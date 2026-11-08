@@ -65,6 +65,7 @@ export function Home(_: { dueCount: number; cardCount: number }) {
   const [last, setLast] = useState<StudyDay | null>(null)
   const [problems, setProblems] = useState(0)
   const [ask, setAsk] = useState('')
+  const [mastery, setMastery] = useState<Record<string, Mastery>>({})
   const daily = useDailyCount()
 
   useEffect(() => {
@@ -79,6 +80,7 @@ export function Home(_: { dueCount: number; cardCount: number }) {
     window.tide.learn.notebooks().then(async (nbs) => {
       setNotebooks(nbs.filter((n) => n.path !== app.settings.libraryFolder && n.path !== 'Coach'))
       const [goals, mastery, allNotes] = await Promise.all([window.tide.goals.list(), window.tide.learn.mastery(), window.tide.vault.notes()])
+      setMastery(mastery as Record<string, Mastery>)
       const byPath = new Map(allNotes.map((n) => [n.path, n]))
       const out: GoalPlan[] = []
       const ahead: Record<string, Forecast> = {}
@@ -309,6 +311,56 @@ export function Home(_: { dueCount: number; cardCount: number }) {
               )}
               <ContextMenu menu={goalMenu} onClose={() => setGoalMenu(null)} />
             </section>
+
+            {(() => {
+              // What needs another look: notes your answers show are weak or confidently wrong
+              const weak = Object.values(mastery)
+                .filter((m) => m.level === 'weak' || m.level === 'shaky' || m.misconceptions > 0)
+                .sort((a, b) => b.misconceptions - a.misconceptions || a.score - b.score)
+                .slice(0, 4)
+              const coming = plans.flatMap((p) => (p.inReview ? p.reviewTopics : p.today).slice(1, 4).map((t) => ({ t, p }))).slice(0, 4)
+              if (weak.length)
+                return (
+                  <section className="rail-card">
+                    <div className="rail-head">
+                      <h2>Needs another look</h2>
+                    </div>
+                    <ul className="rail-list">
+                      {weak.map((m) => (
+                        <li key={m.path} className="rail-weak">
+                          <button onClick={() => app.openPath(m.path)} title={fileTitle(m.path)}>
+                            <span className={`weak-dot ${m.misconceptions ? 'miss' : m.level}`} aria-hidden="true" />
+                            <span>{byPath.get(m.path)?.title || fileTitle(m.path).replace(/\.(md|pdf)$/i, '')}</span>
+                          </button>
+                          <button className="home-link small" onClick={() => app.setView({ kind: 'session', mode: 'quiz', scope: { kind: 'note', path: m.path }, topic: byPath.get(m.path)?.title || fileTitle(m.path).replace(/\.(md|pdf)$/i, ''), options: { length: 5 }, nonce: Date.now() })}>
+                            Quiz
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="rail-foot">{weak.some((m) => m.misconceptions) ? 'Red means a confident wrong answer: fix those first.' : 'From how your recent answers went.'}</p>
+                  </section>
+                )
+              if (coming.length)
+                return (
+                  <section className="rail-card">
+                    <div className="rail-head">
+                      <h2>Coming up</h2>
+                    </div>
+                    <ul className="rail-list">
+                      {coming.map(({ t, p }) => (
+                        <li key={t.text}>
+                          <button onClick={() => app.setView({ kind: 'notebook', path: p.goal.notebook })} title={t.text}>
+                            <Icon name="book" size={14} />
+                            <span>{t.text}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )
+              return null
+            })()}
 
             {problems > 0 && (
               <button className="home-link rail-extra" onClick={() => app.setView({ kind: 'practice' })}>
