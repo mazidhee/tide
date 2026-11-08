@@ -17,6 +17,7 @@ import { localSampling } from './sampling'
 import { getChunks, indexReady, search } from './search'
 import { canTake, CLOUD_REPLY_TOKENS, CloudUnavailable, cloudError, estimateTokens, headersFor, noteLimits, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
 import { escalationFor, providerInfo, type CloudTask, type RequestKind } from '@shared/providers'
+import { SESSION_FORMAT } from '@shared/session'
 import { findImages } from './images'
 import { readText, writeText } from './vault'
 import { applyCanvasOps, describeCanvas, parseCanvas, serializeCanvas } from '@shared/canvas'
@@ -679,10 +680,10 @@ export const searchPapers = memoize(searchPapersNow, { ttlMs: 60 * 60_000, key: 
 export const readWebpage = memoize(readWebpageNow, { ttlMs: 60 * 60_000, max: 40, key: (url) => url.trim() })
 
 /** A chat request as main builds it: a stored conversation adds its running summary */
-export type TurnRequest = ChatRequest & { summary?: string }
+export type TurnRequest = ChatRequest & { summary?: string; /** Only read the opening into the server's cache */ warmOnly?: boolean }
 
 /** The part of the system prompt that stays the same from turn to turn, so a local server can reuse its cache */
-export async function stablePrompt(base: string, req: TurnRequest, web: boolean): Promise<string> {
+export async function stablePrompt(base: string, req: TurnRequest, web: boolean, session = false): Promise<string> {
   const memory = await memoryPrompt().catch(() => '')
   const profile = await profilePrompt().catch(() => '')
   return (
@@ -691,6 +692,8 @@ export async function stablePrompt(base: string, req: TurnRequest, web: boolean)
     (web
       ? ''
       : '\nWeb search is switched off for this conversation, so you cannot look anything up online. If the student asks you to search or asks about something recent, say that you can if they switch on "Web" under the message box (or in the session toolbar), then answer from what you know, saying it may be out of date.') +
+    // A session's tag rules are the same for every lesson, so they sit here, cached with the prompt
+    (session ? `\n\n${SESSION_FORMAT}` : '') +
     (profile ? `\n\n${profile}` : '') +
     (memory ? `\n\n${memory}` : '') +
     (req.summary ? `\n\nSummary of this conversation so far (the transcript below picks up after it):\n${req.summary}` : '')
@@ -1081,15 +1084,34 @@ async function runTool(call: ToolCall, ctx: LoopContext, depth: number): Promise
   return `Unknown tool ${call.name}.`
 }
 
+/**
+ * The tools a turn offers, in a fixed order. The warm-ups build theirs here too: the tools are part
+ * of the prompt's start, so if a warm-up's list differs by one tool, nothing it cached is ever reused.
+ */
+function toolSet(o: { top: boolean; web: boolean; focused: boolean; things: boolean; terminal?: unknown[]; canvas?: unknown[]; lean?: boolean }): unknown[] {
+  if (o.lean) return [CODE_TOOL]
+  const images = (o.web || o.focused) && getSettings().ai.webSearch?.provider !== 'off'
+  return [
+    ...NOTE_TOOLS,
+    CODE_TOOL,
+    ...(images ? [IMAGE_TOOL] : []),
+    ...(o.top ? [STUDY_PLAN] : []),
+    ...(o.terminal ?? []),
+    ...(o.canvas ?? []),
+    ...(o.things ? [THINGS_ADD, THINGS_TASKS, THINGS_FEEDBACK] : []),
+    ...(o.web ? WEB_TOOLS : []),
+    ...(o.top ? [...MEMORY_TOOLS, DELEGATE_TOOL] : [])
+  ]
+}
+
 async function loop(messages: ApiMessage[], ctx: LoopContext, depth: number, onText: (t: string) => void): Promise<string> {
   const term = ctx.terminalId ? terminalInfo(ctx.terminalId) : null
   const terminalTools = term && !term.exited ? (term.kind === 'lab' ? [TERMINAL_READ, TERMINAL_RUN] : [TERMINAL_READ]) : []
   const canvasTools = ctx.canvasPath ? [CANVAS_READ, CANVAS_EDIT] : []
   const top = depth === 0 && !ctx.focused
-  const thingsTools = top && (await thingsAvailable()) ? [THINGS_ADD, THINGS_TASKS, THINGS_FEEDBACK] : []
   // Checking maths or finding a mistake in the cloud needs only the code tool (SymPy), which keeps the request small
-  const lean = ctx.cloud && !ctx.cloud.fellBack && (ctx.cloud.task === 'maths' || ctx.cloud.task === 'errors' || ctx.cloud.task === 'marking')
-  const tools = lean ? [CODE_TOOL] : [...NOTE_TOOLS, CODE_TOOL, ...((ctx.web || ctx.focused) && getSettings().ai.webSearch?.provider !== 'off' ? [IMAGE_TOOL] : []), ...(top ? [STUDY_PLAN] : []), ...terminalTools, ...canvasTools, ...thingsTools, ...(ctx.web ? WEB_TOOLS : []), ...(top ? [...MEMORY_TOOLS, DELEGATE_TOOL] : [])]
+  const lean = !!ctx.cloud && !ctx.cloud.fellBack && (ctx.cloud.task === 'maths' || ctx.cloud.task === 'errors' || ctx.cloud.task === 'marking')
+  const tools = toolSet({ top, web: ctx.web, focused: !!ctx.focused, things: top && (await thingsAvailable()), terminal: terminalTools, canvas: canvasTools, lean })
   const maxSteps = depth === 0 ? MAX_STEPS : HELPER_STEPS
   const seen = new Set<string>()
   let nudged = false
@@ -1187,6 +1209,18 @@ async function streamTurnContinuing(messages: ApiMessage[], tools: unknown[], si
   return { text: written, calls: [] }
 }
 
+// Words that say how to study, not what: they match every note, so they can't pick passages
+const STUDY_WORDS = new Set('want learn deeply start finding already know quiz questions question teach explain about what with from that this have help understand mock interview review writing test thinking memory session practice mixed interleaving across switch topic every never same tell show give make some more into does when where which their there them they your mine please could would should really just like then than also been being able out the and for you how why can are was not any all its one two get use way new now too did has had our who may let see off'.split(' '))
+
+/** Whether a passage is really about the question: it must contain most of the question's key words */
+export function onTopic(question: string, passage: string): boolean {
+  const words = [...new Set(question.toLowerCase().match(/[a-z][a-z0-9+#-]{2,}/g) ?? [])].filter((w) => !STUDY_WORDS.has(w))
+  if (!words.length) return false
+  const text = passage.toLowerCase()
+  const found = words.filter((w) => new RegExp(`\\b${w.replace(/[+#-]/g, '\\$&')}`).test(text)).length
+  return found >= Math.max(1, Math.ceil(words.length * 0.5))
+}
+
 /** The last resort: the same request with no tools at all, so it can only answer */
 async function answerWithoutTools(messages: ApiMessage[], ctx: LoopContext, onText: (t: string) => void, depth: number): Promise<string> {
   const { text } = await streamTurn(messages, [], ctx.signal, onText, ctx)
@@ -1234,18 +1268,48 @@ let stepCounter = 0
  * server with prefix caching already holds it when you ask your first question.
  */
 /** Sends the system prompt and lesson tools once, so a lesson's first reply finds them cached */
+let prewarming: AbortController | null = null
+
+/**
+ * Reads a lesson's opening into the server's cache before the lesson starts: Learn calls this as
+ * you settle on a topic. The messages and tools are built by the same code as the real turn, so
+ * when you press start the model only has to write, not read (about 10 seconds saved).
+ */
+export async function prewarmLesson(req: Omit<ChatRequest, 'id'>): Promise<void> {
+  if (!isMlxVlm()) return
+  prewarming?.abort()
+  const controller = new AbortController()
+  prewarming = controller
+  await agentChat({ ...req, id: 'prewarm', warmOnly: true }, () => {}, controller.signal).catch(() => {})
+}
+
+/** Sends a turn's prompt with a one-token reply, in the background lane, so the server caches it */
+async function warmTurn(messages: ApiMessage[], tools: unknown[], signal: AbortSignal): Promise<void> {
+  const { baseUrl, apiKey } = getSettings().ai
+  const model = await resolveModel()
+  await inBackground(async (s) => {
+    const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
+      body: JSON.stringify({ model, messages, tools, max_tokens: 1, stream: false, ...localSampling(model), ...transientContext() }),
+      signal: s
+    })
+    await res.text()
+  }, signal).catch(() => {})
+}
+
 export async function warmLessons(): Promise<void> {
   const { baseUrl, apiKey } = getSettings().ai
   const model = await resolveModel()
-  // The same tools, in the same order, as a lesson with web on (see loop)
-  const tools = [...NOTE_TOOLS, CODE_TOOL, ...WEB_TOOLS]
+  // Exactly the tools a lesson with web on offers (see toolSet)
+  const tools = toolSet({ top: false, web: true, focused: true, things: false })
   await inBackground(async (signal) => {
     const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
       // Only the system prompt as conversation, "Hi" as request-only context: mlx-vlm then keeps a
       // snapshot right where the system prompt ends, which every lesson's prompt starts with
-      body: JSON.stringify({ model, messages: [{ role: 'system', content: await stablePrompt(SYSTEM, {} as TurnRequest, true) }], transient_context: 'Hi', tools, max_tokens: 1, stream: false }),
+      body: JSON.stringify({ model, messages: [{ role: 'system', content: await stablePrompt(SYSTEM, {} as TurnRequest, true, true) }], transient_context: 'Hi', tools, max_tokens: 1, stream: false }),
       signal
     })
     await res.text()
@@ -1254,8 +1318,8 @@ export async function warmLessons(): Promise<void> {
 
 export async function warmChat(): Promise<void> {
   const { baseUrl, apiKey } = getSettings().ai
-  // The same tools, in the same order, as an ordinary chat, so the cached prefix matches
-  const tools = [...NOTE_TOOLS, CODE_TOOL, STUDY_PLAN, ...((await thingsAvailable()) ? [THINGS_ADD, THINGS_TASKS, THINGS_FEEDBACK] : []), ...WEB_TOOLS, ...MEMORY_TOOLS, DELEGATE_TOOL]
+  // Exactly the tools an ordinary chat offers (see toolSet), so the cached prefix matches
+  const tools = toolSet({ top: true, web: true, focused: false, things: await thingsAvailable() })
   const model = await resolveModel()
   await inBackground(async (signal) => {
     const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
@@ -1298,7 +1362,7 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
   const question = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? ''
   // The cloud model takes this turn if you picked it, or if it's a job set to escalate (worked maths, finding a mistake)
   const job = escalationFor(question, req.askType)
-  const target = routeFor(req.engine === 'cloud' ? null : job, req.engine ?? 'auto')
+  const target = req.warmOnly ? null : routeFor(req.engine === 'cloud' ? null : job, req.engine ?? 'auto')
   if (target) {
     const name = providerInfo(target.provider).models.find((m) => m.id === target.model)?.label ?? target.model
     const why = job === 'maths' ? 'checking the maths' : job === 'errors' ? 'finding the mistake' : 'answering'
@@ -1310,7 +1374,9 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
     req.scope.kind === 'none'
       ? []
       : req.scope.kind === 'vault'
-        ? search(question, 3).map((h) => ({ path: h.path, title: h.title, heading: h.heading || undefined, text: h.text }))
+        ? search(question, 3)
+            .filter((h) => onTopic(question, `${h.title} ${h.heading ?? ''} ${h.text}`))
+            .map((h) => ({ path: h.path, title: h.title, heading: h.heading || undefined, text: h.text }))
         : await retrieve(req.scope, question)
   // A lesson starts from a few passages (it can search for more); a chat gets a wider look
   for (const s of initial.slice(0, req.instructions ? 4 : 8)) addSource(ctx, { path: s.path, title: s.title, heading: s.heading, text: s.text })
@@ -1354,7 +1420,7 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
   // Stored conversations arrive already fitted; sessions and threads keep their opening setup
   const history = req.chatId ? req.messages : fitHistory(req.messages, historyBudget(), !!req.instructions)
   const messages: ApiMessage[] = [
-    { role: 'system', content: await stablePrompt(SYSTEM, req, ctx.web) },
+    { role: 'system', content: await stablePrompt(SYSTEM, req, ctx.web, !!req.session) },
     ...withStableContext(
       // A lesson's instructions ride in its first message, not the system prompt: then the system
       // prompt and tools are the same for every lesson and stay cached between them
@@ -1366,6 +1432,7 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
     )
   ]
 
+  if (req.warmOnly) return warmTurn(messages, toolSet({ top: false, web: ctx.web, focused: !!ctx.focused, things: false }), signal)
   await loop(messages, ctx, 0, (text) => (text === RESET ? emit({ id: req.id, type: 'reset' }) : emit({ id: req.id, type: 'delta', text })))
   if (ctx.cloud && !ctx.cloud.fellBack) ctx.updateStep(ctx.cloud.stepId, { status: 'done' })
 }

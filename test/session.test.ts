@@ -15,10 +15,12 @@ Question 3 of 8.
     expect(b[4]).toMatchObject({ type: 'choice', options: ['O(n)', 'O(log n)', 'O(n log n)', 'O(1)'] })
   })
 
-  it('reads choices written as lines and hides unfinished tags while streaming', () => {
+  it('reads choices written as lines, and streams questions but not other unfinished tags', () => {
     const b = parseBlocks('<ask type="choice">Pick one:\nA) red\nB) blue\n</ask>')
     expect(b[0]).toMatchObject({ kind: 'ask', prompt: 'Pick one:', options: ['red', 'blue'] })
-    expect(parseBlocks('Thinking about it <ask type="short">What is')).toEqual([{ kind: 'text', text: 'Thinking about it' }])
+    // A question being written shows as it comes; other unfinished tags stay hidden
+    expect(parseBlocks('Thinking about it <ask type="short">What is')).toEqual([{ kind: 'text', text: 'Thinking about it' }, { kind: 'ask', type: 'short', prompt: 'What is', options: [], lang: undefined }])
+    expect(parseBlocks('Close. <grade verdict="partial" score="0.5">You missed')).toEqual([{ kind: 'text', text: 'Close.' }])
   })
 
   it('parses plans, scorecards, rubrics and challenges', () => {

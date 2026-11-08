@@ -29,3 +29,19 @@ describe('a reply that stalls mid-answer', () => {
     vi.unstubAllGlobals()
   })
 })
+
+import { parseBlocks } from '../src/shared/session'
+
+describe('a question still being written', () => {
+  it('shows as a question while it streams', () => {
+    const blocks = parseBlocks('Good start.\n\n<ask type="short">What is the average lookup cost of a hash')
+    expect(blocks).toEqual([
+      { kind: 'text', text: 'Good start.' },
+      { kind: 'ask', type: 'short', prompt: 'What is the average lookup cost of a hash', options: [], lang: undefined }
+    ])
+  })
+  it('hides a half-written closing tag', () => {
+    const blocks = parseBlocks('<ask type="short">Why O(1)?</as')
+    expect(blocks[blocks.length - 1]).toMatchObject({ kind: 'ask', prompt: 'Why O(1)?' })
+  })
+})

@@ -4,6 +4,7 @@ import type { SessionSetup } from '@shared/session'
 import { fileTitle, useApp } from '../state'
 import { Icon, type IconName } from './Icon'
 import { PillSegment, PromptBox } from './PromptBox'
+import { openingRequest } from '../lib/openingRequest'
 import { PixelScene } from './PixelScene'
 
 type LearnMode = SessionMode | 'exam' | 'mixed'
@@ -112,10 +113,28 @@ export function LearnView() {
       app.setView({ kind: 'exam', scope, topic: t.trim() || 'what I have been studying', options: { ...exam, difficulty }, nonce: Date.now() })
       return
     }
-    const options: SessionSetup['options'] = m === 'quiz' ? { length, difficulty } : m === 'interview' ? { language, difficulty } : undefined
     if (m === 'interview') localStorage.setItem('tide.interview.lang', language)
-    app.setView({ kind: 'session', mode: m, scope, topic: t.trim() || 'what I have been studying', options, nonce: Date.now() })
+    app.setView({ kind: 'session', ...sessionPlan(m, scope, t), nonce: Date.now() })
   }
+
+  // The lesson Start would open (not exams or mixed practice, which begin differently)
+  function sessionPlan(m: LearnMode, scope: ChatScope, t: string) {
+    const options: SessionSetup['options'] = m === 'quiz' ? { length, difficulty } : m === 'interview' ? { language, difficulty } : undefined
+    return { mode: m as SessionSetup['mode'], scope, topic: t.trim() || 'what I have been studying', options }
+  }
+
+  // While you settle on a topic, the model reads that lesson's opening in the background, so it
+  // starts writing the moment you press start instead of reading for ten seconds first
+  const warmKey = mode === 'exam' || mode === 'mixed' || (mode === 'review' && source.kind !== 'note') || (!topic.trim() && source.kind === 'none') ? '' : JSON.stringify([mode, source, topic.trim(), length, difficulty, language])
+  useEffect(() => {
+    if (!warmKey) return
+    const t = setTimeout(() => {
+      const plan = sessionPlan(mode, source, topic)
+      window.tide.ai.prewarm(openingRequest({ mode: plan.mode, topic: plan.topic, options: plan.options }, plan.scope, app.settings.character ?? 'professor')).catch(() => {})
+    }, 900)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [warmKey])
 
   const needsNote = mode === 'review' && source.kind !== 'note'
 

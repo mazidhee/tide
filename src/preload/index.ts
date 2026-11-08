@@ -64,6 +64,7 @@ const api: TideApi = {
   },
   ai: {
     chat: invoke('ai:chat'),
+    prewarm: invoke('ai:prewarm'),
     cancel: invoke('ai:cancel'),
     onEvent: (cb) => subscribe<ChatEvent>('ai:event', cb),
     models: invoke('ai:models'),

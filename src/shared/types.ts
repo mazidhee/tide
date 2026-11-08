@@ -140,6 +140,8 @@ export interface ChatRequest {
   voice?: import('./characters').CharacterId
   /** Which model answers: auto (Gemma, or the cloud model for jobs set to escalate), or one you picked */
   engine?: 'auto' | 'local' | 'cloud'
+  /** A learning session (teach, quiz, interview…): the session tag rules go in the system prompt */
+  session?: boolean
   /** The tutor's current question type in a session, so a worked answer to a problem can be escalated */
   askType?: string
 }
@@ -508,6 +510,8 @@ export interface TideApi {
   }
   ai: {
     chat(req: ChatRequest): Promise<void>
+    /** Reads a lesson's opening ahead of time, so it starts at once (nothing is shown or saved) */
+    prewarm(req: Omit<ChatRequest, 'id'>): Promise<void>
     cancel(id: string): Promise<void>
     onEvent(cb: (e: ChatEvent) => void): () => void
     models(): Promise<string[]>
