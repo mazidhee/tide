@@ -40,7 +40,7 @@ export function DailyBrief({ dueCards }: { dueCards: number }) {
     problems > 0 && { label: `${problems} problem${problems === 1 ? '' : 's'} to retry`, run: () => app.setView({ kind: 'practice' }) }
   ].filter(Boolean) as { label: string; run(): void }[]
 
-  if (!ready || ((!last || (!last.topics.length && !last.focus)) && !due.length)) return null
+  if (!ready || ((!last || (!last.topics.length && !last.focus)) && !due.length && !daily?.items)) return null
 
   const quiz = () => {
     if (!last) return
@@ -71,36 +71,56 @@ export function DailyBrief({ dueCards }: { dueCards: number }) {
     </>
   ) : null
 
+  // What today's practice holds, in words: "5 flashcards, 1 past mistake"
+  const parts = daily
+    ? [
+        daily.parts.card && `${daily.parts.card} flashcard${daily.parts.card === 1 ? '' : 's'}`,
+        daily.parts.mistake && `${daily.parts.mistake} past mistake${daily.parts.mistake === 1 ? '' : 's'}`,
+        daily.parts.recall && `${daily.parts.recall} to explain from memory`,
+        daily.parts.preview && 'a look at what’s next'
+      ].filter(Boolean)
+    : []
+  const startDaily = () => app.setView({ kind: 'daily', nonce: Date.now() })
+
   return (
     <section className="brief" aria-label="Today">
-      {line && <p className="brief-line">{line}</p>}
-      <div className="brief-actions">
-        {daily && daily.items > 0 && (
-          <button className="btn primary small" onClick={() => app.setView({ kind: 'daily', nonce: Date.now() })} title="Everything due today in one mixed session: cards, past mistakes, explaining from memory, and a look at what’s next">
-            <Icon name="cards" size={14} />
-            Daily practice
-            <span className="brief-count">
-              {daily.items} items, {daily.minutes} min
-            </span>
-          </button>
-        )}
-        {last && last.topics.length > 0 && (
-          <button className={`btn small${daily && daily.items > 0 ? '' : ' primary'}`} onClick={quiz}>
-            <Icon name="quiz" size={14} />
-            Quiz me on it
-          </button>
-        )}
-        {due.length > 0 && (
-          <span className="brief-due">
-            <span className="muted">Due today</span>
-            {due.map((d) => (
-              <button key={d.label} className="pill" onClick={d.run}>
-                {d.label}
+      {line && (
+        <p className="brief-line">
+          {line}
+          {last && last.topics.length > 0 && (
+            <>
+              {' '}
+              <button className="brief-link" onClick={quiz}>
+                Quiz me on it
               </button>
-            ))}
+            </>
+          )}
+        </p>
+      )}
+      {daily && daily.items > 0 && (
+        <div className="up-next" role="button" tabIndex={0} onClick={startDaily} onKeyDown={(e) => e.key === 'Enter' && startDaily()}>
+          <span className="up-next-icon" aria-hidden="true">
+            <Icon name="cards" size={18} />
           </span>
-        )}
-      </div>
+          <span className="up-next-text">
+            <strong>Daily practice</strong>
+            <span>
+              {parts.join(', ')}, about {daily.minutes} min
+            </span>
+          </span>
+          <span className="up-next-go">
+            Start
+            <Icon name="chevron" size={11} />
+          </span>
+        </div>
+      )}
+      {problems > 0 && (
+        <p className="brief-more">
+          <button className="brief-link" onClick={() => app.setView({ kind: 'practice' })}>
+            {problems} problem{problems === 1 ? '' : 's'} to retry in Practice
+          </button>
+        </p>
+      )}
     </section>
   )
 }
