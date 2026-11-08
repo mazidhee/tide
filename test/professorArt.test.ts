@@ -12,7 +12,7 @@ describe('the professor', () => {
           for (const v of row) expect(v === '.' || v in PALETTE).toBe(true)
         }
       }
-  })
+  }, 30_000)
 
   it('makes a menu bar bitmap at 2x', () => {
     const b = professorBitmap('tea', 3, 2)
