@@ -6,6 +6,16 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { syntaxHighlighting, HighlightStyle, indentOnInput } from '@codemirror/language'
 import { tags as t } from '@lezer/highlight'
+import { formatMarkdown, type FormatKind } from '@shared/markdownFormat'
+
+/** Applies a format to the editor's selection */
+function applyFormat(view: EditorView, kind: FormatKind): boolean {
+  const { from, to } = view.state.selection.main
+  const e = formatMarkdown(view.state.doc.toString(), from, to, kind)
+  view.dispatch({ changes: { from: e.from, to: e.to, insert: e.insert }, selection: { anchor: e.anchor, head: e.head }, scrollIntoView: true, userEvent: 'input.format' })
+  view.focus()
+  return true
+}
 
 const highlight = HighlightStyle.define([
   { tag: t.heading1, fontSize: '1.5em', fontWeight: '650' },
@@ -49,6 +59,8 @@ export interface EditorHandle {
   scrollToLine(line: number): void
   /** The paragraph at the cursor (headings above it left out) */
   paragraph(): { text: string; line: number } | null
+  /** Bold, a heading, a list…: applied to the selection, or toggled off */
+  format(kind: FormatKind): void
 }
 
 interface Props {
@@ -103,6 +115,11 @@ export function Editor({ value, onChange, onIdle, onProbe, handleRef }: Props) {
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           syntaxHighlighting(highlight),
           keymap.of([
+            { key: 'Mod-b', run: (v) => applyFormat(v, 'bold') },
+            { key: 'Mod-i', run: (v) => applyFormat(v, 'italic') },
+            { key: 'Mod-k', run: (v) => applyFormat(v, 'link') },
+            { key: 'Mod-e', run: () => false },
+            { key: 'Mod-Shift-x', run: (v) => applyFormat(v, 'strike') },
             {
               key: 'Mod-Shift-t',
               run: (v) => {
@@ -133,6 +150,7 @@ export function Editor({ value, onChange, onIdle, onProbe, handleRef }: Props) {
     if (handleRef) {
       handleRef.current = {
         paragraph: () => paragraphAt(view.state),
+        format: (kind) => void applyFormat(view, kind),
         lineTop: (line) => {
           if (line + 1 > view.state.doc.lines) return null
           const block = view.lineBlockAt(view.state.doc.line(line + 1).from)

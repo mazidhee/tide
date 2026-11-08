@@ -205,7 +205,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     () => () => {
       const k = keepRef.current
       if (!ongoingKey || !view || k.finished || k.turns.length < 2) return
-      saveOngoing({ key: ongoingKey, view, title: `${MODE_LABEL[mode]}: ${topic}`, state: { turns: k.turns, activeId: activeId.current }, busy: k.busy })
+      saveOngoing({ key: ongoingKey, view, title: `${MODE_LABEL[mode] ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: activeId.current }, busy: k.busy })
       if (k.busy && activeId.current) followInBackground(ongoingKey, activeId.current)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -214,7 +214,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // The professor's scene: at the board while he teaches, tea (or chess, in a quiz) on your turn
   const yourTurnScene: ProfessorPose = mode === 'teach' || mode === 'review' ? 'tea' : 'chess'
   const pose: ProfessorPose = busy ? 'board' : cheer ? 'eureka' : finished ? 'happy' : currentAsk ? yourTurnScene : 'idle'
-  useStudying('view', finished ? null : { pose: busy ? 'board' : currentAsk ? yourTurnScene : 'board', label: `${MODE_LABEL[mode]}: ${topic}` })
+  useStudying('view', finished ? null : { pose: busy ? 'board' : currentAsk ? yourTurnScene : 'board', label: `${MODE_LABEL[mode] ?? 'Session'}: ${topic}` })
   useEffect(() => {
     if (finished) finishAgendaItem(topic)
   }, [finished, topic])

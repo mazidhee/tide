@@ -8,6 +8,7 @@ import { renderMarkdown, slugify, splitFrontmatter } from '../lib/markdown'
 import { FONT_VAR, TEXT_SCALE, usePageSettings } from '../lib/pageSettings'
 import { Editor, type EditorHandle } from './Editor'
 import { Icon } from './Icon'
+import { FormatBar } from './FormatBar'
 import { FlashcardMaker } from './FlashcardMaker'
 import { PageMenu } from './PageMenu'
 import { InlineTutor, type InlineTutorHandle } from './InlineTutor'
@@ -464,31 +465,31 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
                     <span>{hint}</span>
                   </button>
                 ))}
+                <div className="menu-label">Quick</div>
+                <button
+                  className="menu-item"
+                  disabled={probing}
+                  onClick={() => {
+                    setLearnOpen(false)
+                    testMe()
+                  }}
+                >
+                  <strong>{probing ? 'Thinking…' : 'Test me now'}</strong>
+                  <span>One question on what you just read or wrote</span>
+                </button>
+                <button
+                  className="menu-item"
+                  onClick={() => {
+                    setLearnOpen(false)
+                    setMakingCards(body)
+                  }}
+                >
+                  <strong>Make flashcards</strong>
+                  <span>Cards from this note, to review later</span>
+                </button>
               </div>
             )}
           </div>
-          <button className="tool-btn" onClick={() => setMakingCards(body)} title="Make flashcards with AI">
-            <Icon name="cards" />
-            <span>Flashcards</span>
-          </button>
-          <button className="tool-btn" onClick={testMe} disabled={probing} title="Ask me one question that tests what I just wrote">
-            <Icon name="quiz" />
-            <span>{probing ? 'Thinking…' : 'Test me'}</span>
-          </button>
-          <button
-            className={`tool-btn coach-toggle${coach ? ' on' : ''}`}
-            aria-pressed={coach}
-            onClick={() => {
-              // In reading mode the coach has nothing to read, so a click on it starts writing
-              if (coach && !editing) return toggleEdit()
-              app.updateSettings({ writingCoach: !coach })
-              if (!coach && !editing) toggleEdit()
-            }}
-            title={coach ? (editing ? 'Coach on: after each pause it checks the paragraph you wrote. Click to turn off.' : 'Coach on: it works while you write. Click to start writing.') : 'Coach my writing as I write'}
-          >
-            <Icon name="tutor" />
-            <span>{coach ? 'Coach on' : 'Coach'}</span>
-          </button>
           <div className="segmented" role="group" aria-label="Mode">
             <button className={!editing ? 'on' : ''} onClick={() => editing && toggleEdit()} title="Read (⌘E)">
               <Icon name="book" size={15} />
@@ -572,6 +573,7 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
         )}
         {raw !== null && editing && (
           <div className={`reading-column editor-column${marginThreads.length || coach ? ' with-margin' : ''}`}>
+            <FormatBar onFormat={(k) => editorRef.current?.format(k)} coach={coach} onCoach={() => app.updateSettings({ writingCoach: !coach })} onTest={testMe} testing={probing} />
             <Editor value={raw} onChange={onEdit} onIdle={onIdle} onProbe={onProbe} handleRef={editorRef} />
             {(probing || coaching) && <div className="probe-status"><span className="spinner" /> {probing ? `${persona.name} is reading your paragraph…` : 'Coach is reading your paragraph…'}</div>}
             <div className="margin-notes" aria-label="Tutor notes">
