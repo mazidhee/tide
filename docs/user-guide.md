@@ -331,7 +331,8 @@ Under the message box, choose what the tutor answers from (all your notes, one n
 - **Back and forward** arrows sit at the top of the sidebar (⌘[ and ⌘]).
 - Lessons, quizzes, interviews and exams keep their place when you leave them: come back with Back or from **In progress** in the sidebar and carry on where you were (a reply still being written keeps arriving while you're away).
 - **Study** folds Learn, Practice, Review and Your week together; **+** at the top makes a note, a new topic, saves a link or adds files; Tide's own folders (your week, journal, mistakes, exams, designs) fold away under **Tide's files**.
-- **Own window** (the ↔ button in a lesson) moves the lesson into a window of its own with nothing else on screen.
+- **Own window** (the ↔ button) moves a lesson, an exam or a drill into a window of its own with nothing else on screen. A lesson brings its conversation; an exam brings its paper, your answers and its running clock; a drill moves before you start it. The window closes when you finish.
+- **Writing a note**: in edit mode a formatting bar sits above the text (headings, bold, italic, code, maths, lists, checklist, quote, link, divider; each toggles off again), with ⌘B, ⌘I and ⌘K. **Test me** and the writing **Coach** live there too. In reading mode, **Learn** holds the sessions plus **Test me now** and **Make flashcards**.
 
 ## Your tutor, and talking
 

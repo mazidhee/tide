@@ -112,6 +112,19 @@ export function DrillView({ kind }: { kind: DrillKind }) {
             <span>Practice</span>
           </button>
           <span className="muted">{spec.label}</span>
+          {!startedAt && !/[#&]focus=/.test(window.location.hash) && (
+            <button
+              className="tool-btn"
+              onClick={() => {
+                window.tide.windows.openFocus({ kind: 'drill', drill: kind, nonce: Date.now() })
+                app.back()
+              }}
+              title="Do the drill in a window of its own, with nothing else on screen"
+            >
+              <Icon name="width" />
+              <span>Own window</span>
+            </button>
+          )}
           <span className={`drill-clock${left < 15 && startedAt ? ' low' : ''}`}>
             {mm}:{String(ss).padStart(2, '0')}
           </span>

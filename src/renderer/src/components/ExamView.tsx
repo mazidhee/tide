@@ -45,6 +45,8 @@ const clock = (ms: number) => {
   return `${Math.floor(s / 3600) ? Math.floor(s / 3600) + ':' : ''}${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`
 }
 
+const inFocusWindow = /[#&]focus=/.test(window.location.hash)
+
 export function ExamView({ scope, topic, options, view }: { scope: ChatScope; topic: string; options: ExamOptions; view?: View }) {
   const ongoingKey = view ? sessionKey(view as { kind: string; topic?: string; nonce?: number }) : null
   const app = useApp()
@@ -82,7 +84,8 @@ export function ExamView({ scope, topic, options, view }: { scope: ChatScope; to
 
   useEffect(() => {
     // Left mid-paper and come back to: the same paper, your answers, the clock still running
-    const saved = ongoingKey ? getOngoing(ongoingKey) : undefined
+    // Moved into a window of its own: the paper, answers and clock come with it
+    const saved = view?.kind === 'exam' && view.resume ? { state: view.resume } : ongoingKey ? getOngoing(ongoingKey) : undefined
     if (saved) {
       const st = saved.state as { paper: ExamPaper; answers: Record<string, Answer>; startedAt: number }
       setPaper(st.paper)
@@ -94,6 +97,8 @@ export function ExamView({ scope, topic, options, view }: { scope: ChatScope; to
     write()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [write])
+  // Moved to its own window: this one mustn't keep a copy as unfinished
+  const moved = useRef(false)
   const keepRef = useRef({ phase, paper, answers, startedAt })
   keepRef.current = { phase, paper, answers, startedAt }
   useEffect(() => {
@@ -102,7 +107,7 @@ export function ExamView({ scope, topic, options, view }: { scope: ChatScope; to
   useEffect(
     () => () => {
       const k = keepRef.current
-      if (ongoingKey && view && k.phase === 'sitting' && k.paper) saveOngoing({ key: ongoingKey, view, title: `Exam: ${topic}`, state: { paper: k.paper, answers: k.answers, startedAt: k.startedAt }, busy: false })
+      if (ongoingKey && view && k.phase === 'sitting' && k.paper && !moved.current) saveOngoing({ key: ongoingKey, view, title: `Exam: ${topic}`, state: { paper: k.paper, answers: k.answers, startedAt: k.startedAt }, busy: false })
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [ongoingKey]
@@ -223,6 +228,22 @@ export function ExamView({ scope, topic, options, view }: { scope: ChatScope; to
             <span className={`exam-clock${left < 5 * 60_000 ? ' low' : ''}${timeUp ? ' up' : ''}`} aria-live="polite">
               {timeUp ? "Time's up" : clock(left)}
             </span>
+          )}
+          {phase === 'sitting' && paper && !inFocusWindow && (
+            <button
+              className="tool-btn"
+              onClick={() => {
+                // Nothing else on screen: the same paper and clock, in a window of its own
+                window.tide.windows.openFocus({ kind: 'exam', scope, topic, options, nonce: Date.now(), resume: { paper, answers, startedAt } })
+                if (ongoingKey) endOngoing(ongoingKey)
+                moved.current = true
+                app.back()
+              }}
+              title="Sit the exam in a window of its own, with nothing else on screen"
+            >
+              <Icon name="width" />
+              <span>Own window</span>
+            </button>
           )}
           {phase === 'sitting' && (
             <button className="btn primary small" onClick={handIn}>

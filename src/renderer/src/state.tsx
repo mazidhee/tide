@@ -24,7 +24,7 @@ export type View =
   | { kind: 'design'; path: string; start?: DesignMode; topic?: string; company?: string; timed?: number; reference?: string; nonce?: number }
   | { kind: 'code'; path?: string }
   | { kind: 'help'; section?: string }
-  | { kind: 'exam'; scope: ChatScope; topic: string; options: ExamOptions; nonce?: number }
+  | { kind: 'exam'; scope: ChatScope; topic: string; options: ExamOptions; nonce?: number; resume?: { paper: unknown; answers: unknown; startedAt: number } }
   | { kind: 'settings'; section?: import('./components/SettingsView').Section | 'ai' | 'notes' }
 
 export interface Toast {
