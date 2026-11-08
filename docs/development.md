@@ -212,3 +212,13 @@ python3 scripts/mlx/check_server.py http://127.0.0.1:8080/v1 6
 ## The cloud helper
 
 `src/shared/providers.ts` is the provider catalogue (prices with the date they were checked) and the escalation rule (`escalationFor`). `src/main/cloud.ts` holds keys (Electron `safeStorage`, in `cloud-keys.json` in the app's data folder, never in settings), routing (`routeFor`), the provider's per-minute token window (`noteLimits`, `canTake`), and the usage log (`usage.jsonl`, one line per request, local or cloud). Agent turns and completions take an optional cloud target; any `CloudUnavailable` before output falls back to the local model.
+
+## Checking everything works
+
+```sh
+npm run check                              # every session type, the tools, lesson speed (about 10 minutes)
+npm run check -- --quick                   # skips the session round-trips
+TIDE_CHECK_GROQ_KEY=gsk_... npm run check  # also the cloud helper
+```
+
+It builds Tide, starts a hidden copy with a throwaway profile and the sample vault in `scripts/check/vault`, and drives it against your model server (`TIDE_CHECK_SERVER`, default `http://127.0.0.1:8080/v1`). Things 4 is pointed at a closed port, so your real tasks are never reached. It exits non-zero if anything fails. Run it after upgrading mlx-vlm, changing models, or before a release.

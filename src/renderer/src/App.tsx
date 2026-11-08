@@ -211,7 +211,7 @@ export default function App() {
 
   // Dev only: lets screenshot tooling drive navigation
   useEffect(() => {
-    if (import.meta.env.DEV) (window as unknown as { __tide: typeof app }).__tide = app
+    if (import.meta.env.DEV || window.tide.app.testCopy) (window as unknown as { __tide: typeof app }).__tide = app
   })
 
   useEffect(() => {

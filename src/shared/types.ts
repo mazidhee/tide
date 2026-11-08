@@ -685,5 +685,7 @@ export interface TideApi {
     openExternal(url: string): Promise<void>
     handy(): Promise<{ installed: boolean; shortcut: string; model: string }>
     platform: string
+    /** Started from the source with a test profile, so check tooling can drive it */
+    testCopy?: boolean
   }
 }
