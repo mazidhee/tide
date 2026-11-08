@@ -4,12 +4,13 @@ import { HomeBanner } from './HomeBanner'
 import { Professor, type ProfessorScene } from './Professor'
 import { PixelMoment, sceneFor, type MomentScene } from './PixelMoment'
 import { useEffect, useMemo, useState } from 'react'
-import type { Goal, Mastery, NotebookMeta, NoteMeta } from '@shared/types'
+import type { ChatScope, Goal, Mastery, NotebookMeta, NoteMeta } from '@shared/types'
 import { readPlan } from '@shared/plan'
 import { parseOutline } from '@shared/outline'
 import { ContextMenu, type MenuState } from './Menu'
 import { planGoal, type GoalPlan } from '../lib/goals'
 import { useDailyCount } from '../lib/daily'
+import { openingRequest } from '../lib/openingRequest'
 import { PromptBox } from './PromptBox'
 import { learnIntent } from '@shared/learnIntent'
 import { listTopics, type StudyDay } from '@shared/brief'
@@ -124,6 +125,19 @@ export function Home(_: { dueCount: number; cardCount: number }) {
   const startLesson = () =>
     nextTopic &&
     app.setView({ kind: 'session', mode: nextTopic.plan.inReview ? 'quiz' : 'teach', scope: nextTopic.topic.path ? { kind: 'note', path: nextTopic.topic.path } : { kind: 'folder', path: nextTopic.plan.goal.notebook }, topic: nextTopic.topic.text, nonce: Date.now() })
+
+  // Read the next lesson's opening into the model's cache now, so starting it is instant
+  const warmTopic = nextTopic ? JSON.stringify([nextTopic.topic.text, nextTopic.topic.path, nextTopic.plan.goal.notebook, nextTopic.plan.inReview]) : ''
+  useEffect(() => {
+    if (!nextTopic) return
+    const t = setTimeout(() => {
+      const mode = nextTopic.plan.inReview ? 'quiz' : 'teach'
+      const scope: ChatScope = nextTopic.topic.path ? { kind: 'note', path: nextTopic.topic.path } : { kind: 'folder', path: nextTopic.plan.goal.notebook }
+      window.tide.ai.prewarm(openingRequest({ mode, topic: nextTopic.topic.text }, scope, app.settings.character ?? 'professor')).catch(() => {})
+    }, 1500)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [warmTopic])
 
   // The one thing to do now: what's due, else the next lesson, else something new
   const hasDaily = !!daily && daily.items > 0
