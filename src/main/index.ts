@@ -483,6 +483,8 @@ function setMenu() {
 // Lets CDP tooling attach during development, never in packaged builds
 // Development only: a separate profile, so a test copy can run beside the one in use
 if (!app.isPackaged && process.env.TIDE_USER_DATA) {
+  // Lets the window's tooling hooks on (see preload); never set in the packaged app
+  process.env.TIDE_TEST_COPY = '1'
   app.setPath('userData', process.env.TIDE_USER_DATA)
   // A test copy runs behind other windows; keep it rendering so measurements are real
   app.commandLine.appendSwitch('disable-renderer-backgrounding')

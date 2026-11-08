@@ -212,7 +212,9 @@ const api: TideApi = {
   app: {
     openExternal: invoke('app:openExternal'),
     handy: invoke('voice:handy'),
-    platform: process.platform
+    platform: process.platform,
+    // A copy started from the source with a throwaway profile (npm run check): tooling may drive it
+    testCopy: process.env.TIDE_TEST_COPY === '1'
   }
 }
 

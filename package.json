@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "dist:mac": "electron-vite build && electron-builder --mac --arm64 --publish never",
-    "postinstall": "node -e \"const fs=require('fs'),p=require('path');const d='node_modules/node-pty/prebuilds';if(fs.existsSync(d))for(const a of fs.readdirSync(d)){const f=p.join(d,a,'spawn-helper');if(fs.existsSync(f))fs.chmodSync(f,0o755)}\""
+    "postinstall": "node -e \"const fs=require('fs'),p=require('path');const d='node_modules/node-pty/prebuilds';if(fs.existsSync(d))for(const a of fs.readdirSync(d)){const f=p.join(d,a,'spawn-helper');if(fs.existsSync(f))fs.chmodSync(f,0o755)}\"",
+    "check": "node scripts/check/run.mjs"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
