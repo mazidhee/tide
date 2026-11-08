@@ -16,12 +16,24 @@ export async function loadDaily(size = 20): Promise<DailyItem[]> {
 }
 
 /** How much is waiting, for the button on Home */
-export function useDailyCount(): { items: number; minutes: number } | null {
-  const [count, setCount] = useState<{ items: number; minutes: number } | null>(null)
+export interface DailyCount {
+  items: number
+  minutes: number
+  /** What's in it, by kind */
+  parts: Record<DailyItem['kind'], number>
+}
+
+export function useDailyCount(): DailyCount | null {
+  const [count, setCount] = useState<DailyCount | null>(null)
   useEffect(() => {
     let live = true
     loadDaily()
-      .then((items) => live && setCount({ items: items.length, minutes: dailyMinutes(items) }))
+      .then((items) => {
+        if (!live) return
+        const parts = { card: 0, mistake: 0, recall: 0, preview: 0 }
+        for (const i of items) parts[i.kind]++
+        setCount({ items: items.length, minutes: dailyMinutes(items), parts })
+      })
       .catch(() => {})
     return () => {
       live = false

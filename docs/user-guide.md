@@ -254,6 +254,10 @@ Four short steps: the day in a sentence (from what you actually did), three quic
 
 Your week in numbers (each day's activity, notebook by notebook, your journal lines), then three questions: what went well, what got in the way, what to change. **Save and plan next week** saves it as a note (**Coach/Reviews**) and plans the next week with it in mind: a plan you didn't finish makes the next one lighter.
 
+### Will you make it?
+
+Each goal on Home says, in one line, when you'll finish at the pace you've actually kept, against its deadline: "At your 3 h a week you'd finish 19 Jan, 12 days late. About 4.3 h a week gets you there." Your pace is the study time Tide logged on that notebook and its topics over the last three weeks; the hours left come from how the plan was sized (or about 2.5 hours a topic). When you're running late, or haven't studied it lately, **Make it fit** asks the tutor to help you choose: more hours, a later deadline, or which topics to cut or skim.
+
 ### Daily practice
 
 **Daily practice** on Home gathers everything due today into one short session: flashcards (overdue and most-forgotten first, plus up to five new ones), retests of past mistakes, explaining a note from memory, and a first look at the next topic in your plan. They're mixed so the same note never comes twice in a row, because switching between topics is what makes recall stick. Written answers are marked in a few seconds (by the cloud helper when it's set to find mistakes), mistakes update their retest streak, and notes their explain-from-memory schedule. It ends on what's next in your plan, with a button to start that lesson. Keys: Space shows a card's answer, 1 to 4 rate it, ⌘↵ checks a written answer and moves on.
