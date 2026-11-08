@@ -1,0 +1,456 @@
+/* Reading typography for notes, saved articles and tutor answers */
+
+.note-title {
+  font-family: var(--font-read);
+  font-size: calc(var(--read-size) * 2.1);
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.018em;
+  margin-top: 8px;
+  margin-bottom: 22px;
+  text-wrap: balance;
+  user-select: text;
+}
+
+.prose {
+  font-family: var(--font-read);
+  font-size: var(--read-size);
+  line-height: 1.72;
+  color: var(--ink);
+  font-optical-sizing: auto;
+  overflow-wrap: break-word;
+  hanging-punctuation: first;
+  user-select: text;
+}
+
+.prose > :first-child {
+  margin-top: 0;
+}
+
+.prose p,
+.prose ul,
+.prose ol,
+.prose blockquote,
+.prose pre,
+.prose table,
+.prose .math-block,
+.prose .callout,
+.prose .video-embed {
+  margin: 0 0 1.05em;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.008em;
+  margin: 1.9em 0 0.6em;
+  scroll-margin-top: 24px;
+  border-radius: 4px;
+}
+
+.prose h1 {
+  font-size: 2em;
+  letter-spacing: -0.015em;
+  margin-top: 0.4em;
+}
+
+.prose h2 {
+  font-size: 1.45em;
+}
+
+.prose h3 {
+  font-size: 1.2em;
+}
+
+.prose h4 {
+  font-size: 1.05em;
+}
+
+.prose h5,
+.prose h6 {
+  font-size: 1em;
+  color: var(--ink-soft);
+}
+
+/* Briefly mark the passage a citation or search result pointed at */
+.prose .flash {
+  animation: flash 1.6s ease-out;
+}
+
+@keyframes flash {
+  0%,
+  30% {
+    background: var(--mark);
+    box-shadow: 0 0 0 6px var(--mark);
+  }
+}
+
+.prose a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  text-underline-offset: 3px;
+}
+
+.prose a:hover {
+  text-decoration-color: var(--accent);
+}
+
+.prose a.wikilink {
+  text-decoration-style: dotted;
+}
+
+.prose strong {
+  font-weight: 650;
+}
+
+.prose mark {
+  background: var(--mark);
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.4em;
+}
+
+.prose li {
+  margin: 0.25em 0;
+}
+
+.prose li > p {
+  margin: 0.25em 0;
+}
+
+.prose li::marker {
+  color: var(--ink-muted);
+}
+
+.prose input[type='checkbox'] {
+  accent-color: var(--accent);
+  margin: 0 0.4em 0 -1.2em;
+  transform: translateY(1px);
+}
+
+.prose blockquote {
+  padding: 0.1em 0 0.1em 1.25em;
+  border-left: 1px solid var(--ink-muted);
+  color: var(--ink-soft);
+}
+
+.prose hr {
+  border: 0;
+  height: 1px;
+  background: var(--line-strong);
+  margin: 2.2em 0;
+}
+
+.prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-m);
+}
+
+.prose code {
+  font-family: var(--font-code);
+  font-size: 0.84em;
+  background: var(--code-bg);
+  padding: 0.12em 0.36em;
+  border-radius: 4px;
+}
+
+.prose pre {
+  position: relative;
+  font-family: var(--font-code);
+  font-size: 0.8em;
+  line-height: 1.6;
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  padding: 14px 16px;
+  overflow-x: auto;
+}
+
+.prose pre code {
+  background: none;
+  padding: 0;
+  font-size: 1em;
+}
+
+.prose pre[data-lang]:not([data-lang=''])::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 6px;
+  right: 58px;
+  font-family: var(--font-ui);
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+}
+
+.run-code {
+  position: absolute;
+  top: 5px;
+  right: 62px;
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 5px;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.run-code:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.prose pre[data-lang]:has(.run-code)::before {
+  right: 112px;
+}
+
+.run-output {
+  position: relative;
+  margin: -0.6em 0 1.05em;
+  padding: 10px 14px;
+  border-radius: 0 0 var(--radius-m) var(--radius-m);
+  border: 1px solid var(--line);
+  border-top: 0;
+  background: var(--bg-inset);
+  font-family: var(--font-code);
+  font-size: 0.78em;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  color: var(--ink-soft);
+  user-select: text;
+}
+
+.run-output::after {
+  content: attr(data-meta);
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.run-output.failed {
+  color: var(--danger);
+}
+
+.copy-code {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  padding: 2px 8px;
+  border-radius: 5px;
+  color: var(--ink-muted);
+  opacity: 0;
+  transition: opacity 120ms;
+}
+
+.prose pre:hover .copy-code,
+.copy-code:focus-visible {
+  opacity: 1;
+}
+
+.copy-code:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.prose table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9em;
+  display: block;
+  overflow-x: auto;
+}
+
+.prose th,
+.prose td {
+  border: 1px solid var(--line-strong);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.prose th {
+  background: var(--bg-inset);
+  font-weight: 650;
+}
+
+.prose .math-block {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.2em 0;
+}
+
+.prose .katex {
+  font-size: 1.06em;
+}
+
+.prose .katex-display {
+  margin: 0.4em 0;
+}
+
+.prose .tag {
+  font-family: var(--font-ui);
+  font-size: 0.78em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 0.1em 0.5em;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.prose .video-embed {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-m);
+  overflow: hidden;
+  background: #000;
+}
+
+.prose .video-embed iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* Callouts (> [!note] Title) */
+
+.callout {
+  --callout: var(--accent);
+  border-radius: var(--radius-m);
+  border: 1px solid color-mix(in srgb, var(--callout) 30%, transparent);
+  background: color-mix(in srgb, var(--callout) 7%, transparent);
+  padding: 0.75em 1em;
+}
+
+.callout-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-weight: 650;
+  color: var(--callout);
+  margin-bottom: 0.3em;
+}
+
+.callout-icon {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.callout-body > :last-child {
+  margin-bottom: 0;
+}
+
+.callout-warning,
+.callout-caution,
+.callout-important {
+  --callout: var(--warn);
+}
+
+.callout-danger,
+.callout-error,
+.callout-bug,
+.callout-failure {
+  --callout: var(--danger);
+}
+
+.callout-tip,
+.callout-hint,
+.callout-success,
+.callout-check,
+.callout-tutor {
+  --callout: var(--accent);
+}
+
+.callout-question,
+.callout-faq {
+  --callout: var(--info);
+}
+
+.callout-example,
+.callout-quote,
+.callout-abstract,
+.callout-summary,
+.callout-todo {
+  --callout: var(--ink-muted);
+}
+
+/* Compact prose inside the tutor panel and quiz */
+
+.prose.compact {
+  font-size: 15px;
+  line-height: 1.62;
+}
+
+.prose.compact h1,
+.prose.compact h2,
+.prose.compact h3 {
+  font-size: 1.08em;
+  margin: 1.1em 0 0.4em;
+}
+
+.prose.compact p:last-child,
+.prose.compact ul:last-child,
+.prose.compact ol:last-child {
+  margin-bottom: 0;
+}
+
+.prose.compact pre {
+  font-size: 0.78em;
+}
+
+.cite {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.35em;
+  height: 1.35em;
+  padding: 0 0.3em;
+  margin: 0 0.1em;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-ui);
+  font-size: 0.68em;
+  font-weight: 700;
+  vertical-align: 0.25em;
+  line-height: 1;
+  transition: background 120ms, color 120ms;
+}
+
+.cite:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.mermaid-diagram {
+  margin: 0 0 1.05em;
+  padding: 14px;
+  border-radius: var(--radius-m);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  overflow-x: auto;
+  text-align: center;
+}
+
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}

@@ -1,0 +1,200 @@
+/*
+  Themes. Every color in the app comes from these tokens.
+  data-theme is set on <html> by useTheme(); "system" resolves to light or graphite.
+*/
+
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f7f7f5;
+  --bg-sidebar: #efefec;
+  --bg-raised: #ffffff;
+  --bg-hover: rgba(29, 31, 35, 0.055);
+  --bg-active: rgba(29, 31, 35, 0.09);
+  --bg-inset: #ebebe7;
+  --ink: #1d1f23;
+  --ink-soft: #464a52;
+  --ink-muted: #7a7e86;
+  --line: rgba(29, 31, 35, 0.1);
+  --line-strong: rgba(29, 31, 35, 0.18);
+  --accent: #0e7c6b;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(14, 124, 107, 0.1);
+  --mark: rgba(255, 196, 0, 0.32);
+  --danger: #b42318;
+  --warn: #a8670d;
+  --info: #2f6fd6;
+  --code-bg: #efefeb;
+  --shadow: 0 1px 2px rgba(20, 22, 26, 0.06), 0 8px 24px rgba(20, 22, 26, 0.08);
+  --hl-yellow: rgba(255, 205, 40, 0.42);
+  --hl-green: rgba(64, 200, 120, 0.35);
+  --hl-blue: rgba(70, 150, 255, 0.32);
+  --hl-pink: rgba(255, 105, 160, 0.32);
+}
+
+:root[data-theme='sepia'] {
+  color-scheme: light;
+  --bg: #f3ecdf;
+  --bg-sidebar: #ebe2d2;
+  --bg-raised: #f9f4ea;
+  --bg-hover: rgba(70, 50, 25, 0.06);
+  --bg-active: rgba(70, 50, 25, 0.1);
+  --bg-inset: #e6dccb;
+  --ink: #3a2f22;
+  --ink-soft: #5c4d3c;
+  --ink-muted: #8c7b66;
+  --line: rgba(70, 50, 25, 0.12);
+  --line-strong: rgba(70, 50, 25, 0.2);
+  --accent: #8a5a1f;
+  --accent-ink: #fff8ee;
+  --accent-soft: rgba(138, 90, 31, 0.12);
+  --mark: rgba(214, 160, 40, 0.3);
+  --danger: #a1301f;
+  --warn: #9a5f12;
+  --info: #3f6fb8;
+  --code-bg: #eadfcd;
+  --shadow: 0 1px 2px rgba(60, 40, 20, 0.08), 0 8px 24px rgba(60, 40, 20, 0.1);
+}
+
+:root[data-theme='graphite'] {
+  color-scheme: dark;
+  --bg: #1b1b1b;
+  --bg-sidebar: #171717;
+  --bg-raised: #242424;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(255, 255, 255, 0.09);
+  --bg-inset: #141414;
+  --ink: #e3e3e3;
+  --ink-soft: #b9b9b9;
+  --ink-muted: #858585;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.15);
+  --accent: #4fb8a6;
+  --accent-ink: #0d1a18;
+  --accent-soft: rgba(79, 184, 166, 0.14);
+  --mark: rgba(255, 200, 60, 0.22);
+  --danger: #f07b6c;
+  --warn: #e0a63a;
+  --info: #79a6f5;
+  --code-bg: #232323;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.4);
+  --hl-yellow: rgba(255, 205, 40, 0.3);
+  --hl-green: rgba(64, 200, 120, 0.28);
+  --hl-blue: rgba(70, 150, 255, 0.3);
+  --hl-pink: rgba(255, 105, 160, 0.28);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #1e2023;
+  --bg-sidebar: #191b1e;
+  --bg-raised: #26292d;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(255, 255, 255, 0.09);
+  --bg-inset: #16181a;
+  --ink: #e6e7e9;
+  --ink-soft: #b7babf;
+  --ink-muted: #858a92;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.15);
+  --accent: #5cc2ae;
+  --accent-ink: #0c1916;
+  --accent-soft: rgba(92, 194, 174, 0.14);
+  --mark: rgba(255, 200, 60, 0.22);
+  --danger: #f07b6c;
+  --warn: #e0a63a;
+  --info: #79a6f5;
+  --code-bg: #25282c;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.4);
+  --hl-yellow: rgba(255, 205, 40, 0.3);
+  --hl-green: rgba(64, 200, 120, 0.28);
+  --hl-blue: rgba(70, 150, 255, 0.3);
+  --hl-pink: rgba(255, 105, 160, 0.28);
+}
+
+:root[data-theme='midnight'] {
+  color-scheme: dark;
+  --bg: #000000;
+  --bg-sidebar: #070707;
+  --bg-raised: #121212;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(255, 255, 255, 0.1);
+  --bg-inset: #0b0b0b;
+  --ink: #ededed;
+  --ink-soft: #bdbdbd;
+  --ink-muted: #7d7d7d;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --accent: #a99bff;
+  --accent-ink: #140f2b;
+  --accent-soft: rgba(169, 155, 255, 0.14);
+  --mark: rgba(255, 200, 60, 0.22);
+  --danger: #ff8a7a;
+  --warn: #e9b04a;
+  --info: #8fb3ff;
+  --code-bg: #111111;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.6), 0 10px 30px rgba(0, 0, 0, 0.7);
+  --hl-yellow: rgba(255, 205, 40, 0.3);
+  --hl-green: rgba(64, 200, 120, 0.28);
+  --hl-blue: rgba(70, 150, 255, 0.3);
+  --hl-pink: rgba(255, 105, 160, 0.28);
+}
+
+:root[data-theme='ember'] {
+  color-scheme: dark;
+  --bg: #1d1916;
+  --bg-sidebar: #181512;
+  --bg-raised: #27221d;
+  --bg-hover: rgba(255, 236, 214, 0.05);
+  --bg-active: rgba(255, 236, 214, 0.09);
+  --bg-inset: #151210;
+  --ink: #eee4d8;
+  --ink-soft: #c6b8a7;
+  --ink-muted: #94867a;
+  --line: rgba(255, 236, 214, 0.09);
+  --line-strong: rgba(255, 236, 214, 0.16);
+  --accent: #e8a44a;
+  --accent-ink: #231705;
+  --accent-soft: rgba(232, 164, 74, 0.14);
+  --mark: rgba(232, 164, 74, 0.24);
+  --danger: #f08a6c;
+  --warn: #f0b45a;
+  --info: #8aa9e0;
+  --code-bg: #25201b;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 10px 30px rgba(0, 0, 0, 0.45);
+  --hl-yellow: rgba(255, 205, 40, 0.3);
+  --hl-green: rgba(64, 200, 120, 0.28);
+  --hl-blue: rgba(70, 150, 255, 0.3);
+  --hl-pink: rgba(255, 105, 160, 0.28);
+}
+
+:root {
+  --font-sans: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  --font-serif: 'Source Serif 4 Variable', 'Iowan Old Style', Georgia, serif;
+  /* Titles and reading text follow the reading font setting: Inter by default, Source Serif if chosen */
+  --font-read-serif: var(--font-sans);
+  --font-read: var(--font-sans);
+  --font-ui: var(--font-sans);
+  --font-code: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+  --base-read-size: 17px;
+  --read-size: var(--base-read-size);
+  --sidebar-w: 264px;
+  --chat-w: 380px;
+  --titlebar-h: 46px;
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 14px;
+  --text-2xs: 11px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  /* Reading measure in ems of the reading size, so a title and its body share one column */
+  --measure: 34;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+:root[data-reading='serif'] {
+  --font-read-serif: var(--font-serif);
+  --font-read: var(--font-serif);
+}

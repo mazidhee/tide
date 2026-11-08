@@ -1,0 +1,100 @@
+import { existsSync, readdirSync } from 'fs'
+import { homedir } from 'os'
+import { join } from 'path'
+import { getSettings } from './settings'
+
+/**
+ * Tunes a local mlx-vlm server for how Tide talks to it.
+ *
+ * Every chat turn and every step of a tool loop resends the whole conversation, and this Mac reads
+ * prompts at a few hundred tokens a second, so a long system prompt costs seconds each time.
+ * mlx-vlm can keep the model's state for prompts it has seen (prefix caching) and continue from
+ * there, but it ships switched off. Turning it on is a runtime setting, so it is reapplied each
+ * launch; it changes speed only, never the answers. Other servers are left alone.
+ */
+// Gemma 4 mixes sliding-window and full attention, so the server can't reuse part of an old prompt,
+// only whole saved snapshots that the new prompt starts with. Tide marks per-turn context as
+// request-only, so each request saves a snapshot exactly where its conversation ends; intermediate
+// snapshots (every N tokens) only crowd the cache, each a few hundred MB, and pushed other
+// conversations' prefixes out. So: 8 entries in 4 GB, and intermediate snapshots only past 8k tokens.
+// Snapshots also go to disk (up to 8 GB): an evicted prefix comes back in under a second instead of
+// a 10-20 s re-read, and survives a server restart.
+export const PREFIX_CACHE = { apc_enabled: true, apc_disk_enabled: true, apc_disk_max_gb: 8, apc_memory_max_gb: 4, apc_checkpoint_entries: 8, apc_checkpoint_interval_tokens: 8192 }
+
+/** Whether the AI server is mlx-vlm, which takes request-only context (see transientContext) */
+let mlxVlmServer = false
+export const isMlxVlm = () => mlxVlmServer
+
+const isLocal = (host: string) => host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]'
+
+/**
+ * Speculative decoding: Google's small "assistant" model guesses a few tokens ahead and the 12B
+ * model checks them in one pass. Answers are the same; code and JSON come out about 30% faster on
+ * an M4 Pro. Used only when that draft model has been downloaded and the server runs Gemma 4 12B.
+ */
+export const DRAFTER_REPO = 'mlx-community/gemma-4-12B-it-qat-assistant-5bit'
+
+export function drafterPath(): string | null {
+  const dir = join(homedir(), '.cache', 'huggingface', 'hub', `models--${DRAFTER_REPO.replace('/', '--')}`, 'snapshots')
+  try {
+    const snap = readdirSync(dir).find((d) => existsSync(join(dir, d, 'model.safetensors')))
+    return snap ? join(dir, snap) : null
+  } catch {
+    return null
+  }
+}
+
+export async function tuneModelServer(): Promise<'enabled' | 'already' | 'unsupported'> {
+  const { baseUrl, apiKey } = getSettings().ai
+  let origin: string
+  try {
+    const url = new URL(baseUrl)
+    if (!isLocal(url.hostname)) return 'unsupported'
+    origin = url.origin
+  } catch {
+    return 'unsupported'
+  }
+  const headers = { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) }
+  const res = await fetch(`${origin}/v1/settings`, { headers, signal: AbortSignal.timeout(3000) }).catch(() => null)
+  if (!res?.ok) return 'unsupported'
+  const body = (await res.json().catch(() => null)) as { current?: Record<string, unknown> } | null
+  if (!body?.current || !('apc_enabled' in body.current)) return 'unsupported'
+  mlxVlmServer = true
+  // Only what differs (each change reloads the model once; settings the server lacks are skipped)
+  const current = body.current
+  const changes: Record<string, unknown> = Object.fromEntries(Object.entries(PREFIX_CACHE).filter(([k, v]) => k in current && current[k] !== v))
+  const drafter = drafterPath()
+  if (drafter && !body.current.draft_model && 'draft_model' in body.current) {
+    const models = (await fetch(`${origin}/v1/models`, { headers, signal: AbortSignal.timeout(3000) }).then((r) => r.json()).catch(() => null)) as { data?: { id: string }[] } | null
+    if (models?.data?.some((m) => /gemma-4-12b/i.test(m.id))) Object.assign(changes, { draft_model: drafter, draft_kind: 'mtp' })
+  }
+  if (!Object.keys(changes).length) return 'already'
+  // Both changes reload the model once, together
+  const patch = await fetch(`${origin}/v1/settings`, { method: 'PATCH', headers, body: JSON.stringify(changes), signal: AbortSignal.timeout(30_000) }).catch(() => null)
+  return patch?.ok ? 'enabled' : 'unsupported'
+}
+
+/** What's switched on in the model server, for Settings */
+export async function speedStatus(): Promise<{ ready: boolean; detail: string }> {
+  const { baseUrl, apiKey } = getSettings().ai
+  let origin: string
+  try {
+    const url = new URL(baseUrl)
+    if (!isLocal(url.hostname)) return { ready: false, detail: 'Only for an AI server on this Mac' }
+    origin = url.origin
+  } catch {
+    return { ready: false, detail: 'No AI server set' }
+  }
+  const res = await fetch(`${origin}/v1/settings`, { headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {}, signal: AbortSignal.timeout(3000) }).catch(() => null)
+  const body = res?.ok ? ((await res.json().catch(() => null)) as { current?: Record<string, unknown> } | null) : null
+  if (!body?.current || !('apc_enabled' in body.current)) return { ready: false, detail: 'Your AI server has no speed settings (they are for mlx-vlm)' }
+  const cache = body.current.apc_enabled === true
+  const draft = !!body.current.draft_model
+  const parts = [cache ? 'prompt cache on' : 'prompt cache off', draft ? 'draft model on' : drafterPath() ? 'draft model off' : 'no draft model downloaded']
+  return { ready: cache && (draft || !drafterPath()), detail: parts.join(', ') }
+}
+
+export async function applySpeedups(): Promise<{ ready: boolean; detail: string }> {
+  await tuneModelServer()
+  return speedStatus()
+}
