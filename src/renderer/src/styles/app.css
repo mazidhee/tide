@@ -13882,3 +13882,81 @@ img.lightbox-item {
 .home2-ask .prompt-tools {
   display: none;
 }
+
+.up-next2-art {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 6px 16px -10px rgba(0, 0, 0, 0.6);
+}
+
+.pixel-moment {
+  display: block;
+  image-rendering: pixelated;
+}
+
+.home2-continue {
+  margin-top: 8px;
+}
+
+.continue-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 16px;
+}
+
+.continue-grid button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 8px;
+  margin: 0 -8px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+  text-align: left;
+}
+
+.continue-grid button:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.continue-grid button svg {
+  flex: none;
+  color: var(--ink-muted);
+}
+
+.continue-grid button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Home ends where its content does: no stacked page and section padding to scroll into */
+.page:has(> .home2) {
+  padding-bottom: 0;
+}
+
+.home2 {
+  padding-bottom: 32px;
+}
+
+/* Both columns end on the same line: the rail's last card reaches down to the main column's end */
+.home2-grid {
+  align-items: stretch;
+}
+
+.home2-rail {
+  position: static;
+}
+
+.home2-rail > .rail-card:last-of-type {
+  flex: 1;
+}
