@@ -10,6 +10,7 @@ export type View =
   | { kind: 'notebook'; path: string }
   | { kind: 'graph'; focus?: string }
   | { kind: 'study'; scope: ChatScope }
+  | { kind: 'daily'; nonce?: number }
   | { kind: 'quiz'; scope: ChatScope }
   | { kind: 'session'; mode: SessionMode; scope: ChatScope; topic: string; options?: SessionSetup['options']; nonce?: number; turns?: { role: 'user' | 'assistant'; content: string }[] }
   | { kind: 'learn' }

@@ -162,6 +162,9 @@ const api: TideApi = {
     warm: invoke('voice:warm'),
     onProgress: (cb: (step: string) => void) => subscribe<string>('voice:progress', cb)
   },
+  daily: {
+    grade: invoke('daily:grade')
+  },
   mistakes: {
     list: invoke('mistakes:list'),
     due: invoke('mistakes:due'),

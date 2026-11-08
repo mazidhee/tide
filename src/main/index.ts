@@ -1,3 +1,4 @@
+import { gradeAnswer } from './daily'
 import { hasKeys, listCloudModels, setKey, testCloud, usageSummary } from './cloud'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, protocol, shell } from 'electron'
 import { join } from 'path'
@@ -273,6 +274,7 @@ function registerIpc() {
     // A window that closes stops studying
     if (status) e.sender.once('destroyed', () => reportStudy(id, null))
   })
+  handle('daily:grade', (req: Parameters<typeof gradeAnswer>[0]) => gradeAnswer(req))
   handle('cloud:keys', () => hasKeys())
   handle('cloud:setKey', (provider: string, key: string | null) => setKey(provider, key))
   handle('cloud:test', (provider: string, model: string) => testCloud(provider, model))

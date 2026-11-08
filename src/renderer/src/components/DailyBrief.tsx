@@ -1,3 +1,4 @@
+import { useDailyCount } from '../lib/daily'
 import { useEffect, useState } from 'react'
 import { formatMinutes, listTopics, type StudyDay } from '@shared/brief'
 import { useApp } from '../state'
@@ -10,6 +11,7 @@ import { Icon } from './Icon'
  */
 export function DailyBrief({ dueCards }: { dueCards: number }) {
   const app = useApp()
+  const daily = useDailyCount()
   const [last, setLast] = useState<StudyDay | null>(null)
   const [recall, setRecall] = useState(0)
   const [problems, setProblems] = useState(0)
@@ -73,8 +75,17 @@ export function DailyBrief({ dueCards }: { dueCards: number }) {
     <section className="brief" aria-label="Today">
       {line && <p className="brief-line">{line}</p>}
       <div className="brief-actions">
+        {daily && daily.items > 0 && (
+          <button className="btn primary small" onClick={() => app.setView({ kind: 'daily', nonce: Date.now() })} title="Everything due today in one mixed session: cards, past mistakes, explaining from memory, and a look at what’s next">
+            <Icon name="cards" size={14} />
+            Daily practice
+            <span className="brief-count">
+              {daily.items} items, {daily.minutes} min
+            </span>
+          </button>
+        )}
         {last && last.topics.length > 0 && (
-          <button className="btn primary small" onClick={quiz}>
+          <button className={`btn small${daily && daily.items > 0 ? '' : ' primary'}`} onClick={quiz}>
             <Icon name="quiz" size={14} />
             Quiz me on it
           </button>

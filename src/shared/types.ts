@@ -629,6 +629,10 @@ export interface TideApi {
     warm(stt: boolean): Promise<void>
     onProgress(cb: (step: string) => void): () => void
   }
+  daily: {
+    /** Marks a typed answer in daily practice */
+    grade(req: { kind: 'mistake' | 'recall'; question: string; expected?: string; path?: string; answer: string }): Promise<import('../main/daily').DailyGrade>
+  }
   mistakes: {
     list(): Promise<import('./mistakes').Mistake[]>
     due(n?: number): Promise<import('./mistakes').Mistake[]>
