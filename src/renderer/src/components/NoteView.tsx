@@ -1,4 +1,5 @@
 import { TimeThis } from './TimeThis'
+import { savePastedImage } from '../lib/pastedImages'
 import { reveal } from '../lib/scroll'
 import { Thinking } from './Thinking'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -583,7 +584,7 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
         {raw !== null && editing && (
           <div className={`reading-column editor-column${marginThreads.length || coach ? ' with-margin' : ''}`}>
             <FormatBar onFormat={(k) => editorRef.current?.format(k)} coach={coach} onCoach={() => app.updateSettings({ writingCoach: !coach })} onTest={testMe} testing={probing} />
-            <Editor value={raw} onChange={onEdit} onIdle={onIdle} onProbe={onProbe} handleRef={editorRef} />
+            <Editor value={raw} onChange={onEdit} onIdle={onIdle} onProbe={onProbe} handleRef={editorRef} onImage={(file) => savePastedImage(path.includes('/') ? `${path.slice(0, path.lastIndexOf('/'))}/attachments` : 'attachments', file)} />
             {(probing || coaching) && <div className="probe-status"><span className="spinner" /> {probing ? `${persona.name} is reading your paragraph…` : 'Coach is reading your paragraph…'}</div>}
             <div className="margin-notes" aria-label="Tutor notes">
               {marginThreads.map((t) => {

@@ -71,6 +71,8 @@ interface Props {
   /** ⌘⇧T: the student asks the tutor to test their thinking on the paragraph at the cursor */
   onProbe?(paragraph: { text: string; line: number }): void
   handleRef?: RefObject<EditorHandle | null>
+  /** Saves a pasted or dropped picture and returns the Markdown that shows it */
+  onImage?(file: File): Promise<string | null>
 }
 
 const IDLE_MS = 3500
@@ -90,7 +92,25 @@ export function paragraphAt(state: EditorState): { text: string; line: number } 
   return text ? { text, line: start - 1 } : null
 }
 
-export function Editor({ value, onChange, onIdle, onProbe, handleRef }: Props) {
+/** Puts each picture in at the cursor (or where it was dropped); false when there are none to handle */
+function insertImages(view: EditorView, files: File[], at: number | null, save?: (file: File) => Promise<string | null>): boolean {
+  const images = files.filter((f) => /^image\/(png|jpeg|webp)$/.test(f.type))
+  if (!images.length || !save) return false
+  const pos = at ?? view.state.selection.main.head
+  ;(async () => {
+    const lines: string[] = []
+    for (const f of images) {
+      const md = await save(f).catch(() => null)
+      if (md) lines.push(md)
+    }
+    if (!lines.length) return
+    const text = `${pos > 0 && view.state.doc.sliceString(pos - 1, pos) !== '\n' ? '\n' : ''}${lines.join('\n')}\n`
+    view.dispatch({ changes: { from: pos, insert: text }, selection: { anchor: pos + text.length } })
+  })()
+  return true
+}
+
+export function Editor({ value, onChange, onIdle, onProbe, handleRef, onImage }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
@@ -99,6 +119,8 @@ export function Editor({ value, onChange, onIdle, onProbe, handleRef }: Props) {
   onIdleRef.current = onIdle
   const onProbeRef = useRef(onProbe)
   onProbeRef.current = onProbe
+  const onImageRef = useRef(onImage)
+  onImageRef.current = onImage
   const idleTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   useEffect(() => {
@@ -133,6 +155,11 @@ export function Editor({ value, onChange, onIdle, onProbe, handleRef }: Props) {
             indentWithTab
           ]),
           theme,
+          // A screenshot pasted or dragged in is saved beside the note and shown where the cursor is
+          EditorView.domEventHandlers({
+            paste: (e, v) => insertImages(v, [...(e.clipboardData?.files ?? [])], null, onImageRef.current) && (e.preventDefault(), true),
+            drop: (e, v) => insertImages(v, [...(e.dataTransfer?.files ?? [])], v.posAtCoords({ x: e.clientX, y: e.clientY }), onImageRef.current) && (e.preventDefault(), true)
+          }),
           EditorView.updateListener.of((u) => {
             if (!u.docChanged) return
             onChangeRef.current(u.state.doc.toString())

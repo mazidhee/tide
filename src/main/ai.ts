@@ -22,6 +22,7 @@ const SYSTEM_PROMPT = `You are Tide, a study assistant that helps the user learn
 - Answer from the numbered sources when they are relevant and cite them inline like [1] or [2][3].
 - If the sources don't contain the answer, say so briefly, then answer from general knowledge and make clear which parts are not from their notes.
 - Explain clearly, like a good tutor. Prefer short paragraphs, lists and worked examples.
+- Keep it plain and on topic: no analogies, metaphors, jokes, asides or small talk unless one genuinely makes this exact point clearer; most answers need none.
 - Use Markdown. Write math with LaTeX: $inline$ and $$display$$.`
 
 function endpoint(path: string) {
