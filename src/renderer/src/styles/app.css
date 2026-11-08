@@ -13948,15 +13948,72 @@ img.lightbox-item {
   padding-bottom: 32px;
 }
 
-/* Both columns end on the same line: the rail's last card reaches down to the main column's end */
-.home2-grid {
-  align-items: stretch;
+
+/* Home answers to its own width (the sidebar may be open or not): narrow, the rail goes below
+   and the Up next card stacks */
+.home2 {
+  container: home / inline-size;
 }
 
 .home2-rail {
   position: static;
 }
 
-.home2-rail > .rail-card:last-of-type {
+@container home (max-width: 900px) {
+  .home2-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .home2-rail {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    align-items: stretch;
+  }
+}
+
+@container home (max-width: 560px) {
+  .up-next2 {
+    flex-wrap: wrap;
+  }
+  .up-next2-go {
+    width: 100%;
+    justify-content: center;
+  }
+  .continue-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.rail-weak {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rail-weak > button:first-child {
   flex: 1;
+  min-width: 0;
+}
+
+.weak-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d4a12b;
+}
+
+.weak-dot.weak {
+  background: #e08a3c;
+}
+
+.weak-dot.miss {
+  background: #e5534b;
+}
+
+.rail-list .rail-weak > .home-link {
+  flex: none;
+  width: auto;
+  margin: 0;
+  padding: 0 2px;
+  background: none;
 }
