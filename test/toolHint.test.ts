@@ -18,3 +18,17 @@ describe('pointing the tutor at the right tool', () => {
   })
   it('stays quiet otherwise', () => expect(toolHint('Explain heaps to me', true)).toBe(''))
 })
+
+import { onTopic } from '../src/main/agent'
+
+describe('passages for a lesson are on its topic', () => {
+  const opening = 'I want to learn DNS resolution deeply. Start by finding out what I already know.'
+  it('drops passages that only share the filler words', () => {
+    expect(onTopic(opening, 'Figure 10.1 Access permission bits. Users who want to learn more can start by reading')).toBe(false)
+    expect(onTopic(opening, 'Search indexes. Lucene writes out new segment files')).toBe(false)
+  })
+  it('keeps passages that are really about it', () => {
+    expect(onTopic(opening, 'A recursive resolver walks DNS from the root servers down to the authoritative server')).toBe(true)
+    expect(onTopic('Quiz me on hash maps', 'Hash maps give O(1) average lookups')).toBe(true)
+  })
+})

@@ -43,8 +43,14 @@ export function parseBlocks(raw: string): Block[] {
   const blocks: Block[] = []
   let last = 0
   const pushText = (t: string) => {
-    const text = t.replace(/<(ask|grade|plan|card|scorecard|rubric|challenge|summary)\b[^>]*>[\s\S]*$/i, '').trim()
+    const text = t.replace(/<(ask|grade|plan|card|scorecard|rubric|challenge|summary|note)\b[^>]*>[\s\S]*$/i, '').trim()
     if (text) blocks.push({ kind: 'text', text })
+    // A question still being written shows as it comes, styled as the question it will be
+    const open = t.match(/<ask\b([^>]*)>([\s\S]*)$/i)
+    if (open && open[2].trim()) {
+      const type = (attr(open[1], 'type')?.toLowerCase() ?? 'short') as AskType
+      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt: open[2].replace(/<\/?a?s?k?$/i, '').trim(), options: [], lang: attr(open[1], 'lang') })
+    }
   }
   for (const m of message.matchAll(TAG)) {
     pushText(message.slice(last, m.index))
@@ -112,7 +118,8 @@ function withAsk(blocks: Block[]): Block[] {
   return out
 }
 
-const COMMON = `Format rules (the app turns these tags into interactive UI, use them exactly):
+/** The tag protocol every session shares; it rides in the system prompt so it's cached once */
+export const SESSION_FORMAT = `Format rules (the app turns these tags into interactive UI, use them exactly):
 - End every message with exactly ONE question for the student inside an ask tag, unless the session is finished:
   <ask type="short">question</ask>
   The student can only answer inside an ask tag, so never ask a question in plain text, not even the first one.
@@ -172,18 +179,16 @@ Work in three phases:
 3. TEACH each step in order: ask them to predict first (<ask type="predict">), then explain clearly with a concrete example, then check understanding with one question and grade it. Move on only when they get it.
    Teach visually as well: when there is structure or a process (a tree, a graph, a flow, a protocol, states, a timeline), draw a small mermaid diagram (under about 12 nodes); when the thing is physical or has a classic textbook figure, show a real one with find_image. One good visual per step, where it helps.
    When you explain an idea, also write it for their notes: <note>the key idea, definition, formula or a short worked example, in 1 to 5 lines of Markdown, worded to be worth rereading later</note>. The app writes these into the note for this topic, beside the lesson.
-When every step is done, write <summary>what they learned, what is still shaky, what to review next</summary>.
-${COMMON}`
+When every step is done, write <summary>what they learned, what is still shaky, what to review next</summary>.`
   }
   if (mode === 'quiz') {
     const n = options?.length ?? 8
-    if (options?.retest?.length) return `${retestInstructions(options.retest)}\n${COMMON}`
+    if (options?.retest?.length) return `${retestInstructions(options.retest)}\n`
     return `You are running an adaptive QUIZ on: ${topic}. Ask ${n} questions in total, one at a time.
 - Mix question types: choice, short, explain, error, problem. Use explain and error often, they test real understanding.
 - Start at ${difficulty === 'hard' ? 'a hard' : difficulty === 'gentle' ? 'an easy' : 'a medium'} level. After a correct answer make the next one harder; after a wrong one, go back a step and probe the gap.
 - Number questions like "Question 3 of ${n}".
-- After the last question write <summary>score, strengths, misconceptions to fix, what to review</summary> and no ask tag.
-${COMMON}`
+- After the last question write <summary>score, strengths, misconceptions to fix, what to review</summary> and no ask tag.`
   }
   if (mode === 'interview' && options?.round === 'design') {
     return `You are a senior engineer running a realistic SYSTEM DESIGN INTERVIEW. Topic: ${topic}. Difficulty: ${difficulty}.${companyStyle(options.company)}${timedRules(options.timed)}
@@ -201,8 +206,7 @@ How a good interviewer runs it:
 - Scalability and reliability: 3/4 — comment
 - Communication: 3/4 — comment
 </scorecard>
-then <summary>verdict (hire / lean hire / lean no / no) and what to study</summary>.
-${COMMON}`
+then <summary>verdict (hire / lean hire / lean no / no) and what to study</summary>.`
   }
   if (mode === 'interview' && options?.round === 'quant') {
     return `You are a trader running a QUANT INTERVIEW like Jane Street, Optiver or SIG. Area: ${topic}. Difficulty: ${difficulty}.${companyStyle(options.company)}${timedRules(options.timed)}
@@ -211,8 +215,7 @@ How it runs:
 2. Areas to draw from, matching the area above: probability (dice, cards, coins, conditional probability, Bayes), expected value and fair prices, combinatorics, statistics (estimators, variance, correlation, regression intuition), brainteasers with a numeric answer, Fermi estimates, sequences, and for markets: market making games ("make me a two-sided market on the sum of 3 dice"), betting and Kelly sizing, option payoffs and basic pricing intuition.
 3. Before you grade, CHECK the answer with run_code: exact maths with Python fractions or SymPy, or a quick Monte Carlo simulation for probability. Never grade from memory. Accept equivalent forms (fractions, decimals to 3 significant figures).
 4. Grade each answer with <grade verdict="correct|partial|wrong" score="0.0-1.0">one line</grade>, then ask how they got it if the reasoning matters, and give the cleanest method in two or three lines when they missed it. Push for speed: a good candidate answers most in under a minute and says their reasoning out loud.
-5. After 8 to 12 questions (or at [time]), finish with a scorecard as lines like "- Accuracy: 3/4 — comment" for Accuracy, Speed, Reasoning, Composure under follow-ups, then a verdict (hire / lean hire / lean no / no) and the 3 areas to drill next.
-${COMMON}`
+5. After 8 to 12 questions (or at [time]), finish with a scorecard as lines like "- Accuracy: 3/4 — comment" for Accuracy, Speed, Reasoning, Composure under follow-ups, then a verdict (hire / lean hire / lean no / no) and the 3 areas to drill next.`
   }
   if (mode === 'interview' && options?.round === 'behavioural') {
     return `You are a hiring manager running a realistic BEHAVIOURAL INTERVIEW. Focus: ${topic}.${companyStyle(options.company)}${timedRules(options.timed)}
@@ -227,8 +230,7 @@ How a good interviewer runs it:
 - Self-awareness: 2/4 — comment
 - Fit with what they value: 3/4 — comment
 </scorecard>
-then <summary>which stories to keep, which to rework, and what kinds of story are missing</summary>.
-${COMMON}`
+then <summary>which stories to keep, which to rework, and what kinds of story are missing</summary>.`
   }
   if (mode === 'interview') {
     return `You are a senior engineer running a realistic CODING INTERVIEW. Topic or problem: ${topic}.${companyStyle(options?.company)}${timedRules(options?.timed)}
@@ -249,8 +251,7 @@ How a good interviewer runs it:
 - Complexity analysis: 4/4 — comment
 - Testing and edge cases: 2/4 — comment
 </scorecard>
-then <summary>verdict (hire / lean hire / lean no / no) and what to practise</summary>.
-${COMMON}`
+then <summary>verdict (hire / lean hire / lean no / no) and what to practise</summary>.`
   }
   if (mode === 'review') {
     return `You are a demanding writing coach and a Socratic sparring partner. Review the student's writing about: ${topic}.
@@ -265,8 +266,7 @@ The text is in the sources. First grade it:
 Then challenge their thinking with 3 to 5 pointed questions or counterarguments, each tied to an exact short quote from their text:
 <challenge quote="exact words from the text">question or counterargument</challenge>
 Check factual claims against the web when unsure. Don't rewrite their text for them.
-Then start the conversation with one question.
-${COMMON}`
+Then start the conversation with one question.`
   }
   if (mode === 'recall') {
     return `This is an EXPLAIN FROM MEMORY check on: ${topic}. The note is in the sources; the student cannot see it.
@@ -274,11 +274,9 @@ ${COMMON}`
 2. When they answer, compare it carefully with the note. Grade how much of the important content they recalled correctly: <grade verdict="correct|partial|wrong" score="0.0-1.0">what they covered well</grade>
 3. Then list, briefly, the key ideas they missed or got wrong, quoting the note's wording where it helps, and add one <card> for the most important miss.
 4. Ask ONE follow-up question on the biggest gap and grade the answer.
-5. Finish with <summary>what stuck, what faded, what to re-read</summary>.
-${COMMON}`
+5. Finish with <summary>what stuck, what faded, what to re-read</summary>.`
   }
-  return `You are probing the student's thinking about: ${topic}. Ask one pointed question at a time that tests whether they really understand: why, what if, an example, an edge case. Push back on vague answers.
-${COMMON}`
+  return `You are probing the student's thinking about: ${topic}. Ask one pointed question at a time that tests whether they really understand: why, what if, an example, an edge case. Push back on vague answers.`
 }
 
 export const MODE_LABEL: Record<SessionMode, string> = {

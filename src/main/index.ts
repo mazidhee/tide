@@ -41,7 +41,7 @@ import { librariesStatus, mathStatus, runCode, runProject, setupLibraries, setup
 import { searchStatus, setupSearch, wakeSearch } from './websearch'
 import { applySpeedups, speedStatus, tuneModelServer } from './modelServer'
 import { labFlashcards } from './labCards'
-import { warmChat, warmLessons } from './agent'
+import { prewarmLesson, warmChat, warmLessons } from './agent'
 import { inBackground } from './modelQueue'
 import { cancelDraft, draftOutline } from './outlineDraft'
 import { cancelCompanyPrep, draftCompanyPrep } from './companyPrep'
@@ -217,6 +217,7 @@ function registerIpc() {
     chat(req, (e) => send('ai:event', e))
   })
   handle('ai:cancel', (id: string) => cancelChat(id))
+  handle('ai:prewarm', (req: Omit<ChatRequest, 'id'>) => prewarmLesson(req))
   setChatsChangedListener((id) => send('chats:changed', id))
   setTerminalListeners(
     (id, data) => send('terminal:data', { id, data }),
