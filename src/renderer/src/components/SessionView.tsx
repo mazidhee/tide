@@ -8,6 +8,7 @@ import { cardsToMarkdown } from '@shared/cards'
 import { fileTitle, useApp, pagesLabel } from '../state'
 import { renderMarkdown } from '../lib/markdown'
 import { Icon } from './Icon'
+import { EnginePill } from './EnginePill'
 import { CodeEditor } from './CodeEditor'
 import { DictateButton, SpeakButton, useTalk } from './Voice'
 import { InterviewClock, useInterviewClock } from './InterviewClock'
@@ -465,6 +466,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         </div>
         <div className="toolbar-actions no-drag">
           {timed && <InterviewClock remaining={clock.remaining} total={timed} />}
+          <EnginePill value={engine} onChange={setEngine} />
           <TimeThis
             context={
               options?.problemId

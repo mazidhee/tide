@@ -195,3 +195,20 @@ Integration tests use a throwaway vault in the system temp folder, never your re
 ## Packaging
 
 `npm run dist:mac` builds with electron-vite and packages an arm64 DMG with electron-builder, using `build/icon.icns`. The app is not code-signed (`identity: null`), so macOS asks for confirmation on first launch. `pdfjs-dist` is unpacked from the asar, because PDF text extraction loads its worker from disk.
+
+## The mlx-vlm token-ban patch
+
+Tide bans Gemma 4's `<|channel>` token (id 100) with `logit_bias`, because Gemma otherwise sometimes opens empty thought channels in the middle of an answer and stalls. mlx-vlm 0.7.11 drops `logit_bias` when speculative decoding (the draft model) is on: the speculative batch gets only the sampler, and MTP verification has fused argmax shortcuts that skip the sampler entirely. Tide also recovers from a stall on its own (it carries the reply on from where it stopped), but the patch stops the stall at the source.
+
+```sh
+~/mlx-env312/bin/python scripts/mlx/patch_token_ban.py      # patches the installed mlx_vlm (idempotent)
+~/mlx-env312/bin/python scripts/mlx/test_token_ban.py       # 15 unit tests; 13 fail on an unpatched install
+# restart mlx_vlm.server, then against the live server:
+python3 scripts/mlx/check_server.py http://127.0.0.1:8080/v1 6
+```
+
+`check_server.py` is a smoke test that the ban holds and replies still finish; a short prompt like its own doesn't reliably reproduce the original stall, which needed Tide's long real context. To undo the patch: `pip install --force-reinstall mlx-vlm==0.7.11`. Re-run the patch after upgrading mlx-vlm; if the upstream code has changed it refuses to apply rather than guessing.
+
+## The cloud helper
+
+`src/shared/providers.ts` is the provider catalogue (prices with the date they were checked) and the escalation rule (`escalationFor`). `src/main/cloud.ts` holds keys (Electron `safeStorage`, in `cloud-keys.json` in the app's data folder, never in settings), routing (`routeFor`), the provider's per-minute token window (`noteLimits`, `canTake`), and the usage log (`usage.jsonl`, one line per request, local or cloud). Agent turns and completions take an optional cloud target; any `CloudUnavailable` before output falls back to the local model.

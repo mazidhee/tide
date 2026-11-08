@@ -23,6 +23,7 @@
 - **Spaced review.** Flashcards scheduled with FSRS, a mistake journal with retests, and study time tracked for you.
 - **Your day and week.** Today's agenda, goals, a wrap-up and a weekly review, kept in step with Things 4.
 - **Private by default.** Runs on a local model (Gemma 4 through MLX) or any OpenAI-compatible server you choose.
+- **A stronger model when it counts.** Optionally send the hardest jobs (checking maths, finding your mistakes, marking, planning) to Groq, Qwen, Gemini or any OpenAI-compatible API, with a usage page that shows exactly what the cloud cost.
 
 <p align="center">
   <img src="docs/screenshots/plan.png" alt="A sized study plan with phases, dates and an adjust box" width="410">

@@ -31,9 +31,34 @@ Install the app, point it at your vault, and connect a model. It takes about fiv
 | MLX | `http://localhost:8080/v1` | No |
 | Ollama | `http://localhost:11434/v1` | No |
 | LM Studio | `http://localhost:1234/v1` | No |
-| OpenAI | `https://api.openai.com/v1` | Yes |
 
-Any other server that speaks the OpenAI API works too: type its address. The tutor's tools (note search, web search, helpers) need a model that supports tool calling. For models that don't, turn off **Let the tutor search my notes and the web**.
+Any other server that speaks the OpenAI API works too: type its address in **Settings → Models → Advanced**. The tutor's tools (note search, web search, helpers) need a model that supports tool calling. For models that don't, turn off **Tools** in **Settings → Tools**.
+
+### The cloud helper
+
+Gemma on your Mac is always the tutor. A cloud model can help with the four jobs where a bigger model makes a real difference to learning:
+
+- **Hard maths**: when you answer a problem with worked steps, it checks each step.
+- **Finding my mistakes**: "check my working", "where did I go wrong", find-the-error questions and code answers.
+- **Marking exams**: typed exam answers, marked against the mark scheme. Photos of handwriting stay with Gemma, which can read them.
+- **Curriculum planning**: sizing a plan, changing it, and writing outlines.
+
+Set it up in **Settings → Models**: choose **Automatically** (those jobs escalate by themselves) or **When I ask** (only when you pick it), a provider, and paste your key. Keys are encrypted with your Mac's Keychain and never shown again. In Chat and in lessons, the model picker beside the box lets you choose **Auto**, **Gemma only**, or the cloud model for that conversation. When a turn goes to the cloud, the step above the reply says so ("GPT-OSS 120B is checking the maths").
+
+If the cloud model can't take a request (rate limited, offline, key refused, over your monthly budget), Gemma answers instead and the step says why. On Groq's free tier the limit that matters is 8,000 tokens a minute: Tide reads how much is left after each request and goes straight to Gemma when the next one won't fit, rather than waiting to be refused.
+
+| Provider | Free tier (checked 8 Nov 2026) |
+| --- | --- |
+| Groq | 1,000 requests a day and 8,000 tokens a minute; GPT-OSS 120B is $0.15 in and $0.60 out per million tokens when paid |
+| Qwen (Alibaba Cloud) | 1M free tokens for 90 days on some models, Singapore region |
+| Google Gemini | Flash models free; free-tier requests may be used by Google |
+| DeepSeek, Claude | Prices not checked yet: set them in **Advanced** before relying on cost figures |
+
+**Add another…** in the provider list takes any OpenAI-compatible API: a name, its address and a model id.
+
+### Usage
+
+**Settings → Usage** shows each month: cloud spend against your budget, cloud requests and tokens, what ran on your Mac, cloud tokens by day, and a breakdown by model and by job. Requests on your Mac are always free and are never counted as spend. Free-tier cloud requests count as $0, with a note of what they would have cost at list price. A model with no price set is left out of the total and flagged, never guessed.
 
 ## Reading and writing notes
 

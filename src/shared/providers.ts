@@ -34,6 +34,8 @@ export interface ProviderInfo {
   keyUrl?: string
   pricingUrl?: string
   models: CloudModel[]
+  /** One line for the picker: what it costs or gives */
+  summary?: string
   /** What the free tier gives, as checked */
   freeTier?: string
   /** When prices and limits were last checked against the provider's own pages */
@@ -46,6 +48,7 @@ export const PROVIDERS: ProviderInfo[] = [
   {
     id: 'groq',
     name: 'Groq',
+    summary: 'Free: 1,000 requests a day, 8,000 tokens a minute',
     baseUrl: 'https://api.groq.com/openai/v1',
     keyUrl: 'https://console.groq.com/keys',
     pricingUrl: 'https://console.groq.com/docs/models',
@@ -60,7 +63,8 @@ export const PROVIDERS: ProviderInfo[] = [
   },
   {
     id: 'qwen',
-    name: 'Qwen (Alibaba Cloud)',
+    name: 'Qwen',
+    summary: 'Alibaba Cloud. 1M free tokens for 90 days on some models',
     baseUrl: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
     keyUrl: 'https://modelstudio.console.alibabacloud.com/',
     pricingUrl: 'https://www.alibabacloud.com/help/en/model-studio/models',
@@ -76,6 +80,7 @@ export const PROVIDERS: ProviderInfo[] = [
   {
     id: 'gemini',
     name: 'Google Gemini',
+    summary: 'Flash models free; free-tier data may be used by Google',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
     keyUrl: 'https://aistudio.google.com/apikey',
     pricingUrl: 'https://ai.google.dev/gemini-api/docs/pricing',
@@ -91,6 +96,7 @@ export const PROVIDERS: ProviderInfo[] = [
   {
     id: 'deepseek',
     name: 'DeepSeek',
+    summary: 'Prices not verified yet: set them before relying on costs',
     baseUrl: 'https://api.deepseek.com/v1',
     keyUrl: 'https://platform.deepseek.com/api_keys',
     pricingUrl: 'https://api-docs.deepseek.com/quick_start/pricing',
@@ -102,7 +108,8 @@ export const PROVIDERS: ProviderInfo[] = [
   },
   {
     id: 'anthropic',
-    name: 'Claude (Anthropic)',
+    name: 'Claude',
+    summary: 'Anthropic. Paid API credits',
     baseUrl: 'https://api.anthropic.com/v1',
     keyUrl: 'https://console.anthropic.com/settings/keys',
     pricingUrl: 'https://www.anthropic.com/pricing#api',

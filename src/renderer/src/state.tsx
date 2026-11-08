@@ -25,7 +25,7 @@ export type View =
   | { kind: 'code'; path?: string }
   | { kind: 'help'; section?: string }
   | { kind: 'exam'; scope: ChatScope; topic: string; options: ExamOptions; nonce?: number }
-  | { kind: 'settings'; section?: 'appearance' | 'ai' | 'notes' }
+  | { kind: 'settings'; section?: import('./components/SettingsView').Section | 'ai' | 'notes' }
 
 export interface Toast {
   id: number
@@ -53,6 +53,8 @@ interface AppState {
   setView(v: View): void
   openPath(path: string, anchor?: string): void
   back(): void
+  /** Back past every Settings page, to wherever you were before */
+  leaveSettings(): void
   forward(): void
   canGoForward: boolean
   canGoBack: boolean
@@ -151,6 +153,16 @@ export function AppProvider({ initial, children }: { initial: Settings; children
     setCanGoForward(future.current.length > 0 || !!prev)
   }, [])
 
+  const leaveSettings = useCallback(() => {
+    let prev = history.current.pop()
+    while (prev && prev.kind === 'settings') prev = history.current.pop()
+    const to: View = prev ?? { kind: 'home' }
+    smoothly(() => setViewState(to))
+    future.current = []
+    setCanGoBack(history.current.length > 0)
+    setCanGoForward(false)
+  }, [])
+
   const forward = useCallback(() => {
     const next = future.current.pop()
     if (!next) return
@@ -203,6 +215,7 @@ export function AppProvider({ initial, children }: { initial: Settings; children
     setView,
     openPath,
     back,
+    leaveSettings,
     forward,
     canGoForward,
     canGoBack,
