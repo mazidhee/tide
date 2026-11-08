@@ -234,6 +234,9 @@ export function validateWeek(raw: Partial<WeekPlan> | null, weekStart: string, c
   return { weekStart, createdAt: Date.now(), summary: String(raw.summary ?? '').trim().slice(0, 800), priorities, days }
 }
 
+/** The title a planned item's to-do has in Things 4 */
+export const thingsTitle = (it: Pick<AgendaItem, 'kind' | 'title'>) => `${it.kind === 'learn' ? '' : `${it.kind[0].toUpperCase()}${it.kind.slice(1)}: `}${it.title}`.slice(0, 250)
+
 export function todayItems(plan: WeekPlan | null, date: string): AgendaItem[] {
   return plan?.days.find((d) => d.date === date)?.items ?? []
 }

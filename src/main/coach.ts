@@ -1,5 +1,5 @@
 import { promises as fs } from 'fs'
-import { DEFAULT_COACH, localDate, moveUnfinished, nextStudyDay, nextTopics, planCompletion, validateWeek, weekMarkdown, type AgendaItem, type CoachSettings, type DayStats, type JournalEntry, type TopicCandidate, type WeekReview, type WeekPlan } from '@shared/coach'
+import { thingsTitle, DEFAULT_COACH, localDate, moveUnfinished, nextStudyDay, nextTopics, planCompletion, validateWeek, weekMarkdown, type AgendaItem, type CoachSettings, type DayStats, type JournalEntry, type TopicCandidate, type WeekReview, type WeekPlan } from '@shared/coach'
 import { companyTrend } from '@shared/interviews'
 import { buildLink } from '@shared/deeplink'
 import { complete, extractJsonObject } from './ai'
@@ -297,8 +297,6 @@ export async function setItemDone(date: string, index: number, done: boolean): P
   if (todo) await updateTask(todo, { completed: done }).catch(() => {})
   return plan
 }
-
-const thingsTitle = (it: AgendaItem) => `${it.kind === 'learn' ? '' : `${it.kind[0].toUpperCase()}${it.kind.slice(1)}: `}${it.title}`.slice(0, 250)
 
 /** The Things to-do made for a planned item, found by its title in the week's project */
 async function thingsTodo(plan: WeekPlan, item: AgendaItem): Promise<string | null> {

@@ -13,6 +13,8 @@ const PATTERNS = [
 export function learnIntent(text: string): { topic: string; goal: string } | null {
   const t = text.trim().replace(/\s+/g, ' ')
   if (t.length > 400 || t.split(' ').length < 3) return null
+  // Your own Metabase is taught by the tutor, which can look inside it, not as a new roadmap
+  if (/\b(our|my|rank'?s|company'?s|work'?s)\b.{0,24}\bmetabase\b/i.test(t) || (/\bmetabase\b/i.test(t) && /\b(dashboards?|questions?|tables?|quer(y|ies)|collections?|charts?)\b/i.test(t))) return null
   for (const re of PATTERNS) {
     const m = t.match(re)
     if (!m) continue

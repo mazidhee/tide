@@ -1,4 +1,5 @@
 import type { AgendaItem } from '@shared/coach'
+import type { Mistake } from '@shared/mistakes'
 import type { useApp } from '../state'
 
 const ACTIVE = 'tide.agenda.active'
@@ -43,4 +44,16 @@ export function finishAgendaItem(topic: string): void {
   } catch {
     // Nothing remembered
   }
+}
+
+/** Starts a retest of the mistakes that are due */
+export function startRetest(app: ReturnType<typeof useApp>, due: Mistake[]) {
+  app.setView({
+    kind: 'session',
+    mode: 'quiz',
+    scope: { kind: 'vault' },
+    topic: 'Mistakes to retest',
+    options: { length: due.length, retest: due.map((m) => ({ id: m.id, topic: m.topic, question: m.question, fix: m.fix })) },
+    nonce: Date.now()
+  })
 }

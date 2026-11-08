@@ -146,6 +146,74 @@ function ToolSetup({ label, hint, check, setup, onReady, busyText, actionText }:
   )
 }
 
+/** Your Metabase, read-only, so the tutor can teach you your own dashboards and data */
+function MetabaseGroup() {
+  const [state, setState] = useState<{ ready: boolean; detail: string; url: string } | null>(null)
+  const [url, setUrl] = useState('')
+  const [key, setKey] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    window.tide.metabase
+      .status()
+      .then((s) => {
+        setState(s)
+        setUrl(s.url)
+      })
+      .catch(() => setState({ ready: false, detail: 'Not connected', url: '' }))
+  }, [])
+  const connect = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      setState(await window.tide.metabase.connect(url, key))
+      setKey('')
+    } catch (e) {
+      setError(errorText(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const disconnect = async () => {
+    await window.tide.metabase.disconnect()
+    setState({ ready: false, detail: 'Not connected', url: '' })
+  }
+  const connected = !!state?.url && state.detail !== 'Not connected'
+  return (
+    <Group title="Metabase" note="Read-only: the tutor can look and run SELECT queries, never change anything. Anything about Metabase is answered by Gemma on this Mac, never a cloud model.">
+      {connected ? (
+        <Row
+          label={
+            <span className="set-status-label">
+              <span className={`tool-dot${state.ready ? ' ok' : ' off'}`} aria-hidden="true" />
+              {state.url.replace(/^https?:\/\//, '')}
+            </span>
+          }
+          hint={state.detail}
+        >
+          <button className="btn small ghost" onClick={disconnect}>
+            Disconnect
+          </button>
+        </Row>
+      ) : (
+        <>
+          <Row label="Address">
+            <input className="set-input wide" value={url} placeholder="https://analytics.example.com" onChange={(e) => setUrl(e.target.value)} spellCheck={false} aria-label="Metabase address" />
+          </Row>
+          <Row label="API key" hint={error ? <span className="set-error">{error}</span> : 'Make one in Metabase: Admin › Settings › Authentication › API keys. Kept in your Keychain.'}>
+            <span className="set-inline">
+              <input className="set-input" type="password" placeholder="mb_…" value={key} onChange={(e) => setKey(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && url.trim() && key.trim() && connect()} aria-label="Metabase API key" />
+              <button className="btn small primary" disabled={!url.trim() || !key.trim() || busy} onClick={connect}>
+                {busy ? 'Checking…' : 'Connect'}
+              </button>
+            </span>
+          </Row>
+        </>
+      )}
+    </Group>
+  )
+}
+
 // ---------- Sections ----------
 
 function GeneralSection() {
@@ -699,6 +767,7 @@ function ToolsSection() {
         <ToolSetup label="Data libraries" hint="NumPy, pandas, Matplotlib" check={window.tide.runner.librariesStatus} setup={window.tide.runner.setupLibraries} />
         <ToolSetup label="Things 4" hint="Tasks and deadlines" check={window.tide.learn.thingsStatus} setup={window.tide.learn.thingsStatus} busyText="Checking…" actionText="Check again" />
       </Group>
+      <MetabaseGroup />
     </>
   )
 }

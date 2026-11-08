@@ -1,5 +1,6 @@
 import { gradeAnswer } from './daily'
 import { hasKeys, listCloudModels, setKey, testCloud, usageSummary } from './cloud'
+import { connectMetabase, disconnectMetabase, metabaseStatus } from './metabase'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, protocol, shell } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
@@ -48,7 +49,7 @@ import { cancelDraft, draftOutline } from './outlineDraft'
 import { cancelCompanyPrep, draftCompanyPrep } from './companyPrep'
 import { adjustPlan, auditRoadmap, planReadings, planToThings, sizePlan, syncFromThings, type PlanRequest } from './planner'
 import type { StudyPlan } from '@shared/plan'
-import { thingsStatus } from './things'
+import { dayTasks, setTaskDone, thingsStatus } from './things'
 import { getCoach, getWeek, planWeek, saveCoach, updateProfile, weekToThings, setItemDone, syncDone, rollOver, dayStats, journal, writeJournal, weekReview, saveReview } from './coach'
 import { addMistakes, listMistakes, mistakesDue, retestMistake } from './mistakes'
 import { initTray, refreshTray, reportStudy, type StudyStatus } from './tray'
@@ -293,6 +294,11 @@ function registerIpc() {
   handle('learn:planToThings', (path: string, name: string, notebook?: string) => planToThings(path, name, notebook))
   handle('learn:syncFromThings', (path: string) => syncFromThings(path))
   handle('things:status', () => thingsStatus())
+  handle('things:today', () => dayTasks())
+  handle('things:setDone', (id: string, done: boolean) => setTaskDone(id, done))
+  handle('metabase:status', () => metabaseStatus())
+  handle('metabase:connect', (url: string, key: string) => connectMetabase(url, key))
+  handle('metabase:disconnect', () => disconnectMetabase())
   handle('learn:adjustPlan', (req: Parameters<typeof adjustPlan>[0]) => adjustPlan(req))
   handle('learn:sizePlan', (id: string, req: PlanRequest) => sizePlan(req, (step) => send('ai:event', { id, type: 'step', step })))
   handle('practice:draftCompanyPrep', (req: CompanyPrepRequest) => {

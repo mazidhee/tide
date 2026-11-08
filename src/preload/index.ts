@@ -88,6 +88,8 @@ const api: TideApi = {
     planReadings: invoke('learn:planReadings'),
     syncFromThings: invoke('learn:syncFromThings'),
     thingsStatus: invoke('things:status'),
+    thingsToday: invoke('things:today'),
+    thingsSetDone: invoke('things:setDone'),
     bookChapters: invoke('learn:bookChapters'),
     brief: invoke('learn:brief'),
     logFocus: invoke('learn:logFocus'),
@@ -212,6 +214,11 @@ const api: TideApi = {
     cards: invoke('study:cards'),
     review: invoke('study:review'),
     saveCards: invoke('study:saveCards')
+  },
+  metabase: {
+    status: invoke('metabase:status'),
+    connect: invoke('metabase:connect'),
+    disconnect: invoke('metabase:disconnect')
   },
   app: {
     openExternal: invoke('app:openExternal'),

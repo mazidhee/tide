@@ -126,7 +126,16 @@ With Things 4 open and **Settings › API** turned on in Things, Tide connects t
 
 - **Plans become projects.** A dated plan goes to Things as one project, with a heading per phase, a to-do per chapter whose checklist is its topics, plus the practice, project and exam, each starting and due on the right days. Use **Send to Things** on a plan's Outline tab if you didn't when you created it.
 - **Progress comes back.** Ticking checklist steps or finishing to-dos in Things ticks the matching topics in Tide when you open the roadmap. It only ever ticks, never unticks.
+- **Your day on Home.** Everything on Today in Things shows on Home's timeline (see Your day on Home).
 - **The tutor sets tasks.** In any chat or session the tutor can add a task (an exercise, a chapter, a revision session before an exam) with steps and a date, and look at what you've finished to decide what to teach next. It asks before adding more than two. Everything Tide adds is tagged **tide**.
+
+### Metabase
+
+Connect your Metabase in **Settings › Tools** with its address and an API key (make one in Metabase under **Admin › Settings › Authentication › API keys**; the key is kept in your Mac's Keychain). Then ask the tutor about it: "teach me our Metabase", "what does the Collections dashboard measure?", "how is the repayments chart built?", "quiz me on which question answers X". It searches Metabase, opens dashboards, questions and tables, reads a question's SQL, and runs a saved question or a SELECT to show real numbers.
+
+It's read-only: Tide only ever sends reading requests, and SQL must be a single SELECT (anything that writes, locks or runs a second statement is refused before it leaves your Mac). Anything about your Metabase is answered by Gemma on this Mac, never a cloud model, even if the cloud helper is on.
+
+"Teach me Metabase" on its own still builds a roadmap for learning Metabase in general; mention *your* Metabase ("our", "my", a dashboard or question) and the tutor looks inside it.
 
 ### The notebook page
 
@@ -240,7 +249,7 @@ The top of Home is a small living pixel world where your tutor spends the day, d
 
 Under the greeting, Home says what you studied on your last study day, with **Quiz me on it**, and what's due.
 
-**Today** is a checklist: mistakes to retest first, then the coach's plan for the day. Tick things off here or in Things 4 (they stay in step); finishing a lesson, quiz or test you started from Today ticks it for you. After 5pm, **Wrap up the day** appears; on Sundays, **Look back on your week**.
+Below it, your day runs down the page as a timeline: what you've finished (with the time), **Now** (the one thing to do next), then the rest of today and this evening. It reads **Today** in Things 4, so anything you or the tutor put there shows up, work included, alongside the coach's plan for the day. A planned item that's also a to-do in Things shows once. Things with a reminder time come first, in order. Tick the dot to finish something here or in Things (they stay in step); click a title to open it in Tide, or in Things if it isn't Tide's. The timeline checks Things every minute and when you come back to the window, so a task the tutor just set slides in. In the evening, **Wrap up the day** ends the path. Ask the tutor to plan your day ("put a 45-minute stablecoins lesson and the take-home on today") and it sets the tasks in Things for today.
 
 ### Goals
 

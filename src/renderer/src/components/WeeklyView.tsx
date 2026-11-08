@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { localDate, type DayStats, type WeekReview } from '@shared/coach'
 import { formatMinutes } from '@shared/brief'
 import { useApp } from '../state'
-import { REVIEWED_KEY } from './TodayPanel'
 import { PixelScene } from './PixelScene'
 import { PromptBox } from './PromptBox'
 
@@ -61,7 +60,7 @@ export function WeeklyView() {
     try {
       const path = await window.tide.coach.saveReview(end, answers)
       try {
-        localStorage.setItem(REVIEWED_KEY, end)
+        localStorage.setItem('tide.review.last', end)
       } catch {
         // Only the Home reminder depends on it
       }

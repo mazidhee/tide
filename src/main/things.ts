@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { promises as fs } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
+import type { DayTask } from '@shared/day'
 
 /**
  * Things 4, the learner's to-do app, through its local HTTP API (127.0.0.1 only, bearer token from
@@ -177,4 +178,39 @@ export async function feedbackOnTask(id: string, feedback: string, complete: boo
 /** Moves a task to another day (its start date and deadline), or completes or reopens it */
 export async function updateTask(id: string, patch: { when?: string; deadline?: string; completed?: boolean }): Promise<ThingsItem> {
   return call<ThingsItem>('PATCH', `/tasks/${encodeURIComponent(id)}`, patch)
+}
+
+const localDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+function dayTask(t: ThingsItem & { area?: { title: string }; list?: string; reminder?: string }, done: boolean): DayTask {
+  // A reminder only puts it at a time if the reminder is today
+  const at = (t.reminder ?? '').startsWith(localDay()) ? /T(\d{2}:\d{2})/.exec(t.reminder!) : null
+  return {
+    id: t.id,
+    title: t.title,
+    where: t.project?.title ?? t.area?.title,
+    evening: t.list === 'evening',
+    done,
+    ...(done && t['completed-at'] ? { doneAt: Date.parse(t['completed-at']) } : {}),
+    ...(at ? { at: at[1] } : {}),
+    ...(t.deadline ? { deadline: t.deadline } : {}),
+    tide: !!t.tags?.includes(TIDE_TAG),
+    ...(/\(tide:\/\/[^)\s]+\)/.test(t.notes ?? '') ? { link: /\((tide:\/\/[^)\s]+)\)/.exec(t.notes!)![1] } : {}),
+    ...(t.url ? { url: t.url } : {})
+  }
+}
+
+/** Today in Things 4: what's on for today and this evening, and what you've already finished */
+export async function dayTasks(): Promise<DayTask[] | null> {
+  if (!(await thingsAvailable())) return null
+  const [open, finished] = await Promise.all([
+    call<ThingsItem[]>('GET', '/lists/today'),
+    call<ThingsItem[]>('GET', `/tasks?status=completed&completed-since=${localDay()}&limit=40`).catch(() => [] as ThingsItem[])
+  ])
+  return [...finished.filter((t) => t.type === 'to-do').map((t) => dayTask(t, true)), ...open.filter((t) => t.type === 'to-do' && t.status === 'open').map((t) => dayTask(t, false))]
+}
+
+/** Ticks a to-do off in Things 4, or back on */
+export async function setTaskDone(id: string, done: boolean): Promise<void> {
+  await call('POST', `/tasks/${encodeURIComponent(id)}/${done ? 'complete' : 'reopen'}`)
 }
