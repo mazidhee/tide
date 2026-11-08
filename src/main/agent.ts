@@ -583,7 +583,7 @@ async function streamTurnOnce(
         }
       } catch (e) {
         // A partial line is skipped; a stuck model must reach the retry, not vanish here
-        if (e instanceof LoopingError) throw e
+        if (e instanceof LoopingError || e instanceof StallError) throw e
       }
     }
   }
