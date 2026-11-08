@@ -29,3 +29,20 @@ describe('outline drafts', () => {
     expect(out.match(/- \[ \]/g)).toHaveLength(1)
   })
 })
+
+import { normalizePlan, planRequestNumbers } from '../src/shared/plan'
+
+describe('asking for a different plan', () => {
+  it('reads lengths and hours said outright', () => {
+    expect(planRequestNumbers('I need to finish in 8 weeks, I can do 10 hours a week')).toEqual({ weeks: 8, hoursPerWeek: 10 })
+    expect(planRequestNumbers('can we do it within 3 months?')).toEqual({ weeks: 13 })
+    expect(planRequestNumbers('give me 12 hrs per week')).toEqual({ hoursPerWeek: 12 })
+    expect(planRequestNumbers('skip the compliance phase')).toEqual({})
+  })
+  it('a length you ask for wins over the usual range for the subject', () => {
+    const raw = { scope: 'discipline' as const, why: '', phases: [{ title: 'A', weeks: 8, outcome: '' }, { title: 'B', weeks: 8, outcome: '' }] }
+    expect(normalizePlan(raw, 10, undefined, 8)!.weeks).toBe(8)
+    // Without it, a discipline isn't squeezed below its floor
+    expect(normalizePlan({ ...raw, phases: [{ title: 'A', weeks: 1, outcome: '' }] }, 6)!.weeks).toBeGreaterThan(10)
+  })
+})

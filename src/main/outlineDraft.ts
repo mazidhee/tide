@@ -103,7 +103,7 @@ Inside each phase use ### chapters of 2 to 6 topics. After each chapter's topics
       controller.signal,
       // A long plan needs room: about 25 tokens a topic with its resources
       req.plan ? Math.min(8000, 1500 + Math.round((req.plan.hoursPerWeek * req.plan.weeks) / 2.5) * 30) : req.size === 'deep' ? 6000 : 3500
-    )) {
+    , 'planning')) {
       emit({ id: req.id, type: 'delta', text })
     }
     emit({ id: req.id, type: 'done' })

@@ -192,3 +192,19 @@ export function createLineGuard() {
     }
   }
 }
+
+/**
+ * Many models (GPT-OSS, Qwen, Claude) write maths as \( … \) and \[ … \]; Tide's renderer reads
+ * $ … $ and $$ … $$. Converts the first form to the second, leaving code alone.
+ */
+export function normalizeMath(text: string): string {
+  if (!text.includes('\\(') && !text.includes('\\[')) return text
+  return text
+    .split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/)
+    .map((part, i) =>
+      i % 2
+        ? part
+        : part.replace(/\\\[([\s\S]+?)\\\]/g, (_, m: string) => `$$${m.trim()}$$`).replace(/\\\((.+?)\\\)/g, (_, m: string) => `$${m.trim()}$`)
+    )
+    .join('')
+}

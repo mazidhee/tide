@@ -49,6 +49,8 @@ export interface Settings {
   pomodoro?: 'auto' | 'off' | '25' | '50'
   /** The character in the menu bar: always, only while studying, or never */
   menuBar?: 'always' | 'studying' | 'off'
+  /** A stronger cloud model for the hard parts; Gemma on this Mac stays the default */
+  cloud?: import('./providers').CloudSettings
 }
 
 export type FileKind = 'note' | 'pdf' | 'image' | 'doc' | 'canvas' | 'other'
@@ -136,6 +138,10 @@ export interface ChatRequest {
   canvasPath?: string
   /** Talk is on: reply with a short spoken part first, in this character's way of talking */
   voice?: import('./characters').CharacterId
+  /** Which model answers: auto (Gemma, or the cloud model for jobs set to escalate), or one you picked */
+  engine?: 'auto' | 'local' | 'cloud'
+  /** The tutor's current question type in a session, so a worked answer to a problem can be escalated */
+  askType?: string
 }
 
 export interface StoredMessage {
@@ -601,6 +607,15 @@ export interface TideApi {
     /** The view handed to this focus window, once */
     focusView(id: string): Promise<unknown>
     close(): Promise<void>
+  }
+  cloud: {
+    /** Which providers have a saved key (the keys themselves never leave the main process) */
+    keys(): Promise<Record<string, boolean>>
+    setKey(provider: string, key: string | null): Promise<void>
+    test(provider: string, model: string): Promise<{ ok: boolean; message: string; limits?: Record<string, string> }>
+    /** Models the provider says this key can use */
+    models(provider: string): Promise<string[]>
+    usage(monthOffset?: number): Promise<import('../main/cloud').UsageSummary>
   }
   voice: {
     status(): Promise<{ ready: boolean; detail: string }>

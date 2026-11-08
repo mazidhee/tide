@@ -146,6 +146,13 @@ const api: TideApi = {
     focusView: invoke('window:focusView'),
     close: invoke('window:close')
   },
+  cloud: {
+    keys: invoke('cloud:keys'),
+    setKey: invoke('cloud:setKey'),
+    test: invoke('cloud:test'),
+    models: invoke('cloud:models'),
+    usage: invoke('cloud:usage')
+  },
   voice: {
     status: invoke('voice:status'),
     setup: invoke('voice:setup'),

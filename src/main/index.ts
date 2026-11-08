@@ -1,3 +1,4 @@
+import { hasKeys, listCloudModels, setKey, testCloud, usageSummary } from './cloud'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, protocol, shell } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
@@ -271,6 +272,11 @@ function registerIpc() {
     // A window that closes stops studying
     if (status) e.sender.once('destroyed', () => reportStudy(id, null))
   })
+  handle('cloud:keys', () => hasKeys())
+  handle('cloud:setKey', (provider: string, key: string | null) => setKey(provider, key))
+  handle('cloud:test', (provider: string, model: string) => testCloud(provider, model))
+  handle('cloud:models', (provider: string) => listCloudModels(provider))
+  handle('cloud:usage', (monthOffset?: number) => usageSummary(monthOffset ?? 0))
   handle('voice:status', () => voiceStatus())
   handle('voice:setup', () => setupVoice((step) => send('voice:progress', step)))
   handle('voice:speak', (text: string, voice?: string, speed?: number) => speak(text, voice, speed))

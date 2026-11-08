@@ -1,5 +1,5 @@
 import type { AgentStep, ChatEvent } from '@shared/types'
-import { normalizePlan, phasesForTasks, readPlan, setFrontmatterValue, shortDate, type StudyPlan } from '@shared/plan'
+import { normalizePlan, phasesForTasks, planRequestNumbers, readPlan, setFrontmatterValue, shortDate, type StudyPlan } from '@shared/plan'
 import { parseOutline, serializeOutline, topicTitle } from '@shared/outline'
 import { readText, writeText } from './vault'
 import { addProject, getProject, thingsAvailable } from './things'
@@ -83,9 +83,9 @@ Return ONLY JSON:
 {"scope": "tool|skill|discipline|career", "coding": true, "why": "one or two sentences on why this length, for this learner", "phases": [{"title": "short phase name", "weeks": 2, "outcome": "what they can do at the end", "project": "a concrete project for this phase", "practice": ["a specific exercise", "another"]}]}
 "coding" is true only when the exercises are programming.`
   const system = 'You are a senior engineer and teacher who plans realistic, specific learning paths.'
-  let out = await complete(prompt, system, signal)
+  let out = await complete(prompt, system, signal, 'interactive', 'planning')
   // A small model sometimes wraps or breaks the JSON: ask once more, strictly
-  if (!normalizePlan(safeJson(out), req.hoursPerWeek)) out = await complete(`${prompt}\n\nYour last reply was not valid JSON. Reply with the JSON object only, nothing before or after it.`, system, signal)
+  if (!normalizePlan(safeJson(out), req.hoursPerWeek)) out = await complete(`${prompt}\n\nYour last reply was not valid JSON. Reply with the JSON object only, nothing before or after it.`, system, signal, 'interactive', 'planning')
   const maxWeeks = req.deadline ? Math.max(1, (new Date(req.deadline).getTime() - new Date(req.start).getTime()) / (7 * 86_400_000)) : undefined
   const plan = normalizePlan(safeJson(out), req.hoursPerWeek, maxWeeks)
   if (!plan) {
@@ -111,15 +111,16 @@ They ask: "${req.request.trim()}"
 Change the plan to do what they ask, and keep everything they didn't ask to change. If they want to finish sooner, first cut, merge or shorten what matters least, and raise the hours a week only if they offered more time; if it then isn't realistic, keep it as close as you can and say so in "why". Put the hours a week you plan for in "hoursPerWeek". In "why", say in one or two sentences what changed.
 Return ONLY JSON in the same shape: {"scope": "...", "coding": true, "hoursPerWeek": 6, "why": "...", "phases": [{"title": "...", "weeks": 2, "outcome": "...", "project": "...", "practice": ["..."]}]}`
   const system = 'You are a senior engineer and teacher who plans realistic, specific learning paths.'
-  let out = await complete(prompt, system, signal)
+  let out = await complete(prompt, system, signal, 'interactive', 'planning')
   let raw = safeJson(out) as (Partial<StudyPlan> & { hoursPerWeek?: number }) | null
   if (!raw?.phases) {
-    out = await complete(`${prompt}\n\nYour last reply was not valid JSON. Reply with the JSON object only.`, system, signal)
+    out = await complete(`${prompt}\n\nYour last reply was not valid JSON. Reply with the JSON object only.`, system, signal, 'interactive', 'planning')
     raw = safeJson(out) as typeof raw
   }
-  const hours = Math.max(1, Math.min(60, Number(raw?.hoursPerWeek) || req.hoursPerWeek))
+  const asked = planRequestNumbers(req.request)
+  const hours = asked.hoursPerWeek ?? Math.max(1, Math.min(60, Number(raw?.hoursPerWeek) || req.hoursPerWeek))
   const maxWeeks = req.deadline ? Math.max(1, (new Date(req.deadline).getTime() - new Date(req.start).getTime()) / (7 * 86_400_000)) : undefined
-  const plan = normalizePlan(raw, hours, maxWeeks)
+  const plan = normalizePlan(raw, hours, maxWeeks, asked.weeks)
   if (!plan) throw new Error("The planner couldn't change the plan that way. Try saying it differently.")
   return plan
 }
@@ -250,7 +251,7 @@ Important topics, projects or practice that are missing for the goal this roadma
 What to drop or move to "later" so the core path gets done.
 ## Next four weeks
 A concrete plan: which sections and topics, and one project.`
-    for await (const t of streamDraft([{ role: 'system', content: 'You review learning plans frankly and specifically. No filler.' }, { role: 'user', content: prompt }], new AbortController().signal, 2000)) {
+    for await (const t of streamDraft([{ role: 'system', content: 'You review learning plans frankly and specifically. No filler.' }, { role: 'user', content: prompt }], new AbortController().signal, 2000, 'planning')) {
       emit({ id, type: 'delta', text: t })
     }
     emit({ id, type: 'done' })
@@ -364,8 +365,8 @@ Return ONLY JSON: {"phases": [{"phase": 1, "items": [{"title": "...", "by": "aut
       return []
     }
   }
-  let phases = read(await complete(prompt, 'You recommend real, well-known learning resources. You never make up titles.'))
-  if (!phases.length) phases = read(await complete(`${prompt}\n\nReply with the JSON object only.`))
+  let phases = read(await complete(prompt, 'You recommend real, well-known learning resources. You never make up titles.', undefined, 'interactive', 'planning'))
+  if (!phases.length) phases = read(await complete(`${prompt}\n\nReply with the JSON object only.`, undefined, undefined, 'interactive', 'planning'))
   return verifyReadings(plan.phases.map((p, i) => ({
     phase: p.title,
     items: (phases.find((x) => Number(x.phase) === i + 1)?.items ?? phases[i]?.items ?? [])

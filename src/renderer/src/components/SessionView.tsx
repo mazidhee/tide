@@ -101,6 +101,11 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     []
   )
 
+  // What the tutor last asked, and which model you chose: a worked answer to a problem can go to the cloud model
+  const askTypeRef = useRef<string | undefined>(undefined)
+  const [engine, setEngine] = useState<'auto' | 'local' | 'cloud'>('auto')
+  const engineRef = useRef(engine)
+  engineRef.current = engine
   const send = useCallback(
     async (content: string, history: Turn[]) => {
       const id = `session:${uid()}`
@@ -116,7 +121,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         const last = messages[messages.length - 1]
         messages[messages.length - 1] = { ...last, content: `(Time left: ${clock.left() || timed} of ${timed} minutes)\n${last.content}` }
       }
-      await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setup), web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined })
+      await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setup), web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, engine: engineRef.current })
     },
     [scope, setup, web, timed, clock]
   )
@@ -172,6 +177,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     ? ((lastBlocks.filter((b) => b.kind === 'ask').pop() as Extract<Block, { kind: 'ask' }> | undefined) ??
       (lastIsTutor && lastBlocks.length && !lastBlocks.some((b) => b.kind === 'summary' || b.kind === 'scores') ? { kind: 'ask' as const, type: 'short' as const, prompt: '', options: [] } : undefined))
     : undefined
+  askTypeRef.current = currentAsk?.type
   const plan = parsed.flatMap((b) => b ?? []).filter((b): b is Extract<Block, { kind: 'plan' }> => b.kind === 'plan').pop()
   // Takeaways the tutor wrote for the lesson's note (from finished replies only)
   const takeaways = useMemo(

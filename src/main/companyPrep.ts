@@ -99,7 +99,7 @@ export async function draftCompanyPrep(req: CompanyPrepRequest, emit: (e: ChatEv
       ],
       controller.signal,
       3500
-    )) {
+    , 'planning')) {
       emit({ id: req.id, type: 'delta', text })
     }
     // The pages it was written from, so the plan can be checked
