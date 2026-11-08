@@ -7,7 +7,7 @@ import { openAgendaItem } from './lib/agenda'
 import { todayItems } from '@shared/coach'
 import { WeeklyView } from './components/WeeklyView'
 import { parseLink, scopeFromLink } from '@shared/deeplink'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ThemeId } from '@shared/types'
 import { folderOf, scopeTopic, useApp } from './state'
 import { Sidebar } from './components/Sidebar'
@@ -200,8 +200,13 @@ export default function App() {
       .catch(() => window.tide.windows.close())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusId])
+  // Close once what it was opened for has ended (back to Home). Page changes land a moment late
+  // (they cross-fade), so the window must have shown its view first, or it would close at once.
+  const focusShown = useRef(false)
   useEffect(() => {
-    if (focusId && focusReady && view.kind === 'home') window.tide.windows.close()
+    if (!focusId || !focusReady) return
+    if (view.kind !== 'home') focusShown.current = true
+    else if (focusShown.current) window.tide.windows.close()
   }, [focusId, focusReady, view.kind])
 
   // Dev only: lets screenshot tooling drive navigation

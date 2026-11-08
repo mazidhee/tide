@@ -12739,3 +12739,473 @@ img.lightbox-item {
   width: 22px;
   height: 22px;
 }
+
+/* ---------- Writing: the formatting bar above the editor ---------- */
+
+.format-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 -10px 28px;
+  padding: 5px 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-raised) 88%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow: 0 6px 20px -14px rgba(0, 0, 0, 0.35);
+}
+
+.format-groups {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.format-group {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 4px;
+}
+
+.format-group + .format-group {
+  border-left: 1px solid var(--line);
+}
+
+.fmt-btn {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 28px;
+  padding: 0 5px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ink-soft);
+  transition:
+    background 100ms ease,
+    color 100ms ease;
+}
+
+.fmt-btn:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.fmt-btn:active {
+  background: var(--bg-active);
+}
+
+.fmt-bold {
+  font-weight: 750;
+}
+
+.fmt-italic {
+  font-style: italic;
+  font-family: var(--font-serif);
+  font-size: 14px;
+}
+
+.fmt-strike {
+  text-decoration: line-through;
+}
+
+.fmt-mono {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.format-aside {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fmt-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.fmt-text:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.fmt-text.coach {
+  border: 1px solid var(--line);
+}
+
+.coach-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line-strong);
+  transition: background 160ms ease;
+}
+
+.fmt-text.coach.on {
+  color: var(--ink);
+  border-color: color-mix(in srgb, #34a853 45%, transparent);
+}
+
+.fmt-text.coach.on .coach-dot {
+  background: #34a853;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #34a853 22%, transparent);
+}
+
+.learn-menu .menu-label {
+  margin: 6px 8px 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+@media (max-width: 760px) {
+  .format-aside .fmt-text:not(.coach) {
+    display: none;
+  }
+}
+
+/* ---------- Review, crafted: a deck on the desk ---------- */
+
+.rv-session-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 8px 0 22px;
+}
+
+.rv-session-head .crumbs {
+  font-size: 14px;
+}
+
+.rv-session-tools {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.rv-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rv-progress-text {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.rv-progress-bar {
+  width: 120px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-active);
+  overflow: hidden;
+}
+
+.rv-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--primary, var(--accent));
+  transition: width 300ms cubic-bezier(0.2, 0.8, 0.25, 1);
+}
+
+/* Two cards peek out behind the one you're on */
+.card-stack {
+  position: relative;
+  margin-bottom: 26px;
+}
+
+.card-stack::before,
+.card-stack::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: -7px;
+  height: 40px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  opacity: 0.7;
+  z-index: 0;
+}
+
+.card-stack::after {
+  left: 32px;
+  right: 32px;
+  bottom: -13px;
+  opacity: 0.4;
+}
+
+.card-stack .flashcard {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 300px;
+  padding: 30px 40px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-raised);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 18px 40px -24px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  animation: card-in 320ms cubic-bezier(0.2, 0.8, 0.25, 1) both;
+}
+
+.card-stack .flashcard.flipped {
+  cursor: default;
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+}
+
+.card-kicker {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.card-stack .card-face {
+  font-family: var(--font-read);
+  font-size: 21px;
+  line-height: 1.5;
+}
+
+.card-answer {
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 1px dashed var(--line-strong);
+  animation: answer-in 260ms ease both;
+}
+
+.card-answer .card-face {
+  font-size: 18px;
+}
+
+@keyframes answer-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.card-stack .card-yours {
+  margin-bottom: 18px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--bg-hover);
+}
+
+.card-stack .card-yours p {
+  margin: 0;
+}
+
+.card-stack .card-foot {
+  margin-top: auto;
+  padding-top: 18px;
+}
+
+.reveal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 auto;
+  height: 40px;
+  padding: 0 18px 0 22px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-raised);
+  font-size: 14px;
+  font-weight: 550;
+  transition:
+    background 120ms ease,
+    transform 120ms ease;
+}
+
+.reveal-btn:hover {
+  background: var(--bg-hover);
+}
+
+.reveal-btn:active {
+  transform: scale(0.98);
+}
+
+.grade-bar {
+  display: flex;
+}
+
+.grade-bar.graded {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  animation: answer-in 220ms ease both;
+}
+
+.grade-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    transform 120ms ease;
+}
+
+.grade-btn:hover {
+  border-color: color-mix(in srgb, var(--tone) 55%, transparent);
+  background: color-mix(in srgb, var(--tone) 8%, var(--bg-raised));
+}
+
+.grade-btn:active {
+  transform: scale(0.98);
+}
+
+.grade-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.grade-label i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tone);
+}
+
+.grade-btn .grade-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.grade-btn kbd {
+  font-size: 10.5px;
+  opacity: 0.7;
+}
+
+.grade-again {
+  --tone: #e5534b;
+}
+
+.grade-hard {
+  --tone: #d4a12b;
+}
+
+.grade-good {
+  --tone: #34a853;
+}
+
+.grade-easy {
+  --tone: #4a8fe3;
+}
+
+/* Deck rows: the mix of new, learning and due at a glance */
+.rv-rows li {
+  gap: 14px;
+}
+
+.rv-mix {
+  display: flex;
+  gap: 2px;
+  width: 96px;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-active);
+}
+
+.rv-mix span {
+  flex-basis: 0;
+  min-width: 4px;
+}
+
+.rv-mix .d-new,
+.rv-legend .d-new {
+  background: #4a8fe3;
+}
+
+.rv-mix .d-learning,
+.rv-legend .d-learning {
+  background: #d4a12b;
+}
+
+.rv-mix .d-due,
+.rv-legend .d-due {
+  background: #34a853;
+}
+
+.rv-mix-text {
+  min-width: 120px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-stack .flashcard,
+  .card-answer,
+  .grade-bar.graded {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .grade-bar.graded {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .card-stack .flashcard {
+    padding: 24px 22px 16px;
+  }
+}
+
+/* The grade names stay in text colour; the dot carries the meaning */
+.grade-bar .grade-btn,
+.grade-bar .grade-btn .grade-label {
+  color: var(--ink);
+}
+
+.card-stack .flashcard.flipped .card-foot {
+  padding-top: 24px;
+}
+
+.rv-legend i.d-due {
+  background: #34a853;
+}
