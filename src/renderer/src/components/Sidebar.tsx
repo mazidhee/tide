@@ -8,10 +8,11 @@ import { Icon, type IconName } from './Icon'
 import { ContextMenu, type MenuState } from './Menu'
 import { Professor } from './Professor'
 import { endOngoing, useOngoing } from '../lib/sessions'
+import { CHAT_IMAGES } from '../lib/pastedImages'
 
 const EXPANDED_KEY = 'tide.expanded'
 /** Folders Tide keeps for itself: shown together, folded away, under "Tide's files" */
-const SYSTEM_FOLDERS = new Set(['Coach', 'Exams', 'Designs', 'Lessons'])
+const SYSTEM_FOLDERS = new Set(['Coach', 'Exams', 'Designs', 'Lessons', CHAT_IMAGES])
 const TIDE_GROUP = '__tide__'
 
 function iconFor(node: FileNode, libraryFolder: string): IconName {

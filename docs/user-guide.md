@@ -175,6 +175,13 @@ Each note has a status: **Not started**, **Learning**, **Reviewing** or **Learne
 
 The tutor works inside your notes the way a good teacher reads over your shoulder: it asks questions next to the exact paragraph you're thinking about.
 
+
+### Pictures in your notes
+
+Paste or drag a screenshot into a note (a textbook page, a diagram, a slide) and Tide saves it in an **attachments** folder beside the note and embeds it, the way Obsidian does. When you chat or start a lesson on that note, Gemma looks at its pictures and teaches from them, and shows the one it's talking about in its answer. You can paste a picture into the chat box too; it's kept under Tide's files in **Chat images**.
+
+To stay quick, pictures are only sent when they matter: at the start of a chat or lesson on the note, when you ask about something visual ("this figure", "the diagram", "what does the page show"), or when you paste one. Each adds about a quarter of a second. A turn with pictures always uses Gemma, even with the cloud helper on.
+
 ### Test my thinking, while you write
 
 Press **Test me** in a note's toolbar. The tutor takes the paragraph you're on (or the one you last wrote, or the last paragraph of the note) and, reading it in the context of the whole note, asks one pointed question beside it: why it works, what happens at an edge case, how it connects to something else. It never explains first. Answer in the margin and it pushes back or goes deeper.

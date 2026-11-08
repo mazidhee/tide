@@ -1,10 +1,12 @@
 import { splitSay } from '@shared/characters'
+import { CHAT_IMAGES, pastedImageFiles, savePastedImage } from '../lib/pastedImages'
+import { imageRefs } from '@shared/noteImages'
 import { Thinking } from './Thinking'
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { AgentStep, ChatScope, ContextSource, StoredMessage } from '@shared/types'
 import { asksForWeb } from '@shared/modelText'
 import { useApp } from '../state'
-import { renderMarkdown } from '../lib/markdown'
+import { renderMarkdown, resolveRelative, vaultUrl } from '../lib/markdown'
 import { Icon } from './Icon'
 import { chatEngine, EnginePill } from './EnginePill'
 import { Professor, type ProfessorState } from './Professor'
@@ -384,7 +386,7 @@ export function TurnView({
         <div className="msg user">
           <div className="msg-bubble">
             {t.attachment && <blockquote>{t.attachment.length > 280 ? t.attachment.slice(0, 280) + '…' : t.attachment}</blockquote>}
-            <p>{t.content}</p>
+            <UserText text={t.content} />
           </div>
         </div>
       </>
@@ -476,6 +478,20 @@ export function Composer({ value, onChange, onSend, busy, onStop, web, onWeb, at
     el.style.height = Math.min(el.scrollHeight, max) + 'px'
   }, [value, ref, max])
   const canSend = !!value.trim() || !!attachment
+  const latest = useRef(value)
+  latest.current = value
+  // A screenshot pasted or dropped in is saved to the vault and goes with the message; Gemma sees it
+  const addImages = (files: File[]) => {
+    if (!files.length) return false
+    ;(async () => {
+      const embeds: string[] = []
+      for (const f of files) embeds.push(await savePastedImage(CHAT_IMAGES, f))
+      const v = latest.current
+      onChange(`${v}${v && !v.endsWith('\n') ? '\n' : ''}${embeds.join('\n')}\n`)
+      ref.current?.focus()
+    })().catch(() => {})
+    return true
+  }
   return (
     <form
       className={`composer${large ? ' large' : ''}`}
@@ -501,6 +517,9 @@ export function Composer({ value, onChange, onSend, busy, onStop, web, onWeb, at
         rows={1}
         placeholder={placeholder ?? (attachment ? 'Ask about the selected text' : 'Ask your tutor')}
         onChange={(e) => onChange(e.target.value)}
+        onPaste={(e) => addImages(pastedImageFiles(e.clipboardData.files)) && e.preventDefault()}
+        onDragOver={(e) => e.dataTransfer.types.includes('Files') && e.preventDefault()}
+        onDrop={(e) => addImages(pastedImageFiles(e.dataTransfer.files)) && e.preventDefault()}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault()
@@ -534,5 +553,24 @@ export function Composer({ value, onChange, onSend, busy, onStop, web, onWeb, at
         )}
       </div>
     </form>
+  )
+}
+
+/** What you wrote, with any pictures you pasted shown as pictures rather than their embed lines */
+function UserText({ text }: { text: string }) {
+  const app = useApp()
+  const pics = imageRefs(text)
+  if (!pics.length) return <p>{text}</p>
+  const rest = text.replace(/!\[\[[^\]]+\]\]|!\[[^\]]*\]\([^)]*\)/g, '').trim()
+  return (
+    <>
+      <span className="msg-pics">
+        {pics.map((p) => {
+          const path = resolveRelative(p, { notePath: '', filesByName: app.filesByName })
+          return <img key={p} src={vaultUrl(path)} alt="" onClick={() => app.openPath(path)} />
+        })}
+      </span>
+      {rest && <p>{rest}</p>}
+    </>
   )
 }

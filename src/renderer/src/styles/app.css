@@ -14194,3 +14194,23 @@ button.tl-dot:focus-visible {
 .rail-foot-row .rail-foot {
   margin: 0;
 }
+
+/* Pictures you pasted into a chat message */
+.msg-pics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.msg-pics img {
+  max-width: 220px;
+  max-height: 160px;
+  border-radius: 10px;
+  object-fit: cover;
+  cursor: pointer;
+}
+
+.msg-pics + p {
+  margin-top: 0;
+}

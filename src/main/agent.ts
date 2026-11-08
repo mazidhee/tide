@@ -9,6 +9,8 @@ import { getCoach, getWeek, profilePrompt } from './coach'
 import { todayItems } from '@shared/coach'
 import { aboutMetabase } from '@shared/metabase'
 import { metabaseHost, metabaseReady, metabaseTool } from './metabase'
+import { loadImages, type NoteImage } from './noteImages'
+import { imageMarkdown } from '@shared/noteImages'
 import { addTask, describeTasks, feedbackOnTask, findTask, searchTasks, thingsAvailable, TIDE_TAG } from './things'
 import { buildLink, type DeepLink } from '@shared/deeplink'
 import { JSDOM } from 'jsdom'
@@ -59,6 +61,7 @@ Rules:
 - Every tool result is numbered like [3]. Cite the numbers you rely on inline, e.g. [3] or [2][5].
 - Don't call tools for things you can explain well yourself, like simple definitions.
 - Then teach: clear explanations, a worked example where it helps, Markdown, LaTeX with $...$ and $$...$$.
+- Keep it plain and on topic: no analogies, metaphors, jokes, asides or small talk unless one genuinely makes this exact point clearer; most answers need none.
 - Teach visually too, so they can see it as well as read it. When there is structure, a process or a relationship (a tree, a graph, a pipeline, a protocol, a state machine, a timeline, a hierarchy), draw it as a small mermaid diagram (under about 12 nodes, short labels in quotes). When the thing exists physically or has a classic textbook figure (anatomy, a circuit, a map, a molecule, a famous chart), show a real one with find_image. A step-by-step trace can be a small table. One good visual beats three.`
 
 const HELPER_SYSTEM = `You are a research helper for a tutor. Investigate only the task you were given using the tools, then reply with a compact summary of what you found (under 200 words) that cites the numbered results you used, like [4]. No greetings.`
@@ -1369,6 +1372,22 @@ export async function warmChat(): Promise<void> {
   })
 }
 
+const VISUAL = /\b(picture|image|screenshot|diagram|figure|chart|graph|plot|photo|page|shown?|see|look|draw(n|ing)?|label(led)?|this one)\b/i
+
+/**
+ * The pictures this turn should look at: any the student put in their message, and a note's own
+ * when it's the subject (at the start of a chat or lesson on it, or when they ask about something
+ * visual). Each later turn without a reason to look skips them, so it stays quick.
+ */
+async function turnImages(req: TurnRequest, question: string): Promise<NoteImage[]> {
+  const notePath = req.scope.kind === 'note' && /\.md$/i.test(req.scope.path) ? req.scope.path : ''
+  const fromMessage = await loadImages(question, notePath || 'chat.md')
+  if (fromMessage.length || !notePath) return fromMessage
+  const firstTurn = req.messages.filter((m) => m.role === 'user').length <= 1
+  if (!firstTurn && !VISUAL.test(question)) return []
+  return loadImages(await readText(notePath).catch(() => ''), notePath)
+}
+
 export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, signal: AbortSignal) {
   const sources: ContextSource[] = []
   const ctx: LoopContext = {
@@ -1394,7 +1413,9 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
   const job = escalationFor(question, req.askType)
   // Anything about your Metabase stays on this Mac: its data never goes to a cloud model
   const mine = metabaseReady() && req.messages.some((m) => aboutMetabase(m.content, metabaseHost()))
-  const target = req.warmOnly || mine ? null : routeFor(req.engine === 'cloud' ? null : job, req.engine ?? 'auto')
+  const images = req.warmOnly ? [] : await turnImages(req, question)
+  // Pictures need a model that can see them: Gemma
+  const target = req.warmOnly || mine || images.length ? null : routeFor(req.engine === 'cloud' ? null : job, req.engine ?? 'auto')
   if (target) {
     const name = providerInfo(target.provider).models.find((m) => m.id === target.model)?.label ?? target.model
     const why = job === 'maths' ? 'checking the maths' : job === 'errors' ? 'finding the mistake' : 'answering'
@@ -1444,7 +1465,8 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
     // A lesson or quiz reads its notes once, at the start: fresh passages every answer would make
     // each turn longer and slower, and the tutor can still search when it needs more
     sources.length && !((assigning || marking) && req.scope.kind === 'vault') && !(req.instructions && userTurns > 1) ? `Passages from what the student is studying right now:\n\n${sources.map((s) => `[${s.index}] ${s.title}${s.heading ? ` > ${s.heading}` : ''}\n${clip(s.text, req.instructions || req.scope.kind === 'vault' ? 1000 : 1600)}`).join('\n\n---\n\n')}` : '',
-    req.attachment ? `The student selected this passage:\n"""\n${req.attachment}\n"""` : ''
+    req.attachment ? `The student selected this passage:\n"""\n${req.attachment}\n"""` : '',
+    images.length ? `You can see ${images.length === 1 ? 'the picture' : `these ${images.length} pictures`} from their notes, attached below in this order: ${images.map((im, i) => `${i + 1}) ${im.path}`).join(', ')}. Teach from what they show. To show one in your answer, put its line on its own exactly as written: ${images.map((im) => imageMarkdown(im.path)).join(' ')}` : ''
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -1465,6 +1487,9 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
   ]
 
   if (req.warmOnly) return warmTurn(messages, toolSet({ top: false, web: ctx.web, focused: !!ctx.focused, things: false }), signal)
+  // The pictures ride on this turn's message only: the start of the prompt stays the same, and cached
+  const last = messages[messages.length - 1]
+  if (images.length && last.role === 'user') last.content = [{ type: 'text', text: String(last.content) }, ...images.map((im) => ({ type: 'image_url' as const, image_url: { url: im.dataUrl } }))]
   await loop(messages, ctx, 0, (text) => (text === RESET ? emit({ id: req.id, type: 'reset' }) : emit({ id: req.id, type: 'delta', text })))
   if (ctx.cloud && !ctx.cloud.fellBack) ctx.updateStep(ctx.cloud.stepId, { status: 'done' })
 }
