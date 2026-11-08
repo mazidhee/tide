@@ -4,17 +4,16 @@ import { HomeBanner } from './HomeBanner'
 import { Professor, type ProfessorScene } from './Professor'
 import { useEffect, useMemo, useState } from 'react'
 import type { Goal, Mastery, NotebookMeta, NoteMeta } from '@shared/types'
-import { GoalCard } from './GoalPanel'
 import { readPlan } from '@shared/plan'
 import { parseOutline } from '@shared/outline'
 import { ContextMenu, type MenuState } from './Menu'
 import { planGoal, type GoalPlan } from '../lib/goals'
-import { DailyBrief } from './DailyBrief'
-import { EditableCover } from './NotebookCover'
+import { useDailyCount } from '../lib/daily'
+import { PromptBox } from './PromptBox'
+import { learnIntent } from '@shared/learnIntent'
+import { listTopics, type StudyDay } from '@shared/brief'
 import { fileTitle, useApp } from '../state'
 import { Icon, type IconName } from './Icon'
-import { vaultUrl } from '../lib/markdown'
-import { isCompanion } from '../lib/companion'
 
 /** The professor's afternoon, as the day goes: tea, the chalkboard, chess, then the late fishing */
 function timeOfDayScene(): ProfessorScene {
@@ -36,16 +35,7 @@ export function sourceIcon(meta: Pick<NoteMeta, 'sourceType' | 'path'>): IconNam
   return 'note'
 }
 
-const timeAgo = (ms: number) => {
-  const d = (Date.now() - ms) / 1000
-  if (d < 60) return 'just now'
-  if (d < 3600) return `${Math.floor(d / 60)} min ago`
-  if (d < 86400) return `${Math.floor(d / 3600)} h ago`
-  if (d < 86400 * 7) return `${Math.floor(d / 86400)} d ago`
-  return new Date(ms).toLocaleDateString()
-}
-
-export function Home({ dueCount, cardCount }: { dueCount: number; cardCount: number }) {
+export function Home(_: { dueCount: number; cardCount: number }) {
   const app = useApp()
   const [banner, setBanner] = useState(() => {
     try {
@@ -70,58 +60,51 @@ export function Home({ dueCount, cardCount }: { dueCount: number; cardCount: num
   const [plans, setPlans] = useState<GoalPlan[]>([])
   const [forecasts, setForecasts] = useState<Record<string, Forecast>>({})
   const [goalMenu, setGoalMenu] = useState<MenuState | null>(null)
-  const [thingsNotebooks, setThingsNotebooks] = useState<Set<string>>(new Set())
-  const reloadNotebooks = () =>
-    window.tide.learn
-      .notebooks()
-      .then((nbs) => setNotebooks(nbs.filter((n) => n.path !== app.settings.libraryFolder && n.path !== 'Coach')))
-      .catch(() => {})
+  const [week, setWeek] = useState<{ days: { label: string; minutes: number; today: boolean }[]; streak: number } | null>(null)
+  const [last, setLast] = useState<StudyDay | null>(null)
+  const [problems, setProblems] = useState(0)
+  const [ask, setAsk] = useState('')
+  const daily = useDailyCount()
 
   useEffect(() => {
     window.tide.vault.notes().then(setNotes)
+    window.tide.learn
+      .brief()
+      .then((b) => {
+        setLast(b.last)
+        setProblems(b.problems)
+      })
+      .catch(() => {})
     window.tide.learn.notebooks().then(async (nbs) => {
       setNotebooks(nbs.filter((n) => n.path !== app.settings.libraryFolder && n.path !== 'Coach'))
-      // Today's plan for every goal whose notebook has an outline
       const [goals, mastery, allNotes] = await Promise.all([window.tide.goals.list(), window.tide.learn.mastery(), window.tide.vault.notes()])
       const byPath = new Map(allNotes.map((n) => [n.path, n]))
       const out: GoalPlan[] = []
-      const inThings = new Set<string>()
       const ahead: Record<string, Forecast> = {}
       // Your real pace: study logged on each goal over the last three weeks (less for a new goal)
       const now = Date.now()
-      const log = await window.tide.learn.focusLog(now - 21 * 86_400_000).catch(() => [])
+      const log = await window.tide.learn.focusLog(now - 60 * DAY).catch(() => [])
+      setWeek(weekOf(log, now))
       for (const g of goals as Goal[]) {
         const outline = nbs.find((n) => n.path === g.notebook)?.outline
         if (!outline) continue
         const md = await window.tide.vault.read(outline).catch(() => '')
-        if (md) {
-          const plan = planGoal(g, md, byPath, mastery as Record<string, Mastery>)
-          out.push(plan)
-          const stored = readPlan(parseOutline(md).preamble ?? '')
-          if (stored?.thingsProject) inThings.add(g.notebook)
-          const windowDays = Math.max(7, Math.min(21, (now - (g.createdAt ?? now)) / 86_400_000))
-          const topics = plan.topics.map((t) => t.text)
-          const recentMinutes = log.filter((e) => e.start >= now - windowDays * 86_400_000 && countsFor(e, g.notebook, topics)).reduce((n, e) => n + e.minutes, 0)
-          ahead[g.id] = forecastGoal({ remainingTopics: plan.total - plan.done, hoursPerTopic: hoursPerTopic(stored, plan.total), recentMinutes, windowDays, deadline: g.deadline, now })
-        }
+        if (!md) continue
+        const plan = planGoal(g, md, byPath, mastery as Record<string, Mastery>)
+        out.push(plan)
+        const stored = readPlan(parseOutline(md).preamble ?? '')
+        const windowDays = Math.max(7, Math.min(21, (now - (g.createdAt ?? now)) / DAY))
+        const topics = plan.topics.map((t) => t.text)
+        const recentMinutes = log.filter((e) => e.start >= now - windowDays * DAY && countsFor(e, g.notebook, topics)).reduce((n, e) => n + e.minutes, 0)
+        ahead[g.id] = forecastGoal({ remainingTopics: plan.total - plan.done, hoursPerTopic: hoursPerTopic(stored, plan.total), recentMinutes, windowDays, deadline: g.deadline, now })
       }
       setPlans(out)
       setForecasts(ahead)
-      setThingsNotebooks(inThings)
     })
   }, [app.files, app.settings.libraryFolder])
 
   const byPath = useMemo(() => new Map(notes.map((n) => [n.path, n])), [notes])
-  const recent = app.recent.slice(0, 6)
   const libPrefix = app.settings.libraryFolder + '/'
-  const saved = useMemo(
-    () =>
-      app.files
-        .filter((f) => f.path.startsWith(libPrefix) && !isCompanion(f.path))
-        .sort((a, b) => (b.mtime ?? 0) - (a.mtime ?? 0))
-        .slice(0, 6),
-    [app.files, libPrefix]
-  )
   // One "Continue" list: what you opened last, then what you changed, never outlines you ticked
   const outlines = useMemo(() => new Set(notebooks.flatMap((n) => (n.outline ? [n.outline] : []))), [notebooks])
   const continueList = useMemo(() => {
@@ -130,36 +113,64 @@ export function Home({ dueCount, cardCount }: { dueCount: number; cardCount: num
       .filter((n) => !n.path.startsWith(libPrefix) && !outlines.has(n.path))
       .sort((a, b) => b.mtime - a.mtime)
       .map((n) => n.path)
-    return [...new Set([...recent, ...edited])].filter((p) => exists.has(p) && !outlines.has(p)).slice(0, 6)
-  }, [notes, recent, libPrefix, outlines, app.files])
+    return [...new Set([...app.recent.slice(0, 6), ...edited])].filter((p) => exists.has(p) && !outlines.has(p)).slice(0, 4)
+  }, [notes, app.recent, libPrefix, outlines, app.files])
 
-  // The two columns show the same number of rows (at most 5), so neither runs longer than the other
-  const HOME_ROWS = 5
-  const rows = continueList.length && saved.length ? Math.min(HOME_ROWS, Math.max(3, Math.min(continueList.length, saved.length))) : HOME_ROWS
+  // The next lesson: the first goal's next topic
+  const nextTopic = plans.map((p) => ({ plan: p, topic: (p.inReview ? p.reviewTopics : p.today)[0] })).find((x) => x.topic)
+  const startLesson = () =>
+    nextTopic &&
+    app.setView({ kind: 'session', mode: nextTopic.plan.inReview ? 'quiz' : 'teach', scope: nextTopic.topic.path ? { kind: 'note', path: nextTopic.topic.path } : { kind: 'folder', path: nextTopic.plan.goal.notebook }, topic: nextTopic.topic.text, nonce: Date.now() })
 
-  const row = (path: string, sub?: string, thumb = false) => {
-    const meta = byPath.get(path)
-    return (
-      <li key={path}>
-        <button className="list-row" onClick={() => app.openPath(path)}>
-          {thumb ? <MiniCover path={path} meta={meta} /> : <Icon name={sourceIcon({ path, sourceType: meta?.sourceType })} size={16} />}
-          <span className="list-title" title={meta?.title ?? fileTitle(path)}>
-            {meta?.title ?? fileTitle(path).replace(/\.pdf$/i, '')}
-          </span>
-          {sub && <span className="muted list-sub">{sub}</span>}
-        </button>
-      </li>
-    )
+  // The one thing to do now: what's due, else the next lesson, else something new
+  const hasDaily = !!daily && daily.items > 0
+  const parts = daily
+    ? [
+        daily.parts.card && `${daily.parts.card} flashcard${daily.parts.card === 1 ? '' : 's'}`,
+        daily.parts.mistake && `${daily.parts.mistake} past mistake${daily.parts.mistake === 1 ? '' : 's'}`,
+        daily.parts.recall && `${daily.parts.recall} to explain from memory`
+      ].filter(Boolean)
+    : []
+  const upNext = hasDaily
+    ? { kicker: 'Up next', title: 'Daily practice', detail: `${parts.join(', ') || 'A short mixed session'}, about ${daily!.minutes} min`, scene: 'cards' as ProfessorScene, go: () => app.setView({ kind: 'daily', nonce: Date.now() }) }
+    : nextTopic
+      ? { kicker: nextTopic.plan.inReview ? 'Review' : 'Next lesson', title: nextTopic.topic.text, detail: nextTopic.plan.goal.name.replace(/^Finish /, ''), scene: 'board' as ProfessorScene, go: startLesson }
+      : { kicker: 'Nothing due', title: 'Learn something new', detail: 'Pick a topic and the tutor will teach it step by step', scene: timeOfDayScene(), go: () => app.setView({ kind: 'learn' }) }
+
+  const quiz = () => {
+    if (!last) return
+    const single = last.topics.length === 1 && last.topics[0].path
+    app.setView({ kind: 'session', mode: 'quiz', scope: single ? { kind: 'note', path: last.topics[0].path! } : { kind: 'vault' }, topic: single ? last.topics[0].title : `What I studied ${last.when}: ${last.topics.map((t) => t.title).join('; ')}`, options: { length: 6 }, nonce: Date.now() })
+  }
+
+  const submitAsk = () => {
+    const text = ask.trim()
+    if (!text) return
+    const wants = learnIntent(text)
+    if (wants) app.setView({ kind: 'new-topic', topic: wants.topic, goal: wants.goal, auto: true, nonce: Date.now() })
+    else app.ask(text)
+    setAsk('')
   }
 
   return (
     <div className="page">
       {banner && <HomeBanner />}
-      <div className={`page-inner home${banner ? ' with-banner' : ''}`}>
-        <header className="home-head">
+      <div className={`page-inner home2${banner ? ' with-banner' : ''}`}>
+        <header className="home2-head">
           <div>
-            <h1 className="page-title">{greeting()}.</h1>
-            <p className="home-date">{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+            <h1 className="home2-greeting">{greeting()}.</h1>
+            <p className="home2-sub">
+              {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+              {last && last.topics.length > 0 && (
+                <>
+                  <span className="home2-dot" aria-hidden="true" />
+                  {last.when[0].toUpperCase() + last.when.slice(1)} you worked on {listTopics(last.topics, 2)}.{' '}
+                  <button className="home-link" onClick={quiz}>
+                    Quiz me on it
+                  </button>
+                </>
+              )}
+            </p>
           </div>
           {!banner && (
             <button
@@ -178,113 +189,197 @@ export function Home({ dueCount, cardCount }: { dueCount: number; cardCount: num
             </button>
           )}
         </header>
-        <DailyBrief dueCards={cardCount > 0 ? dueCount : 0} />
 
-        <TodayPanel />
+        <div className="home2-grid">
+          <main className="home2-main">
+            <div className="up-next2" role="button" tabIndex={0} onClick={upNext.go} onKeyDown={(e) => e.key === 'Enter' && upNext.go()}>
+              <span className="up-next2-prof" aria-hidden="true">
+                <Professor state={upNext.scene} size={56} />
+              </span>
+              <span className="up-next2-text">
+                <span className="up-next2-kicker">{upNext.kicker}</span>
+                <strong>{upNext.title}</strong>
+                <span className="up-next2-detail">{upNext.detail}</span>
+              </span>
+              <span className="up-next2-go">
+                Start
+                <Icon name="chevron" size={11} />
+              </span>
+            </div>
+            {hasDaily && nextTopic && (
+              <button className="home-link then" onClick={startLesson}>
+                <span className="muted">Then</span> {nextTopic.topic.text}
+                <Icon name="chevron" size={10} />
+              </button>
+            )}
 
-        <section className="home-goals">
-          <div className="today-head">
-            <h2 className="section-title">Goals</h2>
-            <span className="today-links">
-              <button
-                className="link-btn"
-                onClick={(e) => {
-                  const r = e.currentTarget.getBoundingClientRect()
-                  const withOutline = notebooks.filter((n) => n.outline)
-                  setGoalMenu({
-                    x: r.left,
-                    y: r.bottom + 4,
-                    items: withOutline.length
-                      ? withOutline.map((n) => ({
-                          label: n.name,
-                          run: () => {
-                            try {
-                              localStorage.setItem('tide.goal.open', n.path)
-                            } catch {
-                              // The form just won't open by itself
+            <div className="home2-ask">
+              <PromptBox value={ask} onChange={setAsk} onSubmit={submitAsk} placeholder="Ask anything, or say what you want to learn…" label="Ask the tutor" />
+            </div>
+
+            <TodayPanel />
+          </main>
+
+          <aside className="home2-rail" aria-label="Your progress">
+            {week && (
+              <section className="rail-card">
+                <div className="rail-head">
+                  <h2>This week</h2>
+                  <span className="rail-num">{fmtHours(week.days.reduce((n, d) => n + d.minutes, 0))}</span>
+                </div>
+                <div className="wk-bars" role="img" aria-label={`Study time over the last 7 days: ${week.days.map((d) => `${d.label} ${d.minutes} minutes`).join(', ')}`}>
+                  {week.days.map((d, i) => {
+                    const max = Math.max(30, ...week.days.map((x) => x.minutes))
+                    return (
+                      <span key={i} className={`wk-bar${d.today ? ' is-today' : ''}`} title={`${d.label}: ${d.minutes ? fmtHours(d.minutes) : 'no study'}`}>
+                        <span className={`wk-bar-fill${d.minutes ? '' : ' empty'}`} style={{ height: d.minutes ? Math.max(6, Math.round((d.minutes / max) * 48)) : 3 }} />
+                        <span className="wk-bar-label">{d.label[0]}</span>
+                      </span>
+                    )
+                  })}
+                </div>
+                <p className="rail-foot">{week.streak > 1 ? `${week.streak}-day streak` : week.streak === 1 ? 'Studied today' : 'Start a streak today'}</p>
+              </section>
+            )}
+
+            <section className="rail-card">
+              <div className="rail-head">
+                <h2>Goals</h2>
+                <button
+                  className="home-link"
+                  onClick={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect()
+                    const withOutline = notebooks.filter((n) => n.outline)
+                    setGoalMenu({
+                      x: r.left,
+                      y: r.bottom + 4,
+                      items: withOutline.length
+                        ? withOutline.map((n) => ({
+                            label: n.name,
+                            run: () => {
+                              try {
+                                localStorage.setItem('tide.goal.open', n.path)
+                              } catch {
+                                // The form just won't open by itself
+                              }
+                              app.setView({ kind: 'notebook', path: n.path })
                             }
-                            app.setView({ kind: 'notebook', path: n.path })
-                          }
-                        }))
-                      : [{ label: 'Start a topic with a roadmap first', run: () => app.setView({ kind: 'new-topic' }) }]
-                  })
-                }}
-              >
-                Set a goal
-              </button>
-            </span>
-          </div>
-          {plans.length ? (
-            <div className="goal-cards">
-              {plans.map((p) => (
-                <GoalCard key={p.goal.id} plan={p} forecast={forecasts[p.goal.id]} inThings={thingsNotebooks.has(p.goal.notebook)} />
-              ))}
-            </div>
-          ) : (
-            <p className="today-empty muted small">A goal is a deadline on a roadmap: Tide paces the topics to it and shows if you're ahead or behind.</p>
-          )}
-          <ContextMenu menu={goalMenu} onClose={() => setGoalMenu(null)} />
-        </section>
+                          }))
+                        : [{ label: 'Start a topic with a roadmap first', run: () => app.setView({ kind: 'new-topic' }) }]
+                    })
+                  }}
+                >
+                  Set a goal
+                </button>
+              </div>
+              {plans.length ? (
+                <ul className="rail-goals">
+                  {plans.map((p) => (
+                    <GoalRow key={p.goal.id} plan={p} forecast={forecasts[p.goal.id]} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="rail-empty">Set a deadline on a roadmap and Tide paces it for you.</p>
+              )}
+              <ContextMenu menu={goalMenu} onClose={() => setGoalMenu(null)} />
+            </section>
 
-        <div className="home-columns">
-          <section>
-            <h2 className="section-title">Continue</h2>
-            {continueList.length ? (
-              <ul className="list">{continueList.slice(0, rows).map((p) => row(p, p.startsWith(libPrefix) ? 'Library' : p.includes('/') ? p.split('/')[0] : undefined))}</ul>
-            ) : (
-              <p className="muted small">Notes and books you open will show up here.</p>
+            {continueList.length > 0 && (
+              <section className="rail-card">
+                <div className="rail-head">
+                  <h2>Continue</h2>
+                  <button className="home-link" onClick={() => app.setView({ kind: 'library' })}>
+                    Library
+                    <Icon name="chevron" size={10} />
+                  </button>
+                </div>
+                <ul className="rail-list">
+                  {continueList.map((path) => {
+                    const meta = byPath.get(path)
+                    return (
+                      <li key={path}>
+                        <button onClick={() => app.openPath(path)} title={meta?.title ?? fileTitle(path)}>
+                          <Icon name={sourceIcon({ path, sourceType: meta?.sourceType })} size={14} />
+                          <span>{meta?.title ?? fileTitle(path).replace(/\.pdf$/i, '')}</span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
             )}
-          </section>
-          <section>
-            <h2 className="section-title">Recently saved</h2>
-            {saved.length ? (
-              <ul className="list">{saved.slice(0, rows).map((f) => row(f.path, f.mtime ? timeAgo(f.mtime) : undefined, true))}</ul>
-            ) : (
-              <p className="muted small">Links, videos, PDFs and docs you save land in your Library.</p>
+
+            {problems > 0 && (
+              <button className="home-link rail-extra" onClick={() => app.setView({ kind: 'practice' })}>
+                {problems} problem{problems === 1 ? '' : 's'} to retry
+                <Icon name="chevron" size={10} />
+              </button>
             )}
-          </section>
+          </aside>
         </div>
-
-        {notebooks.length > 0 && (
-          <section className="shelf-section">
-            <h2 className="section-title">Notebooks</h2>
-            <div className="shelf">
-              {notebooks.map((nb) => (
-                <EditableCover key={nb.path} notebook={nb} onClick={() => app.setView({ kind: 'notebook', path: nb.path })} onChanged={reloadNotebooks} />
-              ))}
-              <button className="nb-new" onClick={() => app.setView({ kind: 'new-topic' })}>
-                <Icon name="plus" size={18} />
-                <span>New topic</span>
-              </button>
-            </div>
-          </section>
-        )}
-
-
-
       </div>
     </div>
   )
 }
 
-/** A small cover for library items: the cached thumbnail when there is one, otherwise the kind's icon */
-function MiniCover({ path, meta }: { path: string; meta?: NoteMeta }) {
-  const [src, setSrc] = useState<string | null>(null)
-  useEffect(() => {
-    let live = true
-    window.tide.library
-      .thumb(path, meta?.image, meta?.sourceUrl)
-      .then((t) => live && t && setSrc(vaultUrl(t)))
-      .catch(() => {})
-    return () => {
-      live = false
-    }
-  }, [path, meta?.image, meta?.sourceUrl])
-  return src ? (
-    <img className="mini-cover" src={src} alt="" draggable={false} onError={() => setSrc(null)} />
-  ) : (
-    <span className="mini-cover empty">
-      <Icon name={sourceIcon({ path, sourceType: meta?.sourceType })} size={14} />
-    </span>
+const DAY = 86_400_000
+const fmtHours = (m: number) => (m < 60 ? `${m} min` : `${Math.round((m / 60) * 10) / 10} h`)
+
+/** The last seven days' study minutes, and how many days in a row up to today (or yesterday) */
+function weekOf(log: { start: number; minutes: number }[], now: number) {
+  const key = (t: number) => {
+    const d = new Date(t)
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+  }
+  const byDay = new Map<string, number>()
+  for (const e of log) byDay.set(key(e.start), (byDay.get(key(e.start)) ?? 0) + e.minutes)
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const t = now - (6 - i) * DAY
+    return { label: new Date(t).toLocaleDateString('en-GB', { weekday: 'short' }), minutes: byDay.get(key(t)) ?? 0, today: i === 6 }
+  })
+  let streak = 0
+  for (let i = byDay.has(key(now)) ? 0 : 1; i < 60 && (byDay.get(key(now - i * DAY)) ?? 0) > 0; i++) streak++
+  return { days, streak }
+}
+
+/** A goal in the rail: how far along, and the forecast in a few words */
+function GoalRow({ plan, forecast: f }: { plan: GoalPlan; forecast?: Forecast }) {
+  const app = useApp()
+  const share = plan.total ? plan.done / plan.total : 0
+  const r = 11
+  const c = 2 * Math.PI * r
+  const state = plan.overdue ? 'Past the deadline' : !f || f.state === 'done' ? `${Math.round(share * 100)}% done` : f.state === 'late' ? `${f.daysLate} days late at your pace` : f.state === 'early' ? `${-f.daysLate!} days early` : f.state === 'on-time' ? 'On time at your pace' : 'No study lately'
+  const tone = plan.overdue || f?.state === 'late' ? 'behind' : f?.state === 'no-data' ? 'quiet' : 'ok'
+  const needed = f && f.neededWeeklyHours !== null && Number.isFinite(f.neededWeeklyHours) ? `${Math.round(f.neededWeeklyHours * 10) / 10} h a week` : null
+  return (
+    <li className={`rail-goal ${tone}`}>
+      <button className="rail-goal-main" onClick={() => app.setView({ kind: 'notebook', path: plan.goal.notebook })}>
+        <svg width="28" height="28" viewBox="0 0 28 28" aria-label={`${Math.round(share * 100)}% done`}>
+          <circle cx="14" cy="14" r={r} fill="none" stroke="var(--bg-active)" strokeWidth="3.5" />
+          <circle cx="14" cy="14" r={r} fill="none" stroke="var(--primary, var(--accent))" strokeWidth="3.5" strokeLinecap="round" strokeDasharray={`${c * Math.max(share, 0.02)} ${c}`} transform="rotate(-90 14 14)" />
+        </svg>
+        <span className="rail-goal-text">
+          <strong>{plan.goal.name.replace(/^Finish /, '')}</strong>
+          <span>
+            {state}
+            {needed && (f?.state === 'late' || f?.state === 'no-data') ? `, needs ${needed}` : ''}
+          </span>
+        </span>
+      </button>
+      {(f?.state === 'late' || f?.state === 'no-data') && (
+        <button
+          className="home-link small"
+          onClick={() =>
+            app.ask(
+              `Help me make my plan for "${plan.goal.name}" fit. I have ${plan.total - plan.done} topics left (about ${Math.round(f.hoursLeft)} hours of study), the deadline is ${plan.goal.deadline}, and lately I've managed ${f.weeklyHours} hours a week${needed ? `; I'd need about ${needed}` : ''}. Suggest a realistic choice: more hours, a later deadline, or which topics to cut or skim, and tell me what you'd do.`,
+              { scope: { kind: 'folder', path: plan.goal.notebook } }
+            )
+          }
+        >
+          Make it fit
+          <Icon name="chevron" size={10} />
+        </button>
+      )}
+    </li>
   )
 }
