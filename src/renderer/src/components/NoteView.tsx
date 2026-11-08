@@ -9,6 +9,7 @@ import { FONT_VAR, TEXT_SCALE, usePageSettings } from '../lib/pageSettings'
 import { Editor, type EditorHandle } from './Editor'
 import { Icon } from './Icon'
 import { FormatBar } from './FormatBar'
+import { openingRequest } from '../lib/openingRequest'
 import { FlashcardMaker } from './FlashcardMaker'
 import { PageMenu } from './PageMenu'
 import { InlineTutor, type InlineTutorHandle } from './InlineTutor'
@@ -437,7 +438,15 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
           <TimeThis context={{ label: fileTitle(path), path, kind: 'note' }} />
           <StatusPicker path={path} status={status} onChange={() => load()} />
           <div className="popover-anchor">
-            <button className={`tool-btn${learnOpen ? ' on' : ''}`} onClick={() => setLearnOpen((v) => !v)} title="Learn from this note">
+            <button
+              className={`tool-btn${learnOpen ? ' on' : ''}`}
+              onClick={() => {
+                // Opening the menu reads "Teach me" on this note into the model's cache, the usual pick
+                if (!learnOpen) window.tide.ai.prewarm(openingRequest({ mode: 'teach', topic: props.title || scopeTopic(scope) }, scope, app.settings.character ?? 'professor')).catch(() => {})
+                setLearnOpen((v) => !v)
+              }}
+              title="Learn from this note"
+            >
               <Icon name="tutor" />
               <span>Learn</span>
             </button>
