@@ -4,6 +4,7 @@ import { fileTitle, useApp } from '../state'
 import { renderMarkdown } from '../lib/markdown'
 import { Icon } from './Icon'
 import { PixelScene } from './PixelScene'
+import { PillToggle } from './PromptBox'
 
 const NEW_PER_SESSION = 20
 
@@ -168,12 +169,13 @@ function Decks({ onStudy }: { onStudy(scope: ChatScope): void }) {
             {decks.map(([name, d]) => (
               <li key={name}>
                 <span className="rv-row-title">{name}</span>
-                <span className="rv-counts">
-                  <span className={`d-new${d.new ? '' : ' zero'}`} title="New">{d.new}</span>
-                  <span className={`d-learning${d.learning ? '' : ' zero'}`} title="Learning">{d.learning}</span>
-                  <span className={`d-due${d.due ? '' : ' zero'}`} title="Due">{d.due}</span>
+                <span className="rv-mix" aria-hidden="true">
+                  {d.new > 0 && <span className="d-new" style={{ flexGrow: d.new }} />}
+                  {d.learning > 0 && <span className="d-learning" style={{ flexGrow: d.learning }} />}
+                  {d.due > 0 && <span className="d-due" style={{ flexGrow: d.due }} />}
                 </span>
-                <button className="btn small" disabled={!d.due && !d.new} onClick={() => onStudy(name === 'Unsorted' ? { kind: 'vault' } : { kind: 'folder', path: name })}>
+                <span className="rv-mix-text">{[d.new && `${d.new} new`, d.learning && `${d.learning} learning`, d.due && `${d.due} due`].filter(Boolean).join(', ') || 'All caught up'}</span>
+                <button className={`btn small${d.due || d.new ? ' primary' : ''}`} disabled={!d.due && !d.new} onClick={() => onStudy(name === 'Unsorted' ? { kind: 'vault' } : { kind: 'folder', path: name })}>
                   Study
                 </button>
               </li>
@@ -280,25 +282,33 @@ export function StudyView({ scope: initialScope }: { scope: ChatScope }) {
     <div className="page study">
       <PixelScene place="flashcards" rows={40} scale={3} className="page-scene" data={{ left: queue.length, live: true }} />
       <div className="page-inner narrow">
-        <header className="page-head">
-          <div>
-            <h1 className="page-title">Review</h1>
-            <p className="muted">{scopeName(scope)}</p>
+        <header className="rv-session-head">
+          <div className="crumbs">
+            <button className="crumb-link" onClick={() => setStarted(false)}>
+              Review
+            </button>
+            <Icon name="chevron" size={11} />
+            <span className="crumb current">{scopeName(scope)}</span>
           </div>
           {card && (
-            <div className="row-gap">
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={typeFirst}
-                  onChange={(e) => {
-                    setTypeFirst(e.target.checked)
-                    localStorage.setItem('tide.review.type', e.target.checked ? 'on' : 'off')
-                  }}
-                />
-                Type my answer first
-              </label>
-              <span className="muted tabular">{queue.length} left</span>
+            <div className="rv-session-tools">
+              <span className="rv-progress" aria-label={`${done} of ${sessionSize} reviewed`}>
+                <span className="rv-progress-text">
+                  {done} of {sessionSize}
+                </span>
+                <span className="rv-progress-bar">
+                  <span style={{ width: `${sessionSize ? Math.min(100, (done / sessionSize) * 100) : 0}%` }} />
+                </span>
+              </span>
+              <PillToggle
+                label="Type first"
+                title="Type your answer before you see it"
+                on={typeFirst}
+                onChange={(on) => {
+                  setTypeFirst(on)
+                  localStorage.setItem('tide.review.type', on ? 'on' : 'off')
+                }}
+              />
             </div>
           )}
         </header>
@@ -329,9 +339,6 @@ export function StudyView({ scope: initialScope }: { scope: ChatScope }) {
 
         {card && (
           <>
-            <div className="session-progress" aria-label={`${done} of ${sessionSize} reviewed`}>
-              <span style={{ width: `${sessionSize ? Math.min(100, (done / sessionSize) * 100) : 0}%` }} />
-            </div>
             {card.leech && (
               <div className="leech">
                 <span>You've forgotten this card {card.schedule?.lapses} times. Drilling it again won't help as much as re-learning the idea.</span>
@@ -340,7 +347,9 @@ export function StudyView({ scope: initialScope }: { scope: ChatScope }) {
                 </button>
               </div>
             )}
-            <div className={`flashcard${flipped ? ' flipped' : ''}${card.cloze ? ' cloze' : ''}`} onClick={() => !flipped && !typeFirst && setFlipped(true)}>
+            <div className="card-stack">
+            <div key={card.id} className={`flashcard${flipped ? ' flipped' : ''}${card.cloze ? ' cloze' : ''}`} onClick={() => !flipped && !typeFirst && setFlipped(true)}>
+              <span className="card-kicker">{card.cloze ? 'Fill the gap' : 'Question'}</span>
               <div className="prose card-face" dangerouslySetInnerHTML={{ __html: renderMarkdown(card.front, env) }} />
               {typeFirst && !flipped && (
                 <textarea
@@ -354,16 +363,16 @@ export function StudyView({ scope: initialScope }: { scope: ChatScope }) {
                 />
               )}
               {flipped && (
-                <>
-                  <div className="card-divider" />
+                <div className="card-answer">
                   {typed.trim() && (
                     <div className="card-yours">
-                      <span className="muted small">Your answer</span>
+                      <span className="card-kicker">You said</span>
                       <p>{typed}</p>
                     </div>
                   )}
+                  <span className="card-kicker">Answer</span>
                   <div className="prose card-face" dangerouslySetInnerHTML={{ __html: renderMarkdown(card.back, env) }} />
-                </>
+                </div>
               )}
               <div className="card-foot">
                 <button className="card-source" onClick={(e) => { e.stopPropagation(); app.openPath(card.path) }}>
@@ -387,31 +396,26 @@ export function StudyView({ scope: initialScope }: { scope: ChatScope }) {
                 )}
               </div>
             </div>
-            <div className="grade-bar">
+            </div>
+            <div className={`grade-bar${flipped ? ' graded' : ''}`}>
               {!flipped ? (
-                <button className="btn primary wide" onClick={() => setFlipped(true)}>
-                  Show answer
+                <button className="reveal-btn" onClick={() => setFlipped(true)}>
+                  Show answer <kbd>Space</kbd>
                 </button>
               ) : (
                 GRADES.map((g) => (
-                  <button key={g.grade} className={`btn grade grade-${g.grade}`} onClick={() => grade(g.grade)}>
-                    <span>{g.label}</span>
-                    <span className="grade-sub">{intervalLabel(card.preview[g.grade])}</span>
+                  <button key={g.grade} className={`grade-btn grade-${g.grade}`} onClick={() => grade(g.grade)}>
+                    <span className="grade-label">
+                      <i aria-hidden="true" />
+                      {g.label}
+                    </span>
+                    <span className="grade-sub">
+                      {intervalLabel(card.preview[g.grade])} <kbd>{g.key}</kbd>
+                    </span>
                   </button>
                 ))
               )}
             </div>
-            <p className="key-hint">
-              {flipped ? (
-                <>
-                  Press <kbd>1</kbd> to <kbd>4</kbd> to grade, <kbd>Space</kbd> for Good
-                </>
-              ) : (
-                <>
-                  Press <kbd>Space</kbd> to show the answer
-                </>
-              )}
-            </p>
           </>
         )}
       </div>
