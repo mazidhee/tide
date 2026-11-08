@@ -547,6 +547,8 @@ export interface TideApi {
     logFocus(start: number, end: number, context?: { label?: string; path?: string; kind?: string }): Promise<void>
     /** Minutes of timed study recorded for a note, book or problem */
     focusTime(path: string): Promise<number>
+    /** Study sessions logged since a time (ms) */
+    focusLog(since: number): Promise<{ start: number; minutes: number; label?: string; path?: string; kind?: string }[]>
     /** Up to three pages worth reading next on these topics, found on the web */
     suggestReading(topics: string[]): Promise<{ title: string; url: string; host: string; why: string }[]>
     /** Chapters of a PDF from its bookmarks, or from its printed contents */

@@ -452,6 +452,12 @@ export async function logFocus(start: number, end: number, context?: { label?: s
   await fs.appendFile(absPath(FOCUS_LOG), JSON.stringify({ start, end, minutes, label: clean(context?.label), path: clean(context?.path), kind: clean(context?.kind) }) + '\n')
 }
 
+/** Study sessions logged since a time, for forecasts */
+export async function focusLog(since: number): Promise<{ start: number; minutes: number; label?: string; path?: string; kind?: string }[]> {
+  const all = await readJsonl<{ start: number; end: number; minutes: number; label?: string; path?: string; kind?: string }>(FOCUS_LOG).catch(() => [])
+  return all.filter((e) => e.start >= since).map(({ start, minutes, label, path, kind }) => ({ start, minutes, label, path, kind }))
+}
+
 const INTERVIEW_LOG = joinRel('.tide', 'interviews.jsonl')
 
 /** Saves one mock interview round's result */

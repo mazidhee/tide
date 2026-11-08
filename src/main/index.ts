@@ -35,7 +35,7 @@ import {
   setNoteStatus,
   updateNotebook,
   recordAttempt,
-  getMastery, getLibraryTopics, onPathMoved, setLibraryTopics, clearCoverImage, logFocus, focusTime, invalidateGraph } from './learn'
+  getMastery, getLibraryTopics, onPathMoved, setLibraryTopics, clearCoverImage, logFocus, focusLog, focusTime, invalidateGraph } from './learn'
 import { importFile, libraryThumb, saveUrl } from './library'
 import { getHighlights, saveHighlights } from './highlights'
 import { librariesStatus, mathStatus, runCode, runProject, setupLibraries, setupMath } from './runner'
@@ -307,6 +307,7 @@ function registerIpc() {
   handle('learn:brief', () => getBrief())
   handle('learn:logFocus', (start: number, end: number, context?: { label?: string; path?: string; kind?: string }) => logFocus(start, end, context))
   handle('learn:focusTime', (p: string) => focusTime(p))
+  handle('learn:focusLog', (since: number) => focusLog(since))
   handle('learn:suggestReading', (topics: string[]) => suggestReading(topics))
   handle('ai:models', () => listModels().catch(() => []))
   handle('ai:test', () => testConnection())

@@ -3,6 +3,7 @@ import type { Goal } from '@shared/types'
 import { useApp } from '../state'
 import { formatDeadline, type GoalPlan, type GoalTopic } from '../lib/goals'
 import { Icon } from './Icon'
+import type { Forecast } from '@shared/forecast'
 
 /** The plan for one goal: pace, today's topics, and where review time starts */
 export function GoalPanel({ plan, onRemove, compact }: { plan: GoalPlan; onRemove?: () => void; compact?: boolean }) {
@@ -115,14 +116,16 @@ export function GoalForm({ notebook, sections, onSave, onCancel }: { notebook: s
  * A goal on Home, at a glance: how far along (a ring), how long is left, whether you're on pace
  * (where you are against where you'd be by today), and the next topic, one click from a lesson.
  */
-export function GoalCard({ plan, inThings }: { plan: GoalPlan; inThings?: boolean }) {
+export function GoalCard({ plan, inThings, forecast }: { plan: GoalPlan; inThings?: boolean; forecast?: Forecast }) {
   const app = useApp()
   const { goal } = plan
   const share = plan.total ? plan.done / plan.total : 0
   const expected = plan.total ? Math.min(1, Math.max(0, (plan.done - plan.ahead) / plan.total)) : 0
   const next = (plan.inReview ? plan.reviewTopics : plan.today)[0]
-  const status = plan.overdue ? 'Past the deadline' : plan.inReview ? 'Review time' : plan.ahead >= 1 ? `${plan.ahead} ahead` : plan.ahead <= -1 ? `${-plan.ahead} behind` : 'On pace'
-  const tone = plan.overdue || plan.ahead <= -1 ? 'behind' : plan.ahead >= 1 ? 'ahead' : 'ok'
+  // At the pace you've actually kept, running late outranks being on the even schedule so far
+  const late = !plan.overdue && !plan.inReview && forecast?.state === 'late'
+  const status = plan.overdue ? 'Past the deadline' : plan.inReview ? 'Review time' : late ? 'Running late' : plan.ahead >= 1 ? `${plan.ahead} ahead` : plan.ahead <= -1 ? `${-plan.ahead} behind` : 'On pace'
+  const tone = plan.overdue || late || plan.ahead <= -1 ? 'behind' : plan.ahead >= 1 ? 'ahead' : 'ok'
   const r = 18
   const c = 2 * Math.PI * r
   return (
@@ -147,6 +150,7 @@ export function GoalCard({ plan, inThings }: { plan: GoalPlan; inThings?: boolea
         <span className="goal-pace-fill" style={{ width: `${share * 100}%` }} />
         <span className="goal-pace-mark" style={{ left: `${expected * 100}%` }} />
       </div>
+      {forecast && <ForecastLine forecast={forecast} plan={plan} />}
       <div className="goal-card-foot">
         {next ? (
           <button
@@ -172,6 +176,45 @@ export function GoalCard({ plan, inThings }: { plan: GoalPlan; inThings?: boolea
           </span>
         )}
       </div>
+    </div>
+  )
+}
+
+const day = (ms: number) => new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+const hours = (h: number) => (h >= 10 ? Math.round(h) : Math.round(h * 10) / 10)
+
+/**
+ * The forecast in a sentence: when you'll finish at the pace you've actually kept, against the
+ * deadline, and the weekly hours that would land it. Running late, the tutor can rework the plan.
+ */
+function ForecastLine({ forecast: f, plan }: { forecast: Forecast; plan: GoalPlan }) {
+  const app = useApp()
+  if (f.state === 'done') return null
+  const needed = f.neededWeeklyHours !== null && Number.isFinite(f.neededWeeklyHours) ? `${hours(f.neededWeeklyHours)} h a week` : null
+  const text =
+    f.state === 'no-data'
+      ? `No study logged on this lately.${needed ? ` About ${needed} finishes it by ${formatDeadline(plan.goal.deadline)}.` : ''}`
+      : f.state === 'late'
+        ? `At your ${hours(f.weeklyHours)} h a week you’d finish ${day(f.finish!)}, ${f.daysLate} days late.${needed ? ` About ${needed} gets you there.` : ''}`
+        : f.state === 'early'
+          ? `At your ${hours(f.weeklyHours)} h a week you’ll finish ${day(f.finish!)}, ${-f.daysLate!} days early.`
+          : `At your ${hours(f.weeklyHours)} h a week you’ll finish around ${day(f.finish!)}, right on time.`
+  return (
+    <div className={`goal-forecast ${f.state}`} onClick={(e) => e.stopPropagation()}>
+      <span>{text}</span>
+      {(f.state === 'late' || f.state === 'no-data') && (
+        <button
+          className="goal-forecast-fix"
+          onClick={() =>
+            app.ask(
+              `Help me make my plan for "${plan.goal.name}" fit. I have ${plan.total - plan.done} topics left (about ${hours(f.hoursLeft)} hours of study), the deadline is ${plan.goal.deadline}, and lately I've managed ${hours(f.weeklyHours)} hours a week${needed ? `; I'd need about ${needed}` : ''}. Suggest a realistic choice: more hours, a later deadline, or which topics to cut or skim, and tell me what you'd do.`,
+              { scope: { kind: 'folder', path: plan.goal.notebook } }
+            )
+          }
+        >
+          Make it fit
+        </button>
+      )}
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { countsFor, forecastGoal, hoursPerTopic, type Forecast } from '@shared/forecast'
 import { TodayPanel } from './TodayPanel'
 import { HomeBanner } from './HomeBanner'
 import { Professor, type ProfessorScene } from './Professor'
@@ -67,6 +68,7 @@ export function Home({ dueCount, cardCount }: { dueCount: number; cardCount: num
   const [notes, setNotes] = useState<NoteMeta[]>([])
   const [notebooks, setNotebooks] = useState<NotebookMeta[]>([])
   const [plans, setPlans] = useState<GoalPlan[]>([])
+  const [forecasts, setForecasts] = useState<Record<string, Forecast>>({})
   const [goalMenu, setGoalMenu] = useState<MenuState | null>(null)
   const [thingsNotebooks, setThingsNotebooks] = useState<Set<string>>(new Set())
   const reloadNotebooks = () =>
@@ -84,16 +86,27 @@ export function Home({ dueCount, cardCount }: { dueCount: number; cardCount: num
       const byPath = new Map(allNotes.map((n) => [n.path, n]))
       const out: GoalPlan[] = []
       const inThings = new Set<string>()
+      const ahead: Record<string, Forecast> = {}
+      // Your real pace: study logged on each goal over the last three weeks (less for a new goal)
+      const now = Date.now()
+      const log = await window.tide.learn.focusLog(now - 21 * 86_400_000).catch(() => [])
       for (const g of goals as Goal[]) {
         const outline = nbs.find((n) => n.path === g.notebook)?.outline
         if (!outline) continue
         const md = await window.tide.vault.read(outline).catch(() => '')
         if (md) {
-          out.push(planGoal(g, md, byPath, mastery as Record<string, Mastery>))
-          if (readPlan(parseOutline(md).preamble ?? '')?.thingsProject) inThings.add(g.notebook)
+          const plan = planGoal(g, md, byPath, mastery as Record<string, Mastery>)
+          out.push(plan)
+          const stored = readPlan(parseOutline(md).preamble ?? '')
+          if (stored?.thingsProject) inThings.add(g.notebook)
+          const windowDays = Math.max(7, Math.min(21, (now - (g.createdAt ?? now)) / 86_400_000))
+          const topics = plan.topics.map((t) => t.text)
+          const recentMinutes = log.filter((e) => e.start >= now - windowDays * 86_400_000 && countsFor(e, g.notebook, topics)).reduce((n, e) => n + e.minutes, 0)
+          ahead[g.id] = forecastGoal({ remainingTopics: plan.total - plan.done, hoursPerTopic: hoursPerTopic(stored, plan.total), recentMinutes, windowDays, deadline: g.deadline, now })
         }
       }
       setPlans(out)
+      setForecasts(ahead)
       setThingsNotebooks(inThings)
     })
   }, [app.files, app.settings.libraryFolder])
@@ -204,7 +217,7 @@ export function Home({ dueCount, cardCount }: { dueCount: number; cardCount: num
           {plans.length ? (
             <div className="goal-cards">
               {plans.map((p) => (
-                <GoalCard key={p.goal.id} plan={p} inThings={thingsNotebooks.has(p.goal.notebook)} />
+                <GoalCard key={p.goal.id} plan={p} forecast={forecasts[p.goal.id]} inThings={thingsNotebooks.has(p.goal.notebook)} />
               ))}
             </div>
           ) : (

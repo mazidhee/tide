@@ -92,6 +92,7 @@ const api: TideApi = {
     brief: invoke('learn:brief'),
     logFocus: invoke('learn:logFocus'),
     focusTime: invoke('learn:focusTime'),
+    focusLog: invoke('learn:focusLog'),
     suggestReading: invoke('learn:suggestReading'),
     chooseCover: invoke('learn:chooseCover'),
     setCoverFile: invoke('learn:setCoverFile'),
