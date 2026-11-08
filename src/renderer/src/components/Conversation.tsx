@@ -6,6 +6,7 @@ import { asksForWeb } from '@shared/modelText'
 import { useApp } from '../state'
 import { renderMarkdown } from '../lib/markdown'
 import { Icon } from './Icon'
+import { chatEngine, EnginePill } from './EnginePill'
 import { Professor, type ProfessorState } from './Professor'
 import { SpeakButton } from './Voice'
 
@@ -193,7 +194,8 @@ export function useConversation() {
           terminalId: opts.terminalId,
           canvasPath: opts.canvasPath,
           voice: opts.voice,
-          web: useWeb
+          web: useWeb,
+          engine: chatEngine()
         })
       } catch (e) {
         activeId.current = null
@@ -507,6 +509,7 @@ export function Composer({ value, onChange, onSend, busy, onStop, web, onWeb, at
       <div className="composer-bar">
         <div className="composer-tools">
           {tools}
+          <EnginePill />
           <button
             type="button"
             className={`pill${web ? ' on' : ''}`}

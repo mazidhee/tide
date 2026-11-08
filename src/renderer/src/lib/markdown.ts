@@ -1,3 +1,4 @@
+import { normalizeMath } from '@shared/modelText'
 import MarkdownIt from 'markdown-it'
 import type StateInline from 'markdown-it/lib/rules_inline/state_inline.mjs'
 import type StateBlock from 'markdown-it/lib/rules_block/state_block.mjs'
@@ -438,5 +439,5 @@ export function splitFrontmatter(raw: string): Frontmatter {
 }
 
 export function renderMarkdown(body: string, env: RenderEnv): string {
-  return sanitize(instance.render(body, env))
+  return sanitize(instance.render(normalizeMath(body), env))
 }

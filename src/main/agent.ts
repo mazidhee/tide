@@ -15,6 +15,8 @@ import type { ChatEvent, ChatMessage, ChatRequest, ContextSource, AgentStep } fr
 import { getSettings } from './settings'
 import { localSampling } from './sampling'
 import { getChunks, indexReady, search } from './search'
+import { canTake, CLOUD_REPLY_TOKENS, CloudUnavailable, cloudError, estimateTokens, headersFor, noteLimits, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
+import { escalationFor, providerInfo, type CloudTask, type RequestKind } from '@shared/providers'
 import { findImages } from './images'
 import { readText, writeText } from './vault'
 import { applyCanvasOps, describeCanvas, parseCanvas, serializeCanvas } from '@shared/canvas'
@@ -463,7 +465,23 @@ function transientContext(): { transient_context?: string } {
 }
 
 /** Retries a turn once with more randomness when the model gets stuck repeating itself */
-async function streamTurn(messages: ApiMessage[], tools: unknown[], signal: AbortSignal, onText: (t: string) => void) {
+async function streamTurn(messages: ApiMessage[], tools: unknown[], signal: AbortSignal, onText: (t: string) => void, ctx?: LoopContext) {
+  const cloud = ctx?.cloud
+  if (cloud && !cloud.fellBack) {
+    let wrote = false
+    try {
+      // Don't send what the provider's per-minute allowance can't take: Gemma answers at once instead
+      const needed = estimateTokens(JSON.stringify(messages).length + JSON.stringify(tools).length) + CLOUD_REPLY_TOKENS
+      if (!canTake(needed)) throw new CloudUnavailable(`The cloud model’s per-minute limit is used up for about ${secondsUntilReset()}s`)
+      return await streamTurnOnce(messages, tools, signal, (t) => ((wrote = true), onText(t)), 0, cloud.target, cloud.task)
+    } catch (e) {
+      if (signal.aborted || !(e instanceof CloudUnavailable || e instanceof TypeError)) throw e
+      // The cloud can't take it right now: Gemma answers, and the step says why
+      cloud.fellBack = true
+      ctx!.updateStep(cloud.stepId, { status: 'error', detail: `${(e as Error).message}. Gemma answered instead.` })
+      if (wrote) onText(RESET)
+    }
+  }
   return asInteractive(() => streamTurnRetrying(messages, tools, signal, onText))
 }
 
@@ -493,7 +511,9 @@ async function streamTurnOnce(
   tools: unknown[],
   outerSignal: AbortSignal,
   onText: (t: string) => void,
-  extraTemperature: number
+  extraTemperature: number,
+  target?: CloudTarget | null,
+  task: RequestKind = 'tutor'
 ): Promise<{ text: string; calls: ToolCall[] }> {
   const { baseUrl, apiKey, temperature } = getSettings().ai
   const controller = new AbortController()
@@ -501,28 +521,40 @@ async function streamTurnOnce(
   outerSignal.addEventListener('abort', abort)
   const signal = controller.signal
   const filter = createStreamFilter()
-  const model = await resolveModel()
-  const payload = {
-    model,
-    messages,
-    temperature: Math.min(1.2, temperature + extraTemperature),
-    ...localSampling(model, extraTemperature > 0),
-    stream: true,
-    max_tokens: 3000,
-    ...(tools.length ? { tools } : {}),
-    ...transientContext()
-  }
+  const model = target ? target.model : await resolveModel()
+  // A cloud model gets a plain OpenAI request: none of the local server's fields, but its real token counts back
+  const payload = target
+    ? { model, messages, temperature: Math.min(1, temperature + extraTemperature), stream: true, max_tokens: CLOUD_REPLY_TOKENS, stream_options: { include_usage: true }, ...(tools.length ? { tools } : {}), ...target.extra }
+    : {
+        model,
+        messages,
+        temperature: Math.min(1.2, temperature + extraTemperature),
+        ...localSampling(model, extraTemperature > 0),
+        stream: true,
+        max_tokens: 3000,
+        ...(tools.length ? { tools } : {}),
+        ...transientContext()
+      }
   // Dev only: keep the last request so model behaviour can be replayed outside the app
   if (process.env.TIDE_DEBUG_AI) {
     const { writeFileSync } = await import('fs')
     writeFileSync(process.env.TIDE_DEBUG_AI, JSON.stringify(payload, null, 1))
   }
-  const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+  const res = await fetch(target ? `${target.baseUrl}/chat/completions` : `${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
+    headers: target ? headersFor(target) : { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
     body: JSON.stringify(payload),
     signal
+  }).catch((e) => {
+    outerSignal.removeEventListener('abort', abort)
+    if (target && !outerSignal.aborted) throw new CloudUnavailable(`Couldn't reach the cloud model: ${(e as Error).message}`)
+    throw e
   })
+  if (target && (!res.ok || !res.body)) {
+    outerSignal.removeEventListener('abort', abort)
+    throw await cloudError(res)
+  }
+  if (target) noteLimits(res.headers)
   if (!res.ok || !res.body) {
     const detail = await res.text().catch(() => '')
     throw new Error(`AI server answered ${res.status}: ${detail.slice(0, 300) || res.statusText}`)
@@ -536,6 +568,7 @@ async function streamTurnOnce(
   let raw = ''
   // How many thought-channel openings there were when the answer began; another one after that is a stall
   let channelsAtStart = -1
+  let usage: { input: number; output: number; cached?: number } | null = null
   const calls = new Map<number, ToolCall>()
   for (;;) {
     const { value, done } = await reader.read()
@@ -547,7 +580,10 @@ async function streamTurnOnce(
       const data = line.trim().replace(/^data:\s*/, '')
       if (!data || data === '[DONE]' || !line.trim().startsWith('data:')) continue
       try {
-        const delta = JSON.parse(data).choices?.[0]?.delta
+        const chunk = JSON.parse(data)
+        const u = chunk.usage ?? chunk.x_groq?.usage
+        if (u) usage = { input: u.prompt_tokens ?? 0, output: u.completion_tokens ?? 0, cached: u.prompt_tokens_details?.cached_tokens }
+        const delta = chunk.choices?.[0]?.delta
         if (delta?.content || delta?.tool_calls) firstAt ||= Date.now()
         if (delta?.content) {
           raw += delta.content
@@ -588,6 +624,15 @@ async function streamTurnOnce(
     }
   }
   outerSignal.removeEventListener('abort', abort)
+  const promptChars = messages.reduce((n, m) => n + (typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content ?? '').length), 0)
+  recordUsage({
+    kind: target ? 'cloud' : 'local',
+    provider: target ? target.provider : 'local',
+    model,
+    task,
+    ...(usage ?? { input: estimateTokens(promptChars + JSON.stringify(tools).length), output: estimateTokens(raw.length) }),
+    estimated: !usage
+  })
   let found = [...calls.values()].filter((c) => c.name)
   // The server sometimes hands a call back as text (Gemma stuttered its opening tag): run it anyway
   if (!found.length && raw.includes('<|tool_call')) found = recoverToolCalls(raw).map((c, i) => ({ id: `recovered_${Date.now()}_${i}`, name: c.name, arguments: c.arguments }))
@@ -619,6 +664,8 @@ interface LoopContext {
   canvasPath?: string
   /** A lesson, quiz or interview: only the tools teaching needs, so the prompt stays short */
   focused?: boolean
+  /** This turn goes to the cloud model (Gemma takes over if it can't) */
+  cloud?: { target: CloudTarget; task: RequestKind; stepId: string; fellBack?: boolean }
 }
 
 // Searches and pages are cached for a while: the model often repeats a query or rereads a page
@@ -1040,7 +1087,9 @@ async function loop(messages: ApiMessage[], ctx: LoopContext, depth: number, onT
   const canvasTools = ctx.canvasPath ? [CANVAS_READ, CANVAS_EDIT] : []
   const top = depth === 0 && !ctx.focused
   const thingsTools = top && (await thingsAvailable()) ? [THINGS_ADD, THINGS_TASKS, THINGS_FEEDBACK] : []
-  const tools = [...NOTE_TOOLS, CODE_TOOL, ...((ctx.web || ctx.focused) && getSettings().ai.webSearch?.provider !== 'off' ? [IMAGE_TOOL] : []), ...(top ? [STUDY_PLAN] : []), ...terminalTools, ...canvasTools, ...thingsTools, ...(ctx.web ? WEB_TOOLS : []), ...(top ? [...MEMORY_TOOLS, DELEGATE_TOOL] : [])]
+  // Checking maths or finding a mistake in the cloud needs only the code tool (SymPy), which keeps the request small
+  const lean = ctx.cloud && !ctx.cloud.fellBack && (ctx.cloud.task === 'maths' || ctx.cloud.task === 'errors' || ctx.cloud.task === 'marking')
+  const tools = lean ? [CODE_TOOL] : [...NOTE_TOOLS, CODE_TOOL, ...((ctx.web || ctx.focused) && getSettings().ai.webSearch?.provider !== 'off' ? [IMAGE_TOOL] : []), ...(top ? [STUDY_PLAN] : []), ...terminalTools, ...canvasTools, ...thingsTools, ...(ctx.web ? WEB_TOOLS : []), ...(top ? [...MEMORY_TOOLS, DELEGATE_TOOL] : [])]
   const maxSteps = depth === 0 ? MAX_STEPS : HELPER_STEPS
   const seen = new Set<string>()
   let nudged = false
@@ -1049,7 +1098,7 @@ async function loop(messages: ApiMessage[], ctx: LoopContext, depth: number, onT
     // start of the prompt, and the server would read it all again); any call it still makes is ignored
     const final = step === maxSteps - 1
     if (final) messages.push({ role: 'user', content: 'Now answer using what you found. Do not call any more tools.' })
-    const turn = await streamTurn(messages, tools, ctx.signal, onText)
+    const turn = await streamTurn(messages, tools, ctx.signal, onText, ctx)
     const text = turn.text
     const calls = final ? [] : turn.calls
     if (final && turn.calls.length && !text.trim()) return answerWithoutTools(messages, ctx, onText, depth)
@@ -1065,7 +1114,7 @@ async function loop(messages: ApiMessage[], ctx: LoopContext, depth: number, onT
       if (!final) messages.push({ role: 'user', content: 'Answer the question now using the results above. Do not call any more tools.' })
       let last = text
       if (!final) {
-        const again = await streamTurn(messages, tools, ctx.signal, onText)
+        const again = await streamTurn(messages, tools, ctx.signal, onText, ctx)
         last = again.text.trim() || !again.calls.length ? again.text : await answerWithoutTools(messages, ctx, onText, depth)
       }
       if (!last.trim() && depth === 0) {
@@ -1140,7 +1189,7 @@ async function streamTurnContinuing(messages: ApiMessage[], tools: unknown[], si
 
 /** The last resort: the same request with no tools at all, so it can only answer */
 async function answerWithoutTools(messages: ApiMessage[], ctx: LoopContext, onText: (t: string) => void, depth: number): Promise<string> {
-  const { text } = await streamTurn(messages, [], ctx.signal, onText)
+  const { text } = await streamTurn(messages, [], ctx.signal, onText, ctx)
   if (text.trim() || depth > 0) return text
   const sorry = "I lost my train of thought there. Ask me again, or say what you'd like me to do next."
   onText(sorry)
@@ -1151,7 +1200,7 @@ async function answerWithoutTools(messages: ApiMessage[], ctx: LoopContext, onTe
  * One-shot harness call for background work (writing exam papers, marking answers): the model may use
  * run_code to check maths, nothing is streamed to the UI, and the final text is returned.
  */
-export async function agentComplete(messages: ApiMessage[], system: string, allowCode: boolean): Promise<string> {
+export async function agentComplete(messages: ApiMessage[], system: string, allowCode: boolean, task?: CloudTask): Promise<string> {
   const controller = new AbortController()
   const ctx: LoopContext = {
     signal: controller.signal,
@@ -1161,12 +1210,14 @@ export async function agentComplete(messages: ApiMessage[], system: string, allo
     step: () => `s${++stepCounter}`,
     updateStep: () => {}
   }
+  const target = task ? routeFor(task) : null
+  if (target && task) ctx.cloud = { target, task, stepId: '' }
   const all: ApiMessage[] = [{ role: 'system', content: system }, ...messages]
-  if (!allowCode) return (await streamTurn(all, [], controller.signal, () => {})).text
+  if (!allowCode) return (await streamTurn(all, [], controller.signal, () => {}, ctx)).text
   // Only the code tool: marking needs maths checks, not note or web lookups
   for (let step = 0; step < 4; step++) {
     const final = step === 3
-    const { text, calls } = await streamTurn(all, final ? [] : [CODE_TOOL], controller.signal, () => {})
+    const { text, calls } = await streamTurn(all, final ? [] : [CODE_TOOL], controller.signal, () => {}, ctx)
     if (!calls.length) return text
     all.push({ role: 'assistant', content: text || null, tool_calls: calls.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.arguments } })) })
     for (const call of calls) all.push({ role: 'tool', tool_call_id: call.id, name: call.name, content: await runTool(call, ctx, 1) })
@@ -1245,6 +1296,14 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
 
   // Start with what the user is looking at, so simple questions about a note need no tool calls
   const question = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? ''
+  // The cloud model takes this turn if you picked it, or if it's a job set to escalate (worked maths, finding a mistake)
+  const job = escalationFor(question, req.askType)
+  const target = routeFor(req.engine === 'cloud' ? null : job, req.engine ?? 'auto')
+  if (target) {
+    const name = providerInfo(target.provider).models.find((m) => m.id === target.model)?.label ?? target.model
+    const why = job === 'maths' ? 'checking the maths' : job === 'errors' ? 'finding the mistake' : 'answering'
+    ctx.cloud = { target, task: job ?? (req.instructions ? 'tutor' : 'chat'), stepId: ctx.step({ kind: 'helper', label: `${name} is ${why}`, status: 'running', depth: 0 }) }
+  }
   // All notes: only the few passages that really match (the tutor searches for more if it needs
   // them); a note, notebook or pages: what retrieval picks for that scope
   const initial =
@@ -1308,6 +1367,7 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
   ]
 
   await loop(messages, ctx, 0, (text) => (text === RESET ? emit({ id: req.id, type: 'reset' }) : emit({ id: req.id, type: 'delta', text })))
+  if (ctx.cloud && !ctx.cloud.fellBack) ctx.updateStep(ctx.cloud.stepId, { status: 'done' })
 }
 
 /** The "Open in Tide" link for a task the tutor sets, from the tool's open argument */

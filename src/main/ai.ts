@@ -1,4 +1,6 @@
 import { inBackground, streamInteractive } from './modelQueue'
+import { canTake, CloudUnavailable, cloudError, estimateTokens, headersFor, noteLimits, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
+import type { CloudTask, RequestKind } from '@shared/providers'
 import { memoryIntent } from '@shared/memoryIntent'
 import { addMemory, forgetMatching } from './memory'
 import type { AgentStep, Chat, StoredMessage } from '@shared/types'
@@ -169,9 +171,22 @@ export function cancelChat(id: string) {
 }
 
 /** Streams a completion. Counts as interactive unless `background` (the caller holds a background slot) */
-export async function* streamCompletion(messages: ChatMessage[], signal: AbortSignal, maxTokens = 3000, background = false, temperatureOverride?: number): AsyncGenerator<string> {
+export async function* streamCompletion(
+  messages: ChatMessage[],
+  signal: AbortSignal,
+  maxTokens = 3000,
+  background = false,
+  temperatureOverride?: number,
+  task: RequestKind = 'other',
+  target?: CloudTarget | null
+): AsyncGenerator<string> {
+  // A cloud model doesn't occupy the Mac, so it skips the local model's queue
+  if (target) {
+    yield* streamCloud(target, messages, signal, maxTokens, temperatureOverride, task)
+    return
+  }
   if (!background) {
-    yield* streamInteractive(() => streamCompletion(messages, signal, maxTokens, true, temperatureOverride))
+    yield* streamInteractive(() => streamCompletion(messages, signal, maxTokens, true, temperatureOverride, task))
     return
   }
   const temperature = temperatureOverride ?? getSettings().ai.temperature
@@ -186,10 +201,21 @@ export async function* streamCompletion(messages: ChatMessage[], signal: AbortSi
     const detail = await res.text().catch(() => '')
     throw new Error(`AI server answered ${res.status}: ${detail.slice(0, 300) || res.statusText}`)
   }
+  let out = 0
+  try {
+    for await (const delta of readStream(res.body, createStreamFilter())) {
+      out += delta.length
+      yield delta
+    }
+  } finally {
+    recordUsage({ kind: 'local', provider: 'local', model, task, input: estimateTokens(JSON.stringify(messages).length), output: estimateTokens(out), estimated: true })
+  }
+}
 
-  const reader = res.body.getReader()
+/** The text deltas of an OpenAI-style stream; `usage` gets the token counts if the server sends them */
+async function* readStream(body: ReadableStream<Uint8Array>, filter: (t: string) => string, usage?: (u: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } }) => void): AsyncGenerator<string> {
+  const reader = body.getReader()
   const decoder = new TextDecoder()
-  const filter = createStreamFilter()
   let buffer = ''
   while (true) {
     const { value, done } = await reader.read()
@@ -204,6 +230,8 @@ export async function* streamCompletion(messages: ChatMessage[], signal: AbortSi
       if (data === '[DONE]') return
       try {
         const json = JSON.parse(data)
+        const u = json.usage ?? json.x_groq?.usage
+        if (u && usage) usage(u)
         const delta = filter(json.choices?.[0]?.delta?.content ?? json.choices?.[0]?.text ?? '')
         if (delta) yield delta
       } catch {
@@ -212,6 +240,60 @@ export async function* streamCompletion(messages: ChatMessage[], signal: AbortSi
     }
   }
 }
+
+/** A cloud model's answer, streamed; its real token counts go to the usage log */
+async function* streamCloud(target: CloudTarget, messages: ChatMessage[], signal: AbortSignal, maxTokens: number, temperatureOverride: number | undefined, task: RequestKind): AsyncGenerator<string> {
+  if (!canTake(estimateTokens(JSON.stringify(messages).length) + maxTokens)) throw new CloudUnavailable(`The cloud model’s per-minute limit can’t take this for about ${secondsUntilReset()}s`)
+  let res: Response
+  try {
+    res = await fetch(`${target.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: headersFor(target),
+      body: JSON.stringify({ model: target.model, messages, temperature: temperatureOverride ?? getSettings().ai.temperature, stream: true, max_tokens: maxTokens, stream_options: { include_usage: true }, ...target.extra }),
+      signal
+    })
+  } catch (e) {
+    if (signal.aborted) throw e
+    throw new CloudUnavailable(`Couldn't reach the cloud model: ${(e as Error).message}`)
+  }
+  if (!res.ok || !res.body) throw await cloudError(res)
+  noteLimits(res.headers)
+  let reported: { input: number; output: number; cached?: number } | null = null
+  let out = 0
+  try {
+    for await (const delta of readStream(res.body, createStreamFilter(), (u) => (reported = { input: u.prompt_tokens ?? 0, output: u.completion_tokens ?? 0, cached: u.prompt_tokens_details?.cached_tokens }))) {
+      out += delta.length
+      yield delta
+    }
+  } finally {
+    const r = reported as { input: number; output: number; cached?: number } | null
+    recordUsage({ kind: 'cloud', provider: target.provider, model: target.model, task, ...(r ?? { input: estimateTokens(JSON.stringify(messages).length), output: estimateTokens(out) }), estimated: !r })
+  }
+}
+
+/**
+ * Streams from the cloud model when this job escalates, and from Gemma otherwise. If the cloud
+ * can't take it (rate limited, down, key refused) before writing anything, Gemma answers instead.
+ */
+export async function* streamRouted(messages: ChatMessage[], signal: AbortSignal, maxTokens: number, task: RequestKind, temperatureOverride?: number): AsyncGenerator<string> {
+  const target = routeFor(isCloudTask(task) ? task : null)
+  if (target) {
+    let wrote = false
+    try {
+      for await (const t of streamCompletion(messages, signal, maxTokens, false, temperatureOverride, task, target)) {
+        wrote = true
+        yield t
+      }
+      return
+    } catch (e) {
+      if (wrote || signal.aborted || !(e instanceof CloudUnavailable)) throw e
+      console.warn(`[cloud] ${(e as Error).message}; answering with the local model`)
+    }
+  }
+  yield* streamCompletion(messages, signal, maxTokens, false, temperatureOverride, task)
+}
+
+export const isCloudTask = (t: RequestKind): t is CloudTask => t === 'maths' || t === 'errors' || t === 'marking' || t === 'planning'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 
@@ -399,7 +481,7 @@ export function friendlyError(e: unknown): string {
  * line forever: repeated lines are dropped, and if it sticks, that pass stops and the model picks
  * up after the last good line, a little warmer, which breaks the loop (twice at most).
  */
-export async function* streamDraft(messages: ChatMessage[], signal: AbortSignal, maxTokens: number): AsyncGenerator<string> {
+export async function* streamDraft(messages: ChatMessage[], signal: AbortSignal, maxTokens: number, task: RequestKind = 'other'): AsyncGenerator<string> {
   let written = ''
   const base = getSettings().ai.temperature
   for (let pass = 0; pass < 3; pass++) {
@@ -417,7 +499,7 @@ export async function* streamDraft(messages: ChatMessage[], signal: AbortSignal,
     // Lines from earlier passes count as written, so a continuation can't repeat them either
     for (const l of written.split('\n')) guard.push(l + '\n')
     try {
-      for await (const t of streamCompletion(turn, local.signal, maxTokens, false, pass ? base + 0.3 * pass : undefined)) {
+      for await (const t of streamRouted(turn, local.signal, maxTokens, task, pass ? base + 0.3 * pass : undefined)) {
         const out = guard.push(t)
         if (out) {
           written += out
@@ -453,12 +535,12 @@ export async function* streamDraft(messages: ChatMessage[], signal: AbortSignal,
  * One-shot generation. Background work (titles, compaction, margin notes) waits for an idle model
  * and gives way when the user needs it; everything else runs at once.
  */
-export async function complete(prompt: string, system?: string, signal?: AbortSignal, priority: 'interactive' | 'background' = 'interactive'): Promise<string> {
-  if (priority === 'background') return inBackground((s) => completeNow(prompt, system, s, true), signal)
-  return completeNow(prompt, system, signal, false)
+export async function complete(prompt: string, system?: string, signal?: AbortSignal, priority: 'interactive' | 'background' = 'interactive', task: RequestKind = priority === 'background' ? 'background' : 'other'): Promise<string> {
+  if (priority === 'background') return inBackground((s) => completeNow(prompt, system, s, true, task), signal)
+  return completeNow(prompt, system, signal, false, task)
 }
 
-async function completeNow(prompt: string, system: string | undefined, signal: AbortSignal | undefined, background: boolean): Promise<string> {
+async function completeNow(prompt: string, system: string | undefined, signal: AbortSignal | undefined, background: boolean, task: RequestKind = 'other'): Promise<string> {
   const controller = new AbortController()
   signal?.addEventListener('abort', () => controller.abort(), { once: true })
   let out = ''
@@ -476,7 +558,9 @@ async function completeNow(prompt: string, system: string | undefined, signal: A
     out = ''
     let looped = false
     try {
-      for await (const t of streamCompletion(messages, pass.signal, 3000, background, temperature)) {
+      // Planning and marking go to the cloud model when they're set to escalate; background work never does
+      const stream = background ? streamCompletion(messages, pass.signal, 3000, true, temperature, task) : streamRouted(messages, pass.signal, 3000, task, temperature)
+      for await (const t of stream) {
         out += t
         if (isLooping(out)) {
           looped = true

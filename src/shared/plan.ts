@@ -45,7 +45,7 @@ export const SCOPE_WEEKS: Record<PlanScope, [number, number]> = {
 }
 
 /** Cleans a model's plan: sane numbers, at least one phase, phase weeks that add up to the total */
-export function normalizePlan(raw: Partial<StudyPlan> | null, hoursPerWeek: number, maxWeeks?: number): StudyPlan | null {
+export function normalizePlan(raw: Partial<StudyPlan> | null, hoursPerWeek: number, maxWeeks?: number, exactWeeks?: number): StudyPlan | null {
   if (!raw || !Array.isArray(raw.phases)) return null
   const phases = raw.phases
     .filter((p) => p && typeof p.title === 'string' && p.title.trim())
@@ -65,14 +65,18 @@ export function normalizePlan(raw: Partial<StudyPlan> | null, hoursPerWeek: numb
   // Keep the total inside what this kind of subject really takes at these hours (models pad a lot),
   // and inside the learner's deadline; phases keep their proportions
   const pace = 6 / Math.max(1, hoursPerWeek)
-  const [lo, hi] = SCOPE_WEEKS[scope].map((w) => w * pace)
+  // Models mostly pad, so the ceiling is firm; the floor is looser (a learner with a head start can be
+  // quicker), except for a whole career from scratch
+  const [lo, hi] = SCOPE_WEEKS[scope].map((w, i) => w * pace * (i === 0 && scope !== 'career' ? 0.6 : 1))
   let target = Math.min(Math.max(proposed, lo), hi)
   if (maxWeeks && maxWeeks > 0) target = Math.min(target, maxWeeks)
+  // A length the learner asked for outright wins over the typical range for the subject
+  if (exactWeeks && exactWeeks > 0) target = exactWeeks
   const k = target / proposed
   const scaled = phases.map((p) => ({ ...p, weeks: Math.max(0.5, Math.round(p.weeks * k * 2) / 2) }))
   const weeks = Math.round(scaled.reduce((n, p) => n + p.weeks, 0) * 2) / 2
   const why = String(raw.why ?? '').trim().slice(0, 600)
-  const resized = Math.abs(weeks - proposed) / proposed > 0.3 ? ` Sized to ${planLength(weeks)} for this kind of subject at ${hoursPerWeek} hours a week.` : ''
+  const resized = !exactWeeks && Math.abs(weeks - proposed) / proposed > 0.3 ? ` Sized to ${planLength(weeks)} for this kind of subject at ${hoursPerWeek} hours a week.` : ''
   return { scope, weeks, hoursPerWeek, why: (why + resized).trim(), phases: scaled, ...(raw.coding === true || String(raw.coding) === 'true' ? { coding: true } : {}) }
 }
 
@@ -284,4 +288,19 @@ export function readingList(topic: string, roadmap: string, sources: { title: st
   })
   if (sources.length) out.push('', '## Pages used to plan this', '', ...sources.map((s) => `- [${s.title.replace(/[[\]]/g, '')}](${s.url})`))
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n'
+}
+
+/**
+ * What a request to change a plan says outright: "finish in 8 weeks", "in 3 months", "10 hours a
+ * week". Those numbers are the learner's, so they're applied exactly rather than left to the model.
+ */
+export function planRequestNumbers(request: string): { weeks?: number; hoursPerWeek?: number } {
+  const q = request.toLowerCase()
+  const span = q.match(/\b(?:in|within|over|for|by|take|to)\s+(?:about\s+|around\s+|just\s+)?(\d+(?:\.\d+)?)\s*(weeks?|wks?|months?|mos?)\b/) ?? q.match(/\b(\d+(?:\.\d+)?)[- ](weeks?|months?)\s+(?:plan|course|instead)\b/)
+  const hours = q.match(/\b(\d+(?:\.\d+)?)\s*(?:h|hrs?|hours?)\s*(?:a|per|each|\/)\s*(?:week|wk)\b/)
+  const n = span ? Number(span[1]) : 0
+  return {
+    ...(n > 0 ? { weeks: /^m/.test(span![2]) ? Math.round(n * 4.35 * 2) / 2 : n } : {}),
+    ...(hours && Number(hours[1]) > 0 ? { hoursPerWeek: Math.min(60, Number(hours[1])) } : {})
+  }
 }

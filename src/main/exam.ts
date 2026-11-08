@@ -84,7 +84,8 @@ Give method marks for correct working even when the final answer is wrong. If th
 Then return ONLY JSON: {"awarded": 2, "feedback": "what earned marks, what lost marks and why, in 2-4 sentences", "missed": "the key idea or step they missed, as one sentence"}
 If you award fewer than ${part.marks} marks, "missed" must say exactly what would have earned the rest; leave it empty only for full marks.`
   const content: ApiContent = [{ type: 'text', text }, ...images.map((url) => ({ type: 'image_url' as const, image_url: { url } }))]
-  const out = await agentComplete([{ role: 'user', content }], 'You are an experienced university examiner.', true)
+  // Typed answers can go to the cloud model; photos of handwriting stay with Gemma, which can read them
+  const out = await agentComplete([{ role: 'user', content }], 'You are an experienced university examiner.', true, images.length ? undefined : 'marking')
   const m = extractJsonObject<{ awarded?: number; feedback?: string; missed?: string }>(out)
   return {
     awarded: Math.max(0, Math.min(part.marks, Number(m.awarded) || 0)),

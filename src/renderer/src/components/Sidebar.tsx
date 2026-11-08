@@ -3,6 +3,7 @@ import { FocusTimer } from './FocusTimer'
 import { useCallback, useEffect, useState, type MouseEvent } from 'react'
 import type { FileNode } from '@shared/types'
 import { fileTitle, folderOf, useApp } from '../state'
+import { SECTIONS } from './SettingsView'
 import { Icon, type IconName } from './Icon'
 import { ContextMenu, type MenuState } from './Menu'
 import { Professor } from './Professor'
@@ -225,6 +226,43 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
   }
   const ongoing = useOngoing()
 
+  // In Settings the sidebar becomes the list of settings, with a way back to where you were
+  if (view.kind === 'settings') {
+    const current = view.section === 'ai' ? 'models' : view.section === 'notes' ? 'general' : (view.section ?? 'general')
+    const groups = [...new Set(SECTIONS.map((x) => x.group))]
+    return (
+      <aside className="sidebar settings-sidebar" aria-label="Settings">
+        <div className="sidebar-top drag">
+          <div className="no-drag nav-arrows">
+            <button className="icon-btn" title="Back (⌘[)" disabled={!app.canGoBack} onClick={app.back}>
+              <Icon name="back" />
+            </button>
+            <button className="icon-btn flip" title="Forward (⌘])" disabled={!app.canGoForward} onClick={app.forward}>
+              <Icon name="back" />
+            </button>
+          </div>
+        </div>
+        <nav className="sidebar-nav settings-sidebar-nav">
+          <button className="nav-item settings-leave" onClick={app.leaveSettings}>
+            <Icon name="back" size={14} />
+            <span>Back to Tide</span>
+          </button>
+          {groups.map((g) => (
+            <div key={g} className="settings-sidebar-group">
+              <div className="settings-sidebar-label">{g}</div>
+              {SECTIONS.filter((x) => x.group === g).map((x) => (
+                <button key={x.id} className={`nav-item${current === x.id ? ' active' : ''}`} aria-current={current === x.id ? 'page' : undefined} onClick={() => app.setView({ kind: 'settings', section: x.id })}>
+                  <Icon name={x.icon} size={16} />
+                  <span>{x.label}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+      </aside>
+    )
+  }
+
   return (
     <aside className="sidebar" aria-label="Notebooks">
       <div className="sidebar-top drag">
@@ -341,7 +379,7 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
       <div className="sidebar-bottom">
         {shown('focus') && <FocusTimer />}
         <div className="sidebar-bottom-row">
-          <button className={`nav-item${view.kind === 'settings' ? ' active' : ''}`} onClick={() => app.setView({ kind: 'settings' })}>
+          <button className="nav-item" onClick={() => app.setView({ kind: 'settings' })}>
             <Icon name="settings" size={16} />
             <span>Settings</span>
           </button>

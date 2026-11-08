@@ -26,3 +26,13 @@ describe('keeping drafts from repeating', () => {
     expect(g.stuck).toBe(false)
   })
 })
+
+import { normalizeMath } from '../src/shared/modelText'
+
+describe('maths from other models', () => {
+  it('turns \\( \\) and \\[ \\] into dollars, but not inside code', () => {
+    expect(normalizeMath('so \\(u(x)v(x)\\) gives\n\\[\n\\frac{d}{dx}uv = u\'v + uv\'\n\\]')).toBe("so $u(x)v(x)$ gives\n$$\\frac{d}{dx}uv = u'v + uv'$$")
+    expect(normalizeMath('`\\(x\\)` and ```\n\\[y\\]\n```')).toBe('`\\(x\\)` and ```\n\\[y\\]\n```')
+    expect(normalizeMath('plain $x$')).toBe('plain $x$')
+  })
+})
