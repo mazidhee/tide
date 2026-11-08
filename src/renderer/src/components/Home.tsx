@@ -2,6 +2,7 @@ import { countsFor, forecastGoal, hoursPerTopic, type Forecast } from '@shared/f
 import { TodayPanel } from './TodayPanel'
 import { HomeBanner } from './HomeBanner'
 import { Professor, type ProfessorScene } from './Professor'
+import { PixelMoment, sceneFor, type MomentScene } from './PixelMoment'
 import { useEffect, useMemo, useState } from 'react'
 import type { Goal, Mastery, NotebookMeta, NoteMeta } from '@shared/types'
 import { readPlan } from '@shared/plan'
@@ -132,10 +133,10 @@ export function Home(_: { dueCount: number; cardCount: number }) {
       ].filter(Boolean)
     : []
   const upNext = hasDaily
-    ? { kicker: 'Up next', title: 'Daily practice', detail: `${parts.join(', ') || 'A short mixed session'}, about ${daily!.minutes} min`, scene: 'cards' as ProfessorScene, go: () => app.setView({ kind: 'daily', nonce: Date.now() }) }
+    ? { kicker: 'Up next', title: 'Daily practice', detail: `${parts.join(', ') || 'A short mixed session'}, about ${daily!.minutes} min`, scene: 'orbit' as MomentScene, go: () => app.setView({ kind: 'daily', nonce: Date.now() }) }
     : nextTopic
-      ? { kicker: nextTopic.plan.inReview ? 'Review' : 'Next lesson', title: nextTopic.topic.text, detail: nextTopic.plan.goal.name.replace(/^Finish /, ''), scene: 'board' as ProfessorScene, go: startLesson }
-      : { kicker: 'Nothing due', title: 'Learn something new', detail: 'Pick a topic and the tutor will teach it step by step', scene: timeOfDayScene(), go: () => app.setView({ kind: 'learn' }) }
+      ? { kicker: nextTopic.plan.inReview ? 'Review' : 'Next lesson', title: nextTopic.topic.text, detail: nextTopic.plan.goal.name.replace(/^Finish /, ''), scene: sceneFor(nextTopic.topic.text), go: startLesson }
+      : { kicker: 'Nothing due', title: 'Learn something new', detail: 'Pick a topic and the tutor will teach it step by step', scene: sceneFor(undefined), go: () => app.setView({ kind: 'learn' }) }
 
   const quiz = () => {
     if (!last) return
@@ -193,8 +194,8 @@ export function Home(_: { dueCount: number; cardCount: number }) {
         <div className="home2-grid">
           <main className="home2-main">
             <div className="up-next2" role="button" tabIndex={0} onClick={upNext.go} onKeyDown={(e) => e.key === 'Enter' && upNext.go()}>
-              <span className="up-next2-prof" aria-hidden="true">
-                <Professor state={upNext.scene} size={56} />
+              <span className="up-next2-art" aria-hidden="true">
+                <PixelMoment scene={(import.meta.env.DEV && (localStorage.getItem('tide.dev.moment') as MomentScene | null)) || upNext.scene} size={72} />
               </span>
               <span className="up-next2-text">
                 <span className="up-next2-kicker">{upNext.kicker}</span>
@@ -218,6 +219,31 @@ export function Home(_: { dueCount: number; cardCount: number }) {
             </div>
 
             <TodayPanel />
+
+            {continueList.length > 0 && (
+              <section className="home2-continue">
+                <div className="rail-head">
+                  <h2>Continue</h2>
+                  <button className="home-link" onClick={() => app.setView({ kind: 'library' })}>
+                    Library
+                    <Icon name="chevron" size={10} />
+                  </button>
+                </div>
+                <ul className="continue-grid">
+                  {continueList.map((path) => {
+                    const meta = byPath.get(path)
+                    return (
+                      <li key={path}>
+                        <button onClick={() => app.openPath(path)} title={meta?.title ?? fileTitle(path)}>
+                          <Icon name={sourceIcon({ path, sourceType: meta?.sourceType })} size={14} />
+                          <span>{meta?.title ?? fileTitle(path).replace(/\.pdf$/i, '')}</span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </section>
+            )}
           </main>
 
           <aside className="home2-rail" aria-label="Your progress">
@@ -283,31 +309,6 @@ export function Home(_: { dueCount: number; cardCount: number }) {
               )}
               <ContextMenu menu={goalMenu} onClose={() => setGoalMenu(null)} />
             </section>
-
-            {continueList.length > 0 && (
-              <section className="rail-card">
-                <div className="rail-head">
-                  <h2>Continue</h2>
-                  <button className="home-link" onClick={() => app.setView({ kind: 'library' })}>
-                    Library
-                    <Icon name="chevron" size={10} />
-                  </button>
-                </div>
-                <ul className="rail-list">
-                  {continueList.map((path) => {
-                    const meta = byPath.get(path)
-                    return (
-                      <li key={path}>
-                        <button onClick={() => app.openPath(path)} title={meta?.title ?? fileTitle(path)}>
-                          <Icon name={sourceIcon({ path, sourceType: meta?.sourceType })} size={14} />
-                          <span>{meta?.title ?? fileTitle(path).replace(/\.pdf$/i, '')}</span>
-                        </button>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </section>
-            )}
 
             {problems > 0 && (
               <button className="home-link rail-extra" onClick={() => app.setView({ kind: 'practice' })}>
