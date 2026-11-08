@@ -21,6 +21,7 @@ import { SessionView } from './components/SessionView'
 import { LearnView } from './components/LearnView'
 import { HelpView } from './components/HelpView'
 import { ExamView } from './components/ExamView'
+import { DailyView } from './components/DailyView'
 import { useFocusCompletion } from './components/FocusTimer'
 import { LabView } from './components/LabView'
 import { CodeView } from './components/CodeView'
@@ -177,8 +178,8 @@ export default function App() {
         ? { label: `Exam: ${view.topic}`, kind: 'exam', noBreaks: true }
         : view.kind === 'file' && /\.(md|pdf)$/i.test(view.path)
           ? { label: view.path.split('/').pop()!.replace(/\.(md|pdf)$/i, ''), path: view.path, kind: 'reading' }
-          : view.kind === 'study'
-            ? { label: 'Flashcards', kind: 'review' }
+          : view.kind === 'study' || view.kind === 'daily'
+            ? { label: view.kind === 'daily' ? 'Daily practice' : 'Flashcards', kind: 'review' }
             : ['practice', 'code', 'lab', 'drill', 'design'].includes(view.kind) || (view.kind === 'file' && /\.canvas$/i.test(view.path))
               ? { label: 'Practice', kind: 'practice' }
               : view.kind === 'chat'
@@ -334,6 +335,7 @@ export default function App() {
   else if (view.kind === 'notebook') main = <NotebookView key={view.path} path={view.path} />
   else if (view.kind === 'graph') main = <GraphView key={view.focus ?? 'all'} focus={view.focus} />
   else if (view.kind === 'study') main = <StudyView scope={view.scope} />
+  else if (view.kind === 'daily') main = <DailyView key={view.nonce ?? 'daily'} />
   else if (view.kind === 'quiz') main = <SessionView key={JSON.stringify(view.scope)} mode="quiz" scope={view.scope} topic={scopeTopic(view.scope)} />
   else if (view.kind === 'session') main = <SessionView key={`${view.mode}:${view.topic}:${view.nonce ?? ''}`} mode={view.mode} scope={view.scope} topic={view.topic} options={view.options} initialTurns={view.turns} view={view} />
   else if (view.kind === 'learn') main = <LearnView />
