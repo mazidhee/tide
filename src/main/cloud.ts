@@ -46,7 +46,7 @@ export function setKey(provider: string, key: string | null) {
   writeFileSync(keysPath(), JSON.stringify(keys), { mode: 0o600 })
 }
 
-function getKey(provider: string): string {
+export function getKey(provider: string): string {
   const enc = readKeys()[provider]
   if (!enc) return ''
   try {

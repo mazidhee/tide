@@ -7,6 +7,8 @@ import { asInteractive, inBackground } from './modelQueue'
 import { memoize } from './memo'
 import { getCoach, getWeek, profilePrompt } from './coach'
 import { todayItems } from '@shared/coach'
+import { aboutMetabase } from '@shared/metabase'
+import { metabaseHost, metabaseReady, metabaseTool } from './metabase'
 import { addTask, describeTasks, feedbackOnTask, findTask, searchTasks, thingsAvailable, TIDE_TAG } from './things'
 import { buildLink, type DeepLink } from '@shared/deeplink'
 import { JSDOM } from 'jsdom'
@@ -50,6 +52,7 @@ You can call tools. Use them when they help:
 - remember: when the student tells you something lasting about themselves (a goal or deadline, their background, what they find hard, how they like to learn), save it as one short sentence in the third person ("Is preparing for Bloomberg interviews in spring 2027"). Don't save facts from their notes, passing questions, or things already in what you remember. When they say "remember that…", always save it.
 - forget: when they ask you to forget something, or tell you it's no longer true.
 - things_assign / things_tasks / things_feedback (only when connected): the student's to-do app, Things 4, which renders Markdown. Set real work between sessions: a quick task, an assignment, a test (an exam in Tide) or a take-home problem to think through. Write a proper brief (## Goal, ## What to do, ## Deliverable, ## How it will be checked, ## Read) specific to what you've been teaching, give steps and a due date, and point "open" at the right place in Tide (an exam or quiz on their notebook, the note to read, a drill). Ask before setting more than two at once. Use things_tasks (with_notes to read answers they wrote in a task) to see what's done or overdue and adapt; mark their work with things_feedback.
+- metabase (only when connected): the student's company Metabase, read-only, to help them learn it. Search it, open dashboards, questions (saved queries) and tables to explain what each measures and how it's built, and run a saved question or a SELECT to show real numbers. It can never change anything.
 - find_image: a real diagram, figure or photo from Wikimedia Commons. It returns Markdown image lines; put the one that fits in your answer, exactly as given.
 - delegate: for big questions with separate parts (e.g. "compare X and Y", "build me a study plan for Z"), give each part to a helper; they research in parallel and report back.
 Rules:
@@ -179,6 +182,18 @@ const THINGS_FEEDBACK = tool(
     complete: { type: 'boolean' }
   },
   ['task', 'feedback']
+)
+const METABASE = tool(
+  'metabase',
+  "Read the student's Metabase (read-only): search it, open a dashboard, question or table, list databases, run a saved question, or run a SELECT.",
+  {
+    action: { type: 'string', enum: ['search', 'databases', 'dashboard', 'question', 'table', 'run_question', 'sql'] },
+    q: { type: 'string', description: 'search: words to look for' },
+    id: { type: 'number', description: 'Needed for dashboard, question, table and run_question: the id from a search' },
+    database: { type: 'number', description: 'sql: the database id' },
+    sql: { type: 'string', description: 'sql: one SELECT; add a LIMIT' }
+  },
+  ['action']
 )
 const TERMINAL_READ = tool('terminal_read', "Read what the student's terminal shows now: recent commands and output.", { lines: { type: 'number', description: 'How many recent lines, default 60' } }, [])
 const TERMINAL_RUN = tool(
@@ -1004,6 +1019,20 @@ async function runTool(call: ToolCall, ctx: LoopContext, depth: number): Promise
     }
   }
 
+  if (call.name === 'metabase') {
+    const action = str('action')
+    const label = action === 'sql' || action === 'run_question' ? 'Running a query in Metabase' : action === 'search' ? `Searching Metabase for “${clip(str('q'), 40)}”` : `Reading Metabase: ${action} ${str('id')}`.trim()
+    const id = ctx.step({ kind: 'metabase', label, status: 'running', depth })
+    try {
+      const out = await metabaseTool(args)
+      ctx.updateStep(id, { status: 'done' })
+      return clip(out, TOOL_TEXT_LIMIT)
+    } catch (e) {
+      ctx.updateStep(id, { status: 'error', detail: (e as Error).message })
+      return `Metabase: ${(e as Error).message}`
+    }
+  }
+
   if (call.name === 'things_tasks') {
     const id = ctx.step({ kind: 'search_notes', label: 'Checking your Things tasks', status: 'running', depth })
     try {
@@ -1088,7 +1117,7 @@ async function runTool(call: ToolCall, ctx: LoopContext, depth: number): Promise
  * The tools a turn offers, in a fixed order. The warm-ups build theirs here too: the tools are part
  * of the prompt's start, so if a warm-up's list differs by one tool, nothing it cached is ever reused.
  */
-function toolSet(o: { top: boolean; web: boolean; focused: boolean; things: boolean; terminal?: unknown[]; canvas?: unknown[]; lean?: boolean }): unknown[] {
+function toolSet(o: { top: boolean; web: boolean; focused: boolean; things: boolean; metabase?: boolean; terminal?: unknown[]; canvas?: unknown[]; lean?: boolean }): unknown[] {
   if (o.lean) return [CODE_TOOL]
   const images = (o.web || o.focused) && getSettings().ai.webSearch?.provider !== 'off'
   return [
@@ -1099,6 +1128,7 @@ function toolSet(o: { top: boolean; web: boolean; focused: boolean; things: bool
     ...(o.terminal ?? []),
     ...(o.canvas ?? []),
     ...(o.things ? [THINGS_ADD, THINGS_TASKS, THINGS_FEEDBACK] : []),
+    ...(o.metabase ? [METABASE] : []),
     ...(o.web ? WEB_TOOLS : []),
     ...(o.top ? [...MEMORY_TOOLS, DELEGATE_TOOL] : [])
   ]
@@ -1111,7 +1141,7 @@ async function loop(messages: ApiMessage[], ctx: LoopContext, depth: number, onT
   const top = depth === 0 && !ctx.focused
   // Checking maths or finding a mistake in the cloud needs only the code tool (SymPy), which keeps the request small
   const lean = !!ctx.cloud && !ctx.cloud.fellBack && (ctx.cloud.task === 'maths' || ctx.cloud.task === 'errors' || ctx.cloud.task === 'marking')
-  const tools = toolSet({ top, web: ctx.web, focused: !!ctx.focused, things: top && (await thingsAvailable()), terminal: terminalTools, canvas: canvasTools, lean })
+  const tools = toolSet({ top, web: ctx.web, focused: !!ctx.focused, things: top && (await thingsAvailable()), metabase: top && !ctx.cloud && metabaseReady(), terminal: terminalTools, canvas: canvasTools, lean })
   const maxSteps = depth === 0 ? MAX_STEPS : HELPER_STEPS
   const seen = new Set<string>()
   let nudged = false
@@ -1319,7 +1349,7 @@ export async function warmLessons(): Promise<void> {
 export async function warmChat(): Promise<void> {
   const { baseUrl, apiKey } = getSettings().ai
   // Exactly the tools an ordinary chat offers (see toolSet), so the cached prefix matches
-  const tools = toolSet({ top: true, web: true, focused: false, things: await thingsAvailable() })
+  const tools = toolSet({ top: true, web: true, focused: false, things: await thingsAvailable(), metabase: metabaseReady() })
   const model = await resolveModel()
   await inBackground(async (signal) => {
     const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
@@ -1362,7 +1392,9 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
   const question = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? ''
   // The cloud model takes this turn if you picked it, or if it's a job set to escalate (worked maths, finding a mistake)
   const job = escalationFor(question, req.askType)
-  const target = req.warmOnly ? null : routeFor(req.engine === 'cloud' ? null : job, req.engine ?? 'auto')
+  // Anything about your Metabase stays on this Mac: its data never goes to a cloud model
+  const mine = metabaseReady() && req.messages.some((m) => aboutMetabase(m.content, metabaseHost()))
+  const target = req.warmOnly || mine ? null : routeFor(req.engine === 'cloud' ? null : job, req.engine ?? 'auto')
   if (target) {
     const name = providerInfo(target.provider).models.find((m) => m.id === target.model)?.label ?? target.model
     const why = job === 'maths' ? 'checking the maths' : job === 'errors' ? 'finding the mistake' : 'answering'

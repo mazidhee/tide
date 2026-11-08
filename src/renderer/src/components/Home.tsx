@@ -1,5 +1,5 @@
 import { countsFor, forecastGoal, hoursPerTopic, type Forecast } from '@shared/forecast'
-import { TodayPanel } from './TodayPanel'
+import { DayTimeline } from './DayTimeline'
 import { HomeBanner } from './HomeBanner'
 import { Professor, type ProfessorScene } from './Professor'
 import { PixelMoment, sceneFor, type MomentScene } from './PixelMoment'
@@ -108,18 +108,6 @@ export function Home(_: { dueCount: number; cardCount: number }) {
   }, [app.files, app.settings.libraryFolder])
 
   const byPath = useMemo(() => new Map(notes.map((n) => [n.path, n])), [notes])
-  const libPrefix = app.settings.libraryFolder + '/'
-  // One "Continue" list: what you opened last, then what you changed, never outlines you ticked
-  const outlines = useMemo(() => new Set(notebooks.flatMap((n) => (n.outline ? [n.outline] : []))), [notebooks])
-  const continueList = useMemo(() => {
-    const exists = new Set(app.files.map((f) => f.path))
-    const edited = notes
-      .filter((n) => !n.path.startsWith(libPrefix) && !outlines.has(n.path))
-      .sort((a, b) => b.mtime - a.mtime)
-      .map((n) => n.path)
-    return [...new Set([...app.recent.slice(0, 6), ...edited])].filter((p) => exists.has(p) && !outlines.has(p)).slice(0, 4)
-  }, [notes, app.recent, libPrefix, outlines, app.files])
-
   // The next lesson: the first goal's next topic
   const nextTopic = plans.map((p) => ({ plan: p, topic: (p.inReview ? p.reviewTopics : p.today)[0] })).find((x) => x.topic)
   const startLesson = () =>
@@ -209,57 +197,28 @@ export function Home(_: { dueCount: number; cardCount: number }) {
 
         <div className="home2-grid">
           <main className="home2-main">
-            <div className="up-next2" role="button" tabIndex={0} onClick={upNext.go} onKeyDown={(e) => e.key === 'Enter' && upNext.go()}>
-              <span className="up-next2-art" aria-hidden="true">
-                <PixelMoment scene={(import.meta.env.DEV && (localStorage.getItem('tide.dev.moment') as MomentScene | null)) || upNext.scene} size={72} />
-              </span>
-              <span className="up-next2-text">
-                <span className="up-next2-kicker">{upNext.kicker}</span>
-                <strong>{upNext.title}</strong>
-                <span className="up-next2-detail">{upNext.detail}</span>
-              </span>
-              <span className="up-next2-go">
-                Start
-                <Icon name="chevron" size={11} />
-              </span>
-            </div>
-            {hasDaily && nextTopic && (
-              <button className="home-link then" onClick={startLesson}>
-                <span className="muted">Then</span> {nextTopic.topic.text}
-                <Icon name="chevron" size={10} />
-              </button>
-            )}
+            <DayTimeline
+              now={
+                <div className="up-next2" role="button" tabIndex={0} onClick={upNext.go} onKeyDown={(e) => e.key === 'Enter' && upNext.go()}>
+                  <span className="up-next2-art" aria-hidden="true">
+                    <PixelMoment scene={(import.meta.env.DEV && (localStorage.getItem('tide.dev.moment') as MomentScene | null)) || upNext.scene} size={72} />
+                  </span>
+                  <span className="up-next2-text">
+                    <span className="up-next2-kicker">{upNext.kicker}</span>
+                    <strong>{upNext.title}</strong>
+                    <span className="up-next2-detail">{upNext.detail}</span>
+                  </span>
+                  <span className="up-next2-go">
+                    Start
+                    <Icon name="chevron" size={11} />
+                  </span>
+                </div>
+              }
+            />
 
             <div className="home2-ask">
               <PromptBox value={ask} onChange={setAsk} onSubmit={submitAsk} placeholder="Ask anything, or say what you want to learn…" label="Ask the tutor" />
             </div>
-
-            <TodayPanel />
-
-            {continueList.length > 0 && (
-              <section className="home2-continue">
-                <div className="rail-head">
-                  <h2>Continue</h2>
-                  <button className="home-link" onClick={() => app.setView({ kind: 'library' })}>
-                    Library
-                    <Icon name="chevron" size={10} />
-                  </button>
-                </div>
-                <ul className="continue-grid">
-                  {continueList.map((path) => {
-                    const meta = byPath.get(path)
-                    return (
-                      <li key={path}>
-                        <button onClick={() => app.openPath(path)} title={meta?.title ?? fileTitle(path)}>
-                          <Icon name={sourceIcon({ path, sourceType: meta?.sourceType })} size={14} />
-                          <span>{meta?.title ?? fileTitle(path).replace(/\.pdf$/i, '')}</span>
-                        </button>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </section>
-            )}
           </main>
 
           <aside className="home2-rail" aria-label="Your progress">
@@ -280,7 +239,13 @@ export function Home(_: { dueCount: number; cardCount: number }) {
                     )
                   })}
                 </div>
-                <p className="rail-foot">{week.streak > 1 ? `${week.streak}-day streak` : week.streak === 1 ? 'Studied today' : 'Start a streak today'}</p>
+                <div className="rail-foot-row">
+                  <p className="rail-foot">{week.streak > 1 ? `${week.streak}-day streak` : week.streak === 1 ? 'Studied today' : 'Start a streak today'}</p>
+                  <button className="home-link small" onClick={() => app.setView({ kind: 'coach' })}>
+                    Your week
+                    <Icon name="chevron" size={10} />
+                  </button>
+                </div>
               </section>
             )}
 

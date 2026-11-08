@@ -34,4 +34,10 @@ describe('Things 4 intent', () => {
     expect(thingsIntent('teach me things about logarithms')).toBeNull()
     expect(thingsIntent('what are the things to know about TCP?')).toBeNull()
   })
+
+  it('leaves Metabase to the tutor, which can look inside it', () => {
+    expect(learnIntent('Teach me our Metabase: what does the collections dashboard show?')).toBeNull()
+    expect(learnIntent("teach me rank's metabase")).toBeNull()
+    expect(learnIntent('Teach me Metabase')?.topic).toBe('Metabase')
+  })
 })

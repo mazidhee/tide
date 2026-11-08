@@ -24,6 +24,7 @@ export interface Turn {
 const STEP_ICON: Record<AgentStep['kind'], 'search' | 'note' | 'globe' | 'external' | 'agents' | 'sparkle' | 'terminal' | 'book' | 'canvas'> = {
   canvas: 'canvas',
   search_notes: 'search',
+  metabase: 'search',
   read_note: 'note',
   web_search: 'globe',
   read_webpage: 'external',
@@ -43,6 +44,7 @@ function summarizeSteps(steps: AgentStep[]): string {
     count('search_notes') && `searched your notes${times(count('search_notes'))}`,
     count('read_note') && `read ${count('read_note')} note${count('read_note') === 1 ? '' : 's'}`,
     count('web_search') && `searched the web${times(count('web_search'))}`,
+    count('metabase') && `looked in Metabase${times(count('metabase'))}`,
     count('read_webpage') && `read ${count('read_webpage')} page${count('read_webpage') === 1 ? '' : 's'}`,
     count('run_code') && `ran code${times(count('run_code'))}`,
     count('terminal') && `used the terminal${times(count('terminal'))}`,

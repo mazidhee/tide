@@ -51,6 +51,8 @@ export interface Settings {
   menuBar?: 'always' | 'studying' | 'off'
   /** A stronger cloud model for the hard parts; Gemma on this Mac stays the default */
   cloud?: import('./providers').CloudSettings
+  /** Your Metabase, read-only, for learning it; its API key is kept in the Keychain */
+  metabase?: { url: string }
 }
 
 export type FileKind = 'note' | 'pdf' | 'image' | 'doc' | 'canvas' | 'other'
@@ -284,7 +286,7 @@ export interface OutlineDraftRequest {
 
 export interface AgentStep {
   id: string
-  kind: 'search_notes' | 'read_note' | 'web_search' | 'read_webpage' | 'delegate' | 'helper' | 'run_code' | 'remember' | 'terminal' | 'canvas'
+  kind: 'search_notes' | 'read_note' | 'web_search' | 'read_webpage' | 'delegate' | 'helper' | 'run_code' | 'remember' | 'terminal' | 'canvas' | 'metabase'
   label: string
   detail?: string
   status: 'running' | 'done' | 'error'
@@ -538,6 +540,9 @@ export interface TideApi {
     /** Ticks roadmap topics finished in Things 4; returns how many */
     syncFromThings(path: string): Promise<number>
     thingsStatus(): Promise<{ ready: boolean; detail: string }>
+    /** Today in Things 4 (today, this evening, finished today); null when Things isn't connected */
+    thingsToday(): Promise<import('./day').DayTask[] | null>
+    thingsSetDone(id: string, done: boolean): Promise<void>
     /** Researches and sizes a learning plan; progress arrives as ai:event steps under id */
     adjustPlan(req: { topic: string; goal?: string; hoursPerWeek: number; deadline?: string; start: string; plan: import('./plan').StudyPlan; request: string }): Promise<import('./plan').StudyPlan>
     sizePlan(id: string, req: { topic: string; goal?: string; hoursPerWeek: number; deadline?: string; start: string }): Promise<{ plan: import('./plan').StudyPlan; research: string; sources: { title: string; url: string }[] }>
@@ -622,6 +627,12 @@ export interface TideApi {
     /** Models the provider says this key can use */
     models(provider: string): Promise<string[]>
     usage(monthOffset?: number): Promise<import('../main/cloud').UsageSummary>
+  }
+  metabase: {
+    status(): Promise<{ ready: boolean; detail: string; url: string }>
+    /** Checks the address and key, then saves them (the key goes to the Keychain) */
+    connect(url: string, key: string): Promise<{ ready: boolean; detail: string; url: string }>
+    disconnect(): Promise<void>
   }
   voice: {
     status(): Promise<{ ready: boolean; detail: string }>
