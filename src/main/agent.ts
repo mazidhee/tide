@@ -58,7 +58,7 @@ You can call tools. Use them when they help:
 - things_assign / things_tasks / things_feedback (only when connected): the student's to-do app, Things 4, which renders Markdown. Set real work between sessions: a quick task, an assignment, a test (an exam in Tide) or a take-home problem to think through. Write a proper brief (## Goal, ## What to do, ## Deliverable, ## How it will be checked, ## Read) specific to what you've been teaching, give steps and a due date, and point "open" at the right place in Tide (an exam or quiz on their notebook, the note to read, a drill). Ask before setting more than two at once. Use things_tasks (with_notes to read answers they wrote in a task) to see what's done or overdue and adapt; mark their work with things_feedback.
 - metabase (only when connected): the student's company Metabase, read-only, to help them learn it. Search it, open dashboards, questions (saved queries) and tables to explain what each measures and how it's built, and run a saved question or a SELECT to show real numbers. It can never change anything.
 - find_image: a real diagram, figure or photo from Wikimedia Commons. It returns Markdown image lines; put the one that fits in your answer, exactly as given.
-- delegate: for big questions with separate parts (e.g. "compare X and Y", "build me a study plan for Z"), give each part to a helper; they research in parallel and report back.
+- delegate (only offered when a cloud model answers): for big questions with separate parts (e.g. "compare X and Y", "build me a study plan for Z"), give each part to a helper; they research in parallel and report back.
 Rules:
 - Every tool result is numbered like [3]. Cite the numbers you rely on inline, e.g. [3] or [2][5].
 - Don't call tools for things you can explain well yourself, like simple definitions.
@@ -717,9 +717,20 @@ export async function stablePrompt(base: string, req: TurnRequest, web: boolean,
     // A session's tag rules are the same for every lesson, so they sit here, cached with the prompt
     (session ? `\n\n${SESSION_FORMAT}` : '') +
     (profile ? `\n\n${profile}` : '') +
-    (memory ? `\n\n${memory}` : '') +
-    (req.summary ? `\n\nSummary of this conversation so far (the transcript below picks up after it):\n${req.summary}` : '')
+    (memory ? `\n\n${memory}` : '')
   )
+}
+
+/**
+ * A long conversation's running summary, at the head of its first remaining message. Not in the
+ * system prompt: each new summary would change the start of the prompt, and the server would
+ * read the whole system prompt and tool list again instead of reusing them.
+ */
+export function withSummary<T extends { role: string; content: string | unknown }>(messages: T[], summary?: string): T[] {
+  if (!summary) return messages
+  const first = messages.findIndex((m) => m.role === 'user')
+  if (first < 0) return messages
+  return messages.map((m, i) => (i === first ? { ...m, content: `Summary of our conversation so far (the transcript picks up after it):\n${summary}\n\n---\n\n${String(m.content)}` } : m))
 }
 
 /** A session's instructions, at the head of its first message (the same text every turn) */
@@ -1124,7 +1135,7 @@ async function runTool(call: ToolCall, ctx: LoopContext, depth: number): Promise
  * The tools a turn offers, in a fixed order. The warm-ups build theirs here too: the tools are part
  * of the prompt's start, so if a warm-up's list differs by one tool, nothing it cached is ever reused.
  */
-function toolSet(o: { top: boolean; web: boolean; focused: boolean; things: boolean; metabase?: boolean; terminal?: unknown[]; canvas?: unknown[]; lean?: boolean }): unknown[] {
+function toolSet(o: { top: boolean; web: boolean; focused: boolean; things: boolean; metabase?: boolean; helpers?: boolean; terminal?: unknown[]; canvas?: unknown[]; lean?: boolean }): unknown[] {
   if (o.lean) return [CODE_TOOL]
   const images = (o.web || o.focused) && getSettings().ai.webSearch?.provider !== 'off'
   return [
@@ -1137,7 +1148,8 @@ function toolSet(o: { top: boolean; web: boolean; focused: boolean; things: bool
     ...(o.things ? [THINGS_ADD, THINGS_TASKS, THINGS_FEEDBACK] : []),
     ...(o.metabase ? [METABASE] : []),
     ...(o.web ? WEB_TOOLS : []),
-    ...(o.top ? [...MEMORY_TOOLS, DELEGATE_TOOL] : [])
+    // Helpers only help in parallel on a cloud model; on this Mac they'd run one after another
+    ...(o.top ? [...MEMORY_TOOLS, ...(o.helpers ? [DELEGATE_TOOL] : [])] : [])
   ]
 }
 
@@ -1148,7 +1160,7 @@ async function loop(messages: ApiMessage[], ctx: LoopContext, depth: number, onT
   const top = depth === 0 && !ctx.focused
   // Checking maths or finding a mistake in the cloud needs only the code tool (SymPy), which keeps the request small
   const lean = !!ctx.cloud && !ctx.cloud.fellBack && (ctx.cloud.task === 'maths' || ctx.cloud.task === 'errors' || ctx.cloud.task === 'marking')
-  const tools = toolSet({ top, web: ctx.web, focused: !!ctx.focused, things: top && (await thingsAvailable()), metabase: top && !ctx.cloud && metabaseReady(), terminal: terminalTools, canvas: canvasTools, lean })
+  const tools = toolSet({ top, web: ctx.web, focused: !!ctx.focused, things: top && (await thingsAvailable()), metabase: top && !ctx.cloud && metabaseReady(), helpers: !!ctx.cloud && !ctx.cloud.fellBack, terminal: terminalTools, canvas: canvasTools, lean })
   const maxSteps = depth === 0 ? MAX_STEPS : HELPER_STEPS
   const seen = new Set<string>()
   let nudged = false
@@ -1312,8 +1324,17 @@ let prewarming: AbortController | null = null
  * you settle on a topic. The messages and tools are built by the same code as the real turn, so
  * when you press start the model only has to write, not read (about 10 seconds saved).
  */
+// What was warmed lately: the same opening again within a few minutes is already in the cache
+const warmed = new Map<string, number>()
+const WARM_FOR_MS = 5 * 60_000
+
 export async function prewarmLesson(req: Omit<ChatRequest, 'id'>): Promise<void> {
   if (!isMlxVlm()) return
+  const key = JSON.stringify([req.messages, req.instructions, req.scope, req.voice, req.web])
+  const at = warmed.get(key)
+  if (at && Date.now() - at < WARM_FOR_MS) return
+  warmed.set(key, Date.now())
+  if (warmed.size > 40) warmed.delete(warmed.keys().next().value!)
   prewarming?.abort()
   const controller = new AbortController()
   prewarming = controller
@@ -1486,7 +1507,10 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
       // A lesson's instructions ride in its first message, not the system prompt: then the system
       // prompt and tools are the same for every lesson and stay cached between them
       withInstructions(
-        history.map((m: ChatMessage) => ({ role: m.role, content: m.content })),
+        withSummary(
+          history.map((m: ChatMessage) => ({ role: m.role, content: m.content })),
+          req.summary
+        ),
         req.instructions
       ),
       turnContext

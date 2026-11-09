@@ -70,8 +70,6 @@ const api: TideApi = {
     models: invoke('ai:models'),
     test: invoke('ai:test'),
     generateFlashcards: invoke('ai:flashcards'),
-    generateQuiz: invoke('ai:quiz'),
-    summarize: invoke('ai:summarize'),
     readAlong: invoke('ai:readAlong')
   },
   learn: {

@@ -441,14 +441,6 @@ export interface StudyCard extends Flashcard {
 
 export type ReviewGrade = 'again' | 'hard' | 'good' | 'easy'
 
-export interface QuizQuestion {
-  question: string
-  options: string[]
-  answer: number
-  explanation: string
-  source?: string
-}
-
 export interface ClipResult {
   path: string
   title: string
@@ -519,8 +511,6 @@ export interface TideApi {
     models(): Promise<string[]>
     test(): Promise<{ ok: boolean; message: string }>
     generateFlashcards(path: string, count: number, focusText?: string, pages?: { from: number; to: number }): Promise<{ front: string; back: string }[]>
-    generateQuiz(scope: ChatScope, count: number): Promise<QuizQuestion[]>
-    summarize(path: string): Promise<string>
     readAlong(path: string, passage: string, mode: string, force?: boolean, style?: 'coach'): Promise<ReadAlongNote | null>
   }
   learn: {

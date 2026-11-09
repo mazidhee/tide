@@ -2,7 +2,8 @@ import { promises as fs } from 'fs'
 import { SKIP_TITLE, type Chapter } from '@shared/guide'
 import { complete, extractJsonArray } from './ai'
 import { pdfText } from './search'
-import { absPath } from './vault'
+import { parseContents } from '@shared/toc'
+import { absPath, joinRel, readText, writeText } from './vault'
 
 /**
  * Chapters of a PDF, for its reading guide. Most published PDFs carry bookmarks, which give exact
@@ -87,9 +88,27 @@ export async function bookChapters(rel: string, deep = false): Promise<BookChapt
 
 const squash = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
 
+const CONTENTS_CACHE = joinRel('.tide', 'contents.json')
+
+/** The book's printed contents, read once per version of the file (by code, else by the model) */
 async function chaptersFromContents(rel: string, numPages: number): Promise<Chapter[]> {
+  const mtime = (await fs.stat(absPath(rel)).catch(() => null))?.mtimeMs ?? 0
+  const cache = await readText(CONTENTS_CACHE)
+    .then((t) => JSON.parse(t) as Record<string, { mtime: number; chapters: Chapter[] }>)
+    .catch(() => ({}) as Record<string, { mtime: number; chapters: Chapter[] }>)
+  if (cache[rel]?.mtime === mtime) return cache[rel].chapters
+  const chapters = await readContents(rel, numPages)
+  cache[rel] = { mtime, chapters }
+  await writeText(CONTENTS_CACHE, JSON.stringify(cache)).catch(() => {})
+  return chapters
+}
+
+async function readContents(rel: string, numPages: number): Promise<Chapter[]> {
   const pages = await pdfText(rel)
   if (!pages.length) return []
+  // Most contents pages are regular enough to read by their shape; the model is the fallback
+  const parsed = parseContents(pages).map((e) => ({ title: e.title, printed: e.printed, part: e.part }))
+  if (parsed.length >= 3) return placeChapters(parsed.filter((r) => !SKIP_TITLE.test(r.title)).slice(0, MAX_CHAPTERS), pages, numPages)
   const front = pages
     .slice(0, 24)
     .map((t, i) => `--- PDF page ${i + 1} ---\n${t}`)
@@ -105,6 +124,11 @@ async function chaptersFromContents(rel: string, numPages: number): Promise<Chap
     .map((r) => ({ title: String(r.title).trim(), printed: Number(r.page), part: r.part === true }))
     .filter((r) => r.title && !SKIP_TITLE.test(r.title))
     .slice(0, MAX_CHAPTERS)
+  return placeChapters(listed, pages, numPages)
+}
+
+/** Printed page numbers to PDF pages, and parts to levels */
+function placeChapters(listed: { title: string; printed: number; part: boolean }[], pages: string[], numPages: number): Chapter[] {
   if (listed.length < 3) return []
   // Printed page numbers are offset from PDF pages by the front matter: find the offset that
   // puts the most chapter titles on the page where they actually appear

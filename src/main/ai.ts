@@ -8,7 +8,7 @@ import type { TurnRequest } from './agent'
 import { compactChat, fallbackTitle, historyBudget, historyFor, needsCompaction, newChat, renameChat, updateChat } from './chats'
 import { fitHistory } from '@shared/context'
 import { cleanModelText } from '@shared/modelText'
-import type { ChatEvent, ChatMessage, ChatRequest, ChatScope, ContextSource, QuizQuestion, ReadAlongNote } from '@shared/types'
+import type { ChatEvent, ChatMessage, ChatRequest, ChatScope, ContextSource, ReadAlongNote } from '@shared/types'
 import { getSettings } from './settings'
 import { localSampling } from './sampling'
 import { createLineGuard, createStreamFilter, isLooping } from '@shared/modelText'
@@ -389,11 +389,9 @@ export async function chat(req: ChatRequest, emit: (e: ChatEvent) => void) {
         'background'
       ).catch(() => '')
       const clean = title.split('\n')[0].replace(/^["'#*\s]+|["'.*\s]+$/g, '').slice(0, 60)
-      // No title (the model was needed elsewhere): the list shows the first words, and the next turn tries again
-      if (clean) {
-        await renameChat(chatId, clean)
-        onChatsChanged(chatId)
-      }
+      // No title from the model (it was needed elsewhere): the first words, once, rather than asking again every turn
+      await renameChat(chatId, clean || fallbackTitle(question))
+      onChatsChanged(chatId)
     }
     if (needsCompaction(saved)) {
       const controller = new AbortController()
@@ -648,36 +646,14 @@ ${material}`
   return cards.filter((c) => c?.front && c?.back).slice(0, count)
 }
 
-export async function generateQuiz(scope: ChatScope, count: number): Promise<QuizQuestion[]> {
-  const sources = await retrieve(scope, 'key concepts important ideas')
-  if (!sources.length) throw new Error('There is nothing to quiz on here yet.')
-  const prompt = `Write a ${count} question multiple choice quiz that tests real understanding of the material below.
-Rules:
-- 4 options each, exactly one correct, plausible distractors.
-- "answer" is the 0-based index of the correct option.
-- "explanation" says briefly why the answer is right.
-- "source" is the number of the source the question is based on.
-- Return ONLY a JSON array like [{"question": "...", "options": ["...","...","...","..."], "answer": 0, "explanation": "...", "source": 1}].
-
-Material:
-${formatSources(sources)}`
-  const questions = extractJsonArray<QuizQuestion & { source?: number | string }>(await complete(prompt))
-  return questions
-    .filter((q) => q?.question && Array.isArray(q.options) && q.options.length >= 2 && Number.isInteger(q.answer))
-    .map((q) => {
-      const src = sources.find((s) => s.index === Number(q.source))
-      return { ...q, source: src?.path }
-    })
-    .slice(0, count)
-}
-
 /**
  * Reads the passage the student just wrote, like a tutor looking over their shoulder.
  * Returns null when there is nothing worth saying, so the margin stays quiet.
  */
 export async function readAlong(path: string, passage: string, mode: string, force = false, style?: 'coach'): Promise<ReadAlongNote | null> {
   const sources = await retrieve({ kind: 'note', path }, passage)
-  const context = formatSources(sources).slice(0, 6000)
+  // Enough of the note to judge the paragraph in context; more only slows the model's reading
+  const context = formatSources(sources).slice(0, force ? 6000 : 2500)
   if (style === 'coach' && !force) return coachNote(passage, context, mode)
   if (force) {
     // The student asked to be tested: always ask something, never explain
@@ -725,13 +701,6 @@ ${passage}
   }
 }
 
-export async function summarize(path: string): Promise<string> {
-  const sources = await retrieve({ kind: 'note', path }, 'main ideas summary')
-  return complete(
-    `Summarize this material for a student revising it. Start with a 2 sentence overview, then the key ideas as bullet points, then any formulas or definitions worth memorizing. Use Markdown and LaTeX.\n\n${formatSources(sources)}`
-  )
-}
-
 /**
  * The writing coach: one margin note on the paragraph just written, aimed at understanding first
  * (a probing question, a correction, a missing piece) and clearer writing second, with a rewrite
@@ -756,8 +725,8 @@ ${context}
 <paragraph>
 ${passage}
 </paragraph>`
-  // Live feedback while writing: it must not wait behind, or be cancelled by, background jobs
-  const out = await complete(prompt)
+  // Feedback while writing waits for the model to be free: your chat and lessons come first
+  const out = await complete(prompt, undefined, undefined, 'background')
   return parseCoachNote(out, passage)
 }
 

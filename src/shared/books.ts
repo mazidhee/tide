@@ -36,6 +36,8 @@ export interface ReadingSuggestion {
 
 const STOP = new Set('the and for with from into what how why when this that are its their your you our about using use via vs between over under than then them they also more most less all any can not but has have had was were will would should could one two three part chapter section introduction learn learning understand basics fundamentals'.split(' '))
 
+export const topicWords = (s: string) => words(s)
+
 const words = (s: string) =>
   [
     ...new Set(

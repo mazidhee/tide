@@ -140,6 +140,22 @@ Fold the earlier summary in; don't lose facts from it.`
  * Folds older turns into the running summary, keeping the last few word for word. Runs after a
  * reply has finished, so it never delays an answer. `summarize` is the model call.
  */
+/**
+ * A message as the summary needs it: code, diagrams and the app's tags shrunk to a word, so the
+ * model reads what was said rather than every line of it
+ */
+export const forSummary = (text: string) =>
+  text
+    .replace(/```mermaid[\s\S]*?```/g, '[a diagram]')
+    .replace(/```(\w*)[\s\S]*?```/g, (_, lang: string) => `[${lang || 'code'} block]`)
+    .replace(/<(say|note|card|plan|summary)>[\s\S]*?<\/\1>/g, '')
+    .replace(/<ask[^>]*>([\s\S]*?)<\/ask>/g, 'Question: $1')
+    .replace(/<grade[^>]*>([\s\S]*?)<\/grade>/g, 'Feedback: $1')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '[an image]')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, 2500)
+
 export async function compactChat(id: string, summarize: (system: string, prompt: string) => Promise<string>): Promise<boolean> {
   const chat = await getChat(id)
   if (!chat || !needsCompaction(chat)) return false
@@ -147,7 +163,7 @@ export async function compactChat(id: string, summarize: (system: string, prompt
   if (cut === null) return false
   const span = chat.messages.slice(chat.summarizedUpTo, cut).filter((m) => !m.error)
   const transcript = span
-    .map((m) => `${m.role === 'user' ? 'Student' : 'Tutor'}: ${m.content.slice(0, 4000)}${m.attachment ? `\n(about this passage: ${m.attachment.slice(0, 600)})` : ''}`)
+    .map((m) => `${m.role === 'user' ? 'Student' : 'Tutor'}: ${forSummary(m.content)}${m.attachment ? `\n(about this passage: ${m.attachment.slice(0, 400)})` : ''}`)
     .join('\n\n')
   const prompt = `${chat.summary ? `Earlier summary:\n${chat.summary}\n\n` : ''}Conversation since then:\n\n${transcript}\n\nWrite the updated summary.`
   const summary = (await summarize(COMPACT_SYSTEM, prompt)).trim()

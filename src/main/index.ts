@@ -22,7 +22,7 @@ import {
   writeText
 } from './vault'
 import { buildIndex, reindexPath, searchHits } from './search'
-import { cancelChat, chat, setChatsChangedListener, generateFlashcards, generateQuiz, listModels, readAlong, summarize, testConnection } from './ai'
+import { cancelChat, chat, setChatsChangedListener, generateFlashcards, listModels, readAlong, testConnection } from './ai'
 import {
   getBacklinks,
   getGraph,
@@ -324,8 +324,6 @@ function registerIpc() {
   handle('ai:models', () => listModels().catch(() => []))
   handle('ai:test', () => testConnection())
   handle('ai:flashcards', (path: string, count: number, focus?: string, pages?: { from: number; to: number }) => generateFlashcards(path, count, focus, pages))
-  handle('ai:quiz', (scope: ChatScope, count: number) => generateQuiz(scope, count))
-  handle('ai:summarize', (path: string) => summarize(path))
   handle('ai:readAlong', (path: string, passage: string, mode: string, force?: boolean, style?: 'coach') => readAlong(path, passage, mode, force, style))
 
   handle('learn:graph', () => getGraph())
