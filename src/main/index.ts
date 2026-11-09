@@ -23,7 +23,7 @@ import {
   writeText
 } from './vault'
 import { buildIndex, reindexPath, searchHits } from './search'
-import { cancelChat, chat, setChatsChangedListener, generateFlashcards, listModels, readAlong, testConnection, tieBreak } from './ai'
+import { cancelChat, chat, setChatsChangedListener, generateFlashcards, listModels, readAlong, testConnection, tieBreak, lessonPassage } from './ai'
 import {
   getBacklinks,
   getGraph,
@@ -303,6 +303,7 @@ function registerIpc() {
   handle('things:status', () => thingsStatus())
   handle('things:today', () => dayTasks())
   handle('books:suggest', (topic: string, limit?: number) => pagesToRead(topic, limit))
+  handle('books:passage', (topic: string) => lessonPassage(topic))
   handle('books:map', (path: string) => mapBook(path))
   handle('things:setDone', (id: string, done: boolean) => setTaskDone(id, done))
   handle('metabase:status', () => metabaseStatus())

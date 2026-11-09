@@ -1,0 +1,382 @@
+{
+  "summary": {
+    "model": "mlx-community/gemma-4-12B-it-4bit",
+    "reviewer": "mlx-community/gemma-4-12B-it-4bit",
+    "minutes": 19.4,
+    "plain": {
+      "accuracy": "32/40 (80%)",
+      "falseCorrect": "1 of 24 not-right answers marked correct",
+      "wrongMarkedCorrect": 1
+    },
+    "withSolution": {
+      "accuracy": "36/40 (90%)",
+      "falseCorrect": "0 of 24 not-right answers marked correct",
+      "wrongMarkedCorrect": 0
+    },
+    "withReview": {
+      "accuracy": "32/40 (80%)",
+      "falseCorrect": "0 of 24 not-right answers marked correct",
+      "wrongMarkedCorrect": 0
+    }
+  },
+  "rows": [
+    {
+      "id": "int-parts-right",
+      "expected": "correct",
+      "plain": "correct",
+      "withSolution": "correct",
+      "withReview": "correct",
+      "why": "nothing"
+    },
+    {
+      "id": "int-parts-wrong",
+      "expected": "wrong",
+      "plain": "wrong",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "deriv-xx",
+      "expected": "wrong",
+      "plain": "wrong",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "limit-sin3x",
+      "expected": "correct",
+      "plain": "correct",
+      "withSolution": "correct",
+      "withReview": "correct",
+      "why": "nothing"
+    },
+    {
+      "id": "limit-cos-bare",
+      "expected": "partial",
+      "plain": "wrong",
+      "withSolution": "partial",
+      "withReview": "partial",
+      "why": "The student provided the correct numerical value but failed to provide the required justification or steps."
+    },
+    {
+      "id": "series-nlogn",
+      "expected": "wrong",
+      "plain": "wrong",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "series-alt-harmonic",
+      "expected": "partial",
+      "plain": "wrong",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "eigen-2x2",
+      "expected": "correct",
+      "plain": "correct",
+      "withSolution": "correct",
+      "withReview": "correct",
+      "why": "nothing"
+    },
+    {
+      "id": "det-2x2",
+      "expected": "wrong",
+      "plain": "correct",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "subspace-det0",
+      "expected": "partial",
+      "plain": "wrong",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "rank-3x3",
+      "expected": "correct",
+      "plain": "correct",
+      "withSolution": "correct",
+      "withReview": "partial",
+      "why": "The student's reasoning is incomplete because it fails to explicitly state that the third row is not a multiple of the first, which is necessary to confirm the rank is exactly 2."
+    },
+    {
+      "id": "dice-7",
+      "expected": "correct",
+      "plain": "correct",
+      "withSolution": "correct",
+      "withReview": "correct",
+      "why": "nothing"
+    },
+    {
+      "id": "six-in-four",
+      "expected": "wrong",
+      "plain": "wrong",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "geom-mean",
+      "expected": "correct",
+      "plain": "correct",
+      "withSolution": "correct",
+      "withReview": "correct",
+      "why": "nothing"
+    },
+    {
+      "id": "bayes-wrong",
+      "expected": "wrong",
+      "plain": "wrong",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "bayes-right",
+      "expected": "correct",
+      "plain": "correct",
+      "withSolution": "correct",
+      "withReview": "correct",
+      "why": "nothing"
+    },
+    {
+      "id": "sd-sum",
+      "expected": "wrong",
+      "plain": "wrong",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "sqrt2-proof",
+      "expected": "correct",
+      "plain": "correct",
+      "withSolution": "correct",
+      "withReview": "correct",
+      "why": "nothing"
+    },
+    {
+      "id": "primes-infinite",
+      "expected": "partial",
+      "plain": "wrong",
+      "withSolution": "partial",
+      "withReview": "partial",
+      "why": "The student's answer fails to explicitly state that the existence of a new prime factor contradicts the initial assumption of a finite list."
+    },
+    {
+      "id": "induction-sum",
+      "expected": "correct",
+      "plain": "partial",
+      "withSolution": "correct",
+      "withReview": "partial",
+      "why": "The student's answer is incomplete because it fails to explicitly state the inductive hypothesis and does not show the algebraic simplification to reach the final form."
+    },
+    {
+      "id": "induction-2n-right",
+      "expected": "correct",
+      "plain": "correct",
+      "withSolution": "correct",
+      "withReview": "correct",
+      "why": "nothing"
+    },
+    {
+      "id": "induction-2n-handwave",
+      "expected": "partial",
+      "plain": "wrong",
+      "withSolution": "partial",
+      "withReview": "partial",
+      "why": "The student's answer lacks a formal inductive step and relies on a qualitative statement rather than a mathematical proof."
+    },
+    {
+      "id": "binary-search",
+      "expected": "correct",
+      "plain": "correct",
+      "withSolution": "correct",
+      "withReview": "correct",
+      "why": "nothing"
+    },
+    {
+      "id": "heapify",
+      "expected": "wrong",
+      "plain": "wrong",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "master-nlogn",
+      "expected": "correct",
+      "plain": "wrong",
+      "withSolution": "correct",
+      "withReview": "partial",
+      "why": "The student's reasoning is incomplete because it fails to explicitly state that $f(n) = \\Theta(n^{\\log_2 2})$ is the condition for Case 2, which requires $f(n)$ to be bounded by $n^1$ and $n^{1+\\epsilon}$ for some $\\epsilon > 0$."
+    },
+    {
+      "id": "recur-linear",
+      "expected": "wrong",
+      "plain": "wrong",
+      "withSolution": "none",
+      "withReview": "none",
+      "why": ""
+    },
+    {
+      "id": "quicksort-worst",
+      "expected": "wrong",
+      "plain": "wrong",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "hash-avg-worst",
+      "expected": "partial",
+      "plain": "partial",
+      "withSolution": "partial",
+      "withReview": "partial",
+      "why": "The student failed to provide the worst-case time complexity and did not explain the reasoning for the average-case complexity."
+    },
+    {
+      "id": "stairs-right",
+      "expected": "correct",
+      "plain": "correct",
+      "withSolution": "correct",
+      "withReview": "correct",
+      "why": "nothing"
+    },
+    {
+      "id": "stairs-wrong",
+      "expected": "wrong",
+      "plain": "wrong",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "palindrome-case",
+      "expected": "wrong",
+      "plain": "wrong",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "race-increment",
+      "expected": "wrong",
+      "plain": "wrong",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "coffman-missing",
+      "expected": "partial",
+      "plain": "partial",
+      "withSolution": "partial",
+      "withReview": "partial",
+      "why": "The student's answer is incomplete because it omits the \"No preemption\" condition."
+    },
+    {
+      "id": "coffman-right",
+      "expected": "correct",
+      "plain": "correct",
+      "withSolution": "correct",
+      "withReview": "correct",
+      "why": "nothing"
+    },
+    {
+      "id": "raft-majority",
+      "expected": "correct",
+      "plain": "correct",
+      "withSolution": "correct",
+      "withReview": "partial",
+      "why": "The student's answer correctly identifies the safety property of electing at most one leader per term but fails to address the second part of the requirement: ensuring the leader possesses all committed entries."
+    },
+    {
+      "id": "cap-misread",
+      "expected": "partial",
+      "plain": "partial",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "isolation-rr",
+      "expected": "wrong",
+      "plain": "wrong",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "index-prefix",
+      "expected": "wrong",
+      "plain": "wrong",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "tcp-handshake",
+      "expected": "wrong",
+      "plain": "wrong",
+      "withSolution": "wrong",
+      "withReview": "wrong",
+      "why": ""
+    },
+    {
+      "id": "paging-bits",
+      "expected": "correct",
+      "plain": "correct",
+      "withSolution": "correct",
+      "withReview": "correct",
+      "why": "nothing"
+    }
+  ],
+  "set": [
+    {
+      "topic": "Integration by parts",
+      "solution": true,
+      "check": false,
+      "passed": null
+    },
+    {
+      "topic": "Eigenvalues and eigenvectors",
+      "solution": true,
+      "check": false,
+      "passed": null
+    },
+    {
+      "topic": "Conditional probability and Bayes' theorem",
+      "solution": false,
+      "check": false,
+      "passed": null
+    },
+    {
+      "topic": "Solving recurrences with the master theorem",
+      "solution": false,
+      "check": false,
+      "passed": null
+    },
+    {
+      "topic": "Binary search trees",
+      "solution": false,
+      "check": false,
+      "passed": null
+    },
+    {
+      "topic": "Race conditions and mutexes",
+      "solution": false,
+      "check": false,
+      "passed": null
+    }
+  ]
+}

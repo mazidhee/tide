@@ -1,0 +1,322 @@
+[
+  {
+    "id": "int-parts-right",
+    "topic": "Integration by parts",
+    "problem": "Find $\\int_0^1 x e^x\\,dx$. Show your steps.",
+    "solution": "By parts with u=x, dv=e^x dx: [x e^x]_0^1 - \\int_0^1 e^x dx = e - (e-1) = 1.",
+    "answer": "By parts: x e^x - e^x evaluated from 0 to 1 = (e - e) - (0 - 1) = 1",
+    "expected": "correct"
+  },
+  {
+    "id": "int-parts-wrong",
+    "topic": "Integration by parts",
+    "problem": "Find $\\int_0^1 x e^x\\,dx$. Show your steps.",
+    "solution": "By parts: [x e^x]_0^1 - \\int_0^1 e^x dx = e - (e-1) = 1.",
+    "answer": "The antiderivative of e^x is e^x so the answer is e - 1",
+    "expected": "wrong"
+  },
+  {
+    "id": "deriv-xx",
+    "topic": "Logarithmic differentiation",
+    "problem": "Differentiate $f(x) = x^x$ for $x>0$.",
+    "solution": "y = x^x, ln y = x ln x, y'/y = ln x + 1, so f'(x) = x^x (ln x + 1).",
+    "answer": "By the power rule, f'(x) = x · x^(x-1) = x^x",
+    "expected": "wrong"
+  },
+  {
+    "id": "limit-sin3x",
+    "topic": "Limits",
+    "problem": "Find $\\lim_{x\\to 0} \\frac{\\sin 3x}{x}$ and justify it.",
+    "solution": "sin(3x)/x = 3 · sin(3x)/(3x) → 3 · 1 = 3.",
+    "answer": "3, because sin(3x)/(3x) tends to 1, so sin(3x)/x = 3·sin(3x)/(3x) tends to 3",
+    "expected": "correct"
+  },
+  {
+    "id": "limit-cos-bare",
+    "topic": "Limits",
+    "problem": "Find $\\lim_{x\\to 0} \\frac{1-\\cos x}{x^2}$ and justify your answer.",
+    "solution": "Using 1 - cos x = 2 sin^2(x/2): the limit is 2·(1/2)^2·(sin(x/2)/(x/2))^2 → 1/2. Or by L'Hôpital twice.",
+    "answer": "1/2",
+    "expected": "partial"
+  },
+  {
+    "id": "series-nlogn",
+    "topic": "Series convergence",
+    "problem": "Does $\\sum_{n=2}^{\\infty} \\frac{1}{n \\ln n}$ converge or diverge? Justify.",
+    "solution": "Diverges by the integral test: \\int_2^\\infty dx/(x ln x) = [ln ln x] → ∞.",
+    "answer": "It converges, because the terms 1/(n ln n) go to zero",
+    "expected": "wrong"
+  },
+  {
+    "id": "series-alt-harmonic",
+    "topic": "Series convergence",
+    "problem": "Does $\\sum_{n=1}^{\\infty} \\frac{(-1)^n}{n}$ converge absolutely, conditionally, or not at all? Justify.",
+    "solution": "Converges by the alternating series test (1/n decreases to 0), but \\sum 1/n diverges, so it converges conditionally, not absolutely.",
+    "answer": "It converges absolutely, by the alternating series test, since 1/n decreases to 0",
+    "expected": "partial"
+  },
+  {
+    "id": "eigen-2x2",
+    "topic": "Eigenvalues",
+    "problem": "Find the eigenvalues of $A = \\begin{pmatrix}2&1\\\\1&2\\end{pmatrix}$.",
+    "solution": "det(A - λI) = (2-λ)^2 - 1 = 0, so λ = 1 or λ = 3.",
+    "answer": "(2-λ)^2 - 1 = 0 gives λ - 2 = ±1, so the eigenvalues are 3 and 1",
+    "expected": "correct"
+  },
+  {
+    "id": "det-2x2",
+    "topic": "Determinants",
+    "problem": "Compute $\\det\\begin{pmatrix}1&2\\\\3&4\\end{pmatrix}$.",
+    "solution": "1·4 - 2·3 = -2.",
+    "answer": "1·4 - 2·3 = 2",
+    "expected": "wrong"
+  },
+  {
+    "id": "subspace-det0",
+    "topic": "Vector spaces",
+    "problem": "Is the set of $2\\times 2$ real matrices with determinant 0 a subspace of all $2\\times2$ matrices? Justify.",
+    "solution": "No: it is not closed under addition. diag(1,0) and diag(0,1) both have det 0 but their sum I has det 1. (It does contain the zero matrix.)",
+    "answer": "No, because it doesn't contain the zero matrix",
+    "expected": "partial"
+  },
+  {
+    "id": "rank-3x3",
+    "topic": "Matrix rank",
+    "problem": "Find the rank of $\\begin{pmatrix}1&2&3\\\\2&4&6\\\\1&1&1\\end{pmatrix}$ and explain.",
+    "solution": "Row 2 = 2·row 1; rows 1 and 3 are independent, so rank 2.",
+    "answer": "Rank 2: row 2 is twice row 1, and row 3 is not a multiple of row 1, so two independent rows",
+    "expected": "correct"
+  },
+  {
+    "id": "dice-7",
+    "topic": "Probability",
+    "problem": "Two fair dice are rolled. What is the probability their sum is 7?",
+    "solution": "6 outcomes (1,6),(2,5),...,(6,1) of 36: 1/6.",
+    "answer": "1/6, since 6 of the 36 equally likely outcomes sum to 7",
+    "expected": "correct"
+  },
+  {
+    "id": "six-in-four",
+    "topic": "Probability",
+    "problem": "A fair die is rolled 4 times. What is the probability of at least one six?",
+    "solution": "1 - (5/6)^4 = 1 - 625/1296 = 671/1296 ≈ 0.518.",
+    "answer": "Each roll has a 1/6 chance, so over 4 rolls it is 4/6 = 2/3",
+    "expected": "wrong"
+  },
+  {
+    "id": "geom-mean",
+    "topic": "Expected value",
+    "problem": "On average, how many rolls of a fair die does it take to get the first six?",
+    "solution": "Geometric with p = 1/6, mean 1/p = 6.",
+    "answer": "6: the number of rolls is geometric with p = 1/6, and its mean is 1/p",
+    "expected": "correct"
+  },
+  {
+    "id": "bayes-wrong",
+    "topic": "Bayes' theorem",
+    "problem": "A disease affects 1% of people. A test detects it 99% of the time and gives a false positive 5% of the time. Someone tests positive. What is the probability they have the disease?",
+    "solution": "P = 0.99·0.01 / (0.99·0.01 + 0.05·0.99) = 0.0099/0.0594 ≈ 0.167.",
+    "answer": "99%, because the test is 99% accurate",
+    "expected": "wrong"
+  },
+  {
+    "id": "bayes-right",
+    "topic": "Bayes' theorem",
+    "problem": "A disease affects 1% of people. A test detects it 99% of the time and gives a false positive 5% of the time. Someone tests positive. What is the probability they have the disease?",
+    "solution": "P = 0.99·0.01 / (0.99·0.01 + 0.05·0.99) = 0.0099/0.0594 ≈ 0.167.",
+    "answer": "About 17%: true positives are 0.99×0.01 = 0.0099, false positives 0.05×0.99 = 0.0495, so 0.0099/(0.0099+0.0495) ≈ 0.167",
+    "expected": "correct"
+  },
+  {
+    "id": "sd-sum",
+    "topic": "Variance",
+    "problem": "X and Y are independent with Var(X) = 4 and Var(Y) = 9. What is the standard deviation of X + Y?",
+    "solution": "Var(X+Y) = 4 + 9 = 13, so SD = √13 ≈ 3.61.",
+    "answer": "The standard deviations are 2 and 3, so the SD of X + Y is 5",
+    "expected": "wrong"
+  },
+  {
+    "id": "sqrt2-proof",
+    "topic": "Proof by contradiction",
+    "problem": "Prove that $\\sqrt{2}$ is irrational.",
+    "solution": "Assume √2 = p/q in lowest terms; p^2 = 2q^2 so p even, p = 2k; then q^2 = 2k^2 so q even; contradiction.",
+    "answer": "Suppose √2 = p/q in lowest terms. Then p² = 2q², so p² is even, so p is even, say p = 2k. Then 4k² = 2q², so q² = 2k² and q is even too. Both even contradicts lowest terms",
+    "expected": "correct"
+  },
+  {
+    "id": "primes-infinite",
+    "topic": "Proof",
+    "problem": "Prove that there are infinitely many primes.",
+    "solution": "Suppose finitely many p1..pk. N = p1···pk + 1 leaves remainder 1 on division by each pi, so any prime factor of N (N > 1 has one) is a new prime. Contradiction.",
+    "answer": "Multiply all the primes together and add 1. That number is a new prime not in the list, so the list was not complete",
+    "expected": "partial"
+  },
+  {
+    "id": "induction-sum",
+    "topic": "Induction",
+    "problem": "Prove by induction that $1 + 2 + \\dots + n = \\frac{n(n+1)}{2}$ for all $n \\ge 1$.",
+    "solution": "Base n=1. Step: n(n+1)/2 + (n+1) = (n+1)(n+2)/2.",
+    "answer": "Base case n = 1: 1 = 1·2/2. Assume it holds for n. Then 1 + ... + n + (n+1) = n(n+1)/2 + (n+1) = (n+1)(n+2)/2, which is the formula for n+1",
+    "expected": "correct"
+  },
+  {
+    "id": "induction-2n-right",
+    "topic": "Induction",
+    "problem": "Prove that $2^n > n^2$ for all integers $n \\ge 5$.",
+    "solution": "Base: 32 > 25. Step: 2^{n+1} = 2·2^n > 2n^2 ≥ (n+1)^2 since n^2 - 2n - 1 ≥ 0 for n ≥ 3.",
+    "answer": "Base n = 5: 32 > 25. Step: 2^(n+1) = 2·2^n > 2n², and 2n² ≥ (n+1)² whenever n ≥ 3 (it is n² - 2n - 1 ≥ 0), so 2^(n+1) > (n+1)²",
+    "expected": "correct"
+  },
+  {
+    "id": "induction-2n-handwave",
+    "topic": "Induction",
+    "problem": "Prove that $2^n > n^2$ for all integers $n \\ge 5$.",
+    "solution": "Base: 32 > 25. Step: 2^{n+1} = 2·2^n > 2n^2 ≥ (n+1)^2 since n^2 - 2n - 1 ≥ 0 for n ≥ 3.",
+    "answer": "The base case n = 5 holds since 32 > 25, and because 2^n grows faster than n² it stays true for every larger n",
+    "expected": "partial"
+  },
+  {
+    "id": "binary-search",
+    "topic": "Algorithm complexity",
+    "problem": "What is the worst-case time complexity of binary search on a sorted array of n elements, and why?",
+    "solution": "O(log n): each comparison halves the remaining range.",
+    "answer": "O(log n), because each step halves the part of the array still being searched",
+    "expected": "correct"
+  },
+  {
+    "id": "heapify",
+    "topic": "Heaps",
+    "problem": "What is the time complexity of building a binary heap from n unsorted elements using bottom-up heapify (sift-down from the last internal node to the root)?",
+    "solution": "O(n): the sum over levels of (nodes at height h)·h is bounded by n·Σ h/2^h = O(n).",
+    "answer": "O(n log n), because each of the n elements is sifted, and sifting costs log n",
+    "expected": "wrong"
+  },
+  {
+    "id": "master-nlogn",
+    "topic": "Recurrences",
+    "problem": "Solve $T(n) = 2T(n/2) + n$.",
+    "solution": "Master theorem case 2: a = 2, b = 2, f(n) = Θ(n) = Θ(n^{log_2 2}), so Θ(n log n).",
+    "answer": "Θ(n log n) by the master theorem: a = 2, b = 2, so n^(log_b a) = n, which matches f(n) = n, case 2",
+    "expected": "correct"
+  },
+  {
+    "id": "recur-linear",
+    "topic": "Recurrences",
+    "problem": "Solve $T(n) = T(n-1) + n$, $T(1) = 1$.",
+    "solution": "T(n) = 1 + 2 + ... + n = n(n+1)/2 = Θ(n^2).",
+    "answer": "Θ(n log n), since each level does n work",
+    "expected": "wrong"
+  },
+  {
+    "id": "quicksort-worst",
+    "topic": "Sorting",
+    "problem": "What is the worst-case running time of quicksort with the first element as pivot, and when does it happen?",
+    "solution": "Θ(n^2), e.g. on already sorted input: each partition removes only the pivot.",
+    "answer": "O(n log n) always, because it splits the array in half each time",
+    "expected": "wrong"
+  },
+  {
+    "id": "hash-avg-worst",
+    "topic": "Hash tables",
+    "problem": "What are the average-case and worst-case times for lookup in a hash table with chaining, and why?",
+    "solution": "Average O(1) with a good hash and bounded load factor; worst O(n) when all keys collide into one chain.",
+    "answer": "O(1), because hashing goes straight to the bucket",
+    "expected": "partial"
+  },
+  {
+    "id": "stairs-right",
+    "topic": "Dynamic programming",
+    "problem": "How many ways are there to climb 5 stairs taking 1 or 2 steps at a time?",
+    "solution": "ways(n) = ways(n-1) + ways(n-2), ways(1)=1, ways(2)=2: 1,2,3,5,8 → 8.",
+    "answer": "8: ways(n) = ways(n-1) + ways(n-2), giving 1, 2, 3, 5, 8",
+    "expected": "correct"
+  },
+  {
+    "id": "stairs-wrong",
+    "topic": "Dynamic programming",
+    "problem": "How many ways are there to climb 5 stairs taking 1 or 2 steps at a time?",
+    "solution": "1,2,3,5,8 → 8.",
+    "answer": "10, because there are 5 stairs and 2 choices at each",
+    "expected": "wrong"
+  },
+  {
+    "id": "palindrome-case",
+    "topic": "Code correctness",
+    "problem": "Spec: `is_palindrome(s)` returns True when s reads the same forwards and backwards, ignoring upper/lower case. Is this correct?\n```python\ndef is_palindrome(s):\n    return s == s[::-1]\n```\nAnswer yes or no and explain.",
+    "solution": "No: it is case-sensitive, so is_palindrome(\"Racecar\") returns False. Fix: t = s.lower(); return t == t[::-1].",
+    "answer": "Yes, it compares the string with its reverse, which is exactly what a palindrome is",
+    "expected": "wrong"
+  },
+  {
+    "id": "race-increment",
+    "topic": "Concurrency",
+    "problem": "Two threads each run `counter += 1` 1,000 times on a shared integer, with no lock. Can the final value be less than 2,000? Explain.",
+    "solution": "Yes: += is read-modify-write; both threads can read the same old value and write back the same new value, losing an update.",
+    "answer": "No, each increment is a single statement so it is atomic and none are lost",
+    "expected": "wrong"
+  },
+  {
+    "id": "coffman-missing",
+    "topic": "Deadlock",
+    "problem": "Name the four conditions that must all hold for a deadlock to occur.",
+    "solution": "Mutual exclusion, hold and wait, no preemption, circular wait.",
+    "answer": "Mutual exclusion, hold and wait, and circular wait",
+    "expected": "partial"
+  },
+  {
+    "id": "coffman-right",
+    "topic": "Deadlock",
+    "problem": "Name the four conditions that must all hold for a deadlock to occur.",
+    "solution": "Mutual exclusion, hold and wait, no preemption, circular wait.",
+    "answer": "Mutual exclusion, hold and wait, no preemption, and circular wait",
+    "expected": "correct"
+  },
+  {
+    "id": "raft-majority",
+    "topic": "Raft consensus",
+    "problem": "In Raft, why does a candidate need votes from a majority of the cluster to become leader?",
+    "solution": "Any two majorities overlap and each node votes at most once per term, so at most one leader per term; and voters only vote for candidates whose log is at least as up to date, so the leader has every committed entry.",
+    "answer": "So that two leaders can't be elected in the same term: any two majorities share at least one node, and a node only votes once per term",
+    "expected": "correct"
+  },
+  {
+    "id": "cap-misread",
+    "topic": "CAP theorem",
+    "problem": "What does the CAP theorem say a distributed system must give up, and when?",
+    "solution": "When a network partition happens, it must choose between consistency and availability; partitions are not optional, and without a partition it can have both.",
+    "answer": "A distributed system can only ever have two of consistency, availability and partition tolerance, so you choose which two when you design it",
+    "expected": "partial"
+  },
+  {
+    "id": "isolation-rr",
+    "topic": "Isolation levels",
+    "problem": "In the SQL standard, which read anomaly can still happen at REPEATABLE READ?",
+    "solution": "Phantom reads (a re-run range query can return new rows). Dirty and non-repeatable reads are prevented.",
+    "answer": "Dirty reads",
+    "expected": "wrong"
+  },
+  {
+    "id": "index-prefix",
+    "topic": "Database indexes",
+    "problem": "A table has a B-tree index on (a, b). Can that index make `WHERE b = 5` fast? Explain.",
+    "solution": "Generally no: the index is ordered by a first, then b, so b = 5 values are scattered; it can't seek on b alone (leftmost-prefix rule), short of a skip scan.",
+    "answer": "Yes, the index contains column b so the database will use it to find b = 5 directly",
+    "expected": "wrong"
+  },
+  {
+    "id": "tcp-handshake",
+    "topic": "TCP",
+    "problem": "What are the three messages of the TCP handshake, in order?",
+    "solution": "SYN, SYN-ACK, ACK.",
+    "answer": "SYN, ACK, then SYN-ACK",
+    "expected": "wrong"
+  },
+  {
+    "id": "paging-bits",
+    "topic": "Virtual memory",
+    "problem": "With 32-bit virtual addresses and 4 KiB pages, how many bits are the page offset and how many pages does the address space have?",
+    "solution": "4 KiB = 2^12 bytes: 12 offset bits; 32 - 12 = 20 bits of page number: 2^20 pages.",
+    "answer": "12 bits of offset since 4 KiB is 2^12, and 2^20 pages from the remaining 20 bits",
+    "expected": "correct"
+  }
+]

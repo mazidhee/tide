@@ -228,6 +228,7 @@ const api: TideApi = {
   },
   books: {
     suggest: invoke('books:suggest'),
+    passage: invoke('books:passage'),
     map: invoke('books:map')
   },
   studyApi: {
