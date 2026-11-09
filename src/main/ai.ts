@@ -273,7 +273,7 @@ async function* readStream(body: ReadableStream<Uint8Array>, filter: (t: string)
 
 /** A cloud model's answer, streamed; its real token counts go to the usage log */
 async function* streamCloud(target: CloudTarget, messages: ChatMessage[], signal: AbortSignal, maxTokens: number, temperatureOverride: number | undefined, task: RequestKind): AsyncGenerator<string> {
-  if (!canTake(estimateTokens(JSON.stringify(messages).length) + maxTokens, target.provider)) throw new CloudUnavailable(`The cloud model’s per-minute limit can’t take this for about ${secondsUntilReset(target.provider)}s`)
+  if (!canTake(estimateTokens(JSON.stringify(messages).length) + maxTokens, target)) throw new CloudUnavailable(`The cloud model’s per-minute limit can’t take this for about ${secondsUntilReset(target)}s`)
   let res: Response
   // A deadline per job: a model that's too slow today hands over to the next one in line
   const slow = AbortSignal.timeout(deadlineFor(task))
@@ -292,7 +292,7 @@ async function* streamCloud(target: CloudTarget, messages: ChatMessage[], signal
     throw new CloudUnavailable(slow.aborted ? `${target.model} took too long` : `Couldn't reach the cloud model: ${(e as Error).message}`)
   }
   if (!res.ok || !res.body) throw await cloudError(res, target)
-  noteLimits(res.headers, target.provider)
+  noteLimits(res.headers, target)
   let reported: { input: number; output: number; cached?: number } | null = null
   let out = 0
   try {
@@ -311,11 +311,11 @@ async function* streamCloud(target: CloudTarget, messages: ChatMessage[], signal
  * model can't take it (rate limited, down, key refused) before writing anything, the next
  * provider you have a key for tries, then Gemma.
  */
-export async function* streamRouted(messages: ChatMessage[], signal: AbortSignal, maxTokens: number, task: RequestKind, temperatureOverride?: number): AsyncGenerator<string> {
+export async function* streamRouted(messages: ChatMessage[], signal: AbortSignal, maxTokens: number, task: RequestKind, temperatureOverride?: number, routine = false): AsyncGenerator<string> {
   for (let tries = 0; tries < 3; tries++) {
     // A provider that just refused is cooling down, so this picks the next one in line
     // Open endpoints only for the short checks (a problem and an answer), never planning from your notes
-    const target = routeFor(isCloudTask(task) ? task : null, 'auto', task === 'marking' || task === 'maths')
+    const target = routeFor(isCloudTask(task) ? task : null, 'auto', task === 'marking' || task === 'maths', routine)
     if (!target) break
     let wrote = false
     try {
@@ -466,7 +466,7 @@ async function answer(req: TurnRequest, emit: (e: ChatEvent) => void) {
       await agentChat(req, (e) => (e.type === 'delta' && (reply += e.text), emit(e)), controller.signal)
       if (req.session && !controller.signal.aborted) {
         const { checkLessonReply, fixNudge } = await import('./lessonGuard')
-        const ask = (prompt: string, system: string, task: RequestKind, signal: AbortSignal) => complete(prompt, system, signal, 'interactive', task)
+        const ask = (prompt: string, system: string, task: RequestKind, signal: AbortSignal, routine?: boolean) => complete(prompt, system, signal, 'interactive', task, routine)
         const problems = await checkLessonReply(req, reply, emit, controller.signal, ask).catch(() => [] as string[])
         if (problems.length && !controller.signal.aborted) {
           emit({ id: req.id, type: 'reset' })
@@ -594,12 +594,13 @@ export async function* streamDraft(messages: ChatMessage[], signal: AbortSignal,
  * One-shot generation. Background work (titles, compaction, margin notes) waits for an idle model
  * and gives way when the user needs it; everything else runs at once.
  */
-export async function complete(prompt: string, system?: string, signal?: AbortSignal, priority: 'interactive' | 'background' = 'interactive', task: RequestKind = priority === 'background' ? 'background' : 'other'): Promise<string> {
+/** `routine`: work that can be left to Gemma when a cloud model's free allowance for the day is running low */
+export async function complete(prompt: string, system?: string, signal?: AbortSignal, priority: 'interactive' | 'background' = 'interactive', task: RequestKind = priority === 'background' ? 'background' : 'other', routine = false): Promise<string> {
   if (priority === 'background') return inBackground((s) => completeNow(prompt, system, s, true, task), signal)
-  return completeNow(prompt, system, signal, false, task)
+  return completeNow(prompt, system, signal, false, task, routine)
 }
 
-async function completeNow(prompt: string, system: string | undefined, signal: AbortSignal | undefined, background: boolean, task: RequestKind = 'other'): Promise<string> {
+async function completeNow(prompt: string, system: string | undefined, signal: AbortSignal | undefined, background: boolean, task: RequestKind = 'other', routine = false): Promise<string> {
   const controller = new AbortController()
   signal?.addEventListener('abort', () => controller.abort(), { once: true })
   let out = ''
@@ -618,7 +619,7 @@ async function completeNow(prompt: string, system: string | undefined, signal: A
     let looped = false
     try {
       // Planning and marking go to the cloud model when they're set to escalate; background work never does
-      const stream = background ? streamCompletion(messages, pass.signal, 3000, true, temperature, task) : streamRouted(messages, pass.signal, 3000, task, temperature)
+      const stream = background ? streamCompletion(messages, pass.signal, 3000, true, temperature, task) : streamRouted(messages, pass.signal, 3000, task, temperature, routine)
       for await (const t of stream) {
         out += t
         if (isLooping(out)) {

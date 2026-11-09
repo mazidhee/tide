@@ -1,5 +1,5 @@
 import { gradeAnswer } from './daily'
-import { hasKeys, listCloudModels, setKey, testCloud, usageSummary } from './cloud'
+import { hasKeys, listCloudModels, loadDayUse, setKey, testCloud, usageSummary } from './cloud'
 import { connectMetabase, disconnectMetabase, metabaseStatus } from './metabase'
 import { followVault } from './vaultHome'
 import { newStudyApiToken, setStudyApi, startStudyApi, stopStudyApi, studyApiStatus } from './studyApi'
@@ -572,6 +572,8 @@ app.whenReady().then(() => {
   })
 
   registerIpc()
+  // Today's cloud use so far, so the daily free allowance is tracked across restarts
+  loadDayUse()
   // The notes folder moved while Tide was closed or open: follow it, or ask where it went
   followVault(
     (path) => {
