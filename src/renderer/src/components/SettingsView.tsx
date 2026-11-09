@@ -214,6 +214,42 @@ function MetabaseGroup() {
   )
 }
 
+/** The problem bank: written and checked ahead by the cloud models, for lessons and Daily practice */
+function BankRow() {
+  const [st, setSt] = useState<Awaited<ReturnType<typeof window.tide.bank.status>> | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    window.tide.bank.status().then(setSt).catch(() => {})
+  }, [])
+  const when = st?.lastRun ? new Date(st.lastRun).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''
+  return (
+    <Row
+      label="Problem bank"
+      hint={
+        busy
+          ? 'Writing and checking problems for what’s coming…'
+          : st?.note
+            ? <span className="set-error">{st.note}</span>
+            : st?.lastRun
+              ? `Last topped up at ${when}: ${st.added} checked problem${st.added === 1 ? '' : 's'} added for ${st.topics} topic${st.topics === 1 ? '' : 's'}. Every half hour while Tide is open, using what’s left of the free allowance.`
+              : 'Every half hour while Tide is open, the cloud model writes and checks problems for your next topics, so lessons have them ready.'
+      }
+    >
+      <button
+        className="btn small"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true)
+          setSt(await window.tide.bank.prepare().catch(() => st))
+          setBusy(false)
+        }}
+      >
+        {busy ? 'Preparing…' : 'Prepare now'}
+      </button>
+    </Row>
+  )
+}
+
 /** Your study time for a dashboard or another app (Plain, a widget), read-only, from this Mac */
 function StudyApiGroup() {
   const app = useApp()
@@ -752,6 +788,7 @@ function ModelsSection() {
                 ))}
               </>
             )}
+            <BankRow />
             <Row
               label="When it’s busy"
               hint={(() => {

@@ -42,7 +42,11 @@ Kimi K3.1 Pro has a page on build.nvidia.com but NVIDIA's API doesn't serve it y
 
 Change any of them under **Settings → Models**. Tide paces itself at about 35 requests a minute rather than wait to be refused, and gives each job a time limit (longer for hard maths) after which the next model in line answers.
 
-## Free backups with no account
+## The problem bank
+
+Every half hour while Tide is open, the cloud model writes problems for what's coming (today's and your next study day's topics, and lessons in progress) at three levels, each solved and checked, and a different model reviews them. During the day this counts as routine work, so it stops once a model is 70% through its day and leaves the rest for your lessons. In the evening it spends what's left before the allowance resets: free allowances don't carry over. **Settings → Models → Problem bank** shows the last run, and **Prepare now** runs it at once. Private projects are never sent; their problems are written by Gemma.
+
+
 
 Two open endpoints need no key and join the end of the line by themselves, after the providers you have keys for: **Kilo** (NVIDIA's Nemotron 3 Ultra, about 200 requests an hour, around 15 seconds an answer) and **OVHcloud** (GPT-OSS 120B and Qwen3.5 397B, about 2 requests a minute, slow). Kilo's free models may train on what they're sent, so they only ever get the short checks (a problem, its solution, your answer), never a tutoring turn with your notes in it.
 

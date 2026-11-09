@@ -2,6 +2,7 @@ import { gradeAnswer } from './daily'
 import { hasKeys, listCloudModels, loadDayUse, setKey, testCloud, usageSummary } from './cloud'
 import { connectMetabase, disconnectMetabase, metabaseStatus } from './metabase'
 import { followVault } from './vaultHome'
+import { bankStatus, prepare as prepareBank, previewFor, startBank, variantFor } from './bank'
 import { newStudyApiToken, setStudyApi, startStudyApi, stopStudyApi, studyApiStatus } from './studyApi'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, protocol, shell } from 'electron'
 import { join } from 'path'
@@ -309,6 +310,10 @@ function registerIpc() {
   handle('things:setDone', (id: string, done: boolean) => setTaskDone(id, done))
   handle('metabase:status', () => metabaseStatus())
   handle('studyApi:status', () => studyApiStatus())
+  handle('bank:status', () => bankStatus())
+  handle('bank:prepare', () => prepareBank())
+  handle('bank:variant', (mistakeId: string) => variantFor(mistakeId))
+  handle('bank:preview', (topic: string) => previewFor(topic))
   handle('studyApi:set', (patch: { enabled?: boolean; lan?: boolean }) => setStudyApi(patch))
   handle('studyApi:newToken', () => newStudyApiToken())
   handle('metabase:connect', (url: string, key: string) => connectMetabase(url, key))
@@ -574,6 +579,8 @@ app.whenReady().then(() => {
   registerIpc()
   // Today's cloud use so far, so the daily free allowance is tracked across restarts
   loadDayUse()
+  // The problem bank tops itself up for what's coming, with the cloud models
+  startBank()
   // The notes folder moved while Tide was closed or open: follow it, or ask where it went
   followVault(
     (path) => {

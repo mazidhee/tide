@@ -16936,3 +16936,16 @@ button.tl-dot:focus-visible {
   overflow-wrap: anywhere;
   font-size: var(--text-xs);
 }
+
+/* While a view that loads on first use (PDF reader, code editor, graph) arrives: a calm, empty frame */
+.view-loading {
+  flex: 1;
+  min-height: 240px;
+}
+
+.view-loading.small {
+  min-height: 160px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--bg-inset);
+}

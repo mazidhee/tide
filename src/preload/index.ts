@@ -231,6 +231,12 @@ const api: TideApi = {
     passage: invoke('books:passage'),
     map: invoke('books:map')
   },
+  bank: {
+    status: invoke('bank:status'),
+    prepare: invoke('bank:prepare'),
+    variant: invoke('bank:variant'),
+    preview: invoke('bank:preview')
+  },
   studyApi: {
     status: invoke('studyApi:status'),
     set: invoke('studyApi:set'),

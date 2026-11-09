@@ -64,6 +64,14 @@ Gemma is a small model, and on hard material it can set a broken problem or mark
 
 If anything fails, the reply is taken back and written again, once, with what to fix; you'll see a moment of "Checking the problem and the mark" above it. Each verdict quotes the part of your answer that earned it.
 
+## Problems ready before you need them
+
+Tide keeps a **problem bank** for the topics coming up: problems written ahead of time by the cloud model, each with its solution, a SymPy check where the answer can be computed, and a review by a second model. Only problems that passed go in front of you.
+
+- In a problem set, when the tutor gives its feedback and starts the next problem, Tide stops it there and puts in a checked problem from the bank instead: harder after a right answer, the same level after a partly right one, easier after a wrong one. Replies come about three times faster, because the tutor writes less.
+- While you work on a problem, the next ones are prepared in the background (by the cloud model, or by Gemma while it's idle).
+- You can start answering as soon as a reply is written; its checks finish behind it. If you answer before they're done, they stop, so your answer goes first.
+
 ## Taught from your books
 
 When a book you own covers the lesson's topic, the lesson is taught from that section: its definitions, notation and examples, with problems that follow from it. Where the model's memory and the book disagree, the book wins.

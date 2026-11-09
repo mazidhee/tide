@@ -9,7 +9,9 @@ import type { TurnRequest } from './agent'
 import { filedUnder } from './learn'
 import { compactChat, fallbackTitle, historyBudget, historyFor, needsCompaction, newChat, renameChat, updateChat } from './chats'
 import { fitHistory } from '@shared/context'
+import { createHash } from 'crypto'
 import { cleanModelText } from '@shared/modelText'
+import { BANK_NUDGE, levelAfter, nextDirection, pickProblem, problemsSoFar, renderProblem, type BankProblem, type Level } from '@shared/bank'
 import type { ChatEvent, ChatMessage, ChatRequest, ChatScope, ContextSource, ReadAlongNote } from '@shared/types'
 import { getSettings } from './settings'
 import { localSampling } from './sampling'
@@ -45,11 +47,17 @@ export async function listModels(): Promise<string[]> {
   if (!res.ok) throw new Error(`Server answered ${res.status} ${res.statusText}`)
   const json = (await res.json()) as { data?: { id: string; loaded?: boolean }[]; models?: { name: string }[] }
   const models = json.data ?? json.models?.map((m) => ({ id: m.name })) ?? []
-  // Prefer what the server already has in memory, then chat/instruct tuned models
+  // Prefer what the server already has in memory, then chat/instruct tuned models ("chat" as a
+  // word: Chatterbox is a voice model)
   const rank = (m: { id: string; loaded?: boolean }) =>
-    (m.loaded ? 0 : 2) + (/(-it\b|instruct|chat)/i.test(m.id) ? 0 : 1)
-  // Speculative-decoding draft models are listed too, but can't hold a conversation
-  return [...models].filter((m) => !/assistant|drafter|dflash|dspark|eagle/i.test(m.id)).sort((a, b) => rank(a) - rank(b)).map((m) => m.id).filter(Boolean)
+    (m.loaded ? 0 : 2) + (/(-it\b|-it-|instruct|\bchat\b)/i.test(m.id) ? 0 : 1)
+  // Speculative-decoding draft models are listed too, and so is everything else on disk (voices,
+  // speech recognition, embeddings): none of them can hold a conversation
+  return [...models]
+    .filter((m) => !/assistant|drafter|dflash|dspark|eagle|tts|chatterbox|kokoro|whisper|parakeet|canary|voice|embed|rerank/i.test(m.id))
+    .sort((a, b) => rank(a) - rank(b))
+    .map((m) => m.id)
+    .filter(Boolean)
 }
 
 async function resolveModel(): Promise<string> {
@@ -334,6 +342,34 @@ export async function* streamRouted(messages: ChatMessage[], signal: AbortSignal
   yield* streamCompletion(messages, signal, maxTokens, false, temperatureOverride, task)
 }
 
+/** No cloud model can take this right now (none set up, all busy, or the day's allowance used) */
+export class NoCloud extends Error {}
+
+/**
+ * A cloud model's whole answer, never Gemma's: for work that should only happen when a cloud model
+ * can do it (writing the problem bank), so it never takes the Mac. Works down the line like
+ * streamRouted; throws NoCloud when nothing can take it.
+ */
+export async function askCloud(prompt: string, system: string, task: CloudTask, signal: AbortSignal, routine = false, maxTokens = 4000): Promise<string> {
+  const messages: ChatMessage[] = [
+    { role: 'system', content: system },
+    { role: 'user', content: prompt }
+  ]
+  for (let tries = 0; tries < 3; tries++) {
+    const target = routeFor(task, 'auto', true, routine)
+    if (!target) break
+    let out = ''
+    try {
+      for await (const t of streamCompletion(messages, signal, maxTokens, false, 0.4, task, target)) out += t
+      return cleanModelText(out)
+    } catch (e) {
+      if (signal.aborted || !(e instanceof CloudUnavailable)) throw e
+      if (!coolingDown(target)) coolTarget(target, 30)
+    }
+  }
+  throw new NoCloud('No cloud model can take this now')
+}
+
 export const isCloudTask = (t: RequestKind): t is CloudTask => t === 'maths' || t === 'errors' || t === 'marking' || t === 'planning'
 
 const uid = () => Math.random().toString(36).slice(2, 10)
@@ -452,6 +488,98 @@ export async function chat(req: ChatRequest, emit: (e: ChatEvent) => void) {
   })()
 }
 
+/** Where each lesson is: the level of its last problem, so "harder" and "easier" mean something */
+const lessonLevels = new Map<string, Level>()
+
+/**
+ * A lesson turn with the problem bank: when checked problems are ready for the topic, the tutor is
+ * told it may ask for one by level instead of writing it, and `supply` adds it; `prepare` tops the
+ * bank up around the new level while the student answers.
+ */
+async function lessonTurn(req: TurnRequest) {
+  const topic = req.topic && /problem set|first problem/i.test(req.instructions ?? '') ? req.topic : ''
+  if (!topic) return null
+  const { readBank, markUsed, prepareAround } = await import('./bank')
+  const { mayLeaveMac } = await import('./lessonGuard')
+  const key = createHash('sha1').update(`${topic}\n${String(req.messages.find((m) => m.role === 'user')?.content ?? '')}`).digest('hex')
+  const replies = req.messages.filter((m) => m.role === 'assistant').map((m) => String(m.content))
+  const transcript = replies.join('\n')
+  const seen = (p: BankProblem) => transcript.includes(p.text.slice(0, 80))
+  const bank = await readBank(topic).catch(() => [] as BankProblem[])
+  const ready = ([1, 2, 3] as Level[]).some((l) => pickProblem(bank, l, seen))
+  const messages = [...req.messages]
+  const last = messages[messages.length - 1]
+  if (ready && last?.role === 'user' && typeof last.content === 'string') messages[messages.length - 1] = { ...last, content: `${last.content}\n\n${BANK_NUDGE}` }
+  const local = !(await mayLeaveMac(req))
+  // While the reply streams: when the tutor starts a new problem right after short feedback, it's
+  // stopped there and a checked problem from the bank takes its place (small models don't reliably
+  // use the <next> tag). Text that might be the start of "**Problem" is held back a moment.
+  const START = /\*\*\s*Problem\s+\d+/i
+  let sent = ''
+  let held = ''
+  let cut = false
+  const stop = new AbortController()
+  const quickFeedback = (before: string) => {
+    const after = before.split(/<\/grade>/i).pop() ?? ''
+    return /<\/grade>/i.test(before) && after.length < 900 && !/^#{1,3}\s/m.test(after) && !/<plan>/i.test(after)
+  }
+  return {
+    request: { ...req, messages },
+    /** Ends the model's turn early when Tide takes over setting the problem */
+    signal: stop.signal,
+    tap(emit: (e: ChatEvent) => void): (e: ChatEvent) => void {
+      return (e) => {
+        if (e.type !== 'delta') return emit(e)
+        if (cut) return
+        held += e.text
+        const m = ready ? START.exec(held) : null
+        if (m && quickFeedback(sent + held.slice(0, m.index))) {
+          const before = held.slice(0, m.index).replace(/\s+$/, '')
+          if (before) emit({ ...e, text: before })
+          sent += before
+          held = ''
+          cut = true
+          stop.abort()
+          return
+        }
+        // All but the tail, which could be the start of "**Problem 12"
+        if (held.length > 16) {
+          const out = held.slice(0, -16)
+          emit({ ...e, text: out })
+          sent += out
+          held = held.slice(-16)
+        }
+      }
+    },
+    /** What the model wrote and the student saw; sends anything still held back */
+    finish(emit: (e: ChatEvent) => void): string {
+      if (held && !cut) {
+        emit({ id: req.id, type: 'delta', text: held })
+        sent += held
+      }
+      held = ''
+      return sent
+    },
+    /** The problem the tutor asked for (by tag) or was about to write, as text to add to its reply */
+    async supply(reply: string, emit: (e: ChatEvent) => void): Promise<string> {
+      const verdict = /<grade\s+verdict\s*=\s*["']?(correct|partial|wrong)/i.exec(reply)?.[1]?.toLowerCase()
+      const dir = nextDirection(reply) ?? (cut ? (verdict === 'correct' ? 'harder' : verdict === 'wrong' ? 'easier' : 'same') : undefined)
+      if (!dir) return ''
+      const level = levelAfter(lessonLevels.get(key) ?? 2, dir)
+      const p = pickProblem(bank, level, seen)
+      if (!p) return ''
+      const text = renderProblem(p, problemsSoFar([...replies, reply]) + 1, dir)
+      emit({ id: req.id, type: 'delta', text })
+      lessonLevels.set(key, p.level)
+      void markUsed(topic, p.id)
+      return text
+    },
+    prepare() {
+      void prepareAround(topic, lessonLevels.get(key) ?? 2, local)
+    }
+  }
+}
+
 async function answer(req: TurnRequest, emit: (e: ChatEvent) => void) {
   const controller = new AbortController()
   running.set(req.id, controller)
@@ -461,13 +589,31 @@ async function answer(req: TurnRequest, emit: (e: ChatEvent) => void) {
       const { agentChat } = await import('./agent')
       // In a lesson, a reply is checked before the student works on it (a repeated or missing
       // question, a check that fails, a flawed problem, a mark that's too generous) and written
-      // again once if anything's wrong: see lessonGuard
+      // again once if anything's wrong: see lessonGuard. In a problem set, the next problem comes
+      // ready from the problem bank (see bank.ts): the tutor says how hard, Tide adds a checked one.
+      const lesson = req.session ? await lessonTurn(req) : null
       let reply = ''
-      await agentChat(req, (e) => (e.type === 'delta' && (reply += e.text), emit(e)), controller.signal)
+      if (lesson) {
+        // The model's turn ends early when Tide takes over setting the problem: that's not an error
+        try {
+          await agentChat(lesson.request, lesson.tap(emit), AbortSignal.any([controller.signal, lesson.signal]))
+        } catch (e) {
+          if (!lesson.signal.aborted || controller.signal.aborted) throw e
+        }
+        reply = lesson.finish(emit)
+      } else await agentChat(req, (e) => (e.type === 'delta' && (reply += e.text), emit(e)), controller.signal)
+      let fromBank = false
+      if (lesson && !controller.signal.aborted) {
+        const added = await lesson.supply(reply, emit)
+        reply += added
+        fromBank = !!added
+      }
       if (req.session && !controller.signal.aborted) {
+        // You can start answering now; the checks go on behind it
+        emit({ id: req.id, type: 'replied' })
         const { checkLessonReply, fixNudge } = await import('./lessonGuard')
         const ask = (prompt: string, system: string, task: RequestKind, signal: AbortSignal, routine?: boolean) => complete(prompt, system, signal, 'interactive', task, routine)
-        const problems = await checkLessonReply(req, reply, emit, controller.signal, ask).catch(() => [] as string[])
+        const problems = await checkLessonReply(req, reply, emit, controller.signal, ask, false, { fromBank }).catch(() => [] as string[])
         if (problems.length && !controller.signal.aborted) {
           emit({ id: req.id, type: 'reset' })
           const messages = [...req.messages]
@@ -478,6 +624,7 @@ async function answer(req: TurnRequest, emit: (e: ChatEvent) => void) {
           // The rewrite isn't sent back again, but it still gets its solution for marking
           if (!controller.signal.aborted) await checkLessonReply(req, again, emit, controller.signal, ask, true).catch(() => [])
         }
+        lesson?.prepare()
       }
       emit({ id: req.id, type: 'done' })
       running.delete(req.id)

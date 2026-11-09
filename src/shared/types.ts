@@ -401,6 +401,8 @@ export type ChatEvent =
   | { id: string; type: 'delta'; text: string }
   /** Clear the reply shown so far (the model is starting over) */
   | { id: string; type: 'reset' }
+  /** A lesson reply is written: the student can answer while its checks finish */
+  | { id: string; type: 'replied' }
   | { id: string; type: 'step'; step: AgentStep }
   | { id: string; type: 'done' }
   | { id: string; type: 'error'; message: string }
@@ -655,6 +657,15 @@ export interface TideApi {
     passage(topic: string): Promise<{ label: string; path: string; from: number; to: number; text: string } | null>
     /** Maps a book now: chapters, pages and what each covers */
     map(path: string): Promise<import('./books').BookMap | null>
+  }
+  /** Problems written and checked ahead of time (main/bank.ts) */
+  bank: {
+    status(): Promise<{ lastRun?: number; added: number; topics: number; note?: string }>
+    prepare(): Promise<{ lastRun?: number; added: number; topics: number; note?: string }>
+    /** A fresh version of a past mistake, for its retest */
+    variant(mistakeId: string): Promise<import('./bank').BankProblem | null>
+    /** An easy first problem on a topic */
+    preview(topic: string): Promise<import('./bank').BankProblem | null>
   }
   studyApi: {
     status(): Promise<import('../main/studyApi').StudyApiStatus>
