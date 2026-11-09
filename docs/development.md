@@ -2,7 +2,7 @@
 
 A local-first study app for macOS, built on an Obsidian vault. You read and write your own Markdown notes, and an AI tutor that runs on any OpenAI-compatible server (including local models through MLX, Ollama or LM Studio) probes your thinking, quizzes you, teaches step by step, and schedules your flashcards.
 
-The user guide lives in [`user-guide.md`](user-guide.md) and is bundled into the app as **Help** (⌘?).
+The user guide lives in [`guide/`](guide/), one Markdown page per topic, and is bundled into the app as **Help** (⌘?). `src/shared/docs.ts` describes the page format, including the `walkthrough` and `animation` blocks.
 
 ## Quick start
 
@@ -103,7 +103,7 @@ src/
     components/      one file per view or widget (NoteView, PdfView, SessionView, OutlineView, …)
     lib/             markdown rendering, page settings, thread engine, mermaid, companion notes
     styles/          theme.css (tokens), app.css (layout and components), prose.css (reading)
-docs/user-guide.md   the user guide, bundled into Help
+docs/guide/          the user guide, one page per topic, bundled into Help
 test/                vitest suites
 build/icon.icns      app icon
 ```
