@@ -42,6 +42,10 @@ export interface ProviderInfo {
   checked?: string
   /** Extra request fields this provider wants for reasoning models */
   reasoningField?: 'reasoning_effort'
+  /** The model for each job, when it's better to spread jobs across models (each has its own limit) */
+  jobs?: Partial<Record<CloudTask, string>>
+  /** Requests a minute to stay under: Tide paces itself rather than wait to be refused */
+  perMinute?: number
 }
 
 export const PROVIDERS: ProviderInfo[] = [
@@ -54,7 +58,11 @@ export const PROVIDERS: ProviderInfo[] = [
     pricingUrl: 'https://build.nvidia.com/models',
     checked: '2026-11-09',
     freeTier: 'Free with an NVIDIA Developer account (phone verification): about 40 requests a minute, no published daily cap. Trial use: prompts may be logged to improve NVIDIA’s products, so private projects and Metabase never go here.',
+    perMinute: 35,
+    // Each job on its own model, so one model's limit isn't shared by everything
+    jobs: { maths: 'moonshotai/kimi-k3.1-pro', errors: 'moonshotai/kimi-k2.6', marking: 'deepseek-ai/deepseek-v4.1-flash', planning: 'deepseek-ai/deepseek-v4.1-flash' },
     models: [
+      { id: 'moonshotai/kimi-k3.1-pro', label: 'Kimi K3.1 Pro', price: { input: 0, output: 0 }, reasoning: true, note: 'Strongest open model: hard maths and proofs. Slower' },
       { id: 'deepseek-ai/deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash', price: { input: 0, output: 0 }, reasoning: true, note: 'Strongest free option for maths and proofs' },
       { id: 'moonshotai/kimi-k2.6', label: 'Kimi K2.6', price: { input: 0, output: 0 }, reasoning: true, note: 'Strong at maths and code' },
       { id: 'z-ai/glm-5.3-flash', label: 'GLM 5.3 Flash', price: { input: 0, output: 0 }, reasoning: true, note: 'Fast; good for code' }
@@ -69,6 +77,7 @@ export const PROVIDERS: ProviderInfo[] = [
     pricingUrl: 'https://console.groq.com/docs/models',
     checked: '2026-11-08',
     freeTier: 'Free key: 1,000 requests a day and 8,000 tokens a minute per model (read from the API’s own rate-limit headers). No card needed.',
+    perMinute: 28,
     reasoningField: 'reasoning_effort',
     models: [
       { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B', price: { input: 0.15, output: 0.6 }, context: 131072, reasoning: true, note: 'Strong reasoning, very fast' },
@@ -186,6 +195,8 @@ export interface CloudSettings {
   reasoning?: 'low' | 'medium' | 'high'
   /** Stop escalating once the month's estimated paid spend reaches this (USD); 0 means no limit */
   monthlyBudget?: number
+  /** A model per job, overriding the provider's own choice for it */
+  taskModels?: Partial<Record<CloudTask, string>>
   providers: Record<string, CloudProviderSettings>
 }
 
@@ -236,4 +247,26 @@ export function escalationFor(answer: string, askType?: string): CloudTask | nul
   if (askType === 'code' && code && text.length > 120) return 'errors'
   if ((askType === 'problem' || MATHS.test(text)) && (WORKING.test(text) || MATHS.test(text))) return 'maths'
   return null
+}
+
+/**
+ * Who answers a job, in order, as provider and model: its model at your provider (yours for the
+ * job, else the provider's choice for it, else the one you picked), that provider's other
+ * reasoning models, then each other provider you have a key for, at its model for the job.
+ */
+export function jobLine(settings: CloudSettings, keys: Record<string, boolean>, task: CloudTask | null): { provider: string; model: string }[] {
+  const out: { provider: string; model: string }[] = []
+  const add = (provider: string, model?: string) => {
+    if (model && keys[provider] && !out.some((t) => t.provider === provider && t.model === model)) out.push({ provider, model })
+  }
+  const modelFor = (provider: string) => {
+    const info = providerInfo(provider, settings)
+    const own = provider === settings.provider && task ? settings.taskModels?.[task] : undefined
+    return own || (task ? info.jobs?.[task] : undefined) || (provider === settings.provider ? settings.model : (settings.providers?.[provider]?.models?.[0] ?? info.models[0]?.id))
+  }
+  add(settings.provider, modelFor(settings.provider))
+  add(settings.provider, settings.model)
+  for (const m of providerInfo(settings.provider, settings).models) if (m.reasoning) add(settings.provider, m.id)
+  for (const id of [...PROVIDERS.map((p) => p.id), ...Object.keys(settings.providers ?? {})]) if (id !== settings.provider) add(id, modelFor(id))
+  return out
 }

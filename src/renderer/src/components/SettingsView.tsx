@@ -734,13 +734,27 @@ function ModelsSection() {
             <Row label="Model" hint={info.models.find((m) => m.id === cloud.model)?.note}>
               <Select label="Model" value={cloud.model} onChange={(v) => save({ model: v })} options={(modelIds.includes(cloud.model) ? modelIds : [cloud.model, ...modelIds]).filter(Boolean).map((id) => ({ value: id, label: modelLabel(id) }))} />
             </Row>
+            {info.jobs && (
+              <>
+                {CLOUD_TASKS.map((t) => (
+                  <Row key={t.id} label={t.label} hint={t.id === 'maths' ? 'Spread across models: each has its own limit' : undefined}>
+                    <Select
+                      label={t.label}
+                      value={cloud.taskModels?.[t.id] ?? info.jobs?.[t.id] ?? cloud.model}
+                      onChange={(v) => save({ taskModels: { ...(cloud.taskModels ?? {}), [t.id]: v } })}
+                      options={[...new Set([cloud.taskModels?.[t.id] ?? info.jobs?.[t.id] ?? cloud.model, ...modelIds])].filter(Boolean).map((id) => ({ value: id, label: modelLabel(id) }))}
+                    />
+                  </Row>
+                ))}
+              </>
+            )}
             <Row
               label="When it’s busy"
               hint={(() => {
                 const others = providers.filter((id) => id !== cloud.provider && keys[id]).map((id) => providerInfo(id, cloud).name)
-                return others.length
-                  ? `If ${info.name} is rate limited or down, ${others.join(', then ')} answer${others.length === 1 ? 's' : ''}, then Gemma on this Mac.`
-                  : `If ${info.name} is rate limited or down, Gemma answers. Save a key for another provider (pick it above, paste its key, then switch back) and it steps in first.`
+                const siblings = info.models.filter((m) => m.reasoning).length > 1 ? `${info.name}’s other models` : ''
+                const line = [siblings, ...others].filter(Boolean)
+                return `If a model is busy, slow or down, ${line.length ? `${line.join(', then ')}, then ` : ''}Gemma on this Mac answers.${others.length ? '' : ' Save a key for another provider (pick it above, paste its key, then switch back) and it joins the line.'}`
               })()}
             />
             <Row label="Billing" hint={plan === 'free' ? 'Counted at $0. Usage shows what it would have cost.' : priceText(price)}>

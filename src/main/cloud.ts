@@ -1,7 +1,7 @@
 import { app, safeStorage } from 'electron'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
-import { costOf, DEFAULT_CLOUD, modelPrice, providerInfo, PROVIDERS, type CloudSettings, type CloudTask, type RequestKind } from '@shared/providers'
+import { costOf, DEFAULT_CLOUD, jobLine, modelPrice, providerInfo, type CloudSettings, type CloudTask, type RequestKind } from '@shared/providers'
 import { getSettings } from './settings'
 
 /**
@@ -91,12 +91,33 @@ export const secondsUntilReset = (provider: string) => Math.max(1, Math.ceil(((t
 /** Room left for a cloud reply (reasoning included); providers count it against the per-minute limit */
 export const CLOUD_REPLY_TOKENS = 1800
 
-/** A refusal (429, an outage, a bad key): leave that provider alone for a while; the next one in line answers */
-export function noteRateLimit(provider: string, retryAfterSeconds?: number) {
-  coolUntil.set(provider, Date.now() + Math.max(20, Math.min(600, retryAfterSeconds ?? 60)) * 1000)
+/** A refusal (429, an outage, too slow): leave that model (or with a bad key, the whole provider) alone for a while */
+export function noteRateLimit(id: string, retryAfterSeconds?: number) {
+  coolUntil.set(id, Date.now() + Math.max(20, Math.min(600, retryAfterSeconds ?? 60)) * 1000)
 }
 
-export const coolingDown = (provider: string) => Date.now() < (coolUntil.get(provider) ?? 0)
+const idOf = (t: { provider: string; model: string }) => `${t.provider}:${t.model}`
+
+/** Resting after a refusal: the model, or its whole provider */
+export const coolingDown = (t: { provider: string; model: string }) => Date.now() < Math.max(coolUntil.get(t.provider) ?? 0, coolUntil.get(idOf(t)) ?? 0)
+
+export const coolTarget = (t: { provider: string; model: string }, seconds?: number) => noteRateLimit(idOf(t), seconds)
+
+// Requests sent to each provider in the last minute: Tide keeps under its pace instead of being refused
+const sent = new Map<string, number[]>()
+
+export function noteSent(provider: string) {
+  const now = Date.now()
+  sent.set(provider, [...(sent.get(provider) ?? []).filter((t) => now - t < 60_000), now])
+}
+
+const underPace = (provider: string) => {
+  const limit = providerInfo(provider, cloudSettings()).perMinute
+  return !limit || (sent.get(provider) ?? []).filter((t) => Date.now() - t < 60_000).length < limit
+}
+
+/** How long a job may take before the next model in line is asked instead (reasoning models think first) */
+export const deadlineFor = (task: RequestKind) => (task === 'maths' ? 150_000 : task === 'planning' ? 120_000 : 75_000)
 
 export function targetFor(provider: string, model: string): CloudTarget | null {
   const s = cloudSettings()
@@ -116,34 +137,25 @@ export function routeFor(task: CloudTask | null, engine: 'auto' | 'local' | 'clo
   const s = cloudSettings()
   if (s.mode === 'off' || engine === 'local') return null
   if (engine !== 'cloud' && (s.mode !== 'auto' || !task || !s.tasks[task] || overBudget())) return null
-  return chain().find((t) => !coolingDown(t.provider)) ?? null
+  return chain(task).find((t) => !coolingDown(t) && underPace(t.provider)) ?? null
 }
 
 /**
- * Who answers, in order: the model you chose, then every other provider you've saved a key for
- * (its first model, or the one you added), so a rate limit or an outage at one moves on to the
- * next before it falls back to Gemma.
+ * Who answers a job, in order (shared/providers jobLine): a rate limit, an outage or a slow reply
+ * moves on to the next before it falls back to Gemma.
  */
-export function chain(): CloudTarget[] {
-  const s = cloudSettings()
-  const main = targetFor(s.provider, s.model)
-  const keys = hasKeys()
-  const backups = [...PROVIDERS.map((p) => p.id), ...Object.keys(s.providers ?? {})]
-    .filter((id, i, all) => all.indexOf(id) === i && id !== s.provider && keys[id])
-    .map((id) => {
-      const info = providerInfo(id, s)
-      return targetFor(id, s.providers?.[id]?.models?.[0] ?? info.models[0]?.id ?? '')
-    })
+export const chain = (task: CloudTask | null = null): CloudTarget[] =>
+  jobLine(cloudSettings(), hasKeys(), task)
+    .map((t) => targetFor(t.provider, t.model))
     .filter((t): t is CloudTarget => !!t)
-  return [...(main ? [main] : []), ...backups]
-}
 
 export const headersFor = (target: CloudTarget) => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${target.apiKey}` })
 
 /** An error worth falling back to Gemma for (rate limits, outages, network), rather than failing the turn */
 export class CloudUnavailable extends Error {}
 
-export async function cloudError(res: Response, provider: string): Promise<Error> {
+export async function cloudError(res: Response, target: { provider: string; model: string }): Promise<Error> {
+  const provider = target.provider
   const body = await res.text().catch(() => '')
   let detail = body.slice(0, 300)
   try {
@@ -155,11 +167,11 @@ export async function cloudError(res: Response, provider: string): Promise<Error
   }
   if (res.status === 429) {
     const retry = Number(res.headers.get('retry-after'))
-    noteRateLimit(provider, Number.isFinite(retry) ? retry : undefined)
+    coolTarget(target, Number.isFinite(retry) ? retry : undefined)
     return new CloudUnavailable(`The cloud model is rate limited for now (${detail || '429'})`)
   }
   if (res.status >= 500 || res.status === 408) {
-    noteRateLimit(provider, 60)
+    coolTarget(target, 60)
     return new CloudUnavailable(`The cloud model is unavailable (${res.status})`)
   }
   if (res.status === 401 || res.status === 403) {
@@ -315,7 +327,7 @@ export async function testCloud(provider: string, model: string): Promise<{ ok: 
       body: JSON.stringify({ model, messages: [{ role: 'user', content: 'Reply with the single word: ready' }], max_tokens: 200, ...target.extra }),
       signal: AbortSignal.timeout(30_000)
     })
-    if (!res.ok) return { ok: false, message: (await cloudError(res, target.provider)).message }
+    if (!res.ok) return { ok: false, message: (await cloudError(res, target)).message }
     noteLimits(res.headers, target.provider)
     const json = (await res.json()) as { usage?: { prompt_tokens?: number; completion_tokens?: number } }
     recordUsage({ kind: 'cloud', provider, model, task: 'other', input: json.usage?.prompt_tokens ?? 0, output: json.usage?.completion_tokens ?? 0 })

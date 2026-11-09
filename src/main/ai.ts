@@ -1,6 +1,6 @@
 import { inBackground, streamInteractive } from './modelQueue'
 import { STRATEGY_LABEL, type Strategy } from '@shared/strategy'
-import { canTake, CloudUnavailable, cloudError, coolingDown, estimateTokens, headersFor, noteLimits, noteRateLimit, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
+import { canTake, CloudUnavailable, cloudError, coolingDown, coolTarget, deadlineFor, estimateTokens, headersFor, noteLimits, noteSent, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
 import type { CloudTask, RequestKind } from '@shared/providers'
 import { memoryIntent } from '@shared/memoryIntent'
 import { addMemory, forgetMatching } from './memory'
@@ -275,19 +275,23 @@ async function* readStream(body: ReadableStream<Uint8Array>, filter: (t: string)
 async function* streamCloud(target: CloudTarget, messages: ChatMessage[], signal: AbortSignal, maxTokens: number, temperatureOverride: number | undefined, task: RequestKind): AsyncGenerator<string> {
   if (!canTake(estimateTokens(JSON.stringify(messages).length) + maxTokens, target.provider)) throw new CloudUnavailable(`The cloud model’s per-minute limit can’t take this for about ${secondsUntilReset(target.provider)}s`)
   let res: Response
+  // A deadline per job: a model that's too slow today hands over to the next one in line
+  const slow = AbortSignal.timeout(deadlineFor(task))
+  const both = AbortSignal.any([signal, slow])
+  noteSent(target.provider)
   try {
     res = await fetch(`${target.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: headersFor(target),
       body: JSON.stringify({ model: target.model, messages, temperature: temperatureOverride ?? getSettings().ai.temperature, stream: true, max_tokens: maxTokens, stream_options: { include_usage: true }, ...target.extra }),
-      signal
+      signal: both
     })
   } catch (e) {
     if (signal.aborted) throw e
-    noteRateLimit(target.provider, 60)
-    throw new CloudUnavailable(`Couldn't reach the cloud model: ${(e as Error).message}`)
+    coolTarget(target, slow.aborted ? 120 : 60)
+    throw new CloudUnavailable(slow.aborted ? `${target.model} took too long` : `Couldn't reach the cloud model: ${(e as Error).message}`)
   }
-  if (!res.ok || !res.body) throw await cloudError(res, target.provider)
+  if (!res.ok || !res.body) throw await cloudError(res, target)
   noteLimits(res.headers, target.provider)
   let reported: { input: number; output: number; cached?: number } | null = null
   let out = 0
@@ -322,7 +326,7 @@ export async function* streamRouted(messages: ChatMessage[], signal: AbortSignal
     } catch (e) {
       if (wrote || signal.aborted || !(e instanceof CloudUnavailable)) throw e
       // Not a refusal it remembers (the per-minute check): don't ask the same one again now
-      if (!coolingDown(target.provider)) noteRateLimit(target.provider, 30)
+      if (!coolingDown(target)) coolTarget(target, 30)
       console.warn(`[cloud] ${target.provider}: ${(e as Error).message}; trying the next`)
     }
   }

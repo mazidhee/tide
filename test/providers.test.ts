@@ -32,3 +32,21 @@ describe('what a request costs', () => {
     expect(providerInfo('mine', settings)).toMatchObject({ name: 'My server', baseUrl: 'https://llm.example/v1', models: [{ id: 'big' }] })
   })
 })
+
+describe('who answers a job', () => {
+  it('spreads jobs over NVIDIA models, then its other models, then other providers', async () => {
+    const { jobLine, DEFAULT_CLOUD } = await import('../src/shared/providers')
+    const s = { ...DEFAULT_CLOUD, provider: 'nvidia', model: 'deepseek-ai/deepseek-v4.1-flash' }
+    const keys = { nvidia: true, groq: true }
+    const maths = jobLine(s, keys, 'maths')
+    expect(maths[0]).toEqual({ provider: 'nvidia', model: 'moonshotai/kimi-k3.1-pro' })
+    expect(maths[1]).toEqual({ provider: 'nvidia', model: 'deepseek-ai/deepseek-v4.1-flash' })
+    expect(maths.at(-1)).toEqual({ provider: 'groq', model: 'openai/gpt-oss-120b' })
+    expect(maths.filter((t) => t.provider === 'nvidia')).toHaveLength(4)
+    expect(jobLine(s, keys, 'marking')[0].model).toBe('deepseek-ai/deepseek-v4.1-flash')
+    expect(jobLine(s, keys, 'errors')[0].model).toBe('moonshotai/kimi-k2.6')
+    // Your own choice for a job wins; providers without a key are left out
+    expect(jobLine({ ...s, taskModels: { maths: 'z-ai/glm-5.3-flash' } }, keys, 'maths')[0].model).toBe('z-ai/glm-5.3-flash')
+    expect(jobLine(s, { nvidia: true }, 'maths').every((t) => t.provider === 'nvidia')).toBe(true)
+  })
+})
