@@ -1,3 +1,4 @@
+import type { BankProblem } from '@shared/bank'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DailyItem } from '@shared/daily'
 import type { ReviewGrade } from '@shared/types'
@@ -64,25 +65,36 @@ export function DailyView() {
     [item, next]
   )
 
+  // Prepared ahead (main/bank.ts): a past mistake as a fresh problem on the same idea, so the retest
+  // tests understanding rather than memory of the old answer; a first problem on the next topic
+  const [fresh, setFresh] = useState<BankProblem | null>(null)
+  useEffect(() => {
+    setFresh(null)
+    if (item?.kind === 'mistake') window.tide.bank.variant(item.mistake.id).then(setFresh).catch(() => {})
+    if (item?.kind === 'preview') window.tide.bank.preview(item.topic).then(setFresh).catch(() => {})
+  }, [item])
+
   const check = useCallback(async () => {
-    if (!item || checking || (item.kind !== 'mistake' && item.kind !== 'recall')) return
+    if (!item || checking || (item.kind !== 'mistake' && item.kind !== 'recall' && !(item.kind === 'preview' && fresh && answer.trim()))) return
     setChecking(true)
     setError('')
     try {
       const g =
-        item.kind === 'mistake'
-          ? await window.tide.daily.grade({ kind: 'mistake', question: item.mistake.question, expected: item.mistake.fix, answer })
+        item.kind === 'mistake' || item.kind === 'preview'
+          ? fresh
+            ? await window.tide.daily.grade({ kind: 'mistake', question: `${fresh.text}\n\n${fresh.ask}`, expected: fresh.solution, answer })
+            : await window.tide.daily.grade({ kind: 'mistake', question: (item as Extract<DailyItem, { kind: 'mistake' }>).mistake.question, expected: (item as Extract<DailyItem, { kind: 'mistake' }>).mistake.fix, answer })
           : await window.tide.daily.grade({ kind: 'recall', question: `Explain ${item.title} from memory`, path: item.path, answer })
       setGrade(g)
-      // Record it where it belongs: a mistake's retest streak, a note's explain-from-memory schedule
+      // Record it where it belongs: a mistake's retest streak, a note's explain-from-memory schedule (a first look counts for nothing)
       if (item.kind === 'mistake') await window.tide.mistakes.retest(item.mistake.id, g.verdict === 'correct').catch(() => {})
-      else await window.tide.recall.review(item.path, g.verdict === 'correct' ? 'good' : g.verdict === 'partial' ? 'hard' : 'again').catch(() => {})
+      else if (item.kind === 'recall') await window.tide.recall.review(item.path, g.verdict === 'correct' ? 'good' : g.verdict === 'partial' ? 'hard' : 'again').catch(() => {})
     } catch (e) {
       setError((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
     } finally {
       setChecking(false)
     }
-  }, [item, answer, checking])
+  }, [item, answer, checking, fresh])
 
   // Keyboard: Space shows a card's answer, 1–4 rates it; ⌘↵ checks a written answer, Enter moves on
   useEffect(() => {
@@ -99,13 +111,13 @@ export function DailyView() {
       } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         if (grade) next(grade.verdict === 'correct' ? 'right' : grade.verdict === 'partial' ? 'close' : 'missed')
-        else if (item.kind === 'preview') next('seen')
+        else if (item.kind === 'preview' && !(fresh && answer.trim())) next('seen')
         else check()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [item, flipped, grade, rateCard, check, next])
+  }, [item, flipped, grade, rateCard, check, next, fresh, answer])
 
   useEffect(() => {
     if (item && item.kind !== 'card') input.current?.focus()
@@ -201,12 +213,18 @@ export function DailyView() {
         {item && item.kind !== 'card' && (
           <div key={item.key} className="daily-item">
             <div className="daily-question">
-              {item.kind === 'mistake' && (
-                <>
-                  <span className="card-kicker">From {item.mistake.topic}</span>
-                  <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(item.mistake.question, env) }} />
-                </>
-              )}
+              {item.kind === 'mistake' &&
+                (fresh ? (
+                  <>
+                    <span className="card-kicker">A new version of something you missed, from {item.mistake.topic}</span>
+                    <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(`${fresh.text}\n\n**${fresh.ask}**`, env) }} />
+                  </>
+                ) : (
+                  <>
+                    <span className="card-kicker">From {item.mistake.topic}</span>
+                    <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(item.mistake.question, env) }} />
+                  </>
+                ))}
               {item.kind === 'recall' && (
                 <>
                   <span className="card-kicker">Without looking</span>
@@ -215,7 +233,14 @@ export function DailyView() {
                   </p>
                 </>
               )}
-              {item.kind === 'preview' && (
+              {item.kind === 'preview' && fresh && (
+                <>
+                  <span className="card-kicker">Before your next lesson: a first try at {item.topic}</span>
+                  <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(`${fresh.text}\n\n**${fresh.ask}**`, env) }} />
+                  <p className="muted small">Have a go even if it's new: trying first makes the lesson stick.</p>
+                </>
+              )}
+              {item.kind === 'preview' && !fresh && (
                 <>
                   <span className="card-kicker">Before your next lesson</span>
                   <p className="daily-prompt">
@@ -247,6 +272,11 @@ export function DailyView() {
             <div className="daily-actions">
               {item.kind === 'preview' ? (
                 <>
+                  {fresh && !grade && (
+                    <button className="btn" disabled={!answer.trim() || checking} onClick={check}>
+                      {checking ? 'Checking…' : 'Check'}
+                    </button>
+                  )}
                   <button className="btn ghost" onClick={() => next('seen')}>
                     Finish
                   </button>

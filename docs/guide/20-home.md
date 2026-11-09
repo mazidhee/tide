@@ -33,6 +33,10 @@ Ask the tutor to plan your day (“put a 45-minute stablecoins lesson and the ta
 
 **Daily practice** gathers everything due today into one short session: flashcards, retests of past mistakes, explaining a note from memory, and a first look at the next topic. Written answers are marked in a few seconds, mistakes update their retest streak, and it ends on what's next in your plan.
 
+## Fresh versions of past mistakes
+
+A retest in Daily practice doesn't repeat the question you got wrong: it asks a new problem on the same idea (different numbers and situation), written and checked ahead of time, so it tests whether you understand it rather than whether you remember the answer. The first look at your next topic is a real first problem from the bank when one is ready.
+
 ## The mistake journal
 
 Every answer you get wrong, and every mark you lose in an exam, goes into `Coach/Mistakes` with what you said and the right idea. Each comes back as a quick retest the next day, then in three days; two right answers on different days puts it right. Retests sit at the top of your day.

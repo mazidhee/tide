@@ -1,9 +1,14 @@
-import * as pdfjs from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { thumbPath } from '@shared/thumbs'
 import { vaultUrl } from './markdown'
 
-pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
+// The PDF library is large: loaded the first time a cover is needed, not when Tide opens
+let pdfjsPromise: Promise<typeof import('pdfjs-dist')> | null = null
+const loadPdfjs = () =>
+  (pdfjsPromise ??= import('pdfjs-dist').then((m) => {
+    m.GlobalWorkerOptions.workerSrc = workerUrl
+    return m
+  }))
 
 let queue: Promise<unknown> = Promise.resolve()
 
@@ -13,6 +18,7 @@ let queue: Promise<unknown> = Promise.resolve()
  */
 export function pdfCover(path: string, width = 480): Promise<string | null> {
   const job = queue.then(async () => {
+    const pdfjs = await loadPdfjs()
     const doc = await pdfjs.getDocument({ url: vaultUrl(path), disableAutoFetch: true, disableStream: false }).promise
     try {
       const page = await doc.getPage(1)

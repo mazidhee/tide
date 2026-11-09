@@ -5,17 +5,15 @@ import { readingLabel, type ReadingSuggestion } from '@shared/books'
 import { notesReviewRequest, wantsNotesReview } from '@shared/lessonNotes'
 import { reveal } from '../lib/scroll'
 import { Thinking } from './Thinking'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
 import { MODE_LABEL, NOTES_NUDGE, openingMessage, parseBlocks, repliesWithoutNote, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
-import { LessonCanvas } from './LessonCanvas'
 import { cardsToMarkdown } from '@shared/cards'
 import { fileTitle, useApp, pagesLabel } from '../state'
 import { renderMarkdown } from '../lib/markdown'
 import { Icon } from './Icon'
 import { EnginePill } from './EnginePill'
-import { CodeEditor } from './CodeEditor'
 import { DictateButton, SpeakButton, useTalk } from './Voice'
 import { InterviewClock, useInterviewClock } from './InterviewClock'
 import { LessonNotes } from './LessonNotes'
@@ -24,6 +22,10 @@ import { useStudying } from '../lib/studying'
 import { endOngoing, followInBackground, getOngoing, keepLive, saveOngoing, sessionKey, stopFollowing } from '../lib/sessions'
 import type { View } from '../state'
 import { Professor, type ProfessorPose } from './Professor'
+
+// Loaded when a lesson needs them: the code editor (Monaco) and the walkthrough canvas
+const CodeEditor = lazy(() => import('./CodeEditor').then((m) => ({ default: m.CodeEditor })))
+const LessonCanvas = lazy(() => import('./LessonCanvas').then((m) => ({ default: m.LessonCanvas })))
 import { parseVerdict, scorecardScore } from '@shared/interviews'
 
 interface Turn {
@@ -114,6 +116,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           return next
         })
         if (e.type === 'error') setError(e.message)
+        // Written: you can answer while its checks finish (a rewrite, rarely, takes the box back)
+        if (e.type === 'replied') setBusy(false)
+        if (e.type === 'reset') setBusy(true)
         if (e.type === 'done' || e.type === 'error') {
           activeId.current = null
           setBusy(false)
@@ -130,6 +135,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const send = useCallback(
     async (content: string, history: Turn[]) => {
       const id = `session:${uid()}`
+      // Answered while the last reply's checks were still running: stop them, your answer comes first
+      if (activeId.current) window.tide.ai.cancel(activeId.current).catch(() => {})
       activeId.current = id
       setBusy(true)
       setError(null)
@@ -762,7 +769,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                 </div>
               ) : currentAsk.type === 'code' ? (
                 <>
-                  <CodeEditor value={code} onChange={setCode} language={currentAsk.lang ?? options?.language ?? 'python'} onSubmit={() => submit()} />
+                  <Suspense fallback={<div className="view-loading small" aria-busy="true" />}>
+                    <CodeEditor value={code} onChange={setCode} language={currentAsk.lang ?? options?.language ?? 'python'} onSubmit={() => submit()} />
+                  </Suspense>
                   <div className="s-run-row">
                     <button className="btn small" onClick={runMine} disabled={running || !code.trim()} title="Run your code in a sandbox">
                       <Icon name="play" size={12} />
@@ -858,7 +867,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       {withNotes && approach === 'walkthrough' && sideTab === 'canvas' ? (
         <div className="lesson-side">
           <SideTabs tab={sideTab} onTab={setSideTab} />
-          <LessonCanvas path={canvasPath} lessonId="session:" revision={canvasRev} />
+          <Suspense fallback={<div className="view-loading" aria-busy="true" />}>
+            <LessonCanvas path={canvasPath} lessonId="session:" revision={canvasRev} />
+          </Suspense>
         </div>
       ) : withNotes && (
         <div className="lesson-side">

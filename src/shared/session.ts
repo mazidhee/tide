@@ -41,6 +41,7 @@ export const hideWorking = (raw: string) =>
   raw
     .replace(/<solution\b[^>]*>[\s\S]*?<\/solution>/gi, '')
     .replace(/<check\b[^>]*>[\s\S]*?<\/check>/gi, '')
+    .replace(/<next\b[^>]*\/?>/gi, '')
     .replace(/<(solution|check)\b[\s\S]*$/i, '')
 
 /** Splits a (possibly still streaming) tutor message into blocks; unfinished tags stay hidden */

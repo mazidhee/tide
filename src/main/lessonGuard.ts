@@ -45,7 +45,7 @@ async function rememberSolution(key: string, solution: string) {
 }
 
 /** The cloud model may see this lesson: not a private project, nothing about your Metabase */
-async function mayLeaveMac(req: ChatRequest): Promise<boolean> {
+export async function mayLeaveMac(req: ChatRequest): Promise<boolean> {
   if (req.scope.kind !== 'none' && req.scope.kind !== 'vault' && (await privatePath(req.scope.path).catch(() => true))) return false
   if (metabaseReady() && req.messages.some((m) => aboutMetabase(text(m), metabaseHost()))) return false
   return true
@@ -67,7 +67,8 @@ export async function checkLessonReply(
   emit: (e: ChatEvent) => void,
   signal: AbortSignal,
   ask: (prompt: string, system: string, task: RequestKind, signal: AbortSignal, routine?: boolean) => Promise<string>,
-  final = false
+  final = false,
+  opts: { fromBank?: boolean } = {}
 ): Promise<string[]> {
   const problems: string[] = []
   const earlier = req.messages.filter((m) => m.role === 'assistant').map(text)
@@ -119,7 +120,8 @@ export async function checkLessonReply(
   const users = req.messages.filter((m) => m.role === 'user')
   const prev = earlier[earlier.length - 1]
   const answered = prev ? answeredProblem(prev, text(users[users.length - 1]), reply) : undefined
-  const posed = posedProblem(reply).split(' ').length >= 8 ? { problem: readable(reply), solution: solutionOf(reply) } : undefined
+  // A banked problem was checked and reviewed when it was written: only the mark needs a second look
+  const posed = !opts.fromBank && posedProblem(reply).split(' ').length >= 8 ? { problem: readable(reply), solution: solutionOf(reply) } : undefined
   const input: ReviewInput = { ...(answered && answered.verdict !== 'wrong' ? { answered } : {}), ...(posed ? { posed } : {}) }
   if (!input.answered && !input.posed) return problems
   step('lesson-review', 'A second model is checking the problem and the mark', 'running')

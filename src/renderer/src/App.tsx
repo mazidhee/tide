@@ -7,12 +7,11 @@ import { openAgendaItem } from './lib/agenda'
 import { todayItems } from '@shared/coach'
 import { WeeklyView } from './components/WeeklyView'
 import { openTideLink } from './lib/links'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ThemeId } from '@shared/types'
 import { folderOf, scopeTopic, useApp } from './state'
 import { Sidebar } from './components/Sidebar'
 import { NoteView } from './components/NoteView'
-import { PdfView } from './components/PdfView'
 import { ChatPanel } from './components/ChatPanel'
 import { Home } from './components/Home'
 import { Library } from './components/Library'
@@ -23,23 +22,26 @@ import { HelpView } from './components/HelpView'
 import { ExamView } from './components/ExamView'
 import { DailyView } from './components/DailyView'
 import { useFocusCompletion } from './components/FocusTimer'
-import { LabView } from './components/LabView'
-import { CodeView } from './components/CodeView'
-import { CanvasView } from './components/CanvasView'
-import { DrillView } from './components/DrillView'
 import { CoachView } from './components/CoachView'
 import { ChatPage } from './components/ChatPage'
 import { NewTopicView } from './components/NewTopicView'
 import { PracticeView } from './components/PracticeView'
 import { SettingsView } from './components/SettingsView'
 import { NotebookView } from './components/NotebookView'
-import { GraphView } from './components/GraphView'
 import { SearchPalette } from './components/SearchPalette'
 import { SaveLinkDialog } from './components/SaveLink'
 import { Icon } from './components/Icon'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { vaultUrl } from './lib/markdown'
 import { followModelBusy } from './lib/motion'
+// The heavy views (PDF reader, terminal, code editor, canvas, graph, drills) load when first opened,
+// not with the window: Tide opens faster and holds less in memory until you need them
+const PdfView = lazy(() => import('./components/PdfView').then((m) => ({ default: m.PdfView })))
+const LabView = lazy(() => import('./components/LabView').then((m) => ({ default: m.LabView })))
+const CodeView = lazy(() => import('./components/CodeView').then((m) => ({ default: m.CodeView })))
+const CanvasView = lazy(() => import('./components/CanvasView').then((m) => ({ default: m.CanvasView })))
+const GraphView = lazy(() => import('./components/GraphView').then((m) => ({ default: m.GraphView })))
+const DrillView = lazy(() => import('./components/DrillView').then((m) => ({ default: m.DrillView })))
 
 const MEASURES = { narrow: '30', normal: '34', wide: '42' }
 
@@ -399,7 +401,9 @@ export default function App() {
             </button>
           </div>
         )}
-        <ErrorBoundary resetKey={JSON.stringify(view)}>{main}</ErrorBoundary>
+        <ErrorBoundary resetKey={JSON.stringify(view)}>
+          <Suspense fallback={<div className="view-loading" aria-busy="true" />}>{main}</Suspense>
+        </ErrorBoundary>
         {!settings.chatOpen && !ownTutor && !focusId && (
           <button className="chat-fab" onClick={() => app.updateSettings({ chatOpen: true })} title="Open tutor (⌘J)">
             <Icon name="sparkle" size={16} />
