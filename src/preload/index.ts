@@ -220,6 +220,7 @@ const api: TideApi = {
   projects: {
     set: invoke('projects:set'),
     docs: invoke('projects:docs'),
+    flowSteps: invoke('projects:flowSteps'),
     map: invoke('projects:map'),
     draftBrief: invoke('projects:draftBrief')
   },

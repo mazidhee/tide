@@ -188,7 +188,8 @@ function dayTask(t: ThingsItem & { area?: { title: string }; list?: string; remi
   return {
     id: t.id,
     title: t.title,
-    where: t.project?.title ?? t.area?.title,
+    // The coach's week project is "This week: 2026-11-09" in Things: here it's just your week
+    where: /^this week\b/i.test(t.project?.title ?? '') ? 'Your week' : (t.project?.title ?? t.area?.title),
     evening: t.list === 'evening',
     done,
     ...(done && t['completed-at'] ? { doneAt: Date.parse(t['completed-at']) } : {}),

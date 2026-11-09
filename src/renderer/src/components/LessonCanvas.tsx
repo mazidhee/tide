@@ -9,7 +9,7 @@ import { Icon } from './Icon'
  * it appears, each connection in the order things flow), and you can move, add and correct it. It
  * is an ordinary .canvas file, so it stays with the topic for later.
  */
-export function LessonCanvas({ path, lessonId }: { path: string; lessonId: string }) {
+export function LessonCanvas({ path, lessonId, revision = 0 }: { path: string; lessonId: string; /** Bumped when the app redraws the file */ revision?: number }) {
   const app = useApp()
   const [canvas, setCanvas] = useState<Canvas | null>(null)
   const [version, setVersion] = useState(0)
@@ -30,7 +30,7 @@ export function LessonCanvas({ path, lessonId }: { path: string; lessonId: strin
   )
   useEffect(() => {
     load()
-  }, [load])
+  }, [load, revision])
 
   const flush = useCallback(async () => {
     clearTimeout(saveTimer.current)
@@ -69,7 +69,7 @@ export function LessonCanvas({ path, lessonId }: { path: string; lessonId: strin
           <Icon name="external" size={13} />
         </button>
       </div>
-      <div className="lesson-canvas-body">{canvas && <CanvasEditor canvas={canvas} onChange={change} version={version} />}</div>
+      <div className="lesson-canvas-body">{canvas && <CanvasEditor canvas={canvas} onChange={change} version={version} compact />}</div>
     </aside>
   )
 }

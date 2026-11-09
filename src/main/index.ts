@@ -52,7 +52,7 @@ import type { StudyPlan } from '@shared/plan'
 import { dayTasks, setTaskDone, thingsStatus } from './things'
 import { mapBook, mapNewBooks, pagesToRead } from './books'
 import { getBrain } from './brain'
-import { draftBrief, mapProject, projectDocs, projectMap, setProject } from './projects'
+import { draftBrief, flowSteps, mapProject, projectDocs, projectMap, setProject } from './projects'
 import { onBrainEvent, recentBrainEvents } from './brainEvents'
 import { getCoach, getWeek, planWeek, saveCoach, updateProfile, inferDirection, autoPlanWeek, weekToThings, setItemDone, syncDone, rollOver, dayStats, journal, writeJournal, weekReview, saveReview } from './coach'
 import { addMistakes, listMistakes, mistakesDue, retestMistake } from './mistakes'
@@ -332,6 +332,7 @@ function registerIpc() {
   handle('ai:tieBreak', (topic: string, options: Parameters<typeof tieBreak>[1], context?: string) => tieBreak(topic, options, context))
   handle('projects:set', (notebook: string, info: Parameters<typeof setProject>[1]) => setProject(notebook, info))
   handle('projects:docs', (notebook: string) => projectDocs(notebook))
+  handle('projects:flowSteps', (notebook: string, flow: string) => flowSteps(notebook, flow))
   handle('projects:map', (notebook: string, rebuild?: boolean) => (rebuild === undefined ? projectMap(notebook) : mapProject(notebook, rebuild)))
   handle('projects:draftBrief', (req: Parameters<typeof draftBrief>[0]) => {
     draftBrief(req, (e) => send('ai:event', e))

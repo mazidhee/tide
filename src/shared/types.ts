@@ -633,6 +633,8 @@ export interface TideApi {
     set(notebook: string, info: import('./project').ProjectInfo | null): Promise<void>
     /** Its documents: attached, and filed under its name */
     docs(notebook: string): Promise<string[]>
+    /** A flow's steps in order (from part, to part, what passes), from the documents */
+    flowSteps(notebook: string, flow: string): Promise<import('./project').FlowStep[]>
     /** The saved map; with rebuild set, maps it now (false: only if a document changed) */
     map(notebook: string, rebuild?: boolean): Promise<import('./project').ProjectMap | null>
     /** Drafts a build brief with the learner; text arrives as ai:event deltas under id */

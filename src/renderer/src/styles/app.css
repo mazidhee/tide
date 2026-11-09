@@ -122,22 +122,38 @@ select {
   cursor: pointer;
 }
 
-input,
-textarea,
-select {
-  background-color: var(--bg-raised);
-  border: 1px solid var(--line-strong);
+/* Fields are filled surfaces: an edge only on hover, and a soft ring when you're typing in one */
+:where(input, textarea, select) {
+  background-color: var(--field);
+  border: 1px solid transparent;
   border-radius: var(--radius-s);
-  padding: 7px 10px;
+  padding: 8px 11px;
   outline: none;
   user-select: text;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
 }
 
-input:focus,
-textarea:focus,
-select:focus {
-  border-color: var(--line-strong);
+/* Zero specificity, so a field drawn inside something bigger (the composer, an editor) keeps its own look */
+:where(input, textarea, select):where(:hover:not(:focus):not(:disabled)) {
+  background-color: var(--field-hover);
+}
+
+:where(input, textarea, select):where(:focus) {
+  background-color: var(--field);
+  border-color: var(--field-edge);
+  box-shadow: var(--focus-ring);
+}
+
+input[type='checkbox'],
+input[type='radio'],
+input[type='range'] {
   box-shadow: none;
+  background: none;
+  border: 0;
+  padding: 0;
 }
 
 code {
@@ -249,40 +265,59 @@ kbd {
   height: 32px;
   padding: 0 14px;
   border-radius: var(--radius-s);
-  border: 1px solid var(--line-strong);
-  background: var(--bg-raised);
-  font-weight: 500;
+  border: 0;
+  background: var(--btn);
+  box-shadow: var(--lift);
+  color: var(--ink);
+  font-weight: 550;
+  letter-spacing: -0.005em;
   white-space: nowrap;
-  transition: background 120ms, border-color 120ms;
+  transition:
+    background 140ms ease,
+    box-shadow 140ms ease,
+    transform 90ms ease,
+    filter 140ms ease;
 }
 
 .btn:hover:not(:disabled) {
-  background: var(--bg-hover);
+  background: var(--btn-hover);
 }
 
+/* The one action that matters: solid, with a little light across its top */
 .btn.primary {
-  background: var(--primary, var(--accent));
-  border-color: var(--primary, var(--accent));
+  background: var(--primary, var(--accent)) linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 60%);
   color: var(--primary-ink, var(--accent-ink));
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 1px 2px rgba(0, 0, 0, 0.22),
+    0 4px 12px -6px rgba(0, 0, 0, 0.4);
 }
 
 .btn.primary:hover:not(:disabled) {
-  background: var(--primary, var(--accent));
-  filter: brightness(1.08);
+  background-color: var(--primary, var(--accent));
+  filter: brightness(1.06);
 }
 
 .btn.primary:disabled {
-  opacity: 0.35;
+  opacity: 1;
+  background: var(--btn);
+  color: var(--ink-muted);
+  box-shadow: none;
 }
 
 .btn:not(:disabled):active {
-  transform: translateY(0.5px);
+  transform: scale(0.98);
 }
 
 .btn.ghost {
   background: transparent;
-  border-color: transparent;
+  box-shadow: none;
+  color: var(--ink-soft);
+}
+
+.btn.ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--ink);
 }
 
 .btn.small {
@@ -393,12 +428,17 @@ kbd {
   height: 28px;
   padding: 0 12px;
   border-radius: 999px;
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
+  background: var(--field);
   color: var(--ink-soft);
+  transition:
+    background 140ms ease,
+    color 140ms ease;
 }
 
 .chip:hover {
-  background: var(--bg-hover);
+  background: var(--field-hover);
+  color: var(--ink);
 }
 
 .chip.on {
@@ -8819,6 +8859,7 @@ code.cmd-chip:hover {
   font: inherit;
   color: var(--ink);
   outline: none;
+  box-shadow: none;
 }
 
 .cv-node {
@@ -8920,6 +8961,7 @@ code.cmd-chip:hover {
   font: 600 14px/1.3 var(--font-ui);
   color: var(--ink);
   outline: none;
+  box-shadow: none;
 }
 
 .cv-handle {
@@ -9684,21 +9726,36 @@ code.cmd-chip:hover {
   color: var(--bg);
 }
 
+/* Study days: one control, the days you study raised out of it */
 .coach-days {
   display: flex;
   gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--field);
 }
 
 .coach-days button {
-  padding: 5px 8px;
-  border-radius: var(--radius-s);
+  min-width: 40px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 7px;
   font-size: 12.5px;
+  font-weight: 500;
   color: var(--ink-muted);
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.coach-days button:hover:not(.on) {
+  color: var(--ink-soft);
 }
 
 .coach-days button.on {
-  background: var(--bg-active, var(--bg-hover));
+  background: var(--btn-hover);
   color: var(--ink);
+  box-shadow: var(--lift);
 }
 
 .coach-why {
@@ -10773,9 +10830,9 @@ button.home-prof {
   gap: 8px;
   padding: 12px 10px 10px 16px;
   border-radius: 18px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   background: var(--bg-raised);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 10px 28px -16px rgba(0, 0, 0, 0.3);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 4%, transparent), 0 1px 2px rgba(0, 0, 0, 0.1), 0 14px 32px -18px rgba(0, 0, 0, 0.45);
   cursor: text;
   transition:
     border-color 140ms ease,
@@ -14473,6 +14530,7 @@ button.tl-dot:focus-visible {
   font-size: 12.5px;
   padding-right: 4px;
   cursor: pointer;
+  box-shadow: none;
 }
 
 .approach-pick select:hover {
@@ -14703,4 +14761,29 @@ button.tl-dot:focus-visible {
   padding: 14px 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius-m);
+}
+
+/* ---------- Filled, not outlined: pills, starters and suggestions ---------- */
+.pill,
+.cp-starters button,
+.suggestions button {
+  border-color: transparent;
+  background: var(--field);
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.pill:hover,
+.cp-starters button:hover,
+.suggestions button:hover {
+  background: var(--field-hover);
+  color: var(--ink);
+}
+
+.pill.on {
+  border-color: transparent;
+  background: var(--btn-hover);
+  color: var(--ink);
+  box-shadow: var(--lift);
 }

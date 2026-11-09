@@ -2,7 +2,7 @@ import { splitSay } from './characters'
 import { retestInstructions } from './mistakes'
 import type { ChatScope, SessionMode, Verdict } from './types'
 import { chooseStrategy, STRATEGY_RULES, type Strategy, type StrategyChoice } from './strategy'
-import type { ProjectKind } from './project'
+import type { FlowStep, ProjectKind } from './project'
 
 /**
  * Learning sessions are a conversation where the tutor writes Markdown plus a few tags the UI
@@ -156,6 +156,8 @@ export interface SessionSetup {
     strategy?: Strategy
     /** Part of a project: taught in its terms, or as a mentor while you build it */
     project?: { name: string; kind: ProjectKind; milestone?: string }
+    /** A walkthrough's steps, in order: the app draws each on the canvas as the lesson reaches it */
+    flow?: FlowStep[]
   }
 }
 
@@ -214,10 +216,14 @@ export function sessionInstructions({ mode, topic, options }: SessionSetup): str
       maths: 'Your first teaching message: the key definition or result in a line, then the first problem (a problem ask).',
       reading: 'Your first teaching message: where to read (section and pages if known) and one question to read for (a short ask).'
     }
+    // A walkthrough with its steps known: follow them, and leave the drawing to the app
+    const flow = options.strategy === 'walkthrough' && options.flow?.length
+      ? `Walk these steps in this order, one per turn, naming each part exactly as written here (the app draws each step on the canvas as soon as you name where it arrives):\n${options.flow.map((s, i) => `   ${i + 1}. ${s.from} → ${s.to}: ${s.label}`).join('\n')}\n   Before each step, ask them to predict where it goes next (a predict ask); then explain what happens there and what can go wrong.`
+      : ''
     return `You are running a TEACH session on: ${topic}.
 1. PROBE: ask one or two short questions, one at a time, to find what they already know. Don't teach yet.
-2. Then teach it this way: ${STRATEGY_RULES[options.strategy]}
-   ${first[options.strategy] ?? ''}
+2. Then teach it this way: ${flow ? 'trace it step by step like following one real record through the system.' : STRATEGY_RULES[options.strategy]}
+   ${flow || (first[options.strategy] ?? '')}
 3. Grade every answer. Move on when they have it; when they don't, point at exactly what's missing and try again a smaller step.
 When you explain an idea, also write it for their notes: <note>the key idea in 1 to 5 lines of Markdown, worth rereading later</note>.${options?.project ? projectRules(options.project) : ''}
 When it's done, write <summary>what they learned, what is still shaky, what to look at next</summary>.`

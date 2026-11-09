@@ -1,4 +1,6 @@
 import { TimeThis } from './TimeThis'
+import { drawSteps, stepsReached } from '@shared/project'
+import { parseCanvas, serializeCanvas } from '@shared/canvas'
 import { readingLabel, type ReadingSuggestion } from '@shared/books'
 import { notesReviewRequest, wantsNotesReview } from '@shared/lessonNotes'
 import { reveal } from '../lib/scroll'
@@ -81,6 +83,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   approachRef.current = approach
   // A walkthrough draws on a canvas kept with the topic
   const canvasPath = useMemo(() => lessonCanvasPath(scope, topic), [scope, topic])
+  // A walkthrough with known steps: draw each as soon as the tutor reaches it (code, not the model)
+  const [canvasRev, setCanvasRev] = useState(0)
+  const drawn = useRef(0)
   const timed = mode === 'interview' ? options?.timed : undefined
   const sendRef = useRef<(content: string, history: Turn[]) => void>(() => {})
   const turnsRef = useRef<Turn[]>([])
@@ -224,6 +229,19 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   }, [mode, topic, scope.kind])
   const notesMine = useRef('')
   const [sideTab, setSideTab] = useState<'canvas' | 'notes'>('canvas')
+  useEffect(() => {
+    const flow = options?.flow
+    if (!flow?.length || busy) return
+    const said = turns.filter((t) => t.role === 'assistant').map((t) => t.content).join('\n')
+    const n = stepsReached(flow, said)
+    if (n <= drawn.current) return
+    drawn.current = n
+    window.tide.vault
+      .read(canvasPath)
+      .then((raw) => window.tide.vault.write(canvasPath, serializeCanvas(drawSteps(parseCanvas(raw), flow, n))))
+      .then(() => setCanvasRev((r) => r + 1))
+      .catch(() => {})
+  }, [turns, busy, options?.flow, canvasPath])
 
   // Talk: the tutor speaks each reply as it writes it, and you answer by voice (or hands-free)
   const lastTurn = turns[turns.length - 1]
@@ -804,7 +822,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       {withNotes && approach === 'walkthrough' && sideTab === 'canvas' ? (
         <div className="lesson-side">
           <SideTabs tab={sideTab} onTab={setSideTab} />
-          <LessonCanvas path={canvasPath} lessonId="session:" />
+          <LessonCanvas path={canvasPath} lessonId="session:" revision={canvasRev} />
         </div>
       ) : withNotes && (
         <div className="lesson-side">

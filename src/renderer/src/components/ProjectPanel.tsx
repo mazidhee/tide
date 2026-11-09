@@ -66,12 +66,15 @@ export function ProjectPanel({ notebook, name, info, onChange }: { notebook: str
   const lesson = (topic: string, options: Lesson = {}) =>
     app.setView({ kind: 'session', mode: 'teach', scope: { kind: 'folder', path: notebook }, topic, options: { ...options, project: { name, kind: info?.kind ?? 'understand', ...(options.project?.milestone ? { milestone: options.project.milestone } : {}) } }, nonce: Date.now() })
   /** A flow, walked through on a canvas that starts with the project's parts already laid out */
+  const [preparing, setPreparing] = useState('')
   const walk = async (flow: string) => {
     const topic = `Walk me through ${flow} in ${name}`
-    const path = lessonCanvasPath({ kind: 'folder', path: notebook }, topic)
-    const exists = await window.tide.vault.read(path).then((t) => !!t.trim()).catch(() => false)
-    if (!exists && map) await window.tide.vault.write(path, serializeCanvas(seedCanvas(map))).catch(() => {})
-    lesson(topic, { strategy: 'walkthrough' })
+    setPreparing(flow)
+    // Its steps from the docs (once; cached), and a canvas with the parts laid out, nothing joined yet
+    const steps = await window.tide.projects.flowSteps(notebook, flow).catch(() => [])
+    if (map) await window.tide.vault.write(lessonCanvasPath({ kind: 'folder', path: notebook }, topic), serializeCanvas(seedCanvas(map))).catch(() => {})
+    setPreparing('')
+    lesson(topic, { strategy: 'walkthrough', ...(steps.length ? { flow: steps } : {}) })
   }
   const deeper = (tool: string) =>
     app.setView({ kind: 'new-topic', topic: tool, goal: `I've been learning ${tool} as it's used in my project "${name}". Now I want to understand it properly, beyond the project: skip what the project already taught me and go deeper.`, nonce: Date.now() })
@@ -167,9 +170,9 @@ export function ProjectPanel({ notebook, name, info, onChange }: { notebook: str
               <h4>Flows</h4>
               <div className="project-chips">
                 {map.flows.map((f) => (
-                  <button key={f} className="chip" onClick={() => walk(f)} title="Traced step by step, drawn on a canvas as it goes">
-                    <Icon name="canvas" size={12} />
-                    {f}
+                  <button key={f} className="chip" onClick={() => walk(f)} disabled={!!preparing} title="Traced step by step, drawn on a canvas as it goes">
+                    {preparing === f ? <span className="spinner" /> : <Icon name="canvas" size={12} />}
+                    {preparing === f ? `Preparing ${f}…` : f}
                   </button>
                 ))}
               </div>

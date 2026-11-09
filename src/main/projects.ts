@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs'
-import { detectTools, flowsIn, markdownHeadings, type ProjectInfo, type ProjectMap } from '@shared/project'
+import { detectTools, flowsIn, markdownHeadings, type FlowStep, type ProjectInfo, type ProjectMap } from '@shared/project'
 import type { ChatEvent } from '@shared/types'
-import { complete, extractJsonObject, friendlyError, streamDraft } from './ai'
+import { complete, extractJsonArray, extractJsonObject, friendlyError, streamDraft } from './ai'
 import { bookChapters } from './book'
 import { directionLine } from './coach'
 import { filedUnder, getNotebooks, updateNotebook } from './learn'
@@ -155,4 +155,46 @@ Be concrete and specific to this project. Don't write the code: they will.`
   } catch (e) {
     emit({ id: req.id, type: 'error', message: friendlyError(e) })
   }
+}
+
+/**
+ * A flow's steps, in order, from the part of the documents that describes it: one short model call
+ * (the flow's section and the known part names in, a small JSON list out), cached with the map.
+ * The lesson follows these steps, and the app draws each on the canvas as the lesson reaches it.
+ */
+export async function flowSteps(notebook: string, flow: string): Promise<FlowStep[]> {
+  const map = await projectMap(notebook)
+  const cached = (map as ProjectMap & { flowSteps?: Record<string, FlowStep[]> } | null)?.flowSteps?.[flow]
+  if (cached?.length) return cached
+  const docs = await projectDocs(notebook)
+  // The flow's own section: the text under its heading in a Markdown doc, else the passages about it
+  let section = ''
+  for (const d of docs.filter((x) => /\.md$/i.test(x))) {
+    const md = await readText(d).catch(() => '')
+    const at = md.search(new RegExp(`^#{1,4}\\s+(?:[\\d.]+\\s+)?${flow.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'im'))
+    if (at >= 0) {
+      const rest = md.slice(at)
+      const end = rest.slice(1).search(/^#{1,4}\s/m)
+      section = rest.slice(0, end < 0 ? 3000 : end + 1).slice(0, 3000)
+      break
+    }
+  }
+  if (!section) {
+    const { search } = await import('./search')
+    section = search(flow, 6, (p) => docs.includes(p))
+      .map((c) => c.text)
+      .join('\n\n')
+      .slice(0, 3000)
+  }
+  const parts = [...(map?.components.map((c) => c.name) ?? []), ...(map?.tools.map((t) => t.name) ?? [])]
+  const raw = await complete(
+    `A system's "${flow}", as its design document describes it:\n${section}\n\nThe system's parts: ${parts.join(', ')}.\nList the flow as ordered steps, each something passing from one part to another. Use the part names exactly as listed where they fit; outside parties (the bank, a customer) may be named as they are in the text.\nReturn ONLY a JSON array of 3 to 8 steps: [{"from": "...", "to": "...", "label": "what passes, in 2 to 5 words"}]`,
+    'You trace how systems work, step by step. Reply with JSON only.'
+  ).catch(() => '')
+  const steps = ((extractJsonArray(raw) as Partial<FlowStep>[] | null) ?? [])
+    .filter((s) => s?.from && s?.to && String(s.from) !== String(s.to))
+    .slice(0, 8)
+    .map((s) => ({ from: String(s.from).slice(0, 60), to: String(s.to).slice(0, 60), label: String(s.label ?? '').slice(0, 40) }))
+  if (steps.length && map) await writeText(mapFile(notebook), JSON.stringify({ ...map, flowSteps: { ...((map as { flowSteps?: object }).flowSteps ?? {}), [flow]: steps } }, null, 1)).catch(() => {})
+  return steps
 }

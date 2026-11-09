@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { briefMilestones, detectTools, flowsIn, markdownHeadings, seedCanvas } from '../src/shared/project'
+import { briefMilestones, detectTools, drawSteps, flowsIn, markdownHeadings, seedCanvas, stepsReached } from '../src/shared/project'
 
 describe('detectTools', () => {
   it('finds the tools a design doc uses, most mentioned first', () => {
@@ -50,5 +50,24 @@ describe('seedCanvas', () => {
     ])
     expect(c.edges).toEqual([])
     expect(c.nodes[3].y).toBeGreaterThan(c.nodes[0].y)
+  })
+})
+
+describe('a walkthrough keeps pace with the lesson', () => {
+  const steps = [
+    { from: 'Ledger service', to: 'Bank', label: 'payout instruction' },
+    { from: 'Bank', to: 'Statement Ingestion service', label: 'MT940 statement' },
+    { from: 'Statement Ingestion service', to: 'Matching Engine', label: 'bank_lines' }
+  ]
+  it('counts the steps the tutor has reached, in order', () => {
+    expect(stepsReached(steps, 'A payout starts in the Ledger service.')).toBe(1)
+    expect(stepsReached(steps, 'The ledger service sends it to the bank, and the bank sends a statement back. What reads it?')).toBe(1)
+    expect(stepsReached(steps, 'The bank sends a statement; the ingestion service parses it. Then the Matching Engine pairs lines.')).toBe(3)
+  })
+  it('draws only the steps reached, adding parts the map lacked', () => {
+    const start = seedCanvas({ components: [{ name: 'Statement Ingestion service', about: '' }, { name: 'Matching Engine', about: '' }, { name: 'Ledger service', about: '' }], tools: [] })
+    const c = drawSteps(start, steps, 2)
+    expect(c.edges.map((e) => e.label)).toEqual(['1. payout instruction', '2. MT940 statement'])
+    expect(c.nodes.find((n) => n.text === 'Bank')?.kind).toBe('external')
   })
 })
