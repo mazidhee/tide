@@ -1,7 +1,6 @@
-import { NEW_PROBLEM_NUDGE, repeatsEarlier } from '@shared/session'
 import { inBackground, streamInteractive } from './modelQueue'
 import { STRATEGY_LABEL, type Strategy } from '@shared/strategy'
-import { canTake, CloudUnavailable, cloudError, estimateTokens, headersFor, noteLimits, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
+import { canTake, CloudUnavailable, cloudError, coolingDown, estimateTokens, headersFor, noteLimits, noteRateLimit, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
 import type { CloudTask, RequestKind } from '@shared/providers'
 import { memoryIntent } from '@shared/memoryIntent'
 import { addMemory, forgetMatching } from './memory'
@@ -116,6 +115,26 @@ function retrievePages(scope: Extract<ChatScope, { kind: 'pages' }>, query: stri
   const step = rest.length / room
   const sampled = step <= 1 ? rest : Array.from({ length: room }, (_, i) => rest[Math.floor(i * step)])
   return [...hits, ...sampled]
+}
+
+/**
+ * The section of a book you own that covers a lesson's topic, as text to teach from: the best
+ * passages from its pages, up to about 5,000 characters. Null when no book covers it.
+ */
+export async function lessonPassage(topic: string): Promise<{ label: string; path: string; from: number; to: number; text: string } | null> {
+  const { pagesToRead } = await import('./books')
+  const { readingLabel } = await import('@shared/books')
+  const s = (await pagesToRead(topic, 1).catch(() => []))[0]
+  if (!s) return null
+  await indexReady()
+  const to = Math.min(s.to, s.from + 8)
+  const chunks = retrievePages({ kind: 'pages', path: s.path, from: s.from, to }, topic).sort((a, b) => chunkPage(a) - chunkPage(b))
+  let text = ''
+  for (const c of chunks) {
+    if (text.length + c.text.length > 5000) break
+    text += `${text ? '\n\n' : ''}${c.text.trim()}`
+  }
+  return text.length > 400 ? { label: readingLabel(s), path: s.path, from: s.from, to, text } : null
 }
 
 export async function retrieve(scope: ChatScope, query: string): Promise<ContextSource[]> {
@@ -254,7 +273,7 @@ async function* readStream(body: ReadableStream<Uint8Array>, filter: (t: string)
 
 /** A cloud model's answer, streamed; its real token counts go to the usage log */
 async function* streamCloud(target: CloudTarget, messages: ChatMessage[], signal: AbortSignal, maxTokens: number, temperatureOverride: number | undefined, task: RequestKind): AsyncGenerator<string> {
-  if (!canTake(estimateTokens(JSON.stringify(messages).length) + maxTokens)) throw new CloudUnavailable(`The cloud model’s per-minute limit can’t take this for about ${secondsUntilReset()}s`)
+  if (!canTake(estimateTokens(JSON.stringify(messages).length) + maxTokens, target.provider)) throw new CloudUnavailable(`The cloud model’s per-minute limit can’t take this for about ${secondsUntilReset(target.provider)}s`)
   let res: Response
   try {
     res = await fetch(`${target.baseUrl}/chat/completions`, {
@@ -265,10 +284,11 @@ async function* streamCloud(target: CloudTarget, messages: ChatMessage[], signal
     })
   } catch (e) {
     if (signal.aborted) throw e
+    noteRateLimit(target.provider, 60)
     throw new CloudUnavailable(`Couldn't reach the cloud model: ${(e as Error).message}`)
   }
-  if (!res.ok || !res.body) throw await cloudError(res)
-  noteLimits(res.headers)
+  if (!res.ok || !res.body) throw await cloudError(res, target.provider)
+  noteLimits(res.headers, target.provider)
   let reported: { input: number; output: number; cached?: number } | null = null
   let out = 0
   try {
@@ -283,12 +303,15 @@ async function* streamCloud(target: CloudTarget, messages: ChatMessage[], signal
 }
 
 /**
- * Streams from the cloud model when this job escalates, and from Gemma otherwise. If the cloud
- * can't take it (rate limited, down, key refused) before writing anything, Gemma answers instead.
+ * Streams from the cloud model when this job escalates, and from Gemma otherwise. If a cloud
+ * model can't take it (rate limited, down, key refused) before writing anything, the next
+ * provider you have a key for tries, then Gemma.
  */
 export async function* streamRouted(messages: ChatMessage[], signal: AbortSignal, maxTokens: number, task: RequestKind, temperatureOverride?: number): AsyncGenerator<string> {
-  const target = routeFor(isCloudTask(task) ? task : null)
-  if (target) {
+  for (let tries = 0; tries < 3; tries++) {
+    // A provider that just refused is cooling down, so this picks the next one in line
+    const target = routeFor(isCloudTask(task) ? task : null)
+    if (!target) break
     let wrote = false
     try {
       for await (const t of streamCompletion(messages, signal, maxTokens, false, temperatureOverride, task, target)) {
@@ -298,7 +321,9 @@ export async function* streamRouted(messages: ChatMessage[], signal: AbortSignal
       return
     } catch (e) {
       if (wrote || signal.aborted || !(e instanceof CloudUnavailable)) throw e
-      console.warn(`[cloud] ${(e as Error).message}; answering with the local model`)
+      // Not a refusal it remembers (the per-minute check): don't ask the same one again now
+      if (!coolingDown(target.provider)) noteRateLimit(target.provider, 30)
+      console.warn(`[cloud] ${target.provider}: ${(e as Error).message}; trying the next`)
     }
   }
   yield* streamCompletion(messages, signal, maxTokens, false, temperatureOverride, task)
@@ -429,17 +454,21 @@ async function answer(req: TurnRequest, emit: (e: ChatEvent) => void) {
   if (getSettings().ai.agent !== false) {
     try {
       const { agentChat } = await import('./agent')
-      // In a lesson, a reply that asks a problem already asked is taken back and written again,
-      // once: small models copy the last problem instead of making a new one
+      // In a lesson, a reply is checked before the student works on it (a repeated or missing
+      // question, a check that fails, a flawed problem, a mark that's too generous) and written
+      // again once if anything's wrong: see lessonGuard
       let reply = ''
       await agentChat(req, (e) => (e.type === 'delta' && (reply += e.text), emit(e)), controller.signal)
-      const earlier = req.session ? req.messages.filter((m) => m.role === 'assistant').map((m) => (typeof m.content === 'string' ? m.content : '')) : []
-      if (req.session && !controller.signal.aborted && repeatsEarlier(reply, earlier)) {
-        emit({ id: req.id, type: 'reset' })
-        const messages = [...req.messages]
-        const last = messages[messages.length - 1]
-        if (last?.role === 'user' && typeof last.content === 'string') messages[messages.length - 1] = { ...last, content: `${last.content}\n\n${NEW_PROBLEM_NUDGE}` }
-        await agentChat({ ...req, messages }, emit, controller.signal)
+      if (req.session && !controller.signal.aborted) {
+        const { checkLessonReply, fixNudge } = await import('./lessonGuard')
+        const problems = await checkLessonReply(req, reply, emit, controller.signal, (prompt, system, cloud) => complete(prompt, system, controller.signal, 'interactive', cloud ? 'marking' : 'other')).catch(() => [] as string[])
+        if (problems.length && !controller.signal.aborted) {
+          emit({ id: req.id, type: 'reset' })
+          const messages = [...req.messages]
+          const last = messages[messages.length - 1]
+          if (last?.role === 'user' && typeof last.content === 'string') messages[messages.length - 1] = { ...last, content: `${last.content}\n\n${fixNudge(problems)}` }
+          await agentChat({ ...req, messages }, emit, controller.signal)
+        }
       }
       emit({ id: req.id, type: 'done' })
       running.delete(req.id)

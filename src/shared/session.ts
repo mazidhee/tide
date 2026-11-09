@@ -36,8 +36,16 @@ function parseScores(body: string): { label: string; score: number; max: number;
     .map((m) => ({ label: m[1].trim(), score: Number(m[2]), max: Number(m[3]), note: m[4].trim() }))
 }
 
+/** The tutor's working (its <solution> and <check> for a problem), which the student never sees: removed, a half-written tag too */
+export const hideWorking = (raw: string) =>
+  raw
+    .replace(/<solution\b[^>]*>[\s\S]*?<\/solution>/gi, '')
+    .replace(/<check\b[^>]*>[\s\S]*?<\/check>/gi, '')
+    .replace(/<(solution|check)\b[\s\S]*$/i, '')
+
 /** Splits a (possibly still streaming) tutor message into blocks; unfinished tags stay hidden */
-export function parseBlocks(raw: string): Block[] {
+export function parseBlocks(full: string): Block[] {
+  const raw = hideWorking(full)
   // What the tutor said aloud (Talk) is spoken, not shown again as a block
   const said = splitSay(raw)
   // A reply that stalled after its spoken part still shows what was said, so there's something to answer
@@ -127,6 +135,8 @@ export const SESSION_FORMAT = `Format rules (the app turns these tags into inter
   The student can only answer inside an ask tag, so never ask a question in plain text, not even the first one.
   Types: predict (they guess before you explain), short (a sentence or two), explain (explain it back in their own words), choice (multiple choice, put options in the tag: <ask type="choice" options="first|second|third|fourth">question</ask>), error (show a flawed statement or code and ask them to find the mistake), problem (a worked problem or calculation), code (they write code: <ask type="code" lang="python">task</ask>).
 - When they answer, judge it first: <grade verdict="correct|partial|wrong" score="0.0-1.0">one or two sentences: what was right and why, or the exact step that's wrong and why; no empty praise</grade>
+- Grade against your own solution, and quote the words of their answer that earned the verdict. "correct" means complete and right, not just heading the right way; a right answer with wrong or missing reasoning is "partial".
+- Before you set a problem, solve it yourself, and put your answer and the key steps after it in <solution>...</solution>. The student never sees it (so this isn't answering your own question); you grade their answer against it. When the answer is a number or an expression, also add <check lang="python">Python that works the answer out from scratch and asserts it equals yours (SymPy is available)</check>; for a code problem, a check that runs your reference solution on test cases with asserts. Tide runs every check before the student sees the problem: if it fails, the problem or your answer is wrong. A problem must be well posed: every quantity it asks about is defined and it has one clear answer.
 - If they got something wrong or partly wrong, capture the idea they missed as a flashcard: <card>question :: answer</card>
 - The student may send [hint]. Give the smallest hint that unblocks their thinking, and give more each time they ask again: a nudge, then a hint, then one worked step, then the answer.
 - The student may say they don't know. Then teach the idea briefly and ask an easier question.

@@ -1,7 +1,7 @@
 import { app, safeStorage } from 'electron'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
-import { costOf, DEFAULT_CLOUD, modelPrice, providerInfo, type CloudSettings, type CloudTask, type RequestKind } from '@shared/providers'
+import { costOf, DEFAULT_CLOUD, modelPrice, providerInfo, PROVIDERS, type CloudSettings, type CloudTask, type RequestKind } from '@shared/providers'
 import { getSettings } from './settings'
 
 /**
@@ -60,10 +60,10 @@ export const hasKeys = (): Record<string, boolean> => Object.fromEntries(Object.
 
 // ---------- Which model answers ----------
 
-let coolUntil = 0
-
-// The provider's per-minute token allowance, as its last response reported it
-let tokenWindow = { remaining: Infinity, resetAt: 0 }
+// Each provider's state: when it may be asked again after a refusal, and its per-minute token
+// allowance as its last response reported it
+const coolUntil = new Map<string, number>()
+const tokenWindow = new Map<string, { remaining: number; resetAt: number }>()
 
 /** "697ms", "35.61s", "1m26.4s" → milliseconds */
 const duration = (v: string | null): number => {
@@ -74,28 +74,29 @@ const duration = (v: string | null): number => {
 }
 
 /** Keeps track of how many tokens are left this minute, from the provider's rate-limit headers */
-export function noteLimits(headers: Headers) {
+export function noteLimits(headers: Headers, provider: string) {
   const remaining = Number(headers.get('x-ratelimit-remaining-tokens'))
-  if (Number.isFinite(remaining) && headers.has('x-ratelimit-remaining-tokens')) tokenWindow = { remaining, resetAt: Date.now() + duration(headers.get('x-ratelimit-reset-tokens')) }
+  if (Number.isFinite(remaining) && headers.has('x-ratelimit-remaining-tokens')) tokenWindow.set(provider, { remaining, resetAt: Date.now() + duration(headers.get('x-ratelimit-reset-tokens')) })
 }
 
 /** Whether a request of about this many tokens fits in what's left this minute (unknown counts as yes) */
-export function canTake(tokens: number): boolean {
-  if (Date.now() >= tokenWindow.resetAt) return true
-  return tokens <= tokenWindow.remaining
+export function canTake(tokens: number, provider: string): boolean {
+  const w = tokenWindow.get(provider)
+  if (!w || Date.now() >= w.resetAt) return true
+  return tokens <= w.remaining
 }
 
-export const secondsUntilReset = () => Math.max(1, Math.ceil((tokenWindow.resetAt - Date.now()) / 1000))
+export const secondsUntilReset = (provider: string) => Math.max(1, Math.ceil(((tokenWindow.get(provider)?.resetAt ?? 0) - Date.now()) / 1000))
 
 /** Room left for a cloud reply (reasoning included); providers count it against the per-minute limit */
 export const CLOUD_REPLY_TOKENS = 1800
 
-/** A 429: leave the cloud alone until the provider says to try again */
-export function noteRateLimit(retryAfterSeconds?: number) {
-  coolUntil = Date.now() + Math.max(20, Math.min(600, retryAfterSeconds ?? 60)) * 1000
+/** A refusal (429, an outage, a bad key): leave that provider alone for a while; the next one in line answers */
+export function noteRateLimit(provider: string, retryAfterSeconds?: number) {
+  coolUntil.set(provider, Date.now() + Math.max(20, Math.min(600, retryAfterSeconds ?? 60)) * 1000)
 }
 
-export const coolingDown = () => Date.now() < coolUntil
+export const coolingDown = (provider: string) => Date.now() < (coolUntil.get(provider) ?? 0)
 
 export function targetFor(provider: string, model: string): CloudTarget | null {
   const s = cloudSettings()
@@ -114,11 +115,27 @@ export function targetFor(provider: string, model: string): CloudTarget | null {
 export function routeFor(task: CloudTask | null, engine: 'auto' | 'local' | 'cloud' = 'auto'): CloudTarget | null {
   const s = cloudSettings()
   if (s.mode === 'off' || engine === 'local') return null
-  const target = targetFor(s.provider, s.model)
-  if (!target || coolingDown()) return null
-  if (engine === 'cloud') return target
-  if (s.mode !== 'auto' || !task || !s.tasks[task] || overBudget()) return null
-  return target
+  if (engine !== 'cloud' && (s.mode !== 'auto' || !task || !s.tasks[task] || overBudget())) return null
+  return chain().find((t) => !coolingDown(t.provider)) ?? null
+}
+
+/**
+ * Who answers, in order: the model you chose, then every other provider you've saved a key for
+ * (its first model, or the one you added), so a rate limit or an outage at one moves on to the
+ * next before it falls back to Gemma.
+ */
+export function chain(): CloudTarget[] {
+  const s = cloudSettings()
+  const main = targetFor(s.provider, s.model)
+  const keys = hasKeys()
+  const backups = [...PROVIDERS.map((p) => p.id), ...Object.keys(s.providers ?? {})]
+    .filter((id, i, all) => all.indexOf(id) === i && id !== s.provider && keys[id])
+    .map((id) => {
+      const info = providerInfo(id, s)
+      return targetFor(id, s.providers?.[id]?.models?.[0] ?? info.models[0]?.id ?? '')
+    })
+    .filter((t): t is CloudTarget => !!t)
+  return [...(main ? [main] : []), ...backups]
 }
 
 export const headersFor = (target: CloudTarget) => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${target.apiKey}` })
@@ -126,7 +143,7 @@ export const headersFor = (target: CloudTarget) => ({ 'Content-Type': 'applicati
 /** An error worth falling back to Gemma for (rate limits, outages, network), rather than failing the turn */
 export class CloudUnavailable extends Error {}
 
-export async function cloudError(res: Response): Promise<Error> {
+export async function cloudError(res: Response, provider: string): Promise<Error> {
   const body = await res.text().catch(() => '')
   let detail = body.slice(0, 300)
   try {
@@ -138,11 +155,17 @@ export async function cloudError(res: Response): Promise<Error> {
   }
   if (res.status === 429) {
     const retry = Number(res.headers.get('retry-after'))
-    noteRateLimit(Number.isFinite(retry) ? retry : undefined)
+    noteRateLimit(provider, Number.isFinite(retry) ? retry : undefined)
     return new CloudUnavailable(`The cloud model is rate limited for now (${detail || '429'})`)
   }
-  if (res.status >= 500 || res.status === 408) return new CloudUnavailable(`The cloud model is unavailable (${res.status})`)
-  if (res.status === 401 || res.status === 403) return new CloudUnavailable('The cloud key was refused. Check it in Settings → Models.')
+  if (res.status >= 500 || res.status === 408) {
+    noteRateLimit(provider, 60)
+    return new CloudUnavailable(`The cloud model is unavailable (${res.status})`)
+  }
+  if (res.status === 401 || res.status === 403) {
+    noteRateLimit(provider, 600)
+    return new CloudUnavailable('The cloud key was refused. Check it in Settings → Models.')
+  }
   return new CloudUnavailable(`The cloud model said: ${detail.replace(/\s+/g, ' ').trim()}`)
 }
 
@@ -292,8 +315,8 @@ export async function testCloud(provider: string, model: string): Promise<{ ok: 
       body: JSON.stringify({ model, messages: [{ role: 'user', content: 'Reply with the single word: ready' }], max_tokens: 200, ...target.extra }),
       signal: AbortSignal.timeout(30_000)
     })
-    if (!res.ok) return { ok: false, message: (await cloudError(res)).message }
-    noteLimits(res.headers)
+    if (!res.ok) return { ok: false, message: (await cloudError(res, target.provider)).message }
+    noteLimits(res.headers, target.provider)
     const json = (await res.json()) as { usage?: { prompt_tokens?: number; completion_tokens?: number } }
     recordUsage({ kind: 'cloud', provider, model, task: 'other', input: json.usage?.prompt_tokens ?? 0, output: json.usage?.completion_tokens ?? 0 })
     const limits = Object.fromEntries([...res.headers.entries()].filter(([k]) => k.startsWith('x-ratelimit-limit')).map(([k, v]) => [k.replace('x-ratelimit-limit-', ''), v]))

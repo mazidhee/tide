@@ -46,6 +46,21 @@ export interface ProviderInfo {
 
 export const PROVIDERS: ProviderInfo[] = [
   {
+    id: 'nvidia',
+    name: 'NVIDIA',
+    summary: 'Free: about 40 requests a minute on strong open models; prompts are logged',
+    baseUrl: 'https://integrate.api.nvidia.com/v1',
+    keyUrl: 'https://build.nvidia.com/settings/api-keys',
+    pricingUrl: 'https://build.nvidia.com/models',
+    checked: '2026-11-09',
+    freeTier: 'Free with an NVIDIA Developer account (phone verification): about 40 requests a minute, no published daily cap. Trial use: prompts may be logged to improve NVIDIA’s products, so private projects and Metabase never go here.',
+    models: [
+      { id: 'deepseek-ai/deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash', price: { input: 0, output: 0 }, reasoning: true, note: 'Strongest free option for maths and proofs' },
+      { id: 'moonshotai/kimi-k2.6', label: 'Kimi K2.6', price: { input: 0, output: 0 }, reasoning: true, note: 'Strong at maths and code' },
+      { id: 'z-ai/glm-5.3-flash', label: 'GLM 5.3 Flash', price: { input: 0, output: 0 }, reasoning: true, note: 'Fast; good for code' }
+    ]
+  },
+  {
     id: 'groq',
     name: 'Groq',
     summary: 'Free: 1,000 requests a day, 8,000 tokens a minute',
@@ -80,12 +95,12 @@ export const PROVIDERS: ProviderInfo[] = [
   {
     id: 'gemini',
     name: 'Google Gemini',
-    summary: 'Flash models free; free-tier data may be used by Google',
+    summary: 'Free, but only about 20 requests a day; free-tier data may be used by Google',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
     keyUrl: 'https://aistudio.google.com/apikey',
     pricingUrl: 'https://ai.google.dev/gemini-api/docs/pricing',
-    checked: '2026-11-08',
-    freeTier: 'Flash and Flash-Lite models are free on the free tier (requests may be used to improve Google’s products). Pro models are paid only.',
+    checked: '2026-11-09',
+    freeTier: 'Flash models are free on the free tier, measured at about 5 requests a minute and 20 a day in November 2026 (Google no longer publishes the number). Free-tier requests may be used to improve Google’s products. Pro models are paid only.',
     reasoningField: 'reasoning_effort',
     models: [
       { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', price: { input: 0.75, output: 3.75, cachedInput: 0.075 }, reasoning: true, note: 'Paid price until 31 Dec 2026' },
@@ -96,14 +111,29 @@ export const PROVIDERS: ProviderInfo[] = [
   {
     id: 'deepseek',
     name: 'DeepSeek',
-    summary: 'Prices not verified yet: set them before relying on costs',
+    summary: 'Cheapest strong model: about $0.002 a check, half price off-peak',
     baseUrl: 'https://api.deepseek.com/v1',
     keyUrl: 'https://platform.deepseek.com/api_keys',
     pricingUrl: 'https://api-docs.deepseek.com/quick_start/pricing',
-    freeTier: 'Prices not verified: their pricing page could not be reached on 2026-11-08. Set them below from the page before relying on cost estimates.',
+    checked: '2026-11-09',
+    freeTier: 'Paid, pay as you go. Off-peak (outside 02:00–05:00 and 07:00–11:00 West Africa Time on weekdays, and all weekend) costs half. deepseek-chat and deepseek-reasoner were retired in July 2026.',
     models: [
-      { id: 'deepseek-chat', label: 'DeepSeek Chat' },
-      { id: 'deepseek-reasoner', label: 'DeepSeek Reasoner', reasoning: true }
+      { id: 'deepseek-flash', label: 'DeepSeek Flash (V4.1)', price: { input: 0.15, output: 0.6 }, reasoning: true, note: 'Peak price; half off-peak' },
+      { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', price: { input: 1.32, output: 3.96 }, reasoning: true, note: 'Peak price; half off-peak' }
+    ]
+  },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    summary: 'Many models behind one key; a few free ones (50 requests a day)',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    keyUrl: 'https://openrouter.ai/keys',
+    pricingUrl: 'https://openrouter.ai/models',
+    checked: '2026-11-09',
+    freeTier: 'Free models (ending in :free): 20 requests a minute and 50 a day, or 1,000 a day once you have bought $10 of credit. Free models’ providers may log prompts. Accepts crypto (USDC) if a card fails.',
+    models: [
+      { id: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'Nemotron 3 Ultra (free)', price: { input: 0, output: 0 }, reasoning: true, note: 'Free, 50 requests a day' },
+      { id: 'moonshotai/kimi-k3.1-pro', label: 'Kimi K3.1 Pro', price: { input: 2, output: 10 }, reasoning: true, note: 'Strongest open model; for the hardest proofs' }
     ]
   },
   {

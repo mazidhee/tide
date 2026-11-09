@@ -147,7 +147,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         const last = messages[messages.length - 1]
         messages[messages.length - 1] = { ...last, content: `(Time left: ${clock.left() || timed} of ${timed} minutes)\n${last.content}` }
       }
-      await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setupRef.current), canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, engine: engineRef.current })
+      await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setupRef.current), canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, engine: engineRef.current })
     },
     [scope, setup, web, timed, clock, mode]
   )
@@ -156,6 +156,20 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     if (!busy) send(`Answer: ${said}`, turnsRef.current)
   }
   turnsRef.current = turns
+
+  // A lesson on a topic a book you own covers is taught from that section: its text rides in the
+  // opening message (hidden, and cached with the start of the lesson, so it costs time once)
+  const openingRef = useRef(openingMessage(setup))
+  const begin = async () => {
+    let opening = openingMessage(setup)
+    if ((mode === 'teach' || mode === 'quiz') && (scope.kind === 'vault' || scope.kind === 'folder')) {
+      const found = await Promise.race([window.tide.books.passage(topic).catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 2000))])
+      if (found)
+        opening += `\n\nThis lesson follows a section of a book they own, ${found.label}. Teach from it: use its definitions, notation and examples, set problems that follow from it, and send them to the pages when it helps. Where your memory and the book disagree, the book wins; say so.\n\"\"\"\n${found.text}\n\"\"\"`
+    }
+    openingRef.current = opening
+    send(opening, [])
+  }
 
   // Start the session
   useEffect(() => {
@@ -196,11 +210,11 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           setApproach(s)
           approachRef.current = s
           setupRef.current = { ...setupRef.current, options: { ...setupRef.current.options, strategy: s } }
-          send(openingMessage(setup), [])
+          begin()
         })
       return
     }
-    send(openingMessage(setup), [])
+    begin()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, topic, JSON.stringify(scope)])
 
@@ -729,7 +743,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           {error && (
             <div className="chat-error">
               <p>{error}</p>
-              <button className="link-btn" onClick={() => send(turns.filter((t) => t.role === 'user').pop()?.content ?? openingMessage(setup), turns.slice(0, -2))}>
+              <button className="link-btn" onClick={() => send(turns.filter((t) => t.role === 'user').pop()?.content ?? openingRef.current, turns.slice(0, -2))}>
                 Try again
               </button>
             </div>
@@ -822,7 +836,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
 
           {finished && (
             <div className="row-gap s-finish">
-              <button className="btn primary" onClick={() => send(openingMessage(setup), [])}>
+              <button className="btn primary" onClick={() => send(openingRef.current, [])}>
                 <Icon name="refresh" size={14} />
                 Go again
               </button>

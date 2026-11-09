@@ -152,6 +152,8 @@ export interface ChatRequest {
   session?: boolean
   /** The tutor's current question type in a session, so a worked answer to a problem can be escalated */
   askType?: string
+  /** A lesson's topic: for checking its problems and finding it in books you own */
+  topic?: string
 }
 
 export interface StoredMessage {
@@ -649,6 +651,8 @@ export interface TideApi {
   books: {
     /** The pages to read in your own books for a topic, best first */
     suggest(topic: string, limit?: number): Promise<import('./books').ReadingSuggestion[]>
+    /** The text of the section of a book you own that covers a topic, to teach a lesson from */
+    passage(topic: string): Promise<{ label: string; path: string; from: number; to: number; text: string } | null>
     /** Maps a book now: chapters, pages and what each covers */
     map(path: string): Promise<import('./books').BookMap | null>
   }

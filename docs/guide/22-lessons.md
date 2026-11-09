@@ -52,6 +52,21 @@ With **Web** on, the tutor looks things up when a topic may be newer than its tr
 
 Lessons and exams are saved as you go, to `.tide/ongoing.json` in your notes folder. If Tide quits, the Mac restarts or the power goes, the lesson is back under **In progress** in the sidebar when Tide opens, exactly where you were. If the tutor was in the middle of a reply, it's asked for again.
 
+## How Tide checks the tutor
+
+Gemma is a small model, and on hard material it can set a broken problem or mark a half-right answer as right. So every lesson reply is checked before you work on it:
+
+- **The tutor solves its own problem first.** With each problem it writes its answer and key steps, hidden from you, and marks your answer against them.
+- **What can be computed is computed.** For a problem with a numeric or algebraic answer, the tutor also writes a short SymPy check (for code, test cases), and Tide runs it. If it fails, the problem or the answer is wrong.
+- **A second look.** On hard topics (proofs, calculus, probability, algorithms, concurrency, distributed systems and the like), a second pass reviews the new problem (is it well posed, is the answer right?) and any **Correct** or **Partly right** it just gave (was it earned?). With the cloud helper set to mark answers, that pass goes to the stronger cloud model; private projects and your Metabase never do.
+- **No repeats, no missing questions.** A problem it already asked, or one that never actually asks anything, is caught too.
+
+If anything fails, the reply is taken back and written again, once, with what to fix; you'll see a moment of "Checking the problem and the mark" above it. Each verdict quotes the part of your answer that earned it.
+
+## Taught from your books
+
+When a book you own covers the lesson's topic, the lesson is taught from that section: its definitions, notation and examples, with problems that follow from it. Where the model's memory and the book disagree, the book wins.
+
 ## No repeated problems
 
 The tutor writes a new problem each time. If a reply asks a problem it already asked in that lesson, Tide takes the reply back and has the tutor write a new one, before you answer it.

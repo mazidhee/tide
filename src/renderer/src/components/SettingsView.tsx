@@ -734,6 +734,15 @@ function ModelsSection() {
             <Row label="Model" hint={info.models.find((m) => m.id === cloud.model)?.note}>
               <Select label="Model" value={cloud.model} onChange={(v) => save({ model: v })} options={(modelIds.includes(cloud.model) ? modelIds : [cloud.model, ...modelIds]).filter(Boolean).map((id) => ({ value: id, label: modelLabel(id) }))} />
             </Row>
+            <Row
+              label="When it’s busy"
+              hint={(() => {
+                const others = providers.filter((id) => id !== cloud.provider && keys[id]).map((id) => providerInfo(id, cloud).name)
+                return others.length
+                  ? `If ${info.name} is rate limited or down, ${others.join(', then ')} answer${others.length === 1 ? 's' : ''}, then Gemma on this Mac.`
+                  : `If ${info.name} is rate limited or down, Gemma answers. Save a key for another provider (pick it above, paste its key, then switch back) and it steps in first.`
+              })()}
+            />
             <Row label="Billing" hint={plan === 'free' ? 'Counted at $0. Usage shows what it would have cost.' : priceText(price)}>
               <Select
                 label="Billing"
