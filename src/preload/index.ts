@@ -216,6 +216,10 @@ const api: TideApi = {
     review: invoke('study:review'),
     saveCards: invoke('study:saveCards')
   },
+  books: {
+    suggest: invoke('books:suggest'),
+    map: invoke('books:map')
+  },
   metabase: {
     status: invoke('metabase:status'),
     connect: invoke('metabase:connect'),

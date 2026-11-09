@@ -629,11 +629,13 @@ export function extractJsonObject<T>(text: string): T {
 export async function generateFlashcards(
   path: string,
   count: number,
-  focusText?: string
+  focusText?: string,
+  /** A book's chapter: cards from passages across those pages */
+  pages?: { from: number; to: number }
 ): Promise<{ front: string; back: string }[]> {
   const material = focusText
     ? focusText
-    : formatSources(await retrieve({ kind: 'note', path }, 'key concepts definitions formulas'))
+    : formatSources(await retrieve(pages ? { kind: 'pages', path, from: pages.from, to: pages.to } : { kind: 'note', path }, 'key concepts definitions formulas'))
   const prompt = `Create ${count} high quality flashcards for studying the material below.
 Rules:
 - One fact or idea per card. Ask about understanding, not trivia.

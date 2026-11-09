@@ -321,7 +321,7 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy }: { week: Week
                     <div className="wk-item-more">
                       {it.why && <span className="muted small">{it.why}</span>}
                       {it.readings?.map((r, j) => (
-                        <a key={j} className="wk-reading" href={r.url ?? '#'} onClick={(e) => (e.preventDefault(), r.url && window.tide.app.openExternal(r.url))} title={r.by ? `${r.title}, ${r.by}` : r.title}>
+                        <a key={j} className="wk-reading" href={r.url ?? '#'} onClick={(e) => (e.preventDefault(), r.path ? app.openPath(r.path, `page=${r.page ?? 1}`) : r.url && window.tide.app.openExternal(r.url))} title={r.by ? `${r.title}, ${r.by}` : r.title}>
                           <Icon name="book" size={11} />
                           {r.title}
                         </a>

@@ -14247,3 +14247,27 @@ button.tl-dot:focus-visible {
 :root[data-model-busy] .cp-hero-mark.professor-hero {
   animation-play-state: paused;
 }
+
+/* A lesson's pages to read in books you own */
+.s-read {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0 0 18px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.s-read-link {
+  color: var(--ink-soft);
+  font-weight: 500;
+  text-align: left;
+  transition: color 120ms ease;
+}
+
+.s-read-link:hover {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

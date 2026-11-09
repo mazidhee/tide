@@ -518,7 +518,7 @@ export interface TideApi {
     onEvent(cb: (e: ChatEvent) => void): () => void
     models(): Promise<string[]>
     test(): Promise<{ ok: boolean; message: string }>
-    generateFlashcards(path: string, count: number, focusText?: string): Promise<{ front: string; back: string }[]>
+    generateFlashcards(path: string, count: number, focusText?: string, pages?: { from: number; to: number }): Promise<{ front: string; back: string }[]>
     generateQuiz(scope: ChatScope, count: number): Promise<QuizQuestion[]>
     summarize(path: string): Promise<string>
     readAlong(path: string, passage: string, mode: string, force?: boolean, style?: 'coach'): Promise<ReadAlongNote | null>
@@ -629,6 +629,12 @@ export interface TideApi {
     /** Models the provider says this key can use */
     models(provider: string): Promise<string[]>
     usage(monthOffset?: number): Promise<import('../main/cloud').UsageSummary>
+  }
+  books: {
+    /** The pages to read in your own books for a topic, best first */
+    suggest(topic: string, limit?: number): Promise<import('./books').ReadingSuggestion[]>
+    /** Maps a book now: chapters, pages and what each covers */
+    map(path: string): Promise<import('./books').BookMap | null>
   }
   metabase: {
     status(): Promise<{ ready: boolean; detail: string; url: string }>

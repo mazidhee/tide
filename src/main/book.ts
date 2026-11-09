@@ -23,8 +23,10 @@ interface OutlineNode {
 }
 
 const MAX_CHAPTERS = 80
+const MAX_SECTIONS = 400
 
-export async function bookChapters(rel: string): Promise<BookChapters> {
+/** `deep` also lists the sections inside each chapter (for the book map; the reading guide stays short) */
+export async function bookChapters(rel: string, deep = false): Promise<BookChapters> {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
   const data = new Uint8Array(await fs.readFile(absPath(rel)))
   const doc = await pdfjs.getDocument({ data, useSystemFonts: true }).promise
@@ -58,14 +60,20 @@ export async function bookChapters(rel: string): Promise<BookChapters> {
         const page = await pageOf(node.dest)
         const open = partsMode ? isPart(node) : descendAll
         if (page) chapters.push({ title: node.title.trim(), page, level: 0 })
-        if (open) {
+        if (open || deep) {
           for (const child of node.items ?? []) {
             if (SKIP_TITLE.test(child.title.trim())) continue
             const p = await pageOf(child.dest)
-            if (p) chapters.push({ title: child.title.trim(), page: p, level: page ? 1 : 0 })
+            const level = page ? 1 : 0
+            if (p) chapters.push({ title: child.title.trim(), page: p, level })
+            // One level further down: a chapter's sections, when a part holds the chapters
+            if (deep && open) for (const grand of child.items ?? []) {
+              const gp = SKIP_TITLE.test(grand.title.trim()) ? null : await pageOf(grand.dest)
+              if (gp) chapters.push({ title: grand.title.trim(), page: gp, level: level + 1 })
+            }
           }
         }
-        if (chapters.length >= MAX_CHAPTERS) break
+        if (chapters.length >= (deep ? MAX_SECTIONS : MAX_CHAPTERS)) break
       }
     }
     const ordered = chapters.filter((c, i) => i === 0 || c.page >= chapters[i - 1].page)

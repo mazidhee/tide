@@ -50,7 +50,8 @@ import { cancelCompanyPrep, draftCompanyPrep } from './companyPrep'
 import { adjustPlan, auditRoadmap, planReadings, planToThings, sizePlan, syncFromThings, type PlanRequest } from './planner'
 import type { StudyPlan } from '@shared/plan'
 import { dayTasks, setTaskDone, thingsStatus } from './things'
-import { getCoach, getWeek, planWeek, saveCoach, updateProfile, inferDirection, weekToThings, setItemDone, syncDone, rollOver, dayStats, journal, writeJournal, weekReview, saveReview } from './coach'
+import { mapBook, mapNewBooks, pagesToRead } from './books'
+import { getCoach, getWeek, planWeek, saveCoach, updateProfile, inferDirection, autoPlanWeek, weekToThings, setItemDone, syncDone, rollOver, dayStats, journal, writeJournal, weekReview, saveReview } from './coach'
 import { addMistakes, listMistakes, mistakesDue, retestMistake } from './mistakes'
 import { initTray, refreshTray, reportStudy, type StudyStatus } from './tray'
 import { localDate, todayItems } from '@shared/coach'
@@ -296,6 +297,8 @@ function registerIpc() {
   handle('learn:syncFromThings', (path: string) => syncFromThings(path))
   handle('things:status', () => thingsStatus())
   handle('things:today', () => dayTasks())
+  handle('books:suggest', (topic: string, limit?: number) => pagesToRead(topic, limit))
+  handle('books:map', (path: string) => mapBook(path))
   handle('things:setDone', (id: string, done: boolean) => setTaskDone(id, done))
   handle('metabase:status', () => metabaseStatus())
   handle('metabase:connect', (url: string, key: string) => connectMetabase(url, key))
@@ -318,7 +321,7 @@ function registerIpc() {
   handle('learn:suggestReading', (topics: string[]) => suggestReading(topics))
   handle('ai:models', () => listModels().catch(() => []))
   handle('ai:test', () => testConnection())
-  handle('ai:flashcards', (path: string, count: number, focus?: string) => generateFlashcards(path, count, focus))
+  handle('ai:flashcards', (path: string, count: number, focus?: string, pages?: { from: number; to: number }) => generateFlashcards(path, count, focus, pages))
   handle('ai:quiz', (scope: ChatScope, count: number) => generateQuiz(scope, count))
   handle('ai:summarize', (path: string) => summarize(path))
   handle('ai:readAlong', (path: string, passage: string, mode: string, force?: boolean, style?: 'coach') => readAlong(path, passage, mode, force, style))
@@ -554,6 +557,12 @@ app.whenReady().then(() => {
   onModelBusy((busy) => BrowserWindow.getAllWindows().forEach((w) => !w.isDestroyed() && w.webContents.send('model:busy', busy)))
   // Where you're heading, worked out quietly once the app has settled (every few days at most)
   setTimeout(() => inferDirection().catch(() => {}), 90_000)
+  // A new week plans itself (the first check a few minutes after launch, then every few hours)
+  setTimeout(() => autoPlanWeek().catch(() => {}), 240_000)
+  setInterval(() => autoPlanWeek().catch(() => {}), 4 * 3_600_000)
+  // Books you own get a map (chapters, pages, what each covers) in the background, a few at a time
+  setTimeout(() => mapNewBooks().catch(() => {}), 180_000)
+  setInterval(() => mapNewBooks().catch(() => {}), 6 * 3_600_000)
   // The tutor in the menu bar; its menu opens today's items and views in the main window
   initTray({
     agenda: async () => todayItems(await getWeek(localDate()), localDate()),
