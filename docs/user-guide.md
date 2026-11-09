@@ -271,7 +271,7 @@ The top of Home is a small living pixel world where your tutor spends the day, d
 
 Under the greeting, Home says what you studied on your last study day, with **Quiz me on it**, and what's due.
 
-Below it, your day runs down the page as a timeline: what you've finished (with the time), **Now** (the one thing to do next), then the rest of today and this evening. It reads **Today** in Things 4, so anything you or the tutor put there shows up, work included, alongside the coach's plan for the day. A planned item that's also a to-do in Things shows once. Things with a reminder time come first, in order. Tick the dot to finish something here or in Things (they stay in step); click a title to open it in Tide, or in Things if it isn't Tide's. The timeline checks Things every minute and when you come back to the window, so a task the tutor just set slides in. In the evening, **Wrap up the day** ends the path. Ask the tutor to plan your day ("put a 45-minute stablecoins lesson and the take-home on today") and it sets the tasks in Things for today.
+Below it, your day runs down the page as a timeline: what you've finished (with the time), **Now** (the one thing to do next), then the rest of today and this evening. It reads **Today** in Things 4, so anything you or the tutor put there shows up, work included, alongside the coach's plan for the day. A planned item that's also a to-do in Things shows once. Things with a reminder time come first, in order. Tick the dot to finish something here or in Things (they stay in step); click a title to open it in Tide, or in Things if it isn't Tide's. The timeline checks Things every minute and when you come back to the window, so a task the tutor just set slides in. In the evening, **Wrap up the day** ends the path. Under the timeline, **This week**, **Goals** and **Needs another look** sit in a row at any window size. Ask the tutor to plan your day ("put a 45-minute stablecoins lesson and the take-home on today") and it sets the tasks in Things for today.
 
 ### Goals
 
@@ -377,9 +377,13 @@ Under the message box, choose what the tutor answers from (all your notes, one n
 
 ## Your tutor, and talking
 
-Choose who your tutor is in **Settings → AI tutor → Your tutor and voice**: **The Professor** (an Oxford don), **Ada** (a young engineer), **Coach Marcus** or **Hoot** the owl. Each has a face around Tide and in the menu bar, a voice, and a way of talking.
+Choose who your tutor is in **Settings → Tutor and voice**: **The Professor** (an Oxford don), **Ada** (a young engineer), **Coach Marcus** or **Hoot** the owl. Each has a face around Tide and in the menu bar, a voice, and a way of talking.
 
 **Natural voice.** Set it up once (about 1 GB): Tide installs Kokoro, a small, natural-sounding speech model, and Parakeet for dictation, in its own Python environment, and they run on your Mac. Speech starts within about a second; dictation writes down what you said in a tenth of a second.
+
+**Voice.** Choose who you hear under **Voice**: the tutor's own, **Lewis** (deeper, British), **Fable**, **Daniel** or **George**. The speaker button plays a sample, and the voice you pick replaces the character's everywhere.
+
+**Dictation.** **Tide (Parakeet)** records you and writes it out on your Mac. **Handy** leaves it to Handy: **Speak** puts the cursor in the box and you press your Handy shortcut. Hands-free talk always uses Tide's own model, since it has to hear when you stop.
 
 **Talk** (in lessons and Chat): the tutor opens each reply with a short spoken part, in its own style, and reads the question out; the full answer stays on screen, so long answers aren't read word for word. Answer with **Speak** (click, talk, click), or turn on **Hands-free** and just talk: Tide hears when you stop. Space or Esc interrupts the tutor.
 
@@ -476,7 +480,11 @@ File anything in the Library under one or more subjects: hover a cover and click
 
 ### Covers
 
-The Library shows everything as a wall of covers. PDFs show their first page, articles and links show the picture the site gives for link previews, and videos show their YouTube thumbnail with the length in the corner. Items with no picture, such as Word documents, get a cover with their title on it. Click any cover to open it. The two buttons next to Filter switch between covers and a plain list.
+The Library shows everything as a wall of covers. PDFs show their first page, articles and links show the picture the site gives for link previews, and videos show their YouTube thumbnail with the length in the corner. Items with no picture, such as Word documents, get a cover with their title on it. Click any cover to open it. The three buttons next to Filter switch between covers, a plain list and **Shelves**.
+
+### The bookcase
+
+**Shelves** lays the Library out as a bookcase, one shelf per subject, each with how much of it you've read. Books show their real covers and spines, videos stand as their thumbnail and articles as a small framed page. Hover a book to pull it out; click it for its card, where you set it to unread, reading or read and choose **Open**, **Teach me** or **Quiz me**. The column on the left is the antilibrary: how much is still unread, then each subject's items. The rail on the right jumps between subjects, and search and the subject filters work here too.
 
 Covers are fetched once and kept in the hidden `.tide/thumbs` folder of your notes, so they show up offline. If a site has no preview picture, Tide remembers that and doesn't ask again.
 
