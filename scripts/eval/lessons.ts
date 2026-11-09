@@ -17,7 +17,7 @@ import { execFileSync } from 'child_process'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { checksOf, parseReview, reviewPrompt, solutionOf, tooGenerous, REVIEW_SYSTEM, type Verdict } from '../../src/shared/lessonCheck'
+import { checksOf, parseReview, parseSolve, readable, reviewPrompt, solutionOf, solvePrompt, tooGenerous, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type Verdict } from '../../src/shared/lessonCheck'
 import { openingMessage, parseBlocks, sessionInstructions, SESSION_FORMAT, type SessionSetup } from '../../src/shared/session'
 
 const args = process.argv.slice(2)
@@ -59,7 +59,7 @@ async function firstModel(base: string): Promise<string> {
 const TUTOR = 'You are Tide, a study assistant that teaches the student step by step, one question at a time.'
 
 function lesson(topic: string): { system: string; setup: SessionSetup } {
-  const setup: SessionSetup = { mode: 'teach', topic, scope: { kind: 'vault' }, options: {} }
+  const setup: SessionSetup = { mode: 'teach', topic, options: {} }
   return { setup, system: `${TUTOR}\n\n${SESSION_FORMAT}\n\n${sessionInstructions(setup)}` }
 }
 
@@ -88,7 +88,7 @@ const tally = (rows: { expected: Verdict; got: string }[]) => {
 async function main() {
   const model = opt('model') || (await firstModel(BASE))
   const reviewer = { base: opt('review-base', BASE).replace(/\/+$/, ''), key: opt('review-key'), model: opt('review-model') || model }
-  const items = (JSON.parse(readFileSync(join(HERE, 'marking.json'), 'utf8')) as Item[]).slice(0, LIMIT)
+  const items = (JSON.parse(readFileSync(join(HERE, 'marking.json'), 'utf8')) as Item[]).slice(0, args.includes('--only-problems') ? 0 : LIMIT)
   console.log(`Tutor: ${model} at ${BASE}\nReviewer: ${reviewer.model} at ${reviewer.base}\n${items.length} answers to mark\n`)
   const rows: Record<string, unknown>[] = []
   const started = Date.now()
@@ -111,7 +111,7 @@ async function main() {
     console.log(`${String(i + 1).padStart(2)} ${it.id.padEnd(24)} expected ${it.expected.padEnd(8)} plain ${plain.verdict.padEnd(8)} +solution ${solved.verdict.padEnd(8)} +review ${reviewed}`)
   }
   const pick = (k: string) => rows.map((r) => ({ expected: r.expected as Verdict, got: String(r[k]) }))
-  const summary = { model, reviewer: reviewer.model, minutes: Math.round((Date.now() - started) / 6000) / 10, plain: tally(pick('plain')), withSolution: tally(pick('withSolution')), withReview: tally(pick('withReview')) }
+  const summary = items.length === 0 ? { model } : { model, reviewer: reviewer.model, minutes: Math.round((Date.now() - started) / 6000) / 10, plain: tally(pick('plain')), withSolution: tally(pick('withSolution')), withReview: tally(pick('withReview')) }
   console.log('\n', JSON.stringify(summary, null, 2))
 
   // Setting problems: does the tutor solve its own problem, and does its check pass?
@@ -125,20 +125,32 @@ async function main() {
       { role: 'assistant', content: '<plan>\n- The core idea\n- Practice\n</plan>\n\nLet\'s go straight to practice.' },
       { role: 'user', content: 'Answer: I already know the basics, give me a hard problem.' }
     ], 900)
-    const checks = checksOf(reply)
-    let passed: boolean | null = null
-    if (checks.length) {
+    const run = (checks: CheckCode[]): boolean | null => {
+      if (!checks.length) return null
       const dir = mkdtempSync(join(tmpdir(), 'tide-eval-'))
       writeFileSync(join(dir, 'check.py'), checks[0].code)
       try {
         execFileSync(opt('python', join(process.env.HOME ?? '', 'Library/Application Support/Tide/python/bin/python')), [join(dir, 'check.py')], { timeout: 20_000, stdio: 'pipe' })
-        passed = true
+        return true
       } catch {
-        passed = false
+        return false
       }
     }
-    set.push({ topic, solution: !!solutionOf(reply), check: checks.length > 0, passed })
-    console.log(`set ${topic.padEnd(46)} solution ${solutionOf(reply) ? 'yes' : 'no '} check ${checks.length ? (passed ? 'passed' : 'FAILED') : '-'}`)
+    const checks = checksOf(reply)
+    let passed = run(checks)
+    // As a lesson does it: a problem set without a solution is solved in a separate call
+    let solvedBy = solutionOf(reply) ? 'tutor' : ''
+    let flaw = ''
+    if (!solvedBy) {
+      const solved = parseSolve(await call(reviewer.base, reviewer.key, reviewer.model, [{ role: 'system', content: SOLVE_SYSTEM }, { role: 'user', content: solvePrompt(readable(reply)) }], 700))
+      if (solved.flaw) flaw = solved.flaw
+      else if (solved.solution) {
+        solvedBy = 'solver'
+        if (passed === null) passed = run(solved.checks)
+      }
+    }
+    set.push({ topic, solvedBy: solvedBy || 'none', flaw, passed, problem: readable(reply).slice(0, 300) })
+    console.log(`set ${topic.padEnd(46)} solved by ${(solvedBy || 'nobody').padEnd(7)} check ${passed === null ? '-' : passed ? 'passed' : 'FAILED'}${flaw ? `  FLAWED: ${flaw}` : ''}`)
   }
 
   mkdirSync(join(HERE, 'results'), { recursive: true })

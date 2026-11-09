@@ -1,0 +1,50 @@
+{
+  "summary": {
+    "model": "mlx-community/gemma-4-12B-it-4bit"
+  },
+  "rows": [],
+  "set": [
+    {
+      "topic": "Integration by parts",
+      "solvedBy": "tutor",
+      "flaw": "",
+      "passed": null,
+      "problem": "To determine the appropriate starting point, I need to gauge your current proficiency with the fundamental tools required for integration by parts.\nSolve the following integral: $\\int x \\cos(x) \\, dx$"
+    },
+    {
+      "topic": "Eigenvalues and eigenvectors",
+      "solvedBy": "tutor",
+      "flaw": "",
+      "passed": null,
+      "problem": "To determine the appropriate starting point, I need to gauge your current understanding of linear transformations and matrix algebra.\nFind the eigenvalues of the matrix $A = \\begin{pmatrix} 4 & 1 \\\\ 1 & 4 \\end{pmatrix}$."
+    },
+    {
+      "topic": "Conditional probability and Bayes' theorem",
+      "solvedBy": "solver",
+      "flaw": "",
+      "passed": null,
+      "problem": "To gauge your current level, let's start with a problem involving conditional probability and independent events.\n\nSuppose you flip a fair coin twice. If I tell you that at least one of the coins landed on heads, what is the probability that both coins landed on heads?\nWhat is the probability?"
+    },
+    {
+      "topic": "Solving recurrences with the master theorem",
+      "solvedBy": "solver",
+      "flaw": "",
+      "passed": null,
+      "problem": "To determine the appropriate starting point, I need to gauge your familiarity with the components of the Master Theorem.\nWhat is the general form of a recurrence relation that the Master Theorem can be applied to? (e.g., $T(n) = \\dots$)"
+    },
+    {
+      "topic": "Binary search trees",
+      "solvedBy": "solver",
+      "flaw": "",
+      "passed": null,
+      "problem": "To determine the best starting point, I need to gauge your current understanding of tree structures and search logic.\nWhat is the main difference between a standard Binary Search Tree (BST) and a regular Binary Tree in terms of how nodes are organized?"
+    },
+    {
+      "topic": "Race conditions and mutexes",
+      "solvedBy": "solver",
+      "flaw": "",
+      "passed": true,
+      "problem": "To assess your current level, I'll start with a scenario involving shared memory.\n\nImagine two threads are both trying to increment a shared counter `count` (initially 0) by 1. The operation `count = count + 1` is actually three steps at the CPU level:\n1. Read the current value of `count` into a reg"
+    }
+  ]
+}

@@ -122,3 +122,22 @@ export function readable(reply: string): string {
 export function fixNudge(problems: string[]): string {
   return `(Tide checked your reply before the student saw it and it has to be written again. ${problems.join(' ')} Write the whole reply again, fixed: grade their last answer honestly, then set a problem that is well posed, with your <solution> and a <check> where the answer can be computed, ending with the question in an <ask> tag.)`
 }
+
+export const SOLVE_SYSTEM = 'You are a careful mathematician and software engineer. You solve exactly the problem given, checking your own work. Reply in exactly the format asked, nothing else.'
+
+/** Asks for the answer to a problem the tutor set without solving it, and a check Tide can run */
+export const solvePrompt = (problem: string) => `A tutor has just set this problem for a student:
+
+${problem}
+
+Solve it. Reply with exactly:
+<solution>the final answer and the key steps, briefly</solution>
+and, only when the answer is a number or an expression, also:
+<check lang="python">Python (SymPy is available) that works the answer out from scratch and asserts it equals yours</check>
+If the problem is not well posed (something it asks about is undefined, or it has no single clear answer), reply with one line instead: FLAWED: what is wrong with it.`
+
+/** What the solver said: its solution and check, or why the problem can't be solved */
+export function parseSolve(out: string): { solution: string; checks: CheckCode[]; flaw?: string } {
+  const flaw = /^\s*FLAWED:\s*(.+)$/im.exec(out)?.[1]?.trim()
+  return { solution: solutionOf(out), checks: checksOf(out), ...(flaw && !solutionOf(out) ? { flaw } : {}) }
+}

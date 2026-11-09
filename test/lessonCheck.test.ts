@@ -57,3 +57,14 @@ describe('lesson checks', () => {
     expect(fixNudge(['It repeats.', 'Its check failed.'])).toContain('It repeats. Its check failed.')
   })
 })
+
+describe('solving a problem the tutor set without an answer', () => {
+  it('reads a solution and check, or why the problem is flawed', async () => {
+    const { parseSolve } = await import('../src/shared/lessonCheck')
+    const ok = parseSolve('<solution>Θ(n²): the sum 1+2+…+n</solution>\n<check lang="python">assert sum(range(1, 11)) == 55</check>')
+    expect(ok.solution).toContain('Θ(n²)')
+    expect(ok.checks).toHaveLength(1)
+    expect(ok.flaw).toBeUndefined()
+    expect(parseSolve('FLAWED: there are only 5 apples, so "both baskets" is undefined.')).toEqual({ solution: '', checks: [], flaw: 'there are only 5 apples, so "both baskets" is undefined.' })
+  })
+})

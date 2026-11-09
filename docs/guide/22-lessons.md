@@ -58,7 +58,8 @@ Gemma is a small model, and on hard material it can set a broken problem or mark
 
 - **The tutor solves its own problem first.** With each problem it writes its answer and key steps, hidden from you, and marks your answer against them.
 - **What can be computed is computed.** For a problem with a numeric or algebraic answer, the tutor also writes a short SymPy check (for code, test cases), and Tide runs it. If it fails, the problem or the answer is wrong.
-- **A second look.** On hard topics (proofs, calculus, probability, algorithms, concurrency, distributed systems and the like), a second pass reviews the new problem (is it well posed, is the answer right?) and any **Correct** or **Partly right** it just gave (was it earned?). With the cloud helper set to mark answers, that pass goes to the stronger cloud model; private projects and your Metabase never do.
+- **If it didn't solve it, Tide does.** When the tutor sets a problem without its answer, a short separate call works it out (the cloud model on hard topics, when it may), runs the check, and keeps the answer with the problem for marking. Measured on 40 hard questions, marking against a solution took Gemma from 80% to 90% right, with no wrong answer marked correct.
+- **A second look by a stronger model.** With the cloud helper set to mark answers, the cloud model reviews each new problem (is it well posed, is the answer right?) and any **Correct** or **Partly right** just given (was it earned?). Gemma doesn't review itself: measured, that made marking worse. Private projects and your Metabase never go to the cloud.
 - **No repeats, no missing questions.** A problem it already asked, or one that never actually asks anything, is caught too.
 
 If anything fails, the reply is taken back and written again, once, with what to fix; you'll see a moment of "Checking the problem and the mark" above it. Each verdict quotes the part of your answer that earned it.

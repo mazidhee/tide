@@ -461,13 +461,17 @@ async function answer(req: TurnRequest, emit: (e: ChatEvent) => void) {
       await agentChat(req, (e) => (e.type === 'delta' && (reply += e.text), emit(e)), controller.signal)
       if (req.session && !controller.signal.aborted) {
         const { checkLessonReply, fixNudge } = await import('./lessonGuard')
-        const problems = await checkLessonReply(req, reply, emit, controller.signal, (prompt, system, cloud) => complete(prompt, system, controller.signal, 'interactive', cloud ? 'marking' : 'other')).catch(() => [] as string[])
+        const ask = (prompt: string, system: string, task: RequestKind) => complete(prompt, system, controller.signal, 'interactive', task)
+        const problems = await checkLessonReply(req, reply, emit, controller.signal, ask).catch(() => [] as string[])
         if (problems.length && !controller.signal.aborted) {
           emit({ id: req.id, type: 'reset' })
           const messages = [...req.messages]
           const last = messages[messages.length - 1]
           if (last?.role === 'user' && typeof last.content === 'string') messages[messages.length - 1] = { ...last, content: `${last.content}\n\n${fixNudge(problems)}` }
-          await agentChat({ ...req, messages }, emit, controller.signal)
+          let again = ''
+          await agentChat({ ...req, messages }, (e) => (e.type === 'delta' && (again += e.text), emit(e)), controller.signal)
+          // The rewrite isn't sent back again, but it still gets its solution for marking
+          if (!controller.signal.aborted) await checkLessonReply(req, again, emit, controller.signal, ask, true).catch(() => [])
         }
       }
       emit({ id: req.id, type: 'done' })
