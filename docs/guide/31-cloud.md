@@ -33,10 +33,12 @@ With NVIDIA as the provider, each job gets its own model, because each model has
 
 | Job | Model |
 | --- | --- |
-| Hard maths and proofs | Kimi K3.1 Pro, the strongest open model (slower) |
+| Hard maths and proofs | DeepSeek V4.1 Flash, the strongest free model NVIDIA's API serves |
 | Finding mistakes and code | Kimi K2.6 |
-| Marking and solving everyday problems | DeepSeek V4.1 Flash (fast) |
-| Planning | DeepSeek V4.1 Flash |
+| Marking and solving everyday problems | GLM 5.3 Flash (fast) |
+| Planning | Nemotron 3 Super |
+
+Kimi K3.1 Pro has a page on build.nvidia.com but NVIDIA's API doesn't serve it yet (it answers 404); when it does, it appears in the model menu and you can pick it for hard maths. A model a provider doesn't serve is skipped for half an hour and the next one answers.
 
 Change any of them under **Settings → Models**. Tide paces itself at about 35 requests a minute rather than wait to be refused, and gives each job a time limit (longer for hard maths) after which the next model in line answers.
 

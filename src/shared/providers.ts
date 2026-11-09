@@ -60,12 +60,13 @@ export const PROVIDERS: ProviderInfo[] = [
     freeTier: 'Free with an NVIDIA Developer account (phone verification): about 40 requests a minute, no published daily cap. Trial use: prompts may be logged to improve NVIDIA’s products, so private projects and Metabase never go here.',
     perMinute: 35,
     // Each job on its own model, so one model's limit isn't shared by everything
-    jobs: { maths: 'moonshotai/kimi-k3.1-pro', errors: 'moonshotai/kimi-k2.6', marking: 'deepseek-ai/deepseek-v4.1-flash', planning: 'deepseek-ai/deepseek-v4.1-flash' },
+    // Models on NVIDIA's API list (checked 9 Nov 2026; Kimi K3.1 Pro has a page but isn't served by the API yet)
+    jobs: { maths: 'deepseek-ai/deepseek-v4.1-flash', errors: 'moonshotai/kimi-k2.6', marking: 'z-ai/glm-5.3-flash', planning: 'nvidia/nemotron-3-super-120b-a12b' },
     models: [
-      { id: 'moonshotai/kimi-k3.1-pro', label: 'Kimi K3.1 Pro', price: { input: 0, output: 0 }, reasoning: true, note: 'Strongest open model: hard maths and proofs. Slower' },
       { id: 'deepseek-ai/deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash', price: { input: 0, output: 0 }, reasoning: true, note: 'Strongest free option for maths and proofs' },
       { id: 'moonshotai/kimi-k2.6', label: 'Kimi K2.6', price: { input: 0, output: 0 }, reasoning: true, note: 'Strong at maths and code' },
-      { id: 'z-ai/glm-5.3-flash', label: 'GLM 5.3 Flash', price: { input: 0, output: 0 }, reasoning: true, note: 'Fast; good for code' }
+      { id: 'z-ai/glm-5.3-flash', label: 'GLM 5.3 Flash', price: { input: 0, output: 0 }, reasoning: true, note: 'Fast; good for marking and code' },
+      { id: 'nvidia/nemotron-3-super-120b-a12b', label: 'Nemotron 3 Super', price: { input: 0, output: 0 }, reasoning: true, note: 'NVIDIA’s own; good for planning' }
     ]
   },
   {
