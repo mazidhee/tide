@@ -5,7 +5,9 @@ import { reveal } from '../lib/scroll'
 import { Thinking } from './Thinking'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
-import { MODE_LABEL, openingMessage, parseBlocks, sessionInstructions, type Block, type SessionSetup } from '@shared/session'
+import { MODE_LABEL, openingMessage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
+import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
+import { LessonCanvas } from './LessonCanvas'
 import { cardsToMarkdown } from '@shared/cards'
 import { fileTitle, useApp, pagesLabel } from '../state'
 import { renderMarkdown } from '../lib/markdown'
@@ -67,7 +69,18 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     const t = setTimeout(() => setCheer(0), Math.max(0, cheer - Date.now()))
     return () => clearTimeout(t)
   }, [cheer])
-  const setup: SessionSetup = useMemo(() => ({ mode, topic, options }), [mode, topic, options])
+  // How to teach it: what was asked for, else the router's choice, settled before the first message
+  const choice = useMemo(() => strategyChoice({ mode, topic, options }, scope), [mode, topic, options, JSON.stringify(scope)])
+  const [taught, setTaught] = useState<Strategy | undefined>(() => options?.strategy ?? choice?.strategy)
+  const setup: SessionSetup = useMemo(() => ({ mode, topic, options: taught ? { ...options, strategy: taught } : options }), [mode, topic, options, taught])
+  const setupRef = useRef(setup)
+  setupRef.current = setup
+  // The approach right now: changes when you ask for another mid-lesson
+  const [approach, setApproach] = useState<Strategy | undefined>(taught)
+  const approachRef = useRef(approach)
+  approachRef.current = approach
+  // A walkthrough draws on a canvas kept with the topic
+  const canvasPath = useMemo(() => lessonCanvasPath(scope, topic), [scope, topic])
   const timed = mode === 'interview' ? options?.timed : undefined
   const sendRef = useRef<(content: string, history: Turn[]) => void>(() => {})
   const turnsRef = useRef<Turn[]>([])
@@ -124,7 +137,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         const last = messages[messages.length - 1]
         messages[messages.length - 1] = { ...last, content: `(Time left: ${clock.left() || timed} of ${timed} minutes)\n${last.content}` }
       }
-      await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setup), session: true, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, engine: engineRef.current })
+      await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setupRef.current), canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, engine: engineRef.current })
     },
     [scope, setup, web, timed, clock]
   )
@@ -154,6 +167,20 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       return
     }
     setTurns([])
+    // A close call between two ways of teaching: the model breaks the tie, in a second or two
+    if (choice && !choice.clear && !options?.strategy) {
+      window.tide.ai
+        .tieBreak(topic, [choice.strategy, choice.runnerUp], options?.project ? `part of the project ${options.project.name}` : undefined)
+        .catch(() => choice.strategy)
+        .then((s) => {
+          setTaught(s)
+          setApproach(s)
+          approachRef.current = s
+          setupRef.current = { ...setupRef.current, options: { ...setupRef.current.options, strategy: s } }
+          send(openingMessage(setup), [])
+        })
+      return
+    }
     send(openingMessage(setup), [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, topic, JSON.stringify(scope)])
@@ -196,6 +223,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     window.tide.books.suggest(topic, 2).then(setToRead).catch(() => {})
   }, [mode, topic, scope.kind])
   const notesMine = useRef('')
+  const [sideTab, setSideTab] = useState<'canvas' | 'notes'>('canvas')
 
   // Talk: the tutor speaks each reply as it writes it, and you answer by voice (or hands-free)
   const lastTurn = turns[turns.length - 1]
@@ -328,11 +356,25 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     })
   }, [parsed, busy, turns, sourcePath, topic, mode, options, scope])
 
+  const changeApproach = (to: Strategy, said?: string) => {
+    setApproach(to)
+    approachRef.current = to
+    if (to === 'walkthrough') setNotesOpen(true)
+    send(`${said ? `${said}\n\n` : ''}(From here on, teach this way: ${STRATEGY_RULES[to] || 'problem sets, one problem at a time, stepping difficulty up and down as before.'})`, turns)
+  }
+
   const submit = (text?: string) => {
     if (busy) return
     const ran = runOut ? `\n\nWhen I ran it:\n\`\`\`\n${(runOut.stdout + runOut.stderr).slice(0, 1500) || '(no output)'}\n\`\`\`` : ''
     const body = text ?? (currentAsk?.type === 'code' ? `${answer.trim() ? answer.trim() + '\n\n' : ''}\`\`\`${currentAsk.lang ?? 'python'}\n${code}\n\`\`\`${ran}` : answer.trim())
     if (!body.trim()) return
+    // Asking to be taught another way ("let's just talk it through") changes the approach from here
+    const to = !text && approach ? switchFrom(body, approach) : null
+    if (to) {
+      changeApproach(to, body)
+      setAnswer('')
+      return
+    }
     // "Review my notes" typed during the lesson sends what you wrote in the notes beside it
     if (!text && withNotes && notesMine.current.length >= 20 && wantsNotesReview(body)) {
       send(notesReviewRequest(notesMine.current), turns)
@@ -555,6 +597,17 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               <span>Notes</span>
             </button>
           )}
+          {mode === 'teach' && approach && (
+            <label className="tool-btn approach-pick" title="How the tutor is teaching this; change it any time">
+              <select value={approach} onChange={(e) => changeApproach(e.target.value as Strategy)} disabled={busy} aria-label="How to teach this">
+                {STRATEGIES.map((s) => (
+                  <option key={s} value={s}>
+                    {STRATEGY_LABEL[s]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <button className="tool-btn keep-label" onClick={() => app.back()} title="End this session">
             <Icon name="x" />
             <span>End</span>
@@ -748,7 +801,14 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           <div ref={bottomRef} />
         </div>
       </div>
-      {withNotes && (
+      {withNotes && approach === 'walkthrough' && sideTab === 'canvas' ? (
+        <div className="lesson-side">
+          <SideTabs tab={sideTab} onTab={setSideTab} />
+          <LessonCanvas path={canvasPath} lessonId="session:" />
+        </div>
+      ) : withNotes && (
+        <div className="lesson-side">
+        {approach === 'walkthrough' && <SideTabs tab={sideTab} onTab={setSideTab} />}
         <LessonNotes
           topic={topic}
           scope={scope}
@@ -757,8 +817,23 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           mineRef={notesMine}
           onCheck={(mine) => send(notesReviewRequest(mine), turns)}
         />
+        </div>
       )}
       </div>
+    </div>
+  )
+}
+
+/** Beside a walkthrough: the canvas the tutor draws on, or your notes */
+function SideTabs({ tab, onTab }: { tab: 'canvas' | 'notes'; onTab(t: 'canvas' | 'notes'): void }) {
+  return (
+    <div className="segmented text lesson-side-tabs" role="tablist">
+      <button role="tab" aria-selected={tab === 'canvas'} className={tab === 'canvas' ? 'on' : ''} onClick={() => onTab('canvas')}>
+        Canvas
+      </button>
+      <button role="tab" aria-selected={tab === 'notes'} className={tab === 'notes' ? 'on' : ''} onClick={() => onTab('notes')}>
+        Notes
+      </button>
     </div>
   )
 }

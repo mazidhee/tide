@@ -14421,3 +14421,286 @@ button.tl-dot:focus-visible {
   top: 54px;
   bottom: auto;
 }
+
+/* ---------- A lesson's side: notes, or the canvas a walkthrough draws on ---------- */
+.lesson-side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 50%, var(--bg-raised));
+}
+
+.lesson-side > .lesson-notes {
+  flex: 1;
+  border-left: 0;
+}
+
+.lesson-side-tabs {
+  align-self: flex-start;
+  margin: 10px 14px 0;
+}
+
+/* A walkthrough needs room to draw: the side grows */
+.session-split:has(.lesson-canvas) {
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 46%);
+}
+
+.lesson-canvas {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.lesson-canvas-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.approach-pick {
+  padding: 0 4px 0 8px;
+}
+
+.approach-pick select {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12.5px;
+  padding-right: 4px;
+  cursor: pointer;
+}
+
+.approach-pick select:hover {
+  color: var(--ink);
+}
+
+/* ---------- A notebook as a project ---------- */
+.project {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  max-width: 760px;
+  padding: 6px 0 40px;
+}
+
+.project-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.project-kind {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.project-head .link-btn {
+  margin-left: auto;
+}
+
+.project-section h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.project-section h4 {
+  margin: 18px 0 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.project-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.project-actions {
+  display: inline-flex;
+  gap: 16px;
+}
+
+.project-overview {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  max-width: 66ch;
+}
+
+.project-docs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+}
+
+.project-docs li {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.project-doc {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.project-doc:hover {
+  color: var(--ink);
+}
+
+.project-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.project-rows li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.project-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13.5px;
+}
+
+.project-row-text strong {
+  font-weight: 550;
+}
+
+.project-rows li.is-done strong {
+  color: var(--ink-muted);
+  text-decoration: line-through;
+}
+
+.project-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.project-chips .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.project-picker {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--bg-raised);
+  max-width: 520px;
+}
+
+.project-picker ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.project-picker li button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  text-align: left;
+  color: var(--ink-soft);
+}
+
+.project-picker li button:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.project-setup {
+  gap: 16px;
+}
+
+.project-lead {
+  margin: 0;
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+
+.project-kinds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.project-kinds button {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: var(--radius-m);
+  border: 1px solid var(--line);
+  text-align: left;
+  font-size: 13px;
+  color: var(--ink-muted);
+  line-height: 1.5;
+}
+
+.project-kinds button strong {
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.project-kinds button.on {
+  border-color: var(--ink-soft);
+  background: var(--bg-raised);
+}
+
+.project-setup .btn.primary {
+  align-self: flex-start;
+}
+
+.project-section .prompt-box + .prompt-box {
+  margin-top: 8px;
+}
+
+.project-section > .btn.primary {
+  margin-top: 12px;
+}
+
+.project-draft {
+  max-height: 420px;
+  overflow: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+}

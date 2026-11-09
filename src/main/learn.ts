@@ -107,7 +107,8 @@ export async function getNotebooks(): Promise<NotebookMeta[]> {
         cover: stored[folder.path]?.cover,
         color: stored[folder.path]?.color,
         description: stored[folder.path]?.description,
-        outline: stored[folder.path]?.outline
+        outline: stored[folder.path]?.outline,
+        ...(stored[folder.path]?.project ? { project: stored[folder.path]!.project } : {})
       }
     })
     .filter((nb) => isNotebook(tree, nb.path, outlines))
@@ -128,7 +129,7 @@ function isNotebook(tree: Awaited<ReturnType<typeof getTree>>, path: string, out
   return !files.every((f) => outlines.has(f.path))
 }
 
-export async function updateNotebook(path: string, patch: Partial<Pick<NotebookMeta, 'cover' | 'color' | 'description' | 'outline'>>) {
+export async function updateNotebook(path: string, patch: Partial<Pick<NotebookMeta, 'cover' | 'color' | 'description' | 'outline' | 'project'>>) {
   await updateJson<Record<string, Partial<NotebookMeta>>>(NOTEBOOKS_FILE, {}, (stored) => ({ ...stored, [path]: { ...stored[path], ...patch } }))
 }
 
@@ -410,6 +411,15 @@ type LibraryStore = Record<string, { topics?: string[] }>
 export async function getLibraryTopics(): Promise<Record<string, string[]>> {
   const store = await readJson<LibraryStore>(LIBRARY, {})
   return Object.fromEntries(Object.entries(store).flatMap(([p, v]) => (v?.topics?.length && existsSync(absPath(p)) ? [[p, v.topics]] : [])))
+}
+
+/** What's filed under a subject in the Library: the sources a notebook, project or company draws on */
+export async function filedUnder(name: string): Promise<string[]> {
+  const want = name.trim().toLowerCase()
+  if (!want) return []
+  return Object.entries(await getLibraryTopics())
+    .filter(([, topics]) => topics.some((t) => t.toLowerCase() === want))
+    .map(([p]) => p)
 }
 
 export async function setLibraryTopics(path: string, topics: string[]) {

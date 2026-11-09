@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ProjectPanel } from './ProjectPanel'
 import type { FileNode, LearningStatus, Mastery, NotebookMeta, NoteMeta } from '@shared/types'
 import { LEVEL_LABEL } from './LearnView'
 import { fileTitle, useApp } from '../state'
@@ -70,7 +71,7 @@ export function NotebookView({ path }: { path: string }) {
   const [notes, setNotes] = useState<Map<string, NoteMeta>>(new Map())
   const [due, setDue] = useState(0)
   const [menu, setMenu] = useState<MenuState | null>(null)
-  const [tab, setTab] = useState<'outline' | 'notes' | 'reading' | null>(null)
+  const [tab, setTab] = useState<'project' | 'outline' | 'notes' | 'reading' | null>(null)
   const library = useLibrary()
   const [picker, setPicker] = useState<{ path: string; at: { x: number; y: number } } | null>(null)
   const [mastery, setMastery] = useState<Record<string, Mastery>>({})
@@ -101,7 +102,7 @@ export function NotebookView({ path }: { path: string }) {
   }, [allNotes, notes])
   const continuePath = app.recent.find((p) => p.startsWith(path + '/'))
   // Open on the outline when the notebook has one, otherwise on its notes
-  const activeTab = tab ?? (meta?.outline ? 'outline' : 'notes')
+  const activeTab = tab ?? (meta?.project ? 'project' : meta?.outline ? 'outline' : 'notes')
   const reading = folder ? library.items.filter((i) => hasTopic(i, folder.name)) : []
   const pickerItem = picker ? library.items.find((i) => i.path === picker.path) : undefined
   const firstNote = chapters[0]?.notes.find((n) => n.kind === 'note')?.path
@@ -117,6 +118,7 @@ export function NotebookView({ path }: { path: string }) {
       x: e.clientX,
       y: e.clientY,
       items: [
+        { label: meta?.project ? 'Project settings' : 'Make it a project…', run: () => setTab('project') },
         {
           label: 'Choose cover image…',
           run: async () => {
@@ -191,6 +193,11 @@ export function NotebookView({ path }: { path: string }) {
         </header>
 
         <div className="nb-tabs segmented text" role="tablist">
+          {(meta?.project || activeTab === 'project') && (
+            <button role="tab" aria-selected={activeTab === 'project'} className={activeTab === 'project' ? 'on' : ''} onClick={() => setTab('project')}>
+              Project
+            </button>
+          )}
           <button role="tab" aria-selected={activeTab === 'outline'} className={activeTab === 'outline' ? 'on' : ''} onClick={() => setTab('outline')}>
             Outline
           </button>
@@ -201,6 +208,8 @@ export function NotebookView({ path }: { path: string }) {
             Reading{reading.length ? <span className="tab-count">{reading.length}</span> : null}
           </button>
         </div>
+
+        {activeTab === 'project' && <ProjectPanel notebook={path} name={folder.name} info={meta?.project ?? null} onChange={load} />}
 
         {activeTab === 'outline' && (
           <OutlineView

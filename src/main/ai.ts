@@ -1,10 +1,12 @@
 import { inBackground, streamInteractive } from './modelQueue'
+import { STRATEGY_LABEL, type Strategy } from '@shared/strategy'
 import { canTake, CloudUnavailable, cloudError, estimateTokens, headersFor, noteLimits, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
 import type { CloudTask, RequestKind } from '@shared/providers'
 import { memoryIntent } from '@shared/memoryIntent'
 import { addMemory, forgetMatching } from './memory'
 import type { AgentStep, Chat, StoredMessage } from '@shared/types'
 import type { TurnRequest } from './agent'
+import { filedUnder } from './learn'
 import { compactChat, fallbackTitle, historyBudget, historyFor, needsCompaction, newChat, renameChat, updateChat } from './chats'
 import { fitHistory } from '@shared/context'
 import { cleanModelText } from '@shared/modelText'
@@ -124,28 +126,32 @@ export async function retrieve(scope: ChatScope, query: string): Promise<Context
     return picked.map((c, i) => ({ index: i + 1, path: c.path, title: c.title, heading: c.heading || undefined, text: c.text }))
   }
   if (scope.kind === 'note') await reindexPath(scope.path)
+  // Sources filed under this notebook's or note's name in the Library come with it: a project's
+  // design docs, the articles filed under a company you're preparing for
+  const filed = new Set(await filedUnder(scopeName(scope)).catch(() => [] as string[]))
+  const within = (p: string) => inScope(scope)(p) || filed.has(p)
 
   let chunks: Chunk[]
   const whole = scope.kind === 'note' ? getChunks(scope.path) : []
   const wholeSize = whole.reduce((n, c) => n + c.text.length, 0)
 
-  if (scope.kind === 'note' && wholeSize <= CONTEXT_BUDGET) {
-    // Small enough to give the model the full note
-    chunks = whole
+  if (scope.kind === 'note' && wholeSize <= CONTEXT_BUDGET * (filed.size ? 0.65 : 1)) {
+    // Small enough to give the model the full note, with the best of what's filed under it
+    chunks = [...whole, ...(filed.size ? search(query, 8, (p) => filed.has(p)).slice(0, 4) : [])]
   } else {
-    const hits = search(query, 24, inScope(scope))
+    const hits = search(query, 24, scope.kind === 'note' ? (p) => p === scope.path || filed.has(p) : within)
     chunks = hits
     if (chunks.length < 3) {
       // Generic questions ("summarize this") match few terms, fall back to reading order
-      const paths = scope.kind === 'note' ? [scope.path] : allChunkPaths().filter(inScope(scope))
+      const paths = scope.kind === 'note' ? [scope.path, ...filed] : allChunkPaths().filter(within)
       const extra = paths.flatMap((p) => getChunks(p).slice(0, scope.kind === 'note' ? 50 : 2))
       chunks = [...chunks, ...extra.filter((c) => !chunks.some((h) => h.id === c.id))]
     }
   }
 
   const picked = takeWithinBudget(chunks, CONTEXT_BUDGET)
-  // Keep reading order inside a file so the model sees coherent text
-  if (scope.kind === 'note') picked.sort((a, b) => a.order - b.order)
+  // Keep reading order inside a file so the model sees coherent text (the note first)
+  if (scope.kind === 'note') picked.sort((a, b) => (a.path === scope.path ? 0 : 1) - (b.path === scope.path ? 0 : 1) || a.path.localeCompare(b.path) || a.order - b.order)
 
   return picked.map((c, i) => ({
     index: i + 1,
@@ -155,6 +161,9 @@ export async function retrieve(scope: ChatScope, query: string): Promise<Context
     text: c.text
   }))
 }
+
+/** The name things are filed under for a scope: a notebook's folder name, or a note's title */
+const scopeName = (scope: ChatScope) => (scope.kind === 'folder' ? scope.path.split('/').pop() ?? '' : scope.kind === 'note' ? scope.path.split('/').pop()!.replace(/\.md$/i, '') : '')
 
 function formatSources(sources: ContextSource[]): string {
   return sources
@@ -746,4 +755,18 @@ export function parseCoachNote(out: string, passage: string): ReadAlongNote | nu
   } catch {
     return null
   }
+}
+
+/**
+ * When the teaching router's top two choices are close: the model picks, from a short prompt and
+ * a one-letter answer. Gives up after a few seconds and keeps the router's first choice.
+ */
+export async function tieBreak(topic: string, options: Strategy[], context = ''): Promise<Strategy> {
+  const letters = options.map((o, i) => `${String.fromCharCode(65 + i)}) ${STRATEGY_LABEL[o]}`).join('\n')
+  const ask = complete(
+    `A learner is starting a lesson on: ${topic}${context ? ` (${context})` : ''}.\nWhich way of teaching fits it best?\n${letters}\nReply with the letter only.`,
+    'You choose how to teach a topic. Reply with one letter.'
+  ).then((out) => options[(out.trim().toUpperCase().charCodeAt(0) || 65) - 65] ?? options[0])
+  const timeout = new Promise<Strategy>((resolve) => setTimeout(() => resolve(options[0]), 5000))
+  return Promise.race([ask, timeout]).catch(() => options[0])
 }

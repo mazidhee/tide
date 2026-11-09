@@ -1,5 +1,6 @@
 import { Professor } from './Professor'
-import { learnIntent } from '@shared/learnIntent'
+import { learnIntent, projectIntent } from '@shared/learnIntent'
+import { startProject } from '../lib/projects'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChatScope, ChatSummary, Memory, NotebookMeta } from '@shared/types'
 import { useApp } from '../state'
@@ -132,6 +133,11 @@ export function ChatPage({ id }: { id?: string }) {
   }
 
   const send = async (text = input) => {
+    const build = projectIntent(text)
+    if (build) {
+      setInput('')
+      return startProject(app, build)
+    }
     const plan = learnIntent(text)
     if (plan) {
       setInput('')

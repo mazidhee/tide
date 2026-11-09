@@ -22,7 +22,7 @@ import {
   writeText
 } from './vault'
 import { buildIndex, reindexPath, searchHits } from './search'
-import { cancelChat, chat, setChatsChangedListener, generateFlashcards, listModels, readAlong, testConnection } from './ai'
+import { cancelChat, chat, setChatsChangedListener, generateFlashcards, listModels, readAlong, testConnection, tieBreak } from './ai'
 import {
   getBacklinks,
   getGraph,
@@ -52,6 +52,7 @@ import type { StudyPlan } from '@shared/plan'
 import { dayTasks, setTaskDone, thingsStatus } from './things'
 import { mapBook, mapNewBooks, pagesToRead } from './books'
 import { getBrain } from './brain'
+import { draftBrief, mapProject, projectDocs, projectMap, setProject } from './projects'
 import { onBrainEvent, recentBrainEvents } from './brainEvents'
 import { getCoach, getWeek, planWeek, saveCoach, updateProfile, inferDirection, autoPlanWeek, weekToThings, setItemDone, syncDone, rollOver, dayStats, journal, writeJournal, weekReview, saveReview } from './coach'
 import { addMistakes, listMistakes, mistakesDue, retestMistake } from './mistakes'
@@ -328,6 +329,13 @@ function registerIpc() {
 
   handle('learn:graph', () => getGraph())
   handle('learn:brain', () => getBrain())
+  handle('ai:tieBreak', (topic: string, options: Parameters<typeof tieBreak>[1], context?: string) => tieBreak(topic, options, context))
+  handle('projects:set', (notebook: string, info: Parameters<typeof setProject>[1]) => setProject(notebook, info))
+  handle('projects:docs', (notebook: string) => projectDocs(notebook))
+  handle('projects:map', (notebook: string, rebuild?: boolean) => (rebuild === undefined ? projectMap(notebook) : mapProject(notebook, rebuild)))
+  handle('projects:draftBrief', (req: Parameters<typeof draftBrief>[0]) => {
+    draftBrief(req, (e) => send('ai:event', e))
+  })
   handle('learn:brainEvents', () => recentBrainEvents())
   handle('learn:backlinks', (p: string) => getBacklinks(p))
   handle('learn:notebooks', () => getNotebooks())

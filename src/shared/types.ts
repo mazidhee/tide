@@ -313,6 +313,8 @@ export interface NotebookMeta {
   description?: string
   /** Vault path of the note used as this notebook's outline */
   outline?: string
+  /** A project: something you're building or need to understand, with its documents */
+  project?: import('./project').ProjectInfo
 }
 
 export interface NoteProgress {
@@ -510,6 +512,8 @@ export interface TideApi {
     onEvent(cb: (e: ChatEvent) => void): () => void
     models(): Promise<string[]>
     test(): Promise<{ ok: boolean; message: string }>
+    /** The model picks between close teaching strategies (a one-letter answer, a few seconds at most) */
+    tieBreak(topic: string, options: import('./strategy').Strategy[], context?: string): Promise<import('./strategy').Strategy>
     generateFlashcards(path: string, count: number, focusText?: string, pages?: { from: number; to: number }): Promise<{ front: string; back: string }[]>
     readAlong(path: string, passage: string, mode: string, force?: boolean, style?: 'coach'): Promise<ReadAlongNote | null>
   }
@@ -521,7 +525,7 @@ export interface TideApi {
     graph(): Promise<GraphData>
     backlinks(path: string): Promise<{ path: string; title: string }[]>
     notebooks(): Promise<NotebookMeta[]>
-    updateNotebook(path: string, patch: Partial<Pick<NotebookMeta, 'color' | 'description' | 'outline'>>): Promise<void>
+    updateNotebook(path: string, patch: Partial<Pick<NotebookMeta, 'color' | 'description' | 'outline' | 'project'>>): Promise<void>
     /** Streams an outline draft for a new topic as ai:event deltas under req.id */
     draftOutline(req: OutlineDraftRequest): Promise<void>
     cancelDraft(id: string): Promise<void>
@@ -623,6 +627,16 @@ export interface TideApi {
     /** Models the provider says this key can use */
     models(provider: string): Promise<string[]>
     usage(monthOffset?: number): Promise<import('../main/cloud').UsageSummary>
+  }
+  projects: {
+    /** Makes a notebook a project (or clears it with null) */
+    set(notebook: string, info: import('./project').ProjectInfo | null): Promise<void>
+    /** Its documents: attached, and filed under its name */
+    docs(notebook: string): Promise<string[]>
+    /** The saved map; with rebuild set, maps it now (false: only if a document changed) */
+    map(notebook: string, rebuild?: boolean): Promise<import('./project').ProjectMap | null>
+    /** Drafts a build brief with the learner; text arrives as ai:event deltas under id */
+    draftBrief(req: { id: string; notebook: string; idea: string; background?: string }): Promise<void>
   }
   books: {
     /** The pages to read in your own books for a topic, best first */

@@ -2,6 +2,8 @@ import type { ChatEvent, CompanyPrepRequest } from '@shared/types'
 import { friendlyError, streamDraft } from './ai'
 import { readWebpage, webSearch } from './agent'
 import { getSettings } from './settings'
+import { filedUnder } from './learn'
+import { search } from './search'
 
 /**
  * Drafts an interview prep plan for one company and role. Like new-topic outlines, research is
@@ -83,11 +85,22 @@ export async function draftCompanyPrep(req: CompanyPrepRequest, emit: (e: ChatEv
         .join('\n\n---\n\n')
     }
     if (controller.signal.aborted) return
+    // What you've filed under the company in the Library (a job spec, articles, notes from a call)
+    // shapes the plan more than anything found online
+    const filed = await filedUnder(req.company).catch(() => [] as string[])
+    const own = filed.length
+      ? search(`${req.company} ${req.role} interview`, 12, (p) => filed.includes(p))
+          .slice(0, 5)
+          .map((c) => `From "${c.title}"${c.heading ? ` (${c.heading})` : ''}:\n${c.text.slice(0, 1200)}`)
+          .join('\n\n---\n\n')
+      : ''
+    if (own) step(3, `Reading ${filed.length} source${filed.length === 1 ? '' : 's'} you filed under ${req.company}`, 'done')
     const user = [
       `Company: ${req.company}`,
       `Role: ${req.role || 'Software engineer'}`,
       req.notes?.trim() ? `About the candidate and their timeline: ${req.notes.trim()}` : '',
       `Today is ${new Date().toISOString().slice(0, 10)}.`,
+      own ? `What the candidate saved about ${req.company} (trust this over web reports; build questions on it):\n\n${own}` : '',
       research ? `Research (use it to decide what goes in; don't copy its wording):\n\n${research}` : 'No web research was available, so rely on what is widely known and say "reportedly" for anything uncertain.'
     ]
       .filter(Boolean)

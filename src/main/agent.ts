@@ -11,6 +11,7 @@ import { aboutMetabase } from '@shared/metabase'
 import { metabaseHost, metabaseReady, metabaseTool } from './metabase'
 import { loadImages, type NoteImage } from './noteImages'
 import { pagesToRead } from './books'
+import { privatePath } from './projects'
 import { readingLabel } from '@shared/books'
 import { imageMarkdown } from '@shared/noteImages'
 import { addTask, describeTasks, feedbackOnTask, findTask, searchTasks, thingsAvailable, TIDE_TAG } from './things'
@@ -1440,7 +1441,9 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
   const mine = metabaseReady() && req.messages.some((m) => aboutMetabase(m.content, metabaseHost()))
   const images = req.warmOnly ? [] : await turnImages(req, question)
   // Pictures need a model that can see them: Gemma
-  const target = req.warmOnly || mine || images.length ? null : routeFor(req.engine === 'cloud' ? null : job, req.engine ?? 'auto')
+  // A private project's documents never leave this Mac
+  const secret = req.scope.kind !== 'none' && req.scope.kind !== 'vault' && (await privatePath(req.scope.path).catch(() => false))
+  const target = req.warmOnly || mine || secret || images.length ? null : routeFor(req.engine === 'cloud' ? null : job, req.engine ?? 'auto')
   if (target) {
     const name = providerInfo(target.provider).models.find((m) => m.id === target.model)?.label ?? target.model
     const why = job === 'maths' ? 'checking the maths' : job === 'errors' ? 'finding the mistake' : 'answering'
@@ -1517,7 +1520,7 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
     )
   ]
 
-  if (req.warmOnly) return warmTurn(messages, toolSet({ top: false, web: ctx.web, focused: !!ctx.focused, things: false }), signal)
+  if (req.warmOnly) return warmTurn(messages, toolSet({ top: false, web: ctx.web, focused: !!ctx.focused, things: false, canvas: req.canvasPath ? [CANVAS_READ, CANVAS_EDIT] : [] }), signal)
   // The pictures ride on this turn's message only: the start of the prompt stays the same, and cached
   const last = messages[messages.length - 1]
   if (images.length && last.role === 'user') last.content = [{ type: 'text', text: String(last.content) }, ...images.map((im) => ({ type: 'image_url' as const, image_url: { url: im.dataUrl } }))]
