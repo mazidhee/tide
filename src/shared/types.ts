@@ -67,6 +67,9 @@ export interface FileNode {
   children?: FileNode[]
 }
 
+/** Reading status of a library item */
+export type ReadStatus = 'read' | 'reading' | 'unread'
+
 export type LearningStatus = 'untested' | 'learning' | 'reviewing' | 'mastered'
 
 export interface NoteMeta {
@@ -706,6 +709,10 @@ export interface TideApi {
     /** Subjects each library item is filed under, by path */
     topics(): Promise<Record<string, string[]>>
     setTopics(path: string, topics: string[]): Promise<void>
+    /** Reading status you set on items (stored), by path */
+    status(): Promise<Record<string, ReadStatus>>
+    /** Sets an item's reading status; null clears it back to the derived one */
+    setStatus(path: string, status: ReadStatus | null): Promise<void>
   }
   highlights: {
     get(path: string): Promise<PdfHighlight[]>

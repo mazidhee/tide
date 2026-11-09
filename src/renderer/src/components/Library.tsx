@@ -3,14 +3,14 @@ import { createPortal } from 'react-dom'
 import type { NoteMeta } from '@shared/types'
 import { useApp } from '../state'
 import { hasTopic, useLibrary, type LibraryItem } from '../lib/library'
-import { vaultUrl } from '../lib/markdown'
-import { pdfCover } from '../lib/pdfThumb'
+import { coverFor } from '../lib/covers'
 import { Icon } from './Icon'
 import { sourceIcon } from './Home'
 import { coverColor } from './NotebookCover'
 import { ReadingFinder } from './ReadingFinder'
 import { SaveLinkForm } from './SaveLink'
 import { PixelScene } from './PixelScene'
+import { Bookcase } from './Bookcase'
 
 type Filter = 'all' | 'article' | 'youtube' | 'pdf' | 'doc' | 'link'
 
@@ -33,7 +33,7 @@ const hostOf = (url: string) => {
 
 type Item = LibraryItem
 
-type Layout = 'grid' | 'list'
+type Layout = 'grid' | 'list' | 'shelf'
 
 const KIND_LABEL: Record<Filter, string> = { all: '', article: 'Article', youtube: 'Video', pdf: 'PDF', doc: 'Doc', link: 'Link' }
 
@@ -58,9 +58,8 @@ function useCover(item: Item, ref: React.RefObject<HTMLElement | null>) {
       async ([entry]) => {
         if (!entry.isIntersecting) return
         io.disconnect()
-        let thumb = await window.tide.library.thumb(item.path, item.image, item.sourceUrl).catch(() => null)
-        if (!thumb && item.type === 'pdf') thumb = await pdfCover(item.path)
-        if (!cancelled && thumb) setSrc(vaultUrl(thumb))
+        const url = await coverFor(item)
+        if (!cancelled && url) setSrc(url)
       },
       { rootMargin: '400px' }
     )
@@ -246,7 +245,7 @@ export function Masonry({ items, onOpen, onTopics }: { items: Item[]; onOpen(i: 
 
 export function Library() {
   const app = useApp()
-  const { items, subjects, setTopics } = useLibrary()
+  const { items, subjects, setTopics, setStatus } = useLibrary()
   const [filter, setFilter] = useState<Filter>('all')
   const [subject, setSubject] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -254,7 +253,8 @@ export function Library() {
   const [finding, setFinding] = useState(false)
   const [layout, setLayout] = useState<Layout>(() => {
     try {
-      return localStorage.getItem('tide.library.layout') === 'list' ? 'list' : 'grid'
+      const saved = localStorage.getItem('tide.library.layout')
+      return saved === 'list' || saved === 'shelf' ? saved : 'grid'
     } catch {
       return 'grid'
     }
@@ -289,11 +289,13 @@ export function Library() {
   }, [items, filter])
   const usedSubjects = subjects.filter((t) => items.some((i) => hasTopic(i, t)))
 
+  const shelfItems = useMemo(() => items.filter((i) => filter === 'all' || i.type === filter), [items, filter])
+
   const pickerItem = picker ? items.find((i) => i.path === picker.path) : undefined
   const openPicker = (i: Item, at: { x: number; y: number }) => setPicker({ path: i.path, at })
 
   return (
-    <div className="page library-page">
+    <div className={`page library-page${layout === 'shelf' && items.length ? ' bc-on' : ''}`}>
       <PixelScene place="library" rows={40} scale={3} className="page-scene" />
       <div className="page-inner">
         <header className="page-head">
@@ -333,7 +335,7 @@ export function Library() {
                 ))}
               </div>
               <div className="library-tools">
-                <input className="filter-input" placeholder="Filter" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Filter library" />
+                {layout !== 'shelf' && <input className="filter-input" placeholder="Filter" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Filter library" />}
                 <div className="layout-toggle" role="radiogroup" aria-label="Layout">
                   <button role="radio" aria-checked={layout === 'grid'} className={layout === 'grid' ? 'on' : ''} title="Covers" onClick={() => pickLayout('grid')}>
                     <Icon name="grid" size={15} />
@@ -341,10 +343,13 @@ export function Library() {
                   <button role="radio" aria-checked={layout === 'list'} className={layout === 'list' ? 'on' : ''} title="List" onClick={() => pickLayout('list')}>
                     <Icon name="list" size={15} />
                   </button>
+                  <button role="radio" aria-checked={layout === 'shelf'} className={layout === 'shelf' ? 'on' : ''} title="Shelves" onClick={() => pickLayout('shelf')}>
+                    <Icon name="library" size={15} />
+                  </button>
                 </div>
               </div>
             </div>
-            <div className="subject-bar" role="tablist" aria-label="Subject">
+            {layout !== 'shelf' && <div className="subject-bar" role="tablist" aria-label="Subject">
               <button role="tab" aria-selected={!subject} className={`subject${!subject ? ' on' : ''}`} onClick={() => setSubject(null)}>
                 All subjects
               </button>
@@ -361,7 +366,7 @@ export function Library() {
                 </button>
               )}
               {!usedSubjects.length && <span className="muted small subject-hint">Tag covers to sort by subject.</span>}
-            </div>
+            </div>}
           </>
         )}
 
@@ -373,6 +378,8 @@ export function Library() {
               the “{app.settings.libraryFolder}” folder of your notes, so Obsidian can see it too.
             </p>
           </div>
+        ) : layout === 'shelf' ? (
+          <Bookcase items={shelfItems} subjects={subjects} setStatus={setStatus} />
         ) : layout === 'grid' ? (
           visible.length ? <Masonry items={visible} onOpen={(i) => app.openPath(i.path)} onTopics={openPicker} /> : <p className="muted">Nothing matches that filter.</p>
         ) : (

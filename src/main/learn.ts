@@ -1,6 +1,7 @@
 import type { DrillResult } from '@shared/drills'
 import type { InterviewRecord } from '@shared/interviews'
 import type { StudyEvent } from '@shared/brief'
+import type { ReadStatus } from '@shared/types'
 import { getSettings } from './settings'
 import { createHash } from 'crypto'
 import { existsSync, promises as fs } from 'fs'
@@ -405,7 +406,7 @@ function updateJson<T>(rel: string, fallback: T, change: (data: T) => T): Promis
   return run
 }
 
-type LibraryStore = Record<string, { topics?: string[] }>
+type LibraryStore = Record<string, { topics?: string[]; status?: ReadStatus }>
 
 /** Subjects each library item is filed under, by path */
 export async function getLibraryTopics(): Promise<Record<string, string[]>> {
@@ -431,6 +432,26 @@ export async function setLibraryTopics(path: string, topics: string[]) {
   await updateJson<LibraryStore>(LIBRARY, {}, (s) => {
     const next = { ...s }
     if (clean.length) next[path] = { ...next[path], topics: clean }
+    else if (next[path]?.status) next[path] = { status: next[path].status }
+    else delete next[path]
+    return next
+  })
+}
+
+/** Reading status you set on library items (read / reading / unread), by path */
+export async function getLibraryStatus(): Promise<Record<string, ReadStatus>> {
+  const store = await readJson<LibraryStore>(LIBRARY, {})
+  return Object.fromEntries(Object.entries(store).flatMap(([p, v]) => (v?.status && existsSync(absPath(p)) ? [[p, v.status]] : [])))
+}
+
+export async function setLibraryStatus(path: string, status: ReadStatus | null) {
+  const ok = status === 'read' || status === 'reading' || status === 'unread'
+  await updateJson<LibraryStore>(LIBRARY, {}, (s) => {
+    const next = { ...s }
+    const { status: _old, ...rest } = next[path] ?? {}
+    void _old
+    if (ok) next[path] = { ...rest, status }
+    else if (rest.topics?.length) next[path] = rest
     else delete next[path]
     return next
   })
