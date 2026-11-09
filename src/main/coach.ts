@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs'
 import { scheduleWeek, summaryFromPlan } from '@shared/schedule'
-import { aimOf, thingsTitle, DEFAULT_COACH, localDate, moveUnfinished, nextStudyDay, nextTopics, planCompletion, weekMarkdown, type AgendaItem, type CoachSettings, type DayStats, type JournalEntry, type TopicCandidate, type WeekReview, type WeekPlan } from '@shared/coach'
+import { aimOf, catchUpPlan, thingsTitle, DEFAULT_COACH, localDate, moveUnfinished, nextStudyDay, nextTopics, planCompletion, weekMarkdown, type AgendaItem, type CoachSettings, type DayStats, type JournalEntry, type TopicCandidate, type WeekReview, type WeekPlan } from '@shared/coach'
 import { companyTrend } from '@shared/interviews'
 import { buildLink } from '@shared/deeplink'
 import { complete, extractJsonObject } from './ai'
@@ -420,14 +420,33 @@ export async function rollOver(date = today()): Promise<{ moved: number; to: str
   const { plan: next, moved } = moveUnfinished(plan, date, to)
   if (!moved.length) return { moved: 0, to }
   await savePlan(next)
-  if (plan.thingsProject && (await thingsAvailable())) {
-    const project = await getProject(plan.thingsProject).catch(() => null)
-    for (const it of moved) {
-      const id = project?.['to-dos']?.find((t) => t.type === 'to-do' && t.title === thingsTitle(it) && t.status === 'open')?.id
-      if (id) await updateTask(id, { when: to, deadline: to }).catch(() => {})
-    }
-  }
+  await moveInThings(plan, moved, to)
   return { moved: moved.length, to }
+}
+
+/**
+ * Unfinished items from days gone by move to today (or the next study day) by themselves, here
+ * and in Things 4, so skipping the evening wrap-up loses nothing. Anything ticked off in Things
+ * counts as done first, so finished work never moves.
+ */
+export async function catchUp(date = today()): Promise<WeekPlan | null> {
+  const plan = await syncDone(date)
+  if (!plan) return plan
+  const { plan: next, moved, to } = catchUpPlan(plan, date, (await getCoach()).days)
+  if (!moved.length) return plan
+  await savePlan(next)
+  await moveInThings(plan, moved, to)
+  return next
+}
+
+/** Gives moved items' to-dos in the week's Things project their new day */
+async function moveInThings(plan: WeekPlan, moved: AgendaItem[], to: string) {
+  if (!plan.thingsProject || !(await thingsAvailable())) return
+  const project = await getProject(plan.thingsProject).catch(() => null)
+  for (const it of moved) {
+    const id = project?.['to-dos']?.find((t) => t.type === 'to-do' && t.title === thingsTitle(it) && t.status === 'open')?.id
+    if (id) await updateTask(id, { when: to, deadline: to }).catch(() => {})
+  }
 }
 
 const notebookOf = (path?: string) => (path && path.includes('/') && !path.includes(':') ? path.split('/')[0] : undefined)

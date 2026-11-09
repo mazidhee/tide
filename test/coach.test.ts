@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_COACH, nextTopics, todayItems, validateWeek, weekMarkdown, weekStartOf } from '../src/shared/coach'
+import { DEFAULT_COACH, catchUpPlan, nextTopics, todayItems, validateWeek, weekMarkdown, weekStartOf, type WeekPlan } from '../src/shared/coach'
 
 const SWE = `## 1. Foundations of Computation — CORE
 ### How Computers Work
@@ -44,5 +44,42 @@ describe('the coach', () => {
     expect(plan.priorities.map((p) => p.notebook)).toEqual(['Software Engineering'])
     expect(todayItems(plan, '2026-11-09')).toHaveLength(2)
     expect(weekMarkdown(plan)).toContain('- [ ] **Learn:** [[Boolean algebra and logic gates]] (60 min)')
+  })
+})
+
+describe('catchUpPlan', () => {
+  const plan = (): WeekPlan => ({
+    weekStart: '2026-11-09',
+    createdAt: 0,
+    summary: '',
+    priorities: [],
+    days: [
+      { date: '2026-11-09', items: [{ kind: 'learn', title: 'Zero', topic: 'The invention of zero', minutes: 45, done: true }, { kind: 'quiz', title: 'Hash maps', minutes: 10 }] },
+      { date: '2026-11-10', items: [{ kind: 'review', title: 'Retest', minutes: 20 }] },
+      { date: '2026-11-11', items: [{ kind: 'learn', title: 'Primes', topic: 'Prime numbers', minutes: 40 }] }
+    ]
+  })
+
+  it("moves what's left on past days to today, oldest first, and leaves what was done", () => {
+    const { plan: p, moved, to } = catchUpPlan(plan(), '2026-11-11', [1, 2, 3, 4, 5])
+    expect(to).toBe('2026-11-11')
+    expect(moved.map((m) => m.title)).toEqual(['Hash maps', 'Retest'])
+    expect(p.days.find((d) => d.date === '2026-11-11')!.items.map((i) => i.title)).toEqual(['Hash maps', 'Retest', 'Primes'])
+    expect(p.days.find((d) => d.date === '2026-11-11')!.items[0].carried).toBe(true)
+    expect(p.days.find((d) => d.date === '2026-11-09')!.items.map((i) => i.title)).toEqual(['Zero'])
+    expect(p.days.find((d) => d.date === '2026-11-10')!.items).toEqual([])
+    // Running it again moves nothing
+    expect(catchUpPlan(p, '2026-11-11', [1, 2, 3, 4, 5]).moved).toEqual([])
+  })
+
+  it('waits for the next study day when today is a day off, and carries past the end of the week', () => {
+    // Saturday 14 Nov is a day off: the next study day is Monday 16, after this plan ends
+    const { plan: p, to } = catchUpPlan(plan(), '2026-11-14', [1, 2, 3, 4, 5])
+    expect(to).toBe('2026-11-16')
+    expect(p.carry?.map((c) => c.title)).toEqual(['Hash maps', 'Retest', 'Primes'])
+  })
+
+  it('does nothing on the first day', () => {
+    expect(catchUpPlan(plan(), '2026-11-09', [1, 2, 3, 4, 5]).moved).toEqual([])
   })
 })

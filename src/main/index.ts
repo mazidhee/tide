@@ -55,7 +55,7 @@ import { mapBook, mapNewBooks, pagesToRead } from './books'
 import { getBrain } from './brain'
 import { draftBrief, flowSteps, mapProject, projectDocs, projectMap, setProject } from './projects'
 import { onBrainEvent, recentBrainEvents } from './brainEvents'
-import { getCoach, getWeek, planWeek, saveCoach, updateProfile, inferDirection, autoPlanWeek, weekToThings, setItemDone, syncDone, rollOver, dayStats, journal, writeJournal, weekReview, saveReview } from './coach'
+import { getCoach, getWeek, planWeek, saveCoach, updateProfile, inferDirection, autoPlanWeek, weekToThings, setItemDone, catchUp, rollOver, dayStats, journal, writeJournal, weekReview, saveReview } from './coach'
 import { addMistakes, listMistakes, mistakesDue, retestMistake } from './mistakes'
 import { initTray, refreshTray, reportStudy, type StudyStatus } from './tray'
 import { localDate, todayItems } from '@shared/coach'
@@ -261,7 +261,8 @@ function registerIpc() {
   handle('coach:infer', (force?: boolean) => inferDirection(!!force))
   handle('coach:toThings', () => weekToThings())
   handle('coach:setDone', (date: string, index: number, done: boolean) => setItemDone(date, index, done))
-  handle('coach:syncDone', () => syncDone())
+  // Home asks for today's plan: ticks from Things come in, and past days' leftovers move to today
+  handle('coach:syncDone', () => catchUp())
   handle('coach:rollOver', (date?: string) => rollOver(date))
   handle('coach:dayStats', (date?: string) => dayStats(date))
   handle('coach:journal', () => journal())
@@ -579,6 +580,9 @@ app.whenReady().then(() => {
   setTimeout(() => inferDirection().catch(() => {}), 90_000)
   // A new week plans itself (the first check a few minutes after launch, then every few hours)
   setTimeout(() => autoPlanWeek().catch(() => {}), 240_000)
+  // Yesterday's leftovers move on even if Home isn't open: soon after starting, then each hour
+  setTimeout(() => catchUp().catch(() => {}), 20_000)
+  setInterval(() => catchUp().catch(() => {}), 3_600_000)
   setInterval(() => autoPlanWeek().catch(() => {}), 4 * 3_600_000)
   // Books you own get a map (chapters, pages, what each covers) in the background, a few at a time
   setTimeout(() => mapNewBooks().catch(() => {}), 180_000)

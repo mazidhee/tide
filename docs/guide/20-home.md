@@ -40,3 +40,8 @@ Every answer you get wrong, and every mark you lose in an exam, goes into `Coach
 ## Wrapping up
 
 **Wrap up the day** is four short steps: the day in a sentence, three quick questions, moving what's left to your next study day, and a line for your journal. The weekly review looks back on the week and plans the next one.
+
+## If you don't finish
+
+Nothing is lost. Whatever you didn't finish moves to the top of your next study day by itself, in Tide and in Things, the next time Tide opens or within the hour, even if you skip the wrap-up. Anything you ticked off in Things counts as done first, so finished work never moves. If the next study day falls in a new week, the next week's plan fits it in first. A week you don't finish also makes the next one lighter.
+
