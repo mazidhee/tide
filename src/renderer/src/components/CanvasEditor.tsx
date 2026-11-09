@@ -9,6 +9,8 @@ interface Props {
   onExample?(): void
   /** Bumped when the canvas is replaced from outside (the tutor drew on it), to re-fit if needed */
   version: number
+  /** Beside a lesson: no palette, the drawing fitted to a narrow panel */
+  compact?: boolean
 }
 
 type Side = 'top' | 'right' | 'bottom' | 'left'
@@ -82,7 +84,8 @@ function KindIcon({ kind }: { kind?: ComponentKind }) {
  * name, further lines are details), Delete to remove, ⌘Z to undo. Scroll or drag the background
  * to pan; pinch or ⌘-scroll to zoom.
  */
-export function CanvasEditor({ canvas, onChange, version, onExample }: Props) {
+export function CanvasEditor({ canvas, onChange, version, onExample, compact }: Props) {
+  const leftRoom = compact ? 12 : PALETTE_W
   const wrapRef = useRef<HTMLDivElement>(null)
   const [view, setView] = useState<View>({ x: 80, y: 80, k: 1 })
   const [selected, setSelected] = useState<Selection>(null)
@@ -116,18 +119,18 @@ export function CanvasEditor({ canvas, onChange, version, onExample }: Props) {
     const wrap = wrapRef.current
     const c = latest.current
     if (!wrap) return
-    if (!c.nodes.length) return setView({ x: PALETTE_W + (wrap.clientWidth - PALETTE_W) / 2 - 90, y: wrap.clientHeight / 2 - 36, k: 1 })
+    if (!c.nodes.length) return setView({ x: leftRoom + (wrap.clientWidth - leftRoom) / 2 - 90, y: wrap.clientHeight / 2 - 36, k: 1 })
     const minX = Math.min(...c.nodes.map((n) => n.x)) - 60
     const minY = Math.min(...c.nodes.map((n) => n.y)) - 60
     const maxX = Math.max(...c.nodes.map((n) => n.x + n.width)) + 60
     const maxY = Math.max(...c.nodes.map((n) => n.y + n.height)) + 60
     // The palette sits on the left; centre the design in the space beside it
-    const left = PALETTE_W
+    const left = leftRoom
     const w = wrap.clientWidth - left
     const h = wrap.clientHeight - 50
     const k = Math.min(1.25, Math.max(0.25, Math.min(w / (maxX - minX), h / (maxY - minY))))
     setView({ k, x: left + w / 2 - ((minX + maxX) / 2) * k, y: h / 2 - ((minY + maxY) / 2) * k })
-  }, [])
+  }, [leftRoom])
 
   // Fit on open, and again as the panel settles or the window resizes, until you move the view
   const touched = useRef(false)
@@ -147,10 +150,10 @@ export function CanvasEditor({ canvas, onChange, version, onExample }: Props) {
     const out = latest.current.nodes.some((n) => {
       const x = n.x * v.k + v.x
       const y = n.y * v.k + v.y
-      return x < PALETTE_W || y < 0 || x + n.width * v.k > wrap.clientWidth || y + n.height * v.k > wrap.clientHeight - 60
+      return x < leftRoom || y < 0 || x + n.width * v.k > wrap.clientWidth || y + n.height * v.k > wrap.clientHeight - 60
     })
     if (out) fit()
-  }, [version, fit])
+  }, [version, fit, leftRoom])
 
   const addAt = (kind: ComponentKind, x?: number, y?: number) => {
     const wrap = wrapRef.current!
@@ -469,6 +472,7 @@ export function CanvasEditor({ canvas, onChange, version, onExample }: Props) {
         </div>
       )}
 
+      {!compact && (
       <div className="cv-palette" role="toolbar" aria-label="Add a component">
         {COMPONENTS.map((c) => (
           <button key={c.kind} className={`cv-pal k-${c.kind}`} onClick={() => addAt(c.kind)} title={`Add ${c.label.toLowerCase()}`}>
@@ -477,6 +481,7 @@ export function CanvasEditor({ canvas, onChange, version, onExample }: Props) {
           </button>
         ))}
       </div>
+      )}
 
       <div className="cv-zoom">
         <button className="icon-btn small" onClick={() => setView((v) => ({ ...v, k: Math.max(0.2, v.k / 1.2) }))} aria-label="Zoom out">

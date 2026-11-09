@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs'
-import { aimOf, thingsTitle, DEFAULT_COACH, localDate, moveUnfinished, nextStudyDay, nextTopics, planCompletion, validateWeek, weekMarkdown, type AgendaItem, type CoachSettings, type DayStats, type JournalEntry, type TopicCandidate, type WeekReview, type WeekPlan } from '@shared/coach'
+import { scheduleWeek, summaryFromPlan } from '@shared/schedule'
+import { aimOf, thingsTitle, DEFAULT_COACH, localDate, moveUnfinished, nextStudyDay, nextTopics, planCompletion, weekMarkdown, type AgendaItem, type CoachSettings, type DayStats, type JournalEntry, type TopicCandidate, type WeekReview, type WeekPlan } from '@shared/coach'
 import { companyTrend } from '@shared/interviews'
 import { buildLink } from '@shared/deeplink'
 import { complete, extractJsonObject } from './ai'
@@ -10,7 +11,6 @@ import { listMistakes } from './mistakes'
 import { getCards } from './study'
 import { addProject, ensureArea, getProject, searchTasks, thingsAvailable, TIDE_TAG, updateTask } from './things'
 import { absPath, joinRel, readText, writeText } from './vault'
-import { planReadings } from './planner'
 import { pagesToRead } from './books'
 import { readingLabel } from '@shared/books'
 
@@ -84,7 +84,17 @@ async function savePlan(plan: WeekPlan) {
 }
 
 /** The facts the coach plans from, as compact text (never the whole history) */
-async function gather(settings: CoachSettings): Promise<{ text: string; candidates: TopicCandidate[] }> {
+interface Facts {
+  weak: { title: string; notebook?: string }[]
+  dueCards: number
+  mistakes: { count: number; topics: string[] }
+  goals: { notebook: string; left: number; daysLeft: number; name: string }[]
+  undone: { topic: string; notebook?: string }[]
+  lastDone?: number
+}
+
+async function gather(settings: CoachSettings): Promise<{ text: string; candidates: TopicCandidate[]; facts: Facts }> {
+  const facts: Facts = { weak: [], dueCards: 0, mistakes: { count: 0, topics: [] }, goals: [], undone: [] }
   const notebooks = await getNotebooks()
   const candidates: TopicCandidate[] = []
   const parts: string[] = []
@@ -105,10 +115,14 @@ async function gather(settings: CoachSettings): Promise<{ text: string; candidat
   const weak = Object.entries(mastery)
     .filter(([, m]) => m.level === 'weak' || m.level === 'shaky')
     .slice(0, 8)
-    .map(([p, m]) => `${p.split('/').pop()?.replace(/\.md$/, '')} (${m.level})`)
+    .map(([p, m]) => {
+      facts.weak.push({ title: p.split('/').pop()!.replace(/\.md$/, ''), notebook: notebooks.find((n) => p.startsWith(`${n.path}/`))?.name })
+      return `${p.split('/').pop()?.replace(/\.md$/, '')} (${m.level})`
+    })
   if (weak.length) parts.push(`Weak or shaky topics to revisit: ${weak.join(', ')}`)
   const cards = await getCards({ kind: 'vault' }).catch(() => [])
   const due = cards.filter((c) => c.schedule && c.schedule.due <= Date.now()).length
+  facts.dueCards = due
   if (due) parts.push(`Flashcards due: ${due}`)
   if (await thingsAvailable()) {
     const open = await searchTasks({ tag: TIDE_TAG, status: 'open', limit: 40 }).catch(() => [])
@@ -131,21 +145,25 @@ async function gather(settings: CoachSettings): Promise<{ text: string; candidat
     const md = nb?.outline ? await readText(nb.outline).catch(() => '') : ''
     const left = (md.match(/^\s*- \[ \] /gm) ?? []).length
     const days = Math.ceil((Date.parse(g.deadline) - Date.now()) / 86_400_000)
+    if (nb) facts.goals.push({ notebook: nb.name, left, daysLeft: days, name: g.name })
     parts.push(`Goal "${g.name}" (${g.notebook}): ${left} topics left, deadline ${g.deadline} (${days >= 0 ? `${days} days away` : 'passed'}). Give it time this week in proportion to how tight that is.`)
   }
   const mistakes = (await listMistakes()).filter((m) => m.status === 'open')
+  facts.mistakes = { count: mistakes.length, topics: [...new Set(mistakes.map((m) => m.topic))] }
   if (mistakes.length) parts.push(`Mistakes waiting to be retested: ${mistakes.length}, in ${[...new Set(mistakes.map((m) => m.topic))].slice(0, 5).join(', ')}. Plan a short "review" to retest them.`)
   // How the last plan went, and what it left undone, so the next one is the right size
   const last = await getWeek(today()).then((p) => p ?? latestPlan()).catch(() => null)
   if (last) {
     const { planned, done } = planCompletion(last, today())
+    if (planned) facts.lastDone = done / planned
     if (planned) parts.push(`Last plan so far: ${done} of ${planned} items done.${done / planned < 0.6 ? ' That plan was too much: plan less.' : ''}`)
     const undone = [...(last.carry ?? []), ...last.days.filter((d) => d.date < today()).flatMap((d) => d.items.filter((it) => !it.done))]
+    facts.undone = undone.filter((it) => it.kind === 'learn' && it.topic).map((it) => ({ topic: it.topic!, notebook: it.notebook }))
     if (undone.length) parts.push(`Unfinished from before (fit the important ones in first): ${undone.slice(0, 8).map((it) => it.topic ?? it.title).join('; ')}`)
   }
   const review = await latestReview()
   if (review) parts.push(`Their weekly review: went well: ${review.wentWell || '-'}; got in the way: ${review.inTheWay || '-'}; change: ${review.change || '-'}`)
-  return { text: parts.join('\n'), candidates }
+  return { text: parts.join('\n'), candidates, facts }
 }
 
 const DAY = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' })
@@ -160,66 +178,30 @@ export async function planWeek(date = today(), background = false): Promise<Week
   if (!settings.focus.length) throw new Error('Pick what to focus on first.')
   // The next seven days from today, so planning on a Sunday plans the coming week, not one day
   const start = date
-  const { text, candidates } = await gather(settings)
+  const { text, candidates, facts } = await gather(settings)
   if (!candidates.length) throw new Error('Your focus notebooks have no roadmap topics left to plan from.')
   const studyDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start + 'T12:00:00Z')
     d.setUTCDate(d.getUTCDate() + i)
     return d.toISOString().slice(0, 10)
   }).filter((d) => settings.days.includes(new Date(d + 'T12:00:00Z').getUTCDay()))
-  const prompt = `You are coaching a learner towards this goal: ${aimOf(settings) || 'becoming strong in their focus subjects'}.
-Focus, most important first: ${settings.focus.join(', ')}. They study about ${settings.hoursPerWeek} hours a week, on these days: ${studyDays.map((d) => `${DAY(d)} ${d}`).join(', ')}.
-
-What you know about where they are:
-${text}
-
-Plan their week. First decide what comes first and why: weigh which topics unlock the others (prerequisites), what their goal needs most, weak spots that will hold them back, and anything overdue. Don't spread them thin: two subjects at most in a day, and keep each topic's order from its roadmap.
-Each study day gets 2 to 5 items, about ${Math.round((settings.hoursPerWeek * 60) / Math.max(1, studyDays.length))} minutes in all:
-- "learn": a roadmap topic, using its exact name from the lists above
-- "practice": problems or coding on what they learned that week
-- "quiz": a short quiz on something learned earlier in the week (spaced retrieval)
-- "review": weak topics or due flashcards
-- "take-home": one harder problem to think through, at most two a week
-- "test": a short test on the week's topics, on the last study day
-Return ONLY JSON:
-{"summary": "2-4 sentences: the priorities this week and why, as you'd tell the learner", "priorities": [{"notebook": "...", "share": 60, "reason": "..."}], "days": [{"date": "yyyy-mm-dd", "items": [{"kind": "learn", "title": "...", "topic": "exact roadmap topic or omit", "notebook": "...", "minutes": 45, "why": "one line"}]}]}`
-  const system = 'You are a thoughtful study coach. You plan realistic weeks that build towards a goal, and you explain your priorities plainly.'
-  const read = (t: string) => {
-    try {
-      return validateWeek(extractJsonObject<Partial<WeekPlan>>(t), start, candidates, settings)
-    } catch {
-      return null
-    }
-  }
-  let plan = read(await ask(prompt, system))
-  if (!plan) plan = read(await ask(`${prompt}\n\nReply with the JSON object only. Every "learn" item must name a topic from the lists exactly.`, system))
-  if (!plan) throw new Error("The coach couldn't put a week together. Try again.")
-  // A subject the plan says matters (a fifth or more of the week) must actually get time
-  const missing = plan.priorities.filter((p) => p.share >= 20 && !plan!.days.some((d) => d.items.some((i) => i.notebook === p.notebook)))
-  if (missing.length) {
-    const again = read(
-      await ask(
-        `${prompt}\n\nYour last plan gave ${missing.map((m) => `${m.notebook} ${m.share}%`).join(' and ')} of the week but scheduled nothing from ${missing.length > 1 ? 'them' : 'it'}. Plan again so each subject gets roughly its share of the minutes, using topics from its list.`,
-        system
-      )
-    )
-    if (again && !again.priorities.filter((p) => p.share >= 20).some((p) => !again.days.some((d) => d.items.some((i) => i.notebook === p.notebook)))) plan = again
-  }
-  // What to read for each topic this week (looked up and checked, so links are real)
-  const learn = plan.days.flatMap((d) => d.items.filter((i) => i.kind === 'learn' && i.topic)).slice(0, 10)
-  if (learn.length) {
-    const readings = await planReadings(
-      `${settings.focus.join(' and ')}`,
-      { scope: 'skill', weeks: 1, hoursPerWeek: settings.hoursPerWeek, why: '', phases: learn.map((i) => ({ title: i.topic!, weeks: 1, outcome: `understand ${i.topic}` })) },
-      ''
-    ).catch(() => [])
-    for (const [i, it] of learn.entries()) {
-      // The pages in books you own come first, then what the web suggests
-      const own = await pagesToRead(it.topic!, 1).catch(() => [])
-      const web = readings[i]?.items.slice(0, own.length ? 1 : 2) ?? []
-      const all = [...own.map((r) => ({ title: readingLabel(r), path: r.path, page: r.from })), ...web.map((x) => ({ title: x.title, ...(x.by ? { by: x.by } : {}), ...(x.url ? { url: x.url } : {}) }))]
-      if (all.length) it.readings = all
-    }
+  // The days are scheduled by code from the facts; the model only says why, in a few sentences
+  const input = { weekStart: start, days: studyDays, hoursPerWeek: settings.hoursPerWeek, focus: settings.focus, candidates, ...facts }
+  const plan = scheduleWeek(input)
+  if (!plan.days.length) throw new Error("There's nothing to plan this week: your focus roadmaps are done, or no study days are set.")
+  const outline = plan.days.map((d) => `${DAY(d.date)}: ${d.items.map((i) => `${i.kind} ${i.topic ?? i.title} (${i.minutes} min)`).join('; ')}`).join('\n')
+  const why = await ask(
+    `A learner heading towards: ${aimOf(settings) || 'getting strong in their focus subjects'}.\nWhat Tide knows:\n${text.slice(0, 2500)}\n\nTheir week, already planned:\nSplit: ${plan.priorities.map((p) => `${p.notebook} ${p.share}% (${p.reason})`).join('; ')}\n${outline}\n\nIn 2 to 4 plain sentences addressed to them ("you"), say what this week focuses on and why: what comes first and what it unlocks, any deadline or weak spot it deals with. No lists, no greeting.`,
+    'You are a thoughtful study coach who explains a plan plainly and briefly.'
+  ).catch(() => '')
+  plan.summary = why.trim().replace(/^["']|["']$/g, '').slice(0, 800) || summaryFromPlan(plan, input)
+  // What to read: the pages in books you own, then the source your roadmap names for the topic
+  const byTopic = new Map(candidates.map((c) => [c.topic, c]))
+  for (const it of plan.days.flatMap((d) => d.items.filter((i) => i.kind === 'learn' && i.topic)).slice(0, 12)) {
+    const own = await pagesToRead(it.topic!, 1).catch(() => [])
+    const source = byTopic.get(it.topic!)?.source
+    const readings = [...own.map((r) => ({ title: readingLabel(r), path: r.path, page: r.from })), ...(source ? [{ title: source }] : [])]
+    if (readings.length) it.readings = readings
   }
   await fs.mkdir(absPath(WEEKS), { recursive: true })
   await writeText(weekFile(start), JSON.stringify(plan, null, 2))
@@ -244,10 +226,23 @@ Focus: ${settings.focus.join(', ') || 'not set'}; ${settings.hoursPerWeek} hours
 ${text}
 ${previous ? `Their previous profile (keep what still holds, especially "How they learn best", which they may have edited):\n${previous.slice(0, 1500)}` : ''}
 Only state what the facts support. Return the Markdown only.`
-  const out = (await complete(prompt, 'You write short, precise learner profiles.')).replace(/^```(?:markdown)?\s*|\s*```$/g, '').trim()
+  // Nothing new since the last profile: keep it (each rewrite costs the model a long read)
+  const key = hashText(prompt)
+  if (previous && (await readText(PROFILE_HASH).catch(() => '')) === key) return previous
+  const out = (await complete(prompt, 'You write short, precise learner profiles.', undefined, 'background')).replace(/^```(?:markdown)?\s*|\s*```$/g, '').trim()
   const note = `# Learner profile\n\n_Tide rewrites this each week from your progress. Edit anything that's wrong; your edits are kept._\n\n${out.replace(/^#\s+Learner profile\s*/i, '')}\n`
   await writeText(PROFILE_NOTE, note)
+  await writeText(PROFILE_HASH, key).catch(() => {})
   return note
+}
+
+const PROFILE_HASH = joinRel('.tide', 'profile.hash')
+
+/** A short fingerprint of some text, to tell whether anything changed */
+export function hashText(text: string): string {
+  let h = 2166136261
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619)
+  return (h >>> 0).toString(36)
 }
 
 const DAY_MS = 86_400_000
@@ -300,7 +295,8 @@ Only state what the facts support.`
   try {
     parsed = extractJsonObject(out)
   } catch {
-    return settings
+    // Tried: wait the usual few days (or a forced retry) rather than trying again every launch
+    return settings.direction ? saveCoach({ ...settings, directionAt: Date.now() }) : settings
   }
   if (!parsed.direction?.trim()) return settings
   const names = new Set(books.map((b) => b.name))
@@ -314,13 +310,17 @@ Only state what the facts support.`
  * Plans the week by itself when there's no plan for today (a new week, or the last one ran out),
  * once it knows what to focus on. Quietly does nothing otherwise; Plan again is always there.
  */
+let autoFailedAt = 0
+
 export async function autoPlanWeek(): Promise<WeekPlan | null> {
   const date = today()
-  if (await getWeek(date)) return null
+  // After a failed try, wait half a day rather than retrying every few hours
+  if (Date.now() - autoFailedAt < 12 * 3_600_000 || (await getWeek(date))) return null
   let settings = await getCoach()
   if (!settings.focus.length) settings = await inferDirection()
   if (!settings.focus.length) return null
   const plan = await planWeek(date, true).catch(() => null)
+  if (!plan) autoFailedAt = Date.now()
   // The profile follows a new week, as when you plan it yourself
   if (plan) await updateProfile().catch(() => {})
   return plan

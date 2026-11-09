@@ -1,14 +1,16 @@
 import { inBackground, streamInteractive } from './modelQueue'
+import { STRATEGY_LABEL, type Strategy } from '@shared/strategy'
 import { canTake, CloudUnavailable, cloudError, estimateTokens, headersFor, noteLimits, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
 import type { CloudTask, RequestKind } from '@shared/providers'
 import { memoryIntent } from '@shared/memoryIntent'
 import { addMemory, forgetMatching } from './memory'
 import type { AgentStep, Chat, StoredMessage } from '@shared/types'
 import type { TurnRequest } from './agent'
+import { filedUnder } from './learn'
 import { compactChat, fallbackTitle, historyBudget, historyFor, needsCompaction, newChat, renameChat, updateChat } from './chats'
 import { fitHistory } from '@shared/context'
 import { cleanModelText } from '@shared/modelText'
-import type { ChatEvent, ChatMessage, ChatRequest, ChatScope, ContextSource, QuizQuestion, ReadAlongNote } from '@shared/types'
+import type { ChatEvent, ChatMessage, ChatRequest, ChatScope, ContextSource, ReadAlongNote } from '@shared/types'
 import { getSettings } from './settings'
 import { localSampling } from './sampling'
 import { createLineGuard, createStreamFilter, isLooping } from '@shared/modelText'
@@ -124,28 +126,32 @@ export async function retrieve(scope: ChatScope, query: string): Promise<Context
     return picked.map((c, i) => ({ index: i + 1, path: c.path, title: c.title, heading: c.heading || undefined, text: c.text }))
   }
   if (scope.kind === 'note') await reindexPath(scope.path)
+  // Sources filed under this notebook's or note's name in the Library come with it: a project's
+  // design docs, the articles filed under a company you're preparing for
+  const filed = new Set(await filedUnder(scopeName(scope)).catch(() => [] as string[]))
+  const within = (p: string) => inScope(scope)(p) || filed.has(p)
 
   let chunks: Chunk[]
   const whole = scope.kind === 'note' ? getChunks(scope.path) : []
   const wholeSize = whole.reduce((n, c) => n + c.text.length, 0)
 
-  if (scope.kind === 'note' && wholeSize <= CONTEXT_BUDGET) {
-    // Small enough to give the model the full note
-    chunks = whole
+  if (scope.kind === 'note' && wholeSize <= CONTEXT_BUDGET * (filed.size ? 0.65 : 1)) {
+    // Small enough to give the model the full note, with the best of what's filed under it
+    chunks = [...whole, ...(filed.size ? search(query, 8, (p) => filed.has(p)).slice(0, 4) : [])]
   } else {
-    const hits = search(query, 24, inScope(scope))
+    const hits = search(query, 24, scope.kind === 'note' ? (p) => p === scope.path || filed.has(p) : within)
     chunks = hits
     if (chunks.length < 3) {
       // Generic questions ("summarize this") match few terms, fall back to reading order
-      const paths = scope.kind === 'note' ? [scope.path] : allChunkPaths().filter(inScope(scope))
+      const paths = scope.kind === 'note' ? [scope.path, ...filed] : allChunkPaths().filter(within)
       const extra = paths.flatMap((p) => getChunks(p).slice(0, scope.kind === 'note' ? 50 : 2))
       chunks = [...chunks, ...extra.filter((c) => !chunks.some((h) => h.id === c.id))]
     }
   }
 
   const picked = takeWithinBudget(chunks, CONTEXT_BUDGET)
-  // Keep reading order inside a file so the model sees coherent text
-  if (scope.kind === 'note') picked.sort((a, b) => a.order - b.order)
+  // Keep reading order inside a file so the model sees coherent text (the note first)
+  if (scope.kind === 'note') picked.sort((a, b) => (a.path === scope.path ? 0 : 1) - (b.path === scope.path ? 0 : 1) || a.path.localeCompare(b.path) || a.order - b.order)
 
   return picked.map((c, i) => ({
     index: i + 1,
@@ -155,6 +161,9 @@ export async function retrieve(scope: ChatScope, query: string): Promise<Context
     text: c.text
   }))
 }
+
+/** The name things are filed under for a scope: a notebook's folder name, or a note's title */
+const scopeName = (scope: ChatScope) => (scope.kind === 'folder' ? scope.path.split('/').pop() ?? '' : scope.kind === 'note' ? scope.path.split('/').pop()!.replace(/\.md$/i, '') : '')
 
 function formatSources(sources: ContextSource[]): string {
   return sources
@@ -389,11 +398,9 @@ export async function chat(req: ChatRequest, emit: (e: ChatEvent) => void) {
         'background'
       ).catch(() => '')
       const clean = title.split('\n')[0].replace(/^["'#*\s]+|["'.*\s]+$/g, '').slice(0, 60)
-      // No title (the model was needed elsewhere): the list shows the first words, and the next turn tries again
-      if (clean) {
-        await renameChat(chatId, clean)
-        onChatsChanged(chatId)
-      }
+      // No title from the model (it was needed elsewhere): the first words, once, rather than asking again every turn
+      await renameChat(chatId, clean || fallbackTitle(question))
+      onChatsChanged(chatId)
     }
     if (needsCompaction(saved)) {
       const controller = new AbortController()
@@ -648,36 +655,14 @@ ${material}`
   return cards.filter((c) => c?.front && c?.back).slice(0, count)
 }
 
-export async function generateQuiz(scope: ChatScope, count: number): Promise<QuizQuestion[]> {
-  const sources = await retrieve(scope, 'key concepts important ideas')
-  if (!sources.length) throw new Error('There is nothing to quiz on here yet.')
-  const prompt = `Write a ${count} question multiple choice quiz that tests real understanding of the material below.
-Rules:
-- 4 options each, exactly one correct, plausible distractors.
-- "answer" is the 0-based index of the correct option.
-- "explanation" says briefly why the answer is right.
-- "source" is the number of the source the question is based on.
-- Return ONLY a JSON array like [{"question": "...", "options": ["...","...","...","..."], "answer": 0, "explanation": "...", "source": 1}].
-
-Material:
-${formatSources(sources)}`
-  const questions = extractJsonArray<QuizQuestion & { source?: number | string }>(await complete(prompt))
-  return questions
-    .filter((q) => q?.question && Array.isArray(q.options) && q.options.length >= 2 && Number.isInteger(q.answer))
-    .map((q) => {
-      const src = sources.find((s) => s.index === Number(q.source))
-      return { ...q, source: src?.path }
-    })
-    .slice(0, count)
-}
-
 /**
  * Reads the passage the student just wrote, like a tutor looking over their shoulder.
  * Returns null when there is nothing worth saying, so the margin stays quiet.
  */
 export async function readAlong(path: string, passage: string, mode: string, force = false, style?: 'coach'): Promise<ReadAlongNote | null> {
   const sources = await retrieve({ kind: 'note', path }, passage)
-  const context = formatSources(sources).slice(0, 6000)
+  // Enough of the note to judge the paragraph in context; more only slows the model's reading
+  const context = formatSources(sources).slice(0, force ? 6000 : 2500)
   if (style === 'coach' && !force) return coachNote(passage, context, mode)
   if (force) {
     // The student asked to be tested: always ask something, never explain
@@ -725,13 +710,6 @@ ${passage}
   }
 }
 
-export async function summarize(path: string): Promise<string> {
-  const sources = await retrieve({ kind: 'note', path }, 'main ideas summary')
-  return complete(
-    `Summarize this material for a student revising it. Start with a 2 sentence overview, then the key ideas as bullet points, then any formulas or definitions worth memorizing. Use Markdown and LaTeX.\n\n${formatSources(sources)}`
-  )
-}
-
 /**
  * The writing coach: one margin note on the paragraph just written, aimed at understanding first
  * (a probing question, a correction, a missing piece) and clearer writing second, with a rewrite
@@ -756,8 +734,8 @@ ${context}
 <paragraph>
 ${passage}
 </paragraph>`
-  // Live feedback while writing: it must not wait behind, or be cancelled by, background jobs
-  const out = await complete(prompt)
+  // Feedback while writing waits for the model to be free: your chat and lessons come first
+  const out = await complete(prompt, undefined, undefined, 'background')
   return parseCoachNote(out, passage)
 }
 
@@ -777,4 +755,18 @@ export function parseCoachNote(out: string, passage: string): ReadAlongNote | nu
   } catch {
     return null
   }
+}
+
+/**
+ * When the teaching router's top two choices are close: the model picks, from a short prompt and
+ * a one-letter answer. Gives up after a few seconds and keeps the router's first choice.
+ */
+export async function tieBreak(topic: string, options: Strategy[], context = ''): Promise<Strategy> {
+  const letters = options.map((o, i) => `${String.fromCharCode(65 + i)}) ${STRATEGY_LABEL[o]}`).join('\n')
+  const ask = complete(
+    `A learner is starting a lesson on: ${topic}${context ? ` (${context})` : ''}.\nWhich way of teaching fits it best?\n${letters}\nReply with the letter only.`,
+    'You choose how to teach a topic. Reply with one letter.'
+  ).then((out) => options[(out.trim().toUpperCase().charCodeAt(0) || 65) - 65] ?? options[0])
+  const timeout = new Promise<Strategy>((resolve) => setTimeout(() => resolve(options[0]), 5000))
+  return Promise.race([ask, timeout]).catch(() => options[0])
 }

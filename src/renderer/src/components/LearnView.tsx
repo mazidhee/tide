@@ -131,7 +131,8 @@ export function LearnView() {
     const t = setTimeout(() => {
       const plan = sessionPlan(mode, source, topic)
       window.tide.ai.prewarm(openingRequest({ mode: plan.mode, topic: plan.topic, options: plan.options }, plan.scope, app.settings.character ?? 'professor')).catch(() => {})
-    }, 900)
+      // Only once you've stopped typing: each warm-up reads the whole opening into the model
+    }, 2500)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [warmKey])

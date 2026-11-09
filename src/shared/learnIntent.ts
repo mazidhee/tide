@@ -42,3 +42,27 @@ export function thingsIntent(text: string): 'assign' | 'mark' | null {
   if (!app && !work) return null
   return /\b(mark|grade|check|review|feedback|look at)\b/i.test(text) ? 'mark' : 'assign'
 }
+
+/**
+ * "I want to build X": a project to build yourself, not a subject to study. Starts a build project
+ * (a notebook with a brief) rather than a study plan. "I want to learn how to build X" stays a plan.
+ */
+export function projectIntent(text: string): { name: string; idea: string } | null {
+  const t = text.trim().replace(/\s+/g, ' ')
+  if (t.length > 400) return null
+  const m = t.match(/^(?:i(?:\s+(?:want|would like|need|wanna|plan|['’]m going)|['’]d like)\s+to\s+build|let['’]?s build|help me build|i['’]m building)\s+(.+?)$/i)
+  if (!m) return null
+  const idea = m[1].replace(/[.!]+$/, '').trim()
+  // A short name for the notebook: the thing itself, before "for/that/which/with/so/to"
+  const thing = idea
+    .replace(/^(an?|the|my|our|some)\s+/i, '')
+    .split(/\s+(?:for me|that|which|so that|so|to (?:learn|understand|practi[cs]e)|because)\b/i)[0]
+    .split(/[,:;(]/)[0]
+    .split(' ')
+    .slice(0, 6)
+    .join(' ')
+    .replace(/[^\p{L}\p{N}+#\- ]/gu, '')
+    .trim()
+  if (thing.length < 2) return null
+  return { name: thing.charAt(0).toUpperCase() + thing.slice(1), idea: t }
+}

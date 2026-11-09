@@ -1,6 +1,8 @@
 import { splitSay } from './characters'
 import { retestInstructions } from './mistakes'
-import type { SessionMode, Verdict } from './types'
+import type { ChatScope, SessionMode, Verdict } from './types'
+import { chooseStrategy, STRATEGY_RULES, type Strategy, type StrategyChoice } from './strategy'
+import type { FlowStep, ProjectKind } from './project'
 
 /**
  * Learning sessions are a conversation where the tutor writes Markdown plus a few tags the UI
@@ -150,7 +152,44 @@ export interface SessionSetup {
     timed?: number
     /** Retest these past mistakes, in order (a quiz) */
     retest?: { id: string; topic: string; question: string; fix: string }[]
+    /** How to teach it (a lesson): chosen by the router unless set */
+    strategy?: Strategy
+    /** Part of a project: taught in its terms, or as a mentor while you build it */
+    project?: { name: string; kind: ProjectKind; milestone?: string }
+    /** A walkthrough's steps, in order: the app draws each on the canvas as the lesson reaches it */
+    flow?: FlowStep[]
   }
+}
+
+/**
+ * A lesson's setup with its way of teaching decided: what was asked for, else what the router
+ * scores best for the topic and where it comes from. Pure, so starting a lesson and warming its
+ * opening ahead of time decide the same thing.
+ */
+export function withStrategy(setup: SessionSetup, scope: ChatScope): SessionSetup {
+  const choice = strategyChoice(setup, scope)
+  return choice ? { ...setup, options: { ...setup.options, strategy: choice.strategy } } : setup
+}
+
+/** The router's choice for a lesson that hasn't been told how to teach, with how sure it is */
+export function strategyChoice(setup: SessionSetup, scope: ChatScope): StrategyChoice | null {
+  if (setup.mode !== 'teach' || setup.options?.strategy || setup.options?.retest) return null
+  const project = setup.options?.project
+  const source = project ? (project.kind === 'build' ? 'brief' : 'design-doc') : scope.kind === 'pages' ? 'book' : scope.kind === 'note' ? 'note' : scope.kind === 'folder' ? 'notebook' : 'none'
+  return chooseStrategy({ text: setup.topic, source, subject: project?.name ?? (scope.kind === 'folder' ? scope.path : undefined), can: { canvas: true, lab: true, code: true, maths: true } })
+}
+
+/** Where a walkthrough's canvas lives: beside the topic's notes, else under Lessons */
+export function lessonCanvasPath(scope: ChatScope, topic: string): string {
+  const dir = scope.kind === 'folder' ? scope.path : scope.kind === 'note' || scope.kind === 'pages' ? scope.path.split('/').slice(0, -1).join('/') : ''
+  return `${dir || 'Lessons'}/${topic.replace(/[\\/:*?"<>|#^[\]]+/g, ' ').trim().slice(0, 60)} (map).canvas`
+}
+
+/** How a project frames a lesson */
+function projectRules(p: NonNullable<NonNullable<SessionSetup['options']>['project']>): string {
+  return p.kind === 'build'
+    ? `\nThey are building "${p.name}" themselves${p.milestone ? `, working on: ${p.milestone}` : ''}, to learn by building it. Be a mentor, not a coder: never write the solution or large parts of their code. Help them plan the next small step, ask how they would do it, review what they write (the exact line, and why), and teach a concept when the step needs it. Their brief is in the passages.`
+    : `\nThis is part of their project "${p.name}". Teach it as it works in that system: take every example from its documents in the passages (its components, data, field names and flows), not generic ones. Where a general concept matters (how an index works, what a transaction guarantees), teach it through the project's own use of it, then say briefly how it generalises.`
 }
 
 /** The rules of a timed, no-hints round, as in a real interview */
@@ -167,7 +206,30 @@ const companyStyle = (company?: string) =>
 
 export function sessionInstructions({ mode, topic, options }: SessionSetup): string {
   const difficulty = options?.difficulty ?? 'normal'
+  if (mode === 'teach' && options?.strategy && options.strategy !== 'problems' && !options.retest) {
+    // Taught another way than problem sets: its own script, so the small model can't drift back
+    const first: Partial<Record<Strategy, string>> = {
+      walkthrough: 'Your first teaching message: call canvas_read, then canvas_edit to draw the first step (connect the first two parts involved and label the connection with what passes between them), then a predict ask for the next step. Every later step: one canvas_edit adding the next connection, then one ask.',
+      dialogue: 'Your first teaching message: pose the real design question in one or two sentences and ask what they would do (an explain ask).',
+      code: 'Your first teaching message: a two-line explanation and the smallest task that exercises it (a code ask).',
+      lab: 'Your first teaching message: the first command or task to try in the lab (a short ask), saying what to look for.',
+      maths: 'Your first teaching message: the key definition or result in a line, then the first problem (a problem ask).',
+      reading: 'Your first teaching message: where to read (section and pages if known) and one question to read for (a short ask).'
+    }
+    // A walkthrough with its steps known: follow them, and leave the drawing to the app
+    const flow = options.strategy === 'walkthrough' && options.flow?.length
+      ? `Walk these steps in this order, one per turn, naming each part exactly as written here (the app draws each step on the canvas as soon as you name where it arrives):\n${options.flow.map((s, i) => `   ${i + 1}. ${s.from} → ${s.to}: ${s.label}`).join('\n')}\n   Before each step, ask them to predict where it goes next (a predict ask); then explain what happens there and what can go wrong.`
+      : ''
+    return `You are running a TEACH session on: ${topic}.
+1. PROBE: ask one or two short questions, one at a time, to find what they already know. Don't teach yet.
+2. Then teach it this way: ${flow ? 'trace it step by step like following one real record through the system.' : STRATEGY_RULES[options.strategy]}
+   ${flow || (first[options.strategy] ?? '')}
+3. Grade every answer. Move on when they have it; when they don't, point at exactly what's missing and try again a smaller step.
+When you explain an idea, also write it for their notes: <note>the key idea in 1 to 5 lines of Markdown, worth rereading later</note>.${options?.project ? projectRules(options.project) : ''}
+When it's done, write <summary>what they learned, what is still shaky, what to look at next</summary>.`
+  }
   if (mode === 'teach') {
+    const extra = options?.project ? projectRules(options.project) : ''
     const start = difficulty === 'hard' ? 'at a hard level' : difficulty === 'gentle' ? 'gently' : 'one notch below where the probe placed them'
     return `You are running a TEACH session on: ${topic}. They learn by doing: you explain briefly, they solve.
 1. PROBE: ask 2 or 3 short diagnostic questions, one at a time, from easy to hard, to place them. Don't teach yet.
@@ -185,7 +247,7 @@ export function sessionInstructions({ mode, topic, options }: SessionSetup): str
    - Now and then ask why a step holds or what would break if something changed. Never ask "does that make sense?".
    Teach visually as well: when there is structure or a process (a tree, a graph, a flow, a protocol, states, a timeline), draw a small mermaid diagram (under about 12 nodes); when the thing is physical or has a classic textbook figure, show a real one with find_image. One good visual per step, where it helps.
    When you explain an idea, also write it for their notes: <note>the key idea, definition, formula or a short worked example, in 1 to 5 lines of Markdown, worded to be worth rereading later</note>. The app writes these into the note for this topic, beside the lesson.
-4. FINISH with 2 or 3 mixed problems across all the steps, one at a time.
+4. FINISH with 2 or 3 mixed problems across all the steps, one at a time.${extra}
 When every step is done, write <summary>what they learned, what is still shaky, what to review next</summary>.`
   }
   if (mode === 'quiz') {

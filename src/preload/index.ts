@@ -70,8 +70,7 @@ const api: TideApi = {
     models: invoke('ai:models'),
     test: invoke('ai:test'),
     generateFlashcards: invoke('ai:flashcards'),
-    generateQuiz: invoke('ai:quiz'),
-    summarize: invoke('ai:summarize'),
+    tieBreak: invoke('ai:tieBreak'),
     readAlong: invoke('ai:readAlong')
   },
   learn: {
@@ -217,6 +216,13 @@ const api: TideApi = {
     cards: invoke('study:cards'),
     review: invoke('study:review'),
     saveCards: invoke('study:saveCards')
+  },
+  projects: {
+    set: invoke('projects:set'),
+    docs: invoke('projects:docs'),
+    flowSteps: invoke('projects:flowSteps'),
+    map: invoke('projects:map'),
+    draftBrief: invoke('projects:draftBrief')
   },
   books: {
     suggest: invoke('books:suggest'),

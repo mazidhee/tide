@@ -3,7 +3,7 @@
  * decides priorities and the week; code supplies the facts (next topics in each roadmap, weak
  * spots, deadlines) and checks the plan only uses topics that really exist.
  */
-import { parseOutline, topicTitle, normalizeTitle } from './outline'
+import { parseOutline, splitSource, topicTitle, normalizeTitle } from './outline'
 
 export interface CoachSettings {
   /** In one or two sentences, where all of this is heading, in your words (overrides `direction`) */
@@ -137,6 +137,8 @@ export interface TopicCandidate {
   notebook: string
   topic: string
   section: string
+  /** The book or course the roadmap names for it ("Topic — _Book_") */
+  source?: string
 }
 
 /** The next unfinished topics in a roadmap, in order, with the section each sits in */
@@ -147,7 +149,8 @@ export function nextTopics(notebook: string, outlineMd: string, n = 12): TopicCa
   for (const l of lines) {
     if (l.kind === 'heading' && l.level >= 2) section = l.text.replace(/\s+[—–]\s+[A-Z][A-Z ,/&]+$/, '').replace(/\s+[—–]\s+\d.*$/, '')
     if (l.kind === 'item' && l.checked === false && !/^(Exam|Project|Practice):/i.test(l.text)) {
-      out.push({ notebook, topic: topicTitle(l.text), section })
+      const source = splitSource(l.text).source
+      out.push({ notebook, topic: topicTitle(l.text), section, ...(source ? { source } : {}) })
       if (out.length >= n) break
     }
   }

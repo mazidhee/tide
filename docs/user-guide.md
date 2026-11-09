@@ -129,6 +129,19 @@ With Things 4 open and **Settings › API** turned on in Things, Tide connects t
 - **Your day on Home.** Everything on Today in Things shows on Home's timeline (see Your day on Home).
 - **The tutor sets tasks.** In any chat or session the tutor can add a task (an exercise, a chapter, a revision session before an exam) with steps and a date, and look at what you've finished to decide what to teach next. It asks before adding more than two. Everything Tide adds is tagged **tide**.
 
+### Projects
+
+A project is a notebook for something you're building or need to understand, with its documents. Make one from a notebook's **⋯** menu (**Make it a project…**), or just say "I want to build a tiny shell in C" on Home or in Chat. There are two kinds:
+
+- **Understand a system.** It exists and has a design doc or spec (PDF or Markdown). Add the documents on the **Project** tab (or file them under the project's name in the Library). **Map it** reads their structure, not every page: headings and contents give the parts and flows, a list of known tools finds what it uses (MongoDB, n8n, Docker…), and one short model call names the components and writes an overview, in a few seconds. Then:
+  - **Teach me** on a part teaches it as it works in your system, with its own data and names as the examples.
+  - A **flow** ("Settlement flow") is walked through step by step on a canvas beside the lesson. The canvas starts with the project's parts laid out; the tutor connects them as the flow moves, and asks you to predict each next step.
+  - **Learn it for this** teaches a tool only as far as the project needs it, through the project's own use of it. **Go deeper** turns it into a full roadmap that builds on what the project taught you.
+  - Ask anything about the project at the bottom of the tab; answers come from its documents.
+- **Build it myself.** Something new you'll build to learn. Describe it and **Draft the brief with me**: the goal, the scope, how it's put together, milestones (each a small thing that runs), what to learn first for each, and the hard parts, saved as a note in the project. **What to learn first** makes a roadmap from it. **Work on it** on a milestone starts a session with a mentor that plans the next step with you, asks how you'd do it and reviews what you write, but never writes it for you. Tick milestones off as you finish them.
+
+**Private** (on by default) keeps everything about a project on Gemma on this Mac, never a cloud model: use it for work. Anything filed under a project's name in the Library counts as one of its documents, so every chat, lesson and quiz on it reads them.
+
 ### Metabase
 
 Connect your Metabase in **Settings › Tools** with its address and an API key (make one in Metabase under **Admin › Settings › Authentication › API keys**; the key is kept in your Mac's Keychain). Then ask the tutor about it: "teach me our Metabase", "what does the Collections dashboard measure?", "how is the repayments chart built?", "quiz me on which question answers X". It searches Metabase, opens dashboards, questions and tables, reads a question's SQL, and runs a saved question or a SELECT to show real numbers.
@@ -304,6 +317,8 @@ Paste a LeetCode link or type a problem's name to track it by pattern. Each has 
 
 ### Company prep
 
+File anything about a company in the Library under its name (a job description, articles, notes from a call): the prep plan is drafted from them first, and mock rounds and questions draw on them.
+
 Type a company in the box, with the role and any notes (an interview date, what you already know) in the small fields under it, and **Research**. Tide reads recent interview reports on the web and drafts a plan: the interview loop round by round, checklists for coding patterns, system design, behavioural themes and domain knowledge, practice problems, questions to ask them, and the sources it used. **Save plan** keeps it in **Interview prep**. Each saved plan has three mock rounds in that company's style: **Coding round**, **System design** (on a canvas, below) and **Behavioural** (STAR stories, probed like a hiring manager would).
 
 With **Timed, 45 min, no hints** ticked (the default), a round runs like the real thing: a clock counts down in the header (amber for the last five minutes), there's no hint button, the interviewer paces the round, and at zero it stops and scores you. Every round's score and verdict is saved (in `.tide/interviews.jsonl`), and each plan shows your latest score per round, how it changed since the last try and the last verdict, so you can see whether you're closing in on their bar.
@@ -397,6 +412,10 @@ On the Learn page, type what you want to learn ("Metabase", "two pointers", or a
 ### Notes as you learn
 
 In **Teach me**, a notes pane sits beside the lesson: the tutor's key ideas are written into the topic's note under **From the lesson** as it teaches, and you write your own anywhere in it (there's an **In my words** section to start you off). **Review my notes**, or just typing "review my notes" or "check what I wrote" as your answer, sends everything you wrote to the tutor: it says what's right and why, then up to three things to fix, quoting your line and saying why each matters, and finishes with a problem on the weakest point. It's an ordinary note; hide the pane with **Notes**.
+
+### How a lesson is taught
+
+Before a lesson starts, Tide decides how best to teach it, from what you asked ("walk me through", "let's think it through", "quiz me"), what it's about (a flow in a system, a proof, a command-line tool, a language feature), where it comes from (a project's design doc, a book chapter, your note), how well you know it and what it can do right now. The choices: **problem sets** (the default), **think it through together** (a design discussion), a **walkthrough on a canvas** (traced step by step, drawn as it goes), **write and run code**, **hands-on in the lab**, **derive it** (checked by SymPy) or **guided reading**. When two are close, Gemma breaks the tie in a second. The approach shows in the lesson's toolbar; change it there, or just say so ("can we just talk it through?") and it switches from that point.
 
 ### How a lesson runs
 

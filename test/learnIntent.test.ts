@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { learnIntent } from '../src/shared/learnIntent'
+import { learnIntent, projectIntent } from '../src/shared/learnIntent'
 
 describe('asking to learn a subject', () => {
   it('turns "I want to learn X" into a plan topic', () => {
@@ -39,5 +39,17 @@ describe('Things 4 intent', () => {
     expect(learnIntent('Teach me our Metabase: what does the collections dashboard show?')).toBeNull()
     expect(learnIntent("teach me rank's metabase")).toBeNull()
     expect(learnIntent('Teach me Metabase')?.topic).toBe('Metabase')
+  })
+})
+
+describe('projectIntent', () => {
+  it('starts a build project for "I want to build"', () => {
+    expect(projectIntent('I want to build payment rails for banks')).toMatchObject({ name: 'Payment rails for banks' })
+    expect(projectIntent("Let's build a tiny Unix shell in C, with pipes")?.name).toBe('Tiny Unix shell in C')
+    expect(projectIntent('help me build a key-value store that persists to disk')?.name).toBe('Key-value store')
+  })
+  it('leaves learning plans and questions alone', () => {
+    expect(projectIntent('I want to learn how to build a local LLM from scratch')).toBeNull()
+    expect(projectIntent('how do I build a REST API?')).toBeNull()
   })
 })

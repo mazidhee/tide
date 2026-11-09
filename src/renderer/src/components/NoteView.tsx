@@ -1,4 +1,5 @@
 import { TimeThis } from './TimeThis'
+import { readyForMargin } from '@shared/lessonNotes'
 import { savePastedImage } from '../lib/pastedImages'
 import { reveal } from '../lib/scroll'
 import { Thinking } from './Thinking'
@@ -62,7 +63,7 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const threadSave = useRef<ReturnType<typeof setTimeout>>(undefined)
   const latest = useRef('')
-  const reviewed = useRef(new Set<string>())
+  const seenAt = useRef(new Map<number, string>())
 
   const load = useCallback(async () => {
     try {
@@ -206,9 +207,9 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
     const auto = coach || page.tutorMode === 'readalong' || page.tutorMode === 'strict'
     const min = page.tutorMode === 'strict' ? MIN_STRICT_CHARS : MIN_READALONG_CHARS
     if (!auto || text.length < min || /^(#|```|\$\$|>\s*\[!tutor)/.test(text)) return
-    const key = text.replace(/\s+/g, ' ')
-    if (reviewed.current.has(key)) return
-    reviewed.current.add(key)
+    // Only a finished thought that has changed enough since it was last read earns another look
+    if (!readyForMargin(text, seenAt.current.get(line))) return
+    seenAt.current.set(line, text)
     setCoaching(true)
     try {
       const note = await window.tide.ai.readAlong(path, text, readAlongMode, false, coach ? 'coach' : undefined)
@@ -228,8 +229,10 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
         }
       ])
     } catch (e) {
-      // Try this paragraph again after the next pause; say once if the model can't be reached
-      reviewed.current.delete(key)
+      // Try this paragraph again after the next pause. Stepping aside for your chat isn't an
+      // error; say once only if the model can't be reached
+      seenAt.current.delete(line)
+      if (/cancel|abort/i.test((e as Error).message)) return
       if (!coachWarned.current) {
         coachWarned.current = true
         app.toast(`The coach couldn't check that: ${(e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')}`, { tone: 'error' })

@@ -49,6 +49,24 @@ export function addTakeaways(note: string, takeaways: string[]): string {
 
 const tidy = (lines: string[]) => lines.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\n+$/, '') + '\n'
 
+/**
+ * Whether a paragraph is worth a margin note now: it ends a thought (a sentence or a formula),
+ * and it has changed enough since it was last looked at. Each look costs the model seconds, so
+ * a word fixed here and there doesn't earn another.
+ */
+export function readyForMargin(text: string, lastSeen?: string): boolean {
+  const t = text.trim()
+  if (!/[.!?:)\]]$|\$\$$/.test(t)) return false
+  if (!lastSeen) return true
+  const a = lastSeen.trim()
+  let start = 0
+  while (start < a.length && start < t.length && a[start] === t[start]) start++
+  let end = 0
+  while (end < a.length - start && end < t.length - start && a[a.length - 1 - end] === t[t.length - 1 - end]) end++
+  const changed = Math.max(a.length, t.length) - start - end
+  return changed / Math.max(a.length, t.length, 1) >= 0.3
+}
+
 /** Everything the learner wrote in the note: all of it but the title and the tutor's takeaways */
 export function learnerText(note: string): string {
   const lines = note.replace(/^#\s[^\n]*\n/, '').split('\n')

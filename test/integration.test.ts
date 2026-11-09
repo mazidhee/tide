@@ -11,7 +11,7 @@ vi.mock('electron', () => ({ app: { getPath: () => userData } }))
 
 const { updateSettings } = await import('../src/main/settings')
 const { buildIndex } = await import('../src/main/search')
-const { chat, generateQuiz } = await import('../src/main/ai')
+const { chat } = await import('../src/main/ai')
 const { saveUrl } = await import('../src/main/library')
 
 let server: Server
@@ -103,19 +103,6 @@ describe('chat', () => {
     await chat({ id: 'c2', messages: [{ role: 'user', content: 'hi' }], scope: { kind: 'none' } }, (e) => events.push(e))
     const err = events.find((e) => e.type === 'error')
     expect(err && err.type === 'error' && err.message).toMatch(/Can't reach the AI server/)
-  })
-})
-
-describe('quiz', () => {
-  it('parses questions and maps sources back to files', async () => {
-    const port = (server.address() as { port: number }).port
-    updateSettings({ ai: { baseUrl: `http://localhost:${port}/v1` } as any })
-    reply =
-      'Here you go:\n```json\n[{"question":"What does log2(8) equal?","options":["2","3","4","8"],"answer":1,"explanation":"2^3 = 8","source":1}]\n```'
-    const quiz = await generateQuiz({ kind: 'note', path: 'Maths/Logarithms.md' }, 1)
-    expect(quiz).toHaveLength(1)
-    expect(quiz[0].answer).toBe(1)
-    expect(quiz[0].source).toBe('Maths/Logarithms.md')
   })
 })
 

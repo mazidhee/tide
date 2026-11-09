@@ -1,11 +1,12 @@
-import { openingMessage, sessionInstructions, type SessionSetup } from '@shared/session'
+import { lessonCanvasPath, openingMessage, sessionInstructions, withStrategy, type SessionSetup } from '@shared/session'
 import type { ChatRequest, ChatScope } from '@shared/types'
 
 /**
  * The first request a lesson sends, exactly. Learn sends the same one ahead of time so the model
  * has already read it (cached) when you press start; any difference would make that wasted work.
  */
-export function openingRequest(setup: SessionSetup, scope: ChatScope, character: string): Omit<ChatRequest, 'id'> {
+export function openingRequest(given: SessionSetup, scope: ChatScope, character: string): Omit<ChatRequest, 'id'> {
+  const setup = withStrategy(given, scope)
   let talk = false
   let web = true
   try {
@@ -18,6 +19,7 @@ export function openingRequest(setup: SessionSetup, scope: ChatScope, character:
     messages: [{ role: 'user', content: openingMessage(setup) }],
     scope,
     instructions: sessionInstructions(setup),
+    ...(setup.options?.strategy === 'walkthrough' ? { canvasPath: lessonCanvasPath(scope, setup.topic) } : {}),
     session: true,
     web,
     voice: talk ? (character as ChatRequest['voice']) : undefined,
