@@ -7,6 +7,7 @@ import { buildLink } from '@shared/deeplink'
 import { complete, extractJsonObject, friendlyError, streamDraft } from './ai'
 import { readWebpage, webSearch } from './agent'
 import { getSettings } from './settings'
+import { directionLine } from './coach'
 
 /**
  * Sizes a learning goal before any outline is written: research how people actually learn it and
@@ -70,8 +71,9 @@ export async function sizePlan(req: PlanRequest, step: (s: AgentStep) => void, s
   }
   if (signal?.aborted) throw new Error('Stopped.')
   step({ id: 'p3', kind: 'helper', label: 'Sizing the plan', status: 'running', depth: 0 })
+  const heading = await directionLine().catch(() => '')
   const prompt = `Plan how a learner gets from where they are to real expertise in: ${req.topic}
-${req.goal?.trim() ? `Their goal and what they already know: ${req.goal.trim()}` : 'They did not say what they already know; assume a capable adult new to this subject.'}
+${req.goal?.trim() ? `Their goal and what they already know: ${req.goal.trim()}` : 'They did not say what they already know; assume a capable adult new to this subject.'}${heading ? `\n${heading} Pick phases, projects and exercises that serve that direction.` : ''}
 They can study about ${req.hoursPerWeek} hours a week, starting ${req.start}.${req.deadline ? ` They want to finish by ${req.deadline}.` : ''}
 
 ${CALIBRATION}
@@ -102,8 +104,9 @@ Return ONLY JSON:
  * and the answer is held to the same limits as a new plan, with any deadline they name enforced.
  */
 export async function adjustPlan(req: PlanRequest & { plan: StudyPlan; request: string }, signal?: AbortSignal): Promise<StudyPlan> {
+  const heading = await directionLine().catch(() => '')
   const prompt = `This is a learner's study plan for: ${req.topic}
-${req.goal?.trim() ? `Their goal and what they know: ${req.goal.trim()}\n` : ''}It starts ${req.start}, at ${req.plan.hoursPerWeek} hours a week, ${req.plan.weeks} weeks in all:
+${req.goal?.trim() ? `Their goal and what they know: ${req.goal.trim()}\n` : ''}${heading ? `${heading}\n` : ''}It starts ${req.start}, at ${req.plan.hoursPerWeek} hours a week, ${req.plan.weeks} weeks in all:
 ${JSON.stringify({ scope: req.plan.scope, coding: !!req.plan.coding, why: req.plan.why, phases: req.plan.phases })}
 
 They ask: "${req.request.trim()}"

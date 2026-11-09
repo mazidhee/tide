@@ -14214,3 +14214,24 @@ button.tl-dot:focus-visible {
 .msg-pics + p {
   margin-top: 0;
 }
+
+/* Your week: where you're heading, worked out by Tide */
+.coach-aim p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+  max-width: 62ch;
+}
+
+.coach-aim p.muted {
+  color: var(--ink-muted);
+}
+
+.coach-aim-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 16px;
+  margin-top: 8px;
+}

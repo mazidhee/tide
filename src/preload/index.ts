@@ -130,6 +130,7 @@ const api: TideApi = {
     week: invoke('coach:week'),
     planWeek: invoke('coach:planWeek'),
     profile: invoke('coach:profile'),
+    infer: invoke('coach:infer'),
     toThings: invoke('coach:toThings'),
     setDone: invoke('coach:setDone'),
     syncDone: invoke('coach:syncDone'),

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChatScope } from '@shared/types'
-import { addTakeaways, newLessonNote, ownWords } from '@shared/lessonNotes'
+import { addTakeaways, learnerText, newLessonNote } from '@shared/lessonNotes'
 import { useApp } from '../state'
 import { Editor } from './Editor'
 import { Icon } from './Icon'
@@ -21,7 +21,7 @@ function notePathFor(files: { path: string; name: string; kind?: string }[], top
  * The lesson's note, beside the lesson: the tutor's takeaways land under "From the lesson" as it
  * teaches, and you write under "In my words". Saved as an ordinary note, created on first use.
  */
-export function LessonNotes({ topic, scope, takeaways, onCheck, busy }: { topic: string; scope: ChatScope; takeaways: string[]; onCheck(words: string): void; busy: boolean }) {
+export function LessonNotes({ topic, scope, takeaways, onCheck, busy, mineRef }: { topic: string; scope: ChatScope; takeaways: string[]; onCheck(mine: string): void; busy: boolean; mineRef?: { current: string } }) {
   const app = useApp()
   const [{ path, exists }] = useState(() => notePathFor(app.files, topic, scope))
   const [text, setText] = useState<string | null>(null)
@@ -71,7 +71,9 @@ export function LessonNotes({ topic, scope, takeaways, onCheck, busy }: { topic:
   }
   useEffect(() => () => clearTimeout(saveTimer.current), [])
 
-  const words = text ? ownWords(text) : ''
+  // Everything you wrote, so the tutor can review it whenever you ask
+  const mine = text ? learnerText(text) : ''
+  if (mineRef) mineRef.current = mine
   return (
     <aside className="lesson-notes" aria-label="Your notes for this lesson">
       <div className="lesson-notes-head">
@@ -80,11 +82,11 @@ export function LessonNotes({ topic, scope, takeaways, onCheck, busy }: { topic:
           <Icon name="external" size={13} />
         </button>
       </div>
-      <p className="muted small lesson-notes-hint">Key ideas land here as you learn. Write yours under “In my words”.</p>
+      <p className="muted small lesson-notes-hint">Key ideas land here as you learn. Write your own anywhere, and ask the tutor to review them.</p>
       <div className="lesson-notes-editor">{text !== null && <Editor value={text} onChange={edit} />}</div>
       <div className="lesson-notes-foot">
-        <button className="btn small" disabled={busy || words.length < 40} onClick={() => onCheck(words)} title="The tutor checks your explanation against the lesson">
-          Check my words
+        <button className="btn small" disabled={busy || mine.length < 20} onClick={() => onCheck(mine)} title="The tutor reads what you wrote and says what's right, what to fix and why">
+          Review my notes
         </button>
       </div>
     </aside>

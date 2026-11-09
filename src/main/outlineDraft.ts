@@ -2,6 +2,7 @@ import type { ChatEvent, OutlineDraftRequest } from '@shared/types'
 import { friendlyError, streamDraft } from './ai'
 import { readWebpage, webSearch } from './agent'
 import { getSettings } from './settings'
+import { directionLine } from './coach'
 
 /**
  * Drafts a study outline for a new topic. Research happens first and in code, not by the model:
@@ -80,9 +81,11 @@ export async function draftOutline(req: OutlineDraftRequest, emit: (e: ChatEvent
     }
     if (controller.signal.aborted) return
     const plan = req.plan
+    const heading = await directionLine().catch(() => '')
     const user = [
       `Topic: ${req.topic}`,
       req.goal?.trim() ? `What the learner wants from it, and what they already know: ${req.goal.trim()}` : '',
+      heading ? `${heading} Choose topics, examples and projects with that in mind (an LLM from scratch for a systems engineer leans on memory, kernels and performance, for instance), but keep the subject complete.` : '',
       plan
         ? `This is a ${plan.weeks}-week plan at ${plan.hoursPerWeek} hours a week (${Math.round(plan.weeks * plan.hoursPerWeek)} study hours in all). Write exactly these phases as the ## parts, in this order, titled "Phase N: name", with NO MORE topics than the number given (one topic is about 2 to 3 hours of study, so a short plan must stay short):
 ${plan.phases.map((p, i) => `${i + 1}. ${p.title}: ${p.weeks} weeks, at most ${topicBudget(p.weeks, plan.hoursPerWeek)} topics. By the end they can ${p.outcome}${p.project ? `. Project: ${p.project}` : ''}`).join('\n')}
