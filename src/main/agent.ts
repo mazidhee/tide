@@ -10,6 +10,8 @@ import { todayItems } from '@shared/coach'
 import { aboutMetabase } from '@shared/metabase'
 import { metabaseHost, metabaseReady, metabaseTool } from './metabase'
 import { loadImages, type NoteImage } from './noteImages'
+import { pagesToRead } from './books'
+import { readingLabel } from '@shared/books'
 import { imageMarkdown } from '@shared/noteImages'
 import { addTask, describeTasks, feedbackOnTask, findTask, searchTasks, thingsAvailable, TIDE_TAG } from './things'
 import { buildLink, type DeepLink } from '@shared/deeplink'
@@ -1452,6 +1454,8 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
   const wanted = req.instructions ? null : thingsIntent(question)
   const thingsOn = !!wanted && (await thingsAvailable())
   const marking = thingsOn && wanted === 'mark'
+  // A lesson opens knowing where its topic is in the books they own, so it can send them to the pages
+  const own = req.session && req.instructions && userTurns <= 1 && req.scope.kind !== 'pages' ? await pagesToRead(question, 2).catch(() => []) : []
   const assigning = thingsOn && wanted === 'assign'
   const turnContext = [
     req.voice ? voiceRules(characterById(req.voice), recentOpenings(req.messages.filter((m) => m.role === 'assistant').map((m) => String(m.content)))) : '',
@@ -1468,6 +1472,7 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
     // each turn longer and slower, and the tutor can still search when it needs more
     sources.length && !((assigning || marking) && req.scope.kind === 'vault') && !(req.instructions && userTurns > 1) ? `Passages from what the student is studying right now:\n\n${sources.map((s) => `[${s.index}] ${s.title}${s.heading ? ` > ${s.heading}` : ''}\n${clip(s.text, req.instructions || req.scope.kind === 'vault' ? 1000 : 1600)}`).join('\n\n---\n\n')}` : '',
     req.attachment ? `The student selected this passage:\n"""\n${req.attachment}\n"""` : '',
+    own.length ? `Where this is covered in books the student owns (they open in Tide; point them to the pages when it helps, as a markdown link like [${readingLabel(own[0])}](/${own[0].path.split('/').map(encodeURIComponent).join('/')}#page=${own[0].from})): ${own.map(readingLabel).join('; ')}` : '',
     images.length ? `You can see ${images.length === 1 ? 'the picture' : `these ${images.length} pictures`} from their notes, attached below in this order: ${images.map((im, i) => `${i + 1}) ${im.path}`).join(', ')}. Teach from what they show. To show one in your answer, put its line on its own exactly as written: ${images.map((im) => imageMarkdown(im.path)).join(' ')}` : ''
   ]
     .filter(Boolean)

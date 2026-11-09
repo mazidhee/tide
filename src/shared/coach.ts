@@ -35,7 +35,8 @@ export interface AgendaItem {
   minutes: number
   /** Why this, now: one line */
   why?: string
-  readings?: { title: string; by?: string; url?: string }[]
+  /** What to read: a page range in a book you own (path and page), or a link */
+  readings?: { title: string; by?: string; url?: string; path?: string; page?: number }[]
   /** Ticked off, by you or by finishing it in Tide */
   done?: boolean
   /** Moved here from an earlier day you didn't get to */

@@ -6,7 +6,7 @@ export const SIDEBAR_ITEMS = [
   { id: 'practice', label: 'Practice' },
   { id: 'library', label: 'Library' },
   { id: 'review', label: 'Review' },
-  { id: 'graph', label: 'Graph' },
+  { id: 'graph', label: 'Brain' },
   { id: 'notebooks', label: 'Notebooks list' },
   { id: 'focus', label: 'Focus timer' },
   { id: 'saveLink', label: 'Save a link' },

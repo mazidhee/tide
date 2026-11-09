@@ -1,4 +1,5 @@
 import { TimeThis } from './TimeThis'
+import { readingLabel, type ReadingSuggestion } from '@shared/books'
 import { notesReviewRequest, wantsNotesReview } from '@shared/lessonNotes'
 import { reveal } from '../lib/scroll'
 import { Thinking } from './Thinking'
@@ -188,6 +189,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   )
   const [notesOpen, setNotesOpen] = useState(() => localStorage.getItem('tide.lesson.notes') !== 'closed')
   const withNotes = mode === 'teach' && notesOpen
+  // Where this is covered in books you own, to read alongside the lesson
+  const [toRead, setToRead] = useState<ReadingSuggestion[]>([])
+  useEffect(() => {
+    if (mode !== 'teach' || scope.kind === 'pages') return
+    window.tide.books.suggest(topic, 2).then(setToRead).catch(() => {})
+  }, [mode, topic, scope.kind])
   const notesMine = useRef('')
 
   // Talk: the tutor speaks each reply as it writes it, and you answer by voice (or hands-free)
@@ -558,6 +565,17 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       <div className={withNotes ? 'session-split' : 'session-solo'}>
       <div className="doc-scroll session-scroll">
         <div className="session-column">
+          {toRead.length > 0 && (
+            <div className="s-read" aria-label="Read alongside">
+              <Icon name="book" size={13} />
+              <span className="muted">Read</span>
+              {toRead.map((r) => (
+                <button key={`${r.path}:${r.from}`} className="s-read-link" onClick={() => app.openPath(r.path, `page=${r.from}`)} title={r.about ?? readingLabel(r)}>
+                  {readingLabel(r)}
+                </button>
+              ))}
+            </div>
+          )}
           {plan && (
             <ol className="s-plan" aria-label="Lesson plan">
               {plan.steps.map((s, i) => (

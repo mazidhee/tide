@@ -11,14 +11,17 @@ interface Card {
 export function FlashcardMaker({
   sourcePath,
   focusText,
+  pages,
   onClose
 }: {
   sourcePath: string
   focusText?: string
+  /** A book's chapter: cards from those pages only */
+  pages?: { from: number; to: number }
   onClose(): void
 }) {
   const app = useApp()
-  const [count, setCount] = useState(focusText ? 3 : 10)
+  const [count, setCount] = useState(focusText ? 3 : pages ? 8 : 10)
   const [cards, setCards] = useState<Card[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -27,7 +30,7 @@ export function FlashcardMaker({
     setBusy(true)
     setError(null)
     try {
-      setCards(await window.tide.ai.generateFlashcards(sourcePath, count, focusText))
+      setCards(await window.tide.ai.generateFlashcards(sourcePath, count, focusText, pages))
     } catch (e) {
       setError((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
     } finally {

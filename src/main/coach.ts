@@ -5,11 +5,14 @@ import { buildLink } from '@shared/deeplink'
 import { complete, extractJsonObject } from './ai'
 import { focusLog, getGoals, getMastery, getNotebooks, listDrills, listInterviews, studyEvents } from './learn'
 import { listMemories } from './memory'
+import { brainEvent } from './brainEvents'
 import { listMistakes } from './mistakes'
 import { getCards } from './study'
 import { addProject, ensureArea, getProject, searchTasks, thingsAvailable, TIDE_TAG, updateTask } from './things'
 import { absPath, joinRel, readText, writeText } from './vault'
 import { planReadings } from './planner'
+import { pagesToRead } from './books'
+import { readingLabel } from '@shared/books'
 
 /**
  * The coach plans your week towards your goal and keeps a short learner profile.
@@ -151,7 +154,8 @@ const DAY = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB'
  * Plans the week: what comes first and why, then each study day's agenda. Readings are looked up
  * (and checked) for the topics to learn. Saved as data and as a note you can edit.
  */
-export async function planWeek(date = today()): Promise<WeekPlan> {
+export async function planWeek(date = today(), background = false): Promise<WeekPlan> {
+  const ask = (prompt: string, system: string) => complete(prompt, system, undefined, background ? 'background' : 'interactive')
   const settings = await getCoach()
   if (!settings.focus.length) throw new Error('Pick what to focus on first.')
   // The next seven days from today, so planning on a Sunday plans the coming week, not one day
@@ -187,14 +191,14 @@ Return ONLY JSON:
       return null
     }
   }
-  let plan = read(await complete(prompt, system))
-  if (!plan) plan = read(await complete(`${prompt}\n\nReply with the JSON object only. Every "learn" item must name a topic from the lists exactly.`, system))
+  let plan = read(await ask(prompt, system))
+  if (!plan) plan = read(await ask(`${prompt}\n\nReply with the JSON object only. Every "learn" item must name a topic from the lists exactly.`, system))
   if (!plan) throw new Error("The coach couldn't put a week together. Try again.")
   // A subject the plan says matters (a fifth or more of the week) must actually get time
   const missing = plan.priorities.filter((p) => p.share >= 20 && !plan!.days.some((d) => d.items.some((i) => i.notebook === p.notebook)))
   if (missing.length) {
     const again = read(
-      await complete(
+      await ask(
         `${prompt}\n\nYour last plan gave ${missing.map((m) => `${m.notebook} ${m.share}%`).join(' and ')} of the week but scheduled nothing from ${missing.length > 1 ? 'them' : 'it'}. Plan again so each subject gets roughly its share of the minutes, using topics from its list.`,
         system
       )
@@ -209,14 +213,18 @@ Return ONLY JSON:
       { scope: 'skill', weeks: 1, hoursPerWeek: settings.hoursPerWeek, why: '', phases: learn.map((i) => ({ title: i.topic!, weeks: 1, outcome: `understand ${i.topic}` })) },
       ''
     ).catch(() => [])
-    learn.forEach((it, i) => {
-      const r = readings[i]?.items.slice(0, 2) ?? []
-      if (r.length) it.readings = r.map((x) => ({ title: x.title, ...(x.by ? { by: x.by } : {}), ...(x.url ? { url: x.url } : {}) }))
-    })
+    for (const [i, it] of learn.entries()) {
+      // The pages in books you own come first, then what the web suggests
+      const own = await pagesToRead(it.topic!, 1).catch(() => [])
+      const web = readings[i]?.items.slice(0, own.length ? 1 : 2) ?? []
+      const all = [...own.map((r) => ({ title: readingLabel(r), path: r.path, page: r.from })), ...web.map((x) => ({ title: x.title, ...(x.by ? { by: x.by } : {}), ...(x.url ? { url: x.url } : {}) }))]
+      if (all.length) it.readings = all
+    }
   }
   await fs.mkdir(absPath(WEEKS), { recursive: true })
   await writeText(weekFile(start), JSON.stringify(plan, null, 2))
   await writeText(WEEK_NOTE, weekMarkdown(plan))
+  brainEvent({ kind: 'week', label: `Planned your week: ${plan.days.reduce((n, d) => n + d.items.filter((i) => i.kind === 'learn').length, 0)} topics to learn` })
   return plan
 }
 
@@ -297,7 +305,25 @@ Only state what the facts support.`
   if (!parsed.direction?.trim()) return settings
   const names = new Set(books.map((b) => b.name))
   const focus = settings.focus.length ? settings.focus : (parsed.focus ?? []).filter((f) => names.has(f) && books.find((b) => b.name === f)?.outline)
-  return saveCoach({ ...settings, direction: parsed.direction.trim(), directionAt: Date.now(), focus })
+  const saved = await saveCoach({ ...settings, direction: parsed.direction.trim(), directionAt: Date.now(), focus })
+  if (parsed.direction.trim() !== settings.direction) brainEvent({ kind: 'direction', label: `Where you're heading: ${parsed.direction.trim()}`, id: 'you' })
+  return saved
+}
+
+/**
+ * Plans the week by itself when there's no plan for today (a new week, or the last one ran out),
+ * once it knows what to focus on. Quietly does nothing otherwise; Plan again is always there.
+ */
+export async function autoPlanWeek(): Promise<WeekPlan | null> {
+  const date = today()
+  if (await getWeek(date)) return null
+  let settings = await getCoach()
+  if (!settings.focus.length) settings = await inferDirection()
+  if (!settings.focus.length) return null
+  const plan = await planWeek(date, true).catch(() => null)
+  // The profile follows a new week, as when you plan it yourself
+  if (plan) await updateProfile().catch(() => {})
+  return plan
 }
 
 /** One line on where the learner is heading, for prompts that shape what to teach and how */

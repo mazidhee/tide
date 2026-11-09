@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { addGuideChapter, chapterAt, chapterRange, guideMarkdown, insertGuide, parseGuide, toggleGuideLine, type GuideChapter } from '@shared/guide'
 import { useApp } from '../state'
 import { Icon } from './Icon'
+import { FlashcardMaker } from './FlashcardMaker'
 
 interface Props {
   /** Vault path of the PDF */
@@ -28,6 +29,7 @@ export function ReadingGuide({ path, notes, onNotes, numPages, currentPage, goTo
   const [finding, setFinding] = useState(false)
   const [note, setNote] = useState('')
   const [marking, setMarking] = useState<string | null>(null)
+  const [cardsFor, setCardsFor] = useState<{ from: number; to: number } | null>(null)
   const current = chapterAt(chapters, currentPage)
   const done = chapters.filter((c) => c.done).length
 
@@ -63,6 +65,13 @@ export function ReadingGuide({ path, notes, onNotes, numPages, currentPage, goTo
       options: mode === 'quiz' ? { length: 6 } : undefined,
       nonce: Date.now()
     })
+  }
+
+  /** A short marked test on a chapter, to check you really learned it */
+  const test = (i: number) => {
+    const c = chapters[i]
+    const { from, to } = chapterRange(chapters, i, numPages)
+    app.setView({ kind: 'exam', scope: { kind: 'pages', path, from, to, label: `${c.title} (${book}, pages ${from}–${to})` }, topic: c.title, options: { questions: 5, minutes: 30, difficulty: 'normal', style: 'university' }, nonce: Date.now() })
   }
 
   /** A coding challenge on a chapter, saved to Practice so it comes back for another go */
@@ -161,6 +170,12 @@ export function ReadingGuide({ path, notes, onNotes, numPages, currentPage, goTo
               <button className="icon-btn small" title="Quiz me on this chapter" onClick={() => study(i, 'quiz')}>
                 <Icon name="quiz" size={13} />
               </button>
+              <button className="icon-btn small" title="Test me on this chapter (marked, 30 min)" onClick={() => test(i)}>
+                <Icon name="check" size={13} />
+              </button>
+              <button className="icon-btn small" title="Flashcards from this chapter" onClick={() => setCardsFor(chapterRange(chapters, i, numPages))}>
+                <Icon name="cards" size={13} />
+              </button>
               <button className="icon-btn small" title="Coding challenge on this chapter" onClick={() => challenge(i)}>
                 <Icon name="terminal" size={13} />
               </button>
@@ -176,6 +191,7 @@ export function ReadingGuide({ path, notes, onNotes, numPages, currentPage, goTo
           </button>
         )}
       </div>
+      {cardsFor && <FlashcardMaker sourcePath={path} pages={cardsFor} onClose={() => setCardsFor(null)} />}
     </div>
   )
 }
