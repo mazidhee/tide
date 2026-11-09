@@ -10,9 +10,14 @@ const NOTE_EXT = new Set(['.md', '.markdown'])
 const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif'])
 const DOC_EXT = new Set(['.docx', '.txt'])
 
+/** The notes folder isn't where Tide was told it is (moved, renamed, a drive unplugged) */
+export class VaultMissing extends Error {}
+
 export function vaultRoot(): string {
   const root = getSettings().vaultPath
   if (!root) throw new Error('No notes folder selected')
+  // Never write into a folder that's gone: that would quietly start an empty vault in its place
+  if (!existsSync(root)) throw new VaultMissing(`Your notes folder isn't at ${root} any more. Tide is looking for it.`)
   return root
 }
 

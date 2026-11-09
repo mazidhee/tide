@@ -1295,7 +1295,7 @@ export async function agentComplete(messages: ApiMessage[], system: string, allo
     step: () => `s${++stepCounter}`,
     updateStep: () => {}
   }
-  const target = task ? routeFor(task) : null
+  const target = task ? routeFor(task, 'auto', false) : null
   if (target && task) ctx.cloud = { target, task, stepId: '' }
   const all: ApiMessage[] = [{ role: 'system', content: system }, ...messages]
   if (!allowCode) return (await streamTurn(all, [], controller.signal, () => {}, ctx)).text
@@ -1444,7 +1444,7 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
   // Pictures need a model that can see them: Gemma
   // A private project's documents never leave this Mac
   const secret = req.scope.kind !== 'none' && req.scope.kind !== 'vault' && (await privatePath(req.scope.path).catch(() => false))
-  const target = req.warmOnly || mine || secret || images.length ? null : routeFor(req.engine === 'cloud' ? null : job, req.engine ?? 'auto')
+  const target = req.warmOnly || mine || secret || images.length ? null : routeFor(req.engine === 'cloud' ? null : job, req.engine ?? 'auto', false)
   if (target) {
     const name = providerInfo(target.provider).models.find((m) => m.id === target.model)?.label ?? target.model
     const why = job === 'maths' ? 'checking the maths' : job === 'errors' ? 'finding the mistake' : 'answering'

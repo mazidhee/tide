@@ -42,6 +42,10 @@ Kimi K3.1 Pro has a page on build.nvidia.com but NVIDIA's API doesn't serve it y
 
 Change any of them under **Settings → Models**. Tide paces itself at about 35 requests a minute rather than wait to be refused, and gives each job a time limit (longer for hard maths) after which the next model in line answers.
 
+## Free backups with no account
+
+Two open endpoints need no key and join the end of the line by themselves, after the providers you have keys for: **Kilo** (NVIDIA's Nemotron 3 Ultra, about 200 requests an hour, around 15 seconds an answer) and **OVHcloud** (GPT-OSS 120B and Qwen3.5 397B, about 2 requests a minute, slow). Kilo's free models may train on what they're sent, so they only ever get the short checks (a problem, its solution, your answer), never a tutoring turn with your notes in it.
+
 ## When it's busy
 
 Models back each other up. If one is rate limited, down, too slow or refuses the key, the same provider's other models try, then every other provider you've saved a key for, then Gemma on this Mac. A provider that refused is left alone for a minute or so (as long as it asks) before it's tried again. **Settings → Models → When it's busy** shows the order.
