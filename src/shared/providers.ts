@@ -46,6 +46,8 @@ export interface ProviderInfo {
   jobs?: Partial<Record<CloudTask, string>>
   /** Requests a minute to stay under: Tide paces itself rather than wait to be refused */
   perMinute?: number
+  /** Answers without a key (an open endpoint): always in the line, after the providers you have keys for */
+  keyless?: boolean
 }
 
 export const PROVIDERS: ProviderInfo[] = [
@@ -159,6 +161,36 @@ export const PROVIDERS: ProviderInfo[] = [
       { id: 'claude-opus-5-5', label: 'Claude Opus 5.5', reasoning: true },
       { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5' }
     ]
+  },
+  {
+    id: 'kilo',
+    name: 'Kilo (no key)',
+    summary: 'Free, no account: NVIDIA’s Nemotron 3 Ultra, about 200 requests an hour. May train on what you send',
+    baseUrl: 'https://api.kilo.ai/api/gateway',
+    pricingUrl: 'https://kilo.ai',
+    checked: '2026-11-09',
+    freeTier: 'No key or account. About 200 requests an hour per address. Its free models may train on prompts, so private projects, Metabase and pictures never go here; only problems and answers do. Tested 9 Nov 2026: right answer in about 15 seconds.',
+    keyless: true,
+    perMinute: 3,
+    models: [
+      { id: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'Nemotron 3 Ultra (free)', price: { input: 0, output: 0 }, reasoning: true, note: 'NVIDIA’s largest open model' },
+      { id: 'kilo-auto/free', label: 'Kilo auto (free)', price: { input: 0, output: 0 } }
+    ]
+  },
+  {
+    id: 'ovh',
+    name: 'OVHcloud (no key)',
+    summary: 'Free, no account, hosted in the EU; about 2 requests a minute and slow',
+    baseUrl: 'https://oai.endpoints.kepler.ai.cloud.ovh.net/v1',
+    pricingUrl: 'https://endpoints.ai.cloud.ovh.net',
+    checked: '2026-11-09',
+    freeTier: 'No key or account: about 2 requests a minute per model. Tested 9 Nov 2026: GPT-OSS 120B answered in about 23 seconds, Qwen3.5-397B in about 60. Too slow to lead; a last backup before Gemma.',
+    keyless: true,
+    perMinute: 2,
+    models: [
+      { id: 'gpt-oss-120b', label: 'GPT-OSS 120B', price: { input: 0, output: 0 }, reasoning: true },
+      { id: 'Qwen3.5-397B-A17B', label: 'Qwen3.5 397B', price: { input: 0, output: 0 }, reasoning: true, note: 'Strong at maths; about a minute an answer' }
+    ]
   }
 ]
 
@@ -257,8 +289,9 @@ export function escalationFor(answer: string, askType?: string): CloudTask | nul
  */
 export function jobLine(settings: CloudSettings, keys: Record<string, boolean>, task: CloudTask | null): { provider: string; model: string }[] {
   const out: { provider: string; model: string }[] = []
+  const usable = (provider: string) => keys[provider] || !!providerInfo(provider, settings).keyless
   const add = (provider: string, model?: string) => {
-    if (model && keys[provider] && !out.some((t) => t.provider === provider && t.model === model)) out.push({ provider, model })
+    if (model && usable(provider) && !out.some((t) => t.provider === provider && t.model === model)) out.push({ provider, model })
   }
   const modelFor = (provider: string) => {
     const info = providerInfo(provider, settings)

@@ -701,6 +701,9 @@ function ModelsSection() {
                 </span>
               </div>
             )}
+            {info.keyless ? (
+              <Row label="API key" hint="None needed: an open endpoint. Only short checks go here, never your notes." />
+            ) : (
             <Row
               label="API key"
               hint={
@@ -731,6 +734,7 @@ function ModelsSection() {
                 </span>
               )}
             </Row>
+            )}
             <Row label="Model" hint={info.models.find((m) => m.id === cloud.model)?.note}>
               <Select label="Model" value={cloud.model} onChange={(v) => save({ model: v })} options={(modelIds.includes(cloud.model) ? modelIds : [cloud.model, ...modelIds]).filter(Boolean).map((id) => ({ value: id, label: modelLabel(id) }))} />
             </Row>
@@ -751,7 +755,7 @@ function ModelsSection() {
             <Row
               label="When it’s busy"
               hint={(() => {
-                const others = providers.filter((id) => id !== cloud.provider && keys[id]).map((id) => providerInfo(id, cloud).name)
+                const others = providers.filter((id) => id !== cloud.provider && (keys[id] || providerInfo(id, cloud).keyless)).map((id) => providerInfo(id, cloud).name)
                 const siblings = info.models.filter((m) => m.reasoning).length > 1 ? `${info.name}’s other models` : ''
                 const line = [siblings, ...others].filter(Boolean)
                 return `If a model is busy, slow or down, ${line.length ? `${line.join(', then ')}, then ` : ''}Gemma on this Mac answers.${others.length ? '' : ' Save a key for another provider (pick it above, paste its key, then switch back) and it joins the line.'}`

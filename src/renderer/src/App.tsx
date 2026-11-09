@@ -136,6 +136,33 @@ function ImageView({ path }: { path: string }) {
 export default function App() {
   // Decoration holds still while the model works: the GPU is Gemma's
   useEffect(() => followModelBusy(), [])
+  // The notes folder moved: Tide followed it (reload to read it afresh), or asks where it went
+  useEffect(() => {
+    const offMoved = window.tideEvents.onVaultMoved((path) => {
+      app.toast(`Your notes folder moved to ${path.replace(/^\/Users\/[^/]+/, '~')}. Tide followed it.`)
+      setTimeout(() => location.reload(), 2500)
+    })
+    const offMissing = window.tideEvents.onVaultMissing((old) =>
+      app.toast(`Tide can't find your notes folder (it was at ${old.replace(/^\/Users\/[^/]+/, '~')}). Nothing is saved until it's found.`, {
+        tone: 'error',
+        action: {
+          label: 'Find it…',
+          run: async () => {
+            const p = await window.tide.vault.choose()
+            if (p) {
+              await app.updateSettings({ vaultPath: p })
+              location.reload()
+            }
+          }
+        }
+      })
+    )
+    return () => {
+      offMoved()
+      offMissing()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const app = useApp()
   const { settings, view, dialog } = app

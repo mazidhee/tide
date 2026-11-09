@@ -1,6 +1,7 @@
 import { gradeAnswer } from './daily'
 import { hasKeys, listCloudModels, setKey, testCloud, usageSummary } from './cloud'
 import { connectMetabase, disconnectMetabase, metabaseStatus } from './metabase'
+import { followVault } from './vaultHome'
 import { newStudyApiToken, setStudyApi, startStudyApi, stopStudyApi, studyApiStatus } from './studyApi'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, protocol, shell } from 'electron'
 import { join } from 'path'
@@ -571,6 +572,14 @@ app.whenReady().then(() => {
   })
 
   registerIpc()
+  // The notes folder moved while Tide was closed or open: follow it, or ask where it went
+  followVault(
+    (path) => {
+      startVault()
+      send('vault:moved', path)
+    },
+    (old) => send('vault:missing', old)
+  )
   // The study data API, when it's turned on in Settings › Tools
   startStudyApi().catch(() => {})
   setMenu()

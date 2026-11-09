@@ -314,7 +314,8 @@ async function* streamCloud(target: CloudTarget, messages: ChatMessage[], signal
 export async function* streamRouted(messages: ChatMessage[], signal: AbortSignal, maxTokens: number, task: RequestKind, temperatureOverride?: number): AsyncGenerator<string> {
   for (let tries = 0; tries < 3; tries++) {
     // A provider that just refused is cooling down, so this picks the next one in line
-    const target = routeFor(isCloudTask(task) ? task : null)
+    // Open endpoints only for the short checks (a problem and an answer), never planning from your notes
+    const target = routeFor(isCloudTask(task) ? task : null, 'auto', task === 'marking' || task === 'maths')
     if (!target) break
     let wrote = false
     try {

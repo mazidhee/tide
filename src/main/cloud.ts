@@ -123,7 +123,7 @@ export function targetFor(provider: string, model: string): CloudTarget | null {
   const s = cloudSettings()
   const info = providerInfo(provider, s)
   const apiKey = getKey(provider)
-  if (!info.baseUrl || !apiKey || !model) return null
+  if (!info.baseUrl || (!apiKey && !info.keyless) || !model) return null
   const reasoning = info.models.find((m) => m.id === model)?.reasoning
   return { provider, model, baseUrl: info.baseUrl.replace(/\/+$/, ''), apiKey, extra: reasoning && info.reasoningField ? { [info.reasoningField]: s.reasoning ?? 'medium' } : {} }
 }
@@ -133,11 +133,12 @@ export function targetFor(provider: string, model: string): CloudTarget | null {
  * (any mode but off); in auto mode a job you ticked escalates by itself, unless the provider is
  * rate limiting us or this month's paid spend has reached the budget.
  */
-export function routeFor(task: CloudTask | null, engine: 'auto' | 'local' | 'cloud' = 'auto'): CloudTarget | null {
+export function routeFor(task: CloudTask | null, engine: 'auto' | 'local' | 'cloud' = 'auto', open = true): CloudTarget | null {
   const s = cloudSettings()
   if (s.mode === 'off' || engine === 'local') return null
   if (engine !== 'cloud' && (s.mode !== 'auto' || !task || !s.tasks[task] || overBudget())) return null
-  return chain(task).find((t) => !coolingDown(t) && underPace(t.provider)) ?? null
+  // Open endpoints (no key) may train on what they're sent: only short checks go there, never a tutoring turn with your notes in it
+  return chain(task).find((t) => !coolingDown(t) && underPace(t.provider) && (open || !providerInfo(t.provider, s).keyless)) ?? null
 }
 
 /**
@@ -149,7 +150,7 @@ export const chain = (task: CloudTask | null = null): CloudTarget[] =>
     .map((t) => targetFor(t.provider, t.model))
     .filter((t): t is CloudTarget => !!t)
 
-export const headersFor = (target: CloudTarget) => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${target.apiKey}` })
+export const headersFor = (target: CloudTarget) => ({ 'Content-Type': 'application/json', ...(target.apiKey ? { Authorization: `Bearer ${target.apiKey}` } : {}) })
 
 /** An error worth falling back to Gemma for (rate limits, outages, network), rather than failing the turn */
 export class CloudUnavailable extends Error {}
@@ -177,7 +178,7 @@ export async function cloudError(res: Response, target: { provider: string; mode
   // No such model at this provider (or not for this key): leave it alone for half an hour, the next one answers
   if (res.status === 404) {
     coolTarget(target, 1800)
-    return new CloudUnavailable(`${provider} doesn't serve ${target.model} (404). Pick another model in Settings → Models.`)
+    return new CloudUnavailable(`${provider} said 404 for ${target.model}${detail ? `: ${detail.replace(/\s+/g, ' ').trim().slice(0, 200)}` : ''}`)
   }
   if (res.status === 401 || res.status === 403) {
     noteRateLimit(provider, 600)
@@ -363,9 +364,9 @@ export async function testCloud(provider: string, model: string): Promise<{ ok: 
 export async function listCloudModels(provider: string): Promise<string[]> {
   const info = providerInfo(provider, cloudSettings())
   const apiKey = getKey(provider)
-  if (!info.baseUrl || !apiKey) return []
+  if (!info.baseUrl || (!apiKey && !info.keyless)) return []
   try {
-    const res = await fetch(`${info.baseUrl.replace(/\/+$/, '')}/models`, { headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(10_000) })
+    const res = await fetch(`${info.baseUrl.replace(/\/+$/, '')}/models`, { headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {}, signal: AbortSignal.timeout(10_000) })
     if (!res.ok) return []
     const json = (await res.json()) as { data?: { id: string }[] }
     return (json.data ?? []).map((m) => m.id.replace(/^models\//, '')).sort()
