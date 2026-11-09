@@ -270,7 +270,7 @@ export async function recordAttempt(a: Omit<Attempt, 'at'>) {
   brainEvent({ kind: 'attempt', label: `${a.verdict === 'correct' ? 'Got right' : a.verdict === 'partial' ? 'Partly right' : 'Missed'}: ${a.topic}`, ...(a.path ? { id: a.path } : {}) })
 }
 
-async function readJsonl<T>(rel: string): Promise<T[]> {
+export async function readJsonl<T>(rel: string): Promise<T[]> {
   try {
     return (await fs.readFile(absPath(rel), 'utf8'))
       .split('\n')

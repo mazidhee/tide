@@ -54,6 +54,8 @@ export interface Settings {
   cloud?: import('./providers').CloudSettings
   /** Your Metabase, read-only, for learning it; its API key is kept in the Keychain */
   metabase?: { url: string }
+  /** Tide's study data API for dashboards and other apps (main/studyApi.ts); off by default */
+  studyApi?: { enabled: boolean; port?: number; lan?: boolean }
 }
 
 export type FileKind = 'note' | 'pdf' | 'image' | 'doc' | 'canvas' | 'other'
@@ -649,6 +651,11 @@ export interface TideApi {
     suggest(topic: string, limit?: number): Promise<import('./books').ReadingSuggestion[]>
     /** Maps a book now: chapters, pages and what each covers */
     map(path: string): Promise<import('./books').BookMap | null>
+  }
+  studyApi: {
+    status(): Promise<import('../main/studyApi').StudyApiStatus>
+    set(patch: { enabled?: boolean; lan?: boolean }): Promise<import('../main/studyApi').StudyApiStatus>
+    newToken(): Promise<import('../main/studyApi').StudyApiStatus>
   }
   metabase: {
     status(): Promise<{ ready: boolean; detail: string; url: string }>

@@ -1,6 +1,7 @@
 import { gradeAnswer } from './daily'
 import { hasKeys, listCloudModels, setKey, testCloud, usageSummary } from './cloud'
 import { connectMetabase, disconnectMetabase, metabaseStatus } from './metabase'
+import { newStudyApiToken, setStudyApi, startStudyApi, stopStudyApi, studyApiStatus } from './studyApi'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, protocol, shell } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
@@ -304,6 +305,9 @@ function registerIpc() {
   handle('books:map', (path: string) => mapBook(path))
   handle('things:setDone', (id: string, done: boolean) => setTaskDone(id, done))
   handle('metabase:status', () => metabaseStatus())
+  handle('studyApi:status', () => studyApiStatus())
+  handle('studyApi:set', (patch: { enabled?: boolean; lan?: boolean }) => setStudyApi(patch))
+  handle('studyApi:newToken', () => newStudyApiToken())
   handle('metabase:connect', (url: string, key: string) => connectMetabase(url, key))
   handle('metabase:disconnect', () => disconnectMetabase())
   handle('learn:adjustPlan', (req: Parameters<typeof adjustPlan>[0]) => adjustPlan(req))
@@ -565,6 +569,8 @@ app.whenReady().then(() => {
   })
 
   registerIpc()
+  // The study data API, when it's turned on in Settings › Tools
+  startStudyApi().catch(() => {})
   setMenu()
   createWindow()
   onBrainEvent((e) => BrowserWindow.getAllWindows().forEach((w) => !w.isDestroyed() && w.webContents.send('brain:event', e)))
@@ -597,6 +603,7 @@ app.whenReady().then(() => {
 
 // No lab container outlives the app
 app.on('before-quit', () => {
+  stopStudyApi().catch(() => {})
   closeAllTerminals()
   stopVoice()
 })

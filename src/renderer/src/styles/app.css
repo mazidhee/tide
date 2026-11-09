@@ -16927,3 +16927,12 @@ button.tl-dot:focus-visible {
     animation: none !important;
   }
 }
+
+/* The study data API's example command: long, so it wraps */
+.set-code {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: var(--text-xs);
+}
