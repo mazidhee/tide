@@ -174,6 +174,11 @@ export async function cloudError(res: Response, target: { provider: string; mode
     coolTarget(target, 60)
     return new CloudUnavailable(`The cloud model is unavailable (${res.status})`)
   }
+  // No such model at this provider (or not for this key): leave it alone for half an hour, the next one answers
+  if (res.status === 404) {
+    coolTarget(target, 1800)
+    return new CloudUnavailable(`${provider} doesn't serve ${target.model} (404). Pick another model in Settings → Models.`)
+  }
   if (res.status === 401 || res.status === 403) {
     noteRateLimit(provider, 600)
     return new CloudUnavailable('The cloud key was refused. Check it in Settings → Models.')
