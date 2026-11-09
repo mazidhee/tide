@@ -206,7 +206,9 @@ const api: TideApi = {
     importPaths: invoke('library:importPaths'),
     thumb: invoke('library:thumb'),
     topics: invoke('library:topics'),
-    setTopics: invoke('library:setTopics')
+    setTopics: invoke('library:setTopics'),
+    status: invoke('library:status'),
+    setStatus: invoke('library:setStatus')
   },
   highlights: {
     get: invoke('highlights:get'),

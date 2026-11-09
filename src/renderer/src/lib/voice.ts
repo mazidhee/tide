@@ -6,7 +6,7 @@ import { splitSay } from '@shared/characters'
  * Uses Tide's natural voice when it's set up, the Mac's own voices otherwise.
  */
 
-type VoicePrefs = { engine: 'natural' | 'system'; name: string; speed: number }
+type VoicePrefs = NonNullable<import('@shared/types').Settings['voice']>
 export const DEFAULT_VOICE: VoicePrefs = { engine: 'natural', name: 'bm_george', speed: 1 }
 
 /** Text to speak: Markdown, LaTeX and code reduced to plain words */

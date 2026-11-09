@@ -11,7 +11,8 @@ const getHandy = () => (handyInfo ??= window.tide.app.handy())
 export const useVoicePrefs = () => {
   const { settings } = useApp()
   const v = settings.voice ?? DEFAULT_VOICE
-  return useMemo(() => ({ ...v, name: characterById(settings.character).voice }), [v, settings.character])
+  // A voice you chose in Settings replaces the character's
+  return useMemo(() => ({ ...v, name: v.custom || characterById(settings.character).voice }), [v, settings.character])
 }
 
 /** Reads text aloud in the tutor's voice */
@@ -45,6 +46,7 @@ export function SpeakButton({ text }: { text: string }) {
  * you said is written out on this Mac and handed back. Otherwise it points to Handy.
  */
 export function DictateButton({ target, onText, onStart }: { target?: RefObject<HTMLTextAreaElement | HTMLInputElement | null>; onText?: (text: string) => void; onStart?: () => void }) {
+  const { settings } = useApp()
   const [hint, setHint] = useState<string | null>(null)
   const [state, setState] = useState<'idle' | 'listening' | 'writing'>('idle')
   const [level, setLevel] = useState(0)
@@ -67,7 +69,9 @@ export function DictateButton({ target, onText, onStart }: { target?: RefObject<
   }
 
   const start = async () => {
-    const ready = await window.tide.voice.status().then((s) => s.ready).catch(() => false)
+    // Handy chosen for dictation (or Tide's model not set up): Handy types into the box instead
+    const viaHandy = (settings.voice ?? DEFAULT_VOICE).dictation === 'handy'
+    const ready = !viaHandy && (await window.tide.voice.status().then((s) => s.ready).catch(() => false))
     if (!ready) {
       target?.current?.focus()
       const h = await getHandy()

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { NoteMeta } from '@shared/types'
+import type { LearningStatus, NoteMeta, ReadStatus } from '@shared/types'
 import { fileTitle, useApp } from '../state'
 import { isCompanion } from './companion'
 
@@ -18,6 +18,10 @@ export interface LibraryItem {
   saved?: string
   /** Subjects it's filed under, e.g. "Mathematics" */
   topics: string[]
+  /** Notes only: the `learning_status` frontmatter field */
+  learning?: LearningStatus
+  /** Reading status you set on it, which wins over one derived from `learning` */
+  readStatus?: ReadStatus
 }
 
 const sameTopic = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' }) === 0
@@ -31,6 +35,7 @@ export function useLibrary() {
   const [notes, setNotes] = useState<NoteMeta[]>([])
   const [topics, setTopicsState] = useState<Record<string, string[]>>({})
   const [notebooks, setNotebooks] = useState<string[]>([])
+  const [statuses, setStatuses] = useState<Record<string, ReadStatus>>({})
   const prefix = app.settings.libraryFolder + '/'
 
   useEffect(() => {
@@ -42,6 +47,10 @@ export function useLibrary() {
         setTopicsState(t)
         setNotebooks(nbs.map((nb) => nb.name).filter((name) => name !== app.settings.libraryFolder))
       })
+      .catch(() => {})
+    window.tide.library
+      .status()
+      .then((s) => live && setStatuses(s))
       .catch(() => {})
     return () => {
       live = false
@@ -66,11 +75,13 @@ export function useLibrary() {
           site: m?.site,
           duration: m?.duration,
           saved: m?.saved,
-          topics: topics[f.path] ?? []
+          topics: topics[f.path] ?? [],
+          learning: m?.status,
+          readStatus: statuses[f.path]
         }
       })
       .sort((a, b) => b.mtime - a.mtime)
-  }, [app.files, notes, prefix, topics])
+  }, [app.files, notes, prefix, topics, statuses])
 
   /** Notebook names first (in shelf order), then any other subject in use */
   const subjects = useMemo(() => {
@@ -97,7 +108,31 @@ export function useLibrary() {
     [app]
   )
 
-  return { items, subjects, setTopics }
+  const setStatus = useCallback(
+    (path: string, next: ReadStatus) => {
+      let previous: ReadStatus | undefined
+      setStatuses((s) => {
+        previous = s[path]
+        return { ...s, [path]: next }
+      })
+      window.tide.library.setStatus(path, next).catch(() => {
+        setStatuses((s) => {
+          const copy = { ...s }
+          if (previous) copy[path] = previous
+          else delete copy[path]
+          return copy
+        })
+        app.toast('Could not save the reading status. Try again.', { tone: 'error' })
+      })
+    },
+    [app]
+  )
+
+  return { items, subjects, setTopics, setStatus }
 }
+
+/** Read / reading / unread: what you set, else what the note's learning status implies */
+export const readStatusOf = (item: LibraryItem): ReadStatus =>
+  item.readStatus ?? (item.learning === 'mastered' ? 'read' : item.learning === 'learning' || item.learning === 'reviewing' ? 'reading' : 'unread')
 
 export const hasTopic = (item: LibraryItem, topic: string) => item.topics.some((t) => sameTopic(t, topic))

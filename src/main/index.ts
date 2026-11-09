@@ -36,7 +36,7 @@ import {
   setNoteStatus,
   updateNotebook,
   recordAttempt,
-  getMastery, getLibraryTopics, onPathMoved, setLibraryTopics, clearCoverImage, logFocus, focusLog, focusTime, invalidateGraph } from './learn'
+  getMastery, getLibraryTopics, getLibraryStatus, onPathMoved, setLibraryTopics, setLibraryStatus, clearCoverImage, logFocus, focusLog, focusTime, invalidateGraph } from './learn'
 import { importFile, libraryThumb, saveUrl } from './library'
 import { getHighlights, saveHighlights } from './highlights'
 import { librariesStatus, mathStatus, runCode, runProject, setupLibraries, setupMath } from './runner'
@@ -388,6 +388,8 @@ function registerIpc() {
   handle('library:importPaths', (paths: string[]) => importPaths(paths))
   handle('library:topics', () => getLibraryTopics())
   handle('library:setTopics', (p: string, topics: string[]) => setLibraryTopics(p, topics))
+  handle('library:status', () => getLibraryStatus())
+  handle('library:setStatus', (p: string, status: 'read' | 'reading' | 'unread' | null) => setLibraryStatus(p, status))
   handle('library:thumb', (p: string, image?: string, source?: string) => libraryThumb(p, image, source))
 
   handle('practice:list', () => listProblems())

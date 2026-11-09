@@ -42,7 +42,8 @@ export interface Settings {
   fontSize: number
   ai: AISettings
   /** How the tutor sounds: Tide's natural voice (Kokoro, set up in Settings) or the Mac's own */
-  voice?: { engine: 'natural' | 'system'; name: string; speed: number }
+  /** custom: a Kokoro voice that replaces the character's; dictation: who writes out what you say */
+  voice?: { engine: 'natural' | 'system'; name: string; speed: number; custom?: string; dictation?: 'tide' | 'handy' }
   /** Who the tutor is: the character's face, voice and way of talking */
   character?: import('./characters').CharacterId
   /** Breaks while you study: paced by the tutor, a fixed rhythm, or none */
@@ -66,6 +67,9 @@ export interface FileNode {
   mtime?: number
   children?: FileNode[]
 }
+
+/** Reading status of a library item */
+export type ReadStatus = 'read' | 'reading' | 'unread'
 
 export type LearningStatus = 'untested' | 'learning' | 'reviewing' | 'mastered'
 
@@ -706,6 +710,10 @@ export interface TideApi {
     /** Subjects each library item is filed under, by path */
     topics(): Promise<Record<string, string[]>>
     setTopics(path: string, topics: string[]): Promise<void>
+    /** Reading status you set on items (stored), by path */
+    status(): Promise<Record<string, ReadStatus>>
+    /** Sets an item's reading status; null clears it back to the derived one */
+    setStatus(path: string, status: ReadStatus | null): Promise<void>
   }
   highlights: {
     get(path: string): Promise<PdfHighlight[]>
