@@ -27,9 +27,22 @@ If the cloud model can't take a request (rate limited, offline, key refused, ove
 
 For most people, NVIDIA's free tier is the best start, with Groq or DeepSeek behind it.
 
+## Getting the most from NVIDIA's free tier
+
+With NVIDIA as the provider, each job gets its own model, because each model has its own limit and spreading the work uses more of the free allowance:
+
+| Job | Model |
+| --- | --- |
+| Hard maths and proofs | Kimi K3.1 Pro, the strongest open model (slower) |
+| Finding mistakes and code | Kimi K2.6 |
+| Marking and solving everyday problems | DeepSeek V4.1 Flash (fast) |
+| Planning | DeepSeek V4.1 Flash |
+
+Change any of them under **Settings → Models**. Tide paces itself at about 35 requests a minute rather than wait to be refused, and gives each job a time limit (longer for hard maths) after which the next model in line answers.
+
 ## When it's busy
 
-Save keys for more than one provider and they back each other up. If the model you chose is rate limited, down or refuses the key, the next provider you have a key for answers, then Gemma on this Mac. A provider that refused is left alone for a minute or so (as long as it asks) before it's tried again. **Settings → Models → When it's busy** shows the order.
+Models back each other up. If one is rate limited, down, too slow or refuses the key, the same provider's other models try, then every other provider you've saved a key for, then Gemma on this Mac. A provider that refused is left alone for a minute or so (as long as it asks) before it's tried again. **Settings → Models → When it's busy** shows the order.
 
 ## Usage
 

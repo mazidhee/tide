@@ -87,7 +87,7 @@ const tally = (rows: { expected: Verdict; got: string }[]) => {
 
 async function main() {
   const model = opt('model') || (await firstModel(BASE))
-  const reviewer = { base: opt('review-base', BASE).replace(/\/+$/, ''), key: opt('review-key'), model: opt('review-model') || model }
+  const reviewer = { base: opt('review-base', BASE).replace(/\/+$/, ''), key: opt('review-key') || process.env.TIDE_REVIEW_KEY || '', model: opt('review-model') || model }
   const items = (JSON.parse(readFileSync(join(HERE, 'marking.json'), 'utf8')) as Item[]).slice(0, args.includes('--only-problems') ? 0 : LIMIT)
   console.log(`Tutor: ${model} at ${BASE}\nReviewer: ${reviewer.model} at ${reviewer.base}\n${items.length} answers to mark\n`)
   const rows: Record<string, unknown>[] = []

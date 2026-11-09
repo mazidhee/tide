@@ -61,7 +61,7 @@ export async function checkLessonReply(
   await runChecks(checksOf(reply))
   if (sets && !solutionOf(reply) && !signal.aborted) {
     step('lesson-solve', 'Working out the answer to this problem', 'running')
-    const solved = parseSolve(await ask(solvePrompt(readable(reply)), SOLVE_SYSTEM, cloud && hard ? 'maths' : 'other').catch(() => ''))
+    const solved = parseSolve(await ask(solvePrompt(readable(reply)), SOLVE_SYSTEM, cloud ? (hard ? 'maths' : 'marking') : 'other').catch(() => ''))
     step('lesson-solve', 'Worked out the answer', 'done')
     if (solved.flaw) problems.push(`The problem can't be solved as set: ${solved.flaw}. Set a different, well-posed problem.`)
     else if (solved.solution) {

@@ -22,7 +22,7 @@ import type { ChatEvent, ChatMessage, ChatRequest, ContextSource, AgentStep } fr
 import { getSettings } from './settings'
 import { localSampling } from './sampling'
 import { getChunks, indexReady, search } from './search'
-import { canTake, CLOUD_REPLY_TOKENS, CloudUnavailable, cloudError, estimateTokens, headersFor, noteLimits, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
+import { canTake, CLOUD_REPLY_TOKENS, CloudUnavailable, cloudError, estimateTokens, headersFor, noteLimits, noteSent, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
 import { escalationFor, providerInfo, type CloudTask, type RequestKind } from '@shared/providers'
 import { SESSION_FORMAT } from '@shared/session'
 import { findImages } from './images'
@@ -564,6 +564,7 @@ async function streamTurnOnce(
     const { writeFileSync } = await import('fs')
     writeFileSync(process.env.TIDE_DEBUG_AI, JSON.stringify(payload, null, 1))
   }
+  if (target) noteSent(target.provider)
   const res = await fetch(target ? `${target.baseUrl}/chat/completions` : `${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
     method: 'POST',
     headers: target ? headersFor(target) : { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
@@ -576,7 +577,7 @@ async function streamTurnOnce(
   })
   if (target && (!res.ok || !res.body)) {
     outerSignal.removeEventListener('abort', abort)
-    throw await cloudError(res, target.provider)
+    throw await cloudError(res, target)
   }
   if (target) noteLimits(res.headers, target.provider)
   if (!res.ok || !res.body) {
