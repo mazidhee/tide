@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { motionPaused } from '../lib/motion'
 import { isScene, paletteFor, professorFrame, SPEED, type ProfessorPose } from '@shared/professorArt'
 import type { CharacterId } from '@shared/characters'
 import { useCharacter } from '../state'
@@ -20,7 +21,7 @@ export function Professor({ state = 'idle', size = 28, title, character }: { sta
 
   useEffect(() => {
     if (reduced) return
-    const t = setInterval(() => setTick((n) => n + 1), SPEED[state])
+    const t = setInterval(() => !motionPaused() && setTick((n) => n + 1), SPEED[state])
     return () => clearInterval(t)
   }, [state, reduced])
 

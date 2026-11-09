@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { motionPaused } from '../lib/motion'
 
 /**
  * A tiny pixel world in a tile (24 × 24 pixels, drawn big): a solar system, a sunrise with birds,
@@ -203,7 +204,7 @@ export function PixelMoment({ scene, size = 72 }: { scene: MomentScene; size?: n
     frame()
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
     const timer = setInterval(() => {
-      if (document.hidden) return
+      if (motionPaused()) return
       t++
       frame()
     }, 110)

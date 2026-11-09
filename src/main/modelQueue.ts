@@ -12,6 +12,36 @@ let pumping: ReturnType<typeof setTimeout> | null = null
 
 const IDLE_MS = 400
 
+// Whether the model is working, for the windows: decoration holds still meanwhile, since the
+// GPU it would draw with is the one Gemma is using. Idle is announced after a short pause, so
+// back-to-back requests don't make it flicker.
+const busyListeners = new Set<(busy: boolean) => void>()
+let announced = false
+let settling: ReturnType<typeof setTimeout> | null = null
+function announce() {
+  const busy = interactive > 0 || !!background
+  if (busy) {
+    if (settling) clearTimeout(settling)
+    settling = null
+    if (!announced) {
+      announced = true
+      busyListeners.forEach((l) => l(true))
+    }
+  } else if (announced && !settling) {
+    settling = setTimeout(() => {
+      settling = null
+      if (interactive > 0 || background) return
+      announced = false
+      busyListeners.forEach((l) => l(false))
+    }, IDLE_MS)
+  }
+}
+
+export function onModelBusy(listener: (busy: boolean) => void): () => void {
+  busyListeners.add(listener)
+  return () => busyListeners.delete(listener)
+}
+
 /** Starts the next background job once the model has been idle for a moment */
 function wake() {
   if (pumping || interactive || background || !waiting.length) return
@@ -39,6 +69,7 @@ async function takeTurn(): Promise<() => void> {
 /** Marks an interactive request for its whole duration, pre-empting background work */
 export async function asInteractive<T>(fn: () => Promise<T>): Promise<T> {
   interactive++
+  announce()
   background?.controller.abort()
   const release = await takeTurn()
   try {
@@ -46,6 +77,7 @@ export async function asInteractive<T>(fn: () => Promise<T>): Promise<T> {
   } finally {
     release()
     interactive--
+    announce()
     wake()
   }
 }
@@ -53,6 +85,7 @@ export async function asInteractive<T>(fn: () => Promise<T>): Promise<T> {
 /** Same as asInteractive, for streaming generators */
 export async function* streamInteractive<T>(gen: () => AsyncGenerator<T>): AsyncGenerator<T> {
   interactive++
+  announce()
   background?.controller.abort()
   const release = await takeTurn()
   try {
@@ -60,6 +93,7 @@ export async function* streamInteractive<T>(gen: () => AsyncGenerator<T>): Async
   } finally {
     release()
     interactive--
+    announce()
     wake()
   }
 }
@@ -76,6 +110,7 @@ export async function inBackground<T>(fn: (signal: AbortSignal) => Promise<T>, o
   })
   const controller = new AbortController()
   background = { controller }
+  announce()
   if (outer?.aborted) {
     background = null
     wake()
@@ -86,6 +121,7 @@ export async function inBackground<T>(fn: (signal: AbortSignal) => Promise<T>, o
     return await fn(controller.signal)
   } finally {
     background = null
+    announce()
     wake()
   }
 }

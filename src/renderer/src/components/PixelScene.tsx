@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { motionPaused } from '../lib/motion'
 import { drawPlace, type Place } from '../lib/pixelWorld'
 import { useCharacter } from '../state'
 
@@ -42,7 +43,7 @@ export function PixelScene({ place, rows = 40, scale = 4, className, onLabel, da
     ro.observe(box)
     if (reduced) return () => ro.disconnect()
     const timer = setInterval(() => {
-      if (document.hidden) return
+      if (motionPaused()) return
       tick++
       draw()
     }, 125)

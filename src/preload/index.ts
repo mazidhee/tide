@@ -235,6 +235,8 @@ contextBridge.exposeInMainWorld('tideEvents', {
   onMenu: (cb: (action: string) => void) => subscribe<string>('menu', cb),
   /** tide:// links opened from other apps (a Things 4 task, a browser) */
   onLink: (cb: (url: string) => void) => subscribe<string>('deeplink', cb),
+  /** Whether the model is working, so decoration can hold still and leave it the GPU */
+  onModelBusy: (cb: (busy: boolean) => void) => subscribe<boolean>('model:busy', cb),
   pendingLink: () => ipcRenderer.invoke('app:pendingLink') as Promise<string | null>,
   pathForFile: (file: File) => webUtils.getPathForFile(file)
 })

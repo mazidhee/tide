@@ -39,6 +39,7 @@ import { SaveLinkDialog } from './components/SaveLink'
 import { Icon } from './components/Icon'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { vaultUrl } from './lib/markdown'
+import { followModelBusy } from './lib/motion'
 
 const MEASURES = { narrow: '30', normal: '34', wide: '42' }
 
@@ -133,6 +134,9 @@ function ImageView({ path }: { path: string }) {
 }
 
 export default function App() {
+  // Decoration holds still while the model works: the GPU is Gemma's
+  useEffect(() => followModelBusy(), [])
+
   const app = useApp()
   const { settings, view, dialog } = app
   const [due, setDue] = useState({ due: 0, total: 0 })
