@@ -19,17 +19,29 @@ describe('buildDay', () => {
   it('puts done first, then timed things in time order, then the rest, then the evening', () => {
     const slots = buildDay(
       [
-        task({ id: 'x', title: 'Sync with Henry', at: '16:00', where: 'Bank reconciliation' }),
-        task({ id: 'y', title: 'Package for staging' }),
-        task({ id: 'z', title: 'Practice dashboards', evening: true }),
-        task({ id: 'w', title: 'Standup', at: '09:30' }),
-        task({ id: 'd', title: 'Create a repo', done: true, doneAt: 1 })
+        task({ id: 'x', title: 'Read chapter 9', at: '16:00', where: 'Your week', tide: true }),
+        task({ id: 'y', title: 'Take-home: rate limiter', tide: true }),
+        task({ id: 'z', title: 'Retest hash maps', evening: true, tide: true }),
+        task({ id: 'w', title: 'Explain consensus', at: '09:30', tide: true }),
+        task({ id: 'd', title: 'Linux lab', done: true, doneAt: 1, tide: true })
       ],
       plan
     )
-    expect(slots.map((s) => s.title)).toEqual(['How stablecoins hold their peg', 'Create a repo', 'Standup', 'Sync with Henry', 'Hash maps', 'Package for staging', 'Practice dashboards'])
+    expect(slots.map((s) => s.title)).toEqual(['How stablecoins hold their peg', 'Linux lab', 'Explain consensus', 'Read chapter 9', 'Hash maps', 'Take-home: rate limiter', 'Retest hash maps'])
     expect(slots.map((s) => s.part)).toEqual(['done', 'done', 'open', 'open', 'open', 'open', 'evening'])
-    expect(slots.find((s) => s.key === 't:x')?.meta).toBe('16:00 · Bank reconciliation')
+    expect(slots.find((s) => s.key === 't:x')?.meta).toBe('16:00 · Your week')
+  })
+
+  it('leaves out your own Today tasks: only what Tide gave you shows', () => {
+    const slots = buildDay(
+      [
+        task({ id: 'h', title: 'Sync with Henry', at: '16:00', where: 'Bank reconciliation' }),
+        task({ id: 'm', title: 'Automatic flag of data patterns', where: 'Metabase' }),
+        task({ id: 't', title: 'Read chapter 9', where: 'Your week', tide: true })
+      ],
+      plan
+    )
+    expect(slots.map((s) => s.title)).toEqual(['How stablecoins hold their peg', 'Hash maps', 'Read chapter 9'])
   })
 
   it('works without Things', () => {

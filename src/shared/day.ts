@@ -58,8 +58,9 @@ export function buildDay(tasks: DayTask[] | null, plan: AgendaItem[]): DaySlot[]
       ...(task ? { task } : {})
     }
   })
+  // Only what Tide gave you (tagged "tide" in Things): the rest of your Today list stays in Things
   const own: DaySlot[] = (tasks ?? [])
-    .filter((t) => !used.has(t.id))
+    .filter((t) => t.tide && !used.has(t.id))
     .map((t) => ({ key: `t:${t.id}`, title: t.title, meta: [t.done && t.doneAt ? clock(t.doneAt) : t.at, t.where].filter(Boolean).join(' · '), part: t.done ? 'done' : t.evening ? 'evening' : 'open', done: t.done, task: t }))
   const all = [...planned, ...own]
   const done = all.filter((s) => s.part === 'done').sort((a, b) => (a.task?.doneAt ?? 0) - (b.task?.doneAt ?? 0))

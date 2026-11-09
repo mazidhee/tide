@@ -10,14 +10,14 @@ new-image: home
 A tour of Home
 home | 16,0,84,17 | The pixel world | **The pixel world.** Your tutor's day, drawn for the time it is: tea in the garden in the morning, the study in the afternoon, the pond at sunset, the fireside at night. Weekend afternoons are a field trip to Mars. The × hides it. | home
 home | 27,20,62,9 | The greeting | **The greeting.** What you studied on your last study day, with **Quiz me on it**, and what's due. | home
-home | 28,30,61,34 | Your day | **Your day.** **Now** is the one thing to do next. Below it, the rest of today: your plan and Today in Things 4, in one list. Tick a dot to finish; click a title to open. | home
+home | 28,30,61,34 | Your day | **Your day.** **Now** is the one thing to do next. Below it, the rest of today: your plan and the learning tasks Tide set you in Things 4, in one list. Tick a dot to finish; click a title to open. | home
 home | 28,66,61,7 | Ask | **Ask.** Type anything here, or “I want to learn…” to start a new subject. | home
 home | 28,77,61,20 | The cards | **The week, goals and weak spots.** Study time by day and your streak, each goal with whether you're on pace, and notes whose recent answers went badly, one click from a quiz. | home
 ```
 
 ## The timeline
 
-Your day runs down the page: what you've finished (with the time), **Now**, then the rest of today and this evening. It reads Today in Things 4, so anything you or the tutor put there shows up, work included. A planned item that's also a Things to-do shows once. Things with a reminder time come first, in order. The timeline checks Things every minute and when you come back to the window, so a task the tutor just set slides in.
+Your day runs down the page: what you've finished (with the time), **Now**, then the rest of today and this evening. It reads Today in Things 4, but only the tasks Tide gave you (tagged **tide**): your plan's items and anything the tutor set. Your own tasks, work included, stay in Things and don't show here. A planned item that's also a Things to-do shows once. Things with a reminder time come first, in order. The timeline checks Things every minute and when you come back to the window, so a task the tutor just set slides in.
 
 Ask the tutor to plan your day (“put a 45-minute stablecoins lesson and the take-home on today”) and it sets the tasks in Things for today.
 
