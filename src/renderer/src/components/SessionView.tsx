@@ -1,4 +1,5 @@
 import { TimeThis } from './TimeThis'
+import { notesReviewRequest, wantsNotesReview } from '@shared/lessonNotes'
 import { reveal } from '../lib/scroll'
 import { Thinking } from './Thinking'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -187,6 +188,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   )
   const [notesOpen, setNotesOpen] = useState(() => localStorage.getItem('tide.lesson.notes') !== 'closed')
   const withNotes = mode === 'teach' && notesOpen
+  const notesMine = useRef('')
 
   // Talk: the tutor speaks each reply as it writes it, and you answer by voice (or hands-free)
   const lastTurn = turns[turns.length - 1]
@@ -324,6 +326,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     const ran = runOut ? `\n\nWhen I ran it:\n\`\`\`\n${(runOut.stdout + runOut.stderr).slice(0, 1500) || '(no output)'}\n\`\`\`` : ''
     const body = text ?? (currentAsk?.type === 'code' ? `${answer.trim() ? answer.trim() + '\n\n' : ''}\`\`\`${currentAsk.lang ?? 'python'}\n${code}\n\`\`\`${ran}` : answer.trim())
     if (!body.trim()) return
+    // "Review my notes" typed during the lesson sends what you wrote in the notes beside it
+    if (!text && withNotes && notesMine.current.length >= 20 && wantsNotesReview(body)) {
+      send(notesReviewRequest(notesMine.current), turns)
+      setAnswer('')
+      return
+    }
     const conf = confidence ? `\n(Confidence: ${CONFIDENCE.find((c) => c.value === confidence)!.label.toLowerCase()})` : ''
     send(text ? body : `Answer: ${body}${conf}`, turns)
     setAnswer('')
@@ -444,10 +452,16 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
 
   const planDone = (() => {
     if (!plan) return 0
-    // Steps count as done as the tutor moves through them; approximate by graded answers after the plan
+    // A step is done after two right in a row, as the tutor is told to move on
     const planTurn = parsed.findIndex((b) => b?.some((x) => x.kind === 'plan'))
-    const grades = parsed.slice(planTurn + 1).flatMap((b) => b ?? []).filter((b) => b.kind === 'grade' && (b as { verdict: Verdict }).verdict === 'correct').length
-    return Math.min(plan.steps.length, grades)
+    const verdicts = parsed.slice(planTurn + 1).flatMap((b) => b ?? []).filter((b) => b.kind === 'grade').map((b) => (b as { verdict: Verdict }).verdict)
+    let steps = 0
+    let streak = 0
+    for (const v of verdicts) {
+      streak = v === 'correct' ? streak + 1 : 0
+      if (streak === 2) (steps++, (streak = 0))
+    }
+    return Math.min(plan.steps.length, steps)
   })()
 
   const scopeLabel = scope.kind === 'note' ? fileTitle(scope.path) : scope.kind === 'pages' ? pagesLabel(scope) : scope.kind === 'folder' ? scope.path.split('/').pop() : null
@@ -722,7 +736,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           scope={scope}
           takeaways={takeaways}
           busy={busy}
-          onCheck={(words) => send(`Here is my explanation in my own words:\n\n${words}\n\nCheck it against what we covered: what is right, what is missing or wrong, and one question to push me further.`, turns)}
+          mineRef={notesMine}
+          onCheck={(mine) => send(notesReviewRequest(mine), turns)}
         />
       )}
       </div>

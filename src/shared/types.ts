@@ -598,6 +598,8 @@ export interface TideApi {
     week(date?: string): Promise<import('./coach').WeekPlan | null>
     planWeek(): Promise<import('./coach').WeekPlan>
     profile(): Promise<string>
+    /** Works out where you're heading (at most every few days unless forced); returns the settings */
+    infer(force?: boolean): Promise<import('./coach').CoachSettings>
     toThings(): Promise<{ project: string; todos: number }>
     setDone(date: string, index: number, done: boolean): Promise<import('./coach').WeekPlan | null>
     syncDone(): Promise<import('./coach').WeekPlan | null>

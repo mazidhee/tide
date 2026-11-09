@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addTakeaways, newLessonNote, ownWords } from '../src/shared/lessonNotes'
+import { addTakeaways, learnerText, newLessonNote, wantsNotesReview } from '../src/shared/lessonNotes'
 import { parseBlocks } from '../src/shared/session'
 
 describe('lesson notes', () => {
@@ -22,11 +22,23 @@ describe('lesson notes', () => {
 
 ## In my words
 `)
-    expect(ownWords(note + '\nIt is about growth, not exact time.\n')).toBe('It is about growth, not exact time.')
+    expect(learnerText(note + '\nIt is about growth, not exact time.\n')).toBe('It is about growth, not exact time.')
   })
 
   it('adds a lesson section to a note that has none, keeping what was there', () => {
     const note = addTakeaways('# Heaps\n\nMy own notes here.\n', ['A heap keeps the smallest item on top.'])
     expect(note).toBe('# Heaps\n\nMy own notes here.\n\n## From the lesson\n\n- A heap keeps the smallest item on top.\n\n## In my words\n')
+  })
+
+  it('reviews everything the learner wrote, but not the tutor\'s takeaways', () => {
+    const note = '# Heaps\n\nMy sketch: parent <= children.\n\n## From the lesson\n\n- A heap keeps the smallest on top.\n\n## In my words\n\nInsert bubbles up in O(log n).\n\n## Questions\n\nWhy not a sorted array?\n'
+    expect(learnerText(note)).toBe('My sketch: parent <= children.\n\nInsert bubbles up in O(log n).\n\n## Questions\n\nWhy not a sorted array?')
+  })
+
+  it('knows when the learner asks for their notes to be reviewed', () => {
+    expect(wantsNotesReview('can you review my notes?')).toBe(true)
+    expect(wantsNotesReview('check what I wrote')).toBe(true)
+    expect(wantsNotesReview('Look over my explanation please')).toBe(true)
+    expect(wantsNotesReview('the heap stores notes in an array')).toBe(false)
   })
 })

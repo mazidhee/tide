@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { DEFAULT_COACH, localDate, type CoachSettings, type WeekPlan } from '@shared/coach'
+import { aimOf, DEFAULT_COACH, localDate, type CoachSettings, type WeekPlan } from '@shared/coach'
 import { useApp } from '../state'
 import { AGENDA_LABEL, openAgendaItem } from '../lib/agenda'
 import { Icon } from './Icon'
@@ -12,7 +12,7 @@ const today = () => localDate()
 const dayLabel = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })
 
 /**
- * Your coach: say where you're heading and what to focus on; Tide plans each week towards it,
+ * Your coach: Tide works out where you're heading (yours to correct) and what to focus on, plans each week towards it,
  * explains its priorities, finds what to read, and can put the week in Things 4.
  */
 export function CoachView() {
@@ -24,9 +24,26 @@ export function CoachView() {
   const [editing, setEditing] = useState(false)
   const [error, setError] = useState('')
   const [thingsReady, setThingsReady] = useState(false)
+  // Where you're heading is worked out, not asked: shown here, yours to correct
+  const [inferring, setInferring] = useState(false)
+  const [editingAim, setEditingAim] = useState(false)
+  const infer = (force = false) => {
+    setInferring(true)
+    window.tide.coach
+      .infer(force)
+      .then((s) => setSettings((cur) => ({ ...cur, direction: s.direction, directionAt: s.directionAt, focus: cur.focus.length ? cur.focus : s.focus })))
+      .catch(() => {})
+      .finally(() => setInferring(false))
+  }
 
   useEffect(() => {
-    window.tide.coach.get().then(setSettings).catch(() => {})
+    window.tide.coach
+      .get()
+      .then((s) => {
+        setSettings(s)
+        if (!s.goal) infer()
+      })
+      .catch(() => {})
     window.tide.coach.week().then(setWeek).catch(() => {})
     window.tide.learn.notebooks().then((n) => setNotebooks(n.filter((x) => x.outline).map((x) => x.name))).catch(() => {})
     window.tide.learn.thingsStatus().then((s) => setThingsReady(s.ready)).catch(() => {})
@@ -111,7 +128,7 @@ export function CoachView() {
 
         {week && !editing ? (
           <button className="coach-settings-row" onClick={() => setEditing(true)} title="Change your goal, focus, hours or days">
-            <span className="coach-settings-goal">{settings.goal || 'No goal set'}</span>
+            <span className="coach-settings-goal">{aimOf(settings) || 'Working out where you’re heading'}</span>
             <span className="muted">{settings.focus.join(', ')}</span>
             <span className="muted">{settings.hoursPerWeek} h a week</span>
             <span className="muted">{DAYS.filter((_, i) => settings.days.includes(i)).join(' ')}</span>
@@ -121,16 +138,36 @@ export function CoachView() {
         <section className="pv-panel coach-setup">
           <div className="pv-main">
             <div className="field">
-              <span>Where is all this heading?</span>
-              <PromptBox
-                value={settings.goal}
-                onChange={(goal) => setSettings({ ...settings, goal })}
-                onBlur={() => save(settings)}
-                multiline
-                action="none"
-                placeholder="Become a strong software engineer with solid maths, ready for trading-firm interviews by next summer"
-                label="Your goal"
-              />
+              <span>Where you’re heading</span>
+              {settings.goal || editingAim ? (
+                <PromptBox
+                  value={settings.goal}
+                  onChange={(goal) => setSettings({ ...settings, goal })}
+                  onBlur={() => {
+                    save(settings)
+                    setEditingAim(false)
+                  }}
+                  multiline
+                  autoFocus={editingAim}
+                  action="none"
+                  placeholder={settings.direction || 'Where all of this is heading, in a sentence or two'}
+                  label="Where you’re heading"
+                  hint={settings.goal ? 'In your words. Clear it to let Tide work it out from what you study.' : undefined}
+                />
+              ) : (
+                <div className="coach-aim">
+                  <p className={inferring && !settings.direction ? 'muted' : ''}>{settings.direction || (inferring ? 'Working it out from your notebooks, goals and what you study…' : 'Study a little and Tide works this out from your notebooks and goals.')}</p>
+                  <span className="coach-aim-actions">
+                    {settings.direction && <span className="muted small">Worked out from your notebooks, goals and study.</span>}
+                    <button className="link-btn" onClick={() => (setSettings({ ...settings, goal: settings.direction ?? '' }), setEditingAim(true))}>
+                      Correct it
+                    </button>
+                    <button className="link-btn" onClick={() => infer(true)} disabled={inferring}>
+                      {inferring ? 'Thinking…' : 'Work it out again'}
+                    </button>
+                  </span>
+                </div>
+              )}
             </div>
             <div className="field">
               <span>Focus on, most important first</span>

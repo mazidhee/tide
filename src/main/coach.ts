@@ -1,9 +1,10 @@
 import { promises as fs } from 'fs'
-import { thingsTitle, DEFAULT_COACH, localDate, moveUnfinished, nextStudyDay, nextTopics, planCompletion, validateWeek, weekMarkdown, type AgendaItem, type CoachSettings, type DayStats, type JournalEntry, type TopicCandidate, type WeekReview, type WeekPlan } from '@shared/coach'
+import { aimOf, thingsTitle, DEFAULT_COACH, localDate, moveUnfinished, nextStudyDay, nextTopics, planCompletion, validateWeek, weekMarkdown, type AgendaItem, type CoachSettings, type DayStats, type JournalEntry, type TopicCandidate, type WeekReview, type WeekPlan } from '@shared/coach'
 import { companyTrend } from '@shared/interviews'
 import { buildLink } from '@shared/deeplink'
 import { complete, extractJsonObject } from './ai'
-import { getGoals, getMastery, getNotebooks, listDrills, listInterviews, studyEvents } from './learn'
+import { focusLog, getGoals, getMastery, getNotebooks, listDrills, listInterviews, studyEvents } from './learn'
+import { listMemories } from './memory'
 import { listMistakes } from './mistakes'
 import { getCards } from './study'
 import { addProject, ensureArea, getProject, searchTasks, thingsAvailable, TIDE_TAG, updateTask } from './things'
@@ -40,7 +41,8 @@ export async function saveCoach(s: CoachSettings): Promise<CoachSettings> {
     goal: String(s.goal ?? '').trim().slice(0, 500),
     focus: (Array.isArray(s.focus) ? s.focus : []).map(String).filter(Boolean).slice(0, 6),
     hoursPerWeek: Math.max(1, Math.min(60, Math.round(Number(s.hoursPerWeek) || 10))),
-    days: (Array.isArray(s.days) ? s.days : DEFAULT_COACH.days).map(Number).filter((d) => d >= 0 && d <= 6)
+    days: (Array.isArray(s.days) ? s.days : DEFAULT_COACH.days).map(Number).filter((d) => d >= 0 && d <= 6),
+    ...(s.direction ? { direction: String(s.direction).trim().slice(0, 500), directionAt: Number(s.directionAt) || Date.now() } : {})
   }
   if (!clean.days.length) clean.days = DEFAULT_COACH.days
   await writeText(SETTINGS, JSON.stringify(clean, null, 2))
@@ -161,7 +163,7 @@ export async function planWeek(date = today()): Promise<WeekPlan> {
     d.setUTCDate(d.getUTCDate() + i)
     return d.toISOString().slice(0, 10)
   }).filter((d) => settings.days.includes(new Date(d + 'T12:00:00Z').getUTCDay()))
-  const prompt = `You are coaching a learner towards this goal: ${settings.goal || 'becoming strong in their focus subjects'}.
+  const prompt = `You are coaching a learner towards this goal: ${aimOf(settings) || 'becoming strong in their focus subjects'}.
 Focus, most important first: ${settings.focus.join(', ')}. They study about ${settings.hoursPerWeek} hours a week, on these days: ${studyDays.map((d) => `${DAY(d)} ${d}`).join(', ')}.
 
 What you know about where they are:
@@ -229,7 +231,7 @@ export async function updateProfile(): Promise<string> {
   const previous = await readText(PROFILE_NOTE).catch(() => '')
   const prompt = `Write a learner profile a tutor will read before every conversation. Under 1000 characters, Markdown, these headings only: ## Goal, ## Focus, ## Where they are, ## Strengths, ## Weak spots, ## How they learn best.
 Facts:
-Goal: ${settings.goal || 'not set'}
+Goal: ${aimOf(settings) || 'not set'}
 Focus: ${settings.focus.join(', ') || 'not set'}; ${settings.hoursPerWeek} hours a week
 ${text}
 ${previous ? `Their previous profile (keep what still holds, especially "How they learn best", which they may have edited):\n${previous.slice(0, 1500)}` : ''}
@@ -240,11 +242,77 @@ Only state what the facts support. Return the Markdown only.`
   return note
 }
 
+const DAY_MS = 86_400_000
+
+/**
+ * Where the learner is heading, worked out rather than asked: from what their notebooks and
+ * roadmaps are about, their deadlines, what they've told the tutor to remember, what they've been
+ * studying and how it's going. Also orders their focus when they haven't picked one. Redone at
+ * most every few days, in the background.
+ */
+export async function inferDirection(force = false): Promise<CoachSettings> {
+  const settings = await getCoach()
+  if (!force && settings.direction && Date.now() - (settings.directionAt ?? 0) < 3 * DAY_MS) return settings
+  const [notebooks, goals, memories, log, mastery, profile] = await Promise.all([
+    getNotebooks().catch(() => []),
+    getGoals().catch(() => []),
+    listMemories().catch(() => []),
+    focusLog(Date.now() - 30 * DAY_MS).catch(() => []),
+    getMastery().catch(() => ({}) as Record<string, { level: string; path: string }>),
+    readText(PROFILE_NOTE).catch(() => '')
+  ])
+  const books = notebooks.filter((n) => n.path !== COACH_FOLDER && !n.path.startsWith('.'))
+  if (!books.length && !memories.length) return settings
+  // Minutes on each notebook over the last month: what they actually spend time on
+  const minutes = new Map<string, number>()
+  for (const e of log) {
+    const nb = books.find((b) => e.path && (e.path === b.path || e.path.startsWith(`${b.path}/`)))
+    if (nb) minutes.set(nb.name, (minutes.get(nb.name) ?? 0) + e.minutes)
+  }
+  const strong = Object.values(mastery).filter((m) => m.level === 'solid' || m.level === 'mastered').length
+  const weak = Object.values(mastery).filter((m) => m.level === 'weak' || m.level === 'shaky').length
+  const facts = [
+    `Notebooks: ${books.map((b) => `${b.name}${b.description ? ` (${b.description.slice(0, 140)})` : ''}${b.outline ? ', has a roadmap' : ''}${minutes.get(b.name) ? `, ${Math.round(minutes.get(b.name)! / 60)} h this month` : ''}`).join('; ')}`,
+    goals.length ? `Deadlines: ${goals.map((g) => `${g.name} by ${g.deadline}`).join('; ')}` : '',
+    memories.length ? `What they've told the tutor:\n${memories.slice(0, 30).map((m) => `- ${m.text}`).join('\n')}` : '',
+    `Recent study topics: ${[...new Set(log.map((e) => e.label).filter(Boolean))].slice(0, 15).join('; ') || 'none logged'}`,
+    `Answers so far: ${strong} topics solid, ${weak} weak or shaky`,
+    settings.goal ? `What they wrote about their goal: ${settings.goal}` : '',
+    profile ? `Their learner profile:\n${profile.slice(0, 1200)}` : ''
+  ]
+    .filter(Boolean)
+    .join('\n')
+  const prompt = `From these facts about a self-directed learner, work out where they are heading.
+${facts}
+
+Return ONLY JSON: {"direction": "one or two plain sentences in the second person: the kind of engineer or expert they're becoming, the areas it spans, and what they're strong at (e.g. 'You're heading towards low-level software engineering for payments and data systems, with blockchain on the side; your maths and problem solving are your strengths.')", "focus": ["notebook names from the list, most important first, at most 4"]}
+Only state what the facts support.`
+  const out = await complete(prompt, 'You read a learner\'s situation accurately and say it plainly.', undefined, 'background').catch(() => '')
+  let parsed: { direction?: string; focus?: string[] } = {}
+  try {
+    parsed = extractJsonObject(out)
+  } catch {
+    return settings
+  }
+  if (!parsed.direction?.trim()) return settings
+  const names = new Set(books.map((b) => b.name))
+  const focus = settings.focus.length ? settings.focus : (parsed.focus ?? []).filter((f) => names.has(f) && books.find((b) => b.name === f)?.outline)
+  return saveCoach({ ...settings, direction: parsed.direction.trim(), directionAt: Date.now(), focus })
+}
+
+/** One line on where the learner is heading, for prompts that shape what to teach and how */
+export async function directionLine(): Promise<string> {
+  const aim = aimOf(await getCoach())
+  return aim ? `Where this learner is heading: ${aim} Shape examples, projects and emphasis towards that, and skip what their strengths already cover.` : ''
+}
+
 /** The profile for the tutor's prompt: short, or nothing */
 export async function profilePrompt(): Promise<string> {
   const note = await readText(PROFILE_NOTE).catch(() => '')
   const body = note.replace(/^# Learner profile\s*/i, '').replace(/^_[^\n]*_\s*/m, '').trim()
-  return body ? `The learner's profile (use it to pitch and connect what you teach; don't recite it):\n${body.slice(0, 1400)}` : ''
+  const aim = aimOf(await getCoach())
+  if (!body && !aim) return ''
+  return `The learner's profile (use it to pitch and connect what you teach; don't recite it):\n${aim ? `Where they're heading: ${aim}\n` : ''}${body.slice(0, 1400)}`
 }
 
 const LINK_LABEL: Partial<Record<AgendaItem['kind'], string>> = { learn: 'Learn it in Tide', quiz: 'Quiz me in Tide', review: 'Review in Tide', test: 'Sit it in Tide', 'take-home': 'Open in Tide', practice: 'Open Practice in Tide' }

@@ -50,7 +50,7 @@ import { cancelCompanyPrep, draftCompanyPrep } from './companyPrep'
 import { adjustPlan, auditRoadmap, planReadings, planToThings, sizePlan, syncFromThings, type PlanRequest } from './planner'
 import type { StudyPlan } from '@shared/plan'
 import { dayTasks, setTaskDone, thingsStatus } from './things'
-import { getCoach, getWeek, planWeek, saveCoach, updateProfile, weekToThings, setItemDone, syncDone, rollOver, dayStats, journal, writeJournal, weekReview, saveReview } from './coach'
+import { getCoach, getWeek, planWeek, saveCoach, updateProfile, inferDirection, weekToThings, setItemDone, syncDone, rollOver, dayStats, journal, writeJournal, weekReview, saveReview } from './coach'
 import { addMistakes, listMistakes, mistakesDue, retestMistake } from './mistakes'
 import { initTray, refreshTray, reportStudy, type StudyStatus } from './tray'
 import { localDate, todayItems } from '@shared/coach'
@@ -253,6 +253,7 @@ function registerIpc() {
   handle('coach:week', (date?: string) => getWeek(date))
   handle('coach:planWeek', () => planWeek())
   handle('coach:profile', () => updateProfile())
+  handle('coach:infer', (force?: boolean) => inferDirection(!!force))
   handle('coach:toThings', () => weekToThings())
   handle('coach:setDone', (date: string, index: number, done: boolean) => setItemDone(date, index, done))
   handle('coach:syncDone', () => syncDone())
@@ -550,6 +551,8 @@ app.whenReady().then(() => {
   registerIpc()
   setMenu()
   createWindow()
+  // Where you're heading, worked out quietly once the app has settled (every few days at most)
+  setTimeout(() => inferDirection().catch(() => {}), 90_000)
   // The tutor in the menu bar; its menu opens today's items and views in the main window
   initTray({
     agenda: async () => todayItems(await getWeek(localDate()), localDate()),

@@ -49,8 +49,21 @@ export function addTakeaways(note: string, takeaways: string[]): string {
 
 const tidy = (lines: string[]) => lines.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\n+$/, '') + '\n'
 
-/** What the learner wrote in their own words, for the coach to review */
-export function ownWords(note: string): string {
-  const m = note.match(/^## In my words\s*\n([\s\S]*?)(?=^#{1,2}\s|$(?![\s\S]))/m)
-  return m?.[1].trim() ?? ''
+/** Everything the learner wrote in the note: all of it but the title and the tutor's takeaways */
+export function learnerText(note: string): string {
+  const lines = note.replace(/^#\s[^\n]*\n/, '').split('\n')
+  const out: string[] = []
+  let inLesson = false
+  for (const l of lines) {
+    if (/^#{1,2}\s/.test(l)) inLesson = l.trim() === LESSON_HEADING
+    if (!inLesson && l.trim() !== OWN_WORDS_HEADING) out.push(l)
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
+
+/** Asked to look at their notes ("review my notes", "can you check what I wrote?") */
+export const wantsNotesReview = (text: string) => /\b(review|check|mark|look (at|over)|read|feedback on)\b[^.?!]{0,30}\b(my )?(notes?|what i('ve)? (wrote|written)|my (work|writing|explanation|words))\b/i.test(text)
+
+/** The request that sends what they wrote to the tutor, for feedback that helps them fix it */
+export const notesReviewRequest = (mine: string) =>
+  `Here is what I've written in my notes for this lesson:\n\n${mine}\n\nReview it against what we covered. First say what's right and why it works. Then at most three things that are wrong, unclear or missing, most important first: quote the exact line, say why it matters and what to change. Then ask one question or problem that tests the weakest point.`

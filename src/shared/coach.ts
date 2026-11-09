@@ -6,14 +6,21 @@
 import { parseOutline, topicTitle, normalizeTitle } from './outline'
 
 export interface CoachSettings {
-  /** In one or two sentences, where all of this is heading */
+  /** In one or two sentences, where all of this is heading, in your words (overrides `direction`) */
   goal: string
+  /** Where Tide works out you're heading, from your notebooks, goals, memories and study */
+  direction?: string
+  /** When `direction` was last worked out (ms) */
+  directionAt?: number
   /** Notebooks to focus on, most important first */
   focus: string[]
   hoursPerWeek: number
   /** Days of the week to study, 0 = Sunday */
   days: number[]
 }
+
+/** Where the learner is heading: what they wrote, else what Tide inferred */
+export const aimOf = (s: Pick<CoachSettings, 'goal' | 'direction'>) => s.goal.trim() || s.direction?.trim() || ''
 
 export const DEFAULT_COACH: CoachSettings = { goal: '', focus: [], hoursPerWeek: 10, days: [1, 2, 3, 4, 5, 6] }
 

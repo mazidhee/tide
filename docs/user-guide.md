@@ -236,7 +236,9 @@ Pick who reads your note in **Reads as**:
 
 ## Your week
 
-**Your week** (from **Today** on Home) is your coach. Tell it once where all this is heading ("a strong software engineer with solid maths, ready for trading-firm interviews next summer"), which notebooks to focus on in order of importance, your hours a week and the days you study.
+**Your week** is your coach. You don't have to tell it where you're heading: Tide works it out from what your notebooks and roadmaps are about, your deadlines, what you've told the tutor to remember, what you've been studying and how your answers go, and says it in a sentence or two at the top ("You're heading towards low-level software engineering for payments and data…"). It looks again every few days in the background. **Correct it** if it's off (your words then win; clear them to hand it back to Tide), or **Work it out again**. It also picks the notebooks to focus on if you haven't. Set your hours a week and study days.
+
+Where you're heading shapes everything else: the week's priorities, the learner profile every chat and lesson reads, and new roadmaps (ask to learn how to build an LLM from scratch and the plan leans towards the systems side if that's where you're going).
 
 **Plan my week** plans the next seven days towards that goal. Tide gathers the facts itself (the next unfinished topics in each focus roadmap, your weak topics, flashcards due, overdue tasks, mock interview scores) and the tutor decides what comes first and says why, for example which topics unlock the others. Each study day gets a few items, sized to your hours: topics to **learn** (straight from your roadmaps, never invented), **practice**, a short **quiz** on earlier topics, **review** of weak spots, a **take-home** or two and a **test** at the end. Topics come with what to read, checked online so the links are real.
 
@@ -394,7 +396,11 @@ On the Learn page, type what you want to learn ("Metabase", "two pointers", or a
 
 ### Notes as you learn
 
-In **Teach me**, a notes pane sits beside the lesson: the tutor's key ideas are written into the topic's note under **From the lesson** as it teaches, and you write your own explanation under **In my words**. **Check my words** has the tutor check your explanation against the lesson. It's an ordinary note; hide the pane with **Notes**.
+In **Teach me**, a notes pane sits beside the lesson: the tutor's key ideas are written into the topic's note under **From the lesson** as it teaches, and you write your own anywhere in it (there's an **In my words** section to start you off). **Review my notes**, or just typing "review my notes" or "check what I wrote" as your answer, sends everything you wrote to the tutor: it says what's right and why, then up to three things to fix, quoting your line and saying why each matters, and finishes with a problem on the weakest point. It's an ordinary note; hide the pane with **Notes**.
+
+### How a lesson runs
+
+**Teach me** works the way the best tutors teach: you do most of the work. It starts with two or three questions, easy to hard, to find your level, then writes a short plan that skips what you already know. Each step is a short explanation with one worked example (skipped when you clearly have the background), then a set of problems, one at a time, labelled like **Problem 2 · harder**. Right first time and the next is harder; right with hints, a fresh one at the same level; wrong, an easier one or just the missing piece re-taught. A step is done after two right in a row without hints, and later steps mix in a problem from earlier ones. When you're wrong it points at the exact step that fails before anything else, and only shows a full solution after the hints, followed by a similar problem for you. It ends with a few mixed problems across the whole lesson.
 
 ### Grading and flashcards
 

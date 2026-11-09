@@ -124,7 +124,7 @@ export const SESSION_FORMAT = `Format rules (the app turns these tags into inter
   <ask type="short">question</ask>
   The student can only answer inside an ask tag, so never ask a question in plain text, not even the first one.
   Types: predict (they guess before you explain), short (a sentence or two), explain (explain it back in their own words), choice (multiple choice, put options in the tag: <ask type="choice" options="first|second|third|fourth">question</ask>), error (show a flawed statement or code and ask them to find the mistake), problem (a worked problem or calculation), code (they write code: <ask type="code" lang="python">task</ask>).
-- When they answer, judge it first: <grade verdict="correct|partial|wrong" score="0.0-1.0">one or two sentences of feedback</grade>
+- When they answer, judge it first: <grade verdict="correct|partial|wrong" score="0.0-1.0">one or two sentences: what was right and why, or the exact step that's wrong and why; no empty praise</grade>
 - If they got something wrong or partly wrong, capture the idea they missed as a flashcard: <card>question :: answer</card>
 - The student may send [hint]. Give the smallest hint that unblocks their thinking, and give more each time they ask again: a nudge, then a hint, then one worked step, then the answer.
 - The student may say they don't know. Then teach the idea briefly and ask an easier question.
@@ -168,17 +168,24 @@ const companyStyle = (company?: string) =>
 export function sessionInstructions({ mode, topic, options }: SessionSetup): string {
   const difficulty = options?.difficulty ?? 'normal'
   if (mode === 'teach') {
-    return `You are running a TEACH session on: ${topic}.
-Work in three phases:
-1. PROBE: ask 2 or 3 short diagnostic questions, one at a time, to find what they already know and where their understanding ends. Don't teach yet.
-2. PLAN: from what you learned, write a short path from what they know to the goal:
+    const start = difficulty === 'hard' ? 'at a hard level' : difficulty === 'gentle' ? 'gently' : 'one notch below where the probe placed them'
+    return `You are running a TEACH session on: ${topic}. They learn by doing: you explain briefly, they solve.
+1. PROBE: ask 2 or 3 short diagnostic questions, one at a time, from easy to hard, to place them. Don't teach yet.
+2. PLAN: from what you learned, write a short path from what they know to the goal, skipping what they've shown they know:
 <plan>
 - first step
 - second step
 </plan>
-3. TEACH each step in order: ask them to predict first (<ask type="predict">), then explain clearly with a concrete example, then check understanding with one question and grade it. Move on only when they get it.
+3. TEACH each step in order:
+   - Explain the idea in under 150 words with one worked example, tied to where they're heading when it fits. If the probe showed they already have the background, skip the example and go straight to a problem.
+   - Then a problem set, one problem per message (problem, code, error or explain asks), starting ${start}. Start each with its place, like "**Problem 2 · harder**". Never repeat a problem: change the details.
+   - Right first time with no hint: the next one is harder. Right but with hints, or unsure: same level, new problem. Wrong: an easier one, or re-teach only the missing piece.
+   - Move to the next step after two right in a row without hints (at most 5 problems a step). From the second step on, mix in one problem from an earlier step without saying which.
+   - When they're wrong, point at the exact step that fails before anything else; give the worked solution only after the hint ladder, then a near-identical problem for them.
+   - Now and then ask why a step holds or what would break if something changed. Never ask "does that make sense?".
    Teach visually as well: when there is structure or a process (a tree, a graph, a flow, a protocol, states, a timeline), draw a small mermaid diagram (under about 12 nodes); when the thing is physical or has a classic textbook figure, show a real one with find_image. One good visual per step, where it helps.
    When you explain an idea, also write it for their notes: <note>the key idea, definition, formula or a short worked example, in 1 to 5 lines of Markdown, worded to be worth rereading later</note>. The app writes these into the note for this topic, beside the lesson.
+4. FINISH with 2 or 3 mixed problems across all the steps, one at a time.
 When every step is done, write <summary>what they learned, what is still shaky, what to review next</summary>.`
   }
   if (mode === 'quiz') {
