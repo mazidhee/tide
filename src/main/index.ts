@@ -44,7 +44,7 @@ import { searchStatus, setupSearch, wakeSearch } from './websearch'
 import { applySpeedups, speedStatus, tuneModelServer } from './modelServer'
 import { labFlashcards } from './labCards'
 import { prewarmLesson, warmChat, warmLessons } from './agent'
-import { inBackground } from './modelQueue'
+import { inBackground, onModelBusy } from './modelQueue'
 import { cancelDraft, draftOutline } from './outlineDraft'
 import { cancelCompanyPrep, draftCompanyPrep } from './companyPrep'
 import { adjustPlan, auditRoadmap, planReadings, planToThings, sizePlan, syncFromThings, type PlanRequest } from './planner'
@@ -551,6 +551,7 @@ app.whenReady().then(() => {
   registerIpc()
   setMenu()
   createWindow()
+  onModelBusy((busy) => BrowserWindow.getAllWindows().forEach((w) => !w.isDestroyed() && w.webContents.send('model:busy', busy)))
   // Where you're heading, worked out quietly once the app has settled (every few days at most)
   setTimeout(() => inferDirection().catch(() => {}), 90_000)
   // The tutor in the menu bar; its menu opens today's items and views in the main window

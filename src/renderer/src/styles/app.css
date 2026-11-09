@@ -14235,3 +14235,15 @@ button.tl-dot:focus-visible {
   gap: 16px;
   margin-top: 8px;
 }
+
+/* While the model is working, shimmering text holds still: repainting it every frame takes GPU
+   time from Gemma (lib/motion.ts). The pulse and spinner stay, they're cheap. */
+:root[data-model-busy] .thinking-text,
+:root[data-model-busy] .msg-live > span:nth-child(2) {
+  animation: none;
+  background-position: 40% 0;
+}
+
+:root[data-model-busy] .cp-hero-mark.professor-hero {
+  animation-play-state: paused;
+}
