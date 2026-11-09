@@ -48,6 +48,14 @@ Paste a screenshot of a textbook page or diagram into a note and the tutor teach
 
 With **Web** on, the tutor looks things up when a topic may be newer than its training or it's unsure of a fact, and cites what it read. It knows today's date, so for anything that changes it searches recent results. It can also search arXiv and read online PDFs.
 
+## If Tide closes mid-lesson
+
+Lessons and exams are saved as you go, to `.tide/ongoing.json` in your notes folder. If Tide quits, the Mac restarts or the power goes, the lesson is back under **In progress** in the sidebar when Tide opens, exactly where you were. If the tutor was in the middle of a reply, it's asked for again.
+
+## No repeated problems
+
+The tutor writes a new problem each time. If a reply asks a problem it already asked in that lesson, Tide takes the reply back and has the tutor write a new one, before you answer it.
+
 ## Grading and flashcards
 
 Each answer is **Correct**, **Partly right** or **Not quite**, with feedback. When you miss something, the tutor writes a flashcard for it. **Add to flashcards** saves it next to the note.

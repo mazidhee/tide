@@ -5,6 +5,10 @@ import type { View } from '../state'
  * Lessons, quizzes, interviews and exams you've left mid-way, so going elsewhere doesn't lose them.
  * Coming back (with Back, or from "In progress" in the sidebar) carries on exactly where it was;
  * a reply still being written keeps arriving while you're away.
+ *
+ * They're saved to disk as they go, the one on screen too, so quitting Tide, a restart or the Mac
+ * shutting down mid-lesson loses nothing: they're back under "In progress" when Tide opens. A
+ * reply that was cut off is asked for again.
  */
 export interface Ongoing {
   key: string
@@ -14,27 +18,70 @@ export interface Ongoing {
   state: unknown
   /** A reply is still being written for it */
   busy: boolean
+  /** Tide closed while a reply was being written: ask for it again when it's opened */
+  interrupted?: boolean
   at: number
 }
 
 const store = new Map<string, Ongoing>()
+/** The one on screen, saved as it goes but not listed until you leave it (or Tide closes) */
+const live = new Map<string, Ongoing>()
 const listeners = new Set<() => void>()
 const emit = () => listeners.forEach((l) => l())
+
+/** In the notes folder beside Tide's other data, written within half a second of each change */
+const FILE = '.tide/ongoing.json'
+let saving: ReturnType<typeof setTimeout> | undefined
+let loaded = false
+
+function persist() {
+  clearTimeout(saving)
+  saving = setTimeout(() => {
+    // Not before what was saved last time has been read, or it would be written over
+    if (!loaded) return persist()
+    const all = new Map<string, Ongoing>()
+    for (const o of [...store.values(), ...live.values()]) if (!all.has(o.key) || all.get(o.key)!.at < o.at) all.set(o.key, o)
+    window.tide.vault.write(FILE, JSON.stringify([...all.values()].sort((a, b) => b.at - a.at).slice(0, 6))).catch(() => {})
+  }, 400)
+}
+
+/** What was in progress when Tide last closed, the lesson on screen included: back under "In progress" */
+export async function loadOngoing() {
+  try {
+    const saved = JSON.parse(await window.tide.vault.read(FILE)) as Ongoing[]
+    for (const o of saved) if (o?.key && o.view && !store.has(o.key)) store.set(o.key, { ...o, busy: false, ...(o.busy ? { interrupted: true } : {}) })
+    emit()
+  } catch {
+    // nothing saved yet, or unreadable
+  }
+  loaded = true
+}
+void loadOngoing()
 
 export const sessionKey = (v: { kind: string; mode?: string; topic?: string; nonce?: number }) => `${v.kind}:${v.mode ?? ''}:${v.topic ?? ''}:${v.nonce ?? ''}`
 
 export function saveOngoing(o: Omit<Ongoing, 'at'>) {
+  live.delete(o.key)
   store.set(o.key, { ...o, at: Date.now() })
   // Keep a handful: the oldest go first
   const all = [...store.values()].sort((a, b) => b.at - a.at)
   for (const old of all.slice(6)) store.delete(old.key)
   emit()
+  persist()
+}
+
+/** The one on screen, as it goes: kept on disk, listed only if Tide closes before you leave it */
+export function keepLive(o: Omit<Ongoing, 'at'>) {
+  live.set(o.key, { ...o, at: Date.now() })
+  persist()
 }
 
 export const getOngoing = (key: string) => store.get(key)
 
 export function endOngoing(key: string) {
+  live.delete(key)
   if (store.delete(key)) emit()
+  persist()
 }
 
 const followers = new Map<string, () => void>()
@@ -64,6 +111,7 @@ export function followInBackground(key: string, id: string): () => void {
       off()
       followers.delete(key)
       emit()
+      persist()
     }
   })
   followers.set(key, off)

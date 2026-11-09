@@ -246,7 +246,7 @@ When it's done, write <summary>what they learned, what is still shaky, what to l
    - When they're wrong, point at the exact step that fails before anything else; give the worked solution only after the hint ladder, then a near-identical problem for them.
    - Now and then ask why a step holds or what would break if something changed. Never ask "does that make sense?".
    Teach visually as well: when there is structure or a process (a tree, a graph, a flow, a protocol, states, a timeline), draw a small mermaid diagram (under about 12 nodes); when the thing is physical or has a classic textbook figure, show a real one with find_image. One good visual per step, where it helps.
-   When you explain an idea, also write it for their notes: <note>the key idea, definition, formula or a short worked example, in 1 to 5 lines of Markdown, worded to be worth rereading later</note>. The app writes these into the note for this topic, beside the lesson.
+   When you explain an idea, also write it for their notes: <note>the key idea, definition, formula or a short worked example, in 1 to 5 lines of Markdown, worded to be worth rereading later</note>. Do the same after grading whenever your feedback states a rule, a reason or corrects something they got wrong: one <note> with that point in a line or two (never one that repeats an earlier note). The app writes these into the note for this topic, beside the lesson.
 4. FINISH with 2 or 3 mixed problems across all the steps, one at a time.${extra}
 When every step is done, write <summary>what they learned, what is still shaky, what to review next</summary>.`
   }
@@ -431,4 +431,60 @@ ${shared}`
 - When they ask to be quizzed, ask one question at a time about THEIR design ("what happens if Redis goes down?", "how do you keep the cache consistent?") and grade each answer briefly before the next.
 - Draw only when they ask you to, or to sketch an alternative next to theirs.
 ${shared}`
+}
+
+/**
+ * The problem a reply poses: what it says after its feedback, plus the question itself, without
+ * the "Problem 2 · harder" label. Empty when it poses nothing worth comparing.
+ */
+export function posedProblem(reply: string): string {
+  const blocks = parseBlocks(reply)
+  const lastGrade = blocks.map((b) => b.kind).lastIndexOf('grade')
+  const after = blocks.slice(lastGrade + 1)
+  if (!after.some((b) => b.kind === 'ask')) return ''
+  const text = after
+    .map((b) => (b.kind === 'text' ? b.text : b.kind === 'ask' ? b.prompt : ''))
+    .join(' ')
+    .replace(/\*{0,2}problem\s+\d+\s*[·.:-]?\s*\w*\*{0,2}/gi, ' ')
+  return text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+}
+
+const shingles = (s: string) => {
+  const w = s.split(' ').filter(Boolean)
+  const out = new Set<string>()
+  for (let i = 0; i + 2 < w.length; i++) out.add(`${w[i]} ${w[i + 1]} ${w[i + 2]}`)
+  return out
+}
+
+/**
+ * Whether a reply asks a problem the tutor already asked in this session, word for word or
+ * nearly (small models copy the last problem instead of writing a new one). Short questions
+ * aren't judged: "Why?" can fairly come up twice.
+ */
+export function repeatsEarlier(reply: string, earlier: string[]): boolean {
+  const now = posedProblem(reply)
+  if (now.split(' ').length < 12) return false
+  const mine = shingles(now)
+  return earlier.some((e) => {
+    const before = posedProblem(e)
+    if (!before) return false
+    const theirs = shingles(before)
+    let same = 0
+    for (const s of mine) if (theirs.has(s)) same++
+    return same / Math.max(1, Math.min(mine.size, theirs.size)) >= 0.8
+  })
+}
+
+/** Said to the tutor (not shown) when it repeated itself, to get a new problem instead */
+export const NEW_PROBLEM_NUDGE =
+  "(Tide: your reply repeated a problem you already asked in this session. Keep your feedback on their answer, then write a NEW problem on the same idea: different objects, numbers and situation, at the level the rules call for, numbered after the last one. Don't ask any earlier problem again.)"
+
+/** Said to the tutor (not shown) when a lesson has gone a while without adding to the notes */
+export const NOTES_NUDGE = "(Tide: nothing has gone into their notes for a while. If your reply teaches or corrects anything, a rule, a reason, a common mistake, add it in a <note>, a line or two that isn't already in their notes.)"
+
+/** Tutor replies since the last one that added to the notes */
+export const repliesWithoutNote = (replies: string[]) => {
+  let n = 0
+  for (let i = replies.length - 1; i >= 0 && !/<note\b/i.test(replies[i]); i--) n++
+  return n
 }

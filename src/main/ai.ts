@@ -1,3 +1,4 @@
+import { NEW_PROBLEM_NUDGE, repeatsEarlier } from '@shared/session'
 import { inBackground, streamInteractive } from './modelQueue'
 import { STRATEGY_LABEL, type Strategy } from '@shared/strategy'
 import { canTake, CloudUnavailable, cloudError, estimateTokens, headersFor, noteLimits, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
@@ -369,6 +370,7 @@ export async function chat(req: ChatRequest, emit: (e: ChatEvent) => void) {
   let error: string | undefined
   await answer({ ...req, messages, attachment: undefined, summary } as TurnRequest, (e) => {
     if (e.type === 'delta') text += e.text
+    else if (e.type === 'reset') text = ''
     else if (e.type === 'sources') sources = e.sources
     else if (e.type === 'step') steps.set(e.step.id, { ...steps.get(e.step.id), ...e.step } as AgentStep)
     else if (e.type === 'error') error = e.message
@@ -427,7 +429,18 @@ async function answer(req: TurnRequest, emit: (e: ChatEvent) => void) {
   if (getSettings().ai.agent !== false) {
     try {
       const { agentChat } = await import('./agent')
-      await agentChat(req, emit, controller.signal)
+      // In a lesson, a reply that asks a problem already asked is taken back and written again,
+      // once: small models copy the last problem instead of making a new one
+      let reply = ''
+      await agentChat(req, (e) => (e.type === 'delta' && (reply += e.text), emit(e)), controller.signal)
+      const earlier = req.session ? req.messages.filter((m) => m.role === 'assistant').map((m) => (typeof m.content === 'string' ? m.content : '')) : []
+      if (req.session && !controller.signal.aborted && repeatsEarlier(reply, earlier)) {
+        emit({ id: req.id, type: 'reset' })
+        const messages = [...req.messages]
+        const last = messages[messages.length - 1]
+        if (last?.role === 'user' && typeof last.content === 'string') messages[messages.length - 1] = { ...last, content: `${last.content}\n\n${NEW_PROBLEM_NUDGE}` }
+        await agentChat({ ...req, messages }, emit, controller.signal)
+      }
       emit({ id: req.id, type: 'done' })
       running.delete(req.id)
       return

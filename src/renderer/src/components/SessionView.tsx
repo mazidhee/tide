@@ -7,7 +7,7 @@ import { reveal } from '../lib/scroll'
 import { Thinking } from './Thinking'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
-import { MODE_LABEL, openingMessage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
+import { MODE_LABEL, NOTES_NUDGE, openingMessage, parseBlocks, repliesWithoutNote, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
 import { LessonCanvas } from './LessonCanvas'
 import { cardsToMarkdown } from '@shared/cards'
@@ -21,7 +21,7 @@ import { InterviewClock, useInterviewClock } from './InterviewClock'
 import { LessonNotes } from './LessonNotes'
 import { finishAgendaItem } from '../lib/agenda'
 import { useStudying } from '../lib/studying'
-import { endOngoing, followInBackground, getOngoing, saveOngoing, sessionKey, stopFollowing } from '../lib/sessions'
+import { endOngoing, followInBackground, getOngoing, keepLive, saveOngoing, sessionKey, stopFollowing } from '../lib/sessions'
 import type { View } from '../state'
 import { Professor, type ProfessorPose } from './Professor'
 import { parseVerdict, scorecardScore } from '@shared/interviews'
@@ -136,6 +136,11 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       const next = [...history, { role: 'user' as const, content }, { role: 'assistant' as const, content: '' }]
       setTurns(next)
       const messages: ChatMessage[] = next.slice(0, -1).map((t) => ({ role: t.role, content: t.content }))
+      // Teaching: a nudge (not shown) when two replies in a row added nothing to the notes
+      if (mode === 'teach' && history.length > 2 && repliesWithoutNote(history.filter((t) => t.role === 'assistant').map((t) => t.content)) >= 2) {
+        const last = messages[messages.length - 1]
+        messages[messages.length - 1] = { ...last, content: `${last.content}\n\n${NOTES_NUDGE}` }
+      }
       // In a timed round the interviewer sees the time left with each answer, to pace the round
       if (timed) {
         clock.start()
@@ -144,7 +149,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       }
       await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setupRef.current), canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, engine: engineRef.current })
     },
-    [scope, setup, web, timed, clock]
+    [scope, setup, web, timed, clock, mode]
   )
   sendRef.current = send
   answerRef2.current = (said) => {
@@ -159,6 +164,15 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     if (saved) {
       stopFollowing(ongoingKey!)
       const st = saved.state as { turns: Turn[]; activeId: string | null }
+      // Tide closed while the tutor was replying: drop the cut-off reply and ask for it again
+      if (saved.interrupted) {
+        const turns = st.turns.map((t) => ({ ...t }))
+        while (turns.length && turns[turns.length - 1].role === 'assistant') turns.pop()
+        const answer = turns.pop()
+        if (answer?.role === 'user') send(answer.content, turns)
+        else setTurns(st.turns.map((t) => ({ ...t })))
+        return
+      }
       setTurns(st.turns.map((t) => ({ ...t })))
       if (saved.busy && st.activeId) {
         activeId.current = st.activeId
@@ -253,6 +267,14 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // Leaving mid-way keeps the session for later; finishing it lets it go
   const keepRef = useRef({ turns, busy, finished })
   keepRef.current = { turns, busy, finished }
+  // Saved to disk as it goes (when you answer, and when each reply is done), so quitting Tide or
+  // the Mac shutting down mid-lesson doesn't lose it
+  useEffect(() => {
+    const k = keepRef.current
+    if (!ongoingKey || !view || k.finished || k.turns.length < 2) return
+    keepLive({ key: ongoingKey, view, title: `${MODE_LABEL[mode] ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: null }, busy: k.busy })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turns.length, busy, finished, ongoingKey])
   useEffect(() => {
     if (finished && ongoingKey) endOngoing(ongoingKey)
   }, [finished, ongoingKey])
