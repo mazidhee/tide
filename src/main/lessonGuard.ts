@@ -6,7 +6,10 @@ import type { ChatEvent, ChatMessage, ChatRequest } from '@shared/types'
 import { routeFor } from './cloud'
 import { metabaseHost, metabaseReady } from './metabase'
 import { privatePath } from './projects'
+import { createHash } from 'crypto'
+import { promises as fs } from 'fs'
 import { runCode } from './runner'
+import { absPath } from './vault'
 
 /**
  * Checks a lesson reply once it's written, before the student works on it (see shared/lessonCheck):
@@ -19,6 +22,27 @@ import { runCode } from './runner'
  */
 
 const text = (m?: ChatMessage) => (typeof m?.content === 'string' ? m.content : '')
+
+// Problems solved before, by their wording: .tide/solutions.json in the notes folder
+const SOLUTIONS = '.tide/solutions.json'
+const problemKey = (reply: string) => createHash('sha1').update(posedProblem(reply)).digest('hex').slice(0, 16)
+
+async function cachedSolution(key: string): Promise<string | undefined> {
+  const all = JSON.parse(await fs.readFile(absPath(SOLUTIONS), 'utf8').catch(() => '{}')) as Record<string, { solution: string; at: number }>
+  return all[key]?.solution
+}
+
+async function rememberSolution(key: string, solution: string) {
+  try {
+    const all = JSON.parse(await fs.readFile(absPath(SOLUTIONS), 'utf8').catch(() => '{}')) as Record<string, { solution: string; at: number }>
+    all[key] = { solution, at: Date.now() }
+    // The 500 most recent
+    const kept = Object.fromEntries(Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, 500))
+    await fs.writeFile(absPath(SOLUTIONS), JSON.stringify(kept))
+  } catch {
+    // a cache, never a reason to fail the lesson
+  }
+}
 
 /** The cloud model may see this lesson: not a private project, nothing about your Metabase */
 async function mayLeaveMac(req: ChatRequest): Promise<boolean> {
@@ -42,7 +66,7 @@ export async function checkLessonReply(
   reply: string,
   emit: (e: ChatEvent) => void,
   signal: AbortSignal,
-  ask: (prompt: string, system: string, task: RequestKind, signal: AbortSignal) => Promise<string>,
+  ask: (prompt: string, system: string, task: RequestKind, signal: AbortSignal, routine?: boolean) => Promise<string>,
   final = false
 ): Promise<string[]> {
   const problems: string[] = []
@@ -70,15 +94,22 @@ export async function checkLessonReply(
   // a solution worked out now (by the cloud model on hard topics, when it may see this lesson)
   await runChecks(checksOf(reply))
   if (sets && !solutionOf(reply) && !signal.aborted) {
-    step('lesson-solve', 'Working out the answer to this problem', 'running')
-    const solved = parseSolve(await within(SOLVE_MS, signal, (s) => ask(solvePrompt(readable(reply)), SOLVE_SYSTEM, cloud ? (hard ? 'maths' : 'marking') : 'other', s)))
+    // Solved before (a retest, a quiz that comes round again): no need to ask anyone
+    const key = problemKey(reply)
+    const known = await cachedSolution(key)
+    step('lesson-solve', known ? 'Found the answer to this problem' : 'Working out the answer to this problem', 'running')
+    // An everyday problem is routine: when a cloud model's day is running low, Gemma solves it and the allowance is kept for hard ones
+    const solved = known ? { solution: known, checks: [] } : parseSolve(await within(SOLVE_MS, signal, (s) => ask(solvePrompt(readable(reply)), SOLVE_SYSTEM, cloud ? (hard ? 'maths' : 'marking') : 'other', s, !hard)))
     step('lesson-solve', 'Worked out the answer', 'done')
     if (solved.flaw) problems.push(`The problem can't be solved as set: ${solved.flaw}. Set a different, well-posed problem.`)
     else if (solved.solution) {
       const before = problems.length
       await runChecks(solved.checks)
       // Kept with the reply, hidden from the student, so their answer is marked against it
-      if (problems.length === before) emit({ id: req.id, type: 'delta', text: `\n\n<solution>${solved.solution}</solution>` })
+      if (problems.length === before) {
+        emit({ id: req.id, type: 'delta', text: `\n\n<solution>${solved.solution}</solution>` })
+        if (!known) await rememberSolution(key, solved.solution)
+      }
     }
   }
   if (signal.aborted) return problems

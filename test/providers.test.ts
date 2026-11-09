@@ -55,7 +55,10 @@ describe('open endpoints', () => {
   it('join the line last, without a key', async () => {
     const { jobLine, DEFAULT_CLOUD } = await import('../src/shared/providers')
     const line = jobLine({ ...DEFAULT_CLOUD, provider: 'groq', model: 'openai/gpt-oss-120b' }, { groq: true }, 'marking')
-    expect(line[0]).toEqual({ provider: 'groq', model: 'openai/gpt-oss-120b' })
+    // Each Groq model has its own free allowance, so each job gets its own model
+    expect(line[0]).toEqual({ provider: 'groq', model: 'openai/gpt-oss-20b' })
+    expect(jobLine({ ...DEFAULT_CLOUD }, { groq: true }, 'maths')[0].model).toBe('openai/gpt-oss-120b')
+    expect(jobLine({ ...DEFAULT_CLOUD }, { groq: true }, 'errors')[0].model).toBe('qwen/qwen3.8-27b')
     expect(line.map((t) => t.provider).slice(-2)).toEqual(['kilo', 'ovh'])
     expect(line.find((t) => t.provider === 'kilo')?.model).toBe('nvidia/nemotron-3-ultra-550b-a55b:free')
   })

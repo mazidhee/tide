@@ -496,7 +496,7 @@ async function streamTurn(messages: ApiMessage[], tools: unknown[], signal: Abor
     try {
       // Don't send what the provider's per-minute allowance can't take: Gemma answers at once instead
       const needed = estimateTokens(JSON.stringify(messages).length + JSON.stringify(tools).length) + CLOUD_REPLY_TOKENS
-      if (!canTake(needed, cloud.target.provider)) throw new CloudUnavailable(`The cloud model’s per-minute limit is used up for about ${secondsUntilReset(cloud.target.provider)}s`)
+      if (!canTake(needed, cloud.target)) throw new CloudUnavailable(`The cloud model’s per-minute limit is used up for about ${secondsUntilReset(cloud.target)}s`)
       return await streamTurnOnce(messages, tools, signal, (t) => ((wrote = true), onText(t)), 0, cloud.target, cloud.task)
     } catch (e) {
       if (signal.aborted || !(e instanceof CloudUnavailable || e instanceof TypeError)) throw e
@@ -579,7 +579,7 @@ async function streamTurnOnce(
     outerSignal.removeEventListener('abort', abort)
     throw await cloudError(res, target)
   }
-  if (target) noteLimits(res.headers, target.provider)
+  if (target) noteLimits(res.headers, target)
   if (!res.ok || !res.body) {
     const detail = await res.text().catch(() => '')
     throw new Error(`AI server answered ${res.status}: ${detail.slice(0, 300) || res.statusText}`)

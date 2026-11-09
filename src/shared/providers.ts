@@ -48,6 +48,8 @@ export interface ProviderInfo {
   perMinute?: number
   /** Answers without a key (an open endpoint): always in the line, after the providers you have keys for */
   keyless?: boolean
+  /** The free allowance per model per day, when the provider has one */
+  perDay?: { requests?: number; tokens?: number }
 }
 
 export const PROVIDERS: ProviderInfo[] = [
@@ -81,6 +83,9 @@ export const PROVIDERS: ProviderInfo[] = [
     checked: '2026-11-08',
     freeTier: 'Free key: 1,000 requests a day and 8,000 tokens a minute per model (read from the API’s own rate-limit headers). No card needed.',
     perMinute: 28,
+    perDay: { requests: 1000, tokens: 200_000 },
+    // Each model has its own allowance: one per job roughly triples what the free tier gives
+    jobs: { maths: 'openai/gpt-oss-120b', errors: 'qwen/qwen3.8-27b', marking: 'openai/gpt-oss-20b', planning: 'openai/gpt-oss-120b' },
     reasoningField: 'reasoning_effort',
     models: [
       { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B', price: { input: 0.15, output: 0.6 }, context: 131072, reasoning: true, note: 'Strong reasoning, very fast' },

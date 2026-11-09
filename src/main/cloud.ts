@@ -60,12 +60,18 @@ export const hasKeys = (): Record<string, boolean> => Object.fromEntries(Object.
 
 // ---------- Which model answers ----------
 
-// Each provider's state: when it may be asked again after a refusal, and its per-minute token
-// allowance as its last response reported it
+// Each model's state (free limits are per model): when it may be asked again after a refusal, its
+// per-minute token allowance and its daily request allowance as its last response reported them,
+// and what Tide itself has used of it today
 const coolUntil = new Map<string, number>()
 const tokenWindow = new Map<string, { remaining: number; resetAt: number }>()
+const dayWindow = new Map<string, { remaining: number; limit: number; resetAt: number }>()
+const dayUse = new Map<string, { date: string; requests: number; tokens: number }>()
 
-/** "697ms", "35.61s", "1m26.4s" → milliseconds */
+const idOf = (t: { provider: string; model: string }) => `${t.provider}:${t.model}`
+const today = () => new Date().toISOString().slice(0, 10)
+
+/** "697ms", "35.61s", "1m26.4s", "2h3m" → milliseconds */
 const duration = (v: string | null): number => {
   if (!v) return 0
   let ms = 0
@@ -73,20 +79,57 @@ const duration = (v: string | null): number => {
   return ms
 }
 
-/** Keeps track of how many tokens are left this minute, from the provider's rate-limit headers */
-export function noteLimits(headers: Headers, provider: string) {
-  const remaining = Number(headers.get('x-ratelimit-remaining-tokens'))
-  if (Number.isFinite(remaining) && headers.has('x-ratelimit-remaining-tokens')) tokenWindow.set(provider, { remaining, resetAt: Date.now() + duration(headers.get('x-ratelimit-reset-tokens')) })
+/** Keeps track of what's left this minute (tokens) and today (requests), from the provider's rate-limit headers */
+export function noteLimits(headers: Headers, t: { provider: string; model: string }) {
+  const id = idOf(t)
+  const tokens = Number(headers.get('x-ratelimit-remaining-tokens'))
+  if (headers.has('x-ratelimit-remaining-tokens') && Number.isFinite(tokens)) tokenWindow.set(id, { remaining: tokens, resetAt: Date.now() + duration(headers.get('x-ratelimit-reset-tokens')) })
+  const left = Number(headers.get('x-ratelimit-remaining-requests'))
+  const limit = Number(headers.get('x-ratelimit-limit-requests'))
+  if (headers.has('x-ratelimit-remaining-requests') && Number.isFinite(left) && limit > 0) dayWindow.set(id, { remaining: left, limit, resetAt: Date.now() + duration(headers.get('x-ratelimit-reset-requests')) })
 }
 
 /** Whether a request of about this many tokens fits in what's left this minute (unknown counts as yes) */
-export function canTake(tokens: number, provider: string): boolean {
-  const w = tokenWindow.get(provider)
+export function canTake(tokens: number, t: { provider: string; model: string }): boolean {
+  const w = tokenWindow.get(idOf(t))
   if (!w || Date.now() >= w.resetAt) return true
   return tokens <= w.remaining
 }
 
-export const secondsUntilReset = (provider: string) => Math.max(1, Math.ceil(((tokenWindow.get(provider)?.resetAt ?? 0) - Date.now()) / 1000))
+export const secondsUntilReset = (t: { provider: string; model: string }) => Math.max(1, Math.ceil(((tokenWindow.get(idOf(t))?.resetAt ?? 0) - Date.now()) / 1000))
+
+/** Counts what Tide sent a model today, for the daily allowance */
+function noteDayUse(t: { provider: string; model: string }, tokens: number) {
+  const id = idOf(t)
+  const u = dayUse.get(id)
+  const d = today()
+  dayUse.set(id, u && u.date === d ? { date: d, requests: u.requests + 1, tokens: u.tokens + tokens } : { date: d, requests: 1, tokens })
+}
+
+/** How much of a model's daily allowance is used, 0 to 1: the provider's own count when it reports one, else Tide's */
+export function dayShare(t: { provider: string; model: string }): number {
+  const id = idOf(t)
+  const w = dayWindow.get(id)
+  const fromHeaders = w && Date.now() < w.resetAt ? 1 - w.remaining / w.limit : 0
+  const per = providerInfo(t.provider, cloudSettings()).perDay
+  const u = dayUse.get(id)
+  const own = u && u.date === today() && per ? Math.max(per.requests ? u.requests / per.requests : 0, per.tokens ? u.tokens / per.tokens : 0) : 0
+  return Math.max(fromHeaders, own)
+}
+
+/** Today's use so far, from the usage log, so a restart doesn't forget it */
+export function loadDayUse() {
+  try {
+    const d = today()
+    const lines = readFileSync(usagePath(), 'utf8').trim().split('\n').slice(-3000)
+    for (const l of lines) {
+      const r = JSON.parse(l) as UsageRecord
+      if (r.kind === 'cloud' && new Date(r.at).toISOString().slice(0, 10) === d) noteDayUse(r, (r.input ?? 0) + (r.output ?? 0))
+    }
+  } catch {
+    // no log yet
+  }
+}
 
 /** Room left for a cloud reply (reasoning included); providers count it against the per-minute limit */
 export const CLOUD_REPLY_TOKENS = 1800
@@ -95,8 +138,6 @@ export const CLOUD_REPLY_TOKENS = 1800
 export function noteRateLimit(id: string, retryAfterSeconds?: number) {
   coolUntil.set(id, Date.now() + Math.max(20, Math.min(600, retryAfterSeconds ?? 60)) * 1000)
 }
-
-const idOf = (t: { provider: string; model: string }) => `${t.provider}:${t.model}`
 
 /** Resting after a refusal: the model, or its whole provider */
 export const coolingDown = (t: { provider: string; model: string }) => Date.now() < Math.max(coolUntil.get(t.provider) ?? 0, coolUntil.get(idOf(t)) ?? 0)
@@ -133,12 +174,22 @@ export function targetFor(provider: string, model: string): CloudTarget | null {
  * (any mode but off); in auto mode a job you ticked escalates by itself, unless the provider is
  * rate limiting us or this month's paid spend has reached the budget.
  */
-export function routeFor(task: CloudTask | null, engine: 'auto' | 'local' | 'cloud' = 'auto', open = true): CloudTarget | null {
+export function routeFor(task: CloudTask | null, engine: 'auto' | 'local' | 'cloud' = 'auto', open = true, low = false): CloudTarget | null {
   const s = cloudSettings()
   if (s.mode === 'off' || engine === 'local') return null
   if (engine !== 'cloud' && (s.mode !== 'auto' || !task || !s.tasks[task] || overBudget())) return null
-  // Open endpoints (no key) may train on what they're sent: only short checks go there, never a tutoring turn with your notes in it
-  return chain(task).find((t) => !coolingDown(t) && underPace(t.provider) && (open || !providerInfo(t.provider, s).keyless)) ?? null
+  return (
+    chain(task).find(
+      (t) =>
+        !coolingDown(t) &&
+        underPace(t.provider) &&
+        // Open endpoints (no key) may train on what they're sent: only short checks go there, never a tutoring turn with your notes in it
+        (open || !providerInfo(t.provider, s).keyless) &&
+        // Today's allowance: the last few percent are left alone, and once a model is 70% through
+        // its day, routine work (solving an everyday problem) leaves the rest for what matters
+        dayShare(t) < (low ? 0.7 : 0.97)
+    ) ?? null
+  )
 }
 
 /**
@@ -220,6 +271,7 @@ export function recordUsage(r: Omit<UsageRecord, 'at' | 'cost' | 'listCost' | 'p
     const list = costOf(modelPrice(r.provider, r.model, s), r)
     extra = { plan, listCost: list, cost: plan === 'free' ? 0 : list }
   }
+  if (r.kind === 'cloud') noteDayUse(r, (r.input ?? 0) + (r.output ?? 0))
   try {
     mkdirSync(dirname(usagePath()), { recursive: true })
     appendFileSync(usagePath(), JSON.stringify({ at: Date.now(), ...r, ...extra }) + '\n')
@@ -342,7 +394,7 @@ export async function testCloud(provider: string, model: string): Promise<{ ok: 
       signal: controller.signal
     })
     if (!res.ok || !res.body) return { ok: false, message: (await cloudError(res, target)).message }
-    noteLimits(res.headers, target.provider)
+    noteLimits(res.headers, target)
     const limits = Object.fromEntries([...res.headers.entries()].filter(([k]) => k.startsWith('x-ratelimit-limit')).map(([k, v]) => [k.replace('x-ratelimit-limit-', ''), v]))
     // The first piece of the answer (or of its thinking) is enough: stop there and save the tokens
     const reader = res.body.getReader()
