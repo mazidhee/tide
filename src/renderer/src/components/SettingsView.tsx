@@ -214,6 +214,68 @@ function MetabaseGroup() {
   )
 }
 
+/** Your study time for a dashboard or another app (Plain, a widget), read-only, from this Mac */
+function StudyApiGroup() {
+  const app = useApp()
+  const [state, setState] = useState<Awaited<ReturnType<typeof window.tide.studyApi.status>> | null>(null)
+  const [shown, setShown] = useState(false)
+  useEffect(() => {
+    window.tide.studyApi.status().then(setState).catch(() => {})
+  }, [])
+  const set = async (patch: { enabled?: boolean; lan?: boolean }) => setState(await window.tide.studyApi.set(patch))
+  const copy = (text: string, what: string) =>
+    navigator.clipboard
+      .writeText(text)
+      .then(() => app.toast(`${what} copied`))
+      .catch(() => {})
+  const on = !!state?.enabled
+  const example = state ? `curl -H "Authorization: Bearer ${state.token}" ${state.url}/summary?days=30` : ''
+  return (
+    <Group title="Study data API" note="Lets a dashboard or another app (like Plain) read your study time: sessions, minutes by day, kind and notebook, streaks, flashcards and answers. Read-only; it can’t change anything in Tide.">
+      <Row label="Share my study data" hint={state?.problem ? <span className="set-error">{state.problem}</span> : on ? (state?.running ? 'Running while Tide is open.' : 'Starting…') : 'Off. Nothing is shared.'}>
+        <Toggle label="Share my study data" on={on} onChange={(v) => set({ enabled: v })} />
+      </Row>
+      {on && state && (
+        <>
+          <Row label="Address" hint="Every request but /health needs the token below.">
+            <span className="set-inline">
+              <code className="path">{state.url}</code>
+              <button className="btn small ghost" onClick={() => copy(state.url, 'Address')}>
+                Copy
+              </button>
+            </span>
+          </Row>
+          <Row label="Token" hint="Send it as “Authorization: Bearer …”. A new token stops the old one working.">
+            <span className="set-inline">
+              <code className="path">{shown ? state.token : '•'.repeat(16)}</code>
+              <button className="btn small ghost" onClick={() => setShown((v) => !v)}>
+                {shown ? 'Hide' : 'Show'}
+              </button>
+              <button className="btn small ghost" onClick={() => copy(state.token, 'Token')}>
+                Copy
+              </button>
+              <button className="btn small ghost" onClick={async () => setState(await window.tide.studyApi.newToken())}>
+                New token
+              </button>
+            </span>
+          </Row>
+          <Row label="Other devices on my network" hint={state.lan ? (state.lanUrl ? <>Reachable at <code className="path">{state.lanUrl}</code></> : 'No network connection right now.') : 'Off: only apps on this Mac can read it.'}>
+            <Toggle label="Other devices on my network" on={state.lan} onChange={(v) => set({ lan: v })} />
+          </Row>
+          <Row label="Try it" hint="Endpoints: /today, /summary?days=30, /sessions?from=2026-11-01. Help › Study data API has the details." stack>
+            <span className="set-inline wide">
+              <code className="path set-code">{shown ? example : example.replace(state.token, '<token>')}</code>
+              <button className="btn small ghost" onClick={() => copy(example, 'Command')}>
+                Copy
+              </button>
+            </span>
+          </Row>
+        </>
+      )}
+    </Group>
+  )
+}
+
 // ---------- Sections ----------
 
 function GeneralSection() {
@@ -794,6 +856,7 @@ function ToolsSection() {
         <ToolSetup label="Things 4" hint="Tasks and deadlines" check={window.tide.learn.thingsStatus} setup={window.tide.learn.thingsStatus} busyText="Checking…" actionText="Check again" />
       </Group>
       <MetabaseGroup />
+      <StudyApiGroup />
     </>
   )
 }

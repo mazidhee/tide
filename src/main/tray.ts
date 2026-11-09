@@ -47,6 +47,12 @@ const idlePose = (): ProfessorPose => {
 
 const latest = () => [...reports.values()].sort((a, b) => b.at - a.at)[0] ?? null
 
+/** What's being studied right now, for the study data API */
+export const currentStudy = () => {
+  const s = latest()
+  return s ? { label: s.label, since: s.since } : null
+}
+
 function frame(p: ProfessorPose) {
   // 16 rows at 2x is a 16-point-tall icon, which sits well in the menu bar
   const { width, height, data } = professorBitmap(p, tick, 2, getSettings().character)

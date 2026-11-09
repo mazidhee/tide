@@ -97,7 +97,7 @@ export function useAutoTrack(context: StudyContext | null, pace: Pace) {
 
     const flush = (end: number) => {
       if (!seg) return
-      if (end - seg.start >= 60_000) window.tide.learn.logFocus(seg.start, end, { label: seg.ctx.label, path: seg.ctx.path, kind: 'session' }).catch(() => {})
+      if (end - seg.start >= 60_000) window.tide.learn.logFocus(seg.start, end, { label: seg.ctx.label, path: seg.ctx.path, kind: seg.ctx.kind }).catch(() => {})
       seg = null
     }
 

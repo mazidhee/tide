@@ -230,6 +230,11 @@ const api: TideApi = {
     suggest: invoke('books:suggest'),
     map: invoke('books:map')
   },
+  studyApi: {
+    status: invoke('studyApi:status'),
+    set: invoke('studyApi:set'),
+    newToken: invoke('studyApi:newToken')
+  },
   metabase: {
     status: invoke('metabase:status'),
     connect: invoke('metabase:connect'),
