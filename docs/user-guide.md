@@ -240,7 +240,7 @@ Pick who reads your note in **Reads as**:
 
 Where you're heading shapes everything else: the week's priorities, the learner profile every chat and lesson reads, and new roadmaps (ask to learn how to build an LLM from scratch and the plan leans towards the systems side if that's where you're going).
 
-**Plan my week** plans the next seven days towards that goal. Tide gathers the facts itself (the next unfinished topics in each focus roadmap, your weak topics, flashcards due, overdue tasks, mock interview scores) and the tutor decides what comes first and says why, for example which topics unlock the others. Each study day gets a few items, sized to your hours: topics to **learn** (straight from your roadmaps, never invented), **practice**, a short **quiz** on earlier topics, **review** of weak spots, a **take-home** or two and a **test** at the end. Topics come with what to read, checked online so the links are real.
+**Plan my week** plans the next seven days towards that goal; when no plan covers today (a new week, or the last one ran out), Tide plans it by itself in the background. Tide gathers the facts itself (the next unfinished topics in each focus roadmap, your weak topics, flashcards due, overdue tasks, mock interview scores) and the tutor decides what comes first and says why, for example which topics unlock the others. Each study day gets a few items, sized to your hours: topics to **learn** (straight from your roadmaps, never invented), **practice**, a short **quiz** on earlier topics, **review** of weak spots, a **take-home** or two and a **test** at the end. Topics come with what to read: the exact pages in books you own first (see Books you own), then links checked online so they're real.
 
 - The page reads at a glance: why the week is shaped the way it is (in a sentence, **More** for the rest), how the time splits between subjects, a strip of seven days (dots for each item, today circled), and the chosen day's items as a checklist with what to read as small links. Your goal, focus, hours and days fold into one row; **Edit** opens them.
 - **Today** on Home shows today's items; click one to start it (a lesson, a quiz, a test, Practice or Review).
@@ -472,6 +472,14 @@ Open a PDF and click **Guide**. **Find the chapters** reads the book's bookmarks
 
 Scanned books have no text, so Tide can't find their chapters; use **Chapter starts on page N** as you reach each one. The guide is a checklist at the top of the book's notes (`<Book> (Notes).md`), so your progress is plain Markdown.
 
+### Books you own
+
+Every book in your vault gets a map in the background, a few at a time: its chapters and the sections inside them with their pages (from its bookmarks, or its printed contents), and a line on what each covers, written from a glance at each section's opening page. Tide never reads a book through: a big book is far more than the model can take in, and the map plus the search index are enough to know where things are.
+
+With the map, Tide points you at the pages for what you're learning: your week lists them first for each topic ("Designing Data-Intensive Applications: Chapter 9 › Distributed Transactions and Consensus, pp. 374–394"), a lesson shows them at the top under **Read**, and the tutor knows them and can send you there. Click one to open the book at that page.
+
+After reading, a chapter in the book's reading guide can be a **Test** (five marked questions, 30 minutes) or **Flashcards**, as well as **Teach me**, **Quiz** and a coding **Challenge**, all on just that chapter. Quizzes and tests draw on passages from across the chapter, not only its first pages.
+
 ### Reading PDFs
 
 - Pages render as you scroll. Use − and + to zoom.
@@ -494,12 +502,21 @@ Every answer you give in a session, and every flashcard review, is recorded. Eac
 
 Confidently wrong answers are counted separately as misconceptions. Levels appear on outline topics and notebook pages, and **Learn → Worth revisiting** lists your weakest notes with one-click Quiz and Teach.
 
-### Graph
+### Brain
 
-**Graph** shows how your notes link to each other. Notes cluster by notebook, the view fits itself to the screen, and you can drag, zoom and click to open a note. Filter by notebook, hide unlinked notes, or open a note's own neighbourhood from **See it in the graph** at the bottom of the note.
+**Brain** (the graph) is everything Tide knows about you and your learning, as one living map:
+
+- **You** in the middle; click it for where you're heading.
+- **Your notebooks** around you, with a ring showing how far through the roadmap you are, and their **notes** linked as you link them.
+- **Your books** and their chapters, each chapter tied to the notes it covers.
+- **What the tutor remembers** about you (diamonds near you).
+- **This week's topics** as dashed rings, by their notebook.
+
+Turn layers on and off along the top (Notes, Books, Memory, This week). It updates as Tide works: when the tutor remembers something, grades an answer, maps a book, plans your week or updates where you're heading, the node it touched glows, and **Live**, bottom left, says what happened (click a line to select its node). Drag, zoom, double-click to open; filter by notebook, hide unlinked notes, or open a note's own neighbourhood from **See it in the graph** at the bottom of the note.
 
 - **Notebooks / Mastery** switches the colours. In Mastery, each note is coloured by its level; click a level in the legend to light up only those notes, so your weak spots stand out.
 - Click a note to see its card: **Open**, **Quiz me**, or **Show around**, which narrows the graph to that note and what's within two links of it. Double-click opens the note directly.
+- A chapter's card has **Read** (opens the book at its first page), **Teach me**, **Quiz** and **Test me**, all on just that chapter's pages. A memory's card has **Forget this**. A week's topic has **Learn it**.
 
 The tutor uses the graph too. When you ask about a note, it also reads the best-matching passage from notes linked to it, and it can look up a note's links, backlinks, notes two steps away and notes with the same tags, each with your mastery level, to connect new ideas to what you already know or spot the weak prerequisite.
 

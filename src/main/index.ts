@@ -51,6 +51,8 @@ import { adjustPlan, auditRoadmap, planReadings, planToThings, sizePlan, syncFro
 import type { StudyPlan } from '@shared/plan'
 import { dayTasks, setTaskDone, thingsStatus } from './things'
 import { mapBook, mapNewBooks, pagesToRead } from './books'
+import { getBrain } from './brain'
+import { onBrainEvent, recentBrainEvents } from './brainEvents'
 import { getCoach, getWeek, planWeek, saveCoach, updateProfile, inferDirection, autoPlanWeek, weekToThings, setItemDone, syncDone, rollOver, dayStats, journal, writeJournal, weekReview, saveReview } from './coach'
 import { addMistakes, listMistakes, mistakesDue, retestMistake } from './mistakes'
 import { initTray, refreshTray, reportStudy, type StudyStatus } from './tray'
@@ -327,6 +329,8 @@ function registerIpc() {
   handle('ai:readAlong', (path: string, passage: string, mode: string, force?: boolean, style?: 'coach') => readAlong(path, passage, mode, force, style))
 
   handle('learn:graph', () => getGraph())
+  handle('learn:brain', () => getBrain())
+  handle('learn:brainEvents', () => recentBrainEvents())
   handle('learn:backlinks', (p: string) => getBacklinks(p))
   handle('learn:notebooks', () => getNotebooks())
   handle('learn:updateNotebook', (p: string, patch: Parameters<typeof updateNotebook>[1]) => updateNotebook(p, patch))
@@ -554,6 +558,7 @@ app.whenReady().then(() => {
   registerIpc()
   setMenu()
   createWindow()
+  onBrainEvent((e) => BrowserWindow.getAllWindows().forEach((w) => !w.isDestroyed() && w.webContents.send('brain:event', e)))
   onModelBusy((busy) => BrowserWindow.getAllWindows().forEach((w) => !w.isDestroyed() && w.webContents.send('model:busy', busy)))
   // Where you're heading, worked out quietly once the app has settled (every few days at most)
   setTimeout(() => inferDirection().catch(() => {}), 90_000)

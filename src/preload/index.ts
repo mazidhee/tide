@@ -76,6 +76,8 @@ const api: TideApi = {
   },
   learn: {
     graph: invoke('learn:graph'),
+    brain: invoke('learn:brain'),
+    brainEvents: invoke('learn:brainEvents'),
     backlinks: invoke('learn:backlinks'),
     notebooks: invoke('learn:notebooks'),
     updateNotebook: invoke('learn:updateNotebook'),
@@ -241,6 +243,8 @@ contextBridge.exposeInMainWorld('tideEvents', {
   onLink: (cb: (url: string) => void) => subscribe<string>('deeplink', cb),
   /** Whether the model is working, so decoration can hold still and leave it the GPU */
   onModelBusy: (cb: (busy: boolean) => void) => subscribe<boolean>('model:busy', cb),
+  /** Something Tide just learned or did, for the brain graph */
+  onBrainEvent: (cb: (e: import('../shared/brain').BrainEvent) => void) => subscribe<import('../shared/brain').BrainEvent>('brain:event', cb),
   pendingLink: () => ipcRenderer.invoke('app:pendingLink') as Promise<string | null>,
   pathForFile: (file: File) => webUtils.getPathForFile(file)
 })

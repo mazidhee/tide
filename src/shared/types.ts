@@ -524,6 +524,10 @@ export interface TideApi {
     readAlong(path: string, passage: string, mode: string, force?: boolean, style?: 'coach'): Promise<ReadAlongNote | null>
   }
   learn: {
+    /** Everything Tide knows, as one graph: you, notebooks, notes, books, memories, this week */
+    brain(): Promise<import('./brain').BrainData>
+    /** What Tide learned or did lately */
+    brainEvents(): Promise<import('./brain').BrainEvent[]>
     graph(): Promise<GraphData>
     backlinks(path: string): Promise<{ path: string; title: string }[]>
     notebooks(): Promise<NotebookMeta[]>

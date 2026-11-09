@@ -324,7 +324,7 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
           )}
         </div>
         {shown('library') && navItem('library', 'Library', view.kind === 'library', () => app.setView({ kind: 'library' }))}
-        {shown('graph') && navItem('graph', 'Graph', view.kind === 'graph', () => app.setView({ kind: 'graph' }))}
+        {shown('graph') && navItem('graph', 'Brain', view.kind === 'graph', () => app.setView({ kind: 'graph' }))}
       </nav>
 
       {ongoing.length > 0 && (

@@ -5,6 +5,7 @@ import { buildLink } from '@shared/deeplink'
 import { complete, extractJsonObject } from './ai'
 import { focusLog, getGoals, getMastery, getNotebooks, listDrills, listInterviews, studyEvents } from './learn'
 import { listMemories } from './memory'
+import { brainEvent } from './brainEvents'
 import { listMistakes } from './mistakes'
 import { getCards } from './study'
 import { addProject, ensureArea, getProject, searchTasks, thingsAvailable, TIDE_TAG, updateTask } from './things'
@@ -223,6 +224,7 @@ Return ONLY JSON:
   await fs.mkdir(absPath(WEEKS), { recursive: true })
   await writeText(weekFile(start), JSON.stringify(plan, null, 2))
   await writeText(WEEK_NOTE, weekMarkdown(plan))
+  brainEvent({ kind: 'week', label: `Planned your week: ${plan.days.reduce((n, d) => n + d.items.filter((i) => i.kind === 'learn').length, 0)} topics to learn` })
   return plan
 }
 
@@ -303,7 +305,9 @@ Only state what the facts support.`
   if (!parsed.direction?.trim()) return settings
   const names = new Set(books.map((b) => b.name))
   const focus = settings.focus.length ? settings.focus : (parsed.focus ?? []).filter((f) => names.has(f) && books.find((b) => b.name === f)?.outline)
-  return saveCoach({ ...settings, direction: parsed.direction.trim(), directionAt: Date.now(), focus })
+  const saved = await saveCoach({ ...settings, direction: parsed.direction.trim(), directionAt: Date.now(), focus })
+  if (parsed.direction.trim() !== settings.direction) brainEvent({ kind: 'direction', label: `Where you're heading: ${parsed.direction.trim()}`, id: 'you' })
+  return saved
 }
 
 /**

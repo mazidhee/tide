@@ -14271,3 +14271,153 @@ button.tl-dot:focus-visible {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* ---------- The brain (Graph) ---------- */
+.brain-layers {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.brain-layer {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg-raised) 85%, transparent);
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  transition:
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.brain-layer.on {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.brain-layer:disabled {
+  opacity: 0.45;
+}
+
+/* Each layer's glyph matches how it's drawn */
+.brain-glyph {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ink-muted);
+}
+
+.brain-layer.k-book .brain-glyph {
+  width: 8px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--info);
+}
+
+.brain-layer.k-memory .brain-glyph {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  transform: rotate(45deg);
+  background: #9a72cf;
+}
+
+.brain-layer.k-week .brain-glyph {
+  background: none;
+  border: 2px dashed var(--accent);
+  box-sizing: border-box;
+}
+
+.brain-layer:not(.on) .brain-glyph {
+  opacity: 0.4;
+}
+
+.brain-feed {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: 300px;
+  padding: 10px 10px 8px;
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--bg-raised) 90%, transparent);
+  border: 1px solid var(--line);
+}
+
+.brain-feed-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 4px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.brain-live {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.brain-feed ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.brain-feed li button {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 6px;
+  border-radius: var(--radius-s);
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.brain-feed li button:not(:disabled):hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.brain-feed-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brain-feed li:first-child .brain-feed-label {
+  color: var(--ink);
+}
+
+.graph-card-detail {
+  margin: -4px 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+/* The feed sits bottom left, clear of the Ask button; the mastery key under the layers */
+.brain-feed {
+  right: auto;
+  left: 14px;
+}
+
+.graph-legend.brain-legend {
+  top: 54px;
+  bottom: auto;
+}

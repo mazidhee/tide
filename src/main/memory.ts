@@ -1,6 +1,7 @@
 import { existsSync, promises as fs } from 'fs'
 import type { Memory } from '@shared/types'
 import { absPath, joinRel, writeText } from './vault'
+import { brainEvent } from './brainEvents'
 
 /**
  * What the tutor remembers about the learner across conversations: goals, background, what they
@@ -54,6 +55,7 @@ export async function addMemory(text: string, chatId?: string): Promise<{ memory
     result = { memory, duplicate: false }
     return [...list, memory]
   })
+  if (!result!.duplicate) brainEvent({ kind: 'memory', label: `Remembered: ${result!.memory.text}`, id: `mem:${result!.memory.id}` })
   return result!
 }
 
@@ -79,6 +81,7 @@ export async function forgetMatching(description: string): Promise<Memory | null
     removed = scored[0].m
     return list.filter((m) => m.id !== removed!.id)
   })
+  if (removed) brainEvent({ kind: 'memory', label: `Forgot: ${(removed as Memory).text}` })
   return removed
 }
 

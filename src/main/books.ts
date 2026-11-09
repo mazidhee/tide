@@ -5,6 +5,7 @@ import { bookChapters } from './book'
 import { pdfText, search } from './search'
 import { absPath, flattenFiles, getTree, joinRel, readText, writeText } from './vault'
 import { promises as fs } from 'fs'
+import { brainEvent } from './brainEvents'
 
 /**
  * A map of each book you own: its chapters and sections with their pages, and a line on what each
@@ -60,6 +61,7 @@ export async function mapBook(path: string, signal?: AbortSignal): Promise<BookM
   const maps = await load()
   maps[path] = map
   await save(maps)
+  brainEvent({ kind: 'book', label: `Mapped ${title}: ${sections.length} sections`, id: `book:${path}` })
   return map
 }
 
