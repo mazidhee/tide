@@ -92,6 +92,25 @@ export function moveUnfinished(plan: WeekPlan, from: string, to: string): { plan
   return { plan: { ...plan, days: next }, moved }
 }
 
+/**
+ * Without a wrap-up, what's left on past days still moves on: everything unfinished before today
+ * goes to the front of today, or the next study day if today isn't one, oldest first (into the
+ * carry for next week's plan when that day is past this one). Run as often as you like; once
+ * moved, nothing is left behind to move again.
+ */
+export function catchUpPlan(plan: WeekPlan, today: string, studyDays: number[]): { plan: WeekPlan; moved: AgendaItem[]; to: string } {
+  const isStudyDay = !studyDays.length || studyDays.includes(new Date(today + 'T12:00:00Z').getUTCDay())
+  const to = isStudyDay ? today : nextStudyDay(today, studyDays)
+  const past = [...plan.days].filter((d) => d.date < today).sort((x, y) => x.date.localeCompare(y.date))
+  const moved = past.flatMap((d) => d.items.filter((it) => !it.done).map((it) => ({ ...it, carried: true })))
+  if (!moved.length) return { plan, moved, to }
+  const days = plan.days.map((d) => (d.date < today ? { ...d, items: d.items.filter((it) => it.done) } : d))
+  if (to > plusDays(plan.weekStart, 6)) return { plan: { ...plan, days, carry: [...(plan.carry ?? []), ...moved] }, moved, to }
+  const target = days.find((d) => d.date === to)
+  const next = target ? days.map((d) => (d === target ? { ...d, items: [...moved, ...d.items] } : d)) : [...days, { date: to, items: moved }].sort((x, y) => x.date.localeCompare(y.date))
+  return { plan: { ...plan, days: next }, moved, to }
+}
+
 export interface DayStats {
   date: string
   minutes: number

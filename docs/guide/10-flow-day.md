@@ -47,4 +47,9 @@ If you prefer a fixed session, **Focus** at the bottom of the sidebar times one 
 
 **Wrap up the day** takes about three minutes: a sentence on what you did, three quick questions on today's topics, moving what's left to your next study day (in Things too), and a line for your journal in `Coach/Journal`.
 
+## If you don't finish
+
+Nothing is lost. Whatever you didn't finish moves to the top of your next study day by itself, in Tide and in Things, the next time Tide opens or within the hour, even if you skip the wrap-up. Anything you ticked off in Things counts as done first, so finished work never moves. If the next study day falls in a new week, the next week's plan fits it in first. A week you don't finish also makes the next one lighter.
+
+
 At the end of the week, the weekly review shows each day's activity and asks what went well, what got in the way and what to change, then plans the next week with that in mind.
