@@ -1,11 +1,11 @@
 import { SIDEBAR_ITEMS } from '@shared/sidebar'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { DEFAULT_VOICE, resetVoiceStatus, Speaker } from '../lib/voice'
-import { CHARACTERS } from '@shared/characters'
+import { CHARACTERS, characterById } from '@shared/characters'
 import { CLOUD_TASKS, DEFAULT_CLOUD, PROVIDERS, modelPrice, providerInfo, type CloudSettings, type ModelPrice } from '@shared/providers'
 import { Professor } from './Professor'
 import { PillSegment } from './PromptBox'
-import type { AISettings, ThemeId } from '@shared/types'
+import type { AISettings, Settings, ThemeId } from '@shared/types'
 import { useApp } from '../state'
 import { Icon, type IconName } from './Icon'
 
@@ -408,11 +408,37 @@ function TutorSection() {
         <Row label="Use the Mac’s own voice" hint="More robotic, nothing to set up.">
           <Toggle label="Use the Mac’s own voice" on={prefs.engine === 'system'} onChange={(on) => save({ engine: on ? 'system' : 'natural' })} />
         </Row>
+        <VoicePicker prefs={prefs} own={characterById(app.settings.character).voice} ready={ready && prefs.engine !== 'system'} save={save} hear={hear} />
+        <Row label="Dictation" hint={prefs.dictation === 'handy' ? 'Speak puts the cursor in the box; press your Handy shortcut and Handy types what you say. Hands-free talk still uses Tide’s model.' : 'Speak records you and Tide writes it out on this Mac (Parakeet).'}>
+          <Select label="Dictation" value={prefs.dictation ?? 'tide'} onChange={(v) => save({ dictation: v as 'tide' | 'handy' })} options={[{ value: 'tide', label: 'Tide (Parakeet)' }, { value: 'handy', label: 'Handy' }]} />
+        </Row>
         <Row label="Speed">
           <Select label="Speed" value={prefs.speed} onChange={(v) => save({ speed: v })} options={[0.85, 0.95, 1, 1.1, 1.2, 1.35].map((v) => ({ value: v, label: v === 1 ? 'Normal' : `${v}×` }))} />
         </Row>
       </Group>
     </>
+  )
+}
+
+const KOKORO_VOICES = [
+  { value: 'bm_lewis', label: 'Lewis: deeper, British' },
+  { value: 'bm_fable', label: 'Fable: British' },
+  { value: 'bm_daniel', label: 'Daniel: British' },
+  { value: 'bm_george', label: 'George: British (the Professor)' }
+]
+
+/** Which voice the tutor speaks in: the character's own, or one of the natural British voices */
+function VoicePicker({ prefs, own, ready, save, hear }: { prefs: NonNullable<Settings['voice']>; own: string; ready: boolean; save(p: Partial<NonNullable<Settings['voice']>>): void; hear(name: string): void }) {
+  const custom = prefs.custom ?? ''
+  return (
+    <Row label="Voice" hint="Replaces the character’s voice everywhere.">
+      <span className="set-inline">
+        <Select label="Voice" value={custom} onChange={(v) => save({ custom: v || undefined })} options={[{ value: '', label: "The tutor's own" }, ...KOKORO_VOICES]} />
+        <button className="icon-btn small" disabled={!ready} title="Hear it" onClick={() => hear(custom || own)}>
+          <Icon name="speaker" size={13} />
+        </button>
+      </span>
+    </Row>
   )
 }
 

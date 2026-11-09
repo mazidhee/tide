@@ -42,7 +42,8 @@ export interface Settings {
   fontSize: number
   ai: AISettings
   /** How the tutor sounds: Tide's natural voice (Kokoro, set up in Settings) or the Mac's own */
-  voice?: { engine: 'natural' | 'system'; name: string; speed: number }
+  /** custom: a Kokoro voice that replaces the character's; dictation: who writes out what you say */
+  voice?: { engine: 'natural' | 'system'; name: string; speed: number; custom?: string; dictation?: 'tide' | 'handy' }
   /** Who the tutor is: the character's face, voice and way of talking */
   character?: import('./characters').CharacterId
   /** Breaks while you study: paced by the tutor, a fixed rhythm, or none */
