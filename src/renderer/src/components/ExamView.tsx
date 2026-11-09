@@ -1,5 +1,5 @@
 import { useStudying } from '../lib/studying'
-import { endOngoing, getOngoing, saveOngoing, sessionKey } from '../lib/sessions'
+import { endOngoing, getOngoing, keepLive, saveOngoing, sessionKey } from '../lib/sessions'
 import type { View } from '../state'
 import { PixelScene } from './PixelScene'
 import { finishAgendaItem } from '../lib/agenda'
@@ -104,6 +104,11 @@ export function ExamView({ scope, topic, options, view }: { scope: ChatScope; to
   useEffect(() => {
     if (ongoingKey && (phase === 'marking' || phase === 'results')) endOngoing(ongoingKey)
   }, [phase, ongoingKey])
+  // Your answers are saved to disk as you write them, so quitting Tide mid-paper loses nothing
+  useEffect(() => {
+    if (ongoingKey && view && phase === 'sitting' && paper && !moved.current) keepLive({ key: ongoingKey, view, title: `Exam: ${topic}`, state: { paper, answers, startedAt }, busy: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, paper, answers, startedAt, ongoingKey])
   useEffect(
     () => () => {
       const k = keepRef.current
