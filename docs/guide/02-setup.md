@@ -38,7 +38,7 @@ The tutor searches Wikipedia with no setup. For the whole web, choose **Private 
 
 With Things 4 open and **Settings › API** turned on in Things, Tide connects to it by itself:
 
-- Today's tasks appear on Home, alongside your plan.
+- The learning tasks Tide puts on Today appear on Home, alongside your plan. Your own tasks stay in Things.
 - Plans become Things projects, a heading per phase and a to-do per chapter.
 - Ticking something in either app ticks it in the other.
 - The tutor can add tasks for you (it asks before adding more than two). Everything Tide adds is tagged **tide**.

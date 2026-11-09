@@ -8,7 +8,7 @@ animation: day
 Your day
 home | 27,20,62,9 | Open Tide | **Open Tide.** Home greets you and says what you studied on your last study day, with **Quiz me on it** to check it stuck. | home
 home | 29,32,60,13 | Do what's due | **Start with Now.** The top of your day is the one thing to do next, usually **Daily practice**: flashcards due, past mistakes to retest and one note to explain from memory, mixed together. Press **Start**. | home
-home | 29,46,40,18 | Follow the timeline | **Follow the timeline.** Below Now is the rest of today: retests, the next topic from your roadmap, and anything on Today in Things 4. Tick a dot to finish it; click a title to open it. | home
+home | 29,46,40,18 | Follow the timeline | **Follow the timeline.** Below Now is the rest of today: retests, the next topic from your roadmap, and the learning tasks Tide put on Today in Things 4. Tick a dot to finish it; click a title to open it. | home
 learn | 36,20,44,19 | Learn the next topic | **Learn the next topic.** Click it on Home, or open **Learn**, type the topic and choose **Teach**. Tide decides how to teach it: problem sets by default, a walkthrough on a canvas for a flow, code for programming. | learn
 learn | 36,44,44,12 | Work the problems | **Work the problems.** Two or three questions find your level. Then each step is a short explanation, one worked example and problems one at a time. Right first time and the next is harder; wrong and you get an easier one or the missing piece. | learn
 note | 33,16,44,42 | Write it in your words | **Write it in your words.** The notes pane beside the lesson fills with the key ideas. Add your own and say **review my notes**: the tutor says what's right and up to three things to fix. |

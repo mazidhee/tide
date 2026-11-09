@@ -11,7 +11,7 @@ summary: The usual problems and what fixes them.
 | The voice doesn't speak | Settings → Tutor and voice: set up the natural voice, or turn on **Use the Mac's own voice**. |
 | Speak doesn't record | With Dictation on Handy, Speak only places the cursor: press your Handy shortcut. |
 | A book has no chapters | It's probably scanned. Use **Chapter starts on page N**. |
-| Things tasks don't show on Home | Open Things and turn on **Settings › API** there. |
+| Tide's tasks don't show on Home | Open Things and turn on **Settings › API** there. Only tasks tagged **tide** show on Home; your own Today tasks stay in Things. |
 | A YouTube video saved without a transcript | The video has no captions YouTube will share. The title and description are still saved. |
 | A note changed in Obsidian doesn't show | Switch away and back. Tide won't overwrite a note while you have unsaved typing. |
 | macOS won't open Tide | Right-click Tide in Applications and choose **Open**, once. |
