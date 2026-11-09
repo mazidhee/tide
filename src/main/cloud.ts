@@ -321,25 +321,41 @@ export function usageSummary(monthOffset = 0): UsageSummary {
 }
 
 /** Checks a provider and key with a tiny request; reports the model and the rate limits it was given */
+/**
+ * Checks the key and the model: passes as soon as the model starts answering (reasoning models
+ * think first, and free tiers queue requests, so waiting for a whole answer times out), and says
+ * how long that took.
+ */
 export async function testCloud(provider: string, model: string): Promise<{ ok: boolean; message: string; limits?: Record<string, string> }> {
   const target = targetFor(provider, model)
   if (!target) return { ok: false, message: 'Add a key for this provider first.' }
   const t0 = Date.now()
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 90_000)
   try {
+    noteSent(provider)
     const res = await fetch(`${target.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: headersFor(target),
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: 'Reply with the single word: ready' }], max_tokens: 200, ...target.extra }),
-      signal: AbortSignal.timeout(30_000)
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: 'Reply with the single word: ready' }], max_tokens: 400, stream: true, ...target.extra }),
+      signal: controller.signal
     })
-    if (!res.ok) return { ok: false, message: (await cloudError(res, target)).message }
+    if (!res.ok || !res.body) return { ok: false, message: (await cloudError(res, target)).message }
     noteLimits(res.headers, target.provider)
-    const json = (await res.json()) as { usage?: { prompt_tokens?: number; completion_tokens?: number } }
-    recordUsage({ kind: 'cloud', provider, model, task: 'other', input: json.usage?.prompt_tokens ?? 0, output: json.usage?.completion_tokens ?? 0 })
     const limits = Object.fromEntries([...res.headers.entries()].filter(([k]) => k.startsWith('x-ratelimit-limit')).map(([k, v]) => [k.replace('x-ratelimit-limit-', ''), v]))
-    return { ok: true, message: `Connected to ${model} in ${((Date.now() - t0) / 1000).toFixed(1)}s`, limits }
+    // The first piece of the answer (or of its thinking) is enough: stop there and save the tokens
+    const reader = res.body.getReader()
+    const { done } = await reader.read()
+    const seconds = (Date.now() - t0) / 1000
+    controller.abort()
+    if (done) return { ok: false, message: 'The model sent nothing back.' }
+    recordUsage({ kind: 'cloud', provider, model, task: 'other', input: 12, output: 1, estimated: true })
+    return { ok: true, message: `Connected: ${model} started answering in ${seconds.toFixed(1)}s${seconds > 20 ? '. Slow right now: free tiers queue requests at busy times, so Tide hands slow jobs to the next model' : ''}`, limits }
   } catch (e) {
+    if (controller.signal.aborted && Date.now() - t0 >= 89_000) return { ok: false, message: `${model} didn't start answering within 90 seconds. The free tier may be very busy right now; try another model or try again later.` }
     return { ok: false, message: (e as Error).message }
+  } finally {
+    clearTimeout(timer)
   }
 }
 

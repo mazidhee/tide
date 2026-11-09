@@ -465,7 +465,7 @@ async function answer(req: TurnRequest, emit: (e: ChatEvent) => void) {
       await agentChat(req, (e) => (e.type === 'delta' && (reply += e.text), emit(e)), controller.signal)
       if (req.session && !controller.signal.aborted) {
         const { checkLessonReply, fixNudge } = await import('./lessonGuard')
-        const ask = (prompt: string, system: string, task: RequestKind) => complete(prompt, system, controller.signal, 'interactive', task)
+        const ask = (prompt: string, system: string, task: RequestKind, signal: AbortSignal) => complete(prompt, system, signal, 'interactive', task)
         const problems = await checkLessonReply(req, reply, emit, controller.signal, ask).catch(() => [] as string[])
         if (problems.length && !controller.signal.aborted) {
           emit({ id: req.id, type: 'reset' })

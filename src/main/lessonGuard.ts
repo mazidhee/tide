@@ -27,12 +27,22 @@ async function mayLeaveMac(req: ChatRequest): Promise<boolean> {
   return true
 }
 
+/** How long a check may hold up the lesson before it's skipped: you're waiting to answer */
+const SOLVE_MS = 45_000
+const REVIEW_MS = 30_000
+
+/** Asks, but gives up after a while (the lesson goes on without that check) */
+async function within(ms: number, signal: AbortSignal, run: (signal: AbortSignal) => Promise<string>): Promise<string> {
+  const timeout = AbortSignal.timeout(ms)
+  return run(AbortSignal.any([signal, timeout])).catch(() => '')
+}
+
 export async function checkLessonReply(
   req: ChatRequest,
   reply: string,
   emit: (e: ChatEvent) => void,
   signal: AbortSignal,
-  ask: (prompt: string, system: string, task: RequestKind) => Promise<string>,
+  ask: (prompt: string, system: string, task: RequestKind, signal: AbortSignal) => Promise<string>,
   final = false
 ): Promise<string[]> {
   const problems: string[] = []
@@ -61,7 +71,7 @@ export async function checkLessonReply(
   await runChecks(checksOf(reply))
   if (sets && !solutionOf(reply) && !signal.aborted) {
     step('lesson-solve', 'Working out the answer to this problem', 'running')
-    const solved = parseSolve(await ask(solvePrompt(readable(reply)), SOLVE_SYSTEM, cloud ? (hard ? 'maths' : 'marking') : 'other').catch(() => ''))
+    const solved = parseSolve(await within(SOLVE_MS, signal, (s) => ask(solvePrompt(readable(reply)), SOLVE_SYSTEM, cloud ? (hard ? 'maths' : 'marking') : 'other', s)))
     step('lesson-solve', 'Worked out the answer', 'done')
     if (solved.flaw) problems.push(`The problem can't be solved as set: ${solved.flaw}. Set a different, well-posed problem.`)
     else if (solved.solution) {
@@ -82,7 +92,7 @@ export async function checkLessonReply(
   const input: ReviewInput = { ...(answered && answered.verdict !== 'wrong' ? { answered } : {}), ...(posed ? { posed } : {}) }
   if (!input.answered && !input.posed) return problems
   step('lesson-review', 'A second model is checking the problem and the mark', 'running')
-  const out = await ask(reviewPrompt(input), REVIEW_SYSTEM, 'marking').catch(() => '')
+  const out = await within(REVIEW_MS, signal, (s) => ask(reviewPrompt(input), REVIEW_SYSTEM, 'marking', s))
   step('lesson-review', 'Checked the problem and the mark', 'done')
   const r = parseReview(out)
   if (input.answered && tooGenerous(input.answered.verdict, r)) problems.push(`Your verdict "${input.answered.verdict}" was too generous: ${r.why ?? 'their answer is incomplete'}. Grade it "${r.verdict}" and say exactly what is missing or wrong.`)
