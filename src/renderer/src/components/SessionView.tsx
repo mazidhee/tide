@@ -8,6 +8,7 @@ import { Thinking } from './Thinking'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
 import { paceNote } from '@shared/pace'
+import { withSources, type SourcePack } from '@shared/sources'
 import { parsePlacement, placementNote } from '@shared/placement'
 import type { Reading } from '@shared/readings'
 import { whyByDefault } from '../lib/agenda'
@@ -208,11 +209,21 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // A lesson on a topic a book you own covers is taught from that section: its text rides in the
   // opening message (hidden, and cached with the start of the lesson, so it costs time once)
   const openingRef = useRef(openingMessage(setup))
+  const [pack, setPack] = useState<SourcePack | null>(null)
   const begin = async () => {
     let opening = openingMessage(setup)
     if ((mode === 'teach' || mode === 'quiz') && (scope.kind === 'vault' || scope.kind === 'folder')) {
       const found = await Promise.race([window.tide.books.passage(topic).catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 2000))])
       if (found) opening = withPassage(opening, found)
+    }
+    // The passages it's taught from (specs, papers, docs found for the topic), when they're ready
+    if (mode === 'teach') {
+      const where = 'path' in scope ? scope.path : undefined
+      const found = await Promise.race([window.tide.sources.lesson(topic, where).catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 1500))])
+      if (found) {
+        setPack(found)
+        opening = withSources(opening, found)
+      }
     }
     openingRef.current = opening
     // Written ahead for this exact lesson (main/bank.ts): it opens at once
@@ -819,7 +830,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       <div className={withNotes ? 'session-split' : 'session-solo'}>
       <div className="doc-scroll session-scroll">
         <div className="session-column">
-          {(toRead.length > 0 || found.length > 0) && (
+          {(toRead.length > 0 || found.length > 0 || !!pack?.sources.length) && (
             <div className="s-read" aria-label="Read alongside">
               <Icon name="book" size={13} />
               <span className="muted">Read</span>
@@ -828,7 +839,13 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   {readingLabel(r)}
                 </button>
               ))}
-              {found.slice(0, 4).map((r) => (
+              {pack?.sources.map((s) => (
+                <button key={`s${s.n}`} className="s-read-link" onClick={() => (s.path ? app.openPath(s.path) : s.url && window.tide.app.openExternal(s.url))} title={`What this lesson is taught from: ${s.title}`}>
+                  <strong>S{s.n}</strong> {s.title}
+                  {!s.path && s.url && <Icon name="external" size={11} />}
+                </button>
+              ))}
+              {found.filter((r) => !pack?.sources.some((s) => s.url === r.url)).slice(0, 4).map((r) => (
                 <button key={r.url} className="s-read-link" onClick={() => (r.path ? app.openPath(r.path) : window.tide.app.openExternal(r.url))} title={[r.by, r.why].filter(Boolean).join(': ') || r.title}>
                   {r.title}
                   {!r.path && <Icon name="external" size={11} />}

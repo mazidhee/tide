@@ -1,6 +1,7 @@
 import { splitSay } from './characters'
 import { retestInstructions } from './mistakes'
 import { placementInstructions, REFRESH_RULES, type PlacementSetup } from './placement'
+import { GROUNDED } from './sources'
 import type { ChatScope, SessionMode, Verdict } from './types'
 import { chooseStrategy, STRATEGY_RULES, type Strategy, type StrategyChoice } from './strategy'
 import type { FlowStep, ProjectKind } from './project'
@@ -250,11 +251,20 @@ export const FOUNDATIONAL = /\b(foundation|foundations|basics?|fundamentals?|int
 /** Every lesson opens with why the topic matters, so there's a reason to learn it before the first question */
 export const BIG_PICTURE = `Open the lesson with the big picture, before your first question: a short paragraph headed **Why this matters** (3 to 5 sentences) saying what this topic is for: where it's used in real systems and real work (name concrete ones), how it connects to what they're working towards (see their learner profile), and what it unlocks next. Plain and specific, no hype. Then carry on as below.`
 
+/**
+ * Whether a lesson starts in Why mode: Settings says always, or foundations and the topic is early,
+ * basic material (judged from its roadmap section when known: a topic id carries the headings)
+ */
+export function whyByDefault(pref: 'off' | 'foundations' | 'always' | undefined, topic: string, topicId?: string): boolean {
+  const mode = pref ?? 'foundations'
+  return mode === 'always' || (mode === 'foundations' && FOUNDATIONAL.test(`${topicId ?? ''} ${topic}`))
+}
+
 export function sessionInstructions(setup: SessionSetup): string {
   const base = baseInstructions(setup)
   if (setup.mode !== 'teach') return base
   // A refresher or a project lesson already has its reason; a placement check isn't a lesson
-  const extra = [!setup.options?.refresh && !setup.options?.project ? BIG_PICTURE : '', setup.options?.why ? WHY_RULES : ''].filter(Boolean)
+  const extra = [!setup.options?.refresh && !setup.options?.project ? BIG_PICTURE : '', GROUNDED, setup.options?.why ? WHY_RULES : ''].filter(Boolean)
   return extra.length ? `${base.trimEnd()}\n\n${extra.join('\n\n')}\n` : base
 }
 

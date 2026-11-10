@@ -1,4 +1,4 @@
-import { checksOf, examplePrompt, hasWorkedMaths, parseExampleCheck, EXAMPLE_SYSTEM, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, solutionOf, solvePrompt, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
+import { checksOf, claimsPrompt, makesClaims, parseClaimCheck, CLAIMS_SYSTEM, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, solutionOf, solvePrompt, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
 import type { RequestKind } from '@shared/providers'
 import { aboutMetabase } from '@shared/metabase'
 import { ownWords, posedProblem, repeatsEarlier } from '@shared/session'
@@ -8,6 +8,7 @@ import { metabaseHost, metabaseReady } from './metabase'
 import { privatePath } from './projects'
 import { comparePython, finalAnswer, type Exact } from '@shared/answerCheck'
 import { createHash } from 'crypto'
+import { sourcesForCheck } from '@shared/sources'
 import { promises as fs } from 'fs'
 import { runCode } from './runner'
 import { absPath } from './vault'
@@ -88,8 +89,8 @@ export interface LessonFindings {
   mark?: { verdict: 'partial' | 'wrong'; why: string }
   /** The problem just set can't be used (repeated, not asked, a failed check, flawed) */
   problem: string[]
-  /** Mistakes in the explanation's worked examples, found by the cloud maths model */
-  errata?: { quote: string; fix: string }[]
+  /** What's wrong (or worth checking) in what the explanation claims, found by the cloud maths model */
+  errata?: { errors: { quote: string; fix: string }[]; unsure: { quote: string; why: string }[] }
 }
 
 /** A real problem in a problem set ("**Problem 3 · harder**"), not a diagnostic or a question in passing */
@@ -131,18 +132,21 @@ export async function checkLessonReply(
 
   // Worked examples in an explanation aren't problems, so nothing else checks them: the cloud maths
   // model does, alongside the other checks, and a mistake gets a correction under the reply
-  const examples = !final && cloud && hasWorkedMaths(reply)
-    ? (step('lesson-examples', 'Checking the worked examples', 'running'),
-      within(REVIEW_MS, signal, (s) => ask(examplePrompt(req.topic ?? '', readable(reply)), EXAMPLE_SYSTEM, 'maths', s))
-        .catch(() => '')
-        .then((out) => {
-          step('lesson-examples', 'Checked the worked examples', 'done')
-          return parseExampleCheck(out ?? '')
-        }))
+  // What an explanation claims (its worked examples and its facts) isn't a problem set to them, so
+  // nothing else checks it: the cloud maths model does, against the lesson's sources, alongside the
+  // other checks; a mistake gets a correction under the reply
+  const claims = !final && cloud && makesClaims(reply)
+    ? (async () => {
+        step('lesson-claims', 'Checking what this explains', 'running')
+        const pack = req.topic ? await import('./sources').then((m) => m.packFor(req.topic!)).catch(() => null) : null
+        const out = await within(REVIEW_MS, signal, (s) => ask(claimsPrompt(req.topic ?? '', readable(reply), sourcesForCheck(pack)), CLAIMS_SYSTEM, 'maths', s, true)).catch(() => '')
+        step('lesson-claims', 'Checked what this explains', 'done')
+        return parseClaimCheck(out ?? '')
+      })()
     : null
   const finish = async () => {
-    const r = await examples
-    if (r && !r.ok && !signal.aborted) found.errata = r.errors
+    const r = await claims
+    if (r && !r.ok && !signal.aborted) found.errata = { errors: r.errors, unsure: r.unsure }
     return found
   }
 

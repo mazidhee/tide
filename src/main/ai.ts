@@ -661,7 +661,7 @@ async function answer(req: TurnRequest, emit: (e: ChatEvent) => void) {
           reply += add
         }
         // A mistake in a worked example: the correction goes under the explanation, and into the notes
-        if (found.errata?.length && !controller.signal.aborted) {
+        if (found.errata && !controller.signal.aborted) {
           const add = correctionText(found.errata)
           emit({ id: req.id, type: 'delta', text: add })
           reply += add

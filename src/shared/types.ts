@@ -605,6 +605,10 @@ export interface TideApi {
     drills(): Promise<import('./drills').DrillResult[]>
   }
   /** Your goal and focus, the week planned towards them, and the learner profile */
+  /** The passages a lesson is taught from (none yet: built in the background for next time) */
+  sources: {
+    lesson(topic: string, where?: string): Promise<import('./sources').SourcePack | null>
+  }
   /** Past lessons, kept as they go: to read again, or carry on */
   lessons: {
     save(r: Omit<import('./lessonLog').LessonRecord, 'started' | 'updated' | 'page'> & { started?: number }): Promise<import('./lessonLog').LessonSummary | null>

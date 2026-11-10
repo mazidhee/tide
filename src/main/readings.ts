@@ -158,7 +158,11 @@ export async function readingsForWeek(getWeek: (date: string) => Promise<WeekPla
   const plan = await getWeek(date)
   if (!plan) return
   const lessons = plan.days.flatMap((d) => todayItems(plan, d.date)).filter((i): i is AgendaItem & { topic: string } => i.kind === 'learn' && !!i.topic).slice(0, 12)
-  for (const it of lessons) await findReadings({ topic: it.topic, notebook: it.notebook }).catch(() => [])
+  for (const it of lessons) {
+    await findReadings({ topic: it.topic, notebook: it.notebook }).catch(() => [])
+    // And the passages a lesson on it will be taught from
+    await import('./sources').then((m) => m.buildPack(it.topic, it.notebook)).catch(() => null)
+  }
   // The plan may have changed meanwhile (items ticked): add to the latest version
   const latest = await getWeek(date)
   if (!latest) return

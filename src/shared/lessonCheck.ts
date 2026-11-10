@@ -142,7 +142,7 @@ export function parseSolve(out: string): { solution: string; checks: CheckCode[]
   return { solution: solutionOf(out), checks: checksOf(out), ...(flaw && !solutionOf(out) ? { flaw } : {}) }
 }
 
-// ---------- Worked examples inside explanations ----------
+// ---------- What an explanation claims: worked examples and facts ----------
 
 /**
  * An explanation with worked calculations in it (a conversion, a sum, a derivation): those aren't
@@ -154,36 +154,58 @@ export function hasWorkedMaths(reply: string): boolean {
   return lines.length >= 2
 }
 
-export const EXAMPLE_SYSTEM = 'You check a tutor’s explanation for mathematical mistakes before a student relies on it. You are exact and brief, and you only flag real errors.'
+/** Teaching worth checking: worked maths, or an explanation long enough to make claims (not a mark and a question) */
+export function makesClaims(reply: string): boolean {
+  if (hasWorkedMaths(reply)) return true
+  const prose = hideWorking(reply)
+    .replace(/<(ask|grade|note|card|plan|summary)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+  return (prose.match(/[A-Za-z]{2,}/g) ?? []).length >= 80
+}
 
-export function examplePrompt(topic: string, explanation: string): string {
+export const CLAIMS_SYSTEM = 'You check what a tutor taught a student before the student relies on it: calculations, worked examples and factual claims. You are exact and brief, and you only flag real problems.'
+
+export function claimsPrompt(topic: string, explanation: string, sources = ''): string {
   return `Topic: ${topic}
-A tutor wrote this for a student:
+${sources ? `Sources for this lesson (prefer them over memory):\n"""\n${sources}\n"""\n` : ''}A tutor wrote this for a student:
 """
 ${explanation.slice(0, 6000)}
 """
-Check every calculation, conversion, worked example and factual claim in it. Ignore style, simplifications that are still true, and notation choices.
-Reply with JSON only: {"ok": true} when everything is right, or {"ok": false, "errors": [{"quote": "the wrong part, quoted briefly", "fix": "the correct result and why, in one or two plain sentences"}]}.`
+Check every calculation, conversion, worked example and factual claim in it${sources ? ', against the sources where they cover it' : ''}. Ignore style, and simplifications that are still true.
+- "errors": things that are wrong (a wrong result, a claim the sources or well-established knowledge contradict).
+- "unsure": specific numbers, parameters, versions or dates stated as fact that you can't confirm and could easily be wrong or out of date.
+Reply with JSON only: {"ok": true} when there's nothing to flag, or {"ok": false, "errors": [{"quote": "the wrong part, quoted briefly", "fix": "what's right and why, in one or two plain sentences"}], "unsure": [{"quote": "...", "why": "what to check, briefly"}]}.`
 }
 
-export function parseExampleCheck(raw: string): { ok: boolean; errors: { quote: string; fix: string }[] } {
+export interface ClaimCheck {
+  ok: boolean
+  errors: { quote: string; fix: string }[]
+  unsure: { quote: string; why: string }[]
+}
+
+export function parseClaimCheck(raw: string): ClaimCheck {
+  const none: ClaimCheck = { ok: true, errors: [], unsure: [] }
   const m = raw.match(/\{[\s\S]*\}/)
-  if (!m) return { ok: true, errors: [] }
+  if (!m) return none
   try {
-    const j = JSON.parse(m[0]) as { ok?: unknown; errors?: unknown }
-    const errors = (Array.isArray(j.errors) ? j.errors : [])
-      .filter((e): e is { quote?: unknown; fix: string } => !!e && typeof (e as { fix?: unknown }).fix === 'string' && !!(e as { fix: string }).fix.trim())
-      .slice(0, 3)
-      .map((e) => ({ quote: typeof e.quote === 'string' ? e.quote.trim().slice(0, 160) : '', fix: e.fix.trim().slice(0, 400) }))
-    return { ok: j.ok !== false || !errors.length, errors: j.ok === false ? errors : [] }
+    const j = JSON.parse(m[0]) as { ok?: unknown; errors?: unknown; unsure?: unknown }
+    if (j.ok !== false) return none
+    const list = (v: unknown) => (Array.isArray(v) ? v : []).filter((e): e is Record<string, unknown> => !!e && typeof e === 'object')
+    const text = (v: unknown, n: number) => (typeof v === 'string' ? v.trim().slice(0, n) : '')
+    const errors = list(j.errors).map((e) => ({ quote: text(e.quote, 160), fix: text(e.fix, 400) })).filter((e) => e.fix).slice(0, 3)
+    const unsure = list(j.unsure).map((e) => ({ quote: text(e.quote, 160), why: text(e.why, 240) })).filter((e) => e.quote).slice(0, 3)
+    return errors.length || unsure.length ? { ok: false, errors, unsure } : none
   } catch {
-    return { ok: true, errors: [] }
+    return none
   }
 }
 
-/** The correction added under the explanation, and into the notes so the wrong version isn't what's kept */
-export function correctionText(errors: { quote: string; fix: string }[]): string {
-  const lines = errors.map((e) => `${e.quote ? `“${e.quote}”: ` : ''}${e.fix}`)
-  const shown = lines.length === 1 ? lines[0] : lines.map((l) => `\n- ${l}`).join('')
-  return `\n\n> **Correction:** ${shown}\n\n<note>Correction: ${errors.map((e) => e.fix).join(' ')}</note>`
+/** Under the explanation: corrections (also into the notes, so the wrong version isn't what's kept), then what's worth checking */
+export function correctionText(c: Pick<ClaimCheck, 'errors' | 'unsure'>): string {
+  const bullets = (xs: string[]) => (xs.length === 1 ? xs[0] : xs.map((x) => `\n> - ${x}`).join(''))
+  const parts: string[] = []
+  if (c.errors.length) parts.push(`> **Correction:** ${bullets(c.errors.map((e) => `${e.quote ? `“${e.quote}”: ` : ''}${e.fix}`))}`)
+  if (c.unsure.length) parts.push(`> **Worth checking:** ${bullets(c.unsure.map((u) => `“${u.quote}”${u.why ? `: ${u.why}` : ''}`))}`)
+  const note = c.errors.length ? `\n\n<note>Correction: ${c.errors.map((e) => e.fix).join(' ')}</note>` : ''
+  return parts.length ? `\n\n${parts.join('\n>\n')}${note}` : ''
 }
