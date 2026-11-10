@@ -11,7 +11,7 @@ import { compactChat, fallbackTitle, historyBudget, historyFor, needsCompaction,
 import { fitHistory } from '@shared/context'
 import { createHash } from 'crypto'
 import { cleanModelText } from '@shared/modelText'
-import { BANK_NUDGE, levelAfter, nextDirection, pickProblem, problemsSoFar, renderProblem, type BankProblem, type Level } from '@shared/bank'
+import { BANK_NUDGE, levelAfter, nextDirection, pickProblem, problemsSoFar, renderProblem, type BankProblem, type Direction, type Level } from '@shared/bank'
 import type { ChatEvent, ChatMessage, ChatRequest, ChatScope, ContextSource, ReadAlongNote } from '@shared/types'
 import { getSettings } from './settings'
 import { localSampling } from './sampling'
@@ -132,7 +132,8 @@ function retrievePages(scope: Extract<ChatScope, { kind: 'pages' }>, query: stri
 export async function lessonPassage(topic: string): Promise<{ label: string; path: string; from: number; to: number; text: string } | null> {
   const { pagesToRead } = await import('./books')
   const { readingLabel } = await import('@shared/books')
-  const s = (await pagesToRead(topic, 1).catch(() => []))[0]
+  // Only a section clearly about the topic: a lesson taught from the wrong pages is worse than none
+  const s = (await pagesToRead(topic, 3).catch(() => [])).find((x) => x.onTopic)
   if (!s) return null
   await indexReady()
   const to = Math.min(s.to, s.from + 8)
@@ -514,7 +515,10 @@ async function lessonTurn(req: TurnRequest) {
   const transcript = replies.join('\n')
   const seen = (p: BankProblem) => transcript.includes(p.text.slice(0, 80))
   const bank = await readBank(topic).catch(() => [] as BankProblem[])
-  const ready = ([1, 2, 3] as Level[]).some((l) => pickProblem(bank, l, seen))
+  // The bank takes over once the problem set has begun (the tutor sets the first problem itself, after
+  // its diagnostic and first teaching), never during the diagnostic
+  const started = replies.some((r) => /\*\*\s*Problem\s+\d+/i.test(r))
+  const ready = started && ([1, 2, 3] as Level[]).some((l) => pickProblem(bank, l, seen))
   const messages = [...req.messages]
   const last = messages[messages.length - 1]
   if (ready && last?.role === 'user' && typeof last.content === 'string') messages[messages.length - 1] = { ...last, content: `${last.content}\n\n${BANK_NUDGE}` }
@@ -571,18 +575,28 @@ async function lessonTurn(req: TurnRequest) {
     /** The problem the tutor asked for (by tag) or was about to write, as text to add to its reply */
     async supply(reply: string, emit: (e: ChatEvent) => void): Promise<string> {
       const verdict = /<grade\s+verdict\s*=\s*["']?(correct|partial|wrong)/i.exec(reply)?.[1]?.toLowerCase()
-      const dir = nextDirection(reply) ?? (cut ? (verdict === 'correct' ? 'harder' : verdict === 'wrong' ? 'easier' : 'same') : undefined)
+      // The mark decides how hard: right → harder, partly right → the same level, wrong → easier
+      const byMark: Direction | undefined = verdict === 'correct' ? 'harder' : verdict === 'wrong' ? 'easier' : verdict === 'partial' ? 'same' : undefined
+      const dir = nextDirection(reply) || cut ? (byMark ?? nextDirection(reply) ?? 'same') : undefined
       if (!dir) return ''
       const level = levelAfter(lessonLevels.get(key) ?? 2, dir)
       const p = pickProblem(bank, level, seen, Date.now(), key)
       if (!p) return ''
-      // A new idea, or just missed: worked for them up to the last step
-      const first = !replies.some((r) => /\*\*Problem\s+\d+/i.test(r))
-      const text = renderProblem(p, problemsSoFar([...replies, reply]) + 1, dir, first || verdict === 'wrong')
+      // Just missed: worked for them up to the last step
+      const text = renderProblem(p, problemsSoFar([...replies, reply]) + 1, dir, verdict === 'wrong')
       emit({ id: req.id, type: 'delta', text })
       lessonLevels.set(key, p.level)
       void markUsed(topic, p.id)
       return text
+    },
+    /** A checked problem at the lesson's level, in place of one that turned out flawed */
+    async replacement(): Promise<string> {
+      const level = lessonLevels.get(key) ?? 2
+      const p = pickProblem(bank, level, seen, Date.now(), key)
+      if (!p) return ''
+      lessonLevels.set(key, p.level)
+      void markUsed(topic, p.id)
+      return renderProblem(p, Math.max(1, problemsSoFar(replies)), 'same')
     },
     prepare(reply: string) {
       // Missed: a problem aimed at exactly what was missed comes next (the tutor's own feedback says what)
@@ -633,18 +647,32 @@ async function answer(req: TurnRequest, emit: (e: ChatEvent) => void) {
       if (req.session && !controller.signal.aborted) {
         // You can start answering now; the checks go on behind it
         emit({ id: req.id, type: 'replied' })
-        const { checkLessonReply, fixNudge } = await import('./lessonGuard')
+        const { checkLessonReply } = await import('./lessonGuard')
         const ask = (prompt: string, system: string, task: RequestKind, signal: AbortSignal, routine?: boolean) => complete(prompt, system, signal, 'interactive', task, routine)
-        const problems = await checkLessonReply(req, reply, emit, controller.signal, ask, false, { fromBank, exact }).catch(() => [] as string[])
-        if (problems.length && !controller.signal.aborted) {
-          emit({ id: req.id, type: 'reset' })
-          const messages = [...req.messages]
-          const last = messages[messages.length - 1]
-          if (last?.role === 'user' && typeof last.content === 'string') messages[messages.length - 1] = { ...last, content: `${last.content}\n\n${fixNudge(problems)}` }
-          let again = ''
-          await agentChat({ ...req, messages }, (e) => (e.type === 'delta' && (again += e.text), emit(e)), controller.signal)
-          // The rewrite isn't sent back again, but it still gets its solution for marking
-          if (!controller.signal.aborted) await checkLessonReply(req, again, emit, controller.signal, ask, true).catch(() => [])
+        const found: import("./lessonGuard").LessonFindings = await checkLessonReply(req, reply, emit, controller.signal, ask, false, { fromBank, exact }).catch(() => ({ problem: [] as string[] }))
+        // What you can see is never wiped: a correction is added below it
+        if (found.mark && !controller.signal.aborted) {
+          const add = `\n\n<grade verdict="${found.mark.verdict}" score="${found.mark.verdict === 'partial' ? 0.5 : 0}">**Second look:** ${found.mark.why}</grade>`
+          emit({ id: req.id, type: 'delta', text: add })
+          reply += add
+        }
+        if (found.problem.length && !controller.signal.aborted) {
+          const why = found.problem[0].replace(/\.$/, '')
+          // A checked one from the bank when there is one; otherwise the tutor writes just a new problem
+          const banked = lesson ? await lesson.replacement() : ''
+          const lead = `\n\n**That problem had a flaw (${why.charAt(0).toLowerCase()}${why.slice(1)}), so here's another.**`
+          if (banked) {
+            emit({ id: req.id, type: 'delta', text: lead + banked })
+            reply += lead + banked
+          } else {
+            emit({ id: req.id, type: 'delta', text: lead })
+            let again = ''
+            const messages: ChatMessage[] = [...req.messages, { role: 'assistant', content: reply }, { role: 'user', content: `(Tide: the problem you just set can't be used: ${why}. Write only a new, well-posed problem on the same idea, numbered the same, with its <solution> and ending with the question in an <ask> tag. No feedback, no preamble.)` }]
+            await agentChat({ ...req, messages }, (e) => (e.type === 'delta' && (again += e.text), emit(e)), controller.signal)
+            reply += lead + again
+            // The replacement still gets its solution for marking
+            if (!controller.signal.aborted) await checkLessonReply(req, again, emit, controller.signal, ask, true).catch(() => null)
+          }
         }
         lesson?.prepare(reply)
       }

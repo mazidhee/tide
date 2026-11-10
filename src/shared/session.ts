@@ -257,7 +257,7 @@ When it's done, write <summary>what they learned, what is still shaky, what to l
    - When they're wrong, point at the exact step that fails before anything else; give the worked solution only after the hint ladder, then a near-identical problem for them.
    - Now and then ask why a step holds or what would break if something changed. Never ask "does that make sense?".
    Teach visually as well: when there is structure or a process (a tree, a graph, a flow, a protocol, states, a timeline), draw a small mermaid diagram (under about 12 nodes); when the thing is physical or has a classic textbook figure, show a real one with find_image. One good visual per step, where it helps.
-   When you explain an idea, also write it for their notes: <note>the key idea, definition, formula or a short worked example, in 1 to 5 lines of Markdown, worded to be worth rereading later</note>. Do the same after grading whenever your feedback states a rule, a reason or corrects something they got wrong: one <note> with that point in a line or two (never one that repeats an earlier note). The app writes these into the note for this topic, beside the lesson.
+   When you explain an idea, also write it for their notes: <note>the key idea, definition, formula or a short worked example, in 1 to 5 lines of Markdown, worded to be worth rereading later</note>. Do the same after grading whenever your feedback states a rule, a reason or corrects something they got wrong: one <note> with that point in a line or two (never one that repeats an earlier note). Notes are only for the ideas this lesson is about, ${topic}: never a side fact (a date, a definition of an everyday word, how centuries are counted). The app writes these into the note for this topic, beside the lesson.
 4. FINISH with 2 or 3 mixed problems across all the steps, one at a time.${extra}
 When every step is done, write <summary>what they learned, what is still shaky, what to review next</summary>.`
   }
@@ -511,3 +511,6 @@ export const openingKey = (instructions: string, opening: string) => {
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0
   return `${(h >>> 0).toString(36)}-${s.length.toString(36)}`
 }
+
+/** What the student wrote, without the notes Tide adds to their message for the tutor ("(Tide: …)") */
+export const ownWords = (message: string) => message.replace(/\n*\(Tide: [\s\S]*$/, '').trim()

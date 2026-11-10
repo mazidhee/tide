@@ -1,4 +1,4 @@
-import { checksOf, fixNudge, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, solutionOf, solvePrompt, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
+import { checksOf, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, solutionOf, solvePrompt, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
 import type { RequestKind } from '@shared/providers'
 import { aboutMetabase } from '@shared/metabase'
 import { posedProblem, repeatsEarlier } from '@shared/session'
@@ -80,6 +80,17 @@ async function within(ms: number, signal: AbortSignal, run: (signal: AbortSignal
   return run(AbortSignal.any([signal, timeout])).catch(() => '')
 }
 
+/** What a check found: a mark that needs a second look, and what's wrong with the problem just set */
+export interface LessonFindings {
+  /** The mark was too generous: what it should have been, and why */
+  mark?: { verdict: 'partial' | 'wrong'; why: string }
+  /** The problem just set can't be used (repeated, not asked, a failed check, flawed) */
+  problem: string[]
+}
+
+/** A real problem in a problem set ("**Problem 3 · harder**"), not a diagnostic or a question in passing */
+const isProblem = (reply: string) => /\*\*\s*Problem\s+\d+/i.test(reply) && posedProblem(reply).split(' ').length >= 8
+
 export async function checkLessonReply(
   req: ChatRequest,
   reply: string,
@@ -88,14 +99,14 @@ export async function checkLessonReply(
   ask: (prompt: string, system: string, task: RequestKind, signal: AbortSignal, routine?: boolean) => Promise<string>,
   final = false,
   opts: { fromBank?: boolean; exact?: Exact | null } = {}
-): Promise<string[]> {
-  const problems: string[] = []
+): Promise<LessonFindings> {
+  const found: LessonFindings = { problem: [] }
   const earlier = req.messages.filter((m) => m.role === 'assistant').map(text)
-  if (repeatsEarlier(reply, earlier)) problems.push('It asks a problem you already asked in this lesson: write a new one, with different objects, numbers and situation.')
-  if (missingQuestion(reply)) problems.push('It sets a problem but never asks it: end with the question in an <ask> tag.')
+  if (repeatsEarlier(reply, earlier)) found.problem.push('It asks a problem already asked in this lesson.')
+  if (missingQuestion(reply)) found.problem.push('It sets a problem but never asks it.')
   // SymPy found their final answer wrong: a "correct" verdict can't stand
   const verdict = /<grade\s+verdict\s*=\s*["']?(correct|partial|wrong)/i.exec(reply)?.[1]?.toLowerCase()
-  if (opts.exact?.result === 'mismatch' && verdict === 'correct') problems.push(`You marked it correct, but SymPy shows their final answer ${opts.exact.theirs} is not ${opts.exact.expected}: mark it as it is and point at the step that goes wrong.`)
+  if (opts.exact?.result === 'mismatch' && verdict === 'correct') found.mark = { verdict: 'wrong', why: 'SymPy checked your final answer against the solution, and it doesn’t come out the same. Look again at the last steps of your working.' }
 
   const step = (id: string, label: string, status: 'running' | 'done') => emit({ id: req.id, type: 'step', step: { id, kind: 'helper', label, status, depth: 0 } })
 
@@ -104,14 +115,15 @@ export async function checkLessonReply(
     step('lesson-check', 'Checking the answer to this problem', 'running')
     for (const c of checks.slice(0, 2)) {
       const r = await runCode(c.lang, c.code, '', 20_000).catch((e: Error) => ({ stdout: '', stderr: e.message, exitCode: 1, timedOut: false, durationMs: 0 }))
-      // A missing library is Tide's problem, not the tutor's: don't send the reply back for it
-      if (r.exitCode !== 0 && !/No module named|isn't supported/.test(r.stderr)) problems.push(`The check of its answer failed${r.timedOut ? ' (timed out)' : ''}: ${(r.stderr || r.stdout).trim().split('\n').slice(-4).join(' ').slice(0, 400)}. The problem or its answer is wrong: fix whichever it is.`)
+      // A missing library is Tide's problem, not the tutor's: don't count it against the problem
+      if (r.exitCode !== 0 && !/No module named|isn't supported/.test(r.stderr)) found.problem.push(`Its answer didn't survive a check${r.timedOut ? ' (timed out)' : ''}.`)
     }
     step('lesson-check', 'Checked the answer to this problem', 'done')
   }
   const cloud = !!routeFor('marking') && (await mayLeaveMac(req))
   const hard = isHardTopic(`${req.topic ?? ''}`)
-  const sets = posedProblem(reply).split(' ').length >= 8
+  // Diagnostics and questions in passing aren't problems to solve or review
+  const sets = isProblem(reply)
 
   // Run what can be computed: the tutor's own check, or, when it set a problem without solving it,
   // a solution worked out now (by the cloud model on hard topics, when it may see this lesson)
@@ -124,35 +136,34 @@ export async function checkLessonReply(
     // An everyday problem is routine: when a cloud model's day is running low, Gemma solves it and the allowance is kept for hard ones
     const solved = known ? { solution: known, checks: [] } : parseSolve(await within(SOLVE_MS, signal, (s) => ask(solvePrompt(readable(reply)), SOLVE_SYSTEM, cloud ? (hard ? 'maths' : 'marking') : 'other', s, !hard)))
     step('lesson-solve', 'Worked out the answer', 'done')
-    if (solved.flaw) problems.push(`The problem can't be solved as set: ${solved.flaw}. Set a different, well-posed problem.`)
+    if (solved.flaw) found.problem.push(solved.flaw)
     else if (solved.solution) {
-      const before = problems.length
+      const before = found.problem.length
       await runChecks(solved.checks)
       // Kept with the reply, hidden from the student, so their answer is marked against it
-      if (problems.length === before) {
+      if (found.problem.length === before) {
         emit({ id: req.id, type: 'delta', text: `\n\n<solution>${solved.solution}</solution>` })
         if (!known) await rememberSolution(key, solved.solution)
       }
     }
   }
-  if (signal.aborted) return problems
+  if (signal.aborted || final || !cloud) return found
 
   // A second look at the new problem and the mark just given, by the stronger cloud model
-  if (final || !cloud) return problems
   const users = req.messages.filter((m) => m.role === 'user')
   const prev = earlier[earlier.length - 1]
-  const answered = prev ? answeredProblem(prev, text(users[users.length - 1]), reply) : undefined
+  // Only an answer to a real problem: a diagnostic just finds where they are
+  const answered = prev && isProblem(prev) ? answeredProblem(prev, text(users[users.length - 1]), reply) : undefined
   // A banked problem was checked and reviewed when it was written: only the mark needs a second look
-  const posed = !opts.fromBank && posedProblem(reply).split(' ').length >= 8 ? { problem: readable(reply), solution: solutionOf(reply) } : undefined
-  const input: ReviewInput = { ...(answered && answered.verdict !== 'wrong' ? { answered } : {}), ...(posed ? { posed } : {}) }
-  if (!input.answered && !input.posed) return problems
+  const posed = !opts.fromBank && sets ? { problem: readable(reply), solution: solutionOf(reply) } : undefined
+  const input: ReviewInput = { ...(answered && answered.verdict !== 'wrong' && !found.mark ? { answered } : {}), ...(posed ? { posed } : {}) }
+  if (!input.answered && !input.posed) return found
   step('lesson-review', 'A second model is checking the problem and the mark', 'running')
   const out = await within(REVIEW_MS, signal, (s) => ask(reviewPrompt(input), REVIEW_SYSTEM, 'marking', s))
   step('lesson-review', 'Checked the problem and the mark', 'done')
   const r = parseReview(out)
-  if (input.answered && tooGenerous(input.answered.verdict, r)) problems.push(`Your verdict "${input.answered.verdict}" was too generous: ${r.why ?? 'their answer is incomplete'}. Grade it "${r.verdict}" and say exactly what is missing or wrong.`)
-  if (input.posed && r.problemOk === false) problems.push(`The new problem is flawed: ${r.flaw ?? 'it is not well posed'}. Set a different, well-posed problem.`)
-  return problems
+  if (input.answered && tooGenerous(input.answered.verdict, r) && r.verdict !== 'correct') found.mark = { verdict: r.verdict as 'partial' | 'wrong', why: r.why ?? 'Your answer is incomplete.' }
+  if (input.posed && r.problemOk === false) found.problem.push(r.flaw ?? 'It isn’t well posed.')
+  return found
 }
 
-export { fixNudge }

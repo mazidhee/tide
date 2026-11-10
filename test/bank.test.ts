@@ -45,7 +45,7 @@ describe('the problem bank', () => {
   })
 
   it('picks the nearest level, fresh first, never one seen in this lesson', () => {
-    const mk = (id: string, level: 1 | 2 | 3, usedAt?: number): BankProblem => ({ id, topic: 't', level, text: id, ask: 'q', askType: 'problem', solution: 's', checked: true, reviewed: null, source: 'prep', createdAt: 0, ...(usedAt ? { usedAt } : {}) })
+    const mk = (id: string, level: 1 | 2 | 3, usedAt?: number): BankProblem => ({ id, topic: 't', level, text: id, ask: 'q', askType: 'problem', solution: 's', checked: true, reviewed: null, source: 'prep', createdAt: 0, v: 2, ...(usedAt ? { usedAt } : {}) })
     const bank = [mk('e1', 1), mk('h1', 3, Date.now()), mk('m1', 2), mk('h-old', 3, Date.now() - 9 * 86_400_000)]
     expect(pickProblem(bank, 2, () => false)?.id).toBe('m1')
     expect(pickProblem(bank, 3, () => false)?.id).toBe('m1')
@@ -71,20 +71,37 @@ describe('the problem bank', () => {
 describe('worked examples and aimed problems', () => {
   it('fades a worked solution to its last step', async () => {
     const { renderProblem, solutionSteps } = await import('../src/shared/bank')
-    const p = { id: 'x', topic: 't', level: 2 as const, text: 'Find the integral of x e^x.', ask: 'What is it?', askType: 'problem' as const, solution: 'u = x, dv = e^x dx\ndu = dx, v = e^x\nx e^x - ∫ e^x dx\n= (x - 1) e^x + C', checked: true, reviewed: true, source: 'prep' as const, createdAt: 0 }
-    expect(solutionSteps(p.solution)).toHaveLength(4)
+    const p = { id: 'x', topic: 't', level: 2 as const, text: 'Find the integral of x e^x.', ask: 'What is it?', askType: 'problem' as const, solution: 'u = x, dv = e^x dx\ndu = dx, v = e^x\nx e^x - ∫ e^x dx\n= (x - 1) e^x + C', checked: true, reviewed: true, source: 'prep' as const, createdAt: 0, v: 2, check: { lang: 'python', code: 'assert True' } }
+    expect(solutionSteps(p.solution)).toHaveLength(3)
     const faded = renderProblem(p, 2, 'easier', true)
     expect(faded).toContain('worked for you up to the last step')
-    expect(faded).toContain('- x e^x - ∫ e^x dx')
+    expect(faded).toContain('- du = dx, v = e^x')
     expect(faded.split('<solution>')[0]).not.toContain('(x - 1) e^x + C')
     expect(renderProblem(p, 2, 'easier', false)).not.toContain('worked for you')
   })
 
   it('serves the problem aimed at this lesson\'s mistake first', async () => {
     const { pickProblem } = await import('../src/shared/bank')
-    const mk = (id: string, level: 1 | 2 | 3, forLesson?: string) => ({ id, topic: 't', level, text: id, ask: 'q', askType: 'problem' as const, solution: 's', checked: true, reviewed: null, source: 'prep' as const, createdAt: 0, ...(forLesson ? { forLesson } : {}) })
+    const mk = (id: string, level: 1 | 2 | 3, forLesson?: string) => ({ id, topic: 't', level, text: id, ask: 'q', askType: 'problem' as const, solution: 's', checked: true, reviewed: null, source: 'prep' as const, createdAt: 0, v: 2, ...(forLesson ? { forLesson } : {}) })
     const bank = [mk('plain', 2), mk('aimed', 2, 'L1'), mk('other-lesson', 2, 'L2')]
     expect(pickProblem(bank, 2, () => false, Date.now(), 'L1')?.id).toBe('aimed')
     expect(pickProblem(bank, 2, () => false, Date.now(), 'L3')?.id).toBe('plain')
+  })
+})
+
+describe('the problems the lesson got wrong', () => {
+  it('drops a question repeated in the problem, keeps "=" lines together, and never fades an argument', async () => {
+    const { parseBank, renderProblem, solutionSteps } = await import('../src/shared/bank')
+    const out = `<problem level="hard" type="explain">
+The invention of zero was a significant breakthrough in positional numeral systems.
+Explain why it was so important.
+<question>Explain why it was so important.</question>
+<solution>It let a position be empty, so place value works.</solution>
+</problem>`
+    const [p] = parseBank(out, 'The invention of zero', 'prep')
+    expect(p.text).toBe('The invention of zero was a significant breakthrough in positional numeral systems.')
+    expect(solutionSteps('Multiply: 23 × 5\n= 115\nShift: 23 × 50\n= 1150\nAdd them')).toEqual(['Multiply: 23 × 5 = 115', 'Shift: 23 × 50 = 1150', 'Add them'])
+    const argument = { ...p, askType: 'explain' as const, solution: 'a\nb\nc\nd', checked: null, reviewed: true }
+    expect(renderProblem(argument, 2, 'easier', true)).not.toContain('worked for you')
   })
 })
