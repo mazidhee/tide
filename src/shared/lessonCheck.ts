@@ -203,9 +203,11 @@ export function parseClaimCheck(raw: string): ClaimCheck {
 /** Under the explanation: corrections (also into the notes, so the wrong version isn't what's kept), then what's worth checking */
 export function correctionText(c: Pick<ClaimCheck, 'errors' | 'unsure'>): string {
   const bullets = (xs: string[]) => (xs.length === 1 ? xs[0] : xs.map((x) => `\n> - ${x}`).join(''))
+  // Model text on one line each, so it stays inside the quote
+  const flat = (t: string) => t.replace(/\s*\n+\s*/g, ' ').trim()
   const parts: string[] = []
-  if (c.errors.length) parts.push(`> **Correction:** ${bullets(c.errors.map((e) => `${e.quote ? `“${e.quote}”: ` : ''}${e.fix}`))}`)
-  if (c.unsure.length) parts.push(`> **Worth checking:** ${bullets(c.unsure.map((u) => `“${u.quote}”${u.why ? `: ${u.why}` : ''}`))}`)
-  const note = c.errors.length ? `\n\n<note>Correction: ${c.errors.map((e) => e.fix).join(' ')}</note>` : ''
+  if (c.errors.length) parts.push(`> **Correction:** ${bullets(c.errors.map((e) => `${e.quote ? `“${flat(e.quote)}”: ` : ''}${flat(e.fix)}`))}`)
+  if (c.unsure.length) parts.push(`> **Worth checking:** ${bullets(c.unsure.map((u) => `“${flat(u.quote)}”${u.why ? `: ${flat(u.why)}` : ''}`))}`)
+  const note = c.errors.length ? `\n\n<note>Correction: ${c.errors.map((e) => flat(e.fix)).join(' ')}</note>` : ''
   return parts.length ? `\n\n${parts.join('\n>\n')}${note}` : ''
 }

@@ -29,8 +29,24 @@ const words = (t: string) => (t.toLowerCase().match(/[a-z0-9]{2,}/g) ?? []).filt
  */
 export function excerpt(text: string, topic: string, max = 1500): string {
   const want = new Set(words(topic))
+  // Paragraphs, and long ones (a page with no blank lines, a PDF page) cut into pieces of a few sentences
+  const pieces = (p: string): string[] => {
+    if (p.length <= 600) return [p]
+    const out: string[] = []
+    let cur = ''
+    for (const sentence of p.split(/(?<=[.!?])\s+|\n/)) {
+      if (cur && cur.length + sentence.length > 600) {
+        out.push(cur)
+        cur = ''
+      }
+      cur = cur ? `${cur} ${sentence}` : sentence
+    }
+    if (cur) out.push(cur)
+    return out
+  }
   const paras = text
     .split(/\n\s*\n|(?<=[.!?])\s{2,}/)
+    .flatMap(pieces)
     .map((p) => p.replace(/\s+/g, ' ').trim())
     .filter((p) => p.length > 60 && !/^(cookie|subscribe|sign in|copyright|all rights reserved)/i.test(p))
   if (!want.size || !paras.length) return text.replace(/\s+/g, ' ').slice(0, max)

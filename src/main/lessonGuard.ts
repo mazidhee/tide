@@ -96,6 +96,24 @@ export interface LessonFindings {
 /** A real problem in a problem set ("**Problem 3 · harder**"), not a diagnostic or a question in passing */
 const isProblem = (reply: string) => /\*\*\s*Problem\s+\d+/i.test(reply) && posedProblem(reply).split(' ').length >= 8
 
+/** A lesson that teaches (not a quiz, a placement check or a retest), from its instructions */
+const teaching = (req: ChatRequest) => !/adaptive QUIZ|PLACEMENT CHECK|retest/i.test(req.instructions ?? '')
+
+/** Claim checks a lesson may use: a handful each, never the same reply twice */
+const CLAIMS_PER_LESSON = 6
+const claimsSeen = new Map<string, Set<string>>()
+function claimBudget(req: ChatRequest, reply: string): boolean {
+  const lesson = createHash('sha1').update(text(req.messages.find((m) => m.role === 'user'))).digest('hex')
+  const seen = claimsSeen.get(lesson) ?? new Set<string>()
+  const key = createHash('sha1').update(reply).digest('hex')
+  if (seen.has(key) || seen.size >= CLAIMS_PER_LESSON) return false
+  seen.add(key)
+  claimsSeen.set(lesson, seen)
+  // Kept small: the lessons of the last few days
+  if (claimsSeen.size > 50) claimsSeen.delete(claimsSeen.keys().next().value!)
+  return true
+}
+
 export async function checkLessonReply(
   req: ChatRequest,
   reply: string,
@@ -135,11 +153,15 @@ export async function checkLessonReply(
   // What an explanation claims (its worked examples and its facts) isn't a problem set to them, so
   // nothing else checks it: the cloud maths model does, against the lesson's sources, alongside the
   // other checks; a mistake gets a correction under the reply
-  const claims = !final && cloud && makesClaims(reply)
+  // Only in lessons (not quizzes or checks), only new explanations, a few a lesson, and only a cloud
+  // model: when none is free (or the day's allowance is running low) it's skipped, never Gemma
+  // checking Gemma, which measured worse than no check
+  const claims = !final && cloud && teaching(req) && makesClaims(reply) && claimBudget(req, reply)
     ? (async () => {
         step('lesson-claims', 'Checking what this explains', 'running')
         const pack = req.topic ? await import('./sources').then((m) => m.packFor(req.topic!)).catch(() => null) : null
-        const out = await within(REVIEW_MS, signal, (s) => ask(claimsPrompt(req.topic ?? '', readable(reply), sourcesForCheck(pack)), CLAIMS_SYSTEM, 'maths', s, true)).catch(() => '')
+        const { askCloud } = await import('./ai')
+        const out = await within(REVIEW_MS, signal, (s) => askCloud(claimsPrompt(req.topic ?? '', readable(reply), sourcesForCheck(pack)), CLAIMS_SYSTEM, 'maths', s, true, 900)).catch(() => '')
         step('lesson-claims', 'Checked what this explains', 'done')
         return parseClaimCheck(out ?? '')
       })()

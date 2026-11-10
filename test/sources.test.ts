@@ -20,6 +20,13 @@ describe('lesson sources', () => {
     expect(e.length).toBeLessThanOrEqual(400)
   })
 
+  it('finds the relevant part of a page with no paragraph breaks, not just its start', () => {
+    const flat = `${'Navigation home about contact blog careers press. '.repeat(40)} Raft leader election: a follower that hears no heartbeat before its election timeout becomes a candidate and requests votes. ${'Unrelated footer text about our company and its history. '.repeat(40)}`
+    const e = excerpt(flat, 'Raft leader election', 600)
+    expect(e).toContain('election timeout becomes a candidate')
+    expect(e.length).toBeLessThanOrEqual(600)
+  })
+
   it('goes into the opening as a hidden note the tutor cites', () => {
     const pack = { topic: 'Raft', at: 1, sources: [{ n: 1, title: 'The Raft site', url: 'https://raft.github.io', text: 'Raft uses heartbeats.' }] }
     const opening = withSources('I want to learn Raft deeply.', pack)

@@ -51,6 +51,9 @@ export function buildPack(topic: string, where?: string): Promise<SourcePack | n
   const running = building.get(key)
   if (running) return running
   const run = (async () => {
+    // A recent pack is kept as it is: rebuilding it would change a lesson's opening for nothing
+    const have = await packFor(topic)
+    if (have) return have
     if (getSettings().ai.webSearch?.provider === 'off' || (await isPrivate(where))) return null
     let readings = await readingsFor(topic)
     if (!readings.length) readings = await findReadings({ topic, path: where, notebook: where }).catch(() => [])
@@ -75,9 +78,10 @@ export function buildPack(topic: string, where?: string): Promise<SourcePack | n
 
 /** For a lesson starting now: the pack if there is one; otherwise it's built in the background, for the checks and next time */
 export async function lessonPack(topic: string, where?: string): Promise<SourcePack | null> {
-  if (await isPrivate(where)) return null
+  // A kept pack is public text (one is only built outside private projects): quick to hand over
   const have = await packFor(topic)
   if (have) return have
+  if (await isPrivate(where)) return null
   buildPack(topic, where).catch(() => null)
   return null
 }
