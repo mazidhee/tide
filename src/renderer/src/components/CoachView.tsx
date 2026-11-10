@@ -271,7 +271,7 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy }: { week: Week
         {more && rest && <p className="wk-rest">{rest}</p>}
         {week.priorities.length > 0 && (
           <div className="wk-split" aria-label="How the week's time is split">
-            <div className="wk-bar">
+            <div className="wk-split-bar">
               {week.priorities.map((p, i) => (
                 <span key={p.notebook} style={{ flexGrow: Math.max(1, p.share), background: `color-mix(in srgb, var(--accent) ${90 - i * 30}%, var(--bg-active))` }} title={p.reason} />
               ))}

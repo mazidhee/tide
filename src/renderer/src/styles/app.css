@@ -12115,13 +12115,13 @@ button.home-prof {
   margin-top: 18px;
 }
 
-.wk-bar {
+.wk-split-bar {
   display: flex;
   gap: 3px;
   height: 8px;
 }
 
-.wk-bar span {
+.wk-split-bar span {
   border-radius: 999px;
 }
 

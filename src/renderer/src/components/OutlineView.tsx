@@ -224,6 +224,9 @@ export function OutlineView({ notebook, outlinePath, notes, mastery, onSetOutlin
 
   const suggestionFor = (text: string): NoteMeta | undefined => (itemLink(text).target ? undefined : byNormal.get(normalizeTitle(topicTitle(text))))
 
+  // Each roadmap line's topic (its id), for where it sits in the plan; a hook, so above the early return
+  const topicAt = useMemo(() => new Map(outline ? roadmapTopics(notebook.split('/').pop() ?? notebook, serializeOutline(outline)).map((t) => [t.line, t]) : []), [outline, notebook])
+
   if (!outlinePath || !outline) {
     return <OutlineEmpty notebook={notebook} notes={notes} onSetOutline={onSetOutline} />
   }
@@ -294,7 +297,6 @@ export function OutlineView({ notebook, outlinePath, notes, mastery, onSetOutlin
   const items = lines.filter((l): l is Extract<OutlineLine, { kind: 'item' }> => l.kind === 'item' && l.checked !== null)
   const done = items.filter((l) => l.checked).length
   // The first topic not yet done: where you are in the roadmap
-  const topicAt = useMemo(() => new Map(outline ? roadmapTopics(notebook.split('/').pop() ?? notebook, serializeOutline(outline)).map((t) => [t.line, t]) : []), [outline, notebook])
   const choosePlace = (e: React.MouseEvent, t: RoadmapTopic, own: boolean) => {
     const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
     const put = (id: string, cls: SectionClass | null) => () => window.tide.curriculum.setOverride(id, cls).then(loadPlace).catch(() => {})
@@ -309,7 +311,13 @@ export function OutlineView({ notebook, outlinePath, notes, mastery, onSetOutlin
       ]
     })
   }
-  const nextIndex = lines.findIndex((l) => l.kind === 'item' && l.checked === false && !/^(Exam|Project|Practice):/i.test(l.text))
+  // Where you are: the first topic left that the plan teaches on weekdays (not one it skips, defers or keeps for weekends)
+  const weekdayTopic = (i: number) => {
+    const t = topicAt.get(i)
+    const cls = t && place?.topics[t.id]?.class
+    return !t?.project && (!cls || cls === 'core' || cls === 'supporting')
+  }
+  const nextIndex = lines.findIndex((l, i) => l.kind === 'item' && l.checked === false && !/^(Exam|Project|Practice):/i.test(l.text) && weekdayTopic(i))
   const suggestions = lines.map((l, i) => (l.kind === 'item' && suggestionFor(l.text) ? i : -1)).filter((i) => i >= 0)
 
   const linkTo = (i: number, note: NoteMeta) => {
