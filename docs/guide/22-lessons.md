@@ -16,7 +16,7 @@ summary: One question at a time, with a tutor that adjusts to every answer.
 
 ## How a lesson runs
 
-**Teach** works the way the best tutors teach: you do most of the work. It starts with two or three questions, easy to hard, to find your level, then writes a short plan that skips what you already know. Each step is a short explanation with one worked example, then problems one at a time, labelled like **Problem 2 · harder**.
+**Teach** works the way the best tutors teach: you do most of the work. It starts with a few questions to find your level, starting near the hard end and stepping down when you miss, then writes a short plan that skips what you already know. Each step is a short explanation with one worked example, then problems one at a time, labelled like **Problem 2 · harder**.
 
 ```animation
 ladder: Right first time, Harder, Right with hints, Same level
@@ -28,9 +28,14 @@ ladder: Right first time, Harder, Right with hints, Same level
 
 A step is done after two right in a row without hints. It ends with a few mixed problems across the whole lesson.
 
+## Explaining before asking
+
+Not every message ends in a question. When an idea needs more than one message, the tutor carries on: you get **Go on** (<kbd>⌘↵</kbd>) and **I have a question** instead of an answer box. After two explaining messages it checks you understood. Say *just explain* and it explains; say *quiz me* and it asks. After two misses in a row it stops setting full questions and shows a worked example of the step you're missing, then asks you to fill in just that step.
+
 ## Answering
 
 - **Question types:** predict, short answer, multiple choice, explain it back, spot the error, worked problem, code.
+- **Multiple choice:** pick with a click or <kbd>1</kbd>–<kbd>4</kbd>. The box underneath stays, so you can type or speak your reasoning with your pick, or write your own answer.
 - **Confidence:** Guessing, Unsure or Sure. Confidently wrong counts as a misconception.
 - **Hints:** Nudge, Hint, Show a step, Show the answer.
 - **I don't know:** the tutor teaches the idea briefly and asks an easier question.

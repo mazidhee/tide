@@ -5,23 +5,39 @@ summary: Your coach. It works out where you're heading and plans the next seven 
 ---
 ![Your week: where you're heading, how the time splits, seven days and today's checklist](img/week.jpg)
 
-## Where you're heading
+## What you're working towards
 
-You don't have to say. Tide works it out from what your notebooks and roadmaps are about, your deadlines, what the tutor remembers, what you've been studying and how your answers go, and says it at the top in a sentence or two (“You're heading towards low-level software engineering for payments and data…”). It looks again every few days in the background. **Correct it** if it's off; your words then win. Clear them to hand it back to Tide.
+List your **aims** in **Edit**: as many as you have, in your own words, each **Main**, **Side** or **Curious**. Reword, reweigh or remove them whenever your interests change. With no aims yet, Tide offers its own guess from your notebooks; **Use it** or write your own.
 
-Where you're heading shapes everything else: the week's priorities, the learner profile every chat reads, and new roadmaps.
+- **Main:** most of your weekday time. Each main aim's roadmap gets weekday time every week.
+- **Side:** a steady, smaller share.
+- **Curious:** weekend reading and primers, never weekday study.
+
+## How Tide sorts your roadmaps
+
+In the background, Tide sorts every roadmap against your aims: what each section is for, how much each aim needs it, and which topics are history or background rather than skills. Your own heading tags (CORE, LATER, OPTIONAL…) are kept, except that a main aim can bring a LATER section forward. Sorting is redone only for what changes: new topics, or new aims. Private projects are sorted on your Mac.
+
+On a roadmap page, each topic shows where it sits: **Weekdays**, **When needed**, **Weekend**, **Later** or **Skip**. Click it to move that topic, or its whole section; your choice always wins. The roadmap's **Next** follows the plan, not just the order of the file.
 
 ## How the week is planned
 
-When no plan covers today, Tide plans the week by itself in the background. The scheduling is done in code, not guessed by the model: it gathers the next unfinished topics in each roadmap, your weak topics, cards due, overdue tasks and mock scores, then fits them into your hours and study days, giving tight deadlines more time. The model only writes the summary of why.
+By default **Tide picks** the week's roadmaps; switch to **I do** to pick them yourself (Tide still says what it would have picked). The scheduling is done in code, not guessed by the model:
 
-Each study day gets a few items, sized to your hours:
+- **Which roadmaps:** at most two on weekdays, by how much your aims need what comes next in each (a foundation counts for what it leads to), plus any deadline that's behind.
+- **What from each:** your roadmap's order, skipping what isn't needed now. History like *the invention of zero* becomes a short weekend primer, never a weekday lesson.
+- **When:** set **Weekdays** and **Weekends** in minutes. Weekends get one subject, the take-home and at most one primer.
+
+Each study day gets a few items, sized to your time:
 
 - topics to **learn**, straight from your roadmaps, never invented,
 - **practice**, a short **quiz** on earlier topics and **review** of weak spots,
-- a **take-home** or two and a **test** at the end.
+- a **take-home** and a **test** at the end.
 
-Each topic comes with what to read: exact pages in books you own first, then links checked online.
+Each item says why it's there ("Consensus, for distributed systems and blockchain infrastructure"). Finishing a lesson ticks it off here and in the roadmap.
+
+## Free readings
+
+For the week's lessons, Tide finds a few free, legal readings: a landmark paper, an RFC or spec, official docs, an open textbook chapter, and Wikipedia. Each is checked to exist before it's kept. Small PDFs from open archives (arXiv, RFCs, project and course sites) are saved into the Library under the notebook, so lessons use them too. Piracy sites are never used, and nothing is looked up for private projects. Turn web search off in Settings to stop it.
 
 ## Reading the page
 

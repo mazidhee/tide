@@ -26,7 +26,7 @@ The voice you pick replaces the character's everywhere. **Use the Mac's own voic
 
 ## Dictation
 
-**Tide (Parakeet)** records you and writes it out on your Mac. **Handy** leaves the typing to Handy: **Speak** puts the cursor in the box and you press your Handy shortcut.
+**Tide (Parakeet)** records you and writes it out on your Mac. **Deepgram (Nova-3)** writes it out in the cloud: more accurate on jargon, as the lesson's topic goes along as a hint. Paste a key from console.deepgram.com; it's checked, then kept in your Keychain. Private projects and Metabase lessons still use Parakeet, and so does anything Deepgram can't take. **Handy** leaves the typing to Handy: **Speak** puts the cursor in the box and you press your Handy shortcut.
 
 ## In the menu bar
 
