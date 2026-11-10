@@ -55,6 +55,7 @@ import type { StudyPlan } from '@shared/plan'
 import { dayTasks, setTaskDone, thingsStatus } from './things'
 import { mapBook, mapNewBooks, pagesToRead } from './books'
 import { findReadings, readingsFor } from './readings'
+import { getLesson, listLessons, saveLesson } from './lessons'
 import { proposeChanges, curriculumStatus, curriculumView, setOverride, sortError, sortRoadmaps } from './curriculum'
 import { aimsKey, aimsOf } from '@shared/coach'
 import type { SectionClass } from '@shared/curriculum'
@@ -277,6 +278,9 @@ function registerIpc() {
   handle('curriculum:placed', (setup: PlacementSetup, results: Record<string, Known>) => savePlacement(setup, results))
   handle('curriculum:propose', (notebook: string) => proposeChanges(notebook))
   handle('curriculum:addTopic', (notebook: string, afterId: string, title: string) => addTopicAfter(notebook, afterId, title))
+  handle('lessons:save', (r: Parameters<typeof saveLesson>[0]) => saveLesson(r))
+  handle('lessons:list', () => listLessons())
+  handle('lessons:get', (id: string) => getLesson(id))
   handle('curriculum:status', async () => ({ notebooks: await curriculumStatus(), error: sortError() }))
   handle('curriculum:sort', () => sortRoadmaps())
   handle('curriculum:view', (notebook: string) => curriculumView(notebook))

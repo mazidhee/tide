@@ -274,7 +274,7 @@ function baseInstructions({ mode, topic, options }: SessionSetup): string {
 2. Then teach it this way: ${flow ? 'trace it step by step like following one real record through the system.' : STRATEGY_RULES[options.strategy]}
    ${flow || (first[options.strategy] ?? '')}
 3. Grade every answer. Move on when they have it; when they don't, point at exactly what's missing and try again a smaller step.
-When you explain an idea, also write it for their notes: <note>the key idea in 1 to 5 lines of Markdown, worth rereading later</note>.${options?.project ? projectRules(options.project) : ''}
+When you explain an idea, also write it for their notes: <note>the key idea in 1 to 5 lines of Markdown (up to 12 for notation, a formula or a worked example), worth rereading later</note>.${options?.project ? projectRules(options.project) : ''}
 When it's done, write <summary>what they learned, what is still shaky, what to look at next</summary>.`
   }
   if (mode === 'teach') {
@@ -295,7 +295,7 @@ When it's done, write <summary>what they learned, what is still shaky, what to l
    - When they're wrong, point at the exact step that fails before anything else; give the worked solution only after the hint ladder, then a near-identical problem for them.
    - Now and then ask why a step holds or what would break if something changed. Never ask "does that make sense?".
    Teach visually as well: when there is structure or a process (a tree, a graph, a flow, a protocol, states, a timeline), draw a small mermaid diagram (under about 12 nodes); when the thing is physical or has a classic textbook figure, show a real one with find_image. One good visual per step, where it helps.
-   When you explain an idea, also write it for their notes: <note>the key idea, definition, formula or a short worked example, in 1 to 5 lines of Markdown, worded to be worth rereading later</note>. Do the same after grading whenever your feedback states a rule, a reason or corrects something they got wrong: one <note> with that point in a line or two (never one that repeats an earlier note). Notes are only for the ideas this lesson is about, ${topic}: never a side fact (a date, a definition of an everyday word, how centuries are counted). The app writes these into the note for this topic, beside the lesson.
+   When you explain an idea, also write it for their notes: <note>the key idea, definition, formula or a short worked example, in 1 to 5 lines of Markdown (up to 12 when it spells out notation or works an example), worded to be worth rereading later</note>. Do the same after grading whenever your feedback states a rule, a reason or corrects something they got wrong: one <note> with that point in a line or two (never one that repeats an earlier note). Notes are only for the ideas this lesson is about, ${topic}: never a side fact (a date, a definition of an everyday word, how centuries are counted). The app writes these into the note for this topic, beside the lesson.
 4. FINISH with 2 or 3 mixed problems across all the steps, one at a time.${extra}
 When every step is done, write <summary>what they learned, what is still shaky, what to review next</summary>.`
   }
@@ -532,6 +532,21 @@ export const NEW_PROBLEM_NUDGE =
 
 /** Said to the tutor (not shown) when a lesson has gone a while without adding to the notes */
 export const NOTES_NUDGE = "(Tide: nothing has gone into their notes for a while. If your reply teaches or corrects anything, a rule, a reason, a common mistake, add it in a <note>, a line or two that isn't already in their notes.)"
+
+/** They asked to go deeper: what's explained now is what they most want to keep */
+export const DEEP_NOTE = "(Tide: they asked you to go deeper. End your reply with a <note> that captures what you explain: the idea in full, any notation spelled out symbol by symbol, and one short worked example. Up to 12 lines.)"
+
+const DEEPER = /\b(explain|more (detail|depth)|deeper|in depth|break (it|this|that)? ?down|don['’]?t (get|understand)|confus|what does .{1,40} mean|notation|walk me through|why (is|does|do))\b/i
+
+/** The notes nudge for this turn, if one is due: deeper asks first, then a long explanation that added nothing to the notes, then two quiet replies */
+export function notesNudge(replies: string[], said: string): string | null {
+  const mine = ownWords(said)
+  if (/^My question:/.test(mine) || DEEPER.test(mine.replace(/^Answer:\s*/, ''))) return DEEP_NOTE
+  const last = replies[replies.length - 1] ?? ''
+  const explained = /<continue\b/i.test(last) || hideWorking(last).replace(/<[^>]+>[\s\S]*?<\/[^>]+>/g, ' ').split(/\s+/).length > 150
+  if (last && !/<note\b/i.test(last) && explained) return NOTES_NUDGE
+  return repliesWithoutNote(replies) >= 2 ? NOTES_NUDGE : null
+}
 
 /** Tutor replies since the last one that added to the notes */
 export const repliesWithoutNote = (replies: string[]) => {

@@ -59,6 +59,14 @@ Paste a screenshot of a textbook page or diagram into a note and the tutor teach
 
 With **Web** on, the tutor looks things up when a topic may be newer than its training or it's unsure of a fact, and cites what it read. It knows today's date, so for anything that changes it searches recent results. It can also search arXiv and read online PDFs.
 
+## Past lessons
+
+Every lesson is kept as it goes, finished or not, under **Study › Past lessons**: read one again as a page (the whole conversation, your answers and marks, what went into your notes) or **Continue** one that didn't finish, where it stopped. The pages are in the `Lessons` folder of your vault too, so you can find them in search or in Obsidian.
+
+## Your notes during a lesson
+
+The tutor writes what it teaches into the note beside the lesson. When you ask it to go deeper (**I have a question**, "explain the notation", "break it down"), what it explains goes into your notes in full: the idea, the notation symbol by symbol, an example. To keep any explanation word for word, click the note button beside it.
+
 ## If Tide closes mid-lesson
 
 Lessons and exams are saved as you go, to `.tide/ongoing.json` in your notes folder. If Tide quits, the Mac restarts or the power goes, the lesson is back under **In progress** in the sidebar when Tide opens, exactly where you were. If the tutor was in the middle of a reply, it's asked for again.

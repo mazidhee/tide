@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { View } from '../state'
+import { lessonId } from '@shared/lessonLog'
 
 /**
  * Lessons, quizzes, interviews and exams you've left mid-way, so going elsewhere doesn't lose them.
@@ -45,11 +46,32 @@ function persist() {
   }, 400)
 }
 
+// ---------- Past lessons: every lesson kept as it goes, to read again or carry on ----------
+
+const lessonTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+/** Keeps a lesson in Past lessons (a second after its last change, or now when it finishes) */
+export function keepLesson(key: string, view: View, turns: unknown, finished = false) {
+  if (view.kind !== 'session' || !Array.isArray(turns)) return
+  const id = view.lesson ?? lessonId(key)
+  clearTimeout(lessonTimers.get(id))
+  const save = () => {
+    lessonTimers.delete(id)
+    window.tide.lessons
+      .save({ id, mode: view.mode, topic: view.topic, scope: view.scope, ...(view.options ? { options: view.options } : {}), turns: (turns as { role: 'user' | 'assistant'; content: string }[]).map(({ role, content }) => ({ role, content })), finished })
+      .catch(() => {})
+  }
+  if (finished) save()
+  else lessonTimers.set(id, setTimeout(save, 1000))
+}
+
 /** What was in progress when Tide last closed, the lesson on screen included: back under "In progress" */
 export async function loadOngoing() {
   try {
     const saved = JSON.parse(await window.tide.vault.read(FILE)) as Ongoing[]
     for (const o of saved) if (o?.key && o.view && !store.has(o.key)) store.set(o.key, { ...o, busy: false, ...(o.busy ? { interrupted: true } : {}) })
+    // Lessons from before Past lessons existed (or saved while it wasn't running) are kept there too
+    for (const o of saved) if (o?.view?.kind === 'session') keepLesson(o.key, o.view, (o.state as { turns?: unknown })?.turns)
     emit()
   } catch {
     // nothing saved yet, or unreadable
@@ -61,6 +83,7 @@ void loadOngoing()
 export const sessionKey = (v: { kind: string; mode?: string; topic?: string; nonce?: number }) => `${v.kind}:${v.mode ?? ''}:${v.topic ?? ''}:${v.nonce ?? ''}`
 
 export function saveOngoing(o: Omit<Ongoing, 'at'>) {
+  keepLesson(o.key, o.view, (o.state as { turns?: unknown })?.turns)
   live.delete(o.key)
   store.set(o.key, { ...o, at: Date.now() })
   // Keep a handful: the oldest go first
@@ -72,6 +95,7 @@ export function saveOngoing(o: Omit<Ongoing, 'at'>) {
 
 /** The one on screen, as it goes: kept on disk, listed only if Tide closes before you leave it */
 export function keepLive(o: Omit<Ongoing, 'at'>) {
+  keepLesson(o.key, o.view, (o.state as { turns?: unknown })?.turns)
   live.set(o.key, { ...o, at: Date.now() })
   persist()
 }
