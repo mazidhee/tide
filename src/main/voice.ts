@@ -3,6 +3,11 @@ import { spawn, type ChildProcess } from 'child_process'
 import { existsSync, promises as fs } from 'fs'
 import { join } from 'path'
 import SERVER_SCRIPT from './voiceServer.py?raw'
+import { getKey, setKey } from './cloud'
+import { aboutMetabase } from '@shared/metabase'
+import { metabaseHost, metabaseReady } from './metabase'
+import { privatePath } from './projects'
+import { getSettings } from './settings'
 
 /**
  * A natural voice for the tutor, made on this Mac: Kokoro (82M parameters, about 25 times faster
@@ -143,9 +148,76 @@ export async function speak(text: string, voice = 'bm_george', speed = 1): Promi
   return new Uint8Array(await (await call('/speak', { text, voice, speed })).arrayBuffer())
 }
 
-/** What was said in a WAV recording */
-export async function transcribe(wav: Uint8Array): Promise<string> {
+/** Where you were speaking: a private project or anything about your Metabase stays on this Mac */
+export type Heard = { path?: string; topic?: string }
+
+/**
+ * What was said in a WAV recording. With Deepgram chosen and its key saved, Deepgram's Nova-3
+ * writes it out (the lesson's topic is passed as a key term, so its jargon comes out spelled
+ * right); otherwise, or when Deepgram fails, Parakeet on this Mac does.
+ */
+export async function transcribe(wav: Uint8Array, where: Heard = {}): Promise<string> {
+  if (getSettings().voice?.dictation === 'deepgram' && getKey(DEEPGRAM) && !(await staysHere(where))) {
+    try {
+      return await deepgram(wav, getKey(DEEPGRAM), where.topic)
+    } catch (e) {
+      if (!existsSync(python())) throw e
+    }
+  }
   return ((await (await call('/transcribe', wav)).json()) as { text: string }).text
+}
+
+const DEEPGRAM = 'deepgram'
+
+async function staysHere(where: Heard): Promise<boolean> {
+  if (where.path && (await privatePath(where.path).catch(() => true))) return true
+  return !!where.topic && metabaseReady() && aboutMetabase(where.topic, metabaseHost())
+}
+
+async function deepgram(wav: Uint8Array, key: string, topic?: string): Promise<string> {
+  const q = new URLSearchParams({ model: 'nova-3', language: 'en', smart_format: 'true' })
+  const term = topic?.replace(/\s+/g, ' ').trim()
+  if (term && term.length <= 60) q.append('keyterm', term)
+  const res = await fetch(`https://api.deepgram.com/v1/listen?${q}`, {
+    method: 'POST',
+    headers: { Authorization: `Token ${key}`, 'Content-Type': 'audio/wav' },
+    body: Buffer.from(wav),
+    signal: AbortSignal.timeout(20_000)
+  })
+  if (res.status === 401 || res.status === 403) throw new Error('Deepgram didn’t accept the key. Check it in Settings › Voice.')
+  if (res.status === 402) throw new Error('Your Deepgram credit has run out. Switch dictation back to Parakeet in Settings › Voice.')
+  if (!res.ok) throw new Error(`Deepgram couldn’t write that out (${res.status}).`)
+  const j = (await res.json()) as { results?: { channels?: { alternatives?: { transcript?: string }[] }[] } }
+  return j.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? ''
+}
+
+/** Whether a Deepgram key is saved (the key itself stays in the main process) */
+export const hasDeepgram = () => !!getKey(DEEPGRAM)
+
+/** Checks the key on a quarter second of silence (a fraction of a cent), then keeps it in the Keychain */
+export async function saveDeepgram(key: string | null): Promise<void> {
+  if (!key?.trim()) return setKey(DEEPGRAM, null)
+  await deepgram(silence(0.25), key.trim())
+  setKey(DEEPGRAM, key.trim())
+}
+
+function silence(seconds: number): Uint8Array {
+  const n = Math.round(16000 * seconds) * 2
+  const v = new DataView(new ArrayBuffer(44 + n))
+  const str = (o: number, t: string) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)))
+  str(0, 'RIFF')
+  v.setUint32(4, 36 + n, true)
+  str(8, 'WAVEfmt ')
+  v.setUint32(16, 16, true)
+  v.setUint16(20, 1, true)
+  v.setUint16(22, 1, true)
+  v.setUint32(24, 16000, true)
+  v.setUint32(28, 32000, true)
+  v.setUint16(32, 2, true)
+  v.setUint16(34, 16, true)
+  str(36, 'data')
+  v.setUint32(40, n, true)
+  return new Uint8Array(v.buffer)
 }
 
 /** Loads the models ahead of time (opening a lesson with talk on), so the first reply isn't slow */

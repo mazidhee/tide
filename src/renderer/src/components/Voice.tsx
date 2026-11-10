@@ -45,7 +45,7 @@ export function SpeakButton({ text }: { text: string }) {
  * Answer by voice. With Tide's natural voice set up, click to talk and click again to stop: what
  * you said is written out on this Mac and handed back. Otherwise it points to Handy.
  */
-export function DictateButton({ target, onText, onStart }: { target?: RefObject<HTMLTextAreaElement | HTMLInputElement | null>; onText?: (text: string) => void; onStart?: () => void }) {
+export function DictateButton({ target, onText, onStart, where }: { target?: RefObject<HTMLTextAreaElement | HTMLInputElement | null>; onText?: (text: string) => void; onStart?: () => void; where?: { path?: string; topic?: string } }) {
   const { settings } = useApp()
   const [hint, setHint] = useState<string | null>(null)
   const [state, setState] = useState<'idle' | 'listening' | 'writing'>('idle')
@@ -70,8 +70,9 @@ export function DictateButton({ target, onText, onStart }: { target?: RefObject<
 
   const start = async () => {
     // Handy chosen for dictation (or Tide's model not set up): Handy types into the box instead
-    const viaHandy = (settings.voice ?? DEFAULT_VOICE).dictation === 'handy'
-    const ready = !viaHandy && (await window.tide.voice.status().then((s) => s.ready).catch(() => false))
+    const by = (settings.voice ?? DEFAULT_VOICE).dictation
+    const deepgram = by === 'deepgram' && (await window.tide.voice.hasDeepgram().catch(() => false))
+    const ready = by !== 'handy' && (deepgram || (await window.tide.voice.status().then((s) => s.ready).catch(() => false)))
     if (!ready) {
       target?.current?.focus()
       const h = await getHandy()
@@ -99,7 +100,7 @@ export function DictateButton({ target, onText, onStart }: { target?: RefObject<
     if (!r) return
     setState('writing')
     try {
-      const text = (await window.tide.voice.transcribe(await r.stop())).trim()
+      const text = (await window.tide.voice.transcribe(await r.stop(), where)).trim()
       if (!text) say('I didn’t catch that. Try again a little closer to the microphone.')
       else if (onText) onText(text)
       else if (target?.current) {
@@ -138,7 +139,7 @@ export function DictateButton({ target, onText, onStart }: { target?: RefObject<
  * voice: click the mic, or turn on hands-free and just talk. Space or Esc stops the tutor
  * mid-sentence (as when you interrupt someone). Remembered across conversations.
  */
-export function useTalk(latest: { content: string; streaming: boolean; key: string } | null, onText: (text: string) => void) {
+export function useTalk(latest: { content: string; streaming: boolean; key: string } | null, onText: (text: string) => void, where?: { path?: string; topic?: string }) {
   const prefs = useVoicePrefs()
   const [talk, setTalk] = useState(() => localStorage.getItem('tide.talk') === 'on')
   const [handsFree, setHandsFree] = useState(() => localStorage.getItem('tide.talk.handsfree') === 'on')
@@ -147,6 +148,8 @@ export function useTalk(latest: { content: string; streaming: boolean; key: stri
   const live = useRef<{ key: string; speaker: Speaker; live: LiveSpeaker } | null>(null)
   const onTextRef = useRef(onText)
   onTextRef.current = onText
+  const whereRef = useRef(where)
+  whereRef.current = where
   const stop = () => {
     live.current?.speaker.stop()
     live.current = null
@@ -201,7 +204,7 @@ export function useTalk(latest: { content: string; streaming: boolean; key: stri
       async (wav) => {
         setHearing('writing')
         try {
-          const text = (await window.tide.voice.transcribe(wav)).trim()
+          const text = (await window.tide.voice.transcribe(wav, whereRef.current)).trim()
           if (live && text.length > 1) onTextRef.current(text)
         } finally {
           if (live) setHearing('listening')
@@ -240,7 +243,7 @@ export function useTalk(latest: { content: string; streaming: boolean; key: stri
 }
 
 /** The Talk switch and, when talking, the mic (or hands-free listening) */
-export function TalkControls({ voice, onText }: { voice: ReturnType<typeof useTalk>; onText(text: string): void }) {
+export function TalkControls({ voice, onText, where }: { voice: ReturnType<typeof useTalk>; onText(text: string): void; where?: { path?: string; topic?: string } }) {
   return (
     <>
       <button
@@ -265,7 +268,7 @@ export function TalkControls({ voice, onText }: { voice: ReturnType<typeof useTa
           {voice.handsFree ? (voice.hearing === 'speech' ? 'Hearing you…' : voice.hearing === 'writing' ? 'Writing it down…' : voice.speaking ? 'Speaking… (Esc)' : 'Listening') : 'Hands-free'}
         </button>
       )}
-      {voice.talk && !voice.handsFree && <DictateButton onStart={voice.stop} onText={onText} />}
+      {voice.talk && !voice.handsFree && <DictateButton onStart={voice.stop} onText={onText} where={where} />}
     </>
   )
 }

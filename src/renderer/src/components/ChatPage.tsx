@@ -36,12 +36,12 @@ export function ChatPage({ id }: { id?: string }) {
   const app = useApp()
   const convo = useConversation()
   const lastReply = [...convo.turns].reverse().find((t) => t.role === 'assistant')
-  const voice = useTalk(lastReply ? { key: lastReply.id, content: lastReply.content, streaming: !!lastReply.streaming } : null, (said) => sendRef.current(said))
   const sendRef = useRef<(text: string) => void>(() => {})
   const [chats, setChats] = useState<ChatSummary[]>([])
   const [query, setQuery] = useState('')
   const [input, setInput] = useState('')
   const [scope, setScope] = useState<ChatScope>({ kind: 'vault' })
+  const voice = useTalk(lastReply ? { key: lastReply.id, content: lastReply.content, streaming: !!lastReply.streaming } : null, (said) => sendRef.current(said), 'path' in scope ? { path: scope.path } : undefined)
   const [notebooks, setNotebooks] = useState<NotebookMeta[]>([])
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -235,7 +235,7 @@ export function ChatPage({ id }: { id?: string }) {
       tools={
         <>
           {scopePicker}
-          <TalkControls voice={voice} onText={(said) => send(said)} />
+          <TalkControls voice={voice} onText={(said) => send(said)} where={'path' in scope ? { path: scope.path } : undefined} />
         </>
       }
     />

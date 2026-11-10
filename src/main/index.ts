@@ -61,7 +61,7 @@ import { getCoach, getWeek, planWeek, saveCoach, updateProfile, inferDirection, 
 import { addMistakes, listMistakes, mistakesDue, retestMistake } from './mistakes'
 import { initTray, refreshTray, reportStudy, type StudyStatus } from './tray'
 import { localDate, todayItems } from '@shared/coach'
-import { setupVoice, speak, stopVoice, transcribe, voiceStatus, warmVoice } from './voice'
+import { hasDeepgram, saveDeepgram, setupVoice, speak, stopVoice, transcribe, voiceStatus, warmVoice, type Heard } from './voice'
 import type { NewMistake } from '@shared/mistakes'
 import type { CoachSettings } from '@shared/coach'
 import { deleteChat, getChat, listChats, pinChat, renameChat } from './chats'
@@ -293,7 +293,9 @@ function registerIpc() {
   handle('voice:status', () => voiceStatus())
   handle('voice:setup', () => setupVoice((step) => send('voice:progress', step)))
   handle('voice:speak', (text: string, voice?: string, speed?: number) => speak(text, voice, speed))
-  handle('voice:transcribe', (wav: Uint8Array) => transcribe(wav))
+  handle('voice:transcribe', (wav: Uint8Array, where?: Heard) => transcribe(wav, where))
+  handle('voice:hasDeepgram', () => hasDeepgram())
+  handle('voice:saveDeepgram', (key: string | null) => saveDeepgram(key))
   handle('voice:warm', (stt: boolean) => warmVoice(stt))
   handle('mistakes:list', () => listMistakes())
   handle('mistakes:due', (n?: number) => mistakesDue(n))
