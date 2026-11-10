@@ -49,6 +49,8 @@ export interface Settings {
   voice?: { engine: 'natural' | 'system'; name: string; speed: number; custom?: string; dictation?: 'tide' | 'handy' | 'deepgram' | 'flow' }
   /** Who the tutor is: the character's face, voice and way of talking */
   character?: import('./characters').CharacterId
+  /** Why mode in lessons: Socratic, from first principles. Foundations (the default) turns it on for early, basic topics */
+  whyMode?: 'off' | 'foundations' | 'always'
   /** Breaks while you study: paced by the tutor, a fixed rhythm, or none */
   pomodoro?: 'auto' | 'off' | '25' | '50'
   /** The character in the menu bar: always, only while studying, or never */

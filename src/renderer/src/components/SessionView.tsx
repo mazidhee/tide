@@ -10,7 +10,8 @@ import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict
 import { paceNote } from '@shared/pace'
 import { parsePlacement, placementNote } from '@shared/placement'
 import type { Reading } from '@shared/readings'
-import { MODE_LABEL, NOTES_NUDGE, ownWords, openingMessage, withPassage, parseBlocks, repliesWithoutNote, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
+import { whyByDefault } from '../lib/agenda'
+import { MODE_LABEL, NOTES_NUDGE, whyNote, ownWords, openingMessage, withPassage, parseBlocks, repliesWithoutNote, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
 import { cardsToMarkdown } from '@shared/cards'
 import { fileTitle, useApp, pagesLabel } from '../state'
@@ -90,7 +91,17 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // How to teach it: what was asked for, else the router's choice, settled before the first message
   const choice = useMemo(() => strategyChoice({ mode, topic, options }, scope), [mode, topic, options, JSON.stringify(scope)])
   const [taught, setTaught] = useState<Strategy | undefined>(() => options?.strategy ?? choice?.strategy)
-  const setup: SessionSetup = useMemo(() => ({ mode, topic, options: taught ? { ...options, strategy: taught } : options }), [mode, topic, options, taught])
+  // Why mode: decided once when the lesson starts (it's part of the cached instructions); the
+  // toggle changes it from the next message on, by a hidden note
+  const whyAtStart = useMemo(() => mode === 'teach' && (options?.why ?? whyByDefault(app.settings.whyMode, topic)), [])
+  const [why, setWhy] = useState(whyAtStart)
+  const whyNoteRef = useRef<string | null>(null)
+  const toggleWhy = () =>
+    setWhy((on) => {
+      whyNoteRef.current = whyNote(!on)
+      return !on
+    })
+  const setup: SessionSetup = useMemo(() => ({ mode, topic, options: { ...options, ...(taught ? { strategy: taught } : {}), ...(whyAtStart ? { why: true } : {}) } }), [mode, topic, options, taught, whyAtStart])
   const setupRef = useRef(setup)
   setupRef.current = setup
   // The approach right now: changes when you ask for another mid-lesson
@@ -167,8 +178,10 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         // A placement check ends after its last question, whether or not the tutor counts
         setupRef.current.options?.placement ? placementNote(history.filter((t) => t.role === 'user').length - 1) : null,
         mode === 'teach' || (mode === 'quiz' && !setupRef.current.options?.placement) ? paceNote(history, content) : null,
+        whyNoteRef.current,
         mode === 'teach' && history.length > 2 && repliesWithoutNote(history.filter((t) => t.role === 'assistant').map((t) => t.content)) >= 2 ? NOTES_NUDGE : null
       ].filter((n): n is string => !!n)
+      if (notes.includes(whyNoteRef.current ?? '')) whyNoteRef.current = null
       const stored = notes.length ? `${content}\n\n${notes.join('\n')}` : content
       const next = [...history, { role: 'user' as const, content: stored }, { role: 'assistant' as const, content: '' }]
       setTurns(next)
@@ -756,6 +769,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             >
               <Icon name="note" />
               <span>Notes</span>
+            </button>
+          )}
+          {mode === 'teach' && (
+            <button className={`tool-btn${why ? ' on' : ''}`} aria-pressed={why} onClick={toggleWhy} title={why ? 'Why mode: teaching the reasons behind each idea, Socratically. Click for plain explanations.' : 'Why mode: have the tutor lead you to why each idea is so, from first principles'}>
+              <Icon name="sparkle" />
+              <span>Why</span>
             </button>
           )}
           {mode === 'teach' && approach && (
