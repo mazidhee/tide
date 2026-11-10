@@ -603,6 +603,10 @@ export interface TideApi {
     drills(): Promise<import('./drills').DrillResult[]>
   }
   /** Your goal and focus, the week planned towards them, and the learner profile */
+  /** Free readings found for a topic; when there are none yet, they're looked up in the background */
+  readings: {
+    for(topic: string, notebook?: string): Promise<import('./readings').Reading[]>
+  }
   /** Your roadmaps sorted against your aims (main/curriculum) */
   curriculum: {
     status(): Promise<{ notebooks: import('../main/curriculum').SortStatus[]; error: string }>

@@ -8,6 +8,7 @@ import { Thinking } from './Thinking'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
 import { paceNote } from '@shared/pace'
+import type { Reading } from '@shared/readings'
 import { MODE_LABEL, NOTES_NUDGE, ownWords, openingMessage, withPassage, parseBlocks, repliesWithoutNote, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
 import { cardsToMarkdown } from '@shared/cards'
@@ -292,6 +293,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const withNotes = mode === 'teach' && notesOpen
   // Where this is covered in books you own, to read alongside the lesson
   const [toRead, setToRead] = useState<ReadingSuggestion[]>([])
+  // Free readings found for the topic (papers, specs, docs), saved PDFs open in Tide
+  const [found, setFound] = useState<Reading[]>([])
+  useEffect(() => {
+    if (mode !== 'teach') return
+    window.tide.readings.for(topic, scope.kind === 'folder' ? scope.path : undefined).then(setFound).catch(() => {})
+  }, [mode, topic, scope.kind])
   useEffect(() => {
     if (mode !== 'teach' || scope.kind === 'pages') return
     window.tide.books.suggest(topic, 2).then(setToRead).catch(() => {})
@@ -741,13 +748,19 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       <div className={withNotes ? 'session-split' : 'session-solo'}>
       <div className="doc-scroll session-scroll">
         <div className="session-column">
-          {toRead.length > 0 && (
+          {(toRead.length > 0 || found.length > 0) && (
             <div className="s-read" aria-label="Read alongside">
               <Icon name="book" size={13} />
               <span className="muted">Read</span>
               {toRead.map((r) => (
                 <button key={`${r.path}:${r.from}`} className="s-read-link" onClick={() => app.openPath(r.path, `page=${r.from}`)} title={r.about ?? readingLabel(r)}>
                   {readingLabel(r)}
+                </button>
+              ))}
+              {found.slice(0, 4).map((r) => (
+                <button key={r.url} className="s-read-link" onClick={() => (r.path ? app.openPath(r.path) : window.tide.app.openExternal(r.url))} title={[r.by, r.why].filter(Boolean).join(': ') || r.title}>
+                  {r.title}
+                  {!r.path && <Icon name="external" size={11} />}
                 </button>
               ))}
             </div>

@@ -16,6 +16,7 @@ import { readingLabel } from '@shared/books'
 import { isSorted, roadmapTopics, sectionsOf, topicsLeft } from '@shared/curriculum'
 import { balanceWeek, type Balance, type BalanceNotebook } from '@shared/balance'
 import { getOverrides, loadSorted } from './curriculum'
+import { readingsForWeek } from './readings'
 import { parseOutline, serializeOutline } from '@shared/outline'
 
 /**
@@ -253,6 +254,8 @@ export async function planWeek(date = today(), background = false): Promise<Week
   await writeText(weekFile(start), JSON.stringify(plan, null, 2))
   await writeText(WEEK_NOTE, weekMarkdown(plan))
   brainEvent({ kind: 'week', label: `Planned your week: ${plan.days.reduce((n, d) => n + d.items.filter((i) => i.kind === 'learn').length, 0)} topics to learn` })
+  // Free readings for the week's lessons, found in the background and added as they come
+  readingsForWeek(getWeek, savePlan, start).catch(() => {})
   return plan
 }
 

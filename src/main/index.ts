@@ -54,6 +54,7 @@ import { adjustPlan, auditRoadmap, planReadings, planToThings, sizePlan, syncFro
 import type { StudyPlan } from '@shared/plan'
 import { dayTasks, setTaskDone, thingsStatus } from './things'
 import { mapBook, mapNewBooks, pagesToRead } from './books'
+import { findReadings, readingsFor } from './readings'
 import { curriculumStatus, curriculumView, setOverride, sortError, sortRoadmaps } from './curriculum'
 import { aimsKey, aimsOf } from '@shared/coach'
 import type { SectionClass } from '@shared/curriculum'
@@ -265,6 +266,12 @@ function registerIpc() {
     // New or reworded aims: sort the roadmaps again, in the background
     if (aimsKey(aimsOf(saved)) !== before) sortRoadmaps().catch(() => {})
     return saved
+  })
+  handle('readings:for', async (topic: string, notebook?: string) => {
+    const have = await readingsFor(topic)
+    // Nothing yet: look it up in the background, for next time
+    if (!have.length) findReadings({ topic, notebook }).catch(() => {})
+    return have
   })
   handle('curriculum:status', async () => ({ notebooks: await curriculumStatus(), error: sortError() }))
   handle('curriculum:sort', () => sortRoadmaps())

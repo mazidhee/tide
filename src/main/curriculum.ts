@@ -65,7 +65,7 @@ export async function setOverride(id: string, cls: SectionClass | null): Promise
 }
 
 /** One model answer: the cloud planning model when it may see this, else Gemma in the background lane */
-async function ask(system: string, prompt: string, onMac: boolean, signal: AbortSignal): Promise<{ text: string; model: string }> {
+export async function ask(system: string, prompt: string, onMac: boolean, signal: AbortSignal): Promise<{ text: string; model: string }> {
   if (!onMac) {
     try {
       let model = 'cloud'
