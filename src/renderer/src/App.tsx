@@ -23,6 +23,7 @@ import { ExamView } from './components/ExamView'
 import { DailyView } from './components/DailyView'
 import { useFocusCompletion } from './components/FocusTimer'
 import { CoachView } from './components/CoachView'
+import { LessonsView } from './components/LessonsView'
 import { ChatPage } from './components/ChatPage'
 import { NewTopicView } from './components/NewTopicView'
 import { PracticeView } from './components/PracticeView'
@@ -360,6 +361,7 @@ export default function App() {
   else if (view.kind === 'chat') main = <ChatPage id={view.id} />
   else if (view.kind === 'lab') main = <LabView key={`${view.terminal}:${view.topic ?? ''}:${view.nonce ?? ''}`} kind={view.terminal} topic={view.topic} />
   else if (view.kind === 'coach') main = <CoachView />
+  else if (view.kind === 'lessons') main = <LessonsView />
   else if (view.kind === 'wrapup') main = <WrapUpView />
   else if (view.kind === 'weekly') main = <WeeklyView />
   else if (view.kind === 'drill') main = <DrillView key={`${view.drill}:${view.nonce ?? ''}`} kind={view.drill} />

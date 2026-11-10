@@ -12,7 +12,8 @@ export type View =
   | { kind: 'study'; scope: ChatScope }
   | { kind: 'daily'; nonce?: number }
   | { kind: 'quiz'; scope: ChatScope }
-  | { kind: 'session'; mode: SessionMode; scope: ChatScope; topic: string; options?: SessionSetup['options']; nonce?: number; turns?: { role: 'user' | 'assistant'; content: string }[] }
+  | { kind: 'session'; mode: SessionMode; scope: ChatScope; topic: string; options?: SessionSetup['options']; nonce?: number; turns?: { role: 'user' | 'assistant'; content: string }[]; /** Carrying on a past lesson: kept under the same record */ lesson?: string }
+  | { kind: 'lessons' }
   | { kind: 'learn' }
   | { kind: 'practice' }
   | { kind: 'new-topic'; topic?: string; goal?: string; auto?: boolean; nonce?: number }

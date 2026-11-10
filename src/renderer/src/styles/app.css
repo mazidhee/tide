@@ -15459,6 +15459,69 @@ button.tl-dot:focus-visible {
   line-height: 1.5;
 }
 
+/* Past lessons */
+.lessons-search {
+  align-self: flex-end;
+}
+
+.lessons-day {
+  margin-top: 28px;
+}
+
+.lessons-day h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.lessons-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.lessons-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.lessons-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 6px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-s);
+}
+
+.lessons-main:hover {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+.lessons-topic {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.lessons-preview {
+  font-size: 13px;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* While the model is working, shimmering text holds still: repainting it every frame takes GPU
    time from Gemma (lib/motion.ts). The pulse and spinner stay, they're cheap. */
 :root[data-model-busy] .thinking-text,

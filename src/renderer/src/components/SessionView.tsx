@@ -11,7 +11,7 @@ import { paceNote } from '@shared/pace'
 import { parsePlacement, placementNote } from '@shared/placement'
 import type { Reading } from '@shared/readings'
 import { whyByDefault } from '../lib/agenda'
-import { MODE_LABEL, NOTES_NUDGE, whyNote, ownWords, openingMessage, withPassage, parseBlocks, repliesWithoutNote, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
+import { MODE_LABEL, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
 import { cardsToMarkdown } from '@shared/cards'
 import { fileTitle, useApp, pagesLabel } from '../state'
@@ -23,7 +23,7 @@ import { InterviewClock, useInterviewClock } from './InterviewClock'
 import { LessonNotes } from './LessonNotes'
 import { finishAgendaItem } from '../lib/agenda'
 import { useStudying } from '../lib/studying'
-import { endOngoing, followInBackground, getOngoing, keepLive, saveOngoing, sessionKey, stopFollowing } from '../lib/sessions'
+import { endOngoing, followInBackground, getOngoing, keepLesson, keepLive, saveOngoing, sessionKey, stopFollowing } from '../lib/sessions'
 import type { View } from '../state'
 import { Professor, type ProfessorPose } from './Professor'
 
@@ -179,7 +179,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         setupRef.current.options?.placement ? placementNote(history.filter((t) => t.role === 'user').length - 1) : null,
         mode === 'teach' || (mode === 'quiz' && !setupRef.current.options?.placement) ? paceNote(history, content) : null,
         whyNoteRef.current,
-        mode === 'teach' && history.length > 2 && repliesWithoutNote(history.filter((t) => t.role === 'assistant').map((t) => t.content)) >= 2 ? NOTES_NUDGE : null
+        mode === 'teach' && history.length > 2 ? notesNudge(history.filter((t) => t.role === 'assistant').map((t) => t.content), content) : null
       ].filter((n): n is string => !!n)
       if (notes.includes(whyNoteRef.current ?? '')) whyNoteRef.current = null
       const stored = notes.length ? `${content}\n\n${notes.join('\n')}` : content
@@ -301,10 +301,28 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     : undefined
   askTypeRef.current = currentAsk?.type
   const plan = parsed.flatMap((b) => b ?? []).filter((b): b is Extract<Block, { kind: 'plan' }> => b.kind === 'plan').pop()
-  // Takeaways the tutor wrote for the lesson's note (from finished replies only)
+  // Explanations you added to your notes yourself, word for word
+  const [pinned, setPinned] = useState<{ at: number; text: string }[]>([])
+  const pinnedAt = useMemo(() => new Set(pinned.map((p) => p.at)), [pinned])
+  const pinToNotes = (at: number, blocks: Block[]) => {
+    const text = blocks
+      .map((b) => (b.kind === 'text' ? b.text : b.kind === 'note' ? b.text : b.kind === 'summary' ? b.text : ''))
+      .filter(Boolean)
+      .join('\n\n')
+      .trim()
+    if (!text) return
+    // Kept as the tutor said it: a quoted block in the lesson's part of your note
+    setPinned((p) => [...p, { at, text: text.split('\n').map((l) => (l.trim() ? `> ${l}` : '>')).join('\n') }])
+    if (!notesOpen) setNotesOpen(true)
+    app.toast('Added to your notes for this lesson')
+  }
+  // Takeaways the tutor wrote for the lesson's note (from finished replies only), and what you added
   const takeaways = useMemo(
-    () => parsed.flatMap((blocks, i) => (blocks && !(busy && i === parsed.length - 1) ? blocks.filter((b): b is Extract<Block, { kind: 'note' }> => b.kind === 'note').map((b) => b.text) : [])),
-    [parsed, busy]
+    () => [
+      ...parsed.flatMap((blocks, i) => (blocks && !(busy && i === parsed.length - 1) ? blocks.filter((b): b is Extract<Block, { kind: 'note' }> => b.kind === 'note').map((b) => b.text) : [])),
+      ...pinned.map((p) => p.text)
+    ],
+    [parsed, busy, pinned]
   )
   const [notesOpen, setNotesOpen] = useState(() => localStorage.getItem('tide.lesson.notes') !== 'closed')
   const withNotes = mode === 'teach' && notesOpen
@@ -355,7 +373,10 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turns.length, busy, finished, ongoingKey])
   useEffect(() => {
-    if (finished && ongoingKey) endOngoing(ongoingKey)
+    if (!finished || !ongoingKey) return
+    // Finished lessons stay in Past lessons, to read again
+    if (view) keepLesson(ongoingKey, view, keepRef.current.turns, true)
+    endOngoing(ongoingKey)
   }, [finished, ongoingKey])
   useEffect(
     () => () => {
@@ -853,6 +874,17 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                 {!live && t.content && (
                   <div className="s-tutor-tools">
                     <SpeakButton text={blocks.filter((b) => b.kind === 'text' || b.kind === 'ask' || b.kind === 'grade').map((b) => ('text' in b ? b.text : 'prompt' in b ? b.prompt : '')).join('. ')} />
+                    {mode === 'teach' && (
+                      <button
+                        className={`icon-btn small${pinnedAt.has(i) ? ' on' : ''}`}
+                        title={pinnedAt.has(i) ? 'In your notes' : 'Add this explanation to your notes, as it is'}
+                        aria-label="Add to notes"
+                        disabled={pinnedAt.has(i)}
+                        onClick={() => pinToNotes(i, blocks)}
+                      >
+                        <Icon name={pinnedAt.has(i) ? 'check' : 'note'} size={13} />
+                      </button>
+                    )}
                   </div>
                 )}
                 {!!t.steps?.length && (

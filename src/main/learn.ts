@@ -552,7 +552,8 @@ export async function studyEvents(): Promise<StudyEvent[]> {
   }
   // Notes you wrote in, not outlines you ticked or pages you saved
   for (const n of notes) {
-    if (n.mtime >= since && !outlines.has(n.path) && !n.path.startsWith(library) && !n.path.startsWith('.')) events.push({ at: n.mtime, kind: 'note', title: n.title, path: n.path })
+    // Lesson pages are written by Tide as a lesson goes, not by you
+    if (n.mtime >= since && !outlines.has(n.path) && !n.path.startsWith(library) && !n.path.startsWith('.') && !(n.path.startsWith('Lessons/') && /^\d{4}-\d{2}-\d{2} /.test(n.path.slice(8)))) events.push({ at: n.mtime, kind: 'note', title: n.title, path: n.path })
   }
   for (const f of await readJsonl<{ start: number; end: number; minutes: number; label?: string; path?: string }>(FOCUS_LOG)) {
     if (f.end >= since && f.minutes > 0) events.push({ at: f.end, kind: 'focus', title: f.label ?? '', path: f.path, minutes: f.minutes })
