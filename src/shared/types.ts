@@ -46,7 +46,7 @@ export interface Settings {
   ai: AISettings
   /** How the tutor sounds: Tide's natural voice (Kokoro, set up in Settings) or the Mac's own */
   /** custom: a Kokoro voice that replaces the character's; dictation: who writes out what you say */
-  voice?: { engine: 'natural' | 'system'; name: string; speed: number; custom?: string; dictation?: 'tide' | 'handy' }
+  voice?: { engine: 'natural' | 'system'; name: string; speed: number; custom?: string; dictation?: 'tide' | 'handy' | 'deepgram' }
   /** Who the tutor is: the character's face, voice and way of talking */
   character?: import('./characters').CharacterId
   /** Breaks while you study: paced by the tutor, a fixed rhythm, or none */
@@ -689,7 +689,11 @@ export interface TideApi {
     status(): Promise<{ ready: boolean; detail: string }>
     setup(): Promise<{ ready: boolean; detail: string }>
     speak(text: string, voice?: string, speed?: number): Promise<Uint8Array>
-    transcribe(wav: Uint8Array): Promise<string>
+    /** where: the lesson's note and topic, so a private project's answers stay on this Mac */
+    transcribe(wav: Uint8Array, where?: { path?: string; topic?: string }): Promise<string>
+    hasDeepgram(): Promise<boolean>
+    /** Checks the key with Deepgram, then keeps it in the Keychain (null forgets it) */
+    saveDeepgram(key: string | null): Promise<void>
     warm(stt: boolean): Promise<void>
     onProgress(cb: (step: string) => void): () => void
   }

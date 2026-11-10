@@ -164,6 +164,8 @@ const api: TideApi = {
     setup: invoke('voice:setup'),
     speak: invoke('voice:speak'),
     transcribe: invoke('voice:transcribe'),
+    hasDeepgram: invoke('voice:hasDeepgram'),
+    saveDeepgram: invoke('voice:saveDeepgram'),
     warm: invoke('voice:warm'),
     onProgress: (cb: (step: string) => void) => subscribe<string>('voice:progress', cb)
   },

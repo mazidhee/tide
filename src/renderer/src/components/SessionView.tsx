@@ -96,6 +96,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // At zero the interviewer is told to stop and score, as in a real round
   const clock = useInterviewClock(timed, () => sendRef.current("[time] Time's up. Stop here and give me the scorecard and verdict.", turnsRef.current))
   const sourcePath = scope.kind === 'note' || scope.kind === 'pages' ? scope.path : undefined
+  // Dictation: a private project's answers stay on this Mac; the topic helps it spell the jargon
+  const heardIn = useMemo(() => ({ path: 'path' in scope ? scope.path : undefined, topic }), [JSON.stringify(scope), topic])
   const env = { notePath: sourcePath ?? '', filesByName: app.filesByName }
 
   useEffect(
@@ -295,7 +297,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
 
   // Talk: the tutor speaks each reply as it writes it, and you answer by voice (or hands-free)
   const lastTurn = turns[turns.length - 1]
-  const voice = useTalk(lastTurn?.role === 'assistant' && turns.length > 1 ? { key: String(turns.length - 1), content: lastTurn.content, streaming: busy } : null, (said) => answerRef2.current(said))
+  const voice = useTalk(lastTurn?.role === 'assistant' && turns.length > 1 ? { key: String(turns.length - 1), content: lastTurn.content, streaming: busy } : null, (said) => answerRef2.current(said), heardIn)
   const talk = voice.talk
   talkRef.current = talk
   const stopTalking = voice.stop
@@ -839,6 +841,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     <DictateButton
                       target={answerRef}
                       onStart={stopTalking}
+                      where={heardIn}
                       onText={talk ? (said) => send(`Answer: ${said}`, turns) : undefined}
                     />
                   )}

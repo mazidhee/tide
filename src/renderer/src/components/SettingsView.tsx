@@ -507,14 +507,67 @@ function TutorSection() {
           <Toggle label="Use the Mac’s own voice" on={prefs.engine === 'system'} onChange={(on) => save({ engine: on ? 'system' : 'natural' })} />
         </Row>
         <VoicePicker prefs={prefs} own={characterById(app.settings.character).voice} ready={ready && prefs.engine !== 'system'} save={save} hear={hear} />
-        <Row label="Dictation" hint={prefs.dictation === 'handy' ? 'Speak puts the cursor in the box; press your Handy shortcut and Handy types what you say. Hands-free talk still uses Tide’s model.' : 'Speak records you and Tide writes it out on this Mac (Parakeet).'}>
-          <Select label="Dictation" value={prefs.dictation ?? 'tide'} onChange={(v) => save({ dictation: v as 'tide' | 'handy' })} options={[{ value: 'tide', label: 'Tide (Parakeet)' }, { value: 'handy', label: 'Handy' }]} />
+        <Row label="Dictation" hint={DICTATION_HINT[prefs.dictation ?? 'tide']}>
+          <Select label="Dictation" value={prefs.dictation ?? 'tide'} onChange={(v) => save({ dictation: v as 'tide' | 'handy' | 'deepgram' })} options={[{ value: 'tide', label: 'Tide (Parakeet)' }, { value: 'deepgram', label: 'Deepgram (Nova-3)' }, { value: 'handy', label: 'Handy' }]} />
         </Row>
+        {prefs.dictation === 'deepgram' && <DeepgramKey />}
         <Row label="Speed">
           <Select label="Speed" value={prefs.speed} onChange={(v) => save({ speed: v })} options={[0.85, 0.95, 1, 1.1, 1.2, 1.35].map((v) => ({ value: v, label: v === 1 ? 'Normal' : `${v}×` }))} />
         </Row>
       </Group>
     </>
+  )
+}
+
+const DICTATION_HINT = {
+  tide: 'Speak records you and Tide writes it out on this Mac (Parakeet).',
+  deepgram: 'Deepgram writes out what you say, with the lesson’s topic as a hint for its jargon. Private projects and Metabase lessons still use Parakeet on this Mac, as does anything Deepgram can’t take.',
+  handy: 'Speak puts the cursor in the box; press your Handy shortcut and Handy types what you say. Hands-free talk still uses Tide’s model.'
+}
+
+/** The Deepgram key: checked with Deepgram, then kept in the Keychain */
+function DeepgramKey() {
+  const [saved, setSaved] = useState<boolean | null>(null)
+  const [draft, setDraft] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    window.tide.voice.hasDeepgram().then(setSaved).catch(() => setSaved(false))
+  }, [])
+  const store = async (key: string | null) => {
+    setBusy(true)
+    setError('')
+    try {
+      await window.tide.voice.saveDeepgram(key)
+      setSaved(!!key)
+      setDraft('')
+    } catch (e) {
+      setError((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+    } finally {
+      setBusy(false)
+    }
+  }
+  if (saved === null) return null
+  return (
+    <Row label="Deepgram key" hint={error ? <span className="set-error">{error}</span> : 'Make one at console.deepgram.com. Kept in your Keychain.'}>
+      {saved ? (
+        <span className="set-inline">
+          <span className="key-mask" aria-hidden="true">
+            ••••••••
+          </span>
+          <button className="btn small ghost" disabled={busy} onClick={() => store(null)}>
+            Remove
+          </button>
+        </span>
+      ) : (
+        <span className="set-inline">
+          <input className="set-input" type="password" placeholder="Paste your key" value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && draft.trim() && store(draft)} aria-label="Deepgram key" />
+          <button className="btn small primary" disabled={!draft.trim() || busy} onClick={() => store(draft)}>
+            {busy ? 'Checking…' : 'Save'}
+          </button>
+        </span>
+      )}
+    </Row>
   )
 }
 
