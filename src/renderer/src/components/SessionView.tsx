@@ -10,6 +10,7 @@ import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict
 import { paceNote } from '@shared/pace'
 import { withSources, type SourcePack } from '@shared/sources'
 import { parsePlacement, placementNote } from '@shared/placement'
+import { correctionText } from '@shared/lessonCheck'
 import type { Reading } from '@shared/readings'
 import { whyByDefault } from '../lib/agenda'
 import { MODE_LABEL, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
@@ -162,6 +163,19 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // What the tutor last asked, and which model you chose: a worked answer to a problem can go to the cloud model
   const askTypeRef = useRef<string | undefined>(undefined)
   const [engine, setEngine] = useState<'auto' | 'local' | 'cloud'>('auto')
+  // A notebook set to be taught by the cloud model starts its lessons that way (you can still switch)
+  useEffect(() => {
+    const where = 'path' in scope ? scope.path : ''
+    if (!where) return
+    window.tide.learn
+      .notebooks()
+      .then((nbs) => {
+        const nb = nbs.find((n) => where === n.path || where.startsWith(`${n.path}/`))
+        if (nb?.tutor === 'cloud') setEngine((e) => (e === 'auto' ? 'cloud' : e))
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const engineRef = useRef(engine)
   engineRef.current = engine
   const send = useCallback(
@@ -312,6 +326,36 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     : undefined
   askTypeRef.current = currentAsk?.type
   const plan = parsed.flatMap((b) => b ?? []).filter((b): b is Extract<Block, { kind: 'plan' }> => b.kind === 'plan').pop()
+  // You doubted a reply: the stronger model checks it against the sources; a correction is added to it
+  const [challenged, setChallenged] = useState<Record<number, 'checking' | 'ok' | 'flagged'>>({})
+  const [edited, setEdited] = useState(0)
+  const challenge = async (at: number) => {
+    const reply = turns[at]?.content
+    if (!reply) return
+    setChallenged((c) => ({ ...c, [at]: 'checking' }))
+    try {
+      const r = await window.tide.lessons.challenge(topic, 'path' in scope ? scope.path : undefined, reply)
+      if (r.offline) {
+        app.toast(r.offline)
+        setChallenged(({ [at]: _, ...c }) => c)
+        return
+      }
+      if (r.ok) {
+        setChallenged((c) => ({ ...c, [at]: 'ok' }))
+        app.toast(pack?.sources.length ? 'Checked against the lesson’s sources: nothing wrong found.' : 'Checked: nothing wrong found.')
+        return
+      }
+      const add = correctionText(r)
+      setTurns((ts) => ts.map((t, k) => (k === at ? { ...t, content: t.content + add } : t)))
+      setEdited((n) => n + 1)
+      setChallenged((c) => ({ ...c, [at]: 'flagged' }))
+      app.toast(r.errors.length ? 'Something in it was wrong: the correction is under it, and in your notes.' : 'Some details are worth checking: see under it.')
+    } catch {
+      setChallenged(({ [at]: _, ...c }) => c)
+      app.toast('Couldn’t check it just now.', { tone: 'error' })
+    }
+  }
+
   // Explanations you added to your notes yourself, word for word
   const [pinned, setPinned] = useState<{ at: number; text: string }[]>([])
   const pinnedAt = useMemo(() => new Set(pinned.map((p) => p.at)), [pinned])
@@ -382,7 +426,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     if (!ongoingKey || !view || k.finished || k.turns.length < 2) return
     keepLive({ key: ongoingKey, view, title: `${MODE_LABEL[mode] ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: null }, busy: k.busy })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [turns.length, busy, finished, ongoingKey])
+  }, [turns.length, busy, finished, ongoingKey, edited])
   useEffect(() => {
     if (!finished || !ongoingKey) return
     // Finished lessons stay in Past lessons, to read again
@@ -891,6 +935,11 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                 {!live && t.content && (
                   <div className="s-tutor-tools">
                     <SpeakButton text={blocks.filter((b) => b.kind === 'text' || b.kind === 'ask' || b.kind === 'grade').map((b) => ('text' in b ? b.text : 'prompt' in b ? b.prompt : '')).join('. ')} />
+                    {(mode === 'teach' || mode === 'quiz') && (
+                      <button className={`icon-btn small${challenged[i] === 'ok' ? ' on' : ''}`} title={challenged[i] === 'checking' ? 'Checking…' : challenged[i] === 'ok' ? 'Checked: nothing wrong found' : 'Doubt this? Have the stronger model check it against the sources'} aria-label="Check this" disabled={!!challenged[i] || busy} onClick={() => challenge(i)}>
+                        {challenged[i] === 'checking' ? <span className="spinner" /> : <Icon name={challenged[i] === 'ok' ? 'check' : 'search'} size={13} />}
+                      </button>
+                    )}
                     {mode === 'teach' && (
                       <button
                         className={`icon-btn small${pinnedAt.has(i) ? ' on' : ''}`}

@@ -131,7 +131,8 @@ const api: TideApi = {
   lessons: {
     save: invoke('lessons:save'),
     list: invoke('lessons:list'),
-    get: invoke('lessons:get')
+    get: invoke('lessons:get'),
+    challenge: invoke('lessons:challenge')
   },
   readings: {
     for: invoke('readings:for')

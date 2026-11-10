@@ -120,6 +120,15 @@ export function NotebookView({ path }: { path: string }) {
       items: [
         { label: meta?.project ? 'Project settings' : 'Make it a project…', run: () => setTab('project') },
         {
+          // For a subject the local model gets wrong too often: the cloud model teaches all of it (within its free allowance)
+          label: meta?.tutor === 'cloud' ? 'Let Tide choose who teaches it' : 'Have the cloud model teach it',
+          run: async () => {
+            await window.tide.learn.updateNotebook(path, { tutor: meta?.tutor === 'cloud' ? 'auto' : 'cloud' })
+            app.toast(meta?.tutor === 'cloud' ? `Tide chooses who teaches ${folder?.name ?? 'this notebook'} again.` : `The cloud model teaches ${folder?.name ?? 'this notebook'}'s lessons from now on.`)
+            load()
+          }
+        },
+        {
           label: 'Choose cover image…',
           run: async () => {
             if (await window.tide.learn.chooseCover(path)) load()

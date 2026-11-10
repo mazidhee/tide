@@ -1,0 +1,447 @@
+[
+ {
+  "id": "raft-majority",
+  "area": "distributed",
+  "source": "Raft (algorithm)",
+  "question": "In Raft, how many servers must have an entry before the leader can treat it as committed, in a cluster of 5?",
+  "must": [
+   "\\b3\\b|three|majority"
+  ],
+  "mustNot": [
+   "\\ball (5|five)\\b"
+  ]
+ },
+ {
+  "id": "raft-election",
+  "area": "distributed",
+  "source": "Raft (algorithm)",
+  "question": "In Raft, what makes a follower start an election?",
+  "must": [
+   "timeout|time out|timed out"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "raft-term",
+  "area": "distributed",
+  "source": "Raft (algorithm)",
+  "question": "In Raft, can there be two leaders in the same term? Answer yes or no and why.",
+  "must": [
+   "\\bno\\b|at most one|only one"
+  ],
+  "mustNot": [
+   "\\byes, (two|there can)"
+  ]
+ },
+ {
+  "id": "paxos-roles",
+  "area": "distributed",
+  "source": "Paxos (computer science)",
+  "question": "Name the three roles in classic Paxos.",
+  "must": [
+   "propos",
+   "accept",
+   "learn"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "flp",
+  "area": "distributed",
+  "source": "Consensus (computer science)",
+  "question": "What does the FLP impossibility result say about consensus?",
+  "must": [
+   "asynchronous",
+   "(one|single|even one)[^.]{0,40}(fail|crash|faulty)|crash failure|faulty process"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "bft-bound",
+  "area": "distributed",
+  "source": "Byzantine fault",
+  "question": "How many nodes does a Byzantine fault tolerant system need to tolerate f Byzantine faults?",
+  "must": [
+   "3f ?\\+ ?1|3 ?f ?\\+ ?1"
+  ],
+  "mustNot": [
+   "2f ?\\+ ?1 (nodes|replicas) (are|is) (enough|sufficient)"
+  ]
+ },
+ {
+  "id": "crash-bound",
+  "area": "distributed",
+  "source": "Paxos (computer science)",
+  "question": "How many replicas does a crash-fault tolerant consensus protocol like Raft or Paxos need to tolerate f crashed nodes?",
+  "must": [
+   "2f ?\\+ ?1"
+  ],
+  "mustNot": [
+   "3f ?\\+ ?1 (replicas|nodes) (are )?(needed|required)"
+  ]
+ },
+ {
+  "id": "cap",
+  "area": "distributed",
+  "source": "CAP theorem",
+  "question": "Under a network partition, what does the CAP theorem say a system must choose between?",
+  "must": [
+   "consisten",
+   "availab"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "lamport",
+  "area": "distributed",
+  "source": "Lamport timestamp",
+  "question": "If event a happened before event b, what do Lamport clocks guarantee about their timestamps? And does the converse hold?",
+  "must": [
+   "L\\(a\\) ?< ?L\\(b\\)|C\\(a\\) ?< ?C\\(b\\)|smaller|less than|lower",
+   "not|doesn.t|does not|no\\b"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "vector",
+  "area": "distributed",
+  "source": "Vector clock",
+  "question": "What can vector clocks detect that Lamport clocks cannot?",
+  "must": [
+   "concurren"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "quorum",
+  "area": "distributed",
+  "source": "Quorum (distributed computing)",
+  "question": "In a replicated store with N replicas, read quorum R and write quorum W, what condition makes every read see the latest write?",
+  "must": [
+   "R ?\\+ ?W ?> ?N|W ?\\+ ?R ?> ?N"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "2pc-block",
+  "area": "distributed",
+  "source": "Two-phase commit protocol",
+  "question": "What is the main weakness of two-phase commit if the coordinator crashes after participants vote yes?",
+  "must": [
+   "block"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "linearizable",
+  "area": "distributed",
+  "source": "Linearizability",
+  "question": "Which is a stronger guarantee for single operations on a single object: linearizability or eventual consistency?",
+  "must": [
+   "lineariz"
+  ],
+  "mustNot": [
+   "eventual consistency is stronger"
+  ]
+ },
+ {
+  "id": "consistent-hash",
+  "area": "distributed",
+  "source": "Consistent hashing",
+  "question": "Why use consistent hashing instead of hash mod N to place keys on N servers?",
+  "must": [
+   "(only|few|small|fraction)[^.]{0,60}(keys|data)[^.]{0,30}(move|remap|reassign|relocat)|(move|remap|reassign|relocat)\\w*[^.]{0,30}(only|few|small|fraction)|minimi[sz]e[^.]{0,40}(remap|movement|reshuffl)"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "lsm",
+  "area": "distributed",
+  "source": "Log-structured merge-tree",
+  "question": "Are LSM trees optimised more for writes or for reads, compared with B-trees?",
+  "must": [
+   "write"
+  ],
+  "mustNot": [
+   "optimi[sz]ed (more )?for reads"
+  ]
+ },
+ {
+  "id": "kafka-order",
+  "area": "distributed",
+  "source": "Apache Kafka",
+  "question": "Does Kafka guarantee message order across a whole topic or within a partition?",
+  "must": [
+   "partition"
+  ],
+  "mustNot": [
+   "(keeps|guarantees|maintains|preserves)[^.]{0,20}order[^.]{0,20}across (the )?(whole|entire) topic"
+  ]
+ },
+ {
+  "id": "btc-block",
+  "area": "blockchain",
+  "source": "Bitcoin",
+  "question": "What is Bitcoin's target average time between blocks?",
+  "must": [
+   "10 ?min|ten min"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "btc-retarget",
+  "area": "blockchain",
+  "source": "Bitcoin network",
+  "question": "How often does Bitcoin adjust its mining difficulty, in blocks?",
+  "must": [
+   "2,?016"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "btc-utxo",
+  "area": "blockchain",
+  "source": "Unspent transaction output",
+  "question": "Does Bitcoin use an account model or a UTXO model to track balances?",
+  "must": [
+   "UTXO|unspent"
+  ],
+  "mustNot": [
+   "bitcoin uses (an |the )?account (model|based)"
+  ]
+ },
+ {
+  "id": "btc-hash",
+  "area": "blockchain",
+  "source": "Bitcoin",
+  "question": "Which hash function does Bitcoin's proof of work use?",
+  "must": [
+   "SHA-?256"
+  ],
+  "mustNot": [
+   "keccak|scrypt"
+  ]
+ },
+ {
+  "id": "btc-curve",
+  "area": "blockchain",
+  "source": "Elliptic Curve Digital Signature Algorithm",
+  "question": "Which elliptic curve do Bitcoin and Ethereum use for transaction signatures?",
+  "must": [
+   "secp256k1"
+  ],
+  "mustNot": [
+   "ed25519 for (bitcoin|ethereum)|curve25519"
+  ]
+ },
+ {
+  "id": "eth-pos",
+  "area": "blockchain",
+  "source": "Ethereum",
+  "question": "Is Ethereum secured by proof of work or proof of stake today, and since when?",
+  "must": [
+   "proof[- ]of[- ]stake|\\bPoS\\b",
+   "2022|merge"
+  ],
+  "mustNot": [
+   "still (uses )?proof[- ]of[- ]work"
+  ]
+ },
+ {
+  "id": "eth-slot",
+  "area": "blockchain",
+  "source": "Ethereum",
+  "question": "How long is a slot on Ethereum's proof-of-stake chain, and how many slots are in an epoch?",
+  "must": [
+   "12 ?s|12 seconds|twelve seconds",
+   "\\b32\\b"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "eth-hash",
+  "area": "blockchain",
+  "source": "SHA-3",
+  "question": "Which hash function does Ethereum use for addresses and most hashing in the EVM?",
+  "must": [
+   "keccak"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "eth-1559",
+  "area": "blockchain",
+  "source": "Ethereum",
+  "question": "Under EIP-1559, what happens to the base fee paid with each transaction?",
+  "must": [
+   "burn"
+  ],
+  "mustNot": [
+   "base fee (goes|is paid) to the (miner|validator|proposer)"
+  ]
+ },
+ {
+  "id": "eth-gas",
+  "area": "blockchain",
+  "source": "Ethereum",
+  "question": "What is gas in Ethereum, in one sentence?",
+  "must": [
+   "computation|computational|execution|work|operation"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "sol-poh",
+  "area": "blockchain",
+  "source": "Solana (blockchain platform)",
+  "question": "What is Proof of History in Solana: a consensus mechanism on its own, or a way of ordering and timestamping events?",
+  "must": [
+   "clock|order|timestamp|sequence|time"
+  ],
+  "mustNot": [
+   "replaces? (proof of stake|consensus) (entirely|completely)"
+  ]
+ },
+ {
+  "id": "merkle",
+  "area": "blockchain",
+  "source": "Merkle tree",
+  "question": "What does a Merkle root let a light client verify, and roughly how big is the proof for one of n transactions?",
+  "must": [
+   "includ|part of|belongs|member|contain",
+   "log"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "optimistic",
+  "area": "blockchain",
+  "source": "Rollup (blockchain)",
+  "question": "How do optimistic rollups handle an invalid state transition, compared with ZK rollups?",
+  "must": [
+   "fraud|fault|challenge",
+   "validity|zero[- ]knowledge|zk"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "finality",
+  "area": "blockchain",
+  "source": "Bitcoin",
+  "question": "Is Bitcoin's finality probabilistic or deterministic?",
+  "must": [
+   "probabilistic"
+  ],
+  "mustNot": [
+   "bitcoin('s)? finality is deterministic"
+  ]
+ },
+ {
+  "id": "nonce-pow",
+  "area": "blockchain",
+  "source": "Proof of work",
+  "question": "In proof of work, what do miners vary to search for a valid block hash?",
+  "must": [
+   "nonce"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "sha-pre",
+  "area": "crypto",
+  "source": "Cryptographic hash function",
+  "question": "What is the difference between preimage resistance and collision resistance?",
+  "must": [
+   "(find|finding)[^.]{0,40}(input|message)[^.]{0,40}(given|that) (hash|output|digest)|given (a |the )?(hash|output|digest)",
+   "(two|pair|any two)[^.]{0,40}(input|message)[^.]{0,40}same (hash|output|digest)"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "ecdsa-nonce",
+  "area": "crypto",
+  "source": "Elliptic Curve Digital Signature Algorithm",
+  "question": "What happens if ECDSA signatures reuse the same nonce k for two different messages?",
+  "must": [
+   "private key|secret key"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "aes",
+  "area": "crypto",
+  "source": "Advanced Encryption Standard",
+  "question": "Is AES a symmetric or an asymmetric cipher, and what is its block size?",
+  "must": [
+   "symmetric",
+   "128"
+  ],
+  "mustNot": [
+   "aes is (an )?asymmetric"
+  ]
+ },
+ {
+  "id": "tls13",
+  "area": "crypto",
+  "source": "Transport Layer Security",
+  "question": "Which key exchange does TLS 1.3 require for forward secrecy: RSA key transport or (EC)DHE?",
+  "must": [
+   "DHE|Diffie"
+  ],
+  "mustNot": [
+   "tls 1\\.3 (uses|supports) rsa key (transport|exchange)"
+  ]
+ },
+ {
+  "id": "idempotency",
+  "area": "payments",
+  "source": "Idempotence",
+  "question": "Why do payment APIs ask clients to send an idempotency key with each request?",
+  "must": [
+   "(retry|retries|repeat|twice|duplicate|double)"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "double-entry",
+  "area": "payments",
+  "source": "Double-entry bookkeeping",
+  "question": "In double-entry bookkeeping, what must be true of every transaction's debits and credits?",
+  "must": [
+   "equal|balance|sum to zero|net to zero"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "iso8583",
+  "area": "payments",
+  "source": "ISO 8583",
+  "question": "What is ISO 8583 used for?",
+  "must": [
+   "card"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "iso20022",
+  "area": "payments",
+  "source": "ISO 20022",
+  "question": "What kind of standard is ISO 20022, and what format are its messages usually in?",
+  "must": [
+   "messag",
+   "XML"
+  ],
+  "mustNot": []
+ },
+ {
+  "id": "auth-capture",
+  "area": "payments",
+  "source": "Authorization hold",
+  "question": "In card payments, what is the difference between authorisation and capture?",
+  "must": [
+   "hold|reserv|approv",
+   "(settle|transfer|move|collect|take)[^.]{0,30}(funds|money)|actual(ly)? (charg|transfer)"
+  ],
+  "mustNot": []
+ }
+]

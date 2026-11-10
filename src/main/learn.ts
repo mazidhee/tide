@@ -108,6 +108,7 @@ export async function getNotebooks(): Promise<NotebookMeta[]> {
         cover: stored[folder.path]?.cover,
         color: stored[folder.path]?.color,
         description: stored[folder.path]?.description,
+        tutor: stored[folder.path]?.tutor,
         outline: stored[folder.path]?.outline,
         ...(stored[folder.path]?.project ? { project: stored[folder.path]!.project } : {})
       }
@@ -130,7 +131,7 @@ function isNotebook(tree: Awaited<ReturnType<typeof getTree>>, path: string, out
   return !files.every((f) => outlines.has(f.path))
 }
 
-export async function updateNotebook(path: string, patch: Partial<Pick<NotebookMeta, 'cover' | 'color' | 'description' | 'outline' | 'project'>>) {
+export async function updateNotebook(path: string, patch: Partial<Pick<NotebookMeta, 'cover' | 'color' | 'description' | 'outline' | 'project' | 'tutor'>>) {
   await updateJson<Record<string, Partial<NotebookMeta>>>(NOTEBOOKS_FILE, {}, (stored) => ({ ...stored, [path]: { ...stored[path], ...patch } }))
 }
 

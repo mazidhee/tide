@@ -1,4 +1,4 @@
-import { checksOf, claimsPrompt, makesClaims, parseClaimCheck, CLAIMS_SYSTEM, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, solutionOf, solvePrompt, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
+import { checksOf, claimsPrompt, makesClaims, parseClaimCheck, CLAIMS_SYSTEM, type ClaimCheck, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, solutionOf, solvePrompt, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
 import type { RequestKind } from '@shared/providers'
 import { aboutMetabase } from '@shared/metabase'
 import { ownWords, posedProblem, repeatsEarlier } from '@shared/session'
@@ -192,3 +192,21 @@ export async function checkLessonReply(
   return finish()
 }
 
+
+/**
+ * You challenged something the tutor said: the cloud model checks that one reply, carefully,
+ * against the lesson's sources. Never for a private project or anything about your Metabase.
+ */
+export async function challengeReply(topic: string, where: string | undefined, reply: string): Promise<ClaimCheck & { offline?: string }> {
+  if (where && (await privatePath(where).catch(() => true))) return { ok: true, errors: [], unsure: [], offline: 'This lesson is in a private project, so it stays on your Mac and isn’t sent to be checked.' }
+  if (metabaseReady() && aboutMetabase(`${topic}\n${reply}`, metabaseHost())) return { ok: true, errors: [], unsure: [], offline: 'This is about your Metabase, so it stays on your Mac.' }
+  const { askCloud, NoCloud } = await import('./ai')
+  const pack = await import('./sources').then((m) => m.packFor(topic)).catch(() => null)
+  try {
+    const out = await askCloud(claimsPrompt(topic, readable(reply), sourcesForCheck(pack)) + '\nThe student has questioned this reply: check it with extra care.', CLAIMS_SYSTEM, 'maths', AbortSignal.timeout(60_000), false, 1500)
+    return parseClaimCheck(out)
+  } catch (e) {
+    if (e instanceof NoCloud) return { ok: true, errors: [], unsure: [], offline: 'No cloud model is free to check it right now. Try again in a minute.' }
+    throw e
+  }
+}
