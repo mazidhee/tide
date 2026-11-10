@@ -54,6 +54,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const [answer, setAnswer] = useState('')
   const [code, setCode] = useState('')
   const [confidence, setConfidence] = useState<1 | 2 | 3 | null>(null)
+  // The last reply is written but its checks are still running: its mark isn't final yet
+  const [checking, setChecking] = useState(false)
   const [hintLevel, setHintLevel] = useState(0)
   const [runOut, setRunOut] = useState<RunResult | null>(null)
   const [running, setRunning] = useState(false)
@@ -116,12 +118,16 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           return next
         })
         if (e.type === 'error') setError(e.message)
-        // Written: you can answer while its checks finish (a rewrite, rarely, takes the box back)
-        if (e.type === 'replied') setBusy(false)
+        // Written: you can answer while its checks finish (corrections are added below, never in place)
+        if (e.type === 'replied') {
+          setBusy(false)
+          setChecking(true)
+        }
         if (e.type === 'reset') setBusy(true)
         if (e.type === 'done' || e.type === 'error') {
           activeId.current = null
           setBusy(false)
+          setChecking(false)
         }
       }),
     []
@@ -137,6 +143,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       const id = `session:${uid()}`
       // Answered while the last reply's checks were still running: stop them, your answer comes first
       if (activeId.current) window.tide.ai.cancel(activeId.current).catch(() => {})
+      setChecking(false)
       activeId.current = id
       setBusy(true)
       setError(null)
@@ -387,13 +394,14 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     })
   }, [finished, mode, options, lastBlocks, app])
 
-  // Record each graded answer once, for mastery
+  // Record each graded answer once, for mastery: when its reply is finished, checks and all, and
+  // its last mark (a second look's correction, when there is one)
   useEffect(() => {
     parsed.forEach((blocks, i) => {
-      blocks?.forEach((b, j) => {
-        if (b.kind !== 'grade') return
-        const key = `${i}:${j}`
-        if (recorded.current.has(key) || (busy && i === parsed.length - 1)) return
+      const grades = (blocks ?? []).filter((b): b is Extract<Block, { kind: 'grade' }> => b.kind === 'grade')
+      grades.slice(-1).forEach((b) => {
+        const key = `${i}`
+        if (recorded.current.has(key) || ((busy || checking) && i === parsed.length - 1)) return
         recorded.current.add(key)
         const prevAsk = (parsed[i - 2] ?? []).filter((x) => x.kind === 'ask').pop() as Extract<Block, { kind: 'ask' }> | undefined
         const conf = turns[i - 1]?.content.match(/\(Confidence: (guessing|unsure|sure)\)/i)?.[1]?.toLowerCase()
@@ -423,7 +431,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         }
       })
     })
-  }, [parsed, busy, turns, sourcePath, topic, mode, options, scope])
+  }, [parsed, busy, checking, turns, sourcePath, topic, mode, options, scope])
 
   const changeApproach = (to: Strategy, said?: string) => {
     setApproach(to)

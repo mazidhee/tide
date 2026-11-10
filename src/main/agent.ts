@@ -24,7 +24,7 @@ import { localSampling } from './sampling'
 import { getChunks, indexReady, search } from './search'
 import { canTake, CLOUD_REPLY_TOKENS, CloudUnavailable, cloudError, estimateTokens, headersFor, noteLimits, noteSent, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
 import { escalationFor, providerInfo, type CloudTask, type RequestKind } from '@shared/providers'
-import { SESSION_FORMAT } from '@shared/session'
+import { SESSION_FORMAT, ownWords } from '@shared/session'
 import { findImages } from './images'
 import { readText, writeText } from './vault'
 import { applyCanvasOps, describeCanvas, parseCanvas, serializeCanvas } from '@shared/canvas'
@@ -1435,7 +1435,9 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
   }
 
   // Start with what the user is looking at, so simple questions about a note need no tool calls
-  const question = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? ''
+  // The student's own words: Tide's notes to the tutor (hidden, with their = signs and tags) mustn't
+  // make an answer look like worked maths, or steer the search
+  const question = ownWords(String([...req.messages].reverse().find((m) => m.role === 'user')?.content ?? ''))
   // The cloud model takes this turn if you picked it, or if it's a job set to escalate (worked maths, finding a mistake)
   const job = escalationFor(question, req.askType)
   // Anything about your Metabase stays on this Mac: its data never goes to a cloud model

@@ -29,7 +29,12 @@ export interface BankProblem {
   usedAt?: number
   /** Written for one lesson, aimed at a mistake made in it */
   forLesson?: string
+  /** The rules it was written and reviewed under (BANK_VERSION) */
+  v?: number
 }
+
+/** Problems written under older rules (maths-style questions for every topic, trivia let through) aren't used */
+export const BANK_VERSION = 2
 
 export const slugOf = (topic: string) =>
   topic
@@ -42,7 +47,9 @@ const LEVEL_WORD: Record<Level, string> = { 1: 'easy', 2: 'medium', 3: 'hard' }
 
 // Everything that never changes is here, at the start of every request, so providers that cache a
 // repeated start of a prompt reuse it; only the topic and counts (or the mistake) follow
-export const BANK_SYSTEM = `You are an expert teacher writing practice problems for a self-taught student. Every problem is well posed, has one clear answer, and tests understanding rather than recall. You solve each problem yourself before writing it down. Vary them: different situations, numbers and kinds of question (calculate, explain why, find the error, predict, compare), never the same problem twice.
+export const BANK_SYSTEM = `You are an expert teacher writing practice problems for a self-taught student. Every problem is well posed, has one clear answer, and tests understanding rather than recall. You solve each problem yourself before writing it down. Vary them: different situations, numbers and kinds of question, never the same problem twice.
+
+Fit the questions to the topic. For maths, computing and engineering: calculate, find the error, predict the output, compare approaches. For ideas, history and concepts: reasoning questions (why it was needed, what breaks without it, how it changed what people could do, explain it to someone who doesn't know it, compare two systems). Never a question that only tests a memorised fact (a date, a name, a century, a definition recited back): every question needs understanding to answer. The question is asked once, in its tag: don't repeat it in the problem.
 
 Write each problem exactly like this, and nothing else:
 
@@ -76,13 +83,18 @@ export function parseBank(out: string, topic: string, source: BankProblem['sourc
       .replace(/<solution\b[\s\S]*?<\/solution>/gi, '')
       .replace(/<check\b[\s\S]*?<\/check>/gi, '')
       .trim()
-    if (!ask || !solution || text.length < 15) continue
+    if (!ask || !solution || (text.length < 15 && ask.length < 25)) continue
     const check = checksOf(body)[0]
+    // The question asked once: not also as the last line of the problem
+    const norm = (x: string) => x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+    const lines = text.split('\n')
+    while (lines.length && norm(lines[lines.length - 1]) && norm(ask).includes(norm(lines[lines.length - 1]))) lines.pop()
+    const statement = lines.join('\n').trim()
     problems.push({
       id: `${now.toString(36)}${problems.length.toString(36)}${Math.random().toString(36).slice(2, 6)}`,
       topic,
       level,
-      text,
+      text: statement,
       ask,
       askType: (TYPES as readonly string[]).includes(type) ? type : 'problem',
       solution,
@@ -90,7 +102,8 @@ export function parseBank(out: string, topic: string, source: BankProblem['sourc
       checked: check ? false : null,
       reviewed: null,
       source,
-      createdAt: now
+      createdAt: now,
+      v: BANK_VERSION
     })
   }
   return problems
@@ -98,7 +111,7 @@ export function parseBank(out: string, topic: string, source: BankProblem['sourc
 
 /** One review for a batch: is each problem well posed, and is its solution right? */
 export function batchReviewPrompt(problems: BankProblem[]): string {
-  return `A tutor wrote these practice problems with their solutions. Check each yourself: is it well posed (everything it asks about is defined, one clear answer) and is the solution right?
+  return `A tutor wrote these practice problems with their solutions. Check each yourself: is it well posed (everything it asks about is defined, one clear answer), is the solution right, and does it test understanding? Mark it flawed if it only tests a memorised fact (a date, a name, a century, a recited definition), if it isn't actually a question, or if the solution has any error, even in passing.
 
 ${problems.map((p, i) => `#${i + 1}\nProblem: ${p.text}\nQuestion: ${p.ask}\nSolution: ${p.solution}`).join('\n\n')}
 
@@ -118,7 +131,7 @@ export function parseBatchReview(out: string, n: number): (boolean | undefined)[
 }
 
 /** Fit to put in front of a student: a check that passed or a review that passed, and nothing that failed */
-export const trusted = (p: BankProblem) => p.checked !== false && p.reviewed !== false && (p.checked === true || p.reviewed === true)
+export const trusted = (p: BankProblem) => (p.v ?? 1) >= BANK_VERSION && p.checked !== false && p.reviewed !== false && (p.checked === true || p.reviewed === true)
 
 export const levelAfter = (current: Level, dir: Direction): Level => (dir === 'harder' ? (Math.min(3, current + 1) as Level) : dir === 'easier' ? (Math.max(1, current - 1) as Level) : current)
 
@@ -163,7 +176,12 @@ const DIR_LABEL: Record<Direction, string> = { harder: 'harder', same: 'same lev
 
 /** A worked solution's steps: its lines, or its sentences when it's one paragraph */
 export function solutionSteps(solution: string): string[] {
-  const lines = solution.split(/\n+/).map((l) => l.trim()).filter(Boolean)
+  // A line that starts with "=" continues the one before it ("23 × 5" / "= 115")
+  const lines = solution
+    .replace(/\n\s*(?=[=≈])/g, ' ')
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter(Boolean)
   if (lines.length >= 3) return lines
   return solution
     .split(/(?<=[.;])\s+(?=[A-Z$\\(])|\s*→\s*/)
@@ -177,12 +195,13 @@ export function solutionSteps(solution: string): string[] {
  * learned (a worked example first, then less and less of it shown).
  */
 export function renderProblem(p: BankProblem, n: number, dir: Direction, fade = false): string {
-  const steps = fade ? solutionSteps(p.solution) : []
+  // Only working that's really worked (a calculation with a check), never an argument cut into lines
+  const steps = fade && p.askType === 'problem' && p.check ? solutionSteps(p.solution) : []
   if (steps.length >= 3) {
     const shown = steps.slice(0, -1).map((s) => `- ${s}`).join('\n')
     return `\n\n**Problem ${n} · ${DIR_LABEL[dir]}, worked for you up to the last step**\n\n${p.text}\n\nHere's how it goes:\n${shown}\n\n<solution>${p.solution}</solution>\n\n<ask type="problem">Finish it: the last step and the final answer.</ask>`
   }
-  return `\n\n**Problem ${n} · ${DIR_LABEL[dir]}**\n\n${p.text}\n\n<solution>${p.solution}</solution>\n\n<ask type="${p.askType === 'choice' ? 'short' : p.askType}">${p.ask}</ask>`
+  return `\n\n**Problem ${n} · ${DIR_LABEL[dir]}**${p.text ? `\n\n${p.text}` : ''}\n\n<solution>${p.solution}</solution>\n\n<ask type="${p.askType === 'choice' ? 'short' : p.askType}">${p.ask}</ask>`
 }
 
 /** How many numbered problems a lesson has set so far */
