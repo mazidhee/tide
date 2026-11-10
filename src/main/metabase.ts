@@ -1,6 +1,7 @@
 import { rowsTable, sqlProblem, type MbColumn } from '@shared/metabase'
 import { getKey, setKey } from './cloud'
 import { getSettings, updateSettings } from './settings'
+import { noteUse } from './connectionUse'
 
 /**
  * Your Metabase, read-only, for learning it: the tutor can search it, read dashboards, questions
@@ -28,6 +29,7 @@ const ALLOWED: [string, RegExp][] = [
 ]
 
 async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown, auth?: { url: string; key: string }): Promise<T> {
+  noteUse('metabase')
   if (!ALLOWED.some(([m, re]) => m === method && re.test(path))) throw new Error('Tide only reads from Metabase.')
   const url = auth?.url ?? metabaseUrl()
   const key = auth?.key ?? getKey(KEY)

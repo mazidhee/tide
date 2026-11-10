@@ -3,6 +3,7 @@ import { promises as fs } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 import type { DayTask } from '@shared/day'
+import { noteUse } from './connectionUse'
 
 /**
  * Things 4, the learner's to-do app, through its local HTTP API (127.0.0.1 only, bearer token from
@@ -41,6 +42,7 @@ async function config(): Promise<{ url: string; token: string } | null> {
 }
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  noteUse('things')
   const cfg = await config()
   if (!cfg) throw new Error('Things 4 isn’t set up for other apps. Turn on Settings › API in Things 4.')
   const res = await fetch(`${cfg.url}${path}`, {

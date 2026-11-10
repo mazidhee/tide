@@ -20,6 +20,7 @@ import { getSettings } from './settings'
 import { aboutMetabase } from '@shared/metabase'
 import { metabaseHost, metabaseReady } from './metabase'
 import { readText, writeText } from './vault'
+import { noteUse } from './connectionUse'
 
 const STORE = '.tide/readings.json'
 const MAX_PDF = 15_000_000
@@ -109,6 +110,7 @@ async function gather(it: { topic: string; notebook?: string; source?: string; s
 }
 
 async function wikipedia(topic: string): Promise<{ title: string; url: string } | null> {
+  noteUse('wikipedia')
   const q = new URLSearchParams({ action: 'query', list: 'search', srsearch: topic, srlimit: '3', format: 'json', origin: '*' })
   const res = await fetch(`https://en.wikipedia.org/w/api.php?${q}`, { headers: { 'User-Agent': 'Tide/0.1 (local study app)' }, signal: AbortSignal.timeout(8000) })
   if (!res.ok) return null

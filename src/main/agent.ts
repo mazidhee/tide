@@ -34,6 +34,7 @@ import { addMemory, forgetMatching, memoryPrompt } from './memory'
 import { fitHistory } from '@shared/context'
 import { historyBudget } from './chats'
 import { asksForWeb, cleanModelText, createStreamFilter, isLooping, recoverToolCalls } from '@shared/modelText'
+import { noteUse } from './connectionUse'
 
 /**
  * Tutor harness: an OpenAI-style tool loop the model drives itself. It can search and read
@@ -320,6 +321,7 @@ async function webSearchNow(query: string, opts: SearchOptions = {}): Promise<We
   const { webSearch: cfg } = getSettings().ai
   const provider = cfg?.provider ?? 'wikipedia'
   if (provider === 'off') throw new Error('Web search is turned off in Settings.')
+  noteUse(provider)
 
   if (provider === 'brave') {
     if (!cfg?.apiKey) throw new Error('Add a Brave Search API key in Settings to search the web.')

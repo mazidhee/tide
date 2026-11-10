@@ -15522,6 +15522,341 @@ button.tl-dot:focus-visible {
   white-space: nowrap;
 }
 
+/* ---------- Connections: every service Tide uses ---------- */
+.cx {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: 920px;
+}
+
+.cx-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cx-summary {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.cx-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: var(--radius-m);
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+}
+
+.cx-tile-n {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.cx-tile-label {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--ink-muted);
+}
+
+.cx-tile.warn .cx-tile-n {
+  color: var(--warn);
+}
+
+.cx-refresh {
+  position: absolute;
+  top: -34px;
+  right: 0;
+}
+
+.cx-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cx-group-title {
+  margin: 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.cx-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.cx-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px 13px 16px;
+}
+
+.cx-row + .cx-row {
+  border-top: 1px solid var(--line);
+}
+
+.cx-row.idle .cx-name,
+.cx-row.idle .cx-mark {
+  opacity: 0.6;
+}
+
+.cx-mark {
+  --tint: var(--info);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tint);
+  background: color-mix(in srgb, var(--tint) 12%, transparent);
+}
+
+.cx-mark.runs-mac {
+  --tint: var(--accent);
+}
+
+.cx-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cx-name-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.cx-name {
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.cx-runs {
+  white-space: nowrap;
+  font-size: 11.5px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: var(--ink-muted);
+  background: var(--bg-hover);
+}
+
+.cx-runs.runs-mac {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.cx-detail {
+  font-size: 13px;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cx-uses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.cx-use {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+.cx-use + .cx-use::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  margin: 0 6px 2px 2px;
+  border-radius: 50%;
+  background: var(--line-strong);
+  vertical-align: middle;
+}
+
+.cx-numbers {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 104px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cx-today {
+  color: var(--ink-soft);
+}
+
+.cx-last {
+  color: var(--ink-muted);
+}
+
+.cx-meter {
+  width: 96px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bg-active);
+  overflow: hidden;
+}
+
+.cx-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.cx-meter span.high {
+  background: var(--warn);
+}
+
+.cx-state {
+  --dot: var(--ink-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 84px;
+  font-size: 12.5px;
+  white-space: nowrap;
+  color: var(--ink-soft);
+}
+
+.cx-state i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dot);
+}
+
+.cx-state.s-connected,
+.cx-state.s-ready {
+  --dot: #2f9e5b;
+}
+
+.cx-state.s-resting {
+  --dot: var(--warn);
+}
+
+.cx-state.s-error {
+  --dot: var(--danger);
+}
+
+.cx-key {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.cx-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.cx-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: var(--radius-l);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+
+.cx-card header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cx-card header > div {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.cx-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.cx-card-for {
+  color: var(--ink-soft);
+}
+
+.cx-card-free {
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cx-card-privacy {
+  color: var(--ink-muted);
+}
+
+.cx-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.cx-card .cx-key {
+  grid-column: auto;
+}
+
+.cx-more {
+  margin: 0 4px;
+}
+
+@media (max-width: 760px) {
+  .cx-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .cx-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .cx-numbers,
+  .cx-manage {
+    display: none;
+  }
+}
+
 /* While the model is working, shimmering text holds still: repainting it every frame takes GPU
    time from Gemma (lib/motion.ts). The pulse and spinner stay, they're cheap. */
 :root[data-model-busy] .thinking-text,
