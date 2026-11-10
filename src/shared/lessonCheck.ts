@@ -141,3 +141,49 @@ export function parseSolve(out: string): { solution: string; checks: CheckCode[]
   const flaw = /^\s*FLAWED:\s*(.+)$/im.exec(out)?.[1]?.trim()
   return { solution: solutionOf(out), checks: checksOf(out), ...(flaw && !solutionOf(out) ? { flaw } : {}) }
 }
+
+// ---------- Worked examples inside explanations ----------
+
+/**
+ * An explanation with worked calculations in it (a conversion, a sum, a derivation): those aren't
+ * problems set to the student, so nothing else checks them, and a wrong example teaches the error.
+ */
+export function hasWorkedMaths(reply: string): boolean {
+  const text = readable(reply)
+  const lines = text.split('\n').filter((l) => /\d/.test(l) && /=|→|⇒|×|÷|\^|\\cdot|\\times|\bremain(ing|der)\b|\bresult is\b|\bgives\b/i.test(l))
+  return lines.length >= 2
+}
+
+export const EXAMPLE_SYSTEM = 'You check a tutor’s explanation for mathematical mistakes before a student relies on it. You are exact and brief, and you only flag real errors.'
+
+export function examplePrompt(topic: string, explanation: string): string {
+  return `Topic: ${topic}
+A tutor wrote this for a student:
+"""
+${explanation.slice(0, 6000)}
+"""
+Check every calculation, conversion, worked example and factual claim in it. Ignore style, simplifications that are still true, and notation choices.
+Reply with JSON only: {"ok": true} when everything is right, or {"ok": false, "errors": [{"quote": "the wrong part, quoted briefly", "fix": "the correct result and why, in one or two plain sentences"}]}.`
+}
+
+export function parseExampleCheck(raw: string): { ok: boolean; errors: { quote: string; fix: string }[] } {
+  const m = raw.match(/\{[\s\S]*\}/)
+  if (!m) return { ok: true, errors: [] }
+  try {
+    const j = JSON.parse(m[0]) as { ok?: unknown; errors?: unknown }
+    const errors = (Array.isArray(j.errors) ? j.errors : [])
+      .filter((e): e is { quote?: unknown; fix: string } => !!e && typeof (e as { fix?: unknown }).fix === 'string' && !!(e as { fix: string }).fix.trim())
+      .slice(0, 3)
+      .map((e) => ({ quote: typeof e.quote === 'string' ? e.quote.trim().slice(0, 160) : '', fix: e.fix.trim().slice(0, 400) }))
+    return { ok: j.ok !== false || !errors.length, errors: j.ok === false ? errors : [] }
+  } catch {
+    return { ok: true, errors: [] }
+  }
+}
+
+/** The correction added under the explanation, and into the notes so the wrong version isn't what's kept */
+export function correctionText(errors: { quote: string; fix: string }[]): string {
+  const lines = errors.map((e) => `${e.quote ? `“${e.quote}”: ` : ''}${e.fix}`)
+  const shown = lines.length === 1 ? lines[0] : lines.map((l) => `\n- ${l}`).join('')
+  return `\n\n> **Correction:** ${shown}\n\n<note>Correction: ${errors.map((e) => e.fix).join(' ')}</note>`
+}

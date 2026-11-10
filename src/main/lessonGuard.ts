@@ -1,4 +1,4 @@
-import { checksOf, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, solutionOf, solvePrompt, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
+import { checksOf, examplePrompt, hasWorkedMaths, parseExampleCheck, EXAMPLE_SYSTEM, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, solutionOf, solvePrompt, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
 import type { RequestKind } from '@shared/providers'
 import { aboutMetabase } from '@shared/metabase'
 import { ownWords, posedProblem, repeatsEarlier } from '@shared/session'
@@ -88,6 +88,8 @@ export interface LessonFindings {
   mark?: { verdict: 'partial' | 'wrong'; why: string }
   /** The problem just set can't be used (repeated, not asked, a failed check, flawed) */
   problem: string[]
+  /** Mistakes in the explanation's worked examples, found by the cloud maths model */
+  errata?: { quote: string; fix: string }[]
 }
 
 /** A real problem in a problem set ("**Problem 3 · harder**"), not a diagnostic or a question in passing */
@@ -127,6 +129,23 @@ export async function checkLessonReply(
   // Diagnostics and questions in passing aren't problems to solve or review
   const sets = isProblem(reply)
 
+  // Worked examples in an explanation aren't problems, so nothing else checks them: the cloud maths
+  // model does, alongside the other checks, and a mistake gets a correction under the reply
+  const examples = !final && cloud && hasWorkedMaths(reply)
+    ? (step('lesson-examples', 'Checking the worked examples', 'running'),
+      within(REVIEW_MS, signal, (s) => ask(examplePrompt(req.topic ?? '', readable(reply)), EXAMPLE_SYSTEM, 'maths', s))
+        .catch(() => '')
+        .then((out) => {
+          step('lesson-examples', 'Checked the worked examples', 'done')
+          return parseExampleCheck(out ?? '')
+        }))
+    : null
+  const finish = async () => {
+    const r = await examples
+    if (r && !r.ok && !signal.aborted) found.errata = r.errors
+    return found
+  }
+
   // Run what can be computed: the tutor's own check, or, when it set a problem without solving it,
   // a solution worked out now (by the cloud model on hard topics, when it may see this lesson)
   await runChecks(checksOf(reply))
@@ -149,7 +168,7 @@ export async function checkLessonReply(
       }
     }
   }
-  if (signal.aborted || final || !cloud) return found
+  if (signal.aborted || final || !cloud) return finish()
 
   // A second look at the new problem and the mark just given, by the stronger cloud model
   const users = req.messages.filter((m) => m.role === 'user')
@@ -159,13 +178,13 @@ export async function checkLessonReply(
   // A banked problem was checked and reviewed when it was written: only the mark needs a second look
   const posed = !opts.fromBank && sets ? { problem: readable(reply), solution: solutionOf(reply) } : undefined
   const input: ReviewInput = { ...(answered && answered.verdict !== 'wrong' && !found.mark ? { answered } : {}), ...(posed ? { posed } : {}) }
-  if (!input.answered && !input.posed) return found
+  if (!input.answered && !input.posed) return finish()
   step('lesson-review', 'A second model is checking the problem and the mark', 'running')
   const out = await within(REVIEW_MS, signal, (s) => ask(reviewPrompt(input), REVIEW_SYSTEM, 'marking', s))
   step('lesson-review', 'Checked the problem and the mark', 'done')
   const r = parseReview(out)
   if (input.answered && tooGenerous(input.answered.verdict, r) && r.verdict !== 'correct') found.mark = { verdict: r.verdict as 'partial' | 'wrong', why: r.why ?? 'Your answer is incomplete.' }
   if (input.posed && r.problemOk === false) found.problem.push(r.flaw ?? 'It isn’t well posed.')
-  return found
+  return finish()
 }
 

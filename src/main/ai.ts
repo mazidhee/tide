@@ -12,6 +12,7 @@ import { fitHistory } from '@shared/context'
 import { createHash } from 'crypto'
 import { cleanModelText } from '@shared/modelText'
 import { PACE_MARK } from '@shared/pace'
+import { correctionText } from '@shared/lessonCheck'
 import { BANK_NUDGE, levelAfter, nextDirection, pickProblem, problemsSoFar, renderProblem, type BankProblem, type Direction, type Level } from '@shared/bank'
 import type { ChatEvent, ChatMessage, ChatRequest, ChatScope, ContextSource, ReadAlongNote } from '@shared/types'
 import { getSettings } from './settings'
@@ -656,6 +657,12 @@ async function answer(req: TurnRequest, emit: (e: ChatEvent) => void) {
         // What you can see is never wiped: a correction is added below it
         if (found.mark && !controller.signal.aborted) {
           const add = `\n\n<grade verdict="${found.mark.verdict}" score="${found.mark.verdict === 'partial' ? 0.5 : 0}">**Second look:** ${found.mark.why}</grade>`
+          emit({ id: req.id, type: 'delta', text: add })
+          reply += add
+        }
+        // A mistake in a worked example: the correction goes under the explanation, and into the notes
+        if (found.errata?.length && !controller.signal.aborted) {
+          const add = correctionText(found.errata)
           emit({ id: req.id, type: 'delta', text: add })
           reply += add
         }

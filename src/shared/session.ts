@@ -247,9 +247,15 @@ export const whyNote = (on: boolean) => (on ? `(Tide: from here on, teach the wh
 /** Topics where Why mode is on by default ("Foundations" in Settings): early, basic material, judged by where it sits in the roadmap */
 export const FOUNDATIONAL = /\b(foundation|foundations|basics?|fundamentals?|introduction|intro|first principles|how computers work|numbers?|number systems?|number bases?|binary|arithmetic|counting|logic|proofs?|set theory|place value|primer|part i\b|chapter 1\b)/i
 
+/** Every lesson opens with why the topic matters, so there's a reason to learn it before the first question */
+export const BIG_PICTURE = `Open the lesson with the big picture, before your first question: a short paragraph headed **Why this matters** (3 to 5 sentences) saying what this topic is for: where it's used in real systems and real work (name concrete ones), how it connects to what they're working towards (see their learner profile), and what it unlocks next. Plain and specific, no hype. Then carry on as below.`
+
 export function sessionInstructions(setup: SessionSetup): string {
   const base = baseInstructions(setup)
-  return setup.mode === 'teach' && setup.options?.why ? `${base.trimEnd()}\n\n${WHY_RULES}\n` : base
+  if (setup.mode !== 'teach') return base
+  // A refresher or a project lesson already has its reason; a placement check isn't a lesson
+  const extra = [!setup.options?.refresh && !setup.options?.project ? BIG_PICTURE : '', setup.options?.why ? WHY_RULES : ''].filter(Boolean)
+  return extra.length ? `${base.trimEnd()}\n\n${extra.join('\n\n')}\n` : base
 }
 
 function baseInstructions({ mode, topic, options }: SessionSetup): string {

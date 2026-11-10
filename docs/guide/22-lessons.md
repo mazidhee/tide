@@ -16,7 +16,7 @@ summary: One question at a time, with a tutor that adjusts to every answer.
 
 ## How a lesson runs
 
-**Teach** works the way the best tutors teach: you do most of the work. It starts with a few questions to find your level, starting near the hard end and stepping down when you miss, then writes a short plan that skips what you already know. Each step is a short explanation with one worked example, then problems one at a time, labelled like **Problem 2 · harder**.
+**Teach** opens with **Why this matters**: what the topic is used for in real systems, how it connects to what you're working towards, and what it unlocks next. Then it works the way the best tutors teach: you do most of the work. It starts with a few questions to find your level, starting near the hard end and stepping down when you miss, then writes a short plan that skips what you already know. Each step is a short explanation with one worked example, then problems one at a time, labelled like **Problem 2 · harder**.
 
 ```animation
 ladder: Right first time, Harder, Right with hints, Same level
@@ -79,9 +79,10 @@ Gemma is a small model, and on hard material it can set a broken problem or mark
 - **What can be computed is computed.** For a problem with a numeric or algebraic answer, the tutor also writes a short SymPy check (for code, test cases), and Tide runs it. If it fails, the problem or the answer is wrong.
 - **If it didn't solve it, Tide does.** When the tutor sets a problem without its answer, a short separate call works it out (the cloud model on hard topics, when it may), runs the check, and keeps the answer with the problem for marking. Measured on 40 hard questions, marking against a solution took Gemma from 80% to 90% right, with no wrong answer marked correct.
 - **A second look by a stronger model.** With the cloud helper set to mark answers, the cloud model reviews each new problem (is it well posed, is the answer right?) and any **Correct** or **Partly right** just given (was it earned?). Gemma doesn't review itself: measured, that made marking worse. Private projects and your Metabase never go to the cloud.
+- **Worked examples are checked too.** An explanation with calculations in it (a conversion, a sum, a derivation) goes to the cloud maths model, which checks every step. A mistake gets a **Correction** under the explanation, and into your notes, so the wrong version isn't what you keep.
 - **No repeats, no missing questions.** A problem it already asked, or one that never actually asks anything, is caught too.
 
-If anything fails, the reply is taken back and written again, once, with what to fix; you'll see a moment of "Checking the problem and the mark" above it. Each verdict quotes the part of your answer that earned it.
+What you've read is never taken away: a flawed problem is replaced below it, a mark that was too generous gets a **Second look**, and a wrong example a **Correction**. You'll see "Checking…" above a reply while this runs, and you can answer meanwhile. Each verdict quotes the part of your answer that earned it.
 
 ## Problems ready before you need them
 
