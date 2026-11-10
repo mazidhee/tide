@@ -1,5 +1,6 @@
 import type { AgendaItem } from '@shared/coach'
 import type { ChatScope } from '@shared/types'
+import { FOUNDATIONAL } from '@shared/session'
 import type { Mistake } from '@shared/mistakes'
 import type { useApp } from '../state'
 
@@ -26,7 +27,7 @@ export function lessonScope(app: ReturnType<typeof useApp>, it: AgendaItem): Cha
 /** Starts the lesson for a planned topic straight away (Home's "Next lesson") */
 export function startAgendaLesson(app: ReturnType<typeof useApp>, it: AgendaItem, at: { date: string; index: number }) {
   remember(it, at)
-  app.setView({ kind: 'session', mode: 'teach', scope: lessonScope(app, it), topic: it.topic ?? it.title, ...(it.refresh ? { options: { refresh: true } } : {}), nonce: Date.now() })
+  app.setView({ kind: 'session', mode: 'teach', scope: lessonScope(app, it), topic: it.topic ?? it.title, options: { ...(it.refresh ? { refresh: true } : {}), why: whyByDefault(app.settings.whyMode, it.topic ?? it.title, it.topicId) }, nonce: Date.now() })
 }
 
 /** The topic a Check's session runs under, so finishing it ticks the item off */
@@ -42,14 +43,14 @@ export function openAgendaItem(app: ReturnType<typeof useApp>, it: AgendaItem, a
     return
   }
   if (it.kind === 'learn' && it.refresh) {
-    app.setView({ kind: 'session', mode: 'teach', scope: lessonScope(app, it), topic, options: { refresh: true }, nonce: Date.now() })
+    app.setView({ kind: 'session', mode: 'teach', scope: lessonScope(app, it), topic, options: { refresh: true, why: whyByDefault(app.settings.whyMode, topic, it.topicId) }, nonce: Date.now() })
     return
   }
   if (it.kind === 'learn') {
     // A note for the topic, if there is one; otherwise the tutor teaches it from the notebook
     const note = noteFor(app, topic)
     if (note) app.openPath(note.path)
-    else app.setView({ kind: 'session', mode: 'teach', scope, topic, nonce: Date.now() })
+    else app.setView({ kind: 'session', mode: 'teach', scope, topic, options: { why: whyByDefault(app.settings.whyMode, topic, it.topicId) }, nonce: Date.now() })
   } else if (it.kind === 'quiz') app.setView({ kind: 'session', mode: 'quiz', scope, topic, options: { length: 6 }, nonce: Date.now() })
   else if (it.kind === 'review') app.setView({ kind: 'study', scope })
   else if (it.kind === 'practice') app.setView({ kind: 'practice' })
@@ -87,4 +88,13 @@ export function startRetest(app: ReturnType<typeof useApp>, due: Mistake[]) {
     options: { length: due.length, retest: due.map((m) => ({ id: m.id, topic: m.topic, question: m.question, fix: m.fix })) },
     nonce: Date.now()
   })
+}
+
+/**
+ * Whether a lesson starts in Why mode: Settings says always, or foundations and the topic is early,
+ * basic material (judged from its roadmap section when known: the id carries the headings)
+ */
+export function whyByDefault(pref: 'off' | 'foundations' | 'always' | undefined, topic: string, topicId?: string): boolean {
+  const mode = pref ?? 'foundations'
+  return mode === 'always' || (mode === 'foundations' && FOUNDATIONAL.test(`${topicId ?? ''} ${topic}`))
 }

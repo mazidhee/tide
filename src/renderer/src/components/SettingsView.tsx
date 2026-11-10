@@ -500,6 +500,18 @@ function TutorSection() {
             ]}
           />
         </Row>
+        <Row label="Explain the why" hint="Why mode: the tutor leads you, question by question, to why each idea is so, from first principles, with history or an analogy where it explains. Longer, deeper lessons. Switch it on or off in any lesson with Why.">
+          <Select
+            label="Explain the why"
+            value={app.settings.whyMode ?? 'foundations'}
+            onChange={(v) => app.updateSettings({ whyMode: v as 'off' | 'foundations' | 'always' })}
+            options={[
+              { value: 'foundations', label: 'For foundations' },
+              { value: 'always', label: 'Always' },
+              { value: 'off', label: 'Off' }
+            ]}
+          />
+        </Row>
       </Group>
       <Group title="Voice">
         <ToolSetup label="Natural voice" hint="Kokoro and Parakeet, running on this Mac" check={check} setup={setup} onReady={() => setReady(true)} busyText={step || 'Setting up (about 1 GB the first time)…'} />

@@ -184,6 +184,8 @@ export interface SessionSetup {
     placement?: PlacementSetup
     /** A refresher (a lesson): learned before, rusty; practice first, explain only what's missed */
     refresh?: boolean
+    /** Why mode: Socratic, from first principles, the reasons behind each rule (Settings › Your tutor) */
+    why?: boolean
   }
 }
 
@@ -230,7 +232,27 @@ const companyStyle = (company?: string) =>
     ? `\nRun it the way ${company} interviews. The student's prep plan for ${company} is in the passages: use its notes on the loop, the topics and patterns they ask about and the values they probe, and pitch the bar at ${company}'s level.`
     : ''
 
-export function sessionInstructions({ mode, topic, options }: SessionSetup): string {
+/** Teaching the why: Socratic, from first principles; analogies and history allowed here, when they explain */
+export const WHY_RULES = `Teach for understanding of WHY, Socratically and from first principles:
+- Never hand over a rule or formula as a fact to memorise. First ask why it must be so, and lead them there with small questions they can reason out, one at a time. If they're stuck, give the next step of the reasoning, not the answer.
+- Derive each idea from simpler things they already accept: the pattern it continues, the problem it solved, why it is the only sensible choice.
+- Use history when it explains the why (what people did before this idea, and what broke), never as trivia.
+- One concrete analogy or physical model is welcome when it makes the abstract tangible; then say exactly where it stops matching.
+- Check understanding by asking them to explain why, to predict a new case, or to extend the idea somewhere new, not to repeat a definition.
+- Longer explanations are fine when the idea needs them, still one idea per message, ending with a question or <continue/>.`
+
+/** Turning Why mode on or off mid-lesson: a hidden note with your next message */
+export const whyNote = (on: boolean) => (on ? `(Tide: from here on, teach the why. ${WHY_RULES.replace(/\n/g, ' ')})` : '(Tide: from here on, explain plainly and directly: no analogies or history unless they make the exact point clearer.)')
+
+/** Topics where Why mode is on by default ("Foundations" in Settings): early, basic material, judged by where it sits in the roadmap */
+export const FOUNDATIONAL = /\b(foundation|foundations|basics?|fundamentals?|introduction|intro|first principles|how computers work|numbers?|number systems?|number bases?|binary|arithmetic|counting|logic|proofs?|set theory|place value|primer|part i\b|chapter 1\b)/i
+
+export function sessionInstructions(setup: SessionSetup): string {
+  const base = baseInstructions(setup)
+  return setup.mode === 'teach' && setup.options?.why ? `${base.trimEnd()}\n\n${WHY_RULES}\n` : base
+}
+
+function baseInstructions({ mode, topic, options }: SessionSetup): string {
   const difficulty = options?.difficulty ?? 'normal'
   if (mode === 'teach' && options?.refresh) return `Topic: ${topic}.\n${REFRESH_RULES}\n`
   if (mode === 'teach' && options?.strategy && options.strategy !== 'problems' && !options.retest) {

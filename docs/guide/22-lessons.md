@@ -28,6 +28,12 @@ ladder: Right first time, Harder, Right with hints, Same level
 
 A step is done after two right in a row without hints. It ends with a few mixed problems across the whole lesson.
 
+## Why mode
+
+Turn on **Why** in a lesson (or set **Explain the why** in Settings › Your tutor) and the tutor teaches the reasons behind each idea, Socratically: instead of handing you a rule, it asks why it must be so and leads you there one small step at a time, from simpler things you already accept. History comes in when it explains the why, and an analogy when it makes something abstract tangible, with where it stops matching. Checks ask you to explain, predict or extend, not to recite. Lessons run longer and go deeper.
+
+By default it's on **for foundations**: early, basic topics like number systems, binary, logic and how computers work, judged from where the topic sits in your roadmap. Set it to **Always** or **Off**, and switch it in any lesson; the change applies from your next message.
+
 ## Explaining before asking
 
 Not every message ends in a question. When an idea needs more than one message, the tutor carries on: you get **Go on** (<kbd>⌘↵</kbd>) and **I have a question** instead of an answer box. After two explaining messages it checks you understood. Say *just explain* and it explains; say *quiz me* and it asks. After two misses in a row it stops setting full questions and shows a worked example of the step you're missing, then asks you to fill in just that step.
