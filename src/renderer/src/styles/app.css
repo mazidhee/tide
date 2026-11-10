@@ -3686,6 +3686,54 @@ button.menu-row:hover {
   flex-shrink: 0;
 }
 
+/* Where a topic sits in the plan. Weekday topics only show on hover (they're the norm);
+   weekend, later and skip always show, as does anything you chose yourself. */
+.ol-place {
+  --place: var(--ink-muted);
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--place) 10%, transparent);
+  color: var(--place);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.ol-place:hover,
+.ol-place:focus-visible {
+  border-color: color-mix(in srgb, var(--place) 35%, transparent);
+}
+
+.ol-place.p-core,
+.ol-place.p-supporting {
+  opacity: 0;
+}
+
+.outline-item:hover .ol-place,
+.ol-place:focus-visible,
+.ol-place.own {
+  opacity: 1;
+}
+
+.ol-place.own {
+  border-color: color-mix(in srgb, var(--place) 35%, transparent);
+}
+
+.ol-place.p-core {
+  --place: var(--accent);
+}
+
+.ol-place.p-enrichment {
+  --place: var(--info);
+}
+
+.outline-item:has(.ol-place.p-elective) .outline-input,
+.outline-item:has(.ol-place.p-skip) .outline-input {
+  color: var(--ink-muted);
+}
+
 .outline-hover-actions {
   display: flex;
   gap: 2px;
@@ -4064,6 +4112,30 @@ button.menu-row:hover {
   flex-wrap: wrap;
   padding-top: 10px;
   border-top: 1px solid var(--line);
+}
+
+/* The tutor is carrying on: Go on, or stop to ask something */
+.s-goon {
+  position: sticky;
+  bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.s-goon:has(textarea) {
+  padding: 14px;
+  border-radius: var(--radius-l);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-raised);
+  box-shadow:
+    var(--shadow),
+    0 -26px 22px -6px var(--bg);
+}
+
+.s-goon-bar {
+  justify-content: flex-end;
 }
 
 .s-finish {
@@ -12043,13 +12115,13 @@ button.home-prof {
   margin-top: 18px;
 }
 
-.wk-bar {
+.wk-split-bar {
   display: flex;
   gap: 3px;
   height: 8px;
 }
 
-.wk-bar span {
+.wk-split-bar span {
   border-radius: 999px;
 }
 
@@ -15274,6 +15346,81 @@ button.tl-dot:focus-visible {
   align-items: baseline;
   gap: 16px;
   margin-top: 8px;
+}
+
+/* Your aims: each a line of your own words, with how much it matters */
+.aims {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 680px;
+}
+
+.aim-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.aim-text {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-s);
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.aim-row .aim-text {
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+
+.aim-text:hover {
+  border-color: var(--line);
+}
+
+.aim-text:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--ink) 30%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 8%, transparent);
+  background: var(--bg);
+}
+
+.aim-new {
+  border: 1px dashed var(--line-strong);
+}
+
+.aim-new::placeholder {
+  color: var(--ink-muted);
+}
+
+.aim-guess {
+  margin: 4px 0 0;
+  max-width: 62ch;
+  line-height: 1.5;
+}
+
+.wk-reason {
+  margin-left: 6px;
+}
+
+.wk-reason::before {
+  content: '· ';
+}
+
+.wk-note {
+  margin: 8px 0 0;
+  max-width: 70ch;
+}
+
+.sort-status {
+  margin: 8px 0 0;
+  max-width: 70ch;
+  line-height: 1.5;
 }
 
 /* While the model is working, shimmering text holds still: repainting it every frame takes GPU

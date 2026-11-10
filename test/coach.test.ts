@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_COACH, catchUpPlan, nextTopics, todayItems, validateWeek, weekMarkdown, weekStartOf, type WeekPlan } from '../src/shared/coach'
+import { DEFAULT_COACH, aimOf, aimsKey, aimsOf, catchUpPlan, nextTopics, todayItems, validateWeek, weekMarkdown, weekStartOf, type WeekPlan } from '../src/shared/coach'
 
 const SWE = `## 1. Foundations of Computation — CORE
 ### How Computers Work
@@ -81,5 +81,26 @@ describe('catchUpPlan', () => {
 
   it('does nothing on the first day', () => {
     expect(catchUpPlan(plan(), '2026-11-09', [1, 2, 3, 4, 5]).moved).toEqual([])
+  })
+})
+
+describe('aims', () => {
+  const aims = [
+    { id: 'a', text: 'Distributed systems and blockchain infra', weight: 'main' as const, since: 1 },
+    { id: 'b', text: 'Payments and fintech', weight: 'side' as const, since: 1 },
+    { id: 'c', text: 'Philosophy', weight: 'curious' as const, since: 1 }
+  ]
+  it('reads the old single goal as one main aim', () => {
+    expect(aimsOf({ goal: 'Quant developer' })).toEqual([{ id: 'goal', text: 'Quant developer', weight: 'main', since: 0 }])
+    expect(aimsOf({ goal: '', aims })).toBe(aims)
+    expect(aimsOf({ goal: '' })).toEqual([])
+  })
+  it('puts the aims in one line, by weight, and falls back to the guess', () => {
+    expect(aimOf({ goal: '', aims })).toBe('Main aims: Distributed systems and blockchain infra. Also: Payments and fintech. Curious about: Philosophy.')
+    expect(aimOf({ goal: '', direction: 'A guess' })).toBe('A guess')
+  })
+  it('keys the aims by wording and weight, not order or ids', () => {
+    expect(aimsKey([...aims].reverse().map((a) => ({ ...a, id: 'x' })))).toBe(aimsKey(aims))
+    expect(aimsKey(aims.map((a, i) => (i === 2 ? { ...a, weight: 'side' as const } : a)))).not.toBe(aimsKey(aims))
   })
 })

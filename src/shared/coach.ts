@@ -3,24 +3,69 @@
  * decides priorities and the week; code supplies the facts (next topics in each roadmap, weak
  * spots, deadlines) and checks the plan only uses topics that really exist.
  */
-import { parseOutline, splitSource, topicTitle, normalizeTitle } from './outline'
+import { roadmapTopics } from './curriculum'
+import { normalizeTitle } from './outline'
+
+export type AimWeight = 'main' | 'side' | 'curious'
+
+/** Something you're working towards: a career direction, a skill, an interest. Many at once, and they change */
+export interface Aim {
+  id: string
+  text: string
+  weight: AimWeight
+  since: number
+}
 
 export interface CoachSettings {
-  /** In one or two sentences, where all of this is heading, in your words (overrides `direction`) */
+  /** What you're working towards, in your words; the week is balanced across these */
+  aims?: Aim[]
+  /** The old single aim, in your words (read as one main aim when there's no list) */
   goal: string
   /** Where Tide works out you're heading, from your notebooks, goals, memories and study */
   direction?: string
   /** When `direction` was last worked out (ms) */
   directionAt?: number
-  /** Notebooks to focus on, most important first */
+  /** Notebooks to focus on, most important first (used when you pick the week's roadmaps) */
   focus: string[]
+  /** Who picks the week's roadmaps: Tide, from your aims (the default once you have aims), or you */
+  pick?: 'tide' | 'me'
   hoursPerWeek: number
   /** Days of the week to study, 0 = Sunday */
   days: number[]
+  /** Minutes on a weekday and on a weekend day, when they differ (otherwise hoursPerWeek is spread evenly) */
+  weekdayMinutes?: number
+  weekendMinutes?: number
 }
 
-/** Where the learner is heading: what they wrote, else what Tide inferred */
-export const aimOf = (s: Pick<CoachSettings, 'goal' | 'direction'>) => s.goal.trim() || s.direction?.trim() || ''
+/** Who picks the week's roadmaps */
+export const pickOf = (s: Pick<CoachSettings, 'pick' | 'aims' | 'goal'>): 'tide' | 'me' => s.pick ?? (aimsOf(s).length ? 'tide' : 'me')
+
+/** Your aims: the list, else the old single goal as a main aim */
+export function aimsOf(s: Pick<CoachSettings, 'aims' | 'goal'>): Aim[] {
+  if (s.aims?.length) return s.aims
+  return s.goal.trim() ? [{ id: 'goal', text: s.goal.trim(), weight: 'main', since: 0 }] : []
+}
+
+const WEIGHT_WORD: Record<AimWeight, string> = { main: 'Main aims', side: 'Also', curious: 'Curious about' }
+
+/** Where the learner is heading, as a line for the model: their aims, else what Tide inferred */
+export function aimOf(s: Pick<CoachSettings, 'aims' | 'goal' | 'direction'>): string {
+  const aims = aimsOf(s)
+  if (!aims.length) return s.direction?.trim() || ''
+  return (['main', 'side', 'curious'] as const)
+    .map((w) => aims.filter((a) => a.weight === w).map((a) => a.text))
+    .map((texts, i) => (texts.length ? `${WEIGHT_WORD[(['main', 'side', 'curious'] as const)[i]]}: ${texts.join('; ')}.` : ''))
+    .filter(Boolean)
+    .join(' ')
+}
+
+/** Changes when the aims change in a way that matters for sorting roadmaps (wording or weight) */
+export function aimsKey(aims: Aim[]): string {
+  const s = aims.map((a) => `${a.weight}:${a.text.trim().toLowerCase()}`).sort().join('|')
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
+  return (h >>> 0).toString(36)
+}
 
 export const DEFAULT_COACH: CoachSettings = { goal: '', focus: [], hoursPerWeek: 10, days: [1, 2, 3, 4, 5, 6] }
 
@@ -31,6 +76,8 @@ export interface AgendaItem {
   title: string
   /** The roadmap topic it covers, exactly as in the roadmap */
   topic?: string
+  /** Its id in the roadmap (shared/curriculum), so finishing it ticks the roadmap too */
+  topicId?: string
   notebook?: string
   minutes: number
   /** Why this, now: one line */
@@ -53,6 +100,10 @@ export interface WeekPlan {
   thingsProject?: string
   /** Unfinished items that ran past the end of this plan, for the next one to pick up */
   carry?: AgendaItem[]
+  /** When you picked the roadmaps: what Tide would have picked, and why */
+  suggested?: { notebook: string; share: number; reason: string }[]
+  /** Roadmaps planned in roadmap order because Tide hasn't sorted them against your aims yet */
+  unsorted?: string[]
 }
 
 /** Today's date where you are (yyyy-mm-dd), not in UTC: an evening wrap-up belongs to today */
@@ -156,24 +207,20 @@ export interface TopicCandidate {
   notebook: string
   topic: string
   section: string
+  /** Its id in the roadmap (shared/curriculum), to tick it off when it's done */
+  topicId?: string
   /** The book or course the roadmap names for it ("Topic — _Book_") */
   source?: string
+  /** Why it's next, for the week (from the aims it serves) */
+  why?: string
 }
 
-/** The next unfinished topics in a roadmap, in order, with the section each sits in */
+/** The next unfinished topics in a roadmap, in order, with the section each sits in (projects are practised, not taught) */
 export function nextTopics(notebook: string, outlineMd: string, n = 12): TopicCandidate[] {
-  const { lines } = parseOutline(outlineMd)
-  const out: TopicCandidate[] = []
-  let section = ''
-  for (const l of lines) {
-    if (l.kind === 'heading' && l.level >= 2) section = l.text.replace(/\s+[—–]\s+[A-Z][A-Z ,/&]+$/, '').replace(/\s+[—–]\s+\d.*$/, '')
-    if (l.kind === 'item' && l.checked === false && !/^(Exam|Project|Practice):/i.test(l.text)) {
-      const source = splitSource(l.text).source
-      out.push({ notebook, topic: topicTitle(l.text), section, ...(source ? { source } : {}) })
-      if (out.length >= n) break
-    }
-  }
-  return out
+  return roadmapTopics(notebook, outlineMd)
+    .filter((t) => !t.checked && !t.project && !/^(Exam|Project|Practice):/i.test(t.title))
+    .slice(0, n)
+    .map((t) => ({ notebook, topic: t.title, section: t.section, topicId: t.id, ...(t.source ? { source: t.source } : {}) }))
 }
 
 /** Monday of the week containing the date (yyyy-mm-dd) */

@@ -318,7 +318,12 @@ async function findBook(title: string, by?: string): Promise<{ url: string } | f
  * never because a search engine was down.
  */
 async function verifyReadings(phases: PhaseReadings[]): Promise<PhaseReadings[]> {
-  const items = phases.flatMap((p) => p.items)
+  await verifyItems(phases.flatMap((p) => p.items))
+  return phases
+}
+
+/** Gives each real resource its link (in place); `unverified` when the web answered and nothing matched */
+export async function verifyItems<T extends { title: string; by?: string; why?: string; url?: string; unverified?: boolean }>(items: T[]): Promise<T[]> {
   const webOn = getSettings().ai.webSearch?.provider !== 'off'
   let next = 0
   const worker = async () => {
@@ -347,7 +352,7 @@ async function verifyReadings(phases: PhaseReadings[]): Promise<PhaseReadings[]>
     }
   }
   await Promise.all([worker(), worker(), worker()])
-  return phases
+  return items
 }
 
 /**

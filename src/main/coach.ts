@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs'
 import { scheduleWeek, summaryFromPlan } from '@shared/schedule'
-import { aimOf, catchUpPlan, thingsTitle, DEFAULT_COACH, localDate, moveUnfinished, nextStudyDay, nextTopics, planCompletion, weekMarkdown, type AgendaItem, type CoachSettings, type DayStats, type JournalEntry, type TopicCandidate, type WeekReview, type WeekPlan } from '@shared/coach'
+import { aimOf, aimsKey, aimsOf, pickOf, catchUpPlan, thingsTitle, DEFAULT_COACH, localDate, moveUnfinished, nextStudyDay, nextTopics, planCompletion, weekMarkdown, type AgendaItem, type CoachSettings, type DayStats, type JournalEntry, type TopicCandidate, type WeekReview, type WeekPlan } from '@shared/coach'
 import { companyTrend } from '@shared/interviews'
 import { buildLink } from '@shared/deeplink'
 import { complete, extractJsonObject } from './ai'
@@ -13,6 +13,11 @@ import { addProject, ensureArea, getProject, searchTasks, thingsAvailable, TIDE_
 import { absPath, joinRel, readText, writeText } from './vault'
 import { pagesToRead } from './books'
 import { readingLabel } from '@shared/books'
+import { isSorted, roadmapTopics, sectionsOf, topicsLeft } from '@shared/curriculum'
+import { balanceWeek, type Balance, type BalanceNotebook } from '@shared/balance'
+import { curriculumStatus, getOverrides, loadSorted, sortRoadmaps, sortRunning } from './curriculum'
+import { readingsForWeek } from './readings'
+import { parseOutline } from '@shared/outline'
 
 /**
  * The coach plans your week towards your goal and keeps a short learner profile.
@@ -39,11 +44,22 @@ export async function getCoach(): Promise<CoachSettings> {
   }
 }
 
+/** Minutes as set, 0 included (a day you don't study); undefined when not set */
+const minutes = (v: unknown) => (v === undefined || v === null || v === '' || !Number.isFinite(Number(v)) || Number(v) < 0 ? undefined : Math.round(Number(v)))
+
 export async function saveCoach(s: CoachSettings): Promise<CoachSettings> {
+  const aims = (Array.isArray(s.aims) ? s.aims : [])
+    .map((a) => ({ id: String(a.id || Math.random().toString(36).slice(2, 10)), text: String(a.text ?? '').trim().slice(0, 160), weight: (['main', 'side', 'curious'] as const).includes(a.weight) ? a.weight : 'side', since: Number(a.since) || Date.now() }))
+    .filter((a) => a.text)
+    .slice(0, 12)
   const clean: CoachSettings = {
+    ...(aims.length ? { aims } : {}),
     goal: String(s.goal ?? '').trim().slice(0, 500),
     focus: (Array.isArray(s.focus) ? s.focus : []).map(String).filter(Boolean).slice(0, 6),
+    ...(s.pick === 'tide' || s.pick === 'me' ? { pick: s.pick } : {}),
     hoursPerWeek: Math.max(1, Math.min(60, Math.round(Number(s.hoursPerWeek) || 10))),
+    ...(minutes(s.weekdayMinutes) !== undefined ? { weekdayMinutes: Math.min(600, minutes(s.weekdayMinutes)!) } : {}),
+    ...(minutes(s.weekendMinutes) !== undefined ? { weekendMinutes: Math.min(720, minutes(s.weekendMinutes)!) } : {}),
     days: (Array.isArray(s.days) ? s.days : DEFAULT_COACH.days).map(Number).filter((d) => d >= 0 && d <= 6),
     ...(s.direction ? { direction: String(s.direction).trim().slice(0, 500), directionAt: Number(s.directionAt) || Date.now() } : {})
   }
@@ -89,27 +105,27 @@ interface Facts {
   dueCards: number
   mistakes: { count: number; topics: string[] }
   goals: { notebook: string; left: number; daysLeft: number; name: string }[]
-  undone: { topic: string; notebook?: string }[]
+  undone: { topic: string; notebook?: string; topicId?: string }[]
   lastDone?: number
 }
 
-async function gather(settings: CoachSettings): Promise<{ text: string; candidates: TopicCandidate[]; facts: Facts }> {
+async function gather(settings: CoachSettings, focus = settings.focus, chosen?: TopicCandidate[]): Promise<{ text: string; candidates: TopicCandidate[]; facts: Facts }> {
   const facts: Facts = { weak: [], dueCards: 0, mistakes: { count: 0, topics: [] }, goals: [], undone: [] }
   const notebooks = await getNotebooks()
   const candidates: TopicCandidate[] = []
   const parts: string[] = []
-  for (const name of settings.focus) {
+  for (const name of focus) {
     const nb = notebooks.find((n) => n.name === name || n.path === name)
     if (!nb?.outline) {
       parts.push(`${name}: no roadmap yet.`)
       continue
     }
     const md = await readText(nb.outline).catch(() => '')
-    const next = nextTopics(nb.name, md, 14)
+    const next = chosen ? chosen.filter((c) => c.notebook === nb.name).slice(0, 14) : nextTopics(nb.name, md, 14)
     const all = (md.match(/^\s*- \[[ xX]\] /gm) ?? []).length
     const done = (md.match(/^\s*- \[[xX]\] /gm) ?? []).length
     candidates.push(...next)
-    parts.push(`${nb.name} roadmap: ${done} of ${all} topics done. Next, in order:\n${next.map((c) => `  - ${c.topic} (in ${c.section})`).join('\n')}`)
+    parts.push(`${nb.name} roadmap: ${done} of ${all} topics done. Next, in order:\n${next.map((c) => `  - ${c.topic} (in ${c.section})${c.why ? `: ${c.why}` : ''}`).join('\n')}`)
   }
   const mastery = await getMastery().catch(() => ({}) as Record<string, { level: string }>)
   const weak = Object.entries(mastery)
@@ -139,15 +155,8 @@ async function gather(settings: CoachSettings): Promise<{ text: string; candidat
   const drills = await listDrills().catch(() => [])
   if (drills.length) parts.push(`Arithmetic sprint best: ${Math.max(...drills.filter((d) => d.kind === 'zetamac').map((d) => d.correct), 0)}`)
   // Deadlines you've set: the plan should keep each on pace, and catch up the ones behind
-  const goals = await getGoals().catch(() => [])
-  for (const g of goals) {
-    const nb = notebooks.find((n) => n.path === g.notebook)
-    const md = nb?.outline ? await readText(nb.outline).catch(() => '') : ''
-    const left = (md.match(/^\s*- \[ \] /gm) ?? []).length
-    const days = Math.ceil((Date.parse(g.deadline) - Date.now()) / 86_400_000)
-    if (nb) facts.goals.push({ notebook: nb.name, left, daysLeft: days, name: g.name })
-    parts.push(`Goal "${g.name}" (${g.notebook}): ${left} topics left, deadline ${g.deadline} (${days >= 0 ? `${days} days away` : 'passed'}). Give it time this week in proportion to how tight that is.`)
-  }
+  facts.goals = await goalFacts()
+  for (const g of facts.goals) parts.push(`Goal "${g.name}" (${g.notebook}): ${g.left} topics left, ${g.daysLeft >= 0 ? `${g.daysLeft} days to the deadline` : 'deadline passed'}. Give it time this week in proportion to how tight that is.`)
   const mistakes = (await listMistakes()).filter((m) => m.status === 'open')
   facts.mistakes = { count: mistakes.length, topics: [...new Set(mistakes.map((m) => m.topic))] }
   if (mistakes.length) parts.push(`Mistakes waiting to be retested: ${mistakes.length}, in ${[...new Set(mistakes.map((m) => m.topic))].slice(0, 5).join(', ')}. Plan a short "review" to retest them.`)
@@ -158,12 +167,43 @@ async function gather(settings: CoachSettings): Promise<{ text: string; candidat
     if (planned) facts.lastDone = done / planned
     if (planned) parts.push(`Last plan so far: ${done} of ${planned} items done.${done / planned < 0.6 ? ' That plan was too much: plan less.' : ''}`)
     const undone = [...(last.carry ?? []), ...last.days.filter((d) => d.date < today()).flatMap((d) => d.items.filter((it) => !it.done))]
-    facts.undone = undone.filter((it) => it.kind === 'learn' && it.topic).map((it) => ({ topic: it.topic!, notebook: it.notebook }))
+    facts.undone = undone.filter((it) => it.kind === 'learn' && it.topic).map((it) => ({ topic: it.topic!, notebook: it.notebook, ...(it.topicId ? { topicId: it.topicId } : {}) }))
     if (undone.length) parts.push(`Unfinished from before (fit the important ones in first): ${undone.slice(0, 8).map((it) => it.topic ?? it.title).join('; ')}`)
   }
   const review = await latestReview()
   if (review) parts.push(`Their weekly review: went well: ${review.wentWell || '-'}; got in the way: ${review.inTheWay || '-'}; change: ${review.change || '-'}`)
   return { text: parts.join('\n'), candidates, facts }
+}
+
+/** Deadlines you've set, with topics left and days to go */
+async function goalFacts(): Promise<Facts['goals']> {
+  const notebooks = await getNotebooks()
+  const out: Facts['goals'] = []
+  for (const g of await getGoals().catch(() => [])) {
+    const nb = notebooks.find((n) => n.path === g.notebook)
+    if (!nb) continue
+    const md = nb.outline ? await readText(nb.outline).catch(() => '') : ''
+    out.push({ notebook: nb.name, left: topicsLeft(roadmapTopics(nb.name, md), g.section), daysLeft: Math.ceil((Date.parse(g.deadline) - Date.now()) / 86_400_000), name: g.name })
+  }
+  return out
+}
+
+/** Every roadmap, sorted against your aims where Tide has done that, for shared/balance */
+async function balanceFor(settings: CoachSettings, goals: Facts['goals']): Promise<Balance> {
+  const aims = aimsOf(settings)
+  const key = aimsKey(aims)
+  const since = Date.now() - 14 * 86_400_000
+  const [all, overrides, log] = await Promise.all([getNotebooks(), getOverrides(), focusLog(since).catch(() => [])])
+  const notebooks: BalanceNotebook[] = []
+  const recent: Record<string, number> = {}
+  for (const nb of all) {
+    if (!nb.outline) continue
+    const topics = roadmapTopics(nb.name, await readText(nb.outline).catch(() => ''))
+    const sorted = await loadSorted(nb.name)
+    notebooks.push({ name: nb.name, topics, sorted, ready: isSorted(sorted, sectionsOf(topics), key) })
+    recent[nb.name] = log.filter((e) => e.path?.startsWith(`${nb.path}/`) || e.label === nb.name).reduce((n, e) => n + e.minutes, 0)
+  }
+  return balanceWeek({ aims, notebooks, overrides, goals, hoursPerWeek: settings.hoursPerWeek, pick: pickOf(settings), pinned: settings.focus, recent })
 }
 
 const DAY = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' })
@@ -175,18 +215,27 @@ const DAY = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB'
 export async function planWeek(date = today(), background = false): Promise<WeekPlan> {
   const ask = (prompt: string, system: string) => complete(prompt, system, undefined, background ? 'background' : 'interactive')
   const settings = await getCoach()
-  if (!settings.focus.length) throw new Error('Pick what to focus on first.')
+  const pick = pickOf(settings)
+  if (pick === 'me' && !settings.focus.length) throw new Error('Pick what to focus on first.')
+  if (pick === 'tide' && !aimsOf(settings).length) throw new Error('Add what you’re working towards first, or pick the roadmaps yourself.')
   // The next seven days from today, so planning on a Sunday plans the coming week, not one day
   const start = date
-  const { text, candidates, facts } = await gather(settings)
-  if (!candidates.length) throw new Error('Your focus notebooks have no roadmap topics left to plan from.')
+  // Which roadmaps get the week, and what from each, from your aims; then the facts for those
+  const balance = await balanceFor(settings, await goalFacts())
+  const { text, facts } = await gather(settings, balance.focus, balance.candidates)
+  const candidates = balance.candidates
+  if (!candidates.length) throw new Error(pick === 'me' ? 'Your focus notebooks have no roadmap topics left to plan from.' : 'None of your roadmaps has anything your aims need right now. Add an aim, or pick the roadmaps yourself.')
   const studyDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start + 'T12:00:00Z')
     d.setUTCDate(d.getUTCDate() + i)
     return d.toISOString().slice(0, 10)
   }).filter((d) => settings.days.includes(new Date(d + 'T12:00:00Z').getUTCDay()))
+  const weekend = studyDays.map((d) => [0, 6].includes(new Date(d + 'T12:00:00Z').getUTCDay()))
+  const set = settings.weekdayMinutes !== undefined || settings.weekendMinutes !== undefined
+  const dayMinutes = set ? weekend.map((w) => (w ? (settings.weekendMinutes ?? settings.weekdayMinutes) : (settings.weekdayMinutes ?? settings.weekendMinutes)) ?? 60) : undefined
+  const hoursPerWeek = dayMinutes ? Math.max(1, dayMinutes.reduce((a, b) => a + b, 0) / 60) : settings.hoursPerWeek
   // The days are scheduled by code from the facts; the model only says why, in a few sentences
-  const input = { weekStart: start, days: studyDays, hoursPerWeek: settings.hoursPerWeek, focus: settings.focus, candidates, ...facts }
+  const input = { weekStart: start, days: studyDays, hoursPerWeek, focus: balance.focus, candidates, shares: balance.shares, primers: balance.primers, weekend, dayMinutes, ...facts }
   const plan = scheduleWeek(input)
   if (!plan.days.length) throw new Error("There's nothing to plan this week: your focus roadmaps are done, or no study days are set.")
   const outline = plan.days.map((d) => `${DAY(d.date)}: ${d.items.map((i) => `${i.kind} ${i.topic ?? i.title} (${i.minutes} min)`).join('; ')}`).join('\n')
@@ -195,8 +244,10 @@ export async function planWeek(date = today(), background = false): Promise<Week
     'You are a thoughtful study coach who explains a plan plainly and briefly.'
   ).catch(() => '')
   plan.summary = why.trim().replace(/^["']|["']$/g, '').slice(0, 800) || summaryFromPlan(plan, input)
+  if (balance.suggested) plan.suggested = balance.suggested
+  if (balance.unsorted.length) plan.unsorted = balance.unsorted
   // What to read: the pages in books you own, then the source your roadmap names for the topic
-  const byTopic = new Map(candidates.map((c) => [c.topic, c]))
+  const byTopic = new Map([...candidates, ...balance.primers].map((c) => [c.topic, c]))
   for (const it of plan.days.flatMap((d) => d.items.filter((i) => i.kind === 'learn' && i.topic)).slice(0, 12)) {
     const own = await pagesToRead(it.topic!, 1).catch(() => [])
     const source = byTopic.get(it.topic!)?.source
@@ -207,6 +258,8 @@ export async function planWeek(date = today(), background = false): Promise<Week
   await writeText(weekFile(start), JSON.stringify(plan, null, 2))
   await writeText(WEEK_NOTE, weekMarkdown(plan))
   brainEvent({ kind: 'week', label: `Planned your week: ${plan.days.reduce((n, d) => n + d.items.filter((i) => i.kind === 'learn').length, 0)} topics to learn` })
+  // Free readings for the week's lessons, found in the background and added as they come
+  readingsForWeek(getWeek, savePlan, start).catch(() => {})
   return plan
 }
 
@@ -280,7 +333,7 @@ export async function inferDirection(force = false): Promise<CoachSettings> {
     memories.length ? `What they've told the tutor:\n${memories.slice(0, 30).map((m) => `- ${m.text}`).join('\n')}` : '',
     `Recent study topics: ${[...new Set(log.map((e) => e.label).filter(Boolean))].slice(0, 15).join('; ') || 'none logged'}`,
     `Answers so far: ${strong} topics solid, ${weak} weak or shaky`,
-    settings.goal ? `What they wrote about their goal: ${settings.goal}` : '',
+    aimsOf(settings).length ? `What they wrote they're working towards: ${aimOf(settings)}` : '',
     profile ? `Their learner profile:\n${profile.slice(0, 1200)}` : ''
   ]
     .filter(Boolean)
@@ -317,8 +370,13 @@ export async function autoPlanWeek(): Promise<WeekPlan | null> {
   // After a failed try, wait half a day rather than retrying every few hours
   if (Date.now() - autoFailedAt < 12 * 3_600_000 || (await getWeek(date))) return null
   let settings = await getCoach()
-  if (!settings.focus.length) settings = await inferDirection()
-  if (!settings.focus.length) return null
+  if (pickOf(settings) === 'me' && !settings.focus.length) settings = await inferDirection()
+  if (pickOf(settings) === 'me' && !settings.focus.length) return null
+  // Tide picks the roadmaps from how they're sorted: wait for that, rather than plan a week on guesses
+  if (pickOf(settings) === 'tide' && (sortRunning() || (await curriculumStatus()).some((n) => !n.sorted))) {
+    sortRoadmaps().catch(() => {})
+    return null
+  }
   const plan = await planWeek(date, true).catch(() => null)
   if (!plan) autoFailedAt = Date.now()
   // The profile follows a new week, as when you plan it yourself
@@ -387,9 +445,31 @@ export async function setItemDone(date: string, index: number, done: boolean): P
   if (!plan || !item) return plan
   item.done = done
   await savePlan(plan)
+  if (item.kind === 'learn' && item.notebook && item.topicId) await tickTopic(item.notebook, item.topicId, done).catch(() => {})
   const todo = await thingsTodo(plan, item).catch(() => null)
   if (todo) await updateTask(todo, { completed: done }).catch(() => {})
   return plan
+}
+
+/**
+ * Ticks a topic in its roadmap (or unticks it), found by id. Only that line's checkbox changes:
+ * every other byte of the file stays as you (or Obsidian) wrote it.
+ */
+export async function tickTopic(notebook: string, topicId: string, done: boolean): Promise<boolean> {
+  const nb = (await getNotebooks()).find((n) => n.name === notebook)
+  if (!nb?.outline) return false
+  const md = await readText(nb.outline)
+  const topic = roadmapTopics(notebook, md).find((t) => t.id === topicId)
+  if (!topic || topic.checked === done) return false
+  const { preamble } = parseOutline(md)
+  const lines = md.split('\n')
+  const at = (preamble ? preamble.split('\n').length - 1 : 0) + topic.line
+  const box = /^(\s*[-*+]\s+\[)([ xX])(\])/
+  // Make sure it's still that topic's line before touching it
+  if (!box.test(lines[at] ?? '') || !lines[at].includes(topic.title.slice(0, 24))) return false
+  lines[at] = lines[at].replace(box, `$1${done ? 'x' : ' '}$3`)
+  await writeText(nb.outline, lines.join('\n'))
+  return true
 }
 
 /** The Things to-do made for a planned item, found by its title in the week's project */

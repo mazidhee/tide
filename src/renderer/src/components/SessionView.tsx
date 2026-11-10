@@ -7,7 +7,9 @@ import { reveal } from '../lib/scroll'
 import { Thinking } from './Thinking'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
-import { MODE_LABEL, NOTES_NUDGE, openingMessage, withPassage, parseBlocks, repliesWithoutNote, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
+import { paceNote } from '@shared/pace'
+import type { Reading } from '@shared/readings'
+import { MODE_LABEL, NOTES_NUDGE, ownWords, openingMessage, withPassage, parseBlocks, repliesWithoutNote, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
 import { cardsToMarkdown } from '@shared/cards'
 import { fileTitle, useApp, pagesLabel } from '../state'
@@ -24,6 +26,11 @@ import type { View } from '../state'
 import { Professor, type ProfessorPose } from './Professor'
 
 // Loaded when a lesson needs them: the code editor (Monaco) and the walkthrough canvas
+/** What Go on sends, and how a question of yours is marked, so neither is recorded as an answer */
+const GO_ON = 'Go on.'
+const ASKED = 'My question: '
+const answered = (said: string) => !said.startsWith(GO_ON) && !said.startsWith(ASKED)
+
 const CodeEditor = lazy(() => import('./CodeEditor').then((m) => ({ default: m.CodeEditor })))
 const LessonCanvas = lazy(() => import('./LessonCanvas').then((m) => ({ default: m.LessonCanvas })))
 import { parseVerdict, scorecardScore } from '@shared/interviews'
@@ -67,6 +74,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const recorded = useRef(new Set<string>())
   const talkRef = useRef(localStorage.getItem('tide.talk') === 'on')
   const answerRef2 = useRef<(said: string) => void>(() => {})
+  const carryOnRef = useRef(false)
+  const [picked, setPicked] = useState<number | null>(null)
+  const [asking, setAsking] = useState(false)
   const gradeIndex = useRef(0)
   // A right answer gets a lightbulb moment
   const [cheer, setCheer] = useState(0)
@@ -149,14 +159,16 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       activeId.current = id
       setBusy(true)
       setError(null)
-      const next = [...history, { role: 'user' as const, content }, { role: 'assistant' as const, content: '' }]
+      // Hidden notes for the tutor (pace, notes), kept with your message so every later request
+      // sends exactly the same text and the model server's cache still matches. Shown without them.
+      const notes = content.includes('(Tide: ') || history.length < 2 ? [] : [
+        mode === 'teach' || mode === 'quiz' ? paceNote(history, content) : null,
+        mode === 'teach' && history.length > 2 && repliesWithoutNote(history.filter((t) => t.role === 'assistant').map((t) => t.content)) >= 2 ? NOTES_NUDGE : null
+      ].filter((n): n is string => !!n)
+      const stored = notes.length ? `${content}\n\n${notes.join('\n')}` : content
+      const next = [...history, { role: 'user' as const, content: stored }, { role: 'assistant' as const, content: '' }]
       setTurns(next)
       const messages: ChatMessage[] = next.slice(0, -1).map((t) => ({ role: t.role, content: t.content }))
-      // Teaching: a nudge (not shown) when two replies in a row added nothing to the notes
-      if (mode === 'teach' && history.length > 2 && repliesWithoutNote(history.filter((t) => t.role === 'assistant').map((t) => t.content)) >= 2) {
-        const last = messages[messages.length - 1]
-        messages[messages.length - 1] = { ...last, content: `${last.content}\n\n${NOTES_NUDGE}` }
-      }
       // In a timed round the interviewer sees the time left with each answer, to pace the round
       if (timed) {
         clock.start()
@@ -169,7 +181,10 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   )
   sendRef.current = send
   answerRef2.current = (said) => {
-    if (!busy) send(`Answer: ${said}`, turnsRef.current)
+    if (busy) return
+    // Mid-explanation, "go on" (said alone) carries on; anything else is a question
+    if (carryOnRef.current) send(/^((yes|yeah|yep|ok|okay|sure|right),?\s+)?(go on|continue|next|carry on|keep going)( please)?[.!]?$/i.test(said.trim()) ? GO_ON : `${ASKED}${said}`, turnsRef.current)
+    else send(`Answer: ${said}`, turnsRef.current)
   }
   turnsRef.current = turns
 
@@ -260,9 +275,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const lastBlocks = parsed[parsed.length - 1] ?? []
   // Never leave the student without a box to answer in while the session is still going
   const lastIsTutor = turns[turns.length - 1]?.role === 'assistant'
+  // The tutor is carrying on explaining: Go on, or ask something (the box opens for a question)
+  const carryOn = !busy && lastIsTutor && lastBlocks.some((b) => b.kind === 'continue')
+  carryOnRef.current = carryOn
   const currentAsk = !busy
     ? ((lastBlocks.filter((b) => b.kind === 'ask').pop() as Extract<Block, { kind: 'ask' }> | undefined) ??
-      (lastIsTutor && lastBlocks.length && !lastBlocks.some((b) => b.kind === 'summary' || b.kind === 'scores') ? { kind: 'ask' as const, type: 'short' as const, prompt: '', options: [] } : undefined))
+      (lastIsTutor && lastBlocks.length && !carryOn && !lastBlocks.some((b) => b.kind === 'summary' || b.kind === 'scores') ? { kind: 'ask' as const, type: 'short' as const, prompt: '', options: [] } : undefined))
     : undefined
   askTypeRef.current = currentAsk?.type
   const plan = parsed.flatMap((b) => b ?? []).filter((b): b is Extract<Block, { kind: 'plan' }> => b.kind === 'plan').pop()
@@ -275,6 +293,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const withNotes = mode === 'teach' && notesOpen
   // Where this is covered in books you own, to read alongside the lesson
   const [toRead, setToRead] = useState<ReadingSuggestion[]>([])
+  // Free readings found for the topic (papers, specs, docs), saved PDFs open in Tide
+  const [found, setFound] = useState<Reading[]>([])
+  useEffect(() => {
+    if (mode !== 'teach') return
+    window.tide.readings.for(topic, 'path' in scope ? scope.path : undefined).then(setFound).catch(() => {})
+  }, [mode, topic, JSON.stringify(scope)])
   useEffect(() => {
     if (mode !== 'teach' || scope.kind === 'pages') return
     window.tide.books.suggest(topic, 2).then(setToRead).catch(() => {})
@@ -301,7 +325,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const talk = voice.talk
   talkRef.current = talk
   const stopTalking = voice.stop
-  const finished = !busy && turns.length > 1 && !currentAsk && lastBlocks.some((b) => b.kind === 'summary' || b.kind === 'scores')
+  const finished = !busy && turns.length > 1 && !currentAsk && !carryOn && lastBlocks.some((b) => b.kind === 'summary' || b.kind === 'scores')
   // Leaving mid-way keeps the session for later; finishing it lets it go
   const keepRef = useRef({ turns, busy, finished })
   keepRef.current = { turns, busy, finished }
@@ -405,6 +429,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         const key = `${i}`
         if (recorded.current.has(key) || ((busy || checking) && i === parsed.length - 1)) return
         recorded.current.add(key)
+        // A mark after "Go on" or a question of yours isn't an answer to record
+        if (!answered(turns[i - 1]?.content ?? '')) return
         const prevAsk = (parsed[i - 2] ?? []).filter((x) => x.kind === 'ask').pop() as Extract<Block, { kind: 'ask' }> | undefined
         const conf = turns[i - 1]?.content.match(/\(Confidence: (guessing|unsure|sure)\)/i)?.[1]?.toLowerCase()
         window.tide.learn.recordAttempt({
@@ -426,7 +452,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         }
         // Anything not right goes in the mistake journal, to come back until it is
         if (b.verdict !== 'correct' && prevAsk?.prompt && (mode === 'teach' || mode === 'quiz')) {
-          const said = turns[i - 1]?.content.replace(/^Answer:\s*/, '').replace(/\n\(Confidence: [^)]*\)\s*$/, '').trim()
+          const said = ownWords(turns[i - 1]?.content ?? '').replace(/^Answer:\s*/, '').replace(/\n\(Confidence: [^)]*\)\s*$/, '').trim()
           window.tide.mistakes
             .add([{ topic, path: sourcePath ?? (scope.kind === 'folder' ? scope.path : undefined), source: mode === 'teach' ? 'lesson' : 'quiz', question: prevAsk.prompt, answer: said, fix: b.text }])
             .catch(() => {})
@@ -445,7 +471,15 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const submit = (text?: string) => {
     if (busy) return
     const ran = runOut ? `\n\nWhen I ran it:\n\`\`\`\n${(runOut.stdout + runOut.stderr).slice(0, 1500) || '(no output)'}\n\`\`\`` : ''
-    const body = text ?? (currentAsk?.type === 'code' ? `${answer.trim() ? answer.trim() + '\n\n' : ''}\`\`\`${currentAsk.lang ?? 'python'}\n${code}\n\`\`\`${ran}` : answer.trim())
+    const choice = currentAsk?.type === 'choice' && currentAsk.options.length > 0
+    const pick = choice && picked !== null && currentAsk.options[picked] ? `(${String.fromCharCode(65 + picked)}) ${currentAsk.options[picked]}` : ''
+    const body =
+      text ??
+      (currentAsk?.type === 'code'
+        ? `${answer.trim() ? answer.trim() + '\n\n' : ''}\`\`\`${currentAsk.lang ?? 'python'}\n${code}\n\`\`\`${ran}`
+        : pick
+          ? `${pick}${answer.trim() ? `\nReasoning: ${answer.trim()}` : ''}`
+          : answer.trim())
     if (!body.trim()) return
     // Asking to be taught another way ("let's just talk it through") changes the approach from here
     const to = !text && approach ? switchFrom(body, approach) : null
@@ -461,12 +495,29 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       return
     }
     const conf = confidence ? `\n(Confidence: ${CONFIDENCE.find((c) => c.value === confidence)!.label.toLowerCase()})` : ''
-    send(text ? body : `Answer: ${body}${conf}`, turns)
+    send(text ? body : asking || carryOn ? `${ASKED}${body}` : `Answer: ${body}${conf}`, turns)
     setAnswer('')
+    setPicked(null)
+    setAsking(false)
     setConfidence(null)
     setHintLevel(0)
     setRunOut(null)
   }
+
+  // Keys: ⌘↵ carries on; 1 to 4 pick an option (when you're not typing)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const typing = (e.target as HTMLElement)?.closest?.('input, textarea, [contenteditable="true"]')
+      if (carryOn && !asking && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        send(GO_ON, turns)
+      } else if (!typing && currentAsk?.type === 'choice' && /^[1-9]$/.test(e.key) && Number(e.key) <= currentAsk.options.length) {
+        setPicked(Number(e.key) - 1)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [carryOn, asking, currentAsk, turns, send])
 
   const runMine = async () => {
     if (!currentAsk || running) return
@@ -697,13 +748,19 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       <div className={withNotes ? 'session-split' : 'session-solo'}>
       <div className="doc-scroll session-scroll">
         <div className="session-column">
-          {toRead.length > 0 && (
+          {(toRead.length > 0 || found.length > 0) && (
             <div className="s-read" aria-label="Read alongside">
               <Icon name="book" size={13} />
               <span className="muted">Read</span>
               {toRead.map((r) => (
                 <button key={`${r.path}:${r.from}`} className="s-read-link" onClick={() => app.openPath(r.path, `page=${r.from}`)} title={r.about ?? readingLabel(r)}>
                   {readingLabel(r)}
+                </button>
+              ))}
+              {found.slice(0, 4).map((r) => (
+                <button key={r.url} className="s-read-link" onClick={() => (r.path ? app.openPath(r.path) : window.tide.app.openExternal(r.url))} title={[r.by, r.why].filter(Boolean).join(': ') || r.title}>
+                  {r.title}
+                  {!r.path && <Icon name="external" size={11} />}
                 </button>
               ))}
             </div>
@@ -723,8 +780,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             if (i === 0 && t.role === 'user') return null
             if (t.role === 'user') {
               const isHint = t.content.startsWith('[hint]')
-              const text = t.content.replace(/^Answer: /, '').replace(/\n\(Confidence: \w+\)$/, '')
-              const conf = t.content.match(/\(Confidence: (\w+)\)$/)?.[1]
+              const own = ownWords(t.content)
+              const text = own.replace(/^Answer: /, '').replace(/^My question: /, '').replace(/\n\(Confidence: \w+\)$/, '')
+              const conf = own.match(/\(Confidence: (\w+)\)$/)?.[1]
               return (
                 <div key={i} className={`s-you${isHint ? ' hint' : ''}`}>
                   {isHint ? (
@@ -777,14 +835,28 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           {currentAsk && (
             <div className="s-answer">
               {currentAsk.type === 'choice' && currentAsk.options.length > 0 ? (
-                <div className="s-options">
-                  {currentAsk.options.map((o, k) => (
-                    <button key={k} className={`quiz-option${answer === o ? ' picked' : ''}`} onClick={() => setAnswer(o)}>
-                      <span className="option-key">{String.fromCharCode(65 + k)}</span>
-                      <span className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(o, env).trim().replace(/^<p[^>]*>|<\/p>$/g, '') }} />
-                    </button>
-                  ))}
-                </div>
+                <>
+                  <div className="s-options" role="radiogroup" aria-label="Options">
+                    {currentAsk.options.map((o, k) => (
+                      <button key={k} role="radio" aria-checked={picked === k} className={`quiz-option${picked === k ? ' picked' : ''}`} onClick={() => setPicked(picked === k ? null : k)} title={`Pick ${String.fromCharCode(65 + k)} (key ${k + 1})`}>
+                        <span className="option-key">{String.fromCharCode(65 + k)}</span>
+                        <span className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(o, env).trim().replace(/^<p[^>]*>|<\/p>$/g, '') }} />
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    ref={answerRef}
+                    className="s-input small"
+                    rows={2}
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit()
+                    }}
+                    placeholder={picked === null ? 'Pick one, or write your own answer' : 'Your reasoning (optional)'}
+                    aria-label="Your reasoning"
+                  />
+                </>
               ) : currentAsk.type === 'code' ? (
                 <>
                   <Suspense fallback={<div className="view-loading small" aria-busy="true" />}>
@@ -837,7 +909,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   ))}
                 </div>
                 <div className="row-gap">
-                  {currentAsk.type !== 'choice' && currentAsk.type !== 'code' && (
+                  {currentAsk.type !== 'code' && (
                     <DictateButton
                       target={answerRef}
                       onStart={stopTalking}
@@ -854,11 +926,52 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   <button className="tool-btn" onClick={() => submit("I don't know.")}>
                     <span>I don't know</span>
                   </button>
-                  <button className="btn primary" onClick={() => submit()} disabled={currentAsk.type === 'code' ? !code.trim() : !answer.trim()}>
+                  <button className="btn primary" onClick={() => submit()} disabled={currentAsk.type === 'code' ? !code.trim() : currentAsk.type === 'choice' && currentAsk.options.length > 0 ? picked === null && !answer.trim() : !answer.trim()}>
                     Submit <kbd>⌘↵</kbd>
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {carryOn && (
+            <div className="s-goon">
+              {asking ? (
+                <>
+                  <textarea
+                    ref={answerRef}
+                    className="s-input"
+                    rows={3}
+                    autoFocus
+                    value={answer}
+                    onChange={(e) => setAnswer(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit()
+                      if (e.key === 'Escape') setAsking(false)
+                    }}
+                    placeholder="What would you like to ask?"
+                    aria-label="Your question"
+                  />
+                  <div className="row-gap s-goon-bar">
+                    <DictateButton target={answerRef} onStart={stopTalking} where={heardIn} />
+                    <button className="tool-btn" onClick={() => (setAsking(false), setAnswer(''))}>
+                      Cancel
+                    </button>
+                    <button className="btn primary" onClick={() => submit()} disabled={!answer.trim()}>
+                      Ask <kbd>⌘↵</kbd>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="row-gap s-goon-bar">
+                  <button className="tool-btn" onClick={() => setAsking(true)}>
+                    I have a question
+                  </button>
+                  <button className="btn primary" autoFocus onClick={() => send(GO_ON, turns)}>
+                    Go on <kbd>⌘↵</kbd>
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

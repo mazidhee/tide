@@ -252,10 +252,50 @@ function pageImage(doc: Document, base: string): string | undefined {
   }
 }
 
-async function savePdfFromUrl(url: string, res: Response): Promise<ClipResult> {
-  const buffer = Buffer.from(await res.arrayBuffer())
+/** A response's body, stopped as soon as it's bigger than `max` bytes */
+async function readCapped(res: Response, max: number): Promise<Buffer> {
+  if (Number(res.headers.get('content-length') || 0) > max) throw new Error(`The file is larger than ${Math.round(max / 1e6)} MB.`)
+  const reader = res.body?.getReader()
+  if (!reader) return Buffer.alloc(0)
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > max) {
+      await reader.cancel().catch(() => {})
+      throw new Error(`The file is larger than ${Math.round(max / 1e6)} MB.`)
+    }
+    chunks.push(value)
+  }
+  return Buffer.concat(chunks)
+}
+
+/** A PDF from a link into the Library: only a real PDF (it starts with %PDF-), and only up to `max` bytes */
+export async function downloadPdf(url: string, opts: { title?: string; max?: number; timeoutMs?: number; allow?: (url: string) => boolean } = {}): Promise<ClipResult> {
+  const signal = AbortSignal.timeout(opts.timeoutMs ?? 60_000)
+  // Redirects are followed by hand, so each hop can be checked against the sites allowed
+  let at = url
+  for (let hop = 0; hop < 6; hop++) {
+    if (opts.allow && !opts.allow(at)) throw new Error('That link leads to a site PDFs aren’t taken from.')
+    const res = await fetch(at, { headers: { 'User-Agent': BROWSER_UA, Accept: 'application/pdf' }, redirect: 'manual', signal })
+    const next = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null
+    if (next) {
+      at = new URL(next, at).toString()
+      continue
+    }
+    if (!res.ok) throw new Error(`The file answered ${res.status} ${res.statusText}`)
+    return savePdfFromUrl(at, res, opts)
+  }
+  throw new Error('Too many redirects.')
+}
+
+async function savePdfFromUrl(url: string, res: Response, opts: { title?: string; max?: number } = {}): Promise<ClipResult> {
+  const buffer = await readCapped(res, opts.max ?? 200_000_000)
+  if (buffer.subarray(0, 1024).indexOf('%PDF-') < 0) throw new Error('That link isn’t a PDF.')
   const fromUrl = decodeURIComponent(basename(new URL(url).pathname)) || 'document.pdf'
-  const name = sanitizeName(basename(fromUrl, extname(fromUrl)))
+  const name = sanitizeName(opts.title?.slice(0, 120) || basename(fromUrl, extname(fromUrl)))
   const path = uniquePath(joinRel(libraryDir('PDFs'), `${name}.pdf`))
   await fs.mkdir(absPath(libraryDir('PDFs')), { recursive: true })
   await fs.writeFile(absPath(path), buffer)
@@ -265,7 +305,8 @@ async function savePdfFromUrl(url: string, res: Response): Promise<ClipResult> {
 async function saveArticle(url: string): Promise<ClipResult> {
   const res = await fetch(url, {
     headers: { 'User-Agent': BROWSER_UA, Accept: 'text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.8' },
-    redirect: 'follow'
+    redirect: 'follow',
+    signal: AbortSignal.timeout(90_000)
   })
   if (!res.ok) throw new Error(`The page answered ${res.status} ${res.statusText}`)
   const type = res.headers.get('content-type') ?? ''

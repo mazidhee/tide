@@ -603,6 +603,19 @@ export interface TideApi {
     drills(): Promise<import('./drills').DrillResult[]>
   }
   /** Your goal and focus, the week planned towards them, and the learner profile */
+  /** Free readings found for a topic; when there are none yet, they're looked up in the background */
+  readings: {
+    /** path: the note or folder the lesson is on, so a private project's topics are never looked up */
+    for(topic: string, path?: string): Promise<import('./readings').Reading[]>
+  }
+  /** Your roadmaps sorted against your aims (main/curriculum) */
+  curriculum: {
+    status(): Promise<{ notebooks: import('../main/curriculum').SortStatus[]; error: string }>
+    sort(): Promise<import('../main/curriculum').SortStatus[]>
+    /** Each topic's place in the plan, by topic id, for the roadmap page */
+    view(notebook: string): Promise<import('./curriculum').CurriculumView>
+    setOverride(id: string, cls: import('./curriculum').SectionClass | null): Promise<Record<string, import('./curriculum').SectionClass>>
+  }
   coach: {
     get(): Promise<import('./coach').CoachSettings>
     save(s: import('./coach').CoachSettings): Promise<import('./coach').CoachSettings>

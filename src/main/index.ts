@@ -54,6 +54,10 @@ import { adjustPlan, auditRoadmap, planReadings, planToThings, sizePlan, syncFro
 import type { StudyPlan } from '@shared/plan'
 import { dayTasks, setTaskDone, thingsStatus } from './things'
 import { mapBook, mapNewBooks, pagesToRead } from './books'
+import { findReadings, readingsFor } from './readings'
+import { curriculumStatus, curriculumView, setOverride, sortError, sortRoadmaps } from './curriculum'
+import { aimsKey, aimsOf } from '@shared/coach'
+import type { SectionClass } from '@shared/curriculum'
 import { getBrain } from './brain'
 import { draftBrief, flowSteps, mapProject, projectDocs, projectMap, setProject } from './projects'
 import { onBrainEvent, recentBrainEvents } from './brainEvents'
@@ -256,7 +260,23 @@ function registerIpc() {
     auditRoadmap(id, path, Number(hours) || 6, (e) => send('ai:event', e))
   })
   handle('coach:get', () => getCoach())
-  handle('coach:save', (s: CoachSettings) => saveCoach(s))
+  handle('coach:save', async (s: CoachSettings) => {
+    const before = aimsKey(aimsOf(await getCoach()))
+    const saved = await saveCoach(s)
+    // New or reworded aims: sort the roadmaps again, in the background
+    if (aimsKey(aimsOf(saved)) !== before) sortRoadmaps().catch(() => {})
+    return saved
+  })
+  handle('readings:for', async (topic: string, path?: string) => {
+    const have = await readingsFor(topic)
+    // Nothing yet: look it up in the background, for next time (never for a private project)
+    if (!have.length) findReadings({ topic, path }).catch(() => {})
+    return have
+  })
+  handle('curriculum:status', async () => ({ notebooks: await curriculumStatus(), error: sortError() }))
+  handle('curriculum:sort', () => sortRoadmaps())
+  handle('curriculum:view', (notebook: string) => curriculumView(notebook))
+  handle('curriculum:setOverride', (id: string, cls: SectionClass | null) => setOverride(id, cls))
   handle('coach:week', (date?: string) => getWeek(date))
   handle('coach:planWeek', () => planWeek())
   handle('coach:profile', () => updateProfile())
@@ -620,6 +640,9 @@ app.whenReady().then(() => {
   setInterval(() => autoPlanWeek().catch(() => {}), 4 * 3_600_000)
   // Books you own get a map (chapters, pages, what each covers) in the background, a few at a time
   setTimeout(() => mapNewBooks().catch(() => {}), 180_000)
+  // Roadmaps sorted against your aims, for anything new since last time
+  setTimeout(() => sortRoadmaps().catch(() => {}), 150_000)
+  setInterval(() => sortRoadmaps().catch(() => {}), 6 * 3_600_000)
   setInterval(() => mapNewBooks().catch(() => {}), 6 * 3_600_000)
   // The tutor in the menu bar; its menu opens today's items and views in the main window
   initTray({

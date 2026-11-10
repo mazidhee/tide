@@ -125,6 +125,15 @@ const api: TideApi = {
     logDrill: invoke('practice:logDrill'),
     drills: invoke('practice:drills')
   },
+  readings: {
+    for: invoke('readings:for')
+  },
+  curriculum: {
+    status: invoke('curriculum:status'),
+    sort: invoke('curriculum:sort'),
+    view: invoke('curriculum:view'),
+    setOverride: invoke('curriculum:setOverride')
+  },
   coach: {
     get: invoke('coach:get'),
     save: invoke('coach:save'),
