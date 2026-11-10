@@ -410,10 +410,13 @@ export async function weekToThings(date = today()): Promise<{ project: string; t
   await ensureArea()
   const sections = plan.days.map((d) => ({
     heading: new Date(d.date + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }),
-    todos: d.items.map((it) => {
+    todos: d.items.map((it, index) => {
       const scope = it.notebook ? `folder:${it.notebook}` : undefined
       const url =
-        it.kind === 'learn' || it.kind === 'review'
+        // Opened as the week opens them: a Check with its questions, a refresher as a refresher
+        it.kind === 'check' || it.refresh
+          ? buildLink({ to: 'agenda', date: d.date, index })
+          : it.kind === 'learn' || it.kind === 'review'
           ? buildLink({ to: 'session', mode: 'teach', topic: it.topic ?? it.title, scope })
           : it.kind === 'quiz'
             ? buildLink({ to: 'session', mode: 'quiz', topic: it.topic ?? it.title, scope })
@@ -489,8 +492,11 @@ export async function addTopicAfter(notebook: string, afterId: string, title: st
   const clean = title.replace(/\s+/g, ' ').trim()
   if (!nb?.outline || !clean) return false
   const md = await readText(nb.outline)
-  const after = roadmapTopics(nb.name, md).find((t) => t.id === afterId)
-  if (!after) return false
+  const all = roadmapTopics(nb.name, md)
+  const after = all.find((t) => t.id === afterId)
+  // Not a topic its section already has, ticked or not (it would shift that topic's id)
+  const same = (a: string) => a.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+  if (!after || all.some((t) => t.sectionId === after.sectionId && same(t.title) === same(clean))) return false
   const { preamble } = parseOutline(md)
   const lines = md.split('\n')
   const at = (preamble ? preamble.split('\n').length - 1 : 0) + after.line
@@ -498,7 +504,8 @@ export async function addTopicAfter(notebook: string, afterId: string, title: st
   if (indent === undefined || !lines[at].includes(after.title.slice(0, 24))) return false
   let end = at + 1
   while (end < lines.length && lines[end].trim() && (lines[end].match(/^(\s*)/)?.[1].length ?? 0) > indent.length) end++
-  lines.splice(end, 0, `${indent}- [ ] ${clean}`)
+  // Keep the file's line endings (Windows-style files end each line with \r)
+  lines.splice(end, 0, `${indent}- [ ] ${clean}${lines[at].endsWith('\r') ? '\r' : ''}`)
   await writeText(nb.outline, lines.join('\n'))
   return true
 }
@@ -539,6 +546,8 @@ export async function savePlacement(setup: PlacementSetup, results: Record<strin
           it.done = true
           it.why = 'You showed you know this in the check: skipped'
           changed = true
+          const todo = await thingsTodo(plan, it).catch(() => null)
+          if (todo) await updateTask(todo, { completed: true }).catch(() => {})
         } else if (shaky.has(it.topicId) && !it.refresh) {
           it.refresh = true
           it.minutes = Math.min(it.minutes, 25)

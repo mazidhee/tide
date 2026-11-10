@@ -197,7 +197,7 @@ export function balanceWeek(input: BalanceInput): Balance {
     const sections = [...new Set(upcoming.map((c) => nb.topics.find((t) => t.id === c.topicId)?.sectionId).filter((id): id is string => !!id))]
     for (const id of sections) {
       if (checks.filter((c) => c.notebook === name).length >= 2) break
-      if (input.placement?.sections[id]) continue
+      // Topics no check has covered yet (a big section is checked in parts)
       const open = weekdayTopics(nb, input).filter((t) => t.sectionId === id && !input.placement?.topics[t.id])
       if (open.length < 3) continue
       checks.push({ notebook: name, section: open[0].section || name, sectionId: id, topics: open.slice(0, PLACEMENT_TOPICS).map((t) => ({ id: t.id, title: t.title })) })

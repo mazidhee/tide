@@ -15,27 +15,35 @@ export const useFlow = () => (useApp().settings.voice ?? DEFAULT_VOICE).dictatio
 /**
  * Hands-free with Wispr Flow: Tide leaves the microphone to Flow and keeps the answer box
  * focused; when Flow finishes putting your words in (one insert of several characters, not your
- * own typing) and nothing more comes for a moment, it's sent. Typing yourself holds it back.
+ * own typing or your own ⌘V) and nothing more comes for a moment, it's sent. Typing yourself holds
+ * it back. Listens on the document, so the box can come and go (it's remade for each question).
  */
-function watchFlow(box: HTMLTextAreaElement | HTMLInputElement, send: () => void): () => void {
+function watchFlow(box: () => HTMLTextAreaElement | HTMLInputElement | null | undefined, send: () => void): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined
+  let ownPaste = 0
   const onInput = (e: Event) => {
+    const el = box()
+    if (!el || e.target !== el) return
     const ev = e as InputEvent
-    const bulk = ev.inputType === 'insertFromPaste' || ev.inputType === 'insertReplacementText' || (ev.inputType === 'insertText' && (ev.data?.length ?? 0) > 2)
+    const pasted = ev.inputType === 'insertFromPaste' && Date.now() - ownPaste > 400
+    const bulk = pasted || (ev.inputType === 'insertText' && (ev.data?.length ?? 0) > 2)
     clearTimeout(timer)
-    if (bulk) timer = setTimeout(() => box.value.trim() && send(), 1200)
+    if (bulk) timer = setTimeout(() => el.value.trim() && box() === el && send(), 1200)
   }
   const onKey = (e: Event) => {
-    // Your own typing (not Flow's paste shortcut) means you're still writing
+    const el = box()
+    if (!el || e.target !== el) return
     const k = e as KeyboardEvent
-    if (!k.metaKey && !k.ctrlKey && k.key.length === 1) clearTimeout(timer)
+    // Your own ⌘V, or your own typing, means you're writing it yourself
+    if ((k.metaKey || k.ctrlKey) && k.key.toLowerCase() === 'v') ownPaste = Date.now()
+    else if (!k.metaKey && !k.ctrlKey && k.key.length === 1) clearTimeout(timer)
   }
-  box.addEventListener('input', onInput)
-  box.addEventListener('keydown', onKey)
+  document.addEventListener('input', onInput, true)
+  document.addEventListener('keydown', onKey, true)
   return () => {
     clearTimeout(timer)
-    box.removeEventListener('input', onInput)
-    box.removeEventListener('keydown', onKey)
+    document.removeEventListener('input', onInput, true)
+    document.removeEventListener('keydown', onKey, true)
   }
 }
 
@@ -238,11 +246,9 @@ export function useTalk(latest: { content: string; streaming: boolean; key: stri
   // With Wispr Flow, Flow listens: Tide keeps the box ready and sends when Flow has typed
   useEffect(() => {
     if (!talk || !handsFree || !flow) return
-    const box = flowRef.current?.box.current
-    if (!box) return
     setHearing('listening')
-    return watchFlow(box, () => flowRef.current?.submit())
-  }, [talk, handsFree, flow, latest?.key])
+    return watchFlow(() => flowRef.current?.box.current, () => flowRef.current?.submit())
+  }, [talk, handsFree, flow])
   useEffect(() => {
     if (flow && talk && handsFree && !busy && !speaking) flowRef.current?.box.current?.focus()
   }, [flow, talk, handsFree, busy, speaking])

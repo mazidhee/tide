@@ -221,7 +221,7 @@ export async function proposeChanges(notebook: string): Promise<Proposal[]> {
   const aims = aimsOf(await getCoach())
   const sections = sectionsOf(roadmapTopics(nb.name, await readText(nb.outline)))
   // Big roadmaps are shown a few topics a section, so the request stays a sensible size
-  const perSection = Math.max(3, Math.min(12, Math.floor(300 / Math.max(1, sections.length))))
+  const perSection = Math.max(1, Math.min(12, Math.floor(240 / Math.max(1, sections.length))))
   const { prompt, topics } = proposePrompt(aims, nb.name, sections, perSection)
   const onMac = await privatePath(nb.path).catch(() => true)
   const { text } = await ask(PROPOSE_SYSTEM, prompt, onMac, new AbortController().signal)

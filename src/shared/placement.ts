@@ -31,13 +31,16 @@ export interface PlacementStore {
 /** At most this many topics go into one check; a bigger section is checked in parts */
 export const PLACEMENT_TOPICS = 16
 
+/** Questions in a check; after the last answer the tutor is told to write the result, so a check always ends */
+export const PLACEMENT_QUESTIONS = 6
+
 export function placementInstructions(p: PlacementSetup): string {
   const list = p.topics.map((t, i) => `${i + 1}. ${t.title}`).join('\n')
   return `You are running a PLACEMENT CHECK on "${p.section}" (${p.notebook}): find out which of these topics the student already knows, so their plan can skip what they know and refresh what's rusty. They may have learned some of it years ago.
 Topics:
 ${list}
 
-- Ask at most 6 questions, one at a time. Each tests using an idea, not reciting a definition, and may cover more than one topic.
+- Ask at most ${PLACEMENT_QUESTIONS} questions, one at a time. Each tests using an idea, not reciting a definition, and may cover more than one topic.
 - Start with the most advanced topics: a confident right answer there shows the basics before it are known too. After a miss, step down to the topic it rests on.
 - Keep questions quick: choice when picking tests the idea well, short otherwise. Don't teach during the check: after each answer, a one-line grade and the next question.
 - Stop as soon as it's clear.
@@ -69,3 +72,8 @@ export const REFRESH_RULES = `This is a REFRESHER: the student learned this befo
 - Start straight away with one quick problem on the core of it.
 - Explain only what they get wrong or can't recall, briefly, then another problem like it.
 - Two or three problems in all, the last a little harder. Then <summary>what came back and anything still shaky</summary> and no ask tag.`
+
+/** The hidden note for a check's turn: from the last allowed answer on, write the result now */
+export function placementNote(answersSoFar: number): string | null {
+  return answersSoFar + 1 >= PLACEMENT_QUESTIONS ? '(Tide: that was the last question of the check. Mark this answer in one line, then write the <placement> result for every topic and the <summary>, and ask nothing more.)' : null
+}

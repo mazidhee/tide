@@ -33,3 +33,18 @@ describe('placement checks', () => {
     expect(openingMessage(s)).toMatch(/^Refresh me on Prime numbers/)
   })
 })
+
+describe('opening a planned item from Things', () => {
+  it('round-trips an agenda link and rejects bad ones', async () => {
+    const { buildLink, parseLink } = await import('../src/shared/deeplink')
+    expect(parseLink(buildLink({ to: 'agenda', date: '2026-11-12', index: 2 }))).toEqual({ to: 'agenda', date: '2026-11-12', index: 2 })
+    expect(parseLink('tide://agenda?date=tomorrow&index=1')).toBeNull()
+    expect(parseLink('tide://agenda?date=2026-11-12')).toBeNull()
+  })
+
+  it('ends a check after the sixth reply, whatever it says', async () => {
+    const { placementNote } = await import('../src/shared/placement')
+    expect(placementNote(4)).toBeNull()
+    expect(placementNote(5)).toMatch(/last question/)
+  })
+})

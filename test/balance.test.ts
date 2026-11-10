@@ -260,7 +260,7 @@ describe('placement in the week', () => {
     const lesson = items.findIndex((i) => i.kind === 'learn' && first.topics.some((t) => t.id === i.topicId))
     expect(at).toBeGreaterThanOrEqual(0)
     expect(at).toBeLessThan(lesson)
-    const again = balanceWeek(base2({ placement: { topics: {}, sections: Object.fromEntries(b.checks.map((c) => [c.sectionId, 1])) } }))
+    const again = balanceWeek(base2({ placement: { topics: Object.fromEntries(first.topics.map((t) => [t.id, { state: 'new' as const, at: 1 }])), sections: {} } }))
     expect(again.checks.map((c) => c.sectionId)).not.toContain(first.sectionId)
   })
 

@@ -296,7 +296,7 @@ export function proposePrompt(aims: { id: string; text: string; weight: string }
       return `  T${topics.length}. ${clip(t.title.replace(/\*\*/g, ''), 80)}`
     })
     const more = s.topics.length - shown.length
-    return `S${i + 1}. ${s.path.join(' > ') || notebook}${s.tagged ? ` [${s.tagged.toUpperCase()}]` : ''}\n${items.join('\n')}${more > 0 ? `\n  (+${more} more)` : ''}`
+    return `S${i + 1}. ${s.path.slice(-2).join(' > ') || notebook}${s.tagged ? ` [${s.tagged.toUpperCase()}]` : ''}\n${items.join('\n')}${more > 0 ? `\n  (+${more} more)` : ''}`
   })
   return { prompt: `Aims:\n${aimLines(aims)}\n\nRoadmap: ${notebook}\n${lines.join('\n')}`, topics }
 }
