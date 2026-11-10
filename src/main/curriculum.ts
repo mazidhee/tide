@@ -86,13 +86,28 @@ export interface SortStatus {
 }
 
 let running: Promise<SortStatus[]> | null = null
+let again = false
 let lastError = ''
 
-/** Sorts whatever isn't sorted yet; one run at a time */
+/** Sorts whatever isn't sorted yet; one run at a time, and once more if asked again meanwhile (new aims) */
 export function sortRoadmaps(): Promise<SortStatus[]> {
-  running ??= sortAll().finally(() => (running = null))
+  if (running) {
+    again = true
+    return running
+  }
+  const run = async (): Promise<SortStatus[]> => {
+    let out = await sortAll()
+    while (again) {
+      again = false
+      out = await sortAll()
+    }
+    return out
+  }
+  running = run().finally(() => (running = null))
   return running
 }
+
+export const sortRunning = () => !!running
 
 async function sortAll(): Promise<SortStatus[]> {
   const aims = aimsOf(await getCoach())
@@ -143,7 +158,10 @@ async function sortOne(notebook: string, outline: string, onMac: boolean, aims: 
   for (let i = 0; i < todo.length; i += SECTION_BATCH) {
     const batch = todo.slice(i, i + SECTION_BATCH)
     const { text, model } = await ask(SORT_SYSTEM, sortPrompt(aims, notebook, batch), onMac, signal)
-    Object.assign(sorted.sections, parseSort(extractJsonObject(text), aims, batch))
+    const got = parseSort(extractJsonObject(text), aims, batch)
+    // An untagged section the model gave no class: from what the aims said, so it isn't asked about forever
+    for (const s of batch) if (!s.tagged && got[s.id] && !got[s.id].class) got[s.id].class = Math.max(0, ...Object.values(got[s.id].serves)) >= 0.6 ? 'core' : 'skip'
+    Object.assign(sorted.sections, got)
     await save(model)
   }
 

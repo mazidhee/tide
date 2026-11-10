@@ -183,7 +183,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   answerRef2.current = (said) => {
     if (busy) return
     // Mid-explanation, "go on" (said alone) carries on; anything else is a question
-    if (carryOnRef.current) send(/^(go on|continue|next|carry on|okay,? go on)[.!]?$/i.test(said.trim()) ? GO_ON : `${ASKED}${said}`, turnsRef.current)
+    if (carryOnRef.current) send(/^((yes|yeah|yep|ok|okay|sure|right),?\s+)?(go on|continue|next|carry on|keep going)( please)?[.!]?$/i.test(said.trim()) ? GO_ON : `${ASKED}${said}`, turnsRef.current)
     else send(`Answer: ${said}`, turnsRef.current)
   }
   turnsRef.current = turns
@@ -297,8 +297,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const [found, setFound] = useState<Reading[]>([])
   useEffect(() => {
     if (mode !== 'teach') return
-    window.tide.readings.for(topic, scope.kind === 'folder' ? scope.path : undefined).then(setFound).catch(() => {})
-  }, [mode, topic, scope.kind])
+    window.tide.readings.for(topic, 'path' in scope ? scope.path : undefined).then(setFound).catch(() => {})
+  }, [mode, topic, JSON.stringify(scope)])
   useEffect(() => {
     if (mode !== 'teach' || scope.kind === 'pages') return
     window.tide.books.suggest(topic, 2).then(setToRead).catch(() => {})

@@ -1,8 +1,8 @@
 /**
  * Which roadmaps get this week, and what from each: decided from your aims, not from roadmap order.
  *
- * - A roadmap's value is how much your aims need what's left in it (its best three sections, so
- *   foundations at the front don't hide what they lead to), plus pressure from a deadline, plus a
+ * - A roadmap's value is how much your aims need what the next weeks would teach from it (and a
+ *   little of the best further on, so foundations in front don't bury it), plus a deadline's pressure, plus a
  *   little for keeping going with something you've been studying.
  * - Weekdays go to at most two roadmaps (or the ones you pinned), in proportion to that value.
  * - Within a roadmap, topics come in your roadmap's order (it's ordered so each builds on the last),
@@ -59,7 +59,7 @@ function bestAim(sorted: SortedRoadmap | null, sectionId: string, aims: Aim[]): 
   return [...aims].sort((a, b) => (serves[b.id] ?? 0) * (AIM_WEIGHT[b.weight] ?? 0.5) - (serves[a.id] ?? 0) * (AIM_WEIGHT[a.weight] ?? 0.5))[0]
 }
 
-const short = (t: string) => (t.length > 48 ? `${t.slice(0, 47)}…` : t)
+const short = (t: string) => (t.length > 64 ? `${t.slice(0, 63)}…` : t)
 
 /** Topics for weekdays, in roadmap order */
 function weekdayTopics(nb: BalanceNotebook, input: BalanceInput): RoadmapTopic[] {
@@ -73,13 +73,21 @@ function weekdayTopics(nb: BalanceNotebook, input: BalanceInput): RoadmapTopic[]
   })
 }
 
-/** How much your aims need what's left in a roadmap, 0..1 */
+/** How much a topic's section matters to your aims; a section you tagged core yourself counts as a needed foundation */
+const topicValue = (t: RoadmapTopic, nb: BalanceNotebook, input: BalanceInput) => Math.max(sectionValue(nb.sorted?.sections[t.sectionId], input.aims), t.tagged === 'core' ? 0.6 : 0)
+
+/**
+ * How much your aims need a roadmap now, 0..1: mostly what the next couple of weeks would teach
+ * from it, partly the best of what's further on (so foundations in front don't bury what they lead to)
+ */
 export function notebookValue(nb: BalanceNotebook, input: BalanceInput): number {
   if (!nb.ready || !nb.sorted) return 0.3
-  const left = new Set(weekdayTopics(nb, input).map((t) => t.sectionId))
-  const values = [...left].map((id) => sectionValue(nb.sorted!.sections[id], input.aims)).sort((a, b) => b - a)
-  const top = values.slice(0, 3)
-  return top.length ? top.reduce((a, b) => a + b, 0) / top.length : 0
+  const left = weekdayTopics(nb, input)
+  if (!left.length) return 0
+  const soon = left.slice(0, 12)
+  const next = soon.reduce((n, t) => n + topicValue(t, nb, input), 0) / soon.length
+  const best = [...new Set(left.map((t) => t.sectionId))].map((id) => sectionValue(nb.sorted!.sections[id], input.aims)).sort((a, b) => b - a).slice(0, 3)
+  return 0.65 * next + 0.35 * (best.reduce((a, b) => a + b, 0) / Math.max(1, best.length))
 }
 
 export function balanceWeek(input: BalanceInput): Balance {
@@ -130,7 +138,7 @@ export function balanceWeek(input: BalanceInput): Balance {
         section: t.section,
         topicId: t.id,
         ...(t.source ? { source: t.source } : {}),
-        why: serves >= 0.6 ? `${t.section ? `${t.section}: ` : ''}${serves >= 1 ? 'the heart of' : 'needed for'} ${short(aim!.text)}` : `Next in your ${name} roadmap${t.section ? ` (${t.section})` : ''}`
+        why: serves >= 0.6 ? `${t.section ? `${t.section}, ` : ''}${serves >= 1 ? 'for' : 'needed for'} ${short(aim!.text).replace(/^\w/, (c) => c.toLowerCase())}` : `Next in your ${name} roadmap${t.section ? ` (${t.section})` : ''}`
       })
     }
   }

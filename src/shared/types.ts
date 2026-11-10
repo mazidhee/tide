@@ -605,7 +605,8 @@ export interface TideApi {
   /** Your goal and focus, the week planned towards them, and the learner profile */
   /** Free readings found for a topic; when there are none yet, they're looked up in the background */
   readings: {
-    for(topic: string, notebook?: string): Promise<import('./readings').Reading[]>
+    /** path: the note or folder the lesson is on, so a private project's topics are never looked up */
+    for(topic: string, path?: string): Promise<import('./readings').Reading[]>
   }
   /** Your roadmaps sorted against your aims (main/curriculum) */
   curriculum: {

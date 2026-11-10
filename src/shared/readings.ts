@@ -30,13 +30,25 @@ const hostOf = (url: string) => {
 
 export const isBlocked = (url: string) => BLOCKED.test(hostOf(url))
 
+/** A site PDFs may come from, over https, by name (never an address on this Mac or the local network) */
+export function pdfHostAllowed(url: string): boolean {
+  let u: URL
+  try {
+    u = new URL(url)
+  } catch {
+    return false
+  }
+  const host = u.hostname.toLowerCase()
+  if (u.protocol !== 'https:' || /^[\d.]+$|^\[|:/.test(host) || host === 'localhost') return false
+  return !isBlocked(url) && PDF_HOSTS.test(host)
+}
+
 /** The PDF behind a link, when there is one Tide may download: arXiv's abstract pages become their PDF */
 export function pdfFor(url: string): string | null {
-  const host = hostOf(url)
-  if (!host || isBlocked(url) || !PDF_HOSTS.test(host)) return null
+  if (!pdfHostAllowed(url.replace(/^http:/i, 'https:'))) return null
   const arxiv = url.match(/arxiv\.org\/(?:abs|pdf)\/([^?#]+?)(?:\.pdf)?(?:[?#].*)?$/i)
   if (arxiv) return `https://arxiv.org/pdf/${arxiv[1]}`
-  return /\.pdf($|[?#])/i.test(url) ? url : null
+  return /\.pdf($|[?#])/i.test(url) ? url.replace(/^http:/i, 'https:') : null
 }
 
 export const READINGS_SYSTEM = 'You recommend real, well-known readings that are free and legal to read online. You never make up a title.'

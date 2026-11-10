@@ -250,12 +250,18 @@ export function classOf(topic: RoadmapTopic, sorted: SortedRoadmap | null, overr
   if (sorted?.enrichment.includes(topic.id)) return 'enrichment'
   if (overrides[topic.sectionId]) return overrides[topic.sectionId]
   const sort = sorted?.sections[topic.sectionId]
+  const most = (weights: string[]) => Math.max(0, ...aims.filter((a) => weights.includes(a.weight)).map((a) => sort?.serves[a.id] ?? 0))
   if (topic.tagged) {
-    // "Optional specialisation" in the roadmap, but a main aim is about it: it's core now
-    if (topic.tagged === 'elective' && sort && aims.some((a) => a.weight === 'main' && (sort.serves[a.id] ?? 0) >= 0.7)) return 'core'
+    // "Optional" or "later" in the roadmap, but a main aim is about it (core) or needs it (supporting)
+    if (topic.tagged === 'elective' && sort) return most(['main']) >= 0.7 ? 'core' : most(['main']) >= 0.6 ? 'supporting' : 'elective'
     return topic.tagged
   }
-  return sort?.class
+  if (!sort?.class) return undefined
+  // The model skipped or deferred a section a main or side aim needs: keep it, as supporting
+  if ((sort.class === 'skip' || sort.class === 'elective') && most(['main', 'side']) >= 0.6) return 'supporting'
+  // Only what you're curious about needs it: that's weekend reading, not weekday study
+  if ((sort.class === 'core' || sort.class === 'supporting') && most(['main', 'side']) < 0.3 && most(['curious']) >= 0.6) return 'enrichment'
+  return sort.class
 }
 
 /** Whether a roadmap has been sorted for these aims, enough to plan from (else it's planned in roadmap order) */

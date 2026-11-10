@@ -37,8 +37,12 @@ describe('paceNote', () => {
   })
 
   it('switches to a worked example after two misses', () => {
-    const history = [tutor('<grade verdict="wrong">no</grade> Try again'), you('Answer: 4'), tutor('<grade verdict="wrong" score="0">no</grade> Next'), you('Answer: 5')]
+    const history = [you('Answer: 3'), tutor('<grade verdict="wrong">no</grade> Try again'), you('Answer: 4'), tutor('<grade verdict="wrong" score="0">no</grade> Next')]
     expect(paceNote(history, 'Answer: 6')).toMatch(/worked example/)
+    // Not on "Go on" or a question, and a mark after "Go on" doesn't count as a miss
+    expect(paceNote(history, 'Go on.')).toBeNull()
+    expect(paceNote([...history, you('Go on.'), tutor('<grade verdict="correct">ok</grade>')], 'Answer: 7')).toMatch(/worked example/)
+    expect(paceNote([you('Go on.'), tutor('<grade verdict="wrong">x</grade>'), you('Go on.'), tutor('<grade verdict="wrong">x</grade>')], 'Answer: 1')).toBeNull()
     expect(paceNote([tutor('<grade verdict="correct">yes</grade>'), you('Answer: 3')], "I don't know.")).toBeNull()
     expect(paceNote([tutor('Q?'), you("Answer: I don't know")], "I don't know.")).toMatch(/worked example/)
   })

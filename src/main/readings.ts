@@ -7,7 +7,7 @@
  */
 import { aimOf, todayItems, type AgendaItem, type WeekPlan } from '@shared/coach'
 import { normalizeTitle } from '@shared/outline'
-import { isBlocked, parseReadings, pdfFor, readingsPrompt, wikipediaPick, READINGS_SYSTEM, type Reading } from '@shared/readings'
+import { isBlocked, parseReadings, pdfFor, pdfHostAllowed, readingsPrompt, wikipediaPick, READINGS_SYSTEM, type Reading } from '@shared/readings'
 import { extractJsonObject } from './ai'
 import { getCoach } from './coach'
 import { ask } from './curriculum'
@@ -17,6 +17,8 @@ import { verifyItems } from './planner'
 import { privatePath } from './projects'
 import { reindexPath } from './search'
 import { getSettings } from './settings'
+import { aboutMetabase } from '@shared/metabase'
+import { metabaseHost, metabaseReady } from './metabase'
 import { readText, writeText } from './vault'
 
 const STORE = '.tide/readings.json'
@@ -61,18 +63,28 @@ export async function readingsFor(topic: string): Promise<Reading[]> {
 
 const findingNow = new Set<string>()
 
-/** Finds readings for one topic, unless it has them (or is being looked up) already */
-export async function findReadings(it: { topic: string; notebook?: string; source?: string; section?: string }): Promise<Reading[]> {
+/** A lookup that found nothing is tried again after a day (the web may have been down) */
+const RETRY_EMPTY = 86_400_000
+
+/**
+ * Finds readings for one topic, unless it has them (or is being looked up) already. `path` is the
+ * note or folder the lesson is about: anything in a private project, or about your Metabase, is
+ * never looked up.
+ */
+export async function findReadings(it: { topic: string; notebook?: string; path?: string; source?: string; section?: string }): Promise<Reading[]> {
   const key = keyOf(it.topic)
   const have = (await load()).topics[key]
-  if (have || findingNow.has(key) || !key) return have?.items ?? []
+  const fresh = have && (have.items.length > 0 || Date.now() - have.at < RETRY_EMPTY)
+  if (fresh || findingNow.has(key) || !key) return have?.items ?? []
   if (getSettings().ai.webSearch?.provider === 'off') return []
-  const nb = it.notebook ? (await getNotebooks()).find((n) => n.name === it.notebook || n.path === it.notebook) : undefined
+  const notebooks = await getNotebooks()
+  const nb = notebooks.find((n) => n.name === it.notebook || n.path === it.notebook) ?? (it.path ? notebooks.find((n) => it.path === n.path || it.path!.startsWith(`${n.path}/`)) : undefined)
   // A private project's topics stay on this Mac: nothing is looked up for them
-  if (nb && (await privatePath(nb.path).catch(() => true))) return []
+  for (const p of [nb?.path, it.path]) if (p && (await privatePath(p).catch(() => true))) return []
+  if (metabaseReady() && aboutMetabase(it.topic, metabaseHost())) return []
   findingNow.add(key)
   try {
-    const items = await gather(it)
+    const items = await gather({ ...it, notebook: nb?.name ?? it.notebook })
     await update((s) => (s.topics[key] = { at: Date.now(), notebook: nb?.name ?? it.notebook ?? '', items }))
     return items
   } finally {
@@ -119,7 +131,7 @@ async function savePdfs(readings: Reading[], notebook?: string) {
     const week = Object.values(store.saved).filter((x) => x.at > Date.now() - 7 * 86_400_000).reduce((n, x) => n + x.bytes, 0)
     if (week >= WEEK_BYTES) return
     try {
-      const saved = await downloadPdf(pdf, { title: r.title, max: Math.min(MAX_PDF, WEEK_BYTES - week), timeoutMs: 45_000 })
+      const saved = await downloadPdf(pdf, { title: r.title, max: Math.min(MAX_PDF, WEEK_BYTES - week), timeoutMs: 45_000, allow: pdfHostAllowed })
       r.path = saved.path
       taken++
       const bytes = await sizeOf(saved.path)

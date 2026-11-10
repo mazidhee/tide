@@ -36,10 +36,11 @@ export function paceNote(history: PaceTurn[], said: string): string | null {
 
   const replies = history.filter((t) => t.role === 'assistant').map((t) => t.content)
   const answers = history.filter((t) => t.role === 'user').map((t) => t.content)
-  // Misses: the last two marks were wrong, or they said they didn't know twice (this answer included)
-  const marks = replies.map(verdictOf).filter(Boolean)
   const idk = (t: string) => /^(Answer:\s*)?(I don['’]t know|idk|no idea|not sure)\.?\s*(\n|$)/i.test(t)
-  const lastTwoWrong = marks.length >= 2 && marks.slice(-2).every((v) => v === 'wrong')
+  const isAnswer = (t: string) => /^Answer:/i.test(t) || idk(t)
+  // Misses only count on answers (not "Go on" or a question), and only marks given to answers
+  const marks = history.flatMap((t, i) => (t.role === 'assistant' && i > 0 && isAnswer(history[i - 1].content) ? [verdictOf(t.content)] : [])).filter(Boolean)
+  const lastTwoWrong = isAnswer(said) && marks.length >= 2 && marks.slice(-2).every((v) => v === 'wrong')
   const twoIdk = idk(said) && answers.length > 0 && idk(answers[answers.length - 1])
   if (twoIdk) return `${PACE_MARK} they've said twice they don't know. Don't ask another full question: show a short worked example of exactly the step they're missing, then ask them to fill in just that one step.)`
   if (lastTwoWrong) return `${PACE_MARK} their last two answers were wrong. Mark this one; if it's wrong again, stop setting full questions: show a short worked example of exactly the step they're missing, then ask them to fill in just that one step.)`

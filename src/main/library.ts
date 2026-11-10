@@ -273,10 +273,22 @@ async function readCapped(res: Response, max: number): Promise<Buffer> {
 }
 
 /** A PDF from a link into the Library: only a real PDF (it starts with %PDF-), and only up to `max` bytes */
-export async function downloadPdf(url: string, opts: { title?: string; max?: number; timeoutMs?: number } = {}): Promise<ClipResult> {
-  const res = await fetch(url, { headers: { 'User-Agent': BROWSER_UA, Accept: 'application/pdf' }, redirect: 'follow', signal: AbortSignal.timeout(opts.timeoutMs ?? 60_000) })
-  if (!res.ok) throw new Error(`The file answered ${res.status} ${res.statusText}`)
-  return savePdfFromUrl(res.url || url, res, opts)
+export async function downloadPdf(url: string, opts: { title?: string; max?: number; timeoutMs?: number; allow?: (url: string) => boolean } = {}): Promise<ClipResult> {
+  const signal = AbortSignal.timeout(opts.timeoutMs ?? 60_000)
+  // Redirects are followed by hand, so each hop can be checked against the sites allowed
+  let at = url
+  for (let hop = 0; hop < 6; hop++) {
+    if (opts.allow && !opts.allow(at)) throw new Error('That link leads to a site PDFs aren’t taken from.')
+    const res = await fetch(at, { headers: { 'User-Agent': BROWSER_UA, Accept: 'application/pdf' }, redirect: 'manual', signal })
+    const next = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null
+    if (next) {
+      at = new URL(next, at).toString()
+      continue
+    }
+    if (!res.ok) throw new Error(`The file answered ${res.status} ${res.statusText}`)
+    return savePdfFromUrl(at, res, opts)
+  }
+  throw new Error('Too many redirects.')
 }
 
 async function savePdfFromUrl(url: string, res: Response, opts: { title?: string; max?: number } = {}): Promise<ClipResult> {

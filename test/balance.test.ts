@@ -141,7 +141,7 @@ describe('balanceWeek', () => {
 
   it('says why, from the aim a topic serves', () => {
     const raft = balanceWeek(base()).candidates.find((c) => c.topic === 'Raft leader election')
-    expect(raft?.why).toMatch(/heart of Distributed systems/)
+    expect(raft?.why).toBe('12. Distributed Systems, for distributed systems and blockchain infrastructure')
   })
 
   it('lets your choices win over Tide’s', () => {
@@ -208,5 +208,28 @@ describe('the week from a balance', () => {
     const learn = plan.days.flatMap((d) => d.items).filter((i) => i.kind === 'learn')
     expect(learn.length).toBeGreaterThan(0)
     expect(learn.every((i) => i.topicId)).toBe(true)
+  })
+})
+
+describe('classes from aims', () => {
+  const nb = (map: Record<string, SortedRoadmap['sections'][string]>, md = MATHS) => notebook('Mathematics', md, bySection(map))
+  const classes = (n: BalanceNotebook) => balanceWeek(base({ notebooks: [n] })).candidates.map((c) => c.topic)
+
+  it('keeps a section a main aim needs even when the model skipped it', () => {
+    const topics = classes(nb({ 'Chapter 1: Numbers': { class: 'skip', serves: { chain: 0.6 } }, 'Chapter 2: Calculus': { class: 'skip', serves: {} }, 'Chapter 3: Number Theory': { class: 'core', serves: { chain: 1 } } }))
+    expect(topics).toContain('Prime numbers')
+    expect(topics).not.toContain('Limits')
+  })
+
+  it('sends what only a curious aim needs to the weekend', () => {
+    const b = balanceWeek(base({ notebooks: [nb({ 'Chapter 1: Numbers': { class: 'core', serves: { phil: 1 } }, 'Chapter 2: Calculus': { class: 'skip', serves: {} }, 'Chapter 3: Number Theory': { class: 'core', serves: { chain: 1 } } })] }))
+    expect(b.candidates.map((c) => c.topic)).not.toContain('Prime numbers')
+    expect(b.primers.map((p) => p.topic)).toContain('Prime numbers')
+  })
+
+  it('brings forward a LATER section your main aim needs, as supporting', () => {
+    const md = `## 23. Cryptography — LATER / OPTIONAL SPECIALIZATION\n\n- [ ] Elliptic curve signatures\n`
+    const n = notebook('Software Engineering', md, bySection({ '23. Cryptography': { serves: { chain: 0.6 } } }))
+    expect(balanceWeek(base({ notebooks: [n] })).candidates.map((c) => c.topic)).toEqual(['Elliptic curve signatures'])
   })
 })

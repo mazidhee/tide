@@ -267,10 +267,10 @@ function registerIpc() {
     if (aimsKey(aimsOf(saved)) !== before) sortRoadmaps().catch(() => {})
     return saved
   })
-  handle('readings:for', async (topic: string, notebook?: string) => {
+  handle('readings:for', async (topic: string, path?: string) => {
     const have = await readingsFor(topic)
-    // Nothing yet: look it up in the background, for next time
-    if (!have.length) findReadings({ topic, notebook }).catch(() => {})
+    // Nothing yet: look it up in the background, for next time (never for a private project)
+    if (!have.length) findReadings({ topic, path }).catch(() => {})
     return have
   })
   handle('curriculum:status', async () => ({ notebooks: await curriculumStatus(), error: sortError() }))

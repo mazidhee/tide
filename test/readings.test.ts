@@ -30,3 +30,15 @@ describe('readings', () => {
     expect(wikipediaPick('Raft leader election', [{ title: 'Kon-Tiki' }])).toBeNull()
   })
 })
+
+describe('pdfHostAllowed', () => {
+  it('takes only https links to allowed sites by name', async () => {
+    const { pdfHostAllowed } = await import('../src/shared/readings')
+    expect(pdfHostAllowed('https://arxiv.org/pdf/1234.5678')).toBe(true)
+    expect(pdfHostAllowed('http://arxiv.org/pdf/1234.5678')).toBe(false)
+    expect(pdfHostAllowed('https://127.0.0.1:8080/v1/models')).toBe(false)
+    expect(pdfHostAllowed('https://localhost/x.pdf')).toBe(false)
+    expect(pdfHostAllowed('https://evil.example/raft.pdf')).toBe(false)
+    expect(pdfHostAllowed('https://raft.github.io.evil.example/x.pdf')).toBe(false)
+  })
+})

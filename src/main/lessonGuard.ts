@@ -63,7 +63,7 @@ export async function exactCheck(req: ChatRequest): Promise<Exact | null> {
   const solution = solutionOf(text(prev))
   const mine = ownWords(text(said))
   // A pick from options (with reasoning after it) isn't a worked answer to compare
-  if (!solution || !/^Answer:/i.test(mine) || /^Answer:\s*\([A-Z]\)\s/.test(mine)) return null
+  if (!solution || req.askType === 'choice' || !/^Answer:/i.test(mine) || /^Answer:\s*\([A-Z]\)\s/.test(mine)) return null
   const expected = finalAnswer(solution)
   const theirs = finalAnswer(mine.replace(/^Answer:\s*/i, '').replace(/\n\(Confidence: [^)]*\)\s*$/, ''))
   if (!expected || !theirs) return null

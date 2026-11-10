@@ -15,9 +15,9 @@ import { pagesToRead } from './books'
 import { readingLabel } from '@shared/books'
 import { isSorted, roadmapTopics, sectionsOf, topicsLeft } from '@shared/curriculum'
 import { balanceWeek, type Balance, type BalanceNotebook } from '@shared/balance'
-import { getOverrides, loadSorted } from './curriculum'
+import { curriculumStatus, getOverrides, loadSorted, sortRoadmaps, sortRunning } from './curriculum'
 import { readingsForWeek } from './readings'
-import { parseOutline, serializeOutline } from '@shared/outline'
+import { parseOutline } from '@shared/outline'
 
 /**
  * The coach plans your week towards your goal and keeps a short learner profile.
@@ -44,6 +44,9 @@ export async function getCoach(): Promise<CoachSettings> {
   }
 }
 
+/** Minutes as set, 0 included (a day you don't study); undefined when not set */
+const minutes = (v: unknown) => (v === undefined || v === null || v === '' || !Number.isFinite(Number(v)) || Number(v) < 0 ? undefined : Math.round(Number(v)))
+
 export async function saveCoach(s: CoachSettings): Promise<CoachSettings> {
   const aims = (Array.isArray(s.aims) ? s.aims : [])
     .map((a) => ({ id: String(a.id || Math.random().toString(36).slice(2, 10)), text: String(a.text ?? '').trim().slice(0, 160), weight: (['main', 'side', 'curious'] as const).includes(a.weight) ? a.weight : 'side', since: Number(a.since) || Date.now() }))
@@ -55,8 +58,8 @@ export async function saveCoach(s: CoachSettings): Promise<CoachSettings> {
     focus: (Array.isArray(s.focus) ? s.focus : []).map(String).filter(Boolean).slice(0, 6),
     ...(s.pick === 'tide' || s.pick === 'me' ? { pick: s.pick } : {}),
     hoursPerWeek: Math.max(1, Math.min(60, Math.round(Number(s.hoursPerWeek) || 10))),
-    ...(Number(s.weekdayMinutes) > 0 ? { weekdayMinutes: Math.min(600, Math.round(Number(s.weekdayMinutes))) } : {}),
-    ...(Number(s.weekendMinutes) > 0 ? { weekendMinutes: Math.min(720, Math.round(Number(s.weekendMinutes))) } : {}),
+    ...(minutes(s.weekdayMinutes) !== undefined ? { weekdayMinutes: Math.min(600, minutes(s.weekdayMinutes)!) } : {}),
+    ...(minutes(s.weekendMinutes) !== undefined ? { weekendMinutes: Math.min(720, minutes(s.weekendMinutes)!) } : {}),
     days: (Array.isArray(s.days) ? s.days : DEFAULT_COACH.days).map(Number).filter((d) => d >= 0 && d <= 6),
     ...(s.direction ? { direction: String(s.direction).trim().slice(0, 500), directionAt: Number(s.directionAt) || Date.now() } : {})
   }
@@ -228,7 +231,8 @@ export async function planWeek(date = today(), background = false): Promise<Week
     return d.toISOString().slice(0, 10)
   }).filter((d) => settings.days.includes(new Date(d + 'T12:00:00Z').getUTCDay()))
   const weekend = studyDays.map((d) => [0, 6].includes(new Date(d + 'T12:00:00Z').getUTCDay()))
-  const dayMinutes = settings.weekdayMinutes || settings.weekendMinutes ? weekend.map((w) => (w ? (settings.weekendMinutes ?? settings.weekdayMinutes) : (settings.weekdayMinutes ?? settings.weekendMinutes)) ?? 60) : undefined
+  const set = settings.weekdayMinutes !== undefined || settings.weekendMinutes !== undefined
+  const dayMinutes = set ? weekend.map((w) => (w ? (settings.weekendMinutes ?? settings.weekdayMinutes) : (settings.weekdayMinutes ?? settings.weekendMinutes)) ?? 60) : undefined
   const hoursPerWeek = dayMinutes ? Math.max(1, dayMinutes.reduce((a, b) => a + b, 0) / 60) : settings.hoursPerWeek
   // The days are scheduled by code from the facts; the model only says why, in a few sentences
   const input = { weekStart: start, days: studyDays, hoursPerWeek, focus: balance.focus, candidates, shares: balance.shares, primers: balance.primers, weekend, dayMinutes, ...facts }
@@ -368,6 +372,11 @@ export async function autoPlanWeek(): Promise<WeekPlan | null> {
   let settings = await getCoach()
   if (pickOf(settings) === 'me' && !settings.focus.length) settings = await inferDirection()
   if (pickOf(settings) === 'me' && !settings.focus.length) return null
+  // Tide picks the roadmaps from how they're sorted: wait for that, rather than plan a week on guesses
+  if (pickOf(settings) === 'tide' && (sortRunning() || (await curriculumStatus()).some((n) => !n.sorted))) {
+    sortRoadmaps().catch(() => {})
+    return null
+  }
   const plan = await planWeek(date, true).catch(() => null)
   if (!plan) autoFailedAt = Date.now()
   // The profile follows a new week, as when you plan it yourself
@@ -442,18 +451,24 @@ export async function setItemDone(date: string, index: number, done: boolean): P
   return plan
 }
 
-/** Ticks a topic in its roadmap (or unticks it), found by id so a moved or reworded line elsewhere doesn't matter */
+/**
+ * Ticks a topic in its roadmap (or unticks it), found by id. Only that line's checkbox changes:
+ * every other byte of the file stays as you (or Obsidian) wrote it.
+ */
 export async function tickTopic(notebook: string, topicId: string, done: boolean): Promise<boolean> {
   const nb = (await getNotebooks()).find((n) => n.name === notebook)
   if (!nb?.outline) return false
   const md = await readText(nb.outline)
   const topic = roadmapTopics(notebook, md).find((t) => t.id === topicId)
   if (!topic || topic.checked === done) return false
-  const outline = parseOutline(md)
-  const line = outline.lines[topic.line]
-  if (line?.kind !== 'item') return false
-  line.checked = done
-  await writeText(nb.outline, serializeOutline(outline))
+  const { preamble } = parseOutline(md)
+  const lines = md.split('\n')
+  const at = (preamble ? preamble.split('\n').length - 1 : 0) + topic.line
+  const box = /^(\s*[-*+]\s+\[)([ xX])(\])/
+  // Make sure it's still that topic's line before touching it
+  if (!box.test(lines[at] ?? '') || !lines[at].includes(topic.title.slice(0, 24))) return false
+  lines[at] = lines[at].replace(box, `$1${done ? 'x' : ' '}$3`)
+  await writeText(nb.outline, lines.join('\n'))
   return true
 }
 
