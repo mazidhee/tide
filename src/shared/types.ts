@@ -14,6 +14,9 @@ export interface AISettings {
   agent?: boolean
   /** Context window the model runs with, in tokens; conversations are compacted to fit it */
   contextTokens?: number
+  /** Start the local model server when it isn't running (default on), with this command */
+  autoStart?: boolean
+  serverCommand?: string
   webSearch?: {
     provider: 'wikipedia' | 'brave' | 'tavily' | 'searxng' | 'off'
     apiKey?: string
@@ -666,6 +669,10 @@ export interface TideApi {
     variant(mistakeId: string): Promise<import('./bank').BankProblem | null>
     /** An easy first problem on a topic */
     preview(topic: string): Promise<import('./bank').BankProblem | null>
+    /** A lesson's first reply, written ahead for exactly this start */
+    opening(instructions: string, opening: string): Promise<string | null>
+    /** Quick problems from the last week's topics */
+    warmups(n?: number): Promise<import('./bank').BankProblem[]>
   }
   studyApi: {
     status(): Promise<import('../main/studyApi').StudyApiStatus>

@@ -1,4 +1,7 @@
-import { existsSync, readdirSync } from 'fs'
+import { spawn } from 'child_process'
+import { connect } from 'net'
+import { existsSync, openSync, readdirSync } from 'fs'
+import { app } from 'electron'
 import { homedir } from 'os'
 import { join } from 'path'
 import { getSettings } from './settings'
@@ -97,4 +100,68 @@ export async function speedStatus(): Promise<{ ready: boolean; detail: string }>
 export async function applySpeedups(): Promise<{ ready: boolean; detail: string }> {
   await tuneModelServer()
   return speedStatus()
+}
+
+// ---------- Starting the server ----------
+
+/** The command that starts Gemma on this Mac: yours, or the usual mlx-vlm one when it's installed */
+export function serverCommand(): string {
+  const own = getSettings().ai.serverCommand?.trim()
+  if (own) return own
+  const bin = join(homedir(), 'mlx-env312', 'bin', 'mlx_vlm.server')
+  if (!existsSync(bin)) return ''
+  let port = '8080'
+  try {
+    port = new URL(getSettings().ai.baseUrl).port || '8080'
+  } catch {
+    // keep 8080
+  }
+  return `${bin} --model mlx-community/gemma-4-12B-it-4bit --port ${port} --draft-block-size 3`
+}
+
+let startedAt = 0
+
+/**
+ * Starts the local model server when it isn't answering (after a restart, or it was closed),
+ * with the command above, at most once every few minutes. It keeps running when Tide quits:
+ * other apps may use it, and Tide finds it ready next time. Output goes to model-server.log.
+ */
+export async function ensureModelServer(): Promise<'running' | 'started' | 'off'> {
+  const { baseUrl, autoStart } = getSettings().ai
+  let url: URL
+  try {
+    url = new URL(baseUrl)
+  } catch {
+    return 'off'
+  }
+  if (!isLocal(url.hostname) || autoStart === false) return 'off'
+  // Something listening on the port is a server (maybe busy with a long reply and slow to answer):
+  // only when nothing is there at all is it started, so a second copy never loads alongside it
+  const port = Number(url.port || (url.protocol === 'https:' ? 443 : 80))
+  const listening = await new Promise<boolean>((done) => {
+    const sock = connect({ host: url.hostname === 'localhost' ? '127.0.0.1' : url.hostname.replace(/^\[|\]$/g, ''), port })
+    sock.setTimeout(2000)
+    sock.once('connect', () => (sock.destroy(), done(true)))
+    sock.once('timeout', () => (sock.destroy(), done(true)))
+    sock.once('error', () => done(false))
+  })
+  if (listening) return 'running'
+  const cmd = serverCommand()
+  if (!cmd || Date.now() - startedAt < 4 * 60_000) return 'off'
+  startedAt = Date.now()
+  const log = openSync(join(app.getPath('userData'), 'model-server.log'), 'a')
+  spawn('/bin/zsh', ['-lc', cmd], { detached: true, stdio: ['ignore', log, log] }).unref()
+  return 'started'
+}
+
+/** Waits for a server just started to answer, up to a couple of minutes (the model loads first) */
+export async function serverReady(timeoutMs = 150_000): Promise<boolean> {
+  const { baseUrl } = getSettings().ai
+  const end = Date.now() + timeoutMs
+  while (Date.now() < end) {
+    const ok = await fetch(`${new URL(baseUrl).origin}/v1/models`, { signal: AbortSignal.timeout(3000) }).then((r) => r.ok).catch(() => false)
+    if (ok) return true
+    await new Promise((r) => setTimeout(r, 3000))
+  }
+  return false
 }

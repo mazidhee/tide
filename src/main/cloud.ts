@@ -117,6 +117,69 @@ export function dayShare(t: { provider: string; model: string }): number {
   return Math.max(fromHeaders, own)
 }
 
+// ---------- How each model does at each job ----------
+
+// Per model and job: answers asked for and answered, time taken, and (for writing problems) how
+// many of its problems a second model passed. Kept in model-stats.json; recent results count most.
+type Stat = { n: number; ok: number; ms: number; reviewed: number; passed: number }
+const stats = new Map<string, Stat>()
+const statKey = (t: { provider: string; model: string }, task: string) => `${idOf(t)}|${task}`
+const statsPath = () => join(app.getPath('userData'), 'model-stats.json')
+let saving: ReturnType<typeof setTimeout> | undefined
+
+function saveStats() {
+  clearTimeout(saving)
+  saving = setTimeout(() => {
+    try {
+      writeFileSync(statsPath(), JSON.stringify(Object.fromEntries(stats)))
+    } catch {
+      // a record, never a reason to fail
+    }
+  }, 5000)
+}
+
+function bump(key: string, fn: (s: Stat) => void) {
+  const s = stats.get(key) ?? { n: 0, ok: 0, ms: 0, reviewed: 0, passed: 0 }
+  fn(s)
+  // Recent results count most: past 40, everything is halved
+  if (s.n > 40) Object.assign(s, { n: s.n / 2, ok: s.ok / 2, ms: s.ms / 2 })
+  if (s.reviewed > 40) Object.assign(s, { reviewed: s.reviewed / 2, passed: s.passed / 2 })
+  stats.set(key, s)
+  saveStats()
+}
+
+/** A request to a model finished: answered or not, and how long it took */
+export const noteOutcome = (t: { provider: string; model: string }, task: string, ok: boolean, ms: number) =>
+  bump(statKey(t, task), (s) => {
+    s.n++
+    if (ok) s.ok++
+    s.ms += ms
+  })
+
+/** A second model reviewed problems this model wrote: how many passed */
+export const noteReviewed = (t: { provider: string; model: string }, task: string, passed: number, total: number) =>
+  bump(statKey(t, task), (s) => {
+    s.reviewed += total
+    s.passed += passed
+  })
+
+/** Doing its job well enough to stay where it is in the line: after a fair number of tries, it mostly answers and mostly passes review */
+function healthy(t: { provider: string; model: string }, task: string): boolean {
+  const s = stats.get(statKey(t, task))
+  if (!s) return true
+  const answers = s.n < 8 || s.ok / s.n >= 0.6
+  const quality = s.reviewed < 8 || s.passed / s.reviewed >= 0.6
+  return answers && quality
+}
+
+export function loadStats() {
+  try {
+    for (const [k, v] of Object.entries(JSON.parse(readFileSync(statsPath(), 'utf8')) as Record<string, Stat>)) stats.set(k, v)
+  } catch {
+    // none yet
+  }
+}
+
 /** Today's use so far, from the usage log, so a restart doesn't forget it */
 export function loadDayUse() {
   try {
@@ -178,18 +241,19 @@ export function routeFor(task: CloudTask | null, engine: 'auto' | 'local' | 'clo
   const s = cloudSettings()
   if (s.mode === 'off' || engine === 'local') return null
   if (engine !== 'cloud' && (s.mode !== 'auto' || !task || !s.tasks[task] || overBudget())) return null
-  return (
-    chain(task).find(
-      (t) =>
-        !coolingDown(t) &&
-        underPace(t.provider) &&
-        // Open endpoints (no key) may train on what they're sent: only short checks go there, never a tutoring turn with your notes in it
-        (open || !providerInfo(t.provider, s).keyless) &&
-        // Today's allowance: the last few percent are left alone, and once a model is 70% through
-        // its day, routine work (solving an everyday problem) leaves the rest for what matters
-        dayShare(t) < (low ? 0.7 : 0.97)
-    ) ?? null
+  const able = chain(task).filter(
+    (t) =>
+      !coolingDown(t) &&
+      underPace(t.provider) &&
+      // Open endpoints (no key) may train on what they're sent: only short checks go there, never a tutoring turn with your notes in it
+      (open || !providerInfo(t.provider, s).keyless) &&
+      // Today's allowance: the last few percent are left alone, and once a model is 70% through
+      // its day, routine work (solving an everyday problem) leaves the rest for what matters
+      dayShare(t) < (low ? 0.7 : 0.97)
   )
+  // A model that keeps failing this job, or whose problems keep failing review, goes to the back
+  const job = task ?? 'other'
+  return able.find((t) => healthy(t, job)) ?? able[0] ?? null
 }
 
 /**

@@ -1,8 +1,11 @@
 import { promises as fs } from 'fs'
 import { BANK_SYSTEM, bankPrompt, batchReviewPrompt, parseBank, parseBatchReview, pickProblem, shortfall, slugOf, trusted, variantPrompt, type BankProblem, type Level } from '@shared/bank'
 import { localDate, nextStudyDay, todayItems } from '@shared/coach'
+import { openingKey, openingMessage, parseBlocks, sessionInstructions, SESSION_FORMAT, strategyChoice, withPassage, type SessionSetup } from '@shared/session'
+import type { ChatScope } from '@shared/types'
 import type { CloudTask } from '@shared/providers'
 import { askCloud, complete, NoCloud } from './ai'
+import { noteReviewed, type CloudTarget } from './cloud'
 import { getCoach, getWeek } from './coach'
 import { mistakesDue } from './mistakes'
 import { privatePath } from './projects'
@@ -45,7 +48,7 @@ async function updateBank(topic: string, fn: (problems: BankProblem[]) => BankPr
 export const markUsed = (topic: string, id: string) => updateBank(topic, (all) => all.map((p) => (p.id === id ? { ...p, usedAt: Date.now() } : p))).catch(() => {})
 
 /** Runs each problem's check, then has a second model review the batch */
-async function verify(problems: BankProblem[], signal: AbortSignal, cloud: boolean): Promise<BankProblem[]> {
+async function verify(problems: BankProblem[], signal: AbortSignal, cloud: boolean, writer?: CloudTarget): Promise<BankProblem[]> {
   const out: BankProblem[] = []
   for (const p of problems) {
     if (!p.check) {
@@ -59,6 +62,9 @@ async function verify(problems: BankProblem[], signal: AbortSignal, cloud: boole
   if (!cloud || signal.aborted) return out
   // A different model from the one that wrote them (marking, not maths), so it isn't checking its own work
   const verdicts = parseBatchReview(await askCloud(batchReviewPrompt(out), 'You check practice problems carefully and say exactly which are flawed. Reply in the format asked.', 'marking', signal, false, 1200).catch(() => ''), out.length)
+  // How the writer did, so a model whose problems keep failing review moves back in the line
+  const judged = verdicts.filter((v) => v !== undefined)
+  if (writer && judged.length) noteReviewed(writer, 'maths', judged.filter(Boolean).length, judged.length)
   return out.map((p, i) => (verdicts[i] === undefined ? p : { ...p, reviewed: verdicts[i]! }))
 }
 
@@ -72,8 +78,9 @@ export async function writeProblems(topic: string, counts: Partial<Record<Level,
   const prompt = bankPrompt(topic, counts)
   let out = ''
   let cloud = false
+  let writer: CloudTarget | undefined
   if (!o.local) {
-    out = await askCloud(prompt, BANK_SYSTEM, 'maths' as CloudTask, o.signal, o.routine).catch((e) => {
+    out = await askCloud(prompt, BANK_SYSTEM, 'maths' as CloudTask, o.signal, o.routine, 4000, (t) => (writer = t)).catch((e) => {
       if (e instanceof NoCloud) return ''
       throw e
     })
@@ -83,7 +90,7 @@ export async function writeProblems(topic: string, counts: Partial<Record<Level,
     if (o.cloudOnly) return 0
     out = await complete(prompt, BANK_SYSTEM, o.signal, 'background')
   }
-  const fresh = await verify(parseBank(out, topic, o.source ?? 'prep'), o.signal, cloud)
+  const fresh = await verify(parseBank(out, topic, o.source ?? 'prep'), o.signal, cloud, writer)
   if (!fresh.length) return 0
   await updateBank(topic, (all) => [...all, ...fresh])
   return fresh.filter(trusted).length
@@ -93,17 +100,17 @@ export async function writeProblems(topic: string, counts: Partial<Record<Level,
 const isPrivate = (notebook?: string) => (notebook ? privatePath(notebook).catch(() => true) : Promise.resolve(false))
 
 /** What to prepare: today's and the next study day's topics, and lessons in progress */
-async function comingTopics(): Promise<{ topic: string; notebook?: string }[]> {
+async function comingTopics(): Promise<{ topic: string; notebook?: string; lesson?: boolean }[]> {
   const today = localDate()
   const days = (await getCoach()).days
   const next = nextStudyDay(today, days)
-  const out: { topic: string; notebook?: string }[] = []
+  const out: { topic: string; notebook?: string; lesson?: boolean }[] = []
   for (const date of [today, next]) {
     const plan = await getWeek(date).catch(() => null)
     for (const it of todayItems(plan, date)) {
       if (it.done || !['learn', 'quiz', 'practice', 'test', 'review'].includes(it.kind)) continue
       const topic = it.topic ?? it.title.replace(/^(quiz|test|practi[cs]e|review)\s*:\s*/i, '')
-      if (topic && !out.some((t) => t.topic === topic)) out.push({ topic, notebook: it.notebook })
+      if (topic && !out.some((t) => t.topic === topic)) out.push({ topic, notebook: it.notebook, lesson: it.kind === 'learn' })
     }
   }
   const ongoing = JSON.parse(await fs.readFile(absPath('.tide/ongoing.json'), 'utf8').catch(() => '[]')) as { title: string }[]
@@ -141,6 +148,7 @@ export async function prepare(): Promise<typeof status> {
       added += await writeProblems(t.topic, need, { signal: controller.signal, local: false, routine, cloudOnly: true })
     }
     added += await prepareVariants(controller.signal, routine)
+    await prepareOpenings(topics, controller.signal, routine)
     status = { lastRun: Date.now(), added, topics: topics.length }
   } catch (e) {
     note = (e as Error).message
@@ -213,4 +221,107 @@ export function startBank() {
   if (timer) return
   setTimeout(() => void prepare(), 3 * 60_000)
   timer = setInterval(() => void prepare(), 30 * 60_000)
+}
+
+// ---------- Lesson openings, written ahead ----------
+
+const OPENINGS = `${DIR}/openings.json`
+
+type Opening = { topic: string; reply: string; at: number }
+
+const readOpenings = () => fs.readFile(absPath(OPENINGS), 'utf8').then((t) => JSON.parse(t) as Record<string, Opening>).catch(() => ({}) as Record<string, Opening>)
+
+/**
+ * The opening of a lesson written ahead for exactly this start (its instructions and opening
+ * message), handed over once: the lesson opens at once instead of waiting for the first reply.
+ */
+export async function openingFor(instructions: string, opening: string): Promise<string | null> {
+  const all = await readOpenings()
+  const key = openingKey(instructions, opening)
+  const hit = all[key]
+  if (!hit) return null
+  delete all[key]
+  await fs.writeFile(absPath(OPENINGS), JSON.stringify(all)).catch(() => {})
+  return hit.reply
+}
+
+/**
+ * Writes the openings of the lessons in your plan, the way the lesson would start them (the same
+ * teaching approach, the same book section), by the cloud model; kept a week.
+ */
+async function prepareOpenings(topics: { topic: string; notebook?: string; lesson?: boolean }[], signal: AbortSignal, routine: boolean) {
+  const { lessonPassage } = await import('./ai')
+  const all = await readOpenings()
+  const week = Date.now() - 7 * 86_400_000
+  for (const k of Object.keys(all)) if (all[k].at < week) delete all[k]
+  for (const t of topics.filter((x) => x.lesson)) {
+    if (signal.aborted || (await isPrivate(t.notebook))) continue
+    const scope: ChatScope = t.notebook ? { kind: 'folder', path: t.notebook } : { kind: 'vault' }
+    // A close call between two ways of teaching is settled when the lesson starts: nothing to write ahead
+    const choice = strategyChoice({ mode: 'teach', topic: t.topic }, scope)
+    if (choice && !choice.clear) continue
+    const setup: SessionSetup = { mode: 'teach', topic: t.topic, options: choice ? { strategy: choice.strategy } : undefined }
+    const found = await lessonPassage(t.topic).catch(() => null)
+    const opening = found ? withPassage(openingMessage(setup), found) : openingMessage(setup)
+    const instructions = sessionInstructions(setup)
+    const key = openingKey(instructions, opening)
+    if (all[key]) continue
+    const reply = await askCloud(opening, `You are Tide, a tutor who teaches one question at a time.\n\n${SESSION_FORMAT}\n\n${instructions}`, 'planning', signal, routine, 1500).catch((e) => {
+      if (e instanceof NoCloud) return ''
+      throw e
+    })
+    if (!reply) break
+    // Only an opening that asks something: the lesson needs a question to start from
+    if (parseBlocks(reply).some((b) => b.kind === 'ask')) all[key] = { topic: t.topic, reply, at: Date.now() }
+  }
+  await fs.mkdir(absPath(DIR), { recursive: true })
+  await fs.writeFile(absPath(OPENINGS), JSON.stringify(all))
+}
+
+/**
+ * After a miss in a lesson: one problem on exactly the idea that was missed (from the tutor's
+ * feedback), at the lesson's level, kept for that lesson so it comes next.
+ */
+export async function aimAt(topic: string, problem: string, missed: string, lesson: string, level: Level, local: boolean): Promise<void> {
+  const signal = new AbortController().signal
+  const prompt = variantPrompt(problem, missed, topic)
+  let out = ''
+  let cloud = false
+  if (!local) {
+    out = await askCloud(prompt, BANK_SYSTEM, 'maths', signal, false).catch(() => '')
+    cloud = !!out
+  }
+  if (!out) out = await complete(prompt, BANK_SYSTEM, signal, 'background').catch(() => '')
+  const [p] = await verify(parseBank(out, topic, 'variant'), signal, cloud).catch(() => [] as BankProblem[])
+  if (!p) return
+  await updateBank(topic, (all) => [...all, { ...p, level, forLesson: lesson }]).catch(() => {})
+}
+
+/**
+ * Quick problems from what was studied in the last week (topics answered in lessons and quizzes),
+ * from the bank: practice spaced out over days, on problems rather than only flashcards.
+ */
+export async function warmups(n = 2): Promise<BankProblem[]> {
+  const since = Date.now() - 7 * 86_400_000
+  const lines = (await fs.readFile(absPath('.tide/attempts.jsonl'), 'utf8').catch(() => ''))
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => {
+      try {
+        return JSON.parse(l) as { at: number; topic?: string }
+      } catch {
+        return null
+      }
+    })
+  const today = new Date().setHours(0, 0, 0, 0)
+  // Studied this week, but not today: a gap of a day or more is what makes recall count
+  const topics = [...new Set(lines.filter((a): a is { at: number; topic: string } => !!a?.topic && a.at >= since && a.at < today).map((a) => a.topic))]
+  const out: BankProblem[] = []
+  for (const t of topics.reverse()) {
+    if (out.length >= n) break
+    const bank = await readBank(t)
+    const p = pickProblem(bank.filter((x) => !x.usedAt || Date.now() - x.usedAt > 2 * 86_400_000), 2, () => false)
+    if (p) out.push(p)
+  }
+  return out
 }

@@ -1,10 +1,10 @@
 import { gradeAnswer } from './daily'
-import { hasKeys, listCloudModels, loadDayUse, setKey, testCloud, usageSummary } from './cloud'
+import { hasKeys, listCloudModels, loadDayUse, loadStats, setKey, testCloud, usageSummary } from './cloud'
 import { connectMetabase, disconnectMetabase, metabaseStatus } from './metabase'
 import { followVault } from './vaultHome'
-import { bankStatus, prepare as prepareBank, previewFor, startBank, variantFor } from './bank'
+import { bankStatus, openingFor, prepare as prepareBank, previewFor, startBank, variantFor, warmups } from './bank'
 import { newStudyApiToken, setStudyApi, startStudyApi, stopStudyApi, studyApiStatus } from './studyApi'
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, protocol, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, protocol, shell, powerMonitor } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import type { CompanyPrepRequest, OutlineDraftRequest, ChatRequest, ChatScope, LearningStatus, ReviewGrade, Settings, PdfHighlight, TutorThread } from '@shared/types'
@@ -44,7 +44,7 @@ import { importFile, libraryThumb, saveUrl } from './library'
 import { getHighlights, saveHighlights } from './highlights'
 import { librariesStatus, mathStatus, runCode, runProject, setupLibraries, setupMath } from './runner'
 import { searchStatus, setupSearch, wakeSearch } from './websearch'
-import { applySpeedups, speedStatus, tuneModelServer } from './modelServer'
+import { applySpeedups, ensureModelServer, serverReady, speedStatus, tuneModelServer } from './modelServer'
 import { labFlashcards } from './labCards'
 import { prewarmLesson, warmChat, warmLessons } from './agent'
 import { inBackground, onModelBusy } from './modelQueue'
@@ -314,6 +314,8 @@ function registerIpc() {
   handle('bank:prepare', () => prepareBank())
   handle('bank:variant', (mistakeId: string) => variantFor(mistakeId))
   handle('bank:preview', (topic: string) => previewFor(topic))
+  handle('bank:opening', (instructions: string, opening: string) => openingFor(instructions, opening))
+  handle('bank:warmups', (n?: number) => warmups(n))
   handle('studyApi:set', (patch: { enabled?: boolean; lan?: boolean }) => setStudyApi(patch))
   handle('studyApi:newToken', () => newStudyApiToken())
   handle('metabase:connect', (url: string, key: string) => connectMetabase(url, key))
@@ -554,16 +556,26 @@ if (app.isPackaged) app.setAsDefaultProtocolClient('tide')
 app.whenReady().then(() => {
   nativeTheme.themeSource = themeSource(getSettings().theme)
   wakeSearch().catch(() => {})
-  // Turn on prefix caching on a local mlx-vlm server, then load the chat prompt into it
-  tuneModelServer()
-    .then((r) => (r === 'unsupported' ? undefined : warmChat().then(() => warmLessons())))
-    .catch(() => {})
-  // A restarted server forgets them: check each minute, when the model is free, and turn them back on
+  // Start the model server if it isn't running, turn on prefix caching and the draft model, then
+  // load the chat and lesson prompts into it, so the first reply is quick
+  const ready = async () => {
+    if ((await ensureModelServer()) === 'started') await serverReady()
+    const r = await tuneModelServer()
+    if (r !== 'unsupported') await warmChat().then(() => warmLessons())
+  }
+  ready().catch(() => {})
+  // A restarted (or closed) server forgets all that: check each minute, when the model is free
   setInterval(() => {
-    inBackground(() => tuneModelServer())
+    inBackground(async () => {
+      if ((await ensureModelServer()) === 'started') await serverReady()
+      return tuneModelServer()
+    })
       .then((r) => (r === 'enabled' ? warmChat().then(() => warmLessons()) : undefined))
       .catch(() => {})
   }, 60_000)
+  // After sleep, the server may have dropped what it had ready: get Gemma ready again before you ask
+  powerMonitor.on('resume', () => setTimeout(() => ready().catch(() => {}), 4000))
+  powerMonitor.on('unlock-screen', () => setTimeout(() => ready().catch(() => {}), 2000))
 
   // Serves vault files (images, PDFs) to the renderer: vault://file/<relative path>
   protocol.handle('vault', (req) => {
@@ -579,6 +591,7 @@ app.whenReady().then(() => {
   registerIpc()
   // Today's cloud use so far, so the daily free allowance is tracked across restarts
   loadDayUse()
+  loadStats()
   // The problem bank tops itself up for what's coming, with the cloud models
   startBank()
   // The notes folder moved while Tide was closed or open: follow it, or ask where it went

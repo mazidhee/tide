@@ -72,6 +72,16 @@ Tide keeps a **problem bank** for the topics coming up: problems written ahead o
 - While you work on a problem, the next ones are prepared in the background (by the cloud model, or by Gemma while it's idle).
 - You can start answering as soon as a reply is written; its checks finish behind it. If you answer before they're done, they stop, so your answer goes first.
 
+## Instant answer checks
+
+When a problem's answer is a number or an expression, SymPy compares yours with the solution before the tutor marks it, so 1/2, 0.5 and 2/4 agree and a wrong result can never be marked correct. You'll see **Checked your final answer** above the reply. The tutor still marks your reasoning.
+
+## Built around your mistakes
+
+- **Worked examples first.** The first problem of a lesson, and the one after a miss, comes worked out up to the last step: you finish it. After that, problems come in full. Learning a new idea goes best this way.
+- **Aimed at what you missed.** After a wrong or partly right answer, a problem on exactly that idea is written for you (from the tutor's own feedback) and comes next.
+- **Ready when you start.** Lessons in your plan have their opening written ahead (taught from your book where you own one), so they start at once.
+
 ## Taught from your books
 
 When a book you own covers the lesson's topic, the lesson is taught from that section: its definitions, notation and examples, with problems that follow from it. Where the model's memory and the book disagree, the book wins.

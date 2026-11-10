@@ -6,6 +6,7 @@ import type { ChatEvent, ChatMessage, ChatRequest } from '@shared/types'
 import { routeFor } from './cloud'
 import { metabaseHost, metabaseReady } from './metabase'
 import { privatePath } from './projects'
+import { comparePython, finalAnswer, type Exact } from '@shared/answerCheck'
 import { createHash } from 'crypto'
 import { promises as fs } from 'fs'
 import { runCode } from './runner'
@@ -51,6 +52,24 @@ export async function mayLeaveMac(req: ChatRequest): Promise<boolean> {
   return true
 }
 
+/**
+ * Your final answer against the solution of the problem you were set, exactly (shared/answerCheck):
+ * before the tutor marks it, so a wrong result can't be marked right. Null when either side doesn't
+ * end in something SymPy can read.
+ */
+export async function exactCheck(req: ChatRequest): Promise<Exact | null> {
+  const prev = [...req.messages].reverse().find((m) => m.role === 'assistant')
+  const said = [...req.messages].reverse().find((m) => m.role === 'user')
+  const solution = solutionOf(text(prev))
+  if (!solution || !/^Answer:/i.test(text(said))) return null
+  const expected = finalAnswer(solution)
+  const theirs = finalAnswer(text(said).replace(/^Answer:\s*/i, '').replace(/\n\(Confidence: [^)]*\)\s*$/, ''))
+  if (!expected || !theirs) return null
+  const r = await runCode('python', comparePython(theirs, expected), '', 15_000).catch(() => null)
+  const out = r?.stdout.trim()
+  return out === 'MATCH' ? { result: 'match', theirs, expected } : out === 'NOMATCH' ? { result: 'mismatch', theirs, expected } : null
+}
+
 /** How long a check may hold up the lesson before it's skipped: you're waiting to answer */
 const SOLVE_MS = 45_000
 const REVIEW_MS = 30_000
@@ -68,12 +87,15 @@ export async function checkLessonReply(
   signal: AbortSignal,
   ask: (prompt: string, system: string, task: RequestKind, signal: AbortSignal, routine?: boolean) => Promise<string>,
   final = false,
-  opts: { fromBank?: boolean } = {}
+  opts: { fromBank?: boolean; exact?: Exact | null } = {}
 ): Promise<string[]> {
   const problems: string[] = []
   const earlier = req.messages.filter((m) => m.role === 'assistant').map(text)
   if (repeatsEarlier(reply, earlier)) problems.push('It asks a problem you already asked in this lesson: write a new one, with different objects, numbers and situation.')
   if (missingQuestion(reply)) problems.push('It sets a problem but never asks it: end with the question in an <ask> tag.')
+  // SymPy found their final answer wrong: a "correct" verdict can't stand
+  const verdict = /<grade\s+verdict\s*=\s*["']?(correct|partial|wrong)/i.exec(reply)?.[1]?.toLowerCase()
+  if (opts.exact?.result === 'mismatch' && verdict === 'correct') problems.push(`You marked it correct, but SymPy shows their final answer ${opts.exact.theirs} is not ${opts.exact.expected}: mark it as it is and point at the step that goes wrong.`)
 
   const step = (id: string, label: string, status: 'running' | 'done') => emit({ id: req.id, type: 'step', step: { id, kind: 'helper', label, status, depth: 0 } })
 
