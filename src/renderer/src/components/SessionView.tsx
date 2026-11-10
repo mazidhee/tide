@@ -75,6 +75,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const recorded = useRef(new Set<string>())
   const talkRef = useRef(localStorage.getItem('tide.talk') === 'on')
   const answerRef2 = useRef<(said: string) => void>(() => {})
+  const submitRef = useRef<() => void>(() => {})
   const carryOnRef = useRef(false)
   const [picked, setPicked] = useState<number | null>(null)
   const [asking, setAsking] = useState(false)
@@ -322,7 +323,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
 
   // Talk: the tutor speaks each reply as it writes it, and you answer by voice (or hands-free)
   const lastTurn = turns[turns.length - 1]
-  const voice = useTalk(lastTurn?.role === 'assistant' && turns.length > 1 ? { key: String(turns.length - 1), content: lastTurn.content, streaming: busy } : null, (said) => answerRef2.current(said), heardIn)
+  const voice = useTalk(lastTurn?.role === 'assistant' && turns.length > 1 ? { key: String(turns.length - 1), content: lastTurn.content, streaming: busy } : null, (said) => answerRef2.current(said), heardIn, { box: answerRef, submit: () => submitRef.current() })
   const talk = voice.talk
   talkRef.current = talk
   const stopTalking = voice.stop
@@ -534,6 +535,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [carryOn, asking, currentAsk, turns, send])
+
+  submitRef.current = () => submit()
 
   const runMine = async () => {
     if (!currentAsk || running) return

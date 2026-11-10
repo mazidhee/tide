@@ -492,7 +492,24 @@ function registerIpc() {
       return { installed: false, shortcut: '', model: '' }
     }
   })
+  // Wispr Flow: installed, and its push-to-talk key (read from its settings, shortcuts only)
+  handle('voice:flow', async () => {
+    const { readFile, access } = await import('fs/promises')
+    const installed = await access('/Applications/Wispr Flow.app').then(() => true, () => false)
+    try {
+      const data = JSON.parse(await readFile(join(app.getPath('home'), 'Library', 'Application Support', 'Wispr Flow', 'config.json'), 'utf8'))
+      const shortcuts: Record<string, string> = data?.prefs?.user?.shortcuts ?? {}
+      const keys = Object.entries(shortcuts).find(([, v]) => v === 'ptt')?.[0]
+      return { installed, pushToTalk: keys ? flowKeys(keys) : '' }
+    } catch {
+      return { installed, pushToTalk: '' }
+    }
+  })
 }
+
+/** Flow keeps shortcuts as macOS key codes ("59+63"): as you'd read them */
+const MAC_KEYS: Record<string, string> = { '63': 'Fn', '58': 'Left ⌥', '61': 'Right ⌥', '59': 'Left ⌃', '62': 'Right ⌃', '55': 'Left ⌘', '54': 'Right ⌘', '56': 'Left ⇧', '60': 'Right ⇧', '49': 'Space', '53': 'Esc', '57': 'Caps Lock' }
+const flowKeys = (codes: string) => codes.split('+').map((c) => MAC_KEYS[c] ?? `key ${c}`).join(' + ')
 
 const themeSource = (theme: Settings['theme']) =>
   theme === 'system' ? 'system' : theme === 'light' || theme === 'sepia' ? 'light' : 'dark'

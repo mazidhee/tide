@@ -508,7 +508,7 @@ function TutorSection() {
         </Row>
         <VoicePicker prefs={prefs} own={characterById(app.settings.character).voice} ready={ready && prefs.engine !== 'system'} save={save} hear={hear} />
         <Row label="Dictation" hint={DICTATION_HINT[prefs.dictation ?? 'tide']}>
-          <Select label="Dictation" value={prefs.dictation ?? 'tide'} onChange={(v) => save({ dictation: v as 'tide' | 'handy' | 'deepgram' })} options={[{ value: 'tide', label: 'Tide (Parakeet)' }, { value: 'deepgram', label: 'Deepgram (Nova-3)' }, { value: 'handy', label: 'Handy' }]} />
+          <Select label="Dictation" value={prefs.dictation ?? 'tide'} onChange={(v) => save({ dictation: v as 'tide' | 'handy' | 'deepgram' | 'flow' })} options={[{ value: 'flow', label: 'Wispr Flow' }, { value: 'tide', label: 'Tide (Parakeet)' }, { value: 'deepgram', label: 'Deepgram (Nova-3)' }, { value: 'handy', label: 'Handy' }]} />
         </Row>
         {prefs.dictation === 'deepgram' && <DeepgramKey />}
         <Row label="Speed">
@@ -520,6 +520,7 @@ function TutorSection() {
 }
 
 const DICTATION_HINT = {
+  flow: 'Wispr Flow types what you say into the answer box: hold your Flow key and speak. With Talk and Hands-free on, Tide sends what Flow types as soon as it finishes, and leaves the microphone to Flow. Flow works through its own service, so it isn’t limited to this Mac; use it outside private projects if that matters to you.',
   tide: 'Speak records you and Tide writes it out on this Mac (Parakeet).',
   deepgram: 'Deepgram writes out what you say, with the lesson’s topic as a hint for its jargon. Private projects and Metabase lessons still use Parakeet on this Mac, as does anything Deepgram can’t take.',
   handy: 'Speak puts the cursor in the box; press your Handy shortcut and Handy types what you say. Hands-free talk still uses Tide’s model.'

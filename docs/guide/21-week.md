@@ -35,6 +35,14 @@ Each study day gets a few items, sized to your time:
 
 Each item says why it's there ("Consensus, for distributed systems and blockchain infrastructure"). Finishing a lesson ticks it off here and in the roadmap.
 
+## Checking what you know
+
+The first time a section comes up, a **Check** goes just before its first lesson: up to six quick questions, hardest first. Topics you know are ticked off and their lessons this week marked done; rusty ones become short **refreshers** (problems first, explanation only where you miss); the rest are taught as usual. Each section is checked once, so early material you learned at school costs a quiz, not weeks.
+
+## Auditing a roadmap
+
+**Audit** on a roadmap page gives a frank review and, under it, **suggested changes** from your aims: move topics or sections (weekdays, weekend, later, skip), or add a missing prerequisite after a topic. Nothing changes until you **Apply** one; moves are recorded as your choices, and an added topic is one new line in the roadmap.
+
 ## Free readings
 
 For the week's lessons, Tide finds a few free, legal readings: a landmark paper, an RFC or spec, official docs, an open textbook chapter, and Wikipedia. Each is checked to exist before it's kept. Small PDFs from open archives (arXiv, RFCs, project and course sites) are saved into the Library under the notebook, so lessons use them too. Piracy sites are never used, and nothing is looked up for private projects. Turn web search off in Settings to stop it.

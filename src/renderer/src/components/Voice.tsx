@@ -6,6 +6,38 @@ import { Icon } from './Icon'
 
 let handyInfo: Promise<{ installed: boolean; shortcut: string; model: string }> | null = null
 const getHandy = () => (handyInfo ??= window.tide.app.handy())
+let flowInfo: Promise<{ installed: boolean; pushToTalk: string }> | null = null
+const getFlow = () => (flowInfo ??= window.tide.app.flow())
+
+/** Wispr Flow does the dictation: it types into whatever box has the cursor */
+export const useFlow = () => (useApp().settings.voice ?? DEFAULT_VOICE).dictation === 'flow'
+
+/**
+ * Hands-free with Wispr Flow: Tide leaves the microphone to Flow and keeps the answer box
+ * focused; when Flow finishes putting your words in (one insert of several characters, not your
+ * own typing) and nothing more comes for a moment, it's sent. Typing yourself holds it back.
+ */
+function watchFlow(box: HTMLTextAreaElement | HTMLInputElement, send: () => void): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const onInput = (e: Event) => {
+    const ev = e as InputEvent
+    const bulk = ev.inputType === 'insertFromPaste' || ev.inputType === 'insertReplacementText' || (ev.inputType === 'insertText' && (ev.data?.length ?? 0) > 2)
+    clearTimeout(timer)
+    if (bulk) timer = setTimeout(() => box.value.trim() && send(), 1200)
+  }
+  const onKey = (e: Event) => {
+    // Your own typing (not Flow's paste shortcut) means you're still writing
+    const k = e as KeyboardEvent
+    if (!k.metaKey && !k.ctrlKey && k.key.length === 1) clearTimeout(timer)
+  }
+  box.addEventListener('input', onInput)
+  box.addEventListener('keydown', onKey)
+  return () => {
+    clearTimeout(timer)
+    box.removeEventListener('input', onInput)
+    box.removeEventListener('keydown', onKey)
+  }
+}
 
 /** The voice: the character's own, at the speed and engine from Settings */
 export const useVoicePrefs = () => {
@@ -71,6 +103,12 @@ export function DictateButton({ target, onText, onStart, where }: { target?: Ref
   const start = async () => {
     // Handy chosen for dictation (or Tide's model not set up): Handy types into the box instead
     const by = (settings.voice ?? DEFAULT_VOICE).dictation
+    if (by === 'flow') {
+      target?.current?.focus()
+      const f = await getFlow()
+      say(f.installed ? `Hold ${f.pushToTalk || 'your Flow key'} and speak: Flow types your words here.` : 'Wispr Flow isn’t installed. Install it, or pick another dictation in Settings › Voice.')
+      return
+    }
     const deepgram = by === 'deepgram' && (await window.tide.voice.hasDeepgram().catch(() => false))
     const ready = by !== 'handy' && (deepgram || (await window.tide.voice.status().then((s) => s.ready).catch(() => false)))
     if (!ready) {
@@ -139,7 +177,7 @@ export function DictateButton({ target, onText, onStart, where }: { target?: Ref
  * voice: click the mic, or turn on hands-free and just talk. Space or Esc stops the tutor
  * mid-sentence (as when you interrupt someone). Remembered across conversations.
  */
-export function useTalk(latest: { content: string; streaming: boolean; key: string } | null, onText: (text: string) => void, where?: { path?: string; topic?: string }) {
+export function useTalk(latest: { content: string; streaming: boolean; key: string } | null, onText: (text: string) => void, where?: { path?: string; topic?: string }, flowBox?: { box: RefObject<HTMLTextAreaElement | HTMLInputElement | null>; submit: () => void }) {
   const prefs = useVoicePrefs()
   const [talk, setTalk] = useState(() => localStorage.getItem('tide.talk') === 'on')
   const [handsFree, setHandsFree] = useState(() => localStorage.getItem('tide.talk.handsfree') === 'on')
@@ -194,9 +232,23 @@ export function useTalk(latest: { content: string; streaming: boolean; key: stri
   // Hands-free: listen whenever the tutor is neither thinking nor talking
   const listener = useRef<Awaited<ReturnType<typeof listen>> | null>(null)
   const busy = !!latest?.streaming
+  const flow = useFlow()
+  const flowRef = useRef(flowBox)
+  flowRef.current = flowBox
+  // With Wispr Flow, Flow listens: Tide keeps the box ready and sends when Flow has typed
   useEffect(() => {
-    if (!talk || !handsFree) {
-      setHearing('off')
+    if (!talk || !handsFree || !flow) return
+    const box = flowRef.current?.box.current
+    if (!box) return
+    setHearing('listening')
+    return watchFlow(box, () => flowRef.current?.submit())
+  }, [talk, handsFree, flow, latest?.key])
+  useEffect(() => {
+    if (flow && talk && handsFree && !busy && !speaking) flowRef.current?.box.current?.focus()
+  }, [flow, talk, handsFree, busy, speaking])
+  useEffect(() => {
+    if (!talk || !handsFree || flow) {
+      if (!flow || !talk || !handsFree) setHearing('off')
       return
     }
     let live = true
@@ -226,7 +278,7 @@ export function useTalk(latest: { content: string; streaming: boolean; key: stri
       listener.current?.stop()
       listener.current = null
     }
-  }, [talk, handsFree])
+  }, [talk, handsFree, flow])
   useEffect(() => listener.current?.pause(busy || speaking), [busy, speaking])
 
   const toggle = () =>
@@ -239,11 +291,11 @@ export function useTalk(latest: { content: string; streaming: boolean; key: stri
       localStorage.setItem('tide.talk.handsfree', v ? 'off' : 'on')
       return !v
     })
-  return { talk, toggle, stop, handsFree, toggleHandsFree, speaking, hearing: busy || speaking ? ('off' as const) : hearing }
+  return { talk, toggle, stop, handsFree, toggleHandsFree, speaking, flow, hearing: busy || speaking ? ('off' as const) : hearing }
 }
 
 /** The Talk switch and, when talking, the mic (or hands-free listening) */
-export function TalkControls({ voice, onText, where }: { voice: ReturnType<typeof useTalk>; onText(text: string): void; where?: { path?: string; topic?: string } }) {
+export function TalkControls({ voice, onText, where, target }: { voice: ReturnType<typeof useTalk>; onText(text: string): void; where?: { path?: string; topic?: string }; target?: RefObject<HTMLTextAreaElement | HTMLInputElement | null> }) {
   return (
     <>
       <button
@@ -261,14 +313,14 @@ export function TalkControls({ voice, onText, where }: { voice: ReturnType<typeo
           type="button"
           className={`pill${voice.handsFree ? ' on' : ''} hands-free is-${voice.hearing}`}
           aria-pressed={voice.handsFree}
-          title={voice.handsFree ? 'Hands-free: just talk; Tide hears when you stop. Space or Esc interrupts the tutor.' : 'Hands-free: no clicking, just talk'}
+          title={voice.flow ? (voice.handsFree ? 'Hands-free with Wispr Flow: speak with Flow; what it types is sent when it finishes. Space or Esc interrupts the tutor.' : 'Hands-free: what Wispr Flow types is sent when it finishes') : voice.handsFree ? 'Hands-free: just talk; Tide hears when you stop. Space or Esc interrupts the tutor.' : 'Hands-free: no clicking, just talk'}
           onClick={voice.toggleHandsFree}
         >
           <span className="hear-dot" aria-hidden="true" />
-          {voice.handsFree ? (voice.hearing === 'speech' ? 'Hearing you…' : voice.hearing === 'writing' ? 'Writing it down…' : voice.speaking ? 'Speaking… (Esc)' : 'Listening') : 'Hands-free'}
+          {voice.handsFree ? (voice.speaking ? 'Speaking… (Esc)' : voice.flow ? 'Flow: sends when done' : voice.hearing === 'speech' ? 'Hearing you…' : voice.hearing === 'writing' ? 'Writing it down…' : 'Listening') : 'Hands-free'}
         </button>
       )}
-      {voice.talk && !voice.handsFree && <DictateButton onStart={voice.stop} onText={onText} where={where} />}
+      {voice.talk && !voice.handsFree && <DictateButton onStart={voice.stop} onText={voice.flow ? undefined : onText} target={target} where={where} />}
     </>
   )
 }
