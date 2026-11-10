@@ -617,6 +617,10 @@ export interface TideApi {
     setOverride(id: string, cls: import('./curriculum').SectionClass | null): Promise<Record<string, import('./curriculum').SectionClass>>
     /** A placement check's result: known topics ticked, shaky ones made refreshers in this week */
     placed(setup: import('./placement').PlacementSetup, results: Record<string, import('./placement').Known>): Promise<{ known: number; shaky: number; fresh: number }>
+    /** Suggested changes to a roadmap from your aims (nothing changes until you accept one) */
+    propose(notebook: string): Promise<import('./curriculum').Proposal[]>
+    /** Adds a topic to a roadmap after another: one new line */
+    addTopic(notebook: string, afterId: string, title: string): Promise<boolean>
   }
   coach: {
     get(): Promise<import('./coach').CoachSettings>

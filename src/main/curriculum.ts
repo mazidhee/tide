@@ -16,8 +16,12 @@ import {
   sectionValue,
   sortPrompt,
   ENRICH_SYSTEM,
+  PROPOSE_SYSTEM,
+  parseProposals,
+  proposePrompt,
   SORT_SYSTEM,
   type CurriculumView,
+  type Proposal,
   type Overrides,
   type SectionClass,
   type SortedRoadmap
@@ -208,4 +212,18 @@ export async function curriculumView(notebook: string): Promise<CurriculumView> 
   const out: CurriculumView['topics'] = {}
   for (const t of topics) out[t.id] = { class: classOf(t, live, overrides, aims), own: !!(overrides[t.id] ?? overrides[t.sectionId]), value: sectionValue(live?.sections[t.sectionId], aims) }
   return { sorted: isSorted(live, sectionsOf(topics), key), topics: out }
+}
+
+/** Suggested changes to a roadmap, from your aims: nothing changes until you accept one */
+export async function proposeChanges(notebook: string): Promise<Proposal[]> {
+  const nb = (await getNotebooks()).find((n) => n.name === notebook || n.path === notebook)
+  if (!nb?.outline) return []
+  const aims = aimsOf(await getCoach())
+  const sections = sectionsOf(roadmapTopics(nb.name, await readText(nb.outline)))
+  // Big roadmaps are shown a few topics a section, so the request stays a sensible size
+  const perSection = Math.max(3, Math.min(12, Math.floor(300 / Math.max(1, sections.length))))
+  const { prompt, topics } = proposePrompt(aims, nb.name, sections, perSection)
+  const onMac = await privatePath(nb.path).catch(() => true)
+  const { text } = await ask(PROPOSE_SYSTEM, prompt, onMac, new AbortController().signal)
+  return parseProposals(extractJsonObject(text), sections, topics)
 }

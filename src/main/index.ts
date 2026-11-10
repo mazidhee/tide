@@ -55,14 +55,14 @@ import type { StudyPlan } from '@shared/plan'
 import { dayTasks, setTaskDone, thingsStatus } from './things'
 import { mapBook, mapNewBooks, pagesToRead } from './books'
 import { findReadings, readingsFor } from './readings'
-import { curriculumStatus, curriculumView, setOverride, sortError, sortRoadmaps } from './curriculum'
+import { proposeChanges, curriculumStatus, curriculumView, setOverride, sortError, sortRoadmaps } from './curriculum'
 import { aimsKey, aimsOf } from '@shared/coach'
 import type { SectionClass } from '@shared/curriculum'
 import type { Known, PlacementSetup } from '@shared/placement'
 import { getBrain } from './brain'
 import { draftBrief, flowSteps, mapProject, projectDocs, projectMap, setProject } from './projects'
 import { onBrainEvent, recentBrainEvents } from './brainEvents'
-import { getCoach, getWeek, planWeek, saveCoach, updateProfile, inferDirection, autoPlanWeek, weekToThings, setItemDone, catchUp, rollOver, dayStats, journal, writeJournal, weekReview, saveReview, savePlacement } from './coach'
+import { getCoach, getWeek, planWeek, saveCoach, updateProfile, inferDirection, autoPlanWeek, weekToThings, setItemDone, catchUp, rollOver, dayStats, journal, writeJournal, weekReview, saveReview, savePlacement, addTopicAfter } from './coach'
 import { addMistakes, listMistakes, mistakesDue, retestMistake } from './mistakes'
 import { initTray, refreshTray, reportStudy, type StudyStatus } from './tray'
 import { localDate, todayItems } from '@shared/coach'
@@ -275,6 +275,8 @@ function registerIpc() {
     return have
   })
   handle('curriculum:placed', (setup: PlacementSetup, results: Record<string, Known>) => savePlacement(setup, results))
+  handle('curriculum:propose', (notebook: string) => proposeChanges(notebook))
+  handle('curriculum:addTopic', (notebook: string, afterId: string, title: string) => addTopicAfter(notebook, afterId, title))
   handle('curriculum:status', async () => ({ notebooks: await curriculumStatus(), error: sortError() }))
   handle('curriculum:sort', () => sortRoadmaps())
   handle('curriculum:view', (notebook: string) => curriculumView(notebook))

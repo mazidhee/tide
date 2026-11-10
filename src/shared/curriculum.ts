@@ -271,3 +271,63 @@ export function isSorted(sorted: SortedRoadmap | null, sections: Section[], aims
   const done = sections.filter((s) => sorted.sections[s.id] && (s.tagged || sorted.sections[s.id].class)).length
   return done / sections.length >= 0.95
 }
+
+// ---------- A roadmap audit's suggested changes ----------
+
+/** One change the audit suggests; nothing happens until you accept it */
+export type Proposal =
+  | { kind: 'place'; ids: string[]; label: string; to: SectionClass; why: string }
+  | { kind: 'add'; after: string; afterTitle: string; title: string; why: string }
+
+export const PROPOSE_SYSTEM = `You review a self-taught learner's roadmap against their aims and suggest a few concrete changes. Only suggest what clearly helps; three to eight changes is typical, none is fine.
+Kinds of change:
+- "place": move topics or whole sections to: weekdays (core to the aims), weekend (history or background), later (not needed yet), or skip (no aim uses it). Use section numbers (S3) for a whole section, topic numbers (T12) for single topics.
+- "add": a prerequisite the roadmap is missing, inserted after a topic number, only when a listed topic clearly can't be learned without it (e.g. modular arithmetic before ECDSA signatures).
+Never suggest skipping basic material an aim rests on; the learner's knowledge is checked separately.
+Reply with JSON only: {"changes":[{"kind":"place","targets":["S3","T12"],"to":"weekend","why":"..."},{"kind":"add","after":"T40","title":"Modular arithmetic","why":"..."}]}`
+
+/** The roadmap for the audit: sections numbered S1…, their topics numbered T1… (long sections shortened) */
+export function proposePrompt(aims: { id: string; text: string; weight: string }[], notebook: string, sections: Section[], perSection = 12): { prompt: string; topics: RoadmapTopic[] } {
+  const topics: RoadmapTopic[] = []
+  const lines = sections.map((s, i) => {
+    const shown = s.topics.filter((t) => !t.checked && !t.project).slice(0, perSection)
+    const items = shown.map((t) => {
+      topics.push(t)
+      return `  T${topics.length}. ${clip(t.title.replace(/\*\*/g, ''), 80)}`
+    })
+    const more = s.topics.length - shown.length
+    return `S${i + 1}. ${s.path.join(' > ') || notebook}${s.tagged ? ` [${s.tagged.toUpperCase()}]` : ''}\n${items.join('\n')}${more > 0 ? `\n  (+${more} more)` : ''}`
+  })
+  return { prompt: `Aims:\n${aimLines(aims)}\n\nRoadmap: ${notebook}\n${lines.join('\n')}`, topics }
+}
+
+const PLACE_TO: Record<string, SectionClass> = { weekdays: 'core', core: 'core', weekend: 'enrichment', enrichment: 'enrichment', later: 'elective', elective: 'elective', skip: 'skip' }
+
+/** The model's suggestions, checked: real sections and topics only, at most eight */
+export function parseProposals(raw: unknown, sections: Section[], topics: RoadmapTopic[]): Proposal[] {
+  const list = (raw as { changes?: unknown })?.changes
+  if (!Array.isArray(list)) return []
+  const out: Proposal[] = []
+  for (const c of list as { kind?: string; targets?: unknown; to?: string; after?: string; title?: string; why?: string }[]) {
+    const why = typeof c?.why === 'string' ? c.why.trim().slice(0, 200) : ''
+    if (c?.kind === 'place' && Array.isArray(c.targets) && PLACE_TO[String(c.to).toLowerCase()]) {
+      const picked = (c.targets as unknown[]).map(String).map((t) => {
+        const m = t.match(/^([ST])(\d+)$/i)
+        if (!m) return null
+        const n = Number(m[2]) - 1
+        return m[1].toUpperCase() === 'S' ? (sections[n] ? { id: sections[n].id, label: sections[n].path[sections[n].path.length - 1] ?? '' } : null) : topics[n] ? { id: topics[n].id, label: topics[n].title } : null
+      })
+      const ok = picked.filter((p): p is { id: string; label: string } => !!p)
+      if (ok.length) out.push({ kind: 'place', ids: ok.map((p) => p.id), label: ok.map((p) => p.label).join(', '), to: PLACE_TO[String(c.to).toLowerCase()], why })
+    } else if (c?.kind === 'add' && typeof c.title === 'string' && c.title.trim()) {
+      const m = String(c.after ?? '').match(/^T(\d+)$/i)
+      const after = m ? topics[Number(m[1]) - 1] : undefined
+      const title = c.title.trim().slice(0, 120)
+      // Not something the roadmap already has
+      const have = new Set(topics.map((t) => norm(t.title)))
+      if (after && !have.has(norm(title))) out.push({ kind: 'add', after: after.id, afterTitle: after.title, title, why })
+    }
+    if (out.length >= 8) break
+  }
+  return out
+}

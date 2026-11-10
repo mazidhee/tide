@@ -483,6 +483,26 @@ export async function tickTopics(notebook: string, topicIds: string[], done: boo
   return changed
 }
 
+/** A new topic in a roadmap, just after another (and its sub-topics), at the same indent: one line added, nothing else changed */
+export async function addTopicAfter(notebook: string, afterId: string, title: string): Promise<boolean> {
+  const nb = (await getNotebooks()).find((n) => n.name === notebook || n.path === notebook)
+  const clean = title.replace(/\s+/g, ' ').trim()
+  if (!nb?.outline || !clean) return false
+  const md = await readText(nb.outline)
+  const after = roadmapTopics(nb.name, md).find((t) => t.id === afterId)
+  if (!after) return false
+  const { preamble } = parseOutline(md)
+  const lines = md.split('\n')
+  const at = (preamble ? preamble.split('\n').length - 1 : 0) + after.line
+  const indent = lines[at]?.match(/^(\s*)[-*+]\s/)?.[1]
+  if (indent === undefined || !lines[at].includes(after.title.slice(0, 24))) return false
+  let end = at + 1
+  while (end < lines.length && lines[end].trim() && (lines[end].match(/^(\s*)/)?.[1].length ?? 0) > indent.length) end++
+  lines.splice(end, 0, `${indent}- [ ] ${clean}`)
+  await writeText(nb.outline, lines.join('\n'))
+  return true
+}
+
 const PLACEMENT = '.tide/placement.json'
 
 export async function getPlacement(): Promise<PlacementStore> {
