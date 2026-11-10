@@ -8,6 +8,7 @@ import { Thinking } from './Thinking'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
 import { paceNote } from '@shared/pace'
+import { parsePlacement } from '@shared/placement'
 import type { Reading } from '@shared/readings'
 import { MODE_LABEL, NOTES_NUDGE, ownWords, openingMessage, withPassage, parseBlocks, repliesWithoutNote, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
@@ -357,6 +358,21 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   useEffect(() => {
     if (finished) finishAgendaItem(topic)
   }, [finished, topic])
+
+  // A placement check that's finished: what you know is ticked off, what's rusty becomes a refresher
+  const placed = useRef(false)
+  useEffect(() => {
+    const setup = options?.placement
+    if (!finished || placed.current || !setup) return
+    const reply = [...turns].reverse().find((t) => t.role === 'assistant')?.content ?? ''
+    const results = parsePlacement(reply, setup.topics)
+    if (!results) return
+    placed.current = true
+    window.tide.curriculum
+      .placed(setup, results)
+      .then((r) => app.toast(`${r.known} known and ticked off, ${r.shaky} to refresh, ${r.fresh} to learn. Your week is updated.`))
+      .catch(() => app.toast('Couldn’t save what the check found. Try it again from Your week.', { tone: 'error' }))
+  }, [finished, options?.placement, turns, app])
 
   // When a session on a note ends: schedule the next explain-from-memory, and write session notes
   const wrapped = useRef(false)

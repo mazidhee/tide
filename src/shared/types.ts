@@ -615,6 +615,8 @@ export interface TideApi {
     /** Each topic's place in the plan, by topic id, for the roadmap page */
     view(notebook: string): Promise<import('./curriculum').CurriculumView>
     setOverride(id: string, cls: import('./curriculum').SectionClass | null): Promise<Record<string, import('./curriculum').SectionClass>>
+    /** A placement check's result: known topics ticked, shaky ones made refreshers in this week */
+    placed(setup: import('./placement').PlacementSetup, results: Record<string, import('./placement').Known>): Promise<{ known: number; shaky: number; fresh: number }>
   }
   coach: {
     get(): Promise<import('./coach').CoachSettings>

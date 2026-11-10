@@ -69,7 +69,7 @@ export function aimsKey(aims: Aim[]): string {
 
 export const DEFAULT_COACH: CoachSettings = { goal: '', focus: [], hoursPerWeek: 10, days: [1, 2, 3, 4, 5, 6] }
 
-export type AgendaKind = 'learn' | 'practice' | 'quiz' | 'review' | 'take-home' | 'test'
+export type AgendaKind = 'learn' | 'practice' | 'quiz' | 'review' | 'take-home' | 'test' | 'check'
 
 export interface AgendaItem {
   kind: AgendaKind
@@ -78,6 +78,10 @@ export interface AgendaItem {
   topic?: string
   /** Its id in the roadmap (shared/curriculum), so finishing it ticks the roadmap too */
   topicId?: string
+  /** A lesson that's a refresher: learned before, rusty */
+  refresh?: boolean
+  /** A Check: the section to test what you already know in */
+  check?: import('./placement').PlacementSetup
   notebook?: string
   minutes: number
   /** Why this, now: one line */
@@ -213,6 +217,8 @@ export interface TopicCandidate {
   source?: string
   /** Why it's next, for the week (from the aims it serves) */
   why?: string
+  /** Learned before and rusty (a placement check said so): a short refresher, not a lesson */
+  refresh?: boolean
 }
 
 /** The next unfinished topics in a roadmap, in order, with the section each sits in (projects are practised, not taught) */
@@ -319,7 +325,7 @@ export function todayItems(plan: WeekPlan | null, date: string): AgendaItem[] {
 }
 
 const dayName = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })
-const KIND_LABEL: Record<AgendaKind, string> = { learn: 'Learn', practice: 'Practise', quiz: 'Quiz', review: 'Review', 'take-home': 'Take-home', test: 'Test' }
+const KIND_LABEL: Record<AgendaKind, string> = { learn: 'Learn', practice: 'Practise', quiz: 'Quiz', review: 'Review', 'take-home': 'Take-home', test: 'Test', check: 'Check' }
 
 /** The week as a note you can read and edit */
 export function weekMarkdown(plan: WeekPlan): string {

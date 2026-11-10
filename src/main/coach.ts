@@ -15,6 +15,7 @@ import { pagesToRead } from './books'
 import { readingLabel } from '@shared/books'
 import { isSorted, roadmapTopics, sectionsOf, topicsLeft } from '@shared/curriculum'
 import { balanceWeek, type Balance, type BalanceNotebook } from '@shared/balance'
+import type { Known, PlacementSetup, PlacementStore } from '@shared/placement'
 import { curriculumStatus, getOverrides, loadSorted, sortRoadmaps, sortRunning } from './curriculum'
 import { readingsForWeek } from './readings'
 import { parseOutline } from '@shared/outline'
@@ -193,7 +194,7 @@ async function balanceFor(settings: CoachSettings, goals: Facts['goals']): Promi
   const aims = aimsOf(settings)
   const key = aimsKey(aims)
   const since = Date.now() - 14 * 86_400_000
-  const [all, overrides, log] = await Promise.all([getNotebooks(), getOverrides(), focusLog(since).catch(() => [])])
+  const [all, overrides, log, placement] = await Promise.all([getNotebooks(), getOverrides(), focusLog(since).catch(() => []), getPlacement()])
   const notebooks: BalanceNotebook[] = []
   const recent: Record<string, number> = {}
   for (const nb of all) {
@@ -203,7 +204,7 @@ async function balanceFor(settings: CoachSettings, goals: Facts['goals']): Promi
     notebooks.push({ name: nb.name, topics, sorted, ready: isSorted(sorted, sectionsOf(topics), key) })
     recent[nb.name] = log.filter((e) => e.path?.startsWith(`${nb.path}/`) || e.label === nb.name).reduce((n, e) => n + e.minutes, 0)
   }
-  return balanceWeek({ aims, notebooks, overrides, goals, hoursPerWeek: settings.hoursPerWeek, pick: pickOf(settings), pinned: settings.focus, recent })
+  return balanceWeek({ aims, notebooks, overrides, goals, hoursPerWeek: settings.hoursPerWeek, pick: pickOf(settings), pinned: settings.focus, recent, placement })
 }
 
 const DAY = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' })
@@ -235,7 +236,7 @@ export async function planWeek(date = today(), background = false): Promise<Week
   const dayMinutes = set ? weekend.map((w) => (w ? (settings.weekendMinutes ?? settings.weekdayMinutes) : (settings.weekdayMinutes ?? settings.weekendMinutes)) ?? 60) : undefined
   const hoursPerWeek = dayMinutes ? Math.max(1, dayMinutes.reduce((a, b) => a + b, 0) / 60) : settings.hoursPerWeek
   // The days are scheduled by code from the facts; the model only says why, in a few sentences
-  const input = { weekStart: start, days: studyDays, hoursPerWeek, focus: balance.focus, candidates, shares: balance.shares, primers: balance.primers, weekend, dayMinutes, ...facts }
+  const input = { weekStart: start, days: studyDays, hoursPerWeek, focus: balance.focus, candidates, shares: balance.shares, primers: balance.primers, checks: balance.checks, weekend, dayMinutes, ...facts }
   const plan = scheduleWeek(input)
   if (!plan.days.length) throw new Error("There's nothing to plan this week: your focus roadmaps are done, or no study days are set.")
   const outline = plan.days.map((d) => `${DAY(d.date)}: ${d.items.map((i) => `${i.kind} ${i.topic ?? i.title} (${i.minutes} min)`).join('; ')}`).join('\n')
@@ -456,20 +457,78 @@ export async function setItemDone(date: string, index: number, done: boolean): P
  * every other byte of the file stays as you (or Obsidian) wrote it.
  */
 export async function tickTopic(notebook: string, topicId: string, done: boolean): Promise<boolean> {
+  return (await tickTopics(notebook, [topicId], done)) > 0
+}
+
+/** Several at once (a placement check's known topics), in one write; returns how many changed */
+export async function tickTopics(notebook: string, topicIds: string[], done: boolean): Promise<number> {
   const nb = (await getNotebooks()).find((n) => n.name === notebook)
-  if (!nb?.outline) return false
+  if (!nb?.outline || !topicIds.length) return 0
   const md = await readText(nb.outline)
-  const topic = roadmapTopics(notebook, md).find((t) => t.id === topicId)
-  if (!topic || topic.checked === done) return false
+  const want = new Set(topicIds)
   const { preamble } = parseOutline(md)
   const lines = md.split('\n')
-  const at = (preamble ? preamble.split('\n').length - 1 : 0) + topic.line
+  const offset = preamble ? preamble.split('\n').length - 1 : 0
   const box = /^(\s*[-*+]\s+\[)([ xX])(\])/
-  // Make sure it's still that topic's line before touching it
-  if (!box.test(lines[at] ?? '') || !lines[at].includes(topic.title.slice(0, 24))) return false
-  lines[at] = lines[at].replace(box, `$1${done ? 'x' : ' '}$3`)
-  await writeText(nb.outline, lines.join('\n'))
-  return true
+  let changed = 0
+  for (const topic of roadmapTopics(notebook, md)) {
+    if (!want.has(topic.id) || topic.checked === done) continue
+    const at = offset + topic.line
+    // Make sure it's still that topic's line before touching it
+    if (!box.test(lines[at] ?? '') || !lines[at].includes(topic.title.slice(0, 24))) continue
+    lines[at] = lines[at].replace(box, `$1${done ? 'x' : ' '}$3`)
+    changed++
+  }
+  if (changed) await writeText(nb.outline, lines.join('\n'))
+  return changed
+}
+
+const PLACEMENT = '.tide/placement.json'
+
+export async function getPlacement(): Promise<PlacementStore> {
+  try {
+    const s = JSON.parse(await readText(PLACEMENT)) as PlacementStore
+    return { topics: s.topics ?? {}, sections: s.sections ?? {} }
+  } catch {
+    return { topics: {}, sections: {} }
+  }
+}
+
+/**
+ * A placement check's result: known topics are ticked in the roadmap and this week's lessons on
+ * them are marked done; shaky ones become short refreshers; new ones stay lessons.
+ */
+export async function savePlacement(setup: PlacementSetup, results: Record<string, Known>): Promise<{ known: number; shaky: number; fresh: number }> {
+  const store = await getPlacement()
+  const now = Date.now()
+  const ids = new Set(setup.topics.map((t) => t.id))
+  for (const [id, state] of Object.entries(results)) if (ids.has(id)) store.topics[id] = { state, at: now }
+  store.sections[setup.sectionId] = now
+  await writeText(PLACEMENT, JSON.stringify(store))
+  const known = Object.entries(results).filter(([id, s]) => ids.has(id) && s === 'known').map(([id]) => id)
+  const shaky = new Set(Object.entries(results).filter(([id, s]) => ids.has(id) && s === 'shaky').map(([id]) => id))
+  await tickTopics(setup.notebook, known, true).catch(() => 0)
+  // This week: lessons on what you know are done; on what's rusty, refreshers
+  const plan = await getWeek(today())
+  if (plan) {
+    let changed = false
+    for (const d of plan.days)
+      for (const it of d.items) {
+        if (it.kind !== 'learn' || !it.topicId || it.done) continue
+        if (known.includes(it.topicId)) {
+          it.done = true
+          it.why = 'You showed you know this in the check: skipped'
+          changed = true
+        } else if (shaky.has(it.topicId) && !it.refresh) {
+          it.refresh = true
+          it.minutes = Math.min(it.minutes, 25)
+          it.why = 'A refresher: you knew this, and it was rusty'
+          changed = true
+        }
+      }
+    if (changed) await savePlan(plan)
+  }
+  return { known: known.length, shaky: shaky.size, fresh: setup.topics.length - known.length - shaky.size }
 }
 
 /** The Things to-do made for a planned item, found by its title in the week's project */

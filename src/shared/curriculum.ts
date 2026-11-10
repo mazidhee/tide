@@ -169,7 +169,8 @@ For each aim, sort the sections it calls for into three lists by section number:
 - "needs": the aim's core material cannot be learned well without it (a foundation it is built on). Be strict: only what that work actually uses, not what is merely related or generally good to know.
 - "useful": helpful background, not required.
 Leave out every section the aim doesn't call for; most aims call for only a few sections of any roadmap.
-Also give a class for each section marked (untagged): core (some aim is about it or needs it), supporting (needed only because a core section uses it), elective (a specialisation or extra for later), enrichment (history, stories, philosophy or culture: interesting, not a skill), or skip (no aim calls for it).
+Also give a class for each section marked (untagged): core (some aim is about it or needs it), supporting (needed only because a core section uses it), elective (a specialisation or extra for later), enrichment (history, stories, philosophy or culture: interesting, not a skill), or skip (no aim uses it at all, even indirectly).
+Basic material an aim rests on is supporting, never skip, however elementary it looks (primes and divisibility for cryptography, logic and proof for reading protocol proofs): the learner may know it already, and Tide checks that with a few questions instead of teaching it again.
 Judge by what each section teaches, using its full path: "History" inside a blockchain section can be a mechanism (Proof of History), and "groups" means different things in algebra and in consensus.
 Reply with JSON only, like: {"aims":{"A1":{"about":[4],"needs":[1,2],"useful":[7]},"A2":{"about":[],"needs":[2],"useful":[]}},"classes":{"3":"core","5":"skip"}}`
 

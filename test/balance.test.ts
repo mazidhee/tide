@@ -99,7 +99,7 @@ const base = (over: Partial<BalanceInput> = {}): BalanceInput => ({ aims, notebo
 
 const days = ['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14']
 const week = (b: ReturnType<typeof balanceWeek>, hours = 12) =>
-  scheduleWeek({ weekStart: days[0], days, hoursPerWeek: hours, focus: b.focus, candidates: b.candidates, shares: b.shares, primers: b.primers, weekend: days.map((d) => new Date(d + 'T12:00:00Z').getUTCDay() === 6), goals: [], weak: [], dueCards: 0, mistakes: { count: 0, topics: [] }, undone: [] })
+  scheduleWeek({ weekStart: days[0], days, hoursPerWeek: hours, focus: b.focus, candidates: b.candidates, shares: b.shares, primers: b.primers, checks: b.checks, weekend: days.map((d) => new Date(d + 'T12:00:00Z').getUTCDay() === 6), goals: [], weak: [], dueCards: 0, mistakes: { count: 0, topics: [] }, undone: [] })
 
 describe('balanceWeek', () => {
   it('gives weekdays to the roadmaps your aims need, two at most', () => {
@@ -242,5 +242,36 @@ describe('main aims', () => {
     const b = balanceWeek({ ...base(), aims: aims2, notebooks: [maths(), swe(), fin], recent: { Mathematics: 300 } })
     expect(b.focus).toContain('Software Engineering')
     expect(b.focus).toContain('Finance')
+  })
+})
+
+describe('placement in the week', () => {
+  it('checks a section before its first lesson, once', () => {
+    const md = `## Number Theory\n\n- [ ] Primes\n- [ ] Divisibility\n- [ ] Modular arithmetic\n- [ ] Fermat's little theorem\n`
+    const nt = notebook('Mathematics', md, bySection({ 'Number Theory': { class: 'core', serves: { chain: 1 } } }))
+    const base2 = (over: Partial<BalanceInput> = {}) => base({ notebooks: [nt, swe()], ...over })
+    const b = balanceWeek(base2())
+    const check = b.checks.find((c) => c.section === 'Number Theory')
+    expect(check?.topics.map((t) => t.title)).toEqual(['Primes', 'Divisibility', 'Modular arithmetic', "Fermat's little theorem"])
+    const plan = week(b)
+    const items = plan.days.flatMap((d) => d.items)
+    const first = b.checks[0]
+    const at = items.findIndex((i) => i.kind === 'check' && i.title === first.section)
+    const lesson = items.findIndex((i) => i.kind === 'learn' && first.topics.some((t) => t.id === i.topicId))
+    expect(at).toBeGreaterThanOrEqual(0)
+    expect(at).toBeLessThan(lesson)
+    const again = balanceWeek(base2({ placement: { topics: {}, sections: Object.fromEntries(b.checks.map((c) => [c.sectionId, 1])) } }))
+    expect(again.checks.map((c) => c.sectionId)).not.toContain(first.sectionId)
+  })
+
+  it('drops what you know and makes what is rusty a short refresher', () => {
+    const swe = balanceWeek(base()).candidates.filter((c) => c.notebook === 'Software Engineering')
+    const [known, shaky] = [swe[0], swe[1]]
+    const b = balanceWeek(base({ placement: { topics: { [known.topicId!]: { state: 'known', at: 1 }, [shaky.topicId!]: { state: 'shaky', at: 1 } }, sections: {} } }))
+    expect(b.candidates.map((c) => c.topicId)).not.toContain(known.topicId)
+    expect(b.candidates.find((c) => c.topicId === shaky.topicId)?.refresh).toBe(true)
+    const item = week(b).days.flatMap((d) => d.items).find((i) => i.topicId === shaky.topicId)
+    expect(item?.refresh).toBe(true)
+    expect(item?.minutes).toBeLessThanOrEqual(25)
   })
 })

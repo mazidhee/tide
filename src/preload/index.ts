@@ -132,7 +132,8 @@ const api: TideApi = {
     status: invoke('curriculum:status'),
     sort: invoke('curriculum:sort'),
     view: invoke('curriculum:view'),
-    setOverride: invoke('curriculum:setOverride')
+    setOverride: invoke('curriculum:setOverride'),
+    placed: invoke('curriculum:placed')
   },
   coach: {
     get: invoke('coach:get'),

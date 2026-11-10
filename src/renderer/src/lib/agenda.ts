@@ -8,7 +8,7 @@ const ACTIVE = 'tide.agenda.active'
 /** Remembered, so finishing the lesson, quiz or test ticks it off */
 function remember(it: AgendaItem, at?: { date: string; index: number }) {
   try {
-    if (at) localStorage.setItem(ACTIVE, JSON.stringify({ ...at, topic: it.kind === 'test' || it.kind === 'take-home' ? it.title : (it.topic ?? it.title), since: Date.now() }))
+    if (at) localStorage.setItem(ACTIVE, JSON.stringify({ ...at, topic: it.kind === 'check' ? checkTopic(it.title) : it.kind === 'test' || it.kind === 'take-home' ? it.title : (it.topic ?? it.title), since: Date.now() }))
   } catch {
     // Storage unavailable: it just won't tick itself off
   }
@@ -26,14 +26,25 @@ export function lessonScope(app: ReturnType<typeof useApp>, it: AgendaItem): Cha
 /** Starts the lesson for a planned topic straight away (Home's "Next lesson") */
 export function startAgendaLesson(app: ReturnType<typeof useApp>, it: AgendaItem, at: { date: string; index: number }) {
   remember(it, at)
-  app.setView({ kind: 'session', mode: 'teach', scope: lessonScope(app, it), topic: it.topic ?? it.title, nonce: Date.now() })
+  app.setView({ kind: 'session', mode: 'teach', scope: lessonScope(app, it), topic: it.topic ?? it.title, ...(it.refresh ? { options: { refresh: true } } : {}), nonce: Date.now() })
 }
+
+/** The topic a Check's session runs under, so finishing it ticks the item off */
+export const checkTopic = (section: string) => `What I already know: ${section}`
 
 /** Opens a planned item where it's done: a lesson, a quiz, a test, Practice or Review */
 export function openAgendaItem(app: ReturnType<typeof useApp>, it: AgendaItem, at?: { date: string; index: number }) {
   remember(it, at)
   const scope = it.notebook ? ({ kind: 'folder', path: it.notebook } as const) : ({ kind: 'vault' } as const)
   const topic = it.topic ?? it.title
+  if (it.kind === 'check' && it.check) {
+    app.setView({ kind: 'session', mode: 'quiz', scope, topic: checkTopic(it.title), options: { placement: it.check, length: 6 }, nonce: Date.now() })
+    return
+  }
+  if (it.kind === 'learn' && it.refresh) {
+    app.setView({ kind: 'session', mode: 'teach', scope: lessonScope(app, it), topic, options: { refresh: true }, nonce: Date.now() })
+    return
+  }
   if (it.kind === 'learn') {
     // A note for the topic, if there is one; otherwise the tutor teaches it from the notebook
     const note = noteFor(app, topic)
@@ -52,7 +63,7 @@ export function openAgendaItem(app: ReturnType<typeof useApp>, it: AgendaItem, a
     })
 }
 
-export const AGENDA_LABEL: Record<AgendaItem['kind'], string> = { learn: 'Learn', practice: 'Practise', quiz: 'Quiz', review: 'Review', 'take-home': 'Take-home', test: 'Test' }
+export const AGENDA_LABEL: Record<AgendaItem['kind'], string> = { learn: 'Learn', practice: 'Practise', quiz: 'Quiz', review: 'Review', 'take-home': 'Take-home', test: 'Test', check: 'Check' }
 
 /** Ticks off the planned item this lesson, quiz or test was started from, if it was */
 export function finishAgendaItem(topic: string): void {
