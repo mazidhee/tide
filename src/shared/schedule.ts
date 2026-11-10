@@ -31,7 +31,7 @@ export interface ScheduleInput {
   dueCards: number
   mistakes: { count: number; topics: string[] }
   /** Learning planned before that didn't get done */
-  undone: { topic: string; notebook?: string }[]
+  undone: { topic: string; notebook?: string; topicId?: string }[]
   /** Share of last week's plan that got done, if there was one */
   lastDone?: number
 }
@@ -82,18 +82,18 @@ export function scheduleWeek(input: ScheduleInput): WeekPlan {
   const n = input.days.length
 
   // Queues: carried-over topics first, then each roadmap in order, never a topic twice
-  const queue = new Map<string, { topic: string; notebook: string; section?: string; carried?: boolean }[]>()
+  const queue = new Map<string, { topic: string; notebook: string; section?: string; topicId?: string; carried?: boolean }[]>()
   const seen = new Set<string>()
   for (const u of input.undone) {
     const nb = u.notebook && input.focus.includes(u.notebook) ? u.notebook : undefined
     if (!nb || seen.has(u.topic)) continue
     seen.add(u.topic)
-    queue.set(nb, [...(queue.get(nb) ?? []), { topic: u.topic, notebook: nb, carried: true }])
+    queue.set(nb, [...(queue.get(nb) ?? []), { topic: u.topic, notebook: nb, ...(u.topicId ? { topicId: u.topicId } : {}), carried: true }])
   }
   for (const c of input.candidates) {
     if (!input.focus.includes(c.notebook) || seen.has(c.topic)) continue
     seen.add(c.topic)
-    queue.set(c.notebook, [...(queue.get(c.notebook) ?? []), { topic: c.topic, notebook: c.notebook, section: c.section }])
+    queue.set(c.notebook, [...(queue.get(c.notebook) ?? []), { topic: c.topic, notebook: c.notebook, section: c.section, ...(c.topicId ? { topicId: c.topicId } : {}) }])
   }
 
   // Repair first: weak spots, due cards and mistakes, early in the week and again mid-week
@@ -133,6 +133,7 @@ export function scheduleWeek(input: ScheduleInput): WeekPlan {
         kind: 'learn',
         title: next.topic,
         topic: next.topic,
+        ...(next.topicId ? { topicId: next.topicId } : {}),
         notebook: nb,
         minutes,
         why: next.carried ? 'Carried over from last time' : goal && (shares.find((s) => s.notebook === nb)?.reason ?? '').includes('left') ? `Next in ${nb}, to keep "${goal.name}" on time` : `Next in your ${nb} roadmap${next.section ? ` (${next.section})` : ''}`,
@@ -164,7 +165,7 @@ export function scheduleWeek(input: ScheduleInput): WeekPlan {
     const shrink = [...plan[d]].reverse().find((it) => it.kind === 'learn')
     if (shrink && room(d) < 40) {
       plan[d] = plan[d].filter((it) => it !== shrink)
-      queue.get(shrink.notebook!)?.unshift({ topic: shrink.topic!, notebook: shrink.notebook! })
+      queue.get(shrink.notebook!)?.unshift({ topic: shrink.topic!, notebook: shrink.notebook!, ...(shrink.topicId ? { topicId: shrink.topicId } : {}) })
     }
     plan[d].push({ kind: 'take-home', title: `Take-home: build on ${taught[taught.length - 1].topic}`, notebook: top, minutes: Math.max(30, Math.min(60, room(d))), why: 'One harder problem to think through, using this week' })
   }

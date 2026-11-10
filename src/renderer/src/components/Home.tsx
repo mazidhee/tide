@@ -9,6 +9,8 @@ import { readPlan } from '@shared/plan'
 import { parseOutline } from '@shared/outline'
 import { ContextMenu, type MenuState } from './Menu'
 import { planGoal, type GoalPlan } from '../lib/goals'
+import { lessonScope, startAgendaLesson } from '../lib/agenda'
+import { localDate, todayItems, type AgendaItem } from '@shared/coach'
 import { useDailyCount } from '../lib/daily'
 import { openingRequest } from '../lib/openingRequest'
 import { PromptBox } from './PromptBox'
@@ -109,20 +111,40 @@ export function Home(_: { dueCount: number; cardCount: number }) {
   }, [app.files, app.settings.libraryFolder])
 
   const byPath = useMemo(() => new Map(notes.map((n) => [n.path, n])), [notes])
-  // The next lesson: the first goal's next topic
-  const nextTopic = plans.map((p) => ({ plan: p, topic: (p.inReview ? p.reviewTopics : p.today)[0] })).find((x) => x.topic)
-  const startLesson = () =>
-    nextTopic &&
-    app.setView({ kind: 'session', mode: nextTopic.plan.inReview ? 'quiz' : 'teach', scope: nextTopic.topic.path ? { kind: 'note', path: nextTopic.topic.path } : { kind: 'folder', path: nextTopic.plan.goal.notebook }, topic: nextTopic.topic.text, nonce: Date.now() })
+  // The next lesson: today's first unfinished lesson in the week's plan, which is ordered by what
+  // matters for your aims; without a plan, the first goal's next topic
+  const [planned, setPlanned] = useState<{ item: AgendaItem; date: string; index: number } | null>(null)
+  useEffect(() => {
+    const date = localDate()
+    window.tide.coach
+      .week(date)
+      .then((w) => {
+        const items = todayItems(w, date)
+        const index = items.findIndex((it) => it.kind === 'learn' && !it.done)
+        setPlanned(index >= 0 ? { item: items[index], date, index } : null)
+      })
+      .catch(() => setPlanned(null))
+  }, [app.files])
+  const fromGoal = plans.map((p) => ({ plan: p, topic: (p.inReview ? p.reviewTopics : p.today)[0] })).find((x) => x.topic)
+  const nextTopic = planned
+    ? { mode: 'teach' as const, text: planned.item.topic ?? planned.item.title, scope: lessonScope(app, planned.item), label: planned.item.notebook ?? '', start: () => startAgendaLesson(app, planned.item, planned) }
+    : fromGoal
+      ? {
+          mode: fromGoal.plan.inReview ? ('quiz' as const) : ('teach' as const),
+          text: fromGoal.topic.text,
+          scope: (fromGoal.topic.path ? { kind: 'note', path: fromGoal.topic.path } : { kind: 'folder', path: fromGoal.plan.goal.notebook }) as ChatScope,
+          label: fromGoal.plan.goal.name.replace(/^Finish /, ''),
+          start: () => app.setView({ kind: 'session', mode: fromGoal.plan.inReview ? 'quiz' : 'teach', scope: fromGoal.topic.path ? { kind: 'note', path: fromGoal.topic.path } : { kind: 'folder', path: fromGoal.plan.goal.notebook }, topic: fromGoal.topic.text, nonce: Date.now() })
+        }
+      : null
+  const startLesson = () => nextTopic?.start()
 
   // Read the next lesson's opening into the model's cache now, so starting it is instant
-  const warmTopic = nextTopic ? JSON.stringify([nextTopic.topic.text, nextTopic.topic.path, nextTopic.plan.goal.notebook, nextTopic.plan.inReview]) : ''
+  const warmTopic = nextTopic ? JSON.stringify([nextTopic.text, nextTopic.scope, nextTopic.mode]) : ''
   useEffect(() => {
     if (!nextTopic) return
     const t = setTimeout(() => {
-      const mode = nextTopic.plan.inReview ? 'quiz' : 'teach'
-      const scope: ChatScope = nextTopic.topic.path ? { kind: 'note', path: nextTopic.topic.path } : { kind: 'folder', path: nextTopic.plan.goal.notebook }
-      window.tide.ai.prewarm(openingRequest({ mode, topic: nextTopic.topic.text }, scope, app.settings.character ?? 'professor')).catch(() => {})
+      window.tide.ai.prewarm(openingRequest({ mode: nextTopic.mode, topic: nextTopic.text }, nextTopic.scope, app.settings.character ?? 'professor')).catch(() => {})
     }, 1500)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -141,7 +163,7 @@ export function Home(_: { dueCount: number; cardCount: number }) {
   const upNext = hasDaily
     ? { kicker: 'Up next', title: 'Daily practice', detail: `${parts.join(', ') || 'A short mixed session'}, about ${daily!.minutes} min`, scene: 'orbit' as MomentScene, go: () => app.setView({ kind: 'daily', nonce: Date.now() }) }
     : nextTopic
-      ? { kicker: nextTopic.plan.inReview ? 'Review' : 'Next lesson', title: nextTopic.topic.text, detail: nextTopic.plan.goal.name.replace(/^Finish /, ''), scene: sceneFor(nextTopic.topic.text), go: startLesson }
+      ? { kicker: nextTopic.mode === 'quiz' ? 'Review' : 'Next lesson', title: nextTopic.text, detail: nextTopic.label, scene: sceneFor(nextTopic.text), go: startLesson }
       : { kicker: 'Nothing due', title: 'Learn something new', detail: 'Pick a topic and the tutor will teach it step by step', scene: sceneFor(undefined), go: () => app.setView({ kind: 'learn' }) }
 
   const quiz = () => {

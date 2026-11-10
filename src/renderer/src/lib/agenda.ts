@@ -1,22 +1,42 @@
 import type { AgendaItem } from '@shared/coach'
+import type { ChatScope } from '@shared/types'
 import type { Mistake } from '@shared/mistakes'
 import type { useApp } from '../state'
 
 const ACTIVE = 'tide.agenda.active'
 
-/** Opens a planned item where it's done: a lesson, a quiz, a test, Practice or Review */
-export function openAgendaItem(app: ReturnType<typeof useApp>, it: AgendaItem, at?: { date: string; index: number }) {
-  // Remembered, so finishing the lesson, quiz or test ticks it off
+/** Remembered, so finishing the lesson, quiz or test ticks it off */
+function remember(it: AgendaItem, at?: { date: string; index: number }) {
   try {
     if (at) localStorage.setItem(ACTIVE, JSON.stringify({ ...at, topic: it.kind === 'test' || it.kind === 'take-home' ? it.title : (it.topic ?? it.title), since: Date.now() }))
   } catch {
     // Storage unavailable: it just won't tick itself off
   }
+}
+
+/** The topic's own note, if there is one */
+const noteFor = (app: ReturnType<typeof useApp>, topic: string) => app.files.find((f) => f.kind === 'note' && f.name.replace(/\.md$/i, '').toLowerCase() === topic.toLowerCase())
+
+/** Where a planned lesson is taught from: its note, else its notebook */
+export function lessonScope(app: ReturnType<typeof useApp>, it: AgendaItem): ChatScope {
+  const note = noteFor(app, it.topic ?? it.title)
+  return note ? { kind: 'note', path: note.path } : it.notebook ? { kind: 'folder', path: it.notebook } : { kind: 'vault' }
+}
+
+/** Starts the lesson for a planned topic straight away (Home's "Next lesson") */
+export function startAgendaLesson(app: ReturnType<typeof useApp>, it: AgendaItem, at: { date: string; index: number }) {
+  remember(it, at)
+  app.setView({ kind: 'session', mode: 'teach', scope: lessonScope(app, it), topic: it.topic ?? it.title, nonce: Date.now() })
+}
+
+/** Opens a planned item where it's done: a lesson, a quiz, a test, Practice or Review */
+export function openAgendaItem(app: ReturnType<typeof useApp>, it: AgendaItem, at?: { date: string; index: number }) {
+  remember(it, at)
   const scope = it.notebook ? ({ kind: 'folder', path: it.notebook } as const) : ({ kind: 'vault' } as const)
   const topic = it.topic ?? it.title
   if (it.kind === 'learn') {
     // A note for the topic, if there is one; otherwise the tutor teaches it from the notebook
-    const note = app.files.find((f) => f.kind === 'note' && f.name.replace(/\.md$/i, '').toLowerCase() === topic.toLowerCase())
+    const note = noteFor(app, topic)
     if (note) app.openPath(note.path)
     else app.setView({ kind: 'session', mode: 'teach', scope, topic, nonce: Date.now() })
   } else if (it.kind === 'quiz') app.setView({ kind: 'session', mode: 'quiz', scope, topic, options: { length: 6 }, nonce: Date.now() })

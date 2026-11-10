@@ -13,6 +13,8 @@ import { addProject, ensureArea, getProject, searchTasks, thingsAvailable, TIDE_
 import { absPath, joinRel, readText, writeText } from './vault'
 import { pagesToRead } from './books'
 import { readingLabel } from '@shared/books'
+import { roadmapTopics, topicsLeft } from '@shared/curriculum'
+import { parseOutline, serializeOutline } from '@shared/outline'
 
 /**
  * The coach plans your week towards your goal and keeps a short learner profile.
@@ -89,7 +91,7 @@ interface Facts {
   dueCards: number
   mistakes: { count: number; topics: string[] }
   goals: { notebook: string; left: number; daysLeft: number; name: string }[]
-  undone: { topic: string; notebook?: string }[]
+  undone: { topic: string; notebook?: string; topicId?: string }[]
   lastDone?: number
 }
 
@@ -143,7 +145,7 @@ async function gather(settings: CoachSettings): Promise<{ text: string; candidat
   for (const g of goals) {
     const nb = notebooks.find((n) => n.path === g.notebook)
     const md = nb?.outline ? await readText(nb.outline).catch(() => '') : ''
-    const left = (md.match(/^\s*- \[ \] /gm) ?? []).length
+    const left = topicsLeft(roadmapTopics(nb?.name ?? g.notebook, md), g.section)
     const days = Math.ceil((Date.parse(g.deadline) - Date.now()) / 86_400_000)
     if (nb) facts.goals.push({ notebook: nb.name, left, daysLeft: days, name: g.name })
     parts.push(`Goal "${g.name}" (${g.notebook}): ${left} topics left, deadline ${g.deadline} (${days >= 0 ? `${days} days away` : 'passed'}). Give it time this week in proportion to how tight that is.`)
@@ -158,7 +160,7 @@ async function gather(settings: CoachSettings): Promise<{ text: string; candidat
     if (planned) facts.lastDone = done / planned
     if (planned) parts.push(`Last plan so far: ${done} of ${planned} items done.${done / planned < 0.6 ? ' That plan was too much: plan less.' : ''}`)
     const undone = [...(last.carry ?? []), ...last.days.filter((d) => d.date < today()).flatMap((d) => d.items.filter((it) => !it.done))]
-    facts.undone = undone.filter((it) => it.kind === 'learn' && it.topic).map((it) => ({ topic: it.topic!, notebook: it.notebook }))
+    facts.undone = undone.filter((it) => it.kind === 'learn' && it.topic).map((it) => ({ topic: it.topic!, notebook: it.notebook, ...(it.topicId ? { topicId: it.topicId } : {}) }))
     if (undone.length) parts.push(`Unfinished from before (fit the important ones in first): ${undone.slice(0, 8).map((it) => it.topic ?? it.title).join('; ')}`)
   }
   const review = await latestReview()
@@ -387,9 +389,25 @@ export async function setItemDone(date: string, index: number, done: boolean): P
   if (!plan || !item) return plan
   item.done = done
   await savePlan(plan)
+  if (item.kind === 'learn' && item.notebook && item.topicId) await tickTopic(item.notebook, item.topicId, done).catch(() => {})
   const todo = await thingsTodo(plan, item).catch(() => null)
   if (todo) await updateTask(todo, { completed: done }).catch(() => {})
   return plan
+}
+
+/** Ticks a topic in its roadmap (or unticks it), found by id so a moved or reworded line elsewhere doesn't matter */
+export async function tickTopic(notebook: string, topicId: string, done: boolean): Promise<boolean> {
+  const nb = (await getNotebooks()).find((n) => n.name === notebook)
+  if (!nb?.outline) return false
+  const md = await readText(nb.outline)
+  const topic = roadmapTopics(notebook, md).find((t) => t.id === topicId)
+  if (!topic || topic.checked === done) return false
+  const outline = parseOutline(md)
+  const line = outline.lines[topic.line]
+  if (line?.kind !== 'item') return false
+  line.checked = done
+  await writeText(nb.outline, serializeOutline(outline))
+  return true
 }
 
 /** The Things to-do made for a planned item, found by its title in the week's project */
