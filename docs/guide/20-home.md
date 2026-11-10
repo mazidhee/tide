@@ -33,6 +33,10 @@ Ask the tutor to plan your day (“put a 45-minute stablecoins lesson and the ta
 
 **Daily practice** gathers everything due today into one short session: flashcards, retests of past mistakes, explaining a note from memory, and a first look at the next topic. Written answers are marked in a few seconds, mistakes update their retest streak, and it ends on what's next in your plan.
 
+## Warm-ups
+
+Daily practice opens with one or two quick problems from topics you studied in the last week (not today): practice spaced out over days, on real problems rather than only flashcards.
+
 ## Fresh versions of past mistakes
 
 A retest in Daily practice doesn't repeat the question you got wrong: it asks a new problem on the same idea (different numbers and situation), written and checked ahead of time, so it tests whether you understand it rather than whether you remember the answer. The first look at your next topic is a real first problem from the bank when one is ready.

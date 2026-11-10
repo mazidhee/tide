@@ -1,6 +1,6 @@
 import { inBackground, streamInteractive } from './modelQueue'
 import { STRATEGY_LABEL, type Strategy } from '@shared/strategy'
-import { canTake, CloudUnavailable, cloudError, coolingDown, coolTarget, deadlineFor, estimateTokens, headersFor, noteLimits, noteSent, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
+import { canTake, CloudUnavailable, cloudError, coolingDown, coolTarget, deadlineFor, estimateTokens, headersFor, noteLimits, noteOutcome, noteSent, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
 import type { CloudTask, RequestKind } from '@shared/providers'
 import { memoryIntent } from '@shared/memoryIntent'
 import { addMemory, forgetMatching } from './memory'
@@ -284,6 +284,7 @@ async function* streamCloud(target: CloudTarget, messages: ChatMessage[], signal
   if (!canTake(estimateTokens(JSON.stringify(messages).length) + maxTokens, target)) throw new CloudUnavailable(`The cloud model’s per-minute limit can’t take this for about ${secondsUntilReset(target)}s`)
   let res: Response
   // A deadline per job: a model that's too slow today hands over to the next one in line
+  const started = Date.now()
   const slow = AbortSignal.timeout(deadlineFor(task))
   const both = AbortSignal.any([signal, slow])
   noteSent(target.provider)
@@ -297,9 +298,13 @@ async function* streamCloud(target: CloudTarget, messages: ChatMessage[], signal
   } catch (e) {
     if (signal.aborted) throw e
     coolTarget(target, slow.aborted ? 120 : 60)
+    noteOutcome(target, task, false, Date.now() - started)
     throw new CloudUnavailable(slow.aborted ? `${target.model} took too long` : `Couldn't reach the cloud model: ${(e as Error).message}`)
   }
-  if (!res.ok || !res.body) throw await cloudError(res, target)
+  if (!res.ok || !res.body) {
+    noteOutcome(target, task, false, Date.now() - started)
+    throw await cloudError(res, target)
+  }
   noteLimits(res.headers, target)
   let reported: { input: number; output: number; cached?: number } | null = null
   let out = 0
@@ -308,6 +313,7 @@ async function* streamCloud(target: CloudTarget, messages: ChatMessage[], signal
       out += delta.length
       yield delta
     }
+    noteOutcome(target, task, true, Date.now() - started)
   } finally {
     const r = reported as { input: number; output: number; cached?: number } | null
     recordUsage({ kind: 'cloud', provider: target.provider, model: target.model, task, ...(r ?? { input: estimateTokens(JSON.stringify(messages).length), output: estimateTokens(out) }), estimated: !r })
@@ -350,7 +356,7 @@ export class NoCloud extends Error {}
  * can do it (writing the problem bank), so it never takes the Mac. Works down the line like
  * streamRouted; throws NoCloud when nothing can take it.
  */
-export async function askCloud(prompt: string, system: string, task: CloudTask, signal: AbortSignal, routine = false, maxTokens = 4000): Promise<string> {
+export async function askCloud(prompt: string, system: string, task: CloudTask, signal: AbortSignal, routine = false, maxTokens = 4000, onTarget?: (t: CloudTarget) => void): Promise<string> {
   const messages: ChatMessage[] = [
     { role: 'system', content: system },
     { role: 'user', content: prompt }
@@ -361,6 +367,7 @@ export async function askCloud(prompt: string, system: string, task: CloudTask, 
     let out = ''
     try {
       for await (const t of streamCompletion(messages, signal, maxTokens, false, 0.4, task, target)) out += t
+      onTarget?.(target)
       return cleanModelText(out)
     } catch (e) {
       if (signal.aborted || !(e instanceof CloudUnavailable)) throw e
@@ -499,7 +506,8 @@ const lessonLevels = new Map<string, Level>()
 async function lessonTurn(req: TurnRequest) {
   const topic = req.topic && /problem set|first problem/i.test(req.instructions ?? '') ? req.topic : ''
   if (!topic) return null
-  const { readBank, markUsed, prepareAround } = await import('./bank')
+  const { readBank, markUsed, prepareAround, aimAt } = await import('./bank')
+  const { readable } = await import('@shared/lessonCheck')
   const { mayLeaveMac } = await import('./lessonGuard')
   const key = createHash('sha1').update(`${topic}\n${String(req.messages.find((m) => m.role === 'user')?.content ?? '')}`).digest('hex')
   const replies = req.messages.filter((m) => m.role === 'assistant').map((m) => String(m.content))
@@ -566,15 +574,21 @@ async function lessonTurn(req: TurnRequest) {
       const dir = nextDirection(reply) ?? (cut ? (verdict === 'correct' ? 'harder' : verdict === 'wrong' ? 'easier' : 'same') : undefined)
       if (!dir) return ''
       const level = levelAfter(lessonLevels.get(key) ?? 2, dir)
-      const p = pickProblem(bank, level, seen)
+      const p = pickProblem(bank, level, seen, Date.now(), key)
       if (!p) return ''
-      const text = renderProblem(p, problemsSoFar([...replies, reply]) + 1, dir)
+      // A new idea, or just missed: worked for them up to the last step
+      const first = !replies.some((r) => /\*\*Problem\s+\d+/i.test(r))
+      const text = renderProblem(p, problemsSoFar([...replies, reply]) + 1, dir, first || verdict === 'wrong')
       emit({ id: req.id, type: 'delta', text })
       lessonLevels.set(key, p.level)
       void markUsed(topic, p.id)
       return text
     },
-    prepare() {
+    prepare(reply: string) {
+      // Missed: a problem aimed at exactly what was missed comes next (the tutor's own feedback says what)
+      const g = /<grade\s+verdict\s*=\s*["']?(partial|wrong)["']?[^>]*>([\s\S]*?)<\/grade>/i.exec(reply)
+      const previous = replies[replies.length - 1]
+      if (g && previous) void aimAt(topic, readable(previous), g[2].trim(), key, lessonLevels.get(key) ?? 2, local)
       void prepareAround(topic, lessonLevels.get(key) ?? 2, local)
     }
   }
@@ -591,6 +605,14 @@ async function answer(req: TurnRequest, emit: (e: ChatEvent) => void) {
       // question, a check that fails, a flawed problem, a mark that's too generous) and written
       // again once if anything's wrong: see lessonGuard. In a problem set, the next problem comes
       // ready from the problem bank (see bank.ts): the tutor says how hard, Tide adds a checked one.
+      // A worked answer is checked exactly first (SymPy), and the tutor is told before it marks it
+      const exact = req.session ? await (await import('./lessonGuard')).exactCheck(req).catch(() => null) : null
+      if (exact) {
+        const { exactNote } = await import('@shared/answerCheck')
+        const last = req.messages[req.messages.length - 1]
+        req = { ...req, messages: [...req.messages.slice(0, -1), { ...last, content: `${String(last.content)}\n\n${exactNote(exact)}` }] }
+        emit({ id: req.id, type: 'step', step: { id: 'exact', kind: 'helper', label: exact.result === 'match' ? 'Checked your final answer: it’s right' : 'Checked your final answer: it isn’t right yet', status: 'done', depth: 0 } })
+      }
       const lesson = req.session ? await lessonTurn(req) : null
       let reply = ''
       if (lesson) {
@@ -613,7 +635,7 @@ async function answer(req: TurnRequest, emit: (e: ChatEvent) => void) {
         emit({ id: req.id, type: 'replied' })
         const { checkLessonReply, fixNudge } = await import('./lessonGuard')
         const ask = (prompt: string, system: string, task: RequestKind, signal: AbortSignal, routine?: boolean) => complete(prompt, system, signal, 'interactive', task, routine)
-        const problems = await checkLessonReply(req, reply, emit, controller.signal, ask, false, { fromBank }).catch(() => [] as string[])
+        const problems = await checkLessonReply(req, reply, emit, controller.signal, ask, false, { fromBank, exact }).catch(() => [] as string[])
         if (problems.length && !controller.signal.aborted) {
           emit({ id: req.id, type: 'reset' })
           const messages = [...req.messages]
@@ -624,7 +646,7 @@ async function answer(req: TurnRequest, emit: (e: ChatEvent) => void) {
           // The rewrite isn't sent back again, but it still gets its solution for marking
           if (!controller.signal.aborted) await checkLessonReply(req, again, emit, controller.signal, ask, true).catch(() => [])
         }
-        lesson?.prepare()
+        lesson?.prepare(reply)
       }
       emit({ id: req.id, type: 'done' })
       running.delete(req.id)

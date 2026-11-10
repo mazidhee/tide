@@ -499,3 +499,15 @@ export const repliesWithoutNote = (replies: string[]) => {
   for (let i = replies.length - 1; i >= 0 && !/<note\b/i.test(replies[i]); i--) n++
   return n
 }
+
+/** A lesson taught from a section of a book they own: the section rides in the opening message */
+export const withPassage = (opening: string, found: { label: string; text: string }) =>
+  `${opening}\n\nThis lesson follows a section of a book they own, ${found.label}. Teach from it: use its definitions, notation and examples, set problems that follow from it, and send them to the pages when it helps. Where your memory and the book disagree, the book wins; say so.\n"""\n${found.text}\n"""`
+
+/** The fingerprint of how a lesson starts (its instructions and opening), for openings written ahead */
+export const openingKey = (instructions: string, opening: string) => {
+  let h = 5381
+  const s = `${instructions}\n---\n${opening}`
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0
+  return `${(h >>> 0).toString(36)}-${s.length.toString(36)}`
+}

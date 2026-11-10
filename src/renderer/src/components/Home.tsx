@@ -132,6 +132,7 @@ export function Home(_: { dueCount: number; cardCount: number }) {
   const hasDaily = !!daily && daily.items > 0
   const parts = daily
     ? [
+        daily.parts.warmup && `${daily.parts.warmup} warm-up${daily.parts.warmup === 1 ? '' : 's'}`,
         daily.parts.card && `${daily.parts.card} flashcard${daily.parts.card === 1 ? '' : 's'}`,
         daily.parts.mistake && `${daily.parts.mistake} past mistake${daily.parts.mistake === 1 ? '' : 's'}`,
         daily.parts.recall && `${daily.parts.recall} to explain from memory`

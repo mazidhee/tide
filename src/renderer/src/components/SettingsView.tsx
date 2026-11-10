@@ -581,6 +581,14 @@ function LocalModel({ onStatus }: { onStatus(s: { ok: boolean; model: string }):
       <Row label="Creativity" hint={ai.temperature <= 0.3 ? 'Precise' : ai.temperature >= 0.8 ? 'Playful' : 'Balanced'}>
         <input className="set-range" type="range" min={0} max={1} step={0.1} value={ai.temperature} onChange={(e) => saveAi({ temperature: Number(e.target.value) })} aria-label="Creativity" />
       </Row>
+      <Row label="Start it with Tide" hint={ai.autoStart === false ? 'Off: start the server yourself before using Tide.' : 'When the server isn’t running (after a restart, or it was closed), Tide starts it, and gets Gemma ready again after your Mac wakes.'}>
+        <Toggle label="Start the model server with Tide" on={ai.autoStart !== false} onChange={(on) => saveAi({ autoStart: on })} />
+      </Row>
+      {ai.autoStart !== false && (
+        <Row label="Start command" hint="Leave empty for the usual one: mlx_vlm.server with Gemma 4 12B and its draft model" stack>
+          <input className="set-input wide" value={ai.serverCommand ?? ''} placeholder="~/mlx-env312/bin/mlx_vlm.server --model mlx-community/gemma-4-12B-it-4bit --port 8080 --draft-block-size 3" onChange={(e) => setAi({ ...ai, serverCommand: e.target.value })} onBlur={() => saveAi({})} spellCheck={false} aria-label="Start command" />
+        </Row>
+      )}
       <ToolSetup label="Speed-ups" hint="Prompt cache and draft model" check={window.tide.runner.speedStatus} setup={window.tide.runner.applySpeedups} busyText="Reloading the model with speed-ups…" actionText="Turn on" />
       <Row label="Connection" hint={status ? <span className={status.ok ? '' : 'error-text'}>{status.message}</span> : 'Checking…'}>
         <button className="btn small" onClick={test} disabled={testing}>

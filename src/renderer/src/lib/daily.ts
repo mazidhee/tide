@@ -4,15 +4,16 @@ import { localDate } from '@shared/coach'
 
 /** Everything due today, mixed into one session (see shared/daily) */
 export async function loadDaily(size = 20): Promise<DailyItem[]> {
-  const [cards, mistakes, recall, week] = await Promise.all([
+  const [cards, mistakes, recall, week, warmups] = await Promise.all([
     window.tide.study.cards({ kind: 'vault' }).catch(() => []),
     window.tide.mistakes.due(10).catch(() => []),
     window.tide.recall.queue().catch(() => []),
-    window.tide.coach.week().catch(() => null)
+    window.tide.coach.week().catch(() => null),
+    window.tide.bank.warmups(2).catch(() => [])
   ])
   const today = week?.days.find((d) => d.date === localDate())
   const next = (today?.items ?? []).filter((i) => i.kind === 'learn' && !i.done && i.topic).map((i) => ({ topic: i.topic!, notebook: i.notebook }))
-  return buildDaily({ cards, mistakes, recall, next, now: Date.now() }, size)
+  return buildDaily({ cards, mistakes, recall, next, warmups, now: Date.now() }, size)
 }
 
 /** How much is waiting, for the button on Home */
@@ -30,7 +31,7 @@ export function useDailyCount(): DailyCount | null {
     loadDaily()
       .then((items) => {
         if (!live) return
-        const parts = { card: 0, mistake: 0, recall: 0, preview: 0 }
+        const parts = { card: 0, mistake: 0, recall: 0, preview: 0, warmup: 0 }
         for (const i of items) parts[i.kind]++
         setCount({ items: items.length, minutes: dailyMinutes(items), parts })
       })

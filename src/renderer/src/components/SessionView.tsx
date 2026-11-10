@@ -7,7 +7,7 @@ import { reveal } from '../lib/scroll'
 import { Thinking } from './Thinking'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
-import { MODE_LABEL, NOTES_NUDGE, openingMessage, parseBlocks, repliesWithoutNote, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
+import { MODE_LABEL, NOTES_NUDGE, openingMessage, withPassage, parseBlocks, repliesWithoutNote, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
 import { cardsToMarkdown } from '@shared/cards'
 import { fileTitle, useApp, pagesLabel } from '../state'
@@ -171,10 +171,18 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     let opening = openingMessage(setup)
     if ((mode === 'teach' || mode === 'quiz') && (scope.kind === 'vault' || scope.kind === 'folder')) {
       const found = await Promise.race([window.tide.books.passage(topic).catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 2000))])
-      if (found)
-        opening += `\n\nThis lesson follows a section of a book they own, ${found.label}. Teach from it: use its definitions, notation and examples, set problems that follow from it, and send them to the pages when it helps. Where your memory and the book disagree, the book wins; say so.\n\"\"\"\n${found.text}\n\"\"\"`
+      if (found) opening = withPassage(opening, found)
     }
     openingRef.current = opening
+    // Written ahead for this exact lesson (main/bank.ts): it opens at once
+    const ready = await window.tide.bank.opening(sessionInstructions(setupRef.current), opening).catch(() => null)
+    if (ready) {
+      setTurns([
+        { role: 'user', content: opening },
+        { role: 'assistant', content: ready }
+      ])
+      return
+    }
     send(opening, [])
   }
 

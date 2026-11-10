@@ -67,3 +67,24 @@ describe('the problem bank', () => {
     expect(problemsSoFar(['**Problem 1 · easy**', 'x', '**Problem 2 · harder** and **Problem 3**'])).toBe(3)
   })
 })
+
+describe('worked examples and aimed problems', () => {
+  it('fades a worked solution to its last step', async () => {
+    const { renderProblem, solutionSteps } = await import('../src/shared/bank')
+    const p = { id: 'x', topic: 't', level: 2 as const, text: 'Find the integral of x e^x.', ask: 'What is it?', askType: 'problem' as const, solution: 'u = x, dv = e^x dx\ndu = dx, v = e^x\nx e^x - ∫ e^x dx\n= (x - 1) e^x + C', checked: true, reviewed: true, source: 'prep' as const, createdAt: 0 }
+    expect(solutionSteps(p.solution)).toHaveLength(4)
+    const faded = renderProblem(p, 2, 'easier', true)
+    expect(faded).toContain('worked for you up to the last step')
+    expect(faded).toContain('- x e^x - ∫ e^x dx')
+    expect(faded.split('<solution>')[0]).not.toContain('(x - 1) e^x + C')
+    expect(renderProblem(p, 2, 'easier', false)).not.toContain('worked for you')
+  })
+
+  it('serves the problem aimed at this lesson\'s mistake first', async () => {
+    const { pickProblem } = await import('../src/shared/bank')
+    const mk = (id: string, level: 1 | 2 | 3, forLesson?: string) => ({ id, topic: 't', level, text: id, ask: 'q', askType: 'problem' as const, solution: 's', checked: true, reviewed: null, source: 'prep' as const, createdAt: 0, ...(forLesson ? { forLesson } : {}) })
+    const bank = [mk('plain', 2), mk('aimed', 2, 'L1'), mk('other-lesson', 2, 'L2')]
+    expect(pickProblem(bank, 2, () => false, Date.now(), 'L1')?.id).toBe('aimed')
+    expect(pickProblem(bank, 2, () => false, Date.now(), 'L3')?.id).toBe('plain')
+  })
+})

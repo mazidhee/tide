@@ -27,6 +27,8 @@ export interface BankProblem {
   source: 'prep' | 'lesson' | 'variant'
   createdAt: number
   usedAt?: number
+  /** Written for one lesson, aimed at a mistake made in it */
+  forLesson?: string
 }
 
 export const slugOf = (topic: string) =>
@@ -38,14 +40,11 @@ export const slugOf = (topic: string) =>
 
 const LEVEL_WORD: Record<Level, string> = { 1: 'easy', 2: 'medium', 3: 'hard' }
 
-export const BANK_SYSTEM = 'You are an expert teacher writing practice problems for a self-taught student. Every problem is well posed, has one clear answer, and tests understanding rather than recall. You solve each problem yourself before writing it down. Reply in exactly the format asked, nothing else.'
+// Everything that never changes is here, at the start of every request, so providers that cache a
+// repeated start of a prompt reuse it; only the topic and counts (or the mistake) follow
+export const BANK_SYSTEM = `You are an expert teacher writing practice problems for a self-taught student. Every problem is well posed, has one clear answer, and tests understanding rather than recall. You solve each problem yourself before writing it down. Vary them: different situations, numbers and kinds of question (calculate, explain why, find the error, predict, compare), never the same problem twice.
 
-/** Asks for problems on a topic, a few at each level, each solved and (where computable) checkable */
-export function bankPrompt(topic: string, counts: Partial<Record<Level, number>>, context = ''): string {
-  const want = (Object.entries(counts) as [string, number][]).filter(([, n]) => n > 0).map(([l, n]) => `${n} ${LEVEL_WORD[Number(l) as Level]}`)
-  return `Write practice problems on: ${topic}
-${context ? `\nWhat the student is working towards, for context: ${context}\n` : ''}
-Write ${want.join(', ')} problem${want.length === 1 && want[0].startsWith('1 ') ? '' : 's'}. Vary them: different situations, numbers and kinds of question (calculate, explain why, find the error, predict, compare), never the same problem twice. Each one, exactly:
+Write each problem exactly like this, and nothing else:
 
 <problem level="easy|medium|hard" type="problem|explain|short|error|code">
 The problem, in Markdown (LaTeX for maths), everything needed to answer it.
@@ -53,6 +52,11 @@ The problem, in Markdown (LaTeX for maths), everything needed to answer it.
 <solution>The answer and the key steps, briefly.</solution>
 <check lang="python">Only when the answer is a number or an expression: Python (SymPy is available) that works the answer out from scratch and asserts it equals yours. Leave this tag out otherwise.</check>
 </problem>`
+
+/** Asks for problems on a topic, a few at each level, each solved and (where computable) checkable */
+export function bankPrompt(topic: string, counts: Partial<Record<Level, number>>, context = ''): string {
+  const want = (Object.entries(counts) as [string, number][]).filter(([, n]) => n > 0).map(([l, n]) => `${n} ${LEVEL_WORD[Number(l) as Level]}`)
+  return `Write ${want.join(', ')} problem${want.length === 1 && want[0].startsWith('1 ') ? '' : 's'} on: ${topic}${context ? `\nWhat the student is working towards, for context: ${context}` : ''}`
 }
 
 const LEVELS: Record<string, Level> = { easy: 1, medium: 2, hard: 3, '1': 1, '2': 2, '3': 3 }
@@ -122,8 +126,11 @@ export const levelAfter = (current: Level, dir: Direction): Level => (dir === 'h
  * The next problem at a level: trusted and not yet used first, then the nearest level, then
  * ones used more than a week ago (a fresh look); never one the student saw in this lesson.
  */
-export function pickProblem(bank: BankProblem[], level: Level, seen: (p: BankProblem) => boolean, now = Date.now()): BankProblem | undefined {
+export function pickProblem(bank: BankProblem[], level: Level, seen: (p: BankProblem) => boolean, now = Date.now(), lesson?: string): BankProblem | undefined {
   const usable = bank.filter((p) => trusted(p) && !seen(p))
+  // A problem written for this lesson's mistake comes first, if it's near the level
+  const aimed = lesson ? usable.find((p) => p.forLesson === lesson && !p.usedAt && Math.abs(p.level - level) <= 1) : undefined
+  if (aimed) return aimed
   const fresh = (p: BankProblem) => !p.usedAt
   const stale = (p: BankProblem) => !!p.usedAt && now - p.usedAt > 7 * 86_400_000
   for (const ok of [fresh, stale]) {
@@ -154,8 +161,27 @@ export const nextDirection = (reply: string): Direction | undefined => (NEXT_TAG
 
 const DIR_LABEL: Record<Direction, string> = { harder: 'harder', same: 'same level', easier: 'easier' }
 
-/** A banked problem as the tutor would have set it, with its solution hidden for marking */
-export function renderProblem(p: BankProblem, n: number, dir: Direction): string {
+/** A worked solution's steps: its lines, or its sentences when it's one paragraph */
+export function solutionSteps(solution: string): string[] {
+  const lines = solution.split(/\n+/).map((l) => l.trim()).filter(Boolean)
+  if (lines.length >= 3) return lines
+  return solution
+    .split(/(?<=[.;])\s+(?=[A-Z$\\(])|\s*→\s*/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+}
+
+/**
+ * A banked problem as the tutor would have set it, with its solution hidden for marking. Faded,
+ * it comes worked out but for its last step, which the student finishes: how a new idea is best
+ * learned (a worked example first, then less and less of it shown).
+ */
+export function renderProblem(p: BankProblem, n: number, dir: Direction, fade = false): string {
+  const steps = fade ? solutionSteps(p.solution) : []
+  if (steps.length >= 3) {
+    const shown = steps.slice(0, -1).map((s) => `- ${s}`).join('\n')
+    return `\n\n**Problem ${n} · ${DIR_LABEL[dir]}, worked for you up to the last step**\n\n${p.text}\n\nHere's how it goes:\n${shown}\n\n<solution>${p.solution}</solution>\n\n<ask type="problem">Finish it: the last step and the final answer.</ask>`
+  }
   return `\n\n**Problem ${n} · ${DIR_LABEL[dir]}**\n\n${p.text}\n\n<solution>${p.solution}</solution>\n\n<ask type="${p.askType === 'choice' ? 'short' : p.askType}">${p.ask}</ask>`
 }
 
@@ -167,16 +193,7 @@ export const BANK_NUDGE =
   '(Tide: checked problems on this topic are ready. After your feedback, if the next thing in this step is a problem, do not write it yourself: end your reply with <next level="harder"/>, <next level="same"/> or <next level="easier"/> as the rules say, and Tide adds a checked problem at that level. When you need to teach something first, or move to the next step, write as usual.)'
 
 /** A fresh version of a past mistake: the same idea, new details, for a retest that tests understanding, not memory */
-export const variantPrompt = (question: string, fix: string, topic: string) => `A student got this wrong earlier, on ${topic}:
+export const variantPrompt = (question: string, fix: string, topic: string) => `Write ONE medium problem that tests exactly the same idea as this one, with different details (numbers, situation, wording), so they can't just recall the old answer. A student got it wrong earlier, on ${topic}.
 
 Question: ${question}
-The idea they missed: ${fix}
-
-Write ONE new problem that tests exactly the same idea with different details (numbers, situation, wording), so they can't just recall the old answer. Exactly:
-
-<problem level="medium" type="problem|explain|short">
-The problem, in Markdown.
-<question>The one question they answer.</question>
-<solution>The answer and the key steps, briefly.</solution>
-<check lang="python">Only when the answer is a number or an expression: Python (SymPy is available) that asserts your answer.</check>
-</problem>`
+The idea they missed: ${fix}`

@@ -19,7 +19,7 @@ const GRADES: { grade: ReviewGrade; label: string; key: string }[] = [
   { grade: 'easy', label: 'Easy', key: '4' }
 ]
 
-const KIND_LABEL: Record<DailyItem['kind'], string> = { card: 'Flashcard', mistake: 'A past mistake', recall: 'From memory', preview: 'Next in your plan' }
+const KIND_LABEL: Record<DailyItem['kind'], string> = { card: 'Flashcard', mistake: 'A past mistake', recall: 'From memory', preview: 'Next in your plan', warmup: 'Warm-up' }
 
 const fileTitle = (p: string) => p.split('/').pop()!.replace(/\.(md|pdf)$/i, '')
 
@@ -72,15 +72,16 @@ export function DailyView() {
     setFresh(null)
     if (item?.kind === 'mistake') window.tide.bank.variant(item.mistake.id).then(setFresh).catch(() => {})
     if (item?.kind === 'preview') window.tide.bank.preview(item.topic).then(setFresh).catch(() => {})
+    if (item?.kind === 'warmup') setFresh(item.problem)
   }, [item])
 
   const check = useCallback(async () => {
-    if (!item || checking || (item.kind !== 'mistake' && item.kind !== 'recall' && !(item.kind === 'preview' && fresh && answer.trim()))) return
+    if (!item || checking || (item.kind !== 'mistake' && item.kind !== 'recall' && item.kind !== 'warmup' && !(item.kind === 'preview' && fresh && answer.trim()))) return
     setChecking(true)
     setError('')
     try {
       const g =
-        item.kind === 'mistake' || item.kind === 'preview'
+        item.kind === 'mistake' || item.kind === 'preview' || item.kind === 'warmup'
           ? fresh
             ? await window.tide.daily.grade({ kind: 'mistake', question: `${fresh.text}\n\n${fresh.ask}`, expected: fresh.solution, answer })
             : await window.tide.daily.grade({ kind: 'mistake', question: (item as Extract<DailyItem, { kind: 'mistake' }>).mistake.question, expected: (item as Extract<DailyItem, { kind: 'mistake' }>).mistake.fix, answer })
@@ -231,6 +232,12 @@ export function DailyView() {
                   <p className="daily-prompt">
                     Explain <strong>{item.title}</strong> in your own words: the main ideas, and why they matter.
                   </p>
+                </>
+              )}
+              {item.kind === 'warmup' && (
+                <>
+                  <span className="card-kicker">Warm-up from {item.problem.topic}</span>
+                  <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(`${item.problem.text}\n\n**${item.problem.ask}**`, env) }} />
                 </>
               )}
               {item.kind === 'preview' && fresh && (

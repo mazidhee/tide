@@ -235,7 +235,9 @@ const api: TideApi = {
     status: invoke('bank:status'),
     prepare: invoke('bank:prepare'),
     variant: invoke('bank:variant'),
-    preview: invoke('bank:preview')
+    preview: invoke('bank:preview'),
+    opening: invoke('bank:opening'),
+    warmups: invoke('bank:warmups')
   },
   studyApi: {
     status: invoke('studyApi:status'),

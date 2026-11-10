@@ -12,6 +12,8 @@ export type DailyItem =
   | { kind: 'mistake'; key: string; path?: string; mistake: Mistake }
   | { kind: 'recall'; key: string; path: string; title: string }
   | { kind: 'preview'; key: string; path?: string; topic: string; notebook?: string }
+  /** A quick problem from something studied in the last week, from the problem bank */
+  | { kind: 'warmup'; key: string; path?: string; problem: import('./bank').BankProblem }
 
 export interface DailySources {
   cards: StudyCard[]
@@ -19,6 +21,8 @@ export interface DailySources {
   recall: { path: string; title: string; due: number; first: boolean }[]
   /** What the plan has next (today's unfinished learn items) */
   next: { topic: string; notebook?: string }[]
+  /** Problems from the last week's topics, for warm-ups */
+  warmups?: import('./bank').BankProblem[]
   now: number
 }
 
@@ -31,13 +35,15 @@ export function buildDaily(src: DailySources, size = 20): DailyItem[] {
     .filter((r) => r.due <= src.now)
     .slice(0, Math.max(1, Math.round(size * SHARE.recall)))
     .map((r) => ({ kind: 'recall', key: `r:${r.path}`, path: r.path, title: r.title }))
+  // Two warm-ups from earlier topics open the session: practice spaced out, on real problems
+  const warmups: DailyItem[] = (src.warmups ?? []).slice(0, 2).map((p) => ({ kind: 'warmup', key: `w:${p.id}`, path: p.topic, problem: p }))
   const preview: DailyItem[] = src.next.slice(0, Math.max(1, Math.round(size * SHARE.preview))).map((n) => ({ kind: 'preview', key: `p:${n.topic}`, path: n.notebook, topic: n.topic, notebook: n.notebook }))
   // Cards fill the rest: overdue first (most overdue first), then the most-forgotten, then a few new
-  const room = Math.max(0, size - mistakes.length - recall.length - preview.length)
+  const room = Math.max(0, size - mistakes.length - recall.length - preview.length - warmups.length)
   const due = src.cards.filter((c) => c.schedule && c.schedule.due <= src.now).sort((a, b) => (b.schedule!.lapses - a.schedule!.lapses) || a.schedule!.due - b.schedule!.due)
   const fresh = src.cards.filter((c) => !c.schedule).slice(0, Math.min(5, Math.ceil(room / 3)))
   const cards: DailyItem[] = [...due, ...fresh].slice(0, room).map((c) => ({ kind: 'card', key: `c:${c.id}`, path: c.path, card: c }))
-  return interleave([mistakes, cards, recall, preview])
+  return [...warmups, ...interleave([mistakes, cards, recall, preview])]
 }
 
 /**

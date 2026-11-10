@@ -20,6 +20,10 @@ If you stop the server, run the same command to start it again. Tide notices and
 > [!info] How fast it is
 > On an M4 Pro with 24 GB, Gemma reads about 220 tokens a second and writes about 43 a second with the draft model. Animations in Tide pause while the model is busy so they don't slow it down.
 
+## Tide starts it for you
+
+With **Settings → Models → Start it with Tide** on (it is by default), Tide starts the model server itself when nothing is running on its port, using the command above (or your own under **Start command**), and gets Gemma ready again after your Mac wakes from sleep. It never starts a second copy: a server that's busy still counts as running. The server keeps running when Tide quits. Its output goes to `~/Library/Application Support/Tide/model-server.log`.
+
 ## Other model servers
 
 | Preset | Address | Key |
