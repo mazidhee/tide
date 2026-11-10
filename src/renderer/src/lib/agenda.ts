@@ -1,6 +1,6 @@
 import type { AgendaItem } from '@shared/coach'
 import type { ChatScope } from '@shared/types'
-import { FOUNDATIONAL } from '@shared/session'
+import { whyByDefault } from '@shared/session'
 import type { Mistake } from '@shared/mistakes'
 import type { useApp } from '../state'
 
@@ -90,11 +90,4 @@ export function startRetest(app: ReturnType<typeof useApp>, due: Mistake[]) {
   })
 }
 
-/**
- * Whether a lesson starts in Why mode: Settings says always, or foundations and the topic is early,
- * basic material (judged from its roadmap section when known: the id carries the headings)
- */
-export function whyByDefault(pref: 'off' | 'foundations' | 'always' | undefined, topic: string, topicId?: string): boolean {
-  const mode = pref ?? 'foundations'
-  return mode === 'always' || (mode === 'foundations' && FOUNDATIONAL.test(`${topicId ?? ''} ${topic}`))
-}
+export { whyByDefault } from '@shared/session'

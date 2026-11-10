@@ -1,7 +1,9 @@
 import { promises as fs } from 'fs'
 import { BANK_SYSTEM, bankPrompt, batchReviewPrompt, parseBank, parseBatchReview, pickProblem, shortfall, slugOf, trusted, variantPrompt, type BankProblem, type Level } from '@shared/bank'
 import { localDate, nextStudyDay, todayItems } from '@shared/coach'
-import { openingKey, openingMessage, parseBlocks, sessionInstructions, SESSION_FORMAT, strategyChoice, withPassage, type SessionSetup } from '@shared/session'
+import { openingKey, openingMessage, parseBlocks, sessionInstructions, SESSION_FORMAT, strategyChoice, whyByDefault, withPassage, type SessionSetup } from '@shared/session'
+import { withSources } from '@shared/sources'
+import { getSettings } from './settings'
 import type { ChatScope } from '@shared/types'
 import type { CloudTask } from '@shared/providers'
 import { askCloud, complete, NoCloud } from './ai'
@@ -100,17 +102,17 @@ export async function writeProblems(topic: string, counts: Partial<Record<Level,
 const isPrivate = (notebook?: string) => (notebook ? privatePath(notebook).catch(() => true) : Promise.resolve(false))
 
 /** What to prepare: today's and the next study day's topics, and lessons in progress */
-async function comingTopics(): Promise<{ topic: string; notebook?: string; lesson?: boolean }[]> {
+async function comingTopics(): Promise<{ topic: string; notebook?: string; lesson?: boolean; topicId?: string; refresh?: boolean }[]> {
   const today = localDate()
   const days = (await getCoach()).days
   const next = nextStudyDay(today, days)
-  const out: { topic: string; notebook?: string; lesson?: boolean }[] = []
+  const out: { topic: string; notebook?: string; lesson?: boolean; topicId?: string; refresh?: boolean }[] = []
   for (const date of [today, next]) {
     const plan = await getWeek(date).catch(() => null)
     for (const it of todayItems(plan, date)) {
       if (it.done || !['learn', 'quiz', 'practice', 'test', 'review'].includes(it.kind)) continue
       const topic = it.topic ?? it.title.replace(/^(quiz|test|practi[cs]e|review)\s*:\s*/i, '')
-      if (topic && !out.some((t) => t.topic === topic)) out.push({ topic, notebook: it.notebook, lesson: it.kind === 'learn' })
+      if (topic && !out.some((t) => t.topic === topic)) out.push({ topic, notebook: it.notebook, lesson: it.kind === 'learn' && !it.refresh, ...(it.topicId ? { topicId: it.topicId } : {}) })
     }
   }
   const ongoing = JSON.parse(await fs.readFile(absPath('.tide/ongoing.json'), 'utf8').catch(() => '[]')) as { title: string }[]
@@ -249,7 +251,7 @@ export async function openingFor(instructions: string, opening: string): Promise
  * Writes the openings of the lessons in your plan, the way the lesson would start them (the same
  * teaching approach, the same book section), by the cloud model; kept a week.
  */
-async function prepareOpenings(topics: { topic: string; notebook?: string; lesson?: boolean }[], signal: AbortSignal, routine: boolean) {
+async function prepareOpenings(topics: { topic: string; notebook?: string; lesson?: boolean; topicId?: string }[], signal: AbortSignal, routine: boolean) {
   const { lessonPassage } = await import('./ai')
   const all = await readOpenings()
   const week = Date.now() - 7 * 86_400_000
@@ -260,9 +262,14 @@ async function prepareOpenings(topics: { topic: string; notebook?: string; lesso
     // A close call between two ways of teaching is settled when the lesson starts: nothing to write ahead
     const choice = strategyChoice({ mode: 'teach', topic: t.topic }, scope)
     if (choice && !choice.clear) continue
-    const setup: SessionSetup = { mode: 'teach', topic: t.topic, options: choice ? { strategy: choice.strategy } : undefined }
+    // Set up as the lesson will be (Why mode by the same rule), and opened the same way (the book
+    // section, then the sources), so the key matches when it starts
+    const why = whyByDefault(getSettings().whyMode, t.topic, t.topicId)
+    const options = { ...(choice ? { strategy: choice.strategy } : {}), ...(why ? { why: true } : {}) }
+    const setup: SessionSetup = { mode: 'teach', topic: t.topic, options: Object.keys(options).length ? options : undefined }
     const found = await lessonPassage(t.topic).catch(() => null)
-    const opening = found ? withPassage(openingMessage(setup), found) : openingMessage(setup)
+    const pack = await import('./sources').then((m) => m.packFor(t.topic)).catch(() => null)
+    const opening = withSources(found ? withPassage(openingMessage(setup), found) : openingMessage(setup), pack)
     const instructions = sessionInstructions(setup)
     const key = openingKey(instructions, opening)
     if (all[key]) continue

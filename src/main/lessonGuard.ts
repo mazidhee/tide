@@ -1,4 +1,4 @@
-import { checksOf, examplePrompt, hasWorkedMaths, parseExampleCheck, EXAMPLE_SYSTEM, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, solutionOf, solvePrompt, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
+import { checksOf, claimsPrompt, makesClaims, parseClaimCheck, CLAIMS_SYSTEM, type ClaimCheck, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, solutionOf, solvePrompt, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
 import type { RequestKind } from '@shared/providers'
 import { aboutMetabase } from '@shared/metabase'
 import { ownWords, posedProblem, repeatsEarlier } from '@shared/session'
@@ -8,6 +8,7 @@ import { metabaseHost, metabaseReady } from './metabase'
 import { privatePath } from './projects'
 import { comparePython, finalAnswer, type Exact } from '@shared/answerCheck'
 import { createHash } from 'crypto'
+import { sourcesForCheck } from '@shared/sources'
 import { promises as fs } from 'fs'
 import { runCode } from './runner'
 import { absPath } from './vault'
@@ -88,12 +89,30 @@ export interface LessonFindings {
   mark?: { verdict: 'partial' | 'wrong'; why: string }
   /** The problem just set can't be used (repeated, not asked, a failed check, flawed) */
   problem: string[]
-  /** Mistakes in the explanation's worked examples, found by the cloud maths model */
-  errata?: { quote: string; fix: string }[]
+  /** What's wrong (or worth checking) in what the explanation claims, found by the cloud maths model */
+  errata?: { errors: { quote: string; fix: string }[]; unsure: { quote: string; why: string }[] }
 }
 
 /** A real problem in a problem set ("**Problem 3 · harder**"), not a diagnostic or a question in passing */
 const isProblem = (reply: string) => /\*\*\s*Problem\s+\d+/i.test(reply) && posedProblem(reply).split(' ').length >= 8
+
+/** A lesson that teaches (not a quiz, a placement check or a retest), from its instructions */
+const teaching = (req: ChatRequest) => !/adaptive QUIZ|PLACEMENT CHECK|retest/i.test(req.instructions ?? '')
+
+/** Claim checks a lesson may use: a handful each, never the same reply twice */
+const CLAIMS_PER_LESSON = 6
+const claimsSeen = new Map<string, Set<string>>()
+function claimBudget(req: ChatRequest, reply: string): boolean {
+  const lesson = createHash('sha1').update(text(req.messages.find((m) => m.role === 'user'))).digest('hex')
+  const seen = claimsSeen.get(lesson) ?? new Set<string>()
+  const key = createHash('sha1').update(reply).digest('hex')
+  if (seen.has(key) || seen.size >= CLAIMS_PER_LESSON) return false
+  seen.add(key)
+  claimsSeen.set(lesson, seen)
+  // Kept small: the lessons of the last few days
+  if (claimsSeen.size > 50) claimsSeen.delete(claimsSeen.keys().next().value!)
+  return true
+}
 
 export async function checkLessonReply(
   req: ChatRequest,
@@ -131,18 +150,25 @@ export async function checkLessonReply(
 
   // Worked examples in an explanation aren't problems, so nothing else checks them: the cloud maths
   // model does, alongside the other checks, and a mistake gets a correction under the reply
-  const examples = !final && cloud && hasWorkedMaths(reply)
-    ? (step('lesson-examples', 'Checking the worked examples', 'running'),
-      within(REVIEW_MS, signal, (s) => ask(examplePrompt(req.topic ?? '', readable(reply)), EXAMPLE_SYSTEM, 'maths', s))
-        .catch(() => '')
-        .then((out) => {
-          step('lesson-examples', 'Checked the worked examples', 'done')
-          return parseExampleCheck(out ?? '')
-        }))
+  // What an explanation claims (its worked examples and its facts) isn't a problem set to them, so
+  // nothing else checks it: the cloud maths model does, against the lesson's sources, alongside the
+  // other checks; a mistake gets a correction under the reply
+  // Only in lessons (not quizzes or checks), only new explanations, a few a lesson, and only a cloud
+  // model: when none is free (or the day's allowance is running low) it's skipped, never Gemma
+  // checking Gemma, which measured worse than no check
+  const claims = !final && cloud && teaching(req) && makesClaims(reply) && claimBudget(req, reply)
+    ? (async () => {
+        step('lesson-claims', 'Checking what this explains', 'running')
+        const pack = req.topic ? await import('./sources').then((m) => m.packFor(req.topic!)).catch(() => null) : null
+        const { askCloud } = await import('./ai')
+        const out = await within(REVIEW_MS, signal, (s) => askCloud(claimsPrompt(req.topic ?? '', readable(reply), sourcesForCheck(pack)), CLAIMS_SYSTEM, 'maths', s, true, 900)).catch(() => '')
+        step('lesson-claims', 'Checked what this explains', 'done')
+        return parseClaimCheck(out ?? '')
+      })()
     : null
   const finish = async () => {
-    const r = await examples
-    if (r && !r.ok && !signal.aborted) found.errata = r.errors
+    const r = await claims
+    if (r && !r.ok && !signal.aborted) found.errata = { errors: r.errors, unsure: r.unsure }
     return found
   }
 
@@ -188,3 +214,21 @@ export async function checkLessonReply(
   return finish()
 }
 
+
+/**
+ * You challenged something the tutor said: the cloud model checks that one reply, carefully,
+ * against the lesson's sources. Never for a private project or anything about your Metabase.
+ */
+export async function challengeReply(topic: string, where: string | undefined, reply: string): Promise<ClaimCheck & { offline?: string }> {
+  if (where && (await privatePath(where).catch(() => true))) return { ok: true, errors: [], unsure: [], offline: 'This lesson is in a private project, so it stays on your Mac and isn’t sent to be checked.' }
+  if (metabaseReady() && aboutMetabase(`${topic}\n${reply}`, metabaseHost())) return { ok: true, errors: [], unsure: [], offline: 'This is about your Metabase, so it stays on your Mac.' }
+  const { askCloud, NoCloud } = await import('./ai')
+  const pack = await import('./sources').then((m) => m.packFor(topic)).catch(() => null)
+  try {
+    const out = await askCloud(claimsPrompt(topic, readable(reply), sourcesForCheck(pack)) + '\nThe student has questioned this reply: check it with extra care.', CLAIMS_SYSTEM, 'maths', AbortSignal.timeout(60_000), false, 1500)
+    return parseClaimCheck(out)
+  } catch (e) {
+    if (e instanceof NoCloud) return { ok: true, errors: [], unsure: [], offline: 'No cloud model is free to check it right now. Try again in a minute.' }
+    throw e
+  }
+}

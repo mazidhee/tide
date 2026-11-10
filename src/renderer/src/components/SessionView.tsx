@@ -8,7 +8,9 @@ import { Thinking } from './Thinking'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
 import { paceNote } from '@shared/pace'
+import { withSources, type SourcePack } from '@shared/sources'
 import { parsePlacement, placementNote } from '@shared/placement'
+import { correctionText } from '@shared/lessonCheck'
 import type { Reading } from '@shared/readings'
 import { whyByDefault } from '../lib/agenda'
 import { MODE_LABEL, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
@@ -161,6 +163,19 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // What the tutor last asked, and which model you chose: a worked answer to a problem can go to the cloud model
   const askTypeRef = useRef<string | undefined>(undefined)
   const [engine, setEngine] = useState<'auto' | 'local' | 'cloud'>('auto')
+  // A notebook set to be taught by the cloud model starts its lessons that way (you can still switch)
+  useEffect(() => {
+    const where = 'path' in scope ? scope.path : ''
+    if (!where) return
+    window.tide.learn
+      .notebooks()
+      .then((nbs) => {
+        const nb = nbs.find((n) => where === n.path || where.startsWith(`${n.path}/`))
+        if (nb?.tutor === 'cloud') setEngine((e) => (e === 'auto' ? 'cloud' : e))
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const engineRef = useRef(engine)
   engineRef.current = engine
   const send = useCallback(
@@ -208,11 +223,21 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // A lesson on a topic a book you own covers is taught from that section: its text rides in the
   // opening message (hidden, and cached with the start of the lesson, so it costs time once)
   const openingRef = useRef(openingMessage(setup))
+  const [pack, setPack] = useState<SourcePack | null>(null)
   const begin = async () => {
     let opening = openingMessage(setup)
     if ((mode === 'teach' || mode === 'quiz') && (scope.kind === 'vault' || scope.kind === 'folder')) {
       const found = await Promise.race([window.tide.books.passage(topic).catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 2000))])
       if (found) opening = withPassage(opening, found)
+    }
+    // The passages it's taught from (specs, papers, docs found for the topic), when they're ready
+    if (mode === 'teach') {
+      const where = 'path' in scope ? scope.path : undefined
+      const found = await Promise.race([window.tide.sources.lesson(topic, where).catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 1500))])
+      if (found) {
+        setPack(found)
+        opening = withSources(opening, found)
+      }
     }
     openingRef.current = opening
     // Written ahead for this exact lesson (main/bank.ts): it opens at once
@@ -301,6 +326,36 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     : undefined
   askTypeRef.current = currentAsk?.type
   const plan = parsed.flatMap((b) => b ?? []).filter((b): b is Extract<Block, { kind: 'plan' }> => b.kind === 'plan').pop()
+  // You doubted a reply: the stronger model checks it against the sources; a correction is added to it
+  const [challenged, setChallenged] = useState<Record<number, 'checking' | 'ok' | 'flagged'>>({})
+  const [edited, setEdited] = useState(0)
+  const challenge = async (at: number) => {
+    const reply = turns[at]?.content
+    if (!reply) return
+    setChallenged((c) => ({ ...c, [at]: 'checking' }))
+    try {
+      const r = await window.tide.lessons.challenge(topic, 'path' in scope ? scope.path : undefined, reply)
+      if (r.offline) {
+        app.toast(r.offline)
+        setChallenged(({ [at]: _, ...c }) => c)
+        return
+      }
+      if (r.ok) {
+        setChallenged((c) => ({ ...c, [at]: 'ok' }))
+        app.toast(pack?.sources.length ? 'Checked against the lesson’s sources: nothing wrong found.' : 'Checked: nothing wrong found.')
+        return
+      }
+      const add = correctionText(r)
+      setTurns((ts) => ts.map((t, k) => (k === at ? { ...t, content: t.content + add } : t)))
+      setEdited((n) => n + 1)
+      setChallenged((c) => ({ ...c, [at]: 'flagged' }))
+      app.toast(r.errors.length ? 'Something in it was wrong: the correction is under it, and in your notes.' : 'Some details are worth checking: see under it.')
+    } catch {
+      setChallenged(({ [at]: _, ...c }) => c)
+      app.toast('Couldn’t check it just now.', { tone: 'error' })
+    }
+  }
+
   // Explanations you added to your notes yourself, word for word
   const [pinned, setPinned] = useState<{ at: number; text: string }[]>([])
   const pinnedAt = useMemo(() => new Set(pinned.map((p) => p.at)), [pinned])
@@ -371,7 +426,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     if (!ongoingKey || !view || k.finished || k.turns.length < 2) return
     keepLive({ key: ongoingKey, view, title: `${MODE_LABEL[mode] ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: null }, busy: k.busy })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [turns.length, busy, finished, ongoingKey])
+  }, [turns.length, busy, finished, ongoingKey, edited])
   useEffect(() => {
     if (!finished || !ongoingKey) return
     // Finished lessons stay in Past lessons, to read again
@@ -819,7 +874,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       <div className={withNotes ? 'session-split' : 'session-solo'}>
       <div className="doc-scroll session-scroll">
         <div className="session-column">
-          {(toRead.length > 0 || found.length > 0) && (
+          {(toRead.length > 0 || found.length > 0 || !!pack?.sources.length) && (
             <div className="s-read" aria-label="Read alongside">
               <Icon name="book" size={13} />
               <span className="muted">Read</span>
@@ -828,7 +883,13 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   {readingLabel(r)}
                 </button>
               ))}
-              {found.slice(0, 4).map((r) => (
+              {pack?.sources.map((s) => (
+                <button key={`s${s.n}`} className="s-read-link" onClick={() => (s.path ? app.openPath(s.path) : s.url && window.tide.app.openExternal(s.url))} title={`What this lesson is taught from: ${s.title}`}>
+                  <strong>S{s.n}</strong> {s.title}
+                  {!s.path && s.url && <Icon name="external" size={11} />}
+                </button>
+              ))}
+              {found.filter((r) => !pack?.sources.some((s) => s.url === r.url)).slice(0, 4).map((r) => (
                 <button key={r.url} className="s-read-link" onClick={() => (r.path ? app.openPath(r.path) : window.tide.app.openExternal(r.url))} title={[r.by, r.why].filter(Boolean).join(': ') || r.title}>
                   {r.title}
                   {!r.path && <Icon name="external" size={11} />}
@@ -874,6 +935,11 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                 {!live && t.content && (
                   <div className="s-tutor-tools">
                     <SpeakButton text={blocks.filter((b) => b.kind === 'text' || b.kind === 'ask' || b.kind === 'grade').map((b) => ('text' in b ? b.text : 'prompt' in b ? b.prompt : '')).join('. ')} />
+                    {(mode === 'teach' || mode === 'quiz') && (
+                      <button className={`icon-btn small${challenged[i] === 'ok' ? ' on' : ''}`} title={challenged[i] === 'checking' ? 'Checking…' : challenged[i] === 'ok' ? 'Checked: nothing wrong found' : 'Doubt this? Have the stronger model check it against the sources'} aria-label="Check this" disabled={!!challenged[i] || busy || (checking && i === turns.length - 1)} onClick={() => challenge(i)}>
+                        {challenged[i] === 'checking' ? <span className="spinner" /> : <Icon name={challenged[i] === 'ok' ? 'check' : 'search'} size={13} />}
+                      </button>
+                    )}
                     {mode === 'teach' && (
                       <button
                         className={`icon-btn small${pinnedAt.has(i) ? ' on' : ''}`}

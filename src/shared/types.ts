@@ -328,6 +328,8 @@ export interface NotebookMeta {
   outline?: string
   /** A project: something you're building or need to understand, with its documents */
   project?: import('./project').ProjectInfo
+  /** Who teaches its lessons: Tide decides (Gemma, the cloud model for hard parts), or the cloud model throughout */
+  tutor?: 'auto' | 'cloud'
 }
 
 export interface NoteProgress {
@@ -540,7 +542,7 @@ export interface TideApi {
     graph(): Promise<GraphData>
     backlinks(path: string): Promise<{ path: string; title: string }[]>
     notebooks(): Promise<NotebookMeta[]>
-    updateNotebook(path: string, patch: Partial<Pick<NotebookMeta, 'color' | 'description' | 'outline' | 'project'>>): Promise<void>
+    updateNotebook(path: string, patch: Partial<Pick<NotebookMeta, 'color' | 'description' | 'outline' | 'project' | 'tutor'>>): Promise<void>
     /** Streams an outline draft for a new topic as ai:event deltas under req.id */
     draftOutline(req: OutlineDraftRequest): Promise<void>
     cancelDraft(id: string): Promise<void>
@@ -605,11 +607,17 @@ export interface TideApi {
     drills(): Promise<import('./drills').DrillResult[]>
   }
   /** Your goal and focus, the week planned towards them, and the learner profile */
+  /** The passages a lesson is taught from (none yet: built in the background for next time) */
+  sources: {
+    lesson(topic: string, where?: string): Promise<import('./sources').SourcePack | null>
+  }
   /** Past lessons, kept as they go: to read again, or carry on */
   lessons: {
     save(r: Omit<import('./lessonLog').LessonRecord, 'started' | 'updated' | 'page'> & { started?: number }): Promise<import('./lessonLog').LessonSummary | null>
     list(): Promise<import('./lessonLog').LessonSummary[]>
     get(id: string): Promise<import('./lessonLog').LessonRecord | null>
+    /** Has the cloud model check one of the tutor's replies against the lesson's sources */
+    challenge(topic: string, where: string | undefined, reply: string): Promise<import('./lessonCheck').ClaimCheck & { offline?: string }>
   }
   /** Free readings found for a topic; when there are none yet, they're looked up in the background */
   readings: {
