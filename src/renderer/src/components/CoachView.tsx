@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
-import { aimOf, DEFAULT_COACH, localDate, type CoachSettings, type WeekPlan } from '@shared/coach'
+import { aimOf, aimsOf, DEFAULT_COACH, localDate, type Aim, type AimWeight, type CoachSettings, type WeekPlan } from '@shared/coach'
 import { useApp } from '../state'
 import { AGENDA_LABEL, openAgendaItem } from '../lib/agenda'
 import { Icon } from './Icon'
-import { PromptBox } from './PromptBox'
 import { PixelScene } from './PixelScene'
 import { Professor } from './Professor'
 
@@ -26,8 +25,7 @@ export function CoachView() {
   const [thingsReady, setThingsReady] = useState(false)
   // Where you're heading is worked out, not asked: shown here, yours to correct
   const [inferring, setInferring] = useState(false)
-  const [editingAim, setEditingAim] = useState(false)
-  const infer = (force = false) => {
+    const infer = (force = false) => {
     setInferring(true)
     window.tide.coach
       .infer(force)
@@ -41,7 +39,7 @@ export function CoachView() {
       .get()
       .then((s) => {
         setSettings(s)
-        if (!s.goal) infer()
+        if (!aimsOf(s).length) infer()
       })
       .catch(() => {})
     window.tide.coach.week().then(setWeek).catch(() => {})
@@ -138,36 +136,14 @@ export function CoachView() {
         <section className="pv-panel coach-setup">
           <div className="pv-main">
             <div className="field">
-              <span>Where you’re heading</span>
-              {settings.goal || editingAim ? (
-                <PromptBox
-                  value={settings.goal}
-                  onChange={(goal) => setSettings({ ...settings, goal })}
-                  onBlur={() => {
-                    save(settings)
-                    setEditingAim(false)
-                  }}
-                  multiline
-                  autoFocus={editingAim}
-                  action="none"
-                  placeholder={settings.direction || 'Where all of this is heading, in a sentence or two'}
-                  label="Where you’re heading"
-                  hint={settings.goal ? 'In your words. Clear it to let Tide work it out from what you study.' : undefined}
-                />
-              ) : (
-                <div className="coach-aim">
-                  <p className={inferring && !settings.direction ? 'muted' : ''}>{settings.direction || (inferring ? 'Working it out from your notebooks, goals and what you study…' : 'Study a little and Tide works this out from your notebooks and goals.')}</p>
-                  <span className="coach-aim-actions">
-                    {settings.direction && <span className="muted small">Worked out from your notebooks, goals and study.</span>}
-                    <button className="link-btn" onClick={() => (setSettings({ ...settings, goal: settings.direction ?? '' }), setEditingAim(true))}>
-                      Correct it
-                    </button>
-                    <button className="link-btn" onClick={() => infer(true)} disabled={inferring}>
-                      {inferring ? 'Thinking…' : 'Work it out again'}
-                    </button>
-                  </span>
-                </div>
-              )}
+              <span>What you’re working towards</span>
+              <AimsEditor
+                aims={aimsOf(settings)}
+                guess={settings.direction}
+                inferring={inferring}
+                onRethink={() => infer(true)}
+                onChange={(aims) => save({ ...settings, aims, goal: '' })}
+              />
             </div>
             <div className="field">
               <span>Focus on, most important first</span>
@@ -353,5 +329,76 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy }: { week: Week
         )}
       </div>
     </>
+  )
+}
+
+const WEIGHTS: { value: AimWeight; label: string; hint: string }[] = [
+  { value: 'main', label: 'Main', hint: 'Most of your weekday time goes here' },
+  { value: 'side', label: 'Side', hint: 'Steady, smaller share' },
+  { value: 'curious', label: 'Curious', hint: 'Weekend reading and primers' }
+]
+
+/** Your aims: as many as you have, each main, side or just curious; reword or drop them any time */
+function AimsEditor({ aims, guess, inferring, onRethink, onChange }: { aims: Aim[]; guess?: string; inferring: boolean; onRethink(): void; onChange(aims: Aim[]): void }) {
+  const [draft, setDraft] = useState('')
+  const [texts, setTexts] = useState<Record<string, string>>({})
+  const add = (text: string) => {
+    const t = text.trim()
+    if (!t) return
+    onChange([...aims, { id: Math.random().toString(36).slice(2, 10), text: t, weight: aims.some((a) => a.weight === 'main') ? 'side' : 'main', since: Date.now() }])
+    setDraft('')
+  }
+  const update = (id: string, patch: Partial<Aim>) => onChange(aims.map((a) => (a.id === id ? { ...a, ...patch } : a)))
+  return (
+    <div className="aims">
+      {aims.map((a) => (
+        <div key={a.id} className="aim-row">
+          <input
+            className="aim-text"
+            value={texts[a.id] ?? a.text}
+            onChange={(e) => setTexts({ ...texts, [a.id]: e.target.value })}
+            onBlur={() => {
+              const t = (texts[a.id] ?? a.text).trim()
+              if (t && t !== a.text) update(a.id, { text: t })
+              setTexts(({ [a.id]: _, ...rest }) => rest)
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+            aria-label="Aim"
+          />
+          <div className="segmented text" role="radiogroup" aria-label={`How much ${a.text} matters`}>
+            {WEIGHTS.map((w) => (
+              <button key={w.value} role="radio" aria-checked={a.weight === w.value} className={a.weight === w.value ? 'on' : ''} title={w.hint} onClick={() => update(a.id, { weight: w.value })}>
+                {w.label}
+              </button>
+            ))}
+          </div>
+          <button className="icon-btn small" title="Remove" aria-label={`Remove ${a.text}`} onClick={() => onChange(aims.filter((x) => x.id !== a.id))}>
+            <Icon name="x" size={12} />
+          </button>
+        </div>
+      ))}
+      <input
+        className="aim-text aim-new"
+        value={draft}
+        placeholder={aims.length ? 'Add another, e.g. payments and fintech systems' : 'e.g. distributed systems and blockchain infrastructure'}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && add(draft)}
+        onBlur={() => add(draft)}
+        aria-label="Add an aim"
+      />
+      {!aims.length && (
+        <p className="muted small aim-guess">
+          {guess ? <>Tide’s guess from your notebooks: {guess} </> : inferring ? 'Working out a guess from your notebooks… ' : null}
+          {guess && (
+            <button className="link-btn" onClick={() => add(guess)}>
+              Use it
+            </button>
+          )}{' '}
+          <button className="link-btn" onClick={onRethink} disabled={inferring}>
+            {inferring ? 'Thinking…' : 'Guess again'}
+          </button>
+        </p>
+      )}
+    </div>
   )
 }

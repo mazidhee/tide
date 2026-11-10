@@ -15276,6 +15276,62 @@ button.tl-dot:focus-visible {
   margin-top: 8px;
 }
 
+/* Your aims: each a line of your own words, with how much it matters */
+.aims {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 680px;
+}
+
+.aim-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.aim-text {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-s);
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.aim-row .aim-text {
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+
+.aim-text:hover {
+  border-color: var(--line);
+}
+
+.aim-text:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--ink) 30%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 8%, transparent);
+  background: var(--bg);
+}
+
+.aim-new {
+  border: 1px dashed var(--line-strong);
+}
+
+.aim-new::placeholder {
+  color: var(--ink-muted);
+}
+
+.aim-guess {
+  margin: 4px 0 0;
+  max-width: 62ch;
+  line-height: 1.5;
+}
+
 /* While the model is working, shimmering text holds still: repainting it every frame takes GPU
    time from Gemma (lib/motion.ts). The pulse and spinner stay, they're cheap. */
 :root[data-model-busy] .thinking-text,

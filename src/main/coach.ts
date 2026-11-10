@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs'
 import { scheduleWeek, summaryFromPlan } from '@shared/schedule'
-import { aimOf, catchUpPlan, thingsTitle, DEFAULT_COACH, localDate, moveUnfinished, nextStudyDay, nextTopics, planCompletion, weekMarkdown, type AgendaItem, type CoachSettings, type DayStats, type JournalEntry, type TopicCandidate, type WeekReview, type WeekPlan } from '@shared/coach'
+import { aimOf, aimsOf, catchUpPlan, thingsTitle, DEFAULT_COACH, localDate, moveUnfinished, nextStudyDay, nextTopics, planCompletion, weekMarkdown, type AgendaItem, type CoachSettings, type DayStats, type JournalEntry, type TopicCandidate, type WeekReview, type WeekPlan } from '@shared/coach'
 import { companyTrend } from '@shared/interviews'
 import { buildLink } from '@shared/deeplink'
 import { complete, extractJsonObject } from './ai'
@@ -42,7 +42,12 @@ export async function getCoach(): Promise<CoachSettings> {
 }
 
 export async function saveCoach(s: CoachSettings): Promise<CoachSettings> {
+  const aims = (Array.isArray(s.aims) ? s.aims : [])
+    .map((a) => ({ id: String(a.id || Math.random().toString(36).slice(2, 10)), text: String(a.text ?? '').trim().slice(0, 160), weight: (['main', 'side', 'curious'] as const).includes(a.weight) ? a.weight : 'side', since: Number(a.since) || Date.now() }))
+    .filter((a) => a.text)
+    .slice(0, 12)
   const clean: CoachSettings = {
+    ...(aims.length ? { aims } : {}),
     goal: String(s.goal ?? '').trim().slice(0, 500),
     focus: (Array.isArray(s.focus) ? s.focus : []).map(String).filter(Boolean).slice(0, 6),
     hoursPerWeek: Math.max(1, Math.min(60, Math.round(Number(s.hoursPerWeek) || 10))),
@@ -282,7 +287,7 @@ export async function inferDirection(force = false): Promise<CoachSettings> {
     memories.length ? `What they've told the tutor:\n${memories.slice(0, 30).map((m) => `- ${m.text}`).join('\n')}` : '',
     `Recent study topics: ${[...new Set(log.map((e) => e.label).filter(Boolean))].slice(0, 15).join('; ') || 'none logged'}`,
     `Answers so far: ${strong} topics solid, ${weak} weak or shaky`,
-    settings.goal ? `What they wrote about their goal: ${settings.goal}` : '',
+    aimsOf(settings).length ? `What they wrote they're working towards: ${aimOf(settings)}` : '',
     profile ? `Their learner profile:\n${profile.slice(0, 1200)}` : ''
   ]
     .filter(Boolean)

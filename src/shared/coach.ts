@@ -6,8 +6,20 @@
 import { roadmapTopics } from './curriculum'
 import { normalizeTitle } from './outline'
 
+export type AimWeight = 'main' | 'side' | 'curious'
+
+/** Something you're working towards: a career direction, a skill, an interest. Many at once, and they change */
+export interface Aim {
+  id: string
+  text: string
+  weight: AimWeight
+  since: number
+}
+
 export interface CoachSettings {
-  /** In one or two sentences, where all of this is heading, in your words (overrides `direction`) */
+  /** What you're working towards, in your words; the week is balanced across these */
+  aims?: Aim[]
+  /** The old single aim, in your words (read as one main aim when there's no list) */
   goal: string
   /** Where Tide works out you're heading, from your notebooks, goals, memories and study */
   direction?: string
@@ -20,8 +32,32 @@ export interface CoachSettings {
   days: number[]
 }
 
-/** Where the learner is heading: what they wrote, else what Tide inferred */
-export const aimOf = (s: Pick<CoachSettings, 'goal' | 'direction'>) => s.goal.trim() || s.direction?.trim() || ''
+/** Your aims: the list, else the old single goal as a main aim */
+export function aimsOf(s: Pick<CoachSettings, 'aims' | 'goal'>): Aim[] {
+  if (s.aims?.length) return s.aims
+  return s.goal.trim() ? [{ id: 'goal', text: s.goal.trim(), weight: 'main', since: 0 }] : []
+}
+
+const WEIGHT_WORD: Record<AimWeight, string> = { main: 'Main aims', side: 'Also', curious: 'Curious about' }
+
+/** Where the learner is heading, as a line for the model: their aims, else what Tide inferred */
+export function aimOf(s: Pick<CoachSettings, 'aims' | 'goal' | 'direction'>): string {
+  const aims = aimsOf(s)
+  if (!aims.length) return s.direction?.trim() || ''
+  return (['main', 'side', 'curious'] as const)
+    .map((w) => aims.filter((a) => a.weight === w).map((a) => a.text))
+    .map((texts, i) => (texts.length ? `${WEIGHT_WORD[(['main', 'side', 'curious'] as const)[i]]}: ${texts.join('; ')}.` : ''))
+    .filter(Boolean)
+    .join(' ')
+}
+
+/** Changes when the aims change in a way that matters for sorting roadmaps (wording or weight) */
+export function aimsKey(aims: Aim[]): string {
+  const s = aims.map((a) => `${a.weight}:${a.text.trim().toLowerCase()}`).sort().join('|')
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
+  return (h >>> 0).toString(36)
+}
 
 export const DEFAULT_COACH: CoachSettings = { goal: '', focus: [], hoursPerWeek: 10, days: [1, 2, 3, 4, 5, 6] }
 
