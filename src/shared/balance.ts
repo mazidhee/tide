@@ -73,8 +73,17 @@ function weekdayTopics(nb: BalanceNotebook, input: BalanceInput): RoadmapTopic[]
   })
 }
 
-/** How much a topic's section matters to your aims; a section you tagged core yourself counts as a needed foundation */
-const topicValue = (t: RoadmapTopic, nb: BalanceNotebook, input: BalanceInput) => Math.max(sectionValue(nb.sorted?.sections[t.sectionId], input.aims), t.tagged === 'core' ? 0.6 : 0)
+/**
+ * How much a topic's section matters to your aims. A foundation (core in your roadmap, or the
+ * model's, with no aim naming it) is worth most of the best of what comes after it in the same
+ * roadmap: that's what it leads to (planning backwards from the goal).
+ */
+function topicValues(nb: BalanceNotebook, input: BalanceInput, topics: RoadmapTopic[]): number[] {
+  const own = topics.map((t) => sectionValue(nb.sorted?.sections[t.sectionId], input.aims))
+  const after: number[] = new Array(topics.length).fill(0)
+  for (let i = topics.length - 2; i >= 0; i--) after[i] = Math.max(after[i + 1], own[i + 1])
+  return topics.map((t, i) => (classOf(t, nb.sorted, input.overrides, input.aims) === 'core' ? Math.max(own[i], 0.8 * after[i]) : own[i]))
+}
 
 /**
  * How much your aims need a roadmap now, 0..1: mostly what the next couple of weeks would teach
@@ -84,11 +93,15 @@ export function notebookValue(nb: BalanceNotebook, input: BalanceInput): number 
   if (!nb.ready || !nb.sorted) return 0.3
   const left = weekdayTopics(nb, input)
   if (!left.length) return 0
-  const soon = left.slice(0, 12)
-  const next = soon.reduce((n, t) => n + topicValue(t, nb, input), 0) / soon.length
+  const values = topicValues(nb, input, left)
+  const soon = values.slice(0, 12)
+  const next = soon.reduce((a, b) => a + b, 0) / soon.length
   const best = [...new Set(left.map((t) => t.sectionId))].map((id) => sectionValue(nb.sorted!.sections[id], input.aims)).sort((a, b) => b - a).slice(0, 3)
   return 0.65 * next + 0.35 * (best.reduce((a, b) => a + b, 0) / Math.max(1, best.length))
 }
+
+/** How much of a roadmap an aim needs: the sum over its sections the aim needs or is about */
+const aimBest = (nb: BalanceNotebook, aimId: string) => Object.values(nb.sorted?.sections ?? {}).reduce((n, s) => n + ((s.serves[aimId] ?? 0) >= 0.6 ? s.serves[aimId] : 0), 0)
 
 export function balanceWeek(input: BalanceInput): Balance {
   const week = Math.max(1, input.hoursPerWeek)
@@ -113,8 +126,16 @@ export function balanceWeek(input: BalanceInput): Balance {
     return serving ? `${next.section || s.nb.name}, for ${short(aim.text)}` : `foundations your aims build on`
   }
 
-  // Two roadmaps on weekdays: a third splits the week too thin to make progress in any
-  const chosen = scored.slice(0, 2)
+  // Two roadmaps on weekdays (a third splits the week too thin to make progress in any). Each main
+  // aim's home, the roadmap that serves it most, gets one of them first
+  const homes = input.aims
+    .filter((a) => a.weight === 'main')
+    .map((a) => {
+      const home = scored.filter((s) => s.nb.ready).sort((x, y) => aimBest(y.nb, a.id) - aimBest(x.nb, a.id))[0]
+      return home && aimBest(home.nb, a.id) >= 0.6 ? home : undefined
+    })
+    .filter((s): s is (typeof scored)[number] => !!s)
+  const chosen = [...new Set([...homes, ...scored])].slice(0, 2).sort((a, b) => b.score - a.score)
   const total = chosen.reduce((n, s) => n + s.score, 0)
   const tideShares: Shares[] = chosen.map((s) => ({ notebook: s.nb.name, share: chosen.length === 1 ? 1 : Math.min(0.7, Math.max(0.3, s.score / total)), reason: reasonFor(s) }))
   // The clamp can leave them not adding up to one

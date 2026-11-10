@@ -233,3 +233,14 @@ describe('classes from aims', () => {
     expect(balanceWeek(base({ notebooks: [n] })).candidates.map((c) => c.topic)).toEqual(['Elliptic curve signatures'])
   })
 })
+
+describe('main aims', () => {
+  it('gives each main aim’s roadmap weekday time, even behind foundations', () => {
+    const aims2: Aim[] = [...aims, { id: 'pay', text: 'Payments', weight: 'main', since: 0 }]
+    const fin = notebook('Finance', FINANCE, bySection({ 'Fixed Income': { class: 'core', serves: { pay: 1 } } }))
+    // Maths has had more study lately; Software Engineering starts with foundations no aim names
+    const b = balanceWeek({ ...base(), aims: aims2, notebooks: [maths(), swe(), fin], recent: { Mathematics: 300 } })
+    expect(b.focus).toContain('Software Engineering')
+    expect(b.focus).toContain('Finance')
+  })
+})
