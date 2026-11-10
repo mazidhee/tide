@@ -1,7 +1,7 @@
 import { checksOf, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, solutionOf, solvePrompt, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
 import type { RequestKind } from '@shared/providers'
 import { aboutMetabase } from '@shared/metabase'
-import { posedProblem, repeatsEarlier } from '@shared/session'
+import { ownWords, posedProblem, repeatsEarlier } from '@shared/session'
 import type { ChatEvent, ChatMessage, ChatRequest } from '@shared/types'
 import { routeFor } from './cloud'
 import { metabaseHost, metabaseReady } from './metabase'
@@ -61,9 +61,11 @@ export async function exactCheck(req: ChatRequest): Promise<Exact | null> {
   const prev = [...req.messages].reverse().find((m) => m.role === 'assistant')
   const said = [...req.messages].reverse().find((m) => m.role === 'user')
   const solution = solutionOf(text(prev))
-  if (!solution || !/^Answer:/i.test(text(said))) return null
+  const mine = ownWords(text(said))
+  // A pick from options (with reasoning after it) isn't a worked answer to compare
+  if (!solution || !/^Answer:/i.test(mine) || /^Answer:\s*\([A-Z]\)\s/.test(mine)) return null
   const expected = finalAnswer(solution)
-  const theirs = finalAnswer(text(said).replace(/^Answer:\s*/i, '').replace(/\n\(Confidence: [^)]*\)\s*$/, ''))
+  const theirs = finalAnswer(mine.replace(/^Answer:\s*/i, '').replace(/\n\(Confidence: [^)]*\)\s*$/, ''))
   if (!expected || !theirs) return null
   const r = await runCode('python', comparePython(theirs, expected), '', 15_000).catch(() => null)
   const out = r?.stdout.trim()

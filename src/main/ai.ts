@@ -11,6 +11,7 @@ import { compactChat, fallbackTitle, historyBudget, historyFor, needsCompaction,
 import { fitHistory } from '@shared/context'
 import { createHash } from 'crypto'
 import { cleanModelText } from '@shared/modelText'
+import { PACE_MARK } from '@shared/pace'
 import { BANK_NUDGE, levelAfter, nextDirection, pickProblem, problemsSoFar, renderProblem, type BankProblem, type Direction, type Level } from '@shared/bank'
 import type { ChatEvent, ChatMessage, ChatRequest, ChatScope, ContextSource, ReadAlongNote } from '@shared/types'
 import { getSettings } from './settings'
@@ -518,9 +519,11 @@ async function lessonTurn(req: TurnRequest) {
   // The bank takes over once the problem set has begun (the tutor sets the first problem itself, after
   // its diagnostic and first teaching), never during the diagnostic
   const started = replies.some((r) => /\*\*\s*Problem\s+\d+/i.test(r))
-  const ready = started && ([1, 2, 3] as Level[]).some((l) => pickProblem(bank, l, seen))
   const messages = [...req.messages]
   const last = messages[messages.length - 1]
+  // A turn with a pace note (you asked to be taught, or you've missed twice) is the tutor's, not the bank's
+  const paced = typeof last?.content === 'string' && last.content.includes(PACE_MARK)
+  const ready = started && !paced && ([1, 2, 3] as Level[]).some((l) => pickProblem(bank, l, seen))
   if (ready && last?.role === 'user' && typeof last.content === 'string') messages[messages.length - 1] = { ...last, content: `${last.content}\n\n${BANK_NUDGE}` }
   const local = !(await mayLeaveMac(req))
   // While the reply streams: when the tutor starts a new problem right after short feedback, it's

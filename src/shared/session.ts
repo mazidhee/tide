@@ -22,6 +22,8 @@ export type Block =
   | { kind: 'summary'; text: string }
   /** A takeaway for the student's notes: written into the lesson's note as it's taught */
   | { kind: 'note'; text: string }
+  /** The tutor will carry on explaining: no question this turn */
+  | { kind: 'continue' }
 
 const attr = (attrs: string, name: string) => attrs.match(new RegExp(`${name}\\s*=\\s*"([^"]*)"`, 'i'))?.[1] ?? attrs.match(new RegExp(`${name}\\s*=\\s*'([^']*)'`, 'i'))?.[1]
 
@@ -46,7 +48,9 @@ export const hideWorking = (raw: string) =>
 
 /** Splits a (possibly still streaming) tutor message into blocks; unfinished tags stay hidden */
 export function parseBlocks(full: string): Block[] {
-  const raw = hideWorking(full)
+  // "Carry on" (<continue/>): no question this time; the app offers Go on instead
+  const carryOn = /<continue\b[^>]*\/?>/i.test(full)
+  const raw = hideWorking(full).replace(/<\/?continue\b[^>]*>/gi, '').replace(/<c(o(n(t(i(n(ue?)?)?)?)?)?)?$/i, '')
   // What the tutor said aloud (Talk) is spoken, not shown again as a block
   const said = splitSay(raw)
   // A reply that stalled after its spoken part still shows what was said, so there's something to answer
@@ -106,6 +110,7 @@ export function parseBlocks(full: string): Block[] {
     }
   }
   pushText(message.slice(last))
+  if (carryOn && !blocks.some((b) => b.kind === 'ask')) return [...blocks, { kind: 'continue' }]
   return withAsk(blocks)
 }
 
@@ -131,17 +136,21 @@ function withAsk(blocks: Block[]): Block[] {
 
 /** The tag protocol every session shares; it rides in the system prompt so it's cached once */
 export const SESSION_FORMAT = `Format rules (the app turns these tags into interactive UI, use them exactly):
-- End every message with exactly ONE question for the student inside an ask tag, unless the session is finished:
-  <ask type="short">question</ask>
-  The student can only answer inside an ask tag, so never ask a question in plain text, not even the first one.
+- End each message in one of two ways, unless the session is finished:
+  a) ONE question for the student inside an ask tag: <ask type="short">question</ask>
+     The student can only answer inside an ask tag, so never ask a question in plain text, not even the first one.
+  b) <continue/> when your next message should carry on explaining: an idea that needs more than one message, or when Tide's note says to explain. Then ask nothing. After two explaining messages in a row, check their understanding with a question.
   Types: predict (they guess before you explain), short (a sentence or two), explain (explain it back in their own words), choice (multiple choice, put options in the tag: <ask type="choice" options="first|second|third|fourth">question</ask>), error (show a flawed statement or code and ask them to find the mistake), problem (a worked problem or calculation), code (they write code: <ask type="code" lang="python">task</ask>).
+- Use choice when picking is the real test (spotting the right idea, the next step, or a misconception) and typing would only slow them down. Write the correct option first, then make each wrong option from one specific misconception, the same length and shape, with nothing that gives the answer away. They may add their reasoning to their pick: mark the reasoning too.
 - When they answer, judge it first: <grade verdict="correct|partial|wrong" score="0.0-1.0">one or two sentences: what was right and why, or the exact step that's wrong and why; no empty praise</grade>
 - Grade against your own solution, and quote the words of their answer that earned the verdict. "correct" means complete and right, not just heading the right way; a right answer with wrong or missing reasoning is "partial".
 - Before you set a problem, solve it yourself, and put your answer and the key steps after it in <solution>...</solution>. The student never sees it (so this isn't answering your own question); you grade their answer against it. When the answer is a number or an expression, also add <check lang="python">Python that works the answer out from scratch and asserts it equals yours (SymPy is available)</check>; for a code problem, a check that runs your reference solution on test cases with asserts. Tide runs every check before the student sees the problem: if it fails, the problem or your answer is wrong. A problem must be well posed: every quantity it asks about is defined and it has one clear answer.
 - If they got something wrong or partly wrong, capture the idea they missed as a flashcard: <card>question :: answer</card>
 - The student may send [hint]. Give the smallest hint that unblocks their thinking, and give more each time they ask again: a nudge, then a hint, then one worked step, then the answer.
 - The student may say they don't know. Then teach the idea briefly and ask an easier question.
-- Their answers note how sure they were. Being confidently wrong is a misconception: address it directly.
+- Their answers note how sure they were. Sure and wrong is a misconception: name it plainly, and test it again later in a new form. Unsure and right: give one more like it.
+- Never repeat a question in the same words. Before the summary, retest anything they missed in a new form.
+- Tide may add a note at the end of their message, starting "(Tide:". Follow it; they don't see it.
 - Never answer your own question. Ask one thing at a time. Keep your turns short. No greetings, no introductions, no preamble: start with the substance.
 - If the topic may be newer than your training data (2025 onwards) or you are unsure of a fact, use web_search and read_webpage first, and cite sources like [3].
 - Math in LaTeX ($...$, $$...$$). Code in fenced blocks.`
@@ -243,7 +252,7 @@ When it's done, write <summary>what they learned, what is still shaky, what to l
     const extra = options?.project ? projectRules(options.project) : ''
     const start = difficulty === 'hard' ? 'at a hard level' : difficulty === 'gentle' ? 'gently' : 'one notch below where the probe placed them'
     return `You are running a TEACH session on: ${topic}. They learn by doing: you explain briefly, they solve.
-1. PROBE: ask 2 or 3 short diagnostic questions, one at a time, from easy to hard, to place them. Don't teach yet.
+1. PROBE: place them with 2 to 4 short questions, one at a time. Start near the hardest thing this topic needs; after a confident right answer, step up; after a miss, step down. Stop once you know where they're solid and where they break. Don't teach yet.
 2. PLAN: from what you learned, write a short path from what they know to the goal, skipping what they've shown they know:
 <plan>
 - first step

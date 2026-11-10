@@ -4114,6 +4114,30 @@ button.menu-row:hover {
   border-top: 1px solid var(--line);
 }
 
+/* The tutor is carrying on: Go on, or stop to ask something */
+.s-goon {
+  position: sticky;
+  bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.s-goon:has(textarea) {
+  padding: 14px;
+  border-radius: var(--radius-l);
+  border: 1px solid var(--line-strong);
+  background: var(--bg-raised);
+  box-shadow:
+    var(--shadow),
+    0 -26px 22px -6px var(--bg);
+}
+
+.s-goon-bar {
+  justify-content: flex-end;
+}
+
 .s-finish {
   margin-top: 8px;
 }
