@@ -34,6 +34,14 @@ export interface ScheduleInput {
   undone: { topic: string; notebook?: string; topicId?: string }[]
   /** Share of last week's plan that got done, if there was one */
   lastDone?: number
+  /** The split worked out from your aims (shared/balance); otherwise by focus rank */
+  shares?: Shares[]
+  /** History and background for weekend days, best first */
+  primers?: TopicCandidate[]
+  /** Which of `days` are Saturday or Sunday */
+  weekend?: boolean[]
+  /** Minutes for each of `days`, when weekdays and weekends differ */
+  dayMinutes?: number[]
 }
 
 const BLOCK = 45
@@ -70,11 +78,12 @@ export function weekShares(input: Pick<ScheduleInput, 'focus' | 'goals' | 'hours
 }
 
 export function scheduleWeek(input: ScheduleInput): WeekPlan {
-  const shares = weekShares(input)
+  const shares = input.shares ?? weekShares(input)
   const perDay = (input.hoursPerWeek * 60) / Math.max(1, input.days.length)
   // A week mostly left undone means this one was too big: lighten it
   const scale = input.lastDone !== undefined && input.lastDone < 0.6 ? 0.8 : 1
-  const budget = input.days.map(() => Math.round(perDay * scale))
+  const budget = input.days.map((_, d) => Math.round((input.dayMinutes?.[d] ?? perDay) * scale))
+  const weekend = input.days.map((_, d) => !!input.weekend?.[d])
   const plan: AgendaItem[][] = input.days.map(() => [])
   const used = (d: number) => plan[d].reduce((n, it) => n + it.minutes, 0)
   const room = (d: number) => budget[d] - used(d)
@@ -82,7 +91,7 @@ export function scheduleWeek(input: ScheduleInput): WeekPlan {
   const n = input.days.length
 
   // Queues: carried-over topics first, then each roadmap in order, never a topic twice
-  const queue = new Map<string, { topic: string; notebook: string; section?: string; topicId?: string; carried?: boolean }[]>()
+  const queue = new Map<string, { topic: string; notebook: string; section?: string; topicId?: string; why?: string; carried?: boolean }[]>()
   const seen = new Set<string>()
   for (const u of input.undone) {
     const nb = u.notebook && input.focus.includes(u.notebook) ? u.notebook : undefined
@@ -93,7 +102,7 @@ export function scheduleWeek(input: ScheduleInput): WeekPlan {
   for (const c of input.candidates) {
     if (!input.focus.includes(c.notebook) || seen.has(c.topic)) continue
     seen.add(c.topic)
-    queue.set(c.notebook, [...(queue.get(c.notebook) ?? []), { topic: c.topic, notebook: c.notebook, section: c.section, ...(c.topicId ? { topicId: c.topicId } : {}) }])
+    queue.set(c.notebook, [...(queue.get(c.notebook) ?? []), { topic: c.topic, notebook: c.notebook, section: c.section, ...(c.topicId ? { topicId: c.topicId } : {}), ...(c.why ? { why: c.why } : {}) }])
   }
 
   // Repair first: weak spots, due cards and mistakes, early in the week and again mid-week
@@ -111,7 +120,19 @@ export function scheduleWeek(input: ScheduleInput): WeekPlan {
   const last = n - 1
   if (n >= 3 && input.hoursPerWeek >= 4) plan[last].push({ kind: 'test', title: "Test on this week's topics", minutes: 30, why: 'Checks what stuck, and shows what to carry into next week' })
 
+  // Weekend primers: a short read on history or background, at most 15% of the week
+  const weekMinutes = budget.reduce((a, b) => a + b, 0)
+  let primed = 0
+  const primers = [...(input.primers ?? [])]
+  for (let d = 0; d < n; d++) {
+    if (!weekend[d] || !primers.length || (primed + 20) / weekMinutes > 0.15 || room(d) < 20 + MIN_BLOCK) continue
+    const p = primers.shift()!
+    plan[d].push({ kind: 'learn', title: p.topic, topic: p.topic, ...(p.topicId ? { topicId: p.topicId } : {}), notebook: p.notebook, minutes: 20, why: p.why ?? 'Weekend primer' })
+    primed += 20
+  }
+
   // Learning: each day from the subjects furthest below their share, two subjects at most a day
+  // (one on weekends: longer, deeper work on the main subject)
   const target = new Map(shares.map((s) => [s.notebook, s.share * budget.reduce((a, b) => a + b, 0)]))
   const got = new Map<string, number>()
   const learned: { day: number; topic: string; notebook: string }[] = []
@@ -119,9 +140,9 @@ export function scheduleWeek(input: ScheduleInput): WeekPlan {
     for (;;) {
       const free = room(d)
       if (free < MIN_BLOCK) break
-      const today = subjects(d)
+      const today = new Set([...subjects(d)].filter((nb): nb is string => !!nb && input.focus.includes(nb)))
       const options = input.focus
-        .filter((nb) => (queue.get(nb)?.length ?? 0) > 0 && (today.has(nb) || today.size < 2))
+        .filter((nb) => (queue.get(nb)?.length ?? 0) > 0 && (today.has(nb) || today.size < (weekend[d] ? 1 : 2)))
         // Furthest below its share in proportion, so a smaller subject still gets its turn
         .sort((a, b) => (got.get(a) ?? 0) / Math.max(1, target.get(a) ?? 0) - (got.get(b) ?? 0) / Math.max(1, target.get(b) ?? 0))
       const nb = options[0]
@@ -136,7 +157,7 @@ export function scheduleWeek(input: ScheduleInput): WeekPlan {
         ...(next.topicId ? { topicId: next.topicId } : {}),
         notebook: nb,
         minutes,
-        why: next.carried ? 'Carried over from last time' : goal && (shares.find((s) => s.notebook === nb)?.reason ?? '').includes('left') ? `Next in ${nb}, to keep "${goal.name}" on time` : `Next in your ${nb} roadmap${next.section ? ` (${next.section})` : ''}`,
+        why: next.carried ? 'Carried over from last time' : goal && (shares.find((s) => s.notebook === nb)?.reason ?? '').includes('left') ? `Next in ${nb}, to keep "${goal.name}" on time` : (next.why ?? `Next in your ${nb} roadmap${next.section ? ` (${next.section})` : ''}`),
         ...(next.carried ? { carried: true } : {})
       })
       got.set(nb, (got.get(nb) ?? 0) + minutes)
@@ -158,7 +179,9 @@ export function scheduleWeek(input: ScheduleInput): WeekPlan {
   }
   // A take-home on the top subject, mid-to-late week, built on what that week taught
   const top = input.focus[0]
-  const d = Math.max(1, Math.min(last - 1, Math.round(n * 0.6)))
+  // On a weekend day when there is one (time for a longer problem), else mid-to-late week
+  const firstWeekend = weekend.findIndex((w, i) => w && i > 0)
+  const d = firstWeekend > 0 ? firstWeekend : Math.max(1, Math.min(last - 1, Math.round(n * 0.6)))
   // Only what was learned before that day: the take-home builds on it
   const taught = learned.filter((l) => l.notebook === top && l.day < d)
   if (top && taught.length >= 2 && input.hoursPerWeek >= 6 && n >= 3) {

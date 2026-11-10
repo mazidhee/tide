@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { aimOf, aimsOf, DEFAULT_COACH, localDate, type Aim, type AimWeight, type CoachSettings, type WeekPlan } from '@shared/coach'
+import { aimOf, aimsOf, pickOf, DEFAULT_COACH, localDate, type Aim, type AimWeight, type CoachSettings, type WeekPlan } from '@shared/coach'
 import { useApp } from '../state'
 import { AGENDA_LABEL, openAgendaItem } from '../lib/agenda'
 import { Icon } from './Icon'
@@ -50,6 +50,15 @@ export function CoachView() {
   const save = (next: CoachSettings) => {
     setSettings(next)
     window.tide.coach.save(next).catch(() => {})
+  }
+  // Weekday and weekend minutes; until you set them, the week's hours spread evenly
+  const evenly = Math.round((settings.hoursPerWeek * 60) / Math.max(1, settings.days.length) / 5) * 5
+  const weekdayMins = settings.weekdayMinutes ?? evenly
+  const weekendMins = settings.weekendMinutes ?? evenly
+  const setMinutes = (k: 'weekdayMinutes' | 'weekendMinutes', v: number) => {
+    const next = { ...settings, weekdayMinutes: weekdayMins, weekendMinutes: weekendMins, [k]: Math.max(0, Math.round(v) || 0) }
+    const total = settings.days.reduce((n, d) => n + (d === 0 || d === 6 ? next.weekendMinutes : next.weekdayMinutes), 0)
+    save({ ...next, hoursPerWeek: Math.max(1, Math.min(60, Math.round(total / 60))) })
   }
   const toggleFocus = (n: string) => save({ ...settings, focus: settings.focus.includes(n) ? settings.focus.filter((x) => x !== n) : [...settings.focus, n] })
   const clean = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
@@ -104,7 +113,7 @@ export function CoachView() {
             <h1 className="page-title">Your week</h1>
             <p className="practice-summary">
               {week
-                ? `${dayLabel(week.days[0]?.date ?? week.weekStart)} to ${dayLabel(week.days[week.days.length - 1]?.date ?? week.weekStart)} · ${settings.hoursPerWeek} hours, ${settings.focus.join(' and ') || 'no focus set'}`
+                ? `${dayLabel(week.days[0]?.date ?? week.weekStart)} to ${dayLabel(week.days[week.days.length - 1]?.date ?? week.weekStart)} · ${settings.hoursPerWeek} hours, ${week.priorities.map((p) => p.notebook).join(' and ') || 'no focus set'}`
                 : 'Tell Tide where you’re heading; it plans each week towards it.'}
             </p>
           </div>
@@ -127,7 +136,7 @@ export function CoachView() {
         {week && !editing ? (
           <button className="coach-settings-row" onClick={() => setEditing(true)} title="Change your goal, focus, hours or days">
             <span className="coach-settings-goal">{aimOf(settings) || 'Working out where you’re heading'}</span>
-            <span className="muted">{settings.focus.join(', ')}</span>
+            <span className="muted">{pickOf(settings) === 'tide' ? 'Tide picks the roadmaps' : settings.focus.join(', ')}</span>
             <span className="muted">{settings.hoursPerWeek} h a week</span>
             <span className="muted">{DAYS.filter((_, i) => settings.days.includes(i)).join(' ')}</span>
             <span className="coach-settings-edit">Edit</span>
@@ -146,6 +155,23 @@ export function CoachView() {
               />
             </div>
             <div className="field">
+              <span>Who picks each week’s roadmaps</span>
+              <div className="segmented text" role="radiogroup" aria-label="Who picks each week’s roadmaps">
+                {(
+                  [
+                    ['tide', 'Tide, from your aims'],
+                    ['me', 'I do']
+                  ] as const
+                ).map(([v, label]) => (
+                  <button key={v} role="radio" aria-checked={pickOf(settings) === v} className={pickOf(settings) === v ? 'on' : ''} onClick={() => save({ ...settings, pick: v })}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {pickOf(settings) === 'tide' && <SortStatus aims={aimsOf(settings).length} />}
+            </div>
+            {pickOf(settings) === 'me' && (
+            <div className="field">
               <span>Focus on, most important first</span>
               <div className="pv-chips">
                 {notebooks.map((n) => {
@@ -160,10 +186,17 @@ export function CoachView() {
                 {!notebooks.length && <span className="muted small">Notebooks with a roadmap appear here.</span>}
               </div>
             </div>
+            )}
             <div className="pv-row">
-              <label className="field-inline">
-                Hours a week
-                <input type="number" min={1} max={60} value={settings.hoursPerWeek} onChange={(e) => save({ ...settings, hoursPerWeek: Math.max(1, Math.min(60, Number(e.target.value) || 1)) })} />
+              <label className="field-inline" title="Minutes on each weekday you study">
+                Weekdays
+                <input type="number" min={15} max={600} step={15} value={weekdayMins} onChange={(e) => setMinutes('weekdayMinutes', Number(e.target.value))} />
+                <span className="muted small">min</span>
+              </label>
+              <label className="field-inline" title="Minutes on Saturday or Sunday, if you study then: longer, deeper work">
+                Weekends
+                <input type="number" min={0} max={720} step={15} value={weekendMins} onChange={(e) => setMinutes('weekendMinutes', Number(e.target.value))} />
+                <span className="muted small">min</span>
               </label>
               <div className="coach-days" role="group" aria-label="Study days">
                 {DAYS.map((d, i) => (
@@ -172,7 +205,7 @@ export function CoachView() {
                   </button>
                 ))}
               </div>
-              <button className="btn primary pv-go" onClick={plan} disabled={!!busy || !settings.focus.length}>
+              <button className="btn primary pv-go" onClick={plan} disabled={!!busy || (pickOf(settings) === 'me' ? !settings.focus.length : !aimsOf(settings).length)}>
                 {busy === 'plan' ? (
                   <>
                     <span className="spinner" /> Planning…
@@ -248,11 +281,16 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy }: { week: Week
                 <span key={p.notebook} title={p.reason}>
                   <i style={{ background: `color-mix(in srgb, var(--accent) ${90 - i * 30}%, var(--bg-active))` }} />
                   {p.notebook} <span className="muted">{p.share}%</span>
+                  {p.reason && <span className="muted wk-reason">{p.reason}</span>}
                 </span>
               ))}
             </div>
           </div>
         )}
+        {week.suggested && week.suggested.map((s) => s.notebook).join() !== week.priorities.map((p) => p.notebook).join() && (
+          <p className="muted small wk-note">Tide would have picked {week.suggested.map((s) => `${s.notebook} (${s.reason})`).join(' and ')}.</p>
+        )}
+        {week.unsorted?.length ? <p className="muted small wk-note">{week.unsorted.join(' and ')} {week.unsorted.length === 1 ? 'is' : 'are'} in roadmap order this week: Tide hasn’t finished sorting {week.unsorted.length === 1 ? 'it' : 'them'} against your aims.</p> : null}
       </section>
 
       <div className="wk-strip" role="tablist" aria-label="Days">
@@ -400,5 +438,41 @@ function AimsEditor({ aims, guess, inferring, onRethink, onChange }: { aims: Aim
         </p>
       )}
     </div>
+  )
+}
+
+/** How far Tide has sorted your roadmaps against your aims, with a way to start it now */
+function SortStatus({ aims }: { aims: number }) {
+  const [status, setStatus] = useState<{ notebooks: { notebook: string; sorted: boolean; sections: number; done: number }[]; error: string } | null>(null)
+  const [sorting, setSorting] = useState(false)
+  const load = () => window.tide.curriculum.status().then(setStatus).catch(() => {})
+  useEffect(() => {
+    load()
+    const t = setInterval(load, 5000)
+    return () => clearInterval(t)
+  }, [aims])
+  if (!aims) return <p className="muted small sort-status">Add what you’re working towards above, and Tide sorts your roadmaps against it.</p>
+  if (!status) return null
+  const left = status.notebooks.filter((n) => !n.sorted)
+  const sort = () => {
+    setSorting(true)
+    window.tide.curriculum
+      .sort()
+      .then(() => load())
+      .catch(() => {})
+      .finally(() => setSorting(false))
+  }
+  return (
+    <p className="muted small sort-status">
+      {left.length
+        ? `Sorting your roadmaps against your aims: ${left.map((n) => `${n.notebook} ${n.done} of ${n.sections} sections`).join(', ')}. Until a roadmap is sorted, it’s planned in roadmap order.`
+        : `Your ${status.notebooks.length === 1 ? 'roadmap is' : `${status.notebooks.length} roadmaps are`} sorted against your aims. Change any topic’s place on its roadmap page.`}{' '}
+      {left.length > 0 && (
+        <button className="link-btn" onClick={sort} disabled={sorting}>
+          {sorting ? 'Sorting…' : 'Sort now'}
+        </button>
+      )}
+      {status.error && <span className="set-error"> Last try stopped: {status.error}</span>}
+    </p>
   )
 }

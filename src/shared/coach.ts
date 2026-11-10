@@ -25,12 +25,20 @@ export interface CoachSettings {
   direction?: string
   /** When `direction` was last worked out (ms) */
   directionAt?: number
-  /** Notebooks to focus on, most important first */
+  /** Notebooks to focus on, most important first (used when you pick the week's roadmaps) */
   focus: string[]
+  /** Who picks the week's roadmaps: Tide, from your aims (the default once you have aims), or you */
+  pick?: 'tide' | 'me'
   hoursPerWeek: number
   /** Days of the week to study, 0 = Sunday */
   days: number[]
+  /** Minutes on a weekday and on a weekend day, when they differ (otherwise hoursPerWeek is spread evenly) */
+  weekdayMinutes?: number
+  weekendMinutes?: number
 }
+
+/** Who picks the week's roadmaps */
+export const pickOf = (s: Pick<CoachSettings, 'pick' | 'aims' | 'goal'>): 'tide' | 'me' => s.pick ?? (aimsOf(s).length ? 'tide' : 'me')
 
 /** Your aims: the list, else the old single goal as a main aim */
 export function aimsOf(s: Pick<CoachSettings, 'aims' | 'goal'>): Aim[] {
@@ -92,6 +100,10 @@ export interface WeekPlan {
   thingsProject?: string
   /** Unfinished items that ran past the end of this plan, for the next one to pick up */
   carry?: AgendaItem[]
+  /** When you picked the roadmaps: what Tide would have picked, and why */
+  suggested?: { notebook: string; share: number; reason: string }[]
+  /** Roadmaps planned in roadmap order because Tide hasn't sorted them against your aims yet */
+  unsorted?: string[]
 }
 
 /** Today's date where you are (yyyy-mm-dd), not in UTC: an evening wrap-up belongs to today */
@@ -199,6 +211,8 @@ export interface TopicCandidate {
   topicId?: string
   /** The book or course the roadmap names for it ("Topic — _Book_") */
   source?: string
+  /** Why it's next, for the week (from the aims it serves) */
+  why?: string
 }
 
 /** The next unfinished topics in a roadmap, in order, with the section each sits in (projects are practised, not taught) */
