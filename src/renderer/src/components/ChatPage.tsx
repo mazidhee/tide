@@ -41,7 +41,8 @@ export function ChatPage({ id }: { id?: string }) {
   const [query, setQuery] = useState('')
   const [input, setInput] = useState('')
   const [scope, setScope] = useState<ChatScope>({ kind: 'vault' })
-  const voice = useTalk(lastReply ? { key: lastReply.id, content: lastReply.content, streaming: !!lastReply.streaming } : null, (said) => sendRef.current(said), 'path' in scope ? { path: scope.path } : undefined)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const voice = useTalk(lastReply ? { key: lastReply.id, content: lastReply.content, streaming: !!lastReply.streaming } : null, (said) => sendRef.current(said), 'path' in scope ? { path: scope.path } : undefined, { box: inputRef, submit: () => sendRef.current(inputRef.current?.value ?? '') })
   const [notebooks, setNotebooks] = useState<NotebookMeta[]>([])
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -78,7 +79,6 @@ export function ChatPage({ id }: { id?: string }) {
     }
   }
   const listRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const refresh = useCallback(() => {
     window.tide.chats.list().then(setChats).catch(() => {})
@@ -235,7 +235,7 @@ export function ChatPage({ id }: { id?: string }) {
       tools={
         <>
           {scopePicker}
-          <TalkControls voice={voice} onText={(said) => send(said)} where={'path' in scope ? { path: scope.path } : undefined} />
+          <TalkControls voice={voice} onText={(said) => send(said)} where={'path' in scope ? { path: scope.path } : undefined} target={inputRef} />
         </>
       }
     />

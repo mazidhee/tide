@@ -228,7 +228,7 @@ export function CoachView() {
   )
 }
 
-const KIND_DOT: Record<string, string> = { learn: 'var(--accent)', practice: 'var(--info)', 'take-home': 'var(--info)', quiz: 'var(--warn)', review: 'var(--warn)', test: 'var(--danger)' }
+const KIND_DOT: Record<string, string> = { learn: 'var(--accent)', practice: 'var(--info)', 'take-home': 'var(--info)', quiz: 'var(--warn)', review: 'var(--warn)', test: 'var(--danger)', check: 'var(--info)' }
 
 /**
  * The week at a glance: why it's shaped the way it is (in a sentence, with more on request), how

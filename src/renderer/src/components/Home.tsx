@@ -9,7 +9,7 @@ import { readPlan } from '@shared/plan'
 import { parseOutline } from '@shared/outline'
 import { ContextMenu, type MenuState } from './Menu'
 import { planGoal, type GoalPlan } from '../lib/goals'
-import { lessonScope, startAgendaLesson } from '../lib/agenda'
+import { lessonScope, openAgendaItem, startAgendaLesson } from '../lib/agenda'
 import { localDate, todayItems, type AgendaItem } from '@shared/coach'
 import { useDailyCount } from '../lib/daily'
 import { openingRequest } from '../lib/openingRequest'
@@ -120,14 +120,17 @@ export function Home(_: { dueCount: number; cardCount: number }) {
       .week(date)
       .then((w) => {
         const items = todayItems(w, date)
-        const index = items.findIndex((it) => it.kind === 'learn' && !it.done)
+        // A Check before its section's first lesson comes first
+        const index = items.findIndex((it) => (it.kind === 'learn' || it.kind === 'check') && !it.done)
         setPlanned(index >= 0 ? { item: items[index], date, index } : null)
       })
       .catch(() => setPlanned(null))
   }, [app.files])
   const fromGoal = plans.map((p) => ({ plan: p, topic: (p.inReview ? p.reviewTopics : p.today)[0] })).find((x) => x.topic)
   const nextTopic = planned
-    ? { mode: 'teach' as const, text: planned.item.topic ?? planned.item.title, scope: lessonScope(app, planned.item), label: planned.item.notebook ?? '', start: () => startAgendaLesson(app, planned.item, planned) }
+    ? planned.item.kind === 'check'
+      ? { mode: 'quiz' as const, text: `Check what you know: ${planned.item.title}`, scope: (planned.item.notebook ? { kind: 'folder', path: planned.item.notebook } : { kind: 'vault' }) as ChatScope, label: planned.item.notebook ?? '', start: () => openAgendaItem(app, planned.item, planned) }
+      : { mode: 'teach' as const, text: planned.item.topic ?? planned.item.title, scope: lessonScope(app, planned.item), label: planned.item.notebook ?? '', start: () => startAgendaLesson(app, planned.item, planned) }
     : fromGoal
       ? {
           mode: fromGoal.plan.inReview ? ('quiz' as const) : ('teach' as const),
@@ -140,9 +143,10 @@ export function Home(_: { dueCount: number; cardCount: number }) {
   const startLesson = () => nextTopic?.start()
 
   // Read the next lesson's opening into the model's cache now, so starting it is instant
-  const warmTopic = nextTopic ? JSON.stringify([nextTopic.text, nextTopic.scope, nextTopic.mode]) : ''
+  // A Check's opening depends on its section's topics; it isn't warmed ahead
+  const warmTopic = nextTopic && planned?.item.kind !== 'check' ? JSON.stringify([nextTopic.text, nextTopic.scope, nextTopic.mode]) : ''
   useEffect(() => {
-    if (!nextTopic) return
+    if (!nextTopic || !warmTopic) return
     const t = setTimeout(() => {
       window.tide.ai.prewarm(openingRequest({ mode: nextTopic.mode, topic: nextTopic.text }, nextTopic.scope, app.settings.character ?? 'professor')).catch(() => {})
     }, 1500)

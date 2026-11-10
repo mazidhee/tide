@@ -15,6 +15,7 @@
  *   at most two subjects a day, each roadmap strictly in order, carried-over topics first.
  */
 import type { AgendaItem, TopicCandidate, WeekPlan } from './coach'
+import type { PlacementSetup } from './placement'
 
 export interface ScheduleInput {
   weekStart: string
@@ -42,10 +43,14 @@ export interface ScheduleInput {
   weekend?: boolean[]
   /** Minutes for each of `days`, when weekdays and weekends differ */
   dayMinutes?: number[]
+  /** Sections to check what you know in, each just before its first lesson */
+  checks?: PlacementSetup[]
 }
 
 const BLOCK = 45
 const MIN_BLOCK = 30
+const REFRESH_BLOCK = 25
+const CHECK_MINUTES = 15
 const MAX_SHARE = 0.7
 /** Study hours a roadmap topic takes, for judging deadlines */
 const HOURS_PER_TOPIC = 2.5
@@ -91,7 +96,7 @@ export function scheduleWeek(input: ScheduleInput): WeekPlan {
   const n = input.days.length
 
   // Queues: carried-over topics first, then each roadmap in order, never a topic twice
-  const queue = new Map<string, { topic: string; notebook: string; section?: string; topicId?: string; why?: string; carried?: boolean }[]>()
+  const queue = new Map<string, { topic: string; notebook: string; section?: string; topicId?: string; why?: string; refresh?: boolean; carried?: boolean }[]>()
   const seen = new Set<string>()
   for (const u of input.undone) {
     const nb = u.notebook && input.focus.includes(u.notebook) ? u.notebook : undefined
@@ -102,7 +107,7 @@ export function scheduleWeek(input: ScheduleInput): WeekPlan {
   for (const c of input.candidates) {
     if (!input.focus.includes(c.notebook) || seen.has(c.topic)) continue
     seen.add(c.topic)
-    queue.set(c.notebook, [...(queue.get(c.notebook) ?? []), { topic: c.topic, notebook: c.notebook, section: c.section, ...(c.topicId ? { topicId: c.topicId } : {}), ...(c.why ? { why: c.why } : {}) }])
+    queue.set(c.notebook, [...(queue.get(c.notebook) ?? []), { topic: c.topic, notebook: c.notebook, section: c.section, ...(c.topicId ? { topicId: c.topicId } : {}), ...(c.why ? { why: c.why } : {}), ...(c.refresh ? { refresh: true } : {}) }])
   }
 
   // Repair first: weak spots, due cards and mistakes, early in the week and again mid-week
@@ -148,13 +153,15 @@ export function scheduleWeek(input: ScheduleInput): WeekPlan {
       const nb = options[0]
       if (!nb) break
       const next = queue.get(nb)!.shift()!
-      const minutes = Math.min(BLOCK, free)
+      // A refresher is short: practice first, explanation only where it's missed
+      const minutes = Math.min(next.refresh ? REFRESH_BLOCK : BLOCK, free)
       const goal = input.goals.find((g) => g.notebook === nb && g.left > 0)
       plan[d].push({
         kind: 'learn',
         title: next.topic,
         topic: next.topic,
         ...(next.topicId ? { topicId: next.topicId } : {}),
+        ...(next.refresh ? { refresh: true } : {}),
         notebook: nb,
         minutes,
         why: next.carried ? 'Carried over from last time' : goal && (shares.find((s) => s.notebook === nb)?.reason ?? '').includes('left') ? `Next in ${nb}, to keep "${goal.name}" on time` : (next.why ?? `Next in your ${nb} roadmap${next.section ? ` (${next.section})` : ''}`),
@@ -191,6 +198,17 @@ export function scheduleWeek(input: ScheduleInput): WeekPlan {
       queue.get(shrink.notebook!)?.unshift({ topic: shrink.topic!, notebook: shrink.notebook!, ...(shrink.topicId ? { topicId: shrink.topicId } : {}) })
     }
     plan[d].push({ kind: 'take-home', title: `Take-home: build on ${taught[taught.length - 1].topic}`, notebook: top, minutes: Math.max(30, Math.min(60, room(d))), why: 'One harder problem to think through, using this week' })
+  }
+
+  // Checks: each just before the first lesson from its section, which gives up the time
+  for (const c of input.checks ?? []) {
+    const ids = new Set(c.topics.map((t) => t.id))
+    const d = plan.findIndex((items) => items.some((it) => it.kind === 'learn' && it.topicId && ids.has(it.topicId)))
+    if (d < 0) continue
+    const at = plan[d].findIndex((it) => it.kind === 'learn' && it.topicId && ids.has(it.topicId))
+    const lesson = plan[d][at]
+    lesson.minutes = Math.max(MIN_BLOCK, lesson.minutes - CHECK_MINUTES)
+    plan[d].splice(at, 0, { kind: 'check', title: c.section, notebook: c.notebook, minutes: CHECK_MINUTES, check: c, why: 'A few questions first: what you already know is skipped, what\'s rusty becomes a short refresher' })
   }
 
   const days = input.days.map((date, d) => ({ date, items: plan[d] })).filter((d) => d.items.length)

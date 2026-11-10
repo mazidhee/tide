@@ -12,6 +12,8 @@ export type DeepLink =
   | { to: 'practice'; tab?: string }
   | { to: 'drill'; kind: 'zetamac' | 'eighty' }
   | { to: 'design'; path?: string; topic?: string; start?: 'teach' | 'interview' }
+  /** An item of your week, opened as the week opens it (a Check, a refresher) */
+  | { to: 'agenda'; date: string; index: number }
 
 export function buildLink(l: DeepLink): string {
   const { to, ...rest } = l
@@ -67,6 +69,11 @@ export function parseLink(url: string): DeepLink | null {
     case 'drill': {
       const kind = oneOf(g('kind'), ['zetamac', 'eighty'] as const)
       return kind ? { to, kind } : null
+    }
+    case 'agenda': {
+      const date = g('date') ?? ''
+      const index = num(g('index'), 0, 50)
+      return /^\d{4}-\d{2}-\d{2}$/.test(date) && index !== undefined ? { to, date, index } : null
     }
     case 'design': {
       const start = oneOf(g('start'), ['teach', 'interview'] as const)

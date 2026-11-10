@@ -132,7 +132,10 @@ const api: TideApi = {
     status: invoke('curriculum:status'),
     sort: invoke('curriculum:sort'),
     view: invoke('curriculum:view'),
-    setOverride: invoke('curriculum:setOverride')
+    setOverride: invoke('curriculum:setOverride'),
+    placed: invoke('curriculum:placed'),
+    propose: invoke('curriculum:propose'),
+    addTopic: invoke('curriculum:addTopic')
   },
   coach: {
     get: invoke('coach:get'),
@@ -263,6 +266,7 @@ const api: TideApi = {
   app: {
     openExternal: invoke('app:openExternal'),
     handy: invoke('voice:handy'),
+    flow: invoke('voice:flow'),
     platform: process.platform,
     // A copy started from the source with a throwaway profile (npm run check): tooling may drive it
     testCopy: process.env.TIDE_TEST_COPY === '1'

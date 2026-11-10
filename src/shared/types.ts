@@ -46,7 +46,7 @@ export interface Settings {
   ai: AISettings
   /** How the tutor sounds: Tide's natural voice (Kokoro, set up in Settings) or the Mac's own */
   /** custom: a Kokoro voice that replaces the character's; dictation: who writes out what you say */
-  voice?: { engine: 'natural' | 'system'; name: string; speed: number; custom?: string; dictation?: 'tide' | 'handy' | 'deepgram' }
+  voice?: { engine: 'natural' | 'system'; name: string; speed: number; custom?: string; dictation?: 'tide' | 'handy' | 'deepgram' | 'flow' }
   /** Who the tutor is: the character's face, voice and way of talking */
   character?: import('./characters').CharacterId
   /** Breaks while you study: paced by the tutor, a fixed rhythm, or none */
@@ -615,6 +615,12 @@ export interface TideApi {
     /** Each topic's place in the plan, by topic id, for the roadmap page */
     view(notebook: string): Promise<import('./curriculum').CurriculumView>
     setOverride(id: string, cls: import('./curriculum').SectionClass | null): Promise<Record<string, import('./curriculum').SectionClass>>
+    /** A placement check's result: known topics ticked, shaky ones made refreshers in this week */
+    placed(setup: import('./placement').PlacementSetup, results: Record<string, import('./placement').Known>): Promise<{ known: number; shaky: number; fresh: number }>
+    /** Suggested changes to a roadmap from your aims (nothing changes until you accept one) */
+    propose(notebook: string): Promise<import('./curriculum').Proposal[]>
+    /** Adds a topic to a roadmap after another: one new line */
+    addTopic(notebook: string, afterId: string, title: string): Promise<boolean>
   }
   coach: {
     get(): Promise<import('./coach').CoachSettings>
@@ -773,6 +779,8 @@ export interface TideApi {
   app: {
     openExternal(url: string): Promise<void>
     handy(): Promise<{ installed: boolean; shortcut: string; model: string }>
+    /** Wispr Flow: installed, and its push-to-talk key, e.g. "Right ⌥" */
+    flow(): Promise<{ installed: boolean; pushToTalk: string }>
     platform: string
     /** Started from the source with a test profile, so check tooling can drive it */
     testCopy?: boolean

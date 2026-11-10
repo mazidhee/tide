@@ -13,6 +13,7 @@
 import { AIM_WEIGHT, classOf, sectionValue, type Overrides, type RoadmapTopic, type SortedRoadmap } from './curriculum'
 import type { Aim, TopicCandidate } from './coach'
 import { weekShares, type Shares } from './schedule'
+import { PLACEMENT_TOPICS, type PlacementSetup, type PlacementStore } from './placement'
 
 export interface BalanceNotebook {
   name: string
@@ -33,6 +34,8 @@ export interface BalanceInput {
   pinned: string[]
   /** Minutes studied in each roadmap over the last two weeks */
   recent: Record<string, number>
+  /** What placement checks found: known topics leave the plan, shaky ones become refreshers */
+  placement?: PlacementStore
 }
 
 export interface Balance {
@@ -47,6 +50,8 @@ export interface Balance {
   suggested?: Shares[]
   /** Roadmaps planned in roadmap order because they aren't sorted yet */
   unsorted: string[]
+  /** Sections to check what you know in before they're taught (one Check each) */
+  checks: PlacementSetup[]
 }
 
 const PER_NOTEBOOK = 20
@@ -65,7 +70,7 @@ const short = (t: string) => (t.length > 64 ? `${t.slice(0, 63)}…` : t)
 function weekdayTopics(nb: BalanceNotebook, input: BalanceInput): RoadmapTopic[] {
   const sorted = nb.ready ? nb.sorted : null
   return nb.topics.filter((t) => {
-    if (t.checked || t.project) return false
+    if (t.checked || t.project || input.placement?.topics[t.id]?.state === 'known') return false
     const cls = classOf(t, sorted, input.overrides, input.aims) ?? (nb.ready ? undefined : t.tagged)
     // Unsorted: everything but your own LATER/OPTIONAL sections; sorted: what's needed now
     if (!nb.ready) return cls !== 'elective' && cls !== 'skip' && !nb.sorted?.enrichment.includes(t.id)
@@ -153,13 +158,17 @@ export function balanceWeek(input: BalanceInput): Balance {
     for (const t of weekdayTopics(nb, input).slice(0, PER_NOTEBOOK)) {
       const aim = nb.ready ? bestAim(nb.sorted, t.sectionId, input.aims) : undefined
       const serves = aim ? (nb.sorted?.sections[t.sectionId]?.serves[aim.id] ?? 0) : 0
+      const refresh = input.placement?.topics[t.id]?.state === 'shaky'
       candidates.push({
         notebook: name,
         topic: t.title,
         section: t.section,
         topicId: t.id,
+        ...(refresh ? { refresh } : {}),
         ...(t.source ? { source: t.source } : {}),
-        why: serves >= 0.6 ? `${t.section ? `${t.section}, ` : ''}${serves >= 1 ? 'for' : 'needed for'} ${short(aim!.text).replace(/^\w/, (c) => c.toLowerCase())}` : `Next in your ${name} roadmap${t.section ? ` (${t.section})` : ''}`
+        why: refresh
+          ? 'A refresher: you knew this, and it was rusty'
+          : serves >= 0.6 ? `${t.section ? `${t.section}, ` : ''}${serves >= 1 ? 'for' : 'needed for'} ${short(aim!.text).replace(/^\w/, (c) => c.toLowerCase())}` : `Next in your ${name} roadmap${t.section ? ` (${t.section})` : ''}`
       })
     }
   }
@@ -179,11 +188,28 @@ export function balanceWeek(input: BalanceInput): Balance {
     .slice(0, 4)
     .map(({ t }) => ({ notebook: t.notebook, topic: t.title, section: t.section, topicId: t.id, why: 'Weekend primer: background worth knowing, not a lesson to master' }))
 
+  // Before a section is taught for the first time: check what you already know of it
+  const checks: PlacementSetup[] = []
+  for (const name of focus) {
+    const nb = input.notebooks.find((n) => n.name === name)
+    if (!nb) continue
+    const upcoming = candidates.filter((c) => c.notebook === name).slice(0, 12)
+    const sections = [...new Set(upcoming.map((c) => nb.topics.find((t) => t.id === c.topicId)?.sectionId).filter((id): id is string => !!id))]
+    for (const id of sections) {
+      if (checks.filter((c) => c.notebook === name).length >= 2) break
+      // Topics no check has covered yet (a big section is checked in parts)
+      const open = weekdayTopics(nb, input).filter((t) => t.sectionId === id && !input.placement?.topics[t.id])
+      if (open.length < 3) continue
+      checks.push({ notebook: name, section: open[0].section || name, sectionId: id, topics: open.slice(0, PLACEMENT_TOPICS).map((t) => ({ id: t.id, title: t.title })) })
+    }
+  }
+
   return {
     focus,
     shares,
     candidates,
     primers,
+    checks,
     ...(pinned ? { suggested: tideShares } : {}),
     unsorted: focus.filter((n) => !input.notebooks.find((nb) => nb.name === n)?.ready)
   }

@@ -160,7 +160,7 @@ async function execute(lang: 'python' | 'javascript', scratch: string, entry: st
     const child = spawn('/usr/bin/sandbox-exec', ['-f', sb, ...cmd], {
       cwd: work,
       env: {
-        PATH: '/usr/bin:/bin:/opt/homebrew/bin',
+        PATH: '/opt/homebrew/bin:/usr/bin:/bin',
         HOME: scratch,
         TMPDIR: scratch,
         PYTHONDONTWRITEBYTECODE: '1',

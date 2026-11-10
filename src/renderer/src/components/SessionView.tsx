@@ -8,6 +8,7 @@ import { Thinking } from './Thinking'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
 import { paceNote } from '@shared/pace'
+import { parsePlacement, placementNote } from '@shared/placement'
 import type { Reading } from '@shared/readings'
 import { MODE_LABEL, NOTES_NUDGE, ownWords, openingMessage, withPassage, parseBlocks, repliesWithoutNote, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
@@ -74,6 +75,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const recorded = useRef(new Set<string>())
   const talkRef = useRef(localStorage.getItem('tide.talk') === 'on')
   const answerRef2 = useRef<(said: string) => void>(() => {})
+  const submitRef = useRef<() => void>(() => {})
   const carryOnRef = useRef(false)
   const [picked, setPicked] = useState<number | null>(null)
   const [asking, setAsking] = useState(false)
@@ -162,7 +164,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       // Hidden notes for the tutor (pace, notes), kept with your message so every later request
       // sends exactly the same text and the model server's cache still matches. Shown without them.
       const notes = content.includes('(Tide: ') || history.length < 2 ? [] : [
-        mode === 'teach' || mode === 'quiz' ? paceNote(history, content) : null,
+        // A placement check ends after its last question, whether or not the tutor counts
+        setupRef.current.options?.placement ? placementNote(history.filter((t) => t.role === 'user').length - 1) : null,
+        mode === 'teach' || (mode === 'quiz' && !setupRef.current.options?.placement) ? paceNote(history, content) : null,
         mode === 'teach' && history.length > 2 && repliesWithoutNote(history.filter((t) => t.role === 'assistant').map((t) => t.content)) >= 2 ? NOTES_NUDGE : null
       ].filter((n): n is string => !!n)
       const stored = notes.length ? `${content}\n\n${notes.join('\n')}` : content
@@ -321,7 +325,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
 
   // Talk: the tutor speaks each reply as it writes it, and you answer by voice (or hands-free)
   const lastTurn = turns[turns.length - 1]
-  const voice = useTalk(lastTurn?.role === 'assistant' && turns.length > 1 ? { key: String(turns.length - 1), content: lastTurn.content, streaming: busy } : null, (said) => answerRef2.current(said), heardIn)
+  const voice = useTalk(lastTurn?.role === 'assistant' && turns.length > 1 ? { key: String(turns.length - 1), content: lastTurn.content, streaming: busy } : null, (said) => answerRef2.current(said), heardIn, { box: answerRef, submit: () => submitRef.current() })
   const talk = voice.talk
   talkRef.current = talk
   const stopTalking = voice.stop
@@ -355,8 +359,33 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const pose: ProfessorPose = busy ? 'board' : cheer ? 'eureka' : finished ? 'happy' : currentAsk ? yourTurnScene : 'idle'
   useStudying('view', finished ? null : { pose: busy ? 'board' : currentAsk ? yourTurnScene : 'board', label: `${MODE_LABEL[mode] ?? 'Session'}: ${topic}` })
   useEffect(() => {
-    if (finished) finishAgendaItem(topic)
-  }, [finished, topic])
+    // A check is ticked off once what it found is saved (below), not just because it ended
+    if (finished && !options?.placement) finishAgendaItem(topic)
+  }, [finished, topic, options?.placement])
+
+  // A placement check that's finished: what you know is ticked off, what's rusty becomes a refresher
+  const placed = useRef(false)
+  useEffect(() => {
+    const setup = options?.placement
+    if (busy || placed.current || !setup) return
+    // The result can come in any reply (even one followed by more questions): the latest wins
+    const results = [...turns].reverse().filter((t) => t.role === 'assistant').map((t) => parsePlacement(t.content, setup.topics)).find(Boolean)
+    if (!results) {
+      if (finished) {
+        placed.current = true
+        app.toast('The check ended without a result, so nothing changed. Run it again from Your week.', { tone: 'error' })
+      }
+      return
+    }
+    placed.current = true
+    window.tide.curriculum
+      .placed(setup, results)
+      .then((r) => {
+        finishAgendaItem(topic)
+        app.toast(`${r.known} known and ticked off, ${r.shaky} to refresh, ${r.fresh} to learn. Your week is updated.`)
+      })
+      .catch(() => app.toast('Couldn’t save what the check found. Try it again from Your week.', { tone: 'error' }))
+  }, [finished, busy, options?.placement, turns, app, topic])
 
   // When a session on a note ends: schedule the next explain-from-memory, and write session notes
   const wrapped = useRef(false)
@@ -518,6 +547,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [carryOn, asking, currentAsk, turns, send])
+
+  submitRef.current = () => submit()
 
   const runMine = async () => {
     if (!currentAsk || running) return
@@ -707,9 +738,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             <span>Talk</span>
           </button>
           {talk && (
-            <button className={`tool-btn keep-label hands-free is-${voice.hearing}${voice.handsFree ? ' on' : ''}`} aria-pressed={voice.handsFree} onClick={voice.toggleHandsFree} title="Hands-free: just talk; Tide hears when you stop. Space or Esc interrupts the tutor.">
+            <button className={`tool-btn keep-label hands-free is-${voice.hearing}${voice.handsFree ? ' on' : ''}`} aria-pressed={voice.handsFree} onClick={voice.toggleHandsFree} title={voice.flow ? 'Hands-free with Wispr Flow: speak with Flow; what it types is sent when it finishes. Space or Esc interrupts the tutor.' : 'Hands-free: just talk; Tide hears when you stop. Space or Esc interrupts the tutor.'}>
               <span className="hear-dot" aria-hidden="true" />
-              <span>{voice.handsFree ? (voice.hearing === 'speech' ? 'Hearing you…' : voice.hearing === 'writing' ? 'Writing it down…' : voice.speaking ? 'Speaking… (Esc)' : 'Listening') : 'Hands-free'}</span>
+              <span>{voice.handsFree ? (voice.speaking ? 'Speaking… (Esc)' : voice.flow ? 'Flow: sends when done' : voice.hearing === 'speech' ? 'Hearing you…' : voice.hearing === 'writing' ? 'Writing it down…' : 'Listening') : 'Hands-free'}</span>
             </button>
           )}
           {mode === 'teach' && (

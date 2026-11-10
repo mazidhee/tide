@@ -10398,6 +10398,42 @@ code.cmd-chip:hover {
   color: var(--ink-muted);
 }
 
+.audit-changes {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.audit-changes h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.audit-changes ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.audit-changes li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.audit-change-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
 .outline-audit .prose h2 {
   font-size: 15px;
   margin: 14px 0 4px;

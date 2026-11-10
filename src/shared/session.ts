@@ -1,5 +1,6 @@
 import { splitSay } from './characters'
 import { retestInstructions } from './mistakes'
+import { placementInstructions, REFRESH_RULES, type PlacementSetup } from './placement'
 import type { ChatScope, SessionMode, Verdict } from './types'
 import { chooseStrategy, STRATEGY_RULES, type Strategy, type StrategyChoice } from './strategy'
 import type { FlowStep, ProjectKind } from './project'
@@ -44,6 +45,7 @@ export const hideWorking = (raw: string) =>
     .replace(/<solution\b[^>]*>[\s\S]*?<\/solution>/gi, '')
     .replace(/<check\b[^>]*>[\s\S]*?<\/check>/gi, '')
     .replace(/<next\b[^>]*\/?>/gi, '')
+    .replace(/<placement>[\s\S]*?(<\/placement>|$)/gi, '')
     .replace(/<(solution|check)\b[\s\S]*$/i, '')
 
 /** Splits a (possibly still streaming) tutor message into blocks; unfinished tags stay hidden */
@@ -178,6 +180,10 @@ export interface SessionSetup {
     project?: { name: string; kind: ProjectKind; milestone?: string }
     /** A walkthrough's steps, in order: the app draws each on the canvas as the lesson reaches it */
     flow?: FlowStep[]
+    /** A placement check on a section (a quiz): which topics are known, shaky or new */
+    placement?: PlacementSetup
+    /** A refresher (a lesson): learned before, rusty; practice first, explain only what's missed */
+    refresh?: boolean
   }
 }
 
@@ -226,6 +232,7 @@ const companyStyle = (company?: string) =>
 
 export function sessionInstructions({ mode, topic, options }: SessionSetup): string {
   const difficulty = options?.difficulty ?? 'normal'
+  if (mode === 'teach' && options?.refresh) return `Topic: ${topic}.\n${REFRESH_RULES}\n`
   if (mode === 'teach' && options?.strategy && options.strategy !== 'problems' && !options.retest) {
     // Taught another way than problem sets: its own script, so the small model can't drift back
     const first: Partial<Record<Strategy, string>> = {
@@ -272,6 +279,7 @@ When every step is done, write <summary>what they learned, what is still shaky, 
   }
   if (mode === 'quiz') {
     const n = options?.length ?? 8
+    if (options?.placement) return `${placementInstructions(options.placement)}\n`
     if (options?.retest?.length) return `${retestInstructions(options.retest)}\n`
     return `You are running an adaptive QUIZ on: ${topic}. Ask ${n} questions in total, one at a time.
 - Mix question types: choice, short, explain, error, problem. Use explain and error often, they test real understanding.
@@ -380,8 +388,9 @@ export const MODE_LABEL: Record<SessionMode, string> = {
 /** The opening message that starts a session */
 export function openingMessage({ mode, topic, options }: SessionSetup): string {
   if (options?.retest?.length) return `Retest me on the ${options.retest.length} question${options.retest.length === 1 ? "" : "s"} I got wrong before.`
+  if (mode === 'teach' && options?.refresh) return `Refresh me on ${topic}: I learned it before.`
   if (mode === 'teach') return `I want to learn ${topic} deeply. Start by finding out what I already know.`
-  if (mode === 'quiz') return `Quiz me on ${topic}.`
+  if (mode === 'quiz') return options?.placement ? `Check what I already know about ${options.placement.section}.` : `Quiz me on ${topic}.`
   if (mode === 'interview') return `I'm ready for the interview. ${topic}`
   if (mode === 'review') return `Review my writing on ${topic} and challenge my thinking.`
   if (mode === 'recall') return `I'm ready to explain ${topic} from memory.`

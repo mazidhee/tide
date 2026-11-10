@@ -3,7 +3,7 @@ import type { Goal, Mastery, NoteMeta } from '@shared/types'
 import { GoalForm, GoalPanel } from './GoalPanel'
 import { planGoal } from '../lib/goals'
 import { LEVEL_LABEL } from './LearnView'
-import { roadmapTopics, type CurriculumView, type RoadmapTopic, type SectionClass } from '@shared/curriculum'
+import { roadmapTopics, type CurriculumView, type Proposal, type RoadmapTopic, type SectionClass } from '@shared/curriculum'
 import { headingTag, itemLink, lineRole, linkItemText, retitleItem, splitSource, topicTitle, normalizeTitle, parseOutline, sectionProgress, serializeOutline, type Outline, type OutlineLine } from '@shared/outline'
 import { renderMarkdown } from '../lib/markdown'
 import { readPlan } from '@shared/plan'
@@ -93,11 +93,41 @@ export function OutlineView({ notebook, outlinePath, notes, mastery, onSetOutlin
       }),
     []
   )
+  // Alongside the written review: concrete changes from your aims, each yours to apply or dismiss
+  const [proposals, setProposals] = useState<{ list: Proposal[]; busy: boolean; error?: string } | null>(null)
+  const auditRun = useRef(0)
   const runAudit = () => {
     if (!outlinePath) return
     const id = `audit-${Date.now()}`
     setAudit({ id, text: '', done: false })
     window.tide.learn.auditRoadmap(id, outlinePath, Number(localStorage.getItem('tide.plan.hours')) || 6)
+    setProposals({ list: [], busy: true })
+    // Only the latest run's suggestions are shown
+    const run = (auditRun.current += 1)
+    window.tide.curriculum
+      .propose(notebook)
+      .then((list) => run === auditRun.current && setProposals({ list, busy: false }))
+      .catch((e) => run === auditRun.current && setProposals({ list: [], busy: false, error: (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') }))
+  }
+  const settle = (p: Proposal) => setProposals((cur) => (cur ? { ...cur, list: cur.list.filter((x) => x !== p) } : cur))
+  const apply = async (p: Proposal) => {
+    try {
+      if (p.kind === 'place') for (const id of p.ids) await window.tide.curriculum.setOverride(id, p.to)
+      else {
+        // Save any edit still waiting first, so the added line isn't written over; then read it back
+        if (dirty.current && latest.current && outlinePath) {
+          clearTimeout(saveTimer.current)
+          await window.tide.vault.write(outlinePath, serializeOutline(latest.current))
+          dirty.current = false
+        }
+        if (!(await window.tide.curriculum.addTopic(notebook, p.after, p.title))) throw new Error('The roadmap changed, or it already has that topic.')
+        if (outlinePath) setOutline(parseOutline(await window.tide.vault.read(outlinePath)))
+      }
+      settle(p)
+      loadPlace()
+    } catch (e) {
+      app.toast((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), { tone: 'error' })
+    }
   }
 
   // A dated plan can live in Things 4; its progress comes back when you open the roadmap
@@ -492,6 +522,37 @@ export function OutlineView({ notebook, outlinePath, notes, mastery, onSetOutlin
             <p className="muted small">
               <span className="spinner" /> Reading your roadmap…
             </p>
+          )}
+          {proposals && (
+            <div className="audit-changes">
+              <h3>Suggested changes</h3>
+              {proposals.busy ? (
+                <p className="muted small">
+                  <span className="spinner" /> Working out changes from your aims…
+                </p>
+              ) : proposals.error ? (
+                <p className="muted small">Couldn’t suggest changes: {proposals.error}</p>
+              ) : !proposals.list.length ? (
+                <p className="muted small">Nothing to change for your aims.</p>
+              ) : (
+                <ul>
+                  {proposals.list.map((p, i) => (
+                    <li key={i}>
+                      <div className="audit-change-text">
+                        <strong>{p.kind === 'place' ? `${p.label}: ${PLACE[p.to].menu}` : `Add “${p.title}” after ${p.afterTitle}`}</strong>
+                        {p.why && <span className="muted small">{p.why}</span>}
+                      </div>
+                      <button className="btn small" onClick={() => apply(p)}>
+                        {p.kind === 'add' ? 'Add it' : 'Apply'}
+                      </button>
+                      <button className="btn small ghost" onClick={() => settle(p)}>
+                        Dismiss
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
         </section>
       )}

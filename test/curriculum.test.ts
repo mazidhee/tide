@@ -110,3 +110,28 @@ describe('nextTopics', () => {
     expect(next[0].topicId).toContain('binary numbers')
   })
 })
+
+describe('audit suggestions', () => {
+  it('keeps only real sections and topics, maps places, and skips additions the roadmap has', async () => {
+    const { parseProposals, proposePrompt, sectionsOf } = await import('../src/shared/curriculum')
+    const sections = sectionsOf(roadmapTopics('Software Engineering', SWE))
+    const { prompt, topics } = proposePrompt([{ id: 'a', text: 'Blockchain infra', weight: 'main' }], 'Software Engineering', sections)
+    expect(prompt).toContain('A1 (main): Blockchain infra')
+    expect(prompt).toMatch(/S1\. 1\. Foundations > How Computers Work \[CORE\]/)
+    const raw = {
+      changes: [
+        { kind: 'place', targets: ['S1', 'T999', 'X3'], to: 'weekend', why: 'history' },
+        { kind: 'place', targets: ['T999'], to: 'later' },
+        { kind: 'place', targets: ['T1'], to: 'nonsense' },
+        { kind: 'add', after: 'T1', title: 'Two’s complement arithmetic', why: 'needed' },
+        { kind: 'add', after: 'T1', title: 'Git', why: 'dupe' },
+        { kind: 'add', after: 'T999', title: 'Ghost' }
+      ]
+    }
+    const out = parseProposals(raw, sections, topics)
+    expect(out).toHaveLength(2)
+    expect(out[0]).toMatchObject({ kind: 'place', to: 'enrichment', ids: [sections[0].id] })
+    expect(out[1]).toMatchObject({ kind: 'add', after: topics[0].id, title: 'Two’s complement arithmetic' })
+    expect(parseProposals(null, sections, topics)).toEqual([])
+  })
+})

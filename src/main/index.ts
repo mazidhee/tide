@@ -55,13 +55,14 @@ import type { StudyPlan } from '@shared/plan'
 import { dayTasks, setTaskDone, thingsStatus } from './things'
 import { mapBook, mapNewBooks, pagesToRead } from './books'
 import { findReadings, readingsFor } from './readings'
-import { curriculumStatus, curriculumView, setOverride, sortError, sortRoadmaps } from './curriculum'
+import { proposeChanges, curriculumStatus, curriculumView, setOverride, sortError, sortRoadmaps } from './curriculum'
 import { aimsKey, aimsOf } from '@shared/coach'
 import type { SectionClass } from '@shared/curriculum'
+import type { Known, PlacementSetup } from '@shared/placement'
 import { getBrain } from './brain'
 import { draftBrief, flowSteps, mapProject, projectDocs, projectMap, setProject } from './projects'
 import { onBrainEvent, recentBrainEvents } from './brainEvents'
-import { getCoach, getWeek, planWeek, saveCoach, updateProfile, inferDirection, autoPlanWeek, weekToThings, setItemDone, catchUp, rollOver, dayStats, journal, writeJournal, weekReview, saveReview } from './coach'
+import { getCoach, getWeek, planWeek, saveCoach, updateProfile, inferDirection, autoPlanWeek, weekToThings, setItemDone, catchUp, rollOver, dayStats, journal, writeJournal, weekReview, saveReview, savePlacement, addTopicAfter } from './coach'
 import { addMistakes, listMistakes, mistakesDue, retestMistake } from './mistakes'
 import { initTray, refreshTray, reportStudy, type StudyStatus } from './tray'
 import { localDate, todayItems } from '@shared/coach'
@@ -273,6 +274,9 @@ function registerIpc() {
     if (!have.length) findReadings({ topic, path }).catch(() => {})
     return have
   })
+  handle('curriculum:placed', (setup: PlacementSetup, results: Record<string, Known>) => savePlacement(setup, results))
+  handle('curriculum:propose', (notebook: string) => proposeChanges(notebook))
+  handle('curriculum:addTopic', (notebook: string, afterId: string, title: string) => addTopicAfter(notebook, afterId, title))
   handle('curriculum:status', async () => ({ notebooks: await curriculumStatus(), error: sortError() }))
   handle('curriculum:sort', () => sortRoadmaps())
   handle('curriculum:view', (notebook: string) => curriculumView(notebook))
@@ -488,7 +492,24 @@ function registerIpc() {
       return { installed: false, shortcut: '', model: '' }
     }
   })
+  // Wispr Flow: installed, and its push-to-talk key (read from its settings, shortcuts only)
+  handle('voice:flow', async () => {
+    const { readFile, access } = await import('fs/promises')
+    const installed = await access('/Applications/Wispr Flow.app').then(() => true, () => false)
+    try {
+      const data = JSON.parse(await readFile(join(app.getPath('home'), 'Library', 'Application Support', 'Wispr Flow', 'config.json'), 'utf8'))
+      const shortcuts: Record<string, string> = data?.prefs?.user?.shortcuts ?? {}
+      const keys = Object.entries(shortcuts).find(([, v]) => v === 'ptt')?.[0]
+      return { installed, pushToTalk: keys ? flowKeys(keys) : '' }
+    } catch {
+      return { installed, pushToTalk: '' }
+    }
+  })
 }
+
+/** Flow keeps shortcuts as macOS key codes ("59+63"): as you'd read them */
+const MAC_KEYS: Record<string, string> = { '63': 'Fn', '58': 'Left ⌥', '61': 'Right ⌥', '59': 'Left ⌃', '62': 'Right ⌃', '55': 'Left ⌘', '54': 'Right ⌘', '56': 'Left ⇧', '60': 'Right ⇧', '49': 'Space', '53': 'Esc', '57': 'Caps Lock' }
+const flowKeys = (codes: string) => codes.split('+').map((c) => MAC_KEYS[c] ?? `key ${c}`).join(' + ')
 
 const themeSource = (theme: Settings['theme']) =>
   theme === 'system' ? 'system' : theme === 'light' || theme === 'sepia' ? 'light' : 'dark'
