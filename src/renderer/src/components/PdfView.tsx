@@ -13,6 +13,8 @@ import { Editor, type EditorHandle } from './Editor'
 import { ReadingGuide } from './ReadingGuide'
 import { ensureChapterSection, type GuideChapter } from '@shared/guide'
 import { addQuoteToNotes, companionPath } from '../lib/companion'
+import { createPdfTools, isFindKey, matchBoxes, type FindStatus, type OutlineItem, type PdfTools } from '../lib/pdfTools'
+import { PdfFindBar } from './PdfFindBar'
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -133,16 +135,74 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const rendered = useRef(new Map<number, { scale: number; task?: pdfjs.RenderTask }>())
 
+  // Find (⌘F) and links: pdf.js's find controller and link service, drawn over Tide's own pages
+  const tools = useRef<PdfTools | null>(null)
+  const textLayers = useRef(new Map<number, pdfjs.TextLayer>())
+  const linkLayers = useRef(new Map<number, { cancel(): void }>())
+  const currentRef = useRef(1)
+  currentRef.current = current
+  const scaleRef = useRef(scale)
+  scaleRef.current = scale
+  const [findOpen, setFindOpen] = useState(false)
+  const [findFocus, setFindFocus] = useState(0)
+  const [findStatus, setFindStatus] = useState<FindStatus | null>(null)
+  const [outline, setOutline] = useState<OutlineItem[]>([])
+  const [showContents, setShowContents] = useState(false)
+
+  /** Draws a page's find matches as boxes over it; the selected one is scrolled to once */
+  const drawMatches = useCallback((num: number) => {
+    const el = scrollRef.current?.querySelector<HTMLElement>(`.pdf-page[data-page="${num}"]`)
+    const layer = el?.querySelector<HTMLElement>('.pdf-find')
+    if (!el || !layer) return
+    const t = tools.current
+    const tl = textLayers.current.get(num)
+    const m = t?.matchesOn(num - 1)
+    if (!t || !tl || !m?.matches?.length) return layer.replaceChildren()
+    let chosen: HTMLElement | null = null
+    const boxes = matchBoxes(tl.textDivs, tl.textContentItemsStr, m.matches, m.lengths, m.selected, el.getBoundingClientRect())
+    layer.replaceChildren(
+      ...boxes.map((b) => {
+        const d = document.createElement('div')
+        d.className = `pdf-find-hit${b.selected ? ' on' : ''}`
+        d.style.cssText = `left:${b.x * 100}%;top:${b.y * 100}%;width:${b.w * 100}%;height:${b.h * 100}%`
+        if (b.selected) chosen ??= d
+        return d
+      })
+    )
+    if (chosen) t.scrollToMatch(chosen, num - 1, m.selected)
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     let loaded: pdfjs.PDFDocumentProxy | null = null
     setDoc(null)
     setPages([])
     setError(null)
+    setOutline([])
+    setFindStatus(null)
     rendered.current.clear()
+    textLayers.current.clear()
+    linkLayers.current.forEach((l) => l.cancel())
+    linkLayers.current.clear()
     ;(async () => {
       try {
         loaded = await pdfjs.getDocument({ url: vaultUrl(path) }).promise
+        const opened = loaded
+        // Find and links come with the document; the reader still opens if they can't
+        createPdfTools(pdfjs, opened, {
+          current: () => currentRef.current,
+          showPage: (n) => goToRef.current(n),
+          showPoint: (n, _x, y) => void showPoint(opened, n, y),
+          matchesChanged: (i) => (i < 0 ? [...textLayers.current.keys()].forEach(drawMatches) : drawMatches(i + 1)),
+          findState: setFindStatus
+        })
+          .then(async (t) => {
+            if (cancelled) return t.destroy()
+            tools.current = t
+            const toc = await t.outline()
+            if (!cancelled) setOutline(toc)
+          })
+          .catch((e) => console.warn('[pdf] find and links unavailable', e))
         const infos: PageInfo[] = []
         for (let i = 1; i <= loaded.numPages; i++) {
           const vp = (await loaded.getPage(i)).getViewport({ scale: 1 })
@@ -161,9 +221,41 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
     window.tide.highlights.get(path).then((h) => !cancelled && setHighlights(h))
     return () => {
       cancelled = true
+      tools.current?.destroy()
+      tools.current = null
       loaded?.destroy()
     }
-  }, [path])
+  }, [path, drawMatches])
+
+  /** Scrolls to a point on a page given in PDF coordinates (a link's destination) */
+  const showPoint = async (d: pdfjs.PDFDocumentProxy, num: number, y: number | null) => {
+    const root = scrollRef.current
+    const el = root?.querySelector<HTMLElement>(`.pdf-page[data-page="${num}"]`)
+    if (!root || !el) return
+    if (y === null) return goToRef.current(num)
+    const page = await d.getPage(num)
+    const [, top] = page.getViewport({ scale: scaleRef.current }).convertToViewportPoint(0, y)
+    root.scrollTo({ top: el.offsetTop + Math.max(0, top) - 24, behavior: 'smooth' })
+  }
+
+  // ⌘F: find in this PDF (an editor or a field beside it keeps its own)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!scrollRef.current?.isConnected || !scrollRef.current.offsetParent) return
+      if (!isFindKey(e, e.target, navigator.platform.startsWith('Mac'))) return
+      e.preventDefault()
+      setFindOpen(true)
+      setFindFocus((n) => n + 1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  const closeFind = () => {
+    setFindOpen(false)
+    setFindStatus(null)
+    tools.current?.close()
+  }
 
   const persist = useCallback(
     (next: PdfHighlight[]) => {
@@ -206,9 +298,23 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
       textDiv.className = 'textLayer'
       el.querySelector('.pdf-canvas')?.replaceChildren(canvas)
       el.querySelector('.pdf-text')?.replaceChildren(textDiv)
-      await new pdfjs.TextLayer({ textContentSource: page.streamTextContent(), container: textDiv, viewport }).render()
+      // The text as the find controller reads it (not normalised), so its matches line up
+      const textLayer = new pdfjs.TextLayer({ textContentSource: page.streamTextContent({ includeMarkedContent: true, disableNormalization: true }), container: textDiv, viewport })
+      await textLayer.render()
+      if (rendered.current.get(num)?.task !== task) return
+      textLayers.current.set(num, textLayer)
+      drawMatches(num)
+      // Links: the contents, references, footnotes and web addresses in the PDF
+      const into = el.querySelector<HTMLElement>('.pdf-links')
+      linkLayers.current.get(num)?.cancel()
+      linkLayers.current.delete(num)
+      if (into && tools.current) {
+        const links = await tools.current.links(page, viewport, into)
+        if (links && rendered.current.get(num)?.task === task) linkLayers.current.set(num, links)
+        else links?.cancel()
+      }
     },
-    [doc, scale]
+    [doc, scale, drawMatches]
   )
 
   // Render pages near the viewport, free the ones far from it, track the current page
@@ -237,8 +343,13 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
           if (!state) continue
           state.task?.cancel()
           rendered.current.delete(num)
+          textLayers.current.delete(num)
+          linkLayers.current.get(num)?.cancel()
+          linkLayers.current.delete(num)
           el.querySelector('.pdf-canvas')?.replaceChildren()
           el.querySelector('.pdf-text')?.replaceChildren()
+          el.querySelector('.pdf-find')?.replaceChildren()
+          el.querySelector('.pdf-links')?.replaceChildren()
         }
       },
       { root, rootMargin: '2400px 0px' }
@@ -333,6 +444,8 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
     const el = scrollRef.current?.querySelector<HTMLElement>(`.pdf-page[data-page="${page}"]`)
     reveal(el)
   }
+  const goToRef = useRef(goTo)
+  goToRef.current = goTo
 
   // Zooming keeps your place: the same spot on the same page stays at the top
   const zoomAnchor = useRef<{ page: number; within: number } | null>(null)
@@ -366,6 +479,17 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
         </div>
         <div className="toolbar-actions no-drag">
           <TimeThis context={{ label: fileTitle(path).replace(/\.pdf$/i, ''), path, kind: 'book' }} />
+          <button
+            className={`icon-btn${findOpen ? ' on' : ''}`}
+            onClick={() => {
+              setFindOpen(true)
+              setFindFocus((n) => n + 1)
+            }}
+            title="Find in PDF (⌘F)"
+            aria-label="Find in PDF"
+          >
+            <Icon name="search" />
+          </button>
           <button className="icon-btn" onClick={() => zoom(-0.15)} title="Zoom out">
             <Icon name="minus" />
           </button>
@@ -374,6 +498,26 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
             <Icon name="plus" />
           </button>
           <div className="toolbar-gap" />
+          {outline.length > 0 && (
+            <div className="popover-anchor">
+              <button className={`tool-btn${showContents ? ' on' : ''}`} onClick={() => setShowContents((v) => !v)} title="The PDF's table of contents">
+                <Icon name="list" />
+                <span>Contents</span>
+              </button>
+              {showContents && (
+                <div className="popover pdf-contents" role="tree">
+                  <OutlineList
+                    items={outline}
+                    onPick={(item) => {
+                      setShowContents(false)
+                      if (item.dest) void tools.current?.goTo(item.dest)
+                      else if (item.url) window.open(item.url, '_blank', 'noopener')
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
           <div className="popover-anchor">
             <button className={`tool-btn${showList ? ' on' : ''}`} onClick={() => setShowList((v) => !v)}>
               <Icon name="highlight" />
@@ -423,6 +567,7 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
       </header>
 
       <div className={`pdf-split${notesOpen ? ' with-notes' : ''}`}>
+      {findOpen && <PdfFindBar status={findStatus} focusNonce={findFocus} onFind={(q, o) => tools.current?.find(q, o)} onClose={closeFind} />}
       <div className="doc-scroll pdf-scroll" ref={scrollRef} onMouseUp={onMouseUp} onMouseDown={(e) => !(e.target as HTMLElement).closest('.selection-pop') && setPop(null)}>
         {error && <div className="empty-state">Couldn't open this PDF: {error}</div>}
         {!doc && !error && <div className="empty-state muted">Opening PDF…</div>}
@@ -436,6 +581,7 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
               style={{ width: p.width * scale, height: p.height * scale, ['--scale-factor' as string]: scale, ['--total-scale-factor' as string]: scale }}
             >
               <div className="pdf-canvas" />
+              <div className="pdf-find" />
               <div className="pdf-highlights">
                 {highlights
                   .filter((h) => h.page === num)
@@ -463,6 +609,7 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
                   )}
               </div>
               <div className="pdf-text" />
+              <div className="pdf-links" />
             </div>
           )
         })}
@@ -575,5 +722,21 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
       </div>
       {cardText && <FlashcardMaker sourcePath={path} focusText={cardText} onClose={() => setCardText(null)} />}
     </div>
+  )
+}
+
+/** The PDF's own table of contents, nested as it is in the file */
+function OutlineList({ items, onPick, depth = 0 }: { items: OutlineItem[]; onPick: (item: OutlineItem) => void; depth?: number }) {
+  return (
+    <ul className="pdf-outline" role={depth ? 'group' : undefined}>
+      {items.map((item, i) => (
+        <li key={i} role="treeitem">
+          <button className="pdf-outline-item" style={{ paddingLeft: 8 + depth * 14 }} disabled={!item.dest && !item.url} onClick={() => onPick(item)}>
+            {item.title}
+          </button>
+          {item.items.length > 0 && depth < 4 && <OutlineList items={item.items} onPick={onPick} depth={depth + 1} />}
+        </li>
+      ))}
+    </ul>
   )
 }

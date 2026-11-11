@@ -139,3 +139,58 @@
     box-shadow: none;
   }
 }
+
+/* The PDF reader's find bar and contents, in the new design's tokens */
+:root[data-design='tide'] {
+  .pdf-find-bar {
+    border: 0;
+    border-radius: var(--r-float);
+    background: var(--raised);
+    box-shadow: var(--shadow-pop);
+    font-family: var(--ui);
+  }
+  .pdf-find-bar:focus-within {
+    box-shadow: var(--shadow-pop), var(--focus-ring);
+  }
+  .pdf-find-bar input {
+    font-size: var(--t-base);
+    color: var(--ink);
+  }
+  .pdf-find-bar input::placeholder {
+    color: var(--ink-3);
+  }
+  .pdf-find-bar .pdf-find-icon,
+  .pdf-find-count {
+    color: var(--ink-3);
+  }
+  .pdf-find-count {
+    font-size: var(--t-meta);
+  }
+  .pdf-find-count.none {
+    color: var(--bad);
+  }
+  .pdf-find-hit {
+    background: color-mix(in srgb, var(--a4) 34%, transparent);
+  }
+  .pdf-find-hit.on {
+    background: color-mix(in srgb, var(--a2) 42%, transparent);
+    box-shadow: 0 0 0 1.5px var(--a2);
+  }
+  .pdf-links .annotationLayer .linkAnnotation > a:hover {
+    background: var(--accent-soft);
+    box-shadow: inset 0 -1.5px 0 var(--accent-line);
+    mix-blend-mode: multiply;
+  }
+  .pdf-outline-item {
+    border-radius: var(--r-ctl);
+    font-size: var(--t-base);
+    color: var(--ink);
+  }
+  .pdf-outline-item:hover:not(:disabled) {
+    background: var(--hover);
+  }
+  .pdf-outline .pdf-outline .pdf-outline-item,
+  .pdf-outline-item:disabled {
+    color: var(--ink-2);
+  }
+}
