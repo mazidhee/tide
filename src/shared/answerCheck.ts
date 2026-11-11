@@ -91,11 +91,15 @@ except Exception:
 `
 }
 
-export type Exact = { result: 'match' | 'mismatch'; theirs: string; expected: string }
+export type Exact = { result: 'match' | 'mismatch'; theirs: string; expected: string; kind?: 'clocks'; why?: string }
 
 /** Said to the tutor (not shown) with what SymPy found, before it marks the answer */
 export const exactNote = (e: Exact) =>
-  e.result === 'match'
+  e.kind === 'clocks'
+    ? e.result === 'match'
+      ? `(Tide: Tide replayed the vector clocks in this problem: their vectors (${e.theirs}) are right, under one of the two rules taught (a send and a receipt each count as an event, or only internal actions do). Mark it correct unless their reasoning is wrong, and never mark down which of those rules they used.)`
+      : `(Tide: Tide replayed the vector clocks in this problem: ${e.why} This can't be marked correct: point at that entry.)`
+    : e.result === 'match'
     ? `(Tide: SymPy checked their final answer, ${e.theirs}, against the solution: it is right, by whatever method they reached it. Mark it correct unless a step of their reasoning is actually wrong; a different method from yours is not an error.)`
     : `(Tide: SymPy checked their final answer, ${e.theirs}, against the solution's ${e.expected}: they are not equal, so this can't be marked correct. Point at where it goes wrong.)`
 
@@ -119,6 +123,10 @@ export function objectsToMethodOnly(feedback: string): boolean {
  */
 export function overruled(exact: Exact | null | undefined, verdict: string | undefined, feedback: string): { verdict: 'correct' | 'partial' | 'wrong'; why: string } | undefined {
   if (!exact || !verdict) return undefined
+  if (exact.kind === 'clocks') {
+    if (exact.result === 'mismatch') return verdict === 'correct' ? { verdict: 'wrong', why: `Tide replayed the clocks: ${exact.why}` } : undefined
+    return verdict === 'wrong' ? { verdict: 'partial', why: `Tide replayed the clocks, and your vectors (${exact.theirs}) are what the events give, so this is not wrong.` } : undefined
+  }
   if (exact.result === 'mismatch') return verdict === 'correct' ? { verdict: 'wrong', why: 'SymPy checked your final answer against the solution, and it doesn’t come out the same. Look again at the last steps of your working.' } : undefined
   if (verdict !== 'correct' && objectsToMethodOnly(feedback)) return { verdict: 'correct', why: `SymPy checked your final answer, ${exact.theirs}, against the solution, and it is right. The mark above was taken down for the method, not for an error: a different route to the right result is correct.` }
   if (verdict === 'wrong') return { verdict: 'partial', why: `SymPy checked your final answer, ${exact.theirs}, against the solution, and it is right, so this is not wrong. Read the feedback above as being about the working, not the result.` }

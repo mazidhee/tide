@@ -3,6 +3,8 @@
  * The tutor draws recursion trees, graphs and flows this way. Blocks still streaming in are left
  * as code until they parse, so a half-written diagram never flashes an error.
  */
+import { repairMermaid } from '@shared/mermaidRepair'
+
 let mermaidPromise: Promise<typeof import('mermaid').default> | null = null
 let currentTheme = ''
 
@@ -33,8 +35,13 @@ async function renderBlock(pre: HTMLElement) {
   pre.dataset.mermaidTried = code
   const mermaid = await getMermaid()
   try {
-    if (!(await mermaid.parse(code, { suppressErrors: true }))) return
-    const { svg } = await mermaid.render(`tide-mermaid-${++counter}`, code)
+    // As written, or mended (a fence opened twice, a mindmap with two roots)
+    let source = code
+    if (!(await mermaid.parse(source, { suppressErrors: true }))) {
+      source = repairMermaid(code)
+      if (source === code.trim() || !(await mermaid.parse(source, { suppressErrors: true }))) return
+    }
+    const { svg } = await mermaid.render(`tide-mermaid-${++counter}`, source)
     if (!pre.isConnected) return
     const figure = document.createElement('figure')
     figure.className = 'mermaid-diagram'

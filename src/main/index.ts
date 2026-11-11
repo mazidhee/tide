@@ -55,7 +55,7 @@ import { inUse, wakeModel, watchModelIdle } from './modelIdle'
 import { inBackground, onModelBusy } from './modelQueue'
 import { cancelDraft, draftOutline } from './outlineDraft'
 import { cancelCompanyPrep, draftCompanyPrep } from './companyPrep'
-import { adjustPlan, auditRoadmap, planReadings, planToThings, sizePlan, syncFromThings, type PlanRequest } from './planner'
+import { adjustPlan, auditRoadmap, checkOutlineResources, planReadings, planToThings, sizePlan, syncFromThings, type PlanRequest } from './planner'
 import type { StudyPlan } from '@shared/plan'
 import { dayTasks, setTaskDone, thingsStatus } from './things'
 import { mapBook, mapNewBooks, pagesToRead } from './books'
@@ -316,7 +316,10 @@ function registerIpc() {
   handle('workshop:state', async (id: string) => (await workshop()).workshopState(String(id)))
   handle('workshop:run', async (id: string) => (await workshop()).runStage(String(id)))
   handle('workshop:hint', async (id: string) => (await workshop()).nextHint(String(id)))
-  handle('workshop:review', async (id: string) => (await workshop()).reviewStage(String(id)))
+  handle('workshop:review', async (id: string, stage?: number) => {
+    const w = await workshop()
+    return w.reviewStage(String(id), undefined, typeof stage === 'number' ? stage : undefined)
+  })
   handle('workshop:ask', async (id: string, question: string) => (await workshop()).askAboutStage(String(id), String(question ?? '')))
   handle('workshop:forTopic', async (topic: string) => (await workshop()).projectForTopic(String(topic ?? '')))
   handle('workshop:propose', async (o: { topic: string; notebook?: string; section?: string }) => (await workshop()).proposeProject({ topic: String(o?.topic ?? ''), notebook: o?.notebook, section: o?.section }))
@@ -370,13 +373,14 @@ function registerIpc() {
   handle('mistakes:due', (n?: number) => mistakesDue(n))
   handle('mistakes:add', (items: NewMistake[]) => addMistakes(items))
   handle('mistakes:retest', (id: string, correct: boolean) => retestMistake(id, correct))
+  handle('learn:checkResources', (md: string) => checkOutlineResources(md))
   handle('learn:planReadings', (topic: string, plan: StudyPlan, research: string) => planReadings(topic, plan, research ?? ''))
   handle('learn:planToThings', (path: string, name: string, notebook?: string) => planToThings(path, name, notebook))
   handle('learn:syncFromThings', (path: string) => syncFromThings(path))
   handle('things:status', () => thingsStatus())
   handle('things:today', () => dayTasks())
-  handle('books:suggest', (topic: string, limit?: number) => pagesToRead(topic, limit))
-  handle('books:passage', (topic: string) => lessonPassage(topic))
+  handle('books:suggest', (topic: string, limit?: number, context?: string) => pagesToRead(topic, limit, context))
+  handle('books:passage', (topic: string, context?: string) => lessonPassage(topic, context))
   handle('books:map', (path: string) => mapBook(path))
   handle('things:setDone', (id: string, done: boolean) => setTaskDone(id, done))
   handle('metabase:status', () => metabaseStatus())

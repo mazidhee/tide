@@ -87,6 +87,7 @@ const api: TideApi = {
     auditRoadmap: invoke('learn:auditRoadmap'),
     planToThings: invoke('learn:planToThings'),
     planReadings: invoke('learn:planReadings'),
+    checkResources: invoke('learn:checkResources'),
     syncFromThings: invoke('learn:syncFromThings'),
     thingsStatus: invoke('things:status'),
     thingsToday: invoke('things:today'),

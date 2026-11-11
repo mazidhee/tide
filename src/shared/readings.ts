@@ -89,3 +89,51 @@ export function wikipediaPick(topic: string, results: { title: string }[]): { ti
   }
   return null
 }
+
+// ---------- Checking a suggested reading is real ----------
+
+const titleWords = (s: string) => new Set(s.toLowerCase().replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !['the', 'and', 'for', 'with', 'from', 'wikipedia'].includes(w)))
+
+/**
+ * The search result that is this reading: its own title, not a page that mentions the words. Most
+ * of the reading's title words are in the result's title, and most of the result's title words are
+ * the reading's, so "Fluent Python" is not "Python Package Index" and "Python Tutorial" is not
+ * "Python (programming language)".
+ */
+export function sameTitle(want: string, got: string): boolean {
+  const a = titleWords(want)
+  const b = titleWords(got)
+  if (!a.size || !b.size) return false
+  const shared = [...a].filter((w) => b.has(w)).length
+  return shared / a.size >= 0.6 && shared / b.size >= 0.6
+}
+
+/** The makers' own documentation, by what a reading names: linked directly, never to a page about it */
+const OFFICIAL_DOCS: [RegExp, string, string][] = [
+  [/\bnumpy\b/i, 'https://numpy.org/doc/stable/', 'NumPy'],
+  [/\bpandas\b/i, 'https://pandas.pydata.org/docs/', 'pandas'],
+  [/\bscipy\b/i, 'https://docs.scipy.org/doc/scipy/', 'SciPy'],
+  [/\bmatplotlib\b/i, 'https://matplotlib.org/stable/', 'Matplotlib'],
+  [/\bpytorch\b/i, 'https://pytorch.org/docs/stable/', 'PyTorch'],
+  [/\bpostgres(ql)?\b/i, 'https://www.postgresql.org/docs/current/', 'PostgreSQL'],
+  [/\bsqlite\b/i, 'https://www.sqlite.org/docs.html', 'SQLite'],
+  [/\brust\b/i, 'https://doc.rust-lang.org/book/', 'The Rust Project'],
+  [/\btypescript\b/i, 'https://www.typescriptlang.org/docs/', 'Microsoft'],
+  [/\bnode\.?js\b/i, 'https://nodejs.org/docs/latest/api/', 'Node.js'],
+  [/\bjavascript\b|\bmdn\b/i, 'https://developer.mozilla.org/en-US/docs/Web/JavaScript', 'MDN'],
+  [/\bgolang\b|\bgo (language|programming)\b/i, 'https://go.dev/doc/', 'The Go Project'],
+  [/\bpython\b/i, 'https://docs.python.org/3/', 'Python Software Foundation']
+]
+
+/** A reading that is a language's or library's official documentation: its real address and maker */
+export function officialDocs(item: { title: string; by?: string; kind?: string }): { url: string; by: string } | null {
+  const text = `${item.title} ${item.by ?? ''}`
+  const isDocs = item.kind === 'docs' || /\b(documentation|docs|official tutorial|reference manual|language reference|library reference)\b/i.test(item.title) || /^(the )?\w+ tutorial$/i.test(item.title.trim()) || /software foundation|\bproject\b|developers\b/i.test(item.by ?? '')
+  if (!isDocs) return null
+  for (const [re, url, by] of OFFICIAL_DOCS)
+    if (re.test(text)) {
+      if (by === 'Python Software Foundation' && /\btutorial\b/i.test(item.title)) return { url: 'https://docs.python.org/3/tutorial/', by }
+      return { url, by }
+    }
+  return null
+}

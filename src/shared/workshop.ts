@@ -803,7 +803,8 @@ export function withoutFix(text: string, solution: WorkshopFile[] = [], theirs: 
 /** The model's review read into its parts; what the tests said comes from the run, never from the model */
 export function parseReview(out: string, run: StageRun, by: StageReview['by'], at: number, solution: WorkshopFile[] = [], theirs: WorkshopFile[] = []): StageReview {
   const { passed, total } = tally(run)
-  const clean = (s: string) => withoutFix(s, solution, theirs)
+  // Stray HTML a small model leaves in its prose (live: a praise ending in "</p>")
+  const clean = (s: string) => withoutFix(s, solution, theirs).replace(/<\/?(p|br|div|span|b|i|em|strong)\b[^>]*>/gi, '').trim()
   const failed = !!run.error || run.tests.some((t) => t.status === 'fail')
   const failure = failed ? clean(tagOf(out, 'failure')) : ''
   const question = clean(tagOf(out, 'question')).split('\n')[0]

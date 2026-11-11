@@ -597,6 +597,8 @@ export interface TideApi {
     /** Streams a review of a roadmap as ai:event deltas under id */
     auditRoadmap(id: string, path: string, hoursPerWeek: number): Promise<void>
     /** Real books, courses and docs for each phase of a plan */
+    /** Drops the books a drafted roadmap names that can't be found, and corrects their authors */
+    checkResources(md: string): Promise<string>
     planReadings(topic: string, plan: import('./plan').StudyPlan, research: string): Promise<{ phase: string; items: { title: string; by?: string; why?: string; url?: string; unverified?: boolean }[] }[]>
     /** Sends a dated roadmap to Things 4 as a project */
     planToThings(path: string, name: string, notebook?: string): Promise<{ project: string; todos: number }>
@@ -758,9 +760,9 @@ export interface TideApi {
   }
   books: {
     /** The pages to read in your own books for a topic, best first */
-    suggest(topic: string, limit?: number): Promise<import('./books').ReadingSuggestion[]>
+    suggest(topic: string, limit?: number, context?: string): Promise<import('./books').ReadingSuggestion[]>
     /** The text of the section of a book you own that covers a topic, to teach a lesson from */
-    passage(topic: string): Promise<{ label: string; path: string; from: number; to: number; text: string } | null>
+    passage(topic: string, context?: string): Promise<{ label: string; path: string; from: number; to: number; text: string } | null>
     /** Maps a book now: chapters, pages and what each covers */
     map(path: string): Promise<import('./books').BookMap | null>
   }
@@ -840,8 +842,8 @@ export interface TideApi {
     /** Runs the current stage's tests (and every earlier stage's) in the sandbox */
     run(id: string): Promise<import('./workshop').WorkshopState>
     hint(id: string): Promise<import('./workshop').WorkshopState>
-    /** The tutor's review of the latest run */
-    review(id: string): Promise<import('./workshop').WorkshopState>
+    /** The tutor's review of the latest run of the stage in hand, or of a stage already passed */
+    review(id: string, stage?: number): Promise<import('./workshop').WorkshopState>
     ask(id: string, question: string): Promise<{ answer: string; by: 'cloud' | 'local' | 'none' }>
     /** The project already written for a roadmap's "Project:" item, if any */
     forTopic(topic: string): Promise<import('./workshop').WorkshopCard | null>

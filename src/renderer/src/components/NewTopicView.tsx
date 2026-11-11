@@ -174,7 +174,9 @@ export function NewTopicView({ initial, initialGoal, auto }: { initial?: string;
       let path = `Roadmaps/${name}.md`
       for (let i = 2; taken.has(path.toLowerCase()); i++) path = `Roadmaps/${name} ${i}.md`
       // A sized plan keeps its dates: in the front matter, the phase headings and the exams
-      const content = plan ? planFrontmatter(plan, start) + addPlanDates(body, dated) : body
+      // The books it names under its chapters are checked first: an invented title or author is left out
+      const checked = body === BLANK ? body : await window.tide.learn.checkResources(body).catch(() => body)
+      const content = plan ? planFrontmatter(plan, start) + addPlanDates(checked, dated) : checked
       await window.tide.vault.write(path, content)
       await window.tide.learn.updateNotebook(folder, { outline: path, ...(goal.trim() || plan?.why ? { description: (goal.trim() || plan!.why).slice(0, 240) } : {}) })
       if (plan && dated.length) {

@@ -1,6 +1,6 @@
 import type { AgentStep, ChatEvent } from '@shared/types'
 import { normalizePlan, phasesForTasks, planRequestNumbers, readPlan, setFrontmatterValue, shortDate, type StudyPlan } from '@shared/plan'
-import { parseOutline, serializeOutline, topicTitle } from '@shared/outline'
+import { applyResourceChecks, outlineResources, parseOutline, serializeOutline, topicTitle } from '@shared/outline'
 import { readText, writeText } from './vault'
 import { addProject, getProject, thingsAvailable } from './things'
 import { buildLink } from '@shared/deeplink'
@@ -12,6 +12,7 @@ import { noteUse } from './connectionUse'
 import { subjectProfile } from './subjects'
 import { roadmapGuidance } from '@shared/subjects'
 import { ADJUSTED_PLAN_SCHEMA, PLAN_SCHEMA, READINGS_SCHEMA } from './replySchemas'
+import { officialDocs, sameTitle } from '@shared/readings'
 
 /**
  * Sizes a learning goal before any outline is written: research how people actually learn it and
@@ -37,6 +38,17 @@ export interface PlanRequest {
 
 const SKIP = /youtube\.com|youtu\.be|x\.com|twitter\.com|facebook\.com|instagram\.com|tiktok\.com|quora\.com/i
 
+/** How far the learner wants to go, not what the subject is: never enough to call a page relevant */
+const LEVEL_WORDS = new Set('beginning beginner beginners basic basics advanced level levels intermediate expert mastery master scratch zero complete full guide learn learning how long take does best books courses roadmap'.split(' '))
+
+/** A page whose title or address names the subject itself ("Python" for "Python from the beginning to an advanced level") */
+export function aboutSubject(topic: string, text: string): boolean {
+  const want = [...words(topic)].filter((w) => !LEVEL_WORDS.has(w))
+  if (!want.length) return true
+  const have = words(text.replace(/[/_.-]+/g, ' '))
+  return want.some((w) => have.has(w))
+}
+
 const CALIBRATION = `Calibrate the size to the subject, the learner and their hours (at about 6 hours a week):
 - A single tool or product (Metabase, Docker, MongoDB, Git, Tableau, Airflow basics): 1 to 4 weeks, 2 to 3 phases.
 - A practical skill or language (SQL to an advanced level, Python for data work, Kubernetes, React): 1 to 4 months.
@@ -58,7 +70,7 @@ export async function sizePlan(req: PlanRequest, step: (s: AgentStep) => void, s
     const pages = (
       await Promise.all(
         unique
-          .filter((r) => !SKIP.test(r.url))
+          .filter((r) => !SKIP.test(r.url) && aboutSubject(req.topic, `${r.title} ${r.url}`))
           .slice(0, 5)
           .map((r) =>
             readWebpage(r.url)
@@ -71,7 +83,8 @@ export async function sizePlan(req: PlanRequest, step: (s: AgentStep) => void, s
       .slice(0, 3)
     step({ id: 'p2', kind: 'read_webpage', label: 'Reading the best guides', status: 'done', detail: pages.map((p) => p.title).join(', ') || 'nothing readable', depth: 0 })
     sources.push(...pages.map((p) => ({ title: p.title, url: p.url })))
-    research = [unique.length ? `Search results:\n${unique.slice(0, 10).map((r) => `- ${r.title}: ${r.snippet}`).join('\n')}` : '', ...pages.map((p) => `Page "${p.title}" (${p.url}):\n${p.text}`)].filter(Boolean).join('\n\n---\n\n')
+    const onSubject = unique.filter((r) => aboutSubject(req.topic, `${r.title} ${r.url}`))
+    research = [onSubject.length ? `Search results:\n${onSubject.slice(0, 10).map((r) => `- ${r.title}: ${r.snippet}`).join('\n')}` : '', ...pages.map((p) => `Page "${p.title}" (${p.url}):\n${p.text}`)].filter(Boolean).join('\n\n---\n\n')
   }
   if (signal?.aborted) throw new Error('Stopped.')
   step({ id: 'p3', kind: 'helper', label: 'Sizing the plan', status: 'running', depth: 0 })
@@ -273,6 +286,19 @@ A concrete plan: which sections and topics, and one project.`
 
 // ---------- Readings ----------
 
+/**
+ * The books and docs a drafted roadmap names under its chapters, checked before it is saved: a
+ * real one keeps its line (with its real author), one that can't be found is left out. A small
+ * model invents plausible titles and co-authors; a roadmap must not pass them on as fact.
+ */
+export async function checkOutlineResources(md: string): Promise<string> {
+  const found = outlineResources(md)
+  if (!found.length) return md
+  const items = found.map((f) => ({ ...f }) as { line: number; title: string; by?: string; url?: string; unverified?: boolean })
+  await verifyItems(items)
+  return applyResourceChecks(md, items.map((x) => ({ line: x.line, title: x.title, ...(x.by ? { by: x.by } : {}), ok: !!x.url && !x.unverified })))
+}
+
 export interface PhaseReadings {
   phase: string
   items: { title: string; by?: string; why?: string; url?: string; unverified?: boolean }[]
@@ -309,17 +335,30 @@ const politeArxiv = (q: string) => {
 }
 const looksLikePaper = (item: { title: string; by?: string; why?: string }) => /\bet al\b|paper|arxiv/i.test(`${item.by ?? ''} ${item.why ?? ''}`)
 
-/** Books in Open Library's free catalogue: null if it couldn't be asked */
-async function findBook(title: string, by?: string): Promise<{ url: string } | false | null> {
+/** Books in Open Library's free catalogue (with their real authors): null if it couldn't be asked */
+async function findBook(title: string, by?: string): Promise<{ url: string; authors: string[] } | false | null> {
   noteUse('openlibrary')
-  const q = new URLSearchParams({ title, limit: '5', fields: 'key,title,author_name' })
-  if (by) q.set('author', by.split(/,| and |&/)[0].replace(/\bet al\.?/i, '').trim())
-  const res = await fetch(`https://openlibrary.org/search.json?${q}`, { headers: { 'User-Agent': 'Tide/0.1 (local study app)' }, signal: AbortSignal.timeout(8000) }).catch(() => null)
-  if (!res?.ok) return null
-  const data = (await res.json().catch(() => null)) as { docs?: { key: string; title: string }[] } | null
-  if (!data) return null
-  const hit = data.docs?.find((d) => matches(words(title), d.title))
-  return hit ? { url: `https://openlibrary.org${hit.key}` } : false
+  const lookup = async (author?: string) => {
+    const q = new URLSearchParams({ title, limit: '5', fields: 'key,title,author_name' })
+    if (author) q.set('author', author)
+    const res = await fetch(`https://openlibrary.org/search.json?${q}`, { headers: { 'User-Agent': 'Tide/0.1 (local study app)' }, signal: AbortSignal.timeout(8000) }).catch(() => null)
+    if (!res?.ok) return null
+    const data = (await res.json().catch(() => null)) as { docs?: { key: string; title: string; author_name?: string[] }[] } | null
+    if (!data) return null
+    const hit = data.docs?.find((d) => matches(words(title), d.title))
+    return hit ? { url: `https://openlibrary.org${hit.key}`, authors: hit.author_name ?? [] } : false
+  }
+  const author = by?.split(/,| and |&/)[0].replace(/\bet al\.?/i, '').trim()
+  const first = await lookup(author || undefined)
+  // A real book with the wrong author named: found by its title alone, and credited to its real author
+  if (first === false && author) return lookup()
+  return first
+}
+
+/** The named author shares a surname with one of the book's real authors */
+const sameAuthor = (by: string, authors: string[]) => {
+  const named = words(by)
+  return authors.some((a) => [...words(a)].some((w) => named.has(w)))
 }
 
 /**
@@ -342,9 +381,17 @@ export async function verifyItems<T extends { title: string; by?: string; why?: 
       const want = words(item.title)
       // A paper on arXiv, a book in Open Library, then the web. Only the web can say "not found":
       // the others only know their own kind of thing
+      // The makers' own documentation goes to the documentation itself
+      const docs = officialDocs(item as { title: string; by?: string; kind?: string })
+      if (docs) {
+        item.url = docs.url
+        item.by = docs.by
+        continue
+      }
       const book = await findBook(item.title, item.by).catch(() => null)
       if (book) {
         item.url = book.url
+        if (book.authors.length && (!item.by || !sameAuthor(item.by, book.authors))) item.by = book.authors.slice(0, 2).join(' and ')
         continue
       }
       if (looksLikePaper(item)) {
@@ -355,8 +402,9 @@ export async function verifyItems<T extends { title: string; by?: string; why?: 
         }
       }
       if (!webOn) continue
+      // The page that is this reading, by its title: a page that only mentions its words is not it
       const results = await webSearch(`${item.title} ${item.by ?? ''}`.trim()).catch(() => null)
-      const hit = results?.find((r) => r.url && matches(want, `${r.title} ${r.snippet}`))
+      const hit = results?.find((r) => r.url && sameTitle(item.title, r.title))
       if (hit) item.url = hit.url
       else if (results && results.length >= 3) item.unverified = true
     }

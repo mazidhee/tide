@@ -409,11 +409,14 @@ function stageInHand(p: WorkshopProject, r: WorkshopRecord): number {
  * explains the first failure without the fix, asks one question about a design choice, and
  * praises only what is specific. Whatever it writes, the fix is taken out (withoutFix).
  */
-export async function reviewStage(id: string, models: WorkshopModels = realModels): Promise<WorkshopState> {
+export async function reviewStage(id: string, models: WorkshopModels = realModels, stageIndex?: number): Promise<WorkshopState> {
   const p = await projectById(id)
   const r = p && (await readRecord(id))
   if (!p || !r) throw new Error('Start the project first.')
-  const index = stageInHand(p, r)
+  // The stage in hand, or one already passed: passing a stage moves the project on, and the code
+  // that passed it is worth a review too (live, there was no way to ask for one)
+  const inHand = stageInHand(p, r)
+  const index = stageIndex !== undefined && Number.isInteger(stageIndex) && stageIndex >= 0 && stageIndex <= inHand ? stageIndex : inHand
   const stage = p.stages[index]
   const progress = r.stages[stage.id]
   if (!progress?.lastRun) throw new Error('Run the tests first: the review is of a run.')

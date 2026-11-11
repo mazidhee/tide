@@ -135,11 +135,11 @@ function retrievePages(scope: Extract<ChatScope, { kind: 'pages' }>, query: stri
  * The section of a book you own that covers a lesson's topic, as text to teach from: the best
  * passages from its pages, up to about 5,000 characters. Null when no book covers it.
  */
-export async function lessonPassage(topic: string): Promise<{ label: string; path: string; from: number; to: number; text: string } | null> {
+export async function lessonPassage(topic: string, context = ''): Promise<{ label: string; path: string; from: number; to: number; text: string } | null> {
   const { pagesToRead } = await import('./books')
   const { readingLabel } = await import('@shared/books')
   // Only a section clearly about the topic: a lesson taught from the wrong pages is worse than none
-  const s = (await pagesToRead(topic, 3).catch(() => [])).find((x) => x.onTopic)
+  const s = (await pagesToRead(topic, 3, context).catch(() => [])).find((x) => x.onTopic)
   if (!s) return null
   await indexReady()
   const to = Math.min(s.to, s.from + 8)
@@ -656,13 +656,22 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
             emit({ id: req.id, type: 'delta', text: lead + banked })
             reply += lead + banked
           } else {
-            emit({ id: req.id, type: 'delta', text: lead })
+            // Written in full before it is shown: a reset inside it (a stall picked up again) must not
+            // wipe the mark above it, and if no new problem comes the one on screen stands, rather
+            // than a promise of "another" with nothing after it (as happened live)
             let again = ''
             const messages: ChatMessage[] = [...req.messages, { role: 'assistant', content: reply }, { role: 'user', content: `(Tide: the problem you just set can't be used: ${why}. Write only a new, well-posed problem on the same idea, numbered the same, with its <solution> and ending with the question in an <ask> tag. No feedback, no preamble.)` }]
-            await agentChat({ ...req, messages }, (e) => (e.type === 'delta' && (again += e.text), emit(e)), controller.signal)
-            reply += lead + again
-            // The replacement still gets its solution for marking
-            if (!controller.signal.aborted) await checkLessonReply(req, again, emit, controller.signal, ask, true).catch(() => null)
+            await agentChat({ ...req, messages }, (e) => {
+              if (e.type === 'delta') again += e.text
+              else if (e.type === 'reset') again = ''
+              else if (e.type !== 'done' && e.type !== 'error') emit(e)
+            }, controller.signal).catch(() => {})
+            if (!controller.signal.aborted && /<ask\b/i.test(again)) {
+              emit({ id: req.id, type: 'delta', text: lead + again })
+              reply += lead + again
+              // The replacement still gets its solution for marking
+              await checkLessonReply(req, again, emit, controller.signal, ask, true).catch(() => null)
+            }
           }
         }
         lesson?.prepare(reply)

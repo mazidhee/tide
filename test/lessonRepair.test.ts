@@ -64,3 +64,20 @@ describe('a lesson reply put right by rule', () => {
     expect(unmarked(good)).toBe(`Yes.\n\n${ASK}`)
   })
 })
+
+describe('stray tags', async () => {
+  const { repairReply } = await import('../src/shared/lessonRepair')
+  it('drops a line that is only an invented tag, and nothing else', () => {
+    const reply = 'Look at how Raft handles it.\n\n<file_path>Raft (algorithm) - Safety rules</file_path>\n\n<file_path>Raft (algorithm) - Safety rules</file_path>\n\nIn a cluster of 5 nodes, can two leaders win?\n\n<ask>Explain.</ask>'
+    const { text, repaired } = repairReply(reply, 'Go on.')
+    expect(text).not.toMatch(/file_path/)
+    expect(text).toMatch(/Look at how Raft handles it\.\n\nIn a cluster of 5 nodes/)
+    expect(text).toMatch(/<ask>Explain\.<\/ask>/)
+    expect(repaired).toContain('stray')
+  })
+  it('keeps a tag mentioned inside a sentence or a code block', () => {
+    const reply = 'Use the `<file_path>` element in config.\n\n```xml\n<path>/etc/x</path>\n```'
+    expect(repairReply(reply, 'Go on.').text).toMatch(/<file_path>/)
+    expect(repairReply(reply, 'Go on.').text).toMatch(/<path>\/etc\/x<\/path>/)
+  })
+})

@@ -40,6 +40,33 @@ const STOP = new Set('the and for with from into what how why when this that are
 
 export const topicWords = (s: string) => words(s)
 
+/** Programming languages a title or subject names: a Python lesson must not be sent to a book on C */
+const LANGUAGES: [string, RegExp][] = [
+  ['python', /python/i],
+  ['c++', /\bc\+\+|\bcpp\b/i],
+  ['c#', /\bc#|\bc sharp\b/i],
+  ['c', /(^|[^\w+#.])c(?![\w+#])(?!\s*\+\+)(?=\s+(programming|language|in\b|for\b|interfaces|traps|primer|how to|data types|standard library|syntax|pointers|compiler|preprocessor)|\s*[-:,(]|$)/i],
+  ['java', /\bjava\b(?!\s*script)/i],
+  ['javascript', /\bjavascript\b|\bnode\.?js\b/i],
+  ['typescript', /\btypescript\b/i],
+  ['rust', /\brust\b/i],
+  ['go', /\bgolang\b|\bthe go programming\b|\bgo programming\b/i],
+  ['haskell', /\bhaskell\b/i],
+  ['ruby', /\bruby\b/i],
+  ['kotlin', /\bkotlin\b/i],
+  ['swift', /\bswift\b/i],
+  ['scala', /\bscala\b/i]
+]
+export const languagesIn = (text: string): string[] => LANGUAGES.filter(([, re]) => re.test(text)).map(([name]) => name)
+
+/** A source titled for another language than the lesson's ("C data types" in a Python lesson) */
+export function otherLanguage(title: string, lesson: string): boolean {
+  const want = languagesIn(lesson)
+  if (!want.length) return false
+  const got = languagesIn(title)
+  return got.length > 0 && !got.some((l) => want.includes(l))
+}
+
 /** Lower case, punctuation to spaces, plurals to singular: for finding a topic as a phrase */
 const flat = (s: string) =>
   ` ${s
@@ -67,9 +94,17 @@ const words = (s: string) =>
  * first (book path and page). A section scores for sharing the topic's words and for holding
  * those hits; a whole chapter's hits count for less, so a precise section beats its chapter.
  */
-export function matchSections(topic: string, maps: BookMap[], hits: { path: string; page: number }[], limit = 2): ReadingSuggestion[] {
+export function matchSections(topic: string, maps: BookMap[], hits: { path: string; page: number }[], limit = 2, context = ''): ReadingSuggestion[] {
   const want = words(topic)
   if (!want.length) return []
+  // The language the lesson is in (from the topic or its notebook): a book on another language is
+  // left out, however well its chapter titles match ("Types, Operators and Expressions" in a book
+  // on C for "Variables and Data Types" in Python)
+  const lessonLangs = languagesIn(`${topic} ${context}`)
+  if (lessonLangs.length) maps = maps.filter((m) => {
+    const bookLangs = languagesIn(m.title)
+    return !bookLangs.length || bookLangs.some((l) => lessonLangs.includes(l))
+  })
   const phrase = flat(topic).trim().replace(/^(the|a|an) /, '')
   const scored: (ReadingSuggestion & { score: number })[] = []
   for (const map of maps) {
@@ -89,7 +124,10 @@ export function matchSections(topic: string, maps: BookMap[], hits: { path: stri
       // and "invention" in a chapter on the Fourier transform), isn't enough
       // Or the topic itself, as a phrase, in its summary: "B-trees" in "indexes … and B-trees", but not
       // "invention of zero" in "zero padding and the invention of the FFT"
-      const onTopic = inTitle >= 0.5 || (inTitle > 0 && overlap >= 0.6) || (phrase.length > 2 && flat(`${s.title} ${s.about ?? ''}`).includes(` ${phrase} `))
+      // Half the words of a two-word topic is one word, and one word is not the topic: "Vector
+      // clocks" is not Strang's "Vector Spaces". A short topic needs all its words in the title
+      const titled2 = want.length <= 2 ? inTitle === 1 : inTitle >= 0.5
+      const onTopic = titled2 || (inTitle > 0 && (want.length > 2 ? overlap >= 0.6 : overlap === 1)) || (phrase.length > 2 && flat(`${s.title} ${s.about ?? ''}`).includes(` ${phrase} `))
       if (!onTopic && !(found >= 2 && overlap > 0)) return
       if (/^(summary|conclusion|chapter summary|exercises|problems)$/i.test(s.title.trim())) return
       // Its chapter is the entry one level up, unless that's a part ("Part II"): then it is the chapter

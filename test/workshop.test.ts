@@ -343,6 +343,9 @@ describe('a project in the notes folder', () => {
     expect(s.current).toBe(1)
     expect(s.stages[1].brief).toContain('encode_record(op, key, value=None) -> bytes')
     expect(existsSync(at('STAGE-2.md'))).toBe(true)
+    // The stage just passed can still be reviewed: its own run, not the next stage's (which has none)
+    const reviewed = await ws.reviewStage('kv-wal', models({ cloud: '<failure>Nothing fails.</failure><question>Why a dict?</question>' }), 0)
+    expect(reviewed.stages[0].review).toMatchObject({ passed: 5, total: 5, question: 'Why a dict?' })
     const { conceptState } = await import('../src/main/knowledge')
     const known = await conceptState('In-memory tables (memtables)')
     expect(known).toMatchObject({ right: 1, wrong: 0 })
@@ -421,5 +424,14 @@ describe('a project proposed for a roadmap item', () => {
     expect(priv.problems[0]).toMatch(/private project/)
     const none = await ws.proposeProject({ topic: 'Project: no cloud today' }, { mayLeave: leave, local, cloud: async () => { throw new Error('No cloud model can take this now') } })
     expect(none.problems[0]).toMatch(/^No cloud model could take it just now/)
+  })
+})
+
+describe('a review with stray HTML in it', async () => {
+  const { parseReview } = await import('../src/shared/workshop')
+  it('is read without the tags', () => {
+    const run = { at: 0, stage: 'memtable', passed: true, tests: [{ stage: 'memtable', name: 'x', status: 'pass' as const }], durationMs: 1 }
+    const r = parseReview('<praise>The use of a dictionary for the internal table keeps lookups constant time.</p></praise>', run, 'local', 0)
+    expect(r.praise).toBe('The use of a dictionary for the internal table keeps lookups constant time.')
   })
 })

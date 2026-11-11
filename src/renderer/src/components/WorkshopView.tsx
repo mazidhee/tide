@@ -78,7 +78,7 @@ export function WorkshopView({ id, from }: { id?: string; from?: { notebook?: st
         now={Date.now()}
         onRun={() => act('run', () => window.tide.workshop.run(id))}
         onHint={() => act('hint', () => window.tide.workshop.hint(id))}
-        onReview={() => act('review', () => window.tide.workshop.review(id))}
+        onReview={() => act('review', () => window.tide.workshop.review(id, selected))}
         onAsk={(question) =>
           act('ask', async () => {
             const r = await window.tide.workshop.ask(id, question)

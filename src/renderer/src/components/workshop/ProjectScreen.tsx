@@ -306,19 +306,23 @@ function StageBody(p: ProjectScreenProps & { stage: StageView; index: number; to
             <pre>{run.output}</pre>
           </details>
         )}
-        {isCurrent && (
+        {(isCurrent || (stage.status === 'done' && run)) && (
           <div className="ws-actions">
-            <button className="btn primary" onClick={p.onRun} disabled={p.busy === 'run'}>
-              <Icon name="play" size={14} />
-              {p.busy === 'run' ? 'Running the tests…' : 'Run the tests'}
-            </button>
+            {isCurrent && (
+              <button className="btn primary" onClick={p.onRun} disabled={p.busy === 'run'}>
+                <Icon name="play" size={14} />
+                {p.busy === 'run' ? 'Running the tests…' : 'Run the tests'}
+              </button>
+            )}
             <button className="btn" onClick={p.onReview} disabled={!run || p.busy === 'review'} title={run ? 'The tutor reads your code and the run' : 'Run the tests first'}>
               <Icon name="tutor" size={14} />
               {p.busy === 'review' ? 'Reading your code…' : 'Review my code'}
             </button>
-            <button className="btn ghost" onClick={p.onHint} disabled={hintsLeft <= 0 || p.busy === 'hint'}>
-              {hintsLeft === 3 ? 'A hint' : hintsLeft > 0 ? `A stronger hint (${hintsLeft} left)` : 'No hints left'}
-            </button>
+            {isCurrent && (
+              <button className="btn ghost" onClick={p.onHint} disabled={hintsLeft <= 0 || p.busy === 'hint'}>
+                {hintsLeft === 3 ? 'A hint' : hintsLeft > 0 ? `A stronger hint (${hintsLeft} left)` : 'No hints left'}
+              </button>
+            )}
           </div>
         )}
         {p.error && <p className="ws-error">{p.error}</p>}

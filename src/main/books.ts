@@ -122,7 +122,7 @@ export function openingLine(page: string, title: string): string {
 }
 
 /** The pages to read in your own books for a topic, best first */
-export async function pagesToRead(topic: string, limit = 2): Promise<ReadingSuggestion[]> {
+export async function pagesToRead(topic: string, limit = 2, context = ''): Promise<ReadingSuggestion[]> {
   const maps = await bookMaps()
   if (!maps.length || !topic.trim()) return []
   const owned = new Set(maps.map((m) => m.path))
@@ -135,5 +135,5 @@ export async function pagesToRead(topic: string, limit = 2): Promise<ReadingSugg
       return want.length && want.filter((w) => text.includes(w)).length / want.length >= 0.6
     })
     .map((h) => ({ path: h.path, page: Number(h.heading.match(/\d+/)?.[0]) || 0 }))
-  return matchSections(topic, maps, hits, limit)
+  return matchSections(topic, maps, hits, limit, context)
 }

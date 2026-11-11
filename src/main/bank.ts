@@ -268,7 +268,7 @@ async function prepareOpenings(topics: { topic: string; notebook?: string; lesso
     const why = whyByDefault(getSettings().whyMode, t.topic, t.topicId)
     const options = { ...(choice ? { strategy: choice.strategy } : {}), ...(why ? { why: true } : {}) }
     const setup: SessionSetup = { mode: 'teach', topic: t.topic, options: Object.keys(options).length ? options : undefined }
-    const found = await lessonPassage(t.topic).catch(() => null)
+    const found = await lessonPassage(t.topic, t.notebook ?? '').catch(() => null)
     const pack = await import('./sources').then((m) => m.packFor(t.topic)).catch(() => null)
     const opening = withSources(found ? withPassage(openingMessage(setup), found) : openingMessage(setup), pack)
     const instructions = sessionInstructions(setup)

@@ -656,6 +656,16 @@ export const ownWords = (message: string) => message.replace(/\n*\(Tide: [\s\S]*
 
 /** What Go on sends, and how a question of yours is marked, so neither is recorded as an answer */
 export const GO_ON = 'Go on.'
+
+/**
+ * End: the student stops the session now. The tutor closes it the way its instructions say (the
+ * <summary> that marks a lesson finished, so it is kept in Past lessons and leaves Carry on, and
+ * what was missed comes back as recall), from how this session went, with nothing new.
+ */
+export const END_NOW = "Let's stop here for today.\n\n(Tide: the student is ending the session now. Teach nothing new and ask nothing. Write your closing <summary> now, as your instructions describe it, from how they answered in this session only.)"
+
+/** Whether End should ask for the closing summary first: something was answered and it isn't closed yet */
+export const shouldSumUp = (turns: { role: string; content: string }[], finished: boolean) => !finished && turns.filter((t) => t.role === 'user' && /^Answer: /.test(t.content)).length > 0
 export const ASKED = 'My question: '
 
 /**
@@ -679,4 +689,5 @@ Choose by what you taught, taking the first that fits:
 - something to watch running, when your instructions describe a simulation of it: that sim block;
 - ideas grouped under a topic: a mermaid mindmap;
 - something physical or with a classic textbook figure: find_image.
+Never answer a waiting question.
 Everything must be exact: every number, bit pattern or formula is one you computed, labels use your explanation's names and symbols, and nothing appears that you didn't teach. In a mermaid flowchart every node is an id with its label in quotes, like A["Row 2"] --> B["Row 3"]; under about 14 nodes.)`
