@@ -5,6 +5,8 @@
 mod lab;
 mod extract;
 mod extract_napi;
+mod pdf;
+mod pdf_napi;
 mod knowledge;
 mod recall;
 

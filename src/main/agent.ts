@@ -21,6 +21,7 @@ import { imageMarkdown } from '@shared/noteImages'
 import { addTask, describeTasks, feedbackOnTask, findTask, searchTasks, thingsAvailable, TIDE_TAG } from './things'
 import { buildLink, type DeepLink } from '@shared/deeplink'
 import { readArticle } from './extract'
+import { pdfiumTextFromBytes } from './pdftext'
 import type { AgentStep, AISettings, ChatEvent, ChatMessage, ChatRequest, ContextSource } from '@shared/types'
 import { getSettings } from './settings'
 import { localSampling } from './sampling'
@@ -439,6 +440,10 @@ async function pdfFromResponse(res: Response, url: string): Promise<{ title: str
   if (declared > MAX_PDF) throw new Error('That PDF is too large to read here. Save it to the library instead.')
   const data = new Uint8Array(await res.arrayBuffer())
   if (data.byteLength > MAX_PDF) throw new Error('That PDF is too large to read here. Save it to the library instead.')
+  const fallbackTitle = () => decodeURIComponent(new URL(url).pathname.split('/').pop() || url)
+  // PDFium off the main thread; pdf.js when it can't
+  const viaPdfium = await pdfiumTextFromBytes(data, 25)
+  if (viaPdfium) return { title: viaPdfium.title || fallbackTitle(), text: viaPdfium.pages.join('\n\n') }
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
   const doc = await pdfjs.getDocument({ data, useSystemFonts: true }).promise
   try {
@@ -448,7 +453,7 @@ async function pdfFromResponse(res: Response, url: string): Promise<{ title: str
       pages.push(content.items.map((it) => ('str' in it ? it.str + (it.hasEOL ? '\n' : ' ') : '')).join('').replace(/[ \t]+/g, ' ').trim())
     }
     const meta = (await doc.getMetadata().catch(() => null))?.info as { Title?: string } | undefined
-    const title = meta?.Title?.trim() || decodeURIComponent(new URL(url).pathname.split('/').pop() || url)
+    const title = meta?.Title?.trim() || fallbackTitle()
     return { title, text: pages.join('\n\n') }
   } finally {
     await doc.destroy()
