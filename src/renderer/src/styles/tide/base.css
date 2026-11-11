@@ -184,7 +184,11 @@
   }
   .segmented.text button,
   .pill-segment button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 0 9px;
+    white-space: nowrap;
   }
   .segmented button:hover:not(:disabled),
   .pill-segment button:hover:not(:disabled) {

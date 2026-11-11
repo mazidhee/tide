@@ -148,6 +148,11 @@
   .session-solo.td-with-rail {
     grid-template-columns: minmax(0, 1fr) 300px;
   }
+  .session-toolbar .page-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
   .td-lesson-head {
     margin-bottom: 12px;
   }
