@@ -39,6 +39,8 @@ export function watchPython(monaco: typeof Monaco, editor: Monaco.editor.IStanda
     if (disposed || !model || model.getLanguageId() !== 'python') return
     const version = model.getVersionId()
     const { lintPython } = await import('./client')
+    // The editor can close while the linter loads (a code answer handed in): a disposed model throws "Model is disposed!"
+    if (disposed || model.isDisposed() || model.getVersionId() !== version) return
     const diagnostics = await lintPython(model.getValue())
     if (disposed || model.isDisposed() || model.getVersionId() !== version) return
     monaco.editor.setModelMarkers(model, RUFF_OWNER, diagnostics ? toMarkers(diagnostics, model.getLineCount()) : [])
@@ -46,7 +48,7 @@ export function watchPython(monaco: typeof Monaco, editor: Monaco.editor.IStanda
 
   const refresh = () => {
     const model = editor.getModel()
-    if (!model) return
+    if (disposed || !model || model.isDisposed()) return
     if (model.getLanguageId() === 'python') {
       registerFormatter(monaco)
       lint()
