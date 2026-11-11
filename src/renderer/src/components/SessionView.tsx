@@ -627,18 +627,20 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const submit = (text?: string, ranNow?: RunResult) => {
     if (busy) return
     // A code question with hidden tests is marked on their results: what is handed in is run first
-    if (!text && !ranNow && currentAsk?.type === 'code' && currentAsk.tests && code.trim() && (!runOut || ranFor.current !== code)) {
+    if (!text && !ranNow && !asking && currentAsk?.type === 'code' && currentAsk.tests && code.trim() && (!runOut || ranFor.current !== code)) {
       if (running) return
       void runMine().then((r) => r && submit(undefined, r))
       return
     }
-    const out = ranNow ?? runOut
+    const out = asking ? null : (ranNow ?? runOut)
     const ran = out ? `\n\nWhen I ran it:\n\`\`\`\n${(out.stdout + out.stderr).slice(0, 1500) || '(no output)'}\n\`\`\`` : ''
     const choice = currentAsk?.type === 'choice' && currentAsk.options.length > 0
     const pick = choice && picked !== null && currentAsk.options[picked] ? `(${String.fromCharCode(65 + picked)}) ${currentAsk.options[picked]}` : ''
     const body =
       text ??
-      (currentAsk?.type === 'code'
+      (asking
+        ? answer.trim()
+        : currentAsk?.type === 'code'
         ? `${answer.trim() ? answer.trim() + '\n\n' : ''}\`\`\`${currentAsk.lang ?? 'python'}\n${code}\n\`\`\`${ran}`
         : pick
           ? `${pick}${answer.trim() ? `\nReasoning: ${answer.trim()}` : ''}`
@@ -1212,7 +1214,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                       {(runOut.stdout + (runOut.stderr ? (runOut.stdout ? '\n' : '') + runOut.stderr : '')) || 'Ran with no output.'}
                     </pre>
                   )}
-                  <textarea className="s-input small" rows={2} value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Explain your code or approach (optional)" />
+                  <textarea className="s-input small" rows={2} value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder={asking ? 'What would you like to ask? Your code can wait.' : 'Explain your code or approach (optional)'} />
                 </>
               ) : (
                 <textarea
@@ -1226,7 +1228,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit()
                   }}
                   placeholder={
-                    currentAsk.type === 'predict'
+                    asking
+                      ? 'What would you like to ask? Your answer can wait.'
+                      : currentAsk.type === 'predict'
                       ? 'Make your best guess before the explanation'
                       : currentAsk.type === 'explain'
                         ? 'Explain it in your own words, as if teaching someone'
@@ -1261,11 +1265,17 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                       <span>{HINT_LEVELS[Math.min(hintLevel, 3)]}</span>
                     </button>
                   )}
-                  <button className="tool-btn" onClick={() => submit("I don't know.")}>
-                    <span>I don't know</span>
+                  {/* A question of your own before answering: sent as a question, never marked as an answer */}
+                  <button className="tool-btn" aria-pressed={asking} onClick={() => setAsking((a) => !a)} title={asking ? 'Back to answering' : 'Ask the tutor something first; the question stays open'}>
+                    <span>{asking ? 'Answer instead' : 'Ask first'}</span>
                   </button>
-                  <button className="btn primary" onClick={() => submit()} disabled={currentAsk.type === 'code' ? !code.trim() : currentAsk.type === 'choice' && currentAsk.options.length > 0 ? picked === null && !answer.trim() : !answer.trim()}>
-                    Submit <kbd>⌘↵</kbd>
+                  {!asking && (
+                    <button className="tool-btn" onClick={() => submit("I don't know.")}>
+                      <span>I don't know</span>
+                    </button>
+                  )}
+                  <button className="btn primary" onClick={() => submit()} disabled={asking ? !answer.trim() : currentAsk.type === 'code' ? !code.trim() : currentAsk.type === 'choice' && currentAsk.options.length > 0 ? picked === null && !answer.trim() : !answer.trim()}>
+                    {asking ? 'Ask' : 'Submit'} <kbd>⌘↵</kbd>
                   </button>
                 </div>
               </div>
