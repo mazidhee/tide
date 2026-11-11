@@ -290,6 +290,19 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     send(opening, [])
   }
 
+  // Typing an answer: the model's background work holds off, so it is free when you send
+  useEffect(() => {
+    let last = 0
+    const onInput = (e: Event) => {
+      const t = e.target as HTMLElement | null
+      if (!t?.closest?.('main') || Date.now() - last < 2000) return
+      last = Date.now()
+      window.tide.ai.typing?.().catch(() => {})
+    }
+    document.addEventListener('input', onInput, true)
+    return () => document.removeEventListener('input', onInput, true)
+  }, [])
+
   // Start the session
   useEffect(() => {
     // Left earlier and come back to: carry on where it was (a reply may have arrived meanwhile)
