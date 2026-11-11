@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tide pathways</title>
+<link rel="stylesheet" href="../app/styles.css">
+<link rel="stylesheet" href="pathways.css">
+<script>
+  // Theme before first paint, from ?theme= or the last choice
+  (function () {
+    var q = new URLSearchParams(location.search), t = q.get('theme')
+    try { t = t || localStorage.getItem('tide-proto-theme') } catch (e) {}
+    document.documentElement.dataset.theme = t === 'dark' ? 'dark' : 'light'
+  })()
+</script>
+</head>
+<body>
+<div class="pw">
+  <header class="topbar pw-top">
+    <div class="crumbs"><span>What you know</span><svg class="i s" viewBox="0 0 20 20"><path d="M8 5l5 5-5 5"/></svg><b>Pathways</b><span class="tag">Prototype</span></div>
+    <span class="sp"></span>
+    <div class="seg" role="group" aria-label="Form" id="formSeg">
+      <button data-form="2d" title="Flat map (2)">Flat</button>
+      <button data-form="3d" title="Depth, in 3D (3)">Depth</button>
+    </div>
+    <div class="seg" role="group" aria-label="Sample size" id="sizeSeg">
+      <button data-n="320" title="The sample: 320 concepts"><span class="tnum">320</span></button>
+      <button data-n="2000" title="Filled out with the parts of each topic"><span class="tnum">2,000</span></button>
+    </div>
+    <div class="seg" role="group" aria-label="Theme" id="themeSeg">
+      <button data-theme-btn="light" title="Light"><svg class="i s" viewBox="0 0 20 20"><circle cx="10" cy="10" r="3.2"/><path d="M10 2.5v1.8M10 15.7v1.8M2.5 10h1.8M15.7 10h1.8M4.7 4.7l1.3 1.3M14 14l1.3 1.3M4.7 15.3L6 14M14 6l1.3-1.3"/></svg></button>
+      <button data-theme-btn="dark" title="Dark"><svg class="i s" viewBox="0 0 20 20"><path d="M15.5 12.2A6.2 6.2 0 0 1 7.8 4.5a6.2 6.2 0 1 0 7.7 7.7z"/></svg></button>
+    </div>
+    <button class="btn quiet sm" id="aboutBtn" aria-expanded="false">About the two forms</button>
+  </header>
+
+  <div class="pw-body">
+    <section class="pw-stage" aria-label="Map">
+      <div class="pw-head">
+        <p class="pw-sum" id="summary"></p>
+        <div class="pw-tools">
+          <label class="field pw-search" id="searchField">
+            <svg class="i s" viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.2"/><path d="M13 13l4 4"/></svg>
+            <input id="search" type="search" placeholder="Find a concept" autocomplete="off" spellcheck="false" aria-controls="results">
+            <kbd>/</kbd>
+          </label>
+          <div class="pw-areas" id="areas" role="group" aria-label="Areas"></div>
+          <span class="sp"></span>
+          <div class="seg" role="group" aria-label="Status" id="statusSeg"></div>
+          <button class="btn sm" id="focusBtn" aria-pressed="false" title="Light the chain back to fundamentals and forward to what it unlocks (F)">
+            <svg class="i s" viewBox="0 0 20 20"><circle cx="4.5" cy="10" r="2"/><circle cx="15.5" cy="5" r="2"/><circle cx="15.5" cy="15" r="2"/><path d="M6.4 9.2l7.2-3.4M6.4 10.8l7.2 3.4"/></svg>Focus chain
+          </button>
+        </div>
+        <ul class="pw-results" id="results" role="listbox" hidden></ul>
+      </div>
+      <div class="pw-canvas" id="canvasWrap">
+        <canvas id="c2d" aria-label="Map of concepts, flat" tabindex="0"></canvas>
+        <canvas id="c3d" aria-label="Map of concepts, in depth" tabindex="0" hidden></canvas>
+        <div class="pw-labels" id="labels3d" hidden></div>
+        <div class="pw-zoom" role="group" aria-label="Zoom">
+          <button class="icon-btn" id="zoomIn" title="Zoom in (+)"><svg class="i s" viewBox="0 0 20 20"><path d="M10 4.5v11M4.5 10h11"/></svg></button>
+          <button class="icon-btn" id="zoomOut" title="Zoom out (-)"><svg class="i s" viewBox="0 0 20 20"><path d="M4.5 10h11"/></svg></button>
+          <button class="icon-btn" id="zoomFit" title="Show everything (0)"><svg class="i s" viewBox="0 0 20 20"><path d="M4 8V4h4M12 4h4v4M16 12v4h-4M8 16H4v-4"/></svg></button>
+        </div>
+        <div class="pw-fps" id="fps" hidden></div>
+      </div>
+      <footer class="pw-foot"><div class="pw-legend" id="legend"></div></footer>
+    </section>
+    <aside class="pw-side" id="side" aria-live="polite"></aside>
+  </div>
+
+  <div class="pw-about" id="about" hidden>
+    <div class="pw-about-in">
+      <div class="pw-about-head"><h2 class="t-sec">The two forms</h2><button class="icon-btn" id="aboutClose" title="Close (Esc)"><svg class="i s" viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15"/></svg></button></div>
+      <div class="pw-about-cols">
+        <div>
+          <h3 class="t-sub">Flat</h3>
+          <p>Concepts run left to right in the order they can be learnt: a concept sits one step to the right of the deepest thing it rests on. Areas are bands. The frontier is the right-hand edge of what is filled in, and the ringed concepts on it are ready next.</p>
+          <p>Best for daily use: every label is readable, nothing hides behind anything else, the same concept is always in the same place, and it costs nothing when you are not touching it. Drawn on a 2D canvas.</p>
+        </div>
+        <div>
+          <h3 class="t-sub">Depth</h3>
+          <p>Each area is a tower on a ring, fundamentals at the foot, deeper concepts higher up. Turning it shows how the areas lean on each other; the links between towers are the cross-subject pathways.</p>
+          <p>Best for seeing the whole shape at once and for the links between subjects. Costs: things hide behind each other, labels must be culled harder, every pathway is one pixel wide (WebGL lines), and it needs the GPU while you move it.</p>
+        </div>
+        <div>
+          <h3 class="t-sub">What 3D costs on this Mac</h3>
+          <p>Gemma runs on the same GPU. So both forms draw only when something changes: when you are not touching the map, nothing is drawn, and the GPU and CPU fall idle. Depth also asks for the low-power GPU path, caps its resolution at 1.5x, drops to 1x while a model is working, and skips the fly-to animation when Reduce motion is on.</p>
+          <label class="pw-check"><input type="checkbox" id="busy"> A model is working (lower 3D resolution)</label>
+          <p class="meta" id="perfNote">Measured on this M4 Pro in headless Chrome (ANGLE on Metal), 1440 by 900 at 2x, no model running: both forms hold 60 frames a second while moving at 320 and at 2,000 concepts. A flat frame takes 0.6 ms (320) or 1.3 ms (2,000) of script; a depth frame 0.3 to 0.4 ms of script and about 1.2 ms with the GPU waited on. Left alone, both draw no frames at all and use under 0.1 ms of CPU a second. Open with ?fps=1 to watch the counter.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="tip" id="tip"></div>
+<script src="data.js"></script>
+<script src="layout.js"></script>
+<script src="view2d.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
