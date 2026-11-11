@@ -1,2 +1,266 @@
+/*
+  The new design: Settings, with Connections and Speed. Grouped settings in ruled boxes, each
+  data page opening on a sentence, tables with columns that never move, and status as a dot and
+  a word rather than a coloured pill. Scoped to data-design='tide'.
+*/
+
 :root[data-design='tide'] {
+  .settings-page .settings-body {
+    max-width: 720px;
+  }
+  .settings-page .settings-body:has(.cx2),
+  .settings-page .settings-body:has(.sp) {
+    max-width: 1080px;
+  }
+  .settings-page h1,
+  .settings-title {
+    font: 600 var(--t-page) / 30px var(--ui);
+    letter-spacing: -0.018em;
+  }
+  .set-group-title {
+    font: 600 var(--t-base) / 20px var(--ui);
+    color: var(--ink);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .set-card {
+    border: 1px solid var(--line);
+    border-radius: var(--r-box);
+    background: var(--raised);
+    box-shadow: none;
+  }
+  .set-row + .set-row,
+  .set-row + .set-pad {
+    border-top: 1px solid var(--line);
+  }
+  .set-input,
+  .set-input:focus {
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-ctl);
+    background: var(--raised);
+  }
+  .set-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .theme-swatch {
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--raised);
+    box-shadow: none;
+  }
+  .theme-swatch:hover {
+    border-color: var(--line-2);
+  }
+  .theme-swatch.on {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .swatch-preview {
+    border-radius: 4px;
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .swatch-name {
+    font-weight: 500;
+  }
+
+  /* ---------- Connections ---------- */
+  .cx2 {
+    --ok: var(--good-mark);
+    --surface-2: var(--sunk);
+    --surface-3: var(--line);
+    max-width: none;
+  }
+  .cx2-today,
+  .cx2-table,
+  .cx2-add,
+  .cx2-card {
+    border: 1px solid var(--line);
+    border-radius: var(--r-box);
+    background: var(--raised);
+    box-shadow: none;
+  }
+  .cx2-sentence {
+    font-size: var(--t-lede);
+    line-height: 23px;
+    color: var(--ink-2);
+  }
+  .cx2-sentence b,
+  .cx2-sentence strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .cx2-flow {
+    height: 10px;
+    border-radius: 4px;
+    background: var(--line);
+  }
+  .cx2-flow span {
+    border-radius: 2px;
+    animation: none;
+  }
+  .cx2-seg {
+    padding: 2px;
+    gap: 2px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--sunk);
+  }
+  .cx2-seg button {
+    height: 24px;
+    border-radius: 5px;
+    font-size: var(--t-meta);
+    font-weight: 500;
+    color: var(--ink-3);
+  }
+  .cx2-seg button.on {
+    background: var(--raised);
+    color: var(--ink);
+    box-shadow:
+      0 0 0 1px var(--line-2),
+      0 1px 2px rgba(16, 28, 48, 0.08);
+  }
+  .cx2-search {
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-ctl);
+    background: var(--raised);
+    box-shadow: none;
+  }
+  .cx2-search:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .cx2-cols {
+    background: transparent;
+    border-bottom: 1px solid var(--line);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-3);
+  }
+  .cx2-group-h {
+    background: var(--sunk);
+    font-size: var(--t-meta);
+    font-weight: 600;
+    color: var(--ink-2);
+  }
+  .cx2-row:hover {
+    background: var(--hover);
+  }
+  .cx2-item.open .cx2-row,
+  .cx2-item.open .cx2-detail {
+    background: var(--accent-soft);
+  }
+  .cx2-name {
+    font-weight: 600;
+  }
+  .cx2-sub {
+    color: var(--ink-3);
+  }
+  /* Status: a dot and a word. Round for running, a ring for idle, a diamond for attention */
+  .cx2-state {
+    padding: 0;
+    border-radius: 0;
+    background: none;
+    border: 0;
+    box-shadow: none;
+    outline: 0;
+    font-size: var(--t-base);
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .cx2-state i {
+    background: transparent;
+    box-shadow: inset 0 0 0 1.5px var(--ink-3);
+  }
+  .cx2-state.t-ok i {
+    background: var(--good-mark);
+    box-shadow: none;
+  }
+  .cx2-state.t-warn,
+  .cx2-state.t-err {
+    color: var(--warn);
+  }
+  .cx2-state.t-err {
+    color: var(--bad);
+  }
+  .cx2-state.t-warn i,
+  .cx2-state.t-err i {
+    border-radius: 1px;
+    transform: rotate(45deg);
+    box-shadow: none;
+    background: var(--warn-mark);
+  }
+  .cx2-state.t-err i {
+    background: var(--bad-mark);
+  }
+  .cx2-state.live i {
+    animation: none;
+  }
+  .cx2-mark {
+    border-radius: 7px;
+    background: #fff;
+    box-shadow: 0 0 0 1px var(--line-2);
+  }
+  .cx2-chip {
+    border: 1px solid var(--line);
+    border-radius: var(--r-mark);
+    background: var(--sunk);
+    color: var(--ink-2);
+    font-size: 12px;
+  }
+  .cx2-pane {
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--raised);
+  }
+  .cx2-key {
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-ctl);
+    font-family: var(--mono);
+  }
+
+  /* ---------- Speed ---------- */
+  .sp-top,
+  .sp-table {
+    border: 1px solid var(--line);
+    border-radius: var(--r-box);
+    background: var(--raised);
+    box-shadow: none;
+  }
+  .sp-sentence {
+    font-size: var(--t-lede);
+    line-height: 23px;
+    color: var(--ink-2);
+  }
+  .sp-sentence b,
+  .sp-sentence strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .sp-bar {
+    border-radius: 4px;
+    background: var(--line);
+  }
+  .sp-bar span {
+    border-radius: 2px;
+  }
+  .sp-cols {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-3);
+    border-bottom: 1px solid var(--line);
+  }
+  .sp-row {
+    border-bottom: 1px solid var(--line);
+  }
+  .sp-row:last-child {
+    border-bottom: 0;
+  }
+  .sp-total {
+    font-weight: 600;
+  }
+  .sp-hint,
+  .sp-where {
+    color: var(--ink-3);
+  }
 }

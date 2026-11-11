@@ -374,8 +374,8 @@ export default function App() {
   // In the new design Home is the whole width of the window and has its own ask box: the tutor
   // panel stays beside what you read (a note, a PDF, the library), one click away from Home
   // …until you ask something from Home: then it opens there with your question, and stays until you close it
-  // The map of what you know is the same: the whole width, the panel on request
-  const wide = view.kind === 'home' || (view.kind === 'graph' && !view.focus && (view.tab ?? lastBrainTab()) === 'know')
+  // The map of what you know and Settings are the same: the whole width, the panel on request
+  const wide = view.kind === 'home' || view.kind === 'settings' || (view.kind === 'graph' && !view.focus && (view.tab ?? lastBrainTab()) === 'know')
   const noPanel = ownTutor || (tide && wide && homeAsked === null)
   let main: React.ReactNode
   if (view.kind === 'file') {
