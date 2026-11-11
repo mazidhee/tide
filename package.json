@@ -126,6 +126,10 @@
       {
         "from": "native/tide-core/tide-core.node",
         "to": "tide-core.node"
+      },
+      {
+        "from": "THIRD_PARTY_NOTICES.md",
+        "to": "THIRD_PARTY_NOTICES.md"
       }
     ]
   },

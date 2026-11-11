@@ -59,9 +59,62 @@ describe('recall, from one lesson to the next', () => {
     const item = recallItems()[0]
     expect(item.reviews).toBe(1)
     expect(item.lapses).toBe(0)
-    expect(item.stability).toBe(2)
-    // Two days away, so nothing is due now
-    expect(Math.round((item.due - Date.now()) / 86_400_000)).toBe(2)
+    // The miss, then a good answer: FSRS's history of the item
+    expect(item.history.map((h) => h.rating)).toEqual([1, 3])
+    expect(item.difficulty).toBeGreaterThan(1)
+    expect(item.stability).toBeGreaterThan(0.212)
+    // Due when the chance of remembering falls to 90%: later than now, so nothing is due
+    expect(item.due).toBeGreaterThan(Date.now())
     expect(await earlierLessons('Hexadecimal numbers', false)).not.toContain('Due for recall')
+
+    // Each review is in the log: the miss when it was kept, the good answer now
+    const log = readFileSync(join(vault, '.tide', 'revlog.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+    expect(log.map((l) => [l.kind, l.id, l.rating])).toEqual([
+      ['recall', item.id, 1],
+      ['recall', item.id, 3]
+    ])
+    expect(log[0].elapsedDays).toBe(0)
+    expect(log[1].elapsedDays).toBeGreaterThanOrEqual(0)
+    expect(typeof log[1].at).toBe('number')
+  })
+
+  it('an opening answer nobody marked is no review', async () => {
+    const before = recallItems()[0]
+    const later = before.due + 1000
+    vi.useFakeTimers({ now: later, toFake: ['Date'] })
+    try {
+      expect(await earlierLessons('Hexadecimal numbers', false)).toContain('Due for recall')
+      await saveLesson({
+        id: 'third',
+        mode: 'teach',
+        topic: 'Hexadecimal numbers',
+        scope: { kind: 'none' } as never,
+        started: later + 1000,
+        turns: [
+          { role: 'user', content: 'Teach me.' },
+          { role: 'assistant', content: `<ask type="short">${Q}</ask>` },
+          { role: 'user', content: 'Answer: 42' },
+          { role: 'assistant', content: 'Moving on.\n\n<ask type="short">How many bits is one hex digit?</ask>' }
+        ]
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+    const after = recallItems()[0]
+    expect(after.reviews).toBe(before.reviews)
+    expect(after.history).toEqual(before.history)
+  })
+
+  it('flashcard reviews go in the same log', async () => {
+    const { reviewCard } = await import('../src/main/study')
+    await reviewCard('card-1', 'good', 'Cards.md')
+    await reviewCard('card-1', 'again', 'Cards.md')
+    const log = readFileSync(join(vault, '.tide', 'revlog.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+    const cards = log.filter((l) => l.kind === 'flashcard')
+    expect(cards.map((l) => [l.id, l.rating])).toEqual([
+      ['card-1', 3],
+      ['card-1', 1]
+    ])
+    expect(cards[0].elapsedDays).toBe(0)
   })
 })
