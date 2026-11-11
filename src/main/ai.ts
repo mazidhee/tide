@@ -1,7 +1,8 @@
 import { recentSpeed } from './speed'
 import { inBackground, streamInteractive } from './modelQueue'
 import { STRATEGY_LABEL, type Strategy } from '@shared/strategy'
-import { canTake, CloudUnavailable, cloudError, coolingDown, coolTarget, deadlineFor, estimateTokens, headersFor, noteLimits, noteOutcome, noteSent, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
+import { CloudUnavailable, coolingDown, coolTarget, estimateTokens, recordUsage, routeFor, type CloudTarget } from './cloud'
+import { readStream, streamCloud } from './cloudStream'
 import type { CloudTask, RequestKind } from '@shared/providers'
 import { memoryIntent } from '@shared/memoryIntent'
 import { addMemory, forgetMatching } from './memory'
@@ -251,87 +252,6 @@ export async function* streamCompletion(
     }
   } finally {
     recordUsage({ kind: 'local', provider: 'local', model, task, input: estimateTokens(JSON.stringify(messages).length), output: estimateTokens(out), estimated: true })
-  }
-}
-
-/** The text deltas of an OpenAI-style stream; `usage` gets the token counts if the server sends them */
-async function* readStream(body: ReadableStream<Uint8Array>, filter: (t: string) => string, usage?: (u: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } }) => void): AsyncGenerator<string> {
-  const reader = body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() ?? ''
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed.startsWith('data:')) continue
-      const data = trimmed.slice(5).trim()
-      if (data === '[DONE]') return
-      try {
-        const json = JSON.parse(data)
-        const u = json.usage ?? json.x_groq?.usage
-        if (u && usage) usage(u)
-        const delta = filter(json.choices?.[0]?.delta?.content ?? json.choices?.[0]?.text ?? '')
-        if (delta) yield delta
-      } catch {
-        // Ignore keep-alive or partial lines
-      }
-    }
-  }
-}
-
-/** A cloud model's answer, streamed; its real token counts go to the usage log */
-/** How long a cloud model has to show any sign of life (its response headers) before the next is tried */
-const FIRST_SIGN_MS = 25_000
-
-async function* streamCloud(target: CloudTarget, messages: ChatMessage[], signal: AbortSignal, maxTokens: number, temperatureOverride: number | undefined, task: RequestKind): AsyncGenerator<string> {
-  if (!canTake(estimateTokens(JSON.stringify(messages).length) + maxTokens, target)) throw new CloudUnavailable(`The cloud model’s per-minute limit can’t take this for about ${secondsUntilReset(target)}s`)
-  let res: Response
-  // A deadline per job: a model that's too slow today hands over to the next one in line
-  const started = Date.now()
-  const slow = AbortSignal.timeout(deadlineFor(task))
-  // And a much shorter one for any sign of life. Some free endpoints accept a request and then
-  // send nothing at all for minutes: without this, each one cost the whole deadline before the
-  // next model was tried. A model that is thinking has still answered with its headers by now.
-  const silent = new AbortController()
-  const noSign = setTimeout(() => silent.abort(), FIRST_SIGN_MS)
-  const both = AbortSignal.any([signal, slow, silent.signal])
-  noteSent(target.provider)
-  try {
-    res = await fetch(`${target.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: headersFor(target),
-      body: JSON.stringify({ model: target.model, messages, temperature: temperatureOverride ?? getSettings().ai.temperature, stream: true, max_tokens: maxTokens, stream_options: { include_usage: true }, ...target.extra }),
-      signal: both
-    })
-  } catch (e) {
-    if (signal.aborted) throw e
-    // An endpoint that said nothing is left alone for ten minutes: it is down, not busy
-    coolTarget(target, silent.signal.aborted ? 600 : slow.aborted ? 120 : 60)
-    noteOutcome(target, task, false, Date.now() - started)
-    throw new CloudUnavailable(silent.signal.aborted ? `${target.model} didn’t start answering` : slow.aborted ? `${target.model} took too long` : `Couldn't reach the cloud model: ${(e as Error).message}`)
-  } finally {
-    clearTimeout(noSign)
-  }
-  if (!res.ok || !res.body) {
-    noteOutcome(target, task, false, Date.now() - started)
-    throw await cloudError(res, target)
-  }
-  noteLimits(res.headers, target)
-  let reported: { input: number; output: number; cached?: number } | null = null
-  let out = 0
-  try {
-    for await (const delta of readStream(res.body, createStreamFilter(), (u) => (reported = { input: u.prompt_tokens ?? 0, output: u.completion_tokens ?? 0, cached: u.prompt_tokens_details?.cached_tokens }))) {
-      out += delta.length
-      yield delta
-    }
-    noteOutcome(target, task, true, Date.now() - started)
-  } finally {
-    const r = reported as { input: number; output: number; cached?: number } | null
-    recordUsage({ kind: 'cloud', provider: target.provider, model: target.model, task, ...(r ?? { input: estimateTokens(JSON.stringify(messages).length), output: estimateTokens(out) }), estimated: !r })
   }
 }
 
