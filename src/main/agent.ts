@@ -12,6 +12,7 @@ import { metabaseHost, metabaseReady, metabaseTool } from './metabase'
 import { loadImages, type NoteImage } from './noteImages'
 import { pagesToRead } from './books'
 import { privatePath } from './projects'
+import { requestSent, timeTurn, toolRan } from './speed'
 import { readingLabel } from '@shared/books'
 import { imageMarkdown } from '@shared/noteImages'
 import { addTask, describeTasks, feedbackOnTask, findTask, searchTasks, thingsAvailable, TIDE_TAG } from './things'
@@ -33,7 +34,7 @@ import { runCode } from './runner'
 import { addMemory, forgetMatching, memoryPrompt } from './memory'
 import { fitHistory } from '@shared/context'
 import { historyBudget } from './chats'
-import { asksForWeb, cleanModelText, createStreamFilter, isLooping, recoverToolCalls } from '@shared/modelText'
+import { asksForWeb, cleanModelText, createStreamFilter, isLooping, recoverToolCalls, streamWatch } from '@shared/modelText'
 import { noteUse, useOf } from './connectionUse'
 import { getKey } from './cloud'
 
@@ -629,6 +630,8 @@ async function streamTurnOnce(
         temperature: Math.min(1.2, temperature + extraTemperature),
         ...localSampling(model, extraTemperature > 0),
         stream: true,
+        // The real token counts back (prompt, cached, written), for Usage and Settings › Speed
+        stream_options: { include_usage: true },
         max_tokens: 3000,
         ...(tools.length ? { tools } : {}),
         ...transientContext()
@@ -639,6 +642,8 @@ async function streamTurnOnce(
     writeFileSync(process.env.TIDE_DEBUG_AI, JSON.stringify(payload, null, 1))
   }
   if (target) noteSent(target.provider)
+  const startAt = performance.now()
+  const timed = requestSent()
   const res = await fetch(target ? `${target.baseUrl}/chat/completions` : `${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
     method: 'POST',
     headers: target ? headersFor(target) : { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
@@ -667,11 +672,17 @@ async function streamTurnOnce(
   let raw = ''
   // How many thought-channel openings there were when the answer began; another one after that is a stall
   let channelsAtStart = -1
+  const watch = streamWatch()
   let usage: { input: number; output: number; cached?: number } | null = null
   const calls = new Map<number, ToolCall>()
+  let firstTokenAt = 0
+  // Tide's own time on the stream: from each piece arriving to asking for the next
+  let tideMs = 0
+  let tokens = 0
   for (;;) {
     const { value, done } = await reader.read()
     if (done) break
+    const got = performance.now()
     buffer += decoder.decode(value, { stream: true })
     const lines = buffer.split('\n')
     buffer = lines.pop() ?? ''
@@ -683,30 +694,35 @@ async function streamTurnOnce(
         const u = chunk.usage ?? chunk.x_groq?.usage
         if (u) usage = { input: u.prompt_tokens ?? 0, output: u.completion_tokens ?? 0, cached: u.prompt_tokens_details?.cached_tokens }
         const delta = chunk.choices?.[0]?.delta
-        if (delta?.content || delta?.tool_calls) firstAt ||= Date.now()
+        if (delta?.content || delta?.tool_calls) {
+          firstAt ||= Date.now()
+          firstTokenAt ||= performance.now()
+          tokens++
+        }
         if (delta?.content) {
           raw += delta.content
           const visible = filter(delta.content)
           text += visible
+          watch.raw(raw)
+          watch.text(text)
           // Watch the raw stream too: repeated hidden reasoning blocks never show up in the text
           // Code inside a tool call written as text can repeat lines legitimately: don't judge it
-          const inCall = raw.lastIndexOf('<|tool_call') > raw.lastIndexOf('<tool_call|>')
-          const channels = raw.match(/<\|channel>/g)?.length ?? 0
+          const inCall = watch.inCall
+          const channels = watch.channels
           if (channelsAtStart < 0 && text.trim()) channelsAtStart = channels
           if (!inCall && channelsAtStart >= 0 && channels > channelsAtStart) {
             controller.abort()
             outerSignal.removeEventListener('abort', abort)
             throw new StallError(cleanModelText(text))
           }
-          if (!inCall && (isLooping(text) || isLooping(raw) || (raw.match(/<\|channel>/g)?.length ?? 0) >= 3)) {
+          if (!inCall && (isLooping(text) || isLooping(raw) || channels >= 3)) {
             controller.abort()
             outerSignal.removeEventListener('abort', abort)
             throw new LoopingError('The model got stuck repeating itself', cleanModelText(text))
           }
           // Never show a tool call the server passed through as text: judge by the raw stream, since
           // the filter strips the special tokens that mark it, and hold back a bare "call:name{" too
-          const openCall = raw.lastIndexOf('<|tool_call') > raw.lastIndexOf('<tool_call|>')
-          if (visible && !openCall && !/(^|\n)\s*call:[A-Za-z_]\w*\{/.test(text)) onText(visible)
+          if (visible && !inCall && !watch.bareCall) onText(visible)
         }
         for (const tc of delta?.tool_calls ?? []) {
           const i = tc.index ?? 0
@@ -721,8 +737,10 @@ async function streamTurnOnce(
         if (e instanceof LoopingError || e instanceof StallError) throw e
       }
     }
+    tideMs += performance.now() - got
   }
   outerSignal.removeEventListener('abort', abort)
+  timed({ engine: target ? 'cloud' : 'local', model, startAt, firstTokenAt, endAt: performance.now(), tokens: usage?.output ?? tokens, promptTokens: usage?.input, cachedTokens: usage?.cached, tideMs })
   const promptChars = messages.reduce((n, m) => n + (typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content ?? '').length), 0)
   recordUsage({
     kind: target ? 'cloud' : 'local',
@@ -877,6 +895,15 @@ function addSource(ctx: LoopContext, s: Omit<ContextSource, 'index'>): number {
 }
 
 async function runTool(call: ToolCall, ctx: LoopContext, depth: number): Promise<string> {
+  const t0 = performance.now()
+  try {
+    return await runToolNow(call, ctx, depth)
+  } finally {
+    toolRan(call.name, performance.now() - t0)
+  }
+}
+
+async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Promise<string> {
   let args: Record<string, unknown> = {}
   try {
     // Dev only: keep the tool calls next to the last request, to see what the model actually sent
@@ -1491,7 +1518,12 @@ async function turnImages(req: TurnRequest, question: string): Promise<NoteImage
   return loadImages(await readText(notePath).catch(() => ''), notePath)
 }
 
-export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, signal: AbortSignal) {
+export function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, signal: AbortSignal): Promise<void> {
+  if (req.warmOnly) return agentChatNow(req, emit, signal)
+  return timeTurn(req.id, req.instructions ? 'lesson' : 'chat', () => agentChatNow(req, emit, signal))
+}
+
+async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, signal: AbortSignal) {
   const sources: ContextSource[] = []
   const ctx: LoopContext = {
     signal,
@@ -1546,7 +1578,7 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
     const graph = await graphCached().catch(() => null)
     const linked = graph ? [...new Set(graph.edges.filter((e) => e.source === (req.scope as { path: string }).path).map((e) => e.target))].slice(0, 3) : []
     for (const p of linked) {
-      const hit = search(question || p, 1, (x) => x === p)[0] ?? getChunks(p)[0]
+      const hit = search(question || p, 1, (x) => x === p)[0] ?? getChunks(p, 1)[0]
       if (hit) addSource(ctx, { path: hit.path, title: hit.title, heading: hit.heading ? `${hit.heading} (linked note)` : 'linked note', text: hit.text.slice(0, 1200) })
     }
   }

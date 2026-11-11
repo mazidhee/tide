@@ -1,7 +1,9 @@
 import MiniSearch from 'minisearch'
-import { promises as fs, existsSync } from 'fs'
+import { app } from 'electron'
+import { promises as fs, existsSync, readFileSync } from 'fs'
+import { createRequire } from 'module'
 import { createHash } from 'crypto'
-import { basename, extname } from 'path'
+import { basename, extname, join } from 'path'
 import matter from 'gray-matter'
 import type { SearchHit } from '@shared/types'
 import { absPath, flattenFiles, getNoteMeta, getTree, joinRel, vaultRoot, writeText } from './vault'
@@ -120,14 +122,140 @@ function chunkPdf(path: string, pages: string[]): Chunk[] {
 }
 
 // ---------- Index ----------
+//
+// The index lives on disk (userData/search), built by Tide's Rust module with Tantivy: opening it
+// is instant, its text sits in the OS file cache instead of this process's memory, and a search
+// takes about a millisecond. Only files that changed since last time are read again. If the module
+// can't load, an in-memory MiniSearch index does the same job, more slowly.
 
-const index = new MiniSearch<Chunk>({
-  fields: ['title', 'heading', 'text'],
-  storeFields: ['path', 'title', 'heading', 'text', 'order'],
-  searchOptions: { boost: { title: 3, heading: 2 }, prefix: true, fuzzy: 0.15, combineWith: 'OR' }
-})
+type Hit = Chunk & { score: number }
 
-const chunksByPath = new Map<string, Chunk[]>()
+interface Backend {
+  replace(path: string, chunks: Chunk[]): void
+  remove(path: string): void
+  clear(): void
+  commit(): void
+  search(q: string, limit: number, paths?: string[]): Hit[]
+  chunks(path: string, limit?: number): Chunk[]
+}
+
+interface NativeIndex {
+  replace(path: string, chunks: { id: string; title: string; heading: string; text: string; order: number }[]): void
+  remove(path: string): void
+  clear(): void
+  commit(): void
+  search(q: string, limit: number, paths?: string[] | null): Hit[]
+  chunks(path: string, limit?: number | null): Hit[]
+}
+
+/** The Rust module: in the app's resources when packaged, next to its crate in development */
+function loadNative(): { SearchIndex: new (dir: string) => NativeIndex } | null {
+  if (process.env.TIDE_JS_SEARCH) return null
+  const appDir = (() => {
+    try {
+      return app.getAppPath()
+    } catch {
+      return ''
+    }
+  })()
+  const candidates = [
+    process.resourcesPath && join(process.resourcesPath, 'tide-core.node'),
+    appDir && join(appDir, 'native', 'tide-core', 'tide-core.node'),
+    join(__dirname, '..', '..', 'native', 'tide-core', 'tide-core.node')
+  ].filter((p): p is string => !!p && existsSync(p))
+  for (const p of candidates) {
+    try {
+      return createRequire(__filename)(p)
+    } catch (e) {
+      console.warn('[search] native index unavailable', p, e)
+    }
+  }
+  return null
+}
+
+function nativeBackend(dir: string): Backend | null {
+  const mod = loadNative()
+  if (!mod) return null
+  try {
+    const ix = new mod.SearchIndex(dir)
+    return {
+      replace: (path, chunks) => ix.replace(path, chunks.map(({ id, title, heading, text, order }) => ({ id, title, heading, text, order }))),
+      remove: (path) => ix.remove(path),
+      clear: () => ix.clear(),
+      commit: () => ix.commit(),
+      search: (q, limit, paths) => ix.search(q, limit, paths ?? null),
+      chunks: (path, limit) => ix.chunks(path, limit ?? null)
+    }
+  } catch (e) {
+    console.warn('[search] native index failed to open', e)
+    return null
+  }
+}
+
+function memoryBackend(): Backend {
+  const index = new MiniSearch<Chunk>({
+    fields: ['title', 'heading', 'text'],
+    storeFields: ['path', 'title', 'heading', 'text', 'order'],
+    searchOptions: { boost: { title: 3, heading: 2 }, prefix: true, fuzzy: 0.15, combineWith: 'OR' }
+  })
+  const byPath = new Map<string, Chunk[]>()
+  const remove = (path: string) => {
+    byPath.get(path)?.forEach((c) => index.has(c.id) && index.discard(c.id))
+    byPath.delete(path)
+  }
+  return {
+    replace: (path, chunks) => {
+      remove(path)
+      const fresh = chunks.filter((c) => !index.has(c.id))
+      index.addAll(fresh)
+      byPath.set(path, fresh)
+    },
+    remove,
+    clear: () => (index.removeAll(), byPath.clear()),
+    commit: () => {},
+    search: (q, limit, paths) => {
+      const only = paths && new Set(paths)
+      return index.search(q, only ? { filter: (r) => only.has(r.path as string) } : undefined).slice(0, limit) as unknown as Hit[]
+    },
+    chunks: (path, limit) => (byPath.get(path) ?? []).slice(0, limit)
+  }
+}
+
+let backend: Backend | null = null
+let backendFor = ''
+/** What's indexed: each file's size and modified time when it was read */
+let manifest: Record<string, string> = {}
+let manifestFile = ''
+
+function ready(): Backend {
+  const root = vaultRoot()
+  if (backend && backendFor === root) return backend
+  const dir = join(app.getPath('userData'), 'search', createHash('sha1').update(root).digest('hex').slice(0, 16))
+  backend = nativeBackend(dir)
+  manifestFile = backend ? join(dir, 'manifest.json') : ''
+  try {
+    manifest = backend ? JSON.parse(readFileSync(manifestFile, 'utf8')) : {}
+  } catch {
+    manifest = {}
+  }
+  backend ??= memoryBackend()
+  backendFor = root
+  return backend
+}
+
+let savingManifest: ReturnType<typeof setTimeout> | undefined
+function saveManifest() {
+  if (!manifestFile) return
+  clearTimeout(savingManifest)
+  const file = manifestFile
+  const snapshot = JSON.stringify(manifest)
+  savingManifest = setTimeout(() => fs.writeFile(file, snapshot).catch(() => {}), 300)
+}
+
+async function signature(path: string): Promise<string | null> {
+  const st = await fs.stat(absPath(path)).catch(() => null)
+  return st ? `${st.size}:${Math.round(st.mtimeMs)}` : null
+}
 
 async function chunksFor(path: string): Promise<Chunk[]> {
   const ext = extname(path).toLowerCase()
@@ -142,49 +270,62 @@ async function chunksFor(path: string): Promise<Chunk[]> {
 const pathQueue = new Map<string, Promise<void>>()
 
 export function reindexPath(path: string): Promise<void> {
-  const run = (pathQueue.get(path) ?? Promise.resolve()).catch(() => {}).then(() => reindexNow(path))
+  const run = (pathQueue.get(path) ?? Promise.resolve()).catch(() => {}).then(() => reindexNow(path, true))
   pathQueue.set(path, run)
   run.finally(() => pathQueue.get(path) === run && pathQueue.delete(path)).catch(() => {})
   return run
 }
 
-async function reindexNow(path: string) {
-  const drop = () => {
-    chunksByPath.get(path)?.forEach((c) => index.has(c.id) && index.discard(c.id))
-    chunksByPath.delete(path)
+async function reindexNow(path: string, commit: boolean) {
+  const b = ready()
+  const sig = await signature(path)
+  if (!sig) {
+    b.remove(path)
+    delete manifest[path]
+  } else {
+    const chunks = await chunksFor(path)
+    b.replace(path, chunks)
+    if (chunks.length) manifest[path] = sig
+    else delete manifest[path]
   }
-  drop()
-  if (!existsSync(absPath(path))) return
-  const chunks = await chunksFor(path)
-  // The read took a while; whatever is indexed for this path now is replaced, never doubled
-  drop()
-  const fresh = chunks.filter((c) => !index.has(c.id))
-  if (fresh.length) {
-    index.addAll(fresh)
-    chunksByPath.set(path, fresh)
+  if (commit) {
+    b.commit()
+    saveManifest()
   }
 }
 
 let building: Promise<void> | null = null
 
+/** Brings the index up to date with the vault: only new, changed and deleted files are touched */
 export function buildIndex(): Promise<void> {
   building = (async () => {
-    index.removeAll()
-    chunksByPath.clear()
+    let b: Backend
     try {
-      vaultRoot()
+      b = ready()
     } catch {
       return
     }
-    const files = flattenFiles(await getTree())
-    // Notes first so search works right away, PDFs can take longer to extract
-    const ordered = [...files.filter((f) => f.kind === 'note'), ...files.filter((f) => f.kind === 'pdf')]
-    for (const f of ordered) {
-      try {
-        await reindexPath(f.path)
-      } catch (e) {
-        console.warn('[search] failed to index', f.path, e)
+    const files = flattenFiles(await getTree()).filter((f) => f.kind === 'note' || f.kind === 'pdf')
+    const present = new Set(files.map((f) => f.path))
+    for (const path of Object.keys(manifest)) {
+      if (!present.has(path)) {
+        b.remove(path)
+        delete manifest[path]
       }
+    }
+    // Notes first so search works right away, PDFs can take longer to extract
+    for (const kind of ['note', 'pdf']) {
+      for (const f of files.filter((x) => x.kind === kind)) {
+        try {
+          const sig = await signature(f.path)
+          if (sig && manifest[f.path] === sig) continue
+          await reindexNow(f.path, false)
+        } catch (e) {
+          console.warn('[search] failed to index', f.path, e)
+        }
+      }
+      b.commit()
+      saveManifest()
     }
   })()
   return building
@@ -192,10 +333,12 @@ export function buildIndex(): Promise<void> {
 
 export const indexReady = () => building ?? Promise.resolve()
 
-export function search(q: string, limit = 20, filter?: (path: string) => boolean): (Chunk & { score: number })[] {
+/** Which index answers: Tide's Rust module, or the in-memory fallback */
+export const searchEngine = (): 'tantivy' | 'memory' => (ready(), manifestFile ? 'tantivy' : 'memory')
+
+export function search(q: string, limit = 20, filter?: (path: string) => boolean): Hit[] {
   if (!q.trim()) return []
-  const results = index.search(q, filter ? { filter: (r) => filter(r.path as string) } : undefined)
-  return results.slice(0, limit) as unknown as (Chunk & { score: number })[]
+  return ready().search(q, limit, filter ? allChunkPaths().filter(filter) : undefined)
 }
 
 export function searchHits(q: string, limit = 20): SearchHit[] {
@@ -214,9 +357,10 @@ export function searchHits(q: string, limit = 20): SearchHit[] {
   return [...seen.values()]
 }
 
-export const getChunks = (path: string) => chunksByPath.get(path) ?? []
+/** A file's passages in reading order: all of them, or only the first few */
+export const getChunks = (path: string, limit?: number): Chunk[] => ready().chunks(path, limit)
 
-export const allChunkPaths = () => [...chunksByPath.keys()]
+export const allChunkPaths = () => (ready(), Object.keys(manifest))
 
 function makeSnippet(text: string, q: string): string {
   const flat = text.replace(/\s+/g, ' ')

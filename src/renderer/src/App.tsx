@@ -35,6 +35,7 @@ import { Icon } from './components/Icon'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { vaultUrl } from './lib/markdown'
 import { followModelBusy } from './lib/motion'
+import { measureRendering } from './lib/renderMeter'
 // The heavy views (PDF reader, terminal, code editor, canvas, graph, drills) load when first opened,
 // not with the window: Tide opens faster and holds less in memory until you need them
 const PdfView = lazy(() => import('./components/PdfView').then((m) => ({ default: m.PdfView })))
@@ -139,6 +140,8 @@ function ImageView({ path }: { path: string }) {
 export default function App() {
   // Decoration holds still while the model works: the GPU is Gemma's
   useEffect(() => followModelBusy(), [])
+  // How long each streamed answer takes to draw, for Settings › Speed
+  useEffect(() => measureRendering(), [])
   // The notes folder moved: Tide followed it (reload to read it afresh), or asks where it went
   useEffect(() => {
     const offMoved = window.tideEvents.onVaultMoved((path) => {

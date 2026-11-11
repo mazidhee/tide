@@ -3,3 +3,5 @@ out
 dist
 .DS_Store
 dist
+native/tide-core/target
+native/tide-core/tide-core.node

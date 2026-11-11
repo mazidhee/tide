@@ -403,6 +403,21 @@ export interface ReadAlongNote {
   rewrite?: string
 }
 
+/** Where one answer's time went (Settings › Speed) */
+export interface TurnSpeed {
+  id: string
+  at: number
+  kind: 'chat' | 'lesson'
+  /** From pressing send to the first model request: Tide's own work */
+  prepareMs: number
+  /** Each model request: reading the prompt (to the first token), then writing */
+  calls: { engine: 'local' | 'cloud'; model: string; prefillMs: number; writeMs: number; tokens: number; promptTokens?: number; cachedTokens?: number; /** Tide's work on the stream, all tokens together */ tideMs: number }[]
+  tools: { name: string; ms: number }[]
+  totalMs: number
+  /** The window drawing the answer as it arrived */
+  render?: { frames: number; totalMs: number; longestMs: number }
+}
+
 export type ChatEvent =
   | { id: string; type: 'sources'; sources: ContextSource[] }
   | { id: string; type: 'delta'; text: string }
@@ -608,6 +623,12 @@ export interface TideApi {
   }
   /** Your goal and focus, the week planned towards them, and the learner profile */
   /** Every service Tide connects to, with its state and use (main/connections) */
+  speed: {
+    /** Where the last answers' time went */
+    recent(): Promise<TurnSpeed[]>
+    /** The window's report on drawing one streamed answer */
+    render(id: string, r: NonNullable<TurnSpeed['render']>): Promise<void>
+  }
   connections: {
     list(fresh?: boolean): Promise<import('./connections').Connection[]>
     /** Saves (or, with null, forgets) the key for a connection added from the Connections page */

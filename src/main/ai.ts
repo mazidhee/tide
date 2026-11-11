@@ -175,7 +175,7 @@ export async function retrieve(scope: ChatScope, query: string): Promise<Context
     if (chunks.length < 3) {
       // Generic questions ("summarize this") match few terms, fall back to reading order
       const paths = scope.kind === 'note' ? [scope.path, ...filed] : allChunkPaths().filter(within)
-      const extra = paths.flatMap((p) => getChunks(p).slice(0, scope.kind === 'note' ? 50 : 2))
+      const extra = paths.flatMap((p) => getChunks(p, scope.kind === 'note' ? 50 : 2))
       chunks = [...chunks, ...extra.filter((c) => !chunks.some((h) => h.id === c.id))]
     }
   }
