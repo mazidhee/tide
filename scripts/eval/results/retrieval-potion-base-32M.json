@@ -1,0 +1,5720 @@
+{
+  "build_s": 1.558571375,
+  "built_bytes_of_text": 13063517,
+  "built_passages": 11840,
+  "exact_vectors": {
+    "bytes": 24248320,
+    "hit3": {
+      "all": 56,
+      "keyword": 46,
+      "paraphrase": 10
+    },
+    "hit8": {
+      "all": 64,
+      "keyword": 47,
+      "paraphrase": 17
+    },
+    "mrr8_sum": {
+      "all": 48.75119047619048,
+      "keyword": 39.25,
+      "paraphrase": 9.501190476190478
+    }
+  },
+  "index_mb": 17.363398551940918,
+  "model": "potion-base-32M",
+  "open_ms": 56.1025,
+  "passages": 11840,
+  "per_question": [
+    {
+      "book": "Computer Systems: A Programmer's Perspective",
+      "kind": "keyword",
+      "page": 96,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "What are the smallest and largest values a w-bit two's-complement number can represent, and which bit vectors give TMin and TMax?",
+      "top": {
+        "fused k=10 w=1": [
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p101"
+        ],
+        "fused k=20 w=0.5": [
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p104"
+        ],
+        "fused k=60 w=0.5": [
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p104"
+        ],
+        "fused k=60 w=1": [
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p101"
+        ],
+        "fused k=60 w=2": [
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p101"
+        ],
+        "vectors only": [
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p101"
+        ],
+        "words (BM25, today)": [
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p97"
+        ],
+        "words top 50, reranked": [
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p101"
+        ]
+      }
+    },
+    {
+      "book": "Computer Systems: A Programmer's Perspective",
+      "kind": "paraphrase",
+      "page": 293,
+      "place": {
+        "fused k=10 w=1": 14,
+        "fused k=20 w=0.5": 32,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 21,
+        "fused k=60 w=2": 20,
+        "vectors only": 4,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "If a C function reads a line of typed text into a small local character array and the user types far more than fits, what exactly gets damaged and how does the program go wrong as the input gets longer?",
+      "top": {
+        "fused k=10 w=1": [
+          "C Programming Language - 2nd p31",
+          "C Programming Language - 2nd p18",
+          "C Programming Language - 2nd p71"
+        ],
+        "fused k=20 w=0.5": [
+          "C Programming Language - 2nd p31",
+          "C Programming Language - 2nd p18",
+          "C Programming Language - 2nd p71"
+        ],
+        "fused k=60 w=0.5": [
+          "C Programming Language - 2nd p31",
+          "C Programming Language - 2nd p18",
+          "C Programming Language - 2nd p71"
+        ],
+        "fused k=60 w=1": [
+          "C Programming Language - 2nd p31",
+          "C Programming Language - 2nd p18",
+          "C Programming Language - 2nd p71"
+        ],
+        "fused k=60 w=2": [
+          "C Programming Language - 2nd p31",
+          "C Programming Language - 2nd p18",
+          "C Programming Language - 2nd p225"
+        ],
+        "vectors only": [
+          "C Programming Language - 2nd p31",
+          "C Programming Language - 2nd p18",
+          "C Programming Language - 2nd p140"
+        ],
+        "words (BM25, today)": [
+          "C Programming Language - 2nd p31",
+          "C Programming Language - 2nd p18",
+          "C Programming Language - 2nd p71"
+        ],
+        "words top 50, reranked": [
+          "C Programming Language - 2nd p31",
+          "C Programming Language - 2nd p18",
+          "C Programming Language - 2nd p225"
+        ]
+      }
+    },
+    {
+      "book": "Computer Systems: A Programmer's Perspective",
+      "kind": "keyword",
+      "page": 529,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "Why can't the compiler turn combine3 into combine4 on its own and accumulate the result in a register? What does memory aliasing have to do with it?",
+      "top": {
+        "fused k=10 w=1": [
+          "Computer Systems: A Programm p529",
+          "Computer Systems: A Programm p529",
+          "Computer Systems: A Programm p527"
+        ],
+        "fused k=20 w=0.5": [
+          "Computer Systems: A Programm p529",
+          "Computer Systems: A Programm p529",
+          "Computer Systems: A Programm p527"
+        ],
+        "fused k=60 w=0.5": [
+          "Computer Systems: A Programm p529",
+          "Computer Systems: A Programm p529",
+          "Computer Systems: A Programm p527"
+        ],
+        "fused k=60 w=1": [
+          "Computer Systems: A Programm p529",
+          "Computer Systems: A Programm p529",
+          "Computer Systems: A Programm p527"
+        ],
+        "fused k=60 w=2": [
+          "Computer Systems: A Programm p529",
+          "Computer Systems: A Programm p529",
+          "Computer Systems: A Programm p527"
+        ],
+        "vectors only": [
+          "Computer Systems: A Programm p529",
+          "Computer Systems: A Programm p529",
+          "Computer Systems: A Programm p555"
+        ],
+        "words (BM25, today)": [
+          "Computer Systems: A Programm p529",
+          "Computer Systems: A Programm p530",
+          "Computer Systems: A Programm p528"
+        ],
+        "words top 50, reranked": [
+          "Computer Systems: A Programm p529",
+          "Computer Systems: A Programm p529",
+          "Computer Systems: A Programm p527"
+        ]
+      }
+    },
+    {
+      "book": "Computer Systems: A Programmer's Perspective",
+      "kind": "paraphrase",
+      "page": 621,
+      "place": {
+        "fused k=10 w=1": 0,
+        "fused k=20 w=0.5": 0,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 0,
+        "fused k=60 w=2": 34,
+        "vectors only": 32,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "Why did chip makers give up on making one processor run faster and faster and start putting several smaller ones on the same chip instead?",
+      "top": {
+        "fused k=10 w=1": [
+          "Computer Systems: A Programm p47",
+          "Computer Systems: A Programm p194",
+          "Computer Systems: A Programm p193"
+        ],
+        "fused k=20 w=0.5": [
+          "Computer Systems: A Programm p47",
+          "Computer Systems: A Programm p194",
+          "Computer Systems: A Programm p193"
+        ],
+        "fused k=60 w=0.5": [
+          "Computer Systems: A Programm p47",
+          "Computer Systems: A Programm p194",
+          "Computer Systems: A Programm p193"
+        ],
+        "fused k=60 w=1": [
+          "Computer Systems: A Programm p47",
+          "Computer Systems: A Programm p194",
+          "Computer Systems: A Programm p192"
+        ],
+        "fused k=60 w=2": [
+          "Computer Systems: A Programm p194",
+          "Computer Systems: A Programm p47",
+          "Computer Systems: A Programm p192"
+        ],
+        "vectors only": [
+          "Computer Systems: A Programm p194",
+          "Computer Systems: A Programm p47",
+          "Computer Systems: A Programm p369"
+        ],
+        "words (BM25, today)": [
+          "Computer Systems: A Programm p193",
+          "Computer Systems: A Programm p47",
+          "Computer Systems: A Programm p48"
+        ],
+        "words top 50, reranked": [
+          "Computer Systems: A Programm p194",
+          "Computer Systems: A Programm p47",
+          "Computer Systems: A Programm p369"
+        ]
+      }
+    },
+    {
+      "book": "Computer Systems: A Programmer's Perspective",
+      "kind": "keyword",
+      "page": 708,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "What is in an ELF relocation entry, and how do the relocation types R_386_PC32 and R_386_32 differ?",
+      "top": {
+        "fused k=10 w=1": [
+          "Computer Systems: A Programm p708",
+          "Computer Systems: A Programm p709",
+          "Computer Systems: A Programm p730"
+        ],
+        "fused k=20 w=0.5": [
+          "Computer Systems: A Programm p708",
+          "Computer Systems: A Programm p709",
+          "Computer Systems: A Programm p730"
+        ],
+        "fused k=60 w=0.5": [
+          "Computer Systems: A Programm p708",
+          "Computer Systems: A Programm p709",
+          "Computer Systems: A Programm p730"
+        ],
+        "fused k=60 w=1": [
+          "Computer Systems: A Programm p708",
+          "Computer Systems: A Programm p709",
+          "Computer Systems: A Programm p730"
+        ],
+        "fused k=60 w=2": [
+          "Computer Systems: A Programm p708",
+          "Computer Systems: A Programm p709",
+          "Computer Systems: A Programm p730"
+        ],
+        "vectors only": [
+          "Computer Systems: A Programm p708",
+          "Computer Systems: A Programm p709",
+          "Computer Systems: A Programm p730"
+        ],
+        "words (BM25, today)": [
+          "Computer Systems: A Programm p708",
+          "Computer Systems: A Programm p709",
+          "Computer Systems: A Programm p730"
+        ],
+        "words top 50, reranked": [
+          "Computer Systems: A Programm p708",
+          "Computer Systems: A Programm p709",
+          "Computer Systems: A Programm p730"
+        ]
+      }
+    },
+    {
+      "book": "Computer Systems: A Programmer's Perspective",
+      "kind": "keyword",
+      "page": 779,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "How do I install a signal handler with the signal function so my program catches SIGINT instead of being terminated when the user types ctrl-c?",
+      "top": {
+        "fused k=10 w=1": [
+          "Computer Systems: A Programm p779",
+          "Computer Systems: A Programm p780",
+          "C Programming Language - 2nd p232"
+        ],
+        "fused k=20 w=0.5": [
+          "Computer Systems: A Programm p779",
+          "Computer Systems: A Programm p780",
+          "Computer Systems: A Programm p779"
+        ],
+        "fused k=60 w=0.5": [
+          "Computer Systems: A Programm p779",
+          "Computer Systems: A Programm p780",
+          "Computer Systems: A Programm p779"
+        ],
+        "fused k=60 w=1": [
+          "Computer Systems: A Programm p779",
+          "Computer Systems: A Programm p780",
+          "C Programming Language - 2nd p232"
+        ],
+        "fused k=60 w=2": [
+          "Computer Systems: A Programm p779",
+          "Computer Systems: A Programm p780",
+          "C Programming Language - 2nd p232"
+        ],
+        "vectors only": [
+          "Computer Systems: A Programm p779",
+          "Computer Systems: A Programm p780",
+          "C Programming Language - 2nd p232"
+        ],
+        "words (BM25, today)": [
+          "Computer Systems: A Programm p779",
+          "Computer Systems: A Programm p795",
+          "Computer Systems: A Programm p779"
+        ],
+        "words top 50, reranked": [
+          "Computer Systems: A Programm p779",
+          "Computer Systems: A Programm p780",
+          "C Programming Language - 2nd p232"
+        ]
+      }
+    },
+    {
+      "book": "Computer Systems: A Programmer's Perspective",
+      "kind": "paraphrase",
+      "page": 926,
+      "place": {
+        "fused k=10 w=1": 49,
+        "fused k=20 w=0.5": 0,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 49,
+        "fused k=60 w=2": 25,
+        "vectors only": 25,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "When a message has to cross from one local network to a different kind of local network through the box that joins them, what happens to the wrappers around the data on the way, and what does the receiving machine do with them?",
+      "top": {
+        "fused k=10 w=1": [
+          "Designing Data-Intensive App p300",
+          "introduction-to-algorithms-a p249",
+          "Designing Data-Intensive App p159"
+        ],
+        "fused k=20 w=0.5": [
+          "introduction-to-algorithms-a p249",
+          "introduction-to-algorithms-a p217",
+          "introduction-to-algorithms-a p212"
+        ],
+        "fused k=60 w=0.5": [
+          "introduction-to-algorithms-a p249",
+          "introduction-to-algorithms-a p217",
+          "introduction-to-algorithms-a p212"
+        ],
+        "fused k=60 w=1": [
+          "Designing Data-Intensive App p309",
+          "Designing Data-Intensive App p300",
+          "introduction-to-algorithms-a p249"
+        ],
+        "fused k=60 w=2": [
+          "Designing Data-Intensive App p309",
+          "Designing Data-Intensive App p300",
+          "Designing Data-Intensive App p159"
+        ],
+        "vectors only": [
+          "Designing Data-Intensive App p300",
+          "Designing Data-Intensive App p159",
+          "Designing Data-Intensive App p301"
+        ],
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p249",
+          "introduction-to-algorithms-a p217",
+          "introduction-to-algorithms-a p212"
+        ],
+        "words top 50, reranked": [
+          "Designing Data-Intensive App p309",
+          "Designing Data-Intensive App p530",
+          "introduction-to-algorithms-a p21"
+        ]
+      }
+    },
+    {
+      "book": "Computer Systems: A Programmer's Perspective",
+      "kind": "paraphrase",
+      "page": 1011,
+      "place": {
+        "fused k=10 w=1": 0,
+        "fused k=20 w=0.5": 0,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 0,
+        "fused k=60 w=2": 32,
+        "vectors only": 32,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "I split a big summation across more workers than my machine has processors and it stopped getting faster, even got a little slower. Why doesn't adding more keep helping?",
+      "top": {
+        "fused k=10 w=1": [
+          "Computer Systems: A Programm p620",
+          "Fluent Python p749",
+          "Computer Systems: A Programm p1013"
+        ],
+        "fused k=20 w=0.5": [
+          "Computer Systems: A Programm p620",
+          "introduction-to-algorithms-a p324",
+          "Linear Algebra and Its Appli p10"
+        ],
+        "fused k=60 w=0.5": [
+          "Computer Systems: A Programm p620",
+          "Fluent Python p749",
+          "introduction-to-algorithms-a p324"
+        ],
+        "fused k=60 w=1": [
+          "Computer Systems: A Programm p620",
+          "Fluent Python p749",
+          "Computer Systems: A Programm p1013"
+        ],
+        "fused k=60 w=2": [
+          "Computer Systems: A Programm p620",
+          "Fluent Python p749",
+          "Computer Systems: A Programm p1013"
+        ],
+        "vectors only": [
+          "Computer Systems: A Programm p1013",
+          "Designing Data-Intensive App p39",
+          "Fluent Python p749"
+        ],
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p324",
+          "Linear Algebra and Its Appli p10",
+          "introduction-to-algorithms-a p67"
+        ],
+        "words top 50, reranked": [
+          "Fluent Python p749",
+          "Computer Systems: A Programm p620",
+          "introduction-to-algorithms-a p67"
+        ]
+      }
+    },
+    {
+      "book": "The C Programming Language",
+      "kind": "keyword",
+      "page": 42,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 3,
+        "words (BM25, today)": 2,
+        "words top 50, reranked": 2
+      },
+      "question": "When a char is converted to an int in C, can the result be negative? Is char signed or unsigned, and what is sign extension here?",
+      "top": {
+        "fused k=10 w=1": [
+          "C Programming Language - 2nd p43",
+          "C Programming Language - 2nd p174",
+          "C Programming Language - 2nd p172"
+        ],
+        "fused k=20 w=0.5": [
+          "C Programming Language - 2nd p43",
+          "C Programming Language - 2nd p174",
+          "C Programming Language - 2nd p42"
+        ],
+        "fused k=60 w=0.5": [
+          "C Programming Language - 2nd p43",
+          "C Programming Language - 2nd p174",
+          "C Programming Language - 2nd p42"
+        ],
+        "fused k=60 w=1": [
+          "C Programming Language - 2nd p43",
+          "C Programming Language - 2nd p174",
+          "C Programming Language - 2nd p172"
+        ],
+        "fused k=60 w=2": [
+          "C Programming Language - 2nd p43",
+          "C Programming Language - 2nd p172",
+          "Computer Systems: A Programm p104"
+        ],
+        "vectors only": [
+          "Computer Systems: A Programm p211",
+          "Computer Systems: A Programm p104",
+          "C Programming Language - 2nd p43"
+        ],
+        "words (BM25, today)": [
+          "C Programming Language - 2nd p174",
+          "C Programming Language - 2nd p43",
+          "C Programming Language - 2nd p42"
+        ],
+        "words top 50, reranked": [
+          "Computer Systems: A Programm p104",
+          "C Programming Language - 2nd p43",
+          "C Programming Language - 2nd p172"
+        ]
+      }
+    },
+    {
+      "book": "The C Programming Language",
+      "kind": "paraphrase",
+      "page": 76,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 2,
+        "fused k=60 w=0.5": 3,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 13,
+        "words top 50, reranked": 1
+      },
+      "question": "If I declare a variable inside the curly braces of an if, using the same name as one that already exists further out, are they the same variable? How long does the inner one live?",
+      "top": {
+        "fused k=10 w=1": [
+          "C Programming Language - 2nd p76",
+          "Anthony Shaw - CPython Inter p383",
+          "C Programming Language - 2nd p52"
+        ],
+        "fused k=20 w=0.5": [
+          "Anthony Shaw - CPython Inter p383",
+          "C Programming Language - 2nd p76",
+          "C Programming Language - 2nd p52"
+        ],
+        "fused k=60 w=0.5": [
+          "Anthony Shaw - CPython Inter p383",
+          "C Programming Language - 2nd p52",
+          "C Programming Language - 2nd p76"
+        ],
+        "fused k=60 w=1": [
+          "C Programming Language - 2nd p76",
+          "Anthony Shaw - CPython Inter p383",
+          "C Programming Language - 2nd p52"
+        ],
+        "fused k=60 w=2": [
+          "C Programming Language - 2nd p76",
+          "Anthony Shaw - CPython Inter p383",
+          "Computer Systems: A Programm p991"
+        ],
+        "vectors only": [
+          "C Programming Language - 2nd p76",
+          "C Programming Language - 2nd p75",
+          "C Programming Language - 2nd p32"
+        ],
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p70",
+          "Scott Meyers-Effective Moder p85",
+          "Scott Meyers-Effective Moder p226"
+        ],
+        "words top 50, reranked": [
+          "C Programming Language - 2nd p76",
+          "Computer Systems: A Programm p991",
+          "Anthony Shaw - CPython Inter p383"
+        ]
+      }
+    },
+    {
+      "book": "The C Programming Language",
+      "kind": "keyword",
+      "page": 89,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "What is the relationship between array indexing and pointer arithmetic in C: is a[i] really the same as *(a+i), and how is an array name different from a pointer?",
+      "top": {
+        "fused k=10 w=1": [
+          "C Programming Language - 2nd p89",
+          "C Programming Language - 2nd p90",
+          "Computer Systems: A Programm p287"
+        ],
+        "fused k=20 w=0.5": [
+          "C Programming Language - 2nd p89",
+          "C Programming Language - 2nd p90",
+          "Computer Systems: A Programm p287"
+        ],
+        "fused k=60 w=0.5": [
+          "C Programming Language - 2nd p89",
+          "C Programming Language - 2nd p90",
+          "Computer Systems: A Programm p287"
+        ],
+        "fused k=60 w=1": [
+          "C Programming Language - 2nd p89",
+          "C Programming Language - 2nd p90",
+          "Computer Systems: A Programm p287"
+        ],
+        "fused k=60 w=2": [
+          "C Programming Language - 2nd p89",
+          "C Programming Language - 2nd p90",
+          "Computer Systems: A Programm p287"
+        ],
+        "vectors only": [
+          "C Programming Language - 2nd p90",
+          "Computer Systems: A Programm p287",
+          "C Programming Language - 2nd p89"
+        ],
+        "words (BM25, today)": [
+          "C Programming Language - 2nd p89",
+          "Scott Meyers-Effective Moder p67",
+          "C Programming Language - 2nd p87"
+        ],
+        "words top 50, reranked": [
+          "C Programming Language - 2nd p90",
+          "Computer Systems: A Programm p287",
+          "C Programming Language - 2nd p89"
+        ]
+      }
+    },
+    {
+      "book": "The C Programming Language",
+      "kind": "paraphrase",
+      "page": 117,
+      "place": {
+        "fused k=10 w=1": 0,
+        "fused k=20 w=0.5": 0,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 0,
+        "fused k=60 w=2": 0,
+        "vectors only": 0,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "In C, when I hand a function one of those grouped records with a couple of named members and the function changes a member, does my original get changed too? And is there a cheaper way to hand over a big one?",
+      "top": {
+        "fused k=10 w=1": [
+          "Scott Meyers-Effective Moder p132",
+          "Scott Meyers-Effective Moder p67",
+          "Scott Meyers-Effective Moder p93"
+        ],
+        "fused k=20 w=0.5": [
+          "Scott Meyers-Effective Moder p132",
+          "Scott Meyers-Effective Moder p67",
+          "Scott Meyers-Effective Moder p105"
+        ],
+        "fused k=60 w=0.5": [
+          "Scott Meyers-Effective Moder p132",
+          "Scott Meyers-Effective Moder p23",
+          "Scott Meyers-Effective Moder p92"
+        ],
+        "fused k=60 w=1": [
+          "Scott Meyers-Effective Moder p132",
+          "Scott Meyers-Effective Moder p23",
+          "Scott Meyers-Effective Moder p92"
+        ],
+        "fused k=60 w=2": [
+          "Scott Meyers-Effective Moder p132",
+          "Scott Meyers-Effective Moder p23",
+          "Scott Meyers-Effective Moder p92"
+        ],
+        "vectors only": [
+          "Scott Meyers-Effective Moder p93",
+          "pythoncrashcourse p182",
+          "pythoncrashcourse p180"
+        ],
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p67",
+          "Scott Meyers-Effective Moder p105",
+          "Scott Meyers-Effective Moder p101"
+        ],
+        "words top 50, reranked": [
+          "Scott Meyers-Effective Moder p132",
+          "Scott Meyers-Effective Moder p23",
+          "Scott Meyers-Effective Moder p92"
+        ]
+      }
+    },
+    {
+      "book": "The C Programming Language",
+      "kind": "paraphrase",
+      "page": 151,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 3,
+        "vectors only": 5,
+        "words (BM25, today)": 2,
+        "words top 50, reranked": 3
+      },
+      "question": "How come a C program on UNIX can read what I type and print to the screen with the very same calls it uses for things stored on disk?",
+      "top": {
+        "fused k=10 w=1": [
+          "C Programming Language - 2nd p151",
+          "C Programming Language - 2nd p142",
+          "Computer Systems: A Programm p42"
+        ],
+        "fused k=20 w=0.5": [
+          "C Programming Language - 2nd p151",
+          "C Programming Language - 2nd p142",
+          "Computer Systems: A Programm p42"
+        ],
+        "fused k=60 w=0.5": [
+          "C Programming Language - 2nd p151",
+          "C Programming Language - 2nd p142",
+          "Computer Systems: A Programm p42"
+        ],
+        "fused k=60 w=1": [
+          "C Programming Language - 2nd p151",
+          "C Programming Language - 2nd p142",
+          "Computer Systems: A Programm p42"
+        ],
+        "fused k=60 w=2": [
+          "C Programming Language - 2nd p142",
+          "Computer Systems: A Programm p42",
+          "C Programming Language - 2nd p151"
+        ],
+        "vectors only": [
+          "Computer Systems: A Programm p916",
+          "Computer Systems: A Programm p42",
+          "Computer Systems: A Programm p915"
+        ],
+        "words (BM25, today)": [
+          "C Programming Language - 2nd p18",
+          "C Programming Language - 2nd p151",
+          "C Programming Language - 2nd p142"
+        ],
+        "words top 50, reranked": [
+          "Computer Systems: A Programm p42",
+          "C Programming Language - 2nd p142",
+          "C Programming Language - 2nd p151"
+        ]
+      }
+    },
+    {
+      "book": "The C Programming Language",
+      "kind": "keyword",
+      "page": 164,
+      "place": {
+        "fused k=10 w=1": 2,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 2,
+        "fused k=60 w=2": 2,
+        "vectors only": 2,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 2
+      },
+      "question": "How does the K&R malloc keep its free list of blocks, and what does the first fit algorithm do when a block is too big or when a block is freed?",
+      "top": {
+        "fused k=10 w=1": [
+          "Computer Systems: A Programm p857",
+          "C Programming Language - 2nd p164",
+          "Computer Systems: A Programm p855"
+        ],
+        "fused k=20 w=0.5": [
+          "C Programming Language - 2nd p164",
+          "Computer Systems: A Programm p857",
+          "Computer Systems: A Programm p855"
+        ],
+        "fused k=60 w=0.5": [
+          "C Programming Language - 2nd p164",
+          "Computer Systems: A Programm p857",
+          "Computer Systems: A Programm p855"
+        ],
+        "fused k=60 w=1": [
+          "Computer Systems: A Programm p857",
+          "C Programming Language - 2nd p164",
+          "Computer Systems: A Programm p855"
+        ],
+        "fused k=60 w=2": [
+          "Computer Systems: A Programm p857",
+          "C Programming Language - 2nd p164",
+          "Computer Systems: A Programm p855"
+        ],
+        "vectors only": [
+          "Computer Systems: A Programm p857",
+          "C Programming Language - 2nd p164",
+          "Computer Systems: A Programm p858"
+        ],
+        "words (BM25, today)": [
+          "C Programming Language - 2nd p164",
+          "Computer Systems: A Programm p857",
+          "Computer Systems: A Programm p888"
+        ],
+        "words top 50, reranked": [
+          "Computer Systems: A Programm p857",
+          "C Programming Language - 2nd p164",
+          "Computer Systems: A Programm p858"
+        ]
+      }
+    },
+    {
+      "book": "Effective Modern C++",
+      "kind": "keyword",
+      "page": 63,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "What is a proxy class in C++, and why are std::vector<bool>::reference and expression templates called invisible proxies?",
+      "top": {
+        "fused k=10 w=1": [
+          "Scott Meyers-Effective Moder p63",
+          "Scott Meyers-Effective Moder p64",
+          "Scott Meyers-Effective Moder p61"
+        ],
+        "fused k=20 w=0.5": [
+          "Scott Meyers-Effective Moder p63",
+          "Scott Meyers-Effective Moder p64",
+          "Scott Meyers-Effective Moder p63"
+        ],
+        "fused k=60 w=0.5": [
+          "Scott Meyers-Effective Moder p63",
+          "Scott Meyers-Effective Moder p64",
+          "Scott Meyers-Effective Moder p63"
+        ],
+        "fused k=60 w=1": [
+          "Scott Meyers-Effective Moder p63",
+          "Scott Meyers-Effective Moder p64",
+          "Scott Meyers-Effective Moder p61"
+        ],
+        "fused k=60 w=2": [
+          "Scott Meyers-Effective Moder p63",
+          "Scott Meyers-Effective Moder p64",
+          "Scott Meyers-Effective Moder p61"
+        ],
+        "vectors only": [
+          "Scott Meyers-Effective Moder p63",
+          "Scott Meyers-Effective Moder p64",
+          "Scott Meyers-Effective Moder p61"
+        ],
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p63",
+          "Scott Meyers-Effective Moder p64",
+          "Scott Meyers-Effective Moder p63"
+        ],
+        "words top 50, reranked": [
+          "Scott Meyers-Effective Moder p63",
+          "Scott Meyers-Effective Moder p64",
+          "Scott Meyers-Effective Moder p61"
+        ]
+      }
+    },
+    {
+      "book": "Effective Modern C++",
+      "kind": "keyword",
+      "page": 96,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 2,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 2
+      },
+      "question": "Why are deleted functions better than the C++98 trick of declaring a function private and not defining it, for example when disabling a template specialization inside a class?",
+      "top": {
+        "fused k=10 w=1": [
+          "Scott Meyers-Effective Moder p96",
+          "Scott Meyers-Effective Moder p93",
+          "Scott Meyers-Effective Moder p23"
+        ],
+        "fused k=20 w=0.5": [
+          "Scott Meyers-Effective Moder p96",
+          "Scott Meyers-Effective Moder p93",
+          "Scott Meyers-Effective Moder p95"
+        ],
+        "fused k=60 w=0.5": [
+          "Scott Meyers-Effective Moder p96",
+          "Scott Meyers-Effective Moder p93",
+          "Scott Meyers-Effective Moder p323"
+        ],
+        "fused k=60 w=1": [
+          "Scott Meyers-Effective Moder p96",
+          "Scott Meyers-Effective Moder p93",
+          "Scott Meyers-Effective Moder p323"
+        ],
+        "fused k=60 w=2": [
+          "Scott Meyers-Effective Moder p96",
+          "Scott Meyers-Effective Moder p93",
+          "Scott Meyers-Effective Moder p23"
+        ],
+        "vectors only": [
+          "Scott Meyers-Effective Moder p23",
+          "Scott Meyers-Effective Moder p96",
+          "Scott Meyers-Effective Moder p93"
+        ],
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p96",
+          "Scott Meyers-Effective Moder p93",
+          "Scott Meyers-Effective Moder p95"
+        ],
+        "words top 50, reranked": [
+          "Scott Meyers-Effective Moder p23",
+          "Scott Meyers-Effective Moder p96",
+          "Scott Meyers-Effective Moder p93"
+        ]
+      }
+    },
+    {
+      "book": "Effective Modern C++",
+      "kind": "paraphrase",
+      "page": 162,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 10,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "I created a reference-counted object with the one-step helper instead of calling new myself. Why can the storage for the object stay occupied long after the last owner is gone and it has been destroyed?",
+      "top": {
+        "fused k=10 w=1": [
+          "Scott Meyers-Effective Moder p162",
+          "Fluent Python p250",
+          "A Survey of Number Represent p222"
+        ],
+        "fused k=20 w=0.5": [
+          "Scott Meyers-Effective Moder p162",
+          "A Survey of Number Represent p222",
+          "A Survey of Number Represent p84"
+        ],
+        "fused k=60 w=0.5": [
+          "Scott Meyers-Effective Moder p162",
+          "A Survey of Number Represent p222",
+          "A Survey of Number Represent p84"
+        ],
+        "fused k=60 w=1": [
+          "Scott Meyers-Effective Moder p162",
+          "Fluent Python p250",
+          "A Survey of Number Represent p222"
+        ],
+        "fused k=60 w=2": [
+          "Scott Meyers-Effective Moder p162",
+          "Fluent Python p250",
+          "Anthony Shaw - CPython Inter p223"
+        ],
+        "vectors only": [
+          "Fluent Python p250",
+          "Anthony Shaw - CPython Inter p223",
+          "Fluent Python p250"
+        ],
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p162",
+          "A Survey of Number Represent p222",
+          "A Survey of Number Represent p84"
+        ],
+        "words top 50, reranked": [
+          "Scott Meyers-Effective Moder p162",
+          "Scott Meyers-Effective Moder p146",
+          "Designing Data-Intensive App p469"
+        ]
+      }
+    },
+    {
+      "book": "Effective Modern C++",
+      "kind": "paraphrase",
+      "page": 189,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 8,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "Instead of one templated setter that accepts anything, I wrote two versions, one for named objects and one for temporaries. Is that slower when I call it with a quoted piece of text?",
+      "top": {
+        "fused k=10 w=1": [
+          "Scott Meyers-Effective Moder p189",
+          "Fluent Python p135",
+          "A Survey of Number Represent p27"
+        ],
+        "fused k=20 w=0.5": [
+          "Scott Meyers-Effective Moder p189",
+          "A Survey of Number Represent p27",
+          "A Survey of Number Represent p28"
+        ],
+        "fused k=60 w=0.5": [
+          "Scott Meyers-Effective Moder p189",
+          "A Survey of Number Represent p27",
+          "A Survey of Number Represent p28"
+        ],
+        "fused k=60 w=1": [
+          "Scott Meyers-Effective Moder p189",
+          "Fluent Python p135",
+          "A Survey of Number Represent p27"
+        ],
+        "fused k=60 w=2": [
+          "Scott Meyers-Effective Moder p189",
+          "Fluent Python p135",
+          "Scott Meyers-Effective Moder p75"
+        ],
+        "vectors only": [
+          "Fluent Python p135",
+          "Scott Meyers-Effective Moder p75",
+          "Fluent Python p289"
+        ],
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p189",
+          "A Survey of Number Represent p27",
+          "A Survey of Number Represent p28"
+        ],
+        "words top 50, reranked": [
+          "Scott Meyers-Effective Moder p189",
+          "Scott Meyers-Effective Moder p196",
+          "Scott Meyers-Effective Moder p204"
+        ]
+      }
+    },
+    {
+      "book": "Effective Modern C++",
+      "kind": "paraphrase",
+      "page": 229,
+      "place": {
+        "fused k=10 w=1": 9,
+        "fused k=20 w=0.5": 6,
+        "fused k=60 w=0.5": 7,
+        "fused k=60 w=1": 10,
+        "fused k=60 w=2": 14,
+        "vectors only": 14,
+        "words (BM25, today)": 5,
+        "words top 50, reranked": 19
+      },
+      "question": "A constant number I declared with its value right inside the class works everywhere, but when I pass it through a generic wrapper that hands its arguments on to another function, the build fails at the link step. What's going on and how do I fix it?",
+      "top": {
+        "fused k=10 w=1": [
+          "Computer Systems: A Programm p1034",
+          "Fluent Python p270",
+          "A Survey of Number Represent p223"
+        ],
+        "fused k=20 w=0.5": [
+          "Computer Systems: A Programm p1034",
+          "A Survey of Number Represent p223",
+          "Data Engineering with Python p268"
+        ],
+        "fused k=60 w=0.5": [
+          "Computer Systems: A Programm p1034",
+          "A Survey of Number Represent p223",
+          "Scott Meyers-Effective Moder p226"
+        ],
+        "fused k=60 w=1": [
+          "Computer Systems: A Programm p1034",
+          "Scott Meyers-Effective Moder p226",
+          "Fluent Python p270"
+        ],
+        "fused k=60 w=2": [
+          "Computer Systems: A Programm p1034",
+          "Scott Meyers-Effective Moder p226",
+          "Fluent Python p270"
+        ],
+        "vectors only": [
+          "Fluent Python p270",
+          "Fluent Python p470",
+          "Computer Systems: A Programm p1034"
+        ],
+        "words (BM25, today)": [
+          "A Survey of Number Represent p223",
+          "Data Engineering with Python p268",
+          "Data Engineering with Python p194"
+        ],
+        "words top 50, reranked": [
+          "Computer Systems: A Programm p1034",
+          "Scott Meyers-Effective Moder p226",
+          "introduction-to-algorithms-a p106"
+        ]
+      }
+    },
+    {
+      "book": "Effective Modern C++",
+      "kind": "keyword",
+      "page": 263,
+      "place": {
+        "fused k=10 w=1": 3,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 2,
+        "fused k=60 w=1": 3,
+        "fused k=60 w=2": 4,
+        "vectors only": 4,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 4
+      },
+      "question": "In which situations is it appropriate to use std::thread directly rather than a task-based design with std::async?",
+      "top": {
+        "fused k=10 w=1": [
+          "Scott Meyers-Effective Moder p268",
+          "Scott Meyers-Effective Moder p267",
+          "Scott Meyers-Effective Moder p263"
+        ],
+        "fused k=20 w=0.5": [
+          "Scott Meyers-Effective Moder p263",
+          "Scott Meyers-Effective Moder p268",
+          "Scott Meyers-Effective Moder p262"
+        ],
+        "fused k=60 w=0.5": [
+          "Scott Meyers-Effective Moder p268",
+          "Scott Meyers-Effective Moder p263",
+          "Scott Meyers-Effective Moder p267"
+        ],
+        "fused k=60 w=1": [
+          "Scott Meyers-Effective Moder p268",
+          "Scott Meyers-Effective Moder p267",
+          "Scott Meyers-Effective Moder p263"
+        ],
+        "fused k=60 w=2": [
+          "Scott Meyers-Effective Moder p268",
+          "Scott Meyers-Effective Moder p267",
+          "Scott Meyers-Effective Moder p279"
+        ],
+        "vectors only": [
+          "Scott Meyers-Effective Moder p268",
+          "Scott Meyers-Effective Moder p267",
+          "Scott Meyers-Effective Moder p279"
+        ],
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p263",
+          "Scott Meyers-Effective Moder p262",
+          "Scott Meyers-Effective Moder p260"
+        ],
+        "words top 50, reranked": [
+          "Scott Meyers-Effective Moder p268",
+          "Scott Meyers-Effective Moder p267",
+          "Scott Meyers-Effective Moder p279"
+        ]
+      }
+    },
+    {
+      "book": "Modern Computer Arithmetic",
+      "kind": "keyword",
+      "page": 21,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "How does Karatsuba's algorithm multiply two n-word integers, and what is the Karatsuba threshold?",
+      "top": {
+        "fused k=10 w=1": [
+          "A Survey of Number Represent p21",
+          "A Survey of Number Represent p60",
+          "A Survey of Number Represent p60"
+        ],
+        "fused k=20 w=0.5": [
+          "A Survey of Number Represent p21",
+          "A Survey of Number Represent p60",
+          "A Survey of Number Represent p25"
+        ],
+        "fused k=60 w=0.5": [
+          "A Survey of Number Represent p21",
+          "A Survey of Number Represent p60",
+          "A Survey of Number Represent p25"
+        ],
+        "fused k=60 w=1": [
+          "A Survey of Number Represent p21",
+          "A Survey of Number Represent p60",
+          "A Survey of Number Represent p25"
+        ],
+        "fused k=60 w=2": [
+          "A Survey of Number Represent p21",
+          "A Survey of Number Represent p60",
+          "A Survey of Number Represent p60"
+        ],
+        "vectors only": [
+          "A Survey of Number Represent p21",
+          "A Survey of Number Represent p60",
+          "A Survey of Number Represent p60"
+        ],
+        "words (BM25, today)": [
+          "A Survey of Number Represent p21",
+          "A Survey of Number Represent p60",
+          "introduction-to-algorithms-a p333"
+        ],
+        "words top 50, reranked": [
+          "A Survey of Number Represent p21",
+          "A Survey of Number Represent p60",
+          "A Survey of Number Represent p60"
+        ]
+      }
+    },
+    {
+      "book": "Modern Computer Arithmetic",
+      "kind": "paraphrase",
+      "page": 45,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 2,
+        "fused k=60 w=1": 2,
+        "fused k=60 w=2": 4,
+        "vectors only": 50,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 5
+      },
+      "question": "There's a loop that finds the whole-number part of a root of a big integer by repeatedly averaging the current guess with the number divided by the guess. Why is it so slow if I start from the number itself, and does any starting guess work?",
+      "top": {
+        "fused k=10 w=1": [
+          "A Survey of Number Represent p45",
+          "A Survey of Number Represent p52",
+          "pythoncrashcourse p155"
+        ],
+        "fused k=20 w=0.5": [
+          "A Survey of Number Represent p45",
+          "A Survey of Number Represent p52",
+          "A Survey of Number Represent p56"
+        ],
+        "fused k=60 w=0.5": [
+          "A Survey of Number Represent p52",
+          "A Survey of Number Represent p45",
+          "A Survey of Number Represent p62"
+        ],
+        "fused k=60 w=1": [
+          "A Survey of Number Represent p52",
+          "A Survey of Number Represent p45",
+          "A Survey of Number Represent p62"
+        ],
+        "fused k=60 w=2": [
+          "A Survey of Number Represent p52",
+          "A Survey of Number Represent p62",
+          "A Survey of Number Represent p187"
+        ],
+        "vectors only": [
+          "pythoncrashcourse p155",
+          "pythoncrashcourse p159",
+          "pythoncrashcourse p154"
+        ],
+        "words (BM25, today)": [
+          "A Survey of Number Represent p45",
+          "A Survey of Number Represent p56",
+          "A Survey of Number Represent p52"
+        ],
+        "words top 50, reranked": [
+          "A Survey of Number Represent p187",
+          "A Survey of Number Represent p62",
+          "A Survey of Number Represent p207"
+        ]
+      }
+    },
+    {
+      "book": "Modern Computer Arithmetic",
+      "kind": "paraphrase",
+      "page": 97,
+      "place": {
+        "fused k=10 w=1": 4,
+        "fused k=20 w=0.5": 3,
+        "fused k=60 w=0.5": 3,
+        "fused k=60 w=1": 4,
+        "fused k=60 w=2": 0,
+        "vectors only": 0,
+        "words (BM25, today)": 2,
+        "words top 50, reranked": 3
+      },
+      "question": "If I only know what a number leaves over when divided by 11, by 13 and by 17, how can I get the number back with a single weighted sum of those three leftovers?",
+      "top": {
+        "fused k=10 w=1": [
+          "Linear Algebra and Its Appli p11",
+          "Linear Algebra and Its Appli p248",
+          "A Survey of Number Represent p17"
+        ],
+        "fused k=20 w=0.5": [
+          "Linear Algebra and Its Appli p11",
+          "A Survey of Number Represent p17",
+          "A Survey of Number Represent p97"
+        ],
+        "fused k=60 w=0.5": [
+          "Linear Algebra and Its Appli p11",
+          "A Survey of Number Represent p17",
+          "A Survey of Number Represent p97"
+        ],
+        "fused k=60 w=1": [
+          "Linear Algebra and Its Appli p11",
+          "Linear Algebra and Its Appli p248",
+          "A Survey of Number Represent p17"
+        ],
+        "fused k=60 w=2": [
+          "Linear Algebra and Its Appli p11",
+          "Linear Algebra and Its Appli p248",
+          "pythoncrashcourse p378"
+        ],
+        "vectors only": [
+          "Linear Algebra and Its Appli p248",
+          "pythoncrashcourse p378",
+          "Fluent Python p345"
+        ],
+        "words (BM25, today)": [
+          "A Survey of Number Represent p17",
+          "A Survey of Number Represent p97",
+          "Linear Algebra and Its Appli p11"
+        ],
+        "words top 50, reranked": [
+          "Linear Algebra and Its Appli p11",
+          "A Survey of Number Represent p124",
+          "A Survey of Number Represent p97"
+        ]
+      }
+    },
+    {
+      "book": "Modern Computer Arithmetic",
+      "kind": "paraphrase",
+      "page": 103,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 4,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 2
+      },
+      "question": "For a multi-precision number kept in base ten, how much memory is wasted if every decimal digit gets its own four bits, and what tighter packing wastes almost nothing?",
+      "top": {
+        "fused k=10 w=1": [
+          "A Survey of Number Represent p103",
+          "A Survey of Number Represent p120",
+          "A Survey of Number Represent p162"
+        ],
+        "fused k=20 w=0.5": [
+          "A Survey of Number Represent p103",
+          "A Survey of Number Represent p162",
+          "A Survey of Number Represent p120"
+        ],
+        "fused k=60 w=0.5": [
+          "A Survey of Number Represent p103",
+          "A Survey of Number Represent p162",
+          "A Survey of Number Represent p120"
+        ],
+        "fused k=60 w=1": [
+          "A Survey of Number Represent p103",
+          "A Survey of Number Represent p120",
+          "A Survey of Number Represent p162"
+        ],
+        "fused k=60 w=2": [
+          "A Survey of Number Represent p103",
+          "A Survey of Number Represent p120",
+          "A Survey of Number Represent p162"
+        ],
+        "vectors only": [
+          "Computer Systems: A Programm p636",
+          "A Survey of Number Represent p215",
+          "Computer Systems: A Programm p147"
+        ],
+        "words (BM25, today)": [
+          "A Survey of Number Represent p103",
+          "A Survey of Number Represent p162",
+          "A Survey of Number Represent p120"
+        ],
+        "words top 50, reranked": [
+          "A Survey of Number Represent p215",
+          "A Survey of Number Represent p103",
+          "A Survey of Number Represent p120"
+        ]
+      }
+    },
+    {
+      "book": "Modern Computer Arithmetic",
+      "kind": "keyword",
+      "page": 112,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 3,
+        "vectors only": 2,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "What are the round bit and the sticky bit, and how do they determine correct rounding of a binary expansion to n bits in each rounding mode?",
+      "top": {
+        "fused k=10 w=1": [
+          "A Survey of Number Represent p112",
+          "A Survey of Number Represent p114",
+          "A Survey of Number Represent p109"
+        ],
+        "fused k=20 w=0.5": [
+          "A Survey of Number Represent p112",
+          "A Survey of Number Represent p109",
+          "A Survey of Number Represent p114"
+        ],
+        "fused k=60 w=0.5": [
+          "A Survey of Number Represent p112",
+          "A Survey of Number Represent p109",
+          "A Survey of Number Represent p114"
+        ],
+        "fused k=60 w=1": [
+          "A Survey of Number Represent p112",
+          "A Survey of Number Represent p109",
+          "A Survey of Number Represent p114"
+        ],
+        "fused k=60 w=2": [
+          "A Survey of Number Represent p114",
+          "A Survey of Number Represent p109",
+          "A Survey of Number Represent p112"
+        ],
+        "vectors only": [
+          "Computer Systems: A Programm p147",
+          "A Survey of Number Represent p113",
+          "Computer Systems: A Programm p146"
+        ],
+        "words (BM25, today)": [
+          "A Survey of Number Represent p112",
+          "Computer Systems: A Programm p147",
+          "A Survey of Number Represent p116"
+        ],
+        "words top 50, reranked": [
+          "A Survey of Number Represent p113",
+          "Computer Systems: A Programm p146",
+          "A Survey of Number Represent p114"
+        ]
+      }
+    },
+    {
+      "book": "Modern Computer Arithmetic",
+      "kind": "keyword",
+      "page": 197,
+      "place": {
+        "fused k=10 w=1": 2,
+        "fused k=20 w=0.5": 2,
+        "fused k=60 w=0.5": 2,
+        "fused k=60 w=1": 2,
+        "fused k=60 w=2": 2,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "What is a holonomic function, and what does the bit-burst algorithm offer over the binary-splitting algorithms that need a functional equation?",
+      "top": {
+        "fused k=10 w=1": [
+          "A Survey of Number Represent p213",
+          "A Survey of Number Represent p196",
+          "A Survey of Number Represent p197"
+        ],
+        "fused k=20 w=0.5": [
+          "A Survey of Number Represent p213",
+          "A Survey of Number Represent p197",
+          "A Survey of Number Represent p196"
+        ],
+        "fused k=60 w=0.5": [
+          "A Survey of Number Represent p213",
+          "A Survey of Number Represent p197",
+          "A Survey of Number Represent p196"
+        ],
+        "fused k=60 w=1": [
+          "A Survey of Number Represent p213",
+          "A Survey of Number Represent p196",
+          "A Survey of Number Represent p197"
+        ],
+        "fused k=60 w=2": [
+          "A Survey of Number Represent p213",
+          "A Survey of Number Represent p196",
+          "A Survey of Number Represent p197"
+        ],
+        "vectors only": [
+          "A Survey of Number Represent p196",
+          "A Survey of Number Represent p213",
+          "A Survey of Number Represent p198"
+        ],
+        "words (BM25, today)": [
+          "A Survey of Number Represent p197",
+          "A Survey of Number Represent p213",
+          "A Survey of Number Represent p6"
+        ],
+        "words top 50, reranked": [
+          "A Survey of Number Represent p196",
+          "A Survey of Number Represent p213",
+          "A Survey of Number Represent p198"
+        ]
+      }
+    },
+    {
+      "book": "Data Engineering with Python",
+      "kind": "keyword",
+      "page": 26,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "What are the three Vs of big data that data engineering tools have to account for?",
+      "top": {
+        "fused k=10 w=1": [
+          "Data Engineering with Python p26",
+          "Data Engineering with Python p22",
+          "Data Engineering with Python p14"
+        ],
+        "fused k=20 w=0.5": [
+          "Data Engineering with Python p26",
+          "Data Engineering with Python p22",
+          "Data Engineering with Python p14"
+        ],
+        "fused k=60 w=0.5": [
+          "Data Engineering with Python p26",
+          "Data Engineering with Python p22",
+          "Data Engineering with Python p14"
+        ],
+        "fused k=60 w=1": [
+          "Data Engineering with Python p26",
+          "Data Engineering with Python p22",
+          "Data Engineering with Python p14"
+        ],
+        "fused k=60 w=2": [
+          "Data Engineering with Python p26",
+          "Data Engineering with Python p22",
+          "Data Engineering with Python p14"
+        ],
+        "vectors only": [
+          "Data Engineering with Python p26",
+          "Data Engineering with Python p22",
+          "Data Engineering with Python p14"
+        ],
+        "words (BM25, today)": [
+          "Data Engineering with Python p26",
+          "Data Engineering with Python p29",
+          "Data Engineering with Python p22"
+        ],
+        "words top 50, reranked": [
+          "Data Engineering with Python p26",
+          "Data Engineering with Python p22",
+          "Data Engineering with Python p14"
+        ]
+      }
+    },
+    {
+      "book": "Data Engineering with Python",
+      "kind": "paraphrase",
+      "page": 65,
+      "place": {
+        "fused k=10 w=1": 28,
+        "fused k=20 w=0.5": 0,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 28,
+        "fused k=60 w=2": 16,
+        "vectors only": 14,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "If one of the values in a plain text spreadsheet-style file has the separator symbol inside it, how does the reader know it isn't the start of the next column?",
+      "top": {
+        "fused k=10 w=1": [
+          "Fluent Python p191",
+          "pythoncrashcourse p384",
+          "Fluent Python p184"
+        ],
+        "fused k=20 w=0.5": [
+          "Fluent Python p191",
+          "Fluent Python p184",
+          "Linear Algebra and Its Appli p19"
+        ],
+        "fused k=60 w=0.5": [
+          "Fluent Python p191",
+          "Fluent Python p184",
+          "pythoncrashcourse p384"
+        ],
+        "fused k=60 w=1": [
+          "Fluent Python p191",
+          "Fluent Python p184",
+          "pythoncrashcourse p384"
+        ],
+        "fused k=60 w=2": [
+          "Fluent Python p191",
+          "pythoncrashcourse p384",
+          "Fluent Python p184"
+        ],
+        "vectors only": [
+          "Fluent Python p191",
+          "pythoncrashcourse p384",
+          "Data Engineering with Python p69"
+        ],
+        "words (BM25, today)": [
+          "Linear Algebra and Its Appli p19",
+          "Linear Algebra and Its Appli p150",
+          "Computer Systems: A Programm p694"
+        ],
+        "words top 50, reranked": [
+          "Fluent Python p191",
+          "pythoncrashcourse p384",
+          "Fluent Python p184"
+        ]
+      }
+    },
+    {
+      "book": "Data Engineering with Python",
+      "kind": "paraphrase",
+      "page": 111,
+      "place": {
+        "fused k=10 w=1": 0,
+        "fused k=20 w=0.5": 0,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 0,
+        "fused k=60 w=2": 33,
+        "vectors only": 32,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "My scheduled workflow only has two small steps, read then load. Why is it a bad idea to merge them into one function?",
+      "top": {
+        "fused k=10 w=1": [
+          "Designing Data-Intensive App p452",
+          "Python Cookbook p255",
+          "Computer Systems: A Programm p680"
+        ],
+        "fused k=20 w=0.5": [
+          "Designing Data-Intensive App p452",
+          "Computer Systems: A Programm p680",
+          "Computer Systems: A Programm p534"
+        ],
+        "fused k=60 w=0.5": [
+          "Designing Data-Intensive App p452",
+          "Designing Data-Intensive App p432",
+          "Computer Systems: A Programm p680"
+        ],
+        "fused k=60 w=1": [
+          "Designing Data-Intensive App p452",
+          "Designing Data-Intensive App p432",
+          "Computer Systems: A Programm p491"
+        ],
+        "fused k=60 w=2": [
+          "Designing Data-Intensive App p452",
+          "Designing Data-Intensive App p432",
+          "Python Cookbook p255"
+        ],
+        "vectors only": [
+          "Python Cookbook p255",
+          "grokking-data-structures p40",
+          "Python Cookbook p155"
+        ],
+        "words (BM25, today)": [
+          "Computer Systems: A Programm p680",
+          "Computer Systems: A Programm p534",
+          "Linear Algebra and Its Appli p441"
+        ],
+        "words top 50, reranked": [
+          "Designing Data-Intensive App p452",
+          "Designing Data-Intensive App p432",
+          "Computer Systems: A Programm p491"
+        ]
+      }
+    },
+    {
+      "book": "Data Engineering with Python",
+      "kind": "keyword",
+      "page": 155,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "What does the upsert index operation do in Elasticsearch when a document with that ID already exists?",
+      "top": {
+        "fused k=10 w=1": [
+          "Data Engineering with Python p155",
+          "Data Engineering with Python p104",
+          "Data Engineering with Python p109"
+        ],
+        "fused k=20 w=0.5": [
+          "Data Engineering with Python p155",
+          "Data Engineering with Python p104",
+          "Data Engineering with Python p109"
+        ],
+        "fused k=60 w=0.5": [
+          "Data Engineering with Python p155",
+          "Data Engineering with Python p104",
+          "Data Engineering with Python p109"
+        ],
+        "fused k=60 w=1": [
+          "Data Engineering with Python p155",
+          "Data Engineering with Python p104",
+          "Data Engineering with Python p109"
+        ],
+        "fused k=60 w=2": [
+          "Data Engineering with Python p155",
+          "Data Engineering with Python p104",
+          "Data Engineering with Python p106"
+        ],
+        "vectors only": [
+          "Data Engineering with Python p155",
+          "Data Engineering with Python p104",
+          "Designing Data-Intensive App p434"
+        ],
+        "words (BM25, today)": [
+          "Data Engineering with Python p155",
+          "Data Engineering with Python p198",
+          "Data Engineering with Python p199"
+        ],
+        "words top 50, reranked": [
+          "Data Engineering with Python p155",
+          "Data Engineering with Python p104",
+          "Data Engineering with Python p106"
+        ]
+      }
+    },
+    {
+      "book": "Data Engineering with Python",
+      "kind": "keyword",
+      "page": 221,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "What do 'active thread' and 'total queued data' on the NiFi status bar tell me when monitoring a pipeline?",
+      "top": {
+        "fused k=10 w=1": [
+          "Data Engineering with Python p221",
+          "Data Engineering with Python p239",
+          "Data Engineering with Python p220"
+        ],
+        "fused k=20 w=0.5": [
+          "Data Engineering with Python p221",
+          "Data Engineering with Python p239",
+          "Data Engineering with Python p220"
+        ],
+        "fused k=60 w=0.5": [
+          "Data Engineering with Python p221",
+          "Data Engineering with Python p239",
+          "Data Engineering with Python p220"
+        ],
+        "fused k=60 w=1": [
+          "Data Engineering with Python p221",
+          "Data Engineering with Python p239",
+          "Data Engineering with Python p220"
+        ],
+        "fused k=60 w=2": [
+          "Data Engineering with Python p221",
+          "Data Engineering with Python p220",
+          "Data Engineering with Python p239"
+        ],
+        "vectors only": [
+          "Data Engineering with Python p221",
+          "Data Engineering with Python p220",
+          "Data Engineering with Python p238"
+        ],
+        "words (BM25, today)": [
+          "Data Engineering with Python p221",
+          "Data Engineering with Python p11",
+          "Data Engineering with Python p239"
+        ],
+        "words top 50, reranked": [
+          "Data Engineering with Python p221",
+          "Data Engineering with Python p220",
+          "Data Engineering with Python p238"
+        ]
+      }
+    },
+    {
+      "book": "Data Engineering with Python",
+      "kind": "paraphrase",
+      "page": 268,
+      "place": {
+        "fused k=10 w=1": 3,
+        "fused k=20 w=0.5": 2,
+        "fused k=60 w=0.5": 3,
+        "fused k=60 w=1": 4,
+        "fused k=60 w=2": 0,
+        "vectors only": 0,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 3
+      },
+      "question": "When inserting a batch of rows from the flow tool into a table, how do I make it all-or-nothing so a single bad record stops everything instead of leaving half the batch written?",
+      "top": {
+        "fused k=10 w=1": [
+          "Designing Data-Intensive App p434",
+          "Designing Data-Intensive App p498",
+          "Data Engineering with Python p268"
+        ],
+        "fused k=20 w=0.5": [
+          "Designing Data-Intensive App p434",
+          "Data Engineering with Python p268",
+          "Linear Algebra and Its Appli p454"
+        ],
+        "fused k=60 w=0.5": [
+          "Designing Data-Intensive App p434",
+          "Data Engineering with Python p98",
+          "Data Engineering with Python p268"
+        ],
+        "fused k=60 w=1": [
+          "Designing Data-Intensive App p434",
+          "Data Engineering with Python p98",
+          "Designing Data-Intensive App p498"
+        ],
+        "fused k=60 w=2": [
+          "Designing Data-Intensive App p434",
+          "Data Engineering with Python p98",
+          "Designing Data-Intensive App p498"
+        ],
+        "vectors only": [
+          "Designing Data-Intensive App p498",
+          "Designing Data-Intensive App p499",
+          "Designing Data-Intensive App p461"
+        ],
+        "words (BM25, today)": [
+          "Data Engineering with Python p268",
+          "Linear Algebra and Its Appli p454",
+          "Designing Data-Intensive App p434"
+        ],
+        "words top 50, reranked": [
+          "Designing Data-Intensive App p434",
+          "Data Engineering with Python p98",
+          "Data Engineering with Python p268"
+        ]
+      }
+    },
+    {
+      "book": "Python Data Science Handbook",
+      "kind": "keyword",
+      "page": 133,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "How do NumPy ufuncs behave on a Pandas Series or DataFrame: what happens to the index and column labels?",
+      "top": {
+        "fused k=10 w=1": [
+          "Python Data Science Handbook p133",
+          "Python Data Science Handbook p7",
+          "Python Data Science Handbook p116"
+        ],
+        "fused k=20 w=0.5": [
+          "Python Data Science Handbook p133",
+          "Python Data Science Handbook p7",
+          "Python Data Science Handbook p115"
+        ],
+        "fused k=60 w=0.5": [
+          "Python Data Science Handbook p133",
+          "Python Data Science Handbook p7",
+          "Python Data Science Handbook p115"
+        ],
+        "fused k=60 w=1": [
+          "Python Data Science Handbook p133",
+          "Python Data Science Handbook p7",
+          "Python Data Science Handbook p115"
+        ],
+        "fused k=60 w=2": [
+          "Python Data Science Handbook p133",
+          "Python Data Science Handbook p7",
+          "Python Data Science Handbook p116"
+        ],
+        "vectors only": [
+          "Python Data Science Handbook p133",
+          "Python Data Science Handbook p116",
+          "Python Data Science Handbook p7"
+        ],
+        "words (BM25, today)": [
+          "Python Data Science Handbook p133",
+          "Python Data Science Handbook p7",
+          "Python Data Science Handbook p115"
+        ],
+        "words top 50, reranked": [
+          "Python Data Science Handbook p133",
+          "Python Data Science Handbook p116",
+          "Python Data Science Handbook p7"
+        ]
+      }
+    },
+    {
+      "book": "Python Data Science Handbook",
+      "kind": "paraphrase",
+      "page": 258,
+      "place": {
+        "fused k=10 w=1": 43,
+        "fused k=20 w=0.5": 30,
+        "fused k=60 w=0.5": 30,
+        "fused k=60 w=1": 43,
+        "fused k=60 w=2": 0,
+        "vectors only": 0,
+        "words (BM25, today)": 24,
+        "words top 50, reranked": 32
+      },
+      "question": "Instead of drawing a little bar on every one of a thousand points, how can I shade a band around a fitted curve to show how unsure the fit is?",
+      "top": {
+        "fused k=10 w=1": [
+          "introduction-to-algorithms-a p398",
+          "introduction-to-algorithms-a p205",
+          "Python Data Science Handbook p389"
+        ],
+        "fused k=20 w=0.5": [
+          "introduction-to-algorithms-a p398",
+          "Python Data Science Handbook p389",
+          "introduction-to-algorithms-a p211"
+        ],
+        "fused k=60 w=0.5": [
+          "introduction-to-algorithms-a p398",
+          "Python Data Science Handbook p389",
+          "introduction-to-algorithms-a p371"
+        ],
+        "fused k=60 w=1": [
+          "introduction-to-algorithms-a p398",
+          "introduction-to-algorithms-a p205",
+          "Python Data Science Handbook p389"
+        ],
+        "fused k=60 w=2": [
+          "introduction-to-algorithms-a p398",
+          "introduction-to-algorithms-a p205",
+          "introduction-to-algorithms-a p371"
+        ],
+        "vectors only": [
+          "introduction-to-algorithms-a p398",
+          "pythoncrashcourse p420",
+          "introduction-to-algorithms-a p228"
+        ],
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p398",
+          "introduction-to-algorithms-a p212",
+          "introduction-to-algorithms-a p287"
+        ],
+        "words top 50, reranked": [
+          "introduction-to-algorithms-a p398",
+          "introduction-to-algorithms-a p198",
+          "introduction-to-algorithms-a p205"
+        ]
+      }
+    },
+    {
+      "book": "Python Data Science Handbook",
+      "kind": "paraphrase",
+      "page": 353,
+      "place": {
+        "fused k=10 w=1": 0,
+        "fused k=20 w=0.5": 0,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 0,
+        "fused k=60 w=2": 0,
+        "vectors only": 0,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "How could a program learn to sort emails into junk and not junk? What would it look at in each message and where do the right answers come from at the start?",
+      "top": {
+        "fused k=10 w=1": [
+          "pythoncrashcourse p533",
+          "introduction-to-algorithms-a p87",
+          "Fluent Python p727"
+        ],
+        "fused k=20 w=0.5": [
+          "introduction-to-algorithms-a p87",
+          "introduction-to-algorithms-a p205",
+          "introduction-to-algorithms-a p253"
+        ],
+        "fused k=60 w=0.5": [
+          "introduction-to-algorithms-a p17",
+          "introduction-to-algorithms-a p87",
+          "introduction-to-algorithms-a p205"
+        ],
+        "fused k=60 w=1": [
+          "introduction-to-algorithms-a p17",
+          "pythoncrashcourse p533",
+          "introduction-to-algorithms-a p87"
+        ],
+        "fused k=60 w=2": [
+          "introduction-to-algorithms-a p17",
+          "pythoncrashcourse p533",
+          "Fluent Python p727"
+        ],
+        "vectors only": [
+          "pythoncrashcourse p533",
+          "Fluent Python p727",
+          "pythoncrashcourse p48"
+        ],
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p87",
+          "introduction-to-algorithms-a p205",
+          "introduction-to-algorithms-a p253"
+        ],
+        "words top 50, reranked": [
+          "introduction-to-algorithms-a p17",
+          "introduction-to-algorithms-a p21",
+          "introduction-to-algorithms-a p7"
+        ]
+      }
+    },
+    {
+      "book": "Python Data Science Handbook",
+      "kind": "keyword",
+      "page": 404,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "When is multinomial naive Bayes more appropriate than Gaussian naive Bayes?",
+      "top": {
+        "fused k=10 w=1": [
+          "Python Data Science Handbook p404",
+          "Python Data Science Handbook p401",
+          "Python Data Science Handbook p407"
+        ],
+        "fused k=20 w=0.5": [
+          "Python Data Science Handbook p404",
+          "Python Data Science Handbook p401",
+          "Python Data Science Handbook p11"
+        ],
+        "fused k=60 w=0.5": [
+          "Python Data Science Handbook p404",
+          "Python Data Science Handbook p401",
+          "Python Data Science Handbook p403"
+        ],
+        "fused k=60 w=1": [
+          "Python Data Science Handbook p404",
+          "Python Data Science Handbook p401",
+          "Python Data Science Handbook p407"
+        ],
+        "fused k=60 w=2": [
+          "Python Data Science Handbook p404",
+          "Python Data Science Handbook p401",
+          "Python Data Science Handbook p407"
+        ],
+        "vectors only": [
+          "Python Data Science Handbook p404",
+          "Python Data Science Handbook p407",
+          "Python Data Science Handbook p401"
+        ],
+        "words (BM25, today)": [
+          "Python Data Science Handbook p404",
+          "Python Data Science Handbook p11",
+          "Python Data Science Handbook p542"
+        ],
+        "words top 50, reranked": [
+          "Python Data Science Handbook p404",
+          "Python Data Science Handbook p407",
+          "Python Data Science Handbook p401"
+        ]
+      }
+    },
+    {
+      "book": "Python Data Science Handbook",
+      "kind": "paraphrase",
+      "page": 458,
+      "place": {
+        "fused k=10 w=1": 37,
+        "fused k=20 w=0.5": 21,
+        "fused k=60 w=0.5": 21,
+        "fused k=60 w=1": 37,
+        "fused k=60 w=2": 0,
+        "vectors only": 0,
+        "words (BM25, today)": 20,
+        "words top 50, reranked": 6
+      },
+      "question": "When I squash data with lots of columns down to fewer dimensions, how do I decide how many of the new directions to keep without throwing away too much information?",
+      "top": {
+        "fused k=10 w=1": [
+          "Data Engineering with Python p180",
+          "Data Engineering with Python p134",
+          "Designing Data-Intensive App p95"
+        ],
+        "fused k=20 w=0.5": [
+          "Data Engineering with Python p180",
+          "Data Engineering with Python p134",
+          "Designing Data-Intensive App p95"
+        ],
+        "fused k=60 w=0.5": [
+          "Data Engineering with Python p180",
+          "Data Engineering with Python p134",
+          "introduction-to-algorithms-a p67"
+        ],
+        "fused k=60 w=1": [
+          "Data Engineering with Python p180",
+          "Data Engineering with Python p134",
+          "introduction-to-algorithms-a p67"
+        ],
+        "fused k=60 w=2": [
+          "Data Engineering with Python p180",
+          "Data Engineering with Python p134",
+          "introduction-to-algorithms-a p67"
+        ],
+        "vectors only": [
+          "Designing Data-Intensive App p117",
+          "Designing Data-Intensive App p125",
+          "pythoncrashcourse p378"
+        ],
+        "words (BM25, today)": [
+          "Designing Data-Intensive App p95",
+          "Data Engineering with Python p180",
+          "Designing Data-Intensive App p416"
+        ],
+        "words top 50, reranked": [
+          "introduction-to-algorithms-a p67",
+          "Data Engineering with Python p134",
+          "Data Engineering with Python p180"
+        ]
+      }
+    },
+    {
+      "book": "Python Data Science Handbook",
+      "kind": "keyword",
+      "page": 509,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 2,
+        "vectors only": 2,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 2
+      },
+      "question": "How does kernel density estimation relate to Gaussian mixture models?",
+      "top": {
+        "fused k=10 w=1": [
+          "Python Data Science Handbook p509",
+          "Python Data Science Handbook p514",
+          "Python Data Science Handbook p12"
+        ],
+        "fused k=20 w=0.5": [
+          "Python Data Science Handbook p509",
+          "Python Data Science Handbook p514",
+          "Python Data Science Handbook p12"
+        ],
+        "fused k=60 w=0.5": [
+          "Python Data Science Handbook p509",
+          "Python Data Science Handbook p514",
+          "Python Data Science Handbook p12"
+        ],
+        "fused k=60 w=1": [
+          "Python Data Science Handbook p509",
+          "Python Data Science Handbook p514",
+          "Python Data Science Handbook p12"
+        ],
+        "fused k=60 w=2": [
+          "Python Data Science Handbook p514",
+          "Python Data Science Handbook p509",
+          "Python Data Science Handbook p12"
+        ],
+        "vectors only": [
+          "Python Data Science Handbook p514",
+          "Python Data Science Handbook p509",
+          "Python Data Science Handbook p12"
+        ],
+        "words (BM25, today)": [
+          "Python Data Science Handbook p509",
+          "Python Data Science Handbook p12",
+          "Python Data Science Handbook p514"
+        ],
+        "words top 50, reranked": [
+          "Python Data Science Handbook p514",
+          "Python Data Science Handbook p509",
+          "Python Data Science Handbook p12"
+        ]
+      }
+    },
+    {
+      "book": "CPython Internals",
+      "kind": "keyword",
+      "page": 79,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "How does a change to the Python grammar get proposed and accepted? What role do PEPs and the Steering Council play?",
+      "top": {
+        "fused k=10 w=1": [
+          "Anthony Shaw - CPython Inter p79",
+          "Anthony Shaw - CPython Inter p76",
+          "Fluent Python p985"
+        ],
+        "fused k=20 w=0.5": [
+          "Anthony Shaw - CPython Inter p79",
+          "Anthony Shaw - CPython Inter p76",
+          "Fluent Python p570"
+        ],
+        "fused k=60 w=0.5": [
+          "Anthony Shaw - CPython Inter p79",
+          "Anthony Shaw - CPython Inter p76",
+          "Fluent Python p570"
+        ],
+        "fused k=60 w=1": [
+          "Anthony Shaw - CPython Inter p79",
+          "Anthony Shaw - CPython Inter p76",
+          "Fluent Python p985"
+        ],
+        "fused k=60 w=2": [
+          "Anthony Shaw - CPython Inter p79",
+          "Fluent Python p985",
+          "Anthony Shaw - CPython Inter p76"
+        ],
+        "vectors only": [
+          "Anthony Shaw - CPython Inter p79",
+          "pythoncrashcourse p46",
+          "Fluent Python p985"
+        ],
+        "words (BM25, today)": [
+          "Anthony Shaw - CPython Inter p79",
+          "Fluent Python p570",
+          "Fluent Python p504"
+        ],
+        "words top 50, reranked": [
+          "Anthony Shaw - CPython Inter p79",
+          "Fluent Python p985",
+          "Fluent Python p514"
+        ]
+      }
+    },
+    {
+      "book": "CPython Internals",
+      "kind": "keyword",
+      "page": 179,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "What is opcode prediction in the CPython eval loop and why does it make pairs like COMPARE_OP and POP_JUMP_IF_FALSE faster?",
+      "top": {
+        "fused k=10 w=1": [
+          "Anthony Shaw - CPython Inter p179",
+          "Python Cookbook p412",
+          "Anthony Shaw - CPython Inter p16"
+        ],
+        "fused k=20 w=0.5": [
+          "Anthony Shaw - CPython Inter p179",
+          "Python Cookbook p412",
+          "Anthony Shaw - CPython Inter p151"
+        ],
+        "fused k=60 w=0.5": [
+          "Anthony Shaw - CPython Inter p179",
+          "Python Cookbook p412",
+          "Anthony Shaw - CPython Inter p151"
+        ],
+        "fused k=60 w=1": [
+          "Anthony Shaw - CPython Inter p179",
+          "Python Cookbook p412",
+          "Anthony Shaw - CPython Inter p16"
+        ],
+        "fused k=60 w=2": [
+          "Anthony Shaw - CPython Inter p179",
+          "Python Cookbook p412",
+          "Anthony Shaw - CPython Inter p16"
+        ],
+        "vectors only": [
+          "Anthony Shaw - CPython Inter p179",
+          "Python Cookbook p412",
+          "Anthony Shaw - CPython Inter p16"
+        ],
+        "words (BM25, today)": [
+          "Anthony Shaw - CPython Inter p179",
+          "Python Cookbook p412",
+          "Anthony Shaw - CPython Inter p151"
+        ],
+        "words top 50, reranked": [
+          "Anthony Shaw - CPython Inter p179",
+          "Python Cookbook p412",
+          "Anthony Shaw - CPython Inter p16"
+        ]
+      }
+    },
+    {
+      "book": "CPython Internals",
+      "kind": "paraphrase",
+      "page": 223,
+      "place": {
+        "fused k=10 w=1": 0,
+        "fused k=20 w=0.5": 0,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 0,
+        "fused k=60 w=2": 0,
+        "vectors only": 0,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "Why does the interpreter's memory cleanup look at recently created things much more often than things that have been around for a long time?",
+      "top": {
+        "fused k=10 w=1": [
+          "Designing Data-Intensive App p551",
+          "Computer Systems: A Programm p620",
+          "Designing Data-Intensive App p43"
+        ],
+        "fused k=20 w=0.5": [
+          "Computer Systems: A Programm p620",
+          "Computer Systems: A Programm p41",
+          "Computer Systems: A Programm p306"
+        ],
+        "fused k=60 w=0.5": [
+          "Computer Systems: A Programm p665",
+          "Computer Systems: A Programm p620",
+          "Computer Systems: A Programm p41"
+        ],
+        "fused k=60 w=1": [
+          "Computer Systems: A Programm p665",
+          "Designing Data-Intensive App p551",
+          "Computer Systems: A Programm p620"
+        ],
+        "fused k=60 w=2": [
+          "Designing Data-Intensive App p551",
+          "Computer Systems: A Programm p665",
+          "Designing Data-Intensive App p43"
+        ],
+        "vectors only": [
+          "Designing Data-Intensive App p551",
+          "Designing Data-Intensive App p43",
+          "grokking-data-structures p33"
+        ],
+        "words (BM25, today)": [
+          "Computer Systems: A Programm p620",
+          "Computer Systems: A Programm p41",
+          "Computer Systems: A Programm p306"
+        ],
+        "words top 50, reranked": [
+          "Computer Systems: A Programm p665",
+          "Computer Systems: A Programm p566",
+          "Computer Systems: A Programm p42"
+        ]
+      }
+    },
+    {
+      "book": "CPython Internals",
+      "kind": "paraphrase",
+      "page": 258,
+      "place": {
+        "fused k=10 w=1": 0,
+        "fused k=20 w=0.5": 0,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 0,
+        "fused k=60 w=2": 0,
+        "vectors only": 0,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "I started several workers in Python expecting them to run at the same moment on different cores, but only one seems to do work at a time. What inside the interpreter causes that?",
+      "top": {
+        "fused k=10 w=1": [
+          "Fluent Python p749",
+          "Fluent Python p727",
+          "Anthony Shaw - CPython Inter p256"
+        ],
+        "fused k=20 w=0.5": [
+          "Fluent Python p749",
+          "Fluent Python p727",
+          "Anthony Shaw - CPython Inter p256"
+        ],
+        "fused k=60 w=0.5": [
+          "Fluent Python p749",
+          "Fluent Python p727",
+          "Anthony Shaw - CPython Inter p256"
+        ],
+        "fused k=60 w=1": [
+          "Fluent Python p749",
+          "Fluent Python p727",
+          "Anthony Shaw - CPython Inter p256"
+        ],
+        "fused k=60 w=2": [
+          "Fluent Python p749",
+          "Fluent Python p727",
+          "Anthony Shaw - CPython Inter p256"
+        ],
+        "vectors only": [
+          "Fluent Python p753",
+          "Fluent Python p731",
+          "Anthony Shaw - CPython Inter p287"
+        ],
+        "words (BM25, today)": [
+          "Fluent Python p729",
+          "Fluent Python p749",
+          "Fluent Python p727"
+        ],
+        "words top 50, reranked": [
+          "Anthony Shaw - CPython Inter p287",
+          "Anthony Shaw - CPython Inter p256",
+          "Fluent Python p749"
+        ]
+      }
+    },
+    {
+      "book": "CPython Internals",
+      "kind": "keyword",
+      "page": 302,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "Why are Unicode strings complicated in CPython, and what is a code point in the Universal Character Set?",
+      "top": {
+        "fused k=10 w=1": [
+          "Anthony Shaw - CPython Inter p302",
+          "Anthony Shaw - CPython Inter p303",
+          "Anthony Shaw - CPython Inter p304"
+        ],
+        "fused k=20 w=0.5": [
+          "Anthony Shaw - CPython Inter p302",
+          "Anthony Shaw - CPython Inter p303",
+          "Anthony Shaw - CPython Inter p304"
+        ],
+        "fused k=60 w=0.5": [
+          "Anthony Shaw - CPython Inter p302",
+          "Anthony Shaw - CPython Inter p303",
+          "Anthony Shaw - CPython Inter p304"
+        ],
+        "fused k=60 w=1": [
+          "Anthony Shaw - CPython Inter p302",
+          "Anthony Shaw - CPython Inter p303",
+          "Anthony Shaw - CPython Inter p304"
+        ],
+        "fused k=60 w=2": [
+          "Anthony Shaw - CPython Inter p302",
+          "Anthony Shaw - CPython Inter p303",
+          "Anthony Shaw - CPython Inter p304"
+        ],
+        "vectors only": [
+          "Anthony Shaw - CPython Inter p302",
+          "Anthony Shaw - CPython Inter p303",
+          "Fluent Python p148"
+        ],
+        "words (BM25, today)": [
+          "Anthony Shaw - CPython Inter p302",
+          "Anthony Shaw - CPython Inter p303",
+          "Anthony Shaw - CPython Inter p304"
+        ],
+        "words top 50, reranked": [
+          "Anthony Shaw - CPython Inter p302",
+          "Anthony Shaw - CPython Inter p303",
+          "Fluent Python p148"
+        ]
+      }
+    },
+    {
+      "book": "CPython Internals",
+      "kind": "paraphrase",
+      "page": 333,
+      "place": {
+        "fused k=10 w=1": 14,
+        "fused k=20 w=0.5": 14,
+        "fused k=60 w=0.5": 5,
+        "fused k=60 w=1": 4,
+        "fused k=60 w=2": 3,
+        "vectors only": 17,
+        "words (BM25, today)": 36,
+        "words top 50, reranked": 3
+      },
+      "question": "When Python itself dies because some C code touched memory it shouldn't have, all I get is a one-line message. How can I make it show which Python lines were running?",
+      "top": {
+        "fused k=10 w=1": [
+          "Python Cookbook p681",
+          "pythoncrashcourse p61",
+          "Fluent Python p771"
+        ],
+        "fused k=20 w=0.5": [
+          "Python Cookbook p681",
+          "Fluent Python p771",
+          "pythoncrashcourse p61"
+        ],
+        "fused k=60 w=0.5": [
+          "Python Cookbook p681",
+          "pythoncrashcourse p61",
+          "Fluent Python p730"
+        ],
+        "fused k=60 w=1": [
+          "Python Cookbook p681",
+          "pythoncrashcourse p61",
+          "Fluent Python p730"
+        ],
+        "fused k=60 w=2": [
+          "Python Cookbook p681",
+          "pythoncrashcourse p61",
+          "Anthony Shaw - CPython Inter p333"
+        ],
+        "vectors only": [
+          "Anthony Shaw - CPython Inter p81",
+          "Python Cookbook p681",
+          "pythoncrashcourse p37"
+        ],
+        "words (BM25, today)": [
+          "Fluent Python p771",
+          "Python Cookbook p681",
+          "Fluent Python p628"
+        ],
+        "words top 50, reranked": [
+          "Python Cookbook p681",
+          "pythoncrashcourse p61",
+          "Anthony Shaw - CPython Inter p333"
+        ]
+      }
+    },
+    {
+      "book": "Python Crash Course",
+      "kind": "keyword",
+      "page": 54,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 6,
+        "words top 50, reranked": 1
+      },
+      "question": "What are the rules for naming variables in Python? Can a variable name start with a number or contain spaces?",
+      "top": {
+        "fused k=10 w=1": [
+          "pythoncrashcourse p54",
+          "A Survey of Number Represent p108",
+          "A Survey of Number Represent p187"
+        ],
+        "fused k=20 w=0.5": [
+          "pythoncrashcourse p54",
+          "A Survey of Number Represent p108",
+          "A Survey of Number Represent p187"
+        ],
+        "fused k=60 w=0.5": [
+          "pythoncrashcourse p54",
+          "A Survey of Number Represent p108",
+          "A Survey of Number Represent p187"
+        ],
+        "fused k=60 w=1": [
+          "pythoncrashcourse p54",
+          "A Survey of Number Represent p108",
+          "A Survey of Number Represent p187"
+        ],
+        "fused k=60 w=2": [
+          "pythoncrashcourse p54",
+          "pythoncrashcourse p522",
+          "Anthony Shaw - CPython Inter p208"
+        ],
+        "vectors only": [
+          "pythoncrashcourse p54",
+          "pythoncrashcourse p522",
+          "Anthony Shaw - CPython Inter p208"
+        ],
+        "words (BM25, today)": [
+          "A Survey of Number Represent p108",
+          "A Survey of Number Represent p187",
+          "A Survey of Number Represent p214"
+        ],
+        "words top 50, reranked": [
+          "pythoncrashcourse p54",
+          "Data Engineering with Python p138",
+          "Data Engineering with Python p262"
+        ]
+      }
+    },
+    {
+      "book": "Python Crash Course",
+      "kind": "paraphrase",
+      "page": 99,
+      "place": {
+        "fused k=10 w=1": 34,
+        "fused k=20 w=0.5": 0,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 34,
+        "fused k=60 w=2": 19,
+        "vectors only": 18,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "How do I grab just the last few entries of a list in a way that keeps working even when the list gets longer or shorter?",
+      "top": {
+        "fused k=10 w=1": [
+          "pythoncrashcourse p88",
+          "pythoncrashcourse p86",
+          "grokking-data-structures p112"
+        ],
+        "fused k=20 w=0.5": [
+          "pythoncrashcourse p86",
+          "pythoncrashcourse p88",
+          "grokking-data-structures p112"
+        ],
+        "fused k=60 w=0.5": [
+          "pythoncrashcourse p86",
+          "pythoncrashcourse p88",
+          "grokking-data-structures p112"
+        ],
+        "fused k=60 w=1": [
+          "pythoncrashcourse p88",
+          "pythoncrashcourse p86",
+          "grokking-data-structures p112"
+        ],
+        "fused k=60 w=2": [
+          "pythoncrashcourse p88",
+          "pythoncrashcourse p86",
+          "grokking-data-structures p112"
+        ],
+        "vectors only": [
+          "grokking-data-structures p118",
+          "pythoncrashcourse p80",
+          "pythoncrashcourse p533"
+        ],
+        "words (BM25, today)": [
+          "pythoncrashcourse p86",
+          "Scott Meyers-Effective Moder p36",
+          "grokking-data-structures p54"
+        ],
+        "words top 50, reranked": [
+          "pythoncrashcourse p88",
+          "grokking-data-structures p112",
+          "pythoncrashcourse p86"
+        ]
+      }
+    },
+    {
+      "book": "Python Crash Course",
+      "kind": "keyword",
+      "page": 185,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 3,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "When mixing positional and arbitrary arguments like *toppings in a function definition, where does the arbitrary parameter have to go?",
+      "top": {
+        "fused k=10 w=1": [
+          "pythoncrashcourse p185",
+          "Fluent Python p272",
+          "C Programming Language - 2nd p179"
+        ],
+        "fused k=20 w=0.5": [
+          "pythoncrashcourse p185",
+          "Fluent Python p272",
+          "pythoncrashcourse p170"
+        ],
+        "fused k=60 w=0.5": [
+          "pythoncrashcourse p185",
+          "Fluent Python p272",
+          "C Programming Language - 2nd p195"
+        ],
+        "fused k=60 w=1": [
+          "pythoncrashcourse p185",
+          "Fluent Python p272",
+          "pythoncrashcourse p191"
+        ],
+        "fused k=60 w=2": [
+          "pythoncrashcourse p185",
+          "Fluent Python p272",
+          "Python Cookbook p382"
+        ],
+        "vectors only": [
+          "C Programming Language - 2nd p179",
+          "C Programming Language - 2nd p178",
+          "pythoncrashcourse p185"
+        ],
+        "words (BM25, today)": [
+          "pythoncrashcourse p185",
+          "pythoncrashcourse p170",
+          "introduction-to-algorithms-a p211"
+        ],
+        "words top 50, reranked": [
+          "pythoncrashcourse p185",
+          "Fluent Python p272",
+          "Python Cookbook p382"
+        ]
+      }
+    },
+    {
+      "book": "Python Crash Course",
+      "kind": "paraphrase",
+      "page": 217,
+      "place": {
+        "fused k=10 w=1": 23,
+        "fused k=20 w=0.5": 0,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 23,
+        "fused k=60 w=2": 13,
+        "vectors only": 12,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "I'm a beginner starting a bigger program. Should I split my code across several files from the beginning or keep everything together at first?",
+      "top": {
+        "fused k=10 w=1": [
+          "C Programming Language - 2nd p9",
+          "C Programming Language - 2nd p74",
+          "C Programming Language - 2nd p9"
+        ],
+        "fused k=20 w=0.5": [
+          "C Programming Language - 2nd p9",
+          "C Programming Language - 2nd p74",
+          "C Programming Language - 2nd p9"
+        ],
+        "fused k=60 w=0.5": [
+          "C Programming Language - 2nd p9",
+          "C Programming Language - 2nd p74",
+          "C Programming Language - 2nd p9"
+        ],
+        "fused k=60 w=1": [
+          "C Programming Language - 2nd p9",
+          "C Programming Language - 2nd p74",
+          "C Programming Language - 2nd p9"
+        ],
+        "fused k=60 w=2": [
+          "C Programming Language - 2nd p9",
+          "C Programming Language - 2nd p74",
+          "pythoncrashcourse p247"
+        ],
+        "vectors only": [
+          "C Programming Language - 2nd p9",
+          "pythoncrashcourse p247",
+          "Computer Systems: A Programm p37"
+        ],
+        "words (BM25, today)": [
+          "C Programming Language - 2nd p9",
+          "C Programming Language - 2nd p26",
+          "C Programming Language - 2nd p74"
+        ],
+        "words top 50, reranked": [
+          "C Programming Language - 2nd p9",
+          "C Programming Language - 2nd p74",
+          "C Programming Language - 2nd p9"
+        ]
+      }
+    },
+    {
+      "book": "Python Crash Course",
+      "kind": "keyword",
+      "page": 432,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "How do I install virtualenv, create a virtual environment and activate it for a Django project?",
+      "top": {
+        "fused k=10 w=1": [
+          "pythoncrashcourse p432",
+          "pythoncrashcourse p431",
+          "pythoncrashcourse p433"
+        ],
+        "fused k=20 w=0.5": [
+          "pythoncrashcourse p432",
+          "pythoncrashcourse p431",
+          "pythoncrashcourse p433"
+        ],
+        "fused k=60 w=0.5": [
+          "pythoncrashcourse p432",
+          "pythoncrashcourse p431",
+          "pythoncrashcourse p433"
+        ],
+        "fused k=60 w=1": [
+          "pythoncrashcourse p432",
+          "pythoncrashcourse p431",
+          "pythoncrashcourse p433"
+        ],
+        "fused k=60 w=2": [
+          "pythoncrashcourse p432",
+          "pythoncrashcourse p431",
+          "pythoncrashcourse p433"
+        ],
+        "vectors only": [
+          "pythoncrashcourse p432",
+          "pythoncrashcourse p431",
+          "pythoncrashcourse p433"
+        ],
+        "words (BM25, today)": [
+          "pythoncrashcourse p432",
+          "pythoncrashcourse p24",
+          "pythoncrashcourse p431"
+        ],
+        "words top 50, reranked": [
+          "pythoncrashcourse p432",
+          "pythoncrashcourse p431",
+          "pythoncrashcourse p433"
+        ]
+      }
+    },
+    {
+      "book": "Python Crash Course",
+      "kind": "paraphrase",
+      "page": 484,
+      "place": {
+        "fused k=10 w=1": 26,
+        "fused k=20 w=0.5": 0,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 27,
+        "fused k=60 w=2": 17,
+        "vectors only": 14,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "In my web app everyone who signs in can see everybody else's entries. How do I change the page so each person only gets the ones they created?",
+      "top": {
+        "fused k=10 w=1": [
+          "pythoncrashcourse p460",
+          "pythoncrashcourse p479",
+          "pythoncrashcourse p471"
+        ],
+        "fused k=20 w=0.5": [
+          "pythoncrashcourse p460",
+          "pythoncrashcourse p479",
+          "pythoncrashcourse p458"
+        ],
+        "fused k=60 w=0.5": [
+          "pythoncrashcourse p460",
+          "pythoncrashcourse p479",
+          "pythoncrashcourse p458"
+        ],
+        "fused k=60 w=1": [
+          "pythoncrashcourse p460",
+          "pythoncrashcourse p479",
+          "pythoncrashcourse p458"
+        ],
+        "fused k=60 w=2": [
+          "pythoncrashcourse p460",
+          "pythoncrashcourse p479",
+          "pythoncrashcourse p471"
+        ],
+        "vectors only": [
+          "pythoncrashcourse p126",
+          "pythoncrashcourse p471",
+          "pythoncrashcourse p460"
+        ],
+        "words (BM25, today)": [
+          "pythoncrashcourse p499",
+          "pythoncrashcourse p460",
+          "Designing Data-Intensive App p533"
+        ],
+        "words top 50, reranked": [
+          "pythoncrashcourse p471",
+          "pythoncrashcourse p460",
+          "pythoncrashcourse p479"
+        ]
+      }
+    },
+    {
+      "book": "Introduction to Algorithms and Machine Learning",
+      "kind": "keyword",
+      "page": 55,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "How does backtracking cut down the number of possibilities compared to brute force search?",
+      "top": {
+        "fused k=10 w=1": [
+          "introduction-to-algorithms-a p55",
+          "grokking-data-structures p72",
+          "introduction-to-algorithms-a p49"
+        ],
+        "fused k=20 w=0.5": [
+          "introduction-to-algorithms-a p55",
+          "introduction-to-algorithms-a p49",
+          "A Survey of Number Represent p144"
+        ],
+        "fused k=60 w=0.5": [
+          "introduction-to-algorithms-a p55",
+          "A Survey of Number Represent p144",
+          "introduction-to-algorithms-a p49"
+        ],
+        "fused k=60 w=1": [
+          "introduction-to-algorithms-a p55",
+          "A Survey of Number Represent p144",
+          "grokking-data-structures p72"
+        ],
+        "fused k=60 w=2": [
+          "introduction-to-algorithms-a p55",
+          "A Survey of Number Represent p144",
+          "grokking-data-structures p72"
+        ],
+        "vectors only": [
+          "introduction-to-algorithms-a p55",
+          "grokking-data-structures p72",
+          "grokking-data-structures p84"
+        ],
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p55",
+          "introduction-to-algorithms-a p49",
+          "introduction-to-algorithms-a p51"
+        ],
+        "words top 50, reranked": [
+          "introduction-to-algorithms-a p55",
+          "A Survey of Number Represent p144",
+          "Linear Algebra and Its Appli p455"
+        ]
+      }
+    },
+    {
+      "book": "Introduction to Algorithms and Machine Learning",
+      "kind": "paraphrase",
+      "page": 116,
+      "place": {
+        "fused k=10 w=1": 0,
+        "fused k=20 w=0.5": 0,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 0,
+        "fused k=60 w=2": 46,
+        "vectors only": 46,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "When I'm grouping similar data points automatically, how do I decide how many groups to ask for if I have no idea in advance?",
+      "top": {
+        "fused k=10 w=1": [
+          "Designing Data-Intensive App p449",
+          "Designing Data-Intensive App p429",
+          "grokking-data-structures p17"
+        ],
+        "fused k=20 w=0.5": [
+          "Designing Data-Intensive App p449",
+          "grokking-data-structures p17",
+          "Designing Data-Intensive App p235"
+        ],
+        "fused k=60 w=0.5": [
+          "Designing Data-Intensive App p449",
+          "Designing Data-Intensive App p235",
+          "grokking-data-structures p39"
+        ],
+        "fused k=60 w=1": [
+          "Designing Data-Intensive App p235",
+          "Designing Data-Intensive App p449",
+          "grokking-data-structures p39"
+        ],
+        "fused k=60 w=2": [
+          "Designing Data-Intensive App p235",
+          "grokking-data-structures p36",
+          "Designing Data-Intensive App p449"
+        ],
+        "vectors only": [
+          "Designing Data-Intensive App p429",
+          "Python Data Science Handbook p180",
+          "Python Data Science Handbook p179"
+        ],
+        "words (BM25, today)": [
+          "grokking-data-structures p17",
+          "Designing Data-Intensive App p449",
+          "Designing Data-Intensive App p91"
+        ],
+        "words top 50, reranked": [
+          "grokking-data-structures p36",
+          "Designing Data-Intensive App p235",
+          "grokking-data-structures p41"
+        ]
+      }
+    },
+    {
+      "book": "Introduction to Algorithms and Machine Learning",
+      "kind": "keyword",
+      "page": 197,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 3,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 3
+      },
+      "question": "Why can't the pseudoinverse method fit a power regression when a data point has an x-coordinate of 0?",
+      "top": {
+        "fused k=10 w=1": [
+          "introduction-to-algorithms-a p197",
+          "introduction-to-algorithms-a p193",
+          "introduction-to-algorithms-a p183"
+        ],
+        "fused k=20 w=0.5": [
+          "introduction-to-algorithms-a p197",
+          "introduction-to-algorithms-a p193",
+          "introduction-to-algorithms-a p221"
+        ],
+        "fused k=60 w=0.5": [
+          "introduction-to-algorithms-a p197",
+          "introduction-to-algorithms-a p193",
+          "introduction-to-algorithms-a p221"
+        ],
+        "fused k=60 w=1": [
+          "introduction-to-algorithms-a p197",
+          "introduction-to-algorithms-a p193",
+          "introduction-to-algorithms-a p221"
+        ],
+        "fused k=60 w=2": [
+          "introduction-to-algorithms-a p197",
+          "introduction-to-algorithms-a p193",
+          "introduction-to-algorithms-a p183"
+        ],
+        "vectors only": [
+          "introduction-to-algorithms-a p183",
+          "introduction-to-algorithms-a p177",
+          "introduction-to-algorithms-a p197"
+        ],
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p197",
+          "introduction-to-algorithms-a p205",
+          "introduction-to-algorithms-a p221"
+        ],
+        "words top 50, reranked": [
+          "introduction-to-algorithms-a p183",
+          "introduction-to-algorithms-a p177",
+          "introduction-to-algorithms-a p197"
+        ]
+      }
+    },
+    {
+      "book": "Introduction to Algorithms and Machine Learning",
+      "kind": "paraphrase",
+      "page": 288,
+      "place": {
+        "fused k=10 w=1": 0,
+        "fused k=20 w=0.5": 0,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 0,
+        "fused k=60 w=2": 0,
+        "vectors only": 0,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "How does the algorithm that sorts examples into categories by asking a series of yes/no questions pick which question to ask next?",
+      "top": {
+        "fused k=10 w=1": [
+          "pythoncrashcourse p533",
+          "introduction-to-algorithms-a p257",
+          "pythoncrashcourse p534"
+        ],
+        "fused k=20 w=0.5": [
+          "introduction-to-algorithms-a p257",
+          "introduction-to-algorithms-a p253",
+          "introduction-to-algorithms-a p87"
+        ],
+        "fused k=60 w=0.5": [
+          "introduction-to-algorithms-a p257",
+          "introduction-to-algorithms-a p253",
+          "introduction-to-algorithms-a p87"
+        ],
+        "fused k=60 w=1": [
+          "pythoncrashcourse p533",
+          "introduction-to-algorithms-a p257",
+          "pythoncrashcourse p534"
+        ],
+        "fused k=60 w=2": [
+          "pythoncrashcourse p533",
+          "pythoncrashcourse p534",
+          "Designing Data-Intensive App p361"
+        ],
+        "vectors only": [
+          "pythoncrashcourse p533",
+          "pythoncrashcourse p534",
+          "Designing Data-Intensive App p361"
+        ],
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p257",
+          "introduction-to-algorithms-a p253",
+          "introduction-to-algorithms-a p87"
+        ],
+        "words top 50, reranked": [
+          "introduction-to-algorithms-a p106",
+          "introduction-to-algorithms-a p89",
+          "introduction-to-algorithms-a p87"
+        ]
+      }
+    },
+    {
+      "book": "Introduction to Algorithms and Machine Learning",
+      "kind": "paraphrase",
+      "page": 333,
+      "place": {
+        "fused k=10 w=1": 4,
+        "fused k=20 w=0.5": 2,
+        "fused k=60 w=0.5": 2,
+        "fused k=60 w=1": 4,
+        "fused k=60 w=2": 0,
+        "vectors only": 0,
+        "words (BM25, today)": 2,
+        "words top 50, reranked": 4
+      },
+      "question": "Is there a guarantee that a network with just a single middle layer can mimic any smooth curve as closely as I want?",
+      "top": {
+        "fused k=10 w=1": [
+          "introduction-to-algorithms-a p398",
+          "introduction-to-algorithms-a p424",
+          "introduction-to-algorithms-a p198"
+        ],
+        "fused k=20 w=0.5": [
+          "introduction-to-algorithms-a p398",
+          "introduction-to-algorithms-a p333",
+          "Data Engineering with Python p256"
+        ],
+        "fused k=60 w=0.5": [
+          "introduction-to-algorithms-a p398",
+          "introduction-to-algorithms-a p333",
+          "Data Engineering with Python p256"
+        ],
+        "fused k=60 w=1": [
+          "introduction-to-algorithms-a p398",
+          "introduction-to-algorithms-a p424",
+          "introduction-to-algorithms-a p198"
+        ],
+        "fused k=60 w=2": [
+          "introduction-to-algorithms-a p398",
+          "introduction-to-algorithms-a p424",
+          "introduction-to-algorithms-a p198"
+        ],
+        "vectors only": [
+          "introduction-to-algorithms-a p424",
+          "introduction-to-algorithms-a p198",
+          "introduction-to-algorithms-a p340"
+        ],
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p398",
+          "introduction-to-algorithms-a p333",
+          "Data Engineering with Python p256"
+        ],
+        "words top 50, reranked": [
+          "introduction-to-algorithms-a p398",
+          "introduction-to-algorithms-a p411",
+          "Designing Data-Intensive App p333"
+        ]
+      }
+    },
+    {
+      "book": "Introduction to Algorithms and Machine Learning",
+      "kind": "keyword",
+      "page": 393,
+      "place": {
+        "fused k=10 w=1": 2,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 2,
+        "fused k=60 w=2": 2,
+        "vectors only": 2,
+        "words (BM25, today)": 2,
+        "words top 50, reranked": 2
+      },
+      "question": "What was Blondie24 and who created it?",
+      "top": {
+        "fused k=10 w=1": [
+          "introduction-to-algorithms-a p415",
+          "introduction-to-algorithms-a p393",
+          "introduction-to-algorithms-a p403"
+        ],
+        "fused k=20 w=0.5": [
+          "introduction-to-algorithms-a p393",
+          "introduction-to-algorithms-a p415",
+          "introduction-to-algorithms-a p421"
+        ],
+        "fused k=60 w=0.5": [
+          "introduction-to-algorithms-a p393",
+          "introduction-to-algorithms-a p415",
+          "introduction-to-algorithms-a p421"
+        ],
+        "fused k=60 w=1": [
+          "introduction-to-algorithms-a p415",
+          "introduction-to-algorithms-a p393",
+          "introduction-to-algorithms-a p403"
+        ],
+        "fused k=60 w=2": [
+          "introduction-to-algorithms-a p415",
+          "introduction-to-algorithms-a p393",
+          "introduction-to-algorithms-a p403"
+        ],
+        "vectors only": [
+          "introduction-to-algorithms-a p415",
+          "introduction-to-algorithms-a p393",
+          "introduction-to-algorithms-a p403"
+        ],
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p6",
+          "introduction-to-algorithms-a p393",
+          "introduction-to-algorithms-a p415"
+        ],
+        "words top 50, reranked": [
+          "introduction-to-algorithms-a p415",
+          "introduction-to-algorithms-a p393",
+          "introduction-to-algorithms-a p403"
+        ]
+      }
+    },
+    {
+      "book": "Python Cookbook",
+      "kind": "keyword",
+      "page": 141,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "What happens to the items before the start index when I use islice() on a generator?",
+      "top": {
+        "fused k=10 w=1": [
+          "Python Cookbook p141",
+          "pythoncrashcourse p85",
+          "pythoncrashcourse p84"
+        ],
+        "fused k=20 w=0.5": [
+          "Python Cookbook p141",
+          "Scott Meyers-Effective Moder p42",
+          "Fluent Python p650"
+        ],
+        "fused k=60 w=0.5": [
+          "Python Cookbook p141",
+          "pythoncrashcourse p85",
+          "Scott Meyers-Effective Moder p42"
+        ],
+        "fused k=60 w=1": [
+          "Python Cookbook p141",
+          "pythoncrashcourse p85",
+          "pythoncrashcourse p84"
+        ],
+        "fused k=60 w=2": [
+          "Python Cookbook p141",
+          "pythoncrashcourse p85",
+          "pythoncrashcourse p84"
+        ],
+        "vectors only": [
+          "Python Cookbook p141",
+          "pythoncrashcourse p84",
+          "Fluent Python p644"
+        ],
+        "words (BM25, today)": [
+          "Python Cookbook p141",
+          "Scott Meyers-Effective Moder p42",
+          "Fluent Python p650"
+        ],
+        "words top 50, reranked": [
+          "Python Cookbook p141",
+          "pythoncrashcourse p85",
+          "Fluent Python p656"
+        ]
+      }
+    },
+    {
+      "book": "Python Cookbook",
+      "kind": "paraphrase",
+      "page": 179,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 6,
+        "words top 50, reranked": 1
+      },
+      "question": "My script blows up with a weird message about surrogates when it tries to show the names of files in a folder. What is going on and how do I stop the crash?",
+      "top": {
+        "fused k=10 w=1": [
+          "Python Cookbook p179",
+          "Python Cookbook p180",
+          "Data Engineering with Python p262"
+        ],
+        "fused k=20 w=0.5": [
+          "Python Cookbook p179",
+          "Python Cookbook p180",
+          "Data Engineering with Python p262"
+        ],
+        "fused k=60 w=0.5": [
+          "Python Cookbook p179",
+          "Python Cookbook p180",
+          "pythoncrashcourse p222"
+        ],
+        "fused k=60 w=1": [
+          "Python Cookbook p179",
+          "Python Cookbook p180",
+          "pythoncrashcourse p222"
+        ],
+        "fused k=60 w=2": [
+          "Python Cookbook p179",
+          "Python Cookbook p180",
+          "pythoncrashcourse p222"
+        ],
+        "vectors only": [
+          "Python Cookbook p179",
+          "pythoncrashcourse p225",
+          "pythoncrashcourse p240"
+        ],
+        "words (BM25, today)": [
+          "Data Engineering with Python p262",
+          "Data Engineering with Python p77",
+          "introduction-to-algorithms-a p324"
+        ],
+        "words top 50, reranked": [
+          "Python Cookbook p179",
+          "pythoncrashcourse p224",
+          "pythoncrashcourse p222"
+        ]
+      }
+    },
+    {
+      "book": "Python Cookbook",
+      "kind": "keyword",
+      "page": 315,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "Why should a mixin class not have its own __init__ method or instance variables?",
+      "top": {
+        "fused k=10 w=1": [
+          "Python Cookbook p315",
+          "Python Cookbook p291",
+          "Fluent Python p873"
+        ],
+        "fused k=20 w=0.5": [
+          "Python Cookbook p315",
+          "Python Cookbook p291",
+          "Python Cookbook p393"
+        ],
+        "fused k=60 w=0.5": [
+          "Python Cookbook p315",
+          "Python Cookbook p291",
+          "Python Cookbook p393"
+        ],
+        "fused k=60 w=1": [
+          "Python Cookbook p315",
+          "Python Cookbook p291",
+          "Python Cookbook p393"
+        ],
+        "fused k=60 w=2": [
+          "Python Cookbook p315",
+          "Python Cookbook p393",
+          "Python Cookbook p291"
+        ],
+        "vectors only": [
+          "Python Cookbook p315",
+          "Fluent Python p873",
+          "Python Cookbook p275"
+        ],
+        "words (BM25, today)": [
+          "Python Cookbook p315",
+          "Python Cookbook p315",
+          "Fluent Python p543"
+        ],
+        "words top 50, reranked": [
+          "Python Cookbook p315",
+          "Fluent Python p873",
+          "pythoncrashcourse p196"
+        ]
+      }
+    },
+    {
+      "book": "Python Cookbook",
+      "kind": "paraphrase",
+      "page": 416,
+      "place": {
+        "fused k=10 w=1": 0,
+        "fused k=20 w=0.5": 0,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 0,
+        "fused k=60 w=2": 0,
+        "vectors only": 0,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "What is that special file you put inside each folder of a multi-folder Python library for, and is it OK to leave it blank?",
+      "top": {
+        "fused k=10 w=1": [
+          "pythoncrashcourse p225",
+          "pythoncrashcourse p503",
+          "Data Engineering with Python p265"
+        ],
+        "fused k=20 w=0.5": [
+          "pythoncrashcourse p225",
+          "Data Engineering with Python p265",
+          "pythoncrashcourse p503"
+        ],
+        "fused k=60 w=0.5": [
+          "pythoncrashcourse p225",
+          "pythoncrashcourse p503",
+          "Data Engineering with Python p265"
+        ],
+        "fused k=60 w=1": [
+          "pythoncrashcourse p225",
+          "pythoncrashcourse p503",
+          "pythoncrashcourse p540"
+        ],
+        "fused k=60 w=2": [
+          "pythoncrashcourse p225",
+          "pythoncrashcourse p503",
+          "pythoncrashcourse p540"
+        ],
+        "vectors only": [
+          "pythoncrashcourse p225",
+          "pythoncrashcourse p224",
+          "pythoncrashcourse p49"
+        ],
+        "words (BM25, today)": [
+          "A Survey of Number Represent p217",
+          "A Survey of Number Represent p145",
+          "pythoncrashcourse p225"
+        ],
+        "words top 50, reranked": [
+          "pythoncrashcourse p225",
+          "pythoncrashcourse p540",
+          "pythoncrashcourse p503"
+        ]
+      }
+    },
+    {
+      "book": "Python Cookbook",
+      "kind": "keyword",
+      "page": 534,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 2,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 2
+      },
+      "question": "What restrictions apply to functions sent to a process pool as a workaround for the GIL?",
+      "top": {
+        "fused k=10 w=1": [
+          "Python Cookbook p533",
+          "Python Cookbook p531",
+          "Python Cookbook p534"
+        ],
+        "fused k=20 w=0.5": [
+          "Python Cookbook p533",
+          "Python Cookbook p531",
+          "Python Cookbook p534"
+        ],
+        "fused k=60 w=0.5": [
+          "Python Cookbook p533",
+          "Python Cookbook p531",
+          "Python Cookbook p534"
+        ],
+        "fused k=60 w=1": [
+          "Python Cookbook p533",
+          "Python Cookbook p531",
+          "Python Cookbook p534"
+        ],
+        "fused k=60 w=2": [
+          "Python Cookbook p533",
+          "Python Cookbook p531",
+          "Python Cookbook p534"
+        ],
+        "vectors only": [
+          "Python Cookbook p531",
+          "Python Cookbook p533",
+          "Python Cookbook p530"
+        ],
+        "words (BM25, today)": [
+          "Python Cookbook p533",
+          "Python Cookbook p534",
+          "A Survey of Number Represent p151"
+        ],
+        "words top 50, reranked": [
+          "Python Cookbook p531",
+          "Python Cookbook p533",
+          "Python Cookbook p255"
+        ]
+      }
+    },
+    {
+      "book": "Python Cookbook",
+      "kind": "paraphrase",
+      "page": 623,
+      "place": {
+        "fused k=10 w=1": 0,
+        "fused k=20 w=0.5": 0,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 0,
+        "fused k=60 w=2": 0,
+        "vectors only": 0,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "What are the drawbacks of calling a big compiled C library straight from Python using only the standard library, without writing any C glue?",
+      "top": {
+        "fused k=10 w=1": [
+          "Computer Systems: A Programm p703",
+          "Scott Meyers-Effective Moder p206",
+          "Computer Systems: A Programm p703"
+        ],
+        "fused k=20 w=0.5": [
+          "Scott Meyers-Effective Moder p206",
+          "Scott Meyers-Effective Moder p242",
+          "Scott Meyers-Effective Moder p222"
+        ],
+        "fused k=60 w=0.5": [
+          "Computer Systems: A Programm p703",
+          "Scott Meyers-Effective Moder p206",
+          "Scott Meyers-Effective Moder p242"
+        ],
+        "fused k=60 w=1": [
+          "Computer Systems: A Programm p703",
+          "Scott Meyers-Effective Moder p206",
+          "Computer Systems: A Programm p703"
+        ],
+        "fused k=60 w=2": [
+          "Computer Systems: A Programm p703",
+          "Computer Systems: A Programm p703",
+          "Python Cookbook p637"
+        ],
+        "vectors only": [
+          "Computer Systems: A Programm p703",
+          "Computer Systems: A Programm p703",
+          "Python Cookbook p637"
+        ],
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p206",
+          "Scott Meyers-Effective Moder p242",
+          "Scott Meyers-Effective Moder p222"
+        ],
+        "words top 50, reranked": [
+          "Computer Systems: A Programm p703",
+          "C Programming Language - 2nd p9",
+          "Python Cookbook p617"
+        ]
+      }
+    },
+    {
+      "book": "Python Cookbook",
+      "kind": "paraphrase",
+      "page": 207,
+      "place": {
+        "fused k=10 w=1": 4,
+        "fused k=20 w=0.5": 28,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 10,
+        "fused k=60 w=2": 7,
+        "vectors only": 2,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "Reading a gigantic XML file piece by piece and throwing away each piece once handled: how much slower is that than loading it all at once, and how much RAM does it save?",
+      "top": {
+        "fused k=10 w=1": [
+          "Designing Data-Intensive App p95",
+          "Python Cookbook p677",
+          "Linear Algebra and Its Appli p393"
+        ],
+        "fused k=20 w=0.5": [
+          "Designing Data-Intensive App p95",
+          "Linear Algebra and Its Appli p393",
+          "Linear Algebra and Its Appli p144"
+        ],
+        "fused k=60 w=0.5": [
+          "Designing Data-Intensive App p95",
+          "Designing Data-Intensive App p168",
+          "Computer Systems: A Programm p596"
+        ],
+        "fused k=60 w=1": [
+          "Designing Data-Intensive App p95",
+          "Designing Data-Intensive App p168",
+          "Computer Systems: A Programm p596"
+        ],
+        "fused k=60 w=2": [
+          "Designing Data-Intensive App p95",
+          "Designing Data-Intensive App p168",
+          "Computer Systems: A Programm p596"
+        ],
+        "vectors only": [
+          "Python Cookbook p677",
+          "Python Cookbook p207",
+          "Designing Data-Intensive App p95"
+        ],
+        "words (BM25, today)": [
+          "Linear Algebra and Its Appli p393",
+          "Linear Algebra and Its Appli p144",
+          "Linear Algebra and Its Appli p235"
+        ],
+        "words top 50, reranked": [
+          "Designing Data-Intensive App p95",
+          "Designing Data-Intensive App p168",
+          "Computer Systems: A Programm p605"
+        ]
+      }
+    },
+    {
+      "book": "Python Cookbook",
+      "kind": "keyword",
+      "page": 451,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "Is a virtual environment a full copy of the Python installation, and where do third-party packages get installed?",
+      "top": {
+        "fused k=10 w=1": [
+          "Python Cookbook p451",
+          "pythoncrashcourse p432",
+          "Python Cookbook p449"
+        ],
+        "fused k=20 w=0.5": [
+          "Python Cookbook p451",
+          "Python Cookbook p450",
+          "pythoncrashcourse p432"
+        ],
+        "fused k=60 w=0.5": [
+          "Python Cookbook p451",
+          "Python Cookbook p450",
+          "pythoncrashcourse p432"
+        ],
+        "fused k=60 w=1": [
+          "Python Cookbook p451",
+          "pythoncrashcourse p432",
+          "Python Cookbook p449"
+        ],
+        "fused k=60 w=2": [
+          "Python Cookbook p451",
+          "Python Cookbook p449",
+          "pythoncrashcourse p432"
+        ],
+        "vectors only": [
+          "Python Cookbook p451",
+          "Python Cookbook p449",
+          "pythoncrashcourse p432"
+        ],
+        "words (BM25, today)": [
+          "Python Cookbook p451",
+          "Python Cookbook p450",
+          "Python Cookbook p428"
+        ],
+        "words top 50, reranked": [
+          "Python Cookbook p451",
+          "Python Cookbook p449",
+          "pythoncrashcourse p432"
+        ]
+      }
+    },
+    {
+      "book": "Fluent Python",
+      "kind": "paraphrase",
+      "page": 60,
+      "place": {
+        "fused k=10 w=1": 3,
+        "fused k=20 w=0.5": 3,
+        "fused k=60 w=0.5": 3,
+        "fused k=60 w=1": 6,
+        "fused k=60 w=2": 8,
+        "vectors only": 41,
+        "words (BM25, today)": 4,
+        "words top 50, reranked": 10
+      },
+      "question": "If I only need to loop once over every combination of two lists, how can I avoid building the whole million-item result in memory first?",
+      "top": {
+        "fused k=10 w=1": [
+          "pythoncrashcourse p88",
+          "pythoncrashcourse p86",
+          "Fluent Python p60"
+        ],
+        "fused k=20 w=0.5": [
+          "pythoncrashcourse p88",
+          "pythoncrashcourse p86",
+          "Fluent Python p60"
+        ],
+        "fused k=60 w=0.5": [
+          "pythoncrashcourse p88",
+          "pythoncrashcourse p86",
+          "Fluent Python p60"
+        ],
+        "fused k=60 w=1": [
+          "pythoncrashcourse p88",
+          "pythoncrashcourse p86",
+          "pythoncrashcourse p159"
+        ],
+        "fused k=60 w=2": [
+          "pythoncrashcourse p88",
+          "pythoncrashcourse p86",
+          "Python Cookbook p149"
+        ],
+        "vectors only": [
+          "pythoncrashcourse p88",
+          "pythoncrashcourse p86",
+          "Computer Systems: A Programm p683"
+        ],
+        "words (BM25, today)": [
+          "pythoncrashcourse p88",
+          "pythoncrashcourse p86",
+          "introduction-to-algorithms-a p387"
+        ],
+        "words top 50, reranked": [
+          "pythoncrashcourse p88",
+          "pythoncrashcourse p86",
+          "Python Cookbook p149"
+        ]
+      }
+    },
+    {
+      "book": "Fluent Python",
+      "kind": "keyword",
+      "page": 178,
+      "place": {
+        "fused k=10 w=1": 2,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 2,
+        "fused k=60 w=2": 2,
+        "vectors only": 2,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 2
+      },
+      "question": "Why does sorted() give wrong results for non-ASCII strings with accents, and what is the standard way to sort them using locale?",
+      "top": {
+        "fused k=10 w=1": [
+          "Fluent Python p88",
+          "Fluent Python p178",
+          "Fluent Python p178"
+        ],
+        "fused k=20 w=0.5": [
+          "Fluent Python p178",
+          "Fluent Python p88",
+          "Fluent Python p178"
+        ],
+        "fused k=60 w=0.5": [
+          "Fluent Python p178",
+          "Fluent Python p88",
+          "Fluent Python p178"
+        ],
+        "fused k=60 w=1": [
+          "Fluent Python p88",
+          "Fluent Python p178",
+          "Fluent Python p178"
+        ],
+        "fused k=60 w=2": [
+          "Fluent Python p88",
+          "Fluent Python p178",
+          "Fluent Python p178"
+        ],
+        "vectors only": [
+          "Fluent Python p88",
+          "Fluent Python p179",
+          "Fluent Python p169"
+        ],
+        "words (BM25, today)": [
+          "Fluent Python p178",
+          "Fluent Python p178",
+          "Scott Meyers-Effective Moder p238"
+        ],
+        "words top 50, reranked": [
+          "Fluent Python p88",
+          "Fluent Python p178",
+          "Fluent Python p178"
+        ]
+      }
+    },
+    {
+      "book": "Fluent Python",
+      "kind": "paraphrase",
+      "page": 246,
+      "place": {
+        "fused k=10 w=1": 13,
+        "fused k=20 w=0.5": 8,
+        "fused k=60 w=0.5": 11,
+        "fused k=60 w=1": 13,
+        "fused k=60 w=2": 0,
+        "vectors only": 0,
+        "words (BM25, today)": 5,
+        "words top 50, reranked": 33
+      },
+      "question": "Why do two separate objects of my class end up sharing the same list when I wrote an empty list as the fallback value in the constructor's signature?",
+      "top": {
+        "fused k=10 w=1": [
+          "Scott Meyers-Effective Moder p201",
+          "Fluent Python p255",
+          "Scott Meyers-Effective Moder p133"
+        ],
+        "fused k=20 w=0.5": [
+          "Scott Meyers-Effective Moder p201",
+          "Scott Meyers-Effective Moder p200",
+          "Scott Meyers-Effective Moder p144"
+        ],
+        "fused k=60 w=0.5": [
+          "Scott Meyers-Effective Moder p201",
+          "Scott Meyers-Effective Moder p200",
+          "Scott Meyers-Effective Moder p74"
+        ],
+        "fused k=60 w=1": [
+          "Scott Meyers-Effective Moder p201",
+          "Scott Meyers-Effective Moder p200",
+          "Fluent Python p255"
+        ],
+        "fused k=60 w=2": [
+          "Scott Meyers-Effective Moder p201",
+          "Fluent Python p255",
+          "Scott Meyers-Effective Moder p133"
+        ],
+        "vectors only": [
+          "Fluent Python p255",
+          "Scott Meyers-Effective Moder p132",
+          "Fluent Python p248"
+        ],
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p144",
+          "Scott Meyers-Effective Moder p161",
+          "Scott Meyers-Effective Moder p201"
+        ],
+        "words top 50, reranked": [
+          "Fluent Python p255",
+          "Scott Meyers-Effective Moder p133",
+          "grokking-data-structures p111"
+        ]
+      }
+    },
+    {
+      "book": "Fluent Python",
+      "kind": "keyword",
+      "page": 353,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "What does the maxsize parameter of functools.lru_cache do and what is its default?",
+      "top": {
+        "fused k=10 w=1": [
+          "Fluent Python p353",
+          "Fluent Python p353",
+          "Fluent Python p350"
+        ],
+        "fused k=20 w=0.5": [
+          "Fluent Python p353",
+          "Fluent Python p353",
+          "Fluent Python p350"
+        ],
+        "fused k=60 w=0.5": [
+          "Fluent Python p353",
+          "Fluent Python p353",
+          "Fluent Python p350"
+        ],
+        "fused k=60 w=1": [
+          "Fluent Python p353",
+          "Fluent Python p353",
+          "Fluent Python p350"
+        ],
+        "fused k=60 w=2": [
+          "Fluent Python p353",
+          "Fluent Python p353",
+          "Fluent Python p350"
+        ],
+        "vectors only": [
+          "Fluent Python p353",
+          "Fluent Python p350",
+          "Fluent Python p353"
+        ],
+        "words (BM25, today)": [
+          "Fluent Python p353",
+          "Fluent Python p353",
+          "Fluent Python p354"
+        ],
+        "words top 50, reranked": [
+          "Fluent Python p353",
+          "Fluent Python p350",
+          "Fluent Python p353"
+        ]
+      }
+    },
+    {
+      "book": "Fluent Python",
+      "kind": "paraphrase",
+      "page": 412,
+      "place": {
+        "fused k=10 w=1": 6,
+        "fused k=20 w=0.5": 10,
+        "fused k=60 w=0.5": 4,
+        "fused k=60 w=1": 4,
+        "fused k=60 w=2": 2,
+        "vectors only": 8,
+        "words (BM25, today)": 18,
+        "words top 50, reranked": 2
+      },
+      "question": "What does Python actually do behind the scenes when I start a field's name with two underscores, and does that really keep other code from reading it?",
+      "top": {
+        "fused k=10 w=1": [
+          "pythoncrashcourse p54",
+          "Python Cookbook p268",
+          "Data Engineering with Python p138"
+        ],
+        "fused k=20 w=0.5": [
+          "pythoncrashcourse p54",
+          "Python Cookbook p268",
+          "Data Engineering with Python p138"
+        ],
+        "fused k=60 w=0.5": [
+          "pythoncrashcourse p54",
+          "Python Cookbook p268",
+          "Python Cookbook p269"
+        ],
+        "fused k=60 w=1": [
+          "pythoncrashcourse p54",
+          "Python Cookbook p269",
+          "Python Cookbook p268"
+        ],
+        "fused k=60 w=2": [
+          "pythoncrashcourse p54",
+          "Fluent Python p413",
+          "Python Cookbook p269"
+        ],
+        "vectors only": [
+          "pythoncrashcourse p54",
+          "pythoncrashcourse p105",
+          "pythoncrashcourse p53"
+        ],
+        "words (BM25, today)": [
+          "Data Engineering with Python p138",
+          "Data Engineering with Python p151",
+          "Python Cookbook p268"
+        ],
+        "words top 50, reranked": [
+          "pythoncrashcourse p54",
+          "Fluent Python p413",
+          "Python Cookbook p269"
+        ]
+      }
+    },
+    {
+      "book": "Fluent Python",
+      "kind": "paraphrase",
+      "page": 827,
+      "place": {
+        "fused k=10 w=1": 4,
+        "fused k=20 w=0.5": 11,
+        "fused k=60 w=0.5": 6,
+        "fused k=60 w=1": 6,
+        "fused k=60 w=2": 4,
+        "vectors only": 3,
+        "words (BM25, today)": 34,
+        "words top 50, reranked": 2
+      },
+      "question": "In async code, saving a file to disk freezes everything else while it writes. How do I hand that work off so the rest keeps running?",
+      "top": {
+        "fused k=10 w=1": [
+          "Scott Meyers-Effective Moder p261",
+          "Designing Data-Intensive App p107",
+          "Fluent Python p820"
+        ],
+        "fused k=20 w=0.5": [
+          "Scott Meyers-Effective Moder p261",
+          "Designing Data-Intensive App p107",
+          "pythoncrashcourse p222"
+        ],
+        "fused k=60 w=0.5": [
+          "Scott Meyers-Effective Moder p261",
+          "Designing Data-Intensive App p107",
+          "Designing Data-Intensive App p384"
+        ],
+        "fused k=60 w=1": [
+          "Scott Meyers-Effective Moder p261",
+          "Designing Data-Intensive App p107",
+          "Designing Data-Intensive App p384"
+        ],
+        "fused k=60 w=2": [
+          "Designing Data-Intensive App p107",
+          "Scott Meyers-Effective Moder p261",
+          "Fluent Python p820"
+        ],
+        "vectors only": [
+          "Fluent Python p820",
+          "Designing Data-Intensive App p319",
+          "Fluent Python p827"
+        ],
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p261",
+          "pythoncrashcourse p222",
+          "introduction-to-algorithms-a p22"
+        ],
+        "words top 50, reranked": [
+          "Fluent Python p820",
+          "Fluent Python p827",
+          "Designing Data-Intensive App p107"
+        ]
+      }
+    },
+    {
+      "book": "Fluent Python",
+      "kind": "keyword",
+      "page": 886,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "What are the limitations of @cached_property compared to a regular property?",
+      "top": {
+        "fused k=10 w=1": [
+          "Fluent Python p886",
+          "Fluent Python p886",
+          "Fluent Python p885"
+        ],
+        "fused k=20 w=0.5": [
+          "Fluent Python p886",
+          "Fluent Python p886",
+          "Computer Systems: A Programm p815"
+        ],
+        "fused k=60 w=0.5": [
+          "Fluent Python p886",
+          "Fluent Python p886",
+          "Computer Systems: A Programm p815"
+        ],
+        "fused k=60 w=1": [
+          "Fluent Python p886",
+          "Fluent Python p886",
+          "Computer Systems: A Programm p815"
+        ],
+        "fused k=60 w=2": [
+          "Fluent Python p886",
+          "Fluent Python p886",
+          "Fluent Python p885"
+        ],
+        "vectors only": [
+          "Fluent Python p886",
+          "Fluent Python p885",
+          "Fluent Python p886"
+        ],
+        "words (BM25, today)": [
+          "Fluent Python p886",
+          "Fluent Python p886",
+          "A Survey of Number Represent p56"
+        ],
+        "words top 50, reranked": [
+          "Fluent Python p886",
+          "Fluent Python p885",
+          "Fluent Python p886"
+        ]
+      }
+    },
+    {
+      "book": "Fluent Python",
+      "kind": "keyword",
+      "page": 716,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "In a match/case OR-pattern, why must all subpatterns use the same variables?",
+      "top": {
+        "fused k=10 w=1": [
+          "Fluent Python p716",
+          "Fluent Python p222",
+          "Fluent Python p72"
+        ],
+        "fused k=20 w=0.5": [
+          "Fluent Python p716",
+          "Fluent Python p222",
+          "Fluent Python p72"
+        ],
+        "fused k=60 w=0.5": [
+          "Fluent Python p716",
+          "Fluent Python p222",
+          "Fluent Python p72"
+        ],
+        "fused k=60 w=1": [
+          "Fluent Python p716",
+          "Fluent Python p222",
+          "Fluent Python p72"
+        ],
+        "fused k=60 w=2": [
+          "Fluent Python p716",
+          "Fluent Python p222",
+          "Fluent Python p71"
+        ],
+        "vectors only": [
+          "Fluent Python p716",
+          "Fluent Python p71",
+          "Fluent Python p222"
+        ],
+        "words (BM25, today)": [
+          "Fluent Python p716",
+          "Fluent Python p222",
+          "Fluent Python p223"
+        ],
+        "words top 50, reranked": [
+          "Fluent Python p716",
+          "Fluent Python p71",
+          "Fluent Python p222"
+        ]
+      }
+    },
+    {
+      "book": "Designing Data-Intensive Applications",
+      "kind": "keyword",
+      "page": 100,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "In an LSM-tree storage engine, what is a memtable and when does it get written out as an SSTable?",
+      "top": {
+        "fused k=10 w=1": [
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p106"
+        ],
+        "fused k=20 w=0.5": [
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p106"
+        ],
+        "fused k=60 w=0.5": [
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p106"
+        ],
+        "fused k=60 w=1": [
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p106"
+        ],
+        "fused k=60 w=2": [
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p106"
+        ],
+        "vectors only": [
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p106"
+        ],
+        "words (BM25, today)": [
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p101"
+        ],
+        "words top 50, reranked": [
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p106"
+        ]
+      }
+    },
+    {
+      "book": "Designing Data-Intensive Applications",
+      "kind": "keyword",
+      "page": 262,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "How does snapshot isolation use the created_by and deleted_by fields on each row to keep multiple versions of an object?",
+      "top": {
+        "fused k=10 w=1": [
+          "Designing Data-Intensive App p262",
+          "Designing Data-Intensive App p261",
+          "Designing Data-Intensive App p263"
+        ],
+        "fused k=20 w=0.5": [
+          "Designing Data-Intensive App p262",
+          "Designing Data-Intensive App p261",
+          "Designing Data-Intensive App p263"
+        ],
+        "fused k=60 w=0.5": [
+          "Designing Data-Intensive App p262",
+          "Designing Data-Intensive App p261",
+          "Designing Data-Intensive App p263"
+        ],
+        "fused k=60 w=1": [
+          "Designing Data-Intensive App p262",
+          "Designing Data-Intensive App p261",
+          "Designing Data-Intensive App p263"
+        ],
+        "fused k=60 w=2": [
+          "Designing Data-Intensive App p262",
+          "Designing Data-Intensive App p261",
+          "Designing Data-Intensive App p263"
+        ],
+        "vectors only": [
+          "Designing Data-Intensive App p262",
+          "Designing Data-Intensive App p261",
+          "Designing Data-Intensive App p213"
+        ],
+        "words (BM25, today)": [
+          "Designing Data-Intensive App p262",
+          "Designing Data-Intensive App p261",
+          "Designing Data-Intensive App p263"
+        ],
+        "words top 50, reranked": [
+          "Designing Data-Intensive App p262",
+          "Designing Data-Intensive App p261",
+          "Designing Data-Intensive App p213"
+        ]
+      }
+    },
+    {
+      "book": "Designing Data-Intensive Applications",
+      "kind": "keyword",
+      "page": 228,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 2,
+        "vectors only": 2,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 2
+      },
+      "question": "Why are secondary indexes a problem when a database is partitioned, and what are the two approaches to partitioning them?",
+      "top": {
+        "fused k=10 w=1": [
+          "Designing Data-Intensive App p228",
+          "Designing Data-Intensive App p239",
+          "Designing Data-Intensive App p229"
+        ],
+        "fused k=20 w=0.5": [
+          "Designing Data-Intensive App p228",
+          "Designing Data-Intensive App p229",
+          "Designing Data-Intensive App p239"
+        ],
+        "fused k=60 w=0.5": [
+          "Designing Data-Intensive App p228",
+          "Designing Data-Intensive App p229",
+          "Designing Data-Intensive App p239"
+        ],
+        "fused k=60 w=1": [
+          "Designing Data-Intensive App p228",
+          "Designing Data-Intensive App p239",
+          "Designing Data-Intensive App p229"
+        ],
+        "fused k=60 w=2": [
+          "Designing Data-Intensive App p239",
+          "Designing Data-Intensive App p229",
+          "Designing Data-Intensive App p228"
+        ],
+        "vectors only": [
+          "Designing Data-Intensive App p239",
+          "Designing Data-Intensive App p229",
+          "Designing Data-Intensive App p228"
+        ],
+        "words (BM25, today)": [
+          "Designing Data-Intensive App p228",
+          "Designing Data-Intensive App p229",
+          "Designing Data-Intensive App p239"
+        ],
+        "words top 50, reranked": [
+          "Designing Data-Intensive App p239",
+          "Designing Data-Intensive App p229",
+          "Designing Data-Intensive App p228"
+        ]
+      }
+    },
+    {
+      "book": "Designing Data-Intensive Applications",
+      "kind": "keyword",
+      "page": 430,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 2,
+        "vectors only": 2,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 2
+      },
+      "question": "What's the difference between a reduce-side join and a map-side join in MapReduce, and why can the map-side one be faster?",
+      "top": {
+        "fused k=10 w=1": [
+          "Designing Data-Intensive App p430",
+          "Designing Data-Intensive App p432",
+          "Designing Data-Intensive App p430"
+        ],
+        "fused k=20 w=0.5": [
+          "Designing Data-Intensive App p430",
+          "Designing Data-Intensive App p432",
+          "Designing Data-Intensive App p430"
+        ],
+        "fused k=60 w=0.5": [
+          "Designing Data-Intensive App p430",
+          "Designing Data-Intensive App p432",
+          "Designing Data-Intensive App p430"
+        ],
+        "fused k=60 w=1": [
+          "Designing Data-Intensive App p430",
+          "Designing Data-Intensive App p432",
+          "Designing Data-Intensive App p430"
+        ],
+        "fused k=60 w=2": [
+          "Designing Data-Intensive App p432",
+          "Designing Data-Intensive App p430",
+          "Designing Data-Intensive App p430"
+        ],
+        "vectors only": [
+          "Designing Data-Intensive App p432",
+          "Designing Data-Intensive App p430",
+          "Designing Data-Intensive App p430"
+        ],
+        "words (BM25, today)": [
+          "Designing Data-Intensive App p430",
+          "Designing Data-Intensive App p432",
+          "Designing Data-Intensive App p430"
+        ],
+        "words top 50, reranked": [
+          "Designing Data-Intensive App p432",
+          "Designing Data-Intensive App p430",
+          "Designing Data-Intensive App p430"
+        ]
+      }
+    },
+    {
+      "book": "Designing Data-Intensive Applications",
+      "kind": "paraphrase",
+      "page": 185,
+      "place": {
+        "fused k=10 w=1": 7,
+        "fused k=20 w=0.5": 4,
+        "fused k=60 w=0.5": 6,
+        "fused k=60 w=1": 9,
+        "fused k=60 w=2": 14,
+        "vectors only": 12,
+        "words (BM25, today)": 4,
+        "words top 50, reranked": 6
+      },
+      "question": "I save a change on a website, refresh, and my edit has vanished because the copy of the database I got hadn't caught up yet. What guarantee stops that, and how do you build it when one machine takes all the updates?",
+      "top": {
+        "fused k=10 w=1": [
+          "Designing Data-Intensive App p267",
+          "Data Engineering with Python p52",
+          "Designing Data-Intensive App p267"
+        ],
+        "fused k=20 w=0.5": [
+          "Data Engineering with Python p52",
+          "Linear Algebra and Its Appli p438",
+          "Linear Algebra and Its Appli p163"
+        ],
+        "fused k=60 w=0.5": [
+          "Designing Data-Intensive App p526",
+          "Data Engineering with Python p52",
+          "Designing Data-Intensive App p260"
+        ],
+        "fused k=60 w=1": [
+          "Designing Data-Intensive App p526",
+          "Designing Data-Intensive App p260",
+          "Designing Data-Intensive App p267"
+        ],
+        "fused k=60 w=2": [
+          "Designing Data-Intensive App p267",
+          "Designing Data-Intensive App p526",
+          "Designing Data-Intensive App p267"
+        ],
+        "vectors only": [
+          "Designing Data-Intensive App p267",
+          "Designing Data-Intensive App p267",
+          "Designing Data-Intensive App p477"
+        ],
+        "words (BM25, today)": [
+          "Data Engineering with Python p52",
+          "Linear Algebra and Its Appli p438",
+          "Linear Algebra and Its Appli p163"
+        ],
+        "words top 50, reranked": [
+          "Designing Data-Intensive App p526",
+          "Designing Data-Intensive App p260",
+          "Designing Data-Intensive App p285"
+        ]
+      }
+    },
+    {
+      "book": "Designing Data-Intensive Applications",
+      "kind": "paraphrase",
+      "page": 330,
+      "place": {
+        "fused k=10 w=1": 4,
+        "fused k=20 w=0.5": 3,
+        "fused k=60 w=0.5": 3,
+        "fused k=60 w=1": 5,
+        "fused k=60 w=2": 5,
+        "vectors only": 4,
+        "words (BM25, today)": 2,
+        "words top 50, reranked": 5
+      },
+      "question": "When people state what a distributed algorithm must guarantee, they split the requirements into 'nothing bad ever happens' and 'something good happens in the end'. What are those two categories and how do I tell which one a requirement belongs to?",
+      "top": {
+        "fused k=10 w=1": [
+          "Designing Data-Intensive App p296",
+          "Designing Data-Intensive App p332",
+          "introduction-to-algorithms-a p388"
+        ],
+        "fused k=20 w=0.5": [
+          "Designing Data-Intensive App p296",
+          "introduction-to-algorithms-a p388",
+          "Designing Data-Intensive App p330"
+        ],
+        "fused k=60 w=0.5": [
+          "Designing Data-Intensive App p296",
+          "introduction-to-algorithms-a p388",
+          "Designing Data-Intensive App p330"
+        ],
+        "fused k=60 w=1": [
+          "Designing Data-Intensive App p296",
+          "Designing Data-Intensive App p326",
+          "Designing Data-Intensive App p332"
+        ],
+        "fused k=60 w=2": [
+          "Designing Data-Intensive App p296",
+          "Designing Data-Intensive App p332",
+          "Designing Data-Intensive App p396"
+        ],
+        "vectors only": [
+          "Designing Data-Intensive App p332",
+          "Designing Data-Intensive App p396",
+          "Designing Data-Intensive App p296"
+        ],
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p388",
+          "Designing Data-Intensive App p330",
+          "Designing Data-Intensive App p296"
+        ],
+        "words top 50, reranked": [
+          "Designing Data-Intensive App p296",
+          "Designing Data-Intensive App p326",
+          "Designing Data-Intensive App p514"
+        ]
+      }
+    },
+    {
+      "book": "Designing Data-Intensive Applications",
+      "kind": "paraphrase",
+      "page": 38,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "If loading one page needs lots of calls to internal servers, why does the user end up waiting a long time much more often than any single one of those servers is slow?",
+      "top": {
+        "fused k=10 w=1": [
+          "Designing Data-Intensive App p38",
+          "Designing Data-Intensive App p39",
+          "Designing Data-Intensive App p533"
+        ],
+        "fused k=20 w=0.5": [
+          "Designing Data-Intensive App p38",
+          "Designing Data-Intensive App p533",
+          "Designing Data-Intensive App p39"
+        ],
+        "fused k=60 w=0.5": [
+          "Designing Data-Intensive App p38",
+          "Designing Data-Intensive App p533",
+          "Designing Data-Intensive App p39"
+        ],
+        "fused k=60 w=1": [
+          "Designing Data-Intensive App p38",
+          "Designing Data-Intensive App p39",
+          "Designing Data-Intensive App p533"
+        ],
+        "fused k=60 w=2": [
+          "Designing Data-Intensive App p38",
+          "Designing Data-Intensive App p39",
+          "Designing Data-Intensive App p533"
+        ],
+        "vectors only": [
+          "Designing Data-Intensive App p38",
+          "Designing Data-Intensive App p39",
+          "Designing Data-Intensive App p167"
+        ],
+        "words (BM25, today)": [
+          "Designing Data-Intensive App p38",
+          "Designing Data-Intensive App p533",
+          "Anthony Shaw - CPython Inter p227"
+        ],
+        "words top 50, reranked": [
+          "Designing Data-Intensive App p38",
+          "Designing Data-Intensive App p39",
+          "Designing Data-Intensive App p167"
+        ]
+      }
+    },
+    {
+      "book": "Designing Data-Intensive Applications",
+      "kind": "paraphrase",
+      "page": 530,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "For a purchase paid in a different currency, is it better for the code to ask another system for the conversion rate at the moment of sale, or to keep its own copy that gets updated whenever the rate changes?",
+      "top": {
+        "fused k=10 w=1": [
+          "Designing Data-Intensive App p530",
+          "Designing Data-Intensive App p498",
+          "Designing Data-Intensive App p531"
+        ],
+        "fused k=20 w=0.5": [
+          "Designing Data-Intensive App p530",
+          "Designing Data-Intensive App p498",
+          "Designing Data-Intensive App p531"
+        ],
+        "fused k=60 w=0.5": [
+          "Designing Data-Intensive App p530",
+          "Designing Data-Intensive App p498",
+          "Designing Data-Intensive App p531"
+        ],
+        "fused k=60 w=1": [
+          "Designing Data-Intensive App p530",
+          "Designing Data-Intensive App p498",
+          "Designing Data-Intensive App p531"
+        ],
+        "fused k=60 w=2": [
+          "Designing Data-Intensive App p530",
+          "Designing Data-Intensive App p498",
+          "Designing Data-Intensive App p531"
+        ],
+        "vectors only": [
+          "Designing Data-Intensive App p530",
+          "Designing Data-Intensive App p498",
+          "Fluent Python p375"
+        ],
+        "words (BM25, today)": [
+          "Designing Data-Intensive App p530",
+          "Designing Data-Intensive App p531",
+          "Designing Data-Intensive App p498"
+        ],
+        "words top 50, reranked": [
+          "Designing Data-Intensive App p530",
+          "Designing Data-Intensive App p498",
+          "Designing Data-Intensive App p531"
+        ]
+      }
+    },
+    {
+      "book": "Linear Algebra and Its Applications",
+      "kind": "keyword",
+      "page": 100,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 2,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 2
+      },
+      "question": "How do I find the special solutions to Ax = 0 from the free variables, and how do they make up the nullspace?",
+      "top": {
+        "fused k=10 w=1": [
+          "Linear Algebra and Its Appli p100",
+          "Linear Algebra and Its Appli p127",
+          "Linear Algebra and Its Appli p103"
+        ],
+        "fused k=20 w=0.5": [
+          "Linear Algebra and Its Appli p100",
+          "Linear Algebra and Its Appli p103",
+          "Linear Algebra and Its Appli p100"
+        ],
+        "fused k=60 w=0.5": [
+          "Linear Algebra and Its Appli p100",
+          "Linear Algebra and Its Appli p103",
+          "Linear Algebra and Its Appli p100"
+        ],
+        "fused k=60 w=1": [
+          "Linear Algebra and Its Appli p100",
+          "Linear Algebra and Its Appli p127",
+          "Linear Algebra and Its Appli p103"
+        ],
+        "fused k=60 w=2": [
+          "Linear Algebra and Its Appli p100",
+          "Linear Algebra and Its Appli p127",
+          "Linear Algebra and Its Appli p100"
+        ],
+        "vectors only": [
+          "Linear Algebra and Its Appli p127",
+          "Linear Algebra and Its Appli p100",
+          "Linear Algebra and Its Appli p102"
+        ],
+        "words (BM25, today)": [
+          "Linear Algebra and Its Appli p100",
+          "Linear Algebra and Its Appli p103",
+          "Linear Algebra and Its Appli p100"
+        ],
+        "words top 50, reranked": [
+          "Linear Algebra and Its Appli p127",
+          "Linear Algebra and Its Appli p100",
+          "Linear Algebra and Its Appli p102"
+        ]
+      }
+    },
+    {
+      "book": "Linear Algebra and Its Applications",
+      "kind": "keyword",
+      "page": 284,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "Why is the matrix [0 1; 0 0] not diagonalizable, and what do algebraic and geometric multiplicity of its eigenvalue have to do with it?",
+      "top": {
+        "fused k=10 w=1": [
+          "Linear Algebra and Its Appli p284",
+          "Linear Algebra and Its Appli p289",
+          "Linear Algebra and Its Appli p290"
+        ],
+        "fused k=20 w=0.5": [
+          "Linear Algebra and Its Appli p284",
+          "Linear Algebra and Its Appli p289",
+          "Linear Algebra and Its Appli p290"
+        ],
+        "fused k=60 w=0.5": [
+          "Linear Algebra and Its Appli p284",
+          "Linear Algebra and Its Appli p289",
+          "Linear Algebra and Its Appli p290"
+        ],
+        "fused k=60 w=1": [
+          "Linear Algebra and Its Appli p284",
+          "Linear Algebra and Its Appli p289",
+          "Linear Algebra and Its Appli p290"
+        ],
+        "fused k=60 w=2": [
+          "Linear Algebra and Its Appli p284",
+          "Linear Algebra and Its Appli p289",
+          "Linear Algebra and Its Appli p290"
+        ],
+        "vectors only": [
+          "Linear Algebra and Its Appli p284",
+          "Linear Algebra and Its Appli p276",
+          "Linear Algebra and Its Appli p377"
+        ],
+        "words (BM25, today)": [
+          "Linear Algebra and Its Appli p284",
+          "Linear Algebra and Its Appli p289",
+          "Linear Algebra and Its Appli p290"
+        ],
+        "words top 50, reranked": [
+          "Linear Algebra and Its Appli p284",
+          "Linear Algebra and Its Appli p276",
+          "Linear Algebra and Its Appli p289"
+        ]
+      }
+    },
+    {
+      "book": "Linear Algebra and Its Applications",
+      "kind": "keyword",
+      "page": 380,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "What is the polar decomposition A = QS and how does it follow from the SVD?",
+      "top": {
+        "fused k=10 w=1": [
+          "Linear Algebra and Its Appli p380",
+          "Linear Algebra and Its Appli p385",
+          "Linear Algebra and Its Appli p385"
+        ],
+        "fused k=20 w=0.5": [
+          "Linear Algebra and Its Appli p380",
+          "Linear Algebra and Its Appli p385",
+          "Linear Algebra and Its Appli p385"
+        ],
+        "fused k=60 w=0.5": [
+          "Linear Algebra and Its Appli p380",
+          "Linear Algebra and Its Appli p385",
+          "Linear Algebra and Its Appli p385"
+        ],
+        "fused k=60 w=1": [
+          "Linear Algebra and Its Appli p380",
+          "Linear Algebra and Its Appli p385",
+          "Linear Algebra and Its Appli p385"
+        ],
+        "fused k=60 w=2": [
+          "Linear Algebra and Its Appli p380",
+          "Linear Algebra and Its Appli p385",
+          "Linear Algebra and Its Appli p385"
+        ],
+        "vectors only": [
+          "Linear Algebra and Its Appli p380",
+          "Linear Algebra and Its Appli p385",
+          "Linear Algebra and Its Appli p213"
+        ],
+        "words (BM25, today)": [
+          "Linear Algebra and Its Appli p380",
+          "Linear Algebra and Its Appli p385",
+          "Linear Algebra and Its Appli p385"
+        ],
+        "words top 50, reranked": [
+          "Linear Algebra and Its Appli p380",
+          "Linear Algebra and Its Appli p385",
+          "Linear Algebra and Its Appli p385"
+        ]
+      }
+    },
+    {
+      "book": "Linear Algebra and Its Applications",
+      "kind": "keyword",
+      "page": 440,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "What are the steps of the revised simplex method, and why is it preferred to working with the full tableau?",
+      "top": {
+        "fused k=10 w=1": [
+          "Linear Algebra and Its Appli p440",
+          "Linear Algebra and Its Appli p439",
+          "Linear Algebra and Its Appli p441"
+        ],
+        "fused k=20 w=0.5": [
+          "Linear Algebra and Its Appli p440",
+          "Linear Algebra and Its Appli p439",
+          "Linear Algebra and Its Appli p437"
+        ],
+        "fused k=60 w=0.5": [
+          "Linear Algebra and Its Appli p440",
+          "Linear Algebra and Its Appli p439",
+          "Linear Algebra and Its Appli p437"
+        ],
+        "fused k=60 w=1": [
+          "Linear Algebra and Its Appli p440",
+          "Linear Algebra and Its Appli p439",
+          "Linear Algebra and Its Appli p441"
+        ],
+        "fused k=60 w=2": [
+          "Linear Algebra and Its Appli p440",
+          "Linear Algebra and Its Appli p441",
+          "Linear Algebra and Its Appli p439"
+        ],
+        "vectors only": [
+          "Linear Algebra and Its Appli p441",
+          "Linear Algebra and Its Appli p440",
+          "Linear Algebra and Its Appli p439"
+        ],
+        "words (BM25, today)": [
+          "Linear Algebra and Its Appli p440",
+          "Linear Algebra and Its Appli p437",
+          "Linear Algebra and Its Appli p439"
+        ],
+        "words top 50, reranked": [
+          "Linear Algebra and Its Appli p441",
+          "Linear Algebra and Its Appli p440",
+          "Linear Algebra and Its Appli p439"
+        ]
+      }
+    },
+    {
+      "book": "Linear Algebra and Its Applications",
+      "kind": "paraphrase",
+      "page": 172,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 2,
+        "fused k=60 w=1": 3,
+        "fused k=60 w=2": 3,
+        "vectors only": 28,
+        "words (BM25, today)": 2,
+        "words top 50, reranked": 4
+      },
+      "question": "Two walls of a room meet at a right angle, so why does the book say those two flat surfaces don't count as perpendicular to each other?",
+      "top": {
+        "fused k=10 w=1": [
+          "Linear Algebra and Its Appli p172",
+          "Linear Algebra and Its Appli p259",
+          "Linear Algebra and Its Appli p260"
+        ],
+        "fused k=20 w=0.5": [
+          "Linear Algebra and Its Appli p172",
+          "Linear Algebra and Its Appli p259",
+          "Linear Algebra and Its Appli p260"
+        ],
+        "fused k=60 w=0.5": [
+          "Linear Algebra and Its Appli p259",
+          "Linear Algebra and Its Appli p172",
+          "Linear Algebra and Its Appli p260"
+        ],
+        "fused k=60 w=1": [
+          "Linear Algebra and Its Appli p259",
+          "Linear Algebra and Its Appli p260",
+          "Linear Algebra and Its Appli p172"
+        ],
+        "fused k=60 w=2": [
+          "Linear Algebra and Its Appli p259",
+          "Linear Algebra and Its Appli p260",
+          "Linear Algebra and Its Appli p172"
+        ],
+        "vectors only": [
+          "Linear Algebra and Its Appli p18",
+          "Linear Algebra and Its Appli p181",
+          "Linear Algebra and Its Appli p19"
+        ],
+        "words (BM25, today)": [
+          "Designing Data-Intensive App p271",
+          "Linear Algebra and Its Appli p172",
+          "Linear Algebra and Its Appli p169"
+        ],
+        "words top 50, reranked": [
+          "Linear Algebra and Its Appli p260",
+          "Linear Algebra and Its Appli p259",
+          "Linear Algebra and Its Appli p188"
+        ]
+      }
+    },
+    {
+      "book": "Linear Algebra and Its Applications",
+      "kind": "paraphrase",
+      "page": 200,
+      "place": {
+        "fused k=10 w=1": 17,
+        "fused k=20 w=0.5": 39,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 18,
+        "fused k=60 w=2": 14,
+        "vectors only": 6,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "When fitting data where some measurements are more trustworthy than others, how much extra importance should the more accurate readings get, and what if their mistakes are linked to each other?",
+      "top": {
+        "fused k=10 w=1": [
+          "introduction-to-algorithms-a p211",
+          "introduction-to-algorithms-a p207",
+          "Designing Data-Intensive App p552"
+        ],
+        "fused k=20 w=0.5": [
+          "introduction-to-algorithms-a p211",
+          "introduction-to-algorithms-a p207",
+          "grokking-data-structures p119"
+        ],
+        "fused k=60 w=0.5": [
+          "introduction-to-algorithms-a p211",
+          "introduction-to-algorithms-a p207",
+          "introduction-to-algorithms-a p217"
+        ],
+        "fused k=60 w=1": [
+          "introduction-to-algorithms-a p211",
+          "introduction-to-algorithms-a p207",
+          "introduction-to-algorithms-a p217"
+        ],
+        "fused k=60 w=2": [
+          "introduction-to-algorithms-a p211",
+          "introduction-to-algorithms-a p207",
+          "introduction-to-algorithms-a p217"
+        ],
+        "vectors only": [
+          "Designing Data-Intensive App p552",
+          "Designing Data-Intensive App p552",
+          "introduction-to-algorithms-a p211"
+        ],
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p211",
+          "grokking-data-structures p119",
+          "Python Data Science Handbook p255"
+        ],
+        "words top 50, reranked": [
+          "introduction-to-algorithms-a p211",
+          "introduction-to-algorithms-a p207",
+          "Designing Data-Intensive App p557"
+        ]
+      }
+    },
+    {
+      "book": "Linear Algebra and Its Applications",
+      "kind": "paraphrase",
+      "page": 260,
+      "place": {
+        "fused k=10 w=1": 13,
+        "fused k=20 w=0.5": 38,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 14,
+        "fused k=60 w=2": 9,
+        "vectors only": 6,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "Is there a geometric picture for that single number you compute from a square matrix — something to do with how much space the box built from its rows takes up? And what does its sign mean?",
+      "top": {
+        "fused k=10 w=1": [
+          "Linear Algebra and Its Appli p150",
+          "A Survey of Number Represent p187",
+          "Python Data Science Handbook p456"
+        ],
+        "fused k=20 w=0.5": [
+          "Linear Algebra and Its Appli p150",
+          "A Survey of Number Represent p187",
+          "A Survey of Number Represent p212"
+        ],
+        "fused k=60 w=0.5": [
+          "Linear Algebra and Its Appli p150",
+          "Linear Algebra and Its Appli p379",
+          "Linear Algebra and Its Appli p33"
+        ],
+        "fused k=60 w=1": [
+          "Linear Algebra and Its Appli p150",
+          "Linear Algebra and Its Appli p379",
+          "Linear Algebra and Its Appli p33"
+        ],
+        "fused k=60 w=2": [
+          "Linear Algebra and Its Appli p150",
+          "Linear Algebra and Its Appli p379",
+          "Linear Algebra and Its Appli p33"
+        ],
+        "vectors only": [
+          "Python Data Science Handbook p456",
+          "Linear Algebra and Its Appli p267",
+          "Linear Algebra and Its Appli p164"
+        ],
+        "words (BM25, today)": [
+          "A Survey of Number Represent p187",
+          "A Survey of Number Represent p212",
+          "Linear Algebra and Its Appli p235"
+        ],
+        "words top 50, reranked": [
+          "Linear Algebra and Its Appli p150",
+          "Linear Algebra and Its Appli p33",
+          "Linear Algebra and Its Appli p379"
+        ]
+      }
+    },
+    {
+      "book": "Linear Algebra and Its Applications",
+      "kind": "paraphrase",
+      "page": 297,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "If each year fixed fractions of people move into and out of a state, why does the split of the population settle to the same proportions in the long run no matter how it started?",
+      "top": {
+        "fused k=10 w=1": [
+          "Linear Algebra and Its Appli p297",
+          "Linear Algebra and Its Appli p315",
+          "Designing Data-Intensive App p235"
+        ],
+        "fused k=20 w=0.5": [
+          "Linear Algebra and Its Appli p297",
+          "Linear Algebra and Its Appli p297",
+          "Linear Algebra and Its Appli p296"
+        ],
+        "fused k=60 w=0.5": [
+          "Linear Algebra and Its Appli p297",
+          "Linear Algebra and Its Appli p315",
+          "Linear Algebra and Its Appli p462"
+        ],
+        "fused k=60 w=1": [
+          "Linear Algebra and Its Appli p297",
+          "Linear Algebra and Its Appli p315",
+          "Linear Algebra and Its Appli p462"
+        ],
+        "fused k=60 w=2": [
+          "Linear Algebra and Its Appli p297",
+          "Linear Algebra and Its Appli p315",
+          "Linear Algebra and Its Appli p462"
+        ],
+        "vectors only": [
+          "Linear Algebra and Its Appli p297",
+          "Designing Data-Intensive App p235",
+          "Python Data Science Handbook p344"
+        ],
+        "words (BM25, today)": [
+          "Linear Algebra and Its Appli p297",
+          "Linear Algebra and Its Appli p297",
+          "Linear Algebra and Its Appli p296"
+        ],
+        "words top 50, reranked": [
+          "Linear Algebra and Its Appli p297",
+          "Linear Algebra and Its Appli p315",
+          "Linear Algebra and Its Appli p462"
+        ]
+      }
+    },
+    {
+      "book": "Grokking Data Structures",
+      "kind": "keyword",
+      "page": 90,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "When should I prefer a dynamic array over a static array, and what does the dynamic array cost me?",
+      "top": {
+        "fused k=10 w=1": [
+          "grokking-data-structures p90",
+          "grokking-data-structures p87",
+          "grokking-data-structures p170"
+        ],
+        "fused k=20 w=0.5": [
+          "grokking-data-structures p90",
+          "grokking-data-structures p87",
+          "grokking-data-structures p170"
+        ],
+        "fused k=60 w=0.5": [
+          "grokking-data-structures p90",
+          "grokking-data-structures p87",
+          "grokking-data-structures p170"
+        ],
+        "fused k=60 w=1": [
+          "grokking-data-structures p90",
+          "grokking-data-structures p87",
+          "grokking-data-structures p170"
+        ],
+        "fused k=60 w=2": [
+          "grokking-data-structures p90",
+          "grokking-data-structures p87",
+          "grokking-data-structures p98"
+        ],
+        "vectors only": [
+          "grokking-data-structures p90",
+          "grokking-data-structures p87",
+          "grokking-data-structures p59"
+        ],
+        "words (BM25, today)": [
+          "grokking-data-structures p90",
+          "grokking-data-structures p170",
+          "grokking-data-structures p87"
+        ],
+        "words top 50, reranked": [
+          "grokking-data-structures p90",
+          "grokking-data-structures p87",
+          "grokking-data-structures p59"
+        ]
+      }
+    },
+    {
+      "book": "Grokking Data Structures",
+      "kind": "keyword",
+      "page": 190,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 2,
+        "fused k=60 w=0.5": 2,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 3,
+        "words top 50, reranked": 1
+      },
+      "question": "If a priority queue is implemented with a sorted linked list or sorted array, how do the top and insert methods work?",
+      "top": {
+        "fused k=10 w=1": [
+          "grokking-data-structures p190",
+          "grokking-data-structures p192",
+          "grokking-data-structures p191"
+        ],
+        "fused k=20 w=0.5": [
+          "grokking-data-structures p192",
+          "grokking-data-structures p191",
+          "grokking-data-structures p190"
+        ],
+        "fused k=60 w=0.5": [
+          "grokking-data-structures p192",
+          "grokking-data-structures p191",
+          "grokking-data-structures p190"
+        ],
+        "fused k=60 w=1": [
+          "grokking-data-structures p190",
+          "grokking-data-structures p192",
+          "grokking-data-structures p191"
+        ],
+        "fused k=60 w=2": [
+          "grokking-data-structures p190",
+          "grokking-data-structures p191",
+          "grokking-data-structures p192"
+        ],
+        "vectors only": [
+          "grokking-data-structures p190",
+          "grokking-data-structures p191",
+          "grokking-data-structures p190"
+        ],
+        "words (BM25, today)": [
+          "grokking-data-structures p192",
+          "grokking-data-structures p195",
+          "grokking-data-structures p191"
+        ],
+        "words top 50, reranked": [
+          "grokking-data-structures p190",
+          "grokking-data-structures p191",
+          "grokking-data-structures p190"
+        ]
+      }
+    },
+    {
+      "book": "Grokking Data Structures",
+      "kind": "keyword",
+      "page": 215,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "What is the BST property, and where do duplicate values go in a binary search tree?",
+      "top": {
+        "fused k=10 w=1": [
+          "grokking-data-structures p215",
+          "grokking-data-structures p220",
+          "grokking-data-structures p230"
+        ],
+        "fused k=20 w=0.5": [
+          "grokking-data-structures p215",
+          "grokking-data-structures p220",
+          "grokking-data-structures p219"
+        ],
+        "fused k=60 w=0.5": [
+          "grokking-data-structures p215",
+          "grokking-data-structures p220",
+          "grokking-data-structures p219"
+        ],
+        "fused k=60 w=1": [
+          "grokking-data-structures p215",
+          "grokking-data-structures p220",
+          "grokking-data-structures p230"
+        ],
+        "fused k=60 w=2": [
+          "grokking-data-structures p215",
+          "grokking-data-structures p220",
+          "grokking-data-structures p230"
+        ],
+        "vectors only": [
+          "grokking-data-structures p215",
+          "grokking-data-structures p230",
+          "grokking-data-structures p220"
+        ],
+        "words (BM25, today)": [
+          "grokking-data-structures p215",
+          "grokking-data-structures p220",
+          "grokking-data-structures p219"
+        ],
+        "words top 50, reranked": [
+          "grokking-data-structures p215",
+          "grokking-data-structures p230",
+          "grokking-data-structures p220"
+        ]
+      }
+    },
+    {
+      "book": "Grokking Data Structures",
+      "kind": "paraphrase",
+      "page": 40,
+      "place": {
+        "fused k=10 w=1": 1,
+        "fused k=20 w=0.5": 1,
+        "fused k=60 w=0.5": 1,
+        "fused k=60 w=1": 1,
+        "fused k=60 w=2": 1,
+        "vectors only": 1,
+        "words (BM25, today)": 1,
+        "words top 50, reranked": 1
+      },
+      "question": "In the animal hospital story, why was it a mistake for the staff to take the next patient's form off the top of the pile, and what did they switch to?",
+      "top": {
+        "fused k=10 w=1": [
+          "grokking-data-structures p40",
+          "grokking-data-structures p40",
+          "A Survey of Number Represent p29"
+        ],
+        "fused k=20 w=0.5": [
+          "grokking-data-structures p40",
+          "A Survey of Number Represent p29",
+          "A Survey of Number Represent p237"
+        ],
+        "fused k=60 w=0.5": [
+          "grokking-data-structures p40",
+          "A Survey of Number Represent p29",
+          "A Survey of Number Represent p237"
+        ],
+        "fused k=60 w=1": [
+          "grokking-data-structures p40",
+          "Computer Systems: A Programm p252",
+          "grokking-data-structures p40"
+        ],
+        "fused k=60 w=2": [
+          "grokking-data-structures p40",
+          "grokking-data-structures p40",
+          "grokking-data-structures p39"
+        ],
+        "vectors only": [
+          "grokking-data-structures p40",
+          "grokking-data-structures p40",
+          "grokking-data-structures p39"
+        ],
+        "words (BM25, today)": [
+          "grokking-data-structures p40",
+          "A Survey of Number Represent p29",
+          "A Survey of Number Represent p237"
+        ],
+        "words top 50, reranked": [
+          "grokking-data-structures p40",
+          "Computer Systems: A Programm p252",
+          "grokking-data-structures p150"
+        ]
+      }
+    },
+    {
+      "book": "Grokking Data Structures",
+      "kind": "paraphrase",
+      "page": 115,
+      "place": {
+        "fused k=10 w=1": 3,
+        "fused k=20 w=0.5": 25,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 7,
+        "fused k=60 w=2": 6,
+        "vectors only": 1,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "To remove an item from a chain of nodes where each one only knows the one after it, why can't I just look the item up and unhook it? What do I need to keep track of while walking along?",
+      "top": {
+        "fused k=10 w=1": [
+          "introduction-to-algorithms-a p378",
+          "introduction-to-algorithms-a p376",
+          "grokking-data-structures p115"
+        ],
+        "fused k=20 w=0.5": [
+          "introduction-to-algorithms-a p378",
+          "introduction-to-algorithms-a p376",
+          "introduction-to-algorithms-a p288"
+        ],
+        "fused k=60 w=0.5": [
+          "introduction-to-algorithms-a p378",
+          "introduction-to-algorithms-a p376",
+          "introduction-to-algorithms-a p264"
+        ],
+        "fused k=60 w=1": [
+          "introduction-to-algorithms-a p378",
+          "introduction-to-algorithms-a p376",
+          "introduction-to-algorithms-a p264"
+        ],
+        "fused k=60 w=2": [
+          "introduction-to-algorithms-a p378",
+          "introduction-to-algorithms-a p264",
+          "introduction-to-algorithms-a p376"
+        ],
+        "vectors only": [
+          "grokking-data-structures p115",
+          "grokking-data-structures p33",
+          "grokking-data-structures p115"
+        ],
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p288",
+          "Linear Algebra and Its Appli p150",
+          "Scott Meyers-Effective Moder p84"
+        ],
+        "words top 50, reranked": [
+          "introduction-to-algorithms-a p378",
+          "introduction-to-algorithms-a p264",
+          "introduction-to-algorithms-a p376"
+        ]
+      }
+    },
+    {
+      "book": "Grokking Data Structures",
+      "kind": "paraphrase",
+      "page": 243,
+      "place": {
+        "fused k=10 w=1": 8,
+        "fused k=20 w=0.5": 29,
+        "fused k=60 w=0.5": 0,
+        "fused k=60 w=1": 8,
+        "fused k=60 w=2": 6,
+        "vectors only": 3,
+        "words (BM25, today)": 0,
+        "words top 50, reranked": 0
+      },
+      "question": "Two different items end up assigned to the same slot of the table. What's the approach where each slot holds a whole list of items instead of a single one?",
+      "top": {
+        "fused k=10 w=1": [
+          "Computer Systems: A Programm p871",
+          "Python Cookbook p149",
+          "Computer Systems: A Programm p872"
+        ],
+        "fused k=20 w=0.5": [
+          "Computer Systems: A Programm p871",
+          "Computer Systems: A Programm p872",
+          "Computer Systems: A Programm p639"
+        ],
+        "fused k=60 w=0.5": [
+          "Computer Systems: A Programm p871",
+          "Computer Systems: A Programm p872",
+          "Computer Systems: A Programm p872"
+        ],
+        "fused k=60 w=1": [
+          "Computer Systems: A Programm p871",
+          "Computer Systems: A Programm p872",
+          "Computer Systems: A Programm p872"
+        ],
+        "fused k=60 w=2": [
+          "Computer Systems: A Programm p872",
+          "Computer Systems: A Programm p872",
+          "Computer Systems: A Programm p871"
+        ],
+        "vectors only": [
+          "Python Cookbook p149",
+          "grokking-data-structures p109",
+          "grokking-data-structures p243"
+        ],
+        "words (BM25, today)": [
+          "Computer Systems: A Programm p871",
+          "Computer Systems: A Programm p639",
+          "Computer Systems: A Programm p857"
+        ],
+        "words top 50, reranked": [
+          "Computer Systems: A Programm p872",
+          "Computer Systems: A Programm p872",
+          "Computer Systems: A Programm p871"
+        ]
+      }
+    }
+  ],
+  "questions": 94,
+  "rankings": [
+    {
+      "all": {
+        "hit3": 60,
+        "hit8": 66,
+        "mrr8": 0.6070921985815603,
+        "n": 94,
+        "recall3": 0.6382978723404256,
+        "recall8": 0.7021276595744681
+      },
+      "keyword": {
+        "hit3": 46,
+        "hit8": 47,
+        "mrr8": 0.9468085106382981,
+        "n": 47,
+        "recall3": 0.9787234042553191,
+        "recall8": 1.0
+      },
+      "p50_ms": 1.2561250000000002,
+      "p95_ms": 1.8360830000000001,
+      "paraphrase": {
+        "hit3": 14,
+        "hit8": 19,
+        "mrr8": 0.2673758865248227,
+        "n": 47,
+        "recall3": 0.2978723404255319,
+        "recall8": 0.40425531914893614
+      },
+      "ranking": "words (BM25, today)"
+    },
+    {
+      "all": {
+        "hit3": 56,
+        "hit8": 65,
+        "mrr8": 0.5207446808510637,
+        "n": 94,
+        "recall3": 0.5957446808510638,
+        "recall8": 0.6914893617021277
+      },
+      "keyword": {
+        "hit3": 46,
+        "hit8": 47,
+        "mrr8": 0.8351063829787234,
+        "n": 47,
+        "recall3": 0.9787234042553191,
+        "recall8": 1.0
+      },
+      "p50_ms": 2.777458,
+      "p95_ms": 2.929958,
+      "paraphrase": {
+        "hit3": 10,
+        "hit8": 18,
+        "mrr8": 0.20638297872340428,
+        "n": 47,
+        "recall3": 0.2127659574468085,
+        "recall8": 0.3829787234042553
+      },
+      "ranking": "vectors only"
+    },
+    {
+      "all": {
+        "hit3": 59,
+        "hit8": 69,
+        "mrr8": 0.6087006079027356,
+        "n": 94,
+        "recall3": 0.6276595744680851,
+        "recall8": 0.7340425531914894
+      },
+      "keyword": {
+        "hit3": 47,
+        "hit8": 47,
+        "mrr8": 0.9432624113475178,
+        "n": 47,
+        "recall3": 1.0,
+        "recall8": 1.0
+      },
+      "p50_ms": 4.008375,
+      "p95_ms": 4.61375,
+      "paraphrase": {
+        "hit3": 12,
+        "hit8": 22,
+        "mrr8": 0.2741388044579534,
+        "n": 47,
+        "recall3": 0.2553191489361702,
+        "recall8": 0.46808510638297873
+      },
+      "ranking": "fused k=60 w=1"
+    },
+    {
+      "all": {
+        "hit3": 62,
+        "hit8": 70,
+        "mrr8": 0.6278495440729485,
+        "n": 94,
+        "recall3": 0.6595744680851063,
+        "recall8": 0.7446808510638298
+      },
+      "keyword": {
+        "hit3": 47,
+        "hit8": 47,
+        "mrr8": 0.9432624113475178,
+        "n": 47,
+        "recall3": 1.0,
+        "recall8": 1.0
+      },
+      "p50_ms": 4.014458,
+      "p95_ms": 4.536166000000001,
+      "paraphrase": {
+        "hit3": 15,
+        "hit8": 23,
+        "mrr8": 0.3124366767983789,
+        "n": 47,
+        "recall3": 0.3191489361702128,
+        "recall8": 0.48936170212765956
+      },
+      "ranking": "fused k=10 w=1"
+    },
+    {
+      "all": {
+        "hit3": 64,
+        "hit8": 69,
+        "mrr8": 0.6233282674772036,
+        "n": 94,
+        "recall3": 0.6808510638297872,
+        "recall8": 0.7340425531914894
+      },
+      "keyword": {
+        "hit3": 47,
+        "hit8": 47,
+        "mrr8": 0.9680851063829787,
+        "n": 47,
+        "recall3": 1.0,
+        "recall8": 1.0
+      },
+      "p50_ms": 4.009333000000001,
+      "p95_ms": 4.557333,
+      "paraphrase": {
+        "hit3": 17,
+        "hit8": 22,
+        "mrr8": 0.2785714285714285,
+        "n": 47,
+        "recall3": 0.3617021276595745,
+        "recall8": 0.46808510638297873
+      },
+      "ranking": "fused k=60 w=0.5"
+    },
+    {
+      "all": {
+        "hit3": 59,
+        "hit8": 67,
+        "mrr8": 0.5732396149949341,
+        "n": 94,
+        "recall3": 0.6276595744680851,
+        "recall8": 0.7127659574468085
+      },
+      "keyword": {
+        "hit3": 46,
+        "hit8": 47,
+        "mrr8": 0.8953900709219859,
+        "n": 47,
+        "recall3": 0.9787234042553191,
+        "recall8": 1.0
+      },
+      "p50_ms": 3.9309999999999996,
+      "p95_ms": 4.482042000000001,
+      "paraphrase": {
+        "hit3": 13,
+        "hit8": 20,
+        "mrr8": 0.2510891590678825,
+        "n": 47,
+        "recall3": 0.2765957446808511,
+        "recall8": 0.425531914893617
+      },
+      "ranking": "fused k=60 w=2"
+    },
+    {
+      "all": {
+        "hit3": 64,
+        "hit8": 67,
+        "mrr8": 0.6387411347517731,
+        "n": 94,
+        "recall3": 0.6808510638297872,
+        "recall8": 0.7127659574468085
+      },
+      "keyword": {
+        "hit3": 47,
+        "hit8": 47,
+        "mrr8": 0.9787234042553191,
+        "n": 47,
+        "recall3": 1.0,
+        "recall8": 1.0
+      },
+      "p50_ms": 3.883625,
+      "p95_ms": 4.40625,
+      "paraphrase": {
+        "hit3": 17,
+        "hit8": 20,
+        "mrr8": 0.2987588652482269,
+        "n": 47,
+        "recall3": 0.3617021276595745,
+        "recall8": 0.425531914893617
+      },
+      "ranking": "fused k=20 w=0.5"
+    },
+    {
+      "all": {
+        "hit3": 61,
+        "hit8": 68,
+        "mrr8": 0.5601063829787234,
+        "n": 94,
+        "recall3": 0.648936170212766,
+        "recall8": 0.723404255319149
+      },
+      "keyword": {
+        "hit3": 46,
+        "hit8": 47,
+        "mrr8": 0.8634751773049645,
+        "n": 47,
+        "recall3": 0.9787234042553191,
+        "recall8": 1.0
+      },
+      "p50_ms": 1.174,
+      "p95_ms": 1.715125,
+      "paraphrase": {
+        "hit3": 15,
+        "hit8": 21,
+        "mrr8": 0.25673758865248225,
+        "n": 47,
+        "recall3": 0.3191489361702128,
+        "recall8": 0.44680851063829785
+      },
+      "ranking": "words top 50, reranked"
+    }
+  ],
+  "rss_after_build_mb": 187.0,
+  "rss_after_open_mb": 15.84375,
+  "rss_peak_mb": 222.609375,
+  "vectors": 11840
+}

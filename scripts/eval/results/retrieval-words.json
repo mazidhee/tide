@@ -1,0 +1,1551 @@
+{
+  "build_s": 0.741325084,
+  "built_bytes_of_text": 13063517,
+  "built_passages": 11840,
+  "index_mb": 12.731765747070312,
+  "model": null,
+  "open_ms": 32.198042,
+  "passages": 11840,
+  "per_question": [
+    {
+      "book": "Computer Systems: A Programmer's Perspective",
+      "kind": "keyword",
+      "page": 96,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What are the smallest and largest values a w-bit two's-complement number can represent, and which bit vectors give TMin and TMax?",
+      "top": {
+        "words (BM25, today)": [
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p96",
+          "Computer Systems: A Programm p97"
+        ]
+      }
+    },
+    {
+      "book": "Computer Systems: A Programmer's Perspective",
+      "kind": "paraphrase",
+      "page": 293,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "If a C function reads a line of typed text into a small local character array and the user types far more than fits, what exactly gets damaged and how does the program go wrong as the input gets longer?",
+      "top": {
+        "words (BM25, today)": [
+          "C Programming Language - 2nd p31",
+          "C Programming Language - 2nd p18",
+          "C Programming Language - 2nd p71"
+        ]
+      }
+    },
+    {
+      "book": "Computer Systems: A Programmer's Perspective",
+      "kind": "keyword",
+      "page": 529,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "Why can't the compiler turn combine3 into combine4 on its own and accumulate the result in a register? What does memory aliasing have to do with it?",
+      "top": {
+        "words (BM25, today)": [
+          "Computer Systems: A Programm p529",
+          "Computer Systems: A Programm p530",
+          "Computer Systems: A Programm p528"
+        ]
+      }
+    },
+    {
+      "book": "Computer Systems: A Programmer's Perspective",
+      "kind": "paraphrase",
+      "page": 621,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "Why did chip makers give up on making one processor run faster and faster and start putting several smaller ones on the same chip instead?",
+      "top": {
+        "words (BM25, today)": [
+          "Computer Systems: A Programm p193",
+          "Computer Systems: A Programm p47",
+          "Computer Systems: A Programm p48"
+        ]
+      }
+    },
+    {
+      "book": "Computer Systems: A Programmer's Perspective",
+      "kind": "keyword",
+      "page": 708,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What is in an ELF relocation entry, and how do the relocation types R_386_PC32 and R_386_32 differ?",
+      "top": {
+        "words (BM25, today)": [
+          "Computer Systems: A Programm p708",
+          "Computer Systems: A Programm p709",
+          "Computer Systems: A Programm p730"
+        ]
+      }
+    },
+    {
+      "book": "Computer Systems: A Programmer's Perspective",
+      "kind": "keyword",
+      "page": 779,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "How do I install a signal handler with the signal function so my program catches SIGINT instead of being terminated when the user types ctrl-c?",
+      "top": {
+        "words (BM25, today)": [
+          "Computer Systems: A Programm p779",
+          "Computer Systems: A Programm p795",
+          "Computer Systems: A Programm p779"
+        ]
+      }
+    },
+    {
+      "book": "Computer Systems: A Programmer's Perspective",
+      "kind": "paraphrase",
+      "page": 926,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "When a message has to cross from one local network to a different kind of local network through the box that joins them, what happens to the wrappers around the data on the way, and what does the receiving machine do with them?",
+      "top": {
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p249",
+          "introduction-to-algorithms-a p217",
+          "introduction-to-algorithms-a p212"
+        ]
+      }
+    },
+    {
+      "book": "Computer Systems: A Programmer's Perspective",
+      "kind": "paraphrase",
+      "page": 1011,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "I split a big summation across more workers than my machine has processors and it stopped getting faster, even got a little slower. Why doesn't adding more keep helping?",
+      "top": {
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p324",
+          "Linear Algebra and Its Appli p10",
+          "introduction-to-algorithms-a p67"
+        ]
+      }
+    },
+    {
+      "book": "The C Programming Language",
+      "kind": "keyword",
+      "page": 42,
+      "place": {
+        "words (BM25, today)": 2
+      },
+      "question": "When a char is converted to an int in C, can the result be negative? Is char signed or unsigned, and what is sign extension here?",
+      "top": {
+        "words (BM25, today)": [
+          "C Programming Language - 2nd p174",
+          "C Programming Language - 2nd p43",
+          "C Programming Language - 2nd p42"
+        ]
+      }
+    },
+    {
+      "book": "The C Programming Language",
+      "kind": "paraphrase",
+      "page": 76,
+      "place": {
+        "words (BM25, today)": 13
+      },
+      "question": "If I declare a variable inside the curly braces of an if, using the same name as one that already exists further out, are they the same variable? How long does the inner one live?",
+      "top": {
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p70",
+          "Scott Meyers-Effective Moder p85",
+          "Scott Meyers-Effective Moder p226"
+        ]
+      }
+    },
+    {
+      "book": "The C Programming Language",
+      "kind": "keyword",
+      "page": 89,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What is the relationship between array indexing and pointer arithmetic in C: is a[i] really the same as *(a+i), and how is an array name different from a pointer?",
+      "top": {
+        "words (BM25, today)": [
+          "C Programming Language - 2nd p89",
+          "Scott Meyers-Effective Moder p67",
+          "C Programming Language - 2nd p87"
+        ]
+      }
+    },
+    {
+      "book": "The C Programming Language",
+      "kind": "paraphrase",
+      "page": 117,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "In C, when I hand a function one of those grouped records with a couple of named members and the function changes a member, does my original get changed too? And is there a cheaper way to hand over a big one?",
+      "top": {
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p67",
+          "Scott Meyers-Effective Moder p105",
+          "Scott Meyers-Effective Moder p101"
+        ]
+      }
+    },
+    {
+      "book": "The C Programming Language",
+      "kind": "paraphrase",
+      "page": 151,
+      "place": {
+        "words (BM25, today)": 2
+      },
+      "question": "How come a C program on UNIX can read what I type and print to the screen with the very same calls it uses for things stored on disk?",
+      "top": {
+        "words (BM25, today)": [
+          "C Programming Language - 2nd p18",
+          "C Programming Language - 2nd p151",
+          "C Programming Language - 2nd p142"
+        ]
+      }
+    },
+    {
+      "book": "The C Programming Language",
+      "kind": "keyword",
+      "page": 164,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "How does the K&R malloc keep its free list of blocks, and what does the first fit algorithm do when a block is too big or when a block is freed?",
+      "top": {
+        "words (BM25, today)": [
+          "C Programming Language - 2nd p164",
+          "Computer Systems: A Programm p857",
+          "Computer Systems: A Programm p888"
+        ]
+      }
+    },
+    {
+      "book": "Effective Modern C++",
+      "kind": "keyword",
+      "page": 63,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What is a proxy class in C++, and why are std::vector<bool>::reference and expression templates called invisible proxies?",
+      "top": {
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p63",
+          "Scott Meyers-Effective Moder p64",
+          "Scott Meyers-Effective Moder p63"
+        ]
+      }
+    },
+    {
+      "book": "Effective Modern C++",
+      "kind": "keyword",
+      "page": 96,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "Why are deleted functions better than the C++98 trick of declaring a function private and not defining it, for example when disabling a template specialization inside a class?",
+      "top": {
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p96",
+          "Scott Meyers-Effective Moder p93",
+          "Scott Meyers-Effective Moder p95"
+        ]
+      }
+    },
+    {
+      "book": "Effective Modern C++",
+      "kind": "paraphrase",
+      "page": 162,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "I created a reference-counted object with the one-step helper instead of calling new myself. Why can the storage for the object stay occupied long after the last owner is gone and it has been destroyed?",
+      "top": {
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p162",
+          "A Survey of Number Represent p222",
+          "A Survey of Number Represent p84"
+        ]
+      }
+    },
+    {
+      "book": "Effective Modern C++",
+      "kind": "paraphrase",
+      "page": 189,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "Instead of one templated setter that accepts anything, I wrote two versions, one for named objects and one for temporaries. Is that slower when I call it with a quoted piece of text?",
+      "top": {
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p189",
+          "A Survey of Number Represent p27",
+          "A Survey of Number Represent p28"
+        ]
+      }
+    },
+    {
+      "book": "Effective Modern C++",
+      "kind": "paraphrase",
+      "page": 229,
+      "place": {
+        "words (BM25, today)": 5
+      },
+      "question": "A constant number I declared with its value right inside the class works everywhere, but when I pass it through a generic wrapper that hands its arguments on to another function, the build fails at the link step. What's going on and how do I fix it?",
+      "top": {
+        "words (BM25, today)": [
+          "A Survey of Number Represent p223",
+          "Data Engineering with Python p268",
+          "Data Engineering with Python p194"
+        ]
+      }
+    },
+    {
+      "book": "Effective Modern C++",
+      "kind": "keyword",
+      "page": 263,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "In which situations is it appropriate to use std::thread directly rather than a task-based design with std::async?",
+      "top": {
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p263",
+          "Scott Meyers-Effective Moder p262",
+          "Scott Meyers-Effective Moder p260"
+        ]
+      }
+    },
+    {
+      "book": "Modern Computer Arithmetic",
+      "kind": "keyword",
+      "page": 21,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "How does Karatsuba's algorithm multiply two n-word integers, and what is the Karatsuba threshold?",
+      "top": {
+        "words (BM25, today)": [
+          "A Survey of Number Represent p21",
+          "A Survey of Number Represent p60",
+          "introduction-to-algorithms-a p333"
+        ]
+      }
+    },
+    {
+      "book": "Modern Computer Arithmetic",
+      "kind": "paraphrase",
+      "page": 45,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "There's a loop that finds the whole-number part of a root of a big integer by repeatedly averaging the current guess with the number divided by the guess. Why is it so slow if I start from the number itself, and does any starting guess work?",
+      "top": {
+        "words (BM25, today)": [
+          "A Survey of Number Represent p45",
+          "A Survey of Number Represent p56",
+          "A Survey of Number Represent p52"
+        ]
+      }
+    },
+    {
+      "book": "Modern Computer Arithmetic",
+      "kind": "paraphrase",
+      "page": 97,
+      "place": {
+        "words (BM25, today)": 2
+      },
+      "question": "If I only know what a number leaves over when divided by 11, by 13 and by 17, how can I get the number back with a single weighted sum of those three leftovers?",
+      "top": {
+        "words (BM25, today)": [
+          "A Survey of Number Represent p17",
+          "A Survey of Number Represent p97",
+          "Linear Algebra and Its Appli p11"
+        ]
+      }
+    },
+    {
+      "book": "Modern Computer Arithmetic",
+      "kind": "paraphrase",
+      "page": 103,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "For a multi-precision number kept in base ten, how much memory is wasted if every decimal digit gets its own four bits, and what tighter packing wastes almost nothing?",
+      "top": {
+        "words (BM25, today)": [
+          "A Survey of Number Represent p103",
+          "A Survey of Number Represent p162",
+          "A Survey of Number Represent p120"
+        ]
+      }
+    },
+    {
+      "book": "Modern Computer Arithmetic",
+      "kind": "keyword",
+      "page": 112,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What are the round bit and the sticky bit, and how do they determine correct rounding of a binary expansion to n bits in each rounding mode?",
+      "top": {
+        "words (BM25, today)": [
+          "A Survey of Number Represent p112",
+          "Computer Systems: A Programm p147",
+          "A Survey of Number Represent p116"
+        ]
+      }
+    },
+    {
+      "book": "Modern Computer Arithmetic",
+      "kind": "keyword",
+      "page": 197,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What is a holonomic function, and what does the bit-burst algorithm offer over the binary-splitting algorithms that need a functional equation?",
+      "top": {
+        "words (BM25, today)": [
+          "A Survey of Number Represent p197",
+          "A Survey of Number Represent p213",
+          "A Survey of Number Represent p6"
+        ]
+      }
+    },
+    {
+      "book": "Data Engineering with Python",
+      "kind": "keyword",
+      "page": 26,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What are the three Vs of big data that data engineering tools have to account for?",
+      "top": {
+        "words (BM25, today)": [
+          "Data Engineering with Python p26",
+          "Data Engineering with Python p29",
+          "Data Engineering with Python p22"
+        ]
+      }
+    },
+    {
+      "book": "Data Engineering with Python",
+      "kind": "paraphrase",
+      "page": 65,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "If one of the values in a plain text spreadsheet-style file has the separator symbol inside it, how does the reader know it isn't the start of the next column?",
+      "top": {
+        "words (BM25, today)": [
+          "Linear Algebra and Its Appli p19",
+          "Linear Algebra and Its Appli p150",
+          "Computer Systems: A Programm p694"
+        ]
+      }
+    },
+    {
+      "book": "Data Engineering with Python",
+      "kind": "paraphrase",
+      "page": 111,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "My scheduled workflow only has two small steps, read then load. Why is it a bad idea to merge them into one function?",
+      "top": {
+        "words (BM25, today)": [
+          "Computer Systems: A Programm p680",
+          "Computer Systems: A Programm p534",
+          "Linear Algebra and Its Appli p441"
+        ]
+      }
+    },
+    {
+      "book": "Data Engineering with Python",
+      "kind": "keyword",
+      "page": 155,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What does the upsert index operation do in Elasticsearch when a document with that ID already exists?",
+      "top": {
+        "words (BM25, today)": [
+          "Data Engineering with Python p155",
+          "Data Engineering with Python p198",
+          "Data Engineering with Python p199"
+        ]
+      }
+    },
+    {
+      "book": "Data Engineering with Python",
+      "kind": "keyword",
+      "page": 221,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What do 'active thread' and 'total queued data' on the NiFi status bar tell me when monitoring a pipeline?",
+      "top": {
+        "words (BM25, today)": [
+          "Data Engineering with Python p221",
+          "Data Engineering with Python p11",
+          "Data Engineering with Python p239"
+        ]
+      }
+    },
+    {
+      "book": "Data Engineering with Python",
+      "kind": "paraphrase",
+      "page": 268,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "When inserting a batch of rows from the flow tool into a table, how do I make it all-or-nothing so a single bad record stops everything instead of leaving half the batch written?",
+      "top": {
+        "words (BM25, today)": [
+          "Data Engineering with Python p268",
+          "Linear Algebra and Its Appli p454",
+          "Designing Data-Intensive App p434"
+        ]
+      }
+    },
+    {
+      "book": "Python Data Science Handbook",
+      "kind": "keyword",
+      "page": 133,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "How do NumPy ufuncs behave on a Pandas Series or DataFrame: what happens to the index and column labels?",
+      "top": {
+        "words (BM25, today)": [
+          "Python Data Science Handbook p133",
+          "Python Data Science Handbook p7",
+          "Python Data Science Handbook p115"
+        ]
+      }
+    },
+    {
+      "book": "Python Data Science Handbook",
+      "kind": "paraphrase",
+      "page": 258,
+      "place": {
+        "words (BM25, today)": 24
+      },
+      "question": "Instead of drawing a little bar on every one of a thousand points, how can I shade a band around a fitted curve to show how unsure the fit is?",
+      "top": {
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p398",
+          "introduction-to-algorithms-a p212",
+          "introduction-to-algorithms-a p287"
+        ]
+      }
+    },
+    {
+      "book": "Python Data Science Handbook",
+      "kind": "paraphrase",
+      "page": 353,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "How could a program learn to sort emails into junk and not junk? What would it look at in each message and where do the right answers come from at the start?",
+      "top": {
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p87",
+          "introduction-to-algorithms-a p205",
+          "introduction-to-algorithms-a p253"
+        ]
+      }
+    },
+    {
+      "book": "Python Data Science Handbook",
+      "kind": "keyword",
+      "page": 404,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "When is multinomial naive Bayes more appropriate than Gaussian naive Bayes?",
+      "top": {
+        "words (BM25, today)": [
+          "Python Data Science Handbook p404",
+          "Python Data Science Handbook p11",
+          "Python Data Science Handbook p542"
+        ]
+      }
+    },
+    {
+      "book": "Python Data Science Handbook",
+      "kind": "paraphrase",
+      "page": 458,
+      "place": {
+        "words (BM25, today)": 20
+      },
+      "question": "When I squash data with lots of columns down to fewer dimensions, how do I decide how many of the new directions to keep without throwing away too much information?",
+      "top": {
+        "words (BM25, today)": [
+          "Designing Data-Intensive App p95",
+          "Data Engineering with Python p180",
+          "Designing Data-Intensive App p416"
+        ]
+      }
+    },
+    {
+      "book": "Python Data Science Handbook",
+      "kind": "keyword",
+      "page": 509,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "How does kernel density estimation relate to Gaussian mixture models?",
+      "top": {
+        "words (BM25, today)": [
+          "Python Data Science Handbook p509",
+          "Python Data Science Handbook p12",
+          "Python Data Science Handbook p514"
+        ]
+      }
+    },
+    {
+      "book": "CPython Internals",
+      "kind": "keyword",
+      "page": 79,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "How does a change to the Python grammar get proposed and accepted? What role do PEPs and the Steering Council play?",
+      "top": {
+        "words (BM25, today)": [
+          "Anthony Shaw - CPython Inter p79",
+          "Fluent Python p570",
+          "Fluent Python p504"
+        ]
+      }
+    },
+    {
+      "book": "CPython Internals",
+      "kind": "keyword",
+      "page": 179,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What is opcode prediction in the CPython eval loop and why does it make pairs like COMPARE_OP and POP_JUMP_IF_FALSE faster?",
+      "top": {
+        "words (BM25, today)": [
+          "Anthony Shaw - CPython Inter p179",
+          "Python Cookbook p412",
+          "Anthony Shaw - CPython Inter p151"
+        ]
+      }
+    },
+    {
+      "book": "CPython Internals",
+      "kind": "paraphrase",
+      "page": 223,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "Why does the interpreter's memory cleanup look at recently created things much more often than things that have been around for a long time?",
+      "top": {
+        "words (BM25, today)": [
+          "Computer Systems: A Programm p620",
+          "Computer Systems: A Programm p41",
+          "Computer Systems: A Programm p306"
+        ]
+      }
+    },
+    {
+      "book": "CPython Internals",
+      "kind": "paraphrase",
+      "page": 258,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "I started several workers in Python expecting them to run at the same moment on different cores, but only one seems to do work at a time. What inside the interpreter causes that?",
+      "top": {
+        "words (BM25, today)": [
+          "Fluent Python p729",
+          "Fluent Python p749",
+          "Fluent Python p727"
+        ]
+      }
+    },
+    {
+      "book": "CPython Internals",
+      "kind": "keyword",
+      "page": 302,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "Why are Unicode strings complicated in CPython, and what is a code point in the Universal Character Set?",
+      "top": {
+        "words (BM25, today)": [
+          "Anthony Shaw - CPython Inter p302",
+          "Anthony Shaw - CPython Inter p303",
+          "Anthony Shaw - CPython Inter p304"
+        ]
+      }
+    },
+    {
+      "book": "CPython Internals",
+      "kind": "paraphrase",
+      "page": 333,
+      "place": {
+        "words (BM25, today)": 36
+      },
+      "question": "When Python itself dies because some C code touched memory it shouldn't have, all I get is a one-line message. How can I make it show which Python lines were running?",
+      "top": {
+        "words (BM25, today)": [
+          "Fluent Python p771",
+          "Python Cookbook p681",
+          "Fluent Python p628"
+        ]
+      }
+    },
+    {
+      "book": "Python Crash Course",
+      "kind": "keyword",
+      "page": 54,
+      "place": {
+        "words (BM25, today)": 6
+      },
+      "question": "What are the rules for naming variables in Python? Can a variable name start with a number or contain spaces?",
+      "top": {
+        "words (BM25, today)": [
+          "A Survey of Number Represent p108",
+          "A Survey of Number Represent p187",
+          "A Survey of Number Represent p214"
+        ]
+      }
+    },
+    {
+      "book": "Python Crash Course",
+      "kind": "paraphrase",
+      "page": 99,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "How do I grab just the last few entries of a list in a way that keeps working even when the list gets longer or shorter?",
+      "top": {
+        "words (BM25, today)": [
+          "pythoncrashcourse p86",
+          "Scott Meyers-Effective Moder p36",
+          "grokking-data-structures p54"
+        ]
+      }
+    },
+    {
+      "book": "Python Crash Course",
+      "kind": "keyword",
+      "page": 185,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "When mixing positional and arbitrary arguments like *toppings in a function definition, where does the arbitrary parameter have to go?",
+      "top": {
+        "words (BM25, today)": [
+          "pythoncrashcourse p185",
+          "pythoncrashcourse p170",
+          "introduction-to-algorithms-a p211"
+        ]
+      }
+    },
+    {
+      "book": "Python Crash Course",
+      "kind": "paraphrase",
+      "page": 217,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "I'm a beginner starting a bigger program. Should I split my code across several files from the beginning or keep everything together at first?",
+      "top": {
+        "words (BM25, today)": [
+          "C Programming Language - 2nd p9",
+          "C Programming Language - 2nd p26",
+          "C Programming Language - 2nd p74"
+        ]
+      }
+    },
+    {
+      "book": "Python Crash Course",
+      "kind": "keyword",
+      "page": 432,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "How do I install virtualenv, create a virtual environment and activate it for a Django project?",
+      "top": {
+        "words (BM25, today)": [
+          "pythoncrashcourse p432",
+          "pythoncrashcourse p24",
+          "pythoncrashcourse p431"
+        ]
+      }
+    },
+    {
+      "book": "Python Crash Course",
+      "kind": "paraphrase",
+      "page": 484,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "In my web app everyone who signs in can see everybody else's entries. How do I change the page so each person only gets the ones they created?",
+      "top": {
+        "words (BM25, today)": [
+          "pythoncrashcourse p499",
+          "pythoncrashcourse p460",
+          "Designing Data-Intensive App p533"
+        ]
+      }
+    },
+    {
+      "book": "Introduction to Algorithms and Machine Learning",
+      "kind": "keyword",
+      "page": 55,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "How does backtracking cut down the number of possibilities compared to brute force search?",
+      "top": {
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p55",
+          "introduction-to-algorithms-a p49",
+          "introduction-to-algorithms-a p51"
+        ]
+      }
+    },
+    {
+      "book": "Introduction to Algorithms and Machine Learning",
+      "kind": "paraphrase",
+      "page": 116,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "When I'm grouping similar data points automatically, how do I decide how many groups to ask for if I have no idea in advance?",
+      "top": {
+        "words (BM25, today)": [
+          "grokking-data-structures p17",
+          "Designing Data-Intensive App p449",
+          "Designing Data-Intensive App p91"
+        ]
+      }
+    },
+    {
+      "book": "Introduction to Algorithms and Machine Learning",
+      "kind": "keyword",
+      "page": 197,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "Why can't the pseudoinverse method fit a power regression when a data point has an x-coordinate of 0?",
+      "top": {
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p197",
+          "introduction-to-algorithms-a p205",
+          "introduction-to-algorithms-a p221"
+        ]
+      }
+    },
+    {
+      "book": "Introduction to Algorithms and Machine Learning",
+      "kind": "paraphrase",
+      "page": 288,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "How does the algorithm that sorts examples into categories by asking a series of yes/no questions pick which question to ask next?",
+      "top": {
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p257",
+          "introduction-to-algorithms-a p253",
+          "introduction-to-algorithms-a p87"
+        ]
+      }
+    },
+    {
+      "book": "Introduction to Algorithms and Machine Learning",
+      "kind": "paraphrase",
+      "page": 333,
+      "place": {
+        "words (BM25, today)": 2
+      },
+      "question": "Is there a guarantee that a network with just a single middle layer can mimic any smooth curve as closely as I want?",
+      "top": {
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p398",
+          "introduction-to-algorithms-a p333",
+          "Data Engineering with Python p256"
+        ]
+      }
+    },
+    {
+      "book": "Introduction to Algorithms and Machine Learning",
+      "kind": "keyword",
+      "page": 393,
+      "place": {
+        "words (BM25, today)": 2
+      },
+      "question": "What was Blondie24 and who created it?",
+      "top": {
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p6",
+          "introduction-to-algorithms-a p393",
+          "introduction-to-algorithms-a p415"
+        ]
+      }
+    },
+    {
+      "book": "Python Cookbook",
+      "kind": "keyword",
+      "page": 141,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What happens to the items before the start index when I use islice() on a generator?",
+      "top": {
+        "words (BM25, today)": [
+          "Python Cookbook p141",
+          "Scott Meyers-Effective Moder p42",
+          "Fluent Python p650"
+        ]
+      }
+    },
+    {
+      "book": "Python Cookbook",
+      "kind": "paraphrase",
+      "page": 179,
+      "place": {
+        "words (BM25, today)": 6
+      },
+      "question": "My script blows up with a weird message about surrogates when it tries to show the names of files in a folder. What is going on and how do I stop the crash?",
+      "top": {
+        "words (BM25, today)": [
+          "Data Engineering with Python p262",
+          "Data Engineering with Python p77",
+          "introduction-to-algorithms-a p324"
+        ]
+      }
+    },
+    {
+      "book": "Python Cookbook",
+      "kind": "keyword",
+      "page": 315,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "Why should a mixin class not have its own __init__ method or instance variables?",
+      "top": {
+        "words (BM25, today)": [
+          "Python Cookbook p315",
+          "Python Cookbook p315",
+          "Fluent Python p543"
+        ]
+      }
+    },
+    {
+      "book": "Python Cookbook",
+      "kind": "paraphrase",
+      "page": 416,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "What is that special file you put inside each folder of a multi-folder Python library for, and is it OK to leave it blank?",
+      "top": {
+        "words (BM25, today)": [
+          "A Survey of Number Represent p217",
+          "A Survey of Number Represent p145",
+          "pythoncrashcourse p225"
+        ]
+      }
+    },
+    {
+      "book": "Python Cookbook",
+      "kind": "keyword",
+      "page": 534,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What restrictions apply to functions sent to a process pool as a workaround for the GIL?",
+      "top": {
+        "words (BM25, today)": [
+          "Python Cookbook p533",
+          "Python Cookbook p534",
+          "A Survey of Number Represent p151"
+        ]
+      }
+    },
+    {
+      "book": "Python Cookbook",
+      "kind": "paraphrase",
+      "page": 623,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "What are the drawbacks of calling a big compiled C library straight from Python using only the standard library, without writing any C glue?",
+      "top": {
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p206",
+          "Scott Meyers-Effective Moder p242",
+          "Scott Meyers-Effective Moder p222"
+        ]
+      }
+    },
+    {
+      "book": "Python Cookbook",
+      "kind": "paraphrase",
+      "page": 207,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "Reading a gigantic XML file piece by piece and throwing away each piece once handled: how much slower is that than loading it all at once, and how much RAM does it save?",
+      "top": {
+        "words (BM25, today)": [
+          "Linear Algebra and Its Appli p393",
+          "Linear Algebra and Its Appli p144",
+          "Linear Algebra and Its Appli p235"
+        ]
+      }
+    },
+    {
+      "book": "Python Cookbook",
+      "kind": "keyword",
+      "page": 451,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "Is a virtual environment a full copy of the Python installation, and where do third-party packages get installed?",
+      "top": {
+        "words (BM25, today)": [
+          "Python Cookbook p451",
+          "Python Cookbook p450",
+          "Python Cookbook p428"
+        ]
+      }
+    },
+    {
+      "book": "Fluent Python",
+      "kind": "paraphrase",
+      "page": 60,
+      "place": {
+        "words (BM25, today)": 4
+      },
+      "question": "If I only need to loop once over every combination of two lists, how can I avoid building the whole million-item result in memory first?",
+      "top": {
+        "words (BM25, today)": [
+          "pythoncrashcourse p88",
+          "pythoncrashcourse p86",
+          "introduction-to-algorithms-a p387"
+        ]
+      }
+    },
+    {
+      "book": "Fluent Python",
+      "kind": "keyword",
+      "page": 178,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "Why does sorted() give wrong results for non-ASCII strings with accents, and what is the standard way to sort them using locale?",
+      "top": {
+        "words (BM25, today)": [
+          "Fluent Python p178",
+          "Fluent Python p178",
+          "Scott Meyers-Effective Moder p238"
+        ]
+      }
+    },
+    {
+      "book": "Fluent Python",
+      "kind": "paraphrase",
+      "page": 246,
+      "place": {
+        "words (BM25, today)": 5
+      },
+      "question": "Why do two separate objects of my class end up sharing the same list when I wrote an empty list as the fallback value in the constructor's signature?",
+      "top": {
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p144",
+          "Scott Meyers-Effective Moder p161",
+          "Scott Meyers-Effective Moder p201"
+        ]
+      }
+    },
+    {
+      "book": "Fluent Python",
+      "kind": "keyword",
+      "page": 353,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What does the maxsize parameter of functools.lru_cache do and what is its default?",
+      "top": {
+        "words (BM25, today)": [
+          "Fluent Python p353",
+          "Fluent Python p353",
+          "Fluent Python p354"
+        ]
+      }
+    },
+    {
+      "book": "Fluent Python",
+      "kind": "paraphrase",
+      "page": 412,
+      "place": {
+        "words (BM25, today)": 18
+      },
+      "question": "What does Python actually do behind the scenes when I start a field's name with two underscores, and does that really keep other code from reading it?",
+      "top": {
+        "words (BM25, today)": [
+          "Data Engineering with Python p138",
+          "Data Engineering with Python p151",
+          "Python Cookbook p268"
+        ]
+      }
+    },
+    {
+      "book": "Fluent Python",
+      "kind": "paraphrase",
+      "page": 827,
+      "place": {
+        "words (BM25, today)": 34
+      },
+      "question": "In async code, saving a file to disk freezes everything else while it writes. How do I hand that work off so the rest keeps running?",
+      "top": {
+        "words (BM25, today)": [
+          "Scott Meyers-Effective Moder p261",
+          "pythoncrashcourse p222",
+          "introduction-to-algorithms-a p22"
+        ]
+      }
+    },
+    {
+      "book": "Fluent Python",
+      "kind": "keyword",
+      "page": 886,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What are the limitations of @cached_property compared to a regular property?",
+      "top": {
+        "words (BM25, today)": [
+          "Fluent Python p886",
+          "Fluent Python p886",
+          "A Survey of Number Represent p56"
+        ]
+      }
+    },
+    {
+      "book": "Fluent Python",
+      "kind": "keyword",
+      "page": 716,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "In a match/case OR-pattern, why must all subpatterns use the same variables?",
+      "top": {
+        "words (BM25, today)": [
+          "Fluent Python p716",
+          "Fluent Python p222",
+          "Fluent Python p223"
+        ]
+      }
+    },
+    {
+      "book": "Designing Data-Intensive Applications",
+      "kind": "keyword",
+      "page": 100,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "In an LSM-tree storage engine, what is a memtable and when does it get written out as an SSTable?",
+      "top": {
+        "words (BM25, today)": [
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p100",
+          "Designing Data-Intensive App p101"
+        ]
+      }
+    },
+    {
+      "book": "Designing Data-Intensive Applications",
+      "kind": "keyword",
+      "page": 262,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "How does snapshot isolation use the created_by and deleted_by fields on each row to keep multiple versions of an object?",
+      "top": {
+        "words (BM25, today)": [
+          "Designing Data-Intensive App p262",
+          "Designing Data-Intensive App p261",
+          "Designing Data-Intensive App p263"
+        ]
+      }
+    },
+    {
+      "book": "Designing Data-Intensive Applications",
+      "kind": "keyword",
+      "page": 228,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "Why are secondary indexes a problem when a database is partitioned, and what are the two approaches to partitioning them?",
+      "top": {
+        "words (BM25, today)": [
+          "Designing Data-Intensive App p228",
+          "Designing Data-Intensive App p229",
+          "Designing Data-Intensive App p239"
+        ]
+      }
+    },
+    {
+      "book": "Designing Data-Intensive Applications",
+      "kind": "keyword",
+      "page": 430,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What's the difference between a reduce-side join and a map-side join in MapReduce, and why can the map-side one be faster?",
+      "top": {
+        "words (BM25, today)": [
+          "Designing Data-Intensive App p430",
+          "Designing Data-Intensive App p432",
+          "Designing Data-Intensive App p430"
+        ]
+      }
+    },
+    {
+      "book": "Designing Data-Intensive Applications",
+      "kind": "paraphrase",
+      "page": 185,
+      "place": {
+        "words (BM25, today)": 4
+      },
+      "question": "I save a change on a website, refresh, and my edit has vanished because the copy of the database I got hadn't caught up yet. What guarantee stops that, and how do you build it when one machine takes all the updates?",
+      "top": {
+        "words (BM25, today)": [
+          "Data Engineering with Python p52",
+          "Linear Algebra and Its Appli p438",
+          "Linear Algebra and Its Appli p163"
+        ]
+      }
+    },
+    {
+      "book": "Designing Data-Intensive Applications",
+      "kind": "paraphrase",
+      "page": 330,
+      "place": {
+        "words (BM25, today)": 2
+      },
+      "question": "When people state what a distributed algorithm must guarantee, they split the requirements into 'nothing bad ever happens' and 'something good happens in the end'. What are those two categories and how do I tell which one a requirement belongs to?",
+      "top": {
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p388",
+          "Designing Data-Intensive App p330",
+          "Designing Data-Intensive App p296"
+        ]
+      }
+    },
+    {
+      "book": "Designing Data-Intensive Applications",
+      "kind": "paraphrase",
+      "page": 38,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "If loading one page needs lots of calls to internal servers, why does the user end up waiting a long time much more often than any single one of those servers is slow?",
+      "top": {
+        "words (BM25, today)": [
+          "Designing Data-Intensive App p38",
+          "Designing Data-Intensive App p533",
+          "Anthony Shaw - CPython Inter p227"
+        ]
+      }
+    },
+    {
+      "book": "Designing Data-Intensive Applications",
+      "kind": "paraphrase",
+      "page": 530,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "For a purchase paid in a different currency, is it better for the code to ask another system for the conversion rate at the moment of sale, or to keep its own copy that gets updated whenever the rate changes?",
+      "top": {
+        "words (BM25, today)": [
+          "Designing Data-Intensive App p530",
+          "Designing Data-Intensive App p531",
+          "Designing Data-Intensive App p498"
+        ]
+      }
+    },
+    {
+      "book": "Linear Algebra and Its Applications",
+      "kind": "keyword",
+      "page": 100,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "How do I find the special solutions to Ax = 0 from the free variables, and how do they make up the nullspace?",
+      "top": {
+        "words (BM25, today)": [
+          "Linear Algebra and Its Appli p100",
+          "Linear Algebra and Its Appli p103",
+          "Linear Algebra and Its Appli p100"
+        ]
+      }
+    },
+    {
+      "book": "Linear Algebra and Its Applications",
+      "kind": "keyword",
+      "page": 284,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "Why is the matrix [0 1; 0 0] not diagonalizable, and what do algebraic and geometric multiplicity of its eigenvalue have to do with it?",
+      "top": {
+        "words (BM25, today)": [
+          "Linear Algebra and Its Appli p284",
+          "Linear Algebra and Its Appli p289",
+          "Linear Algebra and Its Appli p290"
+        ]
+      }
+    },
+    {
+      "book": "Linear Algebra and Its Applications",
+      "kind": "keyword",
+      "page": 380,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What is the polar decomposition A = QS and how does it follow from the SVD?",
+      "top": {
+        "words (BM25, today)": [
+          "Linear Algebra and Its Appli p380",
+          "Linear Algebra and Its Appli p385",
+          "Linear Algebra and Its Appli p385"
+        ]
+      }
+    },
+    {
+      "book": "Linear Algebra and Its Applications",
+      "kind": "keyword",
+      "page": 440,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What are the steps of the revised simplex method, and why is it preferred to working with the full tableau?",
+      "top": {
+        "words (BM25, today)": [
+          "Linear Algebra and Its Appli p440",
+          "Linear Algebra and Its Appli p437",
+          "Linear Algebra and Its Appli p439"
+        ]
+      }
+    },
+    {
+      "book": "Linear Algebra and Its Applications",
+      "kind": "paraphrase",
+      "page": 172,
+      "place": {
+        "words (BM25, today)": 2
+      },
+      "question": "Two walls of a room meet at a right angle, so why does the book say those two flat surfaces don't count as perpendicular to each other?",
+      "top": {
+        "words (BM25, today)": [
+          "Designing Data-Intensive App p271",
+          "Linear Algebra and Its Appli p172",
+          "Linear Algebra and Its Appli p169"
+        ]
+      }
+    },
+    {
+      "book": "Linear Algebra and Its Applications",
+      "kind": "paraphrase",
+      "page": 200,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "When fitting data where some measurements are more trustworthy than others, how much extra importance should the more accurate readings get, and what if their mistakes are linked to each other?",
+      "top": {
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p211",
+          "grokking-data-structures p119",
+          "Python Data Science Handbook p255"
+        ]
+      }
+    },
+    {
+      "book": "Linear Algebra and Its Applications",
+      "kind": "paraphrase",
+      "page": 260,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "Is there a geometric picture for that single number you compute from a square matrix — something to do with how much space the box built from its rows takes up? And what does its sign mean?",
+      "top": {
+        "words (BM25, today)": [
+          "A Survey of Number Represent p187",
+          "A Survey of Number Represent p212",
+          "Linear Algebra and Its Appli p235"
+        ]
+      }
+    },
+    {
+      "book": "Linear Algebra and Its Applications",
+      "kind": "paraphrase",
+      "page": 297,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "If each year fixed fractions of people move into and out of a state, why does the split of the population settle to the same proportions in the long run no matter how it started?",
+      "top": {
+        "words (BM25, today)": [
+          "Linear Algebra and Its Appli p297",
+          "Linear Algebra and Its Appli p297",
+          "Linear Algebra and Its Appli p296"
+        ]
+      }
+    },
+    {
+      "book": "Grokking Data Structures",
+      "kind": "keyword",
+      "page": 90,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "When should I prefer a dynamic array over a static array, and what does the dynamic array cost me?",
+      "top": {
+        "words (BM25, today)": [
+          "grokking-data-structures p90",
+          "grokking-data-structures p170",
+          "grokking-data-structures p87"
+        ]
+      }
+    },
+    {
+      "book": "Grokking Data Structures",
+      "kind": "keyword",
+      "page": 190,
+      "place": {
+        "words (BM25, today)": 3
+      },
+      "question": "If a priority queue is implemented with a sorted linked list or sorted array, how do the top and insert methods work?",
+      "top": {
+        "words (BM25, today)": [
+          "grokking-data-structures p192",
+          "grokking-data-structures p195",
+          "grokking-data-structures p191"
+        ]
+      }
+    },
+    {
+      "book": "Grokking Data Structures",
+      "kind": "keyword",
+      "page": 215,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "What is the BST property, and where do duplicate values go in a binary search tree?",
+      "top": {
+        "words (BM25, today)": [
+          "grokking-data-structures p215",
+          "grokking-data-structures p220",
+          "grokking-data-structures p219"
+        ]
+      }
+    },
+    {
+      "book": "Grokking Data Structures",
+      "kind": "paraphrase",
+      "page": 40,
+      "place": {
+        "words (BM25, today)": 1
+      },
+      "question": "In the animal hospital story, why was it a mistake for the staff to take the next patient's form off the top of the pile, and what did they switch to?",
+      "top": {
+        "words (BM25, today)": [
+          "grokking-data-structures p40",
+          "A Survey of Number Represent p29",
+          "A Survey of Number Represent p237"
+        ]
+      }
+    },
+    {
+      "book": "Grokking Data Structures",
+      "kind": "paraphrase",
+      "page": 115,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "To remove an item from a chain of nodes where each one only knows the one after it, why can't I just look the item up and unhook it? What do I need to keep track of while walking along?",
+      "top": {
+        "words (BM25, today)": [
+          "introduction-to-algorithms-a p288",
+          "Linear Algebra and Its Appli p150",
+          "Scott Meyers-Effective Moder p84"
+        ]
+      }
+    },
+    {
+      "book": "Grokking Data Structures",
+      "kind": "paraphrase",
+      "page": 243,
+      "place": {
+        "words (BM25, today)": 0
+      },
+      "question": "Two different items end up assigned to the same slot of the table. What's the approach where each slot holds a whole list of items instead of a single one?",
+      "top": {
+        "words (BM25, today)": [
+          "Computer Systems: A Programm p871",
+          "Computer Systems: A Programm p639",
+          "Computer Systems: A Programm p857"
+        ]
+      }
+    }
+  ],
+  "questions": 94,
+  "rankings": [
+    {
+      "all": {
+        "hit3": 60,
+        "hit8": 66,
+        "mrr8": 0.6070921985815603,
+        "n": 94,
+        "recall3": 0.6382978723404256,
+        "recall8": 0.7021276595744681
+      },
+      "keyword": {
+        "hit3": 46,
+        "hit8": 47,
+        "mrr8": 0.9468085106382981,
+        "n": 47,
+        "recall3": 0.9787234042553191,
+        "recall8": 1.0
+      },
+      "p50_ms": 1.1295000000000002,
+      "p95_ms": 1.623125,
+      "paraphrase": {
+        "hit3": 14,
+        "hit8": 19,
+        "mrr8": 0.2673758865248227,
+        "n": 47,
+        "recall3": 0.2978723404255319,
+        "recall8": 0.40425531914893614
+      },
+      "ranking": "words (BM25, today)"
+    }
+  ],
+  "rss_after_build_mb": 56.296875,
+  "rss_after_open_mb": 3.375,
+  "rss_peak_mb": 67.921875,
+  "vectors": 0
+}
