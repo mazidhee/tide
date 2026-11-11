@@ -123,7 +123,15 @@ export async function inBackground<T>(fn: (signal: AbortSignal) => Promise<T>, o
     background = null
     announce()
     wake()
+    doneListeners.forEach((l) => l())
   }
+}
+
+const doneListeners = new Set<() => void>()
+
+/** Called each time a background job has finished with the model */
+export function afterBackground(listener: () => void): void {
+  doneListeners.add(listener)
 }
 
 export const modelBusy = () => interactive > 0

@@ -3,7 +3,7 @@ import { isMlxVlm } from './modelServer'
 import { thingsIntent } from '@shared/learnIntent'
 import { graphCached, relatedNotes } from './learn'
 import { readTerminal, runInTerminal, terminalInfo } from './terminal'
-import { asInteractive, inBackground } from './modelQueue'
+import { afterBackground, asInteractive, inBackground } from './modelQueue'
 import { memoize } from './memo'
 import { getCoach, getWeek, profilePrompt } from './coach'
 import { todayItems } from '@shared/coach'
@@ -11,14 +11,16 @@ import { aboutMetabase } from '@shared/metabase'
 import { metabaseHost, metabaseReady, metabaseTool } from './metabase'
 import { loadImages, type NoteImage } from './noteImages'
 import { pagesToRead } from './books'
+import { ensureSearch, LOCAL_URL, nativeSearch } from './websearch'
 import { privatePath } from './projects'
+import { requestSent, timeTurn, toolRan } from './speed'
 import { readingLabel } from '@shared/books'
 import { imageMarkdown } from '@shared/noteImages'
 import { addTask, describeTasks, feedbackOnTask, findTask, searchTasks, thingsAvailable, TIDE_TAG } from './things'
 import { buildLink, type DeepLink } from '@shared/deeplink'
 import { JSDOM } from 'jsdom'
 import { Readability } from '@mozilla/readability'
-import type { ChatEvent, ChatMessage, ChatRequest, ContextSource, AgentStep } from '@shared/types'
+import type { AgentStep, AISettings, ChatEvent, ChatMessage, ChatRequest, ContextSource } from '@shared/types'
 import { getSettings } from './settings'
 import { localSampling } from './sampling'
 import { getChunks, indexReady, search } from './search'
@@ -33,7 +35,7 @@ import { runCode } from './runner'
 import { addMemory, forgetMatching, memoryPrompt } from './memory'
 import { fitHistory } from '@shared/context'
 import { historyBudget } from './chats'
-import { asksForWeb, cleanModelText, createStreamFilter, isLooping, recoverToolCalls } from '@shared/modelText'
+import { asksForWeb, cleanModelText, createStreamFilter, isLooping, recoverToolCalls, streamWatch } from '@shared/modelText'
 import { noteUse, useOf } from './connectionUse'
 import { getKey } from './cloud'
 
@@ -246,6 +248,8 @@ interface WebResult {
 export interface SearchOptions {
   when?: 'any' | 'year' | 'month' | 'week' | 'day'
   news?: boolean
+  /** The turn is about a private project or your Metabase: "fastest available" keeps the search on this Mac */
+  onThisMac?: boolean
 }
 
 const isoDay = (d: unknown) => {
@@ -318,9 +322,28 @@ async function searchPapersNow(query: string): Promise<WebResult[]> {
 
 const stripTags = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#39;/g, "'")
 
+/**
+ * "Fastest available" picks for each search: You.com when its key is saved and its credit isn't
+ * spent (one call, about half a second, several passages from each page, nothing running on this
+ * Mac); otherwise Tide's own engine on this Mac (started for the search, a second or so once up);
+ * otherwise Wikipedia. A turn about a private project or your Metabase never uses the cloud one.
+ */
 async function webSearchNow(query: string, opts: SearchOptions = {}): Promise<WebResult[]> {
-  const { webSearch: cfg } = getSettings().ai
-  const provider = cfg?.provider ?? 'wikipedia'
+  const cfg = getSettings().ai.webSearch
+  const chosen = cfg?.provider ?? 'wikipedia'
+  if (chosen !== 'auto') return searchWith(chosen, cfg?.url, query, opts)
+  const used = useOf('you')
+  if (!opts.onThisMac && getKey('you') && used.thisMonth < YOU_MONTHLY && used.total < YOU_TOTAL) {
+    const found = await searchWith('you', undefined, query, opts, true).catch(() => [] as WebResult[])
+    if (found.length) return found
+  }
+  if (nativeSearch()) return searchWith('searxng', LOCAL_URL, query, opts)
+  return wikipediaSearch(query)
+}
+
+/** One search with one provider. `orNothing`: when it can't answer, return nothing (the caller has another to try) rather than Wikipedia's results. */
+async function searchWith(provider: Exclude<NonNullable<NonNullable<AISettings['webSearch']>['provider']>, 'auto'>, url: string | undefined, query: string, opts: SearchOptions, orNothing = false): Promise<WebResult[]> {
+  const cfg = getSettings().ai.webSearch
   if (provider === 'off') throw new Error('Web search is turned off in Settings.')
   // Keys live in the Keychain now; one typed into an older version is still read from settings
   const key = provider === 'you' ? getKey('you') || '' : provider === 'brave' || provider === 'tavily' ? getKey(provider) || cfg?.apiKey || '' : ''
@@ -329,17 +352,19 @@ async function webSearchNow(query: string, opts: SearchOptions = {}): Promise<We
     // A one-time credit, not a monthly one: stop well before it's gone (about $5 per 1,000 searches)
     if (!key) throw new Error('Add a You.com key in Settings › Connections to search the web.')
     const used = useOf('you')
-    if (used.thisMonth >= YOU_MONTHLY || used.total >= YOU_TOTAL) return wikipediaSearch(query)
+    const instead = () => (orNothing ? Promise.resolve([] as WebResult[]) : wikipediaSearch(query))
+    if (used.thisMonth >= YOU_MONTHLY || used.total >= YOU_TOTAL) return instead()
     noteUse('you')
     const params = new URLSearchParams({ query, count: '8' })
     if (opts.when && opts.when !== 'any') params.set('freshness', opts.when)
     const res = await fetch(`https://ydc-index.io/v1/search?${params}`, { headers: { 'X-API-Key': key, Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) })
     // Out of credit, a bad key or too many at once: Wikipedia answers instead
-    if (!res.ok) return wikipediaSearch(query)
+    if (!res.ok) return instead()
     type YouHit = { title?: string; url?: string; description?: string; snippets?: string[]; page_age?: string }
     const json = (await res.json()) as { results?: { web?: YouHit[]; news?: YouHit[] } | YouHit[]; hits?: YouHit[] }
     const hits = Array.isArray(json.results) ? json.results : [...((opts.news ? json.results?.news : json.results?.web) ?? []), ...(json.hits ?? [])]
-    return uniqueResults(hits.filter((h) => h.url).map((h) => ({ title: h.title ?? h.url!, url: h.url!, snippet: stripTags(h.description || h.snippets?.[0] || '').slice(0, 300), date: isoDay(h.page_age) })), 8)
+    return uniqueResults(hits.filter((h) => h.url).map((h) => ({ title: h.title ?? h.url!, url: h.url!, // Its passages from the page itself say more than the one-line description: often enough to answer from, without opening the page
+      snippet: stripTags([h.description, ...(h.snippets ?? []).slice(0, 3)].filter(Boolean).join(' … ')).slice(0, 700), date: isoDay(h.page_age) })), 8)
   }
   noteUse(provider)
 
@@ -373,12 +398,14 @@ async function webSearchNow(query: string, opts: SearchOptions = {}): Promise<We
   }
 
   if (provider === 'searxng') {
-    if (!cfg?.url) throw new Error('Add your SearXNG address in Settings to search the web.')
+    if (!url) throw new Error('Add your SearXNG address in Settings to search the web.')
     const params = new URLSearchParams({ format: 'json', q: query, language: 'en' })
     if (opts.news) params.set('categories', 'news')
     if (opts.when && opts.when !== 'any') params.set('time_range', opts.when)
     try {
-      const res = await fetch(`${cfg.url.replace(/\/+$/, '')}/search?${params}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20_000) })
+      // Tide's own engine runs only while you're searching: started here if it isn't up
+      if (url === LOCAL_URL) await ensureSearch()
+      const res = await fetch(`${url.replace(/\/+$/, '')}/search?${params}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20_000) })
       if (!res.ok) throw new Error(`SearXNG answered ${res.status}`)
       const json = (await res.json()) as { results?: { title: string; url: string; content?: string; publishedDate?: string | null }[] }
       const results = uniqueResults((json.results ?? []).map((r) => ({ title: r.title, url: r.url, snippet: stripTags(r.content ?? ''), date: isoDay(r.publishedDate) })), 8)
@@ -629,6 +656,8 @@ async function streamTurnOnce(
         temperature: Math.min(1.2, temperature + extraTemperature),
         ...localSampling(model, extraTemperature > 0),
         stream: true,
+        // The real token counts back (prompt, cached, written), for Usage and Settings › Speed
+        stream_options: { include_usage: true },
         max_tokens: 3000,
         ...(tools.length ? { tools } : {}),
         ...transientContext()
@@ -639,6 +668,8 @@ async function streamTurnOnce(
     writeFileSync(process.env.TIDE_DEBUG_AI, JSON.stringify(payload, null, 1))
   }
   if (target) noteSent(target.provider)
+  const startAt = performance.now()
+  const timed = requestSent()
   const res = await fetch(target ? `${target.baseUrl}/chat/completions` : `${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
     method: 'POST',
     headers: target ? headersFor(target) : { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
@@ -667,11 +698,21 @@ async function streamTurnOnce(
   let raw = ''
   // How many thought-channel openings there were when the answer began; another one after that is a stall
   let channelsAtStart = -1
+  const watch = streamWatch()
   let usage: { input: number; output: number; cached?: number } | null = null
   const calls = new Map<number, ToolCall>()
+  let firstTokenAt = 0
+  // Tide's own time on the stream: from each piece arriving to asking for the next
+  let tideMs = 0
+  let tokens = 0
+  // Recorded however the stream ends: a lesson turn cut short so Tide can set the problem is still
+  // an answer from this Mac, to be timed and read back
+  const record = () => timed({ engine: target ? 'cloud' : 'local', model, startAt, firstTokenAt, endAt: performance.now(), tokens: usage?.output ?? tokens, promptTokens: usage?.input, cachedTokens: usage?.cached, tideMs })
+  try {
   for (;;) {
     const { value, done } = await reader.read()
     if (done) break
+    const got = performance.now()
     buffer += decoder.decode(value, { stream: true })
     const lines = buffer.split('\n')
     buffer = lines.pop() ?? ''
@@ -683,30 +724,35 @@ async function streamTurnOnce(
         const u = chunk.usage ?? chunk.x_groq?.usage
         if (u) usage = { input: u.prompt_tokens ?? 0, output: u.completion_tokens ?? 0, cached: u.prompt_tokens_details?.cached_tokens }
         const delta = chunk.choices?.[0]?.delta
-        if (delta?.content || delta?.tool_calls) firstAt ||= Date.now()
+        if (delta?.content || delta?.tool_calls) {
+          firstAt ||= Date.now()
+          firstTokenAt ||= performance.now()
+          tokens++
+        }
         if (delta?.content) {
           raw += delta.content
           const visible = filter(delta.content)
           text += visible
+          watch.raw(raw)
+          watch.text(text)
           // Watch the raw stream too: repeated hidden reasoning blocks never show up in the text
           // Code inside a tool call written as text can repeat lines legitimately: don't judge it
-          const inCall = raw.lastIndexOf('<|tool_call') > raw.lastIndexOf('<tool_call|>')
-          const channels = raw.match(/<\|channel>/g)?.length ?? 0
+          const inCall = watch.inCall
+          const channels = watch.channels
           if (channelsAtStart < 0 && text.trim()) channelsAtStart = channels
           if (!inCall && channelsAtStart >= 0 && channels > channelsAtStart) {
             controller.abort()
             outerSignal.removeEventListener('abort', abort)
             throw new StallError(cleanModelText(text))
           }
-          if (!inCall && (isLooping(text) || isLooping(raw) || (raw.match(/<\|channel>/g)?.length ?? 0) >= 3)) {
+          if (!inCall && (isLooping(text) || isLooping(raw) || channels >= 3)) {
             controller.abort()
             outerSignal.removeEventListener('abort', abort)
             throw new LoopingError('The model got stuck repeating itself', cleanModelText(text))
           }
           // Never show a tool call the server passed through as text: judge by the raw stream, since
           // the filter strips the special tokens that mark it, and hold back a bare "call:name{" too
-          const openCall = raw.lastIndexOf('<|tool_call') > raw.lastIndexOf('<tool_call|>')
-          if (visible && !openCall && !/(^|\n)\s*call:[A-Za-z_]\w*\{/.test(text)) onText(visible)
+          if (visible && !inCall && !watch.bareCall) onText(visible)
         }
         for (const tc of delta?.tool_calls ?? []) {
           const i = tc.index ?? 0
@@ -721,6 +767,10 @@ async function streamTurnOnce(
         if (e instanceof LoopingError || e instanceof StallError) throw e
       }
     }
+    tideMs += performance.now() - got
+  }
+  } finally {
+    record()
   }
   outerSignal.removeEventListener('abort', abort)
   const promptChars = messages.reduce((n, m) => n + (typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content ?? '').length), 0)
@@ -774,7 +824,7 @@ interface LoopContext {
 const normalQuery = (q: string) => q.trim().toLowerCase().replace(/\s+/g, ' ')
 export const webSearch = memoize<[query: string, opts?: SearchOptions], WebResult[]>(webSearchNow, {
   ttlMs: (_q, opts) => (opts?.news || opts?.when === 'day' ? 5 * 60_000 : 30 * 60_000),
-  key: (q, opts) => JSON.stringify([getSettings().ai.webSearch?.provider ?? 'wikipedia', normalQuery(q), opts?.when ?? 'any', !!opts?.news])
+  key: (q, opts) => JSON.stringify([getSettings().ai.webSearch?.provider ?? 'wikipedia', normalQuery(q), opts?.when ?? 'any', !!opts?.news, !!opts?.onThisMac])
 })
 export const searchPapers = memoize(searchPapersNow, { ttlMs: 60 * 60_000, key: (q) => normalQuery(q) })
 export const readWebpage = memoize(readWebpageNow, { ttlMs: 60 * 60_000, max: 40, key: (url, cloudOk = true) => `${cloudOk ? 'c' : 'l'}${url.trim()}` })
@@ -877,6 +927,15 @@ function addSource(ctx: LoopContext, s: Omit<ContextSource, 'index'>): number {
 }
 
 async function runTool(call: ToolCall, ctx: LoopContext, depth: number): Promise<string> {
+  const t0 = performance.now()
+  try {
+    return await runToolNow(call, ctx, depth)
+  } finally {
+    toolRan(call.name, performance.now() - t0)
+  }
+}
+
+async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Promise<string> {
   let args: Record<string, unknown> = {}
   try {
     // Dev only: keep the tool calls next to the last request, to see what the model actually sent
@@ -946,7 +1005,7 @@ async function runTool(call: ToolCall, ctx: LoopContext, depth: number): Promise
     const label = papers ? `Searching papers for “${q}”` : `Searching ${news ? 'the news' : 'the web'} for “${q}”${when ? ` (past ${when})` : ''}`
     const id = ctx.step({ kind: 'web_search', label, status: 'running', depth })
     try {
-      const results = papers ? await searchPapers(q) : await webSearch(q, { when, news })
+      const results = papers ? await searchPapers(q) : await webSearch(q, { when, news, onThisMac: !!ctx.private })
       const real = results.filter((r) => r.url)
       ctx.updateStep(id, { status: 'done', detail: `${real.length} result${real.length === 1 ? '' : 's'}` })
       if (!results.length) return 'No results. Try different words.'
@@ -1231,14 +1290,20 @@ function toolSet(o: { top: boolean; web: boolean; focused: boolean; things: bool
   ]
 }
 
-async function loop(messages: ApiMessage[], ctx: LoopContext, depth: number, onText: (t: string) => void): Promise<string> {
+/** The tools a turn offers. A warm-up must send exactly these: they open the prompt, so one tool
+ *  more or fewer and nothing after them is found in the server's cache. */
+async function turnTools(ctx: LoopContext, depth: number): Promise<unknown[]> {
   const term = ctx.terminalId ? terminalInfo(ctx.terminalId) : null
   const terminalTools = term && !term.exited ? (term.kind === 'lab' ? [TERMINAL_READ, TERMINAL_RUN] : [TERMINAL_READ]) : []
   const canvasTools = ctx.canvasPath ? [CANVAS_READ, CANVAS_EDIT] : []
   const top = depth === 0 && !ctx.focused
   // Checking maths or finding a mistake in the cloud needs only the code tool (SymPy), which keeps the request small
   const lean = !!ctx.cloud && !ctx.cloud.fellBack && (ctx.cloud.task === 'maths' || ctx.cloud.task === 'errors' || ctx.cloud.task === 'marking')
-  const tools = toolSet({ top, web: ctx.web, focused: !!ctx.focused, things: top && (await thingsAvailable()), metabase: top && !ctx.cloud && metabaseReady(), helpers: !!ctx.cloud && !ctx.cloud.fellBack, terminal: terminalTools, canvas: canvasTools, lean })
+  return toolSet({ top, web: ctx.web, focused: !!ctx.focused, things: top && (await thingsAvailable()), metabase: top && !ctx.cloud && metabaseReady(), helpers: !!ctx.cloud && !ctx.cloud.fellBack, terminal: terminalTools, canvas: canvasTools, lean })
+}
+
+async function loop(messages: ApiMessage[], ctx: LoopContext, depth: number, onText: (t: string) => void): Promise<string> {
+  const tools = await turnTools(ctx, depth)
   const maxSteps = depth === 0 ? MAX_STEPS : HELPER_STEPS
   const seen = new Set<string>()
   let nudged = false
@@ -1413,6 +1478,8 @@ export async function prewarmLesson(req: Omit<ChatRequest, 'id'>): Promise<void>
   if (at && Date.now() - at < WARM_FOR_MS) return
   warmed.set(key, Date.now())
   if (warmed.size > 40) warmed.delete(warmed.keys().next().value!)
+  // You're settling on another lesson: the one you were in is no longer kept warm
+  forgetLive()
   prewarming?.abort()
   const controller = new AbortController()
   prewarming = controller
@@ -1430,9 +1497,66 @@ async function warmTurn(messages: ApiMessage[], tools: unknown[], signal: AbortS
       body: JSON.stringify({ model, messages, tools, max_tokens: 1, stream: false, ...localSampling(model), ...transientContext() }),
       signal: s
     })
-    await res.text()
+    const body = await res.text()
+    wasWarmUp = true
+    // Dev only: what was read ahead, to compare with the turn that follows
+    if (process.env.TIDE_DEBUG_AI) (await import('fs')).writeFileSync(`${process.env.TIDE_DEBUG_AI}.warm`, JSON.stringify({ at: Date.now(), messages, tools, reply: body.slice(0, 600) }, null, 1))
   }, signal).catch(() => {})
 }
+
+// ---------- Read-back: the model keeps its place in the conversation you're in ----------
+//
+// The local server can only continue from a saved place that the next prompt starts with exactly,
+// and it saves places while reading a prompt, never while writing. So after an answer the model has
+// no saved place that includes it: your next message would wait while it read its own last answer
+// again (and, if other work pushed the conversation out of its cache, the whole lesson: 20 to 40
+// seconds). Instead, as soon as an answer is finished, the conversation as the next turn will send
+// it is read in the background, while you read; and after any other job has used the model, it is
+// touched again so it stays the most recently used thing there.
+
+let live: { req: TurnRequest; reply: string; at: number } | null = null
+let readingBack: AbortController | null = null
+let touchQueued = false
+/** The job that just finished was itself a warm-up: nothing was pushed out that a touch would fix */
+let wasWarmUp = false
+/** A conversation left alone this long is no longer kept warm */
+const LIVE_FOR_MS = 20 * 60_000
+
+async function readLive(): Promise<void> {
+  const now = live
+  if (!now || !isMlxVlm() || Date.now() - now.at > LIVE_FOR_MS) return
+  readingBack?.abort()
+  const controller = new AbortController()
+  readingBack = controller
+  // Built by the same code as the real next turn, so it is word for word what that turn starts with
+  await agentChatNow({ ...now.req, id: 'readback', warmOnly: true, attachment: undefined, messages: [...now.req.messages, { role: 'assistant', content: now.reply }] }, () => {}, controller.signal).catch(() => {})
+  if (readingBack === controller) readingBack = null
+}
+
+/** An answer on this Mac just finished: have the model read it, ready for what you say next */
+export function readBack(req: TurnRequest, reply: string): void {
+  if (!reply.trim() || req.warmOnly) return
+  live = { req, reply, at: Date.now() }
+  void readLive()
+}
+
+/** You moved to another conversation, or this one is being answered now */
+export function forgetLive(): void {
+  live = null
+  readingBack?.abort()
+}
+
+// Other work used the model: put the live conversation back on top of its cache
+afterBackground(() => {
+  const warm = wasWarmUp
+  wasWarmUp = false
+  if (!live || warm || readingBack || touchQueued) return
+  touchQueued = true
+  setTimeout(() => {
+    touchQueued = false
+    void readLive()
+  }, 50)
+})
 
 export async function warmLessons(): Promise<void> {
   const { baseUrl, apiKey } = getSettings().ai
@@ -1491,7 +1615,12 @@ async function turnImages(req: TurnRequest, question: string): Promise<NoteImage
   return loadImages(await readText(notePath).catch(() => ''), notePath)
 }
 
-export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, signal: AbortSignal) {
+export function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, signal: AbortSignal): Promise<void> {
+  if (req.warmOnly) return agentChatNow(req, emit, signal)
+  return timeTurn(req.id, req.instructions ? 'lesson' : 'chat', () => agentChatNow(req, emit, signal))
+}
+
+async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, signal: AbortSignal) {
   const sources: ContextSource[] = []
   const ctx: LoopContext = {
     signal,
@@ -1546,7 +1675,7 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
     const graph = await graphCached().catch(() => null)
     const linked = graph ? [...new Set(graph.edges.filter((e) => e.source === (req.scope as { path: string }).path).map((e) => e.target))].slice(0, 3) : []
     for (const p of linked) {
-      const hit = search(question || p, 1, (x) => x === p)[0] ?? getChunks(p)[0]
+      const hit = search(question || p, 1, (x) => x === p)[0] ?? getChunks(p, 1)[0]
       if (hit) addSource(ctx, { path: hit.path, title: hit.title, heading: hit.heading ? `${hit.heading} (linked note)` : 'linked note', text: hit.text.slice(0, 1200) })
     }
   }
@@ -1600,7 +1729,7 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
     )
   ]
 
-  if (req.warmOnly) return warmTurn(messages, toolSet({ top: false, web: ctx.web, focused: !!ctx.focused, things: false, canvas: req.canvasPath ? [CANVAS_READ, CANVAS_EDIT] : [] }), signal)
+  if (req.warmOnly) return warmTurn(messages, await turnTools(ctx, 0), signal)
   // The pictures ride on this turn's message only: the start of the prompt stays the same, and cached
   const last = messages[messages.length - 1]
   if (images.length && last.role === 'user') last.content = [{ type: 'text', text: String(last.content) }, ...images.map((im) => ({ type: 'image_url' as const, image_url: { url: im.dataUrl } }))]

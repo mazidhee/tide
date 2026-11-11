@@ -9,6 +9,7 @@ import { join } from 'path'
 import { pathToFileURL } from 'url'
 import type { CompanyPrepRequest, OutlineDraftRequest, ChatRequest, ChatScope, LearningStatus, ReviewGrade, Settings, PdfHighlight, TutorThread } from '@shared/types'
 import { getSettings, updateSettings } from './settings'
+import { noteRender, recentSpeed } from './speed'
 import {
   absPath,
   allNotes,
@@ -43,7 +44,7 @@ import {
 import { importFile, libraryThumb, saveUrl } from './library'
 import { getHighlights, saveHighlights } from './highlights'
 import { librariesStatus, mathStatus, runCode, runProject, setupLibraries, setupMath } from './runner'
-import { searchStatus, setupSearch, wakeSearch } from './websearch'
+import { searchStatus, setupSearch, stopSearch, wakeSearch } from './websearch'
 import { applySpeedups, ensureModelServer, serverReady, speedStatus, tuneModelServer } from './modelServer'
 import { labFlashcards } from './labCards'
 import { prewarmLesson, warmChat, warmLessons } from './agent'
@@ -294,6 +295,9 @@ function registerIpc() {
     return listConnections(true)
   })
   // Only Flow is noted from the window: the rest are counted where Tide calls them
+  handle('speed:recent', () => recentSpeed())
+  handle('speed:memory', async () => (await import('./macMemory')).macMemory())
+  handle('speed:render', (id: string, r: Parameters<typeof noteRender>[1]) => noteRender(id, r))
   handle('connections:used', (id: string) => id === 'flow' && noteUse(id))
   handle('sources:lesson', (topic: string, where?: string) => lessonPack(topic, where))
   handle('lessons:save', (r: Parameters<typeof saveLesson>[0]) => saveLesson(r))
@@ -710,6 +714,7 @@ app.on('before-quit', () => {
   stopStudyApi().catch(() => {})
   closeAllTerminals()
   stopVoice()
+  stopSearch()
 })
 
 app.on('window-all-closed', () => {

@@ -18,7 +18,8 @@ export interface AISettings {
   autoStart?: boolean
   serverCommand?: string
   webSearch?: {
-    provider: 'wikipedia' | 'brave' | 'tavily' | 'you' | 'searxng' | 'off'
+    /** 'auto': the fastest available for each search (You.com when keyed, else the engine on this Mac, else Wikipedia) */
+    provider: 'auto' | 'wikipedia' | 'brave' | 'tavily' | 'you' | 'searxng' | 'off'
     apiKey?: string
     url?: string
   }
@@ -403,6 +404,32 @@ export interface ReadAlongNote {
   rewrite?: string
 }
 
+/** Where one answer's time went (Settings › Speed) */
+export interface TurnSpeed {
+  id: string
+  at: number
+  kind: 'chat' | 'lesson'
+  /** From pressing send to the first model request: Tide's own work */
+  prepareMs: number
+  /** Each model request: reading the prompt (to the first token), then writing */
+  calls: { engine: 'local' | 'cloud'; model: string; prefillMs: number; writeMs: number; tokens: number; promptTokens?: number; cachedTokens?: number; /** Tide's work on the stream, all tokens together */ tideMs: number }[]
+  tools: { name: string; ms: number }[]
+  totalMs: number
+  /** The window drawing the answer as it arrived */
+  render?: { frames: number; totalMs: number; longestMs: number }
+}
+
+/** What holds this Mac's memory (Settings › Speed) */
+export interface MacMemory {
+  total: number
+  swapUsed: number
+  /** The local model server's memory, and how much of it macOS has compressed or swapped */
+  model: number
+  modelSqueezed: number
+  /** The other apps holding the most, largest first */
+  apps: { name: string; bytes: number }[]
+}
+
 export type ChatEvent =
   | { id: string; type: 'sources'; sources: ContextSource[] }
   | { id: string; type: 'delta'; text: string }
@@ -608,6 +635,14 @@ export interface TideApi {
   }
   /** Your goal and focus, the week planned towards them, and the learner profile */
   /** Every service Tide connects to, with its state and use (main/connections) */
+  speed: {
+    /** Where the last answers' time went */
+    recent(): Promise<TurnSpeed[]>
+    /** The window's report on drawing one streamed answer */
+    render(id: string, r: NonNullable<TurnSpeed['render']>): Promise<void>
+    /** What holds this Mac's memory right now (takes about a second) */
+    memory(): Promise<MacMemory>
+  }
   connections: {
     list(fresh?: boolean): Promise<import('./connections').Connection[]>
     /** Saves (or, with null, forgets) the key for a connection added from the Connections page */

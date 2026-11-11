@@ -50,8 +50,56 @@ export function createStreamFilter() {
   }
 }
 
-/** True when the tail of a stream is the same short line or word over and over */
-export const isLooping = (text: string) => /(\b[\w'’-]{1,24}\b)(?:\s+\1){10,}\s*$/.test(text) || /(.{2,60}\n)\1{8,}$/.test(text)
+/** True when the tail of a stream is the same short line or word over and over. Only the tail can
+ *  show it, so only the tail is read: the check costs the same on the last token as the first. */
+export const isLooping = (text: string) => {
+  const tail = text.length > 1500 ? text.slice(-1500) : text
+  return /(\b[\w'’-]{1,24}\b)(?:\s+\1){10,}\s*$/.test(tail) || /(.{2,60}\n)\1{8,}$/.test(tail)
+}
+
+/** Follows the markers in a growing model stream without reading it all again on every token:
+ *  how many reasoning blocks have opened, whether a tool call is open, and whether the visible text
+ *  has started a bare "call:name{" line. */
+export function streamWatch() {
+  const CHANNEL = '<|channel>'
+  const OPEN = '<|tool_call'
+  const CLOSE = '<tool_call|>'
+  let rawSeen = 0
+  let textSeen = 0
+  let channels = 0
+  let lastOpen = -1
+  let lastClose = -1
+  let bareCall = false
+  // Every match that ends past what was read before (a marker can arrive split across tokens)
+  const each = (s: string, token: string, from: number, on: (at: number) => void) => {
+    for (let i = s.indexOf(token, Math.max(0, from - token.length + 1)); i >= 0; i = s.indexOf(token, i + 1)) if (i + token.length > from) on(i)
+  }
+  return {
+    raw(raw: string) {
+      each(raw, CHANNEL, rawSeen, () => channels++)
+      each(raw, OPEN, rawSeen, (i) => (lastOpen = i))
+      each(raw, CLOSE, rawSeen, (i) => (lastClose = i))
+      rawSeen = raw.length
+    },
+    text(text: string) {
+      if (!bareCall) {
+        // From the start of the line the new text joins, so "^" still means a line start
+        const from = textSeen ? text.lastIndexOf('\n', textSeen - 1) : 0
+        bareCall = /(^|\n)\s*call:[A-Za-z_]\w*\{/.test(from > 0 ? text.slice(from) : text)
+      }
+      textSeen = text.length
+    },
+    get channels() {
+      return channels
+    },
+    get inCall() {
+      return lastOpen > lastClose
+    },
+    get bareCall() {
+      return bareCall
+    }
+  }
+}
 
 /** True when a message plainly asks for something to be looked up online */
 export function asksForWeb(text: string): boolean {

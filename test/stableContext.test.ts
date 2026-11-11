@@ -31,3 +31,18 @@ describe('append-only context, for the prefix cache', () => {
     expect(out[0].content).toBe('Something new')
   })
 })
+
+describe('reading an answer back ahead of the next turn', () => {
+  it('sends exactly what the next turn starts with', () => {
+    const first = { role: 'user', content: `What is a nibble? ${Math.random()}` }
+    const sent = withStableContext([first], 'Passages: four bits make a nibble.')
+    const answer = { role: 'assistant', content: 'A nibble is four bits.' }
+    // The read-back: the same conversation with the answer on the end, and no new context
+    const readBack = withStableContext([first, answer], 'context that must not be attached anywhere')
+    expect(readBack.slice(0, 1)).toEqual(sent)
+    expect(readBack[1]).toEqual(answer)
+    // The real next turn starts with every message of the read-back, unchanged
+    const next = withStableContext([first, answer, { role: 'user', content: 'And a byte?' }], 'Passages: eight bits make a byte.')
+    expect(next.slice(0, 2)).toEqual(readBack)
+  })
+})

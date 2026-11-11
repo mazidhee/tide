@@ -125,6 +125,11 @@ const api: TideApi = {
     logDrill: invoke('practice:logDrill'),
     drills: invoke('practice:drills')
   },
+  speed: {
+    recent: invoke('speed:recent'),
+    render: invoke('speed:render'),
+    memory: invoke('speed:memory')
+  },
   connections: {
     list: invoke('connections:list'),
     setKey: invoke('connections:setKey'),

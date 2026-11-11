@@ -10,9 +10,10 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
-    "dist:mac": "electron-vite build && electron-builder --mac --arm64 --publish never",
+    "dist:mac": "npm run native && electron-vite build && electron-builder --mac --arm64 --publish never",
     "postinstall": "node -e \"const fs=require('fs'),p=require('path');const d='node_modules/node-pty/prebuilds';if(fs.existsSync(d))for(const a of fs.readdirSync(d)){const f=p.join(d,a,'spawn-helper');if(fs.existsSync(f))fs.chmodSync(f,0o755)}\"",
-    "check": "node scripts/check/run.mjs"
+    "check": "node scripts/check/run.mjs",
+    "native": "cd native/tide-core && cargo build --release && cp target/release/libtide_core.dylib tide-core.node"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
@@ -119,6 +120,12 @@
         "schemes": [
           "tide"
         ]
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "native/tide-core/tide-core.node",
+        "to": "tide-core.node"
       }
     ]
   },

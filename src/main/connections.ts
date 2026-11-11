@@ -125,7 +125,7 @@ async function build(): Promise<Connection[]> {
         case 'searxng': {
           const { searchStatus } = await import('./websearch')
           const st = await within(4000, searchStatus(), { ready: false, detail: 'Didn’t answer in time' })
-          return as(st.ready ? 'connected' : 'not-set-up', search === 'searxng' ? st.detail : st.ready ? 'Running, not your search now' : st.detail, st.ready && search === 'searxng')
+          return as(st.ready ? 'connected' : 'not-set-up', search === 'searxng' ? st.detail : !st.ready ? st.detail : search === 'auto' ? 'Used for private lessons, and when You.com can’t answer' : 'Set up, not your search now', st.ready && (search === 'searxng' || search === 'auto'))
         }
         case 'brave':
         case 'tavily': {
@@ -138,7 +138,7 @@ async function build(): Promise<Connection[]> {
         case 'firecrawl': {
           const key = !!getKey(info.id)
           if (info.id === 'firecrawl') return as(key ? 'connected' : 'needs-key', key ? 'Reads pages the plain reader can’t' : 'Add a key to use it')
-          return as(key ? 'connected' : 'needs-key', !key ? 'Add a key to use it' : search === 'you' ? 'Your web search' : 'Key saved: choose it as your search in Tools', key && search === 'you')
+          return as(key ? 'connected' : 'needs-key', !key ? 'Add a key to use it' : search === 'you' ? 'Your web search' : search === 'auto' ? 'Your web search, while its credit lasts' : 'Key saved: choose it as your search in Tools', key && (search === 'you' || search === 'auto'))
         }
         case 'arxiv':
         case 'openlibrary':

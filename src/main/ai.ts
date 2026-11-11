@@ -1,3 +1,4 @@
+import { recentSpeed } from './speed'
 import { inBackground, streamInteractive } from './modelQueue'
 import { STRATEGY_LABEL, type Strategy } from '@shared/strategy'
 import { canTake, CloudUnavailable, cloudError, coolingDown, coolTarget, deadlineFor, estimateTokens, headersFor, noteLimits, noteOutcome, noteSent, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
@@ -175,7 +176,7 @@ export async function retrieve(scope: ChatScope, query: string): Promise<Context
     if (chunks.length < 3) {
       // Generic questions ("summarize this") match few terms, fall back to reading order
       const paths = scope.kind === 'note' ? [scope.path, ...filed] : allChunkPaths().filter(within)
-      const extra = paths.flatMap((p) => getChunks(p).slice(0, scope.kind === 'note' ? 50 : 2))
+      const extra = paths.flatMap((p) => getChunks(p, scope.kind === 'note' ? 50 : 2))
       chunks = [...chunks, ...extra.filter((c) => !chunks.some((h) => h.id === c.id))]
     }
   }
@@ -612,9 +613,22 @@ async function lessonTurn(req: TurnRequest) {
   }
 }
 
-async function answer(req: TurnRequest, emit: (e: ChatEvent) => void) {
+async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
   const controller = new AbortController()
   running.set(req.id, controller)
+  // What the window was shown is what the next turn will send back as this answer. Once it's done,
+  // the model on this Mac reads it in the background, so your next message doesn't wait for that
+  const asked = req
+  let shown = ''
+  const emit = (e: ChatEvent) => {
+    if (e.type === 'delta') shown += e.text
+    else if (e.type === 'reset') shown = ''
+    else if (e.type === 'done' && !controller.signal.aborted && answeredHere(req.id)) {
+      const reply = asked.chatId ? cleanModelText(shown) : shown
+      void import('./agent').then((a) => a.readBack(asked, reply))
+    }
+    send(e)
+  }
   // Everything goes through the tool harness when it's on, so threads can run code and check maths too
   if (getSettings().ai.agent !== false) {
     try {
@@ -729,6 +743,11 @@ async function answer(req: TurnRequest, emit: (e: ChatEvent) => void) {
   } finally {
     running.delete(req.id)
   }
+}
+
+/** The answer's last request went to the model on this Mac (a cloud answer leaves nothing for it to read back) */
+function answeredHere(id: string): boolean {
+  return recentSpeed().find((t) => t.id === id)?.calls.at(-1)?.engine === 'local'
 }
 
 export function friendlyError(e: unknown): string {

@@ -16,13 +16,24 @@ import { getSettings } from './settings'
  * launch; it changes speed only, never the answers. Other servers are left alone.
  */
 // Gemma 4 mixes sliding-window and full attention, so the server can't reuse part of an old prompt,
-// only whole saved snapshots that the new prompt starts with. Tide marks per-turn context as
-// request-only, so each request saves a snapshot exactly where its conversation ends; intermediate
-// snapshots (every N tokens) only crowd the cache, each a few hundred MB, and pushed other
-// conversations' prefixes out. So: 8 entries in 4 GB, and intermediate snapshots only past 8k tokens.
-// Snapshots also go to disk (up to 8 GB): an evicted prefix comes back in under a second instead of
-// a 10-20 s re-read, and survives a server restart.
-export const PREFIX_CACHE = { apc_enabled: true, apc_disk_enabled: true, apc_disk_max_gb: 8, apc_memory_max_gb: 4, apc_checkpoint_entries: 8, apc_checkpoint_interval_tokens: 8192 }
+// only whole saved snapshots that the new prompt starts with, and it saves them only while reading
+// a prompt. Tide marks per-turn context as request-only, so each request saves a snapshot exactly
+// where its conversation ends, and reads each answer back as soon as it's written (see readBack in
+// agent.ts), so the next turn starts from a snapshot that already holds it. Measured on an M4 Pro
+// (scripts/bench/gemma.py):
+// - One conversation then needs two or three snapshots (a few hundred MB each), so 2 GB holds it
+//   with room for background work; 4 GB only made the server 1.5 GB bigger.
+// - Intermediate snapshots (every N tokens) crowd the cache and push the conversation out, so they
+//   start only past 8k tokens.
+// - The last snapshot is taken 4 tokens before the end, not 1: a prompt ends with the 4 tokens that
+//   open the model's turn, which the next prompt never repeats, so at 1 it could never match.
+// - Half a GB held back before reading, not the automatic 1.8 GB: with that, a Mac with little
+//   free memory had its snapshots thrown away just before they were needed and a whole lesson was
+//   read again (a worst turn of 44 s); with none, the cache grew a GB past its budget. At half a
+//   GB the worst turn was 2 s and the server no bigger than before.
+// - Snapshots also go to disk (up to 20 GB; one long lesson writes several): one pushed out of
+//   memory comes back in about a second, and survives a restart.
+export const PREFIX_CACHE = { apc_enabled: true, apc_disk_enabled: true, apc_disk_max_gb: 20, apc_memory_max_gb: 2, apc_memory_reserve_gb: 0.5, apc_checkpoint_entries: 6, apc_checkpoint_interval_tokens: 8192, apc_checkpoint_guard_tokens: 4 }
 
 /** Whether the AI server is mlx-vlm, which takes request-only context (see transientContext) */
 let mlxVlmServer = false
