@@ -49,7 +49,7 @@ Run in Python, \`0.1 + 0.2 == 0.3\` is \`False\`: the sum is \`0.300000000000000
     id: 'systems-after-wrong-variable-is-not-a-box',
     subject: 'systems',
     situation: 'after-wrong',
-    setup: { mode: 'teach', topic: 'Variables and data types in Python' },
+    setup: { mode: 'teach', topic: 'Names, objects and mutability in Python' },
     history: [
       {
         tutor: r`<ask type="predict">What does this print?
@@ -93,9 +93,9 @@ print(a)
     setup: { mode: 'teach', topic: 'Vector clocks' },
     history: [
       {
-        tutor: r`Two processes P1 and P2 keep vector clocks [P1, P2], both starting at [0, 0]. Sending and receiving each count as an event.
+        tutor: r`Here is the smallest exchange there is. Before anything happens, both P1 and P2 hold the clock [0, 0]; in this course a message going out and a message coming in are both events.
 
-<ask type="short">P1 sends a message to P2, and P2 receives it. What is P2's clock after the receive, and why?</ask>`
+<ask type="short">P1 messages P2 once, and P2 gets it. Where does P2's clock stand afterwards, and why?</ask>`
       },
       { learner: { answer: "[1, 0]. P2 takes the max of its clock and the message's, and that's all: receiving a message never increments a vector clock, only sends and internal events do.", confidence: 'sure' } }
     ],
@@ -108,7 +108,7 @@ print(a)
     },
     good: r`<grade verdict="wrong" score="0">P2's clock is [1, 1]. The step that fails is leaving the clock at the max: a receive is an event, so after taking the element-wise max ([1, 0]) P2 increments its own entry, giving [1, 1].</grade>
 
-<card>What does a process do to its vector clock on receiving a message? :: Take the element-wise max with the message's clock, then increment its own entry.</card>
+<card>Is a receipt an event for a vector clock? :: Yes: P2 merged to [1, 0], then counted the receipt in its own slot, giving [1, 1].</card>
 
 <ask type="short">P2 now sends a message back to P1, whose clock is [1, 0]. What are P2's clock after the send and P1's after the receive?</ask>`,
     bad: [

@@ -706,5 +706,5 @@ Choose by what you taught, taking the first that fits:
 - something to watch running, when your instructions describe a simulation of it: that sim block;
 - ideas grouped under a topic: a mermaid mindmap;
 - something physical or with a classic textbook figure: find_image.
-Never answer a waiting question: if one is waiting for their answer, draw only its setup (what it gives, laid out), with the results left as "?".
+Never answer a waiting question.
 Everything must be exact: every number, bit pattern or formula is one you computed, labels use your explanation's names and symbols, and nothing appears that you didn't teach. In a mermaid flowchart every node is an id with its label in quotes, like A["Row 2"] --> B["Row 3"]; under about 14 nodes.)`
