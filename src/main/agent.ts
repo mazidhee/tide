@@ -120,7 +120,7 @@ const MEMORY_TOOLS = [
 const CANVAS_READ = tool('canvas_read', "Read the student's system design canvas: every component with its id and kind, and every connection.", {}, [])
 const CANVAS_EDIT = tool(
   'canvas_edit',
-  "Draw on the student's system design canvas. Operations run in order; refer to components by id or by name. Kinds: client, lb (load balancer), gateway, service, worker, database, cache, queue, storage, cdn, external, note.",
+  "Draw on the student's system design canvas. Operations run in order; refer to components by id or by name. Kinds: client, lb (load balancer), gateway, service, worker, database, cache, queue, storage, cdn, external, note. group draws a labelled box around members (a region, a cluster, one team's services).",
   {
     ops: {
       type: 'array',
@@ -128,7 +128,7 @@ const CANVAS_EDIT = tool(
       items: {
         type: 'object',
         properties: {
-          op: { type: 'string', enum: ['add', 'connect', 'update', 'remove', 'disconnect'] },
+          op: { type: 'string', enum: ['add', 'connect', 'update', 'remove', 'disconnect', 'group'] },
           label: { type: 'string', description: 'add/update: the component name' },
           kind: { type: 'string' },
           details: { type: 'string', description: 'add/update: a short second line, e.g. "Postgres, read replicas"' },
@@ -136,7 +136,8 @@ const CANVAS_EDIT = tool(
           near: { type: 'string', description: 'add: place it beside this component' },
           side: { type: 'string', enum: ['right', 'below', 'left', 'above'] },
           from: { type: 'string' },
-          to: { type: 'string' }
+          to: { type: 'string' },
+          members: { type: 'array', items: { type: 'string' }, description: 'group: the components inside it' }
         },
         required: ['op']
       }
