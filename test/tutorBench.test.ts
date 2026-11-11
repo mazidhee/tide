@@ -353,6 +353,26 @@ describe('the visual asked for', () => {
   })
 })
 
+describe('the Show me note', () => {
+  it('lists the kinds in the order to try them, a table of the worked numbers first, and shows how a mermaid node is written', () => {
+    const at = (t: string) => SHOW_ME.indexOf(t)
+    const order = ['a Markdown table, one row per step, with the same numbers as your explanation', 'plot it with run_code', 'mermaid stateDiagram-v2', 'mermaid sequenceDiagram', 'mermaid flowchart;', 'that sim block', 'mermaid mindmap', 'find_image']
+    for (const t of order) expect(at(t), t).toBeGreaterThan(0)
+    expect(order.map(at)).toEqual([...order.map(at)].sort((a, b) => a - b))
+    expect(SHOW_ME).toContain('taking the first that fits')
+    expect(SHOW_ME).toContain('like A["Row 2"] --> B["Row 3"]')
+    // No longer than the note it replaces (231 words), give or take a line
+    expect(SHOW_ME.split(/\s+/).length).toBeLessThanOrEqual(245)
+  })
+
+  it('still asks for one visual, one line and no question, which the scorer holds a Show me reply to', () => {
+    expect(SHOW_ME).toMatch(/Give the ONE visual that fits what you just taught, then one line saying what to look at in it, and stop: no new problem, no question\./)
+    const show = SCENARIOS.filter((s) => s.history.some((t) => 'learner' in t && 'showMe' in t.learner))
+    expect(show.length).toBeGreaterThan(3)
+    for (const s of show) expect(s.expect.ends, s.id).toBe('nothing')
+  })
+})
+
 describe('the judge', () => {
   it('is asked with the lesson so far, the reply without its hidden working, and the rubric', () => {
     const s = SCENARIOS.find((x) => x.situation === 'after-wrong')!

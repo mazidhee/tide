@@ -639,16 +639,22 @@ export const ASKED = 'My question: '
 /**
  * Show me: you ask to see the explanation you were just given. The tutor picks the one kind of
  * picture that fits what it taught, and anything with numbers in it is computed, not drawn by eye.
+ *
+ * The kinds are listed in the order to try them, a table of the worked numbers first. With the
+ * flowchart first, Gemma drew every process as one: asked to show a Gaussian elimination it had
+ * just worked through, it drew boxes named "Row Operations" and "Back-Substitution" with none of
+ * the numbers, and wrote the quoted labels as bare nodes, which mermaid cannot draw.
  */
 export const SHOW_ME = `${ASKED}Show me that as a picture.
 
 (Tide: the student pressed Show me on your last explanation. Don't explain it again in words. Give the ONE visual that fits what you just taught, then one line saying what to look at in it, and stop: no new problem, no question.
-Choose by what the idea is:
-- parts and how data or control moves between them (a system, a pipeline, a request, the layers of a model): a mermaid flowchart;
-- an exchange over time between parties (a protocol, a handshake, a call sequence): a mermaid sequenceDiagram;
-- ideas grouped under a topic, to see the whole of it: a mermaid mindmap;
+Choose by what you taught, taking the first that fits:
+- numbers or values worked step by step (an elimination, an algorithm run, a trace): a Markdown table, one row per step, with the same numbers as your explanation;
+- a function, a distribution or numbers compared: plot it with run_code (matplotlib), computing every value;
 - states and what moves between them: a mermaid stateDiagram-v2;
-- values changing step by step (an algorithm run, a carry chain, a trace): a table, one row per step;
-- a function, a quantity, a distribution or numbers compared: plot it with run_code (matplotlib), computing every value in the code;
-- something that exists physically or has a classic textbook figure: find_image.
-Everything in it must be exact. Any number, bit pattern or formula you show is one you have computed (use run_code when it isn't trivial), labels use the same names and symbols as your explanation, and nothing is included that you didn't teach. Keep a diagram under about 14 nodes with short labels in quotes.)`
+- an exchange over time between parties (a protocol, a call): a mermaid sequenceDiagram;
+- parts and how data or control moves between them (a system, a pipeline, a model's layers): a mermaid flowchart;
+- something to watch running, when your instructions describe a simulation of it: that sim block;
+- ideas grouped under a topic: a mermaid mindmap;
+- something physical or with a classic textbook figure: find_image.
+Everything must be exact: every number, bit pattern or formula is one you computed, labels use your explanation's names and symbols, and nothing appears that you didn't teach. In a mermaid flowchart every node is an id with its label in quotes, like A["Row 2"] --> B["Row 3"]; under about 14 nodes.)`

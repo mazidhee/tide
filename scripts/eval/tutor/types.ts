@@ -4,6 +4,7 @@
  */
 import type { AskType, SessionSetup } from '../../../src/shared/session'
 import type { Verdict } from '../../../src/shared/lessonCheck'
+import type { SimKind } from '../../../src/shared/sims'
 
 /** Bump when a scenario or an expectation changes: results are only comparable within one version */
 export const SCENARIO_SET_VERSION = '1.1.0'
@@ -52,7 +53,7 @@ export type Tag = 'ask' | 'grade' | 'plan' | 'card' | 'note' | 'summary' | 'solu
 export type Visual =
   | { kind: 'mermaid'; diagram?: ('flowchart' | 'sequenceDiagram' | 'stateDiagram' | 'mindmap')[] }
   | { kind: 'table' }
-  | { kind: 'sim'; sim?: 'neural-net' | 'attention' | 'gradient-descent' | 'softmax' }
+  | { kind: 'sim'; sim?: SimKind }
   | { kind: 'chart' }
 
 export interface Expect {
