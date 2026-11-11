@@ -437,3 +437,12 @@ describe('trusted sources for the new subjects', () => {
     for (const s of unchecked) expect(trustedSite(`https://${s.host}${s.path ?? '/'}x`), s.host).toBeNull()
   })
 })
+
+describe('a word shared by two subjects', () => {
+  it('reads "Byzantine" as distributed systems when it is about faults, and as history when it is about the empire', async () => {
+    const { profileSubject: profileTopic } = await import('../src/shared/subjects')
+    expect(profileTopic('Fault tolerance: crash and Byzantine failure counts').kinds[0]).toBe('build')
+    expect(profileTopic('The Byzantine generals problem').kinds[0]).toBe('build')
+    expect(profileTopic('The Byzantine Empire under Justinian').kinds[0]).toBe('narrative')
+  })
+})
