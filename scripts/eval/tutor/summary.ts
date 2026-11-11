@@ -5,7 +5,7 @@
  * what a before-and-after difference has to beat.
  */
 import type { Score } from './score'
-import { SITUATIONS, SUBJECTS, type Scenario } from './types'
+import { BREADTH_SUBJECTS, SITUATIONS, SUBJECTS, type Scenario } from './types'
 
 export interface Row {
   id: string
@@ -116,7 +116,7 @@ export function summarise(every: Row[]): Summary {
       unusualAccepted: stat(marked.filter((r) => r.situation === 'mark-unusual-correct'), (r) => (m(r).got === 'correct' ? 1 : 0)),
       misconceptionNamed: stat(marked.filter((r) => r.situation === 'after-wrong' && m(r).named !== null), (r) => (m(r).named ? 1 : 0))
     },
-    bySubject: Object.fromEntries(SUBJECTS.map((s) => [s, measures(answered.filter((r) => r.subject === s))])),
+    bySubject: Object.fromEntries([...SUBJECTS, ...BREADTH_SUBJECTS.filter((s) => answered.some((r) => r.subject === s))].map((s) => [s, measures(answered.filter((r) => r.subject === s))])),
     bySituation: Object.fromEntries(SITUATIONS.map((s) => [s, measures(answered.filter((r) => r.situation === s))])),
     failures: [...failures].map(([id, n]) => ({ id, share: round(n / Math.max(1, rows.length))! })).sort((a, b) => b.share - a.share),
     repairs: [...repairs].map(([id, n]) => ({ id, share: round(n / Math.max(1, answered.length))! })).sort((a, b) => b.share - a.share),

@@ -5,14 +5,70 @@
 import type { AskType, SessionSetup } from '../../../src/shared/session'
 import type { Verdict } from '../../../src/shared/lessonCheck'
 import type { SimKind } from '../../../src/shared/sims'
+import type { SubjectKind } from '../../../src/shared/subjectMap'
 
 /** Bump when a scenario or an expectation changes: results are only comparable within one version */
-export const SCENARIO_SET_VERSION = '1.1.0'
+export const SCENARIO_SET_VERSION = '1.2.0'
 
+/** The core subjects: each has a scenario in every situation */
 export const SUBJECTS = ['systems', 'c-cpp', 'distributed', 'databases', 'ml', 'maths', 'data-eng'] as const
-export type Subject = (typeof SUBJECTS)[number]
+
+/**
+ * Breadth: subjects outside the ones Tide was tuned on, from physics to contract law, two or more
+ * scenarios each in the situations that matter most for them. Each names the kinds its topic must
+ * be profiled as (src/shared/subjects.ts), so a scenario also proves the lesson got its toolkit.
+ */
+export const BREADTH_SUBJECTS = [
+  'mechanics',
+  'electromagnetism',
+  'quantum',
+  'organic-chem',
+  'genetics',
+  'macro',
+  'corp-finance',
+  'core-banking',
+  'accounting',
+  'contract-law',
+  'game-dev',
+  'graphics-maths',
+  'compilers',
+  'os',
+  'music-theory',
+  'world-history',
+  'linguistics',
+  'statistics',
+  'epidemiology',
+  'ui-design',
+  'philosophy',
+  'physical-skill'
+] as const
+
+export const ALL_SUBJECTS = [...SUBJECTS, ...BREADTH_SUBJECTS] as const
+export type Subject = (typeof ALL_SUBJECTS)[number]
 
 export const SUBJECT_LABEL: Record<Subject, string> = {
+  mechanics: 'Classical mechanics',
+  electromagnetism: 'Electromagnetism',
+  quantum: 'Quantum basics',
+  'organic-chem': 'Organic chemistry',
+  genetics: 'Genetics',
+  macro: 'Macroeconomics',
+  'corp-finance': 'Corporate finance',
+  'core-banking': 'Core banking',
+  accounting: 'Accounting',
+  'contract-law': 'Contract law',
+  'game-dev': 'Game loops and game physics',
+  'graphics-maths': '3-D graphics maths',
+  compilers: 'Compilers',
+  os: 'Operating systems',
+  'music-theory': 'Music theory',
+  'world-history': 'World history',
+  linguistics: 'Linguistics',
+  statistics: 'Statistics',
+  epidemiology: 'Epidemiology',
+  'ui-design': 'UI design critique',
+  philosophy: 'Philosophy',
+  'physical-skill': 'A physical skill',
   systems: 'Computer systems',
   'c-cpp': 'C and C++',
   distributed: 'Distributed systems',
@@ -100,4 +156,6 @@ export interface Scenario {
   bad?: { reply: string; fails: string[]; repaired?: string[] }[]
   /** What a judge model should look for here (optional; see judge.ts) */
   judge?: string
+  /** A breadth scenario: the kinds its topic must be profiled as, main kind first */
+  kinds?: SubjectKind[]
 }

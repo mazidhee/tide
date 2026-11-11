@@ -9,6 +9,8 @@ import { readWebpage, webSearch } from './agent'
 import { getSettings } from './settings'
 import { directionLine } from './coach'
 import { noteUse } from './connectionUse'
+import { subjectProfile } from './subjects'
+import { roadmapGuidance } from '@shared/subjects'
 
 /**
  * Sizes a learning goal before any outline is written: research how people actually learn it and
@@ -73,13 +75,16 @@ export async function sizePlan(req: PlanRequest, step: (s: AgentStep) => void, s
   if (signal?.aborted) throw new Error('Stopped.')
   step({ id: 'p3', kind: 'helper', label: 'Sizing the plan', status: 'running', depth: 0 })
   const heading = await directionLine().catch(() => '')
+  // Subject hook (any-subject, src/shared/subjects.ts): how this kind of subject is practised, phase by phase
+  const subject = await subjectProfile(req.topic).catch(() => null)
+  const guidance = subject ? roadmapGuidance(subject) : ''
   const prompt = `Plan how a learner gets from where they are to real expertise in: ${req.topic}
 ${req.goal?.trim() ? `Their goal and what they already know: ${req.goal.trim()}` : 'They did not say what they already know; assume a capable adult new to this subject.'}${heading ? `\n${heading} Pick phases, projects and exercises that serve that direction.` : ''}
 They can study about ${req.hoursPerWeek} hours a week, starting ${req.start}.${req.deadline ? ` They want to finish by ${req.deadline}.` : ''}
 
 ${CALIBRATION}
 
-Split it into 2 to 8 phases in a sensible order, each ending in something they can do and a project that proves it, with 2 or 3 concrete practice exercises along the way (specific problems to solve, things to build or derive, not "practise X").
+Split it into 2 to 8 phases in a sensible order, each ending in something they can do and a project that proves it, with 2 or 3 concrete practice exercises along the way (specific problems to solve, things to build or derive, not "practise X").${guidance ? `\n${guidance}` : ''}
 ${research ? `Use this research for what the subject covers and how long it really takes:\n\n${research}\n` : ''}
 First decide the scope honestly: "tool" for one product or technology (Metabase, MongoDB, Docker, Git, Excel), "skill" for a broader ability or language, "discipline" for a whole field, "career" only for becoming a professional in a large field from scratch.
 Return ONLY JSON:
@@ -90,7 +95,8 @@ Return ONLY JSON:
   // A small model sometimes wraps or breaks the JSON: ask once more, strictly
   if (!normalizePlan(safeJson(out), req.hoursPerWeek)) out = await complete(`${prompt}\n\nYour last reply was not valid JSON. Reply with the JSON object only, nothing before or after it.`, system, signal, 'interactive', 'planning')
   const maxWeeks = req.deadline ? Math.max(1, (new Date(req.deadline).getTime() - new Date(req.start).getTime()) / (7 * 86_400_000)) : undefined
-  const plan = normalizePlan(safeJson(out), req.hoursPerWeek, maxWeeks)
+  const normal = normalizePlan(safeJson(out), req.hoursPerWeek, maxWeeks)
+  const plan = normal && subject?.kinds.length ? { ...normal, subject: subject.kinds } : normal
   if (!plan) {
     step({ id: 'p3', kind: 'helper', label: 'Sizing the plan', status: 'error', depth: 0 })
     throw new Error("The planner didn't return a plan. Try again.")
@@ -126,7 +132,7 @@ Return ONLY JSON in the same shape: {"scope": "...", "coding": true, "hoursPerWe
   const maxWeeks = req.deadline ? Math.max(1, (new Date(req.deadline).getTime() - new Date(req.start).getTime()) / (7 * 86_400_000)) : undefined
   const plan = normalizePlan(raw, hours, maxWeeks, asked.weeks)
   if (!plan) throw new Error("The planner couldn't change the plan that way. Try saying it differently.")
-  return plan
+  return req.plan.subject ? { ...plan, subject: req.plan.subject } : plan
 }
 
 // ---------- Things 4 ----------

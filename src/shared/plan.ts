@@ -4,6 +4,8 @@
  * the dates are worked out here, in code, from the start date and the weeks per phase.
  */
 
+import type { SubjectKind } from './subjectMap'
+
 export type PlanScope = 'tool' | 'skill' | 'discipline' | 'career'
 
 export interface PlanPhase {
@@ -26,6 +28,8 @@ export interface StudyPlan {
   phases: PlanPhase[]
   /** Whether the practice is programming (then exercises also become coding challenges) */
   coding?: boolean
+  /** What kind of knowledge the subject is (src/shared/subjects.ts), kept in the roadmap as subject_kinds */
+  subject?: SubjectKind[]
 }
 
 export interface DatedPhase extends PlanPhase {
@@ -167,7 +171,14 @@ export function addPlanDates(outline: string, phases: DatedPhase[]): string {
 
 /** Front matter that keeps a plan's dates with its roadmap: start, hours, weeks per phase */
 export function planFrontmatter(plan: StudyPlan, start: string, extra: Record<string, string> = {}): string {
-  const lines = [`plan_start: ${start}`, `plan_hours: ${plan.hoursPerWeek}`, `plan_weeks: [${plan.phases.map((p) => p.weeks).join(', ')}]`, ...Object.entries(extra).map(([k, v]) => `${k}: ${v}`)]
+  const lines = [
+    `plan_start: ${start}`,
+    `plan_hours: ${plan.hoursPerWeek}`,
+    `plan_weeks: [${plan.phases.map((p) => p.weeks).join(', ')}]`,
+    // Subject hook (any-subject): the subject's kinds, decided once and kept with the roadmap
+    ...(plan.subject?.length ? [`subject_kinds: ${plan.subject.join(', ')}`] : []),
+    ...Object.entries(extra).map(([k, v]) => `${k}: ${v}`)
+  ]
   return `---\n${lines.join('\n')}\n---\n\n`
 }
 

@@ -58,8 +58,9 @@ const bookChunks = (path: string): Passage[] =>
 describe('the trusted list', () => {
   it('is a short explicit list, matched by host, subdomain and path', () => {
     expect(trustedCount()).toBeGreaterThan(80)
-    expect(trustedCount()).toBeLessThan(150)
-    expect(Object.keys(TRUSTED).length).toBe(10)
+    // Grew from about 110 when the areas for any subject were added (src/shared/subjects.ts)
+    expect(trustedCount()).toBeLessThan(200)
+    expect(Object.keys(TRUSTED).length).toBe(19)
     expect(trustedSite('https://docs.python.org/3/tutorial/classes.html')?.kind).toBe('official')
     expect(trustedSite('https://www.postgresql.org/docs/current/mvcc-intro.html')?.licence).toBe('PostgreSQL Licence')
     expect(trustedSite('https://en.cppreference.com/w/cpp/language/raii')?.by).toBe('cppreference')
