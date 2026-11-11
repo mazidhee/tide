@@ -9,6 +9,8 @@ import { fileTitle, folderOf, useApp } from '../state'
 import { renderMarkdown, slugify, splitFrontmatter } from '../lib/markdown'
 import { FONT_VAR, TEXT_SCALE, usePageSettings } from '../lib/pageSettings'
 import { Editor, type EditorHandle } from './Editor'
+import { DiscussPanel, type DiscussTarget } from './DiscussPanel'
+import { keepPassage } from '../lib/passages'
 import { Icon } from './Icon'
 import { FormatBar } from './FormatBar'
 import { openingRequest } from '../lib/openingRequest'
@@ -40,6 +42,8 @@ const fmLineCount = (raw: string) => {
 }
 
 export function NoteView({ path, anchor, nonce }: { path: string; anchor?: string; nonce?: number }) {
+  // humanities: a passage being discussed beside the note
+  const [discussing, setDiscussing] = useState<DiscussTarget | null>(null)
   const app = useApp()
   const tide = useTideDesign()
   const [raw, setRaw] = useState<string | null>(null)
@@ -674,6 +678,25 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
             <button onClick={() => askInline('Check every step of the maths here with SymPy (run_code). Show each step as checked or wrong, and for a wrong one say exactly what is wrong and why.')}>Check maths</button>
             <button onClick={() => askInline('Draw this so I can see how it works: a diagram (mermaid) or a step-by-step trace table, then a one-line takeaway.')}>Draw it</button>
             <button onClick={() => askInline()}>Ask</button>
+            {/* humanities: discuss a passage, highlight or bookmark it (kept in the notes page of what you're reading) */}
+            <button
+              onClick={() => {
+                setDiscussing({ passage: selection.text })
+                setSelection(null)
+              }}
+            >
+              Discuss this
+            </button>
+            {path.startsWith(app.settings.libraryFolder + '/') && (
+              <>
+                {(['yellow', 'green', 'blue', 'pink'] as const).map((c) => (
+                  <button key={c} className="swatch-btn" title={`Highlight ${c}`} onClick={() => keepPassage(path, selection.text, { color: c }).then(() => (setSelection(null), app.toast('Highlighted: it is in your notes on this')))}>
+                    <span className={`swatch hl-${c}`} />
+                  </button>
+                ))}
+                <button onClick={() => keepPassage(path, selection.text, { bookmark: true }).then(() => (setSelection(null), app.toast('Bookmarked')))}>Bookmark</button>
+              </>
+            )}
             {path.startsWith(app.settings.libraryFolder + '/') && (
               <button
                 onClick={async () => {
@@ -699,6 +722,11 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
       </div>
 
       {raw !== null && !editing && <OutlineRail articleRef={articleRef} scrollRef={scrollRef} html={html} />}
+      {discussing && (
+        <aside className="discuss-drawer" aria-label="Discussion">
+          <DiscussPanel path={path} target={discussing} onClose={() => setDiscussing(null)} />
+        </aside>
+      )}
       {makingCards !== null && (
         <FlashcardMaker sourcePath={path} focusText={makingCards === body ? undefined : makingCards} onClose={() => setMakingCards(null)} />
       )}

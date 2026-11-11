@@ -27,6 +27,8 @@ import './styles/tide/library.css'
 import './styles/tide/know.css'
 import './styles/tide/settings.css'
 import './styles/tide/rest.css'
+// humanities: the EPUB reader, Discuss this, reading together, appraisals, free books
+import './styles/humanities.css'
 import { resolveDesign } from '@shared/design'
 import { AppProvider } from './state'
 import App from './App'

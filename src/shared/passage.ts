@@ -48,6 +48,8 @@ export const compareLoc = (a: PassageLoc, b: PassageLoc) => locOrder(a) - locOrd
 /** An Obsidian link that opens the book at the passage: [[Meditations.epub#loc=2.4|ch. 2 ¶4]] */
 export function passageLink(path: string, loc: PassageLoc): string {
   const name = path.split('/').pop()!
+  // A note or article opens at its heading, the way Obsidian links do
+  if (loc.kind === 'text' && loc.heading) return `[[${name.replace(/\.md$/i, '')}#${loc.heading}|${locLabel(loc)}]]`
   return `[[${name}#${locAnchor(loc)}|${locLabel(loc)}]]`
 }
 

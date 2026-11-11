@@ -467,6 +467,10 @@ export interface PdfHighlight {
   color: 'yellow' | 'green' | 'blue' | 'pink'
   note?: string
   createdAt: number
+  /** Where it is when that isn't a page of a PDF: "loc=3.12" (an EPUB's chapter and paragraph), "para=7" (an article or note); see shared/passage */
+  loc?: string
+  /** A bookmark: a place kept, with no text marked */
+  bookmark?: boolean
 }
 
 export interface Flashcard {
@@ -867,6 +871,8 @@ export interface TideApi {
     get(path: string): Promise<PdfHighlight[]>
     save(path: string, highlights: PdfHighlight[]): Promise<void>
   }
+  /** humanities: reading books in any format (src/main/reading) */
+  reading: ReadingApi
   study: {
     cards(scope: ChatScope): Promise<StudyCard[]>
     review(cardId: string, grade: ReviewGrade, path: string): Promise<CardSchedule>
@@ -881,4 +887,24 @@ export interface TideApi {
     /** Started from the source with a test profile, so check tooling can drive it */
     testCopy?: boolean
   }
+}
+
+// ---------- humanities: reading (src/main/reading) ----------
+
+export interface ReadingApi {
+  book(path: string): Promise<import('./epub').EpubBook>
+  /** Where a selected passage is in a work */
+  locate(path: string, text: string): Promise<import('./passage').PassageLoc | null>
+  freeSearch(query: string): Promise<import('./freeBooks').FreeBook[]>
+  freeAdd(book: import('./freeBooks').FreeBook): Promise<ClipResult>
+  source(path: string): Promise<(import('./freeBooks').BookSource & { siteName: string }) | null>
+  discuss(req: { path: string; passage: string; loc?: import('./passage').PassageLoc; id?: string; said?: string; spoilers?: boolean; readTo?: import('./passage').PassageLoc }): Promise<{ discussion: import('./closeReading').Discussion; repaired?: boolean }>
+  discussions(path: string): Promise<import('./closeReading').Discussion[]>
+  keep(path: string, id: string, what: { turn?: number; conclusion?: string }): Promise<import('./closeReading').Discussion | null>
+  items(path: string): Promise<import('./bookNotes').ReadingItem[]>
+  syncNotes(path: string): Promise<string>
+  togetherOpen(path: string, kind?: import('./readTogether').WorkKind): Promise<{ record: import('./readTogether').ReadingRecord; recordPath: string; recap: string; chapters: { n: number; title: string; part?: string }[]; next: number }>
+  togetherOrient(path: string, chapter: number): Promise<string>
+  togetherDiscuss(t: { path: string; chapter: number; turns: { role: 'tutor' | 'learner'; text: string }[]; said?: string }): Promise<{ reply: string; record: import('./readTogether').ReadingRecord; refused: string[] }>
+  togetherFinish(path: string, chapter: number, note?: string): Promise<import('./readTogether').ReadingRecord>
 }

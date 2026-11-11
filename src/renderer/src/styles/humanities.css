@@ -1,0 +1,539 @@
+/*
+  Reading in the humanities: the EPUB reader, "Discuss this", reading together, the appraisal of a
+  reading, free books. Written with the classic names (--bg, --ink-soft, --line…), which the new
+  design points at its own roles, so both designs get it; the new design's refinements (its book
+  face, radii and type scale) are scoped to data-design='tide' at the end.
+*/
+
+/* ---------- The EPUB reader ---------- */
+
+.epub-scroll {
+  position: relative;
+  background: var(--bg);
+}
+.epub-chapter {
+  max-width: 68ch;
+  margin: 0 auto;
+  padding: 48px 56px 96px 72px;
+  font-family: var(--font-read-serif, Georgia, serif);
+  font-size: var(--read-size, 17px);
+  line-height: 1.7;
+  color: var(--ink);
+}
+.epub-part {
+  margin: 0 0 6px;
+  font: 500 12px/1.4 var(--font-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.epub-title {
+  margin: 0;
+  font-size: 1.75em;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+.epub-num {
+  margin: 6px 0 32px;
+  font: 400 12.5px/1.4 var(--font-ui);
+  color: var(--ink-muted);
+}
+.epub-sub {
+  margin: 1.6em 0 0.6em;
+  font-size: 1.1em;
+  font-weight: 600;
+}
+.epub-para {
+  position: relative;
+  border-radius: 4px;
+  transition: background-color 0.6s ease;
+}
+.epub-para p {
+  margin: 0 0 0.9em;
+  text-wrap: pretty;
+  hanging-punctuation: first;
+}
+.epub-para p.verse {
+  white-space: pre-line;
+  padding-left: 1.5em;
+}
+.epub-para.flash {
+  background: var(--accent-soft);
+}
+.epub-pnum {
+  position: absolute;
+  left: -48px;
+  top: 0.3em;
+  width: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 400 11px/1.4 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink-muted);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.epub-para:hover .epub-pnum,
+.epub-para.kept .epub-pnum,
+.epub-pnum:focus-visible {
+  opacity: 1;
+}
+.epub-para.kept .epub-pnum {
+  color: var(--accent);
+}
+.epub-hl {
+  color: inherit;
+  border-radius: 2px;
+  padding: 1px 0;
+  cursor: pointer;
+}
+.epub-notes {
+  margin-top: 2.4em;
+  padding-top: 1em;
+  border-top: 1px solid var(--line);
+  font: 400 13.5px/1.55 var(--font-ui);
+  color: var(--ink-soft);
+}
+.epub-notes h3 {
+  margin: 0 0 0.5em;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.epub-notes ol {
+  margin: 0;
+  padding-left: 1.4em;
+}
+.epub-foot {
+  display: flex;
+  justify-content: center;
+  margin-top: 3em;
+  font-family: var(--font-ui);
+}
+.epub-source {
+  margin-top: 2em;
+  font: 400 12px/1.5 var(--font-ui);
+  color: var(--ink-muted);
+  text-align: center;
+}
+.epub-contents {
+  max-width: 260px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s, 6px);
+  background: var(--field, var(--bg-raised));
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+.epub-next svg {
+  transform: scaleX(-1);
+}
+.epub-note-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  min-width: 260px;
+}
+.epub-note-edit textarea,
+.discuss textarea,
+.free-books input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s, 6px);
+  background: var(--field, var(--bg-raised));
+  color: var(--ink);
+  font: 400 13.5px/1.5 var(--font-ui);
+  resize: vertical;
+}
+.epub-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ---------- Discuss this, and reading together ---------- */
+
+.discuss,
+.together {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px 16px;
+  overflow-y: auto;
+  min-height: 0;
+  font-family: var(--font-ui);
+}
+.discuss-head,
+.together-chapter-head,
+.together-record-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.discuss-kicker {
+  font: 600 11px/1.4 var(--font-ui);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.discuss-head .icon-btn {
+  margin-left: auto;
+}
+.discuss-loc {
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-inset);
+  font: 500 11.5px/1.5 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.discuss-loc:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.discuss-loc.small {
+  margin-left: 6px;
+  font-size: 10.5px;
+}
+.discuss-passage {
+  margin: 0;
+  padding: 2px 0 2px 14px;
+  border-left: 2px solid var(--accent);
+  font-family: var(--font-read-serif, Georgia, serif);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink);
+  white-space: pre-line;
+}
+.discuss-turns {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.discuss-turn {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 8px;
+}
+.discuss-who {
+  padding-top: 2px;
+  font: 600 11px/1.6 var(--font-ui);
+  letter-spacing: 0.03em;
+  color: var(--ink-muted);
+}
+.discuss-turn.tutor .discuss-who {
+  color: var(--accent);
+}
+.discuss-body {
+  min-width: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.discuss-body > p {
+  margin: 0;
+}
+.discuss-turn.learner .discuss-body > p {
+  color: var(--ink-soft);
+}
+.discuss-ask {
+  margin-top: 6px;
+  font-weight: 500;
+}
+.discuss-keep {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 400 11.5px/1.5 var(--font-ui);
+  color: var(--ink-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.discuss-turn:hover .discuss-keep,
+.discuss-keep.kept,
+.discuss-keep:focus-visible {
+  opacity: 1;
+}
+.discuss-keep:hover:not(:disabled) {
+  color: var(--accent);
+}
+.discuss-keep.kept {
+  color: var(--ink-soft);
+  cursor: default;
+}
+.discuss-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.discuss-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.discuss-conclusion {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.discuss-error {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+.discuss-drawer {
+  position: fixed;
+  top: 56px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 30;
+  display: flex;
+  width: min(400px, 92vw);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l, 10px);
+  overflow: hidden;
+  background: var(--bg-raised);
+  box-shadow: var(--pop-shadow);
+}
+.discuss-drawer .discuss {
+  flex: 1;
+}
+
+.together-recap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-m, 8px);
+  background: var(--bg-inset);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.together-recap p {
+  margin: 0;
+}
+.together-kind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.together-kind select {
+  font: inherit;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.together-chapter {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.together-chapter-head strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.together-orient {
+  padding-left: 12px;
+  border-left: 2px solid var(--line-strong);
+  color: var(--ink-soft);
+}
+.together-record {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.together-record-head .link-btn {
+  margin-left: auto;
+}
+.together-section h4 {
+  margin: 0 0 4px;
+  font: 600 12px/1.4 var(--font-ui);
+  color: var(--ink-soft);
+}
+.together-section ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.together-section li {
+  padding: 2px 0;
+}
+.together-section li span {
+  color: var(--ink-soft);
+}
+
+/* ---------- A reading appraised, not marked ---------- */
+
+.s-appraise {
+  margin: 4px 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m, 8px);
+  background: var(--bg-raised);
+}
+.s-appraise-head {
+  margin-bottom: 6px;
+  font: 600 11px/1.4 var(--font-ui);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.s-appraise ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 5px 10px;
+  align-items: baseline;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.s-appraise li {
+  display: contents;
+}
+.s-appraise-crit {
+  font-weight: 600;
+  color: var(--ink);
+}
+.s-appraise-level {
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.lv-strong .s-appraise-level {
+  background: color-mix(in srgb, var(--good, #1f9d55) 14%, transparent);
+  color: var(--good, #17703c);
+}
+.lv-developing .s-appraise-level {
+  background: color-mix(in srgb, var(--warn, #e19a00) 16%, transparent);
+  color: var(--warn, #8a5600);
+}
+.lv-missing .s-appraise-level {
+  background: color-mix(in srgb, var(--danger, #b3261e) 12%, transparent);
+  color: var(--danger, #b3261e);
+}
+.lv-na .s-appraise-level {
+  background: var(--bg-inset);
+  color: var(--ink-muted);
+}
+.s-appraise-note {
+  color: var(--ink-soft);
+}
+
+/* ---------- Free books ---------- */
+
+.free-books {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l, 10px);
+  background: var(--bg-raised);
+}
+.free-books p {
+  margin: 0;
+}
+.free-books-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.free-books-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.free-books-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+  font-size: 13.5px;
+}
+
+/* ---------- The new design ---------- */
+
+:root[data-design='tide'] {
+  .epub-chapter {
+    font-family: var(--read);
+    font-size: var(--read-size, 17px);
+  }
+  .epub-part,
+  .epub-num,
+  .epub-notes,
+  .epub-source,
+  .discuss,
+  .together,
+  .free-books {
+    font-family: var(--ui);
+  }
+  .epub-title {
+    font-family: var(--read);
+    font-weight: 600;
+  }
+  .discuss-passage {
+    font-family: var(--read);
+  }
+  .s-appraise,
+  .together-recap {
+    border-radius: var(--r-box);
+  }
+  .s-appraise {
+    background: var(--raised);
+    border-color: var(--line);
+  }
+  .lv-strong .s-appraise-level {
+    background: var(--good-soft);
+    color: var(--good);
+  }
+  .discuss-loc,
+  .epub-contents {
+    border-radius: var(--r-ctl);
+  }
+  .discuss-loc {
+    border-radius: 999px;
+  }
+  .free-books {
+    border-radius: var(--r-box);
+    background: var(--raised);
+  }
+}

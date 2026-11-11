@@ -6,7 +6,7 @@ export const isCompanion = (path: string) => / \(Notes\)\.md$/i.test(path)
 /** The note that goes with a PDF or saved article: "<name> (Notes).md" next to it */
 export const companionPath = (source: string) => {
   const dir = folderOf(source)
-  const name = fileTitle(source).replace(/\.pdf$/i, '')
+  const name = fileTitle(source).replace(/\.(pdf|epub)$/i, '')
   return `${dir ? dir + '/' : ''}${name} (Notes).md`
 }
 
@@ -19,7 +19,7 @@ export async function addQuoteToNotes(source: string, text: string, page?: numbe
   try {
     existing = await window.tide.vault.read(target)
   } catch {
-    const name = fileTitle(source).replace(/\.pdf$/i, '')
+    const name = fileTitle(source).replace(/\.(pdf|epub)$/i, '')
     existing = `---\nsource: "[[${fileName(source)}]]"\n---\n\n# Notes on ${name}\n`
   }
   const link = page ? `[[${fileName(source)}#page=${page}|p. ${page}]]` : `[[${fileName(source).replace(/\.md$/i, '')}]]`
