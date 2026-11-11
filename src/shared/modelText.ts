@@ -101,6 +101,67 @@ export function streamWatch() {
   }
 }
 
+/** What a turn must do next, read off its stream: carry on from a stall, or start over from a loop */
+export type TurnStop = 'stall' | 'loop'
+
+/**
+ * One model turn read as it streams, the way the tutor's harness reads it (main/agent), kept here
+ * so anything that measures the tutor outside the app reads a reply by the same rules:
+ * - the visible text of each piece, without hidden reasoning or special tokens;
+ * - "stall": Gemma opened a thought channel after its answer had begun (it stays there, repeating
+ *   it), so what was written is kept and it is asked to carry on (CARRY_ON);
+ * - "loop": the same line or word over and over, or three thought channels before any answer.
+ * A tool call written as text is never shown and never judged as repetition.
+ */
+export function turnReader() {
+  const filter = createStreamFilter()
+  const watch = streamWatch()
+  let raw = ''
+  let text = ''
+  // How many thought-channel openings there were when the answer began; another one after that is a stall
+  let channelsAtStart = -1
+  return {
+    push(delta: string): { visible: string; stop?: TurnStop } {
+      raw += delta
+      const visible = filter(delta)
+      text += visible
+      watch.raw(raw)
+      watch.text(text)
+      // Watch the raw stream too: repeated hidden reasoning blocks never show up in the text
+      // Code inside a tool call written as text can repeat lines legitimately: don't judge it
+      const inCall = watch.inCall
+      const channels = watch.channels
+      if (channelsAtStart < 0 && text.trim()) channelsAtStart = channels
+      if (!inCall && channelsAtStart >= 0 && channels > channelsAtStart) return { visible: '', stop: 'stall' }
+      if (!inCall && (isLooping(text) || isLooping(raw) || channels >= 3)) return { visible: '', stop: 'loop' }
+      // Never show a tool call the server passed through as text: judge by the raw stream, since
+      // the filter strips the special tokens that mark it, and hold back a bare "call:name{" too
+      return { visible: visible && !inCall && !watch.bareCall ? visible : '' }
+    },
+    /** Everything visible so far */
+    get text() {
+      return text
+    },
+    get raw() {
+      return raw
+    }
+  }
+}
+
+/** Said to the model (not shown) to pick a stalled reply up where it stopped */
+export const CARRY_ON = '(Carry on with your reply exactly where it stopped. Do not repeat anything already written, and no <say> this time.)'
+
+/** The text before a run of repetition, ended at its last full sentence */
+export function beforeLoop(text: string): string {
+  const m = text.match(/(\b[\w'’-]{1,24}\b)(?:\s+\1){10,}\s*$/) ?? text.match(/(.{2,60}\n)\1{8,}$/)
+  let kept = m ? text.slice(0, m.index) : text
+  // Also drop a sentence repeated three or more times at the end
+  const sentences = kept.match(/[^.!?\n]+[.!?]+\s*/g) ?? []
+  while (sentences.length > 2 && sentences[sentences.length - 1].trim() === sentences[sentences.length - 2].trim()) sentences.pop()
+  if (sentences.length) kept = kept.slice(0, kept.lastIndexOf(sentences[sentences.length - 1]) + sentences[sentences.length - 1].length)
+  return kept.trim()
+}
+
 /** True when a message plainly asks for something to be looked up online */
 export function asksForWeb(text: string): boolean {
   return /\b(search|look\s+(it|this|that|them)?\s*up|google|browse|check)\b[^.?!]{0,40}\b(web|online|internet|net)\b|\b(search|look)\s+(online|the web|the internet)\b|\bon(line| the (web|internet))\b.{0,20}\b(search|find|look)|\bgoogle\b|\b(latest|recent|current|today'?s|this (week|month|year)|news|newest|just (released|announced)|right now)\b/i.test(

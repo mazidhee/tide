@@ -6,6 +6,16 @@
 export const SIM_KINDS = ['neural-net', 'attention', 'gradient-descent', 'softmax', 'raft', 'b-tree', 'hash-table', 'cpu', 'tokeniser', 'blockchain', 'plot'] as const
 export type SimKind = (typeof SIM_KINDS)[number]
 
+// A small model often labels the block "json" (or nothing) and gets everything else right:
+// what makes it a simulation is its "kind", not the label on the fence
+const KIND_AT_START = new RegExp(`^\\s*\\{\\s*"kind"\\s*:\\s*"(${SIM_KINDS.join('|')})"`)
+
+/** Whether a fenced block is a simulation, from its label and what it holds */
+export const isSimSource = (lang: string, code: string) => {
+  const l = lang.toLowerCase()
+  return l === 'sim' || ((l === 'json' || l === '') && KIND_AT_START.test(code))
+}
+
 export const SIM_GUIDE = `- For how a model, algorithm, protocol or machine works, show it running: a fenced code block with the language sim holding one JSON object. The app turns it into a live simulation the student can play, step and change; every number in it is computed. Kinds:
   - neural-net, a small network learning by backpropagation: {"kind":"neural-net","layers":[2,4,4,1],"data":"xor","activation":"tanh","rate":0.3}. data: xor, circle, two-moons, spiral, linear. activation: tanh, relu, sigmoid. Up to 3 hidden layers of up to 8 neurons. Add "mode":"forward" or "mode":"backward" to walk one sample through layer by layer, with each value or gradient. Spiral needs relu and [2,8,8,8,1].
   - attention, self-attention on a sentence: {"kind":"attention","tokens":["the","cat","sat"],"heads":2}. Up to 12 tokens, 1 to 4 heads, optional "temperature" and "causal":true. Its weights are seeded random numbers: use it for the mechanism, and never say the pattern means anything.

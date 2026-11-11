@@ -1,4 +1,4 @@
-import { checksOf, claimsPrompt, makesClaims, parseClaimCheck, CLAIMS_SYSTEM, type ClaimCheck, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, solutionOf, solvePrompt, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
+import { checksOf, claimsPrompt, makesClaims, parseClaimCheck, CLAIMS_SYSTEM, type ClaimCheck, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, setsProblem, solutionOf, solvePrompt, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
 import type { RequestKind } from '@shared/providers'
 import { aboutMetabase } from '@shared/metabase'
 import { ownWords, posedProblem, repeatsEarlier } from '@shared/session'
@@ -95,9 +95,6 @@ export interface LessonFindings {
   errata?: { errors: { quote: string; fix: string }[]; unsure: { quote: string; why: string }[] }
 }
 
-/** A real problem in a problem set ("**Problem 3 · harder**"), not a diagnostic or a question in passing */
-const isProblem = (reply: string) => /\*\*\s*Problem\s+\d+/i.test(reply) && posedProblem(reply).split(' ').length >= 8
-
 /** A lesson that teaches (not a quiz, a placement check or a retest), from its instructions */
 const teaching = (req: ChatRequest) => !/adaptive QUIZ|PLACEMENT CHECK|retest/i.test(req.instructions ?? '')
 
@@ -148,7 +145,7 @@ export async function checkLessonReply(
   const cloud = !!routeFor('marking') && (await mayLeaveMac(req))
   const hard = isHardTopic(`${req.topic ?? ''}`)
   // Diagnostics and questions in passing aren't problems to solve or review
-  const sets = isProblem(reply)
+  const sets = setsProblem(reply)
 
   // Worked examples in an explanation aren't problems, so nothing else checks them: the cloud maths
   // model does, alongside the other checks, and a mistake gets a correction under the reply
@@ -202,7 +199,7 @@ export async function checkLessonReply(
   const users = req.messages.filter((m) => m.role === 'user')
   const prev = earlier[earlier.length - 1]
   // Only an answer to a real problem: a diagnostic just finds where they are
-  const answered = prev && isProblem(prev) ? answeredProblem(prev, text(users[users.length - 1]), reply) : undefined
+  const answered = prev && setsProblem(prev) ? answeredProblem(prev, text(users[users.length - 1]), reply) : undefined
   // A banked problem was checked and reviewed when it was written: only the mark needs a second look
   const posed = !opts.fromBank && sets ? { problem: readable(reply), solution: solutionOf(reply) } : undefined
   const input: ReviewInput = { ...(answered && answered.verdict !== 'wrong' && !found.mark ? { answered } : {}), ...(posed ? { posed } : {}) }

@@ -37,6 +37,9 @@ export function missingQuestion(reply: string): boolean {
   return /\*{0,2}problem\s+\d+/i.test(reply)
 }
 
+/** A real problem in a problem set ("**Problem 3 · harder**"), not a diagnostic or a question in passing: what gets solved, checked and reviewed */
+export const setsProblem = (reply: string) => /\*\*\s*Problem\s+\d+/i.test(reply) && posedProblem(reply).split(' ').length >= 8
+
 /** Advanced technical material, where a wrong problem or a generous mark costs the most */
 const HARD =
   /\b(proofs?|prove|theorem|lemma|derive|derivation|induction|integral|differential|eigen\w*|matri(x|ces)|linear algebra|vector spaces?|calculus|limit|series|convergen\w*|probabilit\w*|expected value|variance|bayes\w*|markov|stochastic|optimi[sz]\w*|gradient|complexity|big[- ]o|recurrence|amortized|np[- ]?(hard|complete)|dynamic programming|graph algorithms?|shortest path|concurren\w*|mutex|deadlock|race conditions?|lock[- ]free|memory model|cache coherenc\w*|consensus|raft|paxos|distributed|replication|partition\w*|transactions?|isolation levels?|serializab\w*|compilers?|parsers?|type systems?|operating systems?|virtual memory|kernel|cryptograph\w*|elliptic|zero[- ]knowledge|blockchain|smart contracts?|stablecoins?|settlement|ledger|reconcil\w*|backpropagation|transformers?|attention|neural|machine learning|stochastic calculus|options pricing|black[- ]scholes)\b/i
