@@ -28,6 +28,7 @@ import { localSampling } from './sampling'
 import { getChunks, indexReady, search } from './search'
 import { canTake, CLOUD_REPLY_TOKENS, CloudUnavailable, cloudError, estimateTokens, headersFor, noteLimits, noteSent, noteWhy, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
 import { escalationFor, providerInfo, type CloudTask, type RequestKind } from '@shared/providers'
+import { ledJob } from '@shared/sourceLed'
 import { ownWords } from '@shared/session'
 import { TUTOR_SYSTEM, stableSystem, withInstructions } from '@shared/tutorPrompt'
 import { findImages } from './images'
@@ -1637,7 +1638,8 @@ async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, sign
   // make an answer look like worked maths, or steer the search
   const question = ownWords(String([...req.messages].reverse().find((m) => m.role === 'user')?.content ?? ''))
   // The cloud model takes this turn if you picked it, or if it's a job set to escalate (worked maths, finding a mistake)
-  const job = escalationFor(question, req.askType)
+  // [source-led] a turn that asks about a reading or marks against one is a marking job (shared/sourceLed)
+  const job = escalationFor(question, req.askType) ?? ledJob(req.messages)
   // Anything about your Metabase stays on this Mac: its data never goes to a cloud model
   const mine = metabaseReady() && req.messages.some((m) => aboutMetabase(m.content, metabaseHost()))
   const images = req.warmOnly ? [] : await turnImages(req, question)

@@ -168,6 +168,8 @@ export interface ChatRequest {
   askType?: string
   /** A lesson's topic: for checking its problems and finding it in books you own */
   topic?: string
+  /** [source-led] false when "Let the tutor explain" is chosen for this lesson; otherwise a step is taught from a source when a good one is found (shared/sourceLed) */
+  sourceLed?: boolean
 }
 
 export interface StoredMessage {

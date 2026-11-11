@@ -576,17 +576,32 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
         req = { ...req, messages: [...req.messages.slice(0, -1), { ...last, content: `${String(last.content)}\n\n${exactNote(exact)}` }] }
         emit({ id: req.id, type: 'step', step: { id: 'exact', kind: 'helper', label: exact.result === 'match' ? 'Checked your final answer: it’s right' : 'Checked your final answer: it isn’t right yet', status: 'done', depth: 0 } })
       }
-      const lesson = req.session ? await lessonTurn(req) : null
+      // [source-led] A step taught from a source (main/sourceLed.ts): the reading and the tutor's rules
+      // for it ride with this turn, Tide puts the reading into the reply as it streams (`out`), and the
+      // turn ends at a new plan whose first step has a reading (`led.signal`). Null: nothing changes.
+      const led = req.session ? await import('./sourceLed').then((m) => m.sourceLedTurn(req)).catch(() => null) : null
+      if (led) req = led.request
+      const out = led ? led.tap(emit) : emit
+      const upTo = led ? AbortSignal.any([controller.signal, led.signal]) : controller.signal
+      const lesson = req.session && !led?.teaching ? await lessonTurn(req) : null
       let reply = ''
       if (lesson) {
         // The model's turn ends early when Tide takes over setting the problem: that's not an error
         try {
-          await agentChat(lesson.request, lesson.tap(emit), AbortSignal.any([controller.signal, lesson.signal]))
+          await agentChat(lesson.request, lesson.tap(out), AbortSignal.any([upTo, lesson.signal]))
         } catch (e) {
-          if (!lesson.signal.aborted || controller.signal.aborted) throw e
+          if (!(lesson.signal.aborted || led?.signal.aborted) || controller.signal.aborted) throw e
         }
-        reply = lesson.finish(emit)
-      } else await agentChat(req, (e) => (e.type === 'delta' && (reply += e.text), emit(e)), controller.signal)
+        reply = lesson.finish(out)
+      } else {
+        try {
+          await agentChat(req, (e) => (e.type === 'delta' && (reply += e.text), out(e)), upTo)
+        } catch (e) {
+          if (!led?.signal.aborted || controller.signal.aborted) throw e
+        }
+      }
+      // [source-led] What the checks read is the tutor's own words, without the source's
+      if (led && !controller.signal.aborted) reply = led.settle(shown, emit)
       // Faults a rule can see are put right before anything reads the reply (the checks, the problem
       // bank, the lesson's record, the model's own next turn): a mark on something that wasn't an
       // answer, a grade left unclosed, a numbered question with only Go on to press
