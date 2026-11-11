@@ -11273,6 +11273,18 @@ code.cmd-chip:hover {
   padding: 4px 16px 0;
 }
 
+.lesson-notes-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lesson-notes-view {
+  font-size: 14.5px;
+  cursor: text;
+  padding-bottom: 120px;
+}
+
 .lesson-notes-editor .cm-content {
   line-height: 1.6;
   padding-bottom: 120px;

@@ -3,6 +3,7 @@ import type { ChatScope } from '@shared/types'
 import { addTakeaways, learnerText, newLessonNote } from '@shared/lessonNotes'
 import { useApp } from '../state'
 import { Editor } from './Editor'
+import { renderMarkdown } from '../lib/markdown'
 import { Icon } from './Icon'
 
 const fileSafe = (s: string) => s.replace(/[\\/:*?"<>|#^[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100)
@@ -25,6 +26,8 @@ export function LessonNotes({ topic, scope, takeaways, onCheck, busy, mineRef }:
   const app = useApp()
   const [{ path, exists }] = useState(() => notePathFor(app.files, topic, scope))
   const [text, setText] = useState<string | null>(null)
+  // Read as it will look (Markdown and maths drawn, as in the lesson); written in the editor
+  const [editing, setEditing] = useState(false)
   const created = useRef(exists)
   const latest = useRef('')
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -78,12 +81,29 @@ export function LessonNotes({ topic, scope, takeaways, onCheck, busy, mineRef }:
     <aside className="lesson-notes" aria-label="Your notes for this lesson">
       <div className="lesson-notes-head">
         <span className="lesson-notes-title">Notes</span>
+        <span className="lesson-notes-actions">
+        <button className="btn small ghost" onClick={() => setEditing((e) => !e)} disabled={text === null}>
+          {editing ? 'Done' : 'Edit'}
+        </button>
         <button className="icon-btn small" onClick={() => app.openPath(path)} title={`Open ${path}`} disabled={!created.current && !takeaways.length}>
           <Icon name="external" size={13} />
         </button>
+        </span>
       </div>
       <p className="muted small lesson-notes-hint">Key ideas land here as you learn. Write your own anywhere, and ask the tutor to review them.</p>
-      <div className="lesson-notes-editor">{text !== null && <Editor value={text} onChange={edit} />}</div>
+      <div className="lesson-notes-editor">
+        {text !== null &&
+          (editing ? (
+            <Editor value={text} onChange={edit} />
+          ) : (
+            <div
+              className="prose compact lesson-notes-view"
+              title="Click to write in your notes"
+              onClick={(e) => !(e.target as HTMLElement).closest('a, button, input') && setEditing(true)}
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(text, { notePath: path, filesByName: app.filesByName }) }}
+            />
+          ))}
+      </div>
       <div className="lesson-notes-foot">
         <button className="btn small" disabled={busy || mine.length < 20} onClick={() => onCheck(mine)} title="The tutor reads what you wrote and says what's right, what to fix and why">
           Review my notes
