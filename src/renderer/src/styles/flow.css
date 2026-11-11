@@ -1,0 +1,1094 @@
+/*
+  The canvas (CanvasEditor on xyflow): system designs, lesson diagrams and flowcharts in messages.
+  Every colour comes from the theme's tokens, which the tide design maps onto the classic names,
+  so the canvas follows both designs, all six themes and the accent colour picked in Settings.
+*/
+
+.cv {
+  /* JSON Canvas presets 1–6: red, orange, yellow, green, cyan, purple */
+  --cv-c1: var(--danger);
+  --cv-c2: var(--series-2);
+  --cv-c3: var(--series-4);
+  --cv-c4: var(--series-3);
+  --cv-c5: var(--info);
+  --cv-c6: color-mix(in srgb, #8b6fd0 82%, var(--ink));
+  /* Part kinds: a mark beside a label, never the only sign of what a part is */
+  --k-client: var(--info);
+  --k-edge: var(--cv-c6);
+  --k-service: var(--accent);
+  --k-data: color-mix(in srgb, var(--danger) 78%, var(--series-5));
+  --k-cache: var(--series-4);
+  --k-queue: var(--series-2);
+  --k-external: var(--ink-muted);
+  --k-note: var(--warn);
+  --cv-surface: var(--bg);
+  --cv-card: var(--bg-raised);
+  --cv-rule: color-mix(in srgb, var(--ink) 13%, transparent);
+  --cv-wire: color-mix(in srgb, var(--ink) 34%, transparent);
+  --cv-dot: color-mix(in srgb, var(--ink-muted) 30%, transparent);
+  --cv-float: var(--bg-raised);
+  --cv-float-shadow: var(--pop-shadow);
+  --xy-selection-background-color: color-mix(in srgb, var(--accent) 8%, transparent);
+  --xy-selection-border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  --xy-minimap-background-color: var(--cv-float);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--ink) 7%, transparent);
+  --xy-minimap-mask-stroke-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  --xy-minimap-mask-stroke-width: 1.5;
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  outline: none;
+  background: var(--cv-surface);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+:root[data-design='tide'] .cv {
+  --cv-surface: var(--paper);
+  --cv-card: var(--raised);
+  --cv-dot: color-mix(in srgb, var(--ink-3) 26%, transparent);
+  --cv-c6: var(--a1);
+  --cv-float-shadow: var(--shadow-pop);
+}
+
+.cv .react-flow {
+  background: transparent;
+}
+
+.cv-bg {
+  --xy-background-pattern-color: var(--cv-dot);
+}
+
+.cv .react-flow__pane {
+  cursor: default;
+}
+
+.cv .react-flow__pane.draggable {
+  cursor: grab;
+}
+
+.cv .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+.cve-markers {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+/* ---------- Parts ---------- */
+
+.cv .react-flow__node-text,
+.cv .react-flow__node-file,
+.cv .react-flow__node-link {
+  display: flex;
+  border-radius: 12px;
+}
+
+.cvn {
+  --kind: var(--ink-muted);
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 13px 11px;
+  border-radius: 12px;
+  background: var(--cv-card);
+  border: 1px solid var(--cv-rule);
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.03),
+    0 2px 10px -4px rgba(0, 0, 0, 0.1);
+  color: var(--ink);
+  transition:
+    border-color 0.16s var(--ease),
+    box-shadow 0.2s var(--ease);
+}
+
+.cv:not(.read-only) .react-flow__node:hover > .cvn {
+  border-color: color-mix(in srgb, var(--ink) 22%, transparent);
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.04),
+    0 6px 18px -6px rgba(0, 0, 0, 0.16);
+}
+
+.cv .react-flow__node.selected > .cvn {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent),
+    0 6px 18px -8px rgba(0, 0, 0, 0.18);
+}
+
+.cv .react-flow__node:focus-visible {
+  outline: none;
+}
+
+.cv .react-flow__node:focus-visible > .cvn {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.cvn-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.cvn-head .cvn-kind {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cvn-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--kind) 14%, transparent);
+  color: var(--kind);
+}
+
+.cvn-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.cvn-sub {
+  margin-left: 2px;
+  font-weight: 450;
+  color: var(--ink-muted);
+}
+
+.cvn-details {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cvn-input {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  resize: none;
+  border: none;
+  background: none;
+  font: 600 13.5px/1.3 var(--font-ui);
+  color: var(--ink);
+  outline: none;
+  box-shadow: none;
+}
+
+.k-client {
+  --kind: var(--k-client);
+}
+.k-lb,
+.k-gateway,
+.k-cdn {
+  --kind: var(--k-edge);
+}
+.k-service,
+.k-worker {
+  --kind: var(--k-service);
+}
+.k-database,
+.k-storage {
+  --kind: var(--k-data);
+}
+.k-cache {
+  --kind: var(--k-cache);
+}
+.k-queue {
+  --kind: var(--k-queue);
+}
+.k-external {
+  --kind: var(--k-external);
+}
+.k-note {
+  --kind: var(--k-note);
+}
+.k-file,
+.k-group {
+  --kind: var(--ink-soft);
+}
+
+/* A part with a kind carries a thin bar of its colour along the left: the eye finds the databases */
+.cvn.cvn-text:not(.k-plain):not(.k-note)::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--kind);
+  opacity: 0.85;
+}
+
+/* A plain box (a flowchart step, an Obsidian card): the words, centred */
+.cvn.k-plain {
+  align-items: center;
+  text-align: center;
+  padding: 10px 14px;
+}
+
+.cvn.k-plain .cvn-title {
+  font-weight: 550;
+}
+
+.cvn.tinted {
+  border-color: color-mix(in srgb, var(--node-tint) 50%, var(--cv-rule));
+  background: color-mix(in srgb, var(--node-tint) 9%, var(--cv-card));
+}
+
+.cvn.k-note {
+  background: color-mix(in srgb, var(--k-note) 9%, var(--cv-card));
+  border-color: color-mix(in srgb, var(--k-note) 26%, var(--cv-rule));
+  justify-content: flex-start;
+}
+
+.cvn.k-note .cvn-title {
+  font-weight: 500;
+  font-size: 13px;
+}
+
+/* Flowchart shapes */
+.cvn.shape-round {
+  border-radius: 18px;
+}
+.cvn.shape-stadium,
+.cvn.shape-circle {
+  border-radius: 999px;
+}
+.cvn.shape-cylinder.k-plain {
+  border-radius: 50% / 14px;
+}
+.cvn.shape-subroutine {
+  box-shadow:
+    inset 6px 0 0 -5px var(--cv-rule),
+    inset -6px 0 0 -5px var(--cv-rule);
+}
+.cvn.shape-diamond,
+.cvn.shape-hexagon {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 10px 26px;
+}
+.cvn.shape-diamond::after,
+.cvn.shape-hexagon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--cv-rule);
+  clip-path: var(--clip);
+}
+.cvn.shape-diamond > *,
+.cvn.shape-hexagon > * {
+  position: relative;
+}
+.cvn.shape-diamond::before,
+.cvn.shape-hexagon::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  z-index: 0;
+  background: var(--cv-card);
+  clip-path: var(--clip);
+}
+.cvn.shape-diamond {
+  --clip: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.cvn.shape-hexagon {
+  --clip: polygon(14px 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 14px 100%, 0 50%);
+}
+.cv .react-flow__node.selected > .cvn.shape-diamond::after,
+.cv .react-flow__node.selected > .cvn.shape-hexagon::after,
+.cv .react-flow__node.flow-at > .cvn.shape-diamond::after,
+.cv .react-flow__node.flow-at > .cvn.shape-hexagon::after {
+  background: var(--accent);
+}
+
+/* Files and links */
+.cvn-file,
+.cvn-link {
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.cvn-file {
+  --kind: var(--ink-soft);
+}
+
+.cvn-link {
+  --kind: var(--k-client);
+}
+
+.cvn-preview {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  white-space: pre-line;
+  mask-image: linear-gradient(to bottom, #000 65%, transparent);
+}
+
+.cvn-url {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+
+/* Groups: a quiet region with its name above the parts it holds */
+.cv .react-flow__node-group {
+  border-radius: 16px;
+}
+
+.cvn-group {
+  --node-tint: var(--ink);
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--node-tint) 3.5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--node-tint) 13%, transparent);
+  transition: border-color 0.16s var(--ease);
+}
+
+.cvn-group.tinted {
+  background: color-mix(in srgb, var(--node-tint) 7%, transparent);
+  border-color: color-mix(in srgb, var(--node-tint) 30%, transparent);
+}
+
+.cvn-group.on {
+  border-color: var(--accent);
+}
+
+.cvn-group-label,
+.cvn-group-input {
+  position: absolute;
+  left: 14px;
+  top: 10px;
+  max-width: calc(100% - 28px);
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--node-tint) 55%, var(--ink-muted));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cvn-group:not(.tinted) .cvn-group-label {
+  color: var(--ink-muted);
+}
+
+.cvn-group-input {
+  padding: 0;
+  border: none;
+  background: none;
+  outline: none;
+  box-shadow: none;
+  font-family: inherit;
+  color: var(--ink);
+}
+
+/* Connection dots */
+.cv .cvn-handle {
+  width: 9px;
+  height: 9px;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 50%;
+  background: var(--cv-card);
+  border: 1.5px solid var(--accent);
+  opacity: 0;
+  transition:
+    opacity 0.12s,
+    transform 0.12s;
+}
+
+.cv:not(.read-only) .react-flow__node:hover .cvn-handle,
+.cv .react-flow__node.selected .cvn-handle,
+.cv .react-flow.connecting .cvn-handle,
+.cv .cvn-handle.connectingto {
+  opacity: 1;
+}
+
+.cv .cvn-handle:hover {
+  background: var(--accent);
+}
+
+.cv.read-only .cvn-handle {
+  visibility: hidden;
+}
+
+/* Resizing */
+.cv .cvn-resize-line {
+  border-color: transparent !important;
+}
+
+.cv .cvn-resize-handle {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 2px;
+  background: var(--cv-card) !important;
+  border: 1.5px solid var(--accent) !important;
+}
+
+/* ---------- Connections ---------- */
+
+.cv .react-flow__edge-path.cve {
+  stroke: var(--cv-wire);
+  stroke-width: 1.6;
+  fill: none;
+  transition: stroke 0.2s var(--ease);
+}
+
+.cv .react-flow__edge:hover .react-flow__edge-path.cve {
+  stroke: color-mix(in srgb, var(--ink) 52%, transparent);
+}
+
+.cv .react-flow__edge-path.cve.on,
+.cv .react-flow__edge.selected .react-flow__edge-path.cve {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.cv .react-flow__edge-path.cve.dashed {
+  stroke-dasharray: 6 5;
+}
+
+/* Something that keeps moving along it: a stream, replication, a heartbeat */
+.cv .react-flow__edge-path.cve.flowing {
+  stroke-dasharray: 5 6;
+  animation: cve-flow 0.9s linear infinite;
+}
+
+@keyframes cve-flow {
+  to {
+    stroke-dashoffset: -11;
+  }
+}
+
+.cv .react-flow__edge-path.cve.is-active {
+  stroke: var(--accent);
+  stroke-width: 2.4;
+}
+
+.cv .react-flow__edge-path.cve.is-done {
+  stroke: color-mix(in srgb, var(--accent) 48%, var(--cv-wire));
+  stroke-width: 1.9;
+}
+
+/* While a flow plays, what it hasn't reached yet steps back */
+.cv.playing .react-flow__edge-path.cve:not(.is-active):not(.is-done) {
+  stroke: color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+.cv.playing .react-flow__node:not(.flow-at):not(.flow-from) > .cvn {
+  opacity: 0.72;
+}
+
+.cv.playing .react-flow__node > .cvn {
+  transition: opacity 0.3s var(--ease);
+}
+
+.cve-head {
+  fill: var(--cv-wire);
+}
+.cve-head.on {
+  fill: var(--accent);
+}
+.cve-head.done {
+  fill: color-mix(in srgb, var(--accent) 48%, var(--cv-wire));
+}
+.cve-head.c1 {
+  fill: var(--cv-c1);
+}
+.cve-head.c2 {
+  fill: var(--cv-c2);
+}
+.cve-head.c3 {
+  fill: var(--cv-c3);
+}
+.cve-head.c4 {
+  fill: var(--cv-c4);
+}
+.cve-head.c5 {
+  fill: var(--cv-c5);
+}
+.cve-head.c6 {
+  fill: var(--cv-c6);
+}
+
+.cve-packet-dot {
+  fill: var(--accent);
+  stroke: var(--cv-card);
+  stroke-width: 1.5;
+}
+
+.cve-packet-halo {
+  fill: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.cve-label {
+  position: absolute;
+  padding: 2px 8px 3px;
+  border-radius: 999px;
+  background: var(--cv-card);
+  border: 1px solid var(--cv-rule);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  pointer-events: all;
+  cursor: default;
+  font-variant-numeric: tabular-nums;
+  transition:
+    border-color 0.16s var(--ease),
+    color 0.16s var(--ease),
+    background 0.16s var(--ease);
+}
+
+.cve-label.on {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.cve-label.is-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--cv-card));
+  color: var(--ink);
+}
+
+.cve-label.is-done {
+  color: var(--ink);
+}
+
+.cv.playing .cve-label:not(.is-active):not(.is-done) {
+  opacity: 0.6;
+}
+
+.cve-input {
+  padding: 0;
+  border: none;
+  background: none;
+  outline: none;
+  box-shadow: none;
+  font: inherit;
+  color: var(--ink);
+}
+
+/* The line drawn while connecting */
+.cv .react-flow__connection-path {
+  stroke: var(--accent);
+  stroke-width: 1.8;
+  stroke-dasharray: 5 5;
+  fill: none;
+}
+
+/* ---------- A request arriving ---------- */
+
+.cv .react-flow__node.flow-at > .cvn {
+  opacity: 1;
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent),
+    0 10px 26px -10px color-mix(in srgb, var(--accent) 55%, transparent);
+  animation: cvn-arrive 0.5s 0.95s var(--ease) both;
+}
+
+.cv .react-flow__node.flow-from > .cvn {
+  opacity: 1;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--cv-rule));
+}
+
+@keyframes cvn-arrive {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.035);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ---------- Floating controls ---------- */
+
+.cv .react-flow__panel {
+  margin: 12px;
+}
+
+.cv-palette,
+.cv-toolbar,
+.cv-inspect,
+.cv-caption,
+.cv-help,
+.cv-files,
+.cv-minimap {
+  background: var(--cv-float);
+  box-shadow: var(--cv-float-shadow);
+  border-radius: 12px;
+}
+
+.cv-palette {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 152px;
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  padding: 5px;
+  scrollbar-width: none;
+}
+
+.cv-pal {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 5px 8px 5px 5px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  cursor: grab;
+  transition: background 0.12s;
+}
+
+.cv-pal:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.cv-pal:active {
+  cursor: grabbing;
+}
+
+.cv-pal-rule {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--line);
+}
+
+.cv-toolbar,
+.cv-inspect {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 4px;
+}
+
+.cv-toolbar {
+  margin-bottom: 14px !important;
+}
+
+.cv-tb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  min-width: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+
+.cv-tb,
+.cv-toolbar {
+  white-space: nowrap;
+}
+
+.cv-tb.icon {
+  padding: 0;
+}
+
+.cv-tb:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.cv-tb.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.cv-tb:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.cv-tb.danger:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.cv-tb.play {
+  padding: 0 10px 0 8px;
+  color: var(--ink);
+}
+
+.cv-tb.play:not(:disabled) svg {
+  color: var(--accent);
+}
+
+.cv-zoom-level {
+  min-width: 46px;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.cv-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--line);
+}
+
+.cv-chip {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--kind);
+  opacity: 0.75;
+  transition:
+    background 0.12s,
+    opacity 0.12s;
+}
+
+.cv-chip:hover {
+  opacity: 1;
+  background: var(--bg-hover);
+}
+
+.cv-chip.on {
+  opacity: 1;
+  background: color-mix(in srgb, var(--kind) 16%, transparent);
+}
+
+.cv-inspect-name {
+  padding: 0 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.cv-dash {
+  width: 14px;
+  height: 0;
+  border-top: 1.6px dashed currentColor;
+}
+
+.cv-arrows {
+  width: 16px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.cv-caption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(560px, calc(100% - 40px));
+  margin-bottom: 62px !important;
+  padding: 7px 14px 7px 8px;
+  font-size: 13px;
+  color: var(--ink);
+  animation: cv-rise 0.25s var(--ease);
+}
+
+.cv-step {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.cv-step .muted {
+  color: inherit;
+  opacity: 0.8;
+  font-weight: 500;
+}
+
+.cv-caption-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes cv-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.cv-help {
+  width: 290px;
+  padding: 10px 12px 12px;
+  font-size: 12.5px;
+}
+
+.cv-help-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.cv-help dl {
+  margin: 0;
+}
+
+.cv-help dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+
+.cv-help dt {
+  color: var(--ink-soft);
+}
+
+.cv-help dd {
+  margin: 0;
+  color: var(--ink);
+  text-align: right;
+}
+
+.cv-files {
+  left: 172px;
+  width: 280px;
+  padding: 6px;
+}
+
+.cv-files input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 4px;
+}
+
+.cv-files-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.cv-files-list button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  color: var(--ink);
+  text-align: left;
+}
+
+.cv-files-list button span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cv-files-list button .muted {
+  font-size: 11.5px;
+}
+
+.cv-files-list button:hover {
+  background: var(--bg-hover);
+}
+
+.cv-minimap {
+  overflow: hidden;
+}
+
+.cv-minimap svg {
+  display: block;
+  width: 168px;
+  height: 112px;
+}
+
+.cv-minimap .mm {
+  fill: color-mix(in srgb, var(--ink) 22%, transparent);
+}
+.cv-minimap .mm.k-group {
+  fill: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.cv-minimap .mm.k-client {
+  fill: var(--k-client);
+}
+.cv-minimap .mm.k-lb,
+.cv-minimap .mm.k-gateway,
+.cv-minimap .mm.k-cdn {
+  fill: var(--k-edge);
+}
+.cv-minimap .mm.k-service,
+.cv-minimap .mm.k-worker {
+  fill: var(--k-service);
+}
+.cv-minimap .mm.k-database,
+.cv-minimap .mm.k-storage {
+  fill: var(--k-data);
+}
+.cv-minimap .mm.k-cache {
+  fill: var(--k-cache);
+}
+.cv-minimap .mm.k-queue {
+  fill: var(--k-queue);
+}
+.cv-minimap .mm.k-note {
+  fill: color-mix(in srgb, var(--k-note) 50%, transparent);
+}
+
+.cv-empty {
+  position: absolute;
+  inset: 0 0 60px 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.cv.compact .cv-empty {
+  inset: 0 16px 60px;
+}
+
+.cv-empty p {
+  margin: 0;
+  max-width: 300px;
+}
+
+.cv-empty p:first-child {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.cv-empty .cv-example {
+  margin-top: 10px;
+  pointer-events: auto;
+}
+
+/* Beside a lesson: smaller controls, the drawing has the room */
+.cv.compact .react-flow__panel {
+  margin: 8px;
+}
+
+.cv.compact .cv-toolbar {
+  margin-bottom: 10px !important;
+}
+
+.cv.compact .cv-tb {
+  height: 28px;
+  min-width: 28px;
+}
+
+.cv.compact .cv-caption {
+  margin-bottom: 54px !important;
+  font-size: 12.5px;
+}
+
+.cv.compact .cv-minimap {
+  width: 150px;
+  height: 100px;
+}
+
+/* ---------- A flowchart in a message ---------- */
+
+.flow-figure {
+  position: relative;
+  margin: 14px 0;
+  border-radius: var(--radius-m);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+:root[data-design='tide'] .flow-figure {
+  background: var(--sunk);
+}
+
+.flow-figure .cv {
+  --cv-surface: transparent;
+}
+
+.flow-figure .cv-toolbar {
+  margin: 8px !important;
+  box-shadow: none;
+  border: 1px solid var(--line);
+}
+
+.flow-figure .cv-caption {
+  margin-bottom: 52px !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cv .react-flow__edge-path.cve.flowing,
+  .cv .react-flow__node.flow-at > .cvn,
+  .cv-caption {
+    animation: none;
+  }
+}
+
+/* Narrow: the palette keeps its icons, the names go to tooltips */
+.cv.narrow .cv-palette {
+  width: auto;
+}
+
+.cv.narrow .cv-pal {
+  padding: 5px;
+}
+
+.cv.narrow .cv-pal > span:not(.cvn-icon) {
+  display: none;
+}
+
+.cv.narrow .cv-pal .cvn-icon {
+  width: 24px;
+  height: 24px;
+}

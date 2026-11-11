@@ -1,6 +1,28 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { COMPONENTS, connect, makeNode, nodeLabel, placeNode, type Canvas, type CanvasEdge, type CanvasNode, type ComponentKind } from '@shared/canvas'
-import { Icon } from './Icon'
+import '@xyflow/react/dist/base.css'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type DragEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import {
+  applyNodeChanges,
+  Background,
+  BackgroundVariant,
+  ConnectionMode,
+  MiniMap,
+  Panel,
+  ReactFlow,
+  ReactFlowProvider,
+  SelectionMode,
+  useReactFlow,
+  useStore,
+  type EdgeChange,
+  type NodeChange,
+  type OnConnectEnd
+} from '@xyflow/react'
+import { COMPONENTS, connect, groupAround, makeNode, nodeLabel, placeNode, type Canvas, type CanvasEdge, type CanvasNode, type ComponentKind } from '@shared/canvas'
+import { tidyCanvas } from '@shared/flowLayout'
+import { Icon, type IconName } from './Icon'
+import { EdgeContext, EDGE_TYPES, Markers, type EdgeHooks } from './flow/FlowEdge'
+import { toFlowEdges, toFlowNodes, withFlowGeometry, type FlowEdge, type FlowNode } from './flow/model'
+import { EditorContext, KindIcon, kindName, NODE_TYPES, type EditorHooks } from './flow/nodes'
+import { usePlayer, type Player } from './flow/usePlayer'
 
 interface Props {
   canvas: Canvas
@@ -11,489 +33,794 @@ interface Props {
   version: number
   /** Beside a lesson: no palette, the drawing fitted to a narrow panel */
   compact?: boolean
+  /** A figure in a message: look, pan, play the flow; nothing moves or changes */
+  readOnly?: boolean
+  /** Edges to play once as they arrive (what the tutor just drew); a new nonce plays again */
+  announce?: { ids: string[]; nonce: number }
+  /** Vault files a file card can point at */
+  files?: string[]
+  openFile?(path: string): void
+  readFile?(path: string): Promise<string>
 }
 
-type Side = 'top' | 'right' | 'bottom' | 'left'
-type Selection = { type: 'node'; id: string } | { type: 'edge'; id: string } | null
-interface View {
-  x: number
-  y: number
-  k: number
+const GRID = 20
+const PALETTE: ComponentKind[] = ['client', 'service', 'database', 'cache', 'queue', 'lb', 'gateway', 'worker', 'storage', 'cdn', 'external', 'note']
+
+// Copy and paste between canvases in one window
+let clipboard: { nodes: CanvasNode[]; edges: CanvasEdge[] } | null = null
+
+const pref = (key: string, fallback: boolean) => {
+  try {
+    const v = localStorage.getItem(`tide.canvas.${key}`)
+    return v === null ? fallback : v === '1'
+  } catch {
+    return fallback
+  }
 }
-
-/** Room the palette takes on the left */
-const PALETTE_W = 160
-
-const center = (n: CanvasNode) => ({ x: n.x + n.width / 2, y: n.y + n.height / 2 })
-const anchor = (n: CanvasNode, side: Side) =>
-  side === 'top' ? { x: n.x + n.width / 2, y: n.y } : side === 'bottom' ? { x: n.x + n.width / 2, y: n.y + n.height } : side === 'left' ? { x: n.x, y: n.y + n.height / 2 } : { x: n.x + n.width, y: n.y + n.height / 2 }
-
-/** Which sides an arrow leaves and enters by, from where the two boxes sit */
-function sides(a: CanvasNode, b: CanvasNode): [Side, Side] {
-  const ca = center(a)
-  const cb = center(b)
-  const dx = cb.x - ca.x
-  const dy = cb.y - ca.y
-  if (Math.abs(dx) * 0.6 > Math.abs(dy)) return dx > 0 ? ['right', 'left'] : ['left', 'right']
-  return dy > 0 ? ['bottom', 'top'] : ['top', 'bottom']
-}
-
-const pull = (side: Side, d: number) => (side === 'top' ? { x: 0, y: -d } : side === 'bottom' ? { x: 0, y: d } : side === 'left' ? { x: -d, y: 0 } : { x: d, y: 0 })
-
-function edgePath(a: CanvasNode, b: CanvasNode, e: CanvasEdge) {
-  const [sa, sb] = e.fromSide && e.toSide ? [e.fromSide, e.toSide] : sides(a, b)
-  const p = anchor(a, sa)
-  const q = anchor(b, sb)
-  const d = Math.max(40, Math.hypot(q.x - p.x, q.y - p.y) / 3)
-  const c1 = pull(sa, d)
-  const c2 = pull(sb, d)
-  return {
-    d: `M${p.x},${p.y} C${p.x + c1.x},${p.y + c1.y} ${q.x + c2.x},${q.y + c2.y} ${q.x},${q.y}`,
-    // The curve's midpoint, for the label
-    mid: { x: (p.x + 3 * (p.x + c1.x) + 3 * (q.x + c2.x) + q.x) / 8, y: (p.y + 3 * (p.y + c1.y) + 3 * (q.y + c2.y) + q.y) / 8 }
+const setPref = (key: string, v: boolean) => {
+  try {
+    localStorage.setItem(`tide.canvas.${key}`, v ? '1' : '0')
+  } catch {
+    // private storage; the choice lasts this session
   }
 }
 
-const KIND_ICON: Partial<Record<ComponentKind, string>> = {
-  client: 'M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 14.5zM9 20h6M12 16v4',
-  lb: 'M12 4v5M12 9l-6 6M12 9l6 6M12 9v6M4 18h4M10 18h4M16 18h4',
-  gateway: 'M4 12h16M14 6l6 6-6 6M4 6v12',
-  service: 'M5 5h14v6H5zM5 13h14v6H5zM8 8h.01M8 16h.01',
-  worker: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1',
-  database: 'M5 6c0-1.7 3.1-3 7-3s7 1.3 7 3-3.1 3-7 3-7-1.3-7-3zM5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3',
-  cache: 'M13 3L5 14h6l-1 7 8-11h-6z',
-  queue: 'M4 7h4v10H4zM10 7h4v10h-4zM16 7h4v10h-4z',
-  storage: 'M4 8l8-4 8 4-8 4zM4 8v8l8 4 8-4V8M12 12v8',
-  cdn: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3z',
-  external: 'M14 4h6v6M20 4l-9 9M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10',
-  note: 'M5 4h14v12l-4 4H5zM15 20v-4h4'
-}
+const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+const isMac = typeof navigator !== 'undefined' && /Mac/.test(navigator.platform)
+const MOD = isMac ? '⌘' : 'Ctrl'
 
-function KindIcon({ kind }: { kind?: ComponentKind }) {
-  const d = KIND_ICON[kind ?? 'service'] ?? KIND_ICON.service!
+/**
+ * The canvas: system designs, and the diagrams the tutor draws in lessons, on xyflow. The file
+ * stays JSON Canvas, so it opens in Obsidian too. Drag parts in from the palette, drag from a
+ * dot to connect, double-click to rename; group, snap, tidy, undo, and play a request along the
+ * connections one step at a time.
+ */
+export function CanvasEditor(props: Props) {
   return (
-    <svg className="cv-kind-icon" viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d={d} />
-    </svg>
+    <ReactFlowProvider>
+      <Editor {...props} />
+    </ReactFlowProvider>
   )
 }
 
-/**
- * A small diagram editor for system design: drag components from the palette, drag from a
- * component's edge dot to another to connect them, double-click to rename (the first line is the
- * name, further lines are details), Delete to remove, ⌘Z to undo. Scroll or drag the background
- * to pan; pinch or ⌘-scroll to zoom.
- */
-export function CanvasEditor({ canvas, onChange, version, onExample, compact }: Props) {
-  const leftRoom = compact ? 12 : PALETTE_W
+function Editor({ canvas, onChange, onExample, version, compact, readOnly = false, announce, files, openFile, readFile }: Props) {
+  const rf = useReactFlow<FlowNode, FlowEdge>()
   const wrapRef = useRef<HTMLDivElement>(null)
-  const [view, setView] = useState<View>({ x: 80, y: 80, k: 1 })
-  const [selected, setSelected] = useState<Selection>(null)
-  const [editing, setEditing] = useState<{ type: 'node' | 'edge'; id: string; text: string } | null>(null)
-  const [linking, setLinking] = useState<{ from: string; x: number; y: number } | null>(null)
-  const drag = useRef<{ kind: 'node'; id: string; dx: number; dy: number; start: Canvas; moved: boolean } | { kind: 'pan'; x: number; y: number; vx: number; vy: number } | null>(null)
-  const undo = useRef<Canvas[]>([])
-  const redo = useRef<Canvas[]>([])
+  const markers = `cvm${useId().replace(/[^a-z0-9]/gi, '')}`
   const latest = useRef(canvas)
   latest.current = canvas
-  const viewRef = useRef(view)
-  viewRef.current = view
 
-  /** A change worth undoing; `base` is what to go back to (defaults to the current canvas) */
+  // ---------- History ----------
+  const undoStack = useRef<Canvas[]>([])
+  const redoStack = useRef<Canvas[]>([])
+  const [, setHistoryTick] = useState(0)
   const commit = useCallback(
     (next: Canvas, base: Canvas = latest.current) => {
-      undo.current = [...undo.current.slice(-80), base]
-      redo.current = []
+      if (next === base) return
+      undoStack.current = [...undoStack.current.slice(-120), base]
+      redoStack.current = []
+      setHistoryTick((t) => t + 1)
+      latest.current = next
       onChange(next)
     },
     [onChange]
   )
+  const travel = useCallback(
+    (back: boolean) => {
+      const from = back ? undoStack.current : redoStack.current
+      const to = back ? redoStack.current : undoStack.current
+      const prev = from.pop()
+      if (!prev) return
+      to.push(latest.current)
+      setHistoryTick((t) => t + 1)
+      latest.current = prev
+      onChange(prev)
+    },
+    [onChange]
+  )
 
-  const toWorld = useCallback((clientX: number, clientY: number) => {
-    const r = wrapRef.current!.getBoundingClientRect()
-    const v = viewRef.current
-    return { x: (clientX - r.left - v.x) / v.k, y: (clientY - r.top - v.y) / v.k }
+  // ---------- Nodes: xyflow owns them while you drag; the canvas is written when you let go ----------
+  const [nodes, setNodes] = useState<FlowNode[]>(() => toFlowNodes(canvas))
+  const nodesRef = useRef(nodes)
+  nodesRef.current = nodes
+  useEffect(() => {
+    setNodes((prev) => toFlowNodes(canvas, new Map(prev.map((n) => [n.id, n]))))
+  }, [canvas])
+
+  const [selectedEdges, setSelectedEdges] = useState<Set<string>>(new Set())
+  const [editing, setEditing] = useState<string | null>(null)
+  const [editingEdge, setEditingEdge] = useState<string | null>(null)
+  const [snap, setSnap] = useState(() => pref('snap', true))
+  const [minimap, setMinimap] = useState(() => pref('minimap', !compact))
+  const [help, setHelp] = useState(false)
+  const [filePick, setFilePick] = useState(false)
+  const player = usePlayer(canvas)
+
+  const onNodesChange = useCallback(
+    (changes: NodeChange<FlowNode>[]) => {
+      const next = applyNodeChanges(changes, nodesRef.current)
+      nodesRef.current = next
+      setNodes(next)
+      // A resize has ended: write the new size (and position, when pulled from the top or left)
+      if (changes.some((c) => c.type === 'dimensions' && c.resizing === false)) commit(withFlowGeometry(latest.current, next))
+    },
+    [commit]
+  )
+  const onEdgesChange = useCallback((changes: EdgeChange<FlowEdge>[]) => {
+    const sel = changes.filter((c) => c.type === 'select')
+    if (!sel.length) return
+    setSelectedEdges((prev) => {
+      const s = new Set(prev)
+      for (const c of sel) if (c.type === 'select') (c.selected ? s.add(c.id) : s.delete(c.id))
+      return s
+    })
   }, [])
 
-  const fit = useCallback(() => {
-    const wrap = wrapRef.current
-    const c = latest.current
-    if (!wrap) return
-    if (!c.nodes.length) return setView({ x: leftRoom + (wrap.clientWidth - leftRoom) / 2 - 90, y: wrap.clientHeight / 2 - 36, k: 1 })
-    const minX = Math.min(...c.nodes.map((n) => n.x)) - 60
-    const minY = Math.min(...c.nodes.map((n) => n.y)) - 60
-    const maxX = Math.max(...c.nodes.map((n) => n.x + n.width)) + 60
-    const maxY = Math.max(...c.nodes.map((n) => n.y + n.height)) + 60
-    // The palette sits on the left; centre the design in the space beside it
-    const left = leftRoom
-    const w = wrap.clientWidth - left
-    const h = wrap.clientHeight - 50
-    const k = Math.min(1.25, Math.max(0.25, Math.min(w / (maxX - minX), h / (maxY - minY))))
-    setView({ k, x: left + w / 2 - ((minX + maxX) / 2) * k, y: h / 2 - ((minY + maxY) / 2) * k })
-  }, [leftRoom])
+  const edges = useMemo(() => toFlowEdges(canvas, selectedEdges, player.flow), [canvas, selectedEdges, player.flow])
+  const shownNodes = useMemo(() => {
+    if (!player.at && !player.from) return nodes
+    return nodes.map((n) => (n.id === player.at ? { ...n, className: 'flow-at' } : n.id === player.from ? { ...n, className: 'flow-from' } : n))
+  }, [nodes, player.at, player.from])
 
-  // Fit on open, and again as the panel settles or the window resizes, until you move the view
+  const selectedNodes = useMemo(() => nodes.filter((n) => n.selected).map((n) => n.id), [nodes])
+
+  // ---------- Viewport ----------
   const touched = useRef(false)
-  useLayoutEffect(() => {
+  // A narrow canvas (the tutor open beside it on a laptop) gets an icon-only palette
+  const [narrow, setNarrow] = useState(false)
+  const narrowRef = useRef(false)
+  narrowRef.current = narrow
+  // Fit into the room the floating controls leave: beside the palette, above the toolbar
+  const fit = useCallback(
+    (duration = 0) => {
+      const wrap = wrapRef.current
+      if (!wrap || !wrap.clientWidth) return
+      const all = rf.getNodes()
+      const left = compact || readOnly ? 0 : narrowRef.current ? 64 : 176
+      const top = readOnly ? 0 : 8
+      const bottom = 58
+      const pad = compact ? 18 : 36
+      const w = wrap.clientWidth - left - 2 * pad
+      const h = wrap.clientHeight - top - bottom - 2 * pad
+      if (!all.length || w <= 0 || h <= 0) return rf.setViewport({ x: left + w / 2, y: top + h / 2, zoom: 1 }, { duration })
+      const b = rf.getNodesBounds(all)
+      const k = Math.min(compact ? 1 : 1.15, Math.max(0.1, Math.min(w / b.width, h / b.height)))
+      rf.setViewport({ x: left + pad + (w - b.width * k) / 2 - b.x * k, y: top + pad + (h - b.height * k) / 2 - b.y * k, zoom: k }, { duration })
+    },
+    [rf, compact, readOnly]
+  )
+  // A narrow panel keeps fitting the drawing as it settles, until you move the view
+  useEffect(() => {
     const wrap = wrapRef.current
     if (!wrap) return
-    fit()
-    const ro = new ResizeObserver(() => !touched.current && fit())
+    const ro = new ResizeObserver(() => {
+      setNarrow(wrap.clientWidth < 880)
+      if (!touched.current) requestAnimationFrame(() => fit())
+    })
     ro.observe(wrap)
     return () => ro.disconnect()
   }, [fit])
+  // The tutor drew: bring anything out of view into it
   useEffect(() => {
     if (!version) return
     const wrap = wrapRef.current
     if (!wrap) return
-    const v = viewRef.current
-    const out = latest.current.nodes.some((n) => {
-      const x = n.x * v.k + v.x
-      const y = n.y * v.k + v.y
-      return x < leftRoom || y < 0 || x + n.width * v.k > wrap.clientWidth || y + n.height * v.k > wrap.clientHeight - 60
-    })
-    if (out) fit()
-  }, [version, fit, leftRoom])
+    const t = setTimeout(() => {
+      const v = rf.getViewport()
+      const w = wrap.clientWidth
+      const h = wrap.clientHeight
+      const out = latest.current.nodes.some((n) => {
+        const x = n.x * v.zoom + v.x
+        const y = n.y * v.zoom + v.y
+        return x < 0 || y < 0 || x + n.width * v.zoom > w || y + n.height * v.zoom > h - 56
+      })
+      if (out || !touched.current) fit(350)
+    }, 60)
+    return () => clearTimeout(t)
+  }, [version, rf, fit])
 
-  const addAt = (kind: ComponentKind, x?: number, y?: number) => {
+  // ---------- The tutor's new steps play as they arrive ----------
+  const lastAnnounce = useRef(0)
+  useEffect(() => {
+    if (!announce || announce.nonce === lastAnnounce.current) return
+    lastAnnounce.current = announce.nonce
+    const t = setTimeout(() => player.announce(announce.ids), 250)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [announce])
+
+  // ---------- Adding ----------
+  const centre = useCallback(() => {
     const wrap = wrapRef.current!
-    const v = viewRef.current
-    const c = latest.current
-    const label = COMPONENTS.find((k) => k.kind === kind)!.label
-    let pos: { x: number; y: number }
-    if (x !== undefined && y !== undefined) pos = { x: Math.round(x), y: Math.round(y) }
-    else {
-      // From the palette: beside the selected component and connected to it, else in a free spot in view
-      const sel = selected?.type === 'node' ? c.nodes.find((n) => n.id === selected.id) : undefined
-      const last = c.nodes.at(-1)
-      const mid = { x: ((PALETTE_W + wrap.clientWidth) / 2 - v.x) / v.k - 90, y: (wrap.clientHeight / 2 - v.y) / v.k - 36 }
-      pos = sel ? placeNode(c, sel, 'right') : last ? placeNode(c, last, 'right') : { x: Math.round(mid.x), y: Math.round(mid.y) }
-    }
-    const node = makeNode(c, { label, kind, ...pos })
-    const sel = selected?.type === 'node' ? selected.id : null
-    const added = { ...c, nodes: [...c.nodes, node] }
-    commit(sel ? connect(added, sel, node.id) : added)
-    // Keep the new box in view
-    const vx = node.x * v.k + v.x
-    const vy = node.y * v.k + v.y
-    if (vx < PALETTE_W || vy < 0 || vx + node.width * v.k > wrap.clientWidth - 20 || vy + node.height * v.k > wrap.clientHeight - 60)
-      setView({ ...v, x: v.x + ((PALETTE_W + wrap.clientWidth) / 2 - (vx + (node.width * v.k) / 2)), y: v.y + (wrap.clientHeight / 2 - (vy + (node.height * v.k) / 2)) })
-    setSelected({ type: 'node', id: node.id })
-    setEditing({ type: 'node', id: node.id, text: node.text })
-  }
+    const r = wrap.getBoundingClientRect()
+    return rf.screenToFlowPosition({ x: r.left + r.width / 2 + (compact || readOnly ? 0 : 70), y: r.top + r.height / 2 })
+  }, [rf, compact, readOnly])
 
-  const remove = (sel: Selection) => {
-    if (!sel) return
-    const c = latest.current
-    if (sel.type === 'node') commit({ nodes: c.nodes.filter((n) => n.id !== sel.id), edges: c.edges.filter((e) => e.fromNode !== sel.id && e.toNode !== sel.id) })
-    else commit({ ...c, edges: c.edges.filter((e) => e.id !== sel.id) })
-    setSelected(null)
-  }
-
-  const saveEdit = () => {
-    if (!editing) return
-    const c = latest.current
-    const text = editing.text.replace(/\s+$/, '')
-    if (editing.type === 'node') {
-      const lines = text.split('\n').length
-      if (text && text !== c.nodes.find((n) => n.id === editing.id)?.text)
-        commit({ ...c, nodes: c.nodes.map((n) => (n.id === editing.id ? { ...n, text, height: Math.max(n.height, 48 + lines * 22) } : n)) })
-    } else {
-      commit({ ...c, edges: c.edges.map((e) => (e.id === editing.id ? { ...e, ...(text.trim() ? { label: text.trim() } : { label: undefined }) } : e)) })
-    }
-    setEditing(null)
-  }
-
-  // Keyboard: delete, undo/redo, escape
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement
-      if (editing || target.closest('input, textarea, [contenteditable="true"]')) return
-      if (!wrapRef.current?.contains(document.activeElement) && document.activeElement !== document.body) return
-      if ((e.key === 'Backspace' || e.key === 'Delete') && selected) {
-        e.preventDefault()
-        remove(selected)
-      } else if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault()
-        const from = e.shiftKey ? redo.current : undo.current
-        const to = e.shiftKey ? undo.current : redo.current
-        const prev = from.pop()
-        if (prev) {
-          to.push(latest.current)
-          onChange(prev)
-          setSelected(null)
-        }
-      } else if (e.key === 'Escape') setSelected(null)
-      else if (e.key === 'Enter' && selected?.type === 'node') {
-        e.preventDefault()
-        const n = latest.current.nodes.find((x) => x.id === selected.id)
-        if (n) setEditing({ type: 'node', id: n.id, text: n.text })
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
-
-  // Wheel: pan with two fingers, zoom with a pinch or ⌘
-  useEffect(() => {
-    const wrap = wrapRef.current
-    if (!wrap) return
-    const onWheel = (e: WheelEvent) => {
-      if ((e.target as HTMLElement).closest('.cv-palette, textarea')) return
-      e.preventDefault()
-      touched.current = true
-      const v = viewRef.current
-      if (e.ctrlKey || e.metaKey) {
-        const r = wrap.getBoundingClientRect()
-        const mx = e.clientX - r.left
-        const my = e.clientY - r.top
-        const k = Math.min(2.5, Math.max(0.2, v.k * Math.exp(-e.deltaY * 0.01)))
-        setView({ k, x: mx - ((mx - v.x) * k) / v.k, y: my - ((my - v.y) * k) / v.k })
-      } else setView({ ...v, x: v.x - e.deltaX, y: v.y - e.deltaY })
-    }
-    wrap.addEventListener('wheel', onWheel, { passive: false })
-    return () => wrap.removeEventListener('wheel', onWheel)
+  const selectOnly = useCallback((ids: string[]) => {
+    setNodes((ns) => ns.map((n) => (ids.includes(n.id) !== !!n.selected ? { ...n, selected: ids.includes(n.id) } : n)))
+    setSelectedEdges(new Set())
   }, [])
 
-  // Pointer moves and releases are tracked on the window so a drag can leave the canvas
-  useEffect(() => {
-    const onMove = (e: PointerEvent) => {
-      const d = drag.current
-      if (d?.kind === 'pan') setView((v) => ({ ...v, x: d.vx + e.clientX - d.x, y: d.vy + e.clientY - d.y }))
-      else if (d?.kind === 'node') {
-        const p = toWorld(e.clientX, e.clientY)
-        d.moved = true
-        const c = latest.current
-        onChange({ ...c, nodes: c.nodes.map((n) => (n.id === d.id ? { ...n, x: Math.round(p.x - d.dx), y: Math.round(p.y - d.dy) } : n)) })
-      } else if (linking) {
-        const p = toWorld(e.clientX, e.clientY)
-        setLinking((l) => (l ? { ...l, x: p.x, y: p.y } : l))
-      }
-    }
-    const onUp = (e: PointerEvent) => {
-      const d = drag.current
-      drag.current = null
-      if (d?.kind === 'node' && d.moved) {
-        // One undo step for the whole drag
-        undo.current = [...undo.current.slice(-80), d.start]
-        redo.current = []
-      }
-      if (linking) {
-        const target = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest<HTMLElement>('[data-node]')?.dataset.node
-        if (target && target !== linking.from) commit(connect(latest.current, linking.from, target))
-        setLinking(null)
-      }
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-    return () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-  }, [linking, onChange, commit, toWorld])
+  const snapped = (v: number) => (snap ? Math.round(v / GRID) * GRID : Math.round(v))
 
-  const byId = new Map(canvas.nodes.map((n) => [n.id, n]))
-  const from = linking ? byId.get(linking.from) : undefined
+  const addKind = useCallback(
+    (kind: ComponentKind, at?: { x: number; y: number }) => {
+      const c = latest.current
+      const label = kind === 'note' ? 'Note' : COMPONENTS.find((k) => k.kind === kind)!.label
+      const sel = selectedNodes.length === 1 ? c.nodes.find((n) => n.id === selectedNodes[0] && n.type !== 'group') : undefined
+      let pos: { x: number; y: number }
+      if (at) pos = { x: snapped(at.x - 90), y: snapped(at.y - 36) }
+      else if (sel) pos = placeNode(c, sel, 'right')
+      else {
+        const m = centre()
+        pos = placeNode({ ...c, nodes: c.nodes.filter((n) => Math.abs(n.x - m.x) < 400 && Math.abs(n.y - m.y) < 300) }, undefined, 'right')
+        if (!c.nodes.length || pos.x > m.x + 300) pos = { x: snapped(m.x - 90), y: snapped(m.y - 36) }
+      }
+      const node = makeNode(c, { label, kind, ...pos })
+      const added = { ...c, nodes: [...c.nodes, node] }
+      // From the palette with one part selected: the new part follows on from it
+      commit(sel && !at && kind !== 'note' ? connect(added, sel.id, node.id) : added)
+      requestAnimationFrame(() => {
+        selectOnly([node.id])
+        setEditing(node.id)
+      })
+    },
+    [commit, centre, selectedNodes, selectOnly, snap] // eslint-disable-line react-hooks/exhaustive-deps
+  )
+
+  const addFile = (path: string) => {
+    const c = latest.current
+    const m = centre()
+    const taken = new Set(c.nodes.map((n) => n.id))
+    let id = `file-${(path.split('/').pop() ?? 'file').replace(/\W+/g, '-').toLowerCase()}`.slice(0, 40)
+    for (let i = 2; taken.has(id); i++) id = `${id.replace(/-\d+$/, '')}-${i}`
+    const node: CanvasNode = { id, type: 'file', file: path, x: snapped(m.x - 130), y: snapped(m.y - 80), width: 260, height: 160 }
+    commit({ ...c, nodes: [...c.nodes, node] })
+    setFilePick(false)
+    requestAnimationFrame(() => selectOnly([id]))
+  }
+
+  const group = useCallback(() => {
+    const c = latest.current
+    const members = c.nodes.filter((n) => selectedNodes.includes(n.id) && n.type !== 'group')
+    let g: CanvasNode
+    if (members.length) g = groupAround(c, members, 'Group')
+    else {
+      const m = centre()
+      g = { ...groupAround(c, [{ id: 'x', type: 'text', x: m.x - 160, y: m.y - 100, width: 320, height: 200 }], 'Group', 0) }
+    }
+    commit({ ...c, nodes: [g, ...c.nodes] })
+    requestAnimationFrame(() => {
+      selectOnly([g.id])
+      setEditing(g.id)
+    })
+  }, [commit, selectedNodes, centre, selectOnly])
+
+  const ungroup = useCallback(() => {
+    const c = latest.current
+    const groups = new Set(c.nodes.filter((n) => selectedNodes.includes(n.id) && n.type === 'group').map((n) => n.id))
+    if (groups.size) commit({ ...c, nodes: c.nodes.filter((n) => !groups.has(n.id)), edges: c.edges.filter((e) => !groups.has(e.fromNode) && !groups.has(e.toNode)) })
+  }, [commit, selectedNodes])
+
+  // ---------- Removing, copying ----------
+  const removeSelected = useCallback(() => {
+    const c = latest.current
+    const ids = new Set(nodesRef.current.filter((n) => n.selected).map((n) => n.id))
+    if (!ids.size && !selectedEdges.size) return
+    commit({ ...c, nodes: c.nodes.filter((n) => !ids.has(n.id)), edges: c.edges.filter((e) => !ids.has(e.fromNode) && !ids.has(e.toNode) && !selectedEdges.has(e.id)) })
+    setSelectedEdges(new Set())
+  }, [commit, selectedEdges])
+
+  const copy = useCallback(() => {
+    const c = latest.current
+    const ids = new Set(selectedNodes)
+    if (!ids.size) return false
+    clipboard = { nodes: c.nodes.filter((n) => ids.has(n.id)), edges: c.edges.filter((e) => ids.has(e.fromNode) && ids.has(e.toNode)) }
+    return true
+  }, [selectedNodes])
+
+  const pasteCount = useRef(0)
+  const paste = useCallback(() => {
+    if (!clipboard?.nodes.length) return
+    const c = latest.current
+    const taken = new Set([...c.nodes.map((n) => n.id), ...c.edges.map((e) => e.id)])
+    const fresh = (id: string) => {
+      let n = `${id.replace(/-copy(-\d+)?$/, '')}-copy`
+      for (let i = 2; taken.has(n); i++) n = `${id.replace(/-copy(-\d+)?$/, '')}-copy-${i}`
+      taken.add(n)
+      return n
+    }
+    const off = GRID * 2 * ++pasteCount.current
+    const ids = new Map(clipboard.nodes.map((n) => [n.id, fresh(n.id)]))
+    const nodes = clipboard.nodes.map((n) => ({ ...n, id: ids.get(n.id)!, x: n.x + off, y: n.y + off }))
+    const edges = clipboard.edges.map((e) => ({ ...e, id: fresh(e.id), fromNode: ids.get(e.fromNode)!, toNode: ids.get(e.toNode)! }))
+    // Groups go first so they stay behind what they hold
+    commit({ ...c, nodes: [...nodes.filter((n) => n.type === 'group'), ...c.nodes, ...nodes.filter((n) => n.type !== 'group')], edges: [...c.edges, ...edges] })
+    requestAnimationFrame(() => selectOnly([...ids.values()]))
+  }, [commit, selectOnly])
+
+  const nudge = useCallback(
+    (dx: number, dy: number) => {
+      const ids = new Set(selectedNodes)
+      if (!ids.size) return
+      const c = latest.current
+      // A group carries what it holds
+      const moving = new Set(ids)
+      for (const g of c.nodes.filter((n) => ids.has(n.id) && n.type === 'group'))
+        for (const n of c.nodes) if (n.x >= g.x && n.y >= g.y && n.x + n.width <= g.x + g.width && n.y + n.height <= g.y + g.height) moving.add(n.id)
+      commit({ ...c, nodes: c.nodes.map((n) => (moving.has(n.id) ? { ...n, x: n.x + dx, y: n.y + dy } : n)) })
+    },
+    [commit, selectedNodes]
+  )
+
+  const tidy = useCallback(() => {
+    commit(tidyCanvas(latest.current, compact ? 'TB' : 'LR'))
+    setTimeout(() => fit(400), 60)
+  }, [commit, compact, fit])
+
+  const setKind = (id: string, kind: ComponentKind) => {
+    const c = latest.current
+    const color = COMPONENTS.find((k) => k.kind === kind)?.color
+    commit({
+      ...c,
+      nodes: c.nodes.map((n) => {
+        if (n.id !== id) return n
+        const next: CanvasNode = { ...n, kind }
+        if (color) next.color = color
+        else delete next.color
+        return next
+      })
+    })
+  }
+  const updateEdge = (id: string, patch: Partial<CanvasEdge>) => {
+    const c = latest.current
+    commit({
+      ...c,
+      edges: c.edges.map((e) => {
+        if (e.id !== id) return e
+        const next: CanvasEdge = { ...e, ...patch }
+        for (const k of Object.keys(patch) as (keyof CanvasEdge)[]) if (patch[k] === undefined || patch[k] === false) delete next[k]
+        return next
+      })
+    })
+  }
+
+  // ---------- Hooks the nodes and edges call ----------
+  const editorHooks = useMemo<EditorHooks>(
+    () => ({
+      readOnly,
+      editing,
+      setEditing,
+      saveText: (id, text) => {
+        setEditing(null)
+        const c = latest.current
+        const n = c.nodes.find((x) => x.id === id)
+        if (!n || !text || text === n.text) return
+        const lines = text.split('\n').length
+        commit({ ...c, nodes: c.nodes.map((x) => (x.id === id ? { ...x, text, height: Math.max(x.height, (x.kind && x.kind !== 'note' ? 64 : 40) + lines * 20) } : x)) })
+      },
+      saveGroupLabel: (id, label) => {
+        setEditing(null)
+        const c = latest.current
+        if (c.nodes.find((x) => x.id === id)?.label !== label) commit({ ...c, nodes: c.nodes.map((x) => (x.id === id ? { ...x, label } : x)) })
+      },
+      openFile,
+      readFile
+    }),
+    [readOnly, editing, commit, openFile, readFile]
+  )
+  const edgeHooks = useMemo<EdgeHooks>(
+    () => ({
+      markers,
+      readOnly,
+      editingEdge,
+      setEditingEdge,
+      saveLabel: (id, label) => {
+        setEditingEdge(null)
+        const e = latest.current.edges.find((x) => x.id === id)
+        if (e && (e.label ?? '') !== label) updateEdge(id, { label: label || undefined })
+      },
+      reducedMotion: reducedMotion()
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [markers, readOnly, editingEdge, commit]
+  )
+
+  // ---------- Connecting ----------
+  const onConnect = useCallback((p: { source: string; target: string }) => commit(connect(latest.current, p.source, p.target)), [commit])
+  // Let go over a box rather than its dot: connect to the box
+  const onConnectEnd: OnConnectEnd = useCallback(
+    (event, state) => {
+      if (state.isValid || !state.fromNode) return
+      const pt = 'changedTouches' in event ? event.changedTouches[0] : event
+      const el = document.elementFromPoint(pt.clientX, pt.clientY)?.closest<HTMLElement>('.react-flow__node')
+      const target = el?.dataset.id
+      if (target && target !== state.fromNode.id && latest.current.nodes.find((n) => n.id === target)?.type !== 'group') commit(connect(latest.current, state.fromNode.id, target))
+    },
+    [commit]
+  )
+
+  // ---------- Keyboard ----------
+  const onKeyDown = (e: ReactKeyboardEvent) => {
+    const t = e.target as HTMLElement
+    if (t.closest('input, textarea, [contenteditable="true"]')) return
+    const mod = e.metaKey || e.ctrlKey
+    const k = e.key.toLowerCase()
+    const handled = () => {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    if (k === '?' || (e.shiftKey && k === '/')) return handled(), setHelp((h) => !h)
+    if (k === 'escape') {
+      if (help) return handled(), setHelp(false)
+      if (player.index >= 0) return handled(), player.stop()
+      return handled(), selectOnly([])
+    }
+    if (player.index >= 0 && !mod && (k === 'arrowright' || k === 'arrowleft') && !selectedNodes.length) return handled(), k === 'arrowright' ? player.next() : player.prev()
+    if (k === 'p' && !mod) return handled(), player.playing ? player.pause() : player.play()
+    if (k === 'f' && !mod) return handled(), fit(300)
+    if ((k === '1' && e.shiftKey) || (k === '!' && e.shiftKey)) return handled(), fit(300)
+    if (mod && (k === '=' || k === '+')) return handled(), rf.zoomIn({ duration: 180 })
+    if (mod && k === '-') return handled(), rf.zoomOut({ duration: 180 })
+    if (mod && k === '0') return handled(), rf.zoomTo(1, { duration: 180 })
+    if (readOnly) return
+    if (mod && k === 'z') return handled(), travel(!e.shiftKey)
+    if (mod && k === 'y') return handled(), travel(false)
+    if (mod && k === 'a') return handled(), selectOnly(latest.current.nodes.map((n) => n.id))
+    if (mod && k === 'c') return copy() && handled()
+    if (mod && k === 'x') {
+      if (copy()) {
+        handled()
+        removeSelected()
+      }
+      return
+    }
+    if (mod && k === 'v') return handled(), paste()
+    if (mod && k === 'd') return handled(), copy() && paste()
+    if (mod && k === 'g') return handled(), e.shiftKey ? ungroup() : group()
+    if (k === 'enter' && selectedNodes.length === 1) return handled(), setEditing(selectedNodes[0])
+    if (k === 'n' && !mod) return handled(), addKind('note')
+    if (k === 't' && !mod && !e.shiftKey) return handled(), tidy()
+    if (k.startsWith('arrow') && selectedNodes.length) {
+      const step = e.shiftKey ? GRID : snap ? GRID / 2 : 1
+      handled()
+      return nudge(k === 'arrowleft' ? -step : k === 'arrowright' ? step : 0, k === 'arrowup' ? -step : k === 'arrowdown' ? step : 0)
+    }
+  }
+
+  // ---------- Dropping from the palette ----------
+  const onDrop = (e: DragEvent) => {
+    const kind = e.dataTransfer.getData('application/x-tide-kind') as ComponentKind
+    if (!kind) return
+    e.preventDefault()
+    addKind(kind, rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }))
+  }
+
+  const single = selectedNodes.length === 1 ? canvas.nodes.find((n) => n.id === selectedNodes[0]) : undefined
+  const singleEdge = selectedEdges.size === 1 && !selectedNodes.length ? canvas.edges.find((e) => selectedEdges.has(e.id)) : undefined
+  const many = nodes.length > 200
 
   return (
-    <div
-      ref={wrapRef}
-      className="cv"
-      tabIndex={0}
-      onPointerDown={(e) => {
-        if (e.button !== 0 || (e.target as HTMLElement).closest('.cv-node, .cv-edge-hit, .cv-edge-label, .cv-palette, .cv-zoom')) return
-        wrapRef.current?.focus()
-        setSelected(null)
-        if (editing) saveEdit()
-        touched.current = true
-        drag.current = { kind: 'pan', x: e.clientX, y: e.clientY, vx: view.x, vy: view.y }
-      }}
-      onDoubleClick={(e) => {
-        if ((e.target as HTMLElement).closest('.cv-node, .cv-edge-label, .cv-palette, .cv-zoom')) return
-        const p = toWorld(e.clientX, e.clientY)
-        addAt('service', p.x - 90, p.y - 36)
-      }}
-    >
-      <div className="cv-world" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})` }}>
-        <svg className="cv-edges" width="1" height="1" overflow="visible" aria-hidden="true">
-          <defs>
-            <marker id="cv-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M0,0 L10,5 L0,10 z" className="cv-arrowhead" />
-            </marker>
-            <marker id="cv-arrow-on" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M0,0 L10,5 L0,10 z" className="cv-arrowhead on" />
-            </marker>
-          </defs>
-          {canvas.edges.map((e) => {
-            const a = byId.get(e.fromNode)
-            const b = byId.get(e.toNode)
-            if (!a || !b) return null
-            const { d } = edgePath(a, b, e)
-            const on = selected?.type === 'edge' && selected.id === e.id
-            return (
-              <g key={e.id}>
-                <path d={d} className={`cv-edge${on ? ' on' : ''}`} markerEnd={e.toEnd === 'none' ? undefined : on ? 'url(#cv-arrow-on)' : 'url(#cv-arrow)'} />
-                <path
-                  d={d}
-                  className="cv-edge-hit"
-                  onPointerDown={(ev) => {
-                    ev.stopPropagation()
-                    wrapRef.current?.focus()
-                    setSelected({ type: 'edge', id: e.id })
-                  }}
-                  onDoubleClick={(ev) => {
-                    ev.stopPropagation()
-                    setEditing({ type: 'edge', id: e.id, text: e.label ?? '' })
-                  }}
-                />
-              </g>
-            )
-          })}
-          {from && linking && <line x1={center(from).x} y1={center(from).y} x2={linking.x} y2={linking.y} className="cv-edge linking" />}
-        </svg>
+    <EditorContext.Provider value={editorHooks}>
+      <EdgeContext.Provider value={edgeHooks}>
+        <div
+          ref={wrapRef}
+          className={`cv${compact ? ' compact' : ''}${narrow ? ' narrow' : ''}${readOnly ? ' read-only' : ''}${player.index >= 0 ? ' playing' : ''}`}
+          onKeyDown={onKeyDown}
+          onDragOver={(e) => e.dataTransfer.types.includes('application/x-tide-kind') && e.preventDefault()}
+          onDrop={onDrop}
+          onDoubleClick={(e) => {
+            if (readOnly || !(e.target as HTMLElement).classList.contains('react-flow__pane')) return
+            addKind('service', rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }))
+          }}
+        >
+          <Markers id={markers} />
+          <ReactFlow<FlowNode, FlowEdge>
+            nodes={shownNodes}
+            edges={edges}
+            nodeTypes={NODE_TYPES}
+            edgeTypes={EDGE_TYPES}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onNodeDragStop={() => commit(withFlowGeometry(latest.current, nodesRef.current))}
+            onSelectionDragStop={() => commit(withFlowGeometry(latest.current, nodesRef.current))}
+            onConnect={onConnect}
+            onConnectEnd={onConnectEnd}
+            onBeforeDelete={async () => {
+              removeSelected()
+              return false
+            }}
+            onEdgeDoubleClick={(_, edge) => !readOnly && setEditingEdge(edge.id)}
+            onMoveStart={(ev) => {
+              if (ev) touched.current = true
+            }}
+            onPaneClick={() => {
+              setEditing(null)
+              setFilePick(false)
+            }}
+            connectionMode={ConnectionMode.Loose}
+            connectionRadius={28}
+            snapToGrid={snap && !readOnly}
+            snapGrid={[GRID, GRID]}
+            nodesDraggable={!readOnly}
+            nodesConnectable={!readOnly}
+            elementsSelectable={!readOnly}
+            edgesFocusable={!readOnly}
+            nodesFocusable={!readOnly}
+            selectionMode={SelectionMode.Partial}
+            selectionKeyCode="Shift"
+            multiSelectionKeyCode={isMac ? 'Meta' : 'Control'}
+            deleteKeyCode={readOnly ? null : ['Backspace', 'Delete']}
+            panOnScroll={!readOnly}
+            zoomOnScroll={false}
+            zoomOnPinch
+            zoomActivationKeyCode={isMac ? 'Meta' : 'Control'}
+            zoomOnDoubleClick={false}
+            preventScrolling={!readOnly}
+            minZoom={0.1}
+            maxZoom={2.5}
+            onInit={() => requestAnimationFrame(() => fit())}
+            onlyRenderVisibleElements={many}
+            elevateNodesOnSelect={false}
+            proOptions={{ hideAttribution: true }}
+          >
+            <Background variant={BackgroundVariant.Dots} gap={GRID} size={1.2} className="cv-bg" />
+            {minimap && !readOnly && !help && <MiniMap position="top-right" pannable zoomable className="cv-minimap" nodeClassName={(n) => `mm k-${(n as FlowNode).data.node.kind ?? (n as FlowNode).data.node.type}`} nodeBorderRadius={4} ariaLabel="Overview of the canvas" />}
 
-        {canvas.edges.map((e) => {
-          const a = byId.get(e.fromNode)
-          const b = byId.get(e.toNode)
-          if (!a || !b) return null
-          const { mid } = edgePath(a, b, e)
-          const isEditing = editing?.type === 'edge' && editing.id === e.id
-          if (!e.label && !isEditing) return null
-          return (
-            <div
-              key={e.id}
-              className={`cv-edge-label${selected?.type === 'edge' && selected.id === e.id ? ' on' : ''}`}
-              style={{ left: mid.x, top: mid.y }}
-              onPointerDown={(ev) => {
-                ev.stopPropagation()
-                setSelected({ type: 'edge', id: e.id })
-              }}
-              onDoubleClick={(ev) => {
-                ev.stopPropagation()
-                setEditing({ type: 'edge', id: e.id, text: e.label ?? '' })
-              }}
-            >
-              {isEditing ? (
-                <input
-                  autoFocus
-                  value={editing.text}
-                  onChange={(ev) => setEditing({ ...editing, text: ev.target.value })}
-                  onBlur={saveEdit}
-                  onKeyDown={(ev) => {
-                    if (ev.key === 'Enter') saveEdit()
-                    if (ev.key === 'Escape') setEditing(null)
-                  }}
-                  placeholder="Label"
-                  aria-label="Connection label"
-                />
-              ) : (
-                e.label
-              )}
-            </div>
-          )
-        })}
+            {!compact && !readOnly && (
+              <Panel position="top-left" className="cv-palette" aria-label="Add a component">
+                {PALETTE.map((kind) => (
+                  <button
+                    key={kind}
+                    className={`cv-pal k-${kind}`}
+                    onClick={() => addKind(kind)}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('application/x-tide-kind', kind)
+                      e.dataTransfer.effectAllowed = 'copy'
+                    }}
+                    title={`Add ${kindName(kind)?.toLowerCase()} (or drag it in)`}
+                  >
+                    <span className="cvn-icon">
+                      <KindIcon kind={kind} size={13} />
+                    </span>
+                    <span>{kindName(kind)}</span>
+                  </button>
+                ))}
+                <span className="cv-pal-rule" />
+                {files && (
+                  <button className="cv-pal k-file" onClick={() => setFilePick((f) => !f)} title="Add a note or file from your vault">
+                    <span className="cvn-icon">
+                      <KindIcon kind="file" size={13} />
+                    </span>
+                    <span>File</span>
+                  </button>
+                )}
+                <button className="cv-pal k-group" onClick={group} title={`Group the selection (${MOD}G)`}>
+                  <span className="cvn-icon">
+                    <Icon name="group" size={13} />
+                  </span>
+                  <span>Group</span>
+                </button>
+              </Panel>
+            )}
+            {filePick && files && <FilePicker files={files} onPick={addFile} onClose={() => setFilePick(false)} />}
 
-        {canvas.nodes.map((n) => {
-          const on = selected?.type === 'node' && selected.id === n.id
-          const isEditing = editing?.type === 'node' && editing.id === n.id
-          const [title, ...rest] = n.text.split('\n')
-          return (
-            <div
-              key={n.id}
-              data-node={n.id}
-              className={`cv-node k-${n.kind ?? 'service'}${on ? ' on' : ''}${linking ? ' target' : ''}`}
-              style={{ left: n.x, top: n.y, width: n.width, minHeight: n.height }}
-              onPointerDown={(e) => {
-                if (e.button !== 0 || isEditing || (e.target as HTMLElement).closest('.cv-handle')) return
-                e.stopPropagation()
-                wrapRef.current?.focus()
-                setSelected({ type: 'node', id: n.id })
-                const p = toWorld(e.clientX, e.clientY)
-                drag.current = { kind: 'node', id: n.id, dx: p.x - n.x, dy: p.y - n.y, start: latest.current, moved: false }
-              }}
-              onDoubleClick={(e) => {
-                e.stopPropagation()
-                setEditing({ type: 'node', id: n.id, text: n.text })
-              }}
-            >
-              <span className="cv-kind">
-                <KindIcon kind={n.kind} />
-                {n.kind !== 'note' && <span>{COMPONENTS.find((c) => c.kind === (n.kind ?? 'service'))?.label}</span>}
-              </span>
-              {isEditing ? (
-                <textarea
-                  autoFocus
-                  value={editing.text}
-                  onChange={(e) => setEditing({ ...editing, text: e.target.value })}
-                  onBlur={saveEdit}
-                  onFocus={(e) => e.currentTarget.select()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      saveEdit()
-                    }
-                    if (e.key === 'Escape') setEditing(null)
-                  }}
-                  rows={Math.max(1, editing.text.split('\n').length)}
-                  aria-label="Component name; Shift+Enter adds a details line"
-                />
-              ) : (
+            {!readOnly && (single || singleEdge) && player.index < 0 && (
+              <Panel position="top-center" className="cv-inspect" aria-label="Selection">
+                {single && single.type === 'text' && (
+                  <>
+                    {PALETTE.map((k) => (
+                      <button key={k} className={`cv-chip k-${k}${single.kind === k ? ' on' : ''}`} onClick={() => setKind(single.id, k)} title={kindName(k)} aria-pressed={single.kind === k}>
+                        <KindIcon kind={k} size={13} />
+                      </button>
+                    ))}
+                    <span className="cv-sep" />
+                  </>
+                )}
+                {single && single.type === 'group' && <span className="cv-inspect-name">{nodeLabel(single)}</span>}
+                {single && single.type === 'group' && (
+                  <button className="cv-tb" onClick={ungroup} title={`Ungroup (⇧${MOD}G)`}>
+                    <span>Ungroup</span>
+                  </button>
+                )}
+                {singleEdge && (
+                  <>
+                    <button className="cv-tb" onClick={() => setEditingEdge(singleEdge.id)} title="Label (double-click the line)">
+                      <Icon name="edit" size={14} />
+                      <span>{singleEdge.label ? 'Rename' : 'Label'}</span>
+                    </button>
+                    <button className={`cv-tb${singleEdge.animated ? ' on' : ''}`} aria-pressed={!!singleEdge.animated} onClick={() => updateEdge(singleEdge.id, { animated: !singleEdge.animated })} title="Show it flowing all the time">
+                      <Icon name="flow" size={14} />
+                      <span>Flowing</span>
+                    </button>
+                    <button className={`cv-tb${singleEdge.dashed ? ' on' : ''}`} aria-pressed={!!singleEdge.dashed} onClick={() => updateEdge(singleEdge.id, { dashed: !singleEdge.dashed })} title="Dashed: async or optional">
+                      <span className="cv-dash" aria-hidden="true" />
+                      <span>Dashed</span>
+                    </button>
+                    <button
+                      className="cv-tb"
+                      onClick={() => {
+                        // → then ↔ then — then →
+                        const both = singleEdge.fromEnd === 'arrow'
+                        const none = singleEdge.toEnd === 'none'
+                        updateEdge(singleEdge.id, both ? { fromEnd: undefined, toEnd: 'none' } : none ? { toEnd: undefined } : { fromEnd: 'arrow' })
+                      }}
+                      title="Arrowheads"
+                    >
+                      <span className="cv-arrows">{singleEdge.fromEnd === 'arrow' ? '↔' : singleEdge.toEnd === 'none' ? '—' : '→'}</span>
+                    </button>
+                    <span className="cv-sep" />
+                  </>
+                )}
+                <button className="cv-tb danger" onClick={removeSelected} title="Delete (⌫)" aria-label="Delete">
+                  <Icon name="trash" size={14} />
+                </button>
+              </Panel>
+            )}
+
+            {player.caption && (
+              <Panel position="bottom-center" className="cv-caption" aria-live="polite">
+                <span className="cv-step">
+                  {player.index + 1}
+                  <span className="muted">/{player.steps.length}</span>
+                </span>
+                <span className="cv-caption-text">{player.caption}</span>
+              </Panel>
+            )}
+
+            <Panel position="bottom-center" className="cv-toolbar" aria-label="Canvas">
+              {!readOnly && (
                 <>
-                  <span className="cv-title">{title.replace(/^#+\s*/, '') || nodeLabel(n)}</span>
-                  {rest.join('\n').trim() && <span className="cv-details">{rest.join('\n').trim()}</span>}
+                  <ToolButton icon="undo" label={`Undo (${MOD}Z)`} onClick={() => travel(true)} disabled={!undoStack.current.length} />
+                  <ToolButton icon="redo" label={`Redo (⇧${MOD}Z)`} onClick={() => travel(false)} disabled={!redoStack.current.length} />
+                  <span className="cv-sep" />
                 </>
               )}
-              {(['top', 'right', 'bottom', 'left'] as Side[]).map((s) => (
-                <span
-                  key={s}
-                  className={`cv-handle ${s}`}
-                  title="Drag to another component to connect"
-                  onPointerDown={(e) => {
-                    e.stopPropagation()
-                    const p = toWorld(e.clientX, e.clientY)
-                    setLinking({ from: n.id, x: p.x, y: p.y })
-                  }}
-                />
-              ))}
-            </div>
-          )
-        })}
-      </div>
+              <FlowControls player={player} />
+              {!readOnly && (
+                <>
+                  <span className="cv-sep" />
+                  {!compact && <ToolButton icon="magnet" label="Snap to grid" on={snap} onClick={() => (setSnap(!snap), setPref('snap', !snap))} />}
+                  <ToolButton icon="minimap" label="Overview map" on={minimap} onClick={() => (setMinimap(!minimap), setPref('minimap', !minimap))} />
+                  <ToolButton icon="tidy" label="Tidy the layout (T)" onClick={tidy} disabled={canvas.nodes.length < 2} />
+                </>
+              )}
+              <span className="cv-sep" />
+              <Zoom onFit={() => fit(300)} />
+              {!readOnly && !compact && <ToolButton icon="keyboard" label="Keyboard shortcuts (?)" on={help} onClick={() => setHelp(!help)} />}
+            </Panel>
 
-      {!canvas.nodes.length && (
-        <div className="cv-empty">
-          <p>Sketch your design</p>
-          <p className="muted small">Add components from the left, then drag from a dot to connect them. Or ask the tutor to start one with you.</p>
-          {onExample && (
-            <button className="btn small cv-example" onClick={onExample}>
-              Open a finished example
-            </button>
+            {help && <Shortcuts onClose={() => setHelp(false)} />}
+          </ReactFlow>
+
+          {!canvas.nodes.length && !readOnly && (
+            <div className="cv-empty">
+              <p>Sketch your design</p>
+              <p className="muted small">{compact ? 'The tutor draws here as it explains. You can add and move parts too.' : 'Drag parts in from the left, then drag from a dot to connect them. Or ask the tutor to start one with you.'}</p>
+              {onExample && (
+                <button className="btn small cv-example" onClick={onExample}>
+                  Open a finished example
+                </button>
+              )}
+            </div>
           )}
         </div>
-      )}
+      </EdgeContext.Provider>
+    </EditorContext.Provider>
+  )
+}
 
-      {!compact && (
-      <div className="cv-palette" role="toolbar" aria-label="Add a component">
-        {COMPONENTS.map((c) => (
-          <button key={c.kind} className={`cv-pal k-${c.kind}`} onClick={() => addAt(c.kind)} title={`Add ${c.label.toLowerCase()}`}>
-            <KindIcon kind={c.kind} />
-            <span>{c.label}</span>
+function ToolButton({ icon, label, onClick, on, disabled }: { icon: IconName; label: string; onClick(): void; on?: boolean; disabled?: boolean }) {
+  return (
+    <button className={`cv-tb icon${on ? ' on' : ''}`} onClick={onClick} disabled={disabled} title={label} aria-label={label} {...(on !== undefined ? { 'aria-pressed': on } : {})}>
+      <Icon name={icon} size={15} />
+    </button>
+  )
+}
+
+function FlowControls({ player }: { player: Player }) {
+  const any = player.steps.length > 0 || player.announcing
+  if (!any) return <ToolButton icon="play" label="Play the flow: add connections first" onClick={() => {}} disabled />
+  return (
+    <>
+      {player.index >= 0 && !player.announcing && <ToolButton icon="stepBack" label="Previous step (←)" onClick={player.prev} disabled={player.index <= 0} />}
+      <button className={`cv-tb play${player.playing ? ' on' : ''}`} onClick={player.playing ? player.pause : player.play} title={player.playing ? 'Pause (P)' : 'Play a request along the connections, step by step (P)'}>
+        <Icon name={player.playing ? 'pause' : 'play'} size={14} />
+        <span>{player.playing ? 'Pause' : player.index >= 0 ? 'Play' : 'Play flow'}</span>
+      </button>
+      {player.index >= 0 && !player.announcing && (
+        <>
+          <ToolButton icon="stepNext" label="Next step (→)" onClick={player.next} disabled={player.index >= player.steps.length - 1} />
+          <ToolButton icon="x" label="Stop (Esc)" onClick={player.stop} />
+        </>
+      )}
+    </>
+  )
+}
+
+function Zoom({ onFit }: { onFit(): void }) {
+  const rf = useReactFlow()
+  const zoom = useStore((s) => s.transform[2])
+  return (
+    <>
+      <ToolButton icon="minus" label={`Zoom out (${MOD}−)`} onClick={() => rf.zoomOut({ duration: 180 })} />
+      <button className="cv-tb cv-zoom-level" onClick={() => rf.zoomTo(1, { duration: 200 })} title={`Actual size (${MOD}0)`}>
+        {Math.round(zoom * 100)}%
+      </button>
+      <ToolButton icon="plus" label={`Zoom in (${MOD}+)`} onClick={() => rf.zoomIn({ duration: 180 })} />
+      <ToolButton icon="fit" label="Fit the drawing (F)" onClick={onFit} />
+    </>
+  )
+}
+
+const SHORTCUTS: [string, string][] = [
+  ['Pan', 'Scroll, or drag the background'],
+  ['Zoom', `Pinch, or ${MOD} + scroll`],
+  ['Select several', 'Shift + drag, or ' + MOD + ' + click'],
+  ['Rename', 'Double-click, or Enter'],
+  ['Connect', 'Drag from a dot to another part'],
+  ['Undo / redo', `${MOD}Z / ⇧${MOD}Z`],
+  ['Copy, paste, duplicate', `${MOD}C, ${MOD}V, ${MOD}D`],
+  ['Group / ungroup', `${MOD}G / ⇧${MOD}G`],
+  ['Move a little', 'Arrow keys (Shift: further)'],
+  ['Delete', '⌫'],
+  ['Add a note', 'N'],
+  ['Tidy the layout', 'T'],
+  ['Play the flow', 'P, then ← →'],
+  ['Fit / actual size', `F / ${MOD}0`]
+]
+
+function Shortcuts({ onClose }: { onClose(): void }) {
+  return (
+    <Panel position="top-right" className="cv-help" aria-label="Keyboard shortcuts">
+      <div className="cv-help-head">
+        <span>Shortcuts</span>
+        <button className="icon-btn small" onClick={onClose} aria-label="Close">
+          <Icon name="x" size={13} />
+        </button>
+      </div>
+      <dl>
+        {SHORTCUTS.map(([what, keys]) => (
+          <div key={what}>
+            <dt>{what}</dt>
+            <dd>{keys}</dd>
+          </div>
+        ))}
+      </dl>
+    </Panel>
+  )
+}
+
+function FilePicker({ files, onPick, onClose }: { files: string[]; onPick(path: string): void; onClose(): void }) {
+  const [q, setQ] = useState('')
+  const shown = useMemo(() => {
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean)
+    return files.filter((f) => words.every((w) => f.toLowerCase().includes(w))).slice(0, 40)
+  }, [files, q])
+  return (
+    <Panel position="top-left" className="cv-files" aria-label="Add a file">
+      <input
+        autoFocus
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Find a note or file"
+        onKeyDown={(e) => {
+          e.stopPropagation()
+          if (e.key === 'Escape') onClose()
+          if (e.key === 'Enter' && shown[0]) onPick(shown[0])
+        }}
+        aria-label="Find a note or file"
+      />
+      <div className="cv-files-list">
+        {shown.map((f) => (
+          <button key={f} onClick={() => onPick(f)} title={f}>
+            <span>{(f.split('/').pop() ?? f).replace(/\.md$/i, '')}</span>
+            <span className="muted">{f.split('/').slice(0, -1).join('/')}</span>
           </button>
         ))}
+        {!shown.length && <p className="muted small">Nothing matches</p>}
       </div>
-      )}
-
-      <div className="cv-zoom">
-        <button className="icon-btn small" onClick={() => setView((v) => ({ ...v, k: Math.max(0.2, v.k / 1.2) }))} aria-label="Zoom out">
-          <Icon name="minus" size={13} />
-        </button>
-        <button className="cv-zoom-level" onClick={fit} title="Fit the design">
-          {Math.round(view.k * 100)}%
-        </button>
-        <button className="icon-btn small" onClick={() => setView((v) => ({ ...v, k: Math.min(2.5, v.k * 1.2) }))} aria-label="Zoom in">
-          <Icon name="plus" size={13} />
-        </button>
-      </div>
-    </div>
+    </Panel>
   )
 }

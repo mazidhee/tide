@@ -7,6 +7,7 @@ import { InterviewClock, useInterviewClock } from './InterviewClock'
 import { designInstructions, type DesignMode } from '@shared/session'
 import { fileTitle, useApp } from '../state'
 import { CanvasEditor } from './CanvasEditor'
+import { newEdges, useCanvasFiles } from './flow/canvasFiles'
 import { Composer, TurnView, useConversation } from './Conversation'
 import { Icon } from './Icon'
 import { TimeThis } from './TimeThis'
@@ -30,6 +31,9 @@ export function CanvasView({ path, start, topic, company, timed, reference }: { 
   const [tutorOpen, setTutorOpen] = useState(true)
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const pending = useRef<Canvas | null>(null)
+  const shown = useRef<Canvas | null>(null)
+  const [announce, setAnnounce] = useState<{ ids: string[]; nonce: number }>()
+  const fileProps = useCanvasFiles()
   const listRef = useRef<HTMLDivElement>(null)
   const started = useRef(false)
   const toastRef = useRef(app.toast)
@@ -48,8 +52,13 @@ export function CanvasView({ path, start, topic, company, timed, reference }: { 
         .read(path)
         .then((raw) => {
           pending.current = null
-          setCanvas(parseCanvas(raw))
+          const next = parseCanvas(raw)
+          // The connections the tutor just drew play once, in the order a request takes them
+          const added = shown.current ? newEdges(shown.current, next) : []
+          shown.current = next
+          setCanvas(next)
           setVersion((v) => v + 1)
+          if (added.length) setAnnounce({ ids: added, nonce: Date.now() })
         })
         .catch(() => setCanvas({ nodes: [], edges: [] })),
     [path]
@@ -67,6 +76,7 @@ export function CanvasView({ path, start, topic, company, timed, reference }: { 
   useEffect(() => () => void flush(), [flush])
 
   const change = (next: Canvas) => {
+    shown.current = next
     setCanvas(next)
     pending.current = next
     clearTimeout(saveTimer.current)
@@ -178,7 +188,7 @@ export function CanvasView({ path, start, topic, company, timed, reference }: { 
         </div>
       </header>
       <div className="lab-body">
-        <section className="design-canvas">{canvas ? <CanvasEditor canvas={canvas} onChange={change} version={version} onExample={mode === 'recall' ? undefined : openExample} /> : <div className="ide-empty muted">Opening…</div>}</section>
+        <section className="design-canvas">{canvas ? <CanvasEditor canvas={canvas} onChange={change} version={version} onExample={mode === 'recall' ? undefined : openExample} announce={announce} {...fileProps} /> : <div className="ide-empty muted">Opening…</div>}</section>
         {tutorOpen && (
           <aside className="lab-tutor no-drag" aria-label="Tutor">
             <div className="lab-thread" ref={listRef}>
