@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home · Tide</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="home">
+<div class="app">
+  <aside class="rail" id="rail" aria-label="Tide"></aside>
+  <main class="main">
+    <div class="topbar">
+      <div class="crumbs"><b>Home</b></div>
+      <span class="sp"></span>
+      <span class="meta num" data-tip="Lesson 1 h 20 this morning">Studied 1 h 20 today</span>
+      <label class="field" style="margin-left:12px"><i data-i="search"></i><input placeholder="Search or ask" aria-label="Search or ask"><kbd>⌘K</kbd></label>
+    </div>
+
+    <div class="page">
+      <div class="home">
+        <div>
+          <h1 class="t-page">Wednesday 11 November</h1>
+          <p class="t-lede">3 h 30 planned today. One lesson is open from this morning, and 14 cards are due before they slip.</p>
+
+          <section class="now" aria-label="Next">
+            <div>
+              <h2>Backpropagation in a two-layer network</h2>
+              <p>You stopped at step 3 of 6, gradients by the chain rule. About 25 minutes to finish.</p>
+              <div class="why"><i data-i="flag"></i><span>Your aim <b>Machine learning engineering</b> is two lessons behind pace for 28 November, so this comes first.</span></div>
+              <div class="acts"><a class="btn primary" href="lesson.html"><i data-i="play" class="s"></i>Carry on</a><button class="btn">Choose something else</button><span class="meta" style="margin-left:6px">or press <kbd>↵</kbd></span></div>
+            </div>
+            <div class="side">
+              <span data-prof="56"></span>
+              <div class="steps" data-tip="Step 3 of 6" aria-label="Step 3 of 6"><i class="d"></i><i class="d"></i><i class="c"></i><i></i><i></i><i></i></div>
+            </div>
+          </section>
+
+          <div class="sec-head"><h2 class="t-sec">Then today</h2><span class="meta num">2 h 10 left of 3 h 30</span></div>
+          <div class="today rows">
+            <a class="row" href="know.html"><span class="when">14:30</span><i data-i="review"></i><span class="what"><b>Recall 14 cards</b><span>Fading in Distributed systems, C++ and Computer systems</span></span><span class="btn sm">Start</span><span class="dur">8 min</span></a>
+            <a class="row" href="library.html"><span class="when">15:00</span><i data-i="book"></i><span class="what"><b>Read: Designing Data-Intensive Applications</b><span>Chapter 5, Replication, pages 151 to 174</span></span><span></span><span class="dur">40 min</span></a>
+            <div class="row"><span class="when">16:00</span><i data-i="terminal"></i><span class="what"><b>Practise: move semantics</b><span>Three C++ problems, the second uses your own <code class="c">Buffer</code> class</span></span><span></span><span class="dur">30 min</span></div>
+            <div class="row done"><span class="when">09:10</span><i data-i="check"></i><span class="what"><b>Lesson: Virtual memory and page tables</b><span>Finished. 6 cards made, 1 question missed</span></span><span></span><span class="dur">1 h 20</span></div>
+          </div>
+
+          <div class="sec-head"><h2 class="t-sec">Fading</h2><span class="meta">The line is how well you held it; the fill is where it stands now</span></div>
+          <div class="box">
+            <table class="tbl fading">
+              <thead><tr><th>Concept</th><th>Area</th><th class="opt">Last recalled</th><th class="r">Held</th><th></th></tr></thead>
+              <tbody>
+                <tr class="hit"><td><span class="concept"><span class="level c3" style="--v:31;--hw:55"></span><span class="cellmain">Why a sigmoid saturates</span></span></td><td><span class="area c3">Machine learning</span></td><td class="soft opt">5 days ago, missed</td><td class="r"><span class="drop"><s>55</s><i data-i="chev" class="s"></i>31%</span></td><td class="r"><a class="btn sm" href="lesson.html">In today’s lesson</a></td></tr>
+                <tr class="hit"><td><span class="concept"><span class="level c5" style="--v:47;--hw:78"></span><span class="cellmain">Rule of five</span></span></td><td><span class="area c5">C++</span></td><td class="soft opt">12 days ago</td><td class="r"><span class="drop"><s>78</s><i data-i="chev" class="s"></i>47%</span></td><td class="r"><button class="btn sm">Recall</button></td></tr>
+                <tr class="hit"><td><span class="concept"><span class="level c4" style="--v:49;--hw:72"></span><span class="cellmain">Slowly changing dimensions, type 2</span></span></td><td><span class="area c4">Data engineering</span></td><td class="soft opt">11 days ago</td><td class="r"><span class="drop"><s>72</s><i data-i="chev" class="s"></i>49%</span></td><td class="r"><button class="btn sm">Recall</button></td></tr>
+                <tr class="hit"><td><span class="concept"><span class="level c2" style="--v:52;--hw:84"></span><span class="cellmain">Vector clocks</span></span></td><td><span class="area c2">Distributed systems</span></td><td class="soft opt">9 days ago</td><td class="r"><span class="drop"><s>84</s><i data-i="chev" class="s"></i>52%</span></td><td class="r"><button class="btn sm">Recall</button></td></tr>
+                <tr class="hit"><td><span class="concept"><span class="level c1" style="--v:61;--hw:90"></span><span class="cellmain">TLB misses and page walks</span></span></td><td><span class="area c1">Computer systems</span></td><td class="soft opt">6 days ago</td><td class="r"><span class="drop"><s>90</s><i data-i="chev" class="s"></i>61%</span></td><td class="r"><button class="btn sm">Recall</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <aside class="sidecol">
+          <section>
+            <div class="sec-head" style="margin-top:4px"><h2 class="t-sec">This week</h2><a class="more" href="#">Plan the week</a></div>
+            <p class="big">7 h 10 <small>of 18 h planned</small></p>
+            <svg viewBox="0 0 340 142" width="100%" role="img" aria-label="Hours studied against hours planned, Monday to Sunday" style="margin-top:14px;display:block">
+              <line class="gl" x1="0" x2="340" y1="35" y2="35"/><line class="gl" x1="0" x2="340" y1="72.5" y2="72.5"/>
+              <text class="ax" x="340" y="31" text-anchor="end">3 h</text><text class="ax" x="340" y="68.5" text-anchor="end">1 h 30</text>
+              <g fill="var(--line)">
+                <rect x="6" y="35" width="30" height="75" rx="3" data-tip="Monday&#10;Planned 3 h, done 3 h 10"/><rect x="52" y="35" width="30" height="75" rx="3" data-tip="Tuesday&#10;Planned 3 h, done 2 h 40"/><rect x="98" y="22.5" width="30" height="87.5" rx="3" data-tip="Today&#10;Planned 3 h 30, done 1 h 20 so far"/><rect x="144" y="35" width="30" height="75" rx="3" data-tip="Thursday&#10;Planned 3 h"/><rect x="190" y="35" width="30" height="75" rx="3" data-tip="Friday&#10;Planned 3 h"/><rect x="236" y="60" width="30" height="50" rx="3" data-tip="Saturday&#10;Planned 2 h"/><rect x="282" y="97.5" width="30" height="12.5" rx="3" data-tip="Sunday&#10;Planned 30 min"/>
+              </g>
+              <g fill="var(--accent)" style="pointer-events:none">
+                <path d="M6 110V34a3 3 0 0 1 3-3h24a3 3 0 0 1 3 3v76z"/><path d="M52 110V46a3 3 0 0 1 3-3h24a3 3 0 0 1 3 3v64z"/><path d="M98 110V80a3 3 0 0 1 3-3h24a3 3 0 0 1 3 3v30z"/>
+              </g>
+              <line class="bl" x1="0" x2="340" y1="110.5" y2="110.5"/>
+              <text class="labk" x="113" y="71" text-anchor="middle">1 h 20</text>
+              <g class="ax" text-anchor="middle"><text x="21" y="128">Mon</text><text x="67" y="128">Tue</text><text x="113" y="128" style="fill:var(--ink);font-weight:600">Wed</text><text x="159" y="128">Thu</text><text x="205" y="128">Fri</text><text x="251" y="128">Sat</text><text x="297" y="128">Sun</text></g>
+            </svg>
+            <div class="legend" style="margin-top:4px"><span><i></i>Done</span><span><i class="hollow"></i>Planned</span></div>
+          </section>
+
+          <section>
+            <div class="sec-head" style="margin-top:0"><h2 class="t-sec">Aims</h2><span class="meta">The mark is where today’s pace should be</span></div>
+            <div class="rows">
+              <div class="aim"><div class="top"><b>Machine learning engineering</b><span class="meta num">28 Nov</span></div><div class="pbar c3" style="--v:62;--pace:68" data-tip="23 of 37 lessons done&#10;Pace for today: 25"><i></i><b></b></div><div class="bot"><span class="num">23 of 37 lessons</span><span class="behind">2 behind</span></div></div>
+              <div class="aim"><div class="top"><b>Distributed systems</b><span class="meta num">19 Dec</span></div><div class="pbar c2" style="--v:41;--pace:41" data-tip="17 of 42 lessons done&#10;Pace for today: 17"><i></i><b></b></div><div class="bot"><span class="num">17 of 42 lessons</span><span>On pace</span></div></div>
+              <div class="aim"><div class="top"><b>Modern C++</b><span class="meta num">30 Jan</span></div><div class="pbar c5" style="--v:23;--pace:17" data-tip="7 of 30 lessons done&#10;Pace for today: 5"><i></i><b></b></div><div class="bot"><span class="num">7 of 30 lessons</span><span class="ahead">4 days ahead</span></div></div>
+            </div>
+          </section>
+
+          <section>
+            <div class="sec-head" style="margin-top:0"><h2 class="t-sec">Where it ran today</h2><a class="more" href="connections.html">Connections</a></div>
+            <p class="soft" style="font-size:12.5px;line-height:18px"><span class="num">286</span> answers from Gemma on this Mac. <span class="num">41</span> checks sent to Groq, none from a private notebook.</p>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

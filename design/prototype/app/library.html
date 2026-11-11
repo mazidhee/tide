@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Library · Tide</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="library">
+<div class="app">
+  <aside class="rail" id="rail" aria-label="Tide"></aside>
+  <main class="main">
+    <div class="topbar">
+      <div class="crumbs"><b>Library</b></div>
+      <span class="sp"></span>
+      <button class="btn sm"><i data-i="link" class="s"></i>Save a link</button>
+      <button class="btn sm primary"><i data-i="plus" class="s"></i>Add files</button>
+    </div>
+    <div class="page">
+      <h1 class="t-page">Library</h1>
+      <p class="t-lede">23 books, papers and articles, kept as files in your vault. Five are open; the tutor cites from all of them.</p>
+      <div class="lib-head">
+        <div class="seg" data-pick><button aria-pressed="true">All <span class="c">23</span></button><button>Books <span class="c">6</span></button><button>Papers <span class="c">9</span></button><button>Articles <span class="c">8</span></button></div>
+        <div class="seg" data-pick><button aria-pressed="true">Any area</button><button title="Computer systems" aria-label="Computer systems"><span class="area c1" style="gap:0"></span></button><button title="Distributed systems" aria-label="Distributed systems"><span class="area c2" style="gap:0"></span></button><button title="Machine learning" aria-label="Machine learning"><span class="area c3" style="gap:0"></span></button><button title="Data engineering" aria-label="Data engineering"><span class="area c4" style="gap:0"></span></button><button title="C++" aria-label="C++"><span class="area c5" style="gap:0"></span></button></div>
+        <span class="sp"></span>
+        <label class="field"><i data-i="search"></i><input placeholder="Title, author or phrase" aria-label="Search the library"></label>
+        <div class="seg" data-pick><button aria-pressed="true" title="Covers"><i data-i="grid" class="s"></i></button><button title="List"><i data-i="list" class="s"></i></button></div>
+      </div>
+
+      <div class="sec-head" style="margin-top:28px"><h2 class="t-sec">Books</h2><span class="meta">Most recently opened first</span></div>
+      <div class="shelf">
+<a class="book" href="#" data-tip="Designing Data-Intensive Applications&#10;p. 157 of 590, opened today"><div class="cover k2"><div class="band"><span>Distributed systems</span></div><div class="ttl">Designing Data-Intensive Applications</div><div class="au">Martin Kleppmann</div><div class="art"><svg viewBox="0 0 100 80" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9" preserveAspectRatio="xMidYMid meet"><circle cx="50" cy="26" r="7"/><circle cx="22" cy="58" r="7"/><circle cx="78" cy="58" r="7"/><path d="M45 32 27 52M55 32l18 20M30 58h40"/></svg></div></div><div class="bt">Designing Data-Intensive Applications</div><div class="bm"><div class="pbar c2" style="--v:27"><i></i></div><span>27%</span></div><div class="meta">p. 157 of 590</div></a>
+<a class="book" href="#" data-tip="Computer Systems: A Programmer’s Perspective&#10;p. 692 of 1,080, opened this morning"><div class="cover k1"><div class="band"><span>Computer systems</span></div><div class="ttl">Computer Systems: A Programmer’s Perspective</div><div class="au">Bryant and O’Hallaron</div><div class="art"><svg viewBox="0 0 100 80" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9" preserveAspectRatio="xMidYMid meet"><path d="M18 16h64v12H18zM18 34h64v12H18zM18 52h64v12H18zM30 16v12M30 34v12M30 52v12"/></svg></div></div><div class="bt">Computer Systems: A Programmer’s Perspective</div><div class="bm"><div class="pbar c1" style="--v:64"><i></i></div><span>64%</span></div><div class="meta">p. 692 of 1,080</div></a>
+<a class="book" href="#" data-tip="Deep Learning&#10;p. 200 of 800, opened yesterday"><div class="cover k3"><div class="band"><span>Machine learning</span></div><div class="ttl">Deep Learning</div><div class="au">Goodfellow, Bengio and Courville</div><div class="art"><svg viewBox="0 0 100 80" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9" preserveAspectRatio="xMidYMid meet"><circle cx="18" cy="24" r="4"/><circle cx="18" cy="42" r="4"/><circle cx="18" cy="60" r="4"/><circle cx="50" cy="30" r="4"/><circle cx="50" cy="54" r="4"/><circle cx="82" cy="42" r="4"/><path d="M22 24l24 6M22 42l24-12M22 42l24 12M22 60l24-6M54 30l24 12M54 54l24-12"/></svg></div></div><div class="bt">Deep Learning</div><div class="bm"><div class="pbar c3" style="--v:25"><i></i></div><span>25%</span></div><div class="meta">p. 200 of 800</div></a>
+<a class="book" href="#" data-tip="A Tour of C++&#10;p. 122 of 320, opened Monday"><div class="cover k5"><div class="band"><span>C++</span></div><div class="ttl">A Tour of C++</div><div class="au">Bjarne Stroustrup</div><div class="art"><svg viewBox="0 0 100 80" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9" preserveAspectRatio="xMidYMid meet"><path d="M34 22 14 42l20 20M66 22l20 20-20 20M56 18 44 66"/></svg></div></div><div class="bt">A Tour of C++</div><div class="bm"><div class="pbar c5" style="--v:38"><i></i></div><span>38%</span></div><div class="meta">p. 122 of 320</div></a>
+<a class="book" href="#" data-tip="Operating Systems: Three Easy Pieces&#10;ch. 39 of 48, opened 2 Nov"><div class="cover k1"><div class="band"><span>Computer systems</span></div><div class="ttl">Operating Systems: Three Easy Pieces</div><div class="au">Remzi and Andrea Arpaci-Dusseau</div><div class="art"><svg viewBox="0 0 100 80" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9" preserveAspectRatio="xMidYMid meet"><circle cx="22" cy="42" r="12"/><path d="M40 30h24v24H40zM72 54l12-24 12 24z" transform="translate(-6 0)"/></svg></div></div><div class="bt">Operating Systems: Three Easy Pieces</div><div class="bm"><div class="pbar c1" style="--v:81"><i></i></div><span>81%</span></div><div class="meta">ch. 39 of 48</div></a>
+<a class="book" href="#" data-tip="Fundamentals of Data Engineering&#10;p. 41 of 450, opened 26 Oct"><div class="cover k4"><div class="band"><span>Data engineering</span></div><div class="ttl">Fundamentals of Data Engineering</div><div class="au">Joe Reis and Matt Housley</div><div class="art"><svg viewBox="0 0 100 80" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".9" preserveAspectRatio="xMidYMid meet"><path d="M10 28h22M10 42h22M10 56h22M32 28c12 0 10 14 22 14M32 56c12 0 10-14 22-14M32 42h22M54 42h36M82 34l8 8-8 8"/></svg></div></div><div class="bt">Fundamentals of Data Engineering</div><div class="bm"><div class="pbar c4" style="--v:9"><i></i></div><span>9%</span></div><div class="meta">p. 41 of 450</div></a>
+      </div>
+
+      <div class="sec-head"><h2 class="t-sec">Papers and articles</h2><span class="meta">9 of 17 shown</span></div>
+      <div class="box">
+        <table class="tbl lib">
+          <thead><tr><th>Title</th><th>Kind</th><th>Area</th><th>Where you are</th><th class="r">Read</th><th class="r">Opened</th></tr></thead>
+          <tbody>
+<tr class="hit"><td><div class="svc"><div><b style="font-weight:500">In Search of an Understandable Consensus Algorithm</b><span>Ongaro and Ousterhout, 2014</span></div></div></td><td><span class="kind"><i data-i="article"></i>Paper</span></td><td><span class="area c2">Distributed systems</span></td><td class="soft">Read, 12 cards</td><td><div class="prog"><div class="pbar c2" style="--v:100"><i></i></div><span class="num">100%</span></div></td><td class="r soft num">3 Nov</td></tr>
+<tr class="hit"><td><div class="svc"><div><b style="font-weight:500">Dynamo: Amazon’s Highly Available Key-value Store</b><span>DeCandia and others, 2007</span></div></div></td><td><span class="kind"><i data-i="article"></i>Paper</span></td><td><span class="area c2">Distributed systems</span></td><td class="soft">p. 7 of 16</td><td><div class="prog"><div class="pbar c2" style="--v:45"><i></i></div><span class="num">45%</span></div></td><td class="r soft num">Yesterday</td></tr>
+<tr class="hit"><td><div class="svc"><div><b style="font-weight:500">Time, Clocks, and the Ordering of Events in a Distributed System</b><span>Leslie Lamport, 1978</span></div></div></td><td><span class="kind"><i data-i="article"></i>Paper</span></td><td><span class="area c2">Distributed systems</span></td><td class="soft">Read, 6 cards</td><td><div class="prog"><div class="pbar c2" style="--v:100"><i></i></div><span class="num">100%</span></div></td><td class="r soft num">21 Oct</td></tr>
+<tr class="hit"><td><div class="svc"><div><b style="font-weight:500">Attention Is All You Need</b><span>Vaswani and others, 2017</span></div></div></td><td><span class="kind"><i data-i="article"></i>Paper</span></td><td><span class="area c3">Machine learning</span></td><td class="soft">Not started</td><td><div class="prog"><span></span><span class="muted">New</span></div></td><td class="r soft num">Saved 8 Nov</td></tr>
+<tr class="hit"><td><div class="svc"><div><b style="font-weight:500">Adam: A Method for Stochastic Optimization</b><span>Kingma and Ba, 2014</span></div></div></td><td><span class="kind"><i data-i="article"></i>Paper</span></td><td><span class="area c3">Machine learning</span></td><td class="soft">p. 9 of 15</td><td><div class="prog"><div class="pbar c3" style="--v:60"><i></i></div><span class="num">60%</span></div></td><td class="r soft num">Monday</td></tr>
+<tr class="hit"><td><div class="svc"><div><b style="font-weight:500">Neural Networks and Deep Learning, chapter 2</b><span>Michael Nielsen, neuralnetworksanddeeplearning.com</span></div></div></td><td><span class="kind"><i data-i="link"></i>Article</span></td><td><span class="area c3">Machine learning</span></td><td class="soft">Used in today’s lesson</td><td><div class="prog"><div class="pbar c3" style="--v:70"><i></i></div><span class="num">70%</span></div></td><td class="r soft num">Today</td></tr>
+<tr class="hit"><td><div class="svc"><div><b style="font-weight:500">The Log: What every software engineer should know about real-time data’s unifying abstraction</b><span>Jay Kreps, engineering.linkedin.com</span></div></div></td><td><span class="kind"><i data-i="link"></i>Article</span></td><td><span class="area c4">Data engineering</span></td><td class="soft">Read, 4 cards</td><td><div class="prog"><div class="pbar c4" style="--v:100"><i></i></div><span class="num">100%</span></div></td><td class="r soft num">14 Oct</td></tr>
+<tr class="hit"><td><div class="svc"><div><b style="font-weight:500">What Every Programmer Should Know About Memory</b><span>Ulrich Drepper, 2007</span></div></div></td><td><span class="kind"><i data-i="article"></i>Paper</span></td><td><span class="area c1">Computer systems</span></td><td class="soft">p. 21 of 114</td><td><div class="prog"><div class="pbar c1" style="--v:18"><i></i></div><span class="num">18%</span></div></td><td class="r soft num">5 Nov</td></tr>
+<tr class="hit"><td><div class="svc"><div><b style="font-weight:500">C++ Core Guidelines: Resource management</b><span>isocpp.github.io</span></div></div></td><td><span class="kind"><i data-i="link"></i>Article</span></td><td><span class="area c5">C++</span></td><td class="soft">Section R.20 of 37</td><td><div class="prog"><div class="pbar c5" style="--v:35"><i></i></div><span class="num">35%</span></div></td><td class="r soft num">Monday</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
