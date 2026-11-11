@@ -1,0 +1,606 @@
+/*
+  The data lab: a query you can edit and run, its result as a table, and its charts
+  (lib/lab.ts and lib/labChart.ts). One quiet card per block. Every colour is a theme token;
+  chart marks take theirs from --series-1…6, and all text stays in the ink tokens.
+*/
+
+.lab-block {
+  container-type: inline-size;
+  margin: 0 0 1.05em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--bg-raised);
+  overflow: hidden;
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--ink);
+  text-align: left;
+}
+
+.lab-block:has(.lab-sql:focus-visible) {
+  border-color: var(--line-strong);
+}
+
+.lab-block [hidden] {
+  display: none !important;
+}
+
+/* ---------- The query ---------- */
+
+.lab-editor {
+  background: var(--code-bg);
+}
+
+.lab-chart-block .lab-editor {
+  border-top: 1px solid var(--line);
+}
+
+.lab-actions,
+.lab-head,
+.lab-result-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lab-actions {
+  padding: 6px 6px 0 16px;
+  min-height: 34px;
+}
+
+.lab-space {
+  flex: 1;
+}
+
+.lab-lang {
+  font-size: var(--text-2xs);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+.lab-engine {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lab-engine::before {
+  content: '·';
+  margin-right: 6px;
+}
+
+.lab-block button {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+}
+
+.lab-quiet {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--ink-muted);
+}
+
+.lab-quiet:hover:not(:disabled),
+.lab-quiet:focus-visible {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.lab-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 24px;
+  padding: 0 7px 0 10px;
+  border-radius: 6px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.lab-run:hover:not(:disabled),
+.lab-run:focus-visible {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.lab-kbd {
+  font-family: var(--font-ui);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+/* Highlighted code with a see-through textarea laid exactly over it: the same box, font and wrapping for both */
+.lab-code {
+  display: grid;
+}
+
+.lab-block pre.lab-hl,
+.lab-block .lab-sql {
+  grid-area: 1 / 1;
+  margin: 0;
+  padding: 6px 16px 14px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font-family: var(--font-code);
+  font-size: 13px;
+  line-height: 1.6;
+  letter-spacing: 0;
+  tab-size: 2;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  overflow: hidden;
+}
+
+.lab-block pre.lab-hl {
+  pointer-events: none;
+  user-select: none;
+}
+
+.lab-block pre.lab-hl code {
+  display: block;
+  padding: 0;
+  background: none;
+  font: inherit;
+  white-space: inherit;
+}
+
+.lab-block .lab-sql {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  outline: none;
+  color: transparent;
+  caret-color: var(--ink);
+}
+
+.lab-block .lab-sql::selection {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+/* ---------- The result ---------- */
+
+.lab-result {
+  border-top: 1px solid var(--line);
+  transition: opacity 120ms var(--ease);
+}
+
+.lab-chart-block .lab-result {
+  border-top: 0;
+}
+
+.lab-block.running .lab-result {
+  opacity: 0.55;
+}
+
+.lab-result-bar {
+  flex-wrap: wrap;
+  row-gap: 6px;
+  padding: 8px 12px 8px 10px;
+  min-height: 44px;
+}
+
+.lab-result-bar > .lab-meta:first-child {
+  padding-left: 6px;
+}
+
+.lab-meta {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lab-choice button {
+  padding: 0 10px;
+  font-weight: 500;
+}
+
+.lab-table-wrap {
+  max-height: 336px;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  overscroll-behavior: contain;
+}
+
+.lab-table-wrap:focus-visible,
+.lab-plot:focus-visible {
+  background: none;
+  box-shadow: inset var(--focus-ring);
+}
+
+.lab-block .lab-table {
+  display: table;
+  width: 100%;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+.lab-block .lab-table th,
+.lab-block .lab-table td {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  padding: 6px 12px;
+  text-align: left;
+  vertical-align: baseline;
+  white-space: nowrap;
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lab-block .lab-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-raised);
+  border-bottom-color: var(--line-strong);
+  padding-top: 8px;
+  padding-bottom: 7px;
+  font-size: var(--text-xs);
+  font-weight: 550;
+  color: var(--ink-muted);
+}
+
+.lab-block .lab-table th:first-child,
+.lab-block .lab-table td:first-child {
+  padding-left: 16px;
+}
+
+.lab-block .lab-table th:last-child,
+.lab-block .lab-table td:last-child {
+  padding-right: 16px;
+}
+
+.lab-block .lab-table .num {
+  text-align: right;
+}
+
+.lab-block .lab-table td.null {
+  color: var(--ink-muted);
+  font-family: var(--font-code);
+  font-size: 11.5px;
+}
+
+.lab-block .lab-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.lab-block .lab-table tbody tr:hover td {
+  background: var(--bg-hover);
+}
+
+.lab-block .lab-note,
+.lab-block .lab-empty {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+
+.lab-block .lab-note {
+  padding: 8px 16px 10px;
+  border-top: 1px solid var(--line);
+}
+
+.lab-view .lab-note {
+  padding: 8px 4px 0;
+  border-top: 0;
+}
+
+.lab-block .lab-empty {
+  padding: 10px 4px 6px;
+  font-size: var(--text-sm);
+}
+
+.lab-error {
+  display: grid;
+  gap: 3px;
+  padding: 11px 16px 12px;
+  background: color-mix(in srgb, var(--danger) 7%, transparent);
+  font-family: var(--font-ui);
+}
+
+.lab-error-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.lab-error .lab-error-text {
+  padding: 0;
+  background: none;
+  font-family: var(--font-code);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+/* Under a chart block that couldn't be read: joined to the code above it */
+.lab-under-code {
+  margin: -0.6em 0 1.05em;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-m) var(--radius-m);
+}
+
+/* ---------- A chart block's heading ---------- */
+
+.lab-head {
+  padding: 8px 8px 0 16px;
+  min-height: 36px;
+}
+
+.lab-title {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+}
+
+/* ---------- Charts ---------- */
+
+.lab-view {
+  padding: 2px 14px 14px;
+}
+
+.lab-caption,
+.lab-legend {
+  min-height: 18px;
+  margin: 0 2px 6px;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+.lab-caption:empty {
+  display: none;
+}
+
+.lab-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.lab-legend-item,
+.lab-tip-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.s1 { --s: var(--series-1); }
+.s2 { --s: var(--series-2); }
+.s3 { --s: var(--series-3); }
+.s4 { --s: var(--series-4); }
+.s5 { --s: var(--series-5); }
+.s6 { --s: var(--series-6); }
+
+.lab-key {
+  flex: none;
+  display: inline-block;
+}
+
+.lab-key.box {
+  width: 9px;
+  height: 9px;
+  border-radius: 2.5px;
+  background: var(--s);
+}
+
+/* A line's key carries its pattern as well as its colour */
+.lab-key.line {
+  width: 18px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--s);
+}
+
+.lab-key.line[data-dash='1'] { background: repeating-linear-gradient(90deg, var(--s) 0 5px, transparent 5px 8px); }
+.lab-key.line[data-dash='2'] { background: repeating-linear-gradient(90deg, var(--s) 0 2px, transparent 2px 5px); }
+.lab-key.line[data-dash='3'] { background: repeating-linear-gradient(90deg, var(--s) 0 7px, transparent 7px 9px, var(--s) 9px 11px, transparent 11px 13px); }
+.lab-key.line[data-dash='4'] { background: repeating-linear-gradient(90deg, var(--s) 0 9px, transparent 9px 12px); }
+.lab-key.line[data-dash='5'] { background: repeating-linear-gradient(90deg, var(--s) 0 2px, transparent 2px 4px); }
+
+.lab-plot {
+  position: relative;
+  border-radius: var(--radius-s);
+  touch-action: pan-y;
+}
+
+.lab-svg {
+  display: block;
+  overflow: visible;
+  font-family: var(--font-ui);
+}
+
+.lab-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.lab-axis {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.lab-tick,
+.lab-axis-title,
+.lab-value {
+  font-size: 11px;
+  fill: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.lab-tick.lab-cat,
+.lab-value {
+  font-size: 12px;
+  fill: var(--ink-soft);
+}
+
+.lab-mark {
+  fill: var(--s);
+}
+
+.lab-mark.on {
+  filter: brightness(1.12) saturate(1.05);
+}
+
+.lab-line {
+  fill: none;
+  stroke: var(--s);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.lab-dot {
+  fill: var(--s);
+  stroke: var(--bg-raised);
+  stroke-width: 2;
+}
+
+.lab-point {
+  fill-opacity: 0.82;
+  stroke-width: 1.5;
+}
+
+.lab-band {
+  fill: var(--bg-hover);
+}
+
+.lab-cross {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.lab-ring {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+
+.lab-tip {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  gap: 2px;
+  min-width: 104px;
+  padding: 7px 10px 8px;
+  border-radius: 8px;
+  background: var(--bg-raised);
+  box-shadow: var(--pop-shadow);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.lab-tip-x {
+  color: var(--ink-muted);
+}
+
+.lab-tip-row {
+  display: flex;
+}
+
+.lab-tip-name {
+  color: var(--ink-soft);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lab-tip-value {
+  margin-left: auto;
+  padding-left: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* One number: shown as a number */
+.lab-figure {
+  padding: 10px 2px 2px;
+}
+
+.lab-figure-value {
+  font-size: 40px;
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.022em;
+  color: var(--ink);
+}
+
+.lab-figure-label {
+  margin-top: 5px;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+/* A narrow tutor panel: the engine note gives way before the controls do */
+@container (max-width: 340px) {
+  .lab-engine {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lab-result {
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .lab-mark,
+  .lab-dot,
+  .lab-key.box {
+    forced-color-adjust: none;
+  }
+}
+
+/* Code colours for the query: few, and from the theme */
+.lab-block pre.lab-hl {
+  color: var(--ink);
+}
+
+.lab-hl .hljs-keyword,
+.lab-hl .hljs-operator {
+  color: var(--accent);
+}
+
+.lab-hl .hljs-string {
+  color: var(--warn);
+}
+
+.lab-hl .hljs-number,
+.lab-hl .hljs-literal {
+  color: var(--info);
+}
+
+.lab-hl .hljs-comment {
+  color: var(--ink-muted);
+}

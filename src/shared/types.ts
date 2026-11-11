@@ -148,6 +148,8 @@ export interface ChatRequest {
   web?: boolean
   /** Save this exchange to a stored conversation (created on first use) and build history from it */
   chatId?: string
+  /** Which data lab (a small SQLite with sample data) run_sql uses: a lesson passes its own, a conversation uses its chatId */
+  labId?: string
   /** A terminal the tutor can read (and, in the Linux lab, type into) */
   terminalId?: string
   /** A system design canvas (vault path) the tutor can read and draw on */
@@ -302,7 +304,7 @@ export interface OutlineDraftRequest {
 
 export interface AgentStep {
   id: string
-  kind: 'search_notes' | 'read_note' | 'web_search' | 'read_webpage' | 'delegate' | 'helper' | 'run_code' | 'remember' | 'terminal' | 'canvas' | 'metabase'
+  kind: 'search_notes' | 'read_note' | 'web_search' | 'read_webpage' | 'delegate' | 'helper' | 'run_code' | 'run_sql' | 'remember' | 'terminal' | 'canvas' | 'metabase'
   label: string
   detail?: string
   status: 'running' | 'done' | 'error'
@@ -798,6 +800,13 @@ export interface TideApi {
   exam: {
     generate(scope: ChatScope, topic: string, opts: ExamOptions): Promise<ExamPaper>
     mark(question: ExamQuestion, partIndex: number, answer: string, images: string[]): Promise<ExamMark>
+  }
+  /** The data lab: a small SQLite with sample data, one per conversation or lesson (the id), in memory on this Mac */
+  lab: {
+    query(id: string, sql: string): Promise<import('./lab').LabResult>
+    schema(id: string): Promise<import('./lab').LabTable[]>
+    /** Throws away whatever was changed and puts the sample data back */
+    reset(id: string): Promise<void>
   }
   runner: {
     run(language: string, code: string, stdin?: string): Promise<RunResult>

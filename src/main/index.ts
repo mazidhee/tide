@@ -43,6 +43,7 @@ import {
   getMastery, getLibraryTopics, getLibraryStatus, onPathMoved, setLibraryTopics, setLibraryStatus, clearCoverImage, logFocus, focusLog, focusTime, invalidateGraph } from './learn'
 import { importFile, libraryThumb, saveUrl } from './library'
 import { getHighlights, saveHighlights } from './highlights'
+import { labQuery, labReset, labSchema } from './lab'
 import { librariesStatus, mathStatus, runCode, runProject, setupLibraries, setupMath } from './runner'
 import { searchStatus, setupSearch, stopSearch, wakeSearch } from './websearch'
 import { applySpeedups, ensureModelServer, serverReady, speedStatus, tuneModelServer } from './modelServer'
@@ -473,6 +474,9 @@ function registerIpc() {
   handle('goals:save', (goals: Parameters<typeof saveGoals>[0]) => saveGoals(goals))
   handle('exam:generate', (scope: ChatScope, topic: string, opts: Parameters<typeof generateExam>[2]) => generateExam(scope, topic, opts))
   handle('exam:mark', (q: Parameters<typeof markPart>[0], i: number, answer: string, images: string[]) => markPart(q, i, answer, images))
+  handle('lab:query', (id: string, sql: string) => labQuery(String(id ?? ''), String(sql ?? '')))
+  handle('lab:schema', (id: string) => labSchema(String(id ?? '')))
+  handle('lab:reset', (id: string) => labReset(String(id ?? '')))
   handle('runner:run', (language: string, code: string, stdin?: string) => runCode(language, code, stdin))
   // A link that arrived before the window was ready is picked up once, when the app has loaded
   handle('app:pendingLink', () => {

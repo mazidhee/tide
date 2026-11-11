@@ -75,6 +75,8 @@ const inFocusWindow = /[#&]focus=/.test(window.location.hash)
 
 export function SessionView({ mode, scope, topic, options, initialTurns, view }: { mode: SessionMode; scope: ChatScope; topic: string; options?: SessionSetup['options']; initialTurns?: { role: 'user' | 'assistant'; content: string }[]; view?: View }) {
   const ongoingKey = view ? sessionKey(view as { kind: string; mode?: string; topic?: string; nonce?: number }) : null
+  // The lesson's data lab: the tutor's run_sql and the queries you run in the lesson share it
+  const labId = useRef(`lesson:${ongoingKey ?? uid()}`)
   const app = useApp()
   const [turns, setTurns] = useState<Turn[]>([])
   const [busy, setBusy] = useState(false)
@@ -224,7 +226,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         const last = messages[messages.length - 1]
         messages[messages.length - 1] = { ...last, content: `(Time left: ${clock.left() || timed} of ${timed} minutes)\n${last.content}` }
       }
-      await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setupRef.current), canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, engine: engineRef.current })
+      await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setupRef.current), labId: labId.current, canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, engine: engineRef.current })
     },
     [scope, setup, web, timed, clock, mode]
   )
@@ -890,7 +892,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
 
       <div className={withNotes ? 'session-split' : 'session-solo'}>
       <div className="doc-scroll session-scroll">
-        <div className="session-column">
+        <div className="session-column" data-lab={labId.current}>
           {(toRead.length > 0 || found.length > 0 || !!pack?.sources.length) && (
             <div className="s-read" aria-label="Read alongside">
               <Icon name="book" size={13} />
@@ -979,7 +981,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   <ul className="work-log">
                     {t.steps.map((s) => (
                       <li key={s.id} className={`step ${s.status}${s.depth ? ' nested' : ''}`}>
-                        {s.status === 'running' ? <span className="spinner" /> : <Icon name={s.kind === 'web_search' ? 'globe' : s.kind === 'read_webpage' ? 'external' : s.kind === 'delegate' ? 'agents' : s.kind === 'run_code' ? 'terminal' : 'search'} size={13} />}
+                        {s.status === 'running' ? <span className="spinner" /> : <Icon name={s.kind === 'web_search' ? 'globe' : s.kind === 'read_webpage' ? 'external' : s.kind === 'delegate' ? 'agents' : s.kind === 'run_code' || s.kind === 'run_sql' ? 'terminal' : 'search'} size={13} />}
                         <span className="step-label">{s.label}</span>
                       </li>
                     ))}

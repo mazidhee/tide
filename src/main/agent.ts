@@ -33,6 +33,7 @@ import { findImages } from './images'
 import { readText, writeText } from './vault'
 import { applyCanvasOps, describeCanvas, parseCanvas, serializeCanvas } from '@shared/canvas'
 import { retrieve } from './ai'
+import { runSqlTool } from './lab'
 import { runCode } from './runner'
 import { addMemory, forgetMatching, memoryPrompt } from './memory'
 import { fitHistory } from '@shared/context'
@@ -60,6 +61,7 @@ You can call tools. Use them when they help:
 - web_search / read_webpage: for facts, explanations or examples their notes don't cover. Search, then read the best page before relying on it. Your training data is out of date: for anything that changes (prices, rates, laws and regulation, product versions, companies, markets, crypto, news, recent research), search with when set to "year" or "month" instead of answering from memory.
 - search_papers: research papers on arXiv, for machine learning, statistics, economics, finance and computer science. Read a paper with read_webpage on its link.
 - run_code: run Python or JavaScript in a sandbox. Use it to test the student's code on real cases (including edge cases) before you judge it, and to check maths: with Python and SymPy (from sympy import *) verify each algebra or calculus step before you call it right or wrong, and name the exact line that fails.
+- run_sql: run SQL on a small lab database (SQLite, with sample shop and product-analytics data) kept for this conversation. Run every query before you show it, show queries as \`\`\`sql blocks (the student can run and change them there), and draw a result with a \`\`\`chart block holding JSON: {"sql": "...", "type": "bar" | "line" | "scatter" (optional), "title": "..."}. The engine is SQLite: when the topic is another system (BigQuery, Snowflake, a BI tool), say so and name the differences that matter, checked in its official documentation.
 - remember: when the student tells you something lasting about themselves (a goal or deadline, their background, what they find hard, how they like to learn), save it as one short sentence in the third person ("Is preparing for Bloomberg interviews in spring 2027"). Don't save facts from their notes, passing questions, or things already in what you remember. When they say "remember that…", always save it.
 - forget: when they ask you to forget something, or tell you it's no longer true.
 - things_assign / things_tasks / things_feedback (only when connected): the student's to-do app, Things 4, which renders Markdown. Set real work between sessions: a quick task, an assignment, a test (an exam in Tide) or a take-home problem to think through. Write a proper brief (## Goal, ## What to do, ## Deliverable, ## How it will be checked, ## Read) specific to what you've been teaching, give steps and a due date, and point "open" at the right place in Tide (an exam or quiz on their notebook, the note to read, a drill). Ask before setting more than two at once. Use things_tasks (with_notes to read answers they wrote in a task) to see what's done or overdue and adapt; mark their work with things_feedback.
@@ -222,6 +224,13 @@ const CODE_TOOL = tool(
   'Run Python, JavaScript, C or C++ in a sandbox (no network, no files). Use it for any exact calculation (large numbers, sequences, probabilities, algebra) rather than working it out in your head, and to run a code example before you show its output. Returns stdout, stderr and the exit code. Python has SymPy. C and C++ are compiled with warnings and an undefined-behaviour checker, so their messages are worth showing.',
   { language: { type: 'string', enum: ['python', 'javascript', 'c', 'cpp'] }, code: { type: 'string' }, stdin: { type: 'string' } },
   ['language', 'code']
+)
+
+const SQL_TOOL = tool(
+  'run_sql',
+  "Run SQL on this conversation's data lab: SQLite with sample data (a shop: customers, products, orders, order_items; product analytics: users, events). Use it to run every query before you show it and to check the student's queries. Several statements may be given; the last result comes back as a table (the first 30 rows), with the row count and the time, or SQLite's error message.",
+  { sql: { type: 'string' } },
+  ['sql']
 )
 
 const DELEGATE_TOOL = tool(
@@ -809,6 +818,8 @@ interface LoopContext {
   web: boolean
   /** Conversation being answered, so memories can point back to it */
   chatId?: string
+  /** Which data lab run_sql uses */
+  labId?: string
   /** Terminal attached to this conversation */
   terminalId?: string
   /** System design canvas (a vault path) the tutor can read and draw on */
@@ -1238,6 +1249,15 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     return `exit code: ${r.exitCode}${r.timedOut ? ' (timed out after 10 s)' : ''}\nstdout:\n${clip(r.stdout, 4000) || '(empty)'}\nstderr:\n${clip(r.stderr, 2000) || '(empty)'}`
   }
 
+  if (call.name === 'run_sql') {
+    const sql = String(args.sql ?? '')
+    const firstLine = sql.split('\n').find((l) => l.trim() && !l.trim().startsWith('--'))?.trim() ?? ''
+    const id = ctx.step({ kind: 'run_sql', label: `Running SQL${firstLine ? `: ${firstLine.slice(0, 60)}` : ''}`, status: 'running', depth })
+    const r = runSqlTool(ctx.labId ?? ctx.chatId ?? 'scratch', sql)
+    ctx.updateStep(id, { status: r.ok ? 'done' : 'error', detail: r.detail })
+    return clip(r.text, TOOL_TEXT_LIMIT)
+  }
+
   if (call.name === 'delegate' && depth === 0) {
     const tasks = (Array.isArray(args.tasks) ? args.tasks : []).map(String).filter(Boolean).slice(0, MAX_HELPERS)
     if (!tasks.length) return 'No tasks were given.'
@@ -1275,11 +1295,12 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
  * of the prompt's start, so if a warm-up's list differs by one tool, nothing it cached is ever reused.
  */
 function toolSet(o: { top: boolean; web: boolean; focused: boolean; things: boolean; metabase?: boolean; helpers?: boolean; terminal?: unknown[]; canvas?: unknown[]; lean?: boolean }): unknown[] {
-  if (o.lean) return [CODE_TOOL]
+  if (o.lean) return [CODE_TOOL, SQL_TOOL]
   const images = (o.web || o.focused) && getSettings().ai.webSearch?.provider !== 'off'
   return [
     ...NOTE_TOOLS,
     CODE_TOOL,
+    SQL_TOOL,
     ...(images ? [IMAGE_TOOL] : []),
     ...(o.top ? [STUDY_PLAN] : []),
     ...(o.terminal ?? []),
@@ -1445,7 +1466,7 @@ export async function agentComplete(messages: ApiMessage[], system: string, allo
   // Only the code tool: marking needs maths checks, not note or web lookups
   for (let step = 0; step < 4; step++) {
     const final = step === 3
-    const { text, calls } = await streamTurn(all, final ? [] : [CODE_TOOL], controller.signal, () => {}, ctx)
+    const { text, calls } = await streamTurn(all, final ? [] : [CODE_TOOL, SQL_TOOL], controller.signal, () => {}, ctx)
     if (!calls.length) return text
     all.push({ role: 'assistant', content: text || null, tool_calls: calls.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.arguments } })) })
     for (const call of calls) all.push({ role: 'tool', tool_call_id: call.id, name: call.name, content: await runTool(call, ctx, 1) })
@@ -1630,6 +1651,7 @@ async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, sign
     sources,
     web: req.web !== false,
     chatId: req.chatId,
+    labId: req.labId ?? req.chatId,
     terminalId: req.terminalId,
     canvasPath: req.canvasPath,
     focused: !!req.instructions,
