@@ -333,11 +333,11 @@ export function recap(r: ReadingRecord, today = new Date().toISOString().slice(0
   const parts = [`You stopped at ${r.reached ?? locLabel(r.position)} (${locLabel(r.position)})${when}.`]
   for (const [section, entries] of Object.entries(r.sections)) {
     if (!entries.length || section === 'Open questions') continue
-    const names = entries.slice(-6).map((e) => e.name)
+    const names = entries.slice(-6).map((e) => e.name.replace(/[.?!]+$/, ''))
     parts.push(`${section}: ${names.join(', ')}${entries.length > 6 ? `, and ${entries.length - 6} more` : ''}.`)
   }
   const open = r.sections['Open questions'] ?? []
-  if (open.length) parts.push(`Still open: ${open[open.length - 1].name}${open[open.length - 1].note ? ` — ${open[open.length - 1].note}` : ''}.`)
+  if (open.length) parts.push(`Still open: ${open[open.length - 1].name}${open[open.length - 1].note ? ` (${open[open.length - 1].note.replace(/[.]+$/, '')})` : ''}.`)
   if (last) parts.push(`Last time: ${last.text}`)
   return parts.join(' ')
 }

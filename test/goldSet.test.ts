@@ -71,8 +71,9 @@ const fails = (g: GoldExample, part: string | RegExp) => expect(validateGold(g).
 
 describe('the held-out rule', () => {
   it('sets its thresholds above what the benchmark\'s own scenarios share with each other', () => {
-    // The explain-from-memory openings all repeat one sentence the lesson's instructions dictate; the gold set has no such lessons
-    const c = calibrate(SCENARIOS.filter((s) => s.situation !== 'recall-open'))
+    // The explain-from-memory openings all repeat one sentence the lesson's instructions dictate; the gold set has no such lessons.
+    // Close readings likewise open with the discussion's own first question (shared/closeReading), written by the app, not the model
+    const c = calibrate(SCENARIOS.filter((s) => s.situation !== 'recall-open' && !s.discuss))
     expect(c.wording).toBeLessThan(THRESHOLDS.wording)
     expect(c.wording).toBeGreaterThan(THRESHOLDS.wording / 2) // not set idly high: the threshold is within a factor of two of chance
     expect(c.wordingWhole).toBeLessThan(THRESHOLDS.wordingWhole)

@@ -41,7 +41,10 @@ export function ReadTogetherPanel({ path, current, onChapter, onGo }: { path: st
     setTurns([])
     setOrientation(null)
   }, [current])
-  useEffect(() => endRef.current?.scrollIntoView({ block: 'end' }), [turns.length, busy])
+  useEffect(() => {
+    // Braced: scrolling methods now return a promise, which an effect must not return
+    endRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [turns.length, busy])
 
   const run = async <T,>(label: string, job: () => Promise<T>): Promise<T | null> => {
     setBusy(label)

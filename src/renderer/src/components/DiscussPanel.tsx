@@ -44,7 +44,10 @@ export function DiscussPanel({ path, target, onGo, spoilers, readTo, onClose }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, target.passage, target.id])
 
-  useEffect(() => endRef.current?.scrollIntoView({ block: 'end' }), [d?.turns.length, busy])
+  useEffect(() => {
+    // Braced: scrolling methods now return a promise, which an effect must not return
+    endRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [d?.turns.length, busy])
 
   const send = async () => {
     if (!d || !said.trim() || busy) return
@@ -95,7 +98,12 @@ export function DiscussPanel({ path, target, onGo, spoilers, readTo, onClose }: 
         {!d && !error && <span className="spinner" />}
         {d?.turns.map((t, i) => (
           <div key={i} className={`discuss-turn ${t.role}`}>
-            <div className="discuss-who">{t.role === 'tutor' ? 'Tide' : 'You'}</div>
+            <div className="discuss-who">
+              {t.role === 'tutor' ? 'Tide' : 'You'}
+              <button className={`discuss-keep${t.kept ? ' kept' : ''}`} disabled={t.kept} onClick={() => keep(i)} title={t.kept ? 'In your notes on this book' : 'Add this turn to your notes on the book'} aria-label={t.kept ? 'In your notes' : 'Add to notes'}>
+                <Icon name={t.kept ? 'check' : 'plus'} size={12} />
+              </button>
+            </div>
             <div className="discuss-body">
               {t.role === 'learner' ? (
                 <p>{t.text}</p>
@@ -110,10 +118,6 @@ export function DiscussPanel({ path, target, onGo, spoilers, readTo, onClose }: 
                   ) : null
                 )
               )}
-              <button className={`discuss-keep${t.kept ? ' kept' : ''}`} disabled={t.kept} onClick={() => keep(i)} title="Add this turn to your notes on the book">
-                <Icon name={t.kept ? 'check' : 'plus'} size={12} />
-                {t.kept ? 'In your notes' : 'Add to notes'}
-              </button>
             </div>
           </div>
         ))}

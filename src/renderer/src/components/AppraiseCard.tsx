@@ -17,7 +17,7 @@ export function AppraiseCard({ rows, text, render }: { rows: AppraiseRow[]; text
           <li key={r.criterion} className={`lv-${r.level === 'n/a' ? 'na' : r.level}`}>
             <span className="s-appraise-crit">{r.criterion}</span>
             <span className="s-appraise-level">{LEVEL_LABEL[r.level]}</span>
-            {r.note && <span className="s-appraise-note" dangerouslySetInnerHTML={{ __html: render(r.note).replace(/^<p>|<\/p>\s*$/g, '') }} />}
+            <span className="s-appraise-note">{r.note}</span>
           </li>
         ))}
       </ul>

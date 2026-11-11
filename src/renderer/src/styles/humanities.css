@@ -249,19 +249,36 @@
 .discuss-turn.learner .discuss-body > p {
   color: var(--ink-soft);
 }
+.discuss-body .prose,
+.together .prose {
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+.discuss-body .prose p,
+.together .prose p {
+  margin: 0 0 0.55em;
+}
 .discuss-ask {
   margin-top: 6px;
-  font-weight: 500;
+}
+.discuss-ask.prose {
+  font-weight: 600;
+}
+.discuss-who {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 .discuss-keep {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
   padding: 0;
-  border: 0;
-  background: none;
-  font: 400 11.5px/1.5 var(--font-ui);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg-raised);
   color: var(--ink-muted);
   cursor: pointer;
   opacity: 0;
@@ -274,9 +291,12 @@
 }
 .discuss-keep:hover:not(:disabled) {
   color: var(--accent);
+  border-color: var(--accent);
 }
 .discuss-keep.kept {
-  color: var(--ink-soft);
+  border-color: transparent;
+  background: none;
+  color: var(--accent);
   cursor: default;
 }
 .discuss-compose {
@@ -512,6 +532,11 @@
   }
   .discuss-passage {
     font-family: var(--read);
+  }
+  .discuss-body .prose,
+  .together .prose {
+    font-size: 14.5px;
+    line-height: 1.55;
   }
   .s-appraise,
   .together-recap {
