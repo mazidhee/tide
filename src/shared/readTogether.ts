@@ -419,3 +419,6 @@ export const fallbackQuestion = (chapter: string, kind: WorkKind) =>
     : kind === 'scripture'
       ? `What in ${chapter} stood out to you, and what do you think it asks of its reader?`
       : `What did you make of ${chapter}? Pick the moment that stayed with you and say why.`
+
+/** Words that tell what comes later, whatever names they use */
+export const looksAhead = (text: string) => FUTURE.test(text)

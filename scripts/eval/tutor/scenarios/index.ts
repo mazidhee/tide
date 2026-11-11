@@ -7,5 +7,6 @@ import { DISTRIBUTED } from './distributed'
 import { MATHS } from './maths'
 import { ML } from './ml'
 import { SYSTEMS } from './systems'
+import { HUMANITIES } from './humanities'
 
-export const SCENARIOS: Scenario[] = [...SYSTEMS, ...CCPP, ...DISTRIBUTED, ...DATABASES, ...ML, ...MATHS, ...DATA_ENG]
+export const SCENARIOS: Scenario[] = [...SYSTEMS, ...CCPP, ...DISTRIBUTED, ...DATABASES, ...ML, ...MATHS, ...DATA_ENG, ...HUMANITIES]
