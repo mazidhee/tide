@@ -393,16 +393,69 @@
     overflow: hidden;
     color: var(--ink);
   }
+  button.ks-missed-q {
+    padding: 0;
+    text-align: left;
+    font: inherit;
+    color: var(--accent-text);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+  button.ks-missed-q:hover {
+    text-decoration-color: currentColor;
+  }
+  button.ks-missed-q:focus-visible,
+  .ks-missed-ask:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+    border-radius: 2px;
+  }
+  .ks-missed-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+  }
   .ks-missed-when {
     color: var(--ink-3);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
   }
+  .ks-missed-ask {
+    padding: 0;
+    font: inherit;
+    color: var(--ink-2);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .ks-missed-ask:hover {
+    color: var(--ink);
+  }
   .ks-panel-acts {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
     margin-top: 14px;
+  }
+  /* The third way in, as a quiet link, so all three sit on one line in the panel's width */
+  .ks-panel-link {
+    padding: 0 4px;
+    font: inherit;
+    color: var(--ink-2);
+    cursor: pointer;
+  }
+  .ks-panel-link:hover {
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .ks-panel-link:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+    border-radius: 4px;
   }
 
   /* ---------- Over time ---------- */

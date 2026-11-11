@@ -1,4 +1,5 @@
 import { TimeThis } from './TimeThis'
+import { passageSaying } from '../lib/passage'
 import { readyForMargin } from '@shared/lessonNotes'
 import { savePastedImage } from '../lib/pastedImages'
 import { reveal } from '../lib/scroll'
@@ -155,7 +156,8 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
   useEffect(() => {
     if (!anchor || !html || editing) return
     const id = slugify(anchor.replace(/^Page \d+$/, ''))
-    const el = id ? articleRef.current?.querySelector<HTMLElement>(`[id="${CSS.escape(id)}"]`) : null
+    // A heading by its id; else the passage that says these words (a question in a lesson's page, say)
+    const el = (id ? articleRef.current?.querySelector<HTMLElement>(`[id="${CSS.escape(id)}"]`) : null) ?? (articleRef.current ? passageSaying(articleRef.current, anchor) : null)
     if (!el) return
     requestAnimationFrame(() => {
       reveal(el)

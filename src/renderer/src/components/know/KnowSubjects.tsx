@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { since, type ConceptState, type KnowledgeView } from '@shared/knowledge'
+import { since, type ConceptState, type KnowledgeView, type MissedQuestion } from '@shared/knowledge'
 import { KIND_LABEL, kindOf, layout, syllabus, type Subject, type TopicKind } from '@shared/knowSyllabus'
 import { fadeText } from '@shared/knowTimeline'
 import { Level } from '../tide/Level'
@@ -15,6 +15,8 @@ export interface Actions {
   onLesson(c: ConceptState): void
   onCheck(c: ConceptState): void
   onReview(c: ConceptState): void
+  /** A question missed on it: the lesson moment it came from, or (with `ask`) the question asked again */
+  onMissed?(c: ConceptState, m: MissedQuestion, ask?: boolean): void
 }
 
 type Filter = 'all' | 'fading' | 'ready' | 'new'
@@ -309,9 +311,22 @@ function TopicPanel(p: {
           <h4>Missed, coming back</h4>
           <ul className="ks-missed">
             {missed.slice(0, 3).map((m, i) => (
-              <li key={i}>
-                <span className="ks-missed-q">{plain(m.prompt)}</span>
-                <span className="ks-missed-when">{m.due <= now ? 'due now' : `back ${new Date(m.due).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`}</span>
+              <li key={m.id || i}>
+                {p.actions.onMissed ? (
+                  <button className="ks-missed-q" onClick={() => p.actions.onMissed!(c, m)} title={m.page ? 'Open the lesson at this question' : 'Ask this question again'}>
+                    {plain(m.prompt)}
+                  </button>
+                ) : (
+                  <span className="ks-missed-q">{plain(m.prompt)}</span>
+                )}
+                <span className="ks-missed-side">
+                  <span className="ks-missed-when">{m.due <= now ? 'due now' : `back ${new Date(m.due).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`}</span>
+                  {p.actions.onMissed && m.page && (
+                    <button className="ks-missed-ask" onClick={() => p.actions.onMissed!(c, m, true)} aria-label={`Ask again: ${plain(m.prompt).slice(0, 80)}`}>
+                      Ask again
+                    </button>
+                  )}
+                </span>
               </li>
             ))}
           </ul>
@@ -321,11 +336,14 @@ function TopicPanel(p: {
       <div className="ks-panel-acts">
         {known ? (
           <>
-            <button className="btn small primary" onClick={() => p.actions.onReview(c)}>
+            <button className="btn small primary" onClick={() => p.actions.onReview(c)} title="Ask the questions kept on it that are due">
               Review now
             </button>
-            <button className="btn small" onClick={() => p.actions.onLesson(c)}>
-              Start a lesson
+            <button className="btn small" onClick={() => p.actions.onCheck(c)} title="A few fresh questions to see where it stands">
+              Quick check
+            </button>
+            <button className="ks-panel-link" onClick={() => p.actions.onLesson(c)}>
+              Lesson
             </button>
           </>
         ) : (
