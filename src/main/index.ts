@@ -305,6 +305,7 @@ function registerIpc() {
   handle('lessons:save', (r: Parameters<typeof saveLesson>[0]) => saveLesson(r))
   handle('lessons:list', () => listLessons())
   handle('lessons:get', (id: string) => getLesson(id))
+  handle('knowledge:view', async () => (await import('./knowledge')).knowledgeView())
   handle('curriculum:status', async () => ({ notebooks: await curriculumStatus(), error: sortError() }))
   handle('curriculum:sort', () => sortRoadmaps())
   handle('curriculum:view', (notebook: string) => curriculumView(notebook))

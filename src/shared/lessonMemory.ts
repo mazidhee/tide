@@ -26,6 +26,8 @@ export interface LessonDigest {
   open?: string
   /** How its first question went: marked, not answered, or answered without a mark */
   opening?: 'correct' | 'partial' | 'wrong' | 'stuck' | 'answered'
+  /** Every question in the order it was asked, with how it went (no mark: not answered, or not marked) */
+  asked: { prompt: string; mark?: 'correct' | 'partial' | 'wrong' | 'stuck' }[]
 }
 
 const short = (s: string, n = 150) => {
@@ -35,17 +37,23 @@ const short = (s: string, n = 150) => {
 
 export function digestLesson(r: LessonRecord): LessonDigest | null {
   if (r.mode !== 'teach' && r.mode !== 'quiz') return null
-  const d: LessonDigest = { id: r.id, topic: r.topic, when: r.updated, finished: !!r.finished, plan: [], right: 0, partly: 0, wrong: 0, missed: [], stuck: [] }
+  const d: LessonDigest = { id: r.id, topic: r.topic, when: r.updated, finished: !!r.finished, plan: [], right: 0, partly: 0, wrong: 0, missed: [], stuck: [], asked: [] }
   // The question waiting for an answer; the next reply's first mark is the mark for it
   let asked: string | undefined
   // Whether the question waiting is the lesson's first, and whether they have replied to it
   let first = true
   let replied = false
+  // The first word on a question stands: one they couldn't answer stays that when it is answered after the explanation
+  const mark = (m: NonNullable<LessonDigest['asked'][number]['mark']>) => {
+    const last = d.asked[d.asked.length - 1]
+    if (last && !last.mark) last.mark = m
+  }
   for (const t of r.turns) {
     if (t.role !== 'assistant') {
       // "I don't know", a hint, or "can you explain that again" in place of an answer
       const stuck = !!asked && STUCK.test(ownWords(t.content).replace(/^Answer:\s*/i, ''))
       if (stuck && !d.stuck.includes(short(asked!))) d.stuck.unshift(short(asked!))
+      if (stuck) mark('stuck')
       if (asked && first && !d.opening) stuck ? (d.opening = 'stuck') : (replied = true)
       continue
     }
@@ -57,6 +65,7 @@ export function digestLesson(r: LessonRecord): LessonDigest | null {
     if (asked && first && replied && !d.opening) d.opening = grade && grade.kind === 'grade' ? (grade.verdict === 'correct' ? 'correct' : grade.verdict === 'wrong' ? 'wrong' : 'partial') : 'answered'
     if (asked && (replied || d.opening)) first = false
     if (grade && grade.kind === 'grade' && asked) {
+      mark(grade.verdict === 'correct' ? 'correct' : grade.verdict === 'wrong' ? 'wrong' : 'partial')
       if (grade.verdict === 'correct') d.right++
       else {
         grade.verdict === 'wrong' ? d.wrong++ : d.partly++
@@ -65,6 +74,8 @@ export function digestLesson(r: LessonRecord): LessonDigest | null {
     }
     const ask = [...blocks].reverse().find((b) => b.kind === 'ask')
     asked = ask && ask.kind === 'ask' ? ask.prompt : grade ? undefined : asked
+    // The same question put again (after a hint or an explanation) is still that question
+    if (ask && ask.kind === 'ask' && d.asked[d.asked.length - 1]?.prompt !== short(ask.prompt)) d.asked.push({ prompt: short(ask.prompt) })
   }
   if (asked && !d.finished) d.open = short(asked)
   // Nothing was asked or planned: there is nothing to build on

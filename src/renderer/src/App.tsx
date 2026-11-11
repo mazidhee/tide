@@ -23,6 +23,8 @@ import { ExamView } from './components/ExamView'
 import { DailyView } from './components/DailyView'
 import { useFocusCompletion } from './components/FocusTimer'
 import { CoachView } from './components/CoachView'
+import { lastBrainTab } from './components/BrainTabs'
+import { KnowledgeView } from './components/KnowledgeView'
 import { LessonsView } from './components/LessonsView'
 import { ChatPage } from './components/ChatPage'
 import { NewTopicView } from './components/NewTopicView'
@@ -353,7 +355,8 @@ export default function App() {
     else main = <NoteView key={view.path} path={view.path} anchor={view.anchor} nonce={view.nonce} />
   } else if (view.kind === 'library') main = <Library />
   else if (view.kind === 'notebook') main = <NotebookView key={view.path} path={view.path} />
-  else if (view.kind === 'graph') main = <GraphView key={view.focus ?? 'all'} focus={view.focus} />
+  // Brain: what you know, or the graph. Asked for around a note, it is always the graph
+  else if (view.kind === 'graph') main = !view.focus && (view.tab ?? lastBrainTab()) === 'know' ? <KnowledgeView /> : <GraphView key={view.focus ?? 'all'} focus={view.focus} />
   else if (view.kind === 'study') main = <StudyView scope={view.scope} />
   else if (view.kind === 'daily') main = <DailyView key={view.nonce ?? 'daily'} />
   else if (view.kind === 'quiz') main = <SessionView key={JSON.stringify(view.scope)} mode="quiz" scope={view.scope} topic={scopeTopic(view.scope)} />

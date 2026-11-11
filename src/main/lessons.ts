@@ -6,6 +6,7 @@
 import { promises as fs } from 'fs'
 import { lessonMarkdown, lessonPage, summarise, type LessonRecord, type LessonSummary } from '@shared/lessonLog'
 import { digestLesson, priorLessonsNote, type LessonDigest } from '@shared/lessonMemory'
+import { knowledgeNoteFor, noteLessonKnowledge } from './knowledge'
 import { privatePath } from './projects'
 import { noteLesson, recallNote } from './recall'
 import { absPath, readText, uniquePath, writeText } from './vault'
@@ -35,6 +36,8 @@ export async function saveLesson(input: Omit<LessonRecord, 'started' | 'updated'
   await writeText(page, lessonMarkdown(record))
   // What was missed is kept for recall; never a reason for a save to fail
   await noteLesson(record).catch(() => {})
+  // And what it shows is added to the picture of what they know
+  await noteLessonKnowledge(record).catch(() => {})
   return summarise(record)
 }
 
@@ -65,6 +68,8 @@ export async function earlierLessons(topic: string, privateTurn: boolean, notId?
     const d = digestLesson(r)
     if (d) digests.push(d)
   }
-  // Questions due for recall come first: the lesson opens with one of them
-  return [recallNote(topic), priorLessonsNote(topic, digests)].filter(Boolean).join('\n\n')
+  // Questions due for recall come first: the lesson opens with one of them. Then what those lessons
+  // show, and last the wider picture: what around this topic is solid, shaky, or not yet in place
+  const known = await knowledgeNoteFor(topic, privateTurn).catch(() => '')
+  return [recallNote(topic), priorLessonsNote(topic, digests), known].filter(Boolean).join('\n\n')
 }

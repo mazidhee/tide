@@ -4,6 +4,7 @@ import type { BrainData, BrainEdgeKind, BrainEvent, BrainKind, BrainNode } from 
 import type { MasteryLevel } from '@shared/types'
 import { motionPaused } from '../lib/motion'
 import { fileTitle, useApp } from '../state'
+import { BrainTabs } from './BrainTabs'
 import { Icon } from './Icon'
 
 /** Mid-tone hues that read on light and dark backgrounds */
@@ -519,6 +520,7 @@ export function GraphView({ focus }: { focus?: string }) {
       <header className="doc-toolbar drag">
         <div className="crumbs no-drag">
           <span className="crumb current">Brain</span>
+          <BrainTabs tab="graph" />
           <span className="muted page-count">
             {noteCount} notes{counts.book ? `, ${counts.book} books` : ''}
             {counts.memory ? `, ${counts.memory} memories` : ''}

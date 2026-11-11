@@ -3,6 +3,7 @@
 //! cache rather than the app's memory, and a search takes about a millisecond.
 
 mod lab;
+mod knowledge;
 mod recall;
 
 use std::path::Path;

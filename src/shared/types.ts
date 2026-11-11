@@ -666,6 +666,10 @@ export interface TideApi {
     /** Has the cloud model check one of the tutor's replies against the lesson's sources */
     challenge(topic: string, where: string | undefined, reply: string): Promise<import('./lessonCheck').ClaimCheck & { offline?: string }>
   }
+  /** The knowledge map: every concept with how solid it is today, what is ready next, what is fading, and retention by week */
+  knowledge: {
+    view(): Promise<import('./knowledge').KnowledgeView>
+  }
   /** Free readings found for a topic; when there are none yet, they're looked up in the background */
   readings: {
     /** path: the note or folder the lesson is on, so a private project's topics are never looked up */

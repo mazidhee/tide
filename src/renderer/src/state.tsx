@@ -8,7 +8,7 @@ export type View =
   | { kind: 'file'; path: string; anchor?: string; nonce?: number }
   | { kind: 'library' }
   | { kind: 'notebook'; path: string }
-  | { kind: 'graph'; focus?: string }
+  | { kind: 'graph'; focus?: string; /** Which side of Brain: what you know, or the graph (the one last used when not said) */ tab?: 'know' | 'graph' }
   | { kind: 'study'; scope: ChatScope }
   | { kind: 'daily'; nonce?: number }
   | { kind: 'quiz'; scope: ChatScope }

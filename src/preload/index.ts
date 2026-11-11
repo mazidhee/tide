@@ -144,6 +144,9 @@ const api: TideApi = {
     get: invoke('lessons:get'),
     challenge: invoke('lessons:challenge')
   },
+  knowledge: {
+    view: invoke('knowledge:view')
+  },
   readings: {
     for: invoke('readings:for')
   },
