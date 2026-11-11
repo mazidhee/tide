@@ -70,7 +70,10 @@ describe('a SQL problem the lab’s data cannot answer', () => {
   it('falls back to the bank, then to holding it back with a note, never showing it', async () => {
     const bad = await settleSqlProblem(ILL_POSED, ILL_POSED.slice(ILL_POSED.indexOf('<ask')), io({ rewrite: async () => ILL_POSED, banked: async () => [ILL_POSED, GOOD] }))
     expect(bad.text).toContain('each customer country')
-    const none = await settleSqlProblem(ILL_POSED, ILL_POSED.slice(ILL_POSED.indexOf('<ask')), io())
+    const retired: string[] = []
+    const none = await settleSqlProblem(ILL_POSED, ILL_POSED.slice(ILL_POSED.indexOf('<ask')), io({ retire: (q) => retired.push(q) }))
+    // Never brought back by recall either
+    expect(retired[0]).toMatch(/^Write a query that returns the `category`/)
     expect(none.text).not.toContain('<ask')
     expect(none.text).toMatch(/held back/)
     expect(none.text).toContain('<continue/>')
@@ -85,18 +88,19 @@ describe('a SQL problem the lab’s data cannot answer', () => {
     expect(r.text).toContain('SELECT category, COUNT(*) FROM products')
   })
 
-  it('holds the question back while the reply streams, split anywhere', () => {
+  it('holds the question back while the reply streams, with the paragraph that states it, split anywhere', () => {
     const seen: string[] = []
     const g = holdAsks((e: ChatEvent) => e.type === 'delta' && seen.push(e.text))
-    const text = 'Here is the idea.\n\n**Pro' + 'blem 1**\n\n<as' + 'k type="code" lang="sql">Write…</ask>'
-    for (const piece of ['Here is the idea.\n\n**Pro', 'blem 1**\n\n<as', 'k type="code" lang="sql">Write…</ask>']) g.tap({ id: 't', type: 'delta', text: piece })
+    const pieces = ['Here is the idea.\n\nWrite a query that ret', 'urns each country.\n\n**Pro', 'blem 1**\n\n<as', 'k type="code" lang="sql">Write…</ask>']
+    for (const piece of pieces) g.tap({ id: 't', type: 'delta', text: piece })
     const r = g.finish()
     expect(seen.join('')).toBe('Here is the idea.\n\n')
-    expect(r.sent + r.held).toBe(text)
+    expect(r.held.startsWith('Write a query that returns each country.')).toBe(true)
+    expect(r.sent + r.held).toBe(pieces.join(''))
     const plain: string[] = []
     const g2 = holdAsks((e: ChatEvent) => e.type === 'delta' && plain.push(e.text))
-    g2.tap({ id: 't', type: 'delta', text: 'No question <' })
-    expect(g2.finish()).toEqual({ sent: 'No question ', held: '<' })
+    g2.tap({ id: 't', type: 'delta', text: 'One.\n\nTwo, still coming' })
+    expect(g2.finish()).toEqual({ sent: 'One.\n\n', held: 'Two, still coming' })
   })
 })
 
@@ -157,5 +161,24 @@ describe('a lesson’s tools', () => {
       expect(names).toContain('run_sql')
       expect(names).toContain('load_table')
     }
+  })
+})
+
+describe('the tutor’s run_sql calls', () => {
+  it('read the query even when Gemma sticks a special token to the key', async () => {
+    const { toolArgs } = await import('../src/shared/modelText')
+    expect(toolArgs('{"sql<|channel>": "SELECT 1"}')).toEqual({ sql: 'SELECT 1' })
+    expect(toolArgs('{"code": "print(1)", "language": "python"}')).toEqual({ code: 'print(1)', language: 'python' })
+    expect(toolArgs('')).toEqual({})
+    expect(() => toolArgs('{oops')).toThrow()
+  })
+
+  it('come first in a SQL lesson’s turn, except for a question in passing, a hint or the end', async () => {
+    const { looksAtLabFirst } = await import('../src/shared/sqlCheck')
+    expect(looksAtLabFirst('I want to learn GROUP BY and HAVING in SQL deeply.')).toBe(true)
+    expect(looksAtLabFirst('Answer: ```sql\nSELECT 1\n```')).toBe(true)
+    expect(looksAtLabFirst('My question: what is HAVING?')).toBe(false)
+    expect(looksAtLabFirst('[hint] (a nudge please)')).toBe(false)
+    expect(looksAtLabFirst("Let's stop here for today.")).toBe(false)
   })
 })

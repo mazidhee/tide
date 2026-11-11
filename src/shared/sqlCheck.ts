@@ -135,3 +135,12 @@ function rowsAgree(theirs: LabResult, expected: LabResult, cols: number[], order
 
 /** What a mismatch or match is reported as (the Exact `why`) */
 export const sqlWhy = (c: SqlComparison) => (c.match ? (c.why ? `The rows match the reference's, but ${c.why}.` : 'Their query returns exactly the rows the reference query returns.') : `Tide ran both queries on the lab: ${c.why}.`)
+
+/**
+ * Whether a SQL lesson's turn starts by looking at the lab (its first step a run_sql call): the
+ * opening, an answer, Go on, Tide's own notes. Not a question in passing, a hint, Show me or the end.
+ */
+export function looksAtLabFirst(said: string): boolean {
+  const t = said.trim()
+  return !/^(My question: |\[hint\]|Let's stop here)/.test(t)
+}

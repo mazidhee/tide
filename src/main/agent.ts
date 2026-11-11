@@ -37,6 +37,8 @@ import { readText, writeText } from './vault'
 import { applyCanvasOps, describeCanvas, parseCanvas, serializeCanvas } from '@shared/canvas'
 import { retrieve } from './ai'
 import { aboutSql, dataFiles, labSchemaNote, loadHint, loadTableTool, runSqlTool } from './lab'
+import { looksAtLabFirst } from '@shared/sqlCheck'
+import { toolArgs } from '@shared/modelText'
 import { isSql } from './languages'
 import { runCode } from './runner'
 import { addMemory, forgetMatching, memoryPrompt } from './memory'
@@ -587,7 +589,7 @@ function transientContext(): { transient_context?: string } {
 }
 
 /** Retries a turn once with more randomness when the model gets stuck repeating itself */
-async function streamTurn(messages: ApiMessage[], tools: unknown[], signal: AbortSignal, onText: (t: string) => void, ctx?: LoopContext) {
+async function streamTurn(messages: ApiMessage[], tools: unknown[], signal: AbortSignal, onText: (t: string) => void, ctx?: LoopContext, choice?: ToolChoice) {
   const cloud = ctx?.cloud
   if (cloud && !cloud.fellBack) {
     let wrote = false
@@ -595,7 +597,7 @@ async function streamTurn(messages: ApiMessage[], tools: unknown[], signal: Abor
       // Don't send what the provider's per-minute allowance can't take: Gemma answers at once instead
       const needed = estimateTokens(JSON.stringify(messages).length + JSON.stringify(tools).length) + CLOUD_REPLY_TOKENS
       if (!canTake(needed, cloud.target)) throw new CloudUnavailable(`The cloud model’s per-minute limit is used up for about ${secondsUntilReset(cloud.target)}s`, 'minute')
-      const turn = await streamTurnOnce(messages, tools, signal, (t) => ((wrote = true), onText(t)), 0, cloud.target, cloud.task)
+      const turn = await streamTurnOnce(messages, tools, signal, (t) => ((wrote = true), onText(t)), 0, cloud.target, cloud.task, choice)
       // For the record only (cloud.ts FailCode): a turn that came back with neither words nor a tool call
       if (!turn.text.trim() && !turn.calls.length) noteWhy(cloud.target, cloud.task, 'empty')
       return turn
@@ -608,18 +610,18 @@ async function streamTurn(messages: ApiMessage[], tools: unknown[], signal: Abor
       if (wrote) onText(RESET)
     }
   }
-  return asInteractive(() => streamTurnRetrying(messages, tools, signal, onText))
+  return asInteractive(() => streamTurnRetrying(messages, tools, signal, onText, choice))
 }
 
-async function streamTurnRetrying(messages: ApiMessage[], tools: unknown[], signal: AbortSignal, onText: (t: string) => void) {
+async function streamTurnRetrying(messages: ApiMessage[], tools: unknown[], signal: AbortSignal, onText: (t: string) => void, choice?: ToolChoice) {
   try {
-    return await streamTurnContinuing(messages, tools, signal, onText)
+    return await streamTurnContinuing(messages, tools, signal, onText, choice)
   } catch (e) {
     if (!(e instanceof LoopingError)) throw e
     // Start over, with more randomness; the window clears what it had shown
     onText(RESET)
     try {
-      return await streamTurnOnce(messages, tools, signal, onText, 0.35)
+      return await streamTurnOnce(messages, tools, signal, onText, 0.35, undefined, 'tutor', choice)
     } catch (again) {
       if (!(again instanceof LoopingError)) throw again
       // Stuck twice: keep what was said before it started repeating, rather than nothing
@@ -639,7 +641,8 @@ async function streamTurnOnce(
   onText: (t: string) => void,
   extraTemperature: number,
   target?: CloudTarget | null,
-  task: RequestKind = 'tutor'
+  task: RequestKind = 'tutor',
+  choice?: ToolChoice
 ): Promise<{ text: string; calls: ToolCall[] }> {
   const { baseUrl, apiKey, temperature } = getSettings().ai
   const controller = new AbortController()
@@ -650,7 +653,7 @@ async function streamTurnOnce(
   const model = target ? target.model : await resolveModel()
   // A cloud model gets a plain OpenAI request: none of the local server's fields, but its real token counts back
   const payload = target
-    ? { model, messages, temperature: Math.min(1, temperature + extraTemperature), stream: true, max_tokens: CLOUD_REPLY_TOKENS, stream_options: { include_usage: true }, ...(tools.length ? { tools } : {}), ...target.extra }
+    ? { model, messages, temperature: Math.min(1, temperature + extraTemperature), stream: true, max_tokens: CLOUD_REPLY_TOKENS, stream_options: { include_usage: true }, ...(tools.length ? { tools } : {}), ...(choice && tools.length ? { tool_choice: choice } : {}), ...target.extra }
     : {
         model,
         messages,
@@ -661,6 +664,7 @@ async function streamTurnOnce(
         stream_options: { include_usage: true },
         max_tokens: 3000,
         ...(tools.length ? { tools } : {}),
+        ...(choice && tools.length ? { tool_choice: choice } : {}),
         ...transientContext()
       }
   // Dev only: keep the last request so model behaviour can be replayed outside the app
@@ -780,7 +784,12 @@ async function streamTurnOnce(
 
 // ---------- The loop ----------
 
+/** A call the model must make first (OpenAI's tool_choice, which the local server honours) */
+type ToolChoice = { type: 'function'; function: { name: string } }
+
 interface LoopContext {
+  /** The tool the turn's first step must call: a SQL lesson looks at the lab's data before it sets anything */
+  firstTool?: string
   signal: AbortSignal
   sources: ContextSource[]
   emitSources(): void
@@ -908,7 +917,7 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
   try {
     // Dev only: keep the tool calls next to the last request, to see what the model actually sent
     if (process.env.TIDE_DEBUG_AI) (await import('fs')).appendFileSync(`${process.env.TIDE_DEBUG_AI}.tools`, JSON.stringify({ name: call.name, arguments: call.arguments }) + '\n')
-    args = JSON.parse(call.arguments || '{}')
+    args = toolArgs(call.arguments)
   } catch {
     return 'The tool arguments were not valid JSON.'
   }
@@ -1311,7 +1320,9 @@ async function loop(messages: ApiMessage[], ctx: LoopContext, depth: number, onT
     // start of the prompt, and the server would read it all again); any call it still makes is ignored
     const final = step === maxSteps - 1
     if (final) messages.push({ role: 'user', content: 'Now answer using what you found. Do not call any more tools.' })
-    const turn = await streamTurn(messages, tools, ctx.signal, onText, ctx)
+    // The first step of a turn that must look before it speaks (a SQL lesson: run_sql) calls that tool
+    const choice: ToolChoice | undefined = step === 0 && depth === 0 && ctx.firstTool && tools.some((t) => (t as { function?: { name?: string } }).function?.name === ctx.firstTool) ? { type: 'function', function: { name: ctx.firstTool } } : undefined
+    const turn = await streamTurn(messages, tools, ctx.signal, onText, ctx, choice)
     const text = turn.text
     const calls = final ? [] : turn.calls
     if (final && turn.calls.length && !text.trim()) {
@@ -1380,14 +1391,14 @@ export function toolHint(question: string, web: boolean): string {
  * right after a closing tag like </say> or </grade>), what it wrote so far is kept and it's asked to
  * carry on from there. The conversation so far is a cached prefix, so each pick-up is quick.
  */
-async function streamTurnContinuing(messages: ApiMessage[], tools: unknown[], signal: AbortSignal, onText: (t: string) => void) {
+async function streamTurnContinuing(messages: ApiMessage[], tools: unknown[], signal: AbortSignal, onText: (t: string) => void, choice?: ToolChoice) {
   let written = ''
   for (let i = 0; i < 4; i++) {
     const turn: ApiMessage[] = written
       ? [...messages, { role: 'assistant', content: written }, { role: 'user', content: CARRY_ON }]
       : messages
     try {
-      const out = await streamTurnOnce(turn, tools, signal, onText, i ? 0.15 : 0)
+      const out = await streamTurnOnce(turn, tools, signal, onText, i ? 0.15 : 0, undefined, 'tutor', written ? undefined : choice)
       return { text: written ? `${written}\n\n${out.text}` : out.text, calls: out.calls }
     } catch (e) {
       if (!(e instanceof StallError)) {
@@ -1699,6 +1710,11 @@ async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, sign
   // Subject hook (any-subject, src/main/subjects.ts): a toolkit the topic's words couldn't decide, and what Tide can't do for this subject
   const subject = req.session && req.instructions && userTurns <= 1 && req.topic ? await subjectContext({ topic: req.topic, scope: req.scope, instructions: req.instructions, private: !!ctx.private, web: !!ctx.web }).catch(() => '') : ''
   const assigning = thingsOn && wanted === 'assign'
+  // A SQL lesson knows the lab's tables before it writes its first query
+  const labNote = req.session && req.instructions && aboutSql(`${req.topic ?? ''} ${question}`) ? labSchemaNote(req.labId ?? req.chatId ?? 'scratch', !!ctx.private, dataFiles()) : ''
+  // ...and looks at the data with run_sql before it sets or marks anything: told to, Gemma never
+  // did (no tool call in any SQL lesson turn of the rehearsal), so the turn's first step is that call
+  if (labNote && looksAtLabFirst(String([...req.messages].reverse().find((m) => m.role === 'user')?.content ?? ''))) ctx.firstTool = 'run_sql'
   const turnContext = [
     req.voice ? voiceRules(characterById(req.voice), recentOpenings(req.messages.filter((m) => m.role === 'assistant').map((m) => String(m.content)))) : '',
     req.instructions ? '' : toolHint(question, ctx.web),
@@ -1716,8 +1732,7 @@ async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, sign
     req.attachment ? `The student selected this passage:\n"""\n${req.attachment}\n"""` : '',
     before,
     subject,
-    // A SQL lesson knows the lab's tables before it writes its first query
-    req.session && req.instructions && aboutSql(`${req.topic ?? ''} ${question}`) ? labSchemaNote(req.labId ?? req.chatId ?? 'scratch', !!ctx.private, dataFiles()) : '',
+    labNote,
     // Asked to load one of their files: which tool, and the path (in a lesson too)
     loadHint(question, /\.(csv|tsv)\b|\b(csv|tsv|my data|spreadsheet)\b/i.test(question) ? dataFiles() : []),
     own.length ? `Where this is covered in books the student owns (they open in Tide; point them to the pages when it helps, as a markdown link like [${readingLabel(own[0])}](/${own[0].path.split('/').map(encodeURIComponent).join('/')}#page=${own[0].from})): ${own.map(readingLabel).join('; ')}` : '',

@@ -44,50 +44,48 @@ export function sqlExact(req: ChatRequest): Exact | null {
 }
 
 /**
- * Holds back a SQL lesson's question while the reply streams (from "**Problem n" or "<ask"), so a
- * problem the data can't answer is never on screen. `finish` gives what was shown and what is held.
+ * Holds back a SQL lesson's question while the reply streams, so a problem the data can't answer is
+ * never on screen: text goes out a paragraph at a time, and from the paragraph where "**Problem n"
+ * or "<ask" starts (the problem's statement often comes just before its ask) everything is held.
+ * `finish` gives what was shown and what is held.
  */
 export function holdAsks(emit: (e: ChatEvent) => void) {
   const START = /<ask\b|\*\*\s*Problem\s+\d+/i
+  const STATES = /\b(write|give|fix|complete)\b[^.?\n]{0,60}\bquer(y|ies)\b/i
   let sent = ''
-  let carry = ''
-  let held = ''
+  let pending = ''
   let holding = false
   return {
     tap(e: ChatEvent) {
       if (e.type === 'reset') {
-        sent = carry = held = ''
+        sent = pending = ''
         holding = false
         return emit(e)
       }
       if (e.type !== 'delta') return emit(e)
-      if (holding) {
-        held += e.text
-        return
-      }
-      const buf = carry + e.text
-      const m = START.exec(buf)
-      if (m) {
-        const before = buf.slice(0, m.index)
-        if (before) emit({ ...e, text: before })
-        sent += before
-        held = buf.slice(m.index)
-        carry = ''
+      pending += e.text
+      if (holding) return
+      const m = START.exec(pending)
+      // Up to the last paragraph break before the question (or before the text still arriving)
+      let upTo = m ? pending.lastIndexOf('\n\n', m.index) : pending.lastIndexOf('\n\n')
+      if (m) holding = true
+      // A finished paragraph that asks for a query is the problem's statement: held from there
+      const paragraphs = upTo > 0 ? pending.slice(0, upTo).split(/\n\n/) : []
+      const at = paragraphs.findIndex((p) => STATES.test(p))
+      if (at >= 0) {
         holding = true
-        return
+        upTo = paragraphs.slice(0, at).join('\n\n').length
       }
-      // A tail that could be the start of "<ask" or "**Problem 1" waits for the next piece
-      const tail = /(<a?s?k?|\*\*?\s*(P(r(o(b(l(e(m\s*)?)?)?)?)?)?)?)$/i.exec(buf)
-      const keep = tail && tail[0] ? tail[0].length : 0
-      const out = buf.slice(0, buf.length - keep)
-      if (out) emit({ ...e, text: out })
-      sent += out
-      carry = buf.slice(buf.length - keep)
+      if (upTo > 0) {
+        const out = pending.slice(0, upTo + 2)
+        emit({ ...e, text: out })
+        sent += out
+        pending = pending.slice(upTo + 2)
+      }
     },
     finish(): { sent: string; held: string } {
-      const h = held + (holding ? '' : carry)
-      const r = { sent, held: h }
-      sent = carry = held = ''
+      const r = { sent, held: pending }
+      sent = pending = ''
       holding = false
       return r
     }
@@ -109,6 +107,8 @@ export interface SqlGateIO {
   /** Checked SQL problems from the topic's problem bank, as they would be set, in order of preference */
   banked: () => Promise<string[]>
   step: (label: string, status: 'running' | 'done') => void
+  /** A question found broken is never brought back by recall */
+  retire?: (question: string) => void
 }
 
 /**
@@ -133,16 +133,26 @@ export async function settleSqlProblem(full: string, held: string, io: SqlGateIO
     return why ? { why } : { ok: part + add }
   }
   const first = await vet(full, held)
+  if (process.env.TIDE_DEBUG_SQL) console.log('[sql-gate] first', JSON.stringify(first))
   if (!first) return { text: held }
   if ('ok' in first) return { text: first.ok }
+  const asked = sqlProblem(full, solutionOf(full))?.question
+  if (asked) io.retire?.(asked)
   io.step('The lab’s data can’t answer that problem: setting another', 'running')
   let why = first.why
   if (!io.signal.aborted) {
     const again = await io.rewrite(why).catch(() => '')
     const second = again ? await vet(again, again) : null
+    if (process.env.TIDE_DEBUG_SQL) console.log('[sql-gate] rewrite', JSON.stringify({ again, second }))
     if (second && 'ok' in second) {
       io.step('Set a problem the lab’s data answers', 'done')
       return { text: `\n\n${second.ok.trim()}`, replaced: first.why }
+    }
+    // A question that isn't a query to write (the tutor asked something else instead) needs no lab
+    const asked = !second ? askedIn(again) : ''
+    if (asked) {
+      io.step('Set a different question', 'done')
+      return { text: `\n\n${asked}`, replaced: first.why }
     }
     if (second) why = second.why
   }
@@ -156,4 +166,14 @@ export async function settleSqlProblem(full: string, held: string, io: SqlGateIO
   }
   io.step('Held back a problem the lab’s data can’t answer', 'done')
   return { text: `\n\n_Tide held back the problem written here: ${first.why}. Press Go on for the next step._\n\n<continue/>`, replaced: why }
+}
+
+/** A reply that asks something: as written when it has its <ask>, or with its closing question put in one */
+export function askedIn(reply: string): string {
+  const t = reply.trim()
+  if (/<ask\b[\s\S]*<\/ask>/i.test(t)) return t
+  const paras = t.split(/\n\s*\n/)
+  const last = paras[paras.length - 1]?.trim() ?? ''
+  if (!last.endsWith('?')) return ''
+  return [...paras.slice(0, -1), `<ask type="short">${last}</ask>`].join('\n\n')
 }

@@ -619,7 +619,7 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
         if (held && !controller.signal.aborted) {
           const rewrite = async (why: string) => {
             let again = ''
-            const messages: ChatMessage[] = [...req.messages, { role: 'assistant', content: reply }, { role: 'user', content: `(Tide: the problem you just set can't be used: ${why}. Write only a new, well-posed problem on the same idea that the lab's tables answer with real, non-NULL values: first run your reference query with run_sql and check its rows, then write the problem, put that exact query in a <solution> as a \`\`\`sql block, and end with the question in an <ask type="code" lang="sql"> tag. No feedback, no preamble.)` }]
+            const messages: ChatMessage[] = [...req.messages, { role: 'assistant', content: reply }, { role: 'user', content: `(Tide: the problem you just set can't be used: ${why}. Don't ask it again in any form (not even as the recall question): pick columns that are filled on the same rows. Write only a new, well-posed problem on the same idea that the lab's tables answer with real, non-NULL values: first run your reference query with run_sql and check its rows, then write the problem, put that exact query in a <solution> as a \`\`\`sql block, and end with the question in an <ask type="code" lang="sql"> tag. No feedback, no preamble.)` }]
             await agentChat({ ...req, messages }, (e) => {
               if (e.type === 'delta') again += e.text
               else if (e.type === 'reset') again = ''
@@ -633,7 +633,8 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
             return all.filter((p) => !reply.includes(p.text.slice(0, 80))).slice(0, 6).map((p) => renderProblem(p, 1, 'same'))
           }
           const step = (label: string, status: 'running' | 'done') => emit({ id: req.id, type: 'step', step: { id: 'sql-problem', kind: 'run_sql', label, status, depth: 0 } })
-          const r = await sqlMod.settleSqlProblem(reply, held, { lab: sqlMod.labOf(req), signal: controller.signal, ask: (prompt, system) => complete(prompt, system, controller.signal, 'interactive', 'other'), rewrite, banked, step })
+          const { retireRecall } = await import('./recall')
+          const r = await sqlMod.settleSqlProblem(reply, held, { lab: sqlMod.labOf(req), signal: controller.signal, ask: (prompt, system) => complete(prompt, system, controller.signal, 'interactive', 'other'), rewrite, banked, step, retire: (q) => void retireRecall(q) })
           settled = r.text
         }
         if (settled) downstream({ id: req.id, type: 'delta', text: settled })
