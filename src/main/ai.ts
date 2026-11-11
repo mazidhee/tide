@@ -558,7 +558,20 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
   // the model on this Mac reads it in the background, so your next message doesn't wait for that
   const asked = req
   let shown = ''
+  // Show me pressed while a question waits: the picture is held until it's checked against that
+  // question's hidden solution (shared/showMe), so the answer is never drawn for them
+  const { waitingQuestion, givesAway, setupOnlyNote, WITHHELD } = await import('@shared/showMe')
+  const { SHOW_ME } = await import('@shared/session')
+  const lastSaid = String([...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '')
+  const { asksToSee } = await import('@shared/showMe')
+  const waiting = req.session && (lastSaid.startsWith(SHOW_ME.slice(0, 60)) || asksToSee(lastSaid)) ? waitingQuestion(req.messages.slice(0, -1)) : null
+  let holdShow = !!waiting
+  let heldShow = ''
   const emit = (e: ChatEvent) => {
+    if (holdShow && (e.type === 'delta' || e.type === 'reset')) {
+      heldShow = e.type === 'delta' ? heldShow + e.text : ''
+      return
+    }
     if (e.type === 'delta') shown += e.text
     else if (e.type === 'reset') shown = ''
     else if (e.type === 'done' && !controller.signal.aborted && answeredHere(req.id)) {
@@ -581,14 +594,20 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
         const { exactNote } = await import('@shared/answerCheck')
         const last = req.messages[req.messages.length - 1]
         req = { ...req, messages: [...req.messages.slice(0, -1), { ...last, content: `${String(last.content)}\n\n${exactNote(exact)}` }] }
-        emit({ id: req.id, type: 'step', step: { id: 'exact', kind: 'helper', label: exact.result === 'match' ? 'Checked your final answer: it’s right' : 'Checked your final answer: it isn’t right yet', status: 'done', depth: 0 } })
+        const label = exact.kind === 'sql' ? (exact.result === 'match' ? 'Ran your query beside the reference: the same rows' : 'Ran your query beside the reference: the rows differ') : exact.result === 'match' ? 'Checked your final answer: it’s right' : 'Checked your final answer: it isn’t right yet'
+        emit({ id: req.id, type: 'step', step: { id: 'exact', kind: 'helper', label, status: 'done', depth: 0 } })
       }
       // [source-led] A step taught from a source (main/sourceLed.ts): the reading and the tutor's rules
       // for it ride with this turn, Tide puts the reading into the reply as it streams (`out`), and the
       // turn ends at a new plan whose first step has a reading (`led.signal`). Null: nothing changes.
       const led = req.session ? await import('./sourceLed').then((m) => m.sourceLedTurn(req)).catch(() => null) : null
       if (led) req = led.request
-      const out = led ? led.tap(emit) : emit
+      // A SQL lesson's question is held back while it's written, and shown only once its reference
+      // query has given a real answer on the lesson's lab (main/sqlCheck)
+      const sqlMod = req.session ? await import('./sqlCheck') : null
+      const downstream = led ? led.tap(emit) : emit
+      const gate = sqlMod?.sqlLesson(req) ? sqlMod.holdAsks(downstream) : null
+      const out = gate ? gate.tap : downstream
       const upTo = led ? AbortSignal.any([controller.signal, led.signal]) : controller.signal
       const lesson = req.session && !led?.teaching ? await lessonTurn(req) : null
       let reply = ''
@@ -606,6 +625,52 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
         } catch (e) {
           if (!led?.signal.aborted || controller.signal.aborted) throw e
         }
+      }
+      if (gate && sqlMod) {
+        const { sent, held } = gate.finish()
+        let settled = held
+        if (held && !controller.signal.aborted) {
+          const rewrite = async (why: string) => {
+            let again = ''
+            const messages: ChatMessage[] = [...req.messages, { role: 'assistant', content: reply }, { role: 'user', content: `(Tide: the problem you just set can't be used: ${why}. Don't ask it again in any form (not even as the recall question): pick columns that are filled on the same rows. Write only a new, well-posed problem on the same idea that the lab's tables answer with real, non-NULL values: first run your reference query with run_sql and check its rows, then write the problem, put that exact query in a <solution> as a \`\`\`sql block, and end with the question in an <ask type="code" lang="sql"> tag. No feedback, no preamble.)` }]
+            await agentChat({ ...req, messages }, (e) => {
+              if (e.type === 'delta') again += e.text
+              else if (e.type === 'reset') again = ''
+              else if (e.type !== 'done' && e.type !== 'error') emit(e)
+            }, controller.signal).catch(() => {})
+            return again
+          }
+          const banked = async () => {
+            const { readBank } = await import('./bank')
+            const all = await readBank(req.topic ?? '').catch(() => [])
+            return all.filter((p) => !reply.includes(p.text.slice(0, 80))).slice(0, 6).map((p) => renderProblem(p, 1, 'same'))
+          }
+          const step = (label: string, status: 'running' | 'done') => emit({ id: req.id, type: 'step', step: { id: 'sql-problem', kind: 'run_sql', label, status, depth: 0 } })
+          const { retireRecall } = await import('./recall')
+          const r = await sqlMod.settleSqlProblem(reply, held, { lab: sqlMod.labOf(req), signal: controller.signal, ask: (prompt, system) => complete(prompt, system, controller.signal, 'interactive', 'other'), rewrite, banked, step, retire: (q) => void retireRecall(q) })
+          settled = r.text
+        }
+        if (settled) downstream({ id: req.id, type: 'delta', text: settled })
+        reply = sent + settled
+      }
+      if (waiting && holdShow) {
+        holdShow = false
+        const what = givesAway(heldShow, waiting)
+        let picture = heldShow
+        if (what && !controller.signal.aborted) {
+          const step = (label: string, status: 'running' | 'done') => emit({ id: req.id, type: 'step', step: { id: 'show-setup', kind: 'helper', label, status, depth: 0 } })
+          step('That picture showed the answer you are working on: drawing the setup only', 'running')
+          let again = ''
+          await agentChat({ ...req, messages: [...req.messages, { role: 'assistant', content: heldShow }, { role: 'user', content: setupOnlyNote(what) }] }, (e) => {
+            if (e.type === 'delta') again += e.text
+            else if (e.type === 'reset') again = ''
+            else if (e.type !== 'done' && e.type !== 'error') emit(e)
+          }, controller.signal).catch(() => {})
+          picture = again.trim() && !givesAway(again, waiting) ? again : WITHHELD
+          step(picture === WITHHELD ? 'Held the picture back: it gave the answer away' : 'Drew the setup only', 'done')
+        }
+        emit({ id: req.id, type: 'delta', text: picture })
+        reply = picture
       }
       // [source-led] What the checks read is the tutor's own words, without the source's
       if (led && !controller.signal.aborted) reply = led.settle(shown, emit)
@@ -673,6 +738,24 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
               await checkLessonReply(req, again, emit, controller.signal, ask, true).catch(() => null)
             }
           }
+        }
+        // A code question set without hidden tests gets them, from its reference solution (main/codeTests)
+        const { untestedCodeAsk, testNames } = await import('@shared/codeTests')
+        if (!controller.signal.aborted && untestedCodeAsk(shown)) {
+          const { testsFor } = await import('./codeTests')
+          const { runCode } = await import('./runner')
+          const step = (label: string, status: 'running' | 'done') => emit({ id: req.id, type: 'step', step: { id: 'code-tests', kind: 'run_code', label, status, depth: 0 } })
+          step('Writing hidden tests from the reference solution', 'running')
+          const made = await testsFor(shown, { ask: (prompt, system) => complete(prompt, system, controller.signal, 'interactive', 'other'), run: (lang, code, stdin, o) => runCode(lang, code, stdin, 20_000, o) }).catch(() => null)
+          const tests = made?.tests
+          if (made && tests && !controller.signal.aborted) {
+            // With the reference it was made from, when the tutor wrote none: the answer is marked against it
+            const add = `${made.solution ? `\n\n<solution>\n${made.solution}\n</solution>` : ''}\n\n<tests>\n${tests}\n</tests>`
+            emit({ id: req.id, type: 'delta', text: add })
+            reply += add
+          }
+          const n = tests ? testNames(tests).length : 0
+          step(n ? `Wrote ${n} hidden test${n === 1 ? '' : 's'} the reference solution passes` : 'No hidden tests: the reference solution gave none to keep', 'done')
         }
         lesson?.prepare(reply)
       }

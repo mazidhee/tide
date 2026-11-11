@@ -1,3 +1,5 @@
+import { testNames } from '@shared/codeTests'
+import { showMeOffered } from '@shared/showMe'
 import { TimeThis } from './TimeThis'
 import { drawSteps, stepsReached } from '@shared/project'
 import { parseCanvas, serializeCanvas } from '@shared/canvas'
@@ -20,7 +22,7 @@ import { parsePlacement, placementNote } from '@shared/placement'
 import { correctionText } from '@shared/lessonCheck'
 import type { Reading } from '@shared/readings'
 import { whyByDefault } from '../lib/agenda'
-import { ASKED, END_NOW, GO_ON, SHOW_ME, shouldSumUp, MODE_LABEL, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
+import { ASKED, END_NOW, GO_ON, SHOW_ME, askIdentity, askStarter, shouldSumUp, MODE_LABEL, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
 import { cardsToMarkdown } from '@shared/cards'
 import { fileTitle, useApp, pagesLabel } from '../state'
@@ -365,6 +367,20 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       (lastIsTutor && lastBlocks.length && !carryOn && !lastBlocks.some((b) => b.kind === 'summary' || b.kind === 'scores') ? { kind: 'ask' as const, type: 'short' as const, prompt: '', options: [] } : undefined))
     : undefined
   askTypeRef.current = currentAsk?.type
+  // A new code question starts from its own starter, not from your answer to the last one
+  const askedCode = useRef<string | null>(null)
+  const codeAsk = askIdentity(currentAsk)
+  useEffect(() => {
+    if (!codeAsk || codeAsk === askedCode.current) return
+    const first = askedCode.current === null && !!code.trim()
+    askedCode.current = codeAsk
+    // A lesson picked up again keeps what was being typed for the question it reopens on
+    if (first) return
+    setCode(askStarter(currentAsk?.prompt ?? ''))
+    setRunOut(null)
+    ranFor.current = ''
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codeAsk])
   const plan = parsed.flatMap((b) => b ?? []).filter((b): b is Extract<Block, { kind: 'plan' }> => b.kind === 'plan').pop()
   // You doubted a reply: the stronger model checks it against the sources; a correction is added to it
   const [challenged, setChallenged] = useState<Record<number, 'checking' | 'ok' | 'flagged'>>({})
@@ -1139,7 +1155,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                         {challenged[i] === 'checking' ? <span className="spinner" /> : <Icon name={challenged[i] === 'ok' ? 'check' : 'search'} size={13} />}
                       </button>
                     )}
-                    {mode === 'teach' && i === turns.length - 1 && (
+                    {mode === 'teach' && i === turns.length - 1 && showMeOffered(turns) && (
                       <button className="icon-btn small" title="Show me: see this as a diagram, a trace or a plot" aria-label="Show me this as a picture" disabled={busy} onClick={() => submit(SHOW_ME)}>
                         <Icon name="image" size={13} />
                       </button>
@@ -1227,6 +1243,11 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     )}
                     <span className="muted small">{currentAsk.tests ? 'Run checks it against hidden tests.' : 'Try your solution here.'}</span>
                   </div>
+                  {currentAsk.tests && testNames(currentAsk.tests).length > 0 && (
+                    <p className="muted small s-test-names" aria-label="Hidden tests">
+                      Hidden tests: {testNames(currentAsk.tests).join(' · ')}
+                    </p>
+                  )}
                   {runOut && (
                     <pre className={`run-output s-run-output${runOut.exitCode !== 0 || runOut.timedOut ? ' failed' : ''}`} data-meta={runOut.timedOut ? 'timed out' : `exit ${runOut.exitCode}, ${runOut.durationMs} ms`}>
                       {(runOut.stdout + (runOut.stderr ? (runOut.stdout ? '\n' : '') + runOut.stderr : '')) || 'Ran with no output.'}

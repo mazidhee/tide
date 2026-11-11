@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countsFor, forecastGoal, hoursPerTopic } from '../src/shared/forecast'
+import { countsFor, forecastGoal, hoursPerTopic, lateText } from '../src/shared/forecast'
 
 const now = new Date('2026-11-09T12:00:00').getTime()
 
@@ -27,5 +27,28 @@ describe('goal forecast', () => {
     expect(countsFor({ path: 'Mathematics/Logarithms.md' }, 'Mathematics', [])).toBe(true)
     expect(countsFor({ label: 'teach: Logarithms and exponents' }, 'Mathematics', ['Logarithms'])).toBe(true)
     expect(countsFor({ path: 'Linux/File permissions.md', label: 'Reading' }, 'Mathematics', ['Logarithms'])).toBe(false)
+  })
+})
+
+describe('a forecast too soon to make', () => {
+  const now = new Date('2026-11-11T12:00:00').getTime()
+  const base = { remainingTopics: 68, hoursPerTopic: 2.5, windowDays: 7, deadline: '2027-03-10', now }
+  it('is not made on a goal’s first days (it said "3451 days late at your pace")', () => {
+    const f = forecastGoal({ ...base, recentMinutes: 40, ageDays: 1 })
+    expect(f.state).toBe('too-soon')
+    expect(f.daysLate).toBeNull()
+  })
+  it('is not made on a few minutes of study either', () => {
+    expect(forecastGoal({ ...base, recentMinutes: 30, ageDays: 20 }).state).toBe('too-soon')
+  })
+  it('is made once there is a week and a couple of hours to go on', () => {
+    const f = forecastGoal({ ...base, recentMinutes: 180, ageDays: 20 })
+    expect(f.state).toBe('late')
+    expect(f.daysLate).toBeGreaterThan(0)
+  })
+  it('says "over a year" rather than thousands of days', () => {
+    expect(lateText(3451)).toBe('over a year')
+    expect(lateText(12)).toBe('12 days')
+    expect(lateText(1)).toBe('1 day')
   })
 })

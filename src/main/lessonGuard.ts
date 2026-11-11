@@ -17,6 +17,7 @@ import { runCode } from './runner'
 import { absPath } from './vault'
 import { noteUse } from './connectionUse'
 import { CLAIMS_SCHEMA } from './replySchemas'
+import { factFix, READING_CLAIMS_SYSTEM, readingClaimsPrompt, supportedBy, wrongFacts } from '@shared/factCheck'
 
 /**
  * Checks a lesson reply once it's written, before the student works on it (see shared/lessonCheck):
@@ -67,6 +68,9 @@ export async function exactCheck(req: ChatRequest): Promise<Exact | null> {
   const prev = [...req.messages].reverse().find((m) => m.role === 'assistant')
   const said = [...req.messages].reverse().find((m) => m.role === 'user')
   const mine = ownWords(text(said))
+  // A SQL answer is run beside the reference query on the lesson's lab, and the rows compared
+  const sql = await import('./sqlCheck').then((m) => m.sqlExact(req)).catch(() => null)
+  if (sql) return sql
   // A vector clock problem is replayed, solution or not: a small model marks these by eye
   if (/^Answer:/i.test(mine)) {
     const clocks = checkVectorClocks(text(prev), mine.replace(/^Answer:\s*/i, ''))
@@ -92,6 +96,31 @@ const REVIEW_MS = 30_000
 async function within(ms: number, signal: AbortSignal, run: (signal: AbortSignal) => Promise<string>): Promise<string> {
   const timeout = AbortSignal.timeout(ms)
   return run(AbortSignal.any([signal, timeout])).catch(() => '')
+}
+
+/** What a check reads of a reply: its explanation and questions, its flashcards and its notes */
+export function claimText(reply: string): string {
+  const cards = [...reply.matchAll(/<card\b[^>]*>([\s\S]*?)<\/card>/gi)].map((m) => `Flashcard: ${m[1].replace(/\s*::\s*/, ' — ').trim()}`)
+  const notes = [...reply.matchAll(/<note\b[^>]*>([\s\S]*?)<\/note>/gi)].map((m) => `Note: ${m[1].trim()}`)
+  return [readable(reply), ...cards, ...notes].filter(Boolean).join('\n')
+}
+
+/** Gemma's check against the reading, kept to errors whose evidence is the reading's own words */
+export function readingErrors(raw: string, reading: string): ClaimCheck {
+  const none: ClaimCheck = { ok: true, errors: [], unsure: [] }
+  const m = raw.match(/\{[\s\S]*\}/)
+  if (!m) return none
+  try {
+    const j = JSON.parse(m[0]) as { ok?: unknown; errors?: { quote?: unknown; fix?: unknown; evidence?: unknown }[] }
+    if (j.ok !== false || !Array.isArray(j.errors)) return none
+    const errors = j.errors
+      .filter((e) => e && typeof e.fix === 'string' && typeof e.evidence === 'string' && supportedBy(reading, e.evidence as string))
+      .map((e) => ({ quote: String(e.quote ?? '').slice(0, 160), fix: `${String(e.fix).slice(0, 300)} The reading: “${String(e.evidence).slice(0, 200)}”` }))
+      .slice(0, 2)
+    return errors.length ? { ok: false, errors, unsure: [] } : none
+  } catch {
+    return none
+  }
 }
 
 /** What a check found: a mark that needs a second look, and what's wrong with the problem just set */
@@ -169,19 +198,47 @@ export async function checkLessonReply(
   // Only in lessons (not quizzes or checks), only new explanations, a few a lesson, and only a cloud
   // model: when none is free (or the day's allowance is running low) it's skipped, never Gemma
   // checking Gemma, which measured worse than no check
-  const claims = !final && cloud && teaching(req) && makesClaims(reply) && claimBudget(req, reply)
+  // Flashcards and notes are claims too (one taught live that a receipt never increments a vector clock)
+  const claimsIn = (makesClaims(reply) || /<card\b/i.test(reply)) && teaching(req) && !final
+  const claims = claimsIn && cloud && claimBudget(req, reply)
     ? (async () => {
         step('lesson-claims', 'Checking what this explains', 'running')
         const pack = req.topic ? await import('./sources').then((m) => m.packFor(req.topic!)).catch(() => null) : null
         const { askCloud } = await import('./ai')
-        const out = await within(REVIEW_MS, signal, (s) => askCloud(claimsPrompt(req.topic ?? '', readable(reply), sourcesForCheck(pack)), CLAIMS_SYSTEM, 'maths', s, true, 900, undefined, CLAIMS_SCHEMA)).catch(() => '')
+        const out = await within(REVIEW_MS, signal, (s) => askCloud(claimsPrompt(req.topic ?? '', claimText(reply), sourcesForCheck(pack)), CLAIMS_SYSTEM, 'maths', s, true, 900, undefined, CLAIMS_SCHEMA)).catch(() => '')
         step('lesson-claims', 'Checked what this explains', 'done')
         return parseClaimCheck(out ?? '')
       })()
+    : // No cloud model: when the lesson has a reading, Gemma checks against it, and only what the
+      // reading's own words show wrong is kept (Gemma's own opinion of Gemma measured worse than nothing)
+      claimsIn && !cloud && claimBudget(req, reply)
+      ? (async () => {
+          const pack = req.topic ? await import('./sources').then((m) => m.packFor(req.topic!)).catch(() => null) : null
+          const reading = sourcesForCheck(pack)
+          if (!reading.trim()) return null
+          step('lesson-claims', 'Checking what this explains against the reading', 'running')
+          const out = await within(REVIEW_MS, signal, (s) => ask(readingClaimsPrompt(req.topic ?? '', claimText(reply), reading), READING_CLAIMS_SYSTEM, 'other', s, true))
+          step('lesson-claims', 'Checked what this explains against the reading', 'done')
+          return readingErrors(out, reading)
+        })()
+      : null
+  // Known wrong facts, by rule, shown wrong by running something (shared/factCheck): always, cloud or not
+  const facts = claimsIn
+    ? (async () => {
+        const found = wrongFacts(reply, req.topic ?? '')
+        const out: { quote: string; fix: string }[] = []
+        for (const f of found) {
+          const ran = f.demo ? await runCode('python', f.demo, '', 15_000).catch(() => null) : null
+          out.push({ quote: f.quote.slice(0, 160), fix: factFix(f, ran?.exitCode === 0 ? ran.stdout : undefined) })
+        }
+        return out
+      })()
     : null
   const finish = async () => {
-    const r = await claims
-    if (r && !r.ok && !signal.aborted) found.errata = { errors: r.errors, unsure: r.unsure }
+    const [r, known] = await Promise.all([claims, facts])
+    const errors = [...(known ?? []), ...(r && !r.ok ? r.errors.filter((e) => !(known ?? []).some((k) => k.quote === e.quote)) : [])].slice(0, 3)
+    const unsure = r && !r.ok ? r.unsure : []
+    if ((errors.length || unsure.length) && !signal.aborted) found.errata = { errors, unsure }
     return found
   }
 

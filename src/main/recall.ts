@@ -5,6 +5,7 @@
  * your vault, .tide/recall.json. Every review also goes in the review log (revlog.ts). Lessons
  * in a private project add nothing to either.
  */
+import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import type { LessonRecord } from '@shared/lessonLog'
 import { digestLesson, recallDueNote, type LessonDigest } from '@shared/lessonMemory'
@@ -110,10 +111,48 @@ export async function noteLesson(record: LessonRecord): Promise<void> {
 
 /** For a lesson that is opening: what is due on its topic, as a note for the tutor (empty when nothing is) */
 export function recallNote(topic: string): string {
-  const due = recall()?.due(topic, Date.now(), 2, null) ?? []
+  const out = retired()
+  const due = (recall()?.due(topic, Date.now(), 6, null) ?? []).filter((i) => !out.has(same(i.prompt))).slice(0, 2)
   if (!due.length) return ''
   opened.set(key(topic), { id: due[0].id, at: Date.now() })
   return recallDueNote(due)
+}
+
+// ---------- Questions found to be broken ----------
+
+/** A question as compared: its words, lower case, without Markdown */
+const same = (prompt: string) => prompt.toLowerCase().replace(/[`*_'’"“”]/g, '').replace(/\s+/g, ' ').trim().slice(0, 160)
+const retiredPath = () => join(vaultRoot(), '.tide', 'recall-retired.json')
+function retired(): Set<string> {
+  try {
+    return existsSync(retiredPath()) ? new Set(JSON.parse(readFileSync(retiredPath(), 'utf8')) as string[]) : new Set()
+  } catch {
+    return new Set()
+  }
+}
+
+/**
+ * A recall question that turned out to be broken (a SQL problem the lab's data can't answer) is
+ * never brought back: the rehearsal's opening question was one, asked word for word lesson after
+ * lesson. Matched by its words; returns whether one was kept here.
+ */
+export function retireRecall(question: string): boolean {
+  const q = same(question)
+  // A kept prompt may be cut short ("… On…"): what's before the cut is compared
+  const head = (t: string) => t.replace(/\s*\S*…$/, '').replace(/[.?!\s]+$/, '').slice(0, 80)
+  const hit = (recall()?.all() ?? []).find((i) => {
+    const p = head(same(i.prompt))
+    return p.length > 20 && (q.includes(p) || head(q).includes(p) || p.includes(head(q)))
+  })
+  if (!hit) return false
+  try {
+    const all = retired()
+    all.add(same(hit.prompt))
+    writeFileSync(retiredPath(), JSON.stringify([...all].slice(-500)))
+    return true
+  } catch {
+    return false
+  }
 }
 
 export const recallStats = () => recall()?.stats(Date.now()) ?? { total: 0, due: 0, settled: 0 }

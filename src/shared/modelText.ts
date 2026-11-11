@@ -317,3 +317,14 @@ export function normalizeMath(text: string): string {
     )
     .join('')
 }
+
+/**
+ * A tool call's arguments, read. Gemma 4 on mlx-vlm sends some keys with a special token stuck to
+ * them ({"sql<|channel>": "SELECT …"}, every run_sql call measured), so the tool saw no query:
+ * the tokens are taken off the keys.
+ */
+export function toolArgs(raw: string | undefined): Record<string, unknown> {
+  const parsed = JSON.parse(raw || '{}') as Record<string, unknown>
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+  return Object.fromEntries(Object.entries(parsed).map(([k, v]) => [k.replace(/<\|?[^<>|]*\|?>/g, '').replace(/[<>|]+$/g, '').trim(), v]))
+}

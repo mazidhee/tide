@@ -39,6 +39,19 @@ export function splitTests(body: string): { prompt: string; tests?: string } {
   return { prompt: (body.slice(0, m.index) + body.slice(m.index + m[0].length)).trim(), ...(tests ? { tests } : {}) }
 }
 
+/**
+ * The code a code question starts you from: the last fenced block in its prompt (the tutor writes
+ * "item_name = " with blanks to fill), or nothing. A new code question puts this in the editor in
+ * place of your answer to the last one.
+ */
+export function askStarter(prompt: string): string {
+  const blocks = [...prompt.matchAll(/```[^\n`]*\n([\s\S]*?)\n?[ \t]*```/g)]
+  return blocks.length ? blocks[blocks.length - 1][1].replace(/\s+$/, '') + '\n' : ''
+}
+
+/** Which code question this is, so the editor is reset once per new question and not on every render */
+export const askIdentity = (ask: { type: string; prompt: string; lang?: string } | undefined): string | null => (ask?.type === 'code' ? `${ask.lang ?? ''}\n${ask.prompt}` : null)
+
 const attr = (attrs: string, name: string) => attrs.match(new RegExp(`${name}\\s*=\\s*"([^"]*)"`, 'i'))?.[1] ?? attrs.match(new RegExp(`${name}\\s*=\\s*'([^']*)'`, 'i'))?.[1]
 
 const TAG = /<(ask|grade|plan|card|scorecard|rubric|challenge|summary|note|appraise)\b([^>]*)>([\s\S]*?)<\/\1>/gi
@@ -57,6 +70,7 @@ export const hideWorking = (raw: string) =>
   raw
     .replace(/<solution\b[^>]*>[\s\S]*?<\/solution>/gi, '')
     .replace(/<check\b[^>]*>[\s\S]*?<\/check>/gi, '')
+    .replace(/<tests\b[^>]*>[\s\S]*?(<\/tests>|$)/gi, '')
     .replace(/<next\b[^>]*\/?>/gi, '')
     .replace(/<placement>[\s\S]*?(<\/placement>|$)/gi, '')
     .replace(/<(solution|check)\b[\s\S]*$/i, '')
@@ -89,6 +103,8 @@ const NUMBERED = /\*\*\s*(?:Problem|Question)\s+\d+/i
 export function parseBlocks(full: string): Block[] {
   // "Carry on" (<continue/>): no question this time; the app offers Go on instead
   const carryOn = /<continue\b[^>]*\/?>/i.test(full)
+  // Hidden tests Tide made for the code question from its reference solution (main/codeTests.ts)
+  const madeTests = /<tests\b[^>]*>([\s\S]*?)<\/tests>/i.exec(full)?.[1]?.trim() || undefined
   const raw = closeGrade(hideWorking(full)).replace(/<\/?continue\b[^>]*>/gi, '').replace(/<c(o(n(t(i(n(ue?)?)?)?)?)?)?$/i, '')
   // What the tutor said aloud (Talk) is spoken, not shown again as a block
   const said = splitSay(raw)
@@ -126,7 +142,8 @@ export function parseBlocks(full: string): Block[] {
           prompt = lines.filter((l) => !opt.includes(l)).join('\n').trim()
         }
       }
-      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt, options, lang: attr(attrs, 'lang'), ...(hidden.tests ? { tests: hidden.tests } : {}) })
+      const tests = hidden.tests ?? (type === 'code' ? madeTests : undefined)
+      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt, options, lang: attr(attrs, 'lang'), ...(tests ? { tests } : {}) })
     } else if (name === 'grade') {
       const verdict = (attr(attrs, 'verdict')?.toLowerCase() ?? 'partial') as Verdict
       const score = Number(attr(attrs, 'score') ?? (verdict === 'correct' ? 1 : verdict === 'wrong' ? 0 : 0.5))

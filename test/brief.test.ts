@@ -57,3 +57,22 @@ describe('formatMinutes', () => {
     expect([formatMinutes(45), formatMinutes(60), formatMinutes(80)]).toEqual(['45 min', '1 h', '1 h 20 min'])
   })
 })
+
+describe('a study day’s topics, as Home names them', () => {
+  const at = new Date('2026-11-10T10:00:00').getTime()
+  const now = new Date('2026-11-11T09:00:00').getTime()
+  it('drops the session mode and counts a topic once (Home said "teach: Variables and Data Types, Variables and Data Types")', () => {
+    const d = lastStudyDay(
+      [
+        { at, kind: 'focus', title: 'teach: Variables and Data Types', minutes: 3 },
+        { at: at + 60_000, kind: 'answer', title: 'Variables and Data Types', score: 1 },
+        { at: at + 120_000, kind: 'focus', title: 'teach: Variables and Data Types', minutes: 2 },
+        { at: at + 180_000, kind: 'answer', title: 'Variables and Data Types', path: 'Python/Variables and Data Types.md', score: 1 }
+      ],
+      now
+    )!
+    expect(d.topics.map((t) => t.title)).toEqual(['Variables and Data Types'])
+    expect(d.topics[0].path).toBe('Python/Variables and Data Types.md')
+    expect(listTopics(d.topics, 2)).toBe('Variables and Data Types')
+  })
+})

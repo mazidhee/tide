@@ -11,5 +11,6 @@ import { MATHS } from './maths'
 import { ML } from './ml'
 import { SYSTEMS } from './systems'
 import { HUMANITIES } from './humanities'
+import { WRONG_FACTS } from './wrong-facts'
 
-export const SCENARIOS: Scenario[] = [...SYSTEMS, ...CCPP, ...DISTRIBUTED, ...DATABASES, ...ML, ...MATHS, ...DATA_ENG, ...BREADTH_SCIENCES, ...BREADTH_PRACTICE, ...BREADTH_HUMANITIES, ...HUMANITIES]
+export const SCENARIOS: Scenario[] = [...SYSTEMS, ...CCPP, ...DISTRIBUTED, ...DATABASES, ...ML, ...MATHS, ...DATA_ENG, ...BREADTH_SCIENCES, ...BREADTH_PRACTICE, ...BREADTH_HUMANITIES, ...HUMANITIES, ...WRONG_FACTS]

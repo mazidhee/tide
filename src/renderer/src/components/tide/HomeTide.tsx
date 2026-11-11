@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { ChatScope, Mastery, NoteMeta } from '@shared/types'
-import type { Forecast } from '@shared/forecast'
+import { lateText, type Forecast } from '@shared/forecast'
 import type { Connection } from '@shared/connections'
 import { localDate, type WeekPlan } from '@shared/coach'
 import { since, type ConceptState } from '@shared/knowledge'
@@ -414,9 +414,9 @@ function Aim({ plan, forecast: f, area, makeFit }: { plan: GoalPlan; forecast?: 
   const state = plan.overdue
     ? { text: 'Past the deadline', tone: 'behind' }
     : f?.state === 'late'
-      ? { text: `${f.daysLate} days late at your pace`, tone: 'behind' }
+      ? { text: `${lateText(f.daysLate!)} late at your pace`, tone: 'behind' }
       : f?.state === 'early'
-        ? { text: `${-f.daysLate!} days ahead`, tone: 'ahead' }
+        ? { text: `${lateText(-f.daysLate!)} ahead`, tone: 'ahead' }
         : plan.ahead <= -1
           ? { text: `${lag} behind`, tone: 'behind' }
           : plan.ahead >= 1
@@ -442,6 +442,7 @@ function Aim({ plan, forecast: f, area, makeFit }: { plan: GoalPlan; forecast?: 
         </span>
         <span className={state.tone}>
           {state.text}
+          {f && (f.state === 'late' || f.state === 'no-data') && ' '}
           {f && (f.state === 'late' || f.state === 'no-data') && (
             <button className="td-link" onClick={() => makeFit(plan, f)}>
               Make it fit

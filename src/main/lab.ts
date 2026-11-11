@@ -6,8 +6,8 @@
  * nothing is written to disc and nothing leaves this Mac. A CSV or TSV file from the notes folder
  * can be loaded beside them as a table (labLoadTable).
  */
-import { readFileSync, realpathSync, statSync } from 'fs'
-import { extname, relative, resolve, sep } from 'path'
+import { readdirSync, readFileSync, realpathSync, statSync, type Dirent } from 'fs'
+import { extname, join, relative, resolve, sep } from 'path'
 import { CSV_LIMITS, megabytes, readCsvTable, tableNameFor } from '@shared/csvTable'
 import { loadedText, resultText, schemaText, type LabLoaded, type LabResult, type LabTable } from '@shared/lab'
 import { tideCore } from './native'
@@ -292,11 +292,58 @@ export function runSqlTool(id: string, sql: string, privateTurn: boolean): { tex
  * (orders.category) without running it, and the student's Run answered "no such column".
  * Nothing when the lab holds a private project's data and this turn isn't about it.
  */
-export function labSchemaNote(id: string, privateTurn: boolean): string {
+export function labSchemaNote(id: string, privateTurn: boolean, files: string[] = []): string {
   const held = lab(id)
   if (!held || (!privateTurn && privateHold(held))) return ''
   held.told = true
-  return `${schemaText(labSchema(id))} Write every query against exactly these tables and columns (or a file the student loads), and run it with run_sql before you show it.`
+  const own = files.length
+    ? ` The student's own data files in their notes folder, which you CAN load with load_table (path exactly as written) and then query with run_sql: ${files.slice(0, 12).join(', ')}.`
+    : ''
+  return `You have this lab through your tools in this lesson: run_sql runs a query on it and load_table loads one of the student's .csv or .tsv files into it. Never say you can't see their data or files: load and query them. ${schemaText(labSchema(id))}${own} Before you set a SQL problem, run its reference query with run_sql and check it returns real rows (not empty, not NULL); put that query in the problem's <solution> as a \`\`\`sql block. Write every query against exactly these tables and columns (or a file the student loads), and run it with run_sql before you show it.`
+}
+
+/** The .csv and .tsv files in the notes folder (paths from its root), for the tutor to load; a short walk, cached for a minute */
+let filesSeen: { at: number; root: string; files: string[] } | null = null
+export function dataFiles(): string[] {
+  let root: string
+  try {
+    root = resolve(vaultRoot())
+  } catch {
+    return []
+  }
+  if (filesSeen && filesSeen.root === root && Date.now() - filesSeen.at < 60_000) return filesSeen.files
+  const files: string[] = []
+  const walk = (dir: string, depth: number) => {
+    if (depth > 4 || files.length >= 40) return
+    let entries: Dirent[]
+    try {
+      entries = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const e of entries) {
+      if (e.name.startsWith('.') || e.name === 'node_modules') continue
+      const full = join(dir, e.name)
+      if (e.isDirectory()) walk(full, depth + 1)
+      else if (/\.(csv|tsv)$/i.test(e.name)) files.push(relOf(root, full))
+    }
+  }
+  walk(root, 0)
+  filesSeen = { at: Date.now(), root, files }
+  return files
+}
+
+/**
+ * A lesson message that asks for one of their files ("load my orders.csv"): the line that sends
+ * the tutor to load_table with its path. Gemma answered "I can't see your local files" without it.
+ */
+export function loadHint(question: string, files: string[]): string {
+  const named = [...question.matchAll(/([\w./-]+\.(?:csv|tsv))\b/gi)].map((m) => m[1].trim().split('/').pop()!.toLowerCase())
+  if (!named.length && !/\b(load|open|import|use|query)\b[^.]{0,30}\b(my|our)\b[^.]{0,30}\b(csv|tsv|data|file|spreadsheet)\b/i.test(question)) return ''
+  const hits = files.filter((f) => named.includes(f.split('/').pop()!.toLowerCase()))
+  if (hits.length) return `The student wants their file loaded: call load_table now with path "${hits[0]}" (it is in their notes folder and you can load it), then query it with run_sql and teach from its real rows.`
+  if (named.length) return `The student named a file (${named.join(', ')}) that isn't in their notes folder${files.length ? `; the data files there are ${files.slice(0, 8).join(', ')}` : ''}. Say so, and offer to load one of those with load_table.`
+  return files.length ? `The student wants to work on their own data: their files are ${files.slice(0, 8).join(', ')}. Load the one they mean with load_table, then query it with run_sql.` : ''
 }
 
 /** Whether a lesson is about SQL, and so works in the data lab */

@@ -652,3 +652,9 @@
     }
   }
 }
+
+/* The names of a code question's hidden tests, under the editor */
+:root[data-design='tide'] .s-test-names {
+  margin: 6px 0 0;
+  line-height: 1.45;
+}

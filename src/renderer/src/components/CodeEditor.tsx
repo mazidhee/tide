@@ -82,9 +82,13 @@ export function CodeEditor({ value, onChange, language = 'python', onSubmit, fil
       stopRuff()
       sub.dispose()
       sizeSub.dispose()
-      editor.getModel()?.dispose()
+      // The editor goes first, then its model: disposing the model under a live editor made Monaco
+      // throw "Model is disposed!" from its own pending work (seen when a code answer was handed in)
+      const model = editor.getModel()
+      ed.current = null
+      if (editorRef?.current === editor) editorRef.current = null
       editor.dispose()
-      if (editorRef) editorRef.current = null
+      if (model && !model.isDisposed()) model.dispose()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -100,7 +104,7 @@ export function CodeEditor({ value, onChange, language = 'python', onSubmit, fil
 
   useEffect(() => {
     const model = ed.current?.getModel()
-    if (model) monaco.editor.setModelLanguage(model, monacoLanguage(language))
+    if (model && !model.isDisposed()) monaco.editor.setModelLanguage(model, monacoLanguage(language))
   }, [language])
 
   useEffect(() => {

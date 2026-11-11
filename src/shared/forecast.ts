@@ -15,7 +15,7 @@ export interface Forecast {
   daysLate: number | null
   /** Hours a week that would finish exactly on the deadline */
   neededWeeklyHours: number | null
-  state: 'done' | 'no-data' | 'early' | 'on-time' | 'late'
+  state: 'done' | 'no-data' | 'early' | 'on-time' | 'late' | 'too-soon'
 }
 
 const DAY = 86_400_000
@@ -30,6 +30,17 @@ export interface ForecastInput {
   /** yyyy-mm-dd, or none */
   deadline?: string
   now: number
+  /** Days since the goal was set, when known: a pace from its first few days isn't a pace yet */
+  ageDays?: number
+}
+
+/** A goal needs this long, and this much study, before its pace says anything about the finish */
+export const FORECAST_MIN_DAYS = 7
+export const FORECAST_MIN_MINUTES = 120
+
+/** "12 days late", "over a year late": a forecast that far out is a direction, not a date */
+export function lateText(days: number): string {
+  return days > 365 ? 'over a year' : `${days} day${days === 1 ? '' : 's'}`
 }
 
 /** Hours a topic needs, from a sized plan (hours a week × weeks ÷ topics), else the usual 2.5 */
@@ -46,6 +57,9 @@ export function forecastGoal(i: ForecastInput): Forecast {
   const weeksToDeadline = deadline ? Math.max(0, (deadline - i.now) / (7 * DAY)) : null
   const neededWeeklyHours = weeksToDeadline !== null && hoursLeft > 0 ? (weeksToDeadline > 0.1 ? Math.round((hoursLeft / weeksToDeadline) * 10) / 10 : Infinity) : null
   if (i.remainingTopics <= 0) return { weeklyHours, hoursLeft: 0, finish: i.now, daysLate: deadline ? Math.round((i.now - deadline) / DAY) : null, neededWeeklyHours: 0, state: 'done' }
+  // A few minutes in a new goal's first days, spread over a week, put the finish years out (Home
+  // said "3451 days late at your pace" the day a goal was set): too soon to say
+  if ((i.ageDays !== undefined && i.ageDays < FORECAST_MIN_DAYS) || (i.recentMinutes > 0 && i.recentMinutes < FORECAST_MIN_MINUTES)) return { weeklyHours, hoursLeft, finish: null, daysLate: null, neededWeeklyHours, state: 'too-soon' }
   if (weeklyHours < 0.2) return { weeklyHours, hoursLeft, finish: null, daysLate: null, neededWeeklyHours, state: 'no-data' }
   const finish = i.now + (hoursLeft / weeklyHours) * 7 * DAY
   const daysLate = deadline ? Math.round((finish - deadline) / DAY) : null

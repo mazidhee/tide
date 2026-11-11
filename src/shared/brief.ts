@@ -55,6 +55,17 @@ function whenLabel(day: string, now: number): string {
 const MAX_TOPICS = 5
 
 /**
+ * A topic as you'd name it: a study timer's label carries the session's mode ("teach: Variables",
+ * "quiz: Raft", "Lesson: …"), which Home showed as it was, beside the same topic from its answers
+ */
+export const topicTitle = (title: string) =>
+  title
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^(teach|quiz|mixed|interview|explain|lesson|quiz me|teach me|check|review|retest)\s*:\s*/i, '')
+    .trim()
+
+/**
  * The most recent day before today with any study, within two weeks. With nothing before today,
  * today itself (so a first day of study still gets its recap and quiz). Null when there's nothing.
  */
@@ -73,10 +84,15 @@ export function lastStudyDay(events: StudyEvent[], now = Date.now()): StudyDay |
   for (const e of of) {
     // Timed sessions add to the topic they were on; untitled ones only count as time
     if (e.kind === 'focus' && !e.title) continue
-    const title = e.title.replace(/\s+/g, ' ').trim()
+    const title = topicTitle(e.title)
     if (!title) continue
-    const key = (e.path ?? title).toLowerCase()
-    const entry = scored.get(key) ?? { topic: { title, path: e.path }, score: 0 }
+    // One topic however it was recorded: by its note when it has one, else by name, and a name
+    // already seen with a note joins that one
+    const byName = title.toLowerCase()
+    const key = e.path ? e.path.toLowerCase() : ([...scored].find(([, v]) => v.topic.title.toLowerCase() === byName)?.[0] ?? byName)
+    const named = e.path ? scored.get(byName) : undefined
+    const entry = scored.get(key) ?? { topic: { title, path: e.path }, score: named?.score ?? 0 }
+    if (named && key !== byName) scored.delete(byName)
     entry.score += weight[e.kind]
     scored.set(key, entry)
   }

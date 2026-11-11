@@ -1,4 +1,4 @@
-import { countsFor, forecastGoal, hoursPerTopic, type Forecast } from '@shared/forecast'
+import { countsFor, forecastGoal, hoursPerTopic, lateText, type Forecast } from '@shared/forecast'
 import { DayTimeline } from './DayTimeline'
 import { HomeBanner } from './HomeBanner'
 import { Professor, type ProfessorScene } from './Professor'
@@ -108,7 +108,7 @@ export function Home(_: { dueCount: number; cardCount: number }) {
         const windowDays = Math.max(7, Math.min(21, (now - (g.createdAt ?? now)) / DAY))
         const topics = plan.topics.map((t) => t.text)
         const recentMinutes = log.filter((e) => e.start >= now - windowDays * DAY && countsFor(e, g.notebook, topics)).reduce((n, e) => n + e.minutes, 0)
-        ahead[g.id] = forecastGoal({ remainingTopics: plan.total - plan.done, hoursPerTopic: hoursPerTopic(stored, plan.total), recentMinutes, windowDays, deadline: g.deadline, now })
+        ahead[g.id] = forecastGoal({ remainingTopics: plan.total - plan.done, hoursPerTopic: hoursPerTopic(stored, plan.total), recentMinutes, windowDays, deadline: g.deadline, now, ageDays: g.createdAt ? (now - g.createdAt) / DAY : undefined })
       }
       setPlans(out)
       setForecasts(ahead)
@@ -450,7 +450,7 @@ function GoalRow({ plan, forecast: f }: { plan: GoalPlan; forecast?: Forecast })
   const share = plan.total ? plan.done / plan.total : 0
   const r = 11
   const c = 2 * Math.PI * r
-  const state = plan.overdue ? 'Past the deadline' : !f || f.state === 'done' ? `${Math.round(share * 100)}% done` : f.state === 'late' ? `${f.daysLate} days late at your pace` : f.state === 'early' ? `${-f.daysLate!} days early` : f.state === 'on-time' ? 'On time at your pace' : 'No study lately'
+  const state = plan.overdue ? 'Past the deadline' : !f || f.state === 'done' ? `${Math.round(share * 100)}% done` : f.state === 'late' ? `${lateText(f.daysLate!)} late at your pace` : f.state === 'early' ? `${lateText(-f.daysLate!)} early` : f.state === 'on-time' ? 'On time at your pace' : f.state === 'too-soon' ? `${Math.round(share * 100)}% done` : 'No study lately'
   const tone = plan.overdue || f?.state === 'late' ? 'behind' : f?.state === 'no-data' ? 'quiet' : 'ok'
   const needed = f && f.neededWeeklyHours !== null && Number.isFinite(f.neededWeeklyHours) ? `${Math.round(f.neededWeeklyHours * 10) / 10} h a week` : null
   return (
