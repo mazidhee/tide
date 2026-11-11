@@ -4,8 +4,10 @@ import react from '@vitejs/plugin-react'
 import type { Plugin } from 'vite'
 
 // Strict CSP for packaged builds. Dev needs inline scripts for React fast refresh, so it's build only.
+// 'wasm-unsafe-eval' lets compiled WebAssembly run (Ruff, the Python linter, in the code editor's
+// worker). It does not allow JavaScript eval or new Function.
 const CSP =
-  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' vault: data: https:; " +
+  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' vault: data: https:; " +
   "font-src 'self' data:; connect-src 'self' vault:; frame-src https://www.youtube-nocookie.com https://www.youtube.com; " +
   "worker-src 'self' blob:; media-src 'self' vault: https:"
 

@@ -26,6 +26,8 @@ import { cardsToMarkdown } from '@shared/cards'
 import { fileTitle, useApp, pagesLabel } from '../state'
 import { renderMarkdown } from '../lib/markdown'
 import { Icon } from './Icon'
+import { formatEditor } from '../lib/ruff/editor'
+import type * as Monaco from 'monaco-editor'
 import { EnginePill } from './EnginePill'
 import { DictateButton, SpeakButton, useTalk } from './Voice'
 import { InterviewClock, useInterviewClock } from './InterviewClock'
@@ -85,6 +87,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const [error, setError] = useState<string | null>(null)
   const [answer, setAnswer] = useState('')
   const [code, setCode] = useState('')
+  const codeEditorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
   const [confidence, setConfidence] = useState<1 | 2 | 3 | null>(null)
   // The last reply is written but its checks are still running: its mark isn't final yet
   const [checking, setChecking] = useState(false)
@@ -1200,13 +1203,19 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               ) : currentAsk.type === 'code' ? (
                 <>
                   <Suspense fallback={<div className="view-loading small" aria-busy="true" />}>
-                    <CodeEditor value={code} onChange={setCode} language={currentAsk.lang ?? options?.language ?? 'python'} onSubmit={() => submit()} />
+                    <CodeEditor value={code} onChange={setCode} language={currentAsk.lang ?? options?.language ?? 'python'} onSubmit={() => submit()} editorRef={codeEditorRef} />
                   </Suspense>
                   <div className="s-run-row">
                     <button className="btn small" onClick={() => void runMine()} disabled={running || !code.trim()} title="Run your code in a sandbox">
                       <Icon name="play" size={12} />
                       {running ? 'Running…' : 'Run'}
                     </button>
+                    {/^(python|py)$/i.test((currentAsk.lang ?? options?.language ?? 'python').trim()) && (
+                      <button className="btn small" onClick={() => formatEditor(codeEditorRef.current)} disabled={!code.trim()} title="Format with Ruff (⇧⌥F)">
+                        <Icon name="format" size={12} />
+                        Format
+                      </button>
+                    )}
                     <span className="muted small">{currentAsk.tests ? 'Run checks it against hidden tests.' : 'Try your solution here.'}</span>
                   </div>
                   {runOut && (
