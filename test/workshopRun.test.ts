@@ -162,5 +162,7 @@ describe('running a stage’s tests in the sandbox', () => {
     const none = await runTests(p, 0, [])
     expect(by(none, 'totals per category').message).toBe('SQLite says: no such table: by_category')
     expect(none.notes).toBe('report.sql: the file is missing.')
+    // An error from a table that isn't there is not the refusal the test is after
+    expect(by(none, 'negative amounts are refused').message).toBe('SQLite says: no such table: checked')
   })
 })

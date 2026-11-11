@@ -208,7 +208,8 @@ function runSql(p: WorkshopProject, upTo: number, files: WorkshopFile[]): { test
       db.query('ROLLBACK TO tide_test', 1)
       db.query('RELEASE tide_test', 1)
       let message: string | undefined
-      if (wantsError) message = r.error ? undefined : wantsError[1].trim() || 'This should have been refused, and it was accepted.'
+      // Refused because a table or column isn't there yet is not refused by the learner's rule
+      if (wantsError) message = r.error ? (/no such (table|column)|syntax error/i.test(r.error) ? `SQLite says: ${r.error}` : undefined) : wantsError[1].trim() || 'This should have been refused, and it was accepted.'
       else if (r.error) message = `SQLite says: ${r.error}`
       else if (r.rows.length) message = `${String(r.rows[0][0] ?? 'A check returned a row.')}${r.rowCount > 1 ? ` (and ${r.rowCount - 1} more like it)` : ''}`
       tests.push({ stage: s.id, name: t.name, status: message ? 'fail' : 'pass', ...(message ? { message } : {}) })
