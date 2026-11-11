@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { startSims } from '../src/renderer/src/lib/sims'
 import { ASK_EVENT, askDetail, dispatchAsk } from '../src/renderer/src/lib/sims/parts'
-import { SIM_GUIDE, SIM_LESSON_LINE } from '../src/shared/sims'
+import { SIM_GUIDE, SIM_KINDS, SIM_LESSON_LINE } from '../src/shared/sims'
 import { parseSim } from '../src/renderer/src/lib/sims/spec'
 import { sessionInstructions } from '../src/shared/session'
 
@@ -47,11 +47,47 @@ describe('sim blocks in the page', () => {
 describe('what the tutor is told', () => {
   it('every example in the guide is a valid simulation, and every kind and part is named', () => {
     const examples = SIM_GUIDE.match(/\{"kind":[^\n]*?\}(?=[.\s])/g) ?? []
-    expect(examples).toHaveLength(4)
-    expect(examples.map((e) => parseSim(e)?.kind)).toEqual(['neural-net', 'attention', 'gradient-descent', 'softmax'])
+    expect(examples.map((e) => parseSim(e)?.kind)).toEqual([...SIM_KINDS])
     for (const part of ['neuron:1:2', 'edge:0:1:2', 'surface', 'loss', 'token:3', 'row:3', 'scores', 'weights', 'mix', 'point', 'gradient', 'path', 'minimum', 'logit:2', 'probabilities', 'temperature', '"tour"', '"run"', '"pause"', '"sample"'])
       expect(SIM_GUIDE).toContain(part)
-    expect(SIM_GUIDE.split(/\s+/).length).toBeLessThan(330)
+    // Short enough to sit in every turn's system prompt
+    expect(SIM_GUIDE.split(/\s+/).length).toBeLessThan(640)
+  })
+
+  it('every part and every "do" the guide names exists in its simulation', async () => {
+    const { mount } = await import('../src/renderer/src/lib/sims/runtime')
+    const { KINDS } = await import('../src/renderer/src/lib/sims/runtime')
+    const examples = SIM_GUIDE.match(/\{"kind":[^\n]*?\}(?=[.\s])/g) ?? []
+    const partsText = SIM_GUIDE.slice(SIM_GUIDE.indexOf('Parts to point at:'), SIM_GUIDE.indexOf('Counting starts at 1'))
+    for (const kind of SIM_KINDS) {
+      const named = new RegExp(`${kind} ([^;.]*)[;.]`).exec(partsText)?.[1] ?? ''
+      const parts = named.replace(/ \([^)]*\)/g, '').split(',').map((p) => p.trim()).filter(Boolean)
+      expect(parts.length, kind).toBeGreaterThan(2)
+      const line = SIM_GUIDE.split('\n').find((l) => l.trim().startsWith(`- ${kind},`)) ?? ''
+      const verbs = (line.split(' do: ')[1] ?? '').match(/\{"[a-z]+":(\[\[.*?\]\]|\{.*?\}|[^{}]*?)\}/g) ?? []
+      const spec = parseSim(JSON.stringify({ ...JSON.parse(examples[SIM_KINDS.indexOf(kind)]), tour: verbs.map((v) => ({ say: 'x', do: JSON.parse(v) })) }))!
+      // The kind keeps every verb the guide teaches
+      expect(spec.tour.map((s) => JSON.stringify(s.do)), kind).toEqual(verbs)
+      const view = KINDS[kind].create(spec as never, { root: document.body, reducedMotion: true, palette: () => ({}) as never, select() {}, peek() {}, invalidate() {} })
+      for (let i = 0; i < 400; i++) view.step()
+      // Work that lands a moment later (real hashing) is waited for
+      for (let i = 0; i < 100 && parts.some((part) => !view.describe(part)); i++) {
+        await settle()
+        view.step()
+      }
+      for (const part of parts) expect(view.describe(part), `${kind} ${part}`).not.toBeNull()
+      view.destroy?.()
+    }
+    expect(mount).toBeTypeOf('function')
+  })
+
+  it('a block labelled json, or not labelled, is a simulation when its "kind" is one', async () => {
+    const examples = SIM_GUIDE.match(/\{"kind":[^\n]*?\}(?=[.\s])/g) ?? []
+    document.body.innerHTML = examples.map((e, i) => block(e).replace('data-lang="sim"', i % 2 ? 'data-lang="json"' : 'data-lang=""')).join('') + block('{"kind":"quantum-foam"}').replace('"sim"', '"json"') + block('{"type":"x","kind":"raft"}').replace('"sim"', '"json"')
+    startSims()
+    await new Promise((r) => setTimeout(r, 400))
+    expect(Array.from(document.querySelectorAll('figure.sim'), (f) => (f as HTMLElement).dataset.kind)).toEqual([...SIM_KINDS])
+    expect(document.querySelectorAll('pre.code-block')).toHaveLength(2)
   })
 
   it('lessons are pointed at simulations in one line', () => {

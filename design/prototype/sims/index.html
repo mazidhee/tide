@@ -7,9 +7,13 @@
       Mounts every simulation kind from sample ```sim blocks, through the same hydration the app uses.
       Build first:  npx vite build -c design/prototype/sims/vite.config.ts
       Then open this file. Query: ?theme=light|sepia|graphite|dark|midnight|ember  &w=420|900
-      &only=neural-net|forward|backward|attention|gradient-descent|softmax|tour|bad  &busy=1  &steps=<n>  &press=<button text,…>  &select=<css selector to click>
+      &only=<a sample's key: see harness.ts and samples/>  &dist=<build folder>  &busy=1  &steps=<n>  &press=<button text,…>  &select=<css selector to click>
     -->
-    <link rel="stylesheet" href="dist/harness.css" />
+    <script>
+      // ?dist=<folder> picks another build (see vite.config.ts)
+      var dist = (new URLSearchParams(location.search).get("dist") || "dist").replace(/[^a-z0-9-]/gi, "")
+      document.write('<link rel="stylesheet" href="' + dist + '/harness.css" />')
+    </script>
     <style>
       html, body { height: auto; overflow: auto; }
       body { padding: 24px; }
@@ -20,6 +24,8 @@
   </head>
   <body>
     <div id="column" class="prose"></div>
-    <script src="dist/harness.js"></script>
+    <script>
+      document.write('<script src="' + dist + '/harness.js"><\/script>')
+    </script>
   </body>
 </html>

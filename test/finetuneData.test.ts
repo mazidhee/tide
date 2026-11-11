@@ -114,7 +114,8 @@ describe('personal details', () => {
   })
   it('are removed from what examples carry', () => {
     const built = examplesFrom(lesson([[GOOD[0][0], 'Answer: At the root, says Ada Example (ada@example.com).'], [GOOD[1][0], '']]), opts)
-    expect(JSON.stringify(built.examples)).not.toMatch(/Ada|example\.com/)
+    // The learner's own name and address, not the first name alone: the tutor's instructions use "Ada" in an example
+    expect(JSON.stringify(built.examples)).not.toMatch(/Ada Example|example\.com/)
     expect(built.scrubbed).toBeGreaterThan(0)
   })
 })

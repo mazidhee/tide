@@ -34,6 +34,7 @@ const STEP_ICON: Record<AgentStep['kind'], 'search' | 'note' | 'globe' | 'extern
   helper: 'sparkle',
   run_code: 'terminal',
   run_sql: 'terminal',
+  load_table: 'terminal',
   remember: 'book',
   terminal: 'terminal'
 }
@@ -51,6 +52,7 @@ function summarizeSteps(steps: AgentStep[]): string {
     count('read_webpage') && `read ${count('read_webpage')} page${count('read_webpage') === 1 ? '' : 's'}`,
     count('run_code') && `ran code${times(count('run_code'))}`,
     count('run_sql') && `ran SQL${times(count('run_sql'))}`,
+    count('load_table') && `loaded ${count('load_table') === 1 ? 'a file' : `${count('load_table')} files`} into the lab`,
     count('terminal') && `used the terminal${times(count('terminal'))}`,
     count('helper') && `used ${count('helper')} helpers`,
     remembered && `remembered ${remembered === 1 ? 'something' : `${remembered} things`} about you`

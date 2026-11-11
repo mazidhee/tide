@@ -7,7 +7,11 @@ import { startSims } from '../src/renderer/src/lib/sims'
 const pre = (lang: string, source: string) => `<pre class="code-block" data-lang="${lang}"><button class="copy-code" type="button">Copy</button><code class="hljs">${source.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</code></pre>`
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 /** Long enough for the watchers to look for new blocks (they wait for the text to be still) */
-const settle = () => wait(650)
+const settle = async () => {
+  await wait(650)
+  // The simulations load on first use; wait for one that has been found to finish appearing
+  for (let i = 0; i < 50 && document.querySelector('pre.code-block[data-lang="sim"]'); i++) await wait(100)
+}
 /** Long enough for a widget to be put back, far too short for a new one to be built */
 const blink = () => wait(20)
 

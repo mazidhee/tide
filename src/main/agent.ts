@@ -35,7 +35,7 @@ import { explainerToolResult, findExplainers } from '@shared/explainers'
 import { readText, writeText } from './vault'
 import { applyCanvasOps, describeCanvas, parseCanvas, serializeCanvas } from '@shared/canvas'
 import { retrieve } from './ai'
-import { runSqlTool } from './lab'
+import { loadTableTool, runSqlTool } from './lab'
 import { runCode } from './runner'
 import { addMemory, forgetMatching, memoryPrompt } from './memory'
 import { fitHistory } from '@shared/context'
@@ -220,6 +220,7 @@ const SQL_TOOL = tool(
   { sql: { type: 'string' } },
   ['sql']
 )
+const LOAD_TABLE_TOOL = tool('load_table', "Load a .csv or .tsv file from the student's notes folder into the data lab as a table for run_sql; returns its name, columns and row count.", { path: { type: 'string', description: 'Path in the notes folder' } }, ['path'])
 
 const DELEGATE_TOOL = tool(
   'delegate',
@@ -1236,7 +1237,17 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     const sql = String(args.sql ?? '')
     const firstLine = sql.split('\n').find((l) => l.trim() && !l.trim().startsWith('--'))?.trim() ?? ''
     const id = ctx.step({ kind: 'run_sql', label: `Running SQL${firstLine ? `: ${firstLine.slice(0, 60)}` : ''}`, status: 'running', depth })
-    const r = runSqlTool(ctx.labId ?? ctx.chatId ?? 'scratch', sql)
+    // A lab holding a private project's file answers only on a turn that stays on this Mac
+    const r = runSqlTool(ctx.labId ?? ctx.chatId ?? 'scratch', sql, !!ctx.private)
+    ctx.updateStep(id, { status: r.ok ? 'done' : 'error', detail: r.detail })
+    return clip(r.text, TOOL_TEXT_LIMIT)
+  }
+
+  if (call.name === 'load_table') {
+    const path = str('path')
+    const id = ctx.step({ kind: 'load_table', label: `Loading ${path.split('/').pop() || 'a file'} into the lab`, status: 'running', depth })
+    // A private project's file goes into the lab only on a turn that stays on this Mac
+    const r = await loadTableTool(ctx.labId ?? ctx.chatId ?? 'scratch', path, { private: !!ctx.private, isPrivate: (p) => privatePath(p) })
     ctx.updateStep(id, { status: r.ok ? 'done' : 'error', detail: r.detail })
     return clip(r.text, TOOL_TEXT_LIMIT)
   }
@@ -1284,6 +1295,7 @@ function toolSet(o: { top: boolean; web: boolean; focused: boolean; things: bool
     ...NOTE_TOOLS,
     CODE_TOOL,
     SQL_TOOL,
+    LOAD_TABLE_TOOL,
     ...(images ? [IMAGE_TOOL, EXPLAINER_TOOL] : []),
     ...(o.top ? [STUDY_PLAN] : []),
     ...(o.terminal ?? []),
