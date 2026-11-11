@@ -6,7 +6,7 @@ title: Tide roadmap
 
 One feature at a time, in this order. Each one is built, tested, installed, and only then is the next one started. Nothing runs in parallel: the Mac has 24 GB, and Gemma needs most of it.
 
-Last updated: 12 November 2026.
+Last updated: 12 November 2026. Courses from GitHub and the fuller code editor moved to the top at your request.
 
 ## In the app now
 
@@ -21,10 +21,11 @@ Last updated: 12 November 2026.
 
 ## Now
 
+- [ ] **Courses from GitHub.** Learn from repos such as DataTalksClub's zoomcamps, Made With ML, Karpathy's Zero to Hero and OSSU: modules become lessons with the repo's text shown and credited, and notebooks and exercises run in the lesson. Partial work: worktree `tide-ghcourses`.
+- [ ] **A fuller code editor.** monaco-vscode-api, so lesson code feels like VS Code.
 - [ ] **Faster lesson starts and fewer stalls.** The first answer of a new lesson takes 14–27 s. Gemma stalls in about 14% of turns, and retries run one after another. The turn after a long lesson is trimmed re-reads it all. Partial work: worktree `tide-fast2`.
 - [ ] **Everyday check: Python and ML from zero.** Run real lessons the way you use Tide ("I want to learn Python", "I want to learn ML"), over several sessions, and fix what goes wrong.
 - [ ] **Lab pack ready before it's needed.** Install the data and ML packages (about 900 MB) from Settings, in the background, so the first ML lesson doesn't stall for 30 s. Partial work: worktree `tide-voice`.
-- [ ] **Courses from GitHub.** Learn from repos such as DataTalksClub's zoomcamps, Made With ML, Karpathy's Zero to Hero and OSSU: modules become lessons with the repo's text shown and credited, and notebooks and exercises run in the lesson. Partial work: worktree `tide-ghcourses`.
 - [ ] **Cloud models, tested live.** Route hard questions to stronger cloud models, with your keys in a throwaway test profile (approved), keeping private-project and Metabase content on the Mac.
 
 ## Next
@@ -45,7 +46,6 @@ Last updated: 12 November 2026.
   - A notebook holding only its roadmap is left off the knowledge map.
   - Decide whether one right answer should make a topic solid (FSRS says about 4.5 days) or two.
 - [ ] **PDF reading in Rust.** Removes a one-time 455 ms load.
-- [ ] **A fuller code editor.** monaco-vscode-api, so lesson code feels like VS Code.
 
 ## Not doing
 
