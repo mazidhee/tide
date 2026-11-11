@@ -10,6 +10,8 @@ import { coverColor } from './NotebookCover'
 import { ReadingFinder } from './ReadingFinder'
 import { SaveLinkForm } from './SaveLink'
 import { PixelScene } from './PixelScene'
+import { useTideDesign } from '../lib/design'
+import { AreaMark } from './tide/AreaMark'
 import { Bookcase } from './Bookcase'
 
 type Filter = 'all' | 'article' | 'youtube' | 'pdf' | 'doc' | 'link'
@@ -247,6 +249,7 @@ export function Library() {
   const app = useApp()
   const { items, subjects, setTopics, setStatus } = useLibrary()
   const [filter, setFilter] = useState<Filter>('all')
+  const tide = useTideDesign()
   const [subject, setSubject] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [picker, setPicker] = useState<{ path: string; at: { x: number; y: number } } | null>(null)
@@ -299,7 +302,14 @@ export function Library() {
       <PixelScene place="library" rows={40} scale={3} className="page-scene" />
       <div className="page-inner">
         <header className="page-head">
-          <h1 className="page-title">Library</h1>
+          <div>
+            <h1 className="page-title">Library</h1>
+            {tide && items.length > 0 && (
+              <p className="td-lede">
+                {items.length} {items.length === 1 ? 'item' : 'items'}, kept as files in the “{app.settings.libraryFolder}” folder of your notes. The tutor cites from all of them.
+              </p>
+            )}
+          </div>
           <div className="row-gap">
           <button className={`btn${finding ? ' on' : ''}`} onClick={() => setFinding((f) => !f)} title="Ask the tutor to find good reading on the web">
             <Icon name="book" size={15} />
@@ -355,6 +365,7 @@ export function Library() {
               </button>
               {usedSubjects.map((t) => (
                 <button key={t} role="tab" aria-selected={subject === t} className={`subject${subject === t ? ' on' : ''}`} onClick={() => setSubject(subject === t ? null : t)}>
+                  {tide && <AreaMark area={t} size={14} />}
                   {t}
                   <span className="chip-count">{subjectCounts.of(t)}</span>
                 </button>

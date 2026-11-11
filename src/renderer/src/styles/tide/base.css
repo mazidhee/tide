@@ -328,8 +328,8 @@
 
   /*
     An area of study: the icon chosen from its name, always beside the name. The icon is what
-    identifies it; its area colour tints the icon as a quieter second cue, pulled towards the
-    ink so it reads on every theme's surfaces.
+    identifies it, drawn in plain ink like the navigation's icons, with no colour of its own.
+    (The five area colours stay on the marks that measure something: a level, a progress bar.)
   */
   .td-area {
     display: inline-flex;
@@ -339,12 +339,14 @@
     color: var(--ink-2);
     white-space: nowrap;
   }
-  .td-area-ic {
-    flex: none;
-    color: color-mix(in srgb, var(--c, var(--ink-3)) 55%, var(--ink));
-  }
+  .td-area-ic,
   .tree-row .td-area-ic.tree-icon {
-    color: color-mix(in srgb, var(--c, var(--ink-3)) 55%, var(--ink));
+    flex: none;
+    color: var(--ink-2);
+  }
+  .tree-row:hover .td-area-ic.tree-icon,
+  .tree-row.active .td-area-ic.tree-icon {
+    color: var(--ink);
   }
   .td-c0 {
     --c: var(--ink-3);

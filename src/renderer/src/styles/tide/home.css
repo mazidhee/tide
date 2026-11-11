@@ -356,7 +356,7 @@
   }
   .td-bar-plan,
   .td-bar-none {
-    fill: var(--line);
+    fill: color-mix(in srgb, var(--ink-3) 24%, var(--paper));
   }
   .td-bar-done {
     fill: var(--accent);
@@ -385,7 +385,7 @@
     background: var(--accent);
   }
   .td-legend i.hollow {
-    background: var(--line);
+    background: color-mix(in srgb, var(--ink-3) 24%, var(--paper));
   }
 
   .td-aim {

@@ -1,2 +1,183 @@
+/*
+  The new design: the library. Real covers where a book has one, ruled cards, kinds as a
+  segmented control, subjects marked by their icon. Scoped to data-design='tide'.
+*/
+
 :root[data-design='tide'] {
+  .library-page .page-head {
+    align-items: flex-start;
+    margin-bottom: 20px;
+  }
+  .library-page .page-head .row-gap {
+    flex: none;
+    flex-wrap: nowrap;
+  }
+  .library-page .td-lede {
+    margin: 6px 0 0;
+    max-width: 62ch;
+    font-size: var(--t-lede);
+    line-height: 23px;
+    color: var(--ink-2);
+  }
+  .save-link-row {
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-ctl);
+    background: var(--raised);
+    box-shadow: none;
+  }
+  .save-link-row:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .library-bar {
+    margin-top: 22px;
+  }
+  /* Kinds: a segmented control */
+  .library-bar .chips {
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--sunk);
+  }
+  .library-bar .chip {
+    height: 24px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--ink-3);
+  }
+  .library-bar .chip:hover {
+    background: transparent;
+    color: var(--ink);
+  }
+  .library-bar .chip.on {
+    background: var(--raised);
+    color: var(--ink);
+    box-shadow:
+      0 0 0 1px var(--line-2),
+      0 1px 2px rgba(16, 28, 48, 0.08);
+  }
+  .chip-count {
+    opacity: 1;
+    color: var(--ink-3);
+    font-weight: 400;
+  }
+  .layout-toggle {
+    padding: 2px;
+    gap: 2px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--sunk);
+  }
+  .layout-toggle button {
+    border-radius: 5px;
+    color: var(--ink-3);
+  }
+  .layout-toggle button.on {
+    background: var(--raised);
+    color: var(--ink);
+    box-shadow:
+      0 0 0 1px var(--line-2),
+      0 1px 2px rgba(16, 28, 48, 0.08);
+  }
+  .filter-input {
+    height: 30px;
+  }
+
+  /* Subjects: each by its icon */
+  .subject {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 28px;
+    padding: 0 9px;
+    border-radius: var(--r-ctl);
+    background: transparent;
+    color: var(--ink-2);
+    font-size: var(--t-meta);
+    font-weight: 500;
+    transition: background-color 120ms ease;
+  }
+  .subject:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+  .subject.on {
+    background: var(--active);
+    color: var(--ink);
+  }
+
+  /* An item: its cover, ruled, lifting a little when you point at it */
+  .lib-card {
+    border: 1px solid var(--line);
+    border-radius: var(--r-box);
+    background: var(--raised);
+    box-shadow: none;
+    transition:
+      border-color 120ms ease,
+      transform 160ms var(--ease-out);
+  }
+  .lib-card:hover {
+    border-color: var(--line-2);
+    box-shadow: none;
+    transform: translateY(-2px);
+  }
+  .lib-cover {
+    border-bottom: 1px solid var(--line);
+    background: var(--sunk);
+  }
+  .lib-title {
+    font: 500 var(--t-base) / 19px var(--ui);
+    letter-spacing: 0;
+    color: var(--ink);
+  }
+  .lib-card:hover .lib-title {
+    color: var(--accent-text);
+  }
+  .lib-excerpt {
+    font-family: var(--ui);
+    font-size: var(--t-meta);
+    line-height: 18px;
+    color: var(--ink-3);
+  }
+  .lib-meta {
+    font-size: 12px;
+    color: var(--ink-3);
+  }
+  .lib-topic {
+    height: 20px;
+    padding: 0 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-mark);
+    background: var(--sunk);
+    color: var(--ink-2);
+    font-size: 12px;
+  }
+  .library-row {
+    border-radius: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .library-row:hover {
+    background: var(--hover);
+  }
+  .library-excerpt {
+    color: var(--ink-3);
+  }
+  .topic-picker {
+    border: 0;
+    border-radius: var(--r-box);
+    background: var(--raised);
+    box-shadow: var(--shadow-pop);
+  }
+  .empty-block {
+    border: 1px dashed var(--line-2);
+    border-radius: var(--r-box);
+    background: transparent;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lib-card:hover {
+      transform: none;
+    }
+  }
 }
