@@ -286,5 +286,21 @@ export function runSqlTool(id: string, sql: string, privateTurn: boolean): { tex
   return { text, ok: !r.error, detail: r.error ? 'error' : r.columns.length ? `${r.rowCount.toLocaleString('en-GB')} row${r.rowCount === 1 ? '' : 's'}` : 'done' }
 }
 
+/**
+ * What a SQL lesson's tutor is told about the lab before it writes a query: the tables and their
+ * columns. Without it, Gemma wrote an example on a column the sample data doesn't have
+ * (orders.category) without running it, and the student's Run answered "no such column".
+ * Nothing when the lab holds a private project's data and this turn isn't about it.
+ */
+export function labSchemaNote(id: string, privateTurn: boolean): string {
+  const held = lab(id)
+  if (!held || (!privateTurn && privateHold(held))) return ''
+  held.told = true
+  return `${schemaText(labSchema(id))} Write every query against exactly these tables and columns (or a file the student loads), and run it with run_sql before you show it.`
+}
+
+/** Whether a lesson is about SQL, and so works in the data lab */
+export const aboutSql = (text: string) => /\bsql\b|\bsqlite\b|\bpostgres|\bgroup by\b|\bhaving\b|\bjoins?\b|\bwindow functions?\b|\bselect\b.*\bfrom\b|\bsubquer|\bcte\b|\bquery\b|\bqueries\b/i.test(text)
+
 /** For tests: how many labs are held */
 export const labCount = () => labs.size

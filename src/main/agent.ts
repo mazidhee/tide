@@ -36,7 +36,7 @@ import { explainerToolResult, findExplainers } from '@shared/explainers'
 import { readText, writeText } from './vault'
 import { applyCanvasOps, describeCanvas, parseCanvas, serializeCanvas } from '@shared/canvas'
 import { retrieve } from './ai'
-import { loadTableTool, runSqlTool } from './lab'
+import { aboutSql, labSchemaNote, loadTableTool, runSqlTool } from './lab'
 import { isSql } from './languages'
 import { runCode } from './runner'
 import { addMemory, forgetMatching, memoryPrompt } from './memory'
@@ -1712,6 +1712,8 @@ async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, sign
     sources.length && !((assigning || marking) && req.scope.kind === 'vault') && !(req.instructions && userTurns > 1) ? `Passages from what the student is studying right now:\n\n${sources.map((s) => `[${s.index}] ${s.title}${s.heading ? ` > ${s.heading}` : ''}\n${clip(s.text, req.instructions || req.scope.kind === 'vault' ? 1000 : 1600)}`).join('\n\n---\n\n')}` : '',
     req.attachment ? `The student selected this passage:\n"""\n${req.attachment}\n"""` : '',
     before,
+    // A SQL lesson knows the lab's tables before it writes its first query
+    req.session && req.instructions && aboutSql(`${req.topic ?? ''} ${question}`) ? labSchemaNote(req.labId ?? req.chatId ?? 'scratch', !!ctx.private) : '',
     own.length ? `Where this is covered in books the student owns (they open in Tide; point them to the pages when it helps, as a markdown link like [${readingLabel(own[0])}](/${own[0].path.split('/').map(encodeURIComponent).join('/')}#page=${own[0].from})): ${own.map(readingLabel).join('; ')}` : '',
     images.length ? `You can see ${images.length === 1 ? 'the picture' : `these ${images.length} pictures`} from their notes, attached below in this order: ${images.map((im, i) => `${i + 1}) ${im.path}`).join(', ')}. Teach from what they show. To show one in your answer, put its line on its own exactly as written: ${images.map((im) => imageMarkdown(im.path)).join(' ')}` : ''
   ]

@@ -11,7 +11,7 @@ mkdirSync(join(vault, 'Secret project'), { recursive: true })
 vi.mock('electron', () => ({ app: { getAppPath: () => process.cwd(), getPath: () => root } }))
 vi.mock('../src/main/settings', () => ({ getSettings: () => ({ vaultPath: vault, libraryFolder: 'Library', ai: {} }) }))
 
-import { labLoadTable, labQuery, labReset, labSchema, loadTableTool, runSqlTool, vaultDataFile } from '../src/main/lab'
+import { aboutSql, labLoadTable, labQuery, labReset, labSchema, labSchemaNote, loadTableTool, runSqlTool, vaultDataFile } from '../src/main/lab'
 
 const isPrivate = async (p: string) => p === 'Secret project' || p.startsWith('Secret project/')
 /** As the lab:load IPC does it */
@@ -243,5 +243,21 @@ describe('a private project’s table in the lab', () => {
     expect(runSqlTool('priv-6', 'SELECT count(*) AS n FROM mine', false).text).toMatch(/^n\n2\n/)
     labReset('priv-6')
     expect(runSqlTool('priv-6', 'SELECT count(*) AS n FROM survey', false).ok).toBe(true)
+  })
+})
+
+describe('a SQL lesson is told the tables before its first query', () => {
+  it('names the real columns, so an example cannot use one that is not there', () => {
+    const note = labSchemaNote('schema-note-test', false)
+    if (!note) return // tide-core not built here
+    expect(note).toMatch(/orders \(/)
+    expect(note).not.toMatch(/orders \([^)]*\): [^.]*\bcategory\b/)
+    expect(note).toMatch(/run it with run_sql/)
+  })
+  it('knows a SQL lesson when it sees one', () => {
+    expect(aboutSql('GROUP BY and HAVING in SQL')).toBe(true)
+    expect(aboutSql('Window functions')).toBe(true)
+    expect(aboutSql('Variables and Data Types')).toBe(false)
+    expect(aboutSql('Raft leader election')).toBe(false)
   })
 })
