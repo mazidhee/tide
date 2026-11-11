@@ -134,11 +134,11 @@ function retrievePages(scope: Extract<ChatScope, { kind: 'pages' }>, query: stri
  * The section of a book you own that covers a lesson's topic, as text to teach from: the best
  * passages from its pages, up to about 5,000 characters. Null when no book covers it.
  */
-export async function lessonPassage(topic: string): Promise<{ label: string; path: string; from: number; to: number; text: string } | null> {
+export async function lessonPassage(topic: string, context = ''): Promise<{ label: string; path: string; from: number; to: number; text: string } | null> {
   const { pagesToRead } = await import('./books')
   const { readingLabel } = await import('@shared/books')
   // Only a section clearly about the topic: a lesson taught from the wrong pages is worse than none
-  const s = (await pagesToRead(topic, 3).catch(() => [])).find((x) => x.onTopic)
+  const s = (await pagesToRead(topic, 3, context).catch(() => [])).find((x) => x.onTopic)
   if (!s) return null
   await indexReady()
   const to = Math.min(s.to, s.from + 8)

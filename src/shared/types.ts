@@ -754,9 +754,9 @@ export interface TideApi {
   }
   books: {
     /** The pages to read in your own books for a topic, best first */
-    suggest(topic: string, limit?: number): Promise<import('./books').ReadingSuggestion[]>
+    suggest(topic: string, limit?: number, context?: string): Promise<import('./books').ReadingSuggestion[]>
     /** The text of the section of a book you own that covers a topic, to teach a lesson from */
-    passage(topic: string): Promise<{ label: string; path: string; from: number; to: number; text: string } | null>
+    passage(topic: string, context?: string): Promise<{ label: string; path: string; from: number; to: number; text: string } | null>
     /** Maps a book now: chapters, pages and what each covers */
     map(path: string): Promise<import('./books').BookMap | null>
   }

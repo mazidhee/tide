@@ -1692,7 +1692,7 @@ async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, sign
   const thingsOn = !!wanted && (await thingsAvailable())
   const marking = thingsOn && wanted === 'mark'
   // A lesson opens knowing where its topic is in the books they own, so it can send them to the pages
-  const own = req.session && req.instructions && userTurns <= 1 && req.scope.kind !== 'pages' ? await pagesToRead(question, 2).catch(() => []) : []
+  const own = req.session && req.instructions && userTurns <= 1 && req.scope.kind !== 'pages' ? await pagesToRead(question, 2, `${req.topic ?? ''} ${'path' in req.scope ? req.scope.path : ''}`).catch(() => []) : []
   // And what earlier lessons on this topic (or close to it) show, so it builds on them
   const before = req.session && req.instructions && userTurns <= 1 && req.topic ? await earlierLessons(req.topic, !!ctx.private).catch(() => '') : ''
   const assigning = thingsOn && wanted === 'assign'

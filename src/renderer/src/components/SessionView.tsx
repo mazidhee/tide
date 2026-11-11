@@ -256,7 +256,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const begin = async () => {
     let opening = openingMessage(setup)
     if ((mode === 'teach' || mode === 'quiz') && (scope.kind === 'vault' || scope.kind === 'folder')) {
-      const found = await Promise.race([window.tide.books.passage(topic).catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 2000))])
+      const found = await Promise.race([window.tide.books.passage(topic, 'path' in scope ? scope.path : '').catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 2000))])
       if (found) opening = withPassage(opening, found)
     }
     // The passages it's taught from (specs, papers, docs found for the topic), when they're ready
@@ -429,8 +429,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   }, [mode, topic, JSON.stringify(scope)])
   useEffect(() => {
     if (mode !== 'teach' || scope.kind === 'pages') return
-    window.tide.books.suggest(topic, 2).then(setToRead).catch(() => {})
-  }, [mode, topic, scope.kind])
+    window.tide.books.suggest(topic, 2, 'path' in scope ? scope.path : '').then(setToRead).catch(() => {})
+  }, [mode, topic, JSON.stringify(scope)])
   const notesMine = useRef('')
   const [sideTab, setSideTab] = useState<'canvas' | 'notes'>('canvas')
   useEffect(() => {

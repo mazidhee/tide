@@ -40,6 +40,25 @@ const STOP = new Set('the and for with from into what how why when this that are
 
 export const topicWords = (s: string) => words(s)
 
+/** Programming languages a title or subject names: a Python lesson must not be sent to a book on C */
+const LANGUAGES: [string, RegExp][] = [
+  ['python', /python/i],
+  ['c++', /\bc\+\+|\bcpp\b/i],
+  ['c#', /\bc#|\bc sharp\b/i],
+  ['c', /(^|[^\w+#.])c(?![\w+#])(?!\s*\+\+)(?=\s+(programming|language|in\b|for\b|interfaces|traps|primer|how to)|\s*[-:,(]|$)/i],
+  ['java', /\bjava\b(?!\s*script)/i],
+  ['javascript', /\bjavascript\b|\bnode\.?js\b/i],
+  ['typescript', /\btypescript\b/i],
+  ['rust', /\brust\b/i],
+  ['go', /\bgolang\b|\bthe go programming\b|\bgo programming\b/i],
+  ['haskell', /\bhaskell\b/i],
+  ['ruby', /\bruby\b/i],
+  ['kotlin', /\bkotlin\b/i],
+  ['swift', /\bswift\b/i],
+  ['scala', /\bscala\b/i]
+]
+export const languagesIn = (text: string): string[] => LANGUAGES.filter(([, re]) => re.test(text)).map(([name]) => name)
+
 /** Lower case, punctuation to spaces, plurals to singular: for finding a topic as a phrase */
 const flat = (s: string) =>
   ` ${s
@@ -67,9 +86,17 @@ const words = (s: string) =>
  * first (book path and page). A section scores for sharing the topic's words and for holding
  * those hits; a whole chapter's hits count for less, so a precise section beats its chapter.
  */
-export function matchSections(topic: string, maps: BookMap[], hits: { path: string; page: number }[], limit = 2): ReadingSuggestion[] {
+export function matchSections(topic: string, maps: BookMap[], hits: { path: string; page: number }[], limit = 2, context = ''): ReadingSuggestion[] {
   const want = words(topic)
   if (!want.length) return []
+  // The language the lesson is in (from the topic or its notebook): a book on another language is
+  // left out, however well its chapter titles match ("Types, Operators and Expressions" in a book
+  // on C for "Variables and Data Types" in Python)
+  const lessonLangs = languagesIn(`${topic} ${context}`)
+  if (lessonLangs.length) maps = maps.filter((m) => {
+    const bookLangs = languagesIn(m.title)
+    return !bookLangs.length || bookLangs.some((l) => lessonLangs.includes(l))
+  })
   const phrase = flat(topic).trim().replace(/^(the|a|an) /, '')
   const scored: (ReadingSuggestion & { score: number })[] = []
   for (const map of maps) {
