@@ -10,7 +10,7 @@
  */
 import { promises as fs } from 'fs'
 import { join } from 'path'
-import { roadmapTopics, underHeading } from '@shared/curriculum'
+import { roadmapTopics, splitTag, underHeading } from '@shared/curriculum'
 import {
   conceptName,
   kindOfMark,
@@ -351,7 +351,7 @@ async function aimsIn(notebooks: Awaited<ReturnType<typeof getNotebooks>>): Prom
     const md = await readText(nb.outline).catch(() => null)
     if (md === null) continue
     const topics = roadmapTopics(nb.name, md).filter((t) => !t.project && (!g.section || underHeading(t, g.section)))
-    out.push({ id: g.id, area: nb.name, ...(g.section ? { section: g.section } : {}), deadline: g.deadline, createdAt: g.createdAt, topics: topics.map((t) => t.id) })
+    out.push({ id: g.id, area: nb.name, ...(g.section ? { section: splitTag(g.section).title.replace(/^\s*\d+[.)]\s*/, '') } : {}), deadline: g.deadline, createdAt: g.createdAt, topics: topics.map((t) => t.id) })
   }
   return out
 }

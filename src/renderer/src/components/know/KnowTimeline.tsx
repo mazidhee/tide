@@ -43,6 +43,7 @@ function TimelineBody({ t, data, byId, areaClass, actions }: { t: Timeline; data
   const wrap = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(900)
   const [at, setAt] = useState<number | null>(null)
+  const [tipY, setTipY] = useState(30)
   useEffect(() => {
     const el = wrap.current
     if (!el) return
@@ -85,9 +86,11 @@ function TimelineBody({ t, data, byId, areaClass, actions }: { t: Timeline; data
     const box = e.currentTarget.getBoundingClientRect()
     const i = Math.floor((e.clientX - box.left - PAD.l) / slot)
     setAt(i >= 0 && i < W.length ? i : null)
+    setTipY(Math.max(30, e.clientY - box.top + 18))
   }
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Escape') return setAt(null)
+    setTipY(30)
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'Home' && e.key !== 'End') return
     e.preventDefault()
     setAt((cur) => {
@@ -256,7 +259,7 @@ function TimelineBody({ t, data, byId, areaClass, actions }: { t: Timeline; data
         </svg>
 
         {hovered && at !== null && (
-          <div className="kt-tip" style={{ left: Math.min(width - 150, Math.max(150, xi(at))) }} role="status">
+          <div className="kt-tip" style={{ left: Math.min(width - 150, Math.max(150, xi(at))), top: tipY }} role="status">
             <WeekTip w={hovered} i={at} t={t} byId={byId} />
           </div>
         )}
@@ -370,14 +373,42 @@ function Upcoming({ t, byId, now, areaClass, actions }: { t: Timeline; byId: Map
     .map((w, k) => ({ w, k, ids: [...new Set([...w.fades, ...w.due])].filter((id) => byId.has(id)) }))
     .filter((x) => x.ids.length)
   const shown = all ? weeks : weeks.slice(0, 4)
+  const faded = [...byId.values()].filter((c) => !c.parent && c.status === 'fading').sort((a, b) => b.estimate - a.estimate)
+  const [allFaded, setAllFaded] = useState(false)
   return (
     <section className="kt-up" aria-labelledby="kt-up-h">
       <h2 id="kt-up-h" className="td-sec">
         Fading ahead
       </h2>
+      {(weeks.length > 0 || faded.length > 0) && <p className="kt-up-say">What has already dropped below solid, then what will if it isn’t reviewed, and the recall questions coming due, week by week.</p>}
+      {faded.length > 0 && (
+        <div className="kt-up-week">
+          <h3>Already below solid</h3>
+          <ul>
+            {(allFaded ? faded : faded.slice(0, 6)).map((c) => (
+              <li key={c.id}>
+                <Level now={c.estimate} high={c.level} area={areaClass(c.area)} />
+                <span className="kt-up-main">
+                  <b>{c.name}</b>
+                  <span>
+                    {c.area || 'No notebook'}, held at {pct(c.estimate)}, down from {pct(c.level)}
+                  </span>
+                </span>
+                <button className="btn small" onClick={() => actions.onReview(c)}>
+                  Review now
+                </button>
+              </li>
+            ))}
+          </ul>
+          {faded.length > 6 && (
+            <button className="td-more" onClick={() => setAllFaded((x) => !x)}>
+              {allFaded ? 'Fewer' : `All ${faded.length}, the least faded first`}
+            </button>
+          )}
+        </div>
+      )}
       {weeks.length ? (
         <>
-          <p className="kt-up-say">What drops below solid if it isn’t reviewed, and recall questions coming due, week by week.</p>
           {shown.map(({ w, k, ids }) => (
             <div key={w.start} className="kt-up-week">
               <h3>{k === 0 ? 'This week' : k === 1 ? 'Next week' : `Week of ${short(w.start)}`}</h3>
