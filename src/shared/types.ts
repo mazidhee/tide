@@ -378,6 +378,8 @@ export interface Attempt {
   /** How sure the student said they were, 1 (guess) to 3 (sure) */
   confidence?: 1 | 2 | 3
   question?: string
+  /** The lesson record the answer is kept in (a lesson or a quiz): the knowledge map reads it from there */
+  lesson?: string
 }
 
 export type MasteryLevel = 'new' | 'weak' | 'shaky' | 'solid' | 'mastered'
@@ -692,6 +694,10 @@ export interface TideApi {
   /** The knowledge map: every concept with how solid it is today, what is ready next, what is fading, and retention by week */
   knowledge: {
     view(): Promise<import('./knowledge').KnowledgeView>
+    /** Review now: the concept's kept questions that are due */
+    review(concept: string): Promise<import('./review').ReviewSetup>
+    /** One question of a review was marked: scheduled in its own store and counted on the concept */
+    reviewAnswer(concept: string, item: import('./review').ReviewItem, verdict: Verdict): Promise<void>
   }
   /** Free readings found for a topic; when there are none yet, they're looked up in the background */
   readings: {

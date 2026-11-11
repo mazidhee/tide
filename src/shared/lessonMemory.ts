@@ -27,7 +27,7 @@ export interface LessonDigest {
   /** How its first question went: marked, not answered, or answered without a mark */
   opening?: 'correct' | 'partial' | 'wrong' | 'stuck' | 'answered'
   /** Every question in the order it was asked, with how it went (no mark: not answered, or not marked) */
-  asked: { prompt: string; mark?: 'correct' | 'partial' | 'wrong' | 'stuck' }[]
+  asked: { prompt: string; mark?: 'correct' | 'partial' | 'wrong' | 'stuck'; /** The topic the tutor named on it, in a quiz on several */ topic?: string }[]
 }
 
 const short = (s: string, n = 150) => {
@@ -75,7 +75,7 @@ export function digestLesson(r: LessonRecord): LessonDigest | null {
     const ask = [...blocks].reverse().find((b) => b.kind === 'ask')
     asked = ask && ask.kind === 'ask' ? ask.prompt : grade ? undefined : asked
     // The same question put again (after a hint or an explanation) is still that question
-    if (ask && ask.kind === 'ask' && d.asked[d.asked.length - 1]?.prompt !== short(ask.prompt)) d.asked.push({ prompt: short(ask.prompt) })
+    if (ask && ask.kind === 'ask' && d.asked[d.asked.length - 1]?.prompt !== short(ask.prompt)) d.asked.push({ prompt: short(ask.prompt), ...(ask.topic ? { topic: ask.topic } : {}) })
   }
   if (asked && !d.finished) d.open = short(asked)
   // Nothing was asked or planned: there is nothing to build on

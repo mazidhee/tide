@@ -169,7 +169,9 @@ const api: TideApi = {
     known: invoke('difficulty:known')
   },
   knowledge: {
-    view: invoke('knowledge:view')
+    view: invoke('knowledge:view'),
+    review: invoke('knowledge:review'),
+    reviewAnswer: invoke('knowledge:reviewAnswer')
   },
   readings: {
     for: invoke('readings:for')
