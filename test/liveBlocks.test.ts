@@ -123,6 +123,8 @@ describe('simulations while the message is still being written', () => {
   it('keeps the same simulation, with its training and tour step, through repeated rewrites', async () => {
     message().innerHTML = `<p>Watch it learn.</p>${pre('sim', NET)}`
     await settle()
+    // The first simulation of a run also loads its code; on a busy machine that can outlast one settle
+    for (let i = 0; i < 40 && !message().querySelector('figure.sim'); i++) await wait(100)
     const sim = message().querySelector<HTMLElement>('figure.sim')!
     expect(sim).not.toBeNull()
     click(byText(sim, 'Next'))
