@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { KnowledgeView } from '@shared/knowledge'
+import { conceptName, type ConceptState, type KnowledgeView } from '@shared/knowledge'
 
 /**
  * What you know, read once and shared by everything in the new design that shows a concept's
@@ -40,4 +40,17 @@ export function useKnowledge(on = true): KnowledgeView | null {
     }
   }, [on])
   return on ? k : null
+}
+
+const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+
+/** The concept a lesson or quiz is about: the one with its name, in its notebook's area when two share a name */
+export function conceptFor(k: KnowledgeView | null, topic: string, path?: string): ConceptState | null {
+  if (!k) return null
+  const want = norm(conceptName(topic))
+  if (!want) return null
+  const named = k.concepts.filter((c) => norm(c.name) === want)
+  if (named.length < 2) return named[0] ?? null
+  const top = path?.split('/')[0].toLowerCase()
+  return named.find((c) => c.area.toLowerCase() === top) ?? named.find((c) => c.seen > 0) ?? named[0]
 }

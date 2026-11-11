@@ -1,1 +1,648 @@
-/* The new design: lesson. Scoped to data-design='tide'. */
+/*
+  The new design: a lesson. The reading column in the book face, the question waiting for you in
+  the action colour, the recall card with its level, the plan and what the lesson is checked
+  against in a rail, and the live blocks (simulations, SQL cells, charts) restyled through the
+  tokens. Scoped to data-design='tide'.
+*/
+
+:root[data-design='tide'] {
+  /* ---------- Long reading: the book face at the size you chose, about 74 characters wide ---------- */
+  .prose {
+    font-family: var(--read);
+    font-size: var(--read-size);
+    line-height: 1.65;
+    font-variant-numeric: oldstyle-nums proportional-nums;
+    color: var(--ink);
+  }
+  &[data-reading='sans'] .prose {
+    font-size: calc(var(--read-size) * 0.91);
+    line-height: 1.68;
+    font-variant-numeric: normal;
+  }
+  .prose h1,
+  .prose h2,
+  .prose h3,
+  .prose h4,
+  .prose h5,
+  .prose h6 {
+    font-family: var(--ui);
+    font-weight: 600;
+    font-variant-numeric: normal;
+  }
+  .prose h1 {
+    font-size: 1.41em;
+    line-height: 1.25;
+    letter-spacing: -0.018em;
+  }
+  .prose h2 {
+    font-size: 1.12em;
+    line-height: 1.37;
+    letter-spacing: -0.012em;
+    margin: 2.1em 0 0.45em;
+  }
+  .prose h3 {
+    font-size: 0.89em;
+    line-height: 1.45;
+    margin: 1.7em 0 0.3em;
+  }
+  .prose h4,
+  .prose h5,
+  .prose h6 {
+    font-size: 0.82em;
+    color: var(--ink-2);
+  }
+  .prose strong {
+    font-weight: 600;
+  }
+  .prose a {
+    color: var(--accent-text);
+    text-decoration-color: var(--accent-line);
+  }
+  .prose a:hover {
+    text-decoration-color: var(--accent-text);
+  }
+  .prose :not(pre) > code {
+    font: 0.78em/1.4 var(--mono);
+    background: var(--sunk);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 4px;
+    font-variant-numeric: normal;
+  }
+  .prose pre {
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--sunk);
+    font-variant-numeric: normal;
+  }
+  .prose pre code {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 21px;
+  }
+  .prose blockquote {
+    border-left: 1px solid var(--line-2);
+    color: var(--ink-2);
+  }
+  .prose table {
+    font: 400 14px/20px var(--ui);
+    font-variant-numeric: tabular-nums;
+    border-collapse: collapse;
+  }
+  .prose table th {
+    font-weight: 600;
+    text-align: left;
+    padding: 8px 12px 8px 0;
+    border: 0;
+    border-bottom: 1px solid var(--line-2);
+    background: none;
+  }
+  .prose table td {
+    padding: 8px 12px 8px 0;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+    color: var(--ink-2);
+  }
+  .prose table td:first-child {
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .prose mark {
+    background: var(--mark);
+    border-radius: 2px;
+  }
+  .prose hr {
+    border: 0;
+    border-top: 1px solid var(--line);
+  }
+  .prose .callout {
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--sunk);
+    font-family: var(--ui);
+    font-size: 0.88em;
+    line-height: 1.6;
+    color: var(--ink-2);
+  }
+  .katex {
+    font-variant-numeric: normal;
+  }
+
+  /* ---------- The lesson page ---------- */
+  .td-aa {
+    font: 600 12px/1 var(--serif);
+    width: 28px;
+  }
+  &[data-reading='sans'] .td-aa {
+    font-family: var(--ui);
+  }
+  .session-scroll {
+    padding: 36px 48px 28px;
+  }
+  .session-column {
+    max-width: 704px;
+    gap: 16px;
+  }
+  .session-solo.td-with-rail {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+  .td-lesson-head {
+    margin-bottom: 12px;
+  }
+  .td-lesson-head h1 {
+    margin: 0;
+    font: 600 var(--t-title) / 34px var(--ui);
+    letter-spacing: -0.022em;
+    text-wrap: balance;
+    user-select: text;
+  }
+  .td-lesson-head p {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 16px;
+    margin: 10px 0 0;
+    font-size: var(--t-meta);
+    color: var(--ink-3);
+  }
+  .td-lesson-held {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ink-2);
+  }
+  .td-lesson-held .td-level {
+    height: 16px;
+    width: 8px;
+  }
+
+  /* What to read alongside, when the rail is closed */
+  .s-read-link {
+    color: var(--ink-2);
+  }
+  .s-read-link:hover {
+    color: var(--accent-text);
+  }
+  .s-plan {
+    border: 1px solid var(--line);
+    border-radius: var(--r-box);
+    font-size: var(--t-base);
+  }
+  .s-plan li.done .s-plan-dot {
+    background: var(--ink-3);
+    border-color: var(--ink-3);
+    color: var(--paper);
+  }
+  .s-plan li.current .s-plan-dot {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  /* The tutor speaks in the reading face; you answer in the tool's */
+  .s-tutor {
+    gap: 14px;
+  }
+  .s-tutor .prose.compact {
+    font-size: var(--read-size);
+  }
+  &[data-reading='sans'] .s-tutor .prose.compact {
+    font-size: calc(var(--read-size) * 0.91);
+  }
+  .td-who {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-top: 8px;
+    font-weight: 600;
+  }
+  .td-who .td-meta {
+    font-weight: 400;
+  }
+  /* What you can do with a reply sits under it, in a row, not floating beside it */
+  .s-tutor-tools {
+    position: static;
+    order: 10;
+    display: flex;
+    gap: 2px;
+    margin: -4px 0 0 -6px;
+  }
+  .s-you {
+    max-width: 78%;
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-box) var(--r-box) 3px var(--r-box);
+    background: var(--sunk);
+  }
+  .s-you.hint {
+    border: 0;
+    background: none;
+    padding: 0;
+  }
+  .s-you .prose,
+  .s-you .prose.compact {
+    font: 400 14.5px/22px var(--ui);
+    font-variant-numeric: normal;
+  }
+  .s-conf-tag {
+    color: var(--ink-3);
+  }
+
+  /* The question waiting for you: the one block in the action colour */
+  .s-ask {
+    padding: 18px 20px;
+    border: 1px solid var(--accent-line);
+    border-radius: var(--r-box);
+    background: var(--accent-soft);
+  }
+  .s-ask .prose {
+    font: 600 17px/25px var(--ui);
+    font-variant-numeric: normal;
+    letter-spacing: -0.008em;
+    text-wrap: pretty;
+  }
+  .s-ask .prose p {
+    margin-bottom: 0.6em;
+  }
+  .s-ask .prose > :last-child {
+    margin-bottom: 0;
+  }
+  /* A question about something you already hold: its level stands beside it */
+  .s-ask.td-recall {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 16px;
+    border-color: var(--line-2);
+    background: var(--raised);
+  }
+  .td-recall .td-level {
+    margin-top: 3px;
+  }
+  .td-recall-lab {
+    margin: 0 0 2px;
+    font-size: var(--t-meta);
+    font-weight: 500;
+    color: var(--ink-3);
+  }
+  .td-recall-lab.fading {
+    color: var(--warn);
+  }
+  .td-recall .prose {
+    font-size: 16px;
+    line-height: 24px;
+    letter-spacing: -0.006em;
+  }
+
+  /* A mark on your answer: a word and a sentence, not a coloured box */
+  .s-grade {
+    --tone: var(--warn);
+    gap: 4px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--sunk);
+  }
+  .s-grade.v-correct {
+    --tone: var(--good);
+  }
+  .s-grade.v-wrong {
+    --tone: var(--bad);
+  }
+  .s-grade-badge {
+    color: var(--tone);
+    font-size: var(--t-base);
+    font-weight: 600;
+  }
+  .s-tutor .s-grade .prose.compact {
+    font: 400 14.5px/22px var(--ui);
+    font-variant-numeric: normal;
+    color: var(--ink-2);
+  }
+  .s-card,
+  .s-scores,
+  .s-challenge,
+  .s-summary,
+  .s-takeaway {
+    border: 1px solid var(--line);
+    border-radius: var(--r-box);
+    background: var(--raised);
+  }
+  .s-summary {
+    background: var(--sunk);
+  }
+  .s-scores h3,
+  .s-summary h3 {
+    font: 600 var(--t-base) / 20px var(--ui);
+  }
+  .s-score-bar {
+    background: var(--line);
+  }
+  .s-score-bar .hi {
+    background: var(--good-mark);
+  }
+  .s-score-bar .mid {
+    background: var(--warn-mark);
+  }
+  .s-score-bar .lo {
+    background: var(--bad-mark);
+  }
+  .s-takeaway-label {
+    color: var(--ink-3);
+  }
+  .work-log {
+    font-size: var(--t-meta);
+    color: var(--ink-3);
+  }
+
+  /* Where you answer: a ruled box, the one thing in a lesson that floats */
+  .s-answer,
+  .s-goon:has(textarea) {
+    bottom: 16px;
+    gap: 0;
+    padding: 0;
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-box);
+    background: var(--raised);
+    box-shadow:
+      var(--shadow-float),
+      0 -26px 22px -6px var(--paper);
+  }
+  .s-answer:focus-within,
+  .s-goon:has(textarea):focus-within {
+    border-color: var(--accent);
+    box-shadow:
+      0 0 0 3px var(--accent-soft),
+      var(--shadow-float),
+      0 -26px 22px -6px var(--paper);
+  }
+  .s-input,
+  .s-input:focus {
+    display: block;
+    padding: 12px 14px;
+    border: 0;
+    background: none;
+    box-shadow: none;
+    font: 400 14.5px/22px var(--ui);
+  }
+  /* The answer box is as tall as what you have written, from three lines up */
+  .s-answer .s-input,
+  .s-goon .s-input {
+    field-sizing: content;
+    min-height: 68px;
+    max-height: 38vh;
+    resize: none;
+  }
+  .s-answer .s-input.small {
+    min-height: 44px;
+  }
+  .s-answer > .s-options {
+    padding: 12px 12px 0;
+  }
+  .s-answer > .code-editor,
+  .s-answer > .s-run-row,
+  .s-answer > .s-run-output {
+    margin: 12px 12px 0;
+    width: auto;
+  }
+  .s-answer-bar,
+  .s-goon:has(textarea) .s-goon-bar {
+    padding: 6px 6px 6px 8px;
+    border-top: 1px solid var(--line);
+    gap: 6px;
+  }
+  .s-answer-bar .segmented {
+    border-color: transparent;
+    background: none;
+  }
+  .s-answer-bar .segmented button.on {
+    background: var(--active);
+    box-shadow: none;
+  }
+  .quiz-option {
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-ctl);
+    background: var(--raised);
+    box-shadow: none;
+  }
+  .quiz-option:hover {
+    border-color: var(--ink-3);
+    background: var(--raised);
+  }
+  .quiz-option.picked {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .option-key {
+    font-weight: 600;
+    color: var(--ink-3);
+    border-radius: 4px;
+  }
+  .quiz-option.picked .option-key {
+    color: var(--accent-text);
+  }
+
+  /* ---------- The rail: the plan, and what the lesson is checked against ---------- */
+  .td-lesson-rail {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 28px 22px;
+    border-left: 1px solid var(--line);
+  }
+  .td-lesson-rail section + section {
+    margin-top: 28px;
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+  }
+  .td-rail-h {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 0 0 8px 8px;
+    font: 600 var(--t-base) / 20px var(--ui);
+  }
+  .td-rail-h .td-meta {
+    font-weight: 400;
+  }
+  .td-plan {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .td-plan li {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 7px 8px;
+    border-radius: var(--r-ctl);
+    color: var(--ink-2);
+  }
+  .td-plan-n {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1.5px var(--line-2);
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--ink-3);
+  }
+  .td-plan li.done {
+    color: var(--ink-3);
+  }
+  .td-plan li.done .td-plan-n {
+    background: var(--ink-3);
+    box-shadow: none;
+    color: var(--paper);
+  }
+  .td-plan li.current {
+    background: var(--accent-soft);
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .td-plan li.current .td-plan-n {
+    background: var(--accent);
+    box-shadow: none;
+    color: var(--accent-ink);
+  }
+  .td-src {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: 10px;
+    width: 100%;
+    padding: 8px;
+    border-radius: var(--r-ctl);
+    text-align: left;
+    transition: background-color 120ms ease;
+  }
+  button.td-src:hover {
+    background: var(--hover);
+  }
+  .td-src-k {
+    display: grid;
+    place-items: center;
+    height: 18px;
+    margin-top: 1px;
+    border-radius: 4px;
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font: 600 11px/18px var(--ui);
+  }
+  .td-src b {
+    display: block;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+  .td-src span span {
+    display: block;
+    font-size: var(--t-meta);
+    line-height: 18px;
+    color: var(--ink-3);
+  }
+  .td-src span span span {
+    display: inline;
+  }
+  .td-src .td-ok {
+    color: var(--good);
+  }
+  .td-src .td-warn {
+    color: var(--warn);
+  }
+
+  /* Your notes beside the lesson */
+  .lesson-notes {
+    border-left: 1px solid var(--line);
+    background: var(--sunk);
+  }
+
+  /* ---------- Live blocks: simulations, SQL cells, charts, through the tokens ---------- */
+  .lab-block,
+  .sim {
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-box);
+    background: var(--raised);
+    box-shadow: none;
+    font-family: var(--ui);
+    font-variant-numeric: tabular-nums;
+  }
+  .lab-title,
+  .sim-title {
+    font: 600 var(--t-base) / 20px var(--ui);
+  }
+  .lab-meta,
+  .lab-lang,
+  .lab-engine,
+  .sim-kind,
+  .sim-cap,
+  .sim-label {
+    font-size: var(--t-meta);
+    color: var(--ink-3);
+  }
+  .lab-block pre.lab-hl,
+  .lab-block .lab-sql {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 21px;
+  }
+  .lab-block .lab-table {
+    font-family: var(--ui);
+    font-variant-numeric: tabular-nums;
+  }
+  .lab-block .lab-table th {
+    font-family: var(--mono);
+    font-weight: 500;
+    color: var(--ink-3);
+  }
+  .lab-block .lab-table tbody tr:hover td {
+    background: var(--hover);
+  }
+  .lab-run,
+  .sim-btn.primary {
+    background: var(--primary, var(--accent));
+    border-color: var(--primary, var(--accent));
+    color: var(--primary-ink, var(--accent-ink));
+    border-radius: var(--r-ctl);
+    font-weight: 600;
+    box-shadow: none;
+  }
+  .lab-run:hover:not(:disabled),
+  .sim-btn.primary:hover:not(:disabled) {
+    background: var(--primary, var(--accent-hover));
+    filter: none;
+  }
+  .sim-btn,
+  .sim .sim-select,
+  .sim .sim-number {
+    border-radius: var(--r-ctl);
+    box-shadow: none;
+  }
+  .sim-seg {
+    border-radius: 8px;
+  }
+  .sim-seg-btn {
+    border-radius: 5px;
+  }
+  .lab-error-label {
+    color: var(--bad);
+  }
+  .run-output {
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--sunk);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 21px;
+  }
+
+  @container (max-width: 980px) {
+    .session-solo.td-with-rail {
+      grid-template-columns: minmax(0, 1fr) 264px;
+    }
+    .session-scroll {
+      padding-left: 32px;
+      padding-right: 32px;
+    }
+  }
+}

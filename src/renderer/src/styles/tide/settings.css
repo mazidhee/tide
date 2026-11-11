@@ -1,1 +1,2 @@
-/* The new design: settings. Scoped to data-design='tide'. */
+:root[data-design='tide'] {
+}
