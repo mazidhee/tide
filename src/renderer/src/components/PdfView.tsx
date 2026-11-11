@@ -727,7 +727,7 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
               </div>
               {notes !== null &&
                 (notesEditing ? (
-                  <Editor value={notes} onChange={onNotesEdit} handleRef={editorHandle} />
+                  <Editor value={notes} onChange={onNotesEdit} handleRef={editorHandle} notePath={notesPath} />
                 ) : (
                   <div
                     className="prose pdf-notes-read"

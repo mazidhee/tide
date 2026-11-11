@@ -31,7 +31,24 @@ const GROUPS: { kind: FormatKind; label: ReactNode; title: string; className?: s
  * The writing tools while you edit a note: formatting on the left (each one toggles, and works on
  * the selection or the lines it touches), the writing coach on the right.
  */
-export function FormatBar({ onFormat, coach, onCoach, onTest, testing }: { onFormat(kind: FormatKind): void; coach: boolean; onCoach(): void; onTest(): void; testing: boolean }) {
+export function FormatBar({
+  onFormat,
+  coach,
+  onCoach,
+  onTest,
+  testing,
+  source,
+  onSource
+}: {
+  onFormat(kind: FormatKind): void
+  coach: boolean
+  onCoach(): void
+  onTest(): void
+  testing: boolean
+  /** Source mode (all Markdown shown) rather than live preview */
+  source?: boolean
+  onSource?(): void
+}) {
   return (
     <div className="format-bar" role="toolbar" aria-label="Formatting">
       <div className="format-groups">
@@ -57,6 +74,18 @@ export function FormatBar({ onFormat, coach, onCoach, onTest, testing }: { onFor
         ))}
       </div>
       <div className="format-aside">
+        {onSource && (
+          <button
+            type="button"
+            className={`fmt-text${source ? ' on' : ''}`}
+            aria-pressed={!!source}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={onSource}
+            title={source ? 'Showing the Markdown everywhere. Click for live preview (⌘⇧E)' : 'Live preview: Markdown shows only on the line you are on. Click to show it everywhere (⌘⇧E)'}
+          >
+            Source
+          </button>
+        )}
         <button type="button" className="fmt-text" onMouseDown={(e) => e.preventDefault()} onClick={onTest} disabled={testing} title="One question on the paragraph you’re writing (⌘⇧T)">
           {testing ? 'Thinking…' : 'Test me'}
         </button>

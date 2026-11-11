@@ -859,3 +859,32 @@ are:
     DEALINGS IN THE SOFTWARE.
   """
 ```
+
+## SilverBullet (CodeMirror 6 extensions, adapted into the note editor's live preview)
+
+Licence: MIT. Source: https://github.com/silverbulletmd/silverbullet, commit 237ef6a24d57272acc70c9959fea13ac401c0c80 (client/codemirror: util.ts, syntax/hide_mark.ts, syntax/table.ts, syntax/task.ts, syntax/fenced_code.ts). Adapted in src/renderer/src/lib/livePreview: which Markdown marks are hidden away from the cursor, the test for whether the selection touches a range, hiding a block's source line by line with its widget on the first line, the table widget's height estimate and click-to-cursor, and the task checkbox that rewrites its marker.
+
+```
+Copyright 2022, Zef Hemel
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
+## ixora (CodeMirror 6 extensions)
+
+Licence: Apache-2.0 (the licence's text is under pdf.js above). Original author: Pranav Karawale. Source: https://codeberg.org/retronav/ixora. SilverBullet's mark hiding (hide_mark.ts) and range helpers (util.ts), adapted above, are forked from it.

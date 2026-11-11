@@ -45,6 +45,8 @@ export interface Settings {
   tideReadingFont?: 'serif' | 'sans'
   /** The writing coach in the note editor: probes, corrects and suggests rewrites as you write */
   writingCoach?: boolean
+  /** The note editor shows plain Markdown everywhere instead of live preview (which hides it away from the cursor) */
+  editorSource?: boolean
   /** Study timers: the sidebar's Focus timer and the timer buttons on notes, books and practice */
   studyTimers?: boolean
   /** Sidebar items the user chose to hide (ids from shared/sidebar.ts) */
