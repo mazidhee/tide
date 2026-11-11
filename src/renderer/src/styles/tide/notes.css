@@ -1,2 +1,141 @@
+/*
+  The new design: a note, and the other places you read (a saved article, a PDF's notes). A plain
+  title in the tool's face, the body in the book face at about 74 characters, ruled tables and
+  blocks. Scoped to data-design='tide'.
+*/
+
 :root[data-design='tide'] {
+  /* The reading measure setting still applies; the column is a fifth wider, to suit the serif */
+  .reading-column {
+    max-width: calc(var(--read-size) * var(--measure) * 1.2);
+  }
+  .tutor-gutter {
+    left: max(8px, calc(50% - var(--read-size) * var(--measure) * 1.2 / 2 - 44px));
+  }
+  .editor-column.with-margin {
+    --col: min(calc(var(--read-size) * var(--measure) * 1.2), calc(100% - 270px));
+  }
+  .doc-scroll {
+    padding: 44px 48px 120px;
+  }
+  .note-title {
+    margin-top: 0;
+    margin-bottom: 20px;
+    font: 600 30px/38px var(--ui);
+    letter-spacing: -0.024em;
+  }
+  .doc-source {
+    font-size: var(--t-meta);
+    color: var(--ink-3);
+  }
+
+  /* Status is a dot and a word in a ruled control, not a coloured pill */
+  .status-pill {
+    height: 28px;
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-ctl);
+    background: var(--raised);
+    font-size: var(--t-meta);
+    font-weight: 500;
+  }
+  .status-pill:hover {
+    border-color: var(--ink-3);
+  }
+  .status-pill select,
+  .status-pill select:focus {
+    border: 0;
+    box-shadow: none;
+    background-color: transparent;
+  }
+  .status-learning {
+    --status: var(--warn-mark);
+  }
+  .status-reviewing {
+    --status: var(--accent);
+  }
+  .status-mastered {
+    --status: var(--good-mark);
+  }
+
+  /* Callouts: a sunk, ruled block; the icon carries the kind */
+  .callout {
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--sunk);
+    box-shadow: none;
+  }
+  .callout-title {
+    font-family: var(--ui);
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .callout-icon {
+    color: var(--accent-text);
+  }
+  .callout-warning .callout-icon,
+  .callout-caution .callout-icon {
+    color: var(--warn);
+  }
+  .callout-danger .callout-icon,
+  .callout-error .callout-icon {
+    color: var(--bad);
+  }
+  .callout-body {
+    color: var(--ink-2);
+  }
+
+  /* Selecting text: what you can do with it floats over the page */
+  .selection-pop,
+  .popover {
+    border: 0;
+    border-radius: var(--r-box);
+    background: var(--raised);
+    box-shadow: var(--shadow-pop);
+  }
+  .menu-item {
+    border-radius: var(--r-ctl);
+  }
+  .menu-item:hover {
+    background: var(--hover);
+  }
+  .menu-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-3);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  /* The tutor's notes in the margin, and its replies in the note */
+  .margin-note,
+  .tutor-reply {
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--raised);
+    box-shadow: none;
+  }
+  .backlinks {
+    border-top: 1px solid var(--line);
+  }
+  .section-title {
+    font: 600 var(--t-base) / 20px var(--ui);
+    color: var(--ink);
+  }
+  .list-row {
+    border-radius: var(--r-ctl);
+  }
+  .list-row:hover {
+    background: var(--hover);
+  }
+
+  /* Writing: the editor reads like the note it will be */
+  .cm-editor .cm-content {
+    font-family: var(--read);
+  }
+  .format-bar {
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--raised);
+    box-shadow: none;
+  }
 }

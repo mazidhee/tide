@@ -21,6 +21,7 @@ import { useThreadEngine } from '../lib/useThreadEngine'
 import { PERSONAS } from '@shared/personas'
 import { scopeTopic } from '../state'
 import { addQuoteToNotes } from '../lib/companion'
+import { useTideDesign } from '../lib/design'
 
 const SAVE_DELAY = 600
 const MIN_READALONG_CHARS = 60
@@ -40,6 +41,7 @@ const fmLineCount = (raw: string) => {
 
 export function NoteView({ path, anchor, nonce }: { path: string; anchor?: string; nonce?: number }) {
   const app = useApp()
+  const tide = useTideDesign()
   const [raw, setRaw] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
@@ -439,6 +441,17 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
           </span>
         </div>
         <div className="toolbar-actions no-drag">
+          {tide && (
+            <button
+              className="icon-btn td-aa"
+              aria-pressed={app.settings.tideReadingFont === 'sans'}
+              onClick={() => app.updateSettings({ tideReadingFont: app.settings.tideReadingFont === 'sans' ? 'serif' : 'sans' })}
+              title={app.settings.tideReadingFont === 'sans' ? 'Reading in the sans. Click for the serif.' : 'Reading in the serif. Click for the sans.'}
+              aria-label="Switch the reading face"
+            >
+              Aa
+            </button>
+          )}
           <TimeThis context={{ label: fileTitle(path), path, kind: 'note' }} />
           <StatusPicker path={path} status={status} onChange={() => load()} />
           <div className="popover-anchor">
