@@ -4,6 +4,8 @@ import type { ChatScope } from '@shared/types'
 import { useApp } from '../state'
 import { BrainTabs } from './BrainTabs'
 import { KnowledgeMap } from './KnowledgeMap'
+import { useTideDesign } from '../lib/design'
+import { useAreaClass } from '../lib/areas'
 
 /**
  * Brain, "What you know": the knowledge map, read from .tide/knowledge.json through Tide's Rust
@@ -13,6 +15,8 @@ import { KnowledgeMap } from './KnowledgeMap'
 export function KnowledgeView() {
   const app = useApp()
   const [data, setData] = useState<KnowledgeData | null>(null)
+  const tide = useTideDesign()
+  const areaClass = useAreaClass()
   useEffect(() => {
     let live = true
     const load = () =>
@@ -38,7 +42,7 @@ export function KnowledgeView() {
     <div className="doc-view know-view">
       <header className="doc-toolbar drag">
         <div className="crumbs no-drag">
-          <span className="crumb current">Brain</span>
+          <span className="crumb current">{tide ? 'What you know' : 'Brain'}</span>
           <BrainTabs tab="know" />
         </div>
       </header>
@@ -46,6 +50,8 @@ export function KnowledgeView() {
         {data && (
           <KnowledgeMap
             data={data}
+            tide={tide}
+            areaClass={areaClass}
             onLesson={(c) => app.setView({ kind: 'session', mode: 'teach', scope: scopeOf(c), topic: c.name, nonce: Date.now() })}
             onCheck={(c) => app.setView({ kind: 'session', mode: 'quiz', scope: scopeOf(c), topic: c.name, options: { length: 5 }, nonce: Date.now() })}
             onNewTopic={() => app.setView({ kind: 'new-topic' })}

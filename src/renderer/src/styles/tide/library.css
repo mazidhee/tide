@@ -181,3 +181,139 @@
     }
   }
 }
+
+/*
+  Shelves, in the new design: the bookcase is the whole page. No index down the left, no page
+  header above it (its controls are in the top bar), and the tutor panel steps aside. Over the
+  shelves, bottom left, is the useful part: what you have open, or what is newest and unread,
+  one click from reading.
+*/
+:root[data-design='tide'][data-td-immersive] {
+  .shell.with-chat {
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  }
+  .shell.no-sidebar.with-chat {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .chat {
+    display: none;
+  }
+}
+
+:root[data-design='tide'] {
+  .library-page.td-immersive {
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .library-page.td-immersive .page-inner {
+    flex: 1;
+    min-height: 0;
+    max-width: none;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .library-page.td-immersive .page-head,
+  .library-page.td-immersive .save-link,
+  .library-page.td-immersive .library-bar,
+  .library-page.td-immersive .subject-bar {
+    display: none;
+  }
+  .bc.td-bc {
+    grid-template-columns: minmax(0, 1fr) var(--bc-rail);
+    font-family: var(--ui);
+    border-color: var(--line);
+    border-radius: var(--r-box);
+  }
+  .td-immersive .bc.td-bc {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+  .bc.td-bc {
+    grid-template-rows: 46px minmax(0, 1fr) auto;
+    --bc-mono: var(--ui);
+  }
+  /* Under the shelves, the whole width: what to pick up, one click from reading */
+  .td-tray {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+    gap: 20px;
+    align-items: center;
+    padding: 10px 16px;
+    border-top: 1px solid var(--line);
+    background: var(--raised);
+    font-size: var(--t-base);
+  }
+  .td-tray-say {
+    margin: 0;
+    line-height: 18px;
+    font-size: var(--t-meta);
+    color: var(--ink-2);
+  }
+  .td-tray-say b {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .td-tray-say span {
+    display: block;
+    color: var(--ink-3);
+  }
+  .td-tray ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+  }
+  .td-tray li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 6px;
+    align-items: center;
+    padding: 2px 14px;
+    border-left: 1px solid var(--line);
+  }
+  .td-tray-open {
+    min-width: 0;
+    text-align: left;
+  }
+  .td-tray-open b,
+  .td-tray-open span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .td-tray-open b {
+    font-weight: 500;
+  }
+  .td-tray-open span {
+    font-size: var(--t-meta);
+    line-height: 18px;
+    color: var(--ink-3);
+  }
+  .td-tray-open:hover b {
+    color: var(--accent-text);
+  }
+  .td-topbar-actions .segmented button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  @container (max-width: 900px) {
+    .td-tray ul {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .td-tray li:nth-child(3) {
+      display: none;
+    }
+  }
+}

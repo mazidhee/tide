@@ -167,7 +167,7 @@ function PreviewCover({ e }: { e: Entry }) {
   )
 }
 
-export function Bookcase({ items, subjects, setStatus }: { items: LibraryItem[]; subjects: string[]; setStatus(path: string, s: ReadStatus): void }) {
+export function Bookcase({ items, subjects, setStatus, tide }: { items: LibraryItem[]; subjects: string[]; setStatus(path: string, s: ReadStatus): void; /** The new design: no index down the left; the shelves fill the window, with what to pick up next laid over them */ tide?: boolean }) {
   const app = useApp()
   const [sort, setSort] = useState<Sort>('shelf')
   const [filter, setFilter] = useState<Filter>('all')
@@ -526,7 +526,7 @@ export function Bookcase({ items, subjects, setStatus }: { items: LibraryItem[];
     )
 
   return (
-    <div className="bc">
+    <div className={tide ? 'bc td-bc' : 'bc'}>
       <header className="bc-top">
         <div className="bc-crumb">
           <Icon name="library" size={14} />
@@ -627,7 +627,7 @@ export function Bookcase({ items, subjects, setStatus }: { items: LibraryItem[];
         </div>
       </header>
 
-      <aside className="bc-side">
+      {!tide && <aside className="bc-side">
         <div className="bc-side-head">
           <div className="bc-k">antilibrary</div>
           <div className="bc-big">
@@ -712,7 +712,7 @@ export function Bookcase({ items, subjects, setStatus }: { items: LibraryItem[];
             )
           })}
         </div>
-      </aside>
+      </aside>}
 
       <main
         className="bc-stage"
@@ -903,6 +903,39 @@ export function Bookcase({ items, subjects, setStatus }: { items: LibraryItem[];
         </div>
         <div className="bc-zpct">{Math.round(z * 100)}%</div>
       </nav>
+      {tide && (
+        <section className="td-tray" aria-label="What to pick up">
+          <p className="td-tray-say">
+            <b>{n}</b> on the shelves: <b>{nReading}</b> open, <b>{nRead}</b> read, <b>{nUnread}</b> waiting.
+            <span>{flat.some((e) => e.status === 'reading') ? 'Carry on reading:' : nUnread ? 'Newest, not yet opened:' : ''}</span>
+          </p>
+          {(() => {
+            const reading = flat.filter((e) => e.status === 'reading').sort((a, b) => b.item.mtime - a.item.mtime)
+            const pick = reading.length ? reading.slice(0, 3) : flat.filter((e) => e.status === 'unread').sort((a, b) => b.item.mtime - a.item.mtime).slice(0, 3)
+            if (!pick.length) return null
+            return (
+              <>
+                <ul aria-label={reading.length ? 'Carry on reading' : 'Newest on the shelf, not yet opened'}>
+                  {pick.map((e) => (
+                    <li key={e.item.path}>
+                      <button className="td-tray-open" onClick={() => app.openPath(e.item.path)} title={`Open ${e.item.title}`}>
+                        <b>{e.item.title}</b>
+                        <span>{[groups[e.si].name, KIND_NAME[e.item.type], e.date].filter(Boolean).join(', ')}</span>
+                      </button>
+                      <button className="icon-btn" title="Find it on the shelf" aria-label={`Find ${e.item.title} on the shelf`} onClick={() => openPreview(e, true)}>
+                        <Icon name="library" size={14} />
+                      </button>
+                      <button className="btn small" onClick={() => app.openPath(e.item.path)}>
+                        {reading.length ? 'Carry on' : 'Open'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )
+          })()}
+        </section>
+      )}
     </div>
   )
 }
