@@ -315,7 +315,10 @@ function registerIpc() {
   handle('workshop:state', async (id: string) => (await workshop()).workshopState(String(id)))
   handle('workshop:run', async (id: string) => (await workshop()).runStage(String(id)))
   handle('workshop:hint', async (id: string) => (await workshop()).nextHint(String(id)))
-  handle('workshop:review', async (id: string) => (await workshop()).reviewStage(String(id)))
+  handle('workshop:review', async (id: string, stage?: number) => {
+    const w = await workshop()
+    return w.reviewStage(String(id), undefined, typeof stage === 'number' ? stage : undefined)
+  })
   handle('workshop:ask', async (id: string, question: string) => (await workshop()).askAboutStage(String(id), String(question ?? '')))
   handle('workshop:forTopic', async (topic: string) => (await workshop()).projectForTopic(String(topic ?? '')))
   handle('workshop:propose', async (o: { topic: string; notebook?: string; section?: string }) => (await workshop()).proposeProject({ topic: String(o?.topic ?? ''), notebook: o?.notebook, section: o?.section }))

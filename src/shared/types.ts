@@ -838,8 +838,8 @@ export interface TideApi {
     /** Runs the current stage's tests (and every earlier stage's) in the sandbox */
     run(id: string): Promise<import('./workshop').WorkshopState>
     hint(id: string): Promise<import('./workshop').WorkshopState>
-    /** The tutor's review of the latest run */
-    review(id: string): Promise<import('./workshop').WorkshopState>
+    /** The tutor's review of the latest run of the stage in hand, or of a stage already passed */
+    review(id: string, stage?: number): Promise<import('./workshop').WorkshopState>
     ask(id: string, question: string): Promise<{ answer: string; by: 'cloud' | 'local' | 'none' }>
     /** The project already written for a roadmap's "Project:" item, if any */
     forTopic(topic: string): Promise<import('./workshop').WorkshopCard | null>
