@@ -14,6 +14,13 @@ export interface Row {
   repeat: number
   score: Score
   judge?: Record<string, number> | null
+  /** The request failed: no reply to score, so the row is left out of every number */
+  error?: string
+  /** How many times the reply stalled and was carried on, and whether it looped and was started over */
+  stalls?: number
+  looped?: boolean
+  /** A saved reply that stalled with nothing after it (an offline re-score can't ask the model to carry on): only its mark is read */
+  unfinished?: boolean
 }
 
 export interface Stat {
@@ -69,19 +76,38 @@ export interface Summary {
   bySituation: Record<string, Record<string, Stat>>
   /** Which checks fail most, as a share of replies */
   failures: { id: string; share: number }[]
+  /** How often the app had to step in before the learner saw the reply, as a share of replies: stalls carried on, loops started over, and each repair the scorer applied (Score.repaired) */
+  repairs: { id: string; share: number }[]
+  /** Rows left out: failed requests (out of everything), and unfinished saved replies (out of all but marking) */
+  left: { errors: number; unfinished: number }
   judge?: Record<string, Stat>
 }
 
-export function summarise(rows: Row[]): Summary {
-  const measures = (of: Row[]) => Object.fromEntries(Object.entries(MEASURES).map(([k, f]) => [k, stat(of, f)]).filter(([, s]) => (s as Stat).n > 0)) as Record<string, Stat>
-  const marked = rows.filter((r) => r.score.marking)
+export function summarise(every: Row[]): Summary {
+  // A failed request has no reply; an unfinished one has only its mark
+  const answered = every.filter((r) => !r.error)
+  const rows = answered.filter((r) => !r.unfinished)
+  const readable = (r: Row) => !(r.unfinished && r.score.marking?.got === 'none')
+  const all = (of: Row[]) => Object.fromEntries(Object.entries(MEASURES).map(([k, f]) => [k, stat(of, f)]).filter(([, s]) => (s as Stat).n > 0)) as Record<string, Stat>
+  const measures = (of: Row[]) => {
+    const marking = stat(of.filter(readable), MEASURES.marking)
+    return { ...all(of.filter((r) => !r.unfinished)), ...(marking.n ? { marking } : {}) }
+  }
+  const marked = answered.filter((r) => r.score.marking && readable(r))
   const m = (r: Row) => r.score.marking!
   const failures = new Map<string, number>()
   for (const r of rows) for (const id of r.score.failed) failures.set(id.replace(/^(must|must-not|names):.*/, '$1'), (failures.get(id.replace(/^(must|must-not|names):.*/, '$1')) ?? 0) + 1)
+  const repairs = new Map<string, number>()
+  const tally = (id: string) => repairs.set(id, (repairs.get(id) ?? 0) + 1)
+  for (const r of answered) {
+    if (r.stalls) tally('stall')
+    if (r.looped) tally('loop')
+    for (const id of r.unfinished ? [] : r.score.repaired ?? []) tally(id)
+  }
   const judged = rows.filter((r) => r.judge)
   const criteria = [...new Set(judged.flatMap((r) => Object.keys(r.judge!)))]
   return {
-    measures: measures(rows),
+    measures: measures(answered),
     marking: {
       accuracy: stat(marked, (r) => m(r).score),
       falseCorrect: stat(marked.filter((r) => m(r).expected !== 'correct'), (r) => (m(r).falseCorrect ? 1 : 0)),
@@ -90,9 +116,11 @@ export function summarise(rows: Row[]): Summary {
       unusualAccepted: stat(marked.filter((r) => r.situation === 'mark-unusual-correct'), (r) => (m(r).got === 'correct' ? 1 : 0)),
       misconceptionNamed: stat(marked.filter((r) => r.situation === 'after-wrong' && m(r).named !== null), (r) => (m(r).named ? 1 : 0))
     },
-    bySubject: Object.fromEntries(SUBJECTS.map((s) => [s, measures(rows.filter((r) => r.subject === s))])),
-    bySituation: Object.fromEntries(SITUATIONS.map((s) => [s, measures(rows.filter((r) => r.situation === s))])),
+    bySubject: Object.fromEntries(SUBJECTS.map((s) => [s, measures(answered.filter((r) => r.subject === s))])),
+    bySituation: Object.fromEntries(SITUATIONS.map((s) => [s, measures(answered.filter((r) => r.situation === s))])),
     failures: [...failures].map(([id, n]) => ({ id, share: round(n / Math.max(1, rows.length))! })).sort((a, b) => b.share - a.share),
+    repairs: [...repairs].map(([id, n]) => ({ id, share: round(n / Math.max(1, answered.length))! })).sort((a, b) => b.share - a.share),
+    left: { errors: every.length - answered.length, unfinished: answered.length - rows.length },
     ...(judged.length ? { judge: Object.fromEntries(criteria.map((c) => [c, stat(judged, (r) => r.judge?.[c] ?? null)])) } : {})
   }
 }
@@ -122,6 +150,8 @@ export function printable(s: Summary): string {
     table(s.bySituation),
     'MOST COMMON FAILURES (share of replies)',
     ...s.failures.slice(0, 10).map((f) => `  ${f.id.padEnd(34)} ${(f.share * 100).toFixed(1)}%`),
+    ...(s.repairs?.length ? ['PUT RIGHT BY THE APP BEFORE THE LEARNER SAW IT (share of replies)', ...s.repairs.map((f) => `  ${f.id.padEnd(34)} ${(f.share * 100).toFixed(1)}%`)] : []),
+    ...(s.left?.errors || s.left?.unfinished ? [`LEFT OUT: ${s.left.errors} failed request${s.left.errors === 1 ? '' : 's'} (of everything); ${s.left.unfinished} saved repl${s.left.unfinished === 1 ? 'y' : 'ies'} that stalled with nothing after (of everything but marking)`] : []),
     ...(s.judge ? ['JUDGE (a stronger model, 1 to 5; reported apart from the scores above)', ...Object.entries(s.judge).map(([k, v]) => `  ${k.padEnd(34)} ${v.mean.toFixed(2)} ±${v.spread.toFixed(2)}   (n=${v.n})`)] : [])
   ].join('\n')
 }
