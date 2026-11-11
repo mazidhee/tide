@@ -283,7 +283,8 @@ const api: TideApi = {
   lab: {
     query: invoke('lab:query'),
     schema: invoke('lab:schema'),
-    reset: invoke('lab:reset')
+    reset: invoke('lab:reset'),
+    load: invoke('lab:load')
   },
   metabase: {
     status: invoke('metabase:status'),

@@ -30,6 +30,22 @@ export interface LabTable {
   foreignKeys: { column: string; table: string; to: string }[]
 }
 
+/** What loading one of the learner's CSV or TSV files into a lab gives back. With `error` set nothing was loaded. */
+export interface LabLoaded {
+  /** The table it became */
+  table: string
+  /** The file, as a path in the notes folder */
+  path: string
+  columns: { name: string; type: 'integer' | 'real' | 'text' }[]
+  rows: number
+  /** It took the place of an earlier load of the same file */
+  replaced: boolean
+  /** Rows that were shorter than the header (filled out with NULL) and longer (extra cells dropped) */
+  padded: number
+  cut: number
+  error?: string
+}
+
 /** What a ```chart block holds */
 export interface ChartRequest {
   sql: string
@@ -101,4 +117,15 @@ export function schemaText(tables: LabTable[]): string {
     'Dates are text as YYYY-MM-DD and timestamps as YYYY-MM-DD HH:MM:SS (use date(), strftime() and julianday()). Foreign keys are enforced.'
   ].filter(Boolean)
   return `The lab's tables (SQLite, sample data, the same every time). ${parts.join('. ')}. ${notes.join(' ')}`
+}
+
+/** A load as the tutor reads it: the table's name, its columns with their types, and how many rows */
+export function loadedText(l: LabLoaded): string {
+  if (l.error) return `Could not load that file: ${l.error}`
+  const notes = [
+    l.replaced ? 'It replaced the earlier load of this file.' : '',
+    l.padded ? `${plural(l.padded, 'row')} had fewer cells than the header and ${l.padded === 1 ? 'was' : 'were'} filled out with NULL.` : '',
+    l.cut ? `${plural(l.cut, 'row')} had more cells than the header; the extra cells were dropped.` : ''
+  ].filter(Boolean)
+  return [`Loaded ${l.path} as the table ${l.table} (${plural(l.rows, 'row')}). Columns: ${l.columns.map((c) => `${c.name} ${c.type}`).join(', ')}.`, ...notes].join(' ')
 }

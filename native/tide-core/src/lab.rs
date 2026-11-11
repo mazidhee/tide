@@ -30,6 +30,8 @@ const MAX_ROWS: usize = 5_000;
 const MAX_CELL: usize = 2_000;
 /// About 100 MB of 4 KB pages
 const MAX_PAGES: u32 = 25_000;
+/// The most columns `load_table` will make
+const LOAD_COLUMNS: usize = 200;
 
 /// Pragmas that only read the schema or change how this one connection compares and checks
 const PRAGMAS: &[&str] = &[
@@ -339,6 +341,68 @@ impl Lab {
     }
     Ok(())
   }
+
+  /// Makes a table from rows read out of a file (a CSV the learner keeps in their notes), replacing
+  /// a table of the same name. Cells arrive as text and are stored by the column's type: "integer",
+  /// "real" or "text"; a missing or null cell is NULL. One prepared statement inside one savepoint,
+  /// so a failure halfway leaves the lab as it was. Returns how many rows went in.
+  #[napi]
+  pub fn load_table(&self, name: String, columns: Vec<String>, types: Vec<String>, rows: Vec<Vec<Option<String>>>) -> Result<u32> {
+    if !identifier(&name) || name.to_ascii_lowercase().starts_with("sqlite_") {
+      return Err(err(format!("\"{name}\" can't be used as a table name.")));
+    }
+    if columns.is_empty() || columns.len() != types.len() || columns.len() > LOAD_COLUMNS {
+      return Err(err(format!("A loaded table needs between 1 and {LOAD_COLUMNS} columns, each with a type.")));
+    }
+    if let Some(bad) = columns.iter().find(|c| !identifier(c)) {
+      return Err(err(format!("\"{bad}\" can't be used as a column name.")));
+    }
+    if let Some(bad) = types.iter().find(|t| !matches!(t.as_str(), "integer" | "real" | "text")) {
+      return Err(err(format!("\"{bad}\" isn't a column type the lab loads: use integer, real or text.")));
+    }
+    let mut conn = self.conn.lock().map_err(err)?;
+    let full = |e: rusqlite::Error| match e.sqlite_error_code() {
+      Some(rusqlite::ErrorCode::DiskFull) => err(format!("The lab is full: it holds about {} MB, and this table would take it past that.", MAX_PAGES / 250)),
+      _ => err(e),
+    };
+    // A savepoint rather than a transaction: it also works inside a BEGIN the learner left open
+    let sp = conn.savepoint().map_err(err)?;
+    let defs: Vec<String> = columns.iter().zip(&types).map(|(c, t)| format!("\"{c}\" {}", t.to_ascii_uppercase())).collect();
+    sp.execute_batch(&format!("DROP TABLE IF EXISTS \"{name}\"; CREATE TABLE \"{name}\" ({});", defs.join(", "))).map_err(err)?;
+    {
+      let marks = vec!["?"; columns.len()].join(", ");
+      let mut insert = sp.prepare(&format!("INSERT INTO \"{name}\" VALUES ({marks})")).map_err(err)?;
+      for row in &rows {
+        for (i, kind) in types.iter().enumerate() {
+          let at = i + 1;
+          match row.get(i).and_then(|c| c.as_deref()) {
+            None => insert.raw_bind_parameter(at, rusqlite::types::Null),
+            Some(text) => match kind.as_str() {
+              "integer" => match text.trim().parse::<i64>() {
+                Ok(n) => insert.raw_bind_parameter(at, n),
+                Err(_) => insert.raw_bind_parameter(at, text),
+              },
+              "real" => match text.trim().parse::<f64>() {
+                Ok(f) if f.is_finite() => insert.raw_bind_parameter(at, f),
+                _ => insert.raw_bind_parameter(at, text),
+              },
+              _ => insert.raw_bind_parameter(at, text),
+            },
+          }
+          .map_err(err)?;
+        }
+        insert.raw_execute().map_err(full)?;
+      }
+    }
+    sp.commit().map_err(full)?;
+    Ok(rows.len().min(u32::MAX as usize) as u32)
+  }
+}
+
+/// A name that needs no quoting: a letter or underscore, then letters, digits and underscores
+fn identifier(s: &str) -> bool {
+  let mut chars = s.chars();
+  s.len() <= 64 && chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_') && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 fn exists(conn: &Connection, table: &str) -> bool {
@@ -682,6 +746,86 @@ mod tests {
     let r = lab.query(format!("SELECT * FROM {table}"), 5_000).unwrap();
     let total = one(lab, &format!("SELECT count(*) FROM {table}"));
     format!("{total}:{}", serde_json::to_string(&r.rows[..r.rows.len().min(400)]).unwrap())
+  }
+
+  fn cells(rows: &[&[Option<&str>]]) -> Vec<Vec<Option<String>>> {
+    rows.iter().map(|r| r.iter().map(|c| c.map(String::from)).collect()).collect()
+  }
+
+  #[test]
+  fn load_table_stores_typed_values_and_nulls() {
+    let lab = lab();
+    let rows = cells(&[&[Some("1"), Some("2.5"), Some("007"), Some("2025-01-06")], &[Some("-9223372036854775808"), Some("3"), None, Some("")], &[None, None, Some("x")]]);
+    let n = lab.load_table("mine".into(), vec!["id".into(), "amount".into(), "code".into(), "day".into()], vec!["integer".into(), "real".into(), "text".into(), "text".into()], rows).unwrap();
+    assert_eq!(n, 3);
+    let r = lab.query("SELECT typeof(id), typeof(amount), typeof(code), typeof(day) FROM mine ORDER BY rowid".into(), 10).unwrap();
+    assert_eq!(serde_json::to_string(&r.rows).unwrap(), r#"[["integer","real","text","text"],["integer","real","null","text"],["null","null","text","null"]]"#);
+    assert_eq!(one(&lab, "SELECT min(id) FROM mine"), i64::MIN as f64);
+    let r = lab.query("SELECT code, sum(amount) FROM mine WHERE code = '007'".into(), 10).unwrap();
+    assert_eq!(serde_json::to_string(&r.rows).unwrap(), r#"[["007",2.5]]"#);
+    let t = lab.schema().unwrap().into_iter().find(|t| t.name == "mine").unwrap();
+    assert_eq!(t.rows, 3);
+    assert_eq!(t.columns.iter().map(|c| format!("{} {}", c.name, c.kind)).collect::<Vec<_>>(), ["id integer", "amount real", "code text", "day text"]);
+    // The sample data is untouched, and joins against it work
+    assert_eq!(one(&lab, "SELECT count(*) FROM customers c JOIN mine m ON m.id = c.customer_id"), 1.0);
+  }
+
+  #[test]
+  fn load_table_replaces_and_is_dropped_by_reset() {
+    let lab = lab();
+    let cols = || (vec!["a".to_string()], vec!["integer".to_string()]);
+    lab.load_table("mine".into(), cols().0, cols().1, cells(&[&[Some("1")], &[Some("2")]])).unwrap();
+    lab.load_table("mine".into(), cols().0, cols().1, cells(&[&[Some("5")]])).unwrap();
+    assert_eq!(one(&lab, "SELECT sum(a) FROM mine"), 5.0);
+    // Inside a transaction the learner left open it still loads, and the rollback takes it away again
+    lab.query("BEGIN".into(), 10).unwrap();
+    lab.load_table("other".into(), cols().0, cols().1, cells(&[&[Some("1")]])).unwrap();
+    assert_eq!(one(&lab, "SELECT count(*) FROM other"), 1.0);
+    lab.query("ROLLBACK".into(), 10).unwrap();
+    assert!(lab.query("SELECT * FROM other".into(), 10).unwrap().error.is_some());
+    lab.reset().unwrap();
+    assert_eq!(lab.query("SELECT * FROM mine".into(), 10).unwrap().error.as_deref(), Some("no such table: mine"));
+  }
+
+  #[test]
+  fn load_table_refuses_unsafe_names_and_keeps_the_lab_safe() {
+    let lab = lab();
+    let one_col = || (vec!["a".to_string()], vec!["text".to_string()]);
+    for bad in ["", "1st", "a b", "x\"; DROP TABLE customers; --", "sqlite_master", "SQLITE_x", "naïve"] {
+      assert!(lab.load_table(bad.into(), one_col().0, one_col().1, vec![]).is_err(), "{bad}");
+    }
+    assert!(lab.load_table("t".into(), vec!["a\"b".into()], vec!["text".into()], vec![]).is_err());
+    assert!(lab.load_table("t".into(), vec!["a".into()], vec!["blob".into()], vec![]).is_err());
+    assert!(lab.load_table("t".into(), vec![], vec![], vec![]).is_err());
+    assert!(lab.load_table("t".into(), vec!["a".into(), "b".into()], vec!["text".into()], vec![]).is_err());
+    assert_eq!(one(&lab, "SELECT count(*) FROM customers"), 300.0);
+    // A value that isn't what its column says is kept as text rather than lost
+    lab.load_table("t".into(), vec!["n".into()], vec!["integer".into()], cells(&[&[Some("12")], &[Some("twelve")], &[Some("99999999999999999999")]])).unwrap();
+    let r = lab.query("SELECT typeof(n), n FROM t ORDER BY rowid".into(), 10).unwrap();
+    assert_eq!(r.rows[1][0], "text");
+    assert_eq!(r.rows[1][1], "twelve");
+    // The rules that guard the lab still hold with a loaded table in it
+    assert!(lab.query("ATTACH DATABASE ':memory:' AS other".into(), 10).unwrap().error.is_some());
+    assert!(lab.query("PRAGMA writable_schema = 1".into(), 10).unwrap().error.unwrap().contains("not authorized"));
+    assert_eq!(lab.query("SELECT * FROM t".into(), 2).unwrap().rows.len(), 2);
+  }
+
+  #[test]
+  fn load_table_is_quick_and_stops_at_the_size_limit() {
+    let lab = lab();
+    let rows: Vec<Vec<Option<String>>> = (0..100_000).map(|i| vec![Some(i.to_string()), Some(format!("{}.5", i % 97)), Some(format!("row {i}"))]).collect();
+    let t0 = Instant::now();
+    lab.load_table("big".into(), vec!["id".into(), "x".into(), "label".into()], vec!["integer".into(), "real".into(), "text".into()], rows).unwrap();
+    assert!(t0.elapsed().as_secs_f64() < 5.0, "{:?}", t0.elapsed());
+    assert_eq!(one(&lab, "SELECT count(*) FROM big"), 100_000.0);
+    // Past about 100 MB the load fails whole, with the table that was there before left in place
+    let wide = "x".repeat(2_000);
+    let rows: Vec<Vec<Option<String>>> = (0..60_000).map(|_| vec![Some(wide.clone())]).collect();
+    lab.load_table("small".into(), vec!["a".into()], vec!["text".into()], cells(&[&[Some("kept")]])).unwrap();
+    let e = lab.load_table("small".into(), vec!["a".into()], vec!["text".into()], rows).unwrap_err();
+    assert!(e.reason.contains("The lab is full"), "{}", e.reason);
+    let r = lab.query("SELECT a FROM small".into(), 10).unwrap();
+    assert_eq!(r.rows[0][0], "kept");
   }
 
   #[test]

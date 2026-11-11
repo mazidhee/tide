@@ -304,7 +304,7 @@ export interface OutlineDraftRequest {
 
 export interface AgentStep {
   id: string
-  kind: 'search_notes' | 'read_note' | 'web_search' | 'read_webpage' | 'delegate' | 'helper' | 'run_code' | 'run_sql' | 'remember' | 'terminal' | 'canvas' | 'metabase'
+  kind: 'search_notes' | 'read_note' | 'web_search' | 'read_webpage' | 'delegate' | 'helper' | 'run_code' | 'run_sql' | 'load_table' | 'remember' | 'terminal' | 'canvas' | 'metabase'
   label: string
   detail?: string
   status: 'running' | 'done' | 'error'
@@ -811,6 +811,8 @@ export interface TideApi {
     schema(id: string): Promise<import('./lab').LabTable[]>
     /** Throws away whatever was changed and puts the sample data back */
     reset(id: string): Promise<void>
+    /** Loads a .csv or .tsv file from the notes folder (a path relative to it) into that lab as a table named after the file */
+    load(id: string, path: string): Promise<import('./lab').LabLoaded>
   }
   runner: {
     run(language: string, code: string, stdin?: string): Promise<RunResult>

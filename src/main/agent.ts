@@ -34,7 +34,7 @@ import { explainerToolResult, findExplainers } from '@shared/explainers'
 import { readText, writeText } from './vault'
 import { applyCanvasOps, describeCanvas, parseCanvas, serializeCanvas } from '@shared/canvas'
 import { retrieve } from './ai'
-import { runSqlTool } from './lab'
+import { loadTableTool, runSqlTool } from './lab'
 import { runCode } from './runner'
 import { addMemory, forgetMatching, memoryPrompt } from './memory'
 import { fitHistory } from '@shared/context'
@@ -63,7 +63,7 @@ You can call tools. Use them when they help:
 - web_search / read_webpage: for facts, explanations or examples their notes don't cover. Search, then read the best page before relying on it. Your training data is out of date: for anything that changes (prices, rates, laws and regulation, product versions, companies, markets, crypto, news, recent research), search with when set to "year" or "month" instead of answering from memory.
 - search_papers: research papers on arXiv, for machine learning, statistics, economics, finance and computer science. Read a paper with read_webpage on its link.
 - run_code: run Python or JavaScript in a sandbox. Use it to test the student's code on real cases (including edge cases) before you judge it, and to check maths: with Python and SymPy (from sympy import *) verify each algebra or calculus step before you call it right or wrong, and name the exact line that fails.
-- run_sql: run SQL on a small lab database (SQLite, with sample shop and product-analytics data) kept for this conversation. Run every query before you show it, show queries as \`\`\`sql blocks (the student can run and change them there), and draw a result with a \`\`\`chart block holding JSON: {"sql": "...", "type": "bar" | "line" | "scatter" (optional), "title": "..."}. The engine is SQLite: when the topic is another system (BigQuery, Snowflake, a BI tool), say so and name the differences that matter, checked in its official documentation.
+- run_sql: run SQL on a small lab database (SQLite, with sample shop and product-analytics data) kept for this conversation; load_table adds one of the student's own .csv or .tsv files to it as a table. Run every query before you show it, show queries as \`\`\`sql blocks (the student can run and change them there), and draw a result with a \`\`\`chart block holding JSON: {"sql": "...", "type": "bar" | "line" | "scatter" (optional), "title": "..."}. The engine is SQLite: when the topic is another system (BigQuery, Snowflake, a BI tool), say so and name the differences that matter, checked in its official documentation.
 - remember: when the student tells you something lasting about themselves (a goal or deadline, their background, what they find hard, how they like to learn), save it as one short sentence in the third person ("Is preparing for Bloomberg interviews in spring 2027"). Don't save facts from their notes, passing questions, or things already in what you remember. When they say "remember that…", always save it.
 - forget: when they ask you to forget something, or tell you it's no longer true.
 - things_assign / things_tasks / things_feedback (only when connected): the student's to-do app, Things 4, which renders Markdown. Set real work between sessions: a quick task, an assignment, a test (an exam in Tide) or a take-home problem to think through. Write a proper brief (## Goal, ## What to do, ## Deliverable, ## How it will be checked, ## Read) specific to what you've been teaching, give steps and a due date, and point "open" at the right place in Tide (an exam or quiz on their notebook, the note to read, a drill). Ask before setting more than two at once. Use things_tasks (with_notes to read answers they wrote in a task) to see what's done or overdue and adapt; mark their work with things_feedback.
@@ -244,6 +244,7 @@ const SQL_TOOL = tool(
   { sql: { type: 'string' } },
   ['sql']
 )
+const LOAD_TABLE_TOOL = tool('load_table', "Load a .csv or .tsv file from the student's notes folder into the data lab as a table for run_sql; returns its name, columns and row count.", { path: { type: 'string', description: 'Path in the notes folder' } }, ['path'])
 
 const DELEGATE_TOOL = tool(
   'delegate',
@@ -1276,7 +1277,17 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     const sql = String(args.sql ?? '')
     const firstLine = sql.split('\n').find((l) => l.trim() && !l.trim().startsWith('--'))?.trim() ?? ''
     const id = ctx.step({ kind: 'run_sql', label: `Running SQL${firstLine ? `: ${firstLine.slice(0, 60)}` : ''}`, status: 'running', depth })
-    const r = runSqlTool(ctx.labId ?? ctx.chatId ?? 'scratch', sql)
+    // A lab holding a private project's file answers only on a turn that stays on this Mac
+    const r = runSqlTool(ctx.labId ?? ctx.chatId ?? 'scratch', sql, !!ctx.private)
+    ctx.updateStep(id, { status: r.ok ? 'done' : 'error', detail: r.detail })
+    return clip(r.text, TOOL_TEXT_LIMIT)
+  }
+
+  if (call.name === 'load_table') {
+    const path = str('path')
+    const id = ctx.step({ kind: 'load_table', label: `Loading ${path.split('/').pop() || 'a file'} into the lab`, status: 'running', depth })
+    // A private project's file goes into the lab only on a turn that stays on this Mac
+    const r = await loadTableTool(ctx.labId ?? ctx.chatId ?? 'scratch', path, { private: !!ctx.private, isPrivate: (p) => privatePath(p) })
     ctx.updateStep(id, { status: r.ok ? 'done' : 'error', detail: r.detail })
     return clip(r.text, TOOL_TEXT_LIMIT)
   }
@@ -1324,6 +1335,7 @@ function toolSet(o: { top: boolean; web: boolean; focused: boolean; things: bool
     ...NOTE_TOOLS,
     CODE_TOOL,
     SQL_TOOL,
+    LOAD_TABLE_TOOL,
     ...(images ? [IMAGE_TOOL, EXPLAINER_TOOL] : []),
     ...(o.top ? [STUDY_PLAN] : []),
     ...(o.terminal ?? []),

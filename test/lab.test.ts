@@ -3,8 +3,11 @@ import { describe, expect, it, vi } from 'vitest'
 // The real Rust module (native/tide-core/tide-core.node), found beside the source as in development
 vi.mock('electron', () => ({ app: { getAppPath: () => process.cwd() } }))
 
-import { labCount, labQuery, labReset, labSchema, runSqlTool, sweepLabs } from '../src/main/lab'
+import { labCount, labQuery, labReset, labSchema, runSqlTool as runSql, sweepLabs } from '../src/main/lab'
 import { parseChartRequest, resultSummary, resultText, schemaText } from '../src/shared/lab'
+
+// On a turn that isn't about a private project
+const runSqlTool = (id: string, sql: string) => runSql(id, sql, false)
 
 describe('the data lab in the main process', () => {
   it('seeds both datasets on first use and answers a query with columns, types and rows', () => {

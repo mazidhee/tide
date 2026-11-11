@@ -43,7 +43,7 @@ import {
   getMastery, getLibraryTopics, getLibraryStatus, onPathMoved, setLibraryTopics, setLibraryStatus, clearCoverImage, logFocus, focusLog, focusTime, invalidateGraph } from './learn'
 import { importFile, libraryThumb, saveUrl } from './library'
 import { getHighlights, saveHighlights } from './highlights'
-import { labQuery, labReset, labSchema } from './lab'
+import { labLoadTable, labQuery, labReset, labSchema } from './lab'
 import { librariesStatus, mathStatus, runCode, runProject, setupLibraries, setupMath } from './runner'
 import { searchStatus, setupSearch, stopSearch, wakeSearch } from './websearch'
 import { applySpeedups, ensureModelServer, serverReady, speedStatus, tuneModelServer } from './modelServer'
@@ -68,7 +68,7 @@ import { aimsKey, aimsOf } from '@shared/coach'
 import type { SectionClass } from '@shared/curriculum'
 import type { Known, PlacementSetup } from '@shared/placement'
 import { getBrain } from './brain'
-import { draftBrief, flowSteps, mapProject, projectDocs, projectMap, setProject } from './projects'
+import { draftBrief, flowSteps, mapProject, privatePath, projectDocs, projectMap, setProject } from './projects'
 import { onBrainEvent, recentBrainEvents } from './brainEvents'
 import { getCoach, getWeek, planWeek, saveCoach, updateProfile, inferDirection, autoPlanWeek, weekToThings, setItemDone, catchUp, rollOver, dayStats, journal, writeJournal, weekReview, saveReview, savePlacement, addTopicAfter } from './coach'
 import { addMistakes, listMistakes, mistakesDue, retestMistake } from './mistakes'
@@ -478,6 +478,7 @@ function registerIpc() {
   handle('lab:query', (id: string, sql: string) => labQuery(String(id ?? ''), String(sql ?? '')))
   handle('lab:schema', (id: string) => labSchema(String(id ?? '')))
   handle('lab:reset', (id: string) => labReset(String(id ?? '')))
+  handle('lab:load', (id: string, path: string) => labLoadTable(String(id ?? ''), String(path ?? ''), privatePath))
   handle('runner:run', (language: string, code: string, stdin?: string) => runCode(language, code, stdin))
   // A link that arrived before the window was ready is picked up once, when the app has loaded
   handle('app:pendingLink', () => {
