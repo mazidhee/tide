@@ -1,6 +1,6 @@
 import type { SidebarItem } from '@shared/sidebar'
 import { FocusTimer } from './FocusTimer'
-import { useCallback, useEffect, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react'
 import type { FileNode } from '@shared/types'
 import { fileTitle, folderOf, useApp } from '../state'
 import { SECTIONS } from './SettingsView'
@@ -9,6 +9,10 @@ import { ContextMenu, type MenuState } from './Menu'
 import { Professor } from './Professor'
 import { endOngoing, useOngoing } from '../lib/sessions'
 import { CHAT_IMAGES } from '../lib/pastedImages'
+import { useTideDesign } from '../lib/design'
+import { useAreaClass } from '../lib/areas'
+import { useKnowledge } from '../lib/knowledge'
+import { TideMark } from './tide/TideMark'
 
 const EXPANDED_KEY = 'tide.expanded'
 /** Folders Tide keeps for itself: shown together, folded away, under "Tide's files" */
@@ -52,6 +56,11 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
   const { expanded, toggle } = useExpanded()
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
+  // The new design: a notebook carries its area's colour, and the rail says how much is fading
+  const tide = useTideDesign()
+  const areaOf = useAreaClass()
+  const known = useKnowledge(tide)
+  const fading = useMemo(() => known?.concepts.filter((c) => !c.parent && c.status === 'fading').length ?? 0, [known])
 
   const activePath = view.kind === 'file' ? view.path : null
 
@@ -165,7 +174,7 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
           ) : (
             <span className="tree-chevron-space" />
           )}
-          <Icon name={iconFor(node, settings.libraryFolder)} size={15} className="tree-icon" />
+          {tide && isFolder && depth === 0 && areaOf(node.path) !== 'td-c0' ? <span className={`td-nb-dot ${areaOf(node.path)}`} aria-hidden="true" /> : <Icon name={iconFor(node, settings.libraryFolder)} size={15} className="tree-icon" />}
           {renaming === node.path ? (
             <input
               className="tree-rename"
@@ -199,8 +208,8 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
   const hidden = new Set(settings.sidebarHidden ?? [])
   const shown = (id: SidebarItem) => !hidden.has(id)
 
-  const navItem = (icon: IconName, label: string, active: boolean, onClick: () => void, badge?: number) => (
-    <button className={`nav-item${active ? ' active' : ''}`} onClick={onClick}>
+  const navItem = (icon: IconName, label: string, active: boolean, onClick: () => void, badge?: number | string) => (
+    <button className={`nav-item${active ? ' active' : ''}`} onClick={onClick} aria-current={tide && active ? 'page' : undefined}>
       <Icon name={icon} size={16} />
       <span>{label}</span>
       {!!badge && <span className="badge">{badge}</span>}
@@ -304,6 +313,13 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
         </div>
       </div>
 
+      {tide && (
+        <button className="td-brand" onClick={() => app.setView({ kind: 'home' })} title="Home">
+          <TideMark size={22} />
+          <span>Tide</span>
+          <small>{new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</small>
+        </button>
+      )}
       <nav className="sidebar-nav">
         {shown('home') && navItem('home', 'Home', view.kind === 'home', () => app.setView({ kind: 'home' }))}
         {shown('chat') && navItem('chat', 'Chat', view.kind === 'chat', () => app.setView({ kind: 'chat' }))}
@@ -325,13 +341,13 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
           )}
         </div>
         {shown('library') && navItem('library', 'Library', view.kind === 'library', () => app.setView({ kind: 'library' }))}
-        {shown('graph') && navItem('graph', 'Brain', view.kind === 'graph', () => app.setView({ kind: 'graph' }))}
+        {shown('graph') && navItem('graph', tide ? 'What you know' : 'Brain', view.kind === 'graph', () => app.setView({ kind: 'graph' }), tide && fading ? `${fading} fading` : undefined)}
       </nav>
 
       {ongoing.length > 0 && (
         <div className="sidebar-ongoing">
           <div className="sidebar-section-head">
-            <span>In progress</span>
+            <span>{tide ? 'Carry on' : 'In progress'}</span>
           </div>
           {ongoing.slice(0, 4).map((o) => (
             <div key={o.key} className={`ongoing-row${JSON.stringify(o.view) === JSON.stringify(view) ? ' active' : ''}`}>
