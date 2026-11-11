@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en-GB" data-theme="light" data-design="tide">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tide · Guided projects: harness</title>
+<!--
+  The guided-project screens outside Electron, in the new design: the app's own components and
+  styles with a real library project (the key-value store) and a record made by the same pure
+  functions the app uses. Build and shoot with ./shoot.sh.
+  Open:   index.html?view=failing&theme=light
+          view: failing (stage 2 with a failing run and the tutor's review) | passed (a finished stage)
+                | list (the library) | preview (a project not yet started)
+          theme: light sepia graphite dark midnight ember
+-->
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/source-serif-4/index.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/theme.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/app.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/prose.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/workshop.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/tide/fonts.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/tide/tokens.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/tide/base.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/tide/shell.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/tide/lesson.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/tide/notes.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/tide/rest.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/tide/projects.css" />
+<style>
+  html, body, #root { height: 100%; margin: 0; }
+  body { background: var(--paper, var(--bg)); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="harness.js"></script>
+</body>
+</html>
