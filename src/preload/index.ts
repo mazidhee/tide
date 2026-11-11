@@ -277,6 +277,11 @@ const api: TideApi = {
     set: invoke('studyApi:set'),
     newToken: invoke('studyApi:newToken')
   },
+  lab: {
+    query: invoke('lab:query'),
+    schema: invoke('lab:schema'),
+    reset: invoke('lab:reset')
+  },
   metabase: {
     status: invoke('metabase:status'),
     connect: invoke('metabase:connect'),

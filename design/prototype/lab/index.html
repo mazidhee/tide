@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en-GB" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tide · Data lab harness</title>
+<!--
+  The data lab's query blocks, result table and charts, outside Electron.
+  Build:  node design/prototype/lab/fixtures.mjs
+          node_modules/.bin/esbuild design/prototype/lab/harness.ts --bundle --format=iife --alias:@shared=./src/shared --loader:.json=json --outfile=design/prototype/lab/harness.js
+  Open:   index.html?theme=light&w=420&set=bars   (themes: light sepia graphite dark midnight ember; sets: table bars lines edge)
+-->
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/inter/index.css" />
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/jetbrains-mono/index.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/theme.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/app.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/prose.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/lab.css" />
+<style>
+  html, body { height: auto; overflow: auto; background: var(--bg); }
+  #page { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 28px 32px; padding: 28px; }
+  #page section { width: var(--w); flex: none; }
+  #page h2 { margin: 0 0 10px; font: 500 12px/1.3 var(--font-ui); color: var(--ink-muted); }
+</style>
+</head>
+<body>
+<div id="page"></div>
+<script src="harness.js"></script>
+</body>
+</html>

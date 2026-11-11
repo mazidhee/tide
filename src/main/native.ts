@@ -1,5 +1,5 @@
 /**
- * Tide's Rust module (native/tide-core): the search index and the recall schedule. In the app's
+ * Tide's Rust module (native/tide-core): the search index, the recall schedule and the data lab. In the app's
  * resources when packaged, next to its crate in development. Null when it can't be loaded, and
  * whatever uses it then goes without (search has a slower fallback; recall simply waits).
  */

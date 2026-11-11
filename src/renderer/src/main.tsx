@@ -8,13 +8,16 @@ import 'katex/dist/katex.min.css'
 import './styles/theme.css'
 import './styles/app.css'
 import './styles/prose.css'
+import './styles/lab.css'
 import { AppProvider } from './state'
 import App from './App'
+import { startLab } from './lib/lab'
 import { startMermaid } from './lib/mermaid'
 import { startLightbox } from './lib/lightbox'
 
 window.tide.settings.get().then((settings) => {
   startMermaid()
+  startLab()
 startLightbox()
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

@@ -33,6 +33,7 @@ const STEP_ICON: Record<AgentStep['kind'], 'search' | 'note' | 'globe' | 'extern
   delegate: 'agents',
   helper: 'sparkle',
   run_code: 'terminal',
+  run_sql: 'terminal',
   remember: 'book',
   terminal: 'terminal'
 }
@@ -49,6 +50,7 @@ function summarizeSteps(steps: AgentStep[]): string {
     count('metabase') && `looked in Metabase${times(count('metabase'))}`,
     count('read_webpage') && `read ${count('read_webpage')} page${count('read_webpage') === 1 ? '' : 's'}`,
     count('run_code') && `ran code${times(count('run_code'))}`,
+    count('run_sql') && `ran SQL${times(count('run_sql'))}`,
     count('terminal') && `used the terminal${times(count('terminal'))}`,
     count('helper') && `used ${count('helper')} helpers`,
     remembered && `remembered ${remembered === 1 ? 'something' : `${remembered} things`} about you`
@@ -103,6 +105,9 @@ export interface SendOptions {
  * A stored conversation: its turns, streaming updates, and sending. The main process saves every
  * exchange, so this only keeps what's on screen.
  */
+/** Which conversation each turn on screen belongs to, so a query in it runs on that conversation's data lab */
+const turnLab = new Map<string, string>()
+
 export function useConversation() {
   const [chatId, setChatId] = useState(newChatId)
   const [turns, setTurns] = useState<Turn[]>([])
@@ -112,6 +117,9 @@ export function useConversation() {
   const activeId = useRef<string | null>(null)
   const chatIdRef = useRef(chatId)
   chatIdRef.current = chatId
+  // Each turn's data lab is its conversation's: TurnView reads it from here (see lib/lab.ts)
+  if (turnLab.size > 4000) turnLab.clear()
+  for (const t of turns) turnLab.set(t.id, chatId)
 
   const setWeb = useCallback((on: boolean) => {
     setWebState(on)
@@ -406,6 +414,7 @@ export function TurnView({
             <div
               ref={proseRef}
               className="prose msg-prose"
+              data-lab={turnLab.get(t.id)}
               onClick={onAnswerClick}
               dangerouslySetInnerHTML={{ __html: linkCitations(renderMarkdown(spoken.rest, { notePath: notePath ?? '', filesByName: app.filesByName }), t.sources?.length ?? 0) }}
             />
