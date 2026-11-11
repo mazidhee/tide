@@ -17,7 +17,7 @@ import { parsePlacement, placementNote } from '@shared/placement'
 import { correctionText } from '@shared/lessonCheck'
 import type { Reading } from '@shared/readings'
 import { whyByDefault } from '../lib/agenda'
-import { ASKED, GO_ON, SHOW_ME, MODE_LABEL, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
+import { ASKED, END_NOW, GO_ON, SHOW_ME, shouldSumUp, MODE_LABEL, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
 import { cardsToMarkdown } from '@shared/cards'
 import { fileTitle, useApp, pagesLabel } from '../state'
@@ -1007,7 +1007,14 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               <Icon name="panel" />
             </button>
           )}
-          <button className="tool-btn keep-label" onClick={() => app.back()} title="End this session">
+          <button
+            className="tool-btn keep-label"
+            disabled={busy && shouldSumUp(turns, finished)}
+            // Ending a session that has answers in it closes it properly: the summary, kept in Past
+            // lessons, what was missed due for recall. Pressed again (or with nothing answered), it leaves
+            onClick={() => (!busy && shouldSumUp(turns, finished) ? send(END_NOW, turns) : app.back())}
+            title={shouldSumUp(turns, finished) ? 'End: the tutor sums up what you learned and what to review. To pause instead, just go elsewhere: it waits under Carry on.' : 'Leave this session'}
+          >
             <Icon name="x" />
             <span>End</span>
           </button>

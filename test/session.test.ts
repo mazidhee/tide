@@ -50,3 +50,18 @@ describe('hidden tests on a code question', () => {
     expect(splitTests('Which?\n```tests\n[{"expect": "1"}]\n```')).toEqual({ prompt: 'Which?', tests: '[{"expect": "1"}]' })
   })
 })
+
+describe('End', async () => {
+  const { END_NOW, shouldSumUp, ownWords, parseBlocks } = await import('../src/shared/session')
+  it('sums up a session with answers in it, and only once', () => {
+    const turns = [{ role: 'user', content: 'Teach me X' }, { role: 'assistant', content: '<ask>Q?</ask>' }, { role: 'user', content: 'Answer: 42' }]
+    expect(shouldSumUp(turns, false)).toBe(true)
+    expect(shouldSumUp(turns, true)).toBe(false)
+    expect(shouldSumUp(turns.slice(0, 2), false)).toBe(false)
+  })
+  it('shows the student only their own words, and asks for the closing summary', () => {
+    expect(ownWords(END_NOW)).toBe("Let's stop here for today.")
+    expect(END_NOW).toMatch(/<summary>/)
+    expect(parseBlocks('<summary>You learned X.</summary>').some((b) => b.kind === 'summary')).toBe(true)
+  })
+})
