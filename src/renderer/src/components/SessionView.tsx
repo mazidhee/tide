@@ -10,6 +10,8 @@ import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict
 import { markNote, paceNote } from '@shared/pace'
 import { nothingToMark, unmarked } from '@shared/lessonRepair'
 import { withSources, type SourcePack } from '@shared/sources'
+import { ledPrefKey } from '@shared/sourceLed'
+import { openReading } from '../lib/reading'
 import { parsePlacement, placementNote } from '@shared/placement'
 import { correctionText } from '@shared/lessonCheck'
 import type { Reading } from '@shared/readings'
@@ -87,6 +89,10 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const [running, setRunning] = useState(false)
   const [savedCards, setSavedCards] = useState<Set<string>>(new Set())
   const [web, setWeb] = useState(() => localStorage.getItem('tide.chat.web') !== 'off')
+  // [source-led] Teach from sources (a step opens with a reading when a good source is found) or let the tutor explain: remembered per notebook
+  const [led, setLed] = useState(() => localStorage.getItem(ledPrefKey(scope)) !== 'off')
+  const ledRef = useRef(led)
+  ledRef.current = led
   const activeId = useRef<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const answerRef = useRef<HTMLTextAreaElement>(null)
@@ -223,7 +229,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         const last = messages[messages.length - 1]
         messages[messages.length - 1] = { ...last, content: `(Time left: ${clock.left() || timed} of ${timed} minutes)\n${last.content}` }
       }
-      await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setupRef.current), labId: labId.current, canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, engine: engineRef.current })
+      await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setupRef.current), labId: labId.current, canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, engine: engineRef.current, sourceLed: ledRef.current })
     },
     [scope, setup, web, timed, clock, mode]
   )
@@ -918,6 +924,23 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               <span>Notes</span>
             </button>
           )}
+          {/* [source-led] */}
+          {mode === 'teach' && (
+            <button
+              className={`tool-btn led-toggle${led ? ' on' : ''}`}
+              aria-pressed={led}
+              onClick={() =>
+                setLed((on) => {
+                  localStorage.setItem(ledPrefKey(scope), on ? 'off' : 'on')
+                  return !on
+                })
+              }
+              title={led ? 'Teaching from sources: each step opens with a reading from your books, official documentation or a free text, when a good one is found. Click to let the tutor explain instead.' : 'The tutor is explaining from its own knowledge. Click to teach from sources.'}
+            >
+              <Icon name="book" />
+              <span>{led ? 'Teach from sources' : 'Let the tutor explain'}</span>
+            </button>
+          )}
           {mode === 'teach' && (
             <button className={`tool-btn${why ? ' on' : ''}`} aria-pressed={why} onClick={toggleWhy} title={why ? 'Why mode: teaching the reasons behind each idea, Socratically. Click for plain explanations.' : 'Why mode: have the tutor lead you to why each idea is so, from first principles'}>
               <Icon name="sparkle" />
@@ -971,7 +994,15 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
 
       <div className={`${withNotes ? 'session-split' : 'session-solo'}${rail ? ' td-with-rail' : ''}`}>
       <div className="doc-scroll session-scroll">
-        <div className="session-column" data-lab={labId.current}>
+        <div
+          className="session-column"
+          data-lab={labId.current}
+          // [source-led] a reading's "Open in your library at page N"
+          onClick={(e) => {
+            const open = openReading(e.target)
+            if (open) (e.preventDefault(), app.openPath(open.path, open.anchor))
+          }}
+        >
           {tide && (
             <header className="td-lesson-head">
               <h1>{topic}</h1>
