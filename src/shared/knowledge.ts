@@ -5,7 +5,7 @@
  * everything here is read from roadmaps and lesson records, so it is free and says nothing that
  * didn't happen. The estimates and the store are Tide's Rust module (native/tide-core/src/knowledge.rs).
  */
-import type { RoadmapTopic } from './curriculum'
+import { splitTag, type RoadmapTopic } from './curriculum'
 import type { LessonRecord } from './lessonLog'
 import { closeness, type LessonDigest } from './lessonMemory'
 
@@ -52,12 +52,15 @@ export interface ConceptState {
   prerequisites: string[]
   done: boolean
   private: boolean
-  /** How solid it is now, 0 to 1 */
+  /** How solid it is now, 0 to 1: FSRS-6 retrievability, the chance of remembering it today (0 until something is asked) */
   estimate: number
-  /** How well it was known at the last evidence, before any forgetting */
+  /** What it stood at after the last answer, before any forgetting: 1 when that answer was right */
   level: number
-  /** Days for the estimate to halve when unused */
+  /** Days from the last review for the estimate to halve when unused */
   halfLife: number
+  /** FSRS stability (days for the estimate to fall to 90%) and difficulty (1 to 10); none until something is asked */
+  stability?: number
+  difficulty?: number
   status: ConceptStatus
   lastSeen?: number
   lastRight?: number
@@ -78,6 +81,11 @@ export interface ConceptState {
 
 /** A recall question kept from a lesson, on the topic it was missed in */
 export interface MissedQuestion {
+  /** The recall item's id, and the lesson it was missed in */
+  id: string
+  lesson: string
+  /** That lesson's page in the vault, to open at the question */
+  page?: string
   prompt: string
   /** When it comes back (ms) */
   due: number
@@ -118,8 +126,8 @@ export interface KnowledgeView {
   missed?: Record<string, MissedQuestion[]>
 }
 
-/** The estimate at or above which a concept counts as solid (the same line the Rust module draws) */
-export const SOLID = 0.6
+/** The retrievability at or above which a concept counts as solid, when its last answer was right (the same line the Rust module draws) */
+export const SOLID = 0.85
 
 const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
 
@@ -136,8 +144,79 @@ export function needsOf(title: string): { name: string; needs: string[] | null }
   return { name: title.slice(0, m.index).trim() || title, needs: list }
 }
 
-/** A lesson's topic as its concept is named: without a "(needs: …)" note */
-export const conceptName = (topic: string) => needsOf(topic.replace(/\*\*/g, '')).name
+/** A lesson's topic as its concept is named: without a "(needs: …)" note, a heading's tag ("— CORE") or its number */
+export const conceptName = (topic: string) => splitTag(needsOf(topic.replace(/\*\*/g, '')).name).title.replace(/^\s*\d+[.)]\s+/, '').trim()
+
+// ---------- Quizzes and flashcards ----------
+
+/**
+ * The topic a quiz question counts on. A quiz on one topic: that one. A quiz on several ("What I
+ * studied today: A; B"): the one the tutor named on the question, else the one whose words the
+ * question shares most (at least half of the topic's); none when it can't be told.
+ */
+export function questionTopic(topics: string[], prompt: string, named?: string): string | null {
+  if (topics.length === 1) return topics[0]
+  if (named) {
+    const n = norm(conceptName(named))
+    const hit = topics.find((t) => norm(t) === n)
+    if (hit) return hit
+  }
+  let best: string | null = null
+  let score = 0.5
+  for (const t of topics) {
+    const c = closeness(t, `${named ?? ''} ${prompt}`)
+    if (c > score || (c === score && !best)) [best, score] = [t, c]
+  }
+  return best
+}
+
+const FLASHCARD_TAG = /^flashcards?(?:\/|$)/i
+const words = (s: string) => s.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim()
+
+/**
+ * The names a flashcard's topic may go by, the likeliest first: the headings above it, nearest
+ * first (a card under "## Hash tables — CORE" is on Hash tables); its note's flashcard tags, the
+ * deepest part first (#flashcards/algorithms/hash-tables: "hash tables", then "algorithms hash
+ * tables"); the note a generated deck was made from ("Cards for [[Hash tables]]"); and the note's
+ * own name, without " (Flashcards)". Each as a syllabus heading would be, without tag or number.
+ */
+export function cardTopics(card: { path: string; line: number }, raw: string, tags: string[]): string[] {
+  const out: string[] = []
+  const add = (s: string | undefined) => {
+    const t = s ? conceptName(words(s)) : ''
+    if (t && !out.some((o) => norm(o) === norm(t))) out.push(t)
+  }
+  const lines = raw.split('\n')
+  let level = 7
+  let fence = false
+  const above: { level: number; text: string }[] = []
+  for (let i = 0; i < Math.min(card.line, lines.length); i++) {
+    if (/^\s*(```|~~~)/.test(lines[i])) fence = !fence
+    const h = !fence && lines[i].match(/^(#{1,6})\s+(.+?)\s*#*\s*$/)
+    if (h) above.push({ level: h[1].length, text: h[2] })
+  }
+  for (const h of above.reverse()) {
+    if (h.level >= level) continue
+    level = h.level
+    add(h.text)
+  }
+  for (const tag of tags.filter((t) => FLASHCARD_TAG.test(t))) {
+    const parts = tag.split('/').slice(1).filter(Boolean)
+    for (let k = parts.length - 1; k >= 0; k--) add(parts.slice(k).join(' '))
+  }
+  add(raw.match(/Cards for \[\[([^\]|#]+)/)?.[1])
+  add(card.path.split('/').pop()!.replace(/\.md$/i, '').replace(/\s*\(?flashcards?\)?\s*$/i, ''))
+  return out
+}
+
+/** A flashcard review as evidence: its first showing is an answer, every later one a recall */
+export function cardKind(grade: 'again' | 'hard' | 'good' | 'easy', first: boolean): EvidenceKind {
+  const kind: EvidenceKind = grade === 'again' ? 'wrong' : grade === 'hard' ? 'partly' : 'right'
+  return first ? kind : recalled(kind)
+}
+
+/** A flashcard counts for half an answer in a lesson: remembering a line is less than explaining it */
+export const CARD_WEIGHT = 0.5
 
 /**
  * A roadmap's topics as concepts, in its order. Each builds on the topic before it in its section

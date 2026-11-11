@@ -103,6 +103,8 @@ export async function noteLesson(record: LessonRecord): Promise<void> {
   }
   const path = 'path' in record.scope ? record.scope.path : ''
   if (path && (await privatePath(path).catch(() => false))) return
+  // A review of questions already kept: a miss there is scheduled where the question is kept, not kept twice
+  if (record.options?.review?.items.length) return
   // Not the question this lesson itself opened with: that one is already kept
   const mine = asked ? r.all().find((i) => i.id === asked.id)?.prompt : undefined
   const fresh = [...d.stuck, ...d.missed].filter((p) => p !== mine)
@@ -153,6 +155,13 @@ export function retireRecall(question: string): boolean {
   } catch {
     return false
   }
+}
+
+/** A kept question answered in a review (Review now): scheduled by how it went, and in the review log */
+export async function reviewRecall(id: string, grade: 'again' | 'hard' | 'good' | 'easy'): Promise<RecallItem | null> {
+  const reviewed = recall()?.review(id, grade, Date.now()) ?? null
+  if (reviewed) await appendRevlog([logged(reviewed)].flatMap((e) => e ?? []))
+  return reviewed
 }
 
 export const recallStats = () => recall()?.stats(Date.now()) ?? { total: 0, due: 0, settled: 0 }

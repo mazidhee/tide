@@ -203,8 +203,8 @@ export const getProgress = () => readJson<Record<string, NoteProgress>>(PROGRESS
 
 const REVIEW_LOG = joinRel('.tide', 'reviews.jsonl')
 
-export async function logReview(cardId: string, path: string, grade: ReviewGrade, interval: number) {
-  const line = JSON.stringify({ at: Date.now(), id: cardId, path, grade, interval }) + '\n'
+export async function logReview(cardId: string, path: string, grade: ReviewGrade, interval: number, at = Date.now()) {
+  const line = JSON.stringify({ at, id: cardId, path, grade, interval }) + '\n'
   await fs.mkdir(absPath('.tide'), { recursive: true })
   await fs.appendFile(absPath(REVIEW_LOG), line)
 }

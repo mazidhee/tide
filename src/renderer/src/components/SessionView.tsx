@@ -36,6 +36,7 @@ import { InterviewClock, useInterviewClock } from './InterviewClock'
 import { LessonNotes } from './LessonNotes'
 import { finishAgendaItem } from '../lib/agenda'
 import { useStudying } from '../lib/studying'
+import { lessonId } from '@shared/lessonLog'
 import { endOngoing, followInBackground, getOngoing, keepLesson, keepLive, saveOngoing, sessionKey, stopFollowing } from '../lib/sessions'
 import type { View } from '../state'
 import { Professor, type ProfessorPose } from './Professor'
@@ -81,6 +82,8 @@ const inFocusWindow = /[#&]focus=/.test(window.location.hash)
 
 export function SessionView({ mode, scope, topic, options, initialTurns, view }: { mode: SessionMode; scope: ChatScope; topic: string; options?: SessionSetup['options']; initialTurns?: { role: 'user' | 'assistant'; content: string }[]; view?: View }) {
   const ongoingKey = view ? sessionKey(view as { kind: string; mode?: string; topic?: string; nonce?: number }) : null
+  // The record a lesson or quiz is kept under (lib/sessions.ts keepLesson): its answers are read from there
+  const recordId = view?.kind === 'session' && ongoingKey && (mode === 'teach' || mode === 'quiz') ? (view.lesson ?? lessonId(ongoingKey)) : undefined
   // The lesson's data lab: the tutor's run_sql and the queries you run in the lesson share it
   const labId = useRef(`lesson:${ongoingKey ?? uid()}`)
   const app = useApp()
@@ -634,9 +637,17 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           verdict: b.verdict,
           score: b.score,
           confidence: conf === 'sure' ? 3 : conf === 'unsure' ? 2 : conf === 'guessing' ? 1 : undefined,
-          question: prevAsk?.prompt.slice(0, 300)
+          question: prevAsk?.prompt.slice(0, 300),
+          ...(recordId ? { lesson: recordId } : {})
         })
         if (b.verdict === 'correct') setCheer(Date.now() + 4500)
+        // Review now: the k-th grade is the k-th kept question, scheduled where it is kept
+        const review = options?.review
+        if (review?.items.length) {
+          const k = gradeIndex.current++
+          if (review.items[k]) window.tide.knowledge.reviewAnswer(review.concept, review.items[k], b.verdict).catch(() => {})
+          return
+        }
         // A retest: the k-th grade is the k-th mistake asked about
         const retest = options?.retest
         if (retest?.length) {
@@ -653,7 +664,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         }
       })
     })
-  }, [parsed, busy, checking, turns, sourcePath, topic, mode, options, scope])
+  }, [parsed, busy, checking, turns, sourcePath, topic, mode, options, scope, recordId])
 
   const changeApproach = (to: Strategy, said?: string) => {
     setApproach(to)

@@ -311,6 +311,8 @@ function registerIpc() {
   handle('lessons:list', () => listLessons())
   handle('lessons:get', (id: string) => getLesson(id))
   handle('knowledge:view', async () => (await import('./knowledge')).knowledgeView())
+  handle('knowledge:review', async (concept: string) => (await import('./review')).reviewFor(concept))
+  handle('knowledge:reviewAnswer', async (concept: string, item: import('@shared/review').ReviewItem, verdict: import('@shared/types').Verdict) => (await import('./review')).answerReview(concept, item, verdict))
   // ---- Guided projects and adaptive difficulty (main/workshop.ts, main/difficulty.ts) ----
   const workshop = () => import('./workshop')
   handle('workshop:list', async () => (await workshop()).listWorkshop())

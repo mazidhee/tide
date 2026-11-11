@@ -90,7 +90,7 @@ export function KnowPage({ data, areaClass, actions }: { data: KnowledgeView; ar
       </header>
       {mode === 'subject' ? <KnowSubjects data={data} ready={ready} areaClass={areaClass} actions={actions} /> : <KnowTimeline data={data} areaClass={areaClass} actions={actions} />}
       <p className="know-foot">
-        An estimate, not a mark. A right answer raises a topic and makes it last longer; a wrong one lowers it; and it fades with the time since you last got it right, more slowly the more often that has happened. Solid means held at 60% or more.
+        An estimate, not a mark: the chance you would remember a topic today, by the same model as your reviews (FSRS). Each answer is a review: a right one after a gap makes it last much longer, a wrong one makes it harder to keep, and it fades with the time since. Solid means your last answer was right and the chance is still 85% or more; fading means it has dropped below.
       </p>
     </div>
   )
