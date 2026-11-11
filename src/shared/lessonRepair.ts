@@ -49,5 +49,19 @@ export function repairReply(reply: string, said: string): { text: string; repair
     text = text.replace(/\s*<continue\b[^>]*\/?>/gi, '')
     repaired.push('ask')
   }
+  // Tags the model invents for things it means to point at (a file, a tool call) are not prose:
+  // live, Gemma wrote "<file_path>Raft (algorithm) - Safety rules</file_path>" twice under a reading
+  // (outside code blocks: XML in a code block is code)
+  const stray = text
+    .split(/(^```[\s\S]*?^```)/m)
+    .map((part, i) => (i % 2 ? part : part.replace(STRAY_TAG_LINE, '').replace(/\n{3,}/g, '\n\n')))
+    .join('')
+  if (stray !== text) {
+    text = stray
+    repaired.push('stray')
+  }
   return { text, repaired }
 }
+
+/** A line that is only an invented tag: <file_path>…</file_path>, <tool_call>…</tool_call> and the like */
+const STRAY_TAG_LINE = /^[ \t]*<(file_path|filepath|file|path|tool_call|tool_code|function_call|image_path|source_path)\b[^>]*>[^\n]*?(?:<\/\1>)?[ \t]*$\n?/gim
