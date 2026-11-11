@@ -68,6 +68,21 @@ export interface ConceptState {
   wrong: number
   /** For a solid concept: days until it stops being solid if it isn't used */
   fadesIn?: number
+  /** For a solid concept: when it stops being solid if it isn't used (ms) */
+  fadesAt?: number
+  /** The first evidence on it (ms) */
+  firstSeen?: number
+  /** When it first became solid (ms), whatever has happened since */
+  madeSolid?: number
+}
+
+/** A recall question kept from a lesson, on the topic it was missed in */
+export interface MissedQuestion {
+  prompt: string
+  /** When it comes back (ms) */
+  due: number
+  reviews: number
+  lapses: number
 }
 
 export interface Picture {
@@ -97,6 +112,10 @@ export interface KnowledgeView {
   /** Solid now, soonest to fade first */
   fading: string[]
   weeks: WeekPoint[]
+  /** Weeks back and ahead, with each aim's forecast (knowTimeline.ts) */
+  timeline?: import('./knowTimeline').Timeline
+  /** Recall questions kept on each topic, by concept id */
+  missed?: Record<string, MissedQuestion[]>
 }
 
 /** The estimate at or above which a concept counts as solid (the same line the Rust module draws) */

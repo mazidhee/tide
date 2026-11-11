@@ -48,7 +48,7 @@ export function tagClass(tag: string | undefined): SectionClass | undefined {
 }
 
 /** "12. Distributed Systems — CORE" → the title and its tag (longer tags than the roadmap page shows) */
-function splitTag(text: string): { title: string; tag?: string } {
+export function splitTag(text: string): { title: string; tag?: string } {
   // A dated plan adds " — 3 Nov – 1 Dec" to headings: not part of the name
   const t = text.replace(/\s+[—–]\s+\d.*$/, '')
   const m = t.match(/^(.*?)\s+[—–-]\s+([A-Z][A-Z &/,]{1,60})\s*$/)

@@ -1,338 +1,650 @@
 /*
-  The new design: What you know. One sentence carrying the numbers, then each area as a band of
-  cells. A cell is a concept drawn as the level: the tinted fill is how well you hold it now, the
-  dashed line the highest it has stood. Names wrap to two lines and the cells widen with the
-  room there is, so a long name is never cut short. Scoped to data-design='tide'.
+  The new design: What you know, two ways. By subject, each roadmap is a column read like a
+  syllabus being filled in: its phases in order, each topic with its level (the water in the
+  tank) and a plain status, the untouched tail folded. Over time, weeks run along one axis shared
+  by every panel: made solid, retention, each aim's path and forecast. Scoped to data-design='tide'.
 */
 
 :root[data-design='tide'] {
   .know-scroll {
-    padding: 36px 48px 72px;
+    padding: 32px 40px 72px;
     container-type: inline-size;
   }
-  .know.td-know {
-    max-width: 1280px;
+  .know.kp {
+    max-width: 1480px;
     margin: 0 auto;
   }
-  .td-know-say {
-    margin: 6px 0 0;
-    max-width: 70ch;
+  .kp-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 20px;
+  }
+  .kp-title .page-title {
+    margin: 0;
+  }
+  .kp-say {
+    margin: 8px 0 0;
+    max-width: 74ch;
     font-size: var(--t-lede);
     line-height: 23px;
     color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
   }
-  .td-know-say b {
+  .kp-say b {
     color: var(--ink);
     font-weight: 600;
   }
-  .td-know-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 332px;
-    gap: 0 48px;
-    align-items: start;
-    margin-top: 26px;
-  }
-  .td-know-main {
-    min-width: 0;
-  }
-  .td-know-bar {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    margin-bottom: 18px;
-  }
-  .td-know-key {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 22px;
-    margin: 0;
-    font-size: var(--t-meta);
-    color: var(--ink-3);
-  }
-  .td-know-key span {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .td-cell-key {
-    position: relative;
-    width: 34px;
-    height: 22px;
-    border-radius: var(--r-mark);
-    box-shadow: inset 0 0 0 1px var(--line-2);
-    overflow: hidden;
-  }
-  .td-cell-key.held::before {
-    content: '';
-    position: absolute;
-    inset: 40% 0 0;
-    background: color-mix(in srgb, var(--ink-3) 24%, var(--paper));
-    border-top: 2px solid var(--ink-3);
-  }
-  .td-cell-key.high::before {
-    content: '';
-    position: absolute;
-    inset: 60% 0 0;
-    background: color-mix(in srgb, var(--ink-3) 24%, var(--paper));
-    border-top: 2px solid var(--ink-3);
-  }
-  .td-cell-key.high::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 22%;
-    border-top: 1.5px dashed var(--ink-2);
-  }
-  .td-cell-key.ready {
-    box-shadow: inset 0 0 0 1.5px var(--accent);
-    background: var(--accent-soft);
-  }
-  .td-know .know-filters {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-  }
-  .td-know .know-count {
-    margin-left: 6px;
-    color: var(--ink-3);
-    font-weight: 400;
-  }
-
-  /* An area: its name and figures on the left, its concepts as cells on the right */
-  .td-band {
-    display: grid;
-    grid-template-columns: 172px minmax(0, 1fr);
-    gap: 16px;
-    padding: 16px 0;
+  .kp .know-foot {
+    max-width: 78ch;
+    margin: 40px 0 0;
+    padding-top: 16px;
     border-top: 1px solid var(--line);
-  }
-  .td-band-head h2 {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0;
-    font: 600 var(--t-base) / 20px var(--ui);
-  }
-  .td-band-head h2 span {
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .td-band-head p {
-    margin: 3px 0 0 23px;
     font-size: var(--t-meta);
     line-height: 18px;
     color: var(--ink-3);
   }
-  .td-band-body {
-    min-width: 0;
-  }
-  .td-cells {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(184px, 1fr));
-    gap: 6px;
-  }
-  .td-cell {
-    position: relative;
-    isolation: isolate;
+
+  /* ---------- By subject ---------- */
+
+  .ks-tools {
+    position: sticky;
+    top: -32px;
+    z-index: 2;
     display: flex;
-    align-items: flex-end;
-    min-height: 64px;
-    padding: 24px 8px 7px;
-    border-radius: var(--r-mark);
-    box-shadow: inset 0 0 0 1px var(--line-2);
-    overflow: hidden;
-    text-align: left;
-    color: var(--ink);
-    --cell-ground: color-mix(in srgb, var(--c, var(--accent)) calc(var(--cell-tint) * 0.5), var(--paper));
-    transition: box-shadow 120ms ease;
-  }
-  .td-cell.ready,
-  .td-cell.later,
-  .td-cell.more {
-    --cell-ground: transparent;
-  }
-  /* The level: the fill, in the area's colour laid thinly over the paper so the name stays AA */
-  .td-cell::before {
-    content: '';
-    position: absolute;
-    z-index: -1;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: calc(var(--v, 0) * 1%);
-    background: color-mix(in srgb, var(--c, var(--accent)) var(--cell-tint), var(--paper));
-    border-top: 1.5px solid color-mix(in srgb, var(--c, var(--accent)) 72%, var(--paper));
-  }
-  .td-cell:not([style*='--v'])::before {
-    display: none;
-  }
-  .td-cell-high {
-    position: absolute;
-    z-index: -1;
-    left: 0;
-    right: 0;
-    bottom: calc(var(--hw) * 1%);
-    border-top: 1.5px dashed var(--ink-2);
-  }
-  .td-cell-name {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-    overflow: hidden;
-    font-size: var(--t-meta);
-    line-height: 16px;
-    font-weight: 500;
-    overflow-wrap: anywhere;
-    /* A hairline of the cell's own ground round each letter, so the water line never cuts a word */
-    text-shadow:
-      0 1.5px 0 var(--cell-ground),
-      0 -1.5px 0 var(--cell-ground),
-      1.5px 0 0 var(--cell-ground),
-      -1.5px 0 0 var(--cell-ground),
-      1px 1px 0 var(--cell-ground),
-      -1px -1px 0 var(--cell-ground),
-      1px -1px 0 var(--cell-ground),
-      -1px 1px 0 var(--cell-ground);
-  }
-  .td-cell-tag {
-    position: absolute;
-    right: 5px;
-    top: 5px;
-    display: inline-flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 3px;
-    padding: 0 4px;
-    border-radius: 3px;
+    justify-content: space-between;
+    gap: 10px 16px;
+    margin: 20px 0 8px;
+    padding: 10px 0;
     background: var(--paper);
-    box-shadow: 0 0 0 1px var(--line-2);
-    font-size: 11.5px;
-    line-height: 16px;
-    font-weight: 600;
-    color: var(--ink);
+    border-bottom: 1px solid var(--line);
   }
-  .td-cell.ready {
-    box-shadow: inset 0 0 0 1.5px var(--accent);
-    background: var(--accent-soft);
-  }
-  .td-cell.ready .td-cell-tag {
-    background: none;
-    box-shadow: none;
-    padding: 0;
-    color: var(--accent-text);
-  }
-  .td-cell.later {
-    box-shadow: inset 0 0 0 1px var(--line);
+  .ks-count {
+    margin-left: 2px;
     color: var(--ink-3);
-  }
-  .td-cell.later .td-cell-name {
     font-weight: 400;
+    font-variant-numeric: tabular-nums;
   }
-  .td-cell:hover {
-    box-shadow: inset 0 0 0 1.5px var(--ink-2);
-  }
-  .td-cell.picked {
-    box-shadow: inset 0 0 0 2px var(--ink);
-  }
-  .td-cell.more {
-    box-shadow: inset 0 0 0 1px var(--line);
-    background: var(--sunk);
+  .segmented button.on .ks-count {
     color: var(--ink-2);
   }
-  .td-cell.more small {
-    display: block;
-    font-size: 12px;
-    font-weight: 400;
-    color: var(--ink-3);
-  }
-  .td-cell-detail {
-    margin-top: 8px;
-    padding: 14px 16px;
+  .ks-find {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 240px;
+    max-width: 100%;
+    height: 30px;
+    padding: 0 10px;
     border: 1px solid var(--line-2);
     border-radius: var(--r-ctl);
     background: var(--raised);
+    color: var(--ink-3);
   }
-  .td-cell-detail h3 {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px 10px;
-    margin: 0 0 6px;
-    font: 600 var(--t-base) / 20px var(--ui);
+  .ks-find:focus-within {
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
   }
-  .td-cell-detail h3 .td-meta {
-    font-weight: 400;
-  }
-  .td-cell-detail .know-detail {
-    margin: 0;
-    padding: 0;
+  .ks-find input {
+    flex: 1;
+    min-width: 0;
     border: 0;
+    outline: 0;
     background: none;
-    color: var(--ink-2);
+    font: inherit;
+    font-size: var(--t-base);
+    color: var(--ink);
+  }
+  .ks-find input::placeholder {
+    color: var(--ink-3);
   }
 
-  /* The right column */
-  .td-know-side > section + section {
-    margin-top: 32px;
-    padding-top: 28px;
-    border-top: 1px solid var(--line);
+  .ks-cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(296px, 1fr));
+    gap: 8px 36px;
+    align-items: start;
   }
-  .td-know-side .td-sec {
-    margin-bottom: 10px;
+  .ks-col {
+    min-width: 0;
+    padding-top: 16px;
   }
-  .td-side-head {
+  .ks-head {
+    padding-bottom: 6px;
+  }
+  .ks-head h2 {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font: 600 var(--t-lede) / 21px var(--ui);
+    letter-spacing: -0.005em;
   }
-  .td-know .know-chart-say {
-    margin: 0 0 8px;
+  .ks-head h2 span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .ks-head-say {
+    margin: 4px 0 0;
     font-size: var(--t-meta);
     line-height: 18px;
     color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
   }
-  .td-know .know-chart-say strong {
+  /* How much of the syllabus is filled in: solid, fading, being learnt, along one thin rule */
+  .ks-fill {
+    display: flex;
+    gap: 1px;
+    height: 4px;
+    margin-top: 8px;
+    border-radius: 2px;
+    background: var(--line);
+    overflow: hidden;
+  }
+  .ks-fill i {
+    display: block;
+    height: 100%;
+  }
+  .ks-fill i.solid {
+    background: var(--c, var(--accent));
+  }
+  .ks-fill i.fading {
+    background: var(--warn-mark);
+  }
+  .ks-fill i.learning {
+    background: color-mix(in srgb, var(--c, var(--accent)) 40%, var(--paper));
+  }
+  .ks-head-now {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 8px 0 0;
+    font-size: var(--t-meta);
+    line-height: 18px;
+    font-weight: 500;
+    color: var(--accent-text);
+  }
+  .ks-head-now::before,
+  .ks-here::before {
+    content: '';
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .ks-phase {
+    margin-top: 18px;
+    /* A long syllabus lays out only what is on screen */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 160px;
+  }
+  .ks-phase-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 0 0 4px;
+    padding: 0 0 6px;
+    border-bottom: 1px solid var(--line);
+    font: 600 var(--t-meta) / 18px var(--ui);
     color: var(--ink);
-    font-weight: 600;
   }
-  .know-line-path {
-    stroke: var(--accent);
+  .ks-phase-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
-  .know-point {
-    fill: var(--accent);
-    stroke: var(--paper);
+  .ks-phase-n {
+    flex: none;
+    margin-left: auto;
+    font-weight: 400;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
   }
-  .know-grid {
-    stroke: var(--grid);
+  .ks-here {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 5px;
+    font-weight: 500;
+    color: var(--accent-text);
   }
-  .know-base {
-    stroke: var(--line-2);
+  .ks-phase.here .ks-phase-head {
+    border-bottom-color: var(--accent-line);
   }
-  .know-tick {
-    fill: var(--ink-3);
-    font-family: var(--ui);
-    font-size: 11px;
+  .ks-phase.also .ks-phase-head {
+    color: var(--ink-2);
   }
-  .know-value {
-    fill: var(--ink);
-    font-family: var(--ui);
-    font-weight: 600;
-  }
-  .know-tip {
-    background: var(--ink);
-    color: var(--paper);
-    border: 0;
-    border-radius: var(--r-ctl);
-    box-shadow: none;
-  }
-  .td-mini {
+  .ks-rows {
     list-style: none;
     margin: 0;
     padding: 0;
   }
-  .td-mini li {
+  .ks-row-main {
+    display: grid;
+    grid-template-columns: 9px minmax(0, 1fr);
+    gap: 11px;
+    align-items: center;
+    width: 100%;
+    padding: 6px 6px;
+    border-radius: var(--r-ctl);
+    text-align: left;
+    color: var(--ink);
+  }
+  .ks-row-main:hover {
+    background: var(--hover);
+  }
+  .ks-row.on > .ks-row-main {
+    background: var(--active);
+  }
+  .ks-row-text {
+    min-width: 0;
+  }
+  .ks-row-name {
+    display: block;
+    font-size: var(--t-base);
+    line-height: 19px;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+  .ks-row-meta {
+    display: block;
+    font-size: var(--t-meta);
+    line-height: 17px;
+    color: var(--ink-3);
+  }
+  .ks-row.k-new .ks-row-name {
+    font-weight: 400;
+    color: var(--ink-2);
+  }
+  .ks-row.k-ready .ks-row-meta {
+    color: var(--accent-text);
+  }
+  .ks-row.k-fading .ks-row-meta {
+    color: var(--warn);
+  }
+  .ks-more {
+    width: 100%;
+    padding: 4px 6px 4px 26px;
+    border-radius: var(--r-ctl);
+    text-align: left;
+    font-size: var(--t-meta);
+    line-height: 18px;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .ks-more:hover {
+    color: var(--ink);
+    background: var(--hover);
+  }
+  .ks-tail {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    margin-top: 16px;
+    padding: 9px 6px 8px;
+    border-top: 1px dashed var(--line-2);
+    border-radius: 0;
+    text-align: left;
+    font-size: var(--t-meta);
+    line-height: 18px;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .ks-tail:hover {
+    color: var(--ink);
+    background: var(--hover);
+  }
+  .ks-tail svg {
+    flex: none;
+  }
+  .ks-none {
+    margin: 24px 0;
+    color: var(--ink-3);
+  }
+
+  /* A topic, opened in place */
+  .ks-panel {
+    margin: 4px 0 10px 26px;
+    padding: 12px 14px 14px;
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-ctl);
+    background: var(--raised);
+    font-size: var(--t-meta);
+    line-height: 18px;
+    color: var(--ink-2);
+  }
+  .ks-panel p {
+    margin: 0;
+  }
+  .ks-panel .ks-panel-where {
+    margin-top: 4px;
+    color: var(--ink-3);
+  }
+  .ks-panel-sec {
+    margin-top: 12px;
+  }
+  .ks-panel h4 {
+    margin: 0 0 4px;
+    font: 600 var(--t-meta) / 18px var(--ui);
+    color: var(--ink);
+  }
+  .ks-panel-none {
+    color: var(--ink-3);
+  }
+  .ks-refs,
+  .ks-missed {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .ks-refs button {
+    display: grid;
+    grid-template-columns: 9px minmax(0, 1fr) auto;
+    gap: 9px;
+    align-items: center;
+    width: calc(100% + 8px);
+    padding: 3px 4px;
+    margin: 0 -4px;
+    border-radius: 4px;
+    text-align: left;
+  }
+  .ks-refs button:hover {
+    background: var(--hover);
+  }
+  .ks-refs .td-level {
+    height: 16px;
+  }
+  .ks-ref-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--ink);
+  }
+  .ks-ref-k {
+    color: var(--ink-3);
+  }
+  .ks-ref-k.k-fading {
+    color: var(--warn);
+  }
+  .ks-ref-k.k-ready {
+    color: var(--accent-text);
+  }
+  .ks-missed li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 5px 0;
+    border-top: 1px solid var(--line);
+  }
+  .ks-missed li:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .ks-missed-q {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+    color: var(--ink);
+  }
+  .ks-missed-when {
+    color: var(--ink-3);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .ks-panel-acts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  /* ---------- Over time ---------- */
+
+  .kt {
+    --kt-made: color-mix(in srgb, var(--ink) 42%, var(--paper));
+    margin-top: 20px;
+  }
+  .kt-say {
+    max-width: 78ch;
+    margin: 0 0 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+    font-size: var(--t-base);
+    line-height: 21px;
+    color: var(--ink-2);
+    font-variant-numeric: tabular-nums;
+  }
+  .kt-chart {
+    position: relative;
+    border-radius: var(--r-ctl);
+    outline: none;
+  }
+  .kt-chart:focus-visible {
+    box-shadow:
+      0 0 0 2px var(--paper),
+      0 0 0 4px var(--accent-line);
+  }
+  .kt-chart svg {
+    display: block;
+    overflow: visible;
+  }
+  .kt-panel + .kt-panel {
+    margin-top: 22px;
+  }
+  .kt-panel-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 14px;
+    margin: 0 0 6px 40px;
+  }
+  .kt-panel-head h3 {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    font: 600 var(--t-base) / 20px var(--ui);
+  }
+  .kt-key {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--t-meta);
+    line-height: 18px;
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .kt-key > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .kt-key i {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+  }
+  .kt-key i.made {
+    background: var(--kt-made);
+  }
+  .kt-key > span + span {
+    margin-left: 8px;
+  }
+  .kt-key i.ahead {
+    box-shadow: inset 0 0 0 1.5px var(--warn-mark);
+  }
+  .kt-grid {
+    stroke: var(--grid);
+  }
+  .kt-base {
+    stroke: var(--line-2);
+  }
+  .kt-tick {
+    fill: var(--ink-3);
+    font-family: var(--ui);
+    font-size: var(--t-axis);
+    font-variant-numeric: tabular-nums;
+  }
+  .kt-hover {
+    fill: var(--hover);
+  }
+  .kt-made {
+    fill: var(--kt-made);
+  }
+  .kt-ahead {
+    fill: none;
+    stroke: var(--warn-mark);
+    stroke-width: 1.5;
+  }
+  .kt-now {
+    stroke: var(--accent);
+    stroke-width: 1;
+  }
+  .kt-now-label {
+    fill: var(--accent-text);
+    font-family: var(--ui);
+    font-size: var(--t-axis);
+    font-weight: 600;
+  }
+  .kt-line {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+  .kt-point {
+    fill: var(--accent);
+    stroke: var(--paper);
+    stroke-width: 2;
+  }
+  .kt-value {
+    fill: var(--ink);
+    font-family: var(--ui);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .kt-note {
+    fill: var(--ink-3);
+    font-family: var(--ui);
+    font-size: var(--t-meta);
+  }
+  .kt-path {
+    fill: none;
+    stroke: var(--ink);
+    stroke-width: 2;
+    stroke-linejoin: round;
+  }
+  .kt-likely {
+    fill: none;
+    stroke: var(--ink-2);
+    stroke-width: 1.5;
+    stroke-dasharray: 5 4;
+  }
+  .kt-band {
+    fill: var(--ink);
+    fill-opacity: 0.08;
+  }
+  .kt-deadline {
+    stroke: var(--ink-2);
+    stroke-dasharray: 2 3;
+  }
+  .kt-aim-say {
+    max-width: 80ch;
+    margin: 0 0 6px 40px;
+    font-size: var(--t-base);
+    line-height: 20px;
+    color: var(--ink);
+  }
+  .kt-aim-say.quiet {
+    color: var(--ink-2);
+  }
+  .kt-aim-band {
+    color: var(--ink-3);
+  }
+  .kt-empty {
+    margin: 4px 0 0;
+    max-width: 70ch;
+    font-size: var(--t-meta);
+    line-height: 18px;
+    color: var(--ink-3);
+  }
+  .kt-axis {
+    margin-top: 4px;
+  }
+  .kt-tip {
+    position: absolute;
+    top: 30px;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: max-content;
+    max-width: 300px;
+    padding: 9px 12px;
+    transform: translateX(-50%);
+    border-radius: var(--r-box);
+    background: var(--raised);
+    box-shadow: var(--shadow-pop);
+    font-size: var(--t-meta);
+    line-height: 17px;
+    color: var(--ink-2);
+    pointer-events: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .kt-tip b {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .kt-none {
+    margin: 14px 0 0 40px;
+    font-size: var(--t-meta);
+    line-height: 18px;
+    color: var(--ink-3);
+  }
+
+  .kt-up {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+  }
+  .kt-up .kt-none {
+    margin-left: 0;
+  }
+  .kt-up-say {
+    margin: 4px 0 14px;
+    font-size: var(--t-meta);
+    line-height: 18px;
+    color: var(--ink-3);
+  }
+  .kt-up-week {
+    margin-top: 16px;
+  }
+  .kt-up-week h3 {
+    margin: 0 0 2px;
+    font: 600 var(--t-meta) / 18px var(--ui);
+    color: var(--ink-2);
+  }
+  .kt-up-week ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    column-gap: 32px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .kt-up-week li {
     display: grid;
     grid-template-columns: 9px minmax(0, 1fr) auto;
     gap: 12px;
@@ -340,24 +652,17 @@
     padding: 8px 0;
     border-top: 1px solid var(--line);
   }
-  .td-mini li:first-child {
-    border-top: 0;
-  }
-  .td-mini.next li {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .td-mini-main {
+  .kt-up-main {
     min-width: 0;
-    text-align: left;
   }
-  .td-mini-main b {
+  .kt-up-main b {
     display: block;
     font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .td-mini-main span {
+  .kt-up-main span {
     display: block;
     font-size: var(--t-meta);
     line-height: 18px;
@@ -366,20 +671,8 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .td-mini-main:hover b {
-    color: var(--accent-text);
-  }
-  .td-know .know-none,
-  .td-know .know-foot {
-    font-size: var(--t-meta);
-    line-height: 18px;
-    color: var(--ink-3);
-  }
-  .td-know .know-foot {
-    max-width: 78ch;
-    margin: 20px 0 0;
-    padding-top: 16px;
-    border-top: 1px solid var(--line);
+  .kt-up .td-more {
+    margin-top: 12px;
   }
 
   /* The graph side of Brain, and its tabs */
@@ -387,27 +680,27 @@
     margin-left: 12px;
   }
 
-  @container (max-width: 1040px) {
-    .td-know-grid {
-      grid-template-columns: minmax(0, 1fr) 288px;
-      gap: 0 32px;
+  @container (max-width: 720px) {
+    .ks-find {
+      width: 100%;
     }
-    .td-band {
-      grid-template-columns: 148px minmax(0, 1fr);
+    .kt-up-week ul {
+      grid-template-columns: minmax(0, 1fr);
     }
   }
-  @container (max-width: 820px) {
-    .td-know-grid {
-      grid-template-columns: minmax(0, 1fr);
-    }
-    .td-know-side {
-      margin-top: 32px;
-      padding-top: 28px;
-      border-top: 1px solid var(--line);
-    }
-    .td-band {
-      grid-template-columns: minmax(0, 1fr);
-      gap: 10px;
-    }
+}
+
+@media (max-width: 760px) {
+  :root[data-design='tide'] .know-scroll {
+    padding: 24px 20px 56px;
+  }
+  :root[data-design='tide'] .ks-tools {
+    top: -24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-design='tide'] :is(.ks-row-main, .ks-more, .ks-tail) {
+    transition: none;
   }
 }

@@ -54,6 +54,8 @@ export function KnowledgeView() {
             areaClass={areaClass}
             onLesson={(c) => app.setView({ kind: 'session', mode: 'teach', scope: scopeOf(c), topic: c.name, nonce: Date.now() })}
             onCheck={(c) => app.setView({ kind: 'session', mode: 'quiz', scope: scopeOf(c), topic: c.name, options: { length: 5 }, nonce: Date.now() })}
+            // Review now does what Home's Recall does for a fading concept: a short quiz on it
+            onReview={(c) => app.setView({ kind: 'session', mode: 'quiz', scope: scopeOf(c), topic: c.name, options: { length: 5 }, nonce: Date.now() })}
             onNewTopic={() => app.setView({ kind: 'new-topic' })}
           />
         )}

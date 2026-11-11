@@ -10,7 +10,7 @@
  */
 import { promises as fs } from 'fs'
 import { join } from 'path'
-import { roadmapTopics } from '@shared/curriculum'
+import { roadmapTopics, splitTag, underHeading } from '@shared/curriculum'
 import {
   conceptName,
   kindOfMark,
@@ -24,16 +24,19 @@ import {
   type EvidenceIn,
   type EvidenceKind,
   type KnowledgeView,
-  type Picture,
-  type WeekPoint
+  type MissedQuestion,
+  type Picture
 } from '@shared/knowledge'
+import { buildTimeline, retention, weekEdges, type AimIn, type Returned, type Review } from '@shared/knowTimeline'
 import type { LessonRecord } from '@shared/lessonLog'
 import { digestLesson, type LessonDigest } from '@shared/lessonMemory'
 import type { PlacementStore } from '@shared/placement'
 import type { Attempt, ChatScope } from '@shared/types'
-import { getNotebooks, readJsonl } from './learn'
+import { getGoals, getNotebooks, readJsonl } from './learn'
 import { tideCore } from './native'
 import { privatePath } from './projects'
+import { recallItems } from './recall'
+import { REVLOG_FILE } from './revlog'
 import { absPath, readText, vaultRoot } from './vault'
 
 interface Engine {
@@ -49,7 +52,8 @@ interface Engine {
   around(topic: string, now: number, privateOk: boolean, limit: number): Picture
   ready(area: string | null, now: number, privateOk: boolean, limit: number): ConceptState[]
   fading(area: string | null, now: number, privateOk: boolean, limit: number): ConceptState[]
-  weekly(now: number, weeks: number, offsetMin: number, privateOk: boolean): WeekPoint[]
+  /** Every question that came back, oldest first */
+  returns(privateOk: boolean): Returned[]
 }
 
 let engine: Engine | null = null
@@ -308,14 +312,48 @@ export async function knowledgeView(): Promise<KnowledgeView> {
   if (!k) return { at: now, areas: [], concepts: [], ready: [], fading: [], weeks: [] }
   await syncRoadmaps(k, true).catch(() => {})
   const notebooks = await getNotebooks().catch(() => [])
+  const concepts = k.all(now, true)
+  const returns = k.returns(true)
+  const reviews = await readJsonl<Review>(REVLOG_FILE).catch(() => [] as Review[])
+
+  // Recall questions kept on each topic: the ones missed, and when each comes back
+  const missed: Record<string, MissedQuestion[]> = {}
+  const recall: { concept: string; due: number }[] = []
+  const named = new Map<string, string | null>()
+  for (const item of recallItems()) {
+    if (!named.has(item.topic)) named.set(item.topic, k.resolve(conceptName(item.topic), null))
+    const id = named.get(item.topic)
+    if (!id) continue
+    ;(missed[id] ??= []).push({ prompt: item.prompt, due: item.due, reviews: item.reviews, lapses: item.lapses })
+    recall.push({ concept: id, due: item.due })
+  }
+  for (const list of Object.values(missed)) list.sort((a, b) => a.due - b.due)
+
   return {
     at: now,
     areas: notebooks.map((n) => ({ name: n.name, path: n.path })),
-    concepts: k.all(now, true),
+    concepts,
     ready: k.ready(null, now, true, 100_000).map((c) => c.id),
     fading: k.fading(null, now, true, 200).map((c) => c.id),
-    weeks: k.weekly(now, 12, -new Date(now).getTimezoneOffset(), true)
+    weeks: retention(returns, reviews, weekEdges(now, 11, 0)),
+    timeline: buildTimeline({ now, concepts, returns, reviews, recall, aims: await aimsIn(notebooks) }),
+    missed
   }
+}
+
+/** Each aim with a deadline, and the roadmap topics it covers (all of its roadmap, or the part under its heading) */
+async function aimsIn(notebooks: Awaited<ReturnType<typeof getNotebooks>>): Promise<AimIn[]> {
+  const goals = await getGoals().catch(() => [])
+  const out: AimIn[] = []
+  for (const g of goals) {
+    const nb = notebooks.find((n) => n.path === g.notebook || n.name === g.notebook)
+    if (!nb?.outline || !/^\d{4}-\d{2}-\d{2}$/.test(g.deadline ?? '')) continue
+    const md = await readText(nb.outline).catch(() => null)
+    if (md === null) continue
+    const topics = roadmapTopics(nb.name, md).filter((t) => !t.project && (!g.section || underHeading(t, g.section)))
+    out.push({ id: g.id, area: nb.name, ...(g.section ? { section: splitTag(g.section).title.replace(/^\s*\d+[.)]\s*/, '') } : {}), deadline: g.deadline, createdAt: g.createdAt, topics: topics.map((t) => t.id) })
+  }
+  return out
 }
 
 /** One concept as it stands (for tests and for whoever needs a single answer) */
