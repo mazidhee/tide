@@ -116,6 +116,40 @@ const looksLikeCode = (p: string) => {
   return codey / lines.length >= 0.6 || (CODE_LINE.test(lines[0]) && !proseLine(lines[0]) && lines.length > 1)
 }
 
+/** A reading's words laid out for the page: headings, prose and code, in order. Nothing is added, dropped or reworded; joined back, the parts are the text. */
+export interface ReadingPart {
+  kind: 'heading' | 'prose' | 'code'
+  text: string
+}
+
+export function readingParts(text: string): ReadingPart[] {
+  const lines = text.replace(/\r\n/g, '\n').split('\n')
+  // Text wrapped at a width (documentation) or one line a paragraph (most pages): it decides what a line break means
+  const widest = Math.max(0, ...lines.map((l) => l.trimEnd().length))
+  const indent = (l: string) => l.length - l.trimStart().length
+  const out: { kind: ReadingPart['kind']; lines: string[] }[] = []
+  let blanks = 0
+  let prev = ''
+  lines.forEach((line, i) => {
+    if (!line.trim()) return void blanks++
+    const cur = out[out.length - 1]
+    const after = cur && blanks === 0 ? cur.kind : null
+    const next = lines.slice(i + 1).find((l) => l.trim())
+    const code = !proseLine(line) && (CODE_LINE.test(line) || (after === 'code' && !/^[A-Z][a-z]+ [a-z]+ /.test(line.trim())))
+    const kind: ReadingPart['kind'] = code ? 'code' : (blanks > 0 || !cur) && next !== undefined && headingLine(line) ? 'heading' : 'prose'
+    // A new paragraph: after a blank line, or where a sentence ended on a short or unwrapped line, or the next line steps in
+    const ended = /[.!?:]["'”’)\]]?\s*$/.test(prev)
+    const newPara = blanks > 0 || (ended && (widest > 120 || prev.trimEnd().length < widest * 0.8 || indent(line) > indent(prev)))
+    if (cur && cur.kind === kind && kind !== 'heading' && (kind === 'code' || !newPara)) cur.lines.push(...Array<string>(kind === 'code' ? blanks : 0).fill(''), line)
+    else out.push({ kind, lines: [line] })
+    blanks = 0
+    prev = line
+  })
+  return out.map((p) => ({ kind: p.kind, text: p.kind === 'code' ? p.lines.join('\n') : p.lines.map((l) => l.trim()).join('\n') }))
+}
+
+// ---------- Choosing the excerpt (the window) ----------
+
 /** A text's paragraphs with where each sits in it; long ones (a PDF page, a page with no blank lines) are cut at sentence ends */
 export function paragraphs(text: string): Para[] {
   const out: Para[] = []
@@ -255,7 +289,7 @@ export function chooseExcerpt(text: string, step: string, topic = '', max = EXCE
 /** Text as it is compared: without the marks Tide adds to keep it whole, soft hyphens, and with any run of white space as one space */
 export const plain = (t: string) =>
   t
-    .replace(/[⁠​­﻿]/g, '')
+    .replace(/[\u2060\u200b\u00ad\ufeff]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
 
@@ -430,7 +464,8 @@ export const sealOf = (r: Pick<StepReading, 'text' | 'title' | 'url' | 'path'>) 
  */
 export function readingBlock(r: StepReading): string {
   const { text, ...meta } = r
-  const body = text.replace(/<(?=[A-Za-z/!])/g, '<⁠')
+  // Also a backslash before a bracket, which the lesson's Markdown would otherwise take for maths written the other way
+  const body = text.replace(/\u2060/g, '').replace(/<(?=[A-Za-z/!])/g, '<\u2060').replace(/\\(?=[([])/g, '\\\u2060')
   const longest = Math.max(0, ...(body.match(/`+/g) ?? []).map((t) => t.length))
   const fence = '`'.repeat(Math.max(3, longest + 1))
   return `${fence}reading\n${JSON.stringify({ ...meta, seal: sealOf(r) })}\n${body}\n${fence}`
@@ -451,7 +486,7 @@ export function parseReading(content: string): ParsedReading | null {
     if (typeof meta.title !== 'string' || !meta.title) return null
     const text = content
       .slice(nl + 1)
-      .replace(/<⁠/g, '<')
+      .replace(/\u2060/g, '')
       .replace(/\s+$/, '')
     const reading: StepReading = {
       step: Number(meta.step) || 0,

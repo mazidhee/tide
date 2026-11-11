@@ -1,0 +1,120 @@
+/*
+  A reading in a lesson (lib/reading.ts): the source's own words for the step, with where they are
+  from above and below. These are the classic design's styles; styles/tide/reading.css restyles it
+  for the new design. The text is the source's, so it is set as reading matter, not as a callout.
+*/
+
+.prose .reading,
+.prose .reading-unsealed {
+  margin: 14px 0 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.prose .reading-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.prose .reading-label {
+  flex: 0 0 100%;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.prose .reading-title {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.prose .reading-by {
+  color: var(--ink-soft);
+}
+
+.prose blockquote.reading-text,
+.prose .reading-unsealed .reading-text {
+  margin: 0;
+  padding: 14px 16px 6px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  font-style: normal;
+}
+
+.prose .reading-text p {
+  margin: 0 0 0.75em;
+}
+
+.prose .reading-text .reading-h {
+  font-family: var(--font-ui);
+  font-weight: 600;
+}
+
+.prose .reading-chrome {
+  display: none;
+}
+
+.prose pre.reading-code {
+  margin: 0 0 0.9em;
+  padding: 10px 12px;
+  border-radius: var(--radius-s);
+  background: var(--code-bg);
+  font-family: var(--font-code);
+  font-size: 0.86em;
+  line-height: 1.55;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.prose pre.reading-code code {
+  padding: 0;
+  background: none;
+  font: inherit;
+}
+
+.prose .reading-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 14px;
+  padding: 8px 16px 10px;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.prose .reading-foot .reading-exact {
+  margin-right: auto;
+}
+
+.prose .reading-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+}
+
+.prose .reading-unsealed figcaption {
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--warn);
+}
+
+/* The lesson's tool: teach from sources, or let the tutor explain */
+.tool-btn.led-toggle[aria-pressed='false'] {
+  color: var(--ink-muted);
+}

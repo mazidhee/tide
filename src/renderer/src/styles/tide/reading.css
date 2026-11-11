@@ -1,0 +1,99 @@
+/*
+  The new design: a reading in a lesson (lib/reading.ts). The source's own words are the thing
+  being taught, so they are set as the page itself: the book face at full ink, between two rules,
+  with the source named above and the way back to it below, on a sheet of its own so that where
+  the source's words stop and the tutor's start is never in doubt. Scoped to data-design='tide'.
+*/
+
+:root[data-design='tide'] {
+  .prose .reading {
+    margin: 4px 0 20px;
+    padding: 0 22px;
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-box);
+    background: var(--raised);
+    overflow: visible;
+  }
+  .prose .reading-head {
+    gap: 0 10px;
+    padding: 14px 0 12px;
+    border-bottom: 1px solid var(--line);
+    font: 400 var(--t-meta) / 18px var(--ui);
+    font-variant-numeric: normal;
+  }
+  .prose .reading-label {
+    font: 500 var(--t-meta) / 18px var(--ui);
+    color: var(--accent-text);
+  }
+  .prose .reading-title {
+    font: 600 var(--t-base) / 22px var(--ui);
+    letter-spacing: -0.006em;
+    color: var(--ink);
+  }
+  .prose .reading-by {
+    font-size: var(--t-base);
+    line-height: 22px;
+    color: var(--ink-3);
+  }
+  .prose blockquote.reading-text {
+    padding: 18px 0 6px;
+    border: 0;
+    color: var(--ink);
+    font-family: var(--read);
+    font-size: var(--read-size);
+    line-height: 1.65;
+    text-wrap: pretty;
+    hanging-punctuation: first;
+  }
+  .prose .reading-text p {
+    margin: 0 0 0.8em;
+    max-width: 68ch;
+  }
+  .prose .reading-text .reading-h {
+    margin: 0.2em 0 0.45em;
+    font: 600 1.02em/1.35 var(--ui);
+    letter-spacing: -0.01em;
+    font-variant-numeric: normal;
+  }
+  .prose pre.reading-code {
+    margin: 0.1em 0 1em;
+    padding: 11px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--sunk);
+    font: 400 13px/21px var(--mono);
+    font-variant-numeric: normal;
+    color: var(--ink);
+  }
+  .prose .reading-foot {
+    gap: 2px 16px;
+    padding: 10px 0 12px;
+    border-top: 1px solid var(--line);
+    font: 400 var(--t-meta) / 18px var(--ui);
+    font-variant-numeric: normal;
+    color: var(--ink-3);
+  }
+  .prose .reading-foot a,
+  .prose .reading-foot a.wikilink {
+    font-weight: 500;
+    color: var(--accent-text);
+  }
+  .prose .reading-unsealed {
+    border: 1px dashed var(--line-2);
+    border-radius: var(--r-ctl);
+    background: none;
+  }
+  .prose .reading-unsealed figcaption {
+    border-bottom: 0;
+    padding: 10px 14px 0;
+    font: 500 var(--t-meta) / 18px var(--ui);
+    color: var(--warn);
+  }
+  .prose .reading-unsealed .reading-text {
+    padding: 6px 14px 4px;
+    color: var(--ink-2);
+  }
+  .prose .reading-facts {
+    gap: 2px 16px;
+  }
+}
