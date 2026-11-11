@@ -593,6 +593,8 @@ export interface TideApi {
     /** Streams a review of a roadmap as ai:event deltas under id */
     auditRoadmap(id: string, path: string, hoursPerWeek: number): Promise<void>
     /** Real books, courses and docs for each phase of a plan */
+    /** Drops the books a drafted roadmap names that can't be found, and corrects their authors */
+    checkResources(md: string): Promise<string>
     planReadings(topic: string, plan: import('./plan').StudyPlan, research: string): Promise<{ phase: string; items: { title: string; by?: string; why?: string; url?: string; unverified?: boolean }[] }[]>
     /** Sends a dated roadmap to Things 4 as a project */
     planToThings(path: string, name: string, notebook?: string): Promise<{ project: string; todos: number }>

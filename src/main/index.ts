@@ -54,7 +54,7 @@ import { inUse, wakeModel, watchModelIdle } from './modelIdle'
 import { inBackground, onModelBusy } from './modelQueue'
 import { cancelDraft, draftOutline } from './outlineDraft'
 import { cancelCompanyPrep, draftCompanyPrep } from './companyPrep'
-import { adjustPlan, auditRoadmap, planReadings, planToThings, sizePlan, syncFromThings, type PlanRequest } from './planner'
+import { adjustPlan, auditRoadmap, checkOutlineResources, planReadings, planToThings, sizePlan, syncFromThings, type PlanRequest } from './planner'
 import type { StudyPlan } from '@shared/plan'
 import { dayTasks, setTaskDone, thingsStatus } from './things'
 import { mapBook, mapNewBooks, pagesToRead } from './books'
@@ -369,6 +369,7 @@ function registerIpc() {
   handle('mistakes:due', (n?: number) => mistakesDue(n))
   handle('mistakes:add', (items: NewMistake[]) => addMistakes(items))
   handle('mistakes:retest', (id: string, correct: boolean) => retestMistake(id, correct))
+  handle('learn:checkResources', (md: string) => checkOutlineResources(md))
   handle('learn:planReadings', (topic: string, plan: StudyPlan, research: string) => planReadings(topic, plan, research ?? ''))
   handle('learn:planToThings', (path: string, name: string, notebook?: string) => planToThings(path, name, notebook))
   handle('learn:syncFromThings', (path: string) => syncFromThings(path))

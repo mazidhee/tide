@@ -242,3 +242,37 @@ export function lineRole(lines: OutlineLine[], i: number): LineRole {
   if (l.checked === null && !/^_.+_$/.test(l.text.trim())) return 'note'
   return 'normal'
 }
+
+// ---------- The reading lines a drafted roadmap names ----------
+
+/** "    - *Fluent Python — Luciano Ramalho*" and the like: an indented, italic line under a topic */
+const RESOURCE_LINE = /^(\s{2,}-\s+)([_*])(.+)\2\s*$/
+
+/** The reading each resource line names (title and author), by line number */
+export function outlineResources(md: string): { line: number; title: string; by?: string }[] {
+  const out: { line: number; title: string; by?: string }[] = []
+  md.split('\n').forEach((l, line) => {
+    const m = l.match(RESOURCE_LINE)
+    if (!m) return
+    // A small model sometimes writes underscores for spaces inside the italics
+    const text = m[3].replace(/_/g, ' ').replace(/\s+/g, ' ').trim()
+    const [title, by] = text.split(/\s+[—–]\s+|\s+-\s+|,\s+by\s+|\s+by\s+/i)
+    if (title?.trim()) out.push({ line, title: title.trim(), ...(by?.trim() ? { by: by.trim() } : {}) })
+  })
+  return out
+}
+
+/** Keeps the resource lines found to be real (written with their checked author) and drops the rest */
+export function applyResourceChecks(md: string, checked: { line: number; title: string; by?: string; ok: boolean }[]): string {
+  const byLine = new Map(checked.map((c) => [c.line, c]))
+  return md
+    .split('\n')
+    .flatMap((l, i) => {
+      const c = byLine.get(i)
+      if (!c) return [l]
+      if (!c.ok) return []
+      const indent = l.match(/^\s*-\s+/)?.[0] ?? '    - '
+      return [`${indent}_${c.title}${c.by ? ` — ${c.by}` : ''}_`]
+    })
+    .join('\n')
+}
