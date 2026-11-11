@@ -123,8 +123,16 @@ function Editor({ canvas, onChange, onExample, version, compact, readOnly = fals
   const [nodes, setNodes] = useState<FlowNode[]>(() => toFlowNodes(canvas))
   const nodesRef = useRef(nodes)
   nodesRef.current = nodes
+  // Parts just added (or pasted) are selected once they exist
+  const pendingSelect = useRef<string[] | null>(null)
   useEffect(() => {
-    setNodes((prev) => toFlowNodes(canvas, new Map(prev.map((n) => [n.id, n]))))
+    // Updaters stay pure (React may run them twice); the pending selection is taken here
+    const want = pendingSelect.current && pendingSelect.current.every((id) => canvas.nodes.some((n) => n.id === id)) ? pendingSelect.current : null
+    if (want) pendingSelect.current = null
+    setNodes((prev) => {
+      const next = toFlowNodes(canvas, new Map(prev.map((n) => [n.id, n])))
+      return want ? next.map((n) => (want.includes(n.id) !== !!n.selected ? { ...n, selected: want.includes(n.id) } : n)) : next
+    })
   }, [canvas])
 
   const [selectedEdges, setSelectedEdges] = useState<Set<string>>(new Set())
@@ -179,7 +187,8 @@ function Editor({ canvas, onChange, onExample, version, compact, readOnly = fals
       const left = compact || readOnly ? 0 : narrowRef.current ? 64 : 176
       // A figure's caption sits above the drawing while a flow plays
       const top = readOnly ? 40 : 8
-      const bottom = 58
+      // Room for the toolbar, and in a narrow panel for the caption a playing flow shows above it
+      const bottom = compact && !readOnly ? 100 : 58
       const pad = compact ? 18 : 36
       const w = wrap.clientWidth - left - 2 * pad
       const h = wrap.clientHeight - top - bottom - 2 * pad
@@ -238,6 +247,8 @@ function Editor({ canvas, onChange, onExample, version, compact, readOnly = fals
   }, [rf, compact, readOnly])
 
   const selectOnly = useCallback((ids: string[]) => {
+    // Not drawn yet: select it when it is
+    if (!ids.every((id) => nodesRef.current.some((n) => n.id === id))) pendingSelect.current = ids
     setNodes((ns) => ns.map((n) => (ids.includes(n.id) !== !!n.selected ? { ...n, selected: ids.includes(n.id) } : n)))
     setSelectedEdges(new Set())
   }, [])
@@ -261,10 +272,8 @@ function Editor({ canvas, onChange, onExample, version, compact, readOnly = fals
       const added = { ...c, nodes: [...c.nodes, node] }
       // From the palette with one part selected: the new part follows on from it
       commit(sel && !at && kind !== 'note' ? connect(added, sel.id, node.id) : added)
-      requestAnimationFrame(() => {
-        selectOnly([node.id])
-        setEditing(node.id)
-      })
+      selectOnly([node.id])
+      setEditing(node.id)
     },
     [commit, centre, selectedNodes, selectOnly, snap] // eslint-disable-line react-hooks/exhaustive-deps
   )
@@ -278,7 +287,7 @@ function Editor({ canvas, onChange, onExample, version, compact, readOnly = fals
     const node: CanvasNode = { id, type: 'file', file: path, x: snapped(m.x - 130), y: snapped(m.y - 80), width: 260, height: 160 }
     commit({ ...c, nodes: [...c.nodes, node] })
     setFilePick(false)
-    requestAnimationFrame(() => selectOnly([id]))
+    selectOnly([id])
   }
 
   const group = useCallback(() => {
@@ -291,10 +300,8 @@ function Editor({ canvas, onChange, onExample, version, compact, readOnly = fals
       g = { ...groupAround(c, [{ id: 'x', type: 'text', x: m.x - 160, y: m.y - 100, width: 320, height: 200 }], 'Group', 0) }
     }
     commit({ ...c, nodes: [g, ...c.nodes] })
-    requestAnimationFrame(() => {
-      selectOnly([g.id])
-      setEditing(g.id)
-    })
+    selectOnly([g.id])
+    setEditing(g.id)
   }, [commit, selectedNodes, centre, selectOnly])
 
   const ungroup = useCallback(() => {
@@ -337,7 +344,7 @@ function Editor({ canvas, onChange, onExample, version, compact, readOnly = fals
     const edges = clipboard.edges.map((e) => ({ ...e, id: fresh(e.id), fromNode: ids.get(e.fromNode)!, toNode: ids.get(e.toNode)! }))
     // Groups go first so they stay behind what they hold
     commit({ ...c, nodes: [...nodes.filter((n) => n.type === 'group'), ...c.nodes, ...nodes.filter((n) => n.type !== 'group')], edges: [...c.edges, ...edges] })
-    requestAnimationFrame(() => selectOnly([...ids.values()]))
+    selectOnly([...ids.values()])
   }, [commit, selectOnly])
 
   const nudge = useCallback(
