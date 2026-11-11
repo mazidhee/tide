@@ -614,7 +614,7 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
         const found: import("./lessonGuard").LessonFindings = await checkLessonReply(req, reply, emit, controller.signal, ask, false, { fromBank, exact }).catch(() => ({ problem: [] as string[] }))
         // What you can see is never wiped: a correction is added below it
         if (found.mark && !controller.signal.aborted) {
-          const add = `\n\n<grade verdict="${found.mark.verdict}" score="${found.mark.verdict === 'partial' ? 0.5 : 0}">**Second look:** ${found.mark.why}</grade>`
+          const add = `\n\n<grade verdict="${found.mark.verdict}" score="${found.mark.verdict === 'correct' ? 1 : found.mark.verdict === 'partial' ? 0.5 : 0}">**Second look:** ${found.mark.why}</grade>`
           emit({ id: req.id, type: 'delta', text: add })
           reply += add
         }

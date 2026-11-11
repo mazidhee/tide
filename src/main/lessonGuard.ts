@@ -6,7 +6,7 @@ import type { ChatEvent, ChatMessage, ChatRequest } from '@shared/types'
 import { routeFor } from './cloud'
 import { metabaseHost, metabaseReady } from './metabase'
 import { privatePath } from './projects'
-import { comparePython, finalAnswer, type Exact } from '@shared/answerCheck'
+import { comparePython, finalAnswer, overruled, type Exact } from '@shared/answerCheck'
 import { createHash } from 'crypto'
 import { sourcesForCheck } from '@shared/sources'
 import { promises as fs } from 'fs'
@@ -87,8 +87,8 @@ async function within(ms: number, signal: AbortSignal, run: (signal: AbortSignal
 
 /** What a check found: a mark that needs a second look, and what's wrong with the problem just set */
 export interface LessonFindings {
-  /** The mark was too generous: what it should have been, and why */
-  mark?: { verdict: 'partial' | 'wrong'; why: string }
+  /** The mark can't stand (too generous, or contradicted by the exact check): what it should have been, and why */
+  mark?: { verdict: 'correct' | 'partial' | 'wrong'; why: string }
   /** The problem just set can't be used (repeated, not asked, a failed check, flawed) */
   problem: string[]
   /** What's wrong (or worth checking) in what the explanation claims, found by the cloud maths model */
@@ -126,9 +126,12 @@ export async function checkLessonReply(
   const earlier = req.messages.filter((m) => m.role === 'assistant').map(text)
   if (repeatsEarlier(reply, earlier)) found.problem.push('It asks a problem already asked in this lesson.')
   if (missingQuestion(reply)) found.problem.push('It sets a problem but never asks it.')
-  // SymPy found their final answer wrong: a "correct" verdict can't stand
-  const verdict = /<grade\s+verdict\s*=\s*["']?(correct|partial|wrong)/i.exec(reply)?.[1]?.toLowerCase()
-  if (opts.exact?.result === 'mismatch' && verdict === 'correct') found.mark = { verdict: 'wrong', why: 'SymPy checked your final answer against the solution, and it doesn’t come out the same. Look again at the last steps of your working.' }
+  // A mark the exact check contradicts can't stand: a wrong result marked correct, or a right one
+  // marked wrong or marked down only for its method (shared/answerCheck)
+  const graded = /<grade\b[^>]*verdict\s*=\s*["']?(correct|partial|wrong)[^>]*>([\s\S]*?)(?:<\/grade>|$)/i.exec(reply)
+  const verdict = graded?.[1]?.toLowerCase()
+  const exactly = overruled(opts.exact, verdict, graded?.[2] ?? '')
+  if (exactly) found.mark = exactly
 
   const step = (id: string, label: string, status: 'running' | 'done') => emit({ id: req.id, type: 'step', step: { id, kind: 'helper', label, status, depth: 0 } })
 

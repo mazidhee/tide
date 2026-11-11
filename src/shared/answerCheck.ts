@@ -58,6 +58,22 @@ export function finalAnswer(text: string): string | null {
   return null
 }
 
+const decimals = (s: string) => /^-?\d*\.(\d+)$/.exec(s.trim())?.[1].length
+
+/**
+ * How far apart two answers may be and still agree, when one is written as a decimal and the other
+ * exactly: half a unit in the decimal's last place, so 2/3 agrees with 0.667 and √7 with 2.65. A
+ * solution that ends "= 0.9/1.35 = 0.667" was counting the exact answer 2/3 as wrong, and the
+ * tutor was then told it couldn't be marked correct. Nothing is allowed between two decimals (0.52
+ * is not 0.5), between two exact answers, or for a decimal given to one place.
+ */
+export function roundingSlack(a: string, b: string): number {
+  const [da, db] = [decimals(a), decimals(b)]
+  if ((da === undefined) === (db === undefined)) return 0
+  const places = (da ?? db) as number
+  return places >= 2 ? 0.5 * 10 ** -places : 0
+}
+
 /** Python that prints MATCH, NOMATCH or UNKNOWN for two answers */
 export function comparePython(a: string, b: string): string {
   return `from sympy import *
@@ -68,7 +84,7 @@ try:
     B = parse_expr(${JSON.stringify(b)}, transformations=T)
     same = simplify(A - B) == 0
     if not same and A.is_number and B.is_number:
-        same = abs(N(A) - N(B)) <= 1e-6 * max(1, abs(N(B)))
+        same = abs(N(A) - N(B)) <= max(1e-6 * max(1, abs(N(B))), ${roundingSlack(a, b) * (1 + 1e-9)})
     print('MATCH' if same else 'NOMATCH')
 except Exception:
     print('UNKNOWN')
@@ -80,5 +96,31 @@ export type Exact = { result: 'match' | 'mismatch'; theirs: string; expected: st
 /** Said to the tutor (not shown) with what SymPy found, before it marks the answer */
 export const exactNote = (e: Exact) =>
   e.result === 'match'
-    ? `(Tide: SymPy checked their final answer, ${e.theirs}, against the solution: it is right. Mark the reasoning; the result is correct.)`
+    ? `(Tide: SymPy checked their final answer, ${e.theirs}, against the solution: it is right, by whatever method they reached it. Mark it correct unless a step of their reasoning is actually wrong; a different method from yours is not an error.)`
     : `(Tide: SymPy checked their final answer, ${e.theirs}, against the solution's ${e.expected}: they are not equal, so this can't be marked correct. Point at where it goes wrong.)`
+
+/** Feedback that objects to how an answer was reached and names nothing wrong in it */
+export function objectsToMethodOnly(feedback: string): boolean {
+  const method =
+    /\b(did ?n[o’']t|have ?n[o’']t|has ?n[o’']t|without|instead of|rather than)\b[^.]{0,50}\b(us(e|ed|ing)|appl(y|ied|ying)|comput\w+|calculat\w+|find(ing)?|work(ed|ing)? out|go(ing)? through)\b|\b(standard|expected|usual|conventional|preferred|intended|proper|more efficient)\b[^.]{0,30}\b(way|method|approach|formula|technique|route)\b|\bshould (have )?(used?|appl(y|ied))\b|\bskipped\b/i
+  const fault = /\b(errors?|mistakes?|incorrect|wrong|not (right|correct|equal|valid)|miscalculat\w*|forgot|missed|missing|omitted|should be|is actually|isn['’]t|doesn['’]t|does not|fails?|invalid)\b/i
+  return method.test(feedback) && !fault.test(feedback)
+}
+
+/**
+ * A mark that contradicts the exact check, overruled. The check is of the final answer only, so:
+ * - their answer is not the solution's and it was marked correct: wrong (a wrong result can't pass);
+ * - their answer is the solution's and it was marked wrong: partial at least, since the result is
+ *   right whatever the working;
+ * - their answer is the solution's and the mark was taken down only for the method (the feedback
+ *   names no error, just the route they didn't take): correct. A right answer by an unusual
+ *   method marked down is the mistake that costs a learner most.
+ * Undefined when the mark can stand.
+ */
+export function overruled(exact: Exact | null | undefined, verdict: string | undefined, feedback: string): { verdict: 'correct' | 'partial' | 'wrong'; why: string } | undefined {
+  if (!exact || !verdict) return undefined
+  if (exact.result === 'mismatch') return verdict === 'correct' ? { verdict: 'wrong', why: 'SymPy checked your final answer against the solution, and it doesn’t come out the same. Look again at the last steps of your working.' } : undefined
+  if (verdict !== 'correct' && objectsToMethodOnly(feedback)) return { verdict: 'correct', why: `SymPy checked your final answer, ${exact.theirs}, against the solution, and it is right. The mark above was taken down for the method, not for an error: a different route to the right result is correct.` }
+  if (verdict === 'wrong') return { verdict: 'partial', why: `SymPy checked your final answer, ${exact.theirs}, against the solution, and it is right, so this is not wrong. Read the feedback above as being about the working, not the result.` }
+  return undefined
+}
