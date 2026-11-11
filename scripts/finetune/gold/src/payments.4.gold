@@ -1,0 +1,624 @@
+@@@@ why-single-number-ledger
+situation: why
+topic: Double-entry bookkeeping
+options: {"why":true}
+voice: confused
+level: easy
+expect: {"verdict":"correct","accept":["partial"],"must":["119"],"askTypes":["predict","short","explain"],"askMustNot":["sum to zero","debits (must )?equal credits","cannot change"],"mustNot":["debits (must )?equal credits"]}
+@@ tutor
+Start with a ledger that is not double-entry. A wallet keeps one number per customer and overwrites it whenever something happens. Last night it read: Alice 100, Bob 20. This morning it reads: Alice 60, Bob 59.
+
+<ask type="predict">From those four numbers alone, what can you say about what happened overnight, and what can you not say?</ask>
+@@ learner answer unsure
+um the total went from 120 to 119 so a pound has gone missing somewhere? but I can't tell if alice paid bob 40 and then something took 1, or if they were two separate things that just happened. there's no record of where anything went
+@@ reply
+<grade verdict="correct" score="1">"the total went from 120 to 119 so a pound has gone missing" and "there's no record of where anything went" are the two faults: the numbers show that value vanished, and nothing shows which change lost it.</grade>
+
+So overwriting single numbers has two separate weaknesses. A change to one account says nothing about its other end, and a change can alter the total without anything objecting. You found the missing pound only by adding everything up afterwards, and by then it was too late to say which update was at fault.
+
+Now change one thing about how the wallet is allowed to write. It may no longer edit a number. Every change must be written as a movement: an amount, the account it leaves and the account it arrives in.
+
+<ask type="predict">Under that one restriction, try to write down the overnight changes that take Alice from 100 to 60 and Bob from 20 to 59. Where do you get stuck, and what would you have to add to the ledger to finish?</ask>
+@@ verify
+assert 100 + 20 == 120 and 60 + 59 == 119 and 120 - 119 == 1
+# the movements the next question leads to: 40 leaves Alice, 39 reaches Bob, so 1 needs an account of its own
+assert 100 - 60 == 40 and 59 - 20 == 39 and 40 - 39 == 1
+assert 'Alice 100, Bob 20' in tutor[0] and 'Alice 60, Bob 59' in tutor[0]
+
+@@@@ why-more-decimals-never-sum
+situation: why
+topic: Money as integer minor units
+options: {"why":true}
+voice: overconfident
+level: easy
+expect: {"verdict":"wrong","accept":["partial"],"names":["decimal places","9\\.9999"],"must":["9\\.99","1000 pence"],"askMustNot":["334"],"askTypes":["predict","short","explain"]}
+@@ tutor
+A restaurant bill of £10.00 is split equally between three people, each paying by card.
+
+<ask type="predict">What should each person be charged, and do the three charges add up to £10.00?</ask>
+@@ learner answer sure
+3.33 each obviously. Well 3.3333 really, so just store more decimal places, 4 or 6 of them, and it adds up fine.
+@@ reply
+<grade verdict="wrong" score="0.2">"just store more decimal places" does not make it add up: 3 × 3.33 = 9.99 and 3 × 3.3333 = 9.9999, and every extra 3 still falls short of 10.00. A card also cannot be charged 3.3333 pounds, since the smallest amount that can move is one penny.</grade>
+
+So there are two facts to hold on to. The three charges are real payments, so each is a whole number of pence. And the restaurant is owed all of the £10.00, so the three must total exactly 1000 pence. Dividing gives 1000 = 3 × 333 + 1: equal shares of 333 account for 999, and one penny is left that belongs to somebody.
+
+<card>Why can a bill not always be split into exactly equal charges? :: Charges are whole minor units and must sum to the total. 1000 pence over 3 is 333 each with 1 penny left, and no number of decimal places removes that remainder.</card>
+
+<note>An amount that is charged is a whole number of minor units. Splitting a total means choosing whole numbers that sum to it exactly: 1000 pence over 3 gives a quotient of 333 and a remainder of 1, and the remainder has to be given to someone.</note>
+
+<ask type="predict">Each charge is a whole number of pence and the three must total 1000. Which three numbers would you charge, and what rule would you give a program so that it decides who takes the leftover penny the same way every time?</ask>
+@@ verify
+from decimal import Decimal as D
+assert 3 * D('3.33') == D('9.99') and 3 * D('3.3333') == D('9.9999')
+for places in range(2, 12):
+    assert 3 * D('3.' + '3' * places) < 10
+assert divmod(1000, 3) == (333, 1) and 3 * 333 == 999
+# the withheld answer: 334 + 333 + 333
+assert 334 + 333 + 333 == 1000 and '334' not in reply
+
+@@@@ why-value-dating-just-explain
+situation: why
+topic: Float and value dating
+options: {"why":true}
+voice: wordy
+level: medium
+expect: {"ends":"continue","need":["note"],"must":["273\\.97","value date"],"forbid":["ask"]}
+@@ tutor
+<ask type="predict">A bank receives £1,000,000 for a business customer on Monday, and gives the credit a value date of Wednesday. Who gains from those two days, and how?</ask>
+@@ learner question
+I honestly don't know enough to guess at this one, I've never seen the term before. Can you just explain what a value date is and why two days would matter to anybody?
+@@ reply
+A bank can attach two dates to an entry. The booking date is when the entry appears on the account. The value date is the day from which the money counts: for interest, and as funds the customer may use. If the two were always the same, one date would be enough, so the term exists for the cases where they differ.
+
+In the question they differ by two days. The bank has the £1,000,000 from Monday, but treats it as the customer's only from Wednesday. For those two days the money earns for the bank and not for the customer. Money held in that gap is called float.
+
+To put a size on it, suppose the bank can earn 5% a year on overnight funds, with simple interest and a 365-day year. Two days on £1,000,000 is 1,000,000 × 0.05 × 2 / 365 = £273.97. One payment is small change; the same two days on every incoming payment is a steady income. That is why payment rules in some regions restrict it: UK and EU payment services law, as of the early 2020s, generally requires the value date of a credit to be no later than the business day the bank receives the funds.
+
+<note>Value date: the day from which money counts for interest and availability, as distinct from the booking date. Float is money held between receiving it and passing on its value. Float income = amount × rate × days / 365: £1,000,000 at 5% for 2 days is £273.97.</note>
+
+<continue/>
+@@ verify
+from decimal import Decimal as D
+v = D(1000000) * D('0.05') * 2 / 365
+assert v.quantize(D('0.01')) == D('273.97')
+assert reply.count('273.97') == 2
+
+@@@@ hands-on-luhn-counts-from-left
+situation: hands-on
+topic: The Luhn algorithm
+options: {"strategy":"code"}
+voice: overconfident
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["from the left|left-hand|left end","odd"],"must":["53061748298","False"],"setsProblem":true,"askTypes":["code"],"askMustNot":["reversed","len\\(number\\)"]}
+@@ tutor
+Luhn in code: walk the digits from the right, double every second one, subtract 9 from any doubled value above 9, and test whether the total is a multiple of 10.
+
+<solution>
+def luhn_ok(number):
+    total = 0
+    for i, ch in enumerate(reversed(number)):
+        d = int(ch)
+        if i % 2 == 1:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return total % 10 == 0
+It prints True for '40963183' and False for '40963184'.
+</solution>
+<check lang="python">
+def luhn_ok(number):
+    total = 0
+    for i, ch in enumerate(reversed(number)):
+        d = int(ch)
+        if i % 2 == 1:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return total % 10 == 0
+assert luhn_ok('40963183') and not luhn_ok('40963184')
+</check>
+
+<ask type="code" lang="python">Write `luhn_ok(number)` for a string of digits, and print its result for the test numbers `'40963183'` and `'40963184'`.</ask>
+@@ learner answer sure
+```python
+def luhn_ok(number):
+    total = 0
+    for i, ch in enumerate(number):
+        d = int(ch)
+        if i % 2 == 0:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return total % 10 == 0
+
+print(luhn_ok('40963183'))
+print(luhn_ok('40963184'))
+```
+Prints True then False, so it works. Done.
+@@ reply
+<grade verdict="partial" score="0.5">It does print True then False, but `for i, ch in enumerate(number):` with `if i % 2 == 0:` counts from the left. That doubles the right digits only when the length is even, as it is for these two 8-digit numbers; on an odd length it doubles the wrong ones.</grade>
+
+Your function on an 11-digit test number that passes the check when done from the right:
+
+```python
+def luhn_ok(number):
+    total = 0
+    for i, ch in enumerate(number):
+        d = int(ch)
+        if i % 2 == 0:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return total % 10 == 0
+
+print(luhn_ok('53061748298'))
+```
+
+```
+False
+```
+
+The rule fixes the rightmost digit as never doubled, so the position has to be counted from that end.
+
+<card>Why must a Luhn implementation count positions from the right? :: The rightmost digit is never doubled and every second digit to its left is. Counting from the left gives the same digits only for even lengths.</card>
+
+<note>Luhn positions are counted from the right: rightmost digit undoubled, then every second digit doubled. Test an implementation on both an even-length and an odd-length number.</note>
+
+<solution>
+def luhn_ok(number):
+    total = 0
+    for i, ch in enumerate(reversed(number)):
+        d = int(ch)
+        if i % 2 == 1:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return total % 10 == 0
+It prints True, False, True.
+</solution>
+<check lang="python">
+def luhn_ok(number):
+    total = 0
+    for i, ch in enumerate(reversed(number)):
+        d = int(ch)
+        if i % 2 == 1:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return total % 10 == 0
+assert [luhn_ok(n) for n in ('40963183', '40963184', '53061748298')] == [True, False, True]
+</check>
+
+<ask type="code" lang="python">Fix `luhn_ok` so that it gives the right answer for any length, and print its result for `'40963183'`, `'40963184'` and `'53061748298'`.</ask>
+@@ verify
+# the learner's program prints what they say
+assert run_py(block(learner, 'python')).split() == ['True', 'False']
+# independent Luhn, written a different way (digit sums of the doubled digits)
+def ref(s):
+    ds = [int(c) for c in s][::-1]
+    return (sum(ds[0::2]) + sum(sum(divmod(2 * d, 10)) for d in ds[1::2])) % 10 == 0
+assert ref('40963183') and not ref('40963184') and ref('53061748298')
+# the snippet in the reply is the learner's function, and it really fails on the odd-length number
+src = block(reply, 'python')
+assert block(learner, 'python').split('print')[0].strip() == src.split('print')[0].strip()
+assert run_py(src).strip() == 'False' and len('53061748298') % 2 == 1
+# from the left and from the right agree on every even-length input tried, and differ somewhere on odd lengths
+ns = {}
+exec(src.split('print')[0], ns)
+import random
+random.seed(7)
+assert all(ns['luhn_ok'](s) == ref(s) for s in (''.join(random.choice('0123456789') for _ in range(8)) for _ in range(500)))
+assert any(ns['luhn_ok'](s) != ref(s) for s in (''.join(random.choice('0123456789') for _ in range(9)) for _ in range(500)))
+
+@@@@ hands-on-decimal-rounding-modes
+situation: hands-on
+topic: Rounding money with the decimal module
+options: {"strategy":"code"}
+voice: wordy
+level: medium
+expect: {"verdict":"correct","need":["plan","note"],"must":["2\\.67","2\\.66","quantize"],"setsProblem":true,"askTypes":["code"],"askMustNot":["0\\.23","0\\.58"]}
+@@ tutor
+<ask type="predict">A fee works out at exactly 2.665 pounds and has to be charged in whole pence. Should the customer be charged 2.66 or 2.67, and what does the answer depend on?</ask>
+@@ learner answer sure
+It depends which rounding rule you've agreed on, there isn't one true answer. Round half up gives 2.67. Banker's rounding, half to even, gives 2.66 because the 6 is even so it stays. Either is defensible as long as it's the one in the contract and the same rule is used everywhere the fee is calculated.
+@@ reply
+<grade verdict="correct" score="1">"Round half up gives 2.67" and "half to even, gives 2.66 because the 6 is even" are both right, and so is the point that the rule has to be agreed and applied the same way everywhere.</grade>
+
+<plan>
+- Decimal amounts and exact rounding
+- Choosing the rounding mode
+- Amounts as integer minor units
+</plan>
+
+Python's `decimal` module lets the code state that rule. Build each `Decimal` from a string, so it holds the exact digits, and round with `quantize`, naming the mode:
+
+```python
+from decimal import Decimal, ROUND_HALF_UP, ROUND_HALF_EVEN
+
+fee = Decimal('2.665')
+penny = Decimal('0.01')
+print(fee.quantize(penny, rounding=ROUND_HALF_UP))
+print(fee.quantize(penny, rounding=ROUND_HALF_EVEN))
+```
+
+```
+2.67
+2.66
+```
+
+<note>Rounding money in Python: `Decimal('2.665').quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)`. Build the Decimal from a string, round to the minor unit, and always name the rounding mode: half up gives 2.67, half even gives 2.66.</note>
+
+<solution>
+from decimal import Decimal, ROUND_HALF_UP
+
+def fee(amount, rate):
+    return (amount * rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+print(fee(Decimal('15.00'), Decimal('0.015')))   # 0.23 (the exact product is 0.22500)
+print(fee(Decimal('19.99'), Decimal('0.029')))   # 0.58 (the exact product is 0.57971)
+</solution>
+<check lang="python">
+from decimal import Decimal, ROUND_HALF_UP
+
+def fee(amount, rate):
+    return (amount * rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+assert fee(Decimal('15.00'), Decimal('0.015')) == Decimal('0.23')
+assert fee(Decimal('19.99'), Decimal('0.029')) == Decimal('0.58')
+</check>
+
+<ask type="code" lang="python">Write `fee(amount, rate)` that takes two `Decimal` values and returns amount × rate rounded half up to the penny. Print `fee(Decimal('15.00'), Decimal('0.015'))` and `fee(Decimal('19.99'), Decimal('0.029'))`.</ask>
+@@ verify
+from decimal import Decimal, ROUND_HALF_UP, ROUND_HALF_EVEN
+p = Decimal('0.01')
+assert Decimal('2.665').quantize(p, rounding=ROUND_HALF_UP) == Decimal('2.67')
+assert Decimal('2.665').quantize(p, rounding=ROUND_HALF_EVEN) == Decimal('2.66')
+assert run_py(block(reply, 'python')).split() == ['2.67', '2.66']
+assert Decimal('15.00') * Decimal('0.015') == Decimal('0.22500') and Decimal('19.99') * Decimal('0.029') == Decimal('0.57971')
+assert (Decimal('15.00') * Decimal('0.015')).quantize(p, rounding=ROUND_HALF_UP) == Decimal('0.23')
+assert (Decimal('19.99') * Decimal('0.029')).quantize(p, rounding=ROUND_HALF_UP) == Decimal('0.58')
+assert '0.23' not in visible(reply) and '0.58' not in visible(reply)
+
+@@@@ hands-on-ledger-zero-sum-invariant
+situation: hands-on
+topic: Ledgers for a wallet product
+options: {"strategy":"code"}
+voice: terse
+level: medium
+expect: {"verdict":"correct","must":["t3","-50"],"need":["note"],"setsProblem":true,"askTypes":["code"],"askMustNot":["!= 0","sum\\("]}
+@@ tutor
+A wallet ledger stores entries, not balances. Each entry here is (transaction id, account, amount in pence), negative for a debit, and a balance is the sum of an account's entries.
+
+```python
+entries = [
+    ('t1', 'alice', -4100), ('t1', 'bob', 4000), ('t1', 'fees', 100),
+    ('t2', 'bob', -1500), ('t2', 'alice', 1500),
+]
+print(sum(amount for _, account, amount in entries if account == 'alice'))
+```
+
+```
+-2600
+```
+
+<solution>
+def balance(entries, account):
+    return sum(amount for _, acc, amount in entries if acc == account)
+It prints {'alice': -2600, 'bob': 2500, 'fees': 100}.
+</solution>
+<check lang="python">
+entries = [('t1', 'alice', -4100), ('t1', 'bob', 4000), ('t1', 'fees', 100), ('t2', 'bob', -1500), ('t2', 'alice', 1500)]
+def balance(entries, account):
+    return sum(amount for _, acc, amount in entries if acc == account)
+assert [balance(entries, a) for a in ('alice', 'bob', 'fees')] == [-2600, 2500, 100]
+</check>
+
+<ask type="code" lang="python">Turn that line into a function `balance(entries, account)` and print the balances of alice, bob and fees as one dict.</ask>
+@@ learner answer sure
+```python
+entries = [
+    ('t1', 'alice', -4100), ('t1', 'bob', 4000), ('t1', 'fees', 100),
+    ('t2', 'bob', -1500), ('t2', 'alice', 1500),
+]
+def balance(entries, account):
+    return sum(a for _, acc, a in entries if acc == account)
+print({a: balance(entries, a) for a in ('alice', 'bob', 'fees')})
+```
+{'alice': -2600, 'bob': 2500, 'fees': 100}
+@@ reply
+<grade verdict="correct" score="1">`return sum(a for _, acc, a in entries if acc == account)` is right and prints `{'alice': -2600, 'bob': 2500, 'fees': 100}`: a balance is derived from the entries each time, never stored beside them.</grade>
+
+The three balances sum to zero, and that is by design: each transaction's entries cancel out. Group the entries by transaction to see it, with a third transaction added:
+
+```python
+from collections import defaultdict
+
+entries = [
+    ('t1', 'alice', -4100), ('t1', 'bob', 4000), ('t1', 'fees', 100),
+    ('t2', 'bob', -1500), ('t2', 'alice', 1500),
+    ('t3', 'alice', -500), ('t3', 'bob', 450),
+]
+totals = defaultdict(int)
+for txn, _, amount in entries:
+    totals[txn] += amount
+print(dict(totals))
+print(sum(amount for _, _, amount in entries))
+```
+
+```
+{'t1': 0, 't2': 0, 't3': -50}
+-50
+```
+
+t3 takes 500 pence from alice and gives bob 450: 50 pence have left the ledger with no account to show for them.
+
+<note>Ledger invariant: the entries of every transaction sum to zero, so all balances together sum to zero. Check it when a transaction is written, not afterwards.</note>
+
+<solution>
+def post(entries, txn, lines):
+    if sum(amount for _, amount in lines) != 0:
+        raise ValueError(f'{txn} does not balance')
+    entries.extend((txn, account, amount) for account, amount in lines)
+The balanced call appends three entries; the unbalanced one raises ValueError and appends nothing.
+</solution>
+<check lang="python">
+def post(entries, txn, lines):
+    if sum(amount for _, amount in lines) != 0:
+        raise ValueError(f'{txn} does not balance')
+    entries.extend((txn, account, amount) for account, amount in lines)
+e = []
+post(e, 't3', [('alice', -500), ('bob', 450), ('fees', 50)])
+assert e == [('t3', 'alice', -500), ('t3', 'bob', 450), ('t3', 'fees', 50)]
+try:
+    post(e, 't4', [('alice', -500), ('bob', 450)])
+    assert False
+except ValueError:
+    pass
+assert len(e) == 3
+</check>
+
+<ask type="code" lang="python">Write `post(entries, txn, lines)`, where `lines` is a list of (account, amount) pairs. It appends the transaction's entries only if they balance, and raises `ValueError` otherwise. Show it accepting `[('alice', -500), ('bob', 450), ('fees', 50)]` and rejecting `[('alice', -500), ('bob', 450)]`.</ask>
+@@ verify
+assert run_py(block(tutor[0], 'python')).strip() == '-2600'
+assert run_py(block(learner, 'python')).strip() == "{'alice': -2600, 'bob': 2500, 'fees': 100}"
+assert "{'alice': -2600, 'bob': 2500, 'fees': 100}" in learner.split('```')[-1]
+assert -2600 + 2500 + 100 == 0
+out = run_py(block(reply, 'python')).strip().split('\n')
+assert out == ["{'t1': 0, 't2': 0, 't3': -50}", '-50']
+assert -4100 + 4000 + 100 == 0 and -1500 + 1500 == 0 and -500 + 450 == -50 and -500 + 450 + 50 == 0
+
+@@@@ hands-on-idempotency-key-different-amount
+situation: hands-on
+topic: Idempotency keys in a payment API
+options: {"strategy":"code"}
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["key in seen|only (at )?the key|looks only","amount"],"must":["'amount': 500"],"need":["card"],"setsProblem":true,"askTypes":["code"],"askMustNot":["!= amount","seen\\[key\\]\\['amount'\\]"]}
+@@ tutor
+An idempotency key is a unique value the client sends with a payment request. The server stores its result under that key, so a retry carrying the same key gets the stored result back and nothing is charged twice.
+
+```python
+charges = []
+seen = {}
+
+def charge(key, amount):
+    if key in seen:
+        return seen[key]
+    charges.append(amount)
+    seen[key] = {'id': len(charges), 'amount': amount}
+    return seen[key]
+
+print(charge('k1', 500))
+print(charge('k1', 500))
+print(len(charges))
+```
+
+```
+{'id': 1, 'amount': 500}
+{'id': 1, 'amount': 500}
+1
+```
+
+<note>Idempotency key: the server keeps the first result for each key and returns it for any repeat of that key, so a retried request has no second effect.</note>
+
+<ask type="predict">The client now calls `charge('k1', 900)`: the same key, a different amount. With the code exactly as written, what does the call return, and how many charges exist afterwards?</ask>
+@@ learner answer sure
+It charges 900. The amount is different so it's obviously a new payment, it returns id 2 with amount 900 and there are 2 charges now.
+@@ reply
+<grade verdict="wrong" score="0.1">"The amount is different so it's obviously a new payment" is not what the code does: `if key in seen:` looks only at the key, never at the amount, so the stored result for `'k1'` comes back and nothing new is charged.</grade>
+
+Run it:
+
+```python
+charges = []
+seen = {}
+
+def charge(key, amount):
+    if key in seen:
+        return seen[key]
+    charges.append(amount)
+    seen[key] = {'id': len(charges), 'amount': amount}
+    return seen[key]
+
+charge('k1', 500)
+print(charge('k1', 900))
+print(len(charges))
+```
+
+```
+{'id': 1, 'amount': 500}
+1
+```
+
+The caller asked for 900 and was told, without any error, about a charge of 500. That hides a client bug. Many payment APIs therefore reject a key that is reused with different parameters instead of replaying the old result.
+
+<card>What decides whether a request is treated as a retry by an idempotency-key store? :: The key alone, unless the server also compares the request. A reused key with a different amount should be rejected, not answered with the old result.</card>
+
+<note>A key stands for one request, not one client. The store should keep what was asked as well as the result, and treat the same key with different parameters as an error to report, not a retry to replay.</note>
+
+<solution>
+def charge(key, amount):
+    if key in seen:
+        if seen[key]['amount'] != amount:
+            raise ValueError('key reused with a different amount')
+        return seen[key]
+    charges.append(amount)
+    seen[key] = {'id': len(charges), 'amount': amount}
+    return seen[key]
+A true retry returns {'id': 1, 'amount': 500}; charge('k1', 900) raises ValueError; one charge exists.
+</solution>
+<check lang="python">
+charges, seen = [], {}
+def charge(key, amount):
+    if key in seen:
+        if seen[key]['amount'] != amount:
+            raise ValueError('key reused with a different amount')
+        return seen[key]
+    charges.append(amount)
+    seen[key] = {'id': len(charges), 'amount': amount}
+    return seen[key]
+assert charge('k1', 500) == charge('k1', 500) == {'id': 1, 'amount': 500}
+try:
+    charge('k1', 900)
+    assert False
+except ValueError:
+    pass
+assert charges == [500]
+</check>
+
+<ask type="code" lang="python">Change `charge` so that a key reused with a different amount raises `ValueError`, while a true retry still returns the stored result. Show both cases, and print the number of charges at the end.</ask>
+@@ verify
+out = run_py(block(tutor[0], 'python')).strip().split('\n')
+assert out == ["{'id': 1, 'amount': 500}", "{'id': 1, 'amount': 500}", '1']
+out2 = run_py(block(reply, 'python')).strip().split('\n')
+assert out2 == ["{'id': 1, 'amount': 500}", '1']
+# the function in the reply is the tutor's function, unchanged
+f = lambda s: s[s.index('def charge'):s.index('    return seen[key]\n\n')]
+assert f(block(tutor[0], 'python')) == f(block(reply, 'python'))
+# the learner's prediction (id 2, 900, two charges) is not what happens
+assert "'id': 2" not in out2[0] and out2[1] != '2'
+
+@@@@ summary-holds-expiry-and-capture
+situation: summary
+topic: Authorisation holds: available and ledger balance
+voice: typos
+level: easy
+expect: {"verdict":"correct","must":["387\\.50","expir"]}
+@@ tutor
+**Problem 3 · same level**
+
+An account's ledger balance is £300.00 and one £50.00 hold is pending. The merchant never captures it, and the hold expires. Give the ledger balance and the available balance after the expiry.
+
+<solution>Nothing posts, so the ledger balance stays £300.00. The hold is gone, so the available balance is £300.00 as well.</solution>
+<check lang="python">
+ledger, holds = 300, []
+assert ledger == 300 and ledger - sum(holds) == 300
+</check>
+
+<ask type="problem">Both balances after the expiry, with your reasoning.</ask>
+@@ learner answer sure
+ledger 250 and avaliable 250. the hold was for 50 so when it runs out the 50 comes off
+@@ tutor
+<grade verdict="wrong" score="0.1">"when it runs out the 50 comes off" has the expiry backwards: an expired hold is released, not charged. Nothing posts, so the ledger balance stays £300.00, and with no hold left the available balance returns to £300.00.</grade>
+
+<card>What happens to the balances when an authorisation hold expires without a capture? :: The ledger balance does not change, because nothing posts. The hold is removed, so the available balance rises back by the held amount.</card>
+
+<note>A hold ends in one of two ways. Capture: the ledger balance falls by the captured amount and the hold is removed. Expiry or release: the hold is removed and the ledger balance does not change.</note>
+
+**Problem 4 · final**
+
+An account's ledger balance is £460.00, with two holds pending: £80.00 from a hotel and £25.00 from a taxi app. The hotel captures £72.50 and its hold is removed. The taxi hold expires without a capture. Give the ledger balance and the available balance.
+
+<solution>Ledger: 460.00 − 72.50 = £387.50. Both holds are gone, so the available balance is £387.50 too.</solution>
+<check lang="python">
+from decimal import Decimal as D
+ledger = D('460.00') - D('72.50')
+assert ledger == D('387.50') and ledger - 0 == D('387.50')
+</check>
+
+<ask type="problem">Both balances, with your working.</ask>
+@@ learner answer sure
+ledger 460 - 72.50 = 387.50. the taxi hold just drops off, nothing posts for it. no holds left so availble is 387.50 as well
+@@ reply
+<grade verdict="correct" score="1">"the taxi hold just drops off, nothing posts for it" is the expiry rule applied correctly this time, and "460 - 72.50 = 387.50" uses the captured amount, not the £80.00 that was held.</grade>
+
+<summary>**What you learned:** available balance = ledger balance − pending holds; a capture lowers the ledger balance by the captured amount and removes the hold, even when the capture is smaller than the hold (£72.50 against £80.00, leaving £387.50).
+
+**Still shaky:** expiry. In Problem 3 you took the expired £50.00 off the ledger balance, then handled the taxi hold correctly in Problem 4. One right answer after one wrong is not yet secure; the card on expired holds is in your deck.
+
+**Review next:** authorisation and capture, in particular partial captures and reversals, which are where these holds come from.</summary>
+@@ verify
+from decimal import Decimal as D
+# problem 3: right answer 300 and 300; the learner's 250 comes from charging the expired hold
+assert 300 - 50 == 250
+# problem 4
+ledger = D('460.00') - D('72.50')
+assert ledger == D('387.50')
+assert D('460.00') - D('80.00') - D('25.00') == D('355.00')      # available before anything happened
+assert '387.50' in solution(tutor[1]) and '300.00' in solution(tutor[0])
+
+@@@@ summary-quiz-clearing-settlement
+situation: summary
+topic: Clearing and settlement: the flow of funds
+mode: quiz
+options: {"length":3}
+voice: terse
+level: medium
+expect: {"verdict":"correct","must":["2 (out )?of 3|2/3","interchange","17,?698"]}
+@@ tutor
+**Question 1 of 3**
+
+<ask type="short">In card processing, what does clearing produce that settlement then acts on?</ask>
+@@ learner answer sure
+the amounts each side owes for the day's transactions. clearing works out the positions, settlement is the money actually moving
+@@ tutor
+<grade verdict="correct" score="1">"clearing works out the positions, settlement is the money actually moving" is the distinction: clearing exchanges the transaction records and computes what each party owes, and settlement pays those amounts.</grade>
+
+**Question 2 of 3**
+
+An acquirer's clearing file for one day shows card sales of £18,400.00 and refunds of £650.00. Interchange due to issuers on that day's activity is £52.00. Ignoring scheme fees, what net amount does the acquirer receive at settlement?
+
+<solution>18,400.00 − 650.00 − 52.00 = £17,698.00. Refunds flow back to issuers, and interchange is kept by issuers out of what they send.</solution>
+<check lang="python">
+assert 18400 - 650 - 52 == 17698
+</check>
+
+<ask type="problem">The net amount, with your working.</ask>
+@@ learner answer sure
+18400 - 650 = 17750. plus 52 interchange = 17802
+@@ tutor
+<grade verdict="partial" score="0.4">"18400 - 650 = 17750" is right. "plus 52 interchange" has the direction reversed: interchange is paid by the acquiring side to the issuers, so it is deducted, and the acquirer receives 17,750.00 − 52.00 = £17,698.00.</grade>
+
+<card>At settlement, in which direction does interchange flow? :: From the acquirer's side to the issuer. The issuer keeps it out of the sale amount it sends, so it reduces what the acquirer receives.</card>
+
+**Question 3 of 3**
+
+<ask type="choice" options="The issuer, which deducts it from what it sends the acquirer|The acquirer, which adds it to what it pays the merchant|The network, which keeps it as its fee for the routing|The merchant, which receives it as a rebate on the sale">On a £100.00 card sale with £0.30 of interchange, who ends up holding the £0.30?</ask>
+@@ learner answer sure
+The issuer, which deducts it from what it sends the acquirer. so the acquirer only gets 99.70
+@@ reply
+<grade verdict="correct" score="1">"so the acquirer only gets 99.70" is right, and it is the direction you had reversed in the last question: the issuer keeps the £0.30 and sends on £99.70.</grade>
+
+<summary>**Score:** 2 of 3 correct, with the other partly right.
+
+**Strengths:** the split between clearing (working out the positions) and settlement (paying them), and netting refunds against sales.
+
+**Misconception to fix:** the direction of interchange. In Question 2 you added the £52.00 and got £17,802.00; it is deducted, giving £17,698.00. You had it right in Question 3, on a single sale.
+
+**Review:** the flow of funds on one sale from cardholder to merchant, then a full day's settlement with scheme fees included.</summary>
+@@ verify
+from decimal import Decimal as D
+assert 18400 - 650 == 17750 and 17750 + 52 == 17802 and 17750 - 52 == 17698
+assert D('100.00') - D('0.30') == D('99.70')
+# marks in the history: correct, partial, correct
+import re
+marks = re.findall(r'verdict="(\w+)"', tutor[1] + tutor[2] + reply)
+assert marks == ['correct', 'partial', 'correct']
+assert '17,698.00' in solution(tutor[1])

@@ -1,0 +1,561 @@
+@@@@ hands-on-broadcasting-row-means
+situation: hands-on
+topic: NumPy broadcasting
+options: {"strategy":"code"}
+voice: terse
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"askMustNot":["argmin","\\[0 1 0\\]"],"must":["\\(3, 2, 2\\)","\\(3, 1\\)"],"mustNot":["should have used","keepdims (is|would be) (better|the right)"]}
+@@ tutor
+Broadcasting lets NumPy combine arrays of different shapes by stretching any axis of length 1. Subtracting the row of column means from a matrix subtracts it from every row:
+
+```python
+import numpy as np
+
+X = np.array([[1.0, 10.0], [3.0, 30.0], [5.0, 20.0]])
+print(X.mean(axis=0))
+print(X - X.mean(axis=0))
+```
+
+```
+[ 3. 20.]
+[[ -2. -10.]
+ [  0.  10.]
+ [  2.   0.]]
+```
+
+<solution>print(X - X.mean(axis=1, keepdims=True)) gives [[-4.5, 4.5], [-13.5, 13.5], [-7.5, 7.5]]. The row means must have shape (3, 1) to broadcast across the 2 columns.</solution>
+
+<ask type="code" lang="python">Now centre each row instead: subtract every row's own mean from that row of `X`, and print the result. Note that `X.mean(axis=1)` has shape (3,), which does not broadcast against (3, 2) as it stands.</ask>
+@@ learner answer sure
+```python
+import numpy as np
+X = np.array([[1.0, 10.0], [3.0, 30.0], [5.0, 20.0]])
+print(X - X.mean(axis=1)[:, None])
+```
+@@ reply
+<grade verdict="correct" score="1">`X.mean(axis=1)[:, None]` is right: indexing with `None` adds an axis of length 1, so the means have shape (3, 1) and stretch across the two columns. It prints rows of -4.5 and 4.5, -13.5 and 13.5, -7.5 and 7.5, each summing to 0.</grade>
+
+The same trick on two arrays at once gives every pairwise difference. Give the points a middle axis of length 1 and the centres a leading one, and the subtraction stretches both:
+
+```python
+import numpy as np
+
+P = np.array([[0.0, 0.0], [4.0, 3.0], [1.0, 1.0]])   # 3 points
+C = np.array([[0.0, 1.0], [4.0, 4.0]])               # 2 centres
+D = P[:, None, :] - C[None, :, :]
+print(D.shape)
+print((D ** 2).sum(axis=2))
+```
+
+```
+(3, 2, 2)
+[[ 1. 32.]
+ [20.  1.]
+ [ 1. 18.]]
+```
+
+Row $i$, column $j$ of the last array is the squared distance from point $i$ to centre $j$.
+
+<solution>nearest = (D ** 2).sum(axis=2).argmin(axis=1); print(nearest) prints [0 1 0]: points 0 and 2 are nearest centre 0, point 1 is nearest centre 1.</solution>
+<check lang="python">
+import numpy as np
+P = np.array([[0.0, 0.0], [4.0, 3.0], [1.0, 1.0]])
+C = np.array([[0.0, 1.0], [4.0, 4.0]])
+D = P[:, None, :] - C[None, :, :]
+assert ((D ** 2).sum(axis=2).argmin(axis=1)).tolist() == [0, 1, 0]
+</check>
+
+<ask type="code" lang="python">Add one line, with no loop, that prints for each point the index of its nearest centre.</ask>
+@@ verify
+import numpy as np
+out = run_py(block(learner, 'python'))
+X = np.array([[1.0, 10.0], [3.0, 30.0], [5.0, 20.0]])
+ref = X - X.mean(axis=1, keepdims=True)
+assert out.strip() == str(ref), out
+assert ref.tolist() == [[-4.5, 4.5], [-13.5, 13.5], [-7.5, 7.5]] and np.allclose(ref.sum(axis=1), 0)
+assert X.mean(axis=1)[:, None].shape == (3, 1) and X.mean(axis=1).shape == (3,)
+# the bare (3,) means really do fail to broadcast, as the tutor's task says
+try:
+    X - X.mean(axis=1)
+    raise AssertionError('expected a broadcasting error')
+except ValueError:
+    pass
+# the reference solution for the task set, checked against a loop
+P = np.array([[0.0, 0.0], [4.0, 3.0], [1.0, 1.0]]); C = np.array([[0.0, 1.0], [4.0, 4.0]])
+loop = [min(range(2), key=lambda j: ((P[i] - C[j]) ** 2).sum()) for i in range(3)]
+assert loop == [0, 1, 0] and '[0 1 0]' in solution(reply) and '[0 1 0]' not in visible(reply)
+
+@@@@ hands-on-gradient-added-not-subtracted
+situation: hands-on
+topic: Linear regression by gradient descent in NumPy
+options: {"strategy":"code"}
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","accept":["partial"],"names":["w \\+ lr \\* grad","uphill|increas|away"],"must":["43\\.2","-0\\.4"],"setsProblem":true,"askTypes":["code"],"askMustNot":["w - lr","minus sign","2\\.0 0\\.0"]}
+@@ tutor
+For a one-weight model $\hat y = wx$, the mean squared error is the mean of $(wx - y)^2$, and its gradient with respect to $w$ is the mean of $2(wx - y)x$.
+
+```python
+import numpy as np
+
+x = np.array([1.0, 2.0, 3.0, 4.0])
+y = np.array([2.0, 4.0, 6.0, 8.0])
+w = 0.5
+grad = np.mean(2 * (w * x - y) * x)
+print(np.mean((w * x - y) ** 2), grad)
+```
+
+```
+16.875 -22.5
+```
+
+<solution>lr = 0.04; for i in range(50): grad = np.mean(2 * (w * x - y) * x); w = w - lr * grad. Then print(round(w, 4)) prints 2.0, the slope of the data.</solution>
+
+<ask type="code" lang="python">Add a loop that takes 50 gradient-descent steps from `w = 0.5` with learning rate 0.04, recomputing the gradient at every step, and print the final `w` rounded to 4 places.</ask>
+@@ learner answer sure
+```python
+import numpy as np
+
+x = np.array([1.0, 2.0, 3.0, 4.0])
+y = np.array([2.0, 4.0, 6.0, 8.0])
+w = 0.5
+lr = 0.04
+for i in range(50):
+    grad = np.mean(2 * (w * x - y) * x)
+    w = w + lr * grad
+print(round(w, 4))
+```
+It prints a huge negative number but that's only because 50 steps is too many for this data, the loop itself is right.
+@@ reply
+<grade verdict="wrong" score="0.2">The loop recomputes the gradient correctly, but `w = w + lr * grad` adds it, and the gradient points uphill, the way the loss increases. The step count is not the cause: the very first step already moves away from the answer.</grade>
+
+Here are your first three steps, with the loss after each:
+
+```python
+import numpy as np
+
+x = np.array([1.0, 2.0, 3.0, 4.0])
+y = np.array([2.0, 4.0, 6.0, 8.0])
+w = 0.5
+for step in range(3):
+    grad = np.mean(2 * (w * x - y) * x)
+    w = w + 0.04 * grad
+    print(step, round(w, 3), round(np.mean((w * x - y) ** 2), 2))
+```
+
+```
+0 -0.4 43.2
+1 -1.84 110.59
+2 -4.144 283.12
+```
+
+The data have slope 2, and $w$ leaves 0.5 in the wrong direction while the loss climbs from 16.875 to 43.2 in one step. Fewer steps would only stop it sooner on the same path.
+
+<card>In gradient descent, is the gradient added to or subtracted from the weight, and why? :: Subtracted. The gradient points in the direction of steepest increase of the loss, so descent steps against it.</card>
+
+<note>Gradient descent steps against the gradient, because the gradient is the direction in which the loss rises fastest. A loss that grows at every step from the first is the sign of a step taken the wrong way (or of a rate that is too large).</note>
+
+<solution>Change the update to w = w - lr * grad. With 50 steps it prints 2.0 0.0: the weight reaches the slope of the data and the loss falls to zero.</solution>
+<check lang="python">
+import numpy as np
+x = np.array([1.0, 2.0, 3.0, 4.0]); y = np.array([2.0, 4.0, 6.0, 8.0])
+w, lr = 0.5, 0.04
+for i in range(50):
+    w = w - lr * np.mean(2 * (w * x - y) * x)
+assert (round(w, 4), round(np.mean((w * x - y) ** 2), 4)) == (2.0, 0.0)
+</check>
+
+<ask type="code" lang="python">Correct the update in your 50-step loop, then print the final `w` rounded to 4 places together with the final loss rounded to 4 places.</ask>
+@@ verify
+import numpy as np
+out = run_py(block(learner, 'python'))
+val = float(out.strip())
+assert val < -1e9, out            # "a huge negative number", as the learner reports
+x = np.array([1.0, 2.0, 3.0, 4.0]); y = np.array([2.0, 4.0, 6.0, 8.0])
+loss = lambda w: np.mean((w * x - y) ** 2)
+assert loss(0.5) == 16.875 and np.mean(2 * (0.5 * x - y) * x) == -22.5
+# with the sign as written, every step multiplies the error (w - 2) by 1 + 0.04 * 2 * mean(x^2) = 1.6
+assert abs(1 + 0.04 * 2 * np.mean(x ** 2) - 1.6) < 1e-12
+w1 = 0.5 + 0.04 * -22.5
+assert abs(w1 + 0.4) < 1e-12 and round(loss(w1), 2) == 43.2
+# so no number of steps helps: even one step is worse than the start
+assert loss(w1) > loss(0.5)
+# the fixed loop
+w = 0.5
+for i in range(50):
+    w = w - 0.04 * np.mean(2 * (w * x - y) * x)
+assert round(w, 4) == 2.0 and round(loss(w), 4) == 0.0
+
+@@@@ hands-on-knn-distances-then-vote
+situation: hands-on
+topic: k-nearest neighbours in NumPy
+options: {"strategy":"code"}
+voice: wordy
+level: easy
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"askMustNot":["bincount","prints? 1 0"],"must":["argsort"]}
+@@ tutor
+<ask type="short">k-nearest neighbours has no training step beyond storing the data. What work does it do at prediction time for a single query point?</ask>
+@@ learner answer sure
+As far as I understand it, all the work happens at prediction time: it computes the distance from the query to every stored training point, sorts them (or at least finds the k smallest), takes the k closest points and returns the majority label among those k, or their average if it's regression.
+@@ reply
+<grade verdict="correct" score="1">"computes the distance from the query to every stored training point" and then a majority vote among the k closest is the whole algorithm, including the regression variant.</grade>
+
+The first half takes two lines of NumPy: one broadcast subtraction for all the distances, and `argsort` for the order.
+
+```python
+import numpy as np
+
+X = np.array([[1.0, 1.0], [2.0, 1.0], [6.0, 5.0], [7.0, 6.0], [3.0, 3.0]])
+labels = np.array([0, 0, 1, 1, 0])
+q = np.array([5.0, 4.0])
+d = np.sqrt(((X - q) ** 2).sum(axis=1))
+print(np.round(d, 2))
+print(np.argsort(d)[:3])
+```
+
+```
+[5.   4.24 1.41 2.83 2.24]
+[2 4 3]
+```
+
+The three nearest points to `q` are rows 2, 4 and 3.
+
+<solution>def predict(q, k): d = np.sqrt(((X - q) ** 2).sum(axis=1)); nearest = labels[np.argsort(d)[:k]]; return np.bincount(nearest).argmax(). predict(q, 3) is 1 (labels 1, 0, 1) and predict(np.array([2.0, 2.0]), 3) is 0 (labels 0, 0, 0).</solution>
+<check lang="python">
+import numpy as np
+X = np.array([[1.0, 1.0], [2.0, 1.0], [6.0, 5.0], [7.0, 6.0], [3.0, 3.0]])
+labels = np.array([0, 0, 1, 1, 0])
+def predict(q, k):
+    d = np.sqrt(((X - q) ** 2).sum(axis=1))
+    return np.bincount(labels[np.argsort(d)[:k]]).argmax()
+assert predict(np.array([5.0, 4.0]), 3) == 1 and predict(np.array([2.0, 2.0]), 3) == 0
+</check>
+
+<ask type="code" lang="python">Add the vote. Write `predict(q, k)` that returns the majority label among the `k` nearest rows of `X`, then print `predict(q, 3)` and `predict(np.array([2.0, 2.0]), 3)`.</ask>
+@@ verify
+import numpy as np
+X = np.array([[1.0, 1.0], [2.0, 1.0], [6.0, 5.0], [7.0, 6.0], [3.0, 3.0]])
+labels = np.array([0, 0, 1, 1, 0])
+def nearest(q, k):
+    d = [((float(a) - q[0]) ** 2 + (float(b) - q[1]) ** 2) ** 0.5 for a, b in X]
+    return sorted(range(len(X)), key=lambda i: d[i])[:k], d
+idx, d = nearest((5.0, 4.0), 3)
+assert idx == [2, 4, 3] and [round(v, 2) for v in d] == [5.0, 4.24, 1.41, 2.83, 2.24]
+# no tie among the three nearest, so the order shown is the only one
+assert len({round(v, 6) for v in d}) == 5
+assert labels[idx].tolist() == [1, 0, 1]
+idx2, d2 = nearest((2.0, 2.0), 3)
+assert sorted(idx2) == [0, 1, 4] and labels[idx2].tolist() == [0, 0, 0]
+# the fourth-nearest is strictly further, so the tie between rows 0 and 4 cannot change the vote
+assert sorted(d2)[3] > sorted(d2)[2]
+
+@@@@ hands-on-intercept-column-of-ones
+situation: hands-on
+topic: Linear regression and the normal equation
+options: {"strategy":"code"}
+voice: typos
+level: medium
+expect: {"setsProblem":true,"askTypes":["code"],"must":["column of ones|constant feature","\\(4, 2\\) \\[5\\. 3\\.\\]"],"askMustNot":["0\\.875","1\\.625","0\\.0625"],"forbid":["grade"]}
+@@ tutor
+The normal equation gives the least-squares weights in one step: solve $(X^\top X)\,w = X^\top y$ for $w$.
+
+```python
+import numpy as np
+
+X = np.array([[1.0, 2.0], [2.0, 1.0], [3.0, 4.0], [4.0, 3.0]])
+y = X @ np.array([2.0, -1.0])
+w = np.linalg.solve(X.T @ X, X.T @ y)
+print(np.round(w, 6))
+```
+
+```
+[ 2. -1.]
+```
+
+<solution>y = np.array([1.0, 3.0, 2.0, 5.0]); w = np.linalg.solve(X.T @ X, X.T @ y); print(np.round(w, 4), round(np.mean((X @ w - y) ** 2), 4)) prints [ 1.7759 -0.7241] 0.1681.</solution>
+
+<ask type="code" lang="python">Change `y` to `[1.0, 3.0, 2.0, 5.0]`, which no pair of weights fits exactly. Solve again and print the weights rounded to 4 places and the mean squared error rounded to 4 places.</ask>
+@@ learner question
+one thing first. every fit this gives goes thru the origin doesnt it? X @ w is 0 when both features are 0. so where would an intercept come from, theres no b anywhere in that equation
+@@ reply
+Yes: with this `X` the prediction at the origin is always 0. The intercept comes from giving every example one extra feature that is always 1. The weight on that constant feature is the intercept, and the same equation solves for it along with the rest:
+
+```python
+import numpy as np
+
+x = np.array([1.0, 2.0, 3.0, 4.0])
+y = 3.0 * x + 5.0
+X = np.column_stack([np.ones_like(x), x])
+w = np.linalg.solve(X.T @ X, X.T @ y)
+print(X.shape, np.round(w, 6))
+```
+
+```
+(4, 2) [5. 3.]
+```
+
+The first weight, 5, is the intercept and the second, 3, is the slope.
+
+<note>Intercept in the normal equation: add a column of ones to $X$. The weight on that column is the bias $b$, and $(X^\top X)\,w = X^\top y$ then solves for $b$ together with the other weights.</note>
+
+<solution>X1 = np.column_stack([np.ones(len(X)), X]); y = np.array([1.0, 3.0, 2.0, 5.0]); w = np.linalg.solve(X1.T @ X1, X1.T @ y). The weights are [0.875, 1.625, -0.875] (intercept first) and the mean squared error is 0.0625, lower than the 0.1681 without the intercept.</solution>
+<check lang="python">
+import numpy as np
+X = np.array([[1.0, 2.0], [2.0, 1.0], [3.0, 4.0], [4.0, 3.0]])
+y = np.array([1.0, 3.0, 2.0, 5.0])
+X1 = np.column_stack([np.ones(len(X)), X])
+w = np.linalg.solve(X1.T @ X1, X1.T @ y)
+assert np.allclose(w, [0.875, 1.625, -0.875]) and abs(np.mean((X1 @ w - y) ** 2) - 0.0625) < 1e-12
+</check>
+
+<ask type="code" lang="python">Now do the task you had with an intercept as well: add a column of ones to the 4 × 2 `X` from before, use `y = [1.0, 3.0, 2.0, 5.0]`, and print the three weights (intercept first) and the mean squared error, each rounded to 4 places.</ask>
+@@ verify
+import numpy as np
+X = np.array([[1.0, 2.0], [2.0, 1.0], [3.0, 4.0], [4.0, 3.0]])
+y = np.array([1.0, 3.0, 2.0, 5.0])
+# the tutor's first task, without an intercept
+w0 = np.linalg.solve(X.T @ X, X.T @ y)
+assert np.round(w0, 4).tolist() == [1.7759, -0.7241] and round(float(np.mean((X @ w0 - y) ** 2)), 4) == 0.1681
+assert '[ 1.7759 -0.7241] 0.1681' in solution(tutor[0])
+# the learner's premise: with no ones column the prediction at the origin is 0
+assert (np.zeros(2) @ w0) == 0
+# the task set, against an independent solver
+X1 = np.column_stack([np.ones(4), X])
+w1 = np.linalg.lstsq(X1, y, rcond=None)[0]
+assert np.allclose(w1, [0.875, 1.625, -0.875]) and abs(np.mean((X1 @ w1 - y) ** 2) - 0.0625) < 1e-12
+for v in ['0.875', '1.625', '0.0625']:
+    assert v in solution(reply) and v not in visible(reply), v
+# the snippet's data: y = 3x + 5 recovered exactly
+x = np.array([1.0, 2.0, 3.0, 4.0])
+assert np.allclose(np.linalg.lstsq(np.column_stack([np.ones(4), x]), 3 * x + 5, rcond=None)[0], [5, 3])
+
+@@@@ hands-on-bpe-merge-one-word-first
+situation: hands-on
+topic: Tokenisation: byte-pair encoding
+options: {"strategy":"code"}
+voice: plain
+level: medium
+expect: {"setsProblem":true,"askTypes":["code"],"must":["'h', 'ug', 's'","skip"],"askMustNot":["for s, c in","\\.items\\(\\)","'b', 'ug'"],"forbid":["grade"]}
+@@ tutor
+BPE training repeats two steps: count the adjacent symbol pairs, then merge the most frequent pair everywhere. Counting first:
+
+```python
+from collections import Counter
+
+words = {("h", "u", "g"): 6, ("h", "u", "g", "s"): 3, ("b", "u", "g"): 4, ("b", "u", "n"): 2}
+pairs = Counter()
+for symbols, count in words.items():
+    for a, b in zip(symbols, symbols[1:]):
+        pairs[(a, b)] += count
+print(pairs.most_common(2))
+```
+
+```
+[(('u', 'g'), 13), (('h', 'u'), 9)]
+```
+
+<solution>Scan each word's symbols left to right; where symbols[i] and symbols[i + 1] equal the pair, emit the joined symbol and skip both, otherwise copy symbols[i]. merge(words, ("u", "g")) gives {('h', 'ug'): 6, ('h', 'ug', 's'): 3, ('b', 'ug'): 4, ('b', 'u', 'n'): 2}.</solution>
+
+<ask type="code" lang="python">Write `merge(words, pair)` that returns a new dictionary in which every adjacent occurrence of `pair`, in every word, is replaced by one joined symbol. Print `merge(words, ("u", "g"))`.</ask>
+@@ learner idk
+@@ reply
+Do it for a single word first. Walk along the symbols with an index. When the current symbol and the next one are the pair, emit them joined and skip two places; otherwise emit the current symbol and move one place.
+
+```python
+def merge_word(symbols, pair):
+    out, i = [], 0
+    while i < len(symbols):
+        if i + 1 < len(symbols) and (symbols[i], symbols[i + 1]) == pair:
+            out.append(symbols[i] + symbols[i + 1])
+            i += 2
+        else:
+            out.append(symbols[i])
+            i += 1
+    return tuple(out)
+
+print(merge_word(("h", "u", "g", "s"), ("u", "g")))
+print(merge_word(("b", "u", "n"), ("u", "g")))
+```
+
+```
+('h', 'ug', 's')
+('b', 'u', 'n')
+```
+
+The second word has no adjacent u, g, so it comes back unchanged.
+
+<note>Applying one BPE merge to a word: scan its symbols left to right; where the pair occurs, emit the joined symbol and skip both; otherwise copy the symbol. A word without the pair is unchanged.</note>
+
+<solution>def merge(words, pair): return {merge_word(symbols, pair): count for symbols, count in words.items()}. On the corpus it gives {('h', 'ug'): 6, ('h', 'ug', 's'): 3, ('b', 'ug'): 4, ('b', 'u', 'n'): 2}.</solution>
+<check lang="python">
+def merge_word(symbols, pair):
+    out, i = [], 0
+    while i < len(symbols):
+        if i + 1 < len(symbols) and (symbols[i], symbols[i + 1]) == pair:
+            out.append(symbols[i] + symbols[i + 1]); i += 2
+        else:
+            out.append(symbols[i]); i += 1
+    return tuple(out)
+words = {("h", "u", "g"): 6, ("h", "u", "g", "s"): 3, ("b", "u", "g"): 4, ("b", "u", "n"): 2}
+merged = {merge_word(s, ("u", "g")): c for s, c in words.items()}
+assert merged == {('h', 'ug'): 6, ('h', 'ug', 's'): 3, ('b', 'ug'): 4, ('b', 'u', 'n'): 2}
+</check>
+
+<ask type="code" lang="python">Use `merge_word` to finish the job: write `merge(words, pair)` that applies it to every word in the `words` dictionary and keeps each word's count, then print `merge(words, ("u", "g"))`.</ask>
+@@ verify
+from collections import Counter
+words = {("h", "u", "g"): 6, ("h", "u", "g", "s"): 3, ("b", "u", "g"): 4, ("b", "u", "n"): 2}
+pairs = Counter()
+for symbols, count in words.items():
+    for a, b in zip(symbols, symbols[1:]):
+        pairs[(a, b)] += count
+assert pairs.most_common(2) == [(('u', 'g'), 13), (('h', 'u'), 9)] and pairs[('u', 'g')] == 6 + 3 + 4
+# run the reply's helper and finish the task with it
+ns = {}
+exec(block(reply, 'python').split('print(')[0], ns)
+mw = ns['merge_word']
+assert mw(("h", "u", "g", "s"), ("u", "g")) == ('h', 'ug', 's') and mw(("b", "u", "n"), ("u", "g")) == ('b', 'u', 'n')
+merged = {mw(s, ("u", "g")): c for s, c in words.items()}
+assert merged == {('h', 'ug'): 6, ('h', 'ug', 's'): 3, ('b', 'ug'): 4, ('b', 'u', 'n'): 2}
+# a second method for the same merge: join on a separator and replace
+def by_string(symbols, pair):
+    return tuple(' '.join(symbols).replace(' '.join(pair), ''.join(pair)).split(' '))
+assert all(by_string(s, ("u", "g")) == mw(s, ("u", "g")) for s in words)
+# edge cases the scan must get right: a pair at the very end, and overlapping repeats
+assert mw(("a", "a", "a"), ("a", "a")) == ('aa', 'a') and mw(("x", "u", "g"), ("u", "g")) == ('x', 'ug')
+assert str(merged) in solution(reply) and "('b', 'ug')" not in visible(reply)
+
+@@@@ summary-pooling-and-receptive-fields
+situation: summary
+topic: Pooling and receptive fields
+voice: terse
+level: medium
+expect: {"verdict":"correct","must":["6 × 6 × 8","\\b8\\b","32"],"mustNot":["has 32 (weights|parameters)\\."]}
+@@ tutor
+**Problem 2 · same level**
+
+A 2 × 2 max pool with stride 2 is applied to a 12 × 12 feature map with 8 channels. What is the shape of the output, and how many learned parameters does the pooling layer have?
+
+<solution>Each spatial side halves: 12 / 2 = 6. Channels are pooled separately, so the output is 6 × 6 × 8. Max pooling has no weights: 0 parameters.</solution>
+<check lang="python">
+assert (12 - 2) // 2 + 1 == 6
+</check>
+
+<ask type="problem">The output shape and the parameter count.</ask>
+@@ learner answer sure
+6 x 6 x 8. params: 2*2*8 = 32, one weight per window position per channel
+@@ tutor
+<grade verdict="partial" score="0.5">The shape "6 x 6 x 8" is right. "2*2*8 = 32" is not: max pooling outputs the largest value in each window and has nothing to learn, so the layer has 0 parameters.</grade>
+
+<card>How many learned parameters does a max-pooling layer have? :: None. It outputs the maximum of each window; there are no weights or biases.</card>
+
+<note>Pooling layers (max or average) have no learned parameters. A 2 × 2 pool with stride 2 halves the height and the width and leaves the number of channels unchanged.</note>
+
+**Problem 3 · harder**
+
+(a) Two 3 × 3 convolutions with stride 1 are stacked. How many input pixels wide is the receptive field of one unit in the second convolution's output? (b) A 2 × 2 max pool with stride 2 is now placed between the two convolutions. How wide is the receptive field of one unit in the final output?
+
+<solution>(a) The first convolution sees 3 pixels; the second adds 2 more at a step of 1: 5. (b) After the first convolution: 3, step 1. The pool adds (2 − 1) × 1 = 1, giving 4, and doubles the step to 2. The second convolution adds (3 − 1) × 2 = 4, giving 8.</solution>
+<check lang="python">
+def field(layers):
+    r, jump = 1, 1
+    for k, s in layers:
+        r += (k - 1) * jump
+        jump *= s
+    return r
+assert field([(3, 1), (3, 1)]) == 5 and field([(3, 1), (2, 2), (3, 1)]) == 8
+</check>
+
+<ask type="problem">Both widths, with what each layer adds to the field.</ask>
+@@ learner answer sure
+(a) 5. (b) conv gives 3, the pool makes it 4 and doubles the step, then the second conv adds 2*2 = 4, so 8
+@@ reply
+<grade verdict="correct" score="1">Both are right, and "the pool makes it 4 and doubles the step" is the key line: every layer after a stride-2 pool adds twice as many input pixels as it would have before it.</grade>
+
+<summary>**What you learned:** the output shape of a pooling layer (12 × 12 × 8 becomes 6 × 6 × 8), and how the receptive field grows layer by layer: 5 pixels for two stacked 3 × 3 convolutions, and 8 once a stride-2 pool sits between them.
+
+**Still shaky:** what a pooling layer contains. In Problem 2 you gave it 32 weights; it has none. The card for that is in your deck.
+
+**Review next:** that card, then the same receptive-field calculation with a stride-2 convolution in place of the pool.</summary>
+@@ verify
+# receptive field by brute force: which input positions can change one output unit (1-D is enough, the layers are square)
+def reach(layers, n=40):
+    # each unit is the set of input indices it depends on
+    units = [{i} for i in range(n)]
+    for k, s in layers:
+        units = [set().union(*units[i:i + k]) for i in range(0, len(units) - k + 1, s)]
+    mid = units[len(units) // 2]
+    return max(mid) - min(mid) + 1
+assert reach([(3, 1), (3, 1)]) == 5
+assert reach([(3, 1), (2, 2), (3, 1)]) == 8
+assert reach([(3, 1)]) == 3 and reach([(3, 1), (2, 2)]) == 4
+# the learner's steps
+assert 3 + 1 == 4 and 2 * 2 == 4 and 4 + 4 == 8
+# pooling shape, and the learner's parameter figure
+assert (12 - 2) // 2 + 1 == 6 and 2 * 2 * 8 == 32
+
+@@@@ summary-quiz-cosine-similarity
+situation: summary
+topic: Embeddings and cosine similarity
+mode: quiz
+options: {"length":3}
+voice: overconfident
+level: easy
+expect: {"verdict":"correct","must":["2 of 3","Question 1"],"mustNot":["3 of 3"]}
+@@ tutor
+Question 1 of 3
+
+<ask type="choice" options="1|3|1/3|0">Embedding $b$ is exactly 3 times embedding $a$, so $b = 3a$, and $a$ is not the zero vector. What is the cosine similarity of $a$ and $b$?</ask>
+@@ learner answer sure
+3. b is three times a so the similarity is three times as strong
+@@ tutor
+<grade verdict="wrong" score="0">"three times as strong" treats cosine similarity as if it grew with length. It depends only on the angle: $a \cdot 3a = 3\lVert a \rVert^2$, the two lengths multiply to $3\lVert a \rVert^2$ as well, and the ratio is 1.</grade>
+
+<card>What happens to cosine similarity when one vector is multiplied by a positive number? :: Nothing. The factor appears in both the dot product and the length, and cancels; only the angle matters.</card>
+
+Question 2 of 3
+
+<ask type="short">A retrieval system normalises every embedding to unit length before storing it. What does the plain dot product of two stored embeddings then equal, and why is that useful?</ask>
+@@ learner answer sure
+the dot product is then the cosine similarity itself, since both lengths are 1. so you can search with just dot products and skip the division
+@@ tutor
+<grade verdict="correct" score="1">"the dot product is then the cosine similarity itself, since both lengths are 1" is right, and it is why a vector index can rank by inner product alone.</grade>
+
+Question 3 of 3
+
+Find the cosine similarity of $a = (1, 0, 1)$ and $b = (0, 1, 1)$.
+
+<solution>a · b = 0 + 0 + 1 = 1. Both lengths are √2. Cosine similarity = 1 / (√2 × √2) = 1/2.</solution>
+<check lang="python">
+import math
+a, b = (1, 0, 1), (0, 1, 1)
+dot = sum(x * y for x, y in zip(a, b))
+assert abs(dot / (math.sqrt(2) * math.sqrt(2)) - 0.5) < 1e-12
+</check>
+
+<ask type="problem">The value, with the dot product and both lengths.</ask>
+@@ learner answer sure
+0.5. dot product is 1, both have length sqrt(2), so 1/(sqrt2*sqrt2) = 1/2. told you this was easy
+@@ reply
+<grade verdict="correct" score="1">"1/(sqrt2*sqrt2) = 1/2" is right: a dot product of 1 over two lengths of √2.</grade>
+
+<summary>**Score:** 2 of 3.
+
+**Strengths:** computing cosine similarity from the dot product and the two lengths, and knowing that on unit-length embeddings the dot product is the cosine similarity.
+
+**Misconception to fix:** that a longer vector is more similar. In Question 1 you answered 3 for $b = 3a$; multiplying a vector by a positive number leaves the angle unchanged, so the cosine similarity stays at 1.
+
+**Review:** the card on scaling, then one problem in which two vectors point the same way with very different lengths.</summary>
+@@ verify
+import numpy as np
+cos = lambda a, b: float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b)))
+rng = np.random.default_rng(5)
+a = rng.normal(size=6)
+assert abs(cos(a, 3 * a) - 1) < 1e-12                      # question 1: the right option is 1
+u, v = rng.normal(size=6), rng.normal(size=6)
+u, v = u / np.linalg.norm(u), v / np.linalg.norm(v)
+assert abs(u @ v - cos(u, v)) < 1e-12                       # question 2
+assert abs(cos(np.array([1.0, 0, 1]), np.array([0, 1.0, 1])) - 0.5) < 1e-12   # question 3
+# the score: verdicts of the three answers are wrong, correct, correct
+marks = ['wrong' in tutor[1].split('</grade>')[0], 'verdict="correct"' in tutor[2].split('</grade>')[0], 'verdict="correct"' in reply.split('</grade>')[0]]
+assert marks == [True, True, True] and '2 of 3' in reply

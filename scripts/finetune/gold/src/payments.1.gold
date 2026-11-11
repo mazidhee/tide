@@ -1,0 +1,297 @@
+@@@@ open-four-party-model
+situation: open
+topic: The four-party card model
+voice: plain
+level: easy
+expect: {"must":["acquirer","issuer"],"askMustNot":["issuer","cardholder's bank"]}
+noverify: an opening; it names the four roles and asks who bears the loss, stating no result
+@@ reply
+**Why this matters**
+
+Almost every card payment runs through the same four roles: the cardholder, the merchant, the issuer (the cardholder's bank) and the acquirer (the merchant's bank), joined by a card network such as Visa or Mastercard. Who carries the risk, who earns which fee and who can reverse a payment all follow from that arrangement. Payment service providers, acquirer integrations and dispute tooling are built on it, so reading a settlement report or a decline code means reading this model. It is the base for authorisation and capture, interchange and chargebacks.
+
+<ask type="predict">A cardholder buys £50 of goods on a credit card and never pays their card bill. The shop has already been paid in full. Which of the four parties is left out of pocket, and why that one?</ask>
+
+@@@@ open-quiz-minor-units-rounding
+situation: open
+topic: Money as integer minor units
+mode: quiz
+options: {"length":6}
+voice: terse
+level: medium
+expect: {"must":["Question 1 of 6"],"askMustNot":["2\\.67\\b","2\\.68"]}
+@@ reply
+**Question 1 of 6**
+
+<ask type="predict">A checkout applies a discount and arrives at a price of 2.675 pounds, which has to be rounded to whole pence before the card is charged. The code holds the price in a Python float and calls `round(2.675, 2)`. What does that call return, and why?</ask>
+@@ verify
+from decimal import Decimal
+# the answer that is withheld: the float nearest 2.675 lies just below it, so it rounds down
+assert round(2.675, 2) == 2.67
+assert Decimal(2.675) < Decimal('2.675')
+assert '2.67 ' not in reply and '2.68' not in reply
+
+@@@@ open-refresh-compound-interest
+situation: open
+topic: Simple and compound interest
+options: {"refresh":true}
+voice: plain
+level: easy
+expect: {"setsProblem":true,"askTypes":["problem"],"askMustNot":["2,?382","22\\.03"],"mustNot":["Why this matters"]}
+@@ reply
+**Problem 1**
+
+A deposit of £2,000 earns 6% a year, compounded once a year, and nothing is paid in or out. What is the balance after 3 years, to the penny? How much more is that than the same deposit would reach with simple interest at 6% a year?
+
+<solution>Compound: 2000 × 1.06³ = 2000 × 1.191016 = £2,382.03. Simple: 2000 + 3 × 120 = £2,360.00. Difference: £22.03.</solution>
+<check lang="python">
+from decimal import Decimal as D
+compound = (D(2000) * D('1.06') ** 3).quantize(D('0.01'))
+simple = D(2000) + 3 * D(2000) * D('0.06')
+assert compound == D('2382.03') and simple == D('2360.00') and compound - simple == D('22.03')
+</check>
+
+<ask type="problem">The balance and the difference, with your working.</ask>
+@@ verify
+from decimal import Decimal as D
+assert D('1.06') ** 3 == D('1.191016')
+c = (D(2000) * D('1.06') ** 3).quantize(D('0.01'))
+assert c == D('2382.03') and D(2000) * D('0.06') == 120 and 2000 + 3 * 120 == 2360
+assert c - 2360 == D('22.03')
+s = solution(reply)
+for v in ['1.191016', '2,382.03', '2,360.00', '22.03']:
+    assert v in s, v
+assert '2,382' not in visible(reply) and '22.03' not in visible(reply)
+
+@@@@ open-prior-authorisation-capture
+situation: open-prior
+topic: Authorisation and capture
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Authorisation and capture","daysAgo":4,"finished":false,"plan":["What an authorisation reserves","Capture and when money moves","Expiry and reversals"],"right":3,"partly":1,"wrong":1,"missed":["A hotel authorises £200 at check-in and captures £150 at check-out. What happens to the other £50?"],"open":"An authorisation is never captured. What happens to it?"}]}
+expect: {"must":["authoris"],"askMustNot":["releas","\\b58\\b","\\b41 is captured"]}
+@@ reply
+**Why this matters**
+
+Authorisation and capture are the two halves of a card payment: the first reserves funds on the cardholder's account, the second is the instruction that makes money move. Hotels, fuel pumps, pre-orders and any shop that ships later depend on the gap between them, and bugs in that gap show up as customers with funds tied up or merchants who were never paid. You have what an authorisation reserves from last time; the case where the capture is smaller than the authorisation was the gap, and expiry and reversals are still ahead.
+
+<ask type="short">A fuel pump authorises £99 on a card before the driver fills up. The fuel comes to £41. How much does the merchant capture, and what happens to the rest of the amount that was reserved?</ask>
+@@ verify
+# the withheld answer: capture 41, the remaining 58 of the hold is released
+assert 99 - 41 == 58
+assert '58' not in reply
+
+@@@@ open-prior-chargebacks-build-on-refunds
+situation: open-prior
+topic: Chargebacks and disputes
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Refunds and chargebacks","daysAgo":6,"finished":true,"plan":["What a refund is","What a chargeback is","Costs to the merchant"],"right":4,"partly":0,"wrong":1,"missed":["Who starts a refund, and who starts a chargeback?"]}]}
+expect: {"must":["refund"],"askMustNot":["issuer","cardholder's bank","merchant starts"]}
+noverify: an opening; it asks who starts each route and states no result
+@@ reply
+**Why this matters**
+
+A chargeback is the card networks' process for forcing a payment back when the cardholder disputes it, and for an online merchant it is a direct cost: the sale amount, usually a fee on top, and the risk of losing card acceptance if the rate climbs. Dispute handling, evidence submission and fraud tooling at a payment service provider are all built around its stages. This lesson rests on the difference between a refund and a chargeback from your earlier one, and the question of who sets each going was the one that slipped there, so it comes first.
+
+<ask type="short">A customer wants £60 back for an order that never arrived. There are two routes by which that money can return to their card. For each route, say who sets it going.</ask>
+
+@@@@ open-recall-luhn-errors
+situation: open-recall
+topic: The Luhn algorithm
+voice: plain
+level: medium
+before: {"recall":[{"prompt":"Which kinds of typing mistake in a card number does the Luhn check always catch, and which swap of neighbouring digits does it miss?","topic":"The Luhn algorithm","reviews":2,"lapses":1}]}
+expect: {"askMustNot":["single","\\b09\\b","\\b90\\b"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="short">Which kinds of typing mistake in a card number does the Luhn check always catch, and which swap of neighbouring digits does it miss?</ask>
+
+@@@@ open-recall-netting-liquidity
+situation: open-recall
+topic: Settlement netting: bilateral and multilateral
+voice: plain
+level: medium
+before: {"recall":[{"prompt":"Why does multilateral netting cut the liquidity banks need, compared with settling every payment gross?","topic":"Settlement netting: bilateral and multilateral","reviews":1,"lapses":0}]}
+expect: {"askMustNot":["offset","net position","cancel"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="explain">Why does multilateral netting cut the liquidity banks need, compared with settling every payment gross?</ask>
+
+@@@@ correct-recall-then-open-reconciliation
+situation: after-correct
+topic: Reconciliation: matching a ledger to a bank statement
+voice: terse
+level: medium
+before: {"recall":[{"prompt":"In double-entry bookkeeping, what must be true of the debits and credits in every journal entry?","topic":"Double-entry bookkeeping","reviews":2,"lapses":0}]}
+expect: {"verdict":"correct","heading":"Why this matters","must":["statement"],"askMustNot":["timing","cut-off","not yet","next day","failed"]}
+noverify: a recall answer marked and an opening; nothing is computed
+@@ tutor
+<ask type="short">In double-entry bookkeeping, what must be true of the debits and credits in every journal entry?</ask>
+@@ learner answer sure
+total debits = total credits. every entry, no exceptions
+@@ reply
+<grade verdict="correct" score="1">"total debits = total credits. every entry, no exceptions" is the rule: each entry moves value between accounts, so its two sides are equal by construction.</grade>
+
+**Why this matters**
+
+A balanced ledger only proves that your own records agree with each other. Reconciliation checks them against the outside world: the bank statement, the acquirer's settlement file, a payment scheme's report. Every payments company runs it daily, because it is how a missed payout, a duplicated transfer or a fee nobody recorded is found before a customer finds it. It is also the control that auditors and regulators ask about first when a firm holds client money, and it leads on to exception queues and suspense accounts.
+
+<ask type="short">Your ledger shows a £120 payout to a customer sent on Monday. Monday's bank statement has no £120 line. Give two different explanations: one in which the ledger is wrong, and one in which neither record is wrong.</ask>
+
+@@@@ correct-probe-end-plan-merchant-fees
+situation: after-correct
+topic: Interchange, scheme fees and the merchant discount rate
+voice: terse
+level: easy
+expect: {"verdict":"correct","need":["plan","note"],"setsProblem":true,"askTypes":["problem"],"must":["79\\.60","0\\.5%"],"askMustNot":["149\\.16","0\\.84"]}
+@@ tutor
+<ask type="short">A merchant pays a fee on every card sale. One part of that fee ends up with the cardholder's bank. What is that part called, and who sets its level?</ask>
+@@ learner answer sure
+interchange. goes to the issuer, network sets the rates
+@@ reply
+<grade verdict="correct" score="1">"interchange. goes to the issuer, network sets the rates" is right on both counts: the issuer earns it, and the network publishes the rate tables (in some regions a regulator caps them).</grade>
+
+<plan>
+- The three parts of the merchant discount rate
+- Blended and interchange-plus pricing
+- Fixed fees and small tickets
+</plan>
+
+The merchant discount rate (MDR) is the whole fee a merchant pays its acquirer on a sale. It has three parts: interchange, which the acquirer passes to the issuer; the scheme fee, which goes to the network; and the acquirer's margin, which the acquirer keeps. Take an £80 sale with interchange of 0.2%, a scheme fee of 0.05% and a margin of 0.25%. The parts are £0.16, £0.04 and £0.20, so the MDR is 0.5%, the fee is £0.40 and the merchant receives £79.60.
+
+<note>MDR = interchange (to the issuer) + scheme fee (to the network) + acquirer margin (kept by the acquirer). The merchant receives the sale amount minus MDR × sale. Rates vary by scheme, card type and region.</note>
+
+**Problem 1 · warm-up**
+
+A merchant takes a £150 card payment. Interchange is 0.3%, the scheme fee is 0.06% and the acquirer's margin is 0.2%. How much does each of the issuer, the network and the acquirer earn on this sale, and how much does the merchant receive?
+
+<solution>Issuer: 0.3% of 150 = £0.45. Network: 0.06% of 150 = £0.09. Acquirer: 0.2% of 150 = £0.30. Total fee £0.84 (an MDR of 0.56%). Merchant receives 150 − 0.84 = £149.16.</solution>
+<check lang="python">
+from decimal import Decimal as D
+sale = D(150)
+parts = [sale * D(r) / 100 for r in ('0.3', '0.06', '0.2')]
+assert parts == [D('0.45'), D('0.09'), D('0.30')]
+assert sum(parts) == D('0.84') and sale - sum(parts) == D('149.16')
+</check>
+
+<ask type="problem">The three amounts and what the merchant receives, with your working.</ask>
+@@ verify
+from decimal import Decimal as D
+# worked example in the reply
+p = [D(80) * D(r) / 100 for r in ('0.2', '0.05', '0.25')]
+assert p == [D('0.16'), D('0.04'), D('0.20')] and sum(p) == D('0.40')
+assert D('0.2') + D('0.05') + D('0.25') == D('0.5') and 80 - sum(p) == D('79.60')
+for v in ['£0.16', '£0.04', '£0.20', '0.5%', '£0.40', '£79.60']:
+    assert v in visible(reply), v
+# problem 1
+q = [D(150) * D(r) / 100 for r in ('0.3', '0.06', '0.2')]
+assert q == [D('0.45'), D('0.09'), D('0.30')] and sum(q) == D('0.84') and 150 - sum(q) == D('149.16')
+assert D('0.3') + D('0.06') + D('0.2') == D('0.56')
+s = solution(reply)
+for v in ['£0.45', '£0.09', '£0.30', '£0.84', '0.56%', '£149.16']:
+    assert v in s, v
+assert '149.16' not in visible(reply)
+
+@@@@ correct-netting-bilateral-to-multilateral
+situation: after-correct
+topic: Settlement netting: bilateral and multilateral
+options: {"difficulty":"hard"}
+voice: plain
+level: hard
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"must":["multilateral"],"askMustNot":["380","\\b50\\b"]}
+@@ tutor
+**Problem 1 · hard**
+
+Over one day bank A sends bank B payments totalling £70 million, and B sends A payments totalling £45 million. The two banks settle by bilateral netting. Who pays whom, how much, and by how much does netting cut the value that has to move at settlement?
+
+<solution>A owes 70, B owes 45. Net: A pays B 70 − 45 = £25 million. Gross value would be 70 + 45 = £115 million, so netting cuts it by 115 − 25 = £90 million.</solution>
+<check lang="python">
+net = 70 - 45
+assert net == 25 and 70 + 45 == 115 and 115 - net == 90
+</check>
+
+<ask type="problem">The direction and amount of the net payment, and the reduction, with your working.</ask>
+@@ learner answer sure
+A pays B 25m, since 70 - 45 = 25. Without netting 70 + 45 = 115m would move, so it cuts the value moved by 90m.
+@@ reply
+<grade verdict="correct" score="1">"A pays B 25m, since 70 - 45 = 25" has the right direction and amount, and "115m would move, so it cuts the value moved by 90m" is the right comparison with gross settlement.</grade>
+
+Multilateral netting goes one step further: each bank sets everything it owes against everything it is owed across the whole group, and settles one figure with the system.
+
+<note>Multilateral net position of a bank = total it is owed by all others − total it owes to all others. The positions of all the banks sum to zero.</note>
+
+**Problem 2 · harder**
+
+Three banks have these gross obligations for the day, in £ million: A owes B 120 and owes C 40; B owes A 50 and owes C 90; C owes A 60 and owes B 20. They settle by multilateral netting. Give each bank's net position, the total value that moves at settlement, and the gross total it replaces.
+
+<solution>A: owed 50 + 60 = 110, owes 120 + 40 = 160, net −50 (pays 50). B: owed 120 + 20 = 140, owes 50 + 90 = 140, net 0. C: owed 40 + 90 = 130, owes 60 + 20 = 80, net +50 (receives 50). Value moved: £50 million. Gross total: 120 + 40 + 50 + 90 + 60 + 20 = £380 million.</solution>
+<check lang="python">
+owes = {('A','B'):120, ('A','C'):40, ('B','A'):50, ('B','C'):90, ('C','A'):60, ('C','B'):20}
+net = {b: sum(v for (f,t),v in owes.items() if t==b) - sum(v for (f,t),v in owes.items() if f==b) for b in 'ABC'}
+assert net == {'A': -50, 'B': 0, 'C': 50} and sum(net.values()) == 0
+assert sum(v for v in net.values() if v > 0) == 50 and sum(owes.values()) == 380
+</check>
+
+<ask type="problem">The three net positions, the value moved and the gross total, with your working.</ask>
+@@ verify
+assert 70 - 45 == 25 and 70 + 45 == 115 and 115 - 25 == 90
+owes = {('A','B'):120, ('A','C'):40, ('B','A'):50, ('B','C'):90, ('C','A'):60, ('C','B'):20}
+inn = {b: sum(v for (f,t),v in owes.items() if t==b) for b in 'ABC'}
+out = {b: sum(v for (f,t),v in owes.items() if f==b) for b in 'ABC'}
+assert inn == {'A':110,'B':140,'C':130} and out == {'A':160,'B':140,'C':80}
+assert sum(owes.values()) == 380
+s = solution(reply)
+for v in ['110', '160', '−50', '140', 'net 0', '130', '+50', '380']:
+    assert v in s, v
+assert '380' not in visible(reply)
+
+@@@@ correct-unsure-available-balance
+situation: after-correct
+topic: Authorisation holds: available and ledger balance
+voice: confused
+level: easy
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"must":["ledger"],"askMustNot":["601\\.50","481\\.50"]}
+@@ tutor
+An authorisation hold reserves money without moving it. The ledger balance is what the posted transactions add up to; the available balance is the ledger balance minus the holds that are still pending.
+
+<note>Available balance = ledger balance − pending holds. A hold changes only the available balance. When the sale posts, the ledger balance falls by the posted amount and the hold is removed.</note>
+
+**Problem 1 · warm-up**
+
+An account's ledger balance is £820. Two card authorisations are pending: £75 at a hotel and £30 at a restaurant. Nothing else is pending. What is the available balance?
+
+<solution>820 − 75 − 30 = £715.</solution>
+<check lang="python">
+assert 820 - 75 - 30 == 715
+</check>
+
+<ask type="problem">The available balance, with your working.</ask>
+@@ learner answer unsure
+715? I took both holds off the 820. not sure though if the ledger balance is meant to go down as well when theres a hold
+@@ reply
+<grade verdict="correct" score="1">"I took both holds off the 820" is the right working: 820 − 75 − 30 = 715. On your doubt: the ledger balance stays at £820 while the holds are pending, and it only falls when a sale posts.</grade>
+
+One more at the same level, this time with a posting in it.
+
+**Problem 2 · same level**
+
+An account's ledger balance is £640. Two authorisations are pending: £120 for car hire and £45 at a fuel pump. The fuel sale then posts for £38.50 and its hold is removed; the car hire hold is still pending. Give the ledger balance and the available balance after the posting.
+
+<solution>Ledger: 640 − 38.50 = £601.50. The fuel hold is gone, so the only hold left is £120. Available: 601.50 − 120 = £481.50.</solution>
+<check lang="python">
+from decimal import Decimal as D
+ledger = D(640) - D('38.50')
+assert ledger == D('601.50') and ledger - 120 == D('481.50')
+</check>
+
+<ask type="problem">Both balances after the posting, with your working.</ask>
+@@ verify
+from decimal import Decimal as D
+assert 820 - 75 - 30 == 715
+ledger = D(640) - D('38.50')
+assert ledger == D('601.50') and ledger - D(120) == D('481.50')
+# before the posting the available balance was 640 - 120 - 45
+assert 640 - 120 - 45 == 475
+s = solution(reply)
+assert '601.50' in s and '481.50' in s and '601.50' not in visible(reply) and '481.50' not in visible(reply)

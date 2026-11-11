@@ -1,0 +1,648 @@
+@@@@ mark-error-adam-missing-square-root
+situation: mark-error
+topic: The Adam optimiser
+options: {"strategy":"maths"}
+voice: wordy
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["sqrt|square root","0\\.99\\b"],"must":["0\\.01 \\\\times 4/4 = 0\\.01"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["2\\.02"]}
+@@ tutor
+<note>Adam, for one weight with gradient $g$ at step $t$: $m \leftarrow \beta_1 m + (1-\beta_1)g$, $v \leftarrow \beta_2 v + (1-\beta_2)g^2$, $\hat m = m/(1-\beta_1^t)$, $\hat v = v/(1-\beta_2^t)$, then $w \leftarrow w - \eta\,\hat m/(\sqrt{\hat v} + \epsilon)$.</note>
+
+**Problem 1 · warm-up**
+
+A weight starts at $w = 1$, and on the first step its gradient is $g = 4$. Adam uses $\eta = 0.01$, $\beta_1 = 0.9$ and $\beta_2 = 0.999$; ignore $\epsilon$. Both averages start at 0. Find $m$, $v$, $\hat m$, $\hat v$ and the new $w$.
+
+<solution>m = 0.1 × 4 = 0.4. v = 0.001 × 16 = 0.016. m̂ = 0.4 / (1 − 0.9) = 4. v̂ = 0.016 / (1 − 0.999) = 16. Step = 0.01 × 4 / √16 = 0.01. New w = 0.99.</solution>
+<check lang="python">
+import math
+g, eta, b1, b2 = 4, 0.01, 0.9, 0.999
+m = (1 - b1) * g; v = (1 - b2) * g * g
+mh = m / (1 - b1); vh = v / (1 - b2)
+w = 1 - eta * mh / math.sqrt(vh)
+assert abs(m - 0.4) < 1e-12 and abs(v - 0.016) < 1e-12 and abs(mh - 4) < 1e-9 and abs(vh - 16) < 1e-9 and abs(w - 0.99) < 1e-9
+</check>
+
+<ask type="problem">The five values, with each line of working.</ask>
+@@ learner answer sure
+OK, going through it line by line. m = 0.9×0 + 0.1×4 = 0.4. v = 0.999×0 + 0.001×16 = 0.016. Then the bias corrections: m_hat = 0.4/(1 - 0.9) = 4 and v_hat = 0.016/(1 - 0.999) = 16. Finally the update, w = 1 - 0.01 × 4/16 = 1 - 0.0025 = 0.9975.
+@@ reply
+<grade verdict="partial" score="0.6">The averages and both corrections are right: "m_hat = 0.4/(1 - 0.9) = 4 and v_hat = 0.016/(1 - 0.999) = 16". The first wrong step is the update, "0.01 × 4/16": Adam divides by $\sqrt{\hat v}$, not by $\hat v$. With $\sqrt{16} = 4$ the step is $0.01 \times 4/4 = 0.01$, so the new weight is 0.99, not 0.9975.</grade>
+
+The square root is what makes the units work: $\hat v$ averages $g^2$, so $\sqrt{\hat v}$ is the size of a typical gradient and $\hat m/\sqrt{\hat v}$ is a gradient divided by a gradient. On the first step $\hat m = g$ and $\hat v = g^2$, so the step has size exactly $\eta$ whatever the gradient is.
+
+<card>In Adam's update, what is the bias-corrected first moment divided by? :: By the square root of the bias-corrected second moment (plus ε): step = η · m̂ / (√v̂ + ε). Dividing by v̂ itself is wrong: v̂ averages g², not |g|.</card>
+
+<note>Adam's first step: $\hat m = g$ and $\hat v = g^2$, so the update is $\eta\,g/|g|$: ignoring $\epsilon$, the weight moves by exactly $\eta$, against the sign of the gradient, however large or small $g$ is.</note>
+
+**Problem 2 · same level**
+
+A weight starts at $w = 2$, and on the first step its gradient is $g = -0.5$. Adam uses $\eta = 0.02$, $\beta_1 = 0.9$ and $\beta_2 = 0.999$; ignore $\epsilon$. Find $m$, $v$, $\hat m$, $\hat v$ and the new $w$.
+
+<solution>m = 0.1 × (−0.5) = −0.05. v = 0.001 × 0.25 = 0.00025. m̂ = −0.05 / 0.1 = −0.5. v̂ = 0.00025 / 0.001 = 0.25. √v̂ = 0.5. New w = 2 − 0.02 × (−0.5) / 0.5 = 2.02.</solution>
+<check lang="python">
+import math
+g, eta, b1, b2 = -0.5, 0.02, 0.9, 0.999
+m = (1 - b1) * g; v = (1 - b2) * g * g
+mh = m / (1 - b1); vh = v / (1 - b2)
+w = 2 - eta * mh / math.sqrt(vh)
+assert abs(m + 0.05) < 1e-12 and abs(v - 0.00025) < 1e-12 and abs(mh + 0.5) < 1e-9 and abs(vh - 0.25) < 1e-9 and abs(w - 2.02) < 1e-9
+</check>
+
+<ask type="problem">The five values, with the update written out.</ask>
+@@ verify
+import math
+def adam_first(w, g, eta, b1=0.9, b2=0.999):
+    m = (1 - b1) * g; v = (1 - b2) * g * g
+    mh = m / (1 - b1 ** 1); vh = v / (1 - b2 ** 1)
+    return m, v, mh, vh, w - eta * mh / math.sqrt(vh)
+m, v, mh, vh, w = adam_first(1, 4, 0.01)
+assert abs(m - 0.4) < 1e-12 and abs(v - 0.016) < 1e-12 and abs(mh - 4) < 1e-9 and abs(vh - 16) < 1e-9 and abs(w - 0.99) < 1e-9
+# the learner's lines: all right until the update, which divides by v_hat
+assert abs(0.9 * 0 + 0.1 * 4 - 0.4) < 1e-12 and abs(0.999 * 0 + 0.001 * 16 - 0.016) < 1e-12
+assert abs(0.01 * 4 / 16 - 0.0025) < 1e-12 and abs(1 - 0.0025 - 0.9975) < 1e-12
+assert abs(0.01 * 4 / 4 - 0.01) < 1e-12
+# the first step has size eta whatever the gradient
+for g in (4, -0.5, 1e-3, 250.0):
+    assert abs(abs(adam_first(0, g, 0.01)[4]) - 0.01) < 1e-9
+m, v, mh, vh, w = adam_first(2, -0.5, 0.02)
+assert abs(m + 0.05) < 1e-12 and abs(v - 0.00025) < 1e-12 and abs(mh + 0.5) < 1e-9 and abs(vh - 0.25) < 1e-9 and abs(w - 2.02) < 1e-9
+assert '2.02' in solution(reply) and '2.02' not in visible(reply)
+
+@@@@ mark-error-gain-unweighted-children
+situation: mark-error
+topic: Decision trees: entropy and information gain
+voice: typos
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["weight","0\\.311"],"must":["0\\.689","4/16|4 of the 16"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["0\\.205","0\\.795"]}
+@@ tutor
+**Problem 2 · same level**
+
+A node holds 16 examples, 8 of class A and 8 of class B. A split sends 4 examples to the left child, all of class A, and 12 to the right child: 4 of class A and 8 of class B. Find the information gain of the split in bits.
+
+<solution>Parent: 1 bit. Left child: 0 bits. Right child: −(1/3)log2(1/3) − (2/3)log2(2/3) = 0.918 bits. Weighted child entropy: (4/16) × 0 + (12/16) × 0.918 = 0.689. Gain = 1 − 0.689 = 0.311 bits.</solution>
+<check lang="python">
+import math
+H = lambda *c: -sum(x / sum(c) * math.log2(x / sum(c)) for x in c if x)
+assert round(H(8, 8) - 4 / 16 * H(4, 0) - 12 / 16 * H(4, 8), 3) == 0.311
+</check>
+
+<ask type="problem">The gain, with each entropy and how you combined the children.</ask>
+@@ learner answer sure
+parent is 8 and 8 so H = 1 bit. left child is pure so H = 0. right child has p = 1/3 and 2/3, H = -(1/3)log2(1/3) - (2/3)log2(2/3) = 0.918. avrage of the two children = (0 + 0.918)/2 = 0.459. gain = 1 - 0.459 = 0.541 bits
+@@ reply
+<grade verdict="partial" score="0.6">All three entropies are right: 1, 0 and "0.918". The first wrong step is "(0 + 0.918)/2 = 0.459": the children are not the same size, so each entropy is weighted by its share of the examples, 4/16 and 12/16. That gives 0.25 × 0 + 0.75 × 0.918 = 0.689, and the gain is 1 − 0.689 = 0.311 bits, not 0.541. Your subtraction was right for the average you had.</grade>
+
+The weights matter because the right child holds three quarters of the examples: its impurity describes three times as many cases as the pure left child's does.
+
+<card>How are the children's entropies combined when computing information gain? :: As a weighted average, each child weighted by its share of the parent's examples: gain = H(parent) − Σ (n_child / n_parent) × H(child).</card>
+
+<note>Information gain = H(parent) − Σ (n_child / n_parent) · H(child). The children's entropies are weighted by size; a plain average is only right when the children are equally large.</note>
+
+**Problem 3 · same level**
+
+The same node of 16 examples (8 of class A, 8 of class B) is split another way: 6 examples go left (5 of class A, 1 of class B) and 10 go right (3 of class A, 7 of class B). Find the information gain in bits, to three decimal places.
+
+<solution>Left child (5, 1): 0.650 bits. Right child (3, 7): 0.881 bits. Weighted: (6/16) × 0.650 + (10/16) × 0.881 = 0.795. Gain = 1 − 0.795 = 0.205 bits.</solution>
+<check lang="python">
+import math
+H = lambda *c: -sum(x / sum(c) * math.log2(x / sum(c)) for x in c if x)
+assert round(H(8, 8) - 6 / 16 * H(5, 1) - 10 / 16 * H(3, 7), 3) == 0.205
+</check>
+
+<ask type="problem">The gain, with each child's entropy and its weight.</ask>
+@@ verify
+import math
+def H(*c):
+    n = sum(c)
+    return -sum(x / n * math.log2(x / n) for x in c if x)
+assert H(8, 8) == 1 and H(4, 0) == 0 and round(H(4, 8), 3) == 0.918
+w = 4 / 16 * 0 + 12 / 16 * H(4, 8)
+assert round(w, 3) == 0.689 and round(1 - w, 3) == 0.311
+# the learner's figures follow from the plain average
+assert round((0 + 0.918) / 2, 3) == 0.459 and round(1 - 0.459, 3) == 0.541
+assert 4 / 16 == 0.25 and 12 / 16 == 0.75
+# problem 3
+assert round(H(5, 1), 3) == 0.650 and round(H(3, 7), 3) == 0.881
+w3 = 6 / 16 * H(5, 1) + 10 / 16 * H(3, 7)
+assert round(w3, 3) == 0.795 and round(1 - w3, 3) == 0.205
+assert 5 + 3 == 8 and 1 + 7 == 8 and 6 + 10 == 16
+assert '0.205' in solution(reply) and '0.205' not in visible(reply)
+
+@@@@ mark-error-k-means-distance-slip
+situation: mark-error
+topic: k-means clustering
+options: {"refresh":true}
+voice: terse
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["4 \\+ 4 = 8","5\\.5, 4\\.5"],"must":["\\(2, 1\\.33\\)"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["converged","no point (changes|moves)"]}
+@@ tutor
+**Problem 1**
+
+Five points: P1 (1, 1), P2 (2, 1), P3 (3, 2), P4 (5, 5) and P5 (6, 4). Two centroids start at c1 = (1, 1) and c2 = (5, 4). Carry out one iteration of k-means: assign each point to its nearest centroid by squared distance, then recompute both centroids.
+
+<solution>Squared distances to c1 and c2: P1 0 and 25; P2 1 and 18; P3 5 and 8; P4 32 and 1; P5 34 and 1. So P1, P2 and P3 join c1; P4 and P5 join c2. New c1 = (2, 4/3), about (2, 1.33). New c2 = (5.5, 4.5).</solution>
+<check lang="python">
+P = [(1, 1), (2, 1), (3, 2), (5, 5), (6, 4)]
+C = [(1, 1), (5, 4)]
+d = [[(x - cx) ** 2 + (y - cy) ** 2 for cx, cy in C] for x, y in P]
+assert d == [[0, 25], [1, 18], [5, 8], [32, 1], [34, 1]]
+a = [row.index(min(row)) for row in d]
+assert a == [0, 0, 0, 1, 1]
+mean = lambda k: tuple(sum(p[i] for p, c in zip(P, a) if c == k) / a.count(k) for i in (0, 1))
+assert mean(0) == (2.0, 4 / 3) and mean(1) == (5.5, 4.5)
+</check>
+
+<ask type="problem">Each point's cluster, with its squared distances, and the two new centroids.</ask>
+@@ learner answer sure
+P1: 0 vs 25 -> c1. P2: 1 vs 18 -> c1. P3: to c1 2^2+1^2 = 5, to c2 2^2+2^2 = 4 -> c2. P4: 32 vs 1 -> c2. P5: 34 vs 1 -> c2. new c1 = mean(P1,P2) = (1.5, 1). new c2 = mean(P3,P4,P5) = (14/3, 11/3) = (4.67, 3.67)
+@@ reply
+<grade verdict="partial" score="0.6">P1 and P2 are right, and so is P3's distance to c1, "2^2+1^2 = 5". The first wrong step is "2^2+2^2 = 4": it is 4 + 4 = 8, so P3 is nearer c1 (5 against 8) and belongs to the first cluster. Your two means are worked correctly for the clusters you had; with P3 moved they become c1 = (2, 1.33) and c2 = (5.5, 4.5).</grade>
+
+<card>In the assignment step of k-means, which centroid does a point join? :: The one at the smallest squared distance, the sum of the squared coordinate differences. For (3, 2) and (5, 4) that is 2² + 2² = 8.</card>
+
+<note>One k-means iteration: assign every point to the centroid at the smallest squared distance, then move each centroid to the mean of the points assigned to it. One mis-assigned point shifts both means.</note>
+
+**Problem 2**
+
+Start from the corrected centroids, c1 = (2, 4/3) and c2 = (5.5, 4.5), and carry out the assignment step again for the same five points. Does any point change cluster, and what does that tell you about the next centroid update?
+
+<solution>Squared distances to c1 and c2: P1 1.11 and 32.5; P2 0.11 and 24.5; P3 1.44 and 12.5; P4 22.44 and 0.5; P5 23.11 and 0.5. No point changes cluster, so the means are unchanged and the centroids do not move: k-means has converged.</solution>
+<check lang="python">
+P = [(1, 1), (2, 1), (3, 2), (5, 5), (6, 4)]
+C = [(2, 4 / 3), (5.5, 4.5)]
+d = [[round((x - cx) ** 2 + (y - cy) ** 2, 2) for cx, cy in C] for x, y in P]
+assert d == [[1.11, 32.5], [0.11, 24.5], [1.44, 12.5], [22.44, 0.5], [23.11, 0.5]]
+assert [row.index(min(row)) for row in d] == [0, 0, 0, 1, 1]
+</check>
+
+<ask type="problem">The five assignments with their squared distances, and what follows for the centroids.</ask>
+@@ verify
+import numpy as np
+P = np.array([[1, 1], [2, 1], [3, 2], [5, 5], [6, 4]], float)
+C = np.array([[1, 1], [5, 4]], float)
+d = ((P[:, None, :] - C[None, :, :]) ** 2).sum(-1)
+assert d.tolist() == [[0, 25], [1, 18], [5, 8], [32, 1], [34, 1]]
+a = d.argmin(1)
+assert a.tolist() == [0, 0, 0, 1, 1]
+C2 = np.array([P[a == k].mean(0) for k in (0, 1)])
+assert np.allclose(C2, [[2, 4 / 3], [5.5, 4.5]]) and round(4 / 3, 2) == 1.33
+# the learner's slip and what follows from it
+assert 2 ** 2 + 1 ** 2 == 5 and 2 ** 2 + 2 ** 2 == 8
+theirs1, theirs2 = P[[0, 1]].mean(0), P[[2, 3, 4]].mean(0)
+assert theirs1.tolist() == [1.5, 1.0] and np.allclose(theirs2, [14 / 3, 11 / 3]) and [round(float(v), 2) for v in theirs2] == [4.67, 3.67]
+# problem 2: a second assignment step changes nothing
+d2 = ((P[:, None, :] - C2[None, :, :]) ** 2).sum(-1)
+assert d2.argmin(1).tolist() == a.tolist()
+assert np.allclose(np.array([P[a == k].mean(0) for k in (0, 1)]), C2)
+
+@@@@ mark-error-attention-output-projection
+situation: mark-error
+topic: Multi-head attention: shapes and parameter counts
+options: {"difficulty":"hard"}
+voice: overconfident
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["concatenat","16640"],"must":["64 × 64 \\+ 64 = 4160"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["66048","16512"]}
+@@ tutor
+**Problem 2 · harder**
+
+A multi-head attention layer has model dimension $d_{\text{model}} = 64$ and 4 heads. It has four learned projections, $W_Q$, $W_K$, $W_V$ and the output projection $W_O$, each with a bias vector. Give the dimension of each head and the layer's total number of parameters.
+
+<solution>Head dimension 64 / 4 = 16. Each of the four projections maps 64 values to 64: 64 × 64 + 64 = 4160 parameters. Total 4 × 4160 = 16640.</solution>
+<check lang="python">
+d, h = 64, 4
+assert d // h == 16 and d * d + d == 4160 and 4 * (d * d + d) == 16640
+</check>
+
+<ask type="problem">The head dimension and the total, with the count for each projection.</ask>
+@@ learner answer sure
+Head dimension is 64/4 = 16, easy. Q, K and V are each a 64×64 matrix plus 64 biases = 4160, so 3 × 4160 = 12480. The output projection takes a head's 16 dimensions back up to 64, so that's 16×64 + 64 = 1088. Total 12480 + 1088 = 13568.
+@@ reply
+<grade verdict="partial" score="0.6">The head dimension and the three input projections are right: "3 × 4160 = 12480". The first wrong step is "16×64 + 64 = 1088": the output projection does not take one head's 16 dimensions, it takes all four heads concatenated, 4 × 16 = 64 values, so it has 64 × 64 + 64 = 4160 parameters. Your addition was right for the numbers you had; the total is 12480 + 4160 = 16640.</grade>
+
+<card>In multi-head attention, what is the input size of the output projection W_O? :: The concatenation of all the heads: h × (d_model / h) = d_model values. So W_O is d_model × d_model plus a bias, the same size as W_Q, W_K and W_V.</card>
+
+<note>Multi-head attention with model dimension $d$ and $h$ heads: $W_Q$, $W_K$, $W_V$ each map $d \to d$, and each head uses a slice of width $d/h$. The heads' outputs are concatenated back to $d$ values and $W_O$ maps $d \to d$. With biases: $4(d^2 + d)$ parameters.</note>
+
+**Problem 3 · same level**
+
+Another layer has $d_{\text{model}} = 128$ and 8 heads, with the same four projections and their biases. Give the dimension of each head, the number of values that enter the output projection, and the total number of parameters.
+
+<solution>Head dimension 128 / 8 = 16. The output projection receives 8 × 16 = 128 values. Each projection has 128 × 128 + 128 = 16512 parameters, so the total is 4 × 16512 = 66048.</solution>
+<check lang="python">
+d, h = 128, 8
+assert d // h == 16 and h * (d // h) == 128 and d * d + d == 16512 and 4 * (d * d + d) == 66048
+</check>
+
+<ask type="problem">The head dimension, the size of the output projection's input, and the total.</ask>
+@@ verify
+import numpy as np
+def mha_params(d, h):
+    # build the arrays: three input projections, split into h heads of width d // h, one output projection over the concatenation
+    assert d % h == 0
+    q = [np.zeros((d, d)), np.zeros(d)]; k = [np.zeros((d, d)), np.zeros(d)]; v = [np.zeros((d, d)), np.zeros(d)]
+    concat = h * (d // h)
+    o = [np.zeros((d, concat)), np.zeros(d)]
+    return sum(a.size for a in q + k + v + o), d // h, concat
+total, head, concat = mha_params(64, 4)
+assert (total, head, concat) == (16640, 16, 64)
+assert 64 * 64 + 64 == 4160 and 3 * 4160 == 12480 and 12480 + 4160 == 16640
+# the learner's figures
+assert 16 * 64 + 64 == 1088 and 12480 + 1088 == 13568
+# a forward pass with those shapes runs: (tokens, d) in, (tokens, d) out
+x = np.ones((5, 64))
+heads = (x @ np.zeros((64, 64))).reshape(5, 4, 16)
+assert heads.reshape(5, 64).shape == (5, 64)
+total, head, concat = mha_params(128, 8)
+assert (total, head, concat) == (66048, 16, 128) and 128 * 128 + 128 == 16512
+assert '66048' in solution(reply) and '66048' not in visible(reply)
+
+@@@@ unusual-sigmoid-derivative-direct
+situation: mark-unusual
+topic: The sigmoid and its derivative
+voice: terse
+level: medium
+expect: {"verdict":"correct","mustNot":["should have used","(must|need to|have to) use"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["3/16","\\beven\\b","symmetr"],"must":["3/16"]}
+@@ tutor
+The sigmoid squashes any real number into the interval (0, 1), and its derivative can be written using its output alone.
+
+<note>Sigmoid: $\sigma(z) = \dfrac{1}{1 + e^{-z}}$. Derivative: $\sigma'(z) = \sigma(z)\,(1 - \sigma(z))$.</note>
+
+**Problem 1 · warm-up**
+
+Find $\sigma'(\ln 3)$ exactly.
+
+<solution>σ(ln 3) = 1 / (1 + 1/3) = 3/4. σ'(ln 3) = 3/4 × 1/4 = 3/16.</solution>
+<check lang="python">
+from fractions import Fraction as F
+s = 1 / (1 + F(1, 3))
+assert s == F(3, 4) and s * (1 - s) == F(3, 16)
+</check>
+
+<ask type="problem">The exact value, with your working.</ask>
+@@ learner answer sure
+3/16. didn't use that form, just differentiated directly: σ'(z) = e^(-z)/(1+e^(-z))^2. e^(-ln 3) = 1/3 so (1/3)/(4/3)^2 = (1/3)(9/16) = 3/16
+@@ reply
+<grade verdict="correct" score="1">"(1/3)/(4/3)^2 = (1/3)(9/16) = 3/16" is right. The form you differentiated to is the same function as the one in the note: $\dfrac{e^{-z}}{(1+e^{-z})^2} = \dfrac{1}{1+e^{-z}} \cdot \dfrac{e^{-z}}{1+e^{-z}} = \sigma(z)\,(1 - \sigma(z))$.</grade>
+
+**Problem 2 · harder**
+
+Find $\sigma'(-\ln 3)$ exactly. Compare it with $\sigma'(\ln 3)$, and explain what you find from a property of $\sigma$.
+
+<solution>σ(−ln 3) = 1 / (1 + 3) = 1/4. σ'(−ln 3) = 1/4 × 3/4 = 3/16, the same as σ'(ln 3). Reason: σ(−z) = 1 − σ(z), so the product σ(z)(1 − σ(z)) is unchanged when z is replaced by −z. The derivative is an even function.</solution>
+<check lang="python">
+from fractions import Fraction as F
+s = 1 / (1 + F(3))
+assert s == F(1, 4) and s * (1 - s) == F(3, 16)
+assert 1 / (1 + F(1, 3)) == 1 - s
+</check>
+
+<ask type="problem">The value, the comparison, and the property of $\sigma$ that accounts for it.</ask>
+@@ verify
+import math
+from fractions import Fraction as F
+# the learner's route: e^(-z) / (1 + e^(-z))^2 at z = ln 3
+e = F(1, 3)
+assert e / (1 + e) ** 2 == F(1, 3) / F(4, 3) ** 2 == F(1, 3) * F(9, 16) == F(3, 16)
+# it is the same function as sigma (1 - sigma), and both match a numerical derivative
+sig = lambda z: 1 / (1 + math.exp(-z))
+for z in (-2.0, -0.3, 0.0, math.log(3), 4.0):
+    a = math.exp(-z) / (1 + math.exp(-z)) ** 2
+    b = sig(z) * (1 - sig(z))
+    num = (sig(z + 1e-6) - sig(z - 1e-6)) / 2e-6
+    assert abs(a - b) < 1e-12 and abs(a - num) < 1e-8
+assert abs(sig(math.log(3)) * (1 - sig(math.log(3))) - 3 / 16) < 1e-12
+# problem 2
+assert abs(sig(-math.log(3)) - 0.25) < 1e-12 and abs(sig(-math.log(3)) * (1 - sig(-math.log(3))) - 3 / 16) < 1e-12
+assert abs(sig(-1.7) - (1 - sig(1.7))) < 1e-12
+
+@@@@ unusual-cosine-from-direction-angles
+situation: mark-unusual
+topic: Embeddings and cosine similarity
+voice: wordy
+level: easy
+expect: {"verdict":"correct","mustNot":["should have used","(must|need to|have to) use"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["8/9","0\\.889"],"must":["24/25"]}
+@@ tutor
+An embedding is a vector that stands for a word or a document, and two embeddings are compared by the angle between them rather than by their lengths.
+
+<note>Cosine similarity: $\cos\theta = \dfrac{a \cdot b}{\lVert a \rVert\,\lVert b \rVert}$. It is 1 for vectors pointing the same way, 0 for perpendicular vectors and −1 for opposite ones.</note>
+
+**Problem 1 · warm-up**
+
+Two word embeddings are $a = (3, 4)$ and $b = (4, 3)$. Find their cosine similarity.
+
+<solution>a · b = 12 + 12 = 24. Both lengths are 5. Cosine similarity = 24/25 = 0.96.</solution>
+<check lang="python">
+import math
+a, b = (3, 4), (4, 3)
+assert sum(x * y for x, y in zip(a, b)) / (math.hypot(*a) * math.hypot(*b)) == 0.96
+</check>
+
+<ask type="problem">The cosine similarity, with your working.</ask>
+@@ learner answer sure
+I went a different way from the formula. In 2D each vector is just a direction, so a sits at an angle of atan(4/3) = 53.13 degrees from the x-axis and b at atan(3/4) = 36.87 degrees. The angle between them is 53.13 - 36.87 = 16.26 degrees, and cos(16.26 degrees) = 0.96. So the cosine similarity is 0.96.
+@@ reply
+<grade verdict="correct" score="1">"53.13 - 36.87 = 16.26 degrees, and cos(16.26 degrees) = 0.96" is right. Cosine similarity is the cosine of the angle between the vectors, and in the plane that angle is the difference of their two direction angles. The dot-product form gives the same value, 24/25.</grade>
+
+In three or more dimensions a vector no longer has a single direction angle, so the next one is set there.
+
+**Problem 2 · harder**
+
+Two embeddings in three dimensions are $a = (1, 2, 2)$ and $b = (2, 1, 2)$. Find their cosine similarity, to three decimal places.
+
+<solution>a · b = 2 + 2 + 4 = 8. Both lengths are √(1 + 4 + 4) = 3. Cosine similarity = 8/9 = 0.889.</solution>
+<check lang="python">
+import math
+a, b = (1, 2, 2), (2, 1, 2)
+dot = sum(x * y for x, y in zip(a, b))
+na, nb = math.sqrt(sum(x * x for x in a)), math.sqrt(sum(x * x for x in b))
+assert dot == 8 and na == 3 and nb == 3 and round(dot / (na * nb), 3) == 0.889
+</check>
+
+<ask type="problem">The cosine similarity, with the dot product and both lengths.</ask>
+@@ verify
+import math
+A, B = math.degrees(math.atan(4 / 3)), math.degrees(math.atan(3 / 4))
+assert round(A, 2) == 53.13 and round(B, 2) == 36.87 and round(A - B, 2) == 16.26
+assert round(53.13 - 36.87, 2) == 16.26 and round(math.cos(math.radians(16.26)), 2) == 0.96
+# the standard route agrees
+assert (3 * 4 + 4 * 3) / (5 * 5) == 24 / 25 == 0.96 and abs(math.cos(math.radians(A - B)) - 0.96) < 1e-12
+# problem 2
+import numpy as np
+a, b = np.array([1, 2, 2.0]), np.array([2, 1, 2.0])
+assert a @ b == 8 and np.linalg.norm(a) == 3 and np.linalg.norm(b) == 3
+assert round(float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b))), 3) == 0.889
+assert '0.889' in solution(reply) and '0.889' not in visible(reply)
+
+@@@@ unusual-perplexity-geometric-mean
+situation: mark-unusual
+topic: Perplexity
+voice: typos
+level: medium
+expect: {"verdict":"correct","mustNot":["should have used","(must|need to|have to) use"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["9\\.46","8000"],"must":["geometric mean"]}
+@@ tutor
+Perplexity measures how surprised a language model is by a text: lower is better, and a model that is certain of every token scores 1.
+
+<note>Perplexity of a model on a text of $N$ tokens: $\mathrm{PP} = \exp\!\Big(-\dfrac{1}{N}\sum_{i=1}^{N} \ln p_i\Big)$, where $p_i$ is the probability the model gave to token $i$.</note>
+
+**Problem 1 · warm-up**
+
+A model gives the three tokens of a short text probabilities 0.5, 0.25 and 0.125. What is its perplexity on this text?
+
+<solution>−ln p for the three tokens: ln 2, ln 4, ln 8. Their sum is ln 64 and their mean is ln 64 / 3 = ln 4. PP = e^(ln 4) = 4.</solution>
+<check lang="python">
+import math
+pp = math.exp(-(math.log(0.5) + math.log(0.25) + math.log(0.125)) / 3)
+assert abs(pp - 4) < 1e-12
+</check>
+
+<ask type="problem">The perplexity, with your working.</ask>
+@@ learner answer sure
+4. i took the inverse probablities 2, 4 and 8 and then their geometric mean, (2*4*8)^(1/3) = 64^(1/3) = 4. didnt need any logs
+@@ reply
+<grade verdict="correct" score="1">"(2*4*8)^(1/3) = 64^(1/3) = 4" is right, and it is the same quantity: the exponential of a mean of logs is a geometric mean, so $\exp\big(\tfrac13(\ln 2 + \ln 4 + \ln 8)\big) = (2 \times 4 \times 8)^{1/3}$. Perplexity is the geometric mean of the inverse probabilities.</grade>
+
+Your form also makes the next one easy to set up.
+
+**Problem 2 · harder**
+
+A model reads a four-token text. It gives three of the tokens probability 0.5 each and the fourth probability 0.001. What is its perplexity on this text, to two decimal places?
+
+<solution>Inverse probabilities: 2, 2, 2 and 1000. Their product is 8000 and the fourth root of 8000 is 9.46. One badly predicted token lifts the perplexity from 2 to 9.46.</solution>
+<check lang="python">
+import math
+pp = math.exp(-(3 * math.log(0.5) + math.log(0.001)) / 4)
+assert round(pp, 2) == 9.46 and abs(pp - 8000 ** 0.25) < 1e-9
+</check>
+
+<ask type="problem">The perplexity to two decimal places, with your working.</ask>
+@@ verify
+import math
+ps = [0.5, 0.25, 0.125]
+standard = math.exp(-sum(math.log(p) for p in ps) / len(ps))
+inv = [1 / p for p in ps]
+assert inv == [2, 4, 8] and math.prod(inv) == 64
+theirs = math.prod(inv) ** (1 / 3)
+assert abs(standard - 4) < 1e-12 and abs(theirs - 4) < 1e-12
+# the identity in general
+for qs in ([0.9, 0.2, 0.05, 0.6], [0.3, 0.3], [0.01, 0.99, 0.5]):
+    assert abs(math.exp(-sum(math.log(q) for q in qs) / len(qs)) - math.prod(1 / q for q in qs) ** (1 / len(qs))) < 1e-9
+ps2 = [0.5, 0.5, 0.5, 0.001]
+pp2 = math.exp(-sum(math.log(p) for p in ps2) / 4)
+assert round(pp2, 2) == 9.46 and round(math.prod(1 / p for p in ps2)) == 8000
+assert '9.46' in solution(reply) and '9.46' not in visible(reply)
+
+@@@@ tangent-do-trees-need-scaling
+situation: tangent
+topic: Feature scaling
+voice: wordy
+level: easy
+expect: {"must":["threshold","order"],"askMustNot":["\\b2 standard","= 2\\b","σ = 2"],"askTypes":["short"],"mustNot":["mean is 5","deviation is 2"]}
+@@ tutor
+Standardising a feature subtracts its mean and divides by its standard deviation, $z = (x - \mu)/\sigma$, so that the feature ends with mean 0 and standard deviation 1. Models that add features together or measure distances then treat every feature on the same footing, instead of letting the one with the largest units dominate.
+
+<note>Standardisation: $z = (x - \mu)/\sigma$, with $\mu$ and $\sigma$ the mean and standard deviation of that feature on the training data. The result has mean 0 and standard deviation 1.</note>
+
+**Problem 1 · warm-up**
+
+On the training set a feature takes the eight values 2, 4, 4, 4, 5, 5, 7 and 9. Using the population standard deviation, standardise the value 9.
+
+<solution>Mean = 40 / 8 = 5. Squared deviations: 9, 1, 1, 1, 0, 0, 4, 16, which sum to 32. Variance = 32 / 8 = 4, so σ = 2. z = (9 − 5) / 2 = 2.</solution>
+<check lang="python">
+import statistics
+v = [2, 4, 4, 4, 5, 5, 7, 9]
+assert statistics.mean(v) == 5 and statistics.pstdev(v) == 2 and (9 - 5) / 2 == 2
+</check>
+
+<ask type="problem">The standardised value, with the mean and standard deviation you used.</ask>
+@@ learner question
+Before I work that out, something I've wondered about for a while: do decision trees and random forests need their features scaled like this as well? I keep seeing notebooks where people skip the scaler entirely for tree models and I can't tell whether that's laziness or whether it's actually fine.
+@@ reply
+It is fine. A tree splits on one feature at a time with a threshold, such as $x_3 \le 4.5$, and picks the threshold by how well it separates the training examples. Rescaling a feature moves the threshold but leaves the examples in the same order, so the same examples fall on each side and the tree makes the same splits. That holds for any order-preserving change, including taking the logarithm of a positive feature. Scaling matters for models that combine features in one sum or measure distance across them: k-nearest neighbours, k-means, regularised linear models and neural networks.
+
+Back to the feature you were standardising.
+
+<ask type="short">For the eight training values 2, 4, 4, 4, 5, 5, 7 and 9, how many population standard deviations above the mean does the value 9 lie?</ask>
+@@ verify
+import numpy as np
+v = np.array([2, 4, 4, 4, 5, 5, 7, 9.0])
+assert v.mean() == 5 and v.std() == 2 and (9 - v.mean()) / v.std() == 2
+assert ((v - 5) ** 2).tolist() == [9, 1, 1, 1, 0, 0, 4, 16] and ((v - 5) ** 2).sum() == 32
+# a threshold split is unchanged by an order-preserving rescaling: best split on x and on a transformed x pick the same partition
+rng = np.random.default_rng(3)
+x = rng.uniform(1, 100, 60); y = (x > 37).astype(int) ^ (rng.random(60) < 0.1)
+def best_partition(f):
+    order = np.argsort(f); best = None
+    for i in range(1, len(f)):
+        left, right = y[order[:i]], y[order[i:]]
+        gini = (len(left) * (1 - (left.mean() ** 2 + (1 - left.mean()) ** 2)) + len(right) * (1 - (right.mean() ** 2 + (1 - right.mean()) ** 2))) / len(f)
+        if best is None or gini < best[0] - 1e-12:
+            best = (gini, frozenset(order[:i].tolist()))
+    return best[1]
+assert best_partition(x) == best_partition((x - x.mean()) / x.std()) == best_partition(np.log(x)) == best_partition(1000 * x + 7)
+
+@@@@ tangent-why-not-whole-words
+situation: tangent
+topic: Tokenisation: byte-pair encoding
+voice: overconfident
+level: easy
+expect: {"must":["unknown","subword"],"askMustNot":["\\b11\\b","\\blo\\b","l and o"],"askTypes":["short"],"mustNot":["\\b11 times\\b"]}
+@@ tutor
+Byte-pair encoding builds a vocabulary by repeated merging. Start with every word split into characters. Count each adjacent pair of symbols across the corpus, weighted by how often its word occurs; merge the most frequent pair into one new symbol everywhere; and repeat until the vocabulary reaches the size you want.
+
+<note>BPE training: split words into characters; repeatedly count adjacent symbol pairs (weighted by word frequency), merge the most frequent pair into a new symbol and add it to the vocabulary.</note>
+
+<ask type="short">A corpus has four words with these counts: low 5, lower 2, newer 3, lot 4. Which pair of adjacent characters does BPE merge first, and how many times does that pair occur?</ask>
+@@ learner question
+Hold on, why bother with any of this? Splitting on spaces gives you words for free, and whole words are obviously the better tokens since they actually mean something.
+@@ reply
+Whole words fail on the word the vocabulary has never seen. A word-level vocabulary is fixed after training, so a typo, a new product name or a rare inflection each map to a single unknown token and their content is lost; covering a language well also takes a very large vocabulary. Single characters avoid that, since any string can be spelt out, but sequences become several times longer and each token carries little. Subword merges sit between the two: common words end up as single tokens, and a rare word is still representable as a few familiar pieces, with a vocabulary size you choose.
+
+The pair counts are what decide those pieces, so back to them.
+
+<ask type="short">In the corpus low 5, lower 2, newer 3, lot 4, count every adjacent character pair across the four words, weighting by the word counts. Which pair has the highest total, and what is that total?</ask>
+@@ verify
+from collections import Counter
+words = {'low': 5, 'lower': 2, 'newer': 3, 'lot': 4}
+pairs = Counter()
+for w, n in words.items():
+    for a, b in zip(w, w[1:]):
+        pairs[a + b] += n
+top = pairs.most_common()
+# the pending question has one clear answer: "lo", 11 times, with no tie for first place
+assert top[0] == ('lo', 11) and top[1][1] == 7
+assert pairs == {'lo': 11, 'ow': 7, 'we': 5, 'er': 5, 'ot': 4, 'ne': 3, 'ew': 3}
+# and the reply does not give it away
+assert ' 11' not in reply
+
+@@@@ tangent-pca-versus-autoencoder-explain
+situation: tangent
+topic: Principal component analysis
+voice: typos
+level: hard
+expect: {"ends":"continue","must":["linear","subspace"],"mustNot":["0\\.8\\b","80%","\\(1, 0\\)"]}
+@@ tutor
+PCA finds the directions along which centred data varies most. The first principal component is the unit vector along which the projected data has the largest variance; the second is the best such direction at right angles to the first, and so on. These directions are the eigenvectors of the data's covariance matrix, and each eigenvalue is the variance along its component.
+
+<note>PCA: centre the data, form the covariance matrix and take its eigenvectors. The eigenvector with the largest eigenvalue is the first principal component, and the eigenvalue is the variance along it. Share of variance explained by a component = its eigenvalue divided by the sum of all the eigenvalues.</note>
+
+<ask type="short">A data set with two features has covariance matrix $\begin{pmatrix} 4 & 0 \\ 0 & 1 \end{pmatrix}$. What is its first principal component, and what share of the total variance does that component explain?</ask>
+@@ learner question
+can you explain how this is diffrent from an autoencoder? they both squeeze the data through a bottleneck and rebuild it
+@@ reply
+PCA is the linear special case. Take an autoencoder whose encoder and decoder are both linear, with a bottleneck of $k$ units, trained to minimise squared reconstruction error on centred data. At its optimum it spans the same subspace as the top $k$ principal components, though its weights need not be the components themselves: they can be any basis of that subspace, neither orthogonal nor ordered by variance.
+
+The two part ways once the layers have non-linear activations. The autoencoder can then follow curved structure that no flat subspace captures. In exchange it gives up what makes PCA convenient: an exact solution from one eigendecomposition, components ordered by variance, and a result that does not depend on initialisation or training settings.
+
+<note>PCA against autoencoders: a linear autoencoder with a $k$-unit bottleneck and squared error learns the same subspace as the top $k$ principal components (not necessarily the same basis). Non-linear activations let an autoencoder fit curved structure, at the cost of iterative training and no ordering of components.</note>
+
+Next: how a single point is projected onto a principal component, and what is lost when the other components are dropped.
+
+<continue/>
+@@ verify
+import numpy as np
+# a linear autoencoder trained by gradient descent ends in the subspace of the top principal component
+rng = np.random.default_rng(0)
+X = rng.normal(size=(400, 3)) @ np.diag([3.0, 1.0, 0.3]) @ np.linalg.qr(rng.normal(size=(3, 3)))[0]
+X = X - X.mean(axis=0)
+evals, evecs = np.linalg.eigh(X.T @ X / len(X))
+pc1 = evecs[:, -1]
+E = rng.normal(size=(3, 1)) * 0.1; D = rng.normal(size=(1, 3)) * 0.1
+for _ in range(4000):
+    R = X @ E @ D - X
+    gD = (X @ E).T @ R / len(X); gE = X.T @ (R @ D.T) / len(X)
+    D -= 0.02 * gD; E -= 0.02 * gE
+d = D.ravel() / np.linalg.norm(D)
+assert abs(abs(d @ pc1) - 1) < 1e-3          # same direction (up to sign), so the same 1-D subspace
+# the pending question's answer (not given in the reply): first axis, 4 / (4 + 1) = 0.8
+w, v = np.linalg.eigh(np.array([[4.0, 0.0], [0.0, 1.0]]))
+assert abs(abs(v[:, -1][0]) - 1) < 1e-12 and w[-1] / w.sum() == 0.8
+
+@@@@ why-zero-training-error-examined
+situation: why
+topic: The bias-variance trade-off
+options: {"why":true}
+voice: confused
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["more parameters","fitted to|same ten points"],"askTypes":["predict","short","explain"],"askMustNot":["the noise as well","reproduced the noise","overfit"],"must":["trend"]}
+noverify: conceptual; no figure is computed (a degree-9 polynomial through ten points with distinct x always exists, which is standard interpolation)
+@@ tutor
+**Why this matters**
+
+Every choice of model size, tree depth or regularisation strength is a position on this trade-off, whether or not it is made knowingly. It explains why a deeper tree or a wider network can score better on the training set and worse in production, and it is the reasoning behind validation curves, ensembles such as random forests, and early stopping.
+
+<ask type="predict">Ten noisy points are drawn from an underlying straight-line trend. You fit a straight line to them, and separately a degree-9 polynomial, which passes through all ten points exactly. Then ten fresh points are drawn from the same source and both models are fitted again. Which fitted curve changes more between the two draws, and why?</ask>
+@@ learner answer unsure
+the polynomial i think, because it has more parameters? but it had zero error the first time so maybe its the more accurate one and shouldnt need to change. not sure
+@@ reply
+<grade verdict="partial" score="0.5">"the polynomial" is the right pick, but "because it has more parameters" stops short of a reason: parameters give the freedom to change, not the cause. Your second thought, that zero error makes it the more accurate one, is the part to examine.</grade>
+
+Take that zero error apart. It was measured on the same ten points the polynomial was fitted to, and a degree-9 polynomial can pass through any ten points with different $x$-values, wherever they lie. So the zero says the curve had enough freedom, and nothing yet about new points. Each of those ten points, remember, is the trend plus some noise.
+
+<card>What does zero error on the training points tell you about a flexible model's accuracy on new points? :: Nothing by itself. It was measured on the points the model was fitted to, and a flexible enough model reaches zero on any set of points.</card>
+
+<note>Training error is measured on the points the model was fitted to. A model flexible enough to pass through every one of them reaches zero training error whatever the points are, so that zero is not evidence about new data.</note>
+
+<ask type="predict">One of the ten points sits a little above the trend line because of its noise, and the degree-9 curve passes exactly through it. What has the curve reproduced at that point? Use your answer to predict how its error on the ten fresh points will compare with the straight line's.</ask>
+
+@@@@ why-idk-clip-by-component-first
+situation: why
+topic: Gradient clipping
+options: {"why":true}
+voice: confused
+level: medium
+expect: {"must":["7\\.07","direction"],"askMustNot":["\\(3, 4\\)","0\\.1\\b","1/10","one tenth"],"mustNot":["\\(3, 4\\)"],"forbid":["grade"]}
+@@ tutor
+**Why this matters**
+
+Gradient clipping is the standard guard against exploding gradients: one unusually large gradient can throw the weights so far that training never recovers. It is routine when training recurrent networks and transformers, and PyTorch ships both forms of it, `clip_grad_value_` and `clip_grad_norm_`. Knowing why the two differ tells you which one to reach for.
+
+<ask type="predict">A gradient comes out as $g = (30, 40)$, far larger than usual, and you want an update no longer than 5. One option clips each component into the range $[-5, 5]$. The other shrinks the whole vector until its length is 5. Which would you rather use, and why?</ask>
+@@ learner idk
+@@ reply
+Work out what the first option does, and the choice will follow from it. Clipping each component of $(30, 40)$ into $[-5, 5]$ gives $(5, 5)$. Two things have changed. The original had components in the ratio 3 to 4, so it pointed more along the second axis; the clipped vector points along the diagonal, which is a different direction from the one the loss asked for. And its length is $\sqrt{5^2 + 5^2} = 7.07$, still above 5.
+
+<note>Clipping a gradient component by component can change its direction: $(30, 40)$ clipped into $[-5, 5]$ becomes $(5, 5)$, which no longer points the way the gradient did, and whose length is 7.07 rather than 5.</note>
+
+<ask type="short">Now the second option. The length of $(30, 40)$ is 50. What single number must the whole vector be multiplied by to bring its length down to 5, what vector results, and does it point the same way as the original?</ask>
+@@ verify
+import numpy as np
+g = np.array([30.0, 40.0])
+clipped = np.clip(g, -5, 5)
+assert clipped.tolist() == [5.0, 5.0] and round(float(np.linalg.norm(clipped)), 2) == 7.07
+assert np.linalg.norm(g) == 50
+# the direction changed: the cosine between g and the clipped vector is below 1
+cos = g @ clipped / (np.linalg.norm(g) * np.linalg.norm(clipped))
+assert cos < 0.999
+# the answer withheld: multiply by 0.1, giving (3, 4), same direction, length 5
+scaled = g * (5 / np.linalg.norm(g))
+assert np.allclose(scaled, [3, 4]) and abs(np.linalg.norm(scaled) - 5) < 1e-12 and abs(g @ scaled / (50 * 5) - 1) < 1e-12
+assert '(3, 4)' not in reply
+
+@@@@ why-loss-never-zero-extend
+situation: why
+topic: One-hot targets and label smoothing
+options: {"why":true}
+voice: plain
+level: hard
+expect: {"verdict":"correct","must":["0\\.99991","0\\.00009"],"askTypes":["predict","explain"],"askMustNot":["overconfiden","grow without (bound|limit)","smooth"],"mustNot":["label smoothing (replaces|uses|sets)"]}
+@@ tutor
+<ask type="predict">A classifier ends in a softmax and is trained with cross-entropy against a one-hot target. On one training example its logit for the true class is already 10 above every other logit. Is the loss on that example exactly zero yet, and is there any finite gap at which it would be?</ask>
+@@ learner answer sure
+No. Softmax only gives the true class probability 1 in the limit, e^10 beats the others by a lot but p is still below 1, so -ln p is a bit above 0. No finite gap gets there, it would need an infinite one.
+@@ reply
+<grade verdict="correct" score="1">"No finite gap gets there" is right, for the reason you give: softmax reaches probability 1 only in the limit. With three classes and a gap of 10, $p = e^{10}/(e^{10} + 2) = 0.99991$ and the loss is about 0.00009: small, never zero.</grade>
+
+Follow that one step further. If no finite gap brings the loss to zero, then however good the logits already are, widening the gap lowers the loss a little more.
+
+<ask type="predict">Given that, what does gradient descent keep doing to the gap between the logits, and to the weights that produce it, for as long as training goes on? Say what you would then expect of the probabilities the model reports on new examples.</ask>
+@@ verify
+import math
+p = math.exp(10) / (math.exp(10) + 2)
+assert f'{p:.5f}' == '0.99991' and f'{-math.log(p):.5f}' == '0.00009'
+# the loss is positive at every finite gap and falls as the gap widens
+prev = None
+for gap in (1, 5, 10, 20, 30):
+    q = math.exp(gap) / (math.exp(gap) + 2)
+    loss = -math.log(q)
+    assert loss > 0 and (prev is None or loss < prev)
+    prev = loss

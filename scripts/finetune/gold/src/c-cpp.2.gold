@@ -1,0 +1,618 @@
+@@@@ wrong-signed-overflow-assumed-to-wrap
+situation: after-wrong
+topic: Signed integer overflow in C
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["undefined","0x80000000|INT_MIN|wrap"],"must":["undefined behaviour","a == INT_MAX"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["INT_MIN \\+ b"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+```c
+#include <limits.h>
+
+int will_overflow(int a) {
+    return a + 1 < a;   /* meant to detect that a + 1 overflows */
+}
+```
+
+Is this a reliable test? Say what the C standard gives as the result of `will_overflow(INT_MAX)`.
+
+<solution>Not reliable. For a = INT_MAX the addition overflows a signed int, which is undefined behaviour: the standard gives no result. A compiler may assume it never happens, and then a + 1 < a is false for every a, so the function can be compiled as return 0. A reliable test never performs the overflowing addition: a == INT_MAX.</solution>
+
+<ask type="problem">Reliable or not, and what the standard says the call returns.</ask>
+@@ learner answer sure
+Yes it's reliable. INT_MAX is 0x7FFFFFFF, add 1 and you get 0x80000000 which is INT_MIN in two's complement. That's less than a, so it returns 1. Every CPU made in the last 30 years is two's complement so this always works.
+@@ reply
+<grade verdict="wrong" score="0.2">"add 1 and you get 0x80000000 which is INT_MIN" describes what the processor's add instruction does, not what C defines. In C, overflow of a signed `int` is undefined behaviour on every machine, so the standard gives `will_overflow(INT_MAX)` no result at all.</grade>
+
+The compiler reasons from the language, not the hardware. For every `a` where `a + 1` is defined, `a + 1 < a` is false, so an optimiser may replace the body with `return 0`; Clang at `-O2` typically does exactly that, and the test never fires. A reliable test asks the question before adding, using values that cannot overflow: `a == INT_MAX` here, or `a > INT_MAX - b` for a general `a + b` with `b > 0`.
+
+<card>Why is `a + 1 < a` not a reliable overflow test for a signed int? :: Signed overflow is undefined behaviour, so the compiler may assume it never happens and fold the test to false. Test before adding: a > INT_MAX - b (for b > 0).</card>
+
+<note>Signed integer overflow is undefined behaviour in C, whatever the hardware does. Check before the operation, with arithmetic that cannot itself overflow: for `a + b` with `b > 0`, overflow happens exactly when `a > INT_MAX - b`.</note>
+
+**Problem 2 · same idea**
+
+`a` and `b` are `int`, and `b > 0`. Write a condition, using only arithmetic that cannot overflow, that is true exactly when `a - b` would go below `INT_MIN`.
+
+<solution>a - b < INT_MIN is the same as a < INT_MIN + b, and INT_MIN + b cannot overflow when b > 0. So the condition is a < INT_MIN + b.</solution>
+<check lang="python">
+LO, HI = -128, 127          # the same argument on an 8-bit signed range
+for a in range(LO, HI + 1):
+    for b in range(1, HI + 1):
+        assert LO <= LO + b <= HI
+        assert (a - b < LO) == (a < LO + b)
+</check>
+
+<ask type="problem">The condition, and one line on why its own arithmetic cannot overflow.</ask>
+@@ verify
+import subprocess, tempfile, os
+assert 0x7FFFFFFF == 2**31 - 1 and 0x80000000 - 2**32 == -2**31      # the learner's two's complement figures
+src = '#include <stdio.h>\n' + block(tutor[0], 'c').replace('int will_overflow', '__attribute__((noinline)) int will_overflow') + '\nint main(void) { printf("%d\\n", will_overflow(INT_MAX)); return 0; }\n'
+with tempfile.TemporaryDirectory() as d:
+    open(os.path.join(d, 'm.c'), 'w').write(src)
+    res = {}
+    for opt in ('-O0', '-O2'):
+        subprocess.run(['/usr/bin/clang', '-std=c17', opt, '-o', 'p', 'm.c'], cwd=d, check=True)
+        res[opt] = subprocess.run([os.path.join(d, 'p')], capture_output=True, text=True).stdout.strip()
+# unoptimised it happens to wrap and print 1 (what the learner expects); optimised, the test is folded to 0
+assert res == {'-O0': '1', '-O2': '0'}, res
+# the sanitiser names the undefined operation
+out, err, cerr, code = run_c_full(src, 'c')
+assert 'signed integer overflow' in err
+# the reliable tests, on an 8-bit range
+for a in range(-128, 128):
+    assert (a + 1 > 127) == (a == 127)
+    for b in range(1, 128):
+        assert (a + b > 127) == (a > 127 - b)
+assert 'a < INT_MIN + b' in solution(reply)
+
+@@@@ wrong-macro-argument-evaluated-first
+situation: after-wrong
+topic: Function-like macros in C
+voice: overconfident
+level: easy
+expect: {"verdict":"wrong","names":["SQUARE\\(5\\)|evaluat","token|text"],"must":["2 \\+ 3 \\* 2 \\+ 3","\\b11\\b"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b13\\b","\\b8\\b"]}
+@@ tutor
+A function-like macro is expanded by the preprocessor before the compiler proper sees the code: wherever the parameter appears in the macro body, the argument's tokens are pasted in, unchanged.
+
+<note>A macro call is replaced by its body with the argument's tokens substituted for the parameter. Nothing is evaluated at that stage; the compiler only sees the resulting text.</note>
+
+**Problem 1 · warm-up**
+
+```c
+#define SQUARE(x) x * x
+
+int r = SQUARE(2 + 3);
+```
+
+What is the value of `r`?
+
+<solution>The expansion is 2 + 3 * 2 + 3. Multiplication binds tighter: 2 + 6 + 3 = 11.</solution>
+<check lang="python">
+assert 2 + 3 * 2 + 3 == 11
+</check>
+
+<ask type="problem">The value of r, with the expression as it stands after expansion.</ask>
+@@ learner answer sure
+25. SQUARE(2 + 3) is SQUARE(5), and the expansion is 5 * 5 = 25. Simple.
+@@ reply
+<grade verdict="wrong" score="0.1">"SQUARE(2 + 3) is SQUARE(5)" evaluates the argument first, which is what a function call does. A macro evaluates nothing: the preprocessor pastes the three tokens `2 + 3` in place of each `x`.</grade>
+
+The text the compiler receives is `2 + 3 * 2 + 3`. Multiplication is done first, so it is 2 + 6 + 3 = 11, not 25. The usual defence is to parenthesise every use of the parameter and the whole body, `#define SQUARE(x) ((x) * (x))`, which expands to `((2 + 3) * (2 + 3))` and does give 25.
+
+<card>What does `SQUARE(2 + 3)` expand to with `#define SQUARE(x) x * x`, and what is its value? :: 2 + 3 * 2 + 3 = 11. The argument's tokens are pasted in, not evaluated first.</card>
+
+<note>Parenthesise each parameter and the whole body of a function-like macro: `#define SQUARE(x) ((x) * (x))`. Without them, operators next to the pasted tokens can bind more tightly than the argument's own.</note>
+
+**Problem 2 · same idea**
+
+```c
+#define HALF(x) x / 2
+
+int h = HALF(10 + 6);
+```
+
+<solution>The expansion is 10 + 6 / 2. Division first: 10 + 3 = 13, not 8.</solution>
+<check lang="python">
+assert 10 + 6 // 2 == 13 and (10 + 6) // 2 == 8
+</check>
+
+<ask type="problem">Write the expression after expansion, then give the value of h.</ask>
+@@ verify
+p = lambda body: run_c('#include <stdio.h>\n' + body)
+assert p('#define SQUARE(x) x * x\nint main(void) { int r = SQUARE(2 + 3); printf("%d\\n", r); return 0; }\n').strip() == '11'
+assert p('#define SQUARE(x) ((x) * (x))\nint main(void) { int r = SQUARE(2 + 3); printf("%d\\n", r); return 0; }\n').strip() == '25'
+assert p('#define HALF(x) x / 2\nint main(void) { int h = HALF(10 + 6); printf("%d\\n", h); return 0; }\n').strip() == '13'
+assert 2 + 6 + 3 == 11 and 5 * 5 == 25
+assert '13' in solution(reply) and '13' not in visible(reply)
+
+@@@@ wrong-free-sets-pointer-to-null
+situation: after-wrong
+topic: Dangling pointers and use-after-free
+options: {"strategy":"dialogue"}
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["becomes NULL","copy|by value"],"must":["dangling","undefined behaviour"],"askTypes":["short","explain"],"askMustNot":["every (other )?(copy|pointer)"]}
+@@ tutor
+A cache module keeps a global `struct entry *last` that points at the most recently used entry. A separate function, `evict(struct entry *e)`, removes an entry and ends with `free(e)`. A colleague proposes guarding every use of the global like this: `if (last != NULL) use(last);`.
+
+<ask type="explain">Does that guard stop the program using an entry after it has been freed? Say what `last` holds after `evict` has freed the entry it points at.</ask>
+@@ learner answer sure
+Yes the guard works. free(e) releases the memory and the pointer becomes NULL afterwards, so last != NULL is false and use() gets skipped. That's the whole point of checking for NULL.
+@@ reply
+<grade verdict="wrong" score="0.1">"the pointer becomes NULL afterwards" is the step that fails. `free(e)` receives a copy of the pointer's value, so it cannot change `e`, and it has no knowledge of `last`, a different variable that happens to hold the same address.</grade>
+
+After `evict`, `last` still holds the old address, bit for bit. It is now a dangling pointer: non-null, so the guard passes, and `use(last)` reads memory that has been returned to the allocator. That is undefined behaviour. It may appear to work, or it may read whatever a later `malloc` put in that block.
+
+<card>What does `free(p)` do to the pointer `p` and to other pointers holding the same address? :: Nothing. It releases the block; every pointer to it keeps the old address and becomes dangling. A NULL check cannot detect that.</card>
+
+<note>`free(p)` releases the block and leaves `p`, and every other copy of that address, unchanged: they are dangling pointers. A dangling pointer is not NULL, so `if (p != NULL)` does not detect it; using it is undefined behaviour.</note>
+
+<ask type="short">Suppose `evict` is changed to end with `free(e); e = NULL;`. Which pointer does that assignment change, and does the guard on `last` work now?</ask>
+@@ verify
+# free() cannot change the pointer it is given, nor another variable holding the same address
+src = r'''
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+struct entry { int key; };
+static struct entry *last;
+
+static void evict(struct entry *e) { free(e); e = NULL; (void)e; }
+
+int main(void) {
+    struct entry *e = malloc(sizeof *e);
+    if (!e) return 1;
+    last = e;
+    unsigned char before[sizeof last];
+    memcpy(before, &last, sizeof last);
+    evict(e);
+    /* compare the bytes of the pointer object, without using its value */
+    printf("%d\n", memcmp(before, &last, sizeof last) == 0);
+    unsigned char zero[sizeof last] = {0};
+    printf("%d\n", memcmp(zero, &last, sizeof last) == 0);
+    return 0;
+}
+'''
+assert run_c(src).split() == ['1', '0']
+
+@@@@ wrong-lambda-capture-by-value-sees-later-change
+situation: after-wrong
+topic: Lambda captures in C++
+voice: terse
+level: medium
+expect: {"verdict":"wrong","names":["rate is 20|copied|copy","\\b50\\b"],"must":["\\[&rate\\]","\\b50\\b"],"setsProblem":true,"askTypes":["problem","predict"],"askMustNot":["10 70","\\b70\\b"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+```cpp
+#include <iostream>
+
+int main() {
+    int rate = 10;
+    auto fee = [rate](int amount) { return amount * rate / 100; };
+    rate = 20;
+    std::cout << fee(500) << "\n";
+    return 0;
+}
+```
+
+<solution>[rate] captures by value: the lambda object gets its own copy of rate, 10, when the lambda is created. The later assignment changes only the variable in main. fee(500) = 500 * 10 / 100 = 50.</solution>
+<check lang="python">
+assert 500 * 10 // 100 == 50
+</check>
+
+<ask type="problem">What does this print, and why?</ask>
+@@ learner answer sure
+100. rate is 20 by the time fee is called so 500*20/100 = 100
+@@ reply
+<grade verdict="wrong" score="0.2">"rate is 20 by the time fee is called" is true of the variable in `main`, but the lambda does not read that variable. `[rate]` copied its value, 10, into the lambda object on the line where the lambda was created, so the call computes 500 * 10 / 100 and prints 50.</grade>
+
+The capture list decides this. `[rate]` stores a copy, fixed at creation. `[&rate]` stores a reference to the variable itself, and with that the same program prints 100, because the call reads `rate` when it runs.
+
+<card>When does a lambda with capture `[x]` read the value of x? :: Once, when the lambda is created: it keeps its own copy. `[&x]` keeps a reference and reads x each time the lambda is called.</card>
+
+<note>`[x]` captures by value: a copy made when the lambda is created. `[&x]` captures by reference: the lambda uses the original variable when it is called, so that variable must still be alive then.</note>
+
+**Problem 2 · same idea**
+
+```cpp
+#include <iostream>
+
+int main() {
+    int n = 1;
+    auto by_value = [n] { return n * 10; };
+    auto by_ref = [&n] { return n * 10; };
+    n = 7;
+    std::cout << by_value() << " " << by_ref() << "\n";
+    return 0;
+}
+```
+
+<solution>by_value holds a copy of n made when n was 1: it returns 10. by_ref refers to n itself, which is 7 at the call: it returns 70. Output: 10 70</solution>
+<check lang="python">
+assert (1 * 10, 7 * 10) == (10, 70)
+</check>
+
+<ask type="problem">What does this print? Give the reason for each of the two numbers.</ask>
+@@ verify
+t = block(tutor[0], 'cpp')
+assert run_cpp(t).strip() == '50'
+assert run_cpp(t.replace('[rate]', '[&rate]')).strip() == '100'
+assert 500 * 20 // 100 == 100          # the learner's figure follows from reading rate at the call
+assert run_cpp(block(reply, 'cpp')).strip() == '10 70'
+assert 'Output: 10 70' in solution(reply)
+
+@@@@ wrong-quiz-map-insertion-order
+situation: after-wrong
+topic: std::map versus std::unordered_map
+mode: quiz
+options: {"length":6}
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["insert","sorted|order(ed)? by key|key order"],"must":["apple fig pear","Question 3 of 6"],"askTypes":["choice"]}
+@@ tutor
+**Question 2 of 6**
+
+```cpp
+std::map<std::string, int> stock;
+stock["pear"] = 4;
+stock["apple"] = 9;
+stock["fig"] = 2;
+for (const auto &[name, count] : stock) std::cout << name << " ";
+```
+
+<ask type="predict">In what order are the three names printed, and what decides that order?</ask>
+@@ learner answer sure
+pear apple fig, obviously. A map keeps the pairs in the order you insert them, like a vector of pairs but with lookup by key.
+@@ reply
+<grade verdict="wrong" score="0.1">"A map keeps the pairs in the order you insert them" is the mistake: `std::map` stores its elements sorted by key, here by `<` on `std::string`, and does not record the order of insertion. The loop prints apple fig pear.</grade>
+
+That ordering is what makes a `std::map` different from a hash table: it is a balanced search tree (a red-black tree in the common implementations), so lookup, insertion and removal take $O(\log n)$ and iteration always visits the keys in ascending order.
+
+<card>In what order does iterating a std::map visit its elements? :: In ascending order of key (by the comparison, `<` by default), whatever order they were inserted in.</card>
+
+**Question 3 of 6**
+
+The same three insertions are made into a `std::unordered_map<std::string, int>`, and the same loop runs.
+
+<ask type="choice" options="No order is guaranteed: it depends on the hash function and the bucket count|Insertion order is guaranteed: pear apple fig|Ascending key order is guaranteed: apple fig pear|Ascending value order is guaranteed: fig pear apple">What does the C++ standard guarantee about the order in which the loop visits the names?</ask>
+@@ verify
+src = '#include <iostream>\n#include <map>\n#include <string>\nint main() {\n' + block(tutor[0], 'cpp') + '\nstd::cout << "\\n"; return 0; }\n'
+assert run_cpp(src).split() == ['apple', 'fig', 'pear']
+assert sorted(['pear', 'apple', 'fig']) == ['apple', 'fig', 'pear']
+assert sorted({'pear': 4, 'apple': 9, 'fig': 2}.items(), key=lambda kv: kv[1])[0][0] == 'fig'     # the value-order distractor is a real order
+# the unordered version compiles and visits all three, in some order
+out = run_cpp(src.replace('#include <map>', '#include <unordered_map>').replace('std::map', 'std::unordered_map'))
+assert sorted(out.split()) == ['apple', 'fig', 'pear']
+
+@@@@ idk-function-pointer-declaration
+situation: idk
+topic: Function pointers in C
+voice: plain
+level: medium
+expect: {"must":["address","type"],"askTypes":["choice","short"],"askMustNot":["\\(\\*op\\)"],"mustNot":["int \\(\\*op\\)\\(int, int\\)"]}
+@@ tutor
+```c
+int add(int a, int b) { return a + b; }
+int mul(int a, int b) { return a * b; }
+```
+
+<ask type="short">Write the declaration of a variable `op` that can hold the address of either of these functions, and show how you would call the function through it.</ask>
+@@ learner idk
+@@ reply
+Start one step earlier, with what a function is to the type system. A function has a type made of its return type and its parameter types: `add` has the type "function taking two `int`s and returning `int`". When a function's name is used without a call, it turns into the address of that function, a value that can be stored and passed around like any other pointer. Two functions can share one pointer variable only if their function types are identical, because the caller must know what arguments to pass and what comes back.
+
+<ask type="choice" options="int sub(int x, int y)|long sub(int x, int y)|int neg(int x)|int scale(int x, double k)">Which of these functions has the same function type as `add`, so that one pointer variable could hold the address of either?</ask>
+@@ verify
+# only the first option can share a pointer variable with add without a diagnostic
+decls = ['int sub(int x, int y) { return x - y; }', 'long sub(int x, int y) { return x - y; }', 'int sub(int x) { return -x; }', 'int sub(int x, double k) { return (int)(x * k); }']
+ok = []
+for dcl in decls:
+    src = block(tutor[0], 'c') + dcl + '\nint main(void) { int (*op)(int, int) = add; op = mul; op = sub; return op(1, 1) < 0; }\n'
+    out, err, cerr, code = run_c_full(src, 'c')
+    ok.append(code == 0 and not cerr.strip())
+assert ok == [True, False, False, False], ok
+
+@@@@ idk-virtual-destructor-static-type
+situation: idk
+topic: Virtual destructors in C++
+voice: plain
+level: hard
+expect: {"must":["static type"],"askTypes":["short","predict","choice"],"askMustNot":["undefined","leak","only ~Base"],"mustNot":["undefined behaviour","leak"]}
+@@ tutor
+```cpp
+struct Base {
+    ~Base() { std::puts("~Base"); }
+};
+struct Derived : Base {
+    std::string name = "log";
+    ~Derived() { std::puts("~Derived"); }
+};
+
+Base *p = new Derived;
+delete p;
+```
+
+<ask type="predict">What does `delete p` do here, and what is wrong with it?</ask>
+@@ learner idk
+@@ reply
+One smaller idea decides this. For a member function that is not declared `virtual`, the compiler chooses which function to call from the static type of the expression, meaning the type written in the code, and not from the object that is really there when the program runs. With `Base *p`, a call `p->f()` to a non-virtual `f` is compiled as a call to `Base::f`, even when `p` points at a `Derived`. Only a function declared `virtual` is looked up from the object's real type at run time.
+
+<ask type="short">A destructor is a member function too, and `~Base` above is not declared `virtual`. Going by the static type of `p` alone, which class's destructor does the compiler select for `delete p`?</ask>
+@@ verify
+# the smaller idea, shown on an ordinary non-virtual member function (no delete through the base here)
+src = r'''
+#include <cstdio>
+struct Base { void who() { std::puts("Base"); } virtual void vwho() { std::puts("Base"); } virtual ~Base() = default; };
+struct Derived : Base { void who() { std::puts("Derived"); } void vwho() override { std::puts("Derived"); } };
+int main() { Derived d; Base *p = &d; p->who(); p->vwho(); return 0; }
+'''
+assert run_cpp(src).split() == ['Base', 'Derived']
+# the question's own snippet: with a non-virtual ~Base, this build runs only ~Base (typical; formally undefined)
+q = '#include <cstdio>\n#include <string>\n' + block(tutor[0], 'cpp').replace('Base *p = new Derived;\ndelete p;', 'int main() { Base *p = new Derived; delete p; return 0; }')
+assert 'int main()' in q
+out, err, cerr, code = run_c_full(q, 'cpp')
+assert code == 0 and out.split() == ['~Base'], (out, cerr)
+# with a virtual destructor both run, most derived first
+out = run_cpp(q.replace('~Base() {', 'virtual ~Base() {'))
+assert out.split() == ['~Derived', '~Base'], out
+
+@@@@ idk-snprintf-size-includes-terminator
+situation: idk
+topic: snprintf and buffer sizes in C
+voice: plain
+level: easy
+expect: {"must":["size - 1"],"askTypes":["short","predict"],"askMustNot":["\\bkel\\b","tempera\\b","\\b11\\b"],"mustNot":["tempera\\b","\\b11\\b"]}
+@@ tutor
+```c
+char buf[8];
+int n = snprintf(buf, sizeof buf, "%s", "temperature");
+```
+
+<ask type="short">What string does `buf` hold after this call, and what is the value of `n`?</ask>
+@@ learner idk
+@@ reply
+Take the buffer first and leave `n` for a moment. The second argument of `snprintf` is the whole size of the buffer in bytes, and `snprintf` treats it as a hard limit that includes the terminating zero byte. So it stores at most `size - 1` characters of the formatted text and then always writes the zero byte after them (when `size` is at least 1). Text that does not fit is dropped; nothing is ever written beyond the buffer.
+
+```c
+char small[4];
+snprintf(small, sizeof small, "%s", "kelvin");
+```
+
+<ask type="short">How many characters of "kelvin" does this call store in `small`, and what string does `small` hold afterwards?</ask>
+@@ verify
+src = '#include <stdio.h>\n#include <string.h>\nint main(void) {\n' + block(reply, 'c') + 'printf("%s %zu\\n", small, strlen(small));\n' + block(tutor[0], 'c') + 'printf("%s %d\\n", buf, n);\nreturn 0; }\n'
+out, err, cerr, code = run_c_full(src, 'c')
+assert code == 0 and out.split('\n')[:2] == ['kel 3', 'tempera 11'], (out, cerr)
+assert len('temperature') == 11 and 'temperature'[:8 - 1] == 'tempera' and 'kelvin'[:4 - 1] == 'kel'
+
+@@@@ show-me-recursion-frames-table
+situation: show-me
+topic: Recursion and the call stack
+voice: plain
+level: easy
+expect: {"visual":{"kind":"table"},"must":["digit_sum\\(47\\)","\\b13\\b"]}
+@@ tutor
+```c
+int digit_sum(int n) {
+    if (n == 0) return 0;
+    return n % 10 + digit_sum(n / 10);
+}
+```
+
+Each call gets its own stack frame with its own `n`. `digit_sum(472)` cannot finish until `digit_sum(47)` returns; that call waits for `digit_sum(4)`, which waits for `digit_sum(0)`. The last one hits the base case and returns 0 without calling anything. Then the frames finish in reverse order: 4 + 0 = 4, then 7 + 4 = 11, then 2 + 11 = 13. At the deepest point four frames are on the stack at once.
+
+<note>A recursive call pushes a new stack frame with its own copies of the parameters and locals. Frames are completed in the reverse of the order they were created: the base case returns first, the original call last.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| Frame | n | n % 10 | Waits for | Returns |
+|---|---|---|---|---|
+| 1 | 472 | 2 | digit_sum(47) | 2 + 11 = 13 |
+| 2 | 47 | 7 | digit_sum(4) | 7 + 4 = 11 |
+| 3 | 4 | 4 | digit_sum(0) | 4 + 0 = 4 |
+| 4 | 0 | base case | nothing | 0 |
+
+Read the Returns column from the bottom row upwards: each frame can only finish once the row below it has returned.
+@@ verify
+rows = table(reply)[1:]
+assert len(rows) == 4
+def digit_sum(n): return 0 if n == 0 else n % 10 + digit_sum(n // 10)
+n = 472
+for i, row in enumerate(rows):
+    assert row[0] == str(i + 1) and row[1] == str(n), row
+    if n == 0:
+        assert row[2:] == ['base case', 'nothing', '0'], row
+    else:
+        inner = digit_sum(n // 10)
+        assert row[2] == str(n % 10) and row[3] == f'digit_sum({n // 10})', row
+        assert row[4] == f'{n % 10} + {inner} = {digit_sum(n)}', row
+    n //= 10
+# the function as written in C gives the same total, and the explanation states the same steps
+src = '#include <stdio.h>\n' + block(tutor[0], 'c') + 'int main(void) { printf("%d\\n", digit_sum(472)); return 0; }\n'
+assert run_c(src).strip() == '13'
+for step in ('4 + 0 = 4', '7 + 4 = 11', '2 + 11 = 13', 'four frames'):
+    assert step in tutor[0]
+
+@@@@ show-me-build-pipeline-flowchart
+situation: show-me
+topic: The C preprocessor and separate compilation
+voice: plain
+level: medium
+expect: {"visual":{"kind":"mermaid","diagram":["flowchart"]},"must":["Linker","util\\.h"]}
+@@ tutor
+Building a C program from `main.c` and `util.c` takes three stages. The preprocessor handles every line that starts with `#`: it pastes the text of each included header into the file and expands macros, which gives one translation unit per `.c` file. The compiler turns each translation unit into an object file, `main.o` and `util.o`, on its own; a call to a function defined in the other file is left as an unresolved symbol. The linker joins the object files, matches every unresolved symbol to its one definition, and writes the executable. `util.h` is never compiled by itself: it exists only as text pasted into both translation units.
+
+<note>Preprocessor: one `.c` file plus the text of its headers becomes one translation unit. Compiler: each translation unit becomes one object file, separately. Linker: the object files are joined and each symbol is matched to its definition.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+flowchart LR
+    H["util.h"] --> P1["Preprocessor"]
+    M["main.c"] --> P1
+    H --> P2["Preprocessor"]
+    U["util.c"] --> P2
+    P1 --> T1["Translation unit 1"]
+    P2 --> T2["Translation unit 2"]
+    T1 --> C1["Compiler"]
+    T2 --> C2["Compiler"]
+    C1 --> O1["main.o"]
+    C2 --> O2["util.o"]
+    O1 --> L["Linker"]
+    O2 --> L
+    L --> X["Executable"]
+```
+
+Follow `util.h`: its text enters both preprocessor runs, and the two paths then stay separate until the linker.
+@@ verify
+import re
+body = block(reply, 'mermaid')
+labels = set(re.findall(r'\["([^"]+)"\]', body))
+assert len(labels) <= 14 and len(set(re.findall(r'\b([A-Z]\d?)\[', body))) == 13
+said = tutor[0].lower()
+for l in labels:
+    key = re.sub(r' \d$', '', l).lower()
+    assert key in said, l
+# the pipeline is real: two translation units compiled separately, then linked
+import subprocess, tempfile, os
+with tempfile.TemporaryDirectory() as d:
+    w = lambda n, s: open(os.path.join(d, n), 'w').write(s)
+    w('util.h', '#ifndef UTIL_H\n#define UTIL_H\nint twice(int x);\n#endif\n')
+    w('util.c', '#include "util.h"\nint twice(int x) { return 2 * x; }\n')
+    w('main.c', '#include <stdio.h>\n#include "util.h"\nint main(void) { printf("%d\\n", twice(21)); return 0; }\n')
+    for f in ('main', 'util'):
+        subprocess.run(['/usr/bin/clang', '-std=c17', '-c', f + '.c', '-o', f + '.o'], cwd=d, check=True)
+    nm = subprocess.run(['nm', 'main.o'], cwd=d, capture_output=True, text=True).stdout
+    assert re.search(r'\bU _twice\b', nm), nm                      # unresolved in main.o
+    subprocess.run(['/usr/bin/clang', 'main.o', 'util.o', '-o', 'prog'], cwd=d, check=True)
+    assert subprocess.run([os.path.join(d, 'prog')], capture_output=True, text=True).stdout.strip() == '42'
+
+@@@@ show-me-unique-ptr-states
+situation: show-me
+topic: std::unique_ptr ownership
+voice: plain
+level: medium
+expect: {"visual":{"kind":"mermaid","diagram":["stateDiagram"]},"must":["Owning","Empty"]}
+@@ tutor
+A `std::unique_ptr<T>` is always in one of two states: it owns an object, or it is empty and holds `nullptr`. `std::make_unique<T>()` gives you one that owns a new object; a default-constructed one is empty. Moving from an owner with `std::move` transfers the object to the destination and leaves the source empty. `release()` also leaves it empty, handing you the raw pointer without deleting anything. `reset()` deletes the object and leaves it empty. When an owning `unique_ptr` is destroyed it deletes its object; when an empty one is destroyed nothing happens. No operation produces two `unique_ptr`s that own the same object, which is why it cannot be copied.
+
+<note>`std::unique_ptr<T>` is either owning or empty. Moving from it, `release()` and `reset()` all leave it empty; only `reset()` and the destructor delete the object. It can be moved but not copied, so an object has at most one owner.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+stateDiagram-v2
+    [*] --> Owning: make_unique
+    [*] --> Empty: default-constructed
+    Owning --> Empty: moved from
+    Owning --> Empty: release, nothing deleted
+    Owning --> Empty: reset, object deleted
+    Empty --> Owning: move-assigned from an owner
+    Owning --> [*]: destroyed, object deleted
+    Empty --> [*]: destroyed, nothing happens
+```
+
+Three arrows leave Owning for Empty, and only `reset` and destruction delete the object; no arrow ever creates a second owner.
+@@ verify
+src = r'''
+#include <cstdio>
+#include <memory>
+#include <utility>
+static int deleted = 0;
+struct T { ~T() { deleted++; } };
+int main() {
+    std::unique_ptr<T> d;                         // default-constructed: empty
+    std::printf("%d", d == nullptr);
+    auto a = std::make_unique<T>();               // owning
+    std::printf("%d", a != nullptr);
+    std::unique_ptr<T> b = std::move(a);          // moved from: a empty, b owning, nothing deleted
+    std::printf("%d%d%d", a == nullptr, b != nullptr, deleted);
+    T *raw = b.release();                         // release: empty, nothing deleted
+    std::printf("%d%d", b == nullptr, deleted);
+    d = std::unique_ptr<T>(raw);                  // empty -> owning by move assignment
+    std::printf("%d", d != nullptr);
+    d.reset();                                    // reset: object deleted, empty
+    std::printf("%d%d", d == nullptr, deleted);
+    { auto e = std::make_unique<T>(); }           // owning destroyed: object deleted
+    std::printf("%d", deleted);
+    { std::unique_ptr<T> e; }                     // empty destroyed: nothing
+    std::printf("%d\n", deleted);
+    return 0;
+}
+'''
+assert run_cpp(src).strip() == '1' + '1' + '110' + '10' + '1' + '11' + '2' + '2'
+# copying is refused by the compiler
+out, err, cerr, code = run_c_full('#include <memory>\nint main() { auto a = std::make_unique<int>(1); auto b = a; return 0; }\n', 'cpp')
+assert code != 0 and 'deleted' in cerr
+body = block(reply, 'mermaid')
+assert body.count('-->') == 8 and body.count('Owning --> Empty') == 3
+
+@@@@ show-me-qsort-callback-sequence
+situation: show-me
+topic: Callbacks with qsort in C
+voice: confused
+level: medium
+expect: {"visual":{"kind":"mermaid","diagram":["sequenceDiagram"]},"must":["by_value","qsort"],"ends":"continue"}
+@@ tutor
+`qsort` cannot know how to order your elements, so you pass it a pointer to a comparison function and it calls that function whenever it needs to order two of them. The comparator receives pointers to two elements and returns a negative value, zero or a positive value for less, equal or greater.
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+
+static int by_value(const void *a, const void *b) {
+    int x = *(const int *)a, y = *(const int *)b;
+    return (x > y) - (x < y);
+}
+
+int main(void) {
+    int v[] = {40, 10, 30};
+    qsort(v, 3, sizeof v[0], by_value);
+    printf("%d %d %d\n", v[0], v[1], v[2]);
+    return 0;
+}
+```
+
+```
+10 30 40
+```
+
+<note>A callback is a function you pass by address for other code to call. `qsort(base, count, size, cmp)` calls `cmp` with pointers to two elements; `cmp` returns negative, zero or positive.</note>
+
+<continue/>
+@@ learner question
+could you show me who calls who here as a diagram? I can't see where by_value actually gets run, main never calls it
+@@ reply
+```mermaid
+sequenceDiagram
+    participant M as main
+    participant Q as qsort
+    participant C as by_value
+    M->>Q: v, 3, sizeof v[0], by_value
+    loop each comparison qsort needs
+        Q->>C: pointers to two elements
+        C-->>Q: negative, zero or positive
+    end
+    Q-->>M: returns, v is in order
+```
+
+`main` only hands the address of `by_value` to `qsort`. Every call to it comes from inside `qsort`, once per comparison; how many comparisons there are, and on which pairs, is up to the library's sorting algorithm.
+
+<continue/>
+@@ verify
+assert run_c(block(tutor[0], 'c')).strip() == '10 30 40'
+# by_value is called only from inside qsort: count the calls and check main makes none directly
+src = block(tutor[0], 'c').replace('static int by_value(const void *a, const void *b) {', 'static int calls;\nstatic int by_value(const void *a, const void *b) {\n    calls++;').replace('return 0;\n}', 'printf("%d\\n", calls > 0);\n    return 0;\n}')
+assert 'calls++' in src
+assert run_c(src).split('\n')[1] == '1'
+main_body = block(tutor[0], 'c').split('int main(void)')[1]
+assert 'by_value(' not in main_body and 'by_value)' in main_body
+body = block(reply, 'mermaid')
+assert 'v, 3, sizeof v[0], by_value' in body

@@ -1,0 +1,365 @@
+@@@@ open-linearity-of-expectation
+situation: open
+topic: Linearity of expectation
+voice: plain
+level: medium
+expect: {"must":["expected (value|sum)"],"askMustNot":["still 7","stays 7","unchanged","does not (need|depend)"]}
+@@ reply
+**Why this matters**
+
+Linearity of expectation is the rule for the expected value of a sum of random quantities. It turns counting questions that look hard into short sums: the expected number of collisions in a hash table, of retries across a batch of requests, of comparisons made by randomised quicksort, of distinct users in a sample. It is the main tool in the analysis of randomised algorithms and load balancing, and indicator variables and the bias of an estimator in ML both build on it.
+
+<ask type="predict">Two fair dice are rolled independently, and the expected sum is 7. Now the second die is rigged so that it always shows the same number as the first. What is the expected sum now? Say how you got it.</ask>
+@@ verify
+from fractions import Fraction as F
+from itertools import product
+# independent dice: expected sum 7, as the question states
+assert sum(F(a + b, 36) for a, b in product(range(1, 7), repeat=2)) == 7
+# the rigged pair (second copies the first): the answer withheld is also 7
+assert sum(F(2 * a, 6) for a in range(1, 7)) == 7
+assert 'expected sum is 7' in reply
+
+@@@@ open-quiz-binomial-expression
+situation: open
+topic: The binomial distribution
+mode: quiz
+options: {"length":6}
+voice: plain
+level: easy
+expect: {"askTypes":["choice"],"must":["Question 1 of 6"],"askMustNot":["0\\.1488","0\\.149"]}
+@@ reply
+**Question 1 of 6**
+
+<ask type="choice" options="C(8,2) × 0.1^2 × 0.9^6|0.1^2 × 0.9^6|C(8,2) × 0.1^2|8 × 0.1^2 × 0.9^6">A service sends 8 requests to a backend. Each request fails with probability 0.1, independently of the others. Which expression gives the probability that exactly 2 of the 8 requests fail? Add a line on what each factor counts.</ask>
+@@ verify
+import re
+from math import comb
+opts = re.search(r'options="([^"]*)"', reply).group(1).split('|')
+assert len(opts) == 4
+val = lambda s: eval(s.replace('C(8,2)', 'comb(8,2)').replace('×', '*').replace('^', '**'))
+vals = [val(o) for o in opts]
+exact = comb(8, 2) * 0.1**2 * 0.9**6
+# the first option is the binomial probability; the others are different numbers
+assert abs(vals[0] - exact) < 1e-12 and round(exact, 4) == 0.1488
+assert all(abs(v - exact) > 1e-3 for v in vals[1:])
+# brute force over all 2^8 outcomes
+from itertools import product
+brute = sum(0.1**sum(o) * 0.9**(8 - sum(o)) for o in product([0, 1], repeat=8) if sum(o) == 2)
+assert abs(brute - exact) < 1e-12
+
+@@@@ open-refresh-z-score-tail
+situation: open
+topic: The normal distribution and z-scores
+options: {"refresh":true}
+voice: plain
+level: easy
+expect: {"setsProblem":true,"askTypes":["problem"],"must":["0\\.9772"],"askMustNot":["0\\.0228","2\\.28"],"mustNot":["Why this matters"]}
+@@ reply
+**Problem 1**
+
+The response time of a service is normally distributed with mean 120 ms and standard deviation 15 ms. What fraction of requests take longer than 150 ms? Use whichever of these you need: $\Phi(1) \approx 0.8413$, $\Phi(1.5) \approx 0.9332$, $\Phi(2) \approx 0.9772$.
+
+<solution>z = (150 − 120) / 15 = 2. P(X > 150) = 1 − Φ(2) = 1 − 0.9772 = 0.0228, about 2.3% of requests.</solution>
+<check lang="python">
+from statistics import NormalDist
+z = (150 - 120) / 15
+assert z == 2
+tail = 1 - NormalDist(120, 15).cdf(150)
+assert round(tail, 4) == 0.0228
+</check>
+
+<ask type="problem">The z-score and the fraction, with your working.</ask>
+@@ verify
+from statistics import NormalDist
+N = NormalDist()
+# the three table values given to the learner
+for z, shown in [(1, '0.8413'), (1.5, '0.9332'), (2, '0.9772')]:
+    assert f'{N.cdf(z):.4f}' == shown and shown in visible(reply)
+assert f'{1 - N.cdf(2):.4f}' == '0.0228' and '0.0228' in solution(reply) and '0.0228' not in visible(reply)
+assert round(1 - 0.9772, 4) == 0.0228
+
+@@@@ open-prior-markov-stationary
+situation: open-prior
+topic: Markov chains and stationary distributions
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Markov chains and stationary distributions","daysAgo":4,"finished":false,"plan":["Transition matrices","Stepping a distribution forward","Stationary distributions"],"right":4,"partly":1,"wrong":1,"missed":["A chain has P(A to B) = 0.2 and P(B to A) = 0.6. What is its stationary distribution?"]}]}
+expect: {"must":["long run|stationary"],"askMustNot":["3/4","0\\.75","75%","three quarters"]}
+@@ reply
+**Why this matters**
+
+A Markov chain models a system whose next state depends only on its current one, and its stationary distribution says where the system spends its time in the long run. PageRank is the stationary distribution of a random surfer, many queueing models of servers are Markov chains, and MCMC samplers in ML are built to have a chosen stationary distribution. You have transition matrices and stepping a distribution forward from last time; finding the stationary distribution was the one gap, so that comes first.
+
+<ask type="short">A two-state chain leaves state A with probability 0.1 at each step and leaves state B with probability 0.3. In the long run, what fraction of steps does it spend in A? Give the equation you solve.</ask>
+@@ verify
+from fractions import Fraction as F
+a, b = F(1, 10), F(3, 10)          # leave A, leave B
+pi = (b / (a + b), a / (a + b))    # from the balance equation pi_A * a = pi_B * b
+assert pi == (F(3, 4), F(1, 4))
+# it is stationary: pi P = pi
+P = [[1 - a, a], [b, 1 - b]]
+assert tuple(pi[0] * P[0][j] + pi[1] * P[1][j] for j in range(2)) == pi
+# and stepping any start forward converges to it
+d = (F(0), F(1))
+for _ in range(200):
+    d = tuple(d[0] * P[0][j] + d[1] * P[1][j] for j in range(2))
+assert abs(float(d[0]) - 0.75) < 1e-12
+# new numbers, not the stored question's
+assert '0.2' not in reply and '0.6' not in reply
+
+@@@@ open-prior-confidence-interval-from-standard-error
+situation: open-prior
+topic: Confidence intervals for a sample proportion
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Standard error of a sample proportion","daysAgo":6,"finished":true,"plan":["Spread of a sample proportion","The formula sqrt(p(1-p)/n)","How the sample size changes it"],"right":3,"partly":1,"wrong":1,"missed":["A poll of 400 people finds 50% in favour. To halve the standard error, how many people must the poll ask?"]}]}
+expect: {"must":["standard error"],"askMustNot":["10,?000","four times","quadrupl","4 times"]}
+@@ reply
+**Why this matters**
+
+A confidence interval turns one sample proportion into a range that says how far the true proportion could plausibly be from it. It is what the margin of error on a poll means, what an A/B test reports for a conversion rate, and how an error rate measured on a sample of requests should be quoted. The interval is the estimate plus or minus a multiple of its standard error, so this lesson rests directly on the standard error of a sample proportion from last week, and on how it shrinks as the sample grows, which was the point that slipped then.
+
+<ask type="short">A survey of 2,500 users finds a proportion close to 0.5, with standard error 0.01. How many users would the survey need for a standard error of 0.005? Say how the standard error depends on the sample size.</ask>
+@@ verify
+from math import sqrt
+se = lambda p, n: sqrt(p * (1 - p) / n)
+assert abs(se(0.5, 2500) - 0.01) < 1e-15
+assert abs(se(0.5, 10000) - 0.005) < 1e-15
+# halving the standard error needs four times the sample, and 10,000 is the smallest such n
+assert se(0.5, 9999) > 0.005
+# the stored question's own answer, for the record: 400 -> 1600
+assert abs(se(0.5, 1600) - se(0.5, 400) / 2) < 1e-15
+
+@@@@ open-recall-poisson-rate-window
+situation: open-recall
+topic: The Poisson distribution
+voice: plain
+level: easy
+before: {"recall":[{"prompt":"Calls arrive at 6 per hour on average. What is the Poisson rate for a 10-minute window, and the probability of no calls in it?","topic":"The Poisson distribution","reviews":1,"lapses":0}]}
+expect: {"askMustNot":["0\\.368","e\\^\\{?-1","\\b1 per"]}
+@@ reply
+<ask type="short">Calls arrive at 6 per hour on average. What is the Poisson rate for a 10-minute window, and the probability of no calls in it?</ask>
+@@ verify
+from math import exp
+lam = 6 * 10 / 60
+assert lam == 1 and round(exp(-lam), 3) == 0.368
+assert len(ex['before']['recall'][0]['prompt']) <= 150
+
+@@@@ open-recall-hypergeometric-chips
+situation: open-recall
+topic: The hypergeometric distribution
+voice: plain
+level: medium
+before: {"recall":[{"prompt":"A box has 10 chips, 4 of them faulty. You draw 3 without replacement. What is P(exactly 1 faulty)?","topic":"The hypergeometric distribution","reviews":2,"lapses":1}]}
+expect: {"askMustNot":["1/2","0\\.5","60/120","half"]}
+@@ reply
+<ask type="short">A box has 10 chips, 4 of them faulty. You draw 3 without replacement. What is P(exactly 1 faulty)?</ask>
+@@ verify
+from fractions import Fraction as F
+from itertools import combinations
+from math import comb
+p = F(comb(4, 1) * comb(6, 2), comb(10, 3))
+assert p == F(1, 2)
+chips = [1] * 4 + [0] * 6
+draws = list(combinations(range(10), 3))
+assert F(sum(1 for d in draws if sum(chips[i] for i in d) == 1), len(draws)) == p
+
+@@@@ correct-recall-correlation-then-open
+situation: after-correct
+topic: Covariance and correlation
+voice: terse
+level: medium
+before: {"recall":[{"prompt":"X and Y have Cov(X, Y) = 6, SD(X) = 4 and SD(Y) = 3. What is their correlation?","topic":"Covariance and correlation","reviews":1,"lapses":1}]}
+expect: {"verdict":"correct","heading":"Why this matters","askTypes":["short","predict","explain","choice"],"must":["standard deviations"],"askMustNot":["= 0\\b","\\bzero\\b","uncorrelated","not independent"],"forbid":["plan","solution"]}
+@@ tutor
+<ask type="short">X and Y have Cov(X, Y) = 6, SD(X) = 4 and SD(Y) = 3. What is their correlation?</ask>
+@@ learner answer sure
+6/(4*3) = 0.5
+@@ reply
+<grade verdict="correct" score="1">"6/(4*3) = 0.5" is right: correlation is the covariance divided by the product of the two standard deviations, which removes the units and leaves a number between −1 and 1.</grade>
+
+**Why this matters**
+
+Covariance and correlation measure how two quantities move together. Portfolio risk in finance is built from the covariances between assets, PCA in ML starts from a covariance matrix, and a correlation between two metrics is often the first clue when a system misbehaves. They are also easy to over-read, so this lesson is as much about what a correlation does not tell you as about how to compute one.
+
+<ask type="short">$X$ takes the values −1, 0 and 1 with probability $\frac13$ each, and $Y = X^2$. Work out $\operatorname{Cov}(X, Y)$, and say whether $X$ and $Y$ are independent.</ask>
+@@ verify
+from fractions import Fraction as F
+assert F(6, 4 * 3) == F(1, 2)
+# the probe's withheld answer: covariance 0, yet dependent
+xs = [-1, 0, 1]
+E = lambda f: sum(F(f(x), 3) for x in xs)
+cov = E(lambda x: x * x * x) - E(lambda x: x) * E(lambda x: x * x)
+assert cov == 0
+# dependent: P(X = 0, Y = 0) = 1/3 but P(X = 0) P(Y = 0) = 1/9
+assert F(1, 3) != F(1, 3) * F(1, 3)
+assert tutor[0].count('<ask') == 1 and ex['before']['recall'][0]['prompt'] in tutor[0]
+
+@@@@ correct-probe-inclusion-exclusion-plan
+situation: after-correct
+topic: Inclusion-exclusion for probabilities
+voice: wordy
+level: medium
+expect: {"verdict":"correct","need":["plan","note"],"setsProblem":true,"askTypes":["problem"],"must":["11/15","22"],"askMustNot":["9/10","\\b36\\b","0\\.9"]}
+@@ tutor
+**Why this matters**
+
+Inclusion-exclusion gives the probability that at least one of several overlapping events happens. It is how you count the users matched by any of several filters, work out the chance that some replica in a group fails, and reason about alerts that can fire together. The union bound used all through the analysis of algorithms is its first term, and counting derangements and reliability calculations come next.
+
+<ask type="short">One card is drawn from a standard 52-card deck. What is the probability that it is a heart or a king? Show the terms you add and subtract.</ask>
+@@ learner answer sure
+There are 13 hearts and 4 kings so I start with 13/52 + 4/52, but the king of hearts is in both groups so I've counted it twice and need to take one off. That gives 17/52 - 1/52 = 16/52 = 4/13.
+@@ reply
+<grade verdict="correct" score="1">"the king of hearts is in both groups so I've counted it twice" is the whole idea: $P(A \cup B) = P(A) + P(B) - P(A \cap B)$, which gives 16/52 = 4/13.</grade>
+
+<plan>
+- Three events: singles, pairs, the triple
+- "None of them" by the complement
+- Bounds when the overlaps are unknown
+</plan>
+
+With three events, subtracting the three pairwise overlaps goes too far: an outcome in all three is added 3 times and subtracted 3 times, so it has to be added back once.
+
+Worked example: pick a whole number from 1 to 30 uniformly. The multiples of 2, of 3 and of 5 number 15, 10 and 6. The multiples of 6, of 10 and of 15 number 5, 3 and 2, and one number is a multiple of 30. So 15 + 10 + 6 − 5 − 3 − 2 + 1 = 22 numbers are a multiple of 2, 3 or 5, a probability of 22/30 = 11/15.
+
+<note>$P(A \cup B \cup C) = P(A) + P(B) + P(C) - P(A \cap B) - P(A \cap C) - P(B \cap C) + P(A \cap B \cap C)$: add the singles, subtract the pairs, add the triple.</note>
+
+**Problem 1 · warm-up**
+
+Of 40 engineers, 22 know Python, 18 know Go and 15 know Rust. 9 know Python and Go, 7 know Python and Rust, 6 know Go and Rust, and 3 know all three. One engineer is picked at random. What is the probability that they know at least one of the three languages?
+
+<solution>22 + 18 + 15 − 9 − 7 − 6 + 3 = 36 engineers know at least one, so the probability is 36/40 = 9/10.</solution>
+<check lang="python">
+from fractions import Fraction
+n = 22 + 18 + 15 - 9 - 7 - 6 + 3
+assert n == 36 and Fraction(n, 40) == Fraction(9, 10)
+</check>
+
+<ask type="problem">The probability, with the seven terms you combined.</ask>
+@@ verify
+from fractions import Fraction as F
+# the probe: hearts or kings, by listing the deck
+deck = [(r, s) for r in range(13) for s in 'SHDC']
+assert F(sum(1 for r, s in deck if s == 'H' or r == 12), 52) == F(16, 52) == F(4, 13)
+assert F(13, 52) + F(4, 52) == F(17, 52)
+# the worked example, by brute force and term by term
+ns = range(1, 31)
+cnt = lambda d: sum(1 for n in ns if n % d == 0)
+assert [cnt(d) for d in (2, 3, 5, 6, 10, 15, 30)] == [15, 10, 6, 5, 3, 2, 1]
+assert sum(1 for n in ns if n % 2 == 0 or n % 3 == 0 or n % 5 == 0) == 22 == 15 + 10 + 6 - 5 - 3 - 2 + 1
+assert F(22, 30) == F(11, 15)
+# Problem 1 is a consistent set of counts: every region of the Venn diagram is non-negative
+allthree = 3
+pg, pr, gr = 9 - 3, 7 - 3, 6 - 3
+p, g, r = 22 - pg - pr - 3, 18 - pg - gr - 3, 15 - pr - gr - 3
+regions = [p, g, r, pg, pr, gr, allthree]
+assert all(x >= 0 for x in regions) and sum(regions) == 36 <= 40
+assert '9/10' in solution(reply) and '9/10' not in visible(reply)
+
+@@@@ correct-binomial-next-harder
+situation: after-correct
+topic: The binomial distribution
+options: {"strategy":"maths"}
+voice: plain
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"must":["216/625"],"askMustNot":["1/9","9/81"]}
+@@ tutor
+The binomial distribution counts the successes in $n$ independent trials that each succeed with probability $p$: $P(X = k) = \binom{n}{k} p^k (1-p)^{n-k}$. The coefficient counts which $k$ of the $n$ trials are the successes; the powers give the probability of any one such arrangement.
+
+<note>Binomial: $P(X = k) = \binom{n}{k} p^k (1-p)^{n-k}$ for $n$ independent trials with success probability $p$. $\binom{n}{k}$ is the number of arrangements, $p^k (1-p)^{n-k}$ the probability of each.</note>
+
+Each of 5 independent requests fails with probability $\frac25$. Find the probability that exactly 2 of them fail.
+
+<solution>C(5,2) × (2/5)^2 × (3/5)^3 = 10 × 4/25 × 27/125 = 216/625 = 0.3456.</solution>
+<check lang="python">
+from fractions import Fraction
+from math import comb
+p = comb(5, 2) * Fraction(2, 5)**2 * Fraction(3, 5)**3
+assert p == Fraction(216, 625) and float(p) == 0.3456
+</check>
+
+<ask type="problem">The probability as a fraction, with your working.</ask>
+@@ learner answer sure
+C(5,2) = 10 ways to choose which two fail. Each way has probability (2/5)^2 (3/5)^3 = 4/25 × 27/125 = 108/3125. So 10 × 108/3125 = 216/625, about 0.346.
+@@ reply
+<grade verdict="correct" score="1">"10 × 108/3125 = 216/625" is right, and you gave the reason for each factor: 10 arrangements, each with probability $(2/5)^2 (3/5)^3$.</grade>
+
+The next one needs more than one value of $k$.
+
+A test has 4 multiple-choice questions, each with 3 options, and a candidate guesses every answer at random. The pass mark is 3 correct. Find the probability that the candidate passes.
+
+<solution>X ~ Binomial(4, 1/3). P(X = 3) = 4 × (1/3)^3 × (2/3) = 8/81. P(X = 4) = (1/3)^4 = 1/81. P(pass) = 8/81 + 1/81 = 9/81 = 1/9.</solution>
+<check lang="python">
+from fractions import Fraction
+from math import comb
+p = Fraction(1, 3)
+total = sum(comb(4, k) * p**k * (1 - p)**(4 - k) for k in (3, 4))
+assert total == Fraction(1, 9)
+</check>
+
+<ask type="problem">The probability as a fraction, with each term shown.</ask>
+@@ verify
+from fractions import Fraction as F
+from itertools import product
+from math import comb
+# the learner's steps
+assert comb(5, 2) == 10 and F(4, 25) * F(27, 125) == F(108, 3125) and 10 * F(108, 3125) == F(216, 625)
+assert round(216 / 625, 3) == 0.346
+# brute force over the 2^5 outcomes
+p = F(2, 5)
+assert sum(p**sum(o) * (1 - p)**(5 - sum(o)) for o in product([0, 1], repeat=5) if sum(o) == 2) == F(216, 625)
+# the new problem, by enumerating all 3^4 ways to guess (option 0 is the right one)
+guesses = list(product(range(3), repeat=4))
+assert F(sum(1 for g in guesses if g.count(0) >= 3), len(guesses)) == F(1, 9)
+assert F(8, 81) + F(1, 81) == F(1, 9)
+assert '1/9' in solution(reply) and '1/9' not in visible(reply)
+
+@@@@ correct-unsure-quiz-total-probability
+situation: after-correct
+topic: The law of total probability
+mode: quiz
+voice: typos
+level: easy
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"must":["Question 4 of 8","0\\.032"],"askMustNot":["0\\.62","62%"]}
+@@ tutor
+**Question 3 of 8**
+
+A factory has two machines. Machine A makes 60% of the parts and 2% of its parts are defective. Machine B makes the other 40% and 5% of its parts are defective. A part is picked at random from the whole output. Find the probability that it is defective.
+
+<solution>P(defective) = 0.6 × 0.02 + 0.4 × 0.05 = 0.012 + 0.020 = 0.032.</solution>
+<check lang="python">
+from fractions import Fraction
+p = Fraction(60, 100) * Fraction(2, 100) + Fraction(40, 100) * Fraction(5, 100)
+assert p == Fraction(32, 1000)
+</check>
+
+<ask type="problem">The probability, with the two terms you added.</ask>
+@@ learner answer unsure
+0.6*0.02 + 0.4*0.05 = 0.012 + 0.02 = 0.032 ? i think you wieght each machines rate by how much of the output it makes but not totaly sure
+@@ reply
+<grade verdict="correct" score="1">"0.6*0.02 + 0.4*0.05 = 0.012 + 0.02 = 0.032" is right, and so is the reason: each machine's defect rate is weighted by its share of the output, and the two cases cover every part exactly once.</grade>
+
+One more of the same kind, to make it firm.
+
+**Question 4 of 8**
+
+A support desk receives 70% of its tickets by email and 30% by chat. An email ticket is resolved the same day with probability 0.5, a chat ticket with probability 0.9. Find the probability that a ticket picked at random is resolved the same day.
+
+<solution>P(same day) = 0.7 × 0.5 + 0.3 × 0.9 = 0.35 + 0.27 = 0.62.</solution>
+<check lang="python">
+from fractions import Fraction
+p = Fraction(7, 10) * Fraction(1, 2) + Fraction(3, 10) * Fraction(9, 10)
+assert p == Fraction(62, 100)
+</check>
+
+<ask type="problem">The probability, with the two terms you added.</ask>
+@@ verify
+from fractions import Fraction as F
+# question 3 and the learner's arithmetic
+assert F(6, 10) * F(2, 100) == F(12, 1000) and F(4, 10) * F(5, 100) == F(2, 100)
+assert F(12, 1000) + F(2, 100) == F(32, 1000)
+# by counting 1000 parts: 600 from A with 12 defective, 400 from B with 20 defective
+assert 600 * 2 // 100 + 400 * 5 // 100 == 32
+# question 4, by counting 100 tickets
+assert F(70 * 5 // 10 + 30 * 9 // 10, 100) == F(62, 100) == F(7, 10) * F(1, 2) + F(3, 10) * F(9, 10)
+assert '0.62' in solution(reply) and '0.62' not in visible(reply)

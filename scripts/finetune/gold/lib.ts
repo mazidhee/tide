@@ -356,9 +356,9 @@ const proseOf = (text: string) =>
 const squash = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
 
 const SIM_PARTS: Record<string, RegExp> = {
-  'neural-net': /^(input|layer:\d|neuron:\d:\d|edge:\d:\d:\d|output|loss)$/,
+  'neural-net': /^(input|layer:\d|neuron:\d:\d|edge:\d:\d:\d|output|surface|loss)$/,
   attention: /^(token:\d+|row:\d+|scores|weights|mix)$/,
-  'gradient-descent': /^(point|gradient|path|minimum|surface|loss)$/,
+  'gradient-descent': /^(point|gradient|path|minimum)$/,
   softmax: /^(logit:\d|probabilities|temperature)$/
 }
 

@@ -1,0 +1,625 @@
+@@@@ mark-error-induction-starts-from-conclusion
+situation: mark-error
+topic: Proof by induction
+voice: wordy
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["P\\(k\\+1\\)","implies P\\(k\\)|P\\(k\\+1\\) (implies|gives|to) P\\(k\\)|wrong direction|converse","\\\\frac\\{k\\(k\\+1\\)\\}\\{2\\} \\+ \\(k\\+1\\)"],"must":["\\\\frac\\{\\(k\\+1\\)\\(k\\+2\\)\\}\\{2\\}"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+**Problem 2 · same level**
+
+Prove by induction that $1 + 2 + \dots + n = \frac{n(n+1)}{2}$ for every integer $n \ge 1$. Call the statement $P(n)$.
+
+<solution>Base: n = 1 gives 1 = 1·2/2. Step: assume P(k), that 1 + ... + k = k(k+1)/2. Add k + 1 to both sides: 1 + ... + k + (k+1) = k(k+1)/2 + (k+1) = (k+1)(k+2)/2, which is P(k+1).</solution>
+
+<ask type="problem">The full proof: base case, hypothesis, and the step from $P(k)$ to $P(k+1)$.</ask>
+@@ learner answer sure
+Base case: n = 1, the left side is 1 and the right side is 1*2/2 = 1, so P(1) holds. Inductive step: I want P(k+1), so I write it down: 1 + 2 + ... + k + (k+1) = (k+1)(k+2)/2. Now subtract (k+1) from both sides, which gives 1 + 2 + ... + k = (k+1)(k+2)/2 - (k+1) = (k+1)(k+2-2)/2 = k(k+1)/2. That is exactly P(k), which is true by the induction hypothesis. So P(k+1) holds and that finishes the proof.
+@@ reply
+<grade verdict="partial" score="0.5">The base case and all the algebra are right. The first invalid step is "I want P(k+1), so I write it down": from there you treat $P(k+1)$ as known and arrive at $P(k)$, so what is written proves that $P(k+1)$ implies $P(k)$, the wrong direction.</grade>
+
+Reaching a true statement from a claim does not prove the claim: from the false $-1 = 1$, squaring both sides gives the true $1 = 1$. Your steps happen to be reversible, so the repair is to run them the other way. Start from the hypothesis $P(k)$ and add $k + 1$ to both sides:
+
+$$1 + \dots + k + (k+1) = \frac{k(k+1)}{2} + (k+1) = \frac{(k+1)(k+2)}{2},$$
+
+which is $P(k+1)$.
+
+<card>In an inductive step, which statement do you start from and which do you end at? :: Start from the hypothesis P(k) and derive P(k+1). Starting from P(k+1) and reaching P(k) proves the converse.</card>
+
+<note>The inductive step is a derivation of $P(k+1)$ from $P(k)$. Never begin by writing $P(k+1)$ as an equation and manipulating it: that assumes what is to be proved.</note>
+
+**Problem 3 · same level**
+
+Prove by induction that $1 + 3 + 5 + \dots + (2n - 1) = n^2$ for every $n \ge 1$, with the step written from $P(k)$ forwards.
+
+<solution>Base: n = 1 gives 1 = 1². Step: assume 1 + 3 + ... + (2k − 1) = k². The next term is 2(k+1) − 1 = 2k + 1. Add it to both sides: 1 + ... + (2k − 1) + (2k + 1) = k² + 2k + 1 = (k+1)², which is P(k+1).</solution>
+
+<ask type="problem">The proof, with the first line of your step being the hypothesis.</ask>
+@@ verify
+from fractions import Fraction as F
+for k in range(1, 300):
+    # the learner's algebra is right as algebra
+    assert F((k + 1) * (k + 2), 2) - (k + 1) == F((k + 1) * (k + 2 - 2), 2) == F(k * (k + 1), 2)
+    # the forward step
+    assert F(k * (k + 1), 2) + (k + 1) == F((k + 1) * (k + 2), 2)
+    assert sum(range(1, k + 1)) == F(k * (k + 1), 2)
+    # Problem 3
+    assert sum(2 * i - 1 for i in range(1, k + 1)) == k * k
+    assert k * k + (2 * (k + 1) - 1) == (k + 1) ** 2
+assert (-1) ** 2 == 1 ** 2 and -1 != 1
+assert 'I want P(k+1), so I write it down' in learner
+
+@@@@ mark-error-committee-reserved-seat-overcount
+situation: mark-error
+topic: Counting at least one: complements and overcounting
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","accept":["partial"],"names":["5 (×|x|\\*) 28|multipl","twice|more than once|two times","\\b80\\b"],"must":["84 - 4 = 80|84 − 4 = 80"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b111\\b","\\b126\\b"]}
+@@ tutor
+**Problem 2 · harder**
+
+A committee of 3 is chosen from 5 women and 4 men. How many of the possible committees contain at least one woman?
+
+<solution>All committees: C(9, 3) = 84. Committees with no woman: C(4, 3) = 4. At least one woman: 84 − 4 = 80.</solution>
+<check lang="python">
+from itertools import combinations
+people = ['w'] * 5 + ['m'] * 4
+count = sum(1 for c in combinations(range(9), 3) if any(people[i] == 'w' for i in c))
+assert count == 84 - 4 == 80
+</check>
+
+<ask type="problem">The number of committees, with each step of your count.</ask>
+@@ learner answer sure
+Simple, no need for cases. Step 1: reserve one woman so the condition is guaranteed: 5 ways. Step 2: the other two seats can be anyone from the remaining 8 people: C(8,2) = 28. Step 3: multiply, 5 x 28 = 140 committees.
+@@ reply
+<grade verdict="wrong" score="0.3">"C(8,2) = 28" is computed correctly, but "multiply, 5 x 28 = 140" is the step that fails: a committee with two women is counted twice, once with each of them as the reserved one, and a committee with three women three times. The right count is 80.</grade>
+
+The check is to split by the number of women. Exactly one: $5 \times \binom{4}{2} = 30$. Exactly two: $\binom{5}{2} \times 4 = 40$. Exactly three: $\binom{5}{3} = 10$. Your method gives $30 + 2 \times 40 + 3 \times 10 = 140$; counting each committee once gives $30 + 40 + 10 = 80$. The shortest route is the complement: all committees minus those with no woman, $\binom{9}{3} - \binom{4}{3} = 84 - 4 = 80$.
+
+<card>Why is "reserve one required item, then choose the rest freely" wrong for an at-least-one count? :: A selection with several required items is counted once for each of them that could be the reserved one. Use the complement: total minus those with none.</card>
+
+<note>"At least one" counts: total minus none. Reserving one item and then choosing freely from all the rest overcounts, because the same selection arises from different reserved items.</note>
+
+**Problem 3 · same level**
+
+An on-call rota of 4 is chosen from 6 backend and 3 frontend engineers. How many rotas contain at least one frontend engineer?
+
+<solution>All rotas: C(9, 4) = 126. Rotas with no frontend engineer: C(6, 4) = 15. At least one: 126 − 15 = 111.</solution>
+<check lang="python">
+from itertools import combinations
+from math import comb
+team = ['b'] * 6 + ['f'] * 3
+count = sum(1 for c in combinations(range(9), 4) if any(team[i] == 'f' for i in c))
+assert count == comb(9, 4) - comb(6, 4) == 126 - 15 == 111
+</check>
+
+<ask type="problem">The number of rotas, with the count you subtracted.</ask>
+@@ verify
+from itertools import combinations
+from math import comb
+people = ['w'] * 5 + ['m'] * 4
+by_women = {k: 0 for k in range(4)}
+for c in combinations(range(9), 3):
+    by_women[sum(people[i] == 'w' for i in c)] += 1
+assert by_women == {0: 4, 1: 30, 2: 40, 3: 10}
+assert 5 * comb(4, 2) == 30 and comb(5, 2) * 4 == 40 and comb(5, 3) == 10
+assert comb(8, 2) == 28 and 5 * 28 == 140 == 30 + 2 * 40 + 3 * 10
+assert comb(9, 3) == 84 and comb(4, 3) == 4 and 84 - 4 == 80 == 30 + 40 + 10
+# the learner's procedure, enumerated: (reserved woman, pair from the other 8) gives 140 pairs but 80 distinct committees
+pairs = [(w, rest) for w in range(5) for rest in combinations([p for p in range(9) if p != w], 2)]
+assert len(pairs) == 140 and len({frozenset((w,) + rest) for w, rest in pairs}) == 80
+assert comb(9, 4) - comb(6, 4) == 111 and '111' not in visible(reply)
+
+@@@@ mark-error-bezout-back-substitution-sign
+situation: mark-error
+topic: Bezout coefficients by back-substitution
+options: {"strategy":"maths"}
+voice: typos
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["3\\*78 - 7\\*21","11"],"must":["x = -11|x = −11","y = 14","\\b87\\b"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["3 ?(·|\\\\cdot|\\*) ?57","-8|−8"]}
+@@ tutor
+**Problem 3**
+
+Find integers $x$ and $y$ with $99x + 78y = 3$.
+
+<solution>99 = 1·78 + 21; 78 = 3·21 + 15; 21 = 1·15 + 6; 15 = 2·6 + 3; 6 = 2·3 + 0. Back: 3 = 15 − 2·6 = 15 − 2(21 − 15) = 3·15 − 2·21 = 3(78 − 3·21) − 2·21 = 3·78 − 11·21 = 3·78 − 11(99 − 78) = 14·78 − 11·99. So x = −11, y = 14.</solution>
+<check lang="python">
+from math import gcd
+assert gcd(99, 78) == 3 and 99 * (-11) + 78 * 14 == 3
+</check>
+
+<ask type="problem">One pair $(x, y)$, with the divisions and the back-substitution.</ask>
+@@ learner answer sure
+99 = 1*78 + 21
+78 = 3*21 + 15
+21 = 1*15 + 6
+15 = 2*6 + 3
+6 = 2*3 + 0 so the gcd is 3
+back subsitution:
+3 = 15 - 2*6
+= 15 - 2*(21 - 15) = 3*15 - 2*21
+= 3*(78 - 3*21) - 2*21 = 3*78 - 7*21
+= 3*78 - 7*(99 - 78) = 10*78 - 7*99
+so x = -7 and y = 10
+@@ reply
+<grade verdict="partial" score="0.6">The five divisions and the first two lines of the back-substitution are right, up to "3*15 - 2*21". The first wrong step is "3*(78 - 3*21) - 2*21 = 3*78 - 7*21": expanding gives $-9 \cdot 21 - 2 \cdot 21 = -11 \cdot 21$, not $-7 \cdot 21$. The two coefficients of 21 are both negative, so they add.</grade>
+
+From there: $3 = 3 \cdot 78 - 11 \cdot 21 = 3 \cdot 78 - 11(99 - 78) = 14 \cdot 78 - 11 \cdot 99$, so $x = -11$ and $y = 14$. Your last line follows correctly from the slip, so it is not a second error. Substituting back catches this kind of slip at once: $99 \cdot (-7) + 78 \cdot 10 = 87$, while $99 \cdot (-11) + 78 \cdot 14 = 3$.
+
+<card>After finding x and y with ax + by = gcd(a, b), what check catches an arithmetic slip? :: Substitute them back: compute ax + by and confirm it equals the gcd.</card>
+
+**Problem 4**
+
+Find integers $x$ and $y$ with $57x + 21y = 3$, and substitute them back to confirm.
+
+<solution>57 = 2·21 + 15; 21 = 1·15 + 6; 15 = 2·6 + 3; 6 = 2·3 + 0. Back: 3 = 15 − 2·6 = 15 − 2(21 − 15) = 3·15 − 2·21 = 3(57 − 2·21) − 2·21 = 3·57 − 8·21. So x = 3, y = −8. Check: 171 − 168 = 3.</solution>
+<check lang="python">
+from math import gcd
+assert gcd(57, 21) == 3 and 57 * 3 + 21 * (-8) == 3 and 57 * 3 == 171 and 21 * 8 == 168
+</check>
+
+<ask type="problem">One pair $(x, y)$, with the back-substitution and the final check.</ask>
+@@ verify
+# the learner's divisions are right
+for a, q, b, r in [(99, 1, 78, 21), (78, 3, 21, 15), (21, 1, 15, 6), (15, 2, 6, 3), (6, 2, 3, 0)]:
+    assert a == q * b + r and f'{a} = {q}*{b} + {r}' in learner
+# each line of their back-substitution, evaluated
+assert 15 - 2 * 6 == 3
+assert 15 - 2 * (21 - 15) == 3 * 15 - 2 * 21 == 3                # right
+assert 3 * (78 - 3 * 21) - 2 * 21 == 3 * 78 - 11 * 21 == 3       # the true expansion
+assert 3 * 78 - 7 * 21 != 3                                      # their line: the first wrong one
+assert 3 * 78 - 7 * (99 - 78) == 10 * 78 - 7 * 99                # their last line follows from it
+assert 99 * (-7) + 78 * 10 == 87
+assert 3 * 78 - 11 * (99 - 78) == 14 * 78 - 11 * 99 == 3 and 99 * (-11) + 78 * 14 == 3
+assert 57 * 3 + 21 * (-8) == 3
+
+@@@@ mark-error-rsa-inverse-wrong-modulus
+situation: mark-error
+topic: RSA with tiny numbers
+options: {"difficulty":"hard"}
+voice: confused
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["mod 55","40","\\b27\\b"],"must":["d = 27","3 \\\\times 27 = 81"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["d = 3\\b","\\b14\\b","\\b20\\b"]}
+@@ tutor
+**Problem 1 · hard**
+
+Take the primes $p = 5$ and $q = 11$ and the public exponent $e = 3$. Find the private exponent $d$. Then encrypt the message $m = 2$ and decrypt the result to check that you get 2 back.
+
+<solution>n = 55. φ(n) = 4 × 10 = 40. d is the inverse of 3 mod 40: 3 × 27 = 81 = 2 × 40 + 1, so d = 27. Encrypt: c = 2^3 mod 55 = 8. Decrypt: 8^27 mod 55 = 2.</solution>
+<check lang="python">
+n, phi = 5 * 11, 4 * 10
+d = pow(3, -1, phi)
+c = pow(2, 3, n)
+assert (n, phi, d, c, pow(c, d, n)) == (55, 40, 27, 8, 2)
+</check>
+
+<ask type="problem">$n$, $\varphi(n)$, $d$, the ciphertext and the decrypted value, with your working.</ask>
+@@ learner answer unsure
+n = 5 x 11 = 55. phi = 4 x 10 = 40. d is the inverse of e, so I need 3d = 1 mod 55. 3 x 37 = 111 = 2 x 55 + 1, so d = 37. Encrypt: c = 2^3 = 8. Decrypt: 8^37 mod 55, and I keep getting 13?? which isn't 2. I think I'm messing up the powers somewhere but I can't find where.
+@@ reply
+<grade verdict="partial" score="0.5">$n = 55$, "phi = 4 x 10 = 40" and $c = 8$ are right, and so are your powers: $8^{37} \bmod 55$ really is 13. The first wrong step is "3d = 1 mod 55": the inverse of $e$ is taken modulo $\varphi(n) = 40$, not modulo $n$.</grade>
+
+The reason is that exponents work modulo $\varphi(n)$: for $m$ coprime to 55, $m^{40} \equiv 1 \pmod{55}$, so $m^{ed} \equiv m$ whenever $ed = 1 + 40k$. So $d$ is chosen with $3d \equiv 1 \pmod{40}$, and $3 \times 27 = 81 = 2 \times 40 + 1$ gives $d = 27$. Then $8^{27} \bmod 55 = 2$, the message. With $d = 37$ the product is $ed = 111 = 2 \times 40 + 31$, so decryption returns $m^{31}$ instead of $m$, which is why you got 13. You computed $\varphi(n)$ and then did not use it; this is the step it exists for.
+
+<card>In RSA, modulo which number is d the inverse of e? :: Modulo φ(n) = (p − 1)(q − 1), not modulo n. Messages are reduced mod n; exponents are reduced mod φ(n).</card>
+
+<note>RSA: $n = pq$, $\varphi(n) = (p-1)(q-1)$, and $d \equiv e^{-1} \pmod{\varphi(n)}$. Encrypt $c = m^e \bmod n$, decrypt $m = c^d \bmod n$. Arithmetic on messages is mod $n$; arithmetic on exponents is mod $\varphi(n)$.</note>
+
+**Problem 2 · same level**
+
+Take $p = 3$, $q = 11$ and $e = 7$. Find $d$, encrypt $m = 5$, and decrypt the result.
+
+<solution>n = 33, φ(n) = 2 × 10 = 20. 7 × 3 = 21 = 20 + 1, so d = 3. c = 5^7 mod 33 = 14. Decrypt: 14^3 mod 33 = 5.</solution>
+<check lang="python">
+n, phi = 3 * 11, 2 * 10
+d = pow(7, -1, phi)
+c = pow(5, 7, n)
+assert (n, phi, d, c, pow(c, d, n)) == (33, 20, 3, 14, 5)
+</check>
+
+<ask type="problem">$n$, $\varphi(n)$, $d$, the ciphertext and the decrypted value.</ask>
+@@ verify
+from math import gcd
+n, phi = 55, 40
+assert pow(3, -1, 55) == 37 and 3 * 37 == 111 == 2 * 55 + 1          # the learner's d, as they derived it
+assert pow(2, 3, n) == 8 and pow(8, 37, n) == 13                      # their powers are right
+assert pow(3, -1, phi) == 27 and 3 * 27 == 81 == 2 * 40 + 1 and pow(8, 27, n) == 2
+assert 111 == 2 * 40 + 31
+# Euler: m^40 = 1 (mod 55) for every m coprime to 55, and m^31 is not the identity (it sends 2 to 13)
+assert all(pow(m, 40, n) == 1 for m in range(1, n) if gcd(m, n) == 1)
+assert pow(2, 111, n) == pow(2, 31, n) == 13
+# d = 27 decrypts every message
+assert all(pow(pow(m, 3, n), 27, n) == m for m in range(n))
+# Problem 2
+assert pow(7, -1, 20) == 3 and pow(5, 7, 33) == 14 and pow(14, 3, 33) == 5
+vis = visible(reply)
+assert '14' not in vis.replace('14\\', '')
+
+@@@@ mark-error-recurrence-characteristic-sign
+situation: mark-error
+topic: Solving linear recurrence relations
+voice: terse
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["r\\^2 - 5r - 6 = 0","r\\^2 - 5r \\+ 6"],"must":["2 \\\\cdot 3\\^n - 2\\^n","\\b14\\b"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["3\\^n \\+ \\(-2\\)\\^n","r = 3","-2|−2"]}
+@@ tutor
+**Problem 2 · harder**
+
+Solve the recurrence $a_n = 5a_{n-1} - 6a_{n-2}$ with $a_0 = 1$ and $a_1 = 4$: give a closed form for $a_n$.
+
+<solution>Try a_n = r^n: r^2 = 5r − 6, so r^2 − 5r + 6 = 0, (r − 2)(r − 3) = 0, r = 2 or 3. a_n = A·2^n + B·3^n. A + B = 1 and 2A + 3B = 4 give B = 2, A = −1. a_n = 2·3^n − 2^n.</solution>
+<check lang="python">
+a = [1, 4]
+for n in range(2, 12):
+    a.append(5 * a[-1] - 6 * a[-2])
+assert all(a[n] == 2 * 3**n - 2**n for n in range(12))
+</check>
+
+<ask type="problem">The closed form, with the characteristic equation and the two constants.</ask>
+@@ learner answer sure
+try a_n = r^n. char eq: r^2 - 5r - 6 = 0, (r - 6)(r + 1) = 0, r = 6 or -1. a_n = A*6^n + B*(-1)^n. a_0: A + B = 1. a_1: 6A - B = 4. add: 7A = 5, A = 5/7, B = 2/7. a_n = (5*6^n + 2*(-1)^n)/7
+@@ reply
+<grade verdict="partial" score="0.5">The method is right, and everything after the first line follows correctly from it. The first wrong step is "r^2 - 5r - 6 = 0": putting $a_n = r^n$ into $a_n = 5a_{n-1} - 6a_{n-2}$ gives $r^2 = 5r - 6$, and moving both terms across gives $r^2 - 5r + 6 = 0$. The sign of the 6 flipped.</grade>
+
+With the right equation, $(r - 2)(r - 3) = 0$, so $a_n = A \cdot 2^n + B \cdot 3^n$. The initial values give $A + B = 1$ and $2A + 3B = 4$, so $B = 2$, $A = -1$, and $a_n = 2 \cdot 3^n - 2^n$. A closed form that matches $a_0$ and $a_1$ has only been fitted to them, so test one more term: the recurrence gives $a_2 = 5 \cdot 4 - 6 \cdot 1 = 14$; yours gives $(5 \cdot 36 + 2)/7 = 26$, and $2 \cdot 9 - 4 = 14$.
+
+<card>How do you get the characteristic equation of a_n = p·a_{n-1} + q·a_{n-2}, and how do you check a closed form? :: Substitute r^n: r^2 = pr + q, so r^2 − pr − q = 0 (both signs flip when moved across). Check the closed form against a_2 from the recurrence.</card>
+
+**Problem 3 · same level**
+
+Solve $a_n = a_{n-1} + 6a_{n-2}$ with $a_0 = 2$ and $a_1 = 1$, and test your closed form on $a_2$.
+
+<solution>r^2 = r + 6, so r^2 − r − 6 = 0, (r − 3)(r + 2) = 0, r = 3 or −2. a_n = A·3^n + B·(−2)^n. A + B = 2 and 3A − 2B = 1 give A = 1, B = 1. a_n = 3^n + (−2)^n. Test: a_2 = 1 + 6·2 = 13 and 9 + 4 = 13.</solution>
+<check lang="python">
+a = [2, 1]
+for n in range(2, 12):
+    a.append(a[-1] + 6 * a[-2])
+assert all(a[n] == 3**n + (-2)**n for n in range(12)) and a[2] == 13
+</check>
+
+<ask type="problem">The closed form, with the characteristic equation written out first, and your test on $a_2$.</ask>
+@@ verify
+from fractions import Fraction as F
+# the learner's work follows from their equation
+assert 6 * 6 - 5 * 6 - 6 == 0 and (-1) ** 2 - 5 * (-1) - 6 == 0
+A, B = F(5, 7), F(2, 7)
+assert A + B == 1 and 6 * A - B == 4
+theirs = lambda n: F(5 * 6**n + 2 * (-1) ** n, 7)
+assert theirs(0) == 1 and theirs(1) == 4 and theirs(2) == 26
+# the right closed form
+a = [1, 4]
+for n in range(2, 15):
+    a.append(5 * a[-1] - 6 * a[-2])
+assert a[2] == 14 == 5 * 4 - 6 * 1 == 2 * 9 - 4
+assert all(a[n] == 2 * 3**n - 2**n for n in range(15))
+assert 2 * 2 - 5 * 2 + 6 == 0 and 3 * 3 - 5 * 3 + 6 == 0
+assert -1 + 2 == 1 and 2 * (-1) + 3 * 2 == 4
+b = [2, 1]
+for n in range(2, 15):
+    b.append(b[-1] + 6 * b[-2])
+assert all(b[n] == 3**n + (-2) ** n for n in range(15)) and b[2] == 13
+
+@@@@ unusual-even-subsets-by-toggling
+situation: mark-unusual
+topic: Counting subsets by bijection
+voice: wordy
+level: medium
+expect: {"verdict":"correct","mustNot":["should have (used|added|summed)","standard (method|way) (is|would)","better to"],"must":["\\b32\\b"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b34\\b","Fibonacci"]}
+@@ tutor
+**Problem 3 · harder**
+
+How many subsets of $\{1, 2, 3, 4, 5, 6\}$ have an even number of elements?
+
+<solution>C(6,0) + C(6,2) + C(6,4) + C(6,6) = 1 + 15 + 15 + 1 = 32.</solution>
+<check lang="python">
+from itertools import combinations
+assert sum(1 for r in range(0, 7, 2) for c in combinations(range(6), r)) == 32
+</check>
+
+<ask type="problem">The number of subsets, with your reasoning.</ask>
+@@ learner answer sure
+I didn't add up binomials for this. Pair each subset with the one you get by toggling element 1: put 1 in if it's missing, take it out if it's there. That changes the size by exactly one, so an even-sized subset is always paired with an odd-sized one, and toggling twice gets you back where you started so no subset is in two pairs. So there are as many even ones as odd ones, half of the 64 each, which is 32.
+@@ reply
+<grade verdict="correct" score="1">32 is right and the argument is complete: "toggling twice gets you back where you started" makes the toggle a bijection, and "changes the size by exactly one" makes it swap even-sized and odd-sized subsets, so the two kinds are equal in number, 64 / 2 each.</grade>
+
+Your pairing proves more than the binomial sum does: the same toggle works for any non-empty set, so exactly half of the $2^n$ subsets are even-sized for every $n \ge 1$, which is the identity $\binom{n}{0} - \binom{n}{1} + \binom{n}{2} - \dots = 0$.
+
+**Problem 4 · harder**
+
+How many subsets of $\{1, 2, 3, 4, 5, 6, 7\}$ contain no two consecutive numbers? The empty set and the single-element sets count.
+
+<solution>Let s(n) be the count for {1, ..., n}. A valid subset either omits n (s(n−1) ways) or contains n and so omits n − 1 (s(n−2) ways). s(0) = 1, s(1) = 2, then 3, 5, 8, 13, 21, 34. s(7) = 34.</solution>
+<check lang="python">
+from itertools import combinations
+count = sum(1 for r in range(8) for c in combinations(range(1, 8), r) if all(b - a > 1 for a, b in zip(c, c[1:])))
+s = [1, 2]
+for n in range(2, 8):
+    s.append(s[-1] + s[-2])
+assert count == s[7] == 34
+</check>
+
+<ask type="problem">The number of subsets, with the reasoning that produced it.</ask>
+@@ verify
+from itertools import combinations
+from math import comb
+subsets = [frozenset(c) for r in range(7) for c in combinations(range(1, 7), r)]
+assert len(subsets) == 64
+toggle = lambda s: s ^ frozenset([1])
+# the learner's pairing: an involution with no fixed point that changes the size by one
+assert all(toggle(toggle(s)) == s and toggle(s) != s and abs(len(toggle(s)) - len(s)) == 1 for s in subsets)
+even = [s for s in subsets if len(s) % 2 == 0]
+assert {toggle(s) for s in even} == {s for s in subsets if len(s) % 2 == 1}
+assert len(even) == 32 == comb(6, 0) + comb(6, 2) + comb(6, 4) + comb(6, 6)
+# the identity stated, for n from 1 up
+assert all(sum((-1) ** k * comb(n, k) for k in range(n + 1)) == 0 for n in range(1, 30))
+assert '34' in solution(reply) and '34' not in visible(reply)
+
+@@@@ unusual-lattice-paths-filled-grid
+situation: mark-unusual
+topic: Pascal's triangle and lattice paths
+voice: plain
+level: easy
+expect: {"verdict":"correct","mustNot":["should have (used|written)","standard (method|way) (is|would)","quicker to use"],"must":["\\b35\\b","\\\\binom\\{7\\}\\{3\\}"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b17\\b","\\b18\\b"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+A robot moves on a grid from $(0, 0)$ to $(4, 3)$, each move being one step right or one step up. How many different routes are there?
+
+<solution>Every route is 7 moves, 4 right and 3 up, in some order: C(7, 3) = 35.</solution>
+<check lang="python">
+from itertools import permutations
+from math import comb
+assert len(set(permutations('RRRRUUU'))) == comb(7, 3) == 35
+</check>
+
+<ask type="problem">The number of routes, with how you counted them.</ask>
+@@ learner answer sure
+35. I filled in the grid point by point. Every point on the bottom row and the left column has 1 route. Every other point gets the number to its left plus the number below it, because the last step into it came from one of those two. Rows from the bottom up: 1,1,1,1,1 then 1,2,3,4,5 then 1,3,6,10,15 then 1,4,10,20,35. Top right corner is 35.
+@@ reply
+<grade verdict="correct" score="1">35 is right, and "the last step into it came from one of those two" is exactly why adding the left and lower neighbours counts every route once. All four rows of your grid are correct.</grade>
+
+Your grid is Pascal's triangle turned on its side: the point $(x, y)$ holds $\binom{x+y}{y}$, and your addition rule is $\binom{n}{k} = \binom{n-1}{k-1} + \binom{n-1}{k}$. The corner is $\binom{7}{3} = 35$, the number of ways to place the 3 up-moves among the 7 moves. The grid method also survives changes that a single binomial does not, which the next problem uses.
+
+**Problem 2 · harder**
+
+Same grid and moves, but the point $(2, 1)$ is blocked: no route may pass through it. How many routes from $(0, 0)$ to $(4, 3)$ remain?
+
+<solution>Routes through (2, 1): C(3, 1) = 3 ways to reach it, then C(4, 2) = 6 ways on to (4, 3), so 18. Remaining: 35 − 18 = 17. By grid with a 0 at (2, 1): rows 1,1,1,1,1 / 1,2,0,1,2 / 1,3,3,4,6 / 1,4,7,11,17.</solution>
+<check lang="python">
+from math import comb
+g = [[0] * 5 for _ in range(4)]
+for y in range(4):
+    for x in range(5):
+        if (x, y) == (2, 1):
+            g[y][x] = 0
+        elif x == 0 or y == 0:
+            g[y][x] = 1
+        else:
+            g[y][x] = g[y][x - 1] + g[y - 1][x]
+assert g[3][4] == 35 - comb(3, 1) * comb(4, 2) == 17
+assert g == [[1, 1, 1, 1, 1], [1, 2, 0, 1, 2], [1, 3, 3, 4, 6], [1, 4, 7, 11, 17]]
+</check>
+
+<ask type="problem">The number of routes that avoid the blocked point, with your method.</ask>
+@@ verify
+from itertools import permutations
+from math import comb
+# the learner's grid, rebuilt by their rule
+g = [[1] * 5] + [[1] + [0] * 4 for _ in range(3)]
+for y in range(1, 4):
+    for x in range(1, 5):
+        g[y][x] = g[y][x - 1] + g[y - 1][x]
+rows = [','.join(map(str, r)) for r in g]
+assert rows == ['1,1,1,1,1', '1,2,3,4,5', '1,3,6,10,15', '1,4,10,20,35']
+assert all(r in learner for r in rows)
+assert all(g[y][x] == comb(x + y, y) for y in range(4) for x in range(5)) and comb(7, 3) == 35
+# Problem 2 by brute force over all routes
+def avoids(route, block=(2, 1)):
+    x = y = 0
+    for s in route:
+        x, y = (x + 1, y) if s == 'R' else (x, y + 1)
+        if (x, y) == block:
+            return False
+    return True
+routes = set(permutations('RRRRUUU'))
+assert len(routes) == 35 and sum(avoids(r) for r in routes) == 17
+assert '17' in solution(reply) and '17' not in visible(reply)
+
+@@@@ unusual-odd-sum-by-telescoping
+situation: mark-unusual
+topic: Summations and telescoping sums
+options: {"strategy":"maths"}
+voice: terse
+level: medium
+expect: {"verdict":"correct","mustNot":["should have (used|done)","by induction instead","standard (method|way) (is|would)"],"must":["telescop"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["n/\\(n ?\\+ ?1\\)","\\\\frac\\{n\\}\\{n ?\\+ ?1\\}"]}
+@@ tutor
+**Problem 2**
+
+Prove that $1 + 3 + 5 + \dots + (2n - 1) = n^2$ for every integer $n \ge 1$.
+
+<solution>Arithmetic series: n terms, first 1, last 2n − 1, so the sum is n(1 + 2n − 1)/2 = n · 2n/2 = n². (Induction also works: k² + (2k + 1) = (k + 1)².)</solution>
+
+<ask type="problem">A proof, by any method you can justify.</ask>
+@@ learner answer sure
+2i - 1 = i^2 - (i-1)^2. so the sum over i = 1..n is (1 - 0) + (4 - 1) + (9 - 4) + ... + (n^2 - (n-1)^2). everything cancels except n^2 - 0 = n^2. done
+@@ reply
+<grade verdict="correct" score="1">This is a complete proof. "2i - 1 = i^2 - (i-1)^2" is a true identity, since $i^2 - (i^2 - 2i + 1) = 2i - 1$, and once each term is a difference of consecutive squares the sum telescopes to $n^2 - 0^2$.</grade>
+
+Telescoping needs no induction and no series formula: writing the term as $f(i) - f(i-1)$ is the whole proof, and the sum is $f(n) - f(0)$. The same move works whenever such an $f$ can be found.
+
+<note>Telescoping: if $t_i = f(i) - f(i-1)$, then $\sum_{i=1}^{n} t_i = f(n) - f(0)$, because every intermediate value cancels. Example: $2i - 1 = i^2 - (i-1)^2$ gives $1 + 3 + \dots + (2n-1) = n^2$.</note>
+
+**Problem 3**
+
+Find a closed form for $\sum_{i=1}^{n} \frac{1}{i(i+1)}$ and prove it.
+
+<solution>1/(i(i+1)) = 1/i − 1/(i+1). The sum telescopes: (1 − 1/2) + (1/2 − 1/3) + ... + (1/n − 1/(n+1)) = 1 − 1/(n+1) = n/(n+1).</solution>
+<check lang="python">
+from fractions import Fraction as F
+for n in range(1, 60):
+    assert sum(F(1, i * (i + 1)) for i in range(1, n + 1)) == F(n, n + 1) == 1 - F(1, n + 1)
+    assert F(1, n * (n + 1)) == F(1, n) - F(1, n + 1)
+</check>
+
+<ask type="problem">The closed form, with the identity for the term that makes it work.</ask>
+@@ verify
+from fractions import Fraction as F
+for i in range(1, 300):
+    assert 2 * i - 1 == i * i - (i - 1) ** 2
+for n in range(1, 200):
+    assert sum(2 * i - 1 for i in range(1, n + 1)) == n * n
+    assert n * (1 + 2 * n - 1) // 2 == n * n
+assert (1 - 0, 4 - 1, 9 - 4) == (1, 3, 5)
+assert all(sum(F(1, i * (i + 1)) for i in range(1, n + 1)) == F(n, n + 1) for n in range(1, 80))
+vis = visible(reply)
+assert 'n/(n+1)' not in vis and '\\frac{n}{n+1}' not in vis
+
+@@@@ unusual-inverse-by-fermat-power
+situation: mark-unusual
+topic: Modular inverses
+voice: typos
+level: medium
+expect: {"verdict":"correct","mustNot":["should have (used|run)","standard (method|way) (is|would)","supposed to"],"must":["prime","3\\^9|3\\^\\{9\\}"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b13\\b","\\b91\\b"]}
+@@ tutor
+**Problem 2 · same level**
+
+Find the inverse of 3 modulo 11.
+
+<solution>Extended Euclid: 11 = 3·3 + 2; 3 = 1·2 + 1. Back: 1 = 3 − 2 = 3 − (11 − 3·3) = 4·3 − 11. So the inverse is 4: 3 × 4 = 12 ≡ 1.</solution>
+<check lang="python">
+assert pow(3, -1, 11) == 4 and 3 * 4 % 11 == 1
+</check>
+
+<ask type="problem">The inverse, with your working.</ask>
+@@ learner answer sure
+4. 11 is prime so 3^10 = 1 mod 11, wich means 3 * 3^9 = 1, so the invrse is just 3^9. 3^2 = 9, 3^4 = 81 = 4, 3^8 = 16 = 5, 3^9 = 5*3 = 15 = 4. check: 3*4 = 12 = 1 mod 11
+@@ reply
+<grade verdict="correct" score="1">4 is right, and the method is valid: "3 * 3^9 = 1" reads Fermat's little theorem as saying that $3^9$ is the inverse of 3, and your squarings 9, 4, 5 and the final $5 \cdot 3 = 15 \equiv 4$ are all correct.</grade>
+
+In general, for a prime $p$ not dividing $a$, the inverse of $a$ is $a^{p-2} \bmod p$; with fast exponentiation this is how inverses are often computed in code for prime moduli. Its one limit is the word prime: $a^{m-2}$ is not in general the inverse for a composite modulus $m$, whereas the extended Euclidean algorithm works for any modulus coprime to $a$.
+
+<note>For prime $p$ and $p \nmid a$: $a^{-1} \equiv a^{p-2} \pmod p$, because $a \cdot a^{p-2} = a^{p-1} \equiv 1$. For a composite modulus use the extended Euclidean algorithm.</note>
+
+**Problem 3 · harder**
+
+Find the inverse of 7 modulo 30, and confirm it by multiplying.
+
+<solution>30 is not prime, so use Euclid: 30 = 4·7 + 2; 7 = 3·2 + 1. Back: 1 = 7 − 3·2 = 7 − 3(30 − 4·7) = 13·7 − 3·30. The inverse is 13: 7 × 13 = 91 = 3 × 30 + 1. (7^28 mod 30 is 1, not 13, so the prime shortcut fails here.)</solution>
+<check lang="python">
+assert pow(7, -1, 30) == 13 and 7 * 13 == 91 == 3 * 30 + 1
+assert pow(7, 28, 30) != 13
+</check>
+
+<ask type="problem">The inverse, with the method you chose and why it applies to this modulus.</ask>
+@@ verify
+assert pow(3, 10, 11) == 1 and pow(3, 9, 11) == 4 == pow(3, -1, 11)
+# the learner's squarings
+assert 3**2 == 9 and 81 % 11 == 4 and 16 % 11 == 5 and 15 % 11 == 4 and 12 % 11 == 1
+assert pow(3, 4, 11) == 4 and pow(3, 8, 11) == 5
+# a^(p-2) is the inverse for every prime p and a not divisible by p (small cases)
+for p in [2, 3, 5, 7, 11, 13, 17, 19, 23]:
+    for a in range(1, p):
+        assert a * pow(a, p - 2, p) % p == 1
+# and fails for a composite modulus
+assert 7 * pow(7, 28, 30) % 30 != 1
+assert pow(7, 28, 30) == 1
+assert pow(7, -1, 30) == 13 and '13' not in visible(reply)
+
+@@@@ tangent-are-programs-countable
+situation: tangent
+topic: Countable and uncountable sets
+options: {"strategy":"dialogue"}
+voice: wordy
+level: medium
+expect: {"must":["finite","countable"],"askTypes":["short","explain","predict"],"askMustNot":["diagonal","a \\+ b"]}
+noverify: conceptual; nothing computed (programs are finite strings over a finite alphabet, listed by length)
+@@ tutor
+A set is countable when its elements can be written as a list $x_0, x_1, x_2, \dots$ in which every element appears at some finite position. The integers are countable although they run off in both directions: $0, 1, -1, 2, -2, \dots$ reaches each integer after finitely many steps.
+
+<note>A set is countable if its elements can be listed as $x_0, x_1, x_2, \dots$ with every element at a finite position. The integers are countable: $0, 1, -1, 2, -2, \dots$</note>
+
+<ask type="explain">Is the set of all pairs $(a, b)$ of natural numbers countable? Describe a listing that works, or say why none can.</ask>
+@@ learner question
+Side question before I answer, because this has been bugging me since you defined countable. What about the set of all possible Python programs, is that countable? There are infinitely many of them, and there's no limit on how long a program can be, so I can't see where a list of them would even start.
+@@ reply
+Yes, it is countable. Every program is a finite string of characters from a finite alphabet, so for each length there are only finitely many candidates. List all strings of length 1 in alphabetical order, then all of length 2, and so on, keeping the ones that are valid programs: any given program has some finite length, so it appears after finitely many entries. Each program is finite even though there is no bound on the lengths, and that is what matters.
+
+Your pairs question has the same obstacle and the same cure.
+
+<ask type="explain">Lay the pairs $(a, b)$ out in an infinite table with row $a$ and column $b$. Listing row 0 in full first never gets to row 1. How can you group the cells into finite batches, as lengths grouped the programs, so that every cell is reached?</ask>
+
+@@@@ tangent-four-colour-theorem-planar
+situation: tangent
+topic: Graph colouring and bipartite graphs
+voice: confused
+level: medium
+expect: {"must":["planar","K_5"],"askTypes":["short","predict","explain"],"askMustNot":["odd cycle","\\b3 colours|three colours"]}
+@@ tutor
+A proper colouring gives every vertex a colour so that the two ends of each edge differ. A graph is bipartite when 2 colours are enough: the colours split the vertices into two sides, and every edge runs from one side to the other. A path is bipartite, since the colours can alternate along it.
+
+<note>Proper colouring: adjacent vertices get different colours. A graph is bipartite when it has a proper colouring with 2 colours, so every edge joins the two colour classes.</note>
+
+<ask type="short">Take a cycle on 5 vertices. Can it be properly coloured with 2 colours? Give your reason.</ask>
+@@ learner question
+hang on, I'm confused why we count colours at all. doesn't the four colour theorem say any graph can be coloured with 4? so the answer is never more than 4 anyway
+@@ reply
+The four colour theorem covers planar graphs only: graphs that can be drawn in the plane with no two edges crossing, such as the graph of neighbouring regions on a map. Graphs in general can need any number of colours. In the complete graph $K_5$ every two of the 5 vertices are adjacent, so all 5 must get different colours, and $K_5$ is not planar. Conflict graphs from scheduling or register allocation need not be planar, so the number of colours is a real quantity to work out.
+
+<ask type="short">Back to the cycle on 5 vertices, with 2 colours. Colour one vertex red and walk round the cycle, giving each next vertex the only colour it can take. What happens when you arrive back next to the start?</ask>
+@@ verify
+from itertools import product, combinations
+def colourable(n, edges, k):
+    return any(all(c[u] != c[v] for u, v in edges) for c in product(range(k), repeat=n))
+k5 = list(combinations(range(5), 2))
+assert not colourable(5, k5, 4) and colourable(5, k5, 5)
+c5 = [(i, (i + 1) % 5) for i in range(5)]
+# the pending question's answer (not stated in the reply): the 5-cycle needs 3 colours
+assert not colourable(5, c5, 2) and colourable(5, c5, 3)
+# K5 is not planar: a simple planar graph on v >= 3 vertices has at most 3v - 6 edges
+assert len(k5) == 10 > 3 * 5 - 6
+# a path is bipartite
+assert colourable(6, [(i, i + 1) for i in range(5)], 2)
+
+@@@@ tangent-why-one-is-not-prime
+situation: tangent
+topic: Primes and factorisation
+voice: typos
+level: easy
+expect: {"must":["unique","exactly two"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["2\\^3","3\\^2","2 ?(×|\\\\times|\\*|·) ?2 ?(×|\\\\times|\\*|·) ?2"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+Write 360 as a product of primes.
+
+<solution>360 = 2 × 180 = 2 × 2 × 90 = 2 × 2 × 2 × 45 = 2^3 × 3 × 15 = 2^3 × 3^2 × 5.</solution>
+<check lang="python">
+assert 2**3 * 3**2 * 5 == 360
+</check>
+
+<ask type="problem">The factorisation, with the divisions you did.</ask>
+@@ learner question
+quick one before i do this.. why isnt 1 a prime? it only divides by 1 and itself which is the definiton i learnt
+@@ reply
+It is left out by definition, and the reason is uniqueness. Every integer above 1 has exactly one prime factorisation, apart from the order of the factors. If 1 were prime that would fail: $6 = 2 \times 3 = 1 \times 2 \times 3 = 1 \times 1 \times 2 \times 3$, and every theorem that relies on the unique factorisation would need the words "ignoring 1s". So a prime is defined as an integer greater than 1 with exactly two positive divisors, 1 and itself; the number 1 has only one divisor.
+
+Now the factorisation you were about to do.
+
+<solution>360 = 2 × 2 × 2 × 3 × 3 × 5: the prime 2 three times, 3 twice, 5 once.</solution>
+<check lang="python">
+n, factors, p = 360, [], 2
+while n > 1:
+    while n % p == 0:
+        factors.append(p)
+        n //= p
+    p += 1
+assert factors == [2, 2, 2, 3, 3, 5]
+</check>
+
+<ask type="problem">Divide 360 by its smallest prime factor as many times as it will go, then do the same with the next prime, until 1 is left. Which primes appear, and how many times each?</ask>
+@@ verify
+divisors = lambda n: [d for d in range(1, n + 1) if n % d == 0]
+assert divisors(1) == [1]
+primes = [n for n in range(2, 60) if len(divisors(n)) == 2]
+assert primes[:8] == [2, 3, 5, 7, 11, 13, 17, 19]
+assert 2 * 3 == 6 == 1 * 2 * 3 == 1 * 1 * 2 * 3
+assert 2 * 2 * 2 * 3 * 3 * 5 == 360
+vis = visible(reply)
+assert '2^3' not in vis and '3^2' not in vis

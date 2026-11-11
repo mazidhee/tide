@@ -1,0 +1,421 @@
+@@@@ correct-tail-fanout-plan
+situation: after-correct
+topic: Tail latency and hedged requests
+voice: wordy
+level: medium
+expect: {"verdict":"correct","need":["plan","note"],"setsProblem":true,"askTypes":["problem"],"must":["0\\.0001|0\\.01\\^2|0\\.01 × 0\\.01"],"askMustNot":["0\\.00995","about 1%","1\\.0%"]}
+@@ tutor
+<ask type="predict">A page request fans out to 100 backends in parallel and waits for all of them. Each backend answers within 10 ms 99% of the time and takes about a second otherwise, independently of the others. Is the page slow about 1% of the time, less often, or far more often? Give a rough figure.</ask>
+@@ learner answer sure
+Far more often. The page is only fast if all 100 backends are fast, and the chance of that is 0.99^100, which I think is about 0.37. So the page is slow around 63% of the time, even though each backend on its own is slow only 1% of the time.
+@@ reply
+<grade verdict="correct" score="1">"only fast if all 100 backends are fast" is the whole argument, and the figure holds: $0.99^{100} \approx 0.366$, so about 63% of pages are slow.</grade>
+
+<plan>
+- Hedged requests: a second copy of the call
+- What hedging costs, and delaying the hedge
+- Choosing where to cut the tail
+</plan>
+
+You already have the fan-out formula, $P(\text{slow}) = 1 - (1 - p)^n$, so straight to the fix. A hedged request sends the same call to two replicas and uses whichever answers first. The call is slow only if both copies are slow: with independent replicas and $p = 0.01$ that is $0.01 \times 0.01 = 0.0001$.
+
+<note>Fan-out of $n$ calls, each slow with probability $p$: $P(\text{slow}) = 1 - (1 - p)^n$. A hedged call (two copies, first answer wins) is slow with probability $p^2$ if the replicas are independent.</note>
+
+**Problem 1 · warm-up**
+
+The page from before now hedges every one of its 100 backend calls, each still slow with probability 0.01 per copy, independently. What fraction of pages is slow now?
+
+<solution>Each hedged call is slow with probability 0.0001, so fast with 0.9999. All 100 fast: 0.9999^100 = 0.99005. Slow pages: 1 − 0.99005 = 0.00995, about 1%, down from about 63%.</solution>
+<check lang="python">
+p = 0.01 ** 2
+slow = 1 - (1 - p) ** 100
+assert abs(slow - 0.00995) < 5e-6
+</check>
+
+<ask type="problem">The fraction of slow pages with hedging, with your working.</ask>
+@@ verify
+assert abs(0.99 ** 100 - 0.366) < 5e-4 and round(1 - 0.99 ** 100, 2) == 0.63
+assert round(0.99 ** 100, 2) == 0.37           # the learner's "about 0.37"
+assert abs(0.01 * 0.01 - 0.0001) < 1e-15
+slow = 1 - (1 - 0.0001) ** 100
+assert abs(slow - 0.00995) < 5e-6 and abs(0.9999 ** 100 - 0.99005) < 5e-6
+assert '0.00995' in solution(reply) and '0.00995' not in visible(reply)
+# a Monte Carlo cross-check of the hedged page, seeded
+import random
+rng = random.Random(1)
+trials = 200000
+hits = sum(any(rng.random() < 0.01 and rng.random() < 0.01 for _ in range(100)) for _ in range(trials))
+assert abs(hits / trials - slow) < 0.002
+
+@@@@ correct-token-bucket-explain-capacity
+situation: after-correct
+topic: Rate limiting with a token bucket
+voice: confused
+level: easy
+expect: {"verdict":"correct","ends":"continue","need":["note"],"must":["14,400","\\b48\\b","burst"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+A token bucket has capacity 8 and refills at 4 tokens per second. Each request takes one token and is rejected if the bucket is empty. The bucket is full at t = 0, when 8 requests arrive together. At t = 1 s, 6 more arrive together. How many of those 6 are admitted?
+
+<solution>The 8 requests at t = 0 empty the bucket. By t = 1 s it has refilled 4 tokens, so 4 of the 6 are admitted and 2 are rejected.</solution>
+<check lang="python">
+tokens = 8
+tokens -= min(tokens, 8)
+tokens = min(8, tokens + 4 * 1)
+assert min(tokens, 6) == 4
+</check>
+
+<ask type="problem">The number admitted at t = 1 s, with the token count just before they arrive.</ask>
+@@ learner answer unsure
+4 I think? the first 8 use up everything, then 1 second gives back 4 tokens so only 4 of the 6 get in. but I don't get what the capacity is even for, could you explain that before the next one
+@@ reply
+<grade verdict="correct" score="1">"1 second gives back 4 tokens so only 4 of the 6 get in" is right: the bucket was emptied at t = 0 and holds 4 tokens when the second group arrives.</grade>
+
+The capacity limits how large a burst can be. Tokens that arrive while the bucket is full are thrown away, so a client that stays quiet can never save up more than 8. Without that limit, a client idle for an hour would hold 4 × 3,600 = 14,400 tokens and could send 14,400 requests in one instant, which is the very thing a rate limiter is there to stop.
+
+With capacity $b$ and refill rate $r$, the most that can be admitted in any window of $T$ seconds is $b + rT$: one full bucket, plus what refills during the window. Here any 10-second window admits at most 8 + 4 × 10 = 48 requests. So $r$ sets the long-run rate and $b$ sets the burst allowed on top of it.
+
+<note>Token bucket: the refill rate $r$ sets the sustained rate; the capacity $b$ sets the largest burst. Tokens arriving at a full bucket are discarded. At most $b + rT$ requests are admitted in any window of $T$ seconds.</note>
+
+<continue/>
+@@ verify
+def run(capacity, rate, arrivals, start=None):
+    """arrivals: list of (time, count), times in whole seconds; returns admitted per arrival"""
+    tokens, last, out = (capacity if start is None else start), 0, []
+    for t, n in arrivals:
+        tokens = min(capacity, tokens + rate * (t - last)) if capacity is not None else tokens + rate * (t - last)
+        last = t
+        ok = min(tokens, n)
+        tokens -= ok
+        out.append(ok)
+    return out
+assert run(8, 4, [(0, 8), (1, 6)]) == [8, 4]
+# an hour idle with no capacity limit, starting empty
+assert run(None, 4, [(3600, 10**6)], start=0) == [14400] and 4 * 3600 == 14400
+# with the capacity, an hour idle still admits a burst of only 8
+assert run(8, 4, [(3600, 10**6)], start=0) == [8]
+# the bound b + rT, checked by brute force over one-second steps for a greedy client
+best = 0
+for first in range(0, 30):
+    arrivals = [(t, 10**6) for t in range(first, first + 11)]   # instants spanning a 10 s window
+    best = max(best, sum(run(8, 4, arrivals)))
+assert best == 8 + 4 * 10 == 48
+
+@@@@ wrong-availability-parallel-multiplied
+situation: after-wrong
+topic: Availability arithmetic: nines, series and parallel
+voice: overconfident
+level: easy
+expect: {"verdict":"wrong","names":["series|both replicas are up|both up","at least one"],"must":["99\\.99%","0\\.0001"],"mustNot":["98\\.01% is (right|correct)"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["99\\.75","0\\.9975"]}
+@@ tutor
+Components in series must all be up, so their availabilities multiply: two services at 99.9% each give $0.999 \times 0.999 = 0.998$, about 99.8%.
+
+<note>Series: a request needs every component, so the availability is the product of the components' availabilities (failures assumed independent).</note>
+
+**Problem 2 · harder**
+
+A service runs as two replicas behind a load balancer, and a request succeeds if at least one replica is up. Each replica is up 99% of the time and they fail independently. Treat the load balancer as perfect. What is the availability of the pair?
+
+<solution>The pair is down only when both replicas are down: 0.01 × 0.01 = 0.0001. Availability = 1 − 0.0001 = 0.9999, which is 99.99%.</solution>
+<check lang="python">
+a = 1 - (1 - 0.99) ** 2
+assert abs(a - 0.9999) < 1e-12
+</check>
+
+<ask type="problem">The availability as a percentage, with your working.</ask>
+@@ learner answer sure
+Easy, same rule. Two components so multiply: 0.99 × 0.99 = 0.9801, so 98.01%. Redundancy costs you a little availability.
+@@ reply
+<grade verdict="wrong" score="0.1">"multiply: 0.99 × 0.99 = 0.9801" is the series rule: it gives the chance that both replicas are up. This pair does not need both, it needs at least one, so a second replica cannot leave it worse off than one replica alone at 99%.</grade>
+
+For "at least one", work from the failure case. The pair is down only when both replicas are down at the same time: 0.01 × 0.01 = 0.0001. The availability is 1 − 0.0001 = 0.9999, or 99.99%: two nines have become four.
+
+<card>Two independent replicas, each up 99%, and one is enough. What is the availability? :: 99.99%. Multiply the unavailabilities (0.01 × 0.01 = 0.0001) and subtract from 1. Multiplying the availabilities is the rule for series.</card>
+
+<note>Parallel (any one is enough): multiply the unavailabilities and subtract from 1, $1 - (1 - a_1)(1 - a_2)$. Series (all needed): multiply the availabilities.</note>
+
+**Problem 3 · same idea**
+
+Two replicas, each up 95% of the time and failing independently; a request needs at least one. What is the availability of the pair?
+
+<solution>Both down: 0.05 × 0.05 = 0.0025. Availability = 1 − 0.0025 = 0.9975, which is 99.75%.</solution>
+<check lang="python">
+a = 1 - (1 - 0.95) ** 2
+assert abs(a - 0.9975) < 1e-12
+</check>
+
+<ask type="problem">The availability as a percentage, starting from the chance that both are down.</ask>
+@@ verify
+assert abs(0.999 * 0.999 - 0.998001) < 1e-12 and round(0.999 * 0.999, 3) == 0.998
+assert abs(0.99 * 0.99 - 0.9801) < 1e-12           # the learner's figure is the series product
+assert abs(0.01 * 0.01 - 0.0001) < 1e-15 and abs(1 - 0.01 ** 2 - 0.9999) < 1e-12
+assert 0.9999 > 0.99 > 0.9801                       # one replica alone beats their answer
+assert abs(0.05 * 0.05 - 0.0025) < 1e-15 and abs(1 - 0.05 ** 2 - 0.9975) < 1e-12
+# enumerate the four up/down cases
+import itertools
+def parallel(a, b):
+    return sum((a if x else 1 - a) * (b if y else 1 - b) for x, y in itertools.product([0, 1], repeat=2) if x or y)
+assert abs(parallel(0.99, 0.99) - 0.9999) < 1e-12 and abs(parallel(0.95, 0.95) - 0.9975) < 1e-12
+assert '99.75' in solution(reply) and '99.75' not in visible(reply)
+
+@@@@ wrong-lamport-converse
+situation: after-wrong
+topic: Lamport logical clocks
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["converse|backwards|other (way|direction)|does not (run|hold) in reverse","concurrent"],"must":["concurrent"],"askTypes":["short","explain","choice"],"askMustNot":["only (the )?first","u happened before v (can|is) (be )?ruled out"]}
+@@ tutor
+A Lamport clock is a counter kept by each process. It goes up by one on every local event and every send; a message carries the sender's counter; on receipt the receiver sets its counter to $\max(\text{own}, \text{message}) + 1$. The guarantee: if event $a$ happened before event $b$ (on the same process, or linked by a chain of messages), then $C(a) < C(b)$.
+
+<note>Lamport clock: +1 on each local event and each send; on receive, $\max(\text{own}, \text{received}) + 1$. If $a$ happened before $b$ then $C(a) < C(b)$.</note>
+
+<ask type="short">Event $x$ on process P has timestamp 3. Event $y$ on process Q has timestamp 8. You know nothing else. Did $x$ happen before $y$?</ask>
+@@ learner answer sure
+Yes. 3 < 8 and the whole point of the clock is that smaller timestamps happen first, so x happened before y.
+@@ reply
+<grade verdict="wrong" score="0.1">"smaller timestamps happen first" runs the guarantee backwards. It says that happening first forces a smaller timestamp; it does not say that a smaller timestamp means the event happened first.</grade>
+
+A case that fits your numbers: Q runs 8 local events on its own, and $y$ is the eighth, so $C(y) = 8$. Later, P, which has exchanged no messages with Q, runs 3 local events, and $x$ is the third, so $C(x) = 3$. Here $x$ has the smaller timestamp and came later on the wall clock. No message links the two, so neither happened before the other: they are concurrent. The timestamps 3 and 8 cannot tell this case apart from one where $x$ did come first.
+
+<card>Does C(a) < C(b) on a Lamport clock mean a happened before b? :: No. The guarantee runs one way only: a before b implies C(a) < C(b). With C(a) < C(b), a may have happened before b or the two may be concurrent; only "b before a" is ruled out.</card>
+
+<note>The converse of the Lamport guarantee does not hold: $C(a) < C(b)$ does not show that $a$ happened before $b$. Events with no chain of messages between them are concurrent, whatever their timestamps.</note>
+
+<ask type="short">Event $u$ on P has timestamp 6 and event $v$ on Q has timestamp 2. Three things could be true: $u$ happened before $v$; $v$ happened before $u$; they are concurrent. Which of the three can you rule out from the timestamps alone, and why?</ask>
+@@ verify
+class Proc:
+    def __init__(self): self.c = 0
+    def local(self): self.c += 1; return self.c
+    def send(self): self.c += 1; return self.c
+    def recv(self, s): self.c = max(self.c, s) + 1; return self.c
+# the reply's case: Q runs 8 events first, then P runs 3; no messages
+wall = 0
+q, p = Proc(), Proc()
+ys = []
+for _ in range(8):
+    wall += 1; ys.append((q.local(), wall))
+xs = []
+for _ in range(3):
+    wall += 1; xs.append((p.local(), wall))
+(cy, ty), (cx, tx) = ys[-1], xs[-1]
+assert (cx, cy) == (3, 8) and tx > ty          # smaller timestamp, later in real time
+# the other case with the same timestamps: x really does precede y through a message
+p2, q2 = Proc(), Proc()
+p2.local(); p2.local(); s = p2.send()           # x is P's third event, a send stamped 3
+assert s == 3
+for _ in range(3): q2.local()
+r = q2.recv(s)                                  # max(3, 3) + 1 = 4
+while q2.c < 8: q2.local()
+assert q2.c == 8 and r == 4
+# the guarantee itself, by contrapositive: C(u) = 6 > C(v) = 2 rules out u before v only
+assert not (6 < 2)
+
+@@@@ wrong-backoff-same-schedule
+situation: after-wrong
+topic: Retries with exponential backoff and jitter
+options: {"strategy":"dialogue"}
+voice: typos
+level: medium
+expect: {"verdict":"wrong","names":["same (instant|moment|schedule)|together|at once","jitter"],"must":["jitter","1 s, 3 s and 7 s","15,000"],"askTypes":["short","explain"],"askMustNot":["budget","circuit breaker","limit the number"]}
+@@ tutor
+<ask type="explain">A dependency fails for two seconds, and 5,000 clients see their calls to it fail at the same moment. Every client retries with the same exponential backoff: wait 1 s, then 2 s, then 4 s. What does the dependency see as it comes back, and would you change anything?</ask>
+@@ learner answer sure
+it sees less and less load. Exponential backoff spreads the clients out becuase the waits keep doubling, so i woudnt change anyhting
+@@ reply
+<grade verdict="wrong" score="0.1">"Exponential backoff spreads the clients out" is the step that fails: doubling spaces out the retries of one client, and does nothing to separate one client from another.</grade>
+
+All 5,000 failed at the same instant and follow the same schedule, so they all retry together: 1 s, 3 s and 7 s after the failure. The dependency sees spikes of 5,000 calls at those instants with silence between them, and a spike can knock it over again just as it recovers. The fix is jitter: each client waits a random time, for example uniformly between 0 and the backoff value ("full jitter"), so the retries are smeared across the interval instead of landing in one instant.
+
+<card>Why is exponential backoff alone not enough when many clients fail together? :: They share one schedule, so they retry in synchronised spikes. Jitter (a random wait, e.g. uniform between 0 and the backoff value) spreads the retries out.</card>
+
+<note>Backoff spaces out one client's retries; jitter spreads different clients apart. Use both: wait a random time up to the exponential backoff value.</note>
+
+<ask type="explain">Jitter removes the spikes, but 5,000 clients retrying three times each is still up to 15,000 extra calls aimed at a service that is struggling. What would you add so that the total retry load stays bounded however long the outage lasts?</ask>
+@@ verify
+import itertools, random
+waits = [1, 2, 4]
+times = list(itertools.accumulate(waits))
+assert times == [1, 3, 7] and '1 s, 3 s and 7 s' in reply
+clients = 5000
+assert clients * len(waits) == 15000
+# without jitter every retry instant carries all the clients; with full jitter the first second is spread out
+rng = random.Random(0)
+first = [rng.uniform(0, 1) for _ in range(clients)]
+buckets = [0] * 10
+for t in first: buckets[min(9, int(t * 10))] += 1
+assert max(buckets) < 600 and min(buckets) > 400      # about 500 per 100 ms, no spike of 5,000
+
+@@@@ wrong-lease-check-then-write
+situation: after-wrong
+topic: Leases and fencing tokens
+options: {"difficulty":"hard"}
+voice: overconfident
+level: hard
+expect: {"verdict":"wrong","names":["pause","between|after the check|before the write"],"must":["fencing token","\\b33\\b","\\b34\\b"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["accepts? (it|A's write|the write)","is accepted"]}
+@@ tutor
+**Problem 1 · hard**
+
+A client takes a lock with a 10-second lease, then does two things:
+
+1. checks that its lease has at least 2 seconds left;
+2. writes the file to storage.
+
+The lock service gives the lock to another client once the lease has expired. Is it guaranteed that two clients never write under the same lock? Say why, or give the sequence of events that breaks it.
+
+<solution>Not guaranteed. The client can pass the check and then stop for longer than the lease has left before its write goes out: a garbage-collection pause, a suspended virtual machine, a stalled network call. The lease expires, the service grants the lock to a second client, which writes; then the first client resumes and its write lands as well. A check made before the write says nothing about the moment the write arrives.</solution>
+
+<ask type="problem">Guaranteed or not, with the reason or the breaking sequence.</ask>
+@@ learner answer sure
+Guaranteed. It checks the lease right before writing and there's 2 whole seconds of margin, a write takes milliseconds. The only way to break it is if the clocks are wrong and you can fix that with NTP.
+@@ reply
+<grade verdict="wrong" score="0.1">"a write takes milliseconds" assumes nothing can happen between the check and the write arriving. The process can be paused there for any length of time, by a garbage-collection pause or a suspended virtual machine, and it does not notice; no margin covers a pause of unknown length.</grade>
+
+The sequence, with every clock correct: A passes the check, then pauses for 15 seconds. Its lease expires, the service grants the lock to B, and B writes. A wakes up, still believing its check, and writes too.
+
+The fix has to involve storage. The lock service issues a fencing token with each grant, a number that only goes up, every write carries its token, and storage rejects a write whose token is lower than the highest it has seen. A holds token 33; B is granted 34 and writes; A's late write arrives with 33 and is refused.
+
+<card>Why can a client not make a lease safe by checking it just before writing? :: It can be paused after the check for longer than the lease has left. Safety needs a fencing token: storage rejects writes carrying a token lower than the highest it has seen.</card>
+
+<note>A lease check proves nothing about the moment the write lands. Fencing token: a number that rises with each lock grant, sent with every write and checked by storage.</note>
+
+**Problem 2 · same level**
+
+A holds token 41 and is paused. B is granted token 42 but has not yet written. A wakes and writes with token 41. What does storage do with A's write, and what does that show about the limits of fencing?
+
+<solution>Storage accepts it: the highest token it has seen is at most 41, so 41 is not lower. Fencing does not stop an old holder at the moment its lease expires. It guarantees only that once a newer token's write has been accepted, every older token is refused, so writes are never applied out of token order.</solution>
+
+<ask type="problem">What storage does, and what fencing does and does not guarantee.</ask>
+@@ verify
+class Storage:
+    def __init__(self): self.highest = 0; self.log = []
+    def write(self, who, token):
+        ok = token >= self.highest
+        if ok: self.highest = token; self.log.append(who)
+        return ok
+# the reply's sequence: lease 10 s, check passes with at least 2 s left, pause 15 s
+lease, checked_at, pause = 10, 8, 15
+assert lease - checked_at >= 2 and checked_at + pause > lease
+s = Storage()
+assert s.write('B', 34) is True and s.write('A', 33) is False and s.log == ['B']
+# without the token check both writes land
+assert ['B', 'A'] == ['B'] + ['A']
+# problem 2: B has token 42 but has not written; A's 41 is accepted, later 41s are refused
+s2 = Storage(); s2.highest = 41
+assert s2.write('A', 41) is True
+assert s2.write('B', 42) is True and s2.write('A', 41) is False
+assert 'accepts it' in solution(reply) and 'accepts it' not in visible(reply)
+
+@@@@ wrong-gossip-linear-rounds
+situation: after-wrong
+topic: Gossip protocols and convergence rounds
+voice: terse
+level: easy
+expect: {"verdict":"wrong","names":["doubl","every (node|informed)|newly informed|all of them"],"must":["\\b12\\b","4,?096"],"askTypes":["short","problem","predict"],"askMustNot":["\\b20\\b"]}
+@@ tutor
+<ask type="predict">One node of 4,096 has an update. In each round, every node that has the update passes it to one node that does not have it yet (the best case: no message is wasted). How many rounds until all 4,096 have it?</ask>
+@@ learner answer sure
+4095. one new node per round, 4095 nodes left to tell.
+@@ reply
+<grade verdict="wrong" score="0.1">"one new node per round" counts only the first node as a sender. Every node that has the update sends in each round, the newly informed ones included, so the number of informed nodes doubles.</grade>
+
+Round by round the count goes 1, 2, 4, 8, 16: after $r$ rounds, $2^r$ nodes have the update. $2^{12} = 4096$, so it takes 12 rounds, not 4,095. Real gossip picks its targets at random, so some messages land on nodes that already know and it needs more rounds than this best case, but the count still grows with $\log n$ rather than with $n$.
+
+<card>In the best case, how many rounds does push gossip need to reach n nodes from one? :: About log2(n): every informed node sends each round, so the informed count doubles. 4,096 nodes take 12 rounds.</card>
+
+<note>Gossip spreads exponentially because every informed node is a sender: best case $2^r$ nodes after $r$ rounds, so about $\log_2 n$ rounds for $n$ nodes.</note>
+
+<ask type="short">Same best case, but the cluster has 1,000,000 nodes. How many rounds until every node has the update? Show the two powers of 2 you compared.</ask>
+@@ verify
+def best_case(n):
+    informed, r = 1, 0
+    while informed < n:
+        informed = min(n, informed * 2); r += 1
+    return r
+assert best_case(4096) == 12 and 2 ** 12 == 4096
+assert 4096 - 1 == 4095                          # the learner's count: one node told per round
+assert best_case(1_000_000) == 20 and 2 ** 19 < 1_000_000 <= 2 ** 20
+# random targets take more rounds than the best case, still far fewer than n (seeded)
+import random
+def push(n, seed):
+    rng = random.Random(seed); informed = {0}; r = 0
+    while len(informed) < n:
+        for _ in range(len(informed)): informed.add(rng.randrange(n))
+        r += 1
+    return r
+rs = [push(4096, s) for s in range(10)]
+assert all(12 < r < 40 for r in rs), rs
+
+@@@@ idk-flp-asynchronous-model
+situation: idk
+topic: The FLP impossibility result
+options: {"strategy":"dialogue"}
+voice: plain
+level: hard
+expect: {"must":["no (upper )?(bound|limit)","asynchronous"],"askTypes":["short","explain"],"askMustNot":["slow or (crashed|dead)","crashed or (just )?slow","cannot (tell|distinguish)"]}
+noverify: conceptual; nothing is computed
+@@ tutor
+<ask type="explain">The FLP result says that in an asynchronous system no deterministic protocol can guarantee that the nodes reach consensus if even one of them may crash. What is it about the asynchronous setting that makes a single possible crash so damaging?</ask>
+@@ learner idk
+@@ reply
+The piece you need is what "asynchronous" means here, because it is a precise assumption and stronger than it sounds. There is no upper bound on how long a message takes to arrive or on how long a node takes to act, and the nodes share no clock. A message sent now may arrive in a millisecond or in an hour, and both are legal runs of the system that a correct protocol has to handle. A crash, in this model, is a node that stops sending for ever, and it does so without announcing it.
+
+<note>Asynchronous model: no bound on message delay or on a node's processing time, and no shared clock. A crashed node simply stops, silently.</note>
+
+<ask type="short">Node A needs B's vote to decide. It has waited ten seconds and nothing has come. Name two different things that could be true of B, both consistent with what A has seen, and say what A risks by acting on each guess.</ask>
+
+@@@@ idk-merkle-path-to-root
+situation: idk
+topic: Anti-entropy with Merkle trees
+voice: plain
+level: medium
+expect: {"must":["root","path"],"askTypes":["short","predict","choice"],"askMustNot":["\\b40\\b","\\b20 levels","log","keys 5 to 8 (may|can|could)"]}
+@@ tutor
+<ask type="short">Two replicas hold the same 1,000,000 keys, and exactly one key's value differs between them. Each has built a binary Merkle tree over its keys. Roughly how many hashes do they have to compare to find the differing key, and why so few?</ask>
+@@ learner idk
+@@ reply
+Start from how the tree is built. Each leaf is the hash of one key's data. Each parent is the hash of its two children's hashes, and so on up to a single root, so the root depends on every leaf below it. Change one leaf and its parent changes, then that parent's parent, all the way up: every hash on the path from that leaf to the root differs between the two replicas, and every hash off that path is the same.
+
+<note>Merkle tree: leaf = hash of the data; parent = hash of its children's hashes. One changed leaf changes exactly the hashes on its path to the root, so equal hashes mean identical subtrees (hash collisions aside).</note>
+
+<ask type="short">Take a small tree over 8 keys, numbered 1 to 8 from left to right. The two replicas' roots differ. They compare the root's two children: the left hashes match and the right hashes differ. Which keys are now known to be identical, and which hashes would you compare next?</ask>
+@@ verify
+import hashlib, math
+h = lambda s: hashlib.sha256(s.encode()).hexdigest()
+def levels(leaves):
+    out = [[h(x) for x in leaves]]
+    while len(out[-1]) > 1:
+        p = out[-1]; out.append([h(p[i] + p[i + 1]) for i in range(0, len(p), 2)])
+    return out
+a = [f'k{i}=v' for i in range(1, 9)]
+for changed in range(8):
+    b = list(a); b[changed] += 'x'
+    la, lb = levels(a), levels(b)
+    diff = [(d, i) for d in range(len(la)) for i in range(len(la[d])) if la[d][i] != lb[d][i]]
+    # exactly the path from the changed leaf to the root differs: one hash per level
+    assert diff == [(d, changed >> d) for d in range(4)], diff
+# the easier question's case: left child of the root matches, right differs, so the change is in keys 5 to 8
+b = list(a); b[6] += 'x'
+la, lb = levels(a), levels(b)
+assert la[2][0] == lb[2][0] and la[2][1] != lb[2][1]
+# the withheld answer to the original question: about 2 hashes per level over about 20 levels
+assert math.ceil(math.log2(1_000_000)) == 20 and '40' not in reply
+
+@@@@ idk-chain-replication-tail
+situation: idk
+topic: Chain replication
+voice: plain
+level: medium
+expect: {"must":["tail","head"],"askTypes":["short","predict","choice"],"askMustNot":["old value","has not been (told|acknowledged)","only the head and B"]}
+noverify: conceptual; nothing is computed
+@@ tutor
+In chain replication the replicas are arranged in a line. Writes go to the head and are passed down the chain one replica at a time. Reads go to the tail.
+
+<ask type="short">It is the tail, not the head, that sends the client the acknowledgement of a write. Why does that make every acknowledged write visible to every later read?</ask>
+@@ learner idk
+@@ reply
+Look first at the order in which replicas receive a write. The head stores it and passes it to the next replica, which stores it and passes it on, and the tail gets it last. A replica only ever receives a write from the one before it, so a write cannot skip ahead: at any moment, the replicas that hold a given write are an unbroken run starting at the head. It follows that whatever the tail holds, every other replica in the chain holds too.
+
+<note>Chain replication: a write travels head → … → tail in order, so the replicas holding it always form a prefix of the chain. Anything the tail has, every replica has.</note>
+
+<ask type="short">A chain is head → B → tail, and a key currently holds 5. A write of 6 has been stored by the head and by B, and is on its way to the tail. At this instant: has the client been told the write succeeded, and what does a read of the key return?</ask>

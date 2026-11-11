@@ -1,0 +1,322 @@
+@@@@ open-binary-search-invariants
+situation: open
+topic: Binary search and its invariants
+voice: plain
+level: medium
+expect: {"must":["invariant"],"askMustNot":["lo = mid`? (is|loops|never)","never shrinks","stays the same","two elements"]}
+noverify: an opening; it asks which update can loop for ever and states no result
+@@ reply
+**Why this matters**
+
+Binary search finds a position in sorted data in about $\log_2 n$ steps. It is the lookup inside a B-tree page, in the sorted tables of an LSM store, in `git bisect` and in `std::lower_bound`. The idea fits in one sentence, but the code is known for off-by-one bugs: a loop that never ends, or a target at the edge that is missed. An invariant, a statement about `lo` and `hi` that stays true on every pass, is what lets you check each line instead of guessing it. The same reasoning carries over to finding a boundary and to binary search on an answer.
+
+<ask type="predict">A binary search keeps `lo` and `hi` as inclusive bounds, loops `while lo <= hi` and takes `mid = (lo + hi) // 2`. When `a[mid]` is smaller than the target, one version sets `lo = mid` and another sets `lo = mid + 1`. Which version can loop for ever, and on what size of range does it get stuck?</ask>
+
+@@@@ open-quiz-hash-load-factor
+situation: open
+topic: Hash tables: chaining and load factor
+mode: quiz
+options: {"length":6}
+voice: plain
+level: easy
+expect: {"must":["Question 1 of 6"],"askMustNot":["load factor","\\b3 keys\\b","600 / 200"]}
+@@ reply
+**Question 1 of 6**
+
+<ask type="short">A hash table with separate chaining holds 600 keys in 200 buckets, and its hash function spreads the keys uniformly. On average, how many keys does a lookup for an absent key compare against, and what is the name of that ratio?</ask>
+@@ verify
+# the answer the question is after: n / m = 3, the load factor; not stated in the reply
+assert 600 / 200 == 3
+assert 'load factor' not in reply.lower()
+# simulate: average chain length over buckets equals n / m exactly
+import random
+random.seed(7)
+buckets = [0] * 200
+for _ in range(600):
+    buckets[random.randrange(200)] += 1
+assert sum(buckets) / len(buckets) == 3
+
+@@@@ open-refresh-prefix-sums
+situation: open
+topic: Prefix sums
+options: {"refresh":true}
+voice: plain
+level: easy
+expect: {"setsProblem":true,"askTypes":["problem"],"must":["P\\[0\\] = 0"],"askMustNot":["P\\[5\\]","\\b10, 12\\b"]}
+@@ reply
+**Problem 1**
+
+Take $a = [4, -1, 7, 2, -5, 3]$. Build its prefix-sum array $P$, where $P[0] = 0$ and $P[i] = a[0] + \dots + a[i-1]$. Then use $P$ to get the sum of $a[2]$ to $a[4]$ inclusive with a single subtraction.
+
+<solution>P = [0, 4, 3, 10, 12, 7, 10]. The sum of a[2..4] is P[5] − P[2] = 7 − 3 = 4 (check: 7 + 2 − 5 = 4).</solution>
+<check lang="python">
+from itertools import accumulate
+a = [4, -1, 7, 2, -5, 3]
+P = [0] + list(accumulate(a))
+assert P == [0, 4, 3, 10, 12, 7, 10]
+assert P[5] - P[2] == sum(a[2:5]) == 4
+</check>
+
+<ask type="problem">The array P, and the subtraction that gives the sum of a[2] to a[4].</ask>
+@@ verify
+a = [4, -1, 7, 2, -5, 3]
+P = [0]
+for x in a:
+    P.append(P[-1] + x)
+assert str(P) in solution(reply)
+assert P[5] - P[2] == a[2] + a[3] + a[4] == 4 and (P[5], P[2]) == (7, 3)
+assert 'P[5] − P[2] = 7 − 3 = 4' in solution(reply)
+assert 'P[5]' not in visible(reply)
+
+@@@@ open-prior-topological-sort-cycle
+situation: open-prior
+topic: Topological sort
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Topological sort","daysAgo":2,"finished":false,"plan":["Dependencies as a directed acyclic graph","Kahn's algorithm with in-degrees","Detecting a cycle"],"right":3,"partly":0,"wrong":1,"missed":["How does Kahn's algorithm show that the graph has a cycle?"],"open":"Give a topological order of the graph with edges a→b, a→c, b→d, c→d."}]}
+expect: {"must":["Kahn"],"askMustNot":["cycle","in-degree (never|stays|cannot)"]}
+noverify: an opening; the question's answer (the leftover vertices contain a cycle) is not stated
+@@ reply
+**Why this matters**
+
+A topological sort puts the vertices of a directed graph in an order where every edge points forwards. Build systems such as Make and Bazel use it to order compilation, package managers to order installs, and schedulers such as Airflow to order the tasks of a pipeline. You have the graph model and Kahn's algorithm from two days ago; what the algorithm does on a graph that has no valid order was the one gap, and it is what those tools rely on to reject a bad dependency file.
+
+<ask type="short">Kahn's algorithm runs on a graph with 6 vertices. Its queue becomes empty after it has output only 4 of them. What does that tell you about the 2 vertices left over, and why did neither ever enter the queue?</ask>
+
+@@@@ open-prior-kruskal-on-union-find
+situation: open-prior
+topic: Kruskal's algorithm with union-find
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Union-find with path compression","daysAgo":4,"finished":true,"plan":["Sets as trees with a parent array","Find and union","Path compression","Union by rank"],"right":5,"partly":1,"wrong":0,"missed":[]}]}
+expect: {"must":["union-find","cheapest"],"askMustNot":["find\\(","\\broots?\\b","same set"]}
+noverify: an opening; it asks how the cycle test is done and does not state it
+@@ reply
+**Why this matters**
+
+A minimum spanning tree connects every vertex of a weighted graph for the lowest total edge weight. It is used to lay out networks, in single-linkage clustering, and as a step inside approximation algorithms. Kruskal's algorithm builds one by taking the edges from cheapest to dearest and skipping any edge that would close a cycle. That test rests on the union-find structure from your lesson four days ago: each tree of the forest built so far is one set. With it the whole algorithm costs $O(E \log E)$, and the sort of the edges is the dominant term.
+
+<ask type="short">Kruskal's algorithm is about to consider the edge between vertices u and v. With the two union-find operations you already have, how does it decide whether adding this edge would close a cycle?</ask>
+
+@@@@ open-recall-heap-children
+situation: open-recall
+topic: Binary heaps
+voice: plain
+level: easy
+before: {"recall":[{"prompt":"In a binary heap stored in a 0-indexed array, at which indices are the two children of the node at index i?","topic":"Binary heaps","reviews":2,"lapses":0}]}
+expect: {"askMustNot":["2i","2 ?\\* ?i","i ?\\* ?2"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="short">In a binary heap stored in a 0-indexed array, at which indices are the two children of the node at index i?</ask>
+
+@@@@ open-recall-quicksort-worst-case
+situation: open-recall
+topic: Quicksort and partitioning
+voice: plain
+level: medium
+before: {"recall":[{"prompt":"Quicksort always takes the last element as its pivot. Which inputs make it run in quadratic time, and why?","topic":"Quicksort and partitioning","reviews":1,"lapses":1}]}
+expect: {"askMustNot":["sorted","n - 1","unbalanced"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="explain">Quicksort always takes the last element as its pivot. Which inputs make it run in quadratic time, and why?</ask>
+
+@@@@ correct-big-o-doubling-loop
+situation: after-correct
+topic: Big-O analysis of loops
+voice: terse
+level: medium
+expect: {"verdict":"correct","must":["1023"],"askMustNot":["n log n","harmonic","n / i"]}
+@@ tutor
+**Why this matters**
+
+Counting how a loop's work grows with its input is how you tell, before running anything, whether code that is fine on a thousand rows will finish on a hundred million. It is the vocabulary of every design review and of the documentation of every container and database operation, and the rest of this subject is stated in it.
+
+```python
+def f(n):
+    count = 0
+    i = 1
+    while i < n:
+        for j in range(i):
+            count += 1
+        i *= 2
+    return count
+```
+
+<ask type="predict">How does the value `f(n)` returns grow with n: $\Theta(\log n)$, $\Theta(n)$, $\Theta(n \log n)$ or $\Theta(n^2)$? Say why.</ask>
+@@ learner answer sure
+Θ(n). inner loop runs i times and i doubles, so 1+2+4+... up to below n. geometric, sums to less than 2n
+@@ reply
+<grade verdict="correct" score="1">"geometric, sums to less than 2n" is the whole argument: the last term dominates the sum, so the outer loop's $\log_2 n$ passes do not multiply the cost. For n = 1024 the count is 1 + 2 + … + 512 = 1023.</grade>
+
+A harder one of the same kind. Here the inner loop's step changes instead of its length:
+
+```python
+def g(n):
+    count = 0
+    for i in range(1, n + 1):
+        j = 1
+        while j <= n:
+            count += 1
+            j += i
+    return count
+```
+
+<ask type="short">How does the value `g(n)` returns grow with n, as a $\Theta$ bound? Give the sum you used to get it.</ask>
+@@ verify
+import math
+ns = {}
+exec(block(tutor[0], 'python'), ns)
+exec(block(reply, 'python'), ns)
+f, g = ns['f'], ns['g']
+assert f(1024) == 1023 == sum(2**k for k in range(10))
+for n in (10, 100, 1000, 5000, 100000):
+    assert n / 2 <= f(n) < 2 * n           # Theta(n), the learner's bound
+# g: inner loop runs ceil(n / i) times, a harmonic sum: Theta(n log n)
+for n in (1000, 10000):
+    assert g(n) == sum(math.ceil(n / i) for i in range(1, n + 1))
+    assert 1.0 < g(n) / (n * math.log(n)) < 1.2
+assert g(10000) / g(1000) > 10 * 1.25      # grows faster than linearly
+assert 'n log n' not in visible(reply)
+
+@@@@ correct-merge-sort-plan
+situation: after-correct
+topic: Merge sort
+voice: wordy
+level: medium
+expect: {"verdict":"correct","need":["plan"],"must":["\\b17\\b"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b49\\b"]}
+@@ tutor
+One more before we start, on the merge step alone.
+
+<ask type="short">Two sorted lists of 4 elements each are merged into one sorted list. What is the largest number of comparisons the merge can need, and what kind of input forces it?</ask>
+@@ learner answer sure
+I think it's 7. Each comparison puts exactly one element in the output, and once one of the lists runs out the rest of the other gets copied over with no comparisons at all. So the worst case is when neither runs out early, which is when they interleave, like 1,3,5,7 merged with 2,4,6,8. Then only the very last element is free, so 8 minus 1 = 7.
+@@ reply
+<grade verdict="correct" score="1">"Each comparison puts exactly one element in the output" is the reason, and interleaved lists are the worst case: only the last element is placed without a comparison, so 8 − 1 = 7.</grade>
+
+<plan>
+- Counting comparisons level by level
+- Why the total is $n \log_2 n$
+- Stability and the extra memory
+</plan>
+
+You have the merge, so straight to the whole sort. Merge sort halves the list until each piece has one element, then merges the pieces back in pairs. For $n = 8$ that is four merges of 1 + 1 (at most 1 comparison each), two of 2 + 2 (at most 3 each) and one of 4 + 4 (at most 7). In the worst case: $4 \cdot 1 + 2 \cdot 3 + 1 \cdot 7 = 17$ comparisons.
+
+<note>Merging sorted lists of lengths $a$ and $b$ takes at most $a + b - 1$ comparisons. Merge sort on $n = 2^k$ elements has $k$ levels of merging, and each level handles all $n$ elements, so a level costs fewer than $n$ comparisons.</note>
+
+**Problem 1 · warm-up**
+
+Merge sort runs on 16 elements. What is the largest number of comparisons it can make in total?
+
+<solution>Levels: 8 merges of 1 + 1 give 8; 4 merges of 2 + 2 give 4 × 3 = 12; 2 merges of 4 + 4 give 2 × 7 = 14; 1 merge of 8 + 8 gives 15. Total 8 + 12 + 14 + 15 = 49.</solution>
+<check lang="python">
+def W(n):
+    return 0 if n == 1 else 2 * W(n // 2) + n - 1
+assert W(16) == 8 * 1 + 4 * 3 + 2 * 7 + 15 == 49
+</check>
+
+<ask type="problem">The total, with the count for each level of merging.</ask>
+@@ verify
+from itertools import permutations
+def msort(a, c):
+    if len(a) <= 1:
+        return a
+    m = len(a) // 2
+    l, r = msort(a[:m], c), msort(a[m:], c)
+    out, i, j = [], 0, 0
+    while i < len(l) and j < len(r):
+        c[0] += 1
+        if l[i] <= r[j]:
+            out.append(l[i]); i += 1
+        else:
+            out.append(r[j]); j += 1
+    return out + l[i:] + r[j:]
+def comps(a):
+    c = [0]
+    assert msort(list(a), c) == sorted(a)
+    return c[0]
+# the learner's merge: 7 comparisons on the interleaved lists, and 7 is the most for 4 + 4
+def merge_count(l, r):
+    i = j = c = 0
+    while i < len(l) and j < len(r):
+        c += 1
+        if l[i] <= r[j]: i += 1
+        else: j += 1
+    return c
+assert merge_count([1, 3, 5, 7], [2, 4, 6, 8]) == 7
+from itertools import combinations
+best = 0
+for left in combinations(range(8), 4):
+    right = [x for x in range(8) if x not in left]
+    best = max(best, merge_count(list(left), right))
+assert best == 7
+# the worked example: worst case over every permutation of 8 elements is 17
+assert max(comps(p) for p in permutations(range(8))) == 17 == 4 * 1 + 2 * 3 + 1 * 7
+# n = 16: the recurrence, the closed form n lg n - n + 1, and an input that reaches it
+W = lambda n: 0 if n == 1 else 2 * W(n // 2) + n - 1
+assert W(16) == 49 == 16 * 4 - 16 + 1 and W(8) == 17
+def worst(a):   # build a worst-case input by un-merging: interleave at every level
+    if len(a) <= 1:
+        return a
+    return worst(a[0::2]) + worst(a[1::2])
+assert comps(worst(list(range(16)))) == 49
+assert '49' in solution(reply) and '49' not in visible(reply)
+
+@@@@ correct-recall-dynamic-array-amortised
+situation: after-correct
+topic: Dynamic arrays and amortised analysis
+voice: typos
+level: medium
+before: {"recall":[{"prompt":"A dynamic array doubles its capacity when it is full. What is the amortised cost of one append, and why?","topic":"Dynamic arrays and amortised analysis","reviews":1,"lapses":0}]}
+expect: {"verdict":"correct","heading":"Why this matters","askMustNot":["\\b127\\b","64 \\+"]}
+@@ tutor
+<ask type="short">A dynamic array doubles its capacity when it is full. What is the amortised cost of one append, and why?</ask>
+@@ learner answer sure
+O(1) amortised. a resize copys all n elements but it only happens after n/2 cheap appends since the last resize, so the copy cost spred over those is a constant per append
+@@ reply
+<grade verdict="correct" score="1">"it only happens after n/2 cheap appends since the last resize" is the reason: the n copies are paid for by the n/2 appends before them, about 2 copies each, so the cost per append is constant on average.</grade>
+
+**Why this matters**
+
+Python's `list`, C++'s `std::vector`, Go's slices and Java's `ArrayList` are all dynamic arrays, so this analysis is what their documented "amortised constant time" append means. It also says what the guarantee leaves out: a single append can still cost $O(n)$, which matters for latency in a request path, and it is why `reserve` exists. The same accounting argument is used for hash table resizing and for union-find.
+
+<ask type="short">A dynamic array starts with capacity 1 and doubles whenever an append finds it full. After 100 appends, how many element copies have the resizes made in total?</ask>
+@@ verify
+# the probe's answer (not shown in the reply): resizes at sizes 1, 2, 4, ..., 64 copy 127 elements
+cap, size, copies = 1, 0, 0
+for _ in range(100):
+    if size == cap:
+        copies += size
+        cap *= 2
+    size += 1
+assert copies == 127 == sum(2**k for k in range(7)) and cap == 128
+assert '127' not in reply
+# the learner's claim: at a resize of n elements, n/2 appends have happened since the last resize
+cap, size, last = 1, 0, 0
+for k in range(1, 2000):
+    if size == cap:
+        if size >= 2:
+            assert k - 1 - last == size // 2
+        last = k - 1
+        cap *= 2
+    size += 1
+
+@@@@ correct-lru-cache-dialogue
+situation: after-correct
+topic: LRU cache design
+options: {"strategy":"dialogue"}
+voice: overconfident
+level: medium
+expect: {"verdict":"correct","askTypes":["short","explain"],"must":["evict"],"askMustNot":["\\bkey\\b"]}
+noverify: a design discussion with nothing computed; the structure described (hash map to list nodes, doubly linked list in recency order) is the standard O(1) design
+@@ tutor
+An LRU cache holds at most `capacity` entries. `get(key)` and `put(key, value)` must both run in $O(1)$, and when a put would take it over capacity, the entry used least recently is evicted. A hash map alone gives the $O(1)$ lookup but keeps no order of use.
+
+<ask type="explain">Which structures would you combine, and what does each one do on a get and on a put?</ask>
+@@ learner answer sure
+Hash map plus a doubly linked list, obviously. The list keeps entries in recency order, most recent at the head and the LRU one at the tail. The map goes from key to the list node, so get finds the node in O(1), unlinks it and moves it to the head. Put inserts a new node at the head and if we're over capacity it drops the tail node. All O(1), done.
+@@ reply
+<grade verdict="correct" score="1">"The map goes from key to the list node" is what makes it work: the map finds the node in $O(1)$, and because the list is doubly linked the node can be unlinked and moved to the head without walking the list.</grade>
+
+One step is not finished yet: eviction. When put "drops the tail node", the node leaves the list, but the hash map still holds an entry that points at it. Left there, the map grows without bound and a later get returns a node that is no longer in the list.
+
+<ask type="short">Eviction starts from the tail node, not from the map. What must each list node hold so that the map entry pointing at it can be deleted in $O(1)$?</ask>

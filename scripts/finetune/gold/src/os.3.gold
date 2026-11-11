@@ -1,0 +1,701 @@
+@@@@ mark-error-srtf-forgot-arrival
+situation: mark-error
+topic: Shortest remaining time first
+options: {"difficulty":"hard"}
+voice: wordy
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["8 - 5 = 3","arrival","3\\.5"],"must":["8 − 1 − 5 = 2","3\\.5 ms"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b2 ms\\b","7, 1, 0"]}
+@@ tutor
+**Problem 1 · hard**
+
+Shortest remaining time first is SJF with preemption: whenever a job arrives or finishes, the job with the least remaining time gets the CPU.
+
+| Job | Arrival (ms) | Burst (ms) |
+|---|---|---|
+| P1 | 0 | 8 |
+| P2 | 1 | 5 |
+| P3 | 3 | 2 |
+| P4 | 6 | 3 |
+
+<solution>Timeline: P1 0 to 1, P2 1 to 3, P3 3 to 5, P2 5 to 8, P4 8 to 11, P1 11 to 18. Completion: P1 18, P2 8, P3 5, P4 11. Waiting = completion − arrival − burst: P1 10, P2 2, P3 0, P4 2. Average 14 / 4 = 3.5 ms.</solution>
+<check lang="python">
+jobs = {'P1': (0, 8), 'P2': (1, 5), 'P3': (3, 2), 'P4': (6, 3)}
+rem = {n: b for n, (a, b) in jobs.items()}
+t, done = 0, {}
+while rem:
+    ready = [n for n in rem if jobs[n][0] <= t]
+    n = min(ready, key=lambda n: rem[n])
+    rem[n] -= 1
+    t += 1
+    if rem[n] == 0:
+        del rem[n]
+        done[n] = t
+wait = {n: done[n] - a - b for n, (a, b) in jobs.items()}
+assert done == {'P3': 5, 'P2': 8, 'P4': 11, 'P1': 18}
+assert wait == {'P1': 10, 'P2': 2, 'P3': 0, 'P4': 2} and sum(wait.values()) / 4 == 3.5
+</check>
+
+<ask type="problem">The timeline, each job's waiting time, and the average waiting time.</ask>
+@@ learner answer sure
+At 0 only P1 is there so it runs. At 1 P2 arrives with 5 and P1 has 7 left, so P2 preempts. At 3 P3 arrives with 2 and P2 has 3 left, so P3 preempts and runs 3 to 5. At 5 it's P2 (3 left) against P1 (7 left) so P2 runs; at 6 P4 arrives with 3 but P2 only has 2 left, so P2 keeps going and finishes at 8. Then P4 runs 8 to 11 and P1 runs 11 to 18. Completion times: P1 18, P2 8, P3 5, P4 11. Waiting times: P1 = 18 - 0 - 8 = 10, P2 = 8 - 5 = 3, P3 = 5 - 3 - 2 = 0, P4 = 11 - 6 - 3 = 2. Average = (10 + 3 + 0 + 2) / 4 = 3.75 ms.
+@@ reply
+<grade verdict="partial" score="0.7">The timeline and all four completion times are right, including the hard call at 6: "P2 only has 2 left, so P2 keeps going". The first wrong step is "P2 = 8 - 5 = 3": the arrival time was left out. P2 arrived at 1, so its wait is 8 − 1 − 5 = 2.</grade>
+
+Your average of 3.75 follows correctly from that 3, so it is the same slip, not a second one. With P2 at 2 the waits are 10, 2, 0 and 2, and the average is 14 / 4 = 3.5 ms. You applied the full formula to the other three jobs; P1 hides the omission because its arrival is 0.
+
+<card>Waiting time of a job that arrives after time 0? :: completion − arrival − burst. Leaving out the arrival counts time before the job existed as waiting.</card>
+
+<note>Waiting time = completion − arrival − burst, for every job. A check: no job can wait longer than its completion time minus its arrival time.</note>
+
+**Problem 2 · same level**
+
+Same policy, new jobs.
+
+| Job | Arrival (ms) | Burst (ms) |
+|---|---|---|
+| P1 | 0 | 9 |
+| P2 | 2 | 4 |
+| P3 | 3 | 1 |
+| P4 | 7 | 2 |
+
+<solution>Timeline: P1 0 to 2, P2 2 to 3, P3 3 to 4, P2 4 to 7, P4 7 to 9, P1 9 to 16. Completion: P1 16, P2 7, P3 4, P4 9. Waiting: P1 16 − 0 − 9 = 7, P2 7 − 2 − 4 = 1, P3 4 − 3 − 1 = 0, P4 9 − 7 − 2 = 0. Average 8 / 4 = 2 ms.</solution>
+<check lang="python">
+jobs = {'P1': (0, 9), 'P2': (2, 4), 'P3': (3, 1), 'P4': (7, 2)}
+rem = {n: b for n, (a, b) in jobs.items()}
+t, done = 0, {}
+while rem:
+    ready = [n for n in rem if jobs[n][0] <= t]
+    n = min(ready, key=lambda n: rem[n])
+    rem[n] -= 1
+    t += 1
+    if rem[n] == 0:
+        del rem[n]
+        done[n] = t
+wait = {n: done[n] - a - b for n, (a, b) in jobs.items()}
+assert done == {'P3': 4, 'P2': 7, 'P4': 9, 'P1': 16}
+assert wait == {'P1': 7, 'P2': 1, 'P3': 0, 'P4': 0} and sum(wait.values()) / 4 == 2
+</check>
+
+<ask type="problem">The timeline, each job's waiting time, and the average waiting time.</ask>
+@@ verify
+def srtf(jobs):
+    rem = {n: b for n, a, b in jobs}; arr = {n: a for n, a, b in jobs}; t = 0; done = {}; tl = []
+    while rem:
+        ready = sorted((n for n in rem if arr[n] <= t), key=lambda n: rem[n])
+        assert len(ready) == 1 or rem[ready[0]] != rem[ready[1]], ('tie', t)   # no tie anywhere
+        n = ready[0]
+        if tl and tl[-1][0] == n: tl[-1][2] = t + 1
+        else: tl.append([n, t, t + 1])
+        rem[n] -= 1; t += 1
+        if rem[n] == 0: del rem[n]; done[n] = t
+    return done, ', '.join(f'{n} {a} to {b}' for n, a, b in tl)
+def jobs_of(text):
+    return [(r[0], int(r[1]), int(r[2])) for r in table(text)[1:]]
+j1 = jobs_of(tutor[0])
+done, tl = srtf(j1)
+assert tl == 'P1 0 to 1, P2 1 to 3, P3 3 to 5, P2 5 to 8, P4 8 to 11, P1 11 to 18' and tl in solution(tutor[0])
+assert done == {'P1': 18, 'P2': 8, 'P3': 5, 'P4': 11}
+w = {n: done[n] - a - b for n, a, b in j1}
+assert w == {'P1': 10, 'P2': 2, 'P3': 0, 'P4': 2} and sum(w.values()) / 4 == 3.5
+# the learner's timeline is right and the one slip gives their 3.75
+assert 'P1 18, P2 8, P3 5, P4 11' in learner and (10 + 3 + 0 + 2) / 4 == 3.75 and 8 - 5 == 3
+# at 6: P2 has 2 left against P4's 3
+assert 5 - (3 - 1) - (6 - 5) == 2
+j2 = jobs_of(reply)
+done2, tl2 = srtf(j2)
+assert tl2 in solution(reply) and done2 == {'P1': 16, 'P2': 7, 'P3': 4, 'P4': 9}
+w2 = {n: done2[n] - a - b for n, a, b in j2}
+assert w2 == {'P1': 7, 'P2': 1, 'P3': 0, 'P4': 0} and sum(w2.values()) / 4 == 2
+
+@@@@ mark-error-banker-adds-max
+situation: mark-error
+topic: The banker's algorithm
+voice: plain
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["Max","Allocation","\\(3, 1, 2\\)"],"must":["P3, P1, P0, P2","\\(6, 4, 5\\)"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["P1, P0, P2","\\(5, 4\\)"]}
+@@ tutor
+**Problem 2 · harder**
+
+Three resource types A, B and C. Available = (2, 1, 1).
+
+| Process | Allocation | Max |
+|---|---|---|
+| P0 | (1, 0, 2) | (4, 2, 3) |
+| P1 | (2, 1, 0) | (3, 2, 2) |
+| P2 | (0, 2, 1) | (5, 3, 3) |
+| P3 | (1, 0, 1) | (2, 1, 2) |
+
+Run the safety algorithm. At each step take the lowest-numbered unfinished process whose Need fits in Work.
+
+<solution>Need = Max − Allocation: P0 (3, 2, 1), P1 (1, 1, 2), P2 (5, 1, 2), P3 (1, 1, 1). Work = (2, 1, 1): only P3 fits; it finishes and returns its Allocation, Work = (3, 1, 2). P0 does not fit (B: 2 > 1); P1 fits, Work = (5, 2, 2). P0 fits, Work = (6, 2, 4). P2 fits, Work = (6, 4, 5). Safe, with sequence P3, P1, P0, P2.</solution>
+<check lang="python">
+alloc = [(1, 0, 2), (2, 1, 0), (0, 2, 1), (1, 0, 1)]
+mx = [(4, 2, 3), (3, 2, 2), (5, 3, 3), (2, 1, 2)]
+need = [tuple(m - a for m, a in zip(M, A)) for M, A in zip(mx, alloc)]
+work, order = (2, 1, 1), []
+while len(order) < 4:
+    i = next(i for i in range(4) if i not in order and all(n <= w for n, w in zip(need[i], work)))
+    work = tuple(w + a for w, a in zip(work, alloc[i]))
+    order.append(i)
+assert order == [3, 1, 0, 2] and work == (6, 4, 5)
+</check>
+
+<ask type="problem">The Need matrix, Work after each process finishes, and whether the state is safe (with the sequence).</ask>
+@@ learner answer sure
+Need: P0 (3,2,1), P1 (1,1,2), P2 (5,1,2), P3 (1,1,1). Work = (2,1,1). P0 no, P1 no (needs 2 of C), P2 no, P3 yes. P3 finishes: Work = (2,1,1) + (2,1,2) = (4,2,3). P0 needs (3,2,1), fits: Work = (4,2,3) + (1,0,2) = (5,2,5). P1 fits: Work = (5,2,5) + (2,1,0) = (7,3,5). P2 needs (5,1,2), fits: Work = (7,3,5) + (0,2,1) = (7,5,6). Safe, sequence P3, P0, P1, P2.
+@@ reply
+<grade verdict="partial" score="0.5">The Need matrix and the first choice are right: "P0 no, P1 no (needs 2 of C), P2 no, P3 yes". The first wrong step is "Work = (2,1,1) + (2,1,2) = (4,2,3)": that adds P3's Max. A finishing process returns what it holds, its Allocation (1, 0, 1), so Work = (3, 1, 2).</grade>
+
+Your later additions are correct arithmetic on the wrong Work, but here the slip changes the order. With (3, 1, 2), P0's need (3, 2, 1) does not fit (B: 2 > 1), so P1 goes next: Work = (5, 2, 2). Then P0: (6, 2, 4). Then P2: (6, 4, 5). The state is safe, with sequence P3, P1, P0, P2. A check on the end: the final Work must equal Available plus every Allocation, which is (6, 4, 5); your (7, 5, 6) is more than the system owns.
+
+<card>Safety algorithm: what is added to Work when a process finishes? :: Its Allocation, the resources it actually holds. Max and Need are only used to decide whether it can finish.</card>
+
+<note>Safety algorithm: pick a process with Need ≤ Work, then Work = Work + Allocation of that process. At the end Work equals the total of each resource: Available + the sum of all Allocations.</note>
+
+**Problem 3 · same level**
+
+Two resource types. Available = (2, 1).
+
+| Process | Allocation | Max |
+|---|---|---|
+| P0 | (1, 0) | (3, 2) |
+| P1 | (0, 2) | (2, 3) |
+| P2 | (2, 1) | (4, 2) |
+
+<solution>Need: P0 (2, 2), P1 (2, 1), P2 (2, 1). Work = (2, 1): P0 does not fit, P1 fits, Work = (2, 3). P0 fits, Work = (3, 3). P2 fits, Work = (5, 4). Safe, with sequence P1, P0, P2; the final Work (5, 4) equals Available plus all Allocations.</solution>
+<check lang="python">
+alloc = [(1, 0), (0, 2), (2, 1)]
+mx = [(3, 2), (2, 3), (4, 2)]
+need = [tuple(m - a for m, a in zip(M, A)) for M, A in zip(mx, alloc)]
+work, order, trail = (2, 1), [], []
+while len(order) < 3:
+    i = next(i for i in range(3) if i not in order and all(n <= w for n, w in zip(need[i], work)))
+    work = tuple(w + a for w, a in zip(work, alloc[i]))
+    order.append(i)
+    trail.append(work)
+assert need == [(2, 2), (2, 1), (2, 1)] and order == [1, 0, 2] and trail == [(2, 3), (3, 3), (5, 4)]
+</check>
+
+<ask type="problem">Same rule as before: the Need matrix, Work after each process finishes, and whether the state is safe.</ask>
+@@ verify
+import re
+def parse(text):
+    rows = table(text)[1:]
+    tup = lambda s: tuple(int(x) for x in re.findall(r'\d+', s))
+    return [tup(r[1]) for r in rows], [tup(r[2]) for r in rows]
+def safety(avail, alloc, mx, add=None):
+    need = [tuple(m - a for m, a in zip(M, A)) for M, A in zip(mx, alloc)]
+    work, order, trail = tuple(avail), [], []
+    while len(order) < len(alloc):
+        fit = [i for i in range(len(alloc)) if i not in order and all(n <= w for n, w in zip(need[i], work))]
+        if not fit: return need, order, trail, False
+        i = fit[0]
+        give = (add or {}).get(i, alloc[i])
+        work = tuple(w + a for w, a in zip(work, give)); order.append(i); trail.append(work)
+    return need, order, trail, True
+alloc, mx = parse(tutor[0])
+need, order, trail, safe = safety((2, 1, 1), alloc, mx)
+assert need == [(3, 2, 1), (1, 1, 2), (5, 1, 2), (1, 1, 1)]
+assert order == [3, 1, 0, 2] and trail == [(3, 1, 2), (5, 2, 2), (6, 2, 4), (6, 4, 5)] and safe
+# the total of each resource
+tot = tuple(a + sum(col) for a, col in zip((2, 1, 1), zip(*alloc)))
+assert tot == (6, 4, 5)
+# the learner's run: P3 returns its Max, everything after follows from that
+_, o2, t2, _ = safety((2, 1, 1), alloc, mx, add={3: mx[3]})
+assert o2 == [3, 0, 1, 2] and t2 == [(4, 2, 3), (5, 2, 5), (7, 3, 5), (7, 5, 6)]
+for w in ['(4,2,3)', '(5,2,5)', '(7,3,5)', '(7,5,6)', 'P3, P0, P1, P2']:
+    assert w in learner
+# with the right Work, P0 cannot follow P3
+assert not all(n <= w for n, w in zip(need[0], (3, 1, 2)))
+a3, m3 = parse(reply)
+n3, o3, t3, s3 = safety((2, 1), a3, m3)
+assert n3 == [(2, 2), (2, 1), (2, 1)] and o3 == [1, 0, 2] and t3 == [(2, 3), (3, 3), (5, 4)] and s3
+assert 'P1, P0, P2' in solution(reply) and 'P1, P0, P2' not in visible(reply).replace('P3, P1, P0, P2', '')
+
+@@@@ mark-error-sstf-misses-nearer
+situation: mark-error
+topic: Disk scheduling: FCFS and SSTF
+voice: typos
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["95","48","186"],"must":["186","22 away|22 cylinders"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["155","52, 64"]}
+@@ tutor
+**Problem 2 · harder**
+
+A disk head is at cylinder 60. Requests are pending for cylinders 95, 12, 70, 48, 130 and 33. Serve them with SSTF (shortest seek time first): the next request served is always the one nearest the head's current position. Find the order of service and the total head movement in cylinders.
+
+<solution>From 60: 70 (10). From 70: 48 (22). Then 33 (15), 12 (21), 95 (83), 130 (35). Order 70, 48, 33, 12, 95, 130. Total 10 + 22 + 15 + 21 + 83 + 35 = 186 cylinders.</solution>
+<check lang="python">
+pos, left, order, total = 60, [95, 12, 70, 48, 130, 33], [], 0
+while left:
+    n = min(left, key=lambda c: abs(c - pos))
+    total += abs(n - pos)
+    pos = n
+    left.remove(n)
+    order.append(n)
+assert order == [70, 48, 33, 12, 95, 130] and total == 186
+</check>
+
+<ask type="problem">The order of service and the total head movement, with each move's length.</ask>
+@@ learner answer sure
+from 60 the closest is 70 (10 away). from 70 the next closest is 95, thats 25. then 130 (35). then back down to 48 which is 82, then 33 (15), then 12 (21). order 70, 95, 130, 48, 33, 12. total = 10+25+35+82+15+21 = 188 cylindres
+@@ reply
+<grade verdict="partial" score="0.5">The first move is right: "from 60 the closest is 70 (10 away)". The first wrong step is "from 70 the next closest is 95, thats 25": cylinder 48 is only 22 away from 70, so SSTF turns back and serves 48 next.</grade>
+
+SSTF has no direction: at every step it compares all pending requests on both sides of the head. Your later picks and your sum are consistent with having gone to 95, so there is one error, not several. From 70 the correct run is 48 (22), 33 (15), 12 (21), 95 (83), 130 (35), giving the order 70, 48, 33, 12, 95, 130 and a total of 10 + 22 + 15 + 21 + 83 + 35 = 186 cylinders.
+
+<card>SSTF: which request is served next? :: The pending request nearest the head's current position, on either side. Recompute every distance after each move.</card>
+
+<note>SSTF: after each move, measure the distance from the new head position to every pending request, in both directions, and take the smallest.</note>
+
+**Problem 3 · same level**
+
+The head is at cylinder 45. Requests are pending for cylinders 20, 88, 52, 110, 31 and 64. Serve them with SSTF.
+
+<solution>From 45: 52 (7). Then 64 (12), 88 (24), 110 (22), 31 (79), 20 (11). Order 52, 64, 88, 110, 31, 20. Total 7 + 12 + 24 + 22 + 79 + 11 = 155 cylinders.</solution>
+<check lang="python">
+pos, left, order, total = 45, [20, 88, 52, 110, 31, 64], [], 0
+while left:
+    n = min(left, key=lambda c: abs(c - pos))
+    total += abs(n - pos)
+    pos = n
+    left.remove(n)
+    order.append(n)
+assert order == [52, 64, 88, 110, 31, 20] and total == 155
+</check>
+
+<ask type="problem">The order of service and the total head movement, with each move's length.</ask>
+@@ verify
+def sstf(pos, reqs):
+    left, order, moves = list(reqs), [], []
+    while left:
+        d = sorted(abs(c - pos) for c in left)
+        assert len(d) == 1 or d[0] != d[1], ('tie', pos)       # no tie at any step
+        n = min(left, key=lambda c: abs(c - pos)); moves.append(abs(n - pos)); pos = n; left.remove(n); order.append(n)
+    return order, moves
+order, moves = sstf(60, [95, 12, 70, 48, 130, 33])
+assert order == [70, 48, 33, 12, 95, 130] and moves == [10, 22, 15, 21, 83, 35] and sum(moves) == 186
+assert '10 + 22 + 15 + 21 + 83 + 35 = 186' in reply
+# the learner's route: one wrong pick at 70, then nearest-first from there
+assert abs(95 - 70) == 25 and abs(48 - 70) == 22
+o2, m2 = sstf(95, [12, 48, 130, 33])
+assert o2 == [130, 48, 33, 12] and m2 == [35, 82, 15, 21] and 10 + 25 + sum(m2) == 188
+assert '10+25+35+82+15+21 = 188' in learner
+o3, m3 = sstf(45, [20, 88, 52, 110, 31, 64])
+assert o3 == [52, 64, 88, 110, 31, 20] and m3 == [7, 12, 24, 22, 79, 11] and sum(m3) == 155
+assert '155' in solution(reply) and '155' not in visible(reply)
+
+@@@@ mark-error-best-fit-stale-hole
+situation: mark-error
+topic: Memory allocators: first fit and best fit
+voice: terse
+level: easy
+expect: {"verdict":"partial","accept":["wrong"],"names":["12 hole","\\b21\\b"],"must":["21, 2, 25, 2, 8","\\b58\\b"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["2, 3, 25, 20, 8"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+The free list, in address order, has holes of 30, 12, 50, 20 and 8 KB. Requests arrive for 10, 18, 9 and 25 KB, in that order. Each is placed by best fit: the smallest hole that is large enough. The unused part of a hole stays in the list as a smaller hole. Give the hole chosen for each request and the free list at the end.
+
+<solution>10 goes in the 12 hole (2 left). 18 goes in the 20 hole (2 left). For 9 the list is 30, 2, 50, 2, 8: the smallest hole that fits is 30 (21 left). 25 goes in the 50 hole (25 left). Final list: 21, 2, 25, 2, 8.</solution>
+<check lang="python">
+holes = [30, 12, 50, 20, 8]
+for r in [10, 18, 9, 25]:
+    i = min((h, i) for i, h in enumerate(holes) if h >= r)[1]
+    holes[i] -= r
+assert holes == [21, 2, 25, 2, 8]
+</check>
+
+<ask type="problem">The hole each request goes into, and the final free list in address order.</ask>
+@@ learner answer sure
+10 -> 12 hole, leaves 2. 18 -> 20 hole, leaves 2. 9 -> 12 hole, leaves 3. 25 -> 50 hole, leaves 25. final: 30, 3, 25, 2, 8
+@@ reply
+<grade verdict="partial" score="0.6">The first two placements are right: "10 -> 12 hole, leaves 2" and "18 -> 20 hole, leaves 2". The first wrong step is "9 -> 12 hole, leaves 3": the 12 hole no longer exists, because the first request cut it down to 2.</grade>
+
+When the 9 KB request arrives the list is 30, 2, 50, 2, 8. Only 30 and 50 are large enough, so best fit takes the 30 hole and leaves 21. Your last placement, 25 into the 50 hole, is right either way. The final list is 21, 2, 25, 2, 8. A check that catches this kind of slip: the free space must total 120 − 62 = 58 KB at the end, and 21 + 2 + 25 + 2 + 8 = 58, while your list adds up to 68.
+
+<card>Best fit over several requests: which hole sizes do you search? :: The current ones. Every placement shrinks a hole, so rewrite the free list after each request before choosing the next hole.</card>
+
+<note>Placing a request changes the free list: the chosen hole shrinks by the request size. Total free space afterwards = total before − sum of the requests placed.</note>
+
+**Problem 2 · same level**
+
+Start again from holes of 30, 12, 50, 20 and 8 KB and the same requests, 10, 18, 9 and 25 KB, but place each by first fit: the first hole in address order that is large enough.
+
+<solution>10 goes in the 30 hole (20 left). 18 goes in that same hole, now 20 (2 left). 9 goes in the 12 hole (3 left). 25 goes in the 50 hole (25 left). Final list: 2, 3, 25, 20, 8, which again totals 58.</solution>
+<check lang="python">
+holes = [30, 12, 50, 20, 8]
+for r in [10, 18, 9, 25]:
+    i = next(i for i, h in enumerate(holes) if h >= r)
+    holes[i] -= r
+assert holes == [2, 3, 25, 20, 8] and sum(holes) == 58
+</check>
+
+<ask type="problem">The hole each request goes into, and the final free list in address order.</ask>
+@@ verify
+def place(holes, reqs, pick):
+    holes, trail = list(holes), []
+    for r in reqs:
+        fits = [(h, i) for i, h in enumerate(holes) if h >= r]
+        i = pick(fits); trail.append((r, holes[i], holes[i] - r)); holes[i] -= r
+    return holes, trail
+start, reqs = [30, 12, 50, 20, 8], [10, 18, 9, 25]
+best, bt = place(start, reqs, lambda f: min(f)[1])
+assert best == [21, 2, 25, 2, 8] and bt == [(10, 12, 2), (18, 20, 2), (9, 30, 21), (25, 50, 25)]
+assert sum(start) == 120 and sum(reqs) == 62 and sum(best) == 58
+# the list when the 9 KB request arrives, and which holes fit it
+mid, _ = place(start, reqs[:2], lambda f: min(f)[1])
+assert mid == [30, 2, 50, 2, 8] and [h for h in mid if h >= 9] == [30, 50]
+# the learner's final list and its total
+assert 'final: 30, 3, 25, 2, 8' in learner and 30 + 3 + 25 + 2 + 8 == 68
+first, ft = place(start, reqs, lambda f: min(f, key=lambda x: x[1])[1])
+assert first == [2, 3, 25, 20, 8] and ft == [(10, 30, 20), (18, 20, 2), (9, 12, 3), (25, 50, 25)]
+assert '2, 3, 25, 20, 8' in solution(reply) and '2, 3, 25, 20, 8' not in visible(reply)
+
+@@@@ unusual-fcfs-waiting-by-weights
+situation: mark-unusual
+topic: CPU scheduling: FCFS, SJF and round-robin
+voice: overconfident
+level: medium
+expect: {"verdict":"correct","must":["7\\.75","0 \\+ 6 \\+ 8 \\+ 17"],"mustNot":["should have","you need to draw","not the (standard|usual) (way|method)"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b5 ms\\b","J2, J4, J1, J3","shortest (job|burst)"]}
+@@ tutor
+**Problem 2 · same level**
+
+Four jobs arrive at time 0 and run first come, first served in the order J1, J2, J3, J4, with bursts of 6, 2, 9 and 4 ms. Find the average waiting time.
+
+<solution>Start times are 0, 6, 8 and 17, and with arrivals at 0 those are the waiting times. Sum 31, average 31 / 4 = 7.75 ms.</solution>
+<check lang="python">
+t, waits = 0, []
+for b in [6, 2, 9, 4]:
+    waits.append(t)
+    t += b
+assert waits == [0, 6, 8, 17] and sum(waits) / 4 == 7.75
+</check>
+
+<ask type="problem">The average waiting time, with your working.</ask>
+@@ learner answer sure
+Didn't bother with a timeline. Each burst delays every job behind it: J1's 6 ms is waited out by 3 jobs, J2's 2 ms by 2 jobs, J3's 9 ms by 1 job, and J4 delays nobody. 6×3 + 2×2 + 9×1 = 31 ms of waiting in total, so the average is 31/4 = 7.75 ms.
+@@ reply
+<grade verdict="correct" score="1">7.75 ms is right, and the method is sound: "6×3 + 2×2 + 9×1 = 31" counts each burst once for every job queued behind it, which is the same total as adding the waiting times 0 + 6 + 8 + 17 job by job.</grade>
+
+The two sums are one double count taken in different orders: by job, each wait is the sum of the bursts ahead; by burst, each burst appears in the wait of every job behind. Your form is the more useful one for the next question, because it shows what each position in the queue costs.
+
+**Problem 3 · harder**
+
+The same four jobs, with bursts of 6, 2, 9 and 4 ms, all present at time 0. You may now run them in any order, each to completion.
+
+<solution>In the weighted form the first job's burst is counted 3 times, the second's twice, the third's once and the last's not at all, so the smallest bursts should take the largest multipliers: order J2, J4, J1, J3 (2, 4, 6, 9). Total waiting 2×3 + 4×2 + 6×1 = 20 ms, average 20 / 4 = 5 ms. This is shortest job first.</solution>
+<check lang="python">
+from itertools import permutations
+def total_wait(order):
+    t = w = 0
+    for b in order:
+        w += t
+        t += b
+    return w
+best = min(permutations([6, 2, 9, 4]), key=total_wait)
+assert best == (2, 4, 6, 9) and total_wait(best) == 20 and total_wait(best) / 4 == 5
+</check>
+
+<ask type="problem">Which order gives the lowest average waiting time, and what is that average? Justify the order with your weighted sum.</ask>
+@@ verify
+from itertools import permutations
+b = [6, 2, 9, 4]
+starts = [sum(b[:i]) for i in range(4)]
+assert starts == [0, 6, 8, 17] and sum(starts) == 31 and 31 / 4 == 7.75
+# the learner's weighted sum is the same total
+assert 6 * 3 + 2 * 2 + 9 * 1 == 31 == sum(x * (3 - i) for i, x in enumerate(b))
+assert '6×3 + 2×2 + 9×1 = 31' in learner
+tw = lambda o: sum(sum(o[:i]) for i in range(4))
+ranked = sorted(permutations(b), key=tw)
+assert ranked[0] == (2, 4, 6, 9) and tw(ranked[0]) == 20 and tw(ranked[1]) > 20     # a unique best order
+assert 2 * 3 + 4 * 2 + 6 * 1 == 20
+assert 'J2, J4, J1, J3' in solution(reply) and 'J2, J4' not in visible(reply)
+
+@@@@ unusual-lru-reuse-distance
+situation: mark-unusual
+topic: Page replacement: FIFO, LRU and clock
+voice: wordy
+level: hard
+expect: {"verdict":"correct","must":["most recently used","\\b7\\b"],"mustNot":["should have","you need to track","must track"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b5 faults","does not work|doesn't work|cannot be used"]}
+@@ tutor
+**Problem 4 · harder**
+
+LRU with 3 frames, all empty at the start. The reference string is 2, 4, 6, 2, 8, 4, 2, 6, 8. Count the page faults.
+
+<solution>2, 4, 6 fault (3). 2 hits. 8 faults and evicts 4. 4 faults and evicts 6. 2 hits. 6 faults and evicts 8. 8 faults and evicts 4. Total 7 faults.</solution>
+<check lang="python">
+frames, faults = [], 0
+for p in [2, 4, 6, 2, 8, 4, 2, 6, 8]:
+    if p in frames:
+        frames.remove(p)
+    else:
+        faults += 1
+        if len(frames) == 3:
+            frames.pop(0)
+    frames.append(p)
+assert faults == 7
+</check>
+
+<ask type="problem">The number of page faults, with your working.</ask>
+@@ learner answer sure
+I didn't track the frames at all. For each reference I looked back to the previous use of the same page and counted how many different other pages were referenced in between. With 3 frames it's a hit only if that count is at most 2, because then the page is still among the 3 most recently used. The first uses of 2, 4, 6 and 8 are faults automatically, that's 4. Second 2: between are 4, 6, so 2 distinct, hit. Second 4: between are 6, 2, 8, so 3, fault. Third 2: between are 8, 4, so 2, hit. Second 6: between are 2, 8, 4, 2 which is 3 distinct, fault. Second 8: between are 4, 2, 6, so 3, fault. Total 4 + 3 = 7 faults.
+@@ reply
+<grade verdict="correct" score="1">7 faults is right, and so is the method. LRU with 3 frames always holds exactly the 3 most recently used distinct pages, so your test, "it's a hit only if that count is at most 2", decides each reference without the frame contents.</grade>
+
+The count you used is called the reuse distance (or stack distance) of a reference. It has one advantage over tracing frames: the same distances give the LRU fault count for any number of frames, since a reference hits with k frames exactly when its distance is below k.
+
+**Problem 5 · harder**
+
+Take the same string, 2, 4, 6, 2, 8, 4, 2, 6, 8, with 3 frames, but replace pages by FIFO.
+
+<solution>FIFO trace: 2, 4, 6 fault. 2 hits. 8 faults and evicts 2 (loaded first): frames 4, 6, 8. 4 hits. 2 faults and evicts 4: frames 6, 8, 2. 6 hits. 8 hits. Total 5 faults. The look-back test fails for FIFO: the second 2 at position 7 has only 2 distinct pages since its last use, yet it faults, because FIFO evicts by load time and a hit does not protect a page. FIFO's frames are not "the 3 most recently used", so recency cannot decide a hit.</solution>
+<check lang="python">
+frames, faults = [], 0
+for p in [2, 4, 6, 2, 8, 4, 2, 6, 8]:
+    if p not in frames:
+        faults += 1
+        if len(frames) == 3:
+            frames.pop(0)
+        frames.append(p)
+assert faults == 5
+</check>
+
+<ask type="problem">How many faults does FIFO give, and can your look-back count be used to decide FIFO's hits? Point to one reference in the string that settles it.</ask>
+@@ verify
+refs = [2, 4, 6, 2, 8, 4, 2, 6, 8]
+def lru(refs, k):
+    fr, f = [], 0
+    for p in refs:
+        if p in fr: fr.remove(p)
+        else:
+            f += 1
+            if len(fr) == k: fr.pop(0)
+        fr.append(p)
+    return f
+def fifo_trace(refs, k):
+    fr, out = [], []
+    for p in refs:
+        hit = p in fr
+        if not hit:
+            if len(fr) == k: fr.pop(0)
+            fr.append(p)
+        out.append(hit)
+    return out
+# the learner's method, implemented as described: distinct other pages since the previous use
+def distances(refs):
+    out = []
+    for i, p in enumerate(refs):
+        prev = max((j for j in range(i) if refs[j] == p), default=None)
+        out.append(None if prev is None else len(set(refs[prev + 1:i])))
+    return out
+d = distances(refs)
+assert d == [None, None, None, 2, None, 3, 2, 3, 3]            # their five look-backs: 2, 3, 2, 3, 3
+faults = sum(1 for x in d if x is None or x > 2)
+assert faults == 7 == lru(refs, 3) and d.count(None) == 4
+# the claim that distances give the count for any number of frames
+for k in range(1, 6):
+    assert lru(refs, k) == sum(1 for x in d if x is None or x >= k)
+ft = fifo_trace(refs, 3)
+assert ft.count(False) == 5
+# position 7 (the third 2): distance 2, an LRU hit, but a FIFO fault
+assert refs[6] == 2 and d[6] == 2 and ft[6] is False
+assert '5 faults' in solution(reply) and '5 faults' not in visible(reply)
+
+@@@@ unusual-scan-two-sweeps
+situation: mark-unusual
+topic: Disk scheduling: SCAN and LOOK
+voice: terse
+level: medium
+expect: {"verdict":"correct","must":["348","15 \\+ 35 \\+ 70 \\+ 25 \\+ 14"],"mustNot":["should have","each hop is required"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b320\\b","\\b28\\b"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+A disk has cylinders 0 to 199. The head is at cylinder 40 and moving towards higher numbers. Requests are pending for cylinders 10, 22, 55, 90, 160 and 185. Under SCAN the head serves requests on the way up, carries on to the last cylinder, then reverses and serves the rest on the way down. Find the total head movement in cylinders.
+
+<solution>Up: 40 → 55 → 90 → 160 → 185 → 199, which is 15 + 35 + 70 + 25 + 14 = 159. Down: 199 → 22 → 10, which is 177 + 12 = 189. Total 348 cylinders.</solution>
+<check lang="python">
+path = [40, 55, 90, 160, 185, 199, 22, 10]
+assert sum(abs(b - a) for a, b in zip(path, path[1:])) == 348
+</check>
+
+<ask type="problem">The total head movement, with your working.</ask>
+@@ learner answer sure
+no need to add each hop. up: 199-40 = 159. down: 199-10 = 189. total 348
+@@ reply
+<grade verdict="correct" score="1">348 is right, and the shortcut is valid: "up: 199-40 = 159" works because moves in one direction add up to the distance between the two ends, wherever the stops are. The hops 15 + 35 + 70 + 25 + 14 make the same 159.</grade>
+
+So a SCAN total needs only three numbers: where the head starts, where it turns, and the last request it serves on the way back.
+
+**Problem 2 · harder**
+
+Same disk, same start (cylinder 40, moving up) and same requests: 10, 22, 55, 90, 160 and 185. The policy is now LOOK: the head reverses at the last request in its direction and does not travel on to the end of the disk.
+
+<solution>The head turns at 185. Up: 185 − 40 = 145. Down: 185 − 10 = 175. Total 320 cylinders, which is 348 − 320 = 28 fewer than SCAN: the 14 cylinders from 185 to 199 are no longer travelled, in either direction.</solution>
+<check lang="python">
+path = [40, 55, 90, 160, 185, 22, 10]
+look = sum(abs(b - a) for a, b in zip(path, path[1:]))
+assert look == 320 and 348 - look == 28 == 2 * (199 - 185)
+</check>
+
+<ask type="problem">LOOK's total head movement, and how many cylinders it saves compared with SCAN.</ask>
+@@ verify
+reqs, start, top = [10, 22, 55, 90, 160, 185], 40, 199
+up = sorted(r for r in reqs if r >= start); down = sorted((r for r in reqs if r < start), reverse=True)
+path = [start] + up + [top] + down
+hops = [abs(b - a) for a, b in zip(path, path[1:])]
+assert hops == [15, 35, 70, 25, 14, 177, 12] and sum(hops) == 348
+assert sum(hops[:5]) == 159 == top - start and sum(hops[5:]) == 189 == top - min(reqs)
+assert '199-40 = 159' in learner and '199-10 = 189' in learner
+lpath = [start] + up + down
+lt = sum(abs(b - a) for a, b in zip(lpath, lpath[1:]))
+assert lt == 320 == (185 - 40) + (185 - 10) and 348 - lt == 28
+assert '320' in solution(reply) and '320' not in visible(reply)
+
+@@@@ tangent-sigkill-cannot-be-caught
+situation: tangent
+topic: Signals
+voice: typos
+level: medium
+expect: {"must":["SIGSTOP","cannot be caught"],"askMustNot":["default action","not written|are lost|is lost"],"askTypes":["short","predict","explain"],"words":{"max":170}}
+noverify: conceptual; nothing computed
+@@ tutor
+A process can install a handler for most signals with `sigaction`. When such a signal is delivered, the kernel interrupts the process's normal flow, runs the handler, and then resumes where it left off. With no handler installed the signal's default action applies, and for SIGTERM and SIGINT that is to terminate the process at once. A SIGTERM handler is how a server shuts down cleanly: the handler sets a flag, and the main loop sees the flag, stops taking new work, finishes what is in flight and exits.
+
+<note>A signal with a handler runs the handler and then resumes the program. Without one, the default action applies; for SIGTERM and SIGINT the default is immediate termination, with none of the program's own code run.</note>
+
+<ask type="short">A service flushes its write buffer in a function it calls on shutdown. It has no SIGTERM handler, and someone runs `kill` on it. Does the flush run? Say why.</ask>
+@@ learner question
+wait so why cant i just catch SIGKILL the same way and ignore it? seems like id be able to make a proces unkillable
+@@ reply
+That is exactly what the kernel rules out. SIGKILL and SIGSTOP cannot be caught, blocked or ignored: `sigaction` refuses to install a handler for either. The kernel carries out SIGKILL itself, and the process never runs another instruction of its own, so no program can make itself unkillable and an administrator always has a way to end one. The price is that SIGKILL leaves no chance to clean up, which is why `kill` sends SIGTERM unless told otherwise and SIGKILL is kept as the last resort.
+
+Back to SIGTERM, which a program is allowed to handle.
+
+<ask type="short">A service keeps unsaved records in a memory buffer and has installed no handler for SIGTERM. An operator runs `kill` with the service's PID. Do the buffered records reach the disk before the process ends? Say what decides it.</ask>
+
+@@@@ tangent-container-is-not-a-vm
+situation: tangent
+topic: Containers and namespaces
+options: {"strategy":"dialogue"}
+voice: confused
+level: medium
+expect: {"must":["host's kernel|host kernel","cgroups"],"askTypes":["short","predict","explain"],"askMustNot":["not 1 and 2","different PIDs|other PIDs"],"words":{"max":170}}
+noverify: conceptual; nothing computed
+@@ tutor
+A PID namespace gives a group of processes its own numbering: the first process in it sees itself as PID 1 and cannot see or signal processes outside the namespace. A mount namespace gives the group its own view of the file system tree, and a network namespace gives it its own interfaces and ports.
+
+<note>A namespace changes what a group of processes can see: PID namespace (process numbers), mount namespace (the file system tree), network namespace (interfaces and ports). The processes themselves are ordinary processes.</note>
+
+<ask type="explain">You start a container and run `ps` inside it: it lists two processes. On the host, `ps` lists those same two among hundreds of others. What does that tell you about where the container's processes actually run?</ask>
+@@ learner question
+hang on, I thought a container was basically a lightweight VM with its own little OS inside? does it have its own kernel or not, I'm lost
+@@ reply
+It has no kernel of its own. A virtual machine runs a complete guest kernel on virtual hardware supplied by a hypervisor. A container is a set of ordinary processes running on the host's kernel, with namespaces limiting what they can see and cgroups limiting how much CPU and memory they can use. The "OS" inside a container image is only user-space files: libraries, a shell, a package manager. An Ubuntu image on a Fedora host still has every request to the kernel answered by the Fedora host's kernel.
+
+With that settled, the earlier question in a sharper form.
+
+<ask type="short">Does the host's kernel keep its own process-table entries for the two processes that `ps` shows inside the container? Say what PID numbers you would expect the host to show for them, and why.</ask>
+
+@@@@ tangent-select-epoll-continue
+situation: tangent
+topic: Blocking and non-blocking I/O and event loops
+voice: wordy
+level: medium
+expect: {"ends":"continue","must":["epoll_wait","ready"],"mustNot":["4,999 connections (wait|stall|are stuck)"],"need":["note"],"words":{"max":170}}
+noverify: conceptual; the one figure (1024 descriptors for select) is given as typical, nothing computed
+@@ tutor
+A blocking `read` on a socket with no data puts the calling thread to sleep until data arrives. With one thread per connection that works, but 10,000 mostly idle connections then need 10,000 threads. The alternative is to mark each socket non-blocking, so that `read` returns at once with EAGAIN when there is nothing to read, and to ask the kernel which sockets are ready before reading any of them. One thread then loops: wait for readiness, handle each ready socket without ever blocking on it, repeat. That loop is an event loop.
+
+<note>Event loop: one thread, non-blocking sockets, and a readiness call that sleeps until at least one socket can be read or written. The thread only ever blocks in the readiness call.</note>
+
+<ask type="predict">An event loop serves 5,000 connections on one thread. One handler makes a blocking database call that takes 200 ms. What happens to the other 4,999 connections during that time?</ask>
+@@ learner question
+Before I answer, can you explain the difference between select and epoll? I keep seeing both mentioned as the thing that tells you which sockets are ready and I don't get why there are two.
+@@ reply
+Both are readiness calls; they differ in who keeps the list of sockets.
+
+With `select` the program passes the whole set of descriptors on every call. The kernel checks each one, and the program then scans the whole set again to find which are ready. The work grows with the number of sockets watched, even when only one is ready, and the set has a fixed capacity, typically 1024 descriptors.
+
+With `epoll`, on Linux, the program registers each socket once with `epoll_ctl` and the kernel keeps the list. `epoll_wait` returns only the sockets that are ready, so the work grows with the number of ready sockets, not the number watched. That is why servers holding many idle connections use `epoll`, or `kqueue` on BSD and macOS. Your prediction about the 200 ms call is still open, and it is next.
+
+<note>`select`: the full descriptor set is passed and scanned on every call. `epoll`: register once with `epoll_ctl`; `epoll_wait` returns only the ready descriptors.</note>
+
+<continue/>
+
+@@@@ why-race-single-line-not-atomic
+situation: why
+topic: Race conditions
+options: {"why":true}
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["line of C|single line|statement","instruction"],"must":["load","store"],"askMustNot":["\\b6\\b","one (increment|update) (is|was|gets) lost"],"askTypes":["predict","short","explain"]}
+@@ tutor
+Two threads share `int counter = 0`. Each runs `counter++` 100,000 times with no lock, and the main thread prints `counter` after both have finished.
+
+<ask type="predict">What values can it print, and what in the way `counter++` is carried out decides that?</ask>
+@@ learner answer sure
+200000 every time. counter++ is one statement, so one thread does it and then the other does, they can't cut into the middle of a single line of C. Threads only switch between statements.
+@@ reply
+<grade verdict="wrong" score="0.1">"they can't cut into the middle of a single line of C" is the step that fails. The processor does not execute lines of C; it executes machine instructions, and a thread can be preempted between any two of them. On two cores the threads also run at the same instant.</grade>
+
+So the question becomes what `counter++` turns into. For a shared variable in memory a compiler typically emits three steps: load `counter` into a register, add 1 to the register, store the register back to `counter`. Nothing ties those three together.
+
+<card>Is `counter++` on a shared variable atomic? :: No. It is load, add, store, and another thread can run between any two of those steps.</card>
+
+<note>A C statement is not a unit of execution. `counter++` on shared memory is three steps (load, add, store), and a switch to another thread can fall between any two of them.</note>
+
+Work one interleaving through before settling the general answer.
+
+<ask type="predict">`counter` holds 5. Thread A loads it. Before A does anything else, thread B loads, adds and stores. Then A adds and stores. What does `counter` hold now, and how does that compare with what two increments should have produced?</ask>
+@@ verify
+# the interleaving in the question, step by step
+counter = 5
+a = counter              # A loads
+b = counter; b += 1; counter = b   # B loads, adds, stores
+a += 1; counter = a      # A adds, stores
+assert counter == 6 and 5 + 2 == 7      # one of the two increments is lost
+assert 2 * 100000 == 200000 and '200000 every time' in learner
+ask = reply[reply.rindex('<ask'):]
+assert '6' not in ask.replace('5', '') and 'lost' not in ask
+
+@@@@ why-lock-order-build-the-stuck-state
+situation: why
+topic: Lock ordering and deadlock prevention
+options: {"why":true}
+voice: plain
+level: hard
+expect: {"must":["hold","waiting"],"askMustNot":["hold(s|ing)? (lock |account )?1 and (is )?wait","cannot hold 2","no thread can"],"mustNot":["so no cycle can form","which is impossible"],"askTypes":["short","predict","explain"],"forbid":["grade"]}
+noverify: conceptual; nothing computed
+@@ tutor
+Two threads move money between accounts X and Y. `transfer(from, to)` locks `from`, then locks `to`, moves the money and unlocks both. Thread 1 runs `transfer(X, Y)` while thread 2 runs `transfer(Y, X)`, and now and then both hang for ever. A common fix is to make every transfer lock the account with the smaller ID first, whichever direction the money goes.
+
+<ask type="explain">Why can no deadlock form once every thread takes its locks in the same global order? Argue it from what a deadlock between these threads would have to look like.</ask>
+@@ learner idk
+@@ reply
+Start by building the stuck state, without the fix. For two threads to be deadlocked, neither can be merely slow: each must already hold one lock and be waiting for a lock that the other holds. In the hang you saw, thread 1 holds X and is waiting for Y, while thread 2 holds Y and is waiting for X. Each wait can only end when the other thread moves, and neither can move.
+
+<note>Two threads are deadlocked when each holds a lock that the other is waiting for. Every thread in a deadlock is in the state "holding one lock, waiting for another".</note>
+
+Now apply the rule to a single thread and see which of those states it can still be in.
+
+<ask type="short">Give the accounts IDs 1 and 2, and suppose every thread obeys "lock the smaller ID first". A thread is holding one lock and waiting for the other. Which lock must it be holding, and which must it be waiting for?</ask>
+
+@@@@ why-copy-on-write-find-the-write
+situation: why
+topic: Copy-on-write
+options: {"why":true}
+voice: plain
+level: medium
+expect: {"verdict":"correct","must":["shar"],"askMustNot":["read-only","write-protect","fault","trap"],"mustNot":["read-only","write-protect"],"askTypes":["predict","short","explain"]}
+noverify: conceptual; the 4 GB figure is only quoted from the question, nothing computed
+@@ tutor
+A process using 4 GB of memory calls `fork()`, and the child immediately calls `exec` to run a different program. Early Unix systems copied the parent's whole address space at the fork.
+
+<ask type="predict">What is wasteful about copying all 4 GB here, and what could the kernel do at the fork instead so that the child still sees an identical memory image?</ask>
+@@ learner answer sure
+The copy is thrown away straight after, since exec replaces the child's memory with the new program, so 4 GB gets copied for nothing. Instead the kernel could let the child share the parent's physical pages and only copy the page tables, as long as neither of them changes anything.
+@@ reply
+<grade verdict="correct" score="1">Both parts are right: the copy is discarded at `exec`, and sharing the physical pages gives the child the same image at the cost of copying only the page tables. Your proviso, "as long as neither of them changes anything", is the whole difficulty.</grade>
+
+Take that proviso seriously. After the fork, parent and child are ordinary programs: either may store to any of its pages at any moment, with a plain machine instruction that does not ask the kernel first. If such a store simply went through to a shared page, the other process would see memory change under it, and the two would no longer be separate. So sharing is only safe if the kernel gets control at the first store to each shared page, before the store takes effect.
+
+<ask type="predict">The kernel is not involved in ordinary memory writes. What could it set up at the fork, using the hardware that already checks every memory access, so that the first write to a shared page stops and hands control to the kernel?</ask>

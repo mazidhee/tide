@@ -1,0 +1,418 @@
+@@@@ hands-on-cte-used-twice
+situation: hands-on
+topic: Subqueries versus CTEs
+options: {"strategy":"code"}
+voice: typos
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"must":["\\b260\\b","9\\.6"],"askMustNot":["\\b93\\b","SELECT AVG"],"need":["note"]}
+@@ tutor
+<ask type="short">A subquery in FROM and a CTE written with WITH can express the same query. What does giving the intermediate result a name with WITH let you do that a subquery in FROM does not?</ask>
+@@ learner answer sure
+you can use it more then once in the main query, a subquery in from has to be writen out again every time you need it. also it reads top to bottom instead of inside out
+@@ reply
+<grade verdict="correct" score="1">"you can use it more then once in the main query" is the practical difference, and reading top to bottom is the other reason people reach for WITH.</grade>
+
+A CTE names a query's result so that the main query can treat it as a table:
+
+```sql
+WITH per_customer AS (
+  SELECT customer_id, COUNT(*) AS n FROM orders GROUP BY customer_id
+)
+SELECT COUNT(*) AS customers, MAX(n) AS most, ROUND(AVG(n), 1) AS mean
+FROM per_customer;
+```
+
+It returns one row: 260 customers, the most orders for one customer 43, the mean 9.6.
+
+<note>`WITH name AS (SELECT ...) SELECT ... FROM name`: a CTE is a named result that lasts for one statement. The main query can read it several times, where a subquery in FROM would have to be repeated.</note>
+
+<solution>WITH per_customer AS (SELECT customer_id, COUNT(*) AS n FROM orders GROUP BY customer_id) SELECT customer_id, n FROM per_customer WHERE n > (SELECT AVG(n) FROM per_customer); It returns 93 rows. per_customer is read twice: once for the rows, once inside the scalar subquery that computes the mean.</solution>
+
+<ask type="problem">Keep the WITH part as it is and change the main query: return the customer_id and n of every customer whose n is above the mean, reading per_customer a second time to get that mean. Run it in the block and give the number of rows.</ask>
+@@ verify
+assert lab(block(reply, 'sql')) == [(260, 43, 9.6)]
+q = "WITH per_customer AS (SELECT customer_id, COUNT(*) AS n FROM orders GROUP BY customer_id) SELECT customer_id, n FROM per_customer WHERE n > (SELECT AVG(n) FROM per_customer)"
+assert q in solution(reply)
+rows = lab(q)
+assert len(rows) == 93
+# second method: plain Python over the per-customer counts
+counts = [r[0] for r in lab("SELECT COUNT(*) FROM orders GROUP BY customer_id")]
+mean = sum(counts) / len(counts)
+assert len(counts) == 260 and max(counts) == 43 and round(mean, 1) == 9.6
+assert sum(1 for c in counts if c > mean) == 93
+assert '93' not in visible(reply)
+
+@@@@ hands-on-strftime-weekend-then-date-modifiers
+situation: hands-on
+topic: Date functions in SQLite: strftime, date and julianday
+voice: overconfident
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"must":["Problem 2","2025-06-23","180"],"askMustNot":["\\b40\\b","-7 days","-6 days"]}
+@@ tutor
+SQLite has no date type: order_date is text such as 2024-01-06, and strftime pulls parts out of it. `%w` is the day of the week as a digit, 0 for Sunday to 6 for Saturday:
+
+```sql
+SELECT strftime('%w', order_date) AS dow, COUNT(*) AS orders
+FROM orders
+GROUP BY dow
+ORDER BY dow;
+```
+
+It returns seven rows, from 401 orders on day 0 to 420 on day 6.
+
+<note>In SQLite dates are text in the form YYYY-MM-DD. `strftime('%w', d)` gives the weekday as text, '0' (Sunday) to '6' (Saturday); `%Y`, `%m` and `%d` give the year, month and day.</note>
+
+**Problem 1 · warm-up**
+
+Change the query so that it returns a single number: how many orders were placed at a weekend.
+
+<solution>SELECT COUNT(*) FROM orders WHERE strftime('%w', order_date) IN ('0', '6'); It returns 821 (401 + 420). strftime returns text, so the values compared must be '0' and '6', or the result must be cast to an integer.</solution>
+<check lang="python">
+assert 401 + 420 == 821
+</check>
+
+<ask type="problem">Your query, run in the block, and the count it returns.</ask>
+@@ learner answer sure
+```sql
+SELECT COUNT(*) FROM orders WHERE CAST(strftime('%w', order_date) AS INTEGER) IN (0, 6);
+```
+821. Easy. strftime hands back text so I cast it to an integer and compare with 0 and 6, sunday and saturday.
+@@ reply
+<grade verdict="correct" score="1">821 is right, and "strftime hands back text so I cast it" is the point that matters: without the cast, text compared with the integers 0 and 6 matches nothing in SQLite and the count is 0.</grade>
+
+`date()` takes a date and modifiers that shift it, and `julianday()` turns a date into a day number, so subtracting two of them gives a number of days:
+
+```sql
+SELECT date('2025-06-30', '-7 days')         AS week_before,
+       date('2025-06-30', 'start of month')  AS month_start,
+       julianday('2025-06-30') - julianday('2025-01-01') AS days_between;
+```
+
+It returns 2025-06-23, 2025-06-01 and 180.0. These are SQLite's functions; Postgres writes the same things with interval arithmetic and date_trunc (not run here).
+
+**Problem 2 · harder**
+
+The last order_date in orders is 2025-06-30. Count the orders placed in the final 7 days of the data, 2025-06-24 to 2025-06-30 inclusive, computing the start of that range from '2025-06-30' with a modifier.
+
+<solution>SELECT COUNT(*) FROM orders WHERE order_date > date('2025-06-30', '-7 days'); It returns 40. date('2025-06-30', '-7 days') is 2025-06-23, so a strict > keeps the 24th onwards; >= date('2025-06-30', '-6 days') is the same range. The text dates compare correctly because YYYY-MM-DD sorts in date order.</solution>
+
+<ask type="problem">Your query, the count it returns, and why your comparison includes the 24th but not the 23rd.</ask>
+@@ verify
+rows = lab(block(tutor[0], 'sql'))
+assert len(rows) == 7 and rows[0] == ('0', 401) and rows[6] == ('6', 420)
+assert lab("SELECT strftime('%w', '2024-01-06'), strftime('%w', '2024-01-07')")[0] == ('6', '0')        # a Saturday and a Sunday
+import datetime
+assert datetime.date(2024, 1, 6).weekday() == 5 and datetime.date(2024, 1, 7).weekday() == 6
+assert lab(block(learner, 'sql'))[0][0] == 821
+assert lab("SELECT COUNT(*) FROM orders WHERE strftime('%w', order_date) IN ('0', '6')")[0][0] == 821
+assert lab("SELECT COUNT(*) FROM orders WHERE strftime('%w', order_date) IN (0, 6)")[0][0] == 0       # the claim in the grade
+assert lab(block(reply, 'sql')) == [('2025-06-23', '2025-06-01', 180.0)]
+assert (datetime.date(2025, 6, 30) - datetime.date(2025, 1, 1)).days == 180
+assert lab("SELECT MAX(order_date) FROM orders")[0][0] == '2025-06-30'
+a = lab("SELECT COUNT(*) FROM orders WHERE order_date > date('2025-06-30', '-7 days')")[0][0]
+b = lab("SELECT COUNT(*) FROM orders WHERE order_date >= date('2025-06-30', '-6 days')")[0][0]
+c = lab("SELECT COUNT(*) FROM orders WHERE order_date BETWEEN '2025-06-24' AND '2025-06-30'")[0][0]
+assert a == b == c == 40
+assert 'returns 40' in solution(reply) and '40' not in visible(reply).replace('420', '')
+
+@@@@ hands-on-lead-next-event
+situation: hands-on
+topic: LAG and LEAD window functions
+voice: plain
+level: medium
+expect: {"setsProblem":true,"askTypes":["problem"],"must":["\\b411\\b","\\b278\\b","689"],"askMustNot":["\\b528\\b","\\b161\\b","LAG"]}
+@@ tutor
+LEAD and LAG compare a row with its neighbour without a self join. In the lab's events table each session is a run of events in time order, so `LEAD(event) OVER (PARTITION BY session_id ORDER BY ts)` gives, on every row, the event that came next in the same session, and NULL on a session's last event.
+
+<note>`LEAD(x) OVER (PARTITION BY session_id ORDER BY ts)`: the value of x on the next row of the same session, in time order; NULL when there is no next row. LAG is the same looking backwards.</note>
+
+<continue/>
+@@ learner goon
+@@ reply
+Here it answers a funnel question: what happens straight after a checkout starts.
+
+```sql
+SELECT next_event, COUNT(*) AS n
+FROM (
+  SELECT event,
+         LEAD(event) OVER (PARTITION BY session_id ORDER BY ts) AS next_event
+  FROM events
+)
+WHERE event = 'checkout_started'
+GROUP BY next_event
+ORDER BY n DESC;
+```
+
+It returns two rows: purchase 411, and NULL 278. Of the 689 checkouts started, 411 were followed directly by a purchase and 278 were the last event of their session.
+
+The window function is computed in the inner query, over every event, and the filter on checkout_started is applied outside. Filtering in the same query would remove the other events before LEAD ran, and it would then see only checkout rows.
+
+<solution>Replace LEAD with LAG and rename the column: SELECT prev_event, COUNT(*) AS n FROM (SELECT event, LAG(event) OVER (PARTITION BY session_id ORDER BY ts) AS prev_event FROM events) WHERE event = 'checkout_started' GROUP BY prev_event ORDER BY n DESC; It returns view_item 528 and add_to_cart 161, which add up to the 689 checkouts.</solution>
+<check lang="python">
+assert 528 + 161 == 689 == 411 + 278
+</check>
+
+<ask type="problem">Change the query to look the other way: which event came immediately before each checkout_started, and how many times each? Run it in the block and give the rows.</ask>
+@@ verify
+rows = lab(block(reply, 'sql'))
+assert rows == [('purchase', 411), (None, 278)]
+assert lab("SELECT COUNT(*) FROM events WHERE event = 'checkout_started'")[0][0] == 689
+# the ordering inside a session is fixed: no two events of a session share a timestamp
+assert lab("SELECT COUNT(*) FROM (SELECT 1 FROM events GROUP BY session_id, ts HAVING COUNT(*) > 1)")[0][0] == 0
+q = "SELECT prev_event, COUNT(*) AS n FROM (SELECT event, LAG(event) OVER (PARTITION BY session_id ORDER BY ts) AS prev_event FROM events) WHERE event = 'checkout_started' GROUP BY prev_event ORDER BY n DESC"
+assert q in solution(reply) and lab(q) == [('view_item', 528), ('add_to_cart', 161)]
+# the claim about filtering in the same query: LEAD then sees only checkout rows
+same = lab("SELECT DISTINCT LEAD(event) OVER (PARTITION BY session_id ORDER BY ts) FROM events WHERE event = 'checkout_started'")
+assert set(r[0] for r in same) <= {'checkout_started', None}
+# second method for the 411: a self join on the next event by time
+alt = lab("SELECT COUNT(*) FROM events a JOIN events b ON b.session_id = a.session_id AND b.ts = (SELECT MIN(ts) FROM events c WHERE c.session_id = a.session_id AND c.ts > a.ts) WHERE a.event = 'checkout_started' AND b.event = 'purchase'")[0][0]
+assert alt == 411
+
+@@@@ hands-on-explain-search-scan-continue
+situation: hands-on
+topic: Covering indexes and EXPLAIN QUERY PLAN in SQLite
+voice: wordy
+level: easy
+expect: {"ends":"continue","must":["SCAN orders","2,495","\\b121\\b"],"mustNot":["COVERING"],"need":["note"],"forbid":["grade","solution"]}
+@@ tutor
+Putting EXPLAIN QUERY PLAN in front of a query shows how SQLite would run it, without running it:
+
+```sql
+EXPLAIN QUERY PLAN SELECT order_date FROM orders WHERE customer_id = 42;
+```
+
+The plan's detail line reads:
+
+```
+SEARCH orders USING INDEX orders_customer (customer_id=?)
+```
+
+<ask type="predict">Change the query to select customer_id in place of order_date and run it again. What do you expect to change in that line, and why?</ask>
+@@ learner question
+Before I guess, can you just explain what SEARCH and SCAN actually mean in that output? I've been reading these plans as noise up to now and I'd rather understand the vocabulary first.
+@@ reply
+They name the two ways SQLite can get at rows. SCAN means it reads every row of the table, or every entry of an index, from start to finish and tests each one. SEARCH means it uses a B-tree to go straight to the entries that match and reads only those.
+
+```sql
+EXPLAIN QUERY PLAN SELECT * FROM orders WHERE status = 'refunded';
+```
+
+```
+SCAN orders
+```
+
+There is no index on status, so all 2,495 rows are read to find the 121 refunded ones. In the plan you ran, `SEARCH orders USING INDEX orders_customer (customer_id=?)` says: go down the index orders_customer to the entries whose customer_id equals the value given. The text in brackets is the condition the index is used for; any other condition in the WHERE is checked afterwards, row by row.
+
+<note>EXPLAIN QUERY PLAN: `SCAN t` reads all of t. `SEARCH t USING INDEX i (col=?)` uses index i to jump to the rows that match the bracketed condition. A SCAN of a large table for a WHERE that keeps few rows usually means an index is missing.</note>
+
+<continue/>
+@@ verify
+detail = lambda q: lab(q)[0][-1]
+assert detail(block(tutor[0], 'sql')) == block(tutor[0], '').strip() == 'SEARCH orders USING INDEX orders_customer (customer_id=?)'
+assert detail(block(reply, 'sql')) == block(reply, '').strip() == 'SCAN orders'
+assert lab("SELECT COUNT(*) FROM orders")[0][0] == 2495 and lab("SELECT COUNT(*) FROM orders WHERE status = 'refunded'")[0][0] == 121
+# no index on status
+assert not [r for r in lab("SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'orders'") if 'status' in (r[0] or '')]
+# the pending question's answer is not given away
+assert 'COVERING' in detail("EXPLAIN QUERY PLAN SELECT customer_id FROM orders WHERE customer_id = 42") and 'COVERING' not in reply
+
+@@@@ hands-on-upsert-counter-then-excluded
+situation: hands-on
+topic: Upserts: INSERT ... ON CONFLICT
+voice: confused
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"must":["excluded","2025-01-09 08:44:38"],"askMustNot":["max\\(","06:59:16"]}
+@@ tutor
+An upsert is an INSERT that says what to do when the key already exists. With DO NOTHING the new row is dropped:
+
+```sql
+CREATE TABLE page_views (page TEXT PRIMARY KEY, n INTEGER);
+INSERT INTO page_views VALUES ('home', 1) ON CONFLICT(page) DO NOTHING;
+INSERT INTO page_views VALUES ('home', 1) ON CONFLICT(page) DO NOTHING;
+INSERT INTO page_views VALUES ('home', 1) ON CONFLICT(page) DO NOTHING;
+SELECT page, n FROM page_views;
+```
+
+The SELECT returns one row: home, 1. The second and third INSERT met the existing key and did nothing.
+
+<solution>Replace DO NOTHING with DO UPDATE SET n = n + 1 in the INSERT statements. The first inserts (home, 1); the second and third meet the conflict and add 1 each, so the SELECT returns home, 3.</solution>
+
+<ask type="problem">Change the INSERT statements so that each one counts a view: after running the block the SELECT should return home, 3. Give your statements and say what each of the three does.</ask>
+@@ learner answer unsure
+```sql
+CREATE TABLE page_views (page TEXT PRIMARY KEY, n INTEGER);
+INSERT INTO page_views VALUES ('home', 1) ON CONFLICT(page) DO UPDATE SET n = n + 1;
+INSERT INTO page_views VALUES ('home', 1) ON CONFLICT(page) DO UPDATE SET n = n + 1;
+INSERT INTO page_views VALUES ('home', 1) ON CONFLICT(page) DO UPDATE SET n = n + 1;
+SELECT page, n FROM page_views;
+```
+I think this is it? It gives home, 3. I wasn't sure whether the first insert counts as a conflict too, but I guess not since the table is empty, so it just inserts n = 1 and then the other two add 1 each?
+@@ reply
+<grade verdict="correct" score="1">It returns home, 3, and your reading is right: "the table is empty, so it just inserts n = 1 and then the other two add 1 each". ON CONFLICT is consulted only when the key already exists.</grade>
+
+One more on the same pattern. Inside DO UPDATE, a bare column name is the stored row, and the row that could not be inserted is available as `excluded`. That lets one statement keep a summary per key:
+
+```sql
+CREATE TABLE last_seen (user_id INTEGER PRIMARY KEY, last_ts TEXT, events INTEGER);
+INSERT INTO last_seen VALUES (7, '2025-01-10 06:59:16', 1)
+  ON CONFLICT(user_id) DO UPDATE SET last_ts = excluded.last_ts, events = events + 1;
+INSERT INTO last_seen VALUES (7, '2025-01-09 08:44:38', 1)
+  ON CONFLICT(user_id) DO UPDATE SET last_ts = excluded.last_ts, events = events + 1;
+SELECT * FROM last_seen;
+```
+
+It returns 7, 2025-01-09 08:44:38, 2. The count is right, but the second event arrived out of order and last_ts moved backwards.
+
+<solution>SET last_ts = max(last_ts, excluded.last_ts), events = events + 1. In SQLite max() with two arguments is a scalar function that returns the larger, and timestamps written as YYYY-MM-DD HH:MM:SS compare as text in time order. The SELECT then returns 7, 2025-01-10 06:59:16, 2.</solution>
+
+<ask type="problem">Change the DO UPDATE so that last_ts never moves backwards, whatever order the events arrive in. Run the block and give the row the SELECT returns.</ask>
+@@ verify
+assert sql(block(tutor[0], 'sql')) == [('home', 1)]
+assert sql(block(learner, 'sql')) == [('home', 3)]
+script = block(reply, 'sql')
+assert sql(script) == [(7, '2025-01-09 08:44:38', 2)]
+fixed = script.replace('last_ts = excluded.last_ts', 'last_ts = max(last_ts, excluded.last_ts)')
+assert fixed != script and sql(fixed) == [(7, '2025-01-10 06:59:16', 2)]
+# the same fix holds when the events arrive in time order
+swapped = fixed.replace('2025-01-10 06:59:16', '#A#').replace('2025-01-09 08:44:38', '2025-01-10 06:59:16').replace('#A#', '2025-01-09 08:44:38')
+assert sql(swapped) == [(7, '2025-01-10 06:59:16', 2)]
+assert 'max(last_ts, excluded.last_ts)' in solution(reply) and 'max(' not in visible(reply)
+
+@@@@ hands-on-python-transaction-all-or-nothing
+situation: hands-on
+topic: Atomicity: commit and rollback
+options: {"strategy":"code"}
+voice: terse
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"must":["\\[True, False\\]","transfer_all"],"askMustNot":["with con"]}
+@@ tutor
+In Python's sqlite3, `with con:` runs a block as one transaction: it commits if the block finishes and rolls back if the block raises.
+
+```python
+import sqlite3
+
+con = sqlite3.connect(":memory:")
+con.execute("CREATE TABLE accounts (id INTEGER PRIMARY KEY, balance INTEGER CHECK (balance >= 0))")
+con.execute("INSERT INTO accounts VALUES (1, 100), (2, 20)")
+con.commit()
+
+try:
+    with con:
+        con.execute("UPDATE accounts SET balance = balance + 150 WHERE id = 2")
+        con.execute("UPDATE accounts SET balance = balance - 150 WHERE id = 1")
+except sqlite3.IntegrityError as e:
+    print("failed:", e)
+
+print(con.execute("SELECT id, balance FROM accounts ORDER BY id").fetchall())
+```
+
+```
+failed: CHECK constraint failed: balance >= 0
+[(1, 100), (2, 20)]
+```
+
+<solution>def transfer(con, src, dst, amount): put the two UPDATEs (with ? parameters) inside `with con:` in a try block, return True after it, and return False in `except sqlite3.IntegrityError`. Output: False [(1, 100), (2, 20)] then True [(1, 40), (2, 80)].</solution>
+
+<ask type="code" lang="python">Turn this into a function `transfer(con, src, dst, amount)` that returns True if the transfer committed and False if it was rolled back. Call it with 150 and then with 60, from account 1 to account 2, printing the result and both balances after each call.</ask>
+@@ learner answer sure
+```python
+import sqlite3
+
+def transfer(con, src, dst, amount):
+    try:
+        with con:
+            con.execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", (amount, dst))
+            con.execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", (amount, src))
+        return True
+    except sqlite3.IntegrityError:
+        return False
+
+con = sqlite3.connect(":memory:")
+con.execute("CREATE TABLE accounts (id INTEGER PRIMARY KEY, balance INTEGER CHECK (balance >= 0))")
+con.execute("INSERT INTO accounts VALUES (1, 100), (2, 20)")
+con.commit()
+
+for amount in (150, 60):
+    print(transfer(con, 1, 2, amount), con.execute("SELECT id, balance FROM accounts ORDER BY id").fetchall())
+```
+False [(1, 100), (2, 20)]
+True [(1, 40), (2, 80)]
+150 rolled back incl. the credit, 60 went through
+@@ reply
+<grade verdict="correct" score="1">It runs and prints what you say, and `return True` placed after the `with con:` block is right: it is reached only once the commit has happened. The credit of 150 was undone with the failed debit.</grade>
+
+Each call is atomic on its own. Two calls are not atomic together. With a third account holding 0 and your `transfer` unchanged:
+
+```python
+import sqlite3
+
+def transfer(con, src, dst, amount):
+    try:
+        with con:
+            con.execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", (amount, dst))
+            con.execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", (amount, src))
+        return True
+    except sqlite3.IntegrityError:
+        return False
+
+con = sqlite3.connect(":memory:")
+con.execute("CREATE TABLE accounts (id INTEGER PRIMARY KEY, balance INTEGER CHECK (balance >= 0))")
+con.execute("INSERT INTO accounts VALUES (1, 100), (2, 20), (3, 0)")
+con.commit()
+
+results = [transfer(con, 1, 2, 60), transfer(con, 1, 3, 60)]
+print(results, con.execute("SELECT id, balance FROM accounts ORDER BY id").fetchall())
+```
+
+```
+[True, False] [(1, 40), (2, 80), (3, 0)]
+```
+
+The first payment stayed although the second failed. A payroll run or a batch settlement needs the whole list to stand or fall together.
+
+<solution>
+def transfer_all(con, transfers):
+    try:
+        with con:
+            for src, dst, amount in transfers:
+                con.execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", (amount, dst))
+                con.execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", (amount, src))
+        return True
+    except sqlite3.IntegrityError:
+        return False
+One transaction around the whole loop. On [(1, 2, 60), (1, 3, 60)] it returns False and the balances stay [(1, 100), (2, 20), (3, 0)].
+</solution>
+<check lang="python">
+import sqlite3
+
+def transfer_all(con, transfers):
+    try:
+        with con:
+            for src, dst, amount in transfers:
+                con.execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", (amount, dst))
+                con.execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", (amount, src))
+        return True
+    except sqlite3.IntegrityError:
+        return False
+
+con = sqlite3.connect(":memory:")
+con.execute("CREATE TABLE accounts (id INTEGER PRIMARY KEY, balance INTEGER CHECK (balance >= 0))")
+con.execute("INSERT INTO accounts VALUES (1, 100), (2, 20), (3, 0)")
+con.commit()
+rows = lambda: con.execute("SELECT id, balance FROM accounts ORDER BY id").fetchall()
+assert transfer_all(con, [(1, 2, 60), (1, 3, 60)]) is False and rows() == [(1, 100), (2, 20), (3, 0)]
+assert transfer_all(con, [(1, 2, 60), (1, 3, 40)]) is True and rows() == [(1, 0), (2, 80), (3, 40)]
+</check>
+
+<ask type="code" lang="python">Write `transfer_all(con, transfers)`, where transfers is a list of (src, dst, amount) tuples: either every transfer in the list is committed or none is, and it returns True or False to say which. Run it on the same three accounts with [(1, 2, 60), (1, 3, 60)] and print the result and the balances.</ask>
+@@ verify
+# the learner's program prints exactly what they report
+out = run_py(block(learner, 'python'))
+assert out.strip().split('\n') == ['False [(1, 100), (2, 20)]', 'True [(1, 40), (2, 80)]'], out
+for line in out.strip().split('\n'):
+    assert line in learner
+# the reply's program and its shown output
+assert run_py(block(reply, 'python')).strip() == block(reply, '').strip() == '[True, False] [(1, 40), (2, 80), (3, 0)]'
+# the tutor's earlier program
+assert run_py(block(tutor[0], 'python')).strip() == block(tutor[0], '').strip()
+assert 'transfer_all' in solution(reply) and 'for src, dst, amount in transfers' not in visible(reply)

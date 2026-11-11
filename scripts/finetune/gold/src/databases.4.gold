@@ -1,0 +1,361 @@
+@@@@ tangent-view-versus-materialised
+situation: tangent
+topic: Views
+voice: typos
+level: easy
+expect: {"must":["REFRESH MATERIALIZED VIEW","stores"],"askMustNot":["2,?201"],"askTypes":["predict","short","explain"],"words":{"max":170}}
+@@ tutor
+A view is a SELECT statement stored under a name. Querying the view runs that SELECT.
+
+```sql
+CREATE VIEW completed_orders AS
+SELECT order_id, customer_id, order_date FROM orders WHERE status = 'completed';
+
+SELECT COUNT(*) FROM completed_orders;
+```
+
+The count is 2,200.
+
+<note>`CREATE VIEW name AS SELECT ...` saves a query under a name. `SELECT ... FROM name` then behaves as if the saved query were written in its place.</note>
+
+<ask type="predict">An order's status is changed from processing to completed, and nobody touches the view. What does `SELECT COUNT(*) FROM completed_orders` return the next time it runs, and why?</ask>
+@@ learner question
+quick side question, is this the same thing as a materialized view in postgres? weve got a few of those in the codebase at work and i never realy looked at what they are
+@@ reply
+No. A plain view such as completed_orders stores only its SELECT, and that query runs again every time the view is read. A materialised view stores the result rows themselves, so reading it is cheap, but it shows the data as it was when it was last filled; in Postgres you bring it up to date with `REFRESH MATERIALIZED VIEW`. SQLite has no materialised views, so the one in the lab is the plain kind (the Postgres behaviour was not run here).
+
+<ask type="predict">Back to completed_orders, which is a plain view. One of the 22 orders that are now processing is updated to completed. What does counting the view's rows give afterwards, and where does that number come from?</ask>
+@@ verify
+lab("DROP VIEW IF EXISTS completed_orders")
+assert lab(block(tutor[0], 'sql'))[0][0] == 2200
+assert lab("SELECT COUNT(*) FROM orders WHERE status = 'processing'")[0][0] == 22
+lab("UPDATE orders SET status = 'completed' WHERE order_id = (SELECT MIN(order_id) FROM orders WHERE status = 'processing')")
+assert lab("SELECT COUNT(*) FROM completed_orders")[0][0] == 2201
+assert '2201' not in reply and '2,201' not in reply
+
+@@@@ tangent-sqlite-has-no-hash-index
+situation: tangent
+topic: Hash indexes versus B-tree indexes
+voice: typos
+level: medium
+expect: {"must":["B-tree","USING hash"],"askTypes":["choice"],"words":{"max":170}}
+@@ tutor
+A hash index stores each key in a bucket chosen by a hash of the key, so an equality lookup computes one hash and reads one bucket, whatever the size of the table. A B-tree keeps its keys in sorted order and reaches a key by walking down from the root.
+
+<note>Hash index: bucket = hash(key); one step for `col = value`. B-tree index: keys kept in sorted order; a few page reads from root to leaf for `col = value`.</note>
+
+<ask type="choice" options="Only the equality test|The equality test and the range|The equality test and the ORDER BY|All three of them">An index on orders(order_date) could be a hash index or a B-tree. Which of these can the hash version help with: `order_date = '2025-03-01'`, `order_date BETWEEN '2025-03-01' AND '2025-03-31'`, `ORDER BY order_date`?</ask>
+@@ learner question
+wait does sqlite even have hash indexs? can i make one in the lab and try this out
+@@ reply
+No. In SQLite every index made with CREATE INDEX is a B-tree, and the statement has no option to ask for anything else, so a hash index cannot be tried in the lab. Postgres has them, written `CREATE INDEX ... USING hash (col)`, and MySQL offers them for its MEMORY tables; neither was run here. The lab's orders_date index on orders(order_date) is therefore a B-tree.
+
+<ask type="choice" options="Only the single date|The single date and the whole month|The single date and the sorted output|All three of them">So take it as a thought experiment: suppose orders_date were rebuilt as a hash index in Postgres. Which of these would it still speed up: finding the orders of one exact date, finding the orders of a whole month, returning the orders sorted by date?</ask>
+@@ verify
+import sqlite3
+assert lab("SELECT sql FROM sqlite_master WHERE name = 'orders_date'")[0][0] == 'CREATE INDEX orders_date ON orders(order_date)'
+try:
+    lab("CREATE INDEX orders_date_hash ON orders USING hash (order_date)")
+    assert False, 'SQLite accepted USING hash'
+except sqlite3.OperationalError as e:
+    assert 'syntax error' in str(e)
+import re
+for text in (tutor[0], reply):
+    opts = re.search(r'options="([^"]*)"', text).group(1).split('|')
+    assert len(opts) == 4 and opts[0].startswith('Only')
+
+@@@@ tangent-star-schema-in-denormalisation
+situation: tangent
+topic: Denormalisation trade-offs
+options: {"strategy":"dialogue"}
+voice: confused
+level: medium
+expect: {"must":["fact table","dimension"],"askTypes":["explain","short"],"forbid":["solution"],"words":{"max":170}}
+@@ tutor
+In the lab, order_items has its own unit_price column, although every product already has a price in products. The same fact appears to be stored twice, which is what normalisation tells you to avoid.
+
+<ask type="explain">Suppose you dropped order_items.unit_price and computed revenue as quantity × products.price through a join. What would you gain, and what would go wrong?</ask>
+@@ learner question
+sorry, slightly off topic, but is this copying-columns thing what people mean by a star schema? I keep seeing that term in data engineering posts and I can't tell if it's the same idea or something else
+@@ reply
+Related, but not the same. A star schema is a layout for an analytics warehouse: one central fact table with a row per event, such as a sale, holding the measures and the foreign keys, surrounded by dimension tables (customer, product, date) that describe those keys. The dimensions are deliberately denormalised: a product dimension carries the category name as a column instead of pointing at a separate categories table, which costs some redundancy and saves joins. So a star schema uses denormalisation, but one copied column in a transactional table does not make one.
+
+<ask type="explain">Back to the lab's tables. Imagine order_items has no unit_price column, and a product's price in products is raised today. What happens to the revenue reported for last year's orders, and is that the figure the business wants?</ask>
+@@ verify
+cols = [r[1] for r in lab("PRAGMA table_info(order_items)")]
+assert 'unit_price' in cols and 'price' in [r[1] for r in lab("PRAGMA table_info(products)")]
+# the premise of the question is real in the data: some sold prices differ from today's price
+assert lab("SELECT COUNT(*) FROM order_items oi JOIN products p ON p.product_id = oi.product_id WHERE oi.unit_price <> p.price")[0][0] > 0
+
+@@@@ why-two-phase-locking-early-unlock
+situation: why
+topic: Two-phase locking
+options: {"why":true}
+voice: wordy
+level: hard
+expect: {"verdict":"correct","must":["\\b380\\b","\\b500\\b"],"mustNot":["growing phase","shrinking phase","two-phase locking (says|requires|rule)"],"askTypes":["explain","predict","short"],"forbid":["solution"]}
+@@ tutor
+Start from a rule that looks sufficient: lock an item before you touch it, and unlock it as soon as you have finished with it. Take accounts A = 300 and B = 200, and T1 moving 120 from A to B under that rule: lock A, write A = 180, unlock A; then lock B, write B = 320, unlock B.
+
+<ask type="predict">T2 wants to read A and B and add them up, and it also locks each item before reading it. Find a moment at which T2 gets both locks without waiting and still reports a total that never existed.</ask>
+@@ learner answer sure
+Right after T1 unlocks A and before it has locked B. At that point T2 can lock A and read 180, then lock B and read 200, because B hasn't been touched yet, so it reports 380 instead of 500. Nothing blocked it because T1 held no locks at that point, even though T1 was only half done.
+@@ reply
+<grade verdict="correct" score="1">"Nothing blocked it because T1 held no locks at that point" is the fault exactly: T2 reads 180 and 200 and reports 380, while the true total is 500 both before and after the transfer.</grade>
+
+So locking each item while it is being touched is not enough. The damage was done in the gap after T1 gave up A and before it took B: for that moment T1's half-finished work was open to everyone, and T1 was still going to change something else.
+
+<ask type="explain">T1 did lock before every read and write, so that part of the rule can stay. What extra restriction on when T1 may unlock would have closed the gap? Word it so that it also covers a transaction that touches five items, not only this A-then-B case, and say why your wording is enough.</ask>
+@@ verify
+A, B = 300, 200
+total = A + B
+A -= 120                       # T1 writes A and unlocks it
+seen = A + B                   # T2 reads both in the gap
+B += 120
+assert (A, B) == (180, 320) and seen == 380 and total == 500 == A + B
+for n in ('180', '200', '380', '500'):
+    assert n in learner
+assert 'A = 180' in tutor[0] and 'B = 320' in tutor[0]
+
+@@@@ why-hash-index-range-partial
+situation: why
+topic: Hash indexes versus B-tree indexes
+options: {"why":true}
+voice: wordy
+level: medium
+expect: {"verdict":"partial","names":["scatter","enumerat|list (of|them)|every possible|each possible"],"must":["32,678"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["604,?800","\\b86,?400\\b"],"need":["card"]}
+@@ tutor
+A hash index puts each key in the bucket numbered hash(key) mod the number of buckets, and a good hash function scatters keys: similar keys get unrelated bucket numbers. That is what makes `order_date = '2025-03-01'` one computation and one bucket read.
+
+<ask type="predict">Now take `WHERE order_date BETWEEN '2025-03-01' AND '2025-03-07'`. Where do those neighbouring dates sit relative to each other in the hash index, and what can the database do with the index to answer the query?</ask>
+@@ learner answer unsure
+They'd be scattered all over the place, since the hash of one date tells you nothing about the hash of the next one. So I guess the database hashes each of the seven dates in the range and looks up the seven buckets one after the other? That's seven lookups instead of one, but it would still be using the index.
+@@ reply
+<grade verdict="partial" score="0.6">"scattered all over the place" is right, and it is the reason the index has no stretch of neighbouring entries to walk. The gap is in "hashes each of the seven dates": that works only because you could list every value between the two ends. The database is handed two endpoints, not a list, and for most columns the values in between cannot be enumerated.</grade>
+
+Test your plan on a column where the list is not seven items long. The lab's events table has 32,678 rows, and its ts column is stored to the second, for example 2025-01-07 08:50:36.
+
+<card>Why can a hash index not serve a range condition? :: Hashing scatters neighbouring keys, so the entries in a range are not next to each other. The only way to use the index would be to probe every possible value in the range, which is rarely feasible.</card>
+
+<note>A hash index answers "is this exact key here?". It keeps no order, so the keys between two endpoints are spread across unrelated buckets and cannot be found without knowing each one in advance.</note>
+
+<solution>Seven days of seconds is 7 × 86,400 = 604,800 possible ts values, so the plan makes 604,800 probes. At most 32,678 of them can find a row, because that is every row in the table; reading all 32,678 rows directly is more than 18 times less work than probing.</solution>
+<check lang="python">
+probes = 7 * 24 * 60 * 60
+assert probes == 604800 and probes // 32678 == 18
+</check>
+
+<ask type="problem">For `ts BETWEEN '2025-03-01 00:00:00' AND '2025-03-07 23:59:59'`, how many values would the hash-each-value plan have to probe, and how does that compare with simply reading every row of events?</ask>
+@@ verify
+assert lab("SELECT COUNT(*) FROM events")[0][0] == 32678
+assert lab("SELECT ts FROM events ORDER BY event_id LIMIT 1")[0][0] == '2025-01-07 08:50:36'
+assert lab("SELECT COUNT(*) FROM events WHERE length(ts) <> 19")[0][0] == 0
+from datetime import datetime
+span = datetime(2025, 3, 7, 23, 59, 59) - datetime(2025, 3, 1, 0, 0, 0)
+assert int(span.total_seconds()) + 1 == 604800 == 7 * 86400
+assert 18 < 604800 / 32678 < 19
+assert '604,800' in solution(reply) and '604,800' not in visible(reply)
+
+@@@@ why-where-cannot-see-aggregate-idk
+situation: why
+topic: Query execution order
+options: {"why":true}
+voice: plain
+level: easy
+expect: {"must":["one row at a time","Ireland"],"mustNot":["HAVING"],"askMustNot":["not (been )?formed yet","no group"],"askTypes":["short","predict","explain"],"forbid":["grade","solution"]}
+@@ tutor
+This query is rejected:
+
+```sql
+SELECT country, COUNT(*) AS n FROM customers WHERE COUNT(*) > 20 GROUP BY country;
+```
+
+SQLite's message is `misuse of aggregate: COUNT()`.
+
+<ask type="explain">Why can the database not evaluate COUNT(*) > 20 in the WHERE clause? Reason from what the database has in hand at the moment WHERE is applied.</ask>
+@@ learner idk
+@@ reply
+Take one step back from the error. WHERE is a test applied to one row at a time, as each row arrives from the table in FROM, and its only output is keep or drop for that row. Look at the row it would meet first:
+
+```sql
+SELECT customer_id, name, country FROM customers ORDER BY customer_id LIMIT 1;
+```
+
+That is customer 1, Tunde Nguyen, in Ireland.
+
+<note>WHERE is evaluated once for each row coming out of FROM, and decides only whether that one row is kept.</note>
+
+<ask type="short">The database is deciding whether to keep that single row. For COUNT(*) > 20 to have a value at that moment, which rows would it need to have counted, and has it seen them yet?</ask>
+@@ verify
+import sqlite3
+try:
+    lab(block(tutor[0], 'sql'))
+    assert False, 'the query should be rejected'
+except sqlite3.OperationalError as e:
+    assert str(e) == 'misuse of aggregate: COUNT()' and str(e) in tutor[0]
+assert lab(block(reply, 'sql')) == [(1, 'Tunde Nguyen', 'Ireland')]
+
+@@@@ summary-foreign-key-actions
+situation: summary
+topic: Primary keys, foreign keys and constraints
+voice: overconfident
+level: medium
+autorun: off
+expect: {"verdict":"correct","must":["CASCADE","SET NULL","default|NO ACTION"]}
+@@ tutor
+**Problem 3 · same level**
+
+```sql
+PRAGMA foreign_keys = ON;
+CREATE TABLE authors (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+CREATE TABLE books (id INTEGER PRIMARY KEY, title TEXT NOT NULL,
+                    author_id INTEGER NOT NULL REFERENCES authors(id));
+INSERT INTO authors VALUES (1, 'Achebe'), (2, 'Woolf');
+INSERT INTO books VALUES (10, 'Arrow of God', 1), (11, 'Orlando', 2);
+DELETE FROM authors WHERE id = 1;
+```
+
+<solution>The DELETE is rejected with "FOREIGN KEY constraint failed": a book still references author 1, and a foreign key with no ON DELETE clause takes the default action, NO ACTION, which refuses the delete. Both tables keep 2 rows.</solution>
+
+<ask type="problem">What does the DELETE do, and how many rows do authors and books hold afterwards?</ask>
+@@ learner answer sure
+It deletes Achebe, and the book that points at him goes too, that's the whole point of a foreign key, it ties the rows together. So authors has 1 row and books has 1 row.
+@@ tutor
+<grade verdict="wrong" score="0.1">"the book that points at him goes too" describes ON DELETE CASCADE, which has to be written in the REFERENCES clause; it is not what a foreign key does by default. With no ON DELETE clause the action is NO ACTION: the DELETE is rejected with "FOREIGN KEY constraint failed" and both tables keep 2 rows.</grade>
+
+<card>A foreign key has no ON DELETE clause. What happens when a referenced parent row is deleted? :: The delete is rejected (default action NO ACTION) while any child row still references it. Children are removed only with ON DELETE CASCADE.</card>
+
+<note>A foreign key guarantees every child points at an existing parent. Deleting a referenced parent: rejected by default (NO ACTION); `ON DELETE CASCADE` deletes the children too; `ON DELETE SET NULL` keeps them and clears their reference.</note>
+
+**Problem 4 · same idea**
+
+```sql
+PRAGMA foreign_keys = ON;
+CREATE TABLE teams (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+CREATE TABLE players (id INTEGER PRIMARY KEY, name TEXT NOT NULL,
+                      team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE);
+INSERT INTO teams VALUES (1, 'Red'), (2, 'Blue');
+INSERT INTO players VALUES (1, 'Ada', 1), (2, 'Tunde', 1), (3, 'Mei', 2);
+DELETE FROM teams WHERE id = 1;
+SELECT COUNT(*) FROM players;
+```
+
+<solution>1. The cascade deletes Ada and Tunde with team Red, leaving Mei. With ON DELETE SET NULL no player is deleted: the count is 3, and Ada and Tunde have team_id NULL.</solution>
+
+<ask type="problem">What does the final SELECT return? Then say what it would return if the clause were ON DELETE SET NULL, and what Ada's row would look like.</ask>
+@@ learner answer sure
+1. Cascade removes Ada and Tunde along with Red, so only Mei is left. With SET NULL nothing in players gets deleted so the count is 3, and Ada's row is still there but with team_id NULL.
+@@ reply
+<grade verdict="correct" score="1">Both parts are right: "Cascade removes Ada and Tunde along with Red" gives a count of 1, and under SET NULL the three players stay, with Ada's team_id cleared to NULL.</grade>
+
+<summary>**What you learned:** a foreign key guarantees that every child row points at an existing parent, and the ON DELETE clause chooses what happens to the children when a parent goes: CASCADE deletes them, SET NULL keeps them and clears the reference.
+
+**Still shaky:** the default. In the authors and books problem you assumed the book would be deleted with its author; with no ON DELETE clause the delete is refused. The card for that is in your deck.
+
+**Review next:** the default action once more in a new example, then why SET NULL needs a nullable column (books.author_id was NOT NULL), and the fact that SQLite enforces foreign keys only after PRAGMA foreign_keys = ON.</summary>
+@@ verify
+import sqlite3
+def run(script):
+    c = sqlite3.connect(':memory:', isolation_level=None)
+    err, rows = None, None
+    for s in [x.strip() for x in script.split(';') if x.strip()]:
+        try:
+            cur = c.execute(s)
+            if s.upper().startswith('SELECT'):
+                rows = cur.fetchall()
+        except sqlite3.IntegrityError as e:
+            err = str(e)
+    return c, err, rows
+c, err, _ = run(block(tutor[0], 'sql'))
+assert err == 'FOREIGN KEY constraint failed'
+assert c.execute("SELECT COUNT(*) FROM authors").fetchone()[0] == 2 and c.execute("SELECT COUNT(*) FROM books").fetchone()[0] == 2
+script = block(tutor[1], 'sql')
+c, err, rows = run(script)
+assert err is None and rows == [(1,)] and c.execute("SELECT name FROM players").fetchall() == [('Mei',)]
+c, err, rows = run(script.replace('ON DELETE CASCADE', 'ON DELETE SET NULL'))
+assert err is None and rows == [(3,)]
+assert c.execute("SELECT name, team_id FROM players ORDER BY id").fetchall() == [('Ada', None), ('Tunde', None), ('Mei', 2)]
+# foreign keys are off by default in SQLite: without the pragma the first DELETE goes through
+c, err, _ = run(block(tutor[0], 'sql').replace('PRAGMA foreign_keys = ON;', ''))
+assert err is None and c.execute("SELECT COUNT(*) FROM authors").fetchone()[0] == 1
+
+@@@@ summary-quiz-execution-order
+situation: summary
+topic: Query execution order
+mode: quiz
+options: {"length":3}
+voice: confused
+level: medium
+expect: {"verdict":"correct","must":["2 of 3","\\b178\\b","alias"]}
+@@ tutor
+**Question 1 of 3**
+
+<ask type="choice" options="FROM, WHERE, GROUP BY, HAVING, SELECT, ORDER BY|SELECT, FROM, WHERE, GROUP BY, HAVING, ORDER BY|FROM, GROUP BY, WHERE, HAVING, SELECT, ORDER BY|FROM, WHERE, SELECT, GROUP BY, HAVING, ORDER BY">In which order does a database logically evaluate the clauses of one SELECT statement?</ask>
+@@ learner answer sure
+FROM, WHERE, GROUP BY, HAVING, SELECT, ORDER BY
+@@ tutor
+<grade verdict="correct" score="1">"FROM, WHERE, GROUP BY, HAVING, SELECT, ORDER BY" is the logical order: rows are fetched and filtered, then grouped and the groups filtered, then the output columns are computed and sorted.</grade>
+
+**Question 2 of 3**
+
+```sql
+SELECT name, price * 1.2 AS gross FROM products WHERE gross > 250 ORDER BY gross;
+```
+
+Postgres accepts the ORDER BY gross here but rejects the WHERE gross > 250, saying the column gross does not exist (not run here; SQLite is more lenient and accepts both).
+
+<ask type="explain">Explain the Postgres behaviour: why can ORDER BY use the alias gross when WHERE cannot?</ask>
+@@ learner answer unsure
+Because ORDER BY comes after the select list in the query text, so by then the alias has been read? Hmm, but WHERE is written after the select list as well... I'd still say it's about position, ORDER BY is the last thing written so it can see everything before it.
+@@ tutor
+<grade verdict="wrong" score="0.2">"it's about position" in the text is not the reason, and you found the counter-example yourself: "WHERE is written after the select list as well". What matters is the logical order from question 1: WHERE is evaluated before SELECT has computed gross, and ORDER BY after it.</grade>
+
+<card>Why can ORDER BY use a SELECT alias when WHERE cannot (standard SQL)? :: Evaluation order, not text order: WHERE runs before the SELECT list is computed, so the alias does not exist yet; ORDER BY runs after it.</card>
+
+**Question 3 of 3**
+
+```sql
+SELECT segment, COUNT(*) AS n
+FROM customers
+WHERE country <> 'Nigeria'
+GROUP BY segment
+HAVING COUNT(*) > 30
+ORDER BY n DESC
+LIMIT 1;
+```
+
+The lab has 197 consumer, 75 small business and 28 enterprise customers. Of these, 19 consumer and 3 small business customers are in Nigeria, and no enterprise ones.
+
+<solution>It returns consumer with n = 178. WHERE removes Nigeria's rows first: 197 − 19 = 178, 75 − 3 = 72, 28. HAVING removes enterprise (28 is not above 30). ORDER BY puts consumer (178) above small business (72), and LIMIT 1 cuts small business.</solution>
+<check lang="python">
+left = {'consumer': 197 - 19, 'small business': 75 - 3, 'enterprise': 28}
+kept = {k: v for k, v in left.items() if v > 30}
+assert max(kept, key=kept.get) == 'consumer' and kept['consumer'] == 178 and 'enterprise' not in kept
+</check>
+
+<ask type="problem">Which row does the query return, and at which clause is each of the other two segments eliminated?</ask>
+@@ learner answer sure
+consumer with n = 178. WHERE drops the Nigeria rows first so it's 197 - 19. Enterprise only has 28 so HAVING removes it. Small business has 72 so it passes HAVING, but it sorts below 178 and LIMIT 1 cuts it off.
+@@ reply
+<grade verdict="correct" score="1">"WHERE drops the Nigeria rows first so it's 197 - 19" gives the 178, and you placed each elimination at the right clause: enterprise at HAVING, small business at LIMIT.</grade>
+
+<summary>**Score:** 2 of 3 correct.
+
+**Strengths:** you know the logical order of the clauses, and in question 3 you used it to trace a query step by step and get the right row.
+
+**Misconception to fix:** in question 2 you explained alias visibility by where a clause is written. Text position decides nothing: WHERE cannot see a SELECT alias because it is evaluated before the SELECT list, and ORDER BY can because it is evaluated after.
+
+**Review:** which clauses may refer to a SELECT alias in standard SQL, and the fact that SQLite accepts some uses that Postgres rejects, so a query tested only in the lab can fail elsewhere.</summary>
+@@ verify
+# question 2: SQLite accepts the alias in WHERE, as the tutor says
+assert lab(block(tutor[1], 'sql')) == [('27-inch monitor', 298.8)]
+# question 3
+assert dict(lab("SELECT segment, COUNT(*) FROM customers GROUP BY segment")) == {'consumer': 197, 'small business': 75, 'enterprise': 28}
+assert dict(lab("SELECT segment, COUNT(*) FROM customers WHERE country = 'Nigeria' GROUP BY segment")) == {'consumer': 19, 'small business': 3}
+assert lab(block(tutor[2], 'sql')) == [('consumer', 178)]
+assert dict(lab("SELECT segment, COUNT(*) FROM customers WHERE country <> 'Nigeria' GROUP BY segment")) == {'consumer': 178, 'small business': 72, 'enterprise': 28}
+assert '178' in learner and '72' in learner
+# the score: verdicts in the history are correct, wrong, and now correct
+import re
+marks = [re.search(r'verdict="(\w+)"', t).group(1) for t in tutor[1:]] + [re.search(r'verdict="(\w+)"', reply).group(1)]
+assert marks == ['correct', 'wrong', 'correct'] and marks.count('correct') == 2

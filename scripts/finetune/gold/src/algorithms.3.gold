@@ -1,0 +1,928 @@
+@@@@ mark-error-c-sliding-window-last-window
+situation: mark-error
+topic: Sliding windows
+options: {"strategy":"code"}
+voice: typos
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["n - 1","last (element|window)"],"must":["\\b13\\b","i < n`"],"setsProblem":true,"askTypes":["code"],"askMustNot":["\\b21\\b"]}
+@@ tutor
+A sliding window avoids adding up the whole window again each time it moves: when it moves one place right, add the element that enters and subtract the one that leaves.
+
+<note>Fixed-size sliding window: keep the sum of the current k elements; moving right by one is `sum += a[i] - a[i - k]`. All the window sums together cost $O(n)$ instead of $O(nk)$.</note>
+
+<solution>Build the first window's sum, then slide: for i from k to n − 1, sum += a[i] − a[i − k], keeping the largest. On {2, 9, -3, 4, 1, 8} with k = 3 the window sums are 8, 10, 2, 13, so it returns 13.</solution>
+<check lang="python">
+a, k = [2, 9, -3, 4, 1, 8], 3
+sums = [sum(a[i:i + k]) for i in range(len(a) - k + 1)]
+assert sums == [8, 10, 2, 13] and max(sums) == 13
+</check>
+
+<ask type="code" lang="c">Write `int max_window(const int *a, int n, int k)` that returns the largest sum of k consecutive elements (assume 1 ≤ k ≤ n), and print its result for {2, 9, -3, 4, 1, 8} with k = 3.</ask>
+@@ learner answer sure
+```c
+#include <stdio.h>
+
+int max_window(const int *a, int n, int k) {
+    int sum = 0;
+    for (int i = 0; i < k; i++) sum += a[i];
+    int best = sum;
+    for (int i = k; i < n - 1; i++) {
+        sum += a[i] - a[i - k];
+        if (sum > best) best = sum;
+    }
+    return best;
+}
+
+int main(void) {
+    int a[] = {2, 9, -3, 4, 1, 8};
+    printf("%d\n", max_window(a, 6, 3));
+    return 0;
+}
+```
+it prints 10, thats the window with 9, -3 and 4. used the slide trick so its O(n) not O(nk)
+@@ reply
+<grade verdict="partial" score="0.6">`sum += a[i] - a[i - k];` is the right update and the first window is built correctly, so the method is $O(n)$ as you say. The first wrong line is `for (int i = k; i < n - 1; i++)`: it stops one short, so the window that ends at the last element is never formed.</grade>
+
+I ran it: it does print 10. The four windows of your test sum to 8, 10, 2 and 13. Your loop runs for i = 3 and i = 4 only, so it never reaches 4 + 1 + 8 = 13, which is the true maximum. With the bound `i < n` the same program prints 13; nothing else needs to change.
+
+<card>In a sliding-window loop over a[0..n-1] that adds a[i] and drops a[i - k], what is the loop bound? :: i < n. The entering index i must reach n - 1, or the last window is skipped.</card>
+
+<solution>With `for (int i = k; i < n; i++)` the program prints 13 for k = 3. For k = 6 the loop body never runs and the first sum is returned: 2 + 9 − 3 + 4 + 1 + 8 = 21.</solution>
+<check lang="python">
+a = [2, 9, -3, 4, 1, 8]
+best = lambda k: max(sum(a[i:i + k]) for i in range(len(a) - k + 1))
+assert best(3) == 13 and best(6) == 21
+</check>
+
+<ask type="code" lang="c">Correct the loop bound, then print `max_window` for the same array twice: with k = 3 and with k = 6.</ask>
+@@ verify
+src = block(learner, 'c')
+out, err, cc, code = run_c_full(src, 'c')
+assert out.strip() == '10' and code == 0 and not cc.strip(), (out, err, cc)   # their program, their claim
+a = [2, 9, -3, 4, 1, 8]
+sums = [sum(a[i:i + 3]) for i in range(4)]
+assert sums == [8, 10, 2, 13] and 9 - 3 + 4 == 10 and 4 + 1 + 8 == 13
+# their loop visits i = 3 and 4 only
+assert list(range(3, 6 - 1)) == [3, 4]
+# the corrected program
+fixed = src.replace('i < n - 1', 'i < n').replace('printf("%d\\n", max_window(a, 6, 3));', 'printf("%d\\n", max_window(a, 6, 3));\n    printf("%d\\n", max_window(a, 6, 6));')
+assert fixed != src and 'max_window(a, 6, 6)' in fixed
+assert run_c(fixed).split() == ['13', '21']
+assert '21' in solution(reply) and '21' not in visible(reply)
+
+@@@@ mark-error-python-brackets-open-at-end
+situation: mark-error
+topic: Stacks and balanced brackets
+voice: typos
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["return True","\\(\\(\\)"],"must":["return not stack"],"setsProblem":true,"askTypes":["code"]}
+@@ tutor
+**Problem 2 · harder**
+
+Write `balanced(s)` in Python. It returns True when every bracket in `s`, of the kinds `()`, `[]` and `{}`, is closed by the same kind in the right order, and False otherwise. Characters that are not brackets are ignored.
+
+<solution>Keep a stack of open brackets. Push each opener. On a closer, the stack must be non-empty and its top must be the matching opener; pop it. At the end the stack must be empty: return not stack.</solution>
+<check lang="python">
+def balanced(s):
+    pairs = {')': '(', ']': '[', '}': '{'}
+    stack = []
+    for ch in s:
+        if ch in '([{':
+            stack.append(ch)
+        elif ch in pairs:
+            if not stack or stack.pop() != pairs[ch]:
+                return False
+    return not stack
+assert balanced('([]{})') and balanced('') and balanced('a(b)c')
+assert not balanced('(]') and not balanced(')(') and not balanced('(()') and not balanced('[')
+</check>
+
+<ask type="code" lang="python">Your function, with a few calls that test it.</ask>
+@@ learner answer sure
+```python
+def balanced(s):
+    pairs = {')': '(', ']': '[', '}': '{'}
+    stack = []
+    for ch in s:
+        if ch in '([{':
+            stack.append(ch)
+        elif ch in pairs:
+            if not stack or stack.pop() != pairs[ch]:
+                return False
+    return True
+
+print(balanced("([]{})"), balanced("(]"), balanced(")("))
+```
+prints True False False so it handels the wrong kind of bracket and a closer with nothing open
+@@ reply
+<grade verdict="partial" score="0.7">`if not stack or stack.pop() != pairs[ch]:` is right: it rejects a closer with nothing open and a closer of the wrong kind, and your three tests print what you say. The first wrong line is the last one, `return True`: it is reached whenever the loop ends, even with openers still on the stack.</grade>
+
+The failing input is a string that ends with a bracket still open. I ran `balanced("(()")` on your code and it returns True: the two `(` are pushed, one is popped by the `)`, the loop ends with one `(` left, and nothing looks at it. The fix is to make the final answer depend on the stack: `return not stack`. None of your three tests ends with an open bracket, which is why they all passed.
+
+<card>In a stack-based bracket checker, what must be checked after the last character? :: That the stack is empty. Openers left on it were never closed, so return `not stack`, not True.</card>
+
+<solution>Change the last line to `return not stack`. Then balanced("(()") is False and balanced("") is True (an empty stack at the end).</solution>
+<check lang="python">
+def balanced(s):
+    pairs = {')': '(', ']': '[', '}': '{'}
+    stack = []
+    for ch in s:
+        if ch in '([{':
+            stack.append(ch)
+        elif ch in pairs:
+            if not stack or stack.pop() != pairs[ch]:
+                return False
+    return not stack
+assert balanced("(()") is False and balanced("") is True and balanced("([]{})") is True
+</check>
+
+<ask type="code" lang="python">Change the last line, then add two calls your tests were missing: `balanced("(()")` and `balanced("")`. Print all five results.</ask>
+@@ verify
+src = block(learner, 'python')
+assert run_py(src).strip() == 'True False False'                 # their claim about their own tests
+body = src.split('print(')[0]
+ns = {}
+exec(body, ns)
+assert ns['balanced']('(()') is True                             # the failing input: wrongly accepted
+assert ns['balanced']('((') is True and ns['balanced']('[') is True
+fixed = body.replace('    return True', '    return not stack')
+assert fixed != body
+ns2 = {}
+exec(fixed, ns2)
+b = ns2['balanced']
+assert b('(()') is False and b('') is True
+assert [b('([]{})'), b('(]'), b(')(')] == [True, False, False]   # their three tests pass with either version
+# brute-force agreement of the fixed version with a reduction-based definition on every short string
+from itertools import product
+def reduce_ok(s):
+    prev = None
+    while prev != s:
+        prev = s
+        for p in ('()', '[]', '{}'):
+            s = s.replace(p, '')
+    return s == ''
+for n in range(0, 7):
+    for t in product('()[]{}', repeat=n):
+        s = ''.join(t)
+        assert b(s) == reduce_ok(s), s
+
+@@@@ mark-error-kruskal-keeps-cycle-edge
+situation: mark-error
+topic: Kruskal's algorithm with union-find
+voice: wordy
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["A–C","cycle","\\b13\\b"],"must":["1 \\+ 2 \\+ 4 \\+ 6 = 13"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b11\\b"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+A graph has vertices A to E and these edges: A–B 1, B–C 2, A–C 3, C–D 4, B–D 5, D–E 6, C–E 7. Run Kruskal's algorithm. Which edges does it keep, and what is the total weight of the spanning tree?
+
+<solution>In order of weight: A–B 1 keep; B–C 2 keep; A–C 3 skip (A and C are already connected through B); C–D 4 keep; B–D 5 skip (already connected); D–E 6 keep. Four edges: A–B, B–C, C–D, D–E. Total 1 + 2 + 4 + 6 = 13.</solution>
+<check lang="python">
+edges = [(1, 'A', 'B'), (2, 'B', 'C'), (3, 'A', 'C'), (4, 'C', 'D'), (5, 'B', 'D'), (6, 'D', 'E'), (7, 'C', 'E')]
+parent = {v: v for v in 'ABCDE'}
+def find(x):
+    while parent[x] != x: x = parent[x]
+    return x
+kept = []
+for w, u, v in sorted(edges):
+    if find(u) != find(v):
+        parent[find(u)] = find(v); kept.append((u, v, w))
+assert kept == [('A', 'B', 1), ('B', 'C', 2), ('C', 'D', 4), ('D', 'E', 6)] and sum(k[2] for k in kept) == 13
+</check>
+
+<ask type="problem">The edges kept, in the order they are taken, and the total weight.</ask>
+@@ learner answer sure
+The edges are already listed in order of weight so I just go down the list. A–B 1: take it, A and B are separate. B–C 2: take it, C is new. A–C 3: take it, total so far 6. C–D 4: take it, D is new, total 10. That's 4 edges, and a spanning tree on 5 vertices has exactly 4 edges, so I stop there. Kept A–B, B–C, A–C, C–D with total weight 10.
+@@ reply
+<grade verdict="partial" score="0.5">"A–B 1: take it" and "B–C 2: take it" are right. The first wrong step is "A–C 3: take it": A and C are already connected through B, so this edge closes the cycle A–B–C and Kruskal skips it. Your C–D step and your stopping rule are applied correctly after that, but they end the run before E is reached.</grade>
+
+The check at every edge is the same: keep it only if its two ends are in different components. Your four edges contain a cycle and do not touch E, so they are not a spanning tree. Corrected from the third edge: A–C 3 skip; C–D 4 keep; B–D 5 skip, because B and D are now connected; D–E 6 keep. The tree is A–B, B–C, C–D, D–E with weight 1 + 2 + 4 + 6 = 13.
+
+<card>When does Kruskal's algorithm skip an edge? :: When its two endpoints are already in the same component (find gives the same root), because the edge would close a cycle. "The vertex is new" is not the test.</card>
+
+<note>Kruskal: take edges in increasing weight; keep an edge only if its ends are in different components, then union them. Stop at $n - 1$ kept edges; $n - 1$ edges with no cycle always reach all $n$ vertices.</note>
+
+**Problem 2 · same level**
+
+A graph has vertices P to T and edges R–S 1, P–Q 2, Q–R 3, P–R 4, S–T 5, Q–S 6. Run Kruskal's algorithm on it.
+
+<solution>R–S 1 keep; P–Q 2 keep; Q–R 3 keep (joins {P, Q} to {R, S}); P–R 4 skip (same component); S–T 5 keep. Four edges, total 1 + 2 + 3 + 5 = 11. Q–S 6 is never needed.</solution>
+<check lang="python">
+edges = [(1, 'R', 'S'), (2, 'P', 'Q'), (3, 'Q', 'R'), (4, 'P', 'R'), (5, 'S', 'T'), (6, 'Q', 'S')]
+parent = {v: v for v in 'PQRST'}
+def find(x):
+    while parent[x] != x: x = parent[x]
+    return x
+total, kept = 0, []
+for w, u, v in sorted(edges):
+    if find(u) != find(v):
+        parent[find(u)] = find(v); total += w; kept.append(u + v)
+assert kept == ['RS', 'PQ', 'QR', 'ST'] and total == 11
+</check>
+
+<ask type="problem">Each edge in order with keep or skip, and the total weight of the tree.</ask>
+@@ verify
+from itertools import combinations
+def mst_brute(vs, edges):                 # independent: try every set of n - 1 edges
+    best = None
+    for c in combinations(edges, len(vs) - 1):
+        comp = {v: v for v in vs}
+        def f(x):
+            while comp[x] != x: x = comp[x]
+            return x
+        ok = True
+        for w, u, v in c:
+            if f(u) == f(v): ok = False; break
+            comp[f(u)] = f(v)
+        if ok:
+            t = sum(e[0] for e in c)
+            best = t if best is None or t < best else best
+    return best
+e1 = [(1, 'A', 'B'), (2, 'B', 'C'), (3, 'A', 'C'), (4, 'C', 'D'), (5, 'B', 'D'), (6, 'D', 'E'), (7, 'C', 'E')]
+e2 = [(1, 'R', 'S'), (2, 'P', 'Q'), (3, 'Q', 'R'), (4, 'P', 'R'), (5, 'S', 'T'), (6, 'Q', 'S')]
+assert mst_brute('ABCDE', e1) == 13 and mst_brute('PQRST', e2) == 11
+for w, u, v in e1:
+    assert f'{u}–{v} {w}' in tutor[0]
+for w, u, v in e2:
+    assert f'{u}–{v} {w}' in visible(reply)
+# the learner's edges: weight 10 as they say, a cycle A-B-C, and E untouched
+theirs = [(1, 'A', 'B'), (2, 'B', 'C'), (3, 'A', 'C'), (4, 'C', 'D')]
+assert sum(e[0] for e in theirs) == 10 and 1 + 2 + 3 == 6
+assert 'E' not in {x for _, u, v in theirs for x in (u, v)}
+assert '11' in solution(reply) and '11' not in visible(reply)
+
+@@@@ mark-error-knapsack-ascending-reuses-item
+situation: mark-error
+topic: The 0/1 knapsack problem
+options: {"difficulty":"hard"}
+voice: terse
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["up to 7","twice|two copies|reused|again","\\b12\\b"],"must":["\\[0, 0, 4, 4, 4, 4, 4, 4\\]"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["0, 0, 4, 5, 7, 9, 11, 12","0, 0, 4, 5, 5, 9, 9, 9"]}
+@@ tutor
+**Problem 1 · hard**
+
+0/1 knapsack: each item can be taken at most once. The items, as (weight, value), are A (2, 4), B (3, 5) and C (4, 7), and the capacity is 7. Find the best total value with a dynamic programming table, and show the table after each item.
+
+<solution>One array dp[0..7], zeros to start; for each item, w runs from 7 DOWN to the item's weight with dp[w] = max(dp[w], dp[w − wt] + val). After A: [0, 0, 4, 4, 4, 4, 4, 4]. After B: [0, 0, 4, 5, 5, 9, 9, 9]. After C: [0, 0, 4, 5, 7, 9, 11, 12]. Best value 12, from B and C (weight 7).</solution>
+<check lang="python">
+dp = [0] * 8
+rows = []
+for wt, val in ((2, 4), (3, 5), (4, 7)):
+    for w in range(7, wt - 1, -1):
+        dp[w] = max(dp[w], dp[w - wt] + val)
+    rows.append(dp[:])
+assert rows == [[0, 0, 4, 4, 4, 4, 4, 4], [0, 0, 4, 5, 5, 9, 9, 9], [0, 0, 4, 5, 7, 9, 11, 12]]
+</check>
+
+<ask type="problem">The table after each item, and the best value.</ask>
+@@ learner answer sure
+one array dp[0..7] all zeros. for each item, w from its weight up to 7: dp[w] = max(dp[w], dp[w - wt] + val)
+after A: [0, 0, 4, 4, 8, 8, 12, 12]
+after B: [0, 0, 4, 5, 8, 9, 12, 13]
+after C: [0, 0, 4, 5, 8, 9, 12, 13]
+best = 13
+@@ reply
+<grade verdict="partial" score="0.5">`dp[w] = max(dp[w], dp[w - wt] + val)` is the right update. The first wrong step is the direction, "w from its weight up to 7": going upwards, `dp[w - wt]` has already been updated for the same item, so the item is used again. It shows in your first row: dp[4] = 8 is two copies of A.</grade>
+
+Your rows for B and C follow correctly from that first row, so 13 is not an arithmetic slip: it is A + A + B, the answer to the problem where items may be repeated. For 0/1 knapsack the array has to be filled from 7 down to the item's weight, so that `dp[w - wt]` still holds the value from before this item. After A the row is then [0, 0, 4, 4, 4, 4, 4, 4], and the best value at the end is 12, from B and C.
+
+<card>In the one-array 0/1 knapsack, which way must w run for each item, and why? :: Downwards, from the capacity to the item's weight, so dp[w - wt] is still the value without this item. Upwards lets the item be taken more than once (that is the unbounded knapsack).</card>
+
+<note>One-array knapsack, `dp[w] = max(dp[w], dp[w - wt] + val)`: w descending gives 0/1 (each item once); w ascending gives the unbounded version (items repeat). The direction is the whole difference.</note>
+
+**Problem 2 · redo from that step**
+
+Start from the corrected row after A and process B (3, 5) and then C (4, 7), with w running downwards.
+
+<solution>After B: [0, 0, 4, 5, 5, 9, 9, 9]. After C: [0, 0, 4, 5, 7, 9, 11, 12]. dp[7] = max(9, dp[3] + 7) = 12.</solution>
+<check lang="python">
+dp = [0, 0, 4, 4, 4, 4, 4, 4]
+out = []
+for wt, val in ((3, 5), (4, 7)):
+    for w in range(7, wt - 1, -1):
+        dp[w] = max(dp[w], dp[w - wt] + val)
+    out.append(dp[:])
+assert out == [[0, 0, 4, 5, 5, 9, 9, 9], [0, 0, 4, 5, 7, 9, 11, 12]]
+</check>
+
+<ask type="problem">The array after B and after C, with how you got dp[7] in the last row.</ask>
+@@ verify
+from itertools import combinations, combinations_with_replacement
+items = {'A': (2, 4), 'B': (3, 5), 'C': (4, 7)}
+# 0/1 by brute force: best is 12 from B + C
+best01 = max((sum(items[i][1] for i in c), c) for r in range(4) for c in combinations('ABC', r) if sum(items[i][0] for i in c) <= 7)
+assert best01 == (12, ('B', 'C'))
+# unbounded by brute force: best is 13 from A, A, B
+bestU = max((sum(items[i][1] for i in c), c) for r in range(4) for c in combinations_with_replacement('ABC', r) if sum(items[i][0] for i in c) <= 7)
+assert bestU == (13, ('A', 'A', 'B'))
+# the learner's rows are exactly what the ascending loop produces
+dp, rows = [0] * 8, []
+for wt, val in items.values():
+    for w in range(wt, 8):
+        dp[w] = max(dp[w], dp[w - wt] + val)
+    rows.append(str(dp))
+for name, row in zip('ABC', rows):
+    assert f'after {name}: {row}' in learner, (name, row)
+assert rows[0] == '[0, 0, 4, 4, 8, 8, 12, 12]'
+# the corrected rows
+dp, good = [0] * 8, []
+for wt, val in items.values():
+    for w in range(7, wt - 1, -1):
+        dp[w] = max(dp[w], dp[w - wt] + val)
+    good.append(str(dp))
+assert good[0] in visible(reply) and good[1] in solution(reply) and good[2] in solution(reply)
+assert good[1] not in visible(reply) and good[2] not in visible(reply)
+assert dp[7] == 12 and max(9, 5 + 7) == 12
+
+@@@@ unusual-pair-sum-sort-two-pointers
+situation: mark-unusual
+topic: Pair sums with a hash set
+voice: terse
+level: medium
+expect: {"verdict":"correct","mustNot":["should have used","the standard (way|method) is","hash set (is|would be) (the )?(right|correct|better)"],"must":["n \\\\log n|n log n"],"setsProblem":true,"askTypes":["code"]}
+@@ tutor
+A set answers "have I seen this value" in expected $O(1)$, which turns many pair problems from $O(n^2)$ into one pass.
+
+<note>Pair with a given sum in one pass: for each x, check whether target − x is already in a set of the values seen so far, then add x. Expected $O(n)$ time, $O(n)$ extra space.</note>
+
+**Problem 1 · warm-up**
+
+Write `has_pair(nums, target)`: True if two elements at different positions add up to `target`. Do better than checking every pair.
+
+<solution>seen = set(); for x in nums: if target − x in seen: return True; seen.add(x). Return False at the end. On [8, 3, 11, 5, 1]: 14 is True (3 + 11), 10 is False.</solution>
+<check lang="python">
+def has_pair(nums, target):
+    seen = set()
+    for x in nums:
+        if target - x in seen:
+            return True
+        seen.add(x)
+    return False
+assert has_pair([8, 3, 11, 5, 1], 14) and not has_pair([8, 3, 11, 5, 1], 10) and not has_pair([7], 14)
+</check>
+
+<ask type="code" lang="python">Your function, with calls that test it.</ask>
+@@ learner answer sure
+```python
+def has_pair(nums, target):
+    a = sorted(nums)
+    i, j = 0, len(a) - 1
+    while i < j:
+        s = a[i] + a[j]
+        if s == target:
+            return True
+        if s < target:
+            i += 1
+        else:
+            j -= 1
+    return False
+
+print(has_pair([8, 3, 11, 5, 1], 14), has_pair([8, 3, 11, 5, 1], 10), has_pair([7], 14))
+```
+True False False. sorted then two pointers, no set
+@@ reply
+<grade verdict="correct" score="1">Sorting and then `if s < target: i += 1` with `j -= 1` otherwise is a valid method, and it prints True False False. It is safe to discard `a[i]` when the sum is too small because `a[j]` is the largest partner still available, so no pair containing `a[i]` can reach the target; the mirror argument holds for `a[j]`.</grade>
+
+The cost differs from the set version: $O(n \log n)$ time for the sort instead of expected $O(n)$, but no hashing, and `while i < j` keeps the two positions different without extra care. The same two-pointer scan is the inner step of the next problem.
+
+**Problem 2 · harder**
+
+Write `has_triple(nums, target)`: True if three elements at three different positions add up to `target`, in $O(n^2)$ time.
+
+<solution>Sort. For each index i, run the two-pointer scan on the part after i, looking for target − a[i]. On [8, 3, 11, 5, 1]: 24 is True (8 + 11 + 5), 21 is False, and [5, 5] with 15 is False.</solution>
+<check lang="python">
+from itertools import combinations
+def has_triple(nums, target):
+    a = sorted(nums)
+    for i in range(len(a) - 2):
+        j, k = i + 1, len(a) - 1
+        while j < k:
+            s = a[i] + a[j] + a[k]
+            if s == target:
+                return True
+            if s < target:
+                j += 1
+            else:
+                k -= 1
+    return False
+nums = [8, 3, 11, 5, 1]
+for t in range(0, 40):
+    assert has_triple(nums, t) == any(sum(c) == t for c in combinations(nums, 3))
+assert has_triple(nums, 24) and not has_triple(nums, 21) and not has_triple([5, 5], 15)
+</check>
+
+<ask type="code" lang="python">Write `has_triple` and print its result for `[8, 3, 11, 5, 1]` with targets 24 and 21.</ask>
+@@ verify
+from itertools import combinations
+import random
+src = block(learner, 'python')
+assert run_py(src).strip() == 'True False False'
+ns = {}
+exec(src.split('print(')[0], ns)
+hp = ns['has_pair']
+random.seed(5)
+for _ in range(3000):                      # their method agrees with brute force, duplicates and negatives included
+    nums = [random.randint(-6, 6) for _ in range(random.randint(0, 7))]
+    t = random.randint(-12, 12)
+    assert hp(nums, t) == any(x + y == t for x, y in combinations(nums, 2)), (nums, t)
+assert 3 + 11 == 14 and 8 + 11 + 5 == 24
+nums = [8, 3, 11, 5, 1]
+assert not any(sum(c) == 21 for c in combinations(nums, 3)) and any(sum(c) == 24 for c in combinations(nums, 3))
+
+@@@@ unusual-kth-largest-min-heap
+situation: mark-unusual
+topic: Quickselect
+voice: confused
+level: medium
+expect: {"verdict":"correct","mustNot":["should have used","you were meant to","not what (was|I) asked"],"must":["n \\\\log k|n log k"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["2026","522,?753"]}
+@@ tutor
+Quickselect finds the k-th largest element without sorting everything: partition around a pivot as quicksort does, then continue only in the side that contains the position you want.
+
+<note>Quickselect: partition, then recurse into one side only. Expected $O(n)$ time with a random pivot; worst case $O(n^2)$ when the pivots keep landing at an end.</note>
+
+**Problem 1 · warm-up**
+
+Write `kth_largest(nums, k)` that returns the k-th largest element of an unsorted list without sorting the whole list. Test it on `[9, 2, 14, 7, 21, 5, 11]` with k = 3.
+
+<solution>Quickselect for index n − k of the sorted order. In sorted order the list is 2, 5, 7, 9, 11, 14, 21, so the 3rd largest is 11.</solution>
+<check lang="python">
+assert sorted([9, 2, 14, 7, 21, 5, 11])[-3] == 11
+</check>
+
+<ask type="code" lang="python">Your function and the test call.</ask>
+@@ learner answer unsure
+```python
+import heapq
+
+def kth_largest(nums, k):
+    h = []
+    for x in nums:
+        heapq.heappush(h, x)
+        if len(h) > k:
+            heapq.heappop(h)
+    return h[0]
+
+print(kth_largest([9, 2, 14, 7, 21, 5, 11], 3))
+```
+it prints 11 but I'm not sure this counts?? I couldn't get the partition thing to work so I kept a heap of the 3 biggest so far and threw away the smallest each time. is that cheating
+@@ reply
+<grade verdict="correct" score="1">It counts: "a heap of the 3 biggest so far" is a correct method and it prints 11. After each element the min-heap holds the k largest values seen, so its root `h[0]` is the smallest of those, which is the k-th largest overall.</grade>
+
+Nothing is sorted in full, as the task required. The costs differ from quickselect: your version takes $O(n \log k)$ time in every case and $O(k)$ memory, and it works on a stream you cannot hold in memory. Quickselect is expected $O(n)$ but has an $O(n^2)$ worst case. The next problem is about where those two figures come from.
+
+**Problem 2 · harder**
+
+Partitioning $m$ elements costs $m - 1$ comparisons, and quickselect then continues on one side only, until one element is left. For $n = 1023$, count the comparisons in two cases: (a) every pivot lands exactly in the middle, so the side kept has $(m - 1)/2$ elements; (b) every pivot is the smallest element, so the side kept has $m - 1$ elements.
+
+<solution>(a) Sizes 1023, 511, 255, 127, 63, 31, 15, 7, 3, then 1. Comparisons 1022 + 510 + 254 + 126 + 62 + 30 + 14 + 6 + 2 = 2026, below 2n = 2046. (b) Sizes 1023, 1022, …, 2: comparisons 1022 + 1021 + … + 1 = 1022 × 1023 / 2 = 522,753, about n²/2.</solution>
+<check lang="python">
+m, a = 1023, 0
+while m > 1:
+    a += m - 1
+    m = (m - 1) // 2
+b = sum(m - 1 for m in range(1023, 1, -1))
+assert a == 2026 and b == 522753 == 1022 * 1023 // 2
+</check>
+
+<ask type="problem">Both totals, with the sequence of sizes for case (a).</ask>
+@@ verify
+import random
+src = block(learner, 'python')
+assert run_py(src).strip() == '11'
+ns = {}
+exec(src.split('print(')[0], ns)
+kl = ns['kth_largest']
+random.seed(2)
+for _ in range(2000):                       # their heap method against sorting, duplicates included
+    nums = [random.randint(-20, 20) for _ in range(random.randint(1, 12))]
+    k = random.randint(1, len(nums))
+    assert kl(nums, k) == sorted(nums)[-k]
+assert sorted([9, 2, 14, 7, 21, 5, 11]) == [2, 5, 7, 9, 11, 14, 21]
+sizes, m = [], 1023
+while m > 1:
+    sizes.append(m); m = (m - 1) // 2
+assert sizes == [1023, 511, 255, 127, 63, 31, 15, 7, 3] and sum(s - 1 for s in sizes) == 2026 < 2 * 1023
+assert sum(range(1, 1023)) == 522753
+assert '2026' not in visible(reply) and '522,753' in solution(reply)
+
+@@@@ unusual-lis-tails-bisect
+situation: mark-unusual
+topic: Longest increasing subsequence
+voice: overconfident
+level: hard
+expect: {"verdict":"correct","mustNot":["should have used","the table method is (the )?(right|correct)","not the method"],"must":["n \\\\log n|n log n","tails"],"setsProblem":true,"askTypes":["code"],"askMustNot":["bisect_right"]}
+@@ tutor
+For the longest strictly increasing subsequence, let $L[i]$ be the length of the longest one that ends at position $i$. Then $L[i] = 1 + \max L[j]$ over the earlier positions $j$ with $a[j] < a[i]$, or 1 if there is none, and the answer is the largest $L[i]$.
+
+<note>LIS by table: $L[i] = 1 + \max\{L[j] : j < i,\ a[j] < a[i]\}$ (1 if no such $j$). Answer: $\max_i L[i]$. Two nested loops, $O(n^2)$.</note>
+
+**Problem 1 · warm-up**
+
+Write `lis(a)` that returns the length of the longest strictly increasing subsequence, and print it for `[10, 4, 12, 5, 8, 15, 6, 9]`.
+
+<solution>L = [1, 1, 2, 2, 3, 4, 3, 4], so the answer is 4 (for example 4, 5, 8, 15).</solution>
+<check lang="python">
+a = [10, 4, 12, 5, 8, 15, 6, 9]
+L = []
+for i, x in enumerate(a):
+    L.append(1 + max((L[j] for j in range(i) if a[j] < x), default=0))
+assert L == [1, 1, 2, 2, 3, 4, 3, 4] and max(L) == 4
+</check>
+
+<ask type="code" lang="python">Your function and the call.</ask>
+@@ learner answer sure
+```python
+from bisect import bisect_left
+
+def lis(a):
+    tails = []
+    for x in a:
+        i = bisect_left(tails, x)
+        if i == len(tails):
+            tails.append(x)
+        else:
+            tails[i] = x
+    return len(tails)
+
+print(lis([10, 4, 12, 5, 8, 15, 6, 9]))
+```
+4. The n squared table is the slow way, this is the proper one: tails[i] is the smallest tail of any increasing subsequence of length i+1, binary search it.
+@@ reply
+<grade verdict="correct" score="1">"tails[i] is the smallest tail of any increasing subsequence of length i+1" is the right invariant, and the program prints 4. Because that list stays sorted, `bisect_left` finds in $O(\log n)$ the one entry x improves, or shows that x extends the longest subsequence so far.</grade>
+
+So your method is $O(n \log n)$ against the table's $O(n^2)$, and both are correct. One caution on what `tails` holds: its length is the answer, but its contents need not be a subsequence of the input. Each entry is the best last element for its length, and the entries can come from different subsequences. The next task turns on the choice of `bisect_left`.
+
+**Problem 2 · harder**
+
+Change your function so that equal neighbours are allowed: the longest non-decreasing subsequence. `[3, 3, 3]` should give 3, and `[10, 4, 12, 5, 8, 15, 6, 9]` should still give 4.
+
+<solution>Replace bisect_left with bisect_right, so an x equal to an existing tail goes after it instead of replacing it. Then [3, 3, 3] gives 3 (the strict version gives 1), [10, 4, 12, 5, 8, 15, 6, 9] still gives 4, and [2, 2, 1, 2] gives 3.</solution>
+<check lang="python">
+from bisect import bisect_right
+from itertools import combinations
+def lnds(a):
+    tails = []
+    for x in a:
+        i = bisect_right(tails, x)
+        if i == len(tails): tails.append(x)
+        else: tails[i] = x
+    return len(tails)
+def brute(a):
+    return max(r for r in range(len(a) + 1) for c in combinations(a, r) if all(c[i] <= c[i + 1] for i in range(r - 1)))
+for a in ([3, 3, 3], [10, 4, 12, 5, 8, 15, 6, 9], [2, 2, 1, 2], [5, 4, 4, 3]):
+    assert lnds(a) == brute(a)
+assert lnds([3, 3, 3]) == 3 and lnds([10, 4, 12, 5, 8, 15, 6, 9]) == 4 and lnds([2, 2, 1, 2]) == 3
+</check>
+
+<ask type="code" lang="python">Make the change and print the result for `[3, 3, 3]`, `[10, 4, 12, 5, 8, 15, 6, 9]` and `[2, 2, 1, 2]`.</ask>
+@@ verify
+from itertools import combinations
+import random
+src = block(learner, 'python')
+assert run_py(src).strip() == '4'
+ns = {}
+exec(src.split('print(')[0], ns)
+lis = ns['lis']
+def brute(a):
+    return max(r for r in range(len(a) + 1) for c in combinations(a, r) if all(c[i] < c[i + 1] for i in range(r - 1)))
+random.seed(9)
+for _ in range(600):                       # their method against brute force, with duplicates
+    a = [random.randint(0, 6) for _ in range(random.randint(0, 9))]
+    assert lis(a) == brute(a), a
+assert lis([3, 3, 3]) == 1
+# the caution in the reply: tails need not be a subsequence of the input
+from bisect import bisect_left
+def tails_of(a):
+    t = []
+    for x in a:
+        i = bisect_left(t, x)
+        if i == len(t): t.append(x)
+        else: t[i] = x
+    return t
+def is_subseq(t, a):
+    it = iter(a)
+    return all(x in it for x in t)
+assert tails_of([2, 5, 1]) == [1, 5] and not is_subseq([1, 5], [2, 5, 1])
+assert 'bisect_right' in solution(reply) and 'bisect_right' not in visible(reply)
+
+@@@@ tangent-merge-sort-python-sorted
+situation: tangent
+topic: Merge sort
+voice: typos
+level: easy
+expect: {"must":["Timsort","stable"],"askMustNot":["left (one|record|list) first","<="],"words":{"max":170}}
+@@ tutor
+A sort is stable if records with equal keys come out in the same order they went in. That matters when you sort by one field after another: sort by name, then stably by city, and inside each city the names are still in order. Whether merge sort is stable is decided entirely inside the merge.
+
+<note>Stable sort: records with equal keys keep their input order.</note>
+
+<ask type="short">A merge has (3, "a") at the front of the left list and (3, "c") at the front of the right list, compared by the number only. Which one must it output first for the sort to be stable?</ask>
+@@ learner question
+btw is pythons sorted() a merge sort? or is it quicksort like qsort in C
+@@ reply
+CPython's `sorted` and `list.sort` use Timsort, which is a merge sort adapted to real data: it finds runs that are already in order, extends short runs with insertion sort, and then merges the runs. It is stable, $O(n \log n)$ in the worst case and $O(n)$ on input that is already sorted. C's `qsort` is different on both counts: the C standard does not say which algorithm it uses and does not promise stability.
+
+Since Python's sort is a merge at heart, its stability comes from the same decision you were about to make.
+
+<ask type="short">Two records with the same key reach the fronts of the left and right lists at the same moment. From which list must the merge take first if equal keys are to keep their input order, and why that one?</ask>
+@@ verify
+# Python's sort is stable: equal keys keep input order
+recs = [(3, 'a'), (1, 'x'), (3, 'c'), (2, 'y'), (3, 'b')]
+assert [r[1] for r in sorted(recs, key=lambda r: r[0]) if r[0] == 3] == ['a', 'c', 'b']
+# a merge that takes from the left on ties is stable; taking from the right is not
+def merge(l, r, left_on_tie):
+    out, i, j = [], 0, 0
+    while i < len(l) and j < len(r):
+        take_left = l[i][0] < r[j][0] or (l[i][0] == r[j][0] and left_on_tie)
+        if take_left: out.append(l[i]); i += 1
+        else: out.append(r[j]); j += 1
+    return out + l[i:] + r[j:]
+assert merge([(3, 'a')], [(3, 'c')], True) == [(3, 'a'), (3, 'c')]
+assert merge([(3, 'a')], [(3, 'c')], False) == [(3, 'c'), (3, 'a')]
+# linear behaviour on sorted input: n - 1 comparisons
+class K:
+    n = 0
+    def __init__(self, v): self.v = v
+    def __lt__(self, o):
+        K.n += 1
+        return self.v < o.v
+sorted([K(i) for i in range(1000)])
+assert K.n == 999
+
+@@@@ tangent-bfs-why-not-dfs
+situation: tangent
+topic: Breadth-first search
+voice: confused
+level: medium
+expect: {"must":["A, B, E, D","fewest|shortest"],"askMustNot":["E(,| and) C","\\bE, C\\b"],"words":{"max":170}}
+@@ tutor
+Breadth-first search explores a graph outwards from a start vertex using a queue: take the vertex at the front, add each neighbour not seen before to the back, and record its distance as one more than the current vertex's.
+
+<note>BFS: a queue of discovered vertices. Dequeue u; for each undiscovered neighbour v, set dist[v] = dist[u] + 1 and enqueue v. Vertices leave the queue in order of distance from the start.</note>
+
+**Problem 1 · warm-up**
+
+An undirected graph has edges A–B, A–D, B–E, C–D, D–E, C–F and E–F. Run BFS from A, taking neighbours in alphabetical order. In what order do the vertices leave the queue, and what is each one's distance from A?
+
+<solution>Order A, B, D, E, C, F. Distances: A 0, B 1, D 1, E 2, C 2, F 3.</solution>
+<check lang="python">
+from collections import deque
+edges = ['AB', 'AD', 'BE', 'CD', 'DE', 'CF', 'EF']
+adj = {v: sorted({e.replace(v, '') for e in edges if v in e}) for v in 'ABCDEF'}
+dist, order, q = {'A': 0}, [], deque('A')
+while q:
+    u = q.popleft(); order.append(u)
+    for v in adj[u]:
+        if v not in dist:
+            dist[v] = dist[u] + 1; q.append(v)
+assert order == list('ABDECF') and dist == {'A': 0, 'B': 1, 'D': 1, 'E': 2, 'C': 2, 'F': 3}
+</check>
+
+<ask type="problem">The order, and the distance of each vertex.</ask>
+@@ learner question
+wait before I do this, why do I need a queue at all? DFS also visits every vertex, cant I just use that to get the distances, it seems simpler with recursion
+@@ reply
+DFS does visit every vertex, but it reaches each one along whatever path it happens to be following, not along one with the fewest edges. On this graph, DFS from A with neighbours in alphabetical order goes A, B, E, D: it arrives at D after three edges, although D is joined to A directly. A depth counter in DFS would record 3 for D, where the shortest distance is 1. The queue is what prevents this: it hands vertices back in the order they were discovered, so everything one edge away is processed before anything two edges away.
+
+<ask type="short">Back to the BFS from A. Once A's own neighbours have been taken off the queue, which vertices are discovered next, in what order, and what distance do they get?</ask>
+@@ verify
+from collections import deque
+edges = ['AB', 'AD', 'BE', 'CD', 'DE', 'CF', 'EF']
+for e in edges:
+    assert f'{e[0]}–{e[1]}' in tutor[0]
+adj = {v: sorted({e.replace(v, '') for e in edges if v in e}) for v in 'ABCDEF'}
+# DFS from A, alphabetical: order of first visits and the depth at which each vertex is reached
+order, depth = [], {}
+def dfs(u, d):
+    order.append(u); depth[u] = d
+    for v in adj[u]:
+        if v not in depth:
+            dfs(v, d + 1)
+dfs('A', 0)
+assert order[:4] == ['A', 'B', 'E', 'D'] and depth['D'] == 3
+assert 'D' in adj['A']                                  # D is joined to A directly
+dist, q, out = {'A': 0}, deque('A'), []
+while q:
+    u = q.popleft(); out.append(u)
+    for v in adj[u]:
+        if v not in dist:
+            dist[v] = dist[u] + 1; q.append(v)
+assert dist['D'] == 1 and out == list('ABDECF')
+# the question's answer (E then C, both at distance 2) is not in the reply
+assert [v for v in out if dist[v] == 2] == ['E', 'C']
+assert 'E, C' not in reply and 'E and C' not in reply
+
+@@@@ tangent-quicksort-why-used
+situation: tangent
+topic: Quicksort and partitioning
+voice: overconfident
+level: medium
+expect: {"must":["random","heapsort"],"askMustNot":["index 2","\\[3, 1, 4, 6, 7, 9\\]"],"words":{"max":170}}
+@@ tutor
+Lomuto partition takes the last element as the pivot. It keeps an index `i` marking the end of the "smaller than pivot" region, scans `j` across the rest, and swaps each smaller element into that region. At the end it swaps the pivot into position `i`.
+
+```python
+def partition(a, lo, hi):
+    pivot, i = a[hi], lo
+    for j in range(lo, hi):
+        if a[j] < pivot:
+            a[i], a[j] = a[j], a[i]
+            i += 1
+    a[i], a[hi] = a[hi], a[i]
+    return i
+```
+
+<note>After a partition the pivot is in its final sorted position: everything left of it is smaller and everything right of it is at least as large. Partitioning $m$ elements costs $m - 1$ comparisons.</note>
+
+**Problem 1 · warm-up**
+
+Run `partition(a, 0, 5)` by hand on `a = [6, 3, 9, 1, 7, 4]`. Give the array afterwards and the index returned.
+
+<solution>Pivot 4. j = 1: 3 < 4, swap a[0] and a[1], giving [3, 6, 9, 1, 7, 4], i = 1. j = 3: 1 < 4, swap a[1] and a[3], giving [3, 1, 9, 6, 7, 4], i = 2. Final swap of a[2] and a[5]: [3, 1, 4, 6, 7, 9]. Returns 2.</solution>
+<check lang="python">
+def partition(a, lo, hi):
+    pivot, i = a[hi], lo
+    for j in range(lo, hi):
+        if a[j] < pivot:
+            a[i], a[j] = a[j], a[i]
+            i += 1
+    a[i], a[hi] = a[hi], a[i]
+    return i
+a = [6, 3, 9, 1, 7, 4]
+assert partition(a, 0, 5) == 2 and a == [3, 1, 4, 6, 7, 9]
+</check>
+
+<ask type="problem">The array after the call, and the index it returns.</ask>
+@@ learner question
+Honestly why does anyone still use this? Worst case is n squared, merge sort is n log n guaranteed, so quicksort is just strictly worse. Seems like a legacy thing.
+@@ reply
+It is not strictly worse, for three reasons. The $O(n^2)$ case needs the pivots to keep landing near an end; with a pivot chosen at random the expected cost is $O(n \log n)$ on any input of distinct keys, so no particular ordering is bad (many equal keys need a three-way partition). It sorts in place, where merge sort on an array needs $O(n)$ extra memory. And its scan walks memory sequentially, which makes it fast in practice. Libraries also guard the worst case: C++'s `std::sort` is typically an introsort, a quicksort that switches to heapsort when the recursion gets too deep, so it is $O(n \log n)$ in the worst case. Your point does hold where a guarantee or stability is required: merge sort gives both.
+
+<ask type="short">Back to the partition of `[6, 3, 9, 1, 7, 4]`. Once it has finished, where does the pivot 4 sit, and what can you say about the elements on each side of it?</ask>
+@@ verify
+ns = {}
+exec(block(tutor[0], 'python'), ns)
+a = [6, 3, 9, 1, 7, 4]
+assert ns['partition'](a, 0, 5) == 2 and a == [3, 1, 4, 6, 7, 9]
+assert str(a) in solution(tutor[0]) and str(a) not in reply
+# quicksort with last-element pivot: quadratic comparisons on sorted input, about n log n with random pivots
+import random, math
+def qs(a, lo, hi, cnt, rnd):
+    while lo < hi:
+        if rnd:
+            r = random.randint(lo, hi); a[r], a[hi] = a[hi], a[r]
+        cnt[0] += hi - lo
+        p = ns['partition'](a, lo, hi)
+        if p - lo < hi - p:
+            qs(a, lo, p - 1, cnt, rnd); lo = p + 1
+        else:
+            qs(a, p + 1, hi, cnt, rnd); hi = p - 1
+n = 2000
+c = [0]; b = list(range(n)); qs(b, 0, n - 1, c, False)
+assert b == sorted(b) and c[0] == n * (n - 1) // 2          # sorted input, fixed pivot: every comparison
+random.seed(4)
+c2 = [0]; b = list(range(n)); qs(b, 0, n - 1, c2, True)
+assert b == sorted(b) and c2[0] < 2 * n * math.log(n)       # random pivot on the same input: near 1.39 n log2 n
+
+@@@@ why-heap-array-layout-plan
+situation: why
+topic: Binary heaps
+options: {"why":true}
+voice: terse
+level: medium
+expect: {"verdict":"correct","need":["plan"],"askTypes":["predict","short","explain"],"askMustNot":["\\b11\\b","\\b12\\b","2i"],"mustNot":["2i \\+ 1"]}
+@@ tutor
+One more question to place you.
+
+<ask type="short">A min-heap is stored in an array. What must hold between each element and its parent, and where does that put the smallest element?</ask>
+@@ learner answer sure
+every element >= its parent. so smallest is the root, index 0
+@@ reply
+<grade verdict="correct" score="1">"every element >= its parent" is the heap property, and it does force the minimum to the root: walk up from any element and the values never increase, so nothing can be smaller than the root.</grade>
+
+<plan>
+- Why a tree can live in an array with no pointers
+- Why insert and remove-min cost about $\log_2 n$ steps
+- Why building a heap from $n$ items costs only $O(n)$
+</plan>
+
+A heap is drawn as a tree but stored as a plain array with no child pointers, so the positions alone have to say who is whose child. The array is filled level by level, left to right: the root is index 0, the next level holds indices 1 and 2, and the level below holds 3, 4, 5 and 6. Reading that picture, the children of 1 are 3 and 4, and the children of 2 are 5 and 6.
+
+<ask type="predict">Every level is completely full before the next one begins. Using only that fact, work out which two indices hold the children of node 5, and say how you got there.</ask>
+@@ verify
+# level-order numbering of a complete binary tree: children by counting, not by formula
+levels = [[0], [1, 2], [3, 4, 5, 6], list(range(7, 15))]
+children = {}
+for up, down in zip(levels, levels[1:]):
+    for pos, node in enumerate(up):
+        children[node] = (down[2 * pos], down[2 * pos + 1])
+assert children[1] == (3, 4) and children[2] == (5, 6)          # the two cases the reply reads off
+assert children[5] == (11, 12)                                   # the answer, which the reply does not show
+assert all(children[i] == (2 * i + 1, 2 * i + 2) for i in children)
+assert '11' not in reply and '12' not in reply
+# the grade's claim: with every element >= its parent, the root is the minimum
+import random
+random.seed(1)
+for _ in range(200):
+    h = [random.randint(0, 50) for _ in range(random.randint(1, 15))]
+    import heapq
+    heapq.heapify(h)
+    assert all(h[i] >= h[(i - 1) // 2] for i in range(1, len(h))) and h[0] == min(h)
+
+@@@@ why-sorting-lower-bound-idk
+situation: why
+topic: The lower bound for comparison sorting
+options: {"why":true}
+voice: plain
+level: hard
+expect: {"must":["6","two outcomes"],"askMustNot":["\\b4\\b","2\\^2","\\b3 comparisons"],"mustNot":["n!","\\\\log_2 ?\\(?n!","decision tree"],"forbid":["grade"]}
+@@ tutor
+Merge sort and heapsort both make about $n \log_2 n$ comparisons in the worst case, and no sort that works by comparing elements has ever done better than that order of growth.
+
+<ask type="explain">Why might that be a limit of the problem itself and not a lack of cleverness? Give your best argument, even a partial one.</ask>
+@@ learner idk
+@@ reply
+Take the smallest case that is not trivial and ask what a sorting method has to find out.
+
+A comparison sort learns about its input only by comparing two elements, and each comparison has two outcomes. Three distinct elements can arrive in 6 different orders. Each of those orders needs a different rearrangement to come out sorted, so by the time the method stops it must have told all 6 apart: if two different orders had produced exactly the same answers to every comparison, the method would have treated them identically and got one of them wrong.
+
+<note>A comparison sort sees its input only through the outcomes of its comparisons. Two input orders that give the same outcomes throughout receive the same rearrangement, so a correct sort must make every possible input order produce a different sequence of outcomes.</note>
+
+<ask type="predict">Can any method, however clever, sort every one of the 6 orders of three elements using at most 2 comparisons? Argue it by counting, not by trying particular methods.</ask>
+@@ verify
+import math
+from itertools import permutations, product
+assert math.factorial(3) == 6 and 2 ** 2 == 4 < 6 <= 2 ** 3
+assert math.ceil(math.log2(6)) == 3
+# exhaustive: no adaptive strategy with 2 comparisons separates all 6 orders; some strategy with 3 does
+perms = list(permutations(range(3)))
+pairs = [(0, 1), (0, 2), (1, 2)]
+def can_sort(cands, depth):
+    if len(cands) <= 1:
+        return True
+    if depth == 0:
+        return False
+    for i, j in pairs:
+        yes = [p for p in cands if p[i] < p[j]]
+        no = [p for p in cands if p[i] > p[j]]
+        if can_sort(yes, depth - 1) and can_sort(no, depth - 1):
+            return True
+    return False
+assert not can_sort(perms, 2) and can_sort(perms, 3)
+assert ' 4 ' not in reply and 'n!' not in reply
+
+@@@@ why-stability-selection-sort-swap
+situation: why
+topic: Stability of sorting algorithms
+options: {"why":true}
+voice: confused
+level: medium
+expect: {"verdict":"wrong","names":["swap","no reason|only when a comparison"],"must":["\\(Cy, Leeds\\), \\(Bea, York\\), \\(Ada, York\\)"],"askTypes":["predict","explain","short"],"askMustNot":["\\(Cy, Leeds\\), \\(Ada, York\\), \\(Bea, York\\)","never pass","stable"]}
+@@ tutor
+A list of records is in name order: (Ada, York), (Bea, York), (Cy, Leeds). You now sort it by city with selection sort, which finds the smallest remaining key and swaps it into the next position, one position at a time.
+
+<ask type="predict">After the sort by city, will the two York records still be in name order? Say why.</ask>
+@@ learner answer unsure
+I think yes? They were already in name order, and the sort only compares cities, it never even looks at the names. So it has no reason to reorder Ada and Bea, they tie on city so it should just leave them. Unless I'm missing something about how the swap works
+@@ reply
+<grade verdict="wrong" score="0.2">"it has no reason to reorder Ada and Bea" assumes a record only moves when a comparison says it should. Selection sort also moves records as a side effect of its swaps, and your last sentence points at exactly that.</grade>
+
+Run the first pass. The smallest city is Leeds, held by Cy in position 2, so position 0 and position 2 are swapped:
+
+(Cy, Leeds), (Bea, York), (Ada, York)
+
+That is already in city order, so the sort ends there, with Bea ahead of Ada. No comparison ever involved a name, as you said; Ada was carried over Bea by a swap whose purpose was to place Cy.
+
+<card>Can sorting by city disturb the name order of records in the same city? :: Yes, if the sort moves a record past others with an equal key. Selection sort's long swap does: (Ada, York), (Bea, York), (Cy, Leeds) becomes (Cy, Leeds), (Bea, York), (Ada, York).</card>
+
+<note>A sort can reorder records with equal keys without ever comparing them unfavourably: any move that carries a record past an equal-keyed one does it. Selection sort's swap is such a move.</note>
+
+<ask type="predict">Insertion sort handles the same three records differently: it takes Cy out, shifts Bea one place right, then Ada one place right, and puts Cy at the front. Predict whether Ada and Bea keep their order this time, and say what differs from the swap.</ask>
+@@ verify
+recs = [('Ada', 'York'), ('Bea', 'York'), ('Cy', 'Leeds')]
+def selection(a):
+    a = a[:]
+    for i in range(len(a)):
+        m = min(range(i, len(a)), key=lambda j: (a[j][1], j))    # first smallest key
+        a[i], a[m] = a[m], a[i]
+    return a
+def insertion(a):
+    a = a[:]
+    for i in range(1, len(a)):
+        x, j = a[i], i - 1
+        while j >= 0 and a[j][1] > x[1]:
+            a[j + 1] = a[j]; j -= 1
+        a[j + 1] = x
+    return a
+fmt = lambda a: ', '.join(f'({n}, {c})' for n, c in a)
+assert fmt(recs) in tutor[0]
+s = selection(recs)
+assert fmt(s) == '(Cy, Leeds), (Bea, York), (Ada, York)' and fmt(s) in reply
+assert [c for _, c in s] == sorted(c for _, c in recs)             # in city order after one swap
+# after the first swap (positions 0 and 2) nothing else moves
+a = recs[:]; a[0], a[2] = a[2], a[0]
+assert a == s
+# the predict question's answer: insertion sort keeps Ada before Bea
+assert fmt(insertion(recs)) == '(Cy, Leeds), (Ada, York), (Bea, York)'
+assert fmt(insertion(recs)) not in reply

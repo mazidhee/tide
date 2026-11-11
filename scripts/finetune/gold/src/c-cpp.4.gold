@@ -1,0 +1,685 @@
+@@@@ why-by-value-copy-then-reference
+situation: why
+topic: Passing by value and by const reference in C++
+options: {"why":true}
+voice: wordy
+level: medium
+expect: {"verdict":"correct","askTypes":["predict","explain","short"],"must":["std::string &s"],"askMustNot":["\\bconst\\b","modif","chang"],"mustNot":["const std::string"]}
+@@ tutor
+Start from what a call has to do. `void log_line(std::string s)` is called as `log_line(msg)`, where `msg` is a `std::string` holding 10,000 characters.
+
+<ask type="predict">Before the first statement of `log_line` runs, what has to be created for the parameter `s`, and what work does creating it take?</ask>
+@@ learner answer sure
+Well s is declared as a plain std::string, so it's its own separate string object and not msg itself. That means it has to be copy constructed from msg before the body starts, and for a string that long the copy has to allocate a new buffer on the heap and then copy all 10,000 characters into it. And that happens on every single call.
+@@ reply
+<grade verdict="correct" score="1">"its own separate string object" is the point everything else follows from, and you drew the consequence: "allocate a new buffer on the heap and then copy all 10,000 characters", on each call.</grade>
+
+So the copy is the cost. Now look at what it pays for. Because `s` is a separate object, nothing the body does to `s` can reach `msg`: the caller's string is safe whatever `log_line` does.
+
+Suppose the signature becomes `void log_line(std::string &s)`. Now `s` is another name for `msg` itself, and no characters are copied.
+
+<ask type="predict">With that reference parameter, what is the body of `log_line` now able to do to the caller's `msg` that it could not do before, and why could that surprise someone who reads only the call `log_line(msg)`?</ask>
+@@ verify
+src = r'''
+#include <cstdio>
+#include <cstdlib>
+#include <new>
+#include <string>
+static int allocs = 0;
+void *operator new(std::size_t n) { allocs++; void *p = std::malloc(n); if (!p) std::abort(); return p; }
+void operator delete(void *p) noexcept { std::free(p); }
+void operator delete(void *p, std::size_t) noexcept { std::free(p); }
+static std::size_t by_value(std::string s) { s[0] = 'x'; return s.size(); }
+static std::size_t by_ref(std::string &s) { s[0] = 'x'; return s.size(); }
+int main() {
+    std::string msg(10000, 'a');
+    int before = allocs;
+    by_value(msg);
+    std::printf("%d %c\n", allocs - before, msg[0]);     // one allocation for the copy; msg untouched
+    before = allocs;
+    by_ref(msg);
+    std::printf("%d %c\n", allocs - before, msg[0]);     // no allocation; msg changed through the reference
+    return 0;
+}
+'''
+assert run_cpp(src).split('\n')[:2] == ['1 a', '0 x']
+
+@@@@ why-idk-throwing-move-during-reallocation
+situation: why
+topic: noexcept and exception guarantees in C++
+options: {"why":true}
+voice: plain
+level: hard
+expect: {"must":["moved-from"],"askTypes":["predict","short","explain"],"askMustNot":["throw again","cannot keep","can't keep","noexcept"],"mustNot":["noexcept","move_if_noexcept"],"forbid":["grade"]}
+@@ tutor
+`push_back` on a `std::vector` makes a promise: if it throws, the vector is left exactly as it was before the call. Take a full `std::vector<Widget>` holding 5 elements. `push_back` allocates a larger buffer and transfers the 5 elements into it one at a time with `Widget`'s move constructor. Suppose that move constructor throws while the third element is being transferred.
+
+<ask type="predict">At that moment, can the vector still keep its promise? Say what state elements 1 and 2 of the old buffer are in.</ask>
+@@ learner idk
+@@ reply
+Take only the first two transfers. Moving element 1 into the new buffer let the new object take over its resources, so slot 1 of the old buffer now holds a moved-from `Widget`: still a valid object, but its contents have gone to the new buffer. Slot 2 is in the same state. Then the third move throws.
+
+So the old buffer no longer holds the original five values: two of them have been emptied. The only way to put it back as it was is to move those two elements out of the new buffer into their old slots again.
+
+<ask type="predict">That repair would call the same move constructor two more times. Given what it has just done on element 3, what might happen during the repair, and what would that mean for the promise?</ask>
+@@ verify
+# where the reasoning leads: a vector moves its elements on reallocation only when the move cannot throw
+src = r'''
+#include <cstdio>
+#include <vector>
+struct MayThrow { static inline int copies = 0, moves = 0; MayThrow() = default; MayThrow(const MayThrow &) { copies++; } MayThrow(MayThrow &&) { moves++; } };
+struct NoThrow { static inline int copies = 0, moves = 0; NoThrow() = default; NoThrow(const NoThrow &) { copies++; } NoThrow(NoThrow &&) noexcept { moves++; } };
+int main() {
+    std::vector<MayThrow> a(5); a.reserve(a.capacity() + 1);
+    std::vector<NoThrow> b(5); b.reserve(b.capacity() + 1);
+    std::printf("%d %d %d %d\n", MayThrow::copies, MayThrow::moves, NoThrow::copies, NoThrow::moves);
+    return 0;
+}
+'''
+assert run_cpp(src).split() == ['5', '0', '0', '5']
+# a moved-from object is valid but emptied: shown on a std::string long enough to own a heap buffer
+m = r'''
+#include <cstdio>
+#include <string>
+#include <utility>
+int main() { std::string a(100, 'q'); std::string b = std::move(a); std::printf("%zu %zu\n", a.size(), b.size()); return 0; }
+'''
+assert run_cpp(m).split() == ['0', '100']
+
+@@@@ why-wrong-string-view-holds-a-copy
+situation: why
+topic: std::string_view and lifetime
+options: {"why":true}
+voice: confused
+level: medium
+expect: {"verdict":"wrong","accept":["partial"],"names":["heap","allocat"],"must":["16 bytes","two 8-byte"],"askTypes":["predict","short","explain"],"askMustNot":["length","size of the|how many characters","address of the first|pointer to the first"]}
+@@ tutor
+Here is one measurement to reason from. `sizeof(std::string_view)` is 16 on a typical 64-bit platform, and it is 16 whether the view shows 3 characters or 3 million.
+
+<ask type="predict">From that fact alone, what can a `string_view` object contain, and what can it not contain?</ask>
+@@ learner answer unsure
+hmm. maybe it keeps a short copy of the text inside those 16 bytes and puts the rest on the heap like std::string does? so it contains some of the characters plus a pointer to its own heap copy, I think
+@@ reply
+<grade verdict="wrong" score="0.2">"puts the rest on the heap like std::string does" is the step that does not hold. A heap copy would have to be allocated when the view is made and freed when the view is destroyed, and a `string_view` does neither: making one never allocates, and destroying one frees nothing.</grade>
+
+Test your idea against the measurement. 3 million characters cannot fit in 16 bytes, and there is no private heap copy, so the characters must stay where they already were: in a buffer that some other object owns, such as the `std::string` the view was made from. The view's own 16 bytes only have to let it find and read them there.
+
+<card>Does a std::string_view own or copy the characters it shows? :: No. It refers to characters in a buffer owned by something else; making a view never allocates or copies.</card>
+
+<note>A `std::string_view` owns nothing and copies nothing: it refers to characters stored in a buffer that another object owns.</note>
+
+<ask type="predict">16 bytes is room for exactly two 8-byte values. Which two values would be enough for the view to read the right characters out of someone else's buffer, and no others?</ask>
+@@ verify
+src = r'''
+#include <cstdio>
+#include <cstdlib>
+#include <new>
+#include <string>
+#include <string_view>
+#include <type_traits>
+static int allocs = 0;
+void *operator new(std::size_t n) { allocs++; void *p = std::malloc(n); if (!p) std::abort(); return p; }
+void operator delete(void *p) noexcept { std::free(p); }
+void operator delete(void *p, std::size_t) noexcept { std::free(p); }
+int main() {
+    std::string big(3000000, 'z');
+    int before = allocs;
+    std::string_view v = big;
+    std::string_view w = "abc";
+    std::printf("%zu %zu %d %d\n", sizeof v, sizeof w, allocs - before, (int)std::is_trivially_destructible_v<std::string_view>);
+    std::printf("%d %zu %zu\n", (int)(v.data() == big.data()), v.size(), sizeof(const char *) + sizeof(std::size_t));
+    return 0;
+}
+'''
+out = run_cpp(src).split('\n')
+assert out[0] == '16 16 0 1', out          # 16 bytes for both views, no allocation, nothing to free
+assert out[1] == '1 3000000 16', out       # it reads the string's own buffer; a pointer and a length make up the 16 bytes
+
+@@@@ hands-on-c-function-pointer-callback
+situation: hands-on
+topic: Function pointers and callbacks in C
+options: {"strategy":"code"}
+voice: terse
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"must":["6 10 16","13 36"]}
+@@ tutor
+`int (*op)(int, int)` declares `op` as a pointer to a function that takes two `int`s and returns an `int`. Calling `op(a, b)` runs whichever function it points at.
+
+```c
+#include <stdio.h>
+
+static int add(int a, int b) { return a + b; }
+static int mul(int a, int b) { return a * b; }
+
+int main(void) {
+    int (*op)(int, int) = add;
+    printf("%d\n", op(6, 7));
+    op = mul;
+    printf("%d\n", op(6, 7));
+    return 0;
+}
+```
+
+```
+13
+42
+```
+
+<solution>int apply(int (*f)(int, int), int x, int y) { return f(x, y); } apply(add, 9, 4) is 13 and apply(mul, 9, 4) is 36.</solution>
+
+<ask type="code" lang="c">Write `int apply(int (*f)(int, int), int x, int y)` that calls `f` on `x` and `y` and returns the result. Print `apply(add, 9, 4)` and `apply(mul, 9, 4)`.</ask>
+@@ learner answer sure
+```c
+#include <stdio.h>
+
+static int add(int a, int b) { return a + b; }
+static int mul(int a, int b) { return a * b; }
+
+int apply(int (*f)(int, int), int x, int y) { return f(x, y); }
+
+int main(void) {
+    printf("%d %d\n", apply(add, 9, 4), apply(mul, 9, 4));
+    return 0;
+}
+```
+13 36
+@@ reply
+<grade verdict="correct" score="1">`return f(x, y);` is right and the program prints 13 36: `apply` names neither `add` nor `mul`, it calls whatever address it is handed.</grade>
+
+A function passed in like this is a callback. The receiver can call it as often as it likes, for instance once for each element:
+
+```c
+#include <stdio.h>
+
+static void print_double(int x) { printf("%d ", 2 * x); }
+
+static void for_each(const int *v, int n, void (*visit)(int)) {
+    for (int i = 0; i < n; i++) visit(v[i]);
+}
+
+int main(void) {
+    int v[] = {3, 5, 8};
+    for_each(v, 3, print_double);
+    printf("\n");
+    return 0;
+}
+```
+
+```
+6 10 16
+```
+
+<solution>int count_if(const int *v, int n, int (*pred)(int)) { int c = 0; for (int i = 0; i < n; i++) if (pred(v[i])) c++; return c; } with static int is_even(int x) { return x % 2 == 0; } On {3, 5, 8, 12, 7} it returns 2.</solution>
+
+<ask type="code" lang="c">Write `int count_if(const int *v, int n, int (*pred)(int))` that returns how many elements make `pred` return non-zero. Test it with a predicate `is_even` on `{3, 5, 8, 12, 7}` and print the count.</ask>
+@@ verify
+assert run_c(block(tutor[0], 'c')).split() == ['13', '42']
+assert run_c(block(learner, 'c')).strip() == '13 36'
+assert run_c(block(reply, 'c')).strip() == '6 10 16'
+ref = r'''
+#include <stdio.h>
+static int is_even(int x) { return x % 2 == 0; }
+int count_if(const int *v, int n, int (*pred)(int)) { int c = 0; for (int i = 0; i < n; i++) if (pred(v[i])) c++; return c; }
+int main(void) { int v[] = {3, 5, 8, 12, 7}; printf("%d\n", count_if(v, 5, is_even)); return 0; }
+'''
+assert run_c(ref).strip() == '2'
+assert 'returns 2' in solution(reply)
+assert sum(1 for x in [3, 5, 8, 12, 7] if x % 2 == 0) == 2
+
+@@@@ hands-on-cpp-function-template-plan
+situation: hands-on
+topic: Function templates in C++
+voice: plain
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"need":["plan","note"],"must":["plum","Problem 1"]}
+@@ tutor
+<ask type="short">`int larger(int a, int b)` and `double larger(double a, double b)` have the same body, `return a > b ? a : b;`. Which C++ feature lets you write that body once for any type, and when are the separate `int` and `double` versions produced?</ask>
+@@ learner answer sure
+A function template: template <typename T> T larger(T a, T b). The compiler generates each version at compile time, when it sees a call with that type, so larger(1, 2) makes the int one.
+@@ reply
+<grade verdict="correct" score="1">"The compiler generates each version at compile time, when it sees a call with that type" is right: a template is a pattern, and each type it is used with gets its own function.</grade>
+
+<plan>
+- Writing and calling a function template
+- Deduction conflicts and explicit template arguments
+- Class templates
+</plan>
+
+```cpp
+#include <iostream>
+#include <string>
+
+template <typename T>
+T larger(T a, T b) { return a > b ? a : b; }
+
+int main() {
+    std::cout << larger(3, 8) << "\n";
+    std::cout << larger(2.5, 1.5) << "\n";
+    std::cout << larger(std::string("pear"), std::string("plum")) << "\n";
+    return 0;
+}
+```
+
+```
+8
+2.5
+plum
+```
+
+Each call deduces `T` from its arguments, so this program contains three separate functions, for `int`, `double` and `std::string`. Any type will do, as long as the body compiles for it: here it needs `>` and must be copyable.
+
+<note>`template <typename T> T larger(T a, T b)` is a pattern. Each call deduces `T` from the arguments and the compiler instantiates one function per distinct `T`, at compile time. The type must support every operation the body uses.</note>
+
+**Problem 1 · warm-up**
+
+<solution>template <typename T> T clamp_to(T x, T lo, T hi) { if (x < lo) return lo; if (x > hi) return hi; return x; } clamp_to(15, 0, 10) is 10 and clamp_to(-2.5, -1.0, 1.0) is -1.</solution>
+
+<ask type="code" lang="cpp">Write a function template `clamp_to(x, lo, hi)` that returns `lo` when `x < lo`, `hi` when `x > hi`, and `x` otherwise. Print `clamp_to(15, 0, 10)` and `clamp_to(-2.5, -1.0, 1.0)`.</ask>
+@@ verify
+assert run_cpp(block(reply, 'cpp')).split() == ['8', '2.5', 'plum']
+assert max('pear', 'plum') == 'plum'
+ref = r'''
+#include <iostream>
+template <typename T> T clamp_to(T x, T lo, T hi) { if (x < lo) return lo; if (x > hi) return hi; return x; }
+int main() { std::cout << clamp_to(15, 0, 10) << " " << clamp_to(-2.5, -1.0, 1.0) << "\n"; return 0; }
+'''
+assert run_cpp(ref).strip() == '10 -1'
+# three distinct instantiations really exist in the snippet's program
+import subprocess, tempfile, os
+with tempfile.TemporaryDirectory() as d:
+    open(os.path.join(d, 'm.cpp'), 'w').write(block(reply, 'cpp'))
+    subprocess.run(['/usr/bin/clang++', '-std=c++20', '-O0', '-c', 'm.cpp', '-o', 'm.o'], cwd=d, check=True)
+    nm = subprocess.run('nm m.o | c++filt', shell=True, cwd=d, capture_output=True, text=True).stdout
+    found = [l for l in nm.split('\n') if ' larger<' in l or ' larger(' in l]
+    assert len(found) == 3, found
+
+@@@@ hands-on-c-snprintf-return-value-explained
+situation: hands-on
+topic: snprintf and buffer sizes in C
+options: {"strategy":"code"}
+voice: typos
+level: medium
+expect: {"ends":"continue","must":["\\b7\\b","id=48"],"need":["note"],"forbid":["grade"]}
+@@ tutor
+`snprintf(buf, size, format, ...)` stores at most `size - 1` characters and then a terminating zero byte, so with the buffer's real size it cannot write past the end of `buf`.
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    char buf[16];
+    snprintf(buf, sizeof buf, "id=%d", 4821);
+    printf("%s\n", buf);
+    return 0;
+}
+```
+
+```
+id=4821
+```
+
+<solution>With char buf[6] the call stores the 5 characters "id=48" and the zero byte, and the program prints id=48.</solution>
+
+<ask type="code" lang="c">Change the buffer to `char buf[6]`, run it again, and say what is printed.</ask>
+@@ learner question
+it printed id=48 so it got cut off. before i write anymore, can you explain what the return value of snprintf is? the man page just says it returns an int
+@@ reply
+The return value is the number of characters the complete output would have needed, not counting the zero byte, whether or not they all fitted:
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    char buf[6];
+    int n = snprintf(buf, sizeof buf, "id=%d", 4821);
+    printf("%s\n", buf);
+    printf("%d\n", n);
+    return 0;
+}
+```
+
+```
+id=48
+7
+```
+
+The full text "id=4821" has 7 characters, so `n` is 7 even though only 5 were stored. That makes the return value a truncation test: the output was cut short exactly when `n >= sizeof buf`. Here 7 >= 6, so it was. A negative return value means the formatting itself failed. Since `n` is also the length the text needs, `n + 1` is the buffer size that would have held all of it.
+
+<note>`snprintf` returns the length the full output would have had, excluding the terminator. Truncation happened exactly when the return value is `>=` the size passed in; a negative value is an error.
+
+```c
+int n = snprintf(buf, sizeof buf, "id=%d", id);
+if (n < 0 || (size_t)n >= sizeof buf) { /* error or truncated */ }
+```</note>
+
+<continue/>
+@@ verify
+assert run_c(block(tutor[0], 'c')).strip() == 'id=4821'
+out, err, cerr, code = run_c_full(block(tutor[0], 'c').replace('char buf[16]', 'char buf[6]'), 'c')
+assert code == 0 and out.strip() == 'id=48'           # what the learner reports
+out, err, cerr, code = run_c_full(block(reply, 'c'), 'c')
+assert code == 0 and out.split() == ['id=48', '7'] and not cerr.strip() and not err.strip(), (out, cerr, err)
+assert len('id=4821') == 7 and 'id=4821'[:6 - 1] == 'id=48' and 7 >= 6
+# the idiom in the note compiles and detects the truncation; with n + 1 bytes everything fits
+chk = r'''
+#include <stdio.h>
+int main(void) {
+    char buf[6];
+    int id = 4821;
+    int n = snprintf(buf, sizeof buf, "id=%d", id);
+    if (n < 0 || (size_t)n >= sizeof buf) { puts("truncated"); }
+    char big[8];
+    int m = snprintf(big, sizeof big, "id=%d", id);
+    printf("%s %d\n", big, m < (int)sizeof big);
+    return 0;
+}
+'''
+assert run_c(chk).split('\n')[:2] == ['truncated', 'id=4821 1']
+
+@@@@ hands-on-cpp-optional-after-go-on
+situation: hands-on
+topic: std::optional
+options: {"strategy":"code"}
+voice: plain
+level: easy
+expect: {"setsProblem":true,"askTypes":["code"],"must":["443","value_or"],"forbid":["grade"]}
+@@ tutor
+A function that may have no result to give can return `std::optional<T>`: an object that holds either a `T` or nothing, written `std::nullopt`. The "no result" case is then part of the return type, where the caller can see it, instead of a special value such as -1 that the caller has to remember to test for.
+
+<note>`std::optional<T>` holds either a value of type `T` or nothing (`std::nullopt`). Use it as the return type of a function that can legitimately have no answer.</note>
+
+<continue/>
+@@ learner goon
+@@ reply
+```cpp
+#include <iostream>
+#include <optional>
+#include <string>
+
+std::optional<int> find_port(const std::string &name) {
+    if (name == "http") return 80;
+    if (name == "https") return 443;
+    return std::nullopt;
+}
+
+int main() {
+    std::optional<int> p = find_port("https");
+    if (p) std::cout << *p << "\n";
+    std::cout << find_port("gopher").value_or(0) << "\n";
+    std::cout << find_port("ftp").has_value() << "\n";
+    return 0;
+}
+```
+
+```
+443
+0
+0
+```
+
+`if (p)` (or `p.has_value()`) tests whether a value is present, `*p` reads it, and `value_or(x)` gives the value if there is one and `x` if not. Reading `*p` when `p` is empty is undefined behaviour, so the test comes first.
+
+<note>Using a `std::optional<T> p`: `if (p)` or `p.has_value()` tests it, `*p` reads the value (only after testing), `p.value_or(x)` supplies a fallback.</note>
+
+<solution>std::optional<double> safe_divide(double a, double b) { if (b == 0) return std::nullopt; return a / b; } safe_divide(9, 2) holds 4.5; safe_divide(1, 0) is empty, so has_value() prints 0.</solution>
+
+<ask type="code" lang="cpp">Write `std::optional<double> safe_divide(double a, double b)` that returns nothing when `b` is 0 and the quotient otherwise. In `main`, print the value of `safe_divide(9, 2)` after testing it, then print `safe_divide(1, 0).has_value()`.</ask>
+@@ verify
+assert run_cpp(block(reply, 'cpp')).split() == ['443', '0', '0']
+ref = r'''
+#include <iostream>
+#include <optional>
+std::optional<double> safe_divide(double a, double b) { if (b == 0) return std::nullopt; return a / b; }
+int main() {
+    auto q = safe_divide(9, 2);
+    if (q) std::cout << *q << "\n";
+    std::cout << safe_divide(1, 0).has_value() << "\n";
+    return 0;
+}
+'''
+assert run_cpp(ref).split() == ['4.5', '0']
+assert '4.5' in solution(reply) and '4.5' not in visible(reply)
+
+@@@@ hands-on-c-type-punning-pointer-cast
+situation: hands-on
+topic: Unions and type punning in C
+options: {"strategy":"code"}
+voice: overconfident
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["undefined behaviour","\\*\\(uint32_t \\*\\)&f|cast"],"must":["0xC0000000","memcpy"],"setsProblem":true,"askTypes":["code"],"askMustNot":["-0\\.5","\\b10\\b"]}
+@@ tutor
+To look at the bits of a `float`, copy its bytes into an unsigned integer of the same size with `memcpy`. Compilers typically turn a fixed 4-byte `memcpy` into a single move, so it costs nothing.
+
+```c
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+int main(void) {
+    float f = 1.0f;
+    uint32_t bits;
+    memcpy(&bits, &f, sizeof bits);
+    printf("0x%08X\n", (unsigned)bits);
+    return 0;
+}
+```
+
+```
+0x3F800000
+```
+
+<solution>uint32_t float_bits(float f) { uint32_t b; memcpy(&b, &f, sizeof b); return b; } -2.0f gives 0xC0000000 and 0.15625f gives 0x3E200000.</solution>
+
+<ask type="code" lang="c">Write `uint32_t float_bits(float f)` and use it to print the bits of `-2.0f` and `0.15625f` in the same format.</ask>
+@@ learner answer sure
+```c
+#include <stdint.h>
+#include <stdio.h>
+
+uint32_t float_bits(float f) { return *(uint32_t *)&f; }
+
+int main(void) {
+    printf("0x%08X\n", (unsigned)float_bits(-2.0f));
+    printf("0x%08X\n", (unsigned)float_bits(0.15625f));
+    return 0;
+}
+```
+prints 0xC0000000 and 0x3E200000. No need for memcpy, a cast is shorter and faster.
+@@ reply
+<grade verdict="partial" score="0.5">The two values are right, but `return *(uint32_t *)&f;` gets them by undefined behaviour: it reads a `float` object through an lvalue of type `uint32_t`, which C's effective-type (strict aliasing) rule forbids. And "a cast is shorter and faster" is not so: the 4-byte `memcpy` typically compiles to the same single move.</grade>
+
+It printed the expected bits in this build, but an optimising compiler may assume a `uint32_t *` and a `float *` never point at the same object, and reorder reads and writes on that basis. C gives two defined ways to do it: `memcpy`, or a union, where reading a member other than the one last written reinterprets the bytes (in C; C++ does not allow this).
+
+```c
+#include <stdint.h>
+#include <stdio.h>
+
+union pun { float f; uint32_t u; };
+
+int main(void) {
+    union pun p;
+    p.f = -2.0f;
+    printf("0x%08X\n", (unsigned)p.u);
+    return 0;
+}
+```
+
+```
+0xC0000000
+```
+
+<card>Why is `*(uint32_t *)&f` on a float not a valid way to read its bits in C? :: It accesses a float object through a uint32_t lvalue, which breaks the effective-type (strict aliasing) rule: undefined behaviour. Use memcpy or a union.</card>
+
+<note>Type punning in C: copy the bytes with `memcpy`, or write one union member and read another. Casting a pointer to an unrelated type and dereferencing it is undefined behaviour, even when it prints the expected value.</note>
+
+<solution>float bits_to_float(uint32_t u) { union pun p; p.u = u; return p.f; } (or memcpy into a float). 0x41200000 is 10 and 0xBF000000 is -0.5, so it prints 10 and -0.5.</solution>
+
+<ask type="code" lang="c">Go the other way: write `float bits_to_float(uint32_t u)` with a union or `memcpy`, and print `bits_to_float(0x41200000)` and `bits_to_float(0xBF000000)` with `%g`.</ask>
+@@ verify
+import struct
+assert run_c(block(tutor[0], 'c')).strip() == '0x3F800000'
+out, err, cerr, code = run_c_full(block(learner, 'c'), 'c')
+assert code == 0 and out.split() == ['0xC0000000', '0x3E200000'], (out, cerr)      # what the learner's build prints
+assert run_c(block(reply, 'c')).strip() == '0xC0000000'
+bits = lambda x: struct.unpack('<I', struct.pack('<f', x))[0]
+assert (bits(1.0), bits(-2.0), bits(0.15625)) == (0x3F800000, 0xC0000000, 0x3E200000)
+ref = r'''
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+union pun { float f; uint32_t u; };
+static float bits_to_float(uint32_t u) { union pun p; p.u = u; return p.f; }
+static uint32_t float_bits(float f) { uint32_t b; memcpy(&b, &f, sizeof b); return b; }
+int main(void) {
+    printf("%g %g\n", bits_to_float(0x41200000), bits_to_float(0xBF000000));
+    printf("0x%08X 0x%08X\n", (unsigned)float_bits(-2.0f), (unsigned)float_bits(0.15625f));
+    return 0;
+}
+'''
+assert run_c(ref).split('\n')[:2] == ['10 -0.5', '0xC0000000 0x3E200000']
+assert struct.unpack('<f', struct.pack('<I', 0x41200000))[0] == 10.0 and struct.unpack('<f', struct.pack('<I', 0xBF000000))[0] == -0.5
+# the 4-byte memcpy compiles to no call at all at -O2
+import subprocess, tempfile, os
+with tempfile.TemporaryDirectory() as d:
+    open(os.path.join(d, 'm.c'), 'w').write('#include <stdint.h>\n#include <string.h>\nuint32_t float_bits(float f) { uint32_t b; memcpy(&b, &f, sizeof b); return b; }\n')
+    asm = subprocess.run(['/usr/bin/clang', '-std=c17', '-O2', '-S', '-o', '-', 'm.c'], cwd=d, capture_output=True, text=True).stdout
+    assert 'memcpy' not in asm and 'fmov' in asm, asm
+
+@@@@ summary-rule-of-three-assignment
+situation: summary
+topic: The rule of three in C++
+voice: plain
+level: medium
+expect: {"verdict":"correct","must":["copy assignment","copy-and-swap|self-assignment"]}
+@@ tutor
+**Problem 3 · harder**
+
+```cpp
+class Buffer {
+    int *data;
+    std::size_t n;
+public:
+    explicit Buffer(std::size_t n) : data(new int[n]()), n(n) {}
+    ~Buffer() { delete[] data; }
+    Buffer(const Buffer &o) : data(new int[o.n]), n(o.n) { std::copy(o.data, o.data + n, data); }
+};
+```
+
+`Buffer a(4), b(8);` is followed by `b = a;`.
+
+<solution>b already exists, so b = a calls the copy assignment operator, not the copy constructor. The class declares none, so the compiler generates one that copies data and n memberwise. b's own 8-int array is leaked, both objects now point at a's 4-int array, and that array is deleted twice when the two destructors run.</solution>
+
+<ask type="problem">Which member function runs for `b = a;`, and what goes wrong afterwards?</ask>
+@@ learner answer sure
+The copy constructor runs. It makes a new array of 4 and copies the values over, so nothing goes wrong, b is just a deep copy of a now.
+@@ tutor
+<grade verdict="wrong" score="0.1">"The copy constructor runs" is the step that fails: a constructor runs only when an object is being created, and `b` already exists. `b = a;` calls the copy assignment operator, and since `Buffer` declares none, the compiler generates one that copies each member.</grade>
+
+That generated operator copies the pointer, so `b.data` now equals `a.data`. The 8-int array `b` owned is leaked, and the 4-int array is deleted twice, once by each destructor.
+
+<card>`Buffer b(8); b = a;` Which member function runs, and why not the copy constructor? :: The copy assignment operator: b already exists. A copy constructor runs only when a new object is created from another.</card>
+
+<note>Rule of three: a class that needs its own destructor, copy constructor or copy assignment operator almost always needs all three, because each one exists to manage the same owned resource.</note>
+
+**Problem 4 · final**
+
+<solution>Buffer c = a; is initialisation of a new object: copy constructor, despite the = sign. c = b; assigns to an existing object: copy assignment operator. Buffer d(c); creates a new object: copy constructor.</solution>
+
+<ask type="problem">Name the member function of `Buffer` that runs for each of these lines, in order: `Buffer c = a;`, then `c = b;`, then `Buffer d(c);`.</ask>
+@@ learner answer sure
+Buffer c = a; is the copy constructor, because c is being created there, the = is initialisation. c = b; is copy assignment since c already exists. Buffer d(c); is the copy constructor again.
+@@ reply
+<grade verdict="correct" score="1">All three are right, and "c is being created there, the = is initialisation" is the distinction you missed in the problem before: what decides it is whether the object on the left already exists, not the `=` sign.</grade>
+
+<summary>**What you learned:** a class that owns a resource needs a destructor, a copy constructor and a copy assignment operator together, and which of the two copy operations runs depends on whether the target object is being created or already exists.
+
+**Still shaky:** the compiler-generated copy assignment. In Problem 3 you took `b = a;` to be the copy constructor and expected a deep copy; you separated the two correctly in Problem 4, but you have not yet written an assignment operator for `Buffer` yourself.
+
+**Review next:** write `Buffer &operator=(const Buffer &)` so that it frees the old array, copies the new one and survives self-assignment, then look at the copy-and-swap idiom, and after that the move operations that extend this to the rule of five.</summary>
+@@ verify
+cls = block(tutor[0], 'cpp')
+probe = cls.replace('public:', 'public:\n    const int *ptr() const { return data; }\n    static inline int copies = 0;').replace('{ std::copy(o.data, o.data + n, data); }', '{ std::copy(o.data, o.data + n, data); copies++; }')
+assert probe != cls and 'copies++' in probe
+src = '#include <algorithm>\n#include <cstddef>\n#include <cstdio>\n' + probe + r'''
+int main() {
+    Buffer *a = new Buffer(4), *b = new Buffer(8);     // on the heap and never destroyed: the double delete is not run
+    *b = *a;
+    std::printf("%d %d\n", (int)(a->ptr() == b->ptr()), Buffer::copies);      // same array, copy constructor not called
+    Buffer c = *a;
+    std::printf("%d %d\n", (int)(c.ptr() == a->ptr()), Buffer::copies);       // initialisation: copy constructor
+    Buffer *e = new Buffer(2);
+    Buffer d(*e);
+    std::printf("%d\n", Buffer::copies);
+    delete e;
+    return 0;
+}
+'''
+out, err, cerr, code = run_c_full(src, 'cpp')
+assert code == 0 and out.split('\n')[:3] == ['1 0', '0 1', '2'], (out, cerr)
+
+@@@@ summary-quiz-constexpr
+situation: summary
+topic: constexpr in C++
+mode: quiz
+options: {"length":3}
+voice: terse
+level: medium
+expect: {"verdict":"correct","must":["2 (out )?of 3|2/3","const int n = 7"]}
+@@ tutor
+**Question 1 of 3**
+
+<ask type="short">`constexpr int sq(int x) { return x * x; }` Can `sq` be called with a value that is only known at run time, such as one read from the keyboard? Say what `constexpr` on a function promises.</ask>
+@@ learner answer sure
+yes. constexpr means it can be evaluated at compile time when the arguments are constants, it still works as a normal function at run time
+@@ tutor
+<grade verdict="correct" score="1">"it can be evaluated at compile time when the arguments are constants" is the promise, and you have the other half too: with run-time arguments it is an ordinary function.</grade>
+
+**Question 2 of 3**
+
+```cpp
+constexpr int sq(int x) { return x * x; }
+
+int n = 7;
+int a[sq(4)];               // line A
+constexpr int k = sq(n);    // line B
+```
+
+<ask type="short">Which of line A and line B compile, and why?</ask>
+@@ learner answer sure
+both compile. n is initialised with a literal 7 so the compiler knows its value
+@@ tutor
+<grade verdict="wrong" score="0.2">Line A does compile, but "n is initialised with a literal 7 so the compiler knows its value" does not hold for line B: `n` is not `const`, so its value may change before it is read and it is not usable in a constant expression. A `constexpr` variable needs a constant expression as its initialiser, so line B is an error.</grade>
+
+<card>Why does `int n = 7; constexpr int k = sq(n);` not compile? :: n is a non-const variable, so reading it is not a constant expression, whatever it was initialised with. A constexpr variable must be initialised by a constant expression.</card>
+
+**Question 3 of 3**
+
+<ask type="choice" options="const int n = 7;|static int n = 7;|int n{7};|volatile int n = 7;">Which replacement for the declaration of `n` makes line B compile?</ask>
+@@ learner answer sure
+const int n = 7;
+@@ reply
+<grade verdict="correct" score="1">"const int n = 7;" is right: a `const` integer initialised with a constant expression can itself be used in constant expressions, so `sq(n)` can be evaluated at compile time.</grade>
+
+<summary>**Score:** 2 of 3.
+
+**Strengths:** what `constexpr` means on a function: it may be evaluated at compile time, and it still works as an ordinary function at run time. You also picked the declaration that fixes line B.
+
+**Misconception to fix:** that a variable initialised with a literal is known to the compiler. In Question 2 you expected `constexpr int k = sq(n);` to compile with `int n = 7;`. What matters is whether the variable is `const` (or `constexpr`), not what it was initialised with.
+
+**Review:** which expressions count as constant expressions, and the difference between a `constexpr` function, which may run at compile time, and a `constexpr` variable, which must be initialised at compile time.</summary>
+@@ verify
+def builds(decl):
+    src = 'constexpr int sq(int x) { return x * x; }\n' + decl + '\nint a[sq(4)];\nconstexpr int k = sq(n);\nint main() { return k - 49 + (int)sizeof a - 64; }\n'
+    out, err, cerr, code = run_c_full(src, 'cpp')
+    return code == 0, cerr
+ok, cerr = builds('int n = 7;')
+assert not ok and 'constant expression' in cerr, cerr          # line B is the error; line A is not mentioned
+assert 'int a[sq(4)]' not in cerr
+assert builds('const int n = 7;')[0]
+for wrong in ('static int n = 7;', 'int n{7};', 'volatile int n = 7;'):
+    assert not builds(wrong)[0], wrong
+# line A alone compiles, and sq works at run time
+out = run_cpp('#include <cstdio>\nconstexpr int sq(int x) { return x * x; }\nint a[sq(4)];\nint main(int argc, char **) { std::printf("%zu %d\\n", sizeof a / sizeof a[0], sq(argc + 2)); return 0; }\n')
+assert out.split() == ['16', '9']
+first = history[-2]['tutor'].split('options="')[1].split('|')[0]
+assert first == 'const int n = 7;'

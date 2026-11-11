@@ -1,0 +1,603 @@
+@@@@ show-me-conditional-aggregation-chart
+situation: show-me
+topic: CASE expressions and conditional aggregation
+voice: plain
+level: easy
+expect: {"visual":{"kind":"chart"},"must":["\\b56\\b","\\b91\\b"]}
+@@ tutor
+Conditional aggregation puts a CASE inside an aggregate, so one pass over the rows fills several columns, each counting a different kind of row:
+
+```sql
+SELECT c.segment,
+       SUM(CASE WHEN o.status = 'refunded'  THEN 1 ELSE 0 END) AS refunded,
+       SUM(CASE WHEN o.status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled
+FROM orders o
+JOIN customers c ON c.customer_id = o.customer_id
+GROUP BY c.segment
+ORDER BY c.segment;
+```
+
+Each CASE turns an order into 1 or 0 for its column and SUM adds them up, so the consumer row comes out as 56 refunded and 91 cancelled, enterprise as 14 and 12, and small business as 51 and 49.
+
+<note>Conditional aggregation: `SUM(CASE WHEN condition THEN 1 ELSE 0 END)` counts the rows of each group that meet the condition. Several such columns in one SELECT give several counts from one scan and one GROUP BY.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```chart
+{"sql": "SELECT c.segment, SUM(CASE WHEN o.status = 'refunded' THEN 1 ELSE 0 END) AS refunded, SUM(CASE WHEN o.status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled FROM orders o JOIN customers c ON c.customer_id = o.customer_id GROUP BY c.segment ORDER BY c.segment", "type": "bar", "title": "Refunded and cancelled orders by segment"}
+```
+
+Each segment is one row of the query and each bar is one SUM(CASE ...) column: consumer shows 56 refunded beside 91 cancelled, the only segment where the cancelled bar is the taller one.
+@@ verify
+import json
+rows = lab(block(tutor[0], 'sql'))
+assert rows == [('consumer', 56, 91), ('enterprise', 14, 12), ('small business', 51, 49)], rows
+chart = json.loads(block(reply, 'chart'))
+assert lab(chart['sql']) == rows and chart['type'] == 'bar'
+assert [r[0] for r in rows if r[2] > r[1]] == ['consumer']
+for n in ('56', '91', '14 and 12', '51 and 49'):
+    assert n in tutor[0]
+
+@@@@ show-me-self-join-real-rows
+situation: show-me
+topic: Self joins
+voice: terse
+level: medium
+expect: {"visual":{"kind":"table"},"must":["\\b58\\b","2022-12-24"],"askMustNot":["\\b116\\b","twice","double"],"ends":"ask","words":{"max":110}}
+@@ tutor
+A self join joins a table to itself. The table appears twice under two aliases, and the ON clause compares a row from one copy with a row from the other. To list pairs of customers who signed up on the same day:
+
+`FROM customers a JOIN customers b ON b.signup_date = a.signup_date AND a.customer_id < b.customer_id`
+
+The test `a.customer_id < b.customer_id` keeps each pair once. Without any test on the ids every customer would pair with itself, and every real pair would also appear in both orders.
+
+<note>Self join: one table, two aliases, an ON clause that relates a row to another row of the same table. For unordered pairs add `a.id < b.id`, which removes self-pairs and mirrored duplicates.</note>
+
+<continue/>
+@@ learner question
+ok. what does that look like on the real customers table?
+@@ reply
+```sql
+SELECT a.name AS first_customer, b.name AS second_customer, a.signup_date
+FROM customers a
+JOIN customers b ON b.signup_date = a.signup_date AND a.customer_id < b.customer_id
+ORDER BY a.signup_date, a.customer_id, b.customer_id
+LIMIT 5;
+```
+
+| first_customer | second_customer | signup_date |
+|---|---|---|
+| Hannah Bello | James Fischer | 2022-12-02 |
+| Amara Kelly | Isla Clarke | 2022-12-24 |
+| Amara Kelly | Lukas Jones | 2022-12-24 |
+| Isla Clarke | Lukas Jones | 2022-12-24 |
+| Lukas Fischer | Ngozi Smith | 2022-12-28 |
+
+Look at 2022-12-24: three customers signed up that day, and they give three pairs, each listed once. Without the LIMIT the query returns 58 pairs.
+
+<ask type="predict">Change `<` to `<>` and remove the LIMIT. How many rows come back, and why that number?</ask>
+@@ verify
+q = block(reply, 'sql')
+rows = lab(q)
+assert [list(r) for r in rows] == table(reply)[1:], rows
+full = lab(q.replace('LIMIT 5', ''))
+assert len(full) == 58
+assert len(lab(q.replace('LIMIT 5', '').replace('a.customer_id < b.customer_id', 'a.customer_id <> b.customer_id'))) == 116 == 2 * 58
+assert lab("SELECT COUNT(*) FROM customers WHERE signup_date = '2022-12-24'")[0][0] == 3
+# the join text in the explanation is the one the query uses
+assert 'JOIN customers b ON b.signup_date = a.signup_date AND a.customer_id < b.customer_id' in tutor[0] and 'JOIN customers b ON b.signup_date = a.signup_date AND a.customer_id < b.customer_id' in q
+
+@@@@ show-me-lsm-flowchart
+situation: show-me
+topic: LSM trees and compaction
+voice: plain
+level: medium
+expect: {"visual":{"kind":"mermaid","diagram":["flowchart"]},"must":["write amplification"]}
+noverify: a diagram of the structure just explained; nothing is computed
+@@ tutor
+In an LSM tree with levelled compaction, as in LevelDB and RocksDB, a write goes first to the memtable, a sorted structure in memory. When the memtable is full it is flushed to disk as an SSTable in level 0, and because each flush covers whatever keys were written lately, level 0 files can overlap in key range. Compaction merges level 0 files with the level 1 files they overlap and writes new level 1 files whose key ranges do not overlap, keeping only the newest value of each key. When level 1 passes its size limit, the same merge pushes data into level 2. Every merge rewrites data that was already on disk, and that repeated rewriting is the write amplification compaction costs.
+
+<note>LSM write path: memtable (memory, sorted) → flush → level 0 SSTables (may overlap) → compaction → level 1 (no overlap) → compaction → level 2. Compaction keeps the newest value of each key and drops the rest; its cost is write amplification.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+flowchart TD
+    W["Write"] --> M["Memtable: sorted, in memory"]
+    M -->|"full: flush"| L0["Level 0 SSTables: key ranges may overlap"]
+    L0 -->|"compaction: merge, keep newest value"| L1["Level 1 SSTables: no overlap"]
+    L1 -->|"over its size limit: compaction"| L2["Level 2 SSTables: no overlap"]
+```
+
+Follow one key downwards: the flush writes it to disk once, and each compaction arrow below that writes it again, which is the write amplification.
+
+@@@@ show-me-two-phase-locking-timeline
+situation: show-me
+topic: Two-phase locking
+voice: plain
+level: medium
+expect: {"visual":{"kind":"table"},"must":["\\b200\\b","step 2"]}
+@@ tutor
+Under strict two-phase locking a transaction takes each lock as it first needs the item, a shared (S) lock to read and an exclusive (X) lock to write, and releases all of them together at commit. An X lock is compatible with no other lock; S locks are compatible with each other.
+
+Take accounts A = 100 and B = 100. T1 moves 50 from A to B: it writes A = 50, then B = 150. T2 reads A and then B to report their total. T1 writes A first; T2 then asks to read A while T1 is still running. T2's S lock on A conflicts with T1's X lock, so T2 waits until T1 commits, and then reads A = 50 and B = 150: a total of 200. With no locking T2 could have read A = 50 and B = 100, a total of 150 that never existed.
+
+<note>Strict 2PL: acquire S (read) or X (write) locks as needed, release them all at commit. X conflicts with everything, S only with X. A reader that meets a writer's X lock waits for the writer's commit, so it never sees a half-finished transaction.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| Step | T1 | T2 | Locks held after the step |
+|---|---|---|---|
+| 1 | X lock on A, writes A = 50 | | T1: X(A) |
+| 2 | | asks for S lock on A, waits | T1: X(A) |
+| 3 | X lock on B, writes B = 150 | waiting | T1: X(A), X(B) |
+| 4 | commits, releases A and B | S lock on A granted, reads 50 | T2: S(A) |
+| 5 | | S lock on B, reads 150 | T2: S(A), S(B) |
+| 6 | | commits, releases A and B | none |
+
+Look at step 2: T2's request waits behind T1's X lock until step 4, so it reads 50 and 150, a total of 200, and never the half-finished 50 and 100.
+@@ verify
+# a small lock manager replays the schedule and must reproduce the last column and the values read
+held = {}                      # item -> list of (txn, mode)
+data = {'A': 100, 'B': 100}
+def ok(item, txn, mode):
+    others = [(t, m) for t, m in held.get(item, []) if t != txn]
+    return not others if mode == 'X' else all(m == 'S' for _, m in others)
+def show():
+    out = []
+    for t in ('T1', 'T2'):
+        mine = [f'{m}({i})' for i in ('A', 'B') for tt, m in held.get(i, []) if tt == t]
+        if mine:
+            out.append(f"{t}: {', '.join(mine)}")
+    return '; '.join(out) or 'none'
+def grant(item, txn, mode):
+    held.setdefault(item, []).append((txn, mode))
+def release(txn):
+    for i in held:
+        held[i] = [(t, m) for t, m in held[i] if t != txn]
+states, reads = [], []
+assert ok('A', 'T1', 'X'); grant('A', 'T1', 'X'); data['A'] -= 50; states.append(show())          # 1
+assert not ok('A', 'T2', 'S'); states.append(show())                                              # 2: T2 waits
+assert ok('B', 'T1', 'X'); grant('B', 'T1', 'X'); data['B'] += 50; states.append(show())          # 3
+release('T1'); assert ok('A', 'T2', 'S'); grant('A', 'T2', 'S'); reads.append(data['A']); states.append(show())   # 4
+assert ok('B', 'T2', 'S'); grant('B', 'T2', 'S'); reads.append(data['B']); states.append(show())  # 5
+release('T2'); states.append(show())                                                              # 6
+rows = table(reply)[1:]
+assert [r[3] for r in rows] == states, (states, [r[3] for r in rows])
+assert reads == [50, 150] and sum(reads) == 200 and data == {'A': 50, 'B': 150}
+assert 'A = 50' in rows[0][1] and 'B = 150' in rows[2][1] and 'reads 50' in rows[3][2] and 'reads 150' in rows[4][2]
+assert 'waits' in rows[1][2] and [r[0] for r in rows] == [str(i) for i in range(1, 7)]
+assert 'total of 200' in tutor[0] and 'total of 150' in tutor[0] and 50 + 100 == 150
+
+@@@@ mark-error-left-join-where-filter
+situation: mark-error
+topic: Inner joins and left joins
+voice: wordy
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["WHERE","\\bON\\b","\\b22\\b"],"must":["Problem 3","\\b17\\b"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b13 rows\\b","\\b9\\b"]}
+@@ tutor
+**Problem 2 · harder**
+
+Using the lab's customers and orders tables, return one row for every customer in Nigeria: their name and how many refunded orders they have, with 0 for a customer who has none.
+
+<solution>SELECT c.name, COUNT(o.order_id) AS refunded FROM customers c LEFT JOIN orders o ON o.customer_id = c.customer_id AND o.status = 'refunded' WHERE c.country = 'Nigeria' GROUP BY c.customer_id; 22 rows, one per customer in Nigeria: 5 with one or more refunded orders and 17 with 0. The status test must be in the ON clause, so that a customer with no refunded order still keeps a NULL-padded row.</solution>
+
+<ask type="problem">Your query, run in a sql block, the number of rows it returns, and your reasoning for each clause.</ask>
+@@ learner answer sure
+I used a LEFT JOIN from customers to orders so that customers without any orders stay in the result. Then I filtered down to Nigeria and to refunded orders, grouped by customer, and counted o.order_id rather than * so that an unmatched customer counts as 0 and not 1.
+
+```sql
+SELECT c.name, COUNT(o.order_id) AS refunded
+FROM customers c
+LEFT JOIN orders o ON o.customer_id = c.customer_id
+WHERE c.country = 'Nigeria' AND o.status = 'refunded'
+GROUP BY c.customer_id;
+```
+
+It returns 5 rows.
+@@ reply
+<grade verdict="partial" score="0.6">The LEFT JOIN, the grouping and "counted o.order_id rather than *" are all right. The first wrong step is `AND o.status = 'refunded'` in the WHERE: WHERE runs after the join, and for a customer with no refunded order o.status is another status or NULL, so every one of their rows is dropped. Your 5 rows are the customers with at least one refund; 22 were asked for.</grade>
+
+A test on the right-hand table belongs in the ON clause when unmatched rows must survive:
+
+```sql
+SELECT c.name, COUNT(o.order_id) AS refunded
+FROM customers c
+LEFT JOIN orders o ON o.customer_id = c.customer_id AND o.status = 'refunded'
+WHERE c.country = 'Nigeria'
+GROUP BY c.customer_id;
+```
+
+This returns 22 rows: your 5, and 17 customers with 0.
+
+<card>In a LEFT JOIN, where does a condition on the right-hand table go if unmatched left rows must be kept? :: In the ON clause. In WHERE it is tested after the join, fails on the NULL-padded rows and turns the LEFT JOIN into an inner join.</card>
+
+<note>LEFT JOIN: a condition on the right table in ON decides what counts as a match; the same condition in WHERE removes the unmatched rows afterwards. Conditions on the left table (here the country) go in WHERE.</note>
+
+**Problem 3 · same level**
+
+Return one row for every customer in Spain: their name and their number of cancelled orders, with 0 where there are none.
+
+<solution>SELECT c.name, COUNT(o.order_id) AS cancelled FROM customers c LEFT JOIN orders o ON o.customer_id = c.customer_id AND o.status = 'cancelled' WHERE c.country = 'Spain' GROUP BY c.customer_id; 13 rows, of which 9 show 0.</solution>
+
+<ask type="problem">Your query, the number of rows it returns, and how many of those rows show 0.</ask>
+@@ verify
+theirs = lab(block(learner, 'sql'))
+assert len(theirs) == 5 and '5 rows' in learner
+fixed = lab(block(reply, 'sql'))
+assert len(fixed) == 22 == lab("SELECT COUNT(*) FROM customers WHERE country = 'Nigeria'")[0][0]
+assert sum(1 for r in fixed if r[1] == 0) == 17 and sum(1 for r in fixed if r[1] > 0) == 5
+# the learner's rows are exactly the non-zero rows of the right answer
+assert sorted(theirs) == sorted(r for r in fixed if r[1] > 0)
+# the reference in the earlier solution is the corrected query
+ref = "SELECT c.name, COUNT(o.order_id) AS refunded FROM customers c LEFT JOIN orders o ON o.customer_id = c.customer_id AND o.status = 'refunded' WHERE c.country = 'Nigeria' GROUP BY c.customer_id"
+assert ref in solution(tutor[0]) and sorted(lab(ref)) == sorted(fixed)
+# second method for the 22 rows: a correlated count
+alt = lab("SELECT c.name, (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.customer_id AND o.status = 'refunded') FROM customers c WHERE c.country = 'Nigeria'")
+assert sorted(alt) == sorted(fixed)
+p3 = "SELECT c.name, COUNT(o.order_id) AS cancelled FROM customers c LEFT JOIN orders o ON o.customer_id = c.customer_id AND o.status = 'cancelled' WHERE c.country = 'Spain' GROUP BY c.customer_id"
+assert p3 in solution(reply)
+r3 = lab(p3)
+assert len(r3) == 13 and sum(1 for r in r3 if r[1] == 0) == 9
+
+@@@@ mark-error-substr-leading-space
+situation: mark-error
+topic: String functions in SQLite: instr and substr
+voice: confused
+level: easy
+expect: {"verdict":"partial","accept":["wrong"],"names":["space","\\+ 1","\\b14\\b"],"must":["Problem 3"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b13\\b","- 1"]}
+@@ tutor
+**Problem 2 · harder**
+
+Every name in the lab's customers table is a first name, one space, and a surname, for example Noah Fischer. Using instr and substr, count the customers whose surname is Fischer.
+
+<solution>SELECT COUNT(*) FROM customers WHERE substr(name, instr(name, ' ') + 1) = 'Fischer'; It returns 14. instr(name, ' ') is the position of the space (positions start at 1), so the surname starts one character later, and substr with two arguments runs to the end of the string.</solution>
+
+<ask type="problem">Your query, the count it returns, and what each function call contributes.</ask>
+@@ learner answer unsure
+My steps: instr(name, ' ') gives the position of the space. substr(name, that position) takes everything from there to the end, which is the surname. Then I compare that with 'Fischer' and count.
+
+```sql
+SELECT COUNT(*) FROM customers WHERE substr(name, instr(name, ' ')) = 'Fischer';
+```
+
+But it gives 0?? I can literally see a Noah Fischer in the table so I don't get what's wrong
+@@ reply
+<grade verdict="partial" score="0.6">"instr(name, ' ') gives the position of the space" is right, and so is comparing and counting. The first wrong step is "substr(name, that position)": starting at the space's position includes the space, so the piece is ' Fischer' with a space in front, which never equals 'Fischer'. That is why the count is 0.</grade>
+
+The surname starts one character after the space:
+
+```sql
+SELECT COUNT(*) FROM customers WHERE substr(name, instr(name, ' ') + 1) = 'Fischer';
+```
+
+This returns 14. To see the fault for yourself, select `'[' || substr(name, instr(name, ' ')) || ']'` for a few rows: the brackets show the leading space.
+
+<card>substr(name, instr(name, ' ')) on 'Noah Fischer' returns what? :: ' Fischer', with the space in front: instr gives the space's own position. The surname is substr(name, instr(name, ' ') + 1).</card>
+
+<note>In SQLite, positions in a string start at 1. instr(s, x) is the position of the first x, or 0 if absent. The text after a separator is substr(s, instr(s, x) + 1); the text before it is the first instr(s, x) minus one characters.</note>
+
+**Problem 3 · same level**
+
+Count the customers whose first name is Tom, again with instr and substr.
+
+<solution>SELECT COUNT(*) FROM customers WHERE substr(name, 1, instr(name, ' ') - 1) = 'Tom'; It returns 13. The first name is the instr(name, ' ') − 1 characters before the space; a length of instr(name, ' ') would include the trailing space and match nothing.</solution>
+
+<ask type="problem">Your query and the count it returns, with the start and length you gave substr and why.</ask>
+@@ verify
+assert lab(block(learner, 'sql'))[0][0] == 0
+assert lab(block(reply, 'sql'))[0][0] == 14
+assert lab("SELECT COUNT(*) FROM customers WHERE name LIKE '% Fischer'")[0][0] == 14          # second method
+assert lab("SELECT substr(name, instr(name, ' ')) FROM customers WHERE name = 'Noah Fischer' LIMIT 1")[0][0] == ' Fischer'
+assert lab("SELECT COUNT(*) FROM customers WHERE name = 'Noah Fischer'")[0][0] >= 1
+# every name is exactly two words, as the problem says
+assert lab("SELECT COUNT(*) FROM customers WHERE instr(name, ' ') = 0 OR name LIKE '% % %'")[0][0] == 0
+assert lab("SELECT COUNT(*) FROM customers WHERE substr(name, 1, instr(name, ' ') - 1) = 'Tom'")[0][0] == 13
+assert lab("SELECT COUNT(*) FROM customers WHERE name LIKE 'Tom %'")[0][0] == 13
+assert lab("SELECT COUNT(*) FROM customers WHERE substr(name, 1, instr(name, ' ')) = 'Tom'")[0][0] == 0
+assert lab("SELECT instr('abc', 'z'), instr('abc', 'a')")[0] == (0, 1)
+assert 'returns 13' in solution(reply) and 'returns 14' in solution(tutor[0])
+
+@@@@ mark-error-selectivity-added
+situation: mark-error
+topic: Cardinality estimation
+options: {"difficulty":"hard"}
+voice: terse
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["multipl","2\\.4"],"must":["Problem 3","9\\.6"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["8\\.9","\\b90\\b"]}
+@@ tutor
+**Problem 2 · hard**
+
+A query planner holds these statistics for orders: 2,495 rows; customer_id has 260 distinct values; status has 4 distinct values. It assumes that every value of a column is equally common and that the two columns are independent. Estimate the number of rows returned by `WHERE customer_id = 146 AND status = 'refunded'`.
+
+<solution>Selectivity of customer_id = 146 is 1/260; selectivity of status = 'refunded' is 1/4. For independent conditions joined by AND the selectivities multiply: 1/1040. Estimated rows: 2495 / 1040 ≈ 2.4.</solution>
+<check lang="python">
+est = 2495 * (1 / 260) * (1 / 4)
+assert round(est, 1) == 2.4
+</check>
+
+<ask type="problem">The estimated row count, with each selectivity and how you combined them.</ask>
+@@ learner answer sure
+sel(customer_id = 146) = 1/260 = 0.00385
+sel(status = 'refunded') = 1/4 = 0.25
+two conditions so combined sel = 0.00385 + 0.25 = 0.25385
+rows = 2495 * 0.25385 = 633
+@@ reply
+<grade verdict="partial" score="0.5">Both selectivities are right: "1/260 = 0.00385" and "1/4 = 0.25". The first wrong step is "0.00385 + 0.25": AND keeps a row only if it passes both tests, so of the quarter of rows that pass the status test only 1 in 260 also passes the customer test, and the selectivities multiply. Your 633 follows correctly from the summed figure.</grade>
+
+Corrected: 1/260 × 1/4 = 1/1040, and 2495 / 1040 ≈ 2.4 rows. A quick check catches this kind of slip: an AND can never return more rows than either condition alone, and customer_id = 146 alone is estimated at 2495 / 260 ≈ 9.6 rows, so 633 cannot be right.
+
+<card>How does a planner combine the selectivities of two independent conditions joined by AND? :: It multiplies them: rows ≈ table rows × s1 × s2. The estimate can never exceed the estimate for either condition alone.</card>
+
+<note>Uniform, independent estimate: selectivity of col = value is 1 / (distinct values of col); AND multiplies selectivities; estimated rows = table rows × combined selectivity.</note>
+
+**Problem 3 · same level**
+
+The planner's statistics for users: 800 rows; plan has 3 distinct values, platform has 3 and country has 10. Under the same two assumptions, estimate the rows returned by `WHERE plan = 'pro' AND platform = 'ios' AND country = 'Spain'`.
+
+<solution>Selectivities 1/3, 1/3 and 1/10 multiply to 1/90. Estimated rows: 800 / 90 ≈ 8.9.</solution>
+<check lang="python">
+est = 800 * (1 / 3) * (1 / 3) * (1 / 10)
+assert round(est, 1) == 8.9
+</check>
+
+<ask type="problem">The estimated row count, with the three selectivities and the combined one.</ask>
+@@ verify
+# the statistics quoted are the lab's
+assert lab("SELECT COUNT(*), COUNT(DISTINCT customer_id), COUNT(DISTINCT status) FROM orders")[0] == (2495, 260, 4)
+assert lab("SELECT COUNT(*), COUNT(DISTINCT plan), COUNT(DISTINCT platform), COUNT(DISTINCT country) FROM users")[0] == (800, 3, 3, 10)
+# the learner's arithmetic, as typed: one slip (the sum), the rest follows
+assert round(1 / 260, 5) == 0.00385 and 0.00385 + 0.25 == 0.25385
+assert round(2495 * 0.25385) == 633
+# the correction
+assert 260 * 4 == 1040 and round(2495 / 1040, 1) == 2.4 and round(2495 / 260, 1) == 9.6
+from fractions import Fraction
+assert Fraction(1, 3) * Fraction(1, 3) * Fraction(1, 10) == Fraction(1, 90) and round(800 / 90, 1) == 8.9
+assert '8.9' in solution(reply) and '8.9' not in visible(reply)
+
+@@@@ mark-error-upsert-excluded-meaning
+situation: mark-error
+topic: Upserts: INSERT ... ON CONFLICT
+voice: typos
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["excluded","pen (is|=|becomes|to) 5|qty (is|=) 5|\\b5\\b"],"must":["Problem 2"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b8\\b","\\b13\\b"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+```sql
+CREATE TABLE stock (sku TEXT PRIMARY KEY, qty INTEGER);
+INSERT INTO stock VALUES ('pen', 10);
+INSERT INTO stock VALUES ('ink', 7) ON CONFLICT(sku) DO UPDATE SET qty = excluded.qty;
+INSERT INTO stock VALUES ('pen', 4) ON CONFLICT(sku) DO UPDATE SET qty = excluded.qty;
+INSERT INTO stock VALUES ('ink', 3) ON CONFLICT(sku) DO NOTHING;
+INSERT INTO stock VALUES ('pen', 1) ON CONFLICT(sku) DO UPDATE SET qty = qty + 1;
+SELECT sku, qty FROM stock ORDER BY sku;
+```
+
+Trace the five INSERT statements in order.
+
+<solution>1: pen 10. 2: no row for ink, so a plain insert: ink 7. 3: pen conflicts; excluded is the row that was proposed for insertion, (pen, 4), so qty becomes 4. 4: ink conflicts, DO NOTHING: ink stays 7. 5: pen conflicts, qty = 4 + 1 = 5. Final rows: ink 7, pen 5.</solution>
+
+<ask type="problem">What each INSERT does, and the two rows the final SELECT returns. Work it out before you run the block.</ask>
+@@ learner answer sure
+1. pen 10 goes in
+2. no ink row yet so no conflict, normal insert, ink 7
+3. pen conflicts. excluded is the row thats already in the table (the one the new row gets excluded by), so qty = excluded.qty = 10, pen stays 10
+4. ink conflicts, do nothing, ink still 7
+5. pen conflicts again, qty = qty + 1 = 11
+final: ink 7, pen 11
+@@ reply
+<grade verdict="partial" score="0.6">Steps 1, 2 and 4 are right, including "no conflict, normal insert". The first wrong step is 3: "excluded is the row thats already in the table" has it backwards. `excluded` is the row you tried to insert and that was kept out, here (pen, 4), so qty becomes 4. Step 5 follows correctly from your 10; from 4 it gives 4 + 1 = 5, so the result is ink 7, pen 5.</grade>
+
+Inside DO UPDATE there are two rows to hand: a bare column name such as `qty` is the existing row in the table, and `excluded.qty` is the incoming value. Step 5 uses only the bare name, which is why it reads the stored value.
+
+<card>In INSERT ... ON CONFLICT DO UPDATE, what does excluded.qty refer to? :: The qty of the row that was proposed for insertion and rejected by the conflict. The bare name qty is the row already in the table.</card>
+
+<note>Upsert: `INSERT ... ON CONFLICT(key) DO UPDATE SET col = ...`. In the SET clause, `col` is the stored row and `excluded.col` is the new value that could not be inserted. `SET qty = qty + excluded.qty` adds the new amount to the stored one.</note>
+
+**Problem 2 · same level**
+
+```sql
+CREATE TABLE hits (page TEXT PRIMARY KEY, n INTEGER);
+INSERT INTO hits VALUES ('home', 3);
+INSERT INTO hits VALUES ('home', 10) ON CONFLICT(page) DO UPDATE SET n = n + excluded.n;
+INSERT INTO hits VALUES ('home', 4) ON CONFLICT(page) DO UPDATE SET n = excluded.n * 2;
+SELECT n FROM hits;
+```
+
+<solution>After the second statement n = 3 + 10 = 13 (stored 3 plus incoming 10). The third sets n = 4 × 2 = 8: it uses only the incoming value, so the stored 13 is overwritten. The SELECT returns 8.</solution>
+<check lang="python">
+n = 3
+n = n + 10
+n = 4 * 2
+assert n == 8
+</check>
+
+<ask type="problem">The value of n after each of the two upserts, saying which row each name in the SET clause reads.</ask>
+@@ verify
+import sqlite3
+def trace(script):
+    c = sqlite3.connect(':memory:')
+    out = []
+    for s in [x.strip() for x in script.split(';') if x.strip()]:
+        cur = c.execute(s)
+        if s.upper().startswith('SELECT'):
+            return out, cur.fetchall()
+        if s.upper().startswith('INSERT'):
+            t = 'stock' if 'stock' in s else 'hits'
+            out.append(c.execute(f"SELECT * FROM {t} ORDER BY 1").fetchall())
+states, final = trace(block(tutor[0], 'sql'))
+assert states == [[('pen', 10)], [('ink', 7), ('pen', 10)], [('ink', 7), ('pen', 4)], [('ink', 7), ('pen', 4)], [('ink', 7), ('pen', 5)]]
+assert final == [('ink', 7), ('pen', 5)]
+# the learner's later step follows from the slip: 10 + 1 = 11
+assert 10 + 1 == 11 and 'pen 11' in learner
+states2, final2 = trace(block(reply, 'sql'))
+assert [s[0][1] for s in states2] == [3, 13, 8] and final2 == [(8,)]
+assert 'returns 8' in solution(reply)
+
+@@@@ unusual-anti-join-having-count-zero
+situation: mark-unusual
+topic: Anti-joins: NOT EXISTS and LEFT JOIN ... IS NULL
+voice: terse
+level: medium
+expect: {"verdict":"correct","mustNot":["should have used","you should use","better to use"],"must":["Problem 2","\\b40\\b"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b505\\b","\\b295\\b"]}
+@@ tutor
+An anti-join returns the rows of one table that have no match in another.
+
+<note>Anti-join, two usual forms: `WHERE NOT EXISTS (SELECT 1 FROM b WHERE b.k = a.k)`, or `a LEFT JOIN b ON b.k = a.k WHERE b.k IS NULL`. Both return the rows of a with no partner in b.</note>
+
+**Problem 1 · warm-up**
+
+Using the lab's customers and orders tables, list the customer_id of every customer who has never placed an order.
+
+<solution>SELECT c.customer_id FROM customers c WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id); It returns 40 rows (300 customers, 260 of them with orders).</solution>
+
+<ask type="problem">Your query, run in a sql block, and the number of rows it returns.</ask>
+@@ learner answer sure
+```sql
+select customer_id from customers
+left join orders using (customer_id)
+group by customer_id
+having count(order_id) = 0;
+```
+40 rows. count(order_id) skips the nulls from the unmatched customers so 0 means no orders
+@@ reply
+<grade verdict="correct" score="1">40 rows is right, and the method is valid: "count(order_id) skips the nulls from the unmatched customers", so a count of 0 picks out exactly the customers whose only joined row is the NULL-padded one.</grade>
+
+It returns the same 40 ids as the NOT EXISTS form. The difference is in the work done: yours joins and groups all 2,535 joined rows before discarding most of them, while NOT EXISTS can stop at the first order it finds for a customer. The result is identical.
+
+**Problem 2 · harder**
+
+Using the lab's users and events tables, count the users who have no purchase event. Other kinds of event do not matter: a user with only view_item events has no purchase.
+
+<solution>SELECT COUNT(*) FROM users u WHERE NOT EXISTS (SELECT 1 FROM events e WHERE e.user_id = u.user_id AND e.event = 'purchase'); It returns 505. The event test must sit inside the subquery (or in the ON clause of a LEFT JOIN), so that it limits what counts as a match; 800 users − 295 with a purchase = 505.</solution>
+<check lang="python">
+assert 800 - 295 == 505
+</check>
+
+<ask type="problem">Your query and the count it returns, saying where you put the test on the event type and why there.</ask>
+@@ verify
+theirs = lab(block(learner, 'sql'))
+ref = lab("SELECT c.customer_id FROM customers c WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id)")
+alt = lab("SELECT c.customer_id FROM customers c LEFT JOIN orders o ON o.customer_id = c.customer_id WHERE o.customer_id IS NULL")
+assert len(theirs) == 40 and sorted(theirs) == sorted(ref) == sorted(alt)
+assert lab("SELECT COUNT(*) FROM customers c LEFT JOIN orders o ON o.customer_id = c.customer_id")[0][0] == 2535
+assert lab("SELECT COUNT(*) FROM orders WHERE order_id IS NULL")[0][0] == 0
+q2 = "SELECT COUNT(*) FROM users u WHERE NOT EXISTS (SELECT 1 FROM events e WHERE e.user_id = u.user_id AND e.event = 'purchase')"
+assert q2 in solution(reply) and lab(q2)[0][0] == 505
+assert lab("SELECT COUNT(*) FROM users u LEFT JOIN events e ON e.user_id = u.user_id AND e.event = 'purchase' WHERE e.event_id IS NULL")[0][0] == 505
+assert lab("SELECT COUNT(DISTINCT user_id) FROM events WHERE event = 'purchase'")[0][0] == 295 and lab("SELECT COUNT(*) FROM users")[0][0] == 800
+assert '505' not in visible(reply)
+
+@@@@ unusual-boolean-sum-conditional-count
+situation: mark-unusual
+topic: CASE expressions and conditional aggregation
+voice: overconfident
+level: medium
+expect: {"verdict":"correct","mustNot":["should have used","you should use","must use CASE"],"must":["Problem 2","Postgres"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["29\\.7","26\\.2","33\\.3","AVG"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+Using the lab's users table, return one row per plan with the number of users on that plan and how many of them are on the ios platform, in a single pass over the table.
+
+<solution>SELECT plan, COUNT(*) AS users, SUM(CASE WHEN platform = 'ios' THEN 1 ELSE 0 END) AS ios FROM users GROUP BY plan ORDER BY plan; free 535 and 202, plus 172 and 71, pro 93 and 39.</solution>
+
+<ask type="problem">Your query, run in a sql block, and the three rows it returns.</ask>
+@@ learner answer sure
+```sql
+select plan, count(*) as users, sum(platform = 'ios') as ios
+from users group by plan order by plan;
+```
+free 535 / 202, plus 172 / 71, pro 93 / 39. no need for CASE at all, a comparison is already 1 or 0 in sqlite so summing it counts the trues. way cleaner
+@@ reply
+<grade verdict="correct" score="1">All three rows are right, and the reasoning holds: "a comparison is already 1 or 0 in sqlite", so `sum(platform = 'ios')` adds a 1 for each ios row, exactly what SUM(CASE WHEN ... THEN 1 ELSE 0 END) does.</grade>
+
+One limit on "no need for CASE at all": it is true of SQLite and MySQL, where a comparison is an integer. Postgres has a separate boolean type that SUM does not accept, so there the same count is written with CASE or with `COUNT(*) FILTER (WHERE platform = 'ios')` (Postgres was not run here; the FILTER form also runs in SQLite).
+
+**Problem 2 · harder**
+
+For each plan, return the percentage of its users who are on the web platform, rounded to one decimal place.
+
+<solution>SELECT plan, ROUND(100.0 * SUM(platform = 'web') / COUNT(*), 1) AS web_pct FROM users GROUP BY plan ORDER BY plan; free 29.7, plus 26.2, pro 33.3. The 100.0 forces real division; with integers 159 / 535 would be 0. The mean of a 0/1 flag is the same fraction, so 100.0 * AVG(platform = 'web') also works.</solution>
+<check lang="python">
+web = {'free': (159, 535), 'plus': (45, 172), 'pro': (31, 93)}
+assert {k: round(100 * a / b, 1) for k, (a, b) in web.items()} == {'free': 29.7, 'plus': 26.2, 'pro': 33.3}
+</check>
+
+<ask type="problem">Your query and the three percentages, with a line on how you avoided integer division.</ask>
+@@ verify
+theirs = lab(block(learner, 'sql'))
+ref = lab("SELECT plan, COUNT(*) AS users, SUM(CASE WHEN platform = 'ios' THEN 1 ELSE 0 END) AS ios FROM users GROUP BY plan ORDER BY plan")
+assert theirs == ref == [('free', 535, 202), ('plus', 172, 71), ('pro', 93, 39)]
+for a, b in (('535', '202'), ('172', '71'), ('93', '39')):
+    assert a in learner and b in learner and a in solution(tutor[0]) and b in solution(tutor[0])
+# the FILTER form runs in SQLite and agrees
+assert lab("SELECT plan, COUNT(*), COUNT(*) FILTER (WHERE platform = 'ios') FROM users GROUP BY plan ORDER BY plan") == ref
+assert lab("SELECT typeof(1 = 1), (2 = 3)")[0] == ('integer', 0)
+p2 = lab("SELECT plan, ROUND(100.0 * SUM(platform = 'web') / COUNT(*), 1) AS web_pct FROM users GROUP BY plan ORDER BY plan")
+assert p2 == [('free', 29.7), ('plus', 26.2), ('pro', 33.3)]
+assert lab("SELECT plan, ROUND(100.0 * AVG(platform = 'web'), 1) FROM users GROUP BY plan ORDER BY plan") == p2
+assert lab("SELECT plan, SUM(platform = 'web'), COUNT(*) FROM users GROUP BY plan ORDER BY plan") == [('free', 159, 535), ('plus', 45, 172), ('pro', 31, 93)]
+assert lab("SELECT 159 / 535")[0][0] == 0
+
+@@@@ unusual-median-limit-offset
+situation: mark-unusual
+topic: Median and percentiles in SQL
+voice: plain
+level: hard
+expect: {"verdict":"correct","mustNot":["should have used","you should use"],"must":["Problem 2","40\\.5"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b139\\b","\\b36\\b","OFFSET 35"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+The median of n sorted values is the middle one when n is odd, and the mean of the two middle ones when n is even. Find the median price in the lab's products table, which has 40 rows.
+
+<solution>SELECT AVG(price) FROM (SELECT price, ROW_NUMBER() OVER (ORDER BY price) AS rn, COUNT(*) OVER () AS n FROM products) WHERE rn IN ((n + 1) / 2, (n + 2) / 2); With n = 40 the integer divisions give rows 20 and 21, priced 39 and 42, so the median is 40.5.</solution>
+<check lang="python">
+assert (40 + 1) // 2 == 20 and (40 + 2) // 2 == 21 and (39 + 42) / 2 == 40.5
+</check>
+
+<ask type="problem">Your query, run in a sql block, and the median it returns.</ask>
+@@ learner answer sure
+```sql
+SELECT AVG(price) FROM (
+  SELECT price FROM products ORDER BY price
+  LIMIT 2 - (SELECT COUNT(*) FROM products) % 2
+  OFFSET (SELECT (COUNT(*) - 1) / 2 FROM products)
+);
+```
+40.5. With 40 rows the offset is 19 and the limit is 2, so it averages the 20th and 21st prices, 39 and 42. With an odd count the limit would be 1 and it would return the single middle row.
+@@ reply
+<grade verdict="correct" score="1">40.5 is right, and the method works for both cases: "the offset is 19 and the limit is 2" picks rows 20 and 21 when n is even, and for odd n the same two expressions skip (n − 1) / 2 rows and keep the one middle row, whose average is itself.</grade>
+
+It picks the same rows as numbering them with ROW_NUMBER() and keeping the middle one or two; yours does it with a sort and two counts and no window function.
+
+**Problem 2 · harder**
+
+By the nearest-rank rule, the p-th percentile of n sorted values is the value at position ⌈p/100 × n⌉, counting from 1. Find the 90th percentile of price in products.
+
+<solution>⌈0.9 × 40⌉ = 36, so it is the 36th price in ascending order: SELECT price FROM products ORDER BY price LIMIT 1 OFFSET 35; It returns 139.</solution>
+<check lang="python">
+import math
+pos = math.ceil(90 * 40 / 100)
+assert pos == 36 and pos - 1 == 35
+</check>
+
+<ask type="problem">The position you need, your query, and the price it returns.</ask>
+@@ verify
+assert lab("SELECT COUNT(*) FROM products")[0][0] == 40
+theirs = lab(block(learner, 'sql'))[0][0]
+ref = lab("SELECT AVG(price) FROM (SELECT price, ROW_NUMBER() OVER (ORDER BY price) AS rn, COUNT(*) OVER () AS n FROM products) WHERE rn IN ((n + 1) / 2, (n + 2) / 2)")[0][0]
+assert theirs == ref == 40.5
+import statistics
+prices = sorted(r[0] for r in lab("SELECT price FROM products"))
+assert statistics.median(prices) == 40.5 and prices[19:21] == [39.0, 42.0]
+assert (40 - 1) // 2 == 19 and 2 - 40 % 2 == 2
+# their method on an odd count: drop one product and compare with the true median
+odd = sorted(prices[:-1])
+got = lab("SELECT AVG(price) FROM (SELECT price FROM (SELECT price FROM products ORDER BY price LIMIT 39) ORDER BY price LIMIT 2 - 39 % 2 OFFSET (39 - 1) / 2)")[0][0]
+assert got == statistics.median(odd)
+assert lab("SELECT price FROM products ORDER BY price LIMIT 1 OFFSET 35")[0][0] == 139.0 == prices[35]
+assert '139' in solution(reply) and '139' not in visible(reply)

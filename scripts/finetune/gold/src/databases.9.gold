@@ -1,0 +1,30 @@
+@@@@ show-me-acid-mindmap
+situation: show-me
+topic: The ACID properties
+voice: plain
+level: easy
+expect: {"visual":{"kind":"mermaid","diagram":["mindmap"]},"must":["Atomicity","Durability"]}
+noverify: a diagram of the four properties as the explanation states them; nothing computed
+@@ tutor
+A transaction is a group of statements the database treats as one unit, and ACID names the four promises made about it. Atomicity: all of its changes happen or none do, so a failure part-way leaves nothing behind. Consistency: it takes the data from one state that satisfies every declared constraint to another. Isolation: transactions running at the same time do not see each other's unfinished work. Durability: once a commit is acknowledged, the changes survive a crash.
+
+<note>ACID: atomicity (all or nothing), consistency (constraints hold before and after), isolation (no view of others' unfinished work), durability (a committed change survives a crash).</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+mindmap
+  root((ACID))
+    Atomicity
+      All changes or none
+      A failure leaves nothing behind
+    Consistency
+      Constraints hold before and after
+    Isolation
+      Unfinished work is not seen by others
+    Durability
+      A committed change survives a crash
+```
+
+Each branch is one promise about a single transaction; read the leaf under it for what that promise rules out.

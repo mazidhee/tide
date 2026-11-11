@@ -1,0 +1,568 @@
+@@@@ wrong-bigger-rate-pulls-back
+situation: after-wrong
+topic: Gradient descent step size
+options: {"strategy":"maths"}
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["factor|multipl","diverg|grows|further"],"must":["1\\.96","2\\.744","\\\\tfrac13|1/3"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["-0\\.8","−0\\.8","-1\\.2","−1\\.2"]}
+@@ tutor
+Gradient descent repeats $w \leftarrow w - \eta f'(w)$. On $f(w) = 3w^2$ the gradient is $6w$, so one step is $w \leftarrow w - 6\eta w = (1 - 6\eta)w$. With $\eta = 0.1$ the factor is 0.4: from $w = 1$ the iterates are 0.4, 0.16, 0.064, heading for the minimum at 0.
+
+<note>Gradient descent: $w \leftarrow w - \eta f'(w)$, with learning rate $\eta$. On $f(w) = 3w^2$ this is $w \leftarrow (1 - 6\eta)w$.</note>
+
+**Problem 1 · warm-up**
+
+Same function and the same start, $w = 1$, but now $\eta = 0.4$. Give $w$ after one, two and three steps, and say whether the iterates converge to the minimum.
+
+<solution>Factor 1 − 6 × 0.4 = −1.4. Iterates: −1.4, 1.96, −2.744. The size grows by 1.4 times each step, so it diverges.</solution>
+<check lang="python">
+w, out = 1.0, []
+for _ in range(3):
+    w = w - 0.4 * 6 * w
+    out.append(round(w, 3))
+assert out == [-1.4, 1.96, -2.744]
+</check>
+
+<ask type="problem">The three values of $w$, and whether it converges.</ask>
+@@ learner answer sure
+Converges, and faster than with 0.1 since the steps are four times as big. After one step w = 1 - 0.4*6 = -1.4, so it overshot a bit, but the next steps pull it back in.
+@@ reply
+<grade verdict="wrong" score="0.2">Your first step, "w = 1 - 0.4*6 = -1.4", is right, but "the next steps pull it back in" is not. Every step multiplies $w$ by the same factor, $1 - 6\eta = -1.4$, so the distance from the minimum grows by 1.4 times per step.</grade>
+
+The three iterates are $-1.4$, $1.96$ and $-2.744$: the sign alternates and the size increases, so the run diverges. A step four times as big is only faster while it lands closer to the minimum than it started. On $f(w) = 3w^2$ that needs $|1 - 6\eta| < 1$, which is $\eta < \tfrac13$, and 0.4 is past it.
+
+<card>On $f(w) = aw^2$, when does gradient descent with rate $\eta$ converge? :: Each step multiplies $w$ by $1 - 2a\eta$. It converges when $|1 - 2a\eta| < 1$, that is $0 < \eta < 1/a$. A larger rate diverges however long it runs.</card>
+
+<note>Gradient descent on $f(w) = aw^2$ multiplies $w$ by $1 - 2a\eta$ each step. Factor between 0 and 1: steady approach. Between $-1$ and 0: overshoots and alternates in sign, still converges. Below $-1$: every step lands further away, so it diverges.</note>
+
+**Problem 2 · same idea**
+
+Now $f(w) = 2w^2$, starting from $w = 1$. For each of $\eta = 0.2$, $\eta = 0.45$ and $\eta = 0.55$, give the factor that $w$ is multiplied by at each step, and say whether the iterates converge.
+
+<solution>The gradient is 4w, so the factor is 1 − 4η. η = 0.2: factor 0.2, converges. η = 0.45: factor −0.8, converges with alternating sign. η = 0.55: factor −1.2, diverges.</solution>
+<check lang="python">
+f = [round(1 - 4 * eta, 10) for eta in (0.2, 0.45, 0.55)]
+assert f == [0.2, -0.8, -1.2]
+assert [abs(x) < 1 for x in f] == [True, True, False]
+</check>
+
+<ask type="problem">The three factors, and converge or diverge for each.</ask>
+@@ verify
+# the tutor's worked example and the learner's first step
+w, seq = 1.0, []
+for _ in range(3):
+    w = w - 0.1 * 6 * w; seq.append(round(w, 4))
+assert seq == [0.4, 0.16, 0.064]
+assert round(1 - 0.4 * 6, 10) == -1.4
+# the true run at 0.4, by iterating the update rule on f(w) = 3 w^2
+w, seq = 1.0, []
+for _ in range(3):
+    w = w - 0.4 * (6 * w); seq.append(round(w, 4))
+assert seq == [-1.4, 1.96, -2.744]
+for v in ['1.96', '2.744']:
+    assert v in visible(reply)
+# the threshold: converges just below 1/3, diverges just above
+def ends_small(eta, a=3.0):
+    w = 1.0
+    for _ in range(200000):
+        w = w - eta * 2 * a * w
+        if abs(w) > 1e6:
+            return False
+    return abs(w) < 1e-6
+assert ends_small(0.333) and not ends_small(0.334)
+# problem 2 by iteration, and its threshold 1/a = 0.5
+assert ends_small(0.2, 2.0) and ends_small(0.45, 2.0) and not ends_small(0.55, 2.0)
+assert ends_small(0.499, 2.0) and not ends_small(0.501, 2.0)
+
+@@@@ wrong-l2-drives-weights-to-zero
+situation: after-wrong
+topic: L1 and L2 regularisation
+options: {"strategy":"dialogue"}
+voice: wordy
+level: medium
+expect: {"verdict":"wrong","names":["L1","proportional|fades|weaker|smaller"],"must":["0\\.174","sparse"],"askMustNot":["500","0\\.001 and 0\\.5"],"askTypes":["short","explain"]}
+@@ tutor
+You are fitting a linear model on 1,000 features and you believe most of them are useless. You want the trained model to use only a handful of features, with the weights of the rest at exactly zero.
+
+<ask type="explain">Which penalty would you add to the loss, L1 or L2, and why that one?</ask>
+@@ learner answer sure
+I'd go with L2. Because it squares the weights, a big weight gets punished much harder than with L1, and that pressure pushes the useless ones all the way down to zero so they drop out of the model. L1 only takes the absolute value, so it's the gentler penalty and I'd expect it to leave lots of small weights hanging around.
+@@ reply
+<grade verdict="wrong" score="0.1">"pushes the useless ones all the way down to zero" describes L1, not L2. Squaring makes the L2 pull strong on large weights but ever weaker on small ones, so it shrinks a weight without finishing the job.</grade>
+
+Compare the gradients of the two penalties. For $\lambda w^2$ it is $2\lambda w$: proportional to the weight, so it fades as the weight shrinks. For $\lambda |w|$ it is $\lambda$ for any positive weight, however small. Take $w = 0.5$, $\lambda = 0.5$, learning rate 0.1 and no gradient from the data. L2 multiplies $w$ by 0.9 each step: after 10 steps it is 0.174, and it never reaches 0. L1 subtracts 0.05 each step: after 10 steps it is exactly 0, and a soft-threshold update holds it there. That is why L1 gives sparse models and L2 gives many small weights.
+
+<card>Which penalty produces weights that are exactly zero, L1 or L2, and why? :: L1. Its gradient has the same size λ however small the weight, so it carries the weight all the way to 0. The L2 gradient 2λw fades as the weight shrinks, so L2 only shrinks.</card>
+
+<note>L2 penalty $\lambda w^2$: gradient $2\lambda w$, each step scales the weight by $1 - 2\eta\lambda$ (weight decay), never exactly 0. L1 penalty $\lambda|w|$: gradient $\lambda\,\mathrm{sign}(w)$, a constant pull that reaches exactly 0, giving sparse weights.</note>
+
+<ask type="short">Keep $\lambda = 0.5$. A weight has shrunk to 0.001. How large is the gradient of each penalty at that point, and how many times larger is one than the other?</ask>
+@@ verify
+lam, eta = 0.5, 0.1
+w2 = w1 = 0.5
+for _ in range(10):
+    w2 = w2 - eta * (2 * lam * w2)                       # L2: gradient 2 lambda w
+    w1 = max(0.0, abs(w1) - eta * lam) * (1 if w1 > 0 else -1)   # L1: soft threshold
+assert abs((1 - 2 * eta * lam) - 0.9) < 1e-12 and abs(eta * lam - 0.05) < 1e-12
+assert round(w2, 3) == 0.174 and w2 > 0
+assert abs(w1) < 1e-12
+# one more L1 step stays at zero
+assert max(0.0, abs(w1) - eta * lam) == 0.0
+# plain subtraction of 0.05 ten times from 0.5 also lands on 0
+x = 0.5
+for _ in range(10):
+    x -= 0.05
+assert abs(x) < 1e-12
+# the answer to the question asked: 0.001 against 0.5, a factor of 500
+assert abs(2 * lam * 0.001 - 0.001) < 1e-15 and round(lam / (2 * lam * 0.001)) == 500
+assert '500' not in reply
+
+@@@@ wrong-dropout-divides-by-drop-rate
+situation: after-wrong
+topic: Dropout
+voice: confused
+level: easy
+expect: {"verdict":"wrong","names":["keep probability","drop (probability|rate)|0\\.25"],"must":["0\\.75","2\\.667","10\\.667"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["6\\.25"]}
+@@ tutor
+Dropout zeroes each unit independently with drop probability $p$ during training, so a unit is kept with probability $q = 1 - p$. Zeroing units lowers the layer's average output, and the next layer would then see smaller inputs in training than at inference, when nothing is dropped. Inverted dropout corrects for this during training itself: the surviving activations are scaled up so that a unit's expected output equals its activation.
+
+<note>Dropout in training: each unit is zeroed with drop probability $p$ and kept with probability $q = 1 - p$. Inverted dropout rescales the survivors so that the expected output of a unit equals its activation; at inference the layer does nothing.</note>
+
+**Problem 1 · warm-up**
+
+A layer's four activations are (2, 4, 6, 8). Dropout with drop probability 0.25 happens to zero the third unit. What does the layer pass on, with inverted dropout?
+
+<solution>Keep probability q = 0.75. Survivors are divided by 0.75: (2.667, 5.333, 0, 10.667).</solution>
+<check lang="python">
+out = [round(a * m / 0.75, 3) for a, m in zip((2, 4, 6, 8), (1, 1, 0, 1))]
+assert out == [2.667, 5.333, 0.0, 10.667]
+</check>
+
+<ask type="problem">The four values the layer passes on.</ask>
+@@ learner answer unsure
+(8, 16, 0, 32)? you divide by the dropout rate to keep the scale, so 2/0.25 = 8 and so on. that looks too big though, i'm not sure
+@@ reply
+<grade verdict="wrong" score="0.2">Zeroing the third unit and scaling the rest is the right shape, and your doubt is sound: "you divide by the dropout rate" uses the wrong probability. The survivors are divided by the keep probability, $q = 1 - 0.25 = 0.75$, not by the drop probability 0.25.</grade>
+
+The test is the expected output of one unit with activation $a$. It survives with probability 0.75, so dividing by 0.75 gives $0.75 \times a/0.75 = a$, as required. Dividing by 0.25 gives $0.75 \times a/0.25 = 3a$, three times too large, which is why 8 from an activation of 2 looked wrong. The layer passes on $(2.667, 5.333, 0, 10.667)$.
+
+<card>Inverted dropout with drop probability p: what are the surviving activations divided by? :: The keep probability 1 − p, so that the expected output (1 − p) × a / (1 − p) equals a.</card>
+
+<note>Inverted dropout: output = mask × $a / q$, with $q = 1 - p$ the keep probability. Check any scaling by the expected value: $q \times (a/q) = a$.</note>
+
+**Problem 2 · easier**
+
+A layer's activations are (5, 5, 5, 5). Dropout has drop probability 0.2 and happens to zero the second unit. What does the layer pass on with inverted dropout, and what is the expected output of a single unit over many training steps?
+
+<solution>Keep probability 0.8. Survivors: 5 / 0.8 = 6.25, so the layer passes on (6.25, 0, 6.25, 6.25). Expected output of a unit: 0.8 × 6.25 = 5.</solution>
+<check lang="python">
+out = [a * m / 0.8 for a, m in zip((5, 5, 5, 5), (1, 0, 1, 1))]
+assert out == [6.25, 0.0, 6.25, 6.25] and abs(0.8 * 6.25 - 5) < 1e-12
+</check>
+
+<ask type="problem">The four values, and the expected output of one unit.</ask>
+@@ verify
+import numpy as np
+a = np.array([2.0, 4.0, 6.0, 8.0]); mask = np.array([1, 1, 0, 1])
+right = a * mask / 0.75
+assert [round(float(v), 3) for v in right] == [2.667, 5.333, 0.0, 10.667]
+# the learner's figures follow from dividing by the drop probability
+assert list(a * mask / 0.25) == [8.0, 16.0, 0.0, 32.0]
+# expected output of a unit under each scaling
+assert abs(0.75 * (1 / 0.75) - 1) < 1e-12 and abs(0.75 * (1 / 0.25) - 3) < 1e-12
+# a simulation agrees: the mean over many masks returns the activation with 1/q, three times it with 1/p
+rng = np.random.default_rng(0)
+m = rng.random((200000, 4)) < 0.75
+assert np.allclose((a * m / 0.75).mean(axis=0), a, rtol=0.01)
+assert np.allclose((a * m / 0.25).mean(axis=0), 3 * a, rtol=0.01)
+assert 5 / 0.8 == 6.25 and '6.25' in solution(reply) and '6.25' not in visible(reply)
+
+@@@@ wrong-temperature-up-means-sharper
+situation: after-wrong
+topic: Softmax with temperature
+voice: typos
+level: easy
+expect: {"verdict":"wrong","names":["divid","gaps?|lead|flat"],"must":["0\\.629","1\\.5, 0\\.5, 0"],"askMustNot":["0\\.98","6, 2, 0","above 0\\.844 because"],"askTypes":["short","predict"]}
+@@ tutor
+<ask type="predict">A language model's logits for three candidate next tokens are $(3, 1, 0)$. At temperature 1 the top token has probability 0.844. If the temperature is raised to 2, does that probability go up, go down or stay the same? Give your reason.</ask>
+@@ learner answer sure
+up. higher temprature = more energy so the model is more confident, the biggest logit wins by more. same as heating somthing up
+@@ reply
+<grade verdict="wrong" score="0">"the biggest logit wins by more" is the reverse of what happens. Temperature divides every logit before the softmax, so raising it shrinks the gaps between them, and the top token's lead with them.</grade>
+
+At temperature 2 the logits $(3, 1, 0)$ become $(1.5, 0.5, 0)$. The gap between the first two halves, from 2 to 1, and the probabilities move from $(0.844, 0.114, 0.042)$ to $(0.629, 0.231, 0.140)$: the top token goes down and the others come up. A very high temperature approaches equal probabilities for all tokens; a temperature near 0 puts almost everything on the largest logit. This is why sampling at a high temperature gives more varied text.
+
+<card>What does raising the softmax temperature T do to the distribution? :: p = softmax(z / T). A larger T shrinks the gaps between the logits, so the distribution flattens towards uniform; T below 1 sharpens it towards the largest logit.</card>
+
+<note>Softmax with temperature: $p_i = \dfrac{e^{z_i/T}}{\sum_j e^{z_j/T}}$. $T > 1$ flattens the distribution, $T < 1$ sharpens it, and $T = 1$ is the plain softmax. The order of the probabilities never changes.</note>
+
+<ask type="short">The same logits $(3, 1, 0)$ are now used at temperature 0.5. What do the logits become after the division, and does the top token's probability end above or below 0.844?</ask>
+@@ verify
+import numpy as np
+def softmax(z, T=1.0):
+    z = np.array(z, float) / T
+    e = np.exp(z - z.max())
+    return e / e.sum()
+p1, p2, ph = softmax([3, 1, 0]), softmax([3, 1, 0], 2), softmax([3, 1, 0], 0.5)
+assert [f'{v:.3f}' for v in p1] == ['0.844', '0.114', '0.042']
+assert [f'{v:.3f}' for v in p2] == ['0.629', '0.231', '0.140']
+assert list(np.array([3, 1, 0]) / 2) == [1.5, 0.5, 0.0]
+assert '0.844' in tutor[0]
+# the limits stated
+assert np.allclose(softmax([3, 1, 0], 1000), 1 / 3, atol=1e-3) and softmax([3, 1, 0], 0.05)[0] > 0.999
+# order never changes
+for T in (0.1, 0.5, 1, 2, 5, 50):
+    p = softmax([3, 1, 0], T)
+    assert p[0] > p[1] > p[2]
+# the answer to the question asked: (6, 2, 0), top probability above 0.844
+assert list(np.array([3, 1, 0]) / 0.5) == [6.0, 2.0, 0.0] and ph[0] > 0.844
+
+@@@@ wrong-accuracy-picks-the-silent-model
+situation: after-wrong
+topic: Confusion matrices: accuracy, sensitivity and specificity
+options: {"difficulty":"hard"}
+voice: overconfident
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["none of the 40|0 of (the )?40","sensitivity"],"must":["0\\.75","0\\.964"],"need":["plan","note"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["0\\.895","4275","475"]}
+@@ tutor
+<ask type="short">A fault detector is tested on 2,000 machines, 40 of which are faulty. Model A flags no machine at all. Model B flags 100 machines, and 30 of those are faulty. Which model has the higher accuracy, and which would you rather run?</ask>
+@@ learner answer sure
+A, obviously. 98% against 96%. B makes 80 mistakes and A only makes 40, so A is the better model and that's the one I'd run. Higher accuracy means better model.
+@@ reply
+<grade verdict="partial" score="0.4">Both accuracies are right, "98% against 96%", but "A is the better model" does not follow. A finds none of the 40 faulty machines: its 98% is only the share of machines that are healthy.</grade>
+
+Accuracy counts every machine equally, so on data that is 98% negative it mostly measures the negatives. Split it by class instead. Sensitivity is the share of faulty machines caught: 0 of 40 for A, and 30 of 40 = 0.75 for B. Specificity is the share of healthy machines left alone: 1960 of 1960 = 1 for A, and 1890 of 1960 = 0.964 for B.
+
+<card>Why can a model with 98% accuracy be useless on imbalanced data? :: If 98% of cases are negative, predicting negative every time scores 98% while catching no positives. Report sensitivity and specificity, one rate per class.</card>
+
+<note>Sensitivity = TP / (TP + FN), the share of actual positives caught. Specificity = TN / (TN + FP), the share of actual negatives left alone. Accuracy = (TP + TN) / all, which on imbalanced data is dominated by the larger class.</note>
+
+<plan>
+- Sensitivity and specificity from the four counts
+- Rebuilding the matrix from the two rates
+- Choosing a threshold by what each error costs
+</plan>
+
+**Problem 1 · hard**
+
+A screening model is run on 5,000 parts, of which 250 are defective. Its sensitivity is 0.8 and its specificity is 0.9. Fill in the four cells of its confusion matrix and give its accuracy.
+
+<solution>TP = 0.8 × 250 = 200, FN = 50. Negatives: 4750. TN = 0.9 × 4750 = 4275, FP = 475. Accuracy = (200 + 4275) / 5000 = 0.895.</solution>
+<check lang="python">
+tp = round(0.8 * 250); fn = 250 - tp
+tn = round(0.9 * 4750); fp = 4750 - tn
+assert (tp, fn, tn, fp) == (200, 50, 4275, 475) and (tp + tn) / 5000 == 0.895
+</check>
+
+<ask type="problem">TP, FN, TN and FP, and the accuracy.</ask>
+@@ verify
+N, P = 2000, 40
+# model A: flags nothing
+tpA, fpA, fnA, tnA = 0, 0, 40, 1960
+# model B: flags 100, 30 of them faulty
+tpB, fpB = 30, 70
+fnB, tnB = P - tpB, (N - P) - fpB
+assert (fnB, tnB) == (10, 1890)
+accA, accB = (tpA + tnA) / N, (tpB + tnB) / N
+assert (accA, accB) == (0.98, 0.96)                 # the learner's accuracies
+assert fnA + fpA == 40 and fnB + fpB == 80          # the learner's mistake counts
+assert tpA / P == 0 and tpB / P == 0.75
+assert tnA / (tnA + fpA) == 1 and round(tnB / (tnB + fpB), 3) == 0.964
+assert (N - P) / N == 0.98
+# the problem set
+tp = 0.8 * 250; tn = 0.9 * 4750
+assert (tp, 250 - tp, tn, 4750 - tn) == (200, 50, 4275, 475) and (tp + tn) / 5000 == 0.895
+assert '0.895' in solution(reply) and '0.895' not in visible(reply)
+
+@@@@ idk-order-without-positions
+situation: idk
+topic: Positional encodings
+voice: confused
+level: medium
+expect: {"must":["sum","dot product"],"askMustNot":["identical","the same (vector|output|average)","order does not matter"],"mustNot":["outputs? (for|of) .dog. (is|are) (identical|the same)"]}
+noverify: conceptual; the only arithmetic is that addition is commutative
+@@ tutor
+**Why this matters**
+
+Positional encodings are how a transformer is told the order of its tokens: the sinusoids of the original 2017 transformer, the learned position embeddings of BERT and GPT-2, and the rotary encodings (RoPE) common in current open language models. The choice affects how well a model copes with sequences longer than those it was trained on, and it is one of the first things to check when a model mishandles word order.
+
+<ask type="predict">Suppose the positional encodings are removed from a transformer encoder. It is given "dog bites man" and then "man bites dog". How does its output vector for the token "dog" compare between the two inputs, and why?</ask>
+@@ learner idk
+@@ reply
+Start one level down, with what a single attention layer computes for one token. Its output is a weighted sum of the token vectors in the sentence, and each weight comes from a dot product between two token vectors. A sum does not depend on the order of its terms: $a + b + c = c + b + a$. A dot product between two token vectors does not depend on where in the sentence either token sits.
+
+<note>With no position information, an attention layer's output for a token is a weighted sum over the token vectors, with weights from pairwise dot products. Neither a sum nor a dot product looks at where a token sits in the sequence.</note>
+
+<ask type="short">Take a simpler layer than attention: for a sentence, it outputs the plain average of its three token embeddings. Is its output for "dog bites man" different from its output for "man bites dog"? Say why.</ask>
+
+@@@@ idk-variance-of-a-pre-activation
+situation: idk
+topic: Weight initialisation: Xavier and He
+voice: plain
+level: hard
+expect: {"must":["add","3 \\\\times 2 \\\\times 1 = 6"],"askMustNot":["\\b2\\b","256"],"mustNot":["\\b256\\b"]}
+@@ tutor
+**Why this matters**
+
+Initialisation decides whether a deep network can start learning at all. If the weights start too large, activations grow layer by layer until they overflow or saturate; too small, and the signal fades to nothing before it reaches the output. Xavier (Glorot) and He initialisation are the defaults in PyTorch and Keras layers for exactly this reason, and both come from one short variance calculation.
+
+<ask type="short">A layer has 256 inputs. Each input has mean 0 and variance 1, and each weight is drawn independently with mean 0 and variance 1. Roughly what is the variance of one pre-activation $z = \sum_i w_i x_i$, and what happens to the size of the signal after several such layers?</ask>
+@@ learner idk
+@@ reply
+Build it from a single term. For an independent weight $w$ and input $x$, both with mean 0, the product $wx$ has mean 0 and variance $\operatorname{Var}(w)\operatorname{Var}(x)$. The variances of independent terms add, so a sum of $n$ such products has $n$ times the variance of one. For example, 3 inputs of variance 1 with weights of variance 2 give $\operatorname{Var}(z) = 3 \times 2 \times 1 = 6$.
+
+<note>For independent zero-mean weights and inputs, $\operatorname{Var}\big(\sum_{i=1}^{n} w_i x_i\big) = n \operatorname{Var}(w)\operatorname{Var}(x)$. The variance of a pre-activation grows with the number of inputs to the neuron.</note>
+
+<ask type="short">A neuron has 4 inputs, each with mean 0 and variance 1, and weights with mean 0 and variance 0.5. What is the variance of its pre-activation $z$?</ask>
+@@ verify
+import numpy as np
+rng = np.random.default_rng(1)
+N = 400000
+# the worked example: 3 inputs of variance 1, weights of variance 2
+w = rng.normal(0, np.sqrt(2), (N, 3)); x = rng.normal(0, 1, (N, 3))
+z = (w * x).sum(axis=1)
+assert abs(z.var() - 6) < 0.15 and 3 * 2 * 1 == 6
+# variance of one product is the product of the variances
+assert abs((w[:, 0] * x[:, 0]).var() - 2) < 0.05
+# the question asked: 4 inputs, weight variance 0.5, gives 2
+w = rng.normal(0, np.sqrt(0.5), (N, 4)); x = rng.normal(0, 1, (N, 4))
+assert abs((w * x).sum(axis=1).var() - 2) < 0.05 and 4 * 0.5 * 1 == 2
+# the original question's answer (256) is not given away
+assert '256' not in reply
+
+@@@@ idk-lstm-carry-a-value
+situation: idk
+topic: RNNs and LSTM gates
+voice: confused
+level: medium
+expect: {"must":["0\\.3\\b","kept|keep"],"askMustNot":["f_t = 1","i_t = 0","forget gate (is|at|of) 1"],"mustNot":["f_t = 1\\b","i_t = 0(?![.0-9])"]}
+@@ tutor
+An LSTM keeps a cell state $c_t$ beside its hidden state. At each step, gates with values between 0 and 1 control it: the forget gate $f_t$ scales the old cell state, and the input gate $i_t$ scales a candidate value $g_t$, which lies between $-1$ and 1. The update is $c_t = f_t\,c_{t-1} + i_t\,g_t$.
+
+<note>LSTM cell update: $c_t = f_t\,c_{t-1} + i_t\,g_t$. The forget gate $f_t$ and input gate $i_t$ come from sigmoids, so they lie between 0 and 1; the candidate $g_t$ comes from a tanh, so it lies between $-1$ and 1.</note>
+
+<ask type="short">A cell holds $c = 0.8$ and has to carry that value unchanged across the next 100 steps. What must the forget and input gates do over those steps, and why can a plain RNN, $h_t = \tanh(W h_{t-1} + U x_t)$, not hold a value as easily?</ask>
+@@ learner idk
+@@ reply
+Take one step with numbers first. Suppose the cell holds $c_{t-1} = 0.8$, the gates come out as $f_t = 0.5$ and $i_t = 0.25$, and the candidate is $g_t = -0.4$. Then
+
+$c_t = 0.5 \times 0.8 + 0.25 \times (-0.4) = 0.4 - 0.1 = 0.3$.
+
+The first product is how much of the old value is kept; the second is how much new content is written in. So the cell moved from 0.8 to 0.3 for two separate reasons: half of it was forgotten, and something was added.
+
+<note>Reading the LSTM update: $f_t\,c_{t-1}$ is what is kept of the old cell and $i_t\,g_t$ is what is written. Example: $0.5 \times 0.8 + 0.25 \times (-0.4) = 0.3$.</note>
+
+<ask type="short">The cell holds 0.8 again, and the candidate $g_t$ could be anything between $-1$ and 1. Treating the gates as able to reach the ends of their range, which values of $f_t$ and $i_t$ leave $c_t$ at exactly 0.8 after this one step?</ask>
+@@ verify
+c = 0.5 * 0.8 + 0.25 * (-0.4)
+assert abs(0.5 * 0.8 - 0.4) < 1e-12 and abs(0.25 * -0.4 + 0.1) < 1e-12 and abs(c - 0.3) < 1e-12
+# the answer withheld: f = 1, i = 0 keeps 0.8 for any candidate, over 100 steps too
+for g in (-1, -0.4, 0, 0.7, 1):
+    x = 0.8
+    for _ in range(100):
+        x = 1 * x + 0 * g
+    assert x == 0.8
+# and no other gate setting does so for every candidate
+assert 0.9 * 0.8 + 0 * 0.5 != 0.8 and 1 * 0.8 + 0.1 * 0.5 != 0.8
+
+@@@@ show-me-softmax-temperature-sim
+situation: show-me
+topic: Softmax with temperature
+voice: plain
+level: easy
+expect: {"visual":{"kind":"sim","sim":"softmax"},"must":["temperature"]}
+@@ tutor
+Softmax turns a vector of logits $z$ into probabilities, $p_i = e^{z_i} / \sum_j e^{z_j}$, and a temperature $T$ divides the logits first: $p_i \propto e^{z_i/T}$. Take three candidate next tokens with logits mat 2.5, sofa 1 and moon −0.5. At $T = 1$ their probabilities are 0.786, 0.175 and 0.039. At $T = 2$ the logits become 1.25, 0.5 and −0.25, the gaps between them halve, and the probabilities flatten to 0.590, 0.279 and 0.132. At $T = 0.5$ the gaps double and the probabilities sharpen to 0.950, 0.047 and 0.002.
+
+<note>Softmax with temperature: $p_i = \dfrac{e^{z_i/T}}{\sum_j e^{z_j/T}}$. Dividing by $T > 1$ shrinks the gaps between logits and flattens the distribution; $T < 1$ widens them and sharpens it.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```sim
+{"kind":"softmax","title":"Temperature on three logits","logits":[2.5,1,-0.5],"labels":["mat","sofa","moon"],"temperature":1,"tour":[{"at":"logit:1","say":"The logit for mat is 1.5 above sofa and 3 above moon. Softmax turns those gaps into ratios of probability."},{"at":"probabilities","say":"At temperature 1 the probabilities are 0.786, 0.175 and 0.039."},{"at":"temperature","say":"Set the temperature to 2 and the bars level out to 0.590, 0.279 and 0.132. Set it to 0.5 and mat takes 0.950."}]}
+```
+
+Move the temperature between 0.5 and 2 and watch the tallest bar: its lead shrinks as the temperature rises, and the order of the three bars never changes.
+@@ verify
+import json
+import numpy as np
+spec = json.loads(block(reply, 'sim'))
+assert spec['logits'] == [2.5, 1, -0.5] and spec['labels'] == ['mat', 'sofa', 'moon'] and spec['temperature'] == 1
+def softmax(z, T=1.0):
+    z = np.array(z, float) / T
+    e = np.exp(z - z.max())
+    return e / e.sum()
+want = {1: ['0.786', '0.175', '0.039'], 2: ['0.590', '0.279', '0.132'], 0.5: ['0.950', '0.047', '0.002']}
+for T, shown in want.items():
+    assert [f'{v:.3f}' for v in softmax(spec['logits'], T)] == shown, T
+    for s in shown:
+        assert s in tutor[0], s
+says = ' '.join(s['say'] for s in spec['tour'])
+for s in want[1] + want[2] + ['0.950']:
+    assert s in says, s
+assert list(np.array(spec['logits']) / 2) == [1.25, 0.5, -0.25]
+assert 2.5 - 1 == 1.5 and 2.5 - (-0.5) == 3
+for T in (0.5, 1, 1.5, 2):
+    p = softmax(spec['logits'], T)
+    assert p[0] > p[1] > p[2]
+assert softmax(spec['logits'], 0.5)[0] > softmax(spec['logits'], 1)[0] > softmax(spec['logits'], 2)[0]
+
+@@@@ show-me-adam-on-a-ravine-sim
+situation: show-me
+topic: The Adam optimiser
+voice: confused
+level: hard
+expect: {"visual":{"kind":"sim","sim":"gradient-descent"},"ends":"ask","askTypes":["predict"],"must":["eleven"],"askMustNot":["0\\.6\\b","0\\.98\\b","y (gets|reaches|will)"]}
+@@ tutor
+Adam keeps two running averages for every weight: $m$, of the gradient $g$, and $v$, of the squared gradient. With the usual $\beta_1 = 0.9$ and $\beta_2 = 0.999$:
+
+$$m \leftarrow \beta_1 m + (1 - \beta_1)\,g, \qquad v \leftarrow \beta_2 v + (1 - \beta_2)\,g^2, \qquad w \leftarrow w - \eta\,\frac{\hat m}{\sqrt{\hat v} + \epsilon}$$
+
+Here $\hat m = m / (1 - \beta_1^t)$ and $\hat v = v / (1 - \beta_2^t)$ correct for both averages starting at zero. Dividing by $\sqrt{\hat v}$ measures each weight's step against the usual size of its own gradient, so a weight with large gradients and a weight with small ones move at a similar pace.
+
+<note>Adam: $m \leftarrow \beta_1 m + (1-\beta_1)g$, $v \leftarrow \beta_2 v + (1-\beta_2)g^2$, $\hat m = m/(1-\beta_1^t)$, $\hat v = v/(1-\beta_2^t)$, $w \leftarrow w - \eta\,\hat m/(\sqrt{\hat v}+\epsilon)$. Each weight's step is scaled by the running size of its own gradient.</note>
+
+<ask type="short">Both averages start at 0. After the very first update with gradient $g$, what is $m$ before the bias correction, and by what factor is it smaller than $g$?</ask>
+@@ learner question
+hang on, before that. i can't picture what "a similar pace" looks like. is there a way to watch adam run on a surface where one direction is far steeper than the other?
+@@ reply
+```sim
+{"kind":"gradient-descent","title":"Adam on a ravine","surface":"ravine","optimiser":"adam","rate":0.1,"momentum":0.9,"tour":[{"at":"gradient","say":"The surface is f = 0.1x² + 2y². At the start the gradient is −0.52 along the valley and 5.6 across it: about eleven times larger across.","do":{"pause":true}},{"at":"path","say":"Adam divides each coordinate's step by the running size of its own gradient, so each of the first five steps moves close to 0.1 in x and close to 0.1 in y.","do":{"run":5}},{"at":"minimum","say":"Let it run on towards the minimum at the origin.","do":{"run":60}}]}
+```
+
+Watch the first few steps: the point moves almost exactly as far in x as in y, although the slope across the valley is about eleven times the slope along it.
+
+<ask type="predict">Change one thing: set the optimiser to sgd and leave the rate at 0.1. Predict which coordinate gets close to zero first, y (across the valley) or x (along it), and say why.</ask>
+@@ verify
+import json, math
+spec = json.loads(block(reply, 'sim'))
+assert (spec['surface'], spec['optimiser'], spec['rate'], spec['momentum']) == ('ravine', 'adam', 0.1, 0.9)
+# the app's ravine and its start (src/renderer/src/lib/sims/optim.ts): f = 0.1x^2 + 2y^2 from (-2.6, 1.4)
+grad = lambda x, y: (0.2 * x, 4 * y)
+x, y = -2.6, 1.4
+g0 = grad(x, y)
+assert abs(g0[0] + 0.52) < 1e-12 and abs(g0[1] - 5.6) < 1e-12 and round(g0[1] / abs(g0[0])) == 11
+# the app's Adam update, ported line for line
+b1, b2, eps, rate = spec['momentum'], 0.999, 1e-8, spec['rate']
+m, v, steps = [0.0, 0.0], [0.0, 0.0], []
+for t in range(1, 6):
+    g = grad(x, y); d = [0.0, 0.0]
+    for i in range(2):
+        m[i] = b1 * m[i] + (1 - b1) * g[i]
+        v[i] = b2 * v[i] + (1 - b2) * g[i] * g[i]
+        d[i] = -rate * (m[i] / (1 - b1 ** t)) / (math.sqrt(v[i] / (1 - b2 ** t)) + eps)
+    x += d[0]; y += d[1]; steps.append(d)
+# each of the first five steps is close to 0.1 in both coordinates, towards the minimum
+for dx, dy in steps:
+    assert 0.097 < dx <= 0.1 + 1e-9 and 0.097 < -dy <= 0.1 + 1e-9, (dx, dy)
+# the first step is the rate in each coordinate
+assert abs(steps[0][0] - 0.1) < 1e-6 and abs(steps[0][1] + 0.1) < 1e-6
+# the answer to the question asked: under sgd at 0.1, y shrinks by 0.6 a step and x by 0.98
+assert abs((1 - 0.1 * 4) - 0.6) < 1e-12 and abs((1 - 0.1 * 0.2) - 0.98) < 1e-12
+# the pending question in the tutor's turn: m = 0.1 g after one update
+assert abs((1 - 0.9) * 1.0 - 0.1) < 1e-12
+
+@@@@ show-me-hidden-layer-xor-sim
+situation: show-me
+topic: Hidden layers and linear separability
+voice: plain
+level: easy
+expect: {"visual":{"kind":"sim","sim":"neural-net"},"must":["straight line|one line|single line"]}
+noverify: the simulation's numbers are computed live by the app and none is stated; the block is validated by the checker
+@@ tutor
+A single neuron computes $\sigma(w_1x_1 + w_2x_2 + b)$. It outputs 0.5 exactly where $w_1x_1 + w_2x_2 + b = 0$, which is a straight line in the input plane, so one neuron can only split the plane into the two sides of a line. The XOR pattern defeats it: points where $x_1$ and $x_2$ have the same sign are one class, and points where the signs differ are the other, so each class occupies two opposite quadrants and no single line separates them. A hidden layer fixes this. Each hidden neuron draws its own line, and the output neuron combines the hidden neurons' outputs, so the network's boundary can bend around the quadrants.
+
+<note>One neuron's decision boundary is a straight line (a hyperplane in more dimensions). XOR-like data, where the class depends on whether two inputs agree in sign, is not linearly separable; a hidden layer lets the network combine several lines into one bent boundary.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```sim
+{"kind":"neural-net","title":"One hidden layer on the XOR pattern","layers":[2,4,1],"data":"xor","activation":"tanh","rate":0.3,"tour":[{"at":"input","say":"The two inputs, x₁ and x₂. Points whose inputs agree in sign are one class; the rest are the other."},{"at":"layer:1","say":"Four hidden neurons. Each one draws a single straight line across the input plane."},{"at":"output","say":"The output neuron combines the four hidden outputs into one prediction."},{"at":"loss","say":"Run the training and follow the loss while the boundary takes shape.","do":{"run":300}}]}
+```
+
+Watch the decision surface while it trains and compare it with the four quadrants: the two classes sit in opposite quadrants, so the boundary cannot stay one straight line and fit them.
+
+@@@@ show-me-early-stopping-flowchart
+situation: show-me
+topic: Early stopping
+voice: plain
+level: easy
+expect: {"visual":{"kind":"mermaid","diagram":["flowchart"]},"must":["patience","checkpoint"]}
+@@ tutor
+Early stopping watches the validation loss during training and stops when it has stopped improving. After each epoch on the training set, measure the loss on the validation set. If it is lower than the best seen so far, save a checkpoint of the weights, record it as the new best and reset a counter to 0. If it is not, add 1 to the counter. When the counter reaches the patience, stop and restore the saved checkpoint. With a patience of 3 and validation losses of 0.90, 0.72, 0.65, 0.66, 0.68 and 0.67 over six epochs, the best is 0.65 at epoch 3; epochs 4, 5 and 6 each fail to beat it, so training stops after epoch 6 and the epoch-3 weights are restored.
+
+<note>Early stopping: after each epoch compare the validation loss with the best so far. Better: save a checkpoint, counter = 0. Not better: counter + 1. Stop when the counter reaches the patience, and restore the best checkpoint.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+flowchart TD
+    A["Start: best loss = infinity, counter = 0"] --> B["Train one epoch on the training set"]
+    B --> C["Measure the validation loss"]
+    C --> D{"Lower than the best loss?"}
+    D -->|"yes"| E["Save checkpoint, update best loss, counter = 0"]
+    D -->|"no"| F["counter = counter + 1"]
+    E --> B
+    F --> G{"counter = patience?"}
+    G -->|"no"| B
+    G -->|"yes"| H["Stop and restore the saved checkpoint"]
+```
+
+Follow the two exits of the first diamond: only the "yes" side saves a checkpoint and resets the counter, so the loop stops after patience epochs in a row on the "no" side.
+@@ verify
+# run the loop the diagram draws on the losses in the explanation
+losses, patience = [0.90, 0.72, 0.65, 0.66, 0.68, 0.67], 3
+best, counter, saved, stopped = float('inf'), 0, None, None
+for epoch, loss in enumerate(losses, start=1):
+    if loss < best:
+        best, saved, counter = loss, epoch, 0
+    else:
+        counter += 1
+    if counter == patience:
+        stopped = epoch
+        break
+assert (best, saved, stopped) == (0.65, 3, 6)
+assert 'stops after epoch 6' in tutor[0] and 'epoch-3 weights' in tutor[0]
+d = block(reply, 'mermaid')
+assert d.count('-->') == 9 and d.count('{"') == 2
+for part in ['Train one epoch', 'validation loss', 'Save checkpoint', 'counter = counter + 1', 'counter = patience', 'restore the saved checkpoint']:
+    assert part in d, part
+
+@@@@ show-me-descent-steps-table
+situation: show-me
+topic: Gradient descent step size
+voice: plain
+level: easy
+expect: {"visual":{"kind":"table"},"must":["halves","2\\.8125"]}
+@@ tutor
+Take $f(w) = (w - 3)^2$, whose minimum is at $w = 3$. Its gradient is $f'(w) = 2(w - 3)$, so with learning rate $\eta = 0.25$ one step of gradient descent is $w \leftarrow w - 0.25 \times 2(w - 3) = w - 0.5\,(w - 3)$. Each step therefore removes half of the distance to the minimum. Starting from $w = 0$, the gradient is $-6$ and the first step lands on $w = 1.5$; the distance to 3 has gone from 3 to 1.5.
+
+<note>On $f(w) = (w-3)^2$ with $\eta = 0.25$: $w \leftarrow w - 0.5\,(w - 3)$. The distance to the minimum is multiplied by $1 - 2\eta = 0.5$ at every step.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| Step | $w$ before | Gradient $2(w - 3)$ | $w$ after | Distance to 3 after |
+|---|---|---|---|---|
+| 1 | 0 | −6 | 1.5 | 1.5 |
+| 2 | 1.5 | −3 | 2.25 | 0.75 |
+| 3 | 2.25 | −1.5 | 2.625 | 0.375 |
+| 4 | 2.625 | −0.75 | 2.8125 | 0.1875 |
+
+Read down the last column: the distance to the minimum halves at every step, and the gradient halves with it, so the steps get smaller as $w$ approaches 3.
+@@ verify
+rows = table(reply)[1:]
+assert len(rows) == 4
+fmt = lambda v: f'{v:g}'.replace('-', '−')
+w = 0.0
+for i, row in enumerate(rows, start=1):
+    g = 2 * (w - 3)
+    new = w - 0.25 * g
+    assert row == [str(i), fmt(w), fmt(g), fmt(new), fmt(abs(3 - new))], (i, row)
+    assert abs(3 - new) == abs(3 - w) / 2
+    w = new
+assert w == 2.8125
+assert '1.5' in tutor[0] and '$-6$' in tutor[0]

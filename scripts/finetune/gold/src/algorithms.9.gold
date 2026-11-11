@@ -1,0 +1,34 @@
+@@@@ show-me-sorting-families-mindmap
+situation: show-me
+topic: Families of sorting algorithm
+voice: plain
+level: easy
+expect: {"visual":{"kind":"mermaid","diagram":["mindmap"]},"must":["comparison","counting sort"]}
+noverify: a diagram grouping the algorithms as the explanation groups them; the complexities are the standard ones stated there
+@@ tutor
+Sorting algorithms fall into two families by what they are allowed to do with a key. Comparison sorts only ask which of two keys is smaller. Among them, insertion sort and selection sort take $O(n^2)$ time in the worst case, while merge sort and heapsort take $O(n \log n)$; quicksort is $O(n \log n)$ on average and $O(n^2)$ in the worst case. No comparison sort can beat $n \log n$ in the worst case. The second family reads the key itself: counting sort and radix sort use the digits or the value of an integer key as an index, and run in linear time when the range of keys is small.
+
+<note>Two families: comparison sorts (insertion, selection: $O(n^2)$; merge, heap: $O(n \log n)$; quicksort: $O(n \log n)$ average, $O(n^2)$ worst) and non-comparison sorts (counting, radix), which index by the key and are linear for a small key range.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+mindmap
+  root((Sorting))
+    Comparison sorts
+      Quadratic worst case
+        insertion sort
+        selection sort
+      n log n worst case
+        merge sort
+        heapsort
+      n log n average, quadratic worst
+        quicksort
+    Non-comparison sorts
+      Index by the key
+        counting sort
+        radix sort
+```
+
+Start from the two main branches: everything under the first only compares keys, and only the second branch gets below n log n.

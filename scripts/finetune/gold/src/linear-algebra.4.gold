@@ -1,0 +1,532 @@
+@@@@ why-matrix-columns-from-linearity
+situation: why
+topic: Linear transformations as matrices
+options: {"why":true}
+voice: wordy
+level: medium
+expect: {"verdict":"correct","must":["2 & -1 \\\\\\\\ 1 & 3","first column"],"askTypes":["explain","predict","short"],"askMustNot":["cannot disagree","must agree","\\bno\\b"],"forbid":["solution"]}
+@@ tutor
+Start with a map you know only two things about. $T$ is linear, so $T(u + v) = T(u) + T(v)$ and $T(cu) = cT(u)$. And it sends $e_1 = (1, 0)$ to $(2, 1)$ and $e_2 = (0, 1)$ to $(-1, 3)$.
+
+<ask type="predict">Where must $T$ send $(3, 2)$, and what lets you say so without being told anything more about $T$?</ask>
+@@ learner answer sure
+Well (3,2) is 3 lots of e1 plus 2 lots of e2, and since T is linear I can split the sum and pull the numbers out: T(3e1 + 2e2) = 3T(e1) + 2T(e2) = 3(2,1) + 2(-1,3) = (6,3) + (-2,6) = (4,9).
+@@ reply
+<grade verdict="correct" score="1">"T(3e1 + 2e2) = 3T(e1) + 2T(e2)" is the whole argument: linearity lets you split the sum and pull out the 3 and the 2, and $(6, 3) + (-2, 6) = (4, 9)$ is right.</grade>
+
+Look at what that calculation used: only the two outputs $T(e_1)$ and $T(e_2)$, each weighted by one entry of the input. Write those two outputs side by side as columns:
+
+$$\begin{pmatrix} 2 & -1 \\ 1 & 3 \end{pmatrix}$$
+
+Your sum was 3 times the first column plus 2 times the second. Nothing in it depended on the input being $(3, 2)$: for an input $(x, y)$ the same steps give $x$ times the first column plus $y$ times the second. So that grid of four numbers was enough to carry out everything you did.
+
+<ask type="explain">Suppose another linear map $S$ also sends $e_1$ to $(2, 1)$ and $e_2$ to $(-1, 3)$. Could $S$ and $T$ give different outputs for some vector? Argue it from your own calculation.</ask>
+@@ verify
+import numpy as np
+M = np.array([[2, -1], [1, 3]])                      # columns T(e1), T(e2)
+assert (M @ [1, 0]).tolist() == [2, 1] and (M @ [0, 1]).tolist() == [-1, 3]
+assert (3 * M[:, 0]).tolist() == [6, 3] and (2 * M[:, 1]).tolist() == [-2, 6]      # the learner's two terms
+assert (3 * M[:, 0] + 2 * M[:, 1]).tolist() == [4, 9] == (M @ [3, 2]).tolist()
+x, y = 7, -5
+assert (x * M[:, 0] + y * M[:, 1]).tolist() == (M @ [x, y]).tolist()               # the same steps for any input
+
+@@@@ why-closest-point-is-not-the-origin
+situation: why
+topic: Least squares and the normal equations
+options: {"why":true}
+voice: confused
+level: medium
+expect: {"verdict":"wrong","names":["origin"],"must":["= 13","= 8","\\(3 - t\\)\\^2"],"mustNot":["perpendicular","right angle","90","normal equations"],"askMustNot":["t = 3","90","perpendicular","right angle"],"askTypes":["short","predict"],"forbid":["solution"]}
+@@ tutor
+Suppose $Ax = b$ has no solution, so $b$ is not in the column space of $A$. The best available is the point $p$ of the column space that is closest to $b$. Picture the column space as a plane through the origin and $b$ as a point off it.
+
+<ask type="predict">Which point of the plane do you expect to be closest to $b$, and how would you describe the line from $b$ to it?</ask>
+@@ learner answer guessing
+hmm the plane goes through the origin so i'd guess the origin is the closest point? then the line is just b itself going back to zero
+@@ reply
+<grade verdict="wrong" score="0.1">"i'd guess the origin is the closest point" does not hold up: a plane passing through the origin does not make the origin its nearest point to $b$. A small case shows why.</grade>
+
+Shrink the picture by one dimension. Let the column space be the $x$-axis, the points $(t, 0)$, and let $b = (3, 2)$. The squared distance from $b$ to $(t, 0)$ is $(3 - t)^2 + 2^2$. At the origin, $t = 0$, that is $9 + 4 = 13$. At $t = 1$ it is $4 + 4 = 8$, already closer. So the origin is one candidate among many, and the closest point is whichever candidate makes that distance smallest.
+
+<card>Is the origin the closest point of a subspace to $b$? :: Not in general. The closest point minimises the distance over the whole subspace. For the $x$-axis and $b = (3, 2)$: squared distance 13 at the origin, 8 at $(1, 0)$.</card>
+
+<note>The closest point of a subspace to $b$ minimises $\|b - p\|$ over every $p$ in the subspace. The subspace passing through the origin does not make the origin the minimiser.</note>
+
+<ask type="short">Which $t$ makes $(3 - t)^2 + 4$ smallest? At that $t$, what angle does the line from $(t, 0)$ to $b$ make with the $x$-axis?</ask>
+@@ verify
+import numpy as np
+b = np.array([3.0, 2.0])
+d2 = lambda t: float(np.sum((b - np.array([t, 0.0])) ** 2))
+assert d2(0) == 13 == 9 + 4 and d2(1) == 8 == 4 + 4
+assert all(abs(d2(t) - ((3 - t) ** 2 + 4)) < 1e-12 for t in (-2, 0.5, 3, 7))
+# the answer the question withholds: t = 3, and the line from (3, 0) to b is at a right angle to the axis
+ts = np.linspace(-5, 10, 15001)
+t_best = ts[np.argmin([d2(t) for t in ts])]
+assert abs(t_best - 3) < 1e-9
+e = b - np.array([t_best, 0.0])
+assert abs(e @ np.array([1.0, 0.0])) < 1e-9
+# same conclusion from the normal equations with A = the x-axis direction
+A = np.array([[1.0], [0.0]])
+assert np.allclose(np.linalg.solve(A.T @ A, A.T @ b), [3.0])
+
+@@@@ why-every-basis-of-the-plane-has-two
+situation: why
+topic: Basis and dimension
+options: {"why":true}
+voice: confused
+level: medium
+expect: {"ends":"continue","need":["note"],"forbid":["ask","grade"],"must":["two equations in three unknowns","\\(1, 0\\) \\+ \\(0, 1\\) - \\(1, 1\\) = \\(0, 0\\)","single line"]}
+@@ tutor
+Three vectors in the plane: $(1, 0)$, $(0, 1)$ and $(1, 1)$. Every vector in $\mathbb{R}^2$ can be built from them.
+
+<ask type="predict">Could you throw one of the three away and still build every vector in the plane? What does your answer suggest about how many vectors a basis of the plane can hold?</ask>
+@@ learner question
+ok i can see 3 is one too many here. but can you just explain why EVERY basis of the plane has exactly 2 vectors? i don't see why some weird choice of vectors couldn't need 3
+@@ reply
+A basis has two jobs at once: it must span the plane, and it must be independent, meaning no vector in it is a combination of the others. Each job limits the count from one side.
+
+Fewer than two cannot span. One vector $u$ gives only its multiples $cu$, and those all lie on a single line through the origin, so most of the plane is out of reach.
+
+More than two cannot be independent, however the vectors are chosen. Take any three, $u$, $v$ and $w$, and look for weights with $c_1u + c_2v + c_3w = 0$. Each vector has two entries, so this is two equations in three unknowns. With every right-hand side zero and more unknowns than equations, elimination always leaves at least one unknown free: set it to 1, solve for the others, and you have weights that are not all zero. Then one of the three vectors is a combination of the other two, so it adds nothing they could not already build. For your three the weights are $1, 1, -1$: $(1, 0) + (0, 1) - (1, 1) = (0, 0)$.
+
+So no choice of three vectors, however odd, is independent in the plane, and no single vector spans it. A basis is squeezed to exactly two.
+
+<note>Why every basis of $\mathbb{R}^2$ has 2 vectors: one vector spans only a line; any three satisfy $c_1u + c_2v + c_3w = 0$ with weights not all zero (2 equations, 3 unknowns), so they are dependent.</note>
+
+The same count, $n$ equations against more than $n$ unknowns, settles $\mathbb{R}^n$, and that is the next step.
+
+<continue/>
+@@ verify
+import numpy as np
+# the learner's three vectors: weights 1, 1, -1 give zero
+u, v, w = np.array([1, 0]), np.array([0, 1]), np.array([1, 1])
+assert (1 * u + 1 * v - 1 * w).tolist() == [0, 0]
+# any three vectors in the plane are dependent: a 2 x 3 matrix always has a non-zero null vector
+rng = np.random.default_rng(11)
+for _ in range(200):
+    M = rng.integers(-9, 10, (2, 3)).astype(float)
+    assert np.linalg.matrix_rank(M) <= 2
+    c = np.linalg.svd(M)[2][-1]                      # a unit vector with M c = 0
+    assert np.allclose(M @ c, 0) and abs(np.linalg.norm(c) - 1) < 1e-12
+# one vector spans only a line: rank 1
+assert np.linalg.matrix_rank(np.array([[2.0], [5.0]])) == 1
+# and two independent ones do span: rank 2
+assert np.linalg.matrix_rank(np.column_stack([u, v])) == 2
+
+@@@@ hands-on-broadcasting-row-means
+situation: hands-on
+topic: NumPy broadcasting and matmul shapes
+options: {"strategy":"code"}
+voice: confused
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["\\(2,\\)","from the right|last axis"],"must":["keepdims=True","\\(2, 1\\)"],"setsProblem":true,"askTypes":["code"],"askMustNot":["np\\.abs","\\.max\\("]}
+@@ tutor
+Broadcasting lets NumPy combine arrays of different shapes by stretching axes of length 1. Subtracting the `(3,)` array of column means from a `(2, 3)` array works because the last axes match.
+
+```python
+import numpy as np
+
+X = np.array([[4., 9., 8.],
+              [1., 6., 2.]])
+mu = X.mean(axis=0)
+print(mu.shape, (X - mu).shape)
+print(X - mu)
+```
+
+```
+(3,) (2, 3)
+[[ 1.5  1.5  3. ]
+ [-1.5 -1.5 -3. ]]
+```
+
+<solution>Take the mean along axis 1 and keep that axis, so the means have shape (2, 1): print(X - X.mean(axis=1, keepdims=True)). The rows come out as [-3, 2, 1] and [-2, 3, -1].</solution>
+
+<ask type="code" lang="python">Change the snippet so it subtracts each row's mean instead of each column's, and print the result. Every row of the output should sum to 0.</ask>
+@@ learner answer unsure
+```python
+import numpy as np
+
+X = np.array([[4., 9., 8.],
+              [1., 6., 2.]])
+print(X - X.mean(axis=1))
+```
+ValueError: operands could not be broadcast together with shapes (2,3) (2,)
+
+axis=1 is the row means right? so why can't it subtract them
+@@ reply
+<grade verdict="partial" score="0.5">`X.mean(axis=1)` is the right thing to compute: it is the two row means, 7 and 3. The failure is in the subtraction: that result has shape `(2,)`, and broadcasting lines shapes up from the right, so NumPy compares 3 with 2.</grade>
+
+Two lengths are compatible only when they are equal or one of them is 1. `(2, 3)` against `(2,)` puts the 2 under the 3, which is neither. The row means need shape `(2, 1)`: one mean per row, with a length-1 axis to stretch across the columns. `keepdims=True` keeps that axis.
+
+```python
+import numpy as np
+
+X = np.array([[4., 9., 8.],
+              [1., 6., 2.]])
+m = X.mean(axis=1, keepdims=True)
+print(m.shape)
+print(X - m)
+```
+
+```
+(2, 1)
+[[-3.  2.  1.]
+ [-2.  3. -1.]]
+```
+
+<card>Why does `X - X.mean(axis=1)` fail for a `(2, 3)` array? :: The means have shape `(2,)` and broadcasting aligns from the last axis, so 3 meets 2. Use `X.mean(axis=1, keepdims=True)`, shape `(2, 1)`.</card>
+
+<note>Broadcasting aligns shapes from the last axis; two lengths match if they are equal or one is 1. A per-row quantity for an `(n, m)` array needs shape `(n, 1)`: use `keepdims=True` or `v[:, None]`.</note>
+
+<solution>C = X - X.mean(axis=1, keepdims=True); S = C / np.abs(C).max(axis=1, keepdims=True); print(np.round(S, 3)). The rows come out as [-1, 0.667, 0.333] and [-0.667, 1, -0.333].</solution>
+<check lang="python">
+import numpy as np
+X = np.array([[4., 9., 8.], [1., 6., 2.]])
+C = X - X.mean(axis=1, keepdims=True)
+S = C / np.abs(C).max(axis=1, keepdims=True)
+assert np.round(S, 3).tolist() == [[-1.0, 0.667, 0.333], [-0.667, 1.0, -0.333]]
+</check>
+
+<ask type="code" lang="python">Extend the working snippet: after centring each row, divide each row by its own largest absolute value, so every row's largest entry in size is 1. Print the result rounded to 3 decimals.</ask>
+@@ verify
+import numpy as np
+# the learner's code really fails with the error they pasted
+out, err, code = run_py_full(block(learner, 'python'))
+assert code != 0 and 'ValueError: operands could not be broadcast together with shapes (2,3) (2,)' in err, err
+X = np.array([[4., 9., 8.], [1., 6., 2.]])
+assert X.mean(axis=1).shape == (2,) and X.mean(axis=1).tolist() == [7.0, 3.0]       # axis=1 is the row means
+assert X.mean(axis=1, keepdims=True).shape == (2, 1)
+C = X - X.mean(axis=1, keepdims=True)
+assert C.tolist() == [[-3.0, 2.0, 1.0], [-2.0, 3.0, -1.0]] and np.allclose(C.sum(axis=1), 0)
+assert np.array_equal(C, X - X.mean(axis=1)[:, None])                                # the note's alternative
+# the first tutor turn's output
+assert X.mean(axis=0).tolist() == [2.5, 7.5, 5.0] and (X - X.mean(axis=0)).tolist() == [[1.5, 1.5, 3.0], [-1.5, -1.5, -3.0]]
+assert '[-3, 2, 1] and [-2, 3, -1]' in solution(tutor[0])
+# the reference for the task set
+ref = """
+import numpy as np
+X = np.array([[4., 9., 8.],
+              [1., 6., 2.]])
+C = X - X.mean(axis=1, keepdims=True)
+S = C / np.abs(C).max(axis=1, keepdims=True)
+print(np.round(S, 3))
+"""
+got = run_py(ref)
+assert got.split() == '[[-1. 0.667 0.333] [-0.667 1. -0.333]]'.split(), got
+assert '-0.667' in solution(reply) and '-0.667' not in visible(reply)
+
+@@@@ hands-on-power-iteration-loop
+situation: hands-on
+topic: Power iteration
+options: {"strategy":"code"}
+voice: plain
+level: hard
+expect: {"setsProblem":true,"askTypes":["code"],"must":["3\\.618","Rayleigh quotient"],"askMustNot":["\\b14\\b","3\\.618034"]}
+@@ tutor
+Power iteration finds the eigenvector whose eigenvalue is largest in absolute value, using nothing but matrix-vector products. Write the starting vector as a mix of eigenvectors: each multiplication by $A$ scales every component by its own eigenvalue, so the component with the largest $|\lambda|$ outgrows the rest. Normalising after each step stops the numbers overflowing and leaves the direction unchanged.
+
+<note>Power iteration: repeat $x \leftarrow Ax / \|Ax\|$. The direction of $x$ tends to the dominant eigenvector, and for a unit vector $x$ the Rayleigh quotient $x^TAx$ tends to the dominant eigenvalue.</note>
+
+<continue/>
+@@ learner goon
+@@ reply
+In NumPy it is a short loop. `A @ x` is the matrix-vector product, and for a unit vector `x @ A @ x` is the Rayleigh quotient, the current estimate of the eigenvalue.
+
+```python
+import numpy as np
+
+A = np.array([[2.0, 1.0],
+              [1.0, 3.0]])
+x = np.array([1.0, 0.0])
+for k in range(8):
+    x = A @ x
+    x = x / np.linalg.norm(x)
+print(np.round(x, 4))
+print(round(float(x @ A @ x), 4))
+```
+
+```
+[0.5264 0.8503]
+3.618
+```
+
+The exact dominant eigenvalue of this $A$ is $(5 + \sqrt{5})/2 \approx 3.618$, so eight steps already agree with it to the digits shown. A fixed count of 8 was a guess, though; a real implementation stops when the estimate has settled.
+
+<solution>Keep the previous estimate, compute the new one inside the loop, and break when they differ by less than 1e-10. Counting iterations from 1 and starting the previous estimate at 0.0, the loop stops at iteration 14 with estimate 3.618034.</solution>
+<check lang="python">
+import numpy as np
+A = np.array([[2.0, 1.0], [1.0, 3.0]])
+x = np.array([1.0, 0.0])
+old = 0.0
+for k in range(1, 1000):
+    x = A @ x
+    x = x / np.linalg.norm(x)
+    lam = float(x @ A @ x)
+    if abs(lam - old) < 1e-10:
+        break
+    old = lam
+assert k == 14 and round(lam, 6) == 3.618034
+assert abs(lam - (5 + 5 ** 0.5) / 2) < 1e-9
+</check>
+
+<ask type="code" lang="python">Change the loop so it stops as soon as the Rayleigh quotient changes by less than `1e-10` from one iteration to the next. Print the number of iterations it took and the final estimate to 6 decimals.</ask>
+@@ verify
+import numpy as np
+A = np.array([[2.0, 1.0], [1.0, 3.0]])
+w, V = np.linalg.eigh(A)
+assert abs(w[1] - (5 + np.sqrt(5)) / 2) < 1e-12 and round(w[1], 3) == 3.618
+x = np.array([1.0, 0.0])
+for k in range(8):
+    x = A @ x
+    x = x / np.linalg.norm(x)
+assert np.round(x, 4).tolist() == [0.5264, 0.8503]
+assert np.allclose(abs(x), abs(V[:, 1]), atol=1e-3)           # it has reached the dominant eigenvector
+assert round(float(x @ A @ x), 4) == 3.618
+# the snippet's shown output is its real output
+assert run_py(block(reply, 'python')).split() == block(reply, '').split()
+assert '14' in solution(reply) and '3.618034' in solution(reply)
+
+@@@@ hands-on-cosine-similarity-matrix
+situation: hands-on
+topic: Angles between vectors and cosine similarity
+options: {"strategy":"code"}
+voice: terse
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"must":["U @ U\\.T","0\\.8889"],"askMustNot":["fill_diagonal","argmax"]}
+@@ tutor
+For two vectors $u$ and $v$ at angle $\theta$ to each other, $\cos\theta = \dfrac{u \cdot v}{\|u\|\,\|v\|}$. It is 1 when they point the same way, 0 at a right angle and −1 when they point opposite ways. It ignores length, which is why embedding search uses it.
+
+```python
+import numpy as np
+
+u = np.array([3.0, 4.0])
+v = np.array([4.0, 3.0])
+print(u @ v / (np.linalg.norm(u) * np.linalg.norm(v)))
+```
+
+```
+0.96
+```
+
+<solution>def cos_sim(u, v): return u @ v / (np.linalg.norm(u) * np.linalg.norm(v)). For (1, 2, 2) and (2, 1, 2): 8 / (3 × 3) = 0.8889. For (1, 2, 2) and (2, 4, 4): 18 / (3 × 6) = 1.0.</solution>
+
+<ask type="code" lang="python">Wrap this in a function `cos_sim(u, v)` and print it, rounded to 4 decimals, for `(1, 2, 2)` with `(2, 1, 2)` and for `(1, 2, 2)` with `(2, 4, 4)`.</ask>
+@@ learner answer sure
+```python
+import numpy as np
+
+def cos_sim(u, v):
+    return np.dot(u, v) / np.sqrt(np.dot(u, u) * np.dot(v, v))
+
+print(round(cos_sim(np.array([1, 2, 2]), np.array([2, 1, 2])), 4))
+print(round(cos_sim(np.array([1, 2, 2]), np.array([2, 4, 4])), 4))
+```
+0.8889 and 1.0
+@@ reply
+<grade verdict="correct" score="1">`np.sqrt(np.dot(u, u) * np.dot(v, v))` is the product of the two norms written another way, and it prints 0.8889 and 1.0: the second pair points the same way, so the difference in length does not show.</grade>
+
+For many vectors at once, normalise each row and take one matrix product. Entry $(i, j)$ of `U @ U.T` is row $i$ dotted with row $j$, and for unit rows that is the cosine between them.
+
+```python
+import numpy as np
+
+V = np.array([[1.0, 2.0, 2.0],
+              [2.0, 1.0, 2.0],
+              [0.0, 3.0, 4.0],
+              [3.0, 0.0, -4.0]])
+U = V / np.linalg.norm(V, axis=1, keepdims=True)
+print(np.round(U @ U.T, 3))
+```
+
+```
+[[ 1.     0.889  0.933 -0.333]
+ [ 0.889  1.     0.733 -0.133]
+ [ 0.933  0.733  1.    -0.64 ]
+ [-0.333 -0.133 -0.64   1.   ]]
+```
+
+<note>All pairwise cosines of the rows of `V`: `U = V / np.linalg.norm(V, axis=1, keepdims=True)`, then `U @ U.T`. The diagonal is 1, each row with itself.</note>
+
+<solution>Blank out the diagonal, then take the position of the largest entry in each row: S = U @ U.T; np.fill_diagonal(S, -np.inf); print(S.argmax(axis=1)). It prints [2 0 0 1].</solution>
+<check lang="python">
+import numpy as np
+V = np.array([[1.0, 2.0, 2.0], [2.0, 1.0, 2.0], [0.0, 3.0, 4.0], [3.0, 0.0, -4.0]])
+U = V / np.linalg.norm(V, axis=1, keepdims=True)
+S = U @ U.T
+np.fill_diagonal(S, -np.inf)
+assert S.argmax(axis=1).tolist() == [2, 0, 0, 1]
+</check>
+
+<ask type="code" lang="python">Extend this to print, for each row of `V`, the index of the other row most similar to it. A row must not be matched with itself.</ask>
+@@ verify
+import numpy as np
+from fractions import Fraction as F
+# the learner's program prints what they say
+out = run_py(block(learner, 'python'))
+assert out.split() == ['0.8889', '1.0'], out
+assert round(8 / 9, 4) == 0.8889 and 18 / (3 * 6) == 1.0
+# the first tutor turn's figure
+assert F(3 * 4 + 4 * 3, 5 * 5) == F(24, 25) and 24 / 25 == 0.96
+# exact cosines behind the matrix shown: norms 3, 3, 5, 5
+V = [(1, 2, 2), (2, 1, 2), (0, 3, 4), (3, 0, -4)]
+norms = [3, 3, 5, 5]
+assert [sum(x * x for x in v) for v in V] == [n * n for n in norms]
+cosm = [[F(sum(a * b for a, b in zip(V[i], V[j])), norms[i] * norms[j]) for j in range(4)] for i in range(4)]
+shown = [[float(c) for c in line.replace('[', ' ').replace(']', ' ').split()] for line in block(reply, '').strip().split('\n')]
+assert shown == [[round(float(c), 3) for c in row] for row in cosm], shown
+# no ties off the diagonal, so "most similar other row" is well defined: [2, 0, 0, 1]
+best = []
+for i in range(4):
+    others = sorted(((cosm[i][j], j) for j in range(4) if j != i), reverse=True)
+    assert others[0][0] > others[1][0]
+    best.append(others[0][1])
+assert best == [2, 0, 0, 1] and '[2 0 0 1]' in solution(reply)
+
+@@@@ summary-quadratic-forms-halved-cross-term
+situation: summary
+topic: Quadratic forms
+options: {"strategy":"maths"}
+voice: terse
+level: medium
+expect: {"verdict":"correct","must":["8xy","positive definite","q\\(1, 0\\) = 1"]}
+@@ tutor
+Every quadratic form can be written $q(\mathbf{x}) = \mathbf{x}^TA\mathbf{x}$ with $A$ symmetric. Multiplying out $\begin{pmatrix} x & y \end{pmatrix}\begin{pmatrix} a & b \\ b & c \end{pmatrix}\begin{pmatrix} x \\ y \end{pmatrix}$ gives $ax^2 + 2bxy + cy^2$.
+
+<note>For symmetric $A = \begin{pmatrix} a & b \\ b & c \end{pmatrix}$: $\mathbf{x}^TA\mathbf{x} = ax^2 + 2bxy + cy^2$.</note>
+
+Write $q(x, y) = 3x^2 + 4xy + 5y^2$ as $\mathbf{x}^TA\mathbf{x}$ with $A$ symmetric.
+
+<solution>a = 3, c = 5 and 2b = 4, so b = 2. A = [[3, 2], [2, 5]].</solution>
+<check lang="python">
+A = [[3, 2], [2, 5]]
+q = lambda x, y: A[0][0] * x * x + (A[0][1] + A[1][0]) * x * y + A[1][1] * y * y
+assert all(q(x, y) == 3 * x * x + 4 * x * y + 5 * y * y for x in range(-3, 4) for y in range(-3, 4))
+</check>
+
+<ask type="problem">The matrix $A$.</ask>
+@@ learner answer sure
+A = [[3,4],[4,5]]
+@@ tutor
+<grade verdict="wrong" score="0.2">"[[3,4],[4,5]]" has the right diagonal, but its off-diagonal entries give a cross term of $2 \cdot 4\,xy = 8xy$, not $4xy$. The $xy$ coefficient is shared between the two off-diagonal entries, so each is half of it: $b = 2$ and $A = \begin{pmatrix} 3 & 2 \\ 2 & 5 \end{pmatrix}$.</grade>
+
+<card>In the symmetric matrix of a quadratic form, what goes off the diagonal? :: Half the coefficient of $xy$, in both places. $3x^2 + 4xy + 5y^2$ has matrix [[3, 2], [2, 5]].</card>
+
+<note>The off-diagonal entries of the symmetric matrix are each half the coefficient of $xy$.</note>
+
+Write $q(x, y) = x^2 - 6xy + 2y^2$ as $\mathbf{x}^TA\mathbf{x}$ with $A$ symmetric, and use the matrix to evaluate $q(1, 1)$.
+
+<solution>Diagonal entries 1 and 2; off-diagonal entries −6/2 = −3. A = [[1, −3], [−3, 2]]. q(1, 1) = 1 − 3 − 3 + 2 = −3.</solution>
+<check lang="python">
+A = [[1, -3], [-3, 2]]
+q = lambda x, y: sum(A[i][j] * (x, y)[i] * (x, y)[j] for i in range(2) for j in range(2))
+assert all(q(x, y) == x * x - 6 * x * y + 2 * y * y for x in range(-3, 4) for y in range(-3, 4))
+assert q(1, 1) == -3
+</check>
+
+<ask type="problem">$A$, and $q(1, 1)$.</ask>
+@@ learner answer sure
+A = [[1,-3],[-3,2]], halving the -6 this time. q(1,1) = 1 - 3 - 3 + 2 = -3
+@@ reply
+<grade verdict="correct" score="1">"halving the -6 this time" is the step that was missing before, and "1 - 3 - 3 + 2 = -3" is the sum of all four entries of $A$, which is what $\mathbf{x}^TA\mathbf{x}$ gives at $(1, 1)$.</grade>
+
+<summary>**What you learned:** a quadratic form $ax^2 + 2bxy + cy^2$ is $\mathbf{x}^TA\mathbf{x}$ for the symmetric matrix with $a$ and $c$ on the diagonal and $b$ in both off-diagonal places, and the matrix can be used to evaluate the form.
+
+**Still shaky:** the off-diagonal entries. Your first answer put the whole $xy$ coefficient in each place, which gives $8xy$; the second halved it correctly. One right answer after one miss is not yet settled, and the card is in your deck.
+
+**Next:** the sign of a form. Your $q(1, 1) = -3$ is negative while $q(1, 0) = 1$ is positive, so this form takes both signs. Sorting forms by that behaviour is the subject of positive definite matrices.</summary>
+@@ verify
+import numpy as np
+form = lambda A, x, y: int(np.array([x, y]) @ np.array(A) @ np.array([x, y]))
+# the first answer's matrix gives 8xy, not 4xy
+wrong = [[3, 4], [4, 5]]
+assert all(form(wrong, x, y) == 3 * x * x + 8 * x * y + 5 * y * y for x in range(-3, 4) for y in range(-3, 4))
+right = [[3, 2], [2, 5]]
+assert all(form(right, x, y) == 3 * x * x + 4 * x * y + 5 * y * y for x in range(-3, 4) for y in range(-3, 4))
+# the second problem and the learner's evaluation
+A = [[1, -3], [-3, 2]]
+assert all(form(A, x, y) == x * x - 6 * x * y + 2 * y * y for x in range(-3, 4) for y in range(-3, 4))
+assert form(A, 1, 1) == -3 == 1 - 3 - 3 + 2 == sum(sum(r) for r in A)
+assert form(A, 1, 0) == 1                       # the summary's other value: the form takes both signs
+w = np.linalg.eigvalsh(np.array(A, dtype=float))
+assert w[0] < 0 < w[1]
+
+@@@@ summary-refresh-block-matrices
+situation: summary
+topic: Block matrices
+options: {"refresh":true}
+voice: overconfident
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["zeros on its diagonal","-1"],"must":["Q\\^\\{-1\\} = Q","triangular","\\\\det M = 4"]}
+@@ tutor
+**Problem 1**
+
+$M$ is block upper triangular:
+
+$$M = \begin{pmatrix} A & B \\ 0 & D \end{pmatrix}, \quad A = \begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}, \quad D = \begin{pmatrix} 5 & 6 \\ 7 & 8 \end{pmatrix}$$
+
+with $B$ any $2 \times 2$ block. Find $\det M$.
+
+<solution>For a block triangular matrix, det M = det A · det D = (4 − 6)(40 − 42) = (−2)(−2) = 4. B does not affect it.</solution>
+<check lang="python">
+import numpy as np
+A = np.array([[1.0, 2.0], [3.0, 4.0]]); D = np.array([[5.0, 6.0], [7.0, 8.0]])
+for B in (np.zeros((2, 2)), np.array([[9.0, -4.0], [2.0, 7.0]])):
+    M = np.block([[A, B], [np.zeros((2, 2)), D]])
+    assert abs(np.linalg.det(M) - 4) < 1e-9
+</check>
+
+<ask type="problem">$\det M$, with the rule you used.</ask>
+@@ learner answer sure
+det A * det D = (4-6)(40-42) = (-2)(-2) = 4. B doesn't come into it
+@@ tutor
+<grade verdict="correct" score="1">"det A * det D" is the rule for a block triangular matrix, and "B doesn't come into it" is right: $(-2)(-2) = 4$.</grade>
+
+**Problem 2 · a little harder**
+
+$N$ is block diagonal:
+
+$$N = \begin{pmatrix} P & 0 \\ 0 & Q \end{pmatrix}, \quad P = \begin{pmatrix} 2 & 1 \\ 1 & 1 \end{pmatrix}, \quad Q = \begin{pmatrix} 0 & 1 \\ 1 & 0 \end{pmatrix}$$
+
+Find $N^{-1}$, or say why it does not exist.
+
+<solution>Invert block by block. det P = 1, so P⁻¹ = [[1, −1], [−1, 2]]. det Q = −1 and QQ = I, so Q⁻¹ = Q. N⁻¹ is block diagonal with blocks [[1, −1], [−1, 2]] and [[0, 1], [1, 0]].</solution>
+<check lang="python">
+import numpy as np
+P = np.array([[2.0, 1.0], [1.0, 1.0]]); Q = np.array([[0.0, 1.0], [1.0, 0.0]])
+Z = np.zeros((2, 2))
+N = np.block([[P, Z], [Z, Q]])
+Ninv = np.block([[np.array([[1.0, -1.0], [-1.0, 2.0]]), Z], [Z, Q]])
+assert np.allclose(N @ Ninv, np.eye(4))
+</check>
+
+<ask type="problem">$N^{-1}$ as blocks, or the reason there is none.</ask>
+@@ learner answer sure
+Block diagonal so you invert each block. P^-1 = [[1,-1],[-1,2]]. But Q has zeros on its diagonal so Q is singular, which means N has no inverse.
+@@ reply
+<grade verdict="partial" score="0.5">"invert each block" is the right rule and "P^-1 = [[1,-1],[-1,2]]" is right. "Q has zeros on its diagonal so Q is singular" is the step that fails: $\det Q = 0 \cdot 0 - 1 \cdot 1 = -1$, which is not zero. $Q$ swaps the two coordinates, so $Q^{-1} = Q$, and $N^{-1}$ exists: block diagonal with blocks $P^{-1}$ and $Q$.</grade>
+
+<card>Does a zero on the diagonal make a matrix singular? :: No. A matrix is singular when its determinant is 0: [[0, 1], [1, 0]] has determinant $-1$ and is its own inverse. A zero on the diagonal settles it only for a triangular matrix.</card>
+
+<note>A zero on the diagonal does not make a matrix singular; the determinant decides. $\begin{pmatrix} 0 & 1 \\ 1 & 0 \end{pmatrix}$ has determinant $-1$ and is its own inverse.</note>
+
+<summary>**What came back:** the block rules. The determinant of a block triangular matrix is the product of the determinants of its diagonal blocks ($\det M = 4$, whatever $B$ is), and a block diagonal matrix is inverted block by block.
+
+**Still shaky:** judging whether a matrix is singular by looking at its diagonal. That works only for a triangular matrix; otherwise compute the determinant. $Q$ has zeros on its diagonal, determinant $-1$, and is its own inverse.
+
+**Next:** a short pass on tests for a singular matrix, then multiplying block matrices that have off-diagonal blocks.</summary>
+@@ verify
+import numpy as np
+A = np.array([[1.0, 2.0], [3.0, 4.0]]); D = np.array([[5.0, 6.0], [7.0, 8.0]])
+assert round(np.linalg.det(A)) == -2 == 4 - 6 and round(np.linalg.det(D)) == -2 == 40 - 42
+P = np.array([[2, 1], [1, 1]]); Q = np.array([[0, 1], [1, 0]])
+Pinv = np.array([[1, -1], [-1, 2]])
+assert (P @ Pinv).tolist() == [[1, 0], [0, 1]]                    # the learner's P^-1 is right
+assert 0 * 0 - 1 * 1 == -1 and round(np.linalg.det(Q)) == -1      # Q is not singular
+assert (Q @ Q).tolist() == [[1, 0], [0, 1]]                       # Q is its own inverse
+assert (Q @ [3, 8]).tolist() == [8, 3]                            # it swaps the two coordinates
+Z = np.zeros((2, 2), dtype=int)
+N = np.block([[P, Z], [Z, Q]]); Ninv = np.block([[Pinv, Z], [Z, Q]])
+assert (N @ Ninv).tolist() == np.eye(4, dtype=int).tolist()
+# a triangular matrix with a zero on its diagonal is singular (the card's last sentence)
+T = np.array([[2.0, 5.0], [0.0, 0.0]])
+assert abs(np.linalg.det(T)) < 1e-12

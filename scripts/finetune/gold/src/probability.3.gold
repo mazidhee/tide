@@ -1,0 +1,561 @@
+@@@@ mark-error-binomial-complement-misses-one
+situation: mark-error
+topic: The binomial distribution
+voice: wordy
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["at least (one|1)|exactly (one|1)|0 or 1","1909/4096"],"must":["1909/4096","0\\.466","1458/4096"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["821/3125","0\\.2627","0\\.263"]}
+@@ tutor
+**Problem 3 · harder**
+
+A batch of 6 chips is tested. Each chip is faulty with probability $\frac14$, independently of the others. Find the probability that at least 2 of the 6 are faulty.
+
+<solution>Use the complement: P(X ≥ 2) = 1 − P(X = 0) − P(X = 1). P(X = 0) = (3/4)^6 = 729/4096. P(X = 1) = 6 × (1/4) × (3/4)^5 = 1458/4096. So P(X ≥ 2) = 1 − 2187/4096 = 1909/4096 ≈ 0.466.</solution>
+<check lang="python">
+from fractions import Fraction
+from math import comb
+p = Fraction(1, 4)
+ans = sum(comb(6, k) * p**k * (1 - p)**(6 - k) for k in range(2, 7))
+assert ans == Fraction(1909, 4096) and round(float(ans), 3) == 0.466
+</check>
+
+<ask type="problem">The probability, with your working.</ask>
+@@ learner answer sure
+Adding up the cases for 2, 3, 4, 5 and 6 faulty chips would take five terms, so I'll go through the complement instead. Here n = 6 and p = 1/4, so the chance a chip is fine is 3/4. P(no faulty chips) = (3/4)^6 = 729/4096, which is about 0.178. Then P(at least 2) = 1 - 729/4096 = 3367/4096, about 0.822.
+@@ reply
+<grade verdict="partial" score="0.5">The complement is the right route, and "(3/4)^6 = 729/4096" is correct. The first wrong step is "P(at least 2) = 1 - 729/4096": taking away only the no-faults case leaves at least 1 faulty, not at least 2. The opposite of "at least 2" is "0 or 1", so exactly one faulty has to come off as well.</grade>
+
+$P(X = 1) = 6 \times \frac14 \times \left(\frac34\right)^5$ = 1458/4096, so $P(X \ge 2)$ = 1 − 729/4096 − 1458/4096 = 1909/4096 ≈ 0.466. Your arithmetic after the slip is sound: 3367/4096 is the correct value of $P(X \ge 1)$.
+
+<card>What is the complement of "at least 2 successes"? :: "0 or 1 successes". P(X ≥ 2) = 1 − P(X = 0) − P(X = 1). Only "at least 1" has the single-term complement 1 − P(X = 0).</card>
+
+<note>Complement of "at least $k$": every count below $k$. $P(X \ge k) = 1 - \sum_{j=0}^{k-1} P(X = j)$. List the excluded counts before subtracting.</note>
+
+**Problem 4 · same level**
+
+5 packets are sent, and each is lost with probability $\frac15$, independently. Find the probability that at least 2 are lost.
+
+<solution>P(X = 0) = (4/5)^5 = 1024/3125. P(X = 1) = 5 × (1/5) × (4/5)^4 = 1280/3125. P(X ≥ 2) = 1 − 2304/3125 = 821/3125 ≈ 0.263.</solution>
+<check lang="python">
+from fractions import Fraction
+from math import comb
+p = Fraction(1, 5)
+ans = sum(comb(5, k) * p**k * (1 - p)**(5 - k) for k in range(2, 6))
+assert ans == Fraction(821, 3125)
+</check>
+
+<ask type="problem">The probability, with the counts you excluded and the term for each.</ask>
+@@ verify
+from fractions import Fraction as F
+from itertools import product
+p = F(1, 4)
+def dist(n, p):
+    d = [F(0)] * (n + 1)
+    for o in product([0, 1], repeat=n):
+        d[sum(o)] += p**sum(o) * (1 - p)**(n - sum(o))
+    return d
+d = dist(6, p)
+assert d[0] == F(729, 4096) and d[1] == F(1458, 4096) and round(float(d[0]), 3) == 0.178
+# the learner's result is P(X >= 1), and their arithmetic is right
+assert 1 - d[0] == F(3367, 4096) == sum(d[1:]) and round(3367 / 4096, 3) == 0.822
+# the right answer
+assert sum(d[2:]) == F(1909, 4096) == 1 - F(729, 4096) - F(1458, 4096) and round(1909 / 4096, 3) == 0.466
+assert F(729 + 1458, 4096) == F(2187, 4096)
+# problem 4
+e = dist(5, F(1, 5))
+assert e[0] == F(1024, 3125) and e[1] == F(1280, 3125) and sum(e[2:]) == F(821, 3125) and round(821 / 3125, 3) == 0.263
+assert '821/3125' in solution(reply) and '821/3125' not in visible(reply)
+
+@@@@ mark-error-inclusion-exclusion-drops-triple
+situation: mark-error
+topic: Inclusion-exclusion for probabilities
+voice: terse
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["multiple of 42|all three|triple","5/7"],"must":["30/42","5/7"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["23/35","46/70","\\b46\\b"]}
+@@ tutor
+**Problem 2 · same level**
+
+A whole number is picked uniformly at random from 1 to 42. Find the probability that it is divisible by 2, by 3 or by 7.
+
+<solution>Singles: 21 + 14 + 6 = 41. Pairs (multiples of 6, 14, 21): 7 + 3 + 2 = 12. Triple (multiples of 42): 1. Count = 41 − 12 + 1 = 30, so the probability is 30/42 = 5/7.</solution>
+<check lang="python">
+from fractions import Fraction
+n = sum(1 for k in range(1, 43) if k % 2 == 0 or k % 3 == 0 or k % 7 == 0)
+assert n == 30 and Fraction(n, 42) == Fraction(5, 7)
+</check>
+
+<ask type="problem">The probability, with the counts you added and subtracted.</ask>
+@@ learner answer sure
+mult of 2: 21. mult of 3: 14. mult of 7: 6. sum 41.
+overlaps: mult of 6: 7, mult of 14: 3, mult of 21: 2. sum 12.
+41 - 12 = 29. P = 29/42
+@@ reply
+<grade verdict="partial" score="0.6">All six counts are right: "sum 41" for the singles and "sum 12" for the pairwise overlaps. The first wrong step is stopping at "41 - 12 = 29": the number 42 is a multiple of all three, so it was added 3 times and then subtracted 3 times, and is no longer counted at all. Adding the triple overlap back gives 30, so the probability is 30/42 = 5/7.</grade>
+
+Check on the single number 42: it is in each of the three singles (+3) and each of the three pairs (−3), a net count of 0, yet it is divisible by 2. The last term, +1 for the multiples of 42, repairs that.
+
+<card>With three events, why is the triple overlap added back in inclusion-exclusion? :: An outcome in all three is added 3 times by the singles and removed 3 times by the pairs, so it is counted 0 times; adding the triple once makes it count once.</card>
+
+**Problem 3 · same level**
+
+A whole number is picked uniformly at random from 1 to 70. Find the probability that it is divisible by 2, by 5 or by 7.
+
+<solution>Singles: 35 + 14 + 10 = 59. Pairs (multiples of 10, 14, 35): 7 + 5 + 2 = 14. Triple (multiples of 70): 1. Count = 59 − 14 + 1 = 46, so the probability is 46/70 = 23/35.</solution>
+<check lang="python">
+from fractions import Fraction
+n = sum(1 for k in range(1, 71) if k % 2 == 0 or k % 5 == 0 or k % 7 == 0)
+assert n == 46 and Fraction(n, 70) == Fraction(23, 35)
+</check>
+
+<ask type="problem">The probability, with all seven counts.</ask>
+@@ verify
+from fractions import Fraction as F
+c = lambda N, d: N // d
+# the learner's counts are all right
+assert [c(42, d) for d in (2, 3, 7)] == [21, 14, 6] and 21 + 14 + 6 == 41
+assert [c(42, d) for d in (6, 14, 21)] == [7, 3, 2] and 7 + 3 + 2 == 12
+assert 41 - 12 == 29 and c(42, 42) == 1 and 29 + 1 == 30
+brute = sum(1 for k in range(1, 43) if k % 2 == 0 or k % 3 == 0 or k % 7 == 0)
+assert brute == 30 and F(30, 42) == F(5, 7)
+# 42 is the only number counted 0 times by singles minus pairs
+net = lambda k: sum(k % d == 0 for d in (2, 3, 7)) - sum(k % d == 0 for d in (6, 14, 21))
+assert [k for k in range(1, 43) if net(k) == 0 and (k % 2 == 0 or k % 3 == 0 or k % 7 == 0)] == [42]
+# problem 3
+assert [c(70, d) for d in (2, 5, 7, 10, 14, 35, 70)] == [35, 14, 10, 7, 5, 2, 1]
+assert 35 + 14 + 10 == 59 and 7 + 5 + 2 == 14 and 59 - 14 + 1 == 46
+assert sum(1 for k in range(1, 71) if k % 2 == 0 or k % 5 == 0 or k % 7 == 0) == 46 and F(46, 70) == F(23, 35)
+assert '23/35' in solution(reply) and '23/35' not in visible(reply)
+
+@@@@ mark-error-variance-subtracts-mean-unsquared
+situation: mark-error
+topic: Standard deviation of a discrete distribution
+options: {"strategy":"maths"}
+voice: typos
+level: easy
+expect: {"verdict":"partial","accept":["wrong"],"names":["E\\[X\\]\\^2|square of the mean|squared","1\\.5|3/2"],"must":["1\\.22"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["4\\.25","17/4","2\\.06"]}
+@@ tutor
+The variance of $X$ is the mean squared distance from the mean, $\operatorname{Var}(X) = E[(X - \mu)^2]$, and the standard deviation is its square root, which puts the spread back in the units of $X$.
+
+<note>Variance: $\operatorname{Var}(X) = E[(X - \mu)^2]$ with $\mu = E[X]$. Standard deviation: $\sigma = \sqrt{\operatorname{Var}(X)}$, in the same units as $X$.</note>
+
+$X$ takes the value 1 with probability $\frac12$, 2 with probability $\frac14$ and 4 with probability $\frac14$. Find the variance and the standard deviation of $X$.
+
+<solution>E[X] = 1/2 + 2/4 + 4/4 = 2. E[X^2] = 1/2 + 4/4 + 16/4 = 5.5. Var(X) = 5.5 − 2^2 = 1.5. SD = sqrt(1.5) ≈ 1.22.</solution>
+<check lang="python">
+from fractions import Fraction
+from math import sqrt
+pmf = {1: Fraction(1, 2), 2: Fraction(1, 4), 4: Fraction(1, 4)}
+mu = sum(x * p for x, p in pmf.items())
+var = sum((x - mu)**2 * p for x, p in pmf.items())
+assert mu == 2 and var == Fraction(3, 2) and round(sqrt(var), 2) == 1.22
+</check>
+
+<ask type="problem">The variance and the standard deviation, with your working.</ask>
+@@ learner answer sure
+E[X] = 1(1/2) + 2(1/4) + 4(1/4) = 2
+E[X^2] = 1(1/2) + 4(1/4) + 16(1/4) = 5.5
+Var = E[X^2] - E[X] = 5.5 - 2 = 3.5
+sd = sqrt(3.5) = 1.87 . used the shorcut formula insted of the definiton
+@@ reply
+<grade verdict="partial" score="0.6">Both expectations are right: "E[X] = 1(1/2) + 2(1/4) + 4(1/4) = 2" and $E[X^2] = 5.5$. The first wrong step is "Var = E[X^2] - E[X]": the shortcut subtracts the square of the mean, $E[X]^2 = 4$, so the variance is $5.5 - 4 = 1.5$ and the standard deviation is $\sqrt{1.5} \approx 1.22$. Your square root of 3.5 is taken correctly; it starts from the wrong variance.</grade>
+
+A units check catches this slip. If $X$ is in seconds, $E[X^2]$ is in seconds squared and $E[X]$ is in seconds, so one cannot be subtracted from the other; $E[X]^2$ is in seconds squared, as a variance must be.
+
+<card>What is the shortcut formula for variance? :: Var(X) = E[X^2] − (E[X])^2: the mean of the squares minus the square of the mean. Both terms are in squared units.</card>
+
+<note>Shortcut: $\operatorname{Var}(X) = E[X^2] - (E[X])^2$. It is the definition $E[(X-\mu)^2]$ expanded; the mean is squared before it is subtracted.</note>
+
+$Y$ takes the value 0 with probability $\frac13$, 3 with probability $\frac12$ and 6 with probability $\frac16$. Find the variance and the standard deviation of $Y$ with the shortcut formula.
+
+<solution>E[Y] = 0 + 3/2 + 1 = 2.5. E[Y^2] = 0 + 9/2 + 36/6 = 10.5. Var(Y) = 10.5 − 2.5^2 = 10.5 − 6.25 = 4.25. SD = sqrt(4.25) ≈ 2.06.</solution>
+<check lang="python">
+from fractions import Fraction
+from math import sqrt
+pmf = {0: Fraction(1, 3), 3: Fraction(1, 2), 6: Fraction(1, 6)}
+mu = sum(y * p for y, p in pmf.items())
+var = sum((y - mu)**2 * p for y, p in pmf.items())
+assert sum(pmf.values()) == 1 and mu == Fraction(5, 2) and var == Fraction(17, 4) and round(sqrt(var), 2) == 2.06
+</check>
+
+<ask type="problem">The variance and the standard deviation, with $E[Y]$ and $E[Y^2]$.</ask>
+@@ verify
+from fractions import Fraction as F
+from math import sqrt
+pmf = {1: F(1, 2), 2: F(1, 4), 4: F(1, 4)}
+assert sum(pmf.values()) == 1
+mu = sum(x * p for x, p in pmf.items()); ex2 = sum(x * x * p for x, p in pmf.items())
+assert mu == 2 and ex2 == F(11, 2)
+# the learner's slip and what follows from it
+assert ex2 - mu == F(7, 2) and round(sqrt(3.5), 2) == 1.87
+# the right values, by the definition and by the shortcut
+assert ex2 - mu**2 == F(3, 2) == sum((x - mu)**2 * p for x, p in pmf.items()) and round(sqrt(1.5), 2) == 1.22
+# problem set
+q = {0: F(1, 3), 3: F(1, 2), 6: F(1, 6)}
+m = sum(y * p for y, p in q.items()); m2 = sum(y * y * p for y, p in q.items())
+assert m == F(5, 2) and m2 == F(21, 2) and m2 - m**2 == F(17, 4) and float(m**2) == 6.25 and round(sqrt(4.25), 2) == 2.06
+assert '4.25' in solution(reply) and '4.25' not in visible(reply)
+
+@@@@ mark-error-z-score-reads-wrong-tail
+situation: mark-error
+topic: The normal distribution and z-scores
+voice: plain
+level: easy
+expect: {"verdict":"partial","accept":["wrong"],"names":["below|left|less than","0\\.0668|6\\.68"],"must":["0\\.0668","1 - 0\\.9332|1 − 0\\.9332"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["0\\.0401","4\\.01","1\\.75\\b.*z|z = 1\\.75"]}
+@@ tutor
+**Problem 2 · same level**
+
+Marks in an exam are normally distributed with mean 70 and standard deviation 8. What fraction of candidates score above 82? Table values: $\Phi(1.25) \approx 0.8944$, $\Phi(1.5) \approx 0.9332$, $\Phi(1.75) \approx 0.9599$.
+
+<solution>z = (82 − 70) / 8 = 1.5. Φ(1.5) = 0.9332 is the fraction below 82, so the fraction above is 1 − 0.9332 = 0.0668.</solution>
+<check lang="python">
+from statistics import NormalDist
+assert (82 - 70) / 8 == 1.5
+assert round(1 - NormalDist(70, 8).cdf(82), 4) == 0.0668
+</check>
+
+<ask type="problem">The fraction, with the z-score and how you used the table.</ask>
+@@ learner answer sure
+z = (82 - 70) / 8 = 12 / 8 = 1.5. From the table, Φ(1.5) = 0.9332. So 93.32% of candidates score above 82.
+@@ reply
+<grade verdict="partial" score="0.6">The standardising is right: "z = (82 - 70) / 8 = 12 / 8 = 1.5", and so is the table value. The wrong step is the last one, "93.32% of candidates score above 82": $\Phi(z)$ is the area to the left of $z$, the fraction below 82. The fraction above is $1 - 0.9332 = 0.0668$, about 6.7%.</grade>
+
+A size check settles which tail a number belongs to: 82 is above the mean of 70, and half of all candidates are above the mean, so fewer than half can be above 82. An answer of 93% fails that check; 6.7% passes it.
+
+<card>What area does Φ(z) give, and how do you get the upper tail? :: Φ(z) = P(Z ≤ z), the area to the left of z. The upper tail is P(Z > z) = 1 − Φ(z).</card>
+
+<note>$\Phi(z) = P(Z \le z)$: always the area to the left. Above: $1 - \Phi(z)$. Between $a$ and $b$: $\Phi(b) - \Phi(a)$. Check the size of the answer against the mean, where the area is one half.</note>
+
+**Problem 3 · same level**
+
+In the same exam (mean 70, standard deviation 8), what fraction of candidates score above 84? Use the same table.
+
+<solution>z = (84 − 70) / 8 = 1.75. Fraction above = 1 − Φ(1.75) = 1 − 0.9599 = 0.0401.</solution>
+<check lang="python">
+from statistics import NormalDist
+assert (84 - 70) / 8 == 1.75
+assert round(1 - NormalDist(70, 8).cdf(84), 4) == 0.0401
+</check>
+
+<ask type="problem">The fraction, with the z-score and the tail you took.</ask>
+@@ verify
+from statistics import NormalDist
+N = NormalDist()
+# the table given to the learner
+for z, shown in [(1.25, '0.8944'), (1.5, '0.9332'), (1.75, '0.9599')]:
+    assert f'{N.cdf(z):.4f}' == shown and shown in tutor[0]
+D = NormalDist(70, 8)
+assert (82 - 70) / 8 == 1.5
+# the learner's figure is the lower tail
+assert round(D.cdf(82) * 100, 2) == 93.32
+# the right answer
+assert round(1 - D.cdf(82), 4) == 0.0668 == round(1 - 0.9332, 4) and round((1 - D.cdf(82)) * 100, 1) == 6.7
+# problem 3
+assert (84 - 70) / 8 == 1.75 and round(1 - D.cdf(84), 4) == 0.0401 == round(1 - 0.9599, 4)
+assert '0.0401' in solution(reply) and '0.0401' not in visible(reply)
+
+@@@@ mark-error-stationary-ratio-inverted
+situation: mark-error
+topic: Markov chains and stationary distributions
+voice: terse
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["4\\\\pi_B|4 ?π_B|four times","0\\.8|4/5"],"must":["0\\.8","0\\.2"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["2/5","3/5","\\(0\\.4, 0\\.6\\)"]}
+@@ tutor
+**Problem 2 · same level**
+
+A worker is Idle or Busy at each tick. From Idle it stays Idle with probability 0.9 and becomes Busy with probability 0.1. From Busy it becomes Idle with probability 0.4 and stays Busy with probability 0.6. Find the stationary distribution $(\pi_I, \pi_B)$.
+
+<solution>π_I = 0.9 π_I + 0.4 π_B, so 0.1 π_I = 0.4 π_B and π_I = 4 π_B. With π_I + π_B = 1: π_B = 1/5 and π_I = 4/5. Stationary distribution (0.8, 0.2).</solution>
+<check lang="python">
+from fractions import Fraction as F
+P = [[F(9, 10), F(1, 10)], [F(4, 10), F(6, 10)]]
+pi = [F(4, 5), F(1, 5)]
+assert sum(pi) == 1 and [pi[0] * P[0][j] + pi[1] * P[1][j] for j in range(2)] == pi
+</check>
+
+<ask type="problem">The stationary distribution, with the equations you solved.</ask>
+@@ learner answer sure
+π_I = 0.9 π_I + 0.4 π_B
+0.1 π_I = 0.4 π_B
+π_B = 4 π_I
+π_I + π_B = 1 → 5 π_I = 1 → π_I = 0.2, π_B = 0.8
+@@ reply
+<grade verdict="partial" score="0.6">The set-up is right: "0.1 π_I = 0.4 π_B" is the correct balance equation. The first wrong step is the next line, "π_B = 4 π_I": dividing $0.1\,\pi_I = 0.4\,\pi_B$ by 0.1 gives $\pi_I = 4\pi_B$, the other way round. Then $5\pi_B = 1$, so the stationary distribution is $(\pi_I, \pi_B) = (0.8, 0.2)$. Your last line follows correctly from the inverted ratio.</grade>
+
+The chain itself says which state must be the larger: it leaves Idle only 1 tick in 10 but leaves Busy 4 ticks in 10, so it spends most of its time Idle. And $0.1\,\pi_I = 0.4\,\pi_B$ reads as "flow out of Idle = flow out of Busy": $0.1 \times 0.8 = 0.4 \times 0.2 = 0.08$.
+
+<card>A two-state chain leaves A with probability a and leaves B with probability b. What is its stationary distribution? :: Balance: π_A a = π_B b, so π_A = b / (a + b) and π_B = a / (a + b). The state that is left less often gets the larger share.</card>
+
+<note>Two-state balance: $\pi_A \cdot P(A \to B) = \pi_B \cdot P(B \to A)$. The state that is harder to leave has the larger stationary probability; use that to check which way round the ratio goes.</note>
+
+**Problem 3 · same level**
+
+A link is Healthy or Degraded at each tick. From Healthy it becomes Degraded with probability 0.3; from Degraded it becomes Healthy with probability 0.2. Find the stationary distribution $(\pi_H, \pi_D)$.
+
+<solution>Balance: 0.3 π_H = 0.2 π_D, so π_D = 1.5 π_H. With π_H + π_D = 1: 2.5 π_H = 1, π_H = 0.4, π_D = 0.6. Stationary distribution (0.4, 0.6) = (2/5, 3/5).</solution>
+<check lang="python">
+from fractions import Fraction as F
+P = [[F(7, 10), F(3, 10)], [F(2, 10), F(8, 10)]]
+pi = [F(2, 5), F(3, 5)]
+assert sum(pi) == 1 and [pi[0] * P[0][j] + pi[1] * P[1][j] for j in range(2)] == pi
+</check>
+
+<ask type="problem">The stationary distribution, with the balance equation and a check of which state should be larger.</ask>
+@@ verify
+from fractions import Fraction as F
+def stationary(a, b):
+    # leave-first-state probability a, leave-second-state probability b
+    return (b / (a + b), a / (a + b))
+P = [[F(9, 10), F(1, 10)], [F(4, 10), F(6, 10)]]
+pi = stationary(F(1, 10), F(4, 10))
+assert pi == (F(4, 5), F(1, 5))
+assert tuple(pi[0] * P[0][j] + pi[1] * P[1][j] for j in range(2)) == pi
+# the learner's balance equation is the right one, their answer is not stationary
+assert F(1, 10) * pi[0] == F(4, 10) * pi[1] == F(8, 100)
+bad = (F(1, 5), F(4, 5))
+assert tuple(bad[0] * P[0][j] + bad[1] * P[1][j] for j in range(2)) != bad
+# their last line follows from pi_B = 4 pi_I
+assert F(1, 5) + 4 * F(1, 5) == 1
+# convergence from any start
+d = (F(1, 2), F(1, 2))
+for _ in range(100):
+    d = tuple(d[0] * P[0][j] + d[1] * P[1][j] for j in range(2))
+assert abs(float(d[0]) - 0.8) < 1e-12
+# problem 3
+assert stationary(F(3, 10), F(2, 10)) == (F(2, 5), F(3, 5))
+assert '(0.4, 0.6)' in solution(reply) and '(0.4, 0.6)' not in visible(reply)
+
+@@@@ unusual-committee-complement-count
+situation: mark-unusual
+topic: Sample spaces and counting outcomes
+voice: terse
+level: medium
+expect: {"verdict":"correct","must":["20/21"],"mustNot":["should have","supposed to","intended method","rather than the"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["25/42","50/84","\\b50\\b"]}
+@@ tutor
+**Problem 2 · same level**
+
+A committee of 3 is chosen at random from 5 women and 4 men, every group of 3 being equally likely. Find the probability that the committee contains at least one woman.
+
+<solution>There are C(9,3) = 84 committees. With exactly 1 woman: 5 × C(4,2) = 30. Exactly 2: C(5,2) × 4 = 40. Exactly 3: C(5,3) = 10. Total 80, so the probability is 80/84 = 20/21.</solution>
+<check lang="python">
+from fractions import Fraction
+from itertools import combinations
+people = ['W'] * 5 + ['M'] * 4
+groups = list(combinations(range(9), 3))
+good = sum(1 for g in groups if any(people[i] == 'W' for i in g))
+assert len(groups) == 84 and Fraction(good, 84) == Fraction(20, 21)
+</check>
+
+<ask type="problem">The probability, with the counts you used.</ask>
+@@ learner answer sure
+only way to fail is all men. C(4,3) = 4 of the C(9,3) = 84 committees. 1 - 4/84 = 80/84 = 20/21
+@@ reply
+<grade verdict="correct" score="1">"only way to fail is all men" is valid and the shortest route: "at least one woman" and "all men" split the 84 committees with no overlap, so 1 − 4/84 = 20/21. Counting the cases with 1, 2 and 3 women gives the same 80 committees in three terms where yours takes one.</grade>
+
+**Problem 3 · harder**
+
+From the same 5 women and 4 men, a committee of 3 is again chosen at random. Find the probability that it contains more women than men.
+
+<solution>More women than men means 2 or 3 women. Exactly 2 women: C(5,2) × C(4,1) = 40. Exactly 3 women: C(5,3) = 10. Total 50 of 84, so the probability is 50/84 = 25/42. The complement (0 or 1 women: 4 + 30 = 34 committees) also takes two terms, so it saves nothing here.</solution>
+<check lang="python">
+from fractions import Fraction
+from itertools import combinations
+people = ['W'] * 5 + ['M'] * 4
+groups = list(combinations(range(9), 3))
+good = sum(1 for g in groups if sum(people[i] == 'W' for i in g) >= 2)
+assert Fraction(good, len(groups)) == Fraction(25, 42)
+</check>
+
+<ask type="problem">The probability, with the counts you used. Say whether the complement shortens the work this time.</ask>
+@@ verify
+from fractions import Fraction as F
+from itertools import combinations
+from math import comb
+people = ['W'] * 5 + ['M'] * 4
+groups = list(combinations(range(9), 3))
+w = lambda g: sum(people[i] == 'W' for i in g)
+by = [sum(1 for g in groups if w(g) == k) for k in range(4)]
+assert by == [4, 30, 40, 10] and len(groups) == comb(9, 3) == 84 and comb(4, 3) == 4
+# the learner's complement count equals the direct count
+assert 1 - F(4, 84) == F(80, 84) == F(20, 21) == F(by[1] + by[2] + by[3], 84)
+# problem 3
+assert F(by[2] + by[3], 84) == F(25, 42)
+assert '25/42' in solution(reply) and '25/42' not in visible(reply)
+
+@@@@ unusual-second-card-ace-by-symmetry
+situation: mark-unusual
+topic: Sampling without replacement
+voice: overconfident
+level: medium
+expect: {"verdict":"correct","must":["1/13","symmetr|equally likely"],"mustNot":["should have","supposed to","not rigorous","lucky"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["1/221","12/2652","0\\.0045"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+Two cards are dealt from a well-shuffled 52-card deck, one after the other, without replacement. Find the probability that the second card is an ace.
+
+<solution>Condition on the first card. P(first ace) × P(second ace | first ace) + P(first not ace) × P(second ace | first not ace) = 4/52 × 3/51 + 48/52 × 4/51 = (12 + 192) / 2652 = 204/2652 = 1/13.</solution>
+<check lang="python">
+from fractions import Fraction
+p = Fraction(4, 52) * Fraction(3, 51) + Fraction(48, 52) * Fraction(4, 51)
+assert p == Fraction(1, 13)
+</check>
+
+<ask type="problem">The probability, with your working.</ask>
+@@ learner answer sure
+No calculation needed. A shuffled deck is just a random ordering, so the card sitting in position 2 is equally likely to be any of the 52 cards. 4 of those are aces so it's 4/52 = 1/13. The first card only matters if you look at it.
+@@ reply
+<grade verdict="correct" score="1">"the card sitting in position 2 is equally likely to be any of the 52 cards" is a complete argument: every ordering of the deck is equally likely, so no position favours any card, and 4/52 = 1/13. Your last sentence is the exact condition too: the answer changes only once the first card is seen.</grade>
+
+Conditioning on the first card reaches the same value the long way, $\frac{4}{52} \cdot \frac{3}{51} + \frac{48}{52} \cdot \frac{4}{51} = \frac{204}{2652} = \frac{1}{13}$, which confirms the symmetry argument.
+
+<note>Symmetry in a shuffled deck: before any card is seen, every position is equally likely to hold any given card, and any set of $k$ positions behaves like the first $k$. Use it to move a question about late positions to the top of the deck.</note>
+
+**Problem 2 · harder**
+
+Five cards are dealt in a row from a well-shuffled 52-card deck. Find the probability that the 2nd and the 5th cards are both aces.
+
+<solution>By symmetry, positions 2 and 5 behave like positions 1 and 2: P = 4/52 × 3/51 = 12/2652 = 1/221.</solution>
+<check lang="python">
+from fractions import Fraction
+from itertools import permutations
+# small exact model of the same symmetry: a 7-card deck with 3 marked cards, positions 2 and 5 of 5 dealt
+deck = [1, 1, 1, 0, 0, 0, 0]
+deals = list(permutations(range(7), 5))
+both = sum(1 for d in deals if deck[d[1]] and deck[d[4]])
+assert Fraction(both, len(deals)) == Fraction(3, 7) * Fraction(2, 6)
+assert Fraction(4, 52) * Fraction(3, 51) == Fraction(1, 221)
+</check>
+
+<ask type="problem">The probability, with the argument that gets you there.</ask>
+@@ verify
+from fractions import Fraction as F
+from itertools import permutations
+# exact, by listing every ordered pair of distinct cards (52 × 51 of them); cards 0..3 are the aces
+pairs = list(permutations(range(52), 2))
+assert len(pairs) == 2652
+second_ace = sum(1 for a, b in pairs if b < 4)
+assert second_ace == 204 and F(second_ace, 2652) == F(1, 13) == F(4, 52)
+assert sum(1 for a, b in pairs if a < 4 and b < 4) == 12 and sum(1 for a, b in pairs if a >= 4 and b < 4) == 192
+# problem 2: positions 2 and 5 of five cards, checked exactly by counting ordered pairs for those two positions
+# (the other three positions can be filled in the same number of ways whatever those two cards are)
+assert F(sum(1 for a, b in pairs if a < 4 and b < 4), len(pairs)) == F(1, 221)
+# and on a small deck by full enumeration of 5-card deals: 3 marked cards among 8
+deck = [1, 1, 1, 0, 0, 0, 0, 0]
+deals = list(permutations(range(8), 5))
+assert F(sum(1 for d in deals if deck[d[1]] and deck[d[4]]), len(deals)) == F(3, 8) * F(2, 7)
+assert '1/221' in solution(reply) and '1/221' not in visible(reply)
+
+@@@@ unusual-distinct-faces-by-indicators
+situation: mark-unusual
+topic: Expected value of dice games
+voice: wordy
+level: hard
+expect: {"verdict":"correct","must":["671/216","indicator"],"mustNot":["should have","supposed to","but you need independence","only works if"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["125/54","500/216","2\\.31"]}
+@@ tutor
+**Problem 3 · harder**
+
+A fair six-sided die is rolled 4 times. Let $D$ be the number of distinct faces that appear (for example, the rolls 2, 5, 2, 6 give $D = 3$). Find $E[D]$.
+
+<solution>Of the 6^4 = 1296 sequences, 6 show 1 distinct face, 210 show 2, 720 show 3 and 360 show 4. E[D] = (6 + 420 + 2160 + 1440) / 1296 = 4026/1296 = 671/216 ≈ 3.106.</solution>
+<check lang="python">
+from fractions import Fraction
+from itertools import product
+rolls = list(product(range(6), repeat=4))
+e = Fraction(sum(len(set(r)) for r in rolls), len(rolls))
+assert e == Fraction(671, 216)
+</check>
+
+<ask type="problem">The expected value as a fraction, with your working.</ask>
+@@ learner answer sure
+Finding the whole distribution of D looked painful so I went face by face instead. For each face let I be 1 if that face shows up at least once in the 4 rolls and 0 if not. A given face is missed on every roll with probability (5/6)^4 = 625/1296, so it shows up with probability 671/1296. D is the sum of the six I's, so E[D] = 6 × 671/1296 = 671/216, roughly 3.11. I know the six I's aren't independent (if five faces showed up... they can't all in 4 rolls) but I don't think adding expectations needs that.
+@@ reply
+<grade verdict="correct" score="1">"D is the sum of the six I's, so E[D] = 6 × 671/1296 = 671/216" is right, and so is your closing remark: the indicators are dependent, but the expectation of a sum is the sum of the expectations with no condition on dependence. Each indicator's expectation is just the probability that its face appears.</grade>
+
+Counting the 1296 sequences by their number of distinct faces gives the same 671/216, with far more work. The indicator method is the standard tool for expected counts, so the next problem is one where the distribution is harder still.
+
+**Problem 4 · harder**
+
+A fair die is rolled 4 times. Find the expected number of faces that appear exactly once.
+
+<solution>For one face, P(it appears exactly once in 4 rolls) = 4 × (1/6) × (5/6)^3 = 500/1296. By linearity over the 6 faces, the expectation is 6 × 500/1296 = 3000/1296 = 125/54 ≈ 2.31.</solution>
+<check lang="python">
+from fractions import Fraction
+from itertools import product
+rolls = list(product(range(6), repeat=4))
+e = Fraction(sum(sum(1 for f in range(6) if r.count(f) == 1) for r in rolls), len(rolls))
+assert e == Fraction(125, 54)
+</check>
+
+<ask type="problem">The expected value as a fraction, with the indicator you defined and its probability.</ask>
+@@ verify
+from fractions import Fraction as F
+from itertools import product
+from collections import Counter
+rolls = list(product(range(6), repeat=4))
+by = Counter(len(set(r)) for r in rolls)
+assert dict(by) == {1: 6, 2: 210, 3: 720, 4: 360} and len(rolls) == 1296
+assert 6 * 1 + 210 * 2 + 720 * 3 + 360 * 4 == 4026 and F(4026, 1296) == F(671, 216)
+assert round(671 / 216, 3) == 3.106 and round(671 / 216, 2) == 3.11
+# the learner's route
+assert F(5, 6)**4 == F(625, 1296) and 1 - F(625, 1296) == F(671, 1296) and 6 * F(671, 1296) == F(671, 216)
+# a single indicator's probability by enumeration
+assert F(sum(1 for r in rolls if 0 in r), 1296) == F(671, 1296)
+# the indicators really are dependent: P(face 0 and face 1 both appear) != product
+both = F(sum(1 for r in rolls if 0 in r and 1 in r), 1296)
+assert both != F(671, 1296)**2
+# problem 4
+assert 4 * F(1, 6) * F(5, 6)**3 == F(500, 1296) and 6 * F(500, 1296) == F(125, 54) and round(125 / 54, 2) == 2.31
+assert '125/54' in solution(reply) and '125/54' not in visible(reply)
+
+@@@@ unusual-max-of-dice-by-cdf-difference
+situation: mark-unusual
+topic: Order statistics: the maximum of two dice
+options: {"strategy":"maths"}
+voice: terse
+level: medium
+expect: {"verdict":"correct","must":["7/36"],"mustNot":["should have","supposed to","list(ed)? the outcomes instead"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["61/216","\\b61\\b","0\\.282"]}
+@@ tutor
+Two fair dice are rolled and $M$ is the larger of the two numbers (their common value if they are equal). Find $P(M = 4)$.
+
+<solution>The outcomes with maximum 4 are (4,1), (4,2), (4,3), (1,4), (2,4), (3,4) and (4,4): 7 of 36. P(M = 4) = 7/36.</solution>
+<check lang="python">
+from fractions import Fraction
+from itertools import product
+n = sum(1 for a, b in product(range(1, 7), repeat=2) if max(a, b) == 4)
+assert n == 7 and Fraction(n, 36) == Fraction(7, 36)
+</check>
+
+<ask type="problem">The probability as a fraction, with your working.</ask>
+@@ learner answer sure
+max ≤ 4 means both dice ≤ 4: (4/6)^2 = 16/36. max ≤ 3: (3/6)^2 = 9/36. so P(M=4) = 16/36 - 9/36 = 7/36
+@@ reply
+<grade verdict="correct" score="1">"max ≤ 4 means both dice ≤ 4" is the key step and it is valid: the event $M \le m$ is the same as every die being at most $m$, so independence gives $P(M \le m) = (m/6)^2$, and $P(M = 4) = P(M \le 4) - P(M \le 3) = 7/36$. Listing the 7 outcomes agrees, and your method keeps working when listing does not.</grade>
+
+<note>Maximum of independent rolls: $P(M \le m) = P(\text{every roll} \le m)$, a product. Then $P(M = m) = P(M \le m) - P(M \le m - 1)$. For two dice, $P(M = m) = \frac{m^2 - (m-1)^2}{36} = \frac{2m - 1}{36}$.</note>
+
+Three fair dice are rolled and $M$ is the largest of the three numbers. Find $P(M = 5)$.
+
+<solution>P(M ≤ 5) = (5/6)^3 = 125/216 and P(M ≤ 4) = (4/6)^3 = 64/216. P(M = 5) = (125 − 64) / 216 = 61/216 ≈ 0.282.</solution>
+<check lang="python">
+from fractions import Fraction
+from itertools import product
+n = sum(1 for r in product(range(1, 7), repeat=3) if max(r) == 5)
+assert n == 61 and Fraction(n, 216) == Fraction(5, 6)**3 - Fraction(4, 6)**3
+</check>
+
+<ask type="problem">The probability as a fraction, with your working.</ask>
+@@ verify
+from fractions import Fraction as F
+from itertools import product
+two = list(product(range(1, 7), repeat=2))
+P = lambda pred: F(sum(1 for o in two if pred(o)), 36)
+# the learner's two cumulative values and their difference
+assert P(lambda o: max(o) <= 4) == F(16, 36) == F(4, 6)**2
+assert P(lambda o: max(o) <= 3) == F(9, 36) == F(3, 6)**2
+assert P(lambda o: max(o) == 4) == F(7, 36) == F(16, 36) - F(9, 36)
+assert [o for o in two if max(o) == 4].__len__() == 7
+# the note's formula for every m
+for m in range(1, 7):
+    assert P(lambda o: max(o) == m) == F(2 * m - 1, 36) == F(m * m - (m - 1)**2, 36)
+# the next problem
+three = list(product(range(1, 7), repeat=3))
+assert F(sum(1 for o in three if max(o) == 5), 216) == F(61, 216) and round(61 / 216, 3) == 0.282
+assert '61/216' in solution(reply) and '61/216' not in visible(reply)

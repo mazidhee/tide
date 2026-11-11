@@ -1,0 +1,729 @@
+@@@@ wrong-binary-search-probe-count
+situation: after-wrong
+topic: Binary search and its invariants
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["one element|last element|10th","halvings"],"must":["\\b10\\b","1000, 500, 250, 125, 62, 31, 15, 7, 3, 1"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b7\\b"]}
+@@ tutor
+**Problem 2 · same level**
+
+A sorted array has 1000 elements. A binary search with inclusive bounds (`while lo <= hi`, `mid = (lo + hi) // 2`) looks for a value that is not in the array. What is the largest number of elements it can compare with the target before it stops?
+
+<solution>A probe on a range of s elements leaves at most ⌊s/2⌋ of them. The ranges probed have sizes 1000, 500, 250, 125, 62, 31, 15, 7, 3, 1: ten ranges, one comparison in each, so 10. In general ⌊log2 n⌋ + 1 = 9 + 1 = 10.</solution>
+<check lang="python">
+import math
+def probes(n, target):          # the array is 0, 2, 4, ...; odd targets are absent
+    lo, hi, c = 0, n - 1, 0
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        c += 1
+        if 2 * mid < target: lo = mid + 1
+        elif 2 * mid > target: hi = mid - 1
+        else: return c
+    return c
+assert max(probes(1000, t) for t in range(-1, 2000, 2)) == 10 == math.floor(math.log2(1000)) + 1
+</check>
+
+<ask type="problem">The number of comparisons, with how you counted them.</ask>
+@@ learner answer sure
+9. log2(1000) is 9.97 so you round down. After 9 halvings you're down to 1 element and you're done, that's the whole point of binary search.
+@@ reply
+<grade verdict="wrong" score="0.2">"After 9 halvings you're down to 1 element and you're done" stops one step early: a range of one element has not been compared with the target yet. That last element costs a 10th comparison before `lo` passes `hi`.</grade>
+
+Count the ranges that are probed, not the halvings between them. A probe on a range of $s$ elements leaves at most $\lfloor s/2 \rfloor$, so the sizes run
+
+1000, 500, 250, 125, 62, 31, 15, 7, 3, 1.
+
+That is ten ranges with one comparison in each, so the answer is 10. Nine halvings separate ten ranges.
+
+<card>What is the largest number of elements binary search compares with the target in a sorted array of n? :: ⌊log2 n⌋ + 1. The range of one element still has to be probed: for n = 1000 that is 9 + 1 = 10.</card>
+
+<note>Worst-case probes of binary search on $n$ elements: $\lfloor \log_2 n \rfloor + 1$. Count the ranges probed ($n$, $\lfloor n/2 \rfloor$, …, 1), not the halvings.</note>
+
+**Problem 3 · same idea**
+
+The same search runs on a sorted array of 100 elements, again for a value that is absent. What is the largest number of elements it can compare with the target?
+
+<solution>Range sizes 100, 50, 25, 12, 6, 3, 1: seven ranges, so 7 comparisons. ⌊log2 100⌋ + 1 = 6 + 1 = 7.</solution>
+<check lang="python">
+import math
+s, c = 100, 0
+while s >= 1:
+    c += 1
+    s //= 2
+assert c == 7 == math.floor(math.log2(100)) + 1
+</check>
+
+<ask type="problem">The number of comparisons, with the list of range sizes.</ask>
+@@ verify
+import math
+def probes(n, target):
+    lo, hi, c = 0, n - 1, 0
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        c += 1
+        if 2 * mid < target: lo = mid + 1
+        elif 2 * mid > target: hi = mid - 1
+        else: return c
+    return c
+# worst case over every absent and every present target
+assert max(probes(1000, t) for t in range(-1, 2001)) == 10
+assert max(probes(100, t) for t in range(-1, 201)) == 7
+# the range sizes listed
+def sizes(n):
+    out = []
+    while n >= 1:
+        out.append(n); n //= 2
+    return out
+assert ', '.join(map(str, sizes(1000))) + '.' in reply and len(sizes(1000)) == 10
+assert ', '.join(map(str, sizes(100))) in solution(reply) and len(sizes(100)) == 7
+# the learner's figures: log2(1000) = 9.97, and 9 halvings do leave one element
+assert round(math.log2(1000), 2) == 9.97 and 1000 // 2**9 == 1
+assert math.floor(math.log2(1000)) + 1 == 10 and math.floor(math.log2(100)) + 1 == 7
+
+@@@@ wrong-linear-probing-delete-empties-slot
+situation: after-wrong
+topic: Open addressing and linear probing
+voice: plain
+level: medium
+expect: {"verdict":"wrong","accept":["partial"],"names":["empty","stops"],"must":["tombstone","slot 4"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["3, 4, 5(,| and) 6","slot 6"]}
+@@ tutor
+With open addressing every key lives in the table itself. Linear probing: a key $k$ starts at slot $h(k)$ and, if that slot is taken, tries the next one, and the next, wrapping round at the end. A lookup walks the same path and stops when it finds the key or reaches an empty slot, because an insert would have used that slot.
+
+<note>Linear probing: insert and lookup walk the same slots, $h(k), h(k)+1, \dots$ (mod the table size). A lookup stops at the key or at the first empty slot.</note>
+
+**Problem 1 · warm-up**
+
+A table has 7 slots and $h(k) = k \bmod 7$. Insert 10, 17 and 24 in that order. Then 17 is deleted by setting its slot back to empty. What does a lookup of 24 return afterwards?
+
+<solution>All three keys hash to 3, so they occupy slots 3, 4 and 5. Deleting 17 empties slot 4. The lookup of 24 examines slot 3 (holds 10), then slot 4 (empty) and stops: it reports 24 absent, although 24 is still in slot 5.</solution>
+<check lang="python">
+T = [None] * 7
+for k in (10, 17, 24):
+    i = k % 7
+    while T[i] is not None: i = (i + 1) % 7
+    T[i] = k
+assert T[3:6] == [10, 17, 24]
+T[4] = None
+i, seen = 24 % 7, []
+while T[i] is not None and T[i] != 24:
+    seen.append(i); i = (i + 1) % 7
+seen.append(i)
+assert seen == [3, 4] and T[i] is None
+</check>
+
+<ask type="problem">Found or not found, with the slots the lookup examines.</ask>
+@@ learner answer sure
+Found. 10, 17 and 24 all hash to 3 so they go in slots 3, 4, 5. Deleting 17 only clears slot 4, and 24 is still in slot 5, so the lookup gets to it and returns found.
+@@ reply
+<grade verdict="wrong" score="0.3">"they go in slots 3, 4, 5" is right, and 24 is indeed still in slot 5. "the lookup gets to it" is the step that fails: the lookup starts at slot 3, sees 10, moves on to slot 4, finds it empty and stops there.</grade>
+
+An empty slot means "no key with this probe path was ever placed further on", and that was true until the delete broke it. The lookup reports 24 as not found, after examining slots 3 and 4 only.
+
+The fix is a tombstone: deletion marks slot 4 as deleted, not empty. A lookup steps over a tombstone and carries on; an insert may reuse it.
+
+<card>Why can a linear-probing table not delete a key by emptying its slot? :: A lookup stops at the first empty slot, so keys placed further along the same probe path become unreachable. Mark the slot with a tombstone instead.</card>
+
+<note>Deleting under open addressing: write a tombstone, never "empty". Lookups skip tombstones and stop only at a slot that has never held a key; inserts may reuse a tombstone.</note>
+
+**Problem 2 · same idea**
+
+A 7-slot table with $h(k) = k \bmod 7$ uses tombstones. Slots 3, 4 and 5 hold 10, a tombstone and 24; every other slot is empty. A lookup of 38 is run. Which slots does it examine before it can report the key absent?
+
+<solution>38 mod 7 = 3. Slot 3 holds 10 (not 38), slot 4 is a tombstone (skip), slot 5 holds 24 (not 38), slot 6 is empty: stop. It examines slots 3, 4, 5 and 6.</solution>
+<check lang="python">
+EMPTY, TOMB = None, 'tomb'
+T = [EMPTY, EMPTY, EMPTY, 10, TOMB, 24, EMPTY]
+i, seen = 38 % 7, []
+while True:
+    seen.append(i)
+    if T[i] is EMPTY or T[i] == 38: break
+    i = (i + 1) % 7
+assert seen == [3, 4, 5, 6] and T[i] is EMPTY
+</check>
+
+<ask type="problem">The slots examined, in order, and why the lookup stops where it does.</ask>
+@@ verify
+def insert(T, k):
+    i = k % len(T)
+    while T[i] is not None: i = (i + 1) % len(T)
+    T[i] = k
+def lookup(T, k):
+    i, seen = k % len(T), []
+    for _ in range(len(T)):
+        seen.append(i)
+        if T[i] is None: return False, seen
+        if T[i] == k: return True, seen
+        i = (i + 1) % len(T)
+    return False, seen
+T = [None] * 7
+for k in (10, 17, 24): insert(T, k)
+assert [T.index(k) for k in (10, 17, 24)] == [3, 4, 5]          # the learner's placement is right
+assert lookup(T, 24) == (True, [3, 4, 5])
+T[4] = None                                                      # delete by emptying
+assert lookup(T, 24) == (False, [3, 4]) and T[5] == 24           # not found, yet still in slot 5
+T[4] = 'tomb'                                                    # with a tombstone it is found again
+assert lookup(T, 24) == (True, [3, 4, 5])
+assert 38 % 7 == 3 and lookup(T, 38) == (False, [3, 4, 5, 6])
+assert 'slots 3, 4, 5 and 6' in solution(reply)
+
+@@@@ wrong-dijkstra-negative-edge
+situation: after-wrong
+topic: Dijkstra's algorithm
+voice: overconfident
+level: hard
+expect: {"verdict":"wrong","names":["negative cycles","non-negative"],"must":["reports 3","S, A, C, B"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b11\\b","\\b14\\b","more edges"]}
+@@ tutor
+**Problem 2 · harder**
+
+A directed graph has edges S→A (weight 2), S→B (5), B→A (−4) and A→C (1). Dijkstra's algorithm runs from S in its standard form: a vertex's distance is final once it is removed from the priority queue, and it is never updated after that. What distance does the algorithm report for C, and is that the true shortest distance?
+
+<solution>S is removed at 0: A = 2, B = 5. A is removed at 2: C = 3. C is removed at 3. B is removed at 5: B→A would give 1, but A is already final. The algorithm reports 3 for C. The true shortest distance is S→B→A→C = 5 − 4 + 1 = 2, so the report is wrong.</solution>
+<check lang="python">
+import heapq
+E = {'S': [('A', 2), ('B', 5)], 'B': [('A', -4)], 'A': [('C', 1)], 'C': []}
+dist, done, order, pq = {'S': 0}, set(), [], [(0, 'S')]
+while pq:
+    d, u = heapq.heappop(pq)
+    if u in done: continue
+    done.add(u); order.append(u)
+    for v, w in E[u]:
+        if v not in done and d + w < dist.get(v, float('inf')):
+            dist[v] = d + w; heapq.heappush(pq, (d + w, v))
+assert order == ['S', 'A', 'C', 'B'] and dist['C'] == 3 and 5 - 4 + 1 == 2
+</check>
+
+<ask type="problem">The reported distance and the true one, with the order in which vertices leave the queue.</ask>
+@@ learner answer sure
+It reports 2 and that's the true distance. Dijkstra only breaks on negative cycles and there's no cycle here, so a single negative edge is fine. S→B→A→C = 5 − 4 + 1 = 2.
+@@ reply
+<grade verdict="wrong" score="0.2">"5 − 4 + 1 = 2" is the true shortest distance, but the algorithm does not report it. "Dijkstra only breaks on negative cycles" is the condition for Bellman-Ford; Dijkstra needs every edge weight to be non-negative.</grade>
+
+The vertices leave the queue in the order S, A, C, B. A is removed at distance 2, on the assumption that no path through a vertex still in the queue can be shorter. B, at 5, is still in the queue, and B→A at −4 would give 1. By the time B is removed, A is final and C has already been set to 2 + 1 = 3. So the algorithm reports 3 for C, and the true distance is 2.
+
+<card>Which graphs does Dijkstra's algorithm need, and why? :: Every edge weight non-negative. It finalises the closest unsettled vertex on the assumption that going through a farther vertex cannot be shorter; one negative edge breaks that, even with no cycle.</card>
+
+<note>Dijkstra requires non-negative edge weights. A negative edge can shorten the path to a vertex that is already final, so the result can be wrong without any negative cycle. Bellman-Ford handles negative edges and fails only on a negative cycle reachable from the source.</note>
+
+**Problem 3 · same idea**
+
+A proposed fix: add 4 to every edge weight so that none is negative, run Dijkstra, and use the path it finds. On the same graph, which path from S to C does that give, and is it the shortest path in the original graph?
+
+<solution>New weights: S→A 6, S→B 9, B→A 0, A→C 5. S→A→C costs 11 and S→B→A→C costs 14, so Dijkstra returns S→A→C, which costs 3 in the original graph. The original shortest path is S→B→A→C at 2. The fix fails: adding a constant charges a path once per edge, so paths with more edges are penalised more.</solution>
+<check lang="python">
+orig = {('S', 'A'): 2, ('S', 'B'): 5, ('B', 'A'): -4, ('A', 'C'): 1}
+new = {e: w + 4 for e, w in orig.items()}
+p1, p2 = [('S', 'A'), ('A', 'C')], [('S', 'B'), ('B', 'A'), ('A', 'C')]
+assert min(new.values()) == 0
+assert sum(new[e] for e in p1) == 11 and sum(new[e] for e in p2) == 14
+assert sum(orig[e] for e in p1) == 3 and sum(orig[e] for e in p2) == 2
+</check>
+
+<ask type="problem">The path the fix returns, its cost in the original graph, and whether the fix works.</ask>
+@@ verify
+import heapq
+def dijkstra(E, s):
+    dist, done, order, pq = {s: 0}, set(), [], [(0, s)]
+    while pq:
+        d, u = heapq.heappop(pq)
+        if u in done: continue
+        done.add(u); order.append(u)
+        for v, w in E.get(u, []):
+            if v not in done and d + w < dist.get(v, float('inf')):
+                dist[v] = d + w; heapq.heappush(pq, (d + w, v))
+    return dist, order
+def bellman_ford(E, s, nodes):
+    d = {v: float('inf') for v in nodes}; d[s] = 0
+    for _ in range(len(nodes) - 1):
+        for u in E:
+            for v, w in E[u]:
+                if d[u] + w < d[v]: d[v] = d[u] + w
+    return d
+E = {'S': [('A', 2), ('B', 5)], 'B': [('A', -4)], 'A': [('C', 1)]}
+dist, order = dijkstra(E, 'S')
+assert order == ['S', 'A', 'C', 'B'] and ', '.join(order) in reply
+assert dist['C'] == 3 and dist['A'] == 2
+true = bellman_ford(E, 'S', 'SABC')
+assert true['C'] == 2 and true['A'] == 1
+# the proposed fix
+E4 = {u: [(v, w + 4) for v, w in vs] for u, vs in E.items()}
+d4, _ = dijkstra(E4, 'S')
+assert d4['C'] == 11 and 9 + 0 + 5 == 14
+assert '11' in solution(reply) and '14' in solution(reply)
+
+@@@@ wrong-recurrence-every-level-equal
+situation: after-wrong
+topic: Recurrences and the master theorem
+options: {"difficulty":"hard"}
+voice: terse
+level: hard
+expect: {"verdict":"wrong","names":["each one costs|top level","halve"],"must":["2n\\^2 - n","\\\\Theta\\(n\\^2\\)"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["n\\^2 \\\\log n","4\\^i"]}
+@@ tutor
+**Problem 1 · hard**
+
+Solve the recurrence $T(n) = 2T(n/2) + n^2$ with $T(1) = 1$, for $n$ a power of 2. Give a $\Theta$ bound.
+
+<solution>Recursion tree: level i has 2^i subproblems of size n/2^i, so it costs 2^i (n/2^i)^2 = n^2/2^i. The level costs halve, so the sum is below 2n^2 and at least n^2 (the root): Θ(n^2). Exactly, T(n) = 2n^2 − n. Master theorem: n^2 against n^(log2 2) = n, case 3.</solution>
+<check lang="python">
+def T(n):
+    return 1 if n == 1 else 2 * T(n // 2) + n * n
+for k in range(0, 20):
+    n = 2 ** k
+    assert T(n) == 2 * n * n - n
+</check>
+
+<ask type="problem">The bound, with the cost of each level of the recursion tree.</ask>
+@@ learner answer sure
+Θ(n² log n). log n levels and each one costs n², its merge sort with n² instead of n
+@@ reply
+<grade verdict="wrong" score="0.2">"each one costs n²" is the step that fails: only the top level costs $n^2$. The count of levels, "log n levels", is right.</grade>
+
+Level $i$ of the tree has $2^i$ subproblems of size $n/2^i$, and each pays the square of its size:
+
+$$2^i \left(\frac{n}{2^i}\right)^2 = \frac{n^2}{2^i}.$$
+
+The level costs halve on the way down, so the total is $n^2\left(1 + \tfrac12 + \tfrac14 + \dots\right) < 2n^2$, and the root alone is $n^2$. So $T(n) = \Theta(n^2)$; exactly, $T(n) = 2n^2 - n$. In merge sort the level cost is $2^i \cdot n/2^i = n$ at every level, and only that equality produces the $\log n$ factor.
+
+<card>In a recursion tree for T(n) = aT(n/b) + f(n), when does the answer pick up a log n factor? :: Only when every level costs about the same, a^i f(n/b^i) ≈ f(n). If level costs shrink geometrically the root dominates, Θ(f(n)); if they grow, the leaves dominate.</card>
+
+<note>Recursion tree for $T(n) = aT(n/b) + f(n)$: level $i$ costs $a^i f(n/b^i)$. Equal levels: $\Theta(f(n) \log n)$. Geometrically shrinking: $\Theta(f(n))$. Geometrically growing: $\Theta(n^{\log_b a})$. Work out the level cost before multiplying by the depth.</note>
+
+**Problem 2 · same method**
+
+Solve $T(n) = 4T(n/2) + n^2$ with $T(1) = 1$, for $n$ a power of 2. Give a $\Theta$ bound.
+
+<solution>Level i has 4^i subproblems of size n/2^i: 4^i (n/2^i)^2 = n^2 at every level. There are log2 n + 1 levels, so T(n) = n^2 (log2 n + 1) = Θ(n^2 log n).</solution>
+<check lang="python">
+def T(n):
+    return 1 if n == 1 else 4 * T(n // 2) + n * n
+for k in range(0, 16):
+    n = 2 ** k
+    assert T(n) == n * n * (k + 1)
+</check>
+
+<ask type="problem">The bound, with the cost of level $i$ written out first.</ask>
+@@ verify
+def T(a, n):
+    return 1 if n == 1 else a * T(a, n // 2) + n * n
+for k in range(0, 18):
+    n = 2 ** k
+    assert T(2, n) == 2 * n * n - n            # Theta(n^2), the exact form the reply states
+    assert T(4, n) == n * n * (k + 1)          # Theta(n^2 log n) for the next problem
+    # level costs of the first recurrence: 2^i (n / 2^i)^2 = n^2 / 2^i, summing below 2 n^2
+    levels = [2**i * (n // 2**i) ** 2 for i in range(k + 1)]
+    assert all(levels[i] * 2**i == n * n for i in range(k + 1))
+    assert n * n <= sum(levels) < 2 * n * n
+# the learner's bound overshoots: T / (n^2 log n) tends to 0, T / n^2 tends to 2
+import math
+n = 2 ** 17
+assert T(2, n) / (n * n * math.log2(n)) < 0.12 and abs(T(2, n) / (n * n) - 2) < 1e-4
+assert '2n^2 - n' in reply
+
+@@@@ wrong-quiz-fixed-step-growth
+situation: after-wrong
+topic: Dynamic arrays and amortised analysis
+mode: quiz
+voice: wordy
+level: medium
+expect: {"verdict":"wrong","names":["1 in 10|one in ten|how often","whole array|every element|grows"],"must":["49,500","1,270","Question 4 of 8"],"askMustNot":["geometric","constant fraction"]}
+@@ tutor
+**Question 3 of 8**
+
+<ask type="short">A dynamic array grows by a fixed 10 slots whenever it is full, instead of doubling. Is append still amortised $O(1)$? Give the reason.</ask>
+@@ learner answer sure
+Yes, I'd say it's still O(1) amortised. Most of the appends are cheap and only 1 in 10 triggers a resize, so the cost of the copy averages out over those 10 appends in the same way as it does with doubling. The growth amount just changes the constant.
+@@ reply
+<grade verdict="wrong" score="0.1">"only 1 in 10 triggers a resize" counts how often a resize happens but not what it costs: each resize copies the whole array, and the array keeps growing, so the copy cannot be shared out over a fixed 10 appends.</grade>
+
+Count the copies for 1000 appends, starting from capacity 10. With a fixed step the resizes come at sizes 10, 20, …, 990 and copy $10 + 20 + \dots + 990 = 49,500$ elements: about 50 per append, and the figure grows in proportion to $n$. So append is amortised $\Theta(n)$ and $n$ appends cost $\Theta(n^2)$. With doubling the resizes come at 10, 20, 40, …, 640 and copy 1,270 elements in total, under 2 per append however large $n$ gets.
+
+<card>Why is append amortised O(1) with doubling but not with growth by a fixed number of slots? :: A resize copies all n elements. Doubling makes resizes rarer as n grows (total copies under 2n); a fixed step keeps them every k appends, so total copies are about n²/(2k).</card>
+
+**Question 4 of 8**
+
+<ask type="explain">A third array grows its capacity by a factor of 1.5 when full. Is its append amortised $O(1)$? Explain what a multiplying factor has that a fixed step lacks.</ask>
+@@ verify
+def copies(n, grow, cap=10):
+    size = total = 0
+    for _ in range(n):
+        if size == cap:
+            total += size
+            cap = grow(cap)
+        size += 1
+    return total
+fixed = copies(1000, lambda c: c + 10)
+dbl = copies(1000, lambda c: c * 2)
+assert fixed == 49500 == sum(range(10, 1000, 10)) and f'{fixed:,}' in reply
+assert dbl == 1270 == 10 + 20 + 40 + 80 + 160 + 320 + 640 and f'{dbl:,}' in reply
+assert 49 < fixed / 1000 < 50 and dbl / 1000 < 2
+# fixed step is quadratic in total: about n^2 / 20; doubling stays below 2n
+for n in (10_000, 100_000):
+    assert abs(copies(n, lambda c: c + 10) / (n * n / 20) - 1) < 0.01
+    assert copies(n, lambda c: c * 2) < 2 * n
+# a factor of 1.5 is still linear in total (the next question's answer, not stated in the reply)
+assert copies(100_000, lambda c: c * 3 // 2) < 3 * 100_000
+
+@@@@ idk-kmp-failure-function
+situation: idk
+topic: The KMP failure function
+voice: plain
+level: hard
+expect: {"must":["proper","prefix"],"askMustNot":["0, 0, 1, 0, 1, 2","\\b2\\b"],"mustNot":["0, 0, 1, 0, 1, 2"]}
+@@ tutor
+**Why this matters**
+
+Searching for a pattern in a text by trying every start position can cost the product of the two lengths. The Knuth-Morris-Pratt algorithm does it in time proportional to their sum, by never moving backwards in the text, and its preprocessing table is the model for the automata behind `grep`-style matchers and for many string problems in interviews and competitive work. The whole method rests on one table computed from the pattern alone.
+
+<ask type="short">The failure function of a pattern gives, for each position, the length of the longest proper prefix of the pattern that is also a suffix of the part ending at that position. What are its six values for the pattern `abacab`?</ask>
+@@ learner idk
+@@ reply
+Start with the one idea the table is built from, on a single string. A prefix is what you get by cutting characters off the end, a suffix by cutting them off the front, and "proper" means not the whole string. For `aba` the proper prefixes are `a` and `ab`, and the suffixes of the same lengths are `a` and `ba`. Only the pair of length 1 matches, so the longest proper prefix of `aba` that is also a suffix has length 1.
+
+The failure function is that one number, worked out for each prefix of the pattern in turn.
+
+<note>A border of a string is a proper prefix that is also a suffix. `aba` has the border `a` (length 1). The KMP failure function stores, for each prefix of the pattern, the length of its longest border.</note>
+
+<ask type="short">Take the string `abab` on its own. What is its longest proper prefix that is also a suffix, and how long is it?</ask>
+@@ verify
+def fail(p):
+    f = [0] * len(p)
+    k = 0
+    for i in range(1, len(p)):
+        while k and p[i] != p[k]:
+            k = f[k - 1]
+        if p[i] == p[k]:
+            k += 1
+        f[i] = k
+    return f
+def border(s):   # brute force, an independent method
+    return max((L for L in range(len(s)) if s[:L] == s[len(s) - L:]), default=0)
+assert fail('abacab') == [0, 0, 1, 0, 1, 2] == [border('abacab'[:i + 1]) for i in range(6)]
+assert '0, 0, 1, 0, 1, 2' not in reply          # the answer to the question they could not do is withheld
+assert border('aba') == 1 and 'aba'[:1] == 'aba'[-1:] == 'a' and 'aba'[:2] != 'aba'[-2:] and 'aba'[-2:] == 'ba'
+assert border('abab') == 2 and 'abab'[:2] == 'abab'[-2:] == 'ab'   # the easier question's answer
+
+@@@@ idk-interval-scheduling-counterexample
+situation: idk
+topic: Greedy interval scheduling
+voice: plain
+level: medium
+expect: {"must":["counterexample|loses"],"askMustNot":["finish","\\bends? (first|earliest)","\\b1 interval\\b"],"mustNot":["earliest finish","finishes first","finishing time"]}
+@@ tutor
+**Why this matters**
+
+Interval scheduling asks for the largest set of requests that do not overlap: meetings in one room, jobs on one machine, transmissions on one channel. It is the standard first example of a greedy algorithm that is provably optimal, and the argument used to prove it, exchanging one choice for another, is the one you will reuse for Huffman codes and minimum spanning trees. It also shows how most plausible greedy rules are wrong.
+
+<ask type="short">You want the largest number of non-overlapping intervals. Three greedy rules are proposed: always take the interval that starts earliest, always take the shortest, always take the one that ends earliest. Which one is always optimal?</ask>
+@@ learner idk
+@@ reply
+A greedy rule is correct only if no input makes it lose, so the way to judge one is to look for a small counterexample: a few intervals on which the rule picks fewer than the best possible. One losing input is enough to rule a rule out, and you can test each of the three this way.
+
+Take the first rule on these three intervals: $[0, 10)$, $[1, 2)$ and $[3, 4)$. The rule takes the interval that starts earliest, discards everything that overlaps it, and repeats on what is left.
+
+<note>To reject a greedy rule, find one counterexample: a small input where the rule's result is worse than the optimum. To accept one, a proof is needed; no number of examples is enough.</note>
+
+<ask type="short">On $[0, 10)$, $[1, 2)$ and $[3, 4)$, how many intervals does "always take the one that starts earliest" select, and what is the largest number that can be selected?</ask>
+@@ verify
+from itertools import combinations
+def overlap(a, b):
+    return a[0] < b[1] and b[0] < a[1]
+def best(iv):
+    for r in range(len(iv), 0, -1):
+        for c in combinations(iv, r):
+            if all(not overlap(x, y) for x, y in combinations(c, 2)):
+                return r
+    return 0
+def greedy(iv, key):
+    left, out = sorted(iv, key=key), []
+    while left:
+        x = left.pop(0)
+        out.append(x)
+        left = [y for y in left if not overlap(x, y)]
+    return len(out)
+iv = [(0, 10), (1, 2), (3, 4)]
+assert greedy(iv, lambda x: x[0]) == 1 and best(iv) == 2          # the easier question's answer: 1 against 2
+# the rule the original question is after is earliest end; check it is optimal on random inputs, and that shortest-first loses somewhere
+import random
+random.seed(3)
+lost_shortest = False
+for _ in range(400):
+    iv2 = []
+    for _ in range(random.randint(1, 7)):
+        s = random.randint(0, 12)
+        iv2.append((s, s + random.randint(1, 6)))
+    assert greedy(iv2, lambda x: x[1]) == best(iv2)
+    lost_shortest |= greedy(iv2, lambda x: x[1] - x[0]) < best(iv2)
+assert lost_shortest
+assert 'earliest' not in reply.split('<ask')[0].replace('starts earliest', '')
+
+@@@@ idk-coin-change-last-coin
+situation: idk
+topic: Coin change by dynamic programming
+voice: plain
+level: medium
+expect: {"must":["last coin","\\[3\\] = 4"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["best\\[7\\] = 2","1, 1, 2"],"mustNot":["best\\[10\\] = 2","5 \\+ 5"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+Coins come in values 1, 5 and 6, with as many of each as you like. What is the smallest number of coins that makes 10?
+
+<solution>best[x] = 1 + min over coins c ≤ x of best[x − c], best[0] = 0. The table for 0..10 is 0, 1, 2, 3, 4, 1, 1, 2, 3, 4, 2. So 2 coins: 5 + 5. (Taking the largest coin first gives 6 + 1 + 1 + 1 + 1, which is 5 coins.)</solution>
+<check lang="python">
+best = [0] + [None] * 10
+for x in range(1, 11):
+    best[x] = 1 + min(best[x - c] for c in (1, 5, 6) if c <= x)
+assert best == [0, 1, 2, 3, 4, 1, 1, 2, 3, 4, 2]
+</check>
+
+<ask type="problem">The number of coins, and which coins.</ask>
+@@ learner idk
+@@ reply
+Think only about the last coin placed. Whatever the best way to make an amount $x$ is, it ends with some coin $c$, and before that coin the amount was $x - c$, which must itself have been made as cheaply as possible. So if $\text{best}[x]$ is the fewest coins for $x$:
+
+$$\text{best}[x] = 1 + \min_{c \le x} \text{best}[x - c], \qquad \text{best}[0] = 0.$$
+
+For example, with coins 1, 5 and 6, only the coin 1 fits into the amounts 1 to 4, so $\text{best}[4] = 1 + \text{best}[3] = 4$.
+
+<note>Coin change (fewest coins): $\text{best}[0] = 0$ and $\text{best}[x] = 1 + \min_{c \le x} \text{best}[x - c]$. Try every coin as the last coin and keep the cheapest; small amounts are solved first and reused.</note>
+
+**Problem 1 · first entries**
+
+With the same coins 1, 5 and 6, and $\text{best}[4] = 4$ from above, work out $\text{best}[5]$, $\text{best}[6]$ and $\text{best}[7]$.
+
+<solution>best[5] = 1 + min(best[4], best[0]) = 1 + 0 = 1. best[6] = 1 + min(best[5], best[1], best[0]) = 1 + 0 = 1. best[7] = 1 + min(best[6], best[2], best[1]) = 1 + 1 = 2. So 1, 1, 2.</solution>
+<check lang="python">
+best = [0]
+for x in range(1, 8):
+    best.append(1 + min(best[x - c] for c in (1, 5, 6) if c <= x))
+assert best[4] == 4 and best[5:8] == [1, 1, 2]
+</check>
+
+<ask type="problem">The three values, each with the candidates you took the minimum over.</ask>
+@@ verify
+from itertools import combinations_with_replacement
+def brute(x, coins=(1, 5, 6)):          # independent method: try every multiset of coins
+    for r in range(0, x + 1):
+        for c in combinations_with_replacement(coins, r):
+            if sum(c) == x:
+                return r
+table = [brute(x) for x in range(11)]
+assert table == [0, 1, 2, 3, 4, 1, 1, 2, 3, 4, 2]
+assert ', '.join(map(str, table)) in solution(tutor[0])
+assert table[4] == 4 and table[5:8] == [1, 1, 2] and '1, 1, 2' in solution(reply)
+# greedy largest-first on 10 gives 5 coins, as the earlier solution says
+x, n = 10, 0
+for c in (6, 5, 1):
+    n += x // c; x %= c
+assert n == 5
+# the answer to the question they could not do stays hidden
+assert 'best[10]' not in visible(reply) and '5 + 5' not in visible(reply)
+
+@@@@ show-me-binary-search-trace
+situation: show-me
+topic: Binary search and its invariants
+voice: plain
+level: easy
+expect: {"visual":{"kind":"table"},"must":["7\\.\\.7|index 7"]}
+@@ tutor
+Binary search keeps an inclusive range `lo..hi` that must contain the target if the target is present at all. Each pass compares the middle element `a[mid]`, with `mid = (lo + hi) // 2`, against the target. If `a[mid]` is smaller, everything up to `mid` is ruled out and `lo = mid + 1`; if it is larger, `hi = mid - 1`; if it is equal, the search is over. Take `a = [3, 7, 11, 15, 19, 24, 30, 41, 58, 66, 73]` and the target 41. The range starts as 0..10, narrows to 6..10, then 6..7, then 7..7, and `a[7] = 41` is found on the fourth comparison.
+
+<note>Binary search invariant: if the target is in the array, its index is in `lo..hi`. Each comparison removes `mid` and one side of it, so the range at least halves and the invariant still holds.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| Step | lo | hi | mid | a[mid] | a[mid] against 41 | What changes |
+|---|---|---|---|---|---|---|
+| 1 | 0 | 10 | 5 | 24 | smaller | lo = 6 |
+| 2 | 6 | 10 | 8 | 58 | larger | hi = 7 |
+| 3 | 6 | 7 | 6 | 30 | smaller | lo = 7 |
+| 4 | 7 | 7 | 7 | 41 | equal | found at index 7 |
+
+Read the lo and hi columns downwards: the range 0..10 shrinks to 7..7 in three passes, and index 7 is inside it at every step.
+@@ verify
+a = [3, 7, 11, 15, 19, 24, 30, 41, 58, 66, 73]
+assert str(a) in tutor[0] and a == sorted(a)
+target, lo, hi, rows = 41, 0, len(a) - 1, []
+step = 0
+while lo <= hi:
+    step += 1
+    mid = (lo + hi) // 2
+    if a[mid] < target:
+        rows.append([step, lo, hi, mid, a[mid], 'smaller', f'lo = {mid + 1}']); lo = mid + 1
+    elif a[mid] > target:
+        rows.append([step, lo, hi, mid, a[mid], 'larger', f'hi = {mid - 1}']); hi = mid - 1
+    else:
+        rows.append([step, lo, hi, mid, a[mid], 'equal', f'found at index {mid}']); break
+got = table(reply)[1:]
+assert got == [[str(c) for c in r] for r in rows], got
+assert len(rows) == 4 and a.index(41) == 7
+# the ranges named in the explanation, and the invariant: 7 is inside every range
+ranges = [(r[1], r[2]) for r in rows]
+assert ranges == [(0, 10), (6, 10), (6, 7), (7, 7)]
+for lo_, hi_ in ranges:
+    assert f'{lo_}..{hi_}' in tutor[0] and lo_ <= 7 <= hi_
+
+@@@@ show-me-dijkstra-distances
+situation: show-me
+topic: Dijkstra's algorithm
+voice: plain
+level: medium
+expect: {"visual":{"kind":"table"},"must":["settled"]}
+@@ tutor
+Dijkstra's algorithm keeps a tentative distance for every vertex: 0 for the source and ∞ for the rest. It repeatedly takes the unsettled vertex with the smallest tentative distance, settles it (that distance is now final) and relaxes its outgoing edges: for an edge u→v of weight w, if dist[u] + w is less than dist[v], dist[v] is lowered to it. Take the edges S→A 4, S→B 1, B→A 2, A→C 5, B→C 8 and C→D 3. Settling S gives A = 4 and B = 1. B is settled next: it lowers A to 3 and sets C to 9. Then A lowers C to 8, C sets D to 11, and D is settled last.
+
+<note>Dijkstra (non-negative weights): settle the unsettled vertex with the smallest tentative distance, then relax its edges, dist[v] = min(dist[v], dist[u] + w). A settled distance never changes.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| Step | Vertex settled | S | A | B | C | D |
+|---|---|---|---|---|---|---|
+| 0 | none yet | 0 | ∞ | ∞ | ∞ | ∞ |
+| 1 | S | 0 | 4 | 1 | ∞ | ∞ |
+| 2 | B | 0 | 3 | 1 | 9 | ∞ |
+| 3 | A | 0 | 3 | 1 | 8 | ∞ |
+| 4 | C | 0 | 3 | 1 | 8 | 11 |
+| 5 | D | 0 | 3 | 1 | 8 | 11 |
+
+Each row shows the tentative distances after that vertex's edges are relaxed. Follow column A from 4 down to 3 and column C from 9 down to 8: a distance can fall until its vertex is settled, and never afterwards.
+@@ verify
+INF = float('inf')
+E = {'S': [('A', 4), ('B', 1)], 'B': [('A', 2), ('C', 8)], 'A': [('C', 5)], 'C': [('D', 3)], 'D': []}
+for u, vs in E.items():
+    for v, w in vs:
+        assert f'{u}→{v} {w}' in tutor[0]
+names = 'SABCD'
+dist = {v: INF for v in names}; dist['S'] = 0
+show = lambda d: '∞' if d == INF else str(d)
+rows = [['0', 'none yet'] + [show(dist[v]) for v in names]]
+done = set()
+for step in range(1, 6):
+    u = min((v for v in names if v not in done), key=lambda v: dist[v])
+    done.add(u)
+    for v, w in E[u]:
+        if dist[u] + w < dist[v]:
+            assert v not in done
+            dist[v] = dist[u] + w
+    rows.append([str(step), u] + [show(dist[v]) for v in names])
+assert table(reply)[1:] == rows, table(reply)
+assert [r[1] for r in rows[1:]] == ['S', 'B', 'A', 'C', 'D']
+assert dist == {'S': 0, 'A': 3, 'B': 1, 'C': 8, 'D': 11}
+
+@@@@ show-me-bst-insert-tree
+situation: show-me
+topic: Binary search trees
+voice: plain
+level: easy
+expect: {"visual":{"kind":"mermaid","diagram":["flowchart"]},"must":["32"]}
+@@ tutor
+A binary search tree keeps, at every node, all smaller keys in the left subtree and all larger keys in the right subtree. To insert a key, start at the root and go left when the key is smaller than the node and right when it is larger, until you reach an empty place; the key goes there. Insert 41, 20, 65, 11, 29, 50 and 32 in that order. 41 becomes the root; 20 goes to its left and 65 to its right; 11 goes left of 20 and 29 right of 20; 50 goes left of 65. Last, 32 is smaller than 41, larger than 20 and larger than 29, so it becomes the right child of 29.
+
+<note>BST property: for every node, keys in its left subtree are smaller and keys in its right subtree are larger. Insert walks down from the root by comparisons and attaches the key at the first empty place, so it costs time proportional to the height.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+flowchart TD
+    n41["41"] -->|"smaller"| n20["20"]
+    n41 -->|"larger"| n65["65"]
+    n20 -->|"smaller"| n11["11"]
+    n20 -->|"larger"| n29["29"]
+    n65 -->|"smaller"| n50["50"]
+    n29 -->|"larger"| n32["32"]
+```
+
+Trace 32 down from the root: smaller at 41, larger at 20, larger at 29. Those three comparisons are its whole insertion.
+@@ verify
+import re
+keys = [41, 20, 65, 11, 29, 50, 32]
+assert 'Insert 41, 20, 65, 11, 29, 50 and 32' in tutor[0]
+left, right, root = {}, {}, keys[0]
+paths = {}
+for k in keys[1:]:
+    node, path = root, []
+    while True:
+        side = left if k < node else right
+        path.append((node, 'smaller' if k < node else 'larger'))
+        if node in side:
+            node = side[node]
+        else:
+            side[node] = k
+            break
+    paths[k] = path
+want = {(p, 'smaller', c) for p, c in left.items()} | {(p, 'larger', c) for p, c in right.items()}
+src = block(reply, 'mermaid')
+got = {(int(a), lab, int(b)) for a, lab, b in re.findall(r'n(\d+)(?:\["\d+"\])? -->\|"(\w+)"\| n(\d+)', src)}
+assert got == want and len(got) == 6, got
+for n in keys:                      # every node's label is its own key
+    assert f'n{n}["{n}"]' in src
+assert paths[32] == [(41, 'smaller'), (20, 'larger'), (29, 'larger')]
+# in-order walk gives the keys sorted, so the drawn tree is a BST
+def inorder(n):
+    return (inorder(left[n]) if n in left else []) + [n] + (inorder(right[n]) if n in right else [])
+assert inorder(root) == sorted(keys)
+
+@@@@ show-me-dfs-vertex-states
+situation: show-me
+topic: Depth-first search
+voice: plain
+level: medium
+expect: {"visual":{"kind":"mermaid","diagram":["stateDiagram-v2","stateDiagram"]},"must":["grey"]}
+@@ tutor
+During a depth-first search every vertex is in one of three states. It starts white: not yet reached. When the search first enters it, it turns grey, and it stays grey while the search explores everything reachable through its outgoing edges; the grey vertices are exactly the ones on the current recursion stack. When all its edges have been explored the call returns and the vertex turns black: finished. A vertex never goes backwards through these states. This gives the cycle test for a directed graph: if the search follows an edge and lands on a grey vertex, that vertex is an ancestor on the stack, so the edge closes a cycle. An edge to a black vertex does not.
+
+<note>DFS colours: white = unreached, grey = entered and still on the recursion stack, black = finished. In a directed graph, an edge into a grey vertex is a back edge, and the graph has a cycle exactly when the search finds one.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+stateDiagram-v2
+    [*] --> White
+    White --> Grey: search enters the vertex
+    Grey --> Black: all outgoing edges explored
+    Black --> [*]
+    note right of Grey
+        on the recursion stack
+        an edge into a grey vertex closes a cycle
+    end note
+```
+
+The arrows only go one way, white to grey to black; a vertex is grey for exactly the time its call is on the stack, which is why meeting a grey vertex means a cycle.
+@@ verify
+import re
+src = block(reply, 'mermaid')
+moves = re.findall(r'(\[\*\]|\w+) --> (\[\*\]|\w+)', src)
+assert moves == [('[*]', 'White'), ('White', 'Grey'), ('Grey', 'Black'), ('Black', '[*]')]
+# run a DFS and check the claims: each vertex goes white -> grey -> black once, grey = on the stack,
+# and a grey-vertex edge is found exactly when the directed graph has a cycle
+from itertools import product
+def dfs_cycle(n, edges):
+    colour, stack, log, back = ['white'] * n, [], [], [False]
+    def visit(u):
+        assert colour[u] == 'white'
+        colour[u] = 'grey'; stack.append(u); log.append((u, 'grey'))
+        assert {v for v in range(n) if colour[v] == 'grey'} == set(stack)
+        for a, b in edges:
+            if a == u:
+                if colour[b] == 'grey': back[0] = True
+                elif colour[b] == 'white': visit(b)
+        colour[u] = 'black'; stack.pop(); log.append((u, 'black'))
+    for s in range(n):
+        if colour[s] == 'white': visit(s)
+    for u in range(n):
+        assert [c for v, c in log if v == u] == ['grey', 'black']
+    return back[0]
+def has_cycle(n, edges):            # independent: repeatedly remove vertices with no incoming edge
+    es, vs = set(edges), set(range(n))
+    while True:
+        free = [v for v in vs if not any(b == v for a, b in es)]
+        if not free: return bool(vs)
+        vs -= set(free); es = {(a, b) for a, b in es if a in vs and b in vs}
+pairs = [(a, b) for a in range(4) for b in range(4) if a != b]
+import random
+random.seed(11)
+for _ in range(500):
+    edges = random.sample(pairs, random.randint(0, 7))
+    assert dfs_cycle(4, edges) == has_cycle(4, edges)

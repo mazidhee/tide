@@ -1,0 +1,454 @@
+@@@@ mark-error-pow-two-more-bits
+situation: mark-error
+topic: Proof of work and difficulty
+voice: wordy
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["twice as hard|time doubles|doubles","128"],"must":["128 s","4 ×|× 4|four times"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["2,?048","\\b8 s","\\b64 s"]}
+@@ tutor
+**Problem 3 · harder**
+
+A toy chain requires a block hash with 14 leading zero bits. A miner computes 512 hashes per second. (a) How many hashes does it expect to try per block? (b) How long is that on average? (c) The requirement rises to 16 leading zero bits. What is the average time now?
+
+<solution>(a) Each hash succeeds with probability 2^−14, so 2^14 = 16,384 tries on average. (b) 16,384 / 512 = 32 s. (c) 2^16 / 512 = 2^16 / 2^9 = 2^7 = 128 s, four times as long.</solution>
+<check lang="python">
+assert 2 ** 14 == 16384 and 2 ** 14 / 512 == 32 and 2 ** 16 / 512 == 128
+</check>
+
+<ask type="problem">The three answers, with your working.</ask>
+@@ learner answer sure
+(a) Each hash has a 1 in 2^14 chance of having 14 zero bits at the front, so the expected number of tries is 2^14 = 16,384. (b) At 512 a second that's 16,384 / 512 = 32 seconds. (c) Two more zero bits means the target is twice as hard to hit, so the time doubles and it's 64 seconds.
+@@ reply
+<grade verdict="partial" score="0.6">(a) and (b) are right: "2^14 = 16,384" tries and "16,384 / 512 = 32 seconds". The first wrong step is in (c), "Two more zero bits means the target is twice as hard to hit": each extra zero bit halves the chance of success, so two bits make it four times as hard. The time is 4 × 32 = 128 s, not 64.</grade>
+
+<card>The required number of leading zero bits rises by 2. What happens to the expected number of hashes? :: It is multiplied by 2^2 = 4. Each extra zero bit halves the success probability and doubles the expected work.</card>
+
+<note>Expected tries for $k$ leading zero bits: $2^k$. Adding $m$ bits multiplies the work by $2^m$, so difficulty in bits is a logarithmic scale.</note>
+
+**Problem 4 · same level**
+
+Another toy chain requires 11 leading zero bits, and a miner computes 256 hashes per second. (a) How many hashes does it expect to try per block? (b) How long is that on average? (c) The requirement rises to 14 leading zero bits. What is the average time now?
+
+<solution>(a) 2^11 = 2,048. (b) 2,048 / 256 = 8 s. (c) Three more bits multiply the work by 2^3 = 8: 8 × 8 = 64 s (2^14 / 2^8 = 2^6).</solution>
+<check lang="python">
+assert 2 ** 11 == 2048 and 2 ** 11 / 256 == 8 and 2 ** 14 / 256 == 64
+</check>
+
+<ask type="problem">The three answers, with the factor you used in (c).</ask>
+@@ verify
+assert 2 ** 14 == 16384 and 16384 / 512 == 32
+# the learner's slip: doubling once for two bits
+assert 32 * 2 == 64
+# the correction, two ways
+assert 2 ** 16 / 512 == 128 == 4 * 32 and 2 ** (16 - 14) == 4
+assert 2 ** 11 == 2048 and 2048 / 256 == 8 and 2 ** 14 / 256 == 64 == 8 * 8
+assert '64 s' in solution(reply) and '2,048' in solution(reply)
+v = visible(reply).split('**Problem 4')[1]
+assert '2,048' not in v and '64' not in v
+
+@@@@ mark-error-fee-burn-swapped
+situation: mark-error
+topic: Gas and fees in the EVM
+voice: typos
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["burnt is the tip|swap|other way round|wrong way round","0\\.0015"],"must":["0\\.0015 ETH","0\\.00018 ETH"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["0\\.00405","0\\.0036","0\\.00045"]}
+@@ tutor
+**Problem 2 · same level**
+
+Under the fee rules Ethereum has used since the 2021 London upgrade (EIP-1559), each unit of gas costs the block's base fee, which is burnt, plus a priority fee, or tip, which goes to the block's proposer. A transaction uses 60,000 gas in a block whose base fee is 25 gwei per gas, and it offers a tip of 3 gwei per gas. One gwei is $10^{-9}$ ETH. Find the total fee in ETH, the amount burnt and the amount the proposer receives.
+
+<solution>Total: 60,000 × (25 + 3) = 1,680,000 gwei = 0.00168 ETH. Burnt (base fee): 60,000 × 25 = 1,500,000 gwei = 0.0015 ETH. Proposer (tip): 60,000 × 3 = 180,000 gwei = 0.00018 ETH.</solution>
+<check lang="python">
+from fractions import Fraction
+gwei = Fraction(1, 10 ** 9)
+assert 60000 * 28 * gwei == Fraction(168, 100000)
+assert 60000 * 25 * gwei == Fraction(15, 10000)
+assert 60000 * 3 * gwei == Fraction(18, 100000)
+</check>
+
+<ask type="problem">The three amounts in ETH, with your working.</ask>
+@@ learner answer sure
+total per gas = 25 + 3 = 28 gwei. 60,000 x 28 = 1,680,000 gwei = 0.00168 ETH. burnt is the tip part: 60,000 x 3 = 180,000 gwei = 0.00018 ETH. proposer gets teh base fee: 60,000 x 25 = 1,500,000 gwei = 0.0015 ETH
+@@ reply
+<grade verdict="partial" score="0.6">The total is right, "60,000 x 28 = 1,680,000 gwei = 0.00168 ETH", and both products and conversions after it are computed correctly. The first wrong step is "burnt is the tip part": the two labels are the other way round. The base fee is burnt, 0.0015 ETH, and the tip goes to the proposer, 0.00018 ETH.</grade>
+
+The reason for that way round: the base fee is set by the protocol from how full recent blocks were, and burning it means a proposer gains nothing by pushing it up. The tip is the part a sender chooses, to make including the transaction worth the proposer's while.
+
+<card>Since EIP-1559 (2021), which part of an Ethereum transaction fee is burnt and which goes to the block proposer? :: The base fee (set by the protocol, per gas) is burnt. The priority fee, or tip, goes to the proposer.</card>
+
+**Problem 3 · same level**
+
+A transaction uses 90,000 gas in a block whose base fee is 40 gwei per gas, with a tip of 5 gwei per gas. Find the total fee in ETH, the amount burnt and the amount the proposer receives.
+
+<solution>Total: 90,000 × 45 = 4,050,000 gwei = 0.00405 ETH. Burnt: 90,000 × 40 = 3,600,000 gwei = 0.0036 ETH. Proposer: 90,000 × 5 = 450,000 gwei = 0.00045 ETH.</solution>
+<check lang="python">
+from fractions import Fraction
+gwei = Fraction(1, 10 ** 9)
+assert 90000 * 45 * gwei == Fraction(405, 100000)
+assert 90000 * 40 * gwei == Fraction(36, 10000)
+assert 90000 * 5 * gwei == Fraction(45, 100000)
+</check>
+
+<ask type="problem">The three amounts in ETH, each labelled burnt or paid to the proposer.</ask>
+@@ verify
+from fractions import Fraction
+eth = lambda gwei: Fraction(gwei, 10 ** 9)
+# the learner's arithmetic is right line by line; only the labels are swapped
+assert 25 + 3 == 28 and 60000 * 28 == 1680000 and eth(1680000) == Fraction('0.00168')
+assert 60000 * 3 == 180000 and eth(180000) == Fraction('0.00018')
+assert 60000 * 25 == 1500000 and eth(1500000) == Fraction('0.0015')
+assert eth(1500000) + eth(180000) == eth(1680000)
+# problem 3
+assert 90000 * 45 == 4050000 and eth(4050000) == Fraction('0.00405')
+assert eth(90000 * 40) == Fraction('0.0036') and eth(90000 * 5) == Fraction('0.00045')
+assert Fraction('0.0036') + Fraction('0.00045') == Fraction('0.00405')
+for s in ['0.00405', '0.0036', '0.00045']:
+    assert s in solution(reply) and s not in visible(reply)
+
+@@@@ mark-error-nonce-gap
+situation: mark-error
+topic: The account model and nonces
+voice: plain
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["7 is higher|higher than","\\b6\\b"],"must":["next nonce (is|of) 6|next nonce is then 6|nonce 6"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b14\\b"]}
+@@ tutor
+**Problem 2 · harder**
+
+An account's next nonce is 3. A node's mempool receives five transactions from that account, in this arrival order, with nonces 3, 5, 4, 4 and 7. The second nonce-4 transaction offers a lower fee than the first. The next block's producer includes every transaction from this account that can execute. Which transactions execute, in what order, and what is the account's next nonce afterwards?
+
+<solution>A transaction executes only when its nonce equals the account's next nonce. So: 3, then the first nonce-4 transaction, then 5. The second nonce-4 transaction is not included (that nonce is used, and its lower fee does not replace the first). Nonce 7 cannot execute because no transaction with nonce 6 exists. Next nonce: 6.</solution>
+<check lang="python">
+nonce, pool, done = 3, [3, 5, 4, 4, 7], []
+while nonce in pool:
+    done.append(nonce)
+    nonce += 1
+assert done == [3, 4, 5] and nonce == 6
+</check>
+
+<ask type="problem">The order of execution and the next nonce, with the reason for each transaction left out.</ask>
+@@ learner answer sure
+3 executes first since it matches the account's nonce. 5 can't go yet because 4 is missing, so it waits. Then 4 is there, so 4 executes and that unblocks 5. The second 4 is dropped because that nonce is already taken. 7 is higher than the current nonce so it executes too. Order is 3, 4, 5, 7 and the next nonce is 8.
+@@ reply
+<grade verdict="partial" score="0.6">Right up to and including "The second 4 is dropped because that nonce is already taken": 3, 4, 5 in that order. The first wrong step is "7 is higher than the current nonce so it executes too". After 5 the account's next nonce is 6, and a transaction executes only if its nonce equals that exactly, so 7 waits in the mempool. Your "next nonce is 8" follows from that slip; the order is 3, 4, 5 and the next nonce is 6.</grade>
+
+<card>An account's next nonce is 6 and a transaction with nonce 7 is in the mempool. Can it execute? :: No. A transaction executes only when its nonce equals the account's next nonce. It waits until a nonce-6 transaction has executed.</card>
+
+<note>Nonces must be used in order with no gaps: nonce below the account's next nonce → rejected as already used; equal → can execute; above → waits for the gap to be filled.</note>
+
+**Problem 3 · same level**
+
+An account's next nonce is 10. Transactions from it arrive with nonces 12, 10, 13, 11 and 15. The producer includes every one that can execute. Which execute, in what order, and what is the next nonce afterwards?
+
+<solution>10, 11, 12, 13 execute in nonce order, whatever the arrival order. 15 waits because there is no nonce-14 transaction. Next nonce: 14.</solution>
+<check lang="python">
+nonce, pool, done = 10, [12, 10, 13, 11, 15], []
+while nonce in pool:
+    done.append(nonce)
+    nonce += 1
+assert done == [10, 11, 12, 13] and nonce == 14
+</check>
+
+<ask type="problem">The order of execution, the next nonce, and what happens to any transaction left over.</ask>
+@@ verify
+def run(nonce, pool):
+    done = []
+    while nonce in pool:
+        done.append(nonce)
+        nonce += 1
+    return done, nonce, sorted(set(n for n in pool if n >= nonce))
+assert run(3, [3, 5, 4, 4, 7]) == ([3, 4, 5], 6, [7])
+# the learner's slip: letting 7 through gives the order and next nonce they state
+assert [3, 4, 5] + [7] == [3, 4, 5, 7] and 7 + 1 == 8
+assert run(10, [12, 10, 13, 11, 15]) == ([10, 11, 12, 13], 14, [15])
+assert 'Next nonce: 14' in solution(reply) and '14' not in visible(reply)
+
+@@@@ mark-error-proof-levels-off-by-one
+situation: mark-error
+topic: Merkle trees and inclusion proofs
+voice: confused
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["12 levels|12 - 1|no sibling","12 hashes"],"must":["384 bytes","\\b13\\b"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b9\\b","\\b288\\b","\\b10\\b"]}
+@@ tutor
+**Problem 3 · harder**
+
+A block's Merkle tree has 4,096 transactions as leaves, and each hash is 32 bytes. A light client holds the block's header. (a) How many hashes are in an inclusion proof for one transaction? (b) How many bytes is the proof? (c) How many hashes does the client compute to check it?
+
+<solution>(a) 4,096 = 2^12, so 12 sibling hashes. (b) 12 × 32 = 384 bytes. (c) One hash of the transaction, then one per sibling: 1 + 12 = 13.</solution>
+<check lang="python">
+import math
+k = int(math.log2(4096))
+assert 2 ** k == 4096 and k == 12 and k * 32 == 384 and 1 + k == 13
+</check>
+
+<ask type="problem">The three answers, with your working.</ask>
+@@ learner answer unsure
+ok so 4,096 = 2^12, so the tree has 12 levels I think? but the top level is the root and the root has no sibling, so the proof has 12 - 1 = 11 hashes. (b) 11 x 32 = 352 bytes. (c) one hash for my transaction and then one for each proof hash, so 12. not sure about the levels bit
+@@ reply
+<grade verdict="partial" score="0.6">"4,096 = 2^12" is right, and so is the rule in (c), "one hash for my transaction and then one for each proof hash". The first wrong step is "the tree has 12 levels": halving 4,096 twelve times passes through 13 levels of nodes, the leaves plus 12 above them, and the root is the 13th. The 12 levels below the root each supply one sibling, so the root is already left out and nothing more is subtracted: 12 hashes, 12 × 32 = 384 bytes, and 1 + 12 = 13 hashes computed. Your 352 and 12 follow correctly from the 11.</grade>
+
+<card>A Merkle tree has 2^k leaves. How many levels of nodes does it have, and how many hashes are in an inclusion proof? :: k + 1 levels (the leaves, then k levels above them ending at the root). The proof has k hashes: one sibling for every level except the root.</card>
+
+<note>Count halvings, not levels: $2^k$ leaves take $k$ halvings to reach the root, and each halving uses one sibling. A proof has $k$ hashes; checking it takes $k + 1$ hash computations including the leaf.</note>
+
+**Problem 4 · same level**
+
+A block's Merkle tree has 512 transactions as leaves, with 32-byte hashes. (a) How many hashes are in an inclusion proof? (b) How many bytes is the proof? (c) How many hashes does the client compute to check it?
+
+<solution>(a) 512 = 2^9, so 9 hashes. (b) 9 × 32 = 288 bytes. (c) 1 + 9 = 10.</solution>
+<check lang="python">
+import math
+k = int(math.log2(512))
+assert 2 ** k == 512 and k == 9 and k * 32 == 288 and 1 + k == 10
+</check>
+
+<ask type="problem">The three answers, with the number of halvings you counted.</ask>
+@@ verify
+# build the level sizes of a 4,096-leaf tree
+sizes, n = [4096], 4096
+while n > 1:
+    n //= 2
+    sizes.append(n)
+assert len(sizes) == 13 and len(sizes) - 1 == 12       # 13 levels of nodes, 12 with a sibling
+assert 12 * 32 == 384 and 1 + 12 == 13
+# the learner's later figures follow from their 11
+assert 12 - 1 == 11 and 11 * 32 == 352 and 1 + 11 == 12
+sizes, n = [512], 512
+while n > 1:
+    n //= 2
+    sizes.append(n)
+assert len(sizes) - 1 == 9 and 9 * 32 == 288 and 1 + 9 == 10
+assert '288' in solution(reply) and '288' not in visible(reply)
+
+@@@@ unusual-halving-self-similar
+situation: mark-unusual
+topic: Mining reward halving and total supply
+voice: plain
+level: medium
+expect: {"verdict":"correct","must":["12,000"],"mustNot":["should have used","standard method is better","instead you should"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["9,?000"]}
+@@ tutor
+**Problem 2 · same level**
+
+A toy chain pays 24 coins per block and halves the reward every 250 blocks, for ever, with fractions of a coin allowed. What does the total supply approach?
+
+<solution>Coins per era: 250 × 24 = 6,000, then 3,000, 1,500, … A geometric series with first term 6,000 and ratio 1/2: 6,000 / (1 − 1/2) = 12,000.</solution>
+<check lang="python">
+total = sum(250 * 24 / 2 ** k for k in range(200))
+assert abs(total - 12000) < 1e-6
+</check>
+
+<ask type="problem">The limit, with your working.</ask>
+@@ learner answer sure
+First era is 250 × 24 = 6000 coins. Everything after the first era is the same schedule over again at half the size, so if the total is S then S = 6000 + S/2. That gives S/2 = 6000, so S = 12,000. I didn't use the series formula.
+@@ reply
+<grade verdict="correct" score="1">12,000 is right, and "S = 6000 + S/2" is a valid way to get it: after the first era the rewards are 12, 6, 3, …, each exactly half of 24, 12, 6, …, so what remains is half of the whole. The step is sound because the total is finite, and it is the same argument that proves the series formula.</grade>
+
+**Problem 3 · harder**
+
+A different toy chain also starts at 24 coins per block, but every 250 blocks the reward falls to one third of its previous value: 24, 8, and so on. What does the total supply approach?
+
+<solution>First era: 250 × 24 = 6,000. Ratio 1/3, so the total is 6,000 / (1 − 1/3) = 6,000 × 3/2 = 9,000. By the self-similar argument: S = 6,000 + S/3, so (2/3)S = 6,000 and S = 9,000.</solution>
+<check lang="python">
+total = sum(250 * 24 / 3 ** k for k in range(200))
+assert abs(total - 9000) < 1e-6
+</check>
+
+<ask type="problem">The limit, by whichever method you prefer, with your working.</ask>
+@@ verify
+from fractions import Fraction
+first = 250 * 24
+assert first == 6000
+# the learner's equation S = 6000 + S/2
+S = Fraction(first) / (1 - Fraction(1, 2))
+assert S == 12000 and S == first + S / 2
+# the tail really is half of the whole, term by term
+whole = [Fraction(first, 2 ** k) for k in range(60)]
+assert all(whole[k + 1] == whole[k] / 2 for k in range(59))
+assert abs(float(sum(whole)) - 12000) < 1e-6
+S3 = Fraction(first) / (1 - Fraction(1, 3))
+assert S3 == 9000 and S3 == first + S3 / 3
+assert '9,000' in solution(reply) and '9,000' not in visible(reply)
+
+@@@@ unusual-first-block-decomposition
+situation: mark-unusual
+topic: Hash power and the chance of finding a block
+voice: terse
+level: medium
+expect: {"verdict":"correct","must":["0\\.5904","1 − 0\\.8\\^4|1 - 0\\.8\\^4|0\\.8\\^4"],"mustNot":["should have used","quicker to use"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b11\\b","eleven"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+A mining pool has 20% of a chain's hash power, so each block is found by the pool with probability 0.2, independently of the others. What is the probability that the pool finds at least one of the next 4 blocks?
+
+<solution>The pool finds none with probability 0.8^4 = 0.4096, so at least one with probability 1 − 0.4096 = 0.5904.</solution>
+<check lang="python">
+assert round(1 - 0.8 ** 4, 4) == 0.5904
+</check>
+
+<ask type="problem">The probability, with your working.</ask>
+@@ learner answer sure
+0.2 + 0.8*0.2 + 0.8^2*0.2 + 0.8^3*0.2 = 0.2 + 0.16 + 0.128 + 0.1024 = 0.5904. split by which block is their first
+@@ reply
+<grade verdict="correct" score="1">0.5904 is right. "split by which block is their first" works because the four cases cannot overlap and together they cover every way of finding at least one block, so their probabilities add. The sum equals 1 − 0.8^4, the usual route through "none of the four".</grade>
+
+**Problem 2 · harder**
+
+The same pool, with probability 0.2 per block. How many blocks must pass before its chance of having found at least one is above 90%?
+
+<solution>Need 0.8^n < 0.1. 0.8^10 ≈ 0.107 is not enough; 0.8^11 ≈ 0.086 is. So 11 blocks, where the chance is 1 − 0.086 ≈ 0.914.</solution>
+<check lang="python">
+n = 1
+while 1 - 0.8 ** n <= 0.9:
+    n += 1
+assert n == 11 and round(0.8 ** 10, 3) == 0.107 and round(0.8 ** 11, 3) == 0.086
+</check>
+
+<ask type="problem">The smallest number of blocks, with the inequality you solved.</ask>
+@@ verify
+from fractions import Fraction
+p = Fraction(1, 5)
+terms = [(1 - p) ** k * p for k in range(4)]
+assert [float(t) for t in terms] == [0.2, 0.16, 0.128, 0.1024]
+assert sum(terms) == 1 - (1 - p) ** 4 == Fraction(5904, 10000)
+n = next(n for n in range(1, 100) if 1 - (1 - p) ** n > Fraction(9, 10))
+assert n == 11 and round(float(1 - (1 - p) ** 11), 3) == 0.914
+assert '11 blocks' in solution(reply) and '11' not in visible(reply)
+
+@@@@ unusual-multisig-complement-pairs
+situation: mark-unusual
+topic: Multisignature and threshold schemes
+voice: wordy
+level: medium
+expect: {"verdict":"correct","must":["\\b16\\b","complement"],"mustNot":["should have used","binomials are the proper"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["0\\.028","2\\.8 ?%"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+A 3-of-5 multisignature wallet has five key holders, and a transaction is valid when at least three of them sign it. How many different sets of signers can authorise a transaction?
+
+<solution>Sets of size 3, 4 or 5: C(5,3) + C(5,4) + C(5,5) = 10 + 5 + 1 = 16.</solution>
+<check lang="python">
+from math import comb
+assert comb(5, 3) + comb(5, 4) + comb(5, 5) == 16
+</check>
+
+<ask type="problem">The number of sets, with your working.</ask>
+@@ learner answer sure
+There are 2^5 = 32 possible subsets of the five holders altogether. Now take any subset and its complement, the people not in it. One of the two has at least 3 people and the other has at most 2, and because 5 is odd they can never tie. So exactly half of all the subsets are big enough to sign, which is 32 / 2 = 16. No binomial coefficients needed.
+@@ reply
+<grade verdict="correct" score="1">16 is right, and the pairing is a valid count: "take any subset and its complement" splits the 32 subsets into 16 pairs, and "because 5 is odd they can never tie" guarantees exactly one set in each pair reaches three signers. It agrees with 10 + 5 + 1 from the binomial coefficients.</grade>
+
+The shortcut depends on the threshold being a bare majority of an odd number of holders; for 2-of-5 or 3-of-6 the pairs no longer split evenly.
+
+**Problem 2 · harder**
+
+A 2-of-3 wallet keeps its three keys on separate devices. Each device is compromised independently with probability 0.1. What is the probability that an attacker ends up with enough keys to spend?
+
+<solution>The attacker needs at least 2 of the 3 keys. Exactly two: 3 × 0.1² × 0.9 = 0.027. All three: 0.1³ = 0.001. Total 0.028.</solution>
+<check lang="python">
+from math import comb
+p = sum(comb(3, k) * 0.1 ** k * 0.9 ** (3 - k) for k in (2, 3))
+assert round(p, 6) == 0.028
+</check>
+
+<ask type="problem">The probability, with the cases you added.</ask>
+@@ verify
+from itertools import combinations
+from fractions import Fraction
+holders = range(5)
+subsets = [set(c) for k in range(6) for c in combinations(holders, k)]
+assert len(subsets) == 32
+enough = [s for s in subsets if len(s) >= 3]
+assert len(enough) == 16
+# the learner's pairing: exactly one of each subset and its complement has at least 3
+assert all((len(s) >= 3) != (5 - len(s) >= 3) for s in subsets)
+# it fails for 2-of-5 and 3-of-6, as the reply says
+assert sum(1 for s in subsets if len(s) >= 2) != 16
+six = [c for k in range(7) for c in combinations(range(6), k)]
+assert sum(1 for s in six if len(s) >= 3) != len(six) // 2
+p = Fraction(1, 10)
+assert 3 * p ** 2 * (1 - p) + p ** 3 == Fraction(28, 1000)
+assert '0.028' in solution(reply) and '0.028' not in visible(reply)
+
+@@@@ tangent-hash-is-not-encryption
+situation: tangent
+topic: Hash pointers and the chain of blocks
+voice: confused
+level: easy
+expect: {"ends":"continue","must":["not encryption|no key","256 bits|32 bytes"],"need":["note"],"words":{"max":170}}
+noverify: a conceptual answer; the sizes quoted (256 bits = 32 bytes) are SHA-256's definition
+@@ tutor
+Each block's header stores the hash of the previous block's header. That stored value is a hash pointer: it identifies the previous block and also fixes what it must contain, because any change to that block changes its hash and the pointer no longer matches.
+
+<note>Hash pointer: a reference to a block made of that block's hash. It locates the block and commits to its contents; alter the block and the stored hash no longer matches.</note>
+
+<ask type="predict">A chain has blocks 1 to 5. Someone alters a transaction in block 2. Which stored hash is the first that no longer matches, and in which block is it stored?</ask>
+@@ learner question
+wait before that, can you explain if a hash can be decrypted? like if i have the hash of block 2 can i somehow get block 2 back out of it, or is it more like a zip file
+@@ reply
+No, and it is not like a zip file. A hash is not encryption: there is no key and nothing to decrypt. SHA-256 maps an input of any size to 256 bits, so a block of a megabyte and its 32-byte hash cannot hold the same information. Many different inputs share each output, and the function is designed so that finding any input that produces a chosen output is infeasible.
+
+What a hash allows is checking. Given a candidate for block 2, you hash it and compare the result with the stored value: equal means it is the block the pointer was made from, for all practical purposes. A hash pointer needs nothing more than that, and it is why the previous block still has to be stored and sent in full.
+
+<note>A hash is one-way and fixed-size (SHA-256: 256 bits, whatever the input). It cannot be reversed or decompressed; it can only be recomputed from a candidate input and compared.</note>
+
+Next: what that check finds when block 2 is altered.
+
+<continue/>
+
+@@@@ tangent-mev-from-ordering
+situation: tangent
+topic: Mempools and transaction ordering
+voice: typos
+level: easy
+expect: {"must":["order","maximal extractable value"],"setsProblem":true,"askMustNot":["\\b21\\b","9, 7 and 5","9 \\+ 7 \\+ 5"],"words":{"max":170}}
+@@ tutor
+**Problem 1 · warm-up**
+
+A block has room for 3 transactions. A producer's mempool holds five, all the same size, with fees of 4, 9, 2, 7 and 5 units. The producer wants the most fee revenue. Which transactions does it include, and what is the total?
+
+<solution>The three highest fees: 9, 7 and 5. Total 9 + 7 + 5 = 21 units.</solution>
+<check lang="python">
+fees = [4, 9, 2, 7, 5]
+assert sorted(fees, reverse=True)[:3] == [9, 7, 5] and sum(sorted(fees)[-3:]) == 21
+</check>
+
+<ask type="problem">The three fees chosen and their total.</ask>
+@@ learner question
+quick q before i answer - ive seen "MEV" mentiond everywhere when ppl talk about mempools, whats that actualy
+@@ reply
+MEV is maximal extractable value (originally "miner extractable value"): the profit a block producer can make, beyond fees and the block reward, by choosing which transactions go into its block and in what order. Pending transactions are visible in the mempool, so a producer, or a trader who pays the producer for placement, can put its own transactions around someone else's. The standard example is a sandwich: buy just before a large visible trade moves a price, and sell just after it. All of it follows from one fact: the producer alone decides the order inside its block.
+
+Fee ordering is the simplest use of that same power, which is where the problem was.
+
+<solution>The three highest fees: 9, 7 and 5. Total 9 + 7 + 5 = 21 units.</solution>
+
+<ask type="problem">Back to the block with room for 3: from the fees 4, 9, 2, 7 and 5, which three does a producer after the most revenue take, and what do they add up to?</ask>
+@@ verify
+fees = [4, 9, 2, 7, 5]
+best = sorted(fees, reverse=True)[:3]
+assert best == [9, 7, 5] and sum(best) == 21
+assert '21' in solution(reply) and '21' not in visible(reply)
+# the pending question is put again in new words, not repeated
+import re
+ask = re.search(r'<ask[^>]*>(.*?)</ask>', reply, flags=re.S).group(1)
+old = re.search(r'<ask[^>]*>(.*?)</ask>', tutor[0], flags=re.S).group(1)
+assert ask != old and all(str(f) in ask for f in fees)
+
+@@@@ tangent-majority-cannot-steal
+situation: tangent
+topic: Double spending
+options: {"strategy":"dialogue"}
+voice: wordy
+level: medium
+expect: {"must":["signature","private key"],"mustNot":["can take (your|the) coins"],"askTypes":["short","explain"],"words":{"max":170}}
+noverify: a conceptual answer; nothing is computed
+@@ tutor
+Suppose you run a shop that accepts a proof-of-work coin. A customer pays, you see the transaction in the newest block, and you hand over the goods straight away.
+
+<ask type="explain">What could the customer still do to end up with both the goods and the coins, and what would it take?</ask>
+@@ learner question
+Is this the 51% attack thing I keep reading about? Because what I don't get is, if someone has 51% of the hash power, does that mean they basically control the chain and can just move the coins out of my wallet into theirs? That sounds like the whole thing would be broken.
+@@ reply
+It is related, and no: a majority of the hash power does not let anyone move your coins. Spending an output needs a valid signature from its private key, and every node rejects a block that contains a transaction with an invalid signature, however much work is behind that block. Hash power buys the ability to out-build the honest chain, which means choosing which valid transactions are included, leaving some out, and replacing recent blocks with different ones. So a majority attacker can censor, and can reverse payments they made themselves. They cannot forge a payment from you.
+
+That second ability is the one your shop has to worry about.
+
+<ask type="explain">The customer is the attacker, and their payment to you is in the newest block. Describe the alternative chain they would have to produce for nodes to abandon that block, and what it would contain in place of the payment.</ask>

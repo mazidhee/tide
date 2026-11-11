@@ -1,0 +1,525 @@
+@@@@ hands-on-c-fork-three-then-exec
+situation: hands-on
+topic: fork, exec and wait
+options: {"strategy":"code"}
+voice: terse
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"must":["hello from echo","status 0"],"askMustNot":["status 127","No such file"]}
+@@ tutor
+`fork()` returns 0 in the child and the child's PID in the parent. `waitpid` blocks the parent until that child ends and hands back its exit status.
+
+```c
+#include <stdio.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+int main(void) {
+    pid_t pid = fork();
+    if (pid == 0) {                /* the child's copy continues here */
+        printf("child running\n");
+        return 7;
+    }
+    int status;
+    waitpid(pid, &status, 0);      /* the parent blocks until the child ends */
+    printf("child exited with %d\n", WEXITSTATUS(status));
+    return 0;
+}
+```
+
+```
+child running
+child exited with 7
+```
+
+<solution>Keep the PIDs in an array. In the first loop fork; in the child return (i + 1) * 10 at once, so a child never goes round the loop and forks again. In a second loop call waitpid(p[i], &st, 0) and print WEXITSTATUS(st). Output: 10, 20, 30 on three lines.</solution>
+
+<ask type="code" lang="c">Change the program so the parent forks three children. Child i (0, 1, 2) exits at once with status (i + 1) * 10. After starting all three, the parent waits for each in the order it created them and prints each exit status on its own line.</ask>
+@@ learner answer sure
+```c
+#include <stdio.h>
+#include <sys/wait.h>
+#include <unistd.h>
+int main(void) {
+    pid_t p[3];
+    for (int i = 0; i < 3; i++) {
+        p[i] = fork();
+        if (p[i] == 0) return (i + 1) * 10;
+    }
+    for (int i = 0; i < 3; i++) {
+        int st;
+        waitpid(p[i], &st, 0);
+        printf("%d\n", WEXITSTATUS(st));
+    }
+}
+```
+prints 10 20 30
+@@ reply
+<grade verdict="correct" score="1">It prints 10, 20 and 30 when run. `if (p[i] == 0) return (i + 1) * 10;` takes each child out of the loop before it can fork children of its own, and waiting on the stored PIDs fixes the order whichever child finishes first.</grade>
+
+A child usually runs a different program. `exec` replaces the program in the calling process: same PID, new code and data. It returns only if it fails.
+
+```c
+#include <stdio.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+int main(void) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        execl("/bin/echo", "echo", "hello from echo", (char *)NULL);
+        _exit(127);                /* reached only if execl failed */
+    }
+    int status;
+    waitpid(pid, &status, 0);
+    printf("status %d\n", WEXITSTATUS(status));
+    return 0;
+}
+```
+
+```
+hello from echo
+status 0
+```
+
+<note>`fork` then `exec`: the child calls `execl(path, argv0, ..., (char *)NULL)`. On success nothing after it runs, because the process is now the new program. Code after an exec call is the failure path.</note>
+
+<solution>With the path changed to "/bin/no-such-program", execl fails and returns −1, so the child runs perror, which writes "execl: No such file or directory" to standard error, then _exit(127). The parent prints "status 127".</solution>
+
+<ask type="code" lang="c">Change the path in `execl` to `/bin/no-such-program`, and add `perror("execl");` on the line before `_exit(127)`. Run it and explain each line of output: which process wrote it, and why.</ask>
+@@ verify
+# the learner's program, compiled as the app compiles it
+out, err, cerr, code = run_c_full(block(learner, 'c'), 'c')
+assert code == 0 and not cerr.strip() and out.split() == ['10', '20', '30'], (out, cerr)
+# both snippets shown print what is shown (also checked automatically)
+assert run_c(block(tutor[0], 'c')) == 'child running\nchild exited with 7\n'
+src = block(reply, 'c')
+assert run_c(src) == 'hello from echo\nstatus 0\n'
+# the task set: the changed program really gives what the solution says
+changed = src.replace('/bin/echo', '/bin/no-such-program').replace('_exit(127);', 'perror("execl"); _exit(127);')
+assert changed != src and 'perror' in changed
+o2, e2, c2, rc = run_c_full(changed, 'c')
+assert rc == 0 and o2 == 'status 127\n' and 'execl: No such file or directory' in e2, (o2, e2, c2)
+s = solution(reply)
+assert 'status 127' in s and 'No such file or directory' in s and 'status 127' not in visible(reply)
+
+@@@@ hands-on-c-pipe-plan-first-step
+situation: hands-on
+topic: File descriptors and pipes
+voice: plain
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"need":["plan","note"],"must":["child read 5 bytes","fd\\[0\\]"],"askMustNot":["parent read 5","while \\("]}
+@@ tutor
+**Why this matters**
+
+A pipe is the kernel object behind `|` in a shell, and behind much of how a supervisor captures a child's output or feeds it input. Using one correctly comes down to which process holds which descriptor, and the same reasoning carries over to sockets and to redirecting standard input and output.
+
+<ask type="short">After `pipe(fd)` succeeds, which of `fd[0]` and `fd[1]` do you read from, and what does `read` return once the pipe is empty and every write end has been closed?</ask>
+@@ learner answer sure
+read from fd[0], write to fd[1]. read returns 0 when it's empty and all the writers are closed, that's how you see end of file
+@@ reply
+<grade verdict="correct" score="1">Both parts are right: "read from fd[0], write to fd[1]", and a `read` that returns 0 is the pipe's end of file, which needs every write end closed.</grade>
+
+<plan>
+- One pipe from parent to child
+- Closing unused ends, and why end of file depends on it
+- Joining two programs with dup2
+</plan>
+
+A pipe only becomes useful after `fork`, because the child inherits both descriptors. Each side then closes the end it does not use.
+
+```c
+#include <stdio.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+int main(void) {
+    int fd[2];
+    pipe(fd);                      /* fd[0] is the read end, fd[1] the write end */
+    pid_t pid = fork();
+    if (pid == 0) {                /* child: the reader */
+        close(fd[1]);
+        char buf[16];
+        ssize_t n = read(fd[0], buf, sizeof buf);
+        printf("child read %zd bytes: %.*s", n, (int)n, buf);
+        return 0;
+    }
+    close(fd[0]);                  /* parent: the writer */
+    write(fd[1], "ping\n", 5);
+    close(fd[1]);
+    waitpid(pid, NULL, 0);
+    return 0;
+}
+```
+
+```
+child read 5 bytes: ping
+```
+
+<note>Pipe pattern: `pipe(fd)`, then `fork`. The reader closes `fd[1]`, the writer closes `fd[0]`, and each closes its own end when done. `fd[0]` reads, `fd[1]` writes.</note>
+
+<solution>Swap the roles. Child: close(fd[0]); write(fd[1], "pong\n", 5); close(fd[1]); return 0. Parent: close(fd[1]); then loop while ((n = read(fd[0], buf, sizeof buf)) > 0) total += n; close(fd[0]); waitpid; print the total. Output: "parent read 5 bytes". The parent must close fd[1] before the loop or its read never returns 0.</solution>
+
+<ask type="code" lang="c">Reverse the direction: the child writes `"pong\n"` and the parent reads. Have the parent keep calling `read` until it returns 0, add up the bytes, and print the total after the child has been waited for.</ask>
+@@ verify
+assert run_c(block(reply, 'c')) == 'child read 5 bytes: ping\n'
+assert len('ping\n') == 5 == len('pong\n')
+# a reference solution for the task set, built as the solution describes
+ref = r'''
+#include <stdio.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+int main(void) {
+    int fd[2];
+    pipe(fd);
+    pid_t pid = fork();
+    if (pid == 0) {
+        close(fd[0]);
+        write(fd[1], "pong\n", 5);
+        close(fd[1]);
+        return 0;
+    }
+    close(fd[1]);
+    char buf[16];
+    ssize_t n, total = 0;
+    while ((n = read(fd[0], buf, sizeof buf)) > 0) total += n;
+    close(fd[0]);
+    waitpid(pid, NULL, 0);
+    printf("parent read %zd bytes\n", total);
+    return 0;
+}
+'''
+out, err, cerr, code = run_c_full(ref, 'c')
+assert code == 0 and not cerr.strip() and out == 'parent read 5 bytes\n', (out, cerr)
+assert 'parent read 5 bytes' in solution(reply) and 'parent read 5' not in visible(reply)
+assert 'read from fd[0], write to fd[1]' in learner
+
+@@@@ hands-on-py-round-robin-clock-bug
+situation: hands-on
+topic: Round-robin scheduling and the time quantum
+options: {"strategy":"code"}
+voice: typos
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["clock \\+= quantum","\\b11\\b"],"must":["\\b16\\b","\\b11\\b"],"setsProblem":true,"askTypes":["code"],"askMustNot":["min\\(","clock \\+= run"]}
+@@ tutor
+First come, first served in code is one loop: the clock advances by each burst in turn, and a job finishes when its burst has been added.
+
+```python
+jobs = [("A", 5), ("B", 3), ("C", 8)]   # (name, burst in ms), all arrive at time 0
+
+clock = 0
+for name, burst in jobs:
+    clock += burst
+    print(name, "finishes at", clock)
+```
+
+```
+A finishes at 5
+B finishes at 8
+C finishes at 16
+```
+
+<solution>Use a deque of [name, time left]. Pop the front job, let run = min(3, left), add run to the clock and take it off left; append the job again if left > 0, otherwise print its finishing time. Output: B finishes at 6, A finishes at 11, C finishes at 16.</solution>
+
+<ask type="code" lang="python">Change it to round-robin with a quantum of 3 ms: keep the jobs in a queue, run the front job for at most one quantum, and send it to the back if it still has work left. Print each job's finishing time as it finishes.</ask>
+@@ learner answer unsure
+```python
+from collections import deque
+jobs = deque([["A", 5], ["B", 3], ["C", 8]])
+quantum = 3
+clock = 0
+while jobs:
+    name, left = jobs.popleft()
+    clock += quantum
+    left -= quantum
+    if left > 0:
+        jobs.append([name, left])
+    else:
+        print(name, "finishes at", clock)
+```
+i get B finishes at 6, A finishes at 12, C finishes at 18. queue part works i think but not sure abuot the numbers
+@@ reply
+<grade verdict="partial" score="0.5">The queue is right: `jobs.popleft()` and `jobs.append([name, left])` rotate the jobs correctly, and B at 6 is correct. The line that fails is `clock += quantum`: it charges a full 3 ms even when the job needs less.</grade>
+
+A comes round the second time at 9 with 2 ms left. It should finish at 11, but your clock jumps to 12 and `left` goes to −1. The same happens on C's last turn, so C is reported at 18. A check that exposes it: the bursts total 5 + 3 + 8 = 16 ms and the CPU is never idle, so the last job must finish at exactly 16.
+
+<card>Round-robin simulation: by how much does the clock advance on each turn? :: By min(quantum, time the job still needs). A job that finishes early gives up the rest of its slice.</card>
+
+<note>In a scheduler simulation the clock advances by the time actually used. With no idle time, the last finishing time equals the sum of the bursts: assert it.</note>
+
+<solution>Replace the two lines with run = min(quantum, left); clock += run; left -= run. Record total = 16 (the sum of the bursts) before the loop and assert clock == total after it. Output: B finishes at 6, A finishes at 11, C finishes at 16.</solution>
+
+<ask type="code" lang="python">Fix the loop so a job is charged only for the time it uses. Then add an `assert` after the loop that the final clock equals the sum of the three bursts, and run it.</ask>
+@@ verify
+# the learner's program prints exactly what they report
+out = run_py(block(learner, 'python'))
+assert out == 'B finishes at 6\nA finishes at 12\nC finishes at 18\n', out
+assert run_py(block(tutor[0], 'python')) == 'A finishes at 5\nB finishes at 8\nC finishes at 16\n'
+assert 5 + 3 + 8 == 16
+# the fix described in the solution, applied to their code
+fixed = block(learner, 'python').replace('    clock += quantum\n    left -= quantum\n', '    run = min(quantum, left)\n    clock += run\n    left -= run\n')
+assert 'min(quantum, left)' in fixed
+fixed = fixed.replace('clock = 0\n', 'clock = 0\ntotal = sum(left for _, left in jobs)\n') + 'assert clock == total\n'
+assert run_py(fixed) == 'B finishes at 6\nA finishes at 11\nC finishes at 16\n'
+# the reply's account of A's second turn: it starts at 9 with 2 left
+from collections import deque
+q, t, seen = deque([['A', 5], ['B', 3], ['C', 8]]), 0, []
+while q:
+    n, left = q.popleft(); seen.append((n, t, left)); run = min(3, left); t += run; left -= run
+    if left: q.append([n, left])
+assert ('A', 9, 2) in seen and seen[-1] == ('C', 14, 2) and t == 16
+assert 'min(' not in visible(reply).split('<ask')[1]
+
+@@@@ hands-on-py-best-fit-then-worst-fit
+situation: hands-on
+topic: Memory allocators: first fit and best fit
+options: {"strategy":"code"}
+voice: plain
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"must":["58","external fragmentation"],"askMustNot":["25 (KB )?(request )?fails","fourth request fails","None"]}
+@@ tutor
+An allocator keeps a list of free blocks ("holes"). First fit scans the list in address order and carves the request out of the first hole that is large enough.
+
+```python
+holes = [30, 12, 50, 20, 8]          # free block sizes in KB, in address order
+
+def first_fit(holes, size):
+    for i, h in enumerate(holes):
+        if h >= size:
+            holes[i] -= size
+            return i
+    return None
+
+for request in [10, 18, 9, 25]:
+    print(request, "-> hole", first_fit(holes, request), holes)
+```
+
+```
+10 -> hole 0 [20, 12, 50, 20, 8]
+18 -> hole 0 [2, 12, 50, 20, 8]
+9 -> hole 1 [2, 3, 50, 20, 8]
+25 -> hole 2 [2, 3, 25, 20, 8]
+```
+
+<solution>Collect (size, index) for every hole with size >= request, take the minimum, subtract and return the index; None when nothing fits. The four requests go to holes 1, 3, 0, 2 and the final list is [21, 2, 25, 2, 8].</solution>
+
+<ask type="code" lang="python">Write `best_fit(holes, size)`: it places the request in the smallest hole that is large enough and returns that hole's index, or `None`. Run the same four requests from the same starting list and print each step in the same way.</ask>
+@@ learner answer sure
+```python
+holes = [30, 12, 50, 20, 8]
+
+def best_fit(holes, size):
+    fits = [(h, i) for i, h in enumerate(holes) if h >= size]
+    if not fits:
+        return None
+    h, i = min(fits)
+    holes[i] -= size
+    return i
+
+for request in [10, 18, 9, 25]:
+    print(request, "-> hole", best_fit(holes, request), holes)
+```
+Ends with [21, 2, 25, 2, 8]. The 9 goes into hole 0 because the 12 has already shrunk to 2.
+@@ reply
+<grade verdict="correct" score="1">Correct, and it runs to [21, 2, 25, 2, 8]. `h, i = min(fits)` picks the smallest hole that fits and, on equal sizes, the lowest index. Your remark that "the 12 has already shrunk to 2" is the point where hand traces of best fit usually go wrong.</grade>
+
+Look at what best fit leaves behind.
+
+```python
+holes = [21, 2, 25, 2, 8]            # what best fit left behind
+print("free in total:", sum(holes), "KB")
+print("largest hole:", max(holes), "KB")
+print("a 26 KB request fits:", any(h >= 26 for h in holes))
+```
+
+```
+free in total: 58 KB
+largest hole: 25 KB
+a 26 KB request fits: False
+```
+
+58 KB is free, yet a 26 KB request fails, because the free memory is in pieces and no single piece is big enough. That is external fragmentation. Best fit tends to produce very small leftovers, like the two 2 KB holes here.
+
+<note>External fragmentation: enough memory is free in total, but it is split into holes that are each too small for the request. A request succeeds only if one hole is at least its size.</note>
+
+<solution>worst_fit: find the index of the largest hole; return None if it is smaller than the request; otherwise subtract and return the index. From [30, 12, 50, 20, 8]: 10 goes to hole 2 (40 left), 18 to hole 2 again (22 left), 9 to hole 0 (21 left), and 25 fails with None, because the list is [21, 12, 22, 20, 8]: 83 KB free but no hole of 25. Always cutting the largest hole destroys the big holes.</solution>
+
+<ask type="code" lang="python">One proposed cure is worst fit: always carve the request out of the largest hole, so the leftover stays usefully big. Write `worst_fit(holes, size)` and run the same four requests from the original list `[30, 12, 50, 20, 8]`. Say what happens, and why.</ask>
+@@ verify
+assert run_py(block(tutor[0], 'python')).strip().split('\n')[-1] == '25 -> hole 2 [2, 3, 25, 20, 8]'
+out = run_py(block(learner, 'python')).strip().split('\n')
+assert out == ['10 -> hole 1 [30, 2, 50, 20, 8]', '18 -> hole 3 [30, 2, 50, 2, 8]', '9 -> hole 0 [21, 2, 50, 2, 8]', '25 -> hole 2 [21, 2, 25, 2, 8]'], out
+assert '[21, 2, 25, 2, 8]' in solution(tutor[0]) and 'holes 1, 3, 0, 2' in solution(tutor[0])
+assert sum([21, 2, 25, 2, 8]) == 58 and max([21, 2, 25, 2, 8]) == 25
+# ties: min() on (size, index) pairs takes the lowest index among equal sizes
+assert min([(2, 3), (2, 1), (8, 4)]) == (2, 1)
+ref = '''
+holes = [30, 12, 50, 20, 8]
+
+def worst_fit(holes, size):
+    i = max(range(len(holes)), key=lambda i: holes[i])
+    if holes[i] < size:
+        return None
+    holes[i] -= size
+    return i
+
+for request in [10, 18, 9, 25]:
+    print(request, "-> hole", worst_fit(holes, request), holes)
+'''
+w = run_py(ref).strip().split('\n')
+assert w == ['10 -> hole 2 [30, 12, 40, 20, 8]', '18 -> hole 2 [30, 12, 22, 20, 8]', '9 -> hole 0 [21, 12, 22, 20, 8]', '25 -> hole None [21, 12, 22, 20, 8]'], w
+assert sum([21, 12, 22, 20, 8]) == 83
+s = solution(reply)
+assert '[21, 12, 22, 20, 8]' in s and '83 KB' in s and '83' not in visible(reply)
+
+@@@@ hands-on-c-fork-copies-memory
+situation: hands-on
+topic: fork, exec and wait
+voice: confused
+level: easy
+expect: {"verdict":"wrong","names":["same variable","own (copy|address space)|separate"],"must":["parent: x = 5","prints 5"],"setsProblem":true,"askTypes":["code"],"askMustNot":["same address","identical address","equal addresses"]}
+@@ tutor
+After `fork()` the child starts as a copy of the parent: the same code, the same values in every variable, the same open files.
+
+<ask type="predict">A program sets `int x = 5` and then forks. The child sets `x = 99` and exits. The parent waits for the child to finish and then prints `x`. What does the parent print, and why?</ask>
+@@ learner answer unsure
+99? the child is a copy of the parent so x is the same variable in both, and the parent waits so the childs write happens first. unless copy means something else here
+@@ reply
+<grade verdict="wrong" score="0.1">"x is the same variable in both" is the step that fails, and your doubt about the word copy was the right one. The child gets its own address space: its `x` starts equal to the parent's but is a separate variable. Waiting orders the two processes; it does not join their memory.</grade>
+
+Run it:
+
+```c
+#include <stdio.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+int main(void) {
+    int x = 5;
+    pid_t pid = fork();
+    if (pid == 0) {
+        x = 99;                    /* the child writes to its own copy */
+        printf("child:  x = %d\n", x);
+        return 0;
+    }
+    waitpid(pid, NULL, 0);
+    printf("parent: x = %d\n", x);
+    return 0;
+}
+```
+
+```
+child:  x = 99
+parent: x = 5
+```
+
+The parent prints 5 even though the child's assignment has certainly happened by then.
+
+<card>After fork(), the child assigns to a variable. Does the parent see the change? :: No. Each process has its own address space; the child's variables are copies that start with the same values.</card>
+
+<note>`fork` duplicates the address space: parent and child have the same values at the moment of the fork and separate memory from then on. They share open files, not variables.</note>
+
+<solution>Print (void *)&x with %p in both branches. The two lines show the same address with different values (99 and 5). The address is virtual: each process has its own mapping from that address to physical memory, so equal addresses in two processes do not mean shared memory.</solution>
+
+<ask type="code" lang="c">Add the address of `x` to both `printf` calls, using `%p` and `(void *)&x`. Run it, compare the two addresses with the two values, and explain what you see.</ask>
+@@ verify
+import re
+src = block(reply, 'c')
+assert run_c(src) == 'child:  x = 99\nparent: x = 5\n'
+# the task set: same address in both lines, different values
+mod = src.replace('printf("child:  x = %d\\n", x);', 'printf("child:  x = %d at %p\\n", x, (void *)&x);').replace('printf("parent: x = %d\\n", x);', 'printf("parent: x = %d at %p\\n", x, (void *)&x);')
+assert mod.count('%p') == 2
+out, err, cerr, code = run_c_full(mod, 'c')
+assert code == 0 and not cerr.strip(), cerr
+m = re.findall(r'x = (\d+) at (0x[0-9a-f]+)', out)
+assert len(m) == 2 and [v for v, _ in m] == ['99', '5'] and m[0][1] == m[1][1], out
+assert 'x is the same variable in both' in learner
+assert 'same address' in solution(reply) and 'same address' not in visible(reply)
+
+@@@@ summary-deadlock-conditions-lesson
+situation: summary
+topic: Deadlock: the four conditions
+voice: plain
+level: medium
+expect: {"verdict":"correct","must":["circular wait","hold and wait","lock order"]}
+noverify: conceptual; the marks rest on definitions and nothing is computed
+@@ tutor
+**Problem 4 · mixed**
+
+Three threads and three locks. T1 holds A and is waiting for B. T2 holds B and is waiting for C. T3 holds C and is waiting for A. No thread gives up a lock until it has both of the locks it wants.
+
+<solution>The cycle: T1 waits for T2 (holder of B), T2 waits for T3 (holder of C), T3 waits for T1 (holder of A). A fixed lock order A, B, C removes circular wait: T3 would have to take A before C, so it could never hold C while waiting for A, and the cycle cannot close. Hold and wait is untouched: a thread still holds A while it waits for B.</solution>
+
+<ask type="problem">Write out the cycle of waits, and say which one of the four conditions a fixed lock order A, B, C removes.</ask>
+@@ learner answer sure
+Cycle: T1 waits for T2 (who has B), T2 waits for T3 (has C), T3 waits for T1 (has A). A fixed lock order removes hold and wait, because threads don't hold a lock while waiting any more.
+@@ tutor
+<grade verdict="partial" score="0.5">The cycle is right: "T1 waits for T2 (who has B), T2 waits for T3 (has C), T3 waits for T1 (has A)". But "removes hold and wait" is not what ordering does: under the order A, B, C a thread still holds A while it waits for B.</grade>
+
+What ordering removes is circular wait. T3 would have to take A before C, so it can never hold C while waiting for A, and the chain of waits cannot close into a cycle.
+
+<card>Which deadlock condition does a fixed global lock order remove? :: Circular wait. Threads still hold one lock while waiting for the next, but all waits point from lower to higher locks, so no cycle can form.</card>
+
+<note>Lock ordering breaks circular wait, not hold and wait: with every thread locking in the same order, a wait always goes from a lower lock to a higher one, and a cycle would need one wait to go back down.</note>
+
+**Problem 5 · mixed**
+
+A different design: before touching any data, a thread takes every lock it will need in a single step that either gets all of them or none. It never asks for a further lock later.
+
+<solution>This removes hold and wait: a thread that is waiting holds nothing, and a thread that holds locks never waits for another. The cost: the thread must know every lock it will need in advance, and it holds them for longer than it uses them, which reduces concurrency.</solution>
+
+<ask type="short">Which of the four conditions does this design remove, and what does it cost?</ask>
+@@ learner answer sure
+Hold and wait. A thread either gets every lock it needs in one go or holds none, so it's never holding one while waiting for another. The cost is that you have to know all the locks up front and you hold them longer than needed, so less concurrency.
+@@ reply
+<grade verdict="correct" score="1">Right, with the reason and the cost: "it's never holding one while waiting for another" is hold and wait removed, and knowing every lock in advance while holding them for longer is the price.</grade>
+
+<summary>**What you learned:** to write out a cycle of waits from a description of who holds and who wants each lock, and to match a prevention technique to the condition it removes: a fixed lock order removes circular wait; taking all locks in one step removes hold and wait.
+
+**Still shaky:** telling those two conditions apart. In Problem 4 you credited lock ordering with removing hold and wait; in Problem 5 you applied hold and wait correctly to the all-at-once design. The card on lock ordering is in your deck.
+
+**Review next:** one more pass at lock ordering on a new example, checking for each thread that it can still hold one lock while waiting for another. After that, deadlock avoidance with the banker's algorithm is the natural follow-on.</summary>
+
+@@@@ summary-quiz-user-kernel-mode
+situation: summary
+topic: User mode and kernel mode
+mode: quiz
+options: {"length":3}
+voice: overconfident
+level: medium
+expect: {"verdict":"correct","must":["2 (out )?of 3","exception"]}
+noverify: conceptual; the score (2 of 3) is read off the three marks shown and nothing else is computed
+@@ tutor
+**Question 1 of 3**
+
+<ask type="choice" options="Disabling interrupts|Adding two registers|Calling a function in the same program|Reading a local variable">Which of these operations is a CPU only permitted to carry out in kernel mode?</ask>
+@@ learner answer sure
+Disabling interrupts
+@@ tutor
+<grade verdict="correct" score="1">"Disabling interrupts" is the privileged one: a program able to do it could stop the timer interrupt from ever returning control to the kernel and keep the CPU for itself.</grade>
+
+**Question 2 of 3**
+
+<ask type="short">A program running in user mode executes a privileged instruction directly, for example one that halts the processor. What does the hardware do, and what usually happens to the program?</ask>
+@@ learner answer sure
+The instruction just gets ignored. The CPU skips it since user mode can't run it and the program carries on with the next one.
+@@ tutor
+<grade verdict="wrong" score="0">"The instruction just gets ignored" is not what happens. The CPU refuses the instruction by raising an exception: it switches to kernel mode and jumps to a handler the kernel registered. The kernel then usually ends the program, on Linux by sending it a fatal signal.</grade>
+
+<card>What happens when user-mode code executes a privileged instruction? :: The CPU raises an exception and enters the kernel's handler; the kernel normally terminates the process. The instruction is never silently skipped.</card>
+
+**Question 3 of 3**
+
+<ask type="explain">Whenever the CPU moves from user mode to kernel mode it starts executing at an address the kernel chose in advance, never one supplied by the user program. Why does it have to be that way?</ask>
+@@ learner answer sure
+Because if the program could pick the address it could jump into the middle of kernel code, or to its own code, while running with kernel privileges and skip all the checks. So the kernel registers fixed entry points at boot and the CPU only ever jumps to those.
+@@ reply
+<grade verdict="correct" score="1">Correct: "it could jump into the middle of kernel code, or to its own code, while running with kernel privileges" is exactly the hole that fixed entry points close.</grade>
+
+<summary>**Score:** 2 of 3.
+
+**Strengths:** you know what makes an operation privileged (question 1), and why entry into kernel mode goes only through addresses the kernel registered (question 3).
+
+**Misconception to fix:** that a privileged instruction in user mode is skipped. It is not ignored: the CPU raises an exception, the kernel's handler runs, and the process is normally terminated. The card for this is in your deck.
+
+**Review:** exceptions, and how the kernel decides between ending a process and resuming it, then how interrupts use the same entry mechanism.</summary>

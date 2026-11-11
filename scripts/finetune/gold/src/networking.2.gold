@@ -1,0 +1,418 @@
+@@@@ correct-probe-ends-subnet-plan
+situation: after-correct
+topic: IPv4 addressing and CIDR subnetting
+voice: plain
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"need":["plan","note"],"must":["10\\.4\\.8\\.0","10\\.4\\.11\\.255","1022","Problem 1"],"mustNot":["172\\.20\\.192\\.0","172\\.20\\.207\\.255","4094"],"askTypes":["problem"]}
+@@ tutor
+<ask type="short">How many addresses does a /24 contain, and which two of them are never given to a host?</ask>
+@@ learner answer sure
+256, since 32-24 = 8 host bits and 2^8 = 256. The first one is the network address (host bits all 0) and the last one is the broadcast address (host bits all 1).
+@@ reply
+<grade verdict="correct" score="1">"32-24 = 8 host bits and 2^8 = 256" is right, and so are the two reserved addresses: host bits all 0 for the network, all 1 for the broadcast.</grade>
+
+You have prefixes that end on an octet boundary, so the plan starts where the boundary falls inside an octet.
+
+<plan>
+- Network and broadcast addresses when the prefix splits an octet
+- Splitting a block into equal subnets
+- Subnets of different sizes from one block
+</plan>
+
+With a /22, the third octet holds 22 − 16 = 6 network bits and 2 host bits, so it moves in blocks of $2^2 = 4$: 0, 4, 8, 12 and so on. Take 10.4.9.150/22: the 9 falls in the block that starts at 8. The network address is 10.4.8.0, the broadcast address is the last one before the next block, 10.4.11.255, and there are $2^{10} - 2 = 1022$ usable hosts.
+
+<note>Prefix inside an octet: block size in that octet = 2^(host bits in it). Network address = the start of the block, with all later bits 0. Broadcast = the address just before the next block. Hosts = 2^(32 − prefix) − 2.</note>
+
+**Problem 1 · warm-up**
+
+A host has the address 172.20.200.19/20. Find its network address, its broadcast address and the number of usable hosts.
+
+<solution>20 − 16 = 4 network bits in the third octet and 4 host bits, so the block size is 16. 200 = 12 × 16 + 8, so the block starts at 192. Network 172.20.192.0, broadcast 172.20.207.255, hosts 2^12 − 2 = 4094.</solution>
+<check lang="python">
+import ipaddress
+n = ipaddress.ip_interface('172.20.200.19/20').network
+assert str(n.network_address) == '172.20.192.0'
+assert str(n.broadcast_address) == '172.20.207.255'
+assert n.num_addresses - 2 == 4094
+</check>
+
+<ask type="problem">The three values, with the block size you used.</ask>
+@@ verify
+import ipaddress
+# the learner's answer
+assert 32 - 24 == 8 and 2**8 == 256 == ipaddress.ip_network('10.0.0.0/24').num_addresses
+# the worked example
+n = ipaddress.ip_interface('10.4.9.150/22').network
+assert str(n.network_address) == '10.4.8.0' and str(n.broadcast_address) == '10.4.11.255'
+assert n.num_addresses - 2 == 1022 == 2**10 - 2 and 22 - 16 == 6 and 2**2 == 4 and 9 // 4 * 4 == 8
+for s in ('10.4.8.0', '10.4.11.255', '1022'):
+    assert s in visible(reply)
+# problem 1
+m = ipaddress.ip_interface('172.20.200.19/20').network
+assert str(m.network_address) == '172.20.192.0' and str(m.broadcast_address) == '172.20.207.255'
+assert m.num_addresses - 2 == 4094 == 2**12 - 2 and 200 == 12 * 16 + 8 and 12 * 16 == 192
+for s in ('172.20.192.0', '172.20.207.255', '4094'):
+    assert s in solution(reply) and s not in visible(reply)
+
+@@@@ correct-unsure-keepalive-same-level
+situation: after-correct
+topic: HTTP keep-alive and connection reuse
+voice: confused
+level: easy
+expect: {"verdict":"correct","setsProblem":true,"must":["Problem 2"],"mustNot":["\\b300\\b"],"askTypes":["problem"]}
+@@ tutor
+Without keep-alive, HTTP/1.1 opens a new TCP connection for every object. Each connection costs one round trip for the handshake before the request can go out, then one more for the request and its response.
+
+<note>New connection per object: about 2 round trips each (handshake, then request and response). A kept-alive connection pays the handshake once.</note>
+
+**Problem 1 · warm-up**
+
+A client fetches 6 small objects, one after another, from a server with a round-trip time of 40 ms. Keep-alive is off, so each object uses a new TCP connection. Ignore TLS, server time and transmission time. How long does the whole fetch take?
+
+<solution>Each object costs 2 round trips = 80 ms. 6 × 80 = 480 ms.</solution>
+<check lang="python">
+assert 6 * (40 + 40) == 480
+</check>
+
+<ask type="problem">The total time in milliseconds, with your reasoning.</ask>
+@@ learner answer unsure
+480 ms I think?? each one is a handshake and then the request, so 2 round trips = 80 ms, times 6. but I'm not sure if closing each connection adds more time on top
+@@ reply
+<grade verdict="correct" score="1">"2 round trips = 80 ms, times 6" is right, and 480 ms is the total. Closing adds nothing here: the client already has the response when the FIN exchange starts, and it can open the next connection without waiting for the close to finish.</grade>
+
+One more at the same level, since you were unsure.
+
+**Problem 2 · same level**
+
+The same kind of fetch, with keep-alive on: 9 small objects, one after another, over a single TCP connection to a server with a round-trip time of 30 ms. Ignore TLS, server time and transmission time. How long does it take?
+
+<solution>One handshake: 30 ms. Then 9 request and response exchanges at one round trip each: 9 × 30 = 270 ms. Total 300 ms.</solution>
+<check lang="python">
+rtt = 30
+assert rtt + 9 * rtt == 300
+</check>
+
+<ask type="problem">The total time in milliseconds, saying how many round trips you counted and for what.</ask>
+@@ verify
+assert 2 * 40 == 80 and 6 * 80 == 480
+assert '480' in learner and '80 ms' in learner
+assert 30 + 9 * 30 == 300 and 9 * 30 == 270
+assert '300 ms' in solution(reply) and '300' not in visible(reply)
+
+@@@@ wrong-host-count-includes-network-broadcast
+situation: after-wrong
+topic: IPv4 addressing and CIDR subnetting
+voice: overconfident
+level: easy
+expect: {"verdict":"wrong","accept":["partial"],"names":["network address","broadcast"],"must":["\\b62\\b","10\\.1\\.5\\.65","10\\.1\\.5\\.126"],"mustNot":["192\\.168\\.9\\.14\\b","\\b14 (usable|hosts)"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+**Problem 2 · same level**
+
+A subnet is 10.1.5.64/26. How many hosts can it address, and what are its first and last usable host addresses?
+
+<solution>6 host bits: 2^6 = 64 addresses, 10.1.5.64 to 10.1.5.127. The first is the network address and the last is the broadcast address, so 62 hosts: 10.1.5.65 to 10.1.5.126.</solution>
+<check lang="python">
+import ipaddress
+n = ipaddress.ip_network('10.1.5.64/26')
+hosts = list(n.hosts())
+assert len(hosts) == 62 and str(hosts[0]) == '10.1.5.65' and str(hosts[-1]) == '10.1.5.126'
+</check>
+
+<ask type="problem">The host count and the two addresses.</ask>
+@@ learner answer sure
+64 hosts, 2^6 = 64. First usable is 10.1.5.64 and the last is 10.1.5.127, obviously.
+@@ reply
+<grade verdict="wrong" score="0.2">"2^6 = 64" is the number of addresses in the block, not the number of hosts. Two of them cannot be assigned: 10.1.5.64, with host bits all 0, is the network address, and 10.1.5.127, with host bits all 1, is the broadcast address.</grade>
+
+That leaves 64 − 2 = 62 hosts, from 10.1.5.65 to 10.1.5.126. The usable range always starts one above the network address and ends one below the broadcast address.
+
+<card>How many hosts fit in a subnet with h host bits, and why not 2^h? :: 2^h − 2. The address with host bits all 0 names the network and the one with host bits all 1 is the broadcast address.</card>
+
+<note>Hosts in a subnet = 2^(host bits) − 2. First usable = network address + 1; last usable = broadcast address − 1. (/31 and /32 are special cases.)</note>
+
+**Problem 3 · easier**
+
+A subnet is 192.168.9.0/28. Give its host count and its first and last usable host addresses.
+
+<solution>4 host bits: 2^4 = 16 addresses, 192.168.9.0 to 192.168.9.15. Hosts: 16 − 2 = 14, from 192.168.9.1 to 192.168.9.14.</solution>
+<check lang="python">
+import ipaddress
+hosts = list(ipaddress.ip_network('192.168.9.0/28').hosts())
+assert len(hosts) == 14 and str(hosts[0]) == '192.168.9.1' and str(hosts[-1]) == '192.168.9.14'
+</check>
+
+<ask type="problem">The host count and the two addresses, naming the network and broadcast addresses you set aside.</ask>
+@@ verify
+import ipaddress
+n = ipaddress.ip_network('10.1.5.64/26')
+assert n.num_addresses == 64 == 2**6
+assert str(n.network_address) == '10.1.5.64' and str(n.broadcast_address) == '10.1.5.127'   # the learner's two "usable" addresses
+h = list(n.hosts())
+assert len(h) == 62 and str(h[0]) == '10.1.5.65' and str(h[-1]) == '10.1.5.126'
+m = ipaddress.ip_network('192.168.9.0/28')
+k = list(m.hosts())
+assert m.num_addresses == 16 and len(k) == 14 and str(k[0]) == '192.168.9.1' and str(k[-1]) == '192.168.9.14'
+assert str(m.broadcast_address) == '192.168.9.15'
+assert '192.168.9.14' in solution(reply) and '192.168.9.14' not in visible(reply)
+
+@@@@ wrong-ack-is-last-byte-received
+situation: after-wrong
+topic: TCP sequence and acknowledgement numbers
+voice: typos
+level: easy
+expect: {"verdict":"wrong","accept":["partial"],"names":["next byte|next expected|expects next","4500"],"must":["4500"],"askMustNot":["\\b7000\\b"],"mustNot":["\\b7000\\b"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+Host B has received every byte up to and including byte 4199. A segment now arrives with sequence number 4200, carrying 300 bytes of data. What acknowledgement number does B send?
+
+<solution>The segment holds bytes 4200 to 4499. The acknowledgement number is the next byte B expects: 4200 + 300 = 4500.</solution>
+<check lang="python">
+assert 4200 + 300 == 4500
+</check>
+
+<ask type="problem">The acknowledgement number, with your reasoning.</ask>
+@@ learner answer sure
+4499. the segmnet has bytes 4200 to 4499 so B acks the last byte it recieved
+@@ reply
+<grade verdict="wrong" score="0.2">The range is right, "bytes 4200 to 4499", but "B acks the last byte it recieved" is not what the field means. An acknowledgement number names the next byte the receiver expects, so B sends 4200 + 300 = 4500.</grade>
+
+Read ACK 4500 as "I have everything below 4500; send me 4500 next". It then equals the sequence number of the segment the sender should transmit next, which is why the field is defined this way.
+
+<card>What does a TCP acknowledgement number of N mean? :: Every byte below N has been received, and N is the next byte expected. For a segment with sequence number s and n bytes, the ACK is s + n.</card>
+
+<note>ACK number = next byte expected = sequence number + length of the data received in order. It is cumulative: it covers every byte below it.</note>
+
+<ask type="short">B has now received everything up to and including byte 6999. The next segment is lost, and the one after it arrives: sequence number 7500, carrying 500 bytes. What acknowledgement number does B send, and why?</ask>
+@@ verify
+assert 4200 + 300 == 4500 and 4200 + 300 - 1 == 4499     # right answer; the learner's "last byte" figure
+assert '4499' in learner
+# the new question: a gap at 7000..7499, so the cumulative ACK stays at the first missing byte
+received_through = 6999
+arrived = range(7500, 8000)
+assert received_through + 1 not in arrived
+answer = received_through + 1
+assert answer == 7000
+import re
+assert not re.search(r'\b7000\b', reply)
+
+@@@@ wrong-quiz-dns-ttl-push
+situation: after-wrong
+topic: DNS resolution and caching
+mode: quiz
+options: {"length":6}
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["TTL","11:00"],"must":["11:00","Question 4 of 6"],"askMustNot":["09:10","09:17"],"mustNot":["09:10","09:17"]}
+@@ tutor
+**Question 3 of 6**
+
+<ask type="short">A recursive resolver looks up shop.example at 10:00 and caches the A record, which has a TTL of 3600 seconds. At 10:20 the owner changes the record on the authoritative server. Until what time can that resolver go on answering with the old address?</ask>
+@@ learner answer sure
+Only until 10:20. When the record changes the authoritative server tells the resolvers and they drop the old one, that's what DNS propagation is.
+@@ reply
+<grade verdict="wrong" score="0">"the authoritative server tells the resolvers" is the step that fails: it keeps no list of which resolvers cached the record and sends them nothing. The resolver keeps the old answer until its TTL runs out, 3600 seconds after 10:00, so it can serve the old address until 11:00.</grade>
+
+"Propagation" is only caches expiring one by one, each on its own clock.
+
+<card>After a DNS record changes, when does a resolver that cached the old value stop serving it? :: When the TTL of its cached copy runs out, counted from when it cached it. Nothing is pushed to resolvers.</card>
+
+**Question 4 of 6**
+
+<ask type="short">A record has a TTL of 600 seconds. Resolver X cached it at 09:00 and resolver Y cached it at 09:07. The record is changed at 09:08. By what time has each resolver stopped serving the old value?</ask>
+@@ verify
+from datetime import datetime, timedelta
+t = lambda s: datetime.strptime(s, '%H:%M')
+f = lambda d: d.strftime('%H:%M')
+assert f(t('10:00') + timedelta(seconds=3600)) == '11:00'
+# the next question's withheld answers
+assert f(t('09:00') + timedelta(seconds=600)) == '09:10'
+assert f(t('09:07') + timedelta(seconds=600)) == '09:17'
+assert '09:10' not in reply and '09:17' not in reply
+# both expire after the change, so both really do serve the old value for a while
+assert t('09:10') > t('09:08') and t('09:17') > t('09:08')
+
+@@@@ wrong-longest-prefix-first-match
+situation: after-wrong
+topic: Longest-prefix-match routing
+options: {"difficulty":"hard"}
+voice: confused
+level: hard
+expect: {"verdict":"wrong","names":["order|first row|first match","/20|longest|most specific"],"must":["10\\.20\\.63\\.255","\\bC\\b"],"setsProblem":true,"askMustNot":["\\bB\\b","/16"]}
+@@ tutor
+**Problem 1 · hard**
+
+A router's forwarding table:
+
+| Prefix | Next hop |
+|---|---|
+| 10.0.0.0/8 | A |
+| 10.20.48.0/20 | C |
+| 10.20.0.0/16 | B |
+| 0.0.0.0/0 | D |
+
+A packet arrives for 10.20.61.7. Which next hop does it take, and why?
+
+<solution>All four prefixes contain 10.20.61.7: the /20 covers 10.20.48.0 to 10.20.63.255, and 61 lies between 48 and 63. The longest matching prefix wins, so the packet goes to C.</solution>
+<check lang="python">
+import ipaddress
+table = {'10.0.0.0/8': 'A', '10.20.48.0/20': 'C', '10.20.0.0/16': 'B', '0.0.0.0/0': 'D'}
+d = ipaddress.ip_address('10.20.61.7')
+match = [ipaddress.ip_network(p) for p in table if d in ipaddress.ip_network(p)]
+assert len(match) == 4
+assert table[str(max(match, key=lambda n: n.prefixlen))] == 'C'
+</check>
+
+<ask type="problem">The next hop, and the rule that picked it.</ask>
+@@ learner answer unsure
+A, I think? The router goes down the table and 10.0.0.0/8 is the first row that matches, same as a firewall rule list, right? But then I don't get what the rows under it are even for.
+@@ reply
+<grade verdict="wrong" score="0.1">"10.0.0.0/8 is the first row that matches" assumes the order of the rows decides, as it does in a firewall rule list. A forwarding table has no order: the router finds every prefix that contains the destination and takes the longest one. That is what the rows below it are for.</grade>
+
+Here all four rows match. The /20 covers 10.20.48.0 to 10.20.63.255, which includes 10.20.61.7, and 20 bits is the longest match, so the packet goes to C. A longer prefix describes a smaller block of addresses, so it is the most specific route the router knows.
+
+<card>A destination matches several prefixes in a routing table. Which route is used? :: The one with the longest prefix (the most specific), whatever the order of the rows. 0.0.0.0/0 matches everything and wins only when nothing else does.</card>
+
+<note>Longest-prefix match: of all the prefixes that contain the destination, use the one with the most prefix bits. Row order plays no part.</note>
+
+**Problem 2 · same table**
+
+With the same table, a packet arrives for 10.20.64.1. Find its next hop.
+
+<solution>10.20.64.1 is outside the /20 (which ends at 10.20.63.255). It matches 10.20.0.0/16, 10.0.0.0/8 and 0.0.0.0/0; the longest is the /16, so next hop B.</solution>
+<check lang="python">
+import ipaddress
+table = {'10.0.0.0/8': 'A', '10.20.48.0/20': 'C', '10.20.0.0/16': 'B', '0.0.0.0/0': 'D'}
+d = ipaddress.ip_address('10.20.64.1')
+match = [ipaddress.ip_network(p) for p in table if d in ipaddress.ip_network(p)]
+assert sorted(n.prefixlen for n in match) == [0, 8, 16]
+assert table[str(max(match, key=lambda n: n.prefixlen))] == 'B'
+</check>
+
+<ask type="problem">The next hop, listing which rows match the destination and which do not.</ask>
+@@ verify
+import ipaddress
+# the table as the tutor turn shows it, in its order (so the "first row that matches" is A)
+rows = table(tutor[0])[1:]
+assert rows == [['10.0.0.0/8', 'A'], ['10.20.48.0/20', 'C'], ['10.20.0.0/16', 'B'], ['0.0.0.0/0', 'D']], rows
+def lpm(dst):
+    d = ipaddress.ip_address(dst)
+    m = [(ipaddress.ip_network(p), hop) for p, hop in rows if d in ipaddress.ip_network(p)]
+    return m, max(m, key=lambda x: x[0].prefixlen)[1]
+m, hop = lpm('10.20.61.7')
+assert len(m) == 4 and hop == 'C' and m[0][1] == 'A'
+assert str(ipaddress.ip_network('10.20.48.0/20').broadcast_address) == '10.20.63.255'
+m2, hop2 = lpm('10.20.64.1')
+assert sorted(n.prefixlen for n, _ in m2) == [0, 8, 16] and hop2 == 'B'
+assert 'next hop B' in solution(reply)
+
+@@@@ wrong-transfer-time-bits-bytes
+situation: after-wrong
+topic: Latency, throughput and bandwidth
+options: {"strategy":"maths"}
+voice: terse
+level: easy
+expect: {"verdict":"wrong","names":["bits|megabits","bytes|megabytes"],"must":["3600","\\b60 s\\b","Problem 2"],"mustNot":["\\b120 s\\b","9600"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+Transfer time for a large file is close to its size divided by the throughput, once both are in the same unit. Link rates are quoted in bits per second; file sizes are quoted in bytes.
+
+<note>Transfer time ≈ size / throughput, with both in bits (or both in bytes). 1 byte = 8 bits. Here 1 MB = $10^6$ bytes and 1 Mbit/s = $10^6$ bits per second.</note>
+
+**Problem 1**
+
+A 450 MB file is downloaded at a steady throughput of 60 Mbit/s. How long does the download take?
+
+<solution>450 MB = 450 × 8 = 3600 Mbit. 3600 / 60 = 60 s.</solution>
+<check lang="python">
+size_bits = 450 * 10**6 * 8
+rate = 60 * 10**6
+assert size_bits / rate == 60
+</check>
+
+<ask type="problem">The time in seconds, with your working.</ask>
+@@ learner answer sure
+7.5 s. 450/60
+@@ reply
+<grade verdict="wrong" score="0.1">"450/60" divides megabytes by megabits per second, so the units do not cancel to seconds. The size has to be in bits first: 450 MB = 450 × 8 = 3600 Mbit.</grade>
+
+Then 3600 Mbit / 60 Mbit/s = 60 s, eight times your figure. The factor of 8 is the whole error, and it is the most common one in capacity estimates: a "60 megabit" line moves 7.5 megabytes each second.
+
+<card>A file size is in MB and a link rate is in Mbit/s. What must be done before dividing? :: Convert to the same unit: multiply the megabytes by 8 to get megabits (or divide the rate by 8). Then time = size / rate.</card>
+
+**Problem 2**
+
+A 1.2 GB database backup is copied at a steady throughput of 80 Mbit/s (take 1 GB = 1000 MB). Find the time it takes.
+
+<solution>1.2 GB = 1200 MB = 1200 × 8 = 9600 Mbit. 9600 / 80 = 120 s.</solution>
+<check lang="python">
+size_bits = 1.2 * 10**9 * 8
+rate = 80 * 10**6
+assert abs(size_bits / rate - 120) < 1e-9
+</check>
+
+<ask type="problem">The time in seconds, writing the size in megabits first.</ask>
+@@ verify
+assert 450 / 60 == 7.5                      # the learner's figure
+assert 450 * 8 == 3600 and 3600 / 60 == 60  # the correction
+assert 60 / 7.5 == 8 and 60 / 8 == 7.5      # "eight times your figure"; 60 Mbit/s = 7.5 MB/s
+assert 1200 * 8 == 9600 and 9600 / 80 == 120
+assert '120 s' in solution(reply) and '120' not in visible(reply)
+
+@@@@ idk-certificate-signature-first
+situation: idk
+topic: TLS certificates and chains of trust
+voice: plain
+level: hard
+expect: {"must":["signature","public key"],"askMustNot":["chain of trust","Root R'?s? (public )?key (checks|verifies)"],"mustNot":["walks? the chain","up the chain"]}
+noverify: conceptual; teaches what a certificate signature proves and asks a smaller question, nothing computed
+@@ tutor
+**Why this matters**
+
+A TLS certificate is how a client knows that the server it reached is the one named in the URL, and the chain of trust is how that works without the client knowing every server in advance. It sits under HTTPS, payment APIs, webhook endpoints and mutual TLS between services. An expired intermediate or an incomplete chain is a routine cause of outages, so reading a chain is practical work.
+
+<ask type="explain">Your browser's trust store holds only root CA certificates. A site presents a certificate issued by an intermediate CA the browser has never seen. How can the browser still decide whether to trust the site?</ask>
+@@ learner idk
+@@ reply
+Start with what one certificate is. It binds a name to a public key, and its issuer has signed it: the issuer hashes the certificate's contents and signs the hash with its own private key. Anyone who holds the issuer's public key can check that signature, and a valid result shows the issuer vouched for exactly this name and this key. Nothing else is needed for the check, and nothing secret.
+
+<note>A certificate = subject name + subject's public key + the issuer's signature over them. Verifying it needs only the issuer's public key.</note>
+
+<ask type="short">A server sends two certificates: its own, issued by "Intermediate X", and Intermediate X's, issued by "Root R". The browser already holds Root R's public key. Which of the two signatures can it check first, and what does a valid result give it?</ask>
+
+@@@@ idk-fragment-payload-size
+situation: idk
+topic: MTU, fragmentation and MSS
+voice: plain
+level: medium
+expect: {"must":["976","multiple of 8"],"askMustNot":["1480"],"mustNot":["1040","1480","\\b(3|three) fragments"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+An IPv4 datagram has a total length of 4000 bytes: a 20-byte header and 3980 bytes of payload. It has to cross a link with an MTU of 1500 bytes. How many fragments are produced, and what is the total length of the last one?
+
+<solution>Each fragment may be 1500 bytes in total, so 1480 bytes of payload. 3980 = 1480 + 1480 + 1020, so 3 fragments. The last is 1020 + 20 = 1040 bytes in total.</solution>
+<check lang="python">
+payload, mtu, hdr = 3980, 1500, 20
+per = (mtu - hdr) // 8 * 8
+n = -(-payload // per)
+last = payload - (n - 1) * per + hdr
+assert (per, n, last) == (1480, 3, 1040)
+</check>
+
+<ask type="problem">The number of fragments and the last one's total length.</ask>
+@@ learner idk
+@@ reply
+The piece to have first is how much one fragment can hold. A fragment is a complete IP packet in its own right, so it carries its own 20-byte header, and the MTU limits header and payload together. One more constraint: every fragment except the last must carry a multiple of 8 payload bytes, because the offset field counts in units of 8 bytes. On a link with an MTU of 1000, for example, there is room for 980 payload bytes, and that is rounded down to 976.
+
+<note>Fragment payload ≤ MTU − IP header, rounded down to a multiple of 8 for every fragment but the last. Each fragment repeats the IP header.</note>
+
+<ask type="short">For the 1500-byte MTU in the problem, how many payload bytes can one fragment carry? Say whether that number needs rounding down to a multiple of 8.</ask>
+@@ verify
+# the example taught
+assert 1000 - 20 == 980 and 980 % 8 != 0 and 980 // 8 * 8 == 976
+# the original problem (answer withheld from the reply)
+per = (1500 - 20) // 8 * 8
+assert per == 1480 and 1480 % 8 == 0
+assert 3980 == 1480 + 1480 + 1020 and 1020 + 20 == 1040
+for s in ('1480', '1040'):
+    assert s not in reply

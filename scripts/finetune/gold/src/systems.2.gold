@@ -1,0 +1,595 @@
+@@@@ idk-tlb-reach-huge-pages
+situation: idk
+topic: TLBs and TLB reach
+voice: confused
+level: medium
+expect: {"must":["256 KiB","reach"],"askMustNot":["128 MiB","\\b128\\b"],"mustNot":["128 MiB","256 pages"]}
+@@ tutor
+A TLB entry holds one translation: a virtual page number and the physical frame it maps to. A hit gives the frame at once; a miss means the translation has to be fetched from the page table first, which costs several memory reads.
+
+<note>TLB: a small cache of page translations (virtual page number → physical frame). A hit avoids the page-table lookup; a miss pays for it.</note>
+
+<ask type="short">A TLB has 64 entries. A loop repeatedly reads one byte from every page of a 512 MiB buffer, and the buffer is mapped with 2 MiB pages. How many pages does the loop touch, and can all of their translations stay in the TLB?</ask>
+@@ learner idk
+@@ reply
+One entry maps one whole page, whatever the page size, so the memory a TLB covers at one time is its entry count times the page size. That figure is the TLB reach. With 4 KiB pages, 64 entries reach 64 × 4 KiB = 256 KiB: a loop that stays inside 256 KiB can have every translation in the TLB, and one that ranges over more has to keep evicting entries and fetching them again.
+
+<note>TLB reach = number of entries × page size. 64 entries of 4 KiB pages reach 256 KiB.</note>
+
+<ask type="short">Keep the 64 entries but make every page 2 MiB. What is the reach now?</ask>
+@@ verify
+assert 64 * 4 == 256
+# the easier question's answer, and the original's, neither of which the reply states
+assert 64 * 2 == 128 and 512 // 2 == 256 and 256 > 64
+assert '128' not in reply and '256 pages' not in reply
+
+@@@@ idk-callee-saved-registers
+situation: idk
+topic: Calling conventions and stack frames
+options: {"strategy":"dialogue"}
+voice: plain
+level: medium
+expect: {"must":["caller-saved","callee-saved"],"askMustNot":["rbx","r10","push","restore"],"mustNot":["rbx is","r10 is"],"askTypes":["short","explain"]}
+noverify: purely conceptual; no value is computed and the original question's answer is withheld
+@@ tutor
+A calling convention is the agreement that lets separately compiled functions call each other: where the arguments go, where the result comes back, and which registers a call is allowed to overwrite.
+
+<ask type="short">Under the System V x86-64 convention, `f` holds one value in `rbx` and another in `r10`, then calls `g`. After `g` returns, which of the two values can `f` still rely on, and whose job was it to keep that value intact?</ask>
+@@ learner idk
+@@ reply
+The registers are shared: `g` runs on the same sixteen general-purpose registers as `f`. The convention settles who protects what by putting each register into one of two classes. A caller-saved register may be overwritten by any call, so a caller that still needs its value has to save it before calling. A callee-saved register must hold the same value on return as it did on entry, so a function that wants to use one has to save it first and put it back before returning. The class of each register is fixed by the convention, not chosen by the function.
+
+<note>Caller-saved register: any call may destroy it; the caller saves it if it still needs the value. Callee-saved register: a function that uses it must put the old value back before returning, so a caller can rely on it across a call.</note>
+
+<ask type="short">Suppose a convention makes register A callee-saved and register B caller-saved, and `g` wants to use both as scratch space. What must `g` do for A that it need not do for B?</ask>
+
+@@@@ idk-hamming-which-checks-cover
+situation: idk
+topic: Hamming codes
+voice: terse
+level: medium
+expect: {"must":["110","checks 4 and 2"],"askMustNot":["position 5","\\b101\\b","checks 1 and 2","\\b011\\b"],"mustNot":["position 5","\\b101\\b"]}
+@@ tutor
+In a Hamming(7,4) codeword the positions are numbered 1 to 7. Positions 1, 2 and 4 hold parity bits and the rest hold data. Check 1 covers every position whose number has the 1s bit set (1, 3, 5, 7), check 2 those with the 2s bit set (2, 3, 6, 7), and check 4 those with the 4s bit set (4, 5, 6, 7).
+
+<note>Hamming(7,4): parity bits sit at positions 1, 2 and 4. The check for parity bit $p$ covers every position whose binary number contains $p$: check 1 covers 1, 3, 5, 7; check 2 covers 2, 3, 6, 7; check 4 covers 4, 5, 6, 7.</note>
+
+<ask type="short">A 7-bit word arrives with one bit flipped. Check 1 fails, check 2 passes and check 4 fails. Which position holds the flipped bit?</ask>
+@@ learner idk
+@@ reply
+Work in the other direction first: pick a position and see which checks watch it. Position 6 is 110 in binary. It has the 4s bit and the 2s bit but not the 1s bit, so it is covered by checks 4 and 2 and not by check 1. If bit 6 alone is flipped, exactly those two checks fail and check 1 still passes. Every position has its own set of checks, because every position has its own binary number.
+
+<ask type="short">Which checks cover position 3? If bit 3 alone were flipped, which checks would fail and which would pass?</ask>
+@@ verify
+covers = {p: [n for n in range(1, 8) if n & p] for p in (1, 2, 4)}
+assert covers == {1: [1, 3, 5, 7], 2: [2, 3, 6, 7], 4: [4, 5, 6, 7]}
+# the lists as the tutor turn writes them
+for p in (1, 2, 4):
+    assert '(' + ', '.join(map(str, covers[p])) + ')' in tutor[0]
+watch = lambda pos: [p for p in (4, 2, 1) if pos & p]
+# the worked case: position 6
+assert format(6, '03b') == '110' and watch(6) == [4, 2]
+# the easier question: position 3 is watched by checks 2 and 1
+assert watch(3) == [2, 1]
+# the original question, whose answer is withheld: checks 1 and 4 fail -> position 5
+assert [pos for pos in range(1, 8) if sorted(watch(pos)) == [1, 4]] == [5]
+assert 'position 5' not in reply
+
+@@@@ show-me-interrupt-sequence
+situation: show-me
+topic: Interrupts and exceptions
+voice: plain
+level: medium
+expect: {"visual":{"kind":"mermaid","diagram":["sequenceDiagram"]},"must":["saves the PC and status"]}
+@@ tutor
+A device interrupt runs in a fixed order. The disk controller finishes a read and raises its interrupt request line. The CPU completes the instruction it is executing, then saves the program counter (PC) and the status register, switches to kernel mode and uses the interrupt number to look up a handler address in the vector table. The handler acknowledges the device, copies the data out and ends with a return-from-interrupt instruction, which restores the saved PC and status. The interrupted program carries on at its next instruction and never observes the gap.
+
+<note>Device interrupt: request → the CPU finishes the current instruction → saves PC and status, enters kernel mode → looks up the handler in the vector table → the handler runs and acknowledges the device → return-from-interrupt restores PC and status → the program resumes.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+sequenceDiagram
+    participant D as Disk controller
+    participant C as CPU
+    participant V as Vector table
+    participant H as Handler
+    D->>C: interrupt request
+    Note over C: finish current instruction
+    Note over C: save PC and status, enter kernel mode
+    C->>V: interrupt number
+    V-->>C: handler address
+    C->>H: jump to handler
+    H->>D: acknowledge, copy data out
+    H->>C: return-from-interrupt
+    Note over C: restore PC and status, resume program
+```
+
+Read it from top to bottom: the CPU saves the PC and status before the handler runs and restores them after it, which is why the program resumes exactly where it stopped.
+@@ verify
+d = block(reply, 'mermaid')
+lines = [l.strip() for l in d.split('\n') if l.strip()]
+# the order of the steps in the diagram is the order of the explanation
+steps = ['interrupt request', 'finish current instruction', 'save PC and status', 'interrupt number', 'handler address', 'jump to handler', 'acknowledge', 'return-from-interrupt', 'restore PC and status']
+at = [next(i for i, l in enumerate(lines) if s in l) for s in steps]
+assert at == sorted(at), at
+# every party in the diagram is named in the explanation
+for name in ('disk controller', 'CPU', 'vector table', 'handler'):
+    assert name.lower() in tutor[0].lower(), name
+order = ['interrupt request line', 'completes the instruction', 'saves the program counter', 'kernel mode', 'vector table', 'acknowledges the device', 'return-from-interrupt', 'restores the saved PC']
+pos = [tutor[0].index(s) for s in order]
+assert pos == sorted(pos)
+assert len([l for l in lines if l.startswith('participant')]) == 4
+
+@@@@ show-me-two-bit-counter-states
+situation: show-me
+topic: Branch prediction
+voice: typos
+level: medium
+expect: {"visual":{"kind":"mermaid","diagram":["stateDiagram"]},"must":["01 and 10"],"ends":"ask","askMustNot":["\\bone\\b","\\b1 (in|of|out)","10%","9 (in|of|out)"]}
+@@ tutor
+A one-bit predictor repeats the last outcome, so a loop branch is mispredicted twice for each run of the loop: once at the exit and once when the loop is entered again. A 2-bit saturating counter removes the second miss. It has four states: 00 strongly not taken, 01 weakly not taken, 10 weakly taken, 11 strongly taken, and it predicts taken in states 10 and 11. Each taken branch adds 1, stopping at 11; each not-taken branch subtracts 1, stopping at 00. One surprise moves a strong state to a weak one without changing the prediction; it takes two in a row to flip it.
+
+<note>2-bit saturating counter: states 00, 01, 10, 11; predict taken when the counter is 10 or 11. Taken: +1 (stops at 11). Not taken: −1 (stops at 00). A strong prediction needs two wrong outcomes in a row to flip.</note>
+
+<continue/>
+@@ learner question
+whats that look like as a state diagram? i cant keep the four states striaght in my head
+@@ reply
+```mermaid
+stateDiagram-v2
+    direction LR
+    state "00 strongly not taken" as S0
+    state "01 weakly not taken" as S1
+    state "10 weakly taken" as S2
+    state "11 strongly taken" as S3
+    S0 --> S1: taken
+    S1 --> S2: taken
+    S2 --> S3: taken
+    S3 --> S3: taken
+    S3 --> S2: not taken
+    S2 --> S1: not taken
+    S1 --> S0: not taken
+    S0 --> S0: not taken
+```
+
+The prediction changes only on the two arrows between 01 and 10; every other arrow leaves it as it was.
+
+<ask type="predict">A loop branch is taken 9 times and then not taken once, at the exit, and the loop runs again and again. Starting in state 11, how many of every 10 predictions are wrong?</ask>
+@@ verify
+import re
+d = block(reply, 'mermaid')
+names = dict(re.findall(r'state "(\d\d) [^"]*" as (S\d)', d))
+assert names == {'00': 'S0', '01': 'S1', '10': 'S2', '11': 'S3'}
+labels = dict((v, k) for k, v in re.findall(r'state "([^"]*)" as (S\d)', d))
+for lab in labels.values():
+    assert lab in tutor[0], lab
+arrows = {(a, o): b for a, b, o in re.findall(r'(S\d) --> (S\d): (taken|not taken)', d)}
+assert len(arrows) == 8
+# every arrow is the saturating rule
+for s in range(4):
+    assert arrows[(f'S{s}', 'taken')] == f'S{min(s + 1, 3)}'
+    assert arrows[(f'S{s}', 'not taken')] == f'S{max(s - 1, 0)}'
+# the prediction (taken iff state >= 2) changes only between S1 and S2
+changing = [(a, b) for (a, o), b in arrows.items() if (int(a[1]) >= 2) != (int(b[1]) >= 2)]
+assert sorted(changing) == [('S1', 'S2'), ('S2', 'S1')]
+# the question: 9 taken then 1 not taken, repeated, from state 3 -> 1 wrong in every 10
+state, wrong = 3, []
+for run in range(5):
+    w = 0
+    for taken in [True] * 9 + [False]:
+        w += (state >= 2) != taken
+        state = min(state + 1, 3) if taken else max(state - 1, 0)
+    wrong.append(w)
+assert wrong == [1] * 5
+# the one-bit predictor in the explanation: two wrong per run once it is going
+last, w1 = True, []
+for run in range(5):
+    w = 0
+    for taken in [True] * 9 + [False]:
+        w += last != taken
+        last = taken
+    w1.append(w)
+assert w1[1:] == [2] * 4
+
+@@@@ show-me-shift-add-multiply-table
+situation: show-me
+topic: Shift-and-add multiplication
+voice: plain
+level: easy
+expect: {"visual":{"kind":"table"},"must":["011110"]}
+@@ tutor
+Binary multiplication is long multiplication with only two possible digit products: 0 or the multiplicand itself. Go through the multiplier one bit at a time from the least significant end. If bit $i$ is 1, add the multiplicand shifted left by $i$ places to the running product; if it is 0, add nothing. For 0110 × 0101 (6 × 5): bit 0 is 1, so add 0110, giving 000110. Bit 1 is 0. Bit 2 is 1, so add 011000, giving 011110. Bit 3 is 0. The product is 011110, which is 30.
+
+<note>Shift-and-add multiply: product = the sum of (multiplicand << i) over every bit i of the multiplier that is 1. An n-bit by n-bit product needs up to 2n bits.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| Bit i | Multiplier bit | Multiplicand << i | Added | Product so far |
+|---|---|---|---|---|
+| 0 | 1 | 000110 | yes | 000110 |
+| 1 | 0 | 001100 | no | 000110 |
+| 2 | 1 | 011000 | yes | 011110 |
+| 3 | 0 | 110000 | no | 011110 |
+
+Look at the Added column: only the rows where the multiplier bit is 1 change the product, and the last row holds 011110, which is 30.
+@@ verify
+a, b = 0b0110, 0b0101
+rows, prod = table(reply)[1:], 0
+assert len(rows) == 4
+for i, row in enumerate(rows):
+    bit = (b >> i) & 1
+    shifted = a << i
+    if bit:
+        prod += shifted
+    assert row == [str(i), str(bit), format(shifted, '06b'), 'yes' if bit else 'no', format(prod, '06b')], (i, row)
+assert prod == a * b == 30 == 0b011110
+# the explanation states the same steps
+for s in ('add 0110, giving 000110', 'add 011000, giving 011110', '6 × 5', 'which is 30'):
+    assert s in tutor[0], s
+assert 2 * 4 >= prod.bit_length()
+
+@@@@ mark-error-hamming-parity-of-three
+situation: mark-error
+topic: Hamming codes
+voice: wordy
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["p2","odd"],"must":["0110011"],"askMustNot":["1100110"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+**Problem 2 · same level**
+
+Encode the data bits 1011 as a Hamming(7,4) codeword with even parity. The data bits go, in order, into positions 3, 5, 6 and 7; the parity bits p1, p2 and p4 go into positions 1, 2 and 4. Check 1 covers positions 1, 3, 5, 7; check 2 covers 2, 3, 6, 7; check 4 covers 4, 5, 6, 7.
+
+<solution>Positions 3, 5, 6, 7 hold 1, 0, 1, 1. p1 covers data positions 3, 5, 7: 1, 0, 1 has two ones, so p1 = 0. p2 covers 3, 6, 7: 1, 1, 1 has three ones, so p2 = 1. p4 covers 5, 6, 7: 0, 1, 1 has two ones, so p4 = 0. Codeword, positions 1 to 7: 0110011.</solution>
+<check lang="python">
+def encode(d):
+    w = [0] * 8
+    w[3], w[5], w[6], w[7] = d
+    for p in (1, 2, 4):
+        w[p] = sum(w[n] for n in range(1, 8) if n & p and n != p) % 2
+    return ''.join(map(str, w[1:]))
+assert encode([1, 0, 1, 1]) == '0110011'
+</check>
+
+<ask type="problem">The 7-bit codeword, positions 1 to 7, with each parity bit's working.</ask>
+@@ learner answer sure
+OK so I lay out the positions first: 3, 5, 6, 7 get the data, so pos3 = 1, pos5 = 0, pos6 = 1, pos7 = 1. Then p1 looks at 3, 5, 7 which are 1, 0, 1, that's two ones, already even, so p1 = 0. p2 looks at 3, 6, 7 which are 1, 1, 1, three ones, and since we want even parity p2 = 0. p4 looks at 5, 6, 7 which are 0, 1, 1, two ones, so p4 = 0. Putting it together from position 1: 0010011.
+@@ reply
+<grade verdict="partial" score="0.6">The layout and p1 are right: "two ones, already even, so p1 = 0". The first wrong step is "three ones, and since we want even parity p2 = 0": three is odd, so p2 has to be 1 to bring its group to four ones. Your p4 = 0 is right and your codeword is assembled correctly from your parity bits, so only position 2 changes: 0110011, not 0010011.</grade>
+
+<card>With even parity, what is the parity bit when the bits it covers contain an odd number of ones? :: 1. The parity bit is chosen so that the whole group, parity bit included, has an even number of ones.</card>
+
+<note>Even parity: the parity bit is the XOR of the bits it covers. It is 1 when they hold an odd number of ones and 0 when they hold an even number, so the group as a whole is always even.</note>
+
+**Problem 3 · same level**
+
+Encode the data bits 0110 the same way: data in positions 3, 5, 6 and 7, even parity, the same three checks.
+
+<solution>Positions 3, 5, 6, 7 hold 0, 1, 1, 0. p1 covers 3, 5, 7: 0, 1, 0 has one 1, so p1 = 1. p2 covers 3, 6, 7: 0, 1, 0 has one 1, so p2 = 1. p4 covers 5, 6, 7: 1, 1, 0 has two ones, so p4 = 0. Codeword: 1100110.</solution>
+<check lang="python">
+def encode(d):
+    w = [0] * 8
+    w[3], w[5], w[6], w[7] = d
+    for p in (1, 2, 4):
+        w[p] = sum(w[n] for n in range(1, 8) if n & p and n != p) % 2
+    return ''.join(map(str, w[1:]))
+assert encode([0, 1, 1, 0]) == '1100110'
+</check>
+
+<ask type="problem">The 7-bit codeword, with the number of ones each parity bit saw.</ask>
+@@ verify
+def encode(d, p2_slip=False):
+    w = [0] * 8
+    w[3], w[5], w[6], w[7] = d
+    for p in (1, 2, 4):
+        w[p] = sum(w[n] for n in range(1, 8) if n & p and n != p) % 2
+    if p2_slip:
+        w[2] = 0
+    return w
+right = encode([1, 0, 1, 1])
+assert ''.join(map(str, right[1:])) == '0110011' and (right[1], right[2], right[4]) == (0, 1, 0)
+# the learner's codeword is exactly the right one with p2 set to 0: one error, at p2
+theirs = encode([1, 0, 1, 1], p2_slip=True)
+assert ''.join(map(str, theirs[1:])) == '0010011' and '0010011' in learner
+assert [i for i in range(1, 8) if right[i] != theirs[i]] == [2]
+# the groups as the learner reads them
+assert (right[3], right[5], right[7]) == (1, 0, 1) and (right[3], right[6], right[7]) == (1, 1, 1) and (right[5], right[6], right[7]) == (0, 1, 1)
+# every check of the right codeword is even; the learner's fails check 2 only
+bad = lambda w: [p for p in (1, 2, 4) if sum(w[n] for n in range(1, 8) if n & p) % 2]
+assert bad(right) == [] and bad(theirs) == [2]
+# problem 3
+nxt = encode([0, 1, 1, 0])
+assert ''.join(map(str, nxt[1:])) == '1100110' and bad(nxt) == []
+assert '1100110' in solution(reply) and '1100110' not in visible(reply)
+
+@@@@ mark-error-amat-local-miss-rate
+situation: mark-error
+topic: Average memory access time
+options: {"difficulty":"hard"}
+voice: plain
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["0\\.2 × 100 = 20 ns","reach"],"must":["2\\.5 ns","1%","6\\.5 ns"],"askMustNot":["3\\.56","\\b32\\b"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+**Problem 2 · harder**
+
+A processor has two cache levels. L1 answers in 1 ns and misses on 5% of accesses. An L1 miss goes to L2, which takes 10 ns and misses on 20% of the accesses that reach it. An L2 miss goes to main memory, which takes 100 ns. What is the average memory access time?
+
+<solution>Work from the inside out. Cost of an L1 miss: 10 + 0.2 × 100 = 30 ns. Average: 1 + 0.05 × 30 = 2.5 ns. Term by term: 1 + 0.05 × 10 + 0.05 × 0.2 × 100 = 1 + 0.5 + 1 = 2.5 ns.</solution>
+<check lang="python">
+amat = 1 + 0.05 * (10 + 0.2 * 100)
+assert abs(amat - 2.5) < 1e-9
+</check>
+
+<ask type="problem">The average access time in ns, with each term.</ask>
+@@ learner answer sure
+Every access pays the L1 time, 1 ns. 5% of accesses miss L1 and pay for L2, so that adds 0.05 × 10 = 0.5 ns. 20% miss L2 and pay for memory, so that adds 0.2 × 100 = 20 ns. Total 1 + 0.5 + 20 = 21.5 ns.
+@@ reply
+<grade verdict="partial" score="0.5">The first two terms are right: "0.05 × 10 = 0.5 ns" charges L2's time only to the accesses that reach it. The first wrong step is "0.2 × 100 = 20 ns": the 20% is of the accesses that reach L2, not of all accesses. Only 0.05 × 0.2 = 1% of all accesses go to memory, which adds 0.01 × 100 = 1 ns. Your total follows correctly from your terms; corrected, it is 1 + 0.5 + 1 = 2.5 ns.</grade>
+
+A bound that catches this kind of slip: 95% of accesses finish in 1 ns and the slowest takes 1 + 10 + 100 = 111 ns, so the average can never exceed 0.95 × 1 + 0.05 × 111 = 6.5 ns.
+
+<card>L1 misses 5% of accesses and L2 misses 20% of the accesses that reach it. What fraction of all accesses go to memory? :: 0.05 × 0.2 = 1%. A local miss rate applies only to the accesses that reach that level; multiply down the levels to get the share of all accesses.</card>
+
+<note>AMAT = L1 time + L1 miss rate × (L2 time + L2 local miss rate × memory time). A level's miss rate multiplies everything below it, so the memory term carries both miss rates.</note>
+
+**Problem 3 · same level**
+
+L1 answers in 1 ns and misses on 8% of accesses. L2 takes 12 ns and misses on 25% of the accesses that reach it. Main memory takes 80 ns. What is the average memory access time?
+
+<solution>Cost of an L1 miss: 12 + 0.25 × 80 = 32 ns. Average: 1 + 0.08 × 32 = 3.56 ns. Term by term: 1 + 0.96 + 0.08 × 0.25 × 80 = 1 + 0.96 + 1.6 = 3.56 ns.</solution>
+<check lang="python">
+amat = 1 + 0.08 * (12 + 0.25 * 80)
+assert abs(amat - 3.56) < 1e-9 and abs(0.08 * 12 - 0.96) < 1e-9 and abs(0.08 * 0.25 * 80 - 1.6) < 1e-9
+</check>
+
+<ask type="problem">The average access time in ns, with the share of all accesses that reach memory.</ask>
+@@ verify
+# the right answer, two ways
+assert approx(1 + 0.05 * (10 + 0.2 * 100), 2.5) and approx(1 + 0.05 * 10 + 0.05 * 0.2 * 100, 2.5)
+assert approx(10 + 0.2 * 100, 30) and approx(0.05 * 30, 1.5)
+# the learner's terms and total
+assert approx(0.05 * 10, 0.5) and approx(0.2 * 100, 20) and approx(1 + 0.5 + 20, 21.5)
+# the correction in the grade
+assert approx(0.05 * 0.2, 0.01) and approx(0.01 * 100, 1) and approx(1 + 0.5 + 1, 2.5)
+# the bound: per-access times weighted by the share of accesses on each path
+assert 1 + 10 + 100 == 111 and approx(0.95 * 1 + 0.05 * 111, 6.5)
+exact = 0.95 * 1 + 0.04 * 11 + 0.01 * 111
+assert approx(exact, 2.5) and exact <= 6.5 < 21.5
+# problem 3
+assert approx(12 + 0.25 * 80, 32) and approx(1 + 0.08 * 32, 3.56) and approx(0.08 * 0.25, 0.02)
+assert '3.56' in solution(reply) and '3.56' not in visible(reply)
+
+@@@@ mark-error-ieee-single-bias
+situation: mark-error
+topic: IEEE 754 single-precision encoding
+voice: typos
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["bias 128","127"],"must":["−14\\.25|-14\\.25","130 − 127 = 3"],"askMustNot":["\\b23\\b","1\\.4375"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+The 32-bit pattern 0xC1640000 is an IEEE 754 single-precision float. Decode it to a decimal value.
+
+<solution>Binary: 1 | 10000010 | 1100100 followed by sixteen zeros. Sign 1: negative. Exponent field 10000010 = 130; subtract the bias 127 to get exponent 3. Fraction .11001 = 0.5 + 0.25 + 0.03125 = 0.78125, so the significand is 1.78125. Value: −1.78125 × 2^3 = −14.25.</solution>
+<check lang="python">
+import struct
+assert struct.unpack('>f', bytes.fromhex('C1640000'))[0] == -14.25
+bits = format(0xC1640000, '032b')
+assert (bits[0], int(bits[1:9], 2), bits[9:]) == ('1', 130, '1100100' + '0' * 16)
+assert 0.5 + 0.25 + 0.03125 == 0.78125 and -1.78125 * 2**3 == -14.25
+</check>
+
+<ask type="problem">The decimal value, with the sign, exponent and significand you read off.</ask>
+@@ learner answer sure
+bits are 1 10000010 1100100 then all zeros. sign is 1 so negitive. exponent feild 10000010 = 130, minus the bias 128 gives 2. fraction is .11001 = 0.5 + 0.25 + 0.03125 = 0.78125 so significand 1.78125. value = -1.78125 x 2^2 = -7.125
+@@ reply
+<grade verdict="partial" score="0.6">The three fields are split correctly and "exponent feild 10000010 = 130" is right. The first wrong step is "minus the bias 128 gives 2": the single-precision bias is 127, so the exponent is 130 − 127 = 3. Your significand 1.78125 is right and your last line follows correctly from the wrong exponent; corrected, the value is −1.78125 × 2^3 = −14.25.</grade>
+
+<card>What is the exponent bias in IEEE 754 single precision, and how is it used? :: 127. True exponent = the 8-bit exponent field − 127. (Double precision: the 11-bit field − 1023.)</card>
+
+<note>Single precision: value = (−1)^sign × 1.fraction × 2^(E − 127), for an exponent field E from 1 to 254. The bias is 127, which is 2^7 − 1, not 128.</note>
+
+**Problem 2 · same level**
+
+Decode the single-precision pattern 0x41B80000 to a decimal value.
+
+<solution>Binary: 0 | 10000011 | 0111 followed by nineteen zeros. Sign 0: positive. Exponent field 10000011 = 131; 131 − 127 = 4. Fraction .0111 = 0.25 + 0.125 + 0.0625 = 0.4375, so the significand is 1.4375. Value: 1.4375 × 2^4 = 23.0.</solution>
+<check lang="python">
+import struct
+assert struct.unpack('>f', bytes.fromhex('41B80000'))[0] == 23.0
+bits = format(0x41B80000, '032b')
+assert (bits[0], int(bits[1:9], 2), bits[9:]) == ('0', 131, '0111' + '0' * 19)
+assert 0.25 + 0.125 + 0.0625 == 0.4375 and 1.4375 * 2**4 == 23.0
+</check>
+
+<ask type="problem">The decimal value, with the exponent field and the exponent you used.</ask>
+@@ verify
+import struct
+bits = format(0xC1640000, '032b')
+assert bits[0] == '1' and bits[1:9] == '10000010' and bits[9:16] == '1100100' and set(bits[16:]) == {'0'}
+assert int('10000010', 2) == 130 and 130 - 127 == 3 and 130 - 128 == 2
+assert 0.5 + 0.25 + 0.03125 == 0.78125
+# the learner's result follows from their exponent; the right one from 127
+assert -1.78125 * 2**2 == -7.125 and '-7.125' in learner
+assert -1.78125 * 2**3 == -14.25 == struct.unpack('>f', bytes.fromhex('C1640000'))[0]
+assert 2**7 - 1 == 127 and 2**10 - 1 == 1023
+# problem 2
+assert struct.unpack('>f', bytes.fromhex('41B80000'))[0] == 23.0
+assert '23.0' in solution(reply) and '23.0' not in visible(reply)
+
+@@@@ unusual-round-up-with-shifts
+situation: mark-unusual
+topic: Bit shifts and masks
+options: {"refresh":true}
+voice: terse
+level: medium
+expect: {"verdict":"correct","must":["112"],"mustNot":["should have used","you need the mask","standard (way|method) is"],"askMustNot":["0x7C","\\b124\\b","0xFF"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+**Problem 1**
+
+Write a C expression that rounds an `unsigned` value `x` up to the next multiple of 16 (a multiple of 16 stays as it is), and give its value for `x = 100`.
+
+<solution>(x + 15) & ~15u. Adding 15 takes x past the next multiple unless it is already one, and the mask clears the low 4 bits. For 100: 115 & ~15 = 112.</solution>
+<check lang="python">
+f = lambda x: (x + 15) & ~15 & 0xFFFFFFFF
+assert f(100) == 112 and f(112) == 112 and f(113) == 128
+assert all(f(x) % 16 == 0 and 0 <= f(x) - x < 16 for x in range(2000))
+</check>
+
+<ask type="problem">The expression, and its value for 100.</ask>
+@@ learner answer sure
+((x + 15) >> 4) << 4. for 100: 115 >> 4 = 7, 7 << 4 = 112. no mask needed, the shifts throw away the low 4 bits
+@@ reply
+<grade verdict="correct" score="1">`((x + 15) >> 4) << 4` is right and gives 112. On an unsigned value, shifting right by 4 and back left by 4 leaves zeros in the low four bits, which is all that `& ~15u` does, so "the shifts throw away the low 4 bits" is the reason it works.</grade>
+
+**Problem 2 · a little harder**
+
+A 16-bit register `r` packs three fields: bits 15 to 12 are a type, bits 11 to 4 are a length, and bits 3 to 0 are flags. Write a C expression that extracts the length, and give its value for `r = 0xA7C3`.
+
+<solution>(r >> 4) & 0xFF. The shift drops the 4 flag bits and brings the length down to bit 0; the mask keeps its 8 bits and removes the type. For 0xA7C3: 0xA7C3 >> 4 = 0xA7C, and 0xA7C & 0xFF = 0x7C (124).</solution>
+<check lang="python">
+r = 0xA7C3
+assert r >> 4 == 0xA7C and (r >> 4) & 0xFF == 0x7C == 124
+assert (r >> 12, r & 0xF) == (0xA, 0x3)
+</check>
+
+<ask type="problem">The expression, and the length for 0xA7C3 in hex.</ask>
+@@ verify
+src = r'''
+#include <stdio.h>
+int main(void) {
+    unsigned bad = 0;
+    for (unsigned x = 0; x < 100000u; x++)
+        if ((((x + 15) >> 4) << 4) != ((x + 15) & ~15u)) bad++;
+    unsigned x = 100;
+    printf("%u %u %u %u\n", bad, (x + 15) >> 4, ((x + 15) >> 4) << 4, (x + 15) & ~15u);
+    unsigned r = 0xA7C3;
+    printf("0x%X\n", (r >> 4) & 0xFF);
+    return 0;
+}
+'''
+out, err, cerr, code = run_c_full(src, 'c')
+assert code == 0 and not cerr.strip() and not err.strip(), (cerr, err)
+lines = out.strip().split('\n')
+# the learner's expression equals the mask form everywhere tested, and their steps are right
+assert lines[0] == '0 7 112 112', lines
+assert 100 + 15 == 115 and 115 >> 4 == 7 and 7 << 4 == 112
+assert lines[1] == '0x7C'
+assert '0x7C' in solution(reply) and '0x7C' not in visible(reply)
+
+@@@@ unusual-overflow-from-top-carries
+situation: mark-unusual
+topic: Carry and overflow flags
+voice: plain
+level: hard
+expect: {"verdict":"correct","must":["V = 1","−112|-112"],"mustNot":["should have","sign rule instead","simpler to"],"askMustNot":["0x60","−160|-160"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+**Problem 3 · harder**
+
+An 8-bit adder computes 0x50 + 0x40. Give the 8-bit result and say whether signed overflow occurs (V).
+
+<solution>0x50 + 0x40 = 0x90. Signed: 80 + 64 = 144, above 127, so V = 1: two positive operands gave a result with the top bit set (0x90 reads as −112). There is no carry out, so C = 0.</solution>
+<check lang="python">
+s = 0x50 + 0x40
+assert s == 0x90 and s <= 0xFF and 80 + 64 == 144 > 127 and 0x90 - 256 == -112
+</check>
+
+<ask type="problem">The result in hex, and V with your reason.</ask>
+@@ learner answer sure
+Result 0x90. I looked at the carries around the top bit. The low 7 bits are 0x50 + 0x40 = 0x90, which is over 0x7F, so there is a carry into bit 7. Bit 7 itself is 0 + 0 + that carry = 1 with no carry out. Carry in is 1 and carry out is 0, they differ, so V = 1.
+@@ reply
+<grade verdict="correct" score="1">0x90 and V = 1 are right, and "Carry in is 1 and carry out is 0, they differ, so V = 1" is a valid test: signed overflow occurs exactly when the carry into the top bit differs from the carry out of it. Adders usually compute V this way, as one XOR of those two carries.</grade>
+
+It agrees with the sign rule: two positive operands, 80 + 64 = 144, produced a pattern that reads as −112.
+
+**Problem 4 · harder**
+
+An 8-bit adder computes 0xA0 + 0xC0. Give the 8-bit result, C and V.
+
+<solution>0xA0 + 0xC0 = 0x160, so the result is 0x60 and C = 1. Signed: −96 + −64 = −160, below −128, so V = 1 (two negative operands gave a positive result, +96). By carries: the low 7 bits give 0x20 + 0x40 = 0x60, no carry into bit 7; the carry out is 1; they differ.</solution>
+<check lang="python">
+a, b = 0xA0, 0xC0
+s = a + b
+cin = ((a & 0x7F) + (b & 0x7F)) >> 7
+cout = s >> 8
+assert (s & 0xFF, cout, cin ^ cout) == (0x60, 1, 1)
+assert (a - 256) + (b - 256) == -160 < -128
+</check>
+
+<ask type="problem">The result in hex and both flags, with your reasoning for V.</ask>
+@@ verify
+sg = lambda x: x - 256 if x & 0x80 else x
+# the carry test equals the definition of signed overflow for every pair of bytes
+for a in range(256):
+    for b in range(256):
+        cin = ((a & 0x7F) + (b & 0x7F)) >> 7
+        cout = (a + b) >> 8
+        assert (cin ^ cout) == int(not -128 <= sg(a) + sg(b) <= 127)
+# the learner's steps on 0x50 + 0x40
+a, b = 0x50, 0x40
+assert (a & 0x7F) + (b & 0x7F) == 0x90 > 0x7F and (a + b) >> 8 == 0 and (a + b) & 0xFF == 0x90
+assert (a >> 7, b >> 7) == (0, 0) and sg(a) + sg(b) == 144 and sg(0x90) == -112
+# problem 4
+a, b = 0xA0, 0xC0
+assert (a + b) & 0xFF == 0x60 and (a + b) >> 8 == 1 and sg(a) + sg(b) == -160 and (sg(a), sg(b)) == (-96, -64)
+assert (a & 0x7F, b & 0x7F) == (0x20, 0x40) and 0x60 == 96
+assert '0x60' in solution(reply) and '0x60' not in visible(reply)
+
+@@@@ unusual-tag-bits-from-one-way
+situation: mark-unusual
+topic: Set-associative caches
+voice: overconfident
+level: hard
+expect: {"verdict":"correct","must":["14 bits","8 \\+ 6 = 14"],"mustNot":["should have","you (do )?need to count","safer to"],"askMustNot":["\\b19\\b","\\b128\\b","halv","\\b13\\b"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+**Problem 3 · harder**
+
+A 64 KiB cache is 4-way set-associative with 64-byte lines. Addresses are 32 bits. How many tag bits does each line store?
+
+<solution>Lines: 65536 / 64 = 1024. Sets: 1024 / 4 = 256 = 2^8, so 8 index bits. Offset: 64 = 2^6, 6 bits. Tag: 32 − 8 − 6 = 18 bits.</solution>
+<check lang="python">
+import math
+lines = 64 * 1024 // 64; sets = lines // 4
+assert (lines, sets, 32 - int(math.log2(sets)) - int(math.log2(64))) == (1024, 256, 18)
+</check>
+
+<ask type="problem">The tag width, with your working.</ask>
+@@ learner answer sure
+18, and you don't need to count lines or sets at all. One way is 64 KiB / 4 = 16 KiB = 2^14 bytes. Index plus offset together just pick a byte inside one way, so they're 14 bits between them. Tag = 32 - 14 = 18.
+@@ reply
+<grade verdict="correct" score="1">18 is right, and so is the shortcut: "Index plus offset together just pick a byte inside one way, so they're 14 bits". The index chooses a set and the offset a byte within a line, and one way holds exactly one line from each set, so the two fields together number the 2^14 bytes of a way.</grade>
+
+It matches the long route: 256 sets and 64-byte lines give 8 + 6 = 14 bits. The line size only decides where those 14 bits are split.
+
+**Problem 4 · harder**
+
+The same 64 KiB of data in 64-byte lines is reorganised as an 8-way set-associative cache. What is the tag width now, and how many sets are there?
+
+<solution>One way is now 64 KiB / 8 = 8 KiB = 2^13 bytes, so index + offset = 13 bits and the tag is 32 − 13 = 19 bits. Sets: 1024 lines / 8 = 128 = 2^7 (7 index bits + 6 offset bits = 13). Doubling the ways halved the sets and moved one bit from the index to the tag.</solution>
+<check lang="python">
+import math
+way = 64 * 1024 // 8
+sets = (64 * 1024 // 64) // 8
+assert way == 2**13 and 32 - 13 == 19 and sets == 128 and int(math.log2(sets)) + 6 == 13
+</check>
+
+<ask type="problem">The new tag width and the number of sets, with your working.</ask>
+@@ verify
+import math
+# the standard route
+lines = 64 * 1024 // 64
+sets = lines // 4
+index, offset = int(math.log2(sets)), int(math.log2(64))
+assert (lines, sets, index, offset, 32 - index - offset) == (1024, 256, 8, 6, 18)
+# the learner's route: bytes in one way
+way = 64 * 1024 // 4
+assert way == 16 * 1024 == 2**14 and 32 - 14 == 18 and index + offset == 14
+# the shortcut holds in general: sets × line size = cache size / ways
+for size_kib, ways, line in [(64, 4, 64), (32, 8, 64), (8, 2, 16), (64, 8, 64), (16, 1, 32)]:
+    n_sets = size_kib * 1024 // line // ways
+    assert n_sets * line == size_kib * 1024 // ways
+# problem 4
+assert 64 * 1024 // 8 == 2**13 and lines // 8 == 128 == 2**7 and 32 - 13 == 19
+assert '19 bits' in solution(reply) and '19' not in visible(reply)

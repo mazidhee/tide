@@ -1,0 +1,237 @@
+@@@@ open-backpressure
+situation: open
+topic: Backpressure
+voice: plain
+level: medium
+expect: {"must":["TCP","queue"],"askMustNot":["120,?000","150 s","grows without"]}
+@@ reply
+**Why this matters**
+
+Backpressure is how a slow stage tells the faster stages feeding it to slow down, instead of letting work pile up until memory runs out or every request waits behind a long queue. TCP does it with the receive window, Kafka consumers do it by pulling at their own pace, and gRPC streaming and Reactive Streams build it into the API. Without it, one slow service turns into timeouts and retries in its callers, which is how a local slowdown becomes an outage across a system. It leads on to load shedding, rate limiting and choosing queue sizes.
+
+<ask type="predict">A producer puts 1,000 messages a second on an unbounded in-memory queue. The consumer handles 800 a second. Nothing crashes. Describe the queue's length and the wait of a newly added message after ten minutes, with rough figures.</ask>
+@@ verify
+# the question's answer is not stated; check the figures it turns on so the expectations are right
+backlog = (1000 - 800) * 600
+assert backlog == 120000 and backlog / 800 == 150
+assert '120' not in reply and '150' not in reply
+
+@@@@ open-quiz-leases
+situation: open
+topic: Leases and fencing tokens
+mode: quiz
+options: {"length":6}
+voice: plain
+level: medium
+expect: {"must":["Question 1 of 6"],"mustNot":["Why this matters"],"askMustNot":["cannot (tell|know|distinguish)","still (be )?(alive|running|acting)","after (the lease|it) (expires|has expired|runs out)"]}
+noverify: a quiz's first question; nothing is computed and no answer is stated
+@@ reply
+**Question 1 of 6**
+
+<ask type="short">A lock service grants client A the lock on a file with a lease of 10 seconds. Three seconds later A stops answering the service's messages. What is the earliest moment the service may grant the lock to client B, and why not sooner?</ask>
+
+@@@@ open-refresh-sharding-scan
+situation: open
+topic: Sharding: range versus hash partitioning
+options: {"refresh":true}
+voice: plain
+level: easy
+expect: {"setsProblem":true,"askTypes":["problem"],"must":["Problem 1"],"mustNot":["Why this matters"],"askMustNot":["all 8","every shard"]}
+@@ reply
+**Problem 1**
+
+A users table is split across 8 shards by user id. A query reads every user with an id from 1000 to 1999. How many shards does the query have to be sent to (a) under range partitioning, where each shard holds a block of 5,000 consecutive ids starting from 0, and (b) under hash partitioning, where a user's shard is a hash of the id modulo 8?
+
+<solution>(a) 1 shard: ids 1000 to 1999 all lie in the first block, 0 to 4999. (b) All 8: a hash scatters consecutive ids, so the 1,000 ids land on every shard (about 125 each) and the query goes to all of them.</solution>
+<check lang="python">
+import hashlib
+ids = range(1000, 2000)
+assert {i // 5000 for i in ids} == {0}
+shards = {int(hashlib.sha256(str(i).encode()).hexdigest(), 16) % 8 for i in ids}
+assert len(shards) == 8
+</check>
+
+<ask type="problem">The two counts, with a line of reasoning for each.</ask>
+@@ verify
+import hashlib, collections
+ids = range(1000, 2000)
+assert len(ids) == 1000 and {i // 5000 for i in ids} == {0}
+for algo in ('sha256', 'md5', 'sha1'):
+    c = collections.Counter(int(hashlib.new(algo, str(i).encode()).hexdigest(), 16) % 8 for i in ids)
+    assert len(c) == 8 and 90 < min(c.values()) and max(c.values()) < 160, c
+assert 1000 / 8 == 125 and '125' in solution(reply)
+assert 'All 8' in solution(reply) and 'All 8' not in visible(reply)
+
+@@@@ open-prior-gossip-rounds
+situation: open-prior
+topic: Gossip protocols and convergence rounds
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Gossip protocols and convergence rounds","daysAgo":4,"finished":false,"plan":["Push gossip, round by round","Why the informed count grows exponentially","Push, pull and push-pull"],"right":3,"partly":1,"wrong":1,"missed":["A cluster of 1,000 nodes gossips with fan-out 1. Roughly how many rounds until every node has the update?"],"open":"Why does pull gossip reach the last few nodes faster than push?"}]}
+expect: {"must":["gossip"],"askMustNot":["doubl","log","exponential"]}
+@@ reply
+**Why this matters**
+
+Gossip is how large clusters spread membership changes, failure suspicions and metadata with no coordinator: Cassandra, Redis Cluster and Consul's Serf layer all use it, and transaction relay in peer-to-peer networks works the same way. Its appeal is that the number of rounds grows very slowly with cluster size, so the same protocol serves ten nodes or ten thousand. You have the round-by-round mechanics of push gossip from last time; the size of the round count was the gap, and push against pull is still to come.
+
+<ask type="short">One node in a cluster of 4,000 learns a new fact. Each round, every node that knows it tells one node chosen at random. Is the number of rounds until all 4,000 know it closest to 20, 400 or 4,000? Give your reason in a sentence.</ask>
+@@ verify
+import math, random
+n = 4000
+# the usual estimate for push gossip with fan-out 1, and a seeded simulation of it
+est = math.log2(n) + math.log(n)
+assert 19 < est < 22
+def rounds(seed):
+    rng = random.Random(seed)
+    informed = {0}
+    r = 0
+    while len(informed) < n:
+        for _ in range(len(informed)):
+            informed.add(rng.randrange(n))
+        r += 1
+    return r
+rs = [rounds(s) for s in range(20)]
+assert all(15 <= r <= 30 for r in rs), rs       # closest to 20, far from 400
+assert '4,000' in reply and '20, 400 or 4,000' in reply
+
+@@@@ open-prior-replication-lag
+situation: open-prior
+topic: Replication lag and leader-follower reads
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Leader-follower replication and failover","daysAgo":6,"finished":true,"plan":["Writes go to the leader","Synchronous and asynchronous followers","Failover"],"right":5,"partly":1,"wrong":1,"missed":["A leader acknowledges a write before any asynchronous follower has it, then crashes. What happens to that write after failover?"]}]}
+expect: {"must":["asynchronous","follower"],"askMustNot":["has not (yet )?(reached|arrived)","not (yet )?on (the|any|a) follower","only (on|in) the leader"]}
+noverify: an opening; nothing is computed and the question's answer is not stated
+@@ reply
+**Why this matters**
+
+Most databases you will run scale reads by sending them to followers: Postgres streaming replicas, MySQL replicas, MongoDB secondaries. A follower is always some distance behind the leader, and that distance, the replication lag, is what makes a user's own update vanish on reload or a list shrink between two refreshes. This rests on asynchronous replication from the failover lesson: the leader answers the client without waiting for its followers. That was the one point that slipped there, so it comes first. From it follow read-your-writes, monotonic reads and how to route reads safely.
+
+<ask type="short">A leader replicates asynchronously. At the instant it tells a client "your write succeeded", what is guaranteed to have happened to that write, and what is not?</ask>
+
+@@@@ open-recall-paxos-promise
+situation: open-recall
+topic: Paxos: prepare, promise and accept
+voice: plain
+level: hard
+before: {"recall":[{"prompt":"In Paxos, an acceptor replies to prepare(n) with a promise. What two things does that promise tell the proposer?","topic":"Paxos: prepare, promise and accept","reviews":2,"lapses":1}]}
+expect: {"askMustNot":["highest","lower|less than|below","already accepted"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="short">In Paxos, an acceptor replies to prepare(n) with a promise. What two things does that promise tell the proposer?</ask>
+
+@@@@ open-recall-hinted-handoff
+situation: open-recall
+topic: Hinted handoff and read repair
+voice: plain
+level: easy
+before: {"recall":[{"prompt":"A replica is down when a write arrives. With hinted handoff, where is the write kept, and when is it delivered?","topic":"Hinted handoff and read repair","reviews":0,"lapses":0}]}
+expect: {"askMustNot":["another node","coordinator","comes back|recovers|reachable again"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="explain">A replica is down when a write arrives. With hinted handoff, where is the write kept, and when is it delivered?</ask>
+
+@@@@ correct-raft-commit-plan
+situation: after-correct
+topic: Raft log replication and the commit index
+voice: wordy
+level: medium
+expect: {"verdict":"correct","need":["plan","note"],"setsProblem":true,"askTypes":["problem"],"must":["matchIndex","majority"],"askMustNot":["\\b11\\b"]}
+@@ tutor
+<ask type="short">A Raft leader appends a client's command to its own log at index 8. What else has to be true before the leader may apply that command and answer the client?</ask>
+@@ learner answer sure
+As far as I understand it, appending locally isn't enough, because if the leader died right then nobody else would have the command. So the leader sends it out to the followers and waits. The entry has to be stored on a majority of the servers, counting the leader itself. Once that's true it counts as committed, and only then does the leader apply it to its state machine and reply to the client.
+@@ reply
+<grade verdict="correct" score="1">"stored on a majority of the servers, counting the leader itself" is the commit rule: any later leader needs votes from a majority, and every majority includes at least one server that holds the entry.</grade>
+
+<plan>
+- How the leader tracks followers: matchIndex
+- Working out the commit index
+- The consistency check that repairs a follower's log
+- Why only current-term entries are committed by counting
+</plan>
+
+For each follower the leader keeps `matchIndex`: the highest log index it knows is stored on that follower, learnt from successful AppendEntries replies. The commit index is the highest index stored on a majority of servers, the leader's own last index included. With 3 servers, a leader at index 5 and followers at matchIndex 5 and 3: index 5 is on 2 of 3, so the commit index is 5, and the third server catches up later.
+
+<note>Raft commit index: the highest index N stored on a majority of servers (leader included), where entry N is from the leader's current term. Entries up to N are committed and are applied in log order.</note>
+
+**Problem 1 · warm-up**
+
+A cluster has 5 servers. The leader's last log index is 14 and the four followers' matchIndex values are 14, 11, 9 and 6. Every entry is from the current term. What is the commit index?
+
+<solution>The five indices sorted are 6, 9, 11, 14, 14. A majority of 5 is 3, and the third highest is 11: indices up to 11 are on 3 servers, while 12 to 14 are on only 2. The commit index is 11.</solution>
+<check lang="python">
+def commit(indices):
+    need = len(indices) // 2 + 1
+    return max(n for n in range(max(indices) + 1) if sum(i >= n for i in indices) >= need)
+assert commit([14, 14, 11, 9, 6]) == 11
+</check>
+
+<ask type="problem">The commit index, with the number of servers that hold that entry.</ask>
+@@ verify
+def commit(indices):
+    need = len(indices) // 2 + 1
+    return max(n for n in range(max(indices) + 1) if sum(i >= n for i in indices) >= need)
+# the worked example in the reply
+assert commit([5, 5, 3]) == 5 and sum(i >= 5 for i in [5, 5, 3]) == 2
+# the problem, by the sorting method too
+idx = [14, 14, 11, 9, 6]
+assert sorted(idx, reverse=True)[len(idx) // 2] == 11 == commit(idx)
+assert sum(i >= 11 for i in idx) == 3 and sum(i >= 12 for i in idx) == 2
+assert 'commit index is 11' in solution(reply) and 'index is 11' not in visible(reply)
+
+@@@@ correct-quiz-heartbeat-timeout
+situation: after-correct
+topic: Failure detectors and heartbeats
+mode: quiz
+voice: terse
+level: medium
+expect: {"verdict":"correct","must":["Question 4 of 8"],"mustNot":["Question 3 of 8"],"askTypes":["error"],"askMustNot":["false (positive|suspicion)","GC|garbage","delayed"]}
+@@ tutor
+**Question 3 of 8**
+
+A node sends a heartbeat every 1 second. A monitor declares the node dead when 4 seconds pass with no heartbeat received. Ignore network delay. The node crashes at some moment. What are the shortest and the longest possible times between the crash and the monitor declaring it dead?
+
+<solution>The monitor's timer runs from the last heartbeat. If the node crashes just after sending one, detection comes 4 s after the crash. If it crashes just before sending the next, the last heartbeat was 1 s earlier, so detection comes 3 s after the crash. Between 3 s and 4 s.</solution>
+
+<ask type="problem">Both times, with the crash moment that gives each.</ask>
+@@ learner answer sure
+3s to 4s. crash right after a beat = full 4s wait. crash right before the next beat = last beat was 1s ago so only 3 more.
+@@ reply
+<grade verdict="correct" score="1">"last beat was 1s ago so only 3 more" is the short case and "crash right after a beat = full 4s wait" the long one: detection comes one timeout after the last heartbeat, not after the crash.</grade>
+
+**Question 4 of 8**
+
+<solution>The cost is false suspicion. A heartbeat from a live node that arrives more than 0.1 s late (network jitter, one lost packet, a garbage-collection pause, a busy scheduler) now gets the node declared dead, and each wrong declaration can set off a failover or a rebalance. The timeout trades detection time against wrongly suspecting live nodes; it cannot be cut for nothing.</solution>
+
+<ask type="error">Find the flaw in this plan: "Our monitor can take 4 seconds to notice a dead node. Heartbeats arrive every second, so we will set the timeout to 1.1 seconds and detect crashes several times faster, at no cost."</ask>
+@@ verify
+interval, timeout = 1.0, 4.0
+# detection delay after a crash at offset x into the heartbeat period (0 = just after a beat)
+delay = lambda x: timeout - x
+assert delay(0) == 4 and abs(delay(interval) - 3) < 1e-12
+assert '3 s' in tutor[0] and '4 s' in tutor[0]
+# the flawed plan's own figures: 1.1 s leaves 0.1 s of slack and is several times shorter
+assert abs((1.1 - interval) - 0.1) < 1e-9 and 3 < timeout / 1.1 < 4
+assert '0.1 s' in solution(reply)
+
+@@@@ correct-recall-saga-compensation
+situation: after-correct
+topic: Sagas and compensating actions
+voice: typos
+level: medium
+before: {"recall":[{"prompt":"A saga's third step fails after its first two steps have committed. What does the saga do about those two?","topic":"Sagas and compensating actions","reviews":2,"lapses":1}]}
+expect: {"verdict":"correct","heading":"Why this matters","askTypes":["short","predict","explain","choice"],"must":["Temporal|Step Functions"],"askMustNot":["idempot","retry|again"]}
+noverify: a recall answer marked and a lesson opened; nothing is computed
+@@ tutor
+<ask type="short">A saga's third step fails after its first two steps have committed. What does the saga do about those two?</ask>
+@@ learner answer sure
+it runs compensating transactons for them, step 2 first then step 1. cant roll them back becuase they already commited
+@@ reply
+<grade verdict="correct" score="1">"step 2 first then step 1" is right: committed steps cannot be rolled back, so the saga undoes them with compensating transactions in reverse order.</grade>
+
+**Why this matters**
+
+A saga gives an operation that spans several services, such as an order that reserves stock, charges a card and books a courier, an all-or-nothing outcome without one transaction holding locks across all of them. Payment and booking flows are built this way, usually driven by an orchestrator such as Temporal or AWS Step Functions, or by events passed between the services. The price is that half-finished states are visible to everyone else, and that undoing a step is your own code, which is where most saga bugs live. It leads on to idempotent steps and the outbox pattern.
+
+<ask type="predict">A saga has charged a customer's card, then fails at the shipping step, so it calls the compensation "refund the charge". The refund call times out with no response. What should the saga do next, and what must be true of the refund for that to be safe?</ask>

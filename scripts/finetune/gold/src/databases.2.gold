@@ -1,0 +1,441 @@
+@@@@ correct-quiz-set-operations
+situation: after-correct
+topic: Set operations: UNION, INTERSECT and EXCEPT
+mode: quiz
+options: {"length":8}
+voice: terse
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"must":["Question 2 of 8","547","295"],"askMustNot":["\\b252\\b","subset"]}
+@@ tutor
+**Question 1 of 8**
+
+<ask type="short">In the lab, customers has 300 rows and users has 800, and the same 10 countries appear in both tables. How many rows does `SELECT country FROM customers UNION SELECT country FROM users` return, and how many with UNION ALL in place of UNION?</ask>
+@@ learner answer sure
+10 and 1100. union removes dups across the whole combined result, union all just stacks both
+@@ reply
+<grade verdict="correct" score="1">Both counts are right, and "union removes dups across the whole combined result" is why it is 10 and not 20: duplicates go within each input as well as between the two.</grade>
+
+**Question 2 of 8**
+
+In the lab's events table, 547 different users have an add_to_cart event (call that set A) and 295 different users have a purchase event (set B). This query returns 295 rows:
+
+```sql
+SELECT user_id FROM events WHERE event = 'add_to_cart'
+INTERSECT
+SELECT user_id FROM events WHERE event = 'purchase';
+```
+
+<solution>INTERSECT returns the users in both sets. It returns 295 rows, which is all of B, so every purchaser also added to cart: B lies inside A. A EXCEPT B = 547 − 295 = 252 users (added to cart, never purchased). B EXCEPT A = 0 rows.</solution>
+<check lang="python">
+a, b, both = 547, 295, 295
+assert a - both == 252 and b - both == 0
+</check>
+
+<ask type="problem">Without running anything else: how many rows does A EXCEPT B return, how many does B EXCEPT A return, and what does the 295 tell you about how A and B are related?</ask>
+@@ verify
+assert lab("SELECT COUNT(*) FROM customers")[0][0] == 300 and lab("SELECT COUNT(*) FROM users")[0][0] == 800
+assert lab("SELECT COUNT(*) FROM (SELECT country FROM customers UNION SELECT country FROM users)")[0][0] == 10
+assert lab("SELECT COUNT(*) FROM (SELECT country FROM customers UNION ALL SELECT country FROM users)")[0][0] == 1100
+assert lab("SELECT COUNT(DISTINCT country) FROM customers")[0][0] == 10 == lab("SELECT COUNT(DISTINCT country) FROM users")[0][0]
+A = "SELECT user_id FROM events WHERE event = 'add_to_cart'"
+B = "SELECT user_id FROM events WHERE event = 'purchase'"
+n = lambda q: lab(f"SELECT COUNT(*) FROM ({q})")[0][0]
+assert n(f"SELECT DISTINCT user_id FROM ({A})") == 547 and n(f"SELECT DISTINCT user_id FROM ({B})") == 295
+assert len(lab(block(reply, 'sql'))) == 295
+assert n(f"{A} EXCEPT {B}") == 252 and n(f"{B} EXCEPT {A}") == 0
+assert '252' in solution(reply) and '252' not in visible(reply)
+
+@@@@ wrong-where-filters-rows-not-groups
+situation: after-wrong
+topic: HAVING versus WHERE
+voice: overconfident
+level: easy
+expect: {"verdict":"wrong","accept":["partial"],"names":["rows?","n (is|=) 4|\\b4 rows"],"must":["Problem 2","146"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b39\\b","\\b30\\b"]}
+@@ tutor
+WHERE filters rows before they are grouped; HAVING filters the groups afterwards, so only HAVING can test an aggregate.
+
+<note>WHERE keeps or drops rows, before GROUP BY. HAVING keeps or drops whole groups, after the aggregates are computed.</note>
+
+**Problem 1 · warm-up**
+
+```sql
+SELECT customer_id, COUNT(*) AS n
+FROM orders
+WHERE status = 'refunded'
+GROUP BY customer_id
+HAVING COUNT(*) >= 3;
+```
+
+Customer 1 has 38 orders in the lab, and 4 of them are refunded. Is customer 1 in the result, and if so, what is n on that row?
+
+<solution>Yes, with n = 4. WHERE runs first and keeps only the refunded rows, so customer 1's group holds 4 rows. COUNT(*) is 4, which passes HAVING COUNT(*) >= 3.</solution>
+
+<ask type="problem">Whether customer 1 is returned and the value of n, worked out before you run the block.</ask>
+@@ learner answer sure
+Yes it's returned and n is 38. The WHERE just picks which customers qualify, i.e. the ones that have refunds, and then COUNT(*) counts that customer's orders, which is all 38.
+@@ reply
+<grade verdict="wrong" score="0.2">Customer 1 is returned, but n is 4, not 38. "The WHERE just picks which customers qualify" is the step that fails: WHERE never sees a customer, it tests each row of orders on its own and drops the 34 rows of customer 1 that are not refunded before any group exists.</grade>
+
+By the time GROUP BY runs, customer 1 has 4 rows left, so COUNT(*) is 4, and 4 passes the HAVING test. The 38 is not available anywhere in this query: the rows that would make it up were removed first.
+
+<card>In a query with WHERE and GROUP BY, which rows does COUNT(*) count? :: Only the rows that passed WHERE. WHERE removes rows one at a time before grouping, so every aggregate is computed over what is left.</card>
+
+<note>An aggregate in a grouped query sees only the rows that survived WHERE. To count all of a customer's orders but keep customers by their refunds, the refund test has to move out of WHERE.</note>
+
+**Problem 2 · same idea**
+
+```sql
+SELECT customer_id, COUNT(*) AS n
+FROM orders
+WHERE status = 'completed'
+GROUP BY customer_id
+HAVING COUNT(*) >= 35;
+```
+
+Customer 146 has 43 orders, 39 of them completed. Customer 1 has 38 orders, 30 of them completed.
+
+<solution>Customer 146 is returned with n = 39: its group holds the 39 completed rows and 39 >= 35. Customer 1 is not returned: after WHERE its group holds 30 rows, and 30 < 35, even though it has 38 orders in total.</solution>
+
+<ask type="problem">For each of the two customers: is it in the result, and with what n? Work it out, then run the block to check.</ask>
+@@ verify
+q1 = block(tutor[0], 'sql')
+r1 = dict(lab(q1))
+assert r1[1] == 4 and len(r1) == 5
+assert lab("SELECT COUNT(*) FROM orders WHERE customer_id = 1")[0][0] == 38
+assert lab("SELECT COUNT(*) FROM orders WHERE customer_id = 1 AND status = 'refunded'")[0][0] == 4
+assert 38 - 4 == 34 and '34 rows' in reply
+r2 = dict(lab(block(reply, 'sql')))
+assert r2.get(146) == 39 and 1 not in r2
+assert lab("SELECT COUNT(*), SUM(status = 'completed') FROM orders WHERE customer_id = 146")[0] == (43, 39)
+assert lab("SELECT COUNT(*), SUM(status = 'completed') FROM orders WHERE customer_id = 1")[0] == (38, 30)
+assert 'n = 39' in solution(reply) and 'n = 39' not in visible(reply)
+
+@@@@ wrong-distinct-whole-row-plan
+situation: after-wrong
+topic: DISTINCT and duplicate rows
+voice: typos
+level: easy
+expect: {"verdict":"wrong","names":["whole (row|select list)|every (selected )?column|combination","\\b30\\b"],"must":["\\b29\\b","Problem 1"],"need":["plan","note"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b3 rows\\b","never"]}
+@@ tutor
+<ask type="predict">The lab's customers table has 10 different countries and 3 different segments. What is the largest number of rows `SELECT DISTINCT country, segment FROM customers` could return, and what does DISTINCT compare to decide that two rows are duplicates?</ask>
+@@ learner answer sure
+10. distinct goes with the colum next to it so you get one row per country, and the segment is just whichever one that row happend to have
+@@ reply
+<grade verdict="wrong" score="0.1">"distinct goes with the colum next to it" is the mistake: DISTINCT is not attached to one column. It applies to the whole select list, so two rows are duplicates only when every selected column matches.</grade>
+
+That makes the limit 10 × 3 = 30 combinations of country and segment. The lab returns 29, because one combination has no customer (Nigeria, enterprise):
+
+```sql
+SELECT COUNT(*) FROM (SELECT DISTINCT country, segment FROM customers);
+```
+
+<card>What does SELECT DISTINCT a, b compare? :: Whole rows of the result: the pair (a, b). It returns one row per different combination, not one row per value of a.</card>
+
+<note>SELECT DISTINCT removes duplicate rows of the result, comparing all the selected columns together. It never picks "one row per value of the first column".</note>
+
+<plan>
+- DISTINCT works on whole rows
+- COUNT(DISTINCT x), and duplicates made by joins
+- DISTINCT versus GROUP BY
+</plan>
+
+**Problem 1 · warm-up**
+
+In the lab's users table, plan is free, plus or pro, and platform is android, ios or web. `SELECT DISTINCT plan, platform FROM users` returns 9 rows.
+
+<solution>SELECT DISTINCT plan FROM users returns 3 rows. Adding a column to a DISTINCT list can never reduce the number of rows: rows that differed before still differ, and rows that were equal can now be told apart by the new column, so the count stays the same or grows (3 becomes 9 here).</solution>
+
+<ask type="problem">How many rows does `SELECT DISTINCT plan FROM users` return? Then say whether adding a column to a SELECT DISTINCT list can ever make the result smaller, and why.</ask>
+@@ verify
+assert lab("SELECT COUNT(DISTINCT country), COUNT(DISTINCT segment) FROM customers")[0] == (10, 3)
+assert lab(block(reply, 'sql'))[0][0] == 29 and 10 * 3 == 30
+missing = lab("SELECT c.country, s.segment FROM (SELECT DISTINCT country FROM customers) c, (SELECT DISTINCT segment FROM customers) s EXCEPT SELECT country, segment FROM customers")
+assert missing == [('Nigeria', 'enterprise')]
+assert sorted(r[0] for r in lab("SELECT DISTINCT plan FROM users")) == ['free', 'plus', 'pro']
+assert sorted(r[0] for r in lab("SELECT DISTINCT platform FROM users")) == ['android', 'ios', 'web']
+assert len(lab("SELECT DISTINCT plan, platform FROM users")) == 9
+assert len(lab("SELECT DISTINCT plan FROM users")) == 3 and '3 rows' in solution(reply)
+# the learner's 10 is the number of countries: the belief named in the grade
+assert learner.startswith('10')
+
+@@@@ wrong-lag-ignores-partition
+situation: after-wrong
+topic: LAG and LEAD window functions
+voice: confused
+level: medium
+expect: {"verdict":"wrong","names":["PARTITION BY","NULL"],"must":["Problem 2","2024-01-14"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b13\\b","\\b8\\b"]}
+@@ tutor
+LAG(x) OVER (...) returns x from the previous row in the window's order, and LEAD(x) returns it from the next row.
+
+<note>LAG(x) OVER (PARTITION BY p ORDER BY o) reads x from the row before the current one; LEAD(x) from the row after. "Before" and "after" follow the window's ORDER BY.</note>
+
+**Problem 1 · warm-up**
+
+```sql
+SELECT customer_id, order_id, order_date,
+       LAG(order_date) OVER (PARTITION BY customer_id ORDER BY order_date) AS prev
+FROM orders
+WHERE customer_id IN (111, 112)
+ORDER BY customer_id, order_date;
+```
+
+Customer 111's last order is dated 2025-06-23, and customer 112's first is dated 2024-01-01. What is prev on the row for customer 112's first order?
+
+<solution>NULL. PARTITION BY customer_id gives each customer its own window, so customer 112's first order has no previous row inside its partition, and LAG returns NULL when there is no such row.</solution>
+
+<ask type="problem">The value of prev on that row, with your reason, before you run the block.</ask>
+@@ learner answer unsure
+I think 2025-06-23? LAG looks one row up and the row above 112's first order in the output is 111's last one. Although it's weird that the "previous" date comes out later than the order itself so maybe I'm missing something
+@@ reply
+<grade verdict="wrong" score="0.1">It is NULL. "LAG looks one row up" in the output is the step that fails: LAG looks one row back inside the current row's partition, and PARTITION BY customer_id makes customer 112's orders a window of their own, so its first order has nothing before it. Your doubt about a "previous" date that is later was the right signal.</grade>
+
+Customer 111's rows are never visible to a window function working on customer 112. The final ORDER BY only arranges the finished rows for display; it plays no part in what LAG reads.
+
+<card>What does LAG return on the first row of a partition? :: NULL (or the default given as its third argument), because there is no earlier row in that partition. Rows of other partitions are never read.</card>
+
+<note>A window function sees only the rows of the current row's partition. On the first row of a partition LAG gives NULL; on the last row LEAD gives NULL.</note>
+
+**Problem 2 · same idea**
+
+Customer 112's first three orders are dated 2024-01-01, 2024-01-14 and 2024-01-22. A column is added to the query:
+
+```sql
+SELECT order_date,
+       julianday(order_date) - julianday(LAG(order_date) OVER (PARTITION BY customer_id ORDER BY order_date)) AS gap
+FROM orders
+WHERE customer_id = 112
+ORDER BY order_date
+LIMIT 3;
+```
+
+<solution>NULL, 13.0 and 8.0. The first row has no previous order in its partition, so LAG is NULL and the subtraction is NULL. 14 January − 1 January = 13 days; 22 January − 14 January = 8 days.</solution>
+<check lang="python">
+from datetime import date
+d = [date(2024, 1, 1), date(2024, 1, 14), date(2024, 1, 22)]
+assert [(b - a).days for a, b in zip(d, d[1:])] == [13, 8]
+</check>
+
+<ask type="problem">The value of gap on each of the three rows, worked out first and then checked by running the block.</ask>
+@@ verify
+rows = lab(block(tutor[0], 'sql'))
+first112 = [r for r in rows if r[0] == 112][0]
+last111 = [r for r in rows if r[0] == 111][-1]
+assert first112[2] == '2024-01-01' and first112[3] is None
+assert last111[2] == '2025-06-23'
+# the learner's value is the row above in the output: the misconception named
+assert rows[rows.index(first112) - 1][2] == '2025-06-23' and '2025-06-23' in learner
+got = lab(block(reply, 'sql'))
+assert got == [('2024-01-01', None), ('2024-01-14', 13.0), ('2024-01-22', 8.0)], got
+# no two of customer 112's orders share a date, so the order is fixed
+assert lab("SELECT COUNT(*) - COUNT(DISTINCT order_date) FROM orders WHERE customer_id = 112")[0][0] == 0
+assert '13.0 and 8.0' in solution(reply)
+
+@@@@ wrong-atomicity-error-not-rollback
+situation: after-wrong
+topic: Atomicity: commit and rollback
+voice: overconfident
+level: medium
+autorun: off
+expect: {"verdict":"wrong","names":["automatic","\\b400\\b"],"must":["950","ROLLBACK"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b500 and 950\\b","first UPDATE's"]}
+@@ tutor
+Atomicity means a transaction's changes take effect all together or not at all. This transfer of 100 hits a limit on the receiving account:
+
+```sql
+CREATE TABLE accounts (id INTEGER PRIMARY KEY, balance INTEGER CHECK (balance <= 1000));
+INSERT INTO accounts VALUES (1, 500), (2, 950);
+
+BEGIN;
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+UPDATE accounts SET balance = balance + 100 WHERE id = 2;   -- fails: CHECK constraint failed
+COMMIT;
+```
+
+<ask type="predict">The second UPDATE fails, and the script carries on and sends COMMIT. In SQLite, what is the balance of account 1 afterwards? Say why.</ask>
+@@ learner answer sure
+500, obviously. A transaction is atomic so it's all or nothing. The second update blew up, so the database rolls the whole transaction back automatically and the COMMIT has nothing left to commit.
+@@ reply
+<grade verdict="wrong" score="0.1">Account 1 ends at 400, not 500. "the database rolls the whole transaction back automatically" is the step that fails: in SQLite a statement that fails a constraint undoes only itself, the transaction stays open, and the COMMIT that follows makes the first UPDATE permanent.</grade>
+
+The result is account 1 at 400 and account 2 still at 950: 100 has left one account and arrived nowhere. Atomicity is something the database offers, and the application has to ask for it. All or nothing holds between BEGIN and whichever of COMMIT or ROLLBACK the application sends, so the code must notice the error and choose. Postgres is stricter: after an error it refuses further statements in that transaction and a COMMIT ends it as a rollback (not run here).
+
+<card>In SQLite, a statement fails a constraint in the middle of a transaction. What is undone? :: Only that statement. Earlier statements of the transaction stay pending, and COMMIT would keep them; the application must send ROLLBACK to undo them.</card>
+
+<note>A constraint failure does not end the transaction in SQLite: the failed statement's own changes are undone, earlier ones stay pending. The application decides the outcome: COMMIT keeps everything that succeeded, ROLLBACK discards all of it.</note>
+
+**Problem 2 · same idea**
+
+The table is reset to 500 and 950. The application runs BEGIN and the same two UPDATEs, sees the second one fail, and this time sends ROLLBACK in place of COMMIT.
+
+<solution>Account 1 is 500 and account 2 is 950. The failed UPDATE had already been undone by its own failure; ROLLBACK undoes the first UPDATE (the debit of 100), which had succeeded and was pending.</solution>
+
+<ask type="problem">Give both balances afterwards, and say which statement's change the ROLLBACK undid that the failure had not already undone.</ask>
+@@ verify
+import sqlite3
+def run(end):
+    c = sqlite3.connect(':memory:', isolation_level=None)
+    stmts = [s.strip() for s in block(tutor[0], 'sql').split(';') if s.strip()]
+    assert len(stmts) == 6 and stmts[-1].endswith('COMMIT')
+    err = None
+    for s in stmts[:-1]:
+        try:
+            c.execute(s)
+        except sqlite3.IntegrityError as e:
+            err = str(e)
+            assert c.in_transaction          # the transaction is still open after the failure
+    c.execute(end)
+    return err, c.execute("SELECT id, balance FROM accounts ORDER BY id").fetchall()
+err, after = run('COMMIT')
+assert err == 'CHECK constraint failed: balance <= 1000' and 'CHECK constraint failed' in tutor[0]
+assert after == [(1, 400), (2, 950)]
+assert run('ROLLBACK')[1] == [(1, 500), (2, 950)]
+assert '500' in learner
+
+@@@@ wrong-optimistic-update-no-error
+situation: after-wrong
+topic: Optimistic versus pessimistic concurrency control
+options: {"strategy":"dialogue"}
+voice: plain
+level: medium
+expect: {"verdict":"wrong","accept":["partial"],"names":["error|exception","0 rows|no rows|zero rows|matches nothing|matched nothing"],"must":["version"],"askTypes":["explain","short"],"need":["note"],"forbid":["solution"]}
+@@ tutor
+Two clerks open the same item and both see price 42 at version 3. Each changes the price and saves. With optimistic concurrency nobody holds a lock while editing; each save is an UPDATE that names the version it read:
+
+```sql
+CREATE TABLE items (id INTEGER PRIMARY KEY, price REAL, version INTEGER);
+INSERT INTO items VALUES (13, 42, 3);
+
+UPDATE items SET price = 45, version = 4 WHERE id = 13 AND version = 3;   -- clerk A saves
+UPDATE items SET price = 39, version = 4 WHERE id = 13 AND version = 3;   -- clerk B saves
+SELECT * FROM items;
+```
+
+<ask type="predict">Clerk A's save runs first. What happens when clerk B's UPDATE runs, and how does B's application find out?</ask>
+@@ learner answer sure
+The database raises an error on B's update because the version no longer matches, a bit like a constraint violation. B's application catches that exception and shows a conflict message.
+@@ reply
+<grade verdict="wrong" score="0.2">B's change is indeed not applied, but "The database raises an error on B's update" is wrong: nothing is raised. To the database it is an ordinary UPDATE whose WHERE matches nothing, so it succeeds and changes 0 rows.</grade>
+
+After A's save the row is (13, 45, version 4). B's statement looks for id 13 at version 3, finds no such row and reports success with a count of 0 rows changed. The final SELECT shows price 45, version 4. The version test is a filter, not a constraint, so the only signal is that count, and the application must read it after every such UPDATE. Code that skips the check tells clerk B the save worked when it changed nothing.
+
+<card>How does an application detect a conflict under optimistic concurrency with a version column? :: The UPDATE ... WHERE version = (the version read) changes 0 rows. No error is raised; the application must check the affected-row count.</card>
+
+<note>Optimistic concurrency: read the row and its version, write with `UPDATE ... SET version = version + 1 WHERE id = ? AND version = ?`, then check the affected-row count. 1 means the write won; 0 means someone else wrote first, and the application must handle it.</note>
+
+<ask type="explain">B's application has now seen a count of 0. What are its options from here, which would you choose for a price-editing screen, and what does that choice cost the clerk?</ask>
+@@ verify
+import sqlite3
+c = sqlite3.connect(':memory:')
+stmts = [s.strip() for s in block(tutor[0], 'sql').split(';') if s.strip()]
+counts = [c.execute(s).rowcount for s in stmts[:4]]       # create, insert, A, B: no statement raises
+assert counts[2] == 1 and counts[3] == 0
+final = c.execute("SELECT * FROM items").fetchall()
+assert final == [(13, 45.0, 4)]
+assert '(13, 45, version 4)' in reply and 'price 45, version 4' in reply
+
+@@@@ idk-recursive-cte-rounds
+situation: idk
+topic: Recursive CTEs
+voice: plain
+level: medium
+expect: {"must":["anchor","recursive"],"mustNot":["\\b32\\b","\\b16\\b"],"askMustNot":["1, 2, 3","1,2,3"],"need":["note"]}
+@@ tutor
+A recursive CTE builds its result by feeding its own output back into itself.
+
+```sql
+WITH RECURSIVE n(x) AS (
+  SELECT 1
+  UNION ALL
+  SELECT x * 2 FROM n WHERE x < 20
+)
+SELECT x FROM n;
+```
+
+<ask type="predict">Which values of x does this return? List them in order, and say how you got them.</ask>
+@@ learner idk
+@@ reply
+Read it as two queries joined by UNION ALL. The first, `SELECT 1`, is the anchor: it runs once and produces the starting row. The second is the recursive member: it runs again and again, and each time `FROM n` gives it only the rows produced by the round before. Its WHERE is tested on those incoming rows, not on the values it produces. When a round produces no rows, the recursion stops, and the result is every row from every round.
+
+<note>Recursive CTE: anchor query UNION ALL recursive member. The anchor runs once. The recursive member runs repeatedly, each time reading only the rows the previous round produced, until a round produces nothing. The result is all rounds together.</note>
+
+A smaller one to trace by hand:
+
+```sql
+WITH RECURSIVE n(x) AS (
+  SELECT 1
+  UNION ALL
+  SELECT x + 1 FROM n WHERE x < 3
+)
+SELECT x FROM n;
+```
+
+<ask type="short">Go round by round: what does the anchor produce, what does each later round read and produce, and which round produces nothing?</ask>
+@@ verify
+assert [r[0] for r in lab(block(tutor[0], 'sql'))] == [1, 2, 4, 8, 16, 32]
+assert [r[0] for r in lab(block(reply, 'sql'))] == [1, 2, 3]
+# the answer to the first question is withheld
+import re
+assert not re.search(r'\b(32|16|8)\b', visible(reply))
+
+@@@@ idk-buffer-pool-dirty-page
+situation: idk
+topic: The buffer pool
+voice: plain
+level: medium
+expect: {"must":["dirty","clean","frame"],"askMustNot":["writ(e|ten) (it|the page|page 9)","flush"],"mustNot":["evict(ed|ion)? (it|the page)? ?(after|once) (writing|it is written)"],"need":["note"]}
+noverify: conceptual; nothing is computed
+@@ tutor
+**Why this matters**
+
+A database reads and writes its files in fixed-size pages, and the buffer pool is its in-memory cache of those pages: shared_buffers in Postgres, the InnoDB buffer pool in MySQL, the page cache in SQLite. Whether a query finds its pages there or has to go to disk is commonly the largest single factor in how long it takes. It explains why a query is slow the first time and fast the second, and checkpoints and crash recovery are built on top of it.
+
+<ask type="short">The buffer pool is full, and a query needs a page that is not in it. What has to happen before that page can be read in, and what extra work is there if the page chosen to make room has been modified?</ask>
+@@ learner idk
+@@ reply
+Start with what the pool holds. It is a fixed number of frames, and each frame holds a copy of one page from the data file. While a page is only read, the copy in memory and the copy in the file are identical: the page is clean. When a query changes a row, the change is made to the copy in memory, and from then until it is written back the file holds the older contents: the page is dirty.
+
+<note>Buffer pool: a fixed set of frames, each caching one disk page. Clean page: the copy in memory equals the copy in the file. Dirty page: it has been changed in memory and the file does not have that change yet.</note>
+
+<ask type="short">Two frames could be reused for the page the query needs. One holds page 7, which is clean. The other holds page 9, which is dirty. If the database simply overwrote each frame with the incoming page, what would be lost in each of the two cases?</ask>
+
+@@@@ idk-top-n-per-group-row-number
+situation: idk
+topic: Top-N per group
+voice: plain
+level: medium
+expect: {"must":["PARTITION BY","Turntable"],"mustNot":["rn <= 2","WHERE rn","rn < 3"],"askMustNot":["\\b2 rows\\b","most expensive"],"need":["note"]}
+@@ tutor
+**Problem 1 · medium**
+
+Using the lab's products table, return the two most expensive products in each category, with category, name and price.
+
+<solution>SELECT category, name, price FROM (SELECT category, name, price, ROW_NUMBER() OVER (PARTITION BY category ORDER BY price DESC) AS rn FROM products) WHERE rn <= 2 ORDER BY category, price DESC; It returns 10 rows, two per category; for Audio they are Turntable (179) and Soundbar (149).</solution>
+
+<ask type="problem">Your query, run in a sql block, and the rows it returns for the Audio category.</ask>
+@@ learner idk
+@@ reply
+`ORDER BY price DESC LIMIT 2` would give two rows for the whole table, not two per category. What is needed first is a counter that restarts in every category, and a window function gives one: ROW_NUMBER() numbers the rows 1, 2, 3 in the window's order, and PARTITION BY category starts the numbering again for each category.
+
+```sql
+SELECT category, name, price,
+       ROW_NUMBER() OVER (PARTITION BY category ORDER BY price DESC) AS rn
+FROM products
+WHERE category IN ('Audio', 'Computing')
+ORDER BY category, rn;
+```
+
+Its first three rows are Turntable 179 with rn 1, Soundbar 149 with rn 2 and Over-ear headphones 129 with rn 3.
+
+<note>ROW_NUMBER() OVER (PARTITION BY g ORDER BY x DESC) numbers the rows of each group g from 1, largest x first. The numbering restarts at every new value of g.</note>
+
+<ask type="short">Run it and look at all 16 rows. How many of them have rn = 1, and what do those rows have in common?</ask>
+@@ verify
+ref = "SELECT category, name, price FROM (SELECT category, name, price, ROW_NUMBER() OVER (PARTITION BY category ORDER BY price DESC) AS rn FROM products) WHERE rn <= 2 ORDER BY category, price DESC"
+assert ref in solution(tutor[0])
+top = lab(ref)
+assert len(top) == 10 and top[:2] == [('Audio', 'Turntable', 179.0), ('Audio', 'Soundbar', 149.0)]
+rows = lab(block(reply, 'sql'))
+assert len(rows) == 16
+assert [(r[1], r[2], r[3]) for r in rows[:3]] == [('Turntable', 179.0, 1), ('Soundbar', 149.0, 2), ('Over-ear headphones', 129.0, 3)]
+assert sum(1 for r in rows if r[3] == 1) == 2
+# no two products in a category share a price, so the numbering is fixed
+assert lab("SELECT COUNT(*) FROM (SELECT category, price FROM products GROUP BY category, price HAVING COUNT(*) > 1)")[0][0] == 0

@@ -1,0 +1,670 @@
+@@@@ mark-error-refresh-remainder-sign
+situation: mark-error
+topic: Integer division and remainder with negative operands in C
+options: {"refresh":true}
+voice: wordy
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["always between 0 and 4|-17 % 5 = 3","sign of the dividend"],"must":["-17 % 5 = -2","Problem 3"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["-5\\b","-3\\b"]}
+@@ tutor
+**Problem 2**
+
+Evaluate each of these in C: `-17 / 5`, `-17 % 5`, `17 / -5` and `17 % -5`. Then give the value of `((-17 % 5) + 5) % 5`.
+
+<solution>-17 / 5 = -3 (truncation towards zero). -17 % 5 = -17 - (-3)(5) = -2. 17 / -5 = -3. 17 % -5 = 17 - (-3)(-5) = 2. Last: (-2 + 5) % 5 = 3.</solution>
+<check lang="python">
+import math
+cdiv = lambda a, b: math.trunc(a / b)
+cmod = lambda a, b: a - cdiv(a, b) * b
+assert [cdiv(-17, 5), cmod(-17, 5), cdiv(17, -5), cmod(17, -5)] == [-3, -2, -3, 2]
+assert cmod(cmod(-17, 5) + 5, 5) == 3
+</check>
+
+<ask type="problem">The five values, with your working.</ask>
+@@ learner answer sure
+OK so division in C truncates toward zero, which means -17 / 5 = -3. For the remainder, a remainder is always between 0 and 4 when you divide by 5, so -17 % 5 = 3. Next 17 / -5 = -3, again by truncation. Then 17 % -5 I worked out from the identity: 17 - (-3)(-5) = 17 - 15 = 2. And the last one is (3 + 5) % 5 = 8 % 5 = 3.
+@@ reply
+<grade verdict="partial" score="0.6">Both quotients are right, "-17 / 5 = -3" and "17 / -5 = -3". The first wrong step is "a remainder is always between 0 and 4 when you divide by 5, so -17 % 5 = 3": in C the remainder takes the sign of the dividend, so -17 % 5 = -2.</grade>
+
+The identity you used on the next line gives it directly: -17 - (-3)(5) = -2. Your "17 - (-3)(-5) = 17 - 15 = 2" is right. The last line comes out as 3 either way, because (-2 + 5) % 5 = 3: that expression exists to turn C's remainder into the never-negative one you assumed `%` gives, so it is not a second error.
+
+<card>In C, what is -17 % 5, and what decides its sign? :: -2. The quotient truncates towards zero (-3), and a % b = a - (a / b) * b, so the remainder has the sign of the dividend.</card>
+
+<note>C (C99 on): `a / b` truncates towards zero and `a % b == a - (a / b) * b`, so a non-zero remainder has the sign of `a`. For a result in 0 to n - 1, use `((a % n) + n) % n`.</note>
+
+**Problem 3**
+
+Evaluate `-23 / 4`, `-23 % 4` and `23 % -4`, then `((-23 % 4) + 4) % 4`.
+
+<solution>-23 / 4 = -5. -23 % 4 = -23 - (-5)(4) = -3. 23 / -4 = -5, so 23 % -4 = 23 - (-5)(-4) = 3. Last: (-3 + 4) % 4 = 1.</solution>
+<check lang="python">
+import math
+cdiv = lambda a, b: math.trunc(a / b)
+cmod = lambda a, b: a - cdiv(a, b) * b
+assert [cdiv(-23, 4), cmod(-23, 4), cmod(23, -4), cmod(cmod(-23, 4) + 4, 4)] == [-5, -3, 3, 1]
+</check>
+
+<ask type="problem">The four values. Use the identity for each remainder and show it.</ask>
+@@ verify
+p = lambda body: run_c('#include <stdio.h>\nint main(void) { int a = 17, b = 5, c = 23, d = 4; (void)a; (void)b; (void)c; (void)d; ' + body + ' return 0; }\n').split()
+assert p('printf("%d %d %d %d %d\\n", -a / b, -a % b, a / -b, a % -b, ((-a % b) + b) % b);') == ['-3', '-2', '-3', '2', '3']
+assert p('printf("%d %d %d %d\\n", -c / d, -c % d, c % -d, ((-c % d) + d) % d);') == ['-5', '-3', '3', '1']
+# the learner's lines: the slip, what follows from it, and the lines that are right
+assert -17 % 5 == 3                       # the never-negative (floored) remainder they assumed
+assert 17 - (-3) * (-5) == 2 and (3 + 5) % 5 == 3 and (-2 + 5) % 5 == 3
+assert -17 - (-3) * 5 == -2
+s = solution(reply)
+for part in ('-23 / 4 = -5', '= -3', '= 3', '= 1'):
+    assert part in s
+
+@@@@ mark-error-sort-comparator-tie-break
+situation: mark-error
+topic: std::sort with custom comparators
+voice: wordy
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["a > b","banana date kiwi plum fig"],"must":["a < b"],"setsProblem":true,"askTypes":["code"]}
+@@ tutor
+**Problem 2 · harder**
+
+Sort the words `{"kiwi", "fig", "banana", "plum", "date"}` so that longer words come first, and words of the same length are in alphabetical order. Use `std::sort` with a lambda as the comparator, and print the words on one line separated by spaces.
+
+<solution>Comparator: if (a.size() != b.size()) return a.size() > b.size(); return a < b; Output: banana date kiwi plum fig</solution>
+
+<ask type="code" lang="cpp">Write the whole program and say what it prints.</ask>
+@@ learner answer sure
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <string>
+#include <vector>
+
+int main() {
+    std::vector<std::string> w = {"kiwi", "fig", "banana", "plum", "date"};
+    std::sort(w.begin(), w.end(), [](const std::string &a, const std::string &b) {
+        if (a.size() != b.size()) return a.size() > b.size();
+        return a > b;
+    });
+    for (const auto &s : w) std::cout << s << " ";
+    std::cout << "\n";
+    return 0;
+}
+```
+It prints banana plum kiwi date fig. The way I thought about it: the lambda first looks at the two lengths, and if they are different it uses > so the longer word goes first. If the lengths are the same it falls through to the plain string comparison, which handles the ties.
+@@ reply
+<grade verdict="partial" score="0.6">The length test is right: `return a.size() > b.size();` puts longer words first, and it is only reached when the sizes differ. The wrong line is `return a > b;`: for equal lengths that orders the larger string first, which is reverse alphabetical, so the three four-letter words come out as plum kiwi date. With `return a < b;` the program prints banana date kiwi plum fig.</grade>
+
+The comparator answers one question: must `a` come before `b`. Each line has to be read that way, and for the tie that means `a < b`.
+
+<card>In a std::sort comparator, what should the tie-break return for ascending alphabetical order? :: `a < b`: the comparator returns true exactly when a must come before b.</card>
+
+<note>A `std::sort` comparator `cmp(a, b)` returns true exactly when `a` must come before `b`. For two keys: compare the first key when it differs, otherwise return the comparison of the second key in the direction you want.</note>
+
+**Problem 3 · same level**
+
+<solution>Comparator: if (std::abs(a) != std::abs(b)) return std::abs(a) < std::abs(b); return a < b; Output: -1 1 -2 2 -3 3</solution>
+
+<ask type="code" lang="cpp">Sort `{3, -1, 2, -3, 1, -2}` by absolute value, smallest first, with the negative number first when two absolute values are equal. Use `std::sort` with a lambda and print the result on one line.</ask>
+@@ verify
+out = run_cpp(block(learner, 'cpp')).split()
+assert out == ['banana', 'plum', 'kiwi', 'date', 'fig'], out          # what the learner's program really prints
+fixed = block(learner, 'cpp').replace('return a > b;', 'return a < b;')
+assert fixed != block(learner, 'cpp')
+assert run_cpp(fixed).split() == ['banana', 'date', 'kiwi', 'plum', 'fig']
+assert sorted(['kiwi', 'fig', 'banana', 'plum', 'date'], key=lambda s: (-len(s), s)) == ['banana', 'date', 'kiwi', 'plum', 'fig']
+ref = r'''
+#include <algorithm>
+#include <cstdlib>
+#include <iostream>
+#include <vector>
+int main() {
+    std::vector<int> v = {3, -1, 2, -3, 1, -2};
+    std::sort(v.begin(), v.end(), [](int a, int b) {
+        if (std::abs(a) != std::abs(b)) return std::abs(a) < std::abs(b);
+        return a < b;
+    });
+    for (int x : v) std::cout << x << " ";
+    std::cout << "\n";
+    return 0;
+}
+'''
+assert run_cpp(ref).split() == ['-1', '1', '-2', '2', '-3', '3']
+assert 'Output: -1 1 -2 2 -3 3' in solution(reply)
+
+@@@@ mark-error-short-circuit-or-evaluates-right
+situation: mark-error
+topic: Short-circuit evaluation in C
+options: {"difficulty":"hard"}
+voice: plain
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["right side has to be evaluated|b becomes 6","b = 5|b stays 5|b is still 5"],"must":["b = 5"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["x = 1","y = 2"]}
+@@ tutor
+**Problem 2 · hard**
+
+```c
+int a = 0, b = 5;
+int r = a++ && b++;
+int s = a++ || b++;
+```
+
+Give the final values of `a`, `b`, `r` and `s`.
+
+<solution>Line 2: a++ yields 0 (a becomes 1); the left operand of && is false, so b++ is not evaluated and r = 0. Line 3: a++ yields 1 (a becomes 2); the left operand of || is true, so b++ is not evaluated and s = 1. Final: a = 2, b = 5, r = 0, s = 1.</solution>
+<check lang="python">
+a, b = 0, 5
+left = a; a += 1
+if left: right = b; b += 1; r = int(bool(right))
+else: r = 0
+left = a; a += 1
+if left: s = 1
+else: right = b; b += 1; s = int(bool(right))
+assert (a, b, r, s) == (2, 5, 0, 1)
+</check>
+
+<ask type="problem">The four final values, line by line.</ask>
+@@ learner answer sure
+Line 2: a++ gives 0 and then a is 1. 0 is false so && stops there, b++ never runs, r = 0.
+Line 3: a++ gives 1 and then a is 2. The left side is true, so now the right side has to be evaluated as well: b++ gives 5 and b becomes 6. 1 || 5 is 1, so s = 1.
+Final: a = 2, b = 6, r = 0, s = 1.
+@@ reply
+<grade verdict="partial" score="0.6">Line 2 is right, including "0 is false so && stops there, b++ never runs". The first wrong step is on line 3: "The left side is true, so now the right side has to be evaluated as well". That is the rule for `&&`. For `||` a true left operand already decides the result, so `b++` is skipped and b = 5.</grade>
+
+Your `a = 2`, `r = 0` and `s = 1` stand; only `b` changes. The corrected result is a = 2, b = 5, r = 0, s = 1.
+
+<card>When does `x || y` evaluate y in C? :: Only when x is false (zero). A true left operand decides the result as 1 and y is not evaluated, side effects included.</card>
+
+<note>`x && y` evaluates `y` only when `x` is true; `x || y` evaluates `y` only when `x` is false. A skipped operand's side effects (`b++`, a function call) do not happen.</note>
+
+**Problem 3 · same level**
+
+```c
+int x = 3, y = 0;
+int p = y++ || x--;
+int q = y++ && x--;
+```
+
+<solution>Line 2: y++ yields 0 (y becomes 1); false, so || evaluates x--, which yields 3 (x becomes 2); p = 1. Line 3: y++ yields 1 (y becomes 2); true, so && evaluates x--, which yields 2 (x becomes 1); q = 1. Final: x = 1, y = 2, p = 1, q = 1.</solution>
+<check lang="python">
+x, y = 3, 0
+left = y; y += 1
+if left: p = 1
+else: right = x; x -= 1; p = int(bool(right))
+left = y; y += 1
+if left: right = x; x -= 1; q = int(bool(right))
+else: q = 0
+assert (x, y, p, q) == (1, 2, 1, 1)
+</check>
+
+<ask type="problem">The final values of x, y, p and q. For each line, say whether the right operand is evaluated.</ask>
+@@ verify
+run = lambda body, fmt: run_c('#include <stdio.h>\nint main(void) {\n' + body + 'printf("%d %d %d %d\\n", ' + fmt + ');\nreturn 0; }\n').split()
+assert run(block(tutor[0], 'c'), 'a, b, r, s') == ['2', '5', '0', '1']
+assert run(block(reply, 'c'), 'x, y, p, q') == ['1', '2', '1', '1']
+assert 'x = 1, y = 2, p = 1, q = 1' in solution(reply)
+# the learner's b = 6 is what follows if the right operand of || were evaluated
+a, b = 2, 5; b += 1
+assert b == 6
+
+@@@@ mark-error-enum-value-after-explicit
+situation: mark-error
+topic: Enumerations in C
+voice: typos
+level: easy
+expect: {"verdict":"partial","accept":["wrong"],"names":["AUTO = 7|highest value","AUTO = 3|AUTO is 3"],"must":["6 - 3 = 3"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["E = 6","D = 2","B = 4"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+```c
+enum level { LOW, MID = 5, HIGH, OFF = 2, AUTO };
+```
+
+Give the value of each enumerator, then the value of `HIGH - AUTO`.
+
+<solution>LOW = 0. MID = 5. HIGH = 6 (one more than MID). OFF = 2. AUTO = 3 (one more than OFF, the enumerator just before it). HIGH - AUTO = 6 - 3 = 3.</solution>
+<check lang="python">
+vals, prev = {}, -1
+for name, given in [('LOW', None), ('MID', 5), ('HIGH', None), ('OFF', 2), ('AUTO', None)]:
+    prev = given if given is not None else prev + 1
+    vals[name] = prev
+assert vals == {'LOW': 0, 'MID': 5, 'HIGH': 6, 'OFF': 2, 'AUTO': 3} and vals['HIGH'] - vals['AUTO'] == 3
+</check>
+
+<ask type="problem">The five values and the difference, with a reason for each.</ask>
+@@ learner answer sure
+LOW = 0 becuase it starts at zero. MID = 5 as written. HIGH = 6, one more than MID. OFF = 2 as written. AUTO = 7 since it carries on from the highest value so far. HIGH - AUTO is fine, enumerators are just ints, so 6 - 7 = -1
+@@ reply
+<grade verdict="partial" score="0.6">The first four are right, and so is the rule you used for "HIGH = 6, one more than MID". The first wrong step is "AUTO = 7 since it carries on from the highest value so far": an enumerator with no value is one more than the enumerator written just before it, which is OFF = 2, so AUTO = 3.</grade>
+
+Your subtraction follows correctly from that slip, and "enumerators are just ints" is right. With the corrected value it is HIGH - AUTO = 6 - 3 = 3.
+
+<card>In a C enum, what value does an enumerator get when none is written? :: One more than the enumerator immediately before it (0 for the first), whatever larger values appeared earlier.</card>
+
+<note>C enum values: the first enumerator is 0 unless given a value; each later one without `= value` is the previous enumerator plus 1. "Previous" means the one written just before it, not the largest so far, so two enumerators may share a value.</note>
+
+**Problem 2 · same level**
+
+```c
+enum code { A = 3, B, C = 1, D, E = D + 4 };
+```
+
+<solution>A = 3. B = 4 (A + 1). C = 1. D = 2 (C + 1). E = D + 4 = 6.</solution>
+<check lang="python">
+A = 3; B = A + 1; C = 1; D = C + 1; E = D + 4
+assert (A, B, C, D, E) == (3, 4, 1, 2, 6)
+</check>
+
+<ask type="problem">Give the value of each of the five enumerators, with the rule you applied to each.</ask>
+@@ verify
+out = run_c('#include <stdio.h>\n' + block(tutor[0], 'c') + 'int main(void) { printf("%d %d %d %d %d %d\\n", LOW, MID, HIGH, OFF, AUTO, HIGH - AUTO); return 0; }\n')
+assert out.split() == ['0', '5', '6', '2', '3', '3'], out
+out = run_c('#include <stdio.h>\n' + block(reply, 'c') + 'int main(void) { printf("%d %d %d %d %d\\n", A, B, C, D, E); return 0; }\n')
+assert out.split() == ['3', '4', '1', '2', '6'], out
+assert 6 - 7 == -1 and max(0, 5, 6, 2) + 1 == 7      # the learner's figures follow from "highest so far"
+
+@@@@ unusual-free-list-by-recursion
+situation: mark-unusual
+topic: Dynamic memory in C: malloc and free
+voice: plain
+level: medium
+expect: {"verdict":"correct","mustNot":["should have used","should use a loop","the standard way is"],"setsProblem":true,"askTypes":["error","problem"],"must":["head->next"],"askMustNot":["leak","temporary","overwrit"]}
+@@ tutor
+**Problem 3 · harder**
+
+```c
+struct node { int value; struct node *next; };
+```
+
+Write `void free_list(struct node *head)` that frees every node of a singly linked list whose last node has `next == NULL`. It must never read from a node that has already been freed.
+
+<solution>void free_list(struct node *head) { while (head != NULL) { struct node *next = head->next; free(head); head = next; } } The next pointer is saved before the node is freed.</solution>
+
+<ask type="code" lang="c">Write `free_list`, and say why it never touches freed memory.</ask>
+@@ learner answer sure
+```c
+void free_list(struct node *head) {
+    if (head == NULL) return;
+    free_list(head->next);
+    free(head);
+}
+```
+I free the rest of the list first and only then the node itself, so head->next is always read while head is still allocated.
+@@ reply
+<grade verdict="correct" score="1">This is valid: `free_list(head->next);` reads the `next` pointer before `free(head);` runs, so no freed node is ever read, and every node is freed exactly once, last node first.</grade>
+
+The loop version saves `next` in a local variable before freeing; yours keeps it in the chain of calls instead. The one cost is a stack frame per node, which matters only for very long lists.
+
+**Problem 4 · harder**
+
+```c
+int grow(int **items, size_t *cap) {
+    *items = realloc(*items, *cap * 2 * sizeof **items);
+    if (*items == NULL) return -1;
+    *cap *= 2;
+    return 0;
+}
+```
+
+This function doubles a heap array and returns -1 on failure. On one path it has a memory bug.
+
+<solution>When realloc fails it returns NULL and leaves the original block allocated and unchanged. The assignment *items = realloc(...) has already overwritten the only pointer to that block with NULL, so the block is leaked and the caller's data is unreachable. Fix: assign the result to a temporary, return -1 if it is NULL, and only then store it in *items.</solution>
+
+<ask type="error">Which path is it, and what exactly has gone wrong with the caller's array when the function returns on that path?</ask>
+@@ verify
+import subprocess, tempfile, os
+fn = block(learner, 'c')
+harness = r'''
+#include <stdio.h>
+#include <stdlib.h>
+struct node { int value; struct node *next; };
+static int frees;
+static void counted_free(void *p) { frees++; free(p); }
+#define free counted_free
+''' + fn + r'''
+#undef free
+int main(void) {
+    struct node *head = NULL;
+    for (int i = 0; i < 3; i++) {
+        struct node *n = malloc(sizeof *n);
+        if (!n) return 1;
+        n->value = i; n->next = head; head = n;
+    }
+    free_list(head);
+    free_list(NULL);
+    printf("%d\n", frees);
+    return 0;
+}
+'''
+assert run_c(harness).strip() == '3'
+# under AddressSanitizer too: no use after free, no double free
+with tempfile.TemporaryDirectory() as d:
+    open(os.path.join(d, 'm.c'), 'w').write(harness)
+    subprocess.run(['/usr/bin/clang', '-std=c17', '-g', '-fsanitize=address', '-o', 'p', 'm.c'], cwd=d, check=True)
+    r = subprocess.run([os.path.join(d, 'p')], capture_output=True, text=True)
+    assert r.returncode == 0 and r.stdout.strip() == '3' and 'AddressSanitizer' not in r.stderr, r.stderr
+# the grow function compiles cleanly, and the fix in the solution works on the success path
+g = '#include <stdio.h>\n#include <stdlib.h>\n' + block(reply, 'c') + r'''
+int main(void) {
+    size_t cap = 4;
+    int *items = malloc(cap * sizeof *items);
+    if (!items) return 1;
+    items[3] = 9;
+    int rc = grow(&items, &cap);
+    printf("%d %zu %d\n", rc, cap, items[3]);
+    free(items);
+    return 0;
+}
+'''
+assert run_c(g).split() == ['0', '8', '9']
+
+@@@@ unusual-overflow-check-by-widening
+situation: mark-unusual
+topic: Signed integer overflow in C
+voice: terse
+level: hard
+expect: {"verdict":"correct","mustNot":["should have used","should use INT_MAX - b"],"must":["long long"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["INT_MAX / b"]}
+@@ tutor
+**Problem 3 · harder**
+
+Write `int add_overflows(int a, int b)` that returns 1 when the mathematical sum `a + b` cannot be represented in an `int` and 0 otherwise, without ever performing an `int` addition that overflows. Print its result for (INT_MAX, 1), (INT_MIN, -1), (2000000000, 147483647) and (-5, 5).
+
+<solution>if (b > 0) return a > INT_MAX - b; return a < INT_MIN - b; Neither subtraction can overflow. 2000000000 + 147483647 = 2147483647 = INT_MAX, which fits. Output: 1 1 0 0</solution>
+<check lang="python">
+HI, LO = 2**31 - 1, -2**31
+f = lambda a, b: int(a > HI - b) if b > 0 else int(a < LO - b)
+assert [f(HI, 1), f(LO, -1), f(2000000000, 147483647), f(-5, 5)] == [1, 1, 0, 0]
+assert 2000000000 + 147483647 == HI
+</check>
+
+<ask type="code" lang="c">Write the function and the four calls, and say what it prints.</ask>
+@@ learner answer sure
+```c
+#include <limits.h>
+#include <stdio.h>
+
+int add_overflows(int a, int b) {
+    long long s = (long long)a + b;
+    return s > INT_MAX || s < INT_MIN;
+}
+
+int main(void) {
+    printf("%d %d %d %d\n", add_overflows(INT_MAX, 1), add_overflows(INT_MIN, -1),
+           add_overflows(2000000000, 147483647), add_overflows(-5, 5));
+    return 0;
+}
+```
+prints 1 1 0 0. sum done in long long so it can't overflow
+@@ reply
+<grade verdict="correct" score="1">`long long s = (long long)a + b;` is valid: the cast converts `a` first, `b` is then converted to match, and the addition is done in `long long`, which holds the sum of any two 32-bit `int`s exactly. It prints 1 1 0 0, and the third case is right because that sum is exactly INT_MAX.</grade>
+
+One condition to know: this relies on `long long` being wider than `int`. That holds on every mainstream platform (`int` 32 bits, `long long` at least 64), though the standard does not strictly promise it. The comparison against `INT_MAX - b` reaches the same answer without a wider type, which is what is left when the operands are already the widest type.
+
+**Problem 4 · harder**
+
+`a` and `b` are `int`s with `a >= 0` and `b > 0`. Write a condition, using only `int` arithmetic that cannot overflow, that is true exactly when the product `a * b` would be greater than `INT_MAX`.
+
+<solution>a * b > INT_MAX exactly when a > INT_MAX / b, with integer division: if a <= INT_MAX / b then a * b <= (INT_MAX / b) * b <= INT_MAX, and if a >= INT_MAX / b + 1 then a * b >= (INT_MAX / b + 1) * b > INT_MAX. The division cannot overflow.</solution>
+<check lang="python">
+HI = 127                    # the same argument on an 8-bit signed range
+for a in range(0, HI + 1):
+    for b in range(1, HI + 1):
+        assert (a * b > HI) == (a > HI // b)
+</check>
+
+<ask type="problem">The condition, and a short argument that it is true exactly when the product is too large.</ask>
+@@ verify
+assert run_c(block(learner, 'c')).strip() == '1 1 0 0'
+assert 2000000000 + 147483647 == 2**31 - 1
+# long long really is wider than int here, and holds the two extreme sums
+out = run_c('#include <limits.h>\n#include <stdio.h>\nint main(void) { printf("%zu %zu %lld %lld\\n", sizeof(int), sizeof(long long), (long long)INT_MAX + INT_MAX, (long long)INT_MIN + INT_MIN); return 0; }\n').split()
+assert out == ['4', '8', str(2 * (2**31 - 1)), str(-2**32)], out
+# the standard method agrees with the learner's on a grid of cases
+import random
+random.seed(7)
+HI, LO = 2**31 - 1, -2**31
+for _ in range(20000):
+    a, b = random.randint(LO, HI), random.randint(LO, HI)
+    std = (a > HI - b) if b > 0 else (a < LO - b)
+    assert std == (a + b > HI or a + b < LO)
+assert 'a > INT_MAX / b' in solution(reply)
+
+@@@@ unusual-enum-names-by-lookup-table
+situation: mark-unusual
+topic: Enumerations in C
+voice: wordy
+level: medium
+expect: {"verdict":"correct","mustNot":["should have used","should use a switch"],"must":["names\\[s\\]|index"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b5\\b","\\b7\\b"]}
+@@ tutor
+**Problem 2 · harder**
+
+```c
+enum state { IDLE, RUNNING, DONE };
+```
+
+Write `const char *state_name(enum state s)` that returns "idle", "running" or "done" for the three enumerators and "unknown" for any other value.
+
+<solution>const char *state_name(enum state s) { switch (s) { case IDLE: return "idle"; case RUNNING: return "running"; case DONE: return "done"; } return "unknown"; }</solution>
+
+<ask type="code" lang="c">Write the function.</ask>
+@@ learner answer sure
+```c
+const char *state_name(enum state s) {
+    static const char *const names[] = { "idle", "running", "done" };
+    if ((unsigned)s >= sizeof names / sizeof names[0]) return "unknown";
+    return names[s];
+}
+```
+I didn't use a switch here. The enumerators are 0, 1 and 2 because none of them has an explicit value, so I can use them directly as positions in an array of strings. The cast to unsigned is there so that a negative value turns into a huge number and gets caught by the same range check as a too-large one.
+@@ reply
+<grade verdict="correct" score="1">This is correct. "The enumerators are 0, 1 and 2" is what makes `names[s]` a valid lookup, and `(unsigned)s >= sizeof names / sizeof names[0]` rejects both a value above 2 and a negative one, as you say, before the array is indexed.</grade>
+
+The table depends on the strings staying in the same order as the enumerators; a `switch` over the enum does not, and compilers can warn when a `switch` misses an enumerator. Either is a sound choice here.
+
+**Problem 3 · harder**
+
+```c
+enum perm { READ = 1, WRITE = 2, EXEC = 4 };
+
+int p = READ | EXEC;
+```
+
+<solution>READ | EXEC = 001 | 100 in binary = 101 = 5. p & WRITE = 101 & 010 = 0, so the WRITE bit is not set. p | WRITE = 111 = 7.</solution>
+<check lang="python">
+READ, WRITE, EXEC = 1, 2, 4
+p = READ | EXEC
+assert (p, p & WRITE, p | WRITE) == (5, 0, 7)
+</check>
+
+<ask type="problem">Give the values of `p`, `p & WRITE` and `p | WRITE`, and say why the enumerators were given the values 1, 2 and 4 rather than 0, 1 and 2.</ask>
+@@ verify
+src = '#include <stdio.h>\n' + block(tutor[0], 'c') + block(learner, 'c') + r'''
+int main(void) {
+    printf("%s %s %s %s %s\n", state_name(IDLE), state_name(RUNNING), state_name(DONE), state_name((enum state)3), state_name((enum state)-1));
+    return 0;
+}
+'''
+assert run_c(src).split() == ['idle', 'running', 'done', 'unknown', 'unknown']
+# the reference switch gives the same answers
+ref = '#include <stdio.h>\n' + block(tutor[0], 'c') + solution(tutor[0]) + r'''
+int main(void) {
+    printf("%s %s %s %s\n", state_name(IDLE), state_name(RUNNING), state_name(DONE), state_name((enum state)3));
+    return 0;
+}
+'''
+assert run_c(ref).split() == ['idle', 'running', 'done', 'unknown']
+out = run_c('#include <stdio.h>\n' + block(reply, 'c').replace('int p = READ | EXEC;', '') + 'int main(void) { int p = READ | EXEC; printf("%d %d %d\\n", p, p & WRITE, p | WRITE); return 0; }\n')
+assert out.split() == ['5', '0', '7']
+# clang does warn when a switch over the enum misses an enumerator
+out, err, cerr, code = run_c_full(block(tutor[0], 'c') + 'int f(enum state s) { switch (s) { case IDLE: return 1; case RUNNING: return 2; } return 0; }\nint main(void) { return f(DONE); }\n', 'c')
+assert 'not handled in switch' in cerr, cerr
+
+@@@@ tangent-why-vector-doubles
+situation: tangent
+topic: std::vector growth and capacity
+voice: typos
+level: medium
+expect: {"must":["amortised","49,500","1,023"],"askTypes":["short"],"askMustNot":["\\b5\\b","five"]}
+@@ tutor
+`size()` is the number of elements a vector holds; `capacity()` is how many fit in the buffer it has now. When a `push_back` would take the size past the capacity, the vector allocates a larger buffer, moves the elements across and frees the old one.
+
+```cpp
+#include <iostream>
+#include <vector>
+
+int main() {
+    std::vector<int> v;
+    for (int i = 0; i < 5; i++) {
+        v.push_back(i);
+        std::cout << v.size() << "/" << v.capacity() << " ";
+    }
+    std::cout << "\n";
+    return 0;
+}
+```
+
+```
+1/1 2/2 3/4 4/4 5/8
+```
+
+This standard library (libc++) doubles the capacity each time. The growth factor is the implementation's choice, not fixed by the standard.
+
+<note>`size()`: elements stored. `capacity()`: elements the current buffer can hold. A `push_back` at full capacity allocates a larger buffer and moves every element; libc++ and libstdc++ double the capacity.</note>
+
+**Problem 1 · warm-up**
+
+An empty vector grows by doubling, as above. How many times does it allocate a new buffer during 9 `push_back` calls?
+
+<solution>The capacity goes 1, 2, 4, 8, 16: the buffers are allocated at the 1st, 2nd, 3rd, 5th and 9th push_back. That is 5 allocations.</solution>
+<check lang="python">
+cap, allocs = 0, 0
+for size in range(1, 10):
+    if size > cap:
+        cap = max(1, cap * 2); allocs += 1
+assert (cap, allocs) == (16, 5)
+</check>
+
+<ask type="problem">The number of allocations, with the capacity after each one.</ask>
+@@ learner question
+side question before i anwser, why double it? wouldnt adding like 10 slots each time waste way less memory
+@@ reply
+It would waste less memory and cost far more time. Growing by a fixed 10 slots means a new buffer every 10 `push_back` calls, and each new buffer has every element stored so far moved into it. Over 1,000 calls that is 10 + 20 + ... + 990 = 49,500 element moves, and the total grows with the square of the number of elements. With doubling the moves are 1 + 2 + 4 + ... + 512 = 1,023, always fewer than twice the number of elements. That is what makes `push_back` amortised constant time, which the standard requires. The price is spare capacity, up to about half the buffer, and some libraries grow by a factor of 1.5 to waste less.
+
+<ask type="short">Back to the problem: under doubling, write down the capacity after each of the 9 `push_back` calls, then count how many times it changed.</ask>
+@@ verify
+assert run_cpp(block(tutor[0], 'cpp')).strip() == '1/1 2/2 3/4 4/4 5/8'
+def moves(n, grow):
+    cap, moved = 0, 0
+    for size in range(1, n + 1):
+        if size > cap:
+            moved += size - 1          # everything stored so far goes to the new buffer
+            cap = grow(cap)
+    return moved
+fixed = moves(1000, lambda c: c + 10)
+doubling = moves(1000, lambda c: max(1, c * 2))
+assert fixed == sum(range(10, 1000, 10)) == 49500
+assert doubling == sum(2**k for k in range(10)) == 1023
+for n in (10, 1000, 12345, 100000):
+    assert moves(n, lambda c: max(1, c * 2)) < 2 * n
+# quadratic growth of the fixed-step total: ten times the elements, about a hundred times the moves
+assert 95 < moves(10000, lambda c: c + 10) / fixed < 105
+# the capacities over 9 push_backs, as this library really grows
+out = run_cpp(block(tutor[0], 'cpp').replace('i < 5', 'i < 9')).split()
+caps = [int(x.split('/')[1]) for x in out]
+assert caps == [1, 2, 4, 4, 8, 8, 8, 8, 16] and len(set(caps)) == 5
+
+@@@@ tangent-pragma-once
+situation: tangent
+topic: Header guards in C
+voice: typos
+level: easy
+expect: {"must":["not part of the C or C\\+\\+ standard","GCC, Clang and MSVC"],"askTypes":["short","problem","predict"],"askMustNot":["redefinition","twice|two definitions"]}
+@@ tutor
+An include guard wraps the whole of a header in `#ifndef POINT_H`, `#define POINT_H` and a closing `#endif`. The first time the header is pasted into a translation unit the macro is not yet defined, so the contents are kept and the macro becomes defined. Any later `#include` of the same header in that translation unit finds the macro defined and skips everything up to the `#endif`.
+
+<note>Include guard: `#ifndef NAME_H` / `#define NAME_H` / contents / `#endif`. The contents are seen once per translation unit, however many times the header is included.</note>
+
+**Problem 1 · warm-up**
+
+`point.h` defines `struct point { int x, y; };` and has no guard. `shapes.h` and `canvas.h` each begin with `#include "point.h"`. `main.c` includes `shapes.h` and then `canvas.h`.
+
+<solution>After preprocessing, main.c contains the definition of struct point twice: once through shapes.h and once through canvas.h. The compiler reports a redefinition of struct point at the second one, reached through canvas.h.</solution>
+
+<ask type="problem">What does the compiler report for `main.c`, and at which include does it happen?</ask>
+@@ learner question
+quick one first. ive seen #pragma once at the top of headers instaed of the ifndef lines, is that the same thing and is it proper C?
+@@ reply
+It has the same effect: `#pragma once` tells the compiler to include that file at most once in a translation unit. It is not part of the C or C++ standard, but GCC, Clang and MSVC all support it, so in practice it works almost everywhere. The two fail in different ways. `#pragma once` depends on the compiler recognising that two paths lead to the same file, which can go wrong when a header is reachable as two copies or through links. A guard depends only on its macro name, which goes wrong if two headers choose the same name.
+
+<ask type="short">Back to `main.c`, where `point.h` has neither. Once the preprocessor has pasted in `shapes.h` and then `canvas.h`, how many definitions of `struct point` does the compiler see in the translation unit, and what does it say about that?</ask>
+@@ verify
+import subprocess, tempfile, os
+def build(point_h):
+    with tempfile.TemporaryDirectory() as d:
+        w = lambda n, s: open(os.path.join(d, n), 'w').write(s)
+        w('point.h', point_h)
+        w('shapes.h', '#include "point.h"\nstruct circle { struct point centre; int r; };\n')
+        w('canvas.h', '#include "point.h"\nstruct canvas { struct point origin; };\n')
+        w('main.c', '#include "shapes.h"\n#include "canvas.h"\nint main(void) { struct circle c = {{0, 0}, 1}; struct canvas k = {{0, 0}}; return c.r - 1 + k.origin.x; }\n')
+        p = subprocess.run(['/usr/bin/clang', '-std=c17', '-Wall', '-Wextra', 'main.c', '-o', 'p'], cwd=d, capture_output=True, text=True)
+        return p.returncode, p.stderr
+body = 'struct point { int x, y; };\n'
+code, err = build(body)
+assert code != 0 and "redefinition of 'point'" in err and 'canvas.h' in err, err
+assert build('#ifndef POINT_H\n#define POINT_H\n' + body + '#endif\n') == (0, '')
+assert build('#pragma once\n' + body) == (0, '')
+
+@@@@ tangent-bit-field-layout-on-the-wire
+situation: tangent
+topic: Bit-fields in C
+voice: confused
+level: hard
+expect: {"must":["implementation-defined","shifts and masks"],"askTypes":["short","problem"],"askMustNot":["\\b5\\b","\\b6\\b"]}
+@@ tutor
+```c
+struct flags {
+    unsigned ready : 1;
+    unsigned mode  : 3;
+    unsigned count : 4;
+};
+```
+
+A bit-field is an integer member that occupies a stated number of bits. `mode : 3` can hold 0 to 7 and `count : 4` can hold 0 to 15. Storing a value that does not fit in an unsigned bit-field keeps only its low bits: the value is reduced modulo $2^{w}$ for a field of width $w$.
+
+<note>An unsigned bit-field of width $w$ holds 0 to $2^w - 1$; a larger value stored in it is reduced modulo $2^w$.</note>
+
+**Problem 1 · warm-up**
+
+With `struct flags f;`, the program runs `f.mode = 13;` and `f.count = 22;`.
+
+<solution>mode is 3 bits wide: 13 mod 8 = 5. count is 4 bits wide: 22 mod 16 = 6.</solution>
+<check lang="python">
+assert 13 % 2**3 == 5 and 22 % 2**4 == 6
+</check>
+
+<ask type="problem">What do `f.mode` and `f.count` hold afterwards? Show the reduction for each.</ask>
+@@ learner question
+wait, so is ready the lowest bit of the first byte or the highest one? I assumed I could lay a struct like this over a packet header straight off the wire and read the fields, but now I'm not sure which bit ends up where
+@@ reply
+Not reliably. The C standard leaves the order in which bit-fields are placed within a storage unit implementation-defined, along with whether a field may straddle two units. On the common little-endian targets (x86-64 and AArch64 with GCC or Clang) the first field does land in the least significant bit, but big-endian ABIs typically start from the most significant end, so the same struct describes a different byte there. For a wire format, read the bytes into a fixed-width unsigned integer and extract each field with shifts and masks, which give the same result under every compiler.
+
+<ask type="short">Back to the widths: a 3-bit field can hold eight different values and a 4-bit field sixteen. What is left of 13 in `mode`, and of 22 in `count`, once each has been stored?</ask>
+@@ verify
+src = '#include <stdio.h>\n#include <string.h>\n' + block(tutor[0], 'c') + r'''
+int main(void) {
+    struct flags f;
+    memset(&f, 0, sizeof f);
+    f.mode = 13;
+    f.count = 22;
+    printf("%u %u\n", f.mode, f.count);
+    memset(&f, 0, sizeof f);
+    f.ready = 1;
+    unsigned char first;
+    memcpy(&first, &f, 1);
+    printf("%u\n", first);
+    return 0;
+}
+'''
+out, err, cerr, code = run_c_full(src, 'c')
+assert code == 0 and out.split() == ['5', '6', '1'], (out, cerr)     # on this little-endian target, ready is bit 0 of byte 0
+assert 'changes value from 13 to 5' in cerr and 'changes value from 22 to 6' in cerr
+assert 2**3 == 8 and 2**4 == 16
+# shifts and masks decode the same byte with no dependence on the compiler's layout
+byte = 1 | (5 << 1) | (6 << 4)
+assert (byte & 1, (byte >> 1) & 0b111, (byte >> 4) & 0b1111) == (1, 5, 6)

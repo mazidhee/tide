@@ -1,0 +1,626 @@
+@@@@ show-me-funnel-chart
+situation: show-me
+topic: Funnel analysis in SQL
+voice: plain
+level: easy
+expect: {"visual":{"kind":"chart"},"must":["714","547"]}
+@@ tutor
+A funnel counts how many users reach each step of a path. In the lab's events the steps are signup, view_item, add_to_cart, checkout_started and purchase, and the simplest funnel counts the distinct users who have each event at least once:
+
+```sql
+SELECT event, COUNT(DISTINCT user_id) AS users
+FROM events
+GROUP BY event
+ORDER BY users DESC;
+```
+
+It returns signup 800, view_item 714, add_to_cart 547, checkout_started 417 and purchase 295. Each step keeps a share of the step before it: 714 / 800 = 89% of sign-ups view an item, and 295 / 417 = 71% of those who start a checkout go on to buy.
+
+<note>Simplest funnel: COUNT(DISTINCT user_id) per event, largest first. Step conversion = users at a step / users at the step before.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```chart
+{"sql": "SELECT event, COUNT(DISTINCT user_id) AS users FROM events GROUP BY event ORDER BY users DESC", "type": "bar", "title": "Users reaching each funnel step"}
+```
+
+Compare each bar with the one to its left: the biggest loss of users is between view_item and add_to_cart, from 714 down to 547.
+@@ verify
+import json
+rows = lab(block(tutor[0], 'sql'))
+assert [tuple(r) for r in rows] == [('signup', 800), ('view_item', 714), ('add_to_cart', 547), ('checkout_started', 417), ('purchase', 295)]
+c = json.loads(block(reply, 'chart'))
+assert [tuple(r) for r in lab(c['sql'])] == [tuple(r) for r in rows] and c['type'] == 'bar'
+n = [r[1] for r in rows]
+assert round(100 * n[1] / n[0]) == 89 and round(100 * n[4] / n[3]) == 71
+drops = [a - b for a, b in zip(n, n[1:])]
+assert drops == [86, 167, 130, 122] and drops.index(max(drops)) == 1     # view_item -> add_to_cart is the biggest loss
+
+@@@@ show-me-sliding-window-table
+situation: show-me
+topic: Sliding windows in stream processing
+voice: plain
+level: medium
+expect: {"visual":{"kind":"table"},"must":["12:07","twice|two"]}
+@@ tutor
+A sliding window has a size and a slide. With a size of 10 minutes and a slide of 5, a window starts every 5 minutes and covers the next 10: [11:55, 12:05), [12:00, 12:10), [12:05, 12:15), [12:10, 12:20) and so on, each including its start and excluding its end. Because the size is twice the slide, every event falls into exactly two windows. Take four events, at 12:02, 12:07, 12:08 and 12:13. The event at 12:07 is in [12:00, 12:10) and in [12:05, 12:15). Counting per window gives 1 for [11:55, 12:05), 3 for [12:00, 12:10), 3 for [12:05, 12:15) and 1 for [12:10, 12:20).
+
+<note>Sliding window: starts every `slide`, lasts `size`. An event belongs to every window whose interval contains it, which is size / slide windows when that divides evenly. The four events are counted 8 times in total.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| Event | [11:55, 12:05) | [12:00, 12:10) | [12:05, 12:15) | [12:10, 12:20) |
+|---|---|---|---|---|
+| 12:02 | yes | yes | no | no |
+| 12:07 | no | yes | yes | no |
+| 12:08 | no | yes | yes | no |
+| 12:13 | no | no | yes | yes |
+| Count | 1 | 3 | 3 | 1 |
+
+Read across a row to see that each event is in exactly two windows, and down a column for that window's count.
+@@ verify
+m = lambda s: int(s[:2]) * 60 + int(s[3:])
+rows = table(reply)
+head, body, total = rows[0], rows[1:-1], rows[-1]
+wins = []
+for h in head[1:]:
+    a, b = h.strip('[)').split(', ')
+    wins.append((m(a), m(b)))
+assert all(b - a == 10 for a, b in wins) and [w[0] for w in wins] == [m('11:55'), m('12:00'), m('12:05'), m('12:10')]
+events = ['12:02', '12:07', '12:08', '12:13']
+assert [r[0] for r in body] == events
+counts = [0] * 4
+for r in body:
+    t = m(r[0])
+    marks = ['yes' if a <= t < b else 'no' for a, b in wins]
+    assert r[1:] == marks, (r, marks)
+    assert marks.count('yes') == 2
+    for i, x in enumerate(marks): counts[i] += x == 'yes'
+assert total == ['Count'] + [str(c) for c in counts] and counts == [1, 3, 3, 1] and sum(counts) == 8
+# the explanation states the same counts
+for frag in ('1 for [11:55, 12:05)', '3 for [12:00, 12:10)', '3 for [12:05, 12:15)', '1 for [12:10, 12:20)'):
+    assert frag in tutor[0]
+
+@@@@ show-me-dead-letter-states
+situation: show-me
+topic: Dead-letter queues
+voice: plain
+level: medium
+expect: {"visual":{"kind":"mermaid","diagram":["stateDiagram"]},"must":["third failure"]}
+@@ tutor
+A consumer that cannot process a message can block on it for ever, drop it, or set it aside. A dead-letter queue is the third choice. In this consumer a message is received and then processed. If processing succeeds, the message is acknowledged. If it fails and the message has been tried fewer than 3 times, it waits and is then retried. On the third failure it is published to the dead-letter queue with the error attached and acknowledged on the main queue, so the messages behind it can flow. Later, once the fault is fixed, the dead-lettered messages are replayed into the main queue.
+
+<note>Dead-letter queue: after a bounded number of failed attempts, move the message to a separate queue (with the error) and carry on. Nothing is lost, the main queue is not blocked, and the message can be replayed after a fix.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+stateDiagram-v2
+  [*] --> Received
+  Received --> Processing
+  Processing --> Acknowledged: succeeds
+  Processing --> Waiting: fails, fewer than 3 tries
+  Waiting --> Processing: retry
+  Processing --> DeadLettered: third failure
+  DeadLettered --> Received: replayed after a fix
+  Acknowledged --> [*]
+```
+
+Follow the loop between Processing and Waiting: a message can go round it at most twice, and the third failure leaves by the DeadLettered arrow instead.
+@@ verify
+import re
+body = block(reply, 'mermaid')
+edges = {}
+for line in body.splitlines()[1:]:
+    mm = re.match(r'\s*(\S+) --> (\S+?)(?::\s*(.*))?$', line)
+    edges[(mm.group(1), mm.group(2))] = mm.group(3)
+assert set(edges) == {('[*]', 'Received'), ('Received', 'Processing'), ('Processing', 'Acknowledged'), ('Processing', 'Waiting'), ('Waiting', 'Processing'), ('Processing', 'DeadLettered'), ('DeadLettered', 'Received'), ('Acknowledged', '[*]')}
+# run the rule from the explanation on a message that always fails
+def run(outcomes, limit=3):
+    path, tries = ['Received'], 0
+    for ok in outcomes:
+        path.append('Processing'); tries += 1
+        if ok: path.append('Acknowledged'); return path
+        if tries < limit: path.append('Waiting')
+        else: path.append('DeadLettered'); return path
+path = run([False] * 10)
+assert path.count('Waiting') == 2 and path[-1] == 'DeadLettered' and path.count('Processing') == 3
+for a, b in zip(path, path[1:]): assert (a, b) in edges
+assert run([False, True])[-1] == 'Acknowledged'
+assert 'fewer than 3 times' in tutor[0] and 'third failure' in tutor[0]
+
+@@@@ mark-error-small-files-product
+situation: mark-error
+topic: File sizing and the small-files problem
+voice: typos
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["84,600","86,400"],"must":["84\\.375","\\b169\\b"],"setsProblem":true,"askMustNot":["20,160","\\b237\\b","59\\.06"]}
+@@ tutor
+**Problem 2 · harder**
+
+A streaming job writes one new file to a data lake table every minute, around the clock, and each file is about 2 MB. (a) How many files does it write in 30 days, and how many GB is that? (b) A compaction job rewrites those 30 days into files of 512 MB. How many files are there afterwards? Use 1 GB = 1,024 MB.
+
+<solution>(a) 60 × 24 × 30 = 43,200 files. 43,200 × 2 = 86,400 MB = 86,400 / 1,024 = 84.375 GB. (b) 86,400 / 512 = 168.75, so 169 files (168 full and one part-full).</solution>
+<check lang="python">
+import math
+files = 60 * 24 * 30
+mb = files * 2
+assert files == 43200 and mb == 86400 and mb / 1024 == 84.375
+assert math.ceil(mb / 512) == 169
+</check>
+
+<ask type="problem">The file count, the size in GB and the number of files after compaction, with your working.</ask>
+@@ learner answer sure
+ok so 60*24 = 1440 files a day, times 30 = 43,200 files. size is 43,200 * 2 MB = 84,600 MB, and thats 84,600 / 1024 = 82.6 GB. compaction: 84,600 / 512 = 165.2 so you need 166 files becuase the last one is only partly full
+@@ reply
+<grade verdict="partial" score="0.6">The file count is right: "60*24 = 1440 files a day, times 30 = 43,200 files". The first wrong step is "43,200 * 2 MB = 84,600 MB": the product is 86,400 MB, two digits swapped. Your division by 1,024, your division by 512 and the rounding up all follow correctly from that figure, so they are not separate errors.</grade>
+
+With 86,400 MB the size is 86,400 / 1,024 = 84.375 GB, and compaction leaves 86,400 / 512 = 168.75, so 169 files. Rounding up for the part-full last file was the right call.
+
+<card>43,200 files of 2 MB are compacted into 512 MB files. How many files result? :: 43,200 × 2 = 86,400 MB; 86,400 / 512 = 168.75, so 169 files (round up for the part-full one).</card>
+
+**Problem 3 · same level**
+
+Another job writes a 3 MB file every 30 seconds for 7 days. Compaction then rewrites the week into 256 MB files. Use 1 GB = 1,024 MB.
+
+<solution>2 files a minute: 2 × 60 × 24 × 7 = 20,160 files. 20,160 × 3 = 60,480 MB = 59.0625 GB. 60,480 / 256 = 236.25, so 237 files.</solution>
+<check lang="python">
+import math
+files = 2 * 60 * 24 * 7
+mb = files * 3
+assert files == 20160 and mb == 60480 and mb / 1024 == 59.0625 and math.ceil(mb / 256) == 237
+</check>
+
+<ask type="problem">The file count before compaction, the size in GB, and the file count after, with your working.</ask>
+@@ verify
+import math
+assert 60 * 24 == 1440 and 1440 * 30 == 43200 and 43200 * 2 == 86400
+# the learner's later steps follow from their wrong product
+assert round(84600 / 1024, 1) == 82.6 and round(84600 / 512, 1) == 165.2 and math.ceil(84600 / 512) == 166
+assert 86400 / 1024 == 84.375 and 86400 / 512 == 168.75 and math.ceil(86400 / 512) == 169
+files = 2 * 60 * 24 * 7
+assert files == 20160 and files * 3 == 60480 and 60480 / 1024 == 59.0625 and math.ceil(60480 / 256) == 237
+s = solution(reply)
+assert '20,160' in s and '59.0625' in s and '237' in s and '237' not in visible(reply)
+
+@@@@ mark-error-retention-counts-events
+situation: mark-error
+topic: Retention cohorts in SQL
+voice: confused
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["COUNT\\(\\*\\)","DISTINCT","\\b57\\b"],"must":["42\\.9"],"setsProblem":true,"askMustNot":["\\b45\\b","33\\.1","\\b136\\b"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+Take the cohort of users who signed up in March 2025. A user is retained in week 1 if they have at least one event 7 to 13 days after their signup date. Write queries for the size of the cohort and for the number retained in week 1, run them in the block, and give the retention rate.
+
+<solution>Cohort: SELECT COUNT(*) FROM users WHERE signup_date BETWEEN '2025-03-01' AND '2025-03-31' gives 133. Retained: SELECT COUNT(DISTINCT u.user_id) FROM users u JOIN events e ON e.user_id = u.user_id WHERE u.signup_date BETWEEN '2025-03-01' AND '2025-03-31' AND julianday(date(e.ts)) - julianday(u.signup_date) BETWEEN 7 AND 13 gives 57. Rate 57 / 133 = 42.9%.</solution>
+<check lang="python">
+assert round(100 * 57 / 133, 1) == 42.9
+</check>
+
+<ask type="problem">Both queries, the two counts and the week 1 retention rate.</ask>
+@@ learner answer unsure
+Cohort size first: SELECT COUNT(*) FROM users WHERE signup_date BETWEEN '2025-03-01' AND '2025-03-31' gives 133.
+
+Then the retained ones, joining to their events and keeping days 7 to 13:
+
+```sql
+SELECT COUNT(*) FROM users u JOIN events e ON e.user_id = u.user_id
+WHERE u.signup_date BETWEEN '2025-03-01' AND '2025-03-31'
+  AND julianday(date(e.ts)) - julianday(u.signup_date) BETWEEN 7 AND 13;
+```
+
+That gives 696, so retention is 696 / 133 = 523%. That can't be right for a rate but it is what the query returns.
+@@ reply
+<grade verdict="partial" score="0.5">The cohort of 133, the join and the day filter "BETWEEN 7 AND 13" are all right. The first wrong step is `SELECT COUNT(*)` on the joined rows: the join has one row per event, so 696 is the number of week 1 events, not users. Your 523% follows from that count; you were right to distrust it.</grade>
+
+Count each user once with `COUNT(DISTINCT u.user_id)`:
+
+```sql
+SELECT COUNT(DISTINCT u.user_id) AS retained
+FROM users u JOIN events e ON e.user_id = u.user_id
+WHERE u.signup_date BETWEEN '2025-03-01' AND '2025-03-31'
+  AND julianday(date(e.ts)) - julianday(u.signup_date) BETWEEN 7 AND 13;
+```
+
+It returns 57, so week 1 retention is 57 / 133 = 42.9%.
+
+<card>A retention query joins users to events and uses COUNT(*). What does it count, and what should it use? :: It counts events, one row per event after the join. Retention counts users: COUNT(DISTINCT user_id).</card>
+
+<note>Retention counts users, not events: after joining a cohort to events, use COUNT(DISTINCT user_id). A rate above 100% means rows are being counted, not users.</note>
+
+**Problem 2 · same level**
+
+Now the April 2025 cohort and week 2: a user is retained if they have at least one event 14 to 20 days after signing up.
+
+<solution>Cohort: 136 users signed up from 2025-04-01 to 2025-04-30. Retained: the same query with the April dates and BETWEEN 14 AND 20, using COUNT(DISTINCT u.user_id), gives 45. Rate 45 / 136 = 33.1%.</solution>
+<check lang="python">
+assert round(100 * 45 / 136, 1) == 33.1
+</check>
+
+<ask type="problem">Run both queries in the block and give the cohort size, the number retained and the rate.</ask>
+@@ verify
+assert lab("SELECT COUNT(*) FROM users WHERE signup_date BETWEEN '2025-03-01' AND '2025-03-31'")[0][0] == 133
+assert lab(block(learner, 'sql'))[0][0] == 696           # what the learner's query really returns
+assert round(100 * 696 / 133) == 523
+assert lab(block(reply, 'sql'))[0][0] == 57
+assert round(100 * 57 / 133, 1) == 42.9
+# a second method for 57: users in the cohort for whom such an event exists
+alt = lab("SELECT COUNT(*) FROM users u WHERE u.signup_date BETWEEN '2025-03-01' AND '2025-03-31' AND EXISTS (SELECT 1 FROM events e WHERE e.user_id = u.user_id AND date(e.ts) BETWEEN date(u.signup_date, '+7 days') AND date(u.signup_date, '+13 days'))")[0][0]
+assert alt == 57
+assert lab("SELECT COUNT(*) FROM users WHERE signup_date BETWEEN '2025-04-01' AND '2025-04-30'")[0][0] == 136
+apr = lab("SELECT COUNT(DISTINCT u.user_id) FROM users u JOIN events e ON e.user_id = u.user_id WHERE u.signup_date BETWEEN '2025-04-01' AND '2025-04-30' AND julianday(date(e.ts)) - julianday(u.signup_date) BETWEEN 14 AND 20")[0][0]
+alt2 = lab("SELECT COUNT(*) FROM users u WHERE u.signup_date BETWEEN '2025-04-01' AND '2025-04-30' AND EXISTS (SELECT 1 FROM events e WHERE e.user_id = u.user_id AND date(e.ts) BETWEEN date(u.signup_date, '+14 days') AND date(u.signup_date, '+20 days'))")[0][0]
+assert apr == alt2 == 45 and round(100 * 45 / 136, 1) == 33.1
+s = solution(reply)
+assert '136' in s and '45' in s and '33.1%' in s
+
+@@@@ mark-error-upsert-retry-skips
+situation: mark-error
+topic: Idempotent upserts and MERGE
+voice: terse
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["skip","every row|each row|all three","\\b40\\b"],"must":["\\(4, 'Shelf', 40\\)"],"setsProblem":true,"askMustNot":["\\(11, 'plus', 10\\)","\\b3 rows\\b"]}
+@@ tutor
+An upsert on a key updates the row if the key exists and inserts it otherwise. Warehouses write it as MERGE; SQLite, which the lab uses, writes it as `INSERT ... ON CONFLICT (key) DO UPDATE`.
+
+**Problem 1 · warm-up**
+
+`dim_product(product_id, name, price)` holds (1, 'Lamp', 20), (2, 'Desk', 150) and (3, 'Chair', 60). A batch arrives with three rows in this order: (2, 'Desk', 165), (4, 'Shelf', 45), (4, 'Shelf', 40). It is applied row by row as an upsert on product_id. The task is then retried, so the same batch is applied a second time.
+
+<solution>First pass: 2 exists, price becomes 165; 4 is new, inserted at 45; 4 now exists, updated to 40. Table: (1, 'Lamp', 20), (2, 'Desk', 165), (3, 'Chair', 60), (4, 'Shelf', 40). Second pass: 2 set to 165 again; 4 set to 45, then to 40. Same four rows: the second pass changes nothing in the end.</solution>
+
+<ask type="problem">Give the table's rows after the first pass and after the second, with what each batch row did.</ask>
+@@ learner answer sure
+pass 1: 2 exists -> update 165. 4 missing -> insert at 45. next row, 4 exists now -> update to 40. table: (1, 'Lamp', 20) (2, 'Desk', 165) (3, 'Chair', 60) (4, 'Shelf', 40).
+pass 2: 2 -> 165, no change. 4 -> update to 45. last row was already applied in pass 1 so the upsert skips it. final (4, 'Shelf', 45), still 4 rows.
+@@ reply
+<grade verdict="partial" score="0.6">Pass 1 is right, row by row, ending at "(4, 'Shelf', 40)", and so is the start of pass 2. The first wrong step is "last row was already applied in pass 1 so the upsert skips it": an upsert keeps no record of earlier runs. It applies every row of the batch each time, so the third row sets the price to 40 again.</grade>
+
+After the second pass the table is (1, 'Lamp', 20), (2, 'Desk', 165), (3, 'Chair', 60), (4, 'Shelf', 40): exactly as after the first. That is what makes the retry safe. Each pass ends with the last value in the batch for every key, whatever the table held before.
+
+<card>A batch is applied as an upsert twice. Does the second pass skip rows the first pass applied? :: No. An upsert has no memory of earlier runs; it applies every row again. The result is the same because each key ends at the batch's last value for it.</card>
+
+<note>An upsert is idempotent because of where it ends, not because it skips work: every pass rewrites each key to the batch's last value for that key, so one pass and two passes leave the same table.</note>
+
+**Problem 2 · same level**
+
+`dim_plan(plan_id, name, price)` holds (10, 'free', 0) and (11, 'plus', 8). The batch (11, 'plus', 9), (12, 'pro', 20), (11, 'plus', 10) is applied in that order as an upsert on plan_id, and then applied again.
+
+<solution>Pass 1: 11 updated to 9; 12 inserted; 11 updated to 10. Pass 2: 11 to 9, 12 unchanged, 11 to 10. Final table: (10, 'free', 0), (11, 'plus', 10), (12, 'pro', 20), which is 3 rows.</solution>
+
+<ask type="problem">The table after the second pass, and what the price of plan 11 was at each point during that pass.</ask>
+@@ verify
+import sqlite3
+def apply(rows, batch, key, passes):
+    db = sqlite3.connect(':memory:')
+    db.execute(f'create table t({key} integer primary key, name text, price integer)')
+    db.executemany('insert into t values (?, ?, ?)', rows)
+    states = []
+    for _ in range(passes):
+        for r in batch:
+            db.execute(f'insert into t values (?, ?, ?) on conflict({key}) do update set name = excluded.name, price = excluded.price', r)
+        states.append(db.execute(f'select * from t order by {key}').fetchall())
+    return states
+p = apply([(1, 'Lamp', 20), (2, 'Desk', 150), (3, 'Chair', 60)], [(2, 'Desk', 165), (4, 'Shelf', 45), (4, 'Shelf', 40)], 'product_id', 2)
+want = [(1, 'Lamp', 20), (2, 'Desk', 165), (3, 'Chair', 60), (4, 'Shelf', 40)]
+assert p[0] == want and p[1] == want
+for r in want: assert str(r) in reply and str(r) in solution(tutor[0])
+assert "(4, 'Shelf', 45)" in learner          # the learner's wrong final row
+q = apply([(10, 'free', 0), (11, 'plus', 8)], [(11, 'plus', 9), (12, 'pro', 20), (11, 'plus', 10)], 'plan_id', 2)
+assert q[0] == q[1] == [(10, 'free', 0), (11, 'plus', 10), (12, 'pro', 20)]
+for r in q[1]: assert str(r) in solution(reply)
+
+@@@@ mark-error-dictionary-bits-as-bytes
+situation: mark-error
+topic: Dictionary and run-length encoding
+voice: wordy
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["bits","1 byte|one byte","10,001,800"],"must":["about 9|9\\.0"],"setsProblem":true,"askMustNot":["2,000,120","\\b20\\b","\\b4 bits\\b"]}
+@@ tutor
+**Problem 2 · harder**
+
+A column `country` has 10 million rows and 200 distinct values, stored as strings that average 9 bytes. Dictionary encoding stores each distinct string once and replaces every value with a fixed-width integer code, using the smallest whole number of bits that can tell 200 values apart. Find the plain size, the encoded size (dictionary plus codes) and the compression ratio.
+
+<solution>Plain: 10,000,000 × 9 = 90,000,000 bytes. Code width: 2^7 = 128 < 200 ≤ 256 = 2^8, so 8 bits = 1 byte per value: 10,000,000 bytes of codes. Dictionary: 200 × 9 = 1,800 bytes. Encoded: 10,001,800 bytes. Ratio: 90,000,000 / 10,001,800, about 9.0.</solution>
+<check lang="python">
+import math
+bits = math.ceil(math.log2(200))
+codes = 10_000_000 * bits // 8
+enc = codes + 200 * 9
+assert bits == 8 and enc == 10_001_800 and round(90_000_000 / enc, 1) == 9.0
+</check>
+
+<ask type="problem">The three figures, with your working.</ask>
+@@ learner answer sure
+Plain size is just rows times width, so 10,000,000 x 9 = 90,000,000 bytes. For the codes I need enough bits for 200 values: 2^7 is 128 which is too few and 2^8 is 256, so 8 bits per code. The codes then take 10,000,000 x 8 = 80,000,000 bytes. The dictionary is 200 x 9 = 1,800 bytes. So encoded is 80,001,800 bytes and the ratio is 90,000,000 / 80,001,800 = 1.12, which is not much of a saving really.
+@@ reply
+<grade verdict="partial" score="0.6">The plain size, the code width ("2^8 is 256, so 8 bits per code") and the 1,800-byte dictionary are right. The first wrong step is "10,000,000 x 8 = 80,000,000 bytes": 8 is the width in bits, and 8 bits is 1 byte, so the codes take 10,000,000 bytes. Your total and ratio follow correctly from that slip.</grade>
+
+Corrected: encoded size = 10,000,000 + 1,800 = 10,001,800 bytes, and the ratio is 90,000,000 / 10,001,800, about 9.0. The saving is large because a 9-byte string is replaced by a 1-byte code, and the dictionary is negligible beside 10 million codes.
+
+<card>A dictionary-encoded column has 10 million values and 8-bit codes. How many bytes do the codes take? :: 10,000,000 × 8 bits = 80,000,000 bits = 10,000,000 bytes. Convert bits to bytes before adding the dictionary.</card>
+
+**Problem 3 · same level**
+
+A column `status` has 4 million rows and 12 distinct values, stored as strings that average 10 bytes. Dictionary-encode it with the smallest whole number of bits per code, packing the codes with no padding.
+
+<solution>Plain: 40,000,000 bytes. Code width: 2^3 = 8 < 12 ≤ 16 = 2^4, so 4 bits. Codes: 4,000,000 × 4 = 16,000,000 bits = 2,000,000 bytes. Dictionary: 12 × 10 = 120 bytes. Encoded: 2,000,120 bytes. Ratio: 40,000,000 / 2,000,120, about 20.</solution>
+<check lang="python">
+import math
+bits = math.ceil(math.log2(12))
+enc = 4_000_000 * bits // 8 + 12 * 10
+assert bits == 4 and enc == 2_000_120 and round(40_000_000 / enc, 1) == 20.0
+</check>
+
+<ask type="problem">The plain size, the encoded size in bytes and the ratio, with the code width you used.</ask>
+@@ verify
+import math
+assert 10_000_000 * 9 == 90_000_000 and 2**7 == 128 < 200 <= 256 == 2**8 and 200 * 9 == 1800
+# the learner's figures follow from reading 8 bits as 8 bytes
+assert 10_000_000 * 8 + 1800 == 80_001_800 and round(90_000_000 / 80_001_800, 2) == 1.12
+enc = 10_000_000 * 8 // 8 + 1800
+assert enc == 10_001_800 and round(90_000_000 / enc, 1) == 9.0
+bits = math.ceil(math.log2(12))
+enc2 = 4_000_000 * bits // 8 + 120
+assert bits == 4 and enc2 == 2_000_120 and round(40_000_000 / enc2, 1) == 20.0
+assert '2,000,120' in solution(reply) and '2,000,120' not in visible(reply)
+
+@@@@ unusual-cart-no-purchase-having
+situation: mark-unusual
+topic: Funnel analysis in SQL
+voice: plain
+level: medium
+expect: {"verdict":"correct","must":["\\b252\\b"],"mustNot":["should have used","NOT EXISTS is (the )?(right|correct|proper)"],"setsProblem":true,"askMustNot":["\\b77\\b","\\b25\\b","\\b122\\b"]}
+@@ tutor
+**Problem 2 · harder**
+
+A drop-off question: how many users have at least one add_to_cart event but no purchase event at all? Write one query on `events` and run it in the block.
+
+<solution>SELECT COUNT(DISTINCT user_id) FROM events e WHERE event = 'add_to_cart' AND NOT EXISTS (SELECT 1 FROM events p WHERE p.user_id = e.user_id AND p.event = 'purchase'); gives 252.</solution>
+
+<ask type="problem">Your query and the number it returns.</ask>
+@@ learner answer sure
+I grouped by user and put both conditions in HAVING instead of a subquery:
+
+```sql
+SELECT COUNT(*) FROM (
+  SELECT user_id FROM events
+  GROUP BY user_id
+  HAVING SUM(event = 'add_to_cart') > 0 AND SUM(event = 'purchase') = 0
+);
+```
+
+Returns 252. In SQLite event = 'add_to_cart' is 1 or 0 so the SUM counts that user's cart events.
+@@ reply
+<grade verdict="correct" score="1">252 is right, and the method is sound: "the SUM counts that user's cart events", so `HAVING SUM(event = 'add_to_cart') > 0 AND SUM(event = 'purchase') = 0` keeps exactly the users with a cart event and no purchase. One pass over events, one row per user, no subquery per row.</grade>
+
+This is conditional aggregation, a common form for funnel queries, because each extra step is one more SUM. An anti-join with NOT EXISTS gives the same 252. One thing to carry to other engines: a comparison used as a number works in SQLite and MySQL, while Postgres and most warehouses need a CASE inside the SUM: `SUM(CASE WHEN event = 'purchase' THEN 1 ELSE 0 END)`.
+
+**Problem 3 · harder**
+
+Move one step down the funnel and split by plan. For each plan in `users`, count the users who started a checkout but never purchased.
+
+<solution>SELECT u.plan, COUNT(*) FROM users u WHERE u.user_id IN (SELECT user_id FROM events GROUP BY user_id HAVING SUM(event = 'checkout_started') > 0 AND SUM(event = 'purchase') = 0) GROUP BY u.plan; gives free 77, plus 25, pro 20, which is 122 users in all.</solution>
+<check lang="python">
+assert 77 + 25 + 20 == 122
+</check>
+
+<ask type="problem">Your query, run in the block, and the count for each plan.</ask>
+@@ verify
+assert lab(block(learner, 'sql'))[0][0] == 252
+ref = lab("SELECT COUNT(DISTINCT user_id) FROM events e WHERE event = 'add_to_cart' AND NOT EXISTS (SELECT 1 FROM events p WHERE p.user_id = e.user_id AND p.event = 'purchase')")[0][0]
+assert ref == 252
+# a third way: set difference
+assert lab("SELECT COUNT(*) FROM (SELECT user_id FROM events WHERE event = 'add_to_cart' EXCEPT SELECT user_id FROM events WHERE event = 'purchase')")[0][0] == 252
+rows = lab("SELECT u.plan, COUNT(*) FROM users u WHERE u.user_id IN (SELECT user_id FROM events GROUP BY user_id HAVING SUM(event = 'checkout_started') > 0 AND SUM(event = 'purchase') = 0) GROUP BY u.plan ORDER BY u.plan")
+assert [tuple(r) for r in rows] == [('free', 77), ('plus', 25), ('pro', 20)]
+alt = lab("SELECT u.plan, COUNT(DISTINCT u.user_id) FROM users u JOIN events e ON e.user_id = u.user_id AND e.event = 'checkout_started' WHERE NOT EXISTS (SELECT 1 FROM events p WHERE p.user_id = u.user_id AND p.event = 'purchase') GROUP BY u.plan ORDER BY u.plan")
+assert [tuple(r) for r in alt] == [tuple(r) for r in rows]
+s = solution(reply)
+assert 'free 77' in s and 'plus 25' in s and 'pro 20' in s and '122' in s
+
+@@@@ unusual-sessions-gaps-plus-users
+situation: mark-unusual
+topic: Sessionisation with LAG
+voice: typos
+level: medium
+expect: {"verdict":"correct","must":["6,627","5,827|5827"],"mustNot":["should have used","instead you should"],"setsProblem":true,"askMustNot":["\\b28\\b","\\b31\\b"]}
+@@ tutor
+`LAG(ts) OVER (PARTITION BY user_id ORDER BY ts)` puts each user's previous event time beside the current one. That is all sessionisation needs: an event starts a new session when it has no previous event, or comes more than 30 minutes after it.
+
+<note>Sessionisation: prev = LAG(ts) OVER (PARTITION BY user_id ORDER BY ts). New session when prev IS NULL or ts − prev > the gap. In SQLite, strftime('%s', ts) gives seconds for the subtraction.</note>
+
+**Problem 1 · warm-up**
+
+Ignore the session_id column. Using the 30-minute rule on `events`, count the sessions across all users.
+
+<solution>WITH g AS (SELECT user_id, ts, LAG(ts) OVER (PARTITION BY user_id ORDER BY ts) AS prev FROM events) SELECT SUM(CASE WHEN prev IS NULL OR strftime('%s', ts) - strftime('%s', prev) > 1800 THEN 1 ELSE 0 END) FROM g; gives 6,627.</solution>
+
+<ask type="problem">Write the query, run it in the block and give the count.</ask>
+@@ learner answer sure
+```sql
+WITH g AS (
+  SELECT user_id, ts, LAG(ts) OVER (PARTITION BY user_id ORDER BY ts) AS prev FROM events
+)
+SELECT COUNT(*) FROM g
+WHERE prev IS NOT NULL AND strftime('%s', ts) - strftime('%s', prev) > 1800;
+```
+that gives 5827 gaps over 30 min. evry user also has one first session that isnt after a gap and theres 800 users with events, so 5827 + 800 = 6627 sesions
+@@ reply
+<grade verdict="correct" score="1">6,627 is right. "5827 + 800 = 6627" is a valid count: every session starts either at a user's first event or straight after a gap of more than 30 minutes, the two cases cannot overlap, and there are 800 of the first kind and 5,827 of the second.</grade>
+
+Your two terms are the two halves of the usual flag. `prev IS NULL` is true once per user, which is your 800, and the gap test is true 5,827 times. Counting them separately has a use of its own: gaps divided by users, about 7.3, is the average number of return visits per user.
+
+**Problem 2 · harder**
+
+Still with the 30-minute rule: find the user with the most sessions.
+
+<solution>WITH g AS (SELECT user_id, ts, LAG(ts) OVER (PARTITION BY user_id ORDER BY ts) AS prev FROM events), f AS (SELECT user_id, CASE WHEN prev IS NULL OR strftime('%s', ts) - strftime('%s', prev) > 1800 THEN 1 ELSE 0 END AS is_new FROM g) SELECT user_id, SUM(is_new) AS sessions FROM f GROUP BY user_id ORDER BY sessions DESC LIMIT 1; gives user 28 with 31 sessions (the next highest has 29).</solution>
+
+<ask type="problem">Your query, run in the block, with the user_id and their number of sessions.</ask>
+@@ verify
+assert lab(block(learner, 'sql'))[0][0] == 5827
+assert lab("SELECT COUNT(DISTINCT user_id) FROM events")[0][0] == 800
+flag = "WITH g AS (SELECT user_id, ts, LAG(ts) OVER (PARTITION BY user_id ORDER BY ts) AS prev FROM events) SELECT SUM(CASE WHEN prev IS NULL OR strftime('%s', ts) - strftime('%s', prev) > 1800 THEN 1 ELSE 0 END), SUM(prev IS NULL) FROM g"
+total, firsts = lab(flag)[0]
+assert total == 6627 == 5827 + 800 and firsts == 800
+assert round(5827 / 800, 1) == 7.3
+# an independent count in Python from the raw rows
+from datetime import datetime
+rows = lab("SELECT user_id, ts FROM events ORDER BY user_id, ts")
+per, last = {}, {}
+for u, ts in rows:
+    t = datetime.strptime(ts, '%Y-%m-%d %H:%M:%S')
+    if u not in last or (t - last[u]).total_seconds() > 1800: per[u] = per.get(u, 0) + 1
+    last[u] = t
+assert sum(per.values()) == 6627
+top = sorted(per.items(), key=lambda kv: -kv[1])
+assert top[0] == (28, 31) and top[1][1] == 29
+s = solution(reply)
+assert 'user 28' in s and '31 sessions' in s
+
+@@@@ unusual-distinct-by-sorting
+situation: mark-unusual
+topic: Exact versus approximate distinct counts
+options: {"strategy":"code"}
+voice: terse
+level: medium
+expect: {"verdict":"correct","must":["\\b490\\b","9992"],"mustNot":["should have used","a set is the (right|correct|proper) way"],"setsProblem":true,"askTypes":["code"],"askMustNot":["\\b504\\b","\\b63\\b"]}
+@@ tutor
+An exact distinct count has to remember every different value it has met. The direct way is a set, grown one value at a time:
+
+```python
+seen = set()
+for v in [3, 1, 3, 2, 1]:
+    seen.add(v)
+print(len(seen), sorted(seen))
+```
+
+```
+3 [1, 2, 3]
+```
+
+<solution>def exact_distinct(values): seen = set(); add each v; return len(seen). For the seeded list it returns 490.</solution>
+
+<ask type="code" lang="python">Write `exact_distinct(values)` that returns the number of distinct values. Test it on 2,000 values drawn from `range(500)` with `random.seed(7)` and `random.randrange(500)`, and print the result.</ask>
+@@ learner answer sure
+```python
+import random
+
+def exact_distinct(values):
+    s = sorted(values)
+    n = 0
+    for i, v in enumerate(s):
+        if i == 0 or v != s[i - 1]:
+            n += 1
+    return n
+
+random.seed(7)
+values = [random.randrange(500) for _ in range(2000)]
+print(exact_distinct(values))
+```
+490. no set, sorted so equal values sit together and counted where it changes
+@@ reply
+<grade verdict="correct" score="1">490 is right. "sorted so equal values sit together" is what makes it valid: after sorting, each distinct value is one unbroken run, so `if i == 0 or v != s[i - 1]` fires exactly once per distinct value.</grade>
+
+This is one way an engine counts distinct values when they do not fit in a hash table: sort, then count the boundaries. It costs $O(n \log n)$ time against the set's expected $O(n)$, and both still hold or sort every value. To use less memory you must give up exactness. One way is to keep only a fixed fraction of the distinct values, chosen by hash, and scale up:
+
+```python
+import zlib
+
+def h(v):
+    return zlib.crc32(str(v).encode())
+
+kept = {v for v in range(10000) if h(v) % 8 == 0}
+print(len(kept), len(kept) * 8)
+```
+
+```
+1249 9992
+```
+
+<solution>def approx_distinct(values, m): return len({v for v in values if h(v) % m == 0}) * m. On the seeded list with m = 8 it keeps 63 values and returns 504, against the exact 490.</solution>
+
+<ask type="code" lang="python">Write `approx_distinct(values, m)` that keeps only the values whose hash `h(v)` is divisible by m and returns the number kept times m. Print it with m = 8 for your seeded list, next to the exact count.</ask>
+@@ verify
+out = run_py(block(learner, 'python'))
+assert out.strip() == '490', out
+import random, zlib
+random.seed(7)
+values = [random.randrange(500) for _ in range(2000)]
+assert len(set(values)) == 490
+assert run_py(block(tutor[0], 'python')).strip() == block(tutor[0], '').strip() == '3 [1, 2, 3]'
+h = lambda v: zlib.crc32(str(v).encode())
+kept = {v for v in range(10000) if h(v) % 8 == 0}
+assert (len(kept), len(kept) * 8) == (1249, 9992)
+assert run_py(block(reply, 'python')).strip() == '1249 9992'
+k = {v for v in values if h(v) % 8 == 0}
+assert len(k) == 63 and len(k) * 8 == 504
+s = solution(reply)
+assert '63' in s and '504' in s and '504' not in visible(reply)
+
+@@@@ tangent-is-dbt-etl
+situation: tangent
+topic: ELT versus ETL
+options: {"strategy":"dialogue"}
+voice: plain
+level: easy
+expect: {"must":["dbt","transform","inside the warehouse|in the warehouse"],"askMustNot":["\\braw\\b","untouched"],"words":{"max":170}}
+noverify: a conceptual exchange; nothing is computed
+@@ tutor
+Here is the case to think through. Your team copies payment events from the application database into the warehouse exactly as they are, and only then transforms them there with SQL into reporting tables. A bug is found in a currency-conversion rule: it has been producing wrong totals for three months.
+
+<ask type="explain">Why is this repair easier under ELT than it would be if the conversion had been applied before loading, as in ETL?</ask>
+@@ learner question
+side question, people at work keep calling dbt an ETL tool. is it one?
+@@ reply
+Not in the full sense. dbt does only the T: it turns SQL models into tables and views, runs them inside the warehouse in dependency order, and tests the results. It does not extract data from source systems or load it; another tool or job has to land the data first. So dbt is the transform step of an ELT setup, and calling it an ETL tool is loose usage. That describes dbt Core as I know it up to 2024; the hosted product adds scheduling and other services around the same core.
+
+<ask type="explain">Back to the repair. The conversion rule is fixed today, but three months of totals are wrong. What must still exist in the warehouse for those three months to be recomputed correctly, and which of the two approaches guarantees that it does?</ask>
+
+@@@@ tangent-iceberg-hidden-partitioning
+situation: tangent
+topic: Partitioning a data lake by date
+voice: wordy
+level: medium
+expect: {"must":["transform","metadata","event_ts"],"ends":"continue","words":{"max":170}}
+noverify: a conceptual exchange; nothing is computed
+@@ tutor
+In a Hive-style layout a table is a directory tree, and each partition is a folder named after a column's value, such as `event_date=2025-06-01/`. A query that filters on that column lists only the matching folders and never opens the rest.
+
+<note>Hive-style partitioning: one folder per value of the partition column (event_date=2025-06-01/). A filter on that column prunes whole folders before any file is read.</note>
+
+<ask type="predict">The events table is partitioned by event_date, a date column the writer derives from the timestamp event_ts. An analyst filters with `WHERE event_ts >= '2025-06-01 00:00:00' AND event_ts < '2025-06-02 00:00:00'` and nothing else. In a plain Hive-style table, how many of the 400 daily folders does the engine read?</ask>
+@@ learner question
+Before I answer that, can you just explain what Iceberg's hidden partitioning is? I saw it mentioned right next to this in a blog post and I don't want to mix the two up, so I'd rather hear it plainly first.
+@@ reply
+Hidden partitioning moves the partition rule out of the data and into the table's metadata. In a Hive-style table the partition value is a separate column that writers must fill in and readers must remember to filter on. An Apache Iceberg table instead records a transform of a real column, for example day(event_ts), as its partition spec. Writers supply only event_ts, readers filter only on event_ts, and the engine applies the transform itself to decide which files a query can skip. Because the rule lives in metadata, it can also be changed later without rewriting the files already written. That is the design as of the Iceberg version 1 and 2 table specifications.
+
+<note>Iceberg hidden partitioning: the partition is a transform of a real column (such as day(event_ts)) stored in table metadata. Queries filter on the real column; no separate partition column is written or filtered on.</note>
+
+Your question on the Hive-style table is still open, and this contrast is what it turns on.
+
+<continue/>
+
+@@@@ tangent-registry-versus-contract
+situation: tangent
+topic: Data contracts
+voice: confused
+level: medium
+expect: {"must":["schema registry","structure|names and types","meaning|semantic"],"askMustNot":["semantic","meaning"],"words":{"max":170}}
+noverify: a conceptual exchange; nothing is computed
+@@ tutor
+A data contract is an agreement between the team that produces a dataset and the teams that consume it: what the fields are, what they mean, how fresh the data will be, and how changes are announced. Take a case. The payments team changes `amount` in their events from the gross amount, tax included, to the net amount. The field's name and type stay the same.
+
+<ask type="short">Every pipeline keeps running without an error. Which downstream numbers are now wrong, and from what date?</ask>
+@@ learner question
+wait im confused, isnt this what a schema registry is for? we have one on kafka and i thought that WAS the contract
+@@ reply
+A schema registry covers one part of a contract. It stores the schema of each topic and rejects a new version that breaks the compatibility rule you set, so it guards structure: field names, types, which fields are required. It knows nothing about meaning. The gross-to-net change keeps the same name and the same type, so the registry sees an identical schema and lets it through. A contract also states what each field means, its unit, how fresh the data is, who owns it and how a change is announced, and those parts need checks and people, not only a registry.
+
+<ask type="short">With that in mind, return to `amount`. Dashboards and jobs downstream read it as before and nothing fails. Which of their figures are wrong after the change, and are the figures for dates before the change affected?</ask>

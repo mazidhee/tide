@@ -1,0 +1,432 @@
+@@@@ idk-l4-balancer-what-it-reads
+situation: idk
+topic: Load balancing: layer 4 versus layer 7
+options: {"strategy":"dialogue"}
+voice: plain
+level: medium
+expect: {"must":["ports","per connection"],"askMustNot":["none of them","nothing differs"],"mustNot":["encrypted","layer 7","terminate"],"askTypes":["short","explain"]}
+noverify: conceptual; teaches what a layer 4 balancer reads and asks a smaller question, nothing computed
+@@ tutor
+You run an API behind one address on port 443, all of it HTTPS. Requests to /reports are slow, and you want them on their own pool of servers, with everything else on the general pool.
+
+<ask type="explain">Could a layer 4 load balancer make that split? Say what it would have to look at to do it.</ask>
+@@ learner idk
+@@ reply
+Take first what a layer 4 balancer has to work with. It reads the transport header and nothing above it: for each new connection it sees the source and destination IP addresses and the source and destination ports, picks a backend from those, and then forwards that connection's bytes without interpreting them. Its decision is made once per connection, not once per request.
+
+<note>Layer 4 load balancing: one decision per connection, made from IP addresses and TCP or UDP ports only. The bytes inside the connection are passed through unread.</note>
+
+<ask type="short">Two requests reach your balancer from the same client, both to your address on port 443: one for /reports/7 and one for /users/3. Among the fields a layer 4 balancer reads, which one tells it what each request is asking for?</ask>
+
+@@@@ show-me-handshake-sequence
+situation: show-me
+topic: The TCP three-way handshake
+voice: plain
+level: easy
+expect: {"visual":{"kind":"mermaid","diagram":["sequenceDiagram"]},"must":["seq=3000","ack=3001","ack=8001"]}
+@@ tutor
+The handshake has three messages. The client sends a SYN carrying its initial sequence number, say 3000. The server replies with a SYN-ACK: its own initial sequence number, say 8000, and an acknowledgement number of 3001, because the SYN itself uses up one sequence number. The client then sends an ACK with sequence number 3001 and acknowledgement number 8001. After that, each side knows the other's starting number and knows that its own was received.
+
+<note>Three-way handshake: SYN (seq = x), SYN-ACK (seq = y, ack = x + 1), ACK (seq = x + 1, ack = y + 1). A SYN uses up one sequence number.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    C->>S: SYN, seq=3000
+    S->>C: SYN-ACK, seq=8000, ack=3001
+    C->>S: ACK, seq=3001, ack=8001
+```
+
+Compare each ack with the seq on the arrow just before it: it is one higher, because a SYN uses up one sequence number.
+@@ verify
+import re
+x, y = 3000, 8000
+body = block(reply, 'mermaid')
+arrows = [l.strip() for l in body.splitlines() if '->>' in l]
+assert arrows == [
+    f'C->>S: SYN, seq={x}',
+    f'S->>C: SYN-ACK, seq={y}, ack={x + 1}',
+    f'C->>S: ACK, seq={x + 1}, ack={y + 1}',
+], arrows
+# the same numbers as the explanation
+for n in ('3000', '8000', '3001', '8001'):
+    assert n in tutor[0]
+# "one higher than the seq on the arrow before it"
+seqs = [int(re.search(r'seq=(\d+)', a).group(1)) for a in arrows]
+acks = [int(re.search(r'ack=(\d+)', a).group(1)) for a in arrows[1:]]
+assert acks == [seqs[0] + 1, seqs[1] + 1]
+
+@@@@ show-me-client-connection-states
+situation: show-me
+topic: TCP connection states
+voice: plain
+level: medium
+expect: {"visual":{"kind":"mermaid","diagram":["stateDiagram"]},"must":["SYN_SENT","FIN_WAIT_2","TIME_WAIT"]}
+@@ tutor
+A TCP endpoint is always in one named state, and each segment it sends or receives moves it to the next. Take a client that opens a connection and later closes it first. It starts in CLOSED. Sending a SYN puts it in SYN_SENT; receiving the SYN-ACK and sending the ACK puts it in ESTABLISHED. To close, it sends a FIN and enters FIN_WAIT_1. The server's ACK of that FIN moves it to FIN_WAIT_2, and the server's own FIN, which the client acknowledges, moves it to TIME_WAIT. It waits there for twice the maximum segment lifetime (MSL), then returns to CLOSED.
+
+<note>A client that opens and then closes first: CLOSED → SYN_SENT → ESTABLISHED → FIN_WAIT_1 → FIN_WAIT_2 → TIME_WAIT → CLOSED. TIME_WAIT lasts 2 × MSL, so a lost final ACK can be sent again and stray old segments die out.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+stateDiagram-v2
+    [*] --> CLOSED
+    CLOSED --> SYN_SENT: send SYN
+    SYN_SENT --> ESTABLISHED: receive SYN-ACK, send ACK
+    ESTABLISHED --> FIN_WAIT_1: send FIN
+    FIN_WAIT_1 --> FIN_WAIT_2: receive ACK of FIN
+    FIN_WAIT_2 --> TIME_WAIT: receive FIN, send ACK
+    TIME_WAIT --> CLOSED: 2 x MSL timer expires
+```
+
+Read the label on each arrow: it is the segment sent or received that causes the move, except the last one, which is a timer.
+@@ verify
+body = block(reply, 'mermaid')
+edges = [l.strip().split(':')[0].split(' --> ') for l in body.splitlines() if '-->' in l]
+order = ['CLOSED', 'SYN_SENT', 'ESTABLISHED', 'FIN_WAIT_1', 'FIN_WAIT_2', 'TIME_WAIT', 'CLOSED']
+assert edges[0] == ['[*]', 'CLOSED']
+assert edges[1:] == [[a, b] for a, b in zip(order, order[1:])], edges
+# the same order as the note in the explanation
+assert ' → '.join(order) in tutor[0]
+# every state in the diagram was named in the explanation
+for s in set(order):
+    assert s in tutor[0]
+
+@@@@ show-me-encapsulation-flowchart
+situation: show-me
+topic: The layering model and encapsulation
+voice: typos
+level: easy
+expect: {"visual":{"kind":"mermaid","diagram":["flowchart"]},"must":["520","540","558"],"askMustNot":["1258"],"mustNot":["1258"],"ends":"ask"}
+@@ tutor
+Each layer wraps what the layer above hands it and adds its own header. Suppose a browser sends a 500-byte HTTP request. TCP adds a 20-byte header, making a 520-byte segment. IP adds its own 20-byte header, making a 540-byte packet. Ethernet adds a 14-byte header in front and a 4-byte frame check sequence (FCS) behind, giving a 558-byte frame. The receiver removes them in the reverse order.
+
+<note>Encapsulation: data → TCP segment (+20) → IP packet (+20) → Ethernet frame (+14 header, +4 FCS). Each layer treats what comes from above as payload it does not read. The header sizes are the minimum, without options.</note>
+
+<ask type="short">The receiver's IP layer is handed the 540-byte packet. How many bytes does it pass up to TCP?</ask>
+@@ learner question
+can u draw the wraping so i can see whats inside what
+@@ reply
+```mermaid
+flowchart TD
+    A["HTTP request: 500 bytes"] -->|"TCP adds a 20-byte header"| B["TCP segment: 520 bytes"]
+    B -->|"IP adds a 20-byte header"| C["IP packet: 540 bytes"]
+    C -->|"Ethernet adds a 14-byte header and a 4-byte FCS"| D["Ethernet frame: 558 bytes"]
+```
+
+Each box contains the whole of the box above it plus one layer's own bytes: read down for sending, up for receiving.
+
+<ask type="short">A second request carries 1200 bytes of HTTP data. How large is the Ethernet frame that carries it?</ask>
+@@ verify
+import re
+sizes = [int(n) for n in re.findall(r': (\d+) bytes', block(reply, 'mermaid'))]
+assert sizes == [500, 500 + 20, 500 + 20 + 20, 500 + 20 + 20 + 14 + 4] == [500, 520, 540, 558], sizes
+for n in ('500', '520', '540', '558'):
+    assert n in tutor[0]
+# the new question's withheld answer
+assert 1200 + 20 + 20 + 14 + 4 == 1258 and '1258' not in reply
+
+@@@@ show-me-slow-start-trace-table
+situation: show-me
+topic: TCP congestion control
+voice: plain
+level: medium
+expect: {"visual":{"kind":"table"},"must":["ssthresh","congestion avoidance"]}
+@@ tutor
+A TCP sender limits itself with a congestion window, cwnd, counted here in segments (MSS). It starts small and probes for capacity in two phases. In slow start, cwnd doubles every round trip. Once cwnd reaches the slow start threshold, ssthresh, the sender switches to congestion avoidance and adds only 1 MSS per round trip. With cwnd starting at 1 and ssthresh at 8, and no loss, the window over the first seven round trips is 1, 2, 4, 8, 9, 10, 11.
+
+<note>Slow start: cwnd doubles each round trip while cwnd < ssthresh. Congestion avoidance: cwnd grows by 1 MSS each round trip once cwnd ≥ ssthresh.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| Round trip | cwnd (MSS) | Phase | cwnd for the next round |
+|---|---|---|---|
+| 1 | 1 | slow start | 2 |
+| 2 | 2 | slow start | 4 |
+| 3 | 4 | slow start | 8 |
+| 4 | 8 | congestion avoidance | 9 |
+| 5 | 9 | congestion avoidance | 10 |
+| 6 | 10 | congestion avoidance | 11 |
+| 7 | 11 | congestion avoidance | 12 |
+
+Look at round 4: cwnd has reached ssthresh = 8, and from there the last column grows by 1 instead of doubling.
+@@ verify
+rows = table(reply)[1:]
+cwnd, ssthresh, seen = 1, 8, []
+assert len(rows) == 7
+for i, row in enumerate(rows, start=1):
+    phase = 'slow start' if cwnd < ssthresh else 'congestion avoidance'
+    nxt = cwnd * 2 if cwnd < ssthresh else cwnd + 1
+    assert row == [str(i), str(cwnd), phase, str(nxt)], (i, row)
+    seen.append(cwnd)
+    cwnd = nxt
+assert seen == [1, 2, 4, 8, 9, 10, 11]
+assert '1, 2, 4, 8, 9, 10, 11' in tutor[0]
+assert rows[3][1] == '8' and rows[3][2] == 'congestion avoidance'
+
+@@@@ mark-error-subnet-broadcast-next-block
+situation: mark-error
+topic: IPv4 addressing and CIDR subnetting
+voice: wordy
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["172\\.16\\.40\\.255","172\\.16\\.39\\.255"],"must":["172\\.16\\.39\\.255","Problem 4"],"mustNot":["10\\.50\\.64\\.0","10\\.50\\.95\\.255","8190"],"setsProblem":true}
+@@ tutor
+**Problem 3 · harder**
+
+A server has the address 172.16.37.200/21. Find the subnet mask, the network address, the broadcast address and the number of usable hosts.
+
+<solution>21 − 16 = 5 network bits in the third octet: mask 255.255.248.0, block size 8. 37 lies in the block starting at 32. Network 172.16.32.0; broadcast 172.16.39.255 (one before 172.16.40.0); hosts 2^11 − 2 = 2046.</solution>
+<check lang="python">
+import ipaddress
+n = ipaddress.ip_interface('172.16.37.200/21').network
+assert str(n.netmask) == '255.255.248.0' and str(n.network_address) == '172.16.32.0'
+assert str(n.broadcast_address) == '172.16.39.255' and n.num_addresses - 2 == 2046
+</check>
+
+<ask type="problem">The four values, with your working.</ask>
+@@ learner answer sure
+OK so /21 means 21 - 16 = 5 network bits in the third octet, so the mask there is 11111000 = 248 and the full mask is 255.255.248.0. That leaves 3 host bits in that octet so the block size is 8. The multiples of 8 go 0, 8, 16, 24, 32, 40 and 37 sits in the block starting at 32, so the network address is 172.16.32.0. The next block starts at 40 so the broadcast is 172.16.40.255. For hosts there are 11 host bits in total, 2^11 - 2 = 2046.
+@@ reply
+<grade verdict="partial" score="0.7">The mask, the block size and "the network address is 172.16.32.0" are all right. The first wrong step is "The next block starts at 40 so the broadcast is 172.16.40.255": an address with 40 in the third octet already belongs to the next subnet. The broadcast is the last address before 172.16.40.0, which is 172.16.39.255. Your host count of 2046 is right and does not depend on the slip.</grade>
+
+<card>A subnet's next block starts at 172.16.40.0. What is this subnet's broadcast address? :: 172.16.39.255: one address before the next network address, which is the host bits all set to 1.</card>
+
+<note>Broadcast address = next block's network address − 1. When the prefix splits the third octet, that is (next block start − 1) in the third octet and 255 in the fourth.</note>
+
+**Problem 4 · same level**
+
+A host has the address 10.50.90.3/19. Find the subnet mask, the network address, the broadcast address and the number of usable hosts.
+
+<solution>19 − 16 = 3 network bits in the third octet: mask 255.255.224.0, block size 32. 90 lies in the block starting at 64 (the next starts at 96). Network 10.50.64.0; broadcast 10.50.95.255; hosts 2^13 − 2 = 8190.</solution>
+<check lang="python">
+import ipaddress
+n = ipaddress.ip_interface('10.50.90.3/19').network
+assert str(n.netmask) == '255.255.224.0' and str(n.network_address) == '10.50.64.0'
+assert str(n.broadcast_address) == '10.50.95.255' and n.num_addresses - 2 == 8190
+</check>
+
+<ask type="problem">The four values, with the start of the next block written down before you give the broadcast address.</ask>
+@@ verify
+import ipaddress
+n = ipaddress.ip_interface('172.16.37.200/21').network
+assert str(n.netmask) == '255.255.248.0' and 0b11111000 == 248 and 2**3 == 8
+assert str(n.network_address) == '172.16.32.0' and 37 // 8 * 8 == 32
+assert str(n.broadcast_address) == '172.16.39.255' and n.num_addresses - 2 == 2046 == 2**11 - 2
+# the learner's broadcast is not in this subnet: it is in the next one
+bad = ipaddress.ip_address('172.16.40.255')
+assert bad not in n and bad in ipaddress.ip_network('172.16.40.0/21')
+assert str(ipaddress.ip_address('172.16.40.0') - 1) == '172.16.39.255'
+m = ipaddress.ip_interface('10.50.90.3/19').network
+assert str(m.netmask) == '255.255.224.0' and str(m.network_address) == '10.50.64.0'
+assert str(m.broadcast_address) == '10.50.95.255' and m.num_addresses - 2 == 8190 == 2**13 - 2
+for s in ('10.50.64.0', '10.50.95.255', '8190'):
+    assert s in solution(reply) and s not in visible(reply)
+
+@@@@ mark-error-checksum-dropped-carry
+situation: mark-error
+topic: The Internet checksum
+voice: terse
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["0x9103","carry","0x6EFB"],"must":["0x9104","0x6EFB","Problem 2"],"mustNot":["0x33DC","0xCC23"],"setsProblem":true}
+@@ tutor
+The Internet checksum, used by IPv4, TCP and UDP, treats the data as 16-bit words. Add the words with one's complement addition: whenever a sum overflows 16 bits, the carry is added back into the low end. The checksum is the bitwise complement of the final sum. For 0xFFF0 and 0x0020: the plain sum is 0x10010, the carry wraps to give 0x0011, and the checksum is 0xFFEE.
+
+<note>Internet checksum: one's complement sum of the 16-bit words (a carry out of bit 15 is added back in at bit 0), then invert all 16 bits.</note>
+
+**Problem 1 · warm-up**
+
+Compute the Internet checksum of the three 16-bit words 0x4500, 0xB1C6 and 0x9A3D.
+
+<solution>0x4500 + 0xB1C6 = 0xF6C6. 0xF6C6 + 0x9A3D = 0x19103; wrap the carry: 0x9103 + 1 = 0x9104. Complement: 0x6EFB.</solution>
+<check lang="python">
+s = 0x4500 + 0xB1C6 + 0x9A3D
+while s >> 16:
+    s = (s & 0xFFFF) + (s >> 16)
+assert s == 0x9104 and (~s & 0xFFFF) == 0x6EFB
+</check>
+
+<ask type="problem">The checksum in hex, with each step.</ask>
+@@ learner answer sure
+0x4500 + 0xB1C6 = 0xF6C6
+0xF6C6 + 0x9A3D = 0x19103
+keep 16 bits: 0x9103
+invert: 0x6EFC
+@@ reply
+<grade verdict="partial" score="0.6">Both additions are right, up to "0xF6C6 + 0x9A3D = 0x19103". The first wrong step is "keep 16 bits: 0x9103": that throws the carry away, and one's complement addition adds it back in, 0x9103 + 1 = 0x9104. Your inversion is done correctly on the wrong sum; on 0x9104 it gives 0x6EFB.</grade>
+
+<card>A one's complement sum of 16-bit words comes to 0x19103. What is the 16-bit result? :: 0x9104: the carry out of the top is added back at the bottom (0x9103 + 1), not discarded.</card>
+
+<note>End-around carry: a 17th bit is never dropped. Add it to the low 16 bits, and repeat if that addition carries again.</note>
+
+**Problem 2 · same level**
+
+Compute the Internet checksum of the three 16-bit words 0x8A0C, 0x7F31 and 0xC2E5.
+
+<solution>0x8A0C + 0x7F31 = 0x1093D; wrap: 0x093E. 0x093E + 0xC2E5 = 0xCC23, no carry. Complement: 0x33DC.</solution>
+<check lang="python">
+s = 0x8A0C + 0x7F31 + 0xC2E5
+while s >> 16:
+    s = (s & 0xFFFF) + (s >> 16)
+assert s == 0xCC23 and (~s & 0xFFFF) == 0x33DC
+</check>
+
+<ask type="problem">The checksum in hex, showing where a carry wraps round.</ask>
+@@ verify
+def ones_sum(words):
+    s = 0
+    for w in words:
+        s += w
+        s = (s & 0xFFFF) + (s >> 16)
+    return s
+# the tutor's example
+assert 0xFFF0 + 0x0020 == 0x10010 and ones_sum([0xFFF0, 0x0020]) == 0x0011 and (~0x0011 & 0xFFFF) == 0xFFEE
+# the learner's lines
+assert 0x4500 + 0xB1C6 == 0xF6C6 and 0xF6C6 + 0x9A3D == 0x19103
+assert 0x19103 & 0xFFFF == 0x9103 and (~0x9103 & 0xFFFF) == 0x6EFC      # their slip, and their inversion of it
+# the correction
+assert ones_sum([0x4500, 0xB1C6, 0x9A3D]) == 0x9104 and (~0x9104 & 0xFFFF) == 0x6EFB
+# problem 2, step by step as the solution writes it
+assert 0x8A0C + 0x7F31 == 0x1093D and 0x093D + 1 == 0x093E and 0x093E + 0xC2E5 == 0xCC23
+assert ones_sum([0x8A0C, 0x7F31, 0xC2E5]) == 0xCC23 and (~0xCC23 & 0xFFFF) == 0x33DC
+assert '0x33DC' in solution(reply) and '0x33DC' not in visible(reply)
+
+@@@@ mark-error-fragment-offset-units
+situation: mark-error
+topic: MTU, fragmentation and MSS
+voice: plain
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["offset 1480","185","370"],"must":["185","370","Problem 3"],"mustNot":["\\b135\\b","\\b270\\b"],"setsProblem":true}
+@@ tutor
+**Problem 2 · harder**
+
+An IPv4 datagram with a 20-byte header and 3800 bytes of payload crosses a link with an MTU of 1500 bytes. For each fragment give the payload length, the value of the fragment offset field and the more-fragments (MF) flag.
+
+<solution>Payload per fragment: 1500 − 20 = 1480 (a multiple of 8). Fragments: 1480, 1480 and 3800 − 2960 = 840 bytes. The offset field counts 8-byte units: 0, 1480 / 8 = 185, 2960 / 8 = 370. MF: 1, 1, 0.</solution>
+<check lang="python">
+payload, per = 3800, (1500 - 20) // 8 * 8
+frags, off = [], 0
+while off < payload:
+    n = min(per, payload - off)
+    frags.append((n, off // 8, int(off + n < payload)))
+    off += n
+assert frags == [(1480, 0, 1), (1480, 185, 1), (840, 370, 0)]
+</check>
+
+<ask type="problem">The three values for every fragment.</ask>
+@@ learner answer sure
+Max payload per fragment is 1500 - 20 = 1480, which is a multiple of 8 so that's fine.
+Fragment 1: 1480 bytes, offset 0, MF 1
+Fragment 2: 1480 bytes, offset 1480, MF 1
+Fragment 3: 3800 - 2960 = 840 bytes, offset 2960, MF 0
+@@ reply
+<grade verdict="partial" score="0.7">The payload lengths and the MF flags are right, including "3800 - 2960 = 840 bytes". The first wrong step is "offset 1480": the offset field counts in units of 8 bytes, not in bytes, so fragment 2 carries 1480 / 8 = 185. Fragment 3's 2960 is the same slip, not a second error: its field value is 2960 / 8 = 370.</grade>
+
+The field is only 13 bits wide while a datagram can be up to 65,535 bytes long, so it cannot count single bytes. That is also the reason for the multiple-of-8 rule you applied at the start.
+
+<card>In what unit does the IPv4 fragment offset field count? :: 8-byte units. A fragment whose data starts at byte 1480 of the original payload has offset 1480 / 8 = 185.</card>
+
+<note>Fragment offset field = (byte position of the fragment's data in the original payload) / 8. It is 13 bits wide, so every fragment but the last must carry a multiple of 8 bytes.</note>
+
+**Problem 3 · same level**
+
+An IPv4 datagram with a 20-byte header and 2600 bytes of payload crosses a link with an MTU of 1100 bytes. Give each fragment's payload length, offset field value and MF flag.
+
+<solution>Payload per fragment: 1100 − 20 = 1080 = 8 × 135. Fragments: 1080, 1080 and 2600 − 2160 = 440 bytes. Offsets: 0, 135, 270. MF: 1, 1, 0.</solution>
+<check lang="python">
+payload, per = 2600, (1100 - 20) // 8 * 8
+frags, off = [], 0
+while off < payload:
+    n = min(per, payload - off)
+    frags.append((n, off // 8, int(off + n < payload)))
+    off += n
+assert frags == [(1080, 0, 1), (1080, 135, 1), (440, 270, 0)]
+</check>
+
+<ask type="problem">The three values for every fragment, with the offsets as field values.</ask>
+@@ verify
+def fragment(payload, mtu, hdr=20):
+    per = (mtu - hdr) // 8 * 8
+    out, off = [], 0
+    while off < payload:
+        n = min(per, payload - off)
+        out.append((n, off, off // 8, int(off + n < payload)))
+        off += n
+    return out
+f = fragment(3800, 1500)
+assert [(n, mf) for n, _, _, mf in f] == [(1480, 1), (1480, 1), (840, 0)]     # what the learner got right
+assert [b for _, b, _, _ in f] == [0, 1480, 2960]                              # their offsets are byte positions
+assert [o for _, _, o, _ in f] == [0, 185, 370]                                # the field values
+assert 2**13 == 8192 and 8192 * 8 == 65536 > 65535                             # 13 bits of 8-byte units cover a full datagram
+g = fragment(2600, 1100)
+assert [(n, o, mf) for n, _, o, mf in g] == [(1080, 0, 1), (1080, 135, 1), (440, 270, 0)] and 1080 == 8 * 135
+assert '135' in solution(reply) and '135' not in visible(reply) and '270' not in visible(reply)
+
+@@@@ mark-error-rto-update-order
+situation: mark-error
+topic: TCP retransmission and timeouts
+options: {"difficulty":"hard"}
+voice: overconfident
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["130 . 200|new SRTT|updated SRTT","42\\.5","300"],"must":["42\\.5","\\b300 ms\\b","Problem 3"],"mustNot":["17\\.5","\\b145\\b"],"setsProblem":true}
+@@ tutor
+**Problem 2 · hard**
+
+A TCP sender keeps a smoothed round-trip time SRTT and a variation RTTVAR. For each new sample $R$ it updates them as RFC 6298 specifies, in this order:
+
+$$\text{RTTVAR} \leftarrow \tfrac{3}{4}\,\text{RTTVAR} + \tfrac{1}{4}\,|\text{SRTT} - R| \qquad \text{then} \qquad \text{SRTT} \leftarrow \tfrac{7}{8}\,\text{SRTT} + \tfrac{1}{8}\,R$$
+
+The timeout is $\text{RTO} = \text{SRTT} + 4 \times \text{RTTVAR}$. SRTT is 120 ms and RTTVAR is 30 ms when a sample of 200 ms arrives. Find the new RTTVAR, SRTT and RTO, ignoring the minimum RTO and clock granularity.
+
+<solution>RTTVAR = 0.75 × 30 + 0.25 × |120 − 200| = 22.5 + 20 = 42.5 ms. SRTT = 0.875 × 120 + 0.125 × 200 = 105 + 25 = 130 ms. RTO = 130 + 4 × 42.5 = 300 ms.</solution>
+<check lang="python">
+srtt, rttvar, r = 120, 30, 200
+rttvar = 0.75 * rttvar + 0.25 * abs(srtt - r)
+srtt = 0.875 * srtt + 0.125 * r
+assert (rttvar, srtt, srtt + 4 * rttvar) == (42.5, 130, 300)
+</check>
+
+<ask type="problem">The three values in milliseconds, with your working.</ask>
+@@ learner answer sure
+SRTT = 7/8 × 120 + 1/8 × 200 = 105 + 25 = 130 ms. RTTVAR = 3/4 × 30 + 1/4 × |130 − 200| = 22.5 + 17.5 = 40 ms. RTO = 130 + 4 × 40 = 290 ms. Trivial.
+@@ reply
+<grade verdict="partial" score="0.6">"105 + 25 = 130 ms" is the right SRTT. The first wrong step is "|130 − 200|": that uses the SRTT you had just updated, and RTTVAR is updated first, against the old SRTT of 120. So RTTVAR = 22.5 + 0.25 × 80 = 42.5 ms and RTO = 130 + 4 × 42.5 = 300 ms. Your 290 follows correctly from your RTTVAR of 40.</grade>
+
+The order matters because RTTVAR measures how far the sample fell from what the sender predicted before seeing it. Folding the sample into SRTT first pulls the prediction towards the sample and understates the surprise, which gives a timeout that is too tight.
+
+<card>In the RFC 6298 update, which SRTT goes into |SRTT − R| for RTTVAR? :: The old one, from before this sample. RTTVAR is updated first, then SRTT.</card>
+
+<note>Per sample R: RTTVAR ← ¾ RTTVAR + ¼ |SRTT − R| using the old SRTT, then SRTT ← ⅞ SRTT + ⅛ R, then RTO = SRTT + 4 × RTTVAR.</note>
+
+**Problem 3 · same level**
+
+SRTT is 80 ms and RTTVAR is 10 ms. A sample of 40 ms arrives. Find the new RTTVAR, SRTT and RTO under the same rules.
+
+<solution>RTTVAR = 0.75 × 10 + 0.25 × |80 − 40| = 7.5 + 10 = 17.5 ms. SRTT = 0.875 × 80 + 0.125 × 40 = 70 + 5 = 75 ms. RTO = 75 + 4 × 17.5 = 145 ms.</solution>
+<check lang="python">
+srtt, rttvar, r = 80, 10, 40
+rttvar = 0.75 * rttvar + 0.25 * abs(srtt - r)
+srtt = 0.875 * srtt + 0.125 * r
+assert (rttvar, srtt, srtt + 4 * rttvar) == (17.5, 75, 145)
+</check>
+
+<ask type="problem">The three values in milliseconds, computed in the order the rule gives.</ask>
+@@ verify
+def update(srtt, rttvar, r):
+    rttvar = 0.75 * rttvar + 0.25 * abs(srtt - r)
+    srtt = 0.875 * srtt + 0.125 * r
+    return rttvar, srtt, srtt + 4 * rttvar
+assert update(120, 30, 200) == (42.5, 130, 300)
+# the learner's route: SRTT first, then the deviation against the new SRTT
+s = 7 / 8 * 120 + 1 / 8 * 200
+v = 3 / 4 * 30 + 1 / 4 * abs(s - 200)
+assert s == 130 and 0.25 * abs(s - 200) == 17.5 and v == 40 and s + 4 * v == 290
+assert 0.25 * 80 == 20 and 22.5 + 20 == 42.5
+assert update(80, 10, 40) == (17.5, 75, 145)
+assert '145 ms' in solution(reply) and '145' not in visible(reply)

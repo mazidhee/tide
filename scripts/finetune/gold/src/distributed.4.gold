@@ -1,0 +1,642 @@
+@@@@ tangent-paxos-kafka-kraft
+situation: tangent
+topic: Paxos: prepare, promise and accept
+voice: wordy
+level: hard
+expect: {"must":["KRaft","ZooKeeper","4\\.0"],"askTypes":["short","explain","predict"],"askMustNot":["sends? Y|must (send|use|propose) Y","accept\\(5, Y\\)"]}
+noverify: a tangent on Kafka's history and a pending conceptual question; nothing is computed
+@@ tutor
+In phase 2 the proposer is not always free to send its own value: it must use the value of the highest-numbered proposal reported in the promises it received.
+
+<note>Paxos phase 2: v is the value of the highest-numbered accepted proposal reported in the promises; the proposer's own value only if no promise reported one.</note>
+
+<ask type="short">A proposer sends prepare(5) to three acceptors. Two reply: one has accepted nothing, the other reports that it accepted proposal 3 with value Y. The proposer wanted value Z. Which value goes in its accept(5, …) message, and why is it not free to choose?</ask>
+@@ learner question
+Before I answer, something I've wondered about for a while because we run it at work: does Kafka use Paxos for this kind of thing, or is it Raft? I've seen both names in blog posts and never worked out which one is true.
+@@ reply
+Neither, for the data itself: each partition is replicated by a scheme of Kafka's own, a leader with a set of in-sync replicas. Consensus comes in for the cluster's metadata, such as which broker leads which partition. Older versions kept that in ZooKeeper, which runs Zab, a consensus protocol related to Paxos. KRaft, Kafka's own implementation of Raft, replaced it: it was declared production-ready in Kafka 3.3 (2022), and since Kafka 4.0 (2025) it is the only mode.
+
+<ask type="short">Back to the proposer holding number 5. One promise came back empty and the other carried (3, Y). What does it put in its accept message, and what could go wrong in the system if it sent Z instead?</ask>
+
+@@@@ tangent-ntp-truetime
+situation: tangent
+topic: Clock skew and NTP
+voice: typos
+level: medium
+expect: {"must":["TrueTime","interval","GPS"],"askTypes":["short","predict","explain"],"askMustNot":["x = 1 (survives|wins|is kept)","A's (write|timestamp) (wins|is later)","150 ms"]}
+@@ tutor
+<ask type="short">Two servers each stamp writes with their own wall clock, and the store keeps the write with the later timestamp. Server A's clock runs 200 ms ahead of server B's. A client writes x = 1 through A, and 50 ms later writes x = 2 through B. Which value survives, and why?</ask>
+@@ learner question
+quick q before i answer, is this why google put atomic clocks in thier datacenters for spanner?
+@@ reply
+Yes, this problem is the reason. Spanner's TrueTime API is backed by GPS receivers and atomic clocks in each datacentre, and instead of one timestamp it returns an interval that is guaranteed to contain the true time; the 2012 Spanner paper reports the uncertainty bound as generally between about 1 and 7 ms. Spanner then waits out the uncertainty before a commit becomes visible, so that timestamp order matches real order. It does not remove skew: it bounds it, and pays for the bound in latency.
+
+<ask type="short">Back to the two writes, with ordinary clocks and no such bound. Work out the timestamp each server attaches, taking the true time of the first write as T, and say which write the store keeps.</ask>
+@@ verify
+# the pending question's answer, which the reply must not give: A stamps T + 200, B stamps T + 50
+T = 0
+stamp_a = T + 200            # A's clock is 200 ms ahead of B's; take B's as true time
+stamp_b = (T + 50) + 0
+assert stamp_a > stamp_b and stamp_a - stamp_b == 150
+kept = max([(stamp_a, 'x = 1'), (stamp_b, 'x = 2')])[1]
+assert kept == 'x = 1'
+assert 'x = 1' not in reply and '150' not in reply
+
+@@@@ tangent-breaker-versus-rate-limiter
+situation: tangent
+topic: Circuit breakers
+options: {"strategy":"dialogue"}
+voice: confused
+level: easy
+expect: {"must":["rate limiter","dependency","failure|failing|fail"],"askTypes":["short","explain","predict"],"askMustNot":["\\b300\\b","run out|exhaust"]}
+@@ tutor
+<ask type="explain">Your checkout service calls a fraud-scoring service with a 2-second timeout. The fraud service starts taking 30 seconds to answer. Checkout has 200 worker threads and receives 150 requests a second. What happens to checkout, and how quickly?</ask>
+@@ learner question
+wait, isn't a circuit breaker just a rate limiter with a different name? I keep mixing the two up
+@@ reply
+They point in opposite directions. A rate limiter protects a service from its callers: it caps how many requests are let in per unit of time, whether or not anything is failing. A circuit breaker protects a caller from a dependency that is failing: it watches the outcomes of the calls going out, and when enough of them fail it stops making them for a while. One reacts to volume coming in, the other to failures going out.
+
+<ask type="short">Back to checkout, where the breaker would sit on the calls to the fraud service. With no breaker, every request holds a worker thread for the full 2 seconds before it times out, and 150 requests arrive each second. How many threads does that need once it settles, compared with the 200 checkout has?</ask>
+@@ verify
+arrivals, hold, threads = 150, 2, 200
+assert arrivals * hold == 300 > threads               # the answer the question withholds
+assert 1.3 < threads / arrivals < 1.4                 # the pool is full in under two seconds
+assert '300' not in reply
+for s in ('2-second timeout', '200 worker threads', '150 requests a second'):
+    assert s in tutor[0]
+assert 'full 2 seconds' in reply and '150 requests arrive each second' in reply and 'the 200 checkout has' in reply
+
+@@@@ why-two-generals-last-message
+situation: why
+topic: The two generals problem
+options: {"why":true}
+voice: wordy
+level: hard
+expect: {"verdict":"correct","askTypes":["predict","explain","short"],"mustNot":["no protocol (can|exists)","impossible"],"must":["last message"],"askMustNot":["impossible","no such protocol","did not need"]}
+noverify: a conceptual Why-mode exchange; nothing is computed
+@@ tutor
+Two armies, A and B, win only if they attack at the same time, and lose badly if one attacks alone. They can talk only by messenger, and any messenger may be captured on the way. A sends "attack at dawn".
+
+<ask type="predict">A will attack only if it is sure B will attack too. Having sent the message, is A sure? If not, what would have to happen for it to become sure, and does that settle things for both sides?</ask>
+@@ learner answer sure
+No, the messenger might have been captured, so A can't tell whether B even knows the plan. B could send an acknowledgement back. If it arrives, A knows B got the plan. But then B has the same problem A had: B can't tell whether its ack got through, so B isn't sure A will attack.
+@@ reply
+<grade verdict="correct" score="1">"B has the same problem A had" is the key observation: the acknowledgement makes A sure of one thing, and hands the uncertainty to B, who cannot tell whether "its ack got through".</grade>
+
+So one more message does not finish the job; it moves the doubt to whoever sent last. The natural reaction is to add another acknowledgement, and another. Rather than chase that chain, test the idea all at once. Suppose someone hands you a finished protocol: a fixed exchange of some number of messages, after which both generals are sure and both attack. You are not told how many messages it has, only that it works when they all arrive.
+
+<ask type="explain">Look at the last message of that protocol. Its sender cannot know whether it arrived. So what must the sender do in the case where it is lost, and what does that tell you about a shorter protocol with that message left out?</ask>
+
+@@@@ why-split-brain-two-leaders
+situation: why
+topic: Split brain
+options: {"why":true}
+voice: confused
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["sync up later|merge|reconcil"],"askTypes":["predict","explain","short"],"mustNot":["majority","quorum"],"askMustNot":["150","overdr","more than (the|100)"]}
+@@ tutor
+A cluster of four nodes stores account balances and has one leader. A network fault splits it into two halves of two nodes each. Both halves keep running, and clients can reach both.
+
+<ask type="predict">Suppose the rule is: any group of nodes that cannot see a leader elects one from among themselves. What goes wrong here?</ask>
+@@ learner answer unsure
+the half without the leader elects a new one, so now there's two leaders? but i'm not sure thats actually bad, each half just serves its own clients and they sync up later when the network is back
+@@ reply
+<grade verdict="partial" score="0.5">"now there's two leaders" is what happens, and it is the right place to look. The part to test is "they sync up later": that assumes the two halves' writes can always be combined afterwards.</grade>
+
+Try it on one account rather than in general. The account holds 100. During the split, a client on the left half withdraws 80: the left leader checks the balance, sees 100, approves, and records 20. A client on the right half withdraws 70 from the same account: the right leader also sees 100, approves, and records 30. Each leader followed its rules, and each was correct given what it could see.
+
+<card>What is split brain? :: Two parts of a partitioned cluster each believe they are in charge and accept writes on their own, so each makes decisions without seeing the other's.</card>
+
+<ask type="predict">The network heals and the halves compare notes: one says the balance is 20, the other says 30. What balance should the merged cluster record, and what has already happened that no choice of balance can undo?</ask>
+@@ verify
+balance = 100
+left, right = 80, 70
+# each side approves on its own view
+assert left <= balance and right <= balance
+assert balance - left == 20 and balance - right == 30
+# together they could not both have been approved, which is what the question leads to and does not state
+assert left + right == 150 > balance and balance - left - right == -50
+assert '150' not in reply and '-50' not in reply
+
+@@@@ why-heartbeat-gaps-idk
+situation: why
+topic: Failure detectors and heartbeats
+options: {"why":true}
+voice: plain
+level: medium
+expect: {"forbid":["grade"],"must":["gap"],"askTypes":["predict","short","explain"],"mustNot":["phi","accrual"],"askMustNot":["variance|variab|spread","history|usual|normal"]}
+@@ tutor
+A monitor receives a heartbeat from a node about once a second and has to decide when to call the node dead. The simplest rule is a fixed timeout: dead after 3 seconds of silence.
+
+<ask type="predict">The same 3-second rule is used for a node in the next rack and for a node on another continent, reached over a congested link. Why might one fixed number serve both of them badly?</ask>
+@@ learner idk
+@@ reply
+Start from what the monitor can observe, which is only the gaps between one heartbeat arriving and the next. Here are the last four gaps it recorded for each node, in seconds:
+
+| Node | Gap 1 | Gap 2 | Gap 3 | Gap 4 |
+|---|---|---|---|---|
+| Next rack | 1.00 | 1.01 | 0.99 | 1.00 |
+| Other continent | 0.2 | 2.1 | 0.4 | 1.3 |
+
+Both nodes send one heartbeat a second, and both sets of gaps average 1 second; the network in between is what differs. Now suppose that, for each node, 2.2 seconds have passed since its last heartbeat arrived. The 3-second timeout has fired for neither.
+
+<ask type="predict">For which node is 2.2 seconds of silence strong evidence that it has crashed, and for which is it unremarkable? Say what you compared in order to decide.</ask>
+@@ verify
+rows = table(reply)[1:]
+near = [float(x) for x in rows[0][1:]]
+far = [float(x) for x in rows[1][1:]]
+assert rows[0][0] == 'Next rack' and rows[1][0] == 'Other continent'
+mean = lambda v: sum(v) / len(v)
+assert abs(mean(near) - 1.0) < 1e-9 and abs(mean(far) - 1.0) < 1e-9       # both average 1 second
+# 2.2 s is far outside anything seen from the near node and just past the far node's largest gap
+silence = 2.2
+assert '2.2 seconds' in reply and silence > 2 * max(near) and 0 < silence - max(far) < 0.2
+assert max(near) - min(near) < 0.05 and max(far) - min(far) > 1.5
+# the fixed 3 s timeout has fired for neither
+assert silence < 3 and '3-second' in tutor[0]
+
+@@@@ hands-on-lamport-receive
+situation: hands-on
+topic: Lamport logical clocks
+options: {"strategy":"code"}
+voice: terse
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"must":["tie"],"askMustNot":["\\(4, 'C'","timestamp 4","gets 4"]}
+@@ tutor
+A Lamport clock is a counter per process: add 1 on every local event and every send, and attach the counter to each message sent. On receipt, the receiver sets its counter to max(own, received) + 1.
+
+```python
+class Process:
+    def __init__(self, name):
+        self.name = name
+        self.clock = 0
+
+    def local(self):
+        self.clock += 1
+        return self.clock
+
+    def send(self):
+        self.clock += 1
+        return self.clock          # the timestamp the message carries
+
+a = Process("A")
+print(a.local())
+print(a.local())
+stamp = a.send()
+print(stamp)
+```
+
+```
+1
+2
+3
+```
+
+<solution>def receive(self, stamp): self.clock = max(self.clock, stamp) + 1; return self.clock. After 4 local events and a send, A's message carries 5. B starts at 0, so its receive gives max(0, 5) + 1 = 6 and its next local event gives 7. The program prints 6 then 7.</solution>
+
+<ask type="code" lang="python">Add a `receive(self, stamp)` method that applies the rule above and returns the new counter. Then create a second process B, call `a.local()` four times and `a.send()` once, and print what `b.receive(...)` with that timestamp returns, then what `b.local()` returns.</ask>
+@@ learner answer sure
+```python
+class Process:
+    def __init__(self, name):
+        self.name = name
+        self.clock = 0
+    def local(self):
+        self.clock += 1
+        return self.clock
+    def send(self):
+        self.clock += 1
+        return self.clock
+    def receive(self, stamp):
+        if stamp > self.clock:
+            self.clock = stamp
+        self.clock += 1
+        return self.clock
+
+a = Process("A")
+b = Process("B")
+for i in range(4):
+    a.local()
+s = a.send()
+print(b.receive(s))
+print(b.local())
+```
+6 then 7
+@@ reply
+<grade verdict="correct" score="1">`if stamp > self.clock:` followed by `self.clock += 1` is the receive rule written out, the same as max(own, received) + 1, and it prints 6 then 7 as it should: B jumps past the 5 that A's message carried.</grade>
+
+Timestamps from different processes can tie. Sorting events by (timestamp, process name) breaks every tie the same way on every node, which turns the clocks into one order of all events that everyone agrees on:
+
+```python
+class Process:
+    def __init__(self, name):
+        self.name = name
+        self.clock = 0
+
+    def local(self):
+        self.clock += 1
+        return self.clock
+
+    def send(self):
+        self.clock += 1
+        return self.clock
+
+    def receive(self, stamp):
+        self.clock = max(self.clock, stamp) + 1
+        return self.clock
+
+a, b = Process("A"), Process("B")
+log = [(a.local(), "A", "local")]
+log.append((b.local(), "B", "local"))
+stamp = a.send()
+log.append((stamp, "A", "send"))
+log.append((b.local(), "B", "local"))
+log.append((b.receive(stamp), "B", "receive"))
+for event in sorted(log):
+    print(event)
+```
+
+```
+(1, 'A', 'local')
+(1, 'B', 'local')
+(2, 'A', 'send')
+(2, 'B', 'local')
+(3, 'B', 'receive')
+```
+
+<solution>C's three local events are stamped 1, 2 and 3; its receive is max(3, 2) + 1 = 4. The sorted log gains (1, 'C', 'local') after the B event at 1, (2, 'C', 'local') after the B event at 2, (3, 'C', 'local') after B's receive at 3, and ends with (4, 'C', 'receive').</solution>
+
+<ask type="code" lang="python">Add a third process C. Call `c.local()` three times and then `c.receive(stamp)` with the same `stamp`, appending all four results to `log`, and print the sorted log again. Before you run it, decide which timestamp the last of those four gets and where it lands in the order.</ask>
+@@ verify
+out = run_py(block(learner, 'python'))
+assert out.split() == ['6', '7'], out
+assert '6 then 7' in learner and 'prints 6 then 7' in solution(tutor[0])
+# the reply's program, extended by the reference solution for the task set
+base = block(reply, 'python')
+ref = base.rsplit('for event in sorted(log):', 1)[0] + '''
+c = Process("C")
+for _ in range(3):
+    log.append((c.local(), "C", "local"))
+log.append((c.receive(stamp), "C", "receive"))
+for event in sorted(log):
+    print(event)
+'''
+lines = run_py(ref).strip().split('\n')
+assert lines == ["(1, 'A', 'local')", "(1, 'B', 'local')", "(1, 'C', 'local')", "(2, 'A', 'send')", "(2, 'B', 'local')", "(2, 'C', 'local')", "(3, 'B', 'receive')", "(3, 'C', 'local')", "(4, 'C', 'receive')"], lines
+assert "(4, 'C', 'receive')" in solution(reply) and "(4, 'C'" not in visible(reply)
+assert max(3, 2) + 1 == 4
+
+@@@@ hands-on-backoff-max-for-min
+situation: hands-on
+topic: Retries with exponential backoff and jitter
+options: {"strategy":"code"}
+voice: confused
+level: easy
+expect: {"verdict":"wrong","accept":["partial"],"names":["max","min"],"must":["3000"],"setsProblem":true,"askTypes":["code"],"askMustNot":["1366","1229"]}
+@@ tutor
+Exponential backoff doubles the wait before each retry: `base * 2 ** n` for retry number n, counting from 0.
+
+```python
+def delays(base, attempts):
+    return [base * 2 ** n for n in range(attempts)]
+
+print(delays(100, 6))
+```
+
+```
+[100, 200, 400, 800, 1600, 3200]
+```
+
+<solution>def delays(base, attempts, cap): return [min(cap, base * 2 ** n) for n in range(attempts)]. delays(100, 8, cap=3000) prints [100, 200, 400, 800, 1600, 3000, 3000, 3000].</solution>
+
+<ask type="code" lang="python">Left alone, the waits grow without limit. Add a `cap` parameter so that no delay is longer than `cap` milliseconds, and print `delays(100, 8, cap=3000)`.</ask>
+@@ learner answer unsure
+```python
+def delays(base, attempts, cap):
+    return [max(cap, base * 2 ** n) for n in range(attempts)]
+
+print(delays(100, 8, cap=3000))
+```
+it prints [3000, 3000, 3000, 3000, 3000, 3200, 6400, 12800] which looks wrong?? but I did cap it
+@@ reply
+<grade verdict="wrong" score="0.2">`max(cap, base * 2 ** n)` picks the larger of the two numbers, so it lifts every short wait up to 3000 and lets 3200, 6400 and 12800 through. That makes `cap` a floor. A ceiling takes the smaller of the two: `min`.</grade>
+
+With `min`, and with full jitter added: each real sleep is a random time between 0 and the capped delay, so that clients which failed together do not retry together.
+
+```python
+import random
+
+def delays(base, attempts, cap):
+    return [min(cap, base * 2 ** n) for n in range(attempts)]
+
+print(delays(100, 8, cap=3000))
+
+random.seed(7)
+for d in delays(100, 6, cap=2000):
+    print(d, round(random.uniform(0, d)))
+```
+
+```
+[100, 200, 400, 800, 1600, 3000, 3000, 3000]
+100 32
+200 30
+400 260
+800 58
+1600 857
+2000 731
+```
+
+<card>Which of min and max caps a value at a limit? :: min(cap, x): it returns x while x is below the cap and the cap once x passes it. max(cap, x) is a floor.</card>
+
+<note>Capped backoff: `min(cap, base * 2 ** n)`. Full jitter: sleep `random.uniform(0, that)`.</note>
+
+<solution>Replace the print in the loop with print(d, round(d / 2 + random.uniform(0, d / 2))). With seed 7 the second column is 66, 115, 330, 429, 1229, 1366: every sleep is now at least half its delay.</solution>
+
+<ask type="code" lang="python">Full jitter can pick a sleep close to 0. Change the loop to "equal jitter": half the delay, plus a random amount between 0 and the other half. Keep the seed and print the same two columns.</ask>
+@@ verify
+out = run_py(block(learner, 'python')).strip()
+assert out == '[3000, 3000, 3000, 3000, 3000, 3200, 6400, 12800]' and out in learner
+ref = '''
+def delays(base, attempts, cap):
+    return [min(cap, base * 2 ** n) for n in range(attempts)]
+print(delays(100, 8, cap=3000))
+'''
+assert run_py(ref).strip() == '[100, 200, 400, 800, 1600, 3000, 3000, 3000]'
+assert '[100, 200, 400, 800, 1600, 3000, 3000, 3000]' in solution(tutor[0])
+# the task set: equal jitter with the same seed
+eq = '''
+import random
+def delays(base, attempts, cap):
+    return [min(cap, base * 2 ** n) for n in range(attempts)]
+random.seed(7)
+for d in delays(100, 6, cap=2000):
+    print(d, round(d / 2 + random.uniform(0, d / 2)))
+'''
+rows = [l.split() for l in run_py(eq).strip().split('\n')]
+assert [r[1] for r in rows] == ['66', '115', '330', '429', '1229', '1366']
+assert '66, 115, 330, 429, 1229, 1366' in solution(reply)
+assert all(int(s) >= int(d) / 2 for d, s in rows)
+
+@@@@ hands-on-merkle-root-compare
+situation: hands-on
+topic: Anti-entropy with Merkle trees
+voice: terse
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"must":["f2a0a5c8","ce241d93"],"askMustNot":["True False","right half differs"]}
+@@ tutor
+A Merkle tree hashes each leaf, then hashes pairs of hashes upwards until a single root hash is left.
+
+<ask type="predict">Two replicas build trees over the same four keys, and one key's value differs between them. Are their root hashes equal or different, and how many of the 7 hashes in a tree differ between the two?</ask>
+@@ learner answer sure
+different. 3 of them: the leaf, its parent and the root. the other 4 dont depend on that key
+@@ reply
+<grade verdict="correct" score="1">"the leaf, its parent and the root" is exactly the set that changes, and "the other 4 dont depend on that key" is the reason the rest match.</grade>
+
+Here is that as code, with hashes cut to 8 hex digits to keep the output short:
+
+```python
+import hashlib
+
+def h(text):
+    return hashlib.sha256(text.encode()).hexdigest()[:8]
+
+def root(leaves):
+    level = [h(x) for x in leaves]
+    while len(level) > 1:
+        level = [h(level[i] + level[i + 1]) for i in range(0, len(level), 2)]
+    return level[0]
+
+a = ["k1=5", "k2=7", "k3=1", "k4=9"]
+b = ["k1=5", "k2=7", "k3=2", "k4=9"]
+print(root(a))
+print(root(b))
+print(root(a) == root(b))
+```
+
+```
+f2a0a5c8
+ce241d93
+False
+```
+
+One comparison of two short hashes shows the replicas differ. It does not yet show where.
+
+<solution>def levels(leaves): out = [[h(x) for x in leaves]]; while len(out[-1]) > 1: prev = out[-1]; out.append([h(prev[i] + prev[i + 1]) for i in range(0, len(prev), 2)]); return out. Level 1 holds the two children of the root. Comparing levels(a)[1] with levels(b)[1] entry by entry prints True False: the left halves (k1, k2) match and the right halves differ, so only k3 and k4 need checking.</solution>
+
+<ask type="code" lang="python">Write `levels(leaves)` that returns every level of the tree as a list of lists, from the leaf hashes up to the root. Use it on `a` and `b` to print two booleans: whether the roots' left children match, and whether their right children match.</ask>
+@@ verify
+import hashlib
+def h(text): return hashlib.sha256(text.encode()).hexdigest()[:8]
+def levels(leaves):
+    out = [[h(x) for x in leaves]]
+    while len(out[-1]) > 1:
+        prev = out[-1]
+        out.append([h(prev[i] + prev[i + 1]) for i in range(0, len(prev), 2)])
+    return out
+a = ["k1=5", "k2=7", "k3=1", "k4=9"]
+b = ["k1=5", "k2=7", "k3=2", "k4=9"]
+la, lb = levels(a), levels(b)
+assert la[-1] == ['f2a0a5c8'] and lb[-1] == ['ce241d93']
+# the learner's answer: 7 hashes in a 4-leaf tree, exactly 3 differ (leaf, parent, root)
+assert sum(len(l) for l in la) == 7
+diff = [(d, i) for d in range(3) for i in range(len(la[d])) if la[d][i] != lb[d][i]]
+assert diff == [(0, 2), (1, 1), (2, 0)]
+# the task set, run as a program built on the reply's own code
+src = block(reply, 'python').split('a = [')[0] + '''
+def levels(leaves):
+    out = [[h(x) for x in leaves]]
+    while len(out[-1]) > 1:
+        prev = out[-1]
+        out.append([h(prev[i] + prev[i + 1]) for i in range(0, len(prev), 2)])
+    return out
+a = ["k1=5", "k2=7", "k3=1", "k4=9"]
+b = ["k1=5", "k2=7", "k3=2", "k4=9"]
+la, lb = levels(a), levels(b)
+print(la[1][0] == lb[1][0], la[1][1] == lb[1][1])
+'''
+assert run_py(src).strip() == 'True False'
+assert 'True False' in solution(reply) and 'True False' not in visible(reply)
+
+@@@@ hands-on-gossip-seeded-rounds
+situation: hands-on
+topic: Gossip protocols and convergence rounds
+options: {"strategy":"code"}
+voice: plain
+level: medium
+expect: {"setsProblem":true,"askTypes":["code"],"must":["13 rounds","wasted|already"],"askMustNot":["\\b8 rounds\\b","in 8\\b"]}
+@@ tutor
+Push gossip in one line: each round, every node that has the update sends it to one node picked at random. The sender does not know who already has it, so some sends are wasted on nodes that are already informed, and more of them are wasted as the update spreads.
+
+<note>Push gossip: each round every informed node sends to one random node. Early rounds nearly double the informed count; late rounds mostly hit nodes that already know.</note>
+
+<continue/>
+@@ learner goon
+@@ reply
+A simulation of it for 64 nodes, printing the round number and how many nodes are informed. The random generator is seeded, so the run is repeatable:
+
+```python
+import random
+
+def gossip(n, seed):
+    random.seed(seed)
+    informed = {0}
+    rounds = 0
+    while len(informed) < n:
+        for node in list(informed):
+            informed.add(random.randrange(n))
+        rounds += 1
+        print(rounds, len(informed))
+    return rounds
+
+gossip(64, seed=3)
+```
+
+```
+1 2
+2 4
+3 7
+4 12
+5 18
+6 30
+7 42
+8 51
+9 58
+10 62
+11 62
+12 63
+13 64
+```
+
+The count doubles at first (1, 2, 4), then falls behind doubling as sends start landing on nodes that already know. The tail is the slow part: 58 nodes are informed after round 9, and the last 6 take four more rounds, 13 rounds in all. Round 11 informs nobody new.
+
+<solution>Add a fanout parameter and an inner loop: for node in list(informed): for _ in range(fanout): informed.add(random.randrange(n)). gossip(64, seed=3, fanout=2) prints 1 3, 2 8, 3 18, 4 38, 5 55, 6 62, 7 63, 8 64: 8 rounds instead of 13.</solution>
+
+<ask type="code" lang="python">Add a `fanout` parameter so that each informed node sends to `fanout` random nodes per round instead of one. Run `gossip(64, seed=3, fanout=2)`. Before you run it, predict whether doubling the fan-out halves the number of rounds.</ask>
+@@ verify
+out = run_py(block(reply, 'python')).strip().split('\n')
+pairs = [tuple(map(int, l.split())) for l in out]
+assert pairs[-1] == (13, 64) and len(pairs) == 13
+counts = [c for _, c in pairs]
+assert counts[:2] == [2, 4] and counts[8] == 58 and 64 - 58 == 6 and 13 - 9 == 4
+assert counts[10] == counts[9] == 62                       # round 11 informs nobody new
+assert counts[2] == 7 < 8                                  # behind doubling from round 3
+ref = '''
+import random
+def gossip(n, seed, fanout):
+    random.seed(seed)
+    informed = {0}
+    rounds = 0
+    while len(informed) < n:
+        for node in list(informed):
+            for _ in range(fanout):
+                informed.add(random.randrange(n))
+        rounds += 1
+        print(rounds, len(informed))
+    return rounds
+gossip(64, seed=3, fanout=2)
+'''
+got = [tuple(map(int, l.split())) for l in run_py(ref).strip().split('\n')]
+assert got == [(1, 3), (2, 8), (3, 18), (4, 38), (5, 55), (6, 62), (7, 63), (8, 64)]
+assert '1 3, 2 8, 3 18, 4 38, 5 55, 6 62, 7 63, 8 64' in solution(reply)
+
+@@@@ summary-sharding-mod-n
+situation: summary
+topic: Sharding: range versus hash partitioning
+voice: overconfident
+level: medium
+expect: {"verdict":"correct","must":["9 of 12|9 of the 12","25 of 30|25 of the 30","consistent hashing"]}
+@@ tutor
+**Problem 3 · same level**
+
+A store places key k on shard k mod N. It holds keys 0 to 11 on N = 3 shards, then grows to N = 4. How many of the 12 keys end up on a different shard?
+
+<solution>A key stays only if k mod 3 = k mod 4, which holds for k = 0, 1 and 2. So 3 keys stay and 9 move.</solution>
+<check lang="python">
+assert sum(k % 3 != k % 4 for k in range(12)) == 9
+</check>
+
+<ask type="problem">The number of keys that move, with how you counted them.</ask>
+@@ learner answer sure
+3 keys move. Going from 3 to 4 shards, the new shard has to take a quarter of the data, and 12 / 4 = 3. The rest stay where they are.
+@@ tutor
+<grade verdict="wrong" score="0.2">"the new shard has to take a quarter of the data" is what an ideal rebalance would move. k mod N does not do that: changing N changes the remainder of almost every key. A key stays only if k mod 3 = k mod 4, which is true for k = 0, 1 and 2 alone, so 9 of the 12 keys move.</grade>
+
+<card>With shard = k mod N, how many keys move when N changes? :: Nearly all of them: a key stays only if its remainder is the same for the old and new N. Going from 3 to 4 shards moves 9 of every 12 keys, not a quarter.</card>
+
+<note>Hash-mod-N placement recomputes every key's shard when N changes, so most keys move; an ideal rebalance would move only about 1/N of them.</note>
+
+**Problem 4 · same idea**
+
+The same scheme holds keys 0 to 29 on N = 5 shards and grows to N = 6. How many of the 30 keys move?
+
+<solution>A key stays only if k mod 5 = k mod 6, which holds for k = 0 to 4. So 5 stay and 25 move.</solution>
+<check lang="python">
+assert sum(k % 5 != k % 6 for k in range(30)) == 25
+</check>
+
+<ask type="problem">The number of keys that move, with the keys that stay.</ask>
+@@ learner answer sure
+25 move. I wrote out k mod 5 and k mod 6 and they only agree for k = 0 to 4, so 5 stay and 25 move. Way more than the sixth I would have guessed.
+@@ reply
+<grade verdict="correct" score="1">"they only agree for k = 0 to 4, so 5 stay and 25 move" is right, and listing both remainders is the reliable way to count it.</grade>
+
+<summary>**Learned:** with shard = k mod N, changing the number of shards moves most of the data: 9 of 12 keys going from 3 to 4 shards, 25 of 30 going from 5 to 6. An ideal rebalance would move only the new shard's share.
+
+**Still shaky:** the instinct that adding a shard moves about 1/N of the keys. It gave the wrong answer on the first problem; on the second you counted remainders and noticed the gap yourself, so it is fading but worth one more check.
+
+**Next:** schemes that do move only about 1/N of the keys when a shard is added: a fixed number of partitions reassigned between nodes, and consistent hashing. One recall question on mod-N rebalancing is in your deck.</summary>
+@@ verify
+stay34 = [k for k in range(12) if k % 3 == k % 4]
+assert stay34 == [0, 1, 2] and 12 - len(stay34) == 9
+assert 12 / 4 == 3                                   # the learner's first answer: a quarter of 12
+stay56 = [k for k in range(30) if k % 5 == k % 6]
+assert stay56 == [0, 1, 2, 3, 4] and 30 - len(stay56) == 25
+assert 30 / 6 == 5 and 25 > 5                        # "way more than the sixth"
+# the general pattern over a full cycle of keys
+for n in range(2, 9):
+    cycle = n * (n + 1)
+    assert sum(k % n == k % (n + 1) for k in range(cycle)) == n
+
+@@@@ summary-quiz-session-guarantees
+situation: summary
+topic: Read-your-writes and monotonic reads
+mode: quiz
+options: {"length":3}
+voice: overconfident
+level: medium
+expect: {"verdict":"correct","must":["2 (out )?of 3|2/3","monotonic reads","read-your-writes"]}
+noverify: a conceptual quiz and its summary; the score (2 of 3) is read off the three marks in the history
+@@ tutor
+**Question 1 of 3**
+
+<ask type="choice" options="Read-your-writes|Monotonic reads|Monotonic writes|Eventual consistency">A user saves a new profile photo, reloads the page straight away and sees the old photo. Reads are served by asynchronous followers. Which of these guarantees was broken?</ask>
+@@ learner answer sure
+Read-your-writes
+@@ tutor
+<grade verdict="correct" score="1">"Read-your-writes" is the one: the user's own write was missing from their next read, which went to a follower that had not yet received it.</grade>
+
+**Question 2 of 3**
+
+<ask type="short">A user loads a comment thread and sees 12 comments. A second later they refresh and see 10, though nothing was deleted. Reads are served by asynchronous followers. How did the second read come back with less, and which guarantee would forbid it?</ask>
+@@ learner answer sure
+Replication lag. The second read went to the leader, which was behind the follower that served the first one. It breaks read-your-writes again.
+@@ tutor
+<grade verdict="wrong" score="0.2">"Replication lag" is the cause, but "the leader, which was behind the follower" cannot happen: every write goes through the leader first, so it is never behind. The second read went to a different follower that was further behind than the first. And this user wrote nothing, so read-your-writes is not involved; the guarantee that forbids going backwards between reads is monotonic reads.</grade>
+
+<card>What does monotonic reads guarantee? :: Once a user has seen some state, their later reads never return an older one. It is broken when successive reads hit followers with different lag.</card>
+
+**Question 3 of 3**
+
+<ask type="short">Reads stay on followers. Give one routing rule that gives each user monotonic reads, and say when it stops holding.</ask>
+@@ learner answer sure
+Always send a given user to the same follower, e.g. hash the user id to pick the replica. One follower only ever moves forward so the user never sees time go backwards. It stops holding if that follower dies and the user gets rerouted to one that is further behind.
+@@ reply
+<grade verdict="correct" score="1">"Always send a given user to the same follower" works for the reason you give, "One follower only ever moves forward", and failover to a follower that is further behind is the case where it breaks.</grade>
+
+<summary>**Score:** 2 of 3.
+
+**Strengths:** you recognised a read-your-writes violation from its symptom, and you knew sticky routing as the fix for monotonic reads together with its failure case.
+
+**Misconceptions to fix:** in question 2 you had the leader lagging behind a follower. The leader is the source of every write, so lag only ever runs from leader to follower. You also named read-your-writes where no write was involved: read-your-writes concerns a user's own writes, monotonic reads concerns two reads in a row.
+
+**Review:** the difference between the two guarantees, with one example of each, and what a client can carry (the position of the last state it saw) so that a rerouted read does not go backwards.</summary>

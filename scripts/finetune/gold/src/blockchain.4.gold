@@ -1,0 +1,485 @@
+@@@@ why-hash-pointer-repair-cascade
+situation: why
+topic: Hash pointers and the chain of blocks
+options: {"why":true}
+voice: plain
+level: medium
+expect: {"verdict":"correct","askTypes":["predict","explain","short"],"must":["block 2"],"askMustNot":["block 3","block 6'?s (own )?hash","tip"]}
+noverify: a conceptual Why-mode exchange; nothing is computed
+@@ tutor
+Start from two blocks. Block 2 contains, among its fields, the hash of the whole of block 1.
+
+<ask type="predict">Someone changes a transaction inside block 1 and leaves block 2 untouched. What does a node that re-checks the chain notice, and where?</ask>
+@@ learner answer sure
+It hashes block 1 and gets a different hash from the one written in block 2, so the mismatch shows up at block 2's stored pointer.
+@@ reply
+<grade verdict="correct" score="1">"a different hash from the one written in block 2" is the detection: block 1 no longer matches the value block 2 was built on, so the break shows at block 2's pointer.</grade>
+
+Now let the forger repair that. They overwrite the pointer in block 2 with the new hash of block 1, so that link checks out again. But the pointer is one of block 2's fields, so block 2 is no longer the block it was.
+
+<ask type="predict">The chain has blocks 1 to 6. After that repair inside block 2, which stored value in the chain no longer matches, and why does fixing that one not finish the forger's work?</ask>
+
+@@@@ why-contract-random-number-vote
+situation: why
+topic: Smart contracts and deterministic execution
+options: {"why":true}
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["vote|majority","different (number|winner|result)|own (number|winner)"],"must":["1,000","order"],"askTypes":["predict","short","explain"],"askMustNot":["\\b20\\b","twenty"]}
+@@ tutor
+Thousands of nodes each execute every contract call themselves, and all of them must end up with the same state.
+
+<ask type="predict">A lottery contract needs a random winner, so its author proposes that the contract calls the operating system's random number generator. What happens when the nodes each execute that call?</ask>
+@@ learner answer sure
+Works fine. Each node runs it and gets a winner, then they vote on which result to keep and the majority wins. That's literally what consensus is for.
+@@ reply
+<grade verdict="wrong" score="0.1">"they vote on which result to keep" is not something the nodes can do here: each node draws its own number, so each gets a different winner, and there is no result that most of them share. Consensus settles which transactions run and in what order; every node then computes the outcome itself and expects to get the same one.</grade>
+
+Put numbers on it rather than take that on trust. Say 1,000 nodes execute the call and the lottery has 50 tickets, each equally likely to come out of a node's own generator.
+
+<card>Can nodes vote on the result of a contract call that used local randomness? :: No. Each node would compute a different result, so no majority forms. Consensus fixes the order of transactions; execution must then give every node the same state.</card>
+
+<note>Consensus agrees on which transactions run and in what order, not on results. Every node recomputes the results itself.</note>
+
+<ask type="predict">Of those 1,000 nodes, about how many would you expect to name any one particular ticket as the winner, and is that anywhere near a majority?</ask>
+@@ verify
+# 1,000 nodes, 50 equally likely tickets: expected count naming one given ticket
+assert 1000 / 50 == 20 and 20 < 1000 / 2
+import random
+random.seed(7)
+draws = [random.randrange(50) for _ in range(1000)]
+top = max(draws.count(t) for t in range(50))
+assert top < 500                      # no ticket gets anywhere near a majority
+assert '20' not in visible(reply)
+
+@@@@ why-first-seen-rule-idk
+situation: why
+topic: The longest-chain rule and forks
+options: {"why":true}
+voice: plain
+level: medium
+expect: {"must":["first"],"forbid":["grade"],"askTypes":["predict","short","explain"],"askMustNot":["never (agree|converge)","permanent","split","X keeps A"],"mustNot":["most work","longest chain wins"]}
+noverify: a conceptual Why-mode exchange; nothing is computed
+@@ tutor
+Two miners find a valid block at almost the same moment, so for a while some nodes have seen block A first and others block B. Both blocks are valid and both extend the same parent.
+
+<ask type="explain">Nodes need a rule for which branch to keep: one that each node can apply on its own and that ends with all of them on the same branch. Why can "keep whichever block I saw first, for good" not be that rule?</ask>
+@@ learner idk
+@@ reply
+Take it from the position of two particular nodes instead of the whole network. Node X is near the first miner and received A before B. Node Y is near the second miner and received B before A. Each applies the proposed rule to what it saw, and each can only see its own order of arrival.
+
+Then let time pass: more blocks are mined, some on top of A and some on top of B, and X and Y keep relaying everything they receive to each other.
+
+<ask type="predict">Under "keep whichever I saw first, for good", which block does X hold and which does Y hold? And is there any later message one could send the other that the rule would let change its choice?</ask>
+
+@@@@ hands-on-sha256-bits-differ
+situation: hands-on
+topic: Cryptographic hash functions
+options: {"strategy":"code"}
+voice: terse
+level: easy
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"must":["\\b120\\b","e3b0c442"],"askMustNot":["157","251","\\(1, 12\\)"]}
+@@ tutor
+`hashlib.sha256(data).hexdigest()` returns the SHA-256 digest of a bytes value as 64 hex digits. Change one character of the input and the digest looks unrelated (the first 16 digits of each are shown):
+
+```python
+import hashlib
+
+for msg in [b"pay 5", b"pay 6"]:
+    print(msg.decode(), hashlib.sha256(msg).hexdigest()[:16])
+```
+
+```
+pay 5 6880dc3427b880e1
+pay 6 722d5e45eb6c4c8d
+```
+
+<solution>def differing_bits(a, b): x = int(hashlib.sha256(a).hexdigest(), 16) ^ int(hashlib.sha256(b).hexdigest(), 16); return bin(x).count("1"). For b"pay 5" and b"pay 6" it returns 120.</solution>
+
+<ask type="code" lang="python">Write `differing_bits(a, b)` that returns how many of the 256 bit positions differ between the SHA-256 digests of two bytes values, and print it for `b"pay 5"` and `b"pay 6"`.</ask>
+@@ learner answer sure
+```python
+import hashlib
+def differing_bits(a, b):
+    x = int(hashlib.sha256(a).hexdigest(), 16)
+    y = int(hashlib.sha256(b).hexdigest(), 16)
+    return bin(x ^ y).count("1")
+print(differing_bits(b"pay 5", b"pay 6"))
+```
+prints 120
+@@ reply
+<grade verdict="correct" score="1">`bin(x ^ y).count("1")` is right: XOR leaves a 1 exactly where the two digests differ, and it prints 120. That is close to half of 256, which is what a good hash gives: each output bit flips with probability about one half.</grade>
+
+The digest is the same size whatever goes in:
+
+```python
+import hashlib
+
+for msg in [b"", b"pay 5", b"x" * 1000]:
+    d = hashlib.sha256(msg).digest()
+    print(len(msg), len(d), d.hex()[:8])
+```
+
+```
+0 32 e3b0c442
+5 32 6880dc34
+1000 32 44f83544
+```
+
+More possible inputs than outputs means two inputs with the same digest must exist. Security rests on them being infeasible to find at 32 bytes, and that changes quickly if the digest is cut short.
+
+<solution>def first_collision(nbytes): seen = {}; i = 0; loop: d = hashlib.sha256(str(i).encode()).digest()[:nbytes]; if d in seen: return (seen[d], i); seen[d] = i; i += 1. It returns (1, 12) for 1 byte and (157, 251) for 2 bytes.</solution>
+
+<ask type="code" lang="python">Write `first_collision(nbytes)` that hashes `str(i).encode()` for i = 0, 1, 2, … and returns the first pair `(i, j)` with i < j whose digests share their first `nbytes` bytes, stopping at the smallest such j. Print the result for 1 byte and for 2 bytes.</ask>
+@@ verify
+import hashlib
+out = run_py(block(learner, 'python'))
+assert out.strip() == '120', out
+x = int(hashlib.sha256(b'pay 5').hexdigest(), 16) ^ int(hashlib.sha256(b'pay 6').hexdigest(), 16)
+assert bin(x).count('1') == 120 and abs(120 - 128) <= 8
+ref = '''
+import hashlib
+def first_collision(nbytes):
+    seen, i = {}, 0
+    while True:
+        d = hashlib.sha256(str(i).encode()).digest()[:nbytes]
+        if d in seen:
+            return (seen[d], i)
+        seen[d] = i
+        i += 1
+print(first_collision(1), first_collision(2))
+'''
+assert run_py(ref).strip() == '(1, 12) (157, 251)'
+assert hashlib.sha256(b'1').digest()[:1] == hashlib.sha256(b'12').digest()[:1]
+assert hashlib.sha256(b'157').digest()[:2] == hashlib.sha256(b'251').digest()[:2]
+assert '(157, 251)' in solution(reply) and '157' not in visible(reply)
+
+@@@@ hands-on-merkle-root-hex-text
+situation: hands-on
+topic: Computing a Merkle root in Python
+voice: typos
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["hex|text|characters|ASCII","bytes"],"must":["ea59a369466be42d","\\b64\\b"],"setsProblem":true,"askTypes":["code"],"askMustNot":["66c2c5466ad78131"]}
+@@ tutor
+A Merkle parent is the hash of its two children's digests joined end to end as raw bytes: 32 bytes and 32 bytes in, 32 bytes out.
+
+```python
+import hashlib
+
+def h(data):
+    return hashlib.sha256(data).digest()
+
+left, right = h(b"tx1"), h(b"tx2")
+parent = h(left + right)
+print(len(left + right), parent.hex()[:16])
+```
+
+```
+64 bbea820f07f7f89a
+```
+
+<solution>def merkle_root(leaves): a, b, c, d = [h(x) for x in leaves]; return h(h(a + b) + h(c + d)). For [b"tx1", b"tx2", b"tx3", b"tx4"] the root's first 16 hex digits are ea59a369466be42d.</solution>
+
+<ask type="code" lang="python">Write `merkle_root(leaves)` for a list of exactly four bytes values, using `h` and the pairing rule above, and print the first 16 hex digits of the root of `[b"tx1", b"tx2", b"tx3", b"tx4"]`.</ask>
+@@ learner answer unsure
+```python
+import hashlib
+def h(data):
+    return hashlib.sha256(data).hexdigest()
+def merkle_root(leaves):
+    a, b, c, d = [h(x) for x in leaves]
+    ab = h((a + b).encode())
+    cd = h((c + d).encode())
+    return h((ab + cd).encode())
+print(merkle_root([b"tx1", b"tx2", b"tx3", b"tx4"])[:16])
+```
+i get 773bc304a3b0a626, not sure if thats right. i swaped to hexdigest becuase it was easier to print
+@@ reply
+<grade verdict="partial" score="0.5">The shape is right: four leaves, two parents, one root. The slip is `h((a + b).encode())`: with `hexdigest`, `a + b` is 128 characters of hex text, and you hash that text instead of the 64 raw bytes. Every parent then differs from the one the rule defines, so 773bc304a3b0a626 is not the root; it begins ea59a369466be42d.</grade>
+
+Both are well-defined functions, but only one is the tree everyone else computes: a proof built from your tree would fail against a root built from bytes. Keep digests as bytes inside the tree and call `.hex()` only on the value you print.
+
+<card>Why must Merkle parents hash raw digest bytes rather than hex strings? :: The hex text of two digests is 128 characters, a different input from the 64 raw bytes, so it gives a different parent and a root no other implementation will match.</card>
+
+<note>Inside a Merkle tree every node is 32 raw bytes: `parent = sha256(left + right).digest()`. Convert to hex only for display.</note>
+
+<solution>h returns .digest(); merkle_root returns h(h(a + b) + h(c + d)) with no .encode(); print(root.hex()[:16]). Original order: ea59a369466be42d. Reversed leaves [tx4, tx3, tx2, tx1]: 66c2c5466ad78131.</solution>
+
+<ask type="code" lang="python">Fix `h` and `merkle_root` so that parents hash raw bytes, then print the first 16 hex digits of the root for the same four leaves and for the same leaves in reverse order.</ask>
+@@ verify
+import hashlib
+out = run_py(block(learner, 'python'))
+assert out.strip() == '773bc304a3b0a626', out
+h = lambda b: hashlib.sha256(b).digest()
+def root(leaves):
+    a, b, c, d = [h(x) for x in leaves]
+    return h(h(a + b) + h(c + d)).hex()[:16]
+L = [b'tx1', b'tx2', b'tx3', b'tx4']
+assert root(L) == 'ea59a369466be42d' and root(L[::-1]) == '66c2c5466ad78131'
+assert len(h(b'tx1').hex() + h(b'tx2').hex()) == 128 and len(h(b'tx1') + h(b'tx2')) == 64
+assert h(h(b'tx1') + h(b'tx2')).hex()[:16] == 'bbea820f07f7f89a'
+assert '66c2c5466ad78131' in solution(reply) and '66c2c5466ad78131' not in visible(reply)
+# the fixed program, as the solution describes it
+fixed = '''
+import hashlib
+def h(data):
+    return hashlib.sha256(data).digest()
+def merkle_root(leaves):
+    a, b, c, d = [h(x) for x in leaves]
+    return h(h(a + b) + h(c + d))
+L = [b"tx1", b"tx2", b"tx3", b"tx4"]
+print(merkle_root(L).hex()[:16], merkle_root(L[::-1]).hex()[:16])
+'''
+assert run_py(fixed).strip() == 'ea59a369466be42d 66c2c5466ad78131'
+
+@@@@ hands-on-toy-pow-loop-idk
+situation: hands-on
+topic: A toy proof of work in Python
+options: {"strategy":"code"}
+voice: plain
+level: easy
+expect: {"forbid":["grade"],"setsProblem":true,"askTypes":["code"],"must":["1/16","060a6b77"],"mustNot":["\\b545\\b"],"askMustNot":["\\b545\\b","00ec674c"]}
+@@ tutor
+Proof of work asks for an input whose hash has a rare property; here, a hex digest that starts with zeros. Nothing predicts which input will do, so a miner tries values of a counter, the nonce, one after another:
+
+```python
+import hashlib
+
+for nonce in range(4):
+    digest = hashlib.sha256(f"block-7:{nonce}".encode()).hexdigest()
+    print(nonce, digest[:8], digest.startswith("0"))
+```
+
+```
+0 f7b51947 False
+1 16503fc8 False
+2 ea1f871c False
+3 abed2ef8 False
+```
+
+<solution>def mine(data, zeros): nonce = 0; while the digest of f"{data}:{nonce}" does not start with "0" * zeros: nonce += 1; return nonce. mine("block-7", 2) returns 545 (digest begins 00ec674c).</solution>
+
+<ask type="code" lang="python">Write `mine(data, zeros)` that returns the first nonce for which the digest of `f"{data}:{nonce}"` starts with `zeros` zero hex digits, and print `mine("block-7", 2)`.</ask>
+@@ learner idk
+@@ reply
+The missing piece is a loop with no fixed end: keep raising the nonce until the test passes, then stop. Here it is for a single zero digit, with nothing wrapped in a function yet:
+
+```python
+import hashlib
+
+nonce = 0
+while not hashlib.sha256(f"block-7:{nonce}".encode()).hexdigest().startswith("0"):
+    nonce += 1
+print(nonce, hashlib.sha256(f"block-7:{nonce}".encode()).hexdigest()[:8])
+```
+
+```
+16 060a6b77
+```
+
+A digest starts with 0 with probability 1/16, so a hit takes 16 tries on average; this search took 17 (nonces 0 to 16). The `while not … : nonce += 1` shape is the whole of mining.
+
+<solution>def mine(data, zeros): nonce = 0; while not hashlib.sha256(f"{data}:{nonce}".encode()).hexdigest().startswith("0" * zeros): nonce += 1; return nonce. mine("block-7", 1) is 16 and mine("block-7", 2) is 545.</solution>
+
+<ask type="code" lang="python">Turn that loop into `mine(data, zeros)`: use `data` in place of `"block-7"` and a string of `zeros` zeros in place of `"0"`, and return the nonce. Check that `mine("block-7", 1)` gives 16, then print `mine("block-7", 2)`.</ask>
+@@ verify
+import hashlib
+d = lambda n: hashlib.sha256(f'block-7:{n}'.encode()).hexdigest()
+assert all(not d(n).startswith('0') for n in range(16)) and d(16).startswith('0')
+assert d(16)[:8] == '060a6b77' and len(range(0, 17)) == 17
+ref = '''
+import hashlib
+def mine(data, zeros):
+    nonce = 0
+    while not hashlib.sha256(f"{data}:{nonce}".encode()).hexdigest().startswith("0" * zeros):
+        nonce += 1
+    return nonce
+print(mine("block-7", 1), mine("block-7", 2))
+'''
+assert run_py(ref).strip() == '16 545'
+assert d(545)[:8] == '00ec674c' and '545' in solution(reply) and '545' not in visible(reply)
+assert '545' in solution(tutor[0]) and '545' not in visible(tutor[0])
+
+@@@@ hands-on-hash-chain-tamper
+situation: hands-on
+topic: A hash chain in Python
+voice: plain
+level: medium
+expect: {"setsProblem":true,"askTypes":["code"],"forbid":["grade"],"must":["\\[False, True, True\\]","\\[False, True\\]"],"askMustNot":["None 1","returns 1"]}
+@@ tutor
+A hash chain stores with each record the hash of the record before it, and each block's own hash covers both its data and that previous hash. So every hash depends on everything earlier in the chain.
+
+```python
+import hashlib
+
+def block_hash(prev, data):
+    return hashlib.sha256((prev + data).encode()).hexdigest()
+
+chain, prev = [], "0" * 64
+for data in ["A pays B 5", "B pays C 2", "C pays A 1"]:
+    h = block_hash(prev, data)
+    chain.append({"prev": prev, "data": data, "hash": h})
+    prev = h
+
+for b in chain:
+    print(b["prev"][:8], b["data"], b["hash"][:8])
+```
+
+```
+00000000 A pays B 5 771c64b4
+771c64b4 B pays C 2 02bb3e79
+02bb3e79 C pays A 1 1b9c4fbf
+```
+
+<note>Hash chain: `hash_i = sha256(prev_i + data_i)` with `prev_i = hash_{i-1}`. Each block's `prev` column repeats the `hash` of the block above it.</note>
+
+<continue/>
+@@ learner goon
+@@ reply
+Two checks make the chain verifiable: each block's stored hash must equal the hash of its own contents, and each `prev` must equal the hash stored in the block before. Alter the first block's data, then let the forger recompute that block's hash:
+
+```python
+import hashlib
+
+def block_hash(prev, data):
+    return hashlib.sha256((prev + data).encode()).hexdigest()
+
+chain, prev = [], "0" * 64
+for data in ["A pays B 5", "B pays C 2", "C pays A 1"]:
+    h = block_hash(prev, data)
+    chain.append({"prev": prev, "data": data, "hash": h})
+    prev = h
+
+def own_ok(chain):
+    return [block_hash(b["prev"], b["data"]) == b["hash"] for b in chain]
+
+def links_ok(chain):
+    return [chain[i]["prev"] == chain[i - 1]["hash"] for i in range(1, len(chain))]
+
+chain[0]["data"] = "A pays B 50"
+print(own_ok(chain), links_ok(chain))
+chain[0]["hash"] = block_hash(chain[0]["prev"], chain[0]["data"])
+print(own_ok(chain), links_ok(chain))
+```
+
+```
+[False, True, True] [True, True]
+[True, True, True] [False, True]
+```
+
+After the edit, block 0 fails its own check. After the forger's repair it passes, but the fault has moved: block 1's `prev` no longer matches.
+
+<solution>def first_bad(chain): for i, b in enumerate(chain): if block_hash(b["prev"], b["data"]) != b["hash"]: return i; if i > 0 and b["prev"] != chain[i - 1]["hash"]: return i; return None. The untouched chain gives None; the chain after the forger's repair gives 1.</solution>
+
+<ask type="code" lang="python">Write `first_bad(chain)` that returns the index of the first block failing either check, or `None` if every block passes. Print it for a freshly built chain and for the chain as it stands after the forger's repair.</ask>
+@@ verify
+src = block(reply, 'python')
+out = run_py(src)
+assert out == '[False, True, True] [True, True]\n[True, True, True] [False, True]\n', out
+ref = src + '''
+def first_bad(chain):
+    for i, b in enumerate(chain):
+        if block_hash(b["prev"], b["data"]) != b["hash"]:
+            return i
+        if i > 0 and b["prev"] != chain[i - 1]["hash"]:
+            return i
+    return None
+fresh, prev = [], "0" * 64
+for data in ["A pays B 5", "B pays C 2", "C pays A 1"]:
+    h = block_hash(prev, data)
+    fresh.append({"prev": prev, "data": data, "hash": h})
+    prev = h
+print(first_bad(fresh), first_bad(chain))
+'''
+assert run_py(ref).split('\n')[2] == 'None 1'
+# the earlier turn's listing: each prev is the hash above it
+rows = [l.split() for l in block(tutor[0], '').strip().split('\n')]
+assert rows[1][0] == rows[0][-1] and rows[2][0] == rows[1][-1] and rows[0][0] == '00000000'
+
+@@@@ summary-double-spend-lesson
+situation: summary
+topic: Double spending
+voice: confused
+level: medium
+expect: {"verdict":"correct","must":["signature","unspent|already spent","confirmation"]}
+noverify: a conceptual lesson; the block numbers are labels and nothing is computed
+@@ tutor
+**Problem 3 · same level**
+
+Mallory holds a single UTXO of 10 coins. She signs transaction X, paying it to a shop, and transaction Y, paying the same UTXO to herself, and sends X to some nodes and Y to others. Both signatures are valid. Can both end up in the chain? Say what decides it.
+
+<solution>No. A transaction is valid only if its inputs are unspent. Whichever of X and Y is included in a block first removes the UTXO from the set, and the other is then invalid on that chain, valid signature or not. The order fixed by the chain decides.</solution>
+
+<ask type="problem">Whether both can be included, and what decides the outcome.</ask>
+@@ learner answer unsure
+both sigs are valid so i think both get in?? shop gets 10 and she gets her 10 back. unless nodes notice later and undo one of them, i'm not sure how they'd know
+@@ tutor
+<grade verdict="wrong" score="0.1">"both sigs are valid so i think both get in" checks only one of the two rules. A node also requires every input to be unspent, and nothing is undone later: the second transaction is refused when it arrives.</grade>
+
+Whichever of X and Y reaches a block first removes the 10-coin output from the UTXO set. From then on the other one names an input that no longer exists, so every node following that chain rejects it, valid signature or not. The chain's order is what decides.
+
+<card>Two transactions with valid signatures spend the same UTXO. Why can only one be included? :: Validity needs unspent inputs as well as a signature. The first one included removes the output from the UTXO set; the other then spends something that does not exist.</card>
+
+<note>A valid transaction needs both a valid signature and unspent inputs. A double spend fails the second test: the chain orders the two transactions and the later one is invalid.</note>
+
+**Problem 4 · same idea, new form**
+
+X is in block 500. A miner then produces a competing block 500 that contains Y instead. Nothing is built on the competing block, while the original chain grows to block 503. Which transaction does a node following the most-work chain treat as confirmed, and what is the status of the other?
+
+<solution>X. The chain through the original block 500 has more work, so nodes follow it; on that chain the UTXO is spent by X, so Y is invalid there. Y exists only in an abandoned block.</solution>
+
+<ask type="problem">Which transaction is confirmed, and what has become of the other.</ask>
+@@ learner answer sure
+X is confirmed. the 500 to 503 chain has more work so nodes follow that one, and on it the UTXO is already spent by X which makes Y invalid there. Y only ever existed in the abandoned block
+@@ reply
+<grade verdict="correct" score="1">"on it the UTXO is already spent by X which makes Y invalid there" is the rule you missed in the previous problem, applied correctly, and you tied it to the right chain: the one with more work.</grade>
+
+<summary>**What you learned:** a double spend is two transactions with valid signatures that spend the same output. Only one can be included, because a transaction's inputs must be unspent, and the chain's order decides which. A conflicting transaction in an abandoned block counts for nothing.
+
+**Still shaky:** the unspent-input rule is new. In Problem 3 you took valid signatures to be enough ("both get in") and expected nodes to undo one later; in Problem 4 you applied the rule correctly once. The card is in your deck.
+
+**Next:** confirmations. Problem 4's competing block was abandoned at once; the open question is how many blocks a shop should wait for when an attacker keeps extending the competing branch.</summary>
+
+@@@@ summary-quiz-seed-phrases
+situation: summary
+topic: Wallets and seed phrases
+mode: quiz
+options: {"length":3}
+voice: typos
+level: medium
+expect: {"verdict":"correct","must":["2 (out )?of 3","derivation path"]}
+noverify: a conceptual quiz; the score is a count of the three marks shown (correct, wrong, correct)
+@@ tutor
+**Question 1 of 3**
+
+<ask type="short">What does a wallet store: coins, or something else? Say what it stores and where the coins are.</ask>
+@@ learner answer sure
+it stores the private keys. the coins arent in it, theyre just entries on the chain that those keys are allowed to spend
+@@ tutor
+<grade verdict="correct" score="1">"it stores the private keys" is right, and so is the second half: the coins are records on the chain, and the keys are what authorise spending them.</grade>
+
+**Question 2 of 3**
+
+<ask type="explain">A hierarchical deterministic wallet shows you a seed phrase once, then generates a fresh address for each payment you receive. Months later you enter the phrase on a new device. Which of your addresses come back, and why?</ask>
+@@ learner answer unsure
+only the first adress i think. the others were made later so they cant be in the phrase, youd need a new backup each time
+@@ tutor
+<grade verdict="wrong" score="0.1">"the others were made later so they cant be in the phrase" assumes each address is new random data. In a hierarchical deterministic wallet every key is computed from the seed: the same seed and the same derivation path give the same sequence of keys, so all of the addresses come back and one backup covers them.</grade>
+
+<card>Why does one seed phrase restore every address of a hierarchical deterministic wallet? :: Each key is derived deterministically from the seed along a derivation path. Same seed and same path give the same keys, in the same order, on any device.</card>
+
+**Question 3 of 3**
+
+<ask type="short">Two wallet apps are given the same seed phrase. One shows your funds and the other shows a zero balance. Assuming neither has a bug, what is the most likely reason?</ask>
+@@ learner answer unsure
+diffrent derivation path maybe? same seed but the 2nd app derives other keys from it, so its looking at adresses i never used
+@@ reply
+<grade verdict="correct" score="1">"same seed but the 2nd app derives other keys from it" is the reason: the seed fixes the whole tree of keys, and the derivation path decides which branch of it an app looks at.</grade>
+
+<summary>**Score:** 2 of 3 correct.
+
+**Strengths:** what a wallet holds (keys, not coins), and the role of the derivation path, which you worked out in the last question from the idea you had just been corrected on.
+
+**Misconception to fix:** that each new address needs its own backup. Every key is derived from the seed, so the phrase restores all of them, on any device.
+
+**Review:** deterministic derivation from a seed, and what a seed phrase backup covers: all keys on every path, provided the restoring app uses the same derivation path.</summary>

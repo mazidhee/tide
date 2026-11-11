@@ -1,0 +1,507 @@
+@@@@ hands-on-ipaddress-subnets-then-route
+situation: hands-on
+topic: Python's ipaddress module
+options: {"strategy":"code"}
+voice: plain
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"must":["10\\.9\\.8\\.32/28"],"askMustNot":["prefixlen","max\\("],"mustNot":["B A C"]}
+@@ tutor
+`ipaddress.ip_network` turns a CIDR string into an object that knows its own addresses. It refuses a string with host bits set unless you pass `strict=False`.
+
+```python
+import ipaddress
+
+net = ipaddress.ip_network('192.168.70.192/27')
+print(net.network_address, net.broadcast_address)
+print(net.num_addresses)
+```
+
+```
+192.168.70.192 192.168.70.223
+32
+```
+
+<solution>def describe(cidr): net = ipaddress.ip_network(cidr, strict=False); print(net, net.broadcast_address, net.num_addresses - 2). Output: "192.168.70.192/27 192.168.70.223 30" and "10.4.8.0/22 10.4.11.255 1022".</solution>
+
+<ask type="code" lang="python">Write `describe(cidr)` that takes a host address with a prefix, such as '192.168.70.201/27', and prints its network in CIDR form, the broadcast address and the number of usable hosts. Call it on '192.168.70.201/27' and '10.4.9.150/22'.</ask>
+@@ learner answer sure
+```python
+import ipaddress
+
+def describe(cidr):
+    net = ipaddress.ip_interface(cidr).network
+    print(net, net.broadcast_address, net.num_addresses - 2)
+
+describe('192.168.70.201/27')
+describe('10.4.9.150/22')
+```
+I used ip_interface instead of strict=False, it prints 192.168.70.192/27 192.168.70.223 30 and 10.4.8.0/22 10.4.11.255 1022
+@@ reply
+<grade verdict="correct" score="1">Both lines are right. `ipaddress.ip_interface(cidr).network` is a sound choice: an interface object is exactly "a host address with a prefix", so it keeps the host part and hands you the enclosing network without `strict=False`.</grade>
+
+A network object can also split itself and test membership:
+
+```python
+import ipaddress
+
+net = ipaddress.ip_network('10.9.8.0/24')
+subs = list(net.subnets(new_prefix=28))
+print(len(subs), subs[2])
+print(ipaddress.ip_address('10.9.8.40') in subs[2])
+```
+
+```
+16 10.9.8.32/28
+True
+```
+
+<solution>def route(dst, table): d = ipaddress.ip_address(dst); nets = [ipaddress.ip_network(p) for p in table if d in ipaddress.ip_network(p)]; return table[str(max(nets, key=lambda n: n.prefixlen))]. With the table given it prints B A C: 172.16.9.1 is inside 172.16.8.0/21 (8 to 15), 172.16.16.1 is only inside the /12, and 8.8.4.4 matches only the default.</solution>
+
+<ask type="code" lang="python">Use the `in` test to write `route(dst, table)`, where `table` maps CIDR strings to next-hop names: return the next hop of the most specific network that contains `dst`. Try it with `{'172.16.0.0/12': 'A', '172.16.8.0/21': 'B', '0.0.0.0/0': 'C'}` on '172.16.9.1', '172.16.16.1' and '8.8.4.4', printing the three results on one line.</ask>
+@@ verify
+import ipaddress
+# the learner's program prints what they say
+out = run_py(block(learner, 'python'))
+assert out.splitlines() == ['192.168.70.192/27 192.168.70.223 30', '10.4.8.0/22 10.4.11.255 1022'], out
+assert '192.168.70.192/27 192.168.70.223 30' in learner and '10.4.8.0/22 10.4.11.255 1022' in learner
+# the tutor's own reference gives the same
+ref = '''
+import ipaddress
+def describe(cidr):
+    net = ipaddress.ip_network(cidr, strict=False)
+    print(net, net.broadcast_address, net.num_addresses - 2)
+describe('192.168.70.201/27')
+describe('10.4.9.150/22')
+'''
+assert run_py(ref) == out
+# strict mode really refuses host bits
+try:
+    ipaddress.ip_network('192.168.70.201/27'); raise SystemExit('should have failed')
+except ValueError:
+    pass
+# the task set: reference solution
+ref2 = '''
+import ipaddress
+def route(dst, table):
+    d = ipaddress.ip_address(dst)
+    nets = [ipaddress.ip_network(p) for p in table if d in ipaddress.ip_network(p)]
+    return table[str(max(nets, key=lambda n: n.prefixlen))]
+t = {'172.16.0.0/12': 'A', '172.16.8.0/21': 'B', '0.0.0.0/0': 'C'}
+print(route('172.16.9.1', t), route('172.16.16.1', t), route('8.8.4.4', t))
+'''
+assert run_py(ref2).strip() == 'B A C'
+assert str(ipaddress.ip_network('172.16.8.0/21').broadcast_address) == '172.16.15.255'
+assert 'B A C' in solution(reply) and 'B A C' not in visible(reply)
+
+@@@@ hands-on-struct-little-endian-ports
+situation: hands-on
+topic: Parsing packet headers with struct
+options: {"strategy":"code"}
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","accept":["partial"],"names":["little-endian|low byte first","network byte order|big-endian"],"must":["443","47873"],"mustNot":["169552957","20001"],"setsProblem":true,"askTypes":["code"],"askMustNot":["!HHII"]}
+@@ tutor
+`struct.unpack` turns raw bytes into numbers according to a format string. `!` means network byte order and `H` is an unsigned 16-bit field. A UDP header is four of those:
+
+```python
+import struct
+
+header = bytes.fromhex('d4310035002c8a1f')
+src, dst, length, checksum = struct.unpack('!HHHH', header)
+print(src, dst, length, hex(checksum))
+```
+
+```
+54321 53 44 0x8a1f
+```
+
+<solution>src, dst, seq = struct.unpack('!HHI', bytes.fromhex('c93a01bb0a1b2c3d')) prints 51514 443 169552957.</solution>
+
+<ask type="code" lang="python">A TCP header starts with the source port (16 bits), the destination port (16 bits) and the sequence number (32 bits, format code `I`). Unpack those three from `bytes.fromhex('c93a01bb0a1b2c3d')` and print them.</ask>
+@@ learner answer sure
+```python
+import struct
+data = bytes.fromhex('c93a01bb0a1b2c3d')
+src, dst, seq = struct.unpack('<HHI', data)
+print(src, dst, seq)
+```
+Done, ran first time: 15049 47873 1026300682
+@@ reply
+<grade verdict="wrong" score="0.2">It runs, but all three values are wrong, and the cause is the `<` in `'<HHI'`: that reads each field little-endian, low byte first, while every multi-byte field in a TCP header is in network byte order, which is big-endian. Nothing fails, which is what makes this easy to miss.</grade>
+
+The two bytes of the destination port, read both ways:
+
+```python
+import struct
+
+two = bytes.fromhex('01bb')
+print(struct.unpack('!H', two)[0], struct.unpack('<H', two)[0])
+```
+
+```
+443 47873
+```
+
+`unpack` cannot warn you: any 8 bytes are a valid pair of 16-bit numbers and a 32-bit number in either order.
+
+<card>Which struct prefix do network protocol headers need, and what goes wrong with `<`? :: `!` (network byte order, big-endian). With `<` each field's bytes are read in reverse, so 0x01BB (443) comes out as 0xBB01 (47873) with no error.</card>
+
+<note>Protocol headers are big-endian: start the struct format with `!`. A wrong byte order raises no error; check a field whose value you know, such as a well-known port.</note>
+
+<solution>src, dst, seq, ack = struct.unpack('!HHII', bytes.fromhex('c93a01bb0a1b2c3d00004e21')); print(src, dst, seq, ack) prints 51514 443 169552957 20001.</solution>
+
+<ask type="code" lang="python">Correct the byte order, then extend the format to read the 32-bit acknowledgement number that follows the sequence number. Unpack `bytes.fromhex('c93a01bb0a1b2c3d00004e21')` and print all four values.</ask>
+@@ verify
+import struct
+# the learner's program and the output they report
+out = run_py(block(learner, 'python'))
+assert out.strip() == '15049 47873 1026300682' and '15049 47873 1026300682' in learner
+data = bytes.fromhex('c93a01bb0a1b2c3d')
+assert struct.unpack('!HHI', data) == (51514, 443, 169552957)
+assert struct.unpack('<HHI', data) == (15049, 47873, 1026300682)
+assert 0x01BB == 443 and 0xBB01 == 47873
+# the UDP header in the tutor turn
+assert struct.unpack('!HHHH', bytes.fromhex('d4310035002c8a1f')) == (54321, 53, 44, 0x8a1f)
+# the task set
+ref = '''
+import struct
+src, dst, seq, ack = struct.unpack('!HHII', bytes.fromhex('c93a01bb0a1b2c3d00004e21'))
+print(src, dst, seq, ack)
+'''
+assert run_py(ref).strip() == '51514 443 169552957 20001'
+assert '51514 443 169552957 20001' in solution(reply)
+assert '169552957' not in visible(reply) and '20001' not in visible(reply)
+
+@@@@ hands-on-explain-nibbles-continue
+situation: hands-on
+topic: Parsing packet headers with struct
+options: {"strategy":"code"}
+voice: confused
+level: easy
+expect: {"ends":"continue","must":["01000101","20 bytes"],"forbid":["grade","ask"],"need":["note"]}
+@@ tutor
+The first byte of an IPv4 header packs two 4-bit fields: the version in the high half and the header length (IHL) in the low half. The format code `B` unpacks one unsigned byte.
+
+```python
+import struct
+
+first = struct.unpack('!B', bytes.fromhex('45'))[0]
+print(first, hex(first))
+```
+
+```
+69 0x45
+```
+
+<solution>version = first >> 4 gives 4; ihl = first & 0x0F gives 5. The IHL counts 32-bit words, so the header is 5 × 4 = 20 bytes.</solution>
+
+<ask type="code" lang="python">From `first`, compute the version and the IHL as two separate numbers, using a shift for one and a mask for the other, and print them.</ask>
+@@ learner question
+im lost on the shift and mask bit. can you just explain what >> 4 and & 0x0F actually do to 0x45 before i try anything
+@@ reply
+Both act on the eight bits of the byte, so print them:
+
+```python
+first = 0x45
+print(format(first, '08b'))
+print(format(first >> 4, '08b'), first >> 4)
+print(format(first & 0x0F, '08b'), first & 0x0F)
+```
+
+```
+01000101
+00000100 4
+00000101 5
+```
+
+`>> 4` moves every bit four places to the right. The high half, 0100, lands in the low half, the old low half falls off the end, and zeros come in at the top, leaving the version: 4. `& 0x0F` compares the byte with the mask 00001111 bit by bit and keeps a bit only where the mask has a 1, so the high half is cleared and the low half, 0101, is left as it was: the IHL, 5. The IHL counts 32-bit words, so this header is 5 × 4 = 20 bytes long.
+
+<note>High 4 bits of a byte: `b >> 4`. Low 4 bits: `b & 0x0F`. For an IPv4 first byte of 0x45: version 4, IHL 5 words = 20 bytes.</note>
+
+<continue/>
+@@ verify
+first = 0x45
+assert first == 69 and format(first, '08b') == '01000101'
+assert first >> 4 == 4 and format(first >> 4, '08b') == '00000100'
+assert first & 0x0F == 5 and format(first & 0x0F, '08b') == '00000101' and format(0x0F, '08b') == '00001111'
+assert 5 * 4 == 20
+out = run_py(block(reply, 'python'))
+assert out == block(reply, '') + '\n' or out.strip() == block(reply, '').strip()
+import struct
+assert struct.unpack('!B', bytes.fromhex('45'))[0] == 69
+
+@@@@ hands-on-checksum-single-fold-bug
+situation: hands-on
+topic: The Internet checksum
+options: {"strategy":"code"}
+voice: typos
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["fold","0x10000|17 bits"],"must":["0x10000"],"mustNot":["0xfffe","while s >> 16"],"setsProblem":true,"askTypes":["code"],"askMustNot":["while"]}
+@@ tutor
+In code, the one's complement sum is usually done by adding the words into a wide integer and folding the carries back in afterwards.
+
+```python
+def fold(s):
+    return (s & 0xFFFF) + (s >> 16)
+
+print(hex(fold(0x15A43)))
+```
+
+```
+0x5a44
+```
+
+<solution>def checksum(words): s = sum(words); while s >> 16: s = (s & 0xFFFF) + (s >> 16); return ~s & 0xFFFF. For [0x1C46, 0xE2F0, 0x5B0D] the sum is 0x15A43, folded 0x5A44, checksum 0xa5bb.</solution>
+
+<ask type="code" lang="python">Write `checksum(words)` that returns the Internet checksum of a list of 16-bit words, and print `hex(checksum([0x1C46, 0xE2F0, 0x5B0D]))`.</ask>
+@@ learner answer sure
+```python
+def checksum(words):
+    s = sum(words)
+    s = (s & 0xFFFF) + (s >> 16)
+    return ~s & 0xFFFF
+
+print(hex(checksum([0x1C46, 0xE2F0, 0x5B0D])))
+```
+prints 0xa5bb whcih matches what i got by hand
+@@ reply
+<grade verdict="partial" score="0.6">0xa5bb is right for these words, and `return ~s & 0xFFFF` inverts correctly. The gap is the line `s = (s & 0xFFFF) + (s >> 16)`: it folds once, and one fold can itself carry out of 16 bits, so the function is wrong for some inputs.</grade>
+
+Your function with a print added after the fold, on three words chosen to show it:
+
+```python
+def checksum(words):
+    s = sum(words)
+    s = (s & 0xFFFF) + (s >> 16)
+    print(hex(s))
+    return ~s & 0xFFFF
+
+print(hex(checksum([0xFFFF, 0xFFFF, 0x0001])))
+```
+
+```
+0x10000
+0xffff
+```
+
+After the fold the sum is 0x10000, which is 17 bits again, and the mask in the return line then silently drops that carry.
+
+<card>Why is one fold, (s & 0xFFFF) + (s >> 16), not always enough for an Internet checksum? :: The fold's own addition can carry out of 16 bits (0xFFFF + 1 = 0x10000). Fold until s >> 16 is 0.</card>
+
+<note>Fold carries until the sum fits in 16 bits; a single fold can overflow again. Test a checksum with words that force a second carry, such as 0xFFFF, 0xFFFF, 0x0001.</note>
+
+<solution>Replace the single fold with a loop: while s >> 16: s = (s & 0xFFFF) + (s >> 16). For [0xFFFF, 0xFFFF, 0x0001]: 0x1FFFF, then 0x10000, then 0x0001, so the checksum is 0xfffe. The first input still gives 0xa5bb.</solution>
+
+<ask type="code" lang="python">Change `checksum` so that no carry is ever lost, whatever the input. Print the result for `[0xFFFF, 0xFFFF, 0x0001]` and for `[0x1C46, 0xE2F0, 0x5B0D]`.</ask>
+@@ verify
+# the tutor's fold example and the first task's answer
+assert 0x1C46 + 0xE2F0 + 0x5B0D == 0x15A43 and (0x15A43 & 0xFFFF) + (0x15A43 >> 16) == 0x5A44 and (~0x5A44 & 0xFFFF) == 0xA5BB
+# the learner's code prints what they say
+assert run_py(block(learner, 'python')).strip() == '0xa5bb'
+# and fails on the case the reply shows
+s = 0xFFFF + 0xFFFF + 0x0001
+assert s == 0x1FFFF and (s & 0xFFFF) + (s >> 16) == 0x10000 and (~0x10000 & 0xFFFF) == 0xFFFF
+assert run_py(block(reply, 'python')).split() == ['0x10000', '0xffff']
+# reference solution for the task set
+ref = '''
+def checksum(words):
+    s = sum(words)
+    while s >> 16:
+        s = (s & 0xFFFF) + (s >> 16)
+    return ~s & 0xFFFF
+print(hex(checksum([0xFFFF, 0xFFFF, 0x0001])))
+print(hex(checksum([0x1C46, 0xE2F0, 0x5B0D])))
+'''
+assert run_py(ref).split() == ['0xfffe', '0xa5bb']
+# independent check by modular arithmetic: 0x1FFFF mod 65535 = 1, complement 0xFFFE
+assert s % 65535 == 1 and 65535 - 1 == 0xFFFE
+assert '0xfffe' in solution(reply) and '0xfffe' not in visible(reply)
+
+@@@@ hands-on-sliding-window-toy-sender
+situation: hands-on
+topic: TCP flow control and the sliding window
+voice: terse
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"must":["send 3"],"mustNot":["timeout 2\\n"],"askMustNot":["next_seq = base"]}
+@@ tutor
+A sliding-window sender may have at most `window` unacknowledged packets in flight. It keeps two counters: `base`, the oldest unacknowledged packet, and `next_seq`, the next one to send. It may send while `next_seq < base + window`, and each ACK moves `base` forward, which opens room for one more.
+
+<note>Sliding-window sender: send while next_seq < base + window. The ACK for packet k moves base to k + 1.</note>
+
+<ask type="predict">The window is 3 and packets are numbered from 0. Packets 0, 1 and 2 are in flight when the ACK for packet 0 arrives. Which packet can the sender transmit now, and which packets are in flight afterwards?</ask>
+@@ learner answer sure
+3. then 1 2 3 in flight
+@@ reply
+<grade verdict="correct" score="1">Right: the ACK moves base to 1, so the window covers "1 2 3" and packet 3 is the one new packet it admits.</grade>
+
+The same rule as a program, with a window of 2 and every packet acknowledged in order:
+
+```python
+def run(total, window):
+    base, next_seq = 0, 0
+    while base < total:
+        while next_seq < min(base + window, total):
+            print(f'send {next_seq}')
+            next_seq += 1
+        print(f'ack {base}')
+        base += 1
+
+run(4, 2)
+```
+
+```
+send 0
+send 1
+ack 0
+send 2
+ack 1
+send 3
+ack 2
+ack 3
+```
+
+<solution>def run(total, window, lost=None): in the loop, after the sends: if base == lost: print(f'timeout {base}'); lost = None; next_seq = base; else: print(f'ack {base}'); base += 1. run(5, 3, lost=2) prints: send 0, send 1, send 2, ack 0, send 3, ack 1, send 4, timeout 2, send 2, send 3, send 4, ack 2, ack 3, ack 4. Packets 3 and 4 are sent twice.</solution>
+
+<ask type="code" lang="python">Add a parameter `lost` to `run`: the first transmission of that packet never arrives. When the lost packet becomes the oldest unacknowledged one, print `timeout` with its number instead of an ACK, and have the sender go back and resend from that packet (go-back-N); the second time it gets through. Run `run(5, 3, lost=2)` and note which packets are sent twice.</ask>
+@@ verify
+# the learner's answer: window 3, ACK for 0 arrives
+base, window = 0 + 1, 3
+assert list(range(base, base + window)) == [1, 2, 3]
+# the snippet's output is what the reply shows
+out = run_py(block(reply, 'python'))
+assert out.split('\n')[:8] == ['send 0', 'send 1', 'ack 0', 'send 2', 'ack 1', 'send 3', 'ack 2', 'ack 3'], out
+# never more than `window` packets in flight in that run
+flight = peak = 0
+for line in out.strip().splitlines():
+    flight += 1 if line.startswith('send') else -1
+    peak = max(peak, flight)
+assert peak == 2 and flight == 0
+# reference solution for the task set
+ref = '''
+def run(total, window, lost=None):
+    base, next_seq = 0, 0
+    while base < total:
+        while next_seq < min(base + window, total):
+            print(f'send {next_seq}')
+            next_seq += 1
+        if base == lost:
+            print(f'timeout {base}')
+            lost = None
+            next_seq = base
+        else:
+            print(f'ack {base}')
+            base += 1
+run(5, 3, lost=2)
+'''
+got = run_py(ref).strip().splitlines()
+want = 'send 0, send 1, send 2, ack 0, send 3, ack 1, send 4, timeout 2, send 2, send 3, send 4, ack 2, ack 3, ack 4'
+assert got == want.split(', '), got
+assert want in solution(reply)
+assert sorted(p for p in ('send 2', 'send 3', 'send 4') if got.count(p) == 2) == ['send 2', 'send 3', 'send 4']
+
+@@@@ summary-quiz-http-caching
+situation: summary
+topic: HTTP caching headers and CDNs
+mode: quiz
+options: {"length":3}
+voice: plain
+level: medium
+expect: {"verdict":"correct","must":["304","If-None-Match"]}
+@@ tutor
+**Question 1 of 3**
+
+<ask type="choice" options="It uses its cached copy without contacting the server|It sends a conditional request and waits for a 304|It downloads the whole image again with a 200|It asks the CDN edge whether its copy is still fresh">A browser fetches an image at 12:00 and the response carries `Cache-Control: max-age=600`. The page needs the image again at 12:08. What does the browser do?</ask>
+@@ learner answer sure
+It uses its cached copy without contacting the server. 8 minutes is 480 s, under the 600.
+@@ tutor
+<grade verdict="correct" score="1">"8 minutes is 480 s, under the 600" is the right test: the copy is still fresh, so no request is sent at all.</grade>
+
+**Question 2 of 3**
+
+<ask type="short">The cached response also carried the header `ETag: "v7"`. At 12:15 the page needs the image once more. What request does the browser send, and what does the server answer if the image has not changed?</ask>
+@@ learner answer sure
+It's expired by then (900 s) so the browser does a normal GET again and gets a 200 with the whole image.
+@@ tutor
+<grade verdict="partial" score="0.4">"It's expired by then (900 s)" is right, but a stale copy that has an ETag is revalidated, not fetched afresh. The browser sends a GET with `If-None-Match: "v7"`; if the image is unchanged the server answers 304 Not Modified with no body, and the browser reuses its copy.</grade>
+
+<card>A cached response is stale and has an ETag. What does the browser send, and what comes back if nothing changed? :: A conditional GET with If-None-Match set to the ETag. The server replies 304 Not Modified with no body and the cached copy is reused.</card>
+
+**Question 3 of 3**
+
+<ask type="short">A response carries `Cache-Control: max-age=60, s-maxage=3600`. For how long may a browser treat it as fresh, and for how long may a CDN edge?</ask>
+@@ learner answer sure
+Browser 60 s, CDN 3600 s. s-maxage is for shared caches and overrides max-age there.
+@@ reply
+<grade verdict="correct" score="1">Right on both: "s-maxage is for shared caches and overrides max-age there", so the edge may serve it for an hour while each browser rechecks after a minute.</grade>
+
+<summary>**Score:** 2 of 3 right, 1 partly right.
+
+**Strengths:** freshness arithmetic with max-age (480 s against 600), and the split between a browser's lifetime and a shared cache's with s-maxage.
+
+**To fix:** stale does not mean "download again". A stale copy with an ETag is revalidated with If-None-Match, and an unchanged resource costs a 304 with no body rather than a full 200.
+
+**Review next:** conditional requests (ETag with If-None-Match, Last-Modified with If-Modified-Since), then how a CDN is told to drop a cached object before its lifetime ends.</summary>
+@@ verify
+from datetime import datetime
+t = lambda s: datetime.strptime(s, '%H:%M')
+age1 = (t('12:08') - t('12:00')).total_seconds()
+age2 = (t('12:15') - t('12:00')).total_seconds()
+assert age1 == 480 < 600 and age2 == 900 > 600
+# the marks given in the history and the reply, as the summary counts them
+import re
+marks = re.findall(r'<grade verdict="(\w+)"', tutor[1] + tutor[2] + reply)
+assert marks == ['correct', 'partial', 'correct']
+assert '2 of 3 right, 1 partly right' in reply
+assert 60 < 3600 and 3600 == 60 * 60
+
+@@@@ summary-udp-versus-tcp
+situation: summary
+topic: UDP versus TCP
+voice: typos
+level: easy
+expect: {"verdict":"correct","must":["5400","6000","in order|in-order"]}
+@@ tutor
+**Problem 4 · mixed**
+
+A voice call sends one packet of audio every 20 ms. Packet 7 is lost in the network; packets 8, 9 and 10 arrive on time.
+
+<solution>TCP delivers in order: packets 8, 9 and 10 are held in the receive buffer until packet 7 has been retransmitted and arrives, so the audio stalls and then comes late. UDP hands each packet over on arrival, so the call plays on and covers one 20 ms gap.</solution>
+
+<ask type="explain">If the call ran over TCP, what would happen to the audio in packets 8, 9 and 10 while packet 7 is missing? Say why UDP suits this call better.</ask>
+@@ learner answer unsure
+tcp will resend packet 7 and udp wont. resending is a waste for audio becuase its too late by then, so udp is better
+@@ tutor
+<grade verdict="partial" score="0.5">"resending is a waste for audio becuase its too late by then" is right about the retransmission, but it leaves out what happens to 8, 9 and 10. TCP delivers bytes strictly in order, so those three sit in the receiver's buffer, already arrived, until the resent packet 7 comes in. That stall is the damage, more than the wasted resend.</grade>
+
+With UDP each packet is handed to the application as it arrives, so the call plays 8, 9 and 10 on time and covers a single 20 ms gap.
+
+<card>Over TCP, what happens to data that arrives after a lost segment? :: It waits in the receiver's buffer and is not delivered to the application until the missing segment has been retransmitted, because TCP delivers in order.</card>
+
+<note>TCP: reliable and in order, so one loss delays everything behind it. UDP: each datagram is delivered on arrival, or not at all; the application decides what to do about gaps.</note>
+
+**Problem 5 · mixed**
+
+A UDP header is 8 bytes and a TCP header without options is 20 bytes. An application sends 50 messages of 100 bytes each, one message per packet. Ignoring TCP's handshake and its ACK-only packets, how many bytes of transport-layer header plus payload are sent in total with UDP, and with TCP?
+
+<solution>UDP: 50 × (8 + 100) = 5400 bytes. TCP: 50 × (20 + 100) = 6000 bytes.</solution>
+<check lang="python">
+assert 50 * (8 + 100) == 5400 and 50 * (20 + 100) == 6000
+</check>
+
+<ask type="problem">The two totals, with your working.</ask>
+@@ learner answer sure
+udp 50 x 108 = 5400, tcp 50 x 120 = 6000. so tcp is 600 bytes more
+@@ reply
+<grade verdict="correct" score="1">Both totals are right: "udp 50 x 108 = 5400, tcp 50 x 120 = 6000", and the difference is the 12 extra header bytes on each of the 50 packets.</grade>
+
+<summary>**What you learned:** what each protocol's header costs (8 bytes against at least 20, so 5400 against 6000 bytes here), and that UDP does not retransmit, which suits audio that is useless once it is late.
+
+**Still shaky:** in-order delivery. In the voice problem you had the retransmission but not its consequence: packets that arrive after a loss wait in TCP's buffer until the gap is filled.
+
+**Review next:** head-of-line blocking in TCP, then how QUIC provides reliability on top of UDP without one loss stalling every stream.</summary>
+@@ verify
+assert 8 + 100 == 108 and 20 + 100 == 120
+assert 50 * 108 == 5400 and 50 * 120 == 6000 and 6000 - 5400 == 600 == 50 * 12
+assert '5400' in learner and '6000' in learner
+import re
+assert re.findall(r'<grade verdict="(\w+)"', tutor[1] + reply) == ['partial', 'correct']

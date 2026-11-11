@@ -1,0 +1,429 @@
+@@@@ open-branch-prediction
+situation: open
+topic: Branch prediction
+voice: plain
+level: medium
+expect: {"must":["guess"],"askMustNot":["mispredict","unsorted (run|array|one) (is|takes|will)"]}
+noverify: an opening; the cycle figure is hedged as typical and the question's answer is not stated
+@@ reply
+**Why this matters**
+
+A pipelined processor fetches the instructions after a conditional branch several cycles before it knows which way the branch goes, so it guesses, and a wrong guess throws away the work done since. On current desktop and server cores that is typically somewhere around 15 to 20 cycles each time. Branch prediction is why branch-free comparisons appear in database engines, parsers and sorting code, and why compilers turn some `if` statements into conditional moves. It is also where speculative execution starts, and with it the Spectre class of attacks disclosed in 2018.
+
+<ask type="predict">A loop adds up the elements of a large array that are at least 128; the elements are random bytes from 0 to 255. You run it on the array as it is, then on a sorted copy. Both runs perform the same additions. Which run do you expect to take longer, and what inside the processor would cause the difference?</ask>
+
+@@@@ open-quiz-set-associative-sets
+situation: open
+topic: Set-associative caches
+mode: quiz
+options: {"length":6}
+voice: plain
+level: medium
+expect: {"askMustNot":["\\b64\\b","\\b6 (index )?bits","six"],"mustNot":["Why this matters"]}
+@@ reply
+**Question 1 of 6**
+
+<ask type="short">A cache has 256 lines in total and is 4-way set-associative, so each set holds 4 lines. How many sets does it have, and how many index bits does an address need to choose one of them? Give the division you did.</ask>
+@@ verify
+import math
+sets = 256 // 4
+assert sets == 64 and math.log2(sets) == 6
+# the answer is not in what the learner reads
+assert '64' not in reply and '256 lines' in reply and '4-way' in reply
+
+@@@@ open-prior-tlb-reach
+situation: open-prior
+topic: TLBs and TLB reach
+voice: plain
+level: medium
+before: {"prior":[{"topic":"TLBs and TLB reach","daysAgo":4,"finished":false,"plan":["What a TLB entry holds","TLB reach","Huge pages"],"right":3,"partly":1,"wrong":1,"missed":["A TLB has 32 entries and pages are 4 KiB. How much memory can it map at once?"],"open":"Why do huge pages raise the reach without adding entries?"}]}
+expect: {"must":["reach"],"askMustNot":["512","0\\.5 ?MiB","half a"]}
+@@ reply
+**Why this matters**
+
+Every memory access needs its virtual address translated, and the TLB is the small cache of recent translations that lets most accesses skip the slow lookup. Its reach, the amount of memory it can map at one time, decides whether a database buffer pool, a large hash table or a tensor in an ML job runs with its translations to hand or stalls on TLB misses. You already have what an entry holds; reach was the gap last time, and huge pages follow directly from it.
+
+<ask type="short">A TLB has 128 entries and each entry maps one 4 KiB page. What is the largest amount of memory a program can be using while every one of its translations sits in the TLB?</ask>
+@@ verify
+# the answer to the new question, which the reply must not state
+assert 128 * 4 == 512
+assert '512' not in reply
+# the question is not the stored one: different entry count
+missed = ex['before']['prior'][0]['missed'][0]
+assert '32 entries' in missed and '128 entries' in reply and 32 * 4 == 128
+
+@@@@ open-recall-hamming-check-bits
+situation: open-recall
+topic: Hamming codes
+voice: plain
+level: medium
+before: {"recall":[{"prompt":"How many check bits does a Hamming code need to correct any single-bit error in 11 data bits? Give the condition you used.","topic":"Hamming codes","reviews":1,"lapses":1}]}
+expect: {"askMustNot":["\\b4\\b","\\b15\\b","2\\^r","four"]}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="short">How many check bits does a Hamming code need to correct any single-bit error in 11 data bits? Give the condition you used.</ask>
+
+@@@@ correct-cpu-time-harder-probe
+situation: after-correct
+topic: The CPU performance equation
+options: {"difficulty":"hard"}
+voice: terse
+level: hard
+expect: {"verdict":"correct","must":["0\\.75 s"],"askMustNot":["1\\.07","1\\.067","16/15","0\\.8 s","slower","longer"],"askTypes":["short","predict","explain","choice"],"forbid":["plan"]}
+@@ tutor
+**Why this matters**
+
+The CPU performance equation splits a program's run time into three factors: how many instructions it executes, how many clock cycles each one takes on average (CPI), and how long a cycle lasts. Any claim that a processor, a compiler flag or a rewrite is faster is a claim about those factors, and the equation is how you check whether a gain in one was paid for in another. It is how benchmark results such as SPEC are read and why a higher clock rate alone does not make a faster machine. Pipelining and cache design, which come next, are each an attack on one factor.
+
+<ask type="short">A program executes $2 \times 10^9$ instructions on a machine with an average CPI of 1.5 and a 4 GHz clock. What is its CPU time?</ask>
+@@ learner answer sure
+0.75 s. 2e9 × 1.5 = 3e9 cycles, at 4e9 cycles/s
+@@ reply
+<grade verdict="correct" score="1">"2e9 × 1.5 = 3e9 cycles, at 4e9 cycles/s" is the whole chain: instructions times CPI gives cycles, and dividing by the clock rate gives 0.75 s.</grade>
+
+Now a case where two of the factors move at once.
+
+<ask type="short">A new compiler setting makes the same program execute 20% fewer instructions, but the instructions it now picks are costlier, and the average CPI goes from 1.5 to 2.0. The clock is unchanged. What is the new CPU time divided by the old one?</ask>
+@@ verify
+old = 2e9 * 1.5 / 4e9
+assert old == 0.75 and 2e9 * 1.5 == 3e9
+new = 2e9 * 0.8 * 2.0 / 4e9
+assert approx(new, 0.8) and approx(new / old, 16 / 15) and round(new / old, 3) == 1.067
+# the ratio does not depend on the instruction count or the clock
+assert approx(0.8 * 2.0 / 1.5, 16 / 15)
+assert '1.07' not in reply and '16/15' not in reply
+
+@@@@ correct-sign-extension-plan
+situation: after-correct
+topic: Sign extension
+voice: wordy
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"need":["plan","note"],"must":["0xFFF4","11111001"],"askMustNot":["-11","−11","111111110101","FF5"],"askTypes":["problem"]}
+@@ tutor
+<ask type="short">The byte 0xF4 holds a signed two's complement value. It is copied into a 16-bit signed variable. Write the 16-bit pattern in hex, and say how the new top byte was chosen.</ask>
+@@ learner answer sure
+So 0xF4 has its top bit set, which means it's negative, it's -12 if I work it out (244 - 256). To keep it -12 in 16 bits you fill the new byte with copies of the sign bit, so all ones, and you get 0xFFF4. If you filled it with zeros you'd get 0x00F4 which is +244, not the same value at all.
+@@ reply
+<grade verdict="correct" score="1">"you fill the new byte with copies of the sign bit" is the rule, and 0xFFF4 is −12 in 16 bits, as your comparison with 0x00F4 = 244 shows.</grade>
+
+<plan>
+- Why copying the sign bit keeps the value
+- Zero extension, and which of the two C picks
+- Widening the narrow fields inside an instruction
+</plan>
+
+In an $n$-bit two's complement pattern the top bit has weight $-2^{n-1}$ and every other bit a positive weight. Take the 4-bit pattern 1001: $-8 + 1 = -7$. Widened to 8 bits it is 11111001. The old low bits 001 still give $+1$. The five ones above them give $-128 + 64 + 32 + 16 + 8 = -8$, exactly the weight the old top bit had, so the value is still $-7$. For a value that is not negative the copies are zeros and add nothing.
+
+<note>Sign extension: to widen a two's complement value, copy its top bit into every new bit. The ones from the old top bit upwards add up to the old top bit's weight: $-128 + 64 + 32 + 16 + 8 = -8$ when 4 bits become 8.</note>
+
+**Problem 1 · warm-up**
+
+The 6-bit two's complement field 110101 is widened to 12 bits. Give the 12-bit pattern and its value in decimal.
+
+<solution>The top bit is 1, so six ones go in front: 111111110101 (0xFF5). Value: −32 + 16 + 4 + 1 = −11, the same before and after.</solution>
+<check lang="python">
+def signed(bits):
+    return int(bits, 2) - (1 << len(bits)) * (bits[0] == '1')
+wide = '110101'[0] * 6 + '110101'
+assert wide == '111111110101' and int(wide, 2) == 0xFF5
+assert signed('110101') == signed(wide) == -11
+</check>
+
+<ask type="problem">The 12-bit pattern and the decimal value, with your working.</ask>
+@@ verify
+def signed(bits):
+    return int(bits, 2) - (1 << len(bits)) * (bits[0] == '1')
+# the probe and the learner's figures
+assert signed(format(0xF4, '08b')) == -12 == 244 - 256
+assert signed(format(0xFFF4, '016b')) == -12 and 0x00F4 == 244
+# the worked example in the reply
+assert signed('1001') == -7 == -8 + 1
+assert signed('11111001') == -7 and -128 + 64 + 32 + 16 + 8 == -8
+assert '1' * 4 + '1001' == '11111001'
+# the problem set
+assert signed('110101') == -11 == -32 + 16 + 4 + 1
+assert '111111110101' in solution(reply) and '111111110101' not in visible(reply)
+
+@@@@ correct-refresh-set-associative-tag-storage
+situation: after-correct
+topic: Set-associative caches
+options: {"refresh":true}
+voice: terse
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"must":["256 sets"],"askMustNot":["\\b36\\b","18432","2304"],"askTypes":["problem"]}
+@@ tutor
+**Problem 1**
+
+A 2-way set-associative cache holds 8 KiB of data in 16-byte lines. Addresses are 32 bits. Give the widths of the offset, index and tag fields.
+
+<solution>Offset: 16 = 2^4, so 4 bits. Lines: 8192 / 16 = 512. Sets: 512 / 2 = 256 = 2^8, so 8 index bits. Tag: 32 − 8 − 4 = 20 bits.</solution>
+<check lang="python">
+import math
+lines = 8 * 1024 // 16; sets = lines // 2
+offset = int(math.log2(16)); index = int(math.log2(sets))
+assert (lines, sets, offset, index, 32 - index - offset) == (512, 256, 4, 8, 20)
+</check>
+
+<ask type="problem">The three widths, with the number of sets.</ask>
+@@ learner answer sure
+offset 4, index 8, tag 20. 512 lines / 2 ways = 256 sets
+@@ reply
+<grade verdict="correct" score="1">"512 lines / 2 ways = 256 sets" is the step that matters: the index picks a set, not a line, so it is 8 bits, and 32 − 8 − 4 leaves the 20-bit tag.</grade>
+
+**Problem 2 · a little harder**
+
+A 32 KiB cache is 8-way set-associative with 64-byte lines, on a machine with 48-bit addresses. Every line stores its own tag. How many bits of tag storage does the whole cache hold?
+
+<solution>Lines: 32768 / 64 = 512. Sets: 512 / 8 = 64 = 2^6, so 6 index bits. Offset: 64 = 2^6, 6 bits. Tag: 48 − 6 − 6 = 36 bits. Tag storage: 512 × 36 = 18432 bits, which is 2304 bytes.</solution>
+<check lang="python">
+import math
+lines = 32 * 1024 // 64; sets = lines // 8
+tag = 48 - int(math.log2(sets)) - int(math.log2(64))
+assert (lines, sets, tag, lines * tag, lines * tag // 8) == (512, 64, 36, 18432, 2304)
+</check>
+
+<ask type="problem">The tag width and the total tag storage in bits, with your working.</ask>
+@@ verify
+# problem 1 and the learner's answer
+assert 8 * 1024 // 16 == 512 and 512 // 2 == 256 == 2**8 and 16 == 2**4 and 32 - 8 - 4 == 20
+# problem 2
+lines = 32 * 1024 // 64
+assert lines == 512 and lines // 8 == 64 == 2**6 and 48 - 6 - 6 == 36 and lines * 36 == 18432 and 18432 // 8 == 2304
+assert '18432' in solution(reply) and '18432' not in visible(reply)
+
+@@@@ correct-recall-gray-sequence
+situation: after-correct
+topic: Gray code
+voice: typos
+level: easy
+before: {"recall":[{"prompt":"What is the 3-bit Gray code sequence, starting from 000?","topic":"Gray code","reviews":2,"lapses":0}]}
+expect: {"verdict":"correct","heading":"Why this matters","must":["one bit"],"askMustNot":["any (of the )?16","sixteen","\\b15\\b","all four"],"askTypes":["short","predict","explain","choice"]}
+@@ tutor
+<ask type="short">What is the 3-bit Gray code sequence, starting from 000?</ask>
+@@ learner answer sure
+000, 001, 011, 010, 110, 111, 101, 100. only one bit flips each time. i rememberd it as the 2 bit one, then the 2 bit one backwards with a 1 stuck infront
+@@ reply
+<grade verdict="correct" score="1">"000, 001, 011, 010, 110, 111, 101, 100" is the sequence, and "only one bit flips each time" is the property that defines it.</grade>
+
+**Why this matters**
+
+Gray code orders binary patterns so that neighbouring values differ in exactly one bit. Absolute rotary encoders use it to report the position of a shaft, asynchronous FIFOs use it for the read and write pointers that cross between two clock domains, and Karnaugh maps use it for their row and column order. In the first two a value is read while it may be changing, by something that cannot wait for it to settle. From here you can build the code for any width and convert to and from binary using XOR alone.
+
+<ask type="predict">A 4-bit position counter in plain binary steps from 7 (0111) to 8 (1000). Its four bits are separate signals that never switch at exactly the same instant. If the counter is read partway through the change, which values could the reader see?</ask>
+@@ verify
+import re
+gray = [format(n ^ (n >> 1), '03b') for n in range(8)]
+assert gray == re.findall(r'\b[01]{3}\b', learner)[:8]
+assert ', '.join(gray) in reply
+flips = lambda a, b: bin(int(a, 2) ^ int(b, 2)).count('1')
+assert all(flips(gray[i], gray[(i + 1) % 8]) == 1 for i in range(8))
+# their construction: the 2-bit code, then the 2-bit code reversed with a 1 in front
+g2 = ['00', '01', '11', '10']
+assert ['0' + g for g in g2] + ['1' + g for g in reversed(g2)] == gray
+# the probe: 7 -> 8 flips all four bits, so any subset of flips (any of the 16 patterns) can be seen
+assert bin(7 ^ 8).count('1') == 4
+assert len({7 ^ m for m in range(16)}) == 16
+
+@@@@ wrong-fixed-point-multiply-scale
+situation: after-wrong
+topic: Fixed-point arithmetic
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","accept":["partial"],"names":["scale|256","960"],"must":["\\b60\\b","3\\.75"],"askMustNot":["\\b480\\b","122880","1\\.875"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+A fixed-point number is an integer with an agreed scale. In Q4.4 the stored integer is the value times $2^4 = 16$: 2.5 is stored as 40 and 1.5 as 24. Addition needs nothing special, because both operands carry the same scale: 40 + 24 = 64, and 64 / 16 = 4.0.
+
+<note>Fixed point: stored integer = value × $2^f$, where $f$ is the number of fraction bits. Q4.4 has $f = 4$, a scale of 16. Stored integers add and subtract directly, because both sides carry the same scale.</note>
+
+**Problem 1 · warm-up**
+
+In Q4.4, 2.5 is stored as 40 and 1.5 as 24. Which integer should be stored for the product 2.5 × 1.5, and how do you get it from 40 and 24?
+
+<solution>40 × 24 = 960 carries the scale twice (16 × 16 = 256). Divide by 16 once, a right shift by 4: 960 >> 4 = 60. As a value, 60 / 16 = 3.75 = 2.5 × 1.5.</solution>
+<check lang="python">
+assert 2.5 * 16 == 40 and 1.5 * 16 == 24
+assert (40 * 24) >> 4 == 60 and 60 / 16 == 2.5 * 1.5
+</check>
+
+<ask type="problem">The stored integer for the product, and the operation that produces it.</ask>
+@@ learner answer sure
+Same as addition, you just work on the stored ints. 40 * 24 = 960, so 960 is what gets stored. It won't fit in 8 bits but that's just overflow, the method is right.
+@@ reply
+<grade verdict="wrong" score="0.2">"40 * 24 = 960, so 960 is what gets stored" misses a step. Each stored integer is its value times 16, so their product is the true product times 16 × 16 = 256, and 960 read back in Q4.4 would be 960 / 16 = 60.0, not 3.75. The fault is the scale, not the width of the register.</grade>
+
+Divide one factor of 16 back out: 960 >> 4 = 60, and 60 / 16 = 3.75, which is 2.5 × 1.5 and fits in 8 bits. Addition needed no correction because two numbers at scale 16 add to a sum at scale 16; multiplied, they give a product at scale 256.
+
+<card>In fixed point with f fraction bits, what must follow the multiplication of two stored integers? :: A right shift by f. The raw product carries the scale twice (2^f × 2^f), so one factor of 2^f has to be divided out.</card>
+
+<note>Fixed-point multiply: (a × b) >> f. The raw product has 2f fraction bits; the shift returns it to f. In Q4.4: (40 × 24) >> 4 = 60, which is 3.75.</note>
+
+**Problem 2 · same idea**
+
+In Q8.8 the scale is $2^8 = 256$: 0.75 is stored as 192 and 2.5 as 640. Which integer is stored for their product?
+
+<solution>192 × 640 = 122880, at scale 256 × 256. Shift right by 8: 122880 >> 8 = 480. As a value, 480 / 256 = 1.875 = 0.75 × 2.5.</solution>
+<check lang="python">
+assert 0.75 * 256 == 192 and 2.5 * 256 == 640
+assert 192 * 640 == 122880 and 122880 >> 8 == 480 and 480 / 256 == 0.75 * 2.5 == 1.875
+</check>
+
+<ask type="problem">The stored integer, with the raw product and the correction you applied.</ask>
+@@ verify
+# the tutor's explanation
+assert 2.5 * 16 == 40 and 1.5 * 16 == 24 and 40 + 24 == 64 and 64 / 16 == 4.0
+# the learner's figure and what it would read back as
+assert 40 * 24 == 960 and 960 / 16 == 60.0 and 960 > 255
+# the correction
+assert 16 * 16 == 256 and 960 >> 4 == 60 and 60 / 16 == 3.75 == 2.5 * 1.5 and 60 < 256
+# problem 2
+assert (192 * 640) >> 8 == 480 and 480 / 256 == 1.875
+assert '480' in solution(reply) and '480' not in visible(reply)
+
+@@@@ wrong-cpi-unweighted-average
+situation: after-wrong
+topic: The CPU performance equation
+voice: plain
+level: easy
+expect: {"verdict":"wrong","names":["third|equal share|weigh","half"],"must":["170","1\\.7\\b"],"askMustNot":["1\\.95","195"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+**Problem 2 · same level**
+
+On one processor a program's instructions fall into three classes: 50% are arithmetic at 1 cycle each, 30% are loads and stores at 2 cycles each, and 20% are branches at 3 cycles each. What is the program's average CPI?
+
+<solution>Weight each class by its share: 0.5 × 1 + 0.3 × 2 + 0.2 × 3 = 0.5 + 0.6 + 0.6 = 1.7 cycles per instruction.</solution>
+<check lang="python">
+assert (50 * 1 + 30 * 2 + 20 * 3) / 100 == 1.7
+</check>
+
+<ask type="problem">The average CPI, with the sum you computed.</ask>
+@@ learner answer sure
+The three classes take 1, 2 and 3 cycles, so the average is (1 + 2 + 3) / 3 = 2 cycles per instruction.
+@@ reply
+<grade verdict="wrong" score="0.1">"(1 + 2 + 3) / 3 = 2" averages the three classes as if each made up a third of the program. Half of the instructions are the 1-cycle kind, so that class has to count for more than the others.</grade>
+
+Count the cycles for 100 instructions: 50 × 1 + 30 × 2 + 20 × 3 = 50 + 60 + 60 = 170 cycles, so the average is 170 / 100 = 1.7. With fractions it is the same sum: 0.5 × 1 + 0.3 × 2 + 0.2 × 3 = 1.7.
+
+<card>How is average CPI found from an instruction mix? :: Weight each class's cycle count by the fraction of instructions in that class and add: CPI = Σ fraction × cycles. A plain mean of the cycle counts is only right when the classes are equally common.</card>
+
+<note>Average CPI = Σ (fraction of instructions in class i) × (cycles for class i). The mix matters as much as the cycle counts: 50% at 1, 30% at 2 and 20% at 3 gives 1.7, not 2.</note>
+
+**Problem 3 · same idea**
+
+Another program on the same processor: 60% of its instructions take 1 cycle, 25% take 3 cycles and 15% take 4 cycles. What is its average CPI?
+
+<solution>0.6 × 1 + 0.25 × 3 + 0.15 × 4 = 0.6 + 0.75 + 0.6 = 1.95 cycles per instruction (195 cycles per 100 instructions).</solution>
+<check lang="python">
+assert (60 * 1 + 25 * 3 + 15 * 4) / 100 == 1.95
+</check>
+
+<ask type="problem">The average CPI, with each class's contribution.</ask>
+@@ verify
+# the learner's figure
+assert (1 + 2 + 3) / 3 == 2
+# the correction
+assert 50 * 1 + 30 * 2 + 20 * 3 == 170 and (50, 60, 60) == (50 * 1, 30 * 2, 20 * 3) and 170 / 100 == 1.7
+assert approx(0.5 * 1 + 0.3 * 2 + 0.2 * 3, 1.7)
+# problem 3
+assert 60 * 1 + 25 * 3 + 15 * 4 == 195 and approx(0.6 * 1 + 0.25 * 3 + 0.15 * 4, 1.95)
+assert approx(0.25 * 3, 0.75) and approx(0.15 * 4, 0.6)
+assert '1.95' in solution(reply) and '1.95' not in visible(reply)
+
+@@@@ wrong-quiz-nan-equals-itself
+situation: after-wrong
+topic: Floating-point special values
+mode: quiz
+voice: confused
+level: medium
+expect: {"verdict":"wrong","names":["NaN","unordered|false"],"must":["NaN","Question 4 of 8"],"askMustNot":["evaluates to 1","not the same","differ"]}
+@@ tutor
+**Question 3 of 8**
+
+<ask type="predict">In C on an IEEE 754 machine, `double zero = 0.0; double x = zero / zero;` runs without stopping the program. What does `x == x` evaluate to, and why?</ask>
+@@ learner answer unsure
+1? x is the same variable on both sides so the bits are identical, has to be equal. unless dividing by zero gives garbage, i'm not sure what's in x
+@@ reply
+<grade verdict="wrong" score="0.2">"the bits are identical, has to be equal" is the assumption that fails. `zero / zero` gives NaN, not garbage, and `==` on doubles does not compare bits: IEEE 754 treats NaN as unordered, so `==`, `<`, `>`, `<=` and `>=` are all false when either operand is NaN, even NaN against itself. `x == x` is 0.</grade>
+
+<card>What does x == x give when x is NaN, and why? :: False (0 in C). NaN is unordered: ==, <, >, <= and >= are all false whenever an operand is NaN, including NaN compared with itself.</card>
+
+**Question 4 of 8**
+
+<ask type="short">`x` is still NaN. What does `!(x < 1.0)` evaluate to, and does `x >= 1.0` give the same value? Say why.</ask>
+@@ verify
+src = r'''
+#include <stdio.h>
+#include <math.h>
+int main(void) {
+    double zero = 0.0;
+    double x = zero / zero;
+    double y = x;
+    printf("%d %d %d %d %d %d\n", isnan(x) != 0, x == y, x < y, x > y, x <= y, x >= y);
+    printf("%d %d\n", !(x < 1.0), x >= 1.0);
+    return 0;
+}
+'''
+out, err, cerr, code = run_c_full(src, 'c')
+assert code == 0 and not cerr.strip() and not err.strip(), (cerr, err)
+lines = out.strip().split('\n')
+# zero / zero is NaN and every ordered comparison of it with itself is false
+assert lines[0] == '1 0 0 0 0 0', lines
+# the next question: !(x < 1.0) is 1 while x >= 1.0 is 0
+assert lines[1] == '1 0', lines
+import math
+assert (math.nan == math.nan) is False
+
+@@@@ wrong-carry-overflow-same-flag
+situation: after-wrong
+topic: Carry and overflow flags
+voice: overconfident
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["signed","V = 0"],"must":["C = 0","V = 1","−112|-112"],"need":["plan","note"],"askMustNot":["0x20\\b","−224|-224"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+<ask type="short">An 8-bit adder computes 0xF0 + 0x20. Which of the carry flag (C) and the overflow flag (V) does it set, and what does each one tell you here?</ask>
+@@ learner answer sure
+Both get set. The real sum is 0x110 which needs 9 bits, so there's a carry out, C = 1. And a result that doesn't fit in the register is what overflow means, so V = 1 too. They're basically the same flag.
+@@ reply
+<grade verdict="partial" score="0.4">"there's a carry out, C = 1" is right. "They're basically the same flag" is not: V reports whether the result is wrong when the bytes are read as signed, and read that way this sum is −16 + 32 = 16, which fits, so V = 0.</grade>
+
+<plan>
+- What C and V each report
+- Finding V from the signs of the operands
+- Which flag a comparison should test
+</plan>
+
+The adder produces one bit pattern; each flag says whether that pattern is the true sum under one reading. C = 1 when the unsigned sum is above 255. V = 1 when the signed sum is outside −128 to 127. Take 0x70 + 0x20 = 0x90. Unsigned: 112 + 32 = 144 fits, so C = 0. Signed: 144 does not fit, and 0x90 reads as −112, so V = 1. That is your case reversed.
+
+<card>What do the carry and overflow flags each report after an add? :: Carry: the result read as unsigned did not fit (a carry out of the top bit). Overflow: the result read as signed did not fit. Either can be set without the other.</card>
+
+<note>Carry (C): the sum read as unsigned did not fit. Overflow (V): the sum read as signed did not fit. 0xF0 + 0x20 sets C = 1, V = 0; 0x70 + 0x20 sets C = 0, V = 1.</note>
+
+**Problem 1 · warm-up**
+
+An 8-bit adder computes 0x90 + 0x90. Give the 8-bit result, C and V.
+
+<solution>0x90 + 0x90 = 0x120, so the 8-bit result is 0x20 and C = 1 (unsigned 144 + 144 = 288 > 255). Signed: −112 + −112 = −224, below −128, so V = 1; the result reads as +32.</solution>
+<check lang="python">
+def add8(a, b):
+    s = a + b
+    r = s & 0xFF
+    sg = lambda x: x - 256 if x & 0x80 else x
+    return r, int(s > 0xFF), int(not -128 <= sg(a) + sg(b) <= 127)
+assert add8(0x90, 0x90) == (0x20, 1, 1)
+</check>
+
+<ask type="problem">The result in hex and both flags, with the unsigned and the signed sum.</ask>
+@@ verify
+def add8(a, b):
+    s = a + b
+    sg = lambda x: x - 256 if x & 0x80 else x
+    return s & 0xFF, int(s > 0xFF), int(not -128 <= sg(a) + sg(b) <= 127), sg(a), sg(b), sg(s & 0xFF)
+# the probe: 0xF0 + 0x20
+r, c, v, sa, sb, sr = add8(0xF0, 0x20)
+assert 0xF0 + 0x20 == 0x110 and (r, c, v) == (0x10, 1, 0) and (sa, sb, sr) == (-16, 32, 16)
+# the worked example: 0x70 + 0x20
+r, c, v, sa, sb, sr = add8(0x70, 0x20)
+assert (r, c, v) == (0x90, 0, 1) and (sa, sb) == (112, 32) and 112 + 32 == 144 and sr == -112
+# the problem set
+r, c, v, sa, sb, sr = add8(0x90, 0x90)
+assert (r, c, v) == (0x20, 1, 1) and sa == -112 and sa + sb == -224 and 144 + 144 == 288 and sr == 32
+assert '0x20' in solution(reply)
