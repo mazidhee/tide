@@ -7,30 +7,27 @@
 import type { Activation, DatasetName } from './mlp'
 import type { OptimiserName, SurfaceName } from './optim'
 
-export type SimKind = 'neural-net' | 'attention' | 'gradient-descent' | 'softmax'
+import type { BlockchainSpec } from './chain'
+import type { BTreeSpec } from './btree'
+import type { CpuSpec } from './cpu'
+import type { HashTableSpec } from './hashTable'
+import type { PlotSpec } from './plotExpr'
+import type { RaftSpec } from './raft'
+import type { TokeniserSpec } from './bpe'
+import { parseBlockchainSpec } from './chain'
+import { parseBTreeSpec } from './btree'
+import { parseCpuSpec } from './cpu'
+import { parseHashTableSpec } from './hashTable'
+import { parsePlotSpec } from './plotExpr'
+import { parseRaftSpec } from './raft'
+import { parseTokeniserSpec } from './bpe'
+import { int, num, onlyVerbs, parseBase as base, pick, text, TOUR_LIMITS, type Raw, type SimBase } from './specUtil'
+import { SIM_KINDS, type SimKind } from '@shared/sims'
 
-/** What a tour step may do to the simulation so the picture matches the words */
-export interface TourAction {
-  /** Advance this many steps (training batches, optimiser steps) */
-  run?: number
-  /** true pauses, false plays */
-  pause?: boolean
-  /** Select sample or token n, counted from 1 */
-  sample?: number
-}
+export type { SimKind }
+export type { TourAction, TourStep } from './specUtil'
 
-export interface TourStep {
-  /** The named part to point at; '' or an unknown name shows the caption alone */
-  at: string
-  say: string
-  do?: TourAction
-}
-
-interface Base {
-  title: string
-  seed: number
-  tour: TourStep[]
-}
+type Base = SimBase
 
 export interface NeuralNetSpec extends Base {
   kind: 'neural-net'
@@ -75,7 +72,18 @@ export interface SoftmaxSpec extends Base {
   temperature: number
 }
 
-export type SimSpec = NeuralNetSpec | AttentionSpec | GradientDescentSpec | SoftmaxSpec
+export type SimSpec =
+  | NeuralNetSpec
+  | AttentionSpec
+  | GradientDescentSpec
+  | SoftmaxSpec
+  | RaftSpec
+  | BTreeSpec
+  | HashTableSpec
+  | CpuSpec
+  | TokeniserSpec
+  | BlockchainSpec
+  | PlotSpec
 
 export const LIMITS = {
   hiddenLayers: 3,
@@ -88,58 +96,11 @@ export const LIMITS = {
   temperature: [0.1, 5] as const,
   logits: 8,
   logit: 8,
-  tour: 12,
-  run: 5000
+  tour: TOUR_LIMITS.steps,
+  run: TOUR_LIMITS.run
 }
 
 export const RATES = [0.003, 0.01, 0.03, 0.1, 0.3, 1]
-
-type Raw = Record<string, unknown>
-
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
-
-function num(v: unknown, fallback: number, lo: number, hi: number): number {
-  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN
-  return Number.isFinite(n) ? clamp(n, lo, hi) : fallback
-}
-
-const int = (v: unknown, fallback: number, lo: number, hi: number) => Math.round(num(v, fallback, lo, hi))
-
-function pick<T extends string>(v: unknown, options: readonly T[], fallback: T, aliases: Record<string, T> = {}): T {
-  if (typeof v !== 'string') return fallback
-  const key = v.trim().toLowerCase().replace(/[\s_]+/g, '-')
-  if ((options as readonly string[]).includes(key)) return key as T
-  return aliases[key] ?? fallback
-}
-
-const text = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '')
-
-function parseTour(v: unknown): TourStep[] {
-  if (!Array.isArray(v)) return []
-  const steps: TourStep[] = []
-  for (const item of v) {
-    if (steps.length >= LIMITS.tour) break
-    if (!item || typeof item !== 'object') continue
-    const raw = item as Raw
-    const say = text(raw.say, 280)
-    if (!say) continue
-    const step: TourStep = { at: text(raw.at, 40).toLowerCase().replace(/\s+/g, ''), say }
-    if (raw.do && typeof raw.do === 'object' && !Array.isArray(raw.do)) {
-      const d = raw.do as Raw
-      const action: TourAction = {}
-      if (d.run !== undefined) action.run = int(d.run, 0, 0, LIMITS.run)
-      if (typeof d.pause === 'boolean') action.pause = d.pause
-      if (d.sample !== undefined) action.sample = int(d.sample, 1, 1, 400)
-      if (Object.keys(action).length) step.do = action
-    }
-    steps.push(step)
-  }
-  return steps
-}
-
-function base(raw: Raw): Base {
-  return { title: text(raw.title, 120), seed: int(raw.seed, 1, 0, 999999), tour: parseTour(raw.tour) }
-}
 
 function neuralNet(raw: Raw): NeuralNetSpec {
   // Accepts the full list [2, 4, 4, 1] or just the hidden layers
@@ -211,6 +172,28 @@ function softmaxSpec(raw: Raw): SoftmaxSpec {
   }
 }
 
+/** The first four kinds take no tour verbs of their own */
+const plain = <S extends SimBase>(spec: S | null): S | null => (spec ? onlyVerbs(spec, []) : null)
+
+const KIND_ALIASES: Record<string, SimKind> = {
+  'neural-network': 'neural-net',
+  mlp: 'neural-net',
+  'self-attention': 'attention',
+  btree: 'b-tree',
+  'b+tree': 'b-tree',
+  hashtable: 'hash-table',
+  'hash-map': 'hash-table',
+  hashmap: 'hash-table',
+  tokenizer: 'tokeniser',
+  bpe: 'tokeniser',
+  'register-machine': 'cpu',
+  chain: 'blockchain',
+  'block-chain': 'blockchain',
+  function: 'plot',
+  graph: 'plot',
+  consensus: 'raft'
+}
+
 /** Turns the body of a ```sim block into a checked spec, or null when it isn't one (yet) */
 export function parseSim(source: string): SimSpec | null {
   let raw: unknown
@@ -221,14 +204,31 @@ export function parseSim(source: string): SimSpec | null {
   }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   const obj = raw as Raw
-  const kind = pick(obj.kind, ['neural-net', 'attention', 'gradient-descent', 'softmax'] as const, '' as SimKind, {
-    'neural-network': 'neural-net',
-    mlp: 'neural-net',
-    'self-attention': 'attention'
-  })
-  if (kind === 'neural-net') return neuralNet(obj)
-  if (kind === 'attention') return attention(obj)
-  if (kind === 'gradient-descent') return gradientDescent(obj)
-  if (kind === 'softmax') return softmaxSpec(obj)
-  return null
+  const kind = pick(obj.kind, SIM_KINDS, '' as SimKind, KIND_ALIASES)
+  switch (kind) {
+    case 'neural-net':
+      return plain(neuralNet(obj))
+    case 'attention':
+      return plain(attention(obj))
+    case 'gradient-descent':
+      return plain(gradientDescent(obj))
+    case 'softmax':
+      return plain(softmaxSpec(obj))
+    case 'raft':
+      return parseRaftSpec(obj, base(obj))
+    case 'b-tree':
+      return parseBTreeSpec(obj, base(obj))
+    case 'hash-table':
+      return parseHashTableSpec(obj, base(obj))
+    case 'cpu':
+      return parseCpuSpec(obj, base(obj))
+    case 'tokeniser':
+      return parseTokeniserSpec(obj, base(obj))
+    case 'blockchain':
+      return parseBlockchainSpec(obj, base(obj))
+    case 'plot':
+      return parsePlotSpec(obj, base(obj))
+    default:
+      return null
+  }
 }

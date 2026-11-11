@@ -4,6 +4,7 @@
  * invalid JSON or an unknown kind stays visible as code.
  */
 import { createKeeper, watchBlocks } from '../liveBlocks'
+import { SIM_KINDS } from '@shared/sims'
 import { ASK_EVENT, askQuestion, type AskDetail } from './parts'
 
 let runtime: Promise<typeof import('./runtime')> | null = null
@@ -12,9 +13,11 @@ const sourceOf = (pre: HTMLElement) => pre.querySelector('code')?.textContent ??
 
 // A small model often labels the block "json" (or nothing) and gets everything else right:
 // what makes it a simulation is its "kind", not the label on the fence
+const KIND_AT_START = new RegExp(`^\\s*\\{\\s*"kind"\\s*:\\s*"(${SIM_KINDS.join('|')})"`)
+
 function isSimBlock(pre: HTMLElement): boolean {
   const lang = (pre.dataset.lang ?? '').toLowerCase()
-  return lang === 'sim' || ((lang === 'json' || lang === '') && /^\s*\{\s*"kind"\s*:\s*"(neural-net|attention|gradient-descent|softmax)"/.test(sourceOf(pre)))
+  return lang === 'sim' || ((lang === 'json' || lang === '') && KIND_AT_START.test(sourceOf(pre)))
 }
 
 /** Simulations survive the text around them being replaced (see liveBlocks) */

@@ -9,7 +9,7 @@
 import { readPalette, type Palette } from './colour'
 import { button, h, num, selectField } from './dom'
 import { ASK_EVENT, askDetail, askQuestion, dispatchAsk, type PartInfo } from './parts'
-import type { SimSpec, TourStep } from './spec'
+import type { SimSpec, TourAction, TourStep } from './spec'
 
 export interface SimView {
   el: HTMLElement
@@ -29,6 +29,8 @@ export interface SimView {
   highlight(part: string | null): void
   /** Select sample or token n (from 1) */
   sample?(n: number): void
+  /** A tour step's own verbs for this kind ({"insert":42}, {"stop":2}); run, pause and sample are handled by the frame */
+  act?(action: TourAction): void
   /** Layout or theme changed */
   relayout?(): void
   destroy?(): void
@@ -132,6 +134,7 @@ export function mountSim<S extends SimSpec>(spec: S, def: SimKindDef<S>, place: 
     // Going back only re-reads the words; it doesn't train again
     if (forward && stepNow.do) {
       if (stepNow.do.sample !== undefined) view.sample?.(stepNow.do.sample)
+      view.act?.(stepNow.do)
       if (stepNow.do.pause !== undefined) setPlaying(!stepNow.do.pause)
       if (stepNow.do.run) queued += stepNow.do.run
     }

@@ -9,6 +9,21 @@ import '../../../src/renderer/src/styles/theme.css'
 import '../../../src/renderer/src/styles/app.css'
 import '../../../src/renderer/src/styles/prose.css'
 import '../../../src/renderer/src/styles/sims.css'
+import '../../../src/renderer/src/styles/simkinds/shared.css'
+import '../../../src/renderer/src/styles/simkinds/raft.css'
+import '../../../src/renderer/src/styles/simkinds/bTree.css'
+import '../../../src/renderer/src/styles/simkinds/hashTable.css'
+import '../../../src/renderer/src/styles/simkinds/cpu.css'
+import '../../../src/renderer/src/styles/simkinds/tokeniser.css'
+import '../../../src/renderer/src/styles/simkinds/blockchain.css'
+import '../../../src/renderer/src/styles/simkinds/plot.css'
+import { samples as raftSamples } from './samples/raft'
+import { samples as bTreeSamples } from './samples/bTree'
+import { samples as hashTableSamples } from './samples/hashTable'
+import { samples as cpuSamples } from './samples/cpu'
+import { samples as tokeniserSamples } from './samples/tokeniser'
+import { samples as blockchainSamples } from './samples/blockchain'
+import { samples as plotSamples } from './samples/plot'
 import { startSims } from '../../../src/renderer/src/lib/sims'
 
 const query = new URLSearchParams(location.search)
@@ -42,6 +57,7 @@ const SAMPLES: [string, string, string][] = [
   ['gradient-descent', 'gradient-descent: ravine, momentum', '{"kind":"gradient-descent","surface":"ravine","optimiser":"momentum","rate":0.05,"momentum":0.8,"title":"Momentum in a ravine"}'],
   ['two-minima', 'gradient-descent: two minima, Adam', '{"kind":"gradient-descent","surface":"two-minima","optimiser":"adam","rate":0.1,"title":"Which minimum?","tour":[{"at":"gradient","say":"The orange arrow is the plain gradient step; the blue one is what Adam will actually do."}]}'],
   ['softmax', 'softmax', '{"kind":"softmax","logits":[2.0,1.0,0.1,-1.5],"labels":["cat","dog","bird","fish"],"temperature":1,"title":"From logits to probabilities","tour":[{"at":"logit:1","say":"Drag this logit up and every other probability falls, because they share one total."}]}'],
+  ...raftSamples, ...bTreeSamples, ...hashTableSamples, ...cpuSamples, ...tokeniserSamples, ...blockchainSamples, ...plotSamples,
   ['bad', 'left alone: half-written, unknown kind', '{"kind":"neural-net","layers":[2,4,'],
   ['bad', '', '{"kind":"quantum-foam","qubits":3}']
 ]
