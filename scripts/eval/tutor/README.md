@@ -51,8 +51,8 @@ The set has a version (`SCENARIO_SET_VERSION`). Bump it when a scenario or an ex
 The app never shows a raw completion, so the benchmark doesn't score one. Before a reply is scored:
 
 - **It is read as the app reads a stream** (`turn.ts`, with `turnReader` from `src/shared/modelText.ts`, the same code `src/main/agent.ts` streams through). When Gemma opens a thought channel after its answer has begun, it stays there repeating it; the app keeps what was written and asks it to carry on, up to four times, and starts a looping turn over once with more randomness. The runner does the same, with the app's own carry-on message and temperatures, and streams (`model.ts`) so a stalled reply is cut where the app cuts it rather than running to the token limit.
-- **The app's repairs are applied** (`score.ts`): hidden reasoning and special tokens cleaned off (`cleanModelText`); a closing question in plain text made the ask (`parseBlocks`); a numbered problem with no `<solution>` counted as having one, because `lessonGuard` works it out and attaches it (`setsProblem`); a simulation in a block labelled `json` drawn as one (`isSimSource`). Every one of these is a function imported from `src/`, so a repair added to the app changes the score without a line here.
-- **Each repair is counted**, under "Put right by the app": stalls carried on, loops started over, questions made into asks, solutions worked out, simulations relabelled. A model that needs fewer of them is better (faster, and less depends on the repair holding), so a fine-tune should be read on these as well as on the pass rate.
+- **The app's repairs are applied** (`score.ts`): hidden reasoning and special tokens cleaned off (`cleanModelText`); a mark on a question or on "I don't know" taken off, an unclosed grade closed, a numbered question left with `<continue/>` made answerable (`repairReply` in `src/shared/lessonRepair.ts`, given what the learner sent); a closing question in plain text made the ask (`parseBlocks`); a problem with no `<solution>` counted as having one, because `lessonGuard` works it out and attaches it (`wantsSolution`); a simulation in a block labelled `json` drawn as one (`isSimSource`). Every one of these is a function imported from `src/`, so a repair added to the app changes the score without a line here.
+- **Each repair is counted**, under "Put right by the app": `stall` (carried on), `loop` (started over), `ask` (a question made the ask), `grade` (a mark taken off what wasn't an answer), `close` (a grade closed), `solution` (worked out), `sim` (relabelled). A model that needs fewer of them is better (faster, and less depends on the repair holding), so a fine-tune should be read on these as well as on the pass rate.
 
 A request that fails is tried again, and one that fails twice is left out of every number (the first baseline scored one as an empty reply).
 
@@ -87,21 +87,23 @@ Judge scores never enter the deterministic numbers or the go/no-go rule: a judge
 
 The first baseline's 70 saved replies, as scored then (set 1.0.0, raw completions) and re-scored offline (set 1.1.0, the reply the learner is shown). The re-score leaves out the one failed request, and reads only the mark of the 13 replies that stalled after their grade with nothing saved after it.
 
-| | as scored (1.0.0) | re-scored (1.1.0) |
-|---|---|---|
-| pass | 37.1% (n=70) | 64.3% (n=56) |
-| overall | 85.5% | 96.8% |
-| protocol | 89.2% | 96.5% |
-| marking | 85.7% (n=35) | 97.1% (n=35) |
-| not-right marked correct | 0.0% (n=21) | 0.0% (n=21) |
-| unusual-but-correct accepted | 57.1% (n=7) | 85.7% (n=7) |
-| planted errors caught | 85.7% (n=7) | 100.0% (n=7) |
-| exactness | 89.0% | 97.1% |
-| pace | 79.8% | 96.5% |
-| visual | 57.1% (n=7) | 85.7% (n=7) |
-| stalled and had to be carried on | not counted | 24.6% of replies |
+| | as scored (1.0.0) | re-scored (1.1.0) | and with the repairs added since |
+|---|---|---|---|
+| pass | 37.1% (n=70) | 64.3% (n=56) | 78.6% (n=56) |
+| overall | 85.5% | 96.8% | 97.5% |
+| protocol | 89.2% | 96.5% | 98.6% |
+| marking | 85.7% (n=35) | 97.1% (n=35) | 97.1% |
+| not-right marked correct | 0.0% (n=21) | 0.0% (n=21) | 0.0% |
+| unusual-but-correct accepted | 57.1% (n=7) | 85.7% (n=7) | 85.7% |
+| planted errors caught | 85.7% (n=7) | 100.0% (n=7) | 100.0% |
+| exactness | 89.0% | 97.1% | 97.1% |
+| pace | 79.8% | 96.5% | 96.5% |
+| visual | 57.1% (n=7) | 85.7% (n=7) | 85.7% |
+| stalled and had to be carried on | not counted | 24.6% of replies | 24.6% |
 
-What is left after the correction is real: a flashcard missing after a miss (12.5% of the finished replies), a grade given to a question or to "I don't know" (10.7%), a problem with no solution the app would supply (5.4%), a reply well over length (5.4%), and one right answer in 35 marked down for its method.
+The middle column is the benchmark corrected and nothing else: the scorer's rules, the scenarios, and the repairs the app already made on the day of the run. What it leaves is real: a flashcard missing after a miss (12.5% of the finished replies), a grade given to a question or to "I don't know" (10.7%), a problem with no solution the app would supply (5.4%), a reply well over length (5.4%), a grade never closed (3.6%), and one right answer in 35 marked down for its method.
+
+The last column is the same saved replies read by the app as it is after the fixes that followed (a mark taken off what wasn't an answer, a grade closed, a numbered question made answerable, a solution worked out for any problem): what a rule could put right without asking the model again. It is a projection from 56 old replies, not a measurement. The prompt changes made at the same time (the marking note with each answer, the Show me note, the shorter lesson prompt) can't be seen in saved replies at all: each commit states what it expects the re-run to show.
 
 ## Deciding with it
 
