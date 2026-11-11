@@ -311,6 +311,31 @@ describe('the knowledge map, through lessons, recall and answers', () => {
     expect(keptNamed('Hash tables').evidence.filter((e) => /^attempt:\d+$/.test(e.source)).map((e) => e.kind)).toEqual(['recalled-wrong'])
   })
 
+  it('gives the page its timeline: made solid, what came back, the questions missed, and each aim’s forecast', async () => {
+    writeFileSync(join(vault, '.tide', 'goals.json'), JSON.stringify([{ id: 'g1', name: 'Algorithms by spring', notebook: 'Algorithms', deadline: '2027-03-01', createdAt: Date.now() }]))
+    const view = await knowledgeView()
+    const t = view.timeline!
+    expect(t.weeks.length).toBeGreaterThanOrEqual(26 + 8)
+    expect(t.weeks[t.now].start).toBeLessThanOrEqual(view.at)
+    expect(t.weeks[t.now].end).toBeGreaterThan(view.at)
+    // The same questions that came back, whichever view counts them
+    expect(t.weeks.reduce((n, w) => n + w.asked, 0)).toBe(view.weeks.reduce((n, w) => n + w.asked, 0))
+    // Every topic made solid is in the week it happened, once
+    const made = view.concepts.filter((c) => !c.parent && c.madeSolid && c.madeSolid >= t.weeks[0].start)
+    expect(t.weeks.flatMap((w) => w.solid).sort()).toEqual(made.map((c) => c.id).sort())
+    // A solid topic has a fade date ahead of now
+    for (const c of view.concepts.filter((c) => c.status === 'solid')) expect(c.fadesAt!).toBeGreaterThan(view.at)
+    // What was missed in the Hash tables lessons is on Hash tables
+    const hash = view.concepts.find((c) => c.name === 'Hash tables' && !c.parent)!
+    expect(view.missed![hash.id].length).toBeGreaterThan(0)
+    expect(view.missed![hash.id].some((q) => /chaining|load factor|resiz/i.test(q.prompt))).toBe(true)
+    // The aim covers the roadmap’s six topics; its history is under three weeks, so it isn’t forecast
+    const aim = t.aims[0]
+    expect([aim.area, aim.total, aim.state]).toEqual(['Algorithms', 6, 'early'])
+    expect(aim.projection).toEqual([])
+    expect(aim.say).toMatch(/^Too early to forecast Algorithms/)
+  })
+
   it('keeps private work for a reader on this Mac only', async () => {
     const r = lesson({ id: 'bank-1', topic: 'Ledger reconciliation', scope: { kind: 'folder', path: 'Bank' } })
     await saveLesson({ id: r.id, mode: r.mode, topic: r.topic, scope: r.scope, turns: r.turns })

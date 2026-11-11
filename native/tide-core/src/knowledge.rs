@@ -168,6 +168,12 @@ pub struct ConceptState {
   pub wrong: u32,
   /// For a solid concept: days until it stops being solid if it isn't used
   pub fades_in: Option<f64>,
+  /// For a solid concept: when it stops being solid if it isn't used (ms)
+  pub fades_at: Option<f64>,
+  /// The first evidence on it (ms)
+  pub first_seen: Option<f64>,
+  /// When it first became solid (ms): the moment it was learnt, whatever has happened since
+  pub made_solid: Option<f64>,
 }
 
 #[napi(object)]
@@ -182,13 +188,11 @@ pub struct Picture {
   pub prerequisites: Vec<ConceptState>,
 }
 
+/// A question that came back: a recall, or an answer on a topic first met in an earlier sitting
 #[napi(object)]
-pub struct WeekPoint {
-  /// The Monday the week starts on, as local midnight in ms
-  pub start: f64,
-  /// Questions that came back this week (recall, and answers on a concept first met in an earlier sitting)
-  pub asked: u32,
-  /// How many were right; a partly right answer counts half
+pub struct Returned {
+  pub at: f64,
+  /// 1 right, 0.5 partly right, 0 wrong or not answered
   pub right: f64,
 }
 
@@ -200,6 +204,8 @@ struct Fold {
   last_right: Option<f64>,
   taught_at: Option<f64>,
   last_seen: Option<f64>,
+  first_seen: Option<f64>,
+  made_solid: Option<f64>,
   seen: u32,
   right: u32,
   partly: u32,
@@ -241,6 +247,10 @@ fn fold<'a>(events: impl Iterator<Item = &'a Evidence>) -> Fold {
     }
     f.seen += 1;
     f.last_seen = Some(e.at);
+    f.first_seen.get_or_insert(e.at);
+    if f.made_solid.is_none() && estimate(&f, e.at) >= SOLID {
+      f.made_solid = Some(e.at);
+    }
   }
   f
 }
@@ -342,6 +352,9 @@ impl Entry {
       partly: f.partly,
       wrong: f.wrong,
       fades_in: fades_in(f, now),
+      fades_at: fades_in(f, now).map(|d| now + d * DAY_MS),
+      first_seen: f.first_seen,
+      made_solid: f.made_solid,
     }
   }
 
@@ -657,17 +670,11 @@ impl Store {
     found
   }
 
-  /// Retention by week, for the last `weeks` weeks (this one last): of the questions that came
-  /// back (a recall, or an answer on a topic first met at least half a day before in another
-  /// sitting), how many were right. `offset_min` is local time's distance from UTC, so weeks
-  /// start on the learner's Monday.
-  pub fn weekly(&self, now: f64, weeks: u32, offset_min: f64, private_ok: bool) -> Vec<WeekPoint> {
-    const WEEK: f64 = 7.0 * DAY_MS;
-    // 1 January 1970 was a Thursday; the Monday after it is four days on
-    let week_of = |t: f64| ((t + offset_min * 60_000.0 - 4.0 * DAY_MS) / WEEK).floor();
-    let this = week_of(now);
-    let first = this - (weeks.max(1) - 1) as f64;
-    let mut out: Vec<WeekPoint> = (0..weeks.max(1)).map(|i| WeekPoint { start: (first + i as f64) * WEEK + 4.0 * DAY_MS - offset_min * 60_000.0, asked: 0, right: 0.0 }).collect();
+  /// Every question that came back, oldest first: a recall, or an answer on a topic first met at
+  /// least half a day before in another sitting. Topics only, not their plan steps. Put into weeks
+  /// by the caller, which knows the learner's calendar (time zone and clock changes included).
+  pub fn returns(&self, private_ok: bool) -> Vec<Returned> {
+    let mut out = Vec::new();
     for (_, e) in self.visible(private_ok).filter(|(_, e)| e.c.parent.is_none()) {
       // The earliest evidence, and the earliest from any other source than that
       let mut one: Option<(f64, &str)> = None;
@@ -681,11 +688,7 @@ impl Store {
           _ => None,
         };
         if let (true, Some(c)) = (came_back, credit) {
-          let w = week_of(ev.at) - first;
-          if w >= 0.0 && (w as usize) < out.len() {
-            out[w as usize].asked += 1;
-            out[w as usize].right += c;
-          }
+          out.push(Returned { at: ev.at, right: c });
         }
         match one {
           None => one = Some((ev.at, &ev.source)),
@@ -694,6 +697,7 @@ impl Store {
         }
       }
     }
+    out.sort_by(|a, b| a.at.partial_cmp(&b.at).unwrap_or(std::cmp::Ordering::Equal));
     out
   }
 }
@@ -778,8 +782,8 @@ impl Knowledge {
   }
 
   #[napi]
-  pub fn weekly(&self, now: f64, weeks: u32, offset_min: f64, private_ok: bool) -> Result<Vec<WeekPoint>> {
-    Ok(self.store.lock().map_err(err)?.weekly(now, weeks, offset_min, private_ok))
+  pub fn returns(&self, private_ok: bool) -> Result<Vec<Returned>> {
+    Ok(self.store.lock().map_err(err)?.returns(private_ok))
   }
 }
 
@@ -1039,7 +1043,7 @@ mod tests {
   }
 
   #[test]
-  fn retention_by_week_counts_what_came_back() {
+  fn the_questions_that_came_back() {
     let (_dir, mut s) = store();
     s.upsert(vec![concept("a", "Arrays", "Algorithms", 0, &[]), concept("b", "Hash tables", "Algorithms", 1, &[])]).unwrap();
     let mut step = concept("a##s", "Indexing", "Algorithms", 0, &[]);
@@ -1066,18 +1070,41 @@ mod tests {
     let now = T0 + 23.0 * DAY_MS;
     s.record(vec![ev("b", "recall:r2", "1", "recalled-wrong", now - HOUR)], false).unwrap();
 
-    let weeks = s.weekly(now, 4, 0.0, true);
-    assert_eq!(weeks.iter().map(|w| w.start).collect::<Vec<_>>(), [T0, T0 + 7.0 * DAY_MS, T0 + 14.0 * DAY_MS, T0 + 21.0 * DAY_MS]);
-    assert_eq!(weeks.iter().map(|w| w.asked).collect::<Vec<_>>(), [0, 4, 0, 1]);
-    assert_eq!(weeks.iter().map(|w| w.right).collect::<Vec<_>>(), [0.0, 2.5, 0.0, 0.0]);
+    let back = s.returns(true);
+    let at = |w: f64| back.iter().filter(|r| r.at >= T0 + w * 7.0 * DAY_MS && r.at < T0 + (w + 1.0) * 7.0 * DAY_MS).collect::<Vec<_>>();
+    // Week one: nothing came back. Week two: the recall, the quiz answer an hour later, and the wrong answer
+    // in the second sitting on b and the right one after it; not the plan step. Week four: the missed recall
+    assert_eq!([at(0.0).len(), at(1.0).len(), at(2.0).len(), at(3.0).len()], [0, 4, 0, 1]);
+    assert_eq!(at(1.0).iter().map(|r| r.right).sum::<f64>(), 2.5);
+    assert_eq!(at(3.0)[0].right, 0.0);
+    assert!(back.windows(2).all(|w| w[0].at <= w[1].at), "oldest first");
+  }
 
-    // Weeks start on the learner's Monday: at UTC+1 the first lessons (Tuesday 00:00 UTC) are still in week one,
-    // and a recall at 23:30 UTC on Sunday is already next week's
-    s.record(vec![ev("a", "recall:r3", "1", "recalled-right", T0 + 14.0 * DAY_MS - 0.5 * HOUR)], false).unwrap();
-    assert_eq!(s.weekly(now, 4, 0.0, true)[1].asked, 5);
-    let plus_one = s.weekly(now, 4, 60.0, true);
-    assert_eq!(plus_one[0].start, T0 - HOUR);
-    assert_eq!((plus_one[1].asked, plus_one[2].asked), (4, 1));
+  #[test]
+  fn when_a_topic_was_first_met_and_first_made_solid() {
+    let (_dir, mut s) = store();
+    s.upsert(vec![concept("a", "Arrays", "Algorithms", 0, &[]), concept("b", "Hash tables", "Algorithms", 1, &[])]).unwrap();
+    // Taught, then one right answer: 0.58, not yet solid. The second right answer, a day later, makes it solid
+    s.record(vec![ev("a", "lesson:1", "taught", "taught", T0), ev("a", "lesson:1", "q0", "right", T0 + 60_000.0)], false).unwrap();
+    let a = s.state("a", T0 + HOUR, true).unwrap();
+    assert_eq!((a.first_seen, a.made_solid, a.fades_at), (Some(T0), None, None));
+    s.record(vec![ev("a", "lesson:2", "q0", "right", T0 + DAY_MS)], false).unwrap();
+    let now = T0 + DAY_MS + HOUR;
+    let a = s.state("a", now, true).unwrap();
+    assert_eq!(a.made_solid, Some(T0 + DAY_MS));
+    assert_eq!(a.status, "solid");
+    // The fade date is the fade-in days from now, and the estimate is at the line then
+    let fades_at = a.fades_at.unwrap();
+    assert!((fades_at - (now + a.fades_in.unwrap() * DAY_MS)).abs() < 1.0);
+    let then = s.state("a", fades_at, true).unwrap();
+    assert!((then.estimate - SOLID).abs() < 1e-6);
+    assert_eq!(s.state("a", fades_at + HOUR, true).unwrap().status, "fading");
+    // Once made solid, it stays made solid when it fades or an answer goes wrong
+    s.record(vec![ev("a", "lesson:3", "q0", "wrong", T0 + 3.0 * DAY_MS)], false).unwrap();
+    assert_eq!(s.state("a", T0 + 3.0 * DAY_MS, true).unwrap().made_solid, Some(T0 + DAY_MS));
+    // Never studied: none of the three
+    let b = s.state("b", now, true).unwrap();
+    assert_eq!((b.first_seen, b.made_solid, b.fades_at), (None, None, None));
   }
 
   #[test]
@@ -1093,7 +1120,7 @@ mod tests {
       s.around("Hash tables", now, true, 5);
       s.ready(None, now, true, 8);
       s.fading(None, now, true, 8);
-      s.weekly(now, 12, 0.0, true);
+      s.returns(true);
       s.state("c2500", now, true);
     }
     // Twenty rounds of every query over 5,000 concepts and 30,000 pieces of evidence
