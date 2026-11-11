@@ -6,12 +6,10 @@
  */
 import type { WorkshopProject } from '@shared/workshop'
 import { bpeTokeniser } from './bpeTokeniser'
-import { etlPipeline } from './etlPipeline'
 import { hashRing } from './hashRing'
 import { jsonParser } from './jsonParser'
 import { kvWal } from './kvWal'
 import { ledger } from './ledger'
-import { lispInterpreter } from './lispInterpreter'
 import { lruCache } from './lruCache'
 import { neuralNet } from './neuralNet'
 import { raft } from './raft'
@@ -20,4 +18,4 @@ import { routePlanner } from './routePlanner'
 import { salesReport } from './salesReport'
 import { shell } from './shell'
 
-export const LIBRARY: WorkshopProject[] = [kvWal, shell, rateLimiter, jsonParser, lruCache, lispInterpreter, raft, hashRing, ledger, salesReport, etlPipeline, bpeTokeniser, neuralNet, routePlanner].filter(Boolean)
+export const LIBRARY: WorkshopProject[] = [kvWal, shell, rateLimiter, jsonParser, lruCache, raft, hashRing, ledger, salesReport, bpeTokeniser, neuralNet, routePlanner]

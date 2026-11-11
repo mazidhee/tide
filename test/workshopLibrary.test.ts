@@ -10,7 +10,7 @@ vi.mock('electron', () => ({ app: { getPath: () => userData, getAppPath: () => p
 vi.mock('../src/main/settings', () => ({ getSettings: () => ({ vaultPath: userData, libraryFolder: 'Library', ai: {} }) }))
 
 const { LIBRARY } = await import('../src/main/workshopLibrary')
-const { proveProject } = await import('../src/main/workshop')
+const { proveProject, runTests } = await import('../src/main/workshop')
 
 const only = process.env.WORKSHOP_ONLY
 const projects = only ? LIBRARY.filter((p) => only.split(',').includes(p.id)) : LIBRARY
@@ -48,6 +48,10 @@ describe('the library of guided projects', () => {
           expect(proof.solution!.tests.every((t) => t.status === 'pass')).toBe(true)
           // Every failure a learner would meet first comes with words, not a bare "failed"
           for (const t of proof.starter!.tests) if (t.status === 'fail') expect((t.message ?? '').length, `${t.name} says why`).toBeGreaterThan(10)
+          // What a learner meets on day one: the first stage, run on its starting files alone, fails
+          const first = await runTests(p, 0, p.stages[0].files)
+          expect(first.passed, `${p.id}: stage 1 passes untouched`).toBe(false)
+          expect(first.tests.some((t) => t.status === 'fail' && (t.message ?? '').length > 10)).toBe(true)
           console.log(`  proved ${p.id}: ${total}/${total} tests pass with the reference solution in ${proof.solution!.durationMs} ms; starting files: ${proof.starter!.error ? 'do not build' : `${proof.starter!.tests.filter((t) => t.status === 'pass').length}/${total} pass`}`)
         },
         120_000
