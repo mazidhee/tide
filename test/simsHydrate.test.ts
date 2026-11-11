@@ -70,7 +70,11 @@ describe('what the tutor is told', () => {
       expect(spec.tour.map((s) => JSON.stringify(s.do)), kind).toEqual(verbs)
       const view = KINDS[kind].create(spec as never, { root: document.body, reducedMotion: true, palette: () => ({}) as never, select() {}, peek() {}, invalidate() {} })
       for (let i = 0; i < 400; i++) view.step()
-      await settle()
+      // Work that lands a moment later (real hashing) is waited for
+      for (let i = 0; i < 100 && parts.some((part) => !view.describe(part)); i++) {
+        await settle()
+        view.step()
+      }
       for (const part of parts) expect(view.describe(part), `${kind} ${part}`).not.toBeNull()
       view.destroy?.()
     }
