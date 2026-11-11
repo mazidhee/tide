@@ -7,6 +7,7 @@
 import type { ChatScope } from '@shared/types'
 import { capabilityNote, type CapabilityStatus } from '@shared/capability'
 import { isUnclear, toolkitText, type SubjectProfile } from '@shared/subjects'
+import { HUMANITIES_RULES } from '@shared/humanities'
 import { askCloud } from './ai'
 import { languageStates } from './languages'
 import { labStatus, mathStatus } from './runner'
@@ -51,7 +52,8 @@ export async function subjectContext(req: { topic: string; scope: ChatScope; ins
   const p: SubjectProfile = await subjectProfile(req.topic, { notebook: notebookOf(req.scope), private: req.private, timeoutMs: 6000 })
   if (isUnclear(p)) return ''
   // The lesson screen composes the toolkit from the topic's words; only a profile found otherwise needs adding
-  const kit = req.instructions.includes('How to teach this subject (') ? '' : toolkitText(req.topic, p)
+  // The humanities' rules may be there already, from the topic's own words (shared/humanities), so they aren't added twice
+  const kit = req.instructions.includes('How to teach this subject (') ? '' : toolkitText(req.topic, p, { humanities: !req.instructions.includes(HUMANITIES_RULES) })
   const can = capabilityNote(req.topic, p, { ...(await runnable()), web: req.web })
   return [kit, can].filter(Boolean).join('\n\n')
 }

@@ -1,6 +1,7 @@
 import { checksOf, claimsPrompt, makesClaims, parseClaimCheck, CLAIMS_SYSTEM, type ClaimCheck, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, setsProblem, solutionOf, solvePrompt, wantsSolution, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
 import type { RequestKind } from '@shared/providers'
 import { humanitiesProblems } from '@shared/humanities'
+import { teachesAsHumanities } from '@shared/subjects'
 import { aboutMetabase } from '@shared/metabase'
 import { ownWords, posedProblem, repeatsEarlier } from '@shared/session'
 import type { ChatEvent, ChatMessage, ChatRequest } from '@shared/types'
@@ -128,7 +129,7 @@ export async function checkLessonReply(
   if (repeatsEarlier(reply, earlier)) found.problem.push('It asks a problem already asked in this lesson.')
   if (missingQuestion(reply)) found.problem.push('It sets a problem but never asks it.')
   // humanities: readings are appraised, not marked; a contested question is never presented as settled
-  found.problem.push(...humanitiesProblems(req.topic ?? '', earlier[earlier.length - 1] ?? '', reply))
+  found.problem.push(...humanitiesProblems(req.topic ?? '', earlier[earlier.length - 1] ?? '', reply, teachesAsHumanities(req.topic ?? '')))
   // A mark the exact check contradicts can't stand: a wrong result marked correct, or a right one
   // marked wrong or marked down only for its method (shared/answerCheck)
   const graded = /<grade\b[^>]*verdict\s*=\s*["']?(correct|partial|wrong)[^>]*>([\s\S]*?)(?:<\/grade>|$)/i.exec(reply)

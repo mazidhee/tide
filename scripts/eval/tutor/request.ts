@@ -12,6 +12,7 @@ import { markNote, paceNote } from '../../../src/shared/pace'
 import { ASKED, GO_ON, SHOW_ME, notesNudge, openingMessage, sessionInstructions, type SessionSetup } from '../../../src/shared/session'
 import { TUTOR_SYSTEM, stableSystem, withInstructions } from '../../../src/shared/tutorPrompt'
 import { markingNote, humanitiesArea } from '../../../src/shared/humanities'
+import { teachesAsHumanities, type SubjectProfile } from '../../../src/shared/subjects'
 import { DISCUSS_SYSTEM, discussPrompt, type DiscussTurn } from '../../../src/shared/closeReading'
 import type { DiscussSetup, Learner, Scenario, Turn } from './types'
 
@@ -33,12 +34,12 @@ export function learnerText(l: Learner): string {
 }
 
 /** A message with the hidden notes the lesson screen adds to it (SessionView.send), kept with it from then on */
-function stored(content: string, history: Message[], mode: SessionSetup['mode'], topic = ''): string {
+function stored(content: string, history: Message[], mode: SessionSetup['mode'], topic = '', subject?: SubjectProfile): string {
   if (content.includes('(Tide: ') || history.length < 2) return content
   const notes = [
     mode === 'teach' || mode === 'quiz' ? paceNote(history as { role: 'user' | 'assistant'; content: string }[], content) : null,
     // An answer to a question of interpretation in the humanities is appraised, not marked (as SessionView sends it)
-    mode === 'teach' || mode === 'quiz' ? markingNote(markNote(content), [...history].reverse().find((t) => t.role === 'assistant')?.content ?? '', topic) : null,
+    mode === 'teach' || mode === 'quiz' ? markingNote(markNote(content), [...history].reverse().find((t) => t.role === 'assistant')?.content ?? '', topic, teachesAsHumanities(topic, subject)) : null,
     mode === 'teach' && history.length > 2 ? notesNudge(history.filter((t) => t.role === 'assistant').map((t) => t.content), content) : null
   ].filter((n): n is string => !!n)
   return notes.length ? `${content}\n\n${notes.join('\n')}` : content
@@ -49,7 +50,7 @@ export function lessonTurns(setup: SessionSetup, history: Turn[]): Message[] {
   const turns: Message[] = [{ role: 'user', content: openingMessage(setup) }]
   for (const t of history) {
     if ('tutor' in t) turns.push({ role: 'assistant', content: t.tutor })
-    else turns.push({ role: 'user', content: stored(learnerText(t.learner), turns, setup.mode, setup.topic) })
+    else turns.push({ role: 'user', content: stored(learnerText(t.learner), turns, setup.mode, setup.topic, setup.options?.subject) })
   }
   return turns
 }

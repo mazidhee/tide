@@ -48,11 +48,17 @@ export function bookOutline(book: EpubBook, by?: string): string {
   return `${out.join('\n')}\n`
 }
 
-/** What the outline drafter is told for a book, a reading list or a humanities subject */
-export function readingOutlineRules(topic: string, reading: boolean): string {
-  if (!reading && !humanitiesArea(topic)) return ''
+/**
+ * What the outline drafter is told for a book, a reading list or a humanities subject.
+ * `humanities`: whether the subject is taught as the humanities are (subjects.teachesAsHumanities,
+ * from its profile); without it, the topic's own words decide. `profiled`: the subject's roadmap
+ * guidance (subjects.roadmapGuidance) is given too and already says how each phase ends.
+ */
+export function readingOutlineRules(topic: string, reading: boolean, opts: { humanities?: boolean; profiled?: boolean } = {}): string {
+  const humanities = opts.humanities ?? !!humanitiesArea(topic)
+  if (!reading && !humanities) return ''
   const book = reading
     ? `This is a book (or a list of books) to read. The parts are the work's own parts (or the books in the order to read them), and the topics are its chapters or sections in order, each written "Chapter N: title" with the title the book itself gives. If you are not sure of a chapter's title, write "Chapter N" alone: never invent one. Add one resource line per chapter group naming the edition (for a public-domain work, a free one from Project Gutenberg or Standard Ebooks). End with a part for looking back: a discussion of the whole and an essay question, not projects.`
-    : `This is a humanities subject. Topics are periods, works, figures, arguments and debates, in an order that builds (for history, by period, with the debates about it). Name primary sources to read (documents, texts) in the resource lines alongside scholarly ones, and where historians or traditions disagree make the debate itself a topic. End with a part for reading primary sources and writing an essay, not projects.`
+    : `This is a humanities subject. Topics are periods, works, figures, arguments and debates, in an order that builds (for history, by period, with the debates about it). Name primary sources to read (documents, texts) in the resource lines alongside scholarly ones, and where historians or traditions disagree make the debate itself a topic.${opts.profiled ? '' : ' End with a part for reading primary sources and writing an essay, not projects.'}`
   return book
 }

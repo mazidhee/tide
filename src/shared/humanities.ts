@@ -118,8 +118,12 @@ export function humanitiesRules(topic: string): string {
 /** Said to the tutor (hidden) with an answer to a question of interpretation: appraise it, don't mark it */
 export const APPRAISE_NOTE = '(Tide: this answers a question of interpretation or argument. Respond with <appraise>, not <grade>: what is strongest, then one question pressing on the weakest point. If it is contested, say so.)'
 
-/** The marking note for an answer, by the question it answers: null when the usual note stands */
-export const appraiseNote = (question: string, topic: string): string | null => (humanitiesArea(topic) && markingStyle(question) === 'appraise' ? APPRAISE_NOTE : null)
+/**
+ * The marking note for an answer, by the question it answers: null when the usual note stands.
+ * `humanities`: whether the lesson is taught as the humanities are, decided by its subject profile
+ * (subjects.teachesAsHumanities); without it, the topic's own words decide.
+ */
+export const appraiseNote = (question: string, topic: string, humanities?: boolean): string | null => ((humanities ?? !!humanitiesArea(topic)) && markingStyle(question) === 'appraise' ? APPRAISE_NOTE : null)
 
 /** A word count, for reporting the length of the rules */
 export const wordCount = (s: string) => (s.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []).length
@@ -128,15 +132,15 @@ export const wordCount = (s: string) => (s.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*
 export const lastAsk = (tutor: string) => [...tutor.matchAll(/<ask\b[^>]*>([\s\S]*?)<\/ask>/gi)].pop()?.[1]?.trim() ?? ''
 
 /** The note to send with an answer in a lesson: the appraisal note when the question was one of interpretation in a humanities topic, else the usual one */
-export const markingNote = (usual: string | null, lastTutor: string, topic: string): string | null => (usual ? (appraiseNote(lastAsk(lastTutor), topic) ?? usual) : null)
+export const markingNote = (usual: string | null, lastTutor: string, topic: string, humanities?: boolean): string | null => (usual ? (appraiseNote(lastAsk(lastTutor), topic, humanities) ?? usual) : null)
 
 /**
  * What a lesson reply in the humanities must put right before the learner sees it (main/lessonGuard):
  * a reading or an argument marked right or wrong instead of appraised, or a contested question
  * presented as settled. Facts and dates are still marked, and checked against sources there.
  */
-export function humanitiesProblems(topic: string, previousTutor: string, reply: string): string[] {
-  if (!humanitiesArea(topic)) return []
+export function humanitiesProblems(topic: string, previousTutor: string, reply: string, humanities?: boolean): string[] {
+  if (!(humanities ?? humanitiesArea(topic))) return []
   const out: string[] = []
   const asked = lastAsk(previousTutor)
   if (asked && markingStyle(asked) === 'appraise' && /<grade\b[^>]*verdict\s*=\s*["']?(correct|partial|wrong)/i.test(reply)) out.push('It marks an answer to a question of interpretation right or wrong: appraise it with <appraise> instead (what is strongest, then one question on the weakest point).')

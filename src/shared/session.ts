@@ -5,7 +5,7 @@ import { GROUNDED } from './sources'
 import type { ChatScope, SessionMode, Verdict } from './types'
 import { chooseStrategy, STRATEGY_RULES, type Strategy, type StrategyChoice } from './strategy'
 import type { FlowStep, ProjectKind } from './project'
-import { humanitiesRules, parseAppraise, type AppraiseRow } from './humanities'
+import { parseAppraise, type AppraiseRow } from './humanities'
 import { lessonKit, type SubjectProfile } from './subjects'
 
 /**
@@ -330,9 +330,9 @@ export function sessionInstructions(setup: SessionSetup): string {
   // A refresher or a project lesson already has its reason; a placement check isn't a lesson
   // How to write a simulation rides here, for the kinds this topic can use, not in the system prompt of every lesson
   // Subject hook (any-subject, src/shared/subjects.ts): the subject's own toolkit, and the hands-on and simulation rules only where they apply.
-  // humanities: marking by the kind of question (appraise readings, grade facts), and theology's rules
+  // The humanities' marking (<appraise>) and theology's rules come through it too, for a subject that is mainly texts and arguments or history
   const kit = lessonKit(setup.topic, setup.options?.subject)
-  const extra = [!setup.options?.refresh && !setup.options?.project ? BIG_PICTURE : '', GROUNDED, kit.handsOn ? HANDS_ON : '', kit.sims, kit.toolkit, setup.options?.why ? WHY_RULES : '', humanitiesRules(setup.topic)].filter(Boolean)
+  const extra = [!setup.options?.refresh && !setup.options?.project ? BIG_PICTURE : '', GROUNDED, kit.handsOn ? HANDS_ON : '', kit.sims, kit.toolkit, kit.humanities, setup.options?.why ? WHY_RULES : ''].filter(Boolean)
   return extra.length ? `${base.trimEnd()}\n\n${extra.join('\n\n')}\n` : base
 }
 
