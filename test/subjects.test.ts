@@ -260,6 +260,10 @@ describe('profiling a subject in code', () => {
     expect(profileSubject('Covalent bonds').subjects[0]).toBe('chemistry')
     expect(profileSubject('Literary analysis of Hamlet').kinds[0]).toBe('interpret')
     expect(profileSubject('Shannon entropy').subjects[0]).toBe('information theory')
+    expect(profileSubject("Ohm's law and resistors in series").subjects[0]).toBe('electromagnetism')
+    // "syntax" inside "abstract syntax trees" is not linguistics
+    expect(profileSubject('Compilers: parsing expressions into abstract syntax trees').kinds).toEqual(['build'])
+    expect(profileSubject('Frame-rate independent movement').kinds).toEqual(['build', 'quant'])
   })
 
   it('falls back to the roadmap, and is unclear when nothing names it', () => {

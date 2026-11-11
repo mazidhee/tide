@@ -43,17 +43,18 @@ const norm = (s: string) => s.toLowerCase().replace(/[‘’]/g, "'").replace(/\
 const COMPILED = SUBJECTS.map((s) => ({ entry: s, res: s.phrases.map((p) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${p})(?![\\p{L}\\p{N}])`, 'iu')) }))
 
 /** Each subject a text names, with the length of the longest phrase that named it, best first */
-export function subjectMatches(text: string): { entry: SubjectEntry; score: number }[] {
+export function subjectMatches(text: string): { entry: SubjectEntry; score: number; at: number }[] {
   const t = norm(text)
   if (!t) return []
-  const out: { entry: SubjectEntry; score: number }[] = []
+  const out: { entry: SubjectEntry; score: number; at: number }[] = []
   for (const { entry, res } of COMPILED) {
     let best = 0
+    let at = 0
     for (const re of res) {
       const m = re.exec(t)
-      if (m && m[0].length > best) best = m[0].length
+      if (m && m[0].length > best) [best, at] = [m[0].length, m.index]
     }
-    if (best) out.push({ entry, score: best })
+    if (best) out.push({ entry, score: best, at })
   }
   // The longest phrase wins: "physics in games" over "physics", "history of mathematics" over "mathematics"
   return out.sort((a, b) => b.score - a.score)
@@ -62,13 +63,15 @@ export function subjectMatches(text: string): { entry: SubjectEntry; score: numb
 /** "Build my own X", "X from scratch": a subject made by building it, whatever it is */
 const BUILDS = /\b(build|make|write|implement|code|create)\b.{0,40}\b(own|from scratch)\b|\bfrom scratch\b/i
 
-function fromMatches(found: { entry: SubjectEntry; score: number }[], text: string, from: SubjectProfile['from']): SubjectProfile {
+function fromMatches(found: { entry: SubjectEntry; score: number; at: number }[], text: string, from: SubjectProfile['from']): SubjectProfile {
   const [top, ...rest] = found
   const kinds = [...top.entry.kinds]
   const used = [top.entry]
-  // A second subject of another kind ("physics in games", "philosophy of physics"): its kind joins
+  // A second subject of another kind ("philosophy of physics"): its kind joins, unless its words are
+  // part of the first one's ("syntax" in "abstract syntax trees")
   if (kinds.length < 2) {
-    const other = rest.find((r) => r.score >= 5 && !kinds.includes(r.entry.kinds[0]))
+    const inside = (r: { at: number; score: number }) => r.at >= top.at && r.at + r.score <= top.at + top.score
+    const other = rest.find((r) => r.score >= 5 && !kinds.includes(r.entry.kinds[0]) && !inside(r))
     if (other) {
       kinds.push(other.entry.kinds[0])
       used.push(other.entry)
