@@ -37,3 +37,48 @@ CC BY-SA 4.0 (shown with attribution; adaptations stay CC BY-SA).
 
 Note: ts-fsrs 6 makes FSRS-7 the default and needs Node 24; tests run on Node 22, and cards
 without a full review history must stay on FSRS-6, so flashcards stay on FSRS-6 for now.
+
+## Teaching blocks: second survey
+
+Made the same day, for parts the tutor can put in a lesson. Ranked by teaching value against
+effort; licences read from each package's own LICENSE file.
+
+| # | Candidate | Licence | Size | Verdict |
+|---|---|---|---|---|
+| 1 | planck.js (Box2D port) for physics scenes | MIT | 400 kB, loaded with the first physics block | Adopted |
+| 2 | Mafs for geometry and linear maps | MIT (with tiny-invariant, use-gesture, use-resize-observer, all MIT) | 110 kB, on first use; KaTeX is shared | Adopted |
+| 3 | regexp-tree (parser only) for regex railroad diagrams | MIT | 130 kB, on first use | Adopted |
+| 4 | chess.js for game-tree search | BSD-2-Clause | 95 kB, on first use | Adopted |
+| 5 | sql-formatter (SQLite dialect) to tidy SQL blocks | MIT (bundles nearley, MIT) | 100 kB, on first Tidy | Adopted |
+| 6 | Observable Plot for lesson charts | ISC (pulls in d3) | about 400 kB | Not done: the lab's charts and the plot simulation already cover it |
+| 7 | JSXGraph for constructions | MIT option of MIT/LGPL | 75 MB package, about 800 kB bundle | Not done: Mafs does the same for a seventh of the size |
+| 8 | Excalidraw whiteboard | MIT | 47 MB package, over 2 MB bundle | Not done: too heavy, and a 12B model can't write its scenes reliably; mermaid already draws structure |
+| 9 | DuckDB-WASM analytics lab | MIT | 150 MB package, 30 MB WASM | Not done: the SQLite lab covers the SQL lessons; worth it only for Parquet or large files |
+| 10 | Transformer Explainer | MIT | bundles GPT-2 (about 500 MB) | Not done: too large offline; the attention, softmax and tokeniser simulations cover the mechanism |
+| 11 | Circuit simulators | CircuitJS is GPL-2.0 | | Excluded for the licence; no maintained permissive one found |
+| 12 | Periodic table data | most data sets are CC BY-SA | | Not done |
+
+Pyodide stays excluded: the runner keeps real Python.
+
+What was built, each as a ```sim kind the tutor can write (shared/sims.ts tells it how; a lesson
+is told only about the kinds its topic can use):
+
+- physics: projectile, pendulum, spring, incline and collision scenes stepped by Box2D, with
+  the textbook prediction beside the engine's measurement and the energy over time. A
+  pendulum runs at 3,840 steps a second: Box2D's joints bleed energy at 240 (12% in 10 s from 90°).
+  The exact pendulum period is computed with the arithmetic-geometric mean.
+- geometry: draggable points with every length, angle and area measured; or a 2×2 matrix with
+  draggable basis vectors, the determinant as the unit square's area, and real eigenvectors.
+  Themed by mapping Mafs's CSS variables to Tide's tokens.
+- regex: a railroad diagram drawn from regexp-tree's parse, matches and groups marked in
+  editable test strings. Matching runs in a worker with a 0.4 s limit, so catastrophic
+  backtracking is reported, not a frozen window.
+- chess: legal moves from chess.js, and a minimax or alpha-beta search to depth 4 showing its
+  pick, each move's score and how many positions each search visited. The search uses chess.js's
+  internal move list (50 times faster than its public API); the version is pinned and a test
+  fails if those internals change.
+- SQL blocks gain a Tidy button (Shift+Alt+F).
+
+Found on the way: live blocks waited for the page to be still for 500 ms before looking for new
+ones, so an animated icon anywhere kept simulations and diagrams from ever appearing. The wait is
+now capped.
