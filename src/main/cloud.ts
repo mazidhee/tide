@@ -163,14 +163,6 @@ export const noteReviewed = (t: { provider: string; model: string }, task: strin
     s.passed += passed
   })
 
-/** Doing its job well enough to stay where it is in the line: after a fair number of tries, it mostly answers and mostly passes review */
-function healthy(t: { provider: string; model: string }, task: string): boolean {
-  const s = stats.get(statKey(t, task))
-  if (!s) return true
-  const answers = s.n < 8 || s.ok / s.n >= 0.6
-  const quality = s.reviewed < 8 || s.passed / s.reviewed >= 0.6
-  return answers && quality
-}
 
 export function loadStats() {
   try {
@@ -251,9 +243,37 @@ export function routeFor(task: CloudTask | null, engine: 'auto' | 'local' | 'clo
       // its day, routine work (solving an everyday problem) leaves the rest for what matters
       dayShare(t) < (low ? 0.7 : 0.97)
   )
-  // A model that keeps failing this job, or whose problems keep failing review, goes to the back
+  // Of those, the one that has earned it for this job: see score
   const job = task ?? 'other'
-  return able.find((t) => healthy(t, job)) ?? able[0] ?? null
+  let best: CloudTarget | null = null
+  let top = -1
+  able.forEach((t, place) => {
+    const value = score(t, job, place)
+    if (value > top) [best, top] = [t, value]
+  })
+  return best
+}
+
+/**
+ * How good a choice a model is for a job, from what it has actually done on this Mac, not from a
+ * fixed order. Five things, multiplied, so being bad at any one of them counts:
+ * - how often it answers (rate limits, outages and timeouts all count against it);
+ * - how often what it wrote passed a second model's review;
+ * - how long it takes: a reply in 10 s is worth about three times one that takes two minutes;
+ * - how much of today's free allowance is left: a nearly spent one is kept for when nothing else can;
+ * - where it stands in your line (your main model first), which decides between equals.
+ * A model with no history is trusted about as much as one that answers three times in four, so a
+ * new connection gets tried, and one that keeps failing sinks instead of being asked first forever.
+ */
+export function score(t: { provider: string; model: string }, job: string, place = 0): number {
+  const s = stats.get(statKey(t, job))
+  const answers = ((s?.ok ?? 0) + 3) / ((s?.n ?? 0) + 4)
+  const quality = ((s?.passed ?? 0) + 3) / ((s?.reviewed ?? 0) + 4)
+  const seconds = s && s.n >= 1 ? s.ms / s.n / 1000 : 15
+  const speed = 1 / (1 + seconds / 45)
+  const left = Math.sqrt(Math.max(0.05, 1 - dayShare(t)))
+  const order = 1 / (1 + 0.12 * place)
+  return answers * quality * speed * left * order
 }
 
 /**
