@@ -14,6 +14,7 @@ import { Icon } from '../Icon'
 import { Professor } from '../Professor'
 import { PromptBox } from '../PromptBox'
 import { Level } from './Level'
+import { AreaMark } from './AreaMark'
 
 const DAY = 86_400_000
 /** "1 h 20", "40 min": time as the page says it everywhere */
@@ -225,7 +226,8 @@ export function HomeTide(p: HomeTideProps) {
                         </span>
                       </td>
                       <td className="td-col-area">
-                        <span className={`td-area ${areaOf(c.area)}`}>
+                        <span className="td-area">
+                          <AreaMark area={c.area} />
                           <span>{c.area || 'Outside your roadmaps'}</span>
                         </span>
                       </td>
@@ -426,6 +428,7 @@ function Aim({ plan, forecast: f, area, makeFit }: { plan: GoalPlan; forecast?: 
   return (
     <div className="td-aim">
       <button className="td-aim-top" onClick={() => app.setView({ kind: 'notebook', path: plan.goal.notebook })} title="Open its roadmap">
+        <AreaMark area={plan.goal.notebook} />
         <b>{plan.goal.name.replace(/^Finish /, '')}</b>
         <span className="td-meta">{deadline}</span>
       </button>

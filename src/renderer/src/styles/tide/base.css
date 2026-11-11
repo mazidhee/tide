@@ -326,7 +326,11 @@
 
   /* ---------- Marks shared by every screen ---------- */
 
-  /* An area of study: its colour as a small square, always beside its name */
+  /*
+    An area of study: the icon chosen from its name, always beside the name. The icon is what
+    identifies it; its area colour tints the icon as a quieter second cue, pulled towards the
+    ink so it reads on every theme's surfaces.
+  */
   .td-area {
     display: inline-flex;
     align-items: center;
@@ -335,13 +339,12 @@
     color: var(--ink-2);
     white-space: nowrap;
   }
-  .td-area::before {
-    content: '';
-    width: 8px;
-    height: 8px;
-    border-radius: 2px;
-    background: var(--c, var(--ink-3));
+  .td-area-ic {
     flex: none;
+    color: color-mix(in srgb, var(--c, var(--ink-3)) 55%, var(--ink));
+  }
+  .tree-row .td-area-ic.tree-icon {
+    color: color-mix(in srgb, var(--c, var(--ink-3)) 55%, var(--ink));
   }
   .td-c0 {
     --c: var(--ink-3);

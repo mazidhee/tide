@@ -34,6 +34,7 @@ import { conceptFor, useKnowledge } from '../lib/knowledge'
 import { useAreaClass } from '../lib/areas'
 import { since } from '@shared/knowledge'
 import { Level } from './tide/Level'
+import { AreaMark } from './tide/AreaMark'
 
 // Loaded when a lesson needs them: the code editor (Monaco) and the walkthrough canvas
 /** What Go on sends, and how a question of yours is marked, so neither is recorded as an answer */
@@ -856,7 +857,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           <span className="crumb">{MODE_LABEL[mode]}</span>
           <Icon name="chevron" size={11} />
           <span className="crumb current">{topic}</span>
-          {scopeLabel && scopeLabel !== topic && <span className="muted page-count">from {scopeLabel}</span>}
+          {scopeLabel && scopeLabel !== topic && (
+            <span className="muted page-count">
+              {tide && 'path' in scope && <AreaMark area={scope.path} size={14} />}
+              from {scopeLabel}
+            </span>
+          )}
         </div>
         <div className="toolbar-actions no-drag">
           {timed && <InterviewClock remaining={clock.remaining} total={timed} />}
@@ -987,7 +993,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               <h1>{topic}</h1>
               <p>
                 <span>{MODE_LABEL[mode]}</span>
-                {scopeLabel && scopeLabel !== topic && <span>From {scopeLabel}</span>}
+                {scopeLabel && scopeLabel !== topic && (
+                  <span className="td-area">
+                    {'path' in scope && <AreaMark area={scope.path} size={14} />}
+                    From {scopeLabel}
+                  </span>
+                )}
                 {concept && concept.seen > 0 && (
                   <span className="td-lesson-held">
                     <Level now={concept.estimate} high={concept.level} area={areaOf(concept.area)} />

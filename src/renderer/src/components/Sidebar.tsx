@@ -10,9 +10,8 @@ import { Professor } from './Professor'
 import { endOngoing, useOngoing } from '../lib/sessions'
 import { CHAT_IMAGES } from '../lib/pastedImages'
 import { useTideDesign } from '../lib/design'
-import { useAreaClass } from '../lib/areas'
 import { useKnowledge } from '../lib/knowledge'
-import { TideMark } from './tide/TideMark'
+import { AreaMark } from './tide/AreaMark'
 
 const EXPANDED_KEY = 'tide.expanded'
 /** Folders Tide keeps for itself: shown together, folded away, under "Tide's files" */
@@ -58,7 +57,6 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
   const [renaming, setRenaming] = useState<string | null>(null)
   // The new design: a notebook carries its area's colour, and the rail says how much is fading
   const tide = useTideDesign()
-  const areaOf = useAreaClass()
   const known = useKnowledge(tide)
   const fading = useMemo(() => known?.concepts.filter((c) => !c.parent && c.status === 'fading').length ?? 0, [known])
 
@@ -174,7 +172,7 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
           ) : (
             <span className="tree-chevron-space" />
           )}
-          {tide && isFolder && depth === 0 && areaOf(node.path) !== 'td-c0' ? <span className={`td-nb-dot ${areaOf(node.path)}`} aria-hidden="true" /> : <Icon name={iconFor(node, settings.libraryFolder)} size={15} className="tree-icon" />}
+          {tide && isFolder && depth === 0 && !SYSTEM_FOLDERS.has(node.path) ? <AreaMark area={node.path} size={16} className="tree-icon" /> : <Icon name={iconFor(node, settings.libraryFolder)} size={15} className="tree-icon" />}
           {renaming === node.path ? (
             <input
               className="tree-rename"
@@ -313,13 +311,6 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
         </div>
       </div>
 
-      {tide && (
-        <button className="td-brand" onClick={() => app.setView({ kind: 'home' })} title="Home">
-          <TideMark size={22} />
-          <span>Tide</span>
-          <small>{new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</small>
-        </button>
-      )}
       <nav className="sidebar-nav">
         {shown('home') && navItem('home', 'Home', view.kind === 'home', () => app.setView({ kind: 'home' }))}
         {shown('chat') && navItem('chat', 'Chat', view.kind === 'chat', () => app.setView({ kind: 'chat' }))}

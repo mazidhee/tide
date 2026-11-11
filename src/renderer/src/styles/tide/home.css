@@ -277,6 +277,7 @@
     white-space: nowrap;
   }
   .td-col-area .td-area {
+    display: flex;
     max-width: 100%;
   }
   .td-col-area .td-area span {
@@ -403,7 +404,12 @@
     width: 100%;
     text-align: left;
   }
+  .td-aim-top .td-area-ic {
+    align-self: center;
+  }
   .td-aim-top b {
+    flex: 1;
+    min-width: 0;
     font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;

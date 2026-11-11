@@ -18,31 +18,8 @@
     width: 16px;
     height: 16px;
   }
-  .td-brand {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    margin: 0 8px;
-    padding: 6px 8px 10px;
-    border-radius: var(--r-ctl);
-    font-weight: 600;
-    font-size: 14px;
-    letter-spacing: -0.005em;
-    color: var(--ink);
-    text-align: left;
-  }
-  .td-brand svg {
-    flex: none;
-  }
-  .td-brand small {
-    margin-left: auto;
-    font-weight: 400;
-    font-size: 12px;
-    letter-spacing: 0;
-    color: var(--ink-3);
-  }
   .sidebar-nav {
-    padding: 0 8px 4px;
+    padding: 4px 8px 4px;
     gap: 1px;
   }
   .nav-item {
@@ -151,14 +128,6 @@
   .tree-chevron,
   .tree-icon {
     color: var(--ink-3);
-  }
-  .td-nb-dot {
-    flex: none;
-    width: 8px;
-    height: 8px;
-    margin: 0 4px 0 3px;
-    border-radius: 2px;
-    background: var(--c);
   }
   .tree-system .tree-label {
     color: var(--ink-3);

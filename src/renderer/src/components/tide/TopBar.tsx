@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useApp, type View } from '../../state'
 import { Icon } from '../Icon'
+import { AreaMark } from './AreaMark'
 
 const SLOT = 'td-topbar-slot'
 
@@ -42,6 +43,7 @@ export function TopBar() {
         {parts.map((p, i) => (
           <span key={i} className={i === parts.length - 1 ? 'td-crumb current' : 'td-crumb'}>
             {i > 0 && <Icon name="chevron" size={11} />}
+            {i === 0 && app.view.kind === 'notebook' && <AreaMark area={app.view.path} />}
             {p}
           </span>
         ))}
