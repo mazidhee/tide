@@ -266,7 +266,10 @@ const ATTEMPTS = joinRel('.tide', 'attempts.jsonl')
 
 export async function recordAttempt(a: Omit<Attempt, 'at'>) {
   await fs.mkdir(absPath('.tide'), { recursive: true })
-  await fs.appendFile(absPath(ATTEMPTS), JSON.stringify({ ...a, at: Date.now() }) + '\n')
+  const attempt: Attempt = { ...a, at: Date.now() }
+  await fs.appendFile(absPath(ATTEMPTS), JSON.stringify(attempt) + '\n')
+  // The knowledge map takes answers from sessions that keep no lesson record of their own; never a reason to fail
+  await import('./knowledge').then((k) => k.noteAttempt(attempt)).catch(() => {})
   const { brainEvent } = await import('./brainEvents')
   brainEvent({ kind: 'attempt', label: `${a.verdict === 'correct' ? 'Got right' : a.verdict === 'partial' ? 'Partly right' : 'Missed'}: ${a.topic}`, ...(a.path ? { id: a.path } : {}) })
 }

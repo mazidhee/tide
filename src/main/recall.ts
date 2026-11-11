@@ -7,6 +7,7 @@
 import { join } from 'path'
 import type { LessonRecord } from '@shared/lessonLog'
 import { digestLesson, type LessonDigest } from '@shared/lessonMemory'
+import { noteRecallReview } from './knowledge'
 import { tideCore } from './native'
 import { privatePath } from './projects'
 import { vaultRoot } from './vault'
@@ -67,7 +68,9 @@ export async function noteLesson(record: LessonRecord): Promise<void> {
   if (!r || !d) return
   const asked = opened.get(key(record.topic))
   if (asked && record.started >= asked.at - 60_000 && d.opening) {
-    r.review(asked.id, GRADE[d.opening], Date.now())
+    const reviewed = r.review(asked.id, GRADE[d.opening], Date.now())
+    // The knowledge map counts it too, on the topic the question came from
+    if (reviewed) await noteRecallReview(reviewed, record, d.opening).catch(() => {})
     opened.delete(key(record.topic))
   }
   const path = 'path' in record.scope ? record.scope.path : ''
