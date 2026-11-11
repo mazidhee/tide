@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backpropagation in a two-layer network · Tide</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .hbars { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 7px 10px; align-items: center; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+  .hbars i { display: block; height: 14px; width: calc(var(--v) * 1%); min-width: 2px; background: var(--accent); border-radius: 0 3px 3px 0; }
+  .hbars .trk { border-left: 1px solid var(--line-2); }
+  .hbars .k { font-family: var(--mono); font-size: 12px; text-align: right; }
+  .hbars .none { color: var(--ink-3); font-size: 12px; padding-left: 6px; line-height: 14px; }
+  .hbars .best { color: var(--ink); font-weight: 600; }
+</style>
+</head>
+<body data-page="lesson">
+<div class="app">
+  <aside class="rail" id="rail" aria-label="Tide"></aside>
+  <main class="main">
+    <div class="topbar">
+      <div class="crumbs"><span class="area c3">Machine learning</span><i data-i="chev" class="s"></i><span>Neural networks</span><i data-i="chev" class="s"></i><b>Backpropagation in a two-layer network</b></div>
+      <span class="sp"></span>
+      <span class="meta num" style="display:inline-flex;gap:6px;align-items:center" data-tip="Focus timer. Break at 0:00"><i data-i="timer" class="s"></i>24:10</span>
+      <button class="btn sm" style="margin-left:8px"><i data-i="mic" class="s"></i>Talk</button>
+      <button class="icon-btn" data-read-toggle title="Reading face: serif or sans"><i data-i="text"></i></button>
+      <button class="icon-btn" title="Lesson notes"><i data-i="pen"></i></button>
+      <button class="icon-btn" aria-pressed="true" title="Plan and sources"><i data-i="panel"></i></button>
+    </div>
+
+    <div class="lesson">
+      <div class="lesson-col"><div class="lesson-in">
+        <h1 class="lesson-title">Backpropagation in a two-layer network</h1>
+        <div class="lesson-meta"><span><i data-i="flag" class="s"></i>For your aim Machine learning engineering</span><span><i data-i="laptop" class="s"></i>Taught by Gemma 4 12B on this Mac</span><span><i data-i="clock" class="s"></i>Started 13:42</span></div>
+
+        <section class="recall" aria-label="Recall from last time">
+          <span class="level c3" style="--v:58;--hw:58" data-tip="Held at 58% after this answer&#10;It had fallen to 31%"></span>
+          <div class="lab"><i data-i="reset" class="s"></i>You couldn’t answer this on Thursday</div>
+          <div>
+            <p class="q">Why does the gradient through a sigmoid shrink towards zero when its input is far from zero?</p>
+            <div class="given">Its slope is σ(z)(1 − σ(z)). When z is far from zero, σ is nearly 0 or nearly 1, so one of the two factors is nearly 0 and almost nothing flows back.</div>
+            <div class="verdict"><i data-i="check"></i><span><b>Right.</b> On Thursday you said the gradient “explodes”; it does the opposite. Tide will ask again in 4 days.</span></div>
+          </div>
+        </section>
+
+        <article class="msg">
+          <div class="who"><span data-prof="24"></span>Tide<span class="meta">Step 3, gradients by the chain rule</span></div>
+          <div class="prose">
+            <p>That answer is the whole reason today’s network uses <em>tanh</em> in the hidden layer and keeps the sigmoid only at the output. Here is the network once more, with two inputs, four hidden units and one output:</p>
+            <div class="eq"><math display="block"><mrow><mi mathvariant="bold">h</mi><mo>=</mo><mi>tanh</mi><mo>(</mo><msup><mi>W</mi><mrow><mo>(</mo><mn>1</mn><mo>)</mo></mrow></msup><mi mathvariant="bold">x</mi><mo>+</mo><msup><mi mathvariant="bold">b</mi><mrow><mo>(</mo><mn>1</mn><mo>)</mo></mrow></msup><mo>)</mo><mo>,</mo><mspace width="1.2em"/><mover><mi>y</mi><mo>^</mo></mover><mo>=</mo><mi>σ</mi><mo>(</mo><msup><mi mathvariant="bold">w</mi><mrow><mo>(</mo><mn>2</mn><mo>)</mo><mo>⊤</mo></mrow></msup><mi mathvariant="bold">h</mi><mo>+</mo><msup><mi>b</mi><mrow><mo>(</mo><mn>2</mn><mo>)</mo></mrow></msup><mo>)</mo></mrow></math><span class="n">(1)</span></div>
+            <p>For one example with label <math><mi>y</mi><mo>∈</mo><mo>{</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo>}</mo></math> the loss is the cross-entropy:</p>
+            <div class="eq"><math display="block"><mrow><mi>L</mi><mo>=</mo><mo>−</mo><mo>[</mo><mi>y</mi><mspace width=".17em"/><mi>ln</mi><mspace width=".17em"/><mover><mi>y</mi><mo>^</mo></mover><mo>+</mo><mo>(</mo><mn>1</mn><mo>−</mo><mi>y</mi><mo>)</mo><mspace width=".17em"/><mi>ln</mi><mo>(</mo><mn>1</mn><mo>−</mo><mover><mi>y</mi><mo>^</mo></mover><mo>)</mo><mo>]</mo></mrow></math><span class="n">(2)</span></div>
+            <p>Backpropagation asks one question at each layer: <strong>how much does the loss change if this layer’s input changes?</strong> Call that quantity <math><mi>δ</mi></math>. At the output, the sigmoid and the cross-entropy cancel neatly, which is why they are used together<a class="cite" href="#s1">1</a>:</p>
+            <div class="eq"><math display="block"><mrow><msup><mi>δ</mi><mrow><mo>(</mo><mn>2</mn><mo>)</mo></mrow></msup><mo>=</mo><mfrac><mrow><mo>∂</mo><mi>L</mi></mrow><mrow><mo>∂</mo><msup><mi>z</mi><mrow><mo>(</mo><mn>2</mn><mo>)</mo></mrow></msup></mrow></mfrac><mo>=</mo><mover><mi>y</mi><mo>^</mo></mover><mo>−</mo><mi>y</mi></mrow></math><span class="n">(3)</span></div>
+            <p>To reach the hidden layer, send that error back along the same weights it came forward on, then multiply by the slope of tanh at each unit. Since <math><msup><mi>tanh</mi><mo>′</mo></msup><mo>(</mo><mi>z</mi><mo>)</mo><mo>=</mo><mn>1</mn><mo>−</mo><msup><mi>tanh</mi><mn>2</mn></msup><mo>(</mo><mi>z</mi><mo>)</mo></math>, the slope is already known from the forward pass<a class="cite" href="#s2">2</a>:</p>
+            <div class="eq"><math display="block"><mrow><msup><mi mathvariant="bold">δ</mi><mrow><mo>(</mo><mn>1</mn><mo>)</mo></mrow></msup><mo>=</mo><mo>(</mo><msup><mi mathvariant="bold">w</mi><mrow><mo>(</mo><mn>2</mn><mo>)</mo></mrow></msup><msup><mi>δ</mi><mrow><mo>(</mo><mn>2</mn><mo>)</mo></mrow></msup><mo>)</mo><mo>⊙</mo><mo>(</mo><mn>1</mn><mo>−</mo><msup><mi mathvariant="bold">h</mi><mn>2</mn></msup><mo>)</mo></mrow></math><span class="n">(4)</span></div>
+            <p>The gradients for the weights are then each layer’s <math><mi>δ</mi></math> times whatever fed into that layer:</p>
+            <div class="eq"><math display="block"><mrow><mfrac><mrow><mo>∂</mo><mi>L</mi></mrow><mrow><mo>∂</mo><msup><mi mathvariant="bold">w</mi><mrow><mo>(</mo><mn>2</mn><mo>)</mo></mrow></msup></mrow></mfrac><mo>=</mo><msup><mi>δ</mi><mrow><mo>(</mo><mn>2</mn><mo>)</mo></mrow></msup><mi mathvariant="bold">h</mi><mo>,</mo><mspace width="1.2em"/><mfrac><mrow><mo>∂</mo><mi>L</mi></mrow><mrow><mo>∂</mo><msup><mi>W</mi><mrow><mo>(</mo><mn>1</mn><mo>)</mo></mrow></msup></mrow></mfrac><mo>=</mo><msup><mi mathvariant="bold">δ</mi><mrow><mo>(</mo><mn>1</mn><mo>)</mo></mrow></msup><msup><mi mathvariant="bold">x</mi><mo>⊤</mo></msup></mrow></math><span class="n">(5)</span></div>
+            <p>Notice what (4) says about a hidden unit whose output is close to ±1: the factor <math><mn>1</mn><mo>−</mo><msup><mi>h</mi><mn>2</mn></msup></math> is close to zero, so that unit stops learning. It is the same saturation you just described, one layer down.</p>
+          </div>
+          <div class="tools">
+            <button class="btn quiet sm" title="Speak"><i data-i="speak" class="s"></i>Speak</button>
+            <button class="btn quiet sm" title="Check this"><i data-i="verify" class="s"></i>Check this</button>
+            <button class="btn quiet sm" title="Show me"><i data-i="show" class="s"></i>Show me</button>
+            <button class="btn quiet sm" title="Add to notes"><i data-i="addnote" class="s"></i>Add to notes</button>
+            <a class="checked" href="#sources" data-tip="Equations 3 to 5 re-derived by SymPy on this Mac&#10;Explanation compared with sources 1 and 2"><i data-i="verify" class="s"></i>Checked against 2 sources and by SymPy</a>
+          </div>
+        </article>
+
+        <div class="you">Show me what the hidden layer is actually doing.</div>
+
+        <article class="msg">
+          <div class="who"><span data-prof="24"></span>Tide</div>
+          <div class="prose"><p>Here is the same network training on the two-moons data. Each hidden unit draws one straight line through the plane; the output unit bends them into a single boundary.</p></div>
+
+          <section class="block" aria-label="Simulation: a two-layer network learning two moons">
+            <div class="block-head"><i data-i="models"></i><h2>Two-layer network on two moons</h2><span class="meta">Simulation, runs on this Mac</span><span class="sp"></span><button class="icon-btn" title="Open in its own window"><i data-i="external"></i></button><button class="icon-btn" title="More"><i data-i="more"></i></button></div>
+            <div class="sim">
+              <div>
+                <h3>Network <span>2, 4, 1</span></h3>
+                <svg viewBox="0 0 216 216" id="net" role="img" aria-label="Network diagram: two inputs, four tanh hidden units, one sigmoid output"></svg>
+              </div>
+              <div>
+                <h3>Decision surface <span id="acc">accuracy 96.5%</span></h3>
+                <svg viewBox="0 0 216 216" id="surf" role="img" aria-label="The two classes of points and the boundary the network has learned"></svg>
+              </div>
+              <div>
+                <h3>Loss <span>cross-entropy</span></h3>
+                <svg viewBox="0 0 216 216" id="loss" role="img" aria-label="Training and test loss by epoch"></svg>
+              </div>
+            </div>
+            <div class="simbar">
+              <button class="play" id="play" title="Run" aria-label="Run"><i data-i="play"></i></button>
+              <button class="icon-btn" id="stepb" title="One epoch"><i data-i="step"></i></button>
+              <button class="icon-btn" id="resetb" title="Start again"><i data-i="reset"></i></button>
+              <span class="ctl" style="margin-left:6px">Learning rate <b>0.03 <i data-i="chevd" class="s"></i></b></span>
+              <span class="ctl">Hidden <b>tanh <i data-i="chevd" class="s"></i></b></span>
+              <span class="ctl">Units <b>4 <i data-i="chevd" class="s"></i></b></span>
+              <span class="legend" style="margin-left:6px;order:9;flex-basis:100%"><span><i></i>Positive weight, class A</span><span><i style="--c:var(--neg)"></i>Negative weight, class B</span></span>
+              <span class="epoch">Epoch <b id="ep">184</b> of 400</span>
+            </div>
+            <div class="tour">
+              <span data-prof="28"></span>
+              <p><b>Look at the hidden layer.</b> The thickest line into h₂ comes from x₂: that unit has learned to split the plane roughly top from bottom. Press Run and watch which line thickens next.</p>
+              <span class="pg"><button class="btn sm">Back</button>2 of 5<button class="btn sm">Next</button></span>
+            </div>
+          </section>
+          <div class="tools">
+            <button class="btn quiet sm" title="Speak"><i data-i="speak" class="s"></i>Speak</button>
+            <button class="btn quiet sm" title="Check this"><i data-i="verify" class="s"></i>Check this</button>
+            <button class="btn quiet sm" title="Show me"><i data-i="show" class="s"></i>Show me</button>
+            <button class="btn quiet sm" title="Add to notes"><i data-i="addnote" class="s"></i>Add to notes</button>
+          </div>
+        </article>
+
+        <article class="msg">
+          <div class="who"><span data-prof="24"></span>Tide<span class="meta">Step 5, read your own runs</span></div>
+          <div class="prose"><p>You trained this network at six learning rates on Monday. The runs are in your Study data, so ask them directly: which rate got to a loss of 0.1 soonest?</p></div>
+
+          <section class="block" aria-label="SQL cell">
+            <div class="block-head"><i data-i="terminal"></i><h2>SQL</h2><span class="meta">study.training_runs, read-only</span><span class="sp"></span><button class="btn sm primary"><i data-i="play" class="s"></i>Run</button><kbd>⌘↵</kbd><button class="icon-btn" title="Copy"><i data-i="copy"></i></button></div>
+<pre class="sql"><span class="k">select</span> learning_rate,
+       <span class="f">round</span>(<span class="f">avg</span>(epochs_to_loss_01)) <span class="k">as</span> epochs,
+       <span class="f">round</span>(<span class="f">avg</span>(final_loss), 3)     <span class="k">as</span> final_loss,
+       <span class="f">count</span>(*)                      <span class="k">as</span> runs
+<span class="k">from</span>   training_runs
+<span class="k">where</span>  dataset = <span class="s">'two_moons'</span> <span class="k">and</span> hidden_units = 4
+<span class="k">group by</span> learning_rate
+<span class="k">order by</span> learning_rate;</pre>
+            <div class="result">
+              <div>
+                <table class="tbl">
+                  <thead><tr><th class="r">learning_rate</th><th class="r">epochs</th><th class="r">final_loss</th><th class="r">runs</th></tr></thead>
+                  <tbody>
+                    <tr><td class="r">0.001</td><td class="r">1,840</td><td class="r">0.098</td><td class="r">5</td></tr>
+                    <tr><td class="r">0.003</td><td class="r">912</td><td class="r">0.091</td><td class="r">5</td></tr>
+                    <tr><td class="r">0.01</td><td class="r">388</td><td class="r">0.084</td><td class="r">5</td></tr>
+                    <tr><td class="r">0.03</td><td class="r">171</td><td class="r">0.081</td><td class="r">5</td></tr>
+                    <tr class="best"><td class="r">0.1</td><td class="r">96</td><td class="r">0.094</td><td class="r">5</td></tr>
+                    <tr><td class="r">0.3</td><td class="r muted">null</td><td class="r">0.412</td><td class="r">5</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div>
+                <h3 style="margin:0 0 10px;font:500 12.5px/18px var(--ui);color:var(--ink-2)">Epochs to reach a loss of 0.1, by learning rate</h3>
+                <div class="hbars" role="img" aria-label="Bar chart of epochs to reach a loss of 0.1 for each learning rate">
+                  <span class="k">0.001</span><span class="trk"><i style="--v:100" data-tip="0.001: 1,840 epochs"></i></span><span>1,840</span>
+                  <span class="k">0.003</span><span class="trk"><i style="--v:49.6" data-tip="0.003: 912 epochs"></i></span><span>912</span>
+                  <span class="k">0.01</span><span class="trk"><i style="--v:21.1" data-tip="0.01: 388 epochs"></i></span><span>388</span>
+                  <span class="k">0.03</span><span class="trk"><i style="--v:9.3" data-tip="0.03: 171 epochs"></i></span><span>171</span>
+                  <span class="k best">0.1</span><span class="trk"><i style="--v:5.2" data-tip="0.1: 96 epochs, the fastest"></i></span><span class="best">96</span>
+                  <span class="k">0.3</span><span class="trk"><span class="none">never reached 0.1</span></span><span></span>
+                </div>
+              </div>
+            </div>
+            <div class="block-foot"><span class="num">6 rows in 12 ms</span><span>Ran on this Mac. Nothing left it.</span><span style="margin-left:auto;display:flex;gap:2px"><button class="btn quiet sm">Table</button><button class="btn quiet sm">Chart</button><button class="btn quiet sm" title="Add to notes"><i data-i="addnote" class="s"></i>Add to notes</button></span></div>
+          </section>
+        </article>
+
+        <section class="ask" aria-label="Question">
+                    <p class="q">At a learning rate of 0.3 the loss stalled at 0.412 and never came down. Using equation (4), explain what happened to the hidden units.</p>
+          <div class="answer">
+            <textarea placeholder="Write your answer. A sentence or two is enough." aria-label="Your answer"></textarea>
+            <div class="bar"><button class="icon-btn" title="Dictate"><i data-i="mic"></i></button><button class="btn quiet sm"><i data-i="hint" class="s"></i>Hint</button><span class="meta" style="margin-left:6px">Question 2 of 3 in this step</span><span class="sp"></span><button class="btn quiet sm">I don’t know</button><button class="btn primary sm">Check my answer<kbd style="border-color:rgba(255,255,255,.45);color:inherit">⌘↵</kbd></button></div>
+          </div>
+        </section>
+
+        <div class="composer-wrap"><div class="composer"><i data-i="tutor"></i><input placeholder="Ask about any part of this lesson" aria-label="Ask about any part of this lesson"><button class="icon-btn" title="Dictate"><i data-i="mic"></i></button><button class="send" title="Send" aria-label="Send"><i data-i="send"></i></button></div></div>
+      </div></div>
+
+      <aside class="lesson-side">
+        <section>
+          <div class="side-h">Plan <span class="meta num">3 of 6</span></div>
+          <ol class="plan">
+            <li class="d"><span class="n"><i data-i="check" class="s"></i></span><span>Recall from last time</span><small>4 min</small></li>
+            <li class="d"><span class="n"><i data-i="check" class="s"></i></span><span>The forward pass</span><small>12 min</small></li>
+            <li class="c"><span class="n">3</span><span>Gradients by the chain rule<p>Where the error goes, and why tanh in the middle.</p></span><small>15 min</small></li>
+            <li><span class="n">4</span><span>Train it on two moons</span><small>10 min</small></li>
+            <li><span class="n">5</span><span>Read your own runs</span><small>8 min</small></li>
+            <li><span class="n">6</span><span>Wrap up and make cards</span><small>5 min</small></li>
+          </ol>
+        </section>
+        <section id="sources">
+          <div class="side-h">Checked against</div>
+          <a class="src" href="library.html" id="s1"><span class="k">1</span><span><b>Deep Learning, §6.5</b><span>Goodfellow, Bengio and Courville. In your library, page 200</span></span></a>
+          <a class="src" href="library.html" id="s2"><span class="k">2</span><span><b>Neural Networks and Deep Learning, ch. 2</b><span>Michael Nielsen. Saved article</span></span></a>
+          <div class="src"><span class="k"><i data-i="check" class="s" style="width:12px;height:12px;margin-top:3px"></i></span><span><b>SymPy</b><span>Re-derived equations 3 to 5. <span class="ok" style="display:inline">All three agree.</span></span></span></div>
+          <div class="src"><span class="k"><i data-i="check" class="s" style="width:12px;height:12px;margin-top:3px"></i></span><span><b>Second opinion, Groq</b><span>gpt-oss-120b read the explanation. <span class="ok" style="display:inline">No corrections.</span></span></span></div>
+          <p class="ran"><i data-i="shield" class="s"></i><span>The lesson was written on this Mac. Only the explanation text went to Groq, with nothing from your notes.</span></p>
+        </section>
+      </aside>
+    </div>
+  </main>
+</div>
+<script src="app.js"></script>
+<script>
+/* A static but honest-looking rendering of the simulation. Run and Step advance the epoch, the loss cursor and the boundary. */
+(function () {
+  const NS = 'http://www.w3.org/2000/svg'
+  const el = (p, tag, at) => { const e = document.createElementNS(NS, tag); for (const k in at) e.setAttribute(k, at[k]); p.appendChild(e); return e }
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647; const gauss = () => (rnd() + rnd() + rnd() + rnd() - 2) * 0.9
+
+  // Network
+  const net = document.getElementById('net')
+  const xin = [[22, 72, 'x₁'], [22, 136, 'x₂']], hid = [[108, 26, 'h₁'], [108, 78, 'h₂'], [108, 130, 'h₃'], [108, 182, 'h₄']], out = [194, 104, 'ŷ']
+  const w1 = [[1.9, -0.6], [-0.4, 2.8], [-1.6, 1.1], [0.8, -2.1]], w2 = [2.2, -2.6, 1.4, -1.8]
+  const edges = []
+  hid.forEach((h, j) => xin.forEach((x, i) => edges.push(el(net, 'line', { x1: x[0], y1: x[1], x2: h[0], y2: h[1], class: w1[j][i] > 0 ? 'wpos' : 'wneg', 'stroke-width': 0.6 + Math.abs(w1[j][i]) * 1.25, 'stroke-linecap': 'round', opacity: .85, 'data-tip': `${x[2]} to ${h[2]}: weight ${w1[j][i].toFixed(2)}` }))))
+  hid.forEach((h, j) => el(net, 'line', { x1: h[0], y1: h[1], x2: out[0], y2: out[1], class: w2[j] > 0 ? 'wpos' : 'wneg', 'stroke-width': 0.6 + Math.abs(w2[j]) * 1.25, 'stroke-linecap': 'round', opacity: .85, 'data-tip': `${h[2]} to ŷ: weight ${w2[j].toFixed(2)}` }))
+  const node = (n, hl) => { el(net, 'circle', { cx: n[0], cy: n[1], r: 14, class: 'node' + (hl ? ' hl' : '') }); const t = el(net, 'text', { x: n[0], y: n[1] + 4, 'text-anchor': 'middle', class: 'labk' }); t.textContent = n[2] }
+  xin.forEach((n) => node(n)); hid.forEach((n) => node(n, true)); node(out)
+  ;[[22, 'inputs'], [108, 'tanh'], [194, 'sigmoid']].forEach(([x, s]) => { const t = el(net, 'text', { x, y: 212, 'text-anchor': 'middle', class: 'ax' }); t.textContent = s })
+
+  // Decision surface
+  const surf = document.getElementById('surf'), S = 216
+  const px = (x) => ((x + 1.5) / 4) * S, py = (y) => S - ((y + 1.25) / 3) * S
+  const xs = [-1.5, -1, -0.4, 0, 0.5, 1, 1.5, 2, 2.5], yEnd = [-0.62, -0.42, 0.28, 0.76, 0.24, -0.26, 0.12, 0.92, 1.3], yStart = xs.map((x) => 0.72 - 0.34 * x)
+  const smooth = (pts) => { let d = `M${pts[0][0]} ${pts[0][1]}`; for (let i = 0; i < pts.length - 1; i++) { const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2; d += `C${p1[0] + (p2[0] - p0[0]) / 6} ${p1[1] + (p2[1] - p0[1]) / 6} ${p2[0] - (p3[0] - p1[0]) / 6} ${p2[1] - (p3[1] - p1[1]) / 6} ${p2[0]} ${p2[1]}` } return d }
+  const rA = el(surf, 'path', { class: 'rpos' }), rB = el(surf, 'path', { class: 'rneg' }), bd = el(surf, 'path', { class: 'bound' })
+  for (let i = 0; i < 64; i++) { const t = Math.PI * rnd(); el(surf, 'circle', { cx: px(Math.cos(t) + gauss() * 0.11), cy: py(Math.sin(t) + gauss() * 0.11), r: 3.2, class: 'ppos' }) }
+  for (let i = 0; i < 64; i++) { const t = Math.PI * rnd(); el(surf, 'circle', { cx: px(1 - Math.cos(t) + gauss() * 0.11), cy: py(0.5 - Math.sin(t) + gauss() * 0.11), r: 3.2, class: 'pneg' }) }
+  el(surf, 'rect', { x: .5, y: .5, width: S - 1, height: S - 1, fill: 'none', class: 'bl', rx: 3 })
+  const boundary = (p) => { const pts = xs.map((x, i) => [px(x), py(yStart[i] + (yEnd[i] - yStart[i]) * p)]); const d = smooth(pts); bd.setAttribute('d', d); rA.setAttribute('d', d + `L${S} 0L0 0Z`); rB.setAttribute('d', d + `L${S} ${S}L0 ${S}Z`) }
+
+  // Loss
+  const loss = document.getElementById('loss'), X0 = 32, X1 = 208, Y0 = 12, Y1 = 184, N = 400
+  const lx = (e) => X0 + (e / N) * (X1 - X0), ly = (v) => Y1 - (v / 0.7) * (Y1 - Y0)
+  ;[0, 0.35, 0.7].forEach((v) => { el(loss, 'line', { x1: X0, x2: X1, y1: ly(v), y2: ly(v), class: v ? 'gl' : 'bl' }); const t = el(loss, 'text', { x: X0 - 6, y: ly(v) + 4, 'text-anchor': 'end', class: 'ax' }); t.textContent = v ? v.toFixed(2) : '0' })
+  ;[0, 200, 400].forEach((e) => { const t = el(loss, 'text', { x: lx(e), y: 202, 'text-anchor': e ? (e === 400 ? 'end' : 'middle') : 'start', class: 'ax' }); t.textContent = e })
+  const tr = [], te = []
+  for (let e = 0; e <= N; e += 4) { const b = 0.62 * Math.exp(-e / 62) + 0.06 * Math.exp(-e / 260) + 0.045; tr.push(b + gauss() * 0.006); te.push(b + 0.012 + 0.03 * (1 - Math.exp(-e / 120)) + gauss() * 0.009) }
+  const pTe = el(loss, 'path', { class: 'l-test' }), pTr = el(loss, 'path', { class: 'l-train' }), cur = el(loss, 'line', { class: 'cur', y1: Y0, y2: Y1 })
+  const dTe = el(loss, 'circle', { r: 4, class: 'dotr', style: 'fill:var(--ink-3)' }), dTr = el(loss, 'circle', { r: 4, class: 'dotr' })
+  const tTe = el(loss, 'text', { class: 'lab' }), tTr = el(loss, 'text', { class: 'lab' })
+  const line = (a, k) => a.slice(0, k + 1).map((v, i) => `${i ? 'L' : 'M'}${lx(i * 4).toFixed(1)} ${ly(v).toFixed(1)}`).join('')
+  const ep = document.getElementById('ep'), acc = document.getElementById('acc')
+  let e = 184
+  const draw = () => {
+    const k = Math.round(e / 4), x = lx(k * 4)
+    pTr.setAttribute('d', line(tr, k)); pTe.setAttribute('d', line(te, k)); cur.setAttribute('x1', x); cur.setAttribute('x2', x)
+    dTr.setAttribute('cx', x); dTr.setAttribute('cy', ly(tr[k])); dTe.setAttribute('cx', x); dTe.setAttribute('cy', ly(te[k]))
+    const right = x > 130, tx = right ? x - 9 : x + 9, an = right ? 'end' : 'start'
+    tTe.setAttribute('x', tx); tTe.setAttribute('y', ly(te[k]) - 26); tTe.setAttribute('text-anchor', an); tTe.textContent = `test ${te[k].toFixed(3)}`
+    tTr.setAttribute('x', tx); tTr.setAttribute('y', ly(tr[k]) - 12); tTr.setAttribute('text-anchor', an); tTr.textContent = `train ${tr[k].toFixed(3)}`; tTr.setAttribute('class', 'labk')
+    const p = 1 - Math.exp(-e / 55); boundary(p)
+    ep.textContent = e; acc.textContent = `accuracy ${(50 + 47.5 * (1 - Math.exp(-e / 48))).toFixed(1)}%`
+    edges.forEach((ln, i) => ln.setAttribute('stroke-width', 0.6 + Math.abs(w1[i >> 1][i & 1]) * 1.25 * (0.35 + 0.65 * p)))
+  }
+  draw()
+  let timer = null; const play = document.getElementById('play'), I = window.tideIcon
+  const stop = () => { clearInterval(timer); timer = null; play.innerHTML = I('play'); play.title = 'Run' }
+  play.onclick = () => { if (timer) return stop(); if (e >= N) e = 0; play.innerHTML = I('pause'); play.title = 'Pause'; timer = setInterval(() => { e += 4; draw(); if (e >= N) stop() }, 50) }
+  document.getElementById('stepb').onclick = () => { stop(); e = Math.min(N, e + 4); draw() }
+  document.getElementById('resetb').onclick = () => { stop(); e = 0; draw() }
+})()
+</script>
+</body>
+</html>

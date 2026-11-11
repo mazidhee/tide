@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Replication: leaders and followers · Tide</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="note">
+<div class="app">
+  <aside class="rail" id="rail" aria-label="Tide"></aside>
+  <main class="main">
+    <div class="topbar">
+      <div class="crumbs"><span class="area c2">Distributed systems</span><i data-i="chev" class="s"></i><b>Replication: leaders and followers</b></div>
+      <span class="sp"></span>
+      <span class="meta">Saved to your vault at 11:02</span>
+      <div class="seg" data-pick style="margin-left:8px"><button aria-pressed="true">Read</button><button>Edit</button></div>
+      <button class="icon-btn" data-read-toggle title="Reading face: serif or sans"><i data-i="text"></i></button>
+      <button class="icon-btn" title="Cards from this note"><i data-i="review"></i></button>
+      <button class="icon-btn" aria-pressed="true" title="Tutor"><i data-i="panel"></i></button>
+    </div>
+
+    <div class="note-wrap">
+      <div class="note-col"><article class="note-in">
+        <h1 class="note-title">Replication: leaders and followers</h1>
+        <dl class="props">
+          <dt>Notebook</dt><dd><span class="area c2">Distributed systems</span></dd>
+          <dt>From</dt><dd><a href="library.html" class="tag"><i data-i="book" class="s"></i>Designing Data-Intensive Applications, ch. 5</a><a href="lesson.html" class="tag"><i data-i="tutor" class="s"></i>Lesson, 4 November</a></dd>
+          <dt>Cards</dt><dd><span class="num">8 cards</span><span class="muted">2 fading</span></dd>
+        </dl>
+
+        <div class="prose">
+          <p>A replicated database keeps a copy of the same data on several machines, so that it survives the loss of one and can serve reads from more than one place. With a single leader, every write goes to the leader first. Followers apply the same changes, in the same order, from the leader’s replication log.</p>
+
+          <h2>Synchronous or asynchronous</h2>
+          <p>The question is what the leader waits for before telling the client the write succeeded.</p>
+          <table>
+            <thead><tr><th>Mode</th><th>Client hears “ok” when</th><th>What it costs</th></tr></thead>
+            <tbody>
+              <tr><td>Synchronous</td><td>the leader and the follower both have it</td><td>One slow follower stalls every write</td></tr>
+              <tr><td>Semi-synchronous</td><td>the leader and one chosen follower have it</td><td>Slower writes; two copies always current</td></tr>
+              <tr><td>Asynchronous</td><td>the leader alone has it</td><td>Recent writes can vanish on failover</td></tr>
+            </tbody>
+          </table>
+          <div class="callout"><i data-i="hint"></i><span>In practice “synchronous” nearly always means semi-synchronous: one follower is kept in step and the rest lag behind. If that follower slows down, another is promoted to take its place.</span></div>
+
+          <h2>Asynchronous replication</h2>
+          <p>Writes are fast, and the leader keeps accepting them even if every follower has fallen behind. <span class="cited"><a class="cite pin" href="#c1">1</a>The price is durability: if the leader fails before a follower has received a write, promoting that follower discards the write, even though the client was told it had succeeded.</span> This is the default in PostgreSQL and MySQL, and it is the usual choice when followers are far away.</p>
+<pre class="code"><span class="cm"># postgresql.conf: wait for the first standby that answers</span>
+synchronous_standby_names = <span class="k">'FIRST 1 (replica_a, replica_b)'</span>
+synchronous_commit = <span class="k">on</span></pre>
+
+          <h2>Failover</h2>
+          <p>When the leader dies, a follower has to take over. Three things happen, and each can go wrong:</p>
+          <ul>
+            <li><strong>Deciding the leader is dead.</strong> Usually a timeout, often 30 seconds. Too short and a busy leader is declared dead for nothing.</li>
+            <li><strong>Choosing the new leader.</strong> The follower with the most recent log position loses the least.</li>
+            <li><strong>Telling everyone.</strong> Clients must send writes to the new leader, and the old one must stand down when it returns. If both believe they lead, that is <mark>split brain</mark>.</li>
+          </ul>
+
+          <h2>Replication lag</h2>
+          <p>A read from a lagging follower can miss a write the same user made a moment ago. Reading your own writes from the leader for a short while after writing avoids the most confusing case.</p>
+        </div>
+      </article></div>
+
+      <aside class="tpanel" aria-label="Tutor">
+        <div class="tpanel-head"><span data-prof="22"></span><b>Tutor</b><span class="tag"><i data-i="note" class="s"></i>Answering from this note</span><span style="flex:1"></span><button class="icon-btn" title="New conversation"><i data-i="plus"></i></button><button class="icon-btn" title="Close"><i data-i="x"></i></button></div>
+        <div class="tpanel-body">
+          <div class="you">If the client was told “ok”, how can the write still be lost after a failover?</div>
+          <div class="ans">
+            <p>Because “ok” from an asynchronous leader only means the leader itself has the write<a class="cite" href="#c1">1</a>. The followers receive it afterwards.</p>
+            <p>If the leader dies in that gap, the follower that takes over never saw the write. When the old leader returns it has to throw away what the new leader does not have, so the two agree again<a class="cite" href="#c2">2</a>.</p>
+            <p>Your table already holds the fix: keep one follower synchronous, and accept that each write waits for it<a class="cite" href="#c3">3</a>.</p>
+          </div>
+          <div class="tools">
+            <button class="btn quiet sm" title="Speak"><i data-i="speak" class="s"></i>Speak</button>
+            <button class="btn quiet sm" title="Check this"><i data-i="verify" class="s"></i>Check this</button>
+            <button class="btn quiet sm" title="Show me"><i data-i="show" class="s"></i>Show me</button>
+            <button class="btn quiet sm" title="Add to notes"><i data-i="addnote" class="s"></i>Add to notes</button>
+          </div>
+          <div class="cites">
+            <a class="citecard" href="#" id="c1"><span class="k">1</span><span><b>This note, Asynchronous replication</b><q>if the leader fails before a follower has received a write, promoting that follower discards the write</q></span></a>
+            <a class="citecard" href="library.html" id="c2"><span class="k">2</span><span><b>Designing Data-Intensive Applications, p. 157</b><q>Leader failure: failover. In your library</q></span></a>
+            <a class="citecard" href="#" id="c3"><span class="k">3</span><span><b>This note, Synchronous or asynchronous</b><q>Semi-synchronous: the leader and one chosen follower have it</q></span></a>
+          </div>
+          <p class="ran" style="margin:14px 0 0"><i data-i="laptop" class="s"></i><span>Gemma 4 12B on this Mac, 3.1 s. Nothing left it.</span></p>
+          <div class="suggest"><button class="btn sm">Quiz me on this note</button><button class="btn sm">Make cards from Failover</button></div>
+        </div>
+        <div class="tpanel-foot"><div class="box">
+          <input placeholder="Ask about this note" aria-label="Ask about this note">
+          <div class="bar"><button class="btn quiet sm"><i data-i="note" class="s"></i>This note<i data-i="chevd" class="s"></i></button><span class="sp"></span><button class="icon-btn" title="Dictate"><i data-i="mic"></i></button><button class="send" style="width:28px;height:28px;border-radius:7px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center" aria-label="Send"><i data-i="send"></i></button></div>
+        </div></div>
+      </aside>
+    </div>
+  </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
