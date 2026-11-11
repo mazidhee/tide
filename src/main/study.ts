@@ -2,6 +2,7 @@ import { createHash } from 'crypto'
 import { existsSync, promises as fs } from 'fs'
 import { basename, dirname, extname } from 'path'
 import type { CardSchedule, ChatScope, Flashcard, ReviewGrade, StudyCard } from '@shared/types'
+import { appendRevlog, elapsedDays, RATING as REVLOG_RATING } from './revlog'
 import { absPath, allNotes, joinRel, readText, uniquePath, writeText } from './vault'
 import { createEmptyCard, fsrs, Rating, State, type Card as FsrsCard } from 'ts-fsrs'
 
@@ -191,11 +192,13 @@ export async function getCards(scope: ChatScope): Promise<StudyCard[]> {
 export async function reviewCard(id: string, grade: ReviewGrade, path: string): Promise<CardSchedule> {
   const store = await loadStore()
   const now = new Date()
+  const before = store[id] ? toFsrs(store[id], now).last_review : undefined
   const { stored, schedule } = scheduleAfter(store[id], grade, now)
   store[id] = stored
   await saveStore(store)
   const { logReview } = await import('./learn')
   await logReview(id, path, grade, schedule.interval)
+  await appendRevlog([{ rating: REVLOG_RATING[grade], elapsedDays: elapsedDays(before ? new Date(before).getTime() : undefined, now.getTime()), id, kind: 'flashcard', at: now.getTime() }])
   return schedule
 }
 

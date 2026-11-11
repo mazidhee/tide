@@ -50,6 +50,11 @@ export interface ProviderInfo {
   keyless?: boolean
   /** The free allowance per model per day, when the provider has one */
   perDay?: { requests?: number; tokens?: number }
+  /**
+   * Its OpenAI-compatible endpoint documents `response_format: {type: "json_schema"}`, so a reply
+   * that must be JSON of a known shape is constrained to it. Only set from the provider's own docs.
+   */
+  jsonSchema?: boolean
 }
 
 export const PROVIDERS: ProviderInfo[] = [
@@ -87,6 +92,7 @@ export const PROVIDERS: ProviderInfo[] = [
     // Each model has its own allowance: one per job roughly triples what the free tier gives
     jobs: { maths: 'openai/gpt-oss-120b', errors: 'qwen/qwen3.8-27b', marking: 'openai/gpt-oss-20b', planning: 'openai/gpt-oss-120b' },
     reasoningField: 'reasoning_effort',
+    jsonSchema: true,
     models: [
       { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B', price: { input: 0.15, output: 0.6 }, context: 131072, reasoning: true, note: 'Strong reasoning, very fast' },
       { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B', price: { input: 0.075, output: 0.3 }, context: 131072, reasoning: true, note: 'Lighter and cheaper' },
@@ -134,6 +140,7 @@ export const PROVIDERS: ProviderInfo[] = [
     checked: '2026-11-09',
     freeTier: 'Flash models are free on the free tier, measured at about 5 requests a minute and 20 a day in November 2026 (Google no longer publishes the number). Free-tier requests may be used to improve Google’s products. Pro models are paid only.',
     reasoningField: 'reasoning_effort',
+    jsonSchema: true,
     models: [
       { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', price: { input: 0.75, output: 3.75, cachedInput: 0.075 }, reasoning: true, note: 'Paid price until 31 Dec 2026' },
       { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite', price: { input: 0.3, output: 2.5, cachedInput: 0.03 } },

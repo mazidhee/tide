@@ -1,8 +1,9 @@
 /**
  * Recall: what you missed or couldn't answer in a lesson comes back as the opening question of a
- * later lesson on that topic, at intervals that grow each time it goes well. The schedule and the
+ * later lesson on that topic, when it is about to be forgotten. The schedule (FSRS-6) and the
  * store are Tide's Rust module (native/tide-core/src/recall.rs); the store is one plain file in
- * your vault, .tide/recall.json. Lessons in a private project add nothing to it.
+ * your vault, .tide/recall.json. Every review also goes in the review log (revlog.ts). Lessons
+ * in a private project add nothing to either.
  */
 import { join } from 'path'
 import type { LessonRecord } from '@shared/lessonLog'
@@ -10,6 +11,7 @@ import { digestLesson, recallDueNote, type LessonDigest } from '@shared/lessonMe
 import { noteRecallReview } from './knowledge'
 import { tideCore } from './native'
 import { privatePath } from './projects'
+import { appendRevlog, elapsedDays, type RevlogEntry } from './revlog'
 import { vaultRoot } from './vault'
 
 export interface RecallItem {
@@ -19,10 +21,15 @@ export interface RecallItem {
   lesson: string
   created: number
   due: number
+  /** Days until the chance of remembering it falls to 90% */
   stability: number
+  /** 1 to 10 */
+  difficulty: number
   reviews: number
   lapses: number
   last?: number
+  /** Every review, oldest first, starting with the original miss (rating 1) */
+  history: { rating: number; at: number }[]
 }
 
 interface Engine {
@@ -59,7 +66,23 @@ function recall(): Engine | null {
 const opened = new Map<string, { id: string; at: number }>()
 const key = (topic: string) => topic.trim().toLowerCase()
 
-const GRADE: Record<NonNullable<LessonDigest['opening']>, 'again' | 'hard' | 'good'> = { correct: 'good', partial: 'hard', answered: 'hard', wrong: 'again', stuck: 'again' }
+// An answer nobody marked says nothing about how well it was remembered: no review
+const GRADE: Record<NonNullable<LessonDigest['opening']>, 'again' | 'hard' | 'good' | null> = { correct: 'good', partial: 'hard', answered: null, wrong: 'again', stuck: 'again' }
+
+/** The review log's line for an item's latest review */
+function logged(item: RecallItem): RevlogEntry | null {
+  const h = item.history ?? []
+  const last = h[h.length - 1]
+  if (!last) return null
+  return { rating: last.rating as RevlogEntry['rating'], elapsedDays: elapsedDays(h[h.length - 2]?.at, last.at), id: item.id, kind: 'recall', at: last.at }
+}
+
+/** Keeps new questions; each one's original miss is its first review, so it goes in the log */
+async function keep(r: Engine, items: { prompt: string; topic: string; lesson: string }[]): Promise<void> {
+  const before = new Set(r.all().map((i) => i.id))
+  if (!r.add(items, Date.now())) return
+  await appendRevlog(r.all().filter((i) => !before.has(i.id)).flatMap((i) => logged(i) ?? []))
+}
 
 /** A lesson was saved: keep what was missed in it, and settle the recall question it opened with */
 export async function noteLesson(record: LessonRecord): Promise<void> {
@@ -68,9 +91,13 @@ export async function noteLesson(record: LessonRecord): Promise<void> {
   if (!r || !d) return
   const asked = opened.get(key(record.topic))
   if (asked && record.started >= asked.at - 60_000 && d.opening) {
-    const reviewed = r.review(asked.id, GRADE[d.opening], Date.now())
-    // The knowledge map counts it too, on the topic the question came from
-    if (reviewed) await noteRecallReview(reviewed, record, d.opening).catch(() => {})
+    const grade = GRADE[d.opening]
+    const reviewed = grade ? r.review(asked.id, grade, Date.now()) : null
+    if (reviewed) {
+      await appendRevlog([logged(reviewed)].flatMap((e) => e ?? []))
+      // The knowledge map counts it too, on the topic the question came from
+      await noteRecallReview(reviewed, record, d.opening).catch(() => {})
+    }
     opened.delete(key(record.topic))
   }
   const path = 'path' in record.scope ? record.scope.path : ''
@@ -78,7 +105,7 @@ export async function noteLesson(record: LessonRecord): Promise<void> {
   // Not the question this lesson itself opened with: that one is already kept
   const mine = asked ? r.all().find((i) => i.id === asked.id)?.prompt : undefined
   const fresh = [...d.stuck, ...d.missed].filter((p) => p !== mine)
-  if (fresh.length) r.add(fresh.map((prompt) => ({ prompt, topic: d.topic, lesson: d.id })), Date.now())
+  if (fresh.length) await keep(r, fresh.map((prompt) => ({ prompt, topic: d.topic, lesson: d.id })))
 }
 
 /** For a lesson that is opening: what is due on its topic, as a note for the tutor (empty when nothing is) */
@@ -99,5 +126,5 @@ export async function keepForRecall(items: { prompt: string; topic: string; less
   const r = recall()
   if (!r || !items.length) return
   if (path && (await privatePath(path).catch(() => true))) return
-  r.add(items, Date.now())
+  await keep(r, items)
 }

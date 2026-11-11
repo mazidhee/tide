@@ -27,6 +27,8 @@ import {
   type SortedRoadmap
 } from '@shared/curriculum'
 import { askCloud, complete, extractJsonObject, NoCloud } from './ai'
+import type { ReplySchema } from './cloudStream'
+import { ENRICH_SCHEMA, PROPOSALS_SCHEMA, SORT_SCHEMA } from './replySchemas'
 import { getCoach } from './coach'
 import { getNotebooks } from './learn'
 import { privatePath } from './projects'
@@ -69,11 +71,11 @@ export async function setOverride(id: string, cls: SectionClass | null): Promise
 }
 
 /** One model answer: the cloud planning model when it may see this, else Gemma in the background lane */
-export async function ask(system: string, prompt: string, onMac: boolean, signal: AbortSignal): Promise<{ text: string; model: string }> {
+export async function ask(system: string, prompt: string, onMac: boolean, signal: AbortSignal, schema?: ReplySchema): Promise<{ text: string; model: string }> {
   if (!onMac) {
     try {
       let model = 'cloud'
-      const text = await askCloud(prompt, system, 'planning', signal, true, 3000, (t) => (model = t.model))
+      const text = await askCloud(prompt, system, 'planning', signal, true, 3000, (t) => (model = t.model), schema)
       return { text, model }
     } catch (e) {
       if (!(e instanceof NoCloud)) throw e
@@ -161,7 +163,7 @@ async function sortOne(notebook: string, outline: string, onMac: boolean, aims: 
   const todo = sections.filter((s) => !sorted.sections[s.id] || (!s.tagged && !sorted.sections[s.id].class))
   for (let i = 0; i < todo.length; i += SECTION_BATCH) {
     const batch = todo.slice(i, i + SECTION_BATCH)
-    const { text, model } = await ask(SORT_SYSTEM, sortPrompt(aims, notebook, batch), onMac, signal)
+    const { text, model } = await ask(SORT_SYSTEM, sortPrompt(aims, notebook, batch), onMac, signal, SORT_SCHEMA)
     const got = parseSort(extractJsonObject(text), aims, batch)
     // An untagged section the model gave no class: from what the aims said, so it isn't asked about forever
     for (const s of batch) if (!s.tagged && got[s.id] && !got[s.id].class) got[s.id].class = Math.max(0, ...Object.values(got[s.id].serves)) >= 0.6 ? 'core' : 'skip'
@@ -174,7 +176,7 @@ async function sortOne(notebook: string, outline: string, onMac: boolean, aims: 
   const toLook = topics.filter((t) => !t.project && !looked.has(t.id) && !['elective', 'skip'].includes(classOf(t, sorted, {}, aims) ?? ''))
   for (let i = 0; i < toLook.length; i += TOPIC_BATCH) {
     const batch = toLook.slice(i, i + TOPIC_BATCH)
-    const { text, model } = await ask(ENRICH_SYSTEM, enrichPrompt(batch), onMac, signal)
+    const { text, model } = await ask(ENRICH_SYSTEM, enrichPrompt(batch), onMac, signal, ENRICH_SCHEMA)
     const found = parseEnrich(extractJsonObject(text), batch)
     sorted.enrichment = [...new Set([...sorted.enrichment, ...found])]
     sorted.looked = [...sorted.looked, ...batch.map((t) => t.id)]
@@ -224,6 +226,6 @@ export async function proposeChanges(notebook: string): Promise<Proposal[]> {
   const perSection = Math.max(1, Math.min(12, Math.floor(240 / Math.max(1, sections.length))))
   const { prompt, topics } = proposePrompt(aims, nb.name, sections, perSection)
   const onMac = await privatePath(nb.path).catch(() => true)
-  const { text } = await ask(PROPOSE_SYSTEM, prompt, onMac, new AbortController().signal)
+  const { text } = await ask(PROPOSE_SYSTEM, prompt, onMac, new AbortController().signal, PROPOSALS_SCHEMA)
   return parseProposals(extractJsonObject(text), sections, topics)
 }
