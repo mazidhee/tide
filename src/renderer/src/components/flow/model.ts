@@ -35,6 +35,8 @@ export function toFlowNodes(c: Canvas, prev?: Map<string, FlowNode>): FlowNode[]
   return [...groups, ...rest].map((n) => {
     const parent = parentOf.get(n.id)
     const old = prev?.get(n.id)
+    // Nothing about it changed: hand xyflow the same object, so it skips the node entirely
+    if (old && old.data.node === n && old.parentId === parent?.id && old.position.x === n.x - (parent?.x ?? 0) && old.position.y === n.y - (parent?.y ?? 0)) return old
     const sized = n.type === 'group' || n.type === 'link' || n.type === 'file'
     return {
       id: n.id,
@@ -88,20 +90,29 @@ export function withFlowGeometry(c: Canvas, nodes: FlowNode[]): Canvas {
   return changed ? { ...c, nodes: next } : c
 }
 
+const edgeCache = new WeakMap<CanvasEdge, { key: string; edge: FlowEdge }>()
+
+/** The flow edges; an edge whose state didn't change is the same object as last time */
 export function toFlowEdges(c: Canvas, selected: Set<string>, flow?: { active?: string; done: Set<string>; step: number; run: number }): FlowEdge[] {
   return liveEdges(c).map((e) => {
     const state = flow?.active === e.id ? 'active' : flow?.done.has(e.id) ? 'done' : undefined
-    return {
+    const sel = selected.has(e.id)
+    const key = `${state ?? ''}|${sel ? 1 : 0}|${state === 'active' ? flow!.run : ''}`
+    const hit = edgeCache.get(e)
+    if (hit?.key === key) return hit.edge
+    const edge: FlowEdge = {
       id: e.id,
       source: e.fromNode,
       target: e.toNode,
       sourceHandle: e.fromSide ?? null,
       targetHandle: e.toSide ?? null,
       type: 'flow',
-      selected: selected.has(e.id),
+      selected: sel,
       data: { edge: e, ...(state ? { state, step: flow!.step, run: flow!.run } : {}) },
       ...(state === 'active' ? { zIndex: 5 } : {})
     }
+    edgeCache.set(e, { key, edge })
+    return edge
   })
 }
 

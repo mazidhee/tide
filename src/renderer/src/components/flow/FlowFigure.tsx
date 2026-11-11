@@ -11,7 +11,7 @@ export function figureHeight(c: Canvas, width: number): number {
   const minY = Math.min(...c.nodes.map((n) => n.y))
   const maxY = Math.max(...c.nodes.map((n) => n.y + n.height))
   const k = Math.min(1, (width - 48) / Math.max(1, maxX - minX))
-  return Math.round(Math.min(560, Math.max(220, (maxY - minY) * k + 120)))
+  return Math.round(Math.min(560, Math.max(220, (maxY - minY) * k + 150)))
 }
 
 /**

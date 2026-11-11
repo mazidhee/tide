@@ -288,42 +288,30 @@
 .cvn.shape-hexagon {
   background: none;
   border: none;
-  box-shadow: none;
-  padding: 10px 26px;
+  box-shadow: none !important;
+  padding: 10px 30px;
 }
-.cvn.shape-diamond::after,
-.cvn.shape-hexagon::after {
-  content: '';
+.cvn-outline {
   position: absolute;
   inset: 0;
-  z-index: -1;
-  background: var(--cv-rule);
-  clip-path: var(--clip);
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
-.cvn.shape-diamond > *,
-.cvn.shape-hexagon > * {
+.cvn-outline polygon {
+  fill: var(--cv-card);
+  stroke: var(--cv-rule);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+.cvn.shape-diamond > :is(.cvn-title, .cvn-details, .cvn-input),
+.cvn.shape-hexagon > :is(.cvn-title, .cvn-details, .cvn-input) {
   position: relative;
 }
-.cvn.shape-diamond::before,
-.cvn.shape-hexagon::before {
-  content: '';
-  position: absolute;
-  inset: 1px;
-  z-index: 0;
-  background: var(--cv-card);
-  clip-path: var(--clip);
-}
-.cvn.shape-diamond {
-  --clip: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-}
-.cvn.shape-hexagon {
-  --clip: polygon(14px 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 14px 100%, 0 50%);
-}
-.cv .react-flow__node.selected > .cvn.shape-diamond::after,
-.cv .react-flow__node.selected > .cvn.shape-hexagon::after,
-.cv .react-flow__node.flow-at > .cvn.shape-diamond::after,
-.cv .react-flow__node.flow-at > .cvn.shape-hexagon::after {
-  background: var(--accent);
+.cv .react-flow__node.selected .cvn-outline polygon,
+.cv .react-flow__node.flow-at .cvn-outline polygon {
+  stroke: var(--accent);
+  stroke-width: 2;
 }
 
 /* Files and links */
@@ -943,6 +931,7 @@
 
 .cv-minimap {
   overflow: hidden;
+  margin-bottom: 14px !important;
 }
 
 .cv-minimap svg {
@@ -1064,7 +1053,9 @@
 }
 
 .flow-figure .cv-caption {
-  margin-bottom: 52px !important;
+  margin: 8px !important;
+  box-shadow: none;
+  border: 1px solid var(--line);
 }
 
 @media (prefers-reduced-motion: reduce) {

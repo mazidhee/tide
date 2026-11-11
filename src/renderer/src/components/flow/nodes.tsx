@@ -112,19 +112,27 @@ export const TextNode = memo(function TextNode({ id, data, selected }: NodeProps
   const n = data.node
   const editing = ctx.editing === id
   const kind = n.kind
-  const shape = typeof n.shape === 'string' ? n.shape : undefined
+  // A part with a kind is drawn as its kind; a flowchart's own shapes are for plain steps
+  const shape = typeof n.shape === 'string' && !kind ? n.shape : undefined
+  const outline = shape === 'diamond' ? '50,1 99,50 50,99 1,50' : shape === 'hexagon' ? '10,1 90,1 99,50 90,99 10,99 1,50' : null
   const title = nodeLabel(n)
   const details = nodeDetails(n)
   return (
     <div className={`cvn cvn-text k-${kind ?? 'plain'}${shape ? ` shape-${shape}` : ''}${n.color && !kind ? ' tinted' : ''}`} style={colorStyle(n)} onDoubleClick={() => !ctx.readOnly && ctx.setEditing(id)}>
       <Resizer selected={selected} />
       <Handles />
+      {outline && (
+        <svg className="cvn-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <polygon points={outline} vectorEffect="non-scaling-stroke" />
+        </svg>
+      )}
       {kind && kind !== 'note' && (
         <div className="cvn-head">
           <span className="cvn-icon">
             <KindIcon kind={kind} size={13} />
           </span>
-          <span className="cvn-kind">{kindName(kind)}</span>
+          {/* "Load balancer" named Load balancer: the icon says it once */}
+          {kindName(kind)?.toLowerCase() !== title.toLowerCase() && <span className="cvn-kind">{kindName(kind)}</span>}
         </div>
       )}
       {editing ? (

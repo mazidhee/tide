@@ -177,7 +177,8 @@ function Editor({ canvas, onChange, onExample, version, compact, readOnly = fals
       if (!wrap || !wrap.clientWidth) return
       const all = rf.getNodes()
       const left = compact || readOnly ? 0 : narrowRef.current ? 64 : 176
-      const top = readOnly ? 0 : 8
+      // A figure's caption sits above the drawing while a flow plays
+      const top = readOnly ? 40 : 8
       const bottom = 58
       const pad = compact ? 18 : 36
       const w = wrap.clientWidth - left - 2 * pad
@@ -565,7 +566,7 @@ function Editor({ canvas, onChange, onExample, version, compact, readOnly = fals
             proOptions={{ hideAttribution: true }}
           >
             <Background variant={BackgroundVariant.Dots} gap={GRID} size={1.2} className="cv-bg" />
-            {minimap && !readOnly && !help && <MiniMap position="top-right" pannable zoomable className="cv-minimap" nodeClassName={(n) => `mm k-${(n as FlowNode).data.node.kind ?? (n as FlowNode).data.node.type}`} nodeBorderRadius={4} ariaLabel="Overview of the canvas" />}
+            {minimap && !readOnly && !narrow && <MiniMap position="bottom-right" pannable zoomable className="cv-minimap" nodeClassName={(n) => `mm k-${(n as FlowNode).data.node.kind ?? (n as FlowNode).data.node.type}`} nodeBorderRadius={4} ariaLabel="Overview of the canvas" />}
 
             {!compact && !readOnly && (
               <Panel position="top-left" className="cv-palette" aria-label="Add a component">
@@ -660,7 +661,7 @@ function Editor({ canvas, onChange, onExample, version, compact, readOnly = fals
             )}
 
             {player.caption && (
-              <Panel position="bottom-center" className="cv-caption" aria-live="polite">
+              <Panel position={readOnly ? 'top-left' : 'bottom-center'} className="cv-caption" aria-live="polite">
                 <span className="cv-step">
                   {player.index + 1}
                   <span className="muted">/{player.steps.length}</span>

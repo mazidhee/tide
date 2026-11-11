@@ -36,7 +36,9 @@ function sizeFor(label: string, withKind: boolean, shape: FlowShape): { width: n
   const width = Math.round(Math.min(260, Math.max(shape === 'circle' ? 90 : 120, longest * CHAR_W + 36)))
   // Long lines wrap inside the width
   const wrapped = lines.reduce((n, l) => n + Math.max(1, Math.ceil((l.length * CHAR_W) / (width - 32))), 0)
-  const height = Math.round(Math.max(shape === 'diamond' ? 64 : 44, wrapped * 19 + 24 + (withKind ? 20 : 0)))
+  const height = Math.round(Math.max(44, wrapped * 19 + 24 + (withKind ? 20 : 0)))
+  // A diamond's words sit in its middle half: give it the room
+  if (shape === 'diamond' && !withKind) return { width: Math.round(Math.min(300, width * 1.35)), height: Math.max(80, Math.round(height * 1.7)) }
   return { width, height }
 }
 
@@ -52,7 +54,7 @@ export function flowToCanvas(flow: MermaidFlow): Canvas {
   const nodes: CanvasNode[] = flow.nodes.map((n) => {
     const kind = systemy ? guesses.get(n.id) : undefined
     const size = sizeFor(n.label, !!kind, n.shape)
-    return { id: slugId(n.id), type: 'text', text: n.label, x: 0, y: 0, ...size, ...(kind ? { kind } : {}), ...(n.shape !== 'rect' ? { shape: n.shape } : {}) }
+    return { id: slugId(n.id), type: 'text', text: n.label, x: 0, y: 0, ...size, ...(kind ? { kind } : {}), ...(n.shape !== 'rect' && !kind ? { shape: n.shape } : {}) }
   })
   const groups: CanvasNode[] = flow.groups.map((g) => ({ id: `group-${slugId(g.id)}`, type: 'group', label: g.label, x: 0, y: 0, width: 0, height: 0 }))
   const edges: CanvasEdge[] = flow.links.map((l, i) => ({
