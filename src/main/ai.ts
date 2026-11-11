@@ -284,13 +284,21 @@ async function* readStream(body: ReadableStream<Uint8Array>, filter: (t: string)
 }
 
 /** A cloud model's answer, streamed; its real token counts go to the usage log */
+/** How long a cloud model has to show any sign of life (its response headers) before the next is tried */
+const FIRST_SIGN_MS = 25_000
+
 async function* streamCloud(target: CloudTarget, messages: ChatMessage[], signal: AbortSignal, maxTokens: number, temperatureOverride: number | undefined, task: RequestKind): AsyncGenerator<string> {
   if (!canTake(estimateTokens(JSON.stringify(messages).length) + maxTokens, target)) throw new CloudUnavailable(`The cloud model’s per-minute limit can’t take this for about ${secondsUntilReset(target)}s`)
   let res: Response
   // A deadline per job: a model that's too slow today hands over to the next one in line
   const started = Date.now()
   const slow = AbortSignal.timeout(deadlineFor(task))
-  const both = AbortSignal.any([signal, slow])
+  // And a much shorter one for any sign of life. Some free endpoints accept a request and then
+  // send nothing at all for minutes: without this, each one cost the whole deadline before the
+  // next model was tried. A model that is thinking has still answered with its headers by now.
+  const silent = new AbortController()
+  const noSign = setTimeout(() => silent.abort(), FIRST_SIGN_MS)
+  const both = AbortSignal.any([signal, slow, silent.signal])
   noteSent(target.provider)
   try {
     res = await fetch(`${target.baseUrl}/chat/completions`, {
@@ -301,9 +309,12 @@ async function* streamCloud(target: CloudTarget, messages: ChatMessage[], signal
     })
   } catch (e) {
     if (signal.aborted) throw e
-    coolTarget(target, slow.aborted ? 120 : 60)
+    // An endpoint that said nothing is left alone for ten minutes: it is down, not busy
+    coolTarget(target, silent.signal.aborted ? 600 : slow.aborted ? 120 : 60)
     noteOutcome(target, task, false, Date.now() - started)
-    throw new CloudUnavailable(slow.aborted ? `${target.model} took too long` : `Couldn't reach the cloud model: ${(e as Error).message}`)
+    throw new CloudUnavailable(silent.signal.aborted ? `${target.model} didn’t start answering` : slow.aborted ? `${target.model} took too long` : `Couldn't reach the cloud model: ${(e as Error).message}`)
+  } finally {
+    clearTimeout(noSign)
   }
   if (!res.ok || !res.body) {
     noteOutcome(target, task, false, Date.now() - started)
