@@ -64,6 +64,12 @@ export function unanswerable(r: LabResult): string | null {
   if (r.rows.every((row) => row.every((c) => c === null))) return 'its reference query returns only NULLs'
   const empty = r.columns.filter((_, i) => r.rows.every((row) => row[i] === null))
   if (empty.length) return `its reference query's ${empty.map((c) => `"${c}"`).join(' and ')} ${empty.length === 1 ? 'column is' : 'columns are'} NULL in every row, so the data can't answer it`
+  // Mostly NULL: per-category totals of a column only filled on other rows (seen live: every
+  // category's total NULL, and one NULL category holding all of it)
+  if (r.rows.length >= 2) {
+    const half = r.columns.findIndex((_, i) => r.rows.filter((row) => row[i] === null).length * 2 >= r.rows.length)
+    if (half >= 0) return `its reference query's "${r.columns[half]}" column is NULL in ${r.rows.filter((row) => row[half] === null).length} of ${r.rows.length} rows, so the data barely answers it`
+  }
   return null
 }
 

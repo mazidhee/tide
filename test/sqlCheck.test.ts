@@ -48,6 +48,8 @@ describe('a SQL problem the lab’s data cannot answer', () => {
     expect(unanswerable(labQuery('sqlcheck-test', 'SELECT NULL, NULL'))).toMatch(/only NULLs/)
     expect(unanswerable(labQuery('sqlcheck-test', 'SELECT category FROM orders'))).toMatch(/fails.*no such column/)
     expect(unanswerable(labQuery('sqlcheck-test', 'SELECT country, COUNT(*) FROM customers GROUP BY country'))).toBeNull()
+    // Seen live next: per-category totals of amount, which is only set on purchases (where category isn't)
+    expect(unanswerable(labQuery('sqlcheck-test', 'SELECT category, SUM(amount) FROM events GROUP BY category'))).toMatch(/NULL in \d+ of \d+ rows/)
   })
 
   const io = (over: Partial<Parameters<typeof settleSqlProblem>[2]> = {}) => ({
