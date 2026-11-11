@@ -1391,6 +1391,16 @@ export function toolHint(question: string, web: boolean): string {
  * right after a closing tag like </say> or </grade>), what it wrote so far is kept and it's asked to
  * carry on from there. The conversation so far is a cached prefix, so each pick-up is quick.
  */
+/** What a pick-up wrote, without the paragraphs at its start that were already written before it */
+export function withoutRepeat(written: string, more: string): string {
+  const flat = (t: string) => t.replace(/\s+/g, ' ').trim()
+  const before = flat(written)
+  const paras = more.split(/\n\s*\n/)
+  let k = 0
+  while (k < paras.length && flat(paras[k]) && before.includes(flat(paras[k]))) k++
+  return k ? paras.slice(k).join('\n\n').replace(/^\s+/, '') : more
+}
+
 /** After a pick-up that only repeated itself: past what's written, to the rest of the reply */
 const CARRY_ON_PAST = '(Everything above is already written and shown. Do not write any of it again, not even the grade. Write only what comes after it: the next step of the lesson, ending with one question in an <ask> tag.)'
 
@@ -1403,7 +1413,14 @@ async function streamTurnContinuing(messages: ApiMessage[], tools: unknown[], si
       : messages
     try {
       const out = await streamTurnOnce(turn, tools, signal, onText, i ? 0.15 : 0, undefined, 'tutor', written ? undefined : choice)
-      return { text: written ? `${written}\n\n${out.text}` : out.text, calls: out.calls }
+      if (!written) return out
+      // A pick-up that opens by writing again what was already there (seen live: the grade twice): taken back off the screen
+      const rest = withoutRepeat(written, out.text)
+      if (rest !== out.text) {
+        onText(RESET)
+        onText(`${written}\n\n${rest}`)
+      }
+      return { text: `${written}\n\n${rest}`, calls: out.calls }
     } catch (e) {
       if (!(e instanceof StallError)) {
         if (e instanceof LoopingError && written) e.partial = `${written}\n\n${e.partial}`

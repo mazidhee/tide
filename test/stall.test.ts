@@ -45,3 +45,12 @@ describe('a question still being written', () => {
     expect(blocks[blocks.length - 1]).toMatchObject({ kind: 'ask', prompt: 'Why O(1)?' })
   })
 })
+
+describe('a pick-up that repeats what was written', () => {
+  it('loses the repeated paragraphs at its start, and keeps the rest', async () => {
+    const { withoutRepeat } = await import('../src/main/agent')
+    const grade = '<grade verdict="partial" score="0.5">Only the tax is returned.</grade>'
+    expect(withoutRepeat(grade, `${grade}\n\nAdd it back to the price.\n\n<ask type="code">Again</ask>`)).toBe('Add it back to the price.\n\n<ask type="code">Again</ask>')
+    expect(withoutRepeat(grade, 'Add it back.')).toBe('Add it back.')
+  })
+})
