@@ -3,6 +3,7 @@ import { HANDS_ON, sessionInstructions, WHY_RULES } from '../src/shared/session'
 import { SUBJECTS, SUBJECT_KINDS, type SubjectKind } from '../src/shared/subjectMap'
 import { kindsFrom, lessonKit, parseModelProfile, phaseWorkLine, preferredAreas, profileSubject, PROFILE_SCHEMA, roadmapGuidance, TOOLKITS, toolkitText, wordCount } from '../src/shared/subjects'
 import { TRUSTED, UNCHECKED_TRUSTED, trustedSite } from '../src/shared/trustedSources'
+import { phasesForTasks, planFrontmatter } from '../src/shared/plan'
 
 /** A topic in each subject, and the kind it must be profiled as first: over 150 subjects across every field */
 const TABLE: [string, SubjectKind][] = [
@@ -369,12 +370,26 @@ describe('roadmaps for any subject', () => {
     expect(roadmapGuidance(profileSubject('Philosophy of mind'))).toMatch(/essay/)
     expect(roadmapGuidance(profileSubject('Core banking'))).toMatch(/governing standards.*case study/)
     expect(roadmapGuidance(profileSubject('World history'))).toMatch(/primary sources/)
-    expect(phaseWorkLine(profileSubject('Classical mechanics'))).toMatch(/^- \[ \] Problem set:/)
-    expect(phaseWorkLine(profileSubject('Stoicism'))).toMatch(/^- \[ \] Essay:/)
-    expect(phaseWorkLine(profileSubject('Accounting'))).toMatch(/^- \[ \] Case study:/)
-    expect(phaseWorkLine(profileSubject('The Cold War'))).toMatch(/^- \[ \] Primary sources:/)
+    expect(phaseWorkLine(profileSubject('Classical mechanics'))).toMatch(/^- \[ \] Practice: Problem set, /)
+    expect(phaseWorkLine(profileSubject('Stoicism'))).toMatch(/^- \[ \] Practice: Essay, /)
+    expect(phaseWorkLine(profileSubject('Accounting'))).toMatch(/^- \[ \] Practice: Case study, /)
+    expect(phaseWorkLine(profileSubject('The Cold War'))).toMatch(/^- \[ \] Practice: Primary sources, /)
     expect(phaseWorkLine(profileSubject('Compilers'))).toBe('')
     expect(roadmapGuidance(profileSubject('Zorblax'))).toBe('')
+  })
+
+  it("put the kind's work where the roadmap's parser reads a phase's practice", () => {
+    const md = `## Phase 1: Kinematics\n### Motion\n- [ ] Velocity\n${phaseWorkLine(profileSubject('Classical mechanics'))}\n- [ ] Project: a projectile simulator\n- [ ] Exam: Kinematics\n`
+    const [phase] = phasesForTasks(md, { start: '2026-11-16', hours: 6, weeks: [2] }, (t) => t)
+    expect(phase.practice).toEqual(['Problem set, graded problems on this phase, worked examples first'])
+    expect(phase.chapters[0].topics).toEqual(['Velocity'])
+    expect(phase.project).toBe('a projectile simulator')
+  })
+
+  it('keep the kinds in the roadmap file', () => {
+    const plan = { scope: 'discipline' as const, weeks: 4, hoursPerWeek: 6, why: '', phases: [{ title: 'A', weeks: 4, outcome: 'x' }], subject: profileSubject('Core banking').kinds }
+    expect(planFrontmatter(plan, '2026-11-16')).toContain('subject_kinds: domain, build')
+    expect(planFrontmatter({ ...plan, subject: undefined }, '2026-11-16')).not.toContain('subject_kinds')
   })
 
   it('keep the kinds with the roadmap and read them back', () => {

@@ -279,10 +279,20 @@ export function roadmapGuidance(p: SubjectProfile): string {
   return lines.join(' ')
 }
 
+const PHASE_WORK: Record<string, string> = {
+  'Problem set': 'graded problems on this phase, worked examples first',
+  Essay: "an argued essay on this phase's texts",
+  'Primary sources': "reading this period's primary sources and building its timeline",
+  'Case study': 'a realistic case worked against the governing standard',
+  Critique: 'critiquing strong and weak examples, then a small piece of your own',
+  'Practice log': 'the weekly drills, logged with checkpoints'
+}
+
 /** The line each roadmap phase ends with before its project, for the outline writer; '' for none */
 export function phaseWorkLine(p: SubjectProfile): string {
   const work = p.kinds.map((k) => TOOLKITS[k].phaseWork).find(Boolean)
-  return work ? `- [ ] ${work}: the phase's ${work.toLowerCase()}, specific to its topics` : ''
+  // A "Practice:" line, so the roadmap's parser (plan.phasesForTasks) and Things treat it as the phase's practice
+  return work ? `- [ ] Practice: ${work}, ${PHASE_WORK[work] ?? 'specific to the phase'}` : ''
 }
 
 /** What a phase's project is, for this subject */
