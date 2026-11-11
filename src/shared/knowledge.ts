@@ -205,7 +205,8 @@ export function lessonEvidence(record: Pick<LessonRecord, 'id' | 'mode' | 'start
 
 const clipName = (s: string, n = 48) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s)
 
-const since = (ms: number | undefined, now: number) => {
+/** How long ago, in words: "3 days ago", "5 weeks ago" */
+export const since = (ms: number | undefined, now: number) => {
   if (!ms) return ''
   const days = Math.floor((now - ms) / 86_400_000)
   return days <= 0 ? 'today' : days === 1 ? 'yesterday' : days < 14 ? `${days} days ago` : days < 70 ? `${Math.round(days / 7)} weeks ago` : `${Math.round(days / 30)} months ago`
@@ -254,3 +255,41 @@ export const tickedOnly = (c: ConceptState) => c.done && c.status === 'new'
 
 /** A week's share right, 0 to 1; null when nothing came back that week */
 export const shareRight = (w: WeekPoint) => (w.asked ? w.right / w.asked : null)
+
+export const STATUS_LABEL: Record<ConceptStatus, string> = { solid: 'Solid', fading: 'Fading', learning: 'In progress', new: 'Not started' }
+
+const inDays = (days: number) => (days < 1 ? 'by tomorrow' : days < 14 ? `in ${Math.round(days)} day${Math.round(days) === 1 ? '' : 's'}` : days < 70 ? `in ${Math.round(days / 7)} weeks` : `in ${Math.round(days / 30)} months`)
+
+/** One concept's standing in a few words: the status, and the fact behind it */
+export function standing(c: ConceptState, now: number): { label: string; detail: string } {
+  const answers = c.right + c.partly + c.wrong
+  if (c.status === 'solid') return { label: 'Solid', detail: c.fadesIn !== undefined ? `fades ${inDays(c.fadesIn)} if unused` : '' }
+  if (c.status === 'fading') return { label: 'Fading', detail: `last right ${since(c.lastRight ?? c.lastSeen, now)}` }
+  if (c.status === 'learning') return { label: 'In progress', detail: answers ? `${c.right} of ${answers} right` : 'taught, not checked yet' }
+  return c.done ? { label: 'Ticked', detail: 'not checked by Tide' } : { label: 'Not started', detail: '' }
+}
+
+/** A solid concept this close to the line is worth a look before it crosses */
+const SOON_DAYS = 2
+
+/**
+ * What to go back to, most worth it first: what has just faded (the least work to get back), what
+ * is about to, then what has been answered but not yet right and can't simply be carried on (a
+ * topic in progress that is ready is under "Ready next", not here too). Topics only, not their plan steps.
+ */
+export function revisitList(concepts: ConceptState[], ready: ReadonlySet<string> = new Set()): ConceptState[] {
+  const top = concepts.filter((c) => !c.parent)
+  const fading = top.filter((c) => c.status === 'fading').sort((a, b) => b.estimate - a.estimate)
+  const soon = top.filter((c) => c.status === 'solid' && c.fadesIn !== undefined && c.fadesIn <= SOON_DAYS).sort((a, b) => a.fadesIn! - b.fadesIn!)
+  const shaky = top.filter((c) => c.status === 'learning' && c.wrong + c.partly > 0 && !ready.has(c.id)).sort((a, b) => a.estimate - b.estimate)
+  return [...fading, ...soon, ...shaky]
+}
+
+/** The first few ready topics for the top of the page: one from each area in turn, so no roadmap crowds out the rest */
+export function readyAcross(ready: ConceptState[], n: number): ConceptState[] {
+  const byArea = new Map<string, ConceptState[]>()
+  for (const c of ready) byArea.set(c.area, [...(byArea.get(c.area) ?? []), c])
+  const out: ConceptState[] = []
+  for (let i = 0; out.length < n && [...byArea.values()].some((l) => l.length > i); i++) for (const l of byArea.values()) if (l[i] && out.length < n) out.push(l[i])
+  return out
+}

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en-GB" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tide · What you know: harness</title>
+<!--
+  The "What you know" page (Brain) outside Electron: the app's own component and styles, with sample data.
+  Build:  node_modules/.bin/esbuild design/prototype/knowledge/harness.tsx --bundle --format=iife --jsx=automatic --alias:@shared=./src/shared --define:process.env.NODE_ENV='"production"' --outfile=design/prototype/knowledge/harness.js
+  Open:   index.html?set=large&theme=light
+          set: small (5 topics) | large (800 topics, 8 areas) | fresh (roadmaps, nothing studied) | empty
+          theme: light sepia graphite dark midnight ember      w=<px> narrows the page
+          tall=1 lays the whole page out for one long screenshot
+          click=<css selector>[;<css selector>…] clicks those once mounted (open an area, pick a topic)
+          hover=<week index> shows the chart's hover on that week
+  Shots:  ./shoot.sh
+-->
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/inter/index.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/theme.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/app.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/knowledge.css" />
+<style>
+  html, body, #root { height: 100%; margin: 0; background: var(--bg); }
+  html.tall, html.tall body, html.tall #root { height: auto; overflow: visible; }
+  html.tall .doc-view { height: auto; }
+  html.tall .know-scroll { overflow: visible; }
+  #root { margin: 0 auto; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="harness.js"></script>
+</body>
+</html>
