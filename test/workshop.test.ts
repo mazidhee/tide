@@ -426,3 +426,12 @@ describe('a project proposed for a roadmap item', () => {
     expect(none.problems[0]).toMatch(/^No cloud model could take it just now/)
   })
 })
+
+describe('a review with stray HTML in it', async () => {
+  const { parseReview } = await import('../src/shared/workshop')
+  it('is read without the tags', () => {
+    const run = { at: 0, stage: 'memtable', passed: true, tests: [{ stage: 'memtable', name: 'x', status: 'pass' as const }], durationMs: 1 }
+    const r = parseReview('<praise>The use of a dictionary for the internal table keeps lookups constant time.</p></praise>', run, 'local', 0)
+    expect(r.praise).toBe('The use of a dictionary for the internal table keeps lookups constant time.')
+  })
+})
