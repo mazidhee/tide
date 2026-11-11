@@ -8,6 +8,8 @@ import { Thinking } from './Thinking'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
 import { markNote, paceNote } from '@shared/pace'
+import { markingNote } from '@shared/humanities'
+import { AppraiseCard } from './AppraiseCard'
 import { nothingToMark, unmarked } from '@shared/lessonRepair'
 import { withSources, type SourcePack } from '@shared/sources'
 import { ledPrefKey } from '@shared/sourceLed'
@@ -216,7 +218,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         // A placement check ends after its last question, whether or not the tutor counts
         setupRef.current.options?.placement ? placementNote(history.filter((t) => t.role === 'user').length - 1) : null,
         mode === 'teach' || (mode === 'quiz' && !setupRef.current.options?.placement) ? paceNote(history, content) : null,
-        mode === 'teach' || (mode === 'quiz' && !setupRef.current.options?.placement) ? markNote(content) : null,
+        // humanities: an answer to a question of interpretation is appraised, not marked
+        mode === 'teach' || (mode === 'quiz' && !setupRef.current.options?.placement) ? markingNote(markNote(content), [...history].reverse().find((t) => t.role === 'assistant')?.content ?? '', setupRef.current.topic) : null,
         whyNoteRef.current,
         mode === 'teach' && history.length > 2 ? notesNudge(history.filter((t) => t.role === 'assistant').map((t) => t.content), content) : null
       ].filter((n): n is string => !!n)
@@ -810,6 +813,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             )}
           </div>
         )
+      // humanities: a reading appraised against the rubric
+      case 'appraise':
+        return <AppraiseCard key={key} rows={b.rows} text={b.text} render={(t) => renderMarkdown(t, env)} />
       case 'summary':
         return (
           <div key={key} className="s-summary">
