@@ -33,6 +33,8 @@ export interface GatherDeps {
   /** An ordinary public address (never this Mac, your network, your Metabase, or a signed link) */
   publicUrl(url: string): boolean
   now(): number
+  /** The licence note recorded for a book added from a free library (Project Gutenberg, Standard Ebooks) */
+  licenceOf?(path: string): { licence: string; by?: string } | undefined
 }
 
 export interface GatherOptions {
@@ -82,6 +84,16 @@ export function ownedCandidates(deps: GatherDeps, query: string, opts: GatherOpt
         text += c.text
       }
       if (text.trim()) out.push({ kind: 'book', title: hit.title, path: hit.path, pages, fetchedAt: deps.now(), text })
+    } else if (/\.epub$/i.test(hit.path)) {
+      // An EPUB: the passage found and the next one in its chapter, under "Book: Chapter N: title"
+      if (books++ >= 3) continue
+      const chapter = hit.heading.replace(/\s*\(¶[^)]*\)\s*$/, '')
+      const all = deps.chunks(hit.path).sort((a, b) => a.order - b.order)
+      const at = all.findIndex((c) => c.id === hit.id)
+      const near = (at >= 0 ? all.slice(at, at + 2) : [hit]).filter((c) => c.heading.startsWith(chapter))
+      const text = near.map((c) => c.text).join('\n\n')
+      const source = deps.licenceOf?.(hit.path)
+      if (text.trim()) out.push({ kind: 'book', title: `${hit.title}: ${hit.heading}`, path: hit.path, fetchedAt: deps.now(), text, ...(source?.by ? { by: source.by } : {}), ...(source?.licence ? { licence: source.licence } : {}) })
     } else if (/\.md$/i.test(hit.path)) {
       if (notes++ >= 2) continue
       // One section of the note: its pieces were cut at paragraph breaks, so joined they are its text

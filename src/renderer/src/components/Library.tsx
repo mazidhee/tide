@@ -9,6 +9,7 @@ import { sourceIcon } from './Home'
 import { coverColor } from './NotebookCover'
 import { ReadingFinder } from './ReadingFinder'
 import { SaveLinkForm } from './SaveLink'
+import { FreeBookFinder } from './FreeBookFinder'
 import { PixelScene } from './PixelScene'
 import { useTideDesign } from '../lib/design'
 import { AreaMark } from './tide/AreaMark'
@@ -255,6 +256,7 @@ export function Library() {
   const [subject, setSubject] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [picker, setPicker] = useState<{ path: string; at: { x: number; y: number } } | null>(null)
+  const [freeBooks, setFreeBooks] = useState(false)
   const [finding, setFinding] = useState(false)
   const [layout, setLayout] = useState<Layout>(() => {
     try {
@@ -340,6 +342,10 @@ export function Library() {
               <Icon name="library" size={15} />
             </button>
           </div>
+          <button className={`btn${freeBooks ? ' on' : ''}`} onClick={() => setFreeBooks((f) => !f)} title="Add a free public-domain book">
+            <Icon name="book" size={14} />
+            Free books
+          </button>
           <button className="btn" onClick={() => app.setDialog('save-link')}>
             <Icon name="link" size={14} />
             Save a link
@@ -362,6 +368,11 @@ export function Library() {
             )}
           </div>
           <div className="row-gap">
+          {/* humanities: public-domain books from Project Gutenberg and Standard Ebooks */}
+          <button className={`btn${freeBooks ? ' on' : ''}`} onClick={() => setFreeBooks((f) => !f)} title="Add a free public-domain book">
+            <Icon name="library" size={15} />
+            Free books
+          </button>
           <button className={`btn${finding ? ' on' : ''}`} onClick={() => setFinding((f) => !f)} title="Ask the tutor to find good reading on the web">
             <Icon name="book" size={15} />
             Find reading
@@ -382,6 +393,7 @@ export function Library() {
           </div>
         </header>
         {finding && <ReadingFinder onClose={() => setFinding(false)} />}
+        {freeBooks && <FreeBookFinder onClose={() => setFreeBooks(false)} />}
         <SaveLinkForm compact />
 
         {items.length > 0 && (
