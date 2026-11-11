@@ -39,6 +39,19 @@ export function splitTests(body: string): { prompt: string; tests?: string } {
   return { prompt: (body.slice(0, m.index) + body.slice(m.index + m[0].length)).trim(), ...(tests ? { tests } : {}) }
 }
 
+/**
+ * The code a code question starts you from: the last fenced block in its prompt (the tutor writes
+ * "item_name = " with blanks to fill), or nothing. A new code question puts this in the editor in
+ * place of your answer to the last one.
+ */
+export function askStarter(prompt: string): string {
+  const blocks = [...prompt.matchAll(/```[^\n`]*\n([\s\S]*?)\n?[ \t]*```/g)]
+  return blocks.length ? blocks[blocks.length - 1][1].replace(/\s+$/, '') + '\n' : ''
+}
+
+/** Which code question this is, so the editor is reset once per new question and not on every render */
+export const askIdentity = (ask: { type: string; prompt: string; lang?: string } | undefined): string | null => (ask?.type === 'code' ? `${ask.lang ?? ''}\n${ask.prompt}` : null)
+
 const attr = (attrs: string, name: string) => attrs.match(new RegExp(`${name}\\s*=\\s*"([^"]*)"`, 'i'))?.[1] ?? attrs.match(new RegExp(`${name}\\s*=\\s*'([^']*)'`, 'i'))?.[1]
 
 const TAG = /<(ask|grade|plan|card|scorecard|rubric|challenge|summary|note|appraise)\b([^>]*)>([\s\S]*?)<\/\1>/gi
