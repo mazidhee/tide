@@ -8,6 +8,7 @@ import { Thinking } from './Thinking'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
 import { paceNote } from '@shared/pace'
+import { nothingToMark, unmarked } from '@shared/lessonRepair'
 import { withSources, type SourcePack } from '@shared/sources'
 import { parsePlacement, placementNote } from '@shared/placement'
 import { correctionText } from '@shared/lessonCheck'
@@ -323,7 +324,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     () =>
       turns.map((t, i) => {
         if (t.role !== 'assistant') return null
-        const blocks = parseBlocks(t.content)
+        // Nor has a question of yours, Go on or "I don't know": a mark on one is shown as the plain
+        // feedback it is, while it streams as well as after main has put the reply right (lessonRepair)
+        const blocks = parseBlocks(i > 1 && nothingToMark(turns[i - 1]?.content ?? '') ? unmarked(t.content) : t.content)
         return i <= 1 ? blocks.filter((b) => b.kind !== 'grade' && b.kind !== 'card') : blocks
       }),
     [turns]

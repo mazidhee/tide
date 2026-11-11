@@ -328,7 +328,8 @@ Back to the query, which turns on exactly that difference in layout.
 Avro is a data serialisation format from the Hadoop ecosystem with rich schema evolution support.
 
 <ask type="short">What is schema evolution?</ask>`,
-        fails: ['forbid:grade', 'must']
+        fails: ['must'],
+        repaired: ['grade']
       }
     ],
     judge: 'It says plainly that Avro is row-oriented and what that suits, then returns to the pending columnar question without answering it for the learner.'

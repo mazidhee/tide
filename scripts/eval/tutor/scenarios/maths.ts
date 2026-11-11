@@ -346,7 +346,8 @@ That makes your ten rolls irrelevant to the question you still have open.
 In the long run a 6 comes up once every six rolls, so after ten misses the die has some catching up to do and a 6 becomes a little more likely.
 
 <ask type="short">How many rolls do you expect on average?</ask>`,
-        fails: ['forbid:grade', 'must']
+        fails: ['must'],
+        repaired: ['grade']
       }
     ],
     judge: 'It answers exactly (still 1/6, because rolls are independent and the wait is memoryless), briefly, then returns to the pending question without answering it.'

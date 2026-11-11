@@ -303,7 +303,8 @@ That real-time requirement is what the pending question turns on.
 Yes, they mean the same thing: both say the system behaves as if operations ran one after another.
 
 <ask type="short">Does a linearizable system allow the stale read?</ask>`,
-        fails: ['forbid:grade', 'must']
+        fails: ['must'],
+        repaired: ['grade']
       }
     ],
     judge: 'It says they differ (transactions over many objects with any serial order, against single operations in real-time order), briefly, then returns to the stale-read question without answering it.'

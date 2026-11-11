@@ -125,7 +125,9 @@ describe('protocol', () => {
     expect(failed({ ends: 'continue' }, `First half.\n\n${QUESTION}`)).toContain('ends')
     expect(failed({ ends: 'either' }, 'First half.\n\n<continue/>')).toEqual([])
     expect(failed({ ends: 'nothing' }, `Look at the middle row.\n\n${QUESTION}`, 'show-me')).toContain('ends')
-    expect(failed({ ends: 'ask' }, `First half.\n\n${QUESTION}\n\n<continue/>`)).toContain('ends')
+    // The app shows the question and drops the <continue/> beside it
+    expect(scoreReply(sc({ ends: 'ask' }), `First half.\n\n${QUESTION}\n\n<continue/>`)).toMatchObject({ failed: [], repaired: ['ask'] })
+    expect(failed({ ends: 'continue' }, `First half.\n\n${QUESTION}\n\n<continue/>`)).toContain('ends')
   })
 
   it('fails a malformed ask: unknown type, a choice without options, code without a language, the wrong type', () => {
@@ -218,13 +220,27 @@ describe('marking', () => {
     expect(scoreReply(sc(slip), grade('correct', 'All good.')).marking!.score).toBe(0)
   })
 
-  it('reads the verdict from the opening tag, as the app does: an unclosed grade is a protocol fault, not a wrong mark', () => {
+  it('reads the verdict from the opening tag, as the app does: an unclosed grade is not a wrong mark', () => {
     // From the baseline: three right answers scored as marked down because </grade> was missing
     const unclosed = `<grade verdict="correct" score="1.0">\n\nYou divided by the page size, which is right: page 26, offset 47.\n\n<note>Low 8 bits are the offset.</note>\n\n${QUESTION}`
     const s = scoreReply(sc({ ends: 'ask', verdict: 'correct', names: ['page 26'] }), unclosed)
     expect(s.marking).toMatchObject({ score: 1, got: 'correct', rejectedRight: false, named: true })
-    expect(s.failed).toEqual(['tags-closed'])
+    // The app closes it where the feedback ends (session.closeGrade), so the learner sees the mark
+    expect(s).toMatchObject({ failed: [], repaired: ['close'] })
     expect(scoreReply(sc({ ends: 'ask', verdict: 'correct' }), unclosed.replace('correct', 'partial')).marking).toMatchObject({ score: 0, got: 'partial', rejectedRight: true })
+    // A grade with nothing after its feedback can't be closed by rule: the mark is still read, the tag still counts
+    const cut = scoreReply(sc({ ends: 'ask', verdict: 'wrong', names: ['duplicate'] }), '<grade verdict="wrong" score="0.1">The ledger will hold a duplicate row.</grade')
+    expect(cut.marking).toMatchObject({ score: 1, got: 'wrong', named: true })
+    expect(cut.failed).toEqual(expect.arrayContaining(['tags-closed', 'ends']))
+  })
+
+  it('scores a mark on what was not an answer as the app leaves it: taken off, the feedback kept', () => {
+    // From the baseline: "I don't know" marked wrong 0.0, and a question of the learner's marked "correct"
+    const said = (learner: Scenario['history'][number]) => ({ ...sc({ ends: 'ask', forbid: ['grade'], must: ['coordinator'] }, 'idk'), history: [{ tutor: QUESTION }, learner] })
+    const reply = `<grade verdict="wrong" score="0.0">That is fine: start from the coordinator, which collects the votes.</grade>\n\n${QUESTION}`
+    expect(scoreReply(said({ learner: { idk: true } }), reply)).toMatchObject({ failed: [], repaired: ['grade'] })
+    expect(scoreReply(said({ learner: { question: 'Is that the same as Paxos?' } }), reply)).toMatchObject({ failed: [], repaired: ['grade'] })
+    expect(scoreReply(said({ learner: { answer: 'It waits.' } }), reply).failed).toEqual(['forbid:grade'])
   })
 
   it('fails a missing grade, two grades, a grade that comes late and one with no verdict', () => {

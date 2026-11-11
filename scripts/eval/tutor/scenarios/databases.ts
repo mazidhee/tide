@@ -326,8 +326,8 @@ Any service that updates more than one row per transaction can deadlock, and Pos
 Yes, SQLite uses row-level locks just like Postgres, so the same thing happens in the lab.
 
 What do you think happens when each tries its second update?`,
-        fails: ['forbid:grade', 'must'],
-        repaired: ['ask']
+        fails: ['must'],
+        repaired: ['grade', 'ask']
       }
     ],
     judge: 'It answers exactly (SQLite has database-level locking with a single writer, not row locks), briefly, then returns to the deadlock question rather than starting a lesson on SQLite.'

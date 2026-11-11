@@ -16,17 +16,20 @@
  *
  * And it scores what the learner would see, not the raw completion: the app's own repairs are
  * applied first (shared/modelText's cleaning; a closing question in plain text becomes the ask, as
- * parseBlocks makes it; a problem with no <solution> gets one worked out, as lessonGuard does; a
- * json block that is a simulation is drawn as one). Each repair that was needed is listed in
+ * parseBlocks makes it; a mark on what wasn't an answer taken off and an unclosed grade closed, as
+ * lessonRepair does; a problem with no <solution> gets one worked out, as lessonGuard does; a json
+ * block that is a simulation is drawn as one). Each repair that was needed is listed in
  * `repaired`, so a model that stops needing them still shows as better. Stalls and loops need the
  * model again, so they are handled before this, by turn.ts.
  */
 import { parseChartRequest } from '../../../src/shared/lab'
 import { setsProblem, solutionOf, type Verdict } from '../../../src/shared/lessonCheck'
+import { repairReply } from '../../../src/shared/lessonRepair'
 import { cleanModelText } from '../../../src/shared/modelText'
 import { hideWorking, parseBlocks, type Block } from '../../../src/shared/session'
 import { isSimSource } from '../../../src/shared/sims'
 import { parseSim } from '../../../src/renderer/src/lib/sims/spec'
+import { learnerText } from './request'
 import type { Expect, Scenario, Tag, Turn, Visual } from './types'
 
 export interface Check {
@@ -58,7 +61,7 @@ export interface Score {
   /** Every deterministic expectation met */
   pass: boolean
   failed: string[]
-  /** What the app had to put right before the learner saw it: "ask" (a plain closing question made the ask), "solution" (worked out for a problem set without one), "sim" (a simulation in a block labelled json) */
+  /** What the app had to put right before the learner saw it: "ask" (a plain closing question made the ask), "grade" (a mark on what wasn't an answer, taken off), "close" (an unclosed grade closed), "solution" (worked out for a problem set without one), "sim" (a simulation in a block labelled json) */
   repaired: string[]
 }
 
@@ -206,9 +209,13 @@ const attrOf = (attrs: string, name: string) => attrs.match(new RegExp(`${name}\
 
 export function scoreReply(s: Pick<Scenario, 'expect' | 'situation' | 'setup'> & { history?: Turn[] }, raw: string): Score {
   const e: Expect = s.expect
-  // What the app keeps of a completion: no hidden reasoning, no special tokens
-  const reply = cleanModelText(raw)
-  const repaired: string[] = []
+  // What the app keeps of a completion: no hidden reasoning, no special tokens, and the faults a
+  // rule can fix put right (shared/lessonRepair: a mark on what wasn't an answer, an unclosed grade,
+  // a numbered question left with only Go on)
+  const last = s.history?.[s.history.length - 1]
+  const fixed = repairReply(cleanModelText(raw), last && 'learner' in last ? learnerText(last.learner) : '')
+  const reply = fixed.text
+  const repaired: string[] = [...fixed.repaired]
   const blocks = parseBlocks(reply)
   const visible = hideWorking(reply)
   const read = readableText(blocks)
@@ -231,7 +238,7 @@ export function scoreReply(s: Pick<Scenario, 'expect' | 'situation' | 'setup'> &
   const tail = afterAsk.replace(/<(solution|check|note|card)\b[^>]*>[\s\S]*?<\/\1>/gi, '').trim()
   // With no ask tag, the app makes a closing question in plain text the ask (parseBlocks), so there is something to answer in
   const madeAsk = askCount === 0 && blocks.length > 0 && blocks[blocks.length - 1].kind === 'ask' && blocks.filter((b) => b.kind === 'ask').length === 1
-  if (madeAsk) repaired.push('ask')
+  if (madeAsk && !repaired.includes('ask')) repaired.push('ask')
   const endsAsk = (askCount === 1 && rawAsks.length === 1 && !goesOn && !tail) || madeAsk
   const endsContinue = blocks.some((b) => b.kind === 'continue')
   const endsOk = e.ends === 'ask' ? endsAsk : e.ends === 'continue' ? endsContinue : e.ends === 'either' ? endsAsk || endsContinue : askCount === 0 && !madeAsk
