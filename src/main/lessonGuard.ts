@@ -67,6 +67,9 @@ export async function exactCheck(req: ChatRequest): Promise<Exact | null> {
   const prev = [...req.messages].reverse().find((m) => m.role === 'assistant')
   const said = [...req.messages].reverse().find((m) => m.role === 'user')
   const mine = ownWords(text(said))
+  // A SQL answer is run beside the reference query on the lesson's lab, and the rows compared
+  const sql = await import('./sqlCheck').then((m) => m.sqlExact(req)).catch(() => null)
+  if (sql) return sql
   // A vector clock problem is replayed, solution or not: a small model marks these by eye
   if (/^Answer:/i.test(mine)) {
     const clocks = checkVectorClocks(text(prev), mine.replace(/^Answer:\s*/i, ''))

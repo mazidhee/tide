@@ -581,14 +581,19 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
         const { exactNote } = await import('@shared/answerCheck')
         const last = req.messages[req.messages.length - 1]
         req = { ...req, messages: [...req.messages.slice(0, -1), { ...last, content: `${String(last.content)}\n\n${exactNote(exact)}` }] }
-        emit({ id: req.id, type: 'step', step: { id: 'exact', kind: 'helper', label: exact.result === 'match' ? 'Checked your final answer: it’s right' : 'Checked your final answer: it isn’t right yet', status: 'done', depth: 0 } })
+        const label = exact.kind === 'sql' ? (exact.result === 'match' ? 'Ran your query beside the reference: the same rows' : 'Ran your query beside the reference: the rows differ') : exact.result === 'match' ? 'Checked your final answer: it’s right' : 'Checked your final answer: it isn’t right yet'
+        emit({ id: req.id, type: 'step', step: { id: 'exact', kind: 'helper', label, status: 'done', depth: 0 } })
       }
       // [source-led] A step taught from a source (main/sourceLed.ts): the reading and the tutor's rules
       // for it ride with this turn, Tide puts the reading into the reply as it streams (`out`), and the
       // turn ends at a new plan whose first step has a reading (`led.signal`). Null: nothing changes.
       const led = req.session ? await import('./sourceLed').then((m) => m.sourceLedTurn(req)).catch(() => null) : null
       if (led) req = led.request
-      const out = led ? led.tap(emit) : emit
+      // A SQL lesson's question is held back while it's written, and shown only once its reference
+      // query has given a real answer on the lesson's lab (main/sqlCheck)
+      const sqlMod = req.session && !led ? await import('./sqlCheck') : null
+      const gate = sqlMod?.sqlLesson(req) ? sqlMod.holdAsks(led ? led.tap(emit) : emit) : null
+      const out = gate ? gate.tap : led ? led.tap(emit) : emit
       const upTo = led ? AbortSignal.any([controller.signal, led.signal]) : controller.signal
       const lesson = req.session && !led?.teaching ? await lessonTurn(req) : null
       let reply = ''
@@ -606,6 +611,32 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
         } catch (e) {
           if (!led?.signal.aborted || controller.signal.aborted) throw e
         }
+      }
+      if (gate && sqlMod) {
+        const { sent, held } = gate.finish()
+        let settled = held
+        if (held && !controller.signal.aborted) {
+          const rewrite = async (why: string) => {
+            let again = ''
+            const messages: ChatMessage[] = [...req.messages, { role: 'assistant', content: reply }, { role: 'user', content: `(Tide: the problem you just set can't be used: ${why}. Write only a new, well-posed problem on the same idea that the lab's tables answer with real, non-NULL values: first run your reference query with run_sql and check its rows, then write the problem, put that exact query in a <solution> as a \`\`\`sql block, and end with the question in an <ask type="code" lang="sql"> tag. No feedback, no preamble.)` }]
+            await agentChat({ ...req, messages }, (e) => {
+              if (e.type === 'delta') again += e.text
+              else if (e.type === 'reset') again = ''
+              else if (e.type !== 'done' && e.type !== 'error') emit(e)
+            }, controller.signal).catch(() => {})
+            return again
+          }
+          const banked = async () => {
+            const { readBank } = await import('./bank')
+            const all = await readBank(req.topic ?? '').catch(() => [])
+            return all.filter((p) => !reply.includes(p.text.slice(0, 80))).slice(0, 6).map((p) => renderProblem(p, 1, 'same'))
+          }
+          const step = (label: string, status: 'running' | 'done') => emit({ id: req.id, type: 'step', step: { id: 'sql-problem', kind: 'run_sql', label, status, depth: 0 } })
+          const r = await sqlMod.settleSqlProblem(reply, held, { lab: sqlMod.labOf(req), signal: controller.signal, ask: (prompt, system) => complete(prompt, system, controller.signal, 'interactive', 'other'), rewrite, banked, step })
+          settled = r.text
+        }
+        if (settled) emit({ id: req.id, type: 'delta', text: settled })
+        reply = sent + settled
       }
       // [source-led] What the checks read is the tutor's own words, without the source's
       if (led && !controller.signal.aborted) reply = led.settle(shown, emit)

@@ -91,11 +91,15 @@ except Exception:
 `
 }
 
-export type Exact = { result: 'match' | 'mismatch'; theirs: string; expected: string; kind?: 'clocks'; why?: string }
+export type Exact = { result: 'match' | 'mismatch'; theirs: string; expected: string; kind?: 'clocks' | 'sql'; why?: string }
 
 /** Said to the tutor (not shown) with what SymPy found, before it marks the answer */
 export const exactNote = (e: Exact) =>
-  e.kind === 'clocks'
+  e.kind === 'sql'
+    ? e.result === 'match'
+      ? `(Tide: Tide ran their query and the reference query on the lab's data. ${e.why} This is a fact, not an opinion: their query is right, by whatever method. Mark it correct unless it is right only by accident of this data (say which row would break it); never mark it wrong.)`
+      : `(Tide: Tide ran their query and the reference query on the lab's data. ${e.why} This is a fact: it can't be marked correct. Point at the part of their query that gives the different rows.)`
+    : e.kind === 'clocks'
     ? e.result === 'match'
       ? `(Tide: Tide replayed the vector clocks in this problem: their vectors (${e.theirs}) are right, under one of the two rules taught (a send and a receipt each count as an event, or only internal actions do). Mark it correct unless their reasoning is wrong, and never mark down which of those rules they used.)`
       : `(Tide: Tide replayed the vector clocks in this problem: ${e.why} This can't be marked correct: point at that entry.)`
@@ -123,6 +127,10 @@ export function objectsToMethodOnly(feedback: string): boolean {
  */
 export function overruled(exact: Exact | null | undefined, verdict: string | undefined, feedback: string): { verdict: 'correct' | 'partial' | 'wrong'; why: string } | undefined {
   if (!exact || !verdict) return undefined
+  if (exact.kind === 'sql') {
+    if (exact.result === 'mismatch') return verdict === 'correct' ? { verdict: 'wrong', why: exact.why ?? 'Tide ran your query and the reference query on the lab, and they return different rows.' } : undefined
+    return verdict === 'wrong' ? { verdict: 'partial', why: `Tide ran your query and the reference query on the lab, and they return the same rows, so this is not wrong.` } : undefined
+  }
   if (exact.kind === 'clocks') {
     if (exact.result === 'mismatch') return verdict === 'correct' ? { verdict: 'wrong', why: `Tide replayed the clocks: ${exact.why}` } : undefined
     return verdict === 'wrong' ? { verdict: 'partial', why: `Tide replayed the clocks, and your vectors (${exact.theirs}) are what the events give, so this is not wrong.` } : undefined
