@@ -31,7 +31,8 @@ Bayes' theorem turns "how likely is this evidence if the hypothesis is true" int
         reply: r`Bayes' theorem says $P(A \mid B) = \frac{P(B \mid A)P(A)}{P(B)}$. For a condition with 1% prevalence, a 90% detection rate and a 5% false positive rate, a positive test means only a 15.4% chance of having the condition, because healthy people far outnumber ill ones.
 
 Does that surprise you? What do you think happens if the condition is rarer?`,
-        fails: ['heading', 'plain-question', 'ends', 'must-not']
+        fails: ['heading', 'must-not'],
+        repaired: ['ask']
       }
     ],
     judge: "The opening says concretely where Bayes is used, and its question draws out the learner's intuition about base rates without stating the formula or the answer."
@@ -81,7 +82,8 @@ Find the eigenvalues of $B = \begin{pmatrix} 3 & 1 \\ -1 & 1 \end{pmatrix}$ and 
 Find the eigenvalues and eigenvectors of $B = \begin{pmatrix} 3 & 1 \\ -1 & 1 \end{pmatrix}$.
 
 <ask type="problem">Your answer, with working.</ask>`,
-        fails: ['verdict', 'solution']
+        fails: ['verdict'],
+        repaired: ['solution']
       }
     ]
   },
@@ -140,7 +142,7 @@ Rank says how many independent directions a matrix keeps, and the null space is 
       },
       { learner: { idk: true } }
     ],
-    expect: { ends: 'ask', must: ['null space|nullspace|kernel|nullity', 'free variable|pivot'], words: { max: 200 } },
+    expect: { ends: 'ask', must: ['null space|nullspace|kernel|nullity', 'free variable|pivot|number of columns|total columns|columns? (minus|−|-) (the )?rank'], words: { max: 200 } },
     good: r`The null space of $A$ is the set of all $x$ with $Ax = 0$. The rank is the number of pivot columns left after elimination. Every column without a pivot gives a free variable, and each free variable gives one independent direction in the null space. So for a matrix with $n$ columns, rank plus the dimension of the null space is $n$.
 
 Example: $\begin{pmatrix} 1 & 2 \\ 2 & 4 \end{pmatrix}$ reduces to one pivot, so its rank is 1 and it has one free variable. Its null space is the line through $(-2, 1)$, of dimension $2 - 1 = 1$.
@@ -234,7 +236,7 @@ $X$ and $Y$ are independent, with $\operatorname{Var}(X) = 4$ and $\operatorname
       ends: 'ask',
       verdict: 'partial',
       accept: ['wrong'],
-      names: [r`\b25\b|16\s*\+\s*9|variances? (still |always )?add|add(s|ed|ing)? (the |their )?variances?|\(-1\)\^\{?2`]
+      names: [r`\b25\b|16\s*\+\s*9|variances? (still |always )?add|add(s|ed|ing)? (the |their )?variances?|sum of (the |their )?(scaled )?variances|subtract\w* (the |their )?variances? instead of adding|\(-1\)\^\{?2`]
     },
     good: r`<grade verdict="partial" score="0.5">"Var(2X) = 2² × 4 = 16" and "no covariance term" are right; the step "Var(2X) − Var(Y) = 16 − 9" is wrong. The coefficient of $Y$ is $-1$ and it comes out squared like any other constant, so the variances add: $16 + (-1)^2 \cdot 9 = 25$, and the standard deviation is 5.</grade>
 

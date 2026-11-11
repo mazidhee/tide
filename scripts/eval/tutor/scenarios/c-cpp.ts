@@ -27,7 +27,8 @@ Copying a std::vector of a million elements allocates a new buffer and copies a 
         reply: r`Hello! Move semantics is one of the most exciting features of modern C++. Let's dive in.
 
 Have you used std::move before? What do you think an rvalue is?`,
-        fails: ['no-preamble', 'plain-question', 'ends', 'heading']
+        fails: ['no-preamble', 'heading'],
+        repaired: ['ask']
       }
     ],
     judge: 'The opening names concrete places where moving matters, and its question probes what the learner believes std::move does rather than teaching it.'
@@ -90,7 +91,8 @@ if (~x == 0xF0) puts("equal");
 ~~~
 
 <ask type="problem">Does it print equal?</ask>`),
-        fails: ['verdict', 'solution']
+        fails: ['verdict'],
+        repaired: ['solution']
       }
     ]
   },
@@ -199,7 +201,8 @@ For "cat" the array holds four bytes: 'c', 'a', 't', '\0'. p starts at s, the lo
       },
       { learner: { showMe: true } }
     ],
-    expect: { ends: 'nothing', visual: { kind: 'table' }, forbid: ['grade'], must: [r`\\0|NUL|terminator`] },
+    // A trace table, or the array drawn cell by cell with its terminator: both show where strlen stops
+    expect: { ends: 'nothing', visual: [{ kind: 'table' }, { kind: 'mermaid', diagram: ['flowchart'] }], forbid: ['grade'], must: [r`\\0|NUL|terminator`] },
     good: r`| Step | p - s | *p | *p non-zero | Action |
 |---|---|---|---|---|
 | 1 | 0 | 'c' | yes | p++ |

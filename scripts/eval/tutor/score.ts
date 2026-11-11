@@ -13,12 +13,21 @@
  *
  * It reads replies with the app's own parsers (parseBlocks, hideWorking, solutionOf, the sim and
  * chart block parsers), so "well formed" means what the app would accept.
+ *
+ * And it scores what the learner would see, not the raw completion: the app's own repairs are
+ * applied first (shared/modelText's cleaning; a closing question in plain text becomes the ask, as
+ * parseBlocks makes it; a problem with no <solution> gets one worked out, as lessonGuard does; a
+ * json block that is a simulation is drawn as one). Each repair that was needed is listed in
+ * `repaired`, so a model that stops needing them still shows as better. Stalls and loops need the
+ * model again, so they are handled before this, by turn.ts.
  */
 import { parseChartRequest } from '../../../src/shared/lab'
-import { solutionOf, type Verdict } from '../../../src/shared/lessonCheck'
+import { setsProblem, solutionOf, type Verdict } from '../../../src/shared/lessonCheck'
+import { cleanModelText } from '../../../src/shared/modelText'
 import { hideWorking, parseBlocks, type Block } from '../../../src/shared/session'
+import { isSimSource } from '../../../src/shared/sims'
 import { parseSim } from '../../../src/renderer/src/lib/sims/spec'
-import type { Expect, Scenario, Tag, Visual } from './types'
+import type { Expect, Scenario, Tag, Turn, Visual } from './types'
 
 export interface Check {
   id: string
@@ -49,7 +58,12 @@ export interface Score {
   /** Every deterministic expectation met */
   pass: boolean
   failed: string[]
+  /** What the app had to put right before the learner saw it: "ask" (a plain closing question made the ask), "solution" (worked out for a problem set without one), "sim" (a simulation in a block labelled json) */
+  repaired: string[]
 }
+
+/** A reply may run this far past its bound before it counts: a handful of words is not a pace fault */
+export const PACE_GRACE = 0.1
 
 const ASK_TYPES = ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code']
 const PAIRED: Tag[] = ['ask', 'grade', 'plan', 'card', 'note', 'summary', 'solution', 'check']
@@ -133,13 +147,18 @@ export function hasTable(text: string): boolean {
   return false
 }
 
-function scoreVisual(want: Visual, reply: string): NonNullable<Score['visual']> {
+function scoreVisual(want: Visual, reply: string): NonNullable<Score['visual']> & { relabelled?: boolean } {
   const visible = hideWorking(reply)
   const blocks = fences(visible)
   const found: string[] = []
+  let relabelled = false
   for (const b of blocks) {
     if (b.lang === 'mermaid') found.push(`mermaid:${mermaidKind(b.body) ?? 'unknown'}`)
-    else if (b.lang === 'sim') found.push(`sim:${parseSim(b.body)?.kind ?? 'invalid'}`)
+    // The app draws a block by what it holds: a simulation labelled json (or nothing) is still one
+    else if (isSimSource(b.lang, b.body)) {
+      found.push(`sim:${parseSim(b.body)?.kind ?? 'invalid'}`)
+      relabelled ||= b.lang !== 'sim'
+    }
     else if (b.lang === 'chart') found.push(`chart:${'error' in parseChartRequest(b.body) ? 'invalid' : 'ok'}`)
   }
   if (hasTable(visible)) found.push('table')
@@ -159,17 +178,37 @@ function scoreVisual(want: Visual, reply: string): NonNullable<Score['visual']> 
     if (!sims.length) return fail('no sim block')
     if (sims.includes('invalid')) return fail('a sim block the app cannot read')
     if (want.sim && !sims.includes(want.sim)) return fail(`a ${sims.join(', ')} simulation where ${want.sim} was called for`)
-    return { score: 1, found }
+    return { score: 1, found, relabelled }
   }
   const charts = found.filter((f) => f.startsWith('chart:'))
   if (!charts.length) return fail('no chart block')
   return charts.includes('chart:ok') ? { score: 1, found } : fail('a chart block the app cannot read')
 }
 
+/** Any one of the kinds a scenario allows will do: the first that passes, or why the first failed */
+function scoreVisuals(want: Visual | Visual[], reply: string): ReturnType<typeof scoreVisual> {
+  const all = (Array.isArray(want) ? want : [want]).map((w) => scoreVisual(w, reply))
+  return all.find((v) => v.score) ?? all[0]
+}
+
+/**
+ * The reply asks for another go at the problem just marked, rather than setting a new one: the
+ * tutor's last message posed a problem with its solution, this one marks the answer down and sets
+ * no numbered problem. The solution it will mark against is the one it already wrote.
+ */
+function retriesProblem(history: Turn[] | undefined, reply: string): boolean {
+  const last = [...(history ?? [])].reverse().find((t): t is { tutor: string } => 'tutor' in t)
+  if (!last || !solutionOf(last.tutor) || !/<ask\b[^>]*type\s*=\s*["'](problem|code|error)["']/i.test(last.tutor)) return false
+  return /<grade\b[^>]*verdict\s*=\s*["']?(partial|wrong)/i.test(reply) && !/\*\*\s*Problem\s+\d+/i.test(hideWorking(reply))
+}
+
 const attrOf = (attrs: string, name: string) => attrs.match(new RegExp(`${name}\\s*=\\s*["']([^"']*)["']`, 'i'))?.[1]
 
-export function scoreReply(s: Pick<Scenario, 'expect' | 'situation' | 'setup'>, reply: string): Score {
+export function scoreReply(s: Pick<Scenario, 'expect' | 'situation' | 'setup'> & { history?: Turn[] }, raw: string): Score {
   const e: Expect = s.expect
+  // What the app keeps of a completion: no hidden reasoning, no special tokens
+  const reply = cleanModelText(raw)
+  const repaired: string[] = []
   const blocks = parseBlocks(reply)
   const visible = hideWorking(reply)
   const read = readableText(blocks)
@@ -180,7 +219,7 @@ export function scoreReply(s: Pick<Scenario, 'expect' | 'situation' | 'setup'>, 
   // --- protocol ---
   const unclosed = PAIRED.filter((t) => count(reply, new RegExp(`<${t}\\b[^>]*>`, 'gi')) !== count(reply, new RegExp(`</${t}>`, 'gi')))
   add('tags-closed', !unclosed.length, `unbalanced: ${unclosed.join(', ')}`)
-  add('clean', !/<say>|\(Tide:|<\|?channel\|?>|<think>|<\|tool_call|```tool_code|<tool_call>/i.test(reply), 'voice tags, a hidden note echoed back, thinking markers or a tool call in the text')
+  add('clean', !/<say>|\(Tide:|<\|?channel\|?>|<think>|<\|tool_call|```tool_code|<tool_call>|(^|\n)\s*call:[A-Za-z_]\w*\{/i.test(reply), 'voice tags, a hidden note echoed back, thinking markers or a tool call in the text')
   const opening = read.replace(/^[\s*_#>]+/, '')
   add('no-preamble', !/^(hello|hi\b|hey\b|great question|good question|sure[,!. ]|certainly|of course|absolutely|welcome|okay[,!]|alright[,!]|let['’]?s (get started|dive in|begin))/i.test(opening), 'opens with a greeting or preamble')
 
@@ -190,9 +229,12 @@ export function scoreReply(s: Pick<Scenario, 'expect' | 'situation' | 'setup'>, 
   add('one-ask', askCount <= 1, `${askCount} questions in one message`)
   const afterAsk = askCount ? reply.slice(reply.toLowerCase().lastIndexOf('</ask>') + 6) : ''
   const tail = afterAsk.replace(/<(solution|check|note|card)\b[^>]*>[\s\S]*?<\/\1>/gi, '').trim()
-  const endsAsk = askCount === 1 && rawAsks.length === 1 && !goesOn && !tail
-  const endsContinue = goesOn && askCount === 0
-  const endsOk = e.ends === 'ask' ? endsAsk : e.ends === 'continue' ? endsContinue : e.ends === 'either' ? endsAsk || endsContinue : askCount === 0
+  // With no ask tag, the app makes a closing question in plain text the ask (parseBlocks), so there is something to answer in
+  const madeAsk = askCount === 0 && blocks.length > 0 && blocks[blocks.length - 1].kind === 'ask' && blocks.filter((b) => b.kind === 'ask').length === 1
+  if (madeAsk) repaired.push('ask')
+  const endsAsk = (askCount === 1 && rawAsks.length === 1 && !goesOn && !tail) || madeAsk
+  const endsContinue = blocks.some((b) => b.kind === 'continue')
+  const endsOk = e.ends === 'ask' ? endsAsk : e.ends === 'continue' ? endsContinue : e.ends === 'either' ? endsAsk || endsContinue : askCount === 0 && !madeAsk
   add('ends', endsOk, e.ends === 'nothing' ? 'asks a question where none was wanted' : `does not end with ${e.ends === 'ask' ? 'one question in an ask tag' : e.ends === 'continue' ? '<continue/>' : 'one question or <continue/>'}`)
 
   const askTypes = rawAsks.map((m) => (attrOf(m[1], 'type') ?? '').toLowerCase())
@@ -212,12 +254,25 @@ export function scoreReply(s: Pick<Scenario, 'expect' | 'situation' | 'setup'>, 
   const solution = solutionOf(reply)
   // A question the learner can't answer in, or a second one beside the ask: prose ending in "?" outside
   // the ask tag. A problem's own statement may end in a question: its ask is where it's answered
-  const paragraphs = blocks.flatMap((b) => (b.kind === 'text' ? b.text.replace(FENCE, '').split(/\n{2,}/) : [])).map((p) => p.trim())
-  const asksInProse = paragraphs.some((p) => !/^#{1,6}\s/.test(p) && !/^\*\*[^*]+\*\*$/.test(p) && /\?\s*[*_)"”]*\s*$/.test(p))
-  const plain = (asksInProse && (askCount === 0 || !sets)) || (askCount === 0 && blocks.some((b) => b.kind === 'ask'))
-  add('plain-question', !plain, 'a question in plain text, outside an ask tag')
+  // The one place a question may stand in prose: closing a set-up (a scenario, a case to think
+  // about) straight before the ask that then puts it, like a problem and its ask. A bare question
+  // there, or one anywhere else, is a second thing asked or one with nowhere to answer
+  const isQuestion = (p: string) => !/^#{1,6}\s/.test(p) && !/^\*\*[^*]+\*\*$/.test(p) && /\?\s*[*_)"”]*\s*$/.test(p)
+  const sentences = (p: string) => (p.match(/[.!?:](\s|$)/g) ?? []).length
+  const stray = blocks.some((b, i) => {
+    if (b.kind !== 'text') return false
+    const paras = b.text.replace(FENCE, '').split(/\n{2,}/).map((p) => p.trim()).filter(Boolean)
+    const last = paras.length - 1
+    const stem = blocks[i + 1]?.kind === 'ask' && askCount > 0 && (paras.filter((p) => !/^\*\*[^*]+\*\*$/.test(p)).length > 1 || sentences(paras[last] ?? '') > 1) ? last : -1
+    return paras.some((p, k) => isQuestion(p) && k !== stem)
+  })
+  add('plain-question', !(stray && !sets), 'a question in plain text, outside an ask tag')
   if (e.setsProblem) add('sets-problem', sets, 'no problem set')
-  if (sets || e.setsProblem) add('solution', !!solution, 'a problem without its <solution>')
+  // The app works a missing solution out itself for what it takes to be a problem (lessonGuard), and
+  // a second go at the problem just marked is marked against the solution already written
+  const supplied = !solution && setsProblem(reply)
+  if (supplied && (sets || e.setsProblem)) repaired.push('solution')
+  if ((sets && !retriesProblem(s.history, reply)) || e.setsProblem) add('solution', !!solution || supplied, 'a problem without its <solution>')
   const askText = rawAsks.map((m) => m[2]).join('\n') + '\n' + rawAsks.map((m) => attrOf(m[1], 'options') ?? '').join('\n')
   const squash = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
   const leaks = [
@@ -228,14 +283,16 @@ export function scoreReply(s: Pick<Scenario, 'expect' | 'situation' | 'setup'>, 
   ].filter(Boolean) as string[]
   if (rawAsks.length || e.askMustNot?.length) add('no-leak', !leaks.length, leaks.join('; '))
 
-  const grades = [...reply.matchAll(/<grade\b([^>]*)>([\s\S]*?)<\/grade>/gi)]
+  // The verdict is in the opening tag, which is where the app reads it (lessonGuard, pace): a grade
+  // left unclosed is a protocol fault (tags-closed), not a missing or wrong mark
+  const grades = [...reply.matchAll(/<grade\b([^>]*)>([\s\S]*?)(?:<\/grade>|(?=<(?:ask|note|card|plan|solution|check|summary|grade)\b)|$)/gi)]
   if (e.verdict) {
     add('graded', grades.length === 1, grades.length ? 'more than one grade' : 'no grade for the answer just given')
     if (grades.length) {
       const [, attrs, body] = grades[0]
       const score = attrOf(attrs, 'score')
       add('grade-attrs', /^(correct|partial|wrong)$/i.test(attrOf(attrs, 'verdict') ?? '') && (score === undefined || (/^\d(\.\d+)?$/.test(score) && Number(score) <= 1)) && !!body.trim(), 'a grade with no valid verdict, a score outside 0 to 1, or no feedback')
-      const before = blocks.slice(0, blocks.findIndex((b) => b.kind === 'grade'))
+      const before = parseBlocks(reply.slice(0, grades[0].index))
       add('grade-first', words(readableText(before)) <= 12 && !before.some((b) => b.kind === 'ask'), 'the grade does not come first')
     }
   }
@@ -249,7 +306,9 @@ export function scoreReply(s: Pick<Scenario, 'expect' | 'situation' | 'setup'>, 
   if (e.verdict) {
     const got = (grades.length ? (attrOf(grades[0][1], 'verdict') ?? '').toLowerCase() : '') as Verdict | ''
     const verdict: Verdict | 'none' = got === 'correct' || got === 'partial' || got === 'wrong' ? got : 'none'
-    const named = e.names?.length ? e.names.every((p) => safe(p).test(prose)) : null
+    // Feedback in a grade left unclosed is still what the tutor said about the answer
+    const said = blocks.some((b) => b.kind === 'grade') ? prose : `${prose}\n${grades[0]?.[2] ?? ''}`
+    const named = e.names?.length ? e.names.every((p) => safe(p).test(said)) : null
     marking = { score: verdict === e.verdict || (verdict !== 'none' && (e.accept ?? []).includes(verdict)) ? 1 : 0, expected: e.verdict, got: verdict, falseCorrect: e.verdict !== 'correct' && verdict === 'correct', rejectedRight: e.verdict === 'correct' && verdict !== 'correct', named }
   }
 
@@ -265,10 +324,12 @@ export function scoreReply(s: Pick<Scenario, 'expect' | 'situation' | 'setup'>, 
   // --- pace ---
   const bounds = { ...defaultWords(s), ...(e.words ?? {}) }
   const n = paceWords(reply)
-  const pace = { score: n > bounds.max ? Math.max(0, 1 - (n - bounds.max) / bounds.max) : n < bounds.min ? n / bounds.min : 1, words: n, min: bounds.min, max: bounds.max }
+  const pace = { score: n > bounds.max * (1 + PACE_GRACE) ? Math.max(0, 1 - (n - bounds.max) / bounds.max) : n < bounds.min ? n / bounds.min : 1, words: n, min: bounds.min, max: bounds.max }
 
   // --- visual ---
-  const visual = e.visual ? scoreVisual(e.visual, reply) : null
+  const drawn = e.visual ? scoreVisuals(e.visual, reply) : null
+  if (drawn?.score && drawn.relabelled) repaired.push('sim')
+  const visual = drawn ? { score: drawn.score, found: drawn.found, ...(drawn.why ? { why: drawn.why } : {}) } : null
 
   const protocol = { score: checks.filter((c) => c.ok).length / checks.length, checks }
   const parts = [protocol.score, pace.score, ...(marking ? [marking.score] : []), ...(exactness ? [exactness.score] : []), ...(visual ? [visual.score] : [])]
@@ -280,5 +341,5 @@ export function scoreReply(s: Pick<Scenario, 'expect' | 'situation' | 'setup'>, 
     ...(pace.score < 1 ? ['pace'] : []),
     ...(visual && !visual.score ? ['visual'] : [])
   ]
-  return { protocol, marking, exactness, pace, visual, overall: parts.reduce((a, b) => a + b, 0) / parts.length, pass: !failed.length, failed }
+  return { protocol, marking, exactness, pace, visual, overall: parts.reduce((a, b) => a + b, 0) / parts.length, pass: !failed.length, failed, repaired }
 }

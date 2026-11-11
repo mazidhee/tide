@@ -25,7 +25,8 @@ Every pipeline answers one question before any other: is the data processed in b
         reply: r`Hi! Let's dive in to batch and stream processing, two key ideas in data engineering.
 
 Have you used Spark or Kafka before? What do you think the difference between batch and streaming is?`,
-        fails: ['no-preamble', 'plain-question', 'ends', 'heading']
+        fails: ['no-preamble', 'heading'],
+        repaired: ['ask']
       }
     ],
     judge: 'The opening names real batch and streaming systems and what the choice decides, and its question probes what the learner knows rather than teaching.'
@@ -79,7 +80,8 @@ A topic has 12 partitions and receives 9,000 records per second, spread evenly a
 A topic has 12 partitions and 9,000 records per second. Each consumer handles 2,000 per second. How many consumers are needed?
 
 <ask type="problem">Your answer.</ask>`,
-        fails: ['verdict', 'solution']
+        fails: ['verdict'],
+        repaired: ['solution']
       }
     ],
     judge: 'The answer is complete on all three parts; the reply should mark it correct by quoting it and move to a harder problem without re-teaching.'
@@ -147,7 +149,8 @@ Stream jobs in Flink, Spark Structured Streaming and Kafka Streams group events 
         reply: r`No problem. Think about it this way: how would the job know what time it is in the stream?
 
 What do you think happens when an event arrives late?`,
-        fails: ['ends', 'plain-question', 'must']
+        fails: ['plain-question', 'must'],
+        repaired: ['ask']
       }
     ],
     judge: 'It derives the watermark from the problem (event time can only be estimated from events seen) rather than stating a definition, then asks something easier.'

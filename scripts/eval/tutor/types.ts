@@ -6,7 +6,7 @@ import type { AskType, SessionSetup } from '../../../src/shared/session'
 import type { Verdict } from '../../../src/shared/lessonCheck'
 
 /** Bump when a scenario or an expectation changes: results are only comparable within one version */
-export const SCENARIO_SET_VERSION = '1.0.0'
+export const SCENARIO_SET_VERSION = '1.1.0'
 
 export const SUBJECTS = ['systems', 'c-cpp', 'distributed', 'databases', 'ml', 'maths', 'data-eng'] as const
 export type Subject = (typeof SUBJECTS)[number]
@@ -76,8 +76,8 @@ export interface Expect {
   forbid?: Tag[]
   /** The reply must set a problem (a problem, code or error ask), which then needs its <solution> */
   setsProblem?: boolean
-  /** The kind of picture asked for */
-  visual?: Visual
+  /** The kind of picture asked for; a list when more than one kind shows the idea properly */
+  visual?: Visual | Visual[]
   /** Bounds on the words the learner reads (code, diagrams, notes and hidden working aren't counted) */
   words?: { min?: number; max?: number }
   /** A bold heading the reply must carry, e.g. "Why this matters" at a lesson's opening */
@@ -95,8 +95,8 @@ export interface Scenario {
   expect: Expect
   /** A reply that meets every deterministic expectation: proof the scenario can be passed */
   good: string
-  /** Replies that must fail, each naming the checks it has to trip: proof the scorer notices */
-  bad?: { reply: string; fails: string[] }[]
+  /** Replies that must fail, each naming the checks it has to trip: proof the scorer notices. `repaired` names what the app must be seen to put right in it (see Score.repaired) */
+  bad?: { reply: string; fails: string[]; repaired?: string[] }[]
   /** What a judge model should look for here (optional; see judge.ts) */
   judge?: string
 }

@@ -26,7 +26,8 @@ Any system that keeps copies of data on more than one machine has to decide what
         reply: r`Hello! The CAP theorem is a great topic. It says you can only pick two of consistency, availability and partition tolerance.
 
 Have you come across CAP before? Which two would you pick for a bank?`,
-        fails: ['no-preamble', 'plain-question', 'ends', 'heading']
+        fails: ['no-preamble', 'heading'],
+        repaired: ['ask']
       }
     ],
     judge: 'In Why mode the opening must not hand over the theorem as "pick two of three"; it says where the trade shows up in real stores and asks a question the learner can reason out.'
@@ -231,7 +232,8 @@ P1's clock is [3, 1, 0]. It receives a message stamped [1, 4, 2]. What is P1's c
 Add a fourth process P4 that sends a message to P1 after event f. What is the new clock at P1?
 
 <ask type="problem">Your answer.</ask>`,
-        fails: ['verdict', 'names', 'solution']
+        fails: ['verdict', 'names'],
+        repaired: ['solution']
       }
     ],
     judge: 'Five of six clocks and the concurrency claim are right; the receive at f copies the message clock instead of merging. The reply must point at that step and give [2,2,2], not mark the whole answer correct.'
