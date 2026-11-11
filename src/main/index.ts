@@ -91,6 +91,7 @@ import { getGoals, getRecallQueue, listDrills, listInterviews, logDrill, logInte
 import type { DrillResult } from '@shared/drills'
 import type { InterviewRecord } from '@shared/interviews'
 import { getCards, reviewCard, saveCards } from './study'
+import { registerEditorIpc, runNow } from './workshopWatch'
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'vault', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } }
@@ -314,7 +315,9 @@ function registerIpc() {
   handle('workshop:list', async () => (await workshop()).listWorkshop())
   handle('workshop:start', async (id: string, from?: { notebook?: string; topic?: string }) => (await workshop()).startProject(String(id), from))
   handle('workshop:state', async (id: string) => (await workshop()).workshopState(String(id)))
-  handle('workshop:run', async (id: string) => (await workshop()).runStage(String(id)))
+  // In turn with a run a save started (main/workshopWatch.ts), so two never write the record at once
+  handle('workshop:run', async (id: string) => runNow(String(id)))
+  registerEditorIpc()
   handle('workshop:hint', async (id: string) => (await workshop()).nextHint(String(id)))
   handle('workshop:review', async (id: string, stage?: number) => {
     const w = await workshop()
