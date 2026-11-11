@@ -14,6 +14,9 @@ const SUGGESTIONS: Record<ScopeChoice, string[]> = {
   none: ['Explain big-O like I’m new to it', 'Help me plan a study session']
 }
 
+/** The last request from elsewhere that was passed on, so the panel coming back on screen never sends it a second time */
+let handledAsk: number | null = null
+
 export function ChatPanel() {
   const app = useApp()
   const { view, pendingAsk } = app
@@ -81,7 +84,8 @@ export function ChatPanel() {
 
   // Requests coming from elsewhere: "Explain", "Summarize", "Ask about this notebook"
   useEffect(() => {
-    if (!pendingAsk) return
+    if (!pendingAsk || pendingAsk.nonce === handledAsk) return
+    handledAsk = pendingAsk.nonce
     if (pendingAsk.scope) setExplicitScope(pendingAsk.scope)
     instructionsRef.current = pendingAsk.instructions
     if (pendingAsk.text) send(pendingAsk.text, { attachment: pendingAsk.attachment, scope: pendingAsk.scope, instructions: pendingAsk.instructions })

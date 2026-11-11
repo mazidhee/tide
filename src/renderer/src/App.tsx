@@ -353,6 +353,19 @@ export default function App() {
     }
   }
 
+  // A question asked from Home in the new design (see noPanel below)
+  const [homeAsked, setHomeAsked] = useState<number | null>(null)
+  const askNonce = app.pendingAsk?.nonce
+  const seenAsk = useRef(askNonce)
+  useEffect(() => {
+    if (askNonce !== seenAsk.current && view.kind === 'home') setHomeAsked(askNonce ?? null)
+    seenAsk.current = askNonce
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askNonce])
+  useEffect(() => {
+    if (!settings.chatOpen) setHomeAsked(null)
+  }, [settings.chatOpen])
+
   if (!settings.vaultPath) return <Onboarding />
   if (focusId && !focusReady) return <div className="shell focus-window" />
 
@@ -360,7 +373,8 @@ export default function App() {
   const ownTutor = ['chat', 'lab', 'code', 'design', 'drill', 'session', 'exam'].includes(view.kind) || (view.kind === 'file' && /\.canvas$/i.test(view.path))
   // In the new design Home is the whole width of the window and has its own ask box: the tutor
   // panel stays beside what you read (a note, a PDF, the library), one click away from Home
-  const noPanel = ownTutor || (tide && view.kind === 'home')
+  // …until you ask something from Home: then it opens there with your question, and stays until you close it
+  const noPanel = ownTutor || (tide && view.kind === 'home' && homeAsked === null)
   let main: React.ReactNode
   if (view.kind === 'file') {
     if (/\.pdf$/i.test(view.path)) main = <PdfView key={view.path} path={view.path} anchor={view.anchor} />
