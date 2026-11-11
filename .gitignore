@@ -6,6 +6,8 @@ dist
 native/tide-core/target
 native/tide-core/tide-core.node
 native/tide-core/models
+# PDFium is fetched by version and checksum (npm run pdfium), not kept here
+native/pdfium
 scripts/bench/__pycache__
 
 # The fine-tuning set is the learner's own lessons, and adapters are large: neither is kept here

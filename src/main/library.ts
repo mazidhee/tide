@@ -2,13 +2,13 @@ import { existsSync, promises as fs } from 'fs'
 import { dirname } from 'path'
 import { basename, extname } from 'path'
 import { JSDOM } from 'jsdom'
-import { Readability } from '@mozilla/readability'
 import TurndownService from 'turndown'
 import mammoth from 'mammoth'
 import type { ClipResult } from '@shared/types'
 import { thumbPath } from '@shared/thumbs'
 import { getSettings } from './settings'
 import { absPath, joinRel, sanitizeName, uniquePath, writeText } from './vault'
+import { readArticle, restoreFormulas, type Article } from './extract'
 
 const BROWSER_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36'
@@ -61,6 +61,11 @@ function htmlToMarkdown(html: string): string {
   return turndown
     .turndown(doc.body.innerHTML)
     .replace(/TIDEMATH(\d+)X/g, (_, i) => formulas[Number(i)])
+}
+
+/** An article's HTML as Markdown. The Rust reader has already swapped its formulas for placeholders; jsdom's article still has its MathML */
+export function articleMarkdown(article: Pick<Article, 'content' | 'formulas' | 'engine'>): string {
+  return article.engine === 'rust' ? restoreFormulas(turndown.turndown(article.content), article.formulas) : htmlToMarkdown(article.content)
 }
 
 // ---------- YouTube ----------
@@ -313,19 +318,16 @@ async function saveArticle(url: string): Promise<ClipResult> {
   if (type.includes('application/pdf') || /\.pdf($|\?)/i.test(url)) return savePdfFromUrl(url, res)
 
   const html = await res.text()
-  const dom = new JSDOM(html, { url: res.url || url })
-  const doc = dom.window.document
-  const meta = (name: string) =>
-    doc.querySelector(`meta[property="${name}"], meta[name="${name}"]`)?.getAttribute('content') ?? undefined
+  const article = await readArticle(html, res.url || url)
+  const meta = (name: string): string | undefined => article.meta[name]
 
-  const article = new Readability(doc.cloneNode(true) as Document).parse()
-  const title = article?.title || meta('og:title') || doc.title || new URL(url).hostname
-  const site = article?.siteName || meta('og:site_name') || new URL(url).hostname.replace(/^www\./, '')
+  const title = article.title || meta('og:title') || article.docTitle || new URL(url).hostname
+  const site = article.siteName || meta('og:site_name') || new URL(url).hostname.replace(/^www\./, '')
 
   let body: string
   let folder = 'Articles'
-  if (article?.content && (article.textContent?.trim().length ?? 0) > 200) {
-    body = htmlToMarkdown(article.content)
+  if (article.content && article.text.trim().length > 200) {
+    body = articleMarkdown(article)
   } else {
     // Not an article (app, landing page...), keep a bookmark with what we know
     folder = 'Links'
@@ -338,8 +340,8 @@ async function saveArticle(url: string): Promise<ClipResult> {
       title,
       source: url,
       source_type: folder === 'Articles' ? 'article' : 'link',
-      image: pageImage(doc, res.url || url),
-      author: article?.byline || meta('author'),
+      image: article.image,
+      author: article.byline || meta('author'),
       site,
       published: meta('article:published_time')?.slice(0, 10),
       saved: today(),

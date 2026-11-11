@@ -6,6 +6,7 @@ import { basename, extname, join } from 'path'
 import matter from 'gray-matter'
 import type { SearchHit } from '@shared/types'
 import { tideCore } from './native'
+import { pdfiumText } from './pdftext'
 import { chunkEpub } from '@shared/epub'
 import { epubBook } from './epub'
 import { absPath, flattenFiles, getNoteMeta, getTree, joinRel, vaultRoot, writeText } from './vault'
@@ -76,6 +77,14 @@ async function pdfPages(rel: string): Promise<string[]> {
   if (existsSync(absPath(cacheRel))) {
     return JSON.parse(await fs.readFile(absPath(cacheRel), 'utf8'))
   }
+  // PDFium, off the main thread; pdf.js when it isn't there or can't read the file
+  const pages = (await pdfiumText(full))?.pages ?? (await pdfjsPages(full))
+  await writeText(cacheRel, JSON.stringify(pages))
+  return pages
+}
+
+/** The text of each page by pdf.js, as Tide always read PDFs before PDFium */
+export async function pdfjsPages(full: string): Promise<string[]> {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
   const data = new Uint8Array(await fs.readFile(full))
   const doc = await pdfjs.getDocument({ data, useSystemFonts: true }).promise
@@ -92,7 +101,6 @@ async function pdfPages(rel: string): Promise<string[]> {
     )
   }
   await doc.destroy()
-  await writeText(cacheRel, JSON.stringify(pages))
   return pages
 }
 
