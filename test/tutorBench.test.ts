@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs'
 import { describe, expect, it } from 'vitest'
+import { MARK_NOTE } from '../src/shared/pace'
 import { SESSION_FORMAT, SHOW_ME } from '../src/shared/session'
 import { decide, type Run } from '../scripts/eval/tutor/compare'
 import { judgePrompt, parseJudge } from '../scripts/eval/tutor/judge'
@@ -52,7 +53,9 @@ describe('requests', () => {
     expect(m[0].content).toMatch(/^You are Tide, a patient tutor/)
     expect(m[0].content).toMatch(/Today is Wednesday,? 11 November 2026\./)
     expect(m[1].content).toMatch(/^How to tutor me here:\nYou are running a TEACH session on: /)
-    expect(m[m.length - 1].content).toMatch(/^Answer: [\s\S]+\n\(Confidence: sure\)$/)
+    // The answer as the lesson screen sends it, with the hidden marking note every answer carries
+    expect(m[m.length - 1].content).toMatch(/^Answer: [\s\S]+\n\(Confidence: sure\)\n\n\(Tide: mark this first\. /)
+    expect(m[m.length - 1].content.endsWith(MARK_NOTE)).toBe(true)
   })
 
   it('send the learner\'s messages in the lesson screen\'s own forms', () => {
@@ -62,6 +65,9 @@ describe('requests', () => {
     expect(buildMessages(tangent).at(-1)!.content).toMatch(/^My question: /)
     const idk = SCENARIOS.find((s) => s.situation === 'idk')!
     expect(buildMessages(idk).at(-1)!.content).toMatch(/^I don't know\./)
+    // Nothing to mark in a question or an "I don't know", so no marking note
+    expect(buildMessages(tangent).at(-1)!.content).not.toContain('mark this first')
+    expect(buildMessages(idk).at(-1)!.content).not.toContain('mark this first')
   })
 
   it('add the hidden pace note the app would add (two "I don\'t know" in a row)', () => {

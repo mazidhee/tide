@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { goesOn, paceNote, PACE_MARK } from '../src/shared/pace'
+import { goesOn, paceNote, PACE_MARK, MARK_NOTE, markNote } from '../src/shared/pace'
 import { ownWords, parseBlocks, closeGrade } from '../src/shared/session'
 
 const tutor = (content: string) => ({ role: 'assistant' as const, content })
@@ -97,5 +97,22 @@ describe('paceNote', () => {
   it('is hidden from what you see and from what gets checked', () => {
     const stored = `Answer: 42\n(Confidence: sure)\n\n${PACE_MARK} they asked to be tested.)`
     expect(ownWords(stored)).toBe('Answer: 42\n(Confidence: sure)')
+  })
+})
+
+describe('the marking note', () => {
+  it('rides with an answer, and with nothing else', () => {
+    expect(markNote('Answer: page 26, offset 47\n(Confidence: sure)')).toBe(MARK_NOTE)
+    expect(markNote('My question: is that the same as paging?')).toBeNull()
+    expect(markNote('Go on.')).toBeNull()
+    expect(markNote("I don't know.")).toBeNull()
+    expect(markNote("Answer: I don't know")).toBeNull()
+  })
+
+  it('says the two things in few words: a different method is correct, and a miss gets a flashcard', () => {
+    expect(MARK_NOTE).toMatch(/^\(Tide: mark this first\./)
+    expect(MARK_NOTE).toContain('A right result by a different method from yours is correct.')
+    expect(MARK_NOTE).toContain('<card>question :: answer</card>')
+    expect(MARK_NOTE.split(/\s+/).length).toBeLessThanOrEqual(32)
   })
 })

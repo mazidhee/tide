@@ -13,7 +13,22 @@
  * the same text (the model server's prefix cache). The problem bank stands aside on a turn with one.
  */
 
+import { isAnswer } from './lessonRepair'
+
 export const PACE_MARK = '(Tide: This turn:'
+
+/**
+ * Said with every answer in a lesson (hidden, like the pace note): the two marking rules the local
+ * model drops when they sit only in the format rules, thousands of words back. In the tutor
+ * benchmark's baseline it wrote a flashcard after 1 miss in 8 (a <note> instead, which the lesson's
+ * instructions ask for in the same breath), and marked a correct subquery down for not being a
+ * window function. A 12B model follows the last, most concrete thing it was told, so the rule
+ * rides with the answer it applies to.
+ */
+export const MARK_NOTE = '(Tide: mark this first. A right result by a different method from yours is correct. If it is partial or wrong, add <card>question :: answer</card> for the idea they missed.)'
+
+/** The marking note for what you're sending, when it is an answer to mark */
+export const markNote = (said: string): string | null => (isAnswer(said) ? MARK_NOTE : null)
 
 const EXPLAIN = /\b(just|please|can you|could you)\s+(explain|teach|walk me through|show me)\b|\b(keep|carry on|continue)\s+(explaining|going)\b|\bstop (asking|quizzing)\b|\bno (more )?questions\b/i
 const CHECK = /\b(quiz|test|check) me\b|\bask me (a|some|more)\b|\bharder (one|question|problem)s?\b|\bgive me (a|another) (problem|question)\b/i
