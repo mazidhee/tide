@@ -3,6 +3,8 @@ import { friendlyError, streamDraft } from './ai'
 import { readWebpage, webSearch } from './agent'
 import { getSettings } from './settings'
 import { directionLine } from './coach'
+import { bookOutline, readIntent, readingOutlineRules } from '@shared/readingPlan'
+import { ownedBook } from './reading'
 
 /**
  * Drafts a study outline for a new topic. Research happens first and in code, not by the model:
@@ -80,6 +82,14 @@ export async function draftOutline(req: OutlineDraftRequest, emit: (e: ChatEvent
         .join('\n\n---\n\n')
     }
     if (controller.signal.aborted) return
+    // humanities: a book already in the library is its own roadmap, from its contents (no model, nothing invented)
+    const reading = !!readIntent(req.goal ?? '') || /\b(read|reading list)\b/i.test(req.goal ?? '')
+    const owned = !req.plan ? await ownedBook(req.topic).catch(() => null) : null
+    if (owned) {
+      emit({ id: req.id, type: 'delta', text: bookOutline(owned) })
+      emit({ id: req.id, type: 'done' })
+      return
+    }
     const plan = req.plan
     const heading = await directionLine().catch(() => '')
     const user = [
@@ -93,6 +103,7 @@ Inside each phase use ### chapters of 2 to 6 topics. After each chapter's topics
 - [ ] Project: the phase's project, specific to the learner's goal
 - [ ] Exam: the phase name`
         : `Size: ${SIZE[req.size]}.`,
+      readingOutlineRules(req.topic, reading),
       `Today is ${new Date().toISOString().slice(0, 10)}.`,
       research ? `Use this research to decide what belongs in the outline (don't copy its wording, and leave out anything off-topic):\n\n${research}` : ''
     ]

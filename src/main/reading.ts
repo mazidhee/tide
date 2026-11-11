@@ -42,7 +42,7 @@ import { epubBook } from './epub'
 import { getHighlights } from './highlights'
 import { pdfText } from './search'
 import { getSettings } from './settings'
-import { absPath, joinRel, readText, sanitizeName, uniquePath, writeText } from './vault'
+import { absPath, flattenFiles, getTree, joinRel, readText, sanitizeName, uniquePath, writeText } from './vault'
 
 /**
  * Reading in the humanities, whatever the format (src/shared/passage): the EPUB reader's book,
@@ -105,6 +105,25 @@ export async function workOf(path: string): Promise<{ work: Work; index: TermInd
 }
 
 const allUnits = (w: Work) => w.chapters.flatMap((c) => c.units)
+
+// ---------- A book as a roadmap ----------
+
+const squashTitle = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/^(the|a|an)\s+/, '').replace(/[^a-z0-9]+/g, ' ').trim()
+
+/** An EPUB in the library whose title is the topic ("The Brothers Karamazov"), read for its contents */
+export async function ownedBook(topic: string): Promise<EpubBook | null> {
+  const want = squashTitle(topic)
+  if (want.length < 3) return null
+  const epubs = flattenFiles(await getTree()).filter((f) => f.kind === 'epub')
+  for (const f of epubs) {
+    const name = squashTitle(f.name.replace(/\.epub$/i, '').split(' - ')[0])
+    if (name === want || name.startsWith(`${want} `) || want.startsWith(`${name} `)) {
+      const b = await readEpub(f.path).catch(() => null)
+      if (b && b.chapters.some((c) => c.n > 0)) return b
+    }
+  }
+  return null
+}
 
 // ---------- Free books ----------
 
