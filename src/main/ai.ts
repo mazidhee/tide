@@ -109,8 +109,8 @@ function takeWithinBudget(chunks: Chunk[], budget: number): Chunk[] {
 const chunkPage = (c: Chunk) => Number(c.id.match(/#p(\d+)-\d+$/)?.[1] ?? 0)
 
 /** Passages from a page range: all of it when it fits, else the best matches plus reading order */
-function retrievePages(scope: Extract<ChatScope, { kind: 'pages' }>, query: string): Chunk[] {
-  const inRange = getChunks(scope.path).filter((c) => {
+async function retrievePages(scope: Extract<ChatScope, { kind: 'pages' }>, query: string): Promise<Chunk[]> {
+  const inRange = (await getChunks(scope.path)).filter((c) => {
     const p = chunkPage(c)
     return p >= scope.from && p <= scope.to
   })
@@ -119,7 +119,7 @@ function retrievePages(scope: Extract<ChatScope, { kind: 'pages' }>, query: stri
   const ids = new Set(inRange.map((c) => c.id))
   // The passages that match best, then the rest of the chapter sampled evenly, so a quiz or a
   // summary covers the whole range instead of only its first pages
-  const hits = search(query, 40, (p) => p === scope.path)
+  const hits = (await search(query, 40, (p) => p === scope.path))
     .filter((c) => ids.has(c.id))
     .slice(0, 6)
   const used = hits.reduce((n, c) => n + c.text.length, 0)
@@ -143,7 +143,7 @@ export async function lessonPassage(topic: string, context = ''): Promise<{ labe
   if (!s) return null
   await indexReady()
   const to = Math.min(s.to, s.from + 8)
-  const chunks = retrievePages({ kind: 'pages', path: s.path, from: s.from, to }, topic).sort((a, b) => chunkPage(a) - chunkPage(b))
+  const chunks = (await retrievePages({ kind: 'pages', path: s.path, from: s.from, to }, topic)).sort((a, b) => chunkPage(a) - chunkPage(b))
   let text = ''
   for (const c of chunks) {
     if (text.length + c.text.length > 5000) break
@@ -157,7 +157,7 @@ export async function retrieve(scope: ChatScope, query: string): Promise<Context
   await indexReady()
   if (scope.kind === 'pages') {
     await reindexPath(scope.path)
-    const picked = takeWithinBudget(retrievePages(scope, query), CONTEXT_BUDGET).sort((a, b) => a.order - b.order)
+    const picked = takeWithinBudget(await retrievePages(scope, query), CONTEXT_BUDGET).sort((a, b) => a.order - b.order)
     return picked.map((c, i) => ({ index: i + 1, path: c.path, title: c.title, heading: c.heading || undefined, text: c.text }))
   }
   if (scope.kind === 'note') await reindexPath(scope.path)
@@ -167,19 +167,19 @@ export async function retrieve(scope: ChatScope, query: string): Promise<Context
   const within = (p: string) => inScope(scope)(p) || filed.has(p)
 
   let chunks: Chunk[]
-  const whole = scope.kind === 'note' ? getChunks(scope.path) : []
+  const whole = scope.kind === 'note' ? await getChunks(scope.path) : []
   const wholeSize = whole.reduce((n, c) => n + c.text.length, 0)
 
   if (scope.kind === 'note' && wholeSize <= CONTEXT_BUDGET * (filed.size ? 0.65 : 1)) {
     // Small enough to give the model the full note, with the best of what's filed under it
-    chunks = [...whole, ...(filed.size ? search(query, 8, (p) => filed.has(p)).slice(0, 4) : [])]
+    chunks = [...whole, ...(filed.size ? (await search(query, 8, (p) => filed.has(p))).slice(0, 4) : [])]
   } else {
-    const hits = search(query, 24, scope.kind === 'note' ? (p) => p === scope.path || filed.has(p) : within)
+    const hits = await search(query, 24, scope.kind === 'note' ? (p) => p === scope.path || filed.has(p) : within)
     chunks = hits
     if (chunks.length < 3) {
       // Generic questions ("summarize this") match few terms, fall back to reading order
       const paths = scope.kind === 'note' ? [scope.path, ...filed] : allChunkPaths().filter(within)
-      const extra = paths.flatMap((p) => getChunks(p, scope.kind === 'note' ? 50 : 2))
+      const extra = (await Promise.all(paths.map((p) => getChunks(p, scope.kind === 'note' ? 50 : 2)))).flat()
       chunks = [...chunks, ...extra.filter((c) => !chunks.some((h) => h.id === c.id))]
     }
   }

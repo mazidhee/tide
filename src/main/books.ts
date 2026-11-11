@@ -129,7 +129,7 @@ export async function pagesToRead(topic: string, limit = 2, context = ''): Promi
   // A hit only counts when the passage holds most of the topic's words: a stray "binary" in a
   // chapter on data encoding isn't evidence it teaches binary numbers
   const want = topicWords(topic)
-  const hits = search(topic, 40, (p) => owned.has(p))
+  const hits = (await search(topic, 40, (p) => owned.has(p)))
     .filter((h) => {
       const text = h.text.toLowerCase()
       return want.length && want.filter((w) => text.includes(w)).length / want.length >= 0.6

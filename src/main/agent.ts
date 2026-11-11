@@ -918,7 +918,7 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     const q = str('query')
     const id = ctx.step({ kind: 'search_notes', label: `Searching your notes for “${q}”`, status: 'running', depth })
     await indexReady()
-    const hits = search(q, 6)
+    const hits = await search(q, 6)
     ctx.updateStep(id, { status: 'done', detail: `${hits.length} passages` })
     if (!hits.length) return 'No matching passages in the notes.'
     return hits
@@ -933,7 +933,7 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     const path = str('path')
     const id = ctx.step({ kind: 'read_note', label: `Reading ${path.split('/').pop()?.replace(/\.md$/, '')}`, status: 'running', depth })
     try {
-      const chunks = getChunks(path)
+      const chunks = await getChunks(path)
       const text = chunks.length ? chunks.map((c) => (c.heading ? `## ${c.heading}\n` : '') + c.text).join('\n\n') : await readText(path)
       const n = addSource(ctx, { path, title: chunks[0]?.title ?? path.split('/').pop()!, text: clip(text, 1500) })
       ctx.updateStep(id, { status: 'done' })
@@ -1669,7 +1669,7 @@ async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, sign
     req.scope.kind === 'none'
       ? []
       : req.scope.kind === 'vault'
-        ? search(question, 3)
+        ? (await search(question, 3))
             .filter((h) => onTopic(question, `${h.title} ${h.heading ?? ''} ${h.text}`))
             .map((h) => ({ path: h.path, title: h.title, heading: h.heading || undefined, text: h.text }))
         : await retrieve(req.scope, question)
@@ -1680,7 +1680,7 @@ async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, sign
     const graph = await graphCached().catch(() => null)
     const linked = graph ? [...new Set(graph.edges.filter((e) => e.source === (req.scope as { path: string }).path).map((e) => e.target))].slice(0, 3) : []
     for (const p of linked) {
-      const hit = search(question || p, 1, (x) => x === p)[0] ?? getChunks(p, 1)[0]
+      const hit = (await search(question || p, 1, (x) => x === p))[0] ?? (await getChunks(p, 1))[0]
       if (hit) addSource(ctx, { path: hit.path, title: hit.title, heading: hit.heading ? `${hit.heading} (linked note)` : 'linked note', text: hit.text.slice(0, 1200) })
     }
   }
