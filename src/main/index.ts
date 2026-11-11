@@ -43,6 +43,7 @@ import {
   getMastery, getLibraryTopics, getLibraryStatus, onPathMoved, setLibraryTopics, setLibraryStatus, clearCoverImage, logFocus, focusLog, focusTime, invalidateGraph } from './learn'
 import { importFile, libraryThumb, saveUrl } from './library'
 import { getHighlights, saveHighlights } from './highlights'
+import { registerReading } from './reading'
 import { labLoadTable, labQuery, labReset, labSchema } from './lab'
 import { isSql, languagesStatus } from './languages'
 import { labStatus, librariesStatus, mathStatus, runCode, runProject, setupLab, setupLibraries, setupMath } from './runner'
@@ -465,7 +466,7 @@ function registerIpc() {
     const res = await dialog.showOpenDialog(win!, {
       title: 'Add files to your library',
       properties: ['openFile', 'multiSelections'],
-      filters: [{ name: 'Documents', extensions: ['pdf', 'docx', 'md', 'txt', 'png', 'jpg', 'jpeg', 'webp'] }]
+      filters: [{ name: 'Documents', extensions: ['pdf', 'docx', 'epub', 'md', 'txt', 'png', 'jpg', 'jpeg', 'webp'] }]
     })
     return res.canceled ? [] : importPaths(res.filePaths)
   })
@@ -523,6 +524,8 @@ function registerIpc() {
 
   handle('highlights:get', (p: string) => getHighlights(p))
   handle('highlights:save', (p: string, list: PdfHighlight[]) => saveHighlights(p, list))
+  // humanities: books, free books, Discuss this, reading together, the notes page (src/main/reading)
+  registerReading(handle)
 
   handle('study:cards', (scope: ChatScope) => getCards(scope))
   handle('study:review', (id: string, grade: ReviewGrade, path: string) => reviewCard(id, grade, path))

@@ -21,6 +21,7 @@ const TIDE_GROUP = '__tide__'
 function iconFor(node: FileNode, libraryFolder: string): IconName {
   if (node.type === 'folder') return 'folder'
   if (node.kind === 'pdf') return 'pdf'
+  if (node.kind === 'epub') return 'book'
   if (node.kind === 'image') return 'image'
   if (node.kind === 'canvas') return 'canvas'
   if (node.path.startsWith(`${libraryFolder}/Videos/`)) return 'video'

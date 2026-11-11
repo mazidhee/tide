@@ -43,6 +43,7 @@ import { measureRendering } from './lib/renderMeter'
 // The heavy views (PDF reader, terminal, code editor, canvas, graph, drills) load when first opened,
 // not with the window: Tide opens faster and holds less in memory until you need them
 const PdfView = lazy(() => import('./components/PdfView').then((m) => ({ default: m.PdfView })))
+const EpubView = lazy(() => import('./components/EpubView').then((m) => ({ default: m.EpubView })))
 const LabView = lazy(() => import('./components/LabView').then((m) => ({ default: m.LabView })))
 const WorkshopView = lazy(() => import('./components/WorkshopView').then((m) => ({ default: m.WorkshopView })))
 const CodeView = lazy(() => import('./components/CodeView').then((m) => ({ default: m.CodeView })))
@@ -210,7 +211,7 @@ export default function App() {
   )
   // What you're doing, for the menu bar: reading, flashcards, practising (lessons and exams report their own)
   const pageStudy =
-    view.kind === 'file' && /\.(md|pdf)$/i.test(view.path)
+    view.kind === 'file' && /\.(md|pdf|epub)$/i.test(view.path)
       ? { pose: 'book' as const, label: `Reading: ${view.path.split('/').pop()!.replace(/\.(md|pdf)$/i, '')}` }
       : view.kind === 'study'
         ? { pose: 'cards' as const, label: 'Flashcards' }
@@ -227,7 +228,7 @@ export default function App() {
       ? { label: view.kind === 'session' ? `${view.mode}: ${view.topic}` : 'Quiz', kind: 'lesson', noBreaks: view.kind === 'session' && !!view.options?.timed, path: view.scope.kind === 'note' ? view.scope.path : undefined }
       : view.kind === 'exam'
         ? { label: `Exam: ${view.topic}`, kind: 'exam', noBreaks: true }
-        : view.kind === 'file' && /\.(md|pdf)$/i.test(view.path)
+        : view.kind === 'file' && /\.(md|pdf|epub)$/i.test(view.path)
           ? { label: view.path.split('/').pop()!.replace(/\.(md|pdf)$/i, ''), path: view.path, kind: 'reading' }
           : view.kind === 'study' || view.kind === 'daily'
             ? { label: view.kind === 'daily' ? 'Daily practice' : 'Flashcards', kind: 'review' }
@@ -381,6 +382,8 @@ export default function App() {
   let main: React.ReactNode
   if (view.kind === 'file') {
     if (/\.pdf$/i.test(view.path)) main = <PdfView key={view.path} path={view.path} anchor={view.anchor} />
+    // humanities: EPUB books open in their own reader, at a chapter and paragraph
+    else if (/\.epub$/i.test(view.path)) main = <EpubView key={view.path} path={view.path} anchor={view.anchor} />
     else if (/\.(png|jpe?g|gif|webp|svg|avif)$/i.test(view.path)) main = <ImageView path={view.path} />
     else if (/\.canvas$/i.test(view.path)) main = <CanvasView key={view.path} path={view.path} />
     else main = <NoteView key={view.path} path={view.path} anchor={view.anchor} nonce={view.nonce} />

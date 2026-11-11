@@ -29,7 +29,7 @@ import {
   type Candidate,
   type StepReading
 } from '../src/shared/sourceLed'
-import { TRUSTED, openLicence, statedLicence, trustedCount, trustedSite } from '../src/shared/trustedSources'
+import { TRUSTED, UNVERIFIED_TRUSTED, openLicence, statedLicence, trustedCount, trustedSite } from '../src/shared/trustedSources'
 
 // Pages as the app's reader returned them, recorded once (test/fixtures/sourceLed): no network here
 const page = (name: string) => JSON.parse(readFileSync(`test/fixtures/sourceLed/${name}.json`, 'utf8')) as { url: string; title: string; text: string }
@@ -58,9 +58,9 @@ const bookChunks = (path: string): Passage[] =>
 describe('the trusted list', () => {
   it('is a short explicit list, matched by host, subdomain and path', () => {
     expect(trustedCount()).toBeGreaterThan(80)
-    // Grew from about 110 when the areas for any subject were added (src/shared/subjects.ts)
+    // Grew from about 110 when the areas for any subject and for the humanities were added
     expect(trustedCount()).toBeLessThan(200)
-    expect(Object.keys(TRUSTED).length).toBe(19)
+    expect(Object.keys(TRUSTED).length).toBe(23)
     expect(trustedSite('https://docs.python.org/3/tutorial/classes.html')?.kind).toBe('official')
     expect(trustedSite('https://www.postgresql.org/docs/current/mvcc-intro.html')?.licence).toBe('PostgreSQL Licence')
     expect(trustedSite('https://en.cppreference.com/w/cpp/language/raii')?.by).toBe('cppreference')
@@ -71,6 +71,21 @@ describe('the trusted list', () => {
     expect(trustedSite('https://docs.python.org.evil.example/3/')).toBeNull()
     expect(trustedSite('https://someones-blog.example.com/raft')).toBeNull()
     expect(trustedSite('file:///etc/passwd')).toBeNull()
+  })
+
+  it('covers the humanities: primary texts, scholarly references and courses, with the unchecked ones marked', () => {
+    expect(trustedSite('https://iep.utm.edu/stoicism/')?.by).toBe('Internet Encyclopedia of Philosophy')
+    expect(trustedSite('http://www.perseus.tufts.edu/hopper/text?doc=Perseus:text:1999.01.0170')?.kind).toBe('primary')
+    expect(trustedSite('https://avalon.law.yale.edu/18th_century/fed10.asp')?.kind).toBe('primary')
+    expect(trustedSite('https://sourcebooks.fordham.edu/mod/lutherreformation.asp')?.by).toMatch(/Fordham/)
+    expect(trustedSite('https://www.ccel.org/ccel/augustine/confess.html')?.kind).toBe('primary')
+    expect(trustedSite('https://www.newadvent.org/fathers/1101.htm')?.kind).toBe('primary')
+    expect(trustedSite('https://www.newadvent.org/cathen/')).toBeNull()
+    expect(trustedSite('https://www.gutenberg.org/ebooks/2680')?.licence).toBe('Public domain in the USA')
+    expect(openLicence(trustedSite('https://standardebooks.org/ebooks/marcus-aurelius/meditations/george-long')?.licence)).toBe(true)
+    // Not checked from here, but listed: still trusted, and marked so in the source
+    expect(UNVERIFIED_TRUSTED.Philosophy.map((s) => s.host)).toEqual(['philpapers.org'])
+    expect(trustedSite('https://philpapers.org/rec/XYZ')).not.toBeNull()
   })
 
   it('reads a stated licence, and knows which ones let text be passed on', () => {

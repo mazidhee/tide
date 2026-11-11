@@ -27,6 +27,7 @@ import { metabaseHost, metabaseReady } from './metabase'
 import { privatePath } from './projects'
 import { readingsFor } from './readings'
 import { getChunks, search } from './search'
+import { bookSourceSync } from './reading'
 import { getSettings } from './settings'
 import { readText, writeText } from './vault'
 
@@ -102,7 +103,9 @@ async function lessonFor(req: ChatRequest): Promise<Lesson> {
       ...findExplainers(t).map((e) => ({ title: e.title, by: e.by, url: e.url, explainer: true }))
     ],
     publicUrl,
-    now: () => Date.now()
+    now: () => Date.now(),
+    // humanities: a free book's licence goes under readings taken from it
+    licenceOf: bookSourceSync
   }
   const lesson: Lesson = { opts: { topic, private: secret, web }, deps, candidates: [], have: new Set(), owned: new Set(), searched: new Set(), chosen: new Map(), preparing: Promise.resolve() }
   // The topic's sources are gathered while the tutor finds out what you know: ready by the time it plans

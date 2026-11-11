@@ -11,7 +11,10 @@
 import { markNote, paceNote } from '../../../src/shared/pace'
 import { ASKED, GO_ON, SHOW_ME, notesNudge, openingMessage, sessionInstructions, type SessionSetup } from '../../../src/shared/session'
 import { TUTOR_SYSTEM, stableSystem, withInstructions } from '../../../src/shared/tutorPrompt'
-import type { Learner, Scenario, Turn } from './types'
+import { markingNote, humanitiesArea } from '../../../src/shared/humanities'
+import { teachesAsHumanities, type SubjectProfile } from '../../../src/shared/subjects'
+import { DISCUSS_SYSTEM, discussPrompt, type DiscussTurn } from '../../../src/shared/closeReading'
+import type { DiscussSetup, Learner, Scenario, Turn } from './types'
 
 export interface Message {
   role: 'system' | 'user' | 'assistant'
@@ -31,11 +34,12 @@ export function learnerText(l: Learner): string {
 }
 
 /** A message with the hidden notes the lesson screen adds to it (SessionView.send), kept with it from then on */
-function stored(content: string, history: Message[], mode: SessionSetup['mode']): string {
+function stored(content: string, history: Message[], mode: SessionSetup['mode'], topic = '', subject?: SubjectProfile): string {
   if (content.includes('(Tide: ') || history.length < 2) return content
   const notes = [
     mode === 'teach' || mode === 'quiz' ? paceNote(history as { role: 'user' | 'assistant'; content: string }[], content) : null,
-    mode === 'teach' || mode === 'quiz' ? markNote(content) : null,
+    // An answer to a question of interpretation in the humanities is appraised, not marked (as SessionView sends it)
+    mode === 'teach' || mode === 'quiz' ? markingNote(markNote(content), [...history].reverse().find((t) => t.role === 'assistant')?.content ?? '', topic, teachesAsHumanities(topic, subject)) : null,
     mode === 'teach' && history.length > 2 ? notesNudge(history.filter((t) => t.role === 'assistant').map((t) => t.content), content) : null
   ].filter((n): n is string => !!n)
   return notes.length ? `${content}\n\n${notes.join('\n')}` : content
@@ -46,7 +50,7 @@ export function lessonTurns(setup: SessionSetup, history: Turn[]): Message[] {
   const turns: Message[] = [{ role: 'user', content: openingMessage(setup) }]
   for (const t of history) {
     if ('tutor' in t) turns.push({ role: 'assistant', content: t.tutor })
-    else turns.push({ role: 'user', content: stored(learnerText(t.learner), turns, setup.mode) })
+    else turns.push({ role: 'user', content: stored(learnerText(t.learner), turns, setup.mode, setup.topic, setup.options?.subject) })
   }
   return turns
 }
@@ -55,7 +59,8 @@ export function lessonTurns(setup: SessionSetup, history: Turn[]): Message[] {
 export const systemPrompt = () => stableSystem(TUTOR_SYSTEM, { today: BENCH_DATE, web: false, session: true })
 
 /** The whole request: system prompt, then the turns with the lesson's instructions at the head of the first */
-export function buildMessages(s: Pick<Scenario, 'setup' | 'history'>): Message[] {
+export function buildMessages(s: Pick<Scenario, 'setup' | 'history' | 'discuss'>): Message[] {
+  if (s.discuss) return discussMessages(s.discuss, s.history)
   return [{ role: 'system', content: systemPrompt() }, ...withInstructions(lessonTurns(s.setup, s.history), sessionInstructions(s.setup))]
 }
 
@@ -64,4 +69,17 @@ export function fingerprint(text: string): string {
   let h = 5381
   for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0
   return `${(h >>> 0).toString(36)}-${text.length.toString(36)}`
+}
+
+/** What the learner wrote in a discussion: their words as typed (the discussion has no answer forms) */
+const said = (l: Learner) => ('answer' in l ? l.answer : 'question' in l ? l.question : "I don't know.")
+
+/** A "Discuss this" turn as the app sends it (main/reading.discuss): the discussion's system prompt, then one message with the passage and the talk so far */
+export function discussMessages(d: DiscussSetup, history: Turn[]): Message[] {
+  const turns: DiscussTurn[] = history.map((t) => ('tutor' in t ? { role: 'tutor', text: t.tutor } : { role: 'learner', text: said(t.learner) }))
+  const last = turns.pop()
+  return [
+    { role: 'system', content: DISCUSS_SYSTEM({ narrative: !!d.narrative, theology: humanitiesArea(d.work) === 'theology' }) },
+    { role: 'user', content: discussPrompt({ work: d.work, author: d.author, loc: d.loc, passage: d.passage, before: d.before ?? '', after: '', turns, said: last?.text ?? '' }) }
+  ]
 }

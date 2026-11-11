@@ -7,7 +7,7 @@
 import { buildMessages } from './request'
 import { scoreReply } from './score'
 import { profileSubject } from '../../../src/shared/subjects'
-import { ALL_SUBJECTS, BREADTH_SUBJECTS, SITUATIONS, SUBJECTS, type Scenario } from './types'
+import { ALL_SITUATIONS, ALL_SUBJECTS, BREADTH_SUBJECTS, HUMANITIES_SITUATIONS, HUMANITIES_SUBJECTS, SITUATIONS, SUBJECTS, type Scenario } from './types'
 
 export const MIN_SCENARIOS = 60
 /** Breadth: at least this many scenarios across at least this many subjects outside the core */
@@ -20,12 +20,25 @@ export function validateScenario(s: Scenario): string[] {
   if (!/^[a-z0-9]+(-[a-z0-9]+)+$/.test(s.id)) say('id must be lower-case words joined by hyphens')
   if (!(ALL_SUBJECTS as readonly string[]).includes(s.subject)) say(`unknown subject ${s.subject}`)
   const breadth = (BREADTH_SUBJECTS as readonly string[]).includes(s.subject)
-  if (breadth && !s.kinds?.length) say('a breadth scenario names the kinds its topic is profiled as')
+  // A Discuss this turn is about a passage, not a lesson's topic, so it has no profile to prove
+  if (breadth && !s.discuss && !s.kinds?.length) say('a breadth scenario names the kinds its topic is profiled as')
   if (s.kinds?.length) {
     const got = profileSubject(s.setup.topic).kinds
     if (got.join('+') !== s.kinds.join('+')) say(`its topic is profiled as ${got.join('+') || 'unclear'}, not ${s.kinds.join('+')}`)
   }
-  if (!SITUATIONS.includes(s.situation)) say(`unknown situation ${s.situation}`)
+  if (!ALL_SITUATIONS.includes(s.situation)) say(`unknown situation ${s.situation}`)
+  // The humanities are measured in their own situations, and those are theirs alone
+  const human = (HUMANITIES_SUBJECTS as readonly string[]).includes(s.subject)
+  const humanSituation = (HUMANITIES_SITUATIONS as readonly string[]).includes(s.situation)
+  if (humanSituation && !human) say(`${s.situation} is a humanities situation`)
+  if (s.discuss && s.situation !== 'close-reading' && s.situation !== 'spoiler-trap') say('a discussion is a close reading or a spoiler trap')
+  if (s.situation === 'close-reading' && !s.discuss) say('a close reading is a Discuss this turn: give `discuss`')
+  if ((s.situation === 'close-reading' || s.situation === 'appraise-reading' || s.situation === 'contested') && s.expect.verdict) say('a reading or a contested question is never given a verdict')
+  if (s.situation === 'contested' && !s.expect.contested) say('a contested question needs `contested: true`')
+  if (s.situation === 'appraise-reading' && !s.expect.appraise) say('an appraisal needs `appraise: true`')
+  if (s.situation === 'spoiler-trap' && !s.expect.spoilers?.length) say('a spoiler trap needs `spoilers`: the names it must not use')
+  if (s.situation === 'cited-reply' && !s.expect.quote) say('a cited reply needs `quote: true`')
+  if (s.situation === 'fact-date' && !s.expect.verdict) say('a fact or a date is marked: give its true verdict')
   if (!s.setup?.topic) say('no topic')
   // Ways of teaching that need the canvas, the terminal or a book can't be measured without the app
   if (!STRATEGIES.includes(s.setup.options?.strategy)) say(`strategy ${s.setup.options?.strategy} needs tools the benchmark doesn't have`)
@@ -39,7 +52,7 @@ export function validateScenario(s: Scenario): string[] {
   const last = s.history[s.history.length - 1]
   if (s.history.length && !('learner' in last)) say('the conversation must end with the learner')
   const said = last && 'learner' in last ? last.learner : null
-  const marks = s.situation === 'after-correct' || s.situation === 'after-wrong' || s.situation === 'mark-planted-error' || s.situation === 'mark-unusual-correct'
+  const marks = s.situation === 'after-correct' || s.situation === 'after-wrong' || s.situation === 'mark-planted-error' || s.situation === 'mark-unusual-correct' || s.situation === 'fact-date'
   if (marks && !(said && 'answer' in said)) say('ends with something other than an answer to mark')
   if (marks && !s.expect.verdict) say('no true verdict given')
   if (s.situation === 'after-correct' && s.expect.verdict !== 'correct') say('after-correct needs verdict correct')
@@ -57,6 +70,7 @@ export function validateScenario(s: Scenario): string[] {
   if (s.situation === 'recall-open' && s.setup.mode !== 'recall') say('a recall opening uses mode recall')
   if (s.situation === 'code-bug' && !s.history.some((t) => ('tutor' in t ? t.tutor : 'answer' in t.learner ? t.learner.answer : '').includes('```'))) say('a code question needs code in the conversation')
   if (!marks && s.situation !== 'code-bug' && s.situation !== 'idk' && s.expect.verdict) say('a verdict where nothing is being marked')
+  if (s.situation === 'fact-date' && s.expect.verdict !== 'correct' && !s.expect.names?.length) say('needs `names`: the right fact the feedback must give')
 
   for (const p of [...(s.expect.names ?? []), ...(s.expect.must ?? []), ...(s.expect.mustNot ?? []), ...(s.expect.askMustNot ?? [])]) {
     try {
@@ -70,7 +84,7 @@ export function validateScenario(s: Scenario): string[] {
   try {
     const messages = buildMessages(s)
     if (messages[messages.length - 1].role !== 'user') say('the request does not end with the learner')
-    if (!messages[1].content.startsWith('How to tutor me here:')) say('the lesson instructions are missing from the first message')
+    if (!s.discuss && !messages[1].content.startsWith('How to tutor me here:')) say('the lesson instructions are missing from the first message')
     // The app's hidden notes for this turn bind the reply too: the expectations must agree with them
     const note = messages[messages.length - 1].content
     if (/End your reply with a <note>|add it in a <note>/.test(note) && s.situation !== 'show-me' && !s.expect.need?.includes('note')) say('Tide asks for a <note> on this turn: add need: [\'note\']')
@@ -102,7 +116,7 @@ export function validateSet(all: Scenario[]): { problems: string[]; grid: Record
     ids.add(s.id)
   }
   if (all.length < MIN_SCENARIOS) problems.push(`only ${all.length} scenarios; at least ${MIN_SCENARIOS} wanted`)
-  const grid = Object.fromEntries(ALL_SUBJECTS.map((sub) => [sub, Object.fromEntries(SITUATIONS.map((sit) => [sit, all.filter((s) => s.subject === sub && s.situation === sit).length]))]))
+  const grid = Object.fromEntries(ALL_SUBJECTS.map((sub) => [sub, Object.fromEntries(ALL_SITUATIONS.map((sit) => [sit, all.filter((s) => s.subject === sub && s.situation === sit).length]))]))
   for (const sub of SUBJECTS) for (const sit of SITUATIONS) if (!grid[sub][sit]) problems.push(`no ${sit} scenario for ${sub}`)
   const wide = all.filter((s) => (BREADTH_SUBJECTS as readonly string[]).includes(s.subject))
   const wideSubjects = new Set(wide.map((s) => s.subject))

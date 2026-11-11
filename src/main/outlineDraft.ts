@@ -3,7 +3,9 @@ import { friendlyError, streamDraft } from './ai'
 import { readWebpage, webSearch } from './agent'
 import { getSettings } from './settings'
 import { directionLine } from './coach'
-import { phaseWorkLine, projectKind, roadmapGuidance, profileSubject, type SubjectProfile } from '@shared/subjects'
+import { bookOutline, readIntent, readingOutlineRules } from '@shared/readingPlan'
+import { ownedBook } from './reading'
+import { phaseWorkLine, projectKind, roadmapGuidance, profileSubject, teachesAsHumanities, type SubjectProfile } from '@shared/subjects'
 
 /**
  * Drafts a study outline for a new topic. Research happens first and in code, not by the model:
@@ -81,12 +83,24 @@ export async function draftOutline(req: OutlineDraftRequest, emit: (e: ChatEvent
         .join('\n\n---\n\n')
     }
     if (controller.signal.aborted) return
+    // humanities: a book already in the library is its own roadmap, from its contents (no model, nothing invented)
+    const reading = !!readIntent(req.goal ?? '') || /\b(read|reading list)\b/i.test(req.goal ?? '')
+    const owned = !req.plan ? await ownedBook(req.topic).catch(() => null) : null
+    if (owned) {
+      emit({ id: req.id, type: 'delta', text: bookOutline(owned) })
+      emit({ id: req.id, type: 'done' })
+      return
+    }
     const plan = req.plan
     const heading = await directionLine().catch(() => '')
     // Subject hook (any-subject, src/shared/subjects.ts): the plan's kinds when it was sized, else read off the topic
     const subject: SubjectProfile = plan?.subject?.length ? { kinds: plan.subject, subjects: [], from: 'model' } : profileSubject(req.topic)
     const work = phaseWorkLine(subject)
-    const guidance = roadmapGuidance(subject)
+    // A book or a reading list is read in its own order (shared/readingPlan); a subject ("I want to
+    // learn X") is planned by its profile, with the humanities' rules for topics and sources where
+    // it is taught as the humanities are
+    const guidance = reading ? '' : roadmapGuidance(subject)
+    const readingRules = readingOutlineRules(req.topic, reading, { humanities: teachesAsHumanities(req.topic, subject), profiled: !!guidance })
     const user = [
       `Topic: ${req.topic}`,
       req.goal?.trim() ? `What the learner wants from it, and what they already know: ${req.goal.trim()}` : '',
@@ -99,6 +113,7 @@ ${work ? `${work}\n` : ''}- [ ] Project: the phase's project, specific to the le
 - [ ] Exam: the phase name`
         : `Size: ${SIZE[req.size]}.`,
       guidance,
+      readingRules,
       `Today is ${new Date().toISOString().slice(0, 10)}.`,
       research ? `Use this research to decide what belongs in the outline (don't copy its wording, and leave out anything off-topic):\n\n${research}` : ''
     ]

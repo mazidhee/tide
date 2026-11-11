@@ -9,19 +9,21 @@ import { sourceIcon } from './Home'
 import { coverColor } from './NotebookCover'
 import { ReadingFinder } from './ReadingFinder'
 import { SaveLinkForm } from './SaveLink'
+import { FreeBookFinder } from './FreeBookFinder'
 import { PixelScene } from './PixelScene'
 import { useTideDesign } from '../lib/design'
 import { AreaMark } from './tide/AreaMark'
 import { TopBarActions } from './tide/TopBar'
 import { Bookcase } from './Bookcase'
 
-type Filter = 'all' | 'article' | 'youtube' | 'pdf' | 'doc' | 'link'
+type Filter = 'all' | 'article' | 'youtube' | 'pdf' | 'epub' | 'doc' | 'link'
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'Everything' },
   { id: 'article', label: 'Articles' },
   { id: 'youtube', label: 'Videos' },
   { id: 'pdf', label: 'PDFs' },
+  { id: 'epub', label: 'Books' },
   { id: 'doc', label: 'Docs' },
   { id: 'link', label: 'Links' }
 ]
@@ -38,10 +40,10 @@ type Item = LibraryItem
 
 type Layout = 'grid' | 'list' | 'shelf'
 
-const KIND_LABEL: Record<Filter, string> = { all: '', article: 'Article', youtube: 'Video', pdf: 'PDF', doc: 'Doc', link: 'Link' }
+const KIND_LABEL: Record<Filter, string> = { all: '', article: 'Article', youtube: 'Video', pdf: 'PDF', epub: 'Book', doc: 'Doc', link: 'Link' }
 
 /** Cover shape by kind: books stand up, videos and web pages lie flat */
-const COVER_RATIO: Record<Filter, number> = { all: 0.62, article: 0.56, youtube: 0.5625, pdf: 1.3, doc: 0.75, link: 0.56 }
+const COVER_RATIO: Record<Filter, number> = { all: 0.62, article: 0.56, youtube: 0.5625, pdf: 1.3, epub: 1.5, doc: 0.75, link: 0.56 }
 
 const savedLabel = (i: Item) => {
   const t = i.saved ? new Date(i.saved + 'T12:00:00').getTime() : i.mtime
@@ -254,6 +256,7 @@ export function Library() {
   const [subject, setSubject] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [picker, setPicker] = useState<{ path: string; at: { x: number; y: number } } | null>(null)
+  const [freeBooks, setFreeBooks] = useState(false)
   const [finding, setFinding] = useState(false)
   const [layout, setLayout] = useState<Layout>(() => {
     try {
@@ -339,6 +342,10 @@ export function Library() {
               <Icon name="library" size={15} />
             </button>
           </div>
+          <button className={`btn${freeBooks ? ' on' : ''}`} onClick={() => setFreeBooks((f) => !f)} title="Add a free public-domain book">
+            <Icon name="book" size={14} />
+            Free books
+          </button>
           <button className="btn" onClick={() => app.setDialog('save-link')}>
             <Icon name="link" size={14} />
             Save a link
@@ -361,6 +368,11 @@ export function Library() {
             )}
           </div>
           <div className="row-gap">
+          {/* humanities: public-domain books from Project Gutenberg and Standard Ebooks */}
+          <button className={`btn${freeBooks ? ' on' : ''}`} onClick={() => setFreeBooks((f) => !f)} title="Add a free public-domain book">
+            <Icon name="library" size={15} />
+            Free books
+          </button>
           <button className={`btn${finding ? ' on' : ''}`} onClick={() => setFinding((f) => !f)} title="Ask the tutor to find good reading on the web">
             <Icon name="book" size={15} />
             Find reading
@@ -381,6 +393,7 @@ export function Library() {
           </div>
         </header>
         {finding && <ReadingFinder onClose={() => setFinding(false)} />}
+        {freeBooks && <FreeBookFinder onClose={() => setFreeBooks(false)} />}
         <SaveLinkForm compact />
 
         {items.length > 0 && (

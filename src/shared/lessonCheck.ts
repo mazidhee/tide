@@ -1,4 +1,5 @@
 import { hideWorking, parseBlocks, posedProblem } from './session'
+import { statesDates } from './humanities'
 
 export { hideWorking }
 
@@ -181,6 +182,8 @@ export function hasWorkedMaths(reply: string): boolean {
 /** Teaching worth checking: worked maths, or an explanation long enough to make claims (not a mark and a question) */
 export function makesClaims(reply: string): boolean {
   if (hasWorkedMaths(reply)) return true
+  // humanities: dates and periods stated as fact are checked against the sources, however short the reply
+  if (statesDates(hideWorking(reply).replace(/<[^>]+>/g, ' '))) return true
   const prose = hideWorking(reply)
     .replace(/<(ask|grade|note|card|plan|summary)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')

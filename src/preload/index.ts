@@ -268,6 +268,23 @@ const api: TideApi = {
     get: invoke('highlights:get'),
     save: invoke('highlights:save')
   },
+  // humanities: see src/main/reading
+  reading: {
+    book: invoke('reading:book'),
+    locate: invoke('reading:locate'),
+    freeSearch: invoke('reading:freeSearch'),
+    freeAdd: invoke('reading:freeAdd'),
+    source: invoke('reading:source'),
+    discuss: invoke('reading:discuss'),
+    discussions: invoke('reading:discussions'),
+    keep: invoke('reading:keep'),
+    items: invoke('reading:items'),
+    syncNotes: invoke('reading:syncNotes'),
+    togetherOpen: invoke('reading:togetherOpen'),
+    togetherOrient: invoke('reading:togetherOrient'),
+    togetherDiscuss: invoke('reading:togetherDiscuss'),
+    togetherFinish: invoke('reading:togetherFinish')
+  },
   study: {
     cards: invoke('study:cards'),
     review: invoke('study:review'),

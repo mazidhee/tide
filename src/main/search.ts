@@ -6,6 +6,8 @@ import { basename, extname, join } from 'path'
 import matter from 'gray-matter'
 import type { SearchHit } from '@shared/types'
 import { tideCore } from './native'
+import { chunkEpub } from '@shared/epub'
+import { epubBook } from './epub'
 import { absPath, flattenFiles, getNoteMeta, getTree, joinRel, vaultRoot, writeText } from './vault'
 
 export interface Chunk {
@@ -240,6 +242,8 @@ async function signature(path: string): Promise<string | null> {
 async function chunksFor(path: string): Promise<Chunk[]> {
   const ext = extname(path).toLowerCase()
   if (ext === '.pdf') return chunkPdf(path, await pdfText(path))
+  // EPUB: passages under "Chapter N: title (¶a–b)", so a hit says where it is
+  if (ext === '.epub') return chunkEpub(path, await epubBook(path, absPath, writeText).catch(() => ({ title: '', chapters: [] })))
   if (ext !== '.md' && ext !== '.markdown') return []
   const meta = await getNoteMeta(path)
   if (!meta) return []
@@ -301,7 +305,7 @@ export function buildIndex(): Promise<void> {
     } catch {
       return
     }
-    const files = flattenFiles(await getTree()).filter((f) => f.kind === 'note' || f.kind === 'pdf')
+    const files = flattenFiles(await getTree()).filter((f) => f.kind === 'note' || f.kind === 'pdf' || f.kind === 'epub')
     const present = new Set(files.map((f) => f.path))
     // Gone from the vault, or in the index without Tide knowing (it closed before noting it)
     for (const path of new Set([...Object.keys(manifest), ...b.paths()])) {
@@ -314,7 +318,7 @@ export function buildIndex(): Promise<void> {
     commitIndex(b)
     // Notes first so search works right away, PDFs can take longer to extract; saved every few
     // files, so a first build is searchable as it fills
-    for (const kind of ['note', 'pdf']) {
+    for (const kind of ['note', 'pdf', 'epub']) {
       let since = 0
       for (const f of files.filter((x) => x.kind === kind)) {
         try {

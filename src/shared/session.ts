@@ -5,6 +5,7 @@ import { GROUNDED } from './sources'
 import type { ChatScope, SessionMode, Verdict } from './types'
 import { chooseStrategy, STRATEGY_RULES, type Strategy, type StrategyChoice } from './strategy'
 import type { FlowStep, ProjectKind } from './project'
+import { parseAppraise, type AppraiseRow } from './humanities'
 import { lessonKit, type SubjectProfile } from './subjects'
 
 /**
@@ -27,6 +28,8 @@ export type Block =
   | { kind: 'note'; text: string }
   /** The tutor will carry on explaining: no question this turn */
   | { kind: 'continue' }
+  /** humanities: a reading or an argument appraised against the rubric, instead of a verdict (shared/humanities) */
+  | { kind: 'appraise'; rows: AppraiseRow[]; text: string }
 
 /** A code ask's hidden tests, a ```tests block in its body: taken out of what the student sees (one still being written too) */
 export function splitTests(body: string): { prompt: string; tests?: string } {
@@ -38,7 +41,7 @@ export function splitTests(body: string): { prompt: string; tests?: string } {
 
 const attr = (attrs: string, name: string) => attrs.match(new RegExp(`${name}\\s*=\\s*"([^"]*)"`, 'i'))?.[1] ?? attrs.match(new RegExp(`${name}\\s*=\\s*'([^']*)'`, 'i'))?.[1]
 
-const TAG = /<(ask|grade|plan|card|scorecard|rubric|challenge|summary|note)\b([^>]*)>([\s\S]*?)<\/\1>/gi
+const TAG = /<(ask|grade|plan|card|scorecard|rubric|challenge|summary|note|appraise)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 
 function parseScores(body: string): { label: string; score: number; max: number; note: string }[] {
   return body
@@ -72,7 +75,7 @@ export function closeGrade(reply: string): string {
   const lead = reply.slice(from).match(/^\s*/)![0].length
   const body = reply.slice(from + lead)
   // A closing tag cut short ("</grade") counts as the end too
-  const end = body.search(/\n[ \t]*\n|<\/gr?a?d?e?(?![a-z>])|<(?:ask|note|card|plan|solution|check|summary|continue)\b/i)
+  const end = body.search(/\n[ \t]*\n|<\/gr?a?d?e?(?![a-z>])|<(?:ask|note|card|plan|solution|check|summary|continue|appraise)\b/i)
   if (end <= 0) return reply
   const rest = body.slice(end).replace(/^<\/gr?a?d?e?(?![a-z>])/i, '')
   if (!rest.trim()) return reply
@@ -94,7 +97,7 @@ export function parseBlocks(full: string): Block[] {
   const blocks: Block[] = []
   let last = 0
   const pushText = (t: string) => {
-    const text = t.replace(/<(ask|grade|plan|card|scorecard|rubric|challenge|summary|note)\b[^>]*>[\s\S]*$/i, '').trim()
+    const text = t.replace(/<(ask|grade|plan|card|scorecard|rubric|challenge|summary|note|appraise)\b[^>]*>[\s\S]*$/i, '').trim()
     if (text) blocks.push({ kind: 'text', text })
     // A question still being written shows as it comes, styled as the question it will be
     const open = t.match(/<ask\b([^>]*)>([\s\S]*)$/i)
@@ -144,6 +147,10 @@ export function parseBlocks(full: string): Block[] {
       blocks.push({ kind: 'summary', text: body })
     } else if (name === 'note') {
       if (body.trim()) blocks.push({ kind: 'note', text: body.trim() })
+    } else if (name === 'appraise') {
+      // humanities: rows the app can read; anything else in it is shown as it was written
+      const rows = parseAppraise(body)
+      if (rows.length || body) blocks.push({ kind: 'appraise', rows, text: body })
     }
   }
   pushText(message.slice(last))
@@ -322,9 +329,10 @@ export function sessionInstructions(setup: SessionSetup): string {
   if (setup.mode !== 'teach') return base
   // A refresher or a project lesson already has its reason; a placement check isn't a lesson
   // How to write a simulation rides here, for the kinds this topic can use, not in the system prompt of every lesson
-  // Subject hook (any-subject, src/shared/subjects.ts): the subject's own toolkit, and the hands-on and simulation rules only where they apply
+  // Subject hook (any-subject, src/shared/subjects.ts): the subject's own toolkit, and the hands-on and simulation rules only where they apply.
+  // The humanities' marking (<appraise>) and theology's rules come through it too, for a subject that is mainly texts and arguments or history
   const kit = lessonKit(setup.topic, setup.options?.subject)
-  const extra = [!setup.options?.refresh && !setup.options?.project ? BIG_PICTURE : '', GROUNDED, kit.handsOn ? HANDS_ON : '', kit.sims, kit.toolkit, setup.options?.why ? WHY_RULES : ''].filter(Boolean)
+  const extra = [!setup.options?.refresh && !setup.options?.project ? BIG_PICTURE : '', GROUNDED, kit.handsOn ? HANDS_ON : '', kit.sims, kit.toolkit, kit.humanities, setup.options?.why ? WHY_RULES : ''].filter(Boolean)
   return extra.length ? `${base.trimEnd()}\n\n${extra.join('\n\n')}\n` : base
 }
 

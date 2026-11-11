@@ -1,3 +1,5 @@
+import { readIntent } from './readingPlan'
+
 /**
  * Spots "I want to learn X" in what the learner types, so a request to be taught a whole subject
  * starts a study plan instead of a one-off chat answer. Done in code: it must be reliable.
@@ -13,6 +15,9 @@ const PATTERNS = [
 export function learnIntent(text: string): { topic: string; goal: string } | null {
   const t = text.trim().replace(/\s+/g, ' ')
   if (t.length > 400 || t.split(' ').length < 3) return null
+  // humanities: "I want to read X" is a plan too: the book's chapters are its topics (shared/readingPlan)
+  const read = readIntent(t)
+  if (read) return { topic: read.title.charAt(0).toUpperCase() + read.title.slice(1), goal: t }
   // Your own Metabase is taught by the tutor, which can look inside it, not as a new roadmap
   if (/\b(our|my|rank'?s|company'?s|work'?s)\b.{0,24}\bmetabase\b/i.test(t) || (/\bmetabase\b/i.test(t) && /\b(dashboards?|questions?|tables?|quer(y|ies)|collections?|charts?)\b/i.test(t))) return null
   for (const re of PATTERNS) {

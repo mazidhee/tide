@@ -345,7 +345,7 @@ describe('the toolkits', () => {
   })
 
   it('keep what an unclear topic had before: hands-on and its simulations', () => {
-    expect(lessonKit('Zorblax fundamentals')).toEqual({ handsOn: true, sims: '', toolkit: '' })
+    expect(lessonKit('Zorblax fundamentals')).toEqual({ handsOn: true, sims: '', toolkit: '', humanities: '' })
     expect(sessionInstructions({ mode: 'teach', topic: 'Zorblax fundamentals' })).toContain(HANDS_ON)
   })
 

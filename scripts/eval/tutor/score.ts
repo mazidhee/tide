@@ -28,6 +28,9 @@ import { repairReply } from '../../../src/shared/lessonRepair'
 import { cleanModelText } from '../../../src/shared/modelText'
 import { hideWorking, parseBlocks, type Block } from '../../../src/shared/session'
 import { isSimSource } from '../../../src/shared/sims'
+import { settles } from '../../../src/shared/humanities'
+import { quotesWithLocation } from '../../../src/shared/passage'
+import { looksAhead } from '../../../src/shared/readTogether'
 import { parseSim } from '../../../src/renderer/src/lib/sims/spec'
 import { learnerText } from './request'
 import type { Expect, Scenario, Tag, Turn, Visual } from './types'
@@ -64,6 +67,11 @@ export interface Score {
   /** What the app had to put right before the learner saw it: "ask" (a plain closing question made the ask), "grade" (a mark on what wasn't an answer, taken off), "close" (an unclosed grade closed), "solution" (worked out for a problem set without one), "sim" (a simulation in a block labelled json) */
   repaired: string[]
 }
+
+/** A question that presses on the learner's reasoning or evidence */
+const CHALLENGE = /\bwhy\b|what in the (?:text|passage|poem|chapter|book|letter|document|source|sentence|line|lines|words|clause|verse)|which (?:words|line|lines|sentence|phrase)|what (?:supports|makes you|would you say to|do you make of)|how would you (?:answer|respond|reply|square|defend)|where (?:does|do) (?:he|she|it|they|the text)|what evidence|on what grounds|how do you (?:square|reconcile|know)/i
+/** An alternative reading or a counter-argument offered */
+const COUNTER = /\b(?:another|an alternative|a different|the opposite|a rival|a darker|a harsher|a less) (?:reading|interpretation|view|way of (?:reading|seeing))|\bsome (?:readers|scholars|critics|historians|commentators|theologians|philosophers)\b|\bothers? (?:read|take|see|argue|answer|stress|hold|point|reply)|\bhistorians? (?:argue|stress|hold|answer)\b|\ba (?:stoic|sceptic|skeptic|critic|reader|historian|marxist|feminist|christian|theologian|determinist|libertarian) (?:might|would|could) (?:say|reply|object|answer|argue|read)|\bon the other hand\b|\bthe (?:strongest |obvious )?objection\b|\bcounter-?argument\b|\bpush back\b|\bagainst (?:that|this) reading\b|\bbut consider\b/i
 
 /** A reply may run this far past its bound before it counts: a handful of words is not a pace fault */
 export const PACE_GRACE = 0.1
@@ -102,6 +110,8 @@ export function readableText(blocks: Block[], opts: { notes?: boolean; asks?: bo
         case 'plan':
           return b.steps.join('\n')
         case 'challenge':
+          return b.text
+        case 'appraise':
           return b.text
         default:
           return ''
@@ -299,6 +309,16 @@ export function scoreReply(s: Pick<Scenario, 'expect' | 'situation' | 'setup'> &
   const has = (t: Tag) => (t === 'continue' ? goesOn : new RegExp(`<${t}\\b`, 'i').test(reply))
   for (const t of e.need ?? []) add(`need:${t}`, has(t), `no <${t}>`)
   for (const t of e.forbid ?? []) add(`forbid:${t}`, !has(t), `a <${t}> where there should be none`)
+  // Humanities: a reading answered with the text, never a verdict on a contested question, nothing past the learner's place
+  if (e.quote) add('quoted', quotesWithLocation(read).length > 0, 'no quotation of the text with its location')
+  if (e.spoilers?.length) {
+    const named = e.spoilers.filter((t) => new RegExp(`(^|[^\\p{L}])${t}($|[^\\p{L}])`, 'iu').test(read))
+    add('no-spoiler', !named.length && !looksAhead(read), `reaches past the learner's place${named.length ? `: ${named.join(', ')}` : ''}`)
+  }
+  if (e.contested) add('contested', !grades.length && !settles(read), 'a verdict on a contested question, or one presented as settled')
+  if (e.appraise) add('appraised', blocks.some((b) => b.kind === 'appraise' && b.rows.length >= 3), 'no <appraise> against the rubric')
+  if (e.challenge) add('challenge', CHALLENGE.test(askText), 'the question does not ask for their reasoning or evidence')
+  if (e.counter) add('counter', COUNTER.test(read), 'no alternative reading or counter-argument')
   if (e.heading) add('heading', new RegExp(`(\\*\\*|^#{1,6}\\s*)\\s*${e.heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:?\\s*(\\*\\*|$)`, 'im').test(visible), `no "${e.heading}" heading`)
 
   // --- marking ---

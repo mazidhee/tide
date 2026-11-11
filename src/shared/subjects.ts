@@ -18,6 +18,7 @@
  * Pure, so the lesson screen, main and the benchmark agree, and it can be tested.
  */
 import { simGuide, simKindsFor, simLesson, type SimKind } from './sims'
+import { HUMANITIES_RULES, THEOLOGY_RULES, humanitiesArea } from './humanities'
 import { SUBJECTS, SUBJECT_KINDS, type Need, type SubjectEntry, type SubjectKind } from './subjectMap'
 
 export type { SubjectKind } from './subjectMap'
@@ -158,18 +159,18 @@ export const TOOLKITS: Record<SubjectKind, Toolkit> = {
   },
   interpret: {
     label: 'texts and arguments',
-    areas: ['General reference', 'History, texts and languages', 'Law'],
+    areas: ['Philosophy', 'Theology and religious studies', 'Literature', 'General reference', 'History, texts and languages', 'Law'],
     practice: 'close reading, argument reconstruction, short essays',
     assessment: 'rubric',
     visuals: 'argument maps as mermaid flowcharts; a short quotation set out',
     pace: 'read first',
-    rules: `This subject is texts and arguments. Read first: put a short passage in front of them (quoted exactly, with author and work) before discussing it, and ask what it says before what it means. Answers must be tied to the words of the text. Set arguments out as numbered premises and a conclusion, then ask which premise is weakest and what the strongest objection is. Give rival readings in their best form; where scholars disagree, say so rather than settling it. Mark what a text says with a verdict; mark an interpretation or argument against a rubric: claim, textual evidence, reasoning, counter-argument. Draw an argument's structure as a mermaid flowchart. No code, no simulations.`,
+    rules: `This subject is texts and arguments. Read first: put a short passage in front of them (quoted exactly, with author and work) before discussing it, and ask what it says before what it means. Answers must be tied to the words of the text. Set arguments out as numbered premises and a conclusion, then ask which premise is weakest and what the strongest objection is. Give rival readings in their best form; where scholars disagree, say so rather than settling it. Mark what a text says with a verdict; mark an interpretation or argument against a rubric: claim, textual evidence, reasoning, objection. Draw an argument's structure as a mermaid flowchart. No code, no simulations.`,
     phaseWork: 'Essay',
     project: 'an essay arguing a position from the texts read, answering the strongest objection'
   },
   narrative: {
     label: 'facts, causes and chronology',
-    areas: ['History, texts and languages', 'General reference'],
+    areas: ['History', 'History, texts and languages', 'General reference'],
     practice: 'timelines, cause-and-effect questions, primary sources',
     assessment: 'verdict and rubric',
     visuals: 'timelines as a table or a mermaid timeline; maps from find_image',
@@ -228,6 +229,8 @@ export interface LessonKit {
   sims: string
   /** The toolkit's own rules, short */
   toolkit: string
+  /** The humanities' marking (<appraise>) and, for religion, theology's rules (shared/humanities), or '' */
+  humanities: string
 }
 
 /** The SQL lab, briefly, for a subject that works with data but isn't taught hands-on */
@@ -245,20 +248,43 @@ export function preferredAreas(p: SubjectProfile): string[] {
  */
 export function lessonKit(topic: string, profile?: SubjectProfile, notebook?: string): LessonKit {
   const p = profile ?? profileSubject(topic, notebook)
-  if (isUnclear(p)) return { handsOn: true, sims: simLesson(topic), toolkit: '' }
+  if (isUnclear(p)) return { handsOn: true, sims: simLesson(topic), toolkit: '', humanities: humanitiesText(topic, p) }
   const simsOk = p.kinds.some((k) => SIM_KINDS_OK.includes(k))
   const kinds = simsOk ? [...new Set([...simKindsFor(topic), ...(p.kinds.includes('quant') || p.kinds.includes('build') ? (p.sims ?? []) : [])])] : []
   const sims = kinds.length ? `A live simulation fits this topic (${kinds.join(', ')}). Use one rather than a diagram where it shows the idea running, with a short tour pointing at what to look at, then ask them to change one thing and predict what happens.\n${simGuide(kinds)}` : ''
   const handsOn = !!p.hands
   const parts = p.kinds.map((k) => TOOLKITS[k].rules)
   if (p.lab && !handsOn) parts.push(LAB_LINE)
-  return { handsOn, sims, toolkit: parts.length ? `How to teach this subject (${p.kinds.map((k) => TOOLKITS[k].label).join('; ')}):\n${parts.join('\n')}` : '' }
+  return { handsOn, sims, toolkit: parts.length ? `How to teach this subject (${p.kinds.map((k) => TOOLKITS[k].label).join('; ')}):\n${parts.join('\n')}` : '', humanities: humanitiesText(topic, p) }
+}
+
+/**
+ * Whether a lesson is taught and marked as the humanities are (shared/humanities): readings and
+ * arguments appraised with <appraise>, facts and dates marked. Decided by the profile: a subject
+ * whose main kind is texts and arguments (interpret) or facts, causes and chronology (narrative).
+ * A second kind doesn't make it so ("NULL and three-valued logic" is quant+interpret, contract law
+ * domain+interpret): build, quant and domain subjects keep their verdicts. An unclear topic falls
+ * back to the humanities' own word list, so a book's title ("Augustine, Confessions") still counts.
+ */
+export function teachesAsHumanities(topic: string, profile?: SubjectProfile, notebook?: string): boolean {
+  const p = profile ?? profileSubject(topic, notebook)
+  if (isUnclear(p)) return !!humanitiesArea(topic)
+  return p.kinds[0] === 'interpret' || p.kinds[0] === 'narrative'
+}
+
+/** Religion is described in each tradition's own terms: by the map's subject, or the humanities' word list */
+const isTheology = (topic: string, p: SubjectProfile) => p.subjects.includes('theology and religion') || humanitiesArea(topic) === 'theology'
+
+/** The humanities rules a lesson on this topic gets through the subject hook, or '' */
+function humanitiesText(topic: string, p: SubjectProfile): string {
+  if (!teachesAsHumanities(topic, p)) return ''
+  return isTheology(topic, p) ? `${HUMANITIES_RULES}\n\n${THEOLOGY_RULES}` : HUMANITIES_RULES
 }
 
 /** The toolkit's text for a profile decided outside the lesson's instructions (main, for an unclear topic) */
-export const toolkitText = (topic: string, p: SubjectProfile) => {
+export const toolkitText = (topic: string, p: SubjectProfile, opts: { humanities?: boolean } = {}) => {
   const kit = lessonKit(topic, p)
-  return [kit.toolkit, kit.sims].filter(Boolean).join('\n\n')
+  return [kit.toolkit, kit.sims, opts.humanities === false ? '' : kit.humanities].filter(Boolean).join('\n\n')
 }
 
 // ---------- Roadmaps ----------

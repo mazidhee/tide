@@ -7,7 +7,8 @@
  */
 import { hideWorking } from '../../../src/shared/session'
 import { learnerText, lessonTurns } from './request'
-import { SITUATION_LABEL, type Scenario } from './types'
+import { HUMANITIES_SUBJECTS, SITUATION_LABEL, type Scenario } from './types'
+import { locLabel } from '../../../src/shared/passage'
 
 export const CRITERIA = ['clarity', 'misconception', 'socratic', 'accuracy'] as const
 export type Criterion = (typeof CRITERIA)[number]
@@ -34,13 +35,19 @@ accuracy: is everything it states true? (work any calculation yourself)
   3 = a loose or misleading statement that would not survive a careful reader
   1 = a wrong fact, result or verdict`
 
-export const JUDGE_SYSTEM = 'You are an experienced teacher of mathematics and computer science, assessing a tutor\'s reply to one learner. You are strict and specific, you check facts and calculations yourself, and you reply in exactly the format asked, nothing else.'
+/** For the humanities, the same four criteria read for interpretation and argument */
+export const HUMANITIES_RUBRIC = `In the humanities, read the criteria this way:
+misconception: a reading is not "wrong" for being contestable. Score whether it engages the learner's actual claim, names its weakest point (no evidence, a step that doesn't follow, an objection ignored, a wrong fact or date), and corrects plain facts plainly.
+socratic: does it ask about their reasoning or evidence, or set a strong alternative reading against theirs, one question at a time, without lecturing first or settling a contested question for them?
+accuracy: quotations match the text and carry its location; facts and dates are right; traditions are described in their own terms, with any opinion of the tutor's labelled as such (and none on matters of faith unless asked); nothing from beyond the learner's place in a story.`
+
+export const JUDGE_SYSTEM = 'You are an experienced teacher (of mathematics and computer science, or of philosophy, theology, history and literature), assessing a tutor\'s reply to one learner. You are strict and specific, you check facts and calculations yourself, and you reply in exactly the format asked, nothing else.'
 
 export function judgePrompt(s: Scenario, reply: string): string {
   const turns = lessonTurns(s.setup, s.history)
   const transcript = turns.map((t) => `${t.role === 'user' ? 'LEARNER' : 'TUTOR'}: ${t.role === 'user' ? t.content.replace(/\n*\(Tide: [\s\S]*$/, '') : hideWorking(t.content)}`.trim()).join('\n\n')
   const last = s.history.length ? learnerText((s.history[s.history.length - 1] as { learner: Parameters<typeof learnerText>[0] }).learner).split('\n')[0] : turns[0].content
-  return `A lesson on: ${s.setup.topic}${s.setup.options?.why ? ' (the learner asked to be taught the why, Socratically)' : ''}
+  return `${s.discuss ? `A close reading of ${s.discuss.work}, at ${locLabel(s.discuss.loc)}: "${s.discuss.passage.slice(0, 400)}"` : `A lesson on: ${s.setup.topic}`}${s.setup.options?.why ? ' (the learner asked to be taught the why, Socratically)' : ''}
 Situation: ${SITUATION_LABEL[s.situation]}.${s.expect.verdict ? ` The learner's last answer is in truth ${s.expect.verdict}.` : ''}${s.judge ? `\nLook for: ${s.judge}` : ''}
 
 The lesson so far:
@@ -53,7 +60,9 @@ The tutor's reply to "${last.slice(0, 160)}":
 ${hideWorking(reply).trim()}
 """
 
-${RUBRIC}
+${RUBRIC}${(HUMANITIES_SUBJECTS as readonly string[]).includes(s.subject) ? `
+
+${HUMANITIES_RUBRIC}` : ''}
 
 Reply with these lines only:
 ${CRITERIA.map((c) => `${c.toUpperCase()}: 1-5${c === 'misconception' || c === 'socratic' ? ' or n/a' : ''}`).join('\n')}

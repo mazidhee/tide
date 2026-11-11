@@ -43,8 +43,15 @@ export const BREADTH_SUBJECTS = [
   'physical-skill'
 ] as const
 
-export const ALL_SUBJECTS = [...SUBJECTS, ...BREADTH_SUBJECTS] as const
-export type Subject = (typeof ALL_SUBJECTS)[number]
+/**
+ * The humanities, measured in their own situations (HUMANITIES_SITUATIONS) as well as in the
+ * ordinary ones. Philosophy is also a breadth subject: it is listed in both, counted once.
+ */
+export const HUMANITIES_SUBJECTS = ['philosophy', 'theology', 'history', 'literature'] as const
+
+type AnySubject = (typeof SUBJECTS)[number] | (typeof BREADTH_SUBJECTS)[number] | (typeof HUMANITIES_SUBJECTS)[number]
+export const ALL_SUBJECTS: readonly AnySubject[] = [...new Set<AnySubject>([...SUBJECTS, ...BREADTH_SUBJECTS, ...HUMANITIES_SUBJECTS])]
+export type Subject = AnySubject
 
 export const SUBJECT_LABEL: Record<Subject, string> = {
   mechanics: 'Classical mechanics',
@@ -75,11 +82,17 @@ export const SUBJECT_LABEL: Record<Subject, string> = {
   databases: 'Databases and SQL',
   ml: 'ML and neural networks',
   maths: 'Probability and linear algebra',
-  'data-eng': 'Data engineering'
+  'data-eng': 'Data engineering',
+  theology: 'Theology and religious studies',
+  history: 'History',
+  literature: 'Literature'
 }
 
 export const SITUATIONS = ['open', 'after-correct', 'after-wrong', 'idk', 'show-me', 'mark-planted-error', 'mark-unusual-correct', 'tangent', 'recall-open', 'code-bug'] as const
-export type Situation = (typeof SITUATIONS)[number]
+/** Situations of the humanities: a reading discussed, appraised, a contested question, a date marked, a tradition described, a spoiler resisted, a reply that cites the book */
+export const HUMANITIES_SITUATIONS = ['close-reading', 'appraise-reading', 'contested', 'fact-date', 'describe-tradition', 'spoiler-trap', 'cited-reply'] as const
+export const ALL_SITUATIONS = [...SITUATIONS, ...HUMANITIES_SITUATIONS] as const
+export type Situation = (typeof ALL_SITUATIONS)[number]
 
 export const SITUATION_LABEL: Record<Situation, string> = {
   open: 'Opening a new topic',
@@ -91,7 +104,14 @@ export const SITUATION_LABEL: Record<Situation, string> = {
   'mark-unusual-correct': 'Marking a correct answer written unusually',
   tangent: 'A tangent',
   'recall-open': 'Opening with a recall question',
-  'code-bug': 'A code question with a bug'
+  'code-bug': 'A code question with a bug',
+  'close-reading': 'Discussing a passage the learner has read (Discuss this)',
+  'appraise-reading': 'Appraising an interpretation or argument',
+  contested: 'A contested question',
+  'fact-date': 'Marking a fact or a date',
+  'describe-tradition': 'Describing a religious tradition in its own terms',
+  'spoiler-trap': 'A question that invites a spoiler',
+  'cited-reply': 'Answering a reading with the text, cited by location'
 }
 
 /** What the learner sends, built into the app's own message forms (Answer:, My question:, Show me…) */
@@ -139,10 +159,35 @@ export interface Expect {
   words?: { min?: number; max?: number }
   /** A bold heading the reply must carry, e.g. "Why this matters" at a lesson's opening */
   heading?: string
+  /** Humanities: a quotation of the text with its location, like "…" (ch. 2 ¶1) */
+  quote?: boolean
+  /** Humanities: names or terms from beyond the learner's place, none of which may appear (nor phrases that look ahead) */
+  spoilers?: string[]
+  /** Humanities: a contested question, so no verdict and nothing presented as settled */
+  contested?: boolean
+  /** Humanities: the reading is appraised against the rubric (<appraise>, at least three criteria) */
+  appraise?: boolean
+  /** Humanities: the question asks about the learner's reasoning or evidence */
+  challenge?: boolean
+  /** Humanities: the reply offers another reading or a counter-argument */
+  counter?: boolean
+}
+
+/** A "Discuss this" turn instead of a lesson: the passage and where it is (shared/closeReading) */
+export interface DiscussSetup {
+  work: string
+  author?: string
+  loc: import('../../../src/shared/passage').PassageLoc
+  passage: string
+  before?: string
+  /** A story read for the first time: the reply must keep to what has been read */
+  narrative?: boolean
 }
 
 export interface Scenario {
   id: string
+  /** Set for a "Discuss this" scenario: the request is the discussion's, not a lesson's */
+  discuss?: DiscussSetup
   subject: Subject
   situation: Situation
   /** The lesson as the app sets it up: mode, topic and options are the instructions variant */

@@ -8,6 +8,9 @@ import { Thinking } from './Thinking'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
 import { markNote, paceNote } from '@shared/pace'
+import { markingNote } from '@shared/humanities'
+import { teachesAsHumanities } from '@shared/subjects'
+import { AppraiseCard } from './AppraiseCard'
 import { useDifficulty } from '../lib/difficulty'
 import { nothingToMark, unmarked } from '@shared/lessonRepair'
 import { withSources, type SourcePack } from '@shared/sources'
@@ -221,7 +224,10 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         mode === 'teach' || (mode === 'quiz' && !setupRef.current.options?.placement) ? paceNote(history, content) : null,
         // Hook (shared/difficulty.ts): stands aside on a turn the pace note already speaks for
         paceNote(history, content) ? null : difficulty.noteFor(history, content),
-        mode === 'teach' || (mode === 'quiz' && !setupRef.current.options?.placement) ? markNote(content) : null,
+        // humanities: an answer to a question of interpretation is appraised, not marked (when the subject's profile says it is taught as the humanities)
+        mode === 'teach' || (mode === 'quiz' && !setupRef.current.options?.placement)
+          ? markingNote(markNote(content), [...history].reverse().find((t) => t.role === 'assistant')?.content ?? '', setupRef.current.topic, teachesAsHumanities(setupRef.current.topic, setupRef.current.options?.subject))
+          : null,
         whyNoteRef.current,
         mode === 'teach' && history.length > 2 ? notesNudge(history.filter((t) => t.role === 'assistant').map((t) => t.content), content) : null
       ].filter((n): n is string => !!n)
@@ -815,6 +821,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             )}
           </div>
         )
+      // humanities: a reading appraised against the rubric
+      case 'appraise':
+        return <AppraiseCard key={key} rows={b.rows} text={b.text} render={(t) => renderMarkdown(t, env)} />
       case 'summary':
         return (
           <div key={key} className="s-summary">

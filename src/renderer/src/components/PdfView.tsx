@@ -13,6 +13,7 @@ import { Editor, type EditorHandle } from './Editor'
 import { ReadingGuide } from './ReadingGuide'
 import { ensureChapterSection, type GuideChapter } from '@shared/guide'
 import { addQuoteToNotes, companionPath } from '../lib/companion'
+import { DiscussPanel, type DiscussTarget } from './DiscussPanel'
 import { createPdfTools, isFindKey, matchBoxes, type FindStatus, type OutlineItem, type PdfTools } from '../lib/pdfTools'
 import { PdfFindBar } from './PdfFindBar'
 
@@ -52,7 +53,8 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
   const [showList, setShowList] = useState(false)
   const [cardText, setCardText] = useState<string | null>(null)
   const [notesOpen, setNotesOpen] = useState(() => localStorage.getItem('tide.pdf.notes') === 'open')
-  const [paneTab, setPaneTab] = useState<'guide' | 'notes'>(() => (localStorage.getItem('tide.pdf.pane') === 'notes' ? 'notes' : 'guide'))
+  const [discussing, setDiscussing] = useState<DiscussTarget | null>(null)
+  const [paneTab, setPaneTab] = useState<'guide' | 'notes' | 'discuss'>(() => (localStorage.getItem('tide.pdf.pane') === 'notes' ? 'notes' : 'guide'))
   const editorHandle = useRef<EditorHandle | null>(null)
   const [notesEditing, setNotesEditing] = useState(() => localStorage.getItem('tide.pdf.notesMode') === 'edit')
   const setEditing = (on: boolean) => {
@@ -260,7 +262,8 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
   const persist = useCallback(
     (next: PdfHighlight[]) => {
       setHighlights(next)
-      window.tide.highlights.save(path, next)
+      // humanities: the book's notes page keeps highlights and bookmarks in reading order
+      window.tide.highlights.save(path, next).then(() => window.tide.reading.syncNotes(path)).catch(() => {})
     },
     [path]
   )
@@ -648,6 +651,26 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
             >
               Flashcard
             </button>
+            {/* humanities: discuss the passage beside the page, or keep the place */}
+            <button
+              onClick={() => {
+                setDiscussing({ passage: pop.text, loc: { kind: 'page', page: pop.page } })
+                setPaneTab('discuss')
+                if (!notesOpen) toggleNotes()
+                setPop(null)
+              }}
+            >
+              Discuss this
+            </button>
+            <button
+              onClick={() => {
+                persist([...highlights, { id: uid(), page: pop.page, text: pop.text.slice(0, 160), rects: [], color: 'blue', bookmark: true, createdAt: Date.now() }])
+                window.getSelection()?.removeAllRanges()
+                setPop(null)
+              }}
+            >
+              Bookmark
+            </button>
             {pop.existing && (
               <button
                 className="danger"
@@ -672,12 +695,19 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
               <button role="tab" aria-selected={paneTab === 'notes'} className={paneTab === 'notes' ? 'on' : ''} onClick={() => setPaneTab('notes')}>
                 Notes
               </button>
+              {discussing && (
+                <button role="tab" aria-selected={paneTab === 'discuss'} className={paneTab === 'discuss' ? 'on' : ''} onClick={() => setPaneTab('discuss')}>
+                  Discussion
+                </button>
+              )}
             </div>
             <button className="icon-btn small" title={`Open ${fileTitle(notesPath)} as a full note`} onClick={() => app.openPath(notesPath)}>
               <Icon name="external" size={13} />
             </button>
           </div>
-          {paneTab === 'guide' ? (
+          {paneTab === 'discuss' && discussing ? (
+            <DiscussPanel key={discussing.passage} path={path} target={discussing} onGo={(l) => l.kind === 'page' && goTo(l.page)} readTo={{ kind: 'page', page: current }} onClose={() => setPaneTab('notes')} />
+          ) : paneTab === 'guide' ? (
             <div className="pdf-guide-body">
               {notes !== null ? (
                 <ReadingGuide path={path} notes={notes} onNotes={onNotesEdit} numPages={pages.length} currentPage={current} goTo={goTo} writeNotes={writeChapterNotes} />

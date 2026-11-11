@@ -161,6 +161,38 @@ export const TRUSTED: Record<string, TrustedSite[]> = {
     site('docs.anthropic.com', 'Anthropic documentation', 'official'),
     site('platform.openai.com', 'OpenAI documentation', 'official', undefined, '/docs')
   ],
+  // The humanities: primary texts first, then scholarly references and university courses. Every
+  // address here answered 200 to `curl -sIL -m 15` on 2026-11-11; those that refused are in
+  // UNVERIFIED_TRUSTED below
+  Philosophy: [
+    site('iep.utm.edu', 'Internet Encyclopedia of Philosophy', 'reference'),
+    // Greek and Latin texts with translations; the primary texts of classical philosophy and history
+    site('perseus.tufts.edu', 'Perseus Digital Library (Tufts University)', 'primary')
+  ],
+  // Primary texts and scholarly references, not devotional or polemical sites. Each tradition is read
+  // in its own texts; a site run by one tradition (New Advent, the Vatican) is a primary source for
+  // that tradition's own documents, not a neutral account of others
+  'Theology and religious studies': [
+    site('ccel.org', 'Christian Classics Ethereal Library (Calvin University)', 'primary'),
+    site('newadvent.org', 'New Advent: the Church Fathers in translation', 'primary', undefined, '/fathers'),
+    site('vatican.va', 'The Holy See: documents of the Catholic Church', 'primary', undefined, '/archive'),
+    site('sefaria.org', 'Sefaria: Jewish texts in Hebrew and translation', 'primary'),
+    site('accesstoinsight.org', 'Access to Insight: translations from the Pali Canon', 'primary'),
+    // An archive of old public-domain translations: sound for the texts themselves, dated as scholarship
+    site('sacred-texts.com', 'Internet Sacred Text Archive (public-domain translations)', 'primary')
+  ],
+  History: [
+    site('avalon.law.yale.edu', 'The Avalon Project: documents in law, history and diplomacy (Yale Law School)', 'primary'),
+    site('sourcebooks.fordham.edu', 'Internet History Sourcebooks Project (Fordham University)', 'primary'),
+    site('history.state.gov', 'Office of the Historian, US Department of State', 'primary'),
+    // The whole site, not only /education: the records themselves are primary sources too
+    site('nationalarchives.gov.uk', 'The National Archives (UK)', 'primary'),
+    site('oyc.yale.edu', 'Open Yale Courses', 'course', 'CC BY-NC-SA 3.0')
+  ],
+  Literature: [
+    site('gutenberg.org', 'Project Gutenberg', 'book', 'Public domain in the USA'),
+    site('standardebooks.org', 'Standard Ebooks', 'book', 'Public domain in the USA; CC0 1.0 for the edition')
+  ],
   // The areas below were added for teaching any subject (src/shared/subjects.ts maps each kind of
   // subject to its areas). Every host answered `curl -sIL -m 15` with 200 on 11 November 2026, except
   // m3.material.io, which refuses HEAD (405) and answered a GET with 200. Hosts the network refused
@@ -230,20 +262,16 @@ export const TRUSTED: Record<string, TrustedSite[]> = {
     site('lawsofux.com', 'Jon Yablonski, Laws of UX', 'reference'),
     site('practicaltypography.com', 'Matthew Butterick, Practical Typography', 'book')
   ],
+  // Gutenberg, Avalon, Fordham, Perseus and the UK National Archives are in the humanities areas
+  // above (Literature, History, Philosophy), which the interpret and narrative kinds also read from
   'History, texts and languages': [
-    site('gutenberg.org', 'Project Gutenberg', 'book'),
-    site('avalon.law.yale.edu', 'The Avalon Project (Yale Law School)', 'primary'),
-    site('sourcebooks.fordham.edu', 'Internet History Sourcebooks (Fordham University)', 'primary'),
-    site('perseus.tufts.edu', 'Perseus Digital Library (Tufts University)', 'primary'),
-    site('nationalarchives.gov.uk', 'The National Archives (UK)', 'primary'),
     site('archives.gov', 'US National Archives', 'primary'),
     site('loc.gov', 'Library of Congress', 'primary'),
     site('wals.info', 'World Atlas of Language Structures', 'reference', 'CC BY 4.0')
   ],
   'General reference': [
     site('en.wikipedia.org', 'Wikipedia', 'reference', 'CC BY-SA 4.0'),
-    site('plato.stanford.edu', 'Stanford Encyclopedia of Philosophy', 'reference'),
-    site('iep.utm.edu', 'Internet Encyclopedia of Philosophy', 'reference')
+    site('plato.stanford.edu', 'Stanford Encyclopedia of Philosophy', 'reference')
   ]
 }
 
@@ -273,7 +301,21 @@ export const UNCHECKED_TRUSTED: Record<string, TrustedSite[]> = {
   'Music and design': [site('viva.pressbooks.pub', 'Open Music Theory', 'book', undefined, '/openmusictheory'), site('openmusictheory.github.io', 'Open Music Theory (first edition)', 'book')]
 }
 
-const ALL: TrustedSite[] = Object.values(TRUSTED).flat()
+/**
+ * Sites that belong in the list but could not be checked when it was made: each refused the plain
+ * request (`curl -sIL -m 15`) from the owner's network. They are offered as trusted all the same;
+ * check them again before relying on them, and move each up into TRUSTED once it answers. (Unlike
+ * UNCHECKED_TRUSTED above, which waits to be checked before it counts, these two count now.)
+ *   philpapers.org: 403. Only its openly readable entries would count (PhilArchive's free papers).
+ *   earlychristianwritings.com: 406 to a plain request (it answers a browser). A useful index of
+ *     early Christian texts in translation, run by one person: a finding aid, not a scholarly edition.
+ */
+export const UNVERIFIED_TRUSTED: Record<string, TrustedSite[]> = {
+  Philosophy: [site('philpapers.org', 'PhilPapers (openly readable entries only)', 'reference')],
+  'Theology and religious studies': [site('earlychristianwritings.com', 'Early Christian Writings', 'reference')]
+}
+
+const ALL: TrustedSite[] = [...Object.values(TRUSTED), ...Object.values(UNVERIFIED_TRUSTED)].flat()
 
 export const trustedCount = () => ALL.length
 

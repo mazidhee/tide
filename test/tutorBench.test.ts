@@ -48,7 +48,8 @@ describe('the scenario set', () => {
 })
 
 describe('breadth: subjects outside the core set', () => {
-  const wide = SCENARIOS.filter((s) => (BREADTH_SUBJECTS as readonly string[]).includes(s.subject))
+  // A Discuss this turn in philosophy (a humanities scenario) is about a passage, not a lesson's topic, so it has no kinds
+  const wide = SCENARIOS.filter((s) => (BREADTH_SUBJECTS as readonly string[]).includes(s.subject) && !s.discuss)
 
   it('has at least 40 scenarios across at least 20 subjects, each naming its kinds', () => {
     expect(wide.length).toBeGreaterThanOrEqual(MIN_BREADTH.scenarios)
@@ -554,5 +555,36 @@ describe('the reply the learner is shown', () => {
     expect(s.repairs.find((r) => r.id === 'stall')?.share).toBeCloseTo(17 / 69, 2)
     // No reply the learner would be shown has thinking markers left in it
     expect(rows.some((r) => !r.unfinished && r.score.failed.includes('clean'))).toBe(false)
+  })
+})
+
+describe('the humanities scenarios', () => {
+  const human = SCENARIOS.filter((s) => ['philosophy', 'theology', 'history', 'literature'].includes(s.subject))
+  it('number at least 20, across all four subjects, with close readings, appraisals, contested questions, dates, traditions, a spoiler trap and cited replies', () => {
+    expect(human.length).toBeGreaterThanOrEqual(20)
+    for (const sub of ['philosophy', 'theology', 'history', 'literature']) expect(human.filter((s) => s.subject === sub).length, sub).toBeGreaterThanOrEqual(4)
+    for (const sit of ['close-reading', 'appraise-reading', 'contested', 'fact-date', 'describe-tradition', 'spoiler-trap', 'cited-reply']) expect(human.some((s) => s.situation === sit), sit).toBe(true)
+    // Close readings of Meditations and The Prophet: ask about reasoning, quote with a place, offer a counter-reading, no verdict
+    for (const s of human.filter((x) => x.situation === 'close-reading')) expect(s.expect, s.id).toMatchObject({ quote: true, challenge: true, counter: true, forbid: ['grade'] })
+    expect(human.filter((s) => s.situation === 'close-reading').map((s) => s.discuss?.work)).toEqual(expect.arrayContaining(['Meditations', 'The Prophet']))
+  })
+
+  it('send a close reading as the discussion sends it, and score its checks with no model', () => {
+    const s = human.find((x) => x.id === 'philosophy-close-reading-meditations-opinion')!
+    const m = buildMessages(s)
+    expect(m).toHaveLength(2)
+    expect(m[0].content).toMatch(/Socratically/)
+    expect(m[1].content).toMatch(/The passage \(ch\. 4 ¶7\):[\s\S]*Learner: He is saying harm is all in your head/)
+    const lecture = scoreReply(s, 'Marcus means that externals are indifferent. <ask type="explain">Do you see?</ask>')
+    expect(lecture.failed).toEqual(expect.arrayContaining(['quoted', 'challenge', 'counter']))
+    const spoil = human.find((x) => x.situation === 'spoiler-trap')!
+    expect(scoreReply(spoil, 'Later in the novel, "the narrator" (ch. 1 ¶1) explains. <ask type="explain">Why?</ask>').failed).toContain('no-spoiler')
+  })
+
+  it('send the appraisal note with an answer to a question of interpretation', () => {
+    const s = human.find((x) => x.situation === 'appraise-reading')!
+    expect(buildMessages(s).at(-1)!.content).toMatch(/Respond with <appraise>, not <grade>/)
+    const f = human.find((x) => x.situation === 'fact-date')!
+    expect(buildMessages(f).at(-1)!.content).toMatch(/mark this first/)
   })
 })

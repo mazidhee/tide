@@ -75,7 +75,8 @@
     },
     "files": [
       "out/**/*",
-      "package.json"
+      "package.json",
+      "THIRD_PARTY_NOTICES.md"
     ],
     "mac": {
       "target": [
