@@ -27,7 +27,7 @@ import { buildMessages, fingerprint, type Message } from './request'
 import { SCENARIOS } from './scenarios'
 import { scoreReply } from './score'
 import { printable, summarise, type Row } from './summary'
-import { SCENARIO_SET_VERSION, SITUATIONS, SUBJECTS, type Scenario } from './types'
+import { ALL_SUBJECTS, SCENARIO_SET_VERSION, SITUATIONS, type Scenario } from './types'
 import { tutorTurn } from './turn'
 import { validateSet } from './validate'
 
@@ -70,8 +70,8 @@ function dryRun(): number {
   const sent = SCENARIOS.map((s) => buildMessages(s))
   console.log(`Scenario set ${SCENARIO_SET_VERSION}: ${SCENARIOS.length} scenarios\n`)
   console.log(`${''.padEnd(13)}${SITUATIONS.map((s) => s.slice(0, 9).padStart(10)).join('')}     total`)
-  for (const sub of SUBJECTS) console.log(`${sub.padEnd(13)}${SITUATIONS.map((sit) => String(grid[sub][sit]).padStart(10)).join('')}${String(Object.values(grid[sub]).reduce((a, b) => a + b, 0)).padStart(10)}`)
-  console.log(`${'total'.padEnd(13)}${SITUATIONS.map((sit) => String(SUBJECTS.reduce((a, sub) => a + grid[sub][sit], 0)).padStart(10)).join('')}${String(SCENARIOS.length).padStart(10)}`)
+  for (const sub of ALL_SUBJECTS) console.log(`${sub.padEnd(13)}${SITUATIONS.map((sit) => String(grid[sub][sit]).padStart(10)).join('')}${String(Object.values(grid[sub]).reduce((a, b) => a + b, 0)).padStart(10)}`)
+  console.log(`${'total'.padEnd(13)}${SITUATIONS.map((sit) => String(ALL_SUBJECTS.reduce((a, sub) => a + grid[sub][sit], 0)).padStart(10)).join('')}${String(SCENARIOS.length).padStart(10)}`)
   const chars = sent.map((m) => m.reduce((a, x) => a + x.content.length, 0))
   console.log(`\nRequests built from the app's prompt code: ${sent.length}; ${Math.round(chars.reduce((a, b) => a + b, 0) / Math.max(1, chars.length))} characters each on average (system prompt ${sent[0]?.[0].content.length ?? 0})`)
   console.log(`Prompt fingerprint: ${fingerprint(JSON.stringify(sent))}`)
