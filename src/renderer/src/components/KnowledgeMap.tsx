@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { readyAcross, revisitList, shareRight, since, standing, STATUS_LABEL, tickedOnly, type ConceptState, type ConceptStatus, type KnowledgeView, type WeekPoint } from '@shared/knowledge'
+import { readyAcross, revisitList, SOLID, shareRight, since, standing, STATUS_LABEL, tickedOnly, type ConceptState, type ConceptStatus, type KnowledgeView, type WeekPoint } from '@shared/knowledge'
 import { Icon } from './Icon'
 import { KnowPage } from './know/KnowPage'
 
@@ -279,7 +279,7 @@ export function KnowledgeMap({ data, onLesson, onCheck, onReview, onNewTopic, ti
       </section>
 
       <p className="know-foot">
-        An estimate, not a mark. Each right answer raises a topic and makes it last longer; a wrong one, or one you couldn’t answer, lowers it; and it fades with the time since you last got it right, more slowly the more often that has happened. A topic is solid at {pct(0.6)} or more.
+        An estimate, not a mark: the chance you would remember a topic today, by the same model as your reviews (FSRS). Each answer is a review: a right one after a gap makes it last much longer, a wrong one or one you couldn’t answer makes it harder to keep, and it fades with the time since. A topic is solid when your last answer was right and the chance is {pct(SOLID)} or more.
       </p>
     </div>
   )
@@ -422,8 +422,8 @@ function Detail({ c, now, byId, parts, goTo, onLesson, onCheck }: { c: ConceptSt
   const facts = [
     answers ? `${plural(answers, 'answer')}: ${c.right} right${c.partly ? `, ${c.partly} partly` : ''}${c.wrong ? `, ${c.wrong} wrong or not answered` : ''}` : c.seen ? 'Taught, with no marked answer yet' : c.done ? 'Ticked on your roadmap; Tide has not asked about it' : 'Nothing recorded yet',
     c.lastRight ? `last right ${since(c.lastRight, now)}` : c.lastSeen ? `last seen ${since(c.lastSeen, now)}` : '',
-    c.seen ? `now ${pct(c.estimate)}${c.status === 'fading' ? `, down from ${pct(c.level)}` : ''}` : '',
-    c.lastRight ? `halves every ${c.halfLife < 10 ? c.halfLife.toFixed(1).replace(/\.0$/, '') : Math.round(c.halfLife)} days unused` : ''
+    c.stability !== undefined ? `now ${pct(c.estimate)}${c.status === 'fading' ? `, down from ${pct(c.level)}` : ''}` : '',
+    c.stability !== undefined ? `90% likely to be remembered ${c.stability < 10 ? c.stability.toFixed(1).replace(/\.0$/, '') : Math.round(c.stability)} days after its last review` : ''
   ].filter(Boolean)
   return (
     <div className="know-detail">

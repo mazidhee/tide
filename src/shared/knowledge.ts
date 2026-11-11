@@ -52,12 +52,15 @@ export interface ConceptState {
   prerequisites: string[]
   done: boolean
   private: boolean
-  /** How solid it is now, 0 to 1 */
+  /** How solid it is now, 0 to 1: FSRS-6 retrievability, the chance of remembering it today (0 until something is asked) */
   estimate: number
-  /** How well it was known at the last evidence, before any forgetting */
+  /** What it stood at after the last answer, before any forgetting: 1 when that answer was right */
   level: number
-  /** Days for the estimate to halve when unused */
+  /** Days from the last review for the estimate to halve when unused */
   halfLife: number
+  /** FSRS stability (days for the estimate to fall to 90%) and difficulty (1 to 10); none until something is asked */
+  stability?: number
+  difficulty?: number
   status: ConceptStatus
   lastSeen?: number
   lastRight?: number
@@ -118,8 +121,8 @@ export interface KnowledgeView {
   missed?: Record<string, MissedQuestion[]>
 }
 
-/** The estimate at or above which a concept counts as solid (the same line the Rust module draws) */
-export const SOLID = 0.6
+/** The retrievability at or above which a concept counts as solid, when its last answer was right (the same line the Rust module draws) */
+export const SOLID = 0.85
 
 const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
 

@@ -262,7 +262,7 @@ function TopicPanel(p: {
   const missed = data.missed?.[c.id] ?? []
   const answers = c.right + c.partly + c.wrong
   const facts = [
-    c.seen ? `Held at ${pct(c.estimate)}${c.level - c.estimate >= 0.03 ? `, down from ${pct(c.level)}` : ''}.` : '',
+    c.stability !== undefined ? `Held at ${pct(c.estimate)}${c.level - c.estimate >= 0.03 ? `, down from ${pct(c.level)}` : ''}.` : '',
     answers ? `${c.right} of ${plural(answers, 'answer')} right${c.wrong ? `, ${c.wrong} wrong or not answered` : ''}.` : c.seen ? 'Taught, not checked yet.' : '',
     kind === 'solid' && c.fadesAt ? `Stays solid until ${new Date(c.fadesAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })} if left.` : '',
     c.firstSeen ? `First met ${since(c.firstSeen, now)}.` : ''
