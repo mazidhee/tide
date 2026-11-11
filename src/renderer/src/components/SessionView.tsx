@@ -8,6 +8,7 @@ import { Thinking } from './Thinking'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
 import { markNote, paceNote } from '@shared/pace'
+import { useDifficulty } from '../lib/difficulty'
 import { nothingToMark, unmarked } from '@shared/lessonRepair'
 import { withSources, type SourcePack } from '@shared/sources'
 import { ledPrefKey } from '@shared/sourceLed'
@@ -201,6 +202,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   }, [])
   const engineRef = useRef(engine)
   engineRef.current = engine
+  // Hook (lib/difficulty.ts): how hard the next problem is follows how the answers are going
+  const difficulty = useDifficulty(topic, scope, mode === 'teach' || (mode === 'quiz' && !setup.options?.placement), busy)
   const send = useCallback(
     async (content: string, history: Turn[]) => {
       const id = `session:${uid()}`
@@ -216,6 +219,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         // A placement check ends after its last question, whether or not the tutor counts
         setupRef.current.options?.placement ? placementNote(history.filter((t) => t.role === 'user').length - 1) : null,
         mode === 'teach' || (mode === 'quiz' && !setupRef.current.options?.placement) ? paceNote(history, content) : null,
+        // Hook (shared/difficulty.ts): stands aside on a turn the pace note already speaks for
+        paceNote(history, content) ? null : difficulty.noteFor(history, content),
         mode === 'teach' || (mode === 'quiz' && !setupRef.current.options?.placement) ? markNote(content) : null,
         whyNoteRef.current,
         mode === 'teach' && history.length > 2 ? notesNudge(history.filter((t) => t.role === 'assistant').map((t) => t.content), content) : null
@@ -233,7 +238,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       }
       await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setupRef.current), labId: labId.current, canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, engine: engineRef.current, sourceLed: ledRef.current })
     },
-    [scope, setup, web, timed, clock, mode]
+    [scope, setup, web, timed, clock, mode, difficulty.noteFor]
   )
   sendRef.current = send
   answerRef2.current = (said) => {
@@ -847,6 +852,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
 
   const scopeLabel = scope.kind === 'note' ? fileTitle(scope.path) : scope.kind === 'pages' ? pagesLabel(scope) : scope.kind === 'folder' ? scope.path.split('/').pop() : null
 
+  const difficultyLine = difficulty.line(turns, plan && planDone < plan.steps.length ? plan.steps[planDone] : undefined)
   // The rail of the new design: only when there is something to put in it
   const checks = Object.values(challenged)
   const hasSources = toRead.length > 0 || found.length > 0 || !!pack?.sources.length || checks.length > 0
@@ -1339,6 +1345,13 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   </li>
                 ))}
               </ol>
+            </section>
+          )}
+          {/* Hook (shared/difficulty.ts): one line on what Tide is doing with the level, and why */}
+          {difficultyLine && (
+            <section className="td-rail-level" aria-live="polite">
+              <h2 className="td-rail-h">Level</h2>
+              <p>{difficultyLine}</p>
             </section>
           )}
           {hasSources && (

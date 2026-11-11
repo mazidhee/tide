@@ -1,0 +1,687 @@
+/*
+  Guided projects (components/WorkshopView.tsx, components/workshop/ProjectScreen.tsx): the layout,
+  in the classic names so both designs get it. The new design's refinements are in
+  tide/projects.css, scoped to data-design='tide'.
+*/
+
+.ws-page {
+  background: var(--bg);
+}
+.ws-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.ws-wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 22px 40px 64px;
+}
+.ws-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  margin: 0 0 14px -8px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-muted);
+  font: inherit;
+  cursor: pointer;
+}
+.ws-back:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+.ws-kicker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+}
+.ws-title {
+  margin: 0;
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.ws-lede {
+  max-width: 68ch;
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 23px;
+}
+.ws-meta {
+  max-width: 72ch;
+  margin: 10px 0;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  line-height: 19px;
+}
+.ws-n {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
+  color: var(--ink-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ws-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--ink-muted);
+}
+.ws-dot.good {
+  background: var(--series-3);
+}
+.ws-dot.now {
+  background: var(--accent);
+}
+
+/* ---------- The list ---------- */
+.ws-list-head {
+  margin-bottom: 18px;
+}
+.ws-group {
+  margin-top: 26px;
+}
+.ws-group-h {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.ws-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+.ws-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 190px 150px;
+  gap: 14px;
+  align-items: start;
+  width: 100%;
+  padding: 12px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ws-row:hover {
+  background: var(--bg-hover);
+}
+.ws-row-icon {
+  margin-top: 2px;
+  color: var(--ink-muted);
+}
+.ws-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.ws-row-title {
+  font-weight: 600;
+}
+.ws-row-outcome {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 18px;
+}
+.ws-row-meta,
+.ws-row-state {
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  line-height: 20px;
+}
+.ws-row-state {
+  display: flex;
+  align-items: center;
+}
+.ws-for-topic {
+  margin-bottom: 10px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.ws-for-topic .btn {
+  margin-top: 14px;
+}
+
+/* ---------- A project not yet started ---------- */
+.ws-preview {
+  max-width: 760px;
+}
+.ws-outline {
+  margin: 18px 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+.ws-outline li {
+  display: flex;
+  gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+  line-height: 20px;
+}
+.ws-outline strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ---------- A project in hand ---------- */
+.ws-head {
+  padding-bottom: 16px;
+}
+.ws-track {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 14px;
+}
+.ws-track-seg {
+  width: 44px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-inset);
+}
+.ws-track-seg.done {
+  background: var(--series-3);
+}
+.ws-track-seg.current {
+  background: var(--accent);
+}
+.ws-track-label {
+  margin-left: 10px;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.ws-recap {
+  margin: 4px 0 20px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-raised);
+}
+.ws-recap-h {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.ws-recap-head {
+  margin: 4px 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.ws-recap ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 21px;
+}
+.ws-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 268px;
+  gap: 40px;
+  align-items: start;
+}
+.ws-main {
+  min-width: 0;
+}
+.ws-stage-kicker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+}
+.ws-state {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-soft);
+}
+.ws-stage-h {
+  margin: 4px 0 0;
+  font-size: 19px;
+  line-height: 26px;
+  font-weight: 600;
+}
+.ws-goal {
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 23px;
+}
+.ws-read {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 12px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 20px;
+}
+.ws-read svg {
+  flex: none;
+  position: relative;
+  top: 2px;
+  color: var(--ink-muted);
+}
+.ws-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.ws-source {
+  font-style: italic;
+}
+.ws-brief {
+  margin-top: 18px;
+  padding-top: 4px;
+  font-size: 15.5px;
+  line-height: 1.62;
+}
+.ws-tests,
+.ws-hints,
+.ws-review,
+.ws-ask {
+  margin-top: 28px;
+}
+.ws-tests-head,
+.ws-review-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.ws-tests h3,
+.ws-hints h3,
+.ws-review h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.ws-tests-meta {
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.ws-test-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ws-test {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13.5px;
+}
+.ws-mark {
+  width: 10px;
+  height: 10px;
+  margin-left: 3px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--line-strong);
+}
+.ws-mark.pass {
+  background: var(--series-3);
+  box-shadow: none;
+}
+.ws-mark.fail {
+  width: 9px;
+  height: 9px;
+  border-radius: 1px;
+  background: var(--danger);
+  box-shadow: none;
+  transform: rotate(45deg);
+}
+.ws-test-word {
+  color: var(--ink-muted);
+  font-size: 12.5px;
+}
+.ws-test.fail .ws-test-word {
+  color: var(--danger);
+}
+.ws-test-msg {
+  grid-column: 2 / 4;
+  display: block;
+  margin: 2px 0 2px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--code-bg);
+  color: var(--ink);
+  font: 12.5px/19px var(--font-code);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ws-nothing {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+.ws-nothing p {
+  margin: 0 0 6px;
+}
+.ws-nothing pre,
+.ws-output pre {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  font: 12px/18px var(--font-code);
+  white-space: pre-wrap;
+}
+.ws-regress {
+  margin: 10px 0 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+.ws-output {
+  margin-top: 10px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+.ws-output summary {
+  cursor: pointer;
+}
+.ws-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.ws-error {
+  color: var(--danger);
+  font-size: 13px;
+}
+.ws-hints ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ws-hints li {
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 21px;
+}
+.ws-hint-kind {
+  display: block;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+.ws-review {
+  padding: 16px 18px 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-raised);
+}
+.ws-review-part {
+  padding: 12px 0;
+}
+.ws-review-part + .ws-review-part {
+  border-top: 1px solid var(--line);
+}
+.ws-review-part h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.ws-review-part p,
+.ws-review-part .prose {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 23px;
+}
+.ws-review-part .prose p {
+  margin: 0 0 8px;
+}
+.ws-question {
+  margin: 4px -10px;
+  padding: 12px 10px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+}
+.ws-answer {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.ws-answer-q {
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+.ws-answer .prose {
+  font-size: 14.5px;
+  line-height: 23px;
+}
+.ws-ask-bar {
+  display: flex;
+  gap: 8px;
+}
+.ws-ask-bar input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--bg-raised);
+  color: var(--ink);
+  font: inherit;
+}
+
+/* The rail */
+.ws-rail {
+  position: sticky;
+  top: 0;
+}
+.ws-rail section + section {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.ws-rail .td-rail-h {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.ws-stages,
+.ws-files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ws-stage {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ws-stage:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.ws-stage:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+.ws-stage.done .ws-n {
+  background: var(--ink-muted);
+  box-shadow: none;
+  color: var(--bg);
+}
+.ws-stage.current .ws-n {
+  background: var(--accent);
+  box-shadow: none;
+  color: var(--accent-ink);
+}
+.ws-stage.shown {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+.ws-stage-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  line-height: 20px;
+}
+.ws-stage-title {
+  font-weight: 500;
+}
+.ws-stage-goal {
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  line-height: 18px;
+}
+.ws-file {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: 12.5px/18px var(--font-code);
+  text-align: left;
+  cursor: pointer;
+}
+.ws-file:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+.ws-file svg {
+  flex: none;
+  color: var(--ink-muted);
+}
+.ws-file.this-stage {
+  color: var(--ink);
+  font-weight: 500;
+}
+.ws-rail-note {
+  margin: 10px 8px 0;
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+}
+
+/* Learn's shelf, and a roadmap item's way in */
+.ws-shelf {
+  margin-top: 28px;
+}
+.ws-shelf-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.ws-shelf-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+.ws-shelf-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ws-shelf-row:hover {
+  background: var(--bg-hover);
+}
+.ws-shelf-title {
+  font-weight: 500;
+}
+
+@media (max-width: 900px) {
+  .ws-wrap {
+    padding: 18px 20px 48px;
+  }
+  .ws-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ws-rail {
+    position: static;
+  }
+  .ws-row {
+    grid-template-columns: 22px minmax(0, 1fr);
+  }
+  .ws-row-meta,
+  .ws-row-state {
+    grid-column: 2;
+  }
+}
+.ws-main {
+  max-width: 780px;
+}
+.ws-brief-after {
+  margin-top: 32px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.ws-brief-h {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}

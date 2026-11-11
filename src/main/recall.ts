@@ -91,3 +91,13 @@ export function recallNote(topic: string): string {
 
 export const recallStats = () => recall()?.stats(Date.now()) ?? { total: 0, due: 0, settled: 0 }
 export const recallItems = (): RecallItem[] => recall()?.all() ?? []
+
+// ---------- Hook for guided projects (main/workshop.ts) ----------
+
+/** Questions to bring back in a later lesson on their topic, from outside a lesson. Nothing from a private project is kept */
+export async function keepForRecall(items: { prompt: string; topic: string; lesson: string }[], path?: string): Promise<void> {
+  const r = recall()
+  if (!r || !items.length) return
+  if (path && (await privatePath(path).catch(() => true))) return
+  r.add(items, Date.now())
+}

@@ -228,6 +228,29 @@ export async function noteAttempt(a: Attempt): Promise<void> {
   k.record([made.event])
 }
 
+// ---------- Hooks for guided projects and adaptive difficulty (main/workshop.ts, main/difficulty.ts) ----------
+
+/**
+ * Evidence on a concept from somewhere that keeps no lesson record of its own (a passed stage of a
+ * guided project). Kept once per source and place, however often it is sent.
+ */
+export async function noteEvidence(e: { topic: string; kind: 'right' | 'partly' | 'wrong'; source: string; pos: string; at: number; path?: string }): Promise<void> {
+  const k = await knowledge()
+  if (!k || !e.topic.trim()) return
+  const { area, isPrivate } = await placeOf(e.path)
+  const { concept, fresh } = conceptFor(k, e.topic, area, isPrivate)
+  if (fresh.length) k.upsert(fresh)
+  k.record([{ concept: concept.id, source: e.source, pos: e.pos, kind: e.kind, at: e.at, weight: 1, ...(isPrivate ? { private: true } : {}) }])
+}
+
+/** A topic as the map has it, with what it builds on (private concepts only for a reader on this Mac) */
+export async function conceptPicture(topic: string, privateOk: boolean): Promise<Picture | null> {
+  const k = await knowledge()
+  if (!k) return null
+  await syncRoadmaps(k).catch(() => {})
+  return k.around(conceptName(topic), Date.now(), privateOk, 3)
+}
+
 /** The one time the file isn't there: every roadmap, every lesson kept, every marked answer, read in */
 async function backfill(k: Engine): Promise<void> {
   await syncRoadmaps(k, true)

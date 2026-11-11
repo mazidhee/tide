@@ -144,6 +144,20 @@ const api: TideApi = {
     get: invoke('lessons:get'),
     challenge: invoke('lessons:challenge')
   },
+  workshop: {
+    list: invoke('workshop:list'),
+    start: invoke('workshop:start'),
+    state: invoke('workshop:state'),
+    run: invoke('workshop:run'),
+    hint: invoke('workshop:hint'),
+    review: invoke('workshop:review'),
+    ask: invoke('workshop:ask'),
+    forTopic: invoke('workshop:forTopic'),
+    propose: invoke('workshop:propose')
+  },
+  difficulty: {
+    known: invoke('difficulty:known')
+  },
   knowledge: {
     view: invoke('knowledge:view')
   },
