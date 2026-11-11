@@ -2897,6 +2897,10 @@ button.menu-row:hover {
   max-width: none;
 }
 
+.full-width .editor-column.with-margin {
+  --col: calc(100% - 270px);
+}
+
 .full-width .doc-scroll {
   padding-left: 72px;
   padding-right: 72px;

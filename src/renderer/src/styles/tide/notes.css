@@ -15,6 +15,16 @@
   .editor-column.with-margin {
     --col: min(calc(var(--read-size) * var(--measure) * 1.2), calc(100% - 270px));
   }
+  /* Full width (the page menu) lifts the measure, here as in the classic design */
+  .full-width .reading-column {
+    max-width: none;
+  }
+  .full-width .tutor-gutter {
+    left: 34px;
+  }
+  .full-width .editor-column.with-margin {
+    --col: calc(100% - 270px);
+  }
   .doc-scroll {
     padding: 44px 48px 120px;
   }
