@@ -121,7 +121,22 @@ export function dayShare(t: { provider: string; model: string }): number {
 
 // Per model and job: answers asked for and answered, time taken, and (for writing problems) how
 // many of its problems a second model passed. Kept in model-stats.json; recent results count most.
-type Stat = { n: number; ok: number; ms: number; reviewed: number; passed: number }
+type Stat = { n: number; ok: number; ms: number; reviewed: number; passed: number; why?: Record<string, [count: number, ms: number]> }
+
+/**
+ * Why a cloud request didn't give an answer (or gave a short one), kept beside the counts in
+ * model-stats.json so a model that "fails half the time" can be read: how often each happened and
+ * how long it cost. Shown nowhere; it is for finding out what is wrong.
+ * - silent: no response headers before the first-sign limit; slow: none before the job's deadline
+ * - midstream: the job's deadline passed while the answer was still arriving
+ * - network: the connection failed before any response; broken: it failed mid-answer
+ * - rate: HTTP 429; http-NNN: any other refusal; minute: Tide's own per-minute check held it back
+ * - empty: the stream ended with no answer; spent: the same, cut off at max_tokens (reasoning used it all)
+ * - cut: an answer arrived but was cut off at max_tokens (still counted as answered)
+ * - cancelled: you (or the app) stopped it; gave-up: the caller's own time limit stopped it
+ * - tool-loop: a tutor turn used every step on tools and never answered
+ */
+export type FailCode = 'silent' | 'slow' | 'midstream' | 'network' | 'broken' | 'rate' | `http-${number}` | 'minute' | 'empty' | 'spent' | 'cut' | 'cancelled' | 'gave-up' | 'tool-loop'
 const stats = new Map<string, Stat>()
 const statKey = (t: { provider: string; model: string }, task: string) => `${idOf(t)}|${task}`
 const statsPath = () => join(app.getPath('userData'), 'model-stats.json')
@@ -142,19 +157,37 @@ function bump(key: string, fn: (s: Stat) => void) {
   const s = stats.get(key) ?? { n: 0, ok: 0, ms: 0, reviewed: 0, passed: 0 }
   fn(s)
   // Recent results count most: past 40, everything is halved
-  if (s.n > 40) Object.assign(s, { n: s.n / 2, ok: s.ok / 2, ms: s.ms / 2 })
+  if (s.n > 40) Object.assign(s, { n: s.n / 2, ok: s.ok / 2, ms: s.ms / 2, ...(s.why ? { why: Object.fromEntries(Object.entries(s.why).map(([k, [c, t]]) => [k, [c / 2, t / 2]])) } : {}) })
   if (s.reviewed > 40) Object.assign(s, { reviewed: s.reviewed / 2, passed: s.passed / 2 })
   stats.set(key, s)
   saveStats()
 }
 
-/** A request to a model finished: answered or not, and how long it took */
-export const noteOutcome = (t: { provider: string; model: string }, task: string, ok: boolean, ms: number) =>
+const addWhy = (s: Stat, why: FailCode, ms: number) => {
+  const [count, total] = s.why?.[why] ?? [0, 0]
+  s.why = { ...s.why, [why]: [count + 1, total + ms] }
+}
+
+/** A request to a model finished: answered or not, how long it took, and (when it didn't, or was cut short) why */
+export const noteOutcome = (t: { provider: string; model: string }, task: string, ok: boolean, ms: number, why?: FailCode) =>
   bump(statKey(t, task), (s) => {
     s.n++
     if (ok) s.ok++
     s.ms += ms
+    if (why) addWhy(s, why, ms)
   })
+
+/**
+ * Something that says nothing about the model, so it is written down without counting as a request
+ * it failed: you stopped it, the caller ran out of patience, Tide held it back itself.
+ */
+export const noteWhy = (t: { provider: string; model: string }, task: string, why: FailCode, ms = 0) => bump(statKey(t, task), (s) => addWhy(s, why, ms))
+
+/** What's recorded for a model and job (for tests and for reading the record) */
+export const statFor = (t: { provider: string; model: string }, task: string): Readonly<Stat> | undefined => stats.get(statKey(t, task))
+
+/** Why a request stopped, from the signal that stopped it: a time limit set by the caller, or a plain stop */
+export const stopCode = (signal: AbortSignal): FailCode => ((signal.reason as { name?: string } | undefined)?.name === 'TimeoutError' ? 'gave-up' : 'cancelled')
 
 /** A second model reviewed problems this model wrote: how many passed */
 export const noteReviewed = (t: { provider: string; model: string }, task: string, passed: number, total: number) =>
@@ -288,9 +321,17 @@ export const chain = (task: CloudTask | null = null): CloudTarget[] =>
 export const headersFor = (target: CloudTarget) => ({ 'Content-Type': 'application/json', ...(target.apiKey ? { Authorization: `Bearer ${target.apiKey}` } : {}) })
 
 /** An error worth falling back to Gemma for (rate limits, outages, network), rather than failing the turn */
-export class CloudUnavailable extends Error {}
+export class CloudUnavailable extends Error {
+  constructor(
+    message: string,
+    /** The short reason kept in the record (see FailCode) */
+    readonly why: FailCode = 'network'
+  ) {
+    super(message)
+  }
+}
 
-export async function cloudError(res: Response, target: { provider: string; model: string }): Promise<Error> {
+export async function cloudError(res: Response, target: { provider: string; model: string }): Promise<CloudUnavailable> {
   const provider = target.provider
   const body = await res.text().catch(() => '')
   let detail = body.slice(0, 300)
@@ -304,22 +345,22 @@ export async function cloudError(res: Response, target: { provider: string; mode
   if (res.status === 429) {
     const retry = Number(res.headers.get('retry-after'))
     coolTarget(target, Number.isFinite(retry) ? retry : undefined)
-    return new CloudUnavailable(`The cloud model is rate limited for now (${detail || '429'})`)
+    return new CloudUnavailable(`The cloud model is rate limited for now (${detail || '429'})`, 'rate')
   }
   if (res.status >= 500 || res.status === 408) {
     coolTarget(target, 60)
-    return new CloudUnavailable(`The cloud model is unavailable (${res.status})`)
+    return new CloudUnavailable(`The cloud model is unavailable (${res.status})`, `http-${res.status}`)
   }
   // No such model at this provider (or not for this key): leave it alone for half an hour, the next one answers
   if (res.status === 404) {
     coolTarget(target, 1800)
-    return new CloudUnavailable(`${provider} said 404 for ${target.model}${detail ? `: ${detail.replace(/\s+/g, ' ').trim().slice(0, 200)}` : ''}`)
+    return new CloudUnavailable(`${provider} said 404 for ${target.model}${detail ? `: ${detail.replace(/\s+/g, ' ').trim().slice(0, 200)}` : ''}`, 'http-404')
   }
   if (res.status === 401 || res.status === 403) {
     noteRateLimit(provider, 600)
-    return new CloudUnavailable('The cloud key was refused. Check it in Settings → Models.')
+    return new CloudUnavailable('The cloud key was refused. Check it in Settings → Models.', `http-${res.status}`)
   }
-  return new CloudUnavailable(`The cloud model said: ${detail.replace(/\s+/g, ' ').trim()}`)
+  return new CloudUnavailable(`The cloud model said: ${detail.replace(/\s+/g, ' ').trim()}`, `http-${res.status}`)
 }
 
 // ---------- Usage ----------
@@ -340,6 +381,10 @@ export interface UsageRecord {
   plan?: 'free' | 'paid'
   /** Token counts estimated from text length (the server didn't report them) */
   estimated?: boolean
+  /** Of `output`, how much was the model's reasoning, when the provider says */
+  reasoning?: number
+  /** The reply stopped at max_tokens */
+  cut?: boolean
 }
 
 const usagePath = () => join(app.getPath('userData'), 'usage.jsonl')

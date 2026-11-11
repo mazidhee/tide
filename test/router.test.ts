@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 const dir = mkdtempSync(join(tmpdir(), 'tide-router-'))
 vi.mock('electron', () => ({ app: { getPath: () => dir }, safeStorage: { isEncryptionAvailable: () => false } }))
-const { noteOutcome, noteReviewed, score } = await import('../src/main/cloud')
+const { noteOutcome, noteReviewed, noteWhy, score, statFor, stopCode } = await import('../src/main/cloud')
 
 const times = (n: number, run: () => void) => Array.from({ length: n }, run)
 
@@ -47,5 +47,36 @@ describe('choosing a cloud model by what it has done', () => {
     times(15, () => noteOutcome(m, 'marking', true, 4_000))
     times(15, () => noteOutcome(m, 'maths', false, 60_000))
     expect(score(m, 'marking', 0)).toBeGreaterThan(score(m, 'maths', 0) * 4)
+  })
+})
+
+describe('why requests failed, kept with the counts', () => {
+  it('counts each reason and what it cost, and fades with the rest', () => {
+    const m = { provider: 'e', model: 'hangs' }
+    times(3, () => noteOutcome(m, 'maths', false, 150_000, 'slow'))
+    noteOutcome(m, 'maths', false, 200, 'rate')
+    noteOutcome(m, 'maths', true, 6_000)
+    expect(statFor(m, 'maths')?.why).toEqual({ slow: [3, 450_000], rate: [1, 200] })
+    // Past 40 requests everything is halved, the reasons with it
+    times(36, () => noteOutcome(m, 'maths', true, 6_000))
+    expect(statFor(m, 'maths')?.why).toEqual({ slow: [1.5, 225_000], rate: [0.5, 100] })
+  })
+
+  it('a stopped request is written down without counting against the model', () => {
+    const m = { provider: 'e', model: 'stopped' }
+    noteOutcome(m, 'maths', true, 5_000)
+    const before = score(m, 'maths')
+    times(5, () => noteWhy(m, 'maths', 'cancelled', 40_000))
+    expect(score(m, 'maths')).toBe(before)
+    expect(statFor(m, 'maths')).toMatchObject({ n: 1, ok: 1, ms: 5_000, why: { cancelled: [5, 200_000] } })
+  })
+
+  it('tells a caller that ran out of patience from a plain stop', () => {
+    const stopped = new AbortController()
+    stopped.abort()
+    expect(stopCode(stopped.signal)).toBe('cancelled')
+    const timed = new AbortController()
+    timed.abort(new DOMException('too long', 'TimeoutError'))
+    expect(stopCode(AbortSignal.any([new AbortController().signal, timed.signal]))).toBe('gave-up')
   })
 })
