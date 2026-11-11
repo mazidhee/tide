@@ -16,12 +16,12 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - Review now (spaced review of what is due) and Quick check (a fresh diagnostic)
 - Live preview in the note editor (⌘⇧E for source)
 - Teaching blocks: physics, geometry and matrices, regex, chess search, SQL tidy
+- Courses from GitHub: 52 courses (zoomcamps, OSSU, Made With ML, Zero to Hero, d2l…), taught from their own text, notebooks runnable
 - Faster lessons: off-thread index, cached rendering, steadier prompt cache, idle unload
 - The redesign, with the classic design in Settings
 
 ## Now
 
-- [ ] **Courses from GitHub.** Learn from repos such as DataTalksClub's zoomcamps, Made With ML, Karpathy's Zero to Hero and OSSU: modules become lessons with the repo's text shown and credited, and notebooks and exercises run in the lesson. Partial work: worktree `tide-ghcourses`.
 - [ ] **A fuller code editor.** monaco-vscode-api, so lesson code feels like VS Code.
 - [ ] **Faster lesson starts and fewer stalls.** The first answer of a new lesson takes 14–27 s. Gemma stalls in about 14% of turns, and retries run one after another. The turn after a long lesson is trimmed re-reads it all. Partial work: worktree `tide-fast2`.
 - [ ] **Everyday check: Python and ML from zero.** Run real lessons the way you use Tide ("I want to learn Python", "I want to learn ML"), over several sessions, and fix what goes wrong.
@@ -41,6 +41,8 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - [ ] **Better web clipper and search.** Compare Defuddle with the current clipper, and try a reranker; adopt only if the numbers win.
 - [ ] **Live preview leftovers.** The properties block at the top of a note, embedded notes, and tables and maths inside lists.
 - [ ] **Small fixes.**
+  - Course lessons: Gemma often writes the plan before probing; "Show me" on a course's first step shows the reading again.
+  - Course notebooks needing IPython, data files or internet can't run yet; homework has no generated tests.
   - Long regex diagrams scroll sideways.
   - Matrix labels sit under the drag handles.
   - A notebook holding only its roadmap is left off the knowledge map.

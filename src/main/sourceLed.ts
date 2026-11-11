@@ -21,6 +21,7 @@ import { normalizeTitle } from '@shared/outline'
 import { ASKED, GO_ON, ownWords } from '@shared/session'
 import { ledTap, ownedCandidates, quoteNote, webCandidates, type GatherDeps, type GatherOptions } from '@shared/sourceGather'
 import { chooseReading, ledState, planTurn, turnNote, withoutReadings, type Candidate, type Said, type StepReading } from '@shared/sourceLed'
+import { courseReading, type Section } from '@shared/courses'
 import type { ChatEvent, ChatMessage, ChatRequest } from '@shared/types'
 import { publicUrl, readWebpage, webSearch } from './agent'
 import { filedUnder, getNotebooks } from './learn'
@@ -52,6 +53,8 @@ interface Lesson {
   searched: Set<string>
   chosen: Map<string, StepReading>
   preparing: Promise<void>
+  /** [courses] A course's lesson: its text, and the sections the plan's steps are */
+  course?: { candidate: Candidate; sections: Section[] }
 }
 
 const lessons = new Map<string, Lesson>()
@@ -87,14 +90,16 @@ async function privateTest(): Promise<(path: string) => boolean> {
 
 async function lessonFor(req: ChatRequest): Promise<Lesson> {
   const topic = req.topic!
-  const key = createHash('sha1').update(`${topic}\n${text(req.messages.find((m) => m.role === 'user'))}`).digest('hex')
+  const key = createHash('sha1').update(`${topic}\n${req.course ? `${req.course.id}/${req.course.lesson}\n` : ''}${text(req.messages.find((m) => m.role === 'user'))}`).digest('hex')
   const had = lessons.get(key)
   if (had) return had
   // Private: its place is a private project (when that can't be told, it is treated as one), or it is about your Metabase
   const where = req.scope.kind !== 'none' && req.scope.kind !== 'vault' ? req.scope.path : ''
   const secret = (where ? await privatePath(where).catch(() => true) : false) || (metabaseReady() && (aboutMetabase(topic, metabaseHost()) || req.messages.some((m) => aboutMetabase(text(m), metabaseHost()))))
   const isPrivate = await privateTest().catch(() => () => true)
-  const web = !secret && req.web !== false && getSettings().ai.webSearch?.provider !== 'off'
+  // [courses] A course's lesson is taught from the course: nothing is searched for online
+  const course = req.course ? await import('./courses').then((c) => c.courseLessonSource(req.course!.id, req.course!.lesson)).catch(() => null) : null
+  const web = !course && !secret && req.web !== false && getSettings().ai.webSearch?.provider !== 'off'
   const deps: GatherDeps = {
     search: (q, limit) => searchNow(q, limit),
     chunks: (path) => chunksNow(path),
@@ -110,10 +115,12 @@ async function lessonFor(req: ChatRequest): Promise<Lesson> {
     // humanities: a free book's licence goes under readings taken from it
     licenceOf: bookSourceSync
   }
-  const lesson: Lesson = { opts: { topic, private: secret, web }, where, deps, candidates: [], have: new Set(), owned: new Set(), searched: new Set(), chosen: new Map(), preparing: Promise.resolve() }
+  const lesson: Lesson = { opts: { topic, private: secret, web }, where, deps, candidates: course ? [course.candidate] : [], have: new Set(), owned: new Set(), searched: new Set(), chosen: new Map(), preparing: Promise.resolve(), ...(course ? { course } : {}) }
   // The topic's sources are gathered while the tutor finds out what you know: ready by the time it plans
   lesson.preparing = (async () => {
     own(lesson, topic)
+    // [courses] The lessons of courses you imported that teach the topic: on this Mac, so private lessons may use them too
+    if (!course) for (const c of await import('./courses').then((m) => m.courseCandidates(topic)).catch(() => [] as Candidate[])) lesson.candidates.push(c)
     if (!web) return
     for (const c of await kept(topic)) if (c.url && !lesson.have.has(c.url)) (lesson.have.add(c.url), lesson.candidates.push(c))
     if (lesson.candidates.some((c) => c.url)) return
@@ -143,6 +150,12 @@ function readingFor(l: Lesson, i: number, steps: string[]): StepReading | null {
   const key = `${i}:${step}`
   const had = l.chosen.get(key)
   if (had) return had
+  // [courses] A course's lesson: the step is one of its sections, shown as the course wrote it
+  const fromCourse = l.course ? courseReading(l.course, i, step, l.opts.topic) : null
+  if (fromCourse) {
+    l.chosen.set(key, fromCourse)
+    return fromCourse
+  }
   own(l, `${step} ${l.opts.topic}`)
   // A book or page on another language is never the reading, however well it matches the step
   const lang = `${l.opts.topic} ${l.where}`

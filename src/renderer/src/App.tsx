@@ -46,6 +46,7 @@ const PdfView = lazy(() => import('./components/PdfView').then((m) => ({ default
 const EpubView = lazy(() => import('./components/EpubView').then((m) => ({ default: m.EpubView })))
 const LabView = lazy(() => import('./components/LabView').then((m) => ({ default: m.LabView })))
 const WorkshopView = lazy(() => import('./components/WorkshopView').then((m) => ({ default: m.WorkshopView })))
+const CoursesView = lazy(() => import('./components/CoursesView').then((m) => ({ default: m.CoursesView })))
 const CodeView = lazy(() => import('./components/CodeView').then((m) => ({ default: m.CodeView })))
 const CanvasView = lazy(() => import('./components/CanvasView').then((m) => ({ default: m.CanvasView })))
 const GraphView = lazy(() => import('./components/GraphView').then((m) => ({ default: m.GraphView })))
@@ -398,6 +399,7 @@ export default function App() {
   else if (view.kind === 'learn') main = <LearnView />
   else if (view.kind === 'practice') main = <PracticeView />
   // Guided projects: a small hook (components/WorkshopView.tsx)
+  else if (view.kind === 'courses') main = <CoursesView key={view.id ?? ''} id={view.id} lesson={view.lesson} area={view.area} />
   else if (view.kind === 'workshop') main = <WorkshopView key={`${view.id ?? ''}:${view.from?.topic ?? ''}:${view.nonce ?? ''}`} id={view.id} from={view.from} />
   else if (view.kind === 'new-topic') main = <NewTopicView key={view.nonce ?? 'new'} initial={view.topic} initialGoal={view.goal} auto={view.auto} />
   else if (view.kind === 'chat') main = <ChatPage id={view.id} />

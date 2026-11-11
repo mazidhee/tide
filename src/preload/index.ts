@@ -146,6 +146,20 @@ const api: TideApi = {
     get: invoke('lessons:get'),
     challenge: invoke('lessons:challenge')
   },
+  courses: {
+    list: invoke('courses:list'),
+    get: invoke('courses:get'),
+    import: invoke('courses:import'),
+    update: invoke('courses:update'),
+    remove: invoke('courses:remove'),
+    lesson: invoke('courses:lesson'),
+    file: invoke('courses:file'),
+    mark: invoke('courses:mark'),
+    search: invoke('courses:search'),
+    saveToNotes: invoke('courses:saveToNotes'),
+    preview: invoke('courses:preview'),
+    onProgress: (cb) => subscribe<import('../main/courses').ImportPhase>('courses:progress', cb)
+  },
   workshop: {
     list: invoke('workshop:list'),
     start: invoke('workshop:start'),

@@ -138,13 +138,13 @@ function chunkPdf(path: string, pages: string[]): Chunk[] {
 // takes about a millisecond. Only files that changed since last time are read again. If the module
 // can't load, an in-memory MiniSearch index does the same job, more slowly.
 
-type Hit = Chunk & { score: number }
+export type Hit = Chunk & { score: number }
 
 /**
  * Writes return when done; reads see only what was committed. With the Rust module every call
  * runs off the main thread (a commit syncs a dozen files and took 70-490 ms when it ran on it).
  */
-interface Backend {
+export interface Backend {
   replace(path: string, chunks: Chunk[]): Promise<void>
   remove(path: string): Promise<void>
   commit(): Promise<void>
@@ -224,6 +224,9 @@ function memoryBackend(): Backend {
     chunksNow: (path) => byPath.get(path) ?? []
   }
 }
+
+/** An index of its own at `dir` (Tantivy, else in memory): for text that isn't in your notes, such as an imported course (main/courses) */
+export const openChunkIndex = (dir: string): Backend => nativeBackend(dir) ?? memoryBackend()
 
 let backend: Backend | null = null
 let backendFor = ''

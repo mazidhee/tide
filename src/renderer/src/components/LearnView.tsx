@@ -7,6 +7,7 @@ import { PillSegment, PromptBox } from './PromptBox'
 import { openingRequest } from '../lib/openingRequest'
 import { PixelScene } from './PixelScene'
 import { WorkshopShelf } from './WorkshopView'
+import { CourseShelf } from './CoursesView'
 
 type LearnMode = SessionMode | 'exam' | 'mixed'
 
@@ -282,6 +283,8 @@ export function LearnView() {
 
         {/* Hook: guided projects (components/WorkshopView.tsx) */}
         <WorkshopShelf />
+        {/* Hook: open courses from GitHub (components/CoursesView.tsx) */}
+        <CourseShelf />
 
         {weak.length > 0 && (
           <section className="lrn-weak">

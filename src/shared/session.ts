@@ -9,6 +9,7 @@ import { chooseStrategy, STRATEGY_RULES, type Strategy, type StrategyChoice } fr
 import type { FlowStep, ProjectKind } from './project'
 import { parseAppraise, type AppraiseRow } from './humanities'
 import { lessonKit, type SubjectProfile } from './subjects'
+import { courseRules, type CourseRef } from './courses'
 
 /**
  * Learning sessions are a conversation where the tutor writes Markdown plus a few tags the UI
@@ -259,6 +260,8 @@ export interface SessionSetup {
     why?: boolean
     /** The subject's profile when already decided (a roadmap's, or the model's); else read off the topic (src/shared/subjects.ts) */
     subject?: SubjectProfile
+    /** A lesson of an open course imported from GitHub (shared/courses): taught from its own text, in its sections' order */
+    course?: CourseRef
   }
 }
 
@@ -274,7 +277,8 @@ export function withStrategy(setup: SessionSetup, scope: ChatScope): SessionSetu
 
 /** The router's choice for a lesson that hasn't been told how to teach, with how sure it is */
 export function strategyChoice(setup: SessionSetup, scope: ChatScope): StrategyChoice | null {
-  if (setup.mode !== 'teach' || setup.options?.strategy || setup.options?.retest) return null
+  // A course's lesson is taught in the course's own order, from its own text
+  if (setup.mode !== 'teach' || setup.options?.strategy || setup.options?.retest || setup.options?.course) return null
   const project = setup.options?.project
   const source = project ? (project.kind === 'build' ? 'brief' : 'design-doc') : scope.kind === 'pages' ? 'book' : scope.kind === 'note' ? 'note' : scope.kind === 'folder' ? 'notebook' : 'none'
   return chooseStrategy({ text: setup.topic, source, subject: project?.name ?? (scope.kind === 'folder' ? scope.path : undefined), can: { canvas: true, lab: true, code: true, maths: true } })
@@ -356,7 +360,8 @@ export function sessionInstructions(setup: SessionSetup): string {
   // Subject hook (any-subject, src/shared/subjects.ts): the subject's own toolkit, and the hands-on and simulation rules only where they apply.
   // The humanities' marking (<appraise>) and theology's rules come through it too, for a subject that is mainly texts and arguments or history
   const kit = lessonKit(setup.topic, setup.options?.subject)
-  const extra = [!setup.options?.refresh && !setup.options?.project ? BIG_PICTURE : '', GROUNDED, kit.handsOn ? HANDS_ON : '', kit.sims, kit.toolkit, kit.humanities, setup.options?.why ? WHY_RULES : ''].filter(Boolean)
+  const course = setup.options?.course
+  const extra = [!setup.options?.refresh && !setup.options?.project && !course ? BIG_PICTURE : '', course ? courseRules(course).trim() : '', GROUNDED, kit.handsOn ? HANDS_ON : '', kit.sims, kit.toolkit, kit.humanities, setup.options?.why ? WHY_RULES : ''].filter(Boolean)
   return extra.length ? `${base.trimEnd()}\n\n${extra.join('\n\n')}\n` : base
 }
 

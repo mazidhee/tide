@@ -195,7 +195,8 @@ async function lessonParts(k: Engine, record: LessonRecord): Promise<{ concepts:
   if (record.options?.review?.items.length) return null
   const d = digestLesson(record)
   if (!d) return null
-  const { area, isPrivate } = await placeOf(scopePath(record.scope))
+  // A course's lesson counts under the course, as a subject of its own on the map
+  const { area, isPrivate } = record.options?.course ? { area: record.options.course.title, isPrivate: false } : await placeOf(scopePath(record.scope))
   const shared = isPrivate ? { private: true } : {}
   const source = `lesson:${record.id}`
   // Review now with nothing kept, or a Quick check: on the concept they were started from (a topic, or a part of one)

@@ -38,6 +38,8 @@ export async function saveLesson(input: Omit<LessonRecord, 'started' | 'updated'
   await noteLesson(record).catch(() => {})
   // And what it shows is added to the picture of what they know
   await noteLessonKnowledge(record).catch(() => {})
+  // A course's lesson moves the course on (main/courses)
+  if (record.options?.course) await import('./courses').then((c) => c.noteCourseLesson(record)).catch(() => {})
   return summarise(record)
 }
 

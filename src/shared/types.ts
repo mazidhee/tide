@@ -174,6 +174,8 @@ export interface ChatRequest {
   topic?: string
   /** [source-led] false when "Let the tutor explain" is chosen for this lesson; otherwise a step is taught from a source when a good one is found (shared/sourceLed) */
   sourceLed?: boolean
+  /** [courses] A lesson of an imported course: its own text is what the lesson is taught from (main/courses, main/sourceLed) */
+  course?: { id: string; lesson: string }
 }
 
 export interface StoredMessage {
@@ -846,6 +848,25 @@ export interface TideApi {
     load(id: string, path: string): Promise<import('./lab').LabLoaded>
   }
   /** Guided projects (shared/workshop.ts): built in stages, reviewed against tests */
+  /** Open courses from GitHub (main/courses.ts, shared/courses.ts) */
+  courses: {
+    list(): Promise<import('../main/courses').CourseCard[]>
+    get(id: string): Promise<import('../main/courses').CourseDetail | null>
+    /** Fetches it into Tide's app data, reads it as a course and indexes it */
+    import(id: string): Promise<import('../main/courses').Imported>
+    /** git pull (or a fresh download), then reads it again */
+    update(id: string): Promise<import('../main/courses').Imported>
+    remove(id: string): Promise<void>
+    lesson(id: string, lesson: string): Promise<import('../main/courses').LessonContent | null>
+    file(id: string, path: string): Promise<string | null>
+    mark(id: string, lesson: string, done: boolean): Promise<import('./courses').CourseProgress>
+    search(q: string): Promise<{ course: string; path: string; title: string; heading: string; text: string; score: number }[]>
+    /** Copies its lessons into your notes folder, under Courses/ */
+    saveToNotes(id: string): Promise<{ folder: string; files: number }>
+    /** The course's README from GitHub, to look at before importing it (not saved) */
+    preview(id: string): Promise<{ markdown: string; url: string } | null>
+    onProgress(cb: (e: import('../main/courses').ImportPhase) => void): () => void
+  }
   workshop: {
     list(): Promise<import('./workshop').WorkshopCard[]>
     /** Starts a project, or returns it as it stands when already started */
