@@ -38,7 +38,12 @@ function scan(): void {
       sim.destroy()
       mounted.delete(sim)
     }
-  document.querySelectorAll<HTMLElement>('pre.code-block[data-lang="sim"]').forEach((pre) => void renderBlock(pre))
+  // A small model often labels the block "json" (or nothing) and gets everything else right:
+  // what makes it a simulation is its "kind", not the label on the fence
+  document.querySelectorAll<HTMLElement>('pre.code-block').forEach((pre) => {
+    const lang = (pre.dataset.lang ?? '').toLowerCase()
+    if (lang === 'sim' || ((lang === 'json' || lang === '') && /^\s*\{\s*"kind"\s*:\s*"(neural-net|attention|gradient-descent|softmax)"/.test(pre.querySelector('code')?.textContent ?? ''))) void renderBlock(pre)
+  })
 }
 
 /**

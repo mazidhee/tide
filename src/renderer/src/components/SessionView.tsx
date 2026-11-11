@@ -658,6 +658,22 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
 
   submitRef.current = () => submit()
 
+
+  // Ask about this, pressed on a part of a live simulation: in a lesson it goes straight to the
+  // tutor as your question, saying which part and what it showed
+  const askAboutRef = useRef<(label: string) => void>(() => {})
+  askAboutRef.current = (label) => submit(`${ASKED}In the simulation, explain ${label}: what it is doing here, and why it has that value.`)
+  useEffect(() => {
+    const onAsk = (e: Event) => {
+      const label = (e as CustomEvent<{ label?: string }>).detail?.label
+      if (!label) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      askAboutRef.current(label)
+    }
+    document.addEventListener('tide:ask-about', onAsk, true)
+    return () => document.removeEventListener('tide:ask-about', onAsk, true)
+  }, [])
   const runMine = async () => {
     if (!currentAsk || running) return
     setRunning(true)

@@ -281,7 +281,8 @@ function scan() {
   document.querySelectorAll<HTMLElement>('pre.code-block[data-lang]').forEach((pre) => {
     const lang = (pre.dataset.lang ?? '').toLowerCase()
     if (pre.dataset[DONE] || !pre.isConnected) return
-    if (lang === 'chart') mountChart(pre)
+    // A chart labelled "json" by mistake is still a chart: a JSON object that opens with its query
+    if (lang === 'chart' || (lang === 'json' && /^\s*\{\s*"sql"\s*:/.test(pre.querySelector('code')?.textContent ?? ''))) mountChart(pre)
     else if (lang === 'sql' || lang === 'sqlite') mountSql(pre)
   })
 }
