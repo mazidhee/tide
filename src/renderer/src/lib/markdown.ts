@@ -95,7 +95,7 @@ function lru<V>(max: number) {
 // millisecond each
 const mathCache = lru<string>(2000)
 
-function renderMath(src: string, display: boolean) {
+export function renderMath(src: string, display: boolean) {
   const key = `${display ? 'D' : 'I'}${src}`
   const had = mathCache.get(key)
   if (had !== undefined) return had

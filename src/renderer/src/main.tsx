@@ -28,6 +28,8 @@ import './styles/tide/library.css'
 import './styles/tide/know.css'
 import './styles/tide/settings.css'
 import './styles/tide/rest.css'
+// The note editor's live preview, after both designs' prose so it can match them
+import './styles/livePreview.css'
 import './styles/tide/projects.css'
 // humanities: the EPUB reader, Discuss this, reading together, appraisals, free books
 import './styles/humanities.css'
