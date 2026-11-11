@@ -69,15 +69,10 @@ def ask(messages, tenant, max_tokens=150, tools=True, transient=NOW, temperature
     return (first if first is not None else time.time() - t0), timings, text
 
 
-def next_token(messages, tenant):
-    """The model's five likeliest next tokens after this prompt, with their log-probabilities: a
-    direct reading of the state the prompt left it in, which is exactly what the cache restores."""
-    body = {'model': PREFIX['model'], 'messages': messages, 'tools': PREFIX['tools'], 'transient_context': NOW, 'max_tokens': 1, 'temperature': 0, 'stream': False, 'logprobs': True, 'top_logprobs': 5}
-    req = urllib.request.Request(URL + '/v1/chat/completions', data=json.dumps(body).encode(), headers={'Content-Type': 'application/json', 'X-APC-Tenant': tenant})
-    with urllib.request.urlopen(req, timeout=900) as r:
-        d = json.loads(r.read())
-    first = ((d['choices'][0].get('logprobs') or {}).get('content') or [{}])[0]
-    return {t['token']: t['logprob'] for t in first.get('top_logprobs') or []}, (d.get('usage') or {}).get('prompt_tokens_details', {}).get('cached_tokens', 0)
+def visible(text):
+    """An answer without the model's hidden thinking markers"""
+    import re
+    return re.sub(r'<\|?channel\|?>(thought)?', '', text).strip()
 
 
 def same_until(a, b):
@@ -243,34 +238,37 @@ def check():
         print(('PASS  ' if ok else 'FAIL  ') + text, flush=True)
 
     # 1. The same prompt, continued from the cache and read from scratch by a server that has never
-    # seen it. Two things are compared. The model's next-token probabilities, which depend on the
-    # whole state the cache restored: they must agree to within rounding. And the full answers at
-    # temperature 0, beside a control (two uncached runs against each other), because this server
-    # is not exactly repeatable even with itself: near-ties between words can fall either way.
-    worst = 0.0
-    for i, q in enumerate(QUESTIONS[:6]):
-        hot, cold, cold2 = f'{run}-hot-{i}', f'{run}-never-{i}', f'{run}-never2-{i}'
-        convo = long_history(3 + i, f'{run}-{i}')
-        ask(convo, hot, 1)                                        # read-back
-        ask(background(f'{run}-{i}'), hot, 12, tools=False, transient=None)
-        ask(convo, hot, 1)                                        # keep-warm
-        turn = convo + [{'role': 'user', 'content': q}]
-        p_hot, reused = next_token(turn, hot)
-        p_cold, reused_cold = next_token(turn, cold)
-        shared = set(p_hot) & set(p_cold)
-        gap = max((abs(p_hot[t] - p_cold[t]) for t in shared), default=9.0)
-        top_same = bool(p_hot) and max(p_hot, key=p_hot.get) == max(p_cold, key=p_cold.get)
-        worst = max(worst, gap)
-        verdict(reused > 0 and reused_cold == 0 and top_same and gap < 0.05,
-                f"same next-token probabilities from the cache ({reused} tokens reused) and from scratch: largest difference {gap:.4f} in log-probability, same first choice: {top_same} | {q}")
-        _, _, a_hot = ask(turn, hot, 160, temperature=0)
-        _, _, a_cold = ask(turn, cold, 160, temperature=0)
-        _, _, a_cold2 = ask(turn, cold2, 160, temperature=0)
-        d_cache, d_control = same_until(a_hot, a_cold), same_until(a_cold, a_cold2)
-        say = lambda n: 'identical' if n < 0 else f'differ from character {n}'
-        # The cache may not make answers any less repeatable than the server already is
-        verdict(d_cache < 0 or d_control >= 0, f"   full answers, cached against uncached: {say(d_cache)}; control, uncached against uncached: {say(d_control)}")
-    print(f"      largest next-token difference over all prompts: {worst:.4f}")
+    # seen it, at temperature 0. First with the draft model off: plain greedy decoding, where the
+    # only thing that can change an answer is the state the cache restored, so the answers must be
+    # identical. Then with the draft model on, as Tide runs it, beside a control (two uncached runs
+    # against each other): speculative decoding lets near-ties between words fall either way, so
+    # the cache is held to being no less repeatable than the server is with itself.
+    drafter = call('GET', '/v1/settings')['current'].get('draft_model')
+    say = lambda n: 'identical' if n < 0 else f'differ from character {n}'
+
+    def compare(label, questions, strict):
+        for i, q in enumerate(questions):
+            hot, cold, cold2 = f'{run}-{label}-hot-{i}', f'{run}-{label}-never-{i}', f'{run}-{label}-never2-{i}'
+            convo = long_history(3 + i, f'{run}-{label}-{i}')
+            ask(convo, hot, 1)                                        # read-back
+            ask(background(f'{run}-{label}-{i}'), hot, 12, tools=False, transient=None)
+            ask(convo, hot, 1)                                        # keep-warm
+            turn = convo + [{'role': 'user', 'content': q}]
+            _, tm_hot, a_hot = ask(turn, hot, 160, temperature=0)
+            _, tm_cold, a_cold = ask(turn, cold, 160, temperature=0)
+            _, _, a_cold2 = ask(turn, cold2, 160, temperature=0)
+            d_cache, d_control = same_until(a_hot, a_cold), same_until(a_cold, a_cold2)
+            used = tm_hot['cache_n'] > 0 and tm_cold['cache_n'] == 0
+            ok = used and (d_cache < 0 if strict else (d_cache < 0 or d_control >= 0))
+            verdict(ok, f"{label}: cached ({tm_hot['cache_n']} tokens reused, {tm_hot['prompt_n']} read) against uncached ({tm_cold['prompt_n']} read): {say(d_cache)}; "
+                        f"control, uncached against uncached: {say(d_control)} | {q}" + ('' if used else '  [the cache was not used: nothing compared]'))
+
+    if drafter:
+        settle({'draft_model': None})
+    compare('draft model off', QUESTIONS[:4], strict=True)
+    if drafter:
+        settle({'draft_model': drafter, 'draft_kind': 'mtp'})
+        compare('draft model on', QUESTIONS[3:7], strict=False)
 
     # 2. An earlier message is edited after the conversation was cached: the answer follows the edit
     t = f'{run}-edit'
@@ -279,8 +277,9 @@ def check():
                            {'role': 'user', 'content': 'Explain a carry bit briefly.'}, {'role': 'assistant', 'content': PARA * 3}]
     q = [{'role': 'user', 'content': 'What is my locker number? Reply with the number only.'}]
     ask(locker(17), t, 1)
-    _, tm17, a17 = ask(locker(17) + q, t, 12, temperature=0)
-    _, tm42, a42 = ask(locker(42) + q, t, 12, temperature=0)
+    _, tm17, a17 = ask(locker(17) + q, t, 60, temperature=0)
+    _, tm42, a42 = ask(locker(42) + q, t, 60, temperature=0)
+    a17, a42 = visible(a17), visible(a42)
     verdict('17' in a17 and '42' in a42 and '17' not in a42 and tm42['cache_n'] < tm17['cache_n'],
             f"an edited earlier message is read again, not answered from the old state: said {a17.strip()!r}, then after the edit {a42.strip()!r} (reused {tm17['cache_n']} then only {tm42['cache_n']} tokens)")
 
@@ -289,16 +288,19 @@ def check():
         return system() + [{'role': 'user', 'content': 'Give me a code word to remember.'}, {'role': 'assistant', 'content': f'Your code word is {word}. ' + PARA * 3}]
     q = [{'role': 'user', 'content': 'What code word did you give me? Reply with the word only.'}]
     ask(fact('HARBOUR'), t, 1)
-    _, _, a1 = ask(fact('HARBOUR') + q, t, 12, temperature=0)
-    _, _, a2 = ask(fact('LANTERN') + q, t, 12, temperature=0)
+    _, _, a1 = ask(fact('HARBOUR') + q, t, 60, temperature=0)
+    _, _, a2 = ask(fact('LANTERN') + q, t, 60, temperature=0)
+    a1, a2 = visible(a1), visible(a2)
     verdict('HARBOUR' in a1.upper() and 'LANTERN' in a2.upper() and 'HARBOUR' not in a2.upper(), f"an edited earlier answer is read again: {a1.strip()!r} then {a2.strip()!r}")
 
     # 4. Another conversation never sees this one's state
-    _, _, other = ask(system() + [{'role': 'user', 'content': 'What is my locker number? If I never told you, reply with the single word UNKNOWN.'}], t, 12, temperature=0)
+    _, _, other = ask(system() + [{'role': 'user', 'content': 'What is my locker number? If I never told you, reply with the single word UNKNOWN.'}], t, 60, temperature=0)
+    other = visible(other)
     verdict('17' not in other and '42' not in other, f"a different conversation in the same cache knows nothing of it: {other.strip()!r}")
 
     # 5. A conversation cut short (messages removed from the end) continues from the shorter state
-    _, _, cut = ask(locker(17)[:3] + [{'role': 'user', 'content': 'Have I asked you about a carry bit yet? Reply YES or NO only.'}], t, 6, temperature=0)
+    _, _, cut = ask(locker(17)[:3] + [{'role': 'user', 'content': 'Have I asked you about a carry bit yet? Reply YES or NO only.'}], t, 60, temperature=0)
+    cut = visible(cut)
     verdict('NO' in cut.upper(), f"a conversation with its last turns removed doesn't remember them: {cut.strip()!r}")
 
     print(f"\n{'All checks passed' if not failed else f'{failed} check(s) failed'}")

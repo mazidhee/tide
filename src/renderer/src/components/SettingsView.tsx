@@ -969,6 +969,7 @@ function ToolsSection() {
               })
             }
             options={[
+              { value: 'auto', label: 'Fastest available' },
               { value: 'local', label: 'Private, on this Mac' },
               { value: 'wikipedia', label: 'Wikipedia only' },
               { value: 'brave', label: 'Brave Search' },
@@ -979,6 +980,11 @@ function ToolsSection() {
             ]}
           />
         </Row>
+        {ai.webSearch?.provider === 'auto' && (
+          <Row label="How it chooses" hint="Each search goes to the quickest thing that can answer it">
+            <p className="set-note">You.com when its key is saved and its credit isn’t spent: one call, about half a second, with passages from each page, and nothing running on this Mac. Otherwise the search engine on this Mac, then Wikipedia. Lessons on a private project or your Metabase always search from this Mac.</p>
+          </Row>
+        )}
         {(ai.webSearch?.provider === 'brave' || ai.webSearch?.provider === 'tavily' || ai.webSearch?.provider === 'you') && (
           <Row label="Key" hint="Kept in your Keychain">
             <button className="btn small" onClick={() => app.setView({ kind: 'settings', section: 'connections' as never })}>
@@ -998,8 +1004,8 @@ function ToolsSection() {
         )}
       </Group>
       <Group title="Helpers on this Mac">
-        {provider === 'local' && (
-          <ToolSetup label="Web search engine" check={window.tide.runner.searchStatus} setup={window.tide.runner.setupSearch} onReady={() => saveAi({ webSearch: { ...ai.webSearch, provider: 'searxng', url: LOCAL_SEARCH } })} />
+        {(provider === 'local' || provider === 'auto') && (
+          <ToolSetup label="Web search engine" hint="Starts when you search, stops when you don’t" check={window.tide.runner.searchStatus} setup={window.tide.runner.setupSearch} onReady={() => provider === 'local' && saveAi({ webSearch: { ...ai.webSearch, provider: 'searxng', url: LOCAL_SEARCH } })} />
         )}
         <ToolSetup label="Maths checker" hint="Python with SymPy" check={window.tide.runner.mathStatus} setup={window.tide.runner.setupMath} />
         <ToolSetup label="Data libraries" hint="NumPy, pandas, Matplotlib" check={window.tide.runner.librariesStatus} setup={window.tide.runner.setupLibraries} />

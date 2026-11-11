@@ -72,7 +72,7 @@ export function stopSearch(): void {
 }
 
 /**
- * Before a search: the engine is running, or is started now (about two seconds). A no-op when
+ * Before a search: the engine is running, or is started now (about seven seconds from cold). A no-op when
  * the engine isn't Tide's own program (Docker, or someone else's server).
  */
 export async function ensureSearch(): Promise<void> {
@@ -182,7 +182,8 @@ export async function setupSearch(): Promise<SearchStatus> {
   const native = await setupNative().catch((e) => ({ ready: false, detail: (e as Error).message }))
   if (native.ready) {
     const ai = getSettings().ai
-    updateSettings({ ai: { ...ai, webSearch: { ...ai.webSearch, provider: 'searxng', url: LOCAL_URL } } })
+    // "Fastest available" stays as chosen: it uses this engine when it needs to
+    if (ai.webSearch?.provider !== 'auto') updateSettings({ ai: { ...ai, webSearch: { ...ai.webSearch, provider: 'searxng', url: LOCAL_URL } } })
     return native
   }
   if (!dockerBin()) return { ready: false, detail: `Private search couldn’t be set up: ${native.detail}. (Docker Desktop also works, if you have it.)` }
@@ -220,7 +221,7 @@ export async function setupSearch(): Promise<SearchStatus> {
   }
   if (!(await waitUntilReachable(60_000))) return { ready: false, detail: 'The search engine started but is not answering yet. Give it a minute and check again.' }
   const ai = getSettings().ai
-  updateSettings({ ai: { ...ai, webSearch: { ...ai.webSearch, provider: 'searxng', url: LOCAL_URL } } })
+  if (ai.webSearch?.provider !== 'auto') updateSettings({ ai: { ...ai, webSearch: { ...ai.webSearch, provider: 'searxng', url: LOCAL_URL } } })
   return { ready: true, detail: 'Private web search is running on this Mac.' }
 }
 

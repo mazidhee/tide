@@ -11,7 +11,7 @@ import { aboutMetabase } from '@shared/metabase'
 import { metabaseHost, metabaseReady, metabaseTool } from './metabase'
 import { loadImages, type NoteImage } from './noteImages'
 import { pagesToRead } from './books'
-import { ensureSearch, LOCAL_URL } from './websearch'
+import { ensureSearch, LOCAL_URL, nativeSearch } from './websearch'
 import { privatePath } from './projects'
 import { requestSent, timeTurn, toolRan } from './speed'
 import { readingLabel } from '@shared/books'
@@ -20,7 +20,7 @@ import { addTask, describeTasks, feedbackOnTask, findTask, searchTasks, thingsAv
 import { buildLink, type DeepLink } from '@shared/deeplink'
 import { JSDOM } from 'jsdom'
 import { Readability } from '@mozilla/readability'
-import type { ChatEvent, ChatMessage, ChatRequest, ContextSource, AgentStep } from '@shared/types'
+import type { AgentStep, AISettings, ChatEvent, ChatMessage, ChatRequest, ContextSource } from '@shared/types'
 import { getSettings } from './settings'
 import { localSampling } from './sampling'
 import { getChunks, indexReady, search } from './search'
@@ -248,6 +248,8 @@ interface WebResult {
 export interface SearchOptions {
   when?: 'any' | 'year' | 'month' | 'week' | 'day'
   news?: boolean
+  /** The turn is about a private project or your Metabase: "fastest available" keeps the search on this Mac */
+  onThisMac?: boolean
 }
 
 const isoDay = (d: unknown) => {
@@ -320,9 +322,28 @@ async function searchPapersNow(query: string): Promise<WebResult[]> {
 
 const stripTags = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#39;/g, "'")
 
+/**
+ * "Fastest available" picks for each search: You.com when its key is saved and its credit isn't
+ * spent (one call, about half a second, several passages from each page, nothing running on this
+ * Mac); otherwise Tide's own engine on this Mac (started for the search, a second or so once up);
+ * otherwise Wikipedia. A turn about a private project or your Metabase never uses the cloud one.
+ */
 async function webSearchNow(query: string, opts: SearchOptions = {}): Promise<WebResult[]> {
-  const { webSearch: cfg } = getSettings().ai
-  const provider = cfg?.provider ?? 'wikipedia'
+  const cfg = getSettings().ai.webSearch
+  const chosen = cfg?.provider ?? 'wikipedia'
+  if (chosen !== 'auto') return searchWith(chosen, cfg?.url, query, opts)
+  const used = useOf('you')
+  if (!opts.onThisMac && getKey('you') && used.thisMonth < YOU_MONTHLY && used.total < YOU_TOTAL) {
+    const found = await searchWith('you', undefined, query, opts, true).catch(() => [] as WebResult[])
+    if (found.length) return found
+  }
+  if (nativeSearch()) return searchWith('searxng', LOCAL_URL, query, opts)
+  return wikipediaSearch(query)
+}
+
+/** One search with one provider. `orNothing`: when it can't answer, return nothing (the caller has another to try) rather than Wikipedia's results. */
+async function searchWith(provider: Exclude<NonNullable<NonNullable<AISettings['webSearch']>['provider']>, 'auto'>, url: string | undefined, query: string, opts: SearchOptions, orNothing = false): Promise<WebResult[]> {
+  const cfg = getSettings().ai.webSearch
   if (provider === 'off') throw new Error('Web search is turned off in Settings.')
   // Keys live in the Keychain now; one typed into an older version is still read from settings
   const key = provider === 'you' ? getKey('you') || '' : provider === 'brave' || provider === 'tavily' ? getKey(provider) || cfg?.apiKey || '' : ''
@@ -331,17 +352,19 @@ async function webSearchNow(query: string, opts: SearchOptions = {}): Promise<We
     // A one-time credit, not a monthly one: stop well before it's gone (about $5 per 1,000 searches)
     if (!key) throw new Error('Add a You.com key in Settings › Connections to search the web.')
     const used = useOf('you')
-    if (used.thisMonth >= YOU_MONTHLY || used.total >= YOU_TOTAL) return wikipediaSearch(query)
+    const instead = () => (orNothing ? Promise.resolve([] as WebResult[]) : wikipediaSearch(query))
+    if (used.thisMonth >= YOU_MONTHLY || used.total >= YOU_TOTAL) return instead()
     noteUse('you')
     const params = new URLSearchParams({ query, count: '8' })
     if (opts.when && opts.when !== 'any') params.set('freshness', opts.when)
     const res = await fetch(`https://ydc-index.io/v1/search?${params}`, { headers: { 'X-API-Key': key, Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) })
     // Out of credit, a bad key or too many at once: Wikipedia answers instead
-    if (!res.ok) return wikipediaSearch(query)
+    if (!res.ok) return instead()
     type YouHit = { title?: string; url?: string; description?: string; snippets?: string[]; page_age?: string }
     const json = (await res.json()) as { results?: { web?: YouHit[]; news?: YouHit[] } | YouHit[]; hits?: YouHit[] }
     const hits = Array.isArray(json.results) ? json.results : [...((opts.news ? json.results?.news : json.results?.web) ?? []), ...(json.hits ?? [])]
-    return uniqueResults(hits.filter((h) => h.url).map((h) => ({ title: h.title ?? h.url!, url: h.url!, snippet: stripTags(h.description || h.snippets?.[0] || '').slice(0, 300), date: isoDay(h.page_age) })), 8)
+    return uniqueResults(hits.filter((h) => h.url).map((h) => ({ title: h.title ?? h.url!, url: h.url!, // Its passages from the page itself say more than the one-line description: often enough to answer from, without opening the page
+      snippet: stripTags([h.description, ...(h.snippets ?? []).slice(0, 3)].filter(Boolean).join(' … ')).slice(0, 700), date: isoDay(h.page_age) })), 8)
   }
   noteUse(provider)
 
@@ -375,14 +398,14 @@ async function webSearchNow(query: string, opts: SearchOptions = {}): Promise<We
   }
 
   if (provider === 'searxng') {
-    if (!cfg?.url) throw new Error('Add your SearXNG address in Settings to search the web.')
+    if (!url) throw new Error('Add your SearXNG address in Settings to search the web.')
     const params = new URLSearchParams({ format: 'json', q: query, language: 'en' })
     if (opts.news) params.set('categories', 'news')
     if (opts.when && opts.when !== 'any') params.set('time_range', opts.when)
     try {
       // Tide's own engine runs only while you're searching: started here if it isn't up
-      if (cfg.url === LOCAL_URL) await ensureSearch()
-      const res = await fetch(`${cfg.url.replace(/\/+$/, '')}/search?${params}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20_000) })
+      if (url === LOCAL_URL) await ensureSearch()
+      const res = await fetch(`${url.replace(/\/+$/, '')}/search?${params}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20_000) })
       if (!res.ok) throw new Error(`SearXNG answered ${res.status}`)
       const json = (await res.json()) as { results?: { title: string; url: string; content?: string; publishedDate?: string | null }[] }
       const results = uniqueResults((json.results ?? []).map((r) => ({ title: r.title, url: r.url, snippet: stripTags(r.content ?? ''), date: isoDay(r.publishedDate) })), 8)
@@ -801,7 +824,7 @@ interface LoopContext {
 const normalQuery = (q: string) => q.trim().toLowerCase().replace(/\s+/g, ' ')
 export const webSearch = memoize<[query: string, opts?: SearchOptions], WebResult[]>(webSearchNow, {
   ttlMs: (_q, opts) => (opts?.news || opts?.when === 'day' ? 5 * 60_000 : 30 * 60_000),
-  key: (q, opts) => JSON.stringify([getSettings().ai.webSearch?.provider ?? 'wikipedia', normalQuery(q), opts?.when ?? 'any', !!opts?.news])
+  key: (q, opts) => JSON.stringify([getSettings().ai.webSearch?.provider ?? 'wikipedia', normalQuery(q), opts?.when ?? 'any', !!opts?.news, !!opts?.onThisMac])
 })
 export const searchPapers = memoize(searchPapersNow, { ttlMs: 60 * 60_000, key: (q) => normalQuery(q) })
 export const readWebpage = memoize(readWebpageNow, { ttlMs: 60 * 60_000, max: 40, key: (url, cloudOk = true) => `${cloudOk ? 'c' : 'l'}${url.trim()}` })
@@ -982,7 +1005,7 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     const label = papers ? `Searching papers for “${q}”` : `Searching ${news ? 'the news' : 'the web'} for “${q}”${when ? ` (past ${when})` : ''}`
     const id = ctx.step({ kind: 'web_search', label, status: 'running', depth })
     try {
-      const results = papers ? await searchPapers(q) : await webSearch(q, { when, news })
+      const results = papers ? await searchPapers(q) : await webSearch(q, { when, news, onThisMac: !!ctx.private })
       const real = results.filter((r) => r.url)
       ctx.updateStep(id, { status: 'done', detail: `${real.length} result${real.length === 1 ? '' : 's'}` })
       if (!results.length) return 'No results. Try different words.'

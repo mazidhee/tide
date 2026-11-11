@@ -18,7 +18,8 @@ export interface AISettings {
   autoStart?: boolean
   serverCommand?: string
   webSearch?: {
-    provider: 'wikipedia' | 'brave' | 'tavily' | 'you' | 'searxng' | 'off'
+    /** 'auto': the fastest available for each search (You.com when keyed, else the engine on this Mac, else Wikipedia) */
+    provider: 'auto' | 'wikipedia' | 'brave' | 'tavily' | 'you' | 'searxng' | 'off'
     apiKey?: string
     url?: string
   }
