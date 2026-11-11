@@ -2,7 +2,8 @@ import { recentSpeed } from './speed'
 import { inBackground, streamInteractive } from './modelQueue'
 import { STRATEGY_LABEL, type Strategy } from '@shared/strategy'
 import { CloudUnavailable, coolingDown, coolTarget, estimateTokens, recordUsage, routeFor, type CloudTarget } from './cloud'
-import { readStream, streamCloud } from './cloudStream'
+import { jsonrepair } from 'jsonrepair'
+import { readStream, streamCloud, type ReplySchema } from './cloudStream'
 import type { CloudTask, RequestKind } from '@shared/providers'
 import { memoryIntent } from '@shared/memoryIntent'
 import { addMemory, forgetMatching } from './memory'
@@ -222,11 +223,13 @@ export async function* streamCompletion(
   background = false,
   temperatureOverride?: number,
   task: RequestKind = 'other',
-  target?: CloudTarget | null
+  target?: CloudTarget | null,
+  /** The JSON shape the reply must have: sent to cloud providers that support it, never to the local server */
+  schema?: ReplySchema
 ): AsyncGenerator<string> {
   // A cloud model doesn't occupy the Mac, so it skips the local model's queue
   if (target) {
-    yield* streamCloud(target, messages, signal, maxTokens, temperatureOverride, task)
+    yield* streamCloud(target, messages, signal, maxTokens, temperatureOverride, task, schema)
     return
   }
   if (!background) {
@@ -261,7 +264,7 @@ export async function* streamCompletion(
  * model can't take it (rate limited, down, key refused) before writing anything, the next
  * provider you have a key for tries, then Gemma.
  */
-export async function* streamRouted(messages: ChatMessage[], signal: AbortSignal, maxTokens: number, task: RequestKind, temperatureOverride?: number, routine = false): AsyncGenerator<string> {
+export async function* streamRouted(messages: ChatMessage[], signal: AbortSignal, maxTokens: number, task: RequestKind, temperatureOverride?: number, routine = false, schema?: ReplySchema): AsyncGenerator<string> {
   for (let tries = 0; tries < 3; tries++) {
     // A provider that just refused is cooling down, so this picks the next one in line
     // Open endpoints only for the short checks (a problem and an answer), never planning from your notes
@@ -269,7 +272,7 @@ export async function* streamRouted(messages: ChatMessage[], signal: AbortSignal
     if (!target) break
     let wrote = false
     try {
-      for await (const t of streamCompletion(messages, signal, maxTokens, false, temperatureOverride, task, target)) {
+      for await (const t of streamCompletion(messages, signal, maxTokens, false, temperatureOverride, task, target, schema)) {
         wrote = true
         yield t
       }
@@ -292,7 +295,7 @@ export class NoCloud extends Error {}
  * can do it (writing the problem bank), so it never takes the Mac. Works down the line like
  * streamRouted; throws NoCloud when nothing can take it.
  */
-export async function askCloud(prompt: string, system: string, task: CloudTask, signal: AbortSignal, routine = false, maxTokens = 4000, onTarget?: (t: CloudTarget) => void): Promise<string> {
+export async function askCloud(prompt: string, system: string, task: CloudTask, signal: AbortSignal, routine = false, maxTokens = 4000, onTarget?: (t: CloudTarget) => void, schema?: ReplySchema): Promise<string> {
   const messages: ChatMessage[] = [
     { role: 'system', content: system },
     { role: 'user', content: prompt }
@@ -302,7 +305,7 @@ export async function askCloud(prompt: string, system: string, task: CloudTask, 
     if (!target) break
     let out = ''
     try {
-      for await (const t of streamCompletion(messages, signal, maxTokens, false, 0.4, task, target)) out += t
+      for await (const t of streamCompletion(messages, signal, maxTokens, false, 0.4, task, target, schema)) out += t
       onTarget?.(target)
       return cleanModelText(out)
     } catch (e) {
@@ -785,12 +788,13 @@ export async function* streamDraft(messages: ChatMessage[], signal: AbortSignal,
  * and gives way when the user needs it; everything else runs at once.
  */
 /** `routine`: work that can be left to Gemma when a cloud model's free allowance for the day is running low */
-export async function complete(prompt: string, system?: string, signal?: AbortSignal, priority: 'interactive' | 'background' = 'interactive', task: RequestKind = priority === 'background' ? 'background' : 'other', routine = false): Promise<string> {
+/** `schema`: the JSON shape the reply must have, for cloud providers that can be held to one; the local model's reply is repaired instead (extractJson*) */
+export async function complete(prompt: string, system?: string, signal?: AbortSignal, priority: 'interactive' | 'background' = 'interactive', task: RequestKind = priority === 'background' ? 'background' : 'other', routine = false, schema?: ReplySchema): Promise<string> {
   if (priority === 'background') return inBackground((s) => completeNow(prompt, system, s, true, task), signal)
-  return completeNow(prompt, system, signal, false, task, routine)
+  return completeNow(prompt, system, signal, false, task, routine, schema)
 }
 
-async function completeNow(prompt: string, system: string | undefined, signal: AbortSignal | undefined, background: boolean, task: RequestKind = 'other', routine = false): Promise<string> {
+async function completeNow(prompt: string, system: string | undefined, signal: AbortSignal | undefined, background: boolean, task: RequestKind = 'other', routine = false, schema?: ReplySchema): Promise<string> {
   const controller = new AbortController()
   signal?.addEventListener('abort', () => controller.abort(), { once: true })
   let out = ''
@@ -809,7 +813,7 @@ async function completeNow(prompt: string, system: string | undefined, signal: A
     let looped = false
     try {
       // Planning and marking go to the cloud model when they're set to escalate; background work never does
-      const stream = background ? streamCompletion(messages, pass.signal, 3000, true, temperature, task) : streamRouted(messages, pass.signal, 3000, task, temperature, routine)
+      const stream = background ? streamCompletion(messages, pass.signal, 3000, true, temperature, task) : streamRouted(messages, pass.signal, 3000, task, temperature, routine, schema)
       for await (const t of stream) {
         out += t
         if (isLooping(out)) {
@@ -838,41 +842,132 @@ const stripThinking = (s: string) => s.replace(/<think>[\s\S]*?<\/think>/g, '')
  */
 export const escapeLatexInJson = (json: string) => json.replace(/(?<!\\)((?:\\\\)*)\\(?=[a-zA-Z]{2,})/g, '$1\\\\')
 
-/** Pulls the first JSON array out of a model reply that may include prose or code fences. */
-export function extractJsonArray<T>(text: string): T[] {
-  const cleaned = text.replace(/```(?:json)?/g, '')
-  const start = cleaned.indexOf('[')
-  const end = cleaned.lastIndexOf(']')
-  if (start < 0 || end <= start) throw new Error('The AI did not return a list. Try again.')
-  const raw = cleaned.slice(start, end + 1)
+/** JSON.parse, or undefined */
+function parsed(text: string): unknown {
   try {
-    return JSON.parse(escapeLatexInJson(raw)) as T[]
+    return JSON.parse(text)
   } catch {
-    // Fall back to the text as written, in case the repair itself was wrong
-    try {
-      return JSON.parse(raw) as T[]
-    } catch {
-      throw new Error('The AI answer was not in the expected format. Try again.')
-    }
+    return undefined
   }
 }
 
-/** Pulls the first JSON object out of a model reply, repairing unescaped LaTeX like extractJsonArray */
-export function extractJsonObject<T>(text: string): T {
-  const cleaned = text.replace(/```(?:json)?/g, '')
-  const start = cleaned.indexOf('{')
-  const end = cleaned.lastIndexOf('}')
-  if (start < 0 || end <= start) throw new Error('The AI answer was not in the expected format. Try again.')
-  const raw = cleaned.slice(start, end + 1)
+/** jsonrepair, or undefined when even it can't make JSON of the text */
+function repaired(text: string): unknown {
   try {
-    return JSON.parse(escapeLatexInJson(raw)) as T
+    return JSON.parse(jsonrepair(text))
   } catch {
-    try {
-      return JSON.parse(raw) as T
-    } catch {
-      throw new Error('The AI answer was not in the expected format. Try again.')
+    return undefined
+  }
+}
+
+/**
+ * A reply cut off inside a list (max_tokens ran out): the list up to its last whole item, closed.
+ * Repairing the cut item as well would invent the rest of it, so it is left out.
+ */
+export function wholeItems(tail: string): string | null {
+  let depth = 0
+  let inString: string | null = null
+  let lastWhole = -1
+  for (let i = 0; i < tail.length; i++) {
+    const c = tail[i]
+    if (inString) {
+      if (c === '\\') i++
+      else if (c === inString) {
+        inString = null
+        if (depth === 1) lastWhole = i + 1
+      }
+      continue
+    }
+    if (c === '"' || c === "'") inString = c
+    else if (c === '[' || c === '{') depth++
+    else if (c === ']' || c === '}') {
+      depth--
+      if (depth === 0) return null // not cut off: the list closes
+      if (depth === 1) lastWhole = i + 1
+    } else if (depth === 1 && /[\w.]/.test(c) && !/[\w.]/.test(tail[i + 1] ?? '')) lastWhole = i + 1
+  }
+  return lastWhole > 0 ? tail.slice(0, lastWhole) + ']' : '[]'
+}
+
+/**
+ * Whether a span has words outside strings that JSON can't hold (prose such as "see [1] and [2]
+ * below"): jsonrepair would quote them and return a list of nonsense, so such a span isn't repaired.
+ * Bare object keys ({front: "x"}) and literals are fine.
+ */
+export function hasProse(span: string): boolean {
+  let quote: string | null = null
+  for (let i = 0; i < span.length; i++) {
+    const c = span[i]
+    if (quote) {
+      if (c === '\\') i++
+      else if (c === quote) quote = null
+      continue
+    }
+    if (c === '"' || c === "'") {
+      quote = c
+      continue
+    }
+    if (!/[A-Za-z_]/.test(c)) continue
+    WORD.lastIndex = i
+    const word = WORD.exec(span)![0]
+    COLON.lastIndex = i + word.length
+    if (!COLON.test(span) && !LITERALS.has(word)) return true
+    i += word.length - 1
+  }
+  return false
+}
+const WORD = /[A-Za-z_][\w$]*/y
+const COLON = /\s*:/y
+const LITERALS = new Set(['true', 'false', 'null', 'True', 'False', 'None', 'NaN', 'Infinity', 'undefined'])
+
+/**
+ * Reads JSON of one kind ('[' for a list, '{' for an object) out of a model reply, in order of
+ * trust: the reply as it is; then, from the first opening bracket, the span to the last closing
+ * one with unescaped LaTeX repaired; for a list cut off part-way, the items that were whole; then
+ * jsonrepair, which mends trailing commas, single quotes, comments and unquoted keys. An opening
+ * in prose ("see [1]") is passed over for the next.
+ */
+function extractJson(text: string, open: '[' | '{'): unknown {
+  const close = open === '[' ? ']' : '}'
+  const fits = (v: unknown) => (open === '[' ? Array.isArray(v) : !!v && typeof v === 'object' && !Array.isArray(v))
+  const strict = parsed(text.trim())
+  if (fits(strict)) return strict
+  const cleaned = text.replace(/```(?:json)?/g, '')
+  const end = cleaned.lastIndexOf(close)
+  const openings: number[] = []
+  for (let at = cleaned.indexOf(open); at >= 0 && openings.length < 8; at = cleaned.indexOf(open, at + 1)) openings.push(at)
+  // From each opening in turn: brackets in prose before the JSON ("see [1]") are passed over
+  for (const at of openings) {
+    if (end > at) {
+      const raw = cleaned.slice(at, end + 1)
+      for (const v of [parsed(escapeLatexInJson(raw)), parsed(raw)]) if (fits(v)) return v
+    }
+    const tail = escapeLatexInJson(cleaned.slice(at))
+    // A list that never closes was cut off: its whole items come first, before any repair of the rest
+    const cut = open === '[' ? wholeItems(tail) : null
+    const spans = [cut, end > at ? escapeLatexInJson(cleaned.slice(at, end + 1)) : null, tail]
+    for (const span of spans) {
+      if (span === null || hasProse(span)) continue
+      const v = repaired(span)
+      if (fits(v)) return v
     }
   }
+  return undefined
+}
+
+/** Pulls the first JSON array out of a model reply that may include prose, code fences or broken JSON. */
+export function extractJsonArray<T>(text: string): T[] {
+  if (!text.includes('[')) throw new Error('The AI did not return a list. Try again.')
+  const v = extractJson(text, '[')
+  if (v === undefined) throw new Error('The AI answer was not in the expected format. Try again.')
+  return v as T[]
+}
+
+/** Pulls the first JSON object out of a model reply, repaired like extractJsonArray */
+export function extractJsonObject<T>(text: string): T {
+  const v = extractJson(text, '{')
+  if (v === undefined) throw new Error('The AI answer was not in the expected format. Try again.')
+  return v as T
 }
 
 export async function generateFlashcards(

@@ -1,21 +1,34 @@
-//! Recall: the questions a learner missed or couldn't answer, kept and brought back at growing
-//! intervals. One small file in the vault (plain JSON, readable and yours), loaded once and held
-//! in memory; finding what is due for a topic among thousands of items takes microseconds.
+//! Recall: the questions a learner missed or couldn't answer, kept and brought back when they
+//! are about to be forgotten. One small file in the vault (plain JSON, readable and yours), loaded
+//! once and held in memory; finding what is due for a topic among thousands of items takes microseconds.
 //!
-//! The schedule is deliberately simple and visible. Each item has a "stability": the number of
-//! days it is expected to stay remembered. Answering well multiplies it (2.5 times, 4 when it was
-//! easy); struggling grows it a little; failing cuts it to a quarter and counts a lapse. The item
-//! is due again that many days after the review.
+//! The schedule is FSRS-6 with its default parameters. Each item has a difficulty, a stability
+//! (the days until the chance of remembering it falls to 90%) and its history of reviews. The
+//! original miss counts as a first review rated "again". After each review the item is due when
+//! its predicted retrievability falls to the desired retention, 0.9. Because the model knows how
+//! long it really was since the last review, a review done late moves the schedule differently
+//! from one done on time.
 
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use fsrs::{MemoryState, FSRS, FSRS6_DEFAULT_PARAMETERS};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
 const DAY_MS: f64 = 86_400_000.0;
+/// The chance of remembering an item at the moment it comes due
+pub const DESIRED_RETENTION: f32 = 0.9;
+
+/// One review: 1 again, 2 hard, 3 good, 4 easy; when it happened (ms since 1970)
+#[napi(object)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RecallReview {
+  pub rating: u32,
+  pub at: f64,
+}
 
 #[napi(object)]
 #[derive(Clone, Serialize, Deserialize)]
@@ -29,11 +42,18 @@ pub struct RecallItem {
   pub created: f64,
   /// When to ask it again (ms since 1970); at or before now means due
   pub due: f64,
-  /// Days it is expected to stay remembered
+  /// FSRS stability: days until the chance of remembering it falls to 90%
   pub stability: f64,
+  /// FSRS difficulty, 1 to 10 (0 only in files written before FSRS, until they are migrated)
+  #[serde(default)]
+  pub difficulty: f64,
+  /// Reviews since it was kept (the original miss is in `history`, not counted here)
   pub reviews: u32,
   pub lapses: u32,
   pub last: Option<f64>,
+  /// Every review, oldest first, starting with the original miss
+  #[serde(default)]
+  pub history: Vec<RecallReview>,
 }
 
 #[napi(object)]
@@ -55,6 +75,7 @@ pub struct RecallStats {
 pub struct Recall {
   path: PathBuf,
   items: Mutex<Vec<RecallItem>>,
+  fsrs: FSRS,
 }
 
 const STOP: &[&str] = &[
@@ -85,15 +106,70 @@ fn normal(prompt: &str) -> String {
   prompt.to_lowercase().split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// The stability after a review: "again", "hard", "good" or "easy"
-pub fn next_stability(stability: f64, reviews: u32, grade: &str) -> f64 {
+fn model() -> FSRS {
+  FSRS::new(&FSRS6_DEFAULT_PARAMETERS).expect("the FSRS-6 default parameters are valid")
+}
+
+pub fn rating(grade: &str) -> u32 {
   match grade {
-    "again" => (stability * 0.25).max(0.25),
-    "hard" => (stability * 1.3).max(1.0),
-    "easy" => if reviews == 0 { 5.0 } else { stability * 4.0 },
-    _ => if reviews == 0 { 2.0 } else { stability * 2.5 },
+    "again" => 1,
+    "hard" => 2,
+    "easy" => 4,
+    _ => 3,
   }
-  .min(365.0)
+}
+
+/// The state of a question just missed: one review, rated "again"
+fn first_miss(fsrs: &FSRS) -> MemoryState {
+  fsrs.next_states(None, DESIRED_RETENTION, 0).expect("a new item always has next states").again.memory
+}
+
+/// Gives an item kept before FSRS a plausible state. Its old stability was the days it was
+/// expected to stay remembered, and it was due that long after its last review: read as the
+/// interval at which recall falls to 90%, that is FSRS's own stability, so the due date stays as
+/// it was. Lapses lower the ease the difficulty is derived from. The original miss goes in the
+/// history; the ratings of later reviews were never recorded, so none are made up.
+pub fn migrate(item: &mut RecallItem, fsrs: &FSRS) -> bool {
+  if item.difficulty >= 1.0 {
+    return false;
+  }
+  if item.history.is_empty() {
+    item.history.push(RecallReview { rating: 1, at: item.created });
+  }
+  let state = if item.reviews == 0 {
+    first_miss(fsrs)
+  } else {
+    let ease = (2.5 - 0.2 * item.lapses as f32).clamp(1.3, 2.5);
+    fsrs.memory_state_from_sm2(ease, (item.stability as f32).max(0.25), DESIRED_RETENTION).unwrap_or_else(|_| first_miss(fsrs))
+  };
+  item.stability = state.stability as f64;
+  item.difficulty = state.difficulty as f64;
+  true
+}
+
+/// Schedules one review of `item` at `now` with a rating from 1 (again) to 4 (easy)
+pub fn schedule(item: &mut RecallItem, fsrs: &FSRS, rating: u32, now: f64) {
+  let since = item.last.or(item.history.last().map(|r| r.at)).unwrap_or(item.created);
+  let elapsed = ((now - since) / DAY_MS).max(0.0) as f32;
+  let state = MemoryState { stability: item.stability as f32, difficulty: item.difficulty as f32, stability_fast: item.stability as f32 };
+  let next = fsrs.next_states_with_elapsed_days(Some(state), DESIRED_RETENTION, elapsed).ok();
+  let chosen = next.map(|n| match rating {
+    1 => n.again,
+    2 => n.hard,
+    4 => n.easy,
+    _ => n.good,
+  });
+  if let Some(s) = chosen {
+    item.stability = s.memory.stability as f64;
+    item.difficulty = s.memory.difficulty as f64;
+    item.due = now + (s.interval as f64).max(0.0) * DAY_MS;
+  }
+  if rating == 1 {
+    item.lapses += 1;
+  }
+  item.reviews += 1;
+  item.last = Some(now);
+  item.history.push(RecallReview { rating, at: now });
 }
 
 fn err<E: std::fmt::Display>(e: E) -> Error {
@@ -102,15 +178,26 @@ fn err<E: std::fmt::Display>(e: E) -> Error {
 
 #[napi]
 impl Recall {
-  /// Opens the store at `path` (a JSON file), empty when it isn't there yet
+  /// Opens the store at `path` (a JSON file), empty when it isn't there yet. A file written
+  /// before FSRS is migrated in place: every item kept, each given a state of its own.
   #[napi(constructor)]
   pub fn new(path: String) -> Result<Self> {
     let path = PathBuf::from(path);
-    let items = match std::fs::read(&path) {
+    let fsrs = model();
+    let mut items: Vec<RecallItem> = match std::fs::read(&path) {
       Ok(bytes) => serde_json::from_slice(&bytes).map_err(|e| err(format!("{} is not a recall file: {e}", path.display())))?,
       Err(_) => Vec::new(),
     };
-    Ok(Recall { path, items: Mutex::new(items) })
+    let mut migrated = false;
+    for item in items.iter_mut() {
+      migrated |= migrate(item, &fsrs);
+    }
+    let recall = Recall { path, items: Mutex::new(Vec::new()), fsrs };
+    if migrated {
+      recall.save(&items)?;
+    }
+    *recall.items.lock().map_err(err)? = items;
+    Ok(recall)
   }
 
   /// Written beside itself and renamed, so a crash never leaves half a file
@@ -124,7 +211,8 @@ impl Recall {
   }
 
   /// Adds questions that aren't already kept (the same words, whatever the spacing or case).
-  /// A new one is due straight away: the next lesson on its topic opens with it. Returns how many were new.
+  /// Each starts from one "again" review, the miss itself, and is due straight away: the next
+  /// lesson on its topic opens with it. Returns how many were new.
   #[napi]
   pub fn add(&self, new: Vec<RecallNew>, now: f64) -> Result<u32> {
     let mut items = self.items.lock().map_err(err)?;
@@ -137,7 +225,21 @@ impl Recall {
       }
       added += 1;
       let id = format!("{:x}-{}", now as u64, items.len());
-      items.push(RecallItem { id, prompt: n.prompt, topic: n.topic, lesson: n.lesson, created: now, due: now, stability: 0.0, reviews: 0, lapses: 0, last: None });
+      let s = first_miss(&self.fsrs);
+      items.push(RecallItem {
+        id,
+        prompt: n.prompt,
+        topic: n.topic,
+        lesson: n.lesson,
+        created: now,
+        due: now,
+        stability: s.stability as f64,
+        difficulty: s.difficulty as f64,
+        reviews: 0,
+        lapses: 0,
+        last: None,
+        history: vec![RecallReview { rating: 1, at: now }],
+      });
     }
     if added > 0 {
       self.save(&items)?;
@@ -165,13 +267,7 @@ impl Recall {
   pub fn review(&self, id: String, grade: String, now: f64) -> Result<Option<RecallItem>> {
     let mut items = self.items.lock().map_err(err)?;
     let Some(item) = items.iter_mut().find(|i| i.id == id) else { return Ok(None) };
-    item.stability = next_stability(item.stability, item.reviews, &grade);
-    if grade == "again" {
-      item.lapses += 1;
-    }
-    item.reviews += 1;
-    item.last = Some(now);
-    item.due = now + item.stability * DAY_MS;
+    schedule(item, &self.fsrs, rating(&grade), now);
     let out = item.clone();
     self.save(&items)?;
     Ok(Some(out))
@@ -198,16 +294,123 @@ impl Recall {
 mod tests {
   use super::*;
 
+  const T0: f64 = 1_700_000_000_000.0;
+
+  fn fresh(fsrs: &FSRS) -> RecallItem {
+    let s = first_miss(fsrs);
+    RecallItem {
+      id: "a".into(),
+      prompt: "What is 0x2A in decimal?".into(),
+      topic: "Hexadecimal".into(),
+      lesson: "l".into(),
+      created: T0,
+      due: T0,
+      stability: s.stability as f64,
+      difficulty: s.difficulty as f64,
+      reviews: 0,
+      lapses: 0,
+      last: None,
+      history: vec![RecallReview { rating: 1, at: T0 }],
+    }
+  }
+
+  fn days(item: &RecallItem, from: f64) -> f64 {
+    (item.due - from) / DAY_MS
+  }
+
   #[test]
   fn schedule_grows_with_success_and_shrinks_with_failure() {
-    let first = next_stability(0.0, 0, "good");
-    assert_eq!(first, 2.0);
-    let second = next_stability(first, 1, "good");
-    assert_eq!(second, 5.0);
-    assert!(next_stability(second, 2, "easy") > next_stability(second, 2, "good"));
-    assert_eq!(next_stability(second, 2, "again"), 1.25);
-    assert_eq!(next_stability(0.5, 3, "again"), 0.25);
-    assert_eq!(next_stability(300.0, 9, "easy"), 365.0);
+    let fsrs = model();
+    let mut item = fresh(&fsrs);
+    // The miss itself: FSRS-6's first stability for "again"
+    assert!((item.stability - FSRS6_DEFAULT_PARAMETERS[0] as f64).abs() < 1e-6);
+    let mut now = T0 + DAY_MS;
+    schedule(&mut item, &fsrs, 3, now);
+    let first = item.stability;
+    assert!(days(&item, now) > 0.5);
+    now = item.due;
+    schedule(&mut item, &fsrs, 3, now);
+    assert!(item.stability > first * 1.5, "good on time grows stability: {first} -> {}", item.stability);
+    let mut easy = item.clone();
+    let mut good = item.clone();
+    let mut again = item.clone();
+    now = item.due;
+    schedule(&mut easy, &fsrs, 4, now);
+    schedule(&mut good, &fsrs, 3, now);
+    schedule(&mut again, &fsrs, 1, now);
+    assert!(easy.stability > good.stability);
+    assert!(again.stability < item.stability);
+    assert_eq!(again.lapses, 1);
+    assert_eq!(good.reviews, 3);
+    assert_eq!(good.history.iter().map(|r| r.rating).collect::<Vec<_>>(), vec![1, 3, 3, 3]);
+    // Due when retrievability falls to 0.9: for FSRS-6 that is one stability after the review
+    let r = fsrs.current_retrievability(MemoryState { stability: good.stability as f32, difficulty: good.difficulty as f32, stability_fast: good.stability as f32 }, days(&good, now) as f32);
+    assert!((r - 0.9).abs() < 0.005, "retrievability at due {r}");
+  }
+
+  #[test]
+  fn a_late_review_is_scheduled_differently_from_an_on_time_one() {
+    let fsrs = model();
+    let mut item = fresh(&fsrs);
+    schedule(&mut item, &fsrs, 3, T0 + DAY_MS);
+    let at = item.due;
+    schedule(&mut item, &fsrs, 3, at);
+    let (mut on_time, mut late) = (item.clone(), item.clone());
+    let due = item.due;
+    let interval = due - item.last.unwrap();
+    schedule(&mut on_time, &fsrs, 3, due);
+    schedule(&mut late, &fsrs, 3, due + 3.0 * interval);
+    // Remembering it after much longer is stronger evidence: more stability, a longer wait
+    assert!(late.stability > on_time.stability * 1.2, "{} vs {}", late.stability, on_time.stability);
+    assert!(days(&late, late.last.unwrap()) > days(&on_time, on_time.last.unwrap()));
+    // And a miss after a long gap is not punished like a miss on time
+    let (mut miss_on_time, mut miss_late) = (item.clone(), item.clone());
+    schedule(&mut miss_on_time, &fsrs, 1, due);
+    schedule(&mut miss_late, &fsrs, 1, due + 3.0 * interval);
+    assert_ne!(miss_on_time.stability, miss_late.stability);
+  }
+
+  #[test]
+  fn files_from_before_fsrs_are_migrated_in_place() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("recall.json");
+    let old = serde_json::json!([
+      { "id": "new", "prompt": "What is 0x2A in decimal?", "topic": "Hexadecimal", "lesson": "l1",
+        "created": T0, "due": T0, "stability": 0.0, "reviews": 0, "lapses": 0, "last": null },
+      { "id": "kept", "prompt": "Why does two's complement work?", "topic": "Binary", "lesson": "l2",
+        "created": T0, "due": T0 + 12.5 * DAY_MS, "stability": 5.0, "reviews": 2, "lapses": 0, "last": T0 + 7.5 * DAY_MS },
+      { "id": "shaky", "prompt": "What is a nibble, in bits?", "topic": "Binary", "lesson": "l2",
+        "created": T0, "due": T0 + 3.0 * DAY_MS, "stability": 0.5, "reviews": 4, "lapses": 3, "last": T0 + 2.5 * DAY_MS }
+    ]);
+    std::fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
+    let r = Recall::new(path.to_string_lossy().into()).unwrap();
+    let items = r.all().unwrap();
+    assert_eq!(items.len(), 3, "nothing dropped");
+    for i in &items {
+      assert!(i.difficulty >= 1.0 && i.difficulty <= 10.0);
+      assert!(i.stability > 0.0);
+      assert_eq!(i.history[0], RecallReview { rating: 1, at: T0 }, "the original miss");
+    }
+    let by = |id: &str| items.iter().find(|i| i.id == id).unwrap().clone();
+    // Never reviewed: the state of a fresh miss, still due now
+    assert!((by("new").stability - FSRS6_DEFAULT_PARAMETERS[0] as f64).abs() < 1e-6);
+    assert_eq!(by("new").due, T0);
+    // Reviewed: its old stability carries over, its due date and counts too
+    assert!((by("kept").stability - 5.0).abs() < 0.01);
+    assert_eq!(by("kept").due, T0 + 12.5 * DAY_MS);
+    assert_eq!((by("kept").reviews, by("shaky").lapses), (2, 3));
+    // Lapses read as a harder item
+    assert!(by("shaky").difficulty > by("kept").difficulty);
+    // Written back at once, and reopening it changes nothing more
+    let disk: Vec<RecallItem> = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert!(disk.iter().all(|i| i.difficulty >= 1.0 && i.history.len() == 1));
+    assert!(!path.with_extension("json.tmp").exists());
+    let again = Recall::new(path.to_string_lossy().into()).unwrap().all().unwrap();
+    assert_eq!(serde_json::to_value(&again).unwrap(), serde_json::to_value(&items).unwrap());
+    // And it schedules from there
+    let after = r.review("kept".into(), "good".into(), T0 + 12.5 * DAY_MS).unwrap().unwrap();
+    assert!(after.stability > 5.0);
+    assert_eq!(after.history.len(), 2);
   }
 
   #[test]

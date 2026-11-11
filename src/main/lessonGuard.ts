@@ -13,6 +13,7 @@ import { promises as fs } from 'fs'
 import { runCode } from './runner'
 import { absPath } from './vault'
 import { noteUse } from './connectionUse'
+import { CLAIMS_SCHEMA } from './replySchemas'
 
 /**
  * Checks a lesson reply once it's written, before the student works on it (see shared/lessonCheck):
@@ -163,7 +164,7 @@ export async function checkLessonReply(
         step('lesson-claims', 'Checking what this explains', 'running')
         const pack = req.topic ? await import('./sources').then((m) => m.packFor(req.topic!)).catch(() => null) : null
         const { askCloud } = await import('./ai')
-        const out = await within(REVIEW_MS, signal, (s) => askCloud(claimsPrompt(req.topic ?? '', readable(reply), sourcesForCheck(pack)), CLAIMS_SYSTEM, 'maths', s, true, 900)).catch(() => '')
+        const out = await within(REVIEW_MS, signal, (s) => askCloud(claimsPrompt(req.topic ?? '', readable(reply), sourcesForCheck(pack)), CLAIMS_SYSTEM, 'maths', s, true, 900, undefined, CLAIMS_SCHEMA)).catch(() => '')
         step('lesson-claims', 'Checked what this explains', 'done')
         return parseClaimCheck(out ?? '')
       })()
@@ -227,7 +228,7 @@ export async function challengeReply(topic: string, where: string | undefined, r
   const { askCloud, NoCloud } = await import('./ai')
   const pack = await import('./sources').then((m) => m.packFor(topic)).catch(() => null)
   try {
-    const out = await askCloud(claimsPrompt(topic, readable(reply), sourcesForCheck(pack)) + '\nThe student has questioned this reply: check it with extra care.', CLAIMS_SYSTEM, 'maths', AbortSignal.timeout(60_000), false, 1500)
+    const out = await askCloud(claimsPrompt(topic, readable(reply), sourcesForCheck(pack)) + '\nThe student has questioned this reply: check it with extra care.', CLAIMS_SYSTEM, 'maths', AbortSignal.timeout(60_000), false, 1500, undefined, CLAIMS_SCHEMA)
     return parseClaimCheck(out)
   } catch (e) {
     if (e instanceof NoCloud) return { ok: true, errors: [], unsure: [], offline: 'No cloud model is free to check it right now. Try again in a minute.' }
