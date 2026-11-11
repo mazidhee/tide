@@ -63,7 +63,8 @@ async function verify(problems: BankProblem[], signal: AbortSignal, cloud: boole
   }
   if (!cloud || signal.aborted) return out
   // A different model from the one that wrote them (marking, not maths), so it isn't checking its own work
-  const verdicts = parseBatchReview(await askCloud(batchReviewPrompt(out), 'You check practice problems carefully and say exactly which are flawed. Reply in the format asked.', 'marking', signal, false, 1200).catch(() => ''), out.length)
+  // Room for a reasoning model to think and still answer: at 1,200 tokens, 28 of 87 reviews ran out before saying anything
+  const verdicts = parseBatchReview(await askCloud(batchReviewPrompt(out), 'You check practice problems carefully and say exactly which are flawed. Reply in the format asked.', 'marking', signal, false, 2400).catch(() => ''), out.length)
   // How the writer did, so a model whose problems keep failing review moves back in the line
   const judged = verdicts.filter((v) => v !== undefined)
   if (writer && judged.length) noteReviewed(writer, 'maths', judged.filter(Boolean).length, judged.length)

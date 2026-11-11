@@ -295,12 +295,15 @@ export function routeFor(task: CloudTask | null, engine: 'auto' | 'local' | 'clo
  * - how long it takes: a reply in 10 s is worth about three times one that takes two minutes;
  * - how much of today's free allowance is left: a nearly spent one is kept for when nothing else can;
  * - where it stands in your line (your main model first), which decides between equals.
- * A model with no history is trusted about as much as one that answers three times in four, so a
- * new connection gets tried, and one that keeps failing sinks instead of being asked first forever.
+ * A model with no history is trusted as much as one that answers one time in three: enough to
+ * be tried when the proven ones are failing or resting, never enough to be picked over a model
+ * that is working. (At three in four, an untried model outranked the one answering more than
+ * half the time, took every maths check, and answered none of them.) One that keeps failing
+ * sinks instead of being asked first forever.
  */
 export function score(t: { provider: string; model: string }, job: string, place = 0): number {
   const s = stats.get(statKey(t, job))
-  const answers = ((s?.ok ?? 0) + 3) / ((s?.n ?? 0) + 4)
+  const answers = ((s?.ok ?? 0) + 1) / ((s?.n ?? 0) + 3)
   const quality = ((s?.passed ?? 0) + 3) / ((s?.reviewed ?? 0) + 4)
   const seconds = s && s.n >= 1 ? s.ms / s.n / 1000 : 15
   const speed = 1 / (1 + seconds / 45)

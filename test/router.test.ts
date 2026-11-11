@@ -38,6 +38,14 @@ describe('choosing a cloud model by what it has done', () => {
     expect(score(careful, 'maths', 1)).toBeGreaterThan(score(sloppy, 'maths', 0))
   })
 
+  it('never picks a model it has not tried over one that is working', () => {
+    const working = { provider: 'e', model: 'answers-most-of-the-time' }
+    times(15, () => noteOutcome(working, 'maths', true, 50_000))
+    times(13, () => noteOutcome(working, 'maths', false, 50_000))
+    // Slow and only a little better than half, but real; the untried one is fourth in line
+    expect(score(working, 'maths', 0)).toBeGreaterThan(score({ provider: 'f', model: 'untried' }, 'maths', 4))
+  })
+
   it('keeps your order between models with nothing to tell them apart', () => {
     expect(score({ provider: 'c', model: 'one' }, 'planning', 0)).toBeGreaterThan(score({ provider: 'c', model: 'two' }, 'planning', 1))
   })
