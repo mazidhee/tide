@@ -92,3 +92,21 @@ describe('the real sandbox', () => {
     expect(tests).not.toContain('test_bad')
   })
 })
+
+describe('a code question with only a starter', () => {
+  it('gets its reference from a short request, kept with the tests made from it', async () => {
+    const { testsFor } = await import('../src/main/codeTests')
+    const reply = 'Write a function that takes two numbers and returns their sum.\n\n<ask type="code" lang="python">\n```python\ndef add_numbers(num1, num2):\n    pass\n```\n</ask>'
+    const asked: string[] = []
+    const made = await testsFor(reply, {
+      ask: async (prompt) => {
+        asked.push(prompt)
+        return asked.length === 1 ? '```python\ndef add_numbers(num1, num2):\n    return num1 + num2\n```' : '```python\ndef test_adds():\n    assert add_numbers(2, 3) == 5\n```'
+      },
+      run: async (_l, _c, _s, o) => ok('', o?.tests ? { tests: { passed: ['test_adds'], failed: [] } } : {})
+    })
+    expect(asked[0]).toContain('takes two numbers and returns their sum')
+    expect(made?.solution).toContain('return num1 + num2')
+    expect(made?.tests).toContain('def test_adds')
+  })
+})

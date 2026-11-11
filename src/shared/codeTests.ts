@@ -15,7 +15,9 @@ export function untestedCodeAsk(reply: string): { lang: string; prompt: string }
   if (/```tests/i.test(m[2]) || /<tests\b/i.test(reply)) return null
   const lang = (/lang\s*=\s*["']?([\w+#-]+)/i.exec(m[1])?.[1] ?? 'python').toLowerCase()
   if (/^(sql|sqlite)$/.test(lang)) return null
-  return { lang, prompt: m[2].trim() }
+  // The task is often said just before the ask, which holds only a starter ("Write a function that…")
+  const before = hideWorking(reply).slice(0, m.index).replace(/<[^>]+>[\s\S]*?<\/[^>]+>/g, '').trim().split(/\n\s*\n/).pop()?.trim() ?? ''
+  return { lang, prompt: [before.slice(-600), m[2].trim()].filter(Boolean).join('\n\n') }
 }
 
 /** The reference solution's code: its last fenced block, or the solution itself when it is code */
@@ -80,3 +82,7 @@ export function testNames(tests: string): string[] {
   }
   return [...t.matchAll(/^def\s+test_?(\w*)\s*\(/gm)].map((m) => m[1].replace(/_/g, ' ').trim() || 'test')
 }
+
+/** Asked of the model when a code question came with no reference code: the reference, complete and short */
+export const referencePrompt = (question: string, lang: string) =>
+  `A student has been asked:\n${question}\n\nWrite the reference solution in ${lang}: complete, short and correct, with no example calls, prints or tests unless the question asks for output. Reply with only a \`\`\`${lang} block.`
