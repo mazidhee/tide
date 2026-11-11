@@ -37,6 +37,7 @@ export function fileKind(name: string): FileKind {
   const ext = extname(name).toLowerCase()
   if (NOTE_EXT.has(ext)) return 'note'
   if (ext === '.pdf') return 'pdf'
+  if (ext === '.epub') return 'epub'
   if (ext === '.canvas') return 'canvas'
   if (IMAGE_EXT.has(ext)) return 'image'
   if (DOC_EXT.has(ext)) return 'doc'

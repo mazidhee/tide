@@ -452,7 +452,7 @@ function registerIpc() {
     const res = await dialog.showOpenDialog(win!, {
       title: 'Add files to your library',
       properties: ['openFile', 'multiSelections'],
-      filters: [{ name: 'Documents', extensions: ['pdf', 'docx', 'md', 'txt', 'png', 'jpg', 'jpeg', 'webp'] }]
+      filters: [{ name: 'Documents', extensions: ['pdf', 'docx', 'epub', 'md', 'txt', 'png', 'jpg', 'jpeg', 'webp'] }]
     })
     return res.canceled ? [] : importPaths(res.filePaths)
   })

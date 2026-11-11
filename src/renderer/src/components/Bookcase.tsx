@@ -44,7 +44,7 @@ const SORT_LABEL: [Sort, string][] = [
   ['date', 'oldest first'],
   ['status', 'reading first']
 ]
-const KIND_NAME: Record<LibraryItem['type'], string> = { article: 'web article', youtube: 'video', pdf: 'PDF', doc: 'document', link: 'link' }
+const KIND_NAME: Record<LibraryItem['type'], string> = { article: 'web article', youtube: 'video', pdf: 'PDF', epub: 'book (EPUB)', doc: 'document', link: 'link' }
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v))
 const pad3 = (n: number) => String(n).padStart(3, '0')
@@ -55,7 +55,7 @@ const hostOf = (url?: string) => {
     return ''
   }
 }
-const kindOf = (t: LibraryItem['type']): ShelfKind => (t === 'pdf' ? 'cloth' : t === 'youtube' ? 'video' : 'paper')
+const kindOf = (t: LibraryItem['type']): ShelfKind => (t === 'pdf' || t === 'epub' ? 'cloth' : t === 'youtube' ? 'video' : 'paper')
 const dateOf = (i: LibraryItem) => {
   const t = i.saved ? new Date(i.saved + 'T12:00:00').getTime() : i.mtime
   return t ? new Date(t).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : ''
@@ -86,7 +86,7 @@ function groupItems(items: LibraryItem[], subjects: string[], sort: Sort): { gro
       kind: kindOf(item.type),
       status: readStatusOf(item),
       short: shortTitle(item.title),
-      source: item.type === 'pdf' ? 'PDF' : item.type === 'doc' ? 'Doc' : item.site || hostOf(item.sourceUrl) || KIND_NAME[item.type],
+      source: item.type === 'pdf' ? 'PDF' : item.type === 'epub' ? 'EPUB' : item.type === 'doc' ? 'Doc' : item.site || hostOf(item.sourceUrl) || KIND_NAME[item.type],
       date: dateOf(item),
       face: false
     }))

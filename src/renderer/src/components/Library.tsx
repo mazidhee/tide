@@ -15,13 +15,14 @@ import { AreaMark } from './tide/AreaMark'
 import { TopBarActions } from './tide/TopBar'
 import { Bookcase } from './Bookcase'
 
-type Filter = 'all' | 'article' | 'youtube' | 'pdf' | 'doc' | 'link'
+type Filter = 'all' | 'article' | 'youtube' | 'pdf' | 'epub' | 'doc' | 'link'
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'Everything' },
   { id: 'article', label: 'Articles' },
   { id: 'youtube', label: 'Videos' },
   { id: 'pdf', label: 'PDFs' },
+  { id: 'epub', label: 'Books' },
   { id: 'doc', label: 'Docs' },
   { id: 'link', label: 'Links' }
 ]
@@ -38,10 +39,10 @@ type Item = LibraryItem
 
 type Layout = 'grid' | 'list' | 'shelf'
 
-const KIND_LABEL: Record<Filter, string> = { all: '', article: 'Article', youtube: 'Video', pdf: 'PDF', doc: 'Doc', link: 'Link' }
+const KIND_LABEL: Record<Filter, string> = { all: '', article: 'Article', youtube: 'Video', pdf: 'PDF', epub: 'Book', doc: 'Doc', link: 'Link' }
 
 /** Cover shape by kind: books stand up, videos and web pages lie flat */
-const COVER_RATIO: Record<Filter, number> = { all: 0.62, article: 0.56, youtube: 0.5625, pdf: 1.3, doc: 0.75, link: 0.56 }
+const COVER_RATIO: Record<Filter, number> = { all: 0.62, article: 0.56, youtube: 0.5625, pdf: 1.3, epub: 1.5, doc: 0.75, link: 0.56 }
 
 const savedLabel = (i: Item) => {
   const t = i.saved ? new Date(i.saved + 'T12:00:00').getTime() : i.mtime

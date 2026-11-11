@@ -3,7 +3,7 @@ import type { LearningStatus, NoteMeta, ReadStatus } from '@shared/types'
 import { fileTitle, useApp } from '../state'
 import { isCompanion } from './companion'
 
-export type ItemType = 'article' | 'youtube' | 'pdf' | 'doc' | 'link'
+export type ItemType = 'article' | 'youtube' | 'pdf' | 'epub' | 'doc' | 'link'
 
 export interface LibraryItem {
   path: string
@@ -60,13 +60,13 @@ export function useLibrary() {
   const items: LibraryItem[] = useMemo(() => {
     const meta = new Map(notes.map((n) => [n.path, n]))
     return app.files
-      .filter((f) => f.path.startsWith(prefix) && (f.kind === 'note' || f.kind === 'pdf' || f.kind === 'doc') && !isCompanion(f.path))
+      .filter((f) => f.path.startsWith(prefix) && (f.kind === 'note' || f.kind === 'pdf' || f.kind === 'epub' || f.kind === 'doc') && !isCompanion(f.path))
       .map((f) => {
         const m = meta.get(f.path)
-        const type: ItemType = f.kind === 'pdf' ? 'pdf' : m?.sourceType && m.sourceType !== 'pdf' ? m.sourceType : f.path.includes('/Docs/') ? 'doc' : 'article'
+        const type: ItemType = f.kind === 'pdf' ? 'pdf' : f.kind === 'epub' ? 'epub' : m?.sourceType && m.sourceType !== 'pdf' ? m.sourceType : f.path.includes('/Docs/') ? 'doc' : 'article'
         return {
           path: f.path,
-          title: m?.title ?? fileTitle(f.name).replace(/\.pdf$/i, ''),
+          title: m?.title ?? fileTitle(f.name).replace(/\.(pdf|epub)$/i, ''),
           type,
           excerpt: m?.excerpt ?? '',
           mtime: f.mtime ?? 0,

@@ -374,7 +374,7 @@ export async function importFile(sourcePath: string): Promise<ClipResult> {
     return { path, title: name }
   }
 
-  const folder = ext === '.pdf' ? 'PDFs' : ext === '.md' || ext === '.txt' ? 'Docs' : 'Files'
+  const folder = ext === '.epub' ? 'Books' : ext === '.pdf' ? 'PDFs' : ext === '.md' || ext === '.txt' ? 'Docs' : 'Files'
   const targetExt = ext === '.txt' ? '.md' : ext
   const path = uniquePath(joinRel(libraryDir(folder), `${name}${targetExt}`))
   await fs.mkdir(absPath(libraryDir(folder)), { recursive: true })

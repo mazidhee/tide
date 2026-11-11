@@ -70,7 +70,7 @@ export interface Settings {
   studyApi?: { enabled: boolean; port?: number; lan?: boolean }
 }
 
-export type FileKind = 'note' | 'pdf' | 'image' | 'doc' | 'canvas' | 'other'
+export type FileKind = 'note' | 'pdf' | 'epub' | 'image' | 'doc' | 'canvas' | 'other'
 
 export interface FileNode {
   name: string
