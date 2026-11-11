@@ -1,3 +1,4 @@
+import { checkVectorClocks } from '@shared/vectorClock'
 import { checksOf, claimsPrompt, makesClaims, parseClaimCheck, CLAIMS_SYSTEM, type ClaimCheck, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, setsProblem, solutionOf, solvePrompt, wantsSolution, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
 import type { RequestKind } from '@shared/providers'
 import { aboutMetabase } from '@shared/metabase'
@@ -62,8 +63,13 @@ export async function mayLeaveMac(req: ChatRequest): Promise<boolean> {
 export async function exactCheck(req: ChatRequest): Promise<Exact | null> {
   const prev = [...req.messages].reverse().find((m) => m.role === 'assistant')
   const said = [...req.messages].reverse().find((m) => m.role === 'user')
-  const solution = solutionOf(text(prev))
   const mine = ownWords(text(said))
+  // A vector clock problem is replayed, solution or not: a small model marks these by eye
+  if (/^Answer:/i.test(mine)) {
+    const clocks = checkVectorClocks(text(prev), mine.replace(/^Answer:\s*/i, ''))
+    if (clocks) return { ...clocks, kind: 'clocks' }
+  }
+  const solution = solutionOf(text(prev))
   // A pick from options (with reasoning after it) isn't a worked answer to compare
   if (!solution || req.askType === 'choice' || !/^Answer:/i.test(mine) || /^Answer:\s*\([A-Z]\)\s/.test(mine)) return null
   const expected = finalAnswer(solution)
