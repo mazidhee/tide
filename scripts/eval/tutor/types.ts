@@ -8,7 +8,7 @@ import type { SimKind } from '../../../src/shared/sims'
 import type { SubjectKind } from '../../../src/shared/subjectMap'
 
 /** Bump when a scenario or an expectation changes: results are only comparable within one version */
-export const SCENARIO_SET_VERSION = '1.2.0'
+export const SCENARIO_SET_VERSION = '1.3.0'
 
 /** The core subjects: each has a scenario in every situation */
 export const SUBJECTS = ['systems', 'c-cpp', 'distributed', 'databases', 'ml', 'maths', 'data-eng'] as const
