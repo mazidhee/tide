@@ -44,7 +44,8 @@ import {
 import { importFile, libraryThumb, saveUrl } from './library'
 import { getHighlights, saveHighlights } from './highlights'
 import { labLoadTable, labQuery, labReset, labSchema } from './lab'
-import { librariesStatus, mathStatus, runCode, runProject, setupLibraries, setupMath } from './runner'
+import { isSql, languagesStatus } from './languages'
+import { labStatus, librariesStatus, mathStatus, runCode, runProject, setupLab, setupLibraries, setupMath } from './runner'
 import { searchStatus, setupSearch, stopSearch, wakeSearch } from './websearch'
 import { applySpeedups, ensureModelServer, serverReady, speedStatus, tuneModelServer } from './modelServer'
 import { labFlashcards } from './labCards'
@@ -65,6 +66,7 @@ import { noteUse } from './connectionUse'
 import { challengeReply } from './lessonGuard'
 import { proposeChanges, curriculumStatus, curriculumView, setOverride, sortError, sortRoadmaps } from './curriculum'
 import { aimsKey, aimsOf } from '@shared/coach'
+import { resultText } from '@shared/lab'
 import type { SectionClass } from '@shared/curriculum'
 import type { Known, PlacementSetup } from '@shared/placement'
 import { getBrain } from './brain'
@@ -479,7 +481,14 @@ function registerIpc() {
   handle('lab:schema', (id: string) => labSchema(String(id ?? '')))
   handle('lab:reset', (id: string) => labReset(String(id ?? '')))
   handle('lab:load', (id: string, path: string) => labLoadTable(String(id ?? ''), String(path ?? ''), privatePath))
-  handle('runner:run', (language: string, code: string, stdin?: string) => runCode(language, code, stdin))
+  handle('runner:run', (language: string, code: string, stdin?: string, opts?: { tests?: string; labId?: string }) => {
+    // SQL in a code question runs in the lesson's data lab, like its ```sql blocks
+    if (isSql(String(language ?? '')) && opts?.labId) {
+      const r = labQuery(String(opts.labId), String(code ?? ''))
+      return { stdout: r.error ? '' : resultText(r), stderr: r.error ? `Error: ${r.error}` : '', exitCode: r.error ? 1 : 0, timedOut: false, durationMs: Math.round(r.elapsedMs) }
+    }
+    return runCode(language, code, stdin, undefined, { tests: typeof opts?.tests === 'string' ? opts.tests : undefined })
+  })
   // A link that arrived before the window was ready is picked up once, when the app has loaded
   handle('app:pendingLink', () => {
     const l = pendingLink
@@ -492,6 +501,9 @@ function registerIpc() {
   handle('runner:applySpeedups', () => applySpeedups())
   handle('runner:librariesStatus', () => librariesStatus())
   handle('runner:setupLibraries', () => setupLibraries())
+  handle('runner:labStatus', () => labStatus())
+  handle('runner:setupLab', () => setupLab((step) => send('runner:labProgress', step)))
+  handle('runner:languagesStatus', () => languagesStatus())
   handle('runner:setupMath', () => setupMath())
   handle('websearch:status', () => searchStatus())
   handle('websearch:setup', () => setupSearch())

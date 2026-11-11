@@ -37,6 +37,7 @@ import { readText, writeText } from './vault'
 import { applyCanvasOps, describeCanvas, parseCanvas, serializeCanvas } from '@shared/canvas'
 import { retrieve } from './ai'
 import { loadTableTool, runSqlTool } from './lab'
+import { isSql } from './languages'
 import { runCode } from './runner'
 import { addMemory, forgetMatching, memoryPrompt } from './memory'
 import { fitHistory } from '@shared/context'
@@ -210,8 +211,13 @@ const TERMINAL_RUN = tool(
 
 const CODE_TOOL = tool(
   'run_code',
-  'Run Python, JavaScript, C or C++ in a sandbox (no network, no files). Use it for any exact calculation (large numbers, sequences, probabilities, algebra) rather than working it out in your head, and to run a code example before you show its output. Returns stdout, stderr and the exit code. Python has SymPy. C and C++ are compiled with warnings and an undefined-behaviour checker, so their messages are worth showing.',
-  { language: { type: 'string', enum: ['python', 'javascript', 'c', 'cpp'] }, code: { type: 'string' }, stdin: { type: 'string' } },
+  'Run code in a sandbox (no internet, no files kept). Use it for any exact calculation (large numbers, sequences, probabilities, algebra) rather than working it out in your head, and to run a code example before you show its output. Returns stdout, stderr and the exit code. Python has SymPy, NumPy, pandas and Matplotlib; PyTorch, scikit-learn, SciPy, pytest, requests, httpx and aiohttp only when the learner has added the lab pack. Compiled languages show their warnings, and C and C++ have an undefined-behaviour checker, so their messages are worth showing. A language or Python library that is not installed on this Mac says so in the result, with how to add it: tell the student that, never guess the output. For HTTP and async code a practice server is at the address in the environment variable TIDE_HTTP (/json?delay=1, /flaky?rate=0.3 or ?fail=2, /stream?n=5&delay=0.2, /echo, /status/404); a server the program starts itself must use 127.0.0.1 and the port in TIDE_PORT. sql is sent to run_sql.',
+  {
+    language: { type: 'string', enum: ['python', 'javascript', 'typescript', 'c', 'cpp', 'rust', 'go', 'swift', 'java', 'ruby', 'bash', 'zsh', 'sql'] },
+    code: { type: 'string' },
+    stdin: { type: 'string' },
+    tests: { type: 'string', description: 'Hidden tests. Python: pytest-style test_ functions run against code (its names are imported for them). Any language: input and output cases as JSON, [{"stdin": "2 3", "expect": "5"}], each run as its own program. The result lists which passed and which failed, and why.' }
+  },
   ['language', 'code']
 )
 
@@ -1194,14 +1200,17 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     }
   }
 
+  // SQL asked of run_code goes to the data lab, as run_sql
+  if (call.name === 'run_code' && isSql(str('language'))) return runToolNow({ ...call, name: 'run_sql', arguments: JSON.stringify({ sql: String(args.code ?? '') }) }, ctx, depth)
+
   if (call.name === 'run_code') {
     const language = str('language') || 'python'
     const code = String(args.code ?? '')
     const firstLine = code.split('\n').find((l) => l.trim() && !l.trim().startsWith('#') && !l.trim().startsWith('import') && !l.trim().startsWith('from'))?.trim() ?? ''
     const id = ctx.step({ kind: 'run_code', label: `Running ${language}${firstLine ? `: ${firstLine.slice(0, 60)}` : ''}`, status: 'running', depth })
-    const r = await runCode(language, code, String(args.stdin ?? ''))
-    ctx.updateStep(id, { status: r.exitCode === 0 && !r.timedOut ? 'done' : 'error', detail: r.timedOut ? 'timed out' : r.exitCode === 0 ? `${r.durationMs} ms` : `exit ${r.exitCode}` })
-    return `exit code: ${r.exitCode}${r.timedOut ? ' (timed out after 10 s)' : ''}\nstdout:\n${clip(r.stdout, 4000) || '(empty)'}\nstderr:\n${clip(r.stderr, 2000) || '(empty)'}`
+    const r = await runCode(language, code, String(args.stdin ?? ''), undefined, { tests: typeof args.tests === 'string' ? args.tests : undefined })
+    ctx.updateStep(id, { status: r.exitCode === 0 && !r.timedOut ? 'done' : 'error', detail: r.timedOut ? 'timed out' : r.tests ? `${r.tests.passed.length} of ${r.tests.passed.length + r.tests.failed.length} tests passed` : r.exitCode === 0 ? `${r.durationMs} ms` : `exit ${r.exitCode}` })
+    return `exit code: ${r.exitCode}${r.timedOut ? ` (timed out after ${Math.round(r.durationMs / 1000)} s)` : ''}\nstdout:\n${clip(r.stdout, 4000) || '(empty)'}\nstderr:\n${clip(r.stderr, 2000) || '(empty)'}`
   }
 
   if (call.name === 'run_sql') {

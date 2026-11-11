@@ -16,7 +16,7 @@ export type AskType = 'predict' | 'short' | 'choice' | 'explain' | 'error' | 'pr
 
 export type Block =
   | { kind: 'text'; text: string }
-  | { kind: 'ask'; type: AskType; prompt: string; options: string[]; lang?: string }
+  | { kind: 'ask'; type: AskType; prompt: string; options: string[]; lang?: string; tests?: string }
   | { kind: 'grade'; verdict: Verdict; score: number; text: string }
   | { kind: 'plan'; steps: string[] }
   | { kind: 'card'; front: string; back: string }
@@ -27,6 +27,14 @@ export type Block =
   | { kind: 'note'; text: string }
   /** The tutor will carry on explaining: no question this turn */
   | { kind: 'continue' }
+
+/** A code ask's hidden tests, a ```tests block in its body: taken out of what the student sees (one still being written too) */
+export function splitTests(body: string): { prompt: string; tests?: string } {
+  const m = /\n?[ \t]*```tests[ \t]*\n([\s\S]*?)(?:\n[ \t]*```|$)/i.exec(body)
+  if (!m) return { prompt: body }
+  const tests = m[1].trim()
+  return { prompt: (body.slice(0, m.index) + body.slice(m.index + m[0].length)).trim(), ...(tests ? { tests } : {}) }
+}
 
 const attr = (attrs: string, name: string) => attrs.match(new RegExp(`${name}\\s*=\\s*"([^"]*)"`, 'i'))?.[1] ?? attrs.match(new RegExp(`${name}\\s*=\\s*'([^']*)'`, 'i'))?.[1]
 
@@ -92,7 +100,7 @@ export function parseBlocks(full: string): Block[] {
     const open = t.match(/<ask\b([^>]*)>([\s\S]*)$/i)
     if (open && open[2].trim()) {
       const type = (attr(open[1], 'type')?.toLowerCase() ?? 'short') as AskType
-      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt: open[2].replace(/<\/?a?s?k?$/i, '').trim(), options: [], lang: attr(open[1], 'lang') })
+      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt: splitTests(open[2].replace(/<\/?a?s?k?$/i, '').trim()).prompt, options: [], lang: attr(open[1], 'lang') })
     }
   }
   for (const m of message.matchAll(TAG)) {
@@ -105,16 +113,17 @@ export function parseBlocks(full: string): Block[] {
       const type = (attr(attrs, 'type')?.toLowerCase() ?? 'short') as AskType
       const options = (attr(attrs, 'options') ?? '').split('|').map((o) => o.trim()).filter(Boolean)
       // Some models list choices as "A) ..." lines inside the tag instead of an options attribute
-      let prompt = body
+      const hidden = splitTests(body)
+      let prompt = hidden.prompt
       if (type === 'choice' && !options.length) {
-        const lines = body.split('\n')
+        const lines = prompt.split('\n')
         const opt = lines.filter((l) => /^\s*(?:[A-Da-d][).:]|[-*])\s+/.test(l))
         if (opt.length >= 2) {
           options.push(...opt.map((l) => l.replace(/^\s*(?:[A-Da-d][).:]|[-*])\s+/, '').trim()))
           prompt = lines.filter((l) => !opt.includes(l)).join('\n').trim()
         }
       }
-      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt, options, lang: attr(attrs, 'lang') })
+      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt, options, lang: attr(attrs, 'lang'), ...(hidden.tests ? { tests: hidden.tests } : {}) })
     } else if (name === 'grade') {
       const verdict = (attr(attrs, 'verdict')?.toLowerCase() ?? 'partial') as Verdict
       const score = Number(attr(attrs, 'score') ?? (verdict === 'correct' ? 1 : verdict === 'wrong' ? 0 : 0.5))
@@ -296,7 +305,9 @@ export function whyByDefault(pref: 'off' | 'foundations' | 'always' | undefined,
  */
 export const HANDS_ON = `If this topic is learnt by writing or running something (a programming language, a library, a query language, a command-line tool, a product's API or query builder), teach it hands-on:
 - Show real code: short, complete snippets in fenced blocks with the language named, each doing one thing, in the language or syntax of the topic itself (C for C, SQL for a warehouse, the tool's own query or SDK calls for a product).
-- Python, JavaScript, C and C++ run here. Run every snippet in those with run_code before you show it, and show its real output under it. Never write output from memory. A compiler warning or a runtime error is teaching material: show it and explain it.
+- Python, JavaScript, TypeScript, C, C++, Bash and zsh run here, and Rust, Go, Swift, Java and Ruby when installed. Run every snippet with run_code before you show it, and show its real output under it. Never write output from memory. A compiler warning or a runtime error is teaching material: show it and explain it. If the result says the language or the lab pack (PyTorch, scikit-learn, SciPy, pytest, httpx, aiohttp) isn't installed, say so and how to add it.
+- There is no internet in the sandbox. For HTTP, async, timeouts and retries, use the practice server at the address in TIDE_HTTP (/json?delay=1, /flaky?rate=0.3, /stream?n=5, /echo); in Python, from tide_http import url.
+- A code ask can carry hidden tests in a \`\`\`tests block inside it, which the student doesn't see: test_ functions in Python, or input and output cases as JSON, [{"stdin": "2 3", "expect": "5"}], in any language. Their answer is run against them and you get which passed.
 - SQL runs here too, with run_sql, against the lab's sample data (a shop: customers, products, orders, order_items; product analytics: users, events), or the student's own .csv or .tsv file once load_table has loaded it. Run every query before you show it. Show each query as a \`\`\`sql block: the student can run it there, change it and run it again, so ask them to. A wrong query's error is teaching material.
 - To show data as a picture, write a \`\`\`chart block whose body is JSON: {"sql": "SELECT ...", "type": "bar" or "line" or "scatter" (optional), "title": "..."}. Tide runs the query and draws it: the first column is the category or date, the numeric columns after it are what is drawn. Use it for a trend, a comparison, a funnel or a retention curve, after running the query yourself.
 - The lab's engine is SQLite. When the topic is another system (BigQuery, Snowflake, Postgres, a BI or analytics tool such as Tableau or Mixpanel), say so plainly once, teach the idea on the lab's data, and name the differences that matter for that idea (date and time functions, types, quoting, QUALIFY, arrays and structs, how the tool builds the same query from its interface), each looked up in the official documentation rather than from memory.

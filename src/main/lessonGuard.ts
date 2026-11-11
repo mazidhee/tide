@@ -141,7 +141,7 @@ export async function checkLessonReply(
     for (const c of checks.slice(0, 2)) {
       const r = await runCode(c.lang, c.code, '', 20_000).catch((e: Error) => ({ stdout: '', stderr: e.message, exitCode: 1, timedOut: false, durationMs: 0 }))
       // A missing library is Tide's problem, not the tutor's: don't count it against the problem
-      if (r.exitCode !== 0 && !/No module named|isn't supported/.test(r.stderr)) found.problem.push(`Its answer didn't survive a check${r.timedOut ? ' (timed out)' : ''}.`)
+      if (r.exitCode !== 0 && !/No module named|isn't supported|isn't installed/.test(r.stderr)) found.problem.push(`Its answer didn't survive a check${r.timedOut ? ' (timed out)' : ''}.`)
     }
     step('lesson-check', 'Checked the answer to this problem', 'done')
   }
