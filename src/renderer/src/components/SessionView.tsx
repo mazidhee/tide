@@ -13,7 +13,7 @@ import { parsePlacement, placementNote } from '@shared/placement'
 import { correctionText } from '@shared/lessonCheck'
 import type { Reading } from '@shared/readings'
 import { whyByDefault } from '../lib/agenda'
-import { MODE_LABEL, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
+import { ASKED, GO_ON, SHOW_ME, MODE_LABEL, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
 import { cardsToMarkdown } from '@shared/cards'
 import { fileTitle, useApp, pagesLabel } from '../state'
@@ -30,27 +30,7 @@ import type { View } from '../state'
 import { Professor, type ProfessorPose } from './Professor'
 
 // Loaded when a lesson needs them: the code editor (Monaco) and the walkthrough canvas
-/** What Go on sends, and how a question of yours is marked, so neither is recorded as an answer */
-const GO_ON = 'Go on.'
-const ASKED = 'My question: '
 const answered = (said: string) => !said.startsWith(GO_ON) && !said.startsWith(ASKED)
-
-/**
- * Show me: you ask to see the explanation you were just given. The tutor picks the one kind of
- * picture that fits what it taught, and anything with numbers in it is computed, not drawn by eye.
- */
-const SHOW_ME = `${ASKED}Show me that as a picture.
-
-(Tide: the student pressed Show me on your last explanation. Don't explain it again in words. Give the ONE visual that fits what you just taught, then one line saying what to look at in it, and stop: no new problem, no question.
-Choose by what the idea is:
-- parts and how data or control moves between them (a system, a pipeline, a request, the layers of a model): a mermaid flowchart;
-- an exchange over time between parties (a protocol, a handshake, a call sequence): a mermaid sequenceDiagram;
-- ideas grouped under a topic, to see the whole of it: a mermaid mindmap;
-- states and what moves between them: a mermaid stateDiagram-v2;
-- values changing step by step (an algorithm run, a carry chain, a trace): a table, one row per step;
-- a function, a quantity, a distribution or numbers compared: plot it with run_code (matplotlib), computing every value in the code;
-- something that exists physically or has a classic textbook figure: find_image.
-Everything in it must be exact. Any number, bit pattern or formula you show is one you have computed (use run_code when it isn't trivial), labels use the same names and symbols as your explanation, and nothing is included that you didn't teach. Keep a diagram under about 14 nodes with short labels in quotes.)`
 
 const CodeEditor = lazy(() => import('./CodeEditor').then((m) => ({ default: m.CodeEditor })))
 const LessonCanvas = lazy(() => import('./LessonCanvas').then((m) => ({ default: m.LessonCanvas })))

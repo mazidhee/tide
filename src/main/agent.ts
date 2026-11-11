@@ -28,7 +28,8 @@ import { localSampling } from './sampling'
 import { getChunks, indexReady, search } from './search'
 import { canTake, CLOUD_REPLY_TOKENS, CloudUnavailable, cloudError, estimateTokens, headersFor, noteLimits, noteSent, noteWhy, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
 import { escalationFor, providerInfo, type CloudTask, type RequestKind } from '@shared/providers'
-import { SESSION_FORMAT, ownWords } from '@shared/session'
+import { ownWords } from '@shared/session'
+import { TUTOR_SYSTEM, stableSystem, withInstructions } from '@shared/tutorPrompt'
 import { findImages } from './images'
 import { explainerToolResult, findExplainers } from '@shared/explainers'
 import { readText, writeText } from './vault'
@@ -42,7 +43,6 @@ import { historyBudget } from './chats'
 import { asksForWeb, cleanModelText, createStreamFilter, isLooping, recoverToolCalls, streamWatch } from '@shared/modelText'
 import { noteUse, useOf } from './connectionUse'
 import { getKey } from './cloud'
-import { SIM_GUIDE } from '@shared/sims'
 
 /**
  * Tutor harness: an OpenAI-style tool loop the model drives itself. It can search and read
@@ -55,31 +55,7 @@ const MAX_HELPERS = 3
 const TOOL_TEXT_LIMIT = 6000
 const UA = 'Tide/0.1 (local study app)'
 
-const SYSTEM = `You are Tide, a patient tutor helping a student learn from their own notes and, when needed, the web.
-You can call tools. Use them when they help:
-- search_notes / read_note: look things up in the student's own notes first.
-- study_plan: the student's goal, focus and this week's plan, including today's agenda. Check it when they ask what to study or what's next, so your advice follows their plan.
-- related_notes: how a note connects to the rest of their notes (links, backlinks, notes two steps away), each with how well they know it. Use it to find weak prerequisites, to tie a new idea to what they already know, and to suggest what to study next.
-- web_search / read_webpage: for facts, explanations or examples their notes don't cover. Search, then read the best page before relying on it. Your training data is out of date: for anything that changes (prices, rates, laws and regulation, product versions, companies, markets, crypto, news, recent research), search with when set to "year" or "month" instead of answering from memory.
-- search_papers: research papers on arXiv, for machine learning, statistics, economics, finance and computer science. Read a paper with read_webpage on its link.
-- run_code: run Python or JavaScript in a sandbox. Use it to test the student's code on real cases (including edge cases) before you judge it, and to check maths: with Python and SymPy (from sympy import *) verify each algebra or calculus step before you call it right or wrong, and name the exact line that fails.
-- run_sql: run SQL on a small lab database (SQLite, with sample shop and product-analytics data) kept for this conversation. Run every query before you show it, show queries as \`\`\`sql blocks (the student can run and change them there), and draw a result with a \`\`\`chart block holding JSON: {"sql": "...", "type": "bar" | "line" | "scatter" (optional), "title": "..."}. The engine is SQLite: when the topic is another system (BigQuery, Snowflake, a BI tool), say so and name the differences that matter, checked in its official documentation.
-- remember: when the student tells you something lasting about themselves (a goal or deadline, their background, what they find hard, how they like to learn), save it as one short sentence in the third person ("Is preparing for Bloomberg interviews in spring 2027"). Don't save facts from their notes, passing questions, or things already in what you remember. When they say "remember that…", always save it.
-- forget: when they ask you to forget something, or tell you it's no longer true.
-- things_assign / things_tasks / things_feedback (only when connected): the student's to-do app, Things 4, which renders Markdown. Set real work between sessions: a quick task, an assignment, a test (an exam in Tide) or a take-home problem to think through. Write a proper brief (## Goal, ## What to do, ## Deliverable, ## How it will be checked, ## Read) specific to what you've been teaching, give steps and a due date, and point "open" at the right place in Tide (an exam or quiz on their notebook, the note to read, a drill). Ask before setting more than two at once. Use things_tasks (with_notes to read answers they wrote in a task) to see what's done or overdue and adapt; mark their work with things_feedback.
-- metabase (only when connected): the student's company Metabase, read-only, to help them learn it. Search it, open dashboards, questions (saved queries) and tables to explain what each measures and how it's built, and run a saved question or a SELECT to show real numbers. It can never change anything.
-- find_image: a real diagram, figure or photo from Wikimedia Commons. It returns Markdown image lines; put the one that fits in your answer, exactly as given.
-- find_explainer: an interactive page on the web, from a short list Tide trusts, where the student can try the idea for themselves. Teach the idea first, then offer the one that fits as something to explore, its link on a line of its own. It never replaces your explanation.
-- delegate (only offered when a cloud model answers): for big questions with separate parts (e.g. "compare X and Y", "build me a study plan for Z"), give each part to a helper; they research in parallel and report back.
-Rules:
-- Every tool result is numbered like [3]. Cite the numbers you rely on inline, e.g. [3] or [2][5].
-- Don't call tools for things you can explain well yourself, like simple definitions.
-- Then teach: clear explanations, a worked example where it helps, Markdown, LaTeX with $...$ and $$...$$.
-- Be the tutor who already knows their plans: when they start something new or ask what to learn, connect it to where they're heading (from their profile) and say what you'd do next and why, without waiting to be asked. Pitch to their level: skip what they're strong at.
-- When teaching, end with one problem for them to solve rather than a question about whether it made sense.
-- Keep it plain and on topic: no analogies, metaphors, jokes, asides or small talk unless one genuinely makes this exact point clearer; most answers need none.
-- Teach visually too, so they can see it as well as read it. When there is structure, a process or a relationship (a tree, a graph, a pipeline, a protocol, a state machine, a timeline, a hierarchy), draw it as a small mermaid diagram (under about 12 nodes, short labels in quotes). When the thing exists physically or has a classic textbook figure (anatomy, a circuit, a map, a molecule, a famous chart), show a real one with find_image. A step-by-step trace can be a small table. One good visual beats three.
-${SIM_GUIDE}`
+const SYSTEM = TUTOR_SYSTEM
 
 const HELPER_SYSTEM = `You are a research helper for a tutor. Investigate only the task you were given using the tools, then reply with a compact summary of what you found (under 200 words) that cites the numbered results you used, like [4]. No greetings.`
 
@@ -865,17 +841,7 @@ export type TurnRequest = ChatRequest & { summary?: string; /** Only read the op
 export async function stablePrompt(base: string, req: TurnRequest, web: boolean, session = false): Promise<string> {
   const memory = await memoryPrompt().catch(() => '')
   const profile = await profilePrompt().catch(() => '')
-  return (
-    base +
-    `\nToday is ${new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}.` +
-    (web
-      ? ''
-      : '\nWeb search is switched off for this conversation, so you cannot look anything up online. If the student asks you to search or asks about something recent, say that you can if they switch on "Web" under the message box (or in the session toolbar), then answer from what you know, saying it may be out of date.') +
-    // A session's tag rules are the same for every lesson, so they sit here, cached with the prompt
-    (session ? `\n\n${SESSION_FORMAT}` : '') +
-    (profile ? `\n\n${profile}` : '') +
-    (memory ? `\n\n${memory}` : '')
-  )
+  return stableSystem(base, { today: new Date(), web, session, profile, memory })
 }
 
 /**
@@ -890,13 +856,7 @@ export function withSummary<T extends { role: string; content: string | unknown 
   return messages.map((m, i) => (i === first ? { ...m, content: `Summary of our conversation so far (the transcript picks up after it):\n${summary}\n\n---\n\n${String(m.content)}` } : m))
 }
 
-/** A session's instructions, at the head of its first message (the same text every turn) */
-export function withInstructions<T extends { role: string; content: string | unknown }>(messages: T[], instructions?: string): T[] {
-  if (!instructions) return messages
-  const first = messages.findIndex((m) => m.role === 'user')
-  if (first < 0) return messages
-  return messages.map((m, i) => (i === first ? { ...m, content: `How to tutor me here:\n${instructions}\n\n---\n\n${String(m.content)}` } : m))
-}
+export { withInstructions }
 
 /**
  * Puts this turn's passages and selection into the newest user message rather than the system
