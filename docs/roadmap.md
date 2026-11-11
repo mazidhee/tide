@@ -23,6 +23,12 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 ## Now
 
 - [ ] **A fuller code editor.** monaco-vscode-api, so lesson code feels like VS Code.
+- [ ] **Videos in Tide.** YouTube's own player inside Tide, so almost no added weight: one player at a time, a thumbnail until play, removed when closed. Videos are never downloaded or hosted; your own MP4s also play.
+  - Player and transcript side by side: the line being spoken is marked, clicking a line jumps there, highlight or ask about a line.
+  - The tutor picks a section to watch before a lesson (from saved transcripts and course videos) and a recap clip after it, with questions drawn from the transcript.
+  - Course lessons that have a video show it beside the course text.
+  - After that: the video pauses at chosen moments for a question and goes on when you answer.
+  - Videos without captions can be transcribed on the Mac, only on request and when Gemma is idle.
 - [ ] **Faster lesson starts and fewer stalls.** The first answer of a new lesson takes 14–27 s. Gemma stalls in about 14% of turns, and retries run one after another. The turn after a long lesson is trimmed re-reads it all. Partial work: worktree `tide-fast2`.
 - [ ] **Everyday check: Python and ML from zero.** Run real lessons the way you use Tide ("I want to learn Python", "I want to learn ML"), over several sessions, and fix what goes wrong.
 - [ ] **Lab pack ready before it's needed.** Install the data and ML packages (about 900 MB) from Settings, in the background, so the first ML lesson doesn't stall for 30 s. Partial work: worktree `tide-voice`.
