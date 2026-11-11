@@ -23,7 +23,7 @@
  * model again, so they are handled before this, by turn.ts.
  */
 import { parseChartRequest } from '../../../src/shared/lab'
-import { setsProblem, solutionOf, type Verdict } from '../../../src/shared/lessonCheck'
+import { retriesProblem, solutionOf, wantsSolution, type Verdict } from '../../../src/shared/lessonCheck'
 import { repairReply } from '../../../src/shared/lessonRepair'
 import { cleanModelText } from '../../../src/shared/modelText'
 import { hideWorking, parseBlocks, type Block } from '../../../src/shared/session'
@@ -194,16 +194,8 @@ function scoreVisuals(want: Visual | Visual[], reply: string): ReturnType<typeof
   return all.find((v) => v.score) ?? all[0]
 }
 
-/**
- * The reply asks for another go at the problem just marked, rather than setting a new one: the
- * tutor's last message posed a problem with its solution, this one marks the answer down and sets
- * no numbered problem. The solution it will mark against is the one it already wrote.
- */
-function retriesProblem(history: Turn[] | undefined, reply: string): boolean {
-  const last = [...(history ?? [])].reverse().find((t): t is { tutor: string } => 'tutor' in t)
-  if (!last || !solutionOf(last.tutor) || !/<ask\b[^>]*type\s*=\s*["'](problem|code|error)["']/i.test(last.tutor)) return false
-  return /<grade\b[^>]*verdict\s*=\s*["']?(partial|wrong)/i.test(reply) && !/\*\*\s*Problem\s+\d+/i.test(hideWorking(reply))
-}
+/** The tutor's last message before the reply being scored */
+const lastTutor = (history: Turn[] | undefined) => [...(history ?? [])].reverse().find((t): t is { tutor: string } => 'tutor' in t)?.tutor ?? ''
 
 const attrOf = (attrs: string, name: string) => attrs.match(new RegExp(`${name}\\s*=\\s*["']([^"']*)["']`, 'i'))?.[1]
 
@@ -277,9 +269,10 @@ export function scoreReply(s: Pick<Scenario, 'expect' | 'situation' | 'setup'> &
   if (e.setsProblem) add('sets-problem', sets, 'no problem set')
   // The app works a missing solution out itself for what it takes to be a problem (lessonGuard), and
   // a second go at the problem just marked is marked against the solution already written
-  const supplied = !solution && setsProblem(reply)
+  const previous = lastTutor(s.history)
+  const supplied = !solution && wantsSolution(reply, previous)
   if (supplied && (sets || e.setsProblem)) repaired.push('solution')
-  if ((sets && !retriesProblem(s.history, reply)) || e.setsProblem) add('solution', !!solution || supplied, 'a problem without its <solution>')
+  if ((sets && !retriesProblem(previous, reply)) || e.setsProblem) add('solution', !!solution || supplied, 'a problem without its <solution>')
   const askText = rawAsks.map((m) => m[2]).join('\n') + '\n' + rawAsks.map((m) => attrOf(m[1], 'options') ?? '').join('\n')
   const squash = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
   const leaks = [

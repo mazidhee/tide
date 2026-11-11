@@ -140,7 +140,8 @@ describe('protocol', () => {
   })
 
   it('wants a hidden solution with every problem, and a problem when one is due', () => {
-    expect(failed(ends, '<ask type="problem">Which indices does a search for 7 in [1, 3, 5, 7, 9] probe?</ask>')).toContain('solution')
+    // Too slight for the app to solve for itself, so nothing will supply it
+    expect(failed(ends, '<ask type="problem">Which indices are probed?</ask>')).toContain('solution')
     expect(failed({ ends: 'ask', setsProblem: true }, QUESTION)).toEqual(expect.arrayContaining(['sets-problem', 'solution']))
   })
 
@@ -150,15 +151,19 @@ describe('protocol', () => {
     expect(failed(ends, numbered)).toEqual([])
     expect(repaired(ends, numbered)).toEqual(['solution'])
     expect(repaired(ends, numbered.replace('<ask', '<solution>4, then 6: indices 2 and 3</solution>\n\n<ask'))).toEqual([])
+    // So does a problem or code ask with no "Problem 2" heading (from the baseline: a code task set after a wrong answer)
+    const typed = '<ask type="code" lang="c">Change f so that it prints the address of the first element and the size of the pointer.</ask>'
+    expect(scoreReply(sc(ends), typed)).toMatchObject({ failed: [], repaired: ['solution'] })
   })
 
   it('does not want a new solution for another go at the problem just marked', () => {
     const history = [{ tutor: '**Problem 1 · warm-up**\n\n<solution>def mid(lo, hi): return lo + (hi - lo) // 2</solution>\n\n<ask type="code" lang="python">Write mid(lo, hi) without overflow.</ask>' }, { learner: { answer: 'def mid(lo, hi): return (lo + hi) / 2' } }]
     const again = '<grade verdict="partial" score="0.5">"(lo + hi) / 2" gives a float, and the sum can overflow in a fixed-width language.</grade>\n\n<ask type="code" lang="python">Change your mid so it returns an integer and never adds lo and hi.</ask>'
     const marking: Expect = { ends: 'ask', verdict: 'wrong', accept: ['partial'] }
-    expect(scoreReply({ ...sc(marking), history }, again).failed).toEqual([])
-    // A new numbered problem, or one after a question that had no solution, still needs its own
-    expect(scoreReply({ ...sc(marking), history: [{ tutor: QUESTION }, history[1]] }, again).failed).toContain('solution')
+    expect(scoreReply({ ...sc(marking), history }, again)).toMatchObject({ failed: [], repaired: [] })
+    // The same task after a question that had no solution is new work: the app has to work its solution out
+    expect(scoreReply({ ...sc(marking), history: [{ tutor: QUESTION }, history[1]] }, again)).toMatchObject({ failed: [], repaired: ['solution'] })
+    // And a new numbered problem too slight to solve still fails
     expect(scoreReply({ ...sc(marking), history }, again.replace('<ask', '**Problem 2 · same level**\n\n<ask').replace('Change your mid so it returns an integer and never adds lo and hi.', 'Write.')).failed).toContain('solution')
   })
 

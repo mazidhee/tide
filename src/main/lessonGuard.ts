@@ -1,4 +1,4 @@
-import { checksOf, claimsPrompt, makesClaims, parseClaimCheck, CLAIMS_SYSTEM, type ClaimCheck, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, setsProblem, solutionOf, solvePrompt, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
+import { checksOf, claimsPrompt, makesClaims, parseClaimCheck, CLAIMS_SYSTEM, type ClaimCheck, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, setsProblem, solutionOf, solvePrompt, wantsSolution, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
 import type { RequestKind } from '@shared/providers'
 import { aboutMetabase } from '@shared/metabase'
 import { ownWords, posedProblem, repeatsEarlier } from '@shared/session'
@@ -177,7 +177,7 @@ export async function checkLessonReply(
   // Run what can be computed: the tutor's own check, or, when it set a problem without solving it,
   // a solution worked out now (by the cloud model on hard topics, when it may see this lesson)
   await runChecks(checksOf(reply))
-  if (sets && !solutionOf(reply) && !signal.aborted) {
+  if (wantsSolution(reply, earlier[earlier.length - 1] ?? '') && !solutionOf(reply) && !signal.aborted) {
     // Solved before (a retest, a quiz that comes round again): no need to ask anyone
     const key = problemKey(reply)
     const known = await cachedSolution(key)

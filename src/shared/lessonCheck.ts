@@ -40,6 +40,27 @@ export function missingQuestion(reply: string): boolean {
 /** A real problem in a problem set ("**Problem 3 · harder**"), not a diagnostic or a question in passing: what gets solved, checked and reviewed */
 export const setsProblem = (reply: string) => /\*\*\s*Problem\s+\d+/i.test(reply) && posedProblem(reply).split(' ').length >= 8
 
+/**
+ * The reply asks for another go at the problem just marked, rather than setting a new one: the
+ * tutor's last message posed a problem with its solution, this one marks the answer down and sets
+ * no numbered problem. The solution it will mark against is the one it already wrote.
+ */
+export function retriesProblem(previous: string, reply: string): boolean {
+  if (!solutionOf(previous) || !/<ask\b[^>]*type\s*=\s*["'](problem|code|error)["']/i.test(previous)) return false
+  return /<grade\b[^>]*verdict\s*=\s*["']?(partial|wrong)/i.test(reply) && !/\*\*\s*Problem\s+\d+/i.test(hideWorking(reply))
+}
+
+/**
+ * A reply the app works a solution out for when the tutor wrote none, so the next answer is
+ * marked against something: a numbered problem, or any problem or code ask that sets new work
+ * (the tutor drops the "Problem 2" heading after a wrong answer or in a code lesson, and then
+ * marked the answer to its own unsolved task from memory: 2 of 56 finished benchmark replies).
+ */
+export function wantsSolution(reply: string, previous = ''): boolean {
+  if (setsProblem(reply)) return true
+  return /<ask\b[^>]*type\s*=\s*["'](problem|code)["']/i.test(hideWorking(reply)) && posedProblem(reply).split(' ').length >= 8 && !retriesProblem(previous, reply)
+}
+
 /** Advanced technical material, where a wrong problem or a generous mark costs the most */
 const HARD =
   /\b(proofs?|prove|theorem|lemma|derive|derivation|induction|integral|differential|eigen\w*|matri(x|ces)|linear algebra|vector spaces?|calculus|limit|series|convergen\w*|probabilit\w*|expected value|variance|bayes\w*|markov|stochastic|optimi[sz]\w*|gradient|complexity|big[- ]o|recurrence|amortized|np[- ]?(hard|complete)|dynamic programming|graph algorithms?|shortest path|concurren\w*|mutex|deadlock|race conditions?|lock[- ]free|memory model|cache coherenc\w*|consensus|raft|paxos|distributed|replication|partition\w*|transactions?|isolation levels?|serializab\w*|compilers?|parsers?|type systems?|operating systems?|virtual memory|kernel|cryptograph\w*|elliptic|zero[- ]knowledge|blockchain|smart contracts?|stablecoins?|settlement|ledger|reconcil\w*|backpropagation|transformers?|attention|neural|machine learning|stochastic calculus|options pricing|black[- ]scholes)\b/i
