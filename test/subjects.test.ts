@@ -297,10 +297,11 @@ describe('the toolkits', () => {
     for (const k of OTHERS('interpret')) expect(s).not.toContain(TOOLKITS[k].rules)
   })
 
-  it('give a physics lesson worked problems, exact checks and the plot simulation, and not the reading or code rules', () => {
+  it('give a physics lesson worked problems, exact checks and the physics and plot simulations, and not the reading or code rules', () => {
     const s = sessionInstructions({ mode: 'teach', topic: 'Projectile motion' })
     expect(s).toContain(TOOLKITS.quant.rules)
-    expect(s).toMatch(/A live simulation fits this topic \(plot\)/)
+    expect(s).toMatch(/A live simulation fits this topic \(physics, plot\)/)
+    expect(s).toContain('"kind":"physics"')
     expect(s).toContain('"kind":"plot"')
     expect(s).not.toContain(HANDS_ON)
     for (const k of OTHERS('quant')) expect(s).not.toContain(TOOLKITS[k].rules)

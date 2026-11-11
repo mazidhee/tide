@@ -3274,3 +3274,541 @@ button.sim-ht-index:hover {
     text-align: left;
   }
 }
+
+/* ==========================================================================
+   Kinds built on open-source libraries: physics (planck.js), geometry (Mafs),
+   regex (regexp-tree), chess (chess.js). Every colour is a theme token.
+   ========================================================================== */
+
+/* A quiet button that holds a panel or a picture */
+.sim .sim-ph-predict,
+.sim .sim-ph-energybox,
+.sim .sim-ch-stats,
+.sim .sim-ch-nodes,
+.sim .sim-ge-row,
+.sim .sim-ge-matrix {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.sim-swatch.s1 { background: var(--series-1); }
+.sim-swatch.s2 { background: var(--series-2); }
+.sim-swatch.muted { background: repeating-linear-gradient(90deg, var(--ink-muted) 0 3px, transparent 3px 6px); }
+
+/* ---------- Physics ---------- */
+
+.sim-ph {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sim-ph-params .sim-field-range {
+  min-width: 150px;
+  flex: 1 1 150px;
+}
+
+.sim .sim-ph-canvas {
+  aspect-ratio: 4 / 3;
+  cursor: default;
+}
+
+.sim .sim-ph-energybox {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  margin: 0 -6px;
+  width: calc(100% + 12px);
+}
+
+.sim .sim-ph-energy {
+  height: 76px;
+  box-shadow: none;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+.sim .sim-ph-predict {
+  display: flex;
+}
+
+.sim .sim-ph-predict .sim-table td {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+.sim .sim-ph-predict .sim-table th[title] {
+  text-decoration: underline dotted var(--line-strong);
+  text-underline-offset: 3px;
+}
+
+/* ---------- Geometry (Mafs, themed) ---------- */
+
+.sim .MafsView {
+  --mafs-bg: var(--bg-raised);
+  --mafs-fg: var(--ink);
+  --mafs-origin-color: var(--ink-muted);
+  --mafs-line-color: color-mix(in srgb, var(--line-strong) 70%, transparent);
+  --grid-line-subdivision-color: var(--line);
+  --mafs-blue: var(--series-1);
+  --mafs-orange: var(--series-2);
+  --mafs-green: var(--series-3);
+  --mafs-yellow: var(--series-4);
+  --mafs-pink: var(--series-5);
+  --mafs-red: var(--danger);
+  --mafs-indigo: var(--accent);
+  --mafs-violet: var(--accent);
+  border-radius: var(--radius-s);
+  box-shadow: 0 0 0 1px var(--line);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+}
+
+.sim .MafsView:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--line-strong), var(--focus-ring);
+}
+
+.sim .MafsView text {
+  font-weight: 550;
+}
+
+.sim-ge-stage {
+  min-width: 0;
+}
+
+.sim-ge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sim .sim-ge-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 -6px;
+  width: calc(100% + 12px);
+  padding: 4px 6px;
+}
+
+.sim-ge-label {
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.sim-ge-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--ink);
+  text-align: right;
+}
+
+.sim-ge-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 14px;
+}
+
+.sim .sim-ge-matrix {
+  margin: 0 -6px;
+  width: calc(100% + 12px);
+  padding: 4px 6px;
+}
+
+.sim-ge .sim-inline .sim-field-range {
+  flex: 1;
+}
+
+/* ---------- Regular expressions ---------- */
+
+.sim-rx {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sim-rx-field {
+  flex: 1 1 100%;
+}
+
+.sim-rx-inline {
+  width: 100%;
+}
+
+.sim .sim-rx-pattern {
+  flex: 1;
+  height: 32px;
+  font-size: var(--text-sm);
+}
+
+.sim-rx-slash {
+  font-family: var(--font-mono);
+  color: var(--ink-muted);
+}
+
+.sim-rx-flags .sim-seg-btn {
+  font-family: var(--font-mono);
+  min-width: 28px;
+  padding: 0 8px;
+}
+
+.sim-rx-diagram {
+  overflow-x: auto;
+  padding: 4px 0 2px;
+  cursor: pointer;
+}
+
+.sim-rx-diagram:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-s);
+}
+
+.rr {
+  display: block;
+  max-width: none;
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+
+.rr .rr-line,
+.rr .rr-end {
+  fill: none;
+  stroke: var(--ink-muted);
+  stroke-width: 1.5;
+}
+
+.rr .rr-skip,
+.rr .rr-loop {
+  stroke: var(--ink-soft);
+}
+
+.rr .rr-node rect {
+  stroke-width: 1.25;
+}
+
+.rr .rr-node text {
+  fill: var(--ink);
+}
+
+.rr .rr-lit rect {
+  fill: var(--bg-inset);
+  stroke: var(--line-strong);
+}
+
+.rr .rr-lit text {
+  font-family: var(--font-code);
+}
+
+.rr .rr-meta rect,
+.rr .rr-class rect {
+  fill: color-mix(in srgb, var(--series-1) 13%, var(--bg-raised));
+  stroke: color-mix(in srgb, var(--series-1) 55%, var(--bg-raised));
+}
+
+.rr .rr-assert rect {
+  fill: color-mix(in srgb, var(--series-4) 16%, var(--bg-raised));
+  stroke: color-mix(in srgb, var(--series-4) 60%, var(--bg-raised));
+}
+
+.rr .rr-assert text {
+  font-style: italic;
+}
+
+.rr .rr-ref rect {
+  fill: color-mix(in srgb, var(--series-5) 14%, var(--bg-raised));
+  stroke: color-mix(in srgb, var(--series-5) 55%, var(--bg-raised));
+}
+
+.rr .rr-frame rect {
+  fill: none;
+  stroke-width: 1.25;
+  stroke-dasharray: 4 3;
+}
+
+.rr .rr-group.g1 rect { stroke: var(--series-1); }
+.rr .rr-group.g2 rect { stroke: var(--series-2); }
+.rr .rr-group.g3 rect { stroke: var(--series-3); }
+.rr .rr-group.g4 rect { stroke: var(--series-4); }
+.rr .rr-look rect { stroke: var(--ink-muted); }
+
+.rr .rr-group.on rect {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-dasharray: none;
+}
+
+.rr .rr-note {
+  fill: var(--ink-muted);
+  font-size: 11px;
+}
+
+.rr .rr-group.g1 > .rr-note { fill: var(--series-1); }
+.rr .rr-group.g2 > .rr-note { fill: var(--series-2); }
+.rr .rr-group.g3 > .rr-note { fill: var(--series-3); }
+.rr .rr-group.g4 > .rr-note { fill: var(--series-4); }
+
+.sim-rx-two {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+}
+
+.sim-rx-tests {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sim-rx-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  padding: 4px;
+  margin: -4px;
+  border-radius: var(--radius-s);
+}
+
+.sim-rx-row.chosen {
+  background: var(--bg-inset);
+}
+
+.sim .sim-rx-name {
+  width: 24px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-weight: 550;
+}
+
+.sim .sim-rx-name[aria-pressed='true'] {
+  color: var(--ink);
+}
+
+.sim-rx-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sim .sim-rx-test {
+  width: 100%;
+}
+
+.sim-rx-view {
+  padding: 0 9px;
+  font-size: var(--text-xs);
+  line-height: 1.7;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sim-rx-mark {
+  padding: 1px 0;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--ink);
+}
+
+.sim-rx-mark.alt {
+  background: color-mix(in srgb, var(--accent) 34%, transparent);
+}
+
+.sim-rx-mark.g1 { box-shadow: inset 0 -2px 0 var(--series-1); }
+.sim-rx-mark.g2 { box-shadow: inset 0 -2px 0 var(--series-2); }
+.sim-rx-mark.g3 { box-shadow: inset 0 -2px 0 var(--series-3); }
+.sim-rx-mark.g4 { box-shadow: inset 0 -2px 0 var(--series-4); }
+
+.sim-rx-empty,
+.sim-rx-none,
+.sim-rx-nomatch {
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+.sim-rx-count {
+  padding-top: 6px;
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.sim .sim-rx-table th.g1 { color: var(--series-1); }
+.sim .sim-rx-table th.g2 { color: var(--series-2); }
+.sim .sim-rx-table th.g3 { color: var(--series-3); }
+.sim .sim-rx-table th.g4 { color: var(--series-4); }
+
+.sim .sim-rx-table td {
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Chess ---------- */
+
+.sim-ch-two {
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+}
+
+.sim-ch-boardbox {
+  border-radius: var(--radius-s);
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.sim-ch-boardbox:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--line-strong), var(--focus-ring);
+}
+
+.sim-ch-board {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  cursor: pointer;
+}
+
+/* Squares from the theme: the light one near the page, the dark one tinted with the accent */
+.sim-ch-sq.light { fill: color-mix(in srgb, var(--bg-inset) 70%, var(--bg-raised)); }
+.sim-ch-sq.dark { fill: color-mix(in srgb, var(--accent) 34%, var(--bg-inset)); }
+.sim-ch-sq.last { fill: color-mix(in srgb, var(--series-4) 38%, var(--bg-inset)); }
+.sim-ch-sq.picked { fill: color-mix(in srgb, var(--series-1) 40%, var(--bg-inset)); }
+
+.sim-ch-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 0.06;
+}
+
+.sim-ch-coord {
+  font-family: var(--font-ui);
+  font-size: 0.17px;
+  font-weight: 600;
+}
+
+.sim-ch-coord.on-light { fill: color-mix(in srgb, var(--accent) 60%, var(--ink-muted)); }
+.sim-ch-coord.on-dark { fill: color-mix(in srgb, var(--bg-raised) 80%, transparent); }
+
+.sim-ch-piece {
+  font-family: 'Apple Symbols', 'Segoe UI Symbol', 'DejaVu Sans', serif;
+  font-size: 0.82px;
+  paint-order: stroke;
+  stroke-width: 0.035;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.sim-ch-piece.white { fill: #fbfaf7; stroke: #2a2724; }
+.sim-ch-piece.black { fill: #23211f; stroke: #e8e4dc; stroke-width: 0.02; }
+
+.sim-ch-dot { fill: color-mix(in srgb, var(--ink) 30%, transparent); }
+.sim-ch-take { fill: none; stroke: color-mix(in srgb, var(--ink) 35%, transparent); stroke-width: 0.07; }
+
+.sim-ch-arrow line {
+  stroke: color-mix(in srgb, var(--series-1) 80%, transparent);
+  stroke-width: 0.13;
+  stroke-linecap: round;
+}
+
+.sim-ch-arrow path { fill: color-mix(in srgb, var(--series-1) 80%, transparent); }
+.sim-ch-arrow.on line { stroke: var(--accent); }
+.sim-ch-arrow.on path { fill: var(--accent); }
+
+.sim-ch-params {
+  gap: 10px 16px;
+}
+
+.sim .sim-ch-stats {
+  display: flex;
+  margin: 0 -6px;
+  width: calc(100% + 12px);
+  padding: 4px 6px;
+}
+
+.sim .sim-ch-nodes {
+  display: flex;
+}
+
+.sim-ch-bar {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.sim-ch-name {
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+.sim-ch-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-inset);
+  overflow: hidden;
+}
+
+.sim-ch-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  transition: width 200ms ease;
+}
+
+.sim-ch-fill.mm { background: var(--sim-neg); }
+.sim-ch-fill.ab { background: var(--sim-pos); }
+.sim-ch-fill.unknown { background: repeating-linear-gradient(135deg, var(--sim-neg) 0 4px, transparent 4px 8px); }
+
+.sim-ch-count {
+  min-width: 5ch;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--ink);
+  text-align: right;
+}
+
+.sim-ch-moves {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sim-ch-moves li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+.sim-ch-moves li.top {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.sim-ch-score {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+.sim-ch-history {
+  font-size: var(--text-2xs);
+}
+
+@container sim (max-width: 620px) {
+  .sim-rx-two,
+  .sim-ch-two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
