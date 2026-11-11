@@ -9,6 +9,7 @@ import { readWebpage, webSearch } from './agent'
 import { getSettings } from './settings'
 import { directionLine } from './coach'
 import { noteUse } from './connectionUse'
+import { ADJUSTED_PLAN_SCHEMA, PLAN_SCHEMA, READINGS_SCHEMA } from './replySchemas'
 
 /**
  * Sizes a learning goal before any outline is written: research how people actually learn it and
@@ -86,9 +87,9 @@ Return ONLY JSON:
 {"scope": "tool|skill|discipline|career", "coding": true, "why": "one or two sentences on why this length, for this learner", "phases": [{"title": "short phase name", "weeks": 2, "outcome": "what they can do at the end", "project": "a concrete project for this phase", "practice": ["a specific exercise", "another"]}]}
 "coding" is true only when the exercises are programming.`
   const system = 'You are a senior engineer and teacher who plans realistic, specific learning paths.'
-  let out = await complete(prompt, system, signal, 'interactive', 'planning')
+  let out = await complete(prompt, system, signal, 'interactive', 'planning', false, PLAN_SCHEMA)
   // A small model sometimes wraps or breaks the JSON: ask once more, strictly
-  if (!normalizePlan(safeJson(out), req.hoursPerWeek)) out = await complete(`${prompt}\n\nYour last reply was not valid JSON. Reply with the JSON object only, nothing before or after it.`, system, signal, 'interactive', 'planning')
+  if (!normalizePlan(safeJson(out), req.hoursPerWeek)) out = await complete(`${prompt}\n\nYour last reply was not valid JSON. Reply with the JSON object only, nothing before or after it.`, system, signal, 'interactive', 'planning', false, PLAN_SCHEMA)
   const maxWeeks = req.deadline ? Math.max(1, (new Date(req.deadline).getTime() - new Date(req.start).getTime()) / (7 * 86_400_000)) : undefined
   const plan = normalizePlan(safeJson(out), req.hoursPerWeek, maxWeeks)
   if (!plan) {
@@ -115,10 +116,10 @@ They ask: "${req.request.trim()}"
 Change the plan to do what they ask, and keep everything they didn't ask to change. If they want to finish sooner, first cut, merge or shorten what matters least, and raise the hours a week only if they offered more time; if it then isn't realistic, keep it as close as you can and say so in "why". Put the hours a week you plan for in "hoursPerWeek". In "why", say in one or two sentences what changed.
 Return ONLY JSON in the same shape: {"scope": "...", "coding": true, "hoursPerWeek": 6, "why": "...", "phases": [{"title": "...", "weeks": 2, "outcome": "...", "project": "...", "practice": ["..."]}]}`
   const system = 'You are a senior engineer and teacher who plans realistic, specific learning paths.'
-  let out = await complete(prompt, system, signal, 'interactive', 'planning')
+  let out = await complete(prompt, system, signal, 'interactive', 'planning', false, ADJUSTED_PLAN_SCHEMA)
   let raw = safeJson(out) as (Partial<StudyPlan> & { hoursPerWeek?: number }) | null
   if (!raw?.phases) {
-    out = await complete(`${prompt}\n\nYour last reply was not valid JSON. Reply with the JSON object only.`, system, signal, 'interactive', 'planning')
+    out = await complete(`${prompt}\n\nYour last reply was not valid JSON. Reply with the JSON object only.`, system, signal, 'interactive', 'planning', false, ADJUSTED_PLAN_SCHEMA)
     raw = safeJson(out) as typeof raw
   }
   const asked = planRequestNumbers(req.request)
@@ -376,8 +377,8 @@ Return ONLY JSON: {"phases": [{"phase": 1, "items": [{"title": "...", "by": "aut
       return []
     }
   }
-  let phases = read(await complete(prompt, 'You recommend real, well-known learning resources. You never make up titles.', undefined, 'interactive', 'planning'))
-  if (!phases.length) phases = read(await complete(`${prompt}\n\nReply with the JSON object only.`, undefined, undefined, 'interactive', 'planning'))
+  let phases = read(await complete(prompt, 'You recommend real, well-known learning resources. You never make up titles.', undefined, 'interactive', 'planning', false, READINGS_SCHEMA))
+  if (!phases.length) phases = read(await complete(`${prompt}\n\nReply with the JSON object only.`, undefined, undefined, 'interactive', 'planning', false, READINGS_SCHEMA))
   return verifyReadings(plan.phases.map((p, i) => ({
     phase: p.title,
     items: (phases.find((x) => Number(x.phase) === i + 1)?.items ?? phases[i]?.items ?? [])

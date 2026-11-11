@@ -1,5 +1,5 @@
 import { createStreamFilter } from '@shared/modelText'
-import type { RequestKind } from '@shared/providers'
+import { PROVIDERS, type RequestKind } from '@shared/providers'
 import type { ChatMessage } from '@shared/types'
 import { canTake, CloudUnavailable, cloudError, coolTarget, deadlineFor, estimateTokens, headersFor, noteLimits, noteOutcome, noteSent, noteWhy, recordUsage, secondsUntilReset, stopCode, type CloudTarget, type FailCode } from './cloud'
 import { getSettings } from './settings'
@@ -37,6 +37,26 @@ export async function* readStream(body: ReadableStream<Uint8Array>, filter: (t: 
   }
 }
 
+/** The shape a reply must have: a name and a JSON Schema, as OpenAI-style structured outputs take them */
+export interface ReplySchema {
+  name: string
+  schema: Record<string, unknown>
+}
+
+// Models that turned a schema down once (a 400): asked without one from then on
+const refusedSchema = new Set<string>()
+
+/**
+ * The request field that constrains a reply to `schema`, for a provider that documents it (its
+ * `jsonSchema` flag); nothing for any other, custom providers included. Never used for the local
+ * server: mlx-vlm refuses response_format while the draft model is on.
+ */
+export function responseFormat(target: Pick<CloudTarget, 'provider' | 'model'>, schema?: ReplySchema): { response_format?: unknown } {
+  if (!schema || refusedSchema.has(`${target.provider}/${target.model}`)) return {}
+  if (!PROVIDERS.find((p) => p.id === target.provider)?.jsonSchema) return {}
+  return { response_format: { type: 'json_schema', json_schema: { name: schema.name, schema: schema.schema } } }
+}
+
 /** How long a cloud model has to show any sign of life (its response headers) before the next is tried */
 export const FIRST_SIGN_MS = 25_000
 
@@ -52,7 +72,7 @@ export const FIRST_SIGN_MS = 25_000
  * - Being stopped by you, or by a caller that only waits so long, is written down but is not a
  *   request the model failed.
  */
-export async function* streamCloud(target: CloudTarget, messages: ChatMessage[], signal: AbortSignal, maxTokens: number, temperatureOverride: number | undefined, task: RequestKind): AsyncGenerator<string> {
+export async function* streamCloud(target: CloudTarget, messages: ChatMessage[], signal: AbortSignal, maxTokens: number, temperatureOverride: number | undefined, task: RequestKind, schema?: ReplySchema): AsyncGenerator<string> {
   if (!canTake(estimateTokens(JSON.stringify(messages).length) + maxTokens, target)) {
     noteWhy(target, task, 'minute')
     throw new CloudUnavailable(`The cloud model’s per-minute limit can’t take this for about ${secondsUntilReset(target)}s`, 'minute')
@@ -68,12 +88,13 @@ export async function* streamCloud(target: CloudTarget, messages: ChatMessage[],
   const silent = new AbortController()
   const noSign = setTimeout(() => silent.abort(), FIRST_SIGN_MS)
   const both = AbortSignal.any([signal, slow, silent.signal])
+  const format = responseFormat(target, schema)
   noteSent(target.provider)
   try {
     res = await fetch(`${target.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: headersFor(target),
-      body: JSON.stringify({ model: target.model, messages, temperature: temperatureOverride ?? getSettings().ai.temperature, stream: true, max_tokens: maxTokens, stream_options: { include_usage: true }, ...target.extra }),
+      body: JSON.stringify({ model: target.model, messages, temperature: temperatureOverride ?? getSettings().ai.temperature, stream: true, max_tokens: maxTokens, stream_options: { include_usage: true }, ...target.extra, ...format }),
       signal: both
     })
   } catch (e) {
@@ -88,6 +109,13 @@ export async function* streamCloud(target: CloudTarget, messages: ChatMessage[],
     throw new CloudUnavailable(why === 'silent' ? `${target.model} didn’t start answering` : why === 'slow' ? `${target.model} took too long` : `Couldn't reach the cloud model: ${(e as Error).message}`, why)
   } finally {
     clearTimeout(noSign)
+  }
+  // A model behind a provider that supports schemas may still not take one: ask again without
+  if (res.status === 400 && format.response_format) {
+    await res.body?.cancel().catch(() => {})
+    refusedSchema.add(`${target.provider}/${target.model}`)
+    yield* streamCloud(target, messages, signal, maxTokens, temperatureOverride, task)
+    return
   }
   if (!res.ok || !res.body) {
     const refused = await cloudError(res, target)
