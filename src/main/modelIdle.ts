@@ -11,7 +11,7 @@
  */
 import { app } from 'electron'
 import { isMlxVlm } from './modelServer'
-import { inBackground, sinceAsked } from './modelQueue'
+import { inBackground, lastModelUse, sinceAsked } from './modelQueue'
 import { getSettings } from './settings'
 
 /** Minutes without use before the model is unloaded; 0 keeps it loaded */
@@ -33,6 +33,24 @@ async function loaded(): Promise<boolean> {
   if (!s) return false
   const health = (await fetch(`${s.origin}/health`, { headers: s.headers, signal: AbortSignal.timeout(3000) }).then((r) => r.json()).catch(() => null)) as { loaded_model?: string | null } | null
   return !!health?.loaded_model
+}
+
+/**
+ * How long the server has gone without a request from anyone: another copy of Tide, a script, an
+ * app. Null when it can't say (then only Tide's own use counts, as before). An idle copy of Tide
+ * used to unload Gemma within a minute of anything else loading it, so every lesson turn in the
+ * copy being used paid a reload (about 4.3 s) and read its snapshot back from disk.
+ */
+async function serverIdle(): Promise<{ ms: number; lastAt: number } | null> {
+  const s = server()
+  if (!s) return null
+  const m = (await fetch(`${s.origin}/v1/metrics`, { headers: s.headers, signal: AbortSignal.timeout(1500) })
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null)) as { summary?: { in_flight?: number; last_request_at?: number } } | null
+  const sum = m?.summary
+  if (!sum || typeof sum.last_request_at !== 'number') return null
+  const lastAt = sum.last_request_at * 1000
+  return { ms: sum.in_flight ? 0 : Date.now() - lastAt, lastAt }
 }
 
 /**
@@ -73,7 +91,11 @@ export function wakeModel(warm: () => Promise<unknown>): void {
 /** Starts watching for idleness, and unloads on quit */
 export function watchModelIdle(): void {
   setInterval(() => {
-    if (idleMinutes() && !inUse()) void unloadModel()
+    if (!idleMinutes() || inUse()) return
+    // Not while something else is using it
+    void serverIdle().then((idle) => {
+      if (!idle || idle.ms >= idleMinutes() * 60_000) void unloadModel()
+    })
   }, 60_000)
   let leaving = false
   app.on('before-quit', (e) => {
@@ -82,6 +104,8 @@ export function watchModelIdle(): void {
     leaving = true
     e.preventDefault()
     const s = server()!
-    Promise.race([fetch(`${s.origin}/unload`, { method: 'POST', headers: s.headers }).catch(() => null), new Promise((r) => setTimeout(r, 3000))]).finally(() => app.quit())
+    // Only when the last thing the server did was for this copy of Tide: never under someone else
+    const unload = serverIdle().then((idle) => (idle && (idle.ms === 0 || idle.lastAt > lastModelUse() + 2000) ? null : fetch(`${s.origin}/unload`, { method: 'POST', headers: s.headers }).catch(() => null)))
+    Promise.race([unload, new Promise((r) => setTimeout(r, 3000))]).finally(() => app.quit())
   })
 }
