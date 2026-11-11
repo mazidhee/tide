@@ -1,4 +1,5 @@
 import { testNames } from '@shared/codeTests'
+import { showMeOffered } from '@shared/showMe'
 import { TimeThis } from './TimeThis'
 import { drawSteps, stepsReached } from '@shared/project'
 import { parseCanvas, serializeCanvas } from '@shared/canvas'
@@ -1154,7 +1155,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                         {challenged[i] === 'checking' ? <span className="spinner" /> : <Icon name={challenged[i] === 'ok' ? 'check' : 'search'} size={13} />}
                       </button>
                     )}
-                    {mode === 'teach' && i === turns.length - 1 && (
+                    {mode === 'teach' && i === turns.length - 1 && showMeOffered(turns) && (
                       <button className="icon-btn small" title="Show me: see this as a diagram, a trace or a plot" aria-label="Show me this as a picture" disabled={busy} onClick={() => submit(SHOW_ME)}>
                         <Icon name="image" size={13} />
                       </button>

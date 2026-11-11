@@ -558,7 +558,19 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
   // the model on this Mac reads it in the background, so your next message doesn't wait for that
   const asked = req
   let shown = ''
+  // Show me pressed while a question waits: the picture is held until it's checked against that
+  // question's hidden solution (shared/showMe), so the answer is never drawn for them
+  const { waitingQuestion, givesAway, setupOnlyNote, WITHHELD } = await import('@shared/showMe')
+  const { SHOW_ME } = await import('@shared/session')
+  const lastSaid = String([...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '')
+  const waiting = req.session && lastSaid.startsWith(SHOW_ME.slice(0, 60)) ? waitingQuestion(req.messages.slice(0, -1)) : null
+  let holdShow = !!waiting
+  let heldShow = ''
   const emit = (e: ChatEvent) => {
+    if (holdShow && (e.type === 'delta' || e.type === 'reset')) {
+      heldShow = e.type === 'delta' ? heldShow + e.text : ''
+      return
+    }
     if (e.type === 'delta') shown += e.text
     else if (e.type === 'reset') shown = ''
     else if (e.type === 'done' && !controller.signal.aborted && answeredHere(req.id)) {
@@ -639,6 +651,25 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
         }
         if (settled) downstream({ id: req.id, type: 'delta', text: settled })
         reply = sent + settled
+      }
+      if (waiting && holdShow) {
+        holdShow = false
+        const what = givesAway(heldShow, waiting)
+        let picture = heldShow
+        if (what && !controller.signal.aborted) {
+          const step = (label: string, status: 'running' | 'done') => emit({ id: req.id, type: 'step', step: { id: 'show-setup', kind: 'helper', label, status, depth: 0 } })
+          step('That picture showed the answer you are working on: drawing the setup only', 'running')
+          let again = ''
+          await agentChat({ ...req, messages: [...req.messages, { role: 'assistant', content: heldShow }, { role: 'user', content: setupOnlyNote(what) }] }, (e) => {
+            if (e.type === 'delta') again += e.text
+            else if (e.type === 'reset') again = ''
+            else if (e.type !== 'done' && e.type !== 'error') emit(e)
+          }, controller.signal).catch(() => {})
+          picture = again.trim() && !givesAway(again, waiting) ? again : WITHHELD
+          step(picture === WITHHELD ? 'Held the picture back: it gave the answer away' : 'Drew the setup only', 'done')
+        }
+        emit({ id: req.id, type: 'delta', text: picture })
+        reply = picture
       }
       // [source-led] What the checks read is the tutor's own words, without the source's
       if (led && !controller.signal.aborted) reply = led.settle(shown, emit)
