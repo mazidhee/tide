@@ -30,6 +30,7 @@ import { canTake, CLOUD_REPLY_TOKENS, CloudUnavailable, cloudError, estimateToke
 import { escalationFor, providerInfo, type CloudTask, type RequestKind } from '@shared/providers'
 import { SESSION_FORMAT, ownWords } from '@shared/session'
 import { findImages } from './images'
+import { explainerToolResult, findExplainers } from '@shared/explainers'
 import { readText, writeText } from './vault'
 import { applyCanvasOps, describeCanvas, parseCanvas, serializeCanvas } from '@shared/canvas'
 import { retrieve } from './ai'
@@ -68,6 +69,7 @@ You can call tools. Use them when they help:
 - things_assign / things_tasks / things_feedback (only when connected): the student's to-do app, Things 4, which renders Markdown. Set real work between sessions: a quick task, an assignment, a test (an exam in Tide) or a take-home problem to think through. Write a proper brief (## Goal, ## What to do, ## Deliverable, ## How it will be checked, ## Read) specific to what you've been teaching, give steps and a due date, and point "open" at the right place in Tide (an exam or quiz on their notebook, the note to read, a drill). Ask before setting more than two at once. Use things_tasks (with_notes to read answers they wrote in a task) to see what's done or overdue and adapt; mark their work with things_feedback.
 - metabase (only when connected): the student's company Metabase, read-only, to help them learn it. Search it, open dashboards, questions (saved queries) and tables to explain what each measures and how it's built, and run a saved question or a SELECT to show real numbers. It can never change anything.
 - find_image: a real diagram, figure or photo from Wikimedia Commons. It returns Markdown image lines; put the one that fits in your answer, exactly as given.
+- find_explainer: an interactive page on the web, from a short list Tide trusts, where the student can try the idea for themselves. Teach the idea first, then offer the one that fits as something to explore, its link on a line of its own. It never replaces your explanation.
 - delegate (only offered when a cloud model answers): for big questions with separate parts (e.g. "compare X and Y", "build me a study plan for Z"), give each part to a helper; they research in parallel and report back.
 Rules:
 - Every tool result is numbered like [3]. Cite the numbers you rely on inline, e.g. [3] or [2][5].
@@ -100,6 +102,14 @@ const IMAGE_TOOL = tool(
   'Find a real diagram, figure or photo to show the student (from Wikimedia Commons). Use it when seeing something helps: anatomy, a circuit, a map, a historical figure, a labelled diagram of a structure or process. For abstract flows, trees and graphs, draw a mermaid diagram instead. Returns ready-to-use Markdown image lines: copy the one that fits exactly into your answer.',
   { query: { type: 'string', description: 'What the picture shows, in a few English words, e.g. "binary search tree", "mitochondrion diagram"' } },
   ['query']
+)
+
+/** Somewhere to go and try the idea: a page from the short list in shared/explainers, never a replacement for teaching it */
+const EXPLAINER_TOOL = tool(
+  'find_explainer',
+  'Find an interactive explanation on the web for what you are teaching (for example a transformer you can step through, a B-tree you can insert into, a TLS handshake byte by byte), from a short list Tide trusts. Use it after you have explained the idea, to give the student something to explore; never instead of explaining. Returns up to three Markdown links: put the one that fits on a line of its own, exactly as given.',
+  { topic: { type: 'string', description: 'The idea, in a few English words, e.g. "transformer attention", "b-tree", "pointers in C"' } },
+  ['topic']
 )
 
 const WEB_TOOLS = [
@@ -1051,6 +1061,13 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     }
   }
 
+  if (call.name === 'find_explainer') {
+    const topic = str('topic')
+    const n = findExplainers(topic).length
+    ctx.step({ kind: 'web_search', label: `Looking for something to explore on “${topic}”`, status: 'done', detail: n ? `${n} interactive page${n === 1 ? '' : 's'}` : 'None kept for this', depth })
+    return explainerToolResult(topic)
+  }
+
   if (call.name === 'read_webpage') {
     const url = str('url')
     let host = url
@@ -1303,7 +1320,7 @@ function toolSet(o: { top: boolean; web: boolean; focused: boolean; things: bool
     ...NOTE_TOOLS,
     CODE_TOOL,
     SQL_TOOL,
-    ...(images ? [IMAGE_TOOL] : []),
+    ...(images ? [IMAGE_TOOL, EXPLAINER_TOOL] : []),
     ...(o.top ? [STUDY_PLAN] : []),
     ...(o.terminal ?? []),
     ...(o.canvas ?? []),

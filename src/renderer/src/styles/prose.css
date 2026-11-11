@@ -105,6 +105,83 @@
   text-decoration-style: dotted;
 }
 
+/* A trusted interactive explainer, offered by the tutor as somewhere to go and try the idea.
+   Small and quiet: it sits in a narrow tutor panel as well as a wide lesson. */
+.prose a.explore-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 34rem;
+  margin: 2px 0;
+  padding: 9px 12px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--bg-raised);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.86em;
+  line-height: 1.4;
+  text-decoration: none;
+  transition: border-color 120ms, background 120ms;
+}
+
+.prose a.explore-card:hover {
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--accent-soft) 45%, var(--bg-raised));
+}
+
+.prose li > a.explore-card:first-child {
+  margin-top: 4px;
+}
+
+.explore-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+}
+
+.explore-title {
+  color: var(--ink);
+  font-weight: 620;
+}
+
+.explore-card:hover .explore-title {
+  color: var(--accent);
+}
+
+.explore-by,
+.explore-foot {
+  color: var(--ink-muted);
+  font-size: 0.9em;
+}
+
+.explore-what {
+  text-wrap: pretty;
+}
+
+.explore-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 6px;
+  margin-top: 2px;
+}
+
+.explore-tag {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.explore-where {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.explore-icon {
+  flex: none;
+}
+
 .prose strong {
   font-weight: 650;
 }
