@@ -1,3 +1,4 @@
+import { explainerForUrl, type Explainer } from '@shared/explainers'
 import { normalizeMath } from '@shared/modelText'
 import MarkdownIt from 'markdown-it'
 import type StateInline from 'markdown-it/lib/rules_inline/state_inline.mjs'
@@ -300,6 +301,22 @@ function embedHtml(target: string, env: RenderEnv, alias?: string): string {
   return `<a class="wikilink" data-wikilink="${escapeHtml(target)}" href="#">${escapeHtml(alias || target)}</a>`
 }
 
+// The app's own "external" icon (components/Icon.tsx)
+const EXTERNAL_ICON = 'M14 4h6v6M20 4l-9 9M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10'
+
+/** The card for a trusted explainer. An ordinary external link underneath, so it opens in the browser like any other. */
+export function exploreCard(e: Explainer): string {
+  const host = new URL(e.url).hostname.replace(/^www\./, '')
+  return (
+    `<a class="external explore-card" href="${escapeHtml(e.url)}" target="_blank" data-explainer="${escapeHtml(e.id)}">` +
+    `<span class="explore-head"><span class="explore-title">${escapeHtml(e.title)}</span><span class="explore-by">${escapeHtml(e.by)}</span></span>` +
+    `<span class="explore-what">${escapeHtml(e.what)}</span>` +
+    `<span class="explore-foot"><span class="explore-tag">Explore</span><span class="explore-where">${escapeHtml(host)}, opens in your browser</span>` +
+    `<svg class="explore-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${EXTERNAL_ICON}"/></svg></span>` +
+    `</a>`
+  )
+}
+
 export function createMarkdown() {
   const md: MarkdownIt = new MarkdownIt({
     html: true,
@@ -376,6 +393,23 @@ export function createMarkdown() {
     }
     return defaultLinkOpen(tokens, idx, opts, env, self)
   }
+
+  // A link to one of the interactive explainers Tide trusts, standing alone in its paragraph or
+  // list item, is shown as a small card saying what you can do there. In the middle of a sentence
+  // it stays an ordinary link.
+  md.core.ruler.after('linkify', 'explore_cards', (state) => {
+    for (const token of state.tokens) {
+      if (token.type !== 'inline' || !token.children) continue
+      const kids = token.children.filter((k) => !(k.type === 'softbreak' || (k.type === 'text' && /^[\s.:;,–—-]*$/.test(k.content))))
+      if (kids.length < 3 || kids[0].type !== 'link_open' || kids[kids.length - 1].type !== 'link_close') continue
+      if (kids.some((k, i) => i > 0 && k.type === 'link_open')) continue
+      const explainer = explainerForUrl(kids[0].attrGet('href') ?? '')
+      if (!explainer) continue
+      const card = new state.Token('html_inline', '', 0)
+      card.content = exploreCard(explainer)
+      token.children = [card]
+    }
+  })
 
   // Top-level blocks carry their source lines so tutor threads can anchor to them
   md.core.ruler.push('block_lines', (state) => {

@@ -93,3 +93,41 @@ describe('helpers', () => {
     expect(body.trim()).toBe('Body')
   })
 })
+
+describe('links to trusted explainers', () => {
+  const card = (html: string) => {
+    const box = document.createElement('div')
+    box.innerHTML = html
+    return box.querySelector<HTMLAnchorElement>('a.explore-card')
+  }
+
+  it('shows one standing alone as a card that says what it is and opens like any web link', () => {
+    for (const md of ['[LLM Visualization](https://bbycroft.net/llm)', 'Something to explore:\n\n[this one](https://bbycroft.net/llm/).', '- [LLM Visualization](https://bbycroft.net/llm)', 'https://bbycroft.net/llm']) {
+      const a = card(render(md))!
+      expect(a, md).not.toBeNull()
+      expect(a.getAttribute('href')).toBe('https://bbycroft.net/llm')
+      // The same path as every other web link: a new window, which the app hands to the browser
+      expect(a.target).toBe('_blank')
+      expect(a.classList.contains('external')).toBe(true)
+      expect(a.querySelector('.explore-title')!.textContent).toBe('LLM Visualization')
+      expect(a.querySelector('.explore-by')!.textContent).toBe('Brendan Bycroft')
+      expect(a.querySelector('.explore-what')!.textContent).toMatch(/^Walk through a small GPT/)
+      expect(a.querySelector('.explore-foot')!.textContent).toBe('Explorebbycroft.net, opens in your browser')
+    }
+    expect(render('[x](https://bbycroft.net/llm)')).not.toMatch(/<iframe|<script/)
+  })
+
+  it('makes a card of each link in a list of them', () => {
+    const box = document.createElement('div')
+    box.innerHTML = render('- [B-Trees](https://www.cs.usfca.edu/~galles/visualization/BTree.html)\n- [Compiler Explorer](https://godbolt.org/)')
+    expect(Array.from(box.querySelectorAll('a.explore-card'), (a) => a.getAttribute('data-explainer'))).toEqual(['usfca-btree', 'compiler-explorer'])
+  })
+
+  it('leaves a link in the middle of a sentence, and any other link, as an ordinary link', () => {
+    for (const md of ['Try [LLM Visualization](https://bbycroft.net/llm) after this.', '[LLM Visualization](https://bbycroft.net/llm): walk through a GPT.', '[Another page](https://bbycroft.net/other)', '[Docs](https://example.com/llm)', '[A](https://bbycroft.net/llm) [B](https://godbolt.org/)']) {
+      const html = render(md)
+      expect(card(html), md).toBeNull()
+      expect(html, md).toContain('class="external"')
+    }
+  })
+})
