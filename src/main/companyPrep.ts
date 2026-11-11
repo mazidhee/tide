@@ -89,7 +89,7 @@ export async function draftCompanyPrep(req: CompanyPrepRequest, emit: (e: ChatEv
     // shapes the plan more than anything found online
     const filed = await filedUnder(req.company).catch(() => [] as string[])
     const own = filed.length
-      ? search(`${req.company} ${req.role} interview`, 12, (p) => filed.includes(p))
+      ? (await search(`${req.company} ${req.role} interview`, 12, (p) => filed.includes(p)))
           .slice(0, 5)
           .map((c) => `From "${c.title}"${c.heading ? ` (${c.heading})` : ''}:\n${c.text.slice(0, 1200)}`)
           .join('\n\n---\n\n')

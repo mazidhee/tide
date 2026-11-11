@@ -27,7 +27,7 @@ import { filedUnder, getNotebooks } from './learn'
 import { metabaseHost, metabaseReady } from './metabase'
 import { privatePath } from './projects'
 import { readingsFor } from './readings'
-import { getChunks, search } from './search'
+import { chunksNow, searchNow } from './search'
 import { bookSourceSync } from './reading'
 import { getSettings } from './settings'
 import { readText, writeText } from './vault'
@@ -96,8 +96,8 @@ async function lessonFor(req: ChatRequest): Promise<Lesson> {
   const isPrivate = await privateTest().catch(() => () => true)
   const web = !secret && req.web !== false && getSettings().ai.webSearch?.provider !== 'off'
   const deps: GatherDeps = {
-    search: (q, limit) => search(q, limit),
-    chunks: (path) => getChunks(path),
+    search: (q, limit) => searchNow(q, limit),
+    chunks: (path) => chunksNow(path),
     isPrivate,
     webSearch: (q) => webSearch(q),
     read: (url) => readWebpage(url),

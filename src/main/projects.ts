@@ -75,7 +75,7 @@ export async function mapProject(notebook: string, force = false): Promise<Proje
       const { chapters } = await bookChapters(d, true).catch(() => ({ chapters: [] as { title: string }[] }))
       headings.push(...chapters.map((c) => c.title))
       await reindexPath(d).catch(() => {})
-      const chunks = getChunks(d)
+      const chunks = await getChunks(d)
       texts.push(chunks.length ? chunks.map((c) => c.text).join('\n') : (await pdfText(d).catch(() => [] as string[])).join('\n'))
     }
   }
@@ -181,7 +181,7 @@ export async function flowSteps(notebook: string, flow: string): Promise<FlowSte
   }
   if (!section) {
     const { search } = await import('./search')
-    section = search(flow, 6, (p) => docs.includes(p))
+    section = (await search(flow, 6, (p) => docs.includes(p)))
       .map((c) => c.text)
       .join('\n\n')
       .slice(0, 3000)

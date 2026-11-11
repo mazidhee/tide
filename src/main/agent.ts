@@ -1,3 +1,7 @@
+import { app } from 'electron'
+import { readFileSync } from 'fs'
+import { writeFile } from 'fs/promises'
+import { join } from 'path'
 import { characterById, recentOpenings, splitSay, voiceRules } from '@shared/characters'
 import { isMlxVlm } from './modelServer'
 import { thingsIntent } from '@shared/learnIntent'
@@ -613,7 +617,13 @@ async function streamTurn(messages: ApiMessage[], tools: unknown[], signal: Abor
       if (wrote) onText(RESET)
     }
   }
-  return asInteractive(() => streamTurnRetrying(messages, tools, signal, onText, choice))
+  return asInteractive(() => streamTurnRetrying(messages, tools, signal, onText, choice), conversationOf(messages))
+}
+
+/** Which conversation a request continues: its first user message (with the context it was first sent with) */
+export function conversationOf(messages: { role: string; content: unknown }[]): string | undefined {
+  const first = messages.find((m) => m.role === 'user')
+  return first ? fnv(typeof first.content === 'string' ? first.content : JSON.stringify(first.content)) : undefined
 }
 
 async function streamTurnRetrying(messages: ApiMessage[], tools: unknown[], signal: AbortSignal, onText: (t: string) => void, choice?: ToolChoice) {
@@ -869,6 +879,28 @@ export function withTurnContext<T extends { role: string; content: string | unkn
 const sentContext = new Map<string, string>()
 const SENT_MAX = 400
 
+// Kept on disk too: after Tide restarted, the next turn of a lesson sent its earlier messages
+// without their context, so its prompt matched nothing saved and was read from the system prompt on
+// (the whole lesson, 25-40 s), though the server still had the lesson's snapshot on disk
+const sentFile = () => join(app.getPath('userData'), 'sent-context.json')
+let sentLoaded = false
+function loadSent() {
+  if (sentLoaded || process.env.VITEST) return
+  sentLoaded = true
+  try {
+    const saved = JSON.parse(readFileSync(sentFile(), 'utf8')) as [string, string][]
+    for (const [k, v] of saved) if (!sentContext.has(k)) sentContext.set(k, v)
+  } catch {
+    // none yet
+  }
+}
+let savingSent: ReturnType<typeof setTimeout> | undefined
+function saveSent() {
+  if (process.env.VITEST) return
+  clearTimeout(savingSent)
+  savingSent = setTimeout(() => void writeFile(sentFile(), JSON.stringify([...sentContext])).catch(() => {}), 1000)
+}
+
 const fnv = (s: string) => {
   let h = 2166136261
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619)
@@ -878,6 +910,7 @@ const fnv = (s: string) => {
 /** Earlier messages get back the context they were sent with; the last gets this turn's, remembered */
 export function withStableContext<T extends { role: string; content: string | unknown }>(messages: T[], context: string): T[] {
   // A conversation is known by its first message; a message by its place and words
+  loadSent()
   const first = String(messages.find((m) => m.role === 'user')?.content ?? '')
   const key = (i: number, content: string) => `${fnv(first)}:${i}:${fnv(content)}`
   const last = messages.length - 1
@@ -891,6 +924,7 @@ export function withStableContext<T extends { role: string; content: string | un
     sentContext.delete(k)
     sentContext.set(k, context)
     while (sentContext.size > SENT_MAX) sentContext.delete(sentContext.keys().next().value!)
+    saveSent()
   }
   return withTurnContext(out, context)
 }
@@ -930,7 +964,7 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     const q = str('query')
     const id = ctx.step({ kind: 'search_notes', label: `Searching your notes for “${q}”`, status: 'running', depth })
     await indexReady()
-    const hits = search(q, 6)
+    const hits = await search(q, 6)
     ctx.updateStep(id, { status: 'done', detail: `${hits.length} passages` })
     if (!hits.length) return 'No matching passages in the notes.'
     return hits
@@ -945,7 +979,7 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     const path = str('path')
     const id = ctx.step({ kind: 'read_note', label: `Reading ${path.split('/').pop()?.replace(/\.md$/, '')}`, status: 'running', depth })
     try {
-      const chunks = getChunks(path)
+      const chunks = await getChunks(path)
       const text = chunks.length ? chunks.map((c) => (c.heading ? `## ${c.heading}\n` : '') + c.text).join('\n\n') : await readText(path)
       const n = addSource(ctx, { path, title: chunks[0]?.title ?? path.split('/').pop()!, text: clip(text, 1500) })
       ctx.updateStep(id, { status: 'done' })
@@ -1536,6 +1570,7 @@ export async function prewarmLesson(req: Omit<ChatRequest, 'id'>): Promise<void>
 async function warmTurn(messages: ApiMessage[], tools: unknown[], signal: AbortSignal): Promise<void> {
   const { baseUrl, apiKey } = getSettings().ai
   const model = await resolveModel()
+  // Ahead of other background work, and waited for (not cancelled) by the turn it prepares: see modelQueue
   await inBackground(async (s) => {
     const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
       method: 'POST',
@@ -1547,7 +1582,7 @@ async function warmTurn(messages: ApiMessage[], tools: unknown[], signal: AbortS
     wasWarmUp = true
     // Dev only: what was read ahead, to compare with the turn that follows
     if (process.env.TIDE_DEBUG_AI) (await import('fs')).writeFileSync(`${process.env.TIDE_DEBUG_AI}.warm`, JSON.stringify({ at: Date.now(), messages, tools, reply: body.slice(0, 600) }, null, 1))
-  }, signal).catch(() => {})
+  }, signal, true, { first: true, keep: conversationOf(messages) }).catch(() => {})
 }
 
 // ---------- Read-back: the model keeps its place in the conversation you're in ----------
@@ -1713,7 +1748,7 @@ async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, sign
     req.scope.kind === 'none'
       ? []
       : req.scope.kind === 'vault'
-        ? search(question, 3)
+        ? (await search(question, 3))
             .filter((h) => onTopic(question, `${h.title} ${h.heading ?? ''} ${h.text}`))
             .map((h) => ({ path: h.path, title: h.title, heading: h.heading || undefined, text: h.text }))
         : await retrieve(req.scope, question)
@@ -1724,7 +1759,7 @@ async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, sign
     const graph = await graphCached().catch(() => null)
     const linked = graph ? [...new Set(graph.edges.filter((e) => e.source === (req.scope as { path: string }).path).map((e) => e.target))].slice(0, 3) : []
     for (const p of linked) {
-      const hit = search(question || p, 1, (x) => x === p)[0] ?? getChunks(p, 1)[0]
+      const hit = (await search(question || p, 1, (x) => x === p))[0] ?? (await getChunks(p, 1))[0]
       if (hit) addSource(ctx, { path: hit.path, title: hit.title, heading: hit.heading ? `${hit.heading} (linked note)` : 'linked note', text: hit.text.slice(0, 1200) })
     }
   }

@@ -575,6 +575,8 @@ export interface TideApi {
     chat(req: ChatRequest): Promise<void>
     /** Reads a lesson's opening ahead of time, so it starts at once (nothing is shown or saved) */
     prewarm(req: Omit<ChatRequest, 'id'>): Promise<void>
+    /** The student is typing in a lesson: background model work holds off */
+    typing(): Promise<void>
     cancel(id: string): Promise<void>
     onEvent(cb: (e: ChatEvent) => void): () => void
     models(): Promise<string[]>

@@ -41,7 +41,26 @@ export interface SubjectProfile {
 
 const norm = (s: string) => s.toLowerCase().replace(/[‘’]/g, "'").replace(/\s+/g, ' ').trim()
 
-const COMPILED = SUBJECTS.map((s) => ({ entry: s, res: s.phrases.map((p) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${p})(?![\\p{L}\\p{N}])`, 'iu')) }))
+/**
+ * A phrase is matched as whole words. Those regexes, with their Unicode letter classes, took
+ * 250-300 ms to compile for the 1,100 phrases (twice: V8 compiles a regex again once it runs
+ * often), on the main thread in the middle of a lesson turn. So each phrase is first looked for
+ * plainly, which is cheap to compile, and only a phrase found that way is checked as whole words.
+ */
+class Phrase {
+  private quick: RegExp
+  private whole?: RegExp
+  constructor(private source: string) {
+    this.quick = new RegExp(`(?:${source})`, 'iu')
+  }
+  exec(t: string): RegExpExecArray | null {
+    if (!this.quick.test(t)) return null
+    this.whole ??= new RegExp(`(?<![\\p{L}\\p{N}])(?:${this.source})(?![\\p{L}\\p{N}])`, 'iu')
+    return this.whole.exec(t)
+  }
+}
+
+const COMPILED = SUBJECTS.map((s) => ({ entry: s, res: s.phrases.map((p) => new Phrase(p)) }))
 
 /** Each subject a text names, with the length of the longest phrase that named it, best first */
 export function subjectMatches(text: string): { entry: SubjectEntry; score: number; at: number }[] {

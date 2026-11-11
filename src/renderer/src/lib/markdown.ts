@@ -75,12 +75,38 @@ export function youtubeEmbedId(url: string): string | null {
 
 // ---------- Math ----------
 
-function renderMath(src: string, display: boolean) {
-  try {
-    return katex.renderToString(src, { displayMode: display, throwOnError: false, strict: 'ignore', output: 'html' })
-  } catch {
-    return `<code>${escapeHtml(src)}</code>`
+/** A small cache that forgets the least recently used entry first */
+function lru<V>(max: number) {
+  const m = new Map<string, V>()
+  return {
+    get(k: string): V | undefined {
+      const v = m.get(k)
+      if (v !== undefined) (m.delete(k), m.set(k, v))
+      return v
+    },
+    set(k: string, v: V) {
+      m.set(k, v)
+      if (m.size > max) m.delete(m.keys().next().value!)
+    }
   }
+}
+
+// A lesson's formulas come back again and again while it streams, and KaTeX takes about half a
+// millisecond each
+const mathCache = lru<string>(2000)
+
+function renderMath(src: string, display: boolean) {
+  const key = `${display ? 'D' : 'I'}${src}`
+  const had = mathCache.get(key)
+  if (had !== undefined) return had
+  let html: string
+  try {
+    html = katex.renderToString(src, { displayMode: display, throwOnError: false, strict: 'ignore', output: 'html' })
+  } catch {
+    html = `<code>${escapeHtml(src)}</code>`
+  }
+  mathCache.set(key, html)
+  return html
 }
 
 function mathInline(state: StateInline, silent: boolean) {
@@ -475,6 +501,21 @@ export function splitFrontmatter(raw: string): Frontmatter {
   return { data, body: raw.slice(m[0].length) }
 }
 
+// Rendered blocks, by the note they're in and their text. A lesson re-renders on every streamed
+// token: without this every finished block was parsed, typeset and sanitised again each time
+// (about 3 ms a block, so 50 ms an update by the sixth turn). Kept per file list, since links and
+// embeds are resolved with it.
+const rendered = new WeakMap<RenderEnv['filesByName'], ReturnType<typeof lru<string>>>()
+
 export function renderMarkdown(body: string, env: RenderEnv): string {
-  return sanitize(instance.render(normalizeMath(body), env))
+  // A whole long note is rendered once by its view (and kept by it): not worth holding here too
+  if (body.length > 20_000) return sanitize(instance.render(normalizeMath(body), env))
+  let cache = rendered.get(env.filesByName)
+  if (!cache) rendered.set(env.filesByName, (cache = lru<string>(600)))
+  const key = `${env.notePath}\u0000${body}`
+  const had = cache.get(key)
+  if (had !== undefined) return had
+  const html = sanitize(instance.render(normalizeMath(body), env))
+  cache.set(key, html)
+  return html
 }

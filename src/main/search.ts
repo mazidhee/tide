@@ -140,25 +140,34 @@ function chunkPdf(path: string, pages: string[]): Chunk[] {
 
 type Hit = Chunk & { score: number }
 
+/**
+ * Writes return when done; reads see only what was committed. With the Rust module every call
+ * runs off the main thread (a commit syncs a dozen files and took 70-490 ms when it ran on it).
+ */
 interface Backend {
-  replace(path: string, chunks: Chunk[]): void
-  remove(path: string): void
-  clear(): void
-  commit(): void
-  search(q: string, limit: number, paths?: string[], typing?: boolean): Hit[]
-  chunks(path: string, limit?: number): Chunk[]
+  replace(path: string, chunks: Chunk[]): Promise<void>
+  remove(path: string): Promise<void>
+  commit(): Promise<void>
+  search(q: string, limit: number, paths?: string[], typing?: boolean): Promise<Hit[]>
+  chunks(path: string, limit?: number): Promise<Chunk[]>
   /** Every path with something indexed */
-  paths(): string[]
+  paths(): Promise<string[]>
+  /** `search` and `chunks` on the main thread, for code that can't wait (about a millisecond) */
+  searchNow(q: string, limit: number): Hit[]
+  chunksNow(path: string): Chunk[]
 }
 
+type ChunkIn = { id: string; title: string; heading: string; text: string; order: number }
+
 interface NativeIndex {
-  replace(path: string, chunks: { id: string; title: string; heading: string; text: string; order: number }[]): void
-  remove(path: string): void
-  clear(): void
-  commit(): void
+  replaceAsync(path: string, chunks: ChunkIn[]): Promise<void>
+  removeAsync(path: string): Promise<void>
+  commitAsync(): Promise<void>
+  searchAsync(q: string, limit: number, paths?: string[] | null, typing?: boolean | null): Promise<Hit[]>
+  chunksAsync(path: string, limit?: number | null): Promise<Hit[]>
+  pathsAsync(): Promise<string[]>
   search(q: string, limit: number, paths?: string[] | null, typing?: boolean | null): Hit[]
   chunks(path: string, limit?: number | null): Hit[]
-  paths(): string[]
 }
 
 function nativeBackend(dir: string): Backend | null {
@@ -166,14 +175,17 @@ function nativeBackend(dir: string): Backend | null {
   if (!mod) return null
   try {
     const ix = new mod.SearchIndex(dir)
+    // A module built before the asynchronous calls: fall back to the in-memory index
+    if (typeof ix.commitAsync !== 'function') return null
     return {
-      replace: (path, chunks) => ix.replace(path, chunks.map(({ id, title, heading, text, order }) => ({ id, title, heading, text, order }))),
-      remove: (path) => ix.remove(path),
-      clear: () => ix.clear(),
-      commit: () => ix.commit(),
-      search: (q, limit, paths, typing) => ix.search(q, limit, paths ?? null, typing ?? null),
-      chunks: (path, limit) => ix.chunks(path, limit ?? null),
-      paths: () => ix.paths()
+      replace: (path, chunks) => ix.replaceAsync(path, chunks.map(({ id, title, heading, text, order }) => ({ id, title, heading, text, order }))),
+      remove: (path) => ix.removeAsync(path),
+      commit: () => ix.commitAsync(),
+      search: (q, limit, paths, typing) => ix.searchAsync(q, limit, paths ?? null, typing ?? null),
+      chunks: (path, limit) => ix.chunksAsync(path, limit ?? null),
+      paths: () => ix.pathsAsync(),
+      searchNow: (q, limit) => ix.search(q, limit, null, null),
+      chunksNow: (path) => ix.chunks(path, null)
     }
   } catch (e) {
     console.warn('[search] native index failed to open', e)
@@ -192,29 +204,33 @@ function memoryBackend(): Backend {
     byPath.get(path)?.forEach((c) => index.has(c.id) && index.discard(c.id))
     byPath.delete(path)
   }
+  const search = (q: string, limit: number, paths?: string[]) => {
+    const only = paths && new Set(paths)
+    return index.search(q, only ? { filter: (r) => only.has(r.path as string) } : undefined).slice(0, limit) as unknown as Hit[]
+  }
   return {
-    replace: (path, chunks) => {
+    replace: async (path, chunks) => {
       remove(path)
       const fresh = chunks.filter((c) => !index.has(c.id))
       index.addAll(fresh)
       byPath.set(path, fresh)
     },
-    remove,
-    clear: () => (index.removeAll(), byPath.clear()),
-    commit: () => {},
-    search: (q, limit, paths) => {
-      const only = paths && new Set(paths)
-      return index.search(q, only ? { filter: (r) => only.has(r.path as string) } : undefined).slice(0, limit) as unknown as Hit[]
-    },
-    chunks: (path, limit) => (byPath.get(path) ?? []).slice(0, limit),
-    paths: () => [...byPath.keys()]
+    remove: async (path) => remove(path),
+    commit: async () => {},
+    search: async (q, limit, paths) => search(q, limit, paths),
+    chunks: async (path, limit) => (byPath.get(path) ?? []).slice(0, limit),
+    paths: async () => [...byPath.keys()],
+    searchNow: (q, limit) => search(q, limit),
+    chunksNow: (path) => byPath.get(path) ?? []
   }
 }
 
 let backend: Backend | null = null
 let backendFor = ''
-/** What's indexed: each file's size and modified time when it was read */
+/** What's indexed: each file's size and modified time when it was read (in memory, ahead of the disk) */
 let manifest: Record<string, string> = {}
+/** The same for what is committed: only this is saved, so a change lost at quit is read again */
+let committed: Record<string, string> = {}
 let manifestFile = ''
 
 function ready(): Backend {
@@ -228,8 +244,10 @@ function ready(): Backend {
   } catch {
     manifest = {}
   }
+  committed = { ...manifest }
   backend ??= memoryBackend()
   backendFor = root
+  uncommitted.clear()
   return backend
 }
 
@@ -238,7 +256,7 @@ function saveManifest() {
   if (!manifestFile) return
   clearTimeout(savingManifest)
   const file = manifestFile
-  const snapshot = JSON.stringify(manifest)
+  const snapshot = JSON.stringify(committed)
   savingManifest = setTimeout(() => fs.writeFile(file, snapshot).catch(() => {}), 300)
 }
 
@@ -261,46 +279,98 @@ async function chunksFor(path: string): Promise<Chunk[]> {
 /** One reindex per path at a time: two at once (a save during the first build) added the note twice */
 const pathQueue = new Map<string, Promise<void>>()
 
+/** Reads the file again into the index. It resolves once the index has the change; a search
+ *  waits for it to be committed, which happens within two seconds (`flushIndex` sooner). */
 export function reindexPath(path: string): Promise<void> {
-  const run = (pathQueue.get(path) ?? Promise.resolve()).catch(() => {}).then(() => reindexNow(path, true))
+  const run = (pathQueue.get(path) ?? Promise.resolve()).catch(() => {}).then(() => reindexNow(path))
   pathQueue.set(path, run)
   run.finally(() => pathQueue.get(path) === run && pathQueue.delete(path)).catch(() => {})
   return run
 }
 
-/** Paths changed since the last commit: if that commit fails they are forgotten, to be read again */
-const uncommitted = new Set<string>()
+// ---------- Writes, in order, and grouped commits ----------
+//
+// Every write to the index goes through one queue, so they land in the order they were made. A
+// commit syncs files to disk, so changes are grouped: committed two seconds after the first one,
+// at quit, or as soon as a search needs to see them.
 
-function commitIndex(b: Backend) {
-  if (!uncommitted.size) return
-  try {
-    b.commit()
-  } catch (e) {
-    console.warn('[search] commit failed', e)
-    for (const p of uncommitted) delete manifest[p]
-  }
-  uncommitted.clear()
-  saveManifest()
+/** Paths written since the last commit was queued: if that commit fails they are read again */
+const uncommitted = new Set<string>()
+let writes: Promise<unknown> = Promise.resolve()
+let commitTimer: ReturnType<typeof setTimeout> | undefined
+const COMMIT_AFTER_MS = 2000
+
+function write<T>(run: () => Promise<T>): Promise<T> {
+  const done = writes.then(run)
+  writes = done.catch(() => {})
+  return done
 }
 
-async function reindexNow(path: string, commit: boolean) {
+/** Notes that `path` changed (its write was just queued), so it gets committed soon */
+function changed(path: string) {
+  uncommitted.add(path)
+  commitTimer ??= setTimeout(() => void flushIndex(), COMMIT_AFTER_MS)
+}
+
+/** Commits what has been written, and resolves when it is searchable */
+export function flushIndex(): Promise<void> {
+  clearTimeout(commitTimer)
+  commitTimer = undefined
+  if (!backend || !uncommitted.size) return writes.then(() => {})
+  const b = backend
+  const batch = [...uncommitted]
+  uncommitted.clear()
+  return write(async () => {
+    try {
+      await b.commit()
+      for (const p of batch) {
+        if (p in manifest) committed[p] = manifest[p]
+        else delete committed[p]
+      }
+    } catch (e) {
+      console.warn('[search] commit failed', e)
+      // Read again next time
+      for (const p of batch) delete manifest[p]
+    }
+    saveManifest()
+  })
+}
+
+async function reindexNow(path: string) {
   const b = ready()
   const sig = await signature(path)
   // Unchanged since it was indexed (a chat turn on a note asks every time): nothing to do
   if (sig && manifest[path] === sig) return
   if (!sig) {
     if (!(path in manifest)) return
-    b.remove(path)
     delete manifest[path]
+    changed(path)
+    await write(() => b.remove(path))
   } else {
     const chunks = await chunksFor(path)
-    b.replace(path, chunks)
     // A file with nothing to index is remembered too, so it isn't opened again every launch
     manifest[path] = sig
+    changed(path)
+    await write(() => b.replace(path, chunks)).catch((e) => {
+      delete manifest[path]
+      throw e
+    })
   }
-  uncommitted.add(path)
-  if (commit) commitIndex(b)
 }
+
+// What was written but not yet committed is committed before Tide quits (three seconds at most)
+let quitting = false
+if (typeof app?.on === 'function') {
+  app.on('before-quit', (e) => {
+    if (quitting || !uncommitted.size) return
+    quitting = true
+    e.preventDefault()
+    Promise.race([flushIndex(), new Promise((r) => setTimeout(r, 3000))]).finally(() => app.quit())
+  })
+}
+
+/** Waits for what's been written to be searchable */
+const fresh = () => (backend && uncommitted.size ? flushIndex() : writes.then(() => {}))
 
 let building: Promise<void> | null = null
 
@@ -316,38 +386,37 @@ export function buildIndex(): Promise<void> {
     const files = flattenFiles(await getTree()).filter((f) => f.kind === 'note' || f.kind === 'pdf' || f.kind === 'epub')
     const present = new Set(files.map((f) => f.path))
     // Gone from the vault, or in the index without Tide knowing (it closed before noting it)
-    for (const path of new Set([...Object.keys(manifest), ...b.paths()])) {
+    for (const path of new Set([...Object.keys(manifest), ...(await b.paths())])) {
       if (!present.has(path) || !(path in manifest)) {
-        b.remove(path)
         delete manifest[path]
-        uncommitted.add(path)
+        changed(path)
+        void write(() => b.remove(path)).catch(() => {})
       }
     }
-    commitIndex(b)
+    await flushIndex()
     // Notes first so search works right away, PDFs can take longer to extract; saved every few
     // files, so a first build is searchable as it fills
     for (const kind of ['note', 'pdf', 'epub']) {
       let since = 0
       for (const f of files.filter((x) => x.kind === kind)) {
         try {
-          await reindexNow(f.path, false)
+          await reindexNow(f.path)
         } catch (e) {
           console.warn('[search] failed to index', f.path, e)
         }
         if (uncommitted.size && ++since >= (kind === 'note' ? 40 : 3)) {
-          commitIndex(b)
+          await flushIndex()
           since = 0
-          // Let the window's requests through between batches
-          await new Promise((r) => setImmediate(r))
         }
       }
-      commitIndex(b)
+      await flushIndex()
     }
   })()
   return building
 }
 
-export const indexReady = () => building ?? Promise.resolve()
+/** The first build is done and every write so far is searchable */
+export const indexReady = () => (building ?? Promise.resolve()).then(fresh)
 
 /** Which index answers: Tide's Rust module, or the in-memory fallback */
 export const searchEngine = (): 'tantivy' | 'memory' => (ready(), manifestFile ? 'tantivy' : 'memory')
@@ -361,15 +430,19 @@ function opened(): Backend | null {
   }
 }
 
-export function search(q: string, limit = 20, filter?: (path: string) => boolean, typing = false): Hit[] {
+export async function search(q: string, limit = 20, filter?: (path: string) => boolean, typing = false): Promise<Hit[]> {
   if (!q.trim()) return []
-  return opened()?.search(q, limit, filter ? allChunkPaths().filter(filter) : undefined, typing) ?? []
+  const b = opened()
+  if (!b) return []
+  // A search right after a save sees it
+  await fresh()
+  return b.search(q, limit, filter ? allChunkPaths().filter(filter) : undefined, typing)
 }
 
-export function searchHits(q: string, limit = 20): SearchHit[] {
+export async function searchHits(q: string, limit = 20): Promise<SearchHit[]> {
   const seen = new Map<string, SearchHit>()
   // The search box: the last word may still be being typed
-  for (const r of search(q, limit * 3, undefined, true)) {
+  for (const r of await search(q, limit * 3, undefined, true)) {
     if (seen.has(r.path)) continue
     seen.set(r.path, {
       path: r.path,
@@ -384,7 +457,17 @@ export function searchHits(q: string, limit = 20): SearchHit[] {
 }
 
 /** A file's passages in reading order: all of them, or only the first few */
-export const getChunks = (path: string, limit?: number): Chunk[] => opened()?.chunks(path, limit) ?? []
+export async function getChunks(path: string, limit?: number): Promise<Chunk[]> {
+  const b = opened()
+  if (!b) return []
+  await fresh()
+  return b.chunks(path, limit)
+}
+
+/** `search` and `getChunks` without waiting: what was committed (at most two seconds behind a
+ *  save), for code that has to answer at once, such as choosing a lesson's reading mid-stream */
+export const searchNow = (q: string, limit = 20): Hit[] => (q.trim() ? (opened()?.searchNow(q, limit) ?? []) : [])
+export const chunksNow = (path: string): Chunk[] => opened()?.chunksNow(path) ?? []
 
 export const allChunkPaths = () => (opened() ? Object.keys(manifest) : [])
 

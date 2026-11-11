@@ -52,7 +52,7 @@ import { applySpeedups, ensureModelServer, serverReady, speedStatus, tuneModelSe
 import { labFlashcards } from './labCards'
 import { prewarmLesson, warmChat, warmLessons } from './agent'
 import { inUse, wakeModel, watchModelIdle } from './modelIdle'
-import { inBackground, onModelBusy } from './modelQueue'
+import { inBackground, noteTyping, onModelBusy } from './modelQueue'
 import { cancelDraft, draftOutline } from './outlineDraft'
 import { cancelCompanyPrep, draftCompanyPrep } from './companyPrep'
 import { adjustPlan, auditRoadmap, checkOutlineResources, planReadings, planToThings, sizePlan, syncFromThings, type PlanRequest } from './planner'
@@ -244,6 +244,7 @@ function registerIpc() {
   })
   handle('ai:cancel', (id: string) => cancelChat(id))
   handle('ai:prewarm', (req: Omit<ChatRequest, 'id'>) => prewarmLesson(req))
+  handle('ai:typing', () => noteTyping())
   setChatsChangedListener((id) => send('chats:changed', id))
   setTerminalListeners(
     (id, data) => send('terminal:data', { id, data }),
