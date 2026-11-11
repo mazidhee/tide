@@ -9,15 +9,18 @@ import './styles/theme.css'
 import './styles/app.css'
 import './styles/prose.css'
 import './styles/lab.css'
+import './styles/sims.css'
 import { AppProvider } from './state'
 import App from './App'
 import { startLab } from './lib/lab'
 import { startMermaid } from './lib/mermaid'
 import { startLightbox } from './lib/lightbox'
+import { startSims } from './lib/sims'
 
 window.tide.settings.get().then((settings) => {
   startMermaid()
   startLab()
+  startSims()
 startLightbox()
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

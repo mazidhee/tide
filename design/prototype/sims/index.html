@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Tide simulations: harness</title>
+    <!--
+      Mounts every simulation kind from sample ```sim blocks, through the same hydration the app uses.
+      Build first:  npx vite build -c design/prototype/sims/vite.config.ts
+      Then open this file. Query: ?theme=light|sepia|graphite|dark|midnight|ember  &w=420|900
+      &only=neural-net|forward|backward|attention|gradient-descent|softmax|tour|bad  &busy=1  &steps=<n>  &press=<button text,…>  &select=<css selector to click>
+    -->
+    <link rel="stylesheet" href="dist/harness.css" />
+    <style>
+      html, body { height: auto; overflow: auto; }
+      body { padding: 24px; }
+      #column { margin: 0 auto; }
+      #column > h2 { margin: 28px 0 10px; font: 600 12px var(--font-ui); color: var(--ink-muted); letter-spacing: 0.02em; }
+      #column > h2:first-child { margin-top: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="column" class="prose"></div>
+    <script src="dist/harness.js"></script>
+  </body>
+</html>

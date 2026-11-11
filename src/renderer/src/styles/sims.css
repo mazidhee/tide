@@ -1,0 +1,1225 @@
+/*
+  Live simulations (```sim blocks). Chrome comes from the theme tokens; the only colours of its
+  own are the diverging pair for negative and positive values, picked per colour scheme and
+  checked for colour-blind separation (orange against blue).
+*/
+
+.sim {
+  --sim-pos: light-dark(#2f6fd6, #5b93e8);
+  --sim-neg: light-dark(#c8641a, #cc7430);
+  container-type: inline-size;
+  container-name: sim;
+  display: block;
+  margin: 0 0 1.05em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--bg-raised);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  user-select: none;
+  transition: border-color 140ms ease;
+}
+
+.sim:focus-visible,
+.sim:focus-within {
+  border-color: var(--line-strong);
+  background-color: var(--bg-raised);
+}
+
+.sim [hidden] {
+  display: none !important;
+}
+
+.sim p,
+figure.sim p {
+  margin: 0;
+}
+
+/* ---------- Head ---------- */
+
+.sim-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px 0;
+}
+
+.sim-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.sim-kind {
+  flex: none;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+/* ---------- Tour ---------- */
+
+.sim-tour {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 16px 0;
+  padding: 10px 10px 10px 12px;
+  border-radius: var(--radius-s);
+  background: var(--accent-soft);
+}
+
+.sim-tour-count {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.sim-tour-say {
+  font-size: var(--text-md);
+  line-height: 1.45;
+  color: var(--ink);
+  text-wrap: pretty;
+}
+
+.sim-tour-nav {
+  display: flex;
+  gap: 6px;
+}
+
+.sim-tour.single {
+  grid-template-columns: 1fr;
+  padding: 10px 12px;
+}
+
+.sim-tour.single .sim-tour-say {
+  grid-area: auto;
+}
+
+/* ---------- Body ---------- */
+
+.sim-body {
+  min-width: 0;
+  padding: 12px 16px 4px;
+}
+
+.sim-params {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 16px;
+  margin-bottom: 14px;
+}
+
+.sim-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sim-label {
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--ink-muted);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.sim-field-range {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 4px 8px;
+  cursor: default;
+  min-width: 150px;
+  flex: 1 1 150px;
+  max-width: 240px;
+}
+
+.sim-field-range .sim-label {
+  grid-column: 1;
+}
+
+.sim-field-range .sim-value {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: var(--text-xs);
+  color: var(--ink);
+  text-align: right;
+}
+
+.sim-field-range .sim-range {
+  grid-column: 1 / -1;
+}
+
+.sim-field-range.off {
+  opacity: 0.45;
+}
+
+.sim-field-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.sim-field-check .sim-label {
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+.sim .sim-field input.sim-check {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  transform: none;
+  accent-color: var(--accent);
+}
+
+.sim .sim-select,
+.sim .sim-number {
+  height: 28px;
+  padding: 0 26px 0 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background-color: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-xs);
+}
+
+.sim .sim-number {
+  width: 46px;
+  padding: 0 4px 0 9px;
+}
+
+.sim .sim-select:hover,
+.sim .sim-number:hover {
+  background-color: var(--field-hover);
+}
+
+.sim .sim-select:focus-visible,
+.sim .sim-number:focus-visible {
+  border-color: var(--field-edge);
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
+.sim .sim-range {
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--accent);
+}
+
+.sim .sim-range:focus-visible {
+  box-shadow: var(--focus-ring);
+  border-radius: 8px;
+}
+
+.sim-layers {
+  display: flex;
+  gap: 4px;
+}
+
+.sim-seg {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--field);
+}
+
+.sim-seg-btn {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+  white-space: nowrap;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.sim-seg-btn:hover {
+  color: var(--ink);
+}
+
+.sim-seg-btn[aria-pressed='true'] {
+  background: var(--bg-raised);
+  color: var(--ink);
+  font-weight: 550;
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.sim-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 7px;
+  background: var(--btn);
+  color: var(--ink);
+  font-size: var(--text-xs);
+  font-weight: 550;
+  white-space: nowrap;
+  transition: background-color 120ms ease;
+}
+
+.sim-btn:hover:not(:disabled),
+.sim-btn:focus-visible {
+  background: var(--btn-hover);
+}
+
+.sim-btn.primary {
+  min-width: 62px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.sim-btn.primary:hover:not(:disabled),
+.sim-btn.primary:focus-visible {
+  background: color-mix(in srgb, var(--accent) 88%, var(--ink));
+}
+
+.sim-btn.quiet {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  color: var(--ink-soft);
+}
+
+.sim-btn.quiet:hover:not(:disabled),
+.sim-btn.quiet:focus-visible {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.sim-btn.square {
+  width: 28px;
+  padding: 0;
+}
+
+.sim-btn:disabled {
+  opacity: 0.4;
+}
+
+/* ---------- Plots ---------- */
+
+.sim-plot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  border-radius: var(--radius-s);
+}
+
+.sim-plot-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+}
+
+.sim-canvas {
+  display: block;
+  width: 100%;
+  border-radius: var(--radius-s);
+  box-shadow: 0 0 0 1px var(--line);
+  cursor: pointer;
+}
+
+.sim-canvas:focus-visible {
+  background-color: transparent;
+  box-shadow: 0 0 0 1px var(--line-strong), var(--focus-ring);
+}
+
+.sim-cap {
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+}
+
+.sim-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 12px;
+}
+
+.sim-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-2xs);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.sim-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex: none;
+  font-style: normal;
+}
+
+.sim-swatch.dot {
+  border-radius: 50%;
+}
+
+.sim-swatch.square {
+  border-radius: 1.5px;
+}
+
+.sim-swatch.line {
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.sim-swatch.cross {
+  width: auto;
+  height: auto;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-soft);
+}
+
+.sim-swatch.pos {
+  background: var(--sim-pos);
+}
+
+.sim-swatch.neg {
+  background: var(--sim-neg);
+}
+
+.sim-swatch.ink {
+  background: var(--ink);
+}
+
+/* The part a tour step points at: a calm ring, nothing that moves */
+.sim-hl {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-s);
+}
+
+.sim-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.sim-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 52px;
+}
+
+.sim-stat-label {
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+}
+
+.sim-stat-value {
+  font-size: var(--text-md);
+  font-weight: 550;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.sim-note {
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--ink-muted);
+  text-wrap: pretty;
+}
+
+.sim .sim-table {
+  display: table;
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+  overflow: visible;
+}
+
+.sim .sim-table th,
+.sim .sim-table td {
+  padding: 4px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  vertical-align: baseline;
+  text-align: left;
+  font-weight: 400;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.sim .sim-table thead th {
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.sim .sim-table tbody th {
+  color: var(--ink-soft);
+}
+
+.sim .sim-table .n {
+  text-align: right;
+}
+
+.sim .sim-table tbody tr:last-child th,
+.sim .sim-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.sim-pass-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ---------- Readout and transport ---------- */
+
+.sim-readout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  margin: 8px 16px 0;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.sim-readout-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.sim-readout-label {
+  font-size: var(--text-sm);
+  color: var(--ink);
+  text-wrap: pretty;
+}
+
+.sim-readout.empty .sim-readout-label {
+  color: var(--ink-muted);
+}
+
+.sim-readout-values {
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+  white-space: pre-wrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sim-ask {
+  flex: none;
+}
+
+.sim-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.sim-bar .sim-field {
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  margin-left: 8px;
+}
+
+.sim-status {
+  flex: 1 1 120px;
+  min-width: 0;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  text-align: right;
+}
+
+/* ---------- Neural network ---------- */
+
+.sim-nn-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-areas:
+    'net surface'
+    'under surface';
+  gap: 14px 24px;
+  align-items: start;
+}
+
+.sim-nn-net {
+  grid-area: net;
+}
+
+.sim-nn-side {
+  grid-area: surface;
+}
+
+.sim-nn-under {
+  grid-area: under;
+}
+
+.sim-nn-net {
+  min-width: 0;
+}
+
+.sim-nn-svg {
+  display: block;
+  overflow: visible;
+  border-radius: var(--radius-s);
+}
+
+.sim-nn-svg:focus-visible {
+  background-color: transparent;
+  box-shadow: var(--focus-ring);
+}
+
+.sim-nn-edge {
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.sim-nn-hit {
+  stroke: transparent;
+  stroke-width: 9;
+  cursor: pointer;
+}
+
+.sim-nn-hit:hover {
+  stroke: color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+.sim-nn-node {
+  stroke: var(--ink-muted);
+  stroke-width: 1;
+  cursor: pointer;
+}
+
+.sim-nn-node.pending {
+  stroke-dasharray: 2 2.5;
+}
+
+.sim-nn-node:hover,
+.sim-nn-node.on {
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.sim-nn-text text {
+  font-family: var(--font-ui);
+  pointer-events: none;
+}
+
+.sim-nn-val {
+  font-size: 10px;
+  fill: var(--ink);
+  paint-order: stroke;
+  stroke: var(--bg-raised);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.sim-nn-name {
+  font-size: 11px;
+  fill: var(--ink-soft);
+}
+
+.sim-nn-col {
+  font-size: 10.5px;
+  fill: var(--ink-muted);
+}
+
+.sim-nn-hl-ring,
+.sim-nn-hl-col {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.sim-nn-hl-edge {
+  stroke: var(--accent);
+  stroke-width: 9;
+  stroke-opacity: 0.32;
+  stroke-linecap: round;
+}
+
+.sim-nn-surface {
+  aspect-ratio: 1;
+}
+
+.sim-nn-under {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.sim-nn-loss {
+  height: 96px;
+}
+
+.sim-pass {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.sim-pass-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.sim-pass-step {
+  flex: 1;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.sim-pass-lead {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.sim-pass .sim-table {
+  max-width: 460px;
+}
+
+/* ---------- Attention ---------- */
+
+.sim-att {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+.sim-att .sim-params {
+  margin-bottom: 0;
+}
+
+.sim-att-seq {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+
+.sim-att-arcs {
+  display: block;
+  overflow: visible;
+}
+
+.sim-att-arc {
+  fill: none;
+  stroke: var(--sim-pos);
+  stroke-linecap: round;
+}
+
+.sim-att-tokens {
+  position: relative;
+  display: flex;
+  gap: 4px;
+}
+
+.sim-att-token {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  padding: 5px 2px 4px;
+  border-radius: 7px;
+  background: var(--field);
+  color: var(--ink);
+  transition: background-color 120ms ease;
+}
+
+.sim-att-token:hover,
+.sim-att-token:focus-visible {
+  background: var(--field-hover);
+}
+
+.sim-att-token[aria-pressed='true'] {
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+
+.sim-att-word {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sim-att-w {
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+}
+
+.sim-att-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.sim-att-matrix {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+}
+
+.sim-att-row {
+  display: grid;
+  grid-template-columns: 58px repeat(var(--n), minmax(0, 1fr));
+  gap: 2px;
+  align-items: stretch;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.sim-att-row.head {
+  align-items: end;
+  cursor: default;
+}
+
+.sim-att-corner {
+  align-self: end;
+  font-size: 9.5px;
+  line-height: 1.2;
+  color: var(--ink-muted);
+  white-space: pre-line;
+}
+
+.sim-att-colname {
+  overflow: hidden;
+  padding-bottom: 2px;
+  font-size: var(--text-2xs);
+  color: var(--ink-soft);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sim-att-matrix.dense .sim-att-colname {
+  justify-self: center;
+  max-height: 62px;
+  padding: 0;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.sim-att-rowname {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 6px 0 4px;
+  border-radius: 4px;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sim-att-row.on .sim-att-rowname {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.sim-att-cell {
+  display: grid;
+  place-items: center;
+  height: 30px;
+  border-radius: 3px;
+  font-size: 10.5px;
+  color: var(--ink);
+}
+
+.sim-att-matrix.dense .sim-att-cell {
+  height: 24px;
+  font-size: 9px;
+}
+
+.sim-att-cell.masked {
+  background-color: transparent !important;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.sim-att-row.on {
+  box-shadow: 0 0 0 1.5px var(--ink);
+}
+
+.sim-att-row:not(.head):hover .sim-att-rowname {
+  color: var(--ink);
+}
+
+.sim-att-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.sim-att-scores {
+  cursor: pointer;
+}
+
+.sim-att-barcell {
+  width: 30%;
+  min-width: 48px;
+  padding-right: 0 !important;
+}
+
+.sim-att-bar {
+  display: block;
+  height: 8px;
+  min-width: 1px;
+  border-radius: 0 2px 2px 0;
+  background: var(--sim-pos);
+}
+
+.sim-att-mix {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 5px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.sim-att-mix:focus-visible {
+  background-color: transparent;
+  box-shadow: var(--focus-ring);
+}
+
+.sim-att-mixrow {
+  display: grid;
+  grid-template-columns: minmax(0, 132px) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.sim-att-mixlabel {
+  overflow: hidden;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sim-att-mixrow.total .sim-att-mixlabel {
+  color: var(--ink);
+  font-weight: 550;
+}
+
+.sim-att-strip {
+  display: flex;
+  gap: 2px;
+}
+
+.sim-att-vcell {
+  flex: 1 1 0;
+  height: 14px;
+  max-width: 28px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.sim-att-mixrow.total .sim-att-vcell {
+  height: 18px;
+}
+
+.sim-att-toy {
+  padding: 8px 10px;
+  border-radius: var(--radius-s);
+  background: var(--field);
+  color: var(--ink-soft);
+}
+
+/* ---------- Gradient descent ---------- */
+
+.sim-gd-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.sim-gd-canvas {
+  cursor: crosshair;
+}
+
+.sim-gd-side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.sim-gd-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+}
+
+.sim-gd-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.sim-gd-row dt {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.sim-gd-row dd {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--ink);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ---------- Softmax ---------- */
+
+.sim-sm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+
+.sim-sm-grid {
+  display: grid;
+  grid-template-columns: minmax(48px, max-content) minmax(0, 1fr) auto auto auto minmax(0, 1.1fr) auto;
+  align-items: center;
+  gap: 7px 12px;
+}
+
+.sim-sm-head {
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.sim-sm-head.n,
+.sim-sm-num {
+  text-align: right;
+}
+
+.sim-sm-name {
+  max-width: 120px;
+  overflow: hidden;
+  padding: 2px 4px;
+  margin-left: -4px;
+  border-radius: 5px;
+  font-size: var(--text-sm);
+  font-weight: 550;
+  color: var(--ink);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sim-sm-name:hover {
+  background: var(--bg-hover);
+}
+
+.sim-sm-track,
+.sim-sm-ptrack {
+  position: relative;
+  display: block;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--field);
+}
+
+.sim-sm-ptrack {
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.sim-sm-track:focus-within {
+  box-shadow: var(--focus-ring), 0 0 0 1px var(--line-strong);
+}
+
+.sim-sm-zero {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--line-strong);
+}
+
+.sim-sm-fill {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 0 3px 3px 0;
+  background: var(--sim-pos);
+}
+
+.sim-sm-fill.neg {
+  border-radius: 3px 0 0 3px;
+  background: var(--sim-neg);
+}
+
+.sim-sm-knob {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  width: 4px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--bg-raised);
+}
+
+.sim .sim-sm-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: ew-resize;
+}
+
+.sim-sm-pfill {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  min-width: 1px;
+  border-radius: 0 3px 3px 0;
+  /* Neutral, so it can't be mistaken for a positive or negative logit in any theme */
+  background: color-mix(in srgb, var(--ink) 62%, var(--bg-raised));
+}
+
+.sim-sm-num {
+  font-size: var(--text-xs);
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.sim-sm-num.wide,
+.sim-sm-head.wide {
+  color: var(--ink-soft);
+}
+
+.sim-sm-foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* ---------- Narrow: the tutor panel ---------- */
+
+@container sim (max-width: 620px) {
+  .sim-nn-grid,
+  .sim-att-grid,
+  .sim-gd-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .sim-nn-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      'net net'
+      'surface under';
+    gap: 14px 12px;
+  }
+
+  .sim-nn-loss {
+    height: 84px;
+  }
+
+  .sim-tour {
+    grid-template-columns: 1fr auto;
+  }
+
+  .sim-tour-say {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .sim-sm-grid {
+    grid-template-columns: minmax(40px, max-content) minmax(0, 1fr) auto minmax(0, 1fr) auto;
+    gap: 7px 8px;
+  }
+
+  .sim-sm-num.wide,
+  .sim-sm-head.wide {
+    display: none;
+  }
+
+  .sim-att-row {
+    grid-template-columns: 46px repeat(var(--n), minmax(0, 1fr));
+  }
+
+  .sim-status {
+    flex-basis: 100%;
+    text-align: left;
+  }
+}
+
+@container sim (max-width: 360px) {
+  .sim-nn-grid {
+    grid-template-areas:
+      'net net'
+      'surface surface'
+      'under under';
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sim,
+  .sim * {
+    transition: none !important;
+  }
+}

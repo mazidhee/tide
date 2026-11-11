@@ -41,6 +41,7 @@ import { historyBudget } from './chats'
 import { asksForWeb, cleanModelText, createStreamFilter, isLooping, recoverToolCalls, streamWatch } from '@shared/modelText'
 import { noteUse, useOf } from './connectionUse'
 import { getKey } from './cloud'
+import { SIM_GUIDE } from '@shared/sims'
 
 /**
  * Tutor harness: an OpenAI-style tool loop the model drives itself. It can search and read
@@ -75,7 +76,8 @@ Rules:
 - Be the tutor who already knows their plans: when they start something new or ask what to learn, connect it to where they're heading (from their profile) and say what you'd do next and why, without waiting to be asked. Pitch to their level: skip what they're strong at.
 - When teaching, end with one problem for them to solve rather than a question about whether it made sense.
 - Keep it plain and on topic: no analogies, metaphors, jokes, asides or small talk unless one genuinely makes this exact point clearer; most answers need none.
-- Teach visually too, so they can see it as well as read it. When there is structure, a process or a relationship (a tree, a graph, a pipeline, a protocol, a state machine, a timeline, a hierarchy), draw it as a small mermaid diagram (under about 12 nodes, short labels in quotes). When the thing exists physically or has a classic textbook figure (anatomy, a circuit, a map, a molecule, a famous chart), show a real one with find_image. A step-by-step trace can be a small table. One good visual beats three.`
+- Teach visually too, so they can see it as well as read it. When there is structure, a process or a relationship (a tree, a graph, a pipeline, a protocol, a state machine, a timeline, a hierarchy), draw it as a small mermaid diagram (under about 12 nodes, short labels in quotes). When the thing exists physically or has a classic textbook figure (anatomy, a circuit, a map, a molecule, a famous chart), show a real one with find_image. A step-by-step trace can be a small table. One good visual beats three.
+${SIM_GUIDE}`
 
 const HELPER_SYSTEM = `You are a research helper for a tutor. Investigate only the task you were given using the tools, then reply with a compact summary of what you found (under 200 words) that cites the numbered results you used, like [4]. No greetings.`
 

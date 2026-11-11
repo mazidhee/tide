@@ -147,6 +147,7 @@ Fold the earlier summary in; don't lose facts from it.`
 export const forSummary = (text: string) =>
   text
     .replace(/```mermaid[\s\S]*?```/g, '[a diagram]')
+    .replace(/```sim[\s\S]*?```/g, '[a live simulation]')
     .replace(/```(\w*)[\s\S]*?```/g, (_, lang: string) => `[${lang || 'code'} block]`)
     .replace(/<(say|note|card|plan|summary)>[\s\S]*?<\/\1>/g, '')
     .replace(/<ask[^>]*>([\s\S]*?)<\/ask>/g, 'Question: $1')
