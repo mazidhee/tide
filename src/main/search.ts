@@ -135,8 +135,10 @@ interface Backend {
   remove(path: string): void
   clear(): void
   commit(): void
-  search(q: string, limit: number, paths?: string[]): Hit[]
+  search(q: string, limit: number, paths?: string[], typing?: boolean): Hit[]
   chunks(path: string, limit?: number): Chunk[]
+  /** Every path with something indexed */
+  paths(): string[]
 }
 
 interface NativeIndex {
@@ -144,8 +146,9 @@ interface NativeIndex {
   remove(path: string): void
   clear(): void
   commit(): void
-  search(q: string, limit: number, paths?: string[] | null): Hit[]
+  search(q: string, limit: number, paths?: string[] | null, typing?: boolean | null): Hit[]
   chunks(path: string, limit?: number | null): Hit[]
+  paths(): string[]
 }
 
 /** The Rust module: in the app's resources when packaged, next to its crate in development */
@@ -183,8 +186,9 @@ function nativeBackend(dir: string): Backend | null {
       remove: (path) => ix.remove(path),
       clear: () => ix.clear(),
       commit: () => ix.commit(),
-      search: (q, limit, paths) => ix.search(q, limit, paths ?? null),
-      chunks: (path, limit) => ix.chunks(path, limit ?? null)
+      search: (q, limit, paths, typing) => ix.search(q, limit, paths ?? null, typing ?? null),
+      chunks: (path, limit) => ix.chunks(path, limit ?? null),
+      paths: () => ix.paths()
     }
   } catch (e) {
     console.warn('[search] native index failed to open', e)
@@ -217,7 +221,8 @@ function memoryBackend(): Backend {
       const only = paths && new Set(paths)
       return index.search(q, only ? { filter: (r) => only.has(r.path as string) } : undefined).slice(0, limit) as unknown as Hit[]
     },
-    chunks: (path, limit) => (byPath.get(path) ?? []).slice(0, limit)
+    chunks: (path, limit) => (byPath.get(path) ?? []).slice(0, limit),
+    paths: () => [...byPath.keys()]
   }
 }
 
@@ -276,22 +281,38 @@ export function reindexPath(path: string): Promise<void> {
   return run
 }
 
+/** Paths changed since the last commit: if that commit fails they are forgotten, to be read again */
+const uncommitted = new Set<string>()
+
+function commitIndex(b: Backend) {
+  if (!uncommitted.size) return
+  try {
+    b.commit()
+  } catch (e) {
+    console.warn('[search] commit failed', e)
+    for (const p of uncommitted) delete manifest[p]
+  }
+  uncommitted.clear()
+  saveManifest()
+}
+
 async function reindexNow(path: string, commit: boolean) {
   const b = ready()
   const sig = await signature(path)
+  // Unchanged since it was indexed (a chat turn on a note asks every time): nothing to do
+  if (sig && manifest[path] === sig) return
   if (!sig) {
+    if (!(path in manifest)) return
     b.remove(path)
     delete manifest[path]
   } else {
     const chunks = await chunksFor(path)
     b.replace(path, chunks)
-    if (chunks.length) manifest[path] = sig
-    else delete manifest[path]
+    // A file with nothing to index is remembered too, so it isn't opened again every launch
+    manifest[path] = sig
   }
-  if (commit) {
-    b.commit()
-    saveManifest()
-  }
+  uncommitted.add(path)
+  if (commit) commitIndex(b)
 }
 
 let building: Promise<void> | null = null
@@ -307,25 +328,33 @@ export function buildIndex(): Promise<void> {
     }
     const files = flattenFiles(await getTree()).filter((f) => f.kind === 'note' || f.kind === 'pdf')
     const present = new Set(files.map((f) => f.path))
-    for (const path of Object.keys(manifest)) {
-      if (!present.has(path)) {
+    // Gone from the vault, or in the index without Tide knowing (it closed before noting it)
+    for (const path of new Set([...Object.keys(manifest), ...b.paths()])) {
+      if (!present.has(path) || !(path in manifest)) {
         b.remove(path)
         delete manifest[path]
+        uncommitted.add(path)
       }
     }
-    // Notes first so search works right away, PDFs can take longer to extract
+    commitIndex(b)
+    // Notes first so search works right away, PDFs can take longer to extract; saved every few
+    // files, so a first build is searchable as it fills
     for (const kind of ['note', 'pdf']) {
+      let since = 0
       for (const f of files.filter((x) => x.kind === kind)) {
         try {
-          const sig = await signature(f.path)
-          if (sig && manifest[f.path] === sig) continue
           await reindexNow(f.path, false)
         } catch (e) {
           console.warn('[search] failed to index', f.path, e)
         }
+        if (uncommitted.size && ++since >= (kind === 'note' ? 40 : 3)) {
+          commitIndex(b)
+          since = 0
+          // Let the window's requests through between batches
+          await new Promise((r) => setImmediate(r))
+        }
       }
-      b.commit()
-      saveManifest()
+      commitIndex(b)
     }
   })()
   return building
@@ -336,14 +365,24 @@ export const indexReady = () => building ?? Promise.resolve()
 /** Which index answers: Tide's Rust module, or the in-memory fallback */
 export const searchEngine = (): 'tantivy' | 'memory' => (ready(), manifestFile ? 'tantivy' : 'memory')
 
-export function search(q: string, limit = 20, filter?: (path: string) => boolean): Hit[] {
+/** With no notes folder (not chosen yet, or its disk is away) there is nothing to search, not an error */
+function opened(): Backend | null {
+  try {
+    return ready()
+  } catch {
+    return null
+  }
+}
+
+export function search(q: string, limit = 20, filter?: (path: string) => boolean, typing = false): Hit[] {
   if (!q.trim()) return []
-  return ready().search(q, limit, filter ? allChunkPaths().filter(filter) : undefined)
+  return opened()?.search(q, limit, filter ? allChunkPaths().filter(filter) : undefined, typing) ?? []
 }
 
 export function searchHits(q: string, limit = 20): SearchHit[] {
   const seen = new Map<string, SearchHit>()
-  for (const r of search(q, limit * 3)) {
+  // The search box: the last word may still be being typed
+  for (const r of search(q, limit * 3, undefined, true)) {
     if (seen.has(r.path)) continue
     seen.set(r.path, {
       path: r.path,
@@ -358,9 +397,9 @@ export function searchHits(q: string, limit = 20): SearchHit[] {
 }
 
 /** A file's passages in reading order: all of them, or only the first few */
-export const getChunks = (path: string, limit?: number): Chunk[] => ready().chunks(path, limit)
+export const getChunks = (path: string, limit?: number): Chunk[] => opened()?.chunks(path, limit) ?? []
 
-export const allChunkPaths = () => (ready(), Object.keys(manifest))
+export const allChunkPaths = () => (opened() ? Object.keys(manifest) : [])
 
 function makeSnippet(text: string, q: string): string {
   const flat = text.replace(/\s+/g, ' ')

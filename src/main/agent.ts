@@ -679,6 +679,10 @@ async function streamTurnOnce(
   // Tide's own time on the stream: from each piece arriving to asking for the next
   let tideMs = 0
   let tokens = 0
+  // Recorded however the stream ends: a lesson turn cut short so Tide can set the problem is still
+  // an answer from this Mac, to be timed and read back
+  const record = () => timed({ engine: target ? 'cloud' : 'local', model, startAt, firstTokenAt, endAt: performance.now(), tokens: usage?.output ?? tokens, promptTokens: usage?.input, cachedTokens: usage?.cached, tideMs })
+  try {
   for (;;) {
     const { value, done } = await reader.read()
     if (done) break
@@ -739,8 +743,10 @@ async function streamTurnOnce(
     }
     tideMs += performance.now() - got
   }
+  } finally {
+    record()
+  }
   outerSignal.removeEventListener('abort', abort)
-  timed({ engine: target ? 'cloud' : 'local', model, startAt, firstTokenAt, endAt: performance.now(), tokens: usage?.output ?? tokens, promptTokens: usage?.input, cachedTokens: usage?.cached, tideMs })
   const promptChars = messages.reduce((n, m) => n + (typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content ?? '').length), 0)
   recordUsage({
     kind: target ? 'cloud' : 'local',
@@ -1446,6 +1452,8 @@ export async function prewarmLesson(req: Omit<ChatRequest, 'id'>): Promise<void>
   if (at && Date.now() - at < WARM_FOR_MS) return
   warmed.set(key, Date.now())
   if (warmed.size > 40) warmed.delete(warmed.keys().next().value!)
+  // You're settling on another lesson: the one you were in is no longer kept warm
+  forgetLive()
   prewarming?.abort()
   const controller = new AbortController()
   prewarming = controller
@@ -1464,6 +1472,7 @@ async function warmTurn(messages: ApiMessage[], tools: unknown[], signal: AbortS
       signal: s
     })
     const body = await res.text()
+    wasWarmUp = true
     // Dev only: what was read ahead, to compare with the turn that follows
     if (process.env.TIDE_DEBUG_AI) (await import('fs')).writeFileSync(`${process.env.TIDE_DEBUG_AI}.warm`, JSON.stringify({ at: Date.now(), messages, tools, reply: body.slice(0, 600) }, null, 1))
   }, signal).catch(() => {})
@@ -1482,6 +1491,8 @@ async function warmTurn(messages: ApiMessage[], tools: unknown[], signal: AbortS
 let live: { req: TurnRequest; reply: string; at: number } | null = null
 let readingBack: AbortController | null = null
 let touchQueued = false
+/** The job that just finished was itself a warm-up: nothing was pushed out that a touch would fix */
+let wasWarmUp = false
 /** A conversation left alone this long is no longer kept warm */
 const LIVE_FOR_MS = 20 * 60_000
 
@@ -1511,7 +1522,9 @@ export function forgetLive(): void {
 
 // Other work used the model: put the live conversation back on top of its cache
 afterBackground(() => {
-  if (!live || readingBack || touchQueued) return
+  const warm = wasWarmUp
+  wasWarmUp = false
+  if (!live || warm || readingBack || touchQueued) return
   touchQueued = true
   setTimeout(() => {
     touchQueued = false

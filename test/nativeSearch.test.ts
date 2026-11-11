@@ -23,7 +23,14 @@ describe('the Rust search index', () => {
     expect(first.searchEngine()).toBe('tantivy')
     expect(first.search('complement negative')[0]?.path).toBe('Maths/Binary.md')
     expect(first.search('complment')[0]?.path).toBe('Maths/Binary.md')
-    expect(first.search('hexa').some((h) => h.heading === 'Hexadecimal')).toBe(true)
+    // The start of a word matches only in a search box being typed into, never in a finished question
+    expect(first.search('hexa', 20, undefined, true).some((h) => h.heading === 'Hexadecimal')).toBe(true)
+    expect(first.search('hexa')).toEqual([])
+    expect(first.searchHits('hexa')[0]?.path).toBe('Maths/Binary.md')
+    // Asked to index a file that hasn't changed: nothing is written
+    const before = first.search('complement negative')
+    await first.reindexPath('Maths/Binary.md')
+    expect(first.search('complement negative')).toEqual(before)
     expect(first.search('bits', 5, (p) => p === 'Maths/Primes.md')).toEqual([])
     expect(first.getChunks('Maths/Binary.md').map((c) => c.heading)).toEqual(['Binary', 'Hexadecimal'])
     expect(first.getChunks('Maths/Binary.md', 1).map((c) => c.heading)).toEqual(['Binary'])

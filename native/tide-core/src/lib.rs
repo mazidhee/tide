@@ -162,18 +162,22 @@ impl SearchIndex {
   #[napi]
   pub fn commit(&self) -> Result<()> {
     let mut slot = self.writer.lock().map_err(err)?;
-    if let Some(mut w) = slot.take() {
+    if let Some(w) = slot.as_mut() {
+      // On failure the writer and what it holds are kept, to be committed by the next call
       w.commit().map_err(err)?;
+    }
+    if let Some(w) = slot.take() {
       w.wait_merging_threads().map_err(err)?;
     }
     self.reader.reload().map_err(err)
   }
 
   /// The best passages for `q`, optionally only from `paths`. Every word may match a title
-  /// (worth most), a heading or the text; longer words forgive a typo, and the last word also
-  /// matches as the start of a word, for searching as you type.
+  /// (worth most), a heading or the text, and longer words forgive a typo. With `typing`, the
+  /// last word also matches as the start of a word, for a search box filled as you type; a
+  /// finished question never wants that ("...explain it?" would match everything starting "it").
   #[napi]
-  pub fn search(&self, q: String, limit: u32, paths: Option<Vec<String>>) -> Result<Vec<Chunk>> {
+  pub fn search(&self, q: String, limit: u32, paths: Option<Vec<String>>, typing: Option<bool>) -> Result<Vec<Chunk>> {
     let mut words: Vec<String> = Vec::new();
     let mut a = analyser();
     let mut stream = a.token_stream(&q);
@@ -186,17 +190,21 @@ impl SearchIndex {
     if words.is_empty() || limit == 0 {
       return Ok(Vec::new());
     }
-    let typed_last = !q.ends_with(char::is_whitespace);
+    // A pasted paragraph is searched by its first words: each one costs a lookup per field
+    words.truncate(32);
+    let typed_last = typing.unwrap_or(false) && !q.ends_with(char::is_whitespace);
     let mut clauses: Vec<(Occur, Box<dyn Query>)> = Vec::new();
     for (i, w) in words.iter().enumerate() {
       for (field, boost) in [(self.f.title, 3.0), (self.f.heading, 2.0), (self.f.text, 1.0)] {
         let term = Term::from_field_text(field, w);
         // An exact match counts in full; a longer word one typo off counts for less
         clauses.push((Occur::Should, Box::new(BoostQuery::new(Box::new(TermQuery::new(term.clone(), IndexRecordOption::WithFreqs)), boost))));
-        if w.chars().count() >= 5 {
-          clauses.push((Occur::Should, Box::new(BoostQuery::new(Box::new(FuzzyTermQuery::new(term.clone(), 1, true)), boost * 0.5))));
+        // A near match scores a flat amount, so it is kept small beside a real one, and only the
+        // first dozen words get one
+        if w.chars().count() >= 5 && i < 12 {
+          clauses.push((Occur::Should, Box::new(BoostQuery::new(Box::new(FuzzyTermQuery::new(term.clone(), 1, true)), boost * 0.25))));
         }
-        if i == words.len() - 1 && typed_last && w.chars().count() >= 2 {
+        if i == words.len() - 1 && typed_last && w.chars().count() >= 3 {
           clauses.push((Occur::Should, Box::new(BoostQuery::new(Box::new(FuzzyTermQuery::new_prefix(term, 0, false)), boost * 0.5))));
         }
       }

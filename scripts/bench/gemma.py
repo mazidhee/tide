@@ -69,6 +69,22 @@ def ask(messages, tenant, max_tokens=150, tools=True, transient=NOW, temperature
     return (first if first is not None else time.time() - t0), timings, text
 
 
+def next_token(messages, tenant):
+    """The model's five likeliest next tokens after this prompt, with their log-probabilities: a
+    direct reading of the state the prompt left it in, which is exactly what the cache restores."""
+    body = {'model': PREFIX['model'], 'messages': messages, 'tools': PREFIX['tools'], 'transient_context': NOW, 'max_tokens': 1, 'temperature': 0, 'stream': False, 'logprobs': True, 'top_logprobs': 5}
+    req = urllib.request.Request(URL + '/v1/chat/completions', data=json.dumps(body).encode(), headers={'Content-Type': 'application/json', 'X-APC-Tenant': tenant})
+    with urllib.request.urlopen(req, timeout=900) as r:
+        d = json.loads(r.read())
+    first = ((d['choices'][0].get('logprobs') or {}).get('content') or [{}])[0]
+    return {t['token']: t['logprob'] for t in first.get('top_logprobs') or []}, (d.get('usage') or {}).get('prompt_tokens_details', {}).get('cached_tokens', 0)
+
+
+def same_until(a, b):
+    n = next((i for i in range(min(len(a), len(b))) if a[i] != b[i]), min(len(a), len(b)))
+    return n if n < max(len(a), len(b)) else -1
+
+
 def settle(settings):
     """Applies settings and waits until the server answers with them (a change reloads the model)."""
     current = call('GET', '/v1/settings')['current']
@@ -226,20 +242,35 @@ def check():
         failed += 0 if ok else 1
         print(('PASS  ' if ok else 'FAIL  ') + text, flush=True)
 
-    # 1. Word for word: the same prompt answered from the cache and by a server that has never seen it
-    for i, q in enumerate(QUESTIONS[:5]):
-        hot, cold = f'{run}-hot-{i}', f'{run}-never-{i}'
+    # 1. The same prompt, continued from the cache and read from scratch by a server that has never
+    # seen it. Two things are compared. The model's next-token probabilities, which depend on the
+    # whole state the cache restored: they must agree to within rounding. And the full answers at
+    # temperature 0, beside a control (two uncached runs against each other), because this server
+    # is not exactly repeatable even with itself: near-ties between words can fall either way.
+    worst = 0.0
+    for i, q in enumerate(QUESTIONS[:6]):
+        hot, cold, cold2 = f'{run}-hot-{i}', f'{run}-never-{i}', f'{run}-never2-{i}'
         convo = long_history(3 + i, f'{run}-{i}')
         ask(convo, hot, 1)                                        # read-back
         ask(background(f'{run}-{i}'), hot, 12, tools=False, transient=None)
         ask(convo, hot, 1)                                        # keep-warm
         turn = convo + [{'role': 'user', 'content': q}]
-        _, tm_hot, a_hot = ask(turn, hot, 160, temperature=0)
-        _, tm_cold, a_cold = ask(turn, cold, 160, temperature=0)
-        same = a_hot == a_cold
-        verdict(same and tm_hot['cache_n'] > 0 and tm_cold['cache_n'] == 0,
-                f"same answer with the cache ({tm_hot['cache_n']} tokens reused, {tm_hot['prompt_n']} read) and without ({tm_cold['prompt_n']} read): {q}"
-                + ('' if same else f"\n        cached:   {a_hot[:160]!r}\n        uncached: {a_cold[:160]!r}"))
+        p_hot, reused = next_token(turn, hot)
+        p_cold, reused_cold = next_token(turn, cold)
+        shared = set(p_hot) & set(p_cold)
+        gap = max((abs(p_hot[t] - p_cold[t]) for t in shared), default=9.0)
+        top_same = bool(p_hot) and max(p_hot, key=p_hot.get) == max(p_cold, key=p_cold.get)
+        worst = max(worst, gap)
+        verdict(reused > 0 and reused_cold == 0 and top_same and gap < 0.05,
+                f"same next-token probabilities from the cache ({reused} tokens reused) and from scratch: largest difference {gap:.4f} in log-probability, same first choice: {top_same} | {q}")
+        _, _, a_hot = ask(turn, hot, 160, temperature=0)
+        _, _, a_cold = ask(turn, cold, 160, temperature=0)
+        _, _, a_cold2 = ask(turn, cold2, 160, temperature=0)
+        d_cache, d_control = same_until(a_hot, a_cold), same_until(a_cold, a_cold2)
+        say = lambda n: 'identical' if n < 0 else f'differ from character {n}'
+        # The cache may not make answers any less repeatable than the server already is
+        verdict(d_cache < 0 or d_control >= 0, f"   full answers, cached against uncached: {say(d_cache)}; control, uncached against uncached: {say(d_control)}")
+    print(f"      largest next-token difference over all prompts: {worst:.4f}")
 
     # 2. An earlier message is edited after the conversation was cached: the answer follows the edit
     t = f'{run}-edit'

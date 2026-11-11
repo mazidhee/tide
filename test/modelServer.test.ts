@@ -11,13 +11,14 @@ describe('tuning the local model server', () => {
     const calls: { url: string; method?: string; body?: string }[] = []
     vi.stubGlobal('fetch', async (url: string, init: RequestInit = {}) => {
       calls.push({ url, method: init.method, body: init.body as string })
-      return new Response(JSON.stringify({ current: { apc_enabled: false, apc_disk_enabled: false, apc_memory_max_gb: 2, apc_checkpoint_entries: 2 } }), { status: 200 })
+      return new Response(JSON.stringify({ current: { apc_enabled: false, apc_disk_enabled: false, apc_memory_max_gb: 4, apc_checkpoint_entries: 2 } }), { status: 200 })
     })
     expect(await tuneModelServer()).toBe('enabled')
     expect(calls[0].url).toBe('http://localhost:8080/v1/settings')
     expect(calls[1].method).toBe('PATCH')
-    expect(JSON.parse(calls[1].body!)).toEqual({ apc_enabled: true, apc_disk_enabled: true, apc_memory_max_gb: 4, apc_checkpoint_entries: 8 })
-    expect(PREFIX_CACHE.apc_memory_max_gb).toBe(4)
+    // Only what differs, and only settings this server has
+    expect(JSON.parse(calls[1].body!)).toEqual({ apc_enabled: true, apc_disk_enabled: true, apc_memory_max_gb: 2, apc_checkpoint_entries: 6 })
+    expect(PREFIX_CACHE.apc_memory_max_gb).toBe(2)
   })
 
   it('leaves it alone when caching is already on', async () => {
