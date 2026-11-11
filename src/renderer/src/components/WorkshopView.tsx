@@ -20,6 +20,10 @@ export function WorkshopView({ id, from }: { id?: string; from?: { notebook?: st
   const [answer, setAnswer] = useState<{ question: string; text: string; by: 'cloud' | 'local' | 'none' } | null>(null)
   const [forTopic, setForTopic] = useState<WorkshopCard | null | undefined>(undefined)
   const [proposal, setProposal] = useState<{ tries: number; problems: string[] } | null>(null)
+  const [editor, setEditor] = useState<{ name: string } | null>(null)
+  const [watching, setWatching] = useState(false)
+  const [saveRunning, setSaveRunning] = useState(false)
+  const started = !!(id && state)
 
   const show = useCallback((s: WorkshopState | null) => {
     setState(s)
@@ -39,6 +43,32 @@ export function WorkshopView({ id, from }: { id?: string; from?: { notebook?: st
     if (id || !from?.topic) return
     window.tide.workshop.forTopic(from.topic).then(setForTopic).catch(() => setForTopic(null))
   }, [id, from?.topic])
+
+  // While the project is open (in front or not), a save in any editor runs the tests (main/workshopWatch.ts)
+  useEffect(() => {
+    if (!id || !started) return
+    let live = true
+    window.tide.workshop.editor(id).then((e) => live && setEditor(e)).catch(() => {})
+    window.tide.workshop.watch(id).then((on) => live && setWatching(on)).catch(() => {})
+    const off = window.tide.workshop.onWatch((e) => {
+      if (e.id !== id) return
+      setSaveRunning(e.phase === 'running')
+      if (e.phase === 'ran') {
+        setState((prev) => {
+          // A save that passed the stage moves the screen on, as a run does
+          if (!prev || prev.current !== e.state.current) setSelected(e.state.current)
+          return e.state
+        })
+      } else if (e.phase === 'error') setError(e.message)
+    })
+    return () => {
+      live = false
+      off()
+      setWatching(false)
+      setSaveRunning(false)
+      void window.tide.workshop.unwatch(id).catch(() => {})
+    }
+  }, [id, started])
 
   const open = (cardId: string) => app.setView({ kind: 'workshop', id: cardId, ...(from ? { from } : {}) })
   const act = async (kind: Exclude<WorkshopBusy, null>, f: () => Promise<WorkshopState | null | void>) => {
@@ -85,6 +115,10 @@ export function WorkshopView({ id, from }: { id?: string; from?: { notebook?: st
             setAnswer({ question, text: r.answer, by: r.by })
           })
         }
+        editor={editor}
+        watching={watching}
+        saveRunning={saveRunning}
+        onOpenEditor={() => act('editor', () => window.tide.workshop.openEditor(id).then(() => undefined))}
         onOpenFile={(path) => (/\.md$/i.test(path) ? app.openPath(path) : app.setView({ kind: 'code', path }))}
         onLearn={(concept) => app.setView({ kind: 'session', mode: 'teach', scope: from?.notebook ? { kind: 'folder', path: from.notebook } : { kind: 'none' }, topic: concept, nonce: Date.now() })}
       />

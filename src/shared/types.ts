@@ -68,6 +68,8 @@ export interface Settings {
   metabase?: { url: string }
   /** Tide's study data API for dashboards and other apps (main/studyApi.ts); off by default */
   studyApi?: { enabled: boolean; port?: number; lan?: boolean }
+  /** The editor a guided project opens in (shared/editor.ts): 'auto' picks by the project's language */
+  editor?: import('./editor').EditorChoice
 }
 
 export type FileKind = 'note' | 'pdf' | 'epub' | 'image' | 'doc' | 'canvas' | 'other'
@@ -849,6 +851,17 @@ export interface TideApi {
     forTopic(topic: string): Promise<import('./workshop').WorkshopCard | null>
     /** Has the stronger model design a project for a roadmap item; kept only if Tide can prove it */
     propose(o: { topic: string; notebook?: string; section?: string }): Promise<{ card: import('./workshop').WorkshopCard | null; tries: number; problems: string[] }>
+    /** The editor the project opens in (main/workshopWatch.ts), or null when none is installed */
+    editor(id: string): Promise<{ id: import('./editor').EditorId; name: string } | null>
+    openEditor(id: string): Promise<{ id: import('./editor').EditorId; name: string }>
+    /** Runs the stage's tests whenever a source file in the project's folder is saved, while the screen is open */
+    watch(id: string): Promise<boolean>
+    unwatch(id: string): Promise<void>
+    onWatch(cb: (e: import('./editor').WatchEvent) => void): () => void
+  }
+  /** The code editors found on this Mac (main/editors.ts) */
+  editors: {
+    list(): Promise<import('./editor').InstalledEditor[]>
   }
   difficulty: {
     /** What the knowledge map has on a lesson's topic and what it builds on (shared/difficulty.ts) */

@@ -4,12 +4,13 @@
  * project not yet started, and a project in hand (its stages, the brief, the files, the tests and
  * what they said, the hints, the tutor's review, and a question for the tutor).
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { since } from '@shared/editor'
 import { AREA_LABEL, LANG_LABEL, ago, firstFailure, tally, type StageView, type WorkshopArea, type WorkshopCard, type WorkshopState } from '@shared/workshop'
 import { renderMarkdown } from '../../lib/markdown'
 import { Icon, type IconName } from '../Icon'
 
-export type WorkshopBusy = null | 'start' | 'run' | 'hint' | 'review' | 'ask' | 'propose'
+export type WorkshopBusy = null | 'start' | 'run' | 'hint' | 'review' | 'ask' | 'propose' | 'editor'
 
 const AREA_ICON: Record<WorkshopArea, IconName> = {
   systems: 'subSystems',
@@ -138,6 +139,29 @@ export interface ProjectScreenProps {
   onAsk(question: string): void
   onOpenFile(path: string): void
   onLearn(concept: string): void
+  /** The editor the folder opens in (Settings › Tools), when one is installed */
+  editor?: { name: string } | null
+  onOpenEditor?(): void
+  /** The folder is watched: a save runs the tests */
+  watching?: boolean
+  /** A run started by a save is going */
+  saveRunning?: boolean
+}
+
+/** "12 s ago", ticking on its own so the rest of the screen is not drawn again every second */
+function LiveSince({ at }: { at: number }) {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    setNow(Date.now())
+    let timer: ReturnType<typeof setTimeout>
+    const tick = () => {
+      setNow(Date.now())
+      timer = setTimeout(tick, Date.now() - at < 60_000 ? 1000 : 30_000)
+    }
+    timer = setTimeout(tick, 1000)
+    return () => clearTimeout(timer)
+  }, [at])
+  return <>{since(at, now)}</>
 }
 
 export function ProjectScreen(p: ProjectScreenProps) {
@@ -267,11 +291,21 @@ function StageBody(p: ProjectScreenProps & { stage: StageView; index: number; to
         <div className="ws-tests-head">
           <h3>Tests</h3>
           <span className="ws-tests-meta">
-            {run && counts
-              ? run.error
-                ? `Last run: nothing ran, ${ago(run.at, p.now)}`
-                : `Last run ${ago(run.at, p.now)}: ${counts.passed} of ${counts.total} pass, ${(run.durationMs / 1000).toFixed(1)} s`
-              : 'Not run yet'}
+            {p.saveRunning && isCurrent ? (
+              'Running on your save…'
+            ) : run && counts ? (
+              run.error ? (
+                <>
+                  Last run: nothing ran, {p.now - run.at < 86_400_000 ? <LiveSince at={run.at} /> : ago(run.at, p.now)}
+                </>
+              ) : (
+                <>
+                  Last run {p.now - run.at < 86_400_000 ? <LiveSince at={run.at} /> : ago(run.at, p.now)}: {counts.passed} of {counts.total} pass, {(run.durationMs / 1000).toFixed(1)} s
+                </>
+              )
+            ) : (
+              'Not run yet'
+            )}
           </span>
         </div>
         {run?.error && (
@@ -314,6 +348,12 @@ function StageBody(p: ProjectScreenProps & { stage: StageView; index: number; to
                 {p.busy === 'run' ? 'Running the tests…' : 'Run the tests'}
               </button>
             )}
+            {isCurrent && p.editor && p.onOpenEditor && (
+              <button className="btn" onClick={p.onOpenEditor} title="Opens the project's folder; Tide keeps running the tests here">
+                <Icon name="external" size={14} />
+                Open in {p.editor.name}
+              </button>
+            )}
             <button className="btn" onClick={p.onReview} disabled={!run || p.busy === 'review'} title={run ? 'The tutor reads your code and the run' : 'Run the tests first'}>
               <Icon name="tutor" size={14} />
               {p.busy === 'review' ? 'Reading your code…' : 'Review my code'}
@@ -324,6 +364,12 @@ function StageBody(p: ProjectScreenProps & { stage: StageView; index: number; to
               </button>
             )}
           </div>
+        )}
+        {isCurrent && p.watching && (
+          <p className="ws-on-save">
+            <span className={`ws-dot${p.saveRunning ? ' now' : ''}`} />
+            The tests run again each time you save a file{p.editor ? ` in ${p.editor.name} or anywhere else` : ''}.
+          </p>
         )}
         {p.error && <p className="ws-error">{p.error}</p>}
       </section>

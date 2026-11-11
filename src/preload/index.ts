@@ -154,7 +154,15 @@ const api: TideApi = {
     review: invoke('workshop:review'),
     ask: invoke('workshop:ask'),
     forTopic: invoke('workshop:forTopic'),
-    propose: invoke('workshop:propose')
+    propose: invoke('workshop:propose'),
+    editor: invoke('workshop:editor'),
+    openEditor: invoke('workshop:openEditor'),
+    watch: invoke('workshop:watch'),
+    unwatch: invoke('workshop:unwatch'),
+    onWatch: (cb) => subscribe<import('../shared/editor').WatchEvent>('workshop:watch', cb)
+  },
+  editors: {
+    list: invoke('editors:list')
   },
   difficulty: {
     known: invoke('difficulty:known')
