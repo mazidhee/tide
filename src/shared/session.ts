@@ -5,7 +5,7 @@ import { GROUNDED } from './sources'
 import type { ChatScope, SessionMode, Verdict } from './types'
 import { chooseStrategy, STRATEGY_RULES, type Strategy, type StrategyChoice } from './strategy'
 import type { FlowStep, ProjectKind } from './project'
-import { SIM_LESSON_LINE } from './sims'
+import { simLesson } from './sims'
 
 /**
  * Learning sessions are a conversation where the tutor writes Markdown plus a few tags the UI
@@ -50,11 +50,35 @@ export const hideWorking = (raw: string) =>
     .replace(/<placement>[\s\S]*?(<\/placement>|$)/gi, '')
     .replace(/<(solution|check)\b[\s\S]*$/i, '')
 
+/**
+ * A grade the tutor opened and never closed, closed where its feedback ends: the first blank line
+ * or the next tag. Gemma does this when it stalls just after writing the opening tag and is asked
+ * to carry on (seen in 3 of 70 benchmark replies); left alone, everything from the tag to the next
+ * one is hidden as "unfinished", so the mark and its feedback never appear. A grade still being
+ * written (nothing after its feedback yet) is left as it is.
+ */
+export function closeGrade(reply: string): string {
+  const open = /<grade\b[^>]*>(?![\s\S]*<\/grade>)/i.exec(reply)
+  if (!open) return reply
+  const from = open.index + open[0].length
+  const lead = reply.slice(from).match(/^\s*/)![0].length
+  const body = reply.slice(from + lead)
+  // A closing tag cut short ("</grade") counts as the end too
+  const end = body.search(/\n[ \t]*\n|<\/gr?a?d?e?(?![a-z>])|<(?:ask|note|card|plan|solution|check|summary|continue)\b/i)
+  if (end <= 0) return reply
+  const rest = body.slice(end).replace(/^<\/gr?a?d?e?(?![a-z>])/i, '')
+  if (!rest.trim()) return reply
+  return `${reply.slice(0, from)}${body.slice(0, end).trimEnd()}</grade>${rest.startsWith('\n') ? '' : '\n\n'}${rest}`
+}
+
+/** A numbered question or problem ("**Question 3 of 8**", "**Problem 2 · harder**"): something set to be answered */
+const NUMBERED = /\*\*\s*(?:Problem|Question)\s+\d+/i
+
 /** Splits a (possibly still streaming) tutor message into blocks; unfinished tags stay hidden */
 export function parseBlocks(full: string): Block[] {
   // "Carry on" (<continue/>): no question this time; the app offers Go on instead
   const carryOn = /<continue\b[^>]*\/?>/i.test(full)
-  const raw = hideWorking(full).replace(/<\/?continue\b[^>]*>/gi, '').replace(/<c(o(n(t(i(n(ue?)?)?)?)?)?)?$/i, '')
+  const raw = closeGrade(hideWorking(full)).replace(/<\/?continue\b[^>]*>/gi, '').replace(/<c(o(n(t(i(n(ue?)?)?)?)?)?)?$/i, '')
   // What the tutor said aloud (Talk) is spoken, not shown again as a block
   const said = splitSay(raw)
   // A reply that stalled after its spoken part still shows what was said, so there's something to answer
@@ -114,7 +138,13 @@ export function parseBlocks(full: string): Block[] {
     }
   }
   pushText(message.slice(last))
-  if (carryOn && !blocks.some((b) => b.kind === 'ask')) return [...blocks, { kind: 'continue' }]
+  if (carryOn && !blocks.some((b) => b.kind === 'ask')) {
+    // A numbered question written in plain text and followed by <continue/> is still a question
+    // set to be answered: with only Go on to press there would be nowhere to answer it. (A
+    // rhetorical question before carrying on, with no number, stays as it is.)
+    const asked = NUMBERED.test(raw) ? withAsk(blocks) : blocks
+    return asked.some((b) => b.kind === 'ask') ? asked : [...blocks, { kind: 'continue' }]
+  }
   return withAsk(blocks)
 }
 
@@ -156,7 +186,6 @@ export const SESSION_FORMAT = `Format rules (the app turns these tags into inter
 - Never repeat a question in the same words. Before the summary, retest anything they missed in a new form.
 - Tide may add a note at the end of their message, starting "(Tide:". Follow it; they don't see it.
 - Never answer your own question. Ask one thing at a time. Keep your turns short. No greetings, no introductions, no preamble: start with the substance.
-- If the topic may be newer than your training data (2025 onwards) or you are unsure of a fact, use web_search and read_webpage first, and cite sources like [3].
 - Math in LaTeX ($...$, $$...$$). Code in fenced blocks.`
 
 export interface SessionSetup {
@@ -279,7 +308,8 @@ export function sessionInstructions(setup: SessionSetup): string {
   const base = baseInstructions(setup)
   if (setup.mode !== 'teach') return base
   // A refresher or a project lesson already has its reason; a placement check isn't a lesson
-  const extra = [!setup.options?.refresh && !setup.options?.project ? BIG_PICTURE : '', GROUNDED, HANDS_ON, setup.options?.why ? WHY_RULES : ''].filter(Boolean)
+  // How to write a simulation rides here, for the kinds this topic can use, not in the system prompt of every lesson
+  const extra = [!setup.options?.refresh && !setup.options?.project ? BIG_PICTURE : '', GROUNDED, HANDS_ON, simLesson(setup.topic), setup.options?.why ? WHY_RULES : ''].filter(Boolean)
   return extra.length ? `${base.trimEnd()}\n\n${extra.join('\n\n')}\n` : base
 }
 
@@ -325,8 +355,8 @@ When it's done, write <summary>what they learned, what is still shaky, what to l
    - Move to the next step after two right in a row without hints (at most 5 problems a step). From the second step on, mix in one problem from an earlier step without saying which.
    - When they're wrong, point at the exact step that fails before anything else; give the worked solution only after the hint ladder, then a near-identical problem for them.
    - Now and then ask why a step holds or what would break if something changed. Never ask "does that make sense?".
-   Teach visually as well: when there is structure or a process (a tree, a graph, a flow, a protocol, states, a timeline), draw a small mermaid diagram (under about 12 nodes); when the thing is physical or has a classic textbook figure, show a real one with find_image. One good visual per step, where it helps. ${SIM_LESSON_LINE}
-   When you explain an idea, also write it for their notes: <note>the key idea, definition, formula or a short worked example, in 1 to 5 lines of Markdown (up to 12 when it spells out notation or works an example), worded to be worth rereading later</note>. Do the same after grading whenever your feedback states a rule, a reason or corrects something they got wrong: one <note> with that point in a line or two (never one that repeats an earlier note). Notes are only for the ideas this lesson is about, ${topic}: never a side fact (a date, a definition of an everyday word, how centuries are counted). The app writes these into the note for this topic, beside the lesson.
+   Teach visually as well: when there is structure or a process (a tree, a graph, a flow, a protocol, states, a timeline), draw a small mermaid diagram (under about 12 nodes); when the thing is physical or has a classic textbook figure, show a real one with find_image. One good visual per step, where it helps.
+   When you explain an idea, also write it for their notes: <note>the key idea, definition, formula or a short worked example, in 1 to 5 lines of Markdown (up to 12 when it spells out notation or works an example), worded to be worth rereading later</note>. Do the same after grading whenever your feedback states a rule, a reason or corrects something they got wrong: one <note> with that point in a line or two (never one that repeats an earlier note). Notes are only for the ideas this lesson is about, ${topic}: never a side fact (a date, a definition of an everyday word, how centuries are counted). A note never stands in for the flashcard a miss needs: after a partial or wrong answer write the <card> as well.
 4. FINISH with 2 or 3 mixed problems across all the steps, one at a time.${extra}
 When every step is done, write <summary>what they learned, what is still shaky, what to review next</summary>.`
   }
@@ -608,16 +638,22 @@ export const ASKED = 'My question: '
 /**
  * Show me: you ask to see the explanation you were just given. The tutor picks the one kind of
  * picture that fits what it taught, and anything with numbers in it is computed, not drawn by eye.
+ *
+ * The kinds are listed in the order to try them, a table of the worked numbers first. With the
+ * flowchart first, Gemma drew every process as one: asked to show a Gaussian elimination it had
+ * just worked through, it drew boxes named "Row Operations" and "Back-Substitution" with none of
+ * the numbers, and wrote the quoted labels as bare nodes, which mermaid cannot draw.
  */
 export const SHOW_ME = `${ASKED}Show me that as a picture.
 
 (Tide: the student pressed Show me on your last explanation. Don't explain it again in words. Give the ONE visual that fits what you just taught, then one line saying what to look at in it, and stop: no new problem, no question.
-Choose by what the idea is:
-- parts and how data or control moves between them (a system, a pipeline, a request, the layers of a model): a mermaid flowchart;
-- an exchange over time between parties (a protocol, a handshake, a call sequence): a mermaid sequenceDiagram;
-- ideas grouped under a topic, to see the whole of it: a mermaid mindmap;
+Choose by what you taught, taking the first that fits:
+- numbers or values worked step by step (an elimination, an algorithm run, a trace): a Markdown table, one row per step, with the same numbers as your explanation;
+- a function, a distribution or numbers compared: plot it with run_code (matplotlib), computing every value;
 - states and what moves between them: a mermaid stateDiagram-v2;
-- values changing step by step (an algorithm run, a carry chain, a trace): a table, one row per step;
-- a function, a quantity, a distribution or numbers compared: plot it with run_code (matplotlib), computing every value in the code;
-- something that exists physically or has a classic textbook figure: find_image.
-Everything in it must be exact. Any number, bit pattern or formula you show is one you have computed (use run_code when it isn't trivial), labels use the same names and symbols as your explanation, and nothing is included that you didn't teach. Keep a diagram under about 14 nodes with short labels in quotes.)`
+- an exchange over time between parties (a protocol, a call): a mermaid sequenceDiagram;
+- parts and how data or control moves between them (a system, a pipeline, a model's layers): a mermaid flowchart;
+- something to watch running, when your instructions describe a simulation of it: that sim block;
+- ideas grouped under a topic: a mermaid mindmap;
+- something physical or with a classic textbook figure: find_image.
+Everything must be exact: every number, bit pattern or formula is one you computed, labels use your explanation's names and symbols, and nothing appears that you didn't teach. In a mermaid flowchart every node is an id with its label in quotes, like A["Row 2"] --> B["Row 3"]; under about 14 nodes.)`

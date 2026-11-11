@@ -13,3 +13,4 @@ scripts/finetune/data
 scripts/finetune/adapters
 scripts/finetune/fused
 scripts/finetune/runs
+scripts/finetune/data

@@ -25,7 +25,8 @@ Every process on a modern machine runs as if it had memory to itself. Virtual me
         reply: r`Hello! Great to be learning about virtual memory with you. Let's get started.
 
 What do you already know about virtual memory? And have you heard of page tables?`,
-        fails: ['no-preamble', 'plain-question', 'ends', 'heading']
+        fails: ['no-preamble', 'heading'],
+        repaired: ['ask']
       }
     ],
     judge: 'The opening says concretely where virtual memory is used, and its question finds out what the learner knows rather than teaching.'
@@ -73,7 +74,8 @@ Add the 8-bit two's complement numbers 01100100 and 01000110. Give the 8-bit res
 Add 01100100 and 01000110 in 8 bits. Does it overflow?
 
 <ask type="problem">Your answer.</ask>`,
-        fails: ['verdict', 'solution']
+        fails: ['verdict'],
+        repaired: ['solution']
       }
     ]
   },

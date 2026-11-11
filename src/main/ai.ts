@@ -587,6 +587,20 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
         }
         reply = lesson.finish(emit)
       } else await agentChat(req, (e) => (e.type === 'delta' && (reply += e.text), emit(e)), controller.signal)
+      // Faults a rule can see are put right before anything reads the reply (the checks, the problem
+      // bank, the lesson's record, the model's own next turn): a mark on something that wasn't an
+      // answer, a grade left unclosed, a numbered question with only Go on to press
+      if (req.session && shown && !controller.signal.aborted) {
+        const { repairReply } = await import('@shared/lessonRepair')
+        const said = [...req.messages].reverse().find((m) => m.role === 'user')
+        // What the window is showing (it follows a retry's reset, which the tally in `reply` does not)
+        const fixed = repairReply(shown, typeof said?.content === 'string' ? said.content : '')
+        if (fixed.repaired.length && fixed.text !== shown) {
+          emit({ id: req.id, type: 'reset' })
+          emit({ id: req.id, type: 'delta', text: fixed.text })
+          reply = fixed.text
+        }
+      }
       let fromBank = false
       if (lesson && !controller.signal.aborted) {
         const added = await lesson.supply(reply, emit)
@@ -601,7 +615,7 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
         const found: import("./lessonGuard").LessonFindings = await checkLessonReply(req, reply, emit, controller.signal, ask, false, { fromBank, exact }).catch(() => ({ problem: [] as string[] }))
         // What you can see is never wiped: a correction is added below it
         if (found.mark && !controller.signal.aborted) {
-          const add = `\n\n<grade verdict="${found.mark.verdict}" score="${found.mark.verdict === 'partial' ? 0.5 : 0}">**Second look:** ${found.mark.why}</grade>`
+          const add = `\n\n<grade verdict="${found.mark.verdict}" score="${found.mark.verdict === 'correct' ? 1 : found.mark.verdict === 'partial' ? 0.5 : 0}">**Second look:** ${found.mark.why}</grade>`
           emit({ id: req.id, type: 'delta', text: add })
           reply += add
         }

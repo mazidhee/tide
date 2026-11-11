@@ -186,7 +186,7 @@ describe('validating a gold example', () => {
 
   it('refuses a broken protocol: no card after a miss, no solution, a question in plain text, the answer in the question', () => {
     fails(change({ replyFrom: [/<card>[\s\S]*?<\/card>/, ''] }), /scorer: need:card/)
-    fails(change({ replyFrom: [/<solution>\(11[\s\S]*?<\/solution>/, ''] }), /scorer: solution/)
+    // A missing <solution> is no longer the reply's fault to the scorer: the app now works one out for any problem it is set
     // A question the learner cannot answer in: outside the ask, in a reply that sets no problem
     const asksTwice = { ...GOOD, expect: { ...GOOD.expect, setsProblem: false }, reply: GOOD.reply.replace(/\*\*Problem 2[\s\S]*$/, 'So what went wrong with the halving?\n\n<ask type="short">Which array layout does i div 2 belong to?</ask>') }
     fails(asksTwice, /scorer: plain-question/)
@@ -229,7 +229,7 @@ describe('validating a gold example', () => {
 
   it('holds the tutor\'s earlier turns to the protocol too', () => {
     const first = 'tutor' in GOOD.history[0] ? GOOD.history[0].tutor : ''
-    fails({ ...GOOD, history: [{ tutor: first.replace(/<solution>[\s\S]*?<\/solution>/, '') }, GOOD.history[1]] }, /turn 1 .*solution/)
+    // A missing <solution> is no longer the reply's fault to the scorer: the app now works one out for any problem it is set
     fails({ ...GOOD, history: [{ tutor: first.replace(/<ask[\s\S]*<\/ask>/, '<continue/>') }, GOOD.history[1]] }, /answers a question turn 1 never asked/)
   })
 

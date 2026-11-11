@@ -25,7 +25,8 @@ Self-attention is the operation at the centre of every transformer: the language
         reply: r`Hi! Self-attention is a really exciting topic and I'm glad we're covering it today.
 
 Have you come across queries, keys and values before? And do you know what a dot product is?`,
-        fails: ['no-preamble', 'plain-question', 'ends', 'heading']
+        fails: ['no-preamble', 'heading'],
+        repaired: ['ask']
       }
     ],
     judge: 'The opening names concrete uses of self-attention and its question finds out what the learner already knows instead of teaching the mechanism.'
@@ -70,7 +71,8 @@ Now two layers, with a ReLU in the middle: $h = \mathrm{ReLU}(w_1 x + b_1)$, $\h
 Two layers: $h = \mathrm{ReLU}(w_1 x + b_1)$, $\hat{y} = w_2 h$, $L = \tfrac12(\hat{y} - y)^2$, with $x = 2$, $w_1 = 1.5$, $b_1 = -1$, $w_2 = 2$, $y = 3$. Find both gradients.
 
 <ask type="problem">Your answer.</ask>`,
-        fails: ['verdict', 'solution']
+        fails: ['verdict'],
+        repaired: ['solution']
       }
     ]
   },

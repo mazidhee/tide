@@ -40,7 +40,7 @@ import { runCode } from './runner'
 import { addMemory, forgetMatching, memoryPrompt } from './memory'
 import { fitHistory } from '@shared/context'
 import { historyBudget } from './chats'
-import { asksForWeb, cleanModelText, createStreamFilter, isLooping, recoverToolCalls, streamWatch } from '@shared/modelText'
+import { asksForWeb, beforeLoop, CARRY_ON, cleanModelText, recoverToolCalls, turnReader } from '@shared/modelText'
 import { noteUse, useOf } from './connectionUse'
 import { getKey } from './cloud'
 
@@ -566,17 +566,6 @@ class LoopingError extends Error {
 /** Tells the window to clear the reply it's showing (a retry is starting over) */
 export const RESET = '\u0000reset'
 
-/** The text before a run of repetition, ended at its last full sentence */
-function beforeLoop(text: string): string {
-  const m = text.match(/(\b[\w'’-]{1,24}\b)(?:\s+\1){10,}\s*$/) ?? text.match(/(.{2,60}\n)\1{8,}$/)
-  let kept = m ? text.slice(0, m.index) : text
-  // Also drop a sentence repeated three or more times at the end
-  const sentences = kept.match(/[^.!?\n]+[.!?]+\s*/g) ?? []
-  while (sentences.length > 2 && sentences[sentences.length - 1].trim() === sentences[sentences.length - 2].trim()) sentences.pop()
-  if (sentences.length) kept = kept.slice(0, kept.lastIndexOf(sentences[sentences.length - 1]) + sentences[sentences.length - 1].length)
-  return kept.trim()
-}
-
 /**
  * mlx-vlm saves the conversation's state where request-only context begins, so the next turn
  * (which starts with exactly that conversation) continues from there instead of reading it all
@@ -649,7 +638,7 @@ async function streamTurnOnce(
   const abort = () => controller.abort()
   outerSignal.addEventListener('abort', abort)
   const signal = controller.signal
-  const filter = createStreamFilter()
+  const read = turnReader()
   const model = target ? target.model : await resolveModel()
   // A cloud model gets a plain OpenAI request: none of the local server's fields, but its real token counts back
   const payload = target
@@ -698,11 +687,6 @@ async function streamTurnOnce(
   const t0 = Date.now()
   let firstAt = 0
   let buffer = ''
-  let text = ''
-  let raw = ''
-  // How many thought-channel openings there were when the answer began; another one after that is a stall
-  let channelsAtStart = -1
-  const watch = streamWatch()
   let usage: { input: number; output: number; cached?: number } | null = null
   const calls = new Map<number, ToolCall>()
   let firstTokenAt = 0
@@ -734,29 +718,14 @@ async function streamTurnOnce(
           tokens++
         }
         if (delta?.content) {
-          raw += delta.content
-          const visible = filter(delta.content)
-          text += visible
-          watch.raw(raw)
-          watch.text(text)
-          // Watch the raw stream too: repeated hidden reasoning blocks never show up in the text
-          // Code inside a tool call written as text can repeat lines legitimately: don't judge it
-          const inCall = watch.inCall
-          const channels = watch.channels
-          if (channelsAtStart < 0 && text.trim()) channelsAtStart = channels
-          if (!inCall && channelsAtStart >= 0 && channels > channelsAtStart) {
+          // The stream's rules (what is shown, a stall, a loop) are shared with the benchmark: see turnReader
+          const { visible, stop } = read.push(delta.content)
+          if (stop) {
             controller.abort()
             outerSignal.removeEventListener('abort', abort)
-            throw new StallError(cleanModelText(text))
+            throw stop === 'stall' ? new StallError(cleanModelText(read.text)) : new LoopingError('The model got stuck repeating itself', cleanModelText(read.text))
           }
-          if (!inCall && (isLooping(text) || isLooping(raw) || channels >= 3)) {
-            controller.abort()
-            outerSignal.removeEventListener('abort', abort)
-            throw new LoopingError('The model got stuck repeating itself', cleanModelText(text))
-          }
-          // Never show a tool call the server passed through as text: judge by the raw stream, since
-          // the filter strips the special tokens that mark it, and hold back a bare "call:name{" too
-          if (visible && !inCall && !watch.bareCall) onText(visible)
+          if (visible) onText(visible)
         }
         for (const tc of delta?.tool_calls ?? []) {
           const i = tc.index ?? 0
@@ -777,6 +746,7 @@ async function streamTurnOnce(
     record()
   }
   outerSignal.removeEventListener('abort', abort)
+  const { text, raw } = read
   const promptChars = messages.reduce((n, m) => n + (typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content ?? '').length), 0)
   recordUsage({
     kind: target ? 'cloud' : 'local',
@@ -1403,7 +1373,7 @@ async function streamTurnContinuing(messages: ApiMessage[], tools: unknown[], si
   let written = ''
   for (let i = 0; i < 4; i++) {
     const turn: ApiMessage[] = written
-      ? [...messages, { role: 'assistant', content: written }, { role: 'user', content: '(Carry on with your reply exactly where it stopped. Do not repeat anything already written, and no <say> this time.)' }]
+      ? [...messages, { role: 'assistant', content: written }, { role: 'user', content: CARRY_ON }]
       : messages
     try {
       const out = await streamTurnOnce(turn, tools, signal, onText, i ? 0.15 : 0)

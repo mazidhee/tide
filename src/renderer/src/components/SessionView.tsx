@@ -7,7 +7,8 @@ import { reveal } from '../lib/scroll'
 import { Thinking } from './Thinking'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
-import { paceNote } from '@shared/pace'
+import { markNote, paceNote } from '@shared/pace'
+import { nothingToMark, unmarked } from '@shared/lessonRepair'
 import { withSources, type SourcePack } from '@shared/sources'
 import { parsePlacement, placementNote } from '@shared/placement'
 import { correctionText } from '@shared/lessonCheck'
@@ -207,6 +208,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         // A placement check ends after its last question, whether or not the tutor counts
         setupRef.current.options?.placement ? placementNote(history.filter((t) => t.role === 'user').length - 1) : null,
         mode === 'teach' || (mode === 'quiz' && !setupRef.current.options?.placement) ? paceNote(history, content) : null,
+        mode === 'teach' || (mode === 'quiz' && !setupRef.current.options?.placement) ? markNote(content) : null,
         whyNoteRef.current,
         mode === 'teach' && history.length > 2 ? notesNudge(history.filter((t) => t.role === 'assistant').map((t) => t.content), content) : null
       ].filter((n): n is string => !!n)
@@ -323,7 +325,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     () =>
       turns.map((t, i) => {
         if (t.role !== 'assistant') return null
-        const blocks = parseBlocks(t.content)
+        // Nor has a question of yours, Go on or "I don't know": a mark on one is shown as the plain
+        // feedback it is, while it streams as well as after main has put the reply right (lessonRepair)
+        const blocks = parseBlocks(i > 1 && nothingToMark(turns[i - 1]?.content ?? '') ? unmarked(t.content) : t.content)
         return i <= 1 ? blocks.filter((b) => b.kind !== 'grade' && b.kind !== 'card') : blocks
       }),
     [turns]

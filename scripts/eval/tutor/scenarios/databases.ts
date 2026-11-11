@@ -25,7 +25,8 @@ A composite index is the usual way to make a filter on several columns fast, and
         reply: r`Welcome! Composite indexes are a really interesting topic. An index on (a, b) can be used for a filter on a, or on a and b, but not on b alone. This is called the leftmost prefix rule.
 
 Have you used CREATE INDEX before? What do you think happens with a filter on b?`,
-        fails: ['no-preamble', 'plain-question', 'ends', 'heading']
+        fails: ['no-preamble', 'heading'],
+        repaired: ['ask']
       }
     ],
     judge: 'The opening says concretely what column order in a composite index decides, and its question finds out whether the learner already knows the leftmost-prefix rule without stating it.'
@@ -84,7 +85,8 @@ A table on_call(doctor, on_duty) has two rows, both with on_duty = 1. The rule i
 Two transactions under snapshot isolation each read the on_call table and then each takes a different doctor off duty.
 
 <ask type="problem">Name the anomaly.</ask>`,
-        fails: ['verdict', 'solution']
+        fails: ['verdict'],
+        repaired: ['solution']
       }
     ],
     judge: 'It marks the phantom answer correct without hedging and sets a harder problem (the lesson is at a hard level) with a complete hidden solution.'
@@ -201,7 +203,8 @@ SELECT strftime('%Y-%m', order_date) AS month, COUNT(*) AS orders FROM orders GR
 ~~~
 
 Would you like it as a bar chart instead?`.replace(/~~~/g, '```'),
-        fails: ['visual', 'plain-question', 'ends']
+        fails: ['visual'],
+        repaired: ['ask']
       }
     ],
     judge: 'It answers with a chart block the app can draw (JSON with the monthly query), one line on how to read it, and returns to the pending question.'
@@ -323,7 +326,8 @@ Any service that updates more than one row per transaction can deadlock, and Pos
 Yes, SQLite uses row-level locks just like Postgres, so the same thing happens in the lab.
 
 What do you think happens when each tries its second update?`,
-        fails: ['forbid:grade', 'must', 'plain-question', 'ends']
+        fails: ['must'],
+        repaired: ['grade', 'ask']
       }
     ],
     judge: 'It answers exactly (SQLite has database-level locking with a single writer, not row locks), briefly, then returns to the deadlock question rather than starting a lesson on SQLite.'
@@ -372,7 +376,7 @@ GROUP BY c.customer_id;
       },
       { learner: { answer: 'The revenue is wrong. Joining orders to order_items repeats rows, so SUM adds each amount more than once and the revenue is inflated. The order count is fine because it counts order_id. The fix is to compute the SUM in a subquery before joining.', confidence: 'sure' } }
     ],
-    expect: { ends: 'ask', verdict: 'wrong', accept: ['partial'], names: ['count', r`DISTINCT|per item|each item|every item|item rows?|line items?`], need: ['card'] },
+    expect: { ends: 'ask', verdict: 'wrong', accept: ['partial'], names: ['count', r`DISTINCT|per item|each item|every item|item rows?|line items?|counts? (the )?items|\d+ items|once per`], need: ['card'] },
     good: r`<grade verdict="wrong" score="0.2">"SUM adds each amount more than once" is the step that fails. After the two joins there is one row per order_items row, so each quantity * unit_price is added exactly once and the revenue is right. It is the order row that repeats, once per item, so COUNT(o.order_id) counts items, not orders.</grade>
 
 The fix is COUNT(DISTINCT o.order_id). A customer with 2 orders of 3 items each shows orders = 6 without it and 2 with it.

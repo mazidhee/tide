@@ -14,16 +14,21 @@
  * and the spread across repeats says how much a difference between two runs has to exceed.
  * The temperature defaults to the app's own (0.4, src/main/settings.ts): the tutor is measured as
  * it is used. It talks to the model server directly, without Tide's tools, memory, profile,
- * sources, problem bank or reply checks, so it measures the prompts and the model.
+ * sources, problem bank or cloud checks. What it scores is the reply the learner would be shown:
+ * carried past a stall and started over from a loop as the app does (turn.ts), then with the
+ * app's own repairs applied (score.ts). A request that fails is tried once more, and one that
+ * fails twice is left out of every number rather than scored as an empty reply.
  */
 import { mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { JUDGE_SYSTEM, judgePrompt, parseJudge } from './judge'
+import { complete, firstModel } from './model'
 import { buildMessages, fingerprint, type Message } from './request'
 import { SCENARIOS } from './scenarios'
 import { scoreReply } from './score'
 import { printable, summarise, type Row } from './summary'
 import { SCENARIO_SET_VERSION, SITUATIONS, SUBJECTS, type Scenario } from './types'
+import { tutorTurn } from './turn'
 import { validateSet } from './validate'
 
 const args = process.argv.slice(2)
@@ -48,22 +53,16 @@ function chosen(): Scenario[] {
   return limit > 0 ? picked.slice(0, limit) : picked
 }
 
+/** A judge is asked plainly, in one piece */
 async function call(base: string, key: string, model: string, messages: Message[], extra: Record<string, unknown>): Promise<string> {
-  const local = /localhost|127\.0\.0\.1/.test(base)
   const res = await fetch(`${base}/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) },
-    // Gemma 4 on a local server: block its empty "thinking" token, as Tide does (src/main/sampling.ts)
-    body: JSON.stringify({ model, messages, stream: false, ...extra, ...(/gemma[-_ ]?4/i.test(model) && local ? { logit_bias: { '100': -100 } } : {}) })
+    body: JSON.stringify({ model, messages, stream: false, ...extra })
   })
   if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 300)}`)
   const j = (await res.json()) as { choices: { message: { content: string } }[] }
   return j.choices[0]?.message?.content ?? ''
-}
-
-async function firstModel(base: string, key: string): Promise<string> {
-  const j = (await (await fetch(`${base}/models`, { headers: key ? { Authorization: `Bearer ${key}` } : {} })).json()) as { data: { id: string }[] }
-  return j.data.find((m) => /gemma/i.test(m.id))?.id ?? j.data[0].id
 }
 
 function dryRun(): number {
@@ -100,7 +99,7 @@ async function main() {
   const label = opt('label') || model.split('/').pop()!
   console.log(`Tutor: ${model} at ${BASE}${adapter ? ` with adapter ${adapter}` : ''}\nScenario set ${SCENARIO_SET_VERSION}: ${scenarios.length} scenarios × ${REPEATS} repeats, temperature ${TEMPERATURE}, seeds ${SEED} to ${SEED + REPEATS - 1}${JUDGE.model ? `\nJudge: ${JUDGE.model} at ${JUDGE.base}` : ''}\n`)
 
-  const rows: (Row & { reply: string; error?: string; why?: string })[] = []
+  const rows: (Row & { reply: string; why?: string })[] = []
   const started = Date.now()
   for (const s of scenarios) {
     const messages = buildMessages(s)
@@ -108,10 +107,20 @@ async function main() {
     for (let r = 0; r < REPEATS; r++) {
       let reply = ''
       let error: string | undefined
-      try {
-        reply = await call(BASE, KEY, model, messages, { temperature: TEMPERATURE, seed: SEED + r, max_tokens: MAX_TOKENS, ...(adapter ? { adapter_path: adapter } : {}) })
-      } catch (e) {
-        error = (e as Error).message
+      let turned = { stalls: 0, looped: false }
+      // The app's own numbers: a pick-up or a fresh start is a little warmer, and a turn that looped gets a repetition penalty (main/agent, main/sampling)
+      const ask = (turn: Message[], o: { extra: number; retry: boolean }) =>
+        complete({ base: BASE, key: KEY, model, messages: turn, extra: { temperature: Math.min(1.2, TEMPERATURE + o.extra), seed: SEED + r, max_tokens: MAX_TOKENS, ...(o.retry ? { repetition_penalty: 1.15 } : {}), ...(adapter ? { adapter_path: adapter } : {}) } })
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const t = await tutorTurn(messages, ask)
+          reply = t.reply
+          turned = { stalls: t.stalls, looped: t.looped }
+          error = undefined
+          break
+        } catch (e) {
+          error = (e as Error).message
+        }
       }
       const score = scoreReply(s, reply)
       let judge: Row['judge'] = null
@@ -125,7 +134,7 @@ async function main() {
           why = w
         }
       }
-      rows.push({ id: s.id, subject: s.subject, situation: s.situation, repeat: r, reply, score, judge, ...(error ? { error } : {}), ...(why ? { why } : {}) })
+      rows.push({ id: s.id, subject: s.subject, situation: s.situation, repeat: r, reply, score, judge, ...(turned.stalls ? { stalls: turned.stalls } : {}), ...(turned.looped ? { looped: true } : {}), ...(error ? { error } : {}), ...(why ? { why } : {}) })
       line.push(error ? 'ERROR' : score.pass ? 'pass' : `fail(${score.failed.slice(0, 3).join(',')})`)
     }
     console.log(`${s.id.padEnd(44)} ${line.join('  ')}`)
@@ -134,7 +143,7 @@ async function main() {
   const summary = summarise(rows)
   console.log(`\n${printable(summary)}`)
   const errors = rows.filter((r) => r.error).length
-  if (errors) console.log(`\n${errors} request${errors === 1 ? '' : 's'} failed and scored as empty replies.`)
+  if (errors) console.log(`\n${errors} request${errors === 1 ? '' : 's'} failed twice and ${errors === 1 ? 'is' : 'are'} left out of the numbers above.`)
   const out = opt('out') || join(HERE, 'results')
   mkdirSync(out, { recursive: true })
   const file = join(out, `${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}-${label.replace(/[^\w.-]+/g, '-')}.json`)

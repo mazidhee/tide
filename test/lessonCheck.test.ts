@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { answeredProblem, checksOf, fixNudge, hideWorking, isHardTopic, missingQuestion, parseReview, readable, reviewPrompt, solutionOf, tooGenerous } from '../src/shared/lessonCheck'
+import { answeredProblem, checksOf, fixNudge, hideWorking, isHardTopic, missingQuestion, parseReview, readable, reviewPrompt, solutionOf, tooGenerous, retriesProblem, setsProblem, wantsSolution } from '../src/shared/lessonCheck'
 import { parseBlocks } from '../src/shared/session'
 
 const SET = `**Problem 2 · harder**
@@ -66,5 +66,30 @@ describe('solving a problem the tutor set without an answer', () => {
     expect(ok.checks).toHaveLength(1)
     expect(ok.flaw).toBeUndefined()
     expect(parseSolve('FLAWED: there are only 5 apples, so "both baskets" is undefined.')).toEqual({ solution: '', checks: [], flaw: 'there are only 5 apples, so "both baskets" is undefined.' })
+  })
+})
+
+describe('which replies get a solution worked out for them', () => {
+  const grade = '<grade verdict="wrong" score="0.0">The parameter is a pointer: sizeof gives 8, not 40.</grade>'
+  // From the tutor benchmark's baseline: a code task set after a wrong answer, with no heading and no solution
+  const task = `${grade}\n\n<ask type="code" lang="c">Modify the code so that f prints the address of the first element and main prints the address of the array.</ask>`
+  const predict = 'An array passed to a function is the next thing to test.\n\n<ask type="predict">Which two numbers does this print? Say why.</ask>'
+  const solved = '**Problem 2 · harder**\n\n<solution>return (x << 24) | (x >> 24)</solution>\n\n<ask type="code" lang="c">Write swap32(x) that reverses the byte order of x.</ask>'
+
+  it('a numbered problem, and a problem or code ask that sets new work', () => {
+    expect(setsProblem(task)).toBe(false)
+    expect(wantsSolution(task, predict)).toBe(true)
+    expect(wantsSolution('**Problem 1 · basic**\n\nThe coordinator hears yes from DB1 and no from DB2.\n\n<ask type="choice" options="Abort both|Commit DB1">What is the final state of the transaction?</ask>')).toBe(true)
+  })
+
+  it('not a probe, a short question, or another go at the problem just marked', () => {
+    expect(wantsSolution(predict)).toBe(false)
+    expect(wantsSolution('<ask type="problem">And for n = 3?</ask>')).toBe(false)
+    const again = '<grade verdict="partial" score="0.5">The last shift is wrong: it moves the top byte to the wrong place.</grade>\n\n<ask type="code" lang="c">Correct the last shift in your swap32 so that the top byte lands in the bottom position.</ask>'
+    expect(retriesProblem(solved, again)).toBe(true)
+    expect(wantsSolution(again, solved)).toBe(false)
+    // After a question that had no solution it is new work
+    expect(retriesProblem(predict, again)).toBe(false)
+    expect(wantsSolution(again, predict)).toBe(true)
   })
 })

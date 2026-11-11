@@ -76,9 +76,11 @@ export function validateScenario(s: Scenario): string[] {
     if (!g.pass) say(`its good reply fails: ${g.failed.join(', ')}${g.pace.score < 1 ? ` (${g.pace.words} words, allowed ${g.pace.min} to ${g.pace.max})` : ''}${g.visual?.why ? ` (${g.visual.why})` : ''}`)
   }
   for (const [i, b] of (s.bad ?? []).entries()) {
-    const failed = scoreReply(s, b.reply).failed
+    const { failed, repaired } = scoreReply(s, b.reply)
     const missed = b.fails.filter((f) => !failed.some((id) => id === f || id.startsWith(`${f}:`)))
     if (missed.length) say(`bad reply ${i + 1} should fail ${missed.join(', ')} but failed only: ${failed.join(', ') || 'nothing'}`)
+    const unrepaired = (b.repaired ?? []).filter((r) => !repaired.includes(r))
+    if (unrepaired.length) say(`bad reply ${i + 1} should need the app's repair of ${unrepaired.join(', ')} but needed only: ${repaired.join(', ') || 'none'}`)
   }
   return problems
 }

@@ -8,7 +8,7 @@
  * nothing can be run or looked up), the learner's profile and memory, sources and passages, the
  * problem bank and the checks that run after a reply. It measures the prompts and the model.
  */
-import { paceNote } from '../../../src/shared/pace'
+import { markNote, paceNote } from '../../../src/shared/pace'
 import { ASKED, GO_ON, SHOW_ME, notesNudge, openingMessage, sessionInstructions, type SessionSetup } from '../../../src/shared/session'
 import { TUTOR_SYSTEM, stableSystem, withInstructions } from '../../../src/shared/tutorPrompt'
 import type { Learner, Scenario, Turn } from './types'
@@ -35,6 +35,7 @@ function stored(content: string, history: Message[], mode: SessionSetup['mode'])
   if (content.includes('(Tide: ') || history.length < 2) return content
   const notes = [
     mode === 'teach' || mode === 'quiz' ? paceNote(history as { role: 'user' | 'assistant'; content: string }[], content) : null,
+    mode === 'teach' || mode === 'quiz' ? markNote(content) : null,
     mode === 'teach' && history.length > 2 ? notesNudge(history.filter((t) => t.role === 'assistant').map((t) => t.content), content) : null
   ].filter((n): n is string => !!n)
   return notes.length ? `${content}\n\n${notes.join('\n')}` : content

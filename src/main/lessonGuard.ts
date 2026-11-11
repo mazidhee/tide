@@ -1,4 +1,4 @@
-import { checksOf, claimsPrompt, makesClaims, parseClaimCheck, CLAIMS_SYSTEM, type ClaimCheck, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, solutionOf, solvePrompt, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
+import { checksOf, claimsPrompt, makesClaims, parseClaimCheck, CLAIMS_SYSTEM, type ClaimCheck, isHardTopic, missingQuestion, parseReview, parseSolve, readable, reviewPrompt, setsProblem, solutionOf, solvePrompt, wantsSolution, tooGenerous, answeredProblem, REVIEW_SYSTEM, SOLVE_SYSTEM, type CheckCode, type ReviewInput } from '@shared/lessonCheck'
 import type { RequestKind } from '@shared/providers'
 import { aboutMetabase } from '@shared/metabase'
 import { ownWords, posedProblem, repeatsEarlier } from '@shared/session'
@@ -6,7 +6,7 @@ import type { ChatEvent, ChatMessage, ChatRequest } from '@shared/types'
 import { routeFor } from './cloud'
 import { metabaseHost, metabaseReady } from './metabase'
 import { privatePath } from './projects'
-import { comparePython, finalAnswer, type Exact } from '@shared/answerCheck'
+import { comparePython, finalAnswer, overruled, type Exact } from '@shared/answerCheck'
 import { createHash } from 'crypto'
 import { sourcesForCheck } from '@shared/sources'
 import { promises as fs } from 'fs'
@@ -87,16 +87,13 @@ async function within(ms: number, signal: AbortSignal, run: (signal: AbortSignal
 
 /** What a check found: a mark that needs a second look, and what's wrong with the problem just set */
 export interface LessonFindings {
-  /** The mark was too generous: what it should have been, and why */
-  mark?: { verdict: 'partial' | 'wrong'; why: string }
+  /** The mark can't stand (too generous, or contradicted by the exact check): what it should have been, and why */
+  mark?: { verdict: 'correct' | 'partial' | 'wrong'; why: string }
   /** The problem just set can't be used (repeated, not asked, a failed check, flawed) */
   problem: string[]
   /** What's wrong (or worth checking) in what the explanation claims, found by the cloud maths model */
   errata?: { errors: { quote: string; fix: string }[]; unsure: { quote: string; why: string }[] }
 }
-
-/** A real problem in a problem set ("**Problem 3 · harder**"), not a diagnostic or a question in passing */
-const isProblem = (reply: string) => /\*\*\s*Problem\s+\d+/i.test(reply) && posedProblem(reply).split(' ').length >= 8
 
 /** A lesson that teaches (not a quiz, a placement check or a retest), from its instructions */
 const teaching = (req: ChatRequest) => !/adaptive QUIZ|PLACEMENT CHECK|retest/i.test(req.instructions ?? '')
@@ -129,9 +126,12 @@ export async function checkLessonReply(
   const earlier = req.messages.filter((m) => m.role === 'assistant').map(text)
   if (repeatsEarlier(reply, earlier)) found.problem.push('It asks a problem already asked in this lesson.')
   if (missingQuestion(reply)) found.problem.push('It sets a problem but never asks it.')
-  // SymPy found their final answer wrong: a "correct" verdict can't stand
-  const verdict = /<grade\s+verdict\s*=\s*["']?(correct|partial|wrong)/i.exec(reply)?.[1]?.toLowerCase()
-  if (opts.exact?.result === 'mismatch' && verdict === 'correct') found.mark = { verdict: 'wrong', why: 'SymPy checked your final answer against the solution, and it doesn’t come out the same. Look again at the last steps of your working.' }
+  // A mark the exact check contradicts can't stand: a wrong result marked correct, or a right one
+  // marked wrong or marked down only for its method (shared/answerCheck)
+  const graded = /<grade\b[^>]*verdict\s*=\s*["']?(correct|partial|wrong)[^>]*>([\s\S]*?)(?:<\/grade>|$)/i.exec(reply)
+  const verdict = graded?.[1]?.toLowerCase()
+  const exactly = overruled(opts.exact, verdict, graded?.[2] ?? '')
+  if (exactly) found.mark = exactly
 
   const step = (id: string, label: string, status: 'running' | 'done') => emit({ id: req.id, type: 'step', step: { id, kind: 'helper', label, status, depth: 0 } })
 
@@ -148,7 +148,7 @@ export async function checkLessonReply(
   const cloud = !!routeFor('marking') && (await mayLeaveMac(req))
   const hard = isHardTopic(`${req.topic ?? ''}`)
   // Diagnostics and questions in passing aren't problems to solve or review
-  const sets = isProblem(reply)
+  const sets = setsProblem(reply)
 
   // Worked examples in an explanation aren't problems, so nothing else checks them: the cloud maths
   // model does, alongside the other checks, and a mistake gets a correction under the reply
@@ -177,7 +177,7 @@ export async function checkLessonReply(
   // Run what can be computed: the tutor's own check, or, when it set a problem without solving it,
   // a solution worked out now (by the cloud model on hard topics, when it may see this lesson)
   await runChecks(checksOf(reply))
-  if (sets && !solutionOf(reply) && !signal.aborted) {
+  if (wantsSolution(reply, earlier[earlier.length - 1] ?? '') && !solutionOf(reply) && !signal.aborted) {
     // Solved before (a retest, a quiz that comes round again): no need to ask anyone
     const key = problemKey(reply)
     const known = await cachedSolution(key)
@@ -202,7 +202,7 @@ export async function checkLessonReply(
   const users = req.messages.filter((m) => m.role === 'user')
   const prev = earlier[earlier.length - 1]
   // Only an answer to a real problem: a diagnostic just finds where they are
-  const answered = prev && isProblem(prev) ? answeredProblem(prev, text(users[users.length - 1]), reply) : undefined
+  const answered = prev && setsProblem(prev) ? answeredProblem(prev, text(users[users.length - 1]), reply) : undefined
   // A banked problem was checked and reviewed when it was written: only the mark needs a second look
   const posed = !opts.fromBank && sets ? { problem: readable(reply), solution: solutionOf(reply) } : undefined
   const input: ReviewInput = { ...(answered && answered.verdict !== 'wrong' && !found.mark ? { answered } : {}), ...(posed ? { posed } : {}) }

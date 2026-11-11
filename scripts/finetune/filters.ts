@@ -18,6 +18,7 @@ import type { ProjectInfo } from '../../src/shared/project'
 import { ownWords, repeatsEarlier, sessionInstructions, type SessionSetup } from '../../src/shared/session'
 import { TUTOR_SYSTEM, stableSystem, withInstructions } from '../../src/shared/tutorPrompt'
 import { scoreReply } from '../eval/tutor/score'
+import { repairReply } from '../../src/shared/lessonRepair'
 
 export interface Message {
   role: 'system' | 'user' | 'assistant'
@@ -100,9 +101,16 @@ export function turnExcluded(r: LessonRecord, i: number): string | null {
   const earlier = r.turns.slice(0, i).filter((t) => t.role === 'assistant').map((t) => t.content)
   if (repeatsEarlier(reply, earlier)) return 'repeated-problem'
   if (missingQuestion(reply)) return 'unasked-problem'
+  // A reply the app had to put right is not one to learn from, even though the learner saw it
+  // whole: the benchmark scores what was shown, a training target has to be what should be written
+  const said = r.turns[i - 1]?.role === 'user' ? r.turns[i - 1].content : ''
+  const REPAIR: Record<string, string> = { close: 'tags-closed', grade: 'marked-nothing', ask: 'ends' }
+  const fixed = repairReply(reply, said)
+  if (fixed.repaired.length) return `protocol:${REPAIR[fixed.repaired[0]] ?? fixed.repaired[0]}`
   // The tag protocol, read as the benchmark's scorer reads it: a finished lesson's last turn ends with its summary
   const wraps = /<summary\b|<scorecard\b|<rubric\b/i.test(reply)
   const p = scoreReply({ expect: { ends: wraps ? 'nothing' : 'either' }, situation: 'after-correct', setup: { mode: r.mode, topic: r.topic, options: r.options } }, reply)
+  if (p.repaired.includes('ask')) return 'protocol:plain-question'
   const broken = p.protocol.checks.filter((c) => !c.ok && ['tags-closed', 'clean', 'one-ask', 'ask-attrs', 'ends', 'plain-question', 'no-leak'].includes(c.id)).map((c) => c.id)
   if (broken.length) return `protocol:${broken[0]}`
   // A turn written under a hidden nudge that was stored with the learner's message is fine: the nudge is in the prompt.

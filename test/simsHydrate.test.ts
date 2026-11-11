@@ -2,7 +2,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { startSims } from '../src/renderer/src/lib/sims'
 import { ASK_EVENT, askDetail, dispatchAsk } from '../src/renderer/src/lib/sims/parts'
-import { SIM_GUIDE, SIM_KINDS, SIM_LESSON_LINE } from '../src/shared/sims'
+import { SIM_GUIDE, SIM_KINDS, simGuide, simKindsFor, simLesson } from '../src/shared/sims'
+import { TUTOR_LESSON_SYSTEM, TUTOR_SYSTEM, stableSystem } from '../src/shared/tutorPrompt'
 import { parseSim } from '../src/renderer/src/lib/sims/spec'
 import { sessionInstructions } from '../src/shared/session'
 
@@ -90,7 +91,44 @@ describe('what the tutor is told', () => {
     expect(document.querySelectorAll('pre.code-block')).toHaveLength(2)
   })
 
-  it('lessons are pointed at simulations in one line', () => {
-    expect(sessionInstructions({ mode: 'teach', topic: 'Backpropagation' })).toContain(SIM_LESSON_LINE)
+  it('a lesson is told how to write only the simulations its topic can use, and nothing when none fits', () => {
+    expect(simKindsFor('Backpropagation and the chain rule')).toEqual(['neural-net'])
+    expect(simKindsFor('Momentum in gradient descent')).toEqual(['gradient-descent'])
+    expect(simKindsFor('Raft leader election')).toEqual(['raft'])
+    expect(simKindsFor('Composite B-tree indexes')).toEqual(['b-tree'])
+    for (const plain of ['Integer promotion in C', 'Consistent hashing', 'Window functions: running totals', 'Two-phase commit', 'Variance of sums of random variables']) expect(simKindsFor(plain), plain).toEqual([])
+
+    const lesson = sessionInstructions({ mode: 'teach', topic: 'Backpropagation' })
+    expect(lesson).toContain('A live simulation fits this topic (neural-net).')
+    expect(lesson).toContain('- neural-net, a small network learning by backpropagation: {"kind":"neural-net"')
+    expect(lesson).toContain('Parts to point at: neural-net input, layer:1, neuron:1:2 (layer, neuron), edge:0:1:2 (from layer, from neuron, to neuron), output, surface, loss. Counting starts at 1')
+    expect(lesson).not.toMatch(/"kind":"(raft|b-tree|cpu|plot)"/)
+    // The example it is given is still one the app can draw
+    expect(parseSim(/\{"kind":"neural-net"[^\n]*?\}(?=[.\s])/.exec(lesson)![0])?.kind).toBe('neural-net')
+    expect(sessionInstructions({ mode: 'teach', topic: 'Integer promotion in C' })).not.toMatch(/A live simulation fits|"kind":|sim block/)
+    expect(simLesson('Two-phase commit')).toBe('')
+  })
+
+  it('the guide for every kind is the whole guide, and for a few is far shorter', () => {
+    expect(simGuide(SIM_KINDS)).toBe(SIM_GUIDE)
+    const words = (t: string) => t.split(/\s+/).filter(Boolean).length
+    expect(words(SIM_GUIDE)).toBeGreaterThan(550)
+    expect(words(simLesson('Momentum in gradient descent'))).toBeLessThan(240)
+    expect(SIM_GUIDE).toContain('whose language is sim (never json)')
+  })
+
+  it('a lesson\'s system prompt leaves out the guide and the tools a lesson cannot call; a chat keeps them', () => {
+    const lesson = stableSystem(TUTOR_SYSTEM, { today: new Date(2026, 10, 11), web: true, session: true })
+    const chat = stableSystem(TUTOR_SYSTEM, { today: new Date(2026, 10, 11), web: true })
+    expect(chat).toContain(SIM_GUIDE)
+    expect(lesson).not.toContain('"kind":')
+    for (const tool of ['study_plan:', 'remember:', 'forget:', 'things_assign', 'metabase (only when connected)', 'delegate (only offered']) {
+      expect(chat, tool).toContain(`- ${tool}`)
+      expect(lesson, tool).not.toContain(`- ${tool}`)
+    }
+    // What a lesson can call, and how to teach, are all still there
+    for (const kept of ['- search_notes / read_note', '- web_search / read_webpage', '- run_code:', '- run_sql:', '- find_image:', '- find_explainer:', 'Rules:', 'Teach visually too', 'Format rules (the app turns these tags into interactive UI'])
+      expect(lesson, kept).toContain(kept)
+    expect(TUTOR_LESSON_SYSTEM.split(/\s+/).length).toBeLessThan(700)
   })
 })

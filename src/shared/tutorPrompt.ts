@@ -32,13 +32,28 @@ Rules:
 - Teach visually too, so they can see it as well as read it. When there is structure, a process or a relationship (a tree, a graph, a pipeline, a protocol, a state machine, a timeline, a hierarchy), draw it as a small mermaid diagram (under about 12 nodes, short labels in quotes). When the thing exists physically or has a classic textbook figure (anatomy, a circuit, a map, a molecule, a famous chart), show a real one with find_image. A step-by-step trace can be a small table. One good visual beats three.
 ${SIM_GUIDE}`
 
+/** Tools a lesson is never offered (main/agent toolSet: they belong to the top-level chat), by how their line starts */
+const NOT_IN_LESSONS = ['study_plan', 'remember', 'forget', 'things_assign', 'metabase', 'delegate']
+
 /**
- * The system prompt as sent: the base, today's date, the web note, a session's tag rules, then
- * what Tide knows about the learner. Pure, so a benchmark can fix the date and leave the learner out.
+ * The tutor's prompt for a lesson: without the lines for tools a lesson cannot call (some 330
+ * words describing calls that would fail), and without the simulation guide, which a lesson gets
+ * with its instructions for the kinds its topic can use (sims.simLesson). The same for every
+ * lesson, so the model server's cache of it holds from one lesson to the next.
+ */
+export const TUTOR_LESSON_SYSTEM = TUTOR_SYSTEM.slice(0, TUTOR_SYSTEM.length - SIM_GUIDE.length - 1)
+  .split('\n')
+  .filter((line) => !NOT_IN_LESSONS.some((tool) => line.startsWith(`- ${tool}`)))
+  .join('\n')
+
+/**
+ * The system prompt as sent: the base (the lesson's form of the tutor's prompt in a session),
+ * today's date, the web note, a session's tag rules, then what Tide knows about the learner. Pure,
+ * so a benchmark can fix the date and leave the learner out.
  */
 export function stableSystem(base: string, o: { today: Date; web: boolean; session?: boolean; profile?: string; memory?: string }): string {
   return (
-    base +
+    (o.session && base === TUTOR_SYSTEM ? TUTOR_LESSON_SYSTEM : base) +
     `\nToday is ${o.today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}.` +
     (o.web
       ? ''

@@ -15,6 +15,7 @@ export interface Run {
   version: string
   label: string
   model: string
+  adapter?: string
   prompts: string
   settings: { temperature: number; seed: number; repeats: number; maxTokens: number }
   errors?: number
@@ -48,10 +49,11 @@ export function decide(base: Run, cand: Run): Decision {
   const blockers: string[] = []
   const reasons: string[] = []
   if (base.version !== cand.version) blockers.push(`different scenario sets (${base.version} and ${cand.version}): not comparable`)
-  if (base.prompts !== cand.prompts) blockers.push('the prompts differ between the runs: a model change and a prompt change cannot be told apart')
+  // One thing at a time: new prompts on the same model, or a new model (or adapter) on the same prompts
+  if (base.prompts !== cand.prompts && (base.model !== cand.model || (base.adapter ?? '') !== (cand.adapter ?? ''))) blockers.push('the prompts and the model both differ between the runs: a model change and a prompt change cannot be told apart')
   if (base.settings.temperature !== cand.settings.temperature || base.settings.maxTokens !== cand.settings.maxTokens) blockers.push('the sampling settings differ between the runs')
   if (Math.min(base.settings.repeats, cand.settings.repeats) < RULE.minRepeats) blockers.push(`fewer than ${RULE.minRepeats} repeats: the spread cannot be estimated`)
-  if (base.errors || cand.errors) blockers.push('some requests failed and were scored as empty replies: run again')
+  if (base.errors || cand.errors) blockers.push('some requests failed twice and are missing from a run: run again')
   const b = base.summary
   const c = cand.summary
 
