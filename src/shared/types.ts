@@ -282,6 +282,13 @@ export interface RunResult {
   durationMs: number
   /** Charts the program drew (Matplotlib), as PNG data URLs */
   images?: string[]
+  /** A code question's hidden tests, when it had them: which passed and which failed */
+  tests?: TestResults
+}
+
+export interface TestResults {
+  passed: string[]
+  failed: { name: string; message: string }[]
 }
 
 export interface CompanyPrepRequest {
