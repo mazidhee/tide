@@ -27,7 +27,7 @@ import { buildMessages, fingerprint, type Message } from './request'
 import { SCENARIOS } from './scenarios'
 import { scoreReply } from './score'
 import { printable, summarise, type Row } from './summary'
-import { ALL_SUBJECTS, SCENARIO_SET_VERSION, SITUATIONS, type Scenario } from './types'
+import { ALL_SUBJECTS, HUMANITIES_SITUATIONS, HUMANITIES_SUBJECTS, SCENARIO_SET_VERSION, SITUATIONS, type Scenario } from './types'
 import { tutorTurn } from './turn'
 import { validateSet } from './validate'
 
@@ -69,9 +69,15 @@ function dryRun(): number {
   const { problems, grid } = validateSet(SCENARIOS)
   const sent = SCENARIOS.map((s) => buildMessages(s))
   console.log(`Scenario set ${SCENARIO_SET_VERSION}: ${SCENARIOS.length} scenarios\n`)
-  console.log(`${''.padEnd(13)}${SITUATIONS.map((s) => s.slice(0, 9).padStart(10)).join('')}     total`)
-  for (const sub of ALL_SUBJECTS) console.log(`${sub.padEnd(13)}${SITUATIONS.map((sit) => String(grid[sub][sit]).padStart(10)).join('')}${String(Object.values(grid[sub]).reduce((a, b) => a + b, 0)).padStart(10)}`)
-  console.log(`${'total'.padEnd(13)}${SITUATIONS.map((sit) => String(ALL_SUBJECTS.reduce((a, sub) => a + grid[sub][sit], 0)).padStart(10)).join('')}${String(SCENARIOS.length).padStart(10)}`)
+  // The humanities' own situations print as a second table, for the subjects that have them
+  const table = (situations: readonly string[], subjects: readonly string[]) => {
+    console.log(`${''.padEnd(17)}${situations.map((s) => s.slice(0, 9).padStart(10)).join('')}     total`)
+    for (const sub of subjects) console.log(`${sub.padEnd(17)}${situations.map((sit) => String(grid[sub][sit]).padStart(10)).join('')}${String(situations.reduce((a, sit) => a + grid[sub][sit], 0)).padStart(10)}`)
+    console.log(`${'total'.padEnd(17)}${situations.map((sit) => String(subjects.reduce((a, sub) => a + grid[sub][sit], 0)).padStart(10)).join('')}${String(subjects.reduce((a, sub) => a + situations.reduce((b, sit) => b + grid[sub][sit], 0), 0)).padStart(10)}`)
+  }
+  table(SITUATIONS, ALL_SUBJECTS)
+  console.log('')
+  table(HUMANITIES_SITUATIONS, HUMANITIES_SUBJECTS)
   const chars = sent.map((m) => m.reduce((a, x) => a + x.content.length, 0))
   console.log(`\nRequests built from the app's prompt code: ${sent.length}; ${Math.round(chars.reduce((a, b) => a + b, 0) / Math.max(1, chars.length))} characters each on average (system prompt ${sent[0]?.[0].content.length ?? 0})`)
   console.log(`Prompt fingerprint: ${fingerprint(JSON.stringify(sent))}`)
