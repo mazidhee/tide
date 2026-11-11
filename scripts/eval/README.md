@@ -24,3 +24,11 @@ cargo run --release --example retrieval -- --questions ../../scripts/eval/retrie
 ```
 
 Measured on 11,840 passages (results in `results/retrieval-*.json`): by words alone, keyword questions 47/47 in the first 8, paraphrase 19/47. The best fusion with vectors (potion-base-32M, reciprocal rank fusion) reached 23/47 on paraphrase, gaining 6 and losing 2: not distinguishable from chance (sign test p = 0.29), and which setting came out best changed from model to model. So the app's module is built without a model (`src/embed.rs` stands where one would go).
+
+# Tutor benchmark
+
+How the tutor behaves across teaching situations (protocol, marking, exactness, pace, visuals), on 70 fixed scenarios with an automatic scorer: see `tutor/README.md`. Run it before and after any change to prompts, models or settings.
+
+```bash
+npx vite-node scripts/eval/tutor/run.ts -- --dry-run
+```
