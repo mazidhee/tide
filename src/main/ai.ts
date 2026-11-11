@@ -15,6 +15,7 @@ import { createHash } from 'crypto'
 import { cleanModelText } from '@shared/modelText'
 import { PACE_MARK } from '@shared/pace'
 import { correctionText } from '@shared/lessonCheck'
+import { bankDirection, plannedMove } from '@shared/difficulty'
 import { BANK_NUDGE, levelAfter, nextDirection, pickProblem, problemsSoFar, renderProblem, type BankProblem, type Direction, type Level } from '@shared/bank'
 import type { ChatEvent, ChatMessage, ChatRequest, ChatScope, ContextSource, ReadAlongNote } from '@shared/types'
 import { getSettings } from './settings'
@@ -513,13 +514,16 @@ async function lessonTurn(req: TurnRequest) {
       const verdict = /<grade\s+verdict\s*=\s*["']?(correct|partial|wrong)/i.exec(reply)?.[1]?.toLowerCase()
       // The mark decides how hard: right → harder, partly right → the same level, wrong → easier
       const byMark: Direction | undefined = verdict === 'correct' ? 'harder' : verdict === 'wrong' ? 'easier' : verdict === 'partial' ? 'same' : undefined
-      const dir = nextDirection(reply) || cut ? (byMark ?? nextDirection(reply) ?? 'same') : undefined
+      // Hook (shared/difficulty.ts): when the answer carried the difficulty policy's note, the level follows it
+      const planned = verdict ? plannedMove(typeof last?.content === 'string' ? last.content : '', verdict as 'correct' | 'partial' | 'wrong') : null
+      const policy = planned ? (bankDirection(planned) ?? { dir: 'easier' as Direction, worked: false }) : null
+      const dir = nextDirection(reply) || cut ? (policy?.dir ?? byMark ?? nextDirection(reply) ?? 'same') : undefined
       if (!dir) return ''
       const level = levelAfter(lessonLevels.get(key) ?? 2, dir)
       const p = pickProblem(bank, level, seen, Date.now(), key)
       if (!p) return ''
       // Just missed: worked for them up to the last step
-      const text = renderProblem(p, problemsSoFar([...replies, reply]) + 1, dir, verdict === 'wrong')
+      const text = renderProblem(p, problemsSoFar([...replies, reply]) + 1, dir, policy ? policy.worked : verdict === 'wrong')
       emit({ id: req.id, type: 'delta', text })
       lessonLevels.set(key, p.level)
       void markUsed(topic, p.id)
