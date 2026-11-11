@@ -659,6 +659,20 @@ function LocalModel({ onStatus }: { onStatus(s: { ok: boolean; model: string }):
           <input className="set-input wide" value={ai.serverCommand ?? ''} placeholder="~/mlx-env312/bin/mlx_vlm.server --model mlx-community/gemma-4-12B-it-4bit --port 8080 --draft-block-size 3" onChange={(e) => setAi({ ...ai, serverCommand: e.target.value })} onBlur={() => saveAi({})} spellCheck={false} aria-label="Start command" />
         </Row>
       )}
+      <Row label="Free its memory when idle" hint={(ai.unloadAfterMinutes ?? 15) === 0 ? 'Gemma stays loaded: about 10 GB of this Mac’s memory, whether or not you’re studying.' : 'Gemma holds about 10 GB while loaded. Unloaded, the Mac gets it back; it reloads as you return to Tide, and your first message after a break starts a few seconds later than usual.'}>
+        <Select
+          label="Free the model’s memory when idle"
+          value={String(ai.unloadAfterMinutes ?? 15)}
+          onChange={(v) => saveAi({ unloadAfterMinutes: Number(v) })}
+          options={[
+            { value: '5', label: 'After 5 minutes' },
+            { value: '15', label: 'After 15 minutes' },
+            { value: '30', label: 'After 30 minutes' },
+            { value: '60', label: 'After an hour' },
+            { value: '0', label: 'Never' }
+          ]}
+        />
+      </Row>
       <ToolSetup label="Speed-ups" hint="Prompt cache and draft model" check={window.tide.runner.speedStatus} setup={window.tide.runner.applySpeedups} busyText="Reloading the model with speed-ups…" actionText="Turn on" />
       <Row label="Connection" hint={status ? <span className={status.ok ? '' : 'error-text'}>{status.message}</span> : 'Checking…'}>
         <button className="btn small" onClick={test} disabled={testing}>

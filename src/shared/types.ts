@@ -15,6 +15,8 @@ export interface AISettings {
   /** Context window the model runs with, in tokens; conversations are compacted to fit it */
   contextTokens?: number
   /** Start the local model server when it isn't running (default on), with this command */
+  /** Minutes without use before the local model is unloaded to give its memory back (default 15; 0 keeps it loaded) */
+  unloadAfterMinutes?: number
   autoStart?: boolean
   serverCommand?: string
   webSearch?: {
