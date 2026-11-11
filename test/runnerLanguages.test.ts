@@ -259,6 +259,53 @@ describe.skipIf(!ruby)('Ruby', () => {
   }, LONG)
 })
 
+// Not installed on the Mac these were written on: they run wherever Go or a JDK is
+describe.skipIf(!go)('Go', () => {
+  it('compiles and runs a program, with its input', async () => {
+    const r = await runCode('go', 'package main\n\nimport "fmt"\n\nfunc main() {\n\tvar a, b int\n\tfmt.Scan(&a, &b)\n\tfmt.Println("sum", a+b)\n}', '40 2')
+    expect(r.stderr).toBe('')
+    expect(r.stdout).toBe('sum 42\n')
+  }, LONG)
+
+  it('shows a compile error with its line, and no path from this Mac', async () => {
+    const r = await runCode('go', 'package main\n\nfunc main() {\n\tvar x int = "one"\n\t_ = x\n}')
+    expect(r.exitCode).not.toBe(0)
+    expect(r.stderr).toMatch(/main\.go:4:\d+: cannot use "one"/)
+    noPaths(r.stderr)
+  }, LONG)
+
+  it('reports a panic with its line: an index past the end', async () => {
+    const r = await runCode('go', 'package main\n\nimport "fmt"\n\nfunc main() {\n\ta := []int{1, 2, 3}\n\ti := len(a)\n\tfmt.Println(a[i])\n}')
+    expect(r.exitCode).not.toBe(0)
+    expect(r.stderr).toContain('index out of range [3] with length 3')
+    expect(r.stderr).toMatch(/main\.go:8/)
+    noPaths(r.stderr)
+  }, LONG)
+})
+
+describe.skipIf(!java)('Java', () => {
+  it('runs one file, with its input', async () => {
+    const r = await runCode('java', 'import java.util.Scanner;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner in = new Scanner(System.in);\n        System.out.println("hello, " + in.nextLine().toUpperCase());\n    }\n}', 'tide')
+    expect(r.stdout).toBe('hello, TIDE\n')
+    expect(r.exitCode).toBe(0)
+  }, LONG)
+
+  it('shows a compile error with its line, and no path from this Mac', async () => {
+    const r = await runCode('java', 'public class Main {\n    public static void main(String[] args) {\n        int x = "one";\n    }\n}')
+    expect(r.exitCode).not.toBe(0)
+    expect(r.stderr).toMatch(/Main\.java:3: error: incompatible types/)
+    noPaths(r.stderr)
+  }, LONG)
+
+  it('shows an exception with its line', async () => {
+    const r = await runCode('java', 'public class Main {\n    public static void main(String[] args) {\n        int[] a = {1, 2, 3};\n        System.out.println(a[a.length]);\n    }\n}')
+    expect(r.exitCode).not.toBe(0)
+    expect(r.stderr).toContain('ArrayIndexOutOfBoundsException: Index 3 out of bounds for length 3')
+    expect(r.stderr).toMatch(/Main\.java:4/)
+    noPaths(r.stderr)
+  }, LONG)
+})
+
 describe('shell scripts', () => {
   it('runs Bash, with its input', async () => {
     const r = await runCode('bash', 'read -r a b\necho "$((a + b))"\nfor f in one two; do printf "%s " "$f"; done; echo', '20 22')
