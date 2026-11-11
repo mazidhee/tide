@@ -140,7 +140,14 @@ export const TRUSTED: Record<string, TrustedSite[]> = {
     site('bitcoin.org', 'bitcoin.org and the Bitcoin paper', 'primary', 'MIT'),
     site('developer.bitcoin.org', 'Bitcoin developer documentation', 'official'),
     site('docs.soliditylang.org', 'Solidity documentation', 'official'),
-    site('solana.com', 'Solana documentation', 'official', undefined, '/docs')
+    site('solana.com', 'Solana documentation', 'official', undefined, '/docs'),
+    // Banking standards and regulators' published texts (any-subject build, checked 11 November 2026)
+    site('ecb.europa.eu', 'European Central Bank', 'primary'),
+    site('fsb.org', 'Financial Stability Board', 'primary'),
+    site('fdic.gov', 'US Federal Deposit Insurance Corporation', 'primary'),
+    site('eba.europa.eu', 'European Banking Authority', 'primary'),
+    site('handbook.fca.org.uk', 'FCA Handbook (UK Financial Conduct Authority)', 'primary'),
+    site('investor.gov', 'US SEC, Investor.gov', 'official')
   ],
   'Products and analytics tools': [
     site('docs.mixpanel.com', 'Mixpanel documentation', 'official'),
@@ -154,7 +161,116 @@ export const TRUSTED: Record<string, TrustedSite[]> = {
     site('docs.anthropic.com', 'Anthropic documentation', 'official'),
     site('platform.openai.com', 'OpenAI documentation', 'official', undefined, '/docs')
   ],
-  'General reference': [site('en.wikipedia.org', 'Wikipedia', 'reference', 'CC BY-SA 4.0'), site('plato.stanford.edu', 'Stanford Encyclopedia of Philosophy', 'reference')]
+  // The areas below were added for teaching any subject (src/shared/subjects.ts maps each kind of
+  // subject to its areas). Every host answered `curl -sIL -m 15` with 200 on 11 November 2026, except
+  // m3.material.io, which refuses HEAD (405) and answered a GET with 200. Hosts the network refused
+  // are in UNCHECKED_TRUSTED, apart, until they can be checked.
+  Physics: [
+    site('phys.libretexts.org', 'LibreTexts Physics', 'book'),
+    site('hyperphysics.phy-astr.gsu.edu', 'HyperPhysics (Georgia State University)', 'reference'),
+    site('physics.nist.gov', 'NIST Physical Measurement Laboratory (constants and units)', 'primary'),
+    site('nasa.gov', 'NASA', 'reference')
+  ],
+  Chemistry: [
+    site('chem.libretexts.org', 'LibreTexts Chemistry', 'book'),
+    site('pubchem.ncbi.nlm.nih.gov', 'PubChem (US National Library of Medicine)', 'reference'),
+    site('webbook.nist.gov', 'NIST Chemistry WebBook', 'primary')
+  ],
+  'Biology and medicine': [
+    site('bio.libretexts.org', 'LibreTexts Biology', 'book'),
+    site('ncbi.nlm.nih.gov', 'NCBI Bookshelf (US National Library of Medicine)', 'book', undefined, '/books'),
+    site('pubmed.ncbi.nlm.nih.gov', 'PubMed', 'primary'),
+    site('medlineplus.gov', 'MedlinePlus (US National Library of Medicine)', 'reference'),
+    site('nlm.nih.gov', 'US National Library of Medicine', 'official'),
+    site('genome.gov', 'National Human Genome Research Institute', 'official'),
+    site('ebi.ac.uk', 'EMBL-EBI', 'official'),
+    site('rcsb.org', 'RCSB Protein Data Bank', 'primary'),
+    site('who.int', 'World Health Organization', 'primary'),
+    site('cdc.gov', 'US Centers for Disease Control and Prevention', 'primary')
+  ],
+  Economics: [
+    site('core-econ.org', 'CORE Econ, The Economy', 'book'),
+    site('fred.stlouisfed.org', 'FRED (Federal Reserve Bank of St. Louis)', 'primary'),
+    site('imf.org', 'International Monetary Fund', 'primary'),
+    site('data.worldbank.org', 'World Bank Open Data', 'primary'),
+    site('nber.org', 'National Bureau of Economic Research', 'primary'),
+    site('ourworldindata.org', 'Our World in Data', 'reference', 'CC BY 4.0')
+  ],
+  Accounting: [
+    site('ifrs.org', 'IFRS Foundation (IASB standards)', 'primary'),
+    site('iasplus.com', 'Deloitte IAS Plus', 'reference'),
+    site('frc.org.uk', 'UK Financial Reporting Council', 'primary')
+  ],
+  Law: [
+    site('legislation.gov.uk', 'legislation.gov.uk (The National Archives)', 'primary'),
+    site('law.cornell.edu', 'Legal Information Institute, Cornell Law School', 'reference'),
+    site('supremecourt.gov', 'Supreme Court of the United States', 'primary'),
+    site('supremecourt.uk', 'The Supreme Court of the United Kingdom', 'primary'),
+    site('bailii.org', 'BAILII (British and Irish Legal Information Institute)', 'primary'),
+    site('ecfr.gov', 'Electronic Code of Federal Regulations', 'primary')
+  ],
+  'Game development and graphics': [
+    site('docs.godotengine.org', 'Godot Engine documentation', 'official'),
+    site('learnopengl.com', 'Joey de Vries, LearnOpenGL', 'book'),
+    site('gameprogrammingpatterns.com', 'Robert Nystrom, Game Programming Patterns', 'book'),
+    site('docs.unity3d.com', 'Unity documentation', 'official'),
+    site('dev.epicgames.com', 'Unreal Engine documentation', 'official', undefined, '/documentation'),
+    site('khronos.org', 'Khronos Group (OpenGL, Vulkan, WebGL)', 'primary'),
+    site('gafferongames.com', 'Glenn Fiedler, Gaffer On Games', 'reference'),
+    site('redblobgames.com', 'Amit Patel, Red Blob Games', 'reference')
+  ],
+  'Music and design': [
+    site('musictheory.pugetsound.edu', 'Robert Hutchinson, Music Theory for the 21st-Century Classroom', 'book'),
+    site('musictheory.net', 'musictheory.net', 'reference'),
+    site('developer.apple.com', 'Apple Human Interface Guidelines', 'official', undefined, '/design'),
+    site('developer.android.com', 'Android design guidance', 'official', undefined, '/design'),
+    site('m3.material.io', 'Material Design 3', 'official'),
+    site('designsystem.digital.gov', 'US Web Design System', 'official'),
+    site('nngroup.com', 'Nielsen Norman Group', 'reference', undefined, '/articles'),
+    site('lawsofux.com', 'Jon Yablonski, Laws of UX', 'reference'),
+    site('practicaltypography.com', 'Matthew Butterick, Practical Typography', 'book')
+  ],
+  'History, texts and languages': [
+    site('gutenberg.org', 'Project Gutenberg', 'book'),
+    site('avalon.law.yale.edu', 'The Avalon Project (Yale Law School)', 'primary'),
+    site('sourcebooks.fordham.edu', 'Internet History Sourcebooks (Fordham University)', 'primary'),
+    site('perseus.tufts.edu', 'Perseus Digital Library (Tufts University)', 'primary'),
+    site('nationalarchives.gov.uk', 'The National Archives (UK)', 'primary'),
+    site('archives.gov', 'US National Archives', 'primary'),
+    site('loc.gov', 'Library of Congress', 'primary'),
+    site('wals.info', 'World Atlas of Language Structures', 'reference', 'CC BY 4.0')
+  ],
+  'General reference': [
+    site('en.wikipedia.org', 'Wikipedia', 'reference', 'CC BY-SA 4.0'),
+    site('plato.stanford.edu', 'Stanford Encyclopedia of Philosophy', 'reference'),
+    site('iep.utm.edu', 'Internet Encyclopedia of Philosophy', 'reference')
+  ]
+}
+
+/**
+ * Good sources for the new areas that could not be checked when they were added (11 November 2026):
+ * each refused `curl -sIL -m 15` from the Mac it was checked on (403, a bot challenge, or no
+ * connection). They are not trusted in ranking until checked again; move one into TRUSTED once
+ * `curl -sIL -m 15 https://<host>/` answers 200 from the learner's network.
+ */
+export const UNCHECKED_TRUSTED: Record<string, TrustedSite[]> = {
+  Physics: [site('feynmanlectures.caltech.edu', 'The Feynman Lectures on Physics (Caltech)', 'book')],
+  Chemistry: [site('goldbook.iupac.org', 'IUPAC Gold Book', 'primary')],
+  Economics: [site('oecd.org', 'OECD', 'primary')],
+  'Finance, payments and blockchains': [
+    site('swift.com', 'SWIFT standards (public pages)', 'primary', undefined, '/standards'),
+    site('europeanpaymentscouncil.eu', 'European Payments Council (SEPA rulebooks)', 'primary'),
+    site('fatf-gafi.org', 'Financial Action Task Force', 'primary'),
+    site('sec.gov', 'US Securities and Exchange Commission', 'primary')
+  ],
+  Accounting: [site('fasb.org', 'Financial Accounting Standards Board', 'primary')],
+  Law: [site('eur-lex.europa.eu', 'EUR-Lex (EU law)', 'primary'), site('congress.gov', 'Congress.gov', 'primary'), site('courtlistener.com', 'CourtListener (Free Law Project)', 'primary')],
+  'Game development and graphics': [
+    site('raytracing.github.io', 'Peter Shirley, Ray Tracing in One Weekend', 'book'),
+    site('gpuweb.github.io', 'W3C WebGPU specification', 'primary'),
+    site('realtimerendering.com', 'Real-Time Rendering resources', 'reference')
+  ],
+  'Music and design': [site('viva.pressbooks.pub', 'Open Music Theory', 'book', undefined, '/openmusictheory'), site('openmusictheory.github.io', 'Open Music Theory (first edition)', 'book')]
 }
 
 const ALL: TrustedSite[] = Object.values(TRUSTED).flat()
