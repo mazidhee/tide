@@ -286,7 +286,7 @@ function registerIpc() {
   handle('connections:list', (fresh?: boolean) => listConnections(fresh))
   // Only the services added from the Connections page: other keys have their own checked flows
   handle('connections:setKey', (id: string, key: string | null) => {
-    if (!['you', 'firecrawl'].includes(id)) throw new Error('That connection’s key is set in its own section.')
+    if (!['you', 'firecrawl', 'brave', 'tavily'].includes(id)) throw new Error('That connection’s key is set in its own section.')
     setKey(id, key)
     return listConnections(true)
   })

@@ -94,6 +94,21 @@ export const PROVIDERS: ProviderInfo[] = [
     ]
   },
   {
+    id: 'generalcompute',
+    name: 'General Compute',
+    summary: 'Free credit on sign-up; serves the same GPT-OSS 120B as Groq',
+    baseUrl: 'https://api.generalcompute.com/v1',
+    keyUrl: 'https://www.generalcompute.com',
+    pricingUrl: 'https://www.generalcompute.com/products',
+    checked: '2026-11-11',
+    freeTier: 'A $5 sign-up credit, then about $0.21 per million tokens in and $0.79 out for GPT-OSS 120B. The same model as Groq, so it takes over cleanly when Groq’s day runs out.',
+    models: [
+      { id: 'gpt-oss-120b', label: 'GPT-OSS 120B', price: { input: 0.21, output: 0.79 }, context: 131072, reasoning: true, note: 'Same as Groq’s' },
+      { id: 'deepseek-v3.1', label: 'DeepSeek V3.1', context: 131072, reasoning: true },
+      { id: 'deepseek-v3.2', label: 'DeepSeek V3.2', context: 32768, reasoning: true }
+    ]
+  },
+  {
     id: 'qwen',
     name: 'Qwen',
     summary: 'Alibaba Cloud. 1M free tokens for 90 days on some models',

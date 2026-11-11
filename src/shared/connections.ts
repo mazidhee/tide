@@ -38,6 +38,14 @@ export interface Connection extends ConnectionInfo {
   today?: { requests: number; tokens?: number }
   /** The day's allowance, when it has one: 0 to 1 used */
   dayShare?: number
+  /** A credit or monthly allowance instead: what's used of it, 0 to 1, and how to say it */
+  credit?: { share: number; label: string }
+  /** Uses on each of the last seven days, oldest first */
+  week?: number[]
+  /** Limits and costs, as label and value */
+  limits?: [string, string][]
+  /** For a model provider: the model a test uses */
+  model?: string
 }
 
 export const KIND_LABEL: Record<ConnectionKind, string> = {

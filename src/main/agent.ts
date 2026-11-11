@@ -34,7 +34,8 @@ import { addMemory, forgetMatching, memoryPrompt } from './memory'
 import { fitHistory } from '@shared/context'
 import { historyBudget } from './chats'
 import { asksForWeb, cleanModelText, createStreamFilter, isLooping, recoverToolCalls } from '@shared/modelText'
-import { noteUse } from './connectionUse'
+import { noteUse, useOf } from './connectionUse'
+import { getKey } from './cloud'
 
 /**
  * Tutor harness: an OpenAI-style tool loop the model drives itself. It can search and read
@@ -321,14 +322,31 @@ async function webSearchNow(query: string, opts: SearchOptions = {}): Promise<We
   const { webSearch: cfg } = getSettings().ai
   const provider = cfg?.provider ?? 'wikipedia'
   if (provider === 'off') throw new Error('Web search is turned off in Settings.')
+  // Keys live in the Keychain now; one typed into an older version is still read from settings
+  const key = provider === 'brave' || provider === 'tavily' || provider === 'you' ? getKey(provider) || cfg?.apiKey || '' : ''
+
+  if (provider === 'you') {
+    // A one-time credit, not a monthly one: stop well before it's gone (about $5 per 1,000 searches)
+    if (!key) throw new Error('Add a You.com key in Settings › Connections to search the web.')
+    if (useOf('you').thisMonth >= YOU_MONTHLY) return wikipediaSearch(query)
+    noteUse('you')
+    const params = new URLSearchParams({ query, count: '8' })
+    if (opts.when && opts.when !== 'any') params.set('freshness', opts.when)
+    const res = await fetch(`https://ydc-index.io/v1/search?${params}`, { headers: { 'X-API-Key': key, Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) })
+    if (!res.ok) throw new Error(`You.com answered ${res.status}`)
+    type YouHit = { title?: string; url?: string; description?: string; snippets?: string[]; page_age?: string }
+    const json = (await res.json()) as { results?: { web?: YouHit[]; news?: YouHit[] } | YouHit[]; hits?: YouHit[] }
+    const hits = Array.isArray(json.results) ? json.results : [...((opts.news ? json.results?.news : json.results?.web) ?? []), ...(json.hits ?? [])]
+    return uniqueResults(hits.filter((h) => h.url).map((h) => ({ title: h.title ?? h.url!, url: h.url!, snippet: stripTags(h.description || h.snippets?.[0] || '').slice(0, 300), date: isoDay(h.page_age) })), 8)
+  }
   noteUse(provider)
 
   if (provider === 'brave') {
-    if (!cfg?.apiKey) throw new Error('Add a Brave Search API key in Settings to search the web.')
+    if (!key) throw new Error('Add a Brave Search API key in Settings to search the web.')
     const freshness = { day: 'pd', week: 'pw', month: 'pm', year: 'py' }[opts.when ?? 'any' as string] as string | undefined
     const res = await fetch(
       `https://api.search.brave.com/res/v1/${opts.news ? 'news' : 'web'}/search?count=8&q=${encodeURIComponent(query)}${freshness ? `&freshness=${freshness}` : ''}`,
-      { headers: { Accept: 'application/json', 'X-Subscription-Token': cfg.apiKey }, signal: AbortSignal.timeout(15_000) }
+      { headers: { Accept: 'application/json', 'X-Subscription-Token': key }, signal: AbortSignal.timeout(15_000) }
     )
     if (!res.ok) throw new Error(`Brave Search answered ${res.status}`)
     type BraveHit = { title: string; url: string; description: string; page_age?: string; age?: string }
@@ -340,10 +358,10 @@ async function webSearchNow(query: string, opts: SearchOptions = {}): Promise<We
   }
 
   if (provider === 'tavily') {
-    if (!cfg?.apiKey) throw new Error('Add a Tavily API key in Settings to search the web.')
+    if (!key) throw new Error('Add a Tavily API key in Settings to search the web.')
     const res = await fetch('https://api.tavily.com/search', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({ query, max_results: 8, topic: opts.news ? 'news' : 'general', ...(opts.when && opts.when !== 'any' ? { time_range: opts.when } : {}) }),
       signal: AbortSignal.timeout(20_000)
     })
@@ -406,15 +424,47 @@ async function readWebpageNow(url: string): Promise<{ title: string; text: strin
   // arXiv abstract pages are thin; the PDF has the content
   const arxiv = url.match(/^https?:\/\/(?:www\.)?arxiv\.org\/abs\/([\w.\/-]+?)(?:v\d+)?$/)
   if (arxiv) url = `https://arxiv.org/pdf/${arxiv[1]}`
-  const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'text/html,application/pdf;q=0.9,*/*;q=0.5' }, redirect: 'follow', signal: AbortSignal.timeout(30_000) })
-  if (!res.ok) throw new Error(`The page answered ${res.status}`)
+  const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'text/html,application/pdf;q=0.9,*/*;q=0.5' }, redirect: 'follow', signal: AbortSignal.timeout(30_000) }).catch((e: Error) => e)
+  // Blocked, or built by JavaScript: Firecrawl reads it, when it's set up
+  if (res instanceof Error || !res.ok) {
+    const viaFirecrawl = await firecrawl(url).catch(() => null)
+    if (viaFirecrawl) return viaFirecrawl
+    throw res instanceof Error ? res : new Error(`The page answered ${res.status}`)
+  }
   const type = res.headers.get('content-type') ?? ''
   if (type.includes('application/pdf') || /\.pdf($|\?)/i.test(res.url || url)) return pdfFromResponse(res, res.url || url)
   if (!type.includes('html') && !type.includes('text')) throw new Error(`Can't read ${type || 'this kind of file'} pages yet.`)
   const dom = new JSDOM(await res.text(), { url: res.url || url })
   const article = new Readability(dom.window.document).parse()
   const text = (article?.textContent ?? dom.window.document.body?.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim()
-  return { title: article?.title || dom.window.document.title || url, text }
+  const title = article?.title || dom.window.document.title || url
+  if (text.length < 600) {
+    const viaFirecrawl = await firecrawl(url).catch(() => null)
+    if (viaFirecrawl && viaFirecrawl.text.length > text.length) return viaFirecrawl
+  }
+  return { title, text }
+}
+
+/** You.com's credit is one-time: searches a month before Tide falls back to Wikipedia (about $5 per 1,000) */
+const YOU_MONTHLY = 1500
+/** Firecrawl's free pages a month, kept a little short of the 1,000 */
+const FIRECRAWL_MONTHLY = 950
+
+/** A public page read by Firecrawl as clean Markdown: only when the plain reader got little or nothing */
+async function firecrawl(url: string): Promise<{ title: string; text: string } | null> {
+  const key = getKey('firecrawl')
+  if (!key || useOf('firecrawl').thisMonth >= FIRECRAWL_MONTHLY) return null
+  noteUse('firecrawl')
+  const res = await fetch('https://api.firecrawl.dev/v2/scrape', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    body: JSON.stringify({ url, formats: ['markdown'], onlyMainContent: true }),
+    signal: AbortSignal.timeout(45_000)
+  })
+  if (!res.ok) return null
+  const j = (await res.json()) as { data?: { markdown?: string; metadata?: { title?: string } } }
+  const text = j.data?.markdown?.trim() ?? ''
+  return text ? { title: j.data?.metadata?.title || url, text } : null
 }
 
 // ---------- Streaming completion with tool calls ----------

@@ -10,7 +10,7 @@ import { join } from 'path'
 import { SERVICES, type Connection, type ConnectionInfo, type ConnectionState } from '@shared/connections'
 import { PROVIDERS, providerInfo } from '@shared/providers'
 import { cloudSettings, coolingDown, dayShare, getKey, hasKeys, readUsage } from './cloud'
-import { useOf } from './connectionUse'
+import { useOf, weekOf } from './connectionUse'
 import { metabaseReady } from './metabase'
 import { getSettings } from './settings'
 import { studyApiStatus } from './studyApi'
@@ -21,6 +21,12 @@ const startOfDay = () => {
   const d = new Date()
   d.setHours(0, 0, 0, 0)
   return d.getTime()
+}
+
+/** Services with a credit or monthly allowance rather than a daily one: what Tide counts against it */
+const CREDITS: Record<string, { limit: number; label: (used: number) => string }> = {
+  you: { limit: 1500, label: (n) => `${n.toLocaleString('en-GB')} of 1,500 searches this month` },
+  firecrawl: { limit: 950, label: (n) => `${n.toLocaleString('en-GB')} of 950 pages this month` }
 }
 
 let cache: { at: number; list: Promise<Connection[]> } | null = null
@@ -39,6 +45,13 @@ async function build(): Promise<Connection[]> {
   const month = readUsage(Date.now() - 31 * 86_400_000)
   const today = month.filter((r) => r.at >= startOfDay())
   const lastOf = (pred: (r: (typeof month)[number]) => boolean) => month.filter(pred).reduce((n, r) => Math.max(n, r.at), 0) || undefined
+  // Requests on each of the last seven days, oldest first
+  const weekBy = (pred: (r: (typeof month)[number]) => boolean) =>
+    Array.from({ length: 7 }, (_, i) => {
+      const from = startOfDay() - (6 - i) * 86_400_000
+      return month.filter((r) => r.at >= from && r.at < from + 86_400_000 && pred(r)).length
+    })
+  const fmt = (n: number) => n.toLocaleString('en-GB')
 
   // Model providers: each that has a key or needs none, and the ones you could add
   const providerIds = [...new Set([...PROVIDERS.map((p) => p.id), ...Object.keys(cloud.providers ?? {})])]
@@ -68,7 +81,16 @@ async function build(): Promise<Connection[]> {
       detail: !keyed ? 'Add a key to use it' : cloud.mode === 'off' ? 'The cloud helper is off' : resting ? 'Resting: it hit a limit, back shortly' : id === cloud.provider ? `Main cloud model: ${cloud.model}` : p.keyless ? 'No key needed: a backup' : 'Ready as a backup',
       lastUsed: lastOf((r) => r.kind === 'cloud' && r.provider === id),
       today: { requests: used.length, tokens: used.reduce((n, r) => n + r.input + r.output, 0) },
-      ...(share ? { dayShare: share } : {})
+      ...(share || p.perDay ? { dayShare: share } : {}),
+      week: weekBy((r) => r.kind === 'cloud' && r.provider === id),
+      model: id === cloud.provider ? cloud.model : (p.jobs?.maths ?? p.models[0]?.id),
+      limits: [
+        ...(p.perDay?.requests ? [['Free each day', `${fmt(p.perDay.requests)} requests`] as [string, string]] : []),
+        ...(p.perDay?.tokens ? [['Free tokens', `${fmt(p.perDay.tokens)} a day`] as [string, string]] : []),
+        ...(p.perMinute ? [['Per minute', `${p.perMinute} requests`] as [string, string]] : []),
+        ['Used today', `${fmt(used.length)} requests, ${fmt(used.reduce((n, r) => n + r.input + r.output, 0))} tokens`] as [string, string],
+        ...(!p.perDay && p.summary ? [['Plan', p.summary] as [string, string]] : [])
+      ]
     }
   })
 
@@ -78,14 +100,22 @@ async function build(): Promise<Connection[]> {
   const services = await Promise.all(
     SERVICES.map(async (info): Promise<Connection> => {
       const use = useOf(info.id)
-      const base = { ...info, lastUsed: use.last, today: use.today ? { requests: use.today } : undefined }
+      const credit = CREDITS[info.id]
+      const base = {
+        ...info,
+        lastUsed: use.last,
+        today: use.today ? { requests: use.today } : undefined,
+        week: weekOf(info.id),
+        limits: info.free ? ([['Free', info.free]] as [string, string][]) : [],
+        ...(credit ? { credit: { share: Math.min(1, use.thisMonth / credit.limit), label: credit.label(use.thisMonth) } } : {})
+      }
       const as = (state: ConnectionState, detail: string, active = state === 'connected' || state === 'ready'): Connection => ({ ...base, state, detail, active })
       switch (info.id) {
         case 'local-model': {
           const r = await within(2500, fetch(`${s.ai.baseUrl.replace(/\/+$/, '')}/models`, { signal: AbortSignal.timeout(2500) }).then((x) => x.json() as Promise<{ data?: { id: string; loaded?: boolean }[] }>), null)
           const loaded = r?.data?.find((m) => m.loaded) ?? r?.data?.find((m) => m.id === s.ai.model)
           const local = month.filter((x) => x.kind === 'local')
-          return { ...base, state: r ? 'connected' : 'error', active: !!r, detail: r ? `Running: ${(loaded?.id ?? s.ai.model ?? 'a model').split('/').pop()}` : `Not answering at ${s.ai.baseUrl}`, lastUsed: lastOf((x) => x.kind === 'local'), today: { requests: today.filter((x) => x.kind === 'local').length, tokens: local.filter((x) => x.at >= startOfDay()).reduce((n, x) => n + x.input + x.output, 0) } }
+          return { ...base, state: r ? 'connected' : 'error', active: !!r, detail: r ? `Running: ${(loaded?.id ?? s.ai.model ?? 'a model').split('/').pop()}` : `Not answering at ${s.ai.baseUrl}`, lastUsed: lastOf((x) => x.kind === 'local'), today: { requests: today.filter((x) => x.kind === 'local').length, tokens: local.filter((x) => x.at >= startOfDay()).reduce((n, x) => n + x.input + x.output, 0) }, week: weekBy((x) => x.kind === 'local'), limits: [['Cost', 'Free: runs on your Mac'], ['Server', s.ai.baseUrl]] }
         }
         case 'wikipedia':
           return as('ready', search === 'wikipedia' ? 'Your web search: free, no key' : 'Used for readings, and when search is down')

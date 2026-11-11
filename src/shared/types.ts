@@ -18,7 +18,7 @@ export interface AISettings {
   autoStart?: boolean
   serverCommand?: string
   webSearch?: {
-    provider: 'wikipedia' | 'brave' | 'tavily' | 'searxng' | 'off'
+    provider: 'wikipedia' | 'brave' | 'tavily' | 'you' | 'searxng' | 'off'
     apiKey?: string
     url?: string
   }
