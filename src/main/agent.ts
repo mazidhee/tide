@@ -45,6 +45,7 @@ import { historyBudget } from './chats'
 import { asksForWeb, beforeLoop, CARRY_ON, cleanModelText, recoverToolCalls, turnReader } from '@shared/modelText'
 import { noteUse, useOf } from './connectionUse'
 import { getKey } from './cloud'
+import { subjectContext } from './subjects'
 
 /**
  * Tutor harness: an OpenAI-style tool loop the model drives itself. It can search and read
@@ -1695,6 +1696,8 @@ async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, sign
   const own = req.session && req.instructions && userTurns <= 1 && req.scope.kind !== 'pages' ? await pagesToRead(question, 2).catch(() => []) : []
   // And what earlier lessons on this topic (or close to it) show, so it builds on them
   const before = req.session && req.instructions && userTurns <= 1 && req.topic ? await earlierLessons(req.topic, !!ctx.private).catch(() => '') : ''
+  // Subject hook (any-subject, src/main/subjects.ts): a toolkit the topic's words couldn't decide, and what Tide can't do for this subject
+  const subject = req.session && req.instructions && userTurns <= 1 && req.topic ? await subjectContext({ topic: req.topic, scope: req.scope, instructions: req.instructions, private: !!ctx.private, web: !!ctx.web }).catch(() => '') : ''
   const assigning = thingsOn && wanted === 'assign'
   const turnContext = [
     req.voice ? voiceRules(characterById(req.voice), recentOpenings(req.messages.filter((m) => m.role === 'assistant').map((m) => String(m.content)))) : '',
@@ -1712,6 +1715,7 @@ async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, sign
     sources.length && !((assigning || marking) && req.scope.kind === 'vault') && !(req.instructions && userTurns > 1) ? `Passages from what the student is studying right now:\n\n${sources.map((s) => `[${s.index}] ${s.title}${s.heading ? ` > ${s.heading}` : ''}\n${clip(s.text, req.instructions || req.scope.kind === 'vault' ? 1000 : 1600)}`).join('\n\n---\n\n')}` : '',
     req.attachment ? `The student selected this passage:\n"""\n${req.attachment}\n"""` : '',
     before,
+    subject,
     own.length ? `Where this is covered in books the student owns (they open in Tide; point them to the pages when it helps, as a markdown link like [${readingLabel(own[0])}](/${own[0].path.split('/').map(encodeURIComponent).join('/')}#page=${own[0].from})): ${own.map(readingLabel).join('; ')}` : '',
     images.length ? `You can see ${images.length === 1 ? 'the picture' : `these ${images.length} pictures`} from their notes, attached below in this order: ${images.map((im, i) => `${i + 1}) ${im.path}`).join(', ')}. Teach from what they show. To show one in your answer, put its line on its own exactly as written: ${images.map((im) => imageMarkdown(im.path)).join(' ')}` : ''
   ]
