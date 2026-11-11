@@ -52,3 +52,13 @@ describe('the Show me button', () => {
     expect(showMeOffered([{ role: 'user', content: 'Teach me' }])).toBe(false)
   })
 })
+
+describe('a typed request to see it', () => {
+  it('is checked like the button', async () => {
+    const { asksToSee } = await import('../src/shared/showMe')
+    expect(asksToSee('My question: can you show me that?')).toBe(true)
+    expect(asksToSee('My question: draw it as a diagram')).toBe(true)
+    expect(asksToSee('Answer: I would show me the max first')).toBe(false)
+    expect(asksToSee('My question: why does the receiver increment?')).toBe(false)
+  })
+})

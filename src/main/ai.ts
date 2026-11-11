@@ -563,7 +563,8 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
   const { waitingQuestion, givesAway, setupOnlyNote, WITHHELD } = await import('@shared/showMe')
   const { SHOW_ME } = await import('@shared/session')
   const lastSaid = String([...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '')
-  const waiting = req.session && lastSaid.startsWith(SHOW_ME.slice(0, 60)) ? waitingQuestion(req.messages.slice(0, -1)) : null
+  const { asksToSee } = await import('@shared/showMe')
+  const waiting = req.session && (lastSaid.startsWith(SHOW_ME.slice(0, 60)) || asksToSee(lastSaid)) ? waitingQuestion(req.messages.slice(0, -1)) : null
   let holdShow = !!waiting
   let heldShow = ''
   const emit = (e: ChatEvent) => {

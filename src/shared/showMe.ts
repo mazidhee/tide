@@ -75,3 +75,6 @@ export function showMeOffered(turns: { role: string; content: string }[]): boole
   if (!last || last.role !== 'assistant') return false
   return !parseBlocks(last.content).some((b) => b.kind === 'ask' && b.prompt.trim())
 }
+
+/** A message asking to see it drawn ("show me", "draw it", "as a diagram"), typed rather than the button; never an answer */
+export const asksToSee = (said: string) => !/^Answer:/i.test(said.trim()) && /\bshow me\b|\bdraw (it|this|that|me)\b|\bas an? (picture|diagram|table|plot|chart)\b|\bvisuali[sz]e\b/i.test(said.split(/\n\s*\(Tide:/)[0])
