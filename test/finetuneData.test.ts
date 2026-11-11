@@ -87,6 +87,15 @@ describe('which turns may be learned from', () => {
     expect(t('Heaps are trees kept in arrays.')).toMatch(/^protocol:ends|unfinished/)
   })
 
+  it('leaves out a reply the app had to put right, though the learner saw it whole', () => {
+    const after = (said: string, reply: string) => turnExcluded(lesson([[ASK('Where is the minimum?'), said], [reply, '']], { finished: false }), 3)
+    // From the tutor benchmark's baseline: "I don't know" marked wrong, a grade never closed, a numbered question left with <continue/>
+    expect(after("I don't know.", `<grade verdict="wrong" score="0.0">You haven't answered yet, but that's okay.</grade>\n\n${ASK('What is at index 0?')}`)).toBe('protocol:marked-nothing')
+    expect(after('Answer: the root', `<grade verdict="correct" score="1.0">\n\nRight: the root.\n\n${ASK('And its children?')}`)).toBe('protocol:tags-closed')
+    expect(after('Answer: the root', '<grade verdict="correct" score="1">Right.</grade>\n\n**Question 2 of 8**\n\nWhere are the children of index i?\n\n<continue/>')).toBe('protocol:ends')
+    expect(after('Answer: the root', `<grade verdict="correct" score="1">Right: the root.</grade>\n\n${ASK('And its children?')}`)).toBeNull()
+  })
+
   it('takes the spoken part out of replies written with Talk on, and drops a reply that was only spoken', () => {
     expect(unvoiced(`<say>Right, heaps.</say>\n\n${ASK('Where is the minimum?')}`)).toBe(ASK('Where is the minimum?'))
     const built = examplesFrom(lesson([[`<say>Right, heaps.</say>\n\n${ASK('Where is the minimum?')}`, 'Answer: the root'], ['<say>Yes.</say>', '']], { finished: false }), opts)
