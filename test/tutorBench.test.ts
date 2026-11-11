@@ -11,8 +11,11 @@ import { rescoreRows } from '../scripts/eval/tutor/rescore'
 import { hasTable, paceWords, scoreReply } from '../scripts/eval/tutor/score'
 import { summarise, type Row } from '../scripts/eval/tutor/summary'
 import { readCompletion, savedTurn, tutorTurn } from '../scripts/eval/tutor/turn'
-import { SITUATIONS, SUBJECTS, type Expect, type Scenario } from '../scripts/eval/tutor/types'
-import { MIN_SCENARIOS, validateScenario, validateSet } from '../scripts/eval/tutor/validate'
+import { BREADTH_SUBJECTS, SITUATIONS, SUBJECTS, type Expect, type Scenario } from '../scripts/eval/tutor/types'
+import { TOOLKITS } from '../src/shared/subjects'
+import { SUBJECT_KINDS } from '../src/shared/subjectMap'
+import { HANDS_ON } from '../src/shared/session'
+import { MIN_BREADTH, MIN_SCENARIOS, validateScenario, validateSet } from '../scripts/eval/tutor/validate'
 
 const fence = (lang: string, body: string) => '```' + lang + '\n' + body + '\n```'
 
@@ -41,6 +44,35 @@ describe('the scenario set', () => {
     const s = SCENARIOS.find((x) => x.situation === 'after-wrong')!
     expect(validateScenario({ ...s, good: s.good.replace(/verdict="\w+"/, 'verdict="correct"') }).join(' ')).toMatch(/good reply fails: .*verdict/)
     expect(validateScenario({ ...s, bad: [{ reply: s.good, fails: ['verdict'] }] }).join(' ')).toMatch(/should fail verdict/)
+  })
+})
+
+describe('breadth: subjects outside the core set', () => {
+  // A Discuss this turn in philosophy (a humanities scenario) is about a passage, not a lesson's topic, so it has no kinds
+  const wide = SCENARIOS.filter((s) => (BREADTH_SUBJECTS as readonly string[]).includes(s.subject) && !s.discuss)
+
+  it('has at least 40 scenarios across at least 20 subjects, each naming its kinds', () => {
+    expect(wide.length).toBeGreaterThanOrEqual(MIN_BREADTH.scenarios)
+    expect(new Set(wide.map((s) => s.subject)).size).toBeGreaterThanOrEqual(MIN_BREADTH.subjects)
+    for (const s of wide) expect(s.kinds?.length, s.id).toBeGreaterThan(0)
+  })
+
+  it("sends each lesson its subject's toolkit and none of the others'", () => {
+    for (const s of wide) {
+      const first = buildMessages(s)[1].content
+      for (const k of SUBJECT_KINDS) expect(first.includes(TOOLKITS[k].rules), `${s.id}: ${k}`).toBe(s.kinds!.includes(k))
+    }
+  })
+
+  it('keeps the code and SQL rules out of lessons that are not built', () => {
+    for (const s of wide.filter((x) => ['philosophy', 'world-history', 'music-theory', 'physical-skill', 'linguistics'].includes(x.subject))) expect(buildMessages(s)[1].content, s.id).not.toContain(HANDS_ON)
+    for (const s of wide.filter((x) => ['compilers', 'os', 'game-dev'].includes(x.subject))) expect(buildMessages(s)[1].content, s.id).toContain(HANDS_ON)
+  })
+
+  it('notices a breadth scenario whose topic is profiled as another kind', () => {
+    const s = wide.find((x) => x.subject === 'philosophy')!
+    expect(validateScenario({ ...s, kinds: ['build'] }).join(' ')).toMatch(/profiled as interpret, not build/)
+    expect(validateScenario({ ...s, kinds: undefined }).join(' ')).toMatch(/names the kinds/)
   })
 })
 

@@ -16,6 +16,8 @@ export type View =
   | { kind: 'lessons' }
   | { kind: 'learn' }
   | { kind: 'practice' }
+  // Guided projects (components/WorkshopView.tsx): the list, a project, or a roadmap's "Project:" item
+  | { kind: 'workshop'; id?: string; from?: { notebook?: string; topic?: string }; nonce?: number }
   | { kind: 'new-topic'; topic?: string; goal?: string; auto?: boolean; nonce?: number }
   | { kind: 'chat'; id?: string }
   | { kind: 'lab'; terminal: 'lab' | 'local'; topic?: string; nonce?: number }

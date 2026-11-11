@@ -140,7 +140,14 @@ export const TRUSTED: Record<string, TrustedSite[]> = {
     site('bitcoin.org', 'bitcoin.org and the Bitcoin paper', 'primary', 'MIT'),
     site('developer.bitcoin.org', 'Bitcoin developer documentation', 'official'),
     site('docs.soliditylang.org', 'Solidity documentation', 'official'),
-    site('solana.com', 'Solana documentation', 'official', undefined, '/docs')
+    site('solana.com', 'Solana documentation', 'official', undefined, '/docs'),
+    // Banking standards and regulators' published texts (any-subject build, checked 11 November 2026)
+    site('ecb.europa.eu', 'European Central Bank', 'primary'),
+    site('fsb.org', 'Financial Stability Board', 'primary'),
+    site('fdic.gov', 'US Federal Deposit Insurance Corporation', 'primary'),
+    site('eba.europa.eu', 'European Banking Authority', 'primary'),
+    site('handbook.fca.org.uk', 'FCA Handbook (UK Financial Conduct Authority)', 'primary'),
+    site('investor.gov', 'US SEC, Investor.gov', 'official')
   ],
   'Products and analytics tools': [
     site('docs.mixpanel.com', 'Mixpanel documentation', 'official'),
@@ -154,7 +161,6 @@ export const TRUSTED: Record<string, TrustedSite[]> = {
     site('docs.anthropic.com', 'Anthropic documentation', 'official'),
     site('platform.openai.com', 'OpenAI documentation', 'official', undefined, '/docs')
   ],
-  'General reference': [site('en.wikipedia.org', 'Wikipedia', 'reference', 'CC BY-SA 4.0'), site('plato.stanford.edu', 'Stanford Encyclopedia of Philosophy', 'reference')],
   // The humanities: primary texts first, then scholarly references and university courses. Every
   // address here answered 200 to `curl -sIL -m 15` on 2026-11-11; those that refused are in
   // UNVERIFIED_TRUSTED below
@@ -179,19 +185,127 @@ export const TRUSTED: Record<string, TrustedSite[]> = {
     site('avalon.law.yale.edu', 'The Avalon Project: documents in law, history and diplomacy (Yale Law School)', 'primary'),
     site('sourcebooks.fordham.edu', 'Internet History Sourcebooks Project (Fordham University)', 'primary'),
     site('history.state.gov', 'Office of the Historian, US Department of State', 'primary'),
-    site('nationalarchives.gov.uk', 'The National Archives (UK)', 'primary', undefined, '/education'),
+    // The whole site, not only /education: the records themselves are primary sources too
+    site('nationalarchives.gov.uk', 'The National Archives (UK)', 'primary'),
     site('oyc.yale.edu', 'Open Yale Courses', 'course', 'CC BY-NC-SA 3.0')
   ],
   Literature: [
     site('gutenberg.org', 'Project Gutenberg', 'book', 'Public domain in the USA'),
     site('standardebooks.org', 'Standard Ebooks', 'book', 'Public domain in the USA; CC0 1.0 for the edition')
+  ],
+  // The areas below were added for teaching any subject (src/shared/subjects.ts maps each kind of
+  // subject to its areas). Every host answered `curl -sIL -m 15` with 200 on 11 November 2026, except
+  // m3.material.io, which refuses HEAD (405) and answered a GET with 200. Hosts the network refused
+  // are in UNCHECKED_TRUSTED, apart, until they can be checked.
+  Physics: [
+    site('phys.libretexts.org', 'LibreTexts Physics', 'book'),
+    site('hyperphysics.phy-astr.gsu.edu', 'HyperPhysics (Georgia State University)', 'reference'),
+    site('physics.nist.gov', 'NIST Physical Measurement Laboratory (constants and units)', 'primary'),
+    site('nasa.gov', 'NASA', 'reference')
+  ],
+  Chemistry: [
+    site('chem.libretexts.org', 'LibreTexts Chemistry', 'book'),
+    site('pubchem.ncbi.nlm.nih.gov', 'PubChem (US National Library of Medicine)', 'reference'),
+    site('webbook.nist.gov', 'NIST Chemistry WebBook', 'primary')
+  ],
+  'Biology and medicine': [
+    site('bio.libretexts.org', 'LibreTexts Biology', 'book'),
+    site('ncbi.nlm.nih.gov', 'NCBI Bookshelf (US National Library of Medicine)', 'book', undefined, '/books'),
+    site('pubmed.ncbi.nlm.nih.gov', 'PubMed', 'primary'),
+    site('medlineplus.gov', 'MedlinePlus (US National Library of Medicine)', 'reference'),
+    site('nlm.nih.gov', 'US National Library of Medicine', 'official'),
+    site('genome.gov', 'National Human Genome Research Institute', 'official'),
+    site('ebi.ac.uk', 'EMBL-EBI', 'official'),
+    site('rcsb.org', 'RCSB Protein Data Bank', 'primary'),
+    site('who.int', 'World Health Organization', 'primary'),
+    site('cdc.gov', 'US Centers for Disease Control and Prevention', 'primary')
+  ],
+  Economics: [
+    site('core-econ.org', 'CORE Econ, The Economy', 'book'),
+    site('fred.stlouisfed.org', 'FRED (Federal Reserve Bank of St. Louis)', 'primary'),
+    site('imf.org', 'International Monetary Fund', 'primary'),
+    site('data.worldbank.org', 'World Bank Open Data', 'primary'),
+    site('nber.org', 'National Bureau of Economic Research', 'primary'),
+    site('ourworldindata.org', 'Our World in Data', 'reference', 'CC BY 4.0')
+  ],
+  Accounting: [
+    site('ifrs.org', 'IFRS Foundation (IASB standards)', 'primary'),
+    site('iasplus.com', 'Deloitte IAS Plus', 'reference'),
+    site('frc.org.uk', 'UK Financial Reporting Council', 'primary')
+  ],
+  Law: [
+    site('legislation.gov.uk', 'legislation.gov.uk (The National Archives)', 'primary'),
+    site('law.cornell.edu', 'Legal Information Institute, Cornell Law School', 'reference'),
+    site('supremecourt.gov', 'Supreme Court of the United States', 'primary'),
+    site('supremecourt.uk', 'The Supreme Court of the United Kingdom', 'primary'),
+    site('bailii.org', 'BAILII (British and Irish Legal Information Institute)', 'primary'),
+    site('ecfr.gov', 'Electronic Code of Federal Regulations', 'primary')
+  ],
+  'Game development and graphics': [
+    site('docs.godotengine.org', 'Godot Engine documentation', 'official'),
+    site('learnopengl.com', 'Joey de Vries, LearnOpenGL', 'book'),
+    site('gameprogrammingpatterns.com', 'Robert Nystrom, Game Programming Patterns', 'book'),
+    site('docs.unity3d.com', 'Unity documentation', 'official'),
+    site('dev.epicgames.com', 'Unreal Engine documentation', 'official', undefined, '/documentation'),
+    site('khronos.org', 'Khronos Group (OpenGL, Vulkan, WebGL)', 'primary'),
+    site('gafferongames.com', 'Glenn Fiedler, Gaffer On Games', 'reference'),
+    site('redblobgames.com', 'Amit Patel, Red Blob Games', 'reference')
+  ],
+  'Music and design': [
+    site('musictheory.pugetsound.edu', 'Robert Hutchinson, Music Theory for the 21st-Century Classroom', 'book'),
+    site('musictheory.net', 'musictheory.net', 'reference'),
+    site('developer.apple.com', 'Apple Human Interface Guidelines', 'official', undefined, '/design'),
+    site('developer.android.com', 'Android design guidance', 'official', undefined, '/design'),
+    site('m3.material.io', 'Material Design 3', 'official'),
+    site('designsystem.digital.gov', 'US Web Design System', 'official'),
+    site('nngroup.com', 'Nielsen Norman Group', 'reference', undefined, '/articles'),
+    site('lawsofux.com', 'Jon Yablonski, Laws of UX', 'reference'),
+    site('practicaltypography.com', 'Matthew Butterick, Practical Typography', 'book')
+  ],
+  // Gutenberg, Avalon, Fordham, Perseus and the UK National Archives are in the humanities areas
+  // above (Literature, History, Philosophy), which the interpret and narrative kinds also read from
+  'History, texts and languages': [
+    site('archives.gov', 'US National Archives', 'primary'),
+    site('loc.gov', 'Library of Congress', 'primary'),
+    site('wals.info', 'World Atlas of Language Structures', 'reference', 'CC BY 4.0')
+  ],
+  'General reference': [
+    site('en.wikipedia.org', 'Wikipedia', 'reference', 'CC BY-SA 4.0'),
+    site('plato.stanford.edu', 'Stanford Encyclopedia of Philosophy', 'reference')
   ]
+}
+
+/**
+ * Good sources for the new areas that could not be checked when they were added (11 November 2026):
+ * each refused `curl -sIL -m 15` from the Mac it was checked on (403, a bot challenge, or no
+ * connection). They are not trusted in ranking until checked again; move one into TRUSTED once
+ * `curl -sIL -m 15 https://<host>/` answers 200 from the learner's network.
+ */
+export const UNCHECKED_TRUSTED: Record<string, TrustedSite[]> = {
+  Physics: [site('feynmanlectures.caltech.edu', 'The Feynman Lectures on Physics (Caltech)', 'book')],
+  Chemistry: [site('goldbook.iupac.org', 'IUPAC Gold Book', 'primary')],
+  Economics: [site('oecd.org', 'OECD', 'primary')],
+  'Finance, payments and blockchains': [
+    site('swift.com', 'SWIFT standards (public pages)', 'primary', undefined, '/standards'),
+    site('europeanpaymentscouncil.eu', 'European Payments Council (SEPA rulebooks)', 'primary'),
+    site('fatf-gafi.org', 'Financial Action Task Force', 'primary'),
+    site('sec.gov', 'US Securities and Exchange Commission', 'primary')
+  ],
+  Accounting: [site('fasb.org', 'Financial Accounting Standards Board', 'primary')],
+  Law: [site('eur-lex.europa.eu', 'EUR-Lex (EU law)', 'primary'), site('congress.gov', 'Congress.gov', 'primary'), site('courtlistener.com', 'CourtListener (Free Law Project)', 'primary')],
+  'Game development and graphics': [
+    site('raytracing.github.io', 'Peter Shirley, Ray Tracing in One Weekend', 'book'),
+    site('gpuweb.github.io', 'W3C WebGPU specification', 'primary'),
+    site('realtimerendering.com', 'Real-Time Rendering resources', 'reference')
+  ],
+  'Music and design': [site('viva.pressbooks.pub', 'Open Music Theory', 'book', undefined, '/openmusictheory'), site('openmusictheory.github.io', 'Open Music Theory (first edition)', 'book')]
 }
 
 /**
  * Sites that belong in the list but could not be checked when it was made: each refused the plain
  * request (`curl -sIL -m 15`) from the owner's network. They are offered as trusted all the same;
- * check them again before relying on them, and move each up into TRUSTED once it answers.
+ * check them again before relying on them, and move each up into TRUSTED once it answers. (Unlike
+ * UNCHECKED_TRUSTED above, which waits to be checked before it counts, these two count now.)
  *   philpapers.org: 403. Only its openly readable entries would count (PhilArchive's free papers).
  *   earlychristianwritings.com: 406 to a plain request (it answers a browser). A useful index of
  *     early Christian texts in translation, run by one person: a finding aid, not a scholarly edition.

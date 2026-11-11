@@ -67,6 +67,7 @@ export const HUMANITIES: Scenario[] = [
     subject: 'philosophy',
     situation: 'appraise-reading',
     setup: { mode: 'teach', topic: "Hume's problem of induction" },
+    kinds: ['interpret'],
     history: [
       {
         tutor: `Hume asks what grounds our expectation that the future will resemble the past.
@@ -102,6 +103,7 @@ Your strongest step is the circle. The weakest is the last move.
     subject: 'philosophy',
     situation: 'contested',
     setup: { mode: 'teach', topic: 'Free will and determinism' },
+    kinds: ['interpret'],
     history: [
       {
         tutor: `Compatibilists hold that an act is free when it flows from your own desires and reasoning, without coercion, even if those were themselves caused.
@@ -135,6 +137,7 @@ The strongest objection to compatibilism is the consequence argument: if the pas
     subject: 'philosophy',
     situation: 'fact-date',
     setup: { mode: 'teach', topic: 'Marcus Aurelius and Stoicism' },
+    kinds: ['interpret'],
     history: [
       {
         tutor: `Marcus wrote the Meditations as emperor, often on campaign.
@@ -168,6 +171,7 @@ That joint rule matters for the book: much of what he wrote was written at war o
     subject: 'philosophy',
     situation: 'open',
     setup: { mode: 'teach', topic: 'Stoic ethics: what is in our power' },
+    kinds: ['interpret'],
     history: [],
     expect: { ends: 'ask', heading: 'Why this matters', forbid: ['grade', 'appraise', 'summary'] },
     good: `**Why this matters**
@@ -191,6 +195,7 @@ The Stoic division between what is up to us and what is not is the hinge of Epic
     subject: 'theology',
     situation: 'describe-tradition',
     setup: { mode: 'teach', topic: 'The Eucharist in Catholic and Lutheran theology' },
+    kinds: ['interpret', 'narrative'],
     history: [
       {
         tutor: `Both traditions read the words of institution, "This is my body" (Matthew 26:26), as meaning what they say, but explain it differently.
@@ -223,6 +228,7 @@ Which is true is a question of faith on which I give no view of my own; the two 
     subject: 'theology',
     situation: 'contested',
     setup: { mode: 'teach', topic: 'The problem of evil in Christian theology' },
+    kinds: ['interpret', 'narrative'],
     history: [
       {
         tutor: `The logical problem of evil says a good, all-powerful God and evil cannot both exist.
@@ -254,6 +260,7 @@ Which is true is a question of faith on which I give no view of my own; the two 
     subject: 'theology',
     situation: 'fact-date',
     setup: { mode: 'teach', topic: 'The Council of Nicaea and the Nicene Creed in theology' },
+    kinds: ['interpret', 'narrative'],
     history: [
       {
         tutor: `The first ecumenical council met to settle the dispute over Arius' teaching about the Son.
@@ -306,6 +313,7 @@ The two are easy to confuse because the creed said in churches today is the one 
     subject: 'theology',
     situation: 'describe-tradition',
     setup: { mode: 'teach', topic: 'The resurrection of Jesus in Christian theology and history' },
+    kinds: ['interpret', 'narrative'],
     history: [
       {
         tutor: `Paul's list of witnesses in 1 Corinthians 15:3–8 is the earliest written account.
@@ -339,6 +347,7 @@ What can be described:
     subject: 'history',
     situation: 'fact-date',
     setup: { mode: 'teach', topic: 'The history of the Reformation' },
+    kinds: ['narrative'],
     history: [
       {
         tutor: `The usual starting date of the Reformation is an academic challenge in Wittenberg.
@@ -366,6 +375,7 @@ What can be described:
     subject: 'history',
     situation: 'fact-date',
     setup: { mode: 'teach', topic: "The history of the Thirty Years' War" },
+    kinds: ['narrative'],
     history: [
       {
         tutor: `The war ended with a pair of treaties signed in Münster and Osnabrück.
@@ -395,6 +405,7 @@ What can be described:
     subject: 'history',
     situation: 'appraise-reading',
     setup: { mode: 'teach', topic: 'The causes of the First World War' },
+    kinds: ['narrative'],
     history: [
       {
         tutor: `Historians have weighed the alliances, militarism, imperial rivalry, nationalism and the July Crisis itself.
@@ -430,6 +441,7 @@ Your strongest point is the escalation. The weakest is "had to".
     subject: 'history',
     situation: 'contested',
     setup: { mode: 'teach', topic: 'The history of the Reformation' },
+    kinds: ['narrative'],
     history: [
       {
         tutor: `In 1521 Luther refused to recant at the Diet of Worms.
@@ -461,6 +473,7 @@ Your strongest point is the escalation. The weakest is "had to".
     subject: 'history',
     situation: 'cited-reply',
     setup: { mode: 'teach', topic: 'The history of Magna Carta' },
+    kinds: ['narrative'],
     history: [
       {
         tutor: `Here is clause 39 in translation, from the Avalon Project's text (¶39): "No free man shall be seized or imprisoned, or stripped of his rights or possessions, or outlawed or exiled, or deprived of his standing in any other way, nor will we proceed with force against him, or send others to do so, except by the lawful judgement of his equals or by the law of the land."
@@ -560,6 +573,7 @@ Look at its first words: "No free man shall be seized or imprisoned" (¶39). In 
     subject: 'literature',
     situation: 'appraise-reading',
     setup: { mode: 'teach', topic: "Ivan's rebellion in Dostoevsky's The Brothers Karamazov" },
+    kinds: ['interpret'],
     history: [
       {
         tutor: `Ivan tells Alyosha: "It's not God that I don't accept, Alyosha, only I most respectfully return Him the ticket" (ch. 35 ¶41).
@@ -595,6 +609,7 @@ Read the first half again: "It's not God that I don't accept" (ch. 35 ¶41). Man
     subject: 'literature',
     situation: 'cited-reply',
     setup: { mode: 'teach', topic: "Narration in Dostoevsky's The Brothers Karamazov" },
+    kinds: ['interpret'],
     history: [
       {
         tutor: `From your EPUB, the novel's first sentence (ch. 1 ¶1): "${KARAMAZOV_1}"
@@ -630,6 +645,7 @@ Notice "well known in our district" and "still remembered among us" (ch. 1 ¶1):
     subject: 'literature',
     situation: 'fact-date',
     setup: { mode: 'teach', topic: "Dostoevsky's The Brothers Karamazov" },
+    kinds: ['interpret'],
     history: [
       {
         tutor: `The novel is told by a voice that comments on events as it goes.

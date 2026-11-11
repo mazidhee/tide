@@ -6,16 +6,26 @@
  */
 import { buildMessages } from './request'
 import { scoreReply } from './score'
-import { ALL_SITUATIONS, ALL_SUBJECTS, HUMANITIES_SITUATIONS, HUMANITIES_SUBJECTS, SITUATIONS, SUBJECTS, type Scenario } from './types'
+import { profileSubject } from '../../../src/shared/subjects'
+import { ALL_SITUATIONS, ALL_SUBJECTS, BREADTH_SUBJECTS, HUMANITIES_SITUATIONS, HUMANITIES_SUBJECTS, SITUATIONS, SUBJECTS, type Scenario } from './types'
 
 export const MIN_SCENARIOS = 60
+/** Breadth: at least this many scenarios across at least this many subjects outside the core */
+export const MIN_BREADTH = { scenarios: 40, subjects: 20 }
 const STRATEGIES = [undefined, 'problems', 'dialogue', 'maths', 'code']
 
 export function validateScenario(s: Scenario): string[] {
   const problems: string[] = []
   const say = (m: string) => problems.push(`${s.id}: ${m}`)
   if (!/^[a-z0-9]+(-[a-z0-9]+)+$/.test(s.id)) say('id must be lower-case words joined by hyphens')
-  if (!ALL_SUBJECTS.includes(s.subject)) say(`unknown subject ${s.subject}`)
+  if (!(ALL_SUBJECTS as readonly string[]).includes(s.subject)) say(`unknown subject ${s.subject}`)
+  const breadth = (BREADTH_SUBJECTS as readonly string[]).includes(s.subject)
+  // A Discuss this turn is about a passage, not a lesson's topic, so it has no profile to prove
+  if (breadth && !s.discuss && !s.kinds?.length) say('a breadth scenario names the kinds its topic is profiled as')
+  if (s.kinds?.length) {
+    const got = profileSubject(s.setup.topic).kinds
+    if (got.join('+') !== s.kinds.join('+')) say(`its topic is profiled as ${got.join('+') || 'unclear'}, not ${s.kinds.join('+')}`)
+  }
   if (!ALL_SITUATIONS.includes(s.situation)) say(`unknown situation ${s.situation}`)
   // The humanities are measured in their own situations, and those are theirs alone
   const human = (HUMANITIES_SUBJECTS as readonly string[]).includes(s.subject)
@@ -106,7 +116,12 @@ export function validateSet(all: Scenario[]): { problems: string[]; grid: Record
     ids.add(s.id)
   }
   if (all.length < MIN_SCENARIOS) problems.push(`only ${all.length} scenarios; at least ${MIN_SCENARIOS} wanted`)
-  const grid = Object.fromEntries(SUBJECTS.map((sub) => [sub, Object.fromEntries(SITUATIONS.map((sit) => [sit, all.filter((s) => s.subject === sub && s.situation === sit).length]))]))
+  const grid = Object.fromEntries(ALL_SUBJECTS.map((sub) => [sub, Object.fromEntries(ALL_SITUATIONS.map((sit) => [sit, all.filter((s) => s.subject === sub && s.situation === sit).length]))]))
   for (const sub of SUBJECTS) for (const sit of SITUATIONS) if (!grid[sub][sit]) problems.push(`no ${sit} scenario for ${sub}`)
+  const wide = all.filter((s) => (BREADTH_SUBJECTS as readonly string[]).includes(s.subject))
+  const wideSubjects = new Set(wide.map((s) => s.subject))
+  if (wide.length && wide.length < MIN_BREADTH.scenarios) problems.push(`only ${wide.length} breadth scenarios; at least ${MIN_BREADTH.scenarios} wanted`)
+  if (wide.length && wideSubjects.size < MIN_BREADTH.subjects) problems.push(`breadth covers ${wideSubjects.size} subjects; at least ${MIN_BREADTH.subjects} wanted`)
+  for (const sub of BREADTH_SUBJECTS) if (wide.length && (grid[sub] ? Object.values(grid[sub]).reduce((a, b) => a + b, 0) : 0) < 2) problems.push(`breadth subject ${sub} has fewer than 2 scenarios`)
   return { problems, grid }
 }

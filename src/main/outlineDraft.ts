@@ -5,6 +5,7 @@ import { getSettings } from './settings'
 import { directionLine } from './coach'
 import { bookOutline, readIntent, readingOutlineRules } from '@shared/readingPlan'
 import { ownedBook } from './reading'
+import { phaseWorkLine, projectKind, roadmapGuidance, profileSubject, type SubjectProfile } from '@shared/subjects'
 
 /**
  * Drafts a study outline for a new topic. Research happens first and in code, not by the model:
@@ -92,6 +93,10 @@ export async function draftOutline(req: OutlineDraftRequest, emit: (e: ChatEvent
     }
     const plan = req.plan
     const heading = await directionLine().catch(() => '')
+    // Subject hook (any-subject, src/shared/subjects.ts): the plan's kinds when it was sized, else read off the topic
+    const subject: SubjectProfile = plan?.subject?.length ? { kinds: plan.subject, subjects: [], from: 'model' } : profileSubject(req.topic)
+    const work = phaseWorkLine(subject)
+    const guidance = roadmapGuidance(subject)
     const user = [
       `Topic: ${req.topic}`,
       req.goal?.trim() ? `What the learner wants from it, and what they already know: ${req.goal.trim()}` : '',
@@ -99,10 +104,11 @@ export async function draftOutline(req: OutlineDraftRequest, emit: (e: ChatEvent
       plan
         ? `This is a ${plan.weeks}-week plan at ${plan.hoursPerWeek} hours a week (${Math.round(plan.weeks * plan.hoursPerWeek)} study hours in all). Write exactly these phases as the ## parts, in this order, titled "Phase N: name", with NO MORE topics than the number given (one topic is about 2 to 3 hours of study, so a short plan must stay short):
 ${plan.phases.map((p, i) => `${i + 1}. ${p.title}: ${p.weeks} weeks, at most ${topicBudget(p.weeks, plan.hoursPerWeek)} topics. By the end they can ${p.outcome}${p.project ? `. Project: ${p.project}` : ''}`).join('\n')}
-Inside each phase use ### chapters of 2 to 6 topics. After each chapter's topics, add ONE indented resource line with the best real book, course or official docs for it. End every phase with these two lines, in this order:
-- [ ] Project: the phase's project, specific to the learner's goal
+Inside each phase use ### chapters of 2 to 6 topics. After each chapter's topics, add ONE indented resource line with the best real book, course or official docs for it. End every phase with these ${work ? 'three' : 'two'} lines, in this order:
+${work ? `${work}\n` : ''}- [ ] Project: the phase's project, specific to the learner's goal${projectKind(subject) ? ` (${projectKind(subject)})` : ''}
 - [ ] Exam: the phase name`
         : `Size: ${SIZE[req.size]}.`,
+      guidance,
       readingOutlineRules(req.topic, reading),
       `Today is ${new Date().toISOString().slice(0, 10)}.`,
       research ? `Use this research to decide what belongs in the outline (don't copy its wording, and leave out anything off-topic):\n\n${research}` : ''

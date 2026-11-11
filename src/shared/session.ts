@@ -5,8 +5,8 @@ import { GROUNDED } from './sources'
 import type { ChatScope, SessionMode, Verdict } from './types'
 import { chooseStrategy, STRATEGY_RULES, type Strategy, type StrategyChoice } from './strategy'
 import type { FlowStep, ProjectKind } from './project'
-import { simLesson } from './sims'
 import { humanitiesRules, parseAppraise, type AppraiseRow } from './humanities'
+import { lessonKit, type SubjectProfile } from './subjects'
 
 /**
  * Learning sessions are a conversation where the tutor writes Markdown plus a few tags the UI
@@ -233,6 +233,8 @@ export interface SessionSetup {
     refresh?: boolean
     /** Why mode: Socratic, from first principles, the reasons behind each rule (Settings › Your tutor) */
     why?: boolean
+    /** The subject's profile when already decided (a roadmap's, or the model's); else read off the topic (src/shared/subjects.ts) */
+    subject?: SubjectProfile
   }
 }
 
@@ -327,8 +329,10 @@ export function sessionInstructions(setup: SessionSetup): string {
   if (setup.mode !== 'teach') return base
   // A refresher or a project lesson already has its reason; a placement check isn't a lesson
   // How to write a simulation rides here, for the kinds this topic can use, not in the system prompt of every lesson
+  // Subject hook (any-subject, src/shared/subjects.ts): the subject's own toolkit, and the hands-on and simulation rules only where they apply.
   // humanities: marking by the kind of question (appraise readings, grade facts), and theology's rules
-  const extra = [!setup.options?.refresh && !setup.options?.project ? BIG_PICTURE : '', GROUNDED, HANDS_ON, simLesson(setup.topic), setup.options?.why ? WHY_RULES : '', humanitiesRules(setup.topic)].filter(Boolean)
+  const kit = lessonKit(setup.topic, setup.options?.subject)
+  const extra = [!setup.options?.refresh && !setup.options?.project ? BIG_PICTURE : '', GROUNDED, kit.handsOn ? HANDS_ON : '', kit.sims, kit.toolkit, setup.options?.why ? WHY_RULES : '', humanitiesRules(setup.topic)].filter(Boolean)
   return extra.length ? `${base.trimEnd()}\n\n${extra.join('\n\n')}\n` : base
 }
 

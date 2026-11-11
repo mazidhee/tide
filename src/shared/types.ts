@@ -831,6 +831,27 @@ export interface TideApi {
     /** Loads a .csv or .tsv file from the notes folder (a path relative to it) into that lab as a table named after the file */
     load(id: string, path: string): Promise<import('./lab').LabLoaded>
   }
+  /** Guided projects (shared/workshop.ts): built in stages, reviewed against tests */
+  workshop: {
+    list(): Promise<import('./workshop').WorkshopCard[]>
+    /** Starts a project, or returns it as it stands when already started */
+    start(id: string, from?: { notebook?: string; topic?: string }): Promise<import('./workshop').WorkshopState>
+    state(id: string): Promise<import('./workshop').WorkshopState | null>
+    /** Runs the current stage's tests (and every earlier stage's) in the sandbox */
+    run(id: string): Promise<import('./workshop').WorkshopState>
+    hint(id: string): Promise<import('./workshop').WorkshopState>
+    /** The tutor's review of the latest run */
+    review(id: string): Promise<import('./workshop').WorkshopState>
+    ask(id: string, question: string): Promise<{ answer: string; by: 'cloud' | 'local' | 'none' }>
+    /** The project already written for a roadmap's "Project:" item, if any */
+    forTopic(topic: string): Promise<import('./workshop').WorkshopCard | null>
+    /** Has the stronger model design a project for a roadmap item; kept only if Tide can prove it */
+    propose(o: { topic: string; notebook?: string; section?: string }): Promise<{ card: import('./workshop').WorkshopCard | null; tries: number; problems: string[] }>
+  }
+  difficulty: {
+    /** What the knowledge map has on a lesson's topic and what it builds on (shared/difficulty.ts) */
+    known(topic: string, path?: string): Promise<import('./difficulty').Known>
+  }
   runner: {
     /** `tests`: a code question's hidden tests (Python); `labId`: the data lab that SQL is run in */
     run(language: string, code: string, stdin?: string, opts?: { tests?: string; labId?: string }): Promise<RunResult>

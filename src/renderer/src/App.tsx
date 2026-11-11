@@ -45,6 +45,7 @@ import { measureRendering } from './lib/renderMeter'
 const PdfView = lazy(() => import('./components/PdfView').then((m) => ({ default: m.PdfView })))
 const EpubView = lazy(() => import('./components/EpubView').then((m) => ({ default: m.EpubView })))
 const LabView = lazy(() => import('./components/LabView').then((m) => ({ default: m.LabView })))
+const WorkshopView = lazy(() => import('./components/WorkshopView').then((m) => ({ default: m.WorkshopView })))
 const CodeView = lazy(() => import('./components/CodeView').then((m) => ({ default: m.CodeView })))
 const CanvasView = lazy(() => import('./components/CanvasView').then((m) => ({ default: m.CanvasView })))
 const GraphView = lazy(() => import('./components/GraphView').then((m) => ({ default: m.GraphView })))
@@ -396,6 +397,8 @@ export default function App() {
   else if (view.kind === 'session') main = <SessionView key={`${view.mode}:${view.topic}:${view.nonce ?? ''}`} mode={view.mode} scope={view.scope} topic={view.topic} options={view.options} initialTurns={view.turns} view={view} />
   else if (view.kind === 'learn') main = <LearnView />
   else if (view.kind === 'practice') main = <PracticeView />
+  // Guided projects: a small hook (components/WorkshopView.tsx)
+  else if (view.kind === 'workshop') main = <WorkshopView key={`${view.id ?? ''}:${view.from?.topic ?? ''}:${view.nonce ?? ''}`} id={view.id} from={view.from} />
   else if (view.kind === 'new-topic') main = <NewTopicView key={view.nonce ?? 'new'} initial={view.topic} initialGoal={view.goal} auto={view.auto} />
   else if (view.kind === 'chat') main = <ChatPage id={view.id} />
   else if (view.kind === 'lab') main = <LabView key={`${view.terminal}:${view.topic ?? ''}:${view.nonce ?? ''}`} kind={view.terminal} topic={view.topic} />
