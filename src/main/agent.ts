@@ -1391,11 +1391,15 @@ export function toolHint(question: string, web: boolean): string {
  * right after a closing tag like </say> or </grade>), what it wrote so far is kept and it's asked to
  * carry on from there. The conversation so far is a cached prefix, so each pick-up is quick.
  */
+/** After a pick-up that only repeated itself: past what's written, to the rest of the reply */
+const CARRY_ON_PAST = '(Everything above is already written and shown. Do not write any of it again, not even the grade. Write only what comes after it: the next step of the lesson, ending with one question in an <ask> tag.)'
+
 async function streamTurnContinuing(messages: ApiMessage[], tools: unknown[], signal: AbortSignal, onText: (t: string) => void, choice?: ToolChoice) {
   let written = ''
+  let repeated = false
   for (let i = 0; i < 4; i++) {
     const turn: ApiMessage[] = written
-      ? [...messages, { role: 'assistant', content: written }, { role: 'user', content: CARRY_ON }]
+      ? [...messages, { role: 'assistant', content: written }, { role: 'user', content: repeated ? CARRY_ON_PAST : CARRY_ON }]
       : messages
     try {
       const out = await streamTurnOnce(turn, tools, signal, onText, i ? 0.15 : 0, undefined, 'tutor', written ? undefined : choice)
@@ -1407,6 +1411,15 @@ async function streamTurnContinuing(messages: ApiMessage[], tools: unknown[], si
       }
       const more = e.partial.trim()
       if (!more && i >= 2) return { text: written, calls: [] }
+      // Picked up only to write the same again (seen live after a tool call: one grade four times):
+      // what it repeated is taken off the screen, and it's told plainly to go past it
+      const flat = (t: string) => t.replace(/\s+/g, ' ').trim()
+      if (written && more && flat(written).includes(flat(more))) {
+        repeated = true
+        onText(RESET)
+        onText(written)
+        continue
+      }
       written = written ? `${written}\n\n${more}` : more
       onText('\n\n')
     }
