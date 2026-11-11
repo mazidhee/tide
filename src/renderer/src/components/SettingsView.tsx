@@ -7,6 +7,7 @@ import { Professor } from './Professor'
 import { PillSegment } from './PromptBox'
 import type { AISettings, Settings, ThemeId } from '@shared/types'
 import { useApp } from '../state'
+import { DESIGNS, readingFace, resolveDesign, type DesignId } from '@shared/design'
 import { Icon, type IconName } from './Icon'
 import { SpeedView } from './SpeedView'
 import { ConnectionsView } from './ConnectionsView'
@@ -19,6 +20,17 @@ const THEMES: { id: ThemeId; name: string; bg: string; side: string; ink: string
   { id: 'dark', name: 'Slate', bg: '#1e2023', side: '#191b1e', ink: '#e6e7e9', accent: '#5cc2ae' },
   { id: 'midnight', name: 'Midnight', bg: '#000000', side: '#070707', ink: '#ededed', accent: '#a99bff' },
   { id: 'ember', name: 'Ember', bg: '#1d1916', side: '#181512', ink: '#eee4d8', accent: '#e8a44a' }
+]
+
+/** The same themes as the new design draws them (styles/tide/tokens.css) */
+const TIDE_THEMES: typeof THEMES = [
+  { id: 'system', name: 'Match system', bg: 'linear-gradient(90deg, #ffffff 50%, #1a1b1e 50%)', side: 'rgba(120, 130, 150, 0.16)', ink: '#8d919a', accent: '#4a86d6' },
+  { id: 'light', name: 'Light', bg: '#ffffff', side: '#eff3f8', ink: '#121a26', accent: '#1257b8' },
+  { id: 'sepia', name: 'Sepia', bg: '#f6efe2', side: '#ede4d3', ink: '#33291d', accent: '#1d4f9c' },
+  { id: 'dark', name: 'Dark', bg: '#141a23', side: '#0f141c', ink: '#e7eaf0', accent: '#7db5f5' },
+  { id: 'graphite', name: 'Graphite', bg: '#1a1b1e', side: '#141517', ink: '#e6e7ea', accent: '#7db5f5' },
+  { id: 'midnight', name: 'Midnight', bg: '#000000', side: '#050608', ink: '#ededf0', accent: '#8cbcf7' },
+  { id: 'ember', name: 'Ember', bg: '#1d1916', side: '#171310', ink: '#eee4d8', accent: '#8fbdf2' }
 ]
 
 const PRESETS: { name: string; baseUrl: string; hint: string }[] = [
@@ -347,12 +359,19 @@ function AppearanceSection() {
   const app = useApp()
   const { settings } = app
   const hidden = settings.sidebarHidden ?? []
+  const design = resolveDesign(settings.design)
+  const tide = design === 'tide'
   return (
     <>
+      <Group title="Design" note="The earlier design is kept in full; you can switch back to it here at any time, and your theme, accent colour and text size carry over.">
+        <Row label="Design" hint={DESIGNS.find((d) => d.id === design)?.about}>
+          <PillSegment label="Design" value={design} onChange={(v) => app.updateSettings({ design: v as DesignId })} options={DESIGNS.map((d) => ({ value: d.id, label: d.name }))} />
+        </Row>
+      </Group>
       <Group title="Theme">
         <div className="set-pad">
           <div className="theme-grid">
-            {THEMES.map((t) => (
+            {(tide ? TIDE_THEMES : THEMES).map((t) => (
               <button key={t.id} className={`theme-swatch${settings.theme === t.id ? ' on' : ''}`} onClick={() => app.updateSettings({ theme: t.id })} aria-pressed={settings.theme === t.id}>
                 <span className="swatch-preview" style={{ background: t.bg }}>
                   <span className="swatch-side" style={{ background: t.side }} />
@@ -396,12 +415,19 @@ function AppearanceSection() {
         <Row label="Reading font">
           <PillSegment
             label="Reading font"
-            value={settings.readingFont ?? 'sans'}
-            onChange={(v) => app.updateSettings({ readingFont: v as 'sans' | 'serif' })}
-            options={[
-              { value: 'sans', label: 'Sans' },
-              { value: 'serif', label: 'Serif' }
-            ]}
+            value={readingFace(settings)}
+            onChange={(v) => app.updateSettings(tide ? { tideReadingFont: v as 'sans' | 'serif' } : { readingFont: v as 'sans' | 'serif' })}
+            options={
+              tide
+                ? [
+                    { value: 'serif', label: 'Serif' },
+                    { value: 'sans', label: 'Sans' }
+                  ]
+                : [
+                    { value: 'sans', label: 'Sans' },
+                    { value: 'serif', label: 'Serif' }
+                  ]
+            }
           />
         </Row>
         <Row label="Text size" hint={`${settings.fontSize}px`}>

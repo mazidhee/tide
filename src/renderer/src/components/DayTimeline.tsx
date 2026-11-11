@@ -12,7 +12,7 @@ import { Icon } from './Icon'
  * day and the evening. It reads Things 4's Today (whatever you or the tutor put there) and the
  * coach's plan, and keeps up as they change: tick things off here or in Things.
  */
-export function DayTimeline({ now }: { now: ReactNode }) {
+export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design draws the day as ruled rows, without the 'now' card (Home shows that above) */ tide?: boolean }) {
   const app = useApp()
   const date = localDate()
   const [tasks, setTasks] = useState<DayTask[] | null>(null)
@@ -90,6 +90,76 @@ export function DayTimeline({ now }: { now: ReactNode }) {
       </button>
     </li>
   )
+
+  if (tide) {
+    const KIND_ICON = { learn: 'tutor', practice: 'terminal', quiz: 'quiz', review: 'cards', 'take-home': 'note', test: 'timer', check: 'quiz' } as const
+    const line = (s: DaySlot) => {
+      const canOpen = !!s.plan || !!s.task?.link || !!s.task?.url
+      const minutes = s.plan?.item.minutes
+      return (
+        <li key={s.key} className={`td-row${s.done ? ' done' : ''}`}>
+          <span className="td-row-when">{s.task?.at ?? ''}</span>
+          <button className="td-row-tick" role="checkbox" aria-checked={s.done} aria-label={s.done ? `Mark “${s.title}” not done` : `Mark “${s.title}” done`} title={s.done ? 'Done. Click to undo' : 'Mark as done'} onClick={() => toggle(s)}>
+            <Icon name={s.done ? 'check' : s.plan ? KIND_ICON[s.plan.item.kind] : 'list'} size={15} />
+          </button>
+          <button className="td-row-what" onClick={() => open(s)} disabled={!canOpen} title={s.task && !s.plan && !s.task.link ? 'Open in Things' : undefined}>
+            <b>{s.title}</b>
+            <span>{s.plan?.item.why ?? s.task?.where ?? s.meta.replace(/ · /g, ', ')}</span>
+          </button>
+          {canOpen && !s.done ? (
+            <button className="btn small td-row-go" onClick={() => open(s)}>
+              {s.plan ? 'Start' : 'Open'}
+            </button>
+          ) : (
+            <span />
+          )}
+          <span className="td-row-dur">{minutes ? (minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${String(minutes % 60).padStart(2, '0')}` : ''}`) : ''}</span>
+        </li>
+      )
+    }
+    return (
+      <ol className={`td-today${loaded ? '' : ' is-loading'}${slots.some((s) => s.task?.at) ? '' : ' no-times'}`} aria-label="The rest of today">
+        {due.length > 0 && (
+          <li className="td-row">
+            <span className="td-row-when" />
+            <span className="td-row-tick still" aria-hidden="true">
+              <Icon name="refresh" size={15} />
+            </span>
+            <button className="td-row-what" onClick={() => startRetest(app, due)}>
+              <b>
+                Retest {due.length} mistake{due.length === 1 ? '' : 's'} from before
+              </b>
+              <span>Each comes back until you get it right</span>
+            </button>
+            <button className="btn small td-row-go" onClick={() => startRetest(app, due)}>
+              Start
+            </button>
+            <span className="td-row-dur">{Math.max(5, due.length * 3)} min</span>
+          </li>
+        )}
+        {upcoming.map(line)}
+        {evening.map(line)}
+        {(evening.length > 0 || hour >= 16) && (
+          <li className="td-row">
+            <span className="td-row-when" />
+            <span className="td-row-tick still" aria-hidden="true">
+              <Icon name="note" size={15} />
+            </span>
+            <button className="td-row-what" onClick={() => app.setView({ kind: 'wrapup' })}>
+              <b>Wrap up the day</b>
+              <span>What you did, what stuck, and tomorrow</span>
+            </button>
+            <span />
+            <span className="td-row-dur" />
+          </li>
+        )}
+        {done.map(line)}
+        {loaded && !slots.length && !due.length && hour < 16 && (
+          <li className="td-row-empty">{tasks === null ? 'Connect Things 4 in Settings, or ask the tutor to plan your day, and it shows here.' : 'Nothing else is on today. Ask the tutor to plan the rest of your day.'}</li>
+        )}
+      </ol>
+    )
+  }
 
   return (
     <ol className={`tl${loaded ? '' : ' is-loading'}`} aria-label="Your day">

@@ -1,0 +1,20 @@
+/*
+  The interface grotesque of the new design: Hanken Grotesk (SIL Open Font License 1.1, see
+  assets/fonts/hanken-grotesk/OFL.txt), bundled as the two variable files from the Google Fonts
+  repository. Declared for everyone but only fetched when a rule uses it, which only the new
+  design's rules do. The reading serif, Source Serif 4, is already bundled with the app.
+*/
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+  src: url('../../assets/fonts/hanken-grotesk/HankenGrotesk-wght.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: block;
+  src: url('../../assets/fonts/hanken-grotesk/HankenGrotesk-Italic-wght.ttf') format('truetype');
+}

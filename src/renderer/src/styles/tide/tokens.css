@@ -1,0 +1,329 @@
+/*
+  The new design's tokens. Everything here is scoped to data-design='tide' on the root, so the
+  classic design never sees it.
+
+  Each of the app's themes is mapped onto the same roles:
+    surfaces   --paper (content), --rail (sidebar), --sunk (insets, block headers), --raised
+    rules      --line, --line-2 (the stronger one, for controls)
+    ink        --ink, --ink-2 (secondary), --ink-3 (muted; still AA on every surface)
+    action     --accent: one tidal blue, tuned to each theme. A colour picked in Settings is set
+               inline by useAccent() and so replaces it everywhere; the tones made from it below
+               (--accent-soft, --accent-line, --accent-hover, --accent-text) follow whatever it is.
+    areas      --a1 to --a5: the five subject colours, in a fixed order, tuned per theme. They are
+               marks, always beside a label, never the only carrier of meaning.
+    state      --good, --warn, --bad for text; the -mark ones for dots and bars.
+
+  The core roles are plain hex so test/design.test.ts can read them and hold every theme to
+  WCAG AA. The classic names (--bg, --ink-soft, …) are then pointed at these roles, which is how
+  every screen the new design has not rebuilt still takes on its palette, type and radii.
+*/
+
+:root[data-design='tide'],
+:root[data-design='tide'][data-theme='light'] {
+  color-scheme: light;
+  --paper: #ffffff;
+  --rail: #eff3f8;
+  --sunk: #f5f7fa;
+  --raised: #ffffff;
+  --line: #e1e6ed;
+  --line-2: #c9d1dc;
+  --ink: #121a26;
+  --ink-2: #414b5a;
+  --ink-3: #5f6a7b;
+  --accent: #1257b8;
+  --accent-ink: #ffffff;
+  --good: #17703c;
+  --warn: #8a5600;
+  --bad: #b3261e;
+  --a1: #6250d6;
+  --a2: #eb6834;
+  --a3: #1baf7a;
+  --a4: #eda100;
+  --a5: #e87ba4;
+  --hover: rgba(18, 44, 92, 0.055);
+  --active: rgba(18, 44, 92, 0.1);
+  --good-mark: #1f9d55;
+  --warn-mark: #e19a00;
+  --bad-mark: #d03b3b;
+  --mark: #ffe9a8;
+  --grid: #e6eaf0;
+  --shadow-float: 0 1px 2px rgba(16, 28, 48, 0.06), 0 10px 28px -6px rgba(16, 28, 48, 0.16);
+  --shadow-pop: 0 0 0 1px rgba(16, 28, 48, 0.08), 0 2px 6px rgba(16, 28, 48, 0.08), 0 18px 44px -12px rgba(16, 28, 48, 0.28);
+  --soft-mix: 10%;
+  --cell-tint: 15%;
+}
+
+/* Sepia: the warm reading paper, kept as a theme you can choose; the same blue, deepened for it */
+:root[data-design='tide'][data-theme='sepia'] {
+  color-scheme: light;
+  --paper: #f6efe2;
+  --rail: #ede4d3;
+  --sunk: #f0e8d9;
+  --raised: #fbf6ec;
+  --line: #e0d5c1;
+  --line-2: #c9bba3;
+  --ink: #33291d;
+  --ink-2: #574a3a;
+  --ink-3: #6b5d4c;
+  --accent: #1d4f9c;
+  --accent-ink: #ffffff;
+  --good: #1b6638;
+  --warn: #805000;
+  --bad: #a3271c;
+  --a1: #5546c2;
+  --a2: #cf5524;
+  --a3: #14926a;
+  --a4: #c98800;
+  --a5: #cf5f8c;
+  --hover: rgba(70, 50, 25, 0.06);
+  --active: rgba(70, 50, 25, 0.11);
+  --good-mark: #1f9d55;
+  --warn-mark: #d18f00;
+  --bad-mark: #c93a31;
+  --mark: #f6dc92;
+  --grid: #e4dac8;
+  --shadow-float: 0 1px 2px rgba(60, 40, 20, 0.07), 0 10px 28px -6px rgba(60, 40, 20, 0.18);
+  --shadow-pop: 0 0 0 1px rgba(60, 40, 20, 0.1), 0 2px 6px rgba(60, 40, 20, 0.08), 0 18px 44px -12px rgba(60, 40, 20, 0.3);
+  --soft-mix: 11%;
+  --cell-tint: 18%;
+}
+
+/* Dark: a deep ink blue, the colour of the app icon, not black */
+:root[data-design='tide'][data-theme='dark'] {
+  color-scheme: dark;
+  --paper: #141a23;
+  --rail: #0f141c;
+  --sunk: #10151d;
+  --raised: #1a212c;
+  --line: #242c39;
+  --line-2: #364152;
+  --ink: #e7eaf0;
+  --ink-2: #b3bbc9;
+  --ink-3: #8993a5;
+  --accent: #7db5f5;
+  --accent-ink: #08131f;
+  --good: #5fcf8e;
+  --warn: #e8b04a;
+  --bad: #f08a80;
+  --a1: #9085e9;
+  --a2: #d95926;
+  --a3: #199e70;
+  --a4: #c98500;
+  --a5: #d55181;
+  --hover: rgba(160, 196, 255, 0.07);
+  --active: rgba(160, 196, 255, 0.12);
+  --good-mark: #2fae68;
+  --warn-mark: #e19a00;
+  --bad-mark: #e05a52;
+  --mark: rgba(255, 205, 80, 0.24);
+  --grid: #222a36;
+  --shadow-float: 0 0 0 1px rgba(160, 196, 255, 0.07), 0 14px 36px -8px rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 0 0 1px rgba(160, 196, 255, 0.1), 0 2px 6px rgba(0, 0, 0, 0.3), 0 22px 50px -12px rgba(0, 0, 0, 0.7);
+  --soft-mix: 14%;
+  --cell-tint: 17%;
+}
+
+/* Graphite: the neutral dark, for when blue-black is too much colour. What 'system' uses at night */
+:root[data-design='tide'][data-theme='graphite'] {
+  color-scheme: dark;
+  --paper: #1a1b1e;
+  --rail: #141517;
+  --sunk: #151619;
+  --raised: #212327;
+  --line: #2a2c31;
+  --line-2: #3d4047;
+  --ink: #e6e7ea;
+  --ink-2: #b5b8bf;
+  --ink-3: #8d919a;
+  --accent: #7db5f5;
+  --accent-ink: #08131f;
+  --good: #5fcf8e;
+  --warn: #e8b04a;
+  --bad: #f08a80;
+  --a1: #9085e9;
+  --a2: #d95926;
+  --a3: #199e70;
+  --a4: #c98500;
+  --a5: #d55181;
+  --hover: rgba(255, 255, 255, 0.055);
+  --active: rgba(255, 255, 255, 0.1);
+  --good-mark: #2fae68;
+  --warn-mark: #e19a00;
+  --bad-mark: #e05a52;
+  --mark: rgba(255, 205, 80, 0.24);
+  --grid: #26282c;
+  --shadow-float: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 14px 36px -8px rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 0 0 1px rgba(255, 255, 255, 0.09), 0 2px 6px rgba(0, 0, 0, 0.3), 0 22px 50px -12px rgba(0, 0, 0, 0.7);
+  --soft-mix: 14%;
+  --cell-tint: 17%;
+}
+
+/* Midnight: true black for an OLED-dark room. Rules do the work surfaces can't; marks run brighter */
+:root[data-design='tide'][data-theme='midnight'] {
+  color-scheme: dark;
+  --paper: #000000;
+  --rail: #050608;
+  --sunk: #0a0b0e;
+  --raised: #111318;
+  --line: #1d2027;
+  --line-2: #31353e;
+  --ink: #ededf0;
+  --ink-2: #bcbfc7;
+  --ink-3: #8a8e98;
+  --accent: #8cbcf7;
+  --accent-ink: #06101c;
+  --good: #66d695;
+  --warn: #ecb654;
+  --bad: #f59186;
+  --a1: #9a90f0;
+  --a2: #e0652f;
+  --a3: #1fae7c;
+  --a4: #d69200;
+  --a5: #de5f8d;
+  --hover: rgba(200, 220, 255, 0.08);
+  --active: rgba(200, 220, 255, 0.14);
+  --good-mark: #35b871;
+  --warn-mark: #e6a000;
+  --bad-mark: #e8635b;
+  --mark: rgba(255, 205, 80, 0.26);
+  --grid: #191c22;
+  --shadow-float: 0 0 0 1px rgba(200, 220, 255, 0.12), 0 14px 36px -8px rgba(0, 0, 0, 0.9);
+  --shadow-pop: 0 0 0 1px rgba(200, 220, 255, 0.16), 0 22px 50px -12px rgba(0, 0, 0, 0.9);
+  --soft-mix: 16%;
+  --cell-tint: 20%;
+}
+
+/* Ember: the warm dark. Surfaces and ink stay warm; the action colour is the same blue, which a warm ground sets off */
+:root[data-design='tide'][data-theme='ember'] {
+  color-scheme: dark;
+  --paper: #1d1916;
+  --rail: #171310;
+  --sunk: #181411;
+  --raised: #26211c;
+  --line: #2f2923;
+  --line-2: #473d33;
+  --ink: #eee4d8;
+  --ink-2: #c6b8a7;
+  --ink-3: #9d8f81;
+  --accent: #8fbdf2;
+  --accent-ink: #0a1522;
+  --good: #6ccf8f;
+  --warn: #ecb256;
+  --bad: #f2907e;
+  --a1: #a79cf0;
+  --a2: #e2703c;
+  --a3: #2aa67a;
+  --a4: #d99a1a;
+  --a5: #e06a94;
+  --hover: rgba(255, 236, 214, 0.055);
+  --active: rgba(255, 236, 214, 0.1);
+  --good-mark: #35ad6c;
+  --warn-mark: #e19a00;
+  --bad-mark: #e06450;
+  --mark: rgba(255, 196, 80, 0.24);
+  --grid: #2a2520;
+  --shadow-float: 0 0 0 1px rgba(255, 236, 214, 0.07), 0 14px 36px -8px rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 0 0 1px rgba(255, 236, 214, 0.1), 0 2px 6px rgba(0, 0, 0, 0.3), 0 22px 50px -12px rgba(0, 0, 0, 0.7);
+  --soft-mix: 14%;
+  --cell-tint: 17%;
+}
+
+:root[data-design='tide'] {
+  /* Made from the action colour, so they follow a colour picked in Settings */
+  --accent-soft: color-mix(in srgb, var(--accent) var(--soft-mix), var(--paper));
+  --accent-line: color-mix(in srgb, var(--accent) 36%, var(--paper));
+  --accent-hover: color-mix(in srgb, var(--accent) 86%, var(--ink));
+  /* The action colour as text: pulled a little towards the ink, so a pale pick still reads */
+  --accent-text: color-mix(in srgb, var(--accent) 88%, var(--ink));
+  --warn-soft: color-mix(in srgb, var(--warn-mark) 14%, var(--paper));
+  --bad-soft: color-mix(in srgb, var(--bad-mark) 12%, var(--paper));
+  --good-soft: color-mix(in srgb, var(--good-mark) 12%, var(--paper));
+  --neg: var(--a2);
+  --brand: #12305c;
+
+  /* Type: a grotesque for the tool, a book face for long reading, the system mono for code */
+  --ui: 'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  --serif: 'Source Serif 4 Variable', 'Iowan Old Style', Charter, Georgia, serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, 'JetBrains Mono Variable', monospace;
+  --read: var(--serif);
+  /* Fixed sizes, no fluid type */
+  --t-axis: 11.5px;
+  --t-meta: 12.5px;
+  --t-base: 13.5px;
+  --t-lede: 15px;
+  --t-next: 19px;
+  --t-page: 24px;
+  --t-title: 28px;
+
+  /* Space on a 4px base */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 40px;
+  --s-8: 48px;
+
+  /* Radius says what a thing is */
+  --r-mark: 3px; /* tags, map cells, bars */
+  --r-ctl: 6px; /* buttons, inputs, rows */
+  --r-box: 10px; /* blocks and panels */
+  --r-float: 14px; /* popovers, the composer */
+
+  --rail-w: 244px;
+  --bar-h: 44px;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* ---- The classic names, pointed at the roles above ---- */
+  --bg: var(--paper);
+  --bg-sidebar: var(--rail);
+  --bg-raised: var(--raised);
+  --bg-hover: var(--hover);
+  --bg-active: var(--active);
+  --bg-inset: var(--sunk);
+  --ink-soft: var(--ink-2);
+  --ink-muted: var(--ink-3);
+  --line-strong: var(--line-2);
+  --danger: var(--bad);
+  --info: var(--accent-text);
+  --code-bg: var(--sunk);
+  --shadow: var(--shadow-float);
+  --pop-shadow: var(--shadow-pop);
+  --lift: none;
+  --field: var(--raised);
+  --field-hover: var(--raised);
+  --field-edge: var(--accent);
+  --focus-ring: 0 0 0 3px var(--accent-soft);
+  --btn: var(--raised);
+  --btn-hover: var(--sunk);
+  --series-1: var(--accent);
+  --series-2: var(--a2);
+  --series-3: var(--a3);
+  --series-4: var(--a4);
+  --series-5: var(--a5);
+  --series-6: var(--a1);
+  --font-sans: var(--ui);
+  --font-serif: var(--serif);
+  --font-ui: var(--ui);
+  --font-code: var(--mono);
+  /* Titles, ledes and one-line labels are the tool's voice; the book face is kept for long
+     reading, where styles/tide/lesson.css puts it (.prose, the editor) */
+  --font-read: var(--ui);
+  --font-read-serif: var(--ui);
+  --sidebar-w: var(--rail-w);
+  --titlebar-h: var(--bar-h);
+  --radius-s: var(--r-ctl);
+  --radius-m: var(--r-box);
+  --radius-l: var(--r-float);
+  --text-2xs: 11.5px;
+  --text-xs: 12px;
+  --text-sm: 12.5px;
+  --text-md: 13.5px;
+  --text-lg: 15px;
+  --ease: var(--ease-out);
+}
+
+:root[data-design='tide'][data-reading='sans'] {
+  --read: var(--ui);
+}

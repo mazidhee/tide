@@ -10,6 +10,9 @@ import { coverColor } from './NotebookCover'
 import { ReadingFinder } from './ReadingFinder'
 import { SaveLinkForm } from './SaveLink'
 import { PixelScene } from './PixelScene'
+import { useTideDesign } from '../lib/design'
+import { AreaMark } from './tide/AreaMark'
+import { TopBarActions } from './tide/TopBar'
 import { Bookcase } from './Bookcase'
 
 type Filter = 'all' | 'article' | 'youtube' | 'pdf' | 'doc' | 'link'
@@ -247,6 +250,7 @@ export function Library() {
   const app = useApp()
   const { items, subjects, setTopics, setStatus } = useLibrary()
   const [filter, setFilter] = useState<Filter>('all')
+  const tide = useTideDesign()
   const [subject, setSubject] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [picker, setPicker] = useState<{ path: string; at: { x: number; y: number } } | null>(null)
@@ -294,12 +298,68 @@ export function Library() {
   const pickerItem = picker ? items.find((i) => i.path === picker.path) : undefined
   const openPicker = (i: Item, at: { x: number; y: number }) => setPicker({ path: i.path, at })
 
+  // The new design's shelves take the whole window: the page's own header folds into the top bar,
+  // and the tutor panel steps aside until you leave the shelves
+  const immersive = tide && layout === 'shelf' && items.length > 0
+  useEffect(() => {
+    if (!immersive) return
+    document.documentElement.dataset.tdImmersive = '1'
+    return () => {
+      delete document.documentElement.dataset.tdImmersive
+    }
+  }, [immersive])
+  const addFiles = async () => {
+    const res = await window.tide.library.importFiles()
+    if (res.length) {
+      await app.refreshTree()
+      app.toast(`Added ${res.length} file${res.length === 1 ? '' : 's'}`)
+    }
+  }
+
   return (
-    <div className={`page library-page${layout === 'shelf' && items.length ? ' bc-on' : ''}`}>
+    <div className={`page library-page${layout === 'shelf' && items.length ? ' bc-on' : ''}${immersive ? ' td-immersive' : ''}`}>
+      {immersive && (
+        <TopBarActions>
+          <div className="segmented text" role="tablist" aria-label="Kind">
+            {FILTERS.filter((f) => f.id === 'all' || counts[f.id] || filter === f.id).map((f) => (
+              <button key={f.id} role="tab" aria-selected={filter === f.id} className={filter === f.id ? 'on' : ''} onClick={() => setFilter(f.id)}>
+                {f.label}
+                <span className="chip-count">{counts[f.id] ?? 0}</span>
+              </button>
+            ))}
+          </div>
+          <div className="layout-toggle" role="radiogroup" aria-label="Layout">
+            <button role="radio" aria-checked={false} title="Covers" onClick={() => pickLayout('grid')}>
+              <Icon name="grid" size={15} />
+            </button>
+            <button role="radio" aria-checked={false} title="List" onClick={() => pickLayout('list')}>
+              <Icon name="list" size={15} />
+            </button>
+            <button role="radio" aria-checked className="on" title="Shelves">
+              <Icon name="library" size={15} />
+            </button>
+          </div>
+          <button className="btn" onClick={() => app.setDialog('save-link')}>
+            <Icon name="link" size={14} />
+            Save a link
+          </button>
+          <button className="btn" onClick={addFiles}>
+            <Icon name="upload" size={14} />
+            Add files
+          </button>
+        </TopBarActions>
+      )}
       <PixelScene place="library" rows={40} scale={3} className="page-scene" />
       <div className="page-inner">
         <header className="page-head">
-          <h1 className="page-title">Library</h1>
+          <div>
+            <h1 className="page-title">Library</h1>
+            {tide && items.length > 0 && (
+              <p className="td-lede">
+                {items.length} {items.length === 1 ? 'item' : 'items'}, kept as files in the “{app.settings.libraryFolder}” folder of your notes. The tutor cites from all of them.
+              </p>
+            )}
+          </div>
           <div className="row-gap">
           <button className={`btn${finding ? ' on' : ''}`} onClick={() => setFinding((f) => !f)} title="Ask the tutor to find good reading on the web">
             <Icon name="book" size={15} />
@@ -355,6 +415,7 @@ export function Library() {
               </button>
               {usedSubjects.map((t) => (
                 <button key={t} role="tab" aria-selected={subject === t} className={`subject${subject === t ? ' on' : ''}`} onClick={() => setSubject(subject === t ? null : t)}>
+                  {tide && <AreaMark area={t} size={14} />}
                   {t}
                   <span className="chip-count">{subjectCounts.of(t)}</span>
                 </button>
@@ -379,7 +440,7 @@ export function Library() {
             </p>
           </div>
         ) : layout === 'shelf' ? (
-          <Bookcase items={shelfItems} subjects={subjects} setStatus={setStatus} />
+          <Bookcase items={shelfItems} subjects={subjects} setStatus={setStatus} tide={tide} />
         ) : layout === 'grid' ? (
           visible.length ? <Masonry items={visible} onOpen={(i) => app.openPath(i.path)} onTopics={openPicker} /> : <p className="muted">Nothing matches that filter.</p>
         ) : (

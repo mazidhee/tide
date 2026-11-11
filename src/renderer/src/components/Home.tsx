@@ -19,6 +19,8 @@ import { startProject } from '../lib/projects'
 import { listTopics, type StudyDay } from '@shared/brief'
 import { fileTitle, useApp } from '../state'
 import { Icon, type IconName } from './Icon'
+import { useTideDesign } from '../lib/design'
+import { HomeTide } from './tide/HomeTide'
 
 /** The professor's afternoon, as the day goes: tea, the chalkboard, chess, then the late fishing */
 function timeOfDayScene(): ProfessorScene {
@@ -66,6 +68,8 @@ export function Home(_: { dueCount: number; cardCount: number }) {
   const [forecasts, setForecasts] = useState<Record<string, Forecast>>({})
   const [goalMenu, setGoalMenu] = useState<MenuState | null>(null)
   const [week, setWeek] = useState<{ days: { label: string; minutes: number; today: boolean }[]; streak: number } | null>(null)
+  const tide = useTideDesign()
+  const [log, setLog] = useState<{ start: number; minutes: number }[]>([])
   const [last, setLast] = useState<StudyDay | null>(null)
   const [problems, setProblems] = useState(0)
   const [ask, setAsk] = useState('')
@@ -92,6 +96,7 @@ export function Home(_: { dueCount: number; cardCount: number }) {
       const now = Date.now()
       const log = await window.tide.learn.focusLog(now - 60 * DAY).catch(() => [])
       setWeek(weekOf(log, now))
+      setLog(log)
       for (const g of goals as Goal[]) {
         const outline = nbs.find((n) => n.path === g.notebook)?.outline
         if (!outline) continue
@@ -190,6 +195,58 @@ export function Home(_: { dueCount: number; cardCount: number }) {
     setAsk('')
   }
 
+  const setGoal = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    const withOutline = notebooks.filter((n) => n.outline)
+    setGoalMenu({
+      x: r.left,
+      y: r.bottom + 4,
+      items: withOutline.length
+        ? withOutline.map((n) => ({
+            label: n.name,
+            run: () => {
+              try {
+                localStorage.setItem('tide.goal.open', n.path)
+              } catch {
+                // The form just won't open by itself
+              }
+              app.setView({ kind: 'notebook', path: n.path })
+            }
+          }))
+        : [{ label: 'Start a topic with a roadmap first', run: () => app.setView({ kind: 'new-topic' }) }]
+    })
+  }
+
+  if (tide)
+    return (
+      <HomeTide
+        upNext={upNext}
+        why={!hasDaily && planned ? planned.item.why : undefined}
+        plans={plans}
+        forecasts={forecasts}
+        log={log}
+        last={last}
+        lastLine={last && last.topics.length > 0 ? `${last.when[0].toUpperCase() + last.when.slice(1)} you worked on ${listTopics(last.topics, 2)}.` : ''}
+        quiz={quiz}
+        problems={problems}
+        mastery={mastery}
+        byPath={byPath}
+        dueToday={hasDaily ? { items: daily!.items, minutes: daily!.minutes } : null}
+        ask={ask}
+        setAsk={setAsk}
+        submitAsk={submitAsk}
+        setAim={setGoal}
+        aimMenu={<ContextMenu menu={goalMenu} onClose={() => setGoalMenu(null)} />}
+        makeFit={(plan, f) => {
+          const needed = f.neededWeeklyHours !== null && Number.isFinite(f.neededWeeklyHours) ? `${Math.round(f.neededWeeklyHours * 10) / 10} h a week` : null
+          app.ask(
+            `Help me make my plan for "${plan.goal.name}" fit. I have ${plan.total - plan.done} topics left (about ${Math.round(f.hoursLeft)} hours of study), the deadline is ${plan.goal.deadline}, and lately I've managed ${f.weeklyHours} hours a week${needed ? `; I'd need about ${needed}` : ''}. Suggest a realistic choice: more hours, a later deadline, or which topics to cut or skim, and tell me what you'd do.`,
+            { scope: { kind: 'folder', path: plan.goal.notebook } }
+          )
+        }}
+      />
+    )
+
   return (
     <div className="page">
       {banner && <HomeBanner />}
@@ -287,27 +344,7 @@ export function Home(_: { dueCount: number; cardCount: number }) {
                 <h2>Goals</h2>
                 <button
                   className="home-link"
-                  onClick={(e) => {
-                    const r = e.currentTarget.getBoundingClientRect()
-                    const withOutline = notebooks.filter((n) => n.outline)
-                    setGoalMenu({
-                      x: r.left,
-                      y: r.bottom + 4,
-                      items: withOutline.length
-                        ? withOutline.map((n) => ({
-                            label: n.name,
-                            run: () => {
-                              try {
-                                localStorage.setItem('tide.goal.open', n.path)
-                              } catch {
-                                // The form just won't open by itself
-                              }
-                              app.setView({ kind: 'notebook', path: n.path })
-                            }
-                          }))
-                        : [{ label: 'Start a topic with a roadmap first', run: () => app.setView({ kind: 'new-topic' }) }]
-                    })
-                  }}
+                  onClick={setGoal}
                 >
                   Set a goal
                 </button>

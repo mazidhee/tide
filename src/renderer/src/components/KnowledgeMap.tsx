@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { readyAcross, revisitList, shareRight, since, standing, STATUS_LABEL, tickedOnly, type ConceptState, type ConceptStatus, type KnowledgeView, type WeekPoint } from '@shared/knowledge'
 import { Icon } from './Icon'
+import { Level } from './tide/Level'
+import { AreaMark } from './tide/AreaMark'
 
 /**
  * What you know, as one page: how much is solid today, what to go back to, what is ready to learn
@@ -13,6 +15,10 @@ export interface KnowledgeMapProps {
   onLesson(c: ConceptState): void
   onCheck(c: ConceptState): void
   onNewTopic?(): void
+  /** The new design: areas as bands of cells, each cell a concept with its level */
+  tide?: boolean
+  /** The class carrying an area's colour, for its levels */
+  areaClass?(area: string): string
 }
 
 const NO_AREA = 'Outside your roadmaps'
@@ -35,7 +41,7 @@ interface Area {
   private: boolean
 }
 
-export function KnowledgeMap({ data, onLesson, onCheck, onNewTopic }: KnowledgeMapProps) {
+export function KnowledgeMap({ data, onLesson, onCheck, onNewTopic, tide, areaClass = () => '' }: KnowledgeMapProps) {
   const now = data.at
   const byId = useMemo(() => new Map(data.concepts.map((c) => [c.id, c])), [data])
   const parts = useMemo(() => {
@@ -74,6 +80,8 @@ export function KnowledgeMap({ data, onLesson, onCheck, onNewTopic }: KnowledgeM
   const [shut, setShut] = useState<Set<string>>(() => new Set())
   const [picked, setPicked] = useState<string | null>(null)
   const [more, setMore] = useState<{ revisit: boolean; ready: boolean }>({ revisit: false, ready: false })
+  // In the new design an area shows what you have begun and what is ready; the rest opens when asked
+  const [whole, setWhole] = useState<Set<string>>(() => new Set())
   const rootRef = useRef<HTMLDivElement>(null)
 
   const q = query.trim().toLowerCase()
@@ -131,6 +139,234 @@ export function KnowledgeMap({ data, onLesson, onCheck, onNewTopic }: KnowledgeM
   const begun = total - counts.new
   const shownRevisit = more.revisit ? revisit : revisit.slice(0, SHORT_LIST)
   const readyTop = more.ready ? readyAll.slice(0, 40) : readyAcross(readyAll, SHORT_LIST)
+
+  if (tide) {
+    const pickedConcept = picked ? byId.get(picked) : undefined
+    const filterBar = (
+      <div className="know-filters">
+        <div className="segmented text know-status" role="group" aria-label="Show">
+          <button className={filter === 'all' ? 'on' : ''} onClick={() => setFilter('all')} aria-pressed={filter === 'all'}>
+            All
+          </button>
+          {(['solid', 'fading', 'learning', 'new'] as ConceptStatus[]).map((st) => (
+            <button key={st} className={filter === st ? 'on' : ''} onClick={() => setFilter(filter === st ? 'all' : st)} aria-pressed={filter === st} disabled={!counts[st]}>
+              {STATUS_LABEL[st]}
+              <span className="know-count">{counts[st].toLocaleString('en-GB')}</span>
+            </button>
+          ))}
+        </div>
+        {total > 12 && <input className="filter-input small" type="search" placeholder="Find a topic" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Find a topic" />}
+      </div>
+    )
+    return (
+      <div className="know td-know" ref={rootRef}>
+        <header className="td-know-head">
+          <h1 className="page-title">What you know</h1>
+          <p className="td-know-say">
+            {begun === 0 ? (
+              <>
+                {plural(total, 'topic')} on your roadmaps, none studied here yet. This fills in as you take lessons and answer questions.
+              </>
+            ) : (
+              <>
+                <b>{total.toLocaleString('en-GB')}</b> topics across {plural(areas.length, 'area')}. You hold <b>{counts.solid}</b> of them well, <b>{counts.fading}</b> {counts.fading === 1 ? 'is' : 'are'} fading and due for recall, <b>{counts.learning}</b> {counts.learning === 1 ? 'is' : 'are'} in progress, and <b>{readyAll.length}</b> {readyAll.length === 1 ? 'is' : 'are'} ready to start.
+              </>
+            )}
+          </p>
+        </header>
+
+        <div className="td-know-grid">
+          <div className="td-know-main">
+            <div className="td-know-bar">
+              <p className="td-know-key" aria-hidden="true">
+                <span>
+                  <i className="td-cell-key held" />
+                  How well you hold it now
+                </span>
+                <span>
+                  <i className="td-cell-key high" />
+                  Dashed line: the highest it has stood
+                </span>
+                <span>
+                  <i className="td-cell-key ready" />
+                  Ready next
+                </span>
+              </p>
+              {filterBar}
+            </div>
+
+            {areas.map((a) => {
+              const shownAll = narrowed || whole.has(a.name) || a.topics.length <= 18
+              const first = narrowed ? a.topics.filter(matches) : shownAll ? a.topics : a.topics.filter((c) => c.status !== 'new' || readyIds.has(c.id) || c.id === picked)
+              if (narrowed && !first.length) return null
+              const rest = a.topics.length - first.length
+              const learnt = a.topics.filter((c) => c.status !== 'new')
+              const held = learnt.length ? learnt.reduce((n, c) => n + c.estimate, 0) / learnt.length : 0
+              const ready = a.topics.filter((c) => readyIds.has(c.id)).length
+              const inArea = pickedConcept && pickedConcept.area === a.name ? pickedConcept : undefined
+              return (
+                <section key={a.name} className={`td-band ${areaClass(a.name)}`} aria-label={a.label}>
+                  <div className="td-band-head">
+                    <h2>
+                      <AreaMark area={a.name} />
+                      <span>{a.label}</span>
+                    </h2>
+                    <p>
+                      {learnt.length ? `${learnt.length} learnt, held at ${pct(held)}` : `${a.topics.length} topics, none begun`}
+                      <br />
+                      {[a.counts.fading ? `${a.counts.fading} fading` : '', ready ? `${ready} ready` : '', a.private ? 'private, stays on this Mac' : ''].filter(Boolean).join(', ')}
+                    </p>
+                  </div>
+                  <div className="td-band-body">
+                    <div className="td-cells">
+                      {first.map((c) => {
+                        const isReady = readyIds.has(c.id) && c.status === 'new'
+                        const drop = c.status === 'fading' ? Math.round((c.level - c.estimate) * 100) : 0
+                        const s = standing(c, now)
+                        return (
+                          <button
+                            key={c.id}
+                            data-concept={c.id}
+                            className={`td-cell${isReady ? ' ready' : c.status === 'new' ? ' later' : ''}${picked === c.id ? ' picked' : ''}`}
+                            style={c.status === 'new' ? undefined : { ['--v' as string]: Math.max(6, Math.round(c.estimate * 100)), ...(drop >= 3 ? { ['--hw' as string]: Math.round(c.level * 100) } : {}) }}
+                            onClick={() => setPicked(picked === c.id ? null : c.id)}
+                            aria-expanded={picked === c.id}
+                            title={`${c.name}: ${isReady ? 'ready to start' : `${s.label.toLowerCase()}${c.status !== 'new' ? `, ${pct(c.estimate)}` : c.done ? ' (ticked)' : ''}${drop >= 3 ? `, down from ${pct(c.level)}` : ''}`}`}
+                          >
+                            {drop >= 3 && <i className="td-cell-high" aria-hidden="true" />}
+                            {(drop >= 3 || isReady) && (
+                              <span className="td-cell-tag">
+                                {isReady ? (
+                                  'Ready'
+                                ) : (
+                                  <>
+                                    <Icon name="arrowDown" size={10} />
+                                    {drop}
+                                  </>
+                                )}
+                              </span>
+                            )}
+                            <span className="td-cell-name">{c.name}</span>
+                          </button>
+                        )
+                      })}
+                      {rest > 0 && (
+                        <button className="td-cell more" onClick={() => setWhole((w) => new Set(w).add(a.name))}>
+                          <span className="td-cell-name">
+                            {rest.toLocaleString('en-GB')} not started
+                            <small>Show them</small>
+                          </span>
+                        </button>
+                      )}
+                      {!narrowed && whole.has(a.name) && a.topics.length > 18 && (
+                        <button
+                          className="td-cell more"
+                          onClick={() =>
+                            setWhole((w) => {
+                              const next = new Set(w)
+                              next.delete(a.name)
+                              return next
+                            })
+                          }
+                        >
+                          <span className="td-cell-name">
+                            Show fewer
+                            <small>Only what you have begun</small>
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                    {inArea && (
+                      <div className="td-cell-detail">
+                        <h3>
+                          <Level now={inArea.estimate} high={inArea.level} area={areaClass(inArea.area)} />
+                          {inArea.name}
+                          <span className="td-meta">{[inArea.section, standing(inArea, now).label].filter(Boolean).join(', ')}</span>
+                        </h3>
+                        <Detail c={inArea} now={now} byId={byId} parts={parts} goTo={goTo} onLesson={onLesson} onCheck={onCheck} />
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )
+            })}
+            {narrowed && !areas.some((a) => a.topics.some(matches)) && <p className="know-none">No topic matches{q ? ` “${query.trim()}”` : ''}.</p>}
+            <p className="know-foot">An estimate, not a mark. Each right answer raises a topic and makes it last longer; a wrong one, or one you couldn’t answer, lowers it; and it fades with the time since you last got it right, more slowly the more often that has happened.</p>
+          </div>
+
+          <aside className="td-know-side" aria-label="Retention, fading and ready next">
+            <section aria-labelledby="know-retention">
+              <h2 id="know-retention" className="td-sec">
+                Retention by week
+              </h2>
+              <Retention weeks={data.weeks} />
+            </section>
+            <section aria-labelledby="know-revisit">
+              <div className="td-side-head">
+                <h2 id="know-revisit" className="td-sec">
+                  Fading most
+                </h2>
+                {revisit.length > SHORT_LIST && (
+                  <button className="td-more" onClick={() => setMore((m) => ({ ...m, revisit: !m.revisit }))}>
+                    {more.revisit ? 'Fewer' : `All ${revisit.length}`}
+                  </button>
+                )}
+              </div>
+              {revisit.length ? (
+                <ul className="td-mini">
+                  {shownRevisit.map((c) => (
+                    <li key={c.id}>
+                      <Level now={c.estimate} high={c.level} area={areaClass(c.area)} />
+                      <button className="td-mini-main" onClick={() => goTo(c)} title="Show it in its area">
+                        <b>{c.name}</b>
+                        <span>{why(c, now)}</span>
+                      </button>
+                      <button className="btn small" onClick={() => onCheck(c)}>
+                        Recall
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="know-none">{begun ? 'Nothing is slipping. What you have learnt is holding.' : 'What starts to fade, or was answered wrong, is listed here.'}</p>
+              )}
+            </section>
+            <section aria-labelledby="know-ready">
+              <div className="td-side-head">
+                <h2 id="know-ready" className="td-sec">
+                  Ready next
+                </h2>
+                {readyAll.length > SHORT_LIST && (
+                  <button className="td-more" onClick={() => setMore((m) => ({ ...m, ready: !m.ready }))}>
+                    {more.ready ? 'Fewer' : `All ${Math.min(40, readyAll.length)}`}
+                  </button>
+                )}
+              </div>
+              {readyAll.length ? (
+                <ul className="td-mini next">
+                  {readyTop.map((c) => (
+                    <li key={c.id}>
+                      <button className="td-mini-main" onClick={() => goTo(c)} title="Show it in its area">
+                        <b>{c.name}</b>
+                        <span>
+                          {c.area || NO_AREA}, {after(c, byId)}
+                        </span>
+                      </button>
+                      <button className="btn small" onClick={() => onLesson(c)}>
+                        {c.seen ? 'Continue' : 'Start'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="know-none">Nothing is ready yet: what the next topics build on needs another look first.</p>
+              )}
+            </section>
+          </aside>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="know" ref={rootRef}>

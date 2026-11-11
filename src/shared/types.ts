@@ -32,6 +32,8 @@ export interface Settings {
   /** Folder inside the vault where saved links, PDFs, videos and docs go */
   libraryFolder: string
   theme: ThemeId
+  /** Which of Tide's two designs to draw (shared/design.ts): 'tide', the default, or the earlier 'classic' */
+  design?: import('./design').DesignId
   /** Overrides the theme's accent colour, e.g. '#4f7cff'; null keeps the theme's own */
   accent?: string | null
   sidebarCollapsed: boolean
@@ -39,6 +41,8 @@ export interface Settings {
   readingWidth: 'narrow' | 'normal' | 'wide'
   /** Font for notes, answers and titles; the interface always uses Inter */
   readingFont?: 'sans' | 'serif'
+  /** The reading face in the new design, where the serif is the default; the Aa button switches it */
+  tideReadingFont?: 'serif' | 'sans'
   /** The writing coach in the note editor: probes, corrects and suggests rewrites as you write */
   writingCoach?: boolean
   /** Study timers: the sidebar's Focus timer and the timer buttons on notes, books and practice */

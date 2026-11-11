@@ -1,0 +1,15 @@
+/* The new design: rest. Scoped to data-design='tide'. */
+
+:root[data-design='tide'] {
+  /* The pixel scenes across the top of a page belong to the classic design; here the professor
+     appears only where the tutor speaks (Home's next step, a lesson, the tutor's messages) */
+  .page-scene {
+    display: none;
+  }
+
+  /* The box where you tell Tide something: the tool's voice, not the reading face */
+  .prompt-box textarea,
+  .prompt-box textarea::placeholder {
+    font-family: var(--ui);
+  }
+}

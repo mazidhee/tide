@@ -28,6 +28,13 @@ import { useStudying } from '../lib/studying'
 import { endOngoing, followInBackground, getOngoing, keepLesson, keepLive, saveOngoing, sessionKey, stopFollowing } from '../lib/sessions'
 import type { View } from '../state'
 import { Professor, type ProfessorPose } from './Professor'
+import { useTideDesign } from '../lib/design'
+import { characterById } from '@shared/characters'
+import { conceptFor, useKnowledge } from '../lib/knowledge'
+import { useAreaClass } from '../lib/areas'
+import { since } from '@shared/knowledge'
+import { Level } from './tide/Level'
+import { AreaMark } from './tide/AreaMark'
 
 // Loaded when a lesson needs them: the code editor (Monaco) and the walkthrough canvas
 const answered = (said: string) => !said.startsWith(GO_ON) && !said.startsWith(ASKED)
@@ -51,6 +58,14 @@ const CONFIDENCE = [
 const HINT_LEVELS = ['Nudge', 'Hint', 'Show a step', 'Show the answer']
 
 const uid = () => Math.random().toString(36).slice(2, 10)
+/** "arxiv.org" from a link, or the link itself when it isn't one */
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url
+  }
+}
 const inFocusWindow = /[#&]focus=/.test(window.location.hash)
 
 export function SessionView({ mode, scope, topic, options, initialTurns, view }: { mode: SessionMode; scope: ChatScope; topic: string; options?: SessionSetup['options']; initialTurns?: { role: 'user' | 'assistant'; content: string }[]; view?: View }) {
@@ -380,6 +395,13 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   )
   const [notesOpen, setNotesOpen] = useState(() => localStorage.getItem('tide.lesson.notes') !== 'closed')
   const withNotes = mode === 'teach' && notesOpen
+  // The new design: the plan and what the lesson is checked against sit in a rail on the right
+  // (when your notes are not open there), and a question shows how well you hold what it asks about
+  const tide = useTideDesign()
+  const areaOf = useAreaClass()
+  const known = useKnowledge(tide)
+  const concept = useMemo(() => (tide ? conceptFor(known, topic, 'path' in scope ? scope.path : undefined) : null), [tide, known, topic, JSON.stringify(scope)])
+  const [railOpen, setRailOpen] = useState(() => localStorage.getItem('tide.lesson.rail') !== 'closed')
   // Where this is covered in books you own, to read alongside the lesson
   const [toRead, setToRead] = useState<ReadingSuggestion[]>([])
   // Free readings found for the topic (papers, specs, docs), saved PDFs open in Tide
@@ -678,6 +700,25 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       case 'text':
         return <div key={key} className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(b.text, env) }} />
       case 'ask':
+        // The new design: a question about something you already hold shows its level beside it
+        if (tide && concept && concept.seen > 0)
+          return (
+            <div key={key} className="s-ask td-recall">
+              <Level now={concept.estimate} high={concept.level} area={areaOf(concept.area)} large />
+              <div>
+                <p className={`td-recall-lab${concept.status === 'fading' ? ' fading' : ''}`}>
+                  {options?.retest?.length
+                    ? 'You missed this before'
+                    : concept.status === 'fading'
+                      ? `Fading: last right ${since(concept.lastRight ?? concept.lastSeen, Date.now())}`
+                      : concept.status === 'solid'
+                        ? `Holding: last right ${since(concept.lastRight ?? concept.lastSeen, Date.now())}`
+                        : `In progress: ${concept.right} of ${concept.right + concept.partly + concept.wrong} right so far`}
+                </p>
+                <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(b.prompt, env) }} />
+              </div>
+            </div>
+          )
         return (
           <div key={key} className="s-ask">
             <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(b.prompt, env) }} />
@@ -780,6 +821,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
 
   const scopeLabel = scope.kind === 'note' ? fileTitle(scope.path) : scope.kind === 'pages' ? pagesLabel(scope) : scope.kind === 'folder' ? scope.path.split('/').pop() : null
 
+  // The rail of the new design: only when there is something to put in it
+  const checks = Object.values(challenged)
+  const hasSources = toRead.length > 0 || found.length > 0 || !!pack?.sources.length || checks.length > 0
+  const rail = tide && !withNotes && railOpen && (!!plan || hasSources)
+  const moreFound = found.filter((r) => !pack?.sources.some((x) => x.url === r.url)).slice(0, 4)
+
   return (
     <div className="doc-view session">
       <header className="doc-toolbar drag session-toolbar">
@@ -790,7 +837,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           <span className="crumb">{MODE_LABEL[mode]}</span>
           <Icon name="chevron" size={11} />
           <span className="crumb current">{topic}</span>
-          {scopeLabel && scopeLabel !== topic && <span className="muted page-count">from {scopeLabel}</span>}
+          {scopeLabel && scopeLabel !== topic && (
+            <span className="muted page-count">
+              {tide && 'path' in scope && <AreaMark area={scope.path} size={14} />}
+              from {scopeLabel}
+            </span>
+          )}
         </div>
         <div className="toolbar-actions no-drag">
           {timed && <InterviewClock remaining={clock.remaining} total={timed} />}
@@ -879,6 +931,33 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               </select>
             </label>
           )}
+          {tide && (
+            <button
+              className="icon-btn td-aa"
+              aria-pressed={app.settings.tideReadingFont === 'sans'}
+              onClick={() => app.updateSettings({ tideReadingFont: app.settings.tideReadingFont === 'sans' ? 'serif' : 'sans' })}
+              title={app.settings.tideReadingFont === 'sans' ? 'Reading in the sans. Click for the serif.' : 'Reading in the serif. Click for the sans.'}
+              aria-label="Switch the reading face"
+            >
+              Aa
+            </button>
+          )}
+          {tide && !withNotes && (
+            <button
+              className="icon-btn"
+              aria-pressed={railOpen}
+              onClick={() =>
+                setRailOpen((o) => {
+                  localStorage.setItem('tide.lesson.rail', o ? 'closed' : 'open')
+                  return !o
+                })
+              }
+              title={railOpen ? 'Hide the plan and sources' : 'Show the plan and what this is checked against'}
+              aria-label="The plan and sources"
+            >
+              <Icon name="panel" />
+            </button>
+          )}
           <button className="tool-btn keep-label" onClick={() => app.back()} title="End this session">
             <Icon name="x" />
             <span>End</span>
@@ -886,10 +965,30 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         </div>
       </header>
 
-      <div className={withNotes ? 'session-split' : 'session-solo'}>
+      <div className={`${withNotes ? 'session-split' : 'session-solo'}${rail ? ' td-with-rail' : ''}`}>
       <div className="doc-scroll session-scroll">
         <div className="session-column" data-lab={labId.current}>
-          {(toRead.length > 0 || found.length > 0 || !!pack?.sources.length) && (
+          {tide && (
+            <header className="td-lesson-head">
+              <h1>{topic}</h1>
+              <p>
+                <span>{MODE_LABEL[mode]}</span>
+                {scopeLabel && scopeLabel !== topic && (
+                  <span className="td-area">
+                    {'path' in scope && <AreaMark area={scope.path} size={14} />}
+                    From {scopeLabel}
+                  </span>
+                )}
+                {concept && concept.seen > 0 && (
+                  <span className="td-lesson-held">
+                    <Level now={concept.estimate} high={concept.level} area={areaOf(concept.area)} />
+                    {concept.status === 'fading' ? `Fading: ${Math.round(concept.estimate * 100)}% now, it stood at ${Math.round(concept.level * 100)}%` : `You hold this at ${Math.round(concept.estimate * 100)}%`}
+                  </span>
+                )}
+              </p>
+            </header>
+          )}
+          {!rail && (toRead.length > 0 || found.length > 0 || !!pack?.sources.length) && (
             <div className="s-read" aria-label="Read alongside">
               <Icon name="book" size={13} />
               <span className="muted">Read</span>
@@ -912,7 +1011,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               ))}
             </div>
           )}
-          {plan && (
+          {plan && !rail && (
             <ol className="s-plan" aria-label="Lesson plan">
               {plan.steps.map((s, i) => (
                 <li key={i} className={i < planDone ? 'done' : i === planDone ? 'current' : ''}>
@@ -947,6 +1046,13 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             const live = busy && i === turns.length - 1
             return (
               <div key={i} className="s-tutor">
+                {tide && (
+                  <div className="td-who">
+                    <Professor state={live ? 'writing' : 'idle'} size={24} />
+                    <b>{characterById(app.settings.character ?? 'professor').name}</b>
+                    {plan && i === turns.length - 1 && planDone < plan.steps.length && <span className="td-meta">Step {planDone + 1}: {plan.steps[planDone].replace(/[.:]$/, '')}</span>}
+                  </div>
+                )}
                 {!live && t.content && (
                   <div className="s-tutor-tools">
                     <SpeakButton text={blocks.filter((b) => b.kind === 'text' || b.kind === 'ask' || b.kind === 'grade').map((b) => ('text' in b ? b.text : 'prompt' in b ? b.prompt : '')).join('. ')} />
@@ -1164,6 +1270,80 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           <div ref={bottomRef} />
         </div>
       </div>
+      {rail && (
+        <aside className="td-lesson-rail" aria-label="The plan and sources">
+          {plan && (
+            <section>
+              <h2 className="td-rail-h">
+                Plan
+                <span className="td-meta">
+                  {Math.min(planDone + 1, plan.steps.length)} of {plan.steps.length}
+                </span>
+              </h2>
+              <ol className="td-plan">
+                {plan.steps.map((st, i) => (
+                  <li key={i} className={i < planDone ? 'done' : i === planDone ? 'current' : ''} aria-current={i === planDone ? 'step' : undefined}>
+                    <span className="td-plan-n">{i < planDone ? <Icon name="check" size={11} /> : i + 1}</span>
+                    <span>{st}</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+          {hasSources && (
+            <section>
+              <h2 className="td-rail-h">Checked against</h2>
+              {pack?.sources.map((src) => (
+                <button key={`s${src.n}`} className="td-src" onClick={() => (src.path ? app.openPath(src.path) : src.url && window.tide.app.openExternal(src.url))} title={`What this lesson is taught from: ${src.title}`}>
+                  <span className="td-src-k">{src.n}</span>
+                  <span>
+                    <b>{src.title}</b>
+                    <span>{src.path ? 'In your library' : src.url ? hostOf(src.url) : 'A source for this lesson'}</span>
+                  </span>
+                </button>
+              ))}
+              {toRead.map((r) => (
+                <button key={`${r.path}:${r.from}`} className="td-src" onClick={() => app.openPath(r.path, `page=${r.from}`)} title={r.about ?? readingLabel(r)}>
+                  <span className="td-src-k">
+                    <Icon name="book" size={12} />
+                  </span>
+                  <span>
+                    <b>{readingLabel(r)}</b>
+                    <span>In your library, to read alongside</span>
+                  </span>
+                </button>
+              ))}
+              {moreFound.map((r) => (
+                <button key={r.url} className="td-src" onClick={() => (r.path ? app.openPath(r.path) : window.tide.app.openExternal(r.url))} title={[r.by, r.why].filter(Boolean).join(': ') || r.title}>
+                  <span className="td-src-k">
+                    <Icon name={r.path ? 'pdf' : 'external'} size={12} />
+                  </span>
+                  <span>
+                    <b>{r.title}</b>
+                    <span>{[r.by, r.path ? 'saved in your library' : 'on the web'].filter(Boolean).join(', ')}</span>
+                  </span>
+                </button>
+              ))}
+              {checks.length > 0 && (
+                <div className="td-src still">
+                  <span className="td-src-k">
+                    <Icon name={checks.includes('checking') ? 'search' : 'check'} size={12} />
+                  </span>
+                  <span>
+                    <b>Second look</b>
+                    <span>
+                      {checks.includes('checking')
+                        ? 'The stronger model is reading a reply now.'
+                        : `${checks.length} ${checks.length === 1 ? 'reply' : 'replies'} checked by the stronger model. `}
+                      {!checks.includes('checking') && <span className={checks.includes('flagged') ? 'td-warn' : 'td-ok'}>{checks.includes('flagged') ? `${checks.filter((c) => c === 'flagged').length} corrected.` : 'Nothing wrong found.'}</span>}
+                    </span>
+                  </span>
+                </div>
+              )}
+            </section>
+          )}
+        </aside>
+      )}
       {withNotes && approach === 'walkthrough' && sideTab === 'canvas' ? (
         <div className="lesson-side">
           <SideTabs tab={sideTab} onTab={setSideTab} />
