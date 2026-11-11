@@ -11,6 +11,31 @@ export type { ProfessorPose, ProfessorScene, ProfessorState } from '@shared/prof
  * tutor is doing, or a quiet scene (tea, the chalkboard, fishing, chess). Drawn as squares, so he
  * stays crisp at any size; still when the system asks for reduced motion.
  */
+/**
+ * A frame as SVG squares, a run of one colour in a row as one rect. Kept per frame: he re-renders
+ * on a timer, and building a React element per square every tick cost 0.4-0.5 s a lesson turn.
+ */
+const frames = new Map<string, string>()
+function drawn(g: ArrayLike<ArrayLike<string>>, colours: Record<string, string>): string {
+  const rows = Array.from(g, (r) => Array.from(r).join(''))
+  const key = `${JSON.stringify(colours)}|${rows.join('/')}`
+  const had = frames.get(key)
+  if (had !== undefined) return had
+  let out = ''
+  rows.forEach((row, y) => {
+    for (let x = 0; x < row.length; ) {
+      const v = row[x]
+      let end = x + 1
+      while (end < row.length && row[end] === v) end++
+      if (v !== '.') out += `<rect x="${x}" y="${y}" width="${end - x + 0.02}" height="1.02" fill="${colours[v]}"/>`
+      x = end
+    }
+  })
+  if (frames.size > 400) frames.delete(frames.keys().next().value!)
+  frames.set(key, out)
+  return out
+}
+
 export function Professor({ state = 'idle', size = 28, title, character }: { state?: ProfessorPose; size?: number; title?: string; character?: CharacterId }) {
   const chosen = useCharacter()
   const who = character ?? chosen
@@ -44,16 +69,11 @@ export function Professor({ state = 'idle', size = 28, title, character }: { sta
 
   const g = professorFrame(state, reduced ? 0 : tick, !reduced && blink, who)
   const w = g[0].length
-  const rects: React.ReactElement[] = []
-  g.forEach((row, y) =>
-    row.forEach((v, x) => {
-      if (v !== '.') rects.push(<rect key={`${x}-${y}`} x={x} y={y} width={1.02} height={1.02} fill={colours[v]} />)
-    })
-  )
+  const squares = drawn(g, colours)
   // A scene is wider than he is: same height, more room beside him
   return (
     <svg className={`professor p-${state}${isScene(state) ? ' p-scene' : ''}`} width={(size * w) / 16} height={size} viewBox={`0 0 ${w} 16`} shapeRendering="crispEdges" role="img" aria-label={title ?? 'Tide'}>
-      {rects}
+      <g dangerouslySetInnerHTML={{ __html: squares }} />
     </svg>
   )
 }
