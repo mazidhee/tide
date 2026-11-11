@@ -12,6 +12,7 @@ import { Icon, type IconName } from './Icon'
 import { SpeedView } from './SpeedView'
 import { ConnectionsView } from './ConnectionsView'
 import { LAB_PACK } from '@shared/labPack'
+import type { EditorChoice, InstalledEditor } from '@shared/editor'
 
 const THEMES: { id: ThemeId; name: string; bg: string; side: string; ink: string; accent: string }[] = [
   { id: 'system', name: 'Match system', bg: 'linear-gradient(90deg, #f7f7f5 50%, #1b1b1b 50%)', side: 'rgba(0, 0, 0, 0.06)', ink: '#8a8d93', accent: '#2f9a88' },
@@ -1061,9 +1062,37 @@ function ToolsSection() {
         <ToolSetup label="Languages" hint="What code in lessons can be written in" check={window.tide.runner.languagesStatus} setup={window.tide.runner.languagesStatus} busyText="Checking…" actionText="Check again" />
         <ToolSetup label="Things 4" hint="Tasks and deadlines" check={window.tide.learn.thingsStatus} setup={window.tide.learn.thingsStatus} busyText="Checking…" actionText="Check again" />
       </Group>
+      <EditorGroup />
       <MetabaseGroup />
       <StudyApiGroup />
     </>
+  )
+}
+
+/** The editor a project's "Open in…" uses (shared/editor.ts); by language unless one is picked */
+function EditorGroup() {
+  const app = useApp()
+  const [found, setFound] = useState<InstalledEditor[] | null>(null)
+  useEffect(() => {
+    window.tide.editors
+      .list()
+      .then(setFound)
+      .catch(() => setFound([]))
+  }, [])
+  const choice = app.settings.editor ?? 'auto'
+  return (
+    <Group title="Your editor">
+      <Row label="Projects open in" hint={found && !found.length ? 'No editor Tide knows was found on this Mac' : 'By language: CLion for C and C++, PyCharm for Python, VS Code otherwise, when installed. Tests run again in Tide each time you save.'}>
+        {found && found.length > 0 && (
+          <Select<string>
+            label="Projects open in"
+            value={found.some((e) => e.id === choice) ? choice : 'auto'}
+            onChange={(v) => app.updateSettings({ editor: v as EditorChoice })}
+            options={[{ value: 'auto', label: 'By the project’s language' }, ...found.map((e) => ({ value: e.id, label: e.name }))]}
+          />
+        )}
+      </Row>
+    </Group>
   )
 }
 

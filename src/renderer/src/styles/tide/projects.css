@@ -17,6 +17,7 @@
     letter-spacing: -0.012em;
     color: var(--ink);
   }
+  .ws-on-save,
   .ws-kicker,
   .ws-stage-kicker,
   .ws-tests-meta,

@@ -430,6 +430,18 @@
   gap: 8px;
   margin-top: 16px;
 }
+.ws-on-save {
+  display: flex;
+  align-items: center;
+  margin: 10px 0 0;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+}
+.ws-on-save .ws-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+}
 .ws-error {
   color: var(--danger);
   font-size: 13px;
