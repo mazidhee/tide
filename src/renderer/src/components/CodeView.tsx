@@ -4,6 +4,8 @@ import { useApp } from '../state'
 import { languageForFile } from '../lib/monaco'
 import { createExampleProject } from '../lib/examples'
 import { CodeEditor } from './CodeEditor'
+import { formatEditor } from '../lib/ruff/editor'
+import type { monaco } from '../lib/monaco'
 import { Composer, TurnView, useConversation } from './Conversation'
 import { Icon } from './Icon'
 import { TerminalView } from './TerminalView'
@@ -115,6 +117,7 @@ export function CodeView({ path: initial }: { path?: string }) {
   }
 
   const language = active ? languageForFile(active) : 'plaintext'
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const runnable = RUNNABLE[language]
 
   const run = async () => {
@@ -272,6 +275,12 @@ export function CodeView({ path: initial }: { path?: string }) {
         </div>
         <div className="toolbar-actions no-drag">
           {active && <TimeThis context={{ label: fileName(active), path: active, kind: 'session' }} />}
+          {language === 'python' && (
+            <button className="tool-btn" onClick={() => formatEditor(editorRef.current)} title="Format with Ruff (⇧⌥F)">
+              <Icon name="format" />
+              <span>Format</span>
+            </button>
+          )}
           <button className="tool-btn primary-ish" onClick={run} disabled={!runnable || running} title={runnable ? 'Run (⌘Enter)' : 'Run this in the terminal'}>
             <Icon name="play" />
             <span>{running ? 'Running…' : 'Run'}</span>
@@ -291,7 +300,7 @@ export function CodeView({ path: initial }: { path?: string }) {
         <section className="ide-main">
           <div className="ide-editor">
             {active && loaded === active ? (
-              <CodeEditor key={active} value={text} onChange={edit} language={language} onSubmit={run} fill />
+              <CodeEditor key={active} value={text} onChange={edit} language={language} onSubmit={run} editorRef={editorRef} fill />
             ) : (
               <div className="ide-empty">
                 <p>Start a file</p>

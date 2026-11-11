@@ -54,6 +54,7 @@ export const PATHS = {
   chat: 'M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z',
   tag: 'M3 12V4.5A1.5 1.5 0 0 1 4.5 3H12l9 9-9 9-9-9zM7.5 7.5h.01',
   list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
+  format: 'M4 6h16M10 12h10M4 18h16M4 9.5l3 2.5-3 2.5',
   tutor: 'M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H10l-4 4v-4h-.5A1.5 1.5 0 0 1 4 14.5zM9 10h.01M12 10h.01M15 10h.01',
   // ---- Subjects: what a notebook is about, chosen from its name (shared/subjectIcon.ts). Same grid and stroke as the rest.
   subNotebook: 'M6.5 3.5h11A1.5 1.5 0 0 1 19 5v14a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19V5a1.5 1.5 0 0 1 1.5-1.5zM9 3.5v17M12.5 8h3',

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { monaco, monacoLanguage, tideTheme } from '../lib/monaco'
+import { watchPython } from '../lib/ruff/editor'
 
 interface Props {
   value: string
@@ -20,6 +21,7 @@ interface Props {
 /**
  * The code editor everywhere in Tide (interviews, challenges, the Code playground): Monaco, the
  * editor in VS Code, with its editing, find, multi-cursor and IntelliSense for JS and TypeScript.
+ * Python gets live Ruff diagnostics and Format Document (Shift+Alt+F).
  */
 export function CodeEditor({ value, onChange, language = 'python', onSubmit, fill = false, minLines = 8, maxLines = 24, readOnly = false, editorRef }: Props) {
   const host = useRef<HTMLDivElement>(null)
@@ -71,11 +73,13 @@ export function CodeEditor({ value, onChange, language = 'python', onSubmit, fil
     }
     size()
     const sizeSub = editor.onDidChangeModelContent(size)
+    const stopRuff = watchPython(monaco, editor)
     // Follow the app theme
     const mo = new MutationObserver(() => monaco.editor.setTheme(tideTheme()))
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'style', 'class'] })
     return () => {
       mo.disconnect()
+      stopRuff()
       sub.dispose()
       sizeSub.dispose()
       editor.getModel()?.dispose()

@@ -16,6 +16,7 @@
     "native": "cd native/tide-core && cargo build --release && cp target/release/libtide_core.dylib tide-core.node"
   },
   "dependencies": {
+    "@astral-sh/ruff-wasm-web": "0.17.3",
     "@mozilla/readability": "^0.6.0",
     "chokidar": "^4.0.3",
     "gray-matter": "^4.0.3",
