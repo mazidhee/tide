@@ -8,6 +8,7 @@ import { complete, extractJsonObject, friendlyError, streamDraft } from './ai'
 import { readWebpage, webSearch } from './agent'
 import { getSettings } from './settings'
 import { directionLine } from './coach'
+import { noteUse } from './connectionUse'
 
 /**
  * Sizes a learning goal before any outline is written: research how people actually learn it and
@@ -281,6 +282,7 @@ const matches = (want: Set<string>, text: string, strict = false) => {
 
 /** A paper on arXiv by its exact title */
 async function findPaper(title: string): Promise<{ title: string; url: string }[]> {
+  noteUse('arxiv')
   const q = encodeURIComponent(`ti:"${title.replace(/["]/g, '')}"`)
   const res = await fetch(`https://export.arxiv.org/api/query?search_query=${q}&max_results=3`, { headers: { 'User-Agent': 'Tide/0.1 (local study app)' }, signal: AbortSignal.timeout(15_000) })
   if (!res.ok) throw new Error(`arXiv answered ${res.status}`)
@@ -302,6 +304,7 @@ const looksLikePaper = (item: { title: string; by?: string; why?: string }) => /
 
 /** Books in Open Library's free catalogue: null if it couldn't be asked */
 async function findBook(title: string, by?: string): Promise<{ url: string } | false | null> {
+  noteUse('openlibrary')
   const q = new URLSearchParams({ title, limit: '5', fields: 'key,title,author_name' })
   if (by) q.set('author', by.split(/,| and |&/)[0].replace(/\bet al\.?/i, '').trim())
   const res = await fetch(`https://openlibrary.org/search.json?${q}`, { headers: { 'User-Agent': 'Tide/0.1 (local study app)' }, signal: AbortSignal.timeout(8000) }).catch(() => null)

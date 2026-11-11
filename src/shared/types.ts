@@ -18,7 +18,7 @@ export interface AISettings {
   autoStart?: boolean
   serverCommand?: string
   webSearch?: {
-    provider: 'wikipedia' | 'brave' | 'tavily' | 'searxng' | 'off'
+    provider: 'wikipedia' | 'brave' | 'tavily' | 'you' | 'searxng' | 'off'
     apiKey?: string
     url?: string
   }
@@ -607,6 +607,14 @@ export interface TideApi {
     drills(): Promise<import('./drills').DrillResult[]>
   }
   /** Your goal and focus, the week planned towards them, and the learner profile */
+  /** Every service Tide connects to, with its state and use (main/connections) */
+  connections: {
+    list(fresh?: boolean): Promise<import('./connections').Connection[]>
+    /** Saves (or, with null, forgets) the key for a connection added from the Connections page */
+    setKey(id: string, key: string | null): Promise<import('./connections').Connection[]>
+    /** Notes that a connection the window uses directly (Wispr Flow) was just used */
+    used(id: string): Promise<void>
+  }
   /** The passages a lesson is taught from (none yet: built in the background for next time) */
   sources: {
     lesson(topic: string, where?: string): Promise<import('./sources').SourcePack | null>

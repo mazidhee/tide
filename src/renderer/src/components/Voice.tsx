@@ -28,7 +28,10 @@ function watchFlow(box: () => HTMLTextAreaElement | HTMLInputElement | null | un
     const pasted = ev.inputType === 'insertFromPaste' && Date.now() - ownPaste > 400
     const bulk = pasted || (ev.inputType === 'insertText' && (ev.data?.length ?? 0) > 2)
     clearTimeout(timer)
-    if (bulk) timer = setTimeout(() => el.value.trim() && box() === el && send(), 1200)
+    if (bulk) {
+      void window.tide.connections.used('flow').catch(() => {})
+      timer = setTimeout(() => el.value.trim() && box() === el && send(), 1200)
+    }
   }
   const onKey = (e: Event) => {
     const el = box()
@@ -112,6 +115,7 @@ export function DictateButton({ target, onText, onStart, where }: { target?: Ref
     // Handy chosen for dictation (or Tide's model not set up): Handy types into the box instead
     const by = (settings.voice ?? DEFAULT_VOICE).dictation
     if (by === 'flow') {
+      void window.tide.connections.used('flow').catch(() => {})
       target?.current?.focus()
       const f = await getFlow()
       say(f.installed ? `Hold ${f.pushToTalk || 'your Flow key'} and speak: Flow types your words here.` : 'Wispr Flow isn’t installed. Install it, or pick another dictation in Settings › Voice.')

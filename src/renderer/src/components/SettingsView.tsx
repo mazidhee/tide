@@ -8,6 +8,7 @@ import { PillSegment } from './PromptBox'
 import type { AISettings, Settings, ThemeId } from '@shared/types'
 import { useApp } from '../state'
 import { Icon, type IconName } from './Icon'
+import { ConnectionsView } from './ConnectionsView'
 
 const THEMES: { id: ThemeId; name: string; bg: string; side: string; ink: string; accent: string }[] = [
   { id: 'system', name: 'Match system', bg: 'linear-gradient(90deg, #f7f7f5 50%, #1b1b1b 50%)', side: 'rgba(0, 0, 0, 0.06)', ink: '#8a8d93', accent: '#2f9a88' },
@@ -41,13 +42,14 @@ const ACCENTS = [
 
 const LOCAL_SEARCH = 'http://127.0.0.1:8888'
 
-export type Section = 'general' | 'appearance' | 'tutor' | 'study' | 'models' | 'tools' | 'usage'
+export type Section = 'general' | 'appearance' | 'tutor' | 'study' | 'connections' | 'models' | 'tools' | 'usage'
 
 export const SECTIONS: { id: Section; label: string; icon: IconName; group: string; description: string }[] = [
   { id: 'general', label: 'General', icon: 'settings', group: 'App', description: 'Where your notes live.' },
   { id: 'appearance', label: 'Appearance', icon: 'highlight', group: 'App', description: 'Theme, colour, reading and the sidebar.' },
   { id: 'tutor', label: 'Tutor and voice', icon: 'tutor', group: 'Learning', description: 'Who teaches you, and how they sound.' },
   { id: 'study', label: 'Study time', icon: 'timer', group: 'Learning', description: 'Timers and breaks while you study.' },
+  { id: 'connections', label: 'Connections', icon: 'link', group: 'AI', description: 'Every service Tide uses: what it’s for, where it runs, what it used today, and what you could add.' },
   { id: 'models', label: 'Models', icon: 'sparkle', group: 'AI', description: 'Gemma on this Mac does the tutoring. A cloud model can help with the hardest parts.' },
   { id: 'tools', label: 'Tools', icon: 'terminal', group: 'AI', description: 'What the tutor can use: search, code and your tasks.' },
   { id: 'usage', label: 'Usage', icon: 'graph', group: 'AI', description: 'What each model was used for this month, and what the cloud cost.' }
@@ -969,14 +971,22 @@ function ToolsSection() {
               { value: 'wikipedia', label: 'Wikipedia only' },
               { value: 'brave', label: 'Brave Search' },
               { value: 'tavily', label: 'Tavily' },
+              { value: 'you', label: 'You.com' },
               { value: 'searxng', label: 'SearXNG elsewhere' },
               { value: 'off', label: 'Off' }
             ]}
           />
         </Row>
-        {(ai.webSearch?.provider === 'brave' || ai.webSearch?.provider === 'tavily') && (
-          <Row label={`${ai.webSearch.provider === 'brave' ? 'Brave Search' : 'Tavily'} key`}>
-            <input className="set-input" type="password" value={ai.webSearch.apiKey ?? ''} onChange={(e) => setAi({ ...ai, webSearch: { ...ai.webSearch!, apiKey: e.target.value } })} onBlur={() => saveAi({})} aria-label="Search API key" />
+        {(ai.webSearch?.provider === 'brave' || ai.webSearch?.provider === 'tavily' || ai.webSearch?.provider === 'you') && (
+          <Row label="Key" hint="Kept in your Keychain">
+            <button className="btn small" onClick={() => app.setView({ kind: 'settings', section: 'connections' as never })}>
+              Add or change it in Connections
+            </button>
+          </Row>
+        )}
+        {(ai.webSearch?.provider === 'brave' || ai.webSearch?.provider === 'tavily') && ai.webSearch.apiKey && (
+          <Row label="Older key" hint="Typed in before keys moved to the Keychain; one in the Keychain is used first">
+            <input className="set-input" type="password" value={ai.webSearch.apiKey ?? ''} onChange={(e) => setAi({ ...ai, webSearch: { ...ai.webSearch!, apiKey: e.target.value } })} onBlur={() => saveAi({})} aria-label="Older search API key" />
           </Row>
         )}
         {ai.webSearch?.provider === 'searxng' && ai.webSearch.url !== LOCAL_SEARCH && (
@@ -1116,6 +1126,7 @@ export function SettingsView({ section = 'general' }: { section?: Section | 'ai'
         {tab === 'appearance' && <AppearanceSection />}
         {tab === 'tutor' && <TutorSection />}
         {tab === 'study' && <StudySection />}
+        {tab === 'connections' && <ConnectionsView />}
         {tab === 'models' && <ModelsSection />}
         {tab === 'tools' && <ToolsSection />}
         {tab === 'usage' && <UsageSection />}

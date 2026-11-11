@@ -12,6 +12,7 @@ import { sourcesForCheck } from '@shared/sources'
 import { promises as fs } from 'fs'
 import { runCode } from './runner'
 import { absPath } from './vault'
+import { noteUse } from './connectionUse'
 
 /**
  * Checks a lesson reply once it's written, before the student works on it (see shared/lessonCheck):
@@ -68,6 +69,7 @@ export async function exactCheck(req: ChatRequest): Promise<Exact | null> {
   const expected = finalAnswer(solution)
   const theirs = finalAnswer(mine.replace(/^Answer:\s*/i, '').replace(/\n\(Confidence: [^)]*\)\s*$/, ''))
   if (!expected || !theirs) return null
+  noteUse('maths')
   const r = await runCode('python', comparePython(theirs, expected), '', 15_000).catch(() => null)
   const out = r?.stdout.trim()
   return out === 'MATCH' ? { result: 'match', theirs, expected } : out === 'NOMATCH' ? { result: 'mismatch', theirs, expected } : null

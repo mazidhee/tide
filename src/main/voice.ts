@@ -8,6 +8,7 @@ import { aboutMetabase } from '@shared/metabase'
 import { metabaseHost, metabaseReady } from './metabase'
 import { privatePath } from './projects'
 import { getSettings } from './settings'
+import { noteUse } from './connectionUse'
 
 /**
  * A natural voice for the tutor, made on this Mac: Kokoro (82M parameters, about 25 times faster
@@ -145,6 +146,7 @@ async function call(path: string, body: unknown, timeoutMs = 120_000): Promise<R
 
 /** One stretch of speech, as WAV bytes */
 export async function speak(text: string, voice = 'bm_george', speed = 1): Promise<Uint8Array> {
+  noteUse('voice')
   return new Uint8Array(await (await call('/speak', { text, voice, speed })).arrayBuffer())
 }
 
@@ -159,11 +161,13 @@ export type Heard = { path?: string; topic?: string }
 export async function transcribe(wav: Uint8Array, where: Heard = {}): Promise<string> {
   if (getSettings().voice?.dictation === 'deepgram' && getKey(DEEPGRAM) && !(await staysHere(where))) {
     try {
+      noteUse('deepgram')
       return await deepgram(wav, getKey(DEEPGRAM), where.topic)
     } catch (e) {
       if (!existsSync(python())) throw e
     }
   }
+  noteUse('voice')
   return ((await (await call('/transcribe', wav)).json()) as { text: string }).text
 }
 

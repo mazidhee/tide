@@ -8,6 +8,7 @@ import { readJsonl } from './learn'
 import { getSettings, updateSettings } from './settings'
 import { currentStudy } from './tray'
 import { joinRel } from './vault'
+import { noteUse } from './connectionUse'
 
 /**
  * Tide's study data API: your study time and how it went, for a dashboard or another app (Plain,
@@ -103,6 +104,7 @@ export async function startStudyApi(): Promise<void> {
   if (!c.enabled) return
   token()
   const s = createServer((req, res) => {
+    noteUse('study-api')
     handle(req, res).catch((e: Error) => send(res, 500, { error: e.message }))
   })
   await new Promise<void>((done) => {
