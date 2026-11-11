@@ -14,6 +14,7 @@
  * Hooks: main/ai.ts `answer` calls sourceLedTurn; main/agent.ts asks ledJob for the cloud job.
  */
 import { createHash } from 'crypto'
+import { otherLanguage } from '@shared/books'
 import { findExplainers } from '@shared/explainers'
 import { aboutMetabase } from '@shared/metabase'
 import { normalizeTitle } from '@shared/outline'
@@ -38,6 +39,8 @@ const MAX_STEPS = 8
 
 interface Lesson {
   opts: GatherOptions
+  /** Where the lesson is (its notebook or note): says which programming language it is in */
+  where: string
   deps: GatherDeps
   candidates: Candidate[]
   /** Addresses already read (or tried) */
@@ -104,7 +107,7 @@ async function lessonFor(req: ChatRequest): Promise<Lesson> {
     publicUrl,
     now: () => Date.now()
   }
-  const lesson: Lesson = { opts: { topic, private: secret, web }, deps, candidates: [], have: new Set(), owned: new Set(), searched: new Set(), chosen: new Map(), preparing: Promise.resolve() }
+  const lesson: Lesson = { opts: { topic, private: secret, web }, where, deps, candidates: [], have: new Set(), owned: new Set(), searched: new Set(), chosen: new Map(), preparing: Promise.resolve() }
   // The topic's sources are gathered while the tutor finds out what you know: ready by the time it plans
   lesson.preparing = (async () => {
     own(lesson, topic)
@@ -138,7 +141,9 @@ function readingFor(l: Lesson, i: number, steps: string[]): StepReading | null {
   const had = l.chosen.get(key)
   if (had) return had
   own(l, `${step} ${l.opts.topic}`)
-  const r = chooseReading(l.candidates, i, step, l.opts.topic)
+  // A book or page on another language is never the reading, however well it matches the step
+  const lang = `${l.opts.topic} ${l.where}`
+  const r = chooseReading(l.candidates.filter((c) => !otherLanguage(`${c.title} ${c.path ?? ''}`, lang)), i, step, l.opts.topic)
   if (r) l.chosen.set(key, r)
   return r
 }

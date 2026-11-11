@@ -7,7 +7,7 @@
  */
 import { aimOf, todayItems, type AgendaItem, type WeekPlan } from '@shared/coach'
 import { normalizeTitle } from '@shared/outline'
-import { languagesIn } from '@shared/books'
+import { otherLanguage } from '@shared/books'
 import { isBlocked, parseReadings, pdfFor, pdfHostAllowed, readingsPrompt, wikipediaPick, READINGS_SYSTEM, type Reading } from '@shared/readings'
 import { extractJsonObject } from './ai'
 import { getCoach } from './coach'
@@ -106,9 +106,7 @@ async function gather(it: { topic: string; notebook?: string; source?: string; s
   const out: Reading[] = suggested.filter((s) => s.url && !s.unverified && !isBlocked(s.url)).map((s) => ({ title: s.title, ...(s.by ? { by: s.by } : {}), ...(s.why ? { why: s.why } : {}), url: s.url!, kind: s.kind }))
   const wiki = await wikipedia(it.topic).catch(() => null)
   // Not an article on another language's version of the topic ("C data types" for a Python lesson)
-  const langs = languagesIn(`${it.topic} ${it.notebook ?? ''}`)
-  const otherLanguage = (title: string) => langs.length > 0 && languagesIn(title).some((l) => !langs.includes(l))
-  if (wiki && !otherLanguage(wiki.title) && !out.some((r) => r.url === wiki.url)) out.push({ title: `${wiki.title} (Wikipedia)`, url: wiki.url, kind: 'encyclopedia', why: 'An overview with links onward' })
+  if (wiki && !otherLanguage(wiki.title, `${it.topic} ${it.notebook ?? ''}`) && !out.some((r) => r.url === wiki.url)) out.push({ title: `${wiki.title} (Wikipedia)`, url: wiki.url, kind: 'encyclopedia', why: 'An overview with links onward' })
   await savePdfs(out, it.notebook)
   return out
 }

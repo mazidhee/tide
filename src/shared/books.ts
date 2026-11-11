@@ -45,7 +45,7 @@ const LANGUAGES: [string, RegExp][] = [
   ['python', /python/i],
   ['c++', /\bc\+\+|\bcpp\b/i],
   ['c#', /\bc#|\bc sharp\b/i],
-  ['c', /(^|[^\w+#.])c(?![\w+#])(?!\s*\+\+)(?=\s+(programming|language|in\b|for\b|interfaces|traps|primer|how to)|\s*[-:,(]|$)/i],
+  ['c', /(^|[^\w+#.])c(?![\w+#])(?!\s*\+\+)(?=\s+(programming|language|in\b|for\b|interfaces|traps|primer|how to|data types|standard library|syntax|pointers|compiler|preprocessor)|\s*[-:,(]|$)/i],
   ['java', /\bjava\b(?!\s*script)/i],
   ['javascript', /\bjavascript\b|\bnode\.?js\b/i],
   ['typescript', /\btypescript\b/i],
@@ -58,6 +58,14 @@ const LANGUAGES: [string, RegExp][] = [
   ['scala', /\bscala\b/i]
 ]
 export const languagesIn = (text: string): string[] => LANGUAGES.filter(([, re]) => re.test(text)).map(([name]) => name)
+
+/** A source titled for another language than the lesson's ("C data types" in a Python lesson) */
+export function otherLanguage(title: string, lesson: string): boolean {
+  const want = languagesIn(lesson)
+  if (!want.length) return false
+  const got = languagesIn(title)
+  return got.length > 0 && !got.some((l) => want.includes(l))
+}
 
 /** Lower case, punctuation to spaces, plurals to singular: for finding a topic as a phrase */
 const flat = (s: string) =>

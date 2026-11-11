@@ -63,3 +63,14 @@ describe('matchSections across languages', () => {
     expect(matchSections('Variables and Data Types', [c, py], [], 2).length).toBe(2)
   })
 })
+
+describe('otherLanguage', async () => {
+  const { otherLanguage } = await import('../src/shared/books')
+  it('flags a source on another language than the lesson', () => {
+    expect(otherLanguage('C data types', 'Variables and Data Types Python from the beginning')).toBe(true)
+    expect(otherLanguage('C Programming Language - 2nd Edition (OCR) Library/PDFs/C Programming Language.pdf', 'Variables Python')).toBe(true)
+    expect(otherLanguage('Data type', 'Variables Python')).toBe(false)
+    expect(otherLanguage('pythoncrashcourse', 'Variables Python')).toBe(false)
+    expect(otherLanguage('C data types', 'Variables and Data Types')).toBe(false)
+  })
+})
