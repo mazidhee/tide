@@ -3,7 +3,7 @@ import type { Goal } from '@shared/types'
 import { useApp } from '../state'
 import { formatDeadline, type GoalPlan, type GoalTopic } from '../lib/goals'
 import { Icon } from './Icon'
-import type { Forecast } from '@shared/forecast'
+import { lateText, type Forecast } from '@shared/forecast'
 
 /** The plan for one goal: pace, today's topics, and where review time starts */
 export function GoalPanel({ plan, onRemove, compact }: { plan: GoalPlan; onRemove?: () => void; compact?: boolean }) {
@@ -192,12 +192,14 @@ function ForecastLine({ forecast: f, plan }: { forecast: Forecast; plan: GoalPla
   if (f.state === 'done') return null
   const needed = f.neededWeeklyHours !== null && Number.isFinite(f.neededWeeklyHours) ? `${hours(f.neededWeeklyHours)} h a week` : null
   const text =
-    f.state === 'no-data'
+    f.state === 'too-soon'
+      ? `Too soon to forecast: a week or two of study shows your pace.${needed ? ` About ${needed} finishes it by ${formatDeadline(plan.goal.deadline)}.` : ''}`
+      : f.state === 'no-data'
       ? `No study logged on this lately.${needed ? ` About ${needed} finishes it by ${formatDeadline(plan.goal.deadline)}.` : ''}`
       : f.state === 'late'
-        ? `At your ${hours(f.weeklyHours)} h a week you’d finish ${day(f.finish!)}, ${f.daysLate} days late.${needed ? ` About ${needed} gets you there.` : ''}`
+        ? `At your ${hours(f.weeklyHours)} h a week you’d finish ${day(f.finish!)}, ${lateText(f.daysLate!)} late.${needed ? ` About ${needed} gets you there.` : ''}`
         : f.state === 'early'
-          ? `At your ${hours(f.weeklyHours)} h a week you’ll finish ${day(f.finish!)}, ${-f.daysLate!} days early.`
+          ? `At your ${hours(f.weeklyHours)} h a week you’ll finish ${day(f.finish!)}, ${lateText(-f.daysLate!)} early.`
           : `At your ${hours(f.weeklyHours)} h a week you’ll finish around ${day(f.finish!)}, right on time.`
   return (
     <div className={`goal-forecast ${f.state}`} onClick={(e) => e.stopPropagation()}>
