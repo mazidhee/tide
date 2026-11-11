@@ -146,9 +146,10 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
 
   const { data: props, body } = useMemo(() => splitFrontmatter(raw ?? ''), [raw])
   const fmLines = useMemo(() => fmLineCount(raw ?? ''), [raw])
+  // Rendered only for reading: while editing, a long note would be rendered again on every keystroke
   const html = useMemo(
-    () => (raw === null ? '' : renderMarkdown(body, { notePath: path, filesByName: app.filesByName })),
-    [body, raw, path, app.filesByName]
+    () => (raw === null || editing ? '' : renderMarkdown(body, { notePath: path, filesByName: app.filesByName })),
+    [body, raw, path, app.filesByName, editing]
   )
 
   // Jump to a heading when opened from a citation or search result
