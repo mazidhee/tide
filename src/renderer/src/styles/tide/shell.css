@@ -1,0 +1,428 @@
+/*
+  The new design's shell: the rail on the left, the top bar over every page, and the tutor panel
+  on the right. Scoped to data-design='tide'.
+*/
+
+:root[data-design='tide'] {
+  /* ---------- The rail ---------- */
+  .sidebar {
+    background: var(--rail);
+    border-right: 1px solid var(--line);
+  }
+  .sidebar-top {
+    height: var(--bar-h);
+    padding: 0 8px 0 84px;
+  }
+  .sidebar-top .icon-btn svg,
+  .floating-controls .icon-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+  .td-brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0 8px;
+    padding: 6px 8px 10px;
+    border-radius: var(--r-ctl);
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: -0.005em;
+    color: var(--ink);
+    text-align: left;
+  }
+  .td-brand svg {
+    flex: none;
+  }
+  .td-brand small {
+    margin-left: auto;
+    font-weight: 400;
+    font-size: 12px;
+    letter-spacing: 0;
+    color: var(--ink-3);
+  }
+  .sidebar-nav {
+    padding: 0 8px 4px;
+    gap: 1px;
+  }
+  .nav-item {
+    gap: 9px;
+    height: 30px;
+    padding: 0 8px;
+    border-radius: var(--r-ctl);
+    color: var(--ink-2);
+    font-weight: 500;
+    transition: background-color 120ms ease;
+  }
+  .nav-item > span:first-of-type {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .nav-item > svg:first-child {
+    flex: none;
+    color: var(--ink-3);
+  }
+  .nav-item:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+  .nav-item:hover > svg:first-child {
+    color: var(--ink-2);
+  }
+  .nav-item.active {
+    background: var(--active);
+    color: var(--ink);
+    font-weight: 500;
+  }
+  /* The action colour marks where you are, and nothing else in the rail */
+  .nav-item.active > svg:first-child {
+    color: var(--accent-text);
+  }
+  .nav-item .badge {
+    margin-left: auto;
+    white-space: nowrap;
+  }
+  .nav-group-items {
+    margin-left: 15px;
+    padding-left: 7px;
+  }
+  .nav-group-items .nav-item {
+    font-weight: 400;
+  }
+  .nav-group-items .nav-item.active {
+    font-weight: 500;
+  }
+
+  .sidebar-section-head {
+    padding: 18px 12px 4px 16px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-3);
+  }
+  .sidebar-ongoing {
+    margin: 0;
+  }
+  .ongoing-row {
+    border-radius: var(--r-ctl);
+  }
+  .ongoing-row:hover {
+    background: var(--hover);
+  }
+  .ongoing-row.active {
+    background: var(--active);
+  }
+  .ongoing-open {
+    height: 30px;
+    gap: 9px;
+    padding: 0 6px 0 8px;
+    font-size: var(--t-base);
+    font-weight: 500;
+    color: var(--ink-2);
+  }
+  .ongoing-row.active .ongoing-open {
+    color: var(--ink);
+  }
+  /* A reply arriving is a still dot: nothing in the rail pulses while the model works */
+  .ongoing-dot {
+    animation: none;
+    background: var(--accent);
+  }
+
+  .tree {
+    padding: 0 8px 12px;
+  }
+  .tree-row {
+    gap: 6px;
+    height: 28px;
+    border-radius: var(--r-ctl);
+    color: var(--ink-2);
+    transition: background-color 120ms ease;
+  }
+  .tree-row:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+  .tree-row.active {
+    background: var(--active);
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .tree-chevron,
+  .tree-icon {
+    color: var(--ink-3);
+  }
+  .td-nb-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    margin: 0 4px 0 3px;
+    border-radius: 2px;
+    background: var(--c);
+  }
+  .tree-system .tree-label {
+    color: var(--ink-3);
+  }
+  .tree-rename {
+    height: 22px;
+    padding: 0 6px;
+  }
+
+  .sidebar-bottom {
+    border-top: 1px solid var(--line);
+    padding: 8px;
+  }
+  .sidebar-bottom-row .icon-btn {
+    margin-right: 0;
+  }
+  .settings-sidebar-label {
+    padding: 18px 8px 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ink-3);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .settings-leave {
+    color: var(--ink-2);
+  }
+
+  /* ---------- The top bar ---------- */
+  .td-topbar,
+  .doc-toolbar,
+  .chat-head {
+    height: var(--bar-h);
+    border-bottom: 1px solid var(--line);
+    background: var(--paper);
+  }
+  .td-topbar {
+    position: relative;
+    z-index: 5;
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px 0 24px;
+  }
+  .no-sidebar .td-topbar {
+    padding-left: 228px;
+  }
+  .doc-toolbar {
+    padding: 0 10px 0 calc(var(--toolbar-left, 0px) + 24px);
+    gap: 8px;
+  }
+  .td-crumbs,
+  .crumbs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1 1 auto;
+    color: var(--ink-3);
+    font-size: var(--t-base);
+  }
+  .td-crumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    white-space: nowrap;
+  }
+  .td-crumb svg,
+  .crumb > svg,
+  .crumbs > svg {
+    opacity: 0.7;
+    flex: none;
+  }
+  .td-crumb.current,
+  .crumb.current {
+    color: var(--ink);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .td-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+  }
+  .td-topbar-actions:empty {
+    display: none;
+  }
+  .td-search {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 232px;
+    height: 30px;
+    padding: 0 6px 0 10px;
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-ctl);
+    background: var(--raised);
+    color: var(--ink-3);
+    text-align: left;
+    transition: border-color 120ms ease;
+  }
+  .td-search:hover {
+    border-color: var(--ink-3);
+  }
+  .td-search span {
+    flex: 1;
+  }
+  .toolbar-actions {
+    gap: 2px;
+  }
+
+  /* Pages start under the bar, not behind a hidden title strip */
+  .page {
+    padding: 36px 48px 72px;
+  }
+  .page-inner {
+    max-width: 1120px;
+  }
+
+  /* ---------- The tutor panel ---------- */
+  .chat {
+    background: var(--sunk);
+    border-left: 1px solid var(--line);
+  }
+  .chat-head {
+    background: transparent;
+    padding: 0 10px 0 16px;
+  }
+  .chat-title {
+    font: 600 var(--t-base) / 20px var(--ui);
+  }
+  .chat-title svg {
+    color: var(--accent-text);
+  }
+  .chat-scope {
+    padding: 10px 16px;
+    font-size: var(--t-meta);
+    color: var(--ink-3);
+    border-bottom: 1px solid var(--line);
+  }
+  .chat-scope select {
+    height: 28px;
+    padding: 0 28px 0 8px;
+    font-size: var(--t-meta);
+    font-weight: 500;
+  }
+  .chat-list {
+    padding: 20px 18px;
+  }
+  .chat-empty p {
+    color: var(--ink-2);
+    font-size: var(--t-base);
+    line-height: 20px;
+  }
+  .suggestions button {
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--raised);
+    color: var(--ink-2);
+    font-size: var(--t-base);
+    box-shadow: none;
+    transition: border-color 120ms ease;
+  }
+  .suggestions button:hover {
+    border-color: var(--accent-line);
+    background: var(--raised);
+    color: var(--ink);
+  }
+  .chat-fab {
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-float);
+    background: var(--raised);
+    color: var(--ink);
+    box-shadow: var(--shadow-float);
+    font-weight: 500;
+  }
+  .chat-fab svg {
+    color: var(--accent-text);
+  }
+
+  /* The box you type in is the one thing that floats */
+  .composer {
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-box);
+    background: var(--raised);
+    box-shadow: none;
+  }
+  .composer:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .composer textarea,
+  .composer textarea:focus {
+    border: 0;
+    box-shadow: none;
+    background: none;
+    font-size: var(--t-base);
+    line-height: 20px;
+  }
+  .composer-send {
+    border-radius: 8px;
+    background: var(--primary, var(--accent));
+    color: var(--primary-ink, var(--accent-ink));
+    box-shadow: none;
+  }
+  .composer-send:disabled {
+    background: var(--sunk);
+    color: var(--ink-3);
+    opacity: 1;
+  }
+  .composer .pill {
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: transparent;
+    color: var(--ink-2);
+    font-size: 12px;
+    font-weight: 500;
+    box-shadow: none;
+  }
+  .composer .pill.on {
+    background: var(--sunk);
+    color: var(--ink);
+  }
+
+  /* Messages: you in a ruled box, the tutor as plain text on the page */
+  .msg.user .msg-bubble {
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: var(--r-box) var(--r-box) 3px var(--r-box);
+    color: var(--ink);
+    box-shadow: none;
+  }
+  .main .msg.user .msg-bubble {
+    background: var(--sunk);
+  }
+  .msg-prose {
+    font-family: var(--ui);
+    font-size: 14.5px;
+    line-height: 23px;
+  }
+  .source-chip {
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--raised);
+    box-shadow: none;
+    transition: border-color 120ms ease;
+  }
+  .source-chip:hover {
+    border-color: var(--accent-line);
+    background: var(--raised);
+  }
+  .source-num {
+    font: 600 11px/18px var(--ui);
+    color: var(--accent-text);
+    background: var(--accent-soft);
+    border-radius: 4px;
+    padding: 0 5px;
+  }
+  .source-where {
+    color: var(--ink-3);
+  }
+}

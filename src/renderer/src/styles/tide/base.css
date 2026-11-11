@@ -1,0 +1,538 @@
+/*
+  The new design: what every screen shares. The page, the browser's own parts (selection, caret,
+  scrollbars, focus), type, and the controls. Scoped to data-design='tide'.
+
+  Containers are ruled, not shadowed: a shadow means "this floats" (menus, dialogs, the box you
+  type in). Nothing here moves on load and nothing loops, so the window is still while the model
+  has the GPU.
+*/
+
+:root[data-design='tide'] {
+  body {
+    font: 400 var(--t-base) / 20px var(--ui);
+    font-feature-settings: normal;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+    text-rendering: optimizeLegibility;
+    caret-color: var(--accent);
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 24%, transparent);
+  }
+
+  /* Keyboard focus is shown; a click never leaves a ring behind */
+  :where(button, a, [role='tab'], [role='radio'], [role='option'], [role='treeitem'], [role='menuitem'], [role='button'], [tabindex]):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    background-color: transparent;
+  }
+  :where(.btn.primary, .chip.on, .accent-swatch):focus-visible {
+    filter: none;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--line-2);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--ink-3);
+  }
+
+  ::placeholder {
+    color: var(--ink-3);
+  }
+
+  code {
+    font-family: var(--mono);
+  }
+
+  kbd {
+    font: 500 11px/16px var(--ui);
+    color: var(--ink-3);
+    border: 1px solid var(--line-2);
+    border-radius: 4px;
+    padding: 0 4px;
+    min-width: 18px;
+    text-align: center;
+    display: inline-block;
+    opacity: 1;
+  }
+  .btn.primary kbd {
+    color: inherit;
+    border-color: color-mix(in srgb, currentColor 45%, transparent);
+    opacity: 0.9;
+  }
+
+  /* ---------- Buttons ---------- */
+  .btn {
+    height: 30px;
+    padding: 0 11px;
+    gap: 7px;
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-ctl);
+    background: var(--raised);
+    box-shadow: none;
+    color: var(--ink);
+    font-weight: 500;
+    letter-spacing: 0;
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease;
+  }
+  .btn:hover:not(:disabled) {
+    background: var(--sunk);
+    border-color: var(--ink-3);
+  }
+  .btn:not(:disabled):active {
+    transform: translateY(0.5px);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+  }
+  .btn.primary {
+    background: var(--primary, var(--accent));
+    border-color: var(--primary, var(--accent));
+    color: var(--primary-ink, var(--accent-ink));
+    font-weight: 600;
+    box-shadow: none;
+  }
+  .btn.primary:hover:not(:disabled) {
+    background: var(--primary, var(--accent-hover));
+    border-color: var(--primary, var(--accent-hover));
+    filter: none;
+  }
+  .btn.primary:disabled {
+    opacity: 1;
+    background: var(--sunk);
+    border-color: var(--line);
+    color: var(--ink-3);
+  }
+  .btn.ghost {
+    border-color: transparent;
+    background: transparent;
+    color: var(--ink-2);
+  }
+  .btn.ghost:hover:not(:disabled) {
+    background: var(--hover);
+    border-color: transparent;
+    color: var(--ink);
+  }
+  .btn.small {
+    height: 26px;
+    padding: 0 8px;
+    font-size: var(--t-meta);
+  }
+  .btn.large {
+    height: 36px;
+    padding: 0 16px;
+    font-size: var(--t-base);
+  }
+
+  .icon-btn {
+    border-radius: var(--r-ctl);
+    color: var(--ink-3);
+    transition: background-color 120ms ease;
+  }
+  .icon-btn:hover:not(:disabled) {
+    background: var(--hover);
+    color: var(--ink);
+  }
+  .icon-btn.on,
+  .icon-btn[aria-pressed='true'] {
+    background: var(--active);
+    color: var(--ink);
+  }
+
+  .tool-btn {
+    height: 28px;
+    padding: 0 8px;
+    border-radius: var(--r-ctl);
+    color: var(--ink-2);
+    font-size: var(--t-meta);
+    font-weight: 500;
+    transition: background-color 120ms ease;
+  }
+  .tool-btn:hover:not(:disabled) {
+    background: var(--hover);
+    color: var(--ink);
+  }
+  .tool-btn.on {
+    background: var(--active);
+    color: var(--ink);
+  }
+
+  .link-btn {
+    color: var(--accent-text);
+  }
+
+  /* Segmented controls: a sunk, ruled track; the chosen one is raised out of it */
+  .segmented,
+  .pill-segment {
+    padding: 2px;
+    gap: 2px;
+    background: var(--sunk);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  .segmented button,
+  .pill-segment button {
+    height: 24px;
+    border-radius: 5px;
+    font-size: var(--t-meta);
+    font-weight: 500;
+    color: var(--ink-3);
+  }
+  .segmented.text button,
+  .pill-segment button {
+    padding: 0 9px;
+  }
+  .segmented button:hover:not(:disabled),
+  .pill-segment button:hover:not(:disabled) {
+    color: var(--ink);
+    background: transparent;
+  }
+  .segmented button.on,
+  .pill-segment button.on {
+    background: var(--raised);
+    color: var(--ink);
+    box-shadow:
+      0 0 0 1px var(--line-2),
+      0 1px 2px rgba(16, 28, 48, 0.08);
+  }
+
+  /* Chips are tags you can press: square-cornered marks, never pills */
+  .chip {
+    height: 26px;
+    padding: 0 9px;
+    border-radius: var(--r-ctl);
+    border: 1px solid var(--line-2);
+    background: var(--raised);
+    color: var(--ink-2);
+    font-size: var(--t-meta);
+    font-weight: 500;
+  }
+  .chip:hover {
+    background: var(--sunk);
+    border-color: var(--ink-3);
+    color: var(--ink);
+  }
+  .chip.on {
+    background: var(--active);
+    border-color: var(--line-2);
+    color: var(--ink);
+  }
+  .chip-toggle {
+    border-radius: var(--r-ctl);
+  }
+
+  .badge {
+    min-width: 0;
+    height: auto;
+    padding: 0;
+    background: none;
+    color: var(--ink-3);
+    font-size: 12px;
+    font-weight: 400;
+  }
+
+  .muted {
+    color: var(--ink-3);
+  }
+  .ok-text {
+    color: var(--good);
+  }
+
+  /* ---------- Things that float ---------- */
+  .context-menu,
+  .modal,
+  .palette {
+    background: var(--raised);
+    border: 0;
+    border-radius: var(--r-float);
+    box-shadow: var(--shadow-pop);
+  }
+  .context-menu {
+    border-radius: var(--r-box);
+    padding: 4px;
+  }
+  .context-menu button {
+    border-radius: var(--r-ctl);
+    font-size: var(--t-base);
+  }
+  .context-menu button:hover,
+  .context-menu button:focus-visible {
+    background: var(--hover);
+    outline: 0;
+  }
+  .context-menu button.danger {
+    color: var(--bad);
+  }
+  .menu-sep {
+    background: var(--line);
+  }
+  .modal-backdrop {
+    background: color-mix(in srgb, var(--ink) 28%, transparent);
+    backdrop-filter: none;
+  }
+  .modal-head h2 {
+    font: 600 var(--t-lede) / 20px var(--ui);
+    letter-spacing: -0.005em;
+  }
+  .palette-input {
+    border-bottom: 1px solid var(--line);
+  }
+  .palette-input input,
+  .palette-input input:focus {
+    border: 0;
+    box-shadow: none;
+    background: none;
+  }
+  .palette-row {
+    border-radius: var(--r-ctl);
+  }
+  .palette-row.active {
+    background: var(--active);
+  }
+  .toast {
+    background: var(--ink);
+    color: var(--paper);
+    border: 0;
+    border-radius: var(--r-ctl);
+    box-shadow: var(--shadow-float);
+    font-size: var(--t-base);
+  }
+  .toast .link-btn {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .toast.error {
+    background: var(--bad);
+    color: var(--paper);
+  }
+  .drop-overlay {
+    background: color-mix(in srgb, var(--accent-soft) 88%, transparent);
+    border: 2px dashed var(--accent);
+    color: var(--ink);
+    font: 600 var(--t-lede) / 20px var(--ui);
+  }
+
+  /* ---------- Pages ---------- */
+  .page-title {
+    font: 600 var(--t-page) / 30px var(--ui);
+    letter-spacing: -0.018em;
+    text-wrap: balance;
+  }
+
+  /* ---------- Marks shared by every screen ---------- */
+
+  /* An area of study: its colour as a small square, always beside its name */
+  .td-area {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .td-area::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background: var(--c, var(--ink-3));
+    flex: none;
+  }
+  .td-c0 {
+    --c: var(--ink-3);
+  }
+  .td-c1 {
+    --c: var(--a1);
+  }
+  .td-c2 {
+    --c: var(--a2);
+  }
+  .td-c3 {
+    --c: var(--a3);
+  }
+  .td-c4 {
+    --c: var(--a4);
+  }
+  .td-c5 {
+    --c: var(--a5);
+  }
+
+  /*
+    The level: how solidly something is held, drawn as water standing in a small tank. The fill
+    is where it stands now; the line is the highest it has stood. A gap between them is fading.
+  */
+  .td-level {
+    position: relative;
+    display: inline-block;
+    flex: none;
+    width: 9px;
+    height: 22px;
+    border-radius: 2px;
+    background: var(--sunk);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+    overflow: hidden;
+    vertical-align: middle;
+  }
+  .td-level::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(var(--v) * 1%);
+    background: var(--c, var(--accent));
+    opacity: 0.85;
+  }
+  .td-level::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: clamp(0px, calc(var(--hw, var(--v)) * 1% - 1px), calc(100% - 1.5px));
+    height: 1.5px;
+    background: var(--ink);
+  }
+  .td-level.empty::after {
+    display: none;
+  }
+  .td-level.lg {
+    width: 11px;
+    height: 44px;
+  }
+
+  /* From where it stood to where it stands */
+  .td-drop {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .td-drop s {
+    text-decoration: none;
+    color: var(--ink-3);
+  }
+  .td-drop svg {
+    color: var(--ink-3);
+  }
+
+  /* Progress against a pace: the bar is where you are, the tick where today's pace should be */
+  .td-pbar {
+    position: relative;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--line);
+  }
+  .td-pbar > i {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: calc(var(--v) * 1%);
+    max-width: 100%;
+    background: var(--c, var(--accent));
+    border-radius: 3px;
+  }
+  .td-pbar > b {
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    left: calc(var(--pace) * 1%);
+    width: 2px;
+    background: var(--ink);
+    border-radius: 1px;
+  }
+
+  .td-meta {
+    font-size: var(--t-meta);
+    line-height: 18px;
+    color: var(--ink-3);
+  }
+  .td-sec {
+    margin: 0;
+    font: 600 var(--t-lede) / 20px var(--ui);
+    letter-spacing: -0.005em;
+  }
+
+  /* A ruled table: aligned columns, square cells */
+  .td-tbl {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .td-tbl th {
+    text-align: left;
+    font-weight: 500;
+    font-size: 12px;
+    color: var(--ink-3);
+    height: 32px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .td-tbl td {
+    padding: 0 12px;
+    height: 44px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+  }
+  .td-tbl tr:last-child td {
+    border-bottom: 0;
+  }
+  .td-tbl td:first-child,
+  .td-tbl th:first-child {
+    padding-left: 16px;
+  }
+  .td-tbl td:last-child,
+  .td-tbl th:last-child {
+    padding-right: 16px;
+  }
+  .td-tbl .r {
+    text-align: right;
+  }
+  .td-box {
+    border: 1px solid var(--line);
+    border-radius: var(--r-box);
+    background: var(--raised);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/*
+  Fields: ruled and raised; the rule turns to the action colour when you type. Zero specificity
+  (the scope is inside :where), exactly like the classic defaults they replace, so a field drawn
+  inside something bigger (the composer, an editor, the search palette) keeps its own look.
+*/
+:where(:root[data-design='tide']) :where(input, textarea, select) {
+  background-color: var(--raised);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-ctl);
+  padding: 5px 10px;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+:where(:root[data-design='tide']) :where(input, textarea, select):where(:hover:not(:focus):not(:disabled)) {
+  background-color: var(--raised);
+  border-color: var(--ink-3);
+}
+:where(:root[data-design='tide']) :where(input, textarea, select):where(:focus) {
+  background-color: var(--raised);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+:where(:root[data-design='tide']) :where(input[type='checkbox'], input[type='radio'], input[type='range']) {
+  border: 0;
+  box-shadow: none;
+  background: none;
+  padding: 0;
+}

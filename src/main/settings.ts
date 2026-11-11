@@ -2,28 +2,7 @@ import { app } from 'electron'
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join, dirname } from 'path'
 import type { Settings } from '@shared/types'
-
-const DEFAULTS: Settings = {
-  vaultPath: null,
-  libraryFolder: 'Library',
-  theme: 'system',
-  sidebarCollapsed: false,
-  chatOpen: true,
-  readingWidth: 'normal',
-  readingFont: 'sans',
-  studyTimers: true,
-  fontSize: 17,
-  ai: {
-    baseUrl: 'http://localhost:8080/v1',
-    apiKey: '',
-    model: '',
-    embeddingModel: '',
-    temperature: 0.4,
-    agent: true,
-    contextTokens: 16384,
-    webSearch: { provider: 'wikipedia' }
-  }
-}
+import { withDefaults } from '@shared/settingsDefaults'
 
 const settingsPath = () => join(app.getPath('userData'), 'settings.json')
 
@@ -33,9 +12,9 @@ export function getSettings(): Settings {
   if (cache) return cache
   try {
     const stored = JSON.parse(readFileSync(settingsPath(), 'utf8'))
-    cache = { ...DEFAULTS, ...stored, ai: { ...DEFAULTS.ai, ...(stored.ai ?? {}) } }
+    cache = withDefaults(stored)
   } catch {
-    cache = structuredClone(DEFAULTS)
+    cache = withDefaults(null)
   }
   return cache!
 }

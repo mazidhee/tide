@@ -9,6 +9,7 @@ import { WeeklyView } from './components/WeeklyView'
 import { openTideLink } from './lib/links'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ThemeId } from '@shared/types'
+import { readingFace, resolveDesign, type DesignId } from '@shared/design'
 import { folderOf, scopeTopic, useApp } from './state'
 import { Sidebar } from './components/Sidebar'
 import { NoteView } from './components/NoteView'
@@ -34,6 +35,7 @@ import { NotebookView } from './components/NotebookView'
 import { SearchPalette } from './components/SearchPalette'
 import { SaveLinkDialog } from './components/SaveLink'
 import { Icon } from './components/Icon'
+import { TopBar } from './components/tide/TopBar'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { vaultUrl } from './lib/markdown'
 import { followModelBusy } from './lib/motion'
@@ -101,6 +103,13 @@ function useTheme(theme: ThemeId) {
     media.addEventListener('change', apply)
     return () => media.removeEventListener('change', apply)
   }, [theme])
+}
+
+/** Which of the two designs is drawn: data-design on the root, beside data-theme */
+function useDesign(design: DesignId) {
+  useEffect(() => {
+    document.documentElement.dataset.design = design
+  }, [design])
 }
 
 function Onboarding() {
@@ -178,6 +187,8 @@ export default function App() {
   const [dragging, setDragging] = useState(false)
 
   useTheme(settings.theme)
+  const tide = resolveDesign(settings.design) === 'tide'
+  useDesign(resolveDesign(settings.design))
   useAccent(settings.accent)
   useFocusCompletion()
 
@@ -257,8 +268,8 @@ export default function App() {
   useEffect(() => {
     document.documentElement.style.setProperty('--base-read-size', `${settings.fontSize}px`)
     document.documentElement.style.setProperty('--measure', MEASURES[settings.readingWidth])
-    document.documentElement.dataset.reading = settings.readingFont ?? 'sans'
-  }, [settings.fontSize, settings.readingWidth, settings.readingFont])
+    document.documentElement.dataset.reading = readingFace(settings)
+  }, [settings.fontSize, settings.readingWidth, settings.readingFont, settings.design, settings.tideReadingFont])
 
   const refreshDue = useCallback(async () => {
     if (!settings.vaultPath) return
@@ -347,6 +358,9 @@ export default function App() {
 
   // Views with their own tutor beside them don't get the floating Ask button or the chat panel
   const ownTutor = ['chat', 'lab', 'code', 'design', 'drill', 'session', 'exam'].includes(view.kind) || (view.kind === 'file' && /\.canvas$/i.test(view.path))
+  // In the new design Home is the whole width of the window and has its own ask box: the tutor
+  // panel stays beside what you read (a note, a PDF, the library), one click away from Home
+  const noPanel = ownTutor || (tide && view.kind === 'home')
   let main: React.ReactNode
   if (view.kind === 'file') {
     if (/\.pdf$/i.test(view.path)) main = <PdfView key={view.path} path={view.path} anchor={view.anchor} />
@@ -380,7 +394,7 @@ export default function App() {
 
   return (
     <div
-      className={`shell${settings.sidebarCollapsed || focusId ? ' no-sidebar' : ''}${focusId ? ' focus-window' : ''}${settings.chatOpen && !ownTutor && !focusId ? ' with-chat' : ''}`}
+      className={`shell${settings.sidebarCollapsed || focusId ? ' no-sidebar' : ''}${focusId ? ' focus-window' : ''}${settings.chatOpen && !noPanel && !focusId ? ' with-chat' : ''}`}
       onDragOver={(e) => {
         if ([...e.dataTransfer.types].some((t) => t === 'Files' || t === 'text/uri-list')) {
           e.preventDefault()
@@ -392,7 +406,7 @@ export default function App() {
     >
       {!settings.sidebarCollapsed && !focusId && <Sidebar dueCount={due.due} />}
       <main className="main">
-        {!['file', 'graph', 'help', 'lab', 'code', 'design', 'chat', 'session', 'quiz', 'exam'].includes(view.kind) && <div className="titlebar-drag drag" />}
+        {!['file', 'graph', 'help', 'lab', 'code', 'design', 'chat', 'session', 'quiz', 'exam'].includes(view.kind) && (tide ? <TopBar /> : <div className="titlebar-drag drag" />)}
         {settings.sidebarCollapsed && !focusId && (
           <div className="floating-controls no-drag">
             <button className="icon-btn" title="Show sidebar (⌘\)" onClick={() => app.updateSettings({ sidebarCollapsed: false })}>
@@ -419,7 +433,7 @@ export default function App() {
           </button>
         )}
       </main>
-      {settings.chatOpen && !ownTutor && !focusId && <ChatPanel />}
+      {settings.chatOpen && !noPanel && !focusId && <ChatPanel />}
 
       {dialog === 'search' && <SearchPalette onClose={() => app.setDialog(null)} />}
       {dialog === 'save-link' && <SaveLinkDialog onClose={() => app.setDialog(null)} />}

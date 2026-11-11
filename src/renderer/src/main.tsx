@@ -11,6 +11,19 @@ import './styles/prose.css'
 import './styles/lab.css'
 import './styles/sims.css'
 import './styles/knowledge.css'
+// The new design: every rule in these is scoped to data-design='tide' (see shared/design.ts)
+import './styles/tide/fonts.css'
+import './styles/tide/tokens.css'
+import './styles/tide/base.css'
+import './styles/tide/shell.css'
+import './styles/tide/home.css'
+import './styles/tide/lesson.css'
+import './styles/tide/notes.css'
+import './styles/tide/library.css'
+import './styles/tide/know.css'
+import './styles/tide/settings.css'
+import './styles/tide/rest.css'
+import { resolveDesign } from '@shared/design'
 import { AppProvider } from './state'
 import App from './App'
 import { startLab } from './lib/lab'
@@ -19,6 +32,8 @@ import { startLightbox } from './lib/lightbox'
 import { startSims } from './lib/sims'
 
 window.tide.settings.get().then((settings) => {
+  // Before the first paint, so the window never shows the other design for a frame
+  document.documentElement.dataset.design = resolveDesign(settings.design)
   startMermaid()
   startLab()
   startSims()
