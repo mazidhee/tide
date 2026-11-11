@@ -1070,7 +1070,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                 </button>
               ))}
               {found.filter((r) => !pack?.sources.some((s) => s.url === r.url)).slice(0, 4).map((r) => (
-                <button key={r.url} className="s-read-link" onClick={() => (r.path ? app.openPath(r.path) : window.tide.app.openExternal(r.url))} title={[r.by, r.why].filter(Boolean).join(': ') || r.title}>
+                <button key={`${r.url}#${r.title}`} className="s-read-link" onClick={() => (r.path ? app.openPath(r.path) : window.tide.app.openExternal(r.url))} title={[r.by, r.why].filter(Boolean).join(': ') || r.title}>
                   {r.title}
                   {!r.path && <Icon name="external" size={11} />}
                 </button>
@@ -1395,7 +1395,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                 </button>
               ))}
               {moreFound.map((r) => (
-                <button key={r.url} className="td-src" onClick={() => (r.path ? app.openPath(r.path) : window.tide.app.openExternal(r.url))} title={[r.by, r.why].filter(Boolean).join(': ') || r.title}>
+                <button key={`${r.url}#${r.title}`} className="td-src" onClick={() => (r.path ? app.openPath(r.path) : window.tide.app.openExternal(r.url))} title={[r.by, r.why].filter(Boolean).join(': ') || r.title}>
                   <span className="td-src-k">
                     <Icon name={r.path ? 'pdf' : 'external'} size={12} />
                   </span>
