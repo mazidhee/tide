@@ -1,0 +1,303 @@
+import { describe, expect, it } from 'vitest'
+import { SESSION_FORMAT, SHOW_ME } from '../src/shared/session'
+import { decide, type Run } from '../scripts/eval/tutor/compare'
+import { judgePrompt, parseJudge } from '../scripts/eval/tutor/judge'
+import { buildMessages, lessonTurns } from '../scripts/eval/tutor/request'
+import { SCENARIOS } from '../scripts/eval/tutor/scenarios'
+import { hasTable, paceWords, scoreReply } from '../scripts/eval/tutor/score'
+import { summarise, type Row } from '../scripts/eval/tutor/summary'
+import { SITUATIONS, SUBJECTS, type Expect, type Scenario } from '../scripts/eval/tutor/types'
+import { MIN_SCENARIOS, validateScenario, validateSet } from '../scripts/eval/tutor/validate'
+
+const fence = (lang: string, body: string) => '```' + lang + '\n' + body + '\n```'
+
+/** A scenario with only what the scorer reads */
+const sc = (expect: Expect, situation: Scenario['situation'] = 'after-correct', why = false) => ({ expect, situation, setup: { mode: 'teach' as const, topic: 'Binary search', options: why ? { why: true } : {} } })
+const failed = (expect: Expect, reply: string, situation?: Scenario['situation']) => scoreReply(sc(expect, situation), reply).failed
+
+const QUESTION = '<ask type="short">What is the loop invariant of binary search?</ask>'
+
+describe('the scenario set', () => {
+  it('is well formed: every request builds, every good reply passes, every bad reply fails as named', () => {
+    expect(validateSet(SCENARIOS).problems).toEqual([])
+  })
+
+  it('covers every subject in every situation, with at least 60 scenarios', () => {
+    expect(SCENARIOS.length).toBeGreaterThanOrEqual(MIN_SCENARIOS)
+    for (const subject of SUBJECTS) for (const situation of SITUATIONS) expect(SCENARIOS.some((s) => s.subject === subject && s.situation === situation), `${subject} ${situation}`).toBe(true)
+  })
+
+  it('has a bad reply marked "correct" for every answer that is not right in the marking situations', () => {
+    for (const s of SCENARIOS.filter((x) => x.situation === 'mark-planted-error')) expect(s.bad?.some((b) => b.fails.includes('verdict')), s.id).toBe(true)
+  })
+
+  it('notices a scenario that cannot be passed', () => {
+    const s = SCENARIOS.find((x) => x.situation === 'after-wrong')!
+    expect(validateScenario({ ...s, good: s.good.replace(/verdict="\w+"/, 'verdict="correct"') }).join(' ')).toMatch(/good reply fails: .*verdict/)
+    expect(validateScenario({ ...s, bad: [{ reply: s.good, fails: ['verdict'] }] }).join(' ')).toMatch(/should fail verdict/)
+  })
+})
+
+describe('requests', () => {
+  const marked = SCENARIOS.find((s) => s.situation === 'after-wrong')!
+  it('are built from the app\'s prompts: its system prompt with the tag rules, the instructions at the head of the first message', () => {
+    const m = buildMessages(marked)
+    expect(m[0].role).toBe('system')
+    expect(m[0].content).toContain(SESSION_FORMAT)
+    expect(m[0].content).toMatch(/^You are Tide, a patient tutor/)
+    expect(m[0].content).toMatch(/Today is Wednesday,? 11 November 2026\./)
+    expect(m[1].content).toMatch(/^How to tutor me here:\nYou are running a TEACH session on: /)
+    expect(m[m.length - 1].content).toMatch(/^Answer: [\s\S]+\n\(Confidence: sure\)$/)
+  })
+
+  it('send the learner\'s messages in the lesson screen\'s own forms', () => {
+    const show = SCENARIOS.find((s) => s.history.some((t) => 'learner' in t && 'showMe' in t.learner))!
+    expect(buildMessages(show).at(-1)!.content).toBe(SHOW_ME)
+    const tangent = SCENARIOS.find((s) => s.situation === 'tangent')!
+    expect(buildMessages(tangent).at(-1)!.content).toMatch(/^My question: /)
+    const idk = SCENARIOS.find((s) => s.situation === 'idk')!
+    expect(buildMessages(idk).at(-1)!.content).toMatch(/^I don't know\./)
+  })
+
+  it('add the hidden pace note the app would add (two "I don\'t know" in a row)', () => {
+    const turns = lessonTurns({ mode: 'teach', topic: 'Heaps' }, [{ tutor: QUESTION }, { learner: { idk: true } }, { tutor: QUESTION }, { learner: { idk: true } }])
+    expect(turns.at(-1)!.content).toContain("(Tide: This turn: they've said twice they don't know.")
+    expect(turns[2].content).toBe("I don't know.")
+  })
+})
+
+describe('protocol', () => {
+  const ends: Expect = { ends: 'ask' }
+
+  it('passes a reply that ends with one question in an ask tag', () => {
+    const s = scoreReply(sc(ends), `The invariant is what stays true on every pass of the loop.\n\n${QUESTION}`)
+    expect(s.failed).toEqual([])
+    expect(s.protocol.score).toBe(1)
+    expect(s.pass).toBe(true)
+  })
+
+  it('fails a question asked in plain text', () => {
+    expect(failed(ends, 'The invariant is what stays true on every pass.\n\nWhat do you think the invariant is?')).toEqual(expect.arrayContaining(['plain-question', 'ends']))
+    expect(failed(ends, `Do you know what an invariant is?\n\n${QUESTION}`)).toContain('plain-question')
+  })
+
+  it('lets a problem statement end in a question when its ask follows', () => {
+    const reply = `**Problem 1 · warm-up**\n\nA sorted array has 1,000,000 elements. How many comparisons does binary search need at most?\n\n<solution>ceil(log2(1000001)) = 20</solution>\n\n<ask type="problem">Your count, with your reasoning.</ask>`
+    expect(failed({ ends: 'ask', setsProblem: true }, reply)).toEqual([])
+  })
+
+  it('fails two questions, an unclosed tag, and text after the question', () => {
+    expect(failed(ends, `${QUESTION}\n\n<ask type="short">And its complexity?</ask>`)).toEqual(expect.arrayContaining(['one-ask', 'ends']))
+    expect(failed(ends, 'Here it is.\n\n<ask type="short">What is the invariant')).toEqual(expect.arrayContaining(['tags-closed', 'ends']))
+    expect(failed(ends, `${QUESTION}\n\nTake your time with this one.`)).toContain('ends')
+  })
+
+  it('allows hidden working, a note or a card after the question', () => {
+    expect(failed(ends, `<ask type="problem">Find the midpoint of lo = 4, hi = 9 without overflow.</ask>\n\n<solution>lo + (hi - lo) / 2 = 4 + 2 = 6</solution>\n<note>mid = lo + (hi - lo) / 2 avoids overflow.</note>`)).toEqual([])
+  })
+
+  it('checks <continue/> and "no question" endings', () => {
+    expect(failed({ ends: 'continue' }, 'First half of the idea.\n\n<continue/>')).toEqual([])
+    expect(failed({ ends: 'continue' }, `First half.\n\n${QUESTION}`)).toContain('ends')
+    expect(failed({ ends: 'either' }, 'First half.\n\n<continue/>')).toEqual([])
+    expect(failed({ ends: 'nothing' }, `Look at the middle row.\n\n${QUESTION}`, 'show-me')).toContain('ends')
+    expect(failed({ ends: 'ask' }, `First half.\n\n${QUESTION}\n\n<continue/>`)).toContain('ends')
+  })
+
+  it('fails a malformed ask: unknown type, a choice without options, code without a language, the wrong type', () => {
+    expect(failed(ends, '<ask type="quiz">What is it?</ask>')).toContain('ask-attrs')
+    expect(failed(ends, '<ask>What is it?</ask>')).toContain('ask-attrs')
+    expect(failed(ends, '<ask type="choice">Which one?</ask>')).toContain('ask-attrs')
+    expect(failed(ends, '<ask type="choice" options="O(log n)|O(n)|O(1)">Which one?</ask>')).toEqual([])
+    expect(failed(ends, '<ask type="code">Write it.</ask>')).toContain('ask-attrs')
+    expect(failed({ ends: 'ask', askTypes: ['explain'] }, QUESTION)).toContain('ask-type')
+  })
+
+  it('wants a hidden solution with every problem, and a problem when one is due', () => {
+    expect(failed(ends, '**Problem 2 · harder**\n\nSearch for 7 in [1, 3, 5, 7, 9].\n\n<ask type="problem">Which indices are probed?</ask>')).toContain('solution')
+    expect(failed({ ends: 'ask', setsProblem: true }, QUESTION)).toEqual(expect.arrayContaining(['sets-problem', 'solution']))
+  })
+
+  it('catches an answer leaked into the question', () => {
+    expect(failed(ends, '<ask type="problem">How many probes?<solution>3</solution></ask>')).toContain('no-leak')
+    expect(failed(ends, '<ask type="choice" options="O(log n) (correct)|O(n)|O(1)">Which one?</ask>')).toContain('no-leak')
+    expect(failed({ ends: 'ask', askMustNot: ['\\b20\\b'] }, '<ask type="short">Why is the answer 20 comparisons?</ask>')).toContain('no-leak')
+    const repeated = 'The array is halved each time, so 20 comparisons are enough for a million elements.'
+    expect(failed(ends, `**Problem 1 · warm-up**\n\n${repeated}\n\n<solution>${repeated}</solution>\n\n<ask type="problem">How many comparisons?</ask>`)).toContain('no-leak')
+  })
+
+  it('fails greetings, voice tags, echoed notes and tool calls in the text', () => {
+    expect(failed(ends, `Great question! Let's look at it.\n\n${QUESTION}`)).toContain('no-preamble')
+    expect(failed(ends, `<say>Right, the invariant.</say>\n\n${QUESTION}`)).toContain('clean')
+    expect(failed(ends, `(Tide: they asked to be tested.)\n\n${QUESTION}`)).toContain('clean')
+    expect(failed(ends, `<|tool_call>call:run_code{}<tool_call|>\n\n${QUESTION}`)).toContain('clean')
+  })
+
+  it('checks tags that must and must not be there, and a heading', () => {
+    expect(failed({ ends: 'ask', need: ['card', 'note'] }, QUESTION)).toEqual(expect.arrayContaining(['need:card', 'need:note']))
+    expect(failed({ ends: 'ask', forbid: ['grade'] }, `<grade verdict="wrong" score="0">No.</grade>\n\n${QUESTION}`)).toContain('forbid:grade')
+    expect(failed({ ends: 'ask', heading: 'Why this matters' }, QUESTION, 'open')).toContain('heading')
+    const opening = `**Why this matters**\n\n${'Binary search is how sorted data is searched in logarithmic time, in databases, in standard libraries and in version control. '.repeat(3)}\n\n${QUESTION}`
+    expect(failed({ ends: 'ask', heading: 'Why this matters' }, opening, 'open')).toEqual([])
+  })
+})
+
+describe('marking', () => {
+  const wrong: Expect = { ends: 'ask', verdict: 'wrong', names: ['overflow'] }
+  const grade = (v: string, text: string) => `<grade verdict="${v}" score="${v === 'correct' ? 1 : v === 'wrong' ? 0 : 0.5}">${text}</grade>\n\n${QUESTION}`
+
+  it('scores the verdict against the truth and reads the feedback for what it must name', () => {
+    const s = scoreReply(sc(wrong), grade('wrong', '"(lo + hi) / 2" can overflow when both are large: that is the step that fails.'))
+    expect(s.marking).toEqual({ score: 1, expected: 'wrong', got: 'wrong', falseCorrect: false, rejectedRight: false, named: true })
+    expect(s.failed).toEqual([])
+  })
+
+  it('flags the costly mistake: something not right marked correct', () => {
+    const s = scoreReply(sc(wrong), grade('correct', 'Yes, that midpoint is right.'))
+    expect(s.marking).toMatchObject({ score: 0, falseCorrect: true, named: false })
+    expect(s.failed).toEqual(expect.arrayContaining(['verdict', 'names']))
+  })
+
+  it('flags a right answer marked down, and catches the error unnamed', () => {
+    expect(scoreReply(sc({ ends: 'ask', verdict: 'correct' }), grade('partial', 'Nearly.')).marking).toMatchObject({ score: 0, rejectedRight: true, named: null })
+    expect(scoreReply(sc(wrong), grade('wrong', 'Not right. Look again.')).marking).toMatchObject({ score: 1, named: false })
+  })
+
+  it('accepts a second fair verdict when the scenario allows one, never otherwise', () => {
+    const slip: Expect = { ends: 'ask', verdict: 'partial', accept: ['wrong'] }
+    expect(scoreReply(sc(slip), grade('wrong', 'The last step is off.')).marking!.score).toBe(1)
+    expect(scoreReply(sc(slip), grade('correct', 'All good.')).marking!.score).toBe(0)
+  })
+
+  it('fails a missing grade, two grades, a grade that comes late and one with no verdict', () => {
+    expect(scoreReply(sc(wrong), QUESTION).marking).toMatchObject({ score: 0, got: 'none' })
+    expect(failed(wrong, QUESTION)).toEqual(expect.arrayContaining(['graded', 'verdict']))
+    expect(failed(wrong, `<grade verdict="wrong" score="0">Overflow.</grade>\n<grade verdict="partial" score="0.5">Or maybe.</grade>\n\n${QUESTION}`)).toContain('graded')
+    expect(failed(wrong, `${'Let me first restate what binary search does before I look at your answer in detail. '.repeat(2)}\n\n${grade('wrong', 'It can overflow.')}`)).toContain('grade-first')
+    expect(failed(wrong, `<grade score="0">It can overflow.</grade>\n\n${QUESTION}`)).toEqual(expect.arrayContaining(['grade-attrs', 'verdict']))
+    expect(failed(wrong, `<grade verdict="wrong" score="7">It can overflow.</grade>\n\n${QUESTION}`)).toContain('grade-attrs')
+  })
+})
+
+describe('exactness', () => {
+  const e: Expect = { ends: 'ask', must: ['\\b20\\b', 'log_?2|logarithm'], mustNot: ['\\b1,?000\\b comparisons'] }
+  it('wants the supplied values present and the wrong ones absent, in what the learner reads', () => {
+    expect(scoreReply(sc(e), `It takes at most 20 comparisons, the base-2 logarithm of a million rounded up.\n\n${QUESTION}`).exactness!.score).toBe(1)
+    const bad = scoreReply(sc(e), `It takes about 1000 comparisons.\n\n${QUESTION}`)
+    expect(bad.exactness!.score).toBe(0)
+    expect(bad.failed.filter((f) => f.startsWith('must'))).toHaveLength(3)
+  })
+  it('does not count the hidden solution as said', () => {
+    expect(scoreReply(sc(e), `Think about halving.\n\n<ask type="problem">How many comparisons at most?</ask>\n\n<solution>20, from log_2 of a million.</solution>`).exactness!.checks.filter((c) => c.id.startsWith('must:')).every((c) => !c.ok)).toBe(true)
+  })
+})
+
+describe('pace', () => {
+  it('counts what is read, not code, diagrams, notes or hidden working', () => {
+    const reply = `Three plain words.\n\n${fence('python', 'def f():\n    return 1')}\n\n<note>${'word '.repeat(50)}</note>\n\n<solution>${'word '.repeat(50)}</solution>\n\n<ask type="short">Two words?</ask>`
+    expect(paceWords(reply)).toBe(5)
+  })
+  it('fails a reply that runs long, by how far over it is, and allows more in Why mode', () => {
+    const long = `${'This sentence pads the reply well beyond what a short turn allows. '.repeat(30)}\n\n${QUESTION}`
+    const s = scoreReply(sc({ ends: 'ask' }), long)
+    expect(s.failed).toContain('pace')
+    expect(s.pace.score).toBeLessThan(1)
+    expect(s.pace.score).toBeGreaterThan(0)
+    expect(scoreReply(sc({ ends: 'ask' }, 'after-correct', true), long).pace.max).toBeGreaterThan(s.pace.max)
+    expect(failed({ ends: 'ask', words: { max: 1000 } }, long)).toEqual([])
+  })
+})
+
+describe('the visual asked for', () => {
+  const want = (visual: Expect['visual']): Expect => ({ ends: 'nothing', visual })
+  const seq = fence('mermaid', 'sequenceDiagram\n    participant A as "Client"\n    participant B as "Server"\n    A->>B: SYN\n    B-->>A: SYN-ACK\n    A->>B: ACK')
+  const flow = fence('mermaid', 'flowchart LR\n    A["Source"] --> B["Queue"]\n    B --> C["Warehouse"]')
+
+  it('accepts the right kind of mermaid diagram and rejects another kind, an untyped block and prose', () => {
+    expect(failed(want({ kind: 'mermaid', diagram: ['sequenceDiagram'] }), `${seq}\n\nLook at the order of the three messages.`, 'show-me')).toEqual([])
+    const wrongKind = scoreReply(sc(want({ kind: 'mermaid', diagram: ['sequenceDiagram'] }), 'show-me'), `${flow}\n\nLook at it.`)
+    expect(wrongKind.visual).toMatchObject({ score: 0, found: ['mermaid:flowchart'] })
+    expect(failed(want({ kind: 'mermaid' }), `${fence('mermaid', 'Client -> Server: SYN\nServer -> Client: ACK\nClient -> Server: ACK')}\n\nLook.`, 'show-me')).toContain('visual')
+    expect(failed(want({ kind: 'mermaid' }), 'The client sends SYN, the server answers, the client acknowledges.', 'show-me')).toContain('visual')
+    expect(failed(want({ kind: 'mermaid', diagram: ['stateDiagram'] }), `${fence('mermaid', 'stateDiagram-v2\n    [*] --> Follower\n    Follower --> Candidate: timeout\n    Candidate --> Leader: majority')}\n\nFollow the timeout arrow.`, 'show-me')).toEqual([])
+  })
+
+  it('accepts a table with a header and rows, not a list', () => {
+    const table = '| step | lo | hi | mid |\n| --- | --- | --- | --- |\n| 1 | 0 | 9 | 4 |\n| 2 | 5 | 9 | 7 |'
+    expect(hasTable(table)).toBe(true)
+    expect(failed(want({ kind: 'table' }), `${table}\n\nWatch lo move.`, 'show-me')).toEqual([])
+    expect(failed(want({ kind: 'table' }), '- step 1: lo 0, hi 9\n- step 2: lo 5, hi 9', 'show-me')).toContain('visual')
+    expect(hasTable('| a | b |\n| --- | --- |\n| 1 | 2 |')).toBe(false)
+  })
+
+  it('accepts a simulation the app can read, of the kind asked for', () => {
+    const sim = (json: string) => `${fence('sim', json)}\n\nWatch the path.`
+    expect(failed(want({ kind: 'sim', sim: 'gradient-descent' }), sim('{"kind":"gradient-descent","surface":"ravine","optimiser":"momentum","rate":0.05,"momentum":0.9}'), 'show-me')).toEqual([])
+    expect(failed(want({ kind: 'sim', sim: 'gradient-descent' }), sim('{"kind":"softmax","logits":[2,1,0.1]}'), 'show-me')).toContain('visual')
+    expect(failed(want({ kind: 'sim' }), sim('{"kind":"gradient-descent", surface: ravine}'), 'show-me')).toContain('visual')
+    expect(failed(want({ kind: 'sim' }), sim('{"kind":"decision-tree"}'), 'show-me')).toContain('visual')
+  })
+
+  it('accepts a chart block with a query, and rejects one without', () => {
+    const chart = (json: string) => `${fence('chart', json)}\n\nLook at the dip in March.`
+    expect(failed(want({ kind: 'chart' }), chart('{"sql": "SELECT strftime(\'%Y-%m\', created_at) AS month, COUNT(*) AS orders FROM orders GROUP BY 1 ORDER BY 1", "type": "line", "title": "Orders by month"}'), 'show-me')).toEqual([])
+    expect(failed(want({ kind: 'chart' }), chart('{"type": "line", "title": "Orders by month"}'), 'show-me')).toContain('visual')
+    expect(failed(want({ kind: 'chart' }), chart('orders by month as a line'), 'show-me')).toContain('visual')
+  })
+})
+
+describe('the judge', () => {
+  it('is asked with the lesson so far, the reply without its hidden working, and the rubric', () => {
+    const s = SCENARIOS.find((x) => x.situation === 'after-wrong')!
+    const p = judgePrompt(s, s.good + '\n<solution>SECRET</solution>')
+    expect(p).toContain('The learner\'s last answer is in truth wrong.')
+    expect(p).toContain('misconception: does it deal with what this learner actually got wrong')
+    expect(p).not.toContain('SECRET')
+    expect(p).not.toContain('(Tide:')
+    expect(p).not.toContain('How to tutor me here')
+  })
+  it('has its ratings read, n/a left out, and nonsense refused', () => {
+    expect(parseJudge('CLARITY: 4\nMISCONCEPTION: n/a\n**SOCRATIC**: 2/5\nACCURACY: 5\nWHY: the question repeats the text.')).toEqual({ clarity: 4, socratic: 2, accuracy: 5, why: 'the question repeats the text.' })
+    expect(parseJudge('I think it is fine.')).toBeNull()
+    expect(parseJudge('CLARITY: 9')).toBeNull()
+  })
+})
+
+describe('the summary and the decision', () => {
+  const s = sc({ ends: 'ask', verdict: 'wrong', names: ['overflow'] }, 'mark-planted-error')
+  const good = scoreReply(s, `<grade verdict="wrong" score="0">It can overflow.</grade>\n\n${QUESTION}`)
+  const bad = scoreReply(s, `<grade verdict="correct" score="1">Yes.</grade>\n\n${QUESTION}`)
+  const row = (score: typeof good, repeat: number, id = 'a'): Row => ({ id, subject: 'systems', situation: 'mark-planted-error', repeat, score })
+
+  it('gives means over everything and the spread of the per-repeat means', () => {
+    const sum = summarise([row(good, 0), row(good, 0, 'b'), row(good, 1), row(bad, 1, 'b')])
+    expect(sum.marking.accuracy).toEqual({ mean: 0.75, spread: 0.354, n: 4 })
+    expect(sum.marking.falseCorrect.mean).toBe(0.25)
+    expect(sum.marking.plantedCaught.mean).toBe(0.75)
+    expect(sum.measures.pass.mean).toBe(0.75)
+    expect(sum.bySubject.systems.marking.n).toBe(4)
+    expect(sum.bySubject.maths.marking).toBeUndefined()
+    expect(sum.failures[0]).toEqual({ id: 'verdict', share: 0.25 })
+  })
+
+  const run = (rows: Row[], over: Partial<Run> = {}): Run => ({ version: '1', label: 'x', model: 'm', prompts: 'p', settings: { temperature: 0.4, seed: 1, repeats: 3, maxTokens: 1500 }, summary: summarise(rows), ...over })
+  const three = (scores: (typeof good)[]) => [0, 1, 2].flatMap((r) => scores.map((sc2, i) => row(sc2, r, `s${i}`)))
+
+  it('says go only when something is clearly better and nothing that matters is worse', () => {
+    const base = run(three([good, bad, bad, bad]))
+    const better = run(three([good, good, good, bad]))
+    expect(decide(base, better)).toMatchObject({ go: true, blockers: [] })
+    expect(decide(base, base).go).toBe(false)
+    expect(decide(better, base).blockers.join(' ')).toMatch(/marking accuracy fell/)
+    expect(decide(better, base).blockers.join(' ')).toMatch(/more not-right answers marked correct/)
+  })
+
+  it('refuses to compare runs with different scenario sets, prompts, too few repeats, or failed requests', () => {
+    const base = run(three([good, bad]))
+    const better = run(three([good, good]))
+    expect(decide(base, { ...better, version: '2' }).go).toBe(false)
+    expect(decide(base, { ...better, prompts: 'other' }).blockers.join(' ')).toMatch(/prompts differ/)
+    expect(decide(base, { ...better, settings: { ...better.settings, repeats: 1 } }).go).toBe(false)
+    expect(decide(base, { ...better, errors: 2 }).go).toBe(false)
+  })
+})

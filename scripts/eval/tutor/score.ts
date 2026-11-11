@@ -94,10 +94,12 @@ export function readableText(blocks: Block[], opts: { notes?: boolean; asks?: bo
     .join('\n\n')
 }
 
-/** The words that count for pace: prose, question and feedback; not code, diagrams, notes or working */
+/** The words that count for pace: prose, question and feedback; not code, diagrams, tables, notes or working */
 export function paceWords(reply: string): number {
   const blocks = parseBlocks(reply.replace(FENCE, ' '))
-  return words(readableText(blocks, { notes: false }).replace(/\$\$[\s\S]*?\$\$/g, ' x '))
+  // A table is a picture too: its rows aren't prose
+  const prose = readableText(blocks, { notes: false }).split('\n').filter((l) => (l.match(/\|/g) ?? []).length < 2).join('\n')
+  return words(prose.replace(/\$\$[\s\S]*?\$\$/g, ' x '))
 }
 
 /** How long a reply may be when the scenario doesn't say */
@@ -106,7 +108,7 @@ export function defaultWords(s: Pick<Scenario, 'situation' | 'setup'>): { min: n
   if (s.situation === 'show-me') return { min: 0, max: 90 }
   if (s.situation === 'recall-open') return { min: 0, max: 90 }
   if (s.situation === 'open') return { min: 40, max: Math.round(260 * roomy) }
-  return { min: 8, max: Math.round(230 * roomy) }
+  return { min: 0, max: Math.round(230 * roomy) }
 }
 
 function mermaidKind(body: string): string | null {
