@@ -3,6 +3,7 @@ import { isMlxVlm } from './modelServer'
 import { thingsIntent } from '@shared/learnIntent'
 import { graphCached, relatedNotes } from './learn'
 import { readTerminal, runInTerminal, terminalInfo } from './terminal'
+import { inUse } from './modelIdle'
 import { afterBackground, asInteractive, inBackground } from './modelQueue'
 import { memoize } from './memo'
 import { getCoach, getWeek, profilePrompt } from './coach'
@@ -1524,7 +1525,8 @@ const LIVE_FOR_MS = 20 * 60_000
 
 async function readLive(): Promise<void> {
   const now = live
-  if (!now || !isMlxVlm() || Date.now() - now.at > LIVE_FOR_MS) return
+  // Not once you've been away long enough for the model to be unloaded: keeping warm must not load it again
+  if (!now || !isMlxVlm() || Date.now() - now.at > LIVE_FOR_MS || !inUse()) return
   readingBack?.abort()
   const controller = new AbortController()
   readingBack = controller

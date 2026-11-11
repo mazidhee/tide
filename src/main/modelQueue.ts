@@ -69,6 +69,7 @@ async function takeTurn(): Promise<() => void> {
 /** Marks an interactive request for its whole duration, pre-empting background work */
 export async function asInteractive<T>(fn: () => Promise<T>): Promise<T> {
   interactive++
+  lastAsked = Date.now()
   announce()
   background?.controller.abort()
   const release = await takeTurn()
@@ -76,6 +77,7 @@ export async function asInteractive<T>(fn: () => Promise<T>): Promise<T> {
     return await fn()
   } finally {
     release()
+    lastAsked = Date.now()
     interactive--
     announce()
     wake()
@@ -85,6 +87,7 @@ export async function asInteractive<T>(fn: () => Promise<T>): Promise<T> {
 /** Same as asInteractive, for streaming generators */
 export async function* streamInteractive<T>(gen: () => AsyncGenerator<T>): AsyncGenerator<T> {
   interactive++
+  lastAsked = Date.now()
   announce()
   background?.controller.abort()
   const release = await takeTurn()
@@ -92,6 +95,7 @@ export async function* streamInteractive<T>(gen: () => AsyncGenerator<T>): Async
     yield* gen()
   } finally {
     release()
+    lastAsked = Date.now()
     interactive--
     announce()
     wake()
@@ -102,7 +106,7 @@ export async function* streamInteractive<T>(gen: () => AsyncGenerator<T>): Async
  * Runs background work when the model is free, one job at a time. The job gets a signal that
  * aborts if the user needs the model meanwhile (or if the caller's own signal aborts).
  */
-export async function inBackground<T>(fn: (signal: AbortSignal) => Promise<T>, outer?: AbortSignal): Promise<T> {
+export async function inBackground<T>(fn: (signal: AbortSignal) => Promise<T>, outer?: AbortSignal, usesModel = true): Promise<T> {
   // Every job queues; the pump hands the model to one at a time
   await new Promise<void>((resolve) => {
     waiting.push(resolve)
@@ -123,15 +127,20 @@ export async function inBackground<T>(fn: (signal: AbortSignal) => Promise<T>, o
     background = null
     announce()
     wake()
-    doneListeners.forEach((l) => l())
+    // A job that only waited its turn (a settings check) pushed nothing out of the model's cache
+    if (usesModel) doneListeners.forEach((l) => l())
   }
 }
 
 const doneListeners = new Set<() => void>()
 
-/** Called each time a background job has finished with the model */
+/** Called each time a background job that used the model has finished with it */
 export function afterBackground(listener: () => void): void {
   doneListeners.add(listener)
 }
 
 export const modelBusy = () => interactive > 0
+
+let lastAsked = Date.now()
+/** Milliseconds since you last waited on the model (a reply, a lesson turn, a check): background work doesn't count */
+export const sinceAsked = () => (interactive > 0 ? 0 : Date.now() - lastAsked)

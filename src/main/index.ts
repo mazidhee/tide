@@ -48,6 +48,7 @@ import { searchStatus, setupSearch, stopSearch, wakeSearch } from './websearch'
 import { applySpeedups, ensureModelServer, serverReady, speedStatus, tuneModelServer } from './modelServer'
 import { labFlashcards } from './labCards'
 import { prewarmLesson, warmChat, warmLessons } from './agent'
+import { inUse, wakeModel, watchModelIdle } from './modelIdle'
 import { inBackground, onModelBusy } from './modelQueue'
 import { cancelDraft, draftOutline } from './outlineDraft'
 import { cancelCompanyPrep, draftCompanyPrep } from './companyPrep'
@@ -630,16 +631,24 @@ app.whenReady().then(() => {
   const ready = async () => {
     if ((await ensureModelServer()) === 'started') await serverReady()
     const r = await tuneModelServer()
-    if (r !== 'unsupported') await warmChat().then(() => warmLessons())
+    // Not when you haven't used the model for a while (the Mac just woke with Tide in the background): it stays unloaded until you come back
+    if (r !== 'unsupported' && inUse()) await warmChat().then(() => warmLessons())
   }
   ready().catch(() => {})
+  // The model's memory goes back to the Mac when you aren't studying, and loads as you return
+  watchModelIdle()
+  app.on('browser-window-focus', () => wakeModel(() => warmChat()))
   // A restarted (or closed) server forgets all that: check each minute, when the model is free
   setInterval(() => {
-    inBackground(async () => {
-      if ((await ensureModelServer()) === 'started') await serverReady()
-      return tuneModelServer()
-    })
-      .then((r) => (r === 'enabled' ? warmChat().then(() => warmLessons()) : undefined))
+    inBackground(
+      async () => {
+        if ((await ensureModelServer()) === 'started') await serverReady()
+        return tuneModelServer()
+      },
+      undefined,
+      false
+    )
+      .then((r) => (r === 'enabled' && inUse() ? warmChat().then(() => warmLessons()) : undefined))
       .catch(() => {})
   }, 60_000)
   // After sleep, the server may have dropped what it had ready: get Gemma ready again before you ask
