@@ -1,0 +1,510 @@
+@@@@ wrong-retarget-inverted
+situation: after-wrong
+topic: Difficulty adjustment
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["halve|invert|wrong way|upside","too fast|faster"],"must":["1,200","1,000 / 500 = 2"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b960\\b"]}
+@@ tutor
+A proof-of-work chain aims for a fixed average time between blocks, whatever the total hash power. It cannot measure hash power directly, so it looks at how long the last batch of blocks took and rescales the difficulty by target time over actual time. Bitcoin does this roughly every two weeks and limits how far a single adjustment can move.
+
+<note>Retarget: $D_{\text{new}} = D_{\text{old}} \times \frac{T_{\text{target}}}{T_{\text{actual}}}$, where both times are for the same batch of blocks. Expected work per block is proportional to the difficulty.</note>
+
+**Problem 1 · warm-up**
+
+A toy chain targets 10 minutes per block and retargets every 100 blocks. The last 100 blocks were mined at difficulty 600 and took 500 minutes. What is the new difficulty?
+
+<solution>Target time for the batch: 100 × 10 = 1,000 minutes. Factor: 1,000 / 500 = 2. New difficulty: 600 × 2 = 1,200.</solution>
+<check lang="python">
+target = 100 * 10
+assert 600 * target / 500 == 1200
+</check>
+
+<ask type="problem">The new difficulty, with the factor you applied.</ask>
+@@ learner answer sure
+Blocks took 500 min instead of 1000 so they're coming in half the time, so halve it: difficulty 300. Faster blocks = lower number needed, obviously.
+@@ reply
+<grade verdict="wrong" score="0.2">"half the time" is the right reading of the batch, but "so halve it" applies the factor the wrong way up. Blocks arriving too fast means the hash power has outgrown the difficulty, and halving the difficulty would make them arrive faster still.</grade>
+
+The adjustment has to cancel what happened. The batch should have taken 100 × 10 = 1,000 minutes and took 500, so the factor is 1,000 / 500 = 2 and the new difficulty is 600 × 2 = 1,200. With twice the work needed per block and the same hash power, blocks return to 10 minutes.
+
+<card>100 blocks took half their target time. Does the difficulty go up or down, and by what factor? :: Up, by target time / actual time = 2. Blocks came too fast, so each must need more work.</card>
+
+<note>Direction check for a retarget: blocks too fast → difficulty rises (factor above 1); blocks too slow → difficulty falls (factor below 1). The factor is target over actual, never actual over target.</note>
+
+**Problem 2 · same idea**
+
+The next 100 blocks are mined at difficulty 1,200 and take 1,250 minutes. What is the difficulty after this retarget?
+
+<solution>Target 1,000 minutes, actual 1,250. Factor 1,000 / 1,250 = 0.8. New difficulty 1,200 × 0.8 = 960.</solution>
+<check lang="python">
+assert 1200 * 1000 / 1250 == 960
+</check>
+
+<ask type="problem">The new difficulty, and whether it rose or fell and why.</ask>
+@@ verify
+target = 100 * 10
+assert target == 1000 and target / 500 == 2 and 600 * 2 == 1200
+# the learner's figure follows from inverting the factor
+assert 600 * 500 / target == 300
+# with double the hash power, difficulty 1200 restores the interval: time per block scales as difficulty / hash power
+old_rate = 600 / (500 / 100)            # difficulty units of work per minute in the fast batch
+assert 1200 / old_rate == 10
+assert 1200 * 1000 / 1250 == 960 and 1000 / 1250 == 0.8
+assert '960' in solution(reply) and '960' not in visible(reply)
+
+@@@@ wrong-quiz-signature-encrypts
+situation: after-wrong
+topic: Digital signatures
+mode: quiz
+voice: overconfident
+level: easy
+expect: {"verdict":"partial","accept":["wrong"],"names":["encrypt|confidential|hide|secret","public|anyone"],"must":["Question 5 of 8","(not|un)(.{0,12})(changed|altered)"],"askTypes":["choice"]}
+noverify: a conceptual quiz exchange; nothing is computed
+@@ tutor
+**Question 4 of 8**
+
+<ask type="short">Alice signs a transaction with her private key and broadcasts the transaction, the signature and her public key. Name two things a node learns when the signature verifies, and one thing a signature does not provide.</ask>
+@@ learner answer sure
+It learns the tx came from Alice and that nobody else can read it, since signing encrypts it with her key. What it doesn't provide: nothing really, signed = secure.
+@@ reply
+<grade verdict="partial" score="0.3">"the tx came from Alice" is one of the two: it was signed by whoever holds the private key matching her public key. "signing encrypts it" is the misconception: a signature hides nothing, and the transaction is broadcast in the clear for anyone to read.</grade>
+
+The second thing a node learns is integrity: the transaction has not been altered since it was signed, because any change makes verification fail. What a signature does not provide is secrecy. It is a value sent alongside a public message, and checking it needs only the public key.
+
+<card>What does a valid digital signature prove, and what does it not provide? :: That the holder of the matching private key signed exactly this message (origin and integrity). It does not hide the message: no confidentiality.</card>
+
+**Question 5 of 8**
+
+<ask type="choice" options="Check that a signature on a message was made with Alice's private key|Produce a valid signature on a new message in Alice's name|Work out Alice's private key from one of her signed messages|Decrypt a message that Alice has signed with her private key">Which of these can someone do who holds only Alice's public key?</ask>
+
+@@@@ wrong-utxo-partial-spend
+situation: after-wrong
+topic: The UTXO model
+voice: confused
+level: easy
+expect: {"verdict":"wrong","accept":["partial"],"names":["whole|entire|in full","balance|part"],"must":["\\b24\\b","\\b25\\b"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b3\\b","change"]}
+@@ tutor
+A UTXO chain stores no balance per account. Its state is a set of unspent transaction outputs, each with an amount and a condition for spending it. A transaction names existing outputs as its inputs and creates new outputs; whatever the inputs hold beyond the outputs is the fee.
+
+<note>UTXO model: the state is the set of unspent outputs. A transaction removes the outputs it spends and adds the outputs it creates. Fee = sum of inputs − sum of outputs.</note>
+
+**Problem 1 · warm-up**
+
+Asha controls two UTXOs, worth 40 and 30 units. She wants to pay Ben 45 units and leave a fee of 1 unit. Write the transaction: its inputs, and its outputs with their amounts.
+
+<solution>Inputs: the 40 and the 30 (total 70). Outputs: 45 to Ben and 24 back to an address Asha controls. Fee: 70 − 45 − 24 = 1.</solution>
+<check lang="python">
+assert 40 + 30 - 45 - 1 == 24
+</check>
+
+<ask type="problem">The inputs and the outputs, with amounts.</ask>
+@@ learner answer unsure
+Inputs: the 40, and then 5 from the 30, plus 1 more from the 30 for the fee? Output: 45 to Ben. So the 30 UTXO is left with 24 in it I think. Not sure if taking part of one is how it's written though
+@@ reply
+<grade verdict="wrong" score="0.2">Your doubt is the right one: "the 30 UTXO is left with 24 in it" treats an output as a balance that can be drawn down in part. An output is spent whole or not at all, so the 30 is used up entirely.</grade>
+
+As you wrote it, the transaction has inputs of 40 and 30 and a single output of 45, so the fee would be 70 − 45 = 25 units, not 1. To keep the rest, Asha adds a second output paying herself: 70 − 45 − 1 = 24 units. Inputs 40 and 30; outputs 45 to Ben and 24 to Asha.
+
+<card>Asha spends a 30-unit UTXO but needs only 6 of it. Where does the other 24 go? :: Into a new output she pays to herself (change). The 30 is consumed whole; anything not assigned to an output becomes the fee.</card>
+
+<note>Change: inputs are consumed whole, so a spender who wants something back must create an output to their own address. Value not covered by any output is the fee.</note>
+
+**Problem 2 · same idea**
+
+Caro controls UTXOs of 20 and 15 units. She pays Dev 30 units with a fee of 2 units. Write the inputs and the outputs with amounts.
+
+<solution>Inputs: 20 and 15 (total 35). Outputs: 30 to Dev and 35 − 30 − 2 = 3 back to Caro. Fee: 35 − 33 = 2.</solution>
+<check lang="python">
+assert 20 + 15 - 30 - 2 == 3
+</check>
+
+<ask type="problem">The inputs and the outputs, with amounts, and a line checking the fee.</ask>
+@@ verify
+ins = [40, 30]
+assert sum(ins) - 45 - 1 == 24
+# the learner's transaction as written: both outputs consumed, one output of 45
+assert sum(ins) - 45 == 25
+# their "5 from the 30, plus 1" leaves the 24 they quote
+assert 30 - 5 - 1 == 24 and 40 + 5 == 45
+assert 20 + 15 == 35 and 35 - 30 - 2 == 3
+assert '3 back to Caro' in solution(reply)
+
+@@@@ wrong-catch-up-three-in-a-row
+situation: after-wrong
+topic: Confirmations and probabilistic finality
+options: {"difficulty":"hard"}
+voice: overconfident
+level: hard
+expect: {"verdict":"wrong","names":["in a row|straight|one path|only path|direct","fall(s|ing)? further behind|lose|longer"],"must":["1/64","0\\.0156"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["1/81","0\\.0123"]}
+@@ tutor
+Suppose an attacker with a fraction $q$ of the hash power is $z$ blocks behind the honest chain, which has the rest, $p = 1 - q$. Each new block is the attacker's with probability $q$ and the honest miners' with probability $p$, so the gap moves up or down by one block at a time. For $q < p$, the probability that the attacker ever closes a gap of $z$ blocks is $(q/p)^z$. This is the gambler's-ruin result used in the Bitcoin paper.
+
+<note>Catching up from $z$ blocks behind, with attacker share $q < p = 1 - q$: probability $(q/p)^z$. It falls geometrically with each extra block of lead, which is why waiting for more confirmations helps.</note>
+
+**Problem 1 · hard**
+
+An attacker has 20% of the hash power and is 3 blocks behind. What is the probability that they ever catch up?
+
+<solution>q/p = 0.2 / 0.8 = 0.25. (0.25)^3 = 1/64 ≈ 0.0156.</solution>
+<check lang="python">
+from fractions import Fraction
+q = Fraction(1, 5)
+assert (q / (1 - q)) ** 3 == Fraction(1, 64)
+</check>
+
+<ask type="problem">The probability, as a fraction or a decimal, with your working.</ask>
+@@ learner answer sure
+They need to win 3 blocks in a row, each with prob 0.2, so 0.2^3 = 0.008. The formula is overkill for this.
+@@ reply
+<grade verdict="wrong" score="0.2">"win 3 blocks in a row" is only the most direct path, and $0.2^3 = 0.008$ is the probability of that one path. The attacker can also lose a block, fall further behind and still catch up later, and every such longer path adds to the total.</grade>
+
+Summing over all the paths is what the formula does. With $q = 0.2$ and $p = 0.8$, $q/p = 0.25$, so the probability of ever closing a 3-block gap is $0.25^3 = 1/64 \approx 0.0156$, about twice your figure.
+
+<card>Why is the chance of catching up from 3 blocks behind not $q^3$? :: $q^3$ counts only three attacker blocks in a row. Catching up at any later time includes paths where the attacker first falls further behind; the total is $(q/p)^3$.</card>
+
+<note>$q^z$ is the chance that the next $z$ blocks are all the attacker's. "Ever catches up" is larger: $(q/p)^z$. For $q = 0.2$, $z = 3$: 0.008 against 1/64 ≈ 0.0156.</note>
+
+**Problem 2 · same level**
+
+An attacker has 25% of the hash power and is 4 blocks behind. What is the probability that they ever catch up?
+
+<solution>q/p = 0.25 / 0.75 = 1/3. (1/3)^4 = 1/81 ≈ 0.0123.</solution>
+<check lang="python">
+from fractions import Fraction
+q = Fraction(1, 4)
+assert (q / (1 - q)) ** 4 == Fraction(1, 81)
+assert round(1 / 81, 4) == 0.0123
+</check>
+
+<ask type="problem">The probability, with the value of q/p you used.</ask>
+@@ verify
+import numpy as np
+from fractions import Fraction
+assert Fraction(1, 5) ** 3 == Fraction(1, 125) and 0.2 ** 3 - 0.008 < 1e-12
+assert (Fraction(1, 5) / Fraction(4, 5)) ** 3 == Fraction(1, 64) and round(1 / 64, 4) == 0.0156
+assert 1.9 < (1 / 64) / 0.008 < 2.0          # "about twice"
+
+# a second method: solve the random walk directly. u[d] = P(ever reach gap 0 from gap d),
+# u[0] = 1, u[d] = q u[d-1] + p u[d+1], cut off at a gap so large that u is taken as 0
+def ever(q, z, N=400):
+    p = 1 - q
+    A = np.zeros((N + 1, N + 1)); b = np.zeros(N + 1)
+    A[0, 0] = 1; b[0] = 1
+    A[N, N] = 1
+    for d in range(1, N):
+        A[d, d] = 1; A[d, d - 1] = -q; A[d, d + 1] = -p
+    return np.linalg.solve(A, b)[z]
+assert approx(ever(0.2, 3), 1 / 64, 1e-9)
+assert approx(ever(0.25, 4), 1 / 81, 1e-9)
+assert '1/81' in solution(reply) and '1/81' not in visible(reply)
+
+@@@@ wrong-replay-across-fork
+situation: after-wrong
+topic: Replay protection and chain ids
+options: {"strategy":"dialogue"}
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["bytes|same (key|address|public key)","replay"],"must":["chain id","2016"],"askTypes":["short","explain"]}
+noverify: a conceptual exchange; nothing is computed
+@@ tutor
+A chain splits into two networks, A and B, that share the same history up to the split. Every account therefore has the same key, the same address, the same balance and the same nonce on both. You sign a transfer of 10 coins and broadcast it on network A.
+
+<ask type="explain">What, if anything, stops someone from copying that signed transaction and broadcasting it on network B? Say what you would be relying on.</ask>
+@@ learner answer sure
+Nothing needs to stop it because it can't work. The signature was made for network A, and B has different nodes that would see it isn't one of theirs. A transaction only exists on the chain it was sent to.
+@@ reply
+<grade verdict="wrong" score="0.1">"The signature was made for network A" is the step that fails: a signature is made over the transaction's bytes, and nothing in those bytes names a network. A node on B has no way to "see it isn't one of theirs".</grade>
+
+A signed transaction is data that anyone can copy. B's node runs the same checks as A's: the signature verifies against the same public key, the nonce matches because the histories are shared, and the balance is there. So B accepts it and you have paid 10 coins on both networks. This is a replay attack, and it happened to users after Ethereum and Ethereum Classic split in 2016. The fix adopted on Ethereum later that year (EIP-155) puts a chain id inside the data that is signed.
+
+<card>Two networks share history after a split. Why is a transaction signed for one valid on the other? :: The signature covers only the transaction's bytes, and keys, nonces and balances are the same on both. Unless the signed data includes a chain id, it can be replayed.</card>
+
+<note>Replay protection: the signed data includes a chain id, and each network accepts only transactions signed with its own id. Without it, any transaction valid on one fork can be copied to the other.</note>
+
+<ask type="explain">With a chain id inside the signed data, B's node receives your network-A transaction. Which check fails now, and why can the attacker not simply edit the chain id field to B's value before sending it?</ask>
+
+@@@@ idk-light-client-proof-path
+situation: idk
+topic: Light clients and Merkle proofs
+voice: plain
+level: medium
+expect: {"must":["sibling"],"mustNot":["H7-8","H1-4"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["H4\\b","H1-2"]}
+@@ tutor
+**Problem 2 · harder**
+
+A light client stores block headers only. A full node tells it "your payment is transaction 6 of the 8 in block 900" and sends the transaction. Counting leaves from 1, and writing H5 for a leaf hash, H5-6 for the hash of a pair and H5-8 for the hash above that, which hashes must the full node also send, and how does the client combine them?
+
+<solution>It sends H5, then H7-8, then H1-4. The client computes H6 = hash(tx), H5-6 = hash(H5 ‖ H6), H5-8 = hash(H5-6 ‖ H7-8) and root = hash(H1-4 ‖ H5-8), and compares that with the root in block 900's header.</solution>
+
+<ask type="problem">The hashes in the order they are used, and each combining step.</ask>
+@@ learner idk
+@@ reply
+The idea to hold on to is that the client can always compute its own node, so at each level the only thing it lacks is that node's sibling. The proof is exactly those siblings, from the bottom up.
+
+Take a smaller tree with four leaves and suppose the payment is transaction 2. The client hashes it to get H2. It needs H1, the sibling, and computes H1-2 = hash(H1 ‖ H2), with H1 on the left because leaf 1 comes first. Now it holds H1-2 and needs that node's sibling, H3-4, to compute the root = hash(H1-2 ‖ H3-4).
+
+<note>An inclusion proof is the sibling of each node on the path from the leaf to the root, lowest first. At each step the client hashes its current node with the sibling, keeping the tree's left-to-right order, and finally compares the result with the root in the header.</note>
+
+**Problem 3 · easier**
+
+Same four-leaf tree, but now the payment is transaction 3. Which hashes does the client need, in order, and which value goes on the left in each combining step?
+
+<solution>H4 first: H3-4 = hash(H3 ‖ H4), with H3 on the left. Then H1-2: root = hash(H1-2 ‖ H3-4), with H1-2 on the left.</solution>
+
+<ask type="problem">The hashes in order, and the left and right value of each step.</ask>
+@@ verify
+# sibling paths, by construction of the tree
+def proof(n, leaf):                      # leaf counted from 1; names like H5, H5-6, H5-8
+    level = [(i, i) for i in range(1, n + 1)]
+    idx, out = leaf - 1, []
+    name = lambda r: f'H{r[0]}' if r[0] == r[1] else f'H{r[0]}-{r[1]}'
+    while len(level) > 1:
+        sib = idx ^ 1
+        out.append((name(level[sib]), 'left' if sib < idx else 'right'))
+        level = [(level[i][0], level[i + 1][1]) for i in range(0, len(level), 2)]
+        idx //= 2
+    return out
+assert proof(8, 6) == [('H5', 'left'), ('H7-8', 'right'), ('H1-4', 'left')]
+assert proof(4, 2) == [('H1', 'left'), ('H3-4', 'right')]
+assert proof(4, 3) == [('H4', 'right'), ('H1-2', 'left')]
+s = solution(reply)
+assert s.index('H4') < s.index('H1-2') and 'hash(H3 ‖ H4)' in s and 'hash(H1-2 ‖ H3-4)' in s
+# the original problem's answer is not given away
+assert 'H7-8' not in reply and 'H1-4' not in reply
+assert 'hash(H1 ‖ H2)' in reply and 'hash(H1-2 ‖ H3-4)' in visible(reply)
+
+@@@@ idk-gas-probe-to-plan
+situation: idk
+topic: Gas and fees in the EVM
+voice: plain
+level: medium
+expect: {"need":["plan","note"],"must":["gas limit"],"askMustNot":["out of gas","revert","run(s)? out"]}
+noverify: a conceptual exchange; the only figure, the 100,000 gas limit, is given in the question
+@@ tutor
+**Why this matters**
+
+Gas is how Ethereum and other EVM chains price computation: every transaction pays for the work it makes each node do, and the fee market built on it decides which transactions get into a block. Contract design, wallet fee estimates and the cost model of rollups all come back to it.
+
+<ask type="short">An Ethereum transaction calls a contract, runs out of gas halfway through and is reverted. The sender is still charged a fee. Why would the protocol be designed that way?</ask>
+@@ learner idk
+@@ reply
+<plan>
+- What gas measures
+- Gas limit, gas used and the fee
+- Why a failed transaction still pays
+</plan>
+
+Start with what gas counts. Every EVM operation has a gas cost fixed by the protocol: an addition costs a few units, writing a new storage slot costs thousands (the exact schedule has changed across upgrades). Every node that validates a transaction executes the same operations, so the gas a transaction uses is a count of the work it puts on the whole network. The sender states a gas limit, the most gas they are willing to pay for, and execution is metered against it one operation at a time.
+
+<note>Gas measures computation: each EVM operation has a fixed gas cost, and a transaction's gas used is the sum over the operations it executes. The sender sets a gas limit, the most they will pay for. Costs per operation have changed across upgrades.</note>
+
+<ask type="predict">A contract function contains a loop that never ends. A transaction calls it with a gas limit of 100,000. What happens on each node that executes it, and what decides when execution stops?</ask>
+
+@@@@ idk-commit-without-salt
+situation: idk
+topic: Commit-reveal schemes
+options: {"strategy":"dialogue"}
+voice: plain
+level: easy
+expect: {"must":["determin"],"askTypes":["short","explain"],"askMustNot":["\\bthree hashes\\b","\\b3 hashes\\b","salt","random"]}
+noverify: a conceptual exchange; nothing is computed
+@@ tutor
+Two players want to play rock-paper-scissors through a smart contract. Everything sent to a chain is public, so whoever moves second can read the first move and win. The usual fix has two phases: each player first sends the hash of their move, and once both hashes are on chain each reveals the move, which the contract checks against the hash.
+
+<ask type="explain">A player commits with SHA-256 of the text "rock" and nothing else. What can the opponent do before choosing their own move?</ask>
+@@ learner idk
+@@ reply
+The piece you need is what a hash does and does not hide. A hash function is deterministic and public: the same input always gives the same digest, and anyone can compute it. It cannot be run backwards, but nothing stops someone from running it forwards on a guess and comparing the result with the digest they were shown. So a hash hides its input only when there are too many possible inputs to try.
+
+<note>A hash commitment hides the committed value only if the value is hard to guess. Hashing is deterministic and fast, so anyone can hash a candidate and compare it with the commitment.</note>
+
+<ask type="short">The opponent sees the commitment on chain and knows the committed text is "rock", "paper" or "scissors". How many guesses do they need to check, at most, to learn which one it is?</ask>
+
+@@@@ show-me-merkle-tree-flowchart
+situation: show-me
+topic: Merkle trees and inclusion proofs
+voice: plain
+level: easy
+expect: {"visual":{"kind":"mermaid","diagram":["flowchart"]},"must":["H34"]}
+@@ tutor
+Take four transactions, here just the byte strings "tx1" to "tx4". Hash each one with SHA-256 to get the leaves H1 to H4. Then hash neighbouring pairs joined together: H12 = SHA-256(H1 ‖ H2) and H34 = SHA-256(H3 ‖ H4). Hash that pair the same way to get the root = SHA-256(H12 ‖ H34). Showing the first six hex digits of each: the leaves are 709b55, 27ca64, 1f3cb1 and 41b637, the pair hashes are bbea82 and 570944, and the root is ea59a3. The root is the value stored in the block header. Change any transaction and its leaf changes, then the pair hash above it, then the root.
+
+<note>Merkle tree over four transactions: leaves $H_i = \text{hash}(tx_i)$; $H_{12} = \text{hash}(H_1 \| H_2)$, $H_{34} = \text{hash}(H_3 \| H_4)$; root $= \text{hash}(H_{12} \| H_{34})$. One 32-byte root commits to every transaction and to their order.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+flowchart BT
+  T1["tx1"] --> H1["H1 709b55"]
+  T2["tx2"] --> H2["H2 27ca64"]
+  T3["tx3"] --> H3["H3 1f3cb1"]
+  T4["tx4"] --> H4["H4 41b637"]
+  H1 --> H12["H12 bbea82"]
+  H2 --> H12
+  H3 --> H34["H34 570944"]
+  H4 --> H34
+  H12 --> R["root ea59a3"]
+  H34 --> R
+```
+
+Follow tx3 upwards through H3 and H34 to the root: those are the three hashes that change if tx3 changes, and the other four stay as they are.
+@@ verify
+import hashlib, re
+h = lambda b: hashlib.sha256(b).digest()
+L = [h(f'tx{i}'.encode()) for i in range(1, 5)]
+h12, h34 = h(L[0] + L[1]), h(L[2] + L[3])
+root = h(h12 + h34)
+want = {'H1': L[0], 'H2': L[1], 'H3': L[2], 'H4': L[3], 'H12': h12, 'H34': h34, 'root': root}
+d = block(reply, 'mermaid')
+for name, digest in want.items():
+    assert f'"{name} {digest.hex()[:6]}"' in d, name
+    assert digest.hex()[:6] in tutor[0], name
+# edges: each leaf from its transaction, each parent from its two children
+edges = set(re.findall(r'(\w+)(?:\[[^\]]*\])? --> (\w+)', d))
+assert edges == {('T1', 'H1'), ('T2', 'H2'), ('T3', 'H3'), ('T4', 'H4'), ('H1', 'H12'), ('H2', 'H12'), ('H3', 'H34'), ('H4', 'H34'), ('H12', 'R'), ('H34', 'R')}
+# changing tx3 changes exactly H3, H34 and the root
+L2 = list(L); L2[2] = h(b'tx3 changed')
+g34 = h(L2[2] + L2[3]); groot = h(h12 + g34)
+changed = [L2[2] != L[2], g34 != h34, groot != root]
+assert all(changed) and len(want) - 3 == 4
+
+@@@@ show-me-transaction-sequence
+situation: show-me
+topic: Mempools and transaction ordering
+voice: plain
+level: easy
+expect: {"visual":{"kind":"mermaid","diagram":["sequenceDiagram"]},"must":["mempool"]}
+@@ tutor
+A transaction's path from wallet to block has four parties. The wallet builds the transaction, signs it with the private key and sends it to a node. The node checks the signature, the nonce or inputs, and that the fee can be paid; if it passes, the node adds it to its mempool, its own set of valid but unconfirmed transactions, and gossips it to its peers, which check it and pass it on in the same way. A block producer picks transactions from its mempool, usually highest fee first, puts them in a block and broadcasts the block. Each node that receives the block validates it, applies it and removes the included transactions from its mempool.
+
+<note>Path of a transaction: wallet signs → node validates and adds to its mempool → gossip to peers → a block producer selects it (usually by fee) → the block is broadcast → nodes validate the block and drop its transactions from their mempools. A mempool is per node; there is no single global one.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+sequenceDiagram
+  participant W as Wallet
+  participant N as Node
+  participant P as Peers
+  participant B as Block producer
+  W->>W: build and sign transaction
+  W->>N: send transaction
+  N->>N: check signature, nonce or inputs, fee
+  N->>N: add to mempool
+  N->>P: gossip transaction
+  P->>B: gossip transaction
+  B->>B: pick from mempool, highest fee first
+  B->>P: broadcast block
+  P->>N: broadcast block
+  N->>N: validate block, remove its transactions from mempool
+```
+
+Look at the stretch between "add to mempool" and "broadcast block": that is the time the transaction is valid but unconfirmed.
+@@ verify
+d = block(reply, 'mermaid')
+lines = [l.strip() for l in d.strip().split('\n')]
+assert lines[0] == 'sequenceDiagram'
+msgs = [l for l in lines if '->>' in l]
+# the order of the explanation: sign, send, check, mempool, gossip, pick, block out, block validated
+keys = ['sign', 'send transaction', 'check signature', 'add to mempool', 'gossip', 'pick from mempool', 'broadcast block', 'validate block']
+pos = [next(i for i, m in enumerate(msgs) if k in m) for k in keys]
+assert pos == sorted(pos), pos
+assert len([l for l in lines if l.startswith('participant')]) == 4
+# every party and step is one the explanation named
+for term in ['wallet', 'node', 'peers', 'block producer', 'mempool', 'gossips', 'highest fee first', 'signature', 'nonce or inputs']:
+    assert term in tutor[0].lower(), term
+
+@@@@ show-me-validator-states
+situation: show-me
+topic: Proof of stake: validators, slashing and finality
+voice: terse
+level: medium
+expect: {"visual":{"kind":"mermaid","diagram":["stateDiagram"]},"must":["Active"],"ends":"either","askMustNot":["stays? Active","no arrow"]}
+@@ tutor
+A validator in Ethereum's proof of stake, as it has run since the 2022 switch and simplified here, moves through a small set of states. It makes a deposit, then waits in an activation queue as pending. Once active it proposes blocks and votes on them, earning rewards, and it loses a little for each period it is offline while staying active. It leaves in one of two ways. In a voluntary exit it stops its duties, waits, and its stake becomes withdrawable. If it signs two conflicting blocks or votes it is slashed: part of its stake is burnt and it is forced out, ending at withdrawable with less.
+
+<note>Validator life cycle (Ethereum since 2022, simplified): deposited → pending → active → exiting → withdrawable, or active → slashed → withdrawable. Being offline costs a small penalty; signing conflicting messages is slashed.</note>
+
+<continue/>
+@@ learner question
+can you draw those states? easier to see than read
+@@ reply
+```mermaid
+stateDiagram-v2
+  [*] --> Deposited
+  Deposited --> Pending: joins activation queue
+  Pending --> Active: activated
+  Active --> Exiting: voluntary exit
+  Active --> Slashed: signs conflicting blocks or votes
+  Exiting --> Withdrawable: wait is over
+  Slashed --> Withdrawable: forced out, part of stake burnt
+  Withdrawable --> [*]
+```
+
+Look at the two arrows out of Active: both routes end at Withdrawable, but only the one through Slashed burns stake on the way.
+
+<ask type="predict">A validator's machine loses power for a day and then comes back. Which arrow in the diagram, if any, did it follow during that day?</ask>
+@@ verify
+import re
+d = block(reply, 'mermaid')
+edges = re.findall(r'^\s*(\S+) --> (\S+?)(?::.*)?$', d, flags=re.M)
+assert edges == [('[*]', 'Deposited'), ('Deposited', 'Pending'), ('Pending', 'Active'), ('Active', 'Exiting'), ('Active', 'Slashed'), ('Exiting', 'Withdrawable'), ('Slashed', 'Withdrawable'), ('Withdrawable', '[*]')]
+# every state is named in the explanation, and offline is not a transition there
+for s in ['deposit', 'pending', 'active', 'exit', 'slashed', 'withdrawable']:
+    assert s in tutor[0].lower(), s
+assert 'offline while staying active' in tutor[0]
+assert not any('offline' in l for l in d.split('\n'))
+out_of_active = [b for a, b in edges if a == 'Active']
+assert out_of_active == ['Exiting', 'Slashed']
+
+@@@@ show-me-utxo-set-table
+situation: show-me
+topic: The UTXO model
+voice: plain
+level: easy
+expect: {"visual":{"kind":"table"},"must":["Ana 19","\\b47\\b"]}
+@@ tutor
+Follow a UTXO set through three transactions. It starts with one output: 50 units that Ana can spend. Transaction 1 spends it and creates 30 to Ben and 19 back to Ana; the missing 1 unit is the fee. Transaction 2 spends Ben's 30 and creates 12 to Caz and 17 back to Ben, fee 1. Transaction 3 spends Ana's 19 and creates a single output of 18 to Caz, fee 1. After each transaction the outputs it spent leave the set and the outputs it created join it. The fees are collected by the block's producer in a separate reward transaction, which is left out here.
+
+<note>Applying a transaction to the UTXO set: remove every output it spends, add every output it creates. No output is ever edited. Inputs − outputs = fee.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| Step | Spent | Created | UTXO set after | Fee | Total in set |
+|---|---|---|---|---|---|
+| Start | none | none | Ana 50 | 0 | 50 |
+| Transaction 1 | Ana 50 | Ben 30, Ana 19 | Ben 30, Ana 19 | 1 | 49 |
+| Transaction 2 | Ben 30 | Caz 12, Ben 17 | Ana 19, Caz 12, Ben 17 | 1 | 48 |
+| Transaction 3 | Ana 19 | Caz 18 | Caz 12, Ben 17, Caz 18 | 1 | 47 |
+
+Read down the UTXO set column: each row removes whole outputs and adds new ones, and the total falls by exactly that row's fee.
+@@ verify
+rows = table(reply)[1:]
+state = [('Ana', 50)]
+txs = [None,
+       ([('Ana', 50)], [('Ben', 30), ('Ana', 19)]),
+       ([('Ben', 30)], [('Caz', 12), ('Ben', 17)]),
+       ([('Ana', 19)], [('Caz', 18)])]
+fmt = lambda outs: ', '.join(f'{w} {a}' for w, a in outs) if outs else 'none'
+for i, (row, tx) in enumerate(zip(rows, txs)):
+    if tx is None:
+        spent, created, fee = [], [], 0
+    else:
+        spent, created = tx
+        for o in spent:
+            assert o in state, (i, o)          # only unspent outputs can be spent
+            state.remove(o)
+        state += created
+        fee = sum(a for _, a in spent) - sum(a for _, a in created)
+        assert fee == 1
+    total = sum(a for _, a in state)
+    assert row[1] == fmt(spent) and row[2] == fmt(created), (i, row)
+    assert row[3] == fmt(state), (i, row[3], fmt(state))
+    assert row[4] == str(fee) and row[5] == str(total), (i, row)
+assert len(rows) == 4 and sum(a for _, a in state) == 47
+# the same figures as the explanation
+for s in ['30 to Ben and 19 back to Ana', '12 to Caz and 17 back to Ben', '18 to Caz']:
+    assert s in tutor[0]

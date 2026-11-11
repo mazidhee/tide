@@ -1,0 +1,528 @@
+@@@@ wrong-implication-false-antecedent
+situation: after-wrong
+topic: Propositional logic and truth tables
+voice: overconfident
+level: easy
+expect: {"verdict":"wrong","accept":["partial"],"names":["p is false|false p|when \\$?p\\$? is false","T, F, T, T"],"must":["T, F, T, T"],"askMustNot":["n = 5","\\b5\\b"],"askTypes":["short","problem","predict"]}
+@@ tutor
+<ask type="short">Give the truth value of $p \to q$ in each of the four rows $(p, q)$ = (T, T), (T, F), (F, T), (F, F), in that order, and say how you decided the two rows where $p$ is false.</ask>
+@@ learner answer sure
+T, F, F, F. Obviously if p is false then the implication never fires, so it can't be true. Only T,T gives true, same as you'd expect.
+@@ reply
+<grade verdict="wrong" score="0.2">The first two rows are right, but "if p is false then the implication never fires, so it can't be true" is the error: that makes $p \to q$ the same column as $p \land q$. The column is T, F, T, T.</grade>
+
+$p \to q$ claims only that $q$ holds whenever $p$ does, so the one way to break it is $p$ true with $q$ false. When $p$ is false nothing has been broken, and the statement counts as true. This is forced by how implications are used: "if $n$ is divisible by 4 then $n$ is even" has to be true for every integer $n$, including $n = 3$ (row F, F) and $n = 6$ (row F, T).
+
+<card>In which rows of the truth table is p → q false? :: Only when p is true and q is false. Both rows with p false are true.</card>
+
+<note>$p \to q$ is false in exactly one row: $p$ true, $q$ false. Its column for (T,T), (T,F), (F,T), (F,F) is T, F, T, T, the same as $\lnot p \lor q$.</note>
+
+<ask type="short">For each integer $n$ from 1 to 6, consider the statement "if $n > 3$ then $n$ is even". For which values of $n$ is it false? Say which row of the table each false case is.</ask>
+@@ verify
+from itertools import product
+imp = lambda p, q: (not p) or q
+rows = [(True, True), (True, False), (False, True), (False, False)]
+col = ', '.join('T' if imp(p, q) else 'F' for p, q in rows)
+assert col == 'T, F, T, T' and col in reply
+# the learner's column is the column of AND
+assert ', '.join('T' if (p and q) else 'F' for p, q in rows) == 'T, F, F, F'
+assert learner.startswith('T, F, F, F')
+# the two instances named: n = 3 is row (F, F), n = 6 is row (F, T), and the statement is true for every n
+assert (3 % 4 == 0, 3 % 2 == 0) == (False, False) and (6 % 4 == 0, 6 % 2 == 0) == (False, True)
+assert all(imp(n % 4 == 0, n % 2 == 0) for n in range(-100, 100))
+# the question asked: false only at n = 5
+assert [n for n in range(1, 7) if not imp(n > 3, n % 2 == 0)] == [5]
+
+@@@@ wrong-negation-keeps-outer-quantifier
+situation: after-wrong
+topic: Predicates and quantifiers
+voice: plain
+level: medium
+expect: {"verdict":"wrong","names":["for every|outer|first quantifier|∀","there is a server|some server|at least one server"],"must":["\\\\exists s"],"need":["plan","note"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\\\forall n\\\\, ?\\\\exists m","n > m"]}
+@@ tutor
+<ask type="short">Write the negation of "for every server $s$ there is a backup $b$ that mirrors $s$", with the "not" pushed all the way inside.</ask>
+@@ learner answer sure
+For every server s there is no backup b that mirrors s.
+@@ reply
+<grade verdict="wrong" score="0.2">You negated the inner part, "there is no backup b", but kept "For every server s" unchanged. That says no server at all is mirrored, which is far stronger than the negation: the original fails as soon as one server has no mirror.</grade>
+
+<plan>
+- Negating one quantifier
+- Negating nested quantifiers
+- Reading mixed quantifiers in definitions
+</plan>
+
+A "not" passing a quantifier flips it: $\lnot \forall x\, P(x) \equiv \exists x\, \lnot P(x)$ and $\lnot \exists x\, P(x) \equiv \forall x\, \lnot P(x)$. Applied twice, with $M(b, s)$ for "$b$ mirrors $s$": $\lnot \forall s\, \exists b\, M(b, s) \equiv \exists s\, \lnot \exists b\, M(b, s) \equiv \exists s\, \forall b\, \lnot M(b, s)$. In words: there is a server that no backup mirrors.
+
+<card>What is the negation of ∀s ∃b M(b, s)? :: ∃s ∀b ¬M(b, s). Every quantifier flips as the "not" moves past it, and the "not" lands on the predicate.</card>
+
+<note>Negating quantifiers: $\lnot \forall x\, P(x) \equiv \exists x\, \lnot P(x)$ and $\lnot \exists x\, P(x) \equiv \forall x\, \lnot P(x)$. For nested quantifiers flip each one in turn, left to right, then negate the predicate.</note>
+
+**Problem 1 · warm-up**
+
+Negate $\exists n\, \forall m\, (n \le m)$, pushing the "not" fully inside. Then say which is true over the natural numbers $\{0, 1, 2, \dots\}$: the statement or its negation.
+
+<solution>Negation: ∀n ∃m (n > m). Over the natural numbers the original statement is true, witnessed by n = 0, since 0 ≤ m for every m; so the negation is false.</solution>
+
+<ask type="problem">The negation in symbols, and which of the two is true, with a witness.</ask>
+@@ verify
+from itertools import product
+# over every relation M on a 2 x 3 domain: the negation is "exists s, for all b, not M", and the learner's statement is not equivalent to it
+S, B = range(2), range(3)
+differs = 0
+for bits in product([False, True], repeat=6):
+    M = lambda b, s: bits[s * 3 + b]
+    original = all(any(M(b, s) for b in B) for s in S)
+    negation = any(all(not M(b, s) for b in B) for s in S)
+    theirs = all(not any(M(b, s) for b in B) for s in S)
+    assert negation == (not original)
+    # theirs implies the negation, never the other way round in general
+    assert (not theirs) or negation
+    differs += theirs != negation
+assert differs > 0
+# Problem 1 on an initial segment of the naturals: n = 0 is a least element, so the original is true there
+N = range(0, 50)
+assert any(all(n <= m for m in N) for n in N)
+assert all(0 <= m for m in N)
+assert 'n = 0' in solution(reply)
+
+@@@@ wrong-quiz-panel-counted-in-order
+situation: after-wrong
+topic: Permutations and combinations
+mode: quiz
+voice: terse
+level: easy
+expect: {"verdict":"wrong","names":["order","3! = 6|6 times|six times"],"must":["\\b56\\b","Question 4 of 8"],"askTypes":["choice"],"askMustNot":["5040"]}
+@@ tutor
+**Question 3 of 8**
+
+A review panel of 3 is picked from 8 engineers. The panel has no roles: only who is on it matters. How many different panels are possible?
+
+<solution>C(8, 3) = (8 × 7 × 6) / 3! = 336 / 6 = 56.</solution>
+<check lang="python">
+from itertools import combinations
+from math import comb
+assert len(list(combinations(range(8), 3))) == comb(8, 3) == 56
+</check>
+
+<ask type="problem">The number of panels, with your working.</ask>
+@@ learner answer sure
+8*7*6 = 336
+@@ reply
+<grade verdict="wrong" score="0.2">"8*7*6" counts the ways to pick a first, second and third member, so it treats the same three people in a different order as a different panel. Each panel is counted 3! = 6 times, and 336 / 6 = 56.</grade>
+
+<card>8 × 7 × 6 counts ordered picks of 3 from 8. How do you get the number of unordered groups? :: Divide by the 3! = 6 orders of each group: C(8, 3) = 336 / 6 = 56.</card>
+
+**Question 4 of 8**
+
+<ask type="choice" options="No: 1234 and 4321 are different PINs, so order matters|Yes: the four digits form a set, so order is ignored|Yes: digits that cannot repeat always need the division|Partly: divide by 4, once for each of the positions">A PIN is four different digits from 0 to 9. Someone counts the PINs as 10 × 9 × 8 × 7 and asks whether to divide by 4!. Should they?</ask>
+@@ verify
+from itertools import combinations, permutations
+from math import comb, factorial
+assert 8 * 7 * 6 == 336 == len(list(permutations(range(8), 3)))
+assert factorial(3) == 6 and 336 // 6 == 56 == comb(8, 3) == len(list(combinations(range(8), 3)))
+# the PIN count is the ordered one: no division
+assert len(list(permutations(range(10), 4))) == 10 * 9 * 8 * 7 == 5040
+assert '5040' not in reply
+# the first option written is the correct one
+import re
+opts = re.search(r'options="([^"]*)"', reply).group(1).split('|')
+assert len(opts) == 4 and opts[0].startswith('No: 1234 and 4321')
+
+@@@@ wrong-inclusion-exclusion-product-not-lcm
+situation: after-wrong
+topic: Inclusion-exclusion counting
+options: {"difficulty":"hard"}
+voice: overconfident
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["\\b60\\b","\\b30\\b","least common multiple|lcm"],"must":["\\b266\\b"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b200\\b","\\b12\\b"]}
+@@ tutor
+**Problem 1 · hard**
+
+How many integers from 1 to 1000 are divisible by at least one of 6, 10 and 15?
+
+<solution>Singles: 166 + 100 + 66 = 332. Each pair has least common multiple 30, so each pairwise overlap is ⌊1000/30⌋ = 33, and so is the triple overlap. 332 − 3 × 33 + 33 = 266.</solution>
+<check lang="python">
+brute = sum(1 for n in range(1, 1001) if n % 6 == 0 or n % 10 == 0 or n % 15 == 0)
+assert brute == 332 - 3 * 33 + 33 == 266
+</check>
+
+<ask type="problem">The count, with every term of the inclusion-exclusion sum.</ask>
+@@ learner answer sure
+Standard inclusion-exclusion. Singles: 166 + 100 + 66 = 332. Pairs: divisible by 6 and 10 means divisible by 60, that's 16; 6 and 15 is 90, that's 11; 10 and 15 is 150, that's 6. Total 33. Triple is 6*10*15 = 900, that's 1. So 332 - 33 + 1 = 300.
+@@ reply
+<grade verdict="partial" score="0.4">The structure and the singles are right: "166 + 100 + 66 = 332". The first wrong step is "divisible by 6 and 10 means divisible by 60": 30 is divisible by both and not by 60. A number is divisible by both exactly when it is divisible by their least common multiple, which is 30.</grade>
+
+The product equals the least common multiple only when the two numbers share no factor. Here $\operatorname{lcm}(6, 10) = \operatorname{lcm}(6, 15) = \operatorname{lcm}(10, 15) = 30$, and the least common multiple of all three is 30 as well. Each overlap is $\lfloor 1000/30 \rfloor = 33$, so the count is $332 - 3 \times 33 + 33 = 266$. Your 90, 150 and 900 follow from the same slip, not from new ones.
+
+<card>How many integers up to N are divisible by both a and b? :: ⌊N / lcm(a, b)⌋. The product ab is right only when gcd(a, b) = 1.</card>
+
+<note>In inclusion-exclusion over divisibility, the overlap of "divisible by $a$" and "divisible by $b$" is "divisible by $\operatorname{lcm}(a, b)$", not by $ab$, unless $\gcd(a, b) = 1$.</note>
+
+**Problem 2 · easier**
+
+How many integers from 1 to 600 are divisible by at least one of 4 and 6?
+
+<solution>⌊600/4⌋ = 150, ⌊600/6⌋ = 100, lcm(4, 6) = 12 and ⌊600/12⌋ = 50. 150 + 100 − 50 = 200.</solution>
+<check lang="python">
+from math import lcm
+assert lcm(4, 6) == 12
+assert sum(1 for n in range(1, 601) if n % 4 == 0 or n % 6 == 0) == 150 + 100 - 50 == 200
+</check>
+
+<ask type="problem">The count, naming the number you used for the overlap.</ask>
+@@ verify
+from math import lcm
+N = 1000
+assert (N // 6, N // 10, N // 15) == (166, 100, 66) and 166 + 100 + 66 == 332
+# the learner's figures follow from using products
+assert (N // 60, N // 90, N // 150, N // 900) == (16, 11, 6, 1) and 16 + 11 + 6 == 33 and 332 - 33 + 1 == 300
+assert 6 * 10 * 15 == 900
+# the correction
+assert lcm(6, 10) == lcm(6, 15) == lcm(10, 15) == lcm(6, 10, 15) == 30 and N // 30 == 33
+assert 30 % 6 == 0 and 30 % 10 == 0 and 30 % 60 != 0
+assert sum(1 for n in range(1, N + 1) if n % 6 == 0 or n % 10 == 0 or n % 15 == 0) == 266 == 332 - 99 + 33
+assert sum(1 for n in range(1, 601) if n % 4 == 0 or n % 6 == 0) == 200
+assert '200' in solution(reply) and '200' not in visible(reply)
+
+@@@@ wrong-injective-counts-all-functions
+situation: after-wrong
+topic: Functions: injective, surjective and bijective
+voice: typos
+level: medium
+expect: {"verdict":"wrong","names":["all functions|every function|any function","different outputs|distinct outputs|same output"],"must":["\\b60\\b"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["pigeonhole","\\bzero\\b|\\b0\\b|none"]}
+@@ tutor
+**Problem 2 · same level**
+
+Let $A = \{1, 2, 3\}$ and $B = \{a, b, c, d, e\}$. How many injective functions $f : A \to B$ are there?
+
+<solution>f(1) has 5 choices, f(2) must differ from it: 4 choices, f(3) must differ from both: 3 choices. 5 × 4 × 3 = 60.</solution>
+<check lang="python">
+from itertools import product
+assert sum(1 for f in product('abcde', repeat=3) if len(set(f)) == 3) == 5 * 4 * 3 == 60
+</check>
+
+<ask type="problem">The number of injective functions, with your reasoning.</ask>
+@@ learner answer sure
+5^3 = 125. each of the 3 inputs can go to any of the 5 outputs, and the inputs are all diffrent so its injective
+@@ reply
+<grade verdict="wrong" score="0.2">"each of the 3 inputs can go to any of the 5 outputs" counts all functions from $A$ to $B$, and 125 is that count. The inputs being different is true of every function; injective means different inputs get different outputs, and $f(1) = f(2) = a$ is one of your 125.</grade>
+
+Once $f(1)$ is chosen, $f(2)$ may not reuse it and $f(3)$ may not reuse either, so the count is $5 \times 4 \times 3 = 60$.
+
+<card>What does injective mean, and how many injective functions are there from a 3-element set to a 5-element set? :: Different inputs always have different outputs: no output is used twice. 5 × 4 × 3 = 60.</card>
+
+<note>$f$ is injective when $f(x) = f(y)$ forces $x = y$: no two inputs share an output. From an $m$-element set to an $n$-element set there are $n^m$ functions, of which $n(n-1)\cdots(n-m+1)$ are injective.</note>
+
+**Problem 3 · same idea**
+
+Now swap the sizes: $A = \{1, 2, 3, 4\}$ and $B = \{a, b, c\}$. How many injective functions $f : A \to B$ are there?
+
+<solution>None. f(1), f(2), f(3) use up all three outputs, leaving 0 choices for f(4): 3 × 2 × 1 × 0 = 0. Four inputs cannot have four different outputs among three.</solution>
+<check lang="python">
+from itertools import product
+assert sum(1 for f in product('abc', repeat=4) if len(set(f)) == 4) == 0 == 3 * 2 * 1 * 0
+</check>
+
+<ask type="problem">The number, with the choices available for each input in turn.</ask>
+@@ verify
+from itertools import product
+fs = list(product('abcde', repeat=3))
+assert len(fs) == 5**3 == 125
+assert sum(1 for f in fs if len(set(f)) == 3) == 60
+assert ('a', 'a', 'a') in fs and any(f[0] == f[1] == 'a' for f in fs)
+assert sum(1 for f in product('abc', repeat=4) if len(set(f)) == 4) == 0
+# the note's formula
+from math import perm
+assert perm(5, 3) == 60 and perm(3, 4) == 0
+
+@@@@ idk-bezout-remainders-as-combinations
+situation: idk
+topic: The Euclidean algorithm and Bezout coefficients
+voice: plain
+level: medium
+expect: {"must":["3 \\\\cdot 5 - 2 \\\\cdot 7"],"askMustNot":["7 \\\\cdot 43","-20","−20","\\b20\\b"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+**Problem 2 · harder**
+
+Find integers $x$ and $y$ with $43x + 15y = 1$.
+
+<solution>43 = 2·15 + 13; 15 = 1·13 + 2; 13 = 6·2 + 1. Back: 1 = 13 − 6·2 = 13 − 6(15 − 13) = 7·13 − 6·15 = 7(43 − 2·15) − 6·15 = 7·43 − 20·15. So x = 7, y = −20.</solution>
+<check lang="python">
+assert 43 * 7 + 15 * (-20) == 1
+</check>
+
+<ask type="problem">One pair $(x, y)$, with the steps that produced it.</ask>
+@@ learner idk
+@@ reply
+The idea you need is that every line of the Euclidean algorithm can be turned round to give its remainder as a combination of the two numbers above it. Take 7 and 5. The algorithm runs $7 = 1 \cdot 5 + 2$, then $5 = 2 \cdot 2 + 1$. Turned round, these say $2 = 7 - 5$ and $1 = 5 - 2 \cdot 2$. Substituting the first into the second removes the 2: $1 = 5 - 2(7 - 5) = 3 \cdot 5 - 2 \cdot 7$, which is the pair for 7 and 5.
+
+<note>Each step $a = qb + r$ of the Euclidean algorithm rearranges to $r = a - qb$. Substituting these upwards from the last non-zero remainder writes $\gcd(a, b)$ as $ax + by$. Example: $1 = 3 \cdot 5 - 2 \cdot 7$.</note>
+
+Do the first half of that for the original numbers.
+
+<solution>43 = 2·15 + 13, so 13 = 43 − 2·15. 15 = 1·13 + 2, so 2 = 15 − 13. 13 = 6·2 + 1, so 1 = 13 − 6·2.</solution>
+<check lang="python">
+assert 43 == 2 * 15 + 13 and 15 == 1 * 13 + 2 and 13 == 6 * 2 + 1
+assert 13 == 43 - 2 * 15 and 2 == 15 - 13 and 1 == 13 - 6 * 2
+</check>
+
+<ask type="problem">Run the Euclidean algorithm on 43 and 15, and write each line turned round as "remainder = ...". Stop there: no substitution yet.</ask>
+@@ verify
+assert 7 == 1 * 5 + 2 and 5 == 2 * 2 + 1 and 2 == 7 - 5 and 1 == 5 - 2 * 2
+assert 5 - 2 * (7 - 5) == 3 * 5 - 2 * 7 == 1
+# the answer to the original problem is not shown to the learner
+assert 7 * 43 - 20 * 15 == 1
+vis = visible(reply)
+assert '20' not in vis and '7 \\cdot 43' not in vis
+from math import gcd
+assert gcd(43, 15) == 1 and gcd(7, 5) == 1
+
+@@@@ idk-derangements-list-three
+situation: idk
+topic: Derangements
+voice: plain
+level: medium
+expect: {"must":["231","312"],"askMustNot":["\\b9\\b","nine","2143","2341","2413"],"askTypes":["short","problem"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+Four engineers each leave a laptop on a table. In how many ways can the four laptops be handed back, one each, so that nobody receives their own?
+
+<solution>Derangements of 4. If laptop 1 goes to person 2 the arrangements are 2143, 2341, 2413: three of them. By symmetry the same for laptop 1 going to person 3 or 4. 3 × 3 = 9.</solution>
+<check lang="python">
+from itertools import permutations
+assert sum(1 for p in permutations(range(4)) if all(p[i] != i for i in range(4))) == 9
+</check>
+
+<ask type="problem">The number of ways, with how you counted them.</ask>
+@@ learner idk
+@@ reply
+A hand-back in which nobody gets their own item is called a derangement: a permutation with no item left in its own position. The dependable way to count small cases is to list and strike out. With three items, write each arrangement as the item in position 1, 2, 3. There are $3! = 6$: 123, 132, 213, 231, 312, 321. Strike out any with a 1 first, a 2 second or a 3 third. That removes 123, 132, 213 and 321, leaving 231 and 312, so three items have 2 derangements.
+
+<note>A derangement is a permutation with no fixed point: no item stays in its own position. Three items have 2 derangements, 231 and 312, out of $3! = 6$ permutations.</note>
+
+Four items work the same way, split by where the first position's item comes from.
+
+<ask type="short">Write a hand-back of the four laptops as a string such as 4321 (person 1 gets laptop 4, person 2 gets laptop 3, and so on). List every derangement that starts with 2. How many are there?</ask>
+@@ verify
+from itertools import permutations
+perms3 = [''.join(p) for p in permutations('123')]
+assert perms3 == ['123', '132', '213', '231', '312', '321']
+der3 = [p for p in perms3 if all(p[i] != '123'[i] for i in range(3))]
+assert der3 == ['231', '312']
+assert [p for p in perms3 if p not in der3] == ['123', '132', '213', '321']
+der4 = [''.join(p) for p in permutations('1234') if all(p[i] != '1234'[i] for i in range(4))]
+assert len(der4) == 9 and [d for d in der4 if d[0] == '2'] == ['2143', '2341', '2413']
+# 4321 is the format example in the question: a derangement that does not start with 2
+assert '4321' in der4
+vis = visible(reply)
+assert '2143' not in vis and '2341' not in vis and '2413' not in vis
+
+@@@@ idk-euler-circuit-degrees-in-pairs
+situation: idk
+topic: Euler paths and circuits
+voice: plain
+level: medium
+expect: {"must":["one edge to arrive|in pairs|arrive"],"askMustNot":["\\b4\\b","four","every degree (of|in) \\$?K_5\\$? is even"],"askTypes":["short","predict"]}
+@@ tutor
+<ask type="predict">The complete graph $K_5$ has 5 vertices, with every pair of vertices joined by one edge. Can it be drawn without lifting the pen, going along every edge exactly once and finishing at the starting vertex? Say why.</ask>
+@@ learner idk
+@@ reply
+Start with what such a drawing does at a single vertex. A closed walk that uses every edge exactly once is called an Euler circuit. Each time the walk passes through a vertex it uses one edge to arrive and a different edge to leave, so the edges at that vertex are used up in pairs. The starting vertex is no exception: its first departure pairs with its final arrival. So an Euler circuit can exist only if every vertex has an even number of edges, that is, even degree.
+
+<note>An Euler circuit is a closed walk using every edge exactly once. Each visit to a vertex uses two of its edges (one in, one out), so every vertex must have even degree.</note>
+
+<ask type="short">In $K_5$, how many edges meet at each vertex, and what does the pairing argument say about that number?</ask>
+@@ verify
+from itertools import combinations
+edges = list(combinations(range(5), 2))
+deg = [sum(1 for e in edges if v in e) for v in range(5)]
+assert deg == [4] * 5 and len(edges) == 10
+# K5 does have an Euler circuit (found by search), consistent with all degrees even
+def circuit(path, left):
+    if not left:
+        return path[0] == path[-1]
+    for e in list(left):
+        if path[-1] in e:
+            nxt = e[0] if e[1] == path[-1] else e[1]
+            left.remove(e)
+            if circuit(path + [nxt], left):
+                return True
+            left.add(e)
+    return False
+assert circuit([0], set(edges))
+import re
+ask = re.search(r'<ask[^>]*>([\s\S]*?)</ask>', reply).group(1)
+assert '4' not in ask
+
+@@@@ show-me-euclid-table-414-162
+situation: show-me
+topic: The Euclidean algorithm
+voice: plain
+level: easy
+expect: {"visual":{"kind":"table"},"must":["\\b18\\b"]}
+@@ tutor
+The Euclidean algorithm finds $\gcd(a, b)$ by repeated division with remainder. Divide $a$ by $b$ to get $a = qb + r$; any number that divides both $a$ and $b$ also divides $r = a - qb$, and any number that divides $b$ and $r$ divides $a$, so $\gcd(a, b) = \gcd(b, r)$. Replace the pair $(a, b)$ by $(b, r)$ and repeat until the remainder is 0; the last non-zero remainder is the gcd. For 414 and 162: $414 = 2 \cdot 162 + 90$, then $162 = 1 \cdot 90 + 72$, then $90 = 1 \cdot 72 + 18$, then $72 = 4 \cdot 18 + 0$. So $\gcd(414, 162) = 18$.
+
+<note>Euclidean algorithm: $\gcd(a, b) = \gcd(b, a \bmod b)$, repeated until the remainder is 0. The last non-zero remainder is the gcd. Example: $\gcd(414, 162) = 18$.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| Step | $a$ | $b$ | $q$ | $r = a - qb$ |
+|---|---|---|---|---|
+| 1 | 414 | 162 | 2 | 90 |
+| 2 | 162 | 90 | 1 | 72 |
+| 3 | 90 | 72 | 1 | 18 |
+| 4 | 72 | 18 | 4 | 0 |
+
+Each row's $b$ and $r$ slide left to become the next row's $a$ and $b$; the gcd is the 18 sitting in the $b$ column when $r$ reaches 0.
+@@ verify
+from math import gcd
+rows = table(reply)[1:]
+a, b, step = 414, 162, 1
+for row in rows:
+    q, r = divmod(a, b)
+    assert row == [str(step), str(a), str(b), str(q), str(r)], row
+    a, b, step = b, r, step + 1
+assert b == 0 and a == 18 == gcd(414, 162) and len(rows) == 4
+# the explanation states the same four divisions
+for line in ['414 = 2 \\cdot 162 + 90', '162 = 1 \\cdot 90 + 72', '90 = 1 \\cdot 72 + 18', '72 = 4 \\cdot 18 + 0']:
+    assert line in tutor[0]
+assert rows[-1][2] == '18' and rows[-1][4] == '0'
+
+@@@@ show-me-modexp-squaring-table
+situation: show-me
+topic: Modular exponentiation by squaring
+voice: plain
+level: medium
+expect: {"visual":{"kind":"table"},"must":["\\b12\\b"]}
+@@ tutor
+To compute $3^{13} \bmod 17$ without twelve multiplications, write the exponent in binary: $13 = 1101_2 = 8 + 4 + 1$, so $3^{13} = 3^8 \cdot 3^4 \cdot 3^1$. The powers $3^1, 3^2, 3^4, 3^8$ come from squaring the one before, reducing mod 17 each time: $3$, then $3^2 = 9$, then $9^2 = 81 \equiv 13$, then $13^2 = 169 \equiv 16$. Go through the bits of 13 from the lowest, and multiply the running result by the current square whenever the bit is 1: start at 1, take $3$ (bit 1), skip $9$ (bit 0), take $13$ to get $3 \cdot 13 = 39 \equiv 5$, take $16$ to get $5 \cdot 16 = 80 \equiv 12$. So $3^{13} \equiv 12 \pmod{17}$, in three squarings and three multiplications.
+
+<note>Square and multiply: to find $a^e \bmod m$, square $a$ repeatedly mod $m$ to get $a^{2^i}$, and multiply together the squares where bit $i$ of $e$ is 1. The work is about $\log_2 e$ squarings, not $e$ multiplications.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| Bit $i$ | Bit of 13 | $3^{2^i} \bmod 17$ | Result so far |
+|---|---|---|---|
+| 0 | 1 | 3 | 3 |
+| 1 | 0 | 9 | 3 |
+| 2 | 1 | 13 | 5 |
+| 3 | 1 | 16 | 12 |
+
+The third column squares the entry above it at every row; the last column changes only on rows where the bit is 1, and ends at $3^{13} \bmod 17 = 12$.
+@@ verify
+rows = table(reply)[1:]
+e, m, sq, res = 13, 17, 3, 1
+assert format(e, 'b') == '1101' and e == 8 + 4 + 1 and len(rows) == 4
+for i, row in enumerate(rows):
+    bit = (e >> i) & 1
+    if bit:
+        res = res * sq % m
+    assert row == [str(i), str(bit), str(sq), str(res)], (i, row)
+    assert sq == pow(3, 2**i, m)
+    sq = sq * sq % m
+assert res == pow(3, 13, 17) == 12
+# figures in the explanation
+assert 81 % 17 == 13 and 169 % 17 == 16 and 39 % 17 == 5 and 80 % 17 == 12 and 13 * 13 == 169 and 5 * 16 == 80
+
+@@@@ show-me-root-two-contradiction-flow
+situation: show-me
+topic: Proof by contradiction: the irrationality of root 2
+voice: plain
+level: medium
+expect: {"visual":{"kind":"mermaid","diagram":["flowchart"]},"must":["lowest terms"]}
+@@ tutor
+A proof by contradiction assumes the opposite of the claim and derives something impossible. To prove $\sqrt{2}$ is irrational, assume it is rational: $\sqrt{2} = a/b$ with the fraction in lowest terms, so $a$ and $b$ share no factor. Squaring gives $a^2 = 2b^2$, so $a^2$ is even, and then $a$ is even, because an odd number has an odd square. Write $a = 2c$. Substituting, $4c^2 = 2b^2$, so $b^2 = 2c^2$, and by the same argument $b$ is even. Now $a$ and $b$ are both even, so they share the factor 2, against the assumption of lowest terms. The assumption has led to a contradiction, so it is false: $\sqrt{2}$ is irrational.
+
+<note>Irrationality of $\sqrt{2}$: assume $\sqrt{2} = a/b$ in lowest terms. Then $a^2 = 2b^2$ makes $a$ even, $a = 2c$; then $b^2 = 2c^2$ makes $b$ even. Both even contradicts lowest terms, so no such fraction exists.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+flowchart TD
+    A["Assume √2 = a/b in lowest terms"] --> B["a² = 2b²"]
+    B --> C["a is even: a = 2c"]
+    C --> D["b² = 2c²"]
+    D --> E["b is even"]
+    C --> F["a and b share the factor 2"]
+    E --> F
+    A --> G["a and b share no factor"]
+    F --> H["Contradiction"]
+    G --> H
+    H --> I["Assumption false: √2 is irrational"]
+```
+
+Look at the two arrows into Contradiction: one comes straight from the assumption of lowest terms, the other from what that same assumption forced.
+@@ verify
+import re
+from math import gcd
+body = block(reply, 'mermaid')
+labels = dict(re.findall(r'(\b[A-I])\["([^"]+)"\]', body))
+assert len(labels) == 9
+edges = set(re.findall(r'\b([A-I])(?:\["[^"]+"\])? --> ([A-I])', body))
+assert edges == {('A', 'B'), ('B', 'C'), ('C', 'D'), ('D', 'E'), ('C', 'F'), ('E', 'F'), ('A', 'G'), ('F', 'H'), ('G', 'H'), ('H', 'I')}
+# the steps of the proof, checked on numbers: no a/b in lowest terms has a^2 = 2 b^2
+assert not any(a * a == 2 * b * b for a in range(1, 400) for b in range(1, 400) if gcd(a, b) == 1)
+# an odd number has an odd square; a = 2c gives b^2 = 2c^2
+assert all((n * n) % 2 == 1 for n in range(1, 200, 2))
+for c in range(1, 50):
+    a = 2 * c
+    assert a * a // 2 == 2 * c * c
+# every label names something the explanation said
+for phrase in ['lowest terms', 'a = 2c', 'share no factor', 'share the factor 2']:
+    assert phrase in tutor[0] and phrase in body
+
+@@@@ show-me-dfa-even-ones-state-diagram
+situation: show-me
+topic: Finite automata
+voice: confused
+level: easy
+expect: {"visual":{"kind":"mermaid","diagram":["stateDiagram"]},"must":["even","odd"],"ends":"ask","askTypes":["predict","short"],"askMustNot":["ends in odd","rejected","\\breject"]}
+@@ tutor
+A deterministic finite automaton reads a string one symbol at a time and keeps only one piece of memory: which state it is in. Here is one that accepts exactly the binary strings containing an even number of 1s. It has two states, `even` and `odd`, recording whether the count of 1s read so far is even or odd. It starts in `even`, since no 1s have been read. Reading a 0 leaves the state unchanged; reading a 1 switches to the other state. When the input ends, the string is accepted if the machine is in `even`. On 1011 the states run even, odd, odd, even, odd, so 1011 is rejected: it has three 1s.
+
+<note>A DFA is a set of states, a start state, accepting states and one transition for each (state, symbol) pair. A string is accepted when the run ends in an accepting state. Parity of 1s needs two states: `even` (start, accepting) and `odd`; a 1 switches state, a 0 does not.</note>
+
+<continue/>
+@@ learner question
+i can't picture it, the "switches to the other state" part loses me. can you draw the machine?
+@@ reply
+```mermaid
+stateDiagram-v2
+    [*] --> even
+    even --> even: 0
+    even --> odd: 1
+    odd --> odd: 0
+    odd --> even: 1
+    even --> [*]
+```
+
+The two arrows labelled 1 cross between the states, which is the switching; the arrows labelled 0 loop back to where they started. The arrow from the dot into `even` marks the start, and the arrow from `even` out to the dot marks it as accepting.
+
+<ask type="predict">Put your finger on `even` and follow the arrows for the input 0110, one symbol at a time. Which state do you pass through at each step, and is 0110 accepted?</ask>
+@@ verify
+import re
+body = block(reply, 'mermaid')
+trans = {(s, sym): t for s, t, sym in re.findall(r'(\w+) --> (\w+): ([01])', body)}
+assert trans == {('even', '0'): 'even', ('even', '1'): 'odd', ('odd', '0'): 'odd', ('odd', '1'): 'even'}
+assert '[*] --> even' in body and 'even --> [*]' in body and 'odd --> [*]' not in body
+def run(w):
+    s, seen = 'even', ['even']
+    for ch in w:
+        s = trans[(s, ch)]
+        seen.append(s)
+    return seen
+# the trace in the explanation
+assert run('1011') == ['even', 'odd', 'odd', 'even', 'odd'] and '1011'.count('1') == 3
+# the machine accepts exactly the strings with an even number of 1s
+from itertools import product
+for n in range(0, 9):
+    for w in map(''.join, product('01', repeat=n)):
+        assert (run(w)[-1] == 'even') == (w.count('1') % 2 == 0)
+# the question asked: 0110 runs even, even, odd, even, even and is accepted
+assert run('0110') == ['even', 'even', 'odd', 'even', 'even']

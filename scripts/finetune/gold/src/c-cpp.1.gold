@@ -1,0 +1,366 @@
+@@@@ open-undefined-behaviour
+situation: open
+topic: Undefined behaviour in C
+voice: plain
+level: medium
+expect: {"must":["INT_MAX"],"askMustNot":["undefined","wrap","overflow"]}
+@@ reply
+**Why this matters**
+
+The C standard gives some operations no defined result at all: reading an uninitialised variable, indexing past the end of an array, dereferencing a null pointer. A compiler is allowed to assume a program never does these things, and the optimisers in GCC and Clang use that assumption to delete checks and rearrange code, so a program can pass its tests in a debug build and fail in a release build. A large share of the security bugs in C codebases such as kernels, parsers and codecs belong to this class. Knowing exactly what is undefined lets you read sanitiser reports, write checks that survive optimisation, and trust the C++ you write later, which inherits the same rules.
+
+```c
+int next_is_bigger(int x) { return x + 1 > x; }
+```
+
+<ask type="predict">What do you expect `next_is_bigger(INT_MAX)` to return, and what does the C standard say about the value of `x + 1` in that call?</ask>
+@@ verify
+# the call the question is about really does overflow a signed int: the sanitiser reports it
+src = '#include <limits.h>\n#include <stdio.h>\n' + block(reply, 'c') + '\nint main(void) { printf("%d\\n", next_is_bigger(INT_MAX)); return 0; }\n'
+out, err, cerr, code = run_c_full(src, 'c')
+assert code == 0 and 'signed integer overflow: 2147483647 + 1' in err, (err, cerr)
+# and an optimising build folds the comparison to 1, whatever the hardware would do
+import subprocess, tempfile, os
+with tempfile.TemporaryDirectory() as d:
+    open(os.path.join(d, 'm.c'), 'w').write(src.replace('int next_is_bigger', '__attribute__((noinline)) int next_is_bigger'))
+    subprocess.run(['/usr/bin/clang', '-std=c17', '-O2', '-o', 'p', 'm.c'], cwd=d, check=True)
+    assert subprocess.run([os.path.join(d, 'p')], capture_output=True, text=True).stdout.strip() == '1'
+
+@@@@ open-quiz-const-pointer-declarations
+situation: open
+topic: const correctness in C++
+mode: quiz
+options: {"length":6}
+voice: plain
+level: medium
+expect: {"must":["Question 1 of 6"],"askTypes":["choice"],"forbid":["solution"]}
+@@ reply
+**Question 1 of 6**
+
+```cpp
+int x = 1, y = 2;
+const int *a = &x;
+int *const b = &x;
+```
+
+<ask type="choice" options="a = &y compiles and *a = 5 does not; *b = 5 compiles and b = &y does not|*a = 5 compiles and a = &y does not; b = &y compiles and *b = 5 does not|Neither pointer can be re-pointed, and neither can be assigned through|a and b have the same type, written in two ways: all four lines compile">Four more lines are tried, one at a time: `a = &y;`, `*a = 5;`, `b = &y;` and `*b = 5;`. Which statement says correctly what compiles?</ask>
+@@ verify
+head = block(reply, 'cpp')
+def builds(line):
+    out, err, cerr, code = run_c_full('int main() {\n' + head + line + '\n(void)a; (void)b; (void)y;\nreturn 0; }\n', 'cpp')
+    return code == 0
+assert builds('a = &y;') and builds('*b = 5;')
+assert not builds('*a = 5;') and not builds('b = &y;')
+# the first option is the right one
+first = reply.split('options="')[1].split('|')[0]
+assert first == 'a = &y compiles and *a = 5 does not; *b = 5 compiles and b = &y does not'
+
+@@@@ open-refresh-division-negative-operands
+situation: open
+topic: Integer division and remainder with negative operands in C
+options: {"refresh":true}
+voice: plain
+level: easy
+expect: {"setsProblem":true,"askTypes":["problem"],"askMustNot":["-3","-1\\b","toward"]}
+@@ reply
+**Problem 1**
+
+In C (C99 and later), with `int` operands, give the value of each of these four expressions: `-7 / 2`, `-7 % 2`, `7 / -2` and `7 % -2`.
+
+<solution>Division truncates towards zero: -7 / 2 = -3 and 7 / -2 = -3. The remainder satisfies (a / b) * b + a % b == a, so it takes the sign of the dividend: -7 % 2 = -1 and 7 % -2 = 1.</solution>
+<check lang="python">
+import math
+def cdiv(a, b): return math.trunc(a / b)
+def cmod(a, b): return a - cdiv(a, b) * b
+assert [cdiv(-7, 2), cmod(-7, 2), cdiv(7, -2), cmod(7, -2)] == [-3, -1, -3, 1]
+</check>
+
+<ask type="problem">The four values, and the rule you used to decide the sign of each remainder.</ask>
+@@ verify
+out = run_c('#include <stdio.h>\nint main(void) { int a = 7, b = 2; printf("%d %d %d %d\\n", -a / b, -a % b, a / -b, a % -b); return 0; }\n')
+assert out.split() == ['-3', '-1', '-3', '1'], out
+s = solution(reply)
+assert '-7 / 2 = -3' in s and '7 / -2 = -3' in s and '-7 % 2 = -1' in s and '7 % -2 = 1' in s
+assert '-3' not in visible(reply)
+
+@@@@ open-prior-malloc-lost-pointer
+situation: open-prior
+topic: Dynamic memory in C: malloc and free
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Dynamic memory in C: malloc and free","daysAgo":4,"finished":false,"plan":["What malloc returns","Pairing each malloc with one free","Leaks and how to find them"],"right":3,"partly":1,"wrong":1,"missed":["After p = malloc(64); p = malloc(64); what has happened to the first block?"],"open":"A function returns a pointer from malloc. Who is responsible for freeing it?"}]}
+expect: {"must":["free"],"askMustNot":["leak","lost","unreachable"]}
+noverify: an opening; it asks what happens to the block and states no result
+@@ reply
+**Why this matters**
+
+Every long-running C program, a database server, a network daemon or the firmware of a controller, manages its heap memory by hand, and each block has to be released exactly once by whoever owns it. Getting that wrong shows up as memory use that climbs for days, or as a crash far from the cause. You have what `malloc` returns and how `free` pairs with it from last time; the one gap was a block whose pointer gets overwritten, and finding such blocks with tools is still to come.
+
+<ask type="short">A function runs `char *buf = malloc(100);` and then, with no `free` in between, `buf = "none";`. What is the state of the 100-byte block now, and can any later line of the program release it?</ask>
+
+@@@@ open-prior-copy-assignment-builds-on-copy-constructor
+situation: open-prior
+topic: Copy assignment operators in C++
+voice: plain
+level: hard
+before: {"prior":[{"topic":"Copy constructors in C++","daysAgo":6,"finished":true,"plan":["When a copy is made","Memberwise copy","Deep copy for an owning class"],"right":4,"partly":1,"wrong":1,"missed":["Why does the compiler-generated copy of a class that owns a raw pointer lead to a double delete?"]}]}
+expect: {"must":["copy constructor"],"askMustNot":["double","twice","\\bone array\\b","same array"]}
+@@ reply
+**Why this matters**
+
+Copy assignment is the other half of copying: `a = b` for two objects that already exist, which is what runs when a container overwrites an element or a struct member is replaced. In a class that owns a resource, such as a buffer, a file handle or a socket, it has to release what the left side held, duplicate what the right side holds, and survive `a = a`. It builds on the copy constructor from your earlier lesson, and it rests on the one point missed there: what a memberwise copy does to a raw pointer that owns memory. That comes first, because the same fault appears in assignment.
+
+```cpp
+struct Buf {
+    int *data;
+    Buf() : data(new int[8]) {}
+    ~Buf() { delete[] data; }
+};
+```
+
+<ask type="short">`Buf a;` is followed by `Buf b = a;`, and `Buf` has no copy constructor of its own. How many arrays of 8 ints exist, and what happens when the destructors of `b` and then `a` have both run?</ask>
+@@ verify
+# the generated copy really shares one array: both objects hold the same address
+src = '#include <cstdio>\n' + block(reply, 'cpp') + '''
+int main() {
+    Buf *a = new Buf;
+    Buf *b = new Buf(*a);
+    std::printf("%d\\n", a->data == b->data);
+    delete a;      // b is deliberately not destroyed: that would be the double delete
+    return 0;
+}
+'''
+assert run_cpp(src).strip() == '1'
+
+@@@@ open-recall-static-local
+situation: open-recall
+topic: Static local variables in C
+voice: plain
+level: easy
+before: {"recall":[{"prompt":"In C, how many times is a static local variable initialised, and what happens to its value between calls?","topic":"Static local variables in C","reviews":2,"lapses":0}]}
+expect: {"askMustNot":["\\bonce\\b","kept|keeps|persist|retain"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="short">In C, how many times is a static local variable initialised, and what happens to its value between calls?</ask>
+
+@@@@ open-recall-short-circuit-null-check
+situation: open-recall
+topic: Short-circuit evaluation in C
+voice: plain
+level: easy
+before: {"recall":[{"prompt":"Why is `p != NULL && p->len > 0` safe to evaluate when p is NULL?","topic":"Short-circuit evaluation in C","reviews":1,"lapses":1}]}
+expect: {"askMustNot":["left operand","not evaluated","skips|skipped","stops"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="explain">Why is `p != NULL && p->len > 0` safe to evaluate when p is NULL?</ask>
+
+@@@@ correct-recall-static-then-linkage-opening
+situation: after-correct
+topic: Linkage in C: static and extern
+voice: wordy
+level: medium
+before: {"recall":[{"prompt":"What does `static` do to a function defined at file scope in C?","topic":"Linkage in C: static and extern","reviews":1,"lapses":0}]}
+expect: {"verdict":"correct","heading":"Why this matters","askTypes":["predict","short","explain","choice"],"must":["internal linkage"],"askMustNot":["duplicate","twice","two definitions","multiple definition"],"forbid":["solution"]}
+@@ tutor
+<ask type="short">What does `static` do to a function defined at file scope in C?</ask>
+@@ learner answer sure
+So I remember this one from the helper functions I wrote last week. Putting static on a function at file scope gives the function internal linkage, so the name is only visible inside that .c file and the linker never gets to see it. The practical upshot is that another file can define its own function with the same name, and the two don't clash at link time.
+@@ reply
+<grade verdict="correct" score="1">"internal linkage, so the name is only visible inside that .c file" is the rule, and the consequence you gave, that two files can each have a function of that name, is what it is used for.</grade>
+
+**Why this matters**
+
+Linkage decides which names the linker can see, and so which declarations in different `.c` files refer to the same function or variable. It is how a C library keeps its helper functions private, how one global is shared between files through a header and `extern`, and where "undefined symbol" errors at link time come from. The same rules sit under namespaces, `inline` and the one-definition rule in C++.
+
+<ask type="predict">A header `config.h` contains the line `int verbose = 0;`. Both `main.c` and `log.c` include it; they are compiled separately and then linked into one program. What does the linker report, and why?</ask>
+@@ verify
+import subprocess, tempfile, os
+with tempfile.TemporaryDirectory() as d:
+    w = lambda n, s: open(os.path.join(d, n), 'w').write(s)
+    w('config.h', 'int verbose = 0;\n')
+    w('main.c', '#include "config.h"\nint log_level(void);\nint main(void) { return verbose + log_level(); }\n')
+    w('log.c', '#include "config.h"\nint log_level(void) { return verbose; }\n')
+    p = subprocess.run(['/usr/bin/clang', '-std=c17', 'main.c', 'log.c', '-o', 'p'], cwd=d, capture_output=True, text=True)
+    assert p.returncode != 0 and 'duplicate symbol' in p.stderr and 'verbose' in p.stderr, p.stderr
+    # the learner's claim: two files may each define a static function of the same name
+    w('a.c', 'static int helper(void) { return 1; }\nint from_a(void) { return helper(); }\n')
+    w('b.c', 'static int helper(void) { return 2; }\nint from_a(void);\nint main(void) { return helper() + from_a() - 3; }\n')
+    p = subprocess.run(['/usr/bin/clang', '-std=c17', 'a.c', 'b.c', '-o', 'q'], cwd=d, capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr
+    assert subprocess.run([os.path.join(d, 'q')]).returncode == 0
+
+@@@@ correct-probe-reference-then-plan
+situation: after-correct
+topic: References versus pointers in C++
+voice: terse
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"need":["plan","note"],"must":["\\b17\\b"],"mustNot":["cannot be null"]}
+@@ tutor
+```cpp
+int a = 1, b = 2;
+int &r = a;
+r = b;
+b = 9;
+```
+
+<ask type="short">After these four lines, what are the values of `a` and `b`, and what does `r` refer to?</ask>
+@@ learner answer sure
+a = 2, b = 9. r still refers to a. r = b copies b's value into a, you can't rebind a reference.
+@@ reply
+<grade verdict="correct" score="1">"r still refers to a" and "r = b copies b's value into a" are both right: a reference is bound once, when it is initialised, and from then on every use of `r` is a use of `a`.</grade>
+
+<plan>
+- References as function parameters
+- What a pointer can do that a reference cannot
+- Dangling references
+</plan>
+
+A reference parameter is another name for the caller's own variable, so the function can change it with no `&` at the call and no `*` inside:
+
+```cpp
+#include <iostream>
+
+void add_ten(int &n) { n += 10; }
+
+int main() {
+    int total = 7;
+    add_ten(total);
+    std::cout << total << "\n";
+    return 0;
+}
+```
+
+```
+17
+```
+
+<note>A reference must be initialised where it is declared and names that one object for its whole life: `r = b` assigns to the object, it never re-binds. A parameter `T &x` lets a function modify the caller's argument; `const T &x` lets it read the argument without copying it.</note>
+
+**Problem 1 · warm-up**
+
+<solution>void swap_ints(int &x, int &y) { int t = x; x = y; y = t; } With a = 3 and b = 8 the program prints 8 3.</solution>
+
+<ask type="code" lang="cpp">Write `void swap_ints(int &x, int &y)` that exchanges the caller's two variables. In `main`, set `a = 3` and `b = 8`, call it once, and print `a` and `b` with a space between them.</ask>
+@@ verify
+# the probe: values after the four lines
+out = run_cpp('#include <iostream>\nint main() {\n' + block(tutor[0], 'cpp') + 'std::cout << a << " " << b << " " << (&r == &a) << "\\n"; return 0; }\n')
+assert out.split() == ['2', '9', '1'], out
+# the reference solution for the task set
+ref = '#include <iostream>\nvoid swap_ints(int &x, int &y) { int t = x; x = y; y = t; }\nint main() { int a = 3, b = 8; swap_ints(a, b); std::cout << a << " " << b << "\\n"; return 0; }\n'
+assert run_cpp(ref).strip() == '8 3'
+assert '8 3' in solution(reply) and '8 3' not in visible(reply)
+
+@@@@ correct-sizeof-unevaluated-operand
+situation: after-correct
+topic: sizeof and the sizes of types in C
+options: {"difficulty":"hard"}
+voice: terse
+level: hard
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"must":["Problem 2"],"askMustNot":["not evaluated","unevaluated","\\b8\\b"]}
+@@ tutor
+**Problem 1 · hard**
+
+On a platform where `int` and `float` are 4 bytes and `double` is 8 bytes, give the value of each of these in C (not C++): `sizeof(char)`, `sizeof('a')`, `sizeof(1.0f)` and `sizeof(1.0)`.
+
+<solution>sizeof(char) is 1 by definition. In C a character constant has type int, so sizeof('a') is 4. 1.0f is a float: 4. 1.0 with no suffix is a double: 8.</solution>
+<check lang="python">
+import ctypes
+assert [ctypes.sizeof(ctypes.c_char), ctypes.sizeof(ctypes.c_int), ctypes.sizeof(ctypes.c_float), ctypes.sizeof(ctypes.c_double)] == [1, 4, 4, 8]
+</check>
+
+<ask type="problem">The four values, with the type of each operand.</ask>
+@@ learner answer sure
+1, 4, 4, 8. char is 1 by definition. 'a' is an int in C so 4. 1.0f is a float, 4. 1.0 has no suffix so it's a double, 8.
+@@ reply
+<grade verdict="correct" score="1">All four are right, and "'a' is an int in C so 4" is the one that is usually missed: a character constant has type `int` in C, though in C++ it is a `char` of size 1.</grade>
+
+**Problem 2 · harder**
+
+```c
+int i = 5;
+size_t a = sizeof(i++);
+size_t b = sizeof(i + 2.0);
+```
+
+Same platform. Give the values of `a` and `b`, and the value of `i` after these three lines.
+
+<solution>sizeof uses only the type of its operand and does not evaluate it (a variable-length array is the one exception). i++ has type int, so a = 4, and the increment never happens: i is still 5. In i + 2.0 the int is converted to double, so the expression has type double and b = 8.</solution>
+<check lang="python">
+import ctypes
+assert ctypes.sizeof(ctypes.c_int) == 4 and ctypes.sizeof(ctypes.c_double) == 8
+</check>
+
+<ask type="problem">The values of a and b and the final value of i, with the reason for each.</ask>
+@@ verify
+src = '#include <stdio.h>\nint main(void) {\n' + block(reply, 'c') + 'printf("%zu %zu %d %zu %zu %zu %zu\\n", a, b, i, sizeof(char), sizeof(\'a\'), sizeof(1.0f), sizeof(1.0));\nreturn 0; }\n'
+out, err, cerr, code = run_c_full(src, 'c')
+assert code == 0 and out.split() == ['4', '8', '5', '1', '4', '4', '8'], (out, cerr)
+# clang itself says the increment is not evaluated
+assert 'unevaluated' in cerr
+# in C++ the character constant is a char
+assert run_cpp('#include <cstdio>\nint main() { std::printf("%zu\\n", sizeof(\'a\')); return 0; }\n').strip() == '1'
+s = solution(reply)
+assert 'a = 4' in s and 'b = 8' in s and 'still 5' in s
+
+@@@@ correct-unsure-switch-fall-through
+situation: after-correct
+topic: switch and fall-through in C
+voice: typos
+level: easy
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem","predict"],"must":["Problem 2"],"askMustNot":["\\bbc\\b"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    int n = 2;
+    switch (n) {
+        case 1: printf("one ");
+        case 2: printf("two ");
+        case 3: printf("three ");
+            break;
+        default: printf("other ");
+    }
+    printf("\n");
+    return 0;
+}
+```
+
+<solution>Execution jumps to case 2, prints "two ", falls through into case 3 because there is no break, prints "three ", then the break leaves the switch. Output: two three</solution>
+
+<ask type="problem">What does this program print? Say which statements run and why.</ask>
+@@ learner answer unsure
+two three i think? it jumps to case 2 and prints two, then theres no break so it carrys on into case 3 and prints three, then the break stops it before default. not totaly sure about the carrying on bit
+@@ reply
+<grade verdict="correct" score="1">"theres no break so it carrys on into case 3" is exactly what happens: a case label is only a place to jump to, and execution runs on through the labels below it until a `break` or the end of the switch.</grade>
+
+One more at the same level, since you were not sure of the carrying on.
+
+**Problem 2 · same level**
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    int n = 3;
+    switch (n) {
+        case 1: printf("a");
+        default: printf("b");
+        case 4: printf("c");
+            break;
+        case 5: printf("d");
+    }
+    printf("\n");
+    return 0;
+}
+```
+
+<solution>No case matches 3, so execution jumps to default, wherever it is written. It prints "b", falls through into case 4, prints "c", and the break leaves the switch. Output: bc</solution>
+
+<ask type="problem">What does this one print? Say where execution enters the switch and where it leaves.</ask>
+@@ verify
+assert run_c(block(tutor[0], 'c')).strip() == 'two three'
+assert run_c(block(reply, 'c')).strip() == 'bc'
+assert 'Output: bc' in solution(reply) and 'two three' in solution(tutor[0])

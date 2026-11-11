@@ -1,0 +1,305 @@
+@@@@ open-ieee754
+situation: open
+topic: IEEE 754 floating point
+voice: plain
+level: easy
+expect: {"must":["0\\.1"],"askMustNot":["False","not equal","0\\.30000000000000004"]}
+noverify: an opening; it asks what 0.1 + 0.2 == 0.3 gives and states no result
+@@ reply
+**Why this matters**
+
+Every number with a fractional part in C, Python, JavaScript and SQLite's REAL is stored in the IEEE 754 format, so its rules decide what your arithmetic returns. They are why money is kept in integer minor units rather than doubles, why a loss turns into NaN during training, and why summing the same numbers in a different order can change the last digit. Knowing the format lets you predict the error of a calculation instead of finding it in production, and it sits under the numerical work in ML and in pricing code.
+
+<ask type="predict">In Python, what does `0.1 + 0.2 == 0.3` evaluate to? Say why you expect that.</ask>
+
+@@@@ open-prior-pipeline-hazards
+situation: open-prior
+topic: Pipelining and hazards
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Pipelining and hazards","daysAgo":3,"finished":false,"plan":["The five stages","Data hazards and forwarding","Control hazards and branch prediction"],"right":3,"partly":0,"wrong":1,"missed":["Why can forwarding not remove the stall after a load that the very next instruction uses?"],"open":"A branch is resolved in the EX stage. How many instructions behind it have already been fetched?"}]}
+expect: {"askMustNot":["\\bMEM\\b","one (cycle|stall|bubble)"],"must":["load"]}
+noverify: an opening; the question's answer (value ready at the end of MEM, needed at the start of EX) is not stated
+@@ reply
+**Why this matters**
+
+Pipelining is how a processor overlaps the execution of several instructions, and hazards are the places where that overlap gives a wrong result unless the hardware steps in. Compilers order instructions around them, and the cost of a load followed by its use, or of a mispredicted branch, shows in the profile of any tight loop. You have the five stages and forwarding from last time; the load case was the one gap, and control hazards are still to come.
+
+<ask type="short">In a five-stage pipeline, `lw x5, 0(x1)` is followed directly by `add x6, x5, x2`. At the end of which stage does the loaded value first exist, and at the start of which stage does the add need it?</ask>
+
+@@@@ open-recall-cache-index-bits
+situation: open-recall
+topic: Direct-mapped caches: tag, index and offset
+voice: plain
+level: medium
+before: {"recall":[{"prompt":"A direct-mapped cache has 512 lines of 32 bytes. Which bits of a 32-bit address pick the line?","topic":"Direct-mapped caches: tag, index and offset","reviews":1,"lapses":1}]}
+expect: {"askMustNot":["bits 5","13","\\b9\\b"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="short">A direct-mapped cache has 512 lines of 32 bytes. Which bits of a 32-bit address pick the line?</ask>
+
+@@@@ wrong-amdahl-multiplies-fraction
+situation: after-wrong
+topic: Amdahl's law
+voice: overconfident
+level: easy
+expect: {"verdict":"wrong","names":["serial","8\\.1|multipl"],"must":["\\b20 s\\b","100 / 20 = 5"],"mustNot":["speedup (is|of) 8\\.1 is (right|correct)"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+<plan>
+- The serial part as a limit
+- Speedup for a given core count
+</plan>
+
+Amdahl's law: if a fraction $p$ of a program's run time can be spread over $n$ cores and the rest cannot, the speedup is $S = \frac{1}{(1 - p) + p/n}$. With $p = 0.5$ and $n = 2$: $S = 1/(0.5 + 0.25) = 1.33$.
+
+<note>Amdahl's law: $S = \frac{1}{(1-p) + p/n}$, with $p$ the parallel fraction of the run time and $n$ the number of cores. As $n$ grows, $S$ approaches $\frac{1}{1-p}$.</note>
+
+**Problem 1 · warm-up**
+
+A job takes 100 s on one core. 90 s of that is work that parallelises perfectly; 10 s is serial. How long does it take on 9 cores, and what is the speedup?
+
+<solution>The serial part stays 10 s. The parallel part takes 90 / 9 = 10 s. Total 20 s. Speedup = 100 / 20 = 5.</solution>
+<check lang="python">
+t = 10 + 90 / 9
+assert t == 20 and 100 / t == 5
+</check>
+
+<ask type="problem">The time on 9 cores and the speedup, with your steps.</ask>
+@@ learner answer sure
+Easy. 9 cores means 9 times faster on the 90% that's parallel, so 0.9 × 9 = 8.1x speedup. Time is 100 / 8.1 = 12.3 s.
+@@ reply
+<grade verdict="wrong" score="0.1">"0.9 × 9 = 8.1x speedup" multiplies the parallel fraction by the core count, which treats the 10 s of serial work as if it took no time. The serial part runs for its full 10 s however many cores there are.</grade>
+
+Work in times, not factors. The serial 10 s is unchanged. The parallel 90 s is shared by 9 cores: 90 / 9 = 10 s. The total is 10 + 10 = 20 s, so the speedup is 100 / 20 = 5, not 8.1.
+
+<card>Why is the speedup not the parallel fraction times the core count? :: The serial part keeps its full run time. Add times: T(n) = serial + parallel / n, then speedup = T(1) / T(n).</card>
+
+<note>Amdahl by times: new time = serial time + parallel time / n; speedup = old time / new time. The fraction is never multiplied by n.</note>
+
+**Problem 2 · same idea**
+
+A job takes 60 s on one core: 12 s serial and 48 s perfectly parallel. Find its run time on 4 cores and the speedup.
+
+<solution>Serial 12 s. Parallel 48 / 4 = 12 s. Total 24 s. Speedup 60 / 24 = 2.5.</solution>
+<check lang="python">
+t = 12 + 48 / 4
+assert t == 24 and 60 / t == 2.5
+</check>
+
+<ask type="problem">The run time on 4 cores and the speedup, as serial time plus parallel time.</ask>
+@@ verify
+# the worked correction in the reply
+assert 90 / 9 == 10 and 10 + 10 == 20 and 100 / 20 == 5
+# the learner's figures, as quoted
+assert abs(0.9 * 9 - 8.1) < 1e-12 and round(100 / 8.1, 1) == 12.3
+# Amdahl's formula agrees with the time method for both problems
+S = lambda p, n: 1 / ((1 - p) + p / n)
+assert abs(S(0.9, 9) - 5) < 1e-9 and abs(S(48 / 60, 4) - 2.5) < 1e-9
+assert abs(S(0.5, 2) - 1.3333) < 1e-3
+
+@@@@ show-me-ripple-carry-table
+situation: show-me
+topic: Ripple-carry addition
+voice: plain
+level: easy
+expect: {"visual":{"kind":"table"},"must":["1101"]}
+@@ tutor
+A ripple-carry adder adds two binary numbers one bit position at a time, starting from the least significant bit. Each position adds three bits: one from each number and the carry in from the position to its right. It writes the low bit of that sum and passes the high bit on as the carry out. For 0110 + 0111: bit 0 adds 0 + 1 + 0 and writes 1; bit 1 adds 1 + 1 + 0 = 10, writes 0 and carries 1; bit 2 adds 1 + 1 + 1 = 11, writes 1 and carries 1; bit 3 adds 0 + 0 + 1 and writes 1. The result is 1101, which is 6 + 7 = 13.
+
+<note>Ripple-carry addition: at each bit, s = a + b + carry in; write s mod 2 and carry out s div 2. Each carry out is the next position's carry in, so the top bit waits for every carry below it.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| Bit | a | b | Carry in | a + b + carry in | Sum bit | Carry out |
+|---|---|---|---|---|---|---|
+| 0 | 0 | 1 | 0 | 1 | 1 | 0 |
+| 1 | 1 | 1 | 0 | 10 | 0 | 1 |
+| 2 | 1 | 1 | 1 | 11 | 1 | 1 |
+| 3 | 0 | 0 | 1 | 1 | 1 | 0 |
+
+Follow each Carry out into the Carry in of the row below it: that hand-off is the ripple, and the sum bits read from the bottom row up give 1101.
+@@ verify
+a, b = 0b0110, 0b0111
+rows, carry = table(reply)[1:], 0
+assert len(rows) == 4
+for i, row in enumerate(rows):
+    x, y = (a >> i) & 1, (b >> i) & 1
+    s = x + y + carry
+    assert row == [str(i), str(x), str(y), str(carry), format(s, 'b'), str(s & 1), str(s >> 1)], (i, row)
+    carry = s >> 1
+assert carry == 0 and a + b == 0b1101 == 13
+# the explanation before it states the same steps
+assert '1101' in tutor[0] and '6 + 7 = 13' in tutor[0]
+
+@@@@ hands-on-c-bit-toggle
+situation: hands-on
+topic: Bit manipulation in C
+options: {"strategy":"code"}
+voice: terse
+level: easy
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"askMustNot":["\\^","XOR","exclusive"],"must":["0x2D","0x25"]}
+@@ tutor
+`x & (1u << k)` is non-zero exactly when bit k of x is set: the shift builds a mask with a single 1 at position k, and AND keeps only that bit.
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    unsigned x = 0x2C;                /* binary 00101100 */
+    printf("%d\n", (x & (1u << 3)) != 0);
+    printf("%d\n", (x & (1u << 4)) != 0);
+    return 0;
+}
+```
+
+```
+1
+0
+```
+
+<solution>int is_set(unsigned x, int k) { return (x & (1u << k)) != 0; } The program prints 1 for is_set(0x2C, 5) and 0 for is_set(0x2C, 0).</solution>
+
+<ask type="code" lang="c">Write `int is_set(unsigned x, int k)` that returns 1 if bit k of x is set and 0 otherwise, and print `is_set(0x2C, 5)` and `is_set(0x2C, 0)` from main.</ask>
+@@ learner answer sure
+```c
+#include <stdio.h>
+int is_set(unsigned x, int k) { return (x >> k) & 1; }
+int main(void) { printf("%d %d\n", is_set(0x2C, 5), is_set(0x2C, 0)); }
+```
+prints 1 0
+@@ reply
+<grade verdict="correct" score="1">`return (x >> k) & 1;` is right and it prints 1 0: shifting bit k down to position 0 and masking with 1 leaves exactly 0 or 1, so no comparison is needed.</grade>
+
+Setting a bit is OR with the same kind of mask; clearing one is AND with the mask inverted:
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    unsigned x = 0x2C;
+    x |= 1u << 0;        /* set bit 0 */
+    printf("0x%X\n", x);
+    x &= ~(1u << 3);     /* clear bit 3 */
+    printf("0x%X\n", x);
+    return 0;
+}
+```
+
+```
+0x2D
+0x25
+```
+
+<solution>unsigned toggle(unsigned x, int k) { return x ^ (1u << k); } XOR with the mask flips bit k and leaves the rest. toggle(0x25, 2) is 0x21, and toggling bit 2 of 0x21 gives 0x25 again.</solution>
+
+<ask type="code" lang="c">Write `unsigned toggle(unsigned x, int k)` that flips bit k and leaves the other bits alone. Print `toggle(0x25, 2)`, then flip bit 2 of that result and print it too, both in hex.</ask>
+@@ verify
+# the learner's program really prints what they say, with no diagnostics
+out = run_c(block(learner, 'c'))
+assert out.strip() == '1 0', out
+# the reference solution for the task set
+ref = r'''
+#include <stdio.h>
+unsigned toggle(unsigned x, int k) { return x ^ (1u << k); }
+int main(void) { unsigned a = toggle(0x25, 2); printf("0x%X 0x%X\n", a, toggle(a, 2)); return 0; }
+'''
+assert run_c(ref).strip() == '0x21 0x25'
+assert '0x21' in solution(reply) and '0x21' not in visible(reply)
+assert format(0x2C, '08b') == '00101100'
+
+@@@@ mark-error-cache-index-width
+situation: mark-error
+topic: Direct-mapped caches: tag, index and offset
+voice: wordy
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["2\\^9|\\b9\\b","log2\\(512\\) = 8"],"must":["\\b18\\b"],"setsProblem":true}
+@@ tutor
+**Problem 2 · harder**
+
+A direct-mapped cache holds 16 KiB of data in 32-byte lines. Addresses are 32 bits. Give the widths of the offset, index and tag fields.
+
+<solution>Offset: 32 = 2^5, so 5 bits. Lines: 16384 / 32 = 512 = 2^9, so 9 index bits. Tag: 32 − 9 − 5 = 18 bits.</solution>
+<check lang="python">
+import math
+offset = int(math.log2(32)); lines = 16 * 1024 // 32; index = int(math.log2(lines))
+assert (offset, lines, index, 32 - index - offset) == (5, 512, 9, 18)
+</check>
+
+<ask type="problem">The three widths, with your working.</ask>
+@@ learner answer sure
+Right, so first the offset. A line is 32 bytes = 2^5, so 5 offset bits to pick a byte inside the line. Then the number of lines is 16 KiB over 32 bytes, that's 16384 / 32 = 512 lines. Index bits are log2(512) = 8. Whatever is left over is the tag, so 32 - 8 - 5 = 19 tag bits. Offset 5, index 8, tag 19.
+@@ reply
+<grade verdict="partial" score="0.6">The offset and the line count are right: "32 bytes = 2^5, so 5 offset bits" and "16384 / 32 = 512 lines". The first wrong step is "log2(512) = 8": $2^8 = 256$ and $2^9 = 512$, so the index is 9 bits. Your tag of 19 follows correctly from the wrong index; with 9 it is 32 − 9 − 5 = 18.</grade>
+
+<card>How many index bits does a direct-mapped cache with 512 lines need? :: 9, because 2^9 = 512. Index bits = log2(number of lines).</card>
+
+**Problem 3 · same level**
+
+A direct-mapped cache holds 8 KiB of data in 64-byte lines, with 32-bit addresses. Give the offset, index and tag widths.
+
+<solution>Offset: 64 = 2^6, so 6 bits. Lines: 8192 / 64 = 128 = 2^7, so 7 index bits. Tag: 32 − 7 − 6 = 19 bits.</solution>
+<check lang="python">
+import math
+offset = int(math.log2(64)); lines = 8 * 1024 // 64; index = int(math.log2(lines))
+assert (offset, lines, index, 32 - index - offset) == (6, 128, 7, 19)
+</check>
+
+<ask type="problem">The three widths, with the line count you used.</ask>
+@@ verify
+assert 2**5 == 32 and 16 * 1024 == 16384 and 16384 // 32 == 512
+assert 2**8 == 256 and 2**9 == 512          # the learner's slip, and the correction
+assert 32 - 8 - 5 == 19                     # their tag follows from their index
+assert 32 - 9 - 5 == 18                     # the right tag
+assert 8 * 1024 == 8192 and 8192 // 64 == 128 == 2**7 and 32 - 7 - 6 == 19
+
+@@@@ summary-refresh-hex-conversion
+situation: summary
+topic: Hexadecimal and binary conversion
+options: {"refresh":true}
+voice: typos
+level: easy
+expect: {"verdict":"correct","must":["0x12C","B"]}
+@@ tutor
+**Problem 1**
+
+Convert 0xB7 to binary and to decimal.
+
+<solution>B = 1011 and 7 = 0111, so 10110111. Decimal: 11 × 16 + 7 = 183.</solution>
+<check lang="python">
+assert format(0xB7, 'b') == '10110111' and 11 * 16 + 7 == 0xB7 == 183
+</check>
+
+<ask type="problem">Both values, with your steps.</ask>
+@@ learner answer unsure
+binary is 10110111 becuase B is 1011 and 7 is 0111. decimal i think B is 12 so 12*16+7 = 199
+@@ tutor
+<grade verdict="partial" score="0.5">The binary is right: "B is 1011 and 7 is 0111". The decimal goes wrong at "B is 12": the letter digits run A = 10, B = 11, C = 12, so it is 11 × 16 + 7 = 183.</grade>
+
+<card>What are the decimal values of the hex digits A to F? :: A = 10, B = 11, C = 12, D = 13, E = 14, F = 15.</card>
+
+<note>Hex digits: A = 10, B = 11, C = 12, D = 13, E = 14, F = 15. A two-digit hex number with digits h and l is 16 × h + l.</note>
+
+**Problem 2 · a little harder**
+
+Convert decimal 300 to hexadecimal.
+
+<solution>300 = 1 × 256 + 44; 44 = 2 × 16 + 12; 12 is C. So 0x12C.</solution>
+<check lang="python">
+assert hex(300) == '0x12c'
+</check>
+
+<ask type="problem">The hex value, with the divisions you did.</ask>
+@@ learner answer sure
+0x12C. 300/256 = 1 remainder 44, 44/16 = 2 remainder 12, and 12 is C this time
+@@ reply
+<grade verdict="correct" score="1">"44/16 = 2 remainder 12, and 12 is C" is right, and it uses the digit value you slipped on before.</grade>
+
+<summary>**What came back:** splitting a hex number into 4-bit groups, and converting decimal to hex by repeated division (300 = 0x12C).
+
+**Still shaky:** the values of the letter digits. You took B as 12 in the first problem, then had C = 12 right in the second; the card for A to F is in your deck.
+
+**Next:** nothing more is needed on conversion. Hex addition with carries is the natural follow-on.</summary>
+@@ verify
+assert format(0xB7, 'b') == '10110111' and 0xB7 == 183 and 12 * 16 + 7 == 199
+assert divmod(300, 256) == (1, 44) and divmod(44, 16) == (2, 12) and format(300, 'X') == '12C'

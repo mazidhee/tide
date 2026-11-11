@@ -1,0 +1,340 @@
+@@@@ open-svd-singular-values
+situation: open
+topic: The singular value decomposition
+voice: plain
+level: hard
+expect: {"must":["U\\\\Sigma V\\^T","least-squares"],"askMustNot":["3 and 2","2 and 3","absolute"]}
+@@ reply
+**Why this matters**
+
+The singular value decomposition writes any matrix, square or not, as a rotation or reflection, a stretch along perpendicular axes, and another rotation or reflection: $A = U\Sigma V^T$. It is what `numpy.linalg.lstsq` and `numpy.linalg.pinv` use to solve least-squares problems stably, it is how PCA is usually computed, and it is the basis of low-rank approximation: keeping only the largest singular values gives the closest matrix of a given rank, which is the idea behind latent-factor recommender models and image compression. It also gives the condition number, which says how much a linear solve amplifies error. It builds on the eigenvalues of symmetric matrices and leads to the pseudoinverse.
+
+<ask type="short">$$A = \begin{pmatrix} 3 & 0 \\ 0 & -2 \end{pmatrix}$$ has eigenvalues $3$ and $-2$. What are its singular values? Say how you got them.</ask>
+@@ verify
+import numpy as np
+A = np.array([[3.0, 0.0], [0.0, -2.0]])
+assert np.allclose(sorted(np.linalg.eigvals(A).real), [-2.0, 3.0])
+s = np.linalg.svd(A, compute_uv=False)
+assert np.allclose(s, [3.0, 2.0])
+# singular values are the square roots of the eigenvalues of A^T A
+assert np.allclose(sorted(np.sqrt(np.linalg.eigvalsh(A.T @ A))), [2.0, 3.0])
+assert 'eigenvalues $3$ and $-2$' in reply
+
+@@@@ open-quiz-orthogonal-matrices
+situation: open
+topic: Orthogonal matrices
+mode: quiz
+options: {"length":6}
+voice: plain
+level: medium
+expect: {"askTypes":["choice"],"must":["Question 1 of 6"],"words":{"min":15}}
+@@ reply
+**Question 1 of 6**
+
+<ask type="choice" options="$Q^{-1} = Q^T$|$Q = Q^T$|$\det Q = 1$|$Q^2 = I$">$Q$ is a square matrix whose columns are orthonormal: each has length 1 and any two are perpendicular. Which of these holds for every such $Q$?</ask>
+@@ verify
+import numpy as np
+R = np.array([[0.0, -1.0], [1.0, 0.0]])      # rotation by 90 degrees: orthonormal columns
+F = np.array([[0.0, 1.0], [1.0, 0.0]])       # a reflection: orthonormal columns
+I = np.eye(2)
+for Q in (R, F):
+    assert np.allclose(Q.T @ Q, I) and np.allclose(np.linalg.inv(Q), Q.T)   # the first option always holds
+assert not np.allclose(R, R.T)               # Q = Q^T fails for the rotation
+assert not np.allclose(R @ R, I)             # Q^2 = I fails for the rotation
+assert abs(np.linalg.det(F) + 1) < 1e-12     # det Q = 1 fails for the reflection
+import re
+opts = re.search(r'options="([^"]*)"', reply).group(1).split('|')
+assert opts[0] == '$Q^{-1} = Q^T$' and len(opts) == 4
+
+@@@@ open-refresh-matrix-product
+situation: open
+topic: Matrix multiplication
+options: {"refresh":true}
+voice: plain
+level: easy
+expect: {"setsProblem":true,"askTypes":["problem"],"askMustNot":["15","-6"],"mustNot":["Why this matters"],"words":{"min":10}}
+@@ reply
+**Problem 1**
+
+Compute $AB$ for
+
+$$A = \begin{pmatrix} 2 & -1 \\ 0 & 3 \end{pmatrix}, \quad B = \begin{pmatrix} 1 & 4 \\ -2 & 5 \end{pmatrix}.$$
+
+<solution>Entry (i, j) is row i of A dotted with column j of B. (1,1): 2·1 + (−1)(−2) = 4. (1,2): 2·4 + (−1)·5 = 3. (2,1): 0·1 + 3·(−2) = −6. (2,2): 0·4 + 3·5 = 15. AB = [[4, 3], [−6, 15]].</solution>
+<check lang="python">
+A = [[2, -1], [0, 3]]
+B = [[1, 4], [-2, 5]]
+AB = [[sum(A[i][k] * B[k][j] for k in range(2)) for j in range(2)] for i in range(2)]
+assert AB == [[4, 3], [-6, 15]]
+</check>
+
+<ask type="problem">The four entries of $AB$, with the row-times-column sum for each.</ask>
+@@ verify
+import numpy as np
+A = np.array([[2, -1], [0, 3]]); B = np.array([[1, 4], [-2, 5]])
+assert (A @ B).tolist() == [[4, 3], [-6, 15]]
+assert 2*1 + (-1)*(-2) == 4 and 2*4 + (-1)*5 == 3 and 0*1 + 3*(-2) == -6 and 0*4 + 3*5 == 15
+assert 'AB = [[4, 3], [−6, 15]]' in solution(reply)
+assert '15' not in visible(reply)
+
+@@@@ open-prior-gram-schmidt-subtraction
+situation: open-prior
+topic: Gram-Schmidt orthogonalisation
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Gram-Schmidt orthogonalisation","daysAgo":2,"finished":false,"plan":["Normalising the first vector","Subtracting the component along q1","Three vectors and QR"],"right":2,"partly":1,"wrong":1,"missed":["What is q1 · v2 after the subtraction step, and why?"],"open":"Orthonormalise a1 = (1, 1, 0) and a2 = (1, 0, 1)."}]}
+expect: {"askMustNot":["90","perpendicular","orthogonal","right angle","zero"],"must":["q_1","QR"]}
+noverify: an opening; the question's answer (a right angle, because the q1 component has been removed) is not stated and nothing is computed
+@@ reply
+**Why this matters**
+
+Gram-Schmidt turns any independent set of vectors into an orthonormal set spanning the same space. That set is the $Q$ of a QR factorisation, the standard route to least-squares fits and a building block of eigenvalue algorithms. You have the first step, normalising $a_1$ into $q_1$, from two days ago; the subtraction step is where it slipped, so start there.
+
+<ask type="short">Take $a_2$ and subtract its component along $q_1$, leaving $v_2 = a_2 - (q_1 \cdot a_2)\,q_1$. What is the angle between $v_2$ and $q_1$, and what makes it come out that way?</ask>
+
+@@@@ open-prior-spectral-theorem-inverse-of-q
+situation: open-prior
+topic: Symmetric matrices and the spectral theorem
+voice: plain
+level: hard
+before: {"prior":[{"topic":"Orthogonal matrices","daysAgo":4,"finished":true,"plan":["Orthonormal columns","Lengths and angles are preserved","Rotations and reflections"],"right":4,"partly":0,"wrong":1,"missed":["What is the inverse of an orthogonal matrix Q?"]}]}
+expect: {"askMustNot":["transpose","Q\\^T","Q\\^\\{T\\}","\\\\top"],"must":["orthogonal matrices","Q\\\\Lambda Q\\^\\{-1\\}"],"mustNot":["Q\\^T","transpose"]}
+noverify: an opening; it states the theorem and asks for the inverse of Q without giving it; nothing is computed
+@@ reply
+**Why this matters**
+
+A real symmetric matrix has real eigenvalues and a full set of eigenvectors that can be chosen perpendicular, so it can be written $A = Q\Lambda Q^{-1}$ with $Q$ orthogonal and $\Lambda$ diagonal. Covariance matrices, Hessians of loss functions and graph Laplacians are all symmetric, which is why PCA, second-order optimisation and spectral clustering work the way they do. This rests on orthogonal matrices from four days ago: the factorisation is cheap to use only because inverting $Q$ costs nothing, and that was the one question missed there.
+
+<ask type="short">$Q$ is a square matrix with orthonormal columns. How do you get $Q^{-1}$ from $Q$ without any elimination, and which product would you compute to confirm it?</ask>
+
+@@@@ open-recall-trace-eigenvalues
+situation: open-recall
+topic: The trace and its properties
+voice: plain
+level: easy
+before: {"recall":[{"prompt":"A 2x2 matrix has eigenvalues 5 and -2. What is its trace, and what is its determinant?","topic":"The trace and its properties","reviews":2,"lapses":1}]}
+expect: {"askMustNot":["\\b3\\b","-10","sum","product"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="short">A 2x2 matrix has eigenvalues 5 and -2. What is its trace, and what is its determinant?</ask>
+
+@@@@ open-recall-cross-product-length
+situation: open-recall
+topic: The cross product
+voice: plain
+level: easy
+before: {"recall":[{"prompt":"For vectors a and b in three dimensions, what does the length of a x b measure?","topic":"The cross product","reviews":0,"lapses":0}]}
+expect: {"askMustNot":["area","parallelogram","sin"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="explain">For vectors a and b in three dimensions, what does the length of a x b measure?</ask>
+
+@@@@ correct-lu-probe-to-plan
+situation: after-correct
+topic: LU decomposition
+voice: plain
+level: medium
+expect: {"verdict":"correct","need":["plan","note"],"setsProblem":true,"askTypes":["problem"],"must":["A = E\\^\\{-1\\}U = LU","multiplier"],"askMustNot":["\\b4\\b","\\b5\\b"]}
+@@ tutor
+Elimination on
+
+$$A = \begin{pmatrix} 2 & 1 \\ 6 & 5 \end{pmatrix}$$
+
+subtracts 3 times row 1 from row 2.
+
+<ask type="short">Which matrix $E$ carries out that row operation as the product $EA$, and what is $E^{-1}$?</ask>
+@@ learner answer sure
+E = [[1,0],[-3,1]]. Its inverse is [[1,0],[3,1]], because adding 3 times row 1 back undoes the subtraction.
+@@ reply
+<grade verdict="correct" score="1">"adding 3 times row 1 back undoes the subtraction" is why $E^{-1}$ has $+3$ where $E$ has $-3$, and both matrices are right.</grade>
+
+<plan>
+- $L$ as the record of the multipliers
+- Solving $Ax = b$ with two triangular solves
+- Row exchanges: $PA = LU$
+</plan>
+
+Your two matrices already give the factorisation. $EA$ is upper triangular:
+
+$$EA = \begin{pmatrix} 1 & 0 \\ -3 & 1 \end{pmatrix}\begin{pmatrix} 2 & 1 \\ 6 & 5 \end{pmatrix} = \begin{pmatrix} 2 & 1 \\ 0 & 2 \end{pmatrix} = U.$$
+
+Multiply both sides by $E^{-1}$ and $A = E^{-1}U = LU$, with $L = E^{-1}$ lower triangular. $L$ has 1s on its diagonal and, below it, the multiplier used to clear that position: here 3, in row 2, column 1. Nothing new is computed: $L$ records the elimination that produced $U$.
+
+<note>$A = LU$: $U$ is the upper triangular result of elimination. $L$ is lower triangular with 1s on the diagonal and, in position $(i, j)$, the multiple of row $j$ that was subtracted from row $i$.</note>
+
+**Problem 1 · warm-up**
+
+Factor this matrix as $LU$:
+
+$$A = \begin{pmatrix} 3 & 2 \\ 12 & 13 \end{pmatrix}$$
+
+<solution>Multiplier 12/3 = 4. Row 2 − 4·row 1 = (0, 13 − 8) = (0, 5). U = [[3, 2], [0, 5]] and L = [[1, 0], [4, 1]].</solution>
+<check lang="python">
+L = [[1, 0], [4, 1]]
+U = [[3, 2], [0, 5]]
+LU = [[sum(L[i][k] * U[k][j] for k in range(2)) for j in range(2)] for i in range(2)]
+assert LU == [[3, 2], [12, 13]]
+</check>
+
+<ask type="problem">$L$ and $U$, with the multiplier you used.</ask>
+@@ verify
+import numpy as np
+A = np.array([[2, 1], [6, 5]])
+E = np.array([[1, 0], [-3, 1]]); Einv = np.array([[1, 0], [3, 1]])
+# the learner's two matrices
+assert (E @ A).tolist() == [[2, 1], [0, 2]]            # row 2 minus 3 times row 1, as in the reply
+assert (E @ Einv).tolist() == [[1, 0], [0, 1]]
+assert (Einv @ (E @ A)).tolist() == A.tolist()         # A = L U with L = E^-1
+# Problem 1, from scratch
+A2 = np.array([[3, 2], [12, 13]])
+m = A2[1, 0] // A2[0, 0]
+assert m == 4 and (A2[1] - m * A2[0]).tolist() == [0, 5]
+assert '[[3, 2], [0, 5]]' in solution(reply) and '[[1, 0], [4, 1]]' in solution(reply)
+
+@@@@ correct-recall-markov-then-opening
+situation: after-correct
+topic: Markov matrices and steady states
+voice: terse
+level: medium
+before: {"recall":[{"prompt":"What must each column of a Markov matrix add up to, and which eigenvalue does that guarantee?","topic":"Markov matrices and steady states","reviews":1,"lapses":0}]}
+expect: {"verdict":"correct","heading":"Why this matters","askTypes":["predict","short"],"askMustNot":["2/3","0\\.66","0\\.67","1/3"],"must":["PageRank","steady state"],"forbid":["solution","plan"]}
+@@ tutor
+<ask type="short">What must each column of a Markov matrix add up to, and which eigenvalue does that guarantee?</ask>
+@@ learner answer sure
+1. guarantees eigenvalue 1
+@@ reply
+<grade verdict="correct" score="1">"guarantees eigenvalue 1" is right: columns that sum to 1 mean $\mathbf{1}^T P = \mathbf{1}^T$, so 1 is an eigenvalue of $P^T$ and therefore of $P$.</grade>
+
+**Why this matters**
+
+A Markov matrix moves a probability distribution forward one step, and its steady state is where repeated steps settle. PageRank is the steady state of a chain that follows links; queueing models, credit-rating migration tables and churn models are read the same way; Markov chain Monte Carlo is built so that its steady state is the distribution you want to sample. The steady state is an eigenvector for eigenvalue 1, which ties this topic to diagonalisation and to power iteration.
+
+<ask type="predict">$$P = \begin{pmatrix} 0.9 & 0.2 \\ 0.1 & 0.8 \end{pmatrix}$$ Each column sums to 1. Starting from $x_0 = (1, 0)$, what vector does $P^k x_0$ approach as $k$ grows? A guess with your reasoning is fine.</ask>
+@@ verify
+import numpy as np
+from fractions import Fraction as F
+P = np.array([[0.9, 0.2], [0.1, 0.8]])
+assert np.allclose(P.sum(axis=0), 1)
+assert np.allclose(np.ones(2) @ P, np.ones(2))                 # 1^T P = 1^T
+assert any(abs(l - 1) < 1e-12 for l in np.linalg.eigvals(P))   # so 1 is an eigenvalue
+# the answer the question withholds: the steady state (2/3, 1/3)
+x = np.linalg.matrix_power(P, 200) @ np.array([1.0, 0.0])
+assert np.allclose(x, [2/3, 1/3])
+pi = (F(2, 3), F(1, 3))
+assert F(9, 10) * pi[0] + F(2, 10) * pi[1] == pi[0] and F(1, 10) * pi[0] + F(8, 10) * pi[1] == pi[1]
+assert '2/3' not in reply and '0.66' not in reply
+
+@@@@ correct-condition-number-one-norm
+situation: after-correct
+topic: Matrix norms and the condition number
+options: {"strategy":"maths"}
+voice: terse
+level: hard
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"must":["column sum","4 \\\\times 2 = 8"],"askMustNot":["\\b21\\b","3\\.5"]}
+@@ tutor
+The 2-norm of a matrix is the largest factor by which it stretches a vector: $\|A\|_2 = \max_{x \ne 0} \|Ax\|_2 / \|x\|_2$. The condition number is $\kappa(A) = \|A\|\,\|A^{-1}\|$: the worst-case factor by which a relative error in $b$ grows in the solution of $Ax = b$.
+
+<note>$\|A\|_2 = \max_{x \ne 0} \|Ax\|_2 / \|x\|_2$. Condition number: $\kappa(A) = \|A\|\,\|A^{-1}\| \ge 1$. In solving $Ax = b$, a relative error in $b$ can grow by up to $\kappa(A)$ in $x$.</note>
+
+Find $\kappa_2(D)$ for
+
+$$D = \begin{pmatrix} 4 & 0 \\ 0 & 0.5 \end{pmatrix}$$
+
+<solution>A diagonal matrix stretches each axis by its diagonal entry, so ‖D‖₂ = 4. D⁻¹ = diag(0.25, 2), so ‖D⁻¹‖₂ = 2. κ₂(D) = 4 × 2 = 8.</solution>
+<check lang="python">
+import numpy as np
+D = np.diag([4.0, 0.5])
+k = np.linalg.norm(D, 2) * np.linalg.norm(np.linalg.inv(D), 2)
+assert abs(k - 8) < 1e-12
+</check>
+
+<ask type="problem">$\kappa_2(D)$, with both norms.</ask>
+@@ learner answer sure
+||D|| = 4. D^-1 = diag(1/4, 2) so its norm is 2. kappa = 8
+@@ reply
+<grade verdict="correct" score="1">"D^-1 = diag(1/4, 2) so its norm is 2" is the step that matters: the smallest stretch of $D$, 0.5, becomes the largest stretch of $D^{-1}$, and $\kappa_2 = 4 \times 2 = 8$.</grade>
+
+For a matrix that is not diagonal the 1-norm is easier to compute by hand: $\|A\|_1$ is the largest absolute column sum. The condition number is defined the same way, with that norm on both factors.
+
+<note>$\|A\|_1$ is the largest absolute column sum of $A$, and $\kappa_1(A) = \|A\|_1\,\|A^{-1}\|_1$.</note>
+
+Find $\kappa_1(A)$ for
+
+$$A = \begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}$$
+
+<solution>Absolute column sums of A: 4 and 6, so ‖A‖₁ = 6. det A = −2, so A⁻¹ = [[−2, 1], [1.5, −0.5]], with absolute column sums 3.5 and 1.5: ‖A⁻¹‖₁ = 3.5. κ₁(A) = 6 × 3.5 = 21.</solution>
+<check lang="python">
+import numpy as np
+A = np.array([[1.0, 2.0], [3.0, 4.0]])
+Ainv = np.linalg.inv(A)
+n1 = lambda M: max(abs(M).sum(axis=0))
+assert abs(n1(A) - 6) < 1e-12 and abs(n1(Ainv) - 3.5) < 1e-12
+assert abs(n1(A) * n1(Ainv) - 21) < 1e-9
+</check>
+
+<ask type="problem">$\kappa_1(A)$, with $A^{-1}$ and both column-sum norms.</ask>
+@@ verify
+import numpy as np
+from fractions import Fraction as F
+D = np.diag([4.0, 0.5])
+assert np.isclose(np.linalg.norm(D, 2), 4) and np.isclose(np.linalg.norm(np.linalg.inv(D), 2), 2)
+assert np.allclose(np.linalg.inv(D), np.diag([0.25, 2.0]))       # the learner's inverse
+assert np.isclose(np.linalg.cond(D, 2), 8)
+# the new problem, exactly
+a, b, c, d = F(1), F(2), F(3), F(4)
+det = a * d - b * c
+inv = [[d / det, -b / det], [-c / det, a / det]]
+assert det == -2 and inv == [[F(-2), F(1)], [F(3, 2), F(-1, 2)]]
+n1 = lambda M: max(abs(M[0][j]) + abs(M[1][j]) for j in range(2))
+assert n1([[a, b], [c, d]]) == 6 and n1(inv) == F(7, 2) and n1([[a, b], [c, d]]) * n1(inv) == 21
+assert np.isclose(np.linalg.cond(np.array([[1.0, 2.0], [3.0, 4.0]]), 1), 21)
+assert '21' in solution(reply) and '21' not in visible(reply)
+
+@@@@ correct-unsure-linear-dependence
+situation: after-correct
+topic: Linear independence
+voice: typos
+level: easy
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"must":["Problem 3","2u \\+ v - w = 0"],"askMustNot":["trivial","x = y = z"]}
+@@ tutor
+**Problem 2 · same level**
+
+Are $u = (1, 0, 2)$, $v = (2, 1, 3)$ and $w = (4, 1, 7)$ linearly independent?
+
+<solution>w = 2u + v, since 2(1, 0, 2) + (2, 1, 3) = (4, 1, 7). So 2u + v − w = 0 with coefficients that are not all zero: the vectors are dependent.</solution>
+<check lang="python">
+u, v, w = (1, 0, 2), (2, 1, 3), (4, 1, 7)
+assert tuple(2 * a + b - c for a, b, c in zip(u, v, w)) == (0, 0, 0)
+</check>
+
+<ask type="problem">Independent or dependent, with the combination or the elimination that shows it.</ask>
+@@ learner answer unsure
+dependant i think?? 2u + v = (2,0,4) + (2,1,3) = (4,1,7) wich is w. not sure if finding one combo is enough tho
+@@ reply
+<grade verdict="correct" score="1">"2u + v = (2,0,4) + (2,1,3) = (4,1,7)" settles it: $2u + v - w = 0$ is a combination with coefficients that are not all zero giving the zero vector, and one such combination is exactly what dependence means.</grade>
+
+One more at the same level, where a combination is harder to spot by eye.
+
+**Problem 3 · same level**
+
+Are $a = (1, 1, 0)$, $b = (0, 1, 1)$ and $c = (1, 0, 1)$ linearly independent?
+
+<solution>Solve x a + y b + z c = 0: x + z = 0, x + y = 0, y + z = 0. The first two give z = −x and y = −x; the third then gives −2x = 0, so x = y = z = 0. Only the trivial combination gives zero: independent.</solution>
+<check lang="python">
+import numpy as np
+M = np.array([[1, 0, 1], [1, 1, 0], [0, 1, 1]])   # columns a, b, c
+assert round(np.linalg.det(M)) == 2 and np.linalg.matrix_rank(M) == 3
+</check>
+
+<ask type="problem">Independent or dependent, with the equations for the coefficients.</ask>
+@@ verify
+import numpy as np
+u, v, w = np.array([1, 0, 2]), np.array([2, 1, 3]), np.array([4, 1, 7])
+assert (2 * u).tolist() == [2, 0, 4] and (2 * u + v).tolist() == [4, 1, 7] == w.tolist()   # the learner's line
+assert np.linalg.matrix_rank(np.column_stack([u, v, w])) == 2
+# Problem 3: the three equations have only the zero solution
+a, b, c = np.array([1, 1, 0]), np.array([0, 1, 1]), np.array([1, 0, 1])
+M = np.column_stack([a, b, c])
+assert M.tolist() == [[1, 0, 1], [1, 1, 0], [0, 1, 1]]     # rows: x + z, x + y, y + z
+assert np.linalg.matrix_rank(M) == 3 and round(np.linalg.det(M)) == 2
+assert 'independent' in solution(reply)

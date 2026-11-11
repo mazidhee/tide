@@ -1,0 +1,343 @@
+@@@@ unusual-subnet-count-by-address-ratio
+situation: mark-unusual
+topic: Splitting a network into subnets
+voice: terse
+level: medium
+expect: {"verdict":"correct","must":["Problem 2"],"mustNot":["should have used","192\\.168\\.40\\.128","192\\.168\\.40\\.192","/25"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+Lengthening a prefix by $k$ bits splits a block into $2^k$ equal subnets: the $k$ borrowed bits number them. Splitting 192.168.0.0/24 into /26 subnets borrows 2 bits, giving 4 subnets that start at .0, .64, .128 and .192.
+
+<note>Splitting a /p block into /q subnets (q > p): 2^(q − p) subnets, each of 2^(32 − q) addresses, laid end to end from the start of the block.</note>
+
+**Problem 1 · warm-up**
+
+The block 10.8.0.0/22 is split into /26 subnets. How many subnets is that, and what is the network address of the 6th one, counting 10.8.0.0/26 as the 1st?
+
+<solution>26 − 22 = 4 borrowed bits: 2^4 = 16 subnets of 64 addresses. The 6th starts 5 × 64 = 320 addresses into the block; 320 = 256 + 64, so it is 10.8.1.64.</solution>
+<check lang="python">
+import ipaddress
+subs = list(ipaddress.ip_network('10.8.0.0/22').subnets(new_prefix=26))
+assert len(subs) == 16 and str(subs[5].network_address) == '10.8.1.64'
+</check>
+
+<ask type="problem">The number of subnets and the 6th network address, with your working.</ask>
+@@ learner answer sure
+16 subnets. /22 = 1024 addrs, /26 = 64 addrs, 1024/64 = 16. 6th one starts 5*64 = 320 addresses in. 320 = 256 + 64 so 10.8.1.64
+@@ reply
+<grade verdict="correct" score="1">"1024/64 = 16" is a valid count: equal subnets fill the block exactly, so the number of them is the ratio of the sizes, and $2^{10} / 2^{6}$ is the same $2^{4}$ that counting borrowed bits gives. "320 = 256 + 64" correctly carries one full 256 into the third octet.</grade>
+
+Working in address counts, as you did, is what the next one needs, because its subnets are not all the same size.
+
+**Problem 2 · harder**
+
+From the block 192.168.40.0/24, allocate one subnet each for three LANs that need 100, 50 and 20 hosts. Take them largest first, make each as small as its host count allows, and pack them from the start of the block with no gaps.
+
+<solution>100 hosts need 128 addresses (a /25 holds 126 hosts; a /26 only 62): 192.168.40.0/25. 50 hosts need 64 addresses (62 hosts; a /27 only 30): 192.168.40.128/26. 20 hosts need 32 addresses (30 hosts; a /28 only 14): 192.168.40.192/27.</solution>
+<check lang="python">
+import ipaddress
+start = ipaddress.ip_address('192.168.40.0')
+out = []
+for need in (100, 50, 20):
+    prefix = max(p for p in range(24, 31) if 2 ** (32 - p) - 2 >= need)
+    net = ipaddress.ip_network(f'{start}/{prefix}')
+    out.append(str(net))
+    start = net.broadcast_address + 1
+assert out == ['192.168.40.0/25', '192.168.40.128/26', '192.168.40.192/27']
+</check>
+
+<ask type="problem">The three subnets in CIDR form, with the host capacity of each.</ask>
+@@ verify
+import ipaddress
+big = ipaddress.ip_network('10.8.0.0/22')
+subs = list(big.subnets(new_prefix=26))
+# the learner's method: ratio of address counts, then an offset in addresses
+assert big.num_addresses == 1024 and subs[0].num_addresses == 64 and 1024 // 64 == 16 == len(subs) == 2 ** (26 - 22)
+assert 5 * 64 == 320 == 256 + 64
+assert str(big.network_address + 320) == '10.8.1.64' == str(subs[5].network_address)
+# the tutor's own example
+assert [str(s.network_address).split('.')[-1] for s in ipaddress.ip_network('192.168.0.0/24').subnets(new_prefix=26)] == ['0', '64', '128', '192']
+# problem 2
+nets = [ipaddress.ip_network(n) for n in ('192.168.40.0/25', '192.168.40.128/26', '192.168.40.192/27')]
+assert [n.num_addresses - 2 for n in nets] == [126, 62, 30]
+assert all(a.broadcast_address + 1 == b.network_address for a, b in zip(nets, nets[1:]))
+assert all(n.subnet_of(ipaddress.ip_network('192.168.40.0/24')) for n in nets)
+assert 62 < 100 <= 126 and 30 < 50 <= 62 and 14 < 20 <= 30
+for n in nets[1:]:
+    assert str(n) in solution(reply) and str(n) not in visible(reply)
+
+@@@@ unusual-checksum-mod-65535-then-plan
+situation: mark-unusual
+topic: The Internet checksum
+voice: wordy
+level: hard
+expect: {"verdict":"correct","need":["plan","note"],"must":["0xFFFF","Problem 1"],"mustNot":["should have used","0x0001","reject"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+<ask type="short">Compute the Internet checksum of the three 16-bit words 0xF00D, 0x1234 and 0xBEEF, and say how you did it.</ask>
+@@ learner answer sure
+I don't bother wrapping carries by hand, I just do it in decimal. 0xF00D + 0x1234 + 0xBEEF = 114992. One's complement adding is the same thing as working mod 65535, so 114992 mod 65535 = 49457, and then the checksum is 65535 - 49457 = 16078, which is 0x3ECE.
+@@ reply
+<grade verdict="correct" score="1">0x3ECE is right, and "114992 mod 65535 = 49457" is a valid route: $2^{16} \equiv 1 \pmod{65535}$, so adding a carry back in at the bottom is exactly reduction mod 65535, and subtracting from 65535 inverts the 16 bits.</grade>
+
+One caution for that route: a non-zero sum that is an exact multiple of 65535 wraps to 0xFFFF, where mod gives 0. You have the computation, so the plan is short.
+
+<plan>
+- Verifying a checksum at the receiver
+- Which errors the checksum cannot detect
+</plan>
+
+The receiver has no need to recompute the checksum and compare. It adds every word it received, the checksum field included, with the same one's complement addition. The checksum is the complement of the sum of the data, so if nothing changed the total has every bit set: 0xFFFF. Any other result means the data was corrupted.
+
+<note>Verifying: one's complement sum of all the words including the checksum field. 0xFFFF means no error was detected; anything else means corruption.</note>
+
+**Problem 1 · warm-up**
+
+A receiver gets the four words 0xF00D, 0x1235, 0xBEEF and 0x3ECE, the last being the checksum field. Find the one's complement sum of all four and say what the receiver concludes.
+
+<solution>Plain sum: 0x1FFFF. Wrap the carry: 0xFFFF + 1 = 0x10000, and wrap again: 0x0000 + 1 = 0x0001. That is not 0xFFFF, so the receiver detects an error and discards the data. (The second word arrived as 0x1235 instead of 0x1234.)</solution>
+<check lang="python">
+s = 0xF00D + 0x1235 + 0xBEEF + 0x3ECE
+assert s == 0x1FFFF
+while s >> 16:
+    s = (s & 0xFFFF) + (s >> 16)
+assert s == 0x0001 and s != 0xFFFF
+</check>
+
+<ask type="problem">The sum in hex, with each carry you wrapped, and the receiver's conclusion.</ask>
+@@ verify
+def fold(s):
+    while s >> 16:
+        s = (s & 0xFFFF) + (s >> 16)
+    return s
+words = [0xF00D, 0x1234, 0xBEEF]
+# the learner's decimal route
+assert sum(words) == 114992 and 114992 % 65535 == 49457 and 65535 - 49457 == 16078 == 0x3ECE
+# it agrees with carry wrapping
+assert fold(sum(words)) == 49457 == 0xC131 and (~0xC131 & 0xFFFF) == 0x3ECE
+assert 2**16 % 65535 == 1
+# the caution: verification of the intact words is exactly that edge case
+intact = sum(words) + 0x3ECE
+assert intact % 65535 == 0 and intact != 0 and fold(intact) == 0xFFFF
+# problem 1: one bit flipped in the second word
+bad = 0xF00D + 0x1235 + 0xBEEF + 0x3ECE
+assert bad == 0x1FFFF and (bad & 0xFFFF) + (bad >> 16) == 0x10000 and fold(bad) == 0x0001
+assert 0x1234 ^ 0x1235 == 1
+assert '0x0001' in solution(reply) and '0x0001' not in visible(reply)
+
+@@@@ unusual-quiz-slow-start-closed-form
+situation: mark-unusual
+topic: TCP slow start
+mode: quiz
+options: {"length":6}
+voice: plain
+level: medium
+expect: {"verdict":"correct","must":["Question 5 of 6"],"mustNot":["should have","round 6","sixth round","\\b630\\b"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+**Question 4 of 6**
+
+A sender in slow start begins with a congestion window of 1 segment and doubles it every round trip. There is no loss and no threshold in the way. It has a file of 100 segments to send, and each round trip it sends a full window.
+
+<solution>Segments per round: 1, 2, 4, 8, 16, 32, 64. Running total: 1, 3, 7, 15, 31, 63, 127. The total first reaches 100 in round 7.</solution>
+<check lang="python">
+sent, cwnd, rounds = 0, 1, 0
+while sent < 100:
+    sent += cwnd; cwnd *= 2; rounds += 1
+assert rounds == 7
+</check>
+
+<ask type="problem">In which round trip does the last segment of the file go out? Show how you got it.</ask>
+@@ learner answer sure
+Round 7. After n rounds you've sent 1 + 2 + ... + 2^(n-1) = 2^n - 1 segments in total. Need 2^n - 1 >= 100, so 2^n >= 101. 2^6 = 64 is too small and 2^7 = 128 works.
+@@ reply
+<grade verdict="correct" score="1">Round 7 is right. "1 + 2 + ... + 2^(n-1) = 2^n - 1" is the sum of the geometric series, so solving "2^n >= 101" finds the same round as adding the windows up one at a time, with less work.</grade>
+
+**Question 5 of 6**
+
+Senders now typically start with a window of 10 segments rather than 1 (the initial window allowed by RFC 6928). A sender starts at 10 segments and doubles every round trip, with no loss and no threshold. It has a file of 400 segments to send.
+
+<solution>Segments per round: 10, 20, 40, 80, 160, 320. Running total: 10, 30, 70, 150, 310, 630. The total first reaches 400 in round 6. By the closed form: 10 × (2^n − 1) ≥ 400 needs 2^n ≥ 41, so n = 6.</solution>
+<check lang="python">
+sent, cwnd, rounds = 0, 10, 0
+while sent < 400:
+    sent += cwnd; cwnd *= 2; rounds += 1
+assert rounds == 6 and sent == 630
+</check>
+
+<ask type="problem">In which round trip does the last segment go out? Show your working.</ask>
+@@ verify
+def rounds_needed(first, total):
+    sent, cwnd, r, trace = 0, first, 0, []
+    while sent < total:
+        sent += cwnd; trace.append(sent); cwnd *= 2; r += 1
+    return r, trace
+r, trace = rounds_needed(1, 100)
+assert r == 7 and trace == [1, 3, 7, 15, 31, 63, 127]
+# the learner's closed form
+assert all(sum(2**k for k in range(n)) == 2**n - 1 for n in range(1, 12))
+assert 2**6 == 64 < 101 <= 2**7 == 128
+r2, trace2 = rounds_needed(10, 400)
+assert r2 == 6 and trace2 == [10, 30, 70, 150, 310, 630]
+assert min(n for n in range(1, 20) if 10 * (2**n - 1) >= 400) == 6 and 2**5 < 41 <= 2**6
+assert 'round 6' in solution(reply) and 'round 6' not in visible(reply)
+
+@@@@ tangent-why-isn-is-not-zero
+situation: tangent
+topic: TCP sequence and acknowledgement numbers
+voice: confused
+level: medium
+expect: {"must":["earlier connection","predict|guess"],"askMustNot":["62001","62501"],"mustNot":["62501"]}
+@@ tutor
+A SYN uses up one sequence number even though it carries no data, so that it can be acknowledged and retransmitted like data. If the client's SYN has sequence number $x$, the server acknowledges $x + 1$, and the client's first data byte is numbered $x + 1$. A FIN uses up one in the same way.
+
+<note>SYN and FIN each consume one sequence number, so they can be acknowledged and retransmitted like a byte of data.</note>
+
+<ask type="short">A client's SYN carries sequence number 62000. The client then sends 500 bytes and nothing else. What acknowledgement number does the server send once it has received all of it?</ask>
+@@ learner question
+wait, why does the client start at some random number like 62000 anyway? wouldn't starting from 0 every time be simpler
+@@ reply
+Simpler, but unsafe in two ways. If every connection started at 0, a delayed segment from an earlier connection between the same addresses and ports could land inside the new connection's window and be accepted as its data. And anyone able to guess the numbers could forge segments, a reset or injected data, without seeing the traffic. So each side picks a starting number that is hard to predict; current stacks typically derive it from a clock plus a keyed hash of the addresses and ports (RFC 6528).
+
+<note>Initial sequence numbers are unpredictable so that stray segments from an earlier connection, and forged segments from an attacker who cannot see the traffic, fall outside the window and are rejected.</note>
+
+Back to counting from the client's number.
+
+<ask type="short">The SYN goes out with sequence number 62000 and 500 bytes of data follow it. Which sequence number does the first data byte get, which does the last one get, and so what does the server acknowledge?</ask>
+@@ verify
+syn = 62000
+first = syn + 1
+last = first + 500 - 1
+ack = last + 1
+assert (first, last, ack) == (62001, 62500, 62501)
+for s in ('62001', '62500', '62501'):
+    assert s not in reply
+assert '62000' in tutor[0] and '500 bytes' in tutor[0]
+
+@@@@ tangent-ping-has-no-port
+situation: tangent
+topic: Sockets and ports
+voice: typos
+level: easy
+expect: {"must":["ICMP","no port"],"askMustNot":["\\b4\\b","\\bfour\\b"],"mustNot":["\\b(4|four) sockets"]}
+noverify: conceptual; the ICMP echo type numbers (8 and 0 for IPv4) are protocol constants, and the socket count asked for is not stated
+@@ tutor
+A server's listening socket is only for accepting. `listen` marks it as taking connections on its port; each call to `accept` takes one completed handshake off the queue and returns a new socket for that one client. The new socket has the same local port as the listening one. The kernel tells connections apart by all four values together: local address, local port, remote address, remote port.
+
+<note>`accept` returns a new connected socket for each client. All of them share the listening port; a connection is identified by (local IP, local port, remote IP, remote port).</note>
+
+<ask type="short">A server listens on port 8080 and has accepted 3 clients, all still connected. How many sockets does the server process hold, and what local port does each one use?</ask>
+@@ learner question
+random q, what port does ping use? i wanted to block it on my firwall and couldnt find the port anywhere
+@@ reply
+None. Ping sends ICMP echo requests, and ICMP sits directly on IP, beside TCP and UDP rather than on top of them, so its packets have no port fields at all. Ports belong to TCP and UDP. A firewall matches ping by protocol and message type instead: for IPv4, echo request is ICMP type 8 and echo reply is type 0. Replies are paired with requests by an identifier and a sequence number in the ICMP header.
+
+<note>Ports exist only in TCP and UDP headers. ICMP (ping, traceroute replies) has no ports; it is filtered by protocol and message type.</note>
+
+Back to the server and its sockets.
+
+<ask type="short">Three clients are connected to a server that listens on port 8080. Count every socket the server process has open, the listening one included, and give the local port of each.</ask>
+
+@@@@ tangent-why-quic-runs-over-udp
+situation: tangent
+topic: HTTP/2 multiplexing and head-of-line blocking
+options: {"strategy":"dialogue"}
+voice: wordy
+level: hard
+expect: {"must":["middlebox|firewall","SCTP","kernel"],"askMustNot":["nothing","none of","head-of-line"],"askTypes":["predict","short","explain"]}
+noverify: conceptual; why QUIC is carried in UDP, then the pending prediction in new words, nothing computed
+@@ tutor
+HTTP/2 carries many requests at once on one TCP connection. Each request and its response form a stream with its own number, and both sides cut the streams into frames and interleave them, so a slow response no longer holds up the ones queued behind it as it did in HTTP/1.1.
+
+<note>HTTP/2: one TCP connection, many streams. Frames from different streams are interleaved, each tagged with its stream number.</note>
+
+<ask type="predict">Three responses are in flight as streams 1, 3 and 5. One TCP segment holding a frame of stream 3 is lost; the segments after it, holding frames of streams 1 and 5, arrive. Can the browser use those stream 1 and stream 5 frames straight away? Say why.</ask>
+@@ learner question
+Before I answer, a side question that has been bugging me for a while: is this the reason HTTP/3 runs on UDP? And if TCP was the problem, why didn't they just design a proper new transport protocol, instead of building on top of UDP, which I thought was the unreliable one?
+@@ reply
+They did design one: QUIC, HTTP/3's transport, is a new transport protocol. It is carried inside UDP datagrams for a practical reason. NATs, firewalls and other middleboxes generally pass only TCP and UDP and drop IP protocols they do not recognise, which is what held back SCTP. UDP adds almost nothing of its own, only ports and a checksum, so QUIC builds its reliability, ordering and encryption on top of it, and it ships inside applications instead of waiting for operating system kernels to change. Whether the loss case here is part of the motive is what your prediction will show.
+
+<note>QUIC is a transport protocol carried in UDP because middleboxes pass UDP, and because it can then live in user space and be updated without kernel changes.</note>
+
+<ask type="predict">One TCP segment is missing from the middle of the connection's byte stream. The segments after it have arrived and hold frames of streams 1 and 5. What can TCP hand to the browser's HTTP/2 code while it waits for the retransmission, and why?</ask>
+
+@@@@ why-handshake-two-messages-stale-syn
+situation: why
+topic: The TCP three-way handshake
+options: {"why":true}
+voice: wordy
+level: medium
+expect: {"verdict":"correct","askMustNot":["\\bRST\\b","reset"],"mustNot":["\\bRST\\b"],"askTypes":["predict","explain","short"]}
+noverify: conceptual; a Why-mode derivation of the third handshake message, nothing computed
+@@ tutor
+Take the handshake down to two messages and see what breaks. The client sends a SYN with its starting sequence number, the server answers with a SYN-ACK, and each side treats the connection as open from that moment. Keep in mind that a network can delay a packet for a long time and still deliver it.
+
+<ask type="predict">A client sent a SYN, gave up waiting and went away. A minute later that old SYN finally reaches the server. Under the two-message scheme, what does the server do, and what state is each side left in?</ask>
+@@ learner answer sure
+The server can't tell it's an old one, a SYN is a SYN, so it replies with its SYN-ACK and since two messages is the whole handshake it now thinks the connection is open and sets aside memory for it. The client isn't there any more, or at least doesn't want this connection, so the server is left holding a connection that nobody is going to use.
+@@ reply
+<grade verdict="correct" score="1">Right: "a SYN is a SYN", so the server "now thinks the connection is open" on the strength of a packet that only proves a client wanted a connection at some time in the past. The two sides end up disagreeing about whether a connection exists.</grade>
+
+<note>With two messages the server would commit to a connection on a SYN alone, and a SYN may be an old duplicate. The server lacks any evidence that the client wants the connection now.</note>
+
+So the server needs something more before it commits. Put a third message back and replay the same case: the stale SYN arrives, the server sends its SYN-ACK, but this time it does not treat the connection as open until it hears from the client again.
+
+<ask type="predict">That SYN-ACK reaches a client that has no record of asking for this connection. What do you expect the client to do with it, and what can the server work out from the client's response, or from getting none?</ask>
+
+@@@@ why-slow-start-per-ack-not-per-round
+situation: why
+topic: TCP congestion control
+options: {"why":true}
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","accept":["partial"],"names":["per ACK|each ACK|every ACK","round trip"],"must":["ACK"],"askMustNot":["doubl","\\b8\\b"],"mustNot":["doubl","exponential","2, 4, 8"],"askTypes":["predict","short"]}
+@@ tutor
+A new connection knows nothing about the path's capacity, so the sender starts with a small congestion window, cwnd, and lets the ACKs coming back drive its growth. In slow start the rule is small: for every ACK that acknowledges new data, add 1 segment to cwnd. Start with cwnd = 1 segment, and suppose the receiver acknowledges every segment separately and nothing is lost.
+
+<ask type="predict">Using only that per-ACK rule, what is cwnd after the first, the second and the third round trip? Show how you counted.</ask>
+@@ learner answer sure
+2, 3, 4. It adds one segment each round trip so it grows linearly, which is obviously why it's called slow start.
+@@ reply
+<grade verdict="wrong" score="0.2">"It adds one segment each round trip" swaps the rule's unit: the increase is for every ACK, not for every round trip. Your first value, 2, is right only because the first round has one segment in flight and so one ACK; the 3 and the 4 do not follow.</grade>
+
+Take the second round slowly. At its start cwnd is 2, so the sender may have two segments in flight, and it sends both. Each one is acknowledged on its own.
+
+<card>In slow start, which event adds 1 segment to cwnd? :: Each ACK of new data, not each round trip. Count the ACKs that arrive in a round before updating cwnd.</card>
+
+<note>Slow start's increase is per ACK. The number of ACKs in a round equals the number of segments sent in it, so count those before giving the next cwnd.</note>
+
+<ask type="predict">Two segments go out in the second round and each is acknowledged separately. How many ACKs come back, what is cwnd once they have all arrived, and how many segments can go out in the third round?</ask>
+@@ verify
+# simulate the per-ACK rule, one ACK per segment, no loss
+cwnd, after = 1, []
+for _ in range(3):
+    acks = cwnd            # every segment sent this round is acknowledged separately
+    cwnd += acks           # +1 segment per ACK
+    after.append(cwnd)
+assert after == [2, 4, 8]
+# the learner's values: right for round 1 only
+theirs = [2, 3, 4]
+assert theirs[0] == after[0] and theirs[1:] != after[1:]
+# the withheld answer to the new question: 2 ACKs, cwnd 4, 4 segments in round three
+assert after[1] == 4
+assert '2, 3, 4' in learner
+
+@@@@ why-traceroute-from-ttl
+situation: why
+topic: ICMP and traceroute
+options: {"why":true}
+voice: terse
+level: medium
+expect: {"verdict":"correct","askMustNot":["TTL (of|to|=|set to) ?3","increas","port unreachable","one at a time"],"askTypes":["explain","predict"]}
+noverify: conceptual; a Why-mode step from one TTL-expired reply towards traceroute, nothing computed
+@@ tutor
+Every IP packet carries a TTL field. Each router that forwards the packet lowers it by 1, and a router that would lower it to 0 discards the packet instead and sends an ICMP Time Exceeded message back to the packet's source. The field exists so that a packet caught in a routing loop dies instead of circling for ever.
+
+<ask type="predict">You send a packet with its TTL set to 1 towards a server that is 6 routers away. What happens to the packet, and what do you receive, from which machine?</ask>
+@@ learner answer sure
+first router drops it, ttl hits 0 there. i get a time exceeded back from that router, so from its ip
+@@ reply
+<grade verdict="correct" score="1">Right: "first router drops it, ttl hits 0 there", and because that router writes the Time Exceeded message itself, the message arrives "from its ip" and not from the server's.</grade>
+
+<note>TTL = 1: the first router discards the packet and reports with ICMP Time Exceeded, sent from its own address. The error message reveals a router you never addressed.</note>
+
+That message was designed as an error report for loops, but look at what it gave you as a side effect: the address of one machine on the path to the server.
+
+<ask type="explain">Using only that effect, how would you find the address of the third router on the path, and then of every router on it? Say also how you could tell that a probe had reached the server itself, so you know when to stop.</ask>

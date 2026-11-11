@@ -1,0 +1,396 @@
+@@@@ show-me-authorisation-sequence
+situation: show-me
+topic: The four-party card model
+voice: plain
+level: easy
+expect: {"visual":{"kind":"mermaid","diagram":["sequenceDiagram"]},"must":["Issuer","Acquirer"]}
+@@ tutor
+An authorisation is a request and a response that cross the parties in a second or two. The cardholder presents the card to the merchant. The merchant sends an authorisation request to its acquirer, the acquirer passes it to the card network, and the network routes it to the issuer. The issuer checks the account (funds or credit, card status, its fraud rules), places a hold and answers approved or declined. The response retraces the path: issuer to network, network to acquirer, acquirer to merchant, and the merchant tells the cardholder. No money has moved yet; that happens later, in clearing and settlement.
+
+<note>Authorisation path: cardholder → merchant → acquirer → network → issuer, and the response comes back the same way. The issuer makes the decision and places a hold; no money moves at this stage.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+sequenceDiagram
+    participant C as Cardholder
+    participant M as Merchant
+    participant A as Acquirer
+    participant N as Network
+    participant I as Issuer
+    C->>M: presents card
+    M->>A: authorisation request
+    A->>N: authorisation request
+    N->>I: authorisation request
+    Note over I: checks account, places hold
+    I-->>N: approved or declined
+    N-->>A: approved or declined
+    A-->>M: approved or declined
+    M-->>C: result
+```
+
+Read it downwards: the request crosses three hops to reach the issuer, the only place a decision is made, and the dashed response retraces the same hops in reverse.
+@@ verify
+import re
+d = block(reply, 'mermaid')
+parts = re.findall(r'participant (\w) as (\w+)', d)
+assert [p[1] for p in parts] == ['Cardholder', 'Merchant', 'Acquirer', 'Network', 'Issuer']
+for _, name in parts:
+    assert name.lower() in tutor[0].lower(), name
+req = re.findall(r'(\w)->>(\w): ', d)
+resp = re.findall(r'(\w)-->>(\w): ', d)
+assert req == [('C','M'), ('M','A'), ('A','N'), ('N','I')]
+# the response retraces the request path in reverse
+assert resp == [(b, a) for a, b in reversed(req)]
+assert sum(1 for a, b in req if b == 'I' or a != 'C') == 3
+
+@@@@ show-me-payment-states
+situation: show-me
+topic: Payment state machines
+voice: plain
+level: medium
+expect: {"visual":{"kind":"mermaid","diagram":["stateDiagram"]},"must":["declined","voided"]}
+@@ tutor
+A payment object moves through a small set of states, and only certain moves are allowed. In the model used here it starts as created. Authorisation moves it to authorised, or to declined if the issuer refuses. An authorised payment is either captured, or voided, which releases the hold. A captured payment becomes settled when the funds reach the merchant's side, and a settled payment can later be refunded. Declined, voided and refunded are terminal: nothing leaves them. Real providers add more states (partially refunded, disputed), but the principle is the same: the code refuses any move that is not on the list.
+
+<note>Payment states in this model: created → authorised or declined; authorised → captured or voided; captured → settled; settled → refunded. Declined, voided and refunded are terminal. A move not on the list is rejected.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+stateDiagram-v2
+    [*] --> created
+    created --> authorised: issuer approves
+    created --> declined: issuer refuses
+    authorised --> captured: capture
+    authorised --> voided: void
+    captured --> settled: funds arrive
+    settled --> refunded: refund
+    declined --> [*]
+    voided --> [*]
+    refunded --> [*]
+```
+
+Look at the arrows that are absent: nothing leads from declined or voided to captured, and nothing leads back from settled to authorised.
+@@ verify
+import re
+d = block(reply, 'mermaid')
+edges = re.findall(r'^\s*(\S+) --> (\S+?)(?::.*)?$', d, re.M)
+moves = [(a, b) for a, b in edges if a != '[*]' and b != '[*]']
+assert moves == [('created','authorised'), ('created','declined'), ('authorised','captured'), ('authorised','voided'), ('captured','settled'), ('settled','refunded')]
+terminal = sorted(a for a, b in edges if b == '[*]')
+assert terminal == ['declined', 'refunded', 'voided']
+# terminal states have no outgoing move, and every state is named in the explanation
+assert not [m for m in moves if m[0] in terminal]
+for s in {x for m in moves for x in m}:
+    assert s in tutor[0].lower(), s
+assert ('declined', 'captured') not in moves and ('voided', 'captured') not in moves and ('settled', 'authorised') not in moves
+
+@@@@ show-me-flow-of-funds
+situation: show-me
+topic: Clearing and settlement: the flow of funds
+voice: confused
+level: medium
+expect: {"visual":{"kind":"mermaid","diagram":["flowchart"]},"must":["99\\.50","99\\.70"],"ends":"ask","askMustNot":["99\\.40"]}
+@@ tutor
+At settlement the money runs the opposite way to the authorisation request. Take a £100.00 sale with interchange of £0.30, a scheme fee of £0.05 and an acquirer margin of £0.15. The cardholder owes the issuer £100.00. The issuer keeps the interchange and sends £99.70 through the network's settlement to the acquirer. The acquirer pays the network its £0.05 scheme fee, keeps its £0.15 margin and pays the merchant £99.50. The merchant's total cost is £0.50.
+
+<note>Flow of funds on a card sale: cardholder → issuer → (network settlement) → acquirer → merchant. The issuer keeps the interchange, the network is paid the scheme fee, the acquirer keeps its margin, and the merchant receives the rest.</note>
+
+<continue/>
+@@ learner question
+could you draw that? I keep losing track of who ends up with which bit of the £100
+@@ reply
+```mermaid
+flowchart LR
+    CH["Cardholder"] -->|"£100.00"| IS["Issuer<br/>keeps £0.30"]
+    IS -->|"£99.70"| AC["Acquirer<br/>keeps £0.15"]
+    AC -->|"£0.05 scheme fee"| NW["Network"]
+    AC -->|"£99.50"| ME["Merchant"]
+```
+
+Add up what each party ends with: £0.30 at the issuer, £0.05 at the network, £0.15 at the acquirer and £99.50 at the merchant, which is the £100.00 that went in.
+
+<ask type="predict">Suppose the acquirer raised its margin to £0.25 and nothing else changed. Which figures in the diagram would be different, and what would they become?</ask>
+@@ verify
+import re
+from decimal import Decimal as D
+sale, ic, sf, mg = D('100.00'), D('0.30'), D('0.05'), D('0.15')
+assert sale - ic == D('99.70') and sale - ic - sf - mg == D('99.50') and ic + sf + mg == D('0.50')
+assert ic + sf + mg + D('99.50') == sale
+d = block(reply, 'mermaid')
+edges = re.findall(r'(\w\w)(?:\[[^\]]*\])? -->\|"£([\d.]+)[^"]*"\| (\w\w)', d)
+assert edges == [('CH','100.00','IS'), ('IS','99.70','AC'), ('AC','0.05','NW'), ('AC','99.50','ME')], edges
+# each node's inflow minus outflow equals what its label says it keeps
+flow = {}
+for a, v, b in edges:
+    flow[a] = flow.get(a, D(0)) - D(v); flow[b] = flow.get(b, D(0)) + D(v)
+assert flow == {'CH': D('-100.00'), 'IS': D('0.30'), 'AC': D('0.15'), 'NW': D('0.05'), 'ME': D('99.50')}
+assert 'keeps £0.30' in d and 'keeps £0.15' in d
+for v in ['£99.70', '£99.50', '£0.30', '£0.05', '£0.15']:
+    assert v in tutor[0], v
+# the answer to the closing question: only the acquirer's keep and the merchant's amount change
+assert D('99.70') - sf - D('0.25') == D('99.40') and '99.40' not in reply
+
+@@@@ show-me-luhn-step-table
+situation: show-me
+topic: The Luhn algorithm
+voice: plain
+level: easy
+expect: {"visual":{"kind":"table"},"must":["\\b40\\b"]}
+@@ tutor
+The Luhn check works from the rightmost digit. Leave that digit as it is, double the next one to its left, leave the next, and so on: every second digit is doubled. If doubling gives a number above 9, subtract 9 from it. Add up all the results; the number passes if the total is a multiple of 10. For the test number 40963183 the digits from the right are 3, 8, 1, 3, 6, 9, 0, 4. The doubled ones are 8 → 16 → 7, 3 → 6, 9 → 18 → 9 and 4 → 8, and the total is 3 + 7 + 1 + 6 + 6 + 9 + 0 + 8 = 40, so it passes.
+
+<note>Luhn check: from the right, double every second digit; if a doubled value is above 9, subtract 9; add everything up. Valid when the total is a multiple of 10.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| Position from the right | Digit | Doubled | After doubling | Value added | Running total |
+|---|---|---|---|---|---|
+| 1 | 3 | no | 3 | 3 | 3 |
+| 2 | 8 | yes | 16 | 7 | 10 |
+| 3 | 1 | no | 1 | 1 | 11 |
+| 4 | 3 | yes | 6 | 6 | 17 |
+| 5 | 6 | no | 6 | 6 | 23 |
+| 6 | 9 | yes | 18 | 9 | 32 |
+| 7 | 0 | no | 0 | 0 | 32 |
+| 8 | 4 | yes | 8 | 8 | 40 |
+
+Watch the two rows where doubling goes above 9 (16 becomes 7, and 18 becomes 9), then the last running total: 40, a multiple of 10.
+@@ verify
+num = '40963183'
+rows, total = table(reply)[1:], 0
+assert len(rows) == len(num)
+for i, (row, ch) in enumerate(zip(rows, reversed(num))):
+    d = int(ch); dbl = i % 2 == 1
+    after = d * 2 if dbl else d
+    val = after - 9 if after > 9 else after
+    total += val
+    assert row == [str(i + 1), str(d), 'yes' if dbl else 'no', str(after), str(val), str(total)], (i, row)
+assert total == 40 and total % 10 == 0
+assert '3 + 7 + 1 + 6 + 6 + 9 + 0 + 8 = 40' in tutor[0] and 3 + 7 + 1 + 6 + 6 + 9 + 0 + 8 == 40
+assert num in tutor[0] and '3, 8, 1, 3, 6, 9, 0, 4' in tutor[0]
+
+@@@@ unusual-net-by-complement
+situation: mark-unusual
+topic: Fees: fixed plus percentage pricing
+voice: terse
+level: easy
+expect: {"verdict":"correct","mustNot":["should have","standard method","proper way"],"must":["242\\.55","97\\.1%"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b32p\\b","0\\.32","\\b8%"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+A provider charges 2.9% + 20p on each payment. A customer pays £250.00. How much does the seller receive?
+
+<solution>Fee = 2.9% of 250 + 0.20 = 7.25 + 0.20 = £7.45. Seller receives 250.00 − 7.45 = £242.55.</solution>
+<check lang="python">
+from decimal import Decimal as D
+fee = D(250) * D('0.029') + D('0.20')
+assert fee == D('7.45') and 250 - fee == D('242.55')
+</check>
+
+<ask type="problem">The amount the seller receives, with your working.</ask>
+@@ learner answer sure
+242.55. seller keeps 97.1% so 250 × 0.971 = 242.75, then take off the 20p
+@@ reply
+<grade verdict="correct" score="1">"seller keeps 97.1% so 250 × 0.971 = 242.75, then take off the 20p" is valid and gives £242.55: taking 2.9% away is the same as keeping 97.1%, since 250 − 0.029 × 250 = 250 × (1 − 0.029). The fee it implies is 250.00 − 242.55 = £7.45.</grade>
+
+The fixed part matters more as the sale gets smaller.
+
+**Problem 2 · harder**
+
+The same provider, 2.9% + 20p, with the fee rounded to the nearest penny. A customer pays £4.00. What is the fee in pence, and what percentage of the sale is it?
+
+<solution>2.9% of 4.00 = 0.116; plus 0.20 = 0.316, which rounds to £0.32, so 32p. As a share of the sale: 0.32 / 4.00 = 8%.</solution>
+<check lang="python">
+from decimal import Decimal as D
+fee = (D('4.00') * D('0.029') + D('0.20')).quantize(D('0.01'))
+assert fee == D('0.32') and fee / D('4.00') * 100 == 8
+</check>
+
+<ask type="problem">The fee in pence and as a percentage of the £4.00, with your working.</ask>
+@@ verify
+from decimal import Decimal as D
+# the learner's route and the standard route agree
+assert D(250) * D('0.971') == D('242.750') and D('242.75') - D('0.20') == D('242.55')
+fee = D(250) * D('0.029') + D('0.20')
+assert fee == D('7.45') and 250 - fee == D('242.55') and 1 - D('0.029') == D('0.971')
+f2 = D('4.00') * D('0.029') + D('0.20')
+assert f2 == D('0.316') and f2.quantize(D('0.01')) == D('0.32') and D('0.32') / 4 == D('0.08')
+assert '32p' in solution(reply) and '8%' in solution(reply) and '0.32' not in visible(reply)
+
+@@@@ unusual-reconciliation-divisible-by-nine
+situation: mark-unusual
+topic: Reconciliation: matching a ledger to a bank statement
+voice: wordy
+level: medium
+expect: {"verdict":"correct","mustNot":["should have","line by line first","standard method"],"must":["\\b27\\b","multiple of 9|divisible by 9"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["4,?515"]}
+@@ tutor
+**Problem 2 · harder**
+
+The ledger lists five payouts for the day: £152.00, £80.50, £43.20, £310.00 and £19.99. The bank statement lists five debits: £80.50, £310.00, £125.00, £19.99 and £43.20. Which item does not match, by how much do the totals differ, and what is the likeliest cause?
+
+<solution>Four amounts appear on both sides. The unmatched pair is £152.00 in the ledger against £125.00 on the statement. Ledger total 605.69, statement total 578.69, difference £27.00. Likeliest cause: two digits transposed (152 keyed as 125, or the reverse).</solution>
+<check lang="python">
+from decimal import Decimal as D
+ledger = [D(x) for x in ('152.00', '80.50', '43.20', '310.00', '19.99')]
+stmt = [D(x) for x in ('80.50', '310.00', '125.00', '19.99', '43.20')]
+assert sum(ledger) == D('605.69') and sum(stmt) == D('578.69') and sum(ledger) - sum(stmt) == D('27.00')
+assert sorted(set(ledger) - set(stmt)) == [D('152.00')] and sorted(set(stmt) - set(ledger)) == [D('125.00')]
+</check>
+
+<ask type="problem">The unmatched item, the difference and the likeliest cause, with how you found them.</ask>
+@@ learner answer sure
+I didn't match line by line to start with. I added up both sides: ledger 605.69, statement 578.69, so they differ by 27.00. 27 divides by 9, and a difference that divides by 9 usually means two digits got swapped somewhere, so I went looking for a pair like that and found 152.00 in the ledger vs 125.00 on the statement, and 152 - 125 = 27. So that's the unmatched item, the difference is £27.00, and the cause is a transposition, someone keyed 125 for 152 or the other way round.
+@@ reply
+<grade verdict="correct" score="1">"27 divides by 9, and a difference that divides by 9 usually means two digits got swapped" is a sound route, and you confirmed it by finding the pair: "152 - 125 = 27". Swapping neighbouring digits $a$ and $b$ changes a number by $9(a - b)$ times a power of ten, here $9 \times (5 - 2) = 27$, so the difference is always a multiple of 9.</grade>
+
+Your "usually" is the right strength: a multiple of 9 is a hint, not proof, so finding the actual pair was the step that settled it.
+
+Not every difference is an error. The next one has two items that are nobody's mistake.
+
+**Problem 3 · harder**
+
+On Tuesday the ledger shows payouts totalling £4,870.00. Tuesday's bank statement shows debits totalling £4,540.00. Two facts are known: a £355.00 payout was instructed late on Tuesday and appears on Wednesday's statement, and Tuesday's statement includes a £25.00 bank charge that is not in the ledger. Adjust each side for the item it lacks or should not count, show that the two totals then agree, and say which of the two items needs a new ledger entry.
+
+<solution>Ledger payouts that should be on Tuesday's statement: 4,870.00 − 355.00 = 4,515.00. Statement debits that are payouts: 4,540.00 − 25.00 = 4,515.00. They agree. The £355.00 is a timing difference and needs no entry; the £25.00 bank charge is real and missing from the ledger, so it needs a new entry.</solution>
+<check lang="python">
+from decimal import Decimal as D
+assert D('4870.00') - D('355.00') == D('4515.00') == D('4540.00') - D('25.00')
+</check>
+
+<ask type="problem">The two adjusted totals, and which item needs a ledger entry and why.</ask>
+@@ verify
+from decimal import Decimal as D
+ledger = [D(x) for x in ('152.00', '80.50', '43.20', '310.00', '19.99')]
+stmt = [D(x) for x in ('80.50', '310.00', '125.00', '19.99', '43.20')]
+assert sum(ledger) == D('605.69') and sum(stmt) == D('578.69')
+diff = sum(ledger) - sum(stmt)
+assert diff == 27 and diff % 9 == 0 and 152 - 125 == 27 and 9 * (5 - 2) == 27
+# transposing neighbouring digits always changes a number by a multiple of 9
+for n in range(10, 1000):
+    s = str(n)
+    for i in range(len(s) - 1):
+        t = s[:i] + s[i + 1] + s[i] + s[i + 2:]
+        assert (n - int(t)) % 9 == 0
+        assert n - int(t) == 9 * (int(s[i]) - int(s[i + 1])) * 10 ** (len(s) - i - 2)
+assert D('4870.00') - D('355.00') == D('4515.00') == D('4540.00') - D('25.00')
+assert '4,515.00' in solution(reply) and '4,515' not in visible(reply)
+
+@@@@ unusual-iban-remainder-in-pieces
+situation: mark-unusual
+topic: IBAN structure and the mod-97 check
+voice: plain
+level: hard
+expect: {"verdict":"correct","mustNot":["should have","whole number at once is the"],"must":["remainder"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b90\\b","GB90"]}
+@@ tutor
+**Problem 2 · same level**
+
+Check the made-up IBAN GB72QZXB40112233445566 with the mod-97 rule and say whether it is valid.
+
+<solution>Rearranged: QZXB40112233445566GB72. With Q = 26, Z = 35, X = 33, B = 11, G = 16: 2635331140112233445566161172. That integer mod 97 is 1, so it is valid.</solution>
+<check lang="python">
+iban = 'GB72QZXB40112233445566'
+r = iban[4:] + iban[:4]
+n = ''.join(str(int(c, 36)) for c in r)
+assert n == '2635331140112233445566161172' and int(n) % 97 == 1
+</check>
+
+<ask type="problem">The integer you formed, its remainder mod 97 and your verdict.</ask>
+@@ learner answer sure
+Valid. The integer is 2635331140112233445566161172 but my calculator can't hold 28 digits, so I did it in pieces. 263533114 mod 97 = 22. Put the 22 in front of the next seven digits: 220112233 mod 97 = 27. Then 274455661 mod 97 = 78. Then 7861172 mod 97 = 1. Remainder 1, so it passes.
+@@ reply
+<grade verdict="correct" score="1">The integer is right, and "Put the 22 in front of the next seven digits: 220112233 mod 97 = 27" is a valid way to reduce it: all four of your remainders (22, 27, 78, 1) check out, and the final 1 means it passes.</grade>
+
+It works because the number is (leading block) × $10^k$ + (the rest), and its remainder mod 97 depends on the leading block only through that block's own remainder. Replacing 263533114 by 22 therefore leaves the final remainder unchanged. This is the usual way to code the check where integers are limited to 64 bits.
+
+**Problem 3 · harder**
+
+Check digits are produced with the same arithmetic: write 00 where the check digits go, form the integer as before, take its remainder $r$ mod 97, and the check digits are $98 - r$, written with two digits. Work out the check digits for a made-up UK account with bank code TIDE and the digits 10203012345678 after it.
+
+<solution>Start from GB00TIDE10203012345678. Rearranged: TIDE10203012345678GB00, giving 2918131410203012345678161100. Its remainder mod 97 is 8, so the check digits are 98 − 8 = 90: GB90TIDE10203012345678.</solution>
+<check lang="python">
+r = 'TIDE10203012345678' + 'GB00'
+n = int(''.join(str(int(c, 36)) for c in r))
+assert str(n) == '2918131410203012345678161100' and n % 97 == 8 and 98 - n % 97 == 90
+full = 'TIDE10203012345678' + 'GB90'
+assert int(''.join(str(int(c, 36)) for c in full)) % 97 == 1
+</check>
+
+<ask type="problem">The integer you formed, its remainder and the two check digits.</ask>
+@@ verify
+iban = 'GB72QZXB40112233445566'
+r = iban[4:] + iban[:4]
+n = ''.join(str(int(c, 36)) for c in r)
+assert n == '2635331140112233445566161172' and len(n) == 28 and int(n) % 97 == 1
+assert n in learner and [int(c, 36) for c in 'QZXBG'] == [26, 35, 33, 11, 16]
+# the learner's pieces: nine digits, then each remainder in front of the next seven
+assert int('263533114') % 97 == 22 and n[:9] == '263533114'
+assert '22' + n[9:16] == '220112233' and int('220112233') % 97 == 27
+assert '27' + n[16:23] == '274455661' and int('274455661') % 97 == 78
+assert '78' + n[23:] == '7861172' and int('7861172') % 97 == 1
+m = int(''.join(str(int(c, 36)) for c in 'TIDE10203012345678GB00'))
+assert m % 97 == 8 and 98 - 8 == 90
+assert 'GB90' in solution(reply) and 'GB90' not in visible(reply)
+
+@@@@ tangent-3ds-and-chargebacks
+situation: tangent
+topic: Chargebacks and disputes
+voice: typos
+level: medium
+expect: {"must":["liability","issuer"],"askMustNot":["merchant (loses|bears|carries|pays)","loss (lands|falls) on the merchant"],"mustNot":["always"]}
+noverify: a conceptual answer hedged by network and region; nothing is computed
+@@ tutor
+A fraud chargeback starts when a cardholder tells their issuer that they did not make a payment. The issuer raises the dispute through the network, and the merchant can answer with evidence that the cardholder took part.
+
+<note>Fraud dispute: cardholder → issuer → network → acquirer → merchant. The merchant may respond with evidence; if it cannot, the disputed amount is taken back from it.</note>
+
+<ask type="short">A cardholder disputes a £90 online charge as fraud. The merchant shipped the goods to the address it was given and has nothing else. Who ends up carrying the £90?</ask>
+@@ learner question
+does 3d secure stop this?? like if they aproved it in their banking app can they still do a chargeback
+@@ reply
+For fraud disputes, largely yes. When a payment has been authenticated with 3-D Secure, the card networks' rules typically shift liability for a "this was not me" chargeback from the merchant to the issuer, since it was the issuer that checked the cardholder. The details and exceptions differ by network and region and are revised over time. It does nothing for other dispute reasons: a cardholder who approved the payment in their app can still dispute goods that never arrived or were not as described.
+
+<ask type="short">Back to the £90 order, which was taken with the card number and expiry date alone, with no authentication step. The cardholder says it was not them and the merchant holds only a delivery record. On which party does the loss fall, and what is it about this payment that puts it there?</ask>
+
+@@@@ tangent-why-transfers-take-a-day
+situation: tangent
+topic: Direct debits and mandates
+voice: typos
+level: easy
+expect: {"must":["authoris","batch"],"askMustNot":["mandate","the gym (starts|initiates|pulls)"]}
+noverify: a conceptual answer with named schemes and hedged timings; nothing is computed
+@@ tutor
+A direct debit is a pull payment: the money is requested by the party being paid, not sent by the party paying.
+
+<note>Direct debit: a pull payment. The payee's side initiates each collection from the payer's account, under an authority the payer has given in advance.</note>
+
+<ask type="short">A gym collects £35 a month from a member by direct debit. Which party starts each month's collection, and what gives it the right to take the money?</ask>
+@@ learner question
+side quesiton - why do bank transfers sometimes take a day or more when a card payment at the till goes thru in 2 seconds?
+@@ reply
+The two seconds at the till are only the authorisation: a message that reserves the money. The funds themselves move between the banks later, typically a day or more afterwards, so the card payment is not faster than it looks. A bank transfer on a batch scheme (Bacs in the UK, ACH in the US, the standard SEPA credit transfer in the euro area) is collected into files and processed in cycles with cut-off times, so it arrives after the next cycle. Instant schemes such as UK Faster Payments or SEPA Instant credit the payee in seconds, within limits each scheme sets.
+
+<ask type="short">Back to the gym's £35 a month: the member never sends that payment. Who does set each collection going, and on what authority?</ask>
+
+@@@@ tangent-swift-moves-messages
+situation: tangent
+topic: ISO 8583 and ISO 20022 messages
+options: {"strategy":"dialogue"}
+voice: confused
+level: medium
+expect: {"must":["messag","correspondent"],"askTypes":["short","explain"],"askMustNot":["screen","sanction","automat"]}
+noverify: a conceptual answer; nothing is computed
+@@ tutor
+ISO 8583 is the compact, bitmap-based format that card authorisations have used for decades. ISO 20022 is the newer family of structured messages (XML, with named and nested fields) that bank-to-bank payment systems have been moving to.
+
+<ask type="explain">A bank is moving its cross-border payment messages from a format with free-text lines to ISO 20022. What does carrying the payer's name, street and country in separate named fields make possible that one free-text line did not?</ask>
+@@ learner question
+wait, I thought SWIFT was the thing that actually moves the money between countries? or is that something else, I'm confused about where the money is in all this
+@@ reply
+SWIFT moves messages, not money. It is a secure network over which banks send each other payment instructions, and ISO 20022 is one of the formats those instructions are written in. The money moves on the books of banks that hold accounts with one another, called correspondent accounts: the instruction tells a correspondent bank to debit the sender's account with it and credit the receiver. Where two banks share a settlement system, such as a central bank's, the movement happens there.
+
+<ask type="explain">So the message is the instruction and its fields are all the receiving bank has to go on. If the payer's name, street and country each arrive in a field of their own, what can the receiving bank's software do with them that it could not do reliably with a single line of free text?</ask>

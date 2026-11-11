@@ -1,0 +1,302 @@
+@@@@ open-pigeonhole-principle
+situation: open
+topic: The pigeonhole principle
+voice: plain
+level: medium
+expect: {"askMustNot":["\\b9\\b","nine","2 (×|x|\\*|times) 4"],"must":["hash"]}
+noverify: an opening; it asks for the smallest number of draws (9) and does not state it
+@@ reply
+**Why this matters**
+
+The pigeonhole principle is the counting argument behind every proof that a collision must exist. It is why any hash function with a fixed output size has two inputs with the same digest, why no lossless compressor can shrink every file, and why some server in a pool always carries at least the average load. It proves that something exists without finding it, which is the usual shape of a lower bound in algorithms. It also leads into counting arguments used in probability and in the analysis of hash tables.
+
+<ask type="short">A drawer holds loose socks in 4 colours, plenty of each. What is the smallest number you must take out, without looking, to be certain that 3 of them share a colour? Say how you know that number is enough and that one fewer is not.</ask>
+
+@@@@ open-quiz-modular-arithmetic
+situation: open
+topic: Modular arithmetic
+mode: quiz
+voice: plain
+level: medium
+expect: {"askMustNot":["\\b3\\b","-20","−20"],"must":["Question 1 of 8"]}
+@@ reply
+**Question 1 of 8**
+
+Languages disagree about the sign of a remainder, so fix the convention first: the remainder $r$ of $a$ on division by $m$ always satisfies $0 \le r < m$.
+
+<ask type="short">With that convention, what is $-17 \bmod 5$? Give the multiple of 5 you measured from.</ask>
+@@ verify
+# the answer the question keeps back: -17 = 5 * (-4) + 3
+assert (-17) % 5 == 3 and 5 * (-4) + 3 == -17
+assert not __import__('re').search(r'\b3\b', reply)
+
+@@@@ open-refresh-combinations-team-lead
+situation: open
+topic: Permutations and combinations
+options: {"refresh":true}
+voice: plain
+level: medium
+expect: {"setsProblem":true,"askTypes":["problem"],"askMustNot":["504","126"]}
+@@ reply
+**Problem 1**
+
+A team of 4 is chosen from 9 engineers, and one member of the team is then named its lead. Two outcomes count as the same only when both the team and the lead agree. How many different outcomes are there?
+
+<solution>Choose the team: C(9, 4) = 126. Choose the lead from the 4: 4 ways. 126 × 4 = 504. The same count the other way round: 9 choices of lead, then C(8, 3) = 56 teammates, 9 × 56 = 504.</solution>
+<check lang="python">
+from itertools import combinations
+from math import comb
+outcomes = {(team, lead) for team in combinations(range(9), 4) for lead in team}
+assert len(outcomes) == comb(9, 4) * 4 == 9 * comb(8, 3) == 504
+</check>
+
+<ask type="problem">The number of outcomes, with the choices you multiplied.</ask>
+@@ verify
+from math import comb
+assert comb(9, 4) == 126 and 126 * 4 == 504 and comb(8, 3) == 56 and 9 * 56 == 504
+assert '126' in solution(reply) and '504' in solution(reply)
+assert '504' not in visible(reply) and '126' not in visible(reply)
+
+@@@@ open-prior-induction-base-case
+situation: open-prior
+topic: Proof by induction
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Proof by induction","daysAgo":4,"finished":false,"plan":["Base case and inductive step","Sums and inequalities","Strong induction"],"right":3,"partly":0,"wrong":1,"missed":["An inductive step shows P(k) implies P(k+1) for every k from 1 up, but P(1) was never checked. What has been proved about P(n)?"],"open":"Prove that 2^n > n^2 for every n from 5 up."}]}
+expect: {"must":["base case"],"askMustNot":["false for (all|every)","never true","proves nothing","no n\\b"]}
+@@ reply
+**Why this matters**
+
+Induction is how a claim about every $n$ is proved in finitely many lines, and it is the proof method behind loop invariants, the correctness of recursive functions and most closed forms for running times. You already carry out the inductive step reliably on sums. The gap last time was what the step is worth on its own, so that comes first; inequalities and strong induction follow.
+
+<ask type="short">Let $P(n)$ be the claim $1 + 2 + \dots + n = \frac{n(n+1)}{2} + 5$. If $P(k)$ holds, adding $k + 1$ to both sides gives exactly $P(k+1)$, so the inductive step goes through. For which $n$ is $P(n)$ actually true, and what does that tell you about the base case?</ask>
+@@ verify
+from fractions import Fraction
+P = lambda n: sum(range(1, n + 1)) == Fraction(n * (n + 1), 2) + 5
+# the claim is false for every n, although the step is valid algebra
+assert not any(P(n) for n in range(1, 500))
+for k in range(1, 200):
+    # adding k + 1 to the right side of P(k) gives the right side of P(k+1)
+    assert Fraction(k * (k + 1), 2) + 5 + (k + 1) == Fraction((k + 1) * (k + 2), 2) + 5
+
+@@@@ open-prior-modular-inverses-cancellation
+situation: open-prior
+topic: Modular inverses
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Modular arithmetic","daysAgo":6,"finished":true,"plan":["Congruence and residues","Addition and multiplication mod m","Cancellation and when it fails"],"right":5,"partly":1,"wrong":1,"missed":["Does 2x ≡ 2y (mod 6) force x ≡ y (mod 6)? Give a pair of residues that decides it."]}]}
+expect: {"must":["cancel"],"askMustNot":["gcd","common factor","coprime","\\(0, ?3\\)"]}
+@@ reply
+**Why this matters**
+
+A modular inverse is what division means in modular arithmetic: the number that undoes a multiplication. RSA's private exponent is the inverse of the public exponent, an ECDSA signature needs one for every message signed, and solving a linear congruence, as the Chinese remainder theorem does, comes down to finding one. This lesson rests on the last step of your modular arithmetic lesson, cancellation, which is exactly the question of when an inverse exists. That was the one you missed there, so it is checked first.
+
+<ask type="short">Working mod 9, suppose $3x \equiv 3y$. Can you cancel the 3 and conclude $x \equiv y \pmod 9$? Give a pair of residues that settles it, then say whether 3 can have an inverse mod 9.</ask>
+@@ verify
+# cancellation fails mod 9 for the factor 3: 3*0 = 3*3 (mod 9) with 0 != 3
+assert (3 * 0) % 9 == (3 * 3) % 9 and 0 != 3
+# and 3 has no inverse mod 9
+assert all((3 * t) % 9 != 1 for t in range(9))
+# the stored question's own case: 2*0 = 2*3 (mod 6)
+assert (2 * 0) % 6 == (2 * 3) % 6
+
+@@@@ open-recall-handshake-edges
+situation: open-recall
+topic: Graph basics: degrees and the handshake lemma
+voice: plain
+level: easy
+before: {"recall":[{"prompt":"A graph has 7 vertices, each of degree 4. How many edges does it have?","topic":"Graph basics: degrees and the handshake lemma","reviews":2,"lapses":0}]}
+expect: {"askMustNot":["\\b14\\b","28"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="short">A graph has 7 vertices, each of degree 4. How many edges does it have?</ask>
+
+@@@@ open-recall-contrapositive-divisible
+situation: open-recall
+topic: Implication and the contrapositive
+voice: plain
+level: easy
+before: {"recall":[{"prompt":"State the contrapositive of: if n is divisible by 6, then n is even. Is the contrapositive true?","topic":"Implication and the contrapositive","reviews":1,"lapses":1}]}
+expect: {"askMustNot":["odd","not even","not divisible"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="explain">State the contrapositive of: if n is divisible by 6, then n is even. Is the contrapositive true?</ask>
+
+@@@@ correct-recall-power-set-size
+situation: after-correct
+topic: Power sets
+voice: typos
+level: easy
+before: {"recall":[{"prompt":"How many subsets does a set with 5 elements have, and why?","topic":"Sets and set operations","reviews":1,"lapses":0}]}
+expect: {"verdict":"correct","heading":"Why this matters","must":["2\\^5|32"],"askMustNot":["\\b16\\b","2\\^4","2\\^\\{4\\}"],"askTypes":["short","predict","choice","explain"]}
+@@ tutor
+<ask type="short">How many subsets does a set with 5 elements have, and why?</ask>
+@@ learner answer sure
+32. each elemnt is either in the subset or not so thats 2 choices made 5 times, 2^5
+@@ reply
+<grade verdict="correct" score="1">"2 choices made 5 times, 2^5" is the reason: a subset is fixed by one in-or-out decision per element, and the decisions are independent, so there are 32.</grade>
+
+**Why this matters**
+
+The power set $\mathcal{P}(S)$ is the set of all subsets of $S$, and its size is the reason some problems blow up. A bitmask is one element of a power set, which is how permission flags and subset dynamic programming are stored. Converting a nondeterministic automaton to a deterministic one works on the power set of its states, so $n$ states can become $2^n$. Power sets also lead to Cantor's theorem, which separates countable sets from uncountable ones.
+
+<ask type="short">Let $S = \{a, b\}$. How many elements does $\mathcal{P}(\mathcal{P}(S))$ have? Show how you got the number.</ask>
+@@ verify
+from itertools import combinations
+def powerset(s):
+    s = list(s)
+    return [frozenset(c) for r in range(len(s) + 1) for c in combinations(s, r)]
+assert len(powerset(range(5))) == 32 == 2**5
+pp = powerset(powerset('ab'))
+assert len(pp) == 16
+assert '16' not in reply
+
+@@@@ correct-stars-and-bars-minimum-each
+situation: after-correct
+topic: Stars and bars
+options: {"strategy":"maths"}
+voice: terse
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"must":["C\\(12, ?2\\)|66"],"askMustNot":["\\b35\\b","C\\(7, ?3\\)"]}
+@@ tutor
+The number of ways to write $n$ as an ordered sum of $k$ non-negative integers is $\binom{n+k-1}{k-1}$: lay out $n$ stars and $k - 1$ bars in a row, and choose which of the $n + k - 1$ positions hold the bars.
+
+<note>Stars and bars: the number of solutions of $x_1 + \dots + x_k = n$ in non-negative integers is $\binom{n+k-1}{k-1}$. Each solution is one arrangement of $n$ stars and $k-1$ bars.</note>
+
+**Problem 1**
+
+In how many ways can 10 identical API tokens be shared among 3 services, if a service may receive none?
+
+<solution>n = 10 stars, k = 3 so 2 bars: C(12, 2) = 66.</solution>
+<check lang="python">
+from itertools import product
+from math import comb
+assert sum(1 for x in product(range(11), repeat=3) if sum(x) == 10) == comb(12, 2) == 66
+</check>
+
+<ask type="problem">The count, with the stars and bars you used.</ask>
+@@ learner answer sure
+10 stars 2 bars. C(12,2) = 66
+@@ reply
+<grade verdict="correct" score="1">"10 stars 2 bars" is the right picture: 12 positions, choose 2 for the bars, and C(12,2) = 66.</grade>
+
+The formula counts non-negative solutions only. A lower bound on each part has to be removed before it applies.
+
+**Problem 2**
+
+12 identical tokens are shared among 4 services, and every service must receive at least 2. In how many ways can this be done?
+
+<solution>Give each service its 2 first: 8 tokens used, 4 left to share freely among 4 services. C(4 + 3, 3) = C(7, 3) = 35.</solution>
+<check lang="python">
+from itertools import product
+from math import comb
+brute = sum(1 for x in product(range(2, 13), repeat=4) if sum(x) == 12)
+assert brute == comb(7, 3) == 35
+</check>
+
+<ask type="problem">The count, showing how you dealt with the minimum of 2.</ask>
+@@ verify
+from itertools import product
+from math import comb
+assert comb(12, 2) == 66
+assert sum(1 for x in product(range(11), repeat=3) if sum(x) == 10) == 66
+assert sum(1 for x in product(range(2, 13), repeat=4) if sum(x) == 12) == 35 == comb(7, 3)
+assert '35' in solution(reply) and '35' not in visible(reply)
+assert '66' in solution(tutor[0]) and '66' not in visible(tutor[0])
+
+@@@@ correct-probe-plan-equivalence-classes
+situation: after-correct
+topic: Equivalence relations and classes
+voice: wordy
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"need":["plan","note"],"askTypes":["problem"],"must":["partition"],"askMustNot":["\\{0, ?5\\}","three classes","3 classes"]}
+@@ tutor
+<ask type="short">On the integers, define $a \sim b$ to mean that $a - b$ is divisible by 4. Which of the properties reflexive, symmetric and transitive does $\sim$ have? Give your reason for transitivity.</ask>
+@@ learner answer sure
+All three I'd say. Reflexive since a - a = 0 and 4 divides 0. Symmetric since if 4 divides a - b then it divides b - a too, that's just the negative of it. And transitive because a - c = (a - b) + (b - c), and if both of those brackets are multiples of 4 then their sum is a multiple of 4 as well.
+@@ reply
+<grade verdict="correct" score="1">All three hold, and "a - c = (a - b) + (b - c)" is the step that proves transitivity: a sum of two multiples of 4 is a multiple of 4.</grade>
+
+<plan>
+- Equivalence classes and the partition they form
+- Relations that fail one of the three properties
+- Counting classes
+</plan>
+
+The equivalence class of $a$ is $[a] = \{b : b \sim a\}$, everything related to $a$. For your relation, $[0] = \{\dots, -4, 0, 4, 8, \dots\}$, and $[1]$, $[2]$, $[3]$ are the same set shifted by 1, 2 and 3. Then $[4] = [0]$, so there are exactly four classes, and every integer lies in exactly one of them. This holds for every equivalence relation: its classes partition the set.
+
+<note>The equivalence class of $a$ is $[a] = \{b : b \sim a\}$. Two classes are either equal or disjoint, so the classes of an equivalence relation partition the set. Divisibility of $a - b$ by 4 gives the four classes $[0], [1], [2], [3]$.</note>
+
+**Problem 1 · warm-up**
+
+On $S = \{0, 1, 2, \dots, 9\}$, let $a \sim b$ mean $a^2 \equiv b^2 \pmod 5$. List the equivalence classes.
+
+<solution>Squares mod 5: 0, 5 give 0; 1, 4, 6, 9 give 1; 2, 3, 7, 8 give 4. Classes: {0, 5}, {1, 4, 6, 9}, {2, 3, 7, 8}. Three classes.</solution>
+<check lang="python">
+classes = {}
+for a in range(10):
+    classes.setdefault(a * a % 5, []).append(a)
+assert sorted(classes.values()) == [[0, 5], [1, 4, 6, 9], [2, 3, 7, 8]]
+</check>
+
+<ask type="problem">The classes, each written as a set.</ask>
+@@ verify
+# the learner's three reasons hold on a range of integers
+R = lambda a, b: (a - b) % 4 == 0
+rng = range(-12, 13)
+assert all(R(a, a) for a in rng)
+assert all(R(b, a) for a in rng for b in rng if R(a, b))
+assert all(R(a, c) for a in rng for b in rng for c in rng if R(a, b) and R(b, c))
+# four classes mod 4, and [4] = [0]
+assert len({a % 4 for a in rng}) == 4 and 4 % 4 == 0
+# the problem set
+classes = {}
+for a in range(10):
+    classes.setdefault(a * a % 5, []).append(a)
+assert sorted(classes.values()) == [[0, 5], [1, 4, 6, 9], [2, 3, 7, 8]]
+assert '{2, 3, 7, 8}' in solution(reply) and '{2, 3, 7, 8}' not in visible(reply)
+
+@@@@ correct-unsure-fermat-exponent-reduction
+situation: after-correct
+topic: Fermat's little theorem
+voice: confused
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"must":["\\(3\\^6\\)\\^\\{?16\\}?"],"askMustNot":["\\b10\\b","\\b32\\b"]}
+@@ tutor
+**Problem 2 · harder**
+
+Find $3^{100} \bmod 7$.
+
+<solution>7 is prime and does not divide 3, so 3^6 ≡ 1 (mod 7). 100 = 6 × 16 + 4, so 3^100 ≡ 3^4 = 81 = 77 + 4 ≡ 4.</solution>
+<check lang="python">
+assert pow(3, 6, 7) == 1 and divmod(100, 6) == (16, 4) and pow(3, 100, 7) == 4
+</check>
+
+<ask type="problem">The remainder, with how you reduced the exponent.</ask>
+@@ learner answer unsure
+I think 4? 7 is prime so 3^6 = 1 mod 7. then 100 = 96 + 4 so its just 3^4 = 81 and 81 - 77 = 4. not sure if im allowed to just throw away the 96 like that though
+@@ reply
+<grade verdict="correct" score="1">4 is right, and throwing away the 96 is allowed for the reason you already wrote, "3^6 = 1 mod 7": $3^{96} = (3^6)^{16} \equiv 1^{16} = 1$, so $3^{100} = 3^{96} \cdot 3^4 \equiv 3^4 \equiv 4$.</grade>
+
+The part of the exponent that is a multiple of $p - 1$ contributes a factor of 1, so only the remainder of the exponent on division by $p - 1$ matters.
+
+<note>Fermat's little theorem: if $p$ is prime and $p \nmid a$, then $a^{p-1} \equiv 1 \pmod p$. So exponents reduce mod $p - 1$: $a^{q(p-1) + r} = (a^{p-1})^q \cdot a^r \equiv a^r \pmod p$.</note>
+
+**Problem 3 · same level**
+
+Find $2^{75} \bmod 11$.
+
+<solution>11 is prime and does not divide 2, so 2^10 ≡ 1 (mod 11). 75 = 10 × 7 + 5, so 2^75 ≡ 2^5 = 32 = 22 + 10 ≡ 10.</solution>
+<check lang="python">
+assert pow(2, 10, 11) == 1 and divmod(75, 10) == (7, 5) and pow(2, 75, 11) == 10 == 32 % 11
+</check>
+
+<ask type="problem">The remainder, writing the discarded part of the exponent as a power of $2^{p-1}$.</ask>
+@@ verify
+assert pow(3, 6, 7) == 1 and 96 == 6 * 16 and 100 == 96 + 4
+assert 3**4 == 81 and 81 - 77 == 4 and 77 % 7 == 0 and pow(3, 100, 7) == 4
+assert pow(3, 96, 7) == 1
+assert pow(2, 75, 11) == 10 and 2**5 == 32 and 32 - 22 == 10 and 75 == 10 * 7 + 5
+assert '≡ 10' in solution(reply)
+vis = visible(reply)
+assert '32' not in vis

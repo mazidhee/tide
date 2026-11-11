@@ -1,0 +1,456 @@
+@@@@ correct-quiz-quality-row-counts
+situation: after-correct
+topic: Data quality checks
+mode: quiz
+voice: confused
+level: medium
+expect: {"verdict":"correct","must":["Question 3 of 8"],"setsProblem":true,"askMustNot":["\\b10\\b","\\b11\\b","\\bone\\b"]}
+@@ tutor
+**Question 2 of 8**
+
+A nightly job copies the day's orders from the application database into the warehouse. The source has 12,480 orders for the day and the warehouse table has 12,480 rows for it.
+
+<ask type="short">The row counts match. Name one fault in the copy that this check cannot detect.</ask>
+@@ learner answer unsure
+um, maybe if a row got loaded twice and another one was missed? then the count is still the same but the data is wrong. not sure if that counts
+@@ reply
+<grade verdict="correct" score="1">It counts: "a row got loaded twice and another one was missed" leaves the total unchanged, because the two errors cancel. A row count also cannot see a wrong value inside a row.</grade>
+
+One more at this level, on the check that would catch your duplicate.
+
+**Question 3 of 8**
+
+`dim_customer` should hold one row per customer_id, and customer_id is never NULL. A uniqueness check counts 5,000 rows and 4,990 distinct customer_ids.
+
+<solution>5,000 − 4,990 = 10 rows are surplus. Most ids: 10, each appearing exactly twice. Fewest: 1, a single id appearing 11 times.</solution>
+<check lang="python">
+surplus = 5000 - 4990
+# every way to split the 10 surplus rows over duplicated ids: an id with c rows contributes c - 1
+def splits(n, largest=None):
+    largest = largest or n
+    if n == 0: yield []
+    for first in range(min(n, largest), 0, -1):
+        for rest in splits(n - first, first): yield [first] + rest
+sizes = [len(s) for s in splits(surplus)]
+assert surplus == 10 and max(sizes) == 10 and min(sizes) == 1
+assert [x + 1 for x in next(s for s in splits(surplus) if len(s) == 1)] == [11]
+</check>
+
+<ask type="problem">What is the largest number of customer_ids that could be duplicated, and what is the smallest? Say how many rows the duplicated ids have in each case.</ask>
+@@ verify
+# a row count is blind to one duplicate plus one missing row
+src = list(range(12480))
+copy = src[:-1] + [src[0]]
+assert len(copy) == len(src) == 12480 and set(copy) != set(src)
+# the uniqueness problem: build both extremes and count
+most = [i for i in range(4990)] + list(range(10))
+fewest = [i for i in range(4990)] + [0] * 10
+from collections import Counter
+for rows, dup_ids, top in ((most, 10, 2), (fewest, 1, 11)):
+    c = Counter(rows)
+    assert len(rows) == 5000 and len(c) == 4990
+    assert sum(1 for v in c.values() if v > 1) == dup_ids and max(c.values()) == top
+s = solution(reply)
+assert '10 rows' in s and '11 times' in s
+
+@@@@ wrong-backfill-append-replaces
+situation: after-wrong
+topic: Backfills and partition overwrite
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["replac","INSERT|append"],"must":["14,000","4,000"],"setsProblem":true,"askMustNot":["10,050"]}
+@@ tutor
+A backfill reruns a pipeline for past dates, usually after a bug fix or a correction in the source. Whether that is safe depends on how each run writes its output.
+
+**Problem 1 · warm-up**
+
+A daily job loads one day's orders into `fact_orders` with a plain `INSERT INTO fact_orders SELECT ...`. Each of the days 1 to 5 March has 2,000 orders, and all five days were loaded once. A bug is found in the transform, it is fixed, and the job is rerun for 3 and 4 March.
+
+<solution>Before the rerun: 5 × 2,000 = 10,000 rows. The rerun appends 2 × 2,000 = 4,000 more, so 14,000 rows. The 4,000 original rows for 3 and 4 March, written by the buggy transform, should not be there.</solution>
+<check lang="python">
+before = 5 * 2000
+after = before + 2 * 2000
+assert before == 10000 and after == 14000 and after - before == 4000
+</check>
+
+<ask type="problem">How many rows does fact_orders hold after the rerun, and how many of them should not be there?</ask>
+@@ learner answer sure
+10,000 and none of them wrong. The rerun loads the same order_ids again so it just replaces the old rows for the 3rd and 4th with the fixed ones. That's the whole point of a backfill.
+@@ reply
+<grade verdict="wrong" score="0.1">"it just replaces the old rows" is the step that fails: a plain INSERT never replaces anything, it adds rows, and nothing here declares order_id unique. The rerun adds 4,000 rows to the 10,000 already there, so the table holds 14,000, and the 4,000 buggy originals should not be there.</grade>
+
+Replacement has to be written into the job. The usual form is partition overwrite: the run for a date first deletes that date's rows, or swaps out that date's partition, and then inserts, in one transaction where the engine allows it. A run then leaves exactly that day's rows however many times it is started.
+
+<card>Why does rerunning an append-only load for a past date corrupt the table? :: INSERT adds rows and never replaces them, so the date ends up with its old rows and its new rows. The run must overwrite its own partition: delete the date, then insert.</card>
+
+<note>Backfill rule: a run for date D must replace everything for D, not add to it. Delete (or overwrite the partition for) D, then insert. Then running it once or five times gives the same table.</note>
+
+**Problem 2 · same idea**
+
+The job now deletes the run date's rows and then inserts. The table is back to the correct 10,000 rows. The source has gained 50 late orders for 4 March, so it holds 2,050 for that day. The run for 4 March is then started three times by mistake.
+
+<solution>Each run deletes every 4 March row and inserts 2,050. After any number of runs the table holds 8,000 + 2,050 = 10,050 rows.</solution>
+<check lang="python">
+other_days = 4 * 2000
+rows = other_days + 2000
+for _ in range(3):
+    rows = other_days + 2050      # delete the day, insert the day
+assert rows == 10050
+</check>
+
+<ask type="problem">How many rows does fact_orders hold after the three runs, and how many of them are for 4 March?</ask>
+@@ verify
+import sqlite3
+db = sqlite3.connect(':memory:')
+db.execute('create table src(order_id integer, d text)')
+db.execute('create table fact_orders(order_id integer, d text)')
+oid = 0
+for day in range(1, 6):
+    for _ in range(2000):
+        oid += 1
+        db.execute('insert into src values (?, ?)', (oid, f'2025-03-0{day}'))
+append = lambda d: db.execute('insert into fact_orders select * from src where d = ?', (d,))
+count = lambda: db.execute('select count(*) from fact_orders').fetchone()[0]
+for day in range(1, 6):
+    append(f'2025-03-0{day}')
+assert count() == 10000
+append('2025-03-03'); append('2025-03-04')
+assert count() == 14000                       # a plain INSERT replaces nothing
+dups = db.execute('select count(*) from (select order_id from fact_orders group by 1 having count(*) > 1)').fetchone()[0]
+assert dups == 4000
+# Problem 2: delete then insert, three runs, 50 late orders
+db.execute('delete from fact_orders'); db.execute('insert into fact_orders select * from src')
+assert count() == 10000
+for _ in range(50):
+    oid += 1
+    db.execute('insert into src values (?, ?)', (oid, '2025-03-04'))
+for _ in range(3):
+    db.execute("delete from fact_orders where d = '2025-03-04'")
+    append('2025-03-04')
+assert count() == 10050
+assert db.execute("select count(*) from fact_orders where d = '2025-03-04'").fetchone()[0] == 2050
+assert '10,050' in solution(reply) and '10,050' not in visible(reply)
+assert '10,000' in learner
+
+@@@@ wrong-consumers-beyond-partitions
+situation: after-wrong
+topic: Kafka consumer groups and rebalancing
+options: {"strategy":"dialogue"}
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["idle|no partition|nothing to read","one consumer"],"must":["2,000","\\b600\\b"],"askMustNot":["2 each|two each","independent"],"askTypes":["short","explain"]}
+@@ tutor
+Take a real case. Your order-events topic has 4 partitions and its group has 4 consumers, one partition each. Records arrive at 2,600 per second, spread evenly over the partitions, and each consumer can process about 500 per second, so lag is growing.
+
+<ask type="explain">A colleague proposes scaling the group to 6 consumers. What throughput would the group reach, and would you do it?</ask>
+@@ learner answer sure
+Yes do it. 6 consumers x 500 = 3,000 records/s which beats 2,600, so the lag drains at 400 a second. Easy win, it's what consumer groups are for.
+@@ reply
+<grade verdict="wrong" score="0.1">"6 consumers x 500 = 3,000" assumes every consumer has work, but within a group a partition is assigned to only one consumer at a time. With 4 partitions, 4 consumers own one each and the other 2 sit idle, so throughput stays at 4 × 500 = 2,000 per second and lag still grows by 600 per second.</grade>
+
+The partition is the unit of parallelism: the group can never have more working consumers than the topic has partitions. Extra consumers are only standbys that take over a partition when an owner fails. To raise throughput here you add partitions and then consumers, or make each consumer faster.
+
+<card>A topic has 4 partitions and its group has 6 consumers. How many consumers do work? :: 4. Each partition goes to one consumer in the group; the other 2 are idle standbys.</card>
+
+<note>In a consumer group each partition has one owner, so working consumers ≤ partitions. Group throughput is capped at partitions × per-consumer rate when load is even.</note>
+
+<ask type="short">The analytics team starts a second group on the same 4-partition topic, with 2 consumers. How many partitions does each analytics consumer own, and how many does your original group of 4 lose?</ask>
+@@ verify
+partitions, rate, arrive = 4, 500, 2600
+assert 6 * rate == 3000 and 3000 - arrive == 400          # the learner's figures
+working = min(6, partitions)
+assert working == 4 and 6 - working == 2
+assert working * rate == 2000 and arrive - working * rate == 600
+assert arrive / partitions == 650 > rate                   # every partition is behind
+# the follow-up: a second group is assigned independently, 4 partitions over 2 consumers
+assert partitions // 2 == 2
+
+@@@@ wrong-session-fixed-length
+situation: after-wrong
+topic: Session windows
+voice: wordy
+level: medium
+expect: {"verdict":"wrong","names":["first event|fixed","previous|last event|before it"],"must":["25 minutes","two sessions|2 sessions"],"setsProblem":true,"askMustNot":["\\b3\\b|three"]}
+@@ tutor
+A session window groups one key's events into bursts of activity: a session stays open while events keep arriving, and closes when a gap of inactivity longer than the chosen limit passes.
+
+**Problem 1 · warm-up**
+
+A session window with a 30-minute gap groups one user's events. Their event times are 10:00, 10:20, 10:45, 11:30 and 11:50.
+
+<solution>Gaps between consecutive events: 20, 25, 45 and 20 minutes. Only the 45-minute gap exceeds 30, so a new session starts at 11:30. Two sessions: {10:00, 10:20, 10:45} and {11:30, 11:50}.</solution>
+<check lang="python">
+t = [600, 620, 645, 690, 710]
+sessions = [[t[0]]]
+for a, b in zip(t, t[1:]):
+    if b - a > 30: sessions.append([b])
+    else: sessions[-1].append(b)
+assert sessions == [[600, 620, 645], [690, 710]]
+</check>
+
+<ask type="problem">How many sessions are there, and which events are in each?</ask>
+@@ learner answer sure
+Three sessions. The first one starts at 10:00 and lasts 30 minutes, so it holds 10:00 and 10:20. Then 10:45 is past 10:30 so that one starts a second session which runs until 11:15. And then 11:30 starts the third, with 11:50 inside it because that is before 12:00.
+@@ reply
+<grade verdict="wrong" score="0.2">"starts at 10:00 and lasts 30 minutes" treats the session as a fixed 30-minute block measured from its first event. The 30 minutes is a gap measured from the previous event: 10:45 comes 25 minutes after 10:20, so it joins the first session.</grade>
+
+A session has no fixed length; every new event pushes its end out. Compare each event with the one before it: the gaps are 20, 25, 45 and 20 minutes. Only the 45-minute gap is over 30, so there are two sessions: 10:00, 10:20, 10:45 (45 minutes long), then 11:30, 11:50.
+
+<card>In a session window with a 30-minute gap, what is the 30 minutes measured from? :: From the previous event of the same key, not from the start of the session. A session can last any length while gaps stay within 30 minutes.</card>
+
+<note>Session window: sort a key's events by time; an event starts a new session only when it comes more than the gap after the event before it. Sessions have no fixed length.</note>
+
+**Problem 2 · same idea**
+
+A session window has a 20-minute gap. One user's event times are 14:00, 14:15, 14:40, 14:55, 15:10 and 15:45.
+
+<solution>Gaps: 15, 25, 15, 15 and 35 minutes. The 25 and the 35 exceed 20, so there are three sessions: {14:00, 14:15}, {14:40, 14:55, 15:10} and {15:45}.</solution>
+<check lang="python">
+t = [840, 855, 880, 895, 910, 945]
+sessions = [[t[0]]]
+for a, b in zip(t, t[1:]):
+    if b - a > 20: sessions.append([b])
+    else: sessions[-1].append(b)
+assert sessions == [[840, 855], [880, 895, 910], [945]]
+</check>
+
+<ask type="problem">How many sessions, and which events are in each? List the gaps you compared.</ask>
+@@ verify
+def by_gap(t, gap):
+    out = [[t[0]]]
+    for a, b in zip(t, t[1:]):
+        if b - a > gap: out.append([b])
+        else: out[-1].append(b)
+    return out
+def fixed_block(t, size):                      # the learner's rule: a block of fixed length from its first event
+    out = [[t[0]]]
+    for b in t[1:]:
+        if b >= out[-1][0] + size: out.append([b])
+        else: out[-1].append(b)
+    return out
+m = lambda s: int(s[:2]) * 60 + int(s[3:])
+t1 = [m(x) for x in ('10:00', '10:20', '10:45', '11:30', '11:50')]
+assert [b - a for a, b in zip(t1, t1[1:])] == [20, 25, 45, 20]
+assert len(by_gap(t1, 30)) == 2 and by_gap(t1, 30)[0] == [m('10:00'), m('10:20'), m('10:45')]
+assert by_gap(t1, 30)[0][-1] - by_gap(t1, 30)[0][0] == 45
+# their three sessions really follow from the fixed-block rule
+assert fixed_block(t1, 30) == [[m('10:00'), m('10:20')], [m('10:45')], [m('11:30'), m('11:50')]]
+t2 = [m(x) for x in ('14:00', '14:15', '14:40', '14:55', '15:10', '15:45')]
+assert [b - a for a, b in zip(t2, t2[1:])] == [15, 25, 15, 15, 35]
+assert len(by_gap(t2, 20)) == 3 and len(fixed_block(t2, 20)) == 4   # the new problem separates the two rules
+
+@@@@ wrong-dau-sum-is-not-wau
+situation: after-wrong
+topic: Daily and monthly active users
+voice: overconfident
+level: easy
+expect: {"verdict":"wrong","names":["more than one day|several days|two days|each day","distinct"],"must":["\\b190\\b"],"setsProblem":true,"askMustNot":["\\b409\\b","1,?262","3\\.1"]}
+@@ tutor
+Daily active users (DAU) is the number of distinct users with at least one event on a day. In the lab, for the first week of June:
+
+```sql
+SELECT date(ts) AS day, COUNT(DISTINCT user_id) AS dau
+FROM events
+WHERE ts >= '2025-06-01' AND ts < '2025-06-08'
+GROUP BY day ORDER BY day;
+```
+
+It returns seven rows: 44, 39, 42, 49, 44, 46 and 35.
+
+<note>DAU for a day = COUNT(DISTINCT user_id) over that day's events. Filter with a half-open range on ts (>= start, < next day) so no event at the end of a day is lost.</note>
+
+<ask type="predict">Those seven daily counts add up to 299. Without running anything: is the number of distinct users active in that week equal to 299, more than 299, or fewer, and why?</ask>
+@@ learner answer sure
+Equal, 299. Each day's count is already distinct users, so adding the seven days gives the distinct users for the week.
+@@ reply
+<grade verdict="wrong" score="0.1">"adding the seven days gives the distinct users for the week" fails because each count is distinct only within its own day. A user active on more than one day is counted once in each day's figure, so the sum counts them several times.</grade>
+
+The weekly figure has to be counted over the whole week at once:
+
+```sql
+SELECT COUNT(DISTINCT user_id) AS wau
+FROM events
+WHERE ts >= '2025-06-01' AND ts < '2025-06-08';
+```
+
+It returns 190, well under 299. Distinct counts cannot be added across periods; the sum is user-days, not users.
+
+<card>Why is the sum of seven daily active user counts not the weekly active users? :: A user active on several days is counted in each day's figure. Weekly actives need COUNT(DISTINCT user_id) over the whole week.</card>
+
+<note>Distinct counts do not add up across periods: sum of DAU = user-days ≥ distinct users for the period. Count distinct over the full range instead.</note>
+
+**Problem 1 · same idea**
+
+Use May 2025 this time. Write and run one query for May's monthly active users, and another for the sum of May's 31 daily counts.
+
+<solution>MAU: SELECT COUNT(DISTINCT user_id) FROM events WHERE ts >= '2025-05-01' AND ts < '2025-06-01' gives 409. Sum of DAU: SELECT SUM(dau) FROM (SELECT COUNT(DISTINCT user_id) AS dau FROM events WHERE ts >= '2025-05-01' AND ts < '2025-06-01' GROUP BY date(ts)) gives 1,262. The sum is about 3.1 times the MAU, so the average active user was active on about 3.1 days.</solution>
+
+<ask type="problem">Run both in the block. Give the two numbers, and say what their ratio tells you about a typical active user in May.</ask>
+@@ verify
+q = block(tutor[0], 'sql')
+rows = lab(q)
+assert [r[1] for r in rows] == [44, 39, 42, 49, 44, 46, 35] and sum(r[1] for r in rows) == 299
+assert rows[0][0] == '2025-06-01' and len(rows) == 7
+assert lab(block(reply, 'sql'))[0][0] == 190
+mau = lab("SELECT COUNT(DISTINCT user_id) FROM events WHERE ts >= '2025-05-01' AND ts < '2025-06-01'")[0][0]
+dsum = lab("SELECT SUM(dau) FROM (SELECT COUNT(DISTINCT user_id) AS dau FROM events WHERE ts >= '2025-05-01' AND ts < '2025-06-01' GROUP BY date(ts))")[0][0]
+days = lab("SELECT COUNT(DISTINCT date(ts)) FROM events WHERE ts >= '2025-05-01' AND ts < '2025-06-01'")[0][0]
+assert (mau, dsum, days) == (409, 1262, 31)
+assert round(dsum / mau, 1) == 3.1
+s = solution(reply)
+assert '409' in s and '1,262' in s and '3.1' in s
+assert '409' not in visible(reply) and '1,262' not in visible(reply)
+
+@@@@ wrong-bloom-false-negative
+situation: after-wrong
+topic: Bloom filters in joins
+voice: confused
+level: medium
+expect: {"verdict":"wrong","names":["never cleared|never reset|only ever set|stay 1|stays 1","false positive"],"must":["no false negative|never a false negative|cannot give a false negative|false negatives? (are|is) impossible"],"askMustNot":["no rows? (is|are) skipped|skips? nothing|still correct"]}
+@@ tutor
+A Bloom filter is a bit array with $k$ hash functions. To add a key, set the $k$ bits its hashes point at. To test a key, look at its $k$ bits: if any is 0 the answer is "not present", and if all are 1 the answer is "possibly present". In a join, the engine builds a filter from the small side's join keys and tests each row of the large side against it before the join, so rows that cannot match are skipped without being shuffled.
+
+<note>Bloom filter: add = set the key's k bits; test = "not present" if any of them is 0, "possibly present" if all are 1. Used ahead of a join to skip large-side rows that cannot match.</note>
+
+<ask type="short">The filter was built from all 2 million customer_ids on the small side. A row on the large side has a customer_id for which the filter answers "not present". Can that row still have a match on the small side?</ask>
+@@ learner answer unsure
+I think yes? bloom filters are probabilistic so they can be wrong sometimes, so you'd still have to check the row against the real table to be safe. otherwise you might drop rows that do match
+@@ reply
+<grade verdict="wrong" score="0.2">"they can be wrong sometimes" is true in one direction only, and not this one. A key that was added had all $k$ of its bits set, and bits are never cleared, so testing it always finds them all 1: a "not present" answer for an added key is impossible.</grade>
+
+The row cannot match, and skipping it is safe. The error a Bloom filter can make is the other one, a false positive: a key that was never added may find all its bits already set by other keys, so the filter says "possibly present". That row goes on to the join, finds no match and is discarded there. A false positive costs wasted work; it never changes the result.
+
+<card>Which error can a Bloom filter make, and which can it not? :: False positives only ("possibly present" for a key never added). No false negatives: an added key's bits are all set and never cleared.</card>
+
+<note>A Bloom filter's error is one-sided: no false negatives, some false positives. So "not present" can be trusted and the row dropped; "possibly present" must still be checked by the join.</note>
+
+<ask type="predict">Suppose the filter is far too small for 2 million keys, and after building it every bit is 1. What does it answer for each large-side row, and what does that do to the join's result and to its speed?</ask>
+@@ verify
+import hashlib
+M, K = 4096, 3
+def bits(key):
+    return [int.from_bytes(hashlib.sha256(f'{i}:{key}'.encode()).digest()[:8], 'big') % M for i in range(K)]
+arr = [0] * M
+added = [f'c{i}' for i in range(600)]
+for key in added:
+    for b in bits(key): arr[b] = 1
+test = lambda key: all(arr[b] for b in bits(key))
+assert all(test(key) for key in added)                    # no false negatives, ever
+others = [f'x{i}' for i in range(5000)]
+fp = sum(test(key) for key in others)
+assert 0 < fp < len(others)                               # some false positives, not all
+# a saturated filter says "possibly present" to everything: nothing is skipped, the result is unchanged
+arr = [1] * M
+assert all(test(key) for key in others)
+
+@@@@ idk-late-arriving-dimension
+situation: idk
+topic: Late-arriving dimensions
+voice: plain
+level: hard
+expect: {"must":["surrogate","natural key"],"mustNot":["placeholder","inferred member","unknown member","\\bstub\\b","dummy row"],"askMustNot":["placeholder","inferred"]}
+noverify: a conceptual exchange; nothing is computed
+@@ tutor
+A fact row for a sale arrives carrying the customer's natural key, C-881. The fact load has to swap that for the customer's surrogate key by looking it up in `dim_customer`. The lookup finds nothing: the service that feeds the customer dimension is a few hours behind, so C-881 has no row there yet.
+
+<ask type="short">What can the load do with this fact row so that it is neither dropped nor left pointing at no customer?</ask>
+@@ learner idk
+@@ reply
+Start from what the fact row needs. It stores only a surrogate key: an integer the warehouse itself hands out when a row is inserted into `dim_customer`. The key is not derived from the customer's name, country or any other attribute; the dimension simply assigns the next number to the new row and records which natural key it stands for. So a surrogate key for C-881 exists from the moment the dimension has a row for C-881, and not before.
+
+<note>A surrogate key is assigned by the warehouse when a dimension row is inserted. A fact row can reference a customer only once that customer has a row, and so a key, in the dimension.</note>
+
+<ask type="choice" options="Only the natural key, C-881|Only the name and country|The natural key and every attribute|Nothing: the fact row supplies the key">Which of the customer's details must be known at the moment the dimension hands out a surrogate key for them?</ask>
+
+@@@@ idk-hyperloglog-leading-zeros
+situation: idk
+topic: Approximate distinct counts: the HyperLogLog idea
+voice: plain
+level: hard
+expect: {"must":["1/2","1/4"],"mustNot":["1,?024","2\\^\\{?10"],"askMustNot":["\\b100\\b","1/8","one in eight"]}
+@@ tutor
+An exact distinct count has to remember every value it has seen, which for a billion user_ids is gigabytes of state. HyperLogLog estimates the count from a few kilobytes by looking only at a pattern in the hashes of the values.
+
+<ask type="predict">Each user_id is hashed to a string of random-looking bits. Among all the hashes seen so far, the longest run of leading zero bits is 10. Roughly how many distinct user_ids have been seen, and why?</ask>
+@@ learner idk
+@@ reply
+Take one hash on its own first. A good hash function makes each bit 0 or 1 with equal chance, independently of the other bits. So a hash starts with a 0 with probability 1/2, and starts with two zeros with probability 1/2 × 1/2 = 1/4: each extra leading zero halves the chance. A repeated user_id produces the same hash again, so repeats add no new patterns; only distinct values count.
+
+<note>For a uniform hash, P(first j bits are all 0) = $(1/2)^j$. Equal values give equal hashes, so duplicates never change what patterns have been seen.</note>
+
+<ask type="short">800 distinct values are hashed. About how many of the 800 hashes would you expect to start with three zero bits?</ask>
+@@ verify
+import hashlib
+lead3 = 0
+for i in range(800):
+    h = hashlib.sha256(f'user-{i}'.encode()).digest()
+    if h[0] >> 5 == 0: lead3 += 1                # top three bits are 000
+assert 800 / 8 == 100 and 70 <= lead3 <= 130, lead3
+assert 0.5 * 0.5 == 0.25
+# the withheld answer to the original question
+assert 2 ** 10 == 1024 and '1024' not in reply and '1,024' not in reply
+
+@@@@ idk-shuffle-groupby
+situation: idk
+topic: The shuffle in distributed processing
+voice: plain
+level: medium
+expect: {"must":["partition","row by row|one row at a time|each row on its own"],"mustNot":["shuffle (moves|sends|brings)","same key (end|land)s? (up )?(i|o)n (the same|one) partition"],"askMustNot":["\\bno\\b","partial"]}
+noverify: a conceptual exchange; nothing is computed
+@@ tutor
+<ask type="explain">A Spark job runs a filter and then `groupBy("country").count()` over a dataset stored in 100 partitions. The filter needs no shuffle; the groupBy does. Why does the groupBy need one?</ask>
+@@ learner idk
+@@ reply
+Begin with how the work is divided. The dataset is split into 100 partitions and each one is handled by its own task, which sees only the rows of that partition and nothing of the other 99. A filter fits this exactly: it decides row by row, and keeping or dropping one row needs no knowledge of any other row. So each task filters its own partition and the job is done.
+
+<note>Each task sees one partition only. An operation that works row by row (filter, map) needs nothing from other partitions, so it runs in place.</note>
+
+<ask type="short">Rows with country = 'NG' are spread across all 100 partitions. One task counts the NG rows in its own partition and gets 4,210. Is 4,210 the answer for NG, and what would have to be true of where the NG rows are stored for one task's count to be the answer?</ask>
+
+@@@@ show-me-dag-flowchart
+situation: show-me
+topic: Task dependencies in a DAG
+voice: plain
+level: easy
+expect: {"visual":{"kind":"mermaid","diagram":["flowchart"]},"must":["join_sales"]}
+@@ tutor
+A pipeline is declared as tasks plus dependencies: an edge from A to B means B may start only after A has succeeded. Take a daily sales pipeline with five tasks. `extract_orders` and `extract_customers` have no upstream tasks, so they can run in parallel. `clean_orders` depends on extract_orders. `join_sales` depends on clean_orders and on extract_customers, so it waits for both. `publish_report` depends on join_sales. If extract_customers fails, clean_orders can still run, but join_sales and publish_report cannot start until a retry of it succeeds.
+
+<note>DAG: tasks are nodes, dependencies are directed edges, and there are no cycles. A task starts when all its upstream tasks have succeeded; tasks with no path between them can run in parallel.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+flowchart LR
+  EO["extract_orders"] --> CO["clean_orders"]
+  CO --> JS["join_sales"]
+  EC["extract_customers"] --> JS
+  JS --> PR["publish_report"]
+```
+
+Look at join_sales: two arrows come into it, so it waits for both clean_orders and extract_customers, while the two extract tasks have no arrows in and can start together.
+@@ verify
+import re
+body = block(reply, 'mermaid')
+names = dict(re.findall(r'(\w+)\["([^"]+)"\]', body))
+edges = set()
+for line in body.splitlines()[1:]:
+    a, b = [re.match(r'\s*(\w+)', part).group(1) for part in line.split('-->')]
+    edges.add((names[a], names[b]))
+want = {('extract_orders', 'clean_orders'), ('clean_orders', 'join_sales'), ('extract_customers', 'join_sales'), ('join_sales', 'publish_report')}
+assert edges == want, edges
+assert set(names.values()) == {'extract_orders', 'extract_customers', 'clean_orders', 'join_sales', 'publish_report'}
+for n in names.values(): assert n in tutor[0]
+# the statements in the explanation and in the caption follow from the edges
+ups = lambda n: {a for a, b in edges if b == n}
+assert ups('extract_orders') == set() and ups('extract_customers') == set()
+assert ups('join_sales') == {'clean_orders', 'extract_customers'}
+def downstream(n):
+    out, todo = set(), [n]
+    while todo:
+        x = todo.pop()
+        for a, b in edges:
+            if a == x and b not in out: out.add(b); todo.append(b)
+    return out
+assert downstream('extract_customers') == {'join_sales', 'publish_report'} and 'clean_orders' not in downstream('extract_customers')

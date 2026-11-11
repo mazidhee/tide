@@ -1,0 +1,279 @@
+@@@@ open-hash-functions
+situation: open
+topic: Cryptographic hash functions
+voice: plain
+level: easy
+expect: {"must":["SHA-256"],"askMustNot":["half","\\b128\\b","50 ?%"]}
+noverify: an opening; it asks what fraction of output bits change and states no result
+@@ reply
+**Why this matters**
+
+A cryptographic hash function turns an input of any size into a short, fixed-size fingerprint that is quick to compute and infeasible to reverse or to forge a match for. Blockchains use it at every level: block identifiers, the links between blocks, Merkle trees over transactions, proof of work and address derivation all rest on hashes such as SHA-256 in Bitcoin and Keccak-256 in Ethereum. The same tool gives Git its commit ids and content-addressed stores their keys. Once its properties are exact, tamper evidence and mining become short arguments instead of things to take on trust.
+
+<ask type="predict">Two files differ in a single bit, and you hash each with SHA-256. Roughly what fraction of the 256 output bits would you expect to differ between the two digests, and why would a hash function be designed that way?</ask>
+
+@@@@ open-proof-of-stake
+situation: open
+topic: Proof of stake: validators, slashing and finality
+voice: plain
+level: medium
+expect: {"must":["2022"],"askMustNot":["deposit","locked","evidence"]}
+noverify: an opening; nothing is computed and the question's answer is not stated
+@@ reply
+**Why this matters**
+
+Proof of stake replaces the electricity spent in mining with capital put at risk: validators lock up a stake, take turns proposing and voting on blocks, and lose part of that stake if they provably cheat. Ethereum has worked this way since its 2022 switch from proof of work, and Cosmos chains and Solana use variants of the idea. It decides what an attack on a chain costs, when an exchange or a bridge can treat a deposit as final, and what the software that runs a validator must never do. It also leads into the Byzantine fault tolerant protocols that finality is built from.
+
+<ask type="short">A validator signs two different blocks for the same slot, and both signed blocks reach the network. Why can a proof-of-stake protocol punish that, when a proof-of-work miner who mines on two competing forks cannot be punished in the same way?</ask>
+
+@@@@ open-refresh-utxo-fee
+situation: open
+topic: The UTXO model
+options: {"refresh":true}
+voice: plain
+level: easy
+expect: {"setsProblem":true,"askTypes":["problem"],"must":["600","300"],"askMustNot":["\\b50\\b","consumed","removed"]}
+@@ reply
+**Problem 1**
+
+Dana controls two unspent outputs, worth 600 and 300 units. She signs a transaction with both as inputs and two outputs: 700 units to Eli and 150 units to an address of her own. What fee does the transaction pay, and what has happened to the 600 and 300 outputs once it is confirmed?
+
+<solution>Inputs total 600 + 300 = 900. Outputs total 700 + 150 = 850. The fee is the difference, 900 − 850 = 50 units. Both inputs are spent whole: they leave the UTXO set, and the two new outputs (700 to Eli, 150 to Dana) join it.</solution>
+<check lang="python">
+inputs, outputs = [600, 300], [700, 150]
+assert sum(inputs) - sum(outputs) == 50
+</check>
+
+<ask type="problem">The fee, with the sum you used, and the state of the two old outputs.</ask>
+@@ verify
+utxo = {'d1': 600, 'd2': 300}
+spent = ['d1', 'd2']
+created = {'eli': 700, 'dana': 150}
+fee = sum(utxo[k] for k in spent) - sum(created.values())
+assert fee == 50 and '50 units' in solution(reply)
+for k in spent:
+    del utxo[k]
+utxo.update(created)
+assert utxo == {'eli': 700, 'dana': 150}
+# the answer is not where the learner reads it
+assert '50' not in visible(reply).replace('150', '')
+
+@@@@ open-prior-signatures-binding
+situation: open-prior
+topic: Digital signatures
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Digital signatures","daysAgo":4,"finished":false,"plan":["Sign and verify","What a signature proves","Why the message is hashed first"],"right":3,"partly":1,"wrong":1,"missed":["If Mallory copies Alice's signature from one transaction onto a different transaction, why does verification fail?"],"open":"Why do signature schemes sign a hash of the message rather than the message itself?"}]}
+expect: {"must":["sign"],"askMustNot":["bound to","depends on the message","different (hash|digest)"]}
+noverify: an opening; nothing is computed and the question's answer is not stated
+@@ reply
+**Why this matters**
+
+A transaction on a blockchain is authorised by a digital signature and by nothing else: there is no login to fall back on and no bank to ring. Wallets, multisignature custody, validator votes and bridge attestations are all signature checks. You have signing and verifying in place from last time; the gap was what a signature is tied to, and hashing the message first is still to come.
+
+<ask type="short">Alice signs the message "pay Bob 2". An attacker changes the message to "pay Bob 9" and forwards it with Alice's original signature and her public key. Which three things go into the verifier's check, and why does the check come out false?</ask>
+
+@@@@ open-prior-light-clients
+situation: open-prior
+topic: Light clients and Merkle proofs
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Merkle trees and inclusion proofs","daysAgo":6,"finished":true,"plan":["Building the tree","Inclusion proofs","Proof size"],"right":5,"partly":1,"wrong":1,"missed":["A block has 1,024 transactions. How many hashes does an inclusion proof for one of them contain?"]}]}
+expect: {"must":["header","Merkle"],"askMustNot":["\\b8\\b","eight","log"]}
+@@ reply
+**Why this matters**
+
+A light client follows a chain by downloading block headers only, a small fixed amount of data per block, instead of every transaction. Simplified payment verification in Bitcoin works this way, and so do bridges that check one chain's headers inside a contract on another. It rests directly on the Merkle inclusion proofs from last week: a header carries a Merkle root, and a proof against that root is what convinces a light client that a transaction is in a block. The size of such a proof was the one thing that slipped then, so it comes first.
+
+<ask type="short">A block's Merkle tree has 256 transactions as its leaves. A light client holds the root and is sent one of the transactions. How many sibling hashes must be sent with it so that the client can recompute the root?</ask>
+@@ verify
+import math
+# the answer to the opening question, which the reply does not state
+assert math.log2(256) == 8
+n, levels = 256, 0
+while n > 1:
+    n //= 2
+    levels += 1
+assert levels == 8
+import re
+assert not re.search(r'\b8\b', visible(reply))
+# the earlier question it rests on (1,024 leaves) is not reused word for word
+assert '1,024' not in reply and '1024' not in reply
+
+@@@@ open-recall-pow-expected-tries
+situation: open-recall
+topic: Proof of work and difficulty
+voice: plain
+level: medium
+before: {"recall":[{"prompt":"A block hash must start with 12 zero bits. On average, how many nonces does a miner try before one works?","topic":"Proof of work and difficulty","reviews":2,"lapses":1}]}
+expect: {"askMustNot":["4,?096","2\\^\\{?12"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="short">A block hash must start with 12 zero bits. On average, how many nonces does a miner try before one works?</ask>
+
+@@@@ open-recall-stale-nonce
+situation: open-recall
+topic: The account model and nonces
+voice: plain
+level: easy
+before: {"recall":[{"prompt":"An account's next nonce is 7. A signed transaction from it with nonce 5 arrives. What does a node do with it, and why?","topic":"The account model and nonces","reviews":1,"lapses":0}]}
+expect: {"askMustNot":["reject","replay","already"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="explain">An account's next nonce is 7. A signed transaction from it with nonce 5 arrives. What does a node do with it, and why?</ask>
+
+@@@@ correct-quiz-header-commits-body
+situation: after-correct
+topic: Block structure and headers
+mode: quiz
+voice: terse
+level: medium
+expect: {"verdict":"correct","askTypes":["error"],"askMustNot":["Merkle root","changes the header"],"must":["Question 3 of 8"]}
+noverify: a conceptual quiz exchange; nothing is computed
+@@ tutor
+**Question 2 of 8**
+
+<ask type="short">A block header contains the hash of the previous block's header and a Merkle root of the block's transactions. A node receives a header and, separately, a list of transactions claimed to be that block's body. How does it check that the body belongs to the header?</ask>
+@@ learner answer sure
+hash the txs up into a merkle tree, compare the root w/ the one in the header. any tx changed, added, dropped or reordered -> different root
+@@ reply
+<grade verdict="correct" score="1">"compare the root w/ the one in the header" is the check, and you named what it catches: a change, an addition, a removal or a reordering each gives a different root.</grade>
+
+**Question 3 of 8**
+
+<ask type="error">Find the flaw in this argument: "Proof of work is computed over the block header only, and the header does not contain the transactions themselves. So once a block has been mined, its miner can swap one transaction in the body for another without redoing any work."</ask>
+
+@@@@ correct-merkle-probe-to-plan
+situation: after-correct
+topic: Merkle trees and inclusion proofs
+voice: wordy
+level: medium
+expect: {"verdict":"correct","need":["plan","note"],"setsProblem":true,"askTypes":["problem"],"must":["\\b96 bytes\\b","2,048"],"askMustNot":["\\b11\\b","\\b352\\b"]}
+@@ tutor
+<ask type="short">A Merkle tree is built over four transaction hashes, H1 to H4. Besides the transaction itself, which hashes does someone need in order to check that transaction 3 is under a root they already trust?</ask>
+@@ learner answer sure
+So you hash transaction 3 yourself to get H3. Then you need H4, because that's its partner, and together they give the parent of that pair. Then you need the hash of the other pair, the one made from H1 and H2, to combine with it into the root. So two hashes in total, H4 and the H1-H2 parent. You never need H1 or H2 on their own.
+@@ reply
+<grade verdict="correct" score="1">"two hashes in total, H4 and the H1-H2 parent" is exactly the proof: one sibling at each level on the way up, and you are right that H1 and H2 themselves are never needed.</grade>
+
+<plan>
+- Proof size as the tree grows
+- Verifying a proof: left or right at each level
+- What an inclusion proof does not show
+</plan>
+
+Each level of the tree halves the number of nodes, so a tree with $n$ leaves ($n$ a power of two) has $\log_2 n$ levels below the root, and a proof carries one sibling hash per level. With 8 leaves that is 3 hashes; with 32-byte hashes such as SHA-256, 3 × 32 = 96 bytes. Doubling the number of leaves adds one hash to the proof.
+
+<note>Inclusion proof size: a Merkle tree with $n$ leaves needs $\log_2 n$ sibling hashes, one per level. 8 leaves → 3 hashes → 96 bytes at 32 bytes each. Doubling $n$ adds one hash.</note>
+
+**Problem 1 · warm-up**
+
+A block's Merkle tree has 2,048 transactions as leaves, and each hash is 32 bytes. How many hashes does an inclusion proof for one transaction contain, and how many bytes is that?
+
+<solution>2,048 = 2^11, so the proof has 11 hashes: 11 × 32 = 352 bytes.</solution>
+<check lang="python">
+import math
+k = int(math.log2(2048))
+assert 2 ** k == 2048 and k == 11 and k * 32 == 352
+</check>
+
+<ask type="problem">The number of hashes and the size in bytes, with the power of two you used.</ask>
+@@ verify
+import math
+# four leaves: the proof for leaf 3 is its sibling and the other pair's parent
+path, idx, level = [], 2, ['H1', 'H2', 'H3', 'H4']
+while len(level) > 1:
+    path.append(level[idx ^ 1])
+    level = [level[i] + level[i + 1] for i in range(0, len(level), 2)]
+    idx //= 2
+assert path == ['H4', 'H1H2']
+# the worked example and the problem
+assert math.log2(8) == 3 and 3 * 32 == 96
+assert math.log2(2048) == 11 and 11 * 32 == 352
+assert '11 hashes' in solution(reply) and '352' in solution(reply)
+assert '352' not in visible(reply)
+
+@@@@ correct-halving-99-percent
+situation: after-correct
+topic: Mining reward halving and total supply
+options: {"difficulty":"hard"}
+voice: terse
+level: hard
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"must":["16,000"],"askMustNot":["\\b7\\b","seven","\\b125\\b"]}
+@@ tutor
+**Problem 1 · hard**
+
+A toy chain pays 80 coins per block for its first 100 blocks, then halves the reward every 100 blocks (40, then 20, and so on), with fractions of a coin allowed. How many coins exist after 300 blocks, and what does the total approach if the halvings never stop?
+
+<solution>After 300 blocks: 100 × (80 + 40 + 20) = 14,000. Limit: 100 × 80 × (1 + 1/2 + 1/4 + …) = 8,000 × 2 = 16,000.</solution>
+<check lang="python">
+assert 100 * (80 + 40 + 20) == 14000
+total = sum(100 * 80 / 2 ** k for k in range(200))
+assert abs(total - 16000) < 1e-6
+</check>
+
+<ask type="problem">Both totals, with the series you summed.</ask>
+@@ learner answer sure
+14000 after 300. limit 16000: 100*80*(1 + 1/2 + 1/4 + ...) = 8000*2
+@@ reply
+<grade verdict="correct" score="1">Both are right: 14,000 from the first three eras, and "100*80*(1 + 1/2 + 1/4 + ...) = 8000*2" is the geometric series with ratio 1/2, whose sum is twice its first term.</grade>
+
+Bitcoin's schedule has the same shape, with a reward that halves about every four years, which is why its supply approaches a fixed cap.
+
+**Problem 2 · harder**
+
+Same toy chain. After how many complete 100-block eras has at least 99% of the 16,000-coin limit been issued, and how many coins are still to come at that point?
+
+<solution>After n eras the supply is 16,000 × (1 − 2^−n), so the fraction still to come is 2^−n. 2^−6 = 1/64 ≈ 1.56% is too much; 2^−7 = 1/128 ≈ 0.78% is under 1%. So 7 eras (700 blocks), with 16,000 / 128 = 125 coins still to come.</solution>
+<check lang="python">
+limit, issued, n = 16000, 0, 0
+while issued < 0.99 * limit:
+    issued += 100 * 80 / 2 ** n
+    n += 1
+assert n == 7 and limit - issued == 125
+</check>
+
+<ask type="problem">The number of eras and the coins still to come, with the inequality you solved.</ask>
+@@ verify
+# the learner's two figures
+assert 100 * (80 + 40 + 20) == 14000 and 100 * 80 * 2 == 16000 == 8000 * 2
+# problem 2, by direct accumulation
+issued = 0
+for n in range(1, 20):
+    issued += 100 * 80 / 2 ** (n - 1)
+    assert approx(issued, 16000 * (1 - 2 ** -n), 1e-9)
+    if issued >= 0.99 * 16000:
+        break
+assert n == 7 and 16000 - issued == 125 and 16000 / 128 == 125
+assert round(100 / 64, 2) == 1.56 and round(100 / 128, 2) == 0.78
+assert '7 eras' in solution(reply) and '125' in solution(reply)
+assert '125' not in visible(reply)
+
+@@@@ correct-recall-then-open-confirmations
+situation: after-correct
+topic: Confirmations and probabilistic finality
+voice: wordy
+level: medium
+before: {"recall":[{"prompt":"A payment sits in a block with three more blocks built on top. What must an attacker redo to replace that payment?","topic":"Double spending","reviews":2,"lapses":1}]}
+expect: {"verdict":"correct","heading":"Why this matters","askTypes":["predict","short","explain","choice"],"forbid":["solution"],"must":["confirmation"],"askMustNot":["0\\.18","1/81","\\b15\\b"]}
+@@ tutor
+<ask type="short">A payment sits in a block with three more blocks built on top. What must an attacker redo to replace that payment?</ask>
+@@ learner answer sure
+They'd have to build a replacement for the block that has the payment in it, and since every later block points back at the one before, they also have to redo the three blocks on top, so that's the proof of work for four blocks. And it isn't enough to just match, they have to get ahead of the honest chain, which keeps growing the whole time they're doing this.
+@@ reply
+<grade verdict="correct" score="1">"the proof of work for four blocks" is right, and so is the part most answers leave out: "they have to get ahead of the honest chain", which keeps moving while they work.</grade>
+
+**Why this matters**
+
+A transaction on a proof-of-work chain is never final in an absolute sense: each block built on top makes reversing it less likely, and a confirmation count is how exchanges, payment processors and bridges turn that into a rule such as "credit the deposit after so many blocks". Choosing the count is a risk decision that depends on the value at stake and on how much hash power an attacker could bring. Proof-of-stake chains with a finality step answer the same question in a different way, which is the comparison this leads to.
+
+<ask type="predict">One attacker has 10% of the hash power and is 2 blocks behind the honest chain. Another has 30% and is also 2 blocks behind. Without calculating, is the second attacker's chance of ever catching up about 3 times the first's, or far more than 3 times? Give your reasoning.</ask>
+@@ verify
+# the recall answer: the payment's block plus the three above it
+assert 1 + 3 == 4
+# the probe's answer (not stated in the reply): (q/p)^z for q = 0.1 and q = 0.3, z = 2
+a = (0.1 / 0.9) ** 2
+b = (0.3 / 0.7) ** 2
+assert approx(a, 1 / 81, 1e-12) and approx(b, 9 / 49, 1e-12)
+assert 14 < b / a < 15.5          # far more than 3 times
+assert tutor[0].count('<ask') == 1 and '**' not in tutor[0]

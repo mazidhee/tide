@@ -1,0 +1,602 @@
+@@@@ tangent-spectre-and-speculation
+situation: tangent
+topic: Branch prediction
+voice: typos
+level: medium
+expect: {"must":["specul","cache","2018"],"askMustNot":["1\\.3\\b","\\b130\\b","\\b30\\b"],"setsProblem":true,"askTypes":["problem"],"words":{"max":170}}
+@@ tutor
+Each misprediction adds a fixed penalty: the cycles of wrong-path work that are thrown away. Averaged over a program, the extra cost per instruction is the fraction of instructions that are branches, times the fraction of those that are mispredicted, times the penalty.
+
+<note>Extra CPI from branches = fraction of instructions that are branches × misprediction rate × penalty in cycles.</note>
+
+**Problem 1 · warm-up**
+
+In a program, 20% of the instructions are branches. The predictor is right 90% of the time and a misprediction costs 15 cycles. With perfect prediction the CPI would be 1.0. What is the actual CPI?
+
+<solution>Extra CPI = 0.2 × 0.1 × 15 = 0.3, so the CPI is 1.0 + 0.3 = 1.3.</solution>
+<check lang="python">
+assert abs(1.0 + 0.2 * (1 - 0.9) * 15 - 1.3) < 1e-9
+</check>
+
+<ask type="problem">The CPI, with the extra cycles per instruction.</ask>
+@@ learner question
+quick side question before i do this, is this the same thing spectre was about? i rember it being somthing with the branch predictor
+@@ reply
+Related, but Spectre is not about the cost of a miss. After a prediction the processor runs the predicted path speculatively, and when the prediction is wrong it discards that path's register and memory results but not what the path loaded into the cache. Spectre, disclosed in January 2018, trains the predictor so that a bounds check is predicted to pass, lets the speculative code read out-of-bounds data and touch a cache line chosen by its value, then times memory accesses to find which line became fast.
+
+Back to the cost of a miss, counted another way.
+
+<solution>Of 100 instructions, 20 are branches and 10% of those, 2, are mispredicted. They add 2 × 15 = 30 cycles to the base 100, giving 130 cycles: a CPI of 1.3.</solution>
+<check lang="python">
+branches = 100 * 20 // 100
+missed = branches * 10 // 100
+total = 100 * 1 + missed * 15
+assert (branches, missed, total, total / 100) == (20, 2, 130, 1.3)
+</check>
+
+<ask type="problem">Take 100 instructions of that program: 20 are branches, the predictor gets 90% of them right, each miss costs 15 cycles, and every instruction costs 1 cycle before penalties. How many cycles do the 100 instructions take in total, and what CPI is that?</ask>
+@@ verify
+# the pending problem, by the formula and by counting
+assert approx(1.0 + 0.2 * 0.1 * 15, 1.3) and approx(0.2 * 0.1 * 15, 0.3)
+assert 20 * 10 // 100 == 2 and 2 * 15 == 30 and 100 + 30 == 130 and 130 / 100 == 1.3
+# the reply does not give the answer where the learner reads it
+assert '1.3' not in visible(reply) and '130' not in visible(reply)
+assert '130' in solution(reply)
+
+@@@@ tangent-simd-auto-vectorisation
+situation: tangent
+topic: SIMD basics
+voice: terse
+level: medium
+expect: {"must":["auto-vectoris","not associative"],"askMustNot":["\\b125\\b","\\b3 (left|elements|over)","three"],"words":{"max":170}}
+@@ tutor
+A SIMD instruction applies one operation to several values at once. A 256-bit AVX2 register holds eight 32-bit floats side by side, in lanes, and one vector add produces eight sums. A loop over an array is rewritten to take eight elements per iteration, with a scalar loop at the end for whatever is left over.
+
+<note>SIMD: one instruction, many lanes. A 256-bit register holds 8 floats (8 × 32 bits) or 4 doubles (4 × 64 bits). A vectorised loop handles a full register of elements per iteration and finishes the remainder one element at a time.</note>
+
+<ask type="short">Two arrays of 1,003 floats are added element by element using 256-bit vectors. How many vector additions run, and how many elements are left for the scalar loop?</ask>
+@@ learner question
+do i have to write this by hand with intrinsics or does the compiler do it
+@@ reply
+Often the compiler does it. GCC and Clang auto-vectorise simple counted loops at their higher optimisation levels (typically `-O2` or `-O3`, depending on the compiler and its version), provided they can establish that the iterations are independent, for example that the arrays do not overlap. One case they leave alone by default is a floating-point sum into a single variable: vectorising it changes the order of the additions, floating-point addition is not associative, so the result could differ, and it takes a flag such as `-ffast-math` to allow it. Intrinsics are for the loops the compiler cannot prove safe or vectorises poorly.
+
+Back to the element-by-element add.
+
+<ask type="short">With 8 floats to a 256-bit register and 1,003 elements in each array, how many full registers' worth of elements are there, and how many elements does that leave over?</ask>
+@@ verify
+assert 256 // 32 == 8 and 256 // 64 == 4
+q, r = divmod(1003, 8)
+assert (q, r) == (125, 3)
+assert '125' not in reply
+# floating-point addition is not associative: a concrete case
+assert (0.1 + 0.2) + 0.3 != 0.1 + (0.2 + 0.3)
+
+@@@@ tangent-segfault-is-an-exception
+situation: tangent
+topic: Interrupts and exceptions
+voice: confused
+level: medium
+expect: {"must":["exception","SIGSEGV","synchronous"],"askTypes":["choice"],"words":{"max":170}}
+noverify: purely conceptual; nothing is computed
+@@ tutor
+Two kinds of event make the CPU stop what it is doing and enter the kernel. An interrupt comes from outside the running instruction stream: a device or a timer signals the CPU, and it can arrive between any two instructions. An exception is caused by the instruction being executed, such as a division by zero or an undefined opcode, so it happens at the same point every time the program runs with the same data.
+
+<note>Interrupt: asynchronous, raised by a device or timer, unrelated to the current instruction. Exception: synchronous, raised by the instruction being executed (divide by zero, undefined opcode, a breakpoint).</note>
+
+<ask type="choice" options="A key press reported by the keyboard controller|An integer division by zero in the program|An attempt to execute an undefined opcode|A breakpoint instruction placed by a debugger">Which of these reaches the CPU asynchronously?</ask>
+@@ learner question
+wait so where does a segfault fit in this? is it an interrupt, or is it just the OS deciding to kill me
+@@ reply
+It starts as an exception. When an instruction reads or writes an address that has no valid mapping, or one the process may not use in that way, the CPU's memory management unit raises a fault on that instruction: it is synchronous, so by the definition above it is an exception, not an interrupt. The kernel's handler then finds that the access cannot be put right and sends the process the SIGSEGV signal, whose default action is to terminate it; "segmentation fault" is the message the shell prints for that. So the hardware raises the exception and the operating system decides what follows.
+
+The question that was open, in other terms.
+
+<ask type="choice" options="A network card signalling that a packet has arrived|A load from an address that has no valid mapping|A division of one integer by another that is zero|An instruction code the processor does not recognise">Which of these could arrive between any two instructions, with no connection to what the program is executing?</ask>
+
+@@@@ why-full-adder-sum-is-parity
+situation: why
+topic: Logic gates and adders
+options: {"why":true}
+voice: plain
+level: easy
+expect: {"verdict":"correct","must":["odd","\\\\oplus"],"askMustNot":["at least two","majority","2 and 3","two or three","at least 2"],"askTypes":["predict","explain","short"]}
+@@ tutor
+Before any gates, look at what one column of a binary addition has to do. It receives three bits, $a$, $b$ and a carry in $c$, and the number of ones among them is 0, 1, 2 or 3. In binary those counts are 00, 01, 10 and 11. The sum bit is the low bit of the count and the carry out is the high bit.
+
+<ask type="predict">For which of the counts 0, 1, 2 and 3 is the sum bit 1? Put that as a statement about how many of the three inputs are 1.</ask>
+@@ learner answer sure
+Sum bit is 1 for counts 1 and 3, so it's 1 when an odd number of the inputs are 1.
+@@ reply
+<grade verdict="correct" score="1">"it's 1 when an odd number of the inputs are 1" is the whole specification of the sum bit: the low bit of a count is its parity.</grade>
+
+Now find the gate. XOR of two bits is 1 exactly when they differ, and for two bits that means exactly one of them is 1: an odd count. So $a \oplus b$ reports whether the number of ones in $a$ and $b$ is odd. A second XOR with $c$ leaves that answer alone when $c = 0$ and flips it when $c = 1$, and one more 1 is exactly what turns an odd count into an even one and back. The sum bit is therefore $a \oplus b \oplus c$, reached from the counting argument and not from a memorised table.
+
+<note>Full adder sum bit: $s = a \oplus b \oplus c$. It is the low bit of the count of ones among the three inputs, so it is 1 when an odd number of them are 1. Each XOR brings one more input into the parity.</note>
+
+<ask type="predict">The carry out is the high bit of the count. For which counts is it 1, and why can no arrangement of XOR gates alone produce it from $a$, $b$ and $c$?</ask>
+@@ verify
+from itertools import product, combinations
+rows = list(product((0, 1), repeat=3))
+# sum bit = low bit of the count = odd number of ones = a ^ b ^ c
+for a, b, c in rows:
+    n = a + b + c
+    assert (n & 1) == (n % 2 == 1) == (a ^ b ^ c)
+    # the second XOR leaves a ^ b alone when c is 0 and flips it when c is 1
+    assert ((a ^ b) ^ c) == ((a ^ b) if c == 0 else 1 - (a ^ b))
+assert sorted({a + b + c for a, b, c in rows if (a + b + c) & 1}) == [1, 3]
+assert [(a ^ b, (a + b) % 2) for a, b in product((0, 1), repeat=2)] == [(0, 0), (1, 1), (1, 1), (0, 0)]
+# the carry out is 1 for counts 2 and 3
+carry = {r: (sum(r) >> 1) for r in rows}
+assert sorted({sum(r) for r in rows if carry[r]}) == [2, 3]
+# XOR gates alone compute the XOR of some subset of the inputs (optionally with a constant): none equals the carry
+found = False
+for k in range(4):
+    for subset in combinations(range(3), k):
+        for const in (0, 1):
+            f = {r: (sum(r[i] for i in subset) + const) % 2 for r in rows}
+            found = found or f == carry
+assert not found
+
+@@@@ why-gray-second-half-order
+situation: why
+topic: Gray code
+options: {"why":true}
+voice: confused
+level: medium
+expect: {"verdict":"wrong","accept":["partial"],"names":["join","two bits"],"must":["010 to 100"],"askMustNot":["\\b110\\b","revers","backwards","mirror"],"askTypes":["predict","explain","short"]}
+@@ tutor
+You have the 2-bit Gray code: 00, 01, 11, 10. Rather than memorise the 3-bit one, build it. Eight patterns are needed, and the 2-bit list can supply the last two bits twice over: once behind a leading 0 and once behind a leading 1. The first half is then 000, 001, 011, 010.
+
+<ask type="predict">In what order should the four patterns with a leading 1 follow, so that every step still changes exactly one bit? Say what made you choose it.</ask>
+@@ learner answer unsure
+the same order again i think?? 100, 101, 111, 110. the last two bits already change one at a time in that order so putting a 1 in front shouldnt break anything
+@@ reply
+<grade verdict="wrong" score="0.3">"the last two bits already change one at a time in that order" is true inside your second half: 100, 101, 111, 110 has one change per step. The step it leaves out is the join, from the last pattern of the first half to the first of yours: 010 to 100 changes two bits.</grade>
+
+Look at what the join is forced to do. Whatever order you pick, the leading bit goes from 0 to 1 there, and that already spends the one change the step is allowed.
+
+<card>When a Gray sequence is built from two halves, which step needs checking besides the steps inside each half? :: The join between the halves, and the wrap from the last pattern to the first. Every adjacent pair must differ in exactly one bit.</card>
+
+<note>A Gray sequence has to hold at every step, including the join between two sub-lists and the wrap-around: adjacent patterns differ in exactly one bit.</note>
+
+<ask type="predict">Since the leading bit must change at the join, what has to be true of the other two bits across it? Use that to say which pattern the second half must begin with.</ask>
+@@ verify
+flips = lambda a, b: bin(int(a, 2) ^ int(b, 2)).count('1')
+g2 = ['00', '01', '11', '10']
+assert all(flips(g2[i], g2[i + 1]) == 1 for i in range(3))
+first = ['0' + g for g in g2]
+assert ', '.join(first) == '000, 001, 011, 010' and ', '.join(first) in tutor[0]
+theirs = ['1' + g for g in g2]
+assert ', '.join(theirs) == '100, 101, 111, 110' and ', '.join(theirs) in learner
+# inside their half every step is one change; the join is two
+assert all(flips(theirs[i], theirs[i + 1]) == 1 for i in range(3))
+assert flips(first[-1], theirs[0]) == 2 and (first[-1], theirs[0]) == ('010', '100')
+# the answer being led to: the second half starts with 110 and runs in reverse order
+second = ['1' + g for g in reversed(g2)]
+seq = first + second
+assert second[0] == '110' and all(flips(seq[i], seq[(i + 1) % 8]) == 1 for i in range(8))
+assert '110' not in reply.replace('100, 101, 111, 110', '')
+
+@@@@ why-carry-lookahead-generate
+situation: why
+topic: Carry-lookahead adders
+options: {"why":true}
+voice: plain
+level: hard
+expect: {"must":["generates","whether the carry in"],"askMustNot":["propagat","passes it on","pass(es)? (it|the carry) (on|through|along)","equals the carry in"],"need":["note"],"askTypes":["predict","explain","short"]}
+@@ tutor
+In a ripple-carry adder each column has to wait for the carry from the column below it, so the top bit of a 32-bit sum is not settled until a carry has had time to pass through all 32 columns. Faster gates inside each column do not change that, because the waiting is in the chain and not in the column. The way out began with a different question: how much can a column say about its carry out from its own two bits, $a$ and $b$, before any carry in has arrived.
+
+<note>Ripple-carry delay grows with the width: the carry into the top column has passed through every column below it.</note>
+
+<continue/>
+@@ learner goon
+@@ reply
+Take the columns one kind at a time. If $a = 1$ and $b = 1$, the column's count is already 2 before any carry in is added, so its carry out is 1 whether the carry in turns out to be 0 or 1. That column does not need to wait: it generates a carry by itself. If $a = 0$ and $b = 0$, the count can be at most 1 even with a carry in, so the carry out is 0, again with no waiting.
+
+<note>Generate: a column with $a = 1$ and $b = 1$ has a carry out of 1 whatever its carry in, so $g = a \land b$. A column with $a = b = 0$ has a carry out of 0 whatever its carry in.</note>
+
+<ask type="predict">That leaves the columns where exactly one of $a$ and $b$ is 1. What is their carry out when the carry in is 0, and when it is 1? Then say in your own words what such a column does with an incoming carry.</ask>
+@@ verify
+cout = lambda a, b, c: (a + b + c) >> 1
+# a = b = 1: count already 2, carry out 1 either way
+assert 1 + 1 == 2 and [cout(1, 1, c) for c in (0, 1)] == [1, 1]
+# a = b = 0: count at most 1, carry out 0 either way
+assert max(0 + 0 + c for c in (0, 1)) == 1 and [cout(0, 0, c) for c in (0, 1)] == [0, 0]
+# the case asked about: exactly one of a, b is 1 -> carry out equals carry in
+for a, b in ((0, 1), (1, 0)):
+    assert [cout(a, b, c) for c in (0, 1)] == [0, 1]
+# g = a AND b is exactly "carry out is 1 for both carry ins"
+for a in (0, 1):
+    for b in (0, 1):
+        assert (a & b) == int(all(cout(a, b, c) for c in (0, 1)))
+
+@@@@ hands-on-c-q16-multiply-overflow
+situation: hands-on
+topic: Fixed-point arithmetic
+options: {"strategy":"code"}
+voice: confused
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["32 bits","overflow"],"must":["16106127360","3\\.750000","2147483647"],"askMustNot":["\\* 65536\\) */","<< 16\\) */","int64_t\\) *a"],"setsProblem":true,"askTypes":["code"],"need":["note"]}
+@@ tutor
+Q16.16 keeps 16 fraction bits in an `int32_t`, so the stored integer is the value times 65536. Addition is plain integer addition:
+
+```c
+#include <stdio.h>
+#include <stdint.h>
+
+int main(void) {
+    int32_t a = (int32_t)(2.5 * 65536);
+    int32_t b = (int32_t)(1.5 * 65536);
+    int32_t sum = a + b;
+    printf("%d %d %d\n", a, b, sum);
+    printf("%f\n", sum / 65536.0);
+    return 0;
+}
+```
+
+```
+163840 98304 262144
+4.000000
+```
+
+<solution>int32_t q_mul(int32_t a, int32_t b) { return (int32_t)(((int64_t)a * b) >> 16); } The raw product carries the scale twice, so it is shifted right by 16, and it has to be formed in 64 bits because 163840 × 98304 does not fit in 32. The program then prints 3.750000.</solution>
+
+<ask type="code" lang="c">Add `int32_t q_mul(int32_t a, int32_t b)` that multiplies two Q16.16 numbers, and print `q_mul(a, b) / 65536.0` for the same `a` and `b`. It should print 3.750000.</ask>
+@@ learner answer unsure
+```c
+#include <stdio.h>
+#include <stdint.h>
+
+int32_t q_mul(int32_t a, int32_t b) { return (a * b) >> 16; }
+
+int main(void) {
+    int32_t a = (int32_t)(2.5 * 65536), b = (int32_t)(1.5 * 65536);
+    printf("%f\n", q_mul(a, b) / 65536.0);
+    return 0;
+}
+```
+it prints -0.250000 and a line saying "runtime error: signed integer overflow". i shifted by 16 like the scale says so i dont get whats wrong
+@@ reply
+<grade verdict="partial" score="0.5">The shift is right: `>> 16` removes the extra factor of 65536. The part that fails is `(a * b)`: both operands are `int32_t`, so the product is formed in 32 bits, and 163840 × 98304 = 16106127360 is far above the largest `int32_t`, 2147483647. That is the "signed integer overflow" in the message. It is undefined behaviour, and -0.250000 is only what happened to be left.</grade>
+
+Form the product in 64 bits, shift, then narrow:
+
+```c
+#include <stdio.h>
+#include <stdint.h>
+
+int32_t q_mul(int32_t a, int32_t b) {
+    return (int32_t)(((int64_t)a * b) >> 16);
+}
+
+int main(void) {
+    int32_t a = (int32_t)(2.5 * 65536), b = (int32_t)(1.5 * 65536);
+    printf("%f\n", q_mul(a, b) / 65536.0);
+    return 0;
+}
+```
+
+```
+3.750000
+```
+
+<card>Why must a Q16.16 multiply widen to 64 bits before multiplying? :: The raw product of two 32-bit stored integers can need up to 64 bits. Formed in int32_t it overflows, which is undefined behaviour, before the shift can bring it back into range.</card>
+
+<note>Q16.16 multiply in C: `(int32_t)(((int64_t)a * b) >> 16)`. Cast one operand to `int64_t` before the `*`; casting the product afterwards is too late, because the overflow has already happened.</note>
+
+<solution>int32_t q_div(int32_t a, int32_t b) { return (int32_t)(((int64_t)a * 65536) / b); } Dividing two stored integers cancels the scale, so the dividend is scaled up by 65536 first, in 64 bits, and before the division so that no fraction bits are lost. q_div(q_mul(a, b), b) / 65536.0 prints 2.500000.</solution>
+
+<ask type="code" lang="c">Add `int32_t q_div(int32_t a, int32_t b)` for Q16.16 and print `q_div(q_mul(a, b), b) / 65536.0`, which should give 2.500000. Decide which operand has to be rescaled, and whether that happens before or after the division.</ask>
+@@ verify
+# the learner's program: the sanitiser reports the overflow and it prints what they say
+out, err, cerr, code = run_c_full(block(learner, 'c'), 'c')
+assert code == 0 and not cerr.strip(), cerr
+assert 'signed integer overflow' in err and out.strip() == '-0.250000', (out, err)
+# the numbers in the grade
+a, b = int(2.5 * 65536), int(1.5 * 65536)
+assert (a, b, a + b) == (163840, 98304, 262144) and a * b == 16106127360 > 2**31 - 1 == 2147483647
+assert (a * b) >> 16 == 245760 and 245760 / 65536 == 3.75
+# the reference solution to the task set
+ref = r'''
+#include <stdio.h>
+#include <stdint.h>
+int32_t q_mul(int32_t a, int32_t b) { return (int32_t)(((int64_t)a * b) >> 16); }
+int32_t q_div(int32_t a, int32_t b) { return (int32_t)(((int64_t)a * 65536) / b); }
+int main(void) {
+    int32_t a = (int32_t)(2.5 * 65536), b = (int32_t)(1.5 * 65536);
+    printf("%f\n", q_div(q_mul(a, b), b) / 65536.0);
+    return 0;
+}
+'''
+o2, e2, c2, rc = run_c_full(ref, 'c')
+assert rc == 0 and not c2.strip() and not e2.strip() and o2.strip() == '2.500000', (o2, e2, c2)
+assert 'q_div' in solution(reply) and 'int64_t)a * 65536' not in visible(reply)
+
+@@@@ hands-on-c-inf-and-nan-explained
+situation: hands-on
+topic: Floating-point special values
+options: {"strategy":"code"}
+voice: wordy
+level: easy
+expect: {"ends":"continue","must":["NaN","inf","not a number"],"need":["note"],"forbid":["grade"]}
+@@ tutor
+<ask type="predict">In C, with `double zero = 0.0;`, what does `printf("%f\n", 1.0 / zero);` do: crash, print an error value, or something else?</ask>
+@@ learner question
+I honestly don't know what happens there, I'd have guessed a crash like an integer divide by zero. Before I write anything, can you just explain what inf and nan actually are and where they come from? I keep seeing them in training logs and I've never looked at them properly.
+@@ reply
+No crash: by default IEEE 754 arithmetic never stops the program. It returns one of two kinds of special value instead.
+
+```c
+#include <stdio.h>
+#include <math.h>
+
+int main(void) {
+    double zero = 0.0;
+    double inf = 1.0 / zero;
+    double bad = zero / zero;
+    printf("%f %f\n", inf, -inf);
+    printf("%d\n", inf > 1e308);
+    printf("%d %d\n", isnan(inf - inf), isnan(bad));
+    return 0;
+}
+```
+
+```
+inf -inf
+1
+1 1
+```
+
+Infinity is the result when the true answer is unbounded or too large to represent, such as a non-zero number divided by zero. It carries a sign and compares greater than every finite double. NaN, "not a number", is the result of an operation with no meaningful answer: 0/0, or infinity minus infinity. Adding, subtracting, multiplying or dividing with a NaN operand gives NaN again, which is why one bad value in a training step turns the whole loss into NaN. Integer division by zero is a different matter: C leaves it undefined, and on x86 it traps.
+
+<note>Infinity: from overflow, or x / 0 with x ≠ 0; signed; greater than every finite value. NaN: from an invalid operation such as 0/0 or inf − inf; +, −, × and ÷ with a NaN operand give NaN. Neither stops the program.</note>
+
+<continue/>
+@@ verify
+out = run_c(block(reply, 'c'))
+assert out.strip().split('\n') == ['inf -inf', '1', '1 1'], out
+# the statements in the prose
+import math
+inf, nan = math.inf, math.nan
+assert inf > 1.7976931348623157e308 and -inf < -1.7976931348623157e308
+assert math.isnan(inf - inf) and all(math.isnan(v) for v in (nan + 1.0, nan - 1.0, nan * 2.0, nan / 2.0, 1.0 / nan))
+assert 1e308 * 10 == inf
+src = r'''
+#include <stdio.h>
+#include <math.h>
+int main(void) {
+    double zero = 0.0, bad = zero / zero, three = 3.0;
+    printf("%d %d %d %d\n", isnan(bad + three) != 0, isnan(bad - three) != 0, isnan(bad * three) != 0, isnan(three / bad) != 0);
+    return 0;
+}
+'''
+assert run_c(src).strip() == '1 1 1 1'
+
+@@@@ hands-on-python-gray-inverse
+situation: hands-on
+topic: Gray code
+options: {"strategy":"code"}
+voice: terse
+level: medium
+expect: {"verdict":"correct","must":["\\[1, 2, 1, 3, 1, 2, 1\\]"],"askMustNot":["\\[1, 1, 1","all ones","% 8","every step is 1"],"setsProblem":true,"askTypes":["code"]}
+@@ tutor
+The binary-reflected Gray code of `n` is `n ^ (n >> 1)`: each Gray bit is the XOR of two neighbouring bits of `n`.
+
+```python
+for n in range(8):
+    print(n, format(n ^ (n >> 1), "03b"))
+```
+
+```
+0 000
+1 001
+2 011
+3 010
+4 110
+5 111
+6 101
+7 100
+```
+
+<solution>
+def from_gray(g):
+    n = 0
+    while g:
+        n ^= g
+        g >>= 1
+    return n
+Bit i of n is the XOR of the Gray bits from i upwards, so XOR together g, g >> 1, g >> 2 and so on. The round trip holds for every n from 0 to 255, so the program prints True.
+</solution>
+<check lang="python">
+def from_gray(g):
+    n = 0
+    while g:
+        n ^= g
+        g >>= 1
+    return n
+assert all(from_gray(n ^ (n >> 1)) == n for n in range(256))
+</check>
+
+<ask type="code" lang="python">Write `from_gray(g)` that turns a Gray code back into the ordinary integer, and print whether `from_gray(n ^ (n >> 1)) == n` holds for every `n` from 0 to 255.</ask>
+@@ learner answer sure
+```python
+def from_gray(g):
+    n = g
+    g >>= 1
+    while g:
+        n ^= g
+        g >>= 1
+    return n
+
+print(all(from_gray(n ^ (n >> 1)) == n for n in range(256)))
+```
+True
+@@ reply
+<grade verdict="correct" score="1">It prints True, and the loop of `n ^= g` and `g >>= 1` is the right inverse: it XORs together `g`, `g >> 1`, `g >> 2` and so on, which makes bit i of `n` the XOR of every Gray bit from i upwards.</grade>
+
+Now measure the property the code exists for. This counts the bits that differ between neighbouring values in plain binary:
+
+```python
+def flips(a, b):
+    return bin(a ^ b).count("1")
+
+print([flips(n, n + 1) for n in range(7)])
+```
+
+```
+[1, 2, 1, 3, 1, 2, 1]
+```
+
+<solution>
+gray = [n ^ (n >> 1) for n in range(8)]
+print([flips(gray[i], gray[(i + 1) % 8]) for i in range(8)])
+It prints [1, 1, 1, 1, 1, 1, 1, 1]: one bit changes at every step, including the wrap from 100 back to 000.
+</solution>
+<check lang="python">
+def flips(a, b):
+    return bin(a ^ b).count("1")
+gray = [n ^ (n >> 1) for n in range(8)]
+assert [flips(gray[i], gray[(i + 1) % 8]) for i in range(8)] == [1] * 8
+</check>
+
+<ask type="code" lang="python">Change it to print the flips between consecutive Gray codes of 0 to 7, including the step from the code of 7 back to the code of 0. Decide what list you expect before you run it.</ask>
+@@ verify
+# the learner's program prints True
+assert run_py(block(learner, 'python')).strip() == 'True'
+# why it is the inverse: bit i of n is the XOR of Gray bits i and above
+for n in range(256):
+    g = n ^ (n >> 1)
+    for i in range(8):
+        x = 0
+        for j in range(i, 9):
+            x ^= (g >> j) & 1
+        assert x == (n >> i) & 1
+# the snippet in the reply and the task's reference answer
+assert run_py(block(reply, 'python')).strip() == '[1, 2, 1, 3, 1, 2, 1]'
+ref = block(reply, 'python').split('print')[0] + 'gray = [n ^ (n >> 1) for n in range(8)]\nprint([flips(gray[i], gray[(i + 1) % 8]) for i in range(8)])\n'
+assert run_py(ref).strip() == '[1, 1, 1, 1, 1, 1, 1, 1]'
+assert '[1, 1, 1, 1' not in visible(reply)
+assert format(7 ^ (7 >> 1), '03b') == '100' and format(0, '03b') == '000'
+
+@@@@ summary-mux-and-decoder
+situation: summary
+topic: Multiplexers and decoders
+voice: overconfident
+level: medium
+expect: {"verdict":"correct","must":["truth table","d_3","OR"]}
+@@ tutor
+**Problem 3 · harder**
+
+A 4-to-1 multiplexer has select inputs $s_1 s_0$ and data inputs $d_0$ to $d_3$. It outputs $d_k$, where $k$ is the number $s_1 s_0$ read in binary. Connect $a$ to $s_1$ and $b$ to $s_0$. Which constants on $d_0$, $d_1$, $d_2$ and $d_3$ make the output $a \oplus b$?
+
+<solution>The data inputs hold the truth table of the function in the order ab = 00, 01, 10, 11. XOR gives 0, 1, 1, 0, so d0 = 0, d1 = 1, d2 = 1, d3 = 0.</solution>
+<check lang="python">
+assert [a ^ b for a in (0, 1) for b in (0, 1)] == [0, 1, 1, 0]
+</check>
+
+<ask type="problem">The four constants in order, d0 to d3, with your reasoning.</ask>
+@@ learner answer sure
+d0 = 0, d1 = 1, d2 = 1, d3 = 1. Output has to be 1 whenever a or b is 1, and only the 00 case has neither. Easy.
+@@ tutor
+<grade verdict="partial" score="0.5">d0, d1 and d2 are right. "1 whenever a or b is 1" describes OR, not XOR: with $a = b = 1$ the select value is 11, the output is $d_3$, and $1 \oplus 1 = 0$, so $d_3 = 0$.</grade>
+
+<card>How do you make a 4-to-1 multiplexer compute a function of two inputs? :: Put the inputs on the select lines and the function's truth table on the data inputs: d_k is the output for the input pair that reads as k. For XOR: 0, 1, 1, 0.</card>
+
+<note>A $2^n$-to-1 multiplexer computes any function of $n$ inputs: the inputs drive the select lines and the data inputs hold the truth table, one row each. XOR on a 4-to-1 multiplexer: $d_0, d_1, d_2, d_3 = 0, 1, 1, 0$.</note>
+
+**Problem 4 · mixed**
+
+A 3-to-8 decoder has inputs $a_2 a_1 a_0$ and outputs $y_0$ to $y_7$. For the input 101, which outputs are 1? Then say how many outputs are 1 for an arbitrary input.
+
+<solution>101 is 5, so only y5 is 1. For any input exactly one output is 1: the one whose number is the input read in binary.</solution>
+<check lang="python">
+assert int('101', 2) == 5
+for k in range(8):
+    assert sum(int(k == j) for j in range(8)) == 1
+</check>
+
+<ask type="problem">The outputs that are 1 for input 101, and how many are 1 in general.</ask>
+@@ learner answer sure
+y5, because 101 is 5. And it's always exactly one output, that's the whole point of a decoder, one line per input number.
+@@ reply
+<grade verdict="correct" score="1">"y5, because 101 is 5" and "always exactly one output" are both right: a decoder turns an $n$-bit number into a choice of one line among $2^n$.</grade>
+
+<summary>**What you learned:** a multiplexer passes on the data input numbered by its select lines; a decoder raises the one output numbered by its input; and a $2^n$-to-1 multiplexer can compute any function of $n$ inputs by holding its truth table on the data inputs.
+
+**Still shaky:** filling in that truth table row by row. For XOR you set $d_3 = 1$ on the reasoning "1 whenever a or b is 1", which is OR; the row $a = b = 1$ was not worked out separately. The card for this is in your deck.
+
+**Next:** build a 4-to-1 multiplexer from a 2-to-4 decoder, four AND gates and one OR gate, which ties the two components together. After that, flip-flops and registers.</summary>
+@@ verify
+xor = [a ^ b for a in (0, 1) for b in (0, 1)]
+orr = [a | b for a in (0, 1) for b in (0, 1)]
+# the right constants, and the learner's, which are the OR table: they differ only at d3
+assert xor == [0, 1, 1, 0] and orr == [0, 1, 1, 1]
+assert [k for k in range(4) if xor[k] != orr[k]] == [3]
+assert 'd0 = 0, d1 = 1, d2 = 1, d3 = 1' in history[1]['learner']['answer']
+# the multiplexer wiring: a on s1, b on s0 selects d_(2a + b)
+for a in (0, 1):
+    for b in (0, 1):
+        assert xor[2 * a + b] == a ^ b
+# the decoder
+assert int('101', 2) == 5 and 2**3 == 8
+# the construction named under Next: a 2-to-4 decoder, four ANDs and an OR make a 4-to-1 multiplexer
+for s in range(4):
+    for d in range(16):
+        data = [(d >> k) & 1 for k in range(4)]
+        onehot = [int(s == k) for k in range(4)]
+        assert int(any(onehot[k] & data[k] for k in range(4))) == data[s]
+
+@@@@ summary-quiz-riscv-offsets
+situation: summary
+topic: RISC-V assembly basics
+mode: quiz
+options: {"length":3}
+voice: typos
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["scaled","byte"],"must":["0x1008","2 of 3"]}
+@@ tutor
+**Question 1 of 3**
+
+<ask type="short">In RV32I, what value is in `x5` after `addi x5, x0, 12`, and what is special about `x0`?</ask>
+@@ learner answer sure
+12. x0 always reads as zero so its 0 + 12
+@@ tutor
+<grade verdict="correct" score="1">"x0 always reads as zero" is the point: `addi` adds the immediate 12 to 0, which is how RISC-V loads a small constant.</grade>
+
+**Question 2 of 3**
+
+<ask type="short">With `x5` holding 12, what does `slli x6, x5, 3` put in `x6`, and which multiplication is that?</ask>
+@@ learner answer sure
+96, shifting left by 3 is times 8
+@@ tutor
+<grade verdict="correct" score="1">"shifting left by 3 is times 8" is right: 12 × 8 = 96.</grade>
+
+**Question 3 of 3**
+
+<ask type="short">Suppose `x6` holds 0x1000. Which address does `lw x7, 8(x6)` read from, and how many bytes does it load?</ask>
+@@ learner answer sure
+it loads 4 bytes becuase lw is load word. adress is 0x1020, the 8 is an index so its scaled by the word size, 0x1000 + 8*4
+@@ reply
+<grade verdict="partial" score="0.5">"it loads 4 bytes" is right. "the 8 is an index so its scaled by the word size" is not: the offset in `8(x6)` is a count of bytes, added to the base as it stands, so the address is 0x1000 + 8 = 0x1008, not 0x1020.</grade>
+
+<card>In RISC-V `lw x7, 8(x6)`, how is the address formed? :: Base register plus the offset in bytes, with no scaling: x6 + 8. To index an array of words, the code shifts the index left by 2 itself (slli) before adding it to the base.</card>
+
+<summary>**Score:** 2 of 3 fully right, and half of the third.
+
+**Strengths:** the zero register and loading a constant with `addi`; reading a left shift as multiplication by a power of two.
+
+**Misconception to fix:** you treated the offset in `8(x6)` as an element index scaled by the word size. It is in bytes and is never scaled; any scaling is done by an explicit instruction beforehand.
+
+**Review next:** base-plus-offset addressing on an array of words. Compute the address of element `i` with `slli` by 2 and `add`, then load it with `lw` and offset 0. Then do the same with `lb`, where an element is one byte and no shift is needed.</summary>
+@@ verify
+# question 1 and 2
+assert 0 + 12 == 12 and 12 << 3 == 96 == 12 * 8
+# question 3: the right address and the learner's
+assert 0x1000 + 8 == 0x1008 and 0x1000 + 8 * 4 == 0x1020
+assert '0x1020' in learner
+# the review item: element i of a word array is at base + (i << 2)
+assert all((i << 2) == i * 4 for i in range(64))
+# the score
+marks = ['correct', 'correct', 'partial']
+assert marks.count('correct') == 2 and len(marks) == 3

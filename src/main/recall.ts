@@ -6,7 +6,7 @@
  */
 import { join } from 'path'
 import type { LessonRecord } from '@shared/lessonLog'
-import { digestLesson, type LessonDigest } from '@shared/lessonMemory'
+import { digestLesson, recallDueNote, type LessonDigest } from '@shared/lessonMemory'
 import { noteRecallReview } from './knowledge'
 import { tideCore } from './native'
 import { privatePath } from './projects'
@@ -86,12 +86,7 @@ export function recallNote(topic: string): string {
   const due = recall()?.due(topic, Date.now(), 2, null) ?? []
   if (!due.length) return ''
   opened.set(key(topic), { id: due[0].id, at: Date.now() })
-  const times = (i: RecallItem) => (i.reviews ? `asked ${i.reviews} time${i.reviews === 1 ? '' : 's'} since, missed ${i.lapses}` : 'not asked again yet')
-  return [
-    'Due for recall today (questions this student missed or couldn’t answer before, brought back on a schedule):',
-    ...due.map((i, n) => `${n + 1}. "${i.prompt}" (from "${i.topic}"; ${times(i)})`),
-    'Your opening question is the first of these, in these words, before anything else, in an <ask> tag. When they answer, mark it with a <grade> tag (correct, partial or wrong) and one line of feedback, then begin the lesson. Don’t give the answer away while asking.'
-  ].join('\n')
+  return recallDueNote(due)
 }
 
 export const recallStats = () => recall()?.stats(Date.now()) ?? { total: 0, due: 0, settled: 0 }

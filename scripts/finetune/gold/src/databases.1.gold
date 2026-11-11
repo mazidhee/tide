@@ -1,0 +1,276 @@
+@@@@ open-mvcc
+situation: open
+topic: MVCC (multi-version concurrency control)
+voice: plain
+level: medium
+expect: {"must":["Postgres"],"askMustNot":["snapshot","the old (version|value)","neither"]}
+noverify: an opening; it asks which row version a scan returns and states no result
+@@ reply
+**Why this matters**
+
+Multi-version concurrency control is how Postgres, MySQL's InnoDB and Oracle let readers and writers work on the same rows without blocking each other: an update writes a new version of the row and leaves the old one in place for the transactions that still need it. It is the reason a long report does not freeze a busy orders table. It is also the reason those databases need clean-up work (VACUUM in Postgres, purging the undo log in InnoDB) and grow when a transaction is left open for hours. Taking a consistent backup of a live database relies on the same mechanism.
+
+<ask type="predict">T1 starts a SELECT that scans a large orders table. Half-way through, T2 updates a row that T1's scan has not reached yet, and commits. Under MVCC, which version of that row does T1's scan return, and did either transaction have to wait for the other? Say why you expect that.</ask>
+
+@@@@ open-quiz-having-where
+situation: open
+topic: HAVING versus WHERE
+mode: quiz
+options: {"length":8}
+voice: plain
+level: easy
+expect: {"must":["Question 1 of 8"],"askTypes":["choice"],"forbid":["solution"]}
+@@ reply
+**Question 1 of 8**
+
+<ask type="choice" options="segment test in WHERE, count test in HAVING|segment test in HAVING, count test in WHERE|both tests in WHERE, joined with AND|both tests in HAVING, joined with AND">A query on the lab's customers table groups by country and must return each country that has more than 20 customers in the consumer segment. It needs two tests: segment = 'consumer' and COUNT(*) above 20. Where does each test belong?</ask>
+@@ verify
+# the first option is the right one: it runs and returns three countries
+right = lab("SELECT country FROM customers WHERE segment = 'consumer' GROUP BY country HAVING COUNT(*) > 20 ORDER BY country")
+assert [r[0] for r in right] == ['Germany', 'United Kingdom', 'United States']
+# a count test in WHERE is an error
+import sqlite3
+for q in ["SELECT country FROM customers WHERE COUNT(*) > 20 GROUP BY country HAVING segment = 'consumer'",
+          "SELECT country FROM customers WHERE segment = 'consumer' AND COUNT(*) > 20 GROUP BY country"]:
+    try:
+        lab(q); assert False, 'should fail'
+    except sqlite3.OperationalError as e:
+        assert 'misuse of aggregate' in str(e)
+# both tests in HAVING runs in SQLite but counts every segment, so it is a different (wrong) answer
+both = lab("SELECT country FROM customers GROUP BY country HAVING segment = 'consumer' AND COUNT(*) > 20 ORDER BY country")
+assert [r[0] for r in both] != [r[0] for r in right]
+import re
+opts = re.search(r'options="([^"]*)"', reply).group(1).split('|')
+assert len(opts) == 4 and opts[0].startswith('segment test in WHERE')
+
+@@@@ open-refresh-inner-left-join
+situation: open
+topic: Inner joins and left joins
+options: {"refresh":true}
+voice: plain
+level: easy
+expect: {"setsProblem":true,"askTypes":["problem"],"must":["2,495","260"],"askMustNot":["2,?535","\\b40\\b"],"mustNot":["Why this matters"]}
+@@ reply
+**Problem 1**
+
+The lab's customers table has 300 rows and orders has 2,495. Every order belongs to exactly one customer, and 260 of the customers have at least one order.
+
+```sql
+SELECT COUNT(*) FROM customers c JOIN orders o ON o.customer_id = c.customer_id;
+SELECT COUNT(*) FROM customers c LEFT JOIN orders o ON o.customer_id = c.customer_id;
+```
+
+How many rows does each query count?
+
+<solution>The inner join returns one row per matching pair: 2,495, because every order matches exactly one customer. The left join keeps those rows and adds one row, with NULL in the orders columns, for each of the 300 − 260 = 40 customers who have no order: 2,495 + 40 = 2,535.</solution>
+<check lang="python">
+orders, customers, with_orders = 2495, 300, 260
+inner = orders
+left = inner + (customers - with_orders)
+assert (inner, left) == (2495, 2535)
+</check>
+
+<ask type="problem">Both counts, worked out before you run the block, with your reasoning for each.</ask>
+@@ verify
+assert lab("SELECT COUNT(*) FROM customers")[0][0] == 300
+assert lab("SELECT COUNT(*) FROM orders")[0][0] == 2495
+assert lab("SELECT COUNT(DISTINCT customer_id) FROM orders")[0][0] == 260
+# every order has a customer
+assert lab("SELECT COUNT(*) FROM orders o WHERE NOT EXISTS (SELECT 1 FROM customers c WHERE c.customer_id = o.customer_id)")[0][0] == 0
+qs = [s.strip() for s in block(reply, 'sql').split(';') if s.strip()]
+assert lab(qs[0])[0][0] == 2495 and lab(qs[1])[0][0] == 2535
+assert '2,535' in solution(reply) and '2,535' not in visible(reply) and '2535' not in visible(reply)
+
+@@@@ open-prior-covering-index
+situation: open-prior
+topic: Covering indexes and EXPLAIN QUERY PLAN in SQLite
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Covering indexes and EXPLAIN QUERY PLAN in SQLite","daysAgo":4,"finished":false,"plan":["Reading SEARCH and SCAN in a plan","What makes an index covering","Designing an index for one query"],"right":3,"partly":1,"wrong":1,"missed":["Why does SELECT * keep an index on customer_id from being a covering index for the query?"],"open":"Which columns would an index need so that it covers a filter on customer_id that returns order_date?"}]}
+expect: {"must":["orders_customer"],"askMustNot":["rowid","not in the index","table row","look ?up"]}
+@@ reply
+**Why this matters**
+
+A covering index answers a query from the index alone, with no visit to the table, and EXPLAIN QUERY PLAN is how you confirm that SQLite is doing so. It is often the cheapest large speed-up for a hot read path, and the same idea appears as index-only scans in Postgres and covering indexes in MySQL. You can already read SEARCH and SCAN in a plan; the gap last time was what the visit to the table is and when it is needed.
+
+<ask type="short">The lab has an index orders_customer on orders(customer_id). For `SELECT order_date FROM orders WHERE customer_id = 42`, SQLite finds the matching entries in that index. What does it still have to do for each entry before it can return anything, and why?</ask>
+@@ verify
+# the index exists as described, and this query is a SEARCH on it that is NOT covering
+assert lab("SELECT sql FROM sqlite_master WHERE name = 'orders_customer'")[0][0] == 'CREATE INDEX orders_customer ON orders(customer_id)'
+plan = lab("EXPLAIN QUERY PLAN SELECT order_date FROM orders WHERE customer_id = 42")[0][-1]
+assert 'USING INDEX orders_customer' in plan and 'COVERING' not in plan
+
+@@@@ open-prior-lsm-compaction
+situation: open-prior
+topic: LSM trees and compaction
+voice: plain
+level: medium
+before: {"prior":[{"topic":"LSM trees: memtables and SSTables","daysAgo":2,"finished":true,"plan":["The memtable and the flush","SSTables are sorted and immutable","The read path"],"right":4,"partly":1,"wrong":1,"missed":["Why can a read in an LSM tree have to check more than one SSTable?"]}]}
+expect: {"must":["memtable","SSTable"],"askMustNot":["newest","most recent","all three","every"]}
+noverify: an opening; nothing is computed
+@@ reply
+**Why this matters**
+
+An LSM tree turns random writes into sequential ones by collecting them in memory and flushing them as sorted files, which is why RocksDB, Cassandra and LevelDB sustain high write rates. Compaction is the background work that pays for that: it merges those files so that reads stay fast and overwritten or deleted data is finally dropped. Its settings decide a store's write amplification, space use and read latency, so it is what you tune when such a store misbehaves.
+
+This rests on memtables and SSTables from two days ago, and compaction exists because of the one point you missed there, so that comes first.
+
+<ask type="short">A key is written on Monday, overwritten on Tuesday and overwritten again on Wednesday, and each write was flushed into a different SSTable. Nothing has been merged since. When a read asks for that key, which of those files might it have to look in, and how does it decide which value to return?</ask>
+
+@@@@ open-recall-foreign-key
+situation: open-recall
+topic: Primary keys, foreign keys and constraints
+voice: plain
+level: easy
+before: {"recall":[{"prompt":"With foreign keys enforced, orders.customer_id references customers. What happens to an INSERT of an order whose customer does not exist?","topic":"Primary keys, foreign keys and constraints","reviews":2,"lapses":0}]}
+expect: {"askMustNot":["reject","fail","error","violat"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="short">With foreign keys enforced, orders.customer_id references customers. What happens to an INSERT of an order whose customer does not exist?</ask>
+
+@@@@ open-recall-two-phase-locking
+situation: open-recall
+topic: Two-phase locking
+voice: plain
+level: medium
+before: {"recall":[{"prompt":"In two-phase locking, what may a transaction no longer do once it has released a lock?","topic":"Two-phase locking","reviews":1,"lapses":1}]}
+expect: {"askMustNot":["acquire","take","new lock","shrinking"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="explain">In two-phase locking, what may a transaction no longer do once it has released a lock?</ask>
+
+@@@@ correct-ranking-functions-plan
+situation: after-correct
+topic: Ranking window functions: RANK, DENSE_RANK and ROW_NUMBER
+voice: plain
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"need":["plan","note"],"must":["Problem 1","United Kingdom"],"askMustNot":["1, 2, 2, 2, 5","1, 2, 2, 2, 3"]}
+@@ tutor
+<ask type="short">GROUP BY country gives one row per country. A window function such as COUNT(*) OVER (PARTITION BY country) also works country by country. What does the window version keep that GROUP BY throws away?</ask>
+@@ learner answer sure
+The individual rows. Group by collapses each country down to one row, but a window function leaves every row and adds the computed value alongside it.
+@@ reply
+<grade verdict="correct" score="1">"a window function leaves every row and adds the computed value alongside it" is the difference, and because the rows survive, each one can be given a position among the others.</grade>
+
+<plan>
+- Ranking functions and how they treat ties
+- PARTITION BY: ranking inside each group
+- Filtering on a rank
+</plan>
+
+The three ranking functions differ only on ties. Here countries are ranked by their number of customers:
+
+```sql
+SELECT country, COUNT(*) AS n,
+       ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC, country) AS row_num,
+       RANK()       OVER (ORDER BY COUNT(*) DESC) AS rnk,
+       DENSE_RANK() OVER (ORDER BY COUNT(*) DESC) AS dense
+FROM customers
+GROUP BY country
+ORDER BY n DESC, country
+LIMIT 4;
+```
+
+| country | n | row_num | rnk | dense |
+|---|---|---|---|---|
+| United Kingdom | 73 | 1 | 1 | 1 |
+| United States | 73 | 2 | 1 | 1 |
+| Germany | 33 | 3 | 3 | 2 |
+| France | 27 | 4 | 4 | 3 |
+
+<note>On ties in the ORDER BY: ROW_NUMBER() still counts 1, 2, 3 (add a tie-breaker column or the order among ties is arbitrary); RANK() gives ties the same number, then skips; DENSE_RANK() gives ties the same number and does not skip.</note>
+
+**Problem 1 · warm-up**
+
+Five test scores, highest first: 90, 85, 85, 85, 70. Give RANK() and DENSE_RANK() for each row, both ordered by score descending.
+
+<solution>RANK: 1, 2, 2, 2, 5 (three rows share rank 2, so ranks 3 and 4 are skipped). DENSE_RANK: 1, 2, 2, 2, 3 (no gap after the tie).</solution>
+<check lang="python">
+scores = [90, 85, 85, 85, 70]
+rank = [1 + sum(s > x for s in scores) for x in scores]
+levels = sorted(set(scores), reverse=True)
+dense = [1 + levels.index(x) for x in scores]
+assert rank == [1, 2, 2, 2, 5] and dense == [1, 2, 2, 2, 3]
+</check>
+
+<ask type="problem">The two lists of five numbers, and a line on where they differ and why.</ask>
+@@ verify
+rows = lab(block(reply, 'sql'))
+shown = table(reply)[1:]
+assert [[str(v) for v in r] for r in rows] == shown, (rows, shown)
+# SQLite agrees with the solution on the five scores
+got = sql("SELECT RANK() OVER (ORDER BY s DESC), DENSE_RANK() OVER (ORDER BY s DESC) FROM t ORDER BY s DESC", "CREATE TABLE t(s); INSERT INTO t VALUES (90),(85),(85),(85),(70);")
+assert [r[0] for r in got] == [1, 2, 2, 2, 5] and [r[1] for r in got] == [1, 2, 2, 2, 3]
+assert '1, 2, 2, 2, 5' in solution(reply) and '1, 2, 2, 2, 3' in solution(reply)
+
+@@@@ correct-exists-harder-problem
+situation: after-correct
+topic: Correlated subqueries and EXISTS
+options: {"difficulty":"hard"}
+voice: terse
+level: hard
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"must":["Problem 2"],"askMustNot":["\\b114\\b","\\b154\\b","NOT EXISTS"]}
+@@ tutor
+**Problem 1 · hard**
+
+Using the lab's customers and orders tables, count the customers who have at least one refunded order. Use EXISTS, not a join, and run it in a sql block to check.
+
+<solution>SELECT COUNT(*) FROM customers c WHERE EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id AND o.status = 'refunded'); It returns 86. The subquery is correlated through o.customer_id = c.customer_id, so it is evaluated for each customer, and EXISTS is only true or false, so a customer with several refunds still gives one row.</solution>
+
+<ask type="problem">Your query and the count it returns, with a line on what happens for a customer who has three refunded orders.</ask>
+@@ learner answer sure
+```sql
+select count(*) from customers c
+where exists (select 1 from orders o where o.customer_id = c.customer_id and o.status = 'refunded');
+```
+86. exists is true/false per customer row so 3 refunds = still one row. a join would give 3.
+@@ reply
+<grade verdict="correct" score="1">The query returns 86, and "exists is true/false per customer row so 3 refunds = still one row" is the reason no DISTINCT is needed here, where a join would need one.</grade>
+
+**Problem 2 · harder**
+
+Count the customers who have placed at least one order and whose orders are all completed: not one refunded, cancelled or processing order among them. Then remove the "at least one order" condition and run it again.
+
+<solution>SELECT COUNT(*) FROM customers c WHERE EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id) AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id AND o.status <> 'completed'); It returns 114. Without the first EXISTS it returns 154: the 40 customers with no orders at all have no order that is not completed, so NOT EXISTS is true for them. "All of X satisfy P" is written as "there is no X that fails P", and that is also true when there is no X.</solution>
+
+<ask type="problem">Your query, the two counts, and the reason the second count is larger.</ask>
+@@ verify
+# the learner's query, run as typed, gives the count they state and matches the reference
+theirs = lab(block(learner, 'sql'))[0][0]
+assert theirs == 86 and '86' in learner
+ref = lab("SELECT COUNT(*) FROM customers c WHERE EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id AND o.status = 'refunded')")[0][0]
+assert ref == theirs and '86' in solution(tutor[0]) and '86' in reply
+# their remark about a join: a join gives more rows than customers
+assert lab("SELECT COUNT(*) FROM customers c JOIN orders o ON o.customer_id = c.customer_id AND o.status = 'refunded'")[0][0] == 121 > 86
+# problem 2
+q = "SELECT COUNT(*) FROM customers c WHERE EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id) AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id AND o.status <> 'completed')"
+assert q in solution(reply)
+assert lab(q)[0][0] == 114
+assert lab("SELECT COUNT(*) FROM customers c WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id AND o.status <> 'completed')")[0][0] == 154
+assert lab("SELECT COUNT(*) FROM customers c WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.customer_id)")[0][0] == 40 == 154 - 114
+# second method: group and compare counts
+assert lab("SELECT COUNT(*) FROM (SELECT customer_id FROM orders GROUP BY customer_id HAVING SUM(status <> 'completed') = 0)")[0][0] == 114
+assert sorted(r[0] for r in lab("SELECT DISTINCT status FROM orders")) == ['cancelled', 'completed', 'processing', 'refunded']
+for n in ('114', '154'):
+    assert n in solution(reply) and n not in visible(reply)
+
+@@@@ correct-recall-replica-lag
+situation: after-correct
+topic: Replication: primary, replicas and lag
+voice: wordy
+level: medium
+before: {"recall":[{"prompt":"With asynchronous replication, why can a read from a replica miss a write the primary has already acknowledged?","topic":"Replication: primary, replicas and lag","reviews":1,"lapses":0}]}
+expect: {"verdict":"correct","heading":"Why this matters","askTypes":["short","predict","explain","choice"],"must":["replica"],"askMustNot":["read.your.(own.)?writes","stale","old (name|value)","from the primary"],"forbid":["solution","plan"]}
+noverify: conceptual; nothing is computed
+@@ tutor
+<ask type="short">With asynchronous replication, why can a read from a replica miss a write the primary has already acknowledged?</ask>
+@@ learner answer sure
+Because asynchronous means the primary doesn't wait for the replicas. It commits locally, tells the client it's done, and only afterwards ships the change to the replicas, so for a short while the replica is behind and a read sent there gets the data as it was before the write.
+@@ reply
+<grade verdict="correct" score="1">"It commits locally, tells the client it's done, and only afterwards ships the change" is the cause: the acknowledgement does not depend on any replica having the write.</grade>
+
+**Why this matters**
+
+Nearly every production database runs as a primary with replicas: Postgres streaming replication, MySQL with its binary log, managed services with read replicas. Replicas give read capacity and a standby to fail over to, and the price is lag: a replica is a slightly older copy of the primary. Bugs that appear only under load, such as a user who cannot see what they just saved, usually come from reading a lagging replica. Choosing which reads may go to a replica, and what a failover can lose, is everyday work on payment and ledger systems.
+
+<ask type="short">A user changes their display name. The write goes to the primary and is acknowledged; the page that loads next reads the profile from a replica that is a fraction of a second behind. What does the user see, and what is one way the application could make sure they see their own change?</ask>

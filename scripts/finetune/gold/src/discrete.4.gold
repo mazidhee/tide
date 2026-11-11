@@ -1,0 +1,504 @@
+@@@@ why-contrapositive-same-breaking-case
+situation: why
+topic: Implication and the contrapositive
+options: {"why":true}
+voice: wordy
+level: easy
+expect: {"verdict":"correct","must":["not logged"],"askTypes":["short","predict","explain"],"askMustNot":["equivalent","same request","same case","contrapositive"]}
+@@ tutor
+Take a rule a system might enforce: "if a request is authenticated, then it is logged". Before any logic notation, look at what the rule forbids.
+
+<ask type="short">Exactly one kind of request breaks this rule. Describe it in terms of authenticated or not, logged or not.</ask>
+@@ learner answer sure
+Okay, going through the four combinations in my head. Authenticated and logged is obviously fine. Not authenticated and logged is fine too, because the rule doesn't say anything about requests that aren't authenticated, and not authenticated and not logged is fine for the same reason. So the only one that breaks it is a request that is authenticated but not logged.
+@@ reply
+<grade verdict="correct" score="1">"authenticated but not logged" is the one violation, and you are right that the other three combinations leave the rule intact: a rule of the form "if A then B" forbids A without B and nothing else.</grade>
+
+Now a second rule, written by someone else on the team: "if a request is not logged, then it is not authenticated". It looks like a different rule, about different requests. Judge it the same way, by what it forbids.
+
+<ask type="short">Which kind of request breaks the second rule? Then compare it with your answer for the first rule: can any request break one rule without breaking the other?</ask>
+@@ verify
+from itertools import product
+rule1 = lambda auth, logged: (not auth) or logged            # if authenticated then logged
+rule2 = lambda auth, logged: (not (not logged)) or (not auth)  # if not logged then not authenticated
+breaks1 = [(a, l) for a, l in product([True, False], repeat=2) if not rule1(a, l)]
+breaks2 = [(a, l) for a, l in product([True, False], repeat=2) if not rule2(a, l)]
+# one violation each, and it is the same one: authenticated and not logged
+assert breaks1 == [(True, False)] == breaks2
+assert len([1 for a, l in product([True, False], repeat=2) if rule1(a, l)]) == 3
+
+@@@@ why-tree-extra-edge-makes-cycle
+situation: why
+topic: Trees: why n vertices need n − 1 edges
+options: {"why":true}
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["connected","path"],"must":["cycle"],"askTypes":["predict","short","explain"],"askMustNot":["two (pieces|components|parts)","disconnect","falls apart"]}
+@@ tutor
+A tree is a connected graph with no cycles. Rather than quote how many edges a tree has, we will find out what forces the number. Start by trying to add to one.
+
+<ask type="predict">Take any tree on 6 vertices and add one new edge between two vertices that are not already adjacent. What must now exist in the graph, and why?</ask>
+@@ learner answer sure
+Nothing has to exist. It depends which two vertices you pick. If you join two that are far apart you just get a bigger tree with 6 edges, you only get a problem if they were close together.
+@@ reply
+<grade verdict="wrong" score="0.1">"It depends which two vertices you pick" is the step that fails. A tree is connected, so the two vertices you join, near or far, already have a path between them, and the new edge together with that path is a cycle.</grade>
+
+Distance changes only the length of the cycle. Two ends of a path on 6 vertices are as far apart as they can be, and joining them closes all 6 vertices into one ring. So a tree has no room for another edge: every further edge creates a cycle. That is one half of why the edge count is forced. The other half comes from taking an edge away.
+
+<card>Why does adding any edge to a tree create a cycle? :: A tree is connected, so the two ends of the new edge are already joined by a path; the path plus the new edge is a cycle.</card>
+
+<note>In a tree, any two vertices are joined by a path, because the tree is connected. Adding an edge between two vertices therefore closes a cycle with the path already between them: a tree has as many edges as it can hold without a cycle.</note>
+
+<ask type="predict">Now remove one edge $uv$ from a tree. Could $u$ still reach $v$ by some other route? Use the fact that the tree had no cycles, and say what your answer means for the graph that is left.</ask>
+@@ verify
+from itertools import product, combinations
+def tree_from_prufer(seq, n):
+    degree = [1] * n
+    for v in seq:
+        degree[v] += 1
+    edges = []
+    for v in seq:
+        leaf = min(u for u in range(n) if degree[u] == 1)
+        edges.append((min(leaf, v), max(leaf, v)))
+        degree[leaf] -= 1
+        degree[v] -= 1
+    u, w = [x for x in range(n) if degree[x] == 1]
+    edges.append((u, w))
+    return edges
+def components(n, edges):
+    comp = list(range(n))
+    def find(x):
+        while comp[x] != x:
+            x = comp[x]
+        return x
+    for a, b in edges:
+        comp[find(a)] = find(b)
+    return len({find(x) for x in range(n)})
+n, seen = 6, 0
+for seq in product(range(n), repeat=n - 2):          # every labelled tree on 6 vertices
+    edges = tree_from_prufer(seq, n)
+    assert len(edges) == n - 1 == 5 and components(n, edges) == 1
+    for extra in combinations(range(n), 2):
+        if extra not in edges:
+            # the ends were already connected, so the 6 edges on 6 vertices contain a cycle
+            assert components(n, edges + [extra]) == 1 and len(edges) + 1 > n - 1
+    for e in edges:
+        # removing any edge leaves exactly two pieces (the answer the question keeps back)
+        assert components(n, [f for f in edges if f != e]) == 2
+    seen += 1
+assert seen == 6**4 == 1296
+# joining the ends of a 6-vertex path gives a 6-cycle
+path = [(i, i + 1) for i in range(5)]
+ring = path + [(0, 5)]
+assert all(sum(1 for e in ring if v in e) == 2 for v in range(6)) and components(6, ring) == 1
+
+@@@@ why-strong-induction-just-explain
+situation: why
+topic: Strong induction
+options: {"why":true}
+voice: confused
+level: medium
+expect: {"ends":"continue","need":["note"],"must":["smaller","ordinary induction"],"mustNot":["\\(Tide:"]}
+noverify: conceptual; the reply explains why the strong hypothesis is legitimate and computes nothing
+@@ tutor
+We want to prove that every integer $n \ge 2$ is a product of primes. Take some $n$. If $n$ is prime there is nothing to do. Otherwise $n = ab$ with $2 \le a, b < n$.
+
+<ask type="short">Ordinary induction lets you assume the claim for $n - 1$ and nothing else. Is that enough to finish the proof for $n = ab$? Say what you would need to know, and about which numbers.</ask>
+@@ learner question
+I can see you'd need it for a and b, and those aren't n-1. But can you just explain why we're allowed to assume it for all the smaller numbers at once? That feels like assuming way more than we're entitled to.
+@@ reply
+You have the need right: the proof wants the claim for $a$ and $b$, which can be any numbers between 2 and $n - 1$. Assuming it for all smaller numbers is allowed because nothing is assumed that has not already been earned.
+
+Follow the order in which the cases get proved. $P(2)$ is proved outright. The step for $n = 3$ may use $P(2)$, which is established by then. The step for $n = 4$ may use $P(2)$ and $P(3)$, both established by then. When the argument arrives at any $n$, every smaller case has been proved at an earlier stage, so using all of them uses only known facts. Ordinary induction happens to look back one step; nothing in the logic limits it to one.
+
+To make that exact, let $Q(n)$ be the single statement "$P(m)$ holds for every $m$ from 2 to $n$". Strong induction on $P$ is ordinary induction on $Q$: the hypothesis $Q(n-1)$ is the whole list $P(2), \dots, P(n-1)$, and proving $P(n)$ from that list gives $Q(n)$. So the two methods have the same strength, and the strong one is a convenience.
+
+<note>Strong induction: prove $P(n)$ assuming $P(m)$ for every smaller $m$ (from the base value up). It is ordinary induction applied to $Q(n)$ = "$P(m)$ holds for all $m \le n$", so it assumes nothing extra: by the time the argument reaches $n$, every smaller case has been proved.</note>
+
+<continue/>
+
+@@@@ hands-on-surjections-brute-force-and-formula
+situation: hands-on
+topic: Counting surjections with itertools
+options: {"strategy":"code"}
+voice: terse
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"must":["36 36"],"askMustNot":["\\b540\\b"]}
+@@ tutor
+`itertools.product(range(n), repeat=m)` yields every function from an $m$-element set to an $n$-element set, each as the tuple of its outputs.
+
+```python
+from itertools import product
+
+functions = list(product(range(2), repeat=3))
+print(len(functions))
+print(functions[:3])
+```
+
+```
+8
+[(0, 0, 0), (0, 0, 1), (0, 1, 0)]
+```
+
+<solution>
+from itertools import product
+print(sum(1 for f in product(range(3), repeat=4) if len(set(f)) == 3))
+It prints 36.
+</solution>
+<check lang="python">
+from itertools import product
+assert sum(1 for f in product(range(3), repeat=4) if len(set(f)) == 3) == 36
+</check>
+
+<ask type="code" lang="python">Change this to count the surjective functions from a 4-element set to a 3-element set: the ones whose outputs use every element of the target. Print the count.</ask>
+@@ learner answer sure
+```python
+from itertools import product
+print(sum(set(f) == {0, 1, 2} for f in product(range(3), repeat=4)))
+```
+36
+@@ reply
+<grade verdict="correct" score="1">`set(f) == {0, 1, 2}` is exactly the test for surjective, and the program prints 36: of the 81 functions, 36 use all three outputs.</grade>
+
+Enumeration gives the number; inclusion-exclusion says where it comes from. Take all $3^4$ functions, subtract those that miss a chosen output ($2^4$ each, 3 choices), and add back those that miss two ($1^4$ each, 3 choices):
+
+```python
+from itertools import product
+from math import comb
+
+brute = sum(set(f) == {0, 1, 2} for f in product(range(3), repeat=4))
+formula = 3**4 - comb(3, 1) * 2**4 + comb(3, 2) * 1**4
+print(brute, formula)
+```
+
+```
+36 36
+```
+
+<solution>
+from itertools import product
+from math import comb
+
+def surjections(m, n):
+    return sum((-1) ** k * comb(n, k) * (n - k) ** m for k in range(n + 1))
+
+for m in range(1, 6):
+    for n in range(1, 6):
+        assert surjections(m, n) == sum(len(set(f)) == n for f in product(range(n), repeat=m))
+print(surjections(6, 3))
+It prints 540.
+</solution>
+<check lang="python">
+from itertools import product
+from math import comb
+def surjections(m, n):
+    return sum((-1) ** k * comb(n, k) * (n - k) ** m for k in range(n + 1))
+for m in range(1, 6):
+    for n in range(1, 6):
+        assert surjections(m, n) == sum(len(set(f)) == n for f in product(range(n), repeat=m))
+assert surjections(6, 3) == 540 and surjections(4, 3) == 36 and surjections(2, 3) == 0
+</check>
+
+<ask type="code" lang="python">Write `surjections(m, n)` from the general pattern $\sum_{k=0}^{n} (-1)^k \binom{n}{k} (n-k)^m$. Assert that it equals the brute-force count for every $m$ and $n$ from 1 to 5, then print `surjections(6, 3)`.</ask>
+@@ verify
+from itertools import product
+from math import comb
+# the learner's program prints what they say
+assert run_py(block(learner, 'python')).strip() == '36'
+assert 3**4 == 81 and comb(3, 1) * 2**4 == 48 and comb(3, 2) * 1**4 == 3 and 81 - 48 + 3 == 36
+assert sum(len(set(f)) == 3 for f in product(range(3), repeat=4)) == 36
+# the reference solution for the task set
+ref = solution(reply).split('It prints')[0]
+assert run_py(ref).strip() == '540'
+assert '540' not in visible(reply)
+
+@@@@ hands-on-modular-inverse-not-reduced
+situation: hands-on
+topic: The extended Euclidean algorithm in Python
+options: {"strategy":"code"}
+voice: overconfident
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["return x","% m|x % m","0 to m|range"],"must":["23 13"],"setsProblem":true,"askTypes":["code"],"askMustNot":["\\b6\\b","4 \\* inverse","b \\* inverse"]}
+@@ tutor
+The extended Euclidean algorithm returns $\gcd(a, b)$ together with integers $x$ and $y$ such that $ax + by = \gcd(a, b)$.
+
+```python
+def egcd(a, b):
+    if b == 0:
+        return a, 1, 0
+    g, x, y = egcd(b, a % b)
+    return g, y, x - (a // b) * y
+
+print(egcd(43, 15))
+```
+
+```
+(1, 7, -20)
+```
+
+<solution>
+def inverse(a, m):
+    g, x, _ = egcd(a, m)
+    if g != 1:
+        raise ValueError("no inverse")
+    return x % m
+inverse(15, 43) is 23 and inverse(7, 30) is 13.
+</solution>
+<check lang="python">
+assert pow(15, -1, 43) == 23 and pow(7, -1, 30) == 13
+</check>
+
+<ask type="code" lang="python">Using `egcd`, write `inverse(a, m)` that returns the inverse of `a` modulo `m` as a number from 0 to m − 1, and raises `ValueError` when there is none. Print `inverse(15, 43)` and `inverse(7, 30)`.</ask>
+@@ learner answer sure
+```python
+def egcd(a, b):
+    if b == 0:
+        return a, 1, 0
+    g, x, y = egcd(b, a % b)
+    return g, y, x - (a // b) * y
+
+def inverse(a, m):
+    g, x, y = egcd(a, m)
+    if g != 1:
+        raise ValueError("no inverse")
+    return x
+
+print(inverse(15, 43), inverse(7, 30))
+```
+prints -20 13. nailed it, the x from egcd IS the inverse
+@@ reply
+<grade verdict="partial" score="0.6">The gcd test and the `ValueError` are right, and $-20$ is congruent to the inverse, since $15 \times (-20) = -300 = 1 - 7 \times 43$. But `return x` hands back whatever sign `egcd` produced, and the task asked for a number from 0 to m − 1: it should be `return x % m`.</grade>
+
+In Python `%` with a positive modulus always gives a result from 0 to m − 1, so one operator fixes it:
+
+```python
+def egcd(a, b):
+    if b == 0:
+        return a, 1, 0
+    g, x, y = egcd(b, a % b)
+    return g, y, x - (a // b) * y
+
+def inverse(a, m):
+    g, x, _ = egcd(a, m)
+    if g != 1:
+        raise ValueError("no inverse")
+    return x % m
+
+print(inverse(15, 43), inverse(7, 30))
+```
+
+```
+23 13
+```
+
+The range matters as soon as the result is compared with another residue, used as a table index, or passed to code in a language whose `%` keeps the sign.
+
+<card>egcd(a, m) gives x with ax + my = 1. What must be done to x before returning it as the inverse of a mod m? :: Reduce it: x % m. The x from egcd can be negative; the inverse is reported in the range 0 to m − 1.</card>
+
+<solution>
+def solve(a, b, m):
+    return b * inverse(a, m) % m
+solve(15, 4, 43) is 4 × 23 mod 43 = 92 mod 43 = 6. Check: 15 × 6 = 90 = 2 × 43 + 4.
+</solution>
+<check lang="python">
+assert 4 * pow(15, -1, 43) % 43 == 6 and 15 * 6 % 43 == 4
+</check>
+
+<ask type="code" lang="python">Add `solve(a, b, m)` that returns the $x$ from 0 to m − 1 with $ax \equiv b \pmod m$, using your corrected `inverse`. Print `solve(15, 4, 43)` and check the result by multiplying it by 15.</ask>
+@@ verify
+# the learner's program really prints -20 13
+assert run_py(block(learner, 'python')).strip() == '-20 13'
+assert 15 * (-20) == -300 == 1 - 7 * 43 and (15 * -20) % 43 == 1
+assert -20 % 43 == 23 and 15 * 23 % 43 == 1 and 7 * 13 % 30 == 1
+# the corrected program, with solve added, as the task asks
+fixed = block(reply, 'python').replace('print(inverse(15, 43), inverse(7, 30))', '')
+ref = fixed + '''
+def solve(a, b, m):
+    return b * inverse(a, m) % m
+print(solve(15, 4, 43), 15 * solve(15, 4, 43) % 43)
+try:
+    inverse(6, 9)
+except ValueError:
+    print("no inverse")
+'''
+assert run_py(ref).split('\n')[:2] == ['6 4', 'no inverse']
+import re
+ask = re.findall(r'<ask[^>]*>([\s\S]*?)</ask>', reply)[-1]
+assert not re.search(r'\b6\b', ask)
+
+@@@@ hands-on-truth-table-de-morgan
+situation: hands-on
+topic: De Morgan's laws
+options: {"strategy":"code"}
+voice: plain
+level: easy
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"must":["True False False"],"askMustNot":["De Morgan","agree in every row|always agree|are equal"]}
+@@ tutor
+<ask type="short">How many rows does the truth table of a formula with 3 variables have, and why?</ask>
+@@ learner answer sure
+8. Each variable is true or false, and the choices are independent, so 2 x 2 x 2.
+@@ reply
+<grade verdict="correct" score="1">8 is right, for the reason you give: "2 x 2 x 2", one independent true-or-false choice per variable.</grade>
+
+`itertools.product` generates those rows, so a truth table is a loop. This one prints the table of $p \to q$, written as `(not p) or q`:
+
+```python
+from itertools import product
+
+for p, q in product([True, False], repeat=2):
+    print(p, q, (not p) or q)
+```
+
+```
+True True True
+True False False
+False True True
+False False True
+```
+
+<solution>
+from itertools import product
+
+same = True
+for p, q in product([True, False], repeat=2):
+    left = not (p and q)
+    right = (not p) or (not q)
+    print(p, q, left, right)
+    same = same and (left == right)
+print(same)
+
+The two columns are False, True, True, True in both cases, and the last line printed is True.
+</solution>
+<check lang="python">
+from itertools import product
+rows = [(not (p and q), (not p) or (not q)) for p, q in product([True, False], repeat=2)]
+assert [a for a, b in rows] == [False, True, True, True] and all(a == b for a, b in rows)
+</check>
+
+<ask type="code" lang="python">Change the loop so each row prints `p`, `q`, then `not (p and q)` and `(not p) or (not q)` side by side. After the loop, print a single True or False saying whether the two columns matched in every row.</ask>
+@@ verify
+from itertools import product
+assert len(list(product([True, False], repeat=3))) == 8 == 2 * 2 * 2
+# the table shown is the table of p -> q
+out = run_py(block(reply, 'python')).strip().split('\n')
+rows = list(product([True, False], repeat=2))
+assert out == [f'{p} {q} {(not p) or q}' for p, q in rows]
+assert [((not p) or q) for p, q in rows] == [True, False, True, True]
+# the reference solution for the task runs and ends with True
+ref = solution(reply).split('The two columns')[0]
+lines = run_py(ref).strip().split('\n')
+assert lines[-1] == 'True' and lines[0] == 'True True False False' and len(lines) == 5
+assert [l.split()[2] for l in lines[:4]] == ['False', 'True', 'True', 'True']
+
+@@@@ summary-quiz-sets-empty-set-element
+situation: summary
+topic: Sets and set operations
+mode: quiz
+options: {"length":3}
+voice: plain
+level: easy
+expect: {"verdict":"correct","must":["2 (of|out of) 3","one element"]}
+@@ tutor
+**Question 1 of 3**
+
+<ask type="short">Let $A = \{1, 2, 3, 4\}$ and $B = \{3, 4, 5, 6\}$. Write down $A \setminus B$ and $A \cap B$.</ask>
+@@ learner answer sure
+A \ B = {1, 2} and A ∩ B = {3, 4}
+@@ tutor
+<grade verdict="correct" score="1">Both right: "{1, 2}" is what is in $A$ and not in $B$, and "{3, 4}" is what the two share.</grade>
+
+**Question 2 of 3**
+
+<ask type="short">Three parts. Is $\emptyset \in \{\emptyset\}$? Is $\emptyset \subseteq \{\emptyset\}$? What is $|\{\emptyset\}|$?</ask>
+@@ learner answer sure
+No, yes, and 0. The set containing nothing is just the empty set, so it has no elements for anything to be "in".
+@@ tutor
+<grade verdict="wrong" score="0.3">The middle answer is right, since the empty set is a subset of every set. "The set containing nothing is just the empty set" is the error: $\{\emptyset\}$ contains one thing, namely the set $\emptyset$. So $\emptyset \in \{\emptyset\}$ is true and $|\{\emptyset\}| = 1$.</grade>
+
+<card>How many elements does {∅} have, and is it equal to ∅? :: One element, the empty set itself. {∅} ≠ ∅: a box holding an empty box is not empty.</card>
+
+**Question 3 of 3**
+
+<ask type="short">How many elements does the set $\{\emptyset, \{\emptyset\}\}$ have? Name each element.</ask>
+@@ learner answer sure
+2. The elements are ∅ and {∅}. A set counts as one element of another set even when it's empty itself.
+@@ reply
+<grade verdict="correct" score="1">2 is right, and "A set counts as one element of another set even when it's empty itself" is the point that was missing in the last question.</grade>
+
+<summary>**Score:** 2 of 3.
+
+**Strengths:** set difference and intersection on concrete sets were immediate, and you knew that $\emptyset$ is a subset of every set.
+
+**Misconception to fix:** treating $\{\emptyset\}$ as the empty set. You corrected it in the last question, but only once, so it stays in your deck: $\{\emptyset\}$ has one element, and $\emptyset \in \{\emptyset\}$ is true.
+
+**Review next:** the difference between $\in$ and $\subseteq$ on sets whose elements are sets, then power sets, where every element is itself a set.</summary>
+@@ verify
+A, B = {1, 2, 3, 4}, {3, 4, 5, 6}
+assert A - B == {1, 2} and A & B == {3, 4}
+E = frozenset()
+S = frozenset([E])
+assert E in S and E <= S and len(S) == 1 and S != E
+T = frozenset([E, S])
+assert len(T) == 2 and E in T and S in T
+# the score: marks in the history are correct, wrong, and this reply's correct
+import re
+marks = [re.search(r'<grade verdict="(\w+)"', t).group(1) for t in tutor[1:]] + [re.search(r'<grade verdict="(\w+)"', reply).group(1)]
+assert marks == ['correct', 'wrong', 'correct'] and marks.count('correct') == 2
+
+@@@@ summary-geometric-series-term-count
+situation: summary
+topic: Summations: arithmetic and geometric series
+voice: typos
+level: medium
+expect: {"verdict":"correct","must":["5465","number of terms|term count|how many terms"]}
+@@ tutor
+**Problem 2 · harder**
+
+Find the sum $3 + 6 + 12 + \dots + 3 \cdot 2^9$.
+
+<solution>First term a = 3, ratio r = 2, exponents 0 to 9 so n = 10 terms. Sum = 3(2^10 − 1)/(2 − 1) = 3 × 1023 = 3069.</solution>
+<check lang="python">
+assert sum(3 * 2**k for k in range(10)) == 3 * (2**10 - 1) == 3069
+</check>
+
+<ask type="problem">The sum, with the first term, the ratio and the number of terms.</ask>
+@@ learner answer sure
+a = 3, r = 2, n = 9 becuase the last power is 9. sum = 3(2^9 - 1)/(2 - 1) = 3 * 511 = 1533
+@@ tutor
+<grade verdict="partial" score="0.6">The first term, the ratio and the formula are right. The slip is "n = 9 becuase the last power is 9": the exponents run from 0 to 9, which is 10 terms, so the sum is $3(2^{10} - 1) = 3069$.</grade>
+
+<card>A geometric series runs from a·r^0 to a·r^k. How many terms does it have? :: k + 1, because the exponents 0, 1, ..., k include 0. Its sum is a(r^(k+1) − 1)/(r − 1).</card>
+
+<note>Geometric series: $a + ar + \dots + ar^{n-1} = \frac{a(r^n - 1)}{r - 1}$ for $r \ne 1$, where $n$ is the number of terms. If the last term is $ar^k$, then $n = k + 1$.</note>
+
+**Problem 3 · same level**
+
+Find the sum $5 + 15 + 45 + \dots + 5 \cdot 3^6$.
+
+<solution>a = 5, r = 3, exponents 0 to 6 so n = 7. Sum = 5(3^7 − 1)/(3 − 1) = 5 × 2186 / 2 = 5465.</solution>
+<check lang="python">
+assert sum(5 * 3**k for k in range(7)) == 5 * (3**7 - 1) // 2 == 5465
+</check>
+
+<ask type="problem">The sum, saying how many terms there are and why.</ask>
+@@ learner answer sure
+powers go 0 to 6 so thats 7 terms not 6. 5(3^7 - 1)/(3 - 1) = 5 * 2186 / 2 = 5465
+@@ reply
+<grade verdict="correct" score="1">5465 is right, and "powers go 0 to 6 so thats 7 terms not 6" is the count you missed in the problem before.</grade>
+
+<summary>**What you learned:** summing a finite geometric series with $\frac{a(r^n - 1)}{r - 1}$, reading the first term and the ratio off the series, and getting the number of terms from the exponents.
+
+**Still shaky:** the number of terms. In Problem 2 you took $n = 9$ from a last power of 9 and got 1533 where the sum is 3069; in Problem 3 you counted from exponent 0 and got it right. One correct count is not yet a habit, so the card on it stays in your deck.
+
+**Review next:** series that do not start at exponent 0, such as $r^3 + r^4 + \dots + r^{10}$, and then the infinite series for $|r| < 1$.</summary>
+@@ verify
+assert sum(3 * 2**k for k in range(10)) == 3069 == 3 * (2**10 - 1) and 2**10 - 1 == 1023
+assert 2**9 - 1 == 511 and 3 * 511 == 1533
+assert 3**7 - 1 == 2186 and 5 * 2186 // 2 == 5465 == sum(5 * 3**k for k in range(7))
+assert len(range(0, 7)) == 7 and len(range(0, 10)) == 10
+# the note's formula on other values
+from fractions import Fraction as F
+for a in range(1, 5):
+    for r in range(2, 6):
+        for n in range(1, 9):
+            assert sum(a * r**k for k in range(n)) == F(a * (r**n - 1), r - 1)

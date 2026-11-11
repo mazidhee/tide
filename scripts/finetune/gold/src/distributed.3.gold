@@ -1,0 +1,641 @@
+@@@@ show-me-paxos-sequence
+situation: show-me
+topic: Paxos: prepare, promise and accept
+voice: plain
+level: hard
+expect: {"visual":{"kind":"mermaid","diagram":["sequenceDiagram"]},"must":["prepare\\(1\\)","accept\\(1, X\\)"]}
+@@ tutor
+Single-decree Paxos chooses one value in two phases. Phase 1: the proposer picks a proposal number n and sends prepare(n) to the acceptors. An acceptor that has not promised a higher number replies with a promise, reporting any proposal it has already accepted, and from then on ignores proposals numbered below n. Phase 2: once a majority has promised, the proposer sends accept(n, v), where v is the value of the highest-numbered proposal reported in the promises, or its own value if none was reported. An acceptor accepts unless it has since promised a higher number. The value is chosen once a majority has accepted it.
+
+An example with three acceptors, where A3 is unreachable and the proposer uses n = 1 and wants value X: A1 and A2 promise, neither having accepted anything, so the proposer sends accept(1, X), both accept, and X is chosen by 2 of 3.
+
+<note>Paxos. Phase 1: prepare(n) → promise (never accept below n; here is what I have accepted). Phase 2: accept(n, v) with v taken from the highest-numbered accepted proposal reported, else the proposer's own. Chosen when a majority accepts.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+sequenceDiagram
+    participant P as Proposer
+    participant A1 as Acceptor A1
+    participant A2 as Acceptor A2
+    participant A3 as Acceptor A3
+    Note over P,A3: Phase 1
+    P->>A1: prepare(1)
+    P->>A2: prepare(1)
+    P-xA3: prepare(1)
+    A1-->>P: promise(1), nothing accepted
+    A2-->>P: promise(1), nothing accepted
+    Note over P,A3: Phase 2
+    P->>A1: accept(1, X)
+    P->>A2: accept(1, X)
+    P-xA3: accept(1, X)
+    A1-->>P: accepted(1, X)
+    A2-->>P: accepted(1, X)
+    Note over P: X chosen by 2 of 3
+```
+
+Follow the two round trips: no accept is sent until both promises are back, and X is chosen at the second accepted reply, without A3 ever answering.
+@@ verify
+import re
+class Acceptor:
+    def __init__(self): self.promised = 0; self.accepted = None
+    def prepare(self, n):
+        if n > self.promised:
+            self.promised = n
+            return self.accepted            # the promise reports what was accepted (None = nothing)
+        return 'reject'
+    def accept(self, n, v):
+        if n >= self.promised:
+            self.promised = n; self.accepted = (n, v); return True
+        return False
+acc = {k: Acceptor() for k in ('A1', 'A2', 'A3')}
+up = ['A1', 'A2']
+n, own = 1, 'X'
+trace = []
+for k in acc: trace.append(('P', '->>' if k in up else '-x', k, f'prepare({n})'))
+promises = {}
+for k in up:
+    r = acc[k].prepare(n); assert r != 'reject'; promises[k] = r
+    trace.append((k, '-->>', 'P', f'promise({n}), ' + ('nothing accepted' if r is None else f'accepted {r}')))
+assert len(promises) > len(acc) // 2
+reported = [r for r in promises.values() if r]
+v = max(reported)[1] if reported else own
+for k in acc: trace.append(('P', '->>' if k in up else '-x', k, f'accept({n}, {v})'))
+oks = 0
+for k in up:
+    assert acc[k].accept(n, v); oks += 1
+    trace.append((k, '-->>', 'P', f'accepted({n}, {v})'))
+assert v == 'X' and oks == 2 > len(acc) // 2
+shown = [m.groups() for m in re.finditer(r'^\s*(\w+)(-->>|->>|-x)(\w+): (.+?)\s*$', block(reply, 'mermaid'), re.M)]
+assert [tuple(x) for x in shown] == trace, (shown, trace)
+assert 'X chosen by 2 of 3' in reply and '2 of 3' in tutor[0]
+
+@@@@ show-me-circuit-breaker-states
+situation: show-me
+topic: Circuit breakers
+voice: plain
+level: easy
+expect: {"visual":{"kind":"mermaid","diagram":["stateDiagram"]},"must":["Half-open","Closed","Open"]}
+@@ tutor
+A circuit breaker wraps the calls to a dependency and is always in one of three states. Closed: calls go through, and the breaker counts consecutive failures. When the count reaches a threshold, say 5 in a row, it trips to open. Open: calls fail at once without touching the dependency, which gives it room to recover and stops callers queuing up on timeouts. After a wait, say 30 s, the breaker moves to half-open. Half-open: one trial call is let through. If it succeeds, the breaker closes and the failure count starts again from zero; if it fails, the breaker opens again and the wait restarts. The threshold and the wait are settings you choose, not fixed parts of the pattern.
+
+<note>Circuit breaker: closed (calls pass, failures counted) → open when the failure threshold is reached (calls fail fast) → half-open after a wait (one trial call) → closed if the trial succeeds, open again if it fails.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+stateDiagram-v2
+    state "Half-open" as HalfOpen
+    [*] --> Closed
+    Closed --> Open: 5 failures in a row
+    Open --> HalfOpen: 30 s wait is over
+    HalfOpen --> Closed: trial call succeeds
+    HalfOpen --> Open: trial call fails
+```
+
+Notice that no arrow leads from Open straight back to Closed: the only way to close again is through a successful trial call in Half-open.
+@@ verify
+import re
+edges = {(a, b): label for a, b, label in re.findall(r'^\s*(\w+) --> (\w+): (.+?)\s*$', block(reply, 'mermaid'), re.M)}
+assert set(edges) == {('Closed', 'Open'), ('Open', 'HalfOpen'), ('HalfOpen', 'Closed'), ('HalfOpen', 'Open')}, edges
+assert '[*] --> Closed' in reply and ('Open', 'Closed') not in edges
+# an independent breaker, driven through a script; every transition it makes must be an arrow in the diagram
+class Breaker:
+    def __init__(self, threshold=5, wait=30):
+        self.state, self.fails, self.opened, self.threshold, self.wait = 'Closed', 0, None, threshold, wait
+        self.moves = []
+    def _go(self, to, why): self.moves.append((self.state, to, why)); self.state = to
+    def call(self, now, ok):
+        if self.state == 'Open':
+            if now - self.opened < self.wait: return 'fast-fail'
+            self._go('HalfOpen', 'wait')
+        if self.state == 'HalfOpen':
+            if ok: self.fails = 0; self._go('Closed', 'success')
+            else: self.opened = now; self._go('Open', 'failure')
+            return ok
+        self.fails = 0 if ok else self.fails + 1
+        if self.fails >= self.threshold: self.opened = now; self._go('Open', 'threshold')
+        return ok
+b = Breaker()
+for t in range(4): b.call(t, False)
+assert b.state == 'Closed'                      # 4 failures: still closed
+b.call(4, False); assert b.state == 'Open'      # the 5th in a row trips it
+assert b.call(20, True) == 'fast-fail' and b.state == 'Open'
+b.call(34, False); assert b.state == 'Open'     # trial after 30 s fails: open again, wait restarts
+assert b.call(50, True) == 'fast-fail'
+b.call(64, True); assert b.state == 'Closed' and b.fails == 0
+assert {(a, c) for a, c, _ in b.moves} == set(edges)
+assert '5 failures in a row' in edges[('Closed', 'Open')] and '5 in a row' in tutor[0]
+assert '30 s' in edges[('Open', 'HalfOpen')] and '30 s' in tutor[0]
+
+@@@@ show-me-read-repair-flow
+situation: show-me
+topic: Hinted handoff and read repair
+voice: plain
+level: medium
+expect: {"visual":{"kind":"mermaid","diagram":["flowchart"]},"must":["version 7","version 5"],"ends":"either","askTypes":["short","predict"],"askMustNot":["stale|out of date","nothing (is|would be|gets) repaired","no repair"]}
+@@ tutor
+Read repair fixes stale replicas as a side effect of ordinary reads. The coordinator sends the read to several replicas and compares the versions that come back. It gives the client the newest value, and writes that value back to any replica that returned an older one.
+
+An example: a key is stored on replicas R1, R2 and R3. R3 was down during the last write, so R1 and R2 hold version 7 and R3 still holds version 5. A read gets 7, 7 and 5 back. The client is given version 7, and the coordinator sends version 7 to R3. A key that is never read is never repaired this way, which is why these stores also run a background anti-entropy process.
+
+<note>Read repair: on a read, the coordinator compares the versions returned by the replicas, answers with the newest, and writes it back to the replicas that were behind. It only repairs keys that are read.</note>
+
+<continue/>
+@@ learner question
+I'd like to see that read as a diagram, with the three replicas in it.
+@@ reply
+```mermaid
+flowchart LR
+    C["Client"] -->|"1 read key"| K["Coordinator"]
+    K -->|"2 read"| R1["R1: version 7"]
+    K -->|"2 read"| R2["R2: version 7"]
+    K -->|"2 read"| R3["R3: version 5"]
+    K -->|"3 newest is version 7"| C
+    K -->|"4 write version 7"| R3
+```
+
+Step 4 is the repair: it goes only to R3, the one replica whose reply was older than the newest.
+
+<ask type="predict">Suppose the coordinator had sent this read to R3 alone. What would the client have been given, and what would have happened to R3's copy?</ask>
+@@ verify
+import re
+# the read, simulated: versions held, newest returned, older replicas written back
+held = {'R1': 7, 'R2': 7, 'R3': 5}
+replies = dict(held)
+newest = max(replies.values())
+repaired = [r for r, v in replies.items() if v < newest]
+for r in repaired: held[r] = newest
+assert newest == 7 and repaired == ['R3'] and held == {'R1': 7, 'R2': 7, 'R3': 7}
+d = block(reply, 'mermaid')
+for r, v in replies.items():
+    assert f'{r}["{r}: version {v}"]' in d, r
+assert f'newest is version {newest}"| C' in d
+writes = re.findall(r'K -->\|"4 write version (\d+)"\| (\w+)', d)
+assert writes == [('7', 'R3')], writes
+assert len(re.findall(r'K -->\|"2 read"\|', d)) == 3
+# the question's case: R3 alone returns 5 and there is nothing to compare it with
+alone = {'R3': 5}
+assert max(alone.values()) == 5 and [r for r, v in alone.items() if v < max(alone.values())] == []
+
+@@@@ show-me-lamport-trace-table
+situation: show-me
+topic: Lamport logical clocks
+voice: plain
+level: easy
+expect: {"visual":{"kind":"table"},"must":["max\\(3, 4\\) \\+ 1"]}
+@@ tutor
+Trace the rules on two processes, A and B, both starting at 0. A has a local event (A = 1), then sends message m to B (A = 2, and m carries 2). Meanwhile B has a local event (B = 1). B receives m: max(1, 2) + 1 = 3. B then sends message k to A (B = 4, and k carries 4). Before k arrives, A has another local event (A = 3). A receives k: max(3, 4) + 1 = 5.
+
+<note>Lamport clock rules: on a local event or a send, clock + 1. On a receive, max(own clock, message timestamp) + 1.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| Step | Event | Rule | A's clock | B's clock |
+|---|---|---|---|---|
+| 1 | A: local event | 0 + 1 | 1 | 0 |
+| 2 | A: send m (carries 2) | 1 + 1 | 2 | 0 |
+| 3 | B: local event | 0 + 1 | 2 | 1 |
+| 4 | B: receive m | max(1, 2) + 1 | 2 | 3 |
+| 5 | B: send k (carries 4) | 3 + 1 | 2 | 4 |
+| 6 | A: local event | 2 + 1 | 3 | 4 |
+| 7 | A: receive k | max(3, 4) + 1 | 5 | 4 |
+
+Compare rows 4 and 7 with the others: only a receive can make a clock jump by more than one, and it always lands above the timestamp the message carried.
+@@ verify
+clock = {'A': 0, 'B': 0}
+msgs = {}
+script = [('A', 'local', None), ('A', 'send', 'm'), ('B', 'local', None), ('B', 'recv', 'm'), ('B', 'send', 'k'), ('A', 'local', None), ('A', 'recv', 'k')]
+want = []
+for i, (p, kind, m) in enumerate(script, 1):
+    before = clock[p]
+    if kind == 'recv':
+        rule = f'max({before}, {msgs[m]}) + 1'
+        clock[p] = max(before, msgs[m]) + 1
+        event = f'{p}: receive {m}'
+    else:
+        rule = f'{before} + 1'
+        clock[p] = before + 1
+        if kind == 'send':
+            msgs[m] = clock[p]
+            event = f'{p}: send {m} (carries {clock[p]})'
+        else:
+            event = f'{p}: local event'
+    want.append([str(i), event, rule, str(clock['A']), str(clock['B'])])
+rows = table(reply)[1:]
+assert rows == want, (rows, want)
+assert clock == {'A': 5, 'B': 3 + 1} and msgs == {'m': 2, 'k': 4}
+# the explanation states the same values
+for s in ('A = 1', 'A = 2', 'm carries 2', 'B = 1', 'max(1, 2) + 1 = 3', 'B = 4', 'k carries 4', 'A = 3', 'max(3, 4) + 1 = 5'):
+    assert s in tutor[0], s
+# receives are the only jumps of more than one, and each lands above the carried timestamp
+assert 3 - 1 > 1 and 5 - 3 > 1 and 3 > 2 and 5 > 4
+
+@@@@ mark-error-availability-minutes
+situation: mark-error
+topic: Availability arithmetic: nines, series and parallel
+voice: wordy
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["4,320","43,200"],"must":["43,200","about 69 minutes"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["13\\.1"]}
+@@ tutor
+**Problem 3 · harder**
+
+A request passes through a load balancer (99.99% available), an application tier (99.9%) and a database (99.95%), in series, failing independently. What is the availability of the whole path, and how many minutes of downtime does that allow in a 30-day month?
+
+<solution>0.9999 × 0.999 × 0.9995 = 0.9984 (99.84%), so the path is unavailable 0.0016 of the time. A 30-day month has 30 × 24 × 60 = 43,200 minutes, and 0.0016 × 43,200 is about 69 minutes.</solution>
+<check lang="python">
+a = 0.9999 * 0.999 * 0.9995
+assert round(a, 4) == 0.9984
+assert 30 * 24 * 60 == 43200 and round((1 - a) * 43200) == 69
+</check>
+
+<ask type="problem">The availability and the downtime in minutes, with your working.</ask>
+@@ learner answer sure
+It's in series, so everything has to be up at once and I multiply: 0.9999 × 0.999 × 0.9995 = 0.9984, so 99.84%. That leaves 1 − 0.9984 = 0.0016 unavailable. A 30 day month is 30 × 24 × 60 = 4,320 minutes. So the downtime is 0.0016 × 4,320 = 6.9 minutes a month.
+@@ reply
+<grade verdict="partial" score="0.6">The method and the first two steps are right: "0.9999 × 0.999 × 0.9995 = 0.9984" and "1 − 0.9984 = 0.0016 unavailable". The first wrong step is "30 × 24 × 60 = 4,320 minutes": 30 × 24 = 720 hours and 720 × 60 = 43,200 minutes. Your 6.9 follows correctly from the wrong minute count; with 43,200 the downtime is 0.0016 × 43,200, about 69 minutes a month.</grade>
+
+A quick check for this kind of figure: 99.9% alone allows 43.2 minutes in a 30-day month, and this path is a little worse than 99.9%, so an answer under 43 minutes cannot be right.
+
+<card>How many minutes are in a 30-day month, and how much downtime does 99.9% allow in it? :: 30 × 24 × 60 = 43,200 minutes; 0.1% of that is 43.2 minutes.</card>
+
+**Problem 4 · same level**
+
+An API depends, in series, on an authentication service (99.95% available) and a payments service (99.9%), failing independently. What is the availability of the API, and how many hours of downtime does that allow in a 365-day year?
+
+<solution>0.9995 × 0.999 = 0.9985 (99.85%), unavailable 0.0015 of the time. A year has 365 × 24 = 8,760 hours, and 0.0015 × 8,760 is about 13.1 hours.</solution>
+<check lang="python">
+a = 0.9995 * 0.999
+assert round(a, 4) == 0.9985
+assert 365 * 24 == 8760 and round((1 - a) * 8760, 1) == 13.1
+</check>
+
+<ask type="problem">The availability and the downtime in hours, with the number of hours you used for the year.</ask>
+@@ verify
+a = 0.9999 * 0.999 * 0.9995
+assert round(a, 4) == 0.9984 and round(1 - 0.9984, 4) == 0.0016
+assert 30 * 24 == 720 and 720 * 60 == 43200 != 4320
+assert round(0.0016 * 4320, 1) == 6.9                    # the learner's figure follows from their minute count
+assert round(0.0016 * 43200) == 69 and round((1 - a) * 43200) == 69
+assert abs(0.001 * 43200 - 43.2) < 1e-9 and a < 0.999    # the sanity check in the reply
+b = 0.9995 * 0.999
+assert round(b, 4) == 0.9985 and round(0.0015 * 8760, 1) == 13.1 and round((1 - b) * 8760, 1) == 13.1
+assert '13.1' in solution(reply) and '13.1' not in visible(reply)
+
+@@@@ mark-error-token-bucket-over-capacity
+situation: mark-error
+topic: Rate limiting with a token bucket
+voice: typos
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["1 \\+ 8 = 9","capacity|at most 5|capped"],"must":["\\b11\\b"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b10 of\\b","10 are admitted"]}
+@@ tutor
+**Problem 2 · harder**
+
+A token bucket has capacity 5 and gains 1 token each second, up to its capacity. It starts full. Requests arrive in groups: 3 at t = 0 s, 2 at t = 1 s, 8 at t = 9 s and 2 at t = 10 s. Each request takes one token, or is rejected if there is none. How many of the 15 requests are admitted?
+
+<solution>t = 0: 5 tokens, admit 3, 2 left. t = 1: 3 tokens, admit 2, 1 left. t = 9: 1 + 8 would be 9, capped at 5; admit 5, reject 3, 0 left. t = 10: 1 token, admit 1, reject 1. Admitted: 3 + 2 + 5 + 1 = 11.</solution>
+<check lang="python">
+tokens, last, admitted = 5, 0, 0
+for t, n in [(0, 3), (1, 2), (9, 8), (10, 2)]:
+    tokens = min(5, tokens + (t - last)); last = t
+    ok = min(tokens, n); tokens -= ok; admitted += ok
+assert admitted == 11
+</check>
+
+<ask type="problem">The number admitted, with the token count at each arrival.</ask>
+@@ learner answer sure
+t=0: bucket has 5, the 3 go through, 2 left.
+t=1: one token added so 3, the 2 go through, 1 left.
+t=9: 8 seconds have pased so 1 + 8 = 9 tokens, all 8 go thru, 1 left.
+t=10: one more token so 2, both go thru.
+Total 3 + 2 + 8 + 2 = 15, so all 15 are admited.
+@@ reply
+<grade verdict="partial" score="0.6">The first two steps are right: "the 3 go through, 2 left" and "one token added so 3, the 2 go through, 1 left". The first wrong step is "1 + 8 = 9 tokens": the bucket holds at most its capacity of 5, so the extra tokens are discarded. At t = 9 it has 5, admits 5 of the 8 and rejects 3, leaving 0.</grade>
+
+Your last line follows correctly from the 1 token you thought was left; it is not a second error. From 0 left, t = 10 has 1 token and admits 1 of the 2. The total is 3 + 2 + 5 + 1 = 11 of 15.
+
+<card>A token bucket of capacity 5 holds 1 token and then sits idle for 8 seconds at 1 token a second. How many tokens does it hold? :: 5, not 9. Refill stops at the capacity: tokens = min(capacity, tokens + rate × time).</card>
+
+**Problem 3 · same level**
+
+A token bucket has capacity 4 and gains 2 tokens each second, up to its capacity. It starts full. Requests arrive in groups: 4 at t = 0 s, 3 at t = 1 s and 9 at t = 6 s. How many of the 16 requests are admitted?
+
+<solution>t = 0: 4 tokens, admit 4, 0 left. t = 1: 2 tokens, admit 2, reject 1, 0 left. t = 6: 0 + 10 would be 10, capped at 4; admit 4, reject 5. Admitted: 4 + 2 + 4 = 10.</solution>
+<check lang="python">
+tokens, last, admitted = 4, 0, 0
+for t, n in [(0, 4), (1, 3), (6, 9)]:
+    tokens = min(4, tokens + 2 * (t - last)); last = t
+    ok = min(tokens, n); tokens -= ok; admitted += ok
+assert admitted == 10
+</check>
+
+<ask type="problem">The number admitted, with the token count just before each group arrives.</ask>
+@@ verify
+def run(capacity, rate, arrivals, capped=True):
+    tokens, last, steps = capacity, 0, []
+    for t, n in arrivals:
+        tokens = tokens + rate * (t - last)
+        if capped: tokens = min(capacity, tokens)
+        last = t
+        ok = min(tokens, n); steps.append((tokens, ok, tokens - ok)); tokens -= ok
+    return steps
+arr = [(0, 3), (1, 2), (9, 8), (10, 2)]
+right = run(5, 1, arr)
+assert right == [(5, 3, 2), (3, 2, 1), (5, 5, 0), (1, 1, 0)] and sum(s[1] for s in right) == 11
+# the learner's trace is exactly the same bucket with the cap left out: one slip, the rest follows
+theirs = run(5, 1, arr, capped=False)
+assert theirs == [(5, 3, 2), (3, 2, 1), (9, 8, 1), (2, 2, 0)] and sum(s[1] for s in theirs) == 15
+assert right[:2] == theirs[:2]
+p3 = run(4, 2, [(0, 4), (1, 3), (6, 9)])
+assert p3 == [(4, 4, 0), (2, 2, 0), (4, 4, 0)] and sum(s[1] for s in p3) == 10
+assert 'Admitted: 4 + 2 + 4 = 10' in solution(reply) and '4 + 2 + 4' not in visible(reply)
+
+@@@@ mark-error-raft-commit-followers-only
+situation: mark-error
+topic: Raft log replication and the commit index
+voice: confused
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["3 followers|three followers","leader"],"must":["commit index is 10|commit index of 10"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b19\\b"]}
+@@ tutor
+**Problem 2 · harder**
+
+A Raft cluster has 5 servers. The leader's last log index is 12, and its matchIndex values for the four followers are 9, 12, 7 and 10. Every entry is from the leader's current term. What is the commit index?
+
+<solution>The five servers hold up to 12 (leader), 12, 10, 9 and 7. A majority of 5 is 3, and the third highest is 10: index 10 is stored on the leader and two followers. Index 11 is on only 2 servers. The commit index is 10.</solution>
+<check lang="python">
+idx = [12, 9, 12, 7, 10]
+need = len(idx) // 2 + 1
+assert max(n for n in range(13) if sum(i >= n for i in idx) >= need) == 10
+</check>
+
+<ask type="problem">The commit index, with the servers that hold that entry.</ask>
+@@ learner answer unsure
+ok so majority of 5 is 3. followers are at 9, 12, 7, 10. so I need 3 followers that have the entry. index 12 is on one follower, index 10 is on two followers (the 12 one and the 10 one), index 9 is on three (12, 10, 9). so commit index = 9? I think
+@@ reply
+<grade verdict="partial" score="0.5">"majority of 5 is 3" is right, and so are your counts of followers at each index. The first wrong step is "I need 3 followers": the majority is 3 of the 5 servers, and the leader is one of them, so 2 followers plus the leader is enough.</grade>
+
+The leader holds every entry up to 12, so add it to each of your counts. Index 10 is on "two followers", which makes 3 servers with the leader: a majority. Index 11 is on one follower plus the leader, 2 servers, which is not. So the commit index is 10, not 9. Your 9 follows correctly from the count you set yourself; the count was the only slip.
+
+<card>When a Raft leader counts replicas to commit an entry, does it count itself? :: Yes. A majority is of all servers, leader included: in a 5-server cluster, the leader plus 2 followers.</card>
+
+<note>The majority for commitment is counted over all servers. The leader always holds its own entries, so it needs the entry on (majority − 1) followers.</note>
+
+**Problem 3 · same level**
+
+Another 5-server cluster. The leader's last log index is 21, and its matchIndex values for the four followers are 21, 16, 19 and 13. Every entry is from the current term. What is the commit index?
+
+<solution>The five servers hold up to 21 (leader), 21, 19, 16 and 13. The third highest is 19: index 19 is on the leader and two followers, while 20 and 21 are on only 2 servers. The commit index is 19.</solution>
+<check lang="python">
+idx = [21, 21, 16, 19, 13]
+need = len(idx) // 2 + 1
+assert max(n for n in range(22) if sum(i >= n for i in idx) >= need) == 19
+</check>
+
+<ask type="problem">The commit index, counting the leader.</ask>
+@@ verify
+def commit(indices, need):
+    return max(n for n in range(max(indices) + 1) if sum(i >= n for i in indices) >= need)
+followers, leader = [9, 12, 7, 10], 12
+assert commit(followers + [leader], 3) == 10
+# the learner's counts of followers at each index, and the answer their rule gives
+at = lambda n: sum(i >= n for i in followers)
+assert (at(12), at(10), at(9)) == (1, 2, 3)
+assert commit(followers, 3) == 9                         # three followers required: their 9
+assert at(10) + 1 == 3 and at(11) + 1 == 2               # with the leader counted
+assert commit([21, 16, 19, 13] + [21], 3) == 19
+assert sorted([21, 21, 16, 19, 13], reverse=True)[2] == 19
+assert 'commit index is 19' in solution(reply) and '19' not in visible(reply).split('Problem 3')[1].replace('16, 19 and 13', '')
+
+@@@@ mark-error-backoff-cap-forgotten
+situation: mark-error
+topic: Retries with exponential backoff and jitter
+options: {"refresh":true}
+voice: typos
+level: easy
+expect: {"verdict":"partial","accept":["wrong"],"names":["6400|6,400","cap"],"must":["11,200 ms|11\\.2 s"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["11,500","11\\.5"]}
+@@ tutor
+**Problem 2**
+
+A client retries with exponential backoff: it waits 200 ms before retry 1, and the wait doubles each time, capped at 5 s. There is no jitter. How long has the client waited in total by the time it makes retry 6?
+
+<solution>The waits are 200, 400, 800, 1,600 and 3,200 ms, then 6,400 ms capped to 5,000 ms. Total 11,200 ms = 11.2 s.</solution>
+<check lang="python">
+waits = [min(5000, 200 * 2 ** i) for i in range(6)]
+assert waits[-1] == 5000 and sum(waits) == 11200
+</check>
+
+<ask type="problem">The total wait before retry 6, with the list of waits.</ask>
+@@ learner answer sure
+waits are 200, 400, 800, 1600, 3200 and then 6400 for the 6th. total = 200+400+800+1600+3200+6400 = 12600 ms so 12.6 secodns
+@@ reply
+<grade verdict="partial" score="0.6">The doubling is right as far as "200, 400, 800, 1600, 3200". The first wrong step is "then 6400 for the 6th": the waits are capped at 5 s, and 6,400 ms is over the cap, so the sixth wait is 5,000 ms. Your sum is added correctly; with the capped value it is 6,200 + 5,000 = 11,200 ms, or 11.2 s.</grade>
+
+<card>How is a capped exponential backoff wait computed? :: wait = min(cap, base × 2^(retry − 1)). Once doubling passes the cap, every later wait equals the cap.</card>
+
+**Problem 3 · a little harder**
+
+A client waits 500 ms before retry 1, doubling each time, capped at 4 s, with no jitter. It gives up if retry 5 fails. How long has it waited in total when it makes retry 5?
+
+<solution>The waits are 500, 1,000, 2,000 and 4,000 ms, then 8,000 ms capped to 4,000 ms. Total 11,500 ms = 11.5 s.</solution>
+<check lang="python">
+waits = [min(4000, 500 * 2 ** i) for i in range(5)]
+assert waits == [500, 1000, 2000, 4000, 4000] and sum(waits) == 11500
+</check>
+
+<ask type="problem">The total wait before retry 5, with the wait before each retry.</ask>
+@@ verify
+capped = [min(5000, 200 * 2 ** i) for i in range(6)]
+plain = [200 * 2 ** i for i in range(6)]
+assert plain == [200, 400, 800, 1600, 3200, 6400] and sum(plain) == 12600      # the learner's list and sum
+assert capped == [200, 400, 800, 1600, 3200, 5000] and sum(capped) == 11200
+assert sum(capped[:5]) == 6200 and 6200 + 5000 == 11200
+assert plain[:5] == capped[:5]                                                 # one slip only: the sixth wait
+w = [min(4000, 500 * 2 ** i) for i in range(5)]
+assert w == [500, 1000, 2000, 4000, 4000] and sum(w) == 11500
+assert '11,500' in solution(reply) and '11,500' not in visible(reply)
+
+@@@@ unusual-availability-inclusion-exclusion
+situation: mark-unusual
+topic: Availability arithmetic: nines, series and parallel
+voice: terse
+level: medium
+expect: {"verdict":"correct","mustNot":["should have used","the standard (way|method) is","instead you should"],"must":["99\\.95%|0\\.9995"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["0\\.999\\b","99\\.9%"]}
+@@ tutor
+**Problem 4 · harder**
+
+A database has two replicas in different zones, and a read succeeds if at least one of them is up. One replica is up 99% of the time and the other 95%, independently. What is the availability of reads?
+
+<solution>Reads fail only when both replicas are down: 0.01 × 0.05 = 0.0005. Availability = 1 − 0.0005 = 0.9995, which is 99.95%.</solution>
+<check lang="python">
+assert abs(1 - 0.01 * 0.05 - 0.9995) < 1e-12
+</check>
+
+<ask type="problem">The availability as a percentage, with your working.</ask>
+@@ learner answer sure
+P(A) + P(B) − P(both up) = 0.99 + 0.95 − 0.99 × 0.95 = 1.94 − 0.9405 = 0.9995. 99.95%
+@@ reply
+<grade verdict="correct" score="1">"P(A) + P(B) − P(both up)" is inclusion-exclusion for "at least one is up", and with independent replicas P(both up) is 0.99 × 0.95 = 0.9405, so 0.9995 is right. It is the same quantity as 1 − 0.01 × 0.05: expand $1 - (1 - a)(1 - b)$ and you get $a + b - ab$.</grade>
+
+Your method works for any two components. With three or more, inclusion-exclusion grows extra terms, so keep an eye on which route is shorter.
+
+**Problem 5 · harder**
+
+Three replicas, each up 90% of the time and failing independently; a read needs at least one. What is the availability of reads?
+
+<solution>All three down: 0.1 × 0.1 × 0.1 = 0.001. Availability = 1 − 0.001 = 0.999, which is 99.9%. By inclusion-exclusion: 3(0.9) − 3(0.81) + 0.729 = 2.7 − 2.43 + 0.729 = 0.999.</solution>
+<check lang="python">
+a = 0.9
+assert abs(1 - (1 - a) ** 3 - 0.999) < 1e-12
+assert abs(3 * a - 3 * a * a + a ** 3 - 0.999) < 1e-12
+</check>
+
+<ask type="problem">The availability as a percentage, by whichever method you prefer.</ask>
+@@ verify
+import itertools
+assert abs(0.99 * 0.95 - 0.9405) < 1e-12 and abs(0.99 + 0.95 - 1.94) < 1e-12
+assert abs(1.94 - 0.9405 - 0.9995) < 1e-12                 # the learner's arithmetic, step by step
+assert abs(1 - 0.01 * 0.05 - 0.9995) < 1e-12               # the standard route gives the same
+# the identity the grade states, checked on a grid
+for a in (0.5, 0.9, 0.99):
+    for b in (0.3, 0.95, 0.999):
+        assert abs((1 - (1 - a) * (1 - b)) - (a + b - a * b)) < 1e-12
+def at_least_one(ps):
+    return sum(__import__('math').prod(p if up else 1 - p for p, up in zip(ps, ups)) for ups in itertools.product([0, 1], repeat=len(ps)) if any(ups))
+assert abs(at_least_one([0.99, 0.95]) - 0.9995) < 1e-12
+assert abs(at_least_one([0.9] * 3) - 0.999) < 1e-12
+assert abs(2.7 - 2.43 + 0.729 - 0.999) < 1e-12
+assert '0.999' in solution(reply) and '0.999' not in visible(reply).replace('0.9995', '')
+
+@@@@ unusual-raft-commit-count-down
+situation: mark-unusual
+topic: Raft log replication and the commit index
+options: {"difficulty":"hard"}
+voice: terse
+level: hard
+expect: {"verdict":"correct","mustNot":["should have (used|sorted)","you (need|have) to sort"],"must":["4 of 7|4 servers"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["stays at 6","does not (move|advance)","cannot (be committed|advance)"]}
+@@ tutor
+**Problem 2 · harder**
+
+A Raft cluster has 7 servers. The leader's last log index is 20, and its matchIndex values for the six followers are 18, 20, 15, 17, 11 and 19. Every entry is from the leader's current term. What is the commit index?
+
+<solution>The seven servers hold up to 20 (leader), 20, 19, 18, 17, 15 and 11. A majority of 7 is 4, and the fourth highest is 18. Index 19 is on only 3 servers. The commit index is 18.</solution>
+<check lang="python">
+idx = [20, 18, 20, 15, 17, 11, 19]
+need = len(idx) // 2 + 1
+assert max(n for n in range(21) if sum(i >= n for i in idx) >= need) == 18
+</check>
+
+<ask type="problem">The commit index, with your reasoning.</ask>
+@@ learner answer sure
+18. went down from the top counting servers incl. the leader: index 20 is on 2, index 19 is on 3, index 18 is on 4. 4 of 7 is a majority so stop there.
+@@ reply
+<grade verdict="correct" score="1">"index 20 is on 2, index 19 is on 3, index 18 is on 4" applies the definition directly: the commit index is the highest index held by a majority, and 4 of 7 is the first majority you meet coming down from the top. Taking the fourth highest of the sorted indices gives the same 18, for the same reason.</grade>
+
+**Problem 3 · harder**
+
+A 5-server cluster. The leader is in term 4 and its last log index is 9. Its matchIndex values for the four followers are 9, 8, 8 and 5. Entries up to index 8 were written in term 3; only index 9 is from term 4. The commit index is currently 6. What is the commit index after the leader re-evaluates it?
+
+<solution>Index 8 is on 4 of 5 servers, but its entry is from term 3, and a Raft leader never commits an entry from an earlier term by counting replicas. Index 9 is from term 4 but is on only 2 servers (the leader and one follower). So the commit index stays at 6. When index 9 reaches a third server it commits, and indices 7 and 8 are committed with it.</solution>
+<check lang="python">
+idx = [9, 9, 8, 8, 5]
+term = {n: 3 for n in range(1, 9)}; term[9] = 4
+need, current, commit = 3, 4, 6
+for n in range(commit + 1, 10):
+    if sum(i >= n for i in idx) >= need and term[n] == current:
+        commit = n
+assert commit == 6
+</check>
+
+<ask type="problem">The commit index, with the reason for each index you considered.</ask>
+@@ verify
+idx = [20, 18, 20, 15, 17, 11, 19]
+on = lambda n: sum(i >= n for i in idx)
+assert (on(20), on(19), on(18)) == (2, 3, 4) and len(idx) // 2 + 1 == 4          # the learner's counts
+assert sorted(idx, reverse=True)[3] == 18                                         # the sorting route agrees
+# problem 3, as the leader's rule: majority AND current term
+idx3 = [9, 9, 8, 8, 5]
+term = {n: 3 for n in range(1, 9)}; term[9] = 4
+on3 = lambda n: sum(i >= n for i in idx3)
+assert on3(8) == 4 and on3(9) == 2 and term[8] == 3 and term[9] == 4
+commit = 6
+for n in range(7, 10):
+    if on3(n) >= 3 and term[n] == 4: commit = n
+assert commit == 6
+# once a third server stores index 9, it commits and carries 7 and 8 with it
+idx3b = [9, 9, 9, 8, 5]
+assert sum(i >= 9 for i in idx3b) == 3
+assert 'stays at 6' in solution(reply) and 'stays at 6' not in visible(reply)
+
+@@@@ unusual-ntp-offset-by-delay
+situation: mark-unusual
+topic: Clock skew and NTP
+voice: wordy
+level: medium
+expect: {"verdict":"correct","mustNot":["should have used","the formula you should"],"must":["0\\.100|100 ms","symmetric|same in both directions|each way"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["0\\.080","80 ms","0\\.020","20 ms"]}
+@@ tutor
+NTP estimates how far a client's clock is from a server's using four timestamps: the client sends at $t_0$ and receives the reply at $t_3$ (client clock); the server receives at $t_1$ and replies at $t_2$ (server clock). Offset $= \frac{(t_1 - t_0) + (t_2 - t_3)}{2}$.
+
+<note>NTP offset $= \frac{(t_1 - t_0) + (t_2 - t_3)}{2}$, positive when the client's clock is behind. It is exact only if the network delay is the same in both directions.</note>
+
+**Problem 1 · warm-up**
+
+A client sends a request at $t_0 = 10.000$ s. The server receives it at $t_1 = 10.130$ s and replies at $t_2 = 10.134$ s. The client receives the reply at $t_3 = 10.064$ s. Assume the delay is the same in both directions. How far off is the client's clock, and in which direction?
+
+<solution>Offset = ((10.130 − 10.000) + (10.134 − 10.064)) / 2 = (0.130 + 0.070) / 2 = 0.100 s. The client's clock is 100 ms behind the server's.</solution>
+<check lang="python">
+t0, t1, t2, t3 = 10.000, 10.130, 10.134, 10.064
+assert abs(((t1 - t0) + (t2 - t3)) / 2 - 0.100) < 1e-9
+</check>
+
+<ask type="problem">The offset and its direction, with your working.</ask>
+@@ learner answer sure
+I did it a different way, hope that's ok. The round trip on my clock is 10.064 − 10.000 = 0.064 s, and the server sat on the request for 0.004 s, so the network took 0.060 s in total, which is 0.030 each way. The server stamped its reply 10.134, so when the reply reached me the server's clock must have read 10.134 + 0.030 = 10.164. Mine read 10.064. So my clock is 0.100 s behind.
+@@ reply
+<grade verdict="correct" score="1">"when the reply reached me the server's clock must have read 10.134 + 0.030 = 10.164" is sound: you found the network delay first, 0.060 s split as "0.030 each way", then compared the two clocks at one instant. The result, 0.100 s behind, is right.</grade>
+
+Your route and the formula rest on the same assumption, a symmetric delay, and they are the same algebra: $t_2 + \frac{(t_3 - t_0) - (t_2 - t_1)}{2} - t_3$ rearranges to $\frac{(t_1 - t_0) + (t_2 - t_3)}{2}$. Yours has the advantage of producing the round-trip delay on the way, which NTP also reports.
+
+**Problem 2 · harder**
+
+Keep the same four timestamps, but suppose the true network delays were 0.050 s on the way out and 0.010 s on the way back. What is the client's true offset, and how far out was the estimate of 0.100 s?
+
+<solution>The request left at 10.000 on the client's clock and arrived 0.050 s later, when the server read 10.130, so the server is ahead by 10.130 − 10.050 = 0.080 s. Check with the reply: 10.134 − 0.080 + 0.010 = 10.064. The true offset is 0.080 s, so the estimate is out by 0.020 s, which is half the difference between the two delays: (0.050 − 0.010) / 2.</solution>
+<check lang="python">
+t0, t1, t2, t3 = 10.000, 10.130, 10.134, 10.064
+out, back = 0.050, 0.010
+true = t1 - (t0 + out)
+assert abs(true - 0.080) < 1e-9 and abs((t2 - true + back) - t3) < 1e-9
+est = ((t1 - t0) + (t2 - t3)) / 2
+assert abs((est - true) - (out - back) / 2) < 1e-9 and abs(est - true - 0.020) < 1e-9
+</check>
+
+<ask type="problem">The true offset and the error of the estimate, with your working.</ask>
+@@ verify
+t0, t1, t2, t3 = 10.000, 10.130, 10.134, 10.064
+ap = lambda x, y: abs(x - y) < 1e-9
+# the learner's route, step by step
+rt = t3 - t0; hold = t2 - t1; net = rt - hold
+assert ap(rt, 0.064) and ap(hold, 0.004) and ap(net, 0.060) and ap(net / 2, 0.030)
+assert ap(t2 + net / 2, 10.164) and ap(t2 + net / 2 - t3, 0.100)
+# the formula gives the same, and the two are the same algebra for arbitrary timestamps
+assert ap(((t1 - t0) + (t2 - t3)) / 2, 0.100)
+import random
+rng = random.Random(4)
+for _ in range(200):
+    a, b, c, d = sorted(rng.uniform(0, 5) for _ in range(4))
+    q0, q3 = a, d; q1, q2 = b + rng.uniform(-2, 2), 0
+    q2 = q1 + (c - b)
+    assert ap(q2 + ((q3 - q0) - (q2 - q1)) / 2 - q3, ((q1 - q0) + (q2 - q3)) / 2)
+# a ground-truth simulation of problem 1: true offset 0.100, delays 0.030 each way, server holds 0.004
+off, dly = 0.100, 0.030
+s1 = t0 + dly + off; s2 = s1 + 0.004; c3 = s2 - off + dly
+assert ap(s1, t1) and ap(s2, t2) and ap(c3, t3)
+# problem 2: the same timestamps arise from offset 0.080 with delays 0.050 and 0.010
+off, out, back = 0.080, 0.050, 0.010
+s1 = t0 + out + off; s2 = s1 + 0.004; c3 = s2 - off + back
+assert ap(s1, t1) and ap(s2, t2) and ap(c3, t3)
+assert ap(0.100 - 0.080, (out - back) / 2)
+assert '0.080' in solution(reply) and '0.080' not in visible(reply)

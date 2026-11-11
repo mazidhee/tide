@@ -1,0 +1,629 @@
+@@@@ wrong-dice-payout-squares-the-mean
+situation: after-wrong
+topic: Expected value of dice games
+voice: overconfident
+level: easy
+expect: {"verdict":"wrong","names":["squares? (of )?the (average|mean|expected)|average of the squares","91/6"],"must":["91/6","15\\.17"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["7\\.5","15/2"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+A game pays, in pounds, the square of the number shown by one roll of a fair six-sided die. The fair price of the game is its expected payout. Find it.
+
+<solution>E[X^2] = (1 + 4 + 9 + 16 + 25 + 36) / 6 = 91/6 ≈ 15.17 pounds.</solution>
+<check lang="python">
+from fractions import Fraction
+e = sum(Fraction(x * x, 6) for x in range(1, 7))
+assert e == Fraction(91, 6) and round(float(e), 2) == 15.17
+</check>
+
+<ask type="problem">The fair price, with your working.</ask>
+@@ learner answer sure
+Simple. The expected roll is 3.5 and the game pays the square, so the expected payout is 3.5^2 = 12.25. Fair price is £12.25.
+@@ reply
+<grade verdict="wrong" score="0.1">"3.5^2 = 12.25" squares the average roll, but the price is the average of the squares, and those differ: the payout is not a straight-line function of the roll, so the expectation cannot be moved inside it.</grade>
+
+Average the payouts themselves. The six payouts are 1, 4, 9, 16, 25 and 36, each with probability $\frac16$, so the expected payout is $\frac{91}{6} \approx 15.17$ pounds. It is above 12.25 because squaring stretches the high rolls more than it shrinks the low ones.
+
+<card>For a payout g(X), how do you find the expected payout? :: Average g over the outcomes: E[g(X)] = sum of g(x) P(X = x). In general E[g(X)] is not g(E[X]); for a fair die E[X^2] = 91/6, not 3.5^2.</card>
+
+<note>$E[g(X)] = \sum_x g(x)\,P(X = x)$: apply $g$ to each outcome, then average. $E[g(X)] = g(E[X])$ is guaranteed only when $g$ is linear, of the form $ax + b$.</note>
+
+**Problem 2 · same idea**
+
+A fair four-sided die has faces 1, 2, 3 and 4. A game pays $2^X$ pounds, where $X$ is the number rolled. Find the expected payout.
+
+<solution>The payouts are 2, 4, 8 and 16, each with probability 1/4: (2 + 4 + 8 + 16) / 4 = 30/4 = 7.5 pounds. (Not 2^2.5 ≈ 5.66.)</solution>
+<check lang="python">
+from fractions import Fraction
+e = sum(Fraction(2**x, 4) for x in range(1, 5))
+assert e == Fraction(15, 2)
+</check>
+
+<ask type="problem">The expected payout, with the four payouts you averaged.</ask>
+@@ verify
+from fractions import Fraction as F
+# the learner's figure follows from squaring the mean
+mean = sum(F(x, 6) for x in range(1, 7))
+assert mean == F(7, 2) and float(mean**2) == 12.25
+# the right value
+assert [x * x for x in range(1, 7)] == [1, 4, 9, 16, 25, 36] and sum(x * x for x in range(1, 7)) == 91
+assert round(91 / 6, 2) == 15.17 and F(91, 6) > mean**2
+# problem 2
+assert [2**x for x in range(1, 5)] == [2, 4, 8, 16] and F(30, 4) == F(15, 2)
+assert round(2**2.5, 2) == 5.66
+assert '7.5' in solution(reply) and '7.5' not in visible(reply)
+
+@@@@ wrong-poisson-rate-not-scaled
+situation: after-wrong
+topic: The Poisson distribution
+options: {"strategy":"maths"}
+voice: terse
+level: medium
+expect: {"verdict":"wrong","names":["hour","1\\.5"],"must":["0\\.2231","1\\.5"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["0\\.2707","0\\.271","\\\\lambda = 2\\b"]}
+@@ tutor
+A Poisson distribution gives the number of events in a fixed window when events arrive independently at a steady average rate: $P(X = k) = \frac{\lambda^k e^{-\lambda}}{k!}$, where $\lambda$ is the mean number of events.
+
+<note>Poisson: $P(X = k) = \lambda^k e^{-\lambda} / k!$ for $k = 0, 1, 2, \dots$, with mean $\lambda$. In particular $P(X = 0) = e^{-\lambda}$.</note>
+
+Errors appear in a log at an average of 4.5 per hour. Find the probability that a 20-minute window contains no errors.
+
+<solution>The mean for a 20-minute window is λ = 4.5 × 20/60 = 1.5. P(X = 0) = e^(−1.5) ≈ 0.2231.</solution>
+<check lang="python">
+from math import exp
+lam = 4.5 * 20 / 60
+assert lam == 1.5 and round(exp(-lam), 4) == 0.2231
+</check>
+
+<ask type="problem">The probability to four decimal places, with the value of $\lambda$ you used.</ask>
+@@ learner answer sure
+lambda = 4.5. P(0) = e^-4.5 = 0.0111
+@@ reply
+<grade verdict="wrong" score="0.2">"lambda = 4.5" is the mean for a whole hour, but the window is 20 minutes. $e^{-4.5} \approx 0.0111$ is the chance of an hour with no errors; the formula itself is used correctly.</grade>
+
+$\lambda$ must be the mean count in the window the question asks about. Twenty minutes is a third of an hour, so $\lambda = 4.5 \times \frac{20}{60} = 1.5$, and $P(X = 0) = e^{-1.5} \approx 0.2231$: about twenty times your figure.
+
+<card>Events arrive at r per hour. What is the Poisson mean for a window of t hours? :: lambda = r × t: the rate times the length of the window, in matching units. 4.5 per hour over 20 minutes is 4.5 × 1/3 = 1.5.</card>
+
+<note>The Poisson mean scales with the window: $\lambda = \text{rate} \times \text{window length}$, in the same time units. Fix $\lambda$ for the window first, then use the formula.</note>
+
+A support line receives 4 calls per hour on average. Find the probability of exactly 1 call in a 30-minute window.
+
+<solution>λ = 4 × 30/60 = 2. P(X = 1) = 2 e^(−2) ≈ 0.2707.</solution>
+<check lang="python">
+from math import exp
+lam = 4 * 30 / 60
+assert lam == 2 and round(lam * exp(-lam), 4) == 0.2707
+</check>
+
+<ask type="problem">The probability to four decimal places, with your $\lambda$.</ask>
+@@ verify
+from math import exp, factorial
+pois = lambda lam, k: lam**k * exp(-lam) / factorial(k)
+# the learner's figure follows from using the hourly rate
+assert round(pois(4.5, 0), 4) == 0.0111
+# the right value
+assert 4.5 * 20 / 60 == 1.5 and round(pois(1.5, 0), 4) == 0.2231
+# "about twenty times your figure"
+assert 19 < pois(1.5, 0) / pois(4.5, 0) < 21 and abs(pois(1.5, 0) / pois(4.5, 0) - exp(3)) < 1e-9
+# the new problem
+assert round(pois(2, 1), 4) == 0.2707
+assert '0.2707' in solution(reply) and '0.2707' not in visible(reply)
+# splitting the hour into thirds: three independent empty 20-minute windows make an empty hour
+assert abs(pois(1.5, 0)**3 - pois(4.5, 0)) < 1e-12
+
+@@@@ wrong-gamblers-ruin-fair-means-half
+situation: after-wrong
+topic: Random walks and gambler's ruin
+options: {"difficulty":"hard"}
+voice: overconfident
+level: hard
+expect: {"verdict":"wrong","names":["fair","3/10"],"must":["3/10","straight line|linear"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["2/5","0\\.4\\b"]}
+@@ tutor
+**Problem 1 · hard**
+
+A gambler starts with £3 and bets £1 on a fair coin toss each round: heads wins £1, tails loses £1. Play stops when the fortune reaches £10 or £0. Find the probability that it ends at £10.
+
+<solution>Let h(i) be the probability of reaching 10 before 0 from fortune i. h(0) = 0, h(10) = 1 and h(i) = (h(i−1) + h(i+1)) / 2 for 0 < i < 10, so h is linear in i: h(i) = i/10. h(3) = 3/10.</solution>
+<check lang="python">
+from fractions import Fraction
+h = [Fraction(i, 10) for i in range(11)]
+assert h[0] == 0 and h[10] == 1
+assert all(h[i] == (h[i - 1] + h[i + 1]) / 2 for i in range(1, 10))
+assert h[3] == Fraction(3, 10)
+</check>
+
+<ask type="problem">The probability, with your reasoning.</ask>
+@@ learner answer sure
+It's a fair coin so the game is fair, which means neither end is favoured. It's 1/2 to hit £10 and 1/2 to go broke. The starting amount only changes how long it takes.
+@@ reply
+<grade verdict="wrong" score="0.1">"neither end is favoured" does not follow from the coin being fair: a fair coin makes each single bet even, but £0 is 3 steps away and £10 is 7 steps away, so ruin is the likelier end. The answer is 3/10.</grade>
+
+Let $h(i)$ be the chance of reaching £10 from £$i$. One toss gives $h(i) = \frac12 h(i-1) + \frac12 h(i+1)$: each value is the average of its two neighbours, so the values lie on a straight line from $h(0) = 0$ to $h(10) = 1$. That line is $h(i) = \frac{i}{10}$, so $h(3) = \frac{3}{10}$.
+
+What fairness does give is a check: the expected final fortune, $10 \times \frac{3}{10} + 0 \times \frac{7}{10} = 3$, equals the starting fortune.
+
+<card>Fair £1 bets from £i, stopping at £0 or £N. What is the chance of reaching £N, and why? :: i/N. h(i) is the average of h(i−1) and h(i+1), with h(0) = 0 and h(N) = 1, so h is a straight line in i.</card>
+
+<note>Gambler's ruin with fair bets: $P(\text{reach } N \text{ before } 0 \mid \text{start at } i) = \frac{i}{N}$. A fair game keeps the expected fortune at $i$; it does not make the two ends equally likely.</note>
+
+**Problem 2 · easier**
+
+A gambler starts with £2 and makes fair £1 bets until the fortune is £5 or £0. Write the equation that links $h(2)$ to its neighbours, and find the probability of ending at £5.
+
+<solution>h(2) = (h(1) + h(3)) / 2, with h(0) = 0 and h(5) = 1. The values are linear: h(i) = i/5, so h(2) = 2/5. Check: expected final fortune 5 × 2/5 = 2.</solution>
+<check lang="python">
+from fractions import Fraction
+h = [Fraction(i, 5) for i in range(6)]
+assert all(h[i] == (h[i - 1] + h[i + 1]) / 2 for i in range(1, 5)) and h[2] == Fraction(2, 5)
+</check>
+
+<ask type="problem">The equation for $h(2)$ and the probability.</ask>
+@@ verify
+from fractions import Fraction as F
+def hit(N):
+    # solve h(i) = (h(i-1) + h(i+1)) / 2 exactly by shooting: h(1) = t, then h is forced; scale so h(N) = 1
+    h = [F(0), F(1)]
+    for i in range(1, N):
+        h.append(2 * h[i] - h[i - 1])
+    return [x / h[N] for x in h]
+h10 = hit(10)
+assert h10[3] == F(3, 10) and h10 == [F(i, 10) for i in range(11)]
+assert 10 * h10[3] + 0 * (1 - h10[3]) == 3
+assert hit(5)[2] == F(2, 5)
+# an independent check by iterating the chain's absorption probabilities to convergence
+def absorb(start, N, steps=4000):
+    d = [0.0] * (N + 1); d[start] = 1.0
+    for _ in range(steps):
+        e = [0.0] * (N + 1); e[0] = d[0]; e[N] = d[N]
+        for i in range(1, N):
+            e[i - 1] += d[i] / 2; e[i + 1] += d[i] / 2
+        d = e
+    return d[N]
+assert abs(absorb(3, 10) - 0.3) < 1e-9 and abs(absorb(2, 5) - 0.4) < 1e-9
+assert '2/5' in solution(reply) and '2/5' not in visible(reply)
+
+@@@@ wrong-p-value-read-as-probability-null-true
+situation: after-wrong
+topic: Hypothesis tests and p-values
+options: {"strategy":"dialogue"}
+voice: confused
+level: hard
+expect: {"verdict":"wrong","names":["fair","assum|given|condition"],"must":["0\\.0106","13 or more"],"askTypes":["short","explain","predict"],"askMustNot":["\\b106\\b"]}
+@@ tutor
+You flip a coin 16 times and get 13 heads. Take as the null hypothesis that the coin is fair. Under it, the chance of 13 or more heads in 16 flips is $\frac{697}{65536} \approx 0.0106$, and that number is the one-sided p-value of your result.
+
+<ask type="explain">In your own words: what is that 0.0106 the probability of, and what is it worked out under?</ask>
+@@ learner answer sure
+I think it's the probability that the coin is fair? Like there's only a 1.06% chance the coin is fair given what we saw, so about 98.94% that it's biased to heads. That's why a small p-value means reject.
+@@ reply
+<grade verdict="wrong" score="0.1">"there's only a 1.06% chance the coin is fair given what we saw" turns the statement round. The 0.0106 is worked out assuming the coin is fair: it is the probability of 13 or more heads given a fair coin, not the probability of a fair coin given the heads.</grade>
+
+The calculation shows which way it runs. Counting the 697 sequences with 13 or more heads out of the $2^{16} = 65536$ equally likely ones only makes sense if every sequence is equally likely, which is the fair coin. So the fair coin is the starting assumption of the calculation, and a calculation cannot return the probability of its own assumption. A statement about the chance that the coin is fair would also need how plausible a biased coin was before the flips, which the test never uses.
+
+<card>What is a p-value the probability of? :: Of data at least as extreme as what was seen, calculated assuming the null hypothesis is true: P(data this extreme | null). It is not P(null | data).</card>
+
+<note>p-value = P(a result at least as extreme as the one observed | the null hypothesis is true). It measures how surprising the data are under the null; it is not the probability that the null is true.</note>
+
+<ask type="short">Suppose the coin really is fair and you repeat the 16-flip experiment 10,000 times. In roughly how many of those runs would you expect 13 or more heads, and what does that say the p-value counts?</ask>
+@@ verify
+from fractions import Fraction as F
+from itertools import product
+from math import comb
+n = sum(comb(16, k) for k in range(13, 17))
+assert n == 697 and 2**16 == 65536
+# by listing every sequence of 16 flips
+assert sum(1 for s in product([0, 1], repeat=16) if sum(s) >= 13) == 697
+p = F(697, 65536)
+assert round(float(p), 4) == 0.0106 and round(float(p) * 100, 2) == 1.06 and round(100 - float(p) * 100, 2) == 98.94
+# the withheld answer to the new question
+assert round(10000 * float(p)) == 106
+assert '0.0106' in tutor[0] and '697' in tutor[0]
+
+@@@@ wrong-odds-update-multiplies-probability
+situation: after-wrong
+topic: Bayesian updating with odds and likelihood ratios
+voice: confused
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["odds","4/13"],"must":["4/13","4 : 9|4:9"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["3/7","0\\.429","3 : 4|3:4"]}
+@@ tutor
+The odds form of Bayes' rule: posterior odds = prior odds × likelihood ratio, where the likelihood ratio is $\frac{P(\text{evidence} \mid H)}{P(\text{evidence} \mid \text{not } H)}$. Odds of $a : b$ are a probability of $\frac{a}{a+b}$. For example, prior odds of 1 : 3 and a likelihood ratio of 6 give posterior odds of 6 : 3, a probability of $\frac69 = \frac23$.
+
+<note>Odds form of Bayes' rule: posterior odds = prior odds × likelihood ratio, with LR = P(evidence | H) / P(evidence | not H). Odds a : b ↔ probability a / (a + b).</note>
+
+**Problem 1 · warm-up**
+
+A drawer holds 9 fair coins and 1 two-headed coin. You take one coin at random, flip it twice and see two heads. Use odds to find the probability that it is the two-headed coin.
+
+<solution>Prior odds 1 : 9. LR = 1 / (1/4) = 4. Posterior odds 4 : 9, so the probability is 4/13 ≈ 0.308.</solution>
+<check lang="python">
+from fractions import Fraction
+prior = Fraction(1, 10)
+post = prior * 1 / (prior * 1 + (1 - prior) * Fraction(1, 4))
+assert post == Fraction(4, 13)
+</check>
+
+<ask type="problem">The probability, with the prior odds, the likelihood ratio and the posterior odds.</ask>
+@@ learner answer unsure
+Prior is 1/10. Two heads has probability 1 with the two-headed coin and 1/4 with a fair coin, so the likelihood ratio is 4 I think. I'm not sure what the ratio is meant to multiply though, the odds part confuses me, so I just did posterior = 1/10 × 4 = 4/10 = 0.4?
+@@ reply
+<grade verdict="partial" score="0.4">The prior and "the likelihood ratio is 4" are right. The wrong step is "1/10 × 4": the likelihood ratio multiplies the odds, not the probability. A prior of 1/10 is odds of 1 : 9, which gives 4 : 9 and a probability of 4/13, not 0.4.</grade>
+
+Step by step: prior odds 1 : 9, times 4, gives posterior odds 4 : 9, and $\frac{4}{4+9} = \frac{4}{13} \approx 0.308$. Multiplying the probability cannot be the rule: with a likelihood ratio of 20 it would give $\frac{1}{10} \times 20 = 2$, which is not a probability, while odds of 20 : 9 are a valid $\frac{20}{29}$.
+
+<card>How do you update a probability p with a likelihood ratio? :: Convert to odds p : (1 − p), multiply the first part by the LR, convert back with a / (a + b). Prior 1/10 and LR 4: 1 : 9 → 4 : 9 → 4/13.</card>
+
+<note>Update in three moves: probability → odds ($p : 1-p$), multiply by the likelihood ratio, odds → probability ($\frac{a}{a+b}$). Multiplying $p$ itself by the LR is only close when $p \times \text{LR}$ is still very small.</note>
+
+**Problem 2 · same idea**
+
+One server in 5 in a pool is misconfigured. A health check on a server picked at random reports "slow", a result that is 3 times as likely from a misconfigured server as from a healthy one. Find the probability that this server is misconfigured.
+
+<solution>Prior probability 1/5 is odds of 1 : 4. Times 3 gives 3 : 4. Probability 3/7 ≈ 0.429. (Multiplying the probability would give the wrong 0.6.)</solution>
+<check lang="python">
+from fractions import Fraction
+odds = Fraction(1, 4) * 3
+assert odds / (1 + odds) == Fraction(3, 7)
+</check>
+
+<ask type="problem">The probability, with the prior odds and the posterior odds.</ask>
+@@ verify
+from fractions import Fraction as F
+# the tutor's worked example
+assert F(6, 6 + 3) == F(2, 3)
+# problem 1 by Bayes' theorem directly
+prior = F(1, 10)
+like_two, like_fair = F(1), F(1, 2)**2
+assert like_two / like_fair == 4
+post = prior * like_two / (prior * like_two + (1 - prior) * like_fair)
+assert post == F(4, 13) and round(float(post), 3) == 0.308
+# by counting: flip each of the 10 coins twice, 4 equally likely outcomes each
+two_heads_from_two_headed, two_heads_from_fair = 1 * 4, 9 * 1
+assert F(two_heads_from_two_headed, two_heads_from_two_headed + two_heads_from_fair) == F(4, 13)
+# the learner's figure follows from multiplying the probability
+assert F(1, 10) * 4 == F(4, 10) == F(2, 5)
+# the reductio in the reply
+assert F(1, 10) * 20 == 2 and F(20, 29) == F(20, 20 + 9)
+# problem 2 by Bayes directly, with any likelihoods in ratio 3 : 1
+pm = F(1, 5)
+a, b = F(3, 10), F(1, 10)
+assert pm * a / (pm * a + (1 - pm) * b) == F(3, 7) and round(3 / 7, 3) == 0.429 and F(1, 5) * 3 == F(6, 10)
+# "only close when p is very small"
+p = F(1, 1000); o = p / (1 - p) * 4
+assert abs(float(o / (1 + o)) - float(p * 4)) < 2e-5
+assert '3/7' in solution(reply) and '3/7' not in visible(reply)
+
+@@@@ idk-coupon-collector-stages
+situation: idk
+topic: The coupon collector problem
+voice: plain
+level: medium
+expect: {"must":["stage","frac43"],"mustNot":["25/3","8\\.33"],"askMustNot":["25/3","8\\.33","\\b1/4\\b","\\b4 boxes"]}
+@@ tutor
+**Why this matters**
+
+The coupon collector problem asks how long random sampling takes to see every one of $n$ equally likely items at least once. It is the model behind how many random probes it takes to touch every shard, how many test runs are needed to hit every code path that is chosen at random, and how long gossip takes to reach every node. Its answer grows faster than $n$, which is why the last few items always feel slow.
+
+<ask type="predict">Each cereal box contains one of 4 toys, each equally likely. On average, how many boxes do you need to buy to own all 4? A number, and how you would work it out.</ask>
+@@ learner idk
+@@ reply
+Split the collecting into stages, one for each new toy, and handle one stage at a time. In the stage where you already own $k$ of the 4 toys, each box gives a new toy with probability $\frac{4-k}{4}$, and nothing about earlier boxes changes that. When each try succeeds with probability $p$, the average number of tries up to and including the first success is $\frac1p$.
+
+For example, owning 1 toy, a box is new with probability $\frac34$, so that stage takes $\frac43$ boxes on average.
+
+<note>Coupon collector, one stage: owning $k$ of $n$ items, the next draw is new with probability $\frac{n-k}{n}$, so the stage lasts $\frac{n}{n-k}$ draws on average. The stages are handled separately.</note>
+
+<ask type="short">You own 3 of the 4 toys. What is the probability that the next box holds the missing one, and how many boxes does this last stage take on average?</ask>
+@@ verify
+from fractions import Fraction as F
+# the stage example in the reply: owning 1 of 4
+assert F(4 - 1, 4) == F(3, 4) and 1 / F(3, 4) == F(4, 3)
+# mean tries to first success is 1/p (partial sums of k p q^(k-1) approach 1/p)
+p = 0.75
+assert abs(sum(k * p * (1 - p)**(k - 1) for k in range(1, 200)) - 4 / 3) < 1e-12
+# the easier question's answer (withheld): 1/4 and 4 boxes
+assert F(4 - 3, 4) == F(1, 4) and 1 / F(1, 4) == 4
+# the original question's answer (withheld): 4/4 + 4/3 + 4/2 + 4/1 = 25/3
+total = sum(F(4, 4 - k) for k in range(4))
+assert total == F(25, 3) and '25/3' not in reply and '8.3' not in reply
+# exact check of 25/3 from the chain of states, by solving E_k = 1 + (k/4) E_k + ((4-k)/4) E_{k+1}
+E = F(0)
+for k in (3, 2, 1, 0):
+    E = (1 + F(4 - k, 4) * E) / (1 - F(k, 4))
+assert E == F(25, 3)
+
+@@@@ idk-chebyshev-count-standard-deviations
+situation: idk
+topic: Markov's and Chebyshev's inequalities
+voice: plain
+level: medium
+expect: {"must":["standard deviations","frac\\{1\\}\\{25\\}"],"mustNot":["1/9"],"askMustNot":["1/9","1/4","0\\.25","\\bk = 2\\b","2 standard deviations"]}
+@@ tutor
+Chebyshev's inequality bounds how much probability can sit far from the mean, using only the mean $\mu$ and standard deviation $\sigma$: for any $k > 0$, $P(|X - \mu| \ge k\sigma) \le \frac{1}{k^2}$. It holds for every distribution with a finite variance.
+
+<note>Chebyshev: $P(|X - \mu| \ge k\sigma) \le \frac{1}{k^2}$ for any distribution with mean $\mu$ and standard deviation $\sigma$.</note>
+
+**Problem 1 · warm-up**
+
+A request's latency has mean 200 ms and standard deviation 20 ms; nothing else is known about its distribution. Give an upper bound on the probability that a request takes at least 260 ms or at most 140 ms.
+
+<solution>260 and 140 are both 60 ms from the mean, and 60 / 20 = 3 standard deviations, so k = 3 and P(|X − 200| ≥ 60) ≤ 1/3² = 1/9.</solution>
+<check lang="python">
+from fractions import Fraction
+k = Fraction(260 - 200, 20)
+assert k == 3 == Fraction(200 - 140, 20) and 1 / k**2 == Fraction(1, 9)
+</check>
+
+<ask type="problem">The bound, with the value of $k$ you used.</ask>
+@@ learner idk
+@@ reply
+The piece to get first is the $k$. Chebyshev measures distance from the mean in standard deviations, not in the variable's own units, so before the inequality can be used the distance has to be converted: $k = \frac{\text{distance from the mean}}{\sigma}$.
+
+For example, with mean 10 and standard deviation 2, the value 20 is 10 away from the mean, which is $\frac{10}{2} = 5$ standard deviations, so $k = 5$ and the bound on being that far out, on either side, is $\frac{1}{5^2} = \frac{1}{25}$.
+
+<note>To use Chebyshev on "at least $d$ away from the mean", set $k = d / \sigma$; the bound is then $\frac{1}{k^2} = \frac{\sigma^2}{d^2}$.</note>
+
+<ask type="short">A different service has mean latency 50 ms and standard deviation 4 ms. How many standard deviations from the mean is 58 ms, and what bound does Chebyshev then give for $P(|X - 50| \ge 8)$?</ask>
+@@ verify
+from fractions import Fraction as F
+# the worked example in the reply
+assert F(20 - 10, 2) == 5 and F(1, 5**2) == F(1, 25)
+# the easier question (withheld): k = 2, bound 1/4
+k = F(58 - 50, 4)
+assert k == 2 and 1 / k**2 == F(1, 4)
+# the original problem (withheld): k = 3, bound 1/9
+assert F(260 - 200, 20) == 3 and '1/9' not in reply
+# Chebyshev is attained, so the bound cannot be improved: a three-point distribution at mu ± k sigma and mu
+mu, sigma, kk = 0, 1, 5
+pts = {-kk: F(1, 2 * kk * kk), kk: F(1, 2 * kk * kk), 0: 1 - F(1, kk * kk)}
+mean = sum(x * p for x, p in pts.items()); var = sum(x * x * p for x, p in pts.items()) - mean**2
+assert mean == 0 and var == 1 and pts[-kk] + pts[kk] == F(1, 25)
+
+@@@@ idk-conditional-expectation-fix-first-stage
+situation: idk
+topic: Conditional expectation
+voice: plain
+level: medium
+expect: {"must":["E\\[H \\\\mid N = n\\]|given"],"mustNot":["7/4","1\\.75"],"setsProblem":true,"askMustNot":["3/2","1\\.5","7/4","1\\.75"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+Roll a fair six-sided die and call the result $N$. Then flip $N$ fair coins and count the heads, $H$. Find $E[H]$.
+
+<solution>Given N = n, H counts heads in n fair flips, so E[H | N = n] = n/2. Then E[H] = E[N/2] = 3.5 / 2 = 7/4.</solution>
+<check lang="python">
+from fractions import Fraction
+from math import comb
+e = sum(Fraction(1, 6) * sum(h * Fraction(comb(n, h), 2**n) for h in range(n + 1)) for n in range(1, 7))
+assert e == Fraction(7, 4)
+</check>
+
+<ask type="problem">The expected number of heads, with your working.</ask>
+@@ learner idk
+@@ reply
+The difficulty is that the number of coins is itself random, so freeze it. Suppose the die has already been rolled and shows $n$. Then $H$ is just the number of heads in $n$ fair flips, and its expected value is $\frac{n}{2}$. That is a conditional expectation, written $E[H \mid N = n]$: the average of $H$ over only those outcomes where $N = n$.
+
+The overall average is then the average of these conditional values, each weighted by how likely its case is.
+
+<note>Conditional expectation: $E[H \mid N = n]$ is the mean of $H$ when $N$ is known to be $n$. Law of total expectation: $E[H] = \sum_n E[H \mid N = n]\,P(N = n)$.</note>
+
+**Problem 2 · easier**
+
+A fair coin decides how many more coins are flipped: on heads you flip 2 fair coins, on tails you flip 4. Let $H$ be the number of heads among those 2 or 4 coins (the deciding flip is not counted). Find $E[H]$.
+
+<solution>E[H | 2 coins] = 1 and E[H | 4 coins] = 2. E[H] = 1/2 × 1 + 1/2 × 2 = 3/2.</solution>
+<check lang="python">
+from fractions import Fraction
+from itertools import product
+e = Fraction(0)
+for n in (2, 4):
+    for flips in product([0, 1], repeat=n):
+        e += Fraction(1, 2) * Fraction(1, 2**n) * sum(flips)
+assert e == Fraction(3, 2)
+</check>
+
+<ask type="problem">The two conditional expectations and $E[H]$.</ask>
+@@ verify
+from fractions import Fraction as F
+from itertools import product
+# E[H | N = n] = n/2 for each n, by enumeration
+for n in range(1, 7):
+    assert sum(F(sum(f), 2**n) for f in product([0, 1], repeat=n)) == F(n, 2)
+# the original answer (withheld)
+assert sum(F(1, 6) * F(n, 2) for n in range(1, 7)) == F(7, 4)
+assert '7/4' not in reply
+# the easier problem
+assert F(1, 2) * 1 + F(1, 2) * 2 == F(3, 2)
+assert '3/2' in solution(reply) and '3/2' not in visible(reply)
+
+@@@@ show-me-total-probability-tree-rows
+situation: show-me
+topic: The law of total probability
+voice: plain
+level: easy
+expect: {"visual":{"kind":"table"},"must":["11/60"]}
+@@ tutor
+The law of total probability splits an event over cases that cover everything and do not overlap: $P(T) = \sum_i P(T \mid C_i)\,P(C_i)$. Each term is one path of a probability tree: first the case, then the event within that case.
+
+A request is routed to one of three regions: EU with probability $\frac12$, US with probability $\frac13$, Asia with probability $\frac16$. It times out with probability $\frac{1}{10}$ in EU, $\frac15$ in US and $\frac25$ in Asia. Multiplying along each path gives $\frac{1}{20}$, $\frac{1}{15}$ and $\frac{1}{15}$, and adding the paths gives $P(\text{timeout}) = \frac{11}{60}$.
+
+<note>Law of total probability: if the cases $C_1, \dots, C_n$ are disjoint and cover every outcome, $P(T) = \sum_i P(T \mid C_i)\,P(C_i)$. Multiply along each branch, add across branches.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| Path | P(region) | P(timeout given region) | P(region and timeout) |
+|---|---|---|---|
+| EU, then timeout | 1/2 | 1/10 | 1/20 |
+| US, then timeout | 1/3 | 1/5 | 1/15 |
+| Asia, then timeout | 1/6 | 2/5 | 1/15 |
+| Any region | 1 | | 11/60 |
+
+Each row is one branch of the tree: multiply across the row, then add down the last column. Asia carries the fewest requests but adds as much to the total as the US, because its timeout rate is twice as high.
+@@ verify
+from fractions import Fraction as F
+rows = table(reply)[1:]
+assert len(rows) == 4
+regions = [('EU', F(1, 2), F(1, 10)), ('US', F(1, 3), F(1, 5)), ('Asia', F(1, 6), F(2, 5))]
+total = F(0)
+for row, (name, pr, pt) in zip(rows, regions):
+    assert row[0].startswith(name)
+    assert F(row[1]) == pr and F(row[2]) == pt and F(row[3]) == pr * pt, row
+    assert row[1] == str(pr) and row[2] == str(pt) and row[3] == str(pr * pt)
+    total += pr * pt
+assert sum(r[1] for r in regions) == 1 == F(rows[3][1])
+assert total == F(11, 60) and rows[3][3] == '11/60'
+# the sentence under it: Asia's term equals the US term, and its rate is twice the US rate
+assert regions[2][1] * regions[2][2] == regions[1][1] * regions[1][2] and regions[2][2] == 2 * regions[1][2]
+assert regions[2][1] == min(r[1] for r in regions)
+# the tutor's explanation states the same values
+for s in ['\\frac{1}{20}', '\\frac{1}{15}', '\\frac{11}{60}']:
+    assert s in tutor[0]
+
+@@@@ show-me-markov-chain-stepped-forward
+situation: show-me
+topic: Markov chains and stationary distributions
+voice: terse
+level: medium
+expect: {"visual":{"kind":"table"},"must":["2/3","1/4"],"ends":"ask","askMustNot":["\\(1/2, 1/2\\)","1/6"]}
+@@ tutor
+A service is either Up or Down at each minute. From Up it goes Down with probability $\frac14$; from Down it comes back Up with probability $\frac12$. If the distribution now is $(u, d)$, the next one is $u' = \frac34 u + \frac12 d$ and $d' = \frac14 u + \frac12 d$.
+
+A stationary distribution is one that this step leaves unchanged. Setting $u = \frac34 u + \frac12 d$ with $u + d = 1$ gives $u = \frac23$, $d = \frac13$. Starting from Up for certain, $(1, 0)$, one step gives $(\frac34, \frac14)$, and repeated steps move towards $(\frac23, \frac13)$.
+
+<note>Stepping a chain: new distribution = old distribution × transition matrix. A stationary distribution $\pi$ satisfies $\pi = \pi P$; for Up/Down with $P(\text{U}\to\text{D}) = \frac14$ and $P(\text{D}\to\text{U}) = \frac12$ it is $(\frac23, \frac13)$.</note>
+
+<ask type="short">From $(\frac34, \frac14)$, what is the distribution after one more step?</ask>
+@@ learner question
+could i see the steps in a table? want to watch it converge
+@@ reply
+| Step | P(Up) | P(Down) | P(Up) − 2/3 |
+|---|---|---|---|
+| 0 | 1 | 0 | 1/3 |
+| 1 | 3/4 | 1/4 | 1/12 |
+| 2 | 11/16 | 5/16 | 1/48 |
+| 3 | 43/64 | 21/64 | 1/192 |
+| 4 | 171/256 | 85/256 | 1/768 |
+
+Read down the last column: the gap to the stationary value $\frac23$ is divided by 4 at every step, so the distribution closes in on $(\frac23, \frac13)$ quickly but never jumps onto it. Row 2 is the answer to the question you were on.
+
+<ask type="predict">Now start from Down for certain, $(0, 1)$. What is the distribution after one step, and how far is P(Up) from $\frac23$ then?</ask>
+@@ verify
+from fractions import Fraction as F
+rows = table(reply)[1:]
+assert len(rows) == 5
+u, d = F(1), F(0)
+gaps = []
+for i, row in enumerate(rows):
+    assert row == [str(i), str(u), str(d), str(u - F(2, 3))], (i, row, u, d)
+    gaps.append(u - F(2, 3))
+    u, d = F(3, 4) * u + F(1, 2) * d, F(1, 4) * u + F(1, 2) * d
+assert all(gaps[i + 1] == gaps[i] / 4 for i in range(4))
+# stationary distribution
+pu, pd = F(2, 3), F(1, 3)
+assert (F(3, 4) * pu + F(1, 2) * pd, F(1, 4) * pu + F(1, 2) * pd) == (pu, pd)
+# the pending question's answer is row 2
+assert rows[2][1:3] == ['11/16', '5/16']
+# the new question's withheld answer: from (0, 1) one step gives (1/2, 1/2), a gap of 1/6
+assert (F(3, 4) * 0 + F(1, 2) * 1, F(1, 4) * 0 + F(1, 2) * 1) == (F(1, 2), F(1, 2)) and F(2, 3) - F(1, 2) == F(1, 6)
+
+@@@@ show-me-tree-draws-without-replacement
+situation: show-me
+topic: Probability trees for draws without replacement
+voice: plain
+level: easy
+expect: {"visual":{"kind":"mermaid","diagram":["flowchart"]},"must":["3/10","1/10"]}
+@@ tutor
+A bag holds 3 red and 2 blue balls, and two are drawn without replacement. The first draw is red with probability $\frac35$ and blue with probability $\frac25$. The second draw is from the 4 balls left, so its probabilities depend on the first: after a red, 2 red and 2 blue remain, giving $\frac24$ each; after a blue, 3 red and 1 blue remain, giving $\frac34$ and $\frac14$. Multiplying along each path: red then red $\frac35 \times \frac24 = \frac{3}{10}$, red then blue $\frac{3}{10}$, blue then red $\frac25 \times \frac34 = \frac{3}{10}$, blue then blue $\frac25 \times \frac14 = \frac{1}{10}$.
+
+<note>Without replacement, the second-draw probabilities are conditional on the first draw: the bag has one ball fewer and its mix has changed. The probability of a path is the product of the branch probabilities along it, and the paths' probabilities sum to 1.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+flowchart LR
+  S["Bag: 3 red, 2 blue"] -->|"3/5"| R["1st red"]
+  S -->|"2/5"| B["1st blue"]
+  R -->|"2/4"| RR["red, red: 3/10"]
+  R -->|"2/4"| RB["red, blue: 3/10"]
+  B -->|"3/4"| BR["blue, red: 3/10"]
+  B -->|"1/4"| BB["blue, blue: 1/10"]
+```
+
+Follow any path from the bag to a leaf and multiply the two branch labels to get the leaf's probability; the four leaves add up to 1, and the second-stage labels differ between the two halves because the first draw changed the bag.
+@@ verify
+import re
+from fractions import Fraction as F
+from itertools import permutations
+body = block(reply, 'mermaid')
+edges = re.findall(r'(\w+)(?:\["[^"]*"\])? -->\|"([^"]+)"\| (\w+)\["([^"]+)"\]', body)
+assert len(edges) == 6, edges
+lab = {(a, b): F(p) for a, p, b, _ in edges}
+text = {b: t for _, _, b, t in edges}
+# exact path probabilities by listing ordered draws of two balls from RRRBB
+balls = 'RRRBB'
+pairs = list(permutations(range(5), 2))
+prob = lambda first, second: F(sum(1 for i, j in pairs if balls[i] == first and balls[j] == second), len(pairs))
+first = lambda c: F(balls.count(c), 5)
+assert lab[('S', 'R')] == first('R') == F(3, 5) and lab[('S', 'B')] == first('B') == F(2, 5)
+for leaf, (a, b) in {'RR': 'RR', 'RB': 'RB', 'BR': 'BR', 'BB': 'BB'}.items():
+    parent = a
+    cond = prob(a, b) / first(a)
+    assert lab[(parent, leaf)] == cond, (leaf, lab[(parent, leaf)], cond)
+    shown = F(text[leaf].split(': ')[1])
+    assert shown == prob(a, b) == lab[('S', parent)] * lab[(parent, leaf)]
+assert sum(prob(a, b) for a in 'RB' for b in 'RB') == 1
+# unreduced branch labels as in the explanation
+assert '"2/4"' in body and '\\frac24' in tutor[0]
+assert len(re.findall(r'\["', body)) <= 14
+
+@@@@ show-me-gamblers-ruin-state-diagram
+situation: show-me
+topic: Random walks and gambler's ruin
+voice: plain
+level: easy
+expect: {"visual":{"kind":"mermaid","diagram":["stateDiagram"]},"must":["absorbing|never leaves|stays"]}
+@@ tutor
+Gambler's ruin is a random walk with two walls. Take a gambler whose fortune is a whole number of pounds from 0 to 4, making fair £1 bets. From £1, £2 or £3 the fortune moves up by one with probability $\frac12$ and down by one with probability $\frac12$. £0 (ruin) and £4 (the target) are absorbing states: once the walk reaches either, it stays there with probability 1, so every game ends in one of the two. The walk is a Markov chain with five states, because the next fortune depends only on the current one.
+
+<note>Gambler's ruin: a random walk on 0, 1, …, N that moves ±1 with probability $\frac12$ each from the interior states and stays for ever at 0 or N (absorbing states).</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+stateDiagram-v2
+  direction LR
+  s0: £0 ruin
+  s1: £1
+  s2: £2
+  s3: £3
+  s4: £4 target
+  s1 --> s0: 1/2
+  s1 --> s2: 1/2
+  s2 --> s1: 1/2
+  s2 --> s3: 1/2
+  s3 --> s2: 1/2
+  s3 --> s4: 1/2
+  s0 --> s0: 1
+  s4 --> s4: 1
+```
+
+Look at the two ends: £0 and £4 have no arrow leading away, only a loop with probability 1, which is what absorbing means, while each middle state splits its probability evenly between its two neighbours.
+@@ verify
+import re
+from fractions import Fraction as F
+body = block(reply, 'mermaid')
+edges = [(int(a), int(b), F(p)) for a, b, p in re.findall(r's(\d) --> s(\d): (\S+)', body)]
+assert len(edges) == 8
+P = [[F(0)] * 5 for _ in range(5)]
+for a, b, p in edges:
+    P[a][b] += p
+# the matrix the explanation describes
+want = [[F(0)] * 5 for _ in range(5)]
+want[0][0] = want[4][4] = F(1)
+for i in (1, 2, 3):
+    want[i][i - 1] = want[i][i + 1] = F(1, 2)
+assert P == want and all(sum(r) == 1 for r in P)
+names = dict(re.findall(r'^\s*s(\d): (.+)$', body, flags=re.M))
+assert names == {'0': '£0 ruin', '1': '£1', '2': '£2', '3': '£3', '4': '£4 target'}

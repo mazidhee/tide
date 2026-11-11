@@ -1,0 +1,232 @@
+@@@@ open-orchestration-retry
+situation: open
+topic: Orchestration: DAGs, retries and idempotent tasks
+voice: plain
+level: medium
+expect: {"must":["retr"],"askMustNot":["duplicat","twice","one and a half","1,?500"]}
+noverify: an opening; it asks what a retried append leaves in the table and states no result
+@@ reply
+**Why this matters**
+
+An orchestrator such as Airflow, Dagster or Prefect runs a pipeline as a directed acyclic graph of tasks: it starts each task once the tasks it depends on have succeeded, retries the ones that fail, and reruns past dates on request. Nightly warehouse loads, model training runs and reconciliation jobs in payments are scheduled this way. Because any task may run more than once, the way a task writes its output decides whether a retry repairs the data or corrupts it. This is the base for backfills, data quality gates and every incremental model you will build.
+
+<ask type="predict">A daily task reads yesterday's 1,000 orders and appends them to a warehouse table. It fails after writing 500 rows, and the orchestrator retries it from the start. How many rows for that day are in the table once the retry succeeds, and why?</ask>
+
+@@@@ open-quiz-star-schema-grain
+situation: open
+topic: Star schemas: facts, dimensions and grain
+mode: quiz
+options: {"length":6}
+voice: plain
+level: easy
+expect: {"must":["Question 1 of 6"],"askTypes":["choice"],"mustNot":["Why this matters"]}
+noverify: a quiz opening; one multiple-choice question and no computed value
+@@ reply
+**Question 1 of 6**
+
+A retailer's warehouse has a fact table `fact_sales` with the columns order_id, product_id, customer_id, date_id, quantity and line_amount. An order of three different products puts three rows in it.
+
+<ask type="choice" options="One row per product within an order|One row per order|One row per customer per day|One row per product in the catalogue">What is the grain of fact_sales?</ask>
+
+@@@@ open-refresh-partition-pruning
+situation: open
+topic: Partition pruning and bytes scanned
+options: {"refresh":true}
+voice: plain
+level: easy
+expect: {"setsProblem":true,"askMustNot":["280","1\\.9","14,?600"],"mustNot":["Why this matters"]}
+@@ reply
+**Problem 1**
+
+A table of events is stored as one folder per day, and every day holds about 40 GB. It has 365 days of data. A query filters on `event_date BETWEEN '2025-03-01' AND '2025-03-07'`, and the engine prunes partitions on event_date.
+
+<solution>Both ends of BETWEEN are included, so 7 days are read: 7 × 40 = 280 GB. The whole table is 365 × 40 = 14,600 GB, so the query reads 7/365 of it, about 1.9%.</solution>
+<check lang="python">
+from datetime import date
+days = (date(2025, 3, 7) - date(2025, 3, 1)).days + 1
+assert days == 7 and days * 40 == 280 and 365 * 40 == 14600
+assert round(100 * days / 365, 1) == 1.9
+</check>
+
+<ask type="problem">How many GB does the query read, and what percentage of the table is that?</ask>
+@@ verify
+from datetime import date
+days = (date(2025, 3, 7) - date(2025, 3, 1)).days + 1
+assert days == 7
+s = solution(reply)
+assert str(days * 40) in s and '14,600' in s and 365 * 40 == 14600
+assert round(100 * days / 365, 1) == 1.9 and '1.9%' in s
+assert '280' not in visible(reply)
+
+@@@@ open-prior-schema-evolution-rename
+situation: open-prior
+topic: Schema evolution and compatibility
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Schema evolution and compatibility","daysAgo":4,"finished":false,"plan":["Adding a field with a default","Backward and forward compatibility","Renaming and removing fields"],"right":3,"partly":1,"wrong":1,"missed":["A producer renames the field amount to amount_minor. Why does an old consumer break even though no data was lost?"],"open":"Which change is safe without coordinating readers and writers: adding an optional field or removing a required one?"}]}
+expect: {"must":["renam"],"askMustNot":["\\bnull","missing","absent","alias","both names"]}
+noverify: an opening; the question's answer (the old name is absent, so the reader gets nothing for it) is not stated
+@@ reply
+**Why this matters**
+
+Schemas change every week in a real pipeline: a team adds a column, renames a field or tightens a type, and every reader of that data has to keep working. Avro with a schema registry, Protobuf and table formats such as Iceberg and Delta Lake each define which changes are compatible, and a wrong one stops consumers or quietly empties a column. You have adding a field with a default and the two directions of compatibility from last time; renaming was the gap, and removing fields is still to come.
+
+<ask type="short">A JSON events feed carries a field `total`. The producer starts sending the same values under the name `total_minor` instead, and a downstream job that reads `total` is left unchanged. What does that job get for `total` on the new events, and why does that make the rename a breaking change?</ask>
+
+@@@@ open-prior-sliding-after-session
+situation: open-prior
+topic: Sliding windows in stream processing
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Session windows in stream processing","daysAgo":6,"finished":true,"plan":["A window as a rule for grouping events","The inactivity gap","Merging sessions when a late event arrives"],"right":5,"partly":1,"wrong":0}]}
+expect: {"must":["session","overlap"],"askMustNot":["\\btwo\\b","\\b2\\b","12:00 to 12:10 and 12:05"]}
+noverify: an opening; the question's answer (two windows) is not stated
+@@ reply
+**Why this matters**
+
+A sliding window answers questions of the form "how many in the last 10 minutes, updated every minute": rate limits, velocity checks on a card for fraud, moving averages on a dashboard. Flink and Spark Structured Streaming both offer it, and Kafka Streams calls the fixed-step kind a hopping window. It builds on the idea from your session-window lesson that a window is a rule assigning each event to time intervals. There the rule was a gap of inactivity; here it is a fixed size and a fixed step, so the windows overlap and one event can be counted in more than one of them.
+
+<ask type="predict">Windows are 10 minutes long and a new one starts every 5 minutes, on the hour: the first covers 12:00 up to but not including 12:10, the next starts at 12:05, and so on. Into how many windows does an event at 12:07 fall?</ask>
+
+@@@@ open-recall-log-compaction
+situation: open-recall
+topic: Log compaction
+voice: plain
+level: medium
+before: {"recall":[{"prompt":"What does log compaction keep for each key in a Kafka topic, and what does it remove?","topic":"Log compaction","reviews":2,"lapses":0}]}
+expect: {"askMustNot":["latest","last value","most recent","older","superseded"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="short">What does log compaction keep for each key in a Kafka topic, and what does it remove?</ask>
+
+@@@@ open-recall-broadcast-join
+situation: open-recall
+topic: Broadcast joins
+voice: plain
+level: medium
+before: {"recall":[{"prompt":"Why does a broadcast join not need to shuffle the large table?","topic":"Broadcast joins","reviews":1,"lapses":1}]}
+expect: {"askMustNot":["every executor","copy","in memory","hash map","stays where"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="explain">Why does a broadcast join not need to shuffle the large table?</ask>
+
+@@@@ correct-skew-probe-to-plan
+situation: after-correct
+topic: Data skew and salting in distributed joins
+voice: terse
+level: hard
+expect: {"verdict":"correct","setsProblem":true,"need":["plan","note"],"must":["30 million","\\b60\\b"],"askMustNot":["15 million","15,000,000"]}
+@@ tutor
+**Why this matters**
+
+A distributed join sends every row to a partition chosen by a hash of its join key, so all rows with the same key land on one task. When one key holds a large share of the rows, that task does most of the work while the others finish early, and the job is as slow as its largest partition. It is the usual reason a Spark or Trino job sits at 199 of 200 tasks, and the same effect unbalances Kafka partitions and sharded databases.
+
+<ask type="predict">A join on customer_id is hash-partitioned into 200 partitions. One customer accounts for 30% of the 1 billion order rows. Roughly how many rows does the largest partition hold, and how does that compare with an even split?</ask>
+@@ learner answer sure
+300M+ in one partition, all of that customer's rows hash to the same place. even split would be 5M each. so ~60x bigger
+@@ reply
+<grade verdict="correct" score="1">"all of that customer's rows hash to the same place" is the whole cause: one partition gets the 300 million rows plus its ordinary share, about 60 times the 5 million of an even split.</grade>
+
+<plan>
+- Why more partitions do not help
+- Salting the hot key
+- What salting costs on the other side of the join
+</plan>
+
+Raising the partition count does not split a hot key: a hash sends equal keys to the same partition however many partitions there are. Salting changes the key itself. Append a random number from 0 to $s - 1$ to the key on the skewed side, and the hot key becomes $s$ different keys that can be spread over up to $s$ partitions. With $s = 10$, the 300 million rows become ten keys of about 30 million rows each.
+
+<note>Skew: equal join keys always hash to the same partition, so one hot key makes one oversized task. Salting: join on (key, salt), with salt random in 0 to s − 1 on the skewed side, which cuts the hot key's largest group to about 1/s of its rows.</note>
+
+**Problem 1 · warm-up**
+
+One key has 120 million rows. It is salted with $s = 8$, and the 8 salted keys happen to land in 8 different partitions.
+
+<solution>120 million / 8 = 15 million of the hot key's rows per salted key, so about 15 million in each of those partitions.</solution>
+<check lang="python">
+assert 120_000_000 / 8 == 15_000_000
+</check>
+
+<ask type="problem">About how many of that key's rows does each of those partitions receive?</ask>
+@@ verify
+rows, parts, share = 1_000_000_000, 200, 0.30
+hot = rows * share
+even = rows / parts
+assert hot == 300_000_000 and even == 5_000_000
+largest = hot + (rows - hot) / parts          # the hot key plus an ordinary share of the rest
+assert 60 <= largest / even < 61               # "about 60 times", and the learner's "~60x"
+assert hot / 10 == 30_000_000                  # s = 10 in the worked example
+assert 120_000_000 / 8 == 15_000_000 and '15 million' in solution(reply)
+assert '15 million' not in visible(reply)
+
+@@@@ correct-bytes-scanned-harder
+situation: after-correct
+topic: The cost of a full scan: bytes scanned
+options: {"difficulty":"hard"}
+voice: plain
+level: hard
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"askMustNot":["1\\.2 GB","0\\.006","\\b40 times"],"mustNot":["should have"]}
+@@ tutor
+**Problem 1 · hard**
+
+A columnar table `payments` has 2 billion rows and 50 columns. Assume every column takes the same space and the table is 800 GB compressed. It is not partitioned. A query runs `SELECT user_id, amount FROM payments WHERE country = 'NG'` on an engine that charges 5 dollars per TB scanned (1 TB = 1,000 GB).
+
+<solution>Three columns are read: user_id, amount and country (the filter column must be read as well as the two returned). Each column is 800 / 50 = 16 GB, so the scan is 48 GB = 0.048 TB, costing 0.048 × 5 = 0.24 dollars.</solution>
+<check lang="python">
+per_col = 800 / 50
+scan = 3 * per_col
+assert per_col == 16 and scan == 48 and abs(scan / 1000 * 5 - 0.24) < 1e-12
+</check>
+
+<ask type="problem">How many GB does the query scan, and what does it cost? Say which columns you counted.</ask>
+@@ learner answer sure
+Three columns, not two: user_id and amount are returned and country has to be read for the WHERE. 800/50 = 16 GB per column, so 48 GB = 0.048 TB, about $0.24.
+@@ reply
+<grade verdict="correct" score="1">"country has to be read for the WHERE" is the step most answers miss: a filter column is scanned even though it is not returned, so 3 × 16 = 48 GB and 0.24 dollars.</grade>
+
+**Problem 2 · harder**
+
+The table is rebuilt partitioned by day on `pay_date`: 400 days of data, every day the same size, still 800 GB in total and 50 equal columns. Assume pay_date is held in the partition's path, so reading it costs no bytes, and the engine prunes partitions on it. The query becomes `SELECT user_id, amount FROM payments WHERE country = 'NG' AND pay_date >= '2025-06-01' AND pay_date < '2025-06-11'`.
+
+<solution>The range covers 10 days (1 to 10 June), so 10 of 400 partitions are read: 800 × 10 / 400 = 20 GB of table. Three of 50 columns: 20 × 3 / 50 = 1.2 GB = 0.0012 TB, costing 0.006 dollars. That is 48 / 1.2 = 40 times less than the unpartitioned scan.</solution>
+<check lang="python">
+from datetime import date
+days = (date(2025, 6, 11) - date(2025, 6, 1)).days
+gb = 800 * days / 400 * 3 / 50
+assert days == 10 and abs(gb - 1.2) < 1e-12
+assert abs(gb / 1000 * 5 - 0.006) < 1e-12 and abs(48 / gb - 40) < 1e-9
+</check>
+
+<ask type="problem">The GB scanned, the cost in dollars, and the factor by which this scan is smaller than the one in Problem 1.</ask>
+@@ verify
+per_col = 800 / 50
+assert per_col == 16 and 3 * per_col == 48 and abs(48 / 1000 * 5 - 0.24) < 1e-12
+assert '48 GB' in learner and '0.24' in learner
+from datetime import date
+days = (date(2025, 6, 11) - date(2025, 6, 1)).days
+assert days == 10
+gb = 800 * days / 400 * 3 / 50
+assert abs(gb - 1.2) < 1e-12 and '1.2 GB' in solution(reply)
+assert abs(gb / 1000 * 5 - 0.006) < 1e-12 and '0.006' in solution(reply)
+assert abs(48 / gb - 40) < 1e-9 and '40 times' in solution(reply)
+assert '1.2 GB' not in visible(reply)
+
+@@@@ correct-recall-consumer-groups
+situation: after-correct
+topic: Kafka consumer groups and rebalancing
+voice: terse
+level: medium
+before: {"recall":[{"prompt":"Two consumers are in the same group on one topic. In normal operation, can both be assigned the same partition?","topic":"Kafka consumer groups and rebalancing","reviews":1,"lapses":0}]}
+expect: {"verdict":"correct","heading":"Why this matters","must":["rebalanc"],"askMustNot":["last committed","again","reprocess","duplicat","twice"]}
+noverify: a recall answer marked and an opening paragraph; nothing is computed
+@@ tutor
+<ask type="short">Two consumers are in the same group on one topic. In normal operation, can both be assigned the same partition?</ask>
+@@ learner answer sure
+no. within a group each partition is owned by one consumer at a time, they split them. a 2nd group would get every record too
+@@ reply
+<grade verdict="correct" score="1">"each partition is owned by one consumer at a time" is the rule, and you are right that a second group reads every record independently.</grade>
+
+**Why this matters**
+
+A consumer group is how Kafka spreads a topic's partitions over a set of worker processes, and moves them when a worker joins, leaves or stalls. That reassignment, the rebalance, is where lag spikes and repeated processing come from in production, so reading it correctly is most of operating a stream job. Kafka Streams applications and Kafka Connect sink connectors are consumer groups underneath, and scaling any consumer service comes down to how partitions are shared out.
+
+<ask type="predict">A topic has 6 partitions and its group has 3 consumers, each owning 2. One consumer crashes after processing 40 records it had not yet committed offsets for. Which consumers read its 2 partitions next, and at which record do they start?</ask>

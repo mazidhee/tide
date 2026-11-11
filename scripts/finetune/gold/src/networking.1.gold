@@ -1,0 +1,171 @@
+@@@@ open-tcp-handshake
+situation: open
+topic: The TCP three-way handshake
+voice: plain
+level: easy
+expect: {"must":["round trip"],"askMustNot":["7001","SYN-ACK","SYN and ACK","SYN\\+ACK"]}
+noverify: an opening; it asks for the reply's flags and acknowledgement number and states neither
+@@ reply
+**Why this matters**
+
+Every TCP connection starts with the three-way handshake: an HTTP request, a database session, a gRPC call between services, a peer link between blockchain nodes. It costs one round trip before any data moves, which is the reason connection pools and keep-alive exist. "Connection refused", "connection timed out" and a SYN flood are all handshake outcomes, so knowing the exchange lets you tell them apart in a packet capture. It also sets the starting sequence numbers that TCP's reliability is built on afterwards.
+
+<ask type="predict">A client opens a connection by sending a SYN with sequence number 7000. Which flags are set on the server's reply, and what acknowledgement number does it carry?</ask>
+
+@@@@ open-quiz-dns-first-query
+situation: open
+topic: DNS resolution and caching
+mode: quiz
+options: {"length":6}
+voice: plain
+level: medium
+expect: {"must":["Question 1 of 6"],"askTypes":["choice"],"mustNot":["Why this matters"]}
+noverify: a quiz opening; one multiple-choice question with nothing computed
+@@ reply
+**Question 1 of 6**
+
+<ask type="choice" options="A root name server|The name server for the .org zone|The authoritative server for example.org|Another recursive resolver upstream">A laptop asks its recursive resolver for the address of www.example.org. The resolver has nothing cached except its built-in list of root servers, and it is not configured to forward. Where does the resolver send its first query?</ask>
+
+@@@@ open-refresh-subnet-mask
+situation: open
+topic: Subnet masks and host counts
+options: {"refresh":true}
+voice: plain
+level: easy
+expect: {"setsProblem":true,"askTypes":["problem"],"must":["192\\.168\\.14\\.77/27"],"mustNot":["192\\.168\\.14\\.64","192\\.168\\.14\\.95","\\b30 (usable|hosts)"]}
+@@ reply
+**Problem 1**
+
+A host has the address 192.168.14.77/27. Find the network address of its subnet, the broadcast address, and the number of usable host addresses. Apply the usual rule that the first and last addresses of a subnet are not given to hosts.
+
+<solution>A /27 leaves 5 host bits, so blocks of 2^5 = 32 addresses in the last octet: 0, 32, 64, 96. 77 falls in the block starting at 64. Network 192.168.14.64, broadcast 192.168.14.95 (the last address before 96), usable hosts 32 − 2 = 30.</solution>
+<check lang="python">
+import ipaddress
+n = ipaddress.ip_interface('192.168.14.77/27').network
+assert str(n.network_address) == '192.168.14.64'
+assert str(n.broadcast_address) == '192.168.14.95'
+assert n.num_addresses - 2 == 30
+</check>
+
+<ask type="problem">The network address, the broadcast address and the host count, with your working.</ask>
+@@ verify
+import ipaddress
+n = ipaddress.ip_interface('192.168.14.77/27').network
+s = solution(reply)
+assert str(n.network_address) == '192.168.14.64' and '192.168.14.64' in s
+assert str(n.broadcast_address) == '192.168.14.95' and '192.168.14.95' in s
+assert n.num_addresses == 32 == 2**5 and n.num_addresses - 2 == 30 and '32 − 2 = 30' in s
+assert 64 <= 77 < 96
+# the answer is not in what the learner reads
+v = visible(reply)
+assert '14.64' not in v and '14.95' not in v
+
+@@@@ open-prior-arp-off-subnet
+situation: open-prior
+topic: ARP and MAC addresses
+voice: plain
+level: medium
+before: {"prior":[{"topic":"ARP and MAC addresses","daysAgo":4,"finished":false,"plan":["What a MAC address identifies","The ARP request and reply","Sending off the subnet through the gateway"],"right":3,"partly":1,"wrong":1,"missed":["Host A sends a packet to an address outside its own subnet. Whose MAC address does the frame carry as its destination?"],"open":"Why does an ARP cache entry expire instead of being kept for ever?"}]}
+expect: {"must":["gratuitous ARP|failover"],"askMustNot":["gateway","router","192\\.168\\.1\\.1\\b"]}
+noverify: an opening; the question's answer (ARP for the default gateway, frame addressed to the gateway's MAC) is not stated
+@@ reply
+**Why this matters**
+
+ARP turns an IP address into the MAC address a frame needs, so every packet a host puts on Ethernet or Wi-Fi depends on it. It explains faults you will meet in practice: a duplicate address, a stale cache entry, and failover designs where a virtual IP moves between machines by gratuitous ARP. You have the request and reply exchange from last time; the case of a destination off the subnet is the one that did not hold, and it decides how every packet bound for the internet is framed.
+
+<ask type="short">A laptop at 192.168.1.20/24 sends a packet to 8.8.8.8. For which IP address does it send its ARP request, and which machine's MAC address becomes the frame's destination?</ask>
+
+@@@@ open-prior-congestion-from-flow-control
+situation: open-prior
+topic: TCP congestion control
+voice: plain
+level: medium
+before: {"prior":[{"topic":"TCP flow control and the sliding window","daysAgo":2,"finished":true,"plan":["The advertised window","Bytes in flight","Zero windows and window probes"],"right":4,"partly":1,"wrong":1,"missed":["The receiver advertises 8000 bytes and 6000 bytes are unacknowledged. How many more bytes may the sender send?"]}]}
+expect: {"must":["flow control","in flight"],"askMustNot":["\\b1500\\b","\\b3000\\b"]}
+@@ reply
+**Why this matters**
+
+Congestion control is how a TCP sender sets its rate when the limit is the network rather than the receiver. It is why a download ramps up, why one lost packet can halve throughput, and why algorithms such as CUBIC and BBR are chosen with care on busy servers and CDNs. It rests on the idea from your flow control lesson: the sender may only have a window's worth of unacknowledged bytes in flight. Congestion control adds a second window that the sender works out for itself, and the smaller of the two applies. The in-flight calculation was the one miss last time, so that comes first.
+
+<ask type="short">A sender has transmitted every byte below sequence number 15000 and has been acknowledged up to 12000. The receiver advertises a window of 4500 bytes. How many more bytes may the sender transmit right now?</ask>
+@@ verify
+# the answer the ask withholds: window minus bytes in flight
+in_flight = 15000 - 12000
+assert in_flight == 3000 and 4500 - in_flight == 1500
+import re
+assert not re.search(r'\b1500\b', reply) and not re.search(r'\b3000\b', reply)
+# different numbers from the stored question (8000 - 6000 = 2000)
+assert 8000 - 6000 == 2000 and '8000' not in reply
+
+@@@@ open-recall-mss-from-mtu
+situation: open-recall
+topic: MTU, fragmentation and MSS
+voice: plain
+level: easy
+before: {"recall":[{"prompt":"A link has an MTU of 1500 bytes. What is the largest TCP payload per segment over IPv4 with no options, and why?","topic":"MTU, fragmentation and MSS","reviews":2,"lapses":1}]}
+expect: {"askMustNot":["1460","\\b40\\b","20 \\+ 20"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="short">A link has an MTU of 1500 bytes. What is the largest TCP payload per segment over IPv4 with no options, and why?</ask>
+
+@@@@ open-recall-dhcp-discover
+situation: open-recall
+topic: DHCP and address leases
+voice: plain
+level: easy
+before: {"recall":[{"prompt":"A new laptop has no IP address yet. How can its DHCP Discover reach a server it cannot address?","topic":"DHCP and address leases","reviews":0,"lapses":0}]}
+expect: {"askMustNot":["broadcast","255\\.255","0\\.0\\.0\\.0"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="explain">A new laptop has no IP address yet. How can its DHCP Discover reach a server it cannot address?</ask>
+
+@@@@ correct-probe-seq-after-syn
+situation: after-correct
+topic: TCP sequence and acknowledgement numbers
+voice: terse
+level: medium
+expect: {"verdict":"correct","askMustNot":["1001","1201"],"askTypes":["short","predict"],"forbid":["plan","solution"]}
+@@ tutor
+**Why this matters**
+
+Sequence and acknowledgement numbers are how TCP turns a stream of packets that may be lost, duplicated or reordered into an exact stream of bytes. Reading them is the core skill for a packet capture in Wireshark or tcpdump: they show what was lost, what was retransmitted and where a connection stalled. The same idea, numbering what you send and acknowledging what you have, returns in QUIC, in replication logs and in message queues.
+
+<ask type="short">A sender transmits three segments of 100 bytes each. The first carries sequence number 2000. What sequence numbers do the second and third carry?</ask>
+@@ learner answer sure
+2100 and 2200. seq = number of the first byte in the segment
+@@ reply
+<grade verdict="correct" score="1">"2100 and 2200" is right, and for the reason you give: the sequence number is the "number of the first byte in the segment", so each segment starts 100 past the one before.</grade>
+
+A step up, with the handshake included.
+
+<ask type="short">A client's SYN carries sequence number 1000 and the server's SYN-ACK carries sequence number 5000. Straight after the handshake the client sends 200 bytes of data. What sequence number is on that data segment, and what acknowledgement number does the server send back for it?</ask>
+@@ verify
+# the tutor's first probe: three 100-byte segments from 2000
+assert [2000 + 100 * i for i in range(3)] == [2000, 2100, 2200]
+assert '2100' in learner and '2200' in learner
+# the withheld answer to the new probe: the SYN uses one sequence number
+seq = 1000 + 1
+ack = seq + 200
+assert (seq, ack) == (1001, 1201)
+assert '1001' not in reply and '1201' not in reply
+
+@@@@ correct-recall-nat-port-rewrite
+situation: after-correct
+topic: NAT and port mapping
+voice: wordy
+level: medium
+before: {"recall":[{"prompt":"Two laptops behind one public IP both connect out from source port 50000. How does the NAT router tell their replies apart?","topic":"NAT and port mapping","reviews":1,"lapses":1}]}
+expect: {"verdict":"correct","heading":"Why this matters","askMustNot":["drop","discard"],"askTypes":["predict","short","explain","choice"],"must":["port forwarding"]}
+noverify: conceptual; a recall answer marked and a lesson opened, nothing computed
+@@ tutor
+<ask type="short">Two laptops behind one public IP both connect out from source port 50000. How does the NAT router tell their replies apart?</ask>
+@@ learner answer sure
+The router can't keep both of them as 50000 on the outside, so it rewrites the source port of at least one of them to a different public port and remembers the mapping in its table. When a reply comes back it arrives at a particular public port, the router looks that port up and gets the right laptop's private address and its original port back.
+@@ reply
+<grade verdict="correct" score="1">Right: it "rewrites the source port of at least one of them to a different public port and remembers the mapping in its table", and the port a reply arrives at is the key for the lookup.</grade>
+
+**Why this matters**
+
+NAT sits between almost every private network and the internet: home routers, mobile carriers' carrier-grade NAT, Docker's bridge network, a cloud NAT gateway in front of private subnets. Its table is why outbound connections work with no setup while inbound ones need port forwarding, and why an idle connection can die silently when its entry expires. Peer-to-peer systems, blockchain nodes and WebRTC calls among them, spend real effort getting through it. Knowing the mapping lets you debug faults that appear only from behind a gateway and reason about port exhaustion on a busy one.
+
+<ask type="predict">The router's table holds one entry: public port 40001 maps to 192.168.0.12, port 50000. A packet from an unknown internet host arrives addressed to public port 40002. What does the router do with it, and why?</ask>

@@ -1,0 +1,785 @@
+@@@@ hands-on-c-reverse-list-then-cycle
+situation: hands-on
+topic: Linked lists in C
+options: {"strategy":"code"}
+voice: wordy
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"must":["slow","fast"],"askMustNot":["fast->next->next","slow == fast"]}
+@@ tutor
+A singly linked list is a chain of nodes: each holds a value and a pointer to the next node, and the last one points to NULL. Walking the list means following `next` until NULL.
+
+```c
+#include <stdio.h>
+
+struct Node { int value; struct Node *next; };
+
+void print_list(const struct Node *n) {
+    for (; n; n = n->next) printf("%d%s", n->value, n->next ? " " : "\n");
+}
+
+int main(void) {
+    struct Node c = {3, NULL}, b = {2, &c}, a = {1, &b};
+    print_list(&a);
+    return 0;
+}
+```
+
+```
+1 2 3
+```
+
+<solution>Keep prev = NULL. While head is not NULL: save next = head->next, set head->next = prev, then prev = head and head = next. Return prev. The program prints 1 2 3 and then 3 2 1.</solution>
+
+<ask type="code" lang="c">Add `struct Node *reverse(struct Node *head)` that reverses the list in place by re-pointing the `next` fields and returns the new head. Print the list before and after.</ask>
+@@ learner answer sure
+```c
+#include <stdio.h>
+
+struct Node { int value; struct Node *next; };
+
+void print_list(const struct Node *n) {
+    for (; n; n = n->next) printf("%d%s", n->value, n->next ? " " : "\n");
+}
+
+struct Node *reverse(struct Node *head) {
+    struct Node *prev = NULL;
+    while (head) {
+        struct Node *next = head->next;
+        head->next = prev;
+        prev = head;
+        head = next;
+    }
+    return prev;
+}
+
+int main(void) {
+    struct Node c = {3, NULL}, b = {2, &c}, a = {1, &b};
+    print_list(&a);
+    print_list(reverse(&a));
+    return 0;
+}
+```
+This prints 1 2 3 and then 3 2 1. I had it wrong at first because I overwrote head->next before I'd kept a copy of it and lost the rest of the list, so I added the next variable to hold on to it.
+@@ reply
+<grade verdict="correct" score="1">`struct Node *next = head->next;` before `head->next = prev;` is the step that matters, for the reason you found, and the program prints 1 2 3 then 3 2 1. It is one pass, $O(n)$ time, with three pointers of extra space.</grade>
+
+Next, a list that never ends. If the last node points back into the list there is no NULL, and `print_list` would loop for ever. Floyd's method detects this with two pointers that start at the head: `slow` moves one node per step and `fast` moves two. With no cycle, `fast` runs off the end. With a cycle, both end up going round it, the gap between them shrinks by one node each step, and they meet.
+
+<note>Floyd's cycle detection: advance `slow` by one node and `fast` by two. `fast` reaching NULL means no cycle; `slow` and `fast` pointing at the same node means a cycle. $O(n)$ time, $O(1)$ space.</note>
+
+<solution>int has_cycle(const struct Node *head) { const struct Node *slow = head, *fast = head; while (fast && fast->next) { slow = slow->next; fast = fast->next->next; if (slow == fast) return 1; } return 0; } It prints 0 for the plain list and 1 after c.next = &b.</solution>
+
+<ask type="code" lang="c">Write `int has_cycle(const struct Node *head)` with a slow and a fast pointer. In main, build the list 1, 2, 3 again and print `has_cycle` for it, then set `c.next = &b` and print it once more.</ask>
+@@ verify
+out, err, cc, code = run_c_full(block(learner, 'c'), 'c')
+assert out == '1 2 3\n3 2 1\n' and code == 0 and not cc.strip(), (out, err, cc)
+assert run_c(block(tutor[0], 'c')) == '1 2 3\n'
+ref = r'''
+#include <stdio.h>
+struct Node { int value; struct Node *next; };
+int has_cycle(const struct Node *head) {
+    const struct Node *slow = head, *fast = head;
+    while (fast && fast->next) {
+        slow = slow->next;
+        fast = fast->next->next;
+        if (slow == fast) return 1;
+    }
+    return 0;
+}
+int main(void) {
+    struct Node c = {3, NULL}, b = {2, &c}, a = {1, &b};
+    printf("%d\n", has_cycle(&a));
+    c.next = &b;
+    printf("%d\n", has_cycle(&a));
+    struct Node one = {9, NULL};
+    printf("%d %d\n", has_cycle(&one), has_cycle(NULL));
+    one.next = &one;
+    printf("%d\n", has_cycle(&one));
+    return 0;
+}
+'''
+assert run_c(ref).split() == ['0', '1', '0', '0', '1']
+# Floyd's method against a visited-set check on every functional graph shape up to 7 nodes
+def floyd(nxt, head):
+    slow = fast = head
+    while fast is not None and nxt[fast] is not None:
+        slow = nxt[slow]; fast = nxt[nxt[fast]]
+        if slow == fast: return True
+    return False
+for n in range(1, 8):
+    for back in [None] + list(range(n)):
+        nxt = {i: i + 1 for i in range(n - 1)}; nxt[n - 1] = back
+        assert floyd(nxt, 0) == (back is not None)
+assert 'fast->next->next' in solution(reply) and 'fast->next->next' not in visible(reply)
+
+@@@@ hands-on-python-queue-two-stacks-pours-always
+situation: hands-on
+topic: A queue from two stacks
+options: {"strategy":"code"}
+voice: overconfident
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["every pop|each pop|on every","outbox"],"must":["1 3 2"],"setsProblem":true,"askTypes":["code"],"askMustNot":["if not self\\.outbox"]}
+@@ tutor
+A stack gives back the most recent item first. A Python list is one, with `append` and `pop`:
+
+```python
+s = []
+for x in (1, 2, 3):
+    s.append(x)
+print(s.pop(), s.pop(), s.pop())
+```
+
+```
+3 2 1
+```
+
+Pouring one stack into another reverses the order again, and that is how two stacks can make a first-in, first-out queue.
+
+<solution>push appends to inbox. pop: if outbox is empty, pour all of inbox into it (pop from inbox, append to outbox); then pop from outbox. The pour happens only when outbox is empty.</solution>
+<check lang="python">
+class Queue:
+    def __init__(self): self.inbox, self.outbox = [], []
+    def push(self, x): self.inbox.append(x)
+    def pop(self):
+        if not self.outbox:
+            while self.inbox: self.outbox.append(self.inbox.pop())
+        return self.outbox.pop()
+q = Queue(); q.push(1); q.push(2); a = q.pop(); q.push(3)
+assert (a, q.pop(), q.pop()) == (1, 2, 3)
+</check>
+
+<ask type="code" lang="python">Write a class `Queue` with `push(x)` and `pop()` that stores its items in two lists used only as stacks, and returns items in the order they were pushed. Show it working.</ask>
+@@ learner answer sure
+```python
+class Queue:
+    def __init__(self):
+        self.inbox, self.outbox = [], []
+    def push(self, x):
+        self.inbox.append(x)
+    def pop(self):
+        while self.inbox:
+            self.outbox.append(self.inbox.pop())
+        return self.outbox.pop()
+
+q = Queue()
+q.push(1); q.push(2); q.push(3)
+print(q.pop(), q.pop(), q.pop())
+```
+Prints 1 2 3. Done, that's FIFO from two stacks. Pretty simple once you see the pour trick.
+@@ reply
+<grade verdict="partial" score="0.5">The pour itself, `self.outbox.append(self.inbox.pop())`, is right, and your test does print 1 2 3. The fault is when it pours: `while self.inbox:` runs on every pop, even when `outbox` still holds older items, so a newer item lands on top of them and comes out first.</grade>
+
+Your test pushes everything before popping anything, so it cannot show this. Here is your class with a push between two pops:
+
+```python
+class Queue:
+    def __init__(self):
+        self.inbox, self.outbox = [], []
+    def push(self, x):
+        self.inbox.append(x)
+    def pop(self):
+        while self.inbox:
+            self.outbox.append(self.inbox.pop())
+        return self.outbox.pop()
+
+q = Queue()
+q.push(1); q.push(2)
+first = q.pop()
+q.push(3)
+print(first, q.pop(), q.pop())
+```
+
+```
+1 3 2
+```
+
+After the first pop, `outbox` holds 2. The second pop pours 3 on top of it and returns 3.
+
+<card>In a queue built from two stacks, when may pop pour the inbox into the outbox? :: Only when the outbox is empty. Pouring onto a non-empty outbox puts newer items above older ones and breaks the FIFO order.</card>
+
+<solution>Guard the pour: `if not self.outbox:` before the while loop. The interleaved test then prints 1 2 3.</solution>
+<check lang="python">
+class Queue:
+    def __init__(self): self.inbox, self.outbox = [], []
+    def push(self, x): self.inbox.append(x)
+    def pop(self):
+        if not self.outbox:
+            while self.inbox: self.outbox.append(self.inbox.pop())
+        return self.outbox.pop()
+q = Queue(); q.push(1); q.push(2); first = q.pop(); q.push(3)
+assert (first, q.pop(), q.pop()) == (1, 2, 3)
+</check>
+
+<ask type="code" lang="python">Change `pop` so that the order survives a push between pops, and run the interleaved test above again.</ask>
+@@ verify
+import random
+from collections import deque
+src = block(learner, 'python')
+assert run_py(src).strip() == '1 2 3'
+assert run_py(block(tutor[0], 'python')).strip() == '3 2 1'
+assert run_py(block(reply, 'python')).strip() == '1 3 2'
+# the class in the reply is the learner's own, unchanged
+cls = src.split('\nq = Queue()')[0]
+assert block(reply, 'python').startswith(cls)
+ns = {}
+exec(cls, ns)
+fixed = cls.replace('        while self.inbox:\n            self.outbox.append(self.inbox.pop())', '        if not self.outbox:\n            while self.inbox:\n                self.outbox.append(self.inbox.pop())')
+assert fixed != cls
+ns2 = {}
+exec(fixed, ns2)
+random.seed(8)
+bad = 0
+for _ in range(300):                      # fixed version always matches a real queue; theirs does not
+    q1, q2, ref, ok = ns['Queue'](), ns2['Queue'](), deque(), True
+    for step in range(12):
+        if ref and random.random() < 0.45:
+            want = ref.popleft()
+            assert q2.pop() == want
+            ok &= q1.pop() == want
+        else:
+            ref.append(step); q1.push(step); q2.push(step)
+    bad += not ok
+assert bad > 0
+
+@@@@ hands-on-python-trie-walk-idk
+situation: hands-on
+topic: Tries
+options: {"strategy":"code"}
+voice: confused
+level: medium
+expect: {"must":["node = node\\[ch\\]","KeyError"],"setsProblem":true,"askTypes":["code"],"askMustNot":["True False False","setdefault"],"mustNot":["setdefault","def count_prefix"],"forbid":["grade"]}
+@@ tutor
+A trie stores words letter by letter: each node has one child for each possible next letter, so words with a common prefix share a path from the root. In Python a node can be a dict from letter to child node, with a marker key `"$"` on every node where a word ends.
+
+<solution>def insert(trie, word): node = trie; for ch in word: node = node.setdefault(ch, {}); then node["$"] = True. def count_prefix(trie, prefix): walk to the prefix's node (0 if a letter is missing), then count the "$" markers in the subtree below it. With tea, ten and to inserted: count_prefix "te" is 2, "t" is 3, "x" is 0.</solution>
+<check lang="python">
+def insert(trie, word):
+    node = trie
+    for ch in word:
+        node = node.setdefault(ch, {})
+    node["$"] = True
+def count(node):
+    return sum(1 if k == "$" else count(v) for k, v in node.items())
+def count_prefix(trie, prefix):
+    node = trie
+    for ch in prefix:
+        if ch not in node:
+            return 0
+        node = node[ch]
+    return count(node)
+t = {}
+for w in ("tea", "ten", "to"):
+    insert(t, w)
+assert t == {"t": {"e": {"a": {"$": True}, "n": {"$": True}}, "o": {"$": True}}}
+assert (count_prefix(t, "te"), count_prefix(t, "t"), count_prefix(t, "x")) == (2, 3, 0)
+</check>
+
+<ask type="code" lang="python">Write `insert(trie, word)` and `count_prefix(trie, prefix)`, which returns how many inserted words start with `prefix`. Test them with the words tea, ten and to.</ask>
+@@ learner idk
+@@ reply
+Read a trie before building one. This is the trie for tea, ten and to written out by hand, and a walk along the letters of "ten":
+
+```python
+trie = {"t": {"e": {"a": {"$": True}, "n": {"$": True}}, "o": {"$": True}}}
+node = trie
+for ch in "ten":
+    node = node[ch]
+    print(ch, sorted(node))
+```
+
+```
+t ['e', 'o']
+e ['a', 'n']
+n ['$']
+```
+
+Each step, `node = node[ch]`, replaces the current node with its child for the next letter, and the keys printed are what can follow from there. The walk ends on a node holding `"$"`, so "ten" is a stored word. For a word that is not there, the same loop fails with a KeyError at the first letter that has no child.
+
+<note>A trie as nested dicts: a node maps each next letter to a child node, and `"$"` marks the end of a word. Looking a word up is one step per letter, `node = node[ch]`, whatever the number of words stored.</note>
+
+<solution>def contains(trie, word): node = trie; for ch in word: if ch not in node: return False; node = node[ch]; return "$" in node. It prints True False False: "te" is only a prefix (no marker), and "tin" has no child i under t.</solution>
+<check lang="python">
+trie = {"t": {"e": {"a": {"$": True}, "n": {"$": True}}, "o": {"$": True}}}
+def contains(trie, word):
+    node = trie
+    for ch in word:
+        if ch not in node:
+            return False
+        node = node[ch]
+    return "$" in node
+assert [contains(trie, w) for w in ("ten", "te", "tin")] == [True, False, False]
+</check>
+
+<ask type="code" lang="python">Using this hand-built trie, write `contains(trie, word)`: walk the letters the same way and return True only if every letter is found and the last node has the `"$"` marker. Print it for "ten", "te" and "tin".</ask>
+@@ verify
+code = block(reply, 'python')
+assert run_py(code) == "t ['e', 'o']\ne ['a', 'n']\nn ['$']\n"
+# the hand-written trie is exactly what inserting tea, ten, to builds
+t = {}
+for w in ("tea", "ten", "to"):
+    node = t
+    for ch in w:
+        node = node.setdefault(ch, {})
+    node["$"] = True
+assert str(t).replace("'", '"') in code
+# a missing word fails with KeyError at the first missing letter
+try:
+    node = t
+    for i, ch in enumerate("tin"):
+        node = node[ch]
+    raise AssertionError('no error')
+except KeyError as e:
+    assert e.args[0] == 'i' and i == 1
+# the original task's answer stays hidden; the smaller task's result too
+assert 'True False False' not in visible(reply) and 'setdefault' not in visible(reply)
+
+@@@@ hands-on-python-counting-sort-explain-prefix
+situation: hands-on
+topic: Counting sort
+options: {"strategy":"code"}
+voice: confused
+level: medium
+expect: {"ends":"continue","must":["start: \\[0, 2, 3\\]","input order"],"need":["note"],"forbid":["grade"]}
+@@ tutor
+Counting sort does not compare keys. For keys in the range 0 to k − 1 it counts how many records have each key, then uses the counts to work out where each key's block begins in the output.
+
+```python
+keys = [2, 0, 2, 1, 0]
+count = [0] * 3
+for k in keys:
+    count[k] += 1
+print(count)
+```
+
+```
+[2, 1, 2]
+```
+
+<solution>count = [2, 1, 2]; start[k] = number of records with a smaller key = [0, 2, 3]. Walk the input in order, put each record at out[start[key]] and add 1 to start[key]. Result: (0, "b"), (0, "e"), (1, "d"), (2, "a"), (2, "c").</solution>
+<check lang="python">
+recs = [(2, "a"), (0, "b"), (2, "c"), (1, "d"), (0, "e")]
+assert sorted(recs, key=lambda r: r[0]) == [(0, "b"), (0, "e"), (1, "d"), (2, "a"), (2, "c")]
+</check>
+
+<ask type="code" lang="python">Extend this to records: sort `[(2, "a"), (0, "b"), (2, "c"), (1, "d"), (0, "e")]` by the number with counting sort, keeping records that have equal numbers in their input order.</ask>
+@@ learner question
+I'm stuck on the bit after the counting. Can you just explain what the prefix sum step is for? I don't see how counts turn into positions, or why it would keep a before c.
+@@ reply
+The counts say how large each key's block is; adding them up says where each block starts.
+
+```python
+recs = [(2, "a"), (0, "b"), (2, "c"), (1, "d"), (0, "e")]
+count = [0] * 3
+for key, _ in recs:
+    count[key] += 1
+start = [0] * 3
+for k in range(1, 3):
+    start[k] = start[k - 1] + count[k - 1]
+print("count:", count)
+print("start:", start)
+out = [None] * len(recs)
+for rec in recs:
+    out[start[rec[0]]] = rec
+    start[rec[0]] += 1
+print(out)
+```
+
+```
+count: [2, 1, 2]
+start: [0, 2, 3]
+[(0, 'b'), (0, 'e'), (1, 'd'), (2, 'a'), (2, 'c')]
+```
+
+`start[k]` is the number of records with a key smaller than k, and that is exactly the index where key k's block begins: the two 0s fill indices 0 and 1, so the 1s start at 2 and the 2s at 3. That running total is the prefix sum.
+
+The last loop walks the records in input order. Each one goes to its key's next free index, and that index then moves on by one. `(2, "a")` is met before `(2, "c")`, so a takes index 3 and c takes index 4. Equal keys keep their input order because of the order of that walk, with no comparison anywhere.
+
+<note>Counting sort positions: `start[k]` = number of records with key less than k (a prefix sum of the counts). Place records in input order at `out[start[key]]`, then increment `start[key]`. This is stable, and costs $O(n + k)$.</note>
+
+<continue/>
+@@ verify
+code = block(reply, 'python')
+out = run_py(code)
+assert out == "count: [2, 1, 2]\nstart: [0, 2, 3]\n[(0, 'b'), (0, 'e'), (1, 'd'), (2, 'a'), (2, 'c')]\n"
+assert run_py(block(tutor[0], 'python')).strip() == '[2, 1, 2]'
+recs = [(2, "a"), (0, "b"), (2, "c"), (1, "d"), (0, "e")]
+want = sorted(recs, key=lambda r: r[0])                     # Python's sort is stable: the reference
+assert str(want) in out
+# start[k] really is the number of records with a smaller key; a lands at 3 and c at 4
+start = [sum(1 for r in recs if r[0] < k) for k in range(3)]
+assert start == [0, 2, 3]
+assert want.index((2, "a")) == 3 and want.index((2, "c")) == 4 and want.index((1, "d")) == 2
+assert [i for i, r in enumerate(want) if r[0] == 0] == [0, 1]
+
+@@@@ hands-on-python-memoised-fib-go-on
+situation: hands-on
+topic: Memoisation and tabulation
+options: {"strategy":"code"}
+voice: terse
+level: medium
+expect: {"must":["75025 49","26"],"setsProblem":true,"askTypes":["code"],"askMustNot":["2880067194370816120"],"forbid":["grade"]}
+@@ tutor
+A recursive function that solves the same subproblem many times does the same work many times. The plain recursive Fibonacci shows it; `calls` counts how often the function is entered:
+
+```python
+calls = 0
+
+def fib(n):
+    global calls
+    calls += 1
+    return n if n < 2 else fib(n - 1) + fib(n - 2)
+
+print(fib(25), calls)
+```
+
+```
+75025 242785
+```
+
+There are only 26 different arguments, 0 to 25, yet the function is entered 242,785 times: `fib(23)` is computed twice, `fib(22)` three times, `fib(21)` five times, and so on down.
+
+<continue/>
+@@ learner goon
+@@ reply
+Memoisation keeps each answer the first time it is computed and looks it up after that:
+
+```python
+calls = 0
+memo = {}
+
+def fib(n):
+    global calls
+    calls += 1
+    if n < 2:
+        return n
+    if n not in memo:
+        memo[n] = fib(n - 1) + fib(n - 2)
+    return memo[n]
+
+print(fib(25), calls)
+```
+
+```
+75025 49
+```
+
+The result is the same and the function is entered 49 times instead of 242,785: each of the 26 arguments is worked out once, and every other call is a lookup. The cost falls from exponential in n to linear. This is the top-down form of dynamic programming: the recursion decides which subproblems are needed, and the dictionary stops any being solved twice.
+
+<note>Memoisation (top-down): keep the recursive function, store each subproblem's answer the first time it is computed, return the stored value after that. The cost becomes (number of distinct subproblems) × (work per subproblem).</note>
+
+<solution>def fib_table(n): t = [0, 1]; for i in range(2, n + 1): t.append(t[i - 1] + t[i - 2]); return t[n]. It prints 75025 and 2880067194370816120.</solution>
+<check lang="python">
+def fib_table(n):
+    t = [0, 1]
+    for i in range(2, n + 1):
+        t.append(t[i - 1] + t[i - 2])
+    return t[n]
+assert fib_table(0) == 0 and fib_table(1) == 1
+assert fib_table(25) == 75025 and fib_table(90) == 2880067194370816120
+</check>
+
+<ask type="code" lang="python">Write the bottom-up version, `fib_table(n)`: no recursion, a list filled from index 0 upwards with a loop. Print `fib_table(25)` and `fib_table(90)`.</ask>
+@@ verify
+assert run_py(block(tutor[0], 'python')).strip() == '75025 242785'
+assert run_py(block(reply, 'python')).strip() == '75025 49'
+# the counts by an independent recurrence: naive calls C(n) = 1 + C(n-1) + C(n-2); memoised = 2n - 1
+C = [1, 1]
+for n in range(2, 26):
+    C.append(1 + C[n - 1] + C[n - 2])
+assert C[25] == 242785 and 2 * 25 - 1 == 49 and len(range(0, 26)) == 26
+# how many times each argument is computed in the naive version
+from collections import Counter
+cnt = Counter()
+def f(n):
+    cnt[n] += 1
+    return n if n < 2 else f(n - 1) + f(n - 2)
+assert f(25) == 75025 and (cnt[23], cnt[22], cnt[21]) == (2, 3, 5)
+assert '242,785' in tutor[0] and '242,785' in reply
+a, b = 0, 1
+for _ in range(90):
+    a, b = b, a + b
+assert a == 2880067194370816120 and str(a) in solution(reply) and str(a) not in visible(reply)
+
+@@@@ hands-on-c-popcount-then-power-of-two
+situation: hands-on
+topic: Bit tricks: clearing the lowest set bit
+options: {"strategy":"code"}
+voice: typos
+level: easy
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"must":["0 64"],"askMustNot":["x != 0","x && ","1 0 1 0"]}
+@@ tutor
+`x & (x - 1)` clears the lowest set bit of x. Subtracting 1 turns that bit to 0 and every 0 below it to 1; the AND keeps only the bits the two values share, which is everything above it.
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    unsigned x = 0x2C;
+    while (x) {
+        printf("0x%02X\n", x);
+        x &= x - 1;
+    }
+    return 0;
+}
+```
+
+```
+0x2C
+0x28
+0x20
+```
+
+<solution>int popcount(unsigned x) { int n = 0; while (x) { x &= x - 1; n++; } return n; } The loop runs once per set bit. popcount(0x2C) is 3 and popcount(255) is 8.</solution>
+<check lang="python">
+assert bin(0x2C).count('1') == 3 and bin(255).count('1') == 8
+</check>
+
+<ask type="code" lang="c">Write `int popcount(unsigned x)` that counts the set bits of x by repeating this step, and print `popcount(0x2C)` and `popcount(255)`.</ask>
+@@ learner answer unsure
+```c
+#include <stdio.h>
+
+int popcount(unsigned x) {
+    int n = 0;
+    while (x) {
+        x &= x - 1;
+        n++;
+    }
+    return n;
+}
+
+int main(void) {
+    printf("%d %d\n", popcount(0x2C), popcount(255));
+    return 0;
+}
+```
+prints 3 8 wich looks right. not sure its ok tho that the loop dosnt go thru all 32 bits?
+@@ reply
+<grade verdict="correct" score="1">`x &= x - 1;` removes exactly one set bit on each pass, so the loop runs once per set bit and `n` counts them: 3 passes for 0x2C, 8 for 255. Skipping the zero bits is not a gap, it is what the step is for.</grade>
+
+One more with the same step. Here it is applied once to two values:
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    unsigned a = 64, b = 96;
+    printf("%u %u\n", a & (a - 1), b & (b - 1));
+    return 0;
+}
+```
+
+```
+0 64
+```
+
+64 has a single set bit, so clearing its lowest set bit leaves nothing. 96 is 64 + 32, two set bits, so one of them is left.
+
+<solution>int is_power_of_two(unsigned x) { return x != 0 && (x & (x - 1)) == 0; } A power of two has exactly one set bit. 0 has none and is not a power of two, but 0 & (0 − 1) is also 0, so it needs its own test. Prints 1 0 1 0.</solution>
+<check lang="python">
+def is_pow2(x):
+    return x != 0 and (x & (x - 1)) == 0
+assert [int(is_pow2(x)) for x in (64, 96, 1, 0)] == [1, 0, 1, 0]
+assert all(is_pow2(x) == (x in {2 ** k for k in range(32)}) for x in range(0, 5000))
+</check>
+
+<ask type="code" lang="c">Write `int is_power_of_two(unsigned x)` as a single expression built on this step, with no loop. Print it for 64, 96, 1 and 0, and decide first what 0 ought to give.</ask>
+@@ verify
+out, err, cc, code = run_c_full(block(learner, 'c'), 'c')
+assert out.strip() == '3 8' and code == 0 and not cc.strip(), (out, err, cc)
+assert run_c(block(tutor[0], 'c')).split() == ['0x2C', '0x28', '0x20']
+assert run_c(block(reply, 'c')).strip() == '0 64'
+assert 64 & 63 == 0 and 96 & 95 == 64 and 96 == 64 + 32
+assert bin(0x2C).count('1') == 3 and bin(255).count('1') == 8
+ref = r'''
+#include <stdio.h>
+int is_power_of_two(unsigned x) { return x != 0 && (x & (x - 1)) == 0; }
+int main(void) {
+    printf("%d %d %d %d\n", is_power_of_two(64), is_power_of_two(96), is_power_of_two(1), is_power_of_two(0));
+    return 0;
+}
+'''
+assert run_c(ref).strip() == '1 0 1 0'
+assert '1 0 1 0' in solution(reply) and '1 0 1 0' not in visible(reply)
+
+@@@@ summary-bfs-representation-cost
+situation: summary
+topic: Breadth-first search
+voice: wordy
+level: medium
+expect: {"verdict":"correct","must":["V\\^2","O\\(V \\+ E\\)"]}
+@@ tutor
+**Problem 4 · mixed**
+
+BFS runs on a graph with $V$ vertices and $E$ edges. Give its running time when the graph is stored as adjacency lists, and when it is stored as an adjacency matrix.
+
+<solution>Adjacency lists: O(V + E), each vertex is dequeued once and each list is scanned once. Adjacency matrix: O(V^2), because finding the neighbours of a dequeued vertex means scanning its whole row of V entries, whatever E is.</solution>
+<check lang="python">
+from collections import deque
+V = 40
+M = [[1 if abs(i - j) == 1 else 0 for j in range(V)] for i in range(V)]   # a path: E = V - 1
+seen, q, reads = {0}, deque([0]), 0
+while q:
+    u = q.popleft()
+    for v in range(V):
+        reads += 1
+        if M[u][v] and v not in seen:
+            seen.add(v); q.append(v)
+assert len(seen) == V and reads == V * V
+</check>
+
+<ask type="problem">Both running times, each with its reason.</ask>
+@@ learner answer sure
+With adjacency lists it's O(V + E), since every vertex gets dequeued once and every edge is looked at once from each end. With a matrix I'd say it is the same, O(V + E), because it's the same algorithm visiting the same vertices and the same edges and only the storage is different.
+@@ tutor
+<grade verdict="partial" score="0.5">The list case is right: "every vertex gets dequeued once and every edge is looked at once from each end". The matrix case fails at "only the storage is different": to find a vertex's neighbours in a matrix BFS must scan that vertex's whole row of $V$ entries, edges or not, so the total is $O(V^2)$.</grade>
+
+<card>What is the running time of BFS on an adjacency matrix, and why? :: O(V²). Each of the V dequeued vertices scans a full row of V entries to find its neighbours, however few edges there are.</card>
+
+<note>BFS costs $O(V + E)$ with adjacency lists and $O(V^2)$ with an adjacency matrix. The algorithm is the same; the cost of "list the neighbours of u" is degree(u) in one and $V$ in the other.</note>
+
+**Problem 5 · last one**
+
+An unweighted, undirected graph has edges A–B, A–C, B–D, C–D and D–E. What is the distance from A to E, and how many different shortest paths from A to E are there?
+
+<solution>BFS from A: B and C at distance 1, D at 2, E at 3. D is reached by a shortest path through B and through C, so there are 2 shortest paths to D and each extends to E: 2 shortest paths, A–B–D–E and A–C–D–E.</solution>
+<check lang="python">
+from collections import deque
+adj = {'A': 'BC', 'B': 'AD', 'C': 'AD', 'D': 'BCE', 'E': 'D'}
+dist, ways, q = {'A': 0}, {'A': 1}, deque('A')
+while q:
+    u = q.popleft()
+    for v in adj[u]:
+        if v not in dist:
+            dist[v] = dist[u] + 1; ways[v] = 0; q.append(v)
+        if dist[v] == dist[u] + 1:
+            ways[v] += ways[u]
+assert dist['E'] == 3 and ways['E'] == 2
+</check>
+
+<ask type="problem">The distance and the number of shortest paths, with how you counted them.</ask>
+@@ learner answer sure
+The distance is 3. There are two shortest paths, A-B-D-E and A-C-D-E. B and C are both at distance 1, D is at distance 2 and can be reached from either of them, and then E is one more edge after D.
+@@ reply
+<grade verdict="correct" score="1">"D is at distance 2 and can be reached from either of them" is the reason there are two: both paths are forced through D, which has two parents one level up, and E adds one edge to each. Distance 3, two paths.</grade>
+
+<summary>**What you learned:** BFS takes vertices in order of their distance from the start, so the first time it reaches a vertex is along a shortest path. You used the levels to get the distance to E and to count its shortest paths through D's two parents. With adjacency lists the search costs $O(V + E)$.
+
+**Still shaky:** how the representation changes the cost. You gave $O(V + E)$ for the adjacency matrix as well; it is $O(V^2)$, because every dequeued vertex scans a full row of $V$ entries however few edges exist. The card for it is in your deck.
+
+**Next:** Dijkstra's algorithm, which replaces the queue with a priority queue so that edges can have weights. Before that, compare the two costs on a sparse graph, say 1,000 vertices and 2,000 edges.</summary>
+@@ verify
+from collections import deque
+from itertools import permutations
+edges = ['AB', 'AC', 'BD', 'CD', 'DE']
+for e in edges:
+    assert f'{e[0]}–{e[1]}' in tutor[1]
+adj = {v: [e.replace(v, '') for e in edges if v in e] for v in 'ABCDE'}
+# independent method: enumerate every simple path from A to E
+paths = []
+def walk(p):
+    if p[-1] == 'E':
+        paths.append(p); return
+    for v in adj[p[-1]]:
+        if v not in p:
+            walk(p + v)
+walk('A')
+shortest = min(map(len, paths)) - 1
+best = sorted(p for p in paths if len(p) - 1 == shortest)
+assert shortest == 3 and best == ['ABDE', 'ACDE']
+# matrix BFS reads V*V entries on sparse and dense graphs alike; list BFS reads V + 2E
+def bfs_reads(V, es):
+    M = [[0] * V for _ in range(V)]
+    L = [[] for _ in range(V)]
+    for a, b in es:
+        M[a][b] = M[b][a] = 1; L[a].append(b); L[b].append(a)
+    seen, q, rm = {0}, deque([0]), 0
+    while q:
+        u = q.popleft()
+        for v in range(V):
+            rm += 1
+            if M[u][v] and v not in seen: seen.add(v); q.append(v)
+    seen, q, rl = {0}, deque([0]), 0
+    while q:
+        u = q.popleft()
+        for v in L[u]:
+            rl += 1
+            if v not in seen: seen.add(v); q.append(v)
+    return rm, rl
+V = 60
+path = [(i, i + 1) for i in range(V - 1)]
+assert bfs_reads(V, path) == (V * V, 2 * (V - 1))
+
+@@@@ summary-quiz-radix-stability
+situation: summary
+topic: Counting sort and radix sort
+mode: quiz
+options: {"length":3}
+voice: typos
+level: medium
+expect: {"verdict":"wrong","names":["stable|stability","329"],"must":["2 (out )?of 3","355"]}
+@@ tutor
+**Question 1 of 3**
+
+<ask type="short">Counting sort is run on n integers, each between 0 and k − 1. What is its running time, and when is it a worse choice than a comparison sort?</ask>
+@@ learner answer sure
+O(n + k). bad when k is way bigger then n, like 1000 numbers with values up to a billion, the count array is huge and mostly empty
+@@ tutor
+<grade verdict="correct" score="1">"O(n + k)" is right, and "k is way bigger" is the case that sinks it: the pass over the count array costs $k$ whatever $n$ is.</grade>
+
+**Question 2 of 3**
+
+LSD radix sort in base 10 sorts by the units digit first, then the tens, then the hundreds, with a stable sort on each digit. It is run on [329, 457, 657, 839, 436, 720, 355].
+
+<solution>Units digits are 9, 7, 7, 9, 6, 0, 5. Stable sort on them: 720, 355, 436, 457, 657, 329, 839.</solution>
+<check lang="python">
+a = [329, 457, 657, 839, 436, 720, 355]
+assert sorted(a, key=lambda x: x % 10) == [720, 355, 436, 457, 657, 329, 839]
+</check>
+
+<ask type="problem">What is the list after the first pass, the one on the units digit?</ask>
+@@ learner answer sure
+720, 355, 436, 457, 657, 329, 839
+@@ tutor
+<grade verdict="correct" score="1">"720, 355, 436, 457, 657, 329, 839" is right, with 457 kept ahead of 657 and 329 ahead of 839, as they were in the input.</grade>
+
+**Question 3 of 3**
+
+<ask type="explain">Suppose the sort used on each digit were not stable. Would radix sort still produce a sorted list? Explain.</ask>
+@@ learner answer sure
+yes still sorted. stabilty only matters when theres extra data atached to the keys, for plain numbers two equal digits are interchangable so an unstable sort on each digit gives the same final list, maybe just does a bit more work
+@@ reply
+<grade verdict="wrong" score="0.1">"two equal digits are interchangable" is the mistake: the digits are equal but the numbers carrying them are not. In the last pass 329 and 355 tie on the hundreds digit 3, and the only thing that puts 329 first is that it arrived first from the tens pass. An unstable sort may output 355 before 329.</grade>
+
+<card>Why must each pass of LSD radix sort be stable? :: Numbers that tie on the current digit must stay in the order the earlier passes gave them, because that order is their order by the lower digits. An unstable pass can undo it: 329 and 355 tie on the hundreds digit.</card>
+
+<summary>**Score:** 2 of 3.
+
+**Strengths:** the cost of counting sort, $O(n + k)$, and when a large key range makes it a poor choice; carrying out a radix pass by hand, with ties left in input order.
+
+**Misconception to fix:** that stability only matters when keys carry extra data. In radix sort the rest of the number is the extra data. Each pass sorts by one digit and relies on the previous passes' order among ties, so every pass has to be stable.
+
+**Review:** finish the example by hand. The tens pass gives 720, 329, 436, 839, 355, 457, 657. Do the hundreds pass, and watch the two numbers that start with 3 and the two that start with 4.</summary>
+@@ verify
+a = [329, 457, 657, 839, 436, 720, 355]
+p1 = sorted(a, key=lambda x: x % 10)
+p2 = sorted(p1, key=lambda x: x // 10 % 10)
+p3 = sorted(p2, key=lambda x: x // 100)
+assert '"' + ', '.join(map(str, p1)) + '"' in tutor[2] and ', '.join(map(str, p1)) in solution(tutor[1])
+assert 'interchangable' in learner
+assert ', '.join(map(str, p2)) in reply and p2 == [720, 329, 436, 839, 355, 457, 657]
+assert p3 == sorted(a)
+# in the input 457 is ahead of 657 and 329 ahead of 839 (the second grade's remark)
+assert a.index(457) < a.index(657) and a.index(329) < a.index(839) and p1.index(457) < p1.index(657) and p1.index(329) < p1.index(839)
+# 329 and 355 tie on the hundreds digit and arrive from the tens pass in that order
+assert 329 // 100 == 355 // 100 == 3 and p2.index(329) < p2.index(355)
+assert sorted(x for x in a if x // 100 == 4) == [436, 457]
+# an unstable last pass (ties reversed) gives a list that is not sorted, with 355 before 329
+def reversed_ties(lst, key):
+    return sorted(reversed(lst), key=key)
+bad = reversed_ties(p2, lambda x: x // 100)
+assert bad != sorted(a) and bad.index(355) < bad.index(329)
+# counting sort cost: the pass over the counts is k steps whatever n is
+def counting_steps(n, k):
+    return n + k + n
+assert counting_steps(1000, 10**9) > 10**9

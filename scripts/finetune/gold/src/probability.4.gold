@@ -1,0 +1,667 @@
+@@@@ tangent-monty-hall-from-sample-spaces
+situation: tangent
+topic: Sample spaces and counting outcomes
+voice: wordy
+level: medium
+expect: {"must":["2/3","1/3"],"askMustNot":["5/36","\\b5 (pairs|outcomes)"],"mustNot":["50/50 is right"]}
+@@ tutor
+A sample space is the list of everything that can happen, written so that the outcomes are equally likely. Then the probability of an event is a count: outcomes in the event divided by outcomes in all. For two dice the equally likely outcomes are the 36 ordered pairs (first die, second die), not the 11 possible sums, because the sums are not equally likely.
+
+<note>With equally likely outcomes, $P(A) = \frac{\text{outcomes in } A}{\text{outcomes in the sample space}}$. Choose the sample space so that its outcomes really are equally likely: for two dice, the 36 ordered pairs.</note>
+
+**Problem 1 · warm-up**
+
+Two fair dice are rolled. Find the probability that the numbers add up to 8.
+
+<solution>The pairs are (2,6), (3,5), (4,4), (5,3) and (6,2): 5 of 36, so the probability is 5/36.</solution>
+<check lang="python">
+from fractions import Fraction
+from itertools import product
+n = sum(1 for a, b in product(range(1, 7), repeat=2) if a + b == 8)
+assert n == 5 and Fraction(n, 36) == Fraction(5, 36)
+</check>
+
+<ask type="problem">The probability, with the outcomes you counted.</ask>
+@@ learner question
+Side question before I answer: is this "outcomes that aren't equally likely" thing what goes wrong in the Monty Hall problem? I've never understood why switching wins 2/3 of the time when there are two doors left and it looks like 50/50.
+@@ reply
+Yes, it is the same mistake. The equally likely outcomes are the three doors the car can be behind, so your first pick hides the car with probability 1/3. The host knows where the car is and always opens a goat door from the other two. If your pick was the car (1/3), switching loses. If it was a goat (2/3), the host had no choice: the one door he left closed is the car, and switching wins. So switching wins with probability 2/3.
+
+The two closed doors at the end are two outcomes, but not equally likely ones, exactly as the sums of two dice are not: the host's choice depended on where the car was.
+
+<ask type="short">Back to the dice. Using ordered pairs (first die, second die), which pairs give a total of 8, and out of how many pairs in all?</ask>
+@@ verify
+from fractions import Fraction as F
+from itertools import product
+# Monty Hall by exact enumeration: car position, first pick, and the host's choice when he has two goats to pick from
+stay = switch = F(0)
+for car, pick in product(range(3), repeat=2):
+    hosts = [d for d in range(3) if d != pick and d != car]
+    for h in hosts:
+        w = F(1, 9) / len(hosts)
+        other = next(d for d in range(3) if d != pick and d != h)
+        stay += w * (pick == car)
+        switch += w * (other == car)
+assert stay == F(1, 3) and switch == F(2, 3)
+# the pending dice question
+pairs = [(a, b) for a, b in product(range(1, 7), repeat=2) if a + b == 8]
+assert pairs == [(2, 6), (3, 5), (4, 4), (5, 3), (6, 2)] and F(len(pairs), 36) == F(5, 36)
+# the 11 sums are not equally likely
+sums = {}
+for a, b in product(range(1, 7), repeat=2):
+    sums[a + b] = sums.get(a + b, 0) + 1
+assert len(sums) == 11 and len(set(sums.values())) > 1
+
+@@@@ tangent-normal-rule-of-thumb-origin
+situation: tangent
+topic: The normal distribution and z-scores
+voice: typos
+level: easy
+expect: {"must":["0\\.6827","0\\.9545","0\\.9973"],"askMustNot":["-1\\.5","−1\\.5","1\\.5 standard"]}
+@@ tutor
+A z-score says how many standard deviations a value lies from the mean: $z = \frac{x - \mu}{\sigma}$. It is negative below the mean and positive above it, and it lets one table serve every normal distribution.
+
+<note>z-score: $z = \frac{x - \mu}{\sigma}$, the distance from the mean in standard deviations. If $X$ is normal with mean $\mu$ and standard deviation $\sigma$, then $Z = \frac{X - \mu}{\sigma}$ is standard normal (mean 0, standard deviation 1).</note>
+
+**Problem 1 · warm-up**
+
+A machine fills bags of flour. The weights are normally distributed with mean 500 g and standard deviation 4 g. Find the z-score of a bag that weighs 494 g.
+
+<solution>z = (494 − 500) / 4 = −6 / 4 = −1.5: the bag is 1.5 standard deviations below the mean.</solution>
+<check lang="python">
+assert (494 - 500) / 4 == -1.5
+</check>
+
+<ask type="problem">The z-score, with your working.</ask>
+@@ learner question
+quick one first - where do the 68/95/99.7 percentges come from? are they exact or just a rule of thum
+@@ reply
+They are areas under the standard normal curve: the probability of landing within 1, 2 and 3 standard deviations of the mean, $\Phi(k) - \Phi(-k)$ for $k = 1, 2, 3$. To four places these are 0.6827, 0.9545 and 0.9973, so the familiar percentages are those values rounded, not exact figures. They hold for every normal distribution, because taking z-scores turns any normal into the standard one. $\Phi$ has no closed formula; its values are computed numerically, which is why tables and library functions exist.
+
+<ask type="short">Back to the flour: the bag weighs 494 g, the mean is 500 g and the standard deviation is 4 g. How many standard deviations from the mean is the bag, and on which side?</ask>
+@@ verify
+from statistics import NormalDist
+N = NormalDist()
+vals = [N.cdf(k) - N.cdf(-k) for k in (1, 2, 3)]
+assert [f'{v:.4f}' for v in vals] == ['0.6827', '0.9545', '0.9973']
+for s in ['0.6827', '0.9545', '0.9973']:
+    assert s in reply
+# rounded to the familiar percentages
+assert [round(v * 100) for v in vals[:2]] == [68, 95] and round(vals[2] * 100, 1) == 99.7
+# the same areas for a non-standard normal: it holds for every normal distribution
+D = NormalDist(500, 4)
+assert all(abs((D.cdf(500 + 4 * k) - D.cdf(500 - 4 * k)) - v) < 1e-12 for k, v in zip((1, 2, 3), vals))
+# the pending question's answer, withheld
+assert (494 - 500) / 4 == -1.5 and '1.5' not in reply
+
+@@@@ tangent-kelly-just-explain
+situation: tangent
+topic: Expected value of card games
+voice: plain
+level: medium
+expect: {"must":["fraction","0\\.2\\b|20%","negative"],"ends":"continue","mustNot":["-3/13","−3/13","-0\\.23","−0\\.23"]}
+@@ tutor
+The expected value of a bet is the long-run average profit per play: each possible profit multiplied by its probability, then added up. A bet is fair when that average is 0.
+
+<note>Expected profit of a bet: $E = \sum (\text{profit}) \times P(\text{that profit})$. Positive: favourable in the long run. Zero: fair. Negative: unfavourable.</note>
+
+**Problem 1 · warm-up**
+
+One card is drawn from a standard 52-card deck. You win £9 if it is an ace and lose £1 otherwise. Find your expected profit per play.
+
+<solution>P(ace) = 4/52 = 1/13. E = 9 × 1/13 − 1 × 12/13 = −3/13 ≈ −0.23 pounds per play.</solution>
+<check lang="python">
+from fractions import Fraction
+e = 9 * Fraction(4, 52) - 1 * Fraction(48, 52)
+assert e == Fraction(-3, 13)
+</check>
+
+<ask type="problem">The expected profit, with your working.</ask>
+@@ learner question
+Before I do that, can you just explain what the Kelly criterion is? It comes up whenever people talk about expected value and betting.
+@@ reply
+Expected value says whether a bet is worth taking; the Kelly criterion says how much of your bankroll to stake on it when you can repeat it many times. For a bet that pays $b$ to 1 and wins with probability $p$ (losing with $q = 1 - p$), the Kelly fraction is
+
+$$f = p - \frac{q}{b}.$$
+
+It is the fraction of the bankroll that makes the bankroll grow fastest in the long run. Example: an even-money bet ($b = 1$) that wins with probability 0.6 gives $f = 0.6 - 0.4 = 0.2$, so stake 20% each time. Staking much more than that lowers long-run growth, even though each bet still has positive expected value, because a run of losses takes too large a share of the bankroll.
+
+When the expected value is zero or negative, $f$ comes out zero or negative, which means stake nothing. That is the link to this lesson: the sign of the expected profit decides whether Kelly lets you bet at all. Next comes the card game again.
+
+<continue/>
+@@ verify
+from fractions import Fraction as F
+from math import log
+kelly = lambda p, b: p - (1 - p) / b
+assert abs(kelly(0.6, 1) - 0.2) < 1e-12
+# 0.2 maximises the expected log growth of the bankroll for the even-money bet with p = 0.6
+g = lambda f: 0.6 * log(1 + f) + 0.4 * log(1 - f)
+best = max(range(0, 1000), key=lambda i: g(i / 1000)) / 1000
+assert best == 0.2
+# staking much more lowers growth, and far too much makes it negative, although each bet has positive expected value
+assert g(0.4) < g(0.2) and g(0.5) < 0 and 0.6 * 1 - 0.4 * 1 > 0
+# zero edge gives f = 0; a negative edge gives f < 0
+assert kelly(0.5, 1) == 0
+# the card game in the lesson: b = 9, p = 1/13, and its expected profit is negative
+p = F(1, 13)
+assert p - (1 - p) / 9 == F(-1, 39) and 9 * p - (1 - p) == F(-3, 13)
+# the pending problem's answer is not given away
+assert '3/13' not in reply
+
+@@@@ why-linearity-needs-no-independence
+situation: why
+topic: Linearity of expectation
+options: {"why":true}
+voice: confused
+level: medium
+expect: {"verdict":"correct","accept":["partial"],"must":["42/6|= 7\\b","\\(6, ?6\\)"],"askTypes":["explain","short","predict"],"askMustNot":["commutat","any order","nothing about","does not use"],"forbid":["solution"]}
+@@ tutor
+**Why this matters**
+
+Expected values of sums are everywhere in the analysis of systems: the expected load on a server is a sum over requests, the expected number of collisions in a hash table is a sum over pairs of keys. Whether those expectations can simply be added, and under what conditions, decides how hard such questions are.
+
+<ask type="predict">Two fair dice are rolled independently, and the expected sum is 7. Now the second die is rigged so that it always shows the same number as the first. What is the expected sum now? Say how you got it.</ask>
+@@ learner answer unsure
+7 i think? each die still averages 3.5 by itself. but theyre not independent any more so im not sure adding the averages is even allowed, maybe it only worked before because they were independent
+@@ reply
+<grade verdict="correct" score="1">"each die still averages 3.5 by itself" is the right reason and 7 is right. Your doubt about independence is the real question, so settle it by checking rather than by trusting a rule.</grade>
+
+The rigged pair has only six outcomes, (1, 1) up to (6, 6), each with probability $\frac16$. Their sums are 2, 4, 6, 8, 10 and 12, and the average of those is $\frac{42}{6} = 7$. So adding the two averages gave the right value here, with the dice as dependent as two dice can be.
+
+Now look at why it had to. The total of the six sums, written out, is
+
+$$(1 + 1) + (2 + 2) + (3 + 3) + (4 + 4) + (5 + 5) + (6 + 6).$$
+
+<ask type="explain">Regroup that total as $(1 + 2 + \dots + 6) + (1 + 2 + \dots + 6)$: everything the first die showed, plus everything the second die showed. Which property of addition does the regrouping rely on, and did you need to know how the two dice are related to do it?</ask>
+@@ verify
+from fractions import Fraction as F
+outcomes = [(a, a) for a in range(1, 7)]
+sums = [a + b for a, b in outcomes]
+assert sums == [2, 4, 6, 8, 10, 12] and sum(sums) == 42 and F(42, 6) == 7
+# the regrouping: the same total as first-die values plus second-die values
+assert sum(sums) == sum(a for a, _ in outcomes) + sum(b for _, b in outcomes) == 21 + 21
+assert F(21, 6) == F(7, 2)
+# independent dice give 7 too, as the tutor's question states
+assert sum(F(a + b, 36) for a in range(1, 7) for b in range(1, 7)) == 7
+
+@@@@ why-markov-bound-mass-cannot-go-below-zero
+situation: why
+topic: Markov's and Chebyshev's inequalities
+options: {"why":true}
+voice: overconfident
+level: hard
+expect: {"verdict":"wrong","names":["below (0|zero)|faster than 0|negative"],"must":["0 ms"],"askTypes":["short","predict","explain"],"askMustNot":["\\b15\\b","1/3","a third"],"mustNot":["Markov's inequality (says|states)","\\\\le \\\\frac"],"forbid":["solution"]}
+@@ tutor
+Start from something that can be settled by reasoning alone. A request's latency is never negative, and a service's mean latency is 10 ms. Nothing else about the distribution is known.
+
+<ask type="predict">Could half of all requests take 30 ms or longer? Answer yes or no, and give your reason.</ask>
+@@ learner answer sure
+Yes, easily. Latency distributions are heavily skewed so you can have half the requests way out at 30+ and the other half very fast, and the fast ones balance the mean back down to 10.
+@@ reply
+<grade verdict="wrong" score="0.2">"the fast ones balance the mean back down to 10" is the step that fails. Fast requests can pull a mean down only so far, because no request is faster than 0 ms: latency cannot go below zero. Skew is allowed; unlimited balancing from below is not.</grade>
+
+Test the claim on the case most favourable to it, instead of on a feeling about skewed distributions. To keep the mean as low as possible while half the requests take 30 ms or longer:
+
+- put the slow half at exactly 30 ms, the smallest value the claim allows them;
+- put the fast half at exactly 0 ms, the smallest value any latency can have.
+
+Every other distribution with half its requests at 30 ms or more has a mean at least as large as this one.
+
+<card>Why is there a limit to how much probability a non-negative quantity can have far above its mean? :: Values cannot go below 0, so the low part can pull the mean down only to a point; the high part alone already contributes (threshold × its probability) to the mean, and that cannot exceed the mean.</card>
+
+<ask type="short">Work out the mean latency of that most favourable case. How does it compare with 10 ms, and what does that tell you about the claim?</ask>
+@@ verify
+from fractions import Fraction as F
+# the most favourable case: half at 30, half at 0
+mean = F(1, 2) * 30 + F(1, 2) * 0
+assert mean == 15 and mean > 10
+# no distribution on a grid of non-negative values with at least half its mass at >= 30 has mean <= 10:
+# the mean is at least 30 * P(X >= 30) >= 15
+import itertools
+vals = [0, 5, 10, 30, 60]
+best = None
+for w in itertools.product(range(0, 11), repeat=len(vals)):
+    if sum(w) != 10:
+        continue
+    if sum(wi for wi, v in zip(w, vals) if v >= 30) < 5:
+        continue
+    m = F(sum(wi * v for wi, v in zip(w, vals)), 10)
+    best = m if best is None or m < best else best
+assert best == 15
+# the largest fraction at 30 or more that mean 10 allows is 10/30 (answer withheld from the reply)
+assert F(10, 30) == F(1, 3) and '1/3' not in reply and '15' not in reply
+
+@@@@ why-idk-standard-error-root-n
+situation: why
+topic: Standard error of the sample mean
+options: {"why":true}
+voice: plain
+level: medium
+expect: {"must":["variances add","sqrt\\{?n"],"askTypes":["short","predict","explain"],"askMustNot":["\\\\sigma ?/ ?\\\\sqrt","frac\\{\\\\sigma\\}\\{\\\\sqrt","halv","factor of 2"],"mustNot":["frac\\{\\\\sigma\\}\\{\\\\sqrt\\{n\\}\\}","\\\\sigma/\\\\sqrt"],"forbid":["grade","solution"]}
+@@ tutor
+You measure the same quantity $n$ times. The measurements are independent and each has standard deviation $\sigma$. Averaging them gives a steadier answer than any single one, and the question is how much steadier.
+
+<ask type="predict">With 4 times as many measurements, by what factor does the standard deviation of the average shrink? Give a factor and your reason.</ask>
+@@ learner idk
+@@ reply
+Take it in two steps, starting with the total of the measurements rather than their average.
+
+For independent quantities the variances add. Each measurement has variance $\sigma^2$, so the total of $n$ of them has variance $n\sigma^2$, and its standard deviation is $\sigma\sqrt{n}$. Look at what that says: the total of 100 measurements is not 100 times as uncertain as one measurement, only 10 times, because the errors point in different directions and partly cancel. With two measurements, one error is high and the other low about half the time, and then they offset each other in the total.
+
+That is the whole source of the gain. The spread of the total grows, but more slowly than $n$.
+
+<ask type="short">The average is the total divided by $n$, and dividing a quantity by $n$ divides its standard deviation by $n$. Put the two steps together: what is the standard deviation of the average of $n$ measurements, in terms of $\sigma$ and $n$?</ask>
+@@ verify
+from fractions import Fraction as F
+from itertools import product
+from math import sqrt
+# exact check on a concrete measurement error: -1 or +1 with probability 1/2 each (sigma = 1)
+def var_total(n):
+    outs = list(product([-1, 1], repeat=n))
+    m = F(sum(sum(o) for o in outs), len(outs))
+    return F(sum((sum(o) - m)**2 for o in outs), len(outs))
+for n in (1, 2, 4, 9):
+    assert var_total(n) == n           # variances add: n * sigma^2
+assert sqrt(var_total(4)) == 2 and sqrt(100) == 10
+# two measurements: opposite signs half the time
+outs = list(product([-1, 1], repeat=2))
+assert F(sum(1 for a, b in outs if a != b), len(outs)) == F(1, 2)
+# the withheld answers: sd of the average is sigma / sqrt(n), so 4 times the data halves it
+sd_avg = lambda n: sqrt(var_total(n)) / n
+assert abs(sd_avg(4) - 1 / sqrt(4)) < 1e-12 and abs(sd_avg(4) / sd_avg(1) - 0.5) < 1e-12
+
+@@@@ hands-on-enumerate-dice-exactly
+situation: hands-on
+topic: Sample spaces and counting outcomes
+options: {"strategy":"code"}
+voice: plain
+level: easy
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["code"],"must":["5/18"],"askMustNot":["13/54","sorted\\(o\\)\\[1\\]","\\b52\\b"]}
+@@ tutor
+With equally likely outcomes a probability is a count: outcomes in the event over outcomes in all. `itertools.product` lists the outcomes and `Fraction` keeps the answer exact.
+
+```python
+from fractions import Fraction
+from itertools import product
+
+outcomes = list(product(range(1, 7), repeat=2))
+hits = [o for o in outcomes if sum(o) == 7]
+print(len(outcomes), len(hits), Fraction(len(hits), len(outcomes)))
+```
+
+```
+36 6 1/6
+```
+
+<solution>Change the condition to sum(o) >= 9. There are 10 such outcomes of 36, so it prints 5/18.</solution>
+
+<ask type="code" lang="python">Change the program so that it prints the probability that two dice add up to 9 or more, as an exact fraction.</ask>
+@@ learner answer sure
+```python
+from fractions import Fraction
+from itertools import product
+
+outcomes = list(product(range(1, 7), repeat=2))
+hits = [o for o in outcomes if sum(o) >= 9]
+print(Fraction(len(hits), len(outcomes)))
+```
+prints 5/18
+@@ reply
+<grade verdict="correct" score="1">`hits = [o for o in outcomes if sum(o) >= 9]` is the one change needed, and it prints 5/18: 10 of the 36 ordered pairs, reduced by `Fraction`.</grade>
+
+Counting one event is a filter. To get a whole distribution, count every value of a statistic at once with `Counter`. This prints the distribution of the gap between two dice:
+
+```python
+from collections import Counter
+from fractions import Fraction
+from itertools import product
+
+outcomes = list(product(range(1, 7), repeat=2))
+counts = Counter(abs(a - b) for a, b in outcomes)
+for gap in sorted(counts):
+    print(gap, Fraction(counts[gap], len(outcomes)))
+```
+
+```
+0 1/6
+1 5/18
+2 2/9
+3 1/6
+4 1/9
+5 1/18
+```
+
+<solution>Use repeat=3 and the statistic sorted(o)[1]:
+counts = Counter(sorted(o)[1] for o in product(range(1, 7), repeat=3)), dividing by 216. It prints 1 2/27, 2 5/27, 3 13/54, 4 13/54, 5 5/27, 6 2/27 (counts 16, 40, 52, 52, 40, 16).</solution>
+
+<ask type="code" lang="python">Change the program to roll three dice and print the distribution of the middle value of the three (the median: for the roll 2, 6, 3 it is 3).</ask>
+@@ verify
+from fractions import Fraction as F
+from itertools import product
+from collections import Counter
+# the learner's program prints what they say
+assert run_py(block(learner, 'python')).strip() == '5/18'
+assert sum(1 for o in product(range(1, 7), repeat=2) if sum(o) >= 9) == 10 and F(10, 36) == F(5, 18)
+# the reference solution for the task set, run for real
+ref = '''
+from collections import Counter
+from fractions import Fraction
+from itertools import product
+
+outcomes = list(product(range(1, 7), repeat=3))
+counts = Counter(sorted(o)[1] for o in outcomes)
+for m in sorted(counts):
+    print(m, Fraction(counts[m], len(outcomes)))
+'''
+out = run_py(ref).strip().split('\n')
+assert out == ['1 2/27', '2 5/27', '3 13/54', '4 13/54', '5 5/27', '6 2/27']
+for line in out:
+    assert line in solution(reply)
+c = Counter(sorted(o)[1] for o in product(range(1, 7), repeat=3))
+assert [c[m] for m in range(1, 7)] == [16, 40, 52, 52, 40, 16] and sum(c.values()) == 216
+# the gap distribution shown sums to 1
+gaps = Counter(abs(a - b) for a, b in product(range(1, 7), repeat=2))
+assert sum(F(v, 36) for v in gaps.values()) == 1 and F(gaps[1], 36) == F(5, 18)
+
+@@@@ hands-on-law-of-large-numbers-simulation
+situation: hands-on
+topic: The law of large numbers
+voice: plain
+level: medium
+expect: {"verdict":"correct","need":["plan","note"],"setsProblem":true,"askTypes":["code"],"must":["3\\.499559","3\\.5"],"askMustNot":["-441|−441","-286|−286","does not shrink","gap grows","square root"]}
+@@ tutor
+**Why this matters**
+
+The law of large numbers is the reason an average measured on a sample can stand in for a true rate: it is what makes Monte Carlo estimates, A/B test metrics, error rates measured on a sample of requests and the minibatch loss in ML training meaningful. It is also widely misread as a promise that luck evens out, which leads to wrong conclusions about streaks and about how much data is enough.
+
+<ask type="short">You roll a fair die 10 times and the average is 4.4, well above 3.5. You then roll it 990 more times. Does the law of large numbers say those later rolls will tend to come out low to make up for the start? Say what it does say.</ask>
+@@ learner answer sure
+No. The die has no memory, so the later rolls still average about 3.5 like any others. The early excess just gets diluted: 10 rolls out of 1000 barely count, so the overall average ends up close to 3.5 anyway.
+@@ reply
+<grade verdict="correct" score="1">"The early excess just gets diluted" is what the law says: nothing pulls the later rolls low; they average about 3.5 and simply outnumber the first 10.</grade>
+
+<plan>
+- Watch a running average settle
+- Average versus total: which gap shrinks
+- How fast it settles: the square root of n
+</plan>
+
+The law of large numbers: the average of $n$ independent rolls gets close to the expected value 3.5 as $n$ grows, and stays close. A seeded simulation shows it:
+
+```python
+import random
+
+random.seed(7)
+total = 0
+for n in range(1, 1_000_001):
+    total += random.randint(1, 6)
+    if n in (10, 100, 10_000, 1_000_000):
+        print(n, total / n)
+```
+
+```
+10 3.1
+100 3.34
+10000 3.4714
+1000000 3.499559
+```
+
+<note>Law of large numbers: for independent values with the same distribution and mean $\mu$, the sample average approaches $\mu$ as $n$ grows. It works by dilution; later values do not compensate for earlier ones.</note>
+
+**Problem 1 · warm-up**
+
+<solution>Print a third value: print(n, total / n, total - 3.5 * n). With seed 7 the gaps are -4.0, -16.0, -286.0 and -441.0: the gap between the total and 3.5n does not shrink, it tends to grow (roughly like the square root of n), while the average still converges because that gap is divided by n.</solution>
+
+<ask type="code" lang="python">Add a third number to each printed line: `total - 3.5 * n`, the gap between the total and its expected value. Before you run it, write a comment predicting whether that gap gets smaller as n grows; then run it and compare.</ask>
+@@ verify
+# the reference solution for the task, run for real
+ref = '''
+import random
+
+random.seed(7)
+total = 0
+for n in range(1, 1_000_001):
+    total += random.randint(1, 6)
+    if n in (10, 100, 10_000, 1_000_000):
+        print(n, total / n, total - 3.5 * n)
+'''
+rows = [l.split() for l in run_py(ref).strip().split('\n')]
+assert [r[0] for r in rows] == ['10', '100', '10000', '1000000']
+assert [r[1] for r in rows] == ['3.1', '3.34', '3.4714', '3.499559']
+gaps = [r[2] for r in rows]
+assert gaps == ['-4.0', '-16.0', '-286.0', '-441.0']
+for g in gaps:
+    assert g in solution(reply) and g not in visible(reply)
+# the average's distance from 3.5 shrinks at every checkpoint while the total's gap grows
+dist = [abs(float(r[1]) - 3.5) for r in rows]
+assert dist == sorted(dist, reverse=True) and [abs(float(g)) for g in gaps] == sorted(abs(float(g)) for g in gaps)
+# the shown program's output is the first two columns
+shown = block(reply, '').strip().split('\n')
+assert shown == [f'{r[0]} {r[1]}' for r in rows]
+# the probe: 10 rolls averaging 4.4 then 990 averaging 3.5 give an overall average near 3.5
+assert abs((10 * 4.4 + 990 * 3.5) / 1000 - 3.509) < 1e-9
+
+@@@@ hands-on-derangements-any-instead-of-all
+situation: hands-on
+topic: Derangements: permutations with no fixed point
+options: {"strategy":"code"}
+voice: typos
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["any","all","3/8"],"must":["3/8","23"],"setsProblem":true,"askTypes":["code"],"askMustNot":["prints 1\\b","is 1\\b","equals 1\\b"]}
+@@ tutor
+Four people leave their hats at the door and get them back in a random order. An order is a permutation `p` of 0 to 3, where `p[i]` is the hat person `i` receives, and all 24 permutations are equally likely. This counts the orders in which person 0 gets their own hat:
+
+```python
+from fractions import Fraction
+from itertools import permutations
+
+n = 4
+perms = list(permutations(range(n)))
+own = [p for p in perms if p[0] == 0]
+print(len(own), len(perms), Fraction(len(own), len(perms)))
+```
+
+```
+6 24 1/4
+```
+
+<solution>Keep the permutations where every position differs: [p for p in perms if all(p[i] != i for i in range(n))]. There are 9 of 24, so it prints 3/8.</solution>
+
+<ask type="code" lang="python">Change the program so that it prints the probability that nobody gets their own hat, as an exact fraction.</ask>
+@@ learner answer sure
+```python
+from fractions import Fraction
+from itertools import permutations
+
+n = 4
+perms = list(permutations(range(n)))
+none = [p for p in perms if any(p[i] != i for i in range(n))]
+print(Fraction(len(none), len(perms)))
+```
+it prints 23/24. seems realy high for nobody getting there hat but the code looks right to me
+@@ reply
+<grade verdict="partial" score="0.4">The structure is right, and your doubt about "23/24" is justified. The line that fails is `none = [p for p in perms if any(p[i] != i for i in range(n))]`: `any` keeps a permutation as soon as one person has the wrong hat, which is every order except the one where all four get their own, hence 23. "Nobody gets their own hat" needs every person to have the wrong one: `all`.</grade>
+
+With that one word changed:
+
+```python
+from fractions import Fraction
+from itertools import permutations
+
+n = 4
+perms = list(permutations(range(n)))
+none = [p for p in perms if all(p[i] != i for i in range(n))]
+print(len(none), Fraction(len(none), len(perms)))
+```
+
+```
+9 3/8
+```
+
+<card>In Python, how do you test that no element of a permutation p is in its own position? :: all(p[i] != i for i in range(n)). Using any(...) instead tests "at least one element is out of place", which only excludes the identity.</card>
+
+<solution>Sum the number of fixed points over all permutations and divide by 24:
+total = sum(sum(1 for i in range(n) if p[i] == i) for p in perms); print(Fraction(total, len(perms))). The total is 24, so it prints 1: on average exactly one person gets their own hat.</solution>
+
+<ask type="code" lang="python">Starting from the corrected program, print the expected number of people who do get their own hat when n = 4: the average, over all 24 orders, of the count of positions with `p[i] == i`.</ask>
+@@ verify
+from fractions import Fraction as F
+from itertools import permutations
+# the learner's program really prints 23/24
+assert run_py(block(learner, 'python')).strip() == '23/24'
+perms = list(permutations(range(4)))
+assert sum(1 for p in perms if any(p[i] != i for i in range(4))) == 23
+assert [p for p in perms if not any(p[i] != i for i in range(4))] == [(0, 1, 2, 3)]
+# the correction
+assert sum(1 for p in perms if all(p[i] != i for i in range(4))) == 9 and F(9, 24) == F(3, 8)
+# derangement count by the formula n! * sum (-1)^k / k!
+from math import factorial
+assert sum((-1)**k * factorial(4) // factorial(k) for k in range(5)) == 9
+# the reference solution for the new task, run for real
+ref = '''
+from fractions import Fraction
+from itertools import permutations
+
+n = 4
+perms = list(permutations(range(n)))
+total = sum(sum(1 for i in range(n) if p[i] == i) for p in perms)
+print(total, Fraction(total, len(perms)))
+'''
+assert run_py(ref).strip() == '24 1'
+assert 'prints 1' in solution(reply)
+
+@@@@ summary-exponential-memorylessness
+situation: summary
+topic: The exponential distribution and memorylessness
+voice: confused
+level: medium
+expect: {"verdict":"correct","must":["memoryless","0\\.368|e\\^\\{-1\\}","surviv|1 - e|1 − e"]}
+@@ tutor
+**Problem 3 · same level**
+
+The time between requests to a service is exponential with rate $\lambda = 2$ per second (a mean of 0.5 s). Find the probability that the wait for the next request is longer than 1 second.
+
+<solution>P(T > 1) = e^(−2 × 1) = e^(−2) ≈ 0.135.</solution>
+<check lang="python">
+from math import exp
+assert round(exp(-2 * 1), 3) == 0.135
+</check>
+
+<ask type="problem">The probability to three decimal places, with the formula you used.</ask>
+@@ learner answer unsure
+is it P(T > 1) = 1 - e^(-2) = 0.865? I always mix up which formula is which
+@@ tutor
+<grade verdict="wrong" score="0.2">"1 - e^(-2)" is the probability that the wait is at most 1 second, the cumulative distribution function. The question asks for longer than 1 second, which is the other side: $e^{-2} \approx 0.135$.</grade>
+
+<card>For an exponential wait T with rate λ, what are P(T ≤ t) and P(T > t)? :: P(T ≤ t) = 1 − e^(−λt) and P(T > t) = e^(−λt). "Still waiting after t" is the plain exponential.</card>
+
+<note>Exponential with rate $\lambda$: $P(T > t) = e^{-\lambda t}$ (still waiting at time $t$) and $P(T \le t) = 1 - e^{-\lambda t}$ (it has happened by $t$). The mean wait is $1/\lambda$.</note>
+
+**Problem 4 · last one**
+
+Same service, rate 2 per second. You have already waited 1 second and no request has arrived. Find the probability that you wait at least another 0.5 seconds.
+
+<solution>By memorylessness, P(T > 1.5 | T > 1) = P(T > 0.5) = e^(−2 × 0.5) = e^(−1) ≈ 0.368.</solution>
+<check lang="python">
+from math import exp
+cond = exp(-2 * 1.5) / exp(-2 * 1)
+assert abs(cond - exp(-1)) < 1e-12 and round(cond, 3) == 0.368
+</check>
+
+<ask type="problem">The probability to three decimal places, with your reasoning.</ask>
+@@ learner answer sure
+The exponential is memoryless so the 1 second already waited doesn't change anything. I need P(T > 0.5) = e^(-2 × 0.5) = e^(-1) = 0.368. And this time it's the survival side, e^(-λt), not 1 minus it.
+@@ reply
+<grade verdict="correct" score="1">"the 1 second already waited doesn't change anything" is memorylessness used correctly, and "P(T > 0.5) = e^(-2 × 0.5) = e^(-1) = 0.368" takes the right side of the distribution this time.</grade>
+
+<summary>**What you learned:** the exponential distribution as a model of waiting times at a steady rate, with $P(T > t) = e^{-\lambda t}$ and mean $1/\lambda$; and memorylessness: having waited already does not change the distribution of the remaining wait, so $P(T > 1.5 \mid T > 1) = P(T > 0.5) = e^{-1} \approx 0.368$.
+
+**Still shaky:** which side of the distribution a question asks for. In Problem 3 you gave $1 - e^{-2} \approx 0.865$, the chance the wait is over within 1 second, where the survival probability $e^{-2} \approx 0.135$ was wanted; in Problem 4 you named the survival side yourself. One right answer after one slip is not yet secure, and the card for the two formulas is in your deck.
+
+**Review next:** a few mixed "at most", "longer than" and "between" questions on the same distribution, then the link to the Poisson distribution: exponential gaps between events and Poisson counts of events in a window describe the same process.</summary>
+@@ verify
+from math import exp
+# problem 3: the right value and the learner's slip
+assert round(exp(-2), 3) == 0.135 and round(1 - exp(-2), 3) == 0.865
+# problem 4: conditional probability computed from the definition equals the unconditional survival
+cond = exp(-2 * 1.5) / exp(-2 * 1)
+assert abs(cond - exp(-2 * 0.5)) < 1e-12 and round(cond, 3) == 0.368
+# mean 1/lambda = 0.5, by numerical integration of the survival function
+dt = 1e-4
+assert abs(sum(exp(-2 * k * dt) * dt for k in range(200000)) - 0.5) < 1e-3
+for s in ['0.865', '0.135', '0.368']:
+    assert s in reply
+
+@@@@ summary-quiz-joint-and-marginal
+situation: summary
+topic: Joint and marginal distributions
+mode: quiz
+options: {"length":3}
+voice: terse
+level: medium
+expect: {"verdict":"correct","must":["2 (out )?of 3|2/3","2/5","joint"]}
+@@ tutor
+**Question 1 of 3**
+
+The joint distribution of $X$ and $Y$:
+
+| | Y = 0 | Y = 1 |
+|---|---|---|
+| X = 0 | 1/4 | 1/4 |
+| X = 1 | 1/3 | 1/6 |
+
+<solution>P(Y = 1) is the sum of the Y = 1 column: 1/4 + 1/6 = 5/12.</solution>
+
+<ask type="short">What is the marginal probability $P(Y = 1)$? Show the sum.</ask>
+@@ learner answer sure
+add the Y=1 column: 1/4 + 1/6 = 5/12
+@@ tutor
+<grade verdict="correct" score="1">"1/4 + 1/6 = 5/12" is right: a marginal is the total of its column (or row) of the joint table.</grade>
+
+**Question 2 of 3**
+
+<solution>P(X = 1 | Y = 1) = P(X = 1, Y = 1) / P(Y = 1) = (1/6) / (5/12) = 2/5.</solution>
+
+<ask type="short">From the same table, what is the conditional probability $P(X = 1 \mid Y = 1)$?</ask>
+@@ learner answer sure
+1/6. its the cell where X=1 and Y=1
+@@ tutor
+<grade verdict="wrong" score="0.2">"the cell where X=1 and Y=1" is the joint probability $P(X = 1, Y = 1) = \frac16$, the chance of both together. Conditioning on $Y = 1$ restricts attention to that column, so the cell is divided by the column total: $\frac{1/6}{5/12} = \frac25$.</grade>
+
+<card>How do you read P(X = x | Y = y) from a joint table? :: Divide the cell by its column total: P(X = x, Y = y) / P(Y = y). The cell alone is the joint probability, not the conditional.</card>
+
+**Question 3 of 3**
+
+<solution>Not independent. P(X = 1) = 1/3 + 1/6 = 1/2 and P(Y = 1) = 5/12, whose product is 5/24, but the cell P(X = 1, Y = 1) is 1/6 = 4/24. One cell that differs from the product of its marginals is enough.</solution>
+
+<ask type="explain">Are $X$ and $Y$ in this table independent? Justify your answer with numbers from the table.</ask>
+@@ learner answer sure
+no. P(X=1)P(Y=1) = 1/2 × 5/12 = 5/24 but the cell is 1/6 = 4/24. joint isnt the product of the marginals so not independent
+@@ reply
+<grade verdict="correct" score="1">"1/2 × 5/12 = 5/24 but the cell is 1/6 = 4/24" is a complete justification: one cell that differs from the product of its marginals rules out independence.</grade>
+
+<summary>**Score:** 2 of 3.
+
+**Strengths:** marginals, found by summing a column (5/12), and the independence test, done properly by comparing a joint cell with the product of its two marginals (5/24 against 4/24).
+
+**Misconception to fix:** reading a cell of the table as a conditional probability. In Question 2 you gave the joint probability 1/6 for $P(X = 1 \mid Y = 1)$; the conditional is the cell divided by its column total, (1/6) ÷ (5/12) = 2/5. Your Question 3 answer shows you can tell the joint from the marginals, so the gap is only the dividing step.
+
+**Review:** conditional distributions from a joint table: take one column, divide each cell by the column total and check that the results sum to 1. After that, expectation and covariance computed from a joint table.</summary>
+@@ verify
+from fractions import Fraction as F
+joint = {(0, 0): F(1, 4), (0, 1): F(1, 4), (1, 0): F(1, 3), (1, 1): F(1, 6)}
+assert sum(joint.values()) == 1
+# the table in the first tutor turn is this joint distribution
+t = table(tutor[0])
+assert [F(c) for c in t[1][1:]] == [joint[(0, 0)], joint[(0, 1)]] and [F(c) for c in t[2][1:]] == [joint[(1, 0)], joint[(1, 1)]]
+px = {x: joint[(x, 0)] + joint[(x, 1)] for x in (0, 1)}
+py = {y: joint[(0, y)] + joint[(1, y)] for y in (0, 1)}
+assert py[1] == F(5, 12) and px[1] == F(1, 2)
+assert joint[(1, 1)] / py[1] == F(2, 5)
+assert px[1] * py[1] == F(5, 24) and joint[(1, 1)] == F(4, 24) and px[1] * py[1] != joint[(1, 1)]
+# the conditional distribution given Y = 1 sums to 1
+assert joint[(0, 1)] / py[1] + joint[(1, 1)] / py[1] == 1
+# score: correct, wrong, correct
+import re
+marks = [re.search(r'verdict="(\w+)"', x).group(1) for x in tutor[1:] + [reply]]
+assert marks == ['correct', 'wrong', 'correct'] and marks.count('correct') == 2

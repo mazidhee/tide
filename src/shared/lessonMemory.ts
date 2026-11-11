@@ -137,3 +137,25 @@ export function priorLessonsNote(topic: string, all: LessonDigest[], now = Date.
       : 'This lesson is on a different topic that touches those. Where an idea here rests on one from them, say so in a line and build on it; if it rests on something they missed there, check that first with one short question.'
   ].join('\n')
 }
+
+/** A question due for recall, as the tutor needs to see it: its words, where it came from and how it has gone since */
+export interface RecallDue {
+  prompt: string
+  topic: string
+  reviews: number
+  lapses: number
+}
+
+/** The note a lesson opens with when questions on its topic are due for recall; empty when none are */
+export function recallDueNote(due: RecallDue[]): string {
+  if (!due.length) return ''
+  const times = (i: RecallDue) => (i.reviews ? `asked ${i.reviews} time${i.reviews === 1 ? '' : 's'} since, missed ${i.lapses}` : 'not asked again yet')
+  return [
+    'Due for recall today (questions this student missed or couldn’t answer before, brought back on a schedule):',
+    ...due.map((i, n) => `${n + 1}. "${i.prompt}" (from "${i.topic}"; ${times(i)})`),
+    'Your opening question is the first of these, in these words, before anything else, in an <ask> tag. When they answer, mark it with a <grade> tag (correct, partial or wrong) and one line of feedback, then begin the lesson. Don’t give the answer away while asking.'
+  ].join('\n')
+}
+
+/** What a lesson's first message is given about earlier work, in the order the app joins it: what is due for recall, then what earlier lessons show */
+export const openingNotes = (recall: string, prior: string) => [recall, prior].filter(Boolean).join('\n\n')

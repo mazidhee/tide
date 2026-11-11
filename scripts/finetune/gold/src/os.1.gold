@@ -1,0 +1,340 @@
+@@@@ open-cpu-scheduling-policies
+situation: open
+topic: CPU scheduling: FCFS, SJF and round-robin
+voice: plain
+level: medium
+expect: {"must":["round-robin","waiting time"],"askMustNot":["policy A (is|has|gives|wins)","\\b20 ms","\\b29\\b"]}
+@@ reply
+**Why this matters**
+
+The scheduler decides which runnable thread gets a core next, and that choice sets both how long jobs wait and how quickly a system responds. Linux, the Go runtime's goroutine scheduler and every batch queue make the same trade: finish work early on average, or keep every task responsive. The three textbook policies (first come first served, shortest job first, round-robin) each settle that trade differently, and the measures used to compare them, waiting time and turnaround time, are the ones you will use when sizing thread pools and queue workers. They are also the base for multi-level feedback queues and fair-share scheduling.
+
+<ask type="predict">Three jobs arrive together and each needs 10 ms of CPU. Policy A runs each job to completion in turn. Policy B is round-robin with a 1 ms time slice. Under which policy is the average time until a job finishes lower, and why?</ask>
+@@ verify
+# the hidden answer to the probe: run to completion finishes at 10, 20, 30; round-robin at 28, 29, 30
+a = [10, 20, 30]
+rem, t, done = [10, 10, 10], 0, {}
+while len(done) < 3:
+    for i in range(3):
+        if rem[i]:
+            rem[i] -= 1; t += 1
+            if rem[i] == 0: done[i] = t
+assert [done[i] for i in range(3)] == [28, 29, 30]
+assert sum(a) / 3 == 20 and sum(done.values()) / 3 == 29
+# neither figure is given away
+assert '29' not in reply and '20 ms' not in reply
+
+@@@@ open-quiz-deadlock-two-locks
+situation: open
+topic: Deadlock: the four conditions
+mode: quiz
+options: {"length":6}
+voice: plain
+level: medium
+expect: {"must":["Question 1 of 6"],"askMustNot":["circular"],"mustNot":["Why this matters"]}
+noverify: a quiz's first question; nothing is computed and its answer (circular wait) is not stated
+@@ reply
+**Question 1 of 6**
+
+Thread 1 locks mutex A and then asks for mutex B. Thread 2 locks mutex B and then asks for mutex A. Each took its first lock before the other asked for its second, and neither thread releases a lock until it holds both.
+
+<ask type="short">Both threads now block for ever. Which of the conditions for deadlock is removed if every thread always locks A before B, and why can the deadlock then not form?</ask>
+
+@@@@ open-refresh-link-counts
+situation: open
+topic: Hard links and symbolic links
+options: {"refresh":true}
+voice: plain
+level: easy
+expect: {"setsProblem":true,"must":["link count"],"askMustNot":["No such file","\\b2, 2\\b","dangling"],"mustNot":["Why this matters"]}
+@@ reply
+**Problem 1**
+
+A directory holds one file, `report.txt`, whose inode has a link count of 1. These three commands are run in order:
+
+```
+ln report.txt copy.txt
+ln -s report.txt short.txt
+rm report.txt
+```
+
+<solution>ln adds a second directory entry for the same inode, so the count becomes 2. ln -s creates a separate inode that stores the path "report.txt"; the count of the original stays 2. rm removes one entry, so the count falls to 1 and the data stays. At the end cat copy.txt prints the contents, and cat short.txt fails with "No such file or directory" because the stored path no longer resolves.</solution>
+
+<ask type="problem">What is the inode's link count after each of the three commands, and what do `cat copy.txt` and `cat short.txt` do at the end?</ask>
+@@ verify
+import os, tempfile
+with tempfile.TemporaryDirectory() as d:
+    p = lambda n: os.path.join(d, n)
+    open(p('report.txt'), 'w').write('data\n')
+    assert os.stat(p('report.txt')).st_nlink == 1
+    os.link(p('report.txt'), p('copy.txt'))
+    c1 = os.stat(p('report.txt')).st_nlink
+    os.symlink('report.txt', p('short.txt'))
+    c2 = os.stat(p('report.txt')).st_nlink
+    os.remove(p('report.txt'))
+    c3 = os.stat(p('copy.txt')).st_nlink
+    assert (c1, c2, c3) == (2, 2, 1)
+    assert open(p('copy.txt')).read() == 'data\n'
+    try:
+        open(p('short.txt')).read(); raise AssertionError('the symlink still resolves')
+    except FileNotFoundError:
+        pass
+s = solution(reply)
+assert 'becomes 2' in s and 'stays 2' in s and 'falls to 1' in s and 'No such file or directory' in s
+
+@@@@ open-prior-semaphore-count
+situation: open-prior
+topic: Semaphores
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Semaphores","daysAgo":4,"finished":false,"plan":["Counting semaphores: wait and signal","Binary semaphores as locks","The bounded buffer with two semaphores"],"right":3,"partly":1,"wrong":1,"missed":["A semaphore starts at 2. Three threads call wait() and none has called signal(). How many are blocked?"],"open":"In the bounded buffer, why does the producer wait on the 'empty' semaphore before taking the mutex?"}]}
+expect: {"must":["semaphore","bounded"],"askMustNot":["\\b(three|3) (of them )?(get|pass)","\\b(two|2) (are |stay |left )?blocked"]}
+noverify: an opening; its question (3 pass, 2 block) is asked, not answered
+@@ reply
+**Why this matters**
+
+A semaphore is a counter that the kernel or a threading library guards for you. It is how a connection pool admits only N users at once, how a bounded queue makes producers wait when it is full, and how one thread tells another that work is ready. You have wait and signal and the binary case from last time; the counting behaviour slipped once, and the bounded buffer, which depends on it, is still to come.
+
+<ask type="short">A semaphore is initialised to 3. Five threads each call wait() once, and no thread calls signal(). How many of the five get past wait(), and how many are left blocked?</ask>
+
+@@@@ open-prior-rwlock-from-mutex
+situation: open-prior
+topic: Reader-writer locks
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Mutex locks","daysAgo":6,"finished":true,"plan":["Critical sections","Lock and unlock around shared data","Contention and its cost"],"right":4,"partly":1,"wrong":1,"missed":["Two threads only read a shared map and never write it. Is a mutex needed for correctness?"]}]}
+expect: {"must":["mutex","read"],"askMustNot":["no data race","cannot see a wrong","no lock is needed"]}
+noverify: an opening; conceptual, nothing computed
+@@ reply
+**Why this matters**
+
+A reader-writer lock lets any number of threads read shared data at once and gives a writer exclusive access. It suits data that is read far more often than it is changed: a routing table, a configuration snapshot, an in-memory cache. `pthread_rwlock_t`, Go's `sync.RWMutex` and C++'s `std::shared_mutex` are the forms you will meet. It rests on one idea from your mutex lesson: which combinations of threads can touch shared data at the same moment without harm. That was the question you missed there, so it comes first.
+
+<ask type="short">Four threads call `lookup(key)` on a shared table at the same time, and no thread modifies the table while they run. Can any of them get a wrong result because of the others? Say why or why not.</ask>
+
+@@@@ open-recall-raid5-capacity
+situation: open-recall
+topic: RAID levels
+voice: plain
+level: easy
+before: {"recall":[{"prompt":"A RAID 5 array has five 4 TB disks. What is its usable capacity, and how many disk failures can it survive?","topic":"RAID levels","reviews":1,"lapses":0}]}
+expect: {"askMustNot":["16 TB","\\bone (disk|failure)","\\b1 (disk|failure)"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="short">A RAID 5 array has five 4 TB disks. What is its usable capacity, and how many disk failures can it survive?</ask>
+
+@@@@ open-recall-zombie-state
+situation: open-recall
+topic: Zombie and orphan processes
+voice: plain
+level: easy
+before: {"recall":[{"prompt":"A child process has exited but its parent has not called wait(). What state is the child in, and what does it still hold?","topic":"Zombie and orphan processes","reviews":2,"lapses":1}]}
+expect: {"askMustNot":["zombie","exit status","process table","defunct"],"words":{"max":60}}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="explain">A child process has exited but its parent has not called wait(). What state is the child in, and what does it still hold?</ask>
+
+@@@@ correct-fcfs-then-sjf-arrivals
+situation: after-correct
+topic: CPU scheduling: FCFS, SJF and round-robin
+voice: terse
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"must":["5\\.67","shortest job"],"askMustNot":["5\\.5","P4, P3"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+Three jobs arrive at time 0 in the order P1, P2, P3, with CPU bursts of 7 ms, 3 ms and 5 ms. The scheduler is first come, first served. Find each job's waiting time and the average waiting time.
+
+<solution>P1 runs 0 to 7, P2 7 to 10, P3 10 to 15. Waiting times: 0, 7 and 10 ms. Average: 17 / 3 = 5.67 ms.</solution>
+<check lang="python">
+t, waits = 0, []
+for b in [7, 3, 5]:
+    waits.append(t)
+    t += b
+assert waits == [0, 7, 10] and round(sum(waits) / 3, 2) == 5.67
+</check>
+
+<ask type="problem">The three waiting times and their average, with the order of execution.</ask>
+@@ learner answer sure
+P1 0, P2 7, P3 10. avg 17/3 = 5.67 ms. order P1 P2 P3
+@@ reply
+<grade verdict="correct" score="1">"P1 0, P2 7, P3 10" is right: under FCFS each job waits for the bursts ahead of it, and 17 / 3 = 5.67 ms.</grade>
+
+**Problem 2 · harder**
+
+Now the jobs arrive at different times and the scheduler is shortest job first without preemption: whenever the CPU becomes free it picks the shortest job that has already arrived, and that job runs to completion.
+
+| Job | Arrival (ms) | Burst (ms) |
+|---|---|---|
+| P1 | 0 | 8 |
+| P2 | 1 | 4 |
+| P3 | 2 | 2 |
+| P4 | 3 | 1 |
+
+A job's waiting time is the time it spends ready but not running; with no preemption that is its start time minus its arrival time.
+
+<solution>At 0 only P1 has arrived, so it runs 0 to 8. At 8 the other three are waiting: P4 (1 ms) runs 8 to 9, P3 (2 ms) runs 9 to 11, P2 (4 ms) runs 11 to 15. Waiting times: P1 0, P2 11 − 1 = 10, P3 9 − 2 = 7, P4 8 − 3 = 5. Average: 22 / 4 = 5.5 ms.</solution>
+<check lang="python">
+jobs = {'P1': (0, 8), 'P2': (1, 4), 'P3': (2, 2), 'P4': (3, 1)}
+t, left, order, wait = 0, dict(jobs), [], {}
+while left:
+    ready = [n for n in left if left[n][0] <= t]
+    n = min(ready, key=lambda n: left[n][1])
+    wait[n] = t - left[n][0]
+    t += left[n][1]
+    order.append(n)
+    del left[n]
+assert order == ['P1', 'P4', 'P3', 'P2']
+assert wait == {'P1': 0, 'P4': 5, 'P3': 7, 'P2': 10} and sum(wait.values()) / 4 == 5.5
+</check>
+
+<ask type="problem">The order the jobs run in, each job's waiting time, and the average waiting time.</ask>
+@@ verify
+# Problem 1 and the learner's figures
+t, waits = 0, []
+for b in [7, 3, 5]:
+    waits.append(t); t += b
+assert waits == [0, 7, 10] and round(17 / 3, 2) == 5.67 and sum(waits) == 17
+assert all(x in learner for x in ['P1 0', 'P2 7', 'P3 10', '5.67'])
+# Problem 2: the table in the reply drives an independent simulation
+rows = table(reply)[1:]
+jobs = [(r[0], int(r[1]), int(r[2])) for r in rows]
+assert jobs == [('P1', 0, 8), ('P2', 1, 4), ('P3', 2, 2), ('P4', 3, 1)]
+t, left, sched = 0, list(jobs), []
+while left:
+    ready = sorted((j for j in left if j[1] <= t), key=lambda j: j[2])
+    assert len(ready) == 1 or ready[0][2] != ready[1][2]   # no tie to argue about
+    j = ready[0]; left.remove(j); sched.append((j[0], t, t + j[2], t - j[1])); t += j[2]
+assert sched == [('P1', 0, 8, 0), ('P4', 8, 9, 5), ('P3', 9, 11, 7), ('P2', 11, 15, 10)]
+s = solution(reply)
+for piece in ['8 to 9', '9 to 11', '11 to 15', '22 / 4 = 5.5']:
+    assert piece in s
+assert '5.5' not in visible(reply)
+
+@@@@ correct-probe-plan-context-switch-cost
+situation: after-correct
+topic: Context switches
+voice: wordy
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"need":["plan","note"],"must":["0\\.05%","stack pointer"],"askMustNot":["3\\.8","0\\.038"]}
+@@ tutor
+**Why this matters**
+
+A context switch is how one core serves many threads: the kernel stops one, keeps its state, and resumes another. Every blocking call, timer tick and lock handover in a server goes through one, so its cost shapes choices such as threads against an event loop and how large a thread pool should be. It is also the background for reading scheduler and latency traces.
+
+<ask type="short">A core is running thread A and the kernel decides to run thread B instead. What does the kernel have to save, and where, so that A can later carry on as if nothing had happened?</ask>
+@@ learner answer sure
+It has to save A's CPU state, so the general purpose registers, the program counter and the stack pointer (and the flags), into A's own kernel data structure, the thread control block or A's kernel stack. Then it loads B's saved registers from B's block and jumps to where B left off. If B belongs to a different process it also has to switch the page table pointer, and that's the expensive bit because the TLB entries for A stop being useful.
+@@ reply
+<grade verdict="correct" score="1">Right on both parts: "the general purpose registers, the program counter and the stack pointer" kept in A's own kernel structure is exactly the state a switch must preserve, and you separated out the extra step for a different process, the page table switch.</grade>
+
+<plan>
+- The direct cost of a switch and how it scales with the time slice
+- The indirect cost: cold caches and TLB
+- Why threads of one process switch more cheaply than processes
+</plan>
+
+The direct cost is the time spent saving and restoring state and running the scheduler, during which no thread makes progress. It is fixed per switch, so what matters is how often it is paid. Suppose a switch takes 5 µs and each thread runs a 10 ms slice (10,000 µs) before the next switch. One cycle is 10,000 µs of work plus 5 µs of switching, so the share of CPU time lost is 5 / 10,005 ≈ 0.05%.
+
+<note>Direct context-switch overhead = switch time / (run time between switches + switch time). The switch time is fixed, so the shorter the run between switches, the larger the share of the CPU spent switching.</note>
+
+**Problem 1 · warm-up**
+
+A switch takes 4 µs. A workload's threads block so often that each runs for only 100 µs between switches.
+
+<solution>4 / (100 + 4) = 0.0385, so about 3.8% of CPU time goes on switching.</solution>
+<check lang="python">
+share = 4 / (100 + 4)
+assert round(share, 4) == 0.0385 and round(share * 100, 1) == 3.8
+</check>
+
+<ask type="problem">The share of CPU time spent switching, as a percentage, with the expression you used.</ask>
+@@ verify
+# the worked example: 5 µs per switch, 10 ms slices
+assert 10 * 1000 == 10000
+share = 5 / (10000 + 5)
+assert round(share * 100, 2) == 0.05 and '5 / 10,005' in reply
+# Problem 1
+p1 = 4 / 104
+assert round(p1 * 100, 1) == 3.8 and '3.8%' in solution(reply) and '3.8' not in visible(reply)
+# the grade quotes what was typed
+assert 'the general purpose registers, the program counter and the stack pointer' in learner
+
+@@@@ correct-recall-journal-ordered-mode
+situation: after-correct
+topic: Journaling file systems
+voice: plain
+level: medium
+before: {"recall":[{"prompt":"In ordered-mode journaling, which reaches the disk first: a file's new data blocks, or the journal commit for its metadata?","topic":"Journaling file systems","reviews":2,"lapses":1}]}
+expect: {"verdict":"correct","heading":"Why this matters","must":["ext4","journal"],"askMustNot":["garbage","marked (as )?free","still free","stale"],"askTypes":["predict","short","explain","choice"]}
+noverify: a recall answer marked and a conceptual opening; nothing computed
+@@ tutor
+<ask type="short">In ordered-mode journaling, which reaches the disk first: a file's new data blocks, or the journal commit for its metadata?</ask>
+@@ learner answer sure
+The data blocks go first. Only after they're on disk does the metadata transaction get committed to the journal, so committed metadata never points at blocks that were not written.
+@@ reply
+<grade verdict="correct" score="1">"The data blocks go first" is right, and for the reason you give: the commit is held back so that committed metadata can only point at blocks already on disk.</grade>
+
+**Why this matters**
+
+One file system update usually touches several blocks (an inode, a bitmap, a directory, the data), and a crash can land between any two of those writes. Journaling is how ext4, XFS and NTFS make the group of writes all-or-nothing, so a restart replays a short log instead of checking the whole disk with fsck. It also decides what `fsync` costs and what a database or queue built on the file system may assume after a power cut.
+
+<ask type="predict">Appending one block to a file changes three things on disk: the data block, the inode (new size and block pointer) and the block bitmap. With no journal, the machine loses power after the inode is written but before the other two. What is wrong with the file system when it restarts?</ask>
+
+@@@@ correct-unsure-buddy-split
+situation: after-correct
+topic: The buddy allocator
+voice: typos
+level: easy
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"must":["32 KB","512 KB"],"askMustNot":["\\b19\\b","\\b64\\b","three splits|3 splits"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+A buddy allocator manages a single free block of 128 KB. Block sizes are powers of two, and a block is split in half, again and again, until the smallest block that still fits the request is reached. A request for 20 KB arrives.
+
+<solution>20 KB needs a 32 KB block (16 is too small). Split 128 into 64 + 64, then one 64 into 32 + 32: two splits. The request gets a 32 KB block with 32 − 20 = 12 KB of internal fragmentation. Free blocks left: one of 64 KB and one of 32 KB.</solution>
+<check lang="python">
+size, req, splits, free = 128, 20, 0, []
+while size // 2 >= req:
+    size //= 2
+    splits += 1
+    free.append(size)
+assert (size, splits, size - req, sorted(free)) == (32, 2, 12, [32, 64])
+</check>
+
+<ask type="problem">The size of the block handed out, the number of splits, the space wasted inside the block, and the free blocks left.</ask>
+@@ learner answer unsure
+i think a 32 KB block, since 20 dosnt fit in 16. 2 splits (128 -> 64 -> 32). wasted is 12 KB. left over free: one 64 and one 32?
+@@ reply
+<grade verdict="correct" score="1">All four are right: "2 splits (128 -> 64 -> 32)" gives a 32 KB block, 32 − 20 = 12 KB is wasted inside it, and each split leaves its other half free, hence one 64 and one 32.</grade>
+
+You were not sure, so here is one more at the same level.
+
+**Problem 2 · same level**
+
+A buddy allocator starts with a single free block of 512 KB. A request for 45 KB arrives.
+
+<solution>45 KB needs a 64 KB block (32 is too small). Splits: 512 → 256, 256 → 128, 128 → 64: three splits. Internal fragmentation: 64 − 45 = 19 KB. Free blocks left: 256 KB, 128 KB and 64 KB.</solution>
+<check lang="python">
+size, req, splits, free = 512, 45, 0, []
+while size // 2 >= req:
+    size //= 2
+    splits += 1
+    free.append(size)
+assert (size, splits, size - req, sorted(free)) == (64, 3, 19, [64, 128, 256])
+</check>
+
+<ask type="problem">The size of the block handed out, the number of splits, the space wasted inside the block, and the free blocks left.</ask>
+@@ verify
+def buddy(pool, req):
+    size, splits, free = pool, 0, []
+    while size // 2 >= req:
+        size //= 2; splits += 1; free.append(size)
+    return size, splits, size - req, sorted(free)
+assert buddy(128, 20) == (32, 2, 12, [32, 64])
+assert buddy(512, 45) == (64, 3, 19, [64, 128, 256])
+# the free halves plus the block handed out make up the pool again
+assert 32 + 32 + 64 == 128 and 64 + 64 + 128 + 256 == 512
+assert all(x in learner for x in ['32 KB', '2 splits (128 -> 64 -> 32)', '12 KB', 'one 64 and one 32'])
+s = solution(reply)
+assert '64 KB block' in s and 'three splits' in s and '19 KB' in s and '256 KB, 128 KB and 64 KB' in s

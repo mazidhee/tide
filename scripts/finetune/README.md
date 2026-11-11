@@ -46,11 +46,22 @@ Filters (`filters.ts`, tested in `test/finetuneData.test.ts`):
 | Length | Examples over the window (`--max-tokens`, an estimate at 3.4 characters a token) are dropped, not cut: cutting would cut the reply. |
 | Split | Held out by whole lesson (15% by a hash of the lesson id), so no lesson is on both sides. |
 
-**Gold replies.** `--gold file.jsonl` adds examples written later by a stronger model, in the benchmark's scenario form (`group`, `setup`, `history`, `reply`, `by`). Each must pass the scorer's protocol checks and must not match the benchmark. This is where real improvement would come from: the tutor's own passing turns mostly teach it to do what it already does.
+**Gold replies.** `--gold file.jsonl` (or a folder of them) adds examples written by a stronger model, in the benchmark's scenario form (`group`, `setup`, `history`, `reply`, `by`, `expect`, and `before` for what the first message was told about earlier lessons). Each must pass the scorer and must not match the benchmark. This is where real improvement would come from: the tutor's own passing turns mostly teach it to do what it already does.
+
+**The gold set kept here** (`scripts/finetune/gold/`): 606 examples, 42 to 45 for each of 14 subjects, across 13 situations (openings with and without a note about earlier lessons or a question due for recall, after a correct or a wrong answer, "I don't know", Show me, a worked answer with one error, an unusual correct method, a tangent, Why mode, hands-on code and SQL, a closing summary). They are written in `gold/src/*.gold` (plain text, see `gold/lib.ts`) and compiled to `gold/*.jsonl`:
+
+```bash
+export GOLD_PYTHON=<a python with numpy> GOLD_LAB_DB=<a file copy of the lab's sample database>
+npx vite-node scripts/finetune/gold/cli.ts -- check --write   # validate, verify, keep what passes
+npx vite-node scripts/finetune/gold/cli.ts -- stats           # counts by subject and situation
+npx vite-node scripts/finetune/build.ts -- --vault "<notes folder>" --gold scripts/finetune/gold
+```
+
+`check` keeps an example only if the benchmark's scorer passes it against the expectations of its situation, its mark carries a score that agrees with the verdict and quotes the learner, its prose is in the product's voice, the builder's scrub would not alter it, it is far from every benchmark scenario (`gold/heldout.ts`: wording, numbers, topic and question, thresholds set from what the scenarios share with each other), and everything it states runs: every `<check>`, every program and its shown output, every SQL query on the lab data, every mermaid diagram, and its own verify script. `test/goldSet.test.ts` holds the kept set to the same rules, without the interpreter. On 11 November 2026 the builder turned the 606 into 512 training and 94 held-out examples (368 and 74 topics; no topic on both sides).
 
 ### How many examples exist today
 
-Counted on 11 November 2026 with `--count-only`: **1 lesson, 9 tutor turns, all 9 pass the filters; 3 fit the 8,192-token window** (the other 6 are longer, because that lesson opens with a book passage). No gold replies. Nothing can be held out from one lesson. All 9 were written with Talk on.
+Counted on 11 November 2026 with `--count-only`: **1 lesson, 9 tutor turns, all 9 pass the filters; 3 fit the 8,192-token window** (the other 6 are longer, because that lesson opens with a book passage). Gold replies: 606 (above). Nothing can be held out from one lesson. All 9 were written with Talk on.
 
 ### How many a LoRA would need (estimates, not measurements)
 

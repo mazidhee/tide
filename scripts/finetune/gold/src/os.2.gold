@@ -1,0 +1,598 @@
+@@@@ wrong-rr-waiting-is-not-response
+situation: after-wrong
+topic: Round-robin scheduling and the time quantum
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","accept":["partial"],"names":["response time","first"],"must":["4\\.33","13 / 3"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["5\\.67","17 / 3"]}
+@@ tutor
+Round-robin keeps the ready jobs in a queue. The job at the front runs for at most one quantum; if it still has work left it goes to the back of the queue, otherwise it leaves.
+
+<note>Round-robin: run the front job for min(quantum, time it still needs), then move it to the back if unfinished. A job's waiting time is all the time it spends in the ready queue, across every visit.</note>
+
+**Problem 1 · warm-up**
+
+Three jobs arrive at time 0 in the order P1, P2, P3 with bursts of 5 ms, 3 ms and 1 ms. The scheduler is round-robin with a 2 ms quantum; ignore the cost of switching. Find each job's waiting time and the average.
+
+<solution>Timeline: P1 0 to 2, P2 2 to 4, P3 4 to 5, P1 5 to 7, P2 7 to 8, P1 8 to 9. Completion times: P3 5, P2 8, P1 9. Waiting = completion − burst (all arrive at 0): P1 4, P2 5, P3 4. Average 13 / 3 = 4.33 ms.</solution>
+<check lang="python">
+from collections import deque
+rem = {'P1': 5, 'P2': 3, 'P3': 1}
+burst = dict(rem)
+q, t, done = deque(rem), 0, {}
+while q:
+    n = q.popleft()
+    run = min(2, rem[n])
+    t += run
+    rem[n] -= run
+    if rem[n]:
+        q.append(n)
+    else:
+        done[n] = t
+wait = {n: done[n] - burst[n] for n in burst}
+assert wait == {'P1': 4, 'P2': 5, 'P3': 4} and round(sum(wait.values()) / 3, 2) == 4.33
+</check>
+
+<ask type="problem">The three waiting times and the average, with your timeline.</ask>
+@@ learner answer sure
+Simple. P1 starts straight away so it waits 0. P2 starts at 2 so it waits 2. P3 starts at 4 so it waits 4. Average = (0+2+4)/3 = 2 ms. Round robin is great for waiting time.
+@@ reply
+<grade verdict="wrong" score="0.2">"P2 starts at 2 so it waits 2" counts only the wait before a job's first slice, which is its response time. After that slice P2 still needs 1 ms, goes to the back of the queue and waits again from 4 to 7; P1 waits twice more as well.</grade>
+
+Waiting time adds up every spell in the queue. With all arrivals at 0 it is completion time minus burst. The timeline is P1 0 to 2, P2 2 to 4, P3 4 to 5, P1 5 to 7, P2 7 to 8, P1 8 to 9, so the waits are P1 9 − 5 = 4, P2 8 − 3 = 5 and P3 5 − 1 = 4, and the average is 13 / 3 = 4.33 ms. Your figure for P3 is right only because it finishes in its first slice.
+
+<card>Round-robin: how does waiting time differ from response time? :: Response time is the wait until the first slice. Waiting time is the total time in the ready queue over all visits: completion − arrival − burst.</card>
+
+<note>Waiting time = completion − arrival − burst. Start − arrival is the response time; the two agree only for a job that is never sent back to the queue.</note>
+
+**Problem 2 · same idea**
+
+Jobs P1, P2 and P3 arrive at time 0 in that order with bursts of 4 ms, 6 ms and 2 ms. Round-robin, 3 ms quantum, no switching cost. Find each job's waiting time and the average.
+
+<solution>Timeline: P1 0 to 3, P2 3 to 6, P3 6 to 8, P1 8 to 9, P2 9 to 12. Completion: P1 9, P2 12, P3 8. Waiting: P1 9 − 4 = 5, P2 12 − 6 = 6, P3 8 − 2 = 6. Average 17 / 3 = 5.67 ms.</solution>
+<check lang="python">
+from collections import deque
+rem = {'P1': 4, 'P2': 6, 'P3': 2}
+burst = dict(rem)
+q, t, done = deque(rem), 0, {}
+while q:
+    n = q.popleft()
+    run = min(3, rem[n])
+    t += run
+    rem[n] -= run
+    if rem[n]:
+        q.append(n)
+    else:
+        done[n] = t
+wait = {n: done[n] - burst[n] for n in burst}
+assert wait == {'P1': 5, 'P2': 6, 'P3': 6} and round(sum(wait.values()) / 3, 2) == 5.67
+</check>
+
+<ask type="problem">The three waiting times and the average, from the completion times.</ask>
+@@ verify
+from collections import deque
+def rr(bursts, quantum):
+    rem = dict(bursts); q = deque(rem); t = 0; done = {}; first = {}; line = []
+    while q:
+        n = q.popleft(); first.setdefault(n, t)
+        run = min(quantum, rem[n]); line.append(f'{n} {t} to {t + run}'); t += run; rem[n] -= run
+        if rem[n]: q.append(n)
+        else: done[n] = t
+    return done, first, line
+done, first, line = rr({'P1': 5, 'P2': 3, 'P3': 1}, 2)
+assert done == {'P3': 5, 'P2': 8, 'P1': 9}
+# the learner's figures are the response times, as the grade says
+assert first == {'P1': 0, 'P2': 2, 'P3': 4} and (0 + 2 + 4) / 3 == 2
+assert ', '.join(line) in reply and ', '.join(line) in solution(tutor[0])
+assert [done[n] - b for n, b in [('P1', 5), ('P2', 3), ('P3', 1)]] == [4, 5, 4] and round(13 / 3, 2) == 4.33
+# P2's second wait is from 4 to 7
+assert 'P2 2 to 4' in line[1] and line[4] == 'P2 7 to 8'
+done2, _, line2 = rr({'P1': 4, 'P2': 6, 'P3': 2}, 3)
+assert done2 == {'P1': 9, 'P3': 8, 'P2': 12} and ', '.join(line2) in solution(reply)
+assert [9 - 4, 12 - 6, 8 - 2] == [5, 6, 6] and round(17 / 3, 2) == 5.67
+assert '5.67' not in visible(reply)
+
+@@@@ wrong-lru-evicts-longest-resident
+situation: after-wrong
+topic: Page replacement: FIFO, LRU and clock
+voice: plain
+level: medium
+expect: {"verdict":"wrong","accept":["partial"],"names":["FIFO|first in","last used|most recently used|recently used"],"must":["6 faults","evict"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["6 faults","evicts? 6\\b"]}
+@@ tutor
+**Problem 2 · harder**
+
+A process has 3 frames, all empty at the start, and references pages in this order: 1, 2, 3, 1, 4, 2, 5. The replacement policy is LRU (least recently used). How many page faults occur, and which page is evicted at each replacement?
+
+<solution>1, 2 and 3 fault and fill the frames (3 faults). The second 1 is a hit. 4 faults: the least recently used page is 2 (1 was used just before), so 2 is evicted. 2 faults and evicts 3. 5 faults and evicts 1. Total 6 faults; evictions in order 2, 3, 1.</solution>
+<check lang="python">
+frames, faults, evicted = [], 0, []
+for p in [1, 2, 3, 1, 4, 2, 5]:
+    if p in frames:
+        frames.remove(p)
+    else:
+        faults += 1
+        if len(frames) == 3:
+            evicted.append(frames.pop(0))
+    frames.append(p)
+assert faults == 6 and evicted == [2, 3, 1]
+</check>
+
+<ask type="problem">The number of faults and the page evicted each time, with the frames after each reference.</ask>
+@@ learner answer sure
+1, 2, 3 are faults, that's 3. Then 1 is a hit. 4 is a fault and it replaces page 1 because 1 has been in memory the longest. Then 2 is still there so that's a hit. 5 is a fault and replaces 2. Total 5 faults, evicted 1 then 2.
+@@ reply
+<grade verdict="wrong" score="0.2">The first four references are right, but "it replaces page 1 because 1 has been in memory the longest" is FIFO's rule. LRU ranks pages by when they were last used, and the hit on 1 just before made it the most recently used page of the three.</grade>
+
+When 4 arrives the frames hold 1, 2 and 3, last used at references 4, 2 and 3. The oldest use is page 2's, so 4 evicts 2. Then 2 faults and evicts 3, and 5 faults and evicts 1. That is 6 faults, with evictions 2, 3, 1. Your 5 faults with evictions 1 then 2 is exactly what FIFO gives on this string.
+
+<card>Which page does LRU evict, and how is that different from FIFO? :: LRU evicts the page whose last use is oldest; a hit makes a page the newest. FIFO evicts the page loaded earliest and ignores hits.</card>
+
+<note>LRU: on every reference, hit or fault, the page becomes the most recently used. The victim is the page with the oldest last use, not the one loaded first.</note>
+
+**Problem 3 · same idea**
+
+3 frames, empty at the start, LRU. The reference string is 4, 6, 4, 8, 9, 6, 4.
+
+<solution>4 and 6 fault. 4 is a hit and becomes the most recent. 8 faults and fills the third frame. 9 faults: last uses are 6 (ref 2), 4 (ref 3), 8 (ref 4), so 6 is evicted. 6 faults and evicts 4. 4 faults and evicts 8. Total 6 faults; evictions 6, 4, 8.</solution>
+<check lang="python">
+frames, faults, evicted = [], 0, []
+for p in [4, 6, 4, 8, 9, 6, 4]:
+    if p in frames:
+        frames.remove(p)
+    else:
+        faults += 1
+        if len(frames) == 3:
+            evicted.append(frames.pop(0))
+    frames.append(p)
+assert faults == 6 and evicted == [6, 4, 8]
+</check>
+
+<ask type="problem">The number of faults and the page evicted at each replacement, with the frames after each reference.</ask>
+@@ verify
+def lru(refs, k):
+    last, faults, ev = {}, 0, []
+    for i, p in enumerate(refs, 1):
+        if p not in last:
+            faults += 1
+            if len(last) == k:
+                v = min(last, key=last.get); ev.append(v); del last[v]
+        last[p] = i
+    return faults, ev
+def fifo(refs, k):
+    fr, faults, ev = [], 0, []
+    for p in refs:
+        if p not in fr:
+            faults += 1
+            if len(fr) == k: ev.append(fr.pop(0))
+            fr.append(p)
+    return faults, ev
+refs = [1, 2, 3, 1, 4, 2, 5]
+assert lru(refs, 3) == (6, [2, 3, 1])
+# the learner's answer is FIFO's, as the reply says
+assert fifo(refs, 3) == (5, [1, 2]) and 'Total 5 faults, evicted 1 then 2' in learner
+# last uses when 4 arrives: page 1 at reference 4, page 2 at 2, page 3 at 3
+last = {}
+for i, p in enumerate(refs[:4], 1): last[p] = i
+assert last == {1: 4, 2: 2, 3: 3} and 'last used at references 4, 2 and 3' in reply
+assert lru([4, 6, 4, 8, 9, 6, 4], 3) == (6, [6, 4, 8])
+assert 'evictions 6, 4, 8' in solution(reply)
+
+@@@@ wrong-fork-three-calls-count
+situation: after-wrong
+topic: fork, exec and wait
+voice: terse
+level: easy
+expect: {"verdict":"wrong","names":["each fork|one new process","both|every process"],"must":["\\b8\\b","doubl"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b16\\b","2\\^4"]}
+@@ tutor
+`fork()` creates a child that is a copy of the calling process. Both the parent and the child then carry on from the line after the call.
+
+<note>`fork()` returns twice: the child's PID in the parent and 0 in the child. Both processes continue from the statement after the call, each with its own copy of the variables.</note>
+
+**Problem 1 · warm-up**
+
+```c
+#include <stdio.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+int main(void) {
+    fork();
+    fork();
+    fork();
+    printf("x\n");
+    while (wait(NULL) > 0) {}
+    return 0;
+}
+```
+
+<solution>Every process that exists runs each fork, so the number of processes doubles at each call: 1, 2, 4, 8. Each of the 8 processes prints one line, so 8 lines.</solution>
+<check lang="python">
+procs = 1
+for _ in range(3):
+    procs *= 2
+assert procs == 8
+</check>
+
+<ask type="problem">How many lines does this program print? Give the number of processes after each `fork()`.</ask>
+@@ learner answer sure
+4 lines. each fork makes one new process so 3 forks = 3 children + the original
+@@ reply
+<grade verdict="wrong" score="0.1">"each fork makes one new process" holds for one caller, but after the first `fork()` there are two processes and both of them run the second `fork()`; the child does not skip it.</grade>
+
+Count the processes that reach each call. One process runs the first `fork()`, leaving 2. Both run the second, leaving 4. All four run the third, leaving 8. The count doubles at every call, and each of the 8 processes prints one line, so the program prints 8 lines.
+
+<card>A program calls fork() three times in a row. How many processes exist afterwards, and why? :: 8. Every process that exists runs each fork, so the count doubles at each call: 1, 2, 4, 8.</card>
+
+<note>n calls to `fork()` in a row, with no branching on the return value, leave $2^n$ processes: each call is run by every process that exists at that point.</note>
+
+**Problem 2 · same idea**
+
+```c
+#include <stdio.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+int main(void) {
+    for (int i = 0; i < 4; i++) {
+        fork();
+    }
+    printf("x\n");
+    while (wait(NULL) > 0) {}
+    return 0;
+}
+```
+
+<solution>The loop body runs in every process, parent and children alike, because each child continues the loop from its own copy of i. Four doublings: 1, 2, 4, 8, 16. The program prints 16 lines.</solution>
+<check lang="python">
+procs = 1
+for i in range(4):
+    procs *= 2
+assert procs == 16
+</check>
+
+<ask type="problem">How many lines does this program print? Give the number of processes after each pass of the loop.</ask>
+@@ verify
+# both programs, really run: one "x" per process
+out1 = run_c(block(tutor[0], 'c'))
+assert out1.split() == ['x'] * 8
+out2 = run_c(block(reply, 'c'))
+assert out2.split() == ['x'] * 16
+assert 2 ** 3 == 8 and 2 ** 4 == 16
+# the learner's count: three children plus the original
+assert 3 + 1 == 4 and '4 lines' in learner
+assert '16' not in visible(reply) and '16 lines' in solution(reply)
+
+@@@@ wrong-quiz-raid6-one-parity
+situation: after-wrong
+topic: RAID levels
+mode: quiz
+voice: wordy
+level: medium
+expect: {"verdict":"wrong","names":["RAID 5","two"],"must":["32 TB","Question 5 of 8"],"setsProblem":true,"askMustNot":["18 TB","12 TB"]}
+@@ tutor
+**Question 4 of 8**
+
+An array is built as RAID 6 from six 8 TB disks.
+
+<solution>RAID 6 stores two disks' worth of parity. Usable capacity: (6 − 2) × 8 = 32 TB. It survives any two disk failures.</solution>
+<check lang="python">
+n, size = 6, 8
+assert (n - 2) * size == 32
+</check>
+
+<ask type="problem">Its usable capacity, and the number of disk failures it is guaranteed to survive.</ask>
+@@ learner answer sure
+RAID 6 is the one with the parity spread across all the disks, so you lose one disk's worth of space to parity. Six disks of 8 TB minus one for parity gives 5 x 8 = 40 TB usable. And because there's parity it can rebuild after one disk dies, so it survives 1 failure.
+@@ reply
+<grade verdict="wrong" score="0.1">"minus one for parity" and "it survives 1 failure" describe RAID 5. RAID 6 keeps two independent parity blocks in every stripe, so two disks' worth of space goes to parity and any two disks can fail.</grade>
+
+For this array: (6 − 2) × 8 = 32 TB usable, and it survives two failures. Spreading parity across the disks is common to both levels; the number of parity blocks per stripe is what separates them.
+
+<card>RAID 6 with n disks of equal size: usable capacity and failures survived? :: (n − 2) disks' worth of capacity; any two disks can fail. RAID 5 is (n − 1) and one failure.</card>
+
+**Question 5 of 8**
+
+Four 6 TB disks can be set up either as RAID 5 or as RAID 6.
+
+<solution>RAID 5: (4 − 1) × 6 = 18 TB, survives one failure. RAID 6: (4 − 2) × 6 = 12 TB, survives any two failures.</solution>
+<check lang="python">
+n, size = 4, 6
+assert (n - 1) * size == 18 and (n - 2) * size == 12
+</check>
+
+<ask type="problem">For each of the two levels: the usable capacity and the number of disk failures it survives.</ask>
+@@ verify
+assert (6 - 2) * 8 == 32 and '(6 − 2) × 8 = 32 TB' in reply
+# the learner's figure is RAID 5's for the same disks
+assert (6 - 1) * 8 == 40 and '5 x 8 = 40 TB' in learner
+assert (4 - 1) * 6 == 18 and (4 - 2) * 6 == 12
+s = solution(reply)
+assert '18 TB' in s and '12 TB' in s and '18 TB' not in visible(reply) and '12 TB' not in visible(reply)
+
+@@@@ wrong-hard-link-points-at-name
+situation: after-wrong
+topic: Hard links and symbolic links
+voice: confused
+level: easy
+expect: {"verdict":"wrong","names":["symbolic link|symlink","inode"],"must":["inode number","shows the new line"],"askMustNot":["No such file","dangling","broken","stores? (the|a) path"],"askTypes":["predict","short","explain"]}
+@@ tutor
+`ln a.txt b.txt` creates a hard link. A directory entry is only a name and an inode number, and the inode is the file itself: its size, permissions and the location of its data. After the command, `a.txt` and `b.txt` are two entries carrying the same inode number, and the inode's link count is 2.
+
+<note>A directory entry maps a name to an inode number. A hard link is a second entry with the same inode number; the inode counts its links, and neither name is the "original".</note>
+
+<ask type="predict">After `ln a.txt b.txt` you run `mv a.txt c.txt`, then `echo more >> c.txt`. Does `cat b.txt` show the new line? Say why.</ask>
+@@ learner answer unsure
+no I think b.txt doesn't show it? b.txt was linked to a.txt and a.txt doesn't exist anymore after the mv, so b is pointing at the old name. or does it become broken... I might be mixing this up with shortcuts
+@@ reply
+<grade verdict="wrong" score="0.1">"b is pointing at the old name" is how a symbolic link behaves, and that is the mix-up you suspected. A hard link holds an inode number, not another file's name, so nothing about `b.txt` depends on `a.txt` existing.</grade>
+
+Follow the inode. `mv a.txt c.txt` rewrites one directory entry: the name changes, the inode number in it does not. `echo more >> c.txt` appends to that inode's data. `b.txt` still carries the same inode number, so `cat b.txt` shows the new line. The link count stays 2 throughout.
+
+<card>After ln a.txt b.txt, does renaming or deleting a.txt affect b.txt? :: No. b.txt is a directory entry holding the inode number itself. Renaming changes another entry; deleting it only lowers the link count.</card>
+
+<note>Renaming a file changes a directory entry, never the inode. Every hard link to that inode sees the same data afterwards, because each one names the inode directly.</note>
+
+<ask type="predict">Start again with only `a.txt`. This time run `ln -s a.txt s.txt`, then `mv a.txt c.txt`. What happens when you run `cat s.txt`, and what must `s.txt` contain for that to be the outcome?</ask>
+@@ verify
+import os, tempfile
+with tempfile.TemporaryDirectory() as d:
+    p = lambda n: os.path.join(d, n)
+    open(p('a.txt'), 'w').write('first\n')
+    os.link(p('a.txt'), p('b.txt'))
+    ino = os.stat(p('b.txt')).st_ino
+    assert os.stat(p('a.txt')).st_nlink == 2
+    os.rename(p('a.txt'), p('c.txt'))
+    assert os.stat(p('c.txt')).st_ino == ino            # the rename kept the inode
+    open(p('c.txt'), 'a').write('more\n')
+    assert open(p('b.txt')).read() == 'first\nmore\n'    # b.txt shows the new line
+    assert os.stat(p('b.txt')).st_nlink == 2             # the count stays 2
+with tempfile.TemporaryDirectory() as d:
+    p = lambda n: os.path.join(d, n)
+    open(p('a.txt'), 'w').write('first\n')
+    os.symlink('a.txt', p('s.txt'))
+    os.rename(p('a.txt'), p('c.txt'))
+    assert os.readlink(p('s.txt')) == 'a.txt' and not os.path.exists(p('s.txt'))   # the next question's answer
+assert 'b is pointing at the old name' in learner
+
+@@@@ idk-priority-inversion-who-runs
+situation: idk
+topic: Priority inversion
+options: {"strategy":"dialogue"}
+voice: plain
+level: hard
+expect: {"must":["holder|holds","runnable"],"askMustNot":["priority inheritance","inherit","M runs","boost"],"mustNot":["priority inheritance","inherit"],"askTypes":["short","predict","choice","explain"]}
+noverify: conceptual; nothing computed
+@@ tutor
+One core, strict priority scheduling, three threads: H (high), M (medium) and L (low). L takes a mutex. H becomes runnable, preempts L, and then blocks trying to take the same mutex. At that moment M becomes runnable; M uses no locks and has several seconds of computation to do.
+
+<ask type="explain">H is the most important thread in the system. Who runs now, how long might H be kept waiting, and what would you change to put a bound on that wait?</ask>
+@@ learner idk
+@@ reply
+Take the first part on its own. A thread that is blocked on a mutex is not runnable: the scheduler picks only among runnable threads, so H's priority counts for nothing while it waits. The one thing that can unblock H is the mutex being released, and only its holder can do that, by running until it reaches the unlock. So how long H waits depends on when the holder next gets the core.
+
+<note>A thread blocked on a mutex is not runnable, whatever its priority. It can continue only after the holder releases the mutex, and the holder can release it only while it is running.</note>
+
+<ask type="short">H is blocked, so the runnable threads are L and M. Which of the two does a strict priority scheduler put on the core, and what does that choice do to the mutex L holds?</ask>
+
+@@@@ idk-pipe-descriptor-copies
+situation: idk
+topic: File descriptors and pipes
+voice: plain
+level: medium
+expect: {"must":["cop(y|ies)","descriptor"],"askMustNot":["\\b2\\b[^.]*\\b1\\b","two[^.]*\\bone\\b"],"mustNot":["hangs because","the fix is","returns 0 only"],"askTypes":["short","predict"]}
+noverify: conceptual; the count asked for (2, then 1) is not stated and nothing is computed
+@@ tutor
+**Problem 2 · harder**
+
+A parent creates a pipe with `pipe(fd)` and forks. The child closes nothing and loops on `read(fd[0], buf, sizeof buf)` until it returns 0. The parent closes `fd[0]`, writes 5 bytes to `fd[1]`, closes `fd[1]` and calls `waitpid` on the child. The program never finishes.
+
+<solution>The child's read blocks for ever, and so the parent's waitpid does too. read returns 0 only when the pipe is empty and no descriptor in any process still refers to the write end. The child inherited its own copy of fd[1] at the fork and never closed it, so the write end stays open after the parent's close. Fix: the child calls close(fd[1]) before its read loop.</solution>
+
+<ask type="problem">Which call blocks for ever, why, and the one line that fixes it.</ask>
+@@ learner idk
+@@ reply
+Start with what `fork` does to descriptors. Each process has its own descriptor table, and `fork` gives the child a copy of the parent's. After the fork there are four descriptors for this one pipe: the parent's `fd[0]` and `fd[1]`, and the child's `fd[0]` and `fd[1]`. Closing a descriptor removes one entry from one process's table; the other process's copy is untouched. The kernel keeps an end of the pipe open for as long as any descriptor, in any process, still refers to it.
+
+<note>`fork` copies the descriptor table. A pipe end stays open until every descriptor that refers to it, in every process, has been closed.</note>
+
+<ask type="short">In the program above, how many descriptors refer to the pipe's write end straight after the fork, and how many still do once the parent has run its `close(fd[1])`?</ask>
+
+@@@@ idk-working-sets-fit
+situation: idk
+topic: Thrashing and working sets
+voice: plain
+level: medium
+expect: {"must":["working set","600 MB"],"askMustNot":["thrash","6,?000","12,?000","does not fit|do not fit"],"mustNot":["thrash"],"askTypes":["short","problem"]}
+@@ tutor
+**Why this matters**
+
+When memory runs short a machine can become slower by adding work, which is the opposite of what capacity planning assumes. The working-set idea explains when that happens, and it is behind container memory limits, database buffer sizing and the alerts worth setting on page-fault and swap rates.
+
+<ask type="predict">A server with 8 GB of RAM runs 10 identical worker processes at 90% CPU utilisation. An operator starts 10 more workers to use the spare capacity. CPU utilisation falls to 15% and the disk is busy all the time. What is the machine spending its time on, and why did adding work reduce the work done?</ask>
+@@ learner idk
+@@ reply
+One idea first. A process does not use all of its memory at every moment; over any short interval it touches a limited set of pages, called its working set. While those pages are in RAM the process runs at full speed. When it touches a page that is not in RAM it stops and waits for the disk to bring the page in, and for that time it uses no CPU at all.
+
+<note>Working set: the pages a process has touched in the recent past. A process runs without waiting on the disk only while its working set is held in RAM.</note>
+
+Now put numbers on the server. Suppose each worker's working set is 600 MB, and take 8 GB as 8,192 MB.
+
+<solution>10 workers need 10 × 600 = 6,000 MB, which fits in 8,192 MB. 20 workers need 20 × 600 = 12,000 MB, which does not fit: 3,808 MB of working-set pages have to live on disk at any time.</solution>
+<check lang="python">
+ram = 8 * 1024
+assert 10 * 600 == 6000 <= ram and 20 * 600 == 12000 > ram and 12000 - ram == 3808
+</check>
+
+<ask type="short">Do the working sets of 10 workers fit in RAM together? Do those of 20? Give the two totals.</ask>
+@@ verify
+ram = 8 * 1024
+assert ram == 8192 and '8,192 MB' in reply
+assert 10 * 600 == 6000 and 20 * 600 == 12000 and 6000 <= ram < 12000 and 12000 - ram == 3808
+v = visible(reply)
+assert '6,000' not in v and '12,000' not in v and 'thrash' not in reply.lower()
+
+@@@@ show-process-state-diagram
+situation: show-me
+topic: Process states and transitions
+voice: plain
+level: easy
+expect: {"visual":{"kind":"mermaid","diagram":["stateDiagram"]},"must":["Blocked","Ready"]}
+@@ tutor
+A process is always in one of five states. New: it is being created. Ready: it could run and is waiting for a CPU. Running: it is on a CPU. Blocked: it cannot run until some event happens, such as I/O completing or a lock being released. Terminated: it has finished.
+
+The moves between them are few. Once created, a new process is admitted to ready. The scheduler dispatches a ready process to running. A timer interrupt preempts a running process back to ready. A running process that waits for I/O or a lock becomes blocked. When the event arrives, a blocked process becomes ready, not running. A running process that exits becomes terminated.
+
+<note>Process states: new, ready, running, blocked, terminated. Only the scheduler moves a process from ready to running, and a blocked process always passes through ready before it runs again.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+stateDiagram-v2
+    [*] --> New
+    New --> Ready: admitted
+    Ready --> Running: dispatched
+    Running --> Ready: preempted by timer
+    Running --> Blocked: waits for I/O or a lock
+    Blocked --> Ready: event arrives
+    Running --> Terminated: exits
+    Terminated --> [*]
+```
+
+Look at Blocked: its only arrow out leads to Ready, so a process whose I/O has finished still waits for the scheduler before it runs.
+@@ verify
+import re
+edges = set(re.findall(r'^\s*(\S+) --> (\S+?):?(?:\s|$)', block(reply, 'mermaid'), flags=re.M))
+want = {('[*]', 'New'), ('New', 'Ready'), ('Ready', 'Running'), ('Running', 'Ready'), ('Running', 'Blocked'), ('Blocked', 'Ready'), ('Running', 'Terminated'), ('Terminated', '[*]')}
+assert edges == want, edges
+# exactly the moves the explanation named, and no arrow from Blocked to Running
+assert ('Blocked', 'Running') not in edges
+t = tutor[0]
+for phrase in ['admitted to ready', 'dispatches a ready process to running', 'preempts a running process back to ready', 'waits for I/O or a lock becomes blocked', 'blocked process becomes ready', 'exits becomes terminated']:
+    assert phrase in t, phrase
+assert [e for e in edges if e[0] == 'Blocked'] == [('Blocked', 'Ready')]
+
+@@@@ show-pipeline-sequence-diagram
+situation: show-me
+topic: File descriptors and pipes
+voice: terse
+level: medium
+expect: {"visual":{"kind":"mermaid","diagram":["sequenceDiagram"]},"ends":"either","must":["before either fork|before the forks"],"askMustNot":["never","still holds","stays open"]}
+@@ tutor
+Here is how a shell runs `ls | wc -l`. It calls `pipe()` first and gets a read end and a write end. Then it forks twice. The first child calls `dup2` so that its standard output, descriptor 1, refers to the write end, closes both pipe descriptors and execs `ls`. The second child calls `dup2` so that its standard input, descriptor 0, refers to the read end, closes both pipe descriptors and execs `wc`. The shell closes both of its own pipe descriptors and waits for the two children. `ls` writes into the pipe and `wc` reads from it; when `ls` exits, no write end is open any more, so `wc`'s read returns 0 and it prints its count.
+
+<note>A shell pipeline: `pipe()`, then one `fork` per command. Each child uses `dup2` to put a pipe end on descriptor 0 or 1, closes the pipe descriptors and execs. The shell closes its own copies of both ends.</note>
+
+<continue/>
+@@ learner question
+is there a diagram of who calls what, in order?
+@@ reply
+```mermaid
+sequenceDiagram
+    participant S as Shell
+    participant K as Kernel
+    participant A as Child 1 (ls)
+    participant B as Child 2 (wc)
+    S->>K: pipe()
+    S->>A: fork()
+    S->>B: fork()
+    A->>K: dup2(write end, 1), close both, exec ls
+    B->>K: dup2(read end, 0), close both, exec wc
+    S->>K: close both ends, then wait
+    A->>B: bytes through the pipe
+    A->>K: exit, last write end closes
+    K->>B: read returns 0
+```
+
+Read down the Shell's line: the pipe exists before either fork, which is how both children come to hold its two ends.
+
+<ask type="predict">Suppose the shell skipped its own "close both ends" step and went straight to waiting. `ls` finishes and exits. Does `wc` ever get a read that returns 0? Say why.</ask>
+@@ verify
+body = block(reply, 'mermaid')
+msgs = [l.strip() for l in body.split('\n') if '->>' in l]
+order = [m.split(':')[0] for m in msgs]
+assert order == ['S->>K', 'S->>A', 'S->>B', 'A->>K', 'B->>K', 'S->>K', 'A->>B', 'A->>K', 'K->>B'], order
+# pipe() comes before both forks; the dup2 targets match the explanation (stdout 1 for ls, stdin 0 for wc)
+assert msgs[0].endswith('pipe()') and 'dup2(write end, 1)' in msgs[3] and 'exec ls' in msgs[3]
+assert 'dup2(read end, 0)' in msgs[4] and 'exec wc' in msgs[4]
+t = tutor[0]
+assert 'standard output, descriptor 1, refers to the write end' in t and 'standard input, descriptor 0, refers to the read end' in t
+assert "read returns 0" in t and 'read returns 0' in msgs[-1]
+
+@@@@ show-round-robin-trace-table
+situation: show-me
+topic: Round-robin scheduling and the time quantum
+voice: plain
+level: easy
+expect: {"visual":{"kind":"table"},"must":["6, 8 and 11"]}
+@@ tutor
+Round-robin keeps the ready jobs in a queue. The job at the front runs for one quantum or until it finishes, whichever comes first, and an unfinished job goes to the back of the queue.
+
+Take jobs A, B and C, arriving at time 0 in that order with bursts of 4, 5 and 2 ms, and a 2 ms quantum. A runs from 0 to 2 and rejoins behind C with 2 ms left. B runs from 2 to 4 and has 3 left. C runs from 4 to 6 and finishes. A runs from 6 to 8 and finishes. B is now alone in the queue: it runs from 8 to 10, then from 10 to 11, and finishes at 11.
+
+<note>Round-robin: the front job runs for min(quantum, time left), then goes to the back of the queue if it is not finished. Short jobs leave early; a long job keeps coming round.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| Slice | Runs | From (ms) | To (ms) | Left after (ms) | Queue after |
+|---|---|---|---|---|---|
+| 1 | A | 0 | 2 | 2 | B, C, A |
+| 2 | B | 2 | 4 | 3 | C, A, B |
+| 3 | C | 4 | 6 | 0 | A, B |
+| 4 | A | 6 | 8 | 0 | B |
+| 5 | B | 8 | 10 | 1 | B |
+| 6 | B | 10 | 11 | 0 | empty |
+
+Read the Queue after column downwards: an unfinished job always reappears at the back, and the rows with 0 left give the finishing times 6, 8 and 11.
+@@ verify
+from collections import deque
+rem = {'A': 4, 'B': 5, 'C': 2}
+q, t, rows, done = deque(rem), 0, [], []
+while q:
+    n = q.popleft(); run = min(2, rem[n]); start = t; t += run; rem[n] -= run
+    if rem[n]: q.append(n)
+    else: done.append(t)
+    rows.append([str(len(rows) + 1), n, str(start), str(t), str(rem[n]), ', '.join(q) or 'empty'])
+assert table(reply)[1:] == rows, rows
+assert done == [6, 8, 11]
+# the explanation states the same run
+t0 = tutor[0]
+for piece in ['A runs from 0 to 2', 'B runs from 2 to 4 and has 3 left', 'C runs from 4 to 6 and finishes', 'A runs from 6 to 8 and finishes', 'from 8 to 10, then from 10 to 11']:
+    assert piece in t0, piece
+
+@@@@ show-boot-sequence-flowchart
+situation: show-me
+topic: Boot and init
+voice: plain
+level: easy
+expect: {"visual":{"kind":"mermaid","diagram":["flowchart"]},"must":["PID 1"]}
+@@ tutor
+When a PC is powered on, the CPU starts executing firmware, which is UEFI on current machines. The firmware initialises the hardware and loads a bootloader, such as GRUB, from the EFI system partition. The bootloader loads the kernel image and an initial RAM file system, the initramfs, into memory and jumps to the kernel. The kernel sets up memory management and its core drivers, unpacks the initramfs and runs its init program as PID 1. That program loads the drivers needed to reach the real root file system, mounts it, and hands over by exec to the system's init, which is systemd on most Linux distributions. Because the handover is an exec, systemd is still PID 1. It then starts every other service.
+
+<note>Linux boot on a PC: firmware (UEFI) → bootloader (GRUB) → kernel + initramfs → initramfs init as PID 1 mounts the real root → exec of systemd, still PID 1 → services.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+flowchart TD
+    P["Power on"] --> F["Firmware (UEFI)"]
+    F -->|"loads"| B["Bootloader (GRUB)"]
+    B -->|"loads kernel and initramfs"| K["Kernel"]
+    K -->|"runs as PID 1"| I["initramfs init"]
+    I -->|"mounts real root, then exec"| S["systemd, still PID 1"]
+    S -->|"starts"| V["Services"]
+```
+
+Follow PID 1: it begins as the initramfs program and becomes systemd by exec, so the process number never changes hands.
+@@ verify
+import re
+body = block(reply, 'mermaid')
+nodes = dict(re.findall(r'(\b[A-Z])\["([^"]+)"\]', body))
+chain = re.findall(r'^\s*([A-Z])\b.*?--> ?(?:\|"[^"]*"\| ?)?([A-Z])\b', body, flags=re.M)
+assert chain == [('P', 'F'), ('F', 'B'), ('B', 'K'), ('K', 'I'), ('I', 'S'), ('S', 'V')], chain
+assert [nodes[k] for k in 'PFBKISV'] == ['Power on', 'Firmware (UEFI)', 'Bootloader (GRUB)', 'Kernel', 'initramfs init', 'systemd, still PID 1', 'Services']
+# the same order as the explanation
+t = tutor[0]
+pos = [t.index(w) for w in ['firmware', 'bootloader', 'kernel image', 'runs its init program as PID 1', 'mounts it', 'exec to the system', 'starts every other service']]
+assert pos == sorted(pos)

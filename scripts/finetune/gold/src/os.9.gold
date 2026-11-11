@@ -1,0 +1,35 @@
+@@@@ show-me-ipc-mechanisms-mindmap
+situation: show-me
+topic: Inter-process communication
+voice: terse
+level: easy
+expect: {"visual":{"kind":"mermaid","diagram":["mindmap"]},"must":["shared memory","pipe"],"ends":"nothing"}
+noverify: a diagram grouping the mechanisms as the explanation groups them; nothing computed
+@@ tutor
+Processes have separate address spaces, so they exchange data through the kernel in one of two ways. With message passing the kernel copies bytes from one process to the other: a pipe carries a one-way byte stream between related processes, a socket carries a two-way stream or datagrams and also works across machines, and a message queue carries whole messages. With shared memory the kernel maps the same physical pages into both processes, so nothing is copied, but the processes must coordinate their access themselves, usually with a semaphore or a mutex. Signals are a third, minimal thing: a notification that carries almost no data.
+
+<note>IPC: message passing (pipe, socket, message queue: the kernel copies the data) or shared memory (no copy; the processes synchronise access themselves). A signal only notifies.</note>
+
+<continue/>
+@@ learner question
+too many names. can you draw them grouped as a map
+@@ reply
+```mermaid
+mindmap
+  root((IPC))
+    Message passing
+      The kernel copies the data
+      pipe
+        one-way byte stream
+      socket
+        two-way, also across machines
+      message queue
+        whole messages
+    Shared memory
+      No copy
+      Needs a semaphore or a mutex
+    Signal
+      Notification only
+```
+
+The first two branches are the real choice: the kernel copies for you, or you share pages and synchronise access yourself.

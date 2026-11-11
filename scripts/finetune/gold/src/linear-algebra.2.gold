@@ -1,0 +1,572 @@
+@@@@ wrong-product-order-does-not-matter
+situation: after-wrong
+topic: Matrix multiplication and its non-commutativity
+voice: overconfident
+level: easy
+expect: {"verdict":"partial","accept":["wrong"],"names":["commutative","order"],"must":["1 & 2 \\\\\\\\ 3 & 7","AB \\\\ne BA"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["swap","rows","columns"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+Compute $AB$ and $BA$ for
+
+$$A = \begin{pmatrix} 1 & 2 \\ 0 & 1 \end{pmatrix}, \quad B = \begin{pmatrix} 1 & 0 \\ 3 & 1 \end{pmatrix}$$
+
+<solution>AB = [[1·1 + 2·3, 1·0 + 2·1], [0·1 + 1·3, 0·0 + 1·1]] = [[7, 2], [3, 1]]. BA = [[1·1 + 0·0, 1·2 + 0·1], [3·1 + 1·0, 3·2 + 1·1]] = [[1, 2], [3, 7]].</solution>
+<check lang="python">
+A = [[1, 2], [0, 1]]
+B = [[1, 0], [3, 1]]
+mul = lambda X, Y: [[sum(X[i][k] * Y[k][j] for k in range(2)) for j in range(2)] for i in range(2)]
+assert mul(A, B) == [[7, 2], [3, 1]] and mul(B, A) == [[1, 2], [3, 7]]
+</check>
+
+<ask type="problem">Both products, entry by entry.</ask>
+@@ learner answer sure
+AB = [[7,2],[3,1]]. BA is the same matrix, it's just multiplication so order doesn't matter. BA = [[7,2],[3,1]].
+@@ reply
+<grade verdict="partial" score="0.4">"AB = [[7,2],[3,1]]" is right. "order doesn't matter" is the step that fails: matrix multiplication is not commutative, so $BA$ has to be computed on its own, with $B$'s rows against $A$'s columns.</grade>
+
+Doing that:
+
+$$BA = \begin{pmatrix} 1 & 0 \\ 3 & 1 \end{pmatrix}\begin{pmatrix} 1 & 2 \\ 0 & 1 \end{pmatrix} = \begin{pmatrix} 1 & 2 \\ 3 & 7 \end{pmatrix}$$
+
+The 7 has moved from the top left to the bottom right, so $AB \ne BA$. A product composes two maps: $AB$ applies $B$ first and then $A$, and $BA$ applies them the other way round. Two different actions done in a different order usually give a different result.
+
+<card>Is $AB = BA$ for square matrices of the same size? :: Not in general. $AB$ applies $B$ then $A$; $BA$ applies $A$ then $B$. Compute each product separately.</card>
+
+<note>Matrix multiplication is not commutative: in general $AB \ne BA$. It is associative: $(AB)C = A(BC)$.</note>
+
+**Problem 2 · same idea**
+
+Compute $CD$ and $DC$ for
+
+$$C = \begin{pmatrix} 0 & 1 \\ 1 & 0 \end{pmatrix}, \quad D = \begin{pmatrix} 1 & 2 \\ 3 & 4 \end{pmatrix}$$
+
+and say in a phrase what $C$ does to $D$ from each side.
+
+<solution>CD = [[3, 4], [1, 2]]: C on the left exchanges the two rows of D. DC = [[2, 1], [4, 3]]: C on the right exchanges the two columns of D.</solution>
+<check lang="python">
+C = [[0, 1], [1, 0]]
+D = [[1, 2], [3, 4]]
+mul = lambda X, Y: [[sum(X[i][k] * Y[k][j] for k in range(2)) for j in range(2)] for i in range(2)]
+assert mul(C, D) == [[3, 4], [1, 2]] and mul(D, C) == [[2, 1], [4, 3]]
+</check>
+
+<ask type="problem">Both products, and what $C$ does on the left and on the right.</ask>
+@@ verify
+import numpy as np
+A = np.array([[1, 2], [0, 1]]); B = np.array([[1, 0], [3, 1]])
+assert (A @ B).tolist() == [[7, 2], [3, 1]]          # the learner's AB, right
+assert (B @ A).tolist() == [[1, 2], [3, 7]]          # BA, as the reply states it
+assert (A @ B).tolist() != (B @ A).tolist()
+assert (A @ B)[0, 0] == 7 and (B @ A)[1, 1] == 7     # "the 7 has moved"
+C = np.array([[0, 1], [1, 0]]); D = np.array([[1, 2], [3, 4]])
+assert (C @ D).tolist() == [[3, 4], [1, 2]] == D[::-1].tolist()        # rows exchanged
+assert (D @ C).tolist() == [[2, 1], [4, 3]] == D[:, ::-1].tolist()     # columns exchanged
+assert '[[3, 4], [1, 2]]' in solution(reply) and '[[2, 1], [4, 3]]' in solution(reply)
+
+@@@@ wrong-transpose-of-a-product
+situation: after-wrong
+topic: The transpose
+options: {"strategy":"maths"}
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["revers","3 \\\\times 2"],"must":["\\(AB\\)\\^T = B\\^T A\\^T","4 \\\\times 2"],"askMustNot":["C\\^T ?B\\^T ?A\\^T"],"askTypes":["short"]}
+@@ tutor
+The transpose $A^T$ swaps rows and columns: entry $(i, j)$ of $A^T$ is entry $(j, i)$ of $A$, so a $2 \times 3$ matrix becomes $3 \times 2$. It respects sums: $(A + B)^T = A^T + B^T$.
+
+<note>$A^T$ has entry $(i, j)$ equal to entry $(j, i)$ of $A$; an $m \times n$ matrix becomes $n \times m$. $(A + B)^T = A^T + B^T$ and $(A^T)^T = A$.</note>
+
+<ask type="short">$A$ is $2 \times 3$ and $B$ is $3 \times 4$. Write $(AB)^T$ as a product of $A^T$ and $B^T$.</ask>
+@@ learner answer sure
+(AB)^T = A^T B^T. the transpose just distributes over the product, same as it does over the sum
+@@ reply
+<grade verdict="wrong" score="0.1">"(AB)^T = A^T B^T" cannot hold for these shapes: $A^T$ is $3 \times 2$ and $B^T$ is $4 \times 3$, and a matrix with 2 columns cannot multiply one with 4 rows. The transpose distributes over a sum, but it reverses a product.</grade>
+
+Check the shapes the other way round. $B^T A^T$ is $(4 \times 3)(3 \times 2)$, which is defined and comes out $4 \times 2$, the shape of $(AB)^T$. The entries agree too: entry $(i, j)$ of $(AB)^T$ is entry $(j, i)$ of $AB$, which is row $j$ of $A$ dotted with column $i$ of $B$. That is the same sum as row $i$ of $B^T$ dotted with column $j$ of $A^T$. So $(AB)^T = B^T A^T$.
+
+<card>$(AB)^T$ in terms of $A^T$ and $B^T$ :: $(AB)^T = B^T A^T$: the order reverses. A shape check catches the slip, since $A^T B^T$ is often not even defined.</card>
+
+<note>$(AB)^T = B^T A^T$: transposing a product reverses its order.</note>
+
+<ask type="short">Using that rule twice, write $(ABC)^T$ as a product of the three transposes, and say which grouping of $ABC$ you started from.</ask>
+@@ verify
+import numpy as np
+rng = np.random.default_rng(7)
+A = rng.integers(-5, 6, (2, 3)); B = rng.integers(-5, 6, (3, 4)); C = rng.integers(-5, 6, (4, 2))
+assert A.T.shape == (3, 2) and B.T.shape == (4, 3)
+assert ((A @ B).T == B.T @ A.T).all() and (B.T @ A.T).shape == (4, 2)
+try:
+    A.T @ B.T
+    assert False, 'A^T B^T should not be defined'
+except ValueError as _e:
+    pass
+# the entry argument: entry (i, j) of (AB)^T is row j of A dotted with column i of B
+i, j = 3, 1
+assert (A @ B).T[i, j] == A[j, :] @ B[:, i] == B.T[i, :] @ A.T[:, j]
+# the answer to the question asked
+assert ((A @ B @ C).T == C.T @ B.T @ A.T).all()
+assert 'C^T B^T A^T' not in reply and 'C^TB^TA^T' not in reply
+
+@@@@ wrong-composition-left-to-right
+situation: after-wrong
+topic: Composition of linear transformations
+voice: plain
+level: medium
+expect: {"verdict":"wrong","names":["first","RS"],"must":["0 & -2 \\\\\\\\ 1 & 0","\\(0, 1\\)"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\(2, ?-1\\)","FH"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+$R$ rotates the plane by 90° anticlockwise and $S$ doubles the $x$-coordinate:
+
+$$R = \begin{pmatrix} 0 & -1 \\ 1 & 0 \end{pmatrix}, \quad S = \begin{pmatrix} 2 & 0 \\ 0 & 1 \end{pmatrix}$$
+
+Find the single matrix that first rotates and then scales, and apply it to $(1, 0)$.
+
+<solution>The map applied first stands on the right: rotate, then scale, is SR = [[0, −2], [1, 0]]. SR(1, 0) = (0, 1): the rotation sends (1, 0) to (0, 1), and doubling x leaves (0, 1) where it is.</solution>
+<check lang="python">
+R = [[0, -1], [1, 0]]
+S = [[2, 0], [0, 1]]
+mul = lambda X, Y: [[sum(X[i][k] * Y[k][j] for k in range(2)) for j in range(2)] for i in range(2)]
+SR = mul(S, R)
+assert SR == [[0, -2], [1, 0]]
+assert [SR[0][0] * 1 + SR[0][1] * 0, SR[1][0] * 1 + SR[1][1] * 0] == [0, 1]
+</check>
+
+<ask type="problem">The matrix, and where it sends $(1, 0)$.</ask>
+@@ learner answer sure
+First rotate, then scale, so I multiply in that order: RS = [[0,-1],[2,0]]. Applied to (1,0) that gives (0,2).
+@@ reply
+<grade verdict="wrong" score="0.2">"RS = [[0,-1],[2,0]]" is multiplied correctly, but it is the wrong product. "First rotate, then scale" read left to right puts $R$ on the left; in $RSv$ the matrix next to $v$ acts first, so $RS$ scales first and rotates second.</grade>
+
+Follow the point by hand. Rotating $(1, 0)$ gives $(0, 1)$, and doubling the $x$-coordinate of $(0, 1)$ changes nothing, so the answer has to be $(0, 1)$. The matrix that does this is
+
+$$SR = \begin{pmatrix} 2 & 0 \\ 0 & 1 \end{pmatrix}\begin{pmatrix} 0 & -1 \\ 1 & 0 \end{pmatrix} = \begin{pmatrix} 0 & -2 \\ 1 & 0 \end{pmatrix}$$
+
+and $SR$ sends $(1, 0)$ to $(0, 1)$. Your $(0, 2)$ is the result of scaling first: $(1, 0) \to (2, 0) \to (0, 2)$.
+
+<card>Which product applies $R$ first and then $S$? :: $SR$. In $SRv$ the matrix nearest $v$ acts first, so a composition is written right to left.</card>
+
+<note>Composition reads right to left: $(SR)v = S(Rv)$ applies $R$ first, then $S$.</note>
+
+**Problem 2 · same idea**
+
+$H$ is a shear and $F$ reflects in the $x$-axis:
+
+$$H = \begin{pmatrix} 1 & 1 \\ 0 & 1 \end{pmatrix}, \quad F = \begin{pmatrix} 1 & 0 \\ 0 & -1 \end{pmatrix}$$
+
+Find the single matrix that first shears and then reflects, and apply it to $(1, 1)$.
+
+<solution>Shear first, so H stands on the right: FH = [[1, 1], [0, −1]]. H sends (1, 1) to (2, 1), and F sends that to (2, −1). FH(1, 1) = (2, −1).</solution>
+<check lang="python">
+H = [[1, 1], [0, 1]]
+F = [[1, 0], [0, -1]]
+mul = lambda X, Y: [[sum(X[i][k] * Y[k][j] for k in range(2)) for j in range(2)] for i in range(2)]
+FH = mul(F, H)
+assert FH == [[1, 1], [0, -1]]
+assert [FH[0][0] + FH[0][1], FH[1][0] + FH[1][1]] == [2, -1]
+</check>
+
+<ask type="problem">The matrix, with the order you multiplied in, and the image of $(1, 1)$.</ask>
+@@ verify
+import numpy as np
+R = np.array([[0, -1], [1, 0]]); S = np.array([[2, 0], [0, 1]])
+e1 = np.array([1, 0])
+# the learner's product and result really are RS and RS e1
+assert (R @ S).tolist() == [[0, -1], [2, 0]] and (R @ S @ e1).tolist() == [0, 2]
+# the right composition
+assert (S @ R).tolist() == [[0, -2], [1, 0]]
+assert (R @ e1).tolist() == [0, 1] and (S @ (R @ e1)).tolist() == [0, 1] == (S @ R @ e1).tolist()
+# scaling first: (1,0) -> (2,0) -> (0,2)
+assert (S @ e1).tolist() == [2, 0] and (R @ (S @ e1)).tolist() == [0, 2]
+H = np.array([[1, 1], [0, 1]]); F = np.array([[1, 0], [0, -1]]); v = np.array([1, 1])
+assert (F @ H).tolist() == [[1, 1], [0, -1]] and (H @ v).tolist() == [2, 1] and (F @ H @ v).tolist() == [2, -1]
+assert (H @ F @ v).tolist() != (F @ H @ v).tolist()       # the order matters in the new problem too
+assert '(2, −1)' in solution(reply) and '(2, -1)' not in visible(reply)
+
+@@@@ wrong-quiz-positive-entries-positive-definite
+situation: after-wrong
+topic: Positive definite matrices
+mode: quiz
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["entr","non-zero"],"must":["= -2","-3","Question 4 of 8"],"askMustNot":["\\byes\\b","is positive definite\\b","\\b3\\b"],"askTypes":["short"]}
+@@ tutor
+**Question 3 of 8**
+
+<ask type="short">$$A = \begin{pmatrix} 1 & 2 \\ 2 & 1 \end{pmatrix}$$ Is $A$ positive definite? Say how you decided.</ask>
+@@ learner answer sure
+Yes. It's symmetric and every entry is positive, so x^T A x is always positive.
+@@ reply
+<grade verdict="wrong" score="0.1">"every entry is positive" is not the test. Positive definite means $x^TAx > 0$ for every non-zero $x$, and $x$ may have negative components: with $x = (1, -1)$, $x^TAx = 1 - 2 - 2 + 1 = -2$, so $A$ is not positive definite.</grade>
+
+The quick test for a symmetric $2 \times 2$ matrix with top-left entry $a$ is $a > 0$ and $\det A > 0$. Here $\det A = 1 - 4 = -3$, so it fails.
+
+<card>Must a symmetric matrix with all entries positive be positive definite? :: No. For [[1, 2], [2, 1]], $x = (1, -1)$ gives $x^TAx = -2$. The definition is $x^TAx > 0$ for all non-zero $x$; for 2×2, top-left entry $> 0$ and $\det > 0$.</card>
+
+**Question 4 of 8**
+
+<ask type="short">$$B = \begin{pmatrix} 2 & -1 \\ -1 & 2 \end{pmatrix}$$ $B$ has negative entries. Decide whether it meets the definition, and give the test you used with its numbers.</ask>
+@@ verify
+import numpy as np
+A = np.array([[1, 2], [2, 1]])
+x = np.array([1, -1])
+assert x @ A @ x == -2 and 1 - 2 - 2 + 1 == -2
+assert round(np.linalg.det(A)) == -3 and 1 - 4 == -3
+assert min(np.linalg.eigvalsh(A)) < 0                        # so A really is not positive definite
+# the next question's answer: B is positive definite
+B = np.array([[2, -1], [-1, 2]])
+assert B[0, 0] > 0 and round(np.linalg.det(B)) == 3 and min(np.linalg.eigvalsh(B)) > 0
+rng = np.random.default_rng(1)
+assert all(v @ B @ v > 0 for v in rng.normal(size=(200, 2)))
+
+@@@@ wrong-span-three-vectors-always
+situation: after-wrong
+topic: Linear combinations and span
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["Three vectors in R\\^3 always span it","plane"],"need":["plan","note"],"must":["\\(0, 0, 1\\)","\\(a, b, a \\+ b\\)"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\byes\\b","s = 2","t = 1"]}
+@@ tutor
+<ask type="short">Do $(1, 0, 1)$, $(0, 1, 1)$ and $(1, 1, 2)$ span $\mathbb{R}^3$? Say why.</ask>
+@@ learner answer sure
+Yes. Three vectors in R^3 always span it, you need n vectors for R^n and here n = 3.
+@@ reply
+<grade verdict="wrong" score="0.1">"Three vectors in R^3 always span it" is the belief that fails: three is the number needed, but it is not enough on its own. Here $(1, 1, 2) = (1, 0, 1) + (0, 1, 1)$, so the third vector adds no new direction and the three span only a plane.</grade>
+
+To see what is missing: every combination $a(1, 0, 1) + b(0, 1, 1)$ equals $(a, b, a + b)$, a vector whose third entry is the sum of its first two. $(0, 0, 1)$ does not have that form, so no combination reaches it.
+
+<card>Do any $n$ vectors in $\mathbb{R}^n$ span it? :: Only if none is a combination of the others. $(1,0,1)$, $(0,1,1)$, $(1,1,2)$ span just a plane, because the third is the sum of the first two.</card>
+
+<note>The span of a set of vectors is the set of all their linear combinations. $n$ vectors span $\mathbb{R}^n$ only when none of them is a combination of the others.</note>
+
+<plan>
+- Span as the set of all linear combinations
+- Testing whether a vector is in a span
+- When $n$ vectors span $\mathbb{R}^n$
+</plan>
+
+**Problem 1 · warm-up**
+
+Is $w = (2, 5, 1)$ in the span of $(1, 2, 0)$ and $(0, 1, 1)$?
+
+<solution>s(1, 2, 0) + t(0, 1, 1) = (s, 2s + t, t). The first entry forces s = 2 and the third forces t = 1; the middle entry is then 2·2 + 1 = 5, which matches. So w = 2(1, 2, 0) + 1(0, 1, 1) is in the span.</solution>
+<check lang="python">
+s, t = 2, 1
+assert (s * 1 + t * 0, s * 2 + t * 1, s * 0 + t * 1) == (2, 5, 1)
+</check>
+
+<ask type="problem">In the span or not, with the coefficients you tried.</ask>
+@@ verify
+import numpy as np
+v1, v2, v3 = np.array([1, 0, 1]), np.array([0, 1, 1]), np.array([1, 1, 2])
+assert (v1 + v2).tolist() == v3.tolist()
+M = np.column_stack([v1, v2, v3])
+assert np.linalg.matrix_rank(M) == 2                                  # a plane, not all of R^3
+# (0, 0, 1) is not reachable: adding it raises the rank
+assert np.linalg.matrix_rank(np.column_stack([v1, v2, [0, 0, 1]])) == 3
+a, b = 4, -7
+assert (a * v1 + b * v2).tolist() == [a, b, a + b]
+# Problem 1
+p, q, w = np.array([1, 2, 0]), np.array([0, 1, 1]), np.array([2, 5, 1])
+assert (2 * p + 1 * q).tolist() == w.tolist()
+assert np.linalg.matrix_rank(np.column_stack([p, q])) == np.linalg.matrix_rank(np.column_stack([p, q, w])) == 2
+
+@@@@ idk-coordinates-in-a-basis
+situation: idk
+topic: Change of basis
+voice: plain
+level: medium
+expect: {"must":["c_1 b_1 \\+ c_2 b_2"],"mustNot":["c_1 = 3","\\(3, 2\\)"],"askMustNot":["\\(3, ?1\\)","\\(3, ?2\\)"],"askTypes":["short","problem"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+A basis for the plane is $b_1 = (1, 1)$, $b_2 = (1, -1)$. Find the coordinates of $v = (5, 1)$ in this basis.
+
+<solution>Solve c1(1, 1) + c2(1, −1) = (5, 1): c1 + c2 = 5 and c1 − c2 = 1, so c1 = 3 and c2 = 2. The coordinates are (3, 2).</solution>
+<check lang="python">
+c1, c2 = 3, 2
+assert (c1 * 1 + c2 * 1, c1 * 1 + c2 * -1) == (5, 1)
+</check>
+
+<ask type="problem">The two coordinates, with the equations you solved.</ask>
+@@ learner idk
+@@ reply
+Coordinates are the weights that build a vector out of the basis vectors. In the standard basis, $(5, 1)$ means $5e_1 + 1e_2$. In the basis $b_1, b_2$, the coordinates $(c_1, c_2)$ mean the vector $c_1 b_1 + c_2 b_2$: the same kind of sum, built from different vectors. Going from coordinates to the vector is that sum; the problem above runs it backwards.
+
+<note>The coordinates of $v$ in a basis $b_1, b_2$ are the numbers $c_1, c_2$ with $v = c_1 b_1 + c_2 b_2$.</note>
+
+Start with the forward direction.
+
+<ask type="short">With $b_1 = (1, 1)$ and $b_2 = (1, -1)$, which vector has coordinates $(2, 1)$ in this basis? Write it in ordinary $x, y$ form, with the sum you used.</ask>
+@@ verify
+import numpy as np
+b1, b2 = np.array([1, 1]), np.array([1, -1])
+assert (3 * b1 + 2 * b2).tolist() == [5, 1]            # the original problem's answer, withheld
+assert (2 * b1 + 1 * b2).tolist() == [3, 1]            # the easier question's answer, withheld too
+assert '(3, 2)' not in visible(reply) and '(3, 1)' not in reply
+assert np.allclose(np.linalg.solve(np.column_stack([b1, b2]), [5, 1]), [3, 2])
+
+@@@@ idk-outer-product-columns
+situation: idk
+topic: The outer product and rank-one matrices
+voice: plain
+level: medium
+expect: {"must":["u_i v_j","3 \\\\times 2"],"mustNot":["one (linearly )?independent column","rank"],"askMustNot":["twice","2 times","multiple","double"],"askTypes":["short"]}
+@@ tutor
+The outer product of a column $u$ and a row $v^T$ is the matrix $uv^T$.
+
+<ask type="short">For $u = (1, 2, 3)$ and $v = (4, 5)$, how many linearly independent columns does $uv^T$ have?</ask>
+@@ learner idk
+@@ reply
+Entry $(i, j)$ of $uv^T$ is $u_i v_j$: each entry of $u$ times each entry of $v$, with one row for every entry of $u$ and one column for every entry of $v$. So with 3 entries in $u$ and 2 in $v$, $uv^T$ is $3 \times 2$. It is ordinary matrix multiplication of a $3 \times 1$ matrix by a $1 \times 2$ matrix.
+
+<note>Outer product: $uv^T$ has entry $(i, j)$ equal to $u_i v_j$. For $u \in \mathbb{R}^m$ and $v \in \mathbb{R}^n$ it is an $m \times n$ matrix.</note>
+
+Try a small one before the question about columns.
+
+<ask type="short">Write out $uv^T$ for $u = (1, 2)$ and $v = (3, 6)$, then compare its two columns: how is the second related to the first?</ask>
+@@ verify
+import numpy as np
+u, v = np.array([1, 2, 3]), np.array([4, 5])
+M = np.outer(u, v)
+assert M.shape == (3, 2) and M[2, 1] == u[2] * v[1]
+assert (u.reshape(3, 1) @ v.reshape(1, 2) == M).all()
+assert np.linalg.matrix_rank(M) == 1                    # the original answer: one independent column (withheld)
+u2, v2 = np.array([1, 2]), np.array([3, 6])
+N = np.outer(u2, v2)
+assert N.tolist() == [[3, 6], [6, 12]] and (N[:, 1] == 2 * N[:, 0]).all()   # the easier answer (withheld)
+assert '12' not in reply
+
+@@@@ idk-cauchy-schwarz-equality
+situation: idk
+topic: The Cauchy-Schwarz inequality
+options: {"strategy":"dialogue"}
+voice: plain
+level: medium
+expect: {"must":["7\\.07","\\\\sqrt\\{50\\}"],"mustNot":["parallel","multiple of"],"askMustNot":["\\b10\\b","equal","parallel","multiple"],"askTypes":["short"]}
+@@ tutor
+The Cauchy-Schwarz inequality says $|u \cdot v| \le \|u\|\,\|v\|$ for any two vectors $u$ and $v$.
+
+<ask type="explain">For which pairs $u, v$ does it hold with equality, and why those?</ask>
+@@ learner idk
+@@ reply
+Put numbers in before reasoning about the general case. Take $u = (1, 2)$ and $v = (3, 1)$. Then $u \cdot v = 3 + 2 = 5$, while $\|u\|\,\|v\| = \sqrt{5}\,\sqrt{10} = \sqrt{50} \approx 7.07$. So $5 < 7.07$: for this pair the inequality holds with room to spare. How much room there is depends on how the two vectors sit relative to each other, and one more pair shows that.
+
+<note>Cauchy-Schwarz: $|u \cdot v| \le \|u\|\,\|v\|$. Example: $u = (1, 2)$, $v = (3, 1)$ gives $5 \le \sqrt{50} \approx 7.07$.</note>
+
+<ask type="short">Keep $u = (1, 2)$ and take $v = (2, 4)$. Compute $|u \cdot v|$ and $\|u\|\,\|v\|$. How do the two sides compare this time?</ask>
+@@ verify
+import math
+u, v = (1, 2), (3, 1)
+dot = lambda a, b: sum(x * y for x, y in zip(a, b))
+norm = lambda a: math.sqrt(dot(a, a))
+assert dot(u, v) == 5 and dot(u, u) == 5 and dot(v, v) == 10
+assert abs(norm(u) * norm(v) - math.sqrt(50)) < 1e-12 and round(math.sqrt(50), 2) == 7.07
+# the easier question's answer: both sides are 10 (withheld)
+w = (2, 4)
+assert dot(u, w) == 10 and abs(norm(u) * norm(w) - 10) < 1e-12
+assert '10' not in reply.split('<ask')[1]
+
+@@@@ show-me-gram-schmidt-steps
+situation: show-me
+topic: Gram-Schmidt orthogonalisation
+voice: plain
+level: medium
+expect: {"visual":{"kind":"table"},"must":["-2/3, 2/3, 2/3","1/3"]}
+@@ tutor
+Gram-Schmidt builds perpendicular vectors one at a time: keep the first vector, then from each new vector subtract its component along every vector already built. The component of $a$ along $v$ is $\frac{a \cdot v}{v \cdot v}\,v$. Take $a_1 = (1, 1, 0)$, $a_2 = (1, 0, 1)$, $a_3 = (0, 1, 1)$. First $v_1 = a_1$. Then $v_2 = a_2 - \frac{1}{2}v_1 = (1/2, -1/2, 1)$. Then $v_3 = a_3 - \frac{1}{2}v_1 - \frac{1}{3}v_2 = (-2/3, 2/3, 2/3)$. Dividing each $v_k$ by its length gives the orthonormal vectors $q_k$.
+
+<note>Gram-Schmidt: $v_k = a_k - \sum_{j<k} \frac{a_k \cdot v_j}{v_j \cdot v_j}\,v_j$, then $q_k = v_k / \|v_k\|$. Each subtraction removes the part of $a_k$ that lies along a vector already built.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| Step | Start from | Multiple of $v_1$ subtracted | Multiple of $v_2$ subtracted | Result |
+|---|---|---|---|---|
+| 1 | $a_1 = (1, 1, 0)$ | none | none | $v_1 = (1, 1, 0)$ |
+| 2 | $a_2 = (1, 0, 1)$ | $\frac{a_2 \cdot v_1}{v_1 \cdot v_1} = 1/2$ | none | $v_2 = (1/2, -1/2, 1)$ |
+| 3 | $a_3 = (0, 1, 1)$ | $\frac{a_3 \cdot v_1}{v_1 \cdot v_1} = 1/2$ | $\frac{a_3 \cdot v_2}{v_2 \cdot v_2} = 1/3$ | $v_3 = (-2/3, 2/3, 2/3)$ |
+
+Each row takes its starting vector and subtracts the listed multiples of the results above it; check that any two entries of the Result column have dot product 0.
+@@ verify
+from fractions import Fraction as F
+import re
+dot = lambda a, b: sum(x * y for x, y in zip(a, b))
+a = [(F(1), F(1), F(0)), (F(1), F(0), F(1)), (F(0), F(1), F(1))]
+vs, coeffs = [], []
+for ak in a:
+    cs = [dot(ak, v) / dot(v, v) for v in vs]
+    vk = tuple(x - sum(c * v[i] for c, v in zip(cs, vs)) for i, x in enumerate(ak))
+    vs.append(vk); coeffs.append(cs)
+assert vs[1] == (F(1, 2), F(-1, 2), F(1)) and vs[2] == (F(-2, 3), F(2, 3), F(2, 3))
+assert coeffs[1] == [F(1, 2)] and coeffs[2] == [F(1, 2), F(1, 3)]
+assert all(dot(vs[i], vs[j]) == 0 for i in range(3) for j in range(i))
+fmt = lambda v: '(' + ', '.join(str(x) for x in v) + ')'
+rows = table(reply)[1:]
+assert len(rows) == 3
+for k, row in enumerate(rows):
+    assert row[0] == str(k + 1)
+    assert fmt(a[k]) in row[1], row
+    for j in range(2):
+        cell = row[2 + j]
+        if j < len(coeffs[k]):
+            assert cell.endswith('= ' + str(coeffs[k][j]) + '$'), cell
+        else:
+            assert cell == 'none', cell
+    assert row[4] == f'$v_{k + 1} = {fmt(vs[k])}$', row[4]
+# the explanation before it states the same vectors
+assert '(1/2, -1/2, 1)' in tutor[0] and '(-2/3, 2/3, 2/3)' in tutor[0]
+
+@@@@ show-me-power-iteration-iterates
+situation: show-me
+topic: Power iteration
+voice: plain
+level: medium
+expect: {"visual":{"kind":"table"},"must":["2\\.976","0\\.992"]}
+@@ tutor
+Power iteration finds the eigenvector whose eigenvalue is largest in absolute value by repeated multiplication. Start from some $x_0$, compute $y = Ax_k$, and rescale $y$ to get $x_{k+1}$. Here the rescaling divides by the largest entry of $y$, which keeps the numbers readable, and that largest entry is the current estimate of the eigenvalue. For
+
+$$A = \begin{pmatrix} 2 & 1 \\ 1 & 2 \end{pmatrix}, \quad x_0 = (1, 0)$$
+
+the first step gives $y = (2, 1)$, an estimate of 2, and $x_1 = (1, 0.5)$. Repeating, the vectors approach $(1, 1)$ and the estimates approach 3, the dominant eigenvalue of $A$.
+
+<note>Power iteration: $y = Ax_k$, then $x_{k+1} = y / \max(y)$. The scale factor tends to the dominant eigenvalue and $x_k$ to its eigenvector, provided $x_0$ has a component along that eigenvector.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+| $k$ | $x_k$ | $y = Ax_k$ | Estimate $\max(y)$ | $x_{k+1}$ |
+|---|---|---|---|---|
+| 0 | (1, 0) | (2, 1) | 2 | (1, 0.5) |
+| 1 | (1, 0.5) | (2.5, 2) | 2.5 | (1, 0.8) |
+| 2 | (1, 0.8) | (2.8, 2.6) | 2.8 | (1, 0.929) |
+| 3 | (1, 0.929) | (2.929, 2.857) | 2.929 | (1, 0.976) |
+| 4 | (1, 0.976) | (2.976, 2.951) | 2.976 | (1, 0.992) |
+
+Read down the Estimate column: it climbs towards 3 while the second entry of $x_k$ climbs towards 1. Values are rounded to three decimals.
+@@ verify
+from fractions import Fraction as F
+import numpy as np
+def show(q):
+    s = f'{float(q):.3f}'.rstrip('0').rstrip('.')
+    return s
+vec = lambda v: '(' + ', '.join(show(c) for c in v) + ')'
+A = [[F(2), F(1)], [F(1), F(2)]]
+x = [F(1), F(0)]
+rows = table(reply)[1:]
+assert len(rows) == 5
+for k, row in enumerate(rows):
+    y = [A[0][0] * x[0] + A[0][1] * x[1], A[1][0] * x[0] + A[1][1] * x[1]]
+    m = max(y)
+    nxt = [c / m for c in y]
+    assert row == [str(k), vec(x), vec(y), show(m), vec(nxt)], (row, [str(k), vec(x), vec(y), show(m), vec(nxt)])
+    x = nxt                                   # exact fractions carried forward, rounded only for display
+# the limit the explanation names
+w, V = np.linalg.eigh(np.array([[2.0, 1.0], [1.0, 2.0]]))
+assert np.allclose(w, [1, 3]) and np.allclose(abs(V[:, 1] / V[0, 1]), [1, 1])
+assert '(2, 1)' in tutor[0] and '(1, 0.5)' in tutor[0]
+
+@@@@ show-me-positive-definite-tests-mindmap
+situation: show-me
+topic: Positive definite matrices
+voice: plain
+level: hard
+expect: {"visual":{"kind":"mermaid","diagram":["mindmap"]},"must":["2 and 3/2","1 and 3","R\\^T R"]}
+@@ tutor
+For a symmetric matrix $A$, positive definite means $x^TAx > 0$ for every non-zero $x$. Four other statements are equivalent to that definition, so any one of them can serve as the test: all eigenvalues of $A$ are positive; all pivots in elimination without row exchanges are positive; all leading minors, the determinants of the top-left $k \times k$ blocks, are positive; and $A = R^TR$ for some $R$ with independent columns. For
+
+$$A = \begin{pmatrix} 2 & -1 \\ -1 & 2 \end{pmatrix}$$
+
+the eigenvalues are 1 and 3, the pivots are 2 and 3/2, and the leading minors are 2 and 3, so each of those tests says yes.
+
+<note>Symmetric $A$ is positive definite when $x^TAx > 0$ for all non-zero $x$. Equivalent tests: all eigenvalues positive; all pivots positive; all leading minors positive; $A = R^TR$ with the columns of $R$ independent.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+mindmap
+  root(("Positive definite, symmetric A"))
+    d["Definition"]
+      d1["x^T A x > 0 for every non-zero x"]
+    e["Eigenvalues"]
+      e1["all positive, here 1 and 3"]
+    p["Pivots"]
+      p1["all positive, here 2 and 3/2"]
+    m["Leading minors"]
+      m1["all positive, here 2 and 3"]
+    f["Factorisation"]
+      f1["A = R^T R, independent columns in R"]
+```
+
+Each branch is one test and all five are equivalent; the three with numbers show the same matrix $A$ passing by eigenvalues, by pivots and by leading minors.
+@@ verify
+import numpy as np
+from fractions import Fraction as F
+A = np.array([[2.0, -1.0], [-1.0, 2.0]])
+assert np.allclose(np.linalg.eigvalsh(A), [1, 3])
+# pivots by elimination, exactly
+a, b, c, d = F(2), F(-1), F(-1), F(2)
+p1 = a; p2 = d - (c / a) * b
+assert (p1, p2) == (F(2), F(3, 2))
+# leading minors
+assert a == 2 and a * d - b * c == 3
+# A = R^T R exists (Cholesky), with independent columns
+L = np.linalg.cholesky(A); R = L.T
+assert np.allclose(R.T @ R, A) and np.linalg.matrix_rank(R) == 2
+body = block(reply, 'mermaid')
+for s in ('here 1 and 3', 'here 2 and 3/2', 'here 2 and 3"'):
+    assert s in body, s
+assert body.count('"') // 2 <= 14
+assert '1 and 3' in tutor[0] and '2 and 3/2' in tutor[0] and '2 and 3,' in tutor[0]
+
+@@@@ show-me-least-squares-pipeline
+situation: show-me
+topic: Least squares and the normal equations
+voice: plain
+level: hard
+expect: {"visual":{"kind":"mermaid","diagram":["flowchart"]},"must":["5/6, 3/2","1/6, -1/3, 1/6"]}
+@@ tutor
+When $Ax = b$ has no exact solution, least squares picks the $\hat{x}$ that brings $A\hat{x}$ as close to $b$ as possible. The error $e = b - A\hat{x}$ is then perpendicular to every column of $A$: $A^T(b - A\hat{x}) = 0$, which rearranges to the normal equations $A^TA\hat{x} = A^Tb$.
+
+To fit a line $y = c + dt$ through $(0, 1)$, $(1, 2)$ and $(2, 4)$, $A$ has columns $(1, 1, 1)$ and $(0, 1, 2)$, and $b = (1, 2, 4)$. Then
+
+$$A^TA = \begin{pmatrix} 3 & 3 \\ 3 & 5 \end{pmatrix}, \quad A^Tb = (7, 10), \quad \hat{x} = (5/6, 3/2)$$
+
+so the line is $y = 5/6 + \frac{3}{2}t$. The fitted values are $p = A\hat{x} = (5/6, 7/3, 23/6)$ and the error is $e = b - p = (1/6, -1/3, 1/6)$.
+
+<note>Least squares: solve $A^TA\hat{x} = A^Tb$. Then $p = A\hat{x}$ is the closest point to $b$ in the column space of $A$, and $e = b - p$ satisfies $A^Te = 0$.</note>
+
+<continue/>
+@@ learner showme
+@@ reply
+```mermaid
+flowchart TD
+  A["A with columns (1,1,1) and (0,1,2); b = (1,2,4)"] --> B["Form A^T A = [[3, 3], [3, 5]] and A^T b = (7, 10)"]
+  B --> C["Solve A^T A x = A^T b"]
+  C --> D["x = (5/6, 3/2)"]
+  D --> E["Fitted values p = A x = (5/6, 7/3, 23/6)"]
+  E --> F["Error e = b - p = (1/6, -1/3, 1/6)"]
+  F --> G["Check: A^T e = (0, 0)"]
+```
+
+Follow the arrows from the data down to the check: the last box is the perpendicularity condition the normal equations came from, so it confirms the solve.
+@@ verify
+from fractions import Fraction as F
+A = [[F(1), F(0)], [F(1), F(1)], [F(1), F(2)]]
+b = [F(1), F(2), F(4)]
+AtA = [[sum(A[k][i] * A[k][j] for k in range(3)) for j in range(2)] for i in range(2)]
+Atb = [sum(A[k][i] * b[k] for k in range(3)) for i in range(2)]
+assert AtA == [[3, 3], [3, 5]] and Atb == [7, 10]
+det = AtA[0][0] * AtA[1][1] - AtA[0][1] * AtA[1][0]
+x = [(AtA[1][1] * Atb[0] - AtA[0][1] * Atb[1]) / det, (AtA[0][0] * Atb[1] - AtA[1][0] * Atb[0]) / det]
+assert x == [F(5, 6), F(3, 2)]
+p = [A[k][0] * x[0] + A[k][1] * x[1] for k in range(3)]
+e = [b[k] - p[k] for k in range(3)]
+assert p == [F(5, 6), F(7, 3), F(23, 6)] and e == [F(1, 6), F(-1, 3), F(1, 6)]
+assert [sum(A[k][i] * e[k] for k in range(3)) for i in range(2)] == [0, 0]
+fmt = lambda v: '(' + ', '.join(str(c) for c in v) + ')'
+body = block(reply, 'mermaid')
+for s in ('A^T A = [[3, 3], [3, 5]]', 'A^T b = ' + fmt(Atb), 'x = ' + fmt(x), 'p = A x = ' + fmt(p), 'e = b - p = ' + fmt(e), 'A^T e = (0, 0)'):
+    assert s in body, s
+for s in (fmt(x), fmt(p), fmt(e)):
+    assert s in tutor[0], s

@@ -1,0 +1,318 @@
+@@@@ open-k-means
+situation: open
+topic: k-means clustering
+voice: plain
+level: easy
+expect: {"askMustNot":["local (minimum|optimum)","depends? on the (start|initial)"],"must":["centroid|cluster"]}
+noverify: an opening; it states no computed result
+@@ reply
+**Why this matters**
+
+k-means is the usual first tool for grouping data that has no labels: customer segments from purchase histories, colour palettes from image pixels, and the codebooks that vector quantisation and approximate nearest-neighbour indexes such as FAISS build over embeddings. It alternates two cheap steps, so it runs on millions of points, and the same alternating idea reappears in expectation-maximisation for mixture models. Knowing exactly what it minimises, and what it does not promise, is what lets you trust or reject a clustering in practice.
+
+<ask type="predict">k-means is run twice on the same data with k = 3, each time from different randomly chosen starting centroids. Will the two runs always end with the same clusters? Say why you expect that.</ask>
+
+@@@@ open-quiz-information-gain
+situation: open
+topic: Decision trees: entropy and information gain
+mode: quiz
+options: {"length":6}
+voice: plain
+level: medium
+expect: {"must":["Question 1 of 6"],"askMustNot":["0\\.256","0\\.971"],"setsProblem":true}
+@@ reply
+Question 1 of 6
+
+A node of a decision tree holds 10 examples: 6 of class A and 4 of class B. A candidate split sends 6 examples to the left child (5 of class A, 1 of class B) and 4 to the right child (1 of class A, 3 of class B). Find the information gain of this split in bits, to three decimal places.
+
+<solution>Parent entropy: −0.6 log2 0.6 − 0.4 log2 0.4 = 0.971 bits. Left child (5, 1): 0.650 bits. Right child (1, 3): 0.811 bits. Weighted child entropy: 0.6 × 0.650 + 0.4 × 0.811 = 0.715. Gain = 0.971 − 0.715 = 0.256 bits.</solution>
+<check lang="python">
+import math
+H = lambda *c: -sum(x / sum(c) * math.log2(x / sum(c)) for x in c if x)
+gain = H(6, 4) - 6 / 10 * H(5, 1) - 4 / 10 * H(1, 3)
+assert round(gain, 3) == 0.256
+</check>
+
+<ask type="problem">The information gain, with the entropy of the parent and of each child.</ask>
+@@ verify
+import math
+def H(*c):
+    n = sum(c)
+    return -sum(x / n * math.log2(x / n) for x in c if x)
+assert round(H(6, 4), 3) == 0.971 and round(H(5, 1), 3) == 0.650 and round(H(1, 3), 3) == 0.811
+weighted = 0.6 * H(5, 1) + 0.4 * H(1, 3)
+assert round(weighted, 3) == 0.715 and round(H(6, 4) - weighted, 3) == 0.256
+for v in ['0.971', '0.650', '0.811', '0.715', '0.256']:
+    assert v in solution(reply) and v not in visible(reply), v
+# the children add up to the parent
+assert 5 + 1 == 6 and 1 + 3 == 4 and (5 + 1, 1 + 3) == (6, 4)
+
+@@@@ open-refresh-mse-gradient
+situation: open
+topic: Mean squared error and its gradient
+options: {"refresh":true}
+voice: plain
+level: medium
+expect: {"setsProblem":true,"askMustNot":["14/3","4\\.67","-4\\.6"],"must":["mean squared error"]}
+@@ reply
+**Problem 1**
+
+A model with one weight predicts $\hat{y} = wx$, and currently $w = 2$. The training data are three points $(x, y)$: $(1, 3)$, $(2, 5)$ and $(4, 9)$. Compute the mean squared error on these points, and its derivative with respect to $w$ at $w = 2$.
+
+<solution>Predictions 2, 4, 8; residuals ŷ − y are −1, −1, −1. MSE = (1 + 1 + 1)/3 = 1. dMSE/dw = (2/3) Σ (ŷ − y) x = (2/3)(−1 − 2 − 4) = −14/3 ≈ −4.667.</solution>
+<check lang="python">
+from fractions import Fraction as F
+xs, ys, w = [1, 2, 4], [3, 5, 9], 2
+mse = sum(F(w * x - y) ** 2 for x, y in zip(xs, ys)) / 3
+grad = F(2, 3) * sum((w * x - y) * x for x, y in zip(xs, ys))
+assert mse == 1 and grad == F(-14, 3)
+</check>
+
+<ask type="problem">The mean squared error and the derivative, with the three residuals you used.</ask>
+@@ verify
+import numpy as np
+x = np.array([1.0, 2.0, 4.0]); y = np.array([3.0, 5.0, 9.0])
+mse = lambda w: np.mean((w * x - y) ** 2)
+assert mse(2.0) == 1.0
+assert list(2.0 * x - y) == [-1.0, -1.0, -1.0]
+# the derivative by the formula and by a central difference
+g = np.mean(2 * (2.0 * x - y) * x)
+h = 1e-6
+assert abs(g - (-14 / 3)) < 1e-12 and abs((mse(2 + h) - mse(2 - h)) / (2 * h) - g) < 1e-6
+assert '−14/3' in solution(reply) and '14/3' not in visible(reply)
+
+@@@@ open-prior-dropout-scaling
+situation: open-prior
+topic: Dropout
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Dropout","daysAgo":4,"finished":false,"plan":["What dropout does in training","Inverted scaling","Dropout at inference"],"right":3,"partly":1,"wrong":1,"missed":["With keep probability 0.8, by what factor are the surviving activations scaled in training, and why?"],"open":"At inference, is anything dropped or scaled?"}]}
+expect: {"askMustNot":["\\b6(\\.0)?\\b","doubl","\\b2 times|twice"],"must":["inference|test time"]}
+noverify: an opening; the question's answers (6.0 and 3.0) are not stated and nothing else is computed
+@@ reply
+**Why this matters**
+
+Dropout is one of the standard regularisers in neural networks: it is in the classifier layers of older convolutional networks and throughout transformers, usually with a drop rate of about 0.1. It is also a common source of bugs, because the layer behaves differently in training and at inference, and a model left in the wrong mode gives quietly worse results. You have what dropout does in training from last time; the scaling of the surviving units is the piece that did not hold, and inference is still to come.
+
+<ask type="short">Every unit in a layer outputs 3.0. Inverted dropout is applied in training with keep probability 0.5. What value does a unit that survives pass on, and what is the average value passed on per unit over many training steps?</ask>
+
+@@@@ open-prior-schedules-rest-on-step-size
+situation: open-prior
+topic: Learning-rate schedules
+voice: plain
+level: medium
+before: {"prior":[{"topic":"Choosing the learning rate","daysAgo":6,"finished":true,"plan":["The update rule","Too large: divergence","Too small: slow progress"],"right":5,"partly":0,"wrong":1,"missed":["On f(w) = 3w^2, which learning rates make gradient descent diverge?"]}]}
+expect: {"askMustNot":["0\\.2\\b","1/5","1 - 10"],"must":["warm-up|warm up","diverg|grow"]}
+noverify: an opening; the threshold the question asks for (0.2) is not stated
+@@ reply
+**Why this matters**
+
+A schedule changes the learning rate during training instead of fixing it: linear warm-up followed by cosine or linear decay is the default recipe for training transformers, and step decay is the classic one for convolutional networks. The reason for both halves is the idea from your lesson on choosing the learning rate: a rate is safe or unsafe relative to how sharply the loss curves, and that changes as training goes on. That lesson left one gap, the point at which a rate becomes too large, and a schedule is built around exactly that point, so it comes first.
+
+<ask type="short">Gradient descent on $f(w) = 5w^2$ multiplies $w$ by the same factor at every step. Write that factor in terms of the learning rate $\eta$, and say for which values of $\eta$ the size of $w$ grows instead of shrinking.</ask>
+
+@@@@ open-recall-perplexity-uniform
+situation: open-recall
+topic: Perplexity
+voice: plain
+level: easy
+before: {"recall":[{"prompt":"A language model gives each token in a text probability 0.125. What is its perplexity on that text?","topic":"Perplexity","reviews":1,"lapses":0}]}
+expect: {"askMustNot":["\\b8\\b","eight","1/0\\.125"]}
+noverify: an opening that only repeats the question due for recall
+@@ reply
+<ask type="short">A language model gives each token in a text probability 0.125. What is its perplexity on that text?</ask>
+
+@@@@ open-recall-lora-rank-count
+situation: open-recall
+topic: LoRA: low-rank adaptation
+voice: plain
+level: medium
+before: {"recall":[{"prompt":"LoRA with rank 4 is applied to a 512 × 768 weight matrix. How many parameters does the update train?","topic":"LoRA: low-rank adaptation","reviews":2,"lapses":1},{"prompt":"Why is one of the two LoRA matrices initialised to zero?","topic":"LoRA: low-rank adaptation","reviews":1,"lapses":0}]}
+expect: {"askMustNot":["5120","5,120","1280","initialis"]}
+noverify: an opening that only repeats the first question due for recall
+@@ reply
+<ask type="short">LoRA with rank 4 is applied to a 512 × 768 weight matrix. How many parameters does the update train?</ask>
+
+@@@@ correct-cross-entropy-probe-to-plan
+situation: after-correct
+topic: Cross-entropy loss
+voice: plain
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"need":["plan","note"],"must":["0\\.357","2\\.303"],"askMustNot":["0\\.458","0\\.693","0\\.223"]}
+@@ tutor
+<ask type="predict">A classifier gives the true class probability 0.9 on one example and probability 0.1 on another. Which example has the larger cross-entropy loss, and is it about 2 times, about 9 times or more than 20 times larger?</ask>
+@@ learner answer sure
+The 0.1 one. Loss is -ln(p), so 2.30 against 0.105, which is about 22 times, so more than 20.
+@@ reply
+<grade verdict="correct" score="1">"Loss is -ln(p), so 2.30 against 0.105" is right: the loss is the negative log of the probability given to the true class, and 2.30 / 0.105 is about 22.</grade>
+
+<plan>
+- Cross-entropy for one example
+- The mean over a batch
+- Why confident mistakes cost so much
+- The gradient through softmax
+</plan>
+
+You have the definition, so this step is short. The model outputs one probability per class, and the loss for an example is $L = -\ln p_{\text{true}}$: only the probability given to the true class enters. With outputs $(0.7, 0.2, 0.1)$ and the first class true, $L = -\ln 0.7 = 0.357$. Had the third class been true, $L = -\ln 0.1 = 2.303$. The loss of a batch is the mean of its examples' losses.
+
+<note>Cross-entropy for one example: $L = -\ln p_{\text{true}}$, the negative natural log of the probability the model gave the true class. It is 0 only when that probability is 1, and it grows without bound as the probability falls towards 0. A batch's loss is the mean over its examples.</note>
+
+**Problem 1 · warm-up**
+
+A three-class model outputs $(0.25, 0.5, 0.25)$ for an example whose true class is the second, and $(0.8, 0.1, 0.1)$ for an example whose true class is the first. Find the mean cross-entropy loss of this batch of two, to three decimal places.
+
+<solution>−ln 0.5 = 0.693 and −ln 0.8 = 0.223. Mean = (0.693 + 0.223)/2 = 0.458.</solution>
+<check lang="python">
+import math
+m = (-math.log(0.5) - math.log(0.8)) / 2
+assert round(m, 3) == 0.458
+</check>
+
+<ask type="problem">The mean loss, with the loss of each example.</ask>
+@@ verify
+import math
+# the learner's figures
+assert round(-math.log(0.1), 2) == 2.30 and round(-math.log(0.9), 3) == 0.105
+assert round(-math.log(0.1) / -math.log(0.9)) == 22 and round(2.30 / 0.105) == 22
+# the worked example
+assert round(-math.log(0.7), 3) == 0.357 and round(-math.log(0.1), 3) == 2.303
+# the problem set
+a, b = -math.log(0.5), -math.log(0.8)
+assert round(a, 3) == 0.693 and round(b, 3) == 0.223 and round((a + b) / 2, 3) == 0.458
+assert '0.458' in solution(reply) and '0.458' not in visible(reply)
+assert abs(sum((0.25, 0.5, 0.25)) - 1) < 1e-12 and abs(sum((0.8, 0.1, 0.1)) - 1) < 1e-12 and abs(sum((0.7, 0.2, 0.1)) - 1) < 1e-12
+
+@@@@ correct-dense-then-conv-parameters
+situation: after-correct
+topic: Counting parameters of dense and convolutional layers
+options: {"strategy":"maths"}
+voice: terse
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"askTypes":["problem"],"askMustNot":["4640","4,640","5123200","5,123,200"],"must":["filter"]}
+@@ tutor
+A dense layer with $n$ inputs and $m$ outputs has an $m \times n$ weight matrix and one bias per output.
+
+<note>Dense layer, $n$ inputs to $m$ outputs: $nm$ weights and $m$ biases, so $nm + m = (n + 1)m$ parameters.</note>
+
+**Problem 1 · warm-up**
+
+A dense layer maps 300 inputs to 100 outputs, with biases. How many parameters does it have?
+
+<solution>300 × 100 = 30000 weights, plus 100 biases: 30100.</solution>
+<check lang="python">
+assert 300 * 100 + 100 == 30100
+</check>
+
+<ask type="problem">The parameter count, as weights plus biases.</ask>
+@@ learner answer sure
+30100. 300*100 weights + 100 biases
+@@ reply
+<grade verdict="correct" score="1">"300*100 weights + 100 biases" is the count: one weight for every input-output pair and one bias for each output.</grade>
+
+A convolutional layer shares its weights across positions, so the size of the image does not enter its count. Each filter has $k \times k \times C_{\text{in}}$ weights and one bias, and the layer has $C_{\text{out}}$ filters.
+
+<note>Convolutional layer, $k \times k$ kernel, $C_{\text{in}}$ input channels, $C_{\text{out}}$ filters: $(k^2 C_{\text{in}} + 1)\,C_{\text{out}}$ parameters. The height and width of the input do not appear.</note>
+
+**Problem 2 · harder**
+
+A convolutional layer has a 3 × 3 kernel, 16 input channels and 32 filters, with biases. It maps a 10 × 10 × 16 input to a 10 × 10 × 32 output. How many parameters does it have, and how many would a dense layer need to map the same flattened input to the same flattened output?
+
+<solution>Convolution: (3 × 3 × 16 + 1) × 32 = 145 × 32 = 4640. Dense: the input has 10 × 10 × 16 = 1600 values and the output 10 × 10 × 32 = 3200, so 1600 × 3200 + 3200 = 5123200.</solution>
+<check lang="python">
+conv = (3 * 3 * 16 + 1) * 32
+n, m = 10 * 10 * 16, 10 * 10 * 32
+assert conv == 4640 and n * m + m == 5123200
+</check>
+
+<ask type="problem">Both counts, each as weights plus biases.</ask>
+@@ verify
+assert 300 * 100 + 100 == 30100
+conv = (3 * 3 * 16 + 1) * 32
+assert 3 * 3 * 16 + 1 == 145 and conv == 4640
+n, m = 10 * 10 * 16, 10 * 10 * 32
+assert (n, m) == (1600, 3200) and n * m + m == 5123200
+# count by building the arrays
+import numpy as np
+W = np.zeros((32, 16, 3, 3)); b = np.zeros(32)
+assert W.size + b.size == 4640
+assert np.zeros((m, n)).size + m == 5123200
+assert '4640' in solution(reply) and '5123200' in solution(reply)
+assert '4640' not in visible(reply) and '5123200' not in visible(reply)
+
+@@@@ correct-recall-quantisation-then-open
+situation: after-correct
+topic: Quantisation of model weights
+voice: terse
+level: easy
+before: {"recall":[{"prompt":"A model has 7 billion weights stored as 16-bit floats. How many gigabytes do the weights take (1 GB = 10^9 bytes)?","topic":"Quantisation of model weights","reviews":2,"lapses":0}]}
+expect: {"verdict":"correct","heading":"Why this matters","askMustNot":["\\b16\\b","sixteen","round","nearest"],"askTypes":["short","predict","explain","choice"],"must":["3\\.5 GB"]}
+@@ tutor
+<ask type="short">A model has 7 billion weights stored as 16-bit floats. How many gigabytes do the weights take (1 GB = 10^9 bytes)?</ask>
+@@ learner answer sure
+14 GB. 16 bits = 2 bytes, 7e9 x 2 = 14e9 bytes
+@@ reply
+<grade verdict="correct" score="1">"16 bits = 2 bytes, 7e9 x 2 = 14e9 bytes" is right: 14 GB.</grade>
+
+**Why this matters**
+
+Quantisation stores each weight in fewer bits, and it is what lets a large language model run on a laptop or a phone: the 14 GB of weights you just counted become 3.5 GB at 4 bits each. Formats such as GGUF and the 4-bit builds that MLX and llama.cpp run are quantised models, and the same idea, with 8-bit integers, speeds up inference on CPUs and edge devices. The saving in memory is plain arithmetic; what it costs in accuracy, and why that cost is usually small, is the real subject.
+
+<ask type="short">A weight stored in 4 bits can take only a limited number of distinct values. How many, and what has to happen to an original weight that falls between two of them?</ask>
+@@ verify
+weights = 7e9
+assert weights * 16 / 8 / 1e9 == 14
+assert weights * 4 / 8 / 1e9 == 3.5
+assert 2 ** 4 == 16      # the answer the question withholds
+assert '14 GB' in reply and '3.5 GB' in reply
+
+@@@@ correct-quiz-auc-unsure-same-level
+situation: after-correct
+topic: ROC curves and AUC
+mode: quiz
+voice: typos
+level: medium
+expect: {"verdict":"correct","setsProblem":true,"must":["Question 4 of 8","pair"],"askMustNot":["0\\.7\\b","7/10","7 of"]}
+@@ tutor
+Question 3 of 8
+
+A classifier scores four examples. The two positives get scores 0.9 and 0.4; the two negatives get 0.6 and 0.2. What is the AUC of these scores?
+
+<solution>AUC is the fraction of (positive, negative) pairs in which the positive has the higher score. Pairs: (0.9, 0.6) yes, (0.9, 0.2) yes, (0.4, 0.6) no, (0.4, 0.2) yes. 3 of 4, so AUC = 0.75.</solution>
+<check lang="python">
+pos, neg = [0.9, 0.4], [0.6, 0.2]
+assert sum(p > n for p in pos for n in neg) / 4 == 0.75
+</check>
+
+<ask type="problem">The AUC, with how you counted it.</ask>
+@@ learner answer unsure
+0.75 i think?? theres 4 pos/neg pairs and in 3 of them the postive is scored higher, only 0.4 vs 0.6 is the wrong way round
+@@ reply
+<grade verdict="correct" score="1">"in 3 of them the postive is scored higher" is the definition applied correctly: AUC is the share of positive-negative pairs ranked the right way round, and 3 of 4 is 0.75.</grade>
+
+Your counting method is the reliable one, so here is one more at the same level to settle it.
+
+Question 4 of 8
+
+A classifier scores seven examples. The two positives get 0.8 and 0.45; the five negatives get 0.9, 0.5, 0.4, 0.3 and 0.1. What is the AUC of these scores?
+
+<solution>There are 2 × 5 = 10 pairs. The positive at 0.8 beats four negatives (0.5, 0.4, 0.3, 0.1) and loses to 0.9. The positive at 0.45 beats three (0.4, 0.3, 0.1) and loses to 0.9 and 0.5. 7 of 10 pairs are ranked correctly, so AUC = 0.7.</solution>
+<check lang="python">
+pos, neg = [0.8, 0.45], [0.9, 0.5, 0.4, 0.3, 0.1]
+assert sum(p > n for p in pos for n in neg) / (len(pos) * len(neg)) == 0.7
+</check>
+
+<ask type="problem">The AUC, with the number of pairs and how many are ranked correctly.</ask>
+@@ verify
+def auc_pairs(pos, neg):
+    return sum(p > n for p in pos for n in neg) / (len(pos) * len(neg))
+def auc_curve(pos, neg):
+    # second method: area under the ROC curve by the trapezium rule over every threshold
+    pts = [(0.0, 0.0)]
+    for t in sorted(set(pos + neg), reverse=True):
+        pts.append((sum(n >= t for n in neg) / len(neg), sum(p >= t for p in pos) / len(pos)))
+    return sum((x1 - x0) * (y0 + y1) / 2 for (x0, y0), (x1, y1) in zip(pts, pts[1:]))
+assert auc_pairs([0.9, 0.4], [0.6, 0.2]) == 0.75 and abs(auc_curve([0.9, 0.4], [0.6, 0.2]) - 0.75) < 1e-12
+p, n = [0.8, 0.45], [0.9, 0.5, 0.4, 0.3, 0.1]
+assert auc_pairs(p, n) == 0.7 and abs(auc_curve(p, n) - 0.7) < 1e-12
+assert sum(0.8 > x for x in n) == 4 and sum(0.45 > x for x in n) == 3
+assert 'AUC = 0.7' in solution(reply) and '0.7.' not in visible(reply).replace('0.75', '')

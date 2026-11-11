@@ -19,18 +19,19 @@
  * with setup and history in the benchmark's own form (scripts/eval/tutor/types.ts), so they are
  * turned into requests by the same code. A gold reply must pass the scorer's protocol checks, and
  * one that matches a benchmark scenario is refused: training on the test would spoil the test.
+ * --gold may name a folder: scripts/finetune/gold holds the set kept here (see gold/lib.ts), whose
+ * examples also say what their first message was told about earlier lessons ("before").
  */
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs'
 import { userInfo } from 'os'
 import { join } from 'path'
 import type { LessonRecord } from '../../src/shared/lessonLog'
-import { sessionInstructions } from '../../src/shared/session'
-import { withInstructions } from '../../src/shared/tutorPrompt'
-import { lessonTurns, learnerText } from '../eval/tutor/request'
+import { learnerText } from '../eval/tutor/request'
 import { SCENARIOS } from '../eval/tutor/scenarios'
 import { scoreReply } from '../eval/tutor/score'
 import { SCENARIO_SET_VERSION, type Expect, type Scenario } from '../eval/tutor/types'
-import { estimateTokens, examplesFrom, heldOut, lessonExcluded, matchesBenchmark, privacyMap, scrub, trainingSystem, type Example, type PrivacyMap } from './filters'
+import { estimateTokens, examplesFrom, heldOut, lessonExcluded, matchesBenchmark, privacyMap, scrub, type Example, type PrivacyMap } from './filters'
+import { goldMessages, type Before } from './gold/lib'
 
 export const BUILDER_VERSION = '1.0.0'
 
@@ -45,6 +46,8 @@ interface Gold {
   group: string
   setup: Scenario['setup']
   history: Scenario['history']
+  /** What the lesson's first message was told about earlier lessons and questions due for recall (gold/lib.ts) */
+  before?: Before
   reply: string
   by?: string
   expect?: Expect
@@ -113,7 +116,9 @@ function main() {
   }
 
   const gold = { seen: 0, used: 0, excluded: {} as Record<string, number>, by: {} as Record<string, number> }
-  for (const file of opt('gold').split(',').map((s) => s.trim()).filter(Boolean)) {
+  // A folder stands for every .jsonl in it (scripts/finetune/gold holds the set kept in the repository)
+  const goldFiles = opt('gold').split(',').map((s) => s.trim()).filter(Boolean).flatMap((f) => (statSync(f).isDirectory() ? readdirSync(f).filter((n) => n.endsWith('.jsonl')).sort().map((n) => join(f, n)) : [f]))
+  for (const file of goldFiles) {
     for (const line of readFileSync(file, 'utf8').split('\n').filter((l) => l.trim())) {
       gold.seen++
       let g: Gold
@@ -132,7 +137,8 @@ function main() {
         bump(gold.excluded, 'does-not-end-with-learner')
         continue
       }
-      const said = last && 'learner' in last ? learnerText(last.learner) : ''
+      // Their own words only: Show me, Go on and "I don't know" are the app's messages, the same in the benchmark as everywhere
+      const said = last && 'learner' in last && ('answer' in last.learner || 'question' in last.learner) ? learnerText(last.learner) : ''
       if (matchesBenchmark(g.reply, bench) || matchesBenchmark(said, bench) || SCENARIOS.some((s) => s.setup.topic.toLowerCase() === g.setup.topic.toLowerCase())) {
         bump(gold.excluded, 'matches-benchmark')
         continue
@@ -144,11 +150,7 @@ function main() {
         continue
       }
       const clean = (t: string) => scrub(t, { names }).text
-      const messages = [
-        { role: 'system' as const, content: trainingSystem(Date.UTC(2026, 10, 11)) },
-        ...withInstructions(lessonTurns(g.setup, g.history).map((m) => ({ role: m.role, content: clean(m.content) })), sessionInstructions(g.setup)),
-        { role: 'assistant' as const, content: clean(g.reply) }
-      ]
+      const messages = [...goldMessages(g).map((m, i) => (i === 0 ? m : { role: m.role, content: clean(m.content) })), { role: 'assistant' as const, content: clean(g.reply) }]
       if (estimateTokens(messages) > maxTokens) {
         bump(gold.excluded, 'too-long')
         continue

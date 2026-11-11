@@ -1,0 +1,583 @@
+@@@@ wrong-fee-added-on-top
+situation: after-wrong
+topic: Fees: fixed plus percentage pricing
+voice: overconfident
+level: medium
+expect: {"verdict":"wrong","names":["amount charged|charged amount","97\\.76|4p"],"must":["100\\.00","0\\.98"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["60\\.00","\\b60\\b"]}
+@@ tutor
+**Problem 2 · harder**
+
+A payment provider charges 2% + 20p on each payment, taken out of the amount the customer is charged. A seller wants to receive exactly £97.80 after the fee. How much should they charge the customer?
+
+<solution>Let g be the charge. g − 0.02g − 0.20 = 97.80, so 0.98g = 98.00 and g = £100.00. Check: fee = 2.00 + 0.20 = 2.20, and 100.00 − 2.20 = 97.80.</solution>
+<check lang="python">
+from decimal import Decimal as D
+g = (D('97.80') + D('0.20')) / (1 - D('0.02'))
+assert g == D('100') and g - (g * D('0.02') + D('0.20')) == D('97.80')
+</check>
+
+<ask type="problem">The amount to charge, with your working.</ask>
+@@ learner answer sure
+Easy, just add the fee on top. 2% of 97.80 is 1.956, plus 20p is 2.156, so charge 97.80 + 2.16 = £99.96. Done.
+@@ reply
+<grade verdict="wrong" score="0.2">"2% of 97.80 is 1.956" takes the percentage on the amount the seller wants, but the provider takes it on the amount charged, which is larger. At £99.96 the fee, to the nearest penny, is £2.00 + £0.20 = £2.20, leaving £97.76: 4p short.</grade>
+
+Write the fee on the unknown charge $g$: the seller keeps $g - 0.02g - 0.20$. Setting that equal to 97.80 gives $0.98g = 98.00$, so $g = 98.00 / 0.98 = £100.00$. Check: the fee on £100.00 is £2.20, and £97.80 is left.
+
+<card>A fee of p% + f is taken from the amount charged. What charge leaves a net amount n? :: (n + f) / (1 − p/100). Adding p% of n on top falls short, because the fee is taken on the larger, charged amount.</card>
+
+<note>Grossing up for a fee of rate $p$ plus fixed $f$ taken from the charge: charge $= \frac{\text{net} + f}{1 - p}$. Add the fixed part first, then divide by $1 - p$; do not multiply the net by $1 + p$.</note>
+
+**Problem 3 · same idea**
+
+Another provider charges 2.5% + 25p, taken out of the amount charged. A seller wants to receive exactly £58.25. How much should they charge?
+
+<solution>0.975g = 58.25 + 0.25 = 58.50, so g = 58.50 / 0.975 = £60.00. Check: fee = 1.50 + 0.25 = 1.75, and 60.00 − 1.75 = 58.25.</solution>
+<check lang="python">
+from decimal import Decimal as D
+g = (D('58.25') + D('0.25')) / (1 - D('0.025'))
+assert g == D('60') and g - (g * D('0.025') + D('0.25')) == D('58.25')
+</check>
+
+<ask type="problem">The amount to charge, with a check that the fee on it leaves £58.25.</ask>
+@@ verify
+from decimal import Decimal as D, ROUND_HALF_UP
+q = lambda x: x.quantize(D('0.01'), rounding=ROUND_HALF_UP)
+# the learner's figures follow from adding the fee on the net
+assert D('97.80') * D('0.02') == D('1.956') and D('1.956') + D('0.20') == D('2.156')
+assert q(D('97.80') + D('2.156')) == D('99.96') and D('97.80') + q(D('2.156')) == D('99.96')
+# what charging 99.96 really leaves
+fee = q(D('99.96') * D('0.02')) + D('0.20')
+assert fee == D('2.20') and D('99.96') - fee == D('97.76') and D('97.80') - D('97.76') == D('0.04')
+# the right answer
+g = (D('97.80') + D('0.20')) / D('0.98')
+assert g == 100 and D('97.80') + D('0.20') == D('98.00') and g * D('0.02') + D('0.20') == D('2.20')
+g2 = D('58.50') / D('0.975')
+assert g2 == 60 and g2 * D('0.025') == D('1.50') and 60 - D('1.75') == D('58.25')
+assert '60.00' in solution(reply) and '60.00' not in visible(reply)
+
+@@@@ wrong-apy-same-as-nominal
+situation: after-wrong
+topic: APR versus APY
+voice: overconfident
+level: easy
+expect: {"verdict":"wrong","names":["interest on|earn interest|compound","12\\.68"],"must":["12\\.68%","112\\.68"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["8\\.24"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+A savings account quotes a nominal rate of 12% a year (its APR, before compounding), with interest added to the balance every month. What is its APY, the rate actually earned over a year, to two decimal places?
+
+<solution>Monthly rate 12% / 12 = 1%. Growth over a year: 1.01^12 = 1.126825. APY = 12.68%.</solution>
+<check lang="python">
+apy = (1 + 0.12 / 12) ** 12 - 1
+assert round(apy * 100, 2) == 12.68
+</check>
+
+<ask type="problem">The APY as a percentage, with your working.</ask>
+@@ learner answer sure
+12%. It's 12% a year so you earn 12% in a year, obviously. Monthly just means it gets paid in 12 bits of 1%.
+@@ reply
+<grade verdict="wrong" score="0.2">"it gets paid in 12 bits of 1%" has the monthly rate right, but it treats every 1% as 1% of the starting balance. Each month's interest is added to the balance, so the later months earn interest on the earlier interest as well.</grade>
+
+Follow £100.00. After month 1 it is £101.00. Month 2 pays 1% of £101.00, not of £100.00, giving £102.01. Twelve such steps give $100 \times 1.01^{12} = £112.68$, so the APY is 12.68%, not 12%.
+
+<card>Why is the APY higher than the nominal rate when interest is added more than once a year? :: Each period's interest joins the balance and earns interest itself. APY = (1 + r/n)^n − 1 for nominal rate r compounded n times a year.</card>
+
+<note>APY $= (1 + r/n)^n - 1$, with nominal yearly rate $r$ and $n$ compounding periods a year. With $n = 1$ the two rates are equal; with $n > 1$ the APY is higher. (UK savings accounts call the effective rate AER.)</note>
+
+**Problem 2 · same idea**
+
+An account quotes a nominal 8% a year, with interest added every quarter. What is its APY, to two decimal places?
+
+<solution>Quarterly rate 8% / 4 = 2%. 1.02^4 = 1.08243216. APY = 8.24%.</solution>
+<check lang="python">
+apy = (1 + 0.08 / 4) ** 4 - 1
+assert round(apy * 100, 2) == 8.24
+</check>
+
+<ask type="problem">The APY as a percentage, showing the growth factor for the year.</ask>
+@@ verify
+from decimal import Decimal as D
+assert D('100') * D('1.01') == D('101.00') and D('101.00') * D('1.01') == D('102.0100')
+y = D('1.01') ** 12
+assert (100 * y).quantize(D('0.01')) == D('112.68') and ((y - 1) * 100).quantize(D('0.01')) == D('12.68')
+assert str(y).startswith('1.126825')
+z = D('1.02') ** 4
+assert z == D('1.08243216') and ((z - 1) * 100).quantize(D('0.01')) == D('8.24')
+assert '8.24' in solution(reply) and '8.24' not in visible(reply)
+
+@@@@ wrong-credit-means-money-in
+situation: after-wrong
+topic: Double-entry bookkeeping
+voice: typos
+level: easy
+expect: {"verdict":"wrong","names":["bank's (own )?books|bank's point of view|from the bank","asset"],"must":["debit Cash at bank","credit Customer balances"],"setsProblem":true,"askMustNot":["debit Customer balances","credit Merchant payables"]}
+noverify: which account is debited and credited is a rule of bookkeeping, not a computation; the only figures are the two £100 sides
+@@ tutor
+**Problem 1 · warm-up**
+
+A wallet company receives a £100 bank transfer from a customer who is topping up their wallet. The company's books have two accounts that matter here: Cash at bank (an asset) and Customer balances (a liability, because the company owes that money to its customers). Which account is debited and which is credited, and for how much?
+
+<solution>Debit Cash at bank £100 (an asset rises with a debit). Credit Customer balances £100 (a liability rises with a credit).</solution>
+
+<ask type="problem">The debit and the credit, with the reason for each side.</ask>
+@@ learner answer sure
+credit cash at bank 100 becuase money came in, when my bank credits my acount the balance goes up. so the other side is debit customer balances 100
+@@ reply
+<grade verdict="wrong" score="0.1">"when my bank credits my acount the balance goes up" is true, but it is written from the bank's books: there your deposit is something the bank owes you, a liability, and liabilities rise with a credit. Cash at bank is the company's asset, and assets rise with a debit, so both of your sides are reversed.</grade>
+
+The entry is: debit Cash at bank £100, credit Customer balances £100. Assets go up by £100 and liabilities go up by £100, so the accounting equation still holds.
+
+<card>Why does your bank statement say "credit" when money comes in, if an asset rises with a debit? :: The statement is the bank's ledger. Your balance is the bank's liability, and a liability rises with a credit. In your own books the same money is an asset and rises with a debit.</card>
+
+<note>Assets rise with a debit and fall with a credit. Liabilities and equity rise with a credit and fall with a debit. "Credit means money in" is only how a customer's account looks from the bank's side.</note>
+
+**Problem 2 · same idea**
+
+The customer now spends £30 from the wallet at a merchant, whom the company will pay out later. The accounts are Customer balances (a liability) and Merchant payables (a liability). Which is debited and which is credited?
+
+<solution>Debit Customer balances £30 (the company owes the customer less: a liability falls with a debit). Credit Merchant payables £30 (it owes the merchant more: a liability rises with a credit).</solution>
+
+<ask type="problem">The debit and the credit, with the reason for each side.</ask>
+
+@@@@ wrong-quiz-yen-has-no-minor-unit
+situation: after-wrong
+topic: Currency exponents and minor units
+mode: quiz
+voice: terse
+level: easy
+expect: {"verdict":"wrong","names":["exponent","5,?000"],"must":["Question 4 of 8","10\\^|power of ten|powers? of 10"],"askMustNot":["12\\.5"]}
+@@ tutor
+**Question 3 of 8**
+
+<ask type="short">A payment API returns `{"amount": 5000, "currency": "JPY"}`. Its amounts are in each currency's minor unit, as ISO 4217 defines it. How many yen were charged?</ask>
+@@ learner answer sure
+50 yen. minor units so /100
+@@ reply
+<grade verdict="wrong" score="0.1">"minor units so /100" assumes every currency has two decimal places. ISO 4217 gives each currency its own exponent, and the yen's is 0: its minor unit is the yen itself, so 5000 means 5,000 yen.</grade>
+
+The rule is to divide by 10^exponent, not by 100. Pounds, euros and US dollars have exponent 2; the yen has 0; a few currencies have 3.
+
+<card>How do you turn an amount in minor units into major units? :: Divide by 10^exponent, where the exponent is the currency's ISO 4217 number of decimal places: 2 for GBP, EUR and USD, 0 for JPY, 3 for KWD.</card>
+
+**Question 4 of 8**
+
+<ask type="short">The Kuwaiti dinar has an exponent of 3 in ISO 4217. The same API returns `{"amount": 12500, "currency": "KWD"}`. How many dinars were charged?</ask>
+@@ verify
+from decimal import Decimal as D
+# the learner's figure follows from dividing by 100; the right one divides by 10**0
+assert 5000 // 100 == 50 and 5000 // 10**0 == 5000
+# the answer withheld from question 4
+assert D(12500) / 10**3 == D('12.5')
+assert '12.5' not in reply.replace('12500', '')
+
+@@@@ wrong-fx-rate-direction
+situation: after-wrong
+topic: FX conversion, spreads and rounding
+voice: wordy
+level: medium
+expect: {"verdict":"wrong","names":["direction|wrong way|dollars per pound","396\\.04"],"must":["396\\.04","400\\.00"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["247\\.50","\\b2\\.50"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+A provider's mid-market rate for GBP/USD is 1.2500 US dollars per pound. It sells pounds at 1% above mid: 1.2625 dollars per pound. A customer converts 500 US dollars into pounds. How many pounds do they receive, to the nearest penny?
+
+<solution>Dollars ÷ (dollars per pound) = pounds: 500 / 1.2625 = 396.0396, so £396.04.</solution>
+<check lang="python">
+from decimal import Decimal as D
+assert (D(500) / D('1.2625')).quantize(D('0.01')) == D('396.04')
+</check>
+
+<ask type="problem">The pounds received, with your working.</ask>
+@@ learner answer sure
+OK so the rate they sell at is 1.2625 and the customer has 500 dollars, so I multiply them: 500 × 1.2625 = 631.25. So the customer gets £631.25. I think that's right because the rate is bigger than 1 so you end up with more than you started with.
+@@ reply
+<grade verdict="wrong" score="0.1">"500 × 1.2625 = 631.25" applies the rate in the wrong direction. The quote is dollars per pound: one pound costs 1.2625 dollars, so 500 dollars must buy fewer than 500 pounds, not more.</grade>
+
+Let the units decide the operation: dollars ÷ (dollars per pound) = pounds. So 500 / 1.2625 = £396.04. At the mid rate the same 500 dollars would be 500 / 1.2500 = £400.00, so the provider's 1% margin costs this customer £3.96.
+
+<card>A rate is quoted as 1.2625 dollars per pound. How do you turn dollars into pounds? :: Divide: dollars ÷ (dollars per pound) = pounds. Multiplying by that rate turns pounds into dollars.</card>
+
+<note>A rate quoted as "X dollars per pound" multiplies pounds to give dollars and divides dollars to give pounds. Check the size of the answer: the currency worth more per unit comes out as the smaller number.</note>
+
+**Problem 2 · same idea, other direction**
+
+The same provider buys pounds at 1% below mid: 1.2375 dollars per pound. A customer converts £200 into dollars. How many dollars do they receive, and how much less is that than at the mid rate of 1.2500?
+
+<solution>200 × 1.2375 = 247.50 dollars. At mid: 200 × 1.2500 = 250.00 dollars. The customer receives 2.50 dollars less.</solution>
+<check lang="python">
+from decimal import Decimal as D
+got, mid = D(200) * D('1.2375'), D(200) * D('1.2500')
+assert got == D('247.50') and mid == D('250') and mid - got == D('2.50')
+</check>
+
+<ask type="problem">The dollars received and the shortfall against mid, with your working.</ask>
+@@ verify
+from decimal import Decimal as D
+q = lambda x: x.quantize(D('0.01'))
+assert D('1.2500') * D('1.01') == D('1.2625') and D('1.2500') * D('0.99') == D('1.2375')
+assert D(500) * D('1.2625') == D('631.25')                    # the learner's product
+got = q(D(500) / D('1.2625')); mid = q(D(500) / D('1.2500'))
+assert got == D('396.04') and mid == D('400.00') and mid - got == D('3.96')
+assert D(200) * D('1.2375') == D('247.50') and D(200) * D('1.25') - D('247.50') == D('2.50')
+assert '247.50' in solution(reply) and '247.50' not in visible(reply)
+
+@@@@ idk-iban-letters-to-digits
+situation: idk
+topic: IBAN structure and the mod-97 check
+voice: confused
+level: medium
+expect: {"must":["A is 10|A = 10","two digits"],"mustNot":["it passes","is valid","remainder (is|of) 1\\b"],"askMustNot":["TIDE10203012345678GB90","\\b29\\b","\\b18\\b","\\b13\\b","\\b14\\b"]}
+@@ tutor
+An IBAN is a two-letter country code, two check digits, then the country's own account identifier. The check has three steps: move the first four characters to the end; replace every letter with two digits (A = 10, B = 11, up to Z = 35); read the result as one integer and divide by 97. A valid IBAN leaves a remainder of 1.
+
+<note>IBAN mod-97 check: move the first four characters to the end, turn letters into numbers (A = 10 … Z = 35), and take the integer mod 97. Valid means the remainder is 1.</note>
+
+**Problem 1 · warm-up**
+
+Carry out the check on the made-up IBAN GB90TIDE10203012345678 and say whether it passes.
+
+<solution>Rearranged: TIDE10203012345678GB90. Letters: T = 29, I = 18, D = 13, E = 14, G = 16, B = 11, giving 2918131410203012345678161190. That number mod 97 is 1, so it passes.</solution>
+<check lang="python">
+iban = 'GB90TIDE10203012345678'
+r = iban[4:] + iban[:4]
+n = ''.join(str(int(c, 36)) for c in r)
+assert r == 'TIDE10203012345678GB90' and n == '2918131410203012345678161190' and int(n) % 97 == 1
+</check>
+
+<ask type="problem">The rearranged string, the integer it becomes, the remainder and your verdict.</ask>
+@@ learner idk
+@@ reply
+Leave the division for now and take the first two steps on their own, because they are only rewriting.
+
+The letter rule counts on from the digits: 0 to 9 stand for themselves, then A is 10, B is 11, C is 12, and so on to Z, which is 35. Every letter becomes exactly two digits, and the digits already in the string are left alone. So a fragment such as `C4` becomes `124`, and `Z0` becomes `350`.
+
+<ask type="short">For GB90TIDE10203012345678, write the string you get after moving the first four characters to the end. Then give the two-digit number for each of T, I, D and E.</ask>
+@@ verify
+iban = 'GB90TIDE10203012345678'
+r = iban[4:] + iban[:4]
+assert r == 'TIDE10203012345678GB90'
+val = lambda c: int(c, 36)
+assert [val(c) for c in 'TIDEGB'] == [29, 18, 13, 14, 16, 11]
+assert (val('A'), val('B'), val('C'), val('Z')) == (10, 11, 12, 35)
+n = ''.join(str(val(c)) for c in r)
+assert n == '2918131410203012345678161190' and int(n) % 97 == 1
+assert n in solution(tutor[0])
+# the fragments in the reply
+assert ''.join(str(val(c)) for c in 'C4') == '124' and ''.join(str(val(c)) for c in 'Z0') == '350'
+# the answer to the easier question is not given away
+assert r not in reply and '29' not in reply
+
+@@@@ idk-settlement-exposure
+situation: idk
+topic: Settlement risk and prefunding
+options: {"strategy":"dialogue"}
+voice: plain
+level: hard
+expect: {"must":["exposure"],"need":["note"],"askMustNot":["prefund","collateral","\\bcap\\b"],"mustNot":["prefund"]}
+@@ tutor
+An instant payment scheme credits the payee within seconds. In many designs the banks do not settle with each other at that moment: the scheme adds up what each bank owes and settles in cycles, later.
+
+<ask type="explain">Suppose a sending bank fails after its customers' payments have been credited to payees at other banks, and before the next settlement cycle. What would you put into the scheme's design so that the receiving banks are still paid?</ask>
+@@ learner idk
+@@ reply
+Start with what is at risk, before any design. When a receiving bank credits a payee, it hands over money that is final for the customer. The receiving bank itself gets nothing until the cycle settles. For that interval it is owed the amount by the sending bank, and that unsettled amount is its exposure. The exposure grows with every payment the sender makes and returns to zero only when settlement completes.
+
+<note>Settlement exposure: the value a bank has already credited to its customers for payments whose interbank settlement has not yet happened. It is a claim on the sending bank, and it is what is lost if that bank fails before settlement.</note>
+
+<ask type="short">Since the last cycle, bank R has credited £3 million to its customers for instant payments sent from bank S. Bank S fails now, before settlement. Who is out of pocket at this moment, and why is it not the payees?</ask>
+@@ verify
+# nothing is computed; the single figure in the question is not restated as an answer
+assert reply.count('£3 million') == 1
+
+@@@@ idk-partial-capture-smaller-step
+situation: idk
+topic: Refunds and partial captures
+voice: typos
+level: easy
+expect: {"must":["captur"],"askMustNot":["\\b18\\b","\\b42 (has|leaves|moves)"],"mustNot":["£25 (is|was) released","refund of £55"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+A shop authorises £80 on a card for an order of two items, priced £55 and £25. Only the £55 item is in stock, so it ships and the other is cancelled. A week later the customer sends the item back and the shop returns its price in full. List the movements of money on the card, in order and with amounts, and say what became of the £25.
+
+<solution>1. Capture of £55 against the £80 authorisation: £55 moves from the cardholder to the merchant. 2. The other £25 of the hold is never captured; it is released (or expires) and no money moves. 3. Refund of £55: a new movement from the merchant back to the cardholder. Net effect on the cardholder: zero.</solution>
+<check lang="python">
+assert 80 - 55 == 25 and 55 - 55 == 0
+</check>
+
+<ask type="problem">The movements in order, with amounts, and what happened to the £25.</ask>
+@@ learner idk
+@@ reply
+Take the first half only: the authorisation and what follows it directly.
+
+An authorisation moves no money. It reserves an amount on the cardholder's account. Money moves when the merchant sends a capture, and a capture may be for less than the amount authorised: that is a partial capture. Whatever part of the hold is not captured never becomes a payment.
+
+<note>A capture can be for the full authorised amount or for less (a partial capture). Only the captured amount moves from cardholder to merchant; the rest of the hold is not a payment.</note>
+
+<ask type="short">A shop authorises £60 on a card and then captures £42. How much money has left the cardholder's account, and how much of the hold was reserved but never captured?</ask>
+@@ verify
+assert 80 - 55 == 25
+# the easier question's answer (42 moved, 18 never captured) is withheld
+assert 60 - 42 == 18 and '18' not in reply
+assert '£25' not in reply and '£55' not in reply
+
+@@@@ mark-error-wallet-fee-not-debited
+situation: mark-error
+topic: Ledgers for a wallet product
+voice: wordy
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["debit Alice 40\\.00","41\\.00"],"must":["59\\.00","120\\.00","121\\.00"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["34\\.50","84\\.00","25\\.50"]}
+@@ tutor
+**Problem 2 · harder**
+
+A wallet ledger has three accounts: Alice, Bob and Fees. A debit lowers an account's balance and a credit raises it. Alice starts with £100.00, Bob with £20.00 and Fees with £0.00. Alice sends Bob £40.00, and the wallet charges Alice a £1.00 fee on top. Write the postings, show that they balance, and give the three closing balances.
+
+<solution>Debit Alice 41.00; credit Bob 40.00; credit Fees 1.00. Debits 41.00 = credits 41.00. Closing: Alice 59.00, Bob 60.00, Fees 1.00. Total before 120.00, total after 120.00.</solution>
+<check lang="python">
+from decimal import Decimal as D
+bal = {'Alice': D('100.00'), 'Bob': D('20.00'), 'Fees': D('0.00')}
+posts = [('Alice', D('-41.00')), ('Bob', D('40.00')), ('Fees', D('1.00'))]
+assert sum(a for _, a in posts) == 0
+for acct, a in posts: bal[acct] += a
+assert bal == {'Alice': D('59.00'), 'Bob': D('60.00'), 'Fees': D('1.00')} and sum(bal.values()) == D('120.00')
+</check>
+
+<ask type="problem">The postings, the balance check and the closing balances.</ask>
+@@ learner answer sure
+So the transfer is 40 from Alice to Bob and then there's the fee. Postings: debit Alice 40.00, credit Bob 40.00, credit Fees 1.00. That covers the transfer and the fee so it balances. Closing balances are Alice 100.00 - 40.00 = 60.00, Bob 20.00 + 40.00 = 60.00, and Fees 1.00.
+@@ reply
+<grade verdict="partial" score="0.5">The two credits are right: "credit Bob 40.00, credit Fees 1.00". The first wrong step is "debit Alice 40.00": the debits then total 40.00 against credits of 41.00, so the entry does not balance. The £1.00 credited to Fees was taken from nobody.</grade>
+
+The fee comes from Alice, so the debit is Alice 41.00. Debits 41.00 = credits 41.00, and Alice closes at 100.00 − 41.00 = 59.00. Your Bob and Fees balances are right, and your Alice 60.00 follows correctly from your posting, so it is the same slip, not a second one.
+
+The check that catches it: the three accounts hold 120.00 before the transfer. Yours hold 60.00 + 60.00 + 1.00 = 121.00 afterwards; the corrected ones hold 59.00 + 60.00 + 1.00 = 120.00.
+
+<card>How do you check a set of ledger postings before applying them? :: Total debits must equal total credits. Equivalently, the sum of all balances is the same before and after.</card>
+
+**Problem 3 · same level**
+
+Carry on from the corrected balances: Alice £59.00, Bob £60.00, Fees £1.00. Bob sends Alice £25.00 and is charged a £0.50 fee on top. Write the postings, show that they balance, and give the three closing balances.
+
+<solution>Debit Bob 25.50; credit Alice 25.00; credit Fees 0.50. Debits 25.50 = credits 25.50. Closing: Bob 34.50, Alice 84.00, Fees 1.50. Total still 120.00.</solution>
+<check lang="python">
+from decimal import Decimal as D
+bal = {'Alice': D('59.00'), 'Bob': D('60.00'), 'Fees': D('1.00')}
+posts = [('Bob', D('-25.50')), ('Alice', D('25.00')), ('Fees', D('0.50'))]
+assert sum(a for _, a in posts) == 0
+for acct, a in posts: bal[acct] += a
+assert bal == {'Alice': D('84.00'), 'Bob': D('34.50'), 'Fees': D('1.50')} and sum(bal.values()) == D('120.00')
+</check>
+
+<ask type="problem">The postings, the balance check and the closing balances.</ask>
+@@ verify
+from decimal import Decimal as D
+start = {'Alice': D('100.00'), 'Bob': D('20.00'), 'Fees': D('0.00')}
+def apply(bal, posts):
+    b = dict(bal)
+    for k, v in posts: b[k] += v
+    return b
+# the learner's postings: debits 40, credits 41, and their closing balances
+theirs = [('Alice', D('-40.00')), ('Bob', D('40.00')), ('Fees', D('1.00'))]
+assert sum(v for _, v in theirs) == D('1.00')
+t = apply(start, theirs)
+assert t == {'Alice': D('60.00'), 'Bob': D('60.00'), 'Fees': D('1.00')} and sum(t.values()) == D('121.00')
+right = [('Alice', D('-41.00')), ('Bob', D('40.00')), ('Fees', D('1.00'))]
+r = apply(start, right)
+assert sum(v for _, v in right) == 0 and r['Alice'] == D('59.00') and sum(r.values()) == D('120.00') == sum(start.values())
+n = apply(r, [('Bob', D('-25.50')), ('Alice', D('25.00')), ('Fees', D('0.50'))])
+assert n == {'Alice': D('84.00'), 'Bob': D('34.50'), 'Fees': D('1.50')} and sum(n.values()) == D('120.00')
+for v in ['25.50', '34.50', '84.00', '1.50']:
+    assert v in solution(reply), v
+assert '34.50' not in visible(reply) and '84.00' not in visible(reply)
+
+@@@@ mark-error-scheme-fee-decimal-place
+situation: mark-error
+topic: Blended versus interchange-plus pricing
+voice: terse
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["0\\.08% of 240 = 1\\.92","0\\.192"],"must":["1\\.56","238\\.44"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["1\\.98","358\\.02"]}
+@@ tutor
+**Problem 2 · harder**
+
+A merchant is on interchange-plus pricing: it pays interchange and the scheme fee at cost, plus the acquirer's markup. On a £240 sale, interchange is 0.3%, the scheme fee is 0.08% and the markup is 0.25% + 5p. Work out the total fee to the nearest penny and what the merchant receives.
+
+<solution>Interchange 0.72. Scheme fee 0.192. Markup 0.60 + 0.05 = 0.65. Total 1.562, so £1.56. Merchant receives 240 − 1.56 = £238.44.</solution>
+<check lang="python">
+from decimal import Decimal as D
+fee = D(240) * (D('0.3') + D('0.08') + D('0.25')) / 100 + D('0.05')
+assert fee == D('1.562') and fee.quantize(D('0.01')) == D('1.56') and 240 - D('1.56') == D('238.44')
+</check>
+
+<ask type="problem">The total fee and the merchant's amount, with each part shown.</ask>
+@@ learner answer sure
+interchange 0.3% of 240 = 0.72
+scheme 0.08% of 240 = 1.92
+markup 0.25% of 240 = 0.60, + 0.05 = 0.65
+total 0.72 + 1.92 + 0.65 = 3.29
+merchant gets 240 - 3.29 = 236.71
+@@ reply
+<grade verdict="partial" score="0.6">Interchange and the markup are right: "0.3% of 240 = 0.72" and "0.60, + 0.05 = 0.65". The first wrong step is "0.08% of 240 = 1.92": that is 0.8% of 240. 0.08% of 240 is 240 × 0.0008 = 0.192.</grade>
+
+With the scheme fee corrected the total is 0.72 + 0.192 + 0.65 = 1.562, which is £1.56 to the nearest penny, and the merchant receives 240 − 1.56 = £238.44. Your addition and subtraction are right for the figures you had, so the slip is that one line only.
+
+A size check catches it: 1% of 240 is 2.40, and 0.08% is less than a tenth of 1%, so the scheme fee has to be under 0.24.
+
+<card>How do you compute 0.08% of an amount without slipping a decimal place? :: Multiply by 0.0008 (percent means divide by 100). Check the size: it must be less than a tenth of 1% of the amount.</card>
+
+**Problem 3 · same level**
+
+Same pricing model, different sale: £360, with interchange of 0.2%, a scheme fee of 0.04% and a markup of 0.3% + 4p. Work out the total fee to the nearest penny and what the merchant receives.
+
+<solution>Interchange 0.72. Scheme fee 0.144. Markup 1.08 + 0.04 = 1.12. Total 1.984, so £1.98. Merchant receives 360 − 1.98 = £358.02.</solution>
+<check lang="python">
+from decimal import Decimal as D
+fee = D(360) * (D('0.2') + D('0.04') + D('0.3')) / 100 + D('0.04')
+assert fee == D('1.984') and fee.quantize(D('0.01')) == D('1.98') and 360 - D('1.98') == D('358.02')
+</check>
+
+<ask type="problem">The total fee and the merchant's amount, with each part shown.</ask>
+@@ verify
+from decimal import Decimal as D
+pc = lambda amt, r: D(amt) * D(r) / 100
+assert pc(240, '0.3') == D('0.72') and pc(240, '0.08') == D('0.192') and pc(240, '0.8') == D('1.92') and pc(240, '0.25') == D('0.60')
+assert D(240) * D('0.0008') == D('0.192') and pc(240, '1') == D('2.40')
+# the learner's later steps follow from the slip
+assert D('0.72') + D('1.92') + D('0.65') == D('3.29') and 240 - D('3.29') == D('236.71')
+tot = D('0.72') + D('0.192') + D('0.65')
+assert tot == D('1.562') and tot.quantize(D('0.01')) == D('1.56') and 240 - D('1.56') == D('238.44')
+assert pc(360, '0.2') == D('0.72') and pc(360, '0.04') == D('0.144') and pc(360, '0.3') == D('1.08')
+t2 = D('0.72') + D('0.144') + D('1.12')
+assert t2 == D('1.984') and t2.quantize(D('0.01')) == D('1.98') and 360 - D('1.98') == D('358.02')
+assert '358.02' in solution(reply) and '358.02' not in visible(reply)
+
+@@@@ mark-error-netting-missed-inflow
+situation: mark-error
+topic: Settlement netting: bilateral and multilateral
+voice: wordy
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["B: is owed 30 from A","\\+10|net 10"],"must":["sum to (zero|0)","\\b35\\b"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b25\\b","−15","\\+15"]}
+@@ tutor
+**Problem 3 · harder**
+
+Four banks clear through one scheme. Gross obligations for the cycle, in £ million: A owes B 30 and owes D 15; B owes C 25; C owes A 20 and owes D 10; D owes B 5. Give each bank's multilateral net position and the total paid in at settlement.
+
+<solution>A: owed 20, owes 45, net −25. B: owed 30 + 5 = 35, owes 25, net +10. C: owed 25, owes 30, net −5. D: owed 15 + 10 = 25, owes 5, net +20. The positions sum to 0. Paid in: 25 + 5 = £30 million (paid out: 10 + 20 = 30).</solution>
+<check lang="python">
+owes = {('A','B'):30, ('A','D'):15, ('B','C'):25, ('C','A'):20, ('C','D'):10, ('D','B'):5}
+net = {b: sum(v for (f,t),v in owes.items() if t==b) - sum(v for (f,t),v in owes.items() if f==b) for b in 'ABCD'}
+assert net == {'A': -25, 'B': 10, 'C': -5, 'D': 20} and sum(net.values()) == 0
+assert -sum(v for v in net.values() if v < 0) == 30
+</check>
+
+<ask type="problem">The four net positions and the total paid in, with your working.</ask>
+@@ learner answer sure
+Going bank by bank. A: is owed 20 from C, owes 30 + 15 = 45, so net -25. B: is owed 30 from A, owes 25 to C, so net +5. C: is owed 25 from B, owes 20 + 10 = 30, so net -5. D: is owed 15 + 10 = 25, owes 5, so net +20. Paid in at settlement: A pays in 25 and C pays in 5, so 30 in total.
+@@ reply
+<grade verdict="partial" score="0.7">A, C and D are right, for example "owes 30 + 15 = 45, so net -25". The first wrong step is "B: is owed 30 from A": B is also owed 5 by D, so it is owed 35 and its net position is 35 − 25 = +10, not +5.</grade>
+
+Your total paid in, 30, is still correct, because the two banks that pay in, A and C, are the ones you had right. The slip shows on the other side: the scheme pays out 10 to B and 20 to D, which is 30, while your figures pay out only 5 + 20 = 25.
+
+That is the check to run every time: net positions must sum to zero. Yours give −25 + 5 − 5 + 20 = −5; the corrected ones give −25 + 10 − 5 + 20 = 0.
+
+<card>What quick check shows that a set of multilateral net positions is wrong? :: They must sum to zero, because every obligation is one bank's outflow and another's inflow. Equivalently, total paid in equals total paid out.</card>
+
+**Problem 4 · same level**
+
+A new cycle, in £ million: A owes C 40; B owes A 10 and owes D 35; C owes B 30; D owes A 20 and owes C 5. Give each bank's net position, show that they sum to zero, and give the total paid in.
+
+<solution>A: owed 10 + 20 = 30, owes 40, net −10. B: owed 30, owes 45, net −15. C: owed 40 + 5 = 45, owes 30, net +15. D: owed 35, owes 20 + 5 = 25, net +10. Sum: −10 − 15 + 15 + 10 = 0. Paid in: 10 + 15 = £25 million.</solution>
+<check lang="python">
+owes = {('A','C'):40, ('B','A'):10, ('B','D'):35, ('C','B'):30, ('D','A'):20, ('D','C'):5}
+net = {b: sum(v for (f,t),v in owes.items() if t==b) - sum(v for (f,t),v in owes.items() if f==b) for b in 'ABCD'}
+assert net == {'A': -10, 'B': -15, 'C': 15, 'D': 10} and sum(net.values()) == 0
+assert -sum(v for v in net.values() if v < 0) == 25
+</check>
+
+<ask type="problem">The four net positions, their sum and the total paid in.</ask>
+@@ verify
+def nets(owes, banks='ABCD'):
+    inn = {b: sum(v for (f,t),v in owes.items() if t==b) for b in banks}
+    out = {b: sum(v for (f,t),v in owes.items() if f==b) for b in banks}
+    return inn, out, {b: inn[b] - out[b] for b in banks}
+o1 = {('A','B'):30, ('A','D'):15, ('B','C'):25, ('C','A'):20, ('C','D'):10, ('D','B'):5}
+inn, out, net = nets(o1)
+assert inn == {'A':20,'B':35,'C':25,'D':25} and out == {'A':45,'B':25,'C':30,'D':5}
+assert net == {'A':-25,'B':10,'C':-5,'D':20} and sum(net.values()) == 0
+# the learner's B leaves out D's 5; their other three are right; their sum is -5
+theirs = {'A':-25,'B':30-25,'C':-5,'D':20}
+assert theirs['B'] == 5 and sum(theirs.values()) == -5
+assert 25 + 5 == 30 and 10 + 20 == 30 and 5 + 20 == 25
+o2 = {('A','C'):40, ('B','A'):10, ('B','D'):35, ('C','B'):30, ('D','A'):20, ('D','C'):5}
+i2, u2, n2 = nets(o2)
+assert i2 == {'A':30,'B':30,'C':45,'D':35} and u2 == {'A':40,'B':45,'C':30,'D':25}
+assert n2 == {'A':-10,'B':-15,'C':15,'D':10} and sum(n2.values()) == 0
+s = solution(reply)
+for v in ['net −10', 'net −15', 'net +15', 'net +10', '£25 million']:
+    assert v in s, v
+
+@@@@ mark-error-amortising-interest-on-original
+situation: mark-error
+topic: Amortising loan payments
+options: {"difficulty":"hard"}
+voice: plain
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["12000 × 0\\.005 = 60\\.00 again","57\\.64"],"must":["474\\.21","11,?053\\.94"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["55\\.27","476\\.58","10,?577\\.36"]}
+@@ tutor
+**Problem 2 · harder**
+
+A £12,000 loan at 6% a year, charged monthly at 0.5% of the outstanding balance, is repaid over 24 months with a level payment of £531.85. Interest is rounded to the nearest penny each month. For months 1 and 2, split the payment into interest and principal, and give the balance after month 2.
+
+<solution>Month 1: interest 12,000 × 0.005 = 60.00; principal 531.85 − 60.00 = 471.85; balance 11,528.15. Month 2: interest 11,528.15 × 0.005 = 57.64; principal 531.85 − 57.64 = 474.21; balance 11,053.94.</solution>
+<check lang="python">
+from decimal import Decimal as D, ROUND_HALF_UP
+bal, pay, rows = D('12000'), D('531.85'), []
+for _ in range(2):
+    i = (bal * D('0.005')).quantize(D('0.01'), rounding=ROUND_HALF_UP)
+    bal -= pay - i
+    rows.append((i, pay - i, bal))
+assert rows == [(D('60.00'), D('471.85'), D('11528.15')), (D('57.64'), D('474.21'), D('11053.94'))]
+</check>
+
+<ask type="problem">Interest, principal and balance for each of the two months.</ask>
+@@ learner answer sure
+Month 1: interest = 12000 × 0.005 = 60.00, principal = 531.85 − 60.00 = 471.85, balance = 11528.15.
+Month 2: interest = 12000 × 0.005 = 60.00 again, principal = 471.85, balance = 11528.15 − 471.85 = 11056.30.
+@@ reply
+<grade verdict="partial" score="0.5">Month 1 is right: "principal = 531.85 − 60.00 = 471.85, balance = 11528.15". The first wrong step is "interest = 12000 × 0.005 = 60.00 again": interest is charged on the balance still outstanding, which is now 11,528.15, not on the original loan.</grade>
+
+Month 2 interest is 11,528.15 × 0.005 = 57.64. The principal part is then 531.85 − 57.64 = 474.21, and the balance is 11,528.15 − 474.21 = 11,053.94. Your principal and your subtraction follow correctly from the interest you used, so there is one slip, not three.
+
+The payment is level, but its split moves every month: interest falls as the balance falls, so the principal part rises by the same amount.
+
+<card>On an amortising loan, what is each month's interest charged on? :: The balance outstanding at the start of that month, not the original loan. So interest falls month by month and the principal part of a level payment rises.</card>
+
+**Problem 3 · same level**
+
+Carry on from the corrected balance of £11,053.94, with the same rate and payment. Give the interest, the principal part and the balance for month 3.
+
+<solution>Interest 11,053.94 × 0.005 = 55.27 (55.2697 rounded). Principal 531.85 − 55.27 = 476.58. Balance 11,053.94 − 476.58 = 10,577.36.</solution>
+<check lang="python">
+from decimal import Decimal as D, ROUND_HALF_UP
+i = (D('11053.94') * D('0.005')).quantize(D('0.01'), rounding=ROUND_HALF_UP)
+assert i == D('55.27') and D('531.85') - i == D('476.58') and D('11053.94') - D('476.58') == D('10577.36')
+</check>
+
+<ask type="problem">Interest, principal and balance for month 3, with your working.</ask>
+@@ verify
+from decimal import Decimal as D, ROUND_HALF_UP
+q = lambda x: x.quantize(D('0.01'), rounding=ROUND_HALF_UP)
+# the level payment in the problem is the annuity payment for 12,000 at 0.5% over 24 months
+i = D('0.005')
+pmt = D(12000) * i / (1 - (1 + i) ** -24)
+assert q(pmt) == D('531.85')
+pay, bal, rows = D('531.85'), D(12000), []
+for _ in range(3):
+    it = q(bal * i); bal -= pay - it; rows.append((it, pay - it, bal))
+assert rows[0] == (D('60.00'), D('471.85'), D('11528.15'))
+assert rows[1] == (D('57.64'), D('474.21'), D('11053.94'))
+assert rows[2] == (D('55.27'), D('476.58'), D('10577.36'))
+assert D('11053.94') * i == D('55.26970')
+# the learner's month 2 follows from charging interest on 12,000 again
+assert D('531.85') - D('60.00') == D('471.85') and D('11528.15') - D('471.85') == D('11056.30')
+assert '55.27' not in visible(reply) and '10,577.36' in solution(reply)

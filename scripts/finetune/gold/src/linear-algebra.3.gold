@@ -1,0 +1,776 @@
+@@@@ mark-error-inverse-determinant-along-rows
+situation: mark-error
+topic: Inverting a two-by-two matrix
+options: {"strategy":"maths"}
+voice: wordy
+level: easy
+expect: {"verdict":"partial","accept":["wrong"],"names":["determinant","4 \\\\cdot 2 - 3 \\\\cdot 2 = 2"],"must":["1 & -3/2 \\\\\\\\ -1 & 2"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["5/2"]}
+@@ tutor
+For $A = \begin{pmatrix} a & b \\ c & d \end{pmatrix}$ with $ad - bc \ne 0$:
+
+$$A^{-1} = \frac{1}{ad - bc}\begin{pmatrix} d & -b \\ -c & a \end{pmatrix}$$
+
+<note>Inverse of a $2 \times 2$ matrix: swap the diagonal entries $a$ and $d$, negate $b$ and $c$, and divide by the determinant $ad - bc$. It exists exactly when $ad - bc \ne 0$.</note>
+
+Find $A^{-1}$ for
+
+$$A = \begin{pmatrix} 4 & 3 \\ 2 & 2 \end{pmatrix}$$
+
+<solution>det A = 4·2 − 3·2 = 2. Swap the diagonal entries and negate the other two: [[2, −3], [−2, 4]]. Divide by 2: A⁻¹ = [[1, −3/2], [−1, 2]].</solution>
+<check lang="python">
+from fractions import Fraction as F
+a, b, c, d = F(4), F(3), F(2), F(2)
+det = a * d - b * c
+inv = [[d / det, -b / det], [-c / det, a / det]]
+assert det == 2 and inv == [[F(1), F(-3, 2)], [F(-1), F(2)]]
+</check>
+
+<ask type="problem">$A^{-1}$, with the determinant and each step.</ask>
+@@ learner answer sure
+Okay so step one is the determinant. I take ad - bc, so that's 4*3 - 2*2 = 8. Step two, swap the 4 and the 2 on the diagonal and flip the signs of the other two, giving [[2, -3], [-2, 4]]. Step three, divide everything by the determinant: A^-1 = (1/8)[[2, -3], [-2, 4]] = [[1/4, -3/8], [-1/4, 1/2]].
+@@ reply
+<grade verdict="partial" score="0.5">The first wrong step is the determinant: "4*3 - 2*2 = 8" multiplies along the rows, $ab - cd$, where $ad - bc$ multiplies along the diagonals: $4 \cdot 2 - 3 \cdot 2 = 2$. Your "[[2, -3], [-2, 4]]" is right and dividing by the determinant is the right last step, so only the 8 has to change.</grade>
+
+With the determinant 2:
+
+$$A^{-1} = \frac{1}{2}\begin{pmatrix} 2 & -3 \\ -2 & 4 \end{pmatrix} = \begin{pmatrix} 1 & -3/2 \\ -1 & 2 \end{pmatrix}$$
+
+Multiplying back would have caught it. Row 1 of $A$ times column 1 of your answer is $4 \cdot \frac{1}{4} + 3 \cdot (-\frac{1}{4}) = \frac{1}{4}$, where $AA^{-1} = I$ needs 1.
+
+<card>Which products make up the determinant of [[a, b], [c, d]]? :: The two diagonals: $ad - bc$. Not the rows ($ab - cd$). Check an inverse by multiplying: $AA^{-1}$ must be $I$.</card>
+
+Find $B^{-1}$ for
+
+$$B = \begin{pmatrix} 5 & 2 \\ 4 & 2 \end{pmatrix}$$
+
+<solution>det B = 5·2 − 2·4 = 2. Swap the diagonal entries and negate the other two: [[2, −2], [−4, 5]]. Divide by 2: B⁻¹ = [[1, −1], [−2, 5/2]].</solution>
+<check lang="python">
+from fractions import Fraction as F
+a, b, c, d = F(5), F(2), F(4), F(2)
+det = a * d - b * c
+inv = [[d / det, -b / det], [-c / det, a / det]]
+assert det == 2 and inv == [[F(1), F(-1)], [F(-2), F(5, 2)]]
+</check>
+
+<ask type="problem">$B^{-1}$, with the determinant written as a product along each diagonal, and one entry of $BB^{-1}$ as a check.</ask>
+@@ verify
+from fractions import Fraction as F
+a, b, c, d = F(4), F(3), F(2), F(2)
+# the learner's slip: a*b - c*d, and what follows from it
+wrong_det = a * b - c * d
+assert wrong_det == 8 == 4*3 - 2*2
+adj = [[d, -b], [-c, a]]
+assert adj == [[2, -3], [-2, 4]]
+theirs = [[x / wrong_det for x in row] for row in adj]
+assert theirs == [[F(1, 4), F(-3, 8)], [F(-1, 4), F(1, 2)]]        # their final matrix follows from the 8
+# the right determinant and inverse
+det = a * d - b * c
+inv = [[x / det for x in row] for row in adj]
+assert det == 2 and inv == [[F(1), F(-3, 2)], [F(-1), F(2)]]
+A = [[a, b], [c, d]]
+mul = lambda X, Y: [[sum(X[i][k] * Y[k][j] for k in range(2)) for j in range(2)] for i in range(2)]
+assert mul(A, inv) == [[1, 0], [0, 1]]
+# the product check quoted in the reply: row 1 of A times column 1 of the learner's answer
+assert a * theirs[0][0] + b * theirs[1][0] == F(1, 4)
+# the new problem
+B = [[F(5), F(2)], [F(4), F(2)]]
+Binv = [[F(1), F(-1)], [F(-2), F(5, 2)]]
+assert mul(B, Binv) == [[1, 0], [0, 1]]
+assert '5/2' in solution(reply) and '5/2' not in visible(reply)
+
+@@@@ mark-error-lu-slip-in-row-three
+situation: mark-error
+topic: LU decomposition
+options: {"difficulty":"hard"}
+voice: terse
+level: hard
+expect: {"verdict":"partial","accept":["wrong"],"names":["\\(0, 6, 10\\)","\\b9\\b"],"must":["0 & 0 & 3","9 - 6 = 3"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+**Problem 2 · hard**
+
+Factor this matrix as $LU$, with 1s on the diagonal of $L$:
+
+$$A = \begin{pmatrix} 1 & 2 & 1 \\ 3 & 8 & 5 \\ 2 & 10 & 11 \end{pmatrix}$$
+
+<solution>ℓ21 = 3: row 2 − 3·row 1 = (0, 2, 2). ℓ31 = 2: row 3 − 2·row 1 = (0, 6, 9). ℓ32 = 6/2 = 3: row 3 − 3·row 2 = (0, 0, 3). U = [[1, 2, 1], [0, 2, 2], [0, 0, 3]] and L = [[1, 0, 0], [3, 1, 0], [2, 3, 1]].</solution>
+<check lang="python">
+L = [[1, 0, 0], [3, 1, 0], [2, 3, 1]]
+U = [[1, 2, 1], [0, 2, 2], [0, 0, 3]]
+LU = [[sum(L[i][k] * U[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
+assert LU == [[1, 2, 1], [3, 8, 5], [2, 10, 11]]
+</check>
+
+<ask type="problem">$L$ and $U$, with each row operation.</ask>
+@@ learner answer sure
+l21 = 3: R2 - 3R1 = (0, 2, 2)
+l31 = 2: R3 - 2R1 = (0, 6, 10)
+l32 = 6/2 = 3: R3 - 3R2 = (0, 0, 4)
+U = [[1,2,1],[0,2,2],[0,0,4]], L = [[1,0,0],[3,1,0],[2,3,1]]
+@@ reply
+<grade verdict="partial" score="0.6">"R2 - 3R1 = (0, 2, 2)" is right. The first wrong step is "R3 - 2R1 = (0, 6, 10)": the last entry is $11 - 2 \cdot 1 = 9$, not 10. What comes after follows correctly from that 10: the multiplier 3 is right, and your 4 is $10 - 6$ where it should be $9 - 6 = 3$.</grade>
+
+So $L$ stands as you wrote it, and
+
+$$U = \begin{pmatrix} 1 & 2 & 1 \\ 0 & 2 & 2 \\ 0 & 0 & 3 \end{pmatrix}$$
+
+Multiplying back catches a slip like this. Entry $(3, 3)$ of $LU$ is $2 \cdot 1 + 3 \cdot 2 + 1 \cdot u_{33}$ and has to equal 11; with $u_{33} = 4$ it comes to 12.
+
+<card>How do you check an LU factorisation? :: Multiply $L$ by $U$ and compare with $A$ entry by entry. A wrong entry of $LU$ points at the row operation that slipped.</card>
+
+**Problem 3 · same level**
+
+Factor this matrix as $LU$:
+
+$$B = \begin{pmatrix} 2 & 1 & 3 \\ 4 & 5 & 7 \\ 6 & 9 & 14 \end{pmatrix}$$
+
+<solution>ℓ21 = 2: row 2 − 2·row 1 = (0, 3, 1). ℓ31 = 3: row 3 − 3·row 1 = (0, 6, 5). ℓ32 = 6/3 = 2: row 3 − 2·row 2 = (0, 0, 3). U = [[2, 1, 3], [0, 3, 1], [0, 0, 3]] and L = [[1, 0, 0], [2, 1, 0], [3, 2, 1]].</solution>
+<check lang="python">
+L = [[1, 0, 0], [2, 1, 0], [3, 2, 1]]
+U = [[2, 1, 3], [0, 3, 1], [0, 0, 3]]
+LU = [[sum(L[i][k] * U[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
+assert LU == [[2, 1, 3], [4, 5, 7], [6, 9, 14]]
+</check>
+
+<ask type="problem">$L$ and $U$, with each row operation, and the product $LU$ for row 3 as a check.</ask>
+@@ verify
+from fractions import Fraction as F
+def lu(A):
+    n = len(A); U = [[F(x) for x in r] for r in A]; L = [[F(int(i == j)) for j in range(n)] for i in range(n)]
+    for j in range(n):
+        for i in range(j + 1, n):
+            L[i][j] = U[i][j] / U[j][j]
+            U[i] = [a - L[i][j] * b for a, b in zip(U[i], U[j])]
+    return L, U
+A = [[1, 2, 1], [3, 8, 5], [2, 10, 11]]
+L, U = lu(A)
+assert L == [[1, 0, 0], [3, 1, 0], [2, 3, 1]] and U == [[1, 2, 1], [0, 2, 2], [0, 0, 3]]
+# the learner's steps, replayed
+r1, r2, r3 = A
+s2 = [b - 3 * a for a, b in zip(r1, r2)]
+assert s2 == [0, 2, 2]                                   # right
+s3 = [c - 2 * a for a, c in zip(r1, r3)]
+assert s3 == [0, 6, 9] and 11 - 2 * 1 == 9               # they wrote (0, 6, 10): the first wrong step
+theirs = [0, 6, 10]
+t3 = [c - 3 * b for b, c in zip(s2, theirs)]
+assert t3 == [0, 0, 4] and 10 - 6 == 4                   # their last row follows from the 10
+assert 9 - 6 == 3
+# the check quoted: entry (3,3) of L times their U
+assert 2 * 1 + 3 * 2 + 1 * 4 == 12 and 2 * 1 + 3 * 2 + 1 * 3 == 11
+B = [[2, 1, 3], [4, 5, 7], [6, 9, 14]]
+L2, U2 = lu(B)
+assert L2 == [[1, 0, 0], [2, 1, 0], [3, 2, 1]] and U2 == [[2, 1, 3], [0, 3, 1], [0, 0, 3]]
+assert '[[2, 1, 3], [0, 3, 1], [0, 0, 3]]' in solution(reply)
+
+@@@@ mark-error-gram-schmidt-coefficient
+situation: mark-error
+topic: Gram-Schmidt orthogonalisation
+voice: confused
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["v2 = a2 - 15 a1","\\\\frac\\{15\\}\\{25\\}"],"must":["\\(4/5, -3/5\\)","\\(16/5, -12/5\\)"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["-3/5, 4/5"]}
+@@ tutor
+**Problem 2 · same level**
+
+Use Gram-Schmidt to turn $a_1 = (3, 4)$ and $a_2 = (5, 0)$ into an orthonormal pair $q_1, q_2$.
+
+<solution>‖a1‖ = 5, so q1 = (3/5, 4/5). q1·a2 = 3. v2 = a2 − 3q1 = (5, 0) − (9/5, 12/5) = (16/5, −12/5). ‖v2‖ = 4, so q2 = (4/5, −3/5).</solution>
+<check lang="python">
+from fractions import Fraction as F
+q1 = (F(3, 5), F(4, 5))
+a2 = (F(5), F(0))
+c = q1[0] * a2[0] + q1[1] * a2[1]
+v2 = (a2[0] - c * q1[0], a2[1] - c * q1[1])
+assert c == 3 and v2 == (F(16, 5), F(-12, 5)) and v2[0] ** 2 + v2[1] ** 2 == 16
+q2 = (v2[0] / 4, v2[1] / 4)
+assert q2 == (F(4, 5), F(-3, 5)) and q1[0] * q2[0] + q1[1] * q2[1] == 0
+</check>
+
+<ask type="problem">$q_1$ and $q_2$, with each step.</ask>
+@@ learner answer unsure
+q1 = a1/|a1| = (3/5, 4/5). then for the second one I think I subtract the projection on a1? a2.a1 = 15, so v2 = a2 - 15 a1 = (5,0) - (45,60) = (-40,-60). |v2| = sqrt(5200) = 72.1 so q2 = (-0.555, -0.832). that looks off to me but I can't see where
+@@ reply
+<grade verdict="partial" score="0.4">"q1 = a1/|a1| = (3/5, 4/5)" is right, and so is the plan to subtract the projection. The first wrong step is "v2 = a2 - 15 a1": the multiple of $a_1$ to remove is $\frac{a_2 \cdot a_1}{a_1 \cdot a_1} = \frac{15}{25} = \frac{3}{5}$, not 15. Your later arithmetic follows correctly from the 15.</grade>
+
+You were right that it looks off: $q_1 \cdot (-0.555, -0.832) \approx -1.00$, so that vector points almost opposite to $q_1$ instead of at a right angle to it.
+
+Using the unit vector saves the division, because $q_1 \cdot q_1 = 1$. Then $q_1 \cdot a_2 = 3$ and
+
+$$v_2 = a_2 - 3q_1 = (5, 0) - (9/5, 12/5) = (16/5, -12/5)$$
+
+with $\|v_2\| = 4$, so $q_2 = (4/5, -3/5)$. Check: $q_1 \cdot q_2 = 12/25 - 12/25 = 0$.
+
+<card>How much of $v$ do you subtract from $a$ to make the result perpendicular to $v$? :: $\frac{a \cdot v}{v \cdot v}\,v$. The division by $v \cdot v$ is needed unless $v$ is a unit vector.</card>
+
+<note>Subtracting a projection: $a - \frac{a \cdot v}{v \cdot v}\,v$. With a unit vector $q$ this is $a - (q \cdot a)\,q$.</note>
+
+**Problem 3 · same level**
+
+Use Gram-Schmidt to turn $a_1 = (4, 3)$ and $a_2 = (0, 5)$ into an orthonormal pair.
+
+<solution>‖a1‖ = 5, so q1 = (4/5, 3/5). q1·a2 = 3. v2 = (0, 5) − 3(4/5, 3/5) = (−12/5, 16/5). ‖v2‖ = 4, so q2 = (−3/5, 4/5).</solution>
+<check lang="python">
+from fractions import Fraction as F
+q1 = (F(4, 5), F(3, 5))
+a2 = (F(0), F(5))
+c = q1[0] * a2[0] + q1[1] * a2[1]
+v2 = (a2[0] - c * q1[0], a2[1] - c * q1[1])
+assert c == 3 and v2 == (F(-12, 5), F(16, 5)) and v2[0] ** 2 + v2[1] ** 2 == 16
+q2 = (v2[0] / 4, v2[1] / 4)
+assert q2 == (F(-3, 5), F(4, 5)) and q1[0] * q2[0] + q1[1] * q2[1] == 0
+</check>
+
+<ask type="problem">$q_1$ and $q_2$, with the dot product $q_1 \cdot q_2$ as a check.</ask>
+@@ verify
+import math
+from fractions import Fraction as F
+dot = lambda a, b: sum(x * y for x, y in zip(a, b))
+a1, a2 = (F(3), F(4)), (F(5), F(0))
+q1 = tuple(x / 5 for x in a1)
+assert dot(a1, a1) == 25 and q1 == (F(3, 5), F(4, 5))
+# the learner's steps, replayed with their coefficient 15
+assert dot(a2, a1) == 15
+v_theirs = tuple(x - 15 * y for x, y in zip(a2, a1))
+assert v_theirs == (-40, -60) and dot(v_theirs, v_theirs) == 5200
+n = math.sqrt(5200)
+assert round(n, 1) == 72.1 and (round(-40 / n, 3), round(-60 / n, 3)) == (-0.555, -0.832)
+assert round(float(q1[0]) * -0.555 + float(q1[1]) * -0.832, 2) == -1.00
+# the right coefficient and result
+assert dot(a2, a1) / dot(a1, a1) == F(15, 25) == F(3, 5)
+assert dot(q1, a2) == 3
+v2 = tuple(x - 3 * y for x, y in zip(a2, q1))
+assert v2 == (F(16, 5), F(-12, 5)) and tuple(3 * y for y in q1) == (F(9, 5), F(12, 5)) and dot(v2, v2) == 16
+q2 = tuple(x / 4 for x in v2)
+assert q2 == (F(4, 5), F(-3, 5)) and dot(q1, q2) == 0 and q1[0] * q2[0] == F(12, 25)
+# the new problem
+b1, b2 = (F(4), F(3)), (F(0), F(5))
+p1 = tuple(x / 5 for x in b1)
+w = tuple(x - dot(p1, b2) * y for x, y in zip(b2, p1))
+assert dot(p1, b2) == 3 and w == (F(-12, 5), F(16, 5)) and tuple(x / 4 for x in w) == (F(-3, 5), F(4, 5))
+
+@@@@ mark-error-least-squares-dropped-sign
+situation: mark-error
+topic: Least squares and the normal equations
+voice: typos
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["2\\+0\\+4 = 6","d = 1"],"must":["y = 7/3 \\+ t","\\(-1, 0, 1\\)"],"setsProblem":true,"askTypes":["problem"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+Fit the line $y = c + dt$ to the points $(-1, 2)$, $(0, 1)$ and $(1, 4)$ by least squares.
+
+<solution>A has columns (1, 1, 1) and (−1, 0, 1); b = (2, 1, 4). AᵀA = [[3, 0], [0, 2]]. Aᵀb = (2 + 1 + 4, −2 + 0 + 4) = (7, 2). So 3c = 7 and 2d = 2: c = 7/3, d = 1. The line is y = 7/3 + t.</solution>
+<check lang="python">
+from fractions import Fraction as F
+t = [-1, 0, 1]; y = [2, 1, 4]
+n, st, stt, sy, sty = 3, sum(t), sum(a * a for a in t), sum(y), sum(a * b for a, b in zip(t, y))
+assert (n, st, stt, sy, sty) == (3, 0, 2, 7, 2)
+assert (F(sy, n), F(sty, stt)) == (F(7, 3), F(1))
+</check>
+
+<ask type="problem">$c$ and $d$, with $A^TA$ and $A^Tb$.</ask>
+@@ learner answer sure
+A = [[1,-1],[1,0],[1,1]], b = (2,1,4). A^T A = [[3,0],[0,2]]. A^T b: frist entry 2+1+4 = 7, second entry 2+0+4 = 6. so 3c = 7 and 2d = 6, c = 7/3, d = 3. teh line is y = 7/3 + 3t
+@@ reply
+<grade verdict="partial" score="0.6">"A^T A = [[3,0],[0,2]]" and the first entry "2+1+4 = 7" are right. The first wrong step is "second entry 2+0+4 = 6": the second column of $A$ is $(-1, 0, 1)$, so the sum is $(-1)(2) + 0 \cdot 1 + 1 \cdot 4 = 2$. Your $d = 3$ follows correctly from the 6; with 2 it is $2d = 2$, so $d = 1$.</grade>
+
+$c = 7/3$ stands, and the fitted line is $y = 7/3 + t$. A rough check on the slope would have flagged it: from $t = -1$ to $t = 1$ the data rise from 2 to 4, about 1 per unit of $t$, so a slope of 3 is too steep.
+
+<card>For a line fit $y = c + dt$, what is the second entry of $A^Tb$? :: $\sum t_i y_i$: each $y_i$ multiplied by its own $t_i$, sign included. A negative $t_i$ makes its term negative.</card>
+
+<note>Line fit $y = c + dt$: the columns of $A$ are the ones and the $t_i$, so $A^TA = \begin{pmatrix} n & \sum t_i \\ \sum t_i & \sum t_i^2 \end{pmatrix}$ and $A^Tb = (\sum y_i,\ \sum t_i y_i)$.</note>
+
+**Problem 2 · same level**
+
+Fit $y = c + dt$ to the points $(-1, 1)$, $(0, 0)$ and $(1, 5)$.
+
+<solution>A has columns (1, 1, 1) and (−1, 0, 1); b = (1, 0, 5). AᵀA = [[3, 0], [0, 2]]. Aᵀb = (1 + 0 + 5, −1 + 0 + 5) = (6, 4). So 3c = 6 and 2d = 4: c = 2, d = 2. The line is y = 2 + 2t.</solution>
+<check lang="python">
+from fractions import Fraction as F
+t = [-1, 0, 1]; y = [1, 0, 5]
+n, st, stt, sy, sty = 3, sum(t), sum(a * a for a in t), sum(y), sum(a * b for a, b in zip(t, y))
+assert (n, st, stt, sy, sty) == (3, 0, 2, 6, 4)
+assert (F(sy, n), F(sty, stt)) == (2, 2)
+</check>
+
+<ask type="problem">$c$ and $d$, with each term of the second entry of $A^Tb$ written out.</ask>
+@@ verify
+import numpy as np
+A = np.array([[1, -1], [1, 0], [1, 1]]); b = np.array([2, 1, 4])
+assert (A.T @ A).tolist() == [[3, 0], [0, 2]]
+assert (A.T @ b).tolist() == [7, 2]
+assert 2 + 1 + 4 == 7 and (-1) * 2 + 0 * 1 + 1 * 4 == 2
+# the learner's slip: the second entry with the sign of t = -1 dropped, and what follows
+assert 2 + 0 + 4 == 6 and 6 / 2 == 3
+x = np.linalg.lstsq(A.astype(float), b.astype(float), rcond=None)[0]
+assert np.allclose(x, [7 / 3, 1])
+b2 = np.array([1, 0, 5])
+assert (A.T @ b2).tolist() == [6, 4]
+assert np.allclose(np.linalg.lstsq(A.astype(float), b2.astype(float), rcond=None)[0], [2, 2])
+assert 'y = 2 + 2t' in solution(reply) and 'y = 2 + 2t' not in visible(reply)
+
+@@@@ mark-error-cross-product-middle-sign
+situation: mark-error
+topic: The cross product
+voice: plain
+level: medium
+expect: {"verdict":"partial","accept":["wrong"],"names":["a1b3 - a3b1","second|middle"],"must":["\\(-10, 7, 9\\)","= 14"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["5, -5, 15"]}
+@@ tutor
+**Problem 1 · warm-up**
+
+Compute $a \times b$ for $a = (2, -1, 3)$ and $b = (1, 4, -2)$.
+
+<solution>a × b = (a2b3 − a3b2, a3b1 − a1b3, a1b2 − a2b1) = ((−1)(−2) − 3·4, 3·1 − 2·(−2), 2·4 − (−1)·1) = (−10, 7, 9).</solution>
+<check lang="python">
+a = (2, -1, 3); b = (1, 4, -2)
+c = (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+assert c == (-10, 7, 9)
+assert sum(x * y for x, y in zip(a, c)) == 0 and sum(x * y for x, y in zip(b, c)) == 0
+</check>
+
+<ask type="problem">The three components, with the products in each.</ask>
+@@ learner answer sure
+First: a2b3 - a3b2 = (-1)(-2) - (3)(4) = 2 - 12 = -10. Second: a1b3 - a3b1 = (2)(-2) - (3)(1) = -4 - 3 = -7. Third: a1b2 - a2b1 = (2)(4) - (-1)(1) = 8 + 1 = 9. So a x b = (-10, -7, 9).
+@@ reply
+<grade verdict="partial" score="0.6">The first and third components are right: "2 - 12 = -10" and "8 + 1 = 9". The wrong step is the second: "a1b3 - a3b1" has its two terms the wrong way round. The middle component is $a_3b_1 - a_1b_3 = 3 - (-4) = 7$, so $a \times b = (-10, 7, 9)$.</grade>
+
+The indices run in a cycle, 1 → 2 → 3 → 1: the components are $a_2b_3 - a_3b_2$, then $a_3b_1 - a_1b_3$, then $a_1b_2 - a_2b_1$. If you expand the $3 \times 3$ determinant along its top row instead, the middle minor carries a minus sign, and that sign is what your second line lost.
+
+A check catches it, since $a \times b$ must be perpendicular to $a$: $a \cdot (-10, 7, 9) = -20 - 7 + 27 = 0$, while $a \cdot (-10, -7, 9) = -20 + 7 + 27 = 14$.
+
+<card>Middle component of $a \times b$ :: $a_3b_1 - a_1b_3$ (indices cycle 1 → 2 → 3 → 1). Check the result: $a \cdot (a \times b) = 0$ and $b \cdot (a \times b) = 0$.</card>
+
+<note>$a \times b = (a_2b_3 - a_3b_2,\ a_3b_1 - a_1b_3,\ a_1b_2 - a_2b_1)$. It is perpendicular to both $a$ and $b$.</note>
+
+**Problem 2 · same level**
+
+Compute $a \times b$ for $a = (3, 0, -1)$ and $b = (2, 5, 1)$.
+
+<solution>a × b = (0·1 − (−1)·5, (−1)·2 − 3·1, 3·5 − 0·2) = (5, −5, 15). Check: a·(a × b) = 15 + 0 − 15 = 0 and b·(a × b) = 10 − 25 + 15 = 0.</solution>
+<check lang="python">
+a = (3, 0, -1); b = (2, 5, 1)
+c = (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+assert c == (5, -5, 15)
+assert sum(x * y for x, y in zip(a, c)) == 0 and sum(x * y for x, y in zip(b, c)) == 0
+</check>
+
+<ask type="problem">The three components, and both dot products that check the result.</ask>
+@@ verify
+import numpy as np
+a = np.array([2, -1, 3]); b = np.array([1, 4, -2])
+c = np.cross(a, b)
+assert c.tolist() == [-10, 7, 9]
+# the learner's three lines, as written
+a1, a2, a3 = a.tolist(); b1, b2, b3 = b.tolist()
+assert a2 * b3 - a3 * b2 == 2 - 12 == -10
+assert a1 * b3 - a3 * b1 == -4 - 3 == -7            # their second line: terms reversed
+assert a1 * b2 - a2 * b1 == 8 + 1 == 9
+assert a3 * b1 - a1 * b3 == 3 - (-4) == 7           # the right middle component
+assert a @ c == 0 and -20 - 7 + 27 == 0
+assert a @ np.array([-10, -7, 9]) == 14 == -20 + 7 + 27
+p = np.array([3, 0, -1]); q = np.array([2, 5, 1])
+r = np.cross(p, q)
+assert r.tolist() == [5, -5, 15] and p @ r == 0 and q @ r == 0 and 10 - 25 + 15 == 0
+
+@@@@ unusual-cofactor-down-the-zero-column
+situation: mark-unusual
+topic: Cofactor expansion
+options: {"strategy":"maths"}
+voice: terse
+level: medium
+expect: {"verdict":"correct","mustNot":["should have","were asked","supposed to"],"must":["any row or any column","2 \\\\cdot 15"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["120"]}
+@@ tutor
+Cofactor expansion along row $i$: $\det A = \sum_j (-1)^{i+j} a_{ij} M_{ij}$, where the minor $M_{ij}$ is the determinant left after deleting row $i$ and column $j$.
+
+<note>Cofactor expansion along row $i$: $\det A = \sum_j (-1)^{i+j} a_{ij} M_{ij}$. $M_{ij}$ is the determinant of $A$ with row $i$ and column $j$ removed; the signs follow a chessboard pattern starting with $+$ at the top left.</note>
+
+Expand along the first row to find $\det A$ for
+
+$$A = \begin{pmatrix} 2 & 0 & 1 \\ 1 & 3 & -1 \\ 4 & 0 & 5 \end{pmatrix}$$
+
+<solution>det A = 2·(3·5 − (−1)·0) − 0 + 1·(1·0 − 3·4) = 2·15 − 12 = 18.</solution>
+<check lang="python">
+A = [[2, 0, 1], [1, 3, -1], [4, 0, 5]]
+m = lambda r1, r2, c1, c2: A[r1][c1] * A[r2][c2] - A[r1][c2] * A[r2][c1]
+det = A[0][0] * m(1, 2, 1, 2) - A[0][1] * m(1, 2, 0, 2) + A[0][2] * m(1, 2, 0, 1)
+assert det == 18
+</check>
+
+<ask type="problem">$\det A$, with each cofactor.</ask>
+@@ learner answer sure
+went down column 2 instead, two zeros. only the 3 survives, sign (-1)^(2+2) = +. minor = det [[2,1],[4,5]] = 10 - 4 = 6. det = 3*6 = 18
+@@ reply
+<grade verdict="correct" score="1">"went down column 2 instead" is valid: cofactor expansion gives the same determinant along any row or any column. With "sign (-1)^(2+2) = +" and the minor $10 - 4 = 6$, $3 \cdot 6 = 18$ is right, and picking the line with the most zeros is the efficient way to do it.</grade>
+
+The first row agrees, $2 \cdot 15 - 0 + 1 \cdot (-12) = 18$, and needs two non-zero minors where your column needed one. The saving grows with the size of the matrix.
+
+Find $\det T$ for
+
+$$T = \begin{pmatrix} 2 & 7 & 1 & 5 \\ 0 & 3 & 4 & 8 \\ 0 & 0 & 5 & 6 \\ 0 & 0 & 0 & 4 \end{pmatrix}$$
+
+<solution>Expand down the first column at every stage: det T = 2·det[[3, 4, 8], [0, 5, 6], [0, 0, 4]] = 2·3·det[[5, 6], [0, 4]] = 2·3·(5·4 − 6·0) = 2·3·20 = 120. For a triangular matrix the determinant is the product of the diagonal entries.</solution>
+<check lang="python">
+import numpy as np
+T = np.array([[2, 7, 1, 5], [0, 3, 4, 8], [0, 0, 5, 6], [0, 0, 0, 4]], dtype=float)
+assert round(np.linalg.det(T)) == 120 == 2 * 3 * 5 * 4
+</check>
+
+<ask type="problem">$\det T$, with the line you expanded along at each stage.</ask>
+@@ verify
+import numpy as np
+A = np.array([[2, 0, 1], [1, 3, -1], [4, 0, 5]])
+assert round(np.linalg.det(A)) == 18
+# the learner's expansion down column 2: only a22 = 3 is non-zero there
+assert A[0, 1] == 0 and A[2, 1] == 0 and A[1, 1] == 3 and (-1) ** (2 + 2) == 1
+minor = np.delete(np.delete(A, 1, axis=0), 1, axis=1)
+assert minor.tolist() == [[2, 1], [4, 5]] and 2 * 5 - 1 * 4 == 6 == 10 - 4 and 3 * 6 == 18
+# the first-row expansion quoted in the reply
+M11 = 3 * 5 - (-1) * 0; M13 = 1 * 0 - 3 * 4
+assert M11 == 15 and M13 == -12 and 2 * 15 - 0 + 1 * (-12) == 18
+T = np.array([[2, 7, 1, 5], [0, 3, 4, 8], [0, 0, 5, 6], [0, 0, 0, 4]], dtype=float)
+assert round(np.linalg.det(T)) == 120
+assert '120' in solution(reply) and '120' not in visible(reply)
+
+@@@@ unusual-inverse-by-row-reduction
+situation: mark-unusual
+topic: Inverting a two-by-two matrix
+voice: wordy
+level: medium
+expect: {"verdict":"correct","mustNot":["should have","supposed to","the formula is the"],"must":["6 - 5 = 1","I row reduced"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["-7","B\\^\\{-1\\}A\\^\\{-1\\}"]}
+@@ tutor
+**Problem 2 · same level**
+
+Find $A^{-1}$ for
+
+$$A = \begin{pmatrix} 2 & 1 \\ 5 & 3 \end{pmatrix}$$
+
+<solution>det A = 2·3 − 1·5 = 1. Swap the diagonal entries and negate the other two: A⁻¹ = [[3, −1], [−5, 2]].</solution>
+<check lang="python">
+A = [[2, 1], [5, 3]]
+inv = [[3, -1], [-5, 2]]
+P = [[sum(A[i][k] * inv[k][j] for k in range(2)) for j in range(2)] for i in range(2)]
+assert P == [[1, 0], [0, 1]]
+</check>
+
+<ask type="problem">$A^{-1}$, with your working.</ask>
+@@ learner answer sure
+I couldn't remember which entries swap in the formula, so I row reduced [A | I] instead. Start with rows [2, 1 | 1, 0] and [5, 3 | 0, 1]. R2 - (5/2)R1 gives [0, 1/2 | -5/2, 1], and doubling it gives [0, 1 | -5, 2]. Then R1 - R2 gives [2, 0 | 6, -2], and halving it gives [1, 0 | 3, -1]. The left side is I now, so the inverse is [[3, -1], [-5, 2]].
+@@ reply
+<grade verdict="correct" score="1">"I row reduced [A | I] instead" is a complete method: each row operation is a multiplication on the left, so the operations that turn $A$ into $I$ turn $I$ into $A^{-1}$. Every row you wrote is right, and [[3, -1], [-5, 2]] is the inverse.</grade>
+
+The formula gives the same matrix: $\det A = 6 - 5 = 1$, then swap the 2 and the 3 and negate the 1 and the 5. Row reduction has the advantage of working for a matrix of any size.
+
+**Problem 3 · harder**
+
+$A$ and $B$ are invertible, with
+
+$$A^{-1} = \begin{pmatrix} 3 & -1 \\ -5 & 2 \end{pmatrix}, \quad B^{-1} = \begin{pmatrix} 1 & 2 \\ 0 & 1 \end{pmatrix}$$
+
+Find $(AB)^{-1}$ without working out $A$ or $B$.
+
+<solution>(AB)⁻¹ = B⁻¹A⁻¹, because (AB)(B⁻¹A⁻¹) = A(BB⁻¹)A⁻¹ = I. B⁻¹A⁻¹ = [[1·3 + 2·(−5), 1·(−1) + 2·2], [0·3 + 1·(−5), 0·(−1) + 1·2]] = [[−7, 3], [−5, 2]].</solution>
+<check lang="python">
+import numpy as np
+Ainv = np.array([[3.0, -1.0], [-5.0, 2.0]]); Binv = np.array([[1.0, 2.0], [0.0, 1.0]])
+A = np.linalg.inv(Ainv); B = np.linalg.inv(Binv)
+assert np.allclose(np.linalg.inv(A @ B), [[-7, 3], [-5, 2]])
+assert np.allclose(Binv @ Ainv, [[-7, 3], [-5, 2]])
+</check>
+
+<ask type="problem">$(AB)^{-1}$, with the rule you used and why it holds.</ask>
+@@ verify
+from fractions import Fraction as F
+# replay the learner's row operations on [A | I]
+r1 = [F(2), F(1), F(1), F(0)]
+r2 = [F(5), F(3), F(0), F(1)]
+r2 = [b - F(5, 2) * a for a, b in zip(r1, r2)]
+assert r2 == [0, F(1, 2), F(-5, 2), 1]
+r2 = [2 * x for x in r2]
+assert r2 == [0, 1, -5, 2]
+r1 = [a - b for a, b in zip(r1, r2)]
+assert r1 == [2, 0, 6, -2]
+r1 = [x / 2 for x in r1]
+assert r1 == [1, 0, 3, -1]
+inv = [r1[2:], r2[2:]]
+assert inv == [[3, -1], [-5, 2]]
+A = [[2, 1], [5, 3]]
+mul = lambda X, Y: [[sum(X[i][k] * Y[k][j] for k in range(2)) for j in range(2)] for i in range(2)]
+assert mul(A, inv) == [[1, 0], [0, 1]] and 2 * 3 - 1 * 5 == 1 == 6 - 5
+# Problem 3
+Binv = [[1, 2], [0, 1]]
+assert mul(Binv, inv) == [[-7, 3], [-5, 2]]
+assert mul(inv, Binv) != mul(Binv, inv)                 # the order matters, so the rule is needed
+assert '[[−7, 3], [−5, 2]]' in solution(reply)
+
+@@@@ unusual-coordinates-by-cramers-rule
+situation: mark-unusual
+topic: Change of basis
+voice: terse
+level: medium
+expect: {"verdict":"correct","mustNot":["should have","supposed to"],"must":["Bc = v","D = 5"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\(1, ?2\\)"]}
+@@ tutor
+**Problem 2 · same level**
+
+A basis is $b_1 = (2, 1)$, $b_2 = (1, 3)$. Find the coordinates of $v = (7, 11)$ in this basis.
+
+<solution>Solve c1(2, 1) + c2(1, 3) = (7, 11): 2c1 + c2 = 7 and c1 + 3c2 = 11. From the first, c2 = 7 − 2c1; then c1 + 21 − 6c1 = 11, so c1 = 2 and c2 = 3. Coordinates (2, 3).</solution>
+<check lang="python">
+c1, c2 = 2, 3
+assert (2 * c1 + 1 * c2, 1 * c1 + 3 * c2) == (7, 11)
+</check>
+
+<ask type="problem">The coordinates, with the system you solved.</ask>
+@@ learner answer sure
+cramer. D = 2*3 - 1*1 = 5. c1 = (7*3 - 1*11)/5 = 10/5 = 2. c2 = (2*11 - 7*1)/5 = 15/5 = 3. coords (2,3)
+@@ reply
+<grade verdict="correct" score="1">"c1 = (7*3 - 1*11)/5 = 10/5 = 2" and "c2 = (2*11 - 7*1)/5 = 15/5 = 3" are right. Cramer's rule applies because the coordinates solve the square system $Bc = v$, where $B$ has columns $b_1, b_2$, and $D = 5$ is not zero: each unknown is the determinant with its column replaced by $v$, divided by $D$.</grade>
+
+Check: $2(2, 1) + 3(1, 3) = (7, 11)$. $D \ne 0$ is also what makes $b_1, b_2$ a basis in the first place.
+
+Since $Bc = v$ and $B$ is invertible, one matrix handles every $v$ at once: $c = B^{-1}v$.
+
+<note>Put the basis vectors in the columns of $B$. Then $v = Bc$ turns coordinates into the vector, and $c = B^{-1}v$ turns the vector into coordinates.</note>
+
+**Problem 3 · harder**
+
+For the same basis, compute $B^{-1}$ and use it to find the coordinates of $(4, 7)$.
+
+<solution>B = [[2, 1], [1, 3]], det B = 5, B⁻¹ = (1/5)[[3, −1], [−1, 2]]. B⁻¹(4, 7) = (1/5)(12 − 7, −4 + 14) = (1, 2). Check: 1(2, 1) + 2(1, 3) = (4, 7).</solution>
+<check lang="python">
+from fractions import Fraction as F
+Binv = [[F(3, 5), F(-1, 5)], [F(-1, 5), F(2, 5)]]
+c = (Binv[0][0] * 4 + Binv[0][1] * 7, Binv[1][0] * 4 + Binv[1][1] * 7)
+assert c == (1, 2) and (2 * c[0] + 1 * c[1], 1 * c[0] + 3 * c[1]) == (4, 7)
+</check>
+
+<ask type="problem">$B^{-1}$ and the coordinates of $(4, 7)$, with a check that they rebuild the vector.</ask>
+@@ verify
+from fractions import Fraction as F
+det2 = lambda a, b, c, d: a * d - b * c
+# B has columns b1 = (2, 1), b2 = (1, 3); v = (7, 11)
+D = det2(2, 1, 1, 3)
+assert D == 5 == 2*3 - 1*1
+D1 = det2(7, 1, 11, 3)        # first column replaced by v
+D2 = det2(2, 7, 1, 11)        # second column replaced by v
+assert D1 == 7*3 - 1*11 == 10 and D2 == 2*11 - 7*1 == 15
+assert (F(D1, D), F(D2, D)) == (2, 3)
+assert (2 * 2 + 3 * 1, 2 * 1 + 3 * 3) == (7, 11)
+# Problem 3
+Binv = [[F(3, 5), F(-1, 5)], [F(-1, 5), F(2, 5)]]
+B = [[2, 1], [1, 3]]
+mul = lambda X, Y: [[sum(X[i][k] * Y[k][j] for k in range(2)) for j in range(2)] for i in range(2)]
+assert mul(B, Binv) == [[1, 0], [0, 1]]
+assert (Binv[0][0] * 4 + Binv[0][1] * 7, Binv[1][0] * 4 + Binv[1][1] * 7) == (1, 2)
+assert '(1, 2)' in solution(reply) and '(1, 2)' not in visible(reply)
+
+@@@@ unusual-inverse-of-rotation-by-geometry
+situation: mark-unusual
+topic: Linear transformations as matrices
+voice: wordy
+level: medium
+expect: {"verdict":"correct","mustNot":["should have","supposed to"],"must":["\\\\det R = 1","undo"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\b10\\b"]}
+@@ tutor
+**Problem 3 · harder**
+
+$R$ rotates the plane by 90° anticlockwise:
+
+$$R = \begin{pmatrix} 0 & -1 \\ 1 & 0 \end{pmatrix}$$
+
+Find $R^{-1}$.
+
+<solution>det R = 0·0 − (−1)·1 = 1. Swap the diagonal entries and negate the other two: R⁻¹ = [[0, 1], [−1, 0]], which is the rotation by 90° clockwise.</solution>
+<check lang="python">
+R = [[0, -1], [1, 0]]
+Rinv = [[0, 1], [-1, 0]]
+P = [[sum(Rinv[i][k] * R[k][j] for k in range(2)) for j in range(2)] for i in range(2)]
+assert P == [[1, 0], [0, 1]]
+</check>
+
+<ask type="problem">$R^{-1}$, with your working.</ask>
+@@ learner answer sure
+I didn't use the formula. The inverse has to undo the rotation, so it's a rotation by 90° clockwise. Columns are where the basis vectors land: turning clockwise sends (1,0) to (0,-1) and (0,1) to (1,0). So R^-1 = [[0,1],[-1,0]].
+@@ reply
+<grade verdict="correct" score="1">"The inverse has to undo the rotation, so it's a rotation by 90° clockwise" is a complete argument, and "Columns are where the basis vectors land" turns it into the matrix correctly: columns $(0, -1)$ and $(1, 0)$ give [[0, 1], [-1, 0]].</grade>
+
+The formula agrees: $\det R = 1$, the diagonal entries swap (both are 0) and the other two change sign. Reasoning from what the map does also works where a formula is awkward, which the next problem uses.
+
+**Problem 4 · harder**
+
+$H$ is a shear:
+
+$$H = \begin{pmatrix} 1 & 2 \\ 0 & 1 \end{pmatrix}$$
+
+It sends $(x, y)$ to $(x + 2y, y)$. Find $H^5$ without multiplying five matrices.
+
+<solution>Each application adds 2y to the x-coordinate and leaves y alone, so five applications add 10y: (x, y) goes to (x + 10y, y). H⁵ = [[1, 10], [0, 1]].</solution>
+<check lang="python">
+import numpy as np
+H = np.array([[1, 2], [0, 1]])
+assert np.linalg.matrix_power(H, 5).tolist() == [[1, 10], [0, 1]]
+</check>
+
+<ask type="problem">$H^5$, with the reasoning that gives it.</ask>
+@@ verify
+import numpy as np
+R = np.array([[0, -1], [1, 0]])
+Rinv = np.array([[0, 1], [-1, 0]])
+assert (Rinv @ R).tolist() == [[1, 0], [0, 1]] == (R @ Rinv).tolist()
+# the learner's geometric claims: clockwise quarter turn sends e1 to (0,-1) and e2 to (1,0)
+th = -np.pi / 2
+C = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
+assert np.allclose(C @ [1, 0], [0, -1]) and np.allclose(C @ [0, 1], [1, 0]) and np.allclose(C, Rinv)
+assert Rinv[:, 0].tolist() == [0, -1] and Rinv[:, 1].tolist() == [1, 0]
+assert round(np.linalg.det(R)) == 1
+H = np.array([[1, 2], [0, 1]])
+assert (H @ np.array([3, 4])).tolist() == [3 + 2 * 4, 4]
+assert np.linalg.matrix_power(H, 5).tolist() == [[1, 10], [0, 1]]
+assert '[[1, 10], [0, 1]]' in solution(reply) and '10' not in visible(reply)
+
+@@@@ tangent-homogeneous-four-by-four
+situation: tangent
+topic: Homogeneous coordinates
+voice: typos
+level: medium
+expect: {"must":["\\(x, y, z, 1\\)","\\$w\\$","perspective"],"setsProblem":true,"askTypes":["problem"],"askMustNot":["\\(6, ?2\\)"],"words":{"max":170}}
+@@ tutor
+A translation $(x, y) \mapsto (x + a, y + b)$ is not linear, because it moves the origin, so no $2 \times 2$ matrix can do it. Homogeneous coordinates get round that by writing the point as $(x, y, 1)$:
+
+$$\begin{pmatrix} 1 & 0 & a \\ 0 & 1 & b \\ 0 & 0 & 1 \end{pmatrix}\begin{pmatrix} x \\ y \\ 1 \end{pmatrix} = \begin{pmatrix} x + a \\ y + b \\ 1 \end{pmatrix}$$
+
+<note>Homogeneous coordinates: write $(x, y)$ as $(x, y, 1)$. Translation by $(a, b)$ is then the $3 \times 3$ matrix with the identity in its top-left block and $(a, b, 1)$ as its last column.</note>
+
+**Problem 1 · warm-up**
+
+Write the $3 \times 3$ matrix that translates by $(4, -1)$ and apply it to the point $(2, 3)$.
+
+<solution>T = [[1, 0, 4], [0, 1, −1], [0, 0, 1]]. T(2, 3, 1) = (2 + 4, 3 − 1, 1) = (6, 2, 1), which is the point (6, 2).</solution>
+<check lang="python">
+T = [[1, 0, 4], [0, 1, -1], [0, 0, 1]]
+p = [2, 3, 1]
+assert [sum(T[i][k] * p[k] for k in range(3)) for i in range(3)] == [6, 2, 1]
+</check>
+
+<ask type="problem">The matrix, and the image of $(2, 3)$.</ask>
+@@ learner question
+wait is this why graphics stuff like opengl uses 4x4 matricies for 3d? same trick?
+@@ reply
+Yes, the same trick one dimension up. A 3D point is written $(x, y, z, 1)$, and a $4 \times 4$ matrix can then translate as well as rotate and scale, so a whole chain of moves multiplies into a single matrix. The fourth coordinate, usually called $w$, has a second job: a perspective projection matrix puts the depth into $w$, and dividing $x$, $y$ and $z$ by $w$ afterwards is what makes distant objects come out smaller.
+
+Back in the plane, the problem you have open is the 2D case of exactly this.
+
+<solution>T = [[1, 0, 4], [0, 1, −1], [0, 0, 1]], and T(2, 3, 1) = (6, 2, 1): the point (6, 2).</solution>
+<check lang="python">
+T = [[1, 0, 4], [0, 1, -1], [0, 0, 1]]
+p = [2, 3, 1]
+assert [sum(T[i][k] * p[k] for k in range(3)) for i in range(3)] == [6, 2, 1]
+</check>
+
+<ask type="problem">Which $3 \times 3$ matrix moves every point 4 to the right and 1 down, and where does it send $(2, 3)$?</ask>
+@@ verify
+import numpy as np
+T = np.array([[1, 0, 4], [0, 1, -1], [0, 0, 1]])
+assert (T @ np.array([2, 3, 1])).tolist() == [6, 2, 1]
+# the 3D claim: a 4x4 matrix translates (x, y, z, 1)
+M = np.eye(4); M[:3, 3] = [5, -2, 7]
+assert (M @ np.array([1, 2, 3, 1])).tolist() == [6, 0, 10, 1]
+# a chain of moves is one matrix: rotate about z, then translate
+Rz = np.eye(4); Rz[:2, :2] = [[0, -1], [1, 0]]
+p = np.array([1, 2, 3, 1])
+assert np.allclose((M @ Rz) @ p, M @ (Rz @ p))
+# perspective: a matrix whose last row copies z into w; dividing by w shrinks with depth
+P = np.array([[1.0, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 1, 0]])
+near, far = P @ [1, 1, 2, 1], P @ [1, 1, 8, 1]
+assert near[3] == 2 and far[3] == 8 and far[0] / far[3] < near[0] / near[3]
+assert '(6, 2)' in solution(reply) and '(6, 2)' not in visible(reply)
+
+@@@@ tangent-pca-by-svd
+situation: tangent
+topic: PCA from the covariance matrix
+options: {"strategy":"dialogue"}
+voice: wordy
+level: hard
+expect: {"must":["X\\^TX = V\\\\Sigma\\^2V\\^T","\\\\sigma_i\\^2/\\(n-1\\)","right singular vectors"],"askTypes":["explain","short"],"askMustNot":["largest eigenvalue","top eigenvector","first principal"],"words":{"max":170}}
+@@ tutor
+You have centred data in an $n \times 2$ matrix $X$, so each column has mean 0, and its covariance matrix is $C = \frac{1}{n-1}X^TX$.
+
+<ask type="explain">Which vector associated with $C$ gives the direction along which the data vary most, and why that one?</ask>
+@@ learner question
+Side question before I answer: the scikit-learn docs say its PCA uses the SVD of the data rather than the covariance matrix. Is that a different method, or the same thing done another way?
+@@ reply
+The same thing by another route. Write the centred data as $X = U\Sigma V^T$. Then $X^TX = V\Sigma^2V^T$, so the columns of $V$, the right singular vectors of $X$, are the eigenvectors of $C$, and each eigenvalue of $C$ is $\sigma_i^2/(n-1)$. Libraries prefer the SVD because forming $X^TX$ squares the condition number and loses accuracy in the directions of small variance; the SVD works on $X$ directly.
+
+<note>PCA two ways: the eigenvectors of $C = \frac{1}{n-1}X^TX$, or the right singular vectors of the centred $X = U\Sigma V^T$. They agree, with $\lambda_i = \sigma_i^2/(n-1)$.</note>
+
+Back to $C$ itself.
+
+<ask type="explain">For a unit vector $w$, the variance of the data projected onto $w$ is $w^TCw$. Which $w$ makes that as large as it can be, and how large is it?</ask>
+@@ verify
+import numpy as np
+rng = np.random.default_rng(3)
+n = 50
+X = rng.normal(size=(n, 2)) @ np.array([[2.0, 0.6], [0.0, 0.5]])
+X = X - X.mean(axis=0)
+C = X.T @ X / (n - 1)
+U, s, Vt = np.linalg.svd(X, full_matrices=False)
+assert np.allclose(X.T @ X, Vt.T @ np.diag(s ** 2) @ Vt)                 # X^T X = V Sigma^2 V^T
+lam, E = np.linalg.eigh(C)
+assert np.allclose(sorted(s ** 2 / (n - 1)), lam)                        # eigenvalues are sigma^2 / (n - 1)
+for i in range(2):                                                       # right singular vectors are eigenvectors of C
+    v = Vt[i]
+    assert np.allclose(C @ v, (s[i] ** 2 / (n - 1)) * v)
+# forming X^T X squares the 2-norm condition number
+assert np.isclose(np.linalg.cond(X.T @ X), np.linalg.cond(X) ** 2)
+# the question's answer: w^T C w over unit vectors is largest at the top eigenvector, with value the top eigenvalue
+ws = [np.array([np.cos(t), np.sin(t)]) for t in np.linspace(0, np.pi, 2001)]
+best = max(ws, key=lambda w: w @ C @ w)
+assert abs(best @ C @ best - lam[-1]) < 1e-4 and abs(abs(best @ E[:, -1]) - 1) < 1e-4
+assert np.isclose(np.var(X @ E[:, -1], ddof=1), lam[-1])                 # projected variance is w^T C w
+
+@@@@ tangent-l1-norm-explained
+situation: tangent
+topic: Vectors, norms and unit vectors
+voice: typos
+level: easy
+expect: {"ends":"continue","must":["= 5\\b","= 7\\b","absolute values","L2"],"mustNot":["0\\.6","\\b10\\b"],"need":["note"],"forbid":["ask"],"words":{"max":190}}
+@@ tutor
+The norm of $v = (v_1, \dots, v_n)$ is its length, $\|v\| = \sqrt{v_1^2 + \dots + v_n^2}$. Dividing a non-zero vector by its norm gives the unit vector in the same direction.
+
+<note>Norm: $\|v\| = \sqrt{v_1^2 + \dots + v_n^2}$. Unit vector in the direction of $v \ne 0$: $v / \|v\|$, which has norm 1.</note>
+
+**Problem 1 · warm-up**
+
+Find the unit vector in the direction of $v = (6, -8)$.
+
+<solution>‖v‖ = √(36 + 64) = √100 = 10. The unit vector is v/10 = (0.6, −0.8).</solution>
+<check lang="python">
+import math
+n = math.sqrt(6 ** 2 + (-8) ** 2)
+assert n == 10 and (6 / n, -8 / n) == (0.6, -0.8)
+</check>
+
+<ask type="problem">The unit vector, with the norm you divided by.</ask>
+@@ learner question
+before i do this, could you explain what the L1 norm is? i keep seeing L1 and L2 in ml stuff and dont know if this is one of them
+@@ reply
+The norm above is the L2 norm, also called the Euclidean norm: square the entries, add them, take the square root. The L1 norm adds the absolute values of the entries instead. For $w = (3, -4)$: $\|w\|_2 = \sqrt{9 + 16} = 5$ and $\|w\|_1 = 3 + 4 = 7$. L2 is the straight-line distance from the origin; L1 is the distance covered when you may only move parallel to the axes.
+
+In machine learning the two show up as penalties on a model's weights. An L2 penalty (ridge regression, weight decay) shrinks all the weights smoothly. An L1 penalty (the lasso) pushes some weights to exactly zero, so it is used to get sparse models.
+
+<note>$\|v\|_2 = \sqrt{\sum v_i^2}$ (Euclidean; the default meaning of "norm"). $\|v\|_1 = \sum |v_i|$. For $(3, -4)$: $\|\cdot\|_2 = 5$ and $\|\cdot\|_1 = 7$.</note>
+
+A unit vector in this lesson has length 1 in the L2 norm, and that is the norm Problem 1 uses.
+
+<continue/>
+@@ verify
+import numpy as np
+w = np.array([3.0, -4.0])
+assert np.linalg.norm(w, 2) == 5 == np.sqrt(9 + 16) and np.linalg.norm(w, 1) == 7 == 3 + 4
+# the pending problem's answer stays out of the reply
+v = np.array([6.0, -8.0])
+assert np.linalg.norm(v) == 10 and np.allclose(v / 10, [0.6, -0.8])
+assert '0.6' not in reply and '10' not in reply
+# L1 drives weights to exactly zero, L2 only shrinks: the one-dimensional penalised problems
+# minimise (x - a)^2 / 2 + lam * |x|  ->  soft threshold;  (x - a)^2 / 2 + lam * x^2 / 2  ->  a / (1 + lam)
+a, lam = 0.3, 0.5
+xs = np.linspace(-1, 1, 200001)
+l1 = xs[np.argmin((xs - a) ** 2 / 2 + lam * abs(xs))]
+l2 = xs[np.argmin((xs - a) ** 2 / 2 + lam * xs ** 2 / 2)]
+assert abs(l1) < 1e-9 and abs(l2 - a / (1 + lam)) < 1e-4 and l2 != 0
