@@ -16,7 +16,7 @@ export type AskType = 'predict' | 'short' | 'choice' | 'explain' | 'error' | 'pr
 
 export type Block =
   | { kind: 'text'; text: string }
-  | { kind: 'ask'; type: AskType; prompt: string; options: string[]; lang?: string }
+  | { kind: 'ask'; type: AskType; prompt: string; options: string[]; lang?: string; tests?: string }
   | { kind: 'grade'; verdict: Verdict; score: number; text: string }
   | { kind: 'plan'; steps: string[] }
   | { kind: 'card'; front: string; back: string }
@@ -27,6 +27,14 @@ export type Block =
   | { kind: 'note'; text: string }
   /** The tutor will carry on explaining: no question this turn */
   | { kind: 'continue' }
+
+/** A code ask's hidden tests, a \`\`\`tests block in its body: taken out of what the student sees (one still being written too) */
+export function splitTests(body: string): { prompt: string; tests?: string } {
+  const m = /\n?[ \t]*```tests[ \t]*\n([\s\S]*?)(?:\n[ \t]*```|$)/i.exec(body)
+  if (!m) return { prompt: body }
+  const tests = m[1].trim()
+  return { prompt: (body.slice(0, m.index) + body.slice(m.index + m[0].length)).trim(), ...(tests ? { tests } : {}) }
+}
 
 const attr = (attrs: string, name: string) => attrs.match(new RegExp(`${name}\\s*=\\s*"([^"]*)"`, 'i'))?.[1] ?? attrs.match(new RegExp(`${name}\\s*=\\s*'([^']*)'`, 'i'))?.[1]
 
@@ -92,7 +100,7 @@ export function parseBlocks(full: string): Block[] {
     const open = t.match(/<ask\b([^>]*)>([\s\S]*)$/i)
     if (open && open[2].trim()) {
       const type = (attr(open[1], 'type')?.toLowerCase() ?? 'short') as AskType
-      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt: open[2].replace(/<\/?a?s?k?$/i, '').trim(), options: [], lang: attr(open[1], 'lang') })
+      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt: splitTests(open[2].replace(/<\/?a?s?k?$/i, '').trim()).prompt, options: [], lang: attr(open[1], 'lang') })
     }
   }
   for (const m of message.matchAll(TAG)) {
@@ -105,16 +113,17 @@ export function parseBlocks(full: string): Block[] {
       const type = (attr(attrs, 'type')?.toLowerCase() ?? 'short') as AskType
       const options = (attr(attrs, 'options') ?? '').split('|').map((o) => o.trim()).filter(Boolean)
       // Some models list choices as "A) ..." lines inside the tag instead of an options attribute
-      let prompt = body
+      const hidden = splitTests(body)
+      let prompt = hidden.prompt
       if (type === 'choice' && !options.length) {
-        const lines = body.split('\n')
+        const lines = prompt.split('\n')
         const opt = lines.filter((l) => /^\s*(?:[A-Da-d][).:]|[-*])\s+/.test(l))
         if (opt.length >= 2) {
           options.push(...opt.map((l) => l.replace(/^\s*(?:[A-Da-d][).:]|[-*])\s+/, '').trim()))
           prompt = lines.filter((l) => !opt.includes(l)).join('\n').trim()
         }
       }
-      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt, options, lang: attr(attrs, 'lang') })
+      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt, options, lang: attr(attrs, 'lang'), ...(hidden.tests ? { tests: hidden.tests } : {}) })
     } else if (name === 'grade') {
       const verdict = (attr(attrs, 'verdict')?.toLowerCase() ?? 'partial') as Verdict
       const score = Number(attr(attrs, 'score') ?? (verdict === 'correct' ? 1 : verdict === 'wrong' ? 0 : 0.5))

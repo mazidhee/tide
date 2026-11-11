@@ -84,6 +84,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const [checking, setChecking] = useState(false)
   const [hintLevel, setHintLevel] = useState(0)
   const [runOut, setRunOut] = useState<RunResult | null>(null)
+  /** The code that runOut came from */
+  const ranFor = useRef('')
   const [running, setRunning] = useState(false)
   const [savedCards, setSavedCards] = useState<Set<string>>(new Set())
   const [web, setWeb] = useState(() => localStorage.getItem('tide.chat.web') !== 'off')
@@ -611,9 +613,16 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     send(`${said ? `${said}\n\n` : ''}(From here on, teach this way: ${STRATEGY_RULES[to] || 'problem sets, one problem at a time, stepping difficulty up and down as before.'})`, turns)
   }
 
-  const submit = (text?: string) => {
+  const submit = (text?: string, ranNow?: RunResult) => {
     if (busy) return
-    const ran = runOut ? `\n\nWhen I ran it:\n\`\`\`\n${(runOut.stdout + runOut.stderr).slice(0, 1500) || '(no output)'}\n\`\`\`` : ''
+    // A code question with hidden tests is marked on their results: what is handed in is run first
+    if (!text && !ranNow && currentAsk?.type === 'code' && currentAsk.tests && code.trim() && (!runOut || ranFor.current !== code)) {
+      if (running) return
+      void runMine().then((r) => r && submit(undefined, r))
+      return
+    }
+    const out = ranNow ?? runOut
+    const ran = out ? `\n\nWhen I ran it:\n\`\`\`\n${(out.stdout + out.stderr).slice(0, 1500) || '(no output)'}\n\`\`\`` : ''
     const choice = currentAsk?.type === 'choice' && currentAsk.options.length > 0
     const pick = choice && picked !== null && currentAsk.options[picked] ? `(${String.fromCharCode(65 + picked)}) ${currentAsk.options[picked]}` : ''
     const body =
@@ -680,11 +689,18 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     document.addEventListener('tide:ask-about', onAsk, true)
     return () => document.removeEventListener('tide:ask-about', onAsk, true)
   }, [])
-  const runMine = async () => {
-    if (!currentAsk || running) return
+  const runMine = async (): Promise<RunResult | null> => {
+    if (!currentAsk || running) return null
     setRunning(true)
-    setRunOut(await window.tide.runner.run(currentAsk.lang ?? options?.language ?? 'python', code))
-    setRunning(false)
+    try {
+      // Its hidden tests run with it; SQL runs in this lesson's data lab
+      const r = await window.tide.runner.run(currentAsk.lang ?? options?.language ?? 'python', code, '', { tests: currentAsk.tests, labId: labId.current })
+      ranFor.current = code
+      setRunOut(r)
+      return r
+    } finally {
+      setRunning(false)
+    }
   }
 
   const askHint = () => {
@@ -1141,11 +1157,11 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     <CodeEditor value={code} onChange={setCode} language={currentAsk.lang ?? options?.language ?? 'python'} onSubmit={() => submit()} />
                   </Suspense>
                   <div className="s-run-row">
-                    <button className="btn small" onClick={runMine} disabled={running || !code.trim()} title="Run your code in a sandbox">
+                    <button className="btn small" onClick={() => void runMine()} disabled={running || !code.trim()} title="Run your code in a sandbox">
                       <Icon name="play" size={12} />
                       {running ? 'Running…' : 'Run'}
                     </button>
-                    <span className="muted small">Try your solution here.</span>
+                    <span className="muted small">{currentAsk.tests ? 'Run checks it against hidden tests.' : 'Try your solution here.'}</span>
                   </div>
                   {runOut && (
                     <pre className={`run-output s-run-output${runOut.exitCode !== 0 || runOut.timedOut ? ' failed' : ''}`} data-meta={runOut.timedOut ? 'timed out' : `exit ${runOut.exitCode}, ${runOut.durationMs} ms`}>

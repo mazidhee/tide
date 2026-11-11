@@ -146,8 +146,64 @@ export function networkNote(stderr: string, source: string): string {
 const failed = (stderr: string): RunResult => ({ stdout: '', stderr, exitCode: 1, timedOut: false, durationMs: 0 })
 
 export interface RunOptions {
-  /** Hidden tests for a code question: pytest-style test functions, run against the code (Python) */
+  /**
+   * Hidden tests for a code question. In Python, pytest-style test functions run against the code.
+   * In any language, input and output cases as JSON, [{"stdin": "2 3", "expect": "5"}]: the
+   * program is compiled once and run on each input, and its output is compared with the expected.
+   */
   tests?: string
+}
+
+/** One input and output case of a hidden test */
+export interface IoCase {
+  name: string
+  stdin: string
+  expect: string
+}
+
+const MAX_CASES = 20
+
+/** Input and output cases from a tests field, or null when it is not a JSON list of them */
+export function parseCases(tests: string): IoCase[] | null {
+  const text = tests.trim()
+  if (!text.startsWith('[')) return null
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    return null
+  }
+  if (!Array.isArray(raw) || !raw.length) return null
+  const out: IoCase[] = []
+  for (const [i, c] of raw.slice(0, MAX_CASES).entries()) {
+    if (!c || typeof c !== 'object') return null
+    const o = c as Record<string, unknown>
+    const expected = o.expect ?? o.expected ?? o.output ?? o.stdout
+    if (expected === undefined || expected === null) return null
+    const input = o.stdin ?? o.input ?? ''
+    out.push({ name: typeof o.name === 'string' && o.name.trim() ? o.name.trim() : `case ${i + 1}`, stdin: typeof input === 'string' ? input : String(input), expect: typeof expected === 'string' ? expected : JSON.stringify(expected) })
+  }
+  return out
+}
+
+/** Output as compared: line endings, spaces at the ends of lines and blank lines at the end don't count */
+const normalOutput = (s: string) =>
+  s
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((l) => l.trimEnd())
+    .join('\n')
+    .trim()
+
+/** Whether a case passed and, when not, why in a line or two */
+export function judgeCase(c: IoCase, r: { stdout: string; stderr: string; exitCode: number; timedOut: boolean }): string {
+  if (r.timedOut) return 'timed out'
+  const got = normalOutput(r.stdout)
+  const want = normalOutput(c.expect)
+  if (r.exitCode !== 0) return `stopped with exit code ${r.exitCode}${r.stderr.trim() ? `: ${r.stderr.trim().split('\n').slice(-2).join(' ').slice(0, 200)}` : ''}`
+  if (got === want) return ''
+  const shown = (s: string) => JSON.stringify(s.length > 200 ? `${s.slice(0, 200)}…` : s)
+  return `input ${shown(c.stdin)}: expected ${shown(want)}, got ${shown(got)}`
 }
 
 export async function runCode(language: string, code: string, stdin = '', timeoutMs?: number, opts: RunOptions = {}): Promise<RunResult> {
@@ -155,14 +211,16 @@ export async function runCode(language: string, code: string, stdin = '', timeou
   const lang = languageOf(language)
   if (!lang) return failed(`Running ${language} isn't supported yet. ${LANGUAGE_NAMES} are.`)
   const tests = opts.tests?.trim() ?? ''
-  if (tests && lang.id !== 'python') return failed('Hidden tests run for Python only: run the code with its own checks instead.')
+  const cases = tests ? parseCases(tests) : null
+  if (tests && !cases && lang.id !== 'python') return failed(`Hidden tests in ${lang.name} are input and output cases, as JSON: [{"name": "adds", "stdin": "2 3", "expect": "5"}]. (Test functions are for Python, run with pytest.)`)
+  const pyTests = !!tests && !cases
   const tool = await toolFor(lang)
   if (!tool) return failed(missingText(lang))
   const scratch = await fs.mkdtemp(join(tmpdir(), 'tide-run-'))
   const work = join(scratch, 'work')
   await fs.mkdir(work)
   let entry = lang.entry
-  if (tests) {
+  if (pyTests) {
     // The answer is imported by the tests, which get its names without having to ask
     await fs.writeFile(join(work, 'answer.py'), code)
     await fs.writeFile(join(work, 'test_answer.py'), /^\s*(from answer import|import answer\b)/m.test(tests) ? tests : `from answer import *\n${tests}`)
@@ -174,7 +232,7 @@ export async function runCode(language: string, code: string, stdin = '', timeou
     await fs.writeFile(join(work, entry), code)
   }
   const limit = timeoutMs ?? (lang.id === 'python' && HEAVY_IMPORT.test(code) ? PROJECT_TIMEOUT_MS : TIMEOUT_MS)
-  return execute({ lang, tool: tool.path, scratch, entry, stdin, timeoutMs: limit, source: code, tests: !!tests })
+  return execute({ lang, tool: tool.path, scratch, entry, stdin, timeoutMs: limit, source: code, tests: pyTests, ...(cases ? { cases } : {}) })
 }
 
 /**
@@ -308,6 +366,8 @@ interface Job {
   source: string
   /** answer.py and test_answer.py are in place: run the tests instead of the program */
   tests: boolean
+  /** Run the program once on each case's input, instead of once on stdin */
+  cases?: IoCase[]
 }
 
 async function execute(job: Job): Promise<RunResult> {
@@ -379,6 +439,22 @@ async function execute(job: Job): Promise<RunResult> {
     const built = await sandboxed(sb, lang.compile(c), { cwd: work, env, timeoutMs: COMPILE_TIMEOUT_MS })
     if (built.exitCode !== 0 || built.timedOut) return finish({ stdout: '', stderr: clean(built.stderr || built.stdout) + (built.timedOut ? '\nCompiling took too long and was stopped.' : ''), exitCode: built.exitCode || 1, timedOut: built.timedOut })
     warnings = built.stderr
+  }
+
+  if (job.cases) {
+    const t: TestResults = { passed: [], failed: [] }
+    let shown = ''
+    for (const k of job.cases) {
+      const r = await sandboxed(sb, lang.run(c), { cwd: work, env, stdin: k.stdin, timeoutMs: job.timeoutMs })
+      const why = judgeCase(k, { ...r, stderr: clean(r.stderr) })
+      if (why) {
+        t.failed.push({ name: k.name, message: why })
+        // What the first failing case printed to stderr is shown whole: a traceback is worth reading
+        if (!shown && r.stderr.trim()) shown = clean(r.stderr)
+      } else t.passed.push(k.name)
+    }
+    const stderr = clean(warnings) + shown
+    return finish({ stdout: testSummary(t), stderr: lang.id === 'python' ? stderr + libraryNote(stderr) : stderr, exitCode: t.failed.length ? 1 : 0, timedOut: false, tests: t })
   }
 
   const ran = await sandboxed(sb, job.tests ? [...c.python, join(site, '_tide_tests.py')] : lang.run(c), { cwd: work, env, stdin: job.stdin, timeoutMs: job.timeoutMs })

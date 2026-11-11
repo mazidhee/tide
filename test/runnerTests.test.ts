@@ -5,7 +5,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 const dir = mkdtempSync(join(tmpdir(), 'tide-runt-'))
 vi.mock('electron', () => ({ app: { getPath: () => dir, isPackaged: false } }))
-const { runCode, parseTestResult, testSummary, libraryNote } = await import('../src/main/runner')
+const { runCode, parseTestResult, testSummary, libraryNote, parseCases, judgeCase } = await import('../src/main/runner')
+const { LANGUAGES, toolFor } = await import('../src/main/languages')
 
 const LONG = 60_000
 const TESTS = `def test_adds():
@@ -59,9 +60,10 @@ describe('hidden tests on a code question', () => {
     expect(r.tests!.failed[0].message).toMatch(/NameError.*add/)
   }, LONG)
 
-  it('is for Python only, and says so', async () => {
+  it('in other languages are input and output cases, and says so when given anything else', async () => {
     const r = await runCode('javascript', 'const add = (a, b) => a + b', '', undefined, { tests: 'x' })
-    expect(r.stderr).toContain('Hidden tests run for Python only')
+    expect(r.stderr).toContain('Hidden tests in JavaScript are input and output cases, as JSON')
+    expect(r.exitCode).toBe(1)
   })
 
   it('reads the runner’s results and writes the summary', () => {
@@ -91,5 +93,67 @@ describe('a library that is not installed', () => {
     const r = await runCode('python', 'import nosuchlibrary_tide\n')
     expect(r.exitCode).not.toBe(0)
     expect(r.stderr).toContain("nosuchlibrary_tide isn't available in Tide's Python")
+  }, LONG)
+})
+
+const ADD_CASES = JSON.stringify([
+  { name: 'adds', stdin: '2 3\n', expect: '5' },
+  { name: 'negatives', stdin: '-1 -1', expect: '-2\n' },
+  { name: 'large', stdin: '2000000000 2000000000', expect: '4000000000' }
+])
+
+describe('hidden tests as input and output cases, in any language', () => {
+  it('reads the cases, with other spellings of their fields, and refuses what is not a list of them', () => {
+    expect(parseCases('[{"input": "1", "expected": 2}, {"stdin": "x", "output": "y", "name": "named"}]')).toEqual([
+      { name: 'case 1', stdin: '1', expect: '2' },
+      { name: 'named', stdin: 'x', expect: 'y' }
+    ])
+    expect(parseCases('def test_a(): pass')).toBeNull()
+    expect(parseCases('[]')).toBeNull()
+    expect(parseCases('[{"stdin": "1"}]')).toBeNull()
+    expect(parseCases('[1, 2]')).toBeNull()
+    expect(parseCases(JSON.stringify(Array.from({ length: 50 }, () => ({ expect: '1' }))))!.length).toBe(20)
+  })
+
+  it('compares output without minding line endings or trailing spaces, and says why a case failed', () => {
+    const c = { name: 'a', stdin: '2 3', expect: '5\n' }
+    expect(judgeCase(c, { stdout: '5  \r\n\n', stderr: '', exitCode: 0, timedOut: false })).toBe('')
+    expect(judgeCase(c, { stdout: '6\n', stderr: '', exitCode: 0, timedOut: false })).toBe('input "2 3": expected "5", got "6"')
+    expect(judgeCase(c, { stdout: '', stderr: 'Traceback\nValueError: bad', exitCode: 1, timedOut: false })).toBe('stopped with exit code 1: Traceback ValueError: bad')
+    expect(judgeCase(c, { stdout: '', stderr: '', exitCode: -1, timedOut: true })).toBe('timed out')
+  })
+
+  it('runs a JavaScript program on each input and says which passed', async () => {
+    const code = "const [a, b] = require('fs').readFileSync(0, 'utf8').trim().split(/\\s+/).map(Number)\nconsole.log(a + b)"
+    const r = await runCode('javascript', code, '', undefined, { tests: ADD_CASES })
+    expect(r.tests).toEqual({ passed: ['adds', 'negatives', 'large'], failed: [] })
+    expect(r.stdout).toContain('3 of 3 tests passed')
+    expect(r.exitCode).toBe(0)
+  }, LONG)
+
+  it('runs Python on cases too, and shows the traceback of the first that crashed', async () => {
+    const r = await runCode('python', 'a, b = map(int, input().split())\nif a < 0: raise ValueError("no negatives")\nprint(a + b)', '', undefined, { tests: ADD_CASES })
+    expect(r.tests!.passed).toEqual(['adds', 'large'])
+    expect(r.tests!.failed[0].name).toBe('negatives')
+    expect(r.tests!.failed[0].message).toContain('ValueError: no negatives')
+    expect(r.stderr).toMatch(/line 2/)
+    expect(r.exitCode).toBe(1)
+  }, LONG)
+
+  it('compiles once and catches a wrong answer in C: an int that overflows', async () => {
+    const c = LANGUAGES.find((l) => l.id === 'c')!
+    if (!(await toolFor(c))) return
+    const r = await runCode('c', '#include <stdio.h>\nint main(void) { int a, b; scanf("%d %d", &a, &b); printf("%d\\n", a + b); return 0; }', '', undefined, { tests: ADD_CASES })
+    expect(r.tests!.passed).toEqual(['adds', 'negatives'])
+    expect(r.tests!.failed.map((f) => f.name)).toEqual(['large'])
+  }, LONG)
+
+  it('reports a compile error once, with its line, instead of running any case', async () => {
+    const rust = LANGUAGES.find((l) => l.id === 'rust')!
+    if (!(await toolFor(rust))) return
+    const r = await runCode('rust', 'fn main() {\n    let x: i32 = "no";\n}', '', undefined, { tests: ADD_CASES })
+    expect(r.tests).toBeUndefined()
+    expect(r.stderr).toMatch(/main\.rs:2/)
+    expect(r.exitCode).not.toBe(0)
   }, LONG)
 })

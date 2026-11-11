@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseBlocks } from '../src/shared/session'
+import { parseBlocks, splitTests } from '../src/shared/session'
 
 describe('parseBlocks', () => {
   it('parses a graded turn with a card and the next question', () => {
@@ -28,5 +28,25 @@ Question 3 of 8.
     expect(b[0]).toEqual({ kind: 'plan', steps: ['Halving', 'Invariants'] })
     expect(b[1]).toMatchObject({ kind: 'scores', rows: [{ label: 'Problem solving', score: 3, max: 4, note: 'clear' }, { label: 'Communication', score: 2, max: 4, note: 'quiet' }] })
     expect(b[2]).toMatchObject({ kind: 'challenge', quote: 'it is always faster' })
+  })
+})
+
+describe('hidden tests on a code question', () => {
+  it('are taken out of what the student sees and kept with the question', () => {
+    const reply = 'Write it.\n<ask type="code" lang="python">Write `add(a, b)`.\n```tests\ndef test_adds():\n    assert add(2, 3) == 5\n```\n</ask>'
+    const ask = parseBlocks(reply).find((b) => b.kind === 'ask')!
+    expect(ask).toMatchObject({ type: 'code', lang: 'python', prompt: 'Write `add(a, b)`.', tests: 'def test_adds():\n    assert add(2, 3) == 5' })
+  })
+
+  it('stay hidden while the question is still being written, and a question without them has none', () => {
+    const streaming = parseBlocks('<ask type="code" lang="go">Read two numbers and print their sum.\n```tests\n[{"stdin": "2 3", "exp')
+    expect(streaming.find((b) => b.kind === 'ask')).toMatchObject({ prompt: 'Read two numbers and print their sum.' })
+    const plain = parseBlocks('<ask type="code" lang="c">Print hello.\n```c\nint main(void) {}\n```\n</ask>').find((b) => b.kind === 'ask')!
+    expect(plain).not.toHaveProperty('tests')
+    expect((plain as { prompt: string }).prompt).toContain('```c')
+  })
+
+  it('splits a body by itself', () => {
+    expect(splitTests('Which?\n```tests\n[{"expect": "1"}]\n```')).toEqual({ prompt: 'Which?', tests: '[{"expect": "1"}]' })
   })
 })
