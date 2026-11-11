@@ -311,6 +311,18 @@ function registerIpc() {
   handle('lessons:list', () => listLessons())
   handle('lessons:get', (id: string) => getLesson(id))
   handle('knowledge:view', async () => (await import('./knowledge')).knowledgeView())
+  // ---- Courses from GitHub (main/courses.ts) ----
+  const courses = () => import('./courses')
+  handle('courses:list', async () => (await courses()).listCourses())
+  handle('courses:get', async (id: string) => (await courses()).courseDetail(String(id)))
+  handle('courses:import', async (id: string) => (await courses()).importCourse(String(id)))
+  handle('courses:update', async (id: string) => (await courses()).updateCourse(String(id)))
+  handle('courses:remove', async (id: string) => (await courses()).removeCourse(String(id)))
+  handle('courses:lesson', async (id: string, lesson: string) => (await courses()).lessonContent(String(id), String(lesson)))
+  handle('courses:file', async (id: string, path: string) => (await courses()).courseFile(String(id), String(path)))
+  handle('courses:mark', async (id: string, lesson: string, done: boolean) => (await courses()).markLesson(String(id), String(lesson), !!done))
+  handle('courses:search', async (q: string) => (await courses()).searchCourses(String(q ?? ''), 12))
+  handle('courses:saveToNotes', async (id: string) => (await courses()).saveToNotes(String(id)))
   // ---- Guided projects and adaptive difficulty (main/workshop.ts, main/difficulty.ts) ----
   const workshop = () => import('./workshop')
   handle('workshop:list', async () => (await workshop()).listWorkshop())

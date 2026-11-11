@@ -4,6 +4,7 @@ import type { AgentStep, OutlineDraftRequest } from '@shared/types'
 import { normalizeOutlineDraft, parseOutline, type OutlineLine } from '@shared/outline'
 import { addPlanDates, datePhases, planFrontmatter, planLength, readingList, rescalePlan, shortDate, type StudyPlan } from '@shared/plan'
 import { PixelScene } from './PixelScene'
+import { CourseSuggestions } from './CoursesView'
 import { useApp } from '../state'
 import { Icon } from './Icon'
 import { PillInput, PillSelect, PillToggle, PromptBox } from './PromptBox'
@@ -209,6 +210,8 @@ export function NewTopicView({ initial, initialGoal, auto }: { initial?: string;
       <PixelScene place={phase === 'form' ? 'planner' : 'drafting'} rows={40} scale={3} className="page-scene" data={{ count: topicCount, live: phase === 'drafting' }} />
       <div className="page-inner narrow">
         <h1 className="page-title">New topic</h1>
+        {/* Courses from GitHub that teach it (components/CoursesView.tsx) */}
+        <CourseSuggestions topic={topic} />
 
         {phase === 'form' && (
           <div className="nt-form">

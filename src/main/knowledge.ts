@@ -165,7 +165,8 @@ async function lessonParts(k: Engine, record: LessonRecord): Promise<{ concepts:
   if (record.options?.placement) return null
   const d = digestLesson(record)
   if (!d) return null
-  const { area, isPrivate } = await placeOf(scopePath(record.scope))
+  // A course's lesson counts under the course, as a subject of its own on the map
+  const { area, isPrivate } = record.options?.course ? { area: record.options.course.title, isPrivate: false } : await placeOf(scopePath(record.scope))
   const retest = record.options?.retest
   if (retest?.length) {
     // A retest of mistakes: each question is one that came back, on the topic its mistake was made in

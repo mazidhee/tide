@@ -13,6 +13,7 @@ import './styles/sims.css'
 import './styles/simKinds.css'
 import './styles/knowledge.css'
 import './styles/workshop.css'
+import './styles/courses.css'
 // The new design: every rule in these is scoped to data-design='tide' (see shared/design.ts)
 import './styles/tide/fonts.css'
 import './styles/tide/tokens.css'

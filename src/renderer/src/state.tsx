@@ -19,6 +19,8 @@ export type View =
   // Guided projects (components/WorkshopView.tsx): the list, a project, or a roadmap's "Project:" item
   | { kind: 'workshop'; id?: string; from?: { notebook?: string; topic?: string }; nonce?: number }
   | { kind: 'new-topic'; topic?: string; goal?: string; auto?: boolean; nonce?: number }
+  // Open courses from GitHub (components/CoursesView.tsx): the catalogue, a course, or one of its lessons
+  | { kind: 'courses'; id?: string; lesson?: string; area?: import('@shared/courses').CourseArea }
   | { kind: 'chat'; id?: string }
   | { kind: 'lab'; terminal: 'lab' | 'local'; topic?: string; nonce?: number }
   | { kind: 'coach' }

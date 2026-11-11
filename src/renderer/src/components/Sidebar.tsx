@@ -325,6 +325,7 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
           {studyOpen && (
             <div className="nav-group-items">
               {shown('learn') && navItem('tutor', 'Learn', view.kind === 'learn' || view.kind === 'session' || view.kind === 'quiz' || view.kind === 'exam', () => app.setView({ kind: 'learn' }))}
+              {shown('courses') && navItem('course', 'Courses', view.kind === 'courses', () => app.setView({ kind: 'courses' }))}
               {shown('practice') && navItem('terminal', 'Practice', view.kind === 'practice' || view.kind === 'lab' || view.kind === 'code' || view.kind === 'drill' || view.kind === 'design', () => app.setView({ kind: 'practice' }))}
               {shown('review') && navItem('cards', 'Review', view.kind === 'study', () => app.setView({ kind: 'study', scope: { kind: 'vault' } }), dueCount)}
               {navItem('list', 'Your week', view.kind === 'coach' || view.kind === 'wrapup' || view.kind === 'weekly', () => app.setView({ kind: 'coach' }))}

@@ -55,7 +55,7 @@ export function readingHtml(content: string, renderBlock: (md: string) => string
     return `<figure class="reading-unsealed"><figcaption>The tutor’s own text, not a checked excerpt from a source</figcaption><div class="reading-text"><p>${esc(text).replace(/\n\s*\n/g, '</p><p>')}</p></div></figure>`
   }
   const r = parsed.reading
-  const where = r.kind === 'book' ? 'From a book you own' : r.kind === 'note' ? 'From your notes' : 'Reading'
+  const where = r.kind === 'book' ? 'From a book you own' : r.kind === 'note' ? 'From your notes' : r.kind === 'course' ? 'From the course' : 'Reading'
   const by = r.by && r.by !== r.title ? `<span class="reading-by">${esc(r.by)}</span>` : ''
   const facts = [link(r), r.licence ? `<span class="reading-licence">${esc(r.licence)}</span>` : '', r.url && dayLabel(r.fetched) ? `<span>Fetched ${dayLabel(r.fetched)}</span>` : ''].filter(Boolean)
   return (

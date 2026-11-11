@@ -14,7 +14,8 @@ import { AUTHORITY, UNLISTED, academicHost, openLicence, trustedSite } from './t
 
 // ---------- Candidates ----------
 
-export type SourceKind = 'book' | 'note' | 'web' | 'explainer'
+/** course: a lesson of an open course you imported from GitHub (shared/courses), read from its copy on this Mac */
+export type SourceKind = 'book' | 'note' | 'web' | 'explainer' | 'course'
 
 /** A source that might teach a step: its text as fetched, and what is known about it */
 export interface Candidate {
@@ -357,6 +358,8 @@ export function unreadable(text: string): boolean {
 export function authorityOf(c: Pick<Candidate, 'kind' | 'url'>): number {
   if (c.kind === 'book') return 1
   if (c.kind === 'note') return 0.55
+  // A course you chose to learn from: written to teach this, by people who teach it
+  if (c.kind === 'course') return 0.9
   const listed = c.url ? trustedSite(c.url) : null
   if (listed) return AUTHORITY[listed.kind]
   if (c.kind === 'explainer') return 0.8
@@ -365,7 +368,7 @@ export function authorityOf(c: Pick<Candidate, 'kind' | 'url'>): number {
 
 export function licenceScore(c: Pick<Candidate, 'kind' | 'url' | 'licence'>): number {
   // Your own copy, read on your own Mac
-  if (c.kind === 'book' || c.kind === 'note') return 1
+  if (c.kind === 'book' || c.kind === 'note' || c.kind === 'course') return 1
   if (openLicence(c.licence)) return 1
   const listed = c.url ? trustedSite(c.url) : null
   if (listed) return listed.kind === 'official' || listed.kind === 'primary' ? 0.8 : 0.6
@@ -374,7 +377,8 @@ export function licenceScore(c: Pick<Candidate, 'kind' | 'url' | 'licence'>): nu
 
 /** How much of a source may be shown: a page that isn't yours and isn't openly licensed, never more than half of it */
 export function excerptCeiling(c: Pick<Candidate, 'kind' | 'url' | 'licence' | 'text'>): number {
-  if (c.kind === 'book' || c.kind === 'note' || openLicence(c.licence)) return EXCERPT.max
+  // A course's section is shown whole (it is what the lesson is taught from, and is cut into sections of at most this)
+  if (c.kind === 'book' || c.kind === 'note' || c.kind === 'course' || openLicence(c.licence)) return EXCERPT.max
   return Math.min(EXCERPT.max, Math.floor(wordCount(c.text) / 2))
 }
 
@@ -498,7 +502,7 @@ export function parseReading(content: string): ParsedReading | null {
       ...(typeof meta.licence === 'string' ? { licence: meta.licence } : {}),
       fetched: typeof meta.fetched === 'string' ? meta.fetched : '',
       format: meta.format === 'md' ? 'md' : 'text',
-      kind: meta.kind === 'book' || meta.kind === 'note' || meta.kind === 'explainer' ? meta.kind : 'web',
+      kind: meta.kind === 'book' || meta.kind === 'note' || meta.kind === 'explainer' || meta.kind === 'course' ? meta.kind : 'web',
       text
     }
     return { reading, sealed: !!text.trim() && meta.seal === sealOf(reading) }
