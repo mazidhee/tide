@@ -16536,6 +16536,183 @@ button.tl-dot:focus-visible {
   }
 }
 
+/* ---------- Speed: where each answer's time went ---------- */
+.sp {
+  --sp-tide: var(--ink);
+  --sp-read: #8a7be8;
+  --sp-write: #2f9e8f;
+  --sp-tools: #c78a2e;
+  max-width: 1040px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sp-empty {
+  padding: 40px 0;
+  max-width: 60ch;
+  color: var(--ink-muted);
+}
+
+.sp-top {
+  padding: 20px 22px 18px;
+  margin-bottom: 20px;
+  border-radius: 16px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+}
+
+.sp-sentence {
+  margin: 0 0 14px;
+  max-width: 72ch;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.sp-sentence b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.sp-bar {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.sp-bar span {
+  flex-basis: 0;
+  min-width: 2px;
+}
+
+.sp-tide {
+  background: var(--sp-tide);
+}
+
+.sp-read {
+  background: var(--sp-read);
+}
+
+.sp-write {
+  background: var(--sp-write);
+}
+
+.sp-tools {
+  background: var(--sp-tools);
+}
+
+.sp-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.sp-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.sp-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+}
+
+.sp-legend .num {
+  color: var(--ink-muted);
+}
+
+.sp-table {
+  border-radius: 16px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.sp-cols,
+.sp-row {
+  display: grid;
+  grid-template-columns: 150px minmax(160px, 1fr) 70px 70px 70px 70px;
+  align-items: center;
+  gap: 14px;
+  padding: 0 18px;
+}
+
+.sp-cols {
+  height: 38px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  background: color-mix(in srgb, var(--ink) 2.5%, var(--bg-raised));
+  border-bottom: 1px solid var(--line);
+}
+
+.sp-row {
+  min-height: 58px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.sp-row + .sp-row {
+  border-top: 1px solid var(--line);
+}
+
+.sp .r {
+  justify-self: end;
+  text-align: right;
+}
+
+.sp-what,
+.sp-where {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.sp-what b {
+  font-weight: 560;
+  color: var(--ink);
+}
+
+.sp-row small {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-total {
+  color: var(--ink);
+  font-weight: 560;
+}
+
+.sp {
+  container: sp / inline-size;
+}
+
+@container sp (max-width: 900px) {
+  .sp-cols,
+  .sp-row {
+    grid-template-columns: 96px minmax(110px, 1fr) 58px 58px 58px 58px;
+    gap: 10px;
+    padding: 0 14px;
+  }
+
+  .sp-what small {
+    white-space: normal;
+  }
+}
+
 /* While the model is working, shimmering text holds still: repainting it every frame takes GPU
    time from Gemma (lib/motion.ts). The pulse and spinner stay, they're cheap. */
 :root[data-model-busy] .thinking-text,

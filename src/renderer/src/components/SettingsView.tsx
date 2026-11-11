@@ -8,6 +8,7 @@ import { PillSegment } from './PromptBox'
 import type { AISettings, Settings, ThemeId } from '@shared/types'
 import { useApp } from '../state'
 import { Icon, type IconName } from './Icon'
+import { SpeedView } from './SpeedView'
 import { ConnectionsView } from './ConnectionsView'
 
 const THEMES: { id: ThemeId; name: string; bg: string; side: string; ink: string; accent: string }[] = [
@@ -42,7 +43,7 @@ const ACCENTS = [
 
 const LOCAL_SEARCH = 'http://127.0.0.1:8888'
 
-export type Section = 'general' | 'appearance' | 'tutor' | 'study' | 'connections' | 'models' | 'tools' | 'usage'
+export type Section = 'general' | 'appearance' | 'tutor' | 'study' | 'connections' | 'models' | 'tools' | 'usage' | 'speed'
 
 export const SECTIONS: { id: Section; label: string; icon: IconName; group: string; description: string }[] = [
   { id: 'general', label: 'General', icon: 'settings', group: 'App', description: 'Where your notes live.' },
@@ -52,7 +53,8 @@ export const SECTIONS: { id: Section; label: string; icon: IconName; group: stri
   { id: 'connections', label: 'Connections', icon: 'link', group: 'AI', description: 'Every service Tide uses: what it’s for, where it runs, what it used today, and what you could add.' },
   { id: 'models', label: 'Models', icon: 'sparkle', group: 'AI', description: 'Gemma on this Mac does the tutoring. A cloud model can help with the hardest parts.' },
   { id: 'tools', label: 'Tools', icon: 'terminal', group: 'AI', description: 'What the tutor can use: search, code and your tasks.' },
-  { id: 'usage', label: 'Usage', icon: 'graph', group: 'AI', description: 'What each model was used for this month, and what the cloud cost.' }
+  { id: 'usage', label: 'Usage', icon: 'graph', group: 'AI', description: 'What each model was used for this month, and what the cloud cost.' },
+  { id: 'speed', label: 'Speed', icon: 'gauge', group: 'AI', description: 'Where each answer’s time went: Tide, the model reading, the model writing, and tools.' }
 ]
 
 const LEGACY: Record<string, Section> = { ai: 'models', notes: 'general' }
@@ -1130,6 +1132,7 @@ export function SettingsView({ section = 'general' }: { section?: Section | 'ai'
         {tab === 'models' && <ModelsSection />}
         {tab === 'tools' && <ToolsSection />}
         {tab === 'usage' && <UsageSection />}
+        {tab === 'speed' && <SpeedView />}
       </div>
     </div>
   )
