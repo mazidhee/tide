@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en-GB" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tide · Source-led lesson: harness</title>
+<!--
+  A source-led lesson step outside Electron: the reading chosen and placed by the app's own code
+  (shared/sourceLed, shared/sourceGather), drawn by the app's Markdown and styles.
+  Build and shoot:  ./shoot.sh
+  Open:   index.html?scene=docs&theme=light
+          scene: docs (a reading from official documentation, the question, an answer, a mark that quotes it)
+                 book (a correct mark, then the next step's reading from a book you own)
+                 fallback (a short page; a gap the tutor fills and says so; a block the tutor made up, not shown as a reading)
+          theme: light sepia graphite dark midnight ember     design=classic for the old design     face=sans
+          tall=1 lays the whole lesson out for one long screenshot
+-->
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/inter/index.css" />
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/source-serif-4/index.css" />
+<link rel="stylesheet" href="../../../node_modules/@fontsource-variable/jetbrains-mono/index.css" />
+<link rel="stylesheet" href="../../../node_modules/katex/dist/katex.min.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/theme.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/app.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/prose.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/tide/fonts.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/tide/tokens.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/tide/base.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/tide/shell.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/tide/lesson.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/reading.css" />
+<link rel="stylesheet" href="../../../src/renderer/src/styles/tide/reading.css" />
+<style>
+  html, body, #root { height: 100%; margin: 0; }
+  body { background: var(--paper, var(--bg)); }
+  html.tall, html.tall body, html.tall #root, html.tall .doc-view, html.tall .session-solo { height: auto; overflow: visible; }
+  html.tall .s-answer { position: static; }
+  /* Stand-ins for app chrome the harness doesn't mount */
+  .hx-crumb { display: flex; gap: 10px; align-items: baseline; font: 400 13px/20px var(--ui, var(--font-ui)); color: var(--ink-3, var(--ink-muted)); }
+  .hx-crumb b { color: var(--ink); font-weight: 600; }
+  .hx-tools { margin-left: auto; }
+  .hx-prof { width: 24px; height: 24px; border-radius: 50%; background: var(--accent-soft); border: 1px solid var(--accent-line, var(--line)); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>if (new URLSearchParams(location.search).get('tall')) document.documentElement.classList.add('tall')</script>
+<script src="harness.js"></script>
+</body>
+</html>

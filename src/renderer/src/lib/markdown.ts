@@ -1,3 +1,4 @@
+import { readingHtml } from './reading'
 import { explainerForUrl, type Explainer } from '@shared/explainers'
 import { normalizeMath } from '@shared/modelText'
 import MarkdownIt from 'markdown-it'
@@ -422,6 +423,8 @@ export function createMarkdown() {
   })
   const fenceRule = md.renderer.rules.fence!
   md.renderer.rules.fence = (tokens, idx, opts, env, self) => {
+    // [source-led] a reading Tide put into a lesson: the source's words under their attribution (lib/reading.ts)
+    if (tokens[idx].info.trim() === 'reading') return readingHtml(tokens[idx].content, (m) => md.render(m, env))
     const html = fenceRule(tokens, idx, opts, env, self)
     const t = tokens[idx]
     return t.attrGet('data-line') !== null
