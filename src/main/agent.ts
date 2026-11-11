@@ -219,8 +219,8 @@ const TERMINAL_RUN = tool(
 
 const CODE_TOOL = tool(
   'run_code',
-  'Run Python or JavaScript in a sandbox (no network, no files). Use it for any exact calculation (large numbers, sequences, probabilities, algebra) rather than working it out in your head. Returns stdout, stderr and the exit code. Python has SymPy.',
-  { language: { type: 'string', enum: ['python', 'javascript'] }, code: { type: 'string' }, stdin: { type: 'string' } },
+  'Run Python, JavaScript, C or C++ in a sandbox (no network, no files). Use it for any exact calculation (large numbers, sequences, probabilities, algebra) rather than working it out in your head, and to run a code example before you show its output. Returns stdout, stderr and the exit code. Python has SymPy. C and C++ are compiled with warnings and an undefined-behaviour checker, so their messages are worth showing.',
+  { language: { type: 'string', enum: ['python', 'javascript', 'c', 'cpp'] }, code: { type: 'string' }, stdin: { type: 'string' } },
   ['language', 'code']
 )
 

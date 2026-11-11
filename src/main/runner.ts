@@ -86,16 +86,31 @@ const languageOf = (language: string) => {
   const lang = language.toLowerCase()
   if (['python', 'py', 'python3'].includes(lang)) return 'python'
   if (['javascript', 'js', 'node', 'mjs'].includes(lang)) return 'javascript'
+  if (lang === 'c') return 'c'
+  if (['cpp', 'c++', 'cc', 'cxx'].includes(lang)) return 'cpp'
   return null
 }
 
+type Lang = NonNullable<ReturnType<typeof languageOf>>
+const ENTRY: Record<Lang, string> = { python: 'main.py', javascript: 'main.js', c: 'main.c', cpp: 'main.cpp' }
+
+/**
+ * C and C++ are compiled with the Mac's own clang and run, both inside the sandbox. Warnings are
+ * on and the undefined-behaviour checker is built in, so the mistakes a learner makes (reading
+ * past an array, overflowing a signed int, using a null pointer) are reported with their line
+ * instead of passing silently, which is most of what there is to learn about C.
+ */
+const compileAndRun = (lang: 'c' | 'cpp') =>
+  `${lang === 'c' ? '/usr/bin/clang -std=c17' : '/usr/bin/clang++ -std=c++20'} -Wall -Wextra -g -fsanitize=undefined,bounds -fno-omit-frame-pointer -o prog ${ENTRY[lang]} && exec ./prog`
+
 export async function runCode(language: string, code: string, stdin = '', timeoutMs = TIMEOUT_MS): Promise<RunResult> {
   const lang = languageOf(language)
-  if (!lang) return { stdout: '', stderr: `Running ${language} isn't supported yet. Python and JavaScript are.`, exitCode: 1, timedOut: false, durationMs: 0 }
+  if (!lang) return { stdout: '', stderr: `Running ${language} isn't supported yet. Python, JavaScript, C and C++ are.`, exitCode: 1, timedOut: false, durationMs: 0 }
+  if ((lang === 'c' || lang === 'cpp') && !existsSync('/usr/bin/clang')) return { stdout: '', stderr: 'Running C needs Apple’s command line tools. Install them with: xcode-select --install', exitCode: 1, timedOut: false, durationMs: 0 }
   const scratch = await fs.mkdtemp(join(tmpdir(), 'tide-run-'))
   const work = join(scratch, 'work')
   await fs.mkdir(work)
-  const entry = lang === 'python' ? 'main.py' : 'main.js'
+  const entry = ENTRY[lang]
   await fs.writeFile(join(work, entry), code)
   return execute(lang, scratch, entry, stdin, timeoutMs)
 }
@@ -137,7 +152,7 @@ export async function runProject(entryAbs: string, stdin = ''): Promise<RunResul
   return execute(lang, scratch, relative(root, entryAbs), stdin, PROJECT_TIMEOUT_MS)
 }
 
-async function execute(lang: 'python' | 'javascript', scratch: string, entry: string, stdin: string, timeoutMs: number): Promise<RunResult> {
+async function execute(lang: Lang, scratch: string, entry: string, stdin: string, timeoutMs: number): Promise<RunResult> {
   const work = join(scratch, 'work')
   const file = join(work, entry)
   const site = join(scratch, 'site')
@@ -153,7 +168,7 @@ async function execute(lang: 'python' | 'javascript', scratch: string, entry: st
 
   const isJs = lang === 'javascript'
   const py = pythonPath()
-  const cmd = !isJs ? (py === '/usr/bin/env' ? ['/usr/bin/env', 'python3', file] : [py, file]) : [process.execPath, file]
+  const cmd = lang === 'c' || lang === 'cpp' ? ['/bin/sh', '-c', compileAndRun(lang)] : !isJs ? (py === '/usr/bin/env' ? ['/usr/bin/env', 'python3', file] : [py, file]) : [process.execPath, file]
   const started = Date.now()
 
   return new Promise<RunResult>((resolve) => {

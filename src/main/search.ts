@@ -1,11 +1,11 @@
 import MiniSearch from 'minisearch'
 import { app } from 'electron'
 import { promises as fs, existsSync, readFileSync } from 'fs'
-import { createRequire } from 'module'
 import { createHash } from 'crypto'
 import { basename, extname, join } from 'path'
 import matter from 'gray-matter'
 import type { SearchHit } from '@shared/types'
+import { tideCore } from './native'
 import { absPath, flattenFiles, getNoteMeta, getTree, joinRel, vaultRoot, writeText } from './vault'
 
 export interface Chunk {
@@ -151,33 +151,8 @@ interface NativeIndex {
   paths(): string[]
 }
 
-/** The Rust module: in the app's resources when packaged, next to its crate in development */
-function loadNative(): { SearchIndex: new (dir: string) => NativeIndex } | null {
-  if (process.env.TIDE_JS_SEARCH) return null
-  const appDir = (() => {
-    try {
-      return app.getAppPath()
-    } catch {
-      return ''
-    }
-  })()
-  const candidates = [
-    process.resourcesPath && join(process.resourcesPath, 'tide-core.node'),
-    appDir && join(appDir, 'native', 'tide-core', 'tide-core.node'),
-    join(__dirname, '..', '..', 'native', 'tide-core', 'tide-core.node')
-  ].filter((p): p is string => !!p && existsSync(p))
-  for (const p of candidates) {
-    try {
-      return createRequire(__filename)(p)
-    } catch (e) {
-      console.warn('[search] native index unavailable', p, e)
-    }
-  }
-  return null
-}
-
 function nativeBackend(dir: string): Backend | null {
-  const mod = loadNative()
+  const mod = process.env.TIDE_JS_SEARCH ? null : tideCore<{ SearchIndex: new (dir: string) => NativeIndex }>()
   if (!mod) return null
   try {
     const ix = new mod.SearchIndex(dir)

@@ -143,7 +143,7 @@ export const SESSION_FORMAT = `Format rules (the app turns these tags into inter
   a) ONE question for the student inside an ask tag: <ask type="short">question</ask>
      The student can only answer inside an ask tag, so never ask a question in plain text, not even the first one.
   b) <continue/> when your next message should carry on explaining: an idea that needs more than one message, or when Tide's note says to explain. Then ask nothing. After two explaining messages in a row, check their understanding with a question.
-  Types: predict (they guess before you explain), short (a sentence or two), explain (explain it back in their own words), choice (multiple choice, put options in the tag: <ask type="choice" options="first|second|third|fourth">question</ask>), error (show a flawed statement or code and ask them to find the mistake), problem (a worked problem or calculation), code (they write code: <ask type="code" lang="python">task</ask>).
+  Types: predict (they guess before you explain), short (a sentence or two), explain (explain it back in their own words), choice (multiple choice, put options in the tag: <ask type="choice" options="first|second|third|fourth">question</ask>), error (show a flawed statement or code and ask them to find the mistake), problem (a worked problem or calculation), code (they write code in an editor that runs it: <ask type="code" lang="python">task</ask>; lang is the language being taught: python, javascript, c or cpp run here).
 - Use choice when picking is the real test (spotting the right idea, the next step, or a misconception) and typing would only slow them down. Write the correct option first, then make each wrong option from one specific misconception, the same length and shape, with nothing that gives the answer away. They may add their reasoning to their pick: mark the reasoning too.
 - When they answer, judge it first: <grade verdict="correct|partial|wrong" score="0.0-1.0">one or two sentences: what was right and why, or the exact step that's wrong and why; no empty praise</grade>
 - Grade against your own solution, and quote the words of their answer that earned the verdict. "correct" means complete and right, not just heading the right way; a right answer with wrong or missing reasoning is "partial".
@@ -260,11 +260,22 @@ export function whyByDefault(pref: 'off' | 'foundations' | 'always' | undefined,
   return mode === 'always' || (mode === 'foundations' && FOUNDATIONAL.test(`${topicId ?? ''} ${topic}`))
 }
 
+/**
+ * For anything you learn by doing: a language, a library, a query language, a tool. Real code,
+ * run before it's shown where it can be, and said plainly when it couldn't be.
+ */
+export const HANDS_ON = `If this topic is learnt by writing or running something (a programming language, a library, a query language, a command-line tool, a product's API or query builder), teach it hands-on:
+- Show real code: short, complete snippets in fenced blocks with the language named, each doing one thing, in the language or syntax of the topic itself (C for C, SQL for a warehouse, the tool's own query or SDK calls for a product).
+- Python, JavaScript, C and C++ run here. Run every snippet in those with run_code before you show it, and show its real output under it. Never write output from memory. A compiler warning or a runtime error is teaching material: show it and explain it.
+- What can't run here (a cloud warehouse, a hosted product, another language) is shown exactly as it would be written, with one line saying it wasn't run. Look up the current syntax in the official documentation first (search, then read the page) rather than trusting memory: names and arguments change.
+- Have them write code early, with <ask type="code" lang="...">, starting from something small that works and changing it, rather than reading about it.
+- A snippet worth keeping (an idiom, a pattern, a query they'll reuse) goes in their notes as it is, with one line on when to use it.`
+
 export function sessionInstructions(setup: SessionSetup): string {
   const base = baseInstructions(setup)
   if (setup.mode !== 'teach') return base
   // A refresher or a project lesson already has its reason; a placement check isn't a lesson
-  const extra = [!setup.options?.refresh && !setup.options?.project ? BIG_PICTURE : '', GROUNDED, setup.options?.why ? WHY_RULES : ''].filter(Boolean)
+  const extra = [!setup.options?.refresh && !setup.options?.project ? BIG_PICTURE : '', GROUNDED, HANDS_ON, setup.options?.why ? WHY_RULES : ''].filter(Boolean)
   return extra.length ? `${base.trimEnd()}\n\n${extra.join('\n\n')}\n` : base
 }
 
