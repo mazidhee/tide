@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use tantivy::collector::{DocSetCollector, TopDocs};
 use tantivy::index::SegmentId;
-use tantivy::query::{BooleanQuery, BoostQuery, FuzzyTermQuery, Occur, Query, TermQuery, TermSetQuery};
+use tantivy::query::{BooleanQuery, BoostQuery, DisjunctionMaxQuery, FuzzyTermQuery, Occur, Query, RegexQuery, TermQuery, TermSetQuery};
 use tantivy::schema::{Field, IndexRecordOption, Schema, TextFieldIndexing, TextOptions, Value, FAST, STORED, STRING};
 use tantivy::tokenizer::{LowerCaser, RemoveLongFilter, SimpleTokenizer, Stemmer, TextAnalyzer};
 use tantivy::{doc, DocAddress, Index, IndexReader, IndexWriter, ReloadPolicy, Searcher, SegmentReader, TantivyDocument, Term};
@@ -69,6 +69,28 @@ pub enum Ranking {
 /// questions in scripts/eval/retrieval.json no fusion beat words alone by more than chance.
 pub const HYBRID: Ranking = Ranking::Fused { k: 60.0, weight: 0.5, depth: 50 };
 
+/// How much a question's word counts when it is in a passage's title (a heading counts 2, the
+/// text 1): for a note's passages, for a book's pages (whose title is only the file's name), and
+/// whether every such word counts or only the best of them
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Titles {
+  pub note: f32,
+  pub book: f32,
+  pub once: bool,
+}
+
+/// A book's title is only its file's name, on every one of its hundreds of pages: at 3, a book
+/// with a common word in its name flooded the results (asked how Python variables may be named,
+/// "can a name start with a number", the first three were pages of "A Survey of Number
+/// Representations…" and the right page came 6th; six of 94 questions were flooded so). At 1.5,
+/// on the 94 questions of scripts/eval/retrieval.json: that page comes 1st and none is flooded;
+/// keyword questions 47/47 in the first 3 (was 46) and 47/47 in the first 8 (as before), MRR
+/// 0.965 (0.947); paraphrase 18/47 in the first 3 (was 14: gained 5, lost 1) and 21/47 in the
+/// first 8 (was 19: gained 2, lost 0), MRR 0.300 (0.267). 2, 1 and 0.5 came within a question or
+/// two of that; counting a title once per question rather than per word did no better. A note's
+/// title is written to say what it is about, and the set has no notes to judge by: it keeps 3.
+pub const TITLES: Titles = Titles { note: 3.0, book: 1.5, once: false };
+
 struct Fields {
   id: Field,
   path: Field,
@@ -92,6 +114,9 @@ pub struct Core {
   f: Fields,
   model: Option<Model>,
   vectors: RwLock<HashMap<SegmentId, Arc<SegmentVectors>>>,
+  titles: RwLock<Titles>,
+  /// Matches a book's passages: those whose path is a PDF's
+  books: RegexQuery,
 }
 
 fn analyser() -> TextAnalyzer {
@@ -156,7 +181,8 @@ impl Core {
     let vector = if model.is_some() { Some(field(VECTOR)?) } else { None };
     let f = Fields { id: field("id")?, path: field("path")?, title: field("title")?, heading: field("heading")?, text: field("text")?, order: field("order")?, vector };
     let reader = index.reader_builder().reload_policy(ReloadPolicy::Manual).try_into().map_err(err)?;
-    let core = Core { index, reader, writer: Mutex::new(None), f, model, vectors: RwLock::new(HashMap::new()) };
+    let books = RegexQuery::from_pattern(r".*\.[pP][dD][fF]", f.path).map_err(err)?;
+    let core = Core { index, reader, writer: Mutex::new(None), f, model, vectors: RwLock::new(HashMap::new()), titles: RwLock::new(TITLES), books };
     core.load_vectors()?;
     Ok(core)
   }
@@ -260,23 +286,58 @@ impl Core {
     // A pasted paragraph is searched by its first words: each one costs a lookup per field
     words.truncate(32);
     let typed_last = typing && !q.ends_with(char::is_whitespace);
-    let mut clauses: Vec<(Occur, Box<dyn Query>)> = Vec::new();
-    for (i, w) in words.iter().enumerate() {
-      for (field, boost) in [(self.f.title, 3.0), (self.f.heading, 2.0), (self.f.text, 1.0)] {
+    let titles = self.titles.read().map(|t| *t).unwrap_or(TITLES);
+    // One field's matches for every word, each worth `boost`
+    let matches = |field: Field, boost: f32| {
+      let mut clauses: Vec<Box<dyn Query>> = Vec::new();
+      for (i, w) in words.iter().enumerate() {
         let term = Term::from_field_text(field, w);
         // An exact match counts in full; a longer word one typo off counts for less
-        clauses.push((Occur::Should, Box::new(BoostQuery::new(Box::new(TermQuery::new(term.clone(), IndexRecordOption::WithFreqs)), boost))));
+        clauses.push(Box::new(BoostQuery::new(Box::new(TermQuery::new(term.clone(), IndexRecordOption::WithFreqs)), boost)));
         // A near match scores a flat amount, so it is kept small beside a real one, and only the
         // first dozen words get one
         if w.chars().count() >= 5 && i < 12 {
-          clauses.push((Occur::Should, Box::new(BoostQuery::new(Box::new(FuzzyTermQuery::new(term.clone(), 1, true)), boost * 0.25))));
+          clauses.push(Box::new(BoostQuery::new(Box::new(FuzzyTermQuery::new(term.clone(), 1, true)), boost * 0.25)));
         }
         if i == words.len() - 1 && typed_last && w.chars().count() >= 3 {
-          clauses.push((Occur::Should, Box::new(BoostQuery::new(Box::new(FuzzyTermQuery::new_prefix(term, 0, false)), boost * 0.5))));
+          clauses.push(Box::new(BoostQuery::new(Box::new(FuzzyTermQuery::new_prefix(term, 0, false)), boost * 0.5)));
         }
+      }
+      clauses
+    };
+    let any = |clauses: Vec<Box<dyn Query>>| clauses.into_iter().map(|c| (Occur::Should, c)).collect::<Vec<_>>();
+    let mut clauses = any(matches(self.f.heading, 2.0));
+    clauses.extend(any(matches(self.f.text, 1.0)));
+    // A title's words, summed like the rest or (`once`) only the best of them counted
+    let title = |boost: f32| -> Box<dyn Query> {
+      if titles.once {
+        Box::new(DisjunctionMaxQuery::new(matches(self.f.title, boost)))
+      } else {
+        Box::new(BooleanQuery::new(any(matches(self.f.title, boost))))
+      }
+    };
+    if titles.note == titles.book {
+      if titles.note > 0.0 {
+        clauses.push((Occur::Should, title(titles.note)));
+      }
+    } else {
+      // A book's passages (pages of a PDF) and a note's weigh their titles differently
+      let book = || -> Box<dyn Query> { Box::new(BoostQuery::new(Box::new(self.books.clone()), 0.0)) };
+      if titles.note > 0.0 {
+        clauses.push((Occur::Should, Box::new(BooleanQuery::new(vec![(Occur::Must, title(titles.note)), (Occur::MustNot, book())]))));
+      }
+      if titles.book > 0.0 {
+        clauses.push((Occur::Should, Box::new(BooleanQuery::new(vec![(Occur::Must, title(titles.book)), (Occur::Must, book())]))));
       }
     }
     Some(Box::new(BooleanQuery::new(clauses)))
+  }
+
+  /// Weighs titles another way from now on (the evaluation compares them)
+  pub fn set_titles(&self, titles: Titles) {
+    if let Ok(mut t) = self.titles.write() {
+      *t = titles;
+    }
   }
 
   fn only(&self, paths: &[String]) -> TermSetQuery {

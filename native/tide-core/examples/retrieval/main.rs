@@ -21,7 +21,7 @@ mod index;
 #[allow(dead_code)]
 mod embed;
 
-use index::{Chunk, ChunkIn, Core, Ranking};
+use index::{Chunk, ChunkIn, Core, Ranking, Titles};
 
 /// MAX_CHUNK in src/main/search.ts, in UTF-16 units as JavaScript counts a string's length
 const MAX_CHUNK: usize = 1600;
@@ -156,8 +156,19 @@ fn main() {
   report["index_mb"] = json!(dir_bytes(&index_dir) as f64 / 1_048_576.0);
 
   // ---- rankings ----
-  let mut rankings: Vec<(String, Ranking)> = vec![("words (BM25, today)".into(), Ranking::Words)];
-  if model_dir.is_some() {
+  let mut rankings: Vec<(String, Ranking)> = vec![("words (BM25, as shipped)".into(), Ranking::Words)];
+  // `--titles`: words alone, with a title's words weighed other ways
+  let mut titles: Vec<Titles> = Vec::new();
+  if flag("--titles") {
+    for boost in [3.0, 2.0, 1.5, 1.0, 0.5, 0.0] {
+      rankings.push((format!("title x{boost}"), Ranking::Words));
+      titles.push(Titles { note: boost, book: boost, once: false });
+    }
+    for (book, once) in [(0.0, false), (1.0, false), (1.5, false), (2.0, false), (3.0, true), (2.0, true), (1.0, true)] {
+      rankings.push((format!("notes x3, books x{book}{}", if once { ", once" } else { "" }), Ranking::Words));
+      titles.push(Titles { note: 3.0, book, once });
+    }
+  } else if model_dir.is_some() {
     rankings.push(("vectors only".into(), Ranking::Vectors));
     for (k, weight) in [(60.0, 1.0), (10.0, 1.0), (60.0, 0.5), (60.0, 2.0), (20.0, 0.5)] {
       rankings.push((format!("fused k={k} w={weight}"), Ranking::Fused { k, weight, depth: DEPTH as usize }));
@@ -167,7 +178,10 @@ fn main() {
 
   let mut rows = Vec::new();
   let mut per_question: Vec<Value> = questions.iter().map(|q| json!({ "question": q.text, "kind": q.kind, "book": q.book, "page": q.page, "place": {}, "top": {} })).collect();
-  for (name, how) in &rankings {
+  for (n, (name, how)) in rankings.iter().enumerate() {
+    if let Some(t) = n.checked_sub(1).and_then(|i| titles.get(i)) {
+      core.set_titles(*t);
+    }
     // Where the right page came for each question (0: not in the first 50)
     let mut places = Vec::new();
     for (i, q) in questions.iter().enumerate() {

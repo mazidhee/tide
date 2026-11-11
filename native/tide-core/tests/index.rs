@@ -9,7 +9,7 @@ mod embed;
 #[path = "../src/index.rs"]
 mod index;
 
-use index::{ChunkIn, Core};
+use index::{ChunkIn, Core, Titles};
 
 fn passage(path: &str, n: u32, heading: &str, text: &str) -> ChunkIn {
   ChunkIn { id: format!("{path}#{n}"), title: path.trim_end_matches(".md").to_string(), heading: heading.to_string(), text: text.to_string(), order: n }
@@ -57,6 +57,50 @@ fn finds_passages_follows_edits_and_deletions_and_is_there_after_a_restart() {
   again.commit().unwrap();
   assert_eq!(again.size(), 0);
   assert!(again.paths().unwrap().is_empty());
+}
+
+/// A book's file name is the title of every one of its pages. Weighed as a note's title is, a
+/// book with a common word in its name ("number") came first for any question using that word.
+#[test]
+fn a_book_whose_name_shares_a_word_with_the_question_does_not_flood_the_results() {
+  let dir = tempfile::tempdir().unwrap();
+  let core = Core::open(dir.path(), None).unwrap();
+  let page = |path: &str, n: u32, text: String| ChunkIn { id: format!("{path}#p{n}-0"), title: path.trim_end_matches(".pdf").to_string(), heading: format!("Page {n}"), text, order: n };
+  let survey = "Survey of Number Representations for Computer Arithmetic.pdf";
+  core.replace(survey, (1..=60).map(|n| page(survey, n, format!("Residue arithmetic, radix conversion and carry propagation for fixed point operands, part {n}."))).collect()).unwrap();
+  // Other books use the question's everyday words on most pages, as real ones do
+  let common = ["variables", "name", "rules", "python", "start", "spaces", "contain", "number"];
+  for book in ["Cooking.pdf", "Garden Almanac.pdf", "Sailing Knots.pdf", "Bread.pdf", "Chess Openings.pdf"] {
+    let pages = (1..=100u32).map(|n| {
+      let words: Vec<&str> = (0..7).map(|k| common[(n as usize + k) % common.len()]).collect();
+      page(book, n, format!("Chapter notes {n}: what are the {} for a reader, in a hurry or with time, can vary, and other remarks fill out the page to an ordinary length.", words.join(", ")))
+    });
+    core.replace(book, pages.collect()).unwrap();
+  }
+  let course = "pythoncrashcourse.pdf";
+  core
+    .replace(course, vec![page(course, 54, "Rules for naming variables in Python: variable names can contain only letters, numbers and underscores. A name can start with a letter or an underscore, but not with a number. Spaces are not allowed in variable names.".into())])
+    .unwrap();
+  core.commit().unwrap();
+
+  let question = "What are the rules for naming variables in Python? Can a variable name start with a number or contain spaces?";
+  let top = |c: &Core| c.search(question, 3, None, false).unwrap().into_iter().map(|c| c.path).collect::<Vec<_>>();
+  assert_eq!(top(&core)[0], course);
+  // As it was, with a book's title weighed like a note's: the flood this guards against
+  core.set_titles(Titles { note: 3.0, book: 3.0, once: false });
+  assert_eq!(top(&core), [survey, survey, survey]);
+}
+
+/// A note's title says what the note is about, and still counts in full
+#[test]
+fn a_note_is_still_found_by_its_title_ahead_of_a_passing_mention() {
+  let dir = tempfile::tempdir().unwrap();
+  let core = Core::open(dir.path(), None).unwrap();
+  core.replace("Eigenvalues.md", vec![passage("Eigenvalues.md", 0, "", "Scalars that a matrix stretches certain vectors by.")]).unwrap();
+  core.replace("Diary.md", vec![passage("Diary.md", 0, "", "Today I revised eigenvalues, eigenvalues and more eigenvalues before lunch.")]).unwrap();
+  core.replace("Strang.pdf", vec![ChunkIn { id: "Strang.pdf#p1-0".into(), title: "Strang".into(), heading: "Page 1".into(), text: "The eigenvalues of a triangular matrix are on its diagonal.".into(), order: 0 }]).unwrap();
+  core.commit().unwrap();
+  assert_eq!(core.search("eigenvalues", 3, None, false).unwrap()[0].path, "Eigenvalues.md");
 }
 
 #[test]
