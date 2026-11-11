@@ -271,3 +271,22 @@ describe('lab queries and charts while the message is still being written', () =
     expect(message().querySelector('.lab-table')).toBeNull()
   })
 })
+
+describe('watching for blocks while something animates', () => {
+  it('still finds a new block when the page never stops changing', async () => {
+    const { watchBlocks } = await import('../src/renderer/src/lib/liveBlocks')
+    const keeper = createKeeper({ widget: 'figure.x', isSource: () => false, sourceOf: () => '' })
+    let scans = 0
+    const stop = watchBlocks(keeper, () => scans++, 100)
+    const ticker = document.createElement('span')
+    document.body.append(ticker)
+    // An animated icon: a change every 30 ms, for longer than the wait
+    for (let i = 0; i < 25; i++) {
+      ticker.textContent = String(i)
+      await wait(30)
+    }
+    stop()
+    ticker.remove()
+    expect(scans).toBeGreaterThan(0)
+  })
+})

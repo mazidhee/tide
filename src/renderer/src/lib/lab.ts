@@ -8,6 +8,7 @@
  * with a data-lab attribute names it. Blocks still streaming in are left as code until they
  * settle.
  */
+import { tidySql } from './sqlFormat'
 import hljs from 'highlight.js/lib/common'
 import { parseChartRequest, resultSummary, type ChartRequest, type LabResult } from '@shared/lab'
 import { chooseChart, columnKinds, fullNumber, isIdColumn, type ChartType } from '@shared/labChart'
@@ -135,13 +136,33 @@ export function labBlock(sql: string, ask?: ChartRequest): Block {
     copy.textContent = 'Copied'
     setTimeout(() => (copy.textContent = 'Copy'), 1200)
   })
+  const tidy = button('lab-quiet', 'Tidy', 'Lay the query out one clause to a line (Shift+Alt+F)')
+  const tidyNow = async () => {
+    const out = await tidySql(input.value)
+    if (out === null) {
+      tidy.textContent = 'Cannot tidy'
+      setTimeout(() => (tidy.textContent = 'Tidy'), 1400)
+      return
+    }
+    if (out === input.value) return
+    input.value = out
+    paint()
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+  tidy.addEventListener('click', () => void tidyNow())
+  input.addEventListener('keydown', (e) => {
+    if (e.shiftKey && e.altKey && e.code === 'KeyF') {
+      e.preventDefault()
+      void tidyNow()
+    }
+  })
   const runButton = button('lab-run', '', 'Run the query (Cmd+Enter)')
   const runLabel = el('span', '', 'Run')
   const keys = el('kbd', 'lab-kbd', '⌘↵')
   keys.setAttribute('aria-hidden', 'true')
   runButton.append(runLabel, keys)
   runButton.addEventListener('click', () => void run())
-  actions.append(lang, engine, el('span', 'lab-space'), copy, runButton)
+  actions.append(lang, engine, el('span', 'lab-space'), tidy, copy, runButton)
   editor.append(actions, code)
 
   // A chart block leads with its title and the picture; the query is a click away

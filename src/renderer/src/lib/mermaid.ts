@@ -60,9 +60,19 @@ function scan() {
 
 /** Watches the whole document; call once at startup */
 export function startMermaid() {
+  // Waits for the text to settle, but never more than two seconds: an animated icon elsewhere
+  // changes the page all the time
+  let since = 0
   const observer = new MutationObserver(() => {
+    const now = Date.now()
+    if (timer !== undefined && now - since >= 2000) return
+    since ||= now
     clearTimeout(timer)
-    timer = setTimeout(scan, 500)
+    timer = setTimeout(() => {
+      timer = undefined
+      since = 0
+      scan()
+    }, 500)
   })
   observer.observe(document.body, { childList: true, subtree: true, characterData: true })
   scan()

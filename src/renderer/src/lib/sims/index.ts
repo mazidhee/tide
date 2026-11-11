@@ -29,9 +29,12 @@ async function renderBlock(pre: HTMLElement): Promise<void> {
   }
   try {
     runtime ??= import('./runtime')
-    const { parseSim, mount } = await runtime
+    const { parseSim, mount, load } = await runtime
     const spec = parseSim(code)
-    if (!spec || !pre.isConnected || pre.dataset.simTried !== code) return
+    if (!spec) return
+    // A kind built on a larger library loads it now, the first time one is shown
+    await load(spec.kind)
+    if (!pre.isConnected || pre.dataset.simTried !== code) return
     const slot = keeper.slot(pre)
     const sim = mount(spec, (root) => pre.replaceWith(root))
     keeper.keep(slot, sim.root, sim.destroy)

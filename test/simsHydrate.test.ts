@@ -52,12 +52,12 @@ describe('what the tutor is told', () => {
     for (const part of ['neuron:1:2', 'edge:0:1:2', 'surface', 'loss', 'token:3', 'row:3', 'scores', 'weights', 'mix', 'point', 'gradient', 'path', 'minimum', 'logit:2', 'probabilities', 'temperature', '"tour"', '"run"', '"pause"', '"sample"'])
       expect(SIM_GUIDE).toContain(part)
     // Short enough to sit in every turn's system prompt
-    expect(SIM_GUIDE.split(/\s+/).length).toBeLessThan(640)
+    expect(SIM_GUIDE.split(/\s+/).length).toBeLessThan(800)
   })
 
   it('every part and every "do" the guide names exists in its simulation', async () => {
     const { mount } = await import('../src/renderer/src/lib/sims/runtime')
-    const { KINDS } = await import('../src/renderer/src/lib/sims/runtime')
+    const { load } = await import('../src/renderer/src/lib/sims/runtime')
     const examples = SIM_GUIDE.match(/\{"kind":[^\n]*?\}(?=[.\s])/g) ?? []
     const partsText = SIM_GUIDE.slice(SIM_GUIDE.indexOf('Parts to point at:'), SIM_GUIDE.indexOf('Counting starts at 1'))
     for (const kind of SIM_KINDS) {
@@ -69,7 +69,7 @@ describe('what the tutor is told', () => {
       const spec = parseSim(JSON.stringify({ ...JSON.parse(examples[SIM_KINDS.indexOf(kind)]), tour: verbs.map((v) => ({ say: 'x', do: JSON.parse(v) })) }))!
       // The kind keeps every verb the guide teaches
       expect(spec.tour.map((s) => JSON.stringify(s.do)), kind).toEqual(verbs)
-      const view = KINDS[kind].create(spec as never, { root: document.body, reducedMotion: true, palette: () => ({}) as never, select() {}, peek() {}, invalidate() {} })
+      const view = (await load(kind)).create(spec as never, { root: document.body, reducedMotion: true, palette: () => ({}) as never, select() {}, peek() {}, invalidate() {} })
       for (let i = 0; i < 400; i++) view.step()
       // Work that lands a moment later (real hashing) is waited for
       for (let i = 0; i < 100 && parts.some((part) => !view.describe(part)); i++) {
@@ -80,13 +80,15 @@ describe('what the tutor is told', () => {
       view.destroy?.()
     }
     expect(mount).toBeTypeOf('function')
-  })
+    // The chess search plays its 200 moves for real
+  }, 30000)
 
   it('a block labelled json, or not labelled, is a simulation when its "kind" is one', async () => {
     const examples = SIM_GUIDE.match(/\{"kind":[^\n]*?\}(?=[.\s])/g) ?? []
     document.body.innerHTML = examples.map((e, i) => block(e).replace('data-lang="sim"', i % 2 ? 'data-lang="json"' : 'data-lang=""')).join('') + block('{"kind":"quantum-foam"}').replace('"sim"', '"json"') + block('{"type":"x","kind":"raft"}').replace('"sim"', '"json"')
     startSims()
-    await new Promise((r) => setTimeout(r, 400))
+    // The kinds built on a library load it first
+    for (let i = 0; i < 40 && document.querySelectorAll('figure.sim').length < SIM_KINDS.length; i++) await new Promise((r) => setTimeout(r, 100))
     expect(Array.from(document.querySelectorAll('figure.sim'), (f) => (f as HTMLElement).dataset.kind)).toEqual([...SIM_KINDS])
     expect(document.querySelectorAll('pre.code-block')).toHaveLength(2)
   })

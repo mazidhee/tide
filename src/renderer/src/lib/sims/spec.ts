@@ -12,6 +12,14 @@ import type { BTreeSpec } from './btree'
 import type { CpuSpec } from './cpu'
 import type { HashTableSpec } from './hashTable'
 import type { PlotSpec } from './plotExpr'
+import type { PhysicsSpec } from './physics'
+import type { GeometrySpec } from './geometry'
+import type { RegexSpec } from './regex'
+import type { ChessSpec } from './chess'
+import { parsePhysicsSpec } from './physics'
+import { parseGeometrySpec } from './geometry'
+import { parseRegexSpec } from './regex'
+import { parseChessSpec } from './chess'
 import type { RaftSpec } from './raft'
 import type { TokeniserSpec } from './bpe'
 import { parseBlockchainSpec } from './chain'
@@ -84,6 +92,10 @@ export type SimSpec =
   | TokeniserSpec
   | BlockchainSpec
   | PlotSpec
+  | PhysicsSpec
+  | GeometrySpec
+  | RegexSpec
+  | ChessSpec
 
 export const LIMITS = {
   hiddenLayers: 3,
@@ -191,7 +203,25 @@ const KIND_ALIASES: Record<string, SimKind> = {
   'block-chain': 'blockchain',
   function: 'plot',
   graph: 'plot',
-  consensus: 'raft'
+  consensus: 'raft',
+  mechanics: 'physics',
+  'physics-engine': 'physics',
+  projectile: 'physics',
+  pendulum: 'physics',
+  collision: 'physics',
+  spring: 'physics',
+  incline: 'physics',
+  construction: 'geometry',
+  'linear-map': 'geometry',
+  transform: 'geometry',
+  matrix: 'geometry',
+  vectors: 'geometry',
+  regexp: 'regex',
+  'regular-expression': 'regex',
+  railroad: 'regex',
+  minimax: 'chess',
+  'game-tree': 'chess',
+  'alpha-beta': 'chess'
 }
 
 /** Turns the body of a ```sim block into a checked spec, or null when it isn't one (yet) */
@@ -228,6 +258,14 @@ export function parseSim(source: string): SimSpec | null {
       return parseBlockchainSpec(obj, base(obj))
     case 'plot':
       return parsePlotSpec(obj, base(obj))
+    case 'physics':
+      return parsePhysicsSpec({ ...obj, ...(KIND_ALIASES[String(obj.kind).trim().toLowerCase()] === 'physics' && !obj.scene ? { scene: obj.kind } : {}) }, base(obj))
+    case 'geometry':
+      return parseGeometrySpec(obj, base(obj))
+    case 'regex':
+      return parseRegexSpec(obj, base(obj))
+    case 'chess':
+      return parseChessSpec(obj, base(obj))
     default:
       return null
   }
