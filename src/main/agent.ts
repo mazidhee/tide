@@ -20,8 +20,7 @@ import { readingLabel } from '@shared/books'
 import { imageMarkdown } from '@shared/noteImages'
 import { addTask, describeTasks, feedbackOnTask, findTask, searchTasks, thingsAvailable, TIDE_TAG } from './things'
 import { buildLink, type DeepLink } from '@shared/deeplink'
-import { JSDOM } from 'jsdom'
-import { Readability } from '@mozilla/readability'
+import { readArticle } from './extract'
 import type { AgentStep, AISettings, ChatEvent, ChatMessage, ChatRequest, ContextSource } from '@shared/types'
 import { getSettings } from './settings'
 import { localSampling } from './sampling'
@@ -471,10 +470,9 @@ async function readWebpageNow(url: string, cloudOk = true): Promise<{ title: str
   const type = res.headers.get('content-type') ?? ''
   if (type.includes('application/pdf') || /\.pdf($|\?)/i.test(res.url || url)) return pdfFromResponse(res, res.url || url)
   if (!type.includes('html') && !type.includes('text')) throw new Error(`Can't read ${type || 'this kind of file'} pages yet.`)
-  const dom = new JSDOM(await res.text(), { url: res.url || url })
-  const article = new Readability(dom.window.document).parse()
-  const text = (article?.textContent ?? dom.window.document.body?.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim()
-  const title = article?.title || dom.window.document.title || url
+  const article = await readArticle(await res.text(), res.url || url)
+  const text = article.text
+  const title = article.title || article.docTitle || url
   if (text.length < 600 && cloudOk) {
     const viaFirecrawl = await firecrawl(url).catch(() => null)
     if (viaFirecrawl && viaFirecrawl.text.length > text.length) return viaFirecrawl

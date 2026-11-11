@@ -3,6 +3,8 @@
 //! cache rather than the app's memory, and a search takes about a millisecond.
 
 mod lab;
+mod extract;
+mod extract_napi;
 mod knowledge;
 mod recall;
 

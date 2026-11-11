@@ -15,6 +15,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 fsrs = "=7.0.0"
 rusqlite = { version = "0.37", features = ["bundled", "hooks", "limits", "column_decltype"] }
+# Reading a web page's article (src/extract.rs)
+legible = "0.5.1"
+html-escape = "0.2"
 
 [build-dependencies]
 napi-build = "2"
