@@ -138,7 +138,7 @@
   &[data-reading='sans'] .td-aa {
     font-family: var(--ui);
   }
-  .session-scroll {
+  .doc-scroll.session-scroll {
     padding: 36px 48px 28px;
   }
   .session-column {
@@ -641,7 +641,7 @@
     .session-solo.td-with-rail {
       grid-template-columns: minmax(0, 1fr) 264px;
     }
-    .session-scroll {
+    .doc-scroll.session-scroll {
       padding-left: 32px;
       padding-right: 32px;
     }

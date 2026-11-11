@@ -358,7 +358,7 @@ export default function App() {
   const askNonce = app.pendingAsk?.nonce
   const seenAsk = useRef(askNonce)
   useEffect(() => {
-    if (askNonce !== seenAsk.current && view.kind === 'home') setHomeAsked(askNonce ?? null)
+    if (askNonce !== seenAsk.current && (view.kind === 'home' || view.kind === 'graph')) setHomeAsked(askNonce ?? null)
     seenAsk.current = askNonce
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [askNonce])
@@ -374,7 +374,9 @@ export default function App() {
   // In the new design Home is the whole width of the window and has its own ask box: the tutor
   // panel stays beside what you read (a note, a PDF, the library), one click away from Home
   // …until you ask something from Home: then it opens there with your question, and stays until you close it
-  const noPanel = ownTutor || (tide && view.kind === 'home' && homeAsked === null)
+  // The map of what you know is the same: the whole width, the panel on request
+  const wide = view.kind === 'home' || (view.kind === 'graph' && !view.focus && (view.tab ?? lastBrainTab()) === 'know')
+  const noPanel = ownTutor || (tide && wide && homeAsked === null)
   let main: React.ReactNode
   if (view.kind === 'file') {
     if (/\.pdf$/i.test(view.path)) main = <PdfView key={view.path} path={view.path} anchor={view.anchor} />
