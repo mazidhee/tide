@@ -23,11 +23,11 @@ describe('the list of explainers', () => {
     }
   })
 
-  it('offers nothing that could not be checked', () => {
-    const offered = new Set(EXPLAINERS.map((e) => e.url))
+  it('keeps the pages it could not check apart, and offers them now their owner has vouched for them', () => {
+    const checked = new Set(EXPLAINERS.map((e) => e.url))
     for (const e of UNCHECKED_EXPLAINERS) {
-      expect(offered.has(e.url)).toBe(false)
-      expect(explainerForUrl(e.url)).toBeNull()
+      expect(checked.has(e.url)).toBe(false)
+      expect(explainerForUrl(e.url)?.id).toBe(e.id)
     }
   })
 })
@@ -98,10 +98,14 @@ describe('what find_explainer tells the tutor', () => {
     expect(out).toMatch(/line of its own/)
   })
 
-  it('says plainly when there is none, and never offers an unchecked page', () => {
+  it('says plainly when there is none', () => {
     expect(explainerToolResult('the French Revolution')).toMatch(/^No interactive explainer/)
-    expect(explainerToolResult('raft consensus')).toMatch(/^No interactive explainer/)
-    expect(explainerToolResult('raft consensus')).not.toContain('http')
+  })
+
+  it('finds the well-known pages for the owner\'s subjects', () => {
+    expect(explainerToolResult('raft consensus')).toContain('raft')
+    expect(explainerToolResult('transformer architecture')).toContain('poloclub.github.io/transformer-explainer')
+    expect(explainerToolResult('how does a neural network learn')).toContain('playground.tensorflow.org')
   })
 })
 

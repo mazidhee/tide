@@ -401,9 +401,10 @@ export const EXPLAINERS: Explainer[] = [
 ]
 
 /**
- * Good pages that are NOT offered yet. Each refused the connection from the Mac the list was
- * checked on (all are hosted on GitHub Pages, which that network could not reach), so none could
- * be confirmed. Move one into EXPLAINERS once `curl -sIL -m 15 <url>` ends in 200.
+ * Good pages that could not be checked when the list was made: each refused the connection from
+ * the Mac it was checked on. The owner has since confirmed (11 November 2026) that their own
+ * network was blocking them, not that the pages are gone, so they are offered. They are kept
+ * apart so they can be checked with `curl -sIL -m 15 <url>` once that network lets them through.
  */
 export const UNCHECKED_EXPLAINERS: Explainer[] = [
   {
@@ -602,7 +603,10 @@ function score(e: Explainer, words: string[]): number {
  * The explainers that fit a topic or a question, best first. Nothing is returned for a topic
  * none of them is about: better no link than a loosely related one.
  */
-export function findExplainers(topic: string, limit = 3, from: Explainer[] = EXPLAINERS): Explainer[] {
+/** Everything the tutor may offer */
+export const OFFERED = (): Explainer[] => [...EXPLAINERS, ...UNCHECKED_EXPLAINERS]
+
+export function findExplainers(topic: string, limit = 3, from: Explainer[] = OFFERED()): Explainer[] {
   const words = topicWords(topic)
   if (!words.length) return []
   return from
@@ -614,7 +618,7 @@ export function findExplainers(topic: string, limit = 3, from: Explainer[] = EXP
 }
 
 /** What the find_explainer tool answers: Markdown links the tutor can pass on as they are */
-export function explainerToolResult(topic: string, from: Explainer[] = EXPLAINERS): string {
+export function explainerToolResult(topic: string, from: Explainer[] = OFFERED()): string {
   const found = findExplainers(topic, 3, from)
   if (!found.length) return 'No interactive explainer is kept for that. Teach it yourself; don’t invent a link.'
   return [
@@ -641,7 +645,7 @@ let byPage: Map<string, Explainer> | null = null
 
 /** The explainer a link points at, if it is one of ours. Only exact pages count, not the rest of their sites. */
 export function explainerForUrl(url: string): Explainer | null {
-  byPage ??= new Map(EXPLAINERS.map((e) => [pageKey(e.url)!, e]))
+  byPage ??= new Map(OFFERED().map((e) => [pageKey(e.url)!, e]))
   const key = pageKey(url)
   return (key && byPage.get(key)) || null
 }
