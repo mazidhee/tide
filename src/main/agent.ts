@@ -11,6 +11,7 @@ import { aboutMetabase } from '@shared/metabase'
 import { metabaseHost, metabaseReady, metabaseTool } from './metabase'
 import { loadImages, type NoteImage } from './noteImages'
 import { pagesToRead } from './books'
+import { ensureSearch, LOCAL_URL } from './websearch'
 import { privatePath } from './projects'
 import { requestSent, timeTurn, toolRan } from './speed'
 import { readingLabel } from '@shared/books'
@@ -379,6 +380,8 @@ async function webSearchNow(query: string, opts: SearchOptions = {}): Promise<We
     if (opts.news) params.set('categories', 'news')
     if (opts.when && opts.when !== 'any') params.set('time_range', opts.when)
     try {
+      // Tide's own engine runs only while you're searching: started here if it isn't up
+      if (cfg.url === LOCAL_URL) await ensureSearch()
       const res = await fetch(`${cfg.url.replace(/\/+$/, '')}/search?${params}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20_000) })
       if (!res.ok) throw new Error(`SearXNG answered ${res.status}`)
       const json = (await res.json()) as { results?: { title: string; url: string; content?: string; publishedDate?: string | null }[] }

@@ -44,7 +44,7 @@ import {
 import { importFile, libraryThumb, saveUrl } from './library'
 import { getHighlights, saveHighlights } from './highlights'
 import { librariesStatus, mathStatus, runCode, runProject, setupLibraries, setupMath } from './runner'
-import { searchStatus, setupSearch, wakeSearch } from './websearch'
+import { searchStatus, setupSearch, stopSearch, wakeSearch } from './websearch'
 import { applySpeedups, ensureModelServer, serverReady, speedStatus, tuneModelServer } from './modelServer'
 import { labFlashcards } from './labCards'
 import { prewarmLesson, warmChat, warmLessons } from './agent'
@@ -714,6 +714,7 @@ app.on('before-quit', () => {
   stopStudyApi().catch(() => {})
   closeAllTerminals()
   stopVoice()
+  stopSearch()
 })
 
 app.on('window-all-closed', () => {
