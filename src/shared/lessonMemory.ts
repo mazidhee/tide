@@ -147,12 +147,21 @@ export interface RecallDue {
 }
 
 /** The note a lesson opens with when questions on its topic are due for recall; empty when none are */
+/**
+ * A recall question asked in a later lesson, where the reading it leaned on isn't on screen:
+ * "Based on the reading, if a language..." is asked as "If a language...".
+ */
+export function standaloneQuestion(prompt: string): string {
+  const out = prompt.replace(/^\s*(?:based on|according to|from|using|in) (?:the|this|that) (?:reading|passage|excerpt|text|source|book|section|page)s?(?: above| you just read)?,\s*/i, '')
+  return out === prompt ? prompt : out.charAt(0).toUpperCase() + out.slice(1)
+}
+
 export function recallDueNote(due: RecallDue[]): string {
   if (!due.length) return ''
   const times = (i: RecallDue) => (i.reviews ? `asked ${i.reviews} time${i.reviews === 1 ? '' : 's'} since, missed ${i.lapses}` : 'not asked again yet')
   return [
     'Due for recall today (questions this student missed or couldn’t answer before, brought back on a schedule):',
-    ...due.map((i, n) => `${n + 1}. "${i.prompt}" (from "${i.topic}"; ${times(i)})`),
+    ...due.map((i, n) => `${n + 1}. "${standaloneQuestion(i.prompt)}" (from "${i.topic}"; ${times(i)})`),
     'Your opening question is the first of these, in these words, before anything else, in an <ask> tag. When they answer, mark it with a <grade> tag (correct, partial or wrong) and one line of feedback, then begin the lesson. Don’t give the answer away while asking.'
   ].join('\n')
 }

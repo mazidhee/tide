@@ -69,3 +69,16 @@ describe('what earlier lessons show', () => {
     expect(priorLessonsNote('BigQuery', [digestLesson(lesson())!], NOW)).toBe('')
   })
 })
+
+describe('standaloneQuestion', async () => {
+  const { standaloneQuestion, recallDueNote } = await import('../src/shared/lessonMemory')
+  it('drops a lead-in to a reading that a later lesson does not show', () => {
+    expect(standaloneQuestion('Based on the reading, if a programming language doesn’t have an explicit Boolean type, how might it represent “False”?')).toBe('If a programming language doesn’t have an explicit Boolean type, how might it represent “False”?')
+    expect(standaloneQuestion('According to the passage above, why does Raft need terms?')).toBe('Why does Raft need terms?')
+    expect(standaloneQuestion('What does a constant do?')).toBe('What does a constant do?')
+  })
+  it('asks the recall question without the lead-in', () => {
+    const note = recallDueNote([{ id: 'a', prompt: 'Based on the reading, what is 0?', topic: 'T', reviews: 0, lapses: 0 } as never])
+    expect(note).toContain('"What is 0?"')
+  })
+})
