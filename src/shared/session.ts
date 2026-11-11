@@ -50,11 +50,35 @@ export const hideWorking = (raw: string) =>
     .replace(/<placement>[\s\S]*?(<\/placement>|$)/gi, '')
     .replace(/<(solution|check)\b[\s\S]*$/i, '')
 
+/**
+ * A grade the tutor opened and never closed, closed where its feedback ends: the first blank line
+ * or the next tag. Gemma does this when it stalls just after writing the opening tag and is asked
+ * to carry on (seen in 3 of 70 benchmark replies); left alone, everything from the tag to the next
+ * one is hidden as "unfinished", so the mark and its feedback never appear. A grade still being
+ * written (nothing after its feedback yet) is left as it is.
+ */
+export function closeGrade(reply: string): string {
+  const open = /<grade\b[^>]*>(?![\s\S]*<\/grade>)/i.exec(reply)
+  if (!open) return reply
+  const from = open.index + open[0].length
+  const lead = reply.slice(from).match(/^\s*/)![0].length
+  const body = reply.slice(from + lead)
+  // A closing tag cut short ("</grade") counts as the end too
+  const end = body.search(/\n[ \t]*\n|<\/gr?a?d?e?(?![a-z>])|<(?:ask|note|card|plan|solution|check|summary|continue)\b/i)
+  if (end <= 0) return reply
+  const rest = body.slice(end).replace(/^<\/gr?a?d?e?(?![a-z>])/i, '')
+  if (!rest.trim()) return reply
+  return `${reply.slice(0, from)}${body.slice(0, end).trimEnd()}</grade>${rest.startsWith('\n') ? '' : '\n\n'}${rest}`
+}
+
+/** A numbered question or problem ("**Question 3 of 8**", "**Problem 2 · harder**"): something set to be answered */
+const NUMBERED = /\*\*\s*(?:Problem|Question)\s+\d+/i
+
 /** Splits a (possibly still streaming) tutor message into blocks; unfinished tags stay hidden */
 export function parseBlocks(full: string): Block[] {
   // "Carry on" (<continue/>): no question this time; the app offers Go on instead
   const carryOn = /<continue\b[^>]*\/?>/i.test(full)
-  const raw = hideWorking(full).replace(/<\/?continue\b[^>]*>/gi, '').replace(/<c(o(n(t(i(n(ue?)?)?)?)?)?)?$/i, '')
+  const raw = closeGrade(hideWorking(full)).replace(/<\/?continue\b[^>]*>/gi, '').replace(/<c(o(n(t(i(n(ue?)?)?)?)?)?)?$/i, '')
   // What the tutor said aloud (Talk) is spoken, not shown again as a block
   const said = splitSay(raw)
   // A reply that stalled after its spoken part still shows what was said, so there's something to answer
@@ -114,7 +138,13 @@ export function parseBlocks(full: string): Block[] {
     }
   }
   pushText(message.slice(last))
-  if (carryOn && !blocks.some((b) => b.kind === 'ask')) return [...blocks, { kind: 'continue' }]
+  if (carryOn && !blocks.some((b) => b.kind === 'ask')) {
+    // A numbered question written in plain text and followed by <continue/> is still a question
+    // set to be answered: with only Go on to press there would be nowhere to answer it. (A
+    // rhetorical question before carrying on, with no number, stays as it is.)
+    const asked = NUMBERED.test(raw) ? withAsk(blocks) : blocks
+    return asked.some((b) => b.kind === 'ask') ? asked : [...blocks, { kind: 'continue' }]
+  }
   return withAsk(blocks)
 }
 
