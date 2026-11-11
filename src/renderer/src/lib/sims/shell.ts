@@ -132,6 +132,15 @@ export function mountSim<S extends SimSpec>(spec: S, def: SimKindDef<S>, place: 
     next.disabled = index === tour.length - 1
     view.highlight(stepNow.at && view.describe(stepNow.at) ? stepNow.at : null)
     // Going back only re-reads the words; it doesn't train again
+    // Steps still owed to the step before are taken first (within a short budget), so this
+    // step's own actions meet the state its words expect even when Next is pressed quickly
+    if (forward && queued > 0 && !busy()) {
+      const t0 = performance.now()
+      while (queued > 0 && !view.done?.() && performance.now() - t0 < 40) {
+        view.step()
+        queued--
+      }
+    }
     if (forward && stepNow.do) {
       if (stepNow.do.sample !== undefined) view.sample?.(stepNow.do.sample)
       view.act?.(stepNow.do)

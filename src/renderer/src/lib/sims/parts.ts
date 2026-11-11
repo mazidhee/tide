@@ -5,6 +5,14 @@
  *   attention         token:I, row:I, scores, weights, mix
  *   gradient-descent  point, gradient, path, minimum
  *   softmax           logit:I, probabilities, temperature
+ * The later kinds keep their parts beside their models (parse…Part and describe…Part in each):
+ *   raft (raft.ts)          node:N, log:N, entry:N:I, timer:N, message:ID, leader, term, commit, messages, network, clock
+ *   b-tree (btree.ts)       root, node:L:I, key:K, path, height, fill, order, step
+ *   hash-table (hashTable.ts)  bucket:I (from 0, as the arithmetic counts), key:K, load, probe, hash, collisions, strategy
+ *   cpu (cpu.ts)            pc, ir, phase, program, memory, flags, register:N, flag:Z, memory:A, line:N
+ *   tokeniser (bpe.ts)      text, pairs, pair:N, merges, merge:N, vocabulary, sentence, token:N, length
+ *   blockchain (chain.ts)   block:N, hash:N, nonce:N, link:N, orphan:N, difficulty, tip, fork, miner:a
+ *   plot (plotExpr.ts)      function:N, point, tangent, param:NAME, axes
  * Each description is a plain phrase with the current numbers, ready to drop into a question.
  */
 import type { AttentionModel, AttentionResult } from './attention'
