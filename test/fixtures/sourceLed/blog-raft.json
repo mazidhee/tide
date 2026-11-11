@@ -1,0 +1,7 @@
+{
+ "url": "https://someones-blog.example.com/raft-explained",
+ "title": "Raft explained, by someone who finally got it",
+ "fetched": "2026-11-11",
+ "status": 200,
+ "text": "Raft explained, by someone who finally got it\n\nI spent a weekend on Raft and here is how I think about it now.\n\nRaft picks a leader. The leader election starts when a follower hears nothing for a while, which is the election timeout. The follower becomes a candidate, bumps its term and asks everyone for votes. Whoever gets a majority of votes in that term is the leader. Terms are just numbers that go up, and every election starts a new term.\n\nIf two candidates split the vote nobody wins, the term ends with no leader, and they try again after a random wait. Randomised timeouts make split votes rare in practice.\n\nAfter the election the leader sends heartbeats so that followers do not start another election. A follower that sees a higher term than its own steps down straight away. That is most of leader election and terms; the rest of Raft is log replication, which I will write about next week if I find the time and the coffee.\n\nThanks for reading. Follow me for more posts about distributed systems, and check out my course."
+}
