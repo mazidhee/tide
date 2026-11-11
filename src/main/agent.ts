@@ -26,7 +26,7 @@ import type { AgentStep, AISettings, ChatEvent, ChatMessage, ChatRequest, Contex
 import { getSettings } from './settings'
 import { localSampling } from './sampling'
 import { getChunks, indexReady, search } from './search'
-import { canTake, CLOUD_REPLY_TOKENS, CloudUnavailable, cloudError, estimateTokens, headersFor, noteLimits, noteSent, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
+import { canTake, CLOUD_REPLY_TOKENS, CloudUnavailable, cloudError, estimateTokens, headersFor, noteLimits, noteSent, noteWhy, recordUsage, routeFor, secondsUntilReset, type CloudTarget } from './cloud'
 import { escalationFor, providerInfo, type CloudTask, type RequestKind } from '@shared/providers'
 import { SESSION_FORMAT, ownWords } from '@shared/session'
 import { findImages } from './images'
@@ -610,10 +610,14 @@ async function streamTurn(messages: ApiMessage[], tools: unknown[], signal: Abor
     try {
       // Don't send what the provider's per-minute allowance can't take: Gemma answers at once instead
       const needed = estimateTokens(JSON.stringify(messages).length + JSON.stringify(tools).length) + CLOUD_REPLY_TOKENS
-      if (!canTake(needed, cloud.target)) throw new CloudUnavailable(`The cloud model’s per-minute limit is used up for about ${secondsUntilReset(cloud.target)}s`)
-      return await streamTurnOnce(messages, tools, signal, (t) => ((wrote = true), onText(t)), 0, cloud.target, cloud.task)
+      if (!canTake(needed, cloud.target)) throw new CloudUnavailable(`The cloud model’s per-minute limit is used up for about ${secondsUntilReset(cloud.target)}s`, 'minute')
+      const turn = await streamTurnOnce(messages, tools, signal, (t) => ((wrote = true), onText(t)), 0, cloud.target, cloud.task)
+      // For the record only (cloud.ts FailCode): a turn that came back with neither words nor a tool call
+      if (!turn.text.trim() && !turn.calls.length) noteWhy(cloud.target, cloud.task, 'empty')
+      return turn
     } catch (e) {
       if (signal.aborted || !(e instanceof CloudUnavailable || e instanceof TypeError)) throw e
+      noteWhy(cloud.target, cloud.task, e instanceof CloudUnavailable ? e.why : 'broken')
       // The cloud can't take it right now: Gemma answers, and the step says why
       cloud.fellBack = true
       ctx!.updateStep(cloud.stepId, { status: 'error', detail: `${(e as Error).message}. Gemma answered instead.` })
@@ -1340,7 +1344,10 @@ async function loop(messages: ApiMessage[], ctx: LoopContext, depth: number, onT
     const turn = await streamTurn(messages, tools, ctx.signal, onText, ctx)
     const text = turn.text
     const calls = final ? [] : turn.calls
-    if (final && turn.calls.length && !text.trim()) return answerWithoutTools(messages, ctx, onText, depth)
+    if (final && turn.calls.length && !text.trim()) {
+      if (ctx.cloud && !ctx.cloud.fellBack) noteWhy(ctx.cloud.target, ctx.cloud.task, 'tool-loop')
+      return answerWithoutTools(messages, ctx, onText, depth)
+    }
     if (!calls.length) {
       if (text) return text
       // An empty reply: the model often meant to call another tool. Nudge it once with tools still
