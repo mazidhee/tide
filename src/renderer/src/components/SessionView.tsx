@@ -35,6 +35,23 @@ const GO_ON = 'Go on.'
 const ASKED = 'My question: '
 const answered = (said: string) => !said.startsWith(GO_ON) && !said.startsWith(ASKED)
 
+/**
+ * Show me: you ask to see the explanation you were just given. The tutor picks the one kind of
+ * picture that fits what it taught, and anything with numbers in it is computed, not drawn by eye.
+ */
+const SHOW_ME = `${ASKED}Show me that as a picture.
+
+(Tide: the student pressed Show me on your last explanation. Don't explain it again in words. Give the ONE visual that fits what you just taught, then one line saying what to look at in it, and stop: no new problem, no question.
+Choose by what the idea is:
+- parts and how data or control moves between them (a system, a pipeline, a request, the layers of a model): a mermaid flowchart;
+- an exchange over time between parties (a protocol, a handshake, a call sequence): a mermaid sequenceDiagram;
+- ideas grouped under a topic, to see the whole of it: a mermaid mindmap;
+- states and what moves between them: a mermaid stateDiagram-v2;
+- values changing step by step (an algorithm run, a carry chain, a trace): a table, one row per step;
+- a function, a quantity, a distribution or numbers compared: plot it with run_code (matplotlib), computing every value in the code;
+- something that exists physically or has a classic textbook figure: find_image.
+Everything in it must be exact. Any number, bit pattern or formula you show is one you have computed (use run_code when it isn't trivial), labels use the same names and symbols as your explanation, and nothing is included that you didn't teach. Keep a diagram under about 14 nodes with short labels in quotes.)`
+
 const CodeEditor = lazy(() => import('./CodeEditor').then((m) => ({ default: m.CodeEditor })))
 const LessonCanvas = lazy(() => import('./LessonCanvas').then((m) => ({ default: m.LessonCanvas })))
 import { parseVerdict, scorecardScore } from '@shared/interviews'
@@ -938,6 +955,11 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     {(mode === 'teach' || mode === 'quiz') && (
                       <button className={`icon-btn small${challenged[i] === 'ok' ? ' on' : ''}`} title={challenged[i] === 'checking' ? 'Checking…' : challenged[i] === 'ok' ? 'Checked: nothing wrong found' : 'Doubt this? Have the stronger model check it against the sources'} aria-label="Check this" disabled={!!challenged[i] || busy || (checking && i === turns.length - 1)} onClick={() => challenge(i)}>
                         {challenged[i] === 'checking' ? <span className="spinner" /> : <Icon name={challenged[i] === 'ok' ? 'check' : 'search'} size={13} />}
+                      </button>
+                    )}
+                    {mode === 'teach' && i === turns.length - 1 && (
+                      <button className="icon-btn small" title="Show me: see this as a diagram, a trace or a plot" aria-label="Show me this as a picture" disabled={busy} onClick={() => submit(SHOW_ME)}>
+                        <Icon name="image" size={13} />
                       </button>
                     )}
                     {mode === 'teach' && (

@@ -5,6 +5,8 @@
  */
 import { promises as fs } from 'fs'
 import { lessonMarkdown, lessonPage, summarise, type LessonRecord, type LessonSummary } from '@shared/lessonLog'
+import { digestLesson, priorLessonsNote, type LessonDigest } from '@shared/lessonMemory'
+import { privatePath } from './projects'
 import { absPath, readText, uniquePath, writeText } from './vault'
 
 const DIR = '.tide/lessons'
@@ -42,4 +44,23 @@ export async function listLessons(): Promise<LessonSummary[]> {
     if (r) out.push(summarise(r))
   }
   return out.sort((a, b) => b.updated - a.updated)
+}
+
+/**
+ * What earlier lessons on this topic, or close to it, show: for the tutor, as a new lesson opens.
+ * A lesson from a private project is left out unless this one is private too, since the note
+ * goes wherever the lesson's first message goes.
+ */
+export async function earlierLessons(topic: string, privateTurn: boolean, notId?: string): Promise<string> {
+  const names = await fs.readdir(absPath(DIR)).catch(() => [] as string[])
+  const digests: LessonDigest[] = []
+  for (const n of names.filter((n) => n.endsWith('.json'))) {
+    const r = await getLesson(n.replace(/\.json$/, ''))
+    if (!r || r.id === notId || r.options?.placement) continue
+    const path = 'path' in r.scope ? r.scope.path : ''
+    if (!privateTurn && path && (await privatePath(path).catch(() => false))) continue
+    const d = digestLesson(r)
+    if (d) digests.push(d)
+  }
+  return priorLessonsNote(topic, digests)
 }
