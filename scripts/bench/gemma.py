@@ -4,6 +4,7 @@ How fast the local model answers Tide, measured the way Tide talks to it.
 
     python3 scripts/bench/gemma.py speed --mode before     # the settings and behaviour Tide had
     python3 scripts/bench/gemma.py speed --mode after      # tuned cache, read-back and keep-warm
+    python3 scripts/bench/gemma.py lesson --mode after     # one long lesson with full-length answers
     python3 scripts/bench/gemma.py check                   # the cache never changes an answer
 
 `speed` covers cold and warm starts, short and long prompts, and conversations of several turns
@@ -25,7 +26,7 @@ NOW = '(Context from the app, not the student: it is Wednesday 11 November, 03:1
 # What Tide applied before this work, and what it applies now (src/main/modelServer.ts)
 SETTINGS = {
     'before': {'apc_enabled': True, 'apc_disk_enabled': True, 'apc_disk_max_gb': 8, 'apc_memory_max_gb': 4, 'apc_memory_reserve_gb': None, 'apc_checkpoint_entries': 8, 'apc_checkpoint_interval_tokens': 8192, 'apc_checkpoint_guard_tokens': 1},
-    'after': {'apc_enabled': True, 'apc_disk_enabled': True, 'apc_disk_max_gb': 20, 'apc_memory_max_gb': 2, 'apc_memory_reserve_gb': 0, 'apc_checkpoint_entries': 6, 'apc_checkpoint_interval_tokens': 8192, 'apc_checkpoint_guard_tokens': 4},
+    'after': {'apc_enabled': True, 'apc_disk_enabled': True, 'apc_disk_max_gb': 20, 'apc_memory_max_gb': 2, 'apc_memory_reserve_gb': 0.5, 'apc_checkpoint_entries': 6, 'apc_checkpoint_interval_tokens': 8192, 'apc_checkpoint_guard_tokens': 4},
 }
 
 PARA = ("In two's complement, the most significant bit carries a negative weight, so adding signed and unsigned "
@@ -118,13 +119,13 @@ def background(tag):
             {'role': 'user', 'content': f'Title for conversation {tag}, five words.'}]
 
 
-def converse(history, questions, tenant, mode, jobs, tag):
+def converse(history, questions, tenant, mode, jobs, tag, answer_tokens=150):
     """A conversation of several turns. In 'after' mode each answer is read back and, once the
     background jobs have run, the conversation is touched again: what Tide now does itself."""
     rows = []
     convo = list(history)
     for qi, q in enumerate(questions):
-        first, tm, answer = ask(convo + [{'role': 'user', 'content': q}], tenant)
+        first, tm, answer = ask(convo + [{'role': 'user', 'content': q}], tenant, answer_tokens)
         rows.append({'first': first, 'new': tm['prompt_n'], 'cached': tm['cache_n'], 'rate': tm['predicted_per_second']})
         convo += [{'role': 'user', 'content': q}, {'role': 'assistant', 'content': answer}]
         if mode == 'after':
@@ -134,6 +135,19 @@ def converse(history, questions, tenant, mode, jobs, tag):
         if mode == 'after' and jobs:
             ask(convo, tenant, 1)
     return rows
+
+
+def lesson(mode, answer_tokens):
+    """Only the long lesson, with answers as long as a tutor's really are (the full run caps them at 150 tokens)."""
+    settle(SETTINGS[mode])
+    run = f'{mode}-{random.randint(0, 10**9)}'
+    rows = []
+    for rep in range(2):
+        t = f'{run}-lesson{rep}'
+        rows += converse(long_history(10, t), [q + ' Explain fully, with a worked example.' for q in QUESTIONS[:5]], t, mode, 2, t, answer_tokens)[1:]
+    firsts = [r['first'] for r in rows]
+    print(f"{mode}: long lesson, answers up to {answer_tokens} tokens, background work between turns: first word {statistics.median(firsts):.2f}s median "
+          f"({min(firsts):.2f} to {max(firsts):.2f}; n={len(rows)}), read {round(statistics.median(r['new'] for r in rows))} tokens a turn, wrote {statistics.median(r['rate'] for r in rows):.1f} tok/s | server {server_memory()}")
 
 
 def speed(mode):
@@ -262,7 +276,8 @@ def check():
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('what', choices=['speed', 'check'])
+    p.add_argument('what', choices=['speed', 'lesson', 'check'])
     p.add_argument('--mode', choices=['before', 'after'], default='after')
+    p.add_argument('--answer', type=int, default=500, help='for `lesson`: the most tokens an answer may run to')
     a = p.parse_args()
-    speed(a.mode) if a.what == 'speed' else check()
+    {'speed': lambda: speed(a.mode), 'lesson': lambda: lesson(a.mode, a.answer), 'check': check}[a.what]()

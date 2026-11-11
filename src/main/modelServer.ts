@@ -27,12 +27,13 @@ import { getSettings } from './settings'
 //   start only past 8k tokens.
 // - The last snapshot is taken 4 tokens before the end, not 1: a prompt ends with the 4 tokens that
 //   open the model's turn, which the next prompt never repeats, so at 1 it could never match.
-// - No extra memory held back before reading (the server already keeps its own margin): with the
-//   automatic 1.8 GB on top, a Mac with little free memory had its snapshots thrown away just
-//   before they were needed, and a whole lesson was read again (28 s instead of 1 s).
+// - Half a GB held back before reading, not the automatic 1.8 GB: with that, a Mac with little
+//   free memory had its snapshots thrown away just before they were needed and a whole lesson was
+//   read again (a worst turn of 44 s); with none, the cache grew a GB past its budget. At half a
+//   GB the worst turn was 2 s and the server no bigger than before.
 // - Snapshots also go to disk (up to 20 GB; one long lesson writes several): one pushed out of
 //   memory comes back in about a second, and survives a restart.
-export const PREFIX_CACHE = { apc_enabled: true, apc_disk_enabled: true, apc_disk_max_gb: 20, apc_memory_max_gb: 2, apc_memory_reserve_gb: 0, apc_checkpoint_entries: 6, apc_checkpoint_interval_tokens: 8192, apc_checkpoint_guard_tokens: 4 }
+export const PREFIX_CACHE = { apc_enabled: true, apc_disk_enabled: true, apc_disk_max_gb: 20, apc_memory_max_gb: 2, apc_memory_reserve_gb: 0.5, apc_checkpoint_entries: 6, apc_checkpoint_interval_tokens: 8192, apc_checkpoint_guard_tokens: 4 }
 
 /** Whether the AI server is mlx-vlm, which takes request-only context (see transientContext) */
 let mlxVlmServer = false
