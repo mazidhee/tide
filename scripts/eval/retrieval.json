@@ -1,0 +1,819 @@
+{
+ "gold": "the page, with the pages either side also counted as hits",
+ "books": {
+  "2176e3b02453b5c53c11be3d016410a018744893": {
+   "book": "Computer Systems: A Programmer's Perspective",
+   "path": ""
+  },
+  "2f7e8ee8e24155846f622195cc17695a609a4525": {
+   "book": "The C Programming Language",
+   "path": "Library/PDFs/C Programming Language - 2nd Edition (OCR).pdf"
+  },
+  "3524c39bfbd489e30367c0b37ce607bdee825002": {
+   "book": "Data Engineering with Python",
+   "path": "Library/PDFs/Data Engineering with Python - Paul Crickard.pdf"
+  },
+  "3d790387cd828bc860ee5abd72e80c5f498163f7": {
+   "book": "",
+   "path": "Library/PDFs/Charles Petzold-Code_ The Hidden Language of Computer Hardware and Software-Microsoft Press (2000).pdf"
+  },
+  "4aab2116766576e34f65694140d5ff3eae3502f8": {
+   "book": "Effective Modern C++",
+   "path": "Library/PDFs/Scott Meyers-Effective Modern C++_ 42 Specific Ways to Improve Your Use of C++11 and C++14-O'Reilly Media (2014).pdf"
+  },
+  "516f03568481053b4eb2337239716046b1b27695": {
+   "book": "Python Data Science Handbook",
+   "path": "Library/PDFs/Python Data Science Handbook - Jake VanderPlas.pdf"
+  },
+  "72e93b4216dafad599980a3fb306ef545d692dbc": {
+   "book": "CPython Internals",
+   "path": "Library/PDFs/Anthony Shaw - CPython Internals.pdf"
+  },
+  "746c6e45ab1ddd6094fd6ff3f9ff2b0182a8bfdb": {
+   "book": "Python Crash Course",
+   "path": "Library/PDFs/pythoncrashcourse.pdf"
+  },
+  "74df97a2c584c80475c9e9605b0290124b7f13ca": {
+   "book": "Introduction to Algorithms and Machine Learning",
+   "path": "Library/PDFs/introduction-to-algorithms-and-machine-learning.pdf"
+  },
+  "89d97ebc3e464d08cd26c274a7427b016ef624df": {
+   "book": "Python Cookbook",
+   "path": ""
+  },
+  "aaca88a0dd63ef7d9de82b1d21468a0d6077ad4d": {
+   "book": "Fluent Python",
+   "path": ""
+  },
+  "b36125a0c2213394bf0743808e2b335be1fb1d95": {
+   "book": "Designing Data-Intensive Applications",
+   "path": "Library/PDFs/Designing Data-Intensive Applications.pdf"
+  },
+  "be4b288c5df41115a179234434af05fab3e8c83d": {
+   "book": "Linear Algebra and Its Applications",
+   "path": "Library/PDFs/Linear Algebra and Its Applications - Gilbert Strang.pdf"
+  },
+  "d3754b4522720cdfa1fefb26bb940a93585ab3cd": {
+   "book": "Modern Computer Arithmetic",
+   "path": "Library/PDFs/A Survey of Number Representations for Computer Arithmetic.pdf"
+  },
+  "d42dfcbdfcbe11f8ba7678d8c1652467262756d0": {
+   "book": "Grokking Data Structures",
+   "path": "Library/PDFs/grokking-data-structures.pdf"
+  }
+ },
+ "questions": [
+  {
+   "question": "What are the smallest and largest values a w-bit two's-complement number can represent, and which bit vectors give TMin and TMax?",
+   "kind": "keyword",
+   "book": "Computer Systems: A Programmer's Perspective",
+   "file": "2176e3b02453b5c53c11be3d016410a018744893",
+   "page": 96,
+   "quote": "The least representable value is given by bit vector [10 . . . 0]"
+  },
+  {
+   "question": "If a C function reads a line of typed text into a small local character array and the user types far more than fits, what exactly gets damaged and how does the program go wrong as the input gets longer?",
+   "kind": "paraphrase",
+   "book": "Computer Systems: A Programmer's Perspective",
+   "file": "2176e3b02453b5c53c11be3d016410a018744893",
+   "page": 293,
+   "quote": "the corruption is cumulative—as the number of char- acters increases, more state gets corrupted"
+  },
+  {
+   "question": "Why can't the compiler turn combine3 into combine4 on its own and accumulate the result in a register? What does memory aliasing have to do with it?",
+   "kind": "keyword",
+   "book": "Computer Systems: A Programmer's Perspective",
+   "file": "2176e3b02453b5c53c11be3d016410a018744893",
+   "page": 529,
+   "quote": "the two functions can have different behaviors due to memory aliasing"
+  },
+  {
+   "question": "Why did chip makers give up on making one processor run faster and faster and start putting several smaller ones on the same chip instead?",
+   "kind": "paraphrase",
+   "book": "Computer Systems: A Programmer's Perspective",
+   "file": "2176e3b02453b5c53c11be3d016410a018744893",
+   "page": 621,
+   "quote": "they could no longer increase CPU clock frequencies as quickly because the chips would then consume too much power"
+  },
+  {
+   "question": "What is in an ELF relocation entry, and how do the relocation types R_386_PC32 and R_386_32 differ?",
+   "kind": "keyword",
+   "book": "Computer Systems: A Programmer's Perspective",
+   "file": "2176e3b02453b5c53c11be3d016410a018744893",
+   "page": 708,
+   "quote": "The offset is the section offset of the reference that will need to be modified"
+  },
+  {
+   "question": "How do I install a signal handler with the signal function so my program catches SIGINT instead of being terminated when the user types ctrl-c?",
+   "kind": "keyword",
+   "book": "Computer Systems: A Programmer's Perspective",
+   "file": "2176e3b02453b5c53c11be3d016410a018744893",
+   "page": 779,
+   "quote": "Changing the default action by passing the address of a handler to the signal function is known as installing the handler"
+  },
+  {
+   "question": "When a message has to cross from one local network to a different kind of local network through the box that joins them, what happens to the wrappers around the data on the way, and what does the receiving machine do with them?",
+   "kind": "paraphrase",
+   "book": "Computer Systems: A Programmer's Perspective",
+   "file": "2176e3b02453b5c53c11be3d016410a018744893",
+   "page": 926,
+   "quote": "the protocol software on host B strips off the packet header and frame header"
+  },
+  {
+   "question": "I split a big summation across more workers than my machine has processors and it stopped getting faster, even got a little slower. Why doesn't adding more keep helping?",
+   "kind": "paraphrase",
+   "book": "Computer Systems: A Programmer's Perspective",
+   "file": "2176e3b02453b5c53c11be3d016410a018744893",
+   "page": 1011,
+   "quote": "Running time actually increases a bit as we increase the number of threads because of the overhead of context switching multiple threads on the same core"
+  },
+  {
+   "question": "When a char is converted to an int in C, can the result be negative? Is char signed or unsigned, and what is sign extension here?",
+   "kind": "keyword",
+   "book": "The C Programming Language",
+   "file": "2f7e8ee8e24155846f622195cc17695a609a4525",
+   "page": 42,
+   "quote": "The language does not specify whether variables of type char are signed or unsigned quantities"
+  },
+  {
+   "question": "If I declare a variable inside the curly braces of an if, using the same name as one that already exists further out, are they the same variable? How long does the inner one live?",
+   "kind": "paraphrase",
+   "book": "The C Programming Language",
+   "file": "2f7e8ee8e24155846f622195cc17695a609a4525",
+   "page": 76,
+   "quote": "this i is unrelated to any i outside the block"
+  },
+  {
+   "question": "What is the relationship between array indexing and pointer arithmetic in C: is a[i] really the same as *(a+i), and how is an array name different from a pointer?",
+   "kind": "keyword",
+   "book": "The C Programming Language",
+   "file": "2f7e8ee8e24155846f622195cc17695a609a4525",
+   "page": 89,
+   "quote": "In evaluating a[i] , C converts it to *(a+i) immediately; the two forms are equivalent"
+  },
+  {
+   "question": "In C, when I hand a function one of those grouped records with a couple of named members and the function changes a member, does my original get changed too? And is there a cheaper way to hand over a big one?",
+   "kind": "paraphrase",
+   "book": "The C Programming Language",
+   "file": "2f7e8ee8e24155846f622195cc17695a609a4525",
+   "page": 117,
+   "quote": "structure parameters are passed by value like any others"
+  },
+  {
+   "question": "How come a C program on UNIX can read what I type and print to the screen with the very same calls it uses for things stored on disk?",
+   "kind": "paraphrase",
+   "book": "The C Programming Language",
+   "file": "2f7e8ee8e24155846f622195cc17695a609a4525",
+   "page": 151,
+   "quote": "all peripheral devices, even keyboard and screen, are files in the file system"
+  },
+  {
+   "question": "How does the K&R malloc keep its free list of blocks, and what does the first fit algorithm do when a block is too big or when a block is freed?",
+   "kind": "keyword",
+   "book": "The C Programming Language",
+   "file": "2f7e8ee8e24155846f622195cc17695a609a4525",
+   "page": 164,
+   "quote": "When a request is made, the free list is scanned until a big-enough block is found"
+  },
+  {
+   "question": "What is a proxy class in C++, and why are std::vector<bool>::reference and expression templates called invisible proxies?",
+   "kind": "keyword",
+   "book": "Effective Modern C++",
+   "file": "4aab2116766576e34f65694140d5ff3eae3502f8",
+   "page": 63,
+   "quote": "a proxy class : a class that exists for the purpose of emulating and augmenting the behavior of some other type"
+  },
+  {
+   "question": "Why are deleted functions better than the C++98 trick of declaring a function private and not defining it, for example when disabling a template specialization inside a class?",
+   "kind": "keyword",
+   "book": "Effective Modern C++",
+   "file": "4aab2116766576e34f65694140d5ff3eae3502f8",
+   "page": 96,
+   "quote": "template specializations must be written at namespace scope, not class scope"
+  },
+  {
+   "question": "I created a reference-counted object with the one-step helper instead of calling new myself. Why can the storage for the object stay occupied long after the last owner is gone and it has been destroyed?",
+   "kind": "paraphrase",
+   "book": "Effective Modern C++",
+   "file": "4aab2116766576e34f65694140d5ff3eae3502f8",
+   "page": 162,
+   "quote": "the memory it occupies can’t be released until the control block has also been destroyed"
+  },
+  {
+   "question": "Instead of one templated setter that accepts anything, I wrote two versions, one for named objects and one for temporaries. Is that slower when I call it with a quoted piece of text?",
+   "kind": "paraphrase",
+   "book": "Effective Modern C++",
+   "file": "4aab2116766576e34f65694140d5ff3eae3502f8",
+   "page": 189,
+   "quote": "a temporary std::string object would be created for setName ’s parameter to bind to"
+  },
+  {
+   "question": "A constant number I declared with its value right inside the class works everywhere, but when I pass it through a generic wrapper that hands its arguments on to another function, the build fails at the link step. What's going on and how do I fix it?",
+   "kind": "paraphrase",
+   "book": "Effective Modern C++",
+   "file": "4aab2116766576e34f65694140d5ff3eae3502f8",
+   "page": 229,
+   "quote": "According to the Standard, passing MinVals by reference requires that it be defined"
+  },
+  {
+   "question": "In which situations is it appropriate to use std::thread directly rather than a task-based design with std::async?",
+   "kind": "keyword",
+   "book": "Effective Modern C++",
+   "file": "4aab2116766576e34f65694140d5ff3eae3502f8",
+   "page": 263,
+   "quote": "You need access to the API of the underlying threading implementation"
+  },
+  {
+   "question": "How does Karatsuba's algorithm multiply two n-word integers, and what is the Karatsuba threshold?",
+   "kind": "keyword",
+   "book": "Modern Computer Arithmetic",
+   "file": "d3754b4522720cdfa1fefb26bb940a93585ab3cd",
+   "page": 21,
+   "quote": "The idea is to reduce a multiplication of length n to three multiplications of length n/ 2"
+  },
+  {
+   "question": "There's a loop that finds the whole-number part of a root of a big integer by repeatedly averaging the current guess with the number divided by the guess. Why is it so slow if I start from the number itself, and does any starting guess work?",
+   "kind": "paraphrase",
+   "book": "Modern Computer Arithmetic",
+   "file": "d3754b4522720cdfa1fefb26bb940a93585ab3cd",
+   "page": 45,
+   "quote": "Convergence is slow because the initial value of u assigned at line 1 is much too large"
+  },
+  {
+   "question": "If I only know what a number leaves over when divided by 11, by 13 and by 17, how can I get the number back with a single weighted sum of those three leftovers?",
+   "kind": "paraphrase",
+   "book": "Modern Computer Arithmetic",
+   "file": "d3754b4522720cdfa1fefb26bb940a93585ab3cd",
+   "page": 97,
+   "quote": "which after reduction modulo 11 · 13 · 17 = 2431 gives 497"
+  },
+  {
+   "question": "For a multi-precision number kept in base ten, how much memory is wasted if every decimal digit gets its own four bits, and what tighter packing wastes almost nothing?",
+   "kind": "paraphrase",
+   "book": "Modern Computer Arithmetic",
+   "file": "d3754b4522720cdfa1fefb26bb940a93585ab3cd",
+   "page": 103,
+   "quote": "each decimal digit is represented by 4 bits, with a memory loss of about 17%"
+  },
+  {
+   "question": "What are the round bit and the sticky bit, and how do they determine correct rounding of a binary expansion to n bits in each rounding mode?",
+   "kind": "keyword",
+   "book": "Modern Computer Arithmetic",
+   "file": "d3754b4522720cdfa1fefb26bb940a93585ab3cd",
+   "page": 112,
+   "quote": "called the round bit — and that of the sticky bit s , which is 0"
+  },
+  {
+   "question": "What is a holonomic function, and what does the bit-burst algorithm offer over the binary-splitting algorithms that need a functional equation?",
+   "kind": "keyword",
+   "book": "Modern Computer Arithmetic",
+   "file": "d3754b4522720cdfa1fefb26bb940a93585ab3cd",
+   "page": 197,
+   "quote": "A function f ( x ) is said to be holonomic iff it satisfies a linear homoge- neous differential equation with polynomial coefficients in x"
+  },
+  {
+   "question": "What are the three Vs of big data that data engineering tools have to account for?",
+   "kind": "keyword",
+   "book": "Data Engineering with Python",
+   "file": "3524c39bfbd489e30367c0b37ce607bdee825002",
+   "page": 26,
+   "quote": "Data engineering is part of the overall big data ecosystem and has to account for the three Vs of big data"
+  },
+  {
+   "question": "If one of the values in a plain text spreadsheet-style file has the separator symbol inside it, how does the reader know it isn't the start of the next column?",
+   "kind": "paraphrase",
+   "book": "Data Engineering with Python",
+   "file": "3524c39bfbd489e30367c0b37ce607bdee825002",
+   "page": 65,
+   "quote": "usually a pair of quotes around text strings that could contain a comma that is not used to signify a new field"
+  },
+  {
+   "question": "My scheduled workflow only has two small steps, read then load. Why is it a bad idea to merge them into one function?",
+   "kind": "paraphrase",
+   "book": "Data Engineering with Python",
+   "file": "3524c39bfbd489e30367c0b37ce607bdee825002",
+   "page": 111,
+   "quote": "each task should be atomic; that is, each task should be able to stand on its own"
+  },
+  {
+   "question": "What does the upsert index operation do in Elasticsearch when a document with that ID already exists?",
+   "kind": "keyword",
+   "book": "Data Engineering with Python",
+   "file": "3524c39bfbd489e30367c0b37ce607bdee825002",
+   "page": 155,
+   "quote": "upsert will index the document if the ID does not already exist, and it will update if the ID exists, and the data is different"
+  },
+  {
+   "question": "What do 'active thread' and 'total queued data' on the NiFi status bar tell me when monitoring a pipeline?",
+   "kind": "keyword",
+   "book": "Data Engineering with Python",
+   "file": "3524c39bfbd489e30367c0b37ce607bdee825002",
+   "page": 221,
+   "quote": "Total queued data : The number of flowfiles and the combined size on disk."
+  },
+  {
+   "question": "When inserting a batch of rows from the flow tool into a table, how do I make it all-or-nothing so a single bad record stops everything instead of leaving half the batch written?",
+   "kind": "paraphrase",
+   "book": "Data Engineering with Python",
+   "file": "3524c39bfbd489e30367c0b37ce607bdee825002",
+   "page": 268,
+   "quote": "Setting Rollback on Failure to True is how you can create atomicity in your transactions."
+  },
+  {
+   "question": "How do NumPy ufuncs behave on a Pandas Series or DataFrame: what happens to the index and column labels?",
+   "kind": "keyword",
+   "book": "Python Data Science Handbook",
+   "file": "516f03568481053b4eb2337239716046b1b27695",
+   "page": 133,
+   "quote": "these ufuncs will preserve index and column labels in the output"
+  },
+  {
+   "question": "Instead of drawing a little bar on every one of a thousand points, how can I shade a band around a fitted curve to show how unsure the fit is?",
+   "kind": "paraphrase",
+   "book": "Python Data Science Handbook",
+   "file": "516f03568481053b4eb2337239716046b1b27695",
+   "page": 258,
+   "quote": "we can use the plt.fill_between function with a light color to visualize this continuous error"
+  },
+  {
+   "question": "How could a program learn to sort emails into junk and not junk? What would it look at in each message and where do the right answers come from at the start?",
+   "kind": "paraphrase",
+   "book": "Python Data Science Handbook",
+   "file": "516f03568481053b4eb2337239716046b1b27695",
+   "page": 353,
+   "quote": "normalized counts of important words or phrases"
+  },
+  {
+   "question": "When is multinomial naive Bayes more appropriate than Gaussian naive Bayes?",
+   "kind": "keyword",
+   "book": "Python Data Science Handbook",
+   "file": "516f03568481053b4eb2337239716046b1b27695",
+   "page": 404,
+   "quote": "multinomial naive Bayes is most appropriate for features that represent counts or count rates"
+  },
+  {
+   "question": "When I squash data with lots of columns down to fewer dimensions, how do I decide how many of the new directions to keep without throwing away too much information?",
+   "kind": "paraphrase",
+   "book": "Python Data Science Handbook",
+   "file": "516f03568481053b4eb2337239716046b1b27695",
+   "page": 458,
+   "quote": "explained variance ratio as a function of the number of components"
+  },
+  {
+   "question": "How does kernel density estimation relate to Gaussian mixture models?",
+   "kind": "keyword",
+   "book": "Python Data Science Handbook",
+   "file": "516f03568481053b4eb2337239716046b1b27695",
+   "page": 509,
+   "quote": "mixture consisting of one Gaussian component per point"
+  },
+  {
+   "question": "How does a change to the Python grammar get proposed and accepted? What role do PEPs and the Steering Council play?",
+   "kind": "keyword",
+   "book": "CPython Internals",
+   "file": "72e93b4216dafad599980a3fb306ef545d692dbc",
+   "page": 79,
+   "quote": "If a Python Core Developer proposes a change to the grammar, it must be proposed as a Python Enhancement Proposal (PEP)."
+  },
+  {
+   "question": "What is opcode prediction in the CPython eval loop and why does it make pairs like COMPARE_OP and POP_JUMP_IF_FALSE faster?",
+   "kind": "keyword",
+   "book": "CPython Internals",
+   "file": "72e93b4216dafad599980a3fb306ef545d692dbc",
+   "page": 179,
+   "quote": "A successful prediction saves a trip through the eval-loop, including its unpredictable switch-case branch."
+  },
+  {
+   "question": "Why does the interpreter's memory cleanup look at recently created things much more often than things that have been around for a long time?",
+   "kind": "paraphrase",
+   "book": "CPython Internals",
+   "file": "72e93b4216dafad599980a3fb306ef545d692dbc",
+   "page": 223,
+   "quote": "tion that most (80%+) objects are destroyed shortly after being cre- ated"
+  },
+  {
+   "question": "I started several workers in Python expecting them to run at the same moment on different cores, but only one seems to do work at a time. What inside the interpreter causes that?",
+   "kind": "paraphrase",
+   "book": "CPython Internals",
+   "file": "72e93b4216dafad599980a3fb306ef545d692dbc",
+   "page": 258,
+   "quote": "This means that only 1 thread can be executing a Python bytecode op- eration at any one time."
+  },
+  {
+   "question": "Why are Unicode strings complicated in CPython, and what is a code point in the Universal Character Set?",
+   "kind": "keyword",
+   "book": "CPython Internals",
+   "file": "72e93b4216dafad599980a3fb306ef545d692dbc",
+   "page": 302,
+   "quote": "Each character has a unique identifier known as a code point"
+  },
+  {
+   "question": "When Python itself dies because some C code touched memory it shouldn't have, all I get is a one-line message. How can I make it show which Python lines were running?",
+   "kind": "paraphrase",
+   "book": "CPython Internals",
+   "file": "72e93b4216dafad599980a3fb306ef545d692dbc",
+   "page": 333,
+   "quote": "the fault handler will print the running threads and the Python stack trace to where the fault occurred"
+  },
+  {
+   "question": "What are the rules for naming variables in Python? Can a variable name start with a number or contain spaces?",
+   "kind": "keyword",
+   "book": "Python Crash Course",
+   "file": "746c6e45ab1ddd6094fd6ff3f9ff2b0182a8bfdb",
+   "page": 54,
+   "quote": "They can start with a letter or an underscore, but not with a number."
+  },
+  {
+   "question": "How do I grab just the last few entries of a list in a way that keeps working even when the list gets longer or shorter?",
+   "kind": "paraphrase",
+   "book": "Python Crash Course",
+   "file": "746c6e45ab1ddd6094fd6ff3f9ff2b0182a8bfdb",
+   "page": 99,
+   "quote": "we want to output the last three players on the roster, we can use the slice players[-3:]"
+  },
+  {
+   "question": "When mixing positional and arbitrary arguments like *toppings in a function definition, where does the arbitrary parameter have to go?",
+   "kind": "keyword",
+   "book": "Python Crash Course",
+   "file": "746c6e45ab1ddd6094fd6ff3f9ff2b0182a8bfdb",
+   "page": 185,
+   "quote": "parameter that accepts an arbitrary number of arguments must be placed last in the function definition"
+  },
+  {
+   "question": "I'm a beginner starting a bigger program. Should I split my code across several files from the beginning or keep everything together at first?",
+   "kind": "paraphrase",
+   "book": "Python Crash Course",
+   "file": "746c6e45ab1ddd6094fd6ff3f9ff2b0182a8bfdb",
+   "page": 217,
+   "quote": "doing everything in one file and moving your classes to separate modules once everything is working."
+  },
+  {
+   "question": "How do I install virtualenv, create a virtual environment and activate it for a Django project?",
+   "kind": "keyword",
+   "book": "Python Crash Course",
+   "file": "746c6e45ab1ddd6094fd6ff3f9ff2b0182a8bfdb",
+   "page": 432,
+   "quote": "Packages you install in ll_env will be available only while the environment is active."
+  },
+  {
+   "question": "In my web app everyone who signs in can see everybody else's entries. How do I change the page so each person only gets the ones they created?",
+   "kind": "paraphrase",
+   "book": "Python Crash Course",
+   "file": "746c6e45ab1ddd6094fd6ff3f9ff2b0182a8bfdb",
+   "page": 484,
+   "quote": "tells Django to retrieve only the Topic objects from the database whose owner attribute matches the current user"
+  },
+  {
+   "question": "How does backtracking cut down the number of possibilities compared to brute force search?",
+   "kind": "keyword",
+   "book": "Introduction to Algorithms and Machine Learning",
+   "file": "74df97a2c584c80475c9e9605b0290124b7f13ca",
+   "page": 55,
+   "quote": "whenever we find ourselves constructing a set of possibilities that we know are hopeless, we skip over them and backtrack"
+  },
+  {
+   "question": "When I'm grouping similar data points automatically, how do I decide how many groups to ask for if I have no idea in advance?",
+   "kind": "paraphrase",
+   "book": "Introduction to Algorithms and Machine Learning",
+   "file": "74df97a2c584c80475c9e9605b0290124b7f13ca",
+   "page": 116,
+   "quote": "it’s helpful to graph the \"cohesiveness\" of the clusters versus the value of k"
+  },
+  {
+   "question": "Why can't the pseudoinverse method fit a power regression when a data point has an x-coordinate of 0?",
+   "kind": "keyword",
+   "book": "Introduction to Algorithms and Machine Learning",
+   "file": "74df97a2c584c80475c9e9605b0290124b7f13ca",
+   "page": 197,
+   "quote": "The quantity ln 0 is not defined, so 0 is not a valid input for x"
+  },
+  {
+   "question": "How does the algorithm that sorts examples into categories by asking a series of yes/no questions pick which question to ask next?",
+   "kind": "paraphrase",
+   "book": "Introduction to Algorithms and Machine Learning",
+   "file": "74df97a2c584c80475c9e9605b0290124b7f13ca",
+   "page": 288,
+   "quote": "we repeatedly split impure leaf nodes in the way that most quickly reduces the impurity"
+  },
+  {
+   "question": "Is there a guarantee that a network with just a single middle layer can mimic any smooth curve as closely as I want?",
+   "kind": "paraphrase",
+   "book": "Introduction to Algorithms and Machine Learning",
+   "file": "74df97a2c584c80475c9e9605b0290124b7f13ca",
+   "page": 333,
+   "quote": "there exists a sigmoidally-activated neural network with one hidden layer containing a finite number of neurons"
+  },
+  {
+   "question": "What was Blondie24 and who created it?",
+   "kind": "keyword",
+   "book": "Introduction to Algorithms and Machine Learning",
+   "file": "74df97a2c584c80475c9e9605b0290124b7f13ca",
+   "page": 393,
+   "quote": "created a computer program that achieved expert level checkers-playing ability by learning from scratch"
+  },
+  {
+   "question": "What happens to the items before the start index when I use islice() on a generator?",
+   "kind": "keyword",
+   "book": "Python Cookbook",
+   "file": "89d97ebc3e464d08cd26c274a7427b016ef624df",
+   "page": 141,
+   "quote": "it does this by consuming and discarding all of the items up to the starting slice index"
+  },
+  {
+   "question": "My script blows up with a weird message about surrogates when it tries to show the names of files in a folder. What is going on and how do I stop the crash?",
+   "kind": "paraphrase",
+   "book": "Python Cookbook",
+   "file": "89d97ebc3e464d08cd26c274a7427b016ef624df",
+   "page": 179,
+   "quote": "certain filesystems don’t necessarily enforce this encoding restriction"
+  },
+  {
+   "question": "Why should a mixin class not have its own __init__ method or instance variables?",
+   "kind": "keyword",
+   "book": "Python Cookbook",
+   "file": "89d97ebc3e464d08cd26c274a7427b016ef624df",
+   "page": 315,
+   "quote": "mixin classes typically have no state of their own"
+  },
+  {
+   "question": "What is that special file you put inside each folder of a multi-folder Python library for, and is it OK to leave it blank?",
+   "kind": "paraphrase",
+   "book": "Python Cookbook",
+   "file": "89d97ebc3e464d08cd26c274a7427b016ef624df",
+   "page": 416,
+   "quote": "More often that not, it’s fine to just leave the __init__.py files empty"
+  },
+  {
+   "question": "What restrictions apply to functions sent to a process pool as a workaround for the GIL?",
+   "kind": "keyword",
+   "book": "Python Cookbook",
+   "file": "89d97ebc3e464d08cd26c274a7427b016ef624df",
+   "page": 534,
+   "quote": "the function arguments and return value must be compatible with pickle"
+  },
+  {
+   "question": "What are the drawbacks of calling a big compiled C library straight from Python using only the standard library, without writing any C glue?",
+   "kind": "paraphrase",
+   "book": "Python Cookbook",
+   "file": "89d97ebc3e464d08cd26c274a7427b016ef624df",
+   "page": 623,
+   "quote": "you’ll have to spend a fair bit of time writing out all of the type signatures"
+  },
+  {
+   "question": "Reading a gigantic XML file piece by piece and throwing away each piece once handled: how much slower is that than loading it all at once, and how much RAM does it save?",
+   "kind": "paraphrase",
+   "book": "Python Cookbook",
+   "file": "89d97ebc3e464d08cd26c274a7427b016ef624df",
+   "page": 207,
+   "quote": "it requires more than 60 times as much memory"
+  },
+  {
+   "question": "Is a virtual environment a full copy of the Python installation, and where do third-party packages get installed?",
+   "kind": "keyword",
+   "book": "Python Cookbook",
+   "file": "89d97ebc3e464d08cd26c274a7427b016ef624df",
+   "page": 451,
+   "quote": "it really only consists of a few files and symbolic links"
+  },
+  {
+   "question": "If I only need to loop once over every combination of two lists, how can I avoid building the whole million-item result in memory first?",
+   "kind": "paraphrase",
+   "book": "Fluent Python",
+   "file": "aaca88a0dd63ef7d9de82b1d21468a0d6077ad4d",
+   "page": 60,
+   "quote": "using a generator expression would save the cost of building a list with a million items just to feed the for loop"
+  },
+  {
+   "question": "Why does sorted() give wrong results for non-ASCII strings with accents, and what is the standard way to sort them using locale?",
+   "kind": "keyword",
+   "book": "Fluent Python",
+   "file": "aaca88a0dd63ef7d9de82b1d21468a0d6077ad4d",
+   "page": 178,
+   "quote": "The standard way to sort non-ASCII text in Python is to use the locale.strxfrm"
+  },
+  {
+   "question": "Why do two separate objects of my class end up sharing the same list when I wrote an empty list as the fallback value in the constructor's signature?",
+   "kind": "paraphrase",
+   "book": "Fluent Python",
+   "file": "aaca88a0dd63ef7d9de82b1d21468a0d6077ad4d",
+   "page": 246,
+   "quote": "each default value is evaluated when the function is defined"
+  },
+  {
+   "question": "What does the maxsize parameter of functools.lru_cache do and what is its default?",
+   "kind": "keyword",
+   "book": "Fluent Python",
+   "file": "aaca88a0dd63ef7d9de82b1d21468a0d6077ad4d",
+   "page": 353,
+   "quote": "its memory usage is bounded by the maxsize parameter, which has a rather conservative default value of 128"
+  },
+  {
+   "question": "What does Python actually do behind the scenes when I start a field's name with two underscores, and does that really keep other code from reading it?",
+   "kind": "paraphrase",
+   "book": "Fluent Python",
+   "file": "aaca88a0dd63ef7d9de82b1d21468a0d6077ad4d",
+   "page": 412,
+   "quote": "Name mangling is about safety, not security"
+  },
+  {
+   "question": "In async code, saving a file to disk freezes everything else while it writes. How do I hand that work off so the rest keeps running?",
+   "kind": "paraphrase",
+   "book": "Fluent Python",
+   "file": "aaca88a0dd63ef7d9de82b1d21468a0d6077ad4d",
+   "page": 827,
+   "quote": "reading and writing to storage in the main thread blocks the event loop"
+  },
+  {
+   "question": "What are the limitations of @cached_property compared to a regular property?",
+   "kind": "keyword",
+   "book": "Fluent Python",
+   "file": "aaca88a0dd63ef7d9de82b1d21468a0d6077ad4d",
+   "page": 886,
+   "quote": "It cannot be used in a class that defines __slots__"
+  },
+  {
+   "question": "In a match/case OR-pattern, why must all subpatterns use the same variables?",
+   "kind": "keyword",
+   "book": "Fluent Python",
+   "file": "aaca88a0dd63ef7d9de82b1d21468a0d6077ad4d",
+   "page": 716,
+   "quote": "This restriction is nec‐ essary to ensure that the variables are available to the guard expression"
+  },
+  {
+   "question": "In an LSM-tree storage engine, what is a memtable and when does it get written out as an SSTable?",
+   "kind": "keyword",
+   "book": "Designing Data-Intensive Applications",
+   "file": "b36125a0c2213394bf0743808e2b335be1fb1d95",
+   "page": 100,
+   "quote": "When the memtable gets bigger than some threshold—typically a few megabytes —write it out to disk as an SSTable file."
+  },
+  {
+   "question": "How does snapshot isolation use the created_by and deleted_by fields on each row to keep multiple versions of an object?",
+   "kind": "keyword",
+   "book": "Designing Data-Intensive Applications",
+   "file": "b36125a0c2213394bf0743808e2b335be1fb1d95",
+   "page": 262,
+   "quote": "it is marked for deletion by setting the deleted_by field to the ID of the transaction that requested the deletion"
+  },
+  {
+   "question": "Why are secondary indexes a problem when a database is partitioned, and what are the two approaches to partitioning them?",
+   "kind": "keyword",
+   "book": "Designing Data-Intensive Applications",
+   "file": "b36125a0c2213394bf0743808e2b335be1fb1d95",
+   "page": 228,
+   "quote": "The problem with secondary indexes is that they don’t map neatly to partitions."
+  },
+  {
+   "question": "What's the difference between a reduce-side join and a map-side join in MapReduce, and why can the map-side one be faster?",
+   "kind": "keyword",
+   "book": "Designing Data-Intensive Applications",
+   "file": "b36125a0c2213394bf0743808e2b335be1fb1d95",
+   "page": 430,
+   "quote": "it is possible to make joins faster by using a so-called map-side join"
+  },
+  {
+   "question": "I save a change on a website, refresh, and my edit has vanished because the copy of the database I got hadn't caught up yet. What guarantee stops that, and how do you build it when one machine takes all the updates?",
+   "kind": "paraphrase",
+   "book": "Designing Data-Intensive Applications",
+   "file": "b36125a0c2213394bf0743808e2b335be1fb1d95",
+   "page": 185,
+   "quote": "This is a guarantee that if the user reloads the page, they will always see any updates they submitted themselves."
+  },
+  {
+   "question": "When people state what a distributed algorithm must guarantee, they split the requirements into 'nothing bad ever happens' and 'something good happens in the end'. What are those two categories and how do I tell which one a requirement belongs to?",
+   "kind": "paraphrase",
+   "book": "Designing Data-Intensive Applications",
+   "file": "b36125a0c2213394bf0743808e2b335be1fb1d95",
+   "page": 330,
+   "quote": "A giveaway is that liveness properties often include the word “eventually” in their definition."
+  },
+  {
+   "question": "If loading one page needs lots of calls to internal servers, why does the user end up waiting a long time much more often than any single one of those servers is slow?",
+   "kind": "paraphrase",
+   "book": "Designing Data-Intensive Applications",
+   "file": "b36125a0c2213394bf0743808e2b335be1fb1d95",
+   "page": 38,
+   "quote": "It takes just one slow call to make the entire end-user request slow"
+  },
+  {
+   "question": "For a purchase paid in a different currency, is it better for the code to ask another system for the conversion rate at the moment of sale, or to keep its own copy that gets updated whenever the rate changes?",
+   "kind": "paraphrase",
+   "book": "Designing Data-Intensive Applications",
+   "file": "b36125a0c2213394bf0743808e2b335be1fb1d95",
+   "page": 530,
+   "quote": "would subscribe to a stream of exchange rate updates ahead of time, and record the current rate in a local database whenever it changes"
+  },
+  {
+   "question": "How do I find the special solutions to Ax = 0 from the free variables, and how do they make up the nullspace?",
+   "kind": "keyword",
+   "book": "Linear Algebra and Its Applications",
+   "file": "be4b288c5df41115a179234434af05fab3e8c83d",
+   "page": 100,
+   "quote": "Give one free variable the value 1, set the other free variables to 0, and solve Rx = 0 for the pivot variables."
+  },
+  {
+   "question": "Why is the matrix [0 1; 0 0] not diagonalizable, and what do algebraic and geometric multiplicity of its eigenvalue have to do with it?",
+   "kind": "keyword",
+   "book": "Linear Algebra and Its Applications",
+   "file": "be4b288c5df41115a179234434af05fab3e8c83d",
+   "page": 284,
+   "quote": "Diagonalization can fail only if there are repeated eigenvalues"
+  },
+  {
+   "question": "What is the polar decomposition A = QS and how does it follow from the SVD?",
+   "kind": "keyword",
+   "book": "Linear Algebra and Its Applications",
+   "file": "be4b288c5df41115a179234434af05fab3e8c83d",
+   "page": 380,
+   "quote": "Every real square matrix can be factored into A = QS , where Q is orthogonal and S is symmetric positive semidefinite"
+  },
+  {
+   "question": "What are the steps of the revised simplex method, and why is it preferred to working with the full tableau?",
+   "kind": "keyword",
+   "book": "Linear Algebra and Its Applications",
+   "file": "be4b288c5df41115a179234434af05fab3e8c83d",
+   "page": 440,
+   "quote": "Compute the row vector λ = c B B − 1 and the reduced costs r = c N − λ N"
+  },
+  {
+   "question": "Two walls of a room meet at a right angle, so why does the book say those two flat surfaces don't count as perpendicular to each other?",
+   "kind": "paraphrase",
+   "book": "Linear Algebra and Its Applications",
+   "file": "be4b288c5df41115a179234434af05fab3e8c83d",
+   "page": 172,
+   "quote": "There are lines v and w in the front and side walls that do not meet at a right angle."
+  },
+  {
+   "question": "When fitting data where some measurements are more trustworthy than others, how much extra importance should the more accurate readings get, and what if their mistakes are linked to each other?",
+   "kind": "paraphrase",
+   "book": "Linear Algebra and Its Applications",
+   "file": "be4b288c5df41115a179234434af05fab3e8c83d",
+   "page": 200,
+   "quote": "A more accurate measurement, which means a smaller variance, gets a heavier weight."
+  },
+  {
+   "question": "Is there a geometric picture for that single number you compute from a square matrix — something to do with how much space the box built from its rows takes up? And what does its sign mean?",
+   "kind": "paraphrase",
+   "book": "Linear Algebra and Its Applications",
+   "file": "be4b288c5df41115a179234434af05fab3e8c83d",
+   "page": 260,
+   "quote": "The square root of this equation says that the determinant equals the volume ."
+  },
+  {
+   "question": "If each year fixed fractions of people move into and out of a state, why does the split of the population settle to the same proportions in the long run no matter how it started?",
+   "kind": "paraphrase",
+   "book": "Linear Algebra and Its Applications",
+   "file": "be4b288c5df41115a179234434af05fab3e8c83d",
+   "page": 297,
+   "quote": "The steady state is the eigenvector of A corresponding to λ = 1."
+  },
+  {
+   "question": "When should I prefer a dynamic array over a static array, and what does the dynamic array cost me?",
+   "kind": "keyword",
+   "book": "Grokking Data Structures",
+   "file": "d42dfcbdfcbe11f8ba7678d8c1652467262756d0",
+   "page": 90,
+   "quote": "dynamic arrays are implemented with static arrays, and we still have to pay the price of allocating a new array"
+  },
+  {
+   "question": "If a priority queue is implemented with a sorted linked list or sorted array, how do the top and insert methods work?",
+   "kind": "keyword",
+   "book": "Grokking Data Structures",
+   "file": "d42dfcbdfcbe11f8ba7678d8c1652467262756d0",
+   "page": 190,
+   "quote": "Maintaining the elements sorted by priority simplifies the top method."
+  },
+  {
+   "question": "What is the BST property, and where do duplicate values go in a binary search tree?",
+   "kind": "keyword",
+   "book": "Grokking Data Structures",
+   "file": "d42dfcbdfcbe11f8ba7678d8c1652467262756d0",
+   "page": 215,
+   "quote": "all nodes in the left subtree of N will have values less than or equal to v"
+  },
+  {
+   "question": "In the animal hospital story, why was it a mistake for the staff to take the next patient's form off the top of the pile, and what did they switch to?",
+   "kind": "paraphrase",
+   "book": "Grokking Data Structures",
+   "file": "d42dfcbdfcbe11f8ba7678d8c1652467262756d0",
+   "page": 40,
+   "quote": "the first patient to arrive will be the first to see a doctor"
+  },
+  {
+   "question": "To remove an item from a chain of nodes where each one only knows the one after it, why can't I just look the item up and unhook it? What do I need to keep track of while walking along?",
+   "kind": "paraphrase",
+   "book": "Grokking Data Structures",
+   "file": "d42dfcbdfcbe11f8ba7678d8c1652467262756d0",
+   "page": 115,
+   "quote": "we just need to traverse the list and keep a link to the node before the one we are visiting"
+  },
+  {
+   "question": "Two different items end up assigned to the same slot of the table. What's the approach where each slot holds a whole list of items instead of a single one?",
+   "kind": "paraphrase",
+   "book": "Grokking Data Structures",
+   "file": "d42dfcbdfcbe11f8ba7678d8c1652467262756d0",
+   "page": 243,
+   "quote": "each cell stores the head of a linked list, called a hash chain"
+  }
+ ]
+}
