@@ -647,6 +647,8 @@ export interface WorkshopCard {
   origin: 'library' | 'generated'
   /** What it teaches, across its stages */
   teaches: string[]
+  /** Each stage's title and goal (never its brief, tests or files): what a project not yet started shows */
+  outline: { title: string; goal: string }[]
   progress?: { stage: number; passed: number; startedAt: number; updatedAt: number; finishedAt?: number }
 }
 
@@ -692,6 +694,7 @@ export function cardOf(p: WorkshopProject, r?: WorkshopRecord | null): WorkshopC
     stages: p.stages.length,
     origin: p.origin ?? 'library',
     teaches: [...new Set(p.stages.flatMap((s) => s.teaches))],
+    outline: p.stages.map((s) => ({ title: s.title, goal: s.goal })),
     ...(r ? { progress: { stage: r.stage, passed: p.stages.filter((s) => r.stages[s.id]?.passedAt).length, startedAt: r.startedAt, updatedAt: r.updatedAt, ...(r.finishedAt ? { finishedAt: r.finishedAt } : {}) } } : {})
   }
 }

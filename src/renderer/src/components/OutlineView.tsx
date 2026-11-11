@@ -6,6 +6,7 @@ import { LEVEL_LABEL } from './LearnView'
 import { roadmapTopics, type CurriculumView, type Proposal, type RoadmapTopic, type SectionClass } from '@shared/curriculum'
 import { headingTag, itemLink, lineRole, linkItemText, retitleItem, splitSource, topicTitle, normalizeTitle, parseOutline, sectionProgress, serializeOutline, type Outline, type OutlineLine } from '@shared/outline'
 import { renderMarkdown } from '../lib/markdown'
+import { isProjectItem } from '@shared/workshop'
 import { readPlan } from '@shared/plan'
 import { fileTitle, useApp } from '../state'
 import { Icon } from './Icon'
@@ -646,6 +647,13 @@ export function OutlineView({ notebook, outlinePath, notes, mastery, onSetOutlin
                   </span>
                 ))}
               <div className="outline-actions">
+                {/* Hook: a roadmap's "Project:" item opens a guided project (components/WorkshopView.tsx) */}
+                {isProjectItem(label) && (
+                  <button className="tool-btn ws-build" onClick={() => app.setView({ kind: 'workshop', from: { notebook, topic: label } })} title="Build it as a guided project, with tests Tide runs">
+                    <Icon name="play" size={12} />
+                    <span>Build</span>
+                  </button>
+                )}
                 {(() => {
                   const t = topicAt.get(i)
                   const v = t && place?.topics[t.id]

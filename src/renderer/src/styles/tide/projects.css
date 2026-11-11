@@ -1,0 +1,256 @@
+/*
+  The new design: guided projects (components/workshop/ProjectScreen.tsx). The layout is in
+  ../workshop.css for both designs; this tunes it to the system: tidal blue only for the action,
+  the current stage and the question waiting for you; status as a dot or a diamond and a word;
+  ruled blocks, not cards. Scoped to data-design='tide'.
+*/
+
+:root[data-design='tide'] {
+  .ws-page {
+    background: var(--paper);
+  }
+  .ws-wrap {
+    padding-top: 26px;
+  }
+  .ws-title {
+    font: 600 var(--t-page) / 31px var(--ui);
+    letter-spacing: -0.012em;
+    color: var(--ink);
+  }
+  .ws-kicker,
+  .ws-stage-kicker,
+  .ws-tests-meta,
+  .ws-meta,
+  .ws-row-meta,
+  .ws-row-state,
+  .ws-track-label {
+    font-size: var(--t-meta);
+    color: var(--ink-3);
+  }
+  .ws-lede,
+  .ws-goal {
+    font-size: var(--t-lede);
+    color: var(--ink-2);
+  }
+  .ws-n {
+    box-shadow: inset 0 0 0 1.5px var(--line-2);
+    color: var(--ink-3);
+  }
+  .ws-dot.good,
+  .ws-mark.pass,
+  .ws-track-seg.done {
+    background: var(--good-mark);
+  }
+  .ws-dot.now,
+  .ws-track-seg.current {
+    background: var(--accent);
+  }
+  .ws-track-seg {
+    width: 52px;
+    height: 5px;
+    border-radius: var(--r-mark);
+    background: var(--sunk);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .ws-track-seg.done,
+  .ws-track-seg.current {
+    box-shadow: none;
+  }
+  .ws-track-seg.shown {
+    outline: 2px solid var(--accent-soft);
+    outline-offset: 2px;
+  }
+
+  /* The list: a ruled table, grouped by area */
+  .ws-rows,
+  .ws-outline,
+  .ws-shelf-rows {
+    border-top-color: var(--line);
+  }
+  .ws-row {
+    min-height: 58px;
+    border-bottom-color: var(--line);
+    border-radius: 0;
+  }
+  .ws-row:hover,
+  .ws-shelf-row:hover,
+  .ws-stage:hover:not(:disabled),
+  .ws-file:hover,
+  .ws-back:hover {
+    background: var(--hover);
+  }
+  .ws-row-icon {
+    color: var(--ink-3);
+  }
+  .ws-row-outcome {
+    color: var(--ink-2);
+  }
+  .ws-group-h {
+    font: 600 var(--t-lede) / 22px var(--ui);
+  }
+
+  /* Where you left off: a ruled block on sunk paper */
+  .ws-recap {
+    border-color: var(--line);
+    border-radius: var(--r-box);
+    background: var(--sunk);
+  }
+  .ws-recap-h {
+    color: var(--ink-3);
+    font-size: var(--t-meta);
+  }
+  .ws-recap ul {
+    color: var(--ink-2);
+  }
+
+  /* The stage */
+  .ws-stage-h {
+    font: 600 var(--t-next) / 26px var(--ui);
+  }
+  .ws-read {
+    color: var(--ink-2);
+    font-size: var(--t-meta);
+  }
+  .ws-link {
+    color: var(--accent-text, var(--accent));
+  }
+  .ws-brief {
+    font-family: var(--serif);
+    font-size: 16px;
+    line-height: 26px;
+    max-width: 74ch;
+  }
+  .ws-brief :is(code, pre) {
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+  .ws-brief table {
+    font-family: var(--ui);
+    font-size: var(--t-base);
+  }
+  .ws-tests h3,
+  .ws-hints h3,
+  .ws-review h3 {
+    font: 600 var(--t-lede) / 22px var(--ui);
+  }
+  .ws-test {
+    min-height: 40px;
+    font-size: var(--t-base);
+    border-bottom-color: var(--line);
+  }
+  .ws-mark {
+    box-shadow: inset 0 0 0 1.5px var(--line-2);
+  }
+  .ws-mark.fail {
+    background: var(--bad-mark);
+  }
+  .ws-test.fail .ws-test-word,
+  .ws-regress,
+  .ws-error {
+    color: var(--bad);
+  }
+  .ws-test-msg {
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--sunk);
+    font-family: var(--mono);
+  }
+  .ws-nothing {
+    border-color: var(--line);
+    border-radius: var(--r-box);
+    background: var(--sunk);
+  }
+  .ws-hint-kind {
+    color: var(--ink-3);
+  }
+  .ws-hints li {
+    color: var(--ink-2);
+  }
+
+  /* The review: the tutor's words in the reading face; the question is what waits for you */
+  .ws-review {
+    border-color: var(--line);
+    border-radius: var(--r-box);
+    background: var(--raised);
+  }
+  .ws-review-part h4 {
+    font: 600 var(--t-base) / 20px var(--ui);
+    color: var(--ink);
+  }
+  .ws-review-part p,
+  .ws-review-part .prose {
+    font-family: var(--serif);
+    font-size: 16px;
+    line-height: 25px;
+    color: var(--ink);
+  }
+  .ws-question {
+    background: var(--accent-soft);
+    border-radius: var(--r-ctl);
+  }
+  .ws-answer {
+    border-color: var(--line);
+    border-radius: var(--r-box);
+  }
+  .ws-ask-bar input {
+    height: 36px;
+    border-color: var(--line-2);
+    border-radius: var(--r-ctl);
+    background: var(--raised);
+  }
+  .ws-ask-bar input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--focus-ring);
+  }
+
+  /* The rail */
+  .ws-rail {
+    padding-left: 22px;
+    border-left: 1px solid var(--line);
+  }
+  .ws-rail .td-rail-h {
+    margin-left: 8px;
+  }
+  .ws-stage {
+    color: var(--ink-2);
+  }
+  .ws-stage.done .ws-n {
+    background: var(--ink-3);
+    color: var(--paper);
+  }
+  .ws-stage.shown {
+    background: var(--accent-soft);
+    color: var(--ink);
+  }
+  .ws-stage.current .ws-n {
+    background: var(--accent);
+    box-shadow: none;
+    color: var(--accent-ink);
+  }
+  .ws-brief-h {
+    font: 600 var(--t-lede) / 22px var(--ui);
+  }
+  .ws-brief-after {
+    border-top-color: var(--line);
+  }
+  .ws-stage-goal,
+  .ws-rail-note {
+    color: var(--ink-3);
+  }
+  .ws-file {
+    font-family: var(--mono);
+    color: var(--ink-2);
+  }
+  .ws-file svg {
+    color: var(--ink-3);
+  }
+
+  /* ---- Adaptive difficulty: the lesson rail's one line (SessionView, shared/difficulty.ts) ---- */
+  .td-rail-level p {
+    margin: 0 8px;
+    color: var(--ink-2);
+    font-size: var(--t-meta);
+    line-height: 19px;
+  }
+}

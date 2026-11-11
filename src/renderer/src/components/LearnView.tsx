@@ -6,6 +6,7 @@ import { Icon, type IconName } from './Icon'
 import { PillSegment, PromptBox } from './PromptBox'
 import { openingRequest } from '../lib/openingRequest'
 import { PixelScene } from './PixelScene'
+import { WorkshopShelf } from './WorkshopView'
 
 type LearnMode = SessionMode | 'exam' | 'mixed'
 
@@ -278,6 +279,9 @@ export function LearnView() {
           )}
         </div>
         <p className="lrn-desc">{selected.description}</p>
+
+        {/* Hook: guided projects (components/WorkshopView.tsx) */}
+        <WorkshopShelf />
 
         {weak.length > 0 && (
           <section className="lrn-weak">
