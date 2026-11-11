@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { TurnSpeed } from '@shared/types'
+import type { MacMemory, TurnSpeed } from '@shared/types'
 
 /** The four places an answer's time can go, in a fixed order and colour */
 const PARTS = [
@@ -41,7 +41,13 @@ export function SpeedView() {
   const all = sum.tide + sum.read + sum.write + sum.tools
 
   if (!turns) return <div className="sp-empty">Reading the timings…</div>
-  if (!turns.length) return <div className="sp-empty">Nothing timed yet. Ask the tutor something, then come back: every answer since Tide opened is listed here.</div>
+  if (!turns.length)
+    return (
+      <div className="sp">
+        <div className="sp-empty">Nothing timed yet. Ask the tutor something, then come back: every answer since Tide opened is listed here.</div>
+        <Memory />
+      </div>
+    )
 
   const perAnswer = sum.tide / turns.length
   const rate = (() => {
@@ -73,6 +79,8 @@ export function SpeedView() {
           ))}
         </ul>
       </section>
+
+      <Memory />
 
       <div className="sp-table" role="table" aria-label="Recent answers">
         <div className="sp-cols" role="row">
@@ -124,5 +132,52 @@ function Bar({ parts }: { parts: Record<Part, number> }) {
         <span key={p.key} className={`sp-${p.key}`} style={{ flexGrow: parts[p.key] / total }} title={`${p.label}: ${secs(parts[p.key])}`} />
       ))}
     </div>
+  )
+}
+
+const gb = (n: number) => `${(n / 1024 ** 3).toFixed(n < 10 * 1024 ** 3 ? 1 : 0)} GB`
+
+/** Whether the model has room: it is only fast while macOS leaves it in memory */
+function Memory() {
+  const [m, setM] = useState<MacMemory | null>(null)
+  useEffect(() => {
+    let live = true
+    const load = () => window.tide.speed.memory().then((x) => live && setM(x)).catch(() => {})
+    load()
+    const t = setInterval(load, 30_000)
+    return () => {
+      live = false
+      clearInterval(t)
+    }
+  }, [])
+  if (!m || !m.model) return null
+  const squeezed = m.modelSqueezed / m.model
+  const tight = squeezed > 0.3 || m.swapUsed > 4 * 1024 ** 3
+  const others = m.apps.filter((a) => a.bytes > 0.4 * 1024 ** 3).slice(0, 5)
+  return (
+    <section className={`sp-mem${tight ? ' tight' : ''}`}>
+      <h3>{tight ? 'This Mac is short of memory' : 'The model has the memory it needs'}</h3>
+      <p>
+        The model holds <b>{gb(m.model)}</b> of this Mac’s {gb(m.total)}.{' '}
+        {tight ? (
+          <>
+            macOS has squeezed <b>{gb(m.modelSqueezed)}</b> of it out to make room for other apps, and <b>{gb(m.swapUsed)}</b> is in swap. Squeezed-out memory has to come back before an answer can start, which is when a first word takes many seconds instead of one.
+          </>
+        ) : (
+          <>Little of it has been squeezed out, so answers start promptly.</>
+        )}
+      </p>
+      {others.length > 0 && (
+        <ul className="sp-apps">
+          {others.map((a) => (
+            <li key={a.name}>
+              <span>{a.name}</span>
+              <span className="num">{gb(a.bytes)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {tight && others.length > 0 && <p className="sp-hint">Closing what you aren’t using gives the model room. If Docker is listed, its memory limit (Docker Desktop › Settings › Resources) is usually far above what its containers use.</p>}
+    </section>
   )
 }

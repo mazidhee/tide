@@ -3,7 +3,7 @@ import { isMlxVlm } from './modelServer'
 import { thingsIntent } from '@shared/learnIntent'
 import { graphCached, relatedNotes } from './learn'
 import { readTerminal, runInTerminal, terminalInfo } from './terminal'
-import { asInteractive, inBackground } from './modelQueue'
+import { afterBackground, asInteractive, inBackground } from './modelQueue'
 import { memoize } from './memo'
 import { getCoach, getWeek, profilePrompt } from './coach'
 import { todayItems } from '@shared/coach'
@@ -1258,14 +1258,20 @@ function toolSet(o: { top: boolean; web: boolean; focused: boolean; things: bool
   ]
 }
 
-async function loop(messages: ApiMessage[], ctx: LoopContext, depth: number, onText: (t: string) => void): Promise<string> {
+/** The tools a turn offers. A warm-up must send exactly these: they open the prompt, so one tool
+ *  more or fewer and nothing after them is found in the server's cache. */
+async function turnTools(ctx: LoopContext, depth: number): Promise<unknown[]> {
   const term = ctx.terminalId ? terminalInfo(ctx.terminalId) : null
   const terminalTools = term && !term.exited ? (term.kind === 'lab' ? [TERMINAL_READ, TERMINAL_RUN] : [TERMINAL_READ]) : []
   const canvasTools = ctx.canvasPath ? [CANVAS_READ, CANVAS_EDIT] : []
   const top = depth === 0 && !ctx.focused
   // Checking maths or finding a mistake in the cloud needs only the code tool (SymPy), which keeps the request small
   const lean = !!ctx.cloud && !ctx.cloud.fellBack && (ctx.cloud.task === 'maths' || ctx.cloud.task === 'errors' || ctx.cloud.task === 'marking')
-  const tools = toolSet({ top, web: ctx.web, focused: !!ctx.focused, things: top && (await thingsAvailable()), metabase: top && !ctx.cloud && metabaseReady(), helpers: !!ctx.cloud && !ctx.cloud.fellBack, terminal: terminalTools, canvas: canvasTools, lean })
+  return toolSet({ top, web: ctx.web, focused: !!ctx.focused, things: top && (await thingsAvailable()), metabase: top && !ctx.cloud && metabaseReady(), helpers: !!ctx.cloud && !ctx.cloud.fellBack, terminal: terminalTools, canvas: canvasTools, lean })
+}
+
+async function loop(messages: ApiMessage[], ctx: LoopContext, depth: number, onText: (t: string) => void): Promise<string> {
+  const tools = await turnTools(ctx, depth)
   const maxSteps = depth === 0 ? MAX_STEPS : HELPER_STEPS
   const seen = new Set<string>()
   let nudged = false
@@ -1457,9 +1463,61 @@ async function warmTurn(messages: ApiMessage[], tools: unknown[], signal: AbortS
       body: JSON.stringify({ model, messages, tools, max_tokens: 1, stream: false, ...localSampling(model), ...transientContext() }),
       signal: s
     })
-    await res.text()
+    const body = await res.text()
+    // Dev only: what was read ahead, to compare with the turn that follows
+    if (process.env.TIDE_DEBUG_AI) (await import('fs')).writeFileSync(`${process.env.TIDE_DEBUG_AI}.warm`, JSON.stringify({ at: Date.now(), messages, tools, reply: body.slice(0, 600) }, null, 1))
   }, signal).catch(() => {})
 }
+
+// ---------- Read-back: the model keeps its place in the conversation you're in ----------
+//
+// The local server can only continue from a saved place that the next prompt starts with exactly,
+// and it saves places while reading a prompt, never while writing. So after an answer the model has
+// no saved place that includes it: your next message would wait while it read its own last answer
+// again (and, if other work pushed the conversation out of its cache, the whole lesson: 20 to 40
+// seconds). Instead, as soon as an answer is finished, the conversation as the next turn will send
+// it is read in the background, while you read; and after any other job has used the model, it is
+// touched again so it stays the most recently used thing there.
+
+let live: { req: TurnRequest; reply: string; at: number } | null = null
+let readingBack: AbortController | null = null
+let touchQueued = false
+/** A conversation left alone this long is no longer kept warm */
+const LIVE_FOR_MS = 20 * 60_000
+
+async function readLive(): Promise<void> {
+  const now = live
+  if (!now || !isMlxVlm() || Date.now() - now.at > LIVE_FOR_MS) return
+  readingBack?.abort()
+  const controller = new AbortController()
+  readingBack = controller
+  // Built by the same code as the real next turn, so it is word for word what that turn starts with
+  await agentChatNow({ ...now.req, id: 'readback', warmOnly: true, attachment: undefined, messages: [...now.req.messages, { role: 'assistant', content: now.reply }] }, () => {}, controller.signal).catch(() => {})
+  if (readingBack === controller) readingBack = null
+}
+
+/** An answer on this Mac just finished: have the model read it, ready for what you say next */
+export function readBack(req: TurnRequest, reply: string): void {
+  if (!reply.trim() || req.warmOnly) return
+  live = { req, reply, at: Date.now() }
+  void readLive()
+}
+
+/** You moved to another conversation, or this one is being answered now */
+export function forgetLive(): void {
+  live = null
+  readingBack?.abort()
+}
+
+// Other work used the model: put the live conversation back on top of its cache
+afterBackground(() => {
+  if (!live || readingBack || touchQueued) return
+  touchQueued = true
+  setTimeout(() => {
+    touchQueued = false
+    void readLive()
+  }, 50)
+})
 
 export async function warmLessons(): Promise<void> {
   const { baseUrl, apiKey } = getSettings().ai
@@ -1632,7 +1690,7 @@ async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, sign
     )
   ]
 
-  if (req.warmOnly) return warmTurn(messages, toolSet({ top: false, web: ctx.web, focused: !!ctx.focused, things: false, canvas: req.canvasPath ? [CANVAS_READ, CANVAS_EDIT] : [] }), signal)
+  if (req.warmOnly) return warmTurn(messages, await turnTools(ctx, 0), signal)
   // The pictures ride on this turn's message only: the start of the prompt stays the same, and cached
   const last = messages[messages.length - 1]
   if (images.length && last.role === 'user') last.content = [{ type: 'text', text: String(last.content) }, ...images.map((im) => ({ type: 'image_url' as const, image_url: { url: im.dataUrl } }))]

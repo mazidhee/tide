@@ -418,6 +418,17 @@ export interface TurnSpeed {
   render?: { frames: number; totalMs: number; longestMs: number }
 }
 
+/** What holds this Mac's memory (Settings › Speed) */
+export interface MacMemory {
+  total: number
+  swapUsed: number
+  /** The local model server's memory, and how much of it macOS has compressed or swapped */
+  model: number
+  modelSqueezed: number
+  /** The other apps holding the most, largest first */
+  apps: { name: string; bytes: number }[]
+}
+
 export type ChatEvent =
   | { id: string; type: 'sources'; sources: ContextSource[] }
   | { id: string; type: 'delta'; text: string }
@@ -628,6 +639,8 @@ export interface TideApi {
     recent(): Promise<TurnSpeed[]>
     /** The window's report on drawing one streamed answer */
     render(id: string, r: NonNullable<TurnSpeed['render']>): Promise<void>
+    /** What holds this Mac's memory right now (takes about a second) */
+    memory(): Promise<MacMemory>
   }
   connections: {
     list(fresh?: boolean): Promise<import('./connections').Connection[]>

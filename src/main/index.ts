@@ -296,6 +296,7 @@ function registerIpc() {
   })
   // Only Flow is noted from the window: the rest are counted where Tide calls them
   handle('speed:recent', () => recentSpeed())
+  handle('speed:memory', async () => (await import('./macMemory')).macMemory())
   handle('speed:render', (id: string, r: Parameters<typeof noteRender>[1]) => noteRender(id, r))
   handle('connections:used', (id: string) => id === 'flow' && noteUse(id))
   handle('sources:lesson', (topic: string, where?: string) => lessonPack(topic, where))

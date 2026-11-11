@@ -16630,6 +16630,68 @@ button.tl-dot:focus-visible {
   color: var(--ink-muted);
 }
 
+.sp-mem {
+  padding: 18px 22px;
+  margin-bottom: 20px;
+  border-radius: 16px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+}
+
+.sp-mem.tight {
+  border-color: color-mix(in srgb, var(--warn) 45%, var(--line));
+}
+
+.sp-mem h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.sp-mem p {
+  margin: 0;
+  max-width: 76ch;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.sp-mem p b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.sp-apps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sp-apps li {
+  display: inline-flex;
+  gap: 8px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.sp-apps .num {
+  color: var(--ink-muted);
+}
+
+.sp-mem .sp-hint {
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
 .sp-table {
   border-radius: 16px;
   background: var(--bg-raised);
