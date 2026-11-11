@@ -590,11 +590,12 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
       // Faults a rule can see are put right before anything reads the reply (the checks, the problem
       // bank, the lesson's record, the model's own next turn): a mark on something that wasn't an
       // answer, a grade left unclosed, a numbered question with only Go on to press
-      if (req.session && reply && !controller.signal.aborted) {
+      if (req.session && shown && !controller.signal.aborted) {
         const { repairReply } = await import('@shared/lessonRepair')
         const said = [...req.messages].reverse().find((m) => m.role === 'user')
-        const fixed = repairReply(reply, typeof said?.content === 'string' ? said.content : '')
-        if (fixed.repaired.length && fixed.text !== reply) {
+        // What the window is showing (it follows a retry's reset, which the tally in `reply` does not)
+        const fixed = repairReply(shown, typeof said?.content === 'string' ? said.content : '')
+        if (fixed.repaired.length && fixed.text !== shown) {
           emit({ id: req.id, type: 'reset' })
           emit({ id: req.id, type: 'delta', text: fixed.text })
           reply = fixed.text
