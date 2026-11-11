@@ -30,6 +30,24 @@ describe('what earlier lessons show', () => {
     expect(d.open).toBe('What is 0xF in binary?')
   })
 
+  it('notes what they could not answer, even when nothing was formally marked', () => {
+    const d = digestLesson(
+      lesson({
+        turns: [
+          { role: 'user', content: 'Teach me.' },
+          { role: 'assistant', content: '<ask type="predict">What does each place in 342 stand for?</ask>' },
+          { role: 'user', content: "I don't know." },
+          { role: 'assistant', content: 'Units, tens, hundreds.\n\n<ask type="short">Which powers of two are the first four places?</ask>' },
+          { role: 'user', content: 'Answer: 1, 2, 4, and 8\n\n(Tide: a note for the tutor, can you explain nothing)' },
+          { role: 'assistant', content: 'Yes.\n\n<ask type="short">Why is base 16 convenient?</ask>' },
+          { role: 'user', content: 'Answer: hmm can you explain the positional number system again' }
+        ]
+      })
+    )!
+    expect(d.stuck).toEqual(['Why is base 16 convenient?', 'What does each place in 342 stand for?'])
+    expect([d.right, d.partly, d.wrong]).toEqual([0, 0, 0])
+  })
+
   it('has nothing to say about a lesson where nothing was planned or asked', () => {
     expect(digestLesson(lesson({ turns: [{ role: 'user', content: 'Hi' }, { role: 'assistant', content: 'Hello.' }] }))).toBeNull()
   })
@@ -47,7 +65,7 @@ describe('what earlier lessons show', () => {
     expect(note).toContain('2 questions marked: 1 right, 0 partly, 1 wrong')
     expect(note).toContain('missed: "Convert the decimal number 10 into a binary number."')
     expect(note).toContain('stopped on, unanswered: "What is 0xF in binary?"')
-    expect(note).toContain('Open with one short question on the most important thing they missed')
+    expect(note).toContain('Open with one short question on the most important thing they missed or couldn’t answer')
     expect(priorLessonsNote('BigQuery', [digestLesson(lesson())!], NOW)).toBe('')
   })
 })

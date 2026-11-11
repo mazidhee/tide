@@ -5,7 +5,7 @@
  * tutor builds on what was learnt, goes back to what was missed, and doesn't teach it all again.
  */
 import type { LessonRecord } from './lessonLog'
-import { parseBlocks } from './session'
+import { ownWords, parseBlocks } from './session'
 
 export interface LessonDigest {
   id: string
@@ -20,8 +20,12 @@ export interface LessonDigest {
   wrong: number
   /** The questions marked wrong or partly right, newest first */
   missed: string[]
+  /** The questions they couldn't answer, or asked to have explained again, newest first */
+  stuck: string[]
   /** The question it stopped on, unanswered */
   open?: string
+  /** How its first question went: marked, not answered, or answered without a mark */
+  opening?: 'correct' | 'partial' | 'wrong' | 'stuck' | 'answered'
 }
 
 const short = (s: string, n = 150) => {
@@ -31,15 +35,27 @@ const short = (s: string, n = 150) => {
 
 export function digestLesson(r: LessonRecord): LessonDigest | null {
   if (r.mode !== 'teach' && r.mode !== 'quiz') return null
-  const d: LessonDigest = { id: r.id, topic: r.topic, when: r.updated, finished: !!r.finished, plan: [], right: 0, partly: 0, wrong: 0, missed: [] }
+  const d: LessonDigest = { id: r.id, topic: r.topic, when: r.updated, finished: !!r.finished, plan: [], right: 0, partly: 0, wrong: 0, missed: [], stuck: [] }
   // The question waiting for an answer; the next reply's first mark is the mark for it
   let asked: string | undefined
+  // Whether the question waiting is the lesson's first, and whether they have replied to it
+  let first = true
+  let replied = false
   for (const t of r.turns) {
-    if (t.role !== 'assistant') continue
+    if (t.role !== 'assistant') {
+      // "I don't know", a hint, or "can you explain that again" in place of an answer
+      const stuck = !!asked && STUCK.test(ownWords(t.content).replace(/^Answer:\s*/i, ''))
+      if (stuck && !d.stuck.includes(short(asked!))) d.stuck.unshift(short(asked!))
+      if (asked && first && !d.opening) stuck ? (d.opening = 'stuck') : (replied = true)
+      continue
+    }
     const blocks = parseBlocks(t.content)
-    const plan = blocks.find((b) => b.kind === 'plan')
-    if (plan && plan.kind === 'plan' && !d.plan.length) d.plan = plan.steps.map((s) => short(s, 90))
+    // The plan is restated as the lesson goes: the latest is the fullest
+    const plan = [...blocks].reverse().find((b) => b.kind === 'plan')
+    if (plan && plan.kind === 'plan' && plan.steps.length) d.plan = plan.steps.map((s) => short(s, 90))
     const grade = blocks.find((b) => b.kind === 'grade')
+    if (asked && first && replied && !d.opening) d.opening = grade && grade.kind === 'grade' ? (grade.verdict === 'correct' ? 'correct' : grade.verdict === 'wrong' ? 'wrong' : 'partial') : 'answered'
+    if (asked && (replied || d.opening)) first = false
     if (grade && grade.kind === 'grade' && asked) {
       if (grade.verdict === 'correct') d.right++
       else {
@@ -52,8 +68,10 @@ export function digestLesson(r: LessonRecord): LessonDigest | null {
   }
   if (asked && !d.finished) d.open = short(asked)
   // Nothing was asked or planned: there is nothing to build on
-  return d.plan.length || d.right + d.partly + d.wrong > 0 ? d : null
+  return d.plan.length || d.right + d.partly + d.wrong + d.stuck.length > 0 ? d : null
 }
+
+const STUCK = /^\s*(\[hint\]|idk\b|no idea\b|not sure\b|i (really )?(don'?t|do not) (really )?(know|understand|get)\b|i'?m (not sure|lost|confused)\b)|\bcan you (please )?(explain|show|give me)\b|\b(explain|say) (that|it|this) again\b/i
 
 const STOP = new Set('about with from that this into what when where which their there have your and the for are its how why of in to on a an introduction intro basics fundamentals advanced overview part lesson topic learn learning understanding understand explained guide'.split(' '))
 // Plurals count as the same word ("numbers", "number")
@@ -94,6 +112,7 @@ export function priorLessonsNote(topic: string, all: LessonDigest[], now = Date.
       d.plan.length ? `planned: ${d.plan.slice(0, 6).join('; ')}` : '',
       marks ? `${marks} question${marks === 1 ? '' : 's'} marked: ${d.right} right, ${d.partly} partly, ${d.wrong} wrong` : '',
       d.missed.length ? `missed: ${d.missed.slice(0, 3).map((m) => `"${m}"`).join('; ')}` : '',
+      d.stuck.length ? `couldn’t answer, or asked to have explained again: ${d.stuck.slice(0, 3).map((m) => `"${m}"`).join('; ')}` : '',
       d.open ? `stopped on, unanswered: "${d.open}"` : ''
     ]
     return `- ${parts.filter(Boolean).join('. ')}.`
@@ -103,7 +122,7 @@ export function priorLessonsNote(topic: string, all: LessonDigest[], now = Date.
     'From Tide’s record of earlier lessons with this student (facts read from those lessons, not your memory; use them, don’t recite them):',
     ...lines,
     same
-      ? 'This lesson continues that work. Open with one short question on the most important thing they missed (or, if they missed nothing, the last thing covered), so they recall it before you add to it. Then carry on from where it stopped: don’t teach again what they got right.'
+      ? 'This lesson continues that work. Open with one short question on the most important thing they missed or couldn’t answer (or, if there was nothing, the last thing covered), so they recall it before you add to it. Then carry on from where it stopped: don’t teach again what they got right.'
       : 'This lesson is on a different topic that touches those. Where an idea here rests on one from them, say so in a line and build on it; if it rests on something they missed there, check that first with one short question.'
   ].join('\n')
 }

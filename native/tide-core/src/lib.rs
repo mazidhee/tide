@@ -2,6 +2,8 @@
 //! Tantivy. Opening it is instant (nothing is rebuilt at start), the text lives in the OS file
 //! cache rather than the app's memory, and a search takes about a millisecond.
 
+mod recall;
+
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Mutex;

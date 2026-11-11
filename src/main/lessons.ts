@@ -7,6 +7,7 @@ import { promises as fs } from 'fs'
 import { lessonMarkdown, lessonPage, summarise, type LessonRecord, type LessonSummary } from '@shared/lessonLog'
 import { digestLesson, priorLessonsNote, type LessonDigest } from '@shared/lessonMemory'
 import { privatePath } from './projects'
+import { noteLesson, recallNote } from './recall'
 import { absPath, readText, uniquePath, writeText } from './vault'
 
 const DIR = '.tide/lessons'
@@ -32,6 +33,8 @@ export async function saveLesson(input: Omit<LessonRecord, 'started' | 'updated'
   await fs.mkdir(absPath(DIR), { recursive: true })
   await writeText(fileFor(record.id), JSON.stringify(record))
   await writeText(page, lessonMarkdown(record))
+  // What was missed is kept for recall; never a reason for a save to fail
+  await noteLesson(record).catch(() => {})
   return summarise(record)
 }
 
@@ -62,5 +65,6 @@ export async function earlierLessons(topic: string, privateTurn: boolean, notId?
     const d = digestLesson(r)
     if (d) digests.push(d)
   }
-  return priorLessonsNote(topic, digests)
+  // Questions due for recall come first: the lesson opens with one of them
+  return [recallNote(topic), priorLessonsNote(topic, digests)].filter(Boolean).join('\n\n')
 }
