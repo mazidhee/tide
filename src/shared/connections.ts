@@ -79,7 +79,8 @@ export const SERVICES: ConnectionInfo[] = [
   { id: 'metabase', name: 'Metabase', kind: 'data', runs: 'cloud', usedFor: ['Learning your data', 'Read-only queries'], privacy: 'Answered by Gemma on this Mac only, never a cloud model.', section: 'tools' },
   { id: 'study-api', name: 'Study data API', kind: 'data', runs: 'mac', usedFor: ['Your study time, for other apps'], free: 'On this Mac', section: 'tools' },
   { id: 'maths', name: 'SymPy maths checker', kind: 'tools', runs: 'mac', usedFor: ['Checking answers exactly'], free: 'Free: runs on your Mac', section: 'tools' },
-  { id: 'libraries', name: 'Data libraries', kind: 'tools', runs: 'mac', usedFor: ['NumPy, pandas, plots in code'], free: 'Free: runs on your Mac', section: 'tools' }
+  { id: 'libraries', name: 'Data libraries', kind: 'tools', runs: 'mac', usedFor: ['NumPy, pandas, plots in code'], free: 'Free: runs on your Mac', section: 'tools' },
+  { id: 'lab', name: 'Lab pack', kind: 'tools', runs: 'mac', usedFor: ['PyTorch, scikit-learn, SciPy in code', 'Hidden tests with pytest', 'HTTP and async lessons'], free: 'Free: runs on your Mac', section: 'tools' }
 ]
 
 export const serviceInfo = (id: string) => SERVICES.find((s) => s.id === id)

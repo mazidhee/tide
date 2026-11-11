@@ -65,13 +65,13 @@ describe('installing the lab pack', () => {
     const said: string[] = []
     const d = standIn({ statuses: [NOT_YET, READY], lines: ['Collecting torch', '  Downloading torch-2.15.0-cp315-cp315-macosx_14_0_arm64.whl.metadata (30 kB)', 'Downloading torch-2.15.0-cp315-cp315-macosx_14_0_arm64.whl (138.6 MB)', 'Requirement already satisfied: numpy in ./lib', 'Installing collected packages: tqdm, torch', 'Successfully installed torch-2.15.0'] })
     await installLab(d, (s) => said.push(s))
-    expect(said).toEqual(['Downloading the lab pack (about 180 MB, about 860 MB on disk)…', 'Finding torch…', 'Downloading torch (138.6 MB)…', 'Installing (PyTorch takes a minute)…', 'Installed. Checking it…', 'Loading it for the first time…'])
+    expect(said).toEqual(['Downloading the lab pack (about 180 MB, about 900 MB on disk)…', 'Finding torch…', 'Downloading torch (138.6 MB)…', 'Installing (PyTorch takes a minute)…', 'Installed. Checking it…', 'Loading it for the first time…'])
   })
 
   it('stops before downloading when the disk is too full, and says how much it needs', async () => {
     const d = standIn({ statuses: [NOT_YET], free: 0.4e9 })
     const r = await installLab(d)
-    expect(r).toEqual({ ready: false, detail: 'Not enough free space: the lab pack takes about 860 MB, and this Mac has 0.4 GB free.' })
+    expect(r).toEqual({ ready: false, detail: 'Not enough free space: the lab pack takes about 900 MB, and this Mac has 0.4 GB free.' })
     expect(d.calls).toEqual([])
   })
 
@@ -96,7 +96,7 @@ describe('installing the lab pack', () => {
 
   it('reads which libraries are there', () => {
     expect(labStatusOf('torch 2.15.0\nscikit-learn 1.9.1\nscipy 1.18.1\npytest 9.2.0\ntqdm 4.70.1\nrequests 2.34.2\nhttpx 0.28.1\naiohttp 3.14.5\n')).toEqual({ ready: true, detail: 'PyTorch 2.15.0, scikit-learn 1.9.1, SciPy 1.18.1, pytest 9.2.0, and tqdm, requests, httpx, aiohttp' })
-    expect(labStatusOf('torch -\nscikit-learn -\nscipy -\npytest -\ntqdm -\nrequests -\nhttpx -\naiohttp -\n')).toEqual({ ready: false, detail: 'Not installed yet (about 860 MB on disk)' })
+    expect(labStatusOf('torch -\nscikit-learn -\nscipy -\npytest -\ntqdm -\nrequests -\nhttpx -\naiohttp -\n')).toEqual({ ready: false, detail: 'Not installed yet: about 180 MB to download, about 900 MB on disk' })
     expect(labStatusOf('torch -\nscikit-learn 1.9.1\nscipy 1.18.1\npytest 9.2.0\ntqdm 4.70.1\nrequests 2.34.2\nhttpx -\naiohttp 3.14.5\n').detail).toBe('Not finished: torch, httpx still to install')
   })
 
@@ -108,7 +108,7 @@ describe('installing the lab pack', () => {
 
   it.skipIf(!!venv)('reports not set up when Tide has no Python environment', async () => {
     expect(existsSync(join(dir, 'python'))).toBe(false)
-    expect(await labStatus()).toEqual({ ready: false, detail: 'Not set up yet (about 860 MB on disk)' })
+    expect(await labStatus()).toEqual({ ready: false, detail: 'Not set up yet: about 180 MB to download, about 900 MB on disk' })
   })
 })
 

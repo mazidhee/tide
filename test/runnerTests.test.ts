@@ -80,7 +80,7 @@ describe('a library that is not installed', () => {
   it('is named with the pack it comes in and where to set it up', () => {
     const torch = libraryNote("Traceback (most recent call last):\n  File \"main.py\", line 1, in <module>\n    import torch\nModuleNotFoundError: No module named 'torch'\n")
     expect(torch).toContain("torch is in Tide's lab pack")
-    expect(torch).toContain('Settings › Tools › Lab pack (about 860 MB)')
+    expect(torch).toContain('Settings › Tools › Lab pack (about 900 MB)')
     expect(libraryNote("ModuleNotFoundError: No module named 'sklearn.linear_model'")).toContain("sklearn is in Tide's lab pack")
     expect(libraryNote("ModuleNotFoundError: No module named 'pandas'")).toContain('Settings › Tools › Data libraries')
     expect(libraryNote("ModuleNotFoundError: No module named 'sympy'")).toContain('Maths checker')

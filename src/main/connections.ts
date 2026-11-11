@@ -172,9 +172,10 @@ async function build(): Promise<Connection[]> {
           return st.running ? as('connected', `Serving at ${st.url}`) : as('off', 'Off', false)
         }
         case 'maths':
-        case 'libraries': {
-          const { mathStatus, librariesStatus } = await import('./runner')
-          const st = await within(5000, info.id === 'maths' ? mathStatus() : librariesStatus(), { ready: false, detail: 'Didn’t answer in time' })
+        case 'libraries':
+        case 'lab': {
+          const { mathStatus, librariesStatus, labStatus } = await import('./runner')
+          const st = await within(5000, info.id === 'maths' ? mathStatus() : info.id === 'lab' ? labStatus() : librariesStatus(), { ready: false, detail: 'Didn’t answer in time' })
           return as(st.ready ? 'connected' : 'not-set-up', st.detail)
         }
         default:

@@ -35,7 +35,8 @@ const LOGO: Record<string, { src: string; brand?: string; pad?: boolean; mono?: 
   things: { src: 'things.png', brand: '#3A7CF6' },
   metabase: { src: 'metabase.svg', brand: '#509EE3', mono: true },
   maths: { src: 'sympy.png', brand: '#3B5526', pad: true },
-  libraries: { src: 'python.svg', brand: '#3776AB', mono: true }
+  libraries: { src: 'python.svg', brand: '#3776AB', mono: true },
+  lab: { src: 'python.svg', brand: '#EE4C2C', mono: true }
 }
 
 /** A brand colour too dark to see on a dark theme: the ink instead */

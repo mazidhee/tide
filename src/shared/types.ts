@@ -826,7 +826,8 @@ export interface TideApi {
     load(id: string, path: string): Promise<import('./lab').LabLoaded>
   }
   runner: {
-    run(language: string, code: string, stdin?: string): Promise<RunResult>
+    /** `tests`: a code question's hidden tests (Python); `labId`: the data lab that SQL is run in */
+    run(language: string, code: string, stdin?: string, opts?: { tests?: string; labId?: string }): Promise<RunResult>
     /** Runs a vault file with the rest of its folder (modules, data files) beside it */
     runFile(path: string, stdin?: string): Promise<RunResult>
     librariesStatus(): Promise<{ ready: boolean; detail: string }>
@@ -834,6 +835,12 @@ export interface TideApi {
     speedStatus(): Promise<{ ready: boolean; detail: string }>
     applySpeedups(): Promise<{ ready: boolean; detail: string }>
     setupLibraries(): Promise<{ ready: boolean; detail: string }>
+    /** The lab pack: PyTorch, scikit-learn, SciPy, pytest and HTTP helpers in Tide's Python */
+    labStatus(): Promise<{ ready: boolean; detail: string }>
+    setupLab(): Promise<{ ready: boolean; detail: string }>
+    onLabProgress(cb: (step: string) => void): () => void
+    /** Which languages run on this Mac, and what the others need */
+    languagesStatus(): Promise<{ ready: boolean; detail: string }>
     mathStatus(): Promise<{ ready: boolean; detail: string }>
     setupMath(): Promise<{ ready: boolean; detail: string }>
     /** Private web search (SearXNG in Docker) */

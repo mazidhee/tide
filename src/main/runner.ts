@@ -595,7 +595,7 @@ const LAB_NAMES: Record<string, string> = { torch: 'PyTorch', 'scikit-learn': 's
 
 /** Whether the lab pack is in Tide's Python: asked of the package records, so nothing heavy is imported */
 export async function labStatus(): Promise<Status> {
-  if (!existsSync(mathPython())) return { ready: false, detail: `Not set up yet (${LAB_PACK.size} on disk)` }
+  if (!existsSync(mathPython())) return { ready: false, detail: `Not set up yet: ${LAB_PACK.download} to download, ${LAB_PACK.size} on disk` }
   const code = `from importlib.metadata import version, PackageNotFoundError
 for p in ${JSON.stringify(LAB_PACK.packages)}:
     try:
@@ -612,7 +612,7 @@ for p in ${JSON.stringify(LAB_PACK.packages)}:
 export function labStatusOf(out: string): Status {
   const have = new Map(out.trim().split('\n').map((l) => l.trim().split(/\s+/) as [string, string]))
   const missing = LAB_PACK.packages.filter((p) => !have.get(p) || have.get(p) === '-')
-  if (missing.length === LAB_PACK.packages.length) return { ready: false, detail: `Not installed yet (${LAB_PACK.size} on disk)` }
+  if (missing.length === LAB_PACK.packages.length) return { ready: false, detail: `Not installed yet: ${LAB_PACK.download} to download, ${LAB_PACK.size} on disk` }
   if (missing.length) return { ready: false, detail: `Not finished: ${missing.join(', ')} still to install` }
   return { ready: true, detail: `${Object.keys(LAB_NAMES).map((p) => `${LAB_NAMES[p]} ${have.get(p)}`).join(', ')}, and tqdm, requests, httpx, aiohttp` }
 }
@@ -682,7 +682,7 @@ export async function installLab(d: LabInstaller, onProgress: (step: string) => 
 let labInstall: Promise<Status> | null = null
 
 /**
- * Adds the lab pack (PyTorch, scikit-learn, SciPy, pytest and the HTTP helpers, about 860 MB) to
+ * Adds the lab pack (PyTorch, scikit-learn, SciPy, pytest and the HTTP helpers, about 900 MB) to
  * Tide's Python, for lessons and the tutor's run_code. One install at a time: a second press of
  * the button waits for the first.
  */

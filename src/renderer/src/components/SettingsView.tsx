@@ -11,6 +11,7 @@ import { DESIGNS, readingFace, resolveDesign, type DesignId } from '@shared/desi
 import { Icon, type IconName } from './Icon'
 import { SpeedView } from './SpeedView'
 import { ConnectionsView } from './ConnectionsView'
+import { LAB_PACK } from '@shared/labPack'
 
 const THEMES: { id: ThemeId; name: string; bg: string; side: string; ink: string; accent: string }[] = [
   { id: 'system', name: 'Match system', bg: 'linear-gradient(90deg, #f7f7f5 50%, #1b1b1b 50%)', side: 'rgba(0, 0, 0, 0.06)', ink: '#8a8d93', accent: '#2f9a88' },
@@ -160,6 +161,13 @@ function ToolSetup({ label, hint, check, setup, onReady, busyText, actionText }:
       )}
     </Row>
   )
+}
+
+/** The lab pack: PyTorch, scikit-learn and the rest, installed once, saying what pip is doing as it goes */
+function LabPackSetup() {
+  const [step, setStep] = useState('')
+  useEffect(() => window.tide.runner.onLabProgress(setStep), [])
+  return <ToolSetup label="Lab pack" hint={LAB_PACK.contents} check={window.tide.runner.labStatus} setup={window.tide.runner.setupLab} busyText={step || 'Starting…'} actionText={`Install (${LAB_PACK.size})`} />
 }
 
 /** Your Metabase, read-only, so the tutor can teach you your own dashboards and data */
@@ -1049,6 +1057,8 @@ function ToolsSection() {
         )}
         <ToolSetup label="Maths checker" hint="Python with SymPy" check={window.tide.runner.mathStatus} setup={window.tide.runner.setupMath} />
         <ToolSetup label="Data libraries" hint="NumPy, pandas, Matplotlib" check={window.tide.runner.librariesStatus} setup={window.tide.runner.setupLibraries} />
+        <LabPackSetup />
+        <ToolSetup label="Languages" hint="What code in lessons can be written in" check={window.tide.runner.languagesStatus} setup={window.tide.runner.languagesStatus} busyText="Checking…" actionText="Check again" />
         <ToolSetup label="Things 4" hint="Tasks and deadlines" check={window.tide.learn.thingsStatus} setup={window.tide.learn.thingsStatus} busyText="Checking…" actionText="Check again" />
       </Group>
       <MetabaseGroup />
