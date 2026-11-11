@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { readyAcross, revisitList, shareRight, since, standing, STATUS_LABEL, tickedOnly, type ConceptState, type ConceptStatus, type KnowledgeView, type WeekPoint } from '@shared/knowledge'
+import { readyAcross, revisitList, SOLID, shareRight, since, standing, STATUS_LABEL, tickedOnly, type ConceptState, type ConceptStatus, type KnowledgeView, type MissedQuestion, type WeekPoint } from '@shared/knowledge'
 import { Icon } from './Icon'
 import { KnowPage } from './know/KnowPage'
 
@@ -14,8 +14,10 @@ export interface KnowledgeMapProps {
   onLesson(c: ConceptState): void
   onCheck(c: ConceptState): void
   onNewTopic?(): void
-  /** Review a topic that is solid or fading (the new design's Review now); a check when not given */
+  /** Review a topic that is solid or fading: its kept questions that are due; a check when not given */
   onReview?(c: ConceptState): void
+  /** A question missed on a topic: the lesson moment it came from, or (with `ask`) the question asked again */
+  onMissed?(c: ConceptState, m: MissedQuestion, ask?: boolean): void
   /** The new design: areas as bands of cells, each cell a concept with its level */
   tide?: boolean
   /** The class carrying an area's colour, for its levels */
@@ -42,7 +44,7 @@ interface Area {
   private: boolean
 }
 
-export function KnowledgeMap({ data, onLesson, onCheck, onReview, onNewTopic, tide, areaClass = () => '' }: KnowledgeMapProps) {
+export function KnowledgeMap({ data, onLesson, onCheck, onReview, onMissed, onNewTopic, tide, areaClass = () => '' }: KnowledgeMapProps) {
   const now = data.at
   const byId = useMemo(() => new Map(data.concepts.map((c) => [c.id, c])), [data])
   const parts = useMemo(() => {
@@ -141,7 +143,7 @@ export function KnowledgeMap({ data, onLesson, onCheck, onReview, onNewTopic, ti
   const shownRevisit = more.revisit ? revisit : revisit.slice(0, SHORT_LIST)
   const readyTop = more.ready ? readyAll.slice(0, 40) : readyAcross(readyAll, SHORT_LIST)
 
-  if (tide) return <KnowPage data={data} areaClass={areaClass} actions={{ onLesson, onCheck, onReview: onReview ?? onCheck }} />
+  if (tide) return <KnowPage data={data} areaClass={areaClass} actions={{ onLesson, onCheck, onReview: onReview ?? onCheck, onMissed }} />
 
   return (
     <div className="know" ref={rootRef}>
@@ -271,7 +273,7 @@ export function KnowledgeMap({ data, onLesson, onCheck, onReview, onNewTopic, ti
                 </span>
               </button>
               {a.topics.length >= STRIP_FROM && <Strip topics={a.topics} dim={narrowed ? (c) => !matches(c) : undefined} picked={picked} onPick={goTo} />}
-              {opened && <Rows rows={rows} now={now} byId={byId} parts={parts} ready={readyIds} picked={picked} onPick={(id) => setPicked(picked === id ? null : id)} goTo={goTo} onLesson={onLesson} onCheck={onCheck} />}
+              {opened && <Rows rows={rows} now={now} byId={byId} parts={parts} ready={readyIds} picked={picked} onPick={(id) => setPicked(picked === id ? null : id)} goTo={goTo} onLesson={onLesson} onCheck={onCheck} onReview={onReview} />}
             </div>
           )
         })}
@@ -279,7 +281,7 @@ export function KnowledgeMap({ data, onLesson, onCheck, onReview, onNewTopic, ti
       </section>
 
       <p className="know-foot">
-        An estimate, not a mark. Each right answer raises a topic and makes it last longer; a wrong one, or one you couldn’t answer, lowers it; and it fades with the time since you last got it right, more slowly the more often that has happened. A topic is solid at {pct(0.6)} or more.
+        An estimate, not a mark: the chance you would remember a topic today, by the same model as your reviews (FSRS). Each answer is a review: a right one after a gap makes it last much longer, a wrong one or one you couldn’t answer makes it harder to keep, and it fades with the time since. A topic is solid when your last answer was right and the chance is {pct(SOLID)} or more.
       </p>
     </div>
   )
@@ -376,6 +378,7 @@ function Rows(p: {
   goTo(c: ConceptState): void
   onLesson(c: ConceptState): void
   onCheck(c: ConceptState): void
+  onReview?(c: ConceptState): void
 }) {
   let section: string | undefined | null = null
   return (
@@ -415,15 +418,15 @@ function Rows(p: {
   )
 }
 
-function Detail({ c, now, byId, parts, goTo, onLesson, onCheck }: { c: ConceptState; now: number; byId: Map<string, ConceptState>; parts: Map<string, ConceptState[]>; goTo(c: ConceptState): void; onLesson(c: ConceptState): void; onCheck(c: ConceptState): void }) {
+function Detail({ c, now, byId, parts, goTo, onLesson, onCheck, onReview }: { c: ConceptState; now: number; byId: Map<string, ConceptState>; parts: Map<string, ConceptState[]>; goTo(c: ConceptState): void; onLesson(c: ConceptState): void; onCheck(c: ConceptState): void; onReview?(c: ConceptState): void }) {
   const before = c.prerequisites.map((id) => byId.get(id)).filter((x): x is ConceptState => !!x)
   const steps = parts.get(c.id) ?? []
   const answers = c.right + c.partly + c.wrong
   const facts = [
     answers ? `${plural(answers, 'answer')}: ${c.right} right${c.partly ? `, ${c.partly} partly` : ''}${c.wrong ? `, ${c.wrong} wrong or not answered` : ''}` : c.seen ? 'Taught, with no marked answer yet' : c.done ? 'Ticked on your roadmap; Tide has not asked about it' : 'Nothing recorded yet',
     c.lastRight ? `last right ${since(c.lastRight, now)}` : c.lastSeen ? `last seen ${since(c.lastSeen, now)}` : '',
-    c.seen ? `now ${pct(c.estimate)}${c.status === 'fading' ? `, down from ${pct(c.level)}` : ''}` : '',
-    c.lastRight ? `halves every ${c.halfLife < 10 ? c.halfLife.toFixed(1).replace(/\.0$/, '') : Math.round(c.halfLife)} days unused` : ''
+    c.stability !== undefined ? `now ${pct(c.estimate)}${c.status === 'fading' ? `, down from ${pct(c.level)}` : ''}` : '',
+    c.stability !== undefined ? `90% likely to be remembered ${c.stability < 10 ? c.stability.toFixed(1).replace(/\.0$/, '') : Math.round(c.stability)} days after its last review` : ''
   ].filter(Boolean)
   return (
     <div className="know-detail">
@@ -464,12 +467,28 @@ function Detail({ c, now, byId, parts, goTo, onLesson, onCheck }: { c: ConceptSt
         </div>
       )}
       <div className="know-detail-acts">
-        <button className="btn small primary" onClick={() => (c.status === 'solid' || c.status === 'fading' ? onCheck(c) : onLesson(c))}>
-          {c.status === 'solid' || c.status === 'fading' ? 'Quick check' : c.seen ? 'Continue with a lesson' : 'Start a lesson'}
-        </button>
-        <button className="btn small" onClick={() => (c.status === 'solid' || c.status === 'fading' ? onLesson(c) : onCheck(c))}>
-          {c.status === 'solid' || c.status === 'fading' ? 'Lesson' : 'Quick check'}
-        </button>
+        {(c.status === 'solid' || c.status === 'fading') && onReview ? (
+          <>
+            <button className="btn small primary" onClick={() => onReview(c)}>
+              Review now
+            </button>
+            <button className="btn small" onClick={() => onCheck(c)}>
+              Quick check
+            </button>
+            <button className="btn small" onClick={() => onLesson(c)}>
+              Lesson
+            </button>
+          </>
+        ) : (
+          <>
+            <button className="btn small primary" onClick={() => (c.status === 'solid' || c.status === 'fading' ? onCheck(c) : onLesson(c))}>
+              {c.status === 'solid' || c.status === 'fading' ? 'Quick check' : c.seen ? 'Continue with a lesson' : 'Start a lesson'}
+            </button>
+            <button className="btn small" onClick={() => (c.status === 'solid' || c.status === 'fading' ? onLesson(c) : onCheck(c))}>
+              {c.status === 'solid' || c.status === 'fading' ? 'Lesson' : 'Quick check'}
+            </button>
+          </>
+        )}
       </div>
     </div>
   )

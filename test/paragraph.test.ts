@@ -1,6 +1,6 @@
 import { EditorState } from '@codemirror/state'
 import { describe, expect, it } from 'vitest'
-import { paragraphAt } from '../src/renderer/src/components/Editor'
+import { paragraphAt } from '../src/renderer/src/lib/paragraph'
 
 const at = (doc: string, marker: string) => {
   const pos = doc.indexOf(marker)

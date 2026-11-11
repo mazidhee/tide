@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react'
-import { EditorState } from '@codemirror/state'
+import { Compartment, EditorState } from '@codemirror/state'
 import { EditorView, keymap, drawSelection, highlightActiveLine } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
@@ -7,6 +7,13 @@ import { languages } from '@codemirror/language-data'
 import { syntaxHighlighting, HighlightStyle, indentOnInput } from '@codemirror/language'
 import { tags as t } from '@lezer/highlight'
 import { formatMarkdown, type FormatKind } from '@shared/markdownFormat'
+import { paragraphAt } from '../lib/paragraph'
+import { useApp } from '../state'
+import { tideMarkdown } from '../lib/livePreview/syntax'
+import { livePreviewPlugin } from '../lib/livePreview/decorations'
+import type { LivePreviewEnv } from '../lib/livePreview/widgets'
+import { renderMarkdown, renderMath, resolveRelative, vaultUrl } from '../lib/markdown'
+import { followLink } from '../lib/followLink'
 
 /** Applies a format to the editor's selection */
 function applyFormat(view: EditorView, kind: FormatKind): boolean {
@@ -29,9 +36,19 @@ const highlight = HighlightStyle.define([
   { tag: [t.monospace], fontFamily: 'var(--font-code)', fontSize: '0.9em' },
   { tag: [t.processingInstruction, t.meta, t.contentSeparator], color: 'var(--ink-muted)' },
   { tag: t.quote, color: 'var(--ink-soft)' },
-  { tag: [t.keyword, t.operator], color: 'var(--accent)' },
-  { tag: [t.string], color: 'var(--ink-soft)' },
-  { tag: [t.comment], color: 'var(--ink-muted)', fontStyle: 'italic' }
+  { tag: t.special(t.string), fontFamily: 'var(--font-code)', fontSize: '0.9em', color: 'var(--ink-soft)' },
+  { tag: t.labelName, color: 'var(--accent)' },
+  // Code in fenced blocks, coloured from the theme's own tokens so every theme keeps its contrast
+  { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword, t.definitionKeyword, t.moduleKeyword], color: 'var(--lp-code-keyword)' },
+  { tag: [t.string, t.regexp, t.character, t.special(t.brace)], color: 'var(--lp-code-string)' },
+  { tag: [t.number, t.bool, t.null, t.atom, t.unit], color: 'var(--lp-code-number)' },
+  { tag: [t.function(t.variableName), t.function(t.propertyName), t.macroName], color: 'var(--lp-code-function)' },
+  { tag: [t.typeName, t.className, t.namespace, t.tagName, t.standard(t.variableName)], color: 'var(--lp-code-type)' },
+  { tag: [t.definition(t.variableName), t.definition(t.propertyName), t.attributeName], color: 'var(--lp-code-definition)' },
+  { tag: [t.propertyName], color: 'var(--ink-soft)' },
+  { tag: [t.operator, t.punctuation, t.bracket], color: 'var(--ink-muted)' },
+  { tag: [t.comment, t.lineComment, t.blockComment, t.docComment], color: 'var(--ink-muted)', fontStyle: 'italic' },
+  { tag: t.invalid, color: 'var(--danger)' }
 ])
 
 const theme = EditorView.theme({
@@ -73,24 +90,13 @@ interface Props {
   handleRef?: RefObject<EditorHandle | null>
   /** Saves a pasted or dropped picture and returns the Markdown that shows it */
   onImage?(file: File): Promise<string | null>
+  /** The note being edited (vault path): its links and pictures resolve from here */
+  notePath?: string
 }
 
 const IDLE_MS = 3500
 
-/** The paragraph around the cursor; on a blank line, the one above. Lines are 0-based. */
-export function paragraphAt(state: EditorState): { text: string; line: number } | null {
-  const doc = state.doc
-  // Headings end a paragraph too: notes often have a heading right above its text, no blank line
-  const isText = (n: number) => !!doc.line(n).text.trim() && !/^#{1,6}\s/.test(doc.line(n).text)
-  let start = doc.lineAt(state.selection.main.head).number
-  if (!isText(start) && start > 1 && isText(start - 1)) start--
-  if (!isText(start)) return null
-  let end = start
-  while (start > 1 && isText(start - 1)) start--
-  while (end < doc.lines && isText(end + 1)) end++
-  const text = Array.from({ length: end - start + 1 }, (_, i) => doc.line(start + i).text).join('\n').trim()
-  return text ? { text, line: start - 1 } : null
-}
+export { paragraphAt }
 
 /** Puts each picture in at the cursor (or where it was dropped); false when there are none to handle */
 function insertImages(view: EditorView, files: File[], at: number | null, save?: (file: File) => Promise<string | null>): boolean {
@@ -110,7 +116,28 @@ function insertImages(view: EditorView, files: File[], at: number | null, save?:
   return true
 }
 
-export function Editor({ value, onChange, onIdle, onProbe, handleRef, onImage }: Props) {
+/** Live preview hides Markdown away from the cursor; source mode shows it all. The choice is remembered (settings.editorSource). */
+const previewMode = new Compartment()
+
+export function Editor({ value, onChange, onIdle, onProbe, handleRef, onImage, notePath }: Props) {
+  const app = useApp()
+  const source = app.settings.editorSource === true
+  const appRef = useRef(app)
+  appRef.current = app
+  const notePathRef = useRef(notePath ?? '')
+  notePathRef.current = notePath ?? ''
+  const envRef = useRef<LivePreviewEnv | null>(null)
+  const livePreview = useRef<ReturnType<typeof livePreviewPlugin> | null>(null)
+  if (!envRef.current) {
+    const renderEnv = () => ({ notePath: notePathRef.current, filesByName: appRef.current.filesByName })
+    envRef.current = {
+      imageUrl: (target) => (/^(https?|data|vault):/i.test(target) ? target : vaultUrl(resolveRelative(target, renderEnv()))),
+      renderMath,
+      renderTable: (table) => renderMarkdown(table, renderEnv()),
+      openLink: (link) => void followLink(appRef.current, notePathRef.current, link)
+    }
+    livePreview.current = livePreviewPlugin(envRef.current)
+  }
   const host = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
@@ -134,9 +161,18 @@ export function Editor({ value, onChange, onIdle, onProbe, handleRef, onImage }:
           indentOnInput(),
           highlightActiveLine(),
           EditorView.lineWrapping,
-          markdown({ base: markdownLanguage, codeLanguages: languages }),
+          markdown({ base: markdownLanguage, codeLanguages: languages, extensions: tideMarkdown }),
           syntaxHighlighting(highlight),
+          previewMode.of(source ? [] : livePreview.current!),
           keymap.of([
+            {
+              key: 'Mod-Shift-e',
+              run: () => {
+                const a = appRef.current
+                void a.updateSettings({ editorSource: !(a.settings.editorSource === true) })
+                return true
+              }
+            },
             { key: 'Mod-b', run: (v) => applyFormat(v, 'bold') },
             { key: 'Mod-i', run: (v) => applyFormat(v, 'italic') },
             { key: 'Mod-k', run: (v) => applyFormat(v, 'link') },
@@ -198,6 +234,13 @@ export function Editor({ value, onChange, onIdle, onProbe, handleRef, onImage }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const shownSource = useRef(source)
+  useEffect(() => {
+    if (shownSource.current === source) return
+    shownSource.current = source
+    viewRef.current?.dispatch({ effects: previewMode.reconfigure(source ? [] : livePreview.current!) })
+  }, [source])
+
   useEffect(() => {
     const view = viewRef.current
     const current = view?.state.doc.toString()
@@ -215,5 +258,5 @@ export function Editor({ value, onChange, onIdle, onProbe, handleRef, onImage }:
     }
   }, [value])
 
-  return <div className="editor" ref={host} />
+  return <div className={`editor${source ? ' editor-source' : ' editor-live'}`} ref={host} />
 }

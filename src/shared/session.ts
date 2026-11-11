@@ -1,5 +1,7 @@
 import { splitSay } from './characters'
 import { retestInstructions } from './mistakes'
+import { quizTopics } from './curriculum'
+import { checkInstructions, reviewInstructions, type QuickCheck, type ReviewSetup } from './review'
 import { placementInstructions, REFRESH_RULES, type PlacementSetup } from './placement'
 import { GROUNDED } from './sources'
 import type { ChatScope, SessionMode, Verdict } from './types'
@@ -18,7 +20,7 @@ export type AskType = 'predict' | 'short' | 'choice' | 'explain' | 'error' | 'pr
 
 export type Block =
   | { kind: 'text'; text: string }
-  | { kind: 'ask'; type: AskType; prompt: string; options: string[]; lang?: string; tests?: string }
+  | { kind: 'ask'; type: AskType; prompt: string; options: string[]; lang?: string; tests?: string; /** In a quiz on several topics: the one this question is on */ topic?: string }
   | { kind: 'grade'; verdict: Verdict; score: number; text: string }
   | { kind: 'plan'; steps: string[] }
   | { kind: 'card'; front: string; back: string }
@@ -144,7 +146,8 @@ export function parseBlocks(full: string): Block[] {
         }
       }
       const tests = hidden.tests ?? (type === 'code' ? madeTests : undefined)
-      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt, options, lang: attr(attrs, 'lang'), ...(tests ? { tests } : {}) })
+      const on = attr(attrs, 'topic')?.trim()
+      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt, options, lang: attr(attrs, 'lang'), ...(tests ? { tests } : {}), ...(on ? { topic: on } : {}) })
     } else if (name === 'grade') {
       const verdict = (attr(attrs, 'verdict')?.toLowerCase() ?? 'partial') as Verdict
       const score = Number(attr(attrs, 'score') ?? (verdict === 'correct' ? 1 : verdict === 'wrong' ? 0 : 0.5))
@@ -245,6 +248,10 @@ export interface SessionSetup {
     project?: { name: string; kind: ProjectKind; milestone?: string }
     /** A walkthrough's steps, in order: the app draws each on the canvas as the lesson reaches it */
     flow?: FlowStep[]
+    /** A Quick check (a quiz): a short fresh diagnostic of one topic, on the knowledge map's concept */
+    check?: QuickCheck
+    /** Review now (a quiz): the topic's kept questions that are due, asked again and each scheduled by how it went */
+    review?: ReviewSetup
     /** A placement check on a section (a quiz): which topics are known, shaky or new */
     placement?: PlacementSetup
     /** A refresher (a lesson): learned before, rusty; practice first, explain only what's missed */
@@ -409,10 +416,14 @@ When every step is done, write <summary>what they learned, what is still shaky, 
     const n = options?.length ?? 8
     if (options?.placement) return `${placementInstructions(options.placement)}\n`
     if (options?.retest?.length) return `${retestInstructions(options.retest)}\n`
+    if (options?.review) return `${reviewInstructions(topic, options.review)}\n`
+    if (options?.check) return `${checkInstructions(topic, options.check, n)}\n`
+    const several = quizTopics(topic)
+    const tagTopic = several.length > 1 ? `\n- Each question is on one of these topics: ${several.join('; ')}. Name it in the tag, exactly as written here: <ask type="short" topic="${several[0]}">…</ask>. Spread the questions across them.` : ''
     return `You are running an adaptive QUIZ on: ${topic}. Ask ${n} questions in total, one at a time.
 - Mix question types: choice, short, explain, error, problem. Use explain and error often, they test real understanding.
 - Start at ${difficulty === 'hard' ? 'a hard' : difficulty === 'gentle' ? 'an easy' : 'a medium'} level. After a correct answer make the next one harder; after a wrong one, go back a step and probe the gap.
-- Number questions like "Question 3 of ${n}".
+- Number questions like "Question 3 of ${n}".${tagTopic}
 - After the last question write <summary>score, strengths, misconceptions to fix, what to review</summary> and no ask tag.`
   }
   if (mode === 'interview' && options?.round === 'design') {

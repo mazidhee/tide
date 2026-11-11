@@ -3,32 +3,34 @@
 //! an estimate of how solid each one is today. One plain file in the vault, .tide/knowledge.json,
 //! loaded once and held in memory; every query is a pass over a few thousand small records.
 //!
-//! The forgetting model, in full. Each concept carries two numbers, worked out by replaying its
-//! evidence in the order it happened:
+//! The forgetting model is FSRS-6 with its default parameters, the same model and crate the recall
+//! schedule uses (recall.rs). Each concept carries an FSRS memory state, worked out by replaying
+//! its evidence in the order it happened:
 //!
-//!   level L, 0 to 1: how well it was known at the last evidence
-//!   half-life h, in days: how long it takes the estimate to halve when it isn't used
+//!   stability S, in days: how long until the chance of remembering it falls to 90%
+//!   difficulty D, 1 to 10: how hard it is to make stick
 //!
-//!   taught (weight w)          L <- max(L, 0.3 w)                h <- max(h, 1)
-//!   answered right             L <- L + 0.4 w (1 - L)            h <- max(h, 1) (1 + 1.2 w s)
-//!   recalled right             L <- L + 0.5 w (1 - L)            h <- max(h, 1) (1 + 1.6 w s)
-//!   partly right               L <- L + 0.3 w (0.5 - L)          h <- max(h, 1)
-//!   answered wrong             L <- L (1 - 0.35 w)               h <- max(1, h (1 - 0.4 w))
-//!   couldn't answer,
-//!   recalled wrong             L <- L (1 - 0.45 w)               h <- max(1, h (1 - 0.5 w))
+//! Every marked answer is a review: right and recalled right are "good", partly right is "hard",
+//! wrong, couldn't answer and recalled wrong are "again". Being taught is not a review (nothing
+//! was asked); it only says the concept has been met. A review's weight (a placement check counts
+//! for less than an answer in a lesson, a flashcard for less again) takes it part of the way from
+//! the state before to the state FSRS gives: log S and D move by that share. FSRS knows how long it
+//! really was since the last review, so three right answers in one sitting hardly move S, and a
+//! right answer after weeks moves it a long way.
 //!
-//! s is the spacing of a right answer: 1 for the first, otherwise (days since the last right
-//! answer) / h, at most 1. Three right answers in one sitting raise the level but hardly move the
-//! half-life; a right answer after the half-life has passed more than doubles it. h never
-//! exceeds 365.
+//!   retrievability R(t) = (1 + F t / S) ^ -decay,   F = 0.9 ^ (-1 / decay) - 1
 //!
-//!   estimate today = L * 2 ^ (-(days since the last right answer) / h)
+//! t is the days since the last review; R is 0.9 when t = S. The estimate shown for a concept is R.
 //!
-//! (since it was last taught, when it has never been answered right). So the estimate rises with
-//! success, falls with failure, and decays with time at a rate that slows as h grows.
+//! Status: "new" with no evidence; "solid" while R is 0.85 or more and the last answer was right;
+//! "fading" when the last answer was right but time has taken R below 0.85, where it keeps falling
+//! until the concept is reviewed; "learning" otherwise (taught but never asked, or the last answer
+//! wasn't right: FSRS treats a miss as relearnt at once, but it isn't solid until it is shown).
+//! A concept that has only been taught has no memory state, and an estimate of 0.
 //!
-//! Status: "new" with no evidence; "solid" while the estimate is 0.6 or more; "fading" when the
-//! level reached 0.6 but time has taken the estimate below it; "learning" otherwise.
+//! The file keeps the evidence, never the derived state, so a store written by the earlier model
+//! (a level and a half-life from the same evidence) is read as it is and replayed through this one;
+//! the first save under this model keeps a copy of the earlier file beside it, once.
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -38,11 +40,16 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
 
-use crate::recall::words;
+use fsrs::{MemoryState, FSRS, FSRS6_DEFAULT_DECAY, FSRS6_DEFAULT_PARAMETERS};
+
+use crate::recall::{words, DESIRED_RETENTION};
 
 const DAY_MS: f64 = 86_400_000.0;
-/// The estimate at or above which a concept counts as solid
-pub const SOLID: f64 = 0.6;
+/// The retrievability at or above which a concept counts as solid
+pub const SOLID: f64 = 0.85;
+/// The file's version: 2 since the forgetting model is FSRS (the evidence in it is the same)
+const VERSION: u32 = 2;
+const DECAY: f64 = FSRS6_DEFAULT_DECAY as f64;
 /// An answer counts towards retention when the concept was first met at least this long before, in another sitting
 const RETURN_MS: f64 = 12.0 * 3_600_000.0;
 
@@ -99,13 +106,26 @@ struct Concept {
 
 #[derive(Deserialize)]
 struct FileIn {
+  #[serde(default = "first_version")]
+  version: u32,
   concepts: Vec<Concept>,
+  #[serde(default)]
+  filled: Vec<String>,
+}
+
+fn first_version() -> u32 {
+  1
 }
 
 #[derive(Serialize)]
 struct FileOut<'a> {
   version: u32,
+  /// The forgetting model the estimates are worked out with (never stored: replayed from the evidence)
+  model: &'static str,
   concepts: Vec<&'a Concept>,
+  /// Earlier records read in once each (the review log's flashcards, say), so they are never read twice
+  #[serde(skip_serializing_if = "Vec::is_empty")]
+  filled: Vec<String>,
 }
 
 #[napi(object)]
@@ -150,12 +170,15 @@ pub struct ConceptState {
   pub prerequisites: Vec<String>,
   pub done: bool,
   pub private: bool,
-  /// How solid it is now, 0 to 1
+  /// How solid it is now, 0 to 1: FSRS retrievability, the chance of remembering it today
   pub estimate: f64,
-  /// How well it was known at the last evidence, before any forgetting
+  /// What it stood at after the last answer, before any forgetting: 1 when that answer was right
   pub level: f64,
-  /// Days for the estimate to halve when unused
+  /// Days from the last review for R to halve when unused
   pub half_life: f64,
+  /// FSRS stability (days for R to fall to 90%) and difficulty (1 to 10); none until something is asked
+  pub stability: Option<f64>,
+  pub difficulty: Option<f64>,
   /// new, learning, solid or fading
   pub status: String,
   pub last_seen: Option<f64>,
@@ -199,10 +222,12 @@ pub struct Returned {
 /// What a concept's evidence adds up to
 #[derive(Clone, Default)]
 struct Fold {
-  level: f64,
-  half_life: f64,
+  /// The FSRS memory state after the last review; none until something is asked
+  memory: Option<MemoryState>,
+  last_review: Option<f64>,
+  /// The last answer was right: what makes a concept solid while R holds, and fading after
+  proven: bool,
   last_right: Option<f64>,
-  taught_at: Option<f64>,
   last_seen: Option<f64>,
   first_seen: Option<f64>,
   made_solid: Option<f64>,
@@ -212,73 +237,118 @@ struct Fold {
   wrong: u32,
 }
 
-/// Replays evidence (oldest first) through the model described at the top of this file
-fn fold<'a>(events: impl Iterator<Item = &'a Evidence>) -> Fold {
-  let mut f = Fold::default();
-  for e in events {
-    let w = e.weight.clamp(0.0, 1.0);
-    match e.kind.as_str() {
-      "taught" => {
-        f.level = f.level.max(0.3 * w);
-        f.half_life = f.half_life.max(1.0);
-        f.taught_at = Some(e.at);
-      }
-      "right" | "recalled-right" => {
-        let (gain, growth) = if e.kind == "right" { (0.4, 1.2) } else { (0.5, 1.6) };
-        let h = f.half_life.max(1.0);
-        let spacing = f.last_right.map_or(1.0, |t| (((e.at - t) / DAY_MS) / h).clamp(0.0, 1.0));
-        f.level += gain * w * (1.0 - f.level);
-        f.half_life = (h * (1.0 + growth * w * spacing)).min(365.0);
-        f.last_right = Some(e.at);
-        f.right += 1;
-      }
-      "partly" => {
-        f.level += 0.3 * w * (0.5 - f.level);
-        f.half_life = f.half_life.max(1.0);
-        f.partly += 1;
-      }
-      "wrong" | "stuck" | "recalled-wrong" => {
-        let (fall, shrink) = if e.kind == "wrong" { (0.35, 0.4) } else { (0.45, 0.5) };
-        f.level *= 1.0 - fall * w;
-        f.half_life = (f.half_life * (1.0 - shrink * w)).max(1.0);
-        f.wrong += 1;
-      }
-      _ => continue,
-    }
-    f.seen += 1;
-    f.last_seen = Some(e.at);
-    f.first_seen.get_or_insert(e.at);
-    if f.made_solid.is_none() && estimate(&f, e.at) >= SOLID {
-      f.made_solid = Some(e.at);
-    }
-  }
-  f
+thread_local! {
+  static MODEL: FSRS = FSRS::new(&FSRS6_DEFAULT_PARAMETERS).expect("the FSRS-6 default parameters are valid");
 }
 
-/// How solid it is at `now`: the level, halved for every half-life since it was last used well
+/// The FSRS rating of a kind of evidence: 1 again, 2 hard, 3 good; none for being taught
+fn rating(kind: &str) -> Option<u32> {
+  match kind {
+    "right" | "recalled-right" => Some(3),
+    "partly" => Some(2),
+    "wrong" | "stuck" | "recalled-wrong" => Some(1),
+    _ => None,
+  }
+}
+
+/// One review through FSRS-6, `weight` of the way from the state before to the one it gives
+fn review(model: &FSRS, before: Option<MemoryState>, rating: u32, elapsed_days: f64, weight: f64) -> Option<MemoryState> {
+  let pick = |s: Option<MemoryState>, r: u32, el: f64| {
+    model.next_states_with_elapsed_days(s, DESIRED_RETENTION, el.max(0.0) as f32).ok().map(|n| match r {
+      1 => n.again.memory,
+      2 => n.hard.memory,
+      4 => n.easy.memory,
+      _ => n.good.memory,
+    })
+  };
+  let full = pick(before, rating, elapsed_days)?;
+  if weight >= 1.0 {
+    return Some(full);
+  }
+  // A first review that counts for less starts part of the way from a first miss
+  let from = match before {
+    Some(s) => s,
+    None => pick(None, 1, 0.0)?,
+  };
+  let w = weight.clamp(0.0, 1.0) as f32;
+  let stability = (from.stability.ln() + w * (full.stability.ln() - from.stability.ln())).exp();
+  let difficulty = from.difficulty + w * (full.difficulty - from.difficulty);
+  Some(MemoryState { stability, difficulty, stability_fast: stability })
+}
+
+/// FSRS-6's forgetting curve: the chance of remembering after `days` at stability `s` (in fractions of a day)
+pub fn retrievability(s: f64, days: f64) -> f64 {
+  let factor = 0.9_f64.powf(-1.0 / DECAY) - 1.0;
+  (1.0 + factor * days.max(0.0) / s.max(1e-6)).powf(-DECAY)
+}
+
+/// The days after a review at which R falls to `r`
+fn days_to(s: f64, r: f64) -> f64 {
+  let factor = 0.9_f64.powf(-1.0 / DECAY) - 1.0;
+  s * (r.powf(-1.0 / DECAY) - 1.0) / factor
+}
+
+/// Replays evidence (oldest first) through the model described at the top of this file
+fn fold<'a>(events: impl Iterator<Item = &'a Evidence>) -> Fold {
+  MODEL.with(|model| {
+    let mut f = Fold::default();
+    for e in events {
+      let w = e.weight.clamp(0.0, 1.0);
+      match rating(&e.kind) {
+        None if e.kind == "taught" => {}
+        None => continue,
+        Some(r) => {
+          let elapsed = f.last_review.map_or(0.0, |t| (e.at - t) / DAY_MS);
+          if let Some(next) = review(model, f.memory, r, elapsed, w) {
+            f.memory = Some(next);
+          }
+          f.last_review = Some(e.at);
+          f.proven = r == 3;
+          match r {
+            3 => {
+              f.right += 1;
+              f.last_right = Some(e.at);
+            }
+            2 => f.partly += 1,
+            _ => f.wrong += 1,
+          }
+        }
+      }
+      f.seen += 1;
+      f.last_seen = Some(e.at);
+      f.first_seen.get_or_insert(e.at);
+      if f.made_solid.is_none() && status(&f, e.at) == "solid" {
+        f.made_solid = Some(e.at);
+      }
+    }
+    f
+  })
+}
+
+/// R at `now`: the chance of remembering it, from its memory state and the time since the last review
 fn estimate(f: &Fold, now: f64) -> f64 {
-  match f.last_right.or(f.taught_at) {
-    Some(t) => f.level * 0.5_f64.powf(((now - t).max(0.0) / DAY_MS) / f.half_life.max(1.0)),
-    None => f.level,
+  match (f.memory, f.last_review) {
+    (Some(m), Some(t)) => retrievability(m.stability as f64, (now - t) / DAY_MS),
+    _ => 0.0,
   }
 }
 
 fn status(f: &Fold, now: f64) -> &'static str {
   if f.seen == 0 {
     "new"
-  } else if estimate(f, now) >= SOLID {
+  } else if f.proven && estimate(f, now) >= SOLID {
     "solid"
-  } else if f.level >= SOLID {
+  } else if f.proven {
     "fading"
   } else {
     "learning"
   }
 }
 
-/// Days until a solid concept's estimate falls to the line, if it isn't used
+/// Days until a solid concept's R falls to the line, if it isn't used
 fn fades_in(f: &Fold, now: f64) -> Option<f64> {
-  let from = f.last_right.or(f.taught_at)?;
-  (estimate(f, now) >= SOLID).then(|| f.half_life.max(1.0) * (f.level / SOLID).log2() - (now - from).max(0.0) / DAY_MS)
+  let (m, t) = (f.memory?, f.last_review?);
+  (status(f, now) == "solid").then(|| days_to(m.stability as f64, SOLID) - (now - t).max(0.0) / DAY_MS)
 }
 
 /// The order evidence is replayed in: by time; at the same moment, being taught comes before the
@@ -342,8 +412,10 @@ impl Entry {
       done: c.done,
       private: c.private,
       estimate: estimate(f, now),
-      level: f.level,
-      half_life: f.half_life,
+      level: if f.proven { 1.0 } else { estimate(f, now) },
+      half_life: f.memory.map_or(0.0, |m| days_to(m.stability as f64, 0.5)),
+      stability: f.memory.map(|m| m.stability as f64),
+      difficulty: f.memory.map(|m| m.difficulty as f64),
       status: status(f, now).to_string(),
       last_seen: f.last_seen,
       last_right: f.last_right,
@@ -371,6 +443,9 @@ impl Entry {
 pub struct Store {
   path: PathBuf,
   existed: bool,
+  /// The version the file was written in, when it was there
+  version: u32,
+  filled: Vec<String>,
   entries: Vec<Entry>,
   by_id: HashMap<String, usize>,
   /// Evidence key -> the concept holding it
@@ -380,11 +455,11 @@ pub struct Store {
 
 impl Store {
   pub fn open(path: PathBuf) -> std::result::Result<Store, String> {
-    let (existed, concepts) = match std::fs::read(&path) {
-      Ok(bytes) => (true, serde_json::from_slice::<FileIn>(&bytes).map_err(|e| format!("{} is not a knowledge file: {e}", path.display()))?.concepts),
-      Err(_) => (false, Vec::new()),
+    let (existed, file) = match std::fs::read(&path) {
+      Ok(bytes) => (true, serde_json::from_slice::<FileIn>(&bytes).map_err(|e| format!("{} is not a knowledge file: {e}", path.display()))?),
+      Err(_) => (false, FileIn { version: VERSION, concepts: Vec::new(), filled: Vec::new() }),
     };
-    let mut s = Store { path, existed, entries: concepts.into_iter().map(Entry::new).collect(), by_id: HashMap::new(), keys: HashMap::new(), superseded: HashSet::new() };
+    let mut s = Store { path, existed, version: file.version, filled: file.filled, entries: file.concepts.into_iter().map(Entry::new).collect(), by_id: HashMap::new(), keys: HashMap::new(), superseded: HashSet::new() };
     s.reindex();
     Ok(s)
   }
@@ -408,12 +483,38 @@ impl Store {
     if let Some(dir) = self.path.parent() {
       std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
-    let out = FileOut { version: 1, concepts: self.entries.iter().map(|e| &e.c).collect() };
+    // A file from an earlier model is kept as it was, once, before it is first written in this one
+    if self.existed && self.version < VERSION {
+      let copy = self.earlier_copy();
+      if !copy.exists() {
+        std::fs::copy(&self.path, &copy).map_err(|e| e.to_string())?;
+      }
+    }
+    let out = FileOut { version: VERSION, model: "fsrs-6", concepts: self.entries.iter().map(|e| &e.c).collect(), filled: self.filled.clone() };
     let tmp = self.path.with_extension("json.tmp");
     std::fs::write(&tmp, serde_json::to_vec_pretty(&out).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, &self.path).map_err(|e| e.to_string())?;
     self.existed = true;
+    self.version = VERSION;
     Ok(())
+  }
+
+  /// Where the copy of a file written by an earlier model goes: knowledge.v1.json beside it
+  fn earlier_copy(&self) -> PathBuf {
+    self.path.with_extension(format!("v{}.json", self.version))
+  }
+
+  /// Whether earlier records of this kind have been read in
+  pub fn is_filled(&self, what: &str) -> bool {
+    self.filled.iter().any(|f| f == what)
+  }
+
+  /// Marks earlier records of this kind as read in, and saves
+  pub fn mark_filled(&mut self, what: &str) -> std::result::Result<(), String> {
+    if !self.is_filled(what) {
+      self.filled.push(what.to_string());
+    }
+    self.save()
   }
 
   /// Adds a concept or brings it up to date; true when anything changed. A roadmap topic stays one whoever names it again.
@@ -549,18 +650,24 @@ impl Store {
     Ok(changed)
   }
 
-  /// The concept with this name (whatever the case or punctuation): in `area` first, a roadmap topic first. Never a plan step.
+  /// The concept with this name (whatever the case or punctuation), else the one whose name says
+  /// the same words (plurals and words like "introduction to" aside): in `area` first, a roadmap
+  /// topic first. Never a plan step.
   pub fn resolve(&self, name: &str, area: Option<&str>) -> Option<String> {
     let n = normal(name);
     if n.is_empty() {
       return None;
     }
-    self
-      .entries
-      .iter()
-      .filter(|e| e.c.parent.is_none() && e.norm == n)
-      .min_by_key(|e| (area != Some(e.c.area.as_str()), e.c.origin != "roadmap", e.c.order))
-      .map(|e| e.c.id.clone())
+    let best = |hit: &dyn Fn(&Entry) -> bool| {
+      self
+        .entries
+        .iter()
+        .filter(|e| e.c.parent.is_none() && hit(e))
+        .min_by_key(|e| (area != Some(e.c.area.as_str()), e.c.origin != "roadmap", e.c.order))
+        .map(|e| e.c.id.clone())
+    };
+    let w = words(name);
+    best(&|e| e.norm == n).or_else(|| if w.is_empty() { None } else { best(&|e| e.words == w) })
   }
 
   fn visible(&self, private_ok: bool) -> impl Iterator<Item = (usize, &Entry)> {
@@ -671,7 +778,7 @@ impl Store {
   }
 
   /// Every question that came back, oldest first: a recall, or an answer on a topic first met at
-  /// least half a day before in another sitting. Topics only, not their plan steps. Put into weeks
+  /// least half a day before in another sitting. Not flashcards: the review log has those. Topics only, not their plan steps. Put into weeks
   /// by the caller, which knows the learner's calendar (time zone and clock changes included).
   pub fn returns(&self, private_ok: bool) -> Vec<Returned> {
     let mut out = Vec::new();
@@ -680,6 +787,10 @@ impl Store {
       let mut one: Option<(f64, &str)> = None;
       let mut two: Option<(f64, &str)> = None;
       for ev in e.c.evidence.iter().filter(|ev| private_ok || !ev.private) {
+        // A flashcard's return is counted from the review log, where every card is, matched to a topic or not
+        if ev.source.starts_with("card:") {
+          continue;
+        }
         let came_back = ev.kind.starts_with("recalled-") || [one, two].iter().flatten().any(|(t, s)| *s != ev.source && *t <= ev.at - RETURN_MS);
         let credit = match ev.kind.as_str() {
           "right" | "recalled-right" => Some(1.0),
@@ -785,6 +896,17 @@ impl Knowledge {
   pub fn returns(&self, private_ok: bool) -> Result<Vec<Returned>> {
     Ok(self.store.lock().map_err(err)?.returns(private_ok))
   }
+
+  /// Whether earlier records of this kind (a name the caller chooses) have been read in
+  #[napi]
+  pub fn filled(&self, what: String) -> Result<bool> {
+    Ok(self.store.lock().map_err(err)?.is_filled(&what))
+  }
+
+  #[napi]
+  pub fn mark_filled(&self, what: String) -> Result<()> {
+    self.store.lock().map_err(err)?.mark_filled(&what).map_err(err)
+  }
 }
 
 #[cfg(test)]
@@ -818,69 +940,137 @@ mod tests {
     s.record(vec![ev(id, &src, "taught", "taught", at), ev(id, &src, "q0", "right", at + 60_000.0), ev(id, &src, "q1", "right", at + 120_000.0)], false).unwrap();
   }
 
+  /// The FSRS-6 state recall.rs would reach for the same ratings at the same times
+  fn recall_engine(ratings: &[(u32, f64)]) -> (f64, f64) {
+    use crate::recall::{schedule, RecallItem, RecallReview};
+    let model = FSRS::new(&FSRS6_DEFAULT_PARAMETERS).unwrap();
+    let (r0, t0) = ratings[0];
+    let first = model.next_states(None, DESIRED_RETENTION, 0).unwrap();
+    let m = match r0 {
+      1 => first.again.memory,
+      2 => first.hard.memory,
+      _ => first.good.memory,
+    };
+    let mut item = RecallItem { id: "x".into(), prompt: String::new(), topic: String::new(), lesson: String::new(), created: t0, due: t0, stability: m.stability as f64, difficulty: m.difficulty as f64, reviews: 0, lapses: 0, last: Some(t0), history: vec![RecallReview { rating: r0, at: t0 }] };
+    for &(r, at) in &ratings[1..] {
+      schedule(&mut item, &model, r, at);
+    }
+    (item.stability, item.difficulty)
+  }
+
   #[test]
-  fn the_estimate_rises_with_success_and_falls_with_failure() {
+  fn answers_are_fsrs_reviews_and_being_taught_is_not() {
+    // Taught only: met, but nothing asked, so no memory state and nothing to hold
     let taught = fold([one("taught", T0)].iter());
-    assert!((taught.level - 0.3).abs() < 1e-9);
-    assert_eq!(taught.half_life, 1.0);
+    assert_eq!((taught.seen, taught.memory.is_none()), (1, true));
+    assert_eq!(estimate(&taught, T0 + HOUR), 0.0);
+    assert_eq!(status(&taught, T0 + HOUR), "learning");
 
+    // A right answer is a "good" review: FSRS-6's first stability for good, w2 days
     let right = fold([one("taught", T0), one("right", T0 + 1.0)].iter());
-    assert!((right.level - 0.58).abs() < 1e-9); // 0.3 + 0.4 * 0.7
-    assert!((right.half_life - 2.2).abs() < 1e-9); // the first right answer counts in full
-    assert!(estimate(&right, T0 + 1.0) > estimate(&taught, T0 + 1.0));
+    let m = right.memory.unwrap();
+    assert!((m.stability - FSRS6_DEFAULT_PARAMETERS[2]).abs() < 1e-4);
+    // Exactly the state the recall schedule reaches for the same reviews at the same times
+    let ratings = [(3, T0), (1, T0 + 2.0 * DAY_MS), (3, T0 + 3.0 * DAY_MS), (2, T0 + 10.0 * DAY_MS), (3, T0 + 30.0 * DAY_MS)];
+    let kinds = |r: u32| match r {
+      1 => "wrong",
+      2 => "partly",
+      _ => "right",
+    };
+    let replayed = fold(ratings.iter().map(|&(r, at)| one(kinds(r), at)).collect::<Vec<_>>().iter()).memory.unwrap();
+    let (s, d) = recall_engine(&ratings);
+    assert!((replayed.stability as f64 - s).abs() < 1e-3 && (replayed.difficulty as f64 - d).abs() < 1e-3, "{} {} vs {s} {d}", replayed.stability, replayed.difficulty);
 
-    let wrong = fold([one("taught", T0), one("right", T0 + 1.0), one("wrong", T0 + 2.0)].iter());
-    assert!((wrong.level - 0.58 * 0.65).abs() < 1e-9);
-    assert!((wrong.half_life - 2.2 * 0.6).abs() < 1e-9);
-    let stuck = fold([one("taught", T0), one("right", T0 + 1.0), one("stuck", T0 + 2.0)].iter());
-    assert!(stuck.level < wrong.level); // couldn't answer costs more than a wrong answer
+    // Partly right is "hard", wrong and couldn't answer are "again": less stability, more difficulty
+    let partly = fold([one("partly", T0)].iter()).memory.unwrap();
+    let wrong = fold([one("wrong", T0)].iter()).memory.unwrap();
+    assert!(wrong.stability < partly.stability && partly.stability < m.stability);
+    assert!(wrong.difficulty > partly.difficulty && partly.difficulty > m.difficulty);
+    let stuck = fold([one("stuck", T0)].iter()).memory.unwrap();
+    assert_eq!(stuck, wrong);
 
-    // Partly right pulls towards a half from either side
-    assert!(fold([one("taught", T0), one("partly", T0 + 1.0)].iter()).level > 0.3);
-    let high = [one("right", T0), one("right", T0 + 1.0), one("right", T0 + 2.0)];
-    assert!(fold(high.iter().chain([one("partly", T0 + 3.0)].iter())).level < fold(high.iter()).level);
+    // A recall that went right is a good review like any other; the time since the last one is what counts
+    let lesson_then_recall = fold([one("right", T0), one("recalled-right", T0 + 5.0 * DAY_MS)].iter()).memory.unwrap();
+    let lesson_then_answer = fold([one("right", T0), one("right", T0 + 5.0 * DAY_MS)].iter()).memory.unwrap();
+    assert_eq!(lesson_then_recall, lesson_then_answer);
 
-    // A recall counts for more than an answer inside a lesson
-    assert!(fold([one("recalled-right", T0)].iter()).level > fold([one("right", T0)].iter()).level);
     // At the same moment: taught first, then the questions in the order they were asked
     let mut same: Vec<Evidence> = ["q10", "taught", "q2", "q3"].iter().map(|p| Evidence { pos: p.to_string(), kind: if *p == "taught" { "taught".into() } else { "right".into() }, ..one("right", T0) }).collect();
     same.sort_by(in_order);
     assert_eq!(same.iter().map(|e| e.pos.as_str()).collect::<Vec<_>>(), ["taught", "q2", "q3", "q10"]);
-    // An unknown kind is ignored, and nothing ever leaves 0..1
+    // An unknown kind is ignored, and R never leaves 0..1
     assert_eq!(fold([one("guessed", T0)].iter()).seen, 0);
     let many: Vec<Evidence> = (0..40).map(|i| one("recalled-right", T0 + i as f64 * 30.0 * DAY_MS)).collect();
     let top = fold(many.iter());
-    assert!(top.level <= 1.0 && top.half_life == 365.0);
+    let r = estimate(&top, T0 + 40.0 * 30.0 * DAY_MS);
+    assert!(r > 0.0 && r <= 1.0);
   }
 
   #[test]
-  fn it_decays_with_time_and_more_slowly_once_strengthened() {
-    // One half-life after the last right answer, the estimate is half the level
-    let f = fold([one("taught", T0), one("right", T0)].iter());
-    assert!((estimate(&f, T0 + 2.2 * DAY_MS) - 0.29).abs() < 1e-9);
-    assert_eq!(estimate(&f, T0 - DAY_MS), f.level); // never more than the level
+  fn a_review_that_counts_for_less_moves_the_state_less() {
+    let model = FSRS::new(&FSRS6_DEFAULT_PARAMETERS).unwrap();
+    let base = review(&model, None, 3, 0.0, 1.0).unwrap();
+    let full = review(&model, Some(base), 3, 6.0, 1.0).unwrap();
+    let half = review(&model, Some(base), 3, 6.0, 0.5).unwrap();
+    assert!(half.stability > base.stability && half.stability < full.stability);
+    // Half the way in log stability: the geometric mean
+    assert!(((half.stability as f64) - ((base.stability * full.stability) as f64).sqrt()).abs() < 1e-3);
+    // A first review that counts for less starts part of the way from a first miss
+    let first = review(&model, None, 3, 0.0, 0.7).unwrap();
+    let miss = review(&model, None, 1, 0.0, 1.0).unwrap();
+    assert!(first.stability > miss.stability && first.stability < base.stability);
+    assert_eq!(review(&model, Some(base), 3, 6.0, 0.0).unwrap().stability, base.stability);
+  }
 
-    // Three right answers in one sitting hardly move the half-life...
+  #[test]
+  fn retrievability_is_fsrs_six_and_solid_is_its_85_per_cent_line() {
+    // The crate's own curve (its scheduler rounds to whole days; this one doesn't, so the map moves through the day)
+    for (s, t) in [(2.3, 0.0), (2.3, 1.0), (2.3, 4.5), (40.0, 90.0), (0.2, 0.5)] {
+      let theirs = fsrs::current_retrievability(MemoryState { stability: s as f32, difficulty: 5.0, stability_fast: s as f32 }, t as f32, FSRS6_DEFAULT_DECAY) as f64;
+      assert!((retrievability(s, t) - theirs).abs() < 1e-5, "S {s}, t {t}: {} vs {theirs}", retrievability(s, t));
+    }
+    // R is 0.9 one stability after the review, and the line is crossed where days_to says
+    assert!((retrievability(7.0, 7.0) - 0.9).abs() < 1e-9);
+    assert!((retrievability(7.0, days_to(7.0, SOLID)) - SOLID).abs() < 1e-9);
+    assert_eq!(SOLID, 0.85);
+  }
+
+  #[test]
+  fn it_fades_with_time_and_more_slowly_once_spaced() {
+    // Three right answers in one sitting hardly move stability...
     let crammed = fold([one("right", T0), one("right", T0 + 60_000.0), one("right", T0 + 120_000.0)].iter());
-    assert!(crammed.half_life < 2.3);
+    let once = fold([one("right", T0)].iter());
+    assert!(crammed.memory.unwrap().stability < once.memory.unwrap().stability * 1.05);
     // ...the same three a few days apart move it a long way
     let spaced = fold([one("right", T0), one("right", T0 + 3.0 * DAY_MS), one("right", T0 + 9.0 * DAY_MS)].iter());
-    assert!((spaced.half_life - 2.2 * 2.2 * 2.2).abs() < 1e-9);
-    assert_eq!(crammed.level, spaced.level);
+    assert!(spaced.memory.unwrap().stability > 5.0 * crammed.memory.unwrap().stability);
+    assert_eq!(crammed.right, spaced.right);
     let later = 20.0 * DAY_MS;
-    assert!(estimate(&spaced, T0 + 9.0 * DAY_MS + later) > 2.0 * estimate(&crammed, T0 + later));
+    assert!(estimate(&spaced, T0 + 9.0 * DAY_MS + later) > estimate(&crammed, T0 + later) + 0.1);
 
-    // Status follows: solid, then fading once time has taken it under the line, and a recall brings it back stronger
+    // Solid while R holds at 0.85, then fading as it falls under; a recall brings it back stronger
     assert_eq!(status(&crammed, T0 + HOUR), "solid");
     let left = fades_in(&crammed, T0 + HOUR).unwrap();
-    assert!(left > 0.5 && left < 1.5);
-    assert_eq!(status(&crammed, T0 + 3.0 * DAY_MS), "fading");
-    assert!(fades_in(&crammed, T0 + 3.0 * DAY_MS).is_none());
-    let back = fold([one("right", T0), one("right", T0 + 60_000.0), one("right", T0 + 120_000.0), one("recalled-right", T0 + 3.0 * DAY_MS)].iter());
-    assert_eq!(status(&back, T0 + 5.0 * DAY_MS), "solid");
-    assert!(back.half_life > 2.0 * crammed.half_life);
+    assert!(left > 3.0 && left < 6.0, "{left}");
+    assert_eq!(status(&crammed, T0 + 6.0 * DAY_MS), "fading");
+    assert!(estimate(&crammed, T0 + 6.0 * DAY_MS) < SOLID);
+    assert!(estimate(&crammed, T0 + 12.0 * DAY_MS) < estimate(&crammed, T0 + 6.0 * DAY_MS), "and keeps falling");
+    assert!(fades_in(&crammed, T0 + 6.0 * DAY_MS).is_none());
+    let back = fold([one("right", T0), one("right", T0 + 60_000.0), one("right", T0 + 120_000.0), one("recalled-right", T0 + 6.0 * DAY_MS)].iter());
+    assert_eq!(status(&back, T0 + 10.0 * DAY_MS), "solid");
+    assert!(back.memory.unwrap().stability > 2.0 * crammed.memory.unwrap().stability);
     assert_eq!(status(&Fold::default(), T0), "new");
-    assert_eq!(status(&fold([one("taught", T0)].iter()), T0), "learning");
+
+    // A wrong answer leaves it in progress, however high FSRS puts R once it has been put right;
+    // the next right answer makes it solid again
+    let missed = fold([one("right", T0), one("right", T0 + 3.0 * DAY_MS), one("wrong", T0 + 4.0 * DAY_MS)].iter());
+    assert!(estimate(&missed, T0 + 4.0 * DAY_MS + HOUR) > SOLID);
+    assert_eq!(status(&missed, T0 + 4.0 * DAY_MS + HOUR), "learning");
+    assert!(fades_in(&missed, T0 + 4.0 * DAY_MS + HOUR).is_none());
+    let fixed = fold([one("right", T0), one("right", T0 + 3.0 * DAY_MS), one("wrong", T0 + 4.0 * DAY_MS), one("right", T0 + 5.0 * DAY_MS)].iter());
+    assert_eq!(status(&fixed, T0 + 5.0 * DAY_MS + HOUR), "solid");
+    // Partly right isn't shown either
+    assert_eq!(status(&fold([one("right", T0), one("partly", T0 + DAY_MS)].iter()), T0 + DAY_MS + HOUR), "learning");
   }
 
   #[test]
@@ -1084,16 +1274,20 @@ mod tests {
   fn when_a_topic_was_first_met_and_first_made_solid() {
     let (_dir, mut s) = store();
     s.upsert(vec![concept("a", "Arrays", "Algorithms", 0, &[]), concept("b", "Hash tables", "Algorithms", 1, &[])]).unwrap();
-    // Taught, then one right answer: 0.58, not yet solid. The second right answer, a day later, makes it solid
-    s.record(vec![ev("a", "lesson:1", "taught", "taught", T0), ev("a", "lesson:1", "q0", "right", T0 + 60_000.0)], false).unwrap();
+    // Taught, then partly right: begun, not yet solid. The right answer a day later makes it solid
+    s.record(vec![ev("a", "lesson:1", "taught", "taught", T0), ev("a", "lesson:1", "q0", "partly", T0 + 60_000.0)], false).unwrap();
     let a = s.state("a", T0 + HOUR, true).unwrap();
-    assert_eq!((a.first_seen, a.made_solid, a.fades_at), (Some(T0), None, None));
+    assert_eq!((a.first_seen, a.made_solid, a.fades_at, a.status.as_str()), (Some(T0), None, None, "learning"));
     s.record(vec![ev("a", "lesson:2", "q0", "right", T0 + DAY_MS)], false).unwrap();
     let now = T0 + DAY_MS + HOUR;
     let a = s.state("a", now, true).unwrap();
     assert_eq!(a.made_solid, Some(T0 + DAY_MS));
     assert_eq!(a.status, "solid");
-    // The fade date is the fade-in days from now, and the estimate is at the line then
+    assert_eq!(a.level, 1.0);
+    assert!(a.stability.unwrap() > 1.0 && a.difficulty.unwrap() >= 1.0);
+    // R halves far more slowly than it falls from 1 to 0.9: FSRS-6's curve has a long tail
+    assert!(a.half_life > 10.0 * a.stability.unwrap());
+    // The fade date is the fade-in days from now, and R is at the line then
     let fades_at = a.fades_at.unwrap();
     assert!((fades_at - (now + a.fades_in.unwrap() * DAY_MS)).abs() < 1.0);
     let then = s.state("a", fades_at, true).unwrap();
@@ -1104,7 +1298,68 @@ mod tests {
     assert_eq!(s.state("a", T0 + 3.0 * DAY_MS, true).unwrap().made_solid, Some(T0 + DAY_MS));
     // Never studied: none of the three
     let b = s.state("b", now, true).unwrap();
-    assert_eq!((b.first_seen, b.made_solid, b.fades_at), (None, None, None));
+    assert_eq!((b.first_seen, b.made_solid, b.fades_at, b.stability), (None, None, None, None));
+  }
+
+  #[test]
+  fn a_file_from_the_earlier_model_is_replayed_and_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("knowledge.json");
+    // As the half-life model wrote it: version 1, the evidence and nothing derived
+    let v1 = serde_json::json!({ "version": 1, "concepts": [
+      { "id": "a", "name": "Arrays", "area": "Algorithms", "origin": "roadmap", "order": 0, "prerequisites": [], "done": true, "evidence": [
+        { "source": "lesson:old", "pos": "taught", "kind": "taught", "at": T0, "weight": 1.0 },
+        { "source": "lesson:old", "pos": "q0", "kind": "right", "at": T0 + 60_000.0, "weight": 1.0 },
+        { "source": "recall:r1", "pos": "1", "kind": "recalled-right", "at": T0 + 8.0 * DAY_MS, "weight": 1.0, "supersedes": "lesson:x#q0" } ] },
+      { "id": "b", "name": "Hash tables", "area": "Algorithms", "origin": "roadmap", "order": 1, "prerequisites": ["a"], "evidence": [] } ] });
+    let original = serde_json::to_vec_pretty(&v1).unwrap();
+    std::fs::write(&path, &original).unwrap();
+
+    let mut s = Store::open(path.clone()).unwrap();
+    assert!(s.existed);
+    // Worked out from the same evidence, through FSRS: two good reviews eight days apart
+    let a = s.state("a", T0 + 8.0 * DAY_MS + HOUR, true).unwrap();
+    assert_eq!((a.seen, a.right, a.status.as_str()), (3, 2, "solid"));
+    assert!((a.stability.unwrap() - recall_engine(&[(3, T0 + 60_000.0), (3, T0 + 8.0 * DAY_MS)]).0).abs() < 1e-3);
+    // Opening it writes nothing
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    assert!(!path.with_extension("v1.json").exists());
+
+    // The first save keeps the earlier file beside it, as it was, and writes every piece of evidence back
+    s.record(vec![ev("b", "lesson:b", "q0", "right", T0 + 9.0 * DAY_MS)], false).unwrap();
+    assert_eq!(std::fs::read(path.with_extension("v1.json")).unwrap(), original);
+    let now: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!((now["version"].as_u64(), now["model"].as_str()), (Some(2), Some("fsrs-6")));
+    assert_eq!(now["concepts"][0]["evidence"], v1["concepts"][0]["evidence"]);
+    assert_eq!(now["concepts"][0]["done"], true);
+    // Saved again, or opened and saved again, the copy is left alone
+    std::fs::write(path.with_extension("v1.json"), b"kept").unwrap();
+    s.save().unwrap();
+    let mut again = Store::open(path.clone()).unwrap();
+    again.save().unwrap();
+    assert_eq!(std::fs::read(path.with_extension("v1.json")).unwrap(), b"kept");
+    assert!(again.superseded.contains("lesson:x#q0"));
+
+    // What has been read in once is remembered with the file
+    assert!(!again.is_filled("cards"));
+    again.mark_filled("cards").unwrap();
+    assert!(Store::open(path).unwrap().is_filled("cards"));
+  }
+
+  #[test]
+  fn a_name_finds_its_topic_by_its_words_and_flashcards_are_not_counted_twice() {
+    let (_dir, mut s) = store();
+    s.upsert(vec![concept("h", "Hash tables", "Algorithms", 0, &[]), concept("n", "Binary numbers", "Maths", 0, &[])]).unwrap();
+    assert_eq!(s.resolve("Hash tables", None).as_deref(), Some("h"));
+    assert_eq!(s.resolve("hash table", None).as_deref(), Some("h"));
+    assert_eq!(s.resolve("Introduction to hash tables", None).as_deref(), Some("h"));
+    assert_eq!(s.resolve("Hash tables in Rust", None), None);
+    assert_eq!(s.resolve("binary", None), None);
+    // A flashcard's return is in the map's evidence, but not in what came back: the review log counts it
+    learn(&mut s, "h", T0);
+    s.record(vec![ev("h", "card:abc", "1", "recalled-right", T0 + 5.0 * DAY_MS), ev("h", "recall:r", "1", "recalled-right", T0 + 6.0 * DAY_MS)], false).unwrap();
+    assert_eq!(s.state("h", T0 + 6.0 * DAY_MS, true).unwrap().right, 4);
+    assert_eq!(s.returns(true).len(), 1);
   }
 
   #[test]

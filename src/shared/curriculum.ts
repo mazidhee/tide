@@ -55,6 +55,20 @@ export function splitTag(text: string): { title: string; tag?: string } {
   return m ? { title: m[1], tag: m[2].trim() } : { title: t }
 }
 
+/**
+ * The topics a quiz's title names, each as its syllabus heading would be (without a tag or a date):
+ * "What I studied today: Hash tables; Tries" is two, "What I already know: Graphs — CORE" one.
+ */
+export function quizTopics(title: string): string[] {
+  const bare = title.replace(/\*\*/g, '').replace(/^\s*(?:what i studied\b[^:]*|check what you know|what i already know|check)\s*:\s*/i, '')
+  const out: string[] = []
+  for (const part of bare.split(/\s*;\s*/)) {
+    const t = splitTag(part.trim()).title.replace(/^\s*\d+[.)]\s+/, '').trim()
+    if (t && !out.some((o) => o.toLowerCase() === t.toLowerCase())) out.push(t)
+  }
+  return out
+}
+
 const PROJECT_HEAD = /\bcapstone\b|\bprojects?\b/i
 const PROJECT_ITEM = /^\**\s*(capstone|project)\b/i
 

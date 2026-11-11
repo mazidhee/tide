@@ -94,7 +94,7 @@ export function LessonNotes({ topic, scope, takeaways, onCheck, busy, mineRef }:
       <div className="lesson-notes-editor">
         {text !== null &&
           (editing ? (
-            <Editor value={text} onChange={edit} />
+            <Editor value={text} onChange={edit} notePath={path} />
           ) : (
             <div
               className="prose compact lesson-notes-view"

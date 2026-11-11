@@ -1,4 +1,5 @@
 import { TimeThis } from './TimeThis'
+import { passageSaying } from '../lib/passage'
 import { readyForMargin } from '@shared/lessonNotes'
 import { savePastedImage } from '../lib/pastedImages'
 import { reveal } from '../lib/scroll'
@@ -9,6 +10,7 @@ import { fileTitle, folderOf, useApp } from '../state'
 import { renderMarkdown, slugify, splitFrontmatter } from '../lib/markdown'
 import { FONT_VAR, TEXT_SCALE, usePageSettings } from '../lib/pageSettings'
 import { Editor, type EditorHandle } from './Editor'
+import { followLink } from '../lib/followLink'
 import { DiscussPanel, type DiscussTarget } from './DiscussPanel'
 import { keepPassage } from '../lib/passages'
 import { Icon } from './Icon'
@@ -146,16 +148,18 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
 
   const { data: props, body } = useMemo(() => splitFrontmatter(raw ?? ''), [raw])
   const fmLines = useMemo(() => fmLineCount(raw ?? ''), [raw])
+  // Rendered only for reading: while editing, a long note would be rendered again on every keystroke
   const html = useMemo(
-    () => (raw === null ? '' : renderMarkdown(body, { notePath: path, filesByName: app.filesByName })),
-    [body, raw, path, app.filesByName]
+    () => (raw === null || editing ? '' : renderMarkdown(body, { notePath: path, filesByName: app.filesByName })),
+    [body, raw, path, app.filesByName, editing]
   )
 
   // Jump to a heading when opened from a citation or search result
   useEffect(() => {
     if (!anchor || !html || editing) return
     const id = slugify(anchor.replace(/^Page \d+$/, ''))
-    const el = id ? articleRef.current?.querySelector<HTMLElement>(`[id="${CSS.escape(id)}"]`) : null
+    // A heading by its id; else the passage that says these words (a question in a lesson's page, say)
+    const el = (id ? articleRef.current?.querySelector<HTMLElement>(`[id="${CSS.escape(id)}"]`) : null) ?? (articleRef.current ? passageSaying(articleRef.current, anchor) : null)
     if (!el) return
     requestAnimationFrame(() => {
       reveal(el)
@@ -369,19 +373,8 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
       e.preventDefault()
       const direct = link.dataset.href
       const wikilink = link.dataset.wikilink
-      const resolved = direct ?? (wikilink ? await window.tide.vault.resolveLink(wikilink, path) : null)
-      if (resolved) app.openPath(resolved, wikilink?.split('#')[1])
-      else if (wikilink) {
-        app.toast(`“${wikilink}” doesn't exist yet`, {
-          action: {
-            label: 'Create it',
-            run: async () => {
-              const created = await window.tide.vault.createNote(folderOf(path), wikilink.split('#')[0])
-              app.openPath(created)
-            }
-          }
-        })
-      }
+      if (direct) app.openPath(direct, wikilink?.split('#')[1])
+      else if (wikilink) await followLink(app, path, { wikilink })
       return
     }
     if (target.closest('.tag')) app.setDialog('search')
@@ -603,8 +596,8 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
         )}
         {raw !== null && editing && (
           <div className={`reading-column editor-column${marginThreads.length || coach ? ' with-margin' : ''}`}>
-            <FormatBar onFormat={(k) => editorRef.current?.format(k)} coach={coach} onCoach={() => app.updateSettings({ writingCoach: !coach })} onTest={testMe} testing={probing} />
-            <Editor value={raw} onChange={onEdit} onIdle={onIdle} onProbe={onProbe} handleRef={editorRef} onImage={(file) => savePastedImage(path.includes('/') ? `${path.slice(0, path.lastIndexOf('/'))}/attachments` : 'attachments', file)} />
+            <FormatBar onFormat={(k) => editorRef.current?.format(k)} coach={coach} onCoach={() => app.updateSettings({ writingCoach: !coach })} onTest={testMe} testing={probing} source={app.settings.editorSource === true} onSource={() => app.updateSettings({ editorSource: !(app.settings.editorSource === true) })} />
+            <Editor value={raw} onChange={onEdit} onIdle={onIdle} onProbe={onProbe} handleRef={editorRef} notePath={path} onImage={(file) => savePastedImage(path.includes('/') ? `${path.slice(0, path.lastIndexOf('/'))}/attachments` : 'attachments', file)} />
             {(probing || coaching) && <div className="probe-status"><span className="spinner" /> {probing ? `${persona.name} is reading your paragraph…` : 'Coach is reading your paragraph…'}</div>}
             <div className="margin-notes" aria-label="Tutor notes">
               {marginThreads.map((t) => {

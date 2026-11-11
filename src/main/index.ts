@@ -323,6 +323,8 @@ function registerIpc() {
   handle('courses:mark', async (id: string, lesson: string, done: boolean) => (await courses()).markLesson(String(id), String(lesson), !!done))
   handle('courses:search', async (q: string) => (await courses()).searchCourses(String(q ?? ''), 12))
   handle('courses:saveToNotes', async (id: string) => (await courses()).saveToNotes(String(id)))
+  handle('knowledge:review', async (concept: string) => (await import('./review')).reviewFor(concept))
+  handle('knowledge:reviewAnswer', async (concept: string, item: import('@shared/review').ReviewItem, verdict: import('@shared/types').Verdict) => (await import('./review')).answerReview(concept, item, verdict))
   // ---- Guided projects and adaptive difficulty (main/workshop.ts, main/difficulty.ts) ----
   const workshop = () => import('./workshop')
   handle('workshop:list', async () => (await workshop()).listWorkshop())

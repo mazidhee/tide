@@ -197,8 +197,10 @@ export async function reviewCard(id: string, grade: ReviewGrade, path: string): 
   store[id] = stored
   await saveStore(store)
   const { logReview } = await import('./learn')
-  await logReview(id, path, grade, schedule.interval)
+  await logReview(id, path, grade, schedule.interval, now.getTime())
   await appendRevlog([{ rating: REVLOG_RATING[grade], elapsedDays: elapsedDays(before ? new Date(before).getTime() : undefined, now.getTime()), id, kind: 'flashcard', at: now.getTime() }])
+  // And on the topic it is about, in the knowledge map (never a reason for a review to fail)
+  await import('./knowledge').then((k) => k.noteCardReview({ id, path, grade, at: now.getTime(), first: !before })).catch(() => {})
   return schedule
 }
 

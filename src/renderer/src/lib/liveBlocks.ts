@@ -138,17 +138,29 @@ export function createKeeper(o: KeeperOptions): Keeper {
 
 /**
  * Watches the whole document for one kind of live block. Widgets are put back at once, before
- * the page is painted; looking for new blocks waits until the text has been still for a moment.
+ * the page is painted; looking for new blocks waits until the text has been still for a moment
+ * (or, while something keeps changing, a few moments at most).
  * Changes inside a widget (a simulation repainting its numbers) are not text arriving, and
  * don't put the wait off.
  */
 export function watchBlocks(keeper: Keeper, scan: () => void, delay = 500): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined
+  // When the wait began: something that never stops changing (an animated icon) must not put
+  // the scan off for ever, so the wait is at most a few delays long
+  let since = 0
+  const run = () => {
+    timer = undefined
+    since = 0
+    scan()
+  }
   const observer = new MutationObserver((records) => {
     keeper.reclaim()
     if (records.every((r) => keeper.owns(r.target))) return
+    const now = Date.now()
+    if (timer !== undefined && now - since >= delay * 4) return
+    since ||= now
     clearTimeout(timer)
-    timer = setTimeout(scan, delay)
+    timer = setTimeout(run, delay)
   })
   observer.observe(document.body, { childList: true, subtree: true, characterData: true })
   return () => {

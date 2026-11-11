@@ -10,8 +10,11 @@
  */
 import { promises as fs } from 'fs'
 import { join } from 'path'
-import { roadmapTopics, splitTag, underHeading } from '@shared/curriculum'
+import { quizTopics, roadmapTopics, splitTag, underHeading } from '@shared/curriculum'
 import {
+  CARD_WEIGHT,
+  cardKind,
+  cardTopics,
   conceptName,
   kindOfMark,
   knowledgeNote,
@@ -25,19 +28,20 @@ import {
   type EvidenceKind,
   type KnowledgeView,
   type MissedQuestion,
-  type Picture
+  type Picture,
+  questionTopic
 } from '@shared/knowledge'
 import { buildTimeline, retention, weekEdges, type AimIn, type Returned, type Review } from '@shared/knowTimeline'
 import type { LessonRecord } from '@shared/lessonLog'
 import { digestLesson, type LessonDigest } from '@shared/lessonMemory'
 import type { PlacementStore } from '@shared/placement'
-import type { Attempt, ChatScope } from '@shared/types'
+import type { Attempt, ChatScope, ReviewGrade } from '@shared/types'
 import { getGoals, getNotebooks, readJsonl } from './learn'
 import { tideCore } from './native'
 import { privatePath } from './projects'
 import { recallItems } from './recall'
 import { REVLOG_FILE } from './revlog'
-import { absPath, readText, vaultRoot } from './vault'
+import { absPath, getNoteMeta, readText, vaultRoot } from './vault'
 
 interface Engine {
   existed(): boolean
@@ -54,6 +58,9 @@ interface Engine {
   fading(area: string | null, now: number, privateOk: boolean, limit: number): ConceptState[]
   /** Every question that came back, oldest first */
   returns(privateOk: boolean): Returned[]
+  /** Whether earlier records of a kind have been read in, and marking them so */
+  filled(what: string): boolean
+  markFilled(what: string): void
 }
 
 let engine: Engine | null = null
@@ -73,6 +80,7 @@ function open(): Engine | null {
   engineFor = root
   engine = null
   filling = null
+  refilling = null
   syncedAt = 0
   try {
     const mod = tideCore<{ Knowledge?: new (path: string) => Engine }>()
@@ -93,7 +101,27 @@ async function knowledge(): Promise<Engine | null> {
       .then(() => k.flush())
   }
   if (filling) await filling.catch(() => {})
+  // Records the map didn't read when it began (each read in once): flashcard reviews, and answers in exams
+  if (!refilling && (!k.filled(CARDS_FILLED) || !k.filled(ATTEMPTS_FILLED))) {
+    refilling = refill(k).catch((e) => console.warn('[knowledge] reading earlier reviews', e))
+  }
+  if (refilling) await refilling
   return k
+}
+
+const CARDS_FILLED = 'flashcards'
+const ATTEMPTS_FILLED = 'attempts-without-a-record'
+let refilling: Promise<void> | null = null
+
+async function refill(k: Engine): Promise<void> {
+  if (!k.filled(ATTEMPTS_FILLED)) {
+    await recordAttempts(k)
+    k.markFilled(ATTEMPTS_FILLED)
+  }
+  if (!k.filled(CARDS_FILLED)) {
+    await recordCardHistory(k)
+    k.markFilled(CARDS_FILLED)
+  }
 }
 
 // ---------- Concepts ----------
@@ -163,10 +191,43 @@ function conceptFor(k: Engine, topic: string, area: string, isPrivate: boolean):
 async function lessonParts(k: Engine, record: LessonRecord): Promise<{ concepts: ConceptIn[]; events: EvidenceIn[] } | null> {
   // A placement check is read from its result, not its questions
   if (record.options?.placement) return null
+  // A review of kept questions: each answer is recorded as it is marked, by the store the question is kept in
+  if (record.options?.review?.items.length) return null
   const d = digestLesson(record)
   if (!d) return null
   // A course's lesson counts under the course, as a subject of its own on the map
   const { area, isPrivate } = record.options?.course ? { area: record.options.course.title, isPrivate: false } : await placeOf(scopePath(record.scope))
+  const shared = isPrivate ? { private: true } : {}
+  const source = `lesson:${record.id}`
+  // Review now with nothing kept, or a Quick check: on the concept they were started from (a topic, or a part of one)
+  const on = record.options?.review?.concept ?? record.options?.check?.concept
+  const fixed = on ? k.state(on, Date.now(), true) : null
+  if (fixed && record.options?.review) {
+    // Questions from memory on something learnt before: every answer is a return
+    const events = d.asked.flatMap((a, i): EvidenceIn[] => (a.mark ? [{ concept: fixed.id, source, pos: `q${i}`, kind: recalled(kindOfMark(a.mark)), at: record.updated, weight: 1, ...shared }] : []))
+    return events.length ? { concepts: [], events } : null
+  }
+  if (fixed && fixed.parent) {
+    // A check on one part of a topic: its answers are on that part
+    const events = d.asked.flatMap((a, i): EvidenceIn[] => (a.mark ? [{ concept: fixed.id, source, pos: `q${i}`, kind: kindOfMark(a.mark), at: record.updated, weight: 1, ...shared }] : []))
+    return events.length ? { concepts: [], events } : null
+  }
+  if (record.mode === 'quiz' && !fixed) {
+    const topics = quizTopics(record.topic)
+    if (topics.length > 1) {
+      // A quiz on several topics: each answer on the topic its question is on
+      const concepts: ConceptIn[] = []
+      const events: EvidenceIn[] = []
+      d.asked.forEach((a, i) => {
+        const t = a.mark && questionTopic(topics, a.prompt, a.topic)
+        if (!t || !a.mark) return
+        const { concept, fresh } = conceptFor(k, t, area, isPrivate)
+        if (fresh.length && !concepts.some((c) => c.id === concept.id)) concepts.push(...fresh)
+        events.push({ concept: concept.id, source, pos: `q${i}`, kind: kindOfMark(a.mark), at: record.updated, weight: 1, ...shared })
+      })
+      return events.length ? { concepts, events } : null
+    }
+  }
   const retest = record.options?.retest
   if (retest?.length) {
     // A retest of mistakes: each question is one that came back, on the topic its mistake was made in
@@ -180,7 +241,7 @@ async function lessonParts(k: Engine, record: LessonRecord): Promise<{ concepts:
     })
     return events.length ? { concepts, events } : null
   }
-  const { concept, fresh } = conceptFor(k, record.topic, area, isPrivate)
+  const { concept, fresh } = fixed ? { concept: { id: fixed.id, area: fixed.area }, fresh: [] } : conceptFor(k, record.mode === 'quiz' ? (quizTopics(record.topic)[0] ?? record.topic) : record.topic, area, isPrivate)
   const { steps, events } = lessonEvidence(record, d, concept, isPrivate)
   return events.length ? { concepts: [...fresh, ...steps], events } : null
 }
@@ -220,10 +281,10 @@ function attemptEvent(k: Engine, a: Attempt, area: string, isPrivate: boolean): 
 
 /**
  * A marked answer was recorded. Lessons and quizzes are read from their lesson record, question by
- * question, so only answers from the other kinds of session (recall, interviews, exams…) count here.
+ * question, so only answers kept in no lesson record (recall, interviews, an exam's marked parts…) count here.
  */
 export async function noteAttempt(a: Attempt): Promise<void> {
-  if (a.mode === 'teach' || a.mode === 'quiz') return
+  if (a.lesson || a.mode === 'teach') return
   const k = await knowledge()
   if (!k) return
   const { area, isPrivate } = await placeOf(a.path)
@@ -259,26 +320,29 @@ export async function conceptPicture(topic: string, privateOk: boolean): Promise
 /** The one time the file isn't there: every roadmap, every lesson kept, every marked answer, read in */
 async function backfill(k: Engine): Promise<void> {
   await syncRoadmaps(k, true)
-  const dir = '.tide/lessons'
-  const names = await fs.readdir(absPath(dir)).catch(() => [] as string[])
-  const records: LessonRecord[] = []
-  for (const n of names.filter((n) => n.endsWith('.json'))) {
-    try {
-      records.push(JSON.parse(await readText(`${dir}/${n}`)) as LessonRecord)
-    } catch {
-      // A record that can't be read adds nothing
-    }
-  }
-  records.sort((a, b) => a.started - b.started)
+  const records = await lessonRecords()
   for (const r of records) {
     const parts = await lessonParts(k, r).catch(() => null)
     if (!parts) continue
     if (parts.concepts.length) k.upsert(parts.concepts)
     k.record(parts.events, true)
   }
-  // Answers from lessons and quizzes older than their records, and from every other kind of session
-  const covered = (a: Attempt) => records.some((r) => (r.mode === 'teach' || r.mode === 'quiz') && r.topic === a.topic && a.at >= r.started - 60_000 && a.at <= r.updated + 60_000)
-  const attempts = (await readJsonl<Attempt>('.tide/attempts.jsonl')).filter((a) => !((a.mode === 'teach' || a.mode === 'quiz') && covered(a)))
+  await recordAttempts(k, records)
+  await recordCardHistory(k)
+  k.markFilled(ATTEMPTS_FILLED)
+  k.markFilled(CARDS_FILLED)
+}
+
+/**
+ * Marked answers kept in no lesson record: from interviews, recall sessions and exams, and from
+ * lessons and quizzes older than their records. Each is kept once (by its time), so reading them
+ * again changes nothing.
+ */
+async function recordAttempts(k: Engine, known?: LessonRecord[]): Promise<void> {
+  const records = known ?? (await lessonRecords())
+  // In a lesson record: said so (since answers name their record), or a lesson or quiz on that topic going on at the time
+  const covered = (a: Attempt) => !!a.lesson || ((a.mode === 'teach' || a.mode === 'quiz') && records.some((r) => (r.mode === 'teach' || r.mode === 'quiz') && r.topic === a.topic && a.at >= r.started - 60_000 && a.at <= r.updated + 60_000))
+  const attempts = (await readJsonl<Attempt>('.tide/attempts.jsonl')).filter((a) => !covered(a))
   const places = new Map<string, { area: string; isPrivate: boolean }>()
   const events: EvidenceIn[] = []
   for (const a of attempts) {
@@ -290,6 +354,117 @@ async function backfill(k: Engine): Promise<void> {
     events.push(made.event)
   }
   if (events.length) k.record(events)
+}
+
+async function lessonRecords(): Promise<LessonRecord[]> {
+  const dir = '.tide/lessons'
+  const names = await fs.readdir(absPath(dir)).catch(() => [] as string[])
+  const records: LessonRecord[] = []
+  for (const n of names.filter((n) => n.endsWith('.json'))) {
+    try {
+      records.push(JSON.parse(await readText(`${dir}/${n}`)) as LessonRecord)
+    } catch {
+      // A record that can't be read adds nothing
+    }
+  }
+  return records.sort((a, b) => a.started - b.started)
+}
+
+// ---------- Flashcards ----------
+
+/** Read once per note while a batch of cards is matched: its text, tags and cards */
+type NoteCache = Map<string, Promise<{ raw: string; tags: string[]; cards: { id: string; line: number }[] } | null>>
+
+async function readCardNote(path: string, cache: NoteCache) {
+  if (!cache.has(path)) {
+    cache.set(
+      path,
+      (async () => {
+        const raw = await readText(path).catch(() => null)
+        if (raw === null) return null
+        const tags = (await getNoteMeta(path).catch(() => null))?.tags ?? []
+        const { parseFlashcards } = await import('./study')
+        const tagged = tags.some((t) => /^flashcards(\/|$)/.test(t))
+        return { raw, tags, cards: parseFlashcards(path, raw, { highlightClozes: tagged }) }
+      })()
+    )
+  }
+  return cache.get(path)!
+}
+
+/**
+ * The concept a flashcard is on: the first of the names its headings, tags and note give it that
+ * is a topic on the map (a roadmap topic first). Null when none is: a card is never made a topic of its own.
+ */
+async function cardConcept(k: Engine, card: { id: string; path: string }, cache: NoteCache): Promise<{ id: string; isPrivate: boolean } | null> {
+  const note = await readCardNote(card.path, cache)
+  const line = note?.cards.find((c) => c.id === card.id)?.line ?? Number.MAX_SAFE_INTEGER
+  const { area, isPrivate } = await placeOf(card.path)
+  for (const name of cardTopics({ path: card.path, line: note ? line : 0 }, note?.raw ?? '', note?.tags ?? [])) {
+    const id = k.resolve(name, area || null)
+    if (id) return { id, isPrivate }
+  }
+  return null
+}
+
+const cardEvent = (concept: string, r: { id: string; grade: ReviewGrade; at: number }, first: boolean, isPrivate: boolean): EvidenceIn => ({
+  concept,
+  source: `card:${r.id}`,
+  pos: String(r.at),
+  kind: cardKind(r.grade, first),
+  at: r.at,
+  weight: CARD_WEIGHT,
+  ...(isPrivate ? { private: true } : {})
+})
+
+/** A flashcard was reviewed: evidence on its topic, when it has one on the map */
+export async function noteCardReview(r: { id: string; path: string; grade: ReviewGrade; at: number; first: boolean }): Promise<void> {
+  const k = await knowledge()
+  if (!k) return
+  await syncRoadmaps(k).catch(() => {})
+  const c = await cardConcept(k, r, new Map())
+  if (c) k.record([cardEvent(c.id, r, r.first, c.isPrivate)])
+}
+
+/** Every flashcard review in the review log, read in once */
+async function recordCardHistory(k: Engine): Promise<void> {
+  const lines = await readJsonl<{ at: number; id: string; path: string; grade: ReviewGrade }>('.tide/reviews.jsonl')
+  if (!lines.length) return
+  const cache: NoteCache = new Map()
+  const seen = new Set<string>()
+  const concepts = new Map<string, { id: string; isPrivate: boolean } | null>()
+  const events: EvidenceIn[] = []
+  for (const r of [...lines].sort((a, b) => a.at - b.at)) {
+    if (!r?.id || !r.path || !r.at) continue
+    const key = `${r.path}\u0000${r.id}`
+    if (!concepts.has(key)) concepts.set(key, await cardConcept(k, r, cache))
+    const c = concepts.get(key)
+    if (c) events.push(cardEvent(c.id, r, !seen.has(r.id), c.isPrivate))
+    seen.add(r.id)
+  }
+  if (events.length) k.record(events)
+}
+
+/** The flashcards on a concept, with when each is due */
+export async function cardsOn(conceptId: string): Promise<{ id: string; path: string; front: string; back: string; due: number }[]> {
+  const k = await knowledge()
+  if (!k) return []
+  const { getCards } = await import('./study')
+  const cards = await getCards({ kind: 'vault' }).catch(() => [])
+  const cache: NoteCache = new Map()
+  const out: { id: string; path: string; front: string; back: string; due: number }[] = []
+  for (const c of cards) {
+    if ((await cardConcept(k, c, cache))?.id === conceptId) out.push({ id: c.id, path: c.path, front: c.front, back: c.back, due: c.schedule?.due ?? Date.now() })
+  }
+  return out
+}
+
+/** A question kept elsewhere was answered in a review: evidence on the concept the review is on */
+export async function noteReviewAnswer(e: { concept: string; source: string; pos: string; kind: EvidenceKind; at: number; path?: string }): Promise<void> {
+  const k = await knowledge()
+  if (!k || !k.state(e.concept, Date.now(), true)) return
+  const { isPrivate } = await placeOf(e.path)
+  k.record([{ concept: e.concept, source: e.source, pos: e.pos, kind: e.kind, at: e.at, weight: 1, ...(isPrivate ? { private: true } : {}) }])
 }
 
 // ---------- What it is read for ----------
@@ -325,7 +500,8 @@ export async function knowledgeView(): Promise<KnowledgeView> {
     if (!named.has(item.topic)) named.set(item.topic, k.resolve(conceptName(item.topic), null))
     const id = named.get(item.topic)
     if (!id) continue
-    ;(missed[id] ??= []).push({ prompt: item.prompt, due: item.due, reviews: item.reviews, lapses: item.lapses })
+    const page = await lessonPageOf(item.lesson)
+    ;(missed[id] ??= []).push({ id: item.id, lesson: item.lesson, ...(page ? { page } : {}), prompt: item.prompt, due: item.due, reviews: item.reviews, lapses: item.lapses })
     recall.push({ concept: id, due: item.due })
   }
   for (const list of Object.values(missed)) list.sort((a, b) => a.due - b.due)
@@ -342,6 +518,20 @@ export async function knowledgeView(): Promise<KnowledgeView> {
   }
 }
 
+/** A lesson's page in the vault (fixed when it was first kept, so remembered once found) */
+const pages = new Map<string, string | null>()
+async function lessonPageOf(id: string): Promise<string | null> {
+  if (!id) return null
+  if (!pages.has(id)) {
+    const { getLesson } = await import('./lessons')
+    const page = (await getLesson(id).catch(() => null))?.page ?? null
+    // A lesson not found may yet be saved, and a page may have been moved: only a page there is remembered
+    if (!page || !(await fs.stat(absPath(page)).catch(() => null))) return null
+    pages.set(id, page)
+  }
+  return pages.get(id) ?? null
+}
+
 /** Each aim with a deadline, and the roadmap topics it covers (all of its roadmap, or the part under its heading) */
 async function aimsIn(notebooks: Awaited<ReturnType<typeof getNotebooks>>): Promise<AimIn[]> {
   const goals = await getGoals().catch(() => [])
@@ -355,6 +545,18 @@ async function aimsIn(notebooks: Awaited<ReturnType<typeof getNotebooks>>): Prom
     out.push({ id: g.id, area: nb.name, ...(g.section ? { section: splitTag(g.section).title.replace(/^\s*\d+[.)]\s*/, '') } : {}), deadline: g.deadline, createdAt: g.createdAt, topics: topics.map((t) => t.id) })
   }
   return out
+}
+
+/** The concept a topic's name is on the map, if it is one */
+export async function conceptOfTopic(topic: string): Promise<string | null> {
+  const k = await knowledge()
+  return k?.resolve(conceptName(topic), null) ?? null
+}
+
+/** One concept as it stands, by id */
+export async function conceptById(id: string): Promise<ConceptState | null> {
+  const k = await knowledge()
+  return k?.state(id, Date.now(), true) ?? null
 }
 
 /** One concept as it stands (for tests and for whoever needs a single answer) */

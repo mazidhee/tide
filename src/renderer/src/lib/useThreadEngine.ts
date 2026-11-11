@@ -24,11 +24,14 @@ export interface AskOptions {
 export function useThreadEngine(path: string, instructions: string, defaultPersona: PersonaId, setThreads: (u: (t: TutorThread[]) => TutorThread[]) => void) {
   const [streaming, setStreaming] = useState<Set<string>>(new Set())
   const quizThreads = useRef(new Set<string>())
+  // Reading mode and the margin each run an engine over the same threads: each takes only the
+  // answers it asked for, or every word would arrive twice
+  const mine = useRef(new Set<string>())
 
   useEffect(
     () =>
       window.tide.ai.onEvent((e) => {
-        if (!e.id.includes(':inline')) return
+        if (!e.id.includes(':inline') || !mine.current.has(e.id)) return
         const threadId = e.id.split(':')[0]
         if (e.type === 'reset') {
           const threadId0 = e.id.split(':')[0]
@@ -47,6 +50,7 @@ export function useThreadEngine(path: string, instructions: string, defaultPerso
           )
         }
         if (e.type === 'done' || e.type === 'error') {
+          mine.current.delete(e.id)
           setStreaming((s) => {
             const n = new Set(s)
             n.delete(threadId)
@@ -67,8 +71,10 @@ export function useThreadEngine(path: string, instructions: string, defaultPerso
       const panel = opts.panel?.length
         ? `Answer as a panel of reviewers. For each, write a short heading with their name in bold, then 2 or 3 sharp bullet points from their point of view:\n${opts.panel.map((p) => `- ${PERSONAS[p].name}: ${PERSONAS[p].voice}`).join('\n')}`
         : `Your voice: ${persona.voice}`
+      const id = `${thread.id}:inline:${Date.now()}`
+      mine.current.add(id)
       await window.tide.ai.chat({
-        id: `${thread.id}:inline:${Date.now()}`,
+        id,
         messages,
         scope: { kind: 'note', path },
         attachment: thread.quote,

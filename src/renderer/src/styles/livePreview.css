@@ -1,0 +1,340 @@
+/*
+  The note editor's live preview (lib/livePreview): Markdown drawn as the note it will be, except on
+  the line being edited. Every colour comes from the theme's tokens, so it follows all themes and
+  both designs; the new design's differences are at the end.
+*/
+
+:root {
+  /* Code in fenced blocks: the theme's own hues, pulled towards its ink so each keeps its contrast */
+  --lp-code-keyword: color-mix(in srgb, var(--accent) 82%, var(--ink));
+  --lp-code-string: color-mix(in srgb, var(--series-3) 62%, var(--ink));
+  --lp-code-number: color-mix(in srgb, var(--series-2) 72%, var(--ink));
+  --lp-code-function: color-mix(in srgb, var(--info) 78%, var(--ink));
+  --lp-code-type: color-mix(in srgb, var(--warn) 78%, var(--ink));
+  --lp-code-definition: var(--ink);
+}
+
+/* Syntax hidden away from the cursor */
+.cm-live-preview .cm-lp-hide {
+  display: none;
+}
+
+/* A line that is only a drawn block (a table, a formula, a picture): CodeMirror's cursor buffers
+   beside the widget would each add an empty line box. The cursor never rests there: the line shows
+   its source as soon as it does. */
+.cm-live-preview .cm-line.cm-lp-block-line > .cm-widgetBuffer {
+  display: none;
+}
+
+/* Lines a drawn block (a table, a formula) stands in for */
+.cm-live-preview .cm-line.cm-lp-hidden {
+  display: none;
+}
+
+/* Headings: room above, as in the reading view */
+.cm-live-preview .cm-line.cm-lp-heading {
+  line-height: 1.3;
+  padding-top: 0.55em;
+  padding-bottom: 0.15em;
+}
+.cm-live-preview .cm-line.cm-lp-h1 {
+  padding-top: 0.3em;
+}
+
+/* Inline code, ==highlights== and #tags */
+.cm-live-preview .cm-lp-code {
+  font-family: var(--font-code);
+  font-size: 0.86em;
+  background: var(--code-bg);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+}
+.cm-live-preview .cm-lp-code span {
+  font-size: inherit;
+}
+.cm-live-preview .cm-lp-highlight {
+  background: var(--mark);
+  border-radius: 2px;
+}
+.cm-live-preview .cm-lp-tag {
+  font-family: var(--font-ui);
+  font-size: 0.8em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 0.1em 0.5em;
+  border-radius: 999px;
+}
+
+/* Links: Markdown links and [[wiki links]] open on click */
+.cm-live-preview .cm-lp-link,
+.cm-live-preview .cm-lp-wikilink {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.cm-live-preview .cm-lp-link span {
+  color: inherit;
+}
+.cm-live-preview .cm-lp-wikilink {
+  text-decoration-style: dotted;
+}
+.cm-live-preview .cm-lp-link:hover,
+.cm-live-preview .cm-lp-wikilink:hover {
+  text-decoration-color: var(--accent);
+}
+
+/* Lists and tasks */
+.cm-live-preview .cm-lp-bullet {
+  display: inline-block;
+  min-width: 0.6em;
+  color: var(--ink-muted);
+}
+.cm-live-preview .cm-lp-list-number {
+  color: var(--ink-muted);
+}
+.cm-live-preview .cm-lp-task input {
+  accent-color: var(--accent);
+  width: 0.95em;
+  height: 0.95em;
+  margin: 0 0.35em 0 0;
+  vertical-align: -0.1em;
+  cursor: pointer;
+}
+.cm-live-preview .cm-lp-task-done {
+  color: var(--ink-muted);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--ink-muted) 60%, transparent);
+}
+
+/* Quotes and callouts */
+.cm-live-preview .cm-line.cm-lp-quote {
+  border-left: 1px solid var(--ink-muted);
+  padding-left: 1.1em;
+  color: var(--ink-soft);
+}
+.cm-live-preview .cm-line.cm-lp-callout {
+  --callout: var(--accent);
+  border-left: 2px solid color-mix(in srgb, var(--callout) 55%, transparent);
+  background: color-mix(in srgb, var(--callout) 6%, transparent);
+  color: var(--ink);
+}
+.cm-live-preview .cm-line.cm-lp-callout-title {
+  font-weight: 650;
+  color: var(--callout);
+  padding-top: 0.3em;
+}
+.cm-live-preview .cm-lp-callout-warning,
+.cm-live-preview .cm-lp-callout-caution,
+.cm-live-preview .cm-lp-callout-important {
+  --callout: var(--warn);
+}
+.cm-live-preview .cm-lp-callout-danger,
+.cm-live-preview .cm-lp-callout-error,
+.cm-live-preview .cm-lp-callout-bug,
+.cm-live-preview .cm-lp-callout-failure {
+  --callout: var(--danger);
+}
+.cm-live-preview .cm-lp-callout-question,
+.cm-live-preview .cm-lp-callout-faq {
+  --callout: var(--info);
+}
+.cm-live-preview .cm-lp-callout-example,
+.cm-live-preview .cm-lp-callout-quote,
+.cm-live-preview .cm-lp-callout-abstract,
+.cm-live-preview .cm-lp-callout-summary,
+.cm-live-preview .cm-lp-callout-todo {
+  --callout: var(--ink-muted);
+}
+
+.cm-live-preview .cm-line.cm-lp-callout-last {
+  padding-bottom: 0.3em;
+}
+
+/* A horizontal rule: the line draws it when its dashes are hidden */
+.cm-live-preview .cm-line.cm-lp-hr {
+  position: relative;
+}
+.cm-live-preview .cm-line.cm-lp-hr::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px solid var(--line-strong);
+}
+
+/* Fenced code: one block, its fences folded into a thin top and bottom with the language named */
+.cm-live-preview .cm-line.cm-lp-fence {
+  font-family: var(--font-code);
+  font-size: 0.82em;
+  line-height: 1.6;
+  background: var(--code-bg);
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  padding: 0 16px;
+}
+.cm-live-preview .cm-line.cm-lp-fence span {
+  font-size: inherit;
+  font-family: inherit;
+}
+.cm-live-preview .cm-line.cm-lp-fence-open {
+  border-top: 1px solid var(--line);
+  border-radius: var(--radius-m) var(--radius-m) 0 0;
+  padding-top: 6px;
+}
+.cm-live-preview .cm-line.cm-lp-fence-close {
+  border-bottom: 1px solid var(--line);
+  border-radius: 0 0 var(--radius-m) var(--radius-m);
+  padding-bottom: 6px;
+}
+.cm-live-preview .cm-lp-fence-lang {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--ink-muted);
+  letter-spacing: 0.02em;
+}
+
+/* Maths */
+.cm-live-preview .cm-lp-math .katex {
+  font-size: 1.06em;
+}
+.cm-live-preview .cm-lp-math-block {
+  display: block;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.2em 0;
+  cursor: text;
+}
+.cm-live-preview .cm-lp-math-block .katex-display {
+  margin: 0.3em 0;
+}
+.cm-live-preview .cm-lp-math-preview {
+  margin-top: 4px;
+  border-top: 1px dashed var(--line);
+}
+.cm-live-preview .cm-lp-math-source,
+.cm-live-preview .cm-line.cm-lp-math-source-line {
+  font-family: var(--font-code);
+  font-size: 0.86em;
+  color: var(--ink-soft);
+}
+.cm-live-preview .cm-line.cm-lp-math-source-line span {
+  font-size: inherit;
+}
+
+/* Pictures */
+.cm-live-preview .cm-lp-image {
+  display: block;
+  padding: 0.3em 0;
+}
+.cm-live-preview .cm-lp-image img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-m);
+  cursor: text;
+}
+
+/* Tables: drawn with the reading view's table styles (the widget is a .prose) */
+.cm-live-preview .cm-lp-table {
+  display: block;
+  padding: 0.3em 0;
+  cursor: text;
+  white-space: normal;
+}
+.cm-live-preview .cm-lp-table table {
+  margin: 0;
+}
+.cm-live-preview .cm-line.cm-lp-table-source {
+  font-family: var(--font-code);
+  font-size: 0.84em;
+}
+.cm-live-preview .cm-line.cm-lp-table-source span {
+  font-size: inherit;
+}
+
+/* Frontmatter: quiet, as the properties above a note */
+.cm-live-preview .cm-line.cm-lp-frontmatter {
+  font-family: var(--font-code);
+  font-size: 0.78em;
+  line-height: 1.6;
+  color: var(--ink-muted);
+}
+.cm-live-preview .cm-line.cm-lp-frontmatter span {
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+}
+
+/* The source toggle in the format bar */
+.fmt-text.on {
+  background: var(--bg-active);
+  color: var(--ink);
+}
+
+/* ---------- The new design ---------- */
+:root[data-design='tide'] {
+  .cm-live-preview .cm-line.cm-lp-heading {
+    font-family: var(--ui);
+    letter-spacing: -0.012em;
+  }
+  .cm-live-preview .cm-lp-code {
+    background: var(--sunk);
+    border: 1px solid var(--line);
+    font-family: var(--mono);
+    font-size: 0.8em;
+    padding: 1px 4px;
+  }
+  .cm-live-preview .cm-lp-link,
+  .cm-live-preview .cm-lp-wikilink {
+    color: var(--accent-text);
+    text-decoration-color: var(--accent-line);
+  }
+  .cm-live-preview .cm-line.cm-lp-quote {
+    border-left-color: var(--line-2);
+    color: var(--ink-2);
+  }
+  .cm-live-preview .cm-line.cm-lp-callout {
+    border-left: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    background: var(--sunk);
+    font-family: var(--ui);
+    font-size: 0.88em;
+    color: var(--ink-2);
+    padding-left: 1em;
+  }
+  .cm-live-preview .cm-line.cm-lp-callout-first {
+    border-top: 1px solid var(--line);
+    border-radius: var(--r-ctl) var(--r-ctl) 0 0;
+  }
+  .cm-live-preview .cm-line.cm-lp-callout-last {
+    border-bottom: 1px solid var(--line);
+    border-radius: 0 0 var(--r-ctl) var(--r-ctl);
+    padding-bottom: 0.4em;
+  }
+  .cm-live-preview .cm-line.cm-lp-callout-first.cm-lp-callout-last {
+    border-radius: var(--r-ctl);
+  }
+  .cm-live-preview .cm-line.cm-lp-callout-title {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .cm-live-preview .cm-line.cm-lp-fence {
+    background: var(--sunk);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 21px;
+  }
+  .cm-live-preview .cm-line.cm-lp-fence-open,
+  .cm-live-preview .cm-line.cm-lp-fence-close {
+    border-radius: var(--r-ctl) var(--r-ctl) 0 0;
+  }
+  .cm-live-preview .cm-line.cm-lp-fence-close {
+    border-radius: 0 0 var(--r-ctl) var(--r-ctl);
+  }
+  .cm-live-preview .cm-line.cm-lp-hr::after {
+    border-top-color: var(--line);
+  }
+}
