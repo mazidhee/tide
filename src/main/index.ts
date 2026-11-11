@@ -322,6 +322,7 @@ function registerIpc() {
   handle('courses:file', async (id: string, path: string) => (await courses()).courseFile(String(id), String(path)))
   handle('courses:mark', async (id: string, lesson: string, done: boolean) => (await courses()).markLesson(String(id), String(lesson), !!done))
   handle('courses:search', async (q: string) => (await courses()).searchCourses(String(q ?? ''), 12))
+  handle('courses:preview', async (id: string) => (await courses()).coursePreview(String(id)))
   handle('courses:saveToNotes', async (id: string) => (await courses()).saveToNotes(String(id)))
   handle('knowledge:review', async (concept: string) => (await import('./review')).reviewFor(concept))
   handle('knowledge:reviewAnswer', async (concept: string, item: import('@shared/review').ReviewItem, verdict: import('@shared/types').Verdict) => (await import('./review')).answerReview(concept, item, verdict))

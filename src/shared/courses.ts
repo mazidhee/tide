@@ -149,7 +149,8 @@ export function titleOf(md: string, path: string): string {
   const first = heads.find((h) => h.level === 1) ?? (/^(readme|index)\./i.test(basename(path)) ? heads.find((h) => h.level === 2) : undefined)
   const t = first?.text.replace(/^[^\p{L}\p{N}]+/u, '').trim()
   if (t && t.length <= 120) return t
-  return prettyName(basename(path))
+  // A folder's README with no title of its own: named by its folder
+  return prettyName(/^(readme|index)\./i.test(basename(path)) && dirOf(path) ? basename(dirOf(path)) : basename(path))
 }
 
 // ---------- Notebooks ----------
@@ -627,10 +628,15 @@ export function moduleProgress(m: CourseModule, p: CourseProgress | undefined): 
   return { done, started, total }
 }
 
-/** Where to carry on: the first lesson begun and not done, else the first not done */
+/** Where to carry on: a lesson begun and not done, else the first not done after the furthest one done, else the first not done */
 export function nextLesson(o: CourseOutline, p: CourseProgress | undefined): { module: CourseModule; lesson: CourseLesson } | null {
   const all = o.modules.flatMap((m) => m.lessons.map((lesson) => ({ module: m, lesson })))
-  return all.find((x) => p?.[x.lesson.id] && !p[x.lesson.id].done) ?? all.find((x) => !p?.[x.lesson.id]?.done) ?? null
+  const begun = all.find((x) => p?.[x.lesson.id] && !p[x.lesson.id].done)
+  if (begun) return begun
+  // After the furthest lesson done, not back at the start because an early one was skipped
+  let last = -1
+  all.forEach((x, i) => p?.[x.lesson.id]?.done && (last = i))
+  return all.slice(last + 1).find((x) => !p?.[x.lesson.id]?.done) ?? all.find((x) => !p?.[x.lesson.id]?.done) ?? null
 }
 
 export const courseDone = (o: CourseOutline, p: CourseProgress | undefined) => o.modules.reduce((n, m) => n + moduleProgress(m, p).done, 0)
@@ -653,7 +659,7 @@ export interface CourseRef {
 export function courseRules(c: CourseRef): string {
   const plan = c.steps.map((s) => `- ${s}`).join('\n')
   const head = `\nThis lesson follows "${c.lessonTitle}" from the course "${c.title}" by ${c.by} (an open course on GitHub, licence: ${c.licence}). The course's own text does the teaching: Tide shows it to the student a section at a time as readings, word for word with its source. Your part is to question, mark and fill gaps, never to re-explain what a reading already says.`
-  const planRule = `\nKeep the probe short (one or two questions). Then write the plan as exactly these steps, in this order, word for word, leaving out only a step the probe showed they already know:\n<plan>\n${plan}\n</plan>`
+  const planRule = `\nKeep the probe short (one or two questions). Then write the plan as exactly these steps, in this order, word for word, leaving out only a step the probe showed they already know:\n<plan>\n${plan}\n</plan>\nWrite the plan once, and never again: after it, Tide moves the lesson on from step to step.`
   if (c.kind === 'homework')
     return `${head}\nThis is the module's HOMEWORK. Its brief is shown as the reading. Be a mentor, not a solver: never give the answers. For each question in it, ask how they would approach it, check their reasoning and their result, and point at the exact part of the course that answers it when they are stuck. Where an answer can be checked by running code (a query, a function, a number), set it as a code ask with hidden tests.${planRule}`
   return `${head}${c.kind === 'notebook' ? '\nThe lesson is a notebook: its code runs here. When a reading has code in it, ask them to run it or to change it and predict what changes (a code ask in its language), rather than asking them to recall it.' : ''}${planRule}`

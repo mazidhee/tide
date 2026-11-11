@@ -316,7 +316,8 @@ export function quoteCheck(grade: string, reading: string, answer = ''): { found
   const own = norm(answer)
   const found: string[] = []
   const missing: string[] = []
-  for (const m of grade.matchAll(/[\u201c"]([^\u201c\u201d"]{12,400})[\u201d"]/g)) {
+  // Tags out first: an attribute's quotes (verdict="correct") would otherwise pair with a quotation's
+  for (const m of grade.replace(/<[^>]*>/g, ' ').matchAll(/[\u201c"]([^\u201c\u201d"]{12,400})[\u201d"]/g)) {
     const parts = m[1]
       .split(/\s*(?:\u2026|\.{3}|\[\u2026\]|\[\.{3}\])\s*/)
       .map((p) => norm(p).replace(/^[\s,;:.]+|[\s,;:.!?]+$/g, ''))
@@ -561,8 +562,14 @@ export const planSteps = (reply: string): string[] => {
  */
 export function ledState(replies: string[]): LedState {
   let planAt = -1
+  let planned = ''
   replies.forEach((r, i) => {
-    if (planSteps(r).length) planAt = i
+    const steps = planSteps(r)
+    // A plan written out again unchanged (a small model repeats it) is the same plan: the lesson goes on where it was
+    if (steps.length && steps.join('\n').toLowerCase() !== planned) {
+      planAt = i
+      planned = steps.join('\n').toLowerCase()
+    }
   })
   const state: LedState = { steps: [], cur: 0, streak: 0, shown: new Map(), fresh: false }
   if (planAt < 0) return state
@@ -671,4 +678,64 @@ export const ledPrefKey = (scope: { kind: string; path?: string }) => {
   const p = scope.path ?? ''
   const notebook = scope.kind === 'folder' ? p : scope.kind === 'note' || scope.kind === 'pages' ? p.split('/').slice(0, -1).join('/') : ''
   return `tide.lesson.sources:${notebook || 'all'}`
+}
+
+// ---------- The tutor copying a reading out ----------
+
+const echoWords = (t: string) =>
+  plain(t.replace(/[*_`>#]/g, ' ').replace(/^\s*[-+]\s+/gm, ' '))
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+/**
+ * A reply with the tutor's own copy of a reading taken out: Tide already shows the reading, and its
+ * rules say never to copy it out, but a small model sometimes does ("Read the following: …"). A
+ * paragraph of the tutor's (outside the reading block, of at least six words, or three when it
+ * ends in a colon) whose words are all in
+ * a reading of the same reply goes, and so does a line that only introduces it.
+ */
+export function withoutEcho(reply: string): string {
+  // The same reading twice in one reply (a reply that was started again): once is enough
+  const seen = new Set<string>()
+  reply = reply.replace(BLOCK, (all, lead: string, _f: string, body: string) => {
+    const key = body.trim()
+    if (seen.has(key)) return lead
+    seen.add(key)
+    return all
+  })
+  const readings = readingsIn(reply).filter((r) => r.sealed)
+  if (!readings.length) return reply
+  const source = readings.map((r) => ` ${echoWords(r.reading.text)} `).join('\n')
+  const out: string[] = []
+  let fence: string | null = null
+  let dropped = false
+  // Paragraphs, keeping fenced blocks (the reading itself among them) whole
+  const parts: string[] = []
+  let cur: string[] = []
+  for (const line of reply.split('\n')) {
+    const f = line.match(/^(`{3,}|~{3,})/)
+    if (f) fence = fence ? (f[1][0] === fence[0] && f[1].length >= fence.length ? null : fence) : f[1]
+    if (!fence && !f && !line.trim()) {
+      parts.push(cur.join('\n'))
+      cur = []
+    } else cur.push(line)
+  }
+  parts.push(cur.join('\n'))
+  for (const p of parts) {
+    const fenced = /^(`{3,}|~{3,})/.test(p.trim())
+    const w = echoWords(p)
+    const isEcho = !fenced && !/<[a-z]+[\s>]/i.test(p) && w.split(' ').length >= (/:\s*$/.test(p.trim()) ? 3 : 6) && source.includes(` ${w} `)
+    // A heading of the reading's, copied, counts with what follows it
+    const isHead = !fenced && /^#{1,6}\s/.test(p.trim()) && source.includes(` ${w} `)
+    if (isEcho || isHead) {
+      dropped = true
+      // The line that only introduced the copy goes with it
+      if (out.length && /^(read (the following|this|it)|here is the reading|the reading)\b[^.\n]{0,40}:?\s*$/i.test(out[out.length - 1].trim())) out.pop()
+      continue
+    }
+    out.push(p)
+  }
+  return dropped ? out.join('\n\n').replace(/\n{3,}/g, '\n\n') : reply
 }

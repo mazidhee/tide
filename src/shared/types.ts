@@ -863,6 +863,8 @@ export interface TideApi {
     search(q: string): Promise<{ course: string; path: string; title: string; heading: string; text: string; score: number }[]>
     /** Copies its lessons into your notes folder, under Courses/ */
     saveToNotes(id: string): Promise<{ folder: string; files: number }>
+    /** The course's README from GitHub, to look at before importing it (not saved) */
+    preview(id: string): Promise<{ markdown: string; url: string } | null>
     onProgress(cb: (e: import('../main/courses').ImportPhase) => void): () => void
   }
   workshop: {

@@ -12,8 +12,6 @@ import { Icon, type IconName } from './Icon'
 import { renderMarkdown, splitFrontmatter } from '../lib/markdown'
 import { codeBlockClick } from '../lib/runBlocks'
 
-const AREA_TONE: Record<CourseArea, number> = { data: 3, mlops: 2, ml: 1, dl: 5, cs: 4, systems: 3, swe: 1, design: 2, algo: 4, maths: 5, physics: 2 }
-const areaStyle = (a: CourseArea) => ({ '--crs-tone': `var(--a${AREA_TONE[a]}, var(--series-${AREA_TONE[a]}))` }) as React.CSSProperties
 
 const KIND_LABEL: Record<CatalogueCourse['kind'], string> = { course: 'Course', book: 'Book', notes: 'Notes', projects: 'Projects', guide: 'Guide' }
 const LESSON_ICON: Record<CourseLesson['kind'], IconName> = { reading: 'article', notebook: 'terminal', homework: 'edit' }
@@ -64,8 +62,7 @@ async function learnLesson(app: ReturnType<typeof useApp>, c: CatalogueCourse, m
 }
 
 export function CoursesView({ id, lesson, area }: { id?: string; lesson?: string; area?: CourseArea }) {
-  if (id && lesson) return <LessonReader id={id} lessonId={lesson} />
-  if (id) return <CoursePage id={id} />
+  if (id) return <CourseReader id={id} lessonId={lesson} />
   return <Catalogue area={area} />
 }
 
@@ -114,9 +111,8 @@ function Catalogue({ area: initialArea }: { area?: CourseArea }) {
               <h2 className="crs-section">Your courses</h2>
               <ul className="crs-mine-rows">
                 {mine.map((c) => (
-                  <li key={c.id} style={areaStyle(c.area)}>
+                  <li key={c.id}>
                     <button className="crs-mine-row" onClick={() => app.setView({ kind: 'courses', id: c.id })}>
-                      <span className="crs-tone-dot" aria-hidden="true" />
                       <span className="crs-mine-name">
                         <span className="crs-mine-title">{c.title}</span>
                         <span className="crs-mine-next">{c.imported!.next ? `Next: ${c.imported!.next.title}` : 'Every lesson done'}</span>
@@ -140,8 +136,7 @@ function Catalogue({ area: initialArea }: { area?: CourseArea }) {
               All <span className="crs-count">{cards?.length ?? ''}</span>
             </button>
             {AREAS.map((a) => (
-              <button key={a.id} className={`crs-area-chip${area === a.id ? ' on' : ''}`} style={areaStyle(a.id)} onClick={() => setArea(a.id)}>
-                <span className="crs-tone-dot" aria-hidden="true" />
+              <button key={a.id} className={`crs-area-chip${area === a.id ? ' on' : ''}`} onClick={() => setArea(a.id)}>
                 {a.label} <span className="crs-count">{counts[a.id] ?? ''}</span>
               </button>
             ))}
@@ -153,10 +148,9 @@ function Catalogue({ area: initialArea }: { area?: CourseArea }) {
             <p className="crs-empty">No course matches “{q}”.</p>
           ) : (
             AREAS.filter((a) => shown.some((c) => c.area === a.id)).map((a) => (
-              <section key={a.id} className="crs-area" style={areaStyle(a.id)}>
+              <section key={a.id} className="crs-area">
                 <div className="crs-area-head">
                   <h2 className="crs-section">
-                    <span className="crs-tone-dot" aria-hidden="true" />
                     {a.label}
                   </h2>
                   <span className="crs-meta">{a.blurb}</span>
@@ -215,39 +209,74 @@ function Catalogue({ area: initialArea }: { area?: CourseArea }) {
   )
 }
 
-// ---------- A course ----------
+// ---------- A course: its outline beside the text you are reading ----------
 
-function CoursePage({ id }: { id: string }) {
+const squash = (t: string) => t.toLowerCase().replace(/<[^>]+>|[^\p{L}\p{N}]+/gu, '')
+const sameTitle = (a: string, b: string) => !!b && squash(a) === squash(b)
+
+/**
+ * A course, read in place: the outline down the side (modules, lessons, where you are) and the
+ * lesson itself in the main column, rendered as the course wrote it, with the tutor one click away.
+ * Before it is imported, the column shows the course's README from GitHub, so you can see what it
+ * is before you bring it onto this Mac.
+ */
+function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
   const app = useApp()
   const [d, setD] = useState<CourseDetail | null | undefined>(undefined)
+  const [content, setContent] = useState<LessonContent | null | undefined>(undefined)
+  const [preview, setPreview] = useState<{ markdown: string; url: string } | null | undefined>(undefined)
   const [open, setOpen] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState<'import' | 'update' | 'save' | 'remove' | null>(null)
-  const [known, setKnown] = useState<Map<string, string>>(new Map())
   const phases = useImports()
   const phase = phases[id]
+  const mainRef = useRef<HTMLDivElement>(null)
   const load = useCallback(() => window.tide.courses.get(id).then(setD).catch(() => setD(null)), [id])
   useEffect(() => void load(), [load])
-
-  // What the knowledge map already says about the course's lessons
   useEffect(() => {
-    if (!d?.imported) return
-    window.tide.knowledge
-      .view()
-      .then((v) => {
-        const m = new Map<string, string>()
-        for (const c of v.concepts) if (c.area === d.course.title && c.status !== 'new') m.set(c.name.toLowerCase(), c.status)
-        setKnown(m)
-      })
-      .catch(() => {})
-  }, [d?.imported, d?.course.title])
+    if (phase?.phase === 'done') void load()
+  }, [phase?.phase, load])
 
   const outline = d?.imported?.outline
   const progress = d?.progress ?? {}
   const next = outline ? nextLesson(outline, progress) : null
-  // The module you're in opens by itself
+  const flat = useMemo(() => outline?.modules.flatMap((m) => m.lessons.map((l) => ({ m, l }))) ?? [], [outline])
+  const currentId = lessonId ?? next?.lesson.id ?? flat[0]?.l.id
+  const at = flat.findIndex((x) => x.l.id === currentId)
+  const here = at >= 0 ? flat[at] : null
+
+  // The lesson's text, or the README before it is imported
   useEffect(() => {
-    if (next) setOpen((o) => (o.size ? o : new Set([next.module.id])))
-  }, [next?.module.id]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!d) return
+    if (!d.imported) {
+      if (preview === undefined) window.tide.courses.preview(id).then(setPreview).catch(() => setPreview(null))
+      return
+    }
+    if (!currentId) return setContent(null)
+    let live = true
+    setContent(undefined)
+    window.tide.courses
+      .lesson(id, currentId)
+      .then((c) => live && setContent(c))
+      .catch(() => live && setContent(null))
+    mainRef.current?.scrollTo({ top: 0 })
+    return () => {
+      live = false
+    }
+  }, [d, id, currentId]) // eslint-disable-line react-hooks/exhaustive-deps
+  // The module you are in stays open
+  useEffect(() => {
+    if (here) setOpen((o) => (o.has(here.m.id) ? o : new Set(o).add(here.m.id)))
+  }, [here?.m.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const env = useMemo(() => ({ notePath: '', filesByName: app.filesByName }), [app.filesByName])
+  const body = content ? content.markdown : !d?.imported && preview ? preview.markdown : ''
+  // The page has the lesson's title over it: the text's own first heading, when it says the same, isn't repeated
+  const title = content?.title ?? (!d?.imported ? d?.course.title : '') ?? ''
+  const html = useMemo(() => {
+    if (!body) return ''
+    const text = splitFrontmatter(body).body.replace(/^\s*#\s+(.+)\n+/, (all, h: string) => (sameTitle(h, title) ? '' : all))
+    return renderMarkdown(text, env)
+  }, [body, env, title])
 
   const act = async (kind: NonNullable<typeof busy>, f: () => Promise<unknown>) => {
     setBusy(kind)
@@ -260,156 +289,162 @@ function CoursePage({ id }: { id: string }) {
       setBusy(null)
     }
   }
+  const goTo = (lesson: string) => app.setView({ kind: 'courses', id, lesson })
 
-  const back = (
-    <button className="crs-back" onClick={() => app.setView({ kind: 'courses' })}>
-      <Icon name="back" size={14} />
-      Courses
-    </button>
-  )
-  if (d === undefined) return <Shell>{back}</Shell>
-  if (!d) return <Shell>{back}<p className="crs-empty">That course isn’t in the catalogue.</p></Shell>
+  if (d === undefined) return <div className="doc-view crs-page crs-immersive" />
+  if (!d) {
+    return (
+      <div className="doc-view crs-page">
+        <div className="crs-scroll">
+          <div className="crs-wrap">
+            <button className="crs-back" onClick={() => app.setView({ kind: 'courses' })}>
+              <Icon name="back" size={14} /> Courses
+            </button>
+            <p className="crs-empty">That course isn’t in the catalogue.</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
   const c = d.course
   const total = outline?.lessons ?? 0
   const done = outline ? outline.modules.reduce((n, m) => n + moduleProgress(m, progress).done, 0) : 0
-  const importing = busy === 'import' || busy === 'update' || (phase && phase.phase !== 'done' && phase.phase !== 'error')
+  const importing = busy === 'import' || (!!phase && phase.phase !== 'done' && phase.phase !== 'error' && !d.imported)
+  const isDone = !!(currentId && progress[currentId]?.done)
 
   return (
-    <Shell>
-      {back}
-      <header className="crs-course-head" style={areaStyle(c.area)}>
-        <p className="crs-kicker">
-          <span className="crs-tone-dot" aria-hidden="true" />
-          {areaLabel(c.area)} · {KIND_LABEL[c.kind]} · {c.level.charAt(0).toUpperCase() + c.level.slice(1)}
-        </p>
-        <h1 className="crs-title">{c.title}</h1>
-        <p className="crs-byline">
-          By {c.by} ·{' '}
-          <a className="external" href={repoUrl(c)} target="_blank" rel="noreferrer">
-            github.com/{c.repo}
-          </a>
-        </p>
-        <p className="crs-lede">{c.covers}.</p>
-        <p className="crs-licence-line">
-          <Licence c={c} long />
-          <span>{c.licenceNote ?? (c.tier === 'open' ? `Openly licensed (${c.licence}): shown with its source and licence.` : c.licence)}</span>
-        </p>
-      </header>
-
-      {!d.imported ? (
-        <section className="crs-import">
-          <div>
-            <h2 className="crs-section">Import this course</h2>
-            <p className="crs-meta">
-              Tide downloads its lessons, notebooks and code (not its images or data) with a shallow git clone into its own app data, reads them as {c.kind === 'course' ? 'modules and lessons' : 'chapters'}, and indexes them for search and for your lessons. Nothing goes into your notes unless you ask.
-            </p>
-          </div>
-          <button className="btn primary" disabled={!!importing} onClick={() => act('import', () => window.tide.courses.import(id))}>
-            {importing ? (
-              <>
-                <span className="spinner" /> {phase ? PHASE_LABEL[phase.phase] : 'Starting'}…
-              </>
-            ) : (
-              'Import course'
-            )}
+    <div className="doc-view crs-page crs-immersive">
+      <main className="crs-main" ref={mainRef}>
+        <div className="crs-article">
+          <button className="crs-back" onClick={() => app.setView({ kind: 'courses' })}>
+            <Icon name="back" size={14} /> Courses
           </button>
-          {phase?.phase === 'error' && <p className="crs-error">{phase.detail}</p>}
-        </section>
-      ) : (
-        <div className="crs-layout">
-          <div className="crs-modules">
-            {outline!.modules.map((m, mi) => {
-              const p = moduleProgress(m, progress)
-              const isOpen = open.has(m.id)
-              const single = m.lessons.length === 1 && m.lessons[0].title === m.title
-              return (
-                <section key={m.id} className={`crs-module${isOpen ? ' open' : ''}${p.done === p.total ? ' complete' : ''}`}>
-                  <button className="crs-module-head" aria-expanded={isOpen} onClick={() => setOpen((o) => (o.has(m.id) ? new Set([...o].filter((x) => x !== m.id)) : new Set(o).add(m.id)))}>
-                    <span className="crs-module-n">{p.done === p.total ? <Icon name="check" size={12} /> : mi + 1}</span>
-                    <span className="crs-module-title">{m.title}</span>
-                    <span className="crs-module-progress">
-                      <Bar done={p.done} started={p.started} total={p.total} />
-                      <span className="crs-meta">
-                        {p.done}/{p.total}
-                      </span>
+          {d.imported ? (
+            content === undefined ? (
+              <div className="crs-skeleton" aria-busy="true">
+                <span />
+                <span />
+                <span />
+              </div>
+            ) : !content || !here ? (
+              <p className="crs-empty">That lesson isn’t in the course any more. Update the course, or pick another lesson.</p>
+            ) : (
+              <>
+                <header className="crs-article-head">
+                  <p className="crs-kicker">
+                    {here.m.title}
+                    <span aria-hidden="true">·</span>
+                    {LESSON_LABEL[here.l.kind]}
+                    <span aria-hidden="true">·</span>
+                    {minutes(here.l.words)} min
+                  </p>
+                  <h1 className="crs-article-title">{content.title}</h1>
+                  <p className="crs-attrib">
+                    <span>
+                      From <a href={content.url} target="_blank" rel="noreferrer">{c.title}</a> by {c.by}
                     </span>
-                    <Icon name="chevron" size={12} className="crs-chev" />
-                  </button>
-                  {isOpen && (
-                    <ul className="crs-lessons">
-                      {m.lessons.map((l) => {
-                        const lp = progress[l.id]
-                        const k = known.get(lessonTopic(c, m, l).toLowerCase())
-                        return (
-                          <li key={l.id} className={`crs-lesson${lp?.done ? ' done' : lp ? ' begun' : ''}${next?.lesson.id === l.id ? ' next' : ''}`}>
-                            <span className="crs-state" title={lp?.done ? 'Done' : lp ? 'Begun' : 'Not started'} />
-                            <button className="crs-lesson-main" onClick={() => app.setView({ kind: 'courses', id, lesson: l.id })}>
-                              <Icon name={LESSON_ICON[l.kind]} size={14} />
-                              <span className="crs-lesson-title">{single ? LESSON_LABEL[l.kind] : l.title}</span>
-                              <span className="crs-meta">
-                                {l.kind !== 'reading' ? `${LESSON_LABEL[l.kind]} · ` : ''}
-                                {minutes(l.words)} min{lp && (lp.right || lp.partly || lp.wrong) ? ` · ${lp.right} of ${lp.right + lp.partly + lp.wrong} right` : ''}
-                                {k ? ` · ${k}` : ''}
-                              </span>
-                            </button>
-                            <button className="btn small crs-learn" onClick={() => void learnLesson(app, c, m, l)} title="A lesson taught from this text: the tutor questions and marks">
-                              {lp && !lp.done ? 'Carry on' : 'Learn'}
-                            </button>
-                          </li>
-                        )
-                      })}
-                      {m.code.length > 0 && (
-                        <li className="crs-code-row">
-                          <Icon name="terminal" size={13} />
-                          <span className="crs-meta">
-                            Code: {m.code.slice(0, 4).map((p) => p.split('/').pop()).join(', ')}
-                            {m.code.length > 4 ? ` and ${m.code.length - 4} more` : ''}
-                          </span>
-                        </li>
-                      )}
-                    </ul>
+                    <Licence c={c} />
+                  </p>
+                  <div className="crs-article-actions">
+                    <button className="btn primary" onClick={() => void learnLesson(app, c, here.m, here.l)}>
+                      <Icon name="tutor" size={14} /> {progress[here.l.id] && !isDone ? 'Carry on with the tutor' : 'Learn this with the tutor'}
+                    </button>
+                    <button className={`tool-btn${isDone ? ' on' : ''}`} onClick={() => window.tide.courses.mark(id, here.l.id, !isDone).then((p) => setD((x) => (x ? { ...x, progress: p } : x)))}>
+                      <Icon name="check" size={13} /> {isDone ? 'Done' : 'Mark as done'}
+                    </button>
+                    <span className="crs-meta">
+                      {content.sections.length > 1 ? `The tutor takes you through it in ${content.sections.length} parts` : 'The tutor takes you through it'}
+                    </span>
+                  </div>
+                </header>
+                <article className={`prose crs-prose${here.l.kind === 'notebook' ? ' notebook' : ''}`} dangerouslySetInnerHTML={{ __html: html }} onClick={(e) => void codeBlockClick(e.target, { cumulative: here.l.kind === 'notebook' })} />
+                <nav className="crs-pager">
+                  {at > 0 ? (
+                    <button className="crs-pager-btn" onClick={() => goTo(flat[at - 1].l.id)}>
+                      <span className="crs-meta">Previous</span>
+                      <span>{flat[at - 1].l.title}</span>
+                    </button>
+                  ) : (
+                    <span />
                   )}
-                </section>
-              )
-            })}
-          </div>
-
-          <aside className="crs-rail">
-            <div className="crs-rail-block">
-              <p className="crs-rail-label">Progress</p>
-              <p className="crs-rail-big">
-                {done} <span>of {total} lessons</span>
-              </p>
-              <Bar done={done} total={total} />
-              {next ? (
-                <button className="btn primary wide" onClick={() => void learnLesson(app, c, next.module, next.lesson)}>
-                  {progress[next.lesson.id] ? 'Carry on' : done ? 'Next lesson' : 'Start the course'}
-                </button>
-              ) : (
-                <p className="crs-meta">Every lesson is done.</p>
-              )}
-              {next && (
-                <p className="crs-rail-next">
-                  <span className="crs-meta">{next.module.title}</span>
-                  <button className="crs-link" onClick={() => app.setView({ kind: 'courses', id, lesson: next.lesson.id })}>
-                    {next.lesson.title}
-                  </button>
+                  {at < flat.length - 1 && (
+                    <button className="crs-pager-btn next" onClick={() => goTo(flat[at + 1].l.id)}>
+                      <span className="crs-meta">Next</span>
+                      <span>{flat[at + 1].l.title}</span>
+                    </button>
+                  )}
+                </nav>
+              </>
+            )
+          ) : (
+            <>
+              <header className="crs-article-head">
+                <p className="crs-kicker">
+                  {KIND_LABEL[c.kind]} <span aria-hidden="true">·</span> {c.level.charAt(0).toUpperCase() + c.level.slice(1)}
                 </p>
-              )}
+                <h1 className="crs-article-title">{c.title}</h1>
+                <p className="crs-article-lede">{c.covers}.</p>
+                <p className="crs-attrib">
+                  {preview ? (
+                    <span>
+                      Its README, read from <a href={preview.url} target="_blank" rel="noreferrer">GitHub</a>. Import the course to read every lesson here.
+                    </span>
+                  ) : preview === null ? (
+                    'Its README could not be read from GitHub just now.'
+                  ) : (
+                    'Reading its README from GitHub…'
+                  )}
+                </p>
+              </header>
+              {preview ? <article className="prose crs-prose" dangerouslySetInnerHTML={{ __html: html }} /> : preview === undefined && <div className="crs-skeleton" aria-busy="true"><span /><span /><span /></div>}
+            </>
+          )}
+        </div>
+      </main>
+      <aside className="crs-toc" aria-label="Course outline">
+        <div className="crs-toc-head">
+          <p className="crs-kicker">
+            {areaLabel(c.area)} · {KIND_LABEL[c.kind]}
+          </p>
+          <h1 className="crs-toc-title">{c.title}</h1>
+          <p className="crs-toc-by">{c.by}</p>
+          {d.imported ? (
+            <div className="crs-toc-progress">
+              <Bar done={done} total={total} />
+              <span className="crs-meta">
+                {done} of {total} done
+              </span>
             </div>
-            <div className="crs-rail-block">
-              <p className="crs-rail-label">On this Mac</p>
-              <p className="crs-meta">
-                Imported {day(d.imported.importedAt)}
-                {d.imported.updatedAt - d.imported.importedAt > 60_000 ? `, updated ${day(d.imported.updatedAt)}` : ''}
-                {d.imported.commit ? ` at ${d.imported.commit.slice(0, 7)}` : ''}.
-              </p>
-              <div className="crs-rail-actions">
-                <button className="tool-btn" disabled={!!busy} onClick={() => act('update', () => window.tide.courses.update(id))}>
-                  <Icon name="refresh" size={13} /> {busy === 'update' ? `${phase ? PHASE_LABEL[phase.phase] : 'Updating'}…` : 'Update'}
+          ) : (
+            <div className="crs-toc-import">
+              <p className="crs-meta">Import it to read every lesson here, run its code and learn it with the tutor. Its text is fetched from GitHub into Tide’s own data, not your notes.</p>
+              <button className="btn primary wide" disabled={importing} onClick={() => act('import', () => window.tide.courses.import(id))}>
+                {importing ? (
+                  <>
+                    <span className="spinner" /> {phase ? PHASE_LABEL[phase.phase] : 'Starting'}…
+                  </>
+                ) : (
+                  'Import course'
+                )}
+              </button>
+              {phase?.phase === 'error' && <p className="crs-error">{phase.detail}</p>}
+            </div>
+          )}
+          <div className="crs-toc-meta">
+            <span className="crs-toc-licence">
+              <Licence c={c} />
+              <a className="crs-toc-link" href={repoUrl(c)} target="_blank" rel="noreferrer" title={`github.com/${c.repo}`}>
+                <Icon name="external" size={12} /> GitHub
+              </a>
+            </span>
+            {d.imported && (
+              <div className="crs-toc-actions">
+                <button className="icon-btn small" title={busy === 'update' ? 'Updating…' : 'Update from GitHub'} disabled={!!busy} onClick={() => act('update', () => window.tide.courses.update(id))}>
+                  <Icon name="refresh" size={14} />
                 </button>
                 <button
-                  className="tool-btn"
+                  className="icon-btn small"
+                  title="Save its lessons to your notes, each with its source and licence"
                   disabled={!!busy}
                   onClick={() =>
                     act('save', async () => {
@@ -418,147 +453,60 @@ function CoursePage({ id }: { id: string }) {
                       app.toast(`Saved ${r.files} lessons to ${r.folder}`, { action: { label: 'Open', run: () => app.setView({ kind: 'notebook', path: r.folder }) } })
                     })
                   }
-                  title="Copy its lessons into your notes folder, each with its source and licence"
                 >
-                  <Icon name="note" size={13} /> {busy === 'save' ? 'Saving…' : 'Save to my notes'}
+                  <Icon name="note" size={14} />
                 </button>
                 <button
-                  className="tool-btn"
+                  className="icon-btn small"
+                  title="Remove from this Mac (progress is kept)"
                   disabled={!!busy}
                   onClick={() => {
                     if (window.confirm(`Remove ${c.title} from this Mac? Your progress is kept.`)) void act('remove', () => window.tide.courses.remove(id))
                   }}
                 >
-                  <Icon name="trash" size={13} /> Remove
+                  <Icon name="trash" size={14} />
                 </button>
+                <span className="crs-meta">{busy === 'update' ? `${phase ? PHASE_LABEL[phase.phase] : 'Updating'}…` : `Updated ${day(d.imported.updatedAt)}`}</span>
               </div>
-            </div>
-            <div className="crs-rail-block">
-              <p className="crs-rail-label">What you know</p>
-              <p className="crs-meta">Lessons you take here count on your knowledge map, under “{c.title}”.</p>
-              <button className="crs-link" onClick={() => app.setView({ kind: 'graph', tab: 'know' })}>
-                Open the map
-              </button>
-            </div>
-          </aside>
+            )}
+          </div>
         </div>
-      )}
-    </Shell>
-  )
-}
-
-function Shell({ children, wide }: { children: React.ReactNode; wide?: boolean }) {
-  return (
-    <div className="doc-view crs-page">
-      <div className="crs-scroll">
-        <div className={`crs-wrap${wide ? '' : ''}`}>{children}</div>
-      </div>
-    </div>
-  )
-}
-
-// ---------- A lesson, as the course wrote it ----------
-
-function LessonReader({ id, lessonId }: { id: string; lessonId: string }) {
-  const app = useApp()
-  const [d, setD] = useState<CourseDetail | null>(null)
-  const [content, setContent] = useState<LessonContent | null | undefined>(undefined)
-  const [progress, setProgress] = useState<CourseProgress>({})
-  const scrollRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    setContent(undefined)
-    window.tide.courses.get(id).then((x) => {
-      setD(x)
-      setProgress(x?.progress ?? {})
-    })
-    window.tide.courses
-      .lesson(id, lessonId)
-      .then(setContent)
-      .catch(() => setContent(null))
-    scrollRef.current?.scrollTo({ top: 0 })
-  }, [id, lessonId])
-
-  const env = useMemo(() => ({ notePath: '', filesByName: app.filesByName }), [app.filesByName])
-  const html = useMemo(() => (content ? renderMarkdown(splitFrontmatter(content.markdown).body, env) : ''), [content, env])
-  const outline = d?.imported?.outline
-  const flat = outline?.modules.flatMap((m) => m.lessons.map((l) => ({ m, l }))) ?? []
-  const at = flat.findIndex((x) => x.l.id === lessonId)
-  const here = flat[at]
-  const prev = at > 0 ? flat[at - 1] : null
-  const next = at >= 0 && at < flat.length - 1 ? flat[at + 1] : null
-  const c = d?.course
-  const done = !!progress[lessonId]?.done
-
-  return (
-    <div className="doc-view crs-page">
-      <div className="crs-scroll" ref={scrollRef}>
-        <div className="crs-wrap crs-reader">
-          <button className="crs-back" onClick={() => app.setView({ kind: 'courses', id })}>
-            <Icon name="back" size={14} />
-            {c?.title ?? 'Course'}
-          </button>
-          {content === undefined || !c ? (
-            <p className="crs-meta">Loading…</p>
-          ) : !content || !here ? (
-            <p className="crs-empty">That lesson isn’t in the course any more. Update the course, or pick another lesson.</p>
-          ) : (
-            <>
-              <header className="crs-reader-head" style={areaStyle(c.area)}>
-                <p className="crs-kicker">
-                  <span className="crs-tone-dot" aria-hidden="true" />
-                  {here.m.title} · {LESSON_LABEL[here.l.kind]} · {minutes(here.l.words)} min
-                </p>
-                <h1 className="crs-title">{content.title}</h1>
-                <div className="crs-reader-actions">
-                  <button className="btn primary" onClick={() => void learnLesson(app, c, here.m, here.l)}>
-                    <Icon name="tutor" size={14} /> {progress[lessonId] && !done ? 'Carry on with the tutor' : 'Learn this with the tutor'}
+        {outline && (
+          <nav className="crs-toc-modules">
+            {outline.modules.map((m, mi) => {
+              const p = moduleProgress(m, progress)
+              const isOpen = open.has(m.id)
+              return (
+                <section key={m.id} className={`crs-toc-module${isOpen ? ' open' : ''}`}>
+                  <button className="crs-toc-module-head" aria-expanded={isOpen} onClick={() => setOpen((o) => (o.has(m.id) ? new Set([...o].filter((x) => x !== m.id)) : new Set(o).add(m.id)))}>
+                    <span className={`crs-module-n${p.done === p.total ? ' complete' : ''}`}>{p.done === p.total ? <Icon name="check" size={11} /> : mi + 1}</span>
+                    <span className="crs-toc-module-title">{m.title}</span>
+                    <span className="crs-meta">
+                      {p.done}/{p.total}
+                    </span>
                   </button>
-                  <button className={`tool-btn${done ? ' on' : ''}`} onClick={() => window.tide.courses.mark(id, lessonId, !done).then(setProgress)}>
-                    <Icon name="check" size={13} /> {done ? 'Done' : 'Mark as done'}
-                  </button>
-                  <span className="crs-meta">
-                    {content.sections.length} part{content.sections.length === 1 ? '' : 's'} for the tutor to take you through
-                  </span>
-                </div>
-              </header>
-              <figure className="crs-source">
-                <figcaption>
-                  <span className="crs-source-label">From the course</span>
-                  <span>
-                    {c.title}, by {c.by}
-                  </span>
-                  <Licence c={c} />
-                  <a className="external" href={content.url} target="_blank" rel="noreferrer">
-                    View on GitHub
-                  </a>
-                </figcaption>
-                <article
-                  className={`prose crs-prose${here.l.kind === 'notebook' ? ' notebook' : ''}`}
-                  dangerouslySetInnerHTML={{ __html: html }}
-                  onClick={(e) => void codeBlockClick(e.target, { cumulative: here.l.kind === 'notebook' })}
-                />
-              </figure>
-              <nav className="crs-pager">
-                {prev ? (
-                  <button className="crs-pager-btn" onClick={() => app.setView({ kind: 'courses', id, lesson: prev.l.id })}>
-                    <span className="crs-meta">Previous</span>
-                    <span>{prev.l.title}</span>
-                  </button>
-                ) : (
-                  <span />
-                )}
-                {next && (
-                  <button className="crs-pager-btn next" onClick={() => app.setView({ kind: 'courses', id, lesson: next.l.id })}>
-                    <span className="crs-meta">Next</span>
-                    <span>{next.l.title}</span>
-                  </button>
-                )}
-              </nav>
-            </>
-          )}
-        </div>
-      </div>
+                  {isOpen && (
+                    <ul className="crs-toc-lessons">
+                      {m.lessons.map((l) => {
+                        const lp = progress[l.id]
+                        return (
+                          <li key={l.id}>
+                            <button className={`crs-toc-lesson${l.id === currentId ? ' current' : ''}${lp?.done ? ' done' : lp ? ' begun' : ''}`} onClick={() => goTo(l.id)} aria-current={l.id === currentId ? 'page' : undefined}>
+                              <span className="crs-state" aria-hidden="true" />
+                              <span className="crs-toc-lesson-title">{l.title}</span>
+                              {l.kind !== 'reading' && <Icon name={LESSON_ICON[l.kind]} size={12} />}
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </section>
+              )
+            })}
+          </nav>
+        )}
+      </aside>
     </div>
   )
 }
@@ -598,9 +546,8 @@ export function CourseSuggestions({ topic, title = 'Open courses that teach this
       </div>
       <ul className="crs-suggest-rows">
         {cards.map((c) => (
-          <li key={c.id} style={areaStyle(c.area)}>
+          <li key={c.id}>
             <button className="crs-suggest-row" onClick={() => app.setView({ kind: 'courses', id: c.id })}>
-              <span className="crs-tone-dot" aria-hidden="true" />
               <span className="crs-suggest-name">
                 <span className="crs-card-title">{c.title}</span>
                 <span className="crs-meta">

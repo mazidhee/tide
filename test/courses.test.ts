@@ -217,6 +217,7 @@ describe('suggesting and progress', () => {
     expect(moduleProgress(o.modules[0], p)).toEqual({ done: 1, started: 1, total: 3 })
     expect(nextLesson(o, p)?.lesson.path).toBe('c.md')
     expect(nextLesson(o, {})?.lesson.path).toBe('a.md')
+    expect(nextLesson(o, { 'b.md': { started: 1, updated: 2, done: true, right: 1, partly: 0, wrong: 0 } })?.lesson.path).toBe('c.md')
   })
 })
 
@@ -249,5 +250,47 @@ describe('teaching from a course', () => {
     expect(faithful(long.text, md)).toBe(true)
     expect(authorityOf({ kind: 'course' })).toBeGreaterThan(0.8)
     expect(licenceScore({ kind: 'course' })).toBe(1)
+  })
+})
+
+describe('the tutor copying a reading out', () => {
+  it('leaves out the copy and the line that introduced it, and nothing else', async () => {
+    const { withoutEcho, readingBlock } = await import('@shared/sourceLed')
+    const text = '## Why Docker?\n\nDocker provides the following advantages:\n\n* Reproducibility: Same environment everywhere\n* Isolation: Applications run independently'
+    const block = readingBlock({ step: 1, title: 'Introduction to Docker', fetched: '2026-11-11', format: 'md', kind: 'course', text })
+    const reply = `<grade verdict="correct">Right.</grade>\n\n${block}\n\nSince you have isolation, look at the wider benefits.\n\nRead the following:\n\n## Why Docker?\n\nDocker provides the following advantages:\n\n* Reproducibility: Same environment everywhere\n* Isolation: Applications run independently\n\n<ask type="short">How does reproducibility help?</ask>`
+    const out = withoutEcho(reply)
+    expect(out).toContain(block)
+    expect(out).toContain('Since you have isolation, look at the wider benefits.')
+    expect(out).toContain('<ask type="short">')
+    expect(out).not.toContain('Read the following')
+    expect(out.split('Reproducibility: Same environment everywhere').length).toBe(2)
+    expect(withoutEcho('No reading here.\n\nJust text.')).toBe('No reading here.\n\nJust text.')
+  })
+})
+
+describe('a plan written out again', () => {
+  it('keeps the lesson where it was when the plan is the same, and starts again when it changes', async () => {
+    const { ledState, readingBlock } = await import('@shared/sourceLed')
+    const plan = '<plan>\n- A\n- B\n- C\n</plan>'
+    const r0 = { step: 0, title: 'T', fetched: '2026-11-11', format: 'md' as const, kind: 'course' as const, text: 'Words of step A for the reading here.' }
+    const r1 = { ...r0, step: 1, text: 'Words of step B for the reading here.' }
+    const replies = [`${plan}\n\n<continue/>`, `${readingBlock(r0)}\n\n<ask type="short">Q</ask>`, `<grade verdict="correct">ok</grade>\n\n${readingBlock(r1)}\n\n<ask type="short">Q2</ask>`, `<grade verdict="correct">ok</grade>\n\n${plan}\n\n<continue/>`]
+    expect(ledState(replies).cur).toBe(2)
+    expect(ledState([...replies.slice(0, 3), `${'<plan>\n- X\n- Y\n</plan>'}`]).cur).toBe(0)
+  })
+  it('shows a reading put in twice only once', async () => {
+    const { withoutEcho, readingBlock, readingsIn } = await import('@shared/sourceLed')
+    const b = readingBlock({ step: 0, title: 'T', fetched: '2026-11-11', format: 'md', kind: 'course', text: 'The words of the course, as they are.' })
+    expect(readingsIn(withoutEcho(`${b}\n\n${b}\n\nA question?`)).length).toBe(1)
+  })
+})
+
+describe('quotations in a mark', () => {
+  it('pairs quotation marks inside the text, never with a tag’s attribute', async () => {
+    const { quoteCheck } = await import('@shared/sourceLed')
+    const reading = 'An experiment is the larger modeling activity, such as trying several algorithms. Each trial is a run.'
+    const grade = '<grade verdict="correct" score="1.0">You got it. The reading confirms this: “An experiment is the larger modeling activity… Each trial is a run.”</grade>'
+    expect(quoteCheck(grade, reading)).toEqual({ found: ['An experiment is the larger modeling activity… Each trial is a run.'], missing: [] })
   })
 })

@@ -399,7 +399,7 @@ const day = (at: number) => new Date(at).toISOString().slice(0, 10)
 
 /** A course lesson as a source a reading is taken from */
 function candidateOf(c: CatalogueCourse, l: LessonContent, fetchedAt: number): Candidate {
-  return { kind: 'course', title: l.title, by: `${c.title} · ${c.by}`, url: l.url, licence: c.licence, fetchedAt, text: l.markdown, format: 'md' }
+  return { kind: 'course', title: l.title, by: `${c.title} · ${c.by}`, url: l.url, licence: c.tier === 'open' ? c.licence : 'No open licence: for your own study', fetchedAt, text: l.markdown, format: 'md' }
 }
 
 /** The lesson a course lesson is taught from: its text as a source, and its sections (the plan's steps) */
@@ -453,4 +453,34 @@ export async function saveToNotes(id: string): Promise<{ folder: string; files: 
     }
   }
   return { folder, files }
+}
+
+// ---------- A look before importing ----------
+
+const previews = new Map<string, { at: number; markdown: string | null }>()
+
+/**
+ * The course's README (or the file it is read from), fetched from GitHub to show what the course is
+ * before you import it: read like a web page, kept in memory for an hour, never saved.
+ */
+export async function coursePreview(id: string): Promise<{ markdown: string; url: string } | null> {
+  const c = catalogueCourse(id)
+  if (!c) return null
+  const path = c.split ?? (c.root ? `${c.root}/README.md` : 'README.md')
+  const url = `https://github.com/${c.repo}/blob/${c.branch}/${path}`
+  const had = previews.get(id)
+  if (had && Date.now() - had.at < 3_600_000) return had.markdown ? { markdown: had.markdown, url } : null
+  let markdown: string | null = null
+  for (const p of [...new Set([path, 'README.md'])]) {
+    const res = await fetch(`https://raw.githubusercontent.com/${c.repo}/${c.branch}/${p}`).catch(() => null)
+    if (!res?.ok) continue
+    const raw = await res.text()
+    const md = /\.ipynb$/i.test(p) ? notebookMarkdown(raw) : raw
+    if (md?.trim()) {
+      markdown = absolutise(md.length > 60_000 ? md.slice(0, 60_000) : md, c, p)
+      break
+    }
+  }
+  previews.set(id, { at: Date.now(), markdown })
+  return markdown ? { markdown, url } : null
 }

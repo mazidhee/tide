@@ -16,7 +16,7 @@ import { AppraiseCard } from './AppraiseCard'
 import { useDifficulty } from '../lib/difficulty'
 import { nothingToMark, unmarked } from '@shared/lessonRepair'
 import { withSources, type SourcePack } from '@shared/sources'
-import { ledPrefKey } from '@shared/sourceLed'
+import { ledPrefKey, withoutEcho } from '@shared/sourceLed'
 import { openReading } from '../lib/reading'
 import { codeBlockClick } from '../lib/runBlocks'
 import { parsePlacement, placementNote } from '@shared/placement'
@@ -368,7 +368,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         if (t.role !== 'assistant') return null
         // Nor has a question of yours, Go on or "I don't know": a mark on one is shown as the plain
         // feedback it is, while it streams as well as after main has put the reply right (lessonRepair)
-        const blocks = parseBlocks(i > 1 && nothingToMark(turns[i - 1]?.content ?? '') ? unmarked(t.content) : t.content)
+        // [source-led] the tutor's own copy of a reading Tide already shows is left out (shared/sourceLed)
+        const content = withoutEcho(t.content)
+        const blocks = parseBlocks(i > 1 && nothingToMark(turns[i - 1]?.content ?? '') ? unmarked(content) : content)
         return i <= 1 ? blocks.filter((b) => b.kind !== 'grade' && b.kind !== 'card') : blocks
       }),
     [turns]

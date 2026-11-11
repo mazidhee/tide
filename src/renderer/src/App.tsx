@@ -399,7 +399,7 @@ export default function App() {
   else if (view.kind === 'learn') main = <LearnView />
   else if (view.kind === 'practice') main = <PracticeView />
   // Guided projects: a small hook (components/WorkshopView.tsx)
-  else if (view.kind === 'courses') main = <CoursesView key={`${view.id ?? ''}:${view.lesson ?? ''}`} id={view.id} lesson={view.lesson} area={view.area} />
+  else if (view.kind === 'courses') main = <CoursesView key={view.id ?? ''} id={view.id} lesson={view.lesson} area={view.area} />
   else if (view.kind === 'workshop') main = <WorkshopView key={`${view.id ?? ''}:${view.from?.topic ?? ''}:${view.nonce ?? ''}`} id={view.id} from={view.from} />
   else if (view.kind === 'new-topic') main = <NewTopicView key={view.nonce ?? 'new'} initial={view.topic} initialGoal={view.goal} auto={view.auto} />
   else if (view.kind === 'chat') main = <ChatPage id={view.id} />
