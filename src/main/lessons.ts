@@ -5,7 +5,7 @@
  */
 import { promises as fs } from 'fs'
 import { lessonMarkdown, lessonPage, summarise, type LessonRecord, type LessonSummary } from '@shared/lessonLog'
-import { digestLesson, priorLessonsNote, type LessonDigest } from '@shared/lessonMemory'
+import { digestLesson, openingNotes, priorLessonsNote, type LessonDigest } from '@shared/lessonMemory'
 import { knowledgeNoteFor, noteLessonKnowledge } from './knowledge'
 import { privatePath } from './projects'
 import { noteLesson, recallNote } from './recall'
@@ -71,5 +71,5 @@ export async function earlierLessons(topic: string, privateTurn: boolean, notId?
   // Questions due for recall come first: the lesson opens with one of them. Then what those lessons
   // show, and last the wider picture: what around this topic is solid, shaky, or not yet in place
   const known = await knowledgeNoteFor(topic, privateTurn).catch(() => '')
-  return [recallNote(topic), priorLessonsNote(topic, digests), known].filter(Boolean).join('\n\n')
+  return [openingNotes(recallNote(topic), priorLessonsNote(topic, digests)), known].filter(Boolean).join('\n\n')
 }
