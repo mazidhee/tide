@@ -591,9 +591,10 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
       if (led) req = led.request
       // A SQL lesson's question is held back while it's written, and shown only once its reference
       // query has given a real answer on the lesson's lab (main/sqlCheck)
-      const sqlMod = req.session && !led ? await import('./sqlCheck') : null
-      const gate = sqlMod?.sqlLesson(req) ? sqlMod.holdAsks(led ? led.tap(emit) : emit) : null
-      const out = gate ? gate.tap : led ? led.tap(emit) : emit
+      const sqlMod = req.session ? await import('./sqlCheck') : null
+      const downstream = led ? led.tap(emit) : emit
+      const gate = sqlMod?.sqlLesson(req) ? sqlMod.holdAsks(downstream) : null
+      const out = gate ? gate.tap : downstream
       const upTo = led ? AbortSignal.any([controller.signal, led.signal]) : controller.signal
       const lesson = req.session && !led?.teaching ? await lessonTurn(req) : null
       let reply = ''
@@ -635,7 +636,7 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
           const r = await sqlMod.settleSqlProblem(reply, held, { lab: sqlMod.labOf(req), signal: controller.signal, ask: (prompt, system) => complete(prompt, system, controller.signal, 'interactive', 'other'), rewrite, banked, step })
           settled = r.text
         }
-        if (settled) emit({ id: req.id, type: 'delta', text: settled })
+        if (settled) downstream({ id: req.id, type: 'delta', text: settled })
         reply = sent + settled
       }
       // [source-led] What the checks read is the tutor's own words, without the source's
