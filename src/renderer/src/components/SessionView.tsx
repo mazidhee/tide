@@ -1,3 +1,4 @@
+import { testNames } from '@shared/codeTests'
 import { TimeThis } from './TimeThis'
 import { drawSteps, stepsReached } from '@shared/project'
 import { parseCanvas, serializeCanvas } from '@shared/canvas'
@@ -1241,6 +1242,11 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     )}
                     <span className="muted small">{currentAsk.tests ? 'Run checks it against hidden tests.' : 'Try your solution here.'}</span>
                   </div>
+                  {currentAsk.tests && testNames(currentAsk.tests).length > 0 && (
+                    <p className="muted small s-test-names" aria-label="Hidden tests">
+                      Hidden tests: {testNames(currentAsk.tests).join(' · ')}
+                    </p>
+                  )}
                   {runOut && (
                     <pre className={`run-output s-run-output${runOut.exitCode !== 0 || runOut.timedOut ? ' failed' : ''}`} data-meta={runOut.timedOut ? 'timed out' : `exit ${runOut.exitCode}, ${runOut.durationMs} ms`}>
                       {(runOut.stdout + (runOut.stderr ? (runOut.stdout ? '\n' : '') + runOut.stderr : '')) || 'Ran with no output.'}

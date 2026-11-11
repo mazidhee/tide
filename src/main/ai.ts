@@ -707,6 +707,22 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
             }
           }
         }
+        // A code question set without hidden tests gets them, from its reference solution (main/codeTests)
+        const { untestedCodeAsk, testNames } = await import('@shared/codeTests')
+        if (!controller.signal.aborted && untestedCodeAsk(shown)) {
+          const { deriveTests } = await import('./codeTests')
+          const { runCode } = await import('./runner')
+          const step = (label: string, status: 'running' | 'done') => emit({ id: req.id, type: 'step', step: { id: 'code-tests', kind: 'run_code', label, status, depth: 0 } })
+          step('Writing hidden tests from the reference solution', 'running')
+          const tests = await deriveTests(shown, { ask: (prompt, system) => complete(prompt, system, controller.signal, 'interactive', 'other'), run: (lang, code, stdin, o) => runCode(lang, code, stdin, 20_000, o) }).catch(() => null)
+          if (tests && !controller.signal.aborted) {
+            const add = `\n\n<tests>\n${tests}\n</tests>`
+            emit({ id: req.id, type: 'delta', text: add })
+            reply += add
+          }
+          const n = tests ? testNames(tests).length : 0
+          step(n ? `Wrote ${n} hidden test${n === 1 ? '' : 's'} the reference solution passes` : 'No hidden tests: the reference solution gave none to keep', 'done')
+        }
         lesson?.prepare(reply)
       }
       emit({ id: req.id, type: 'done' })
