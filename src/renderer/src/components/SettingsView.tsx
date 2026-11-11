@@ -971,14 +971,22 @@ function ToolsSection() {
               { value: 'wikipedia', label: 'Wikipedia only' },
               { value: 'brave', label: 'Brave Search' },
               { value: 'tavily', label: 'Tavily' },
+              { value: 'you', label: 'You.com' },
               { value: 'searxng', label: 'SearXNG elsewhere' },
               { value: 'off', label: 'Off' }
             ]}
           />
         </Row>
-        {(ai.webSearch?.provider === 'brave' || ai.webSearch?.provider === 'tavily') && (
-          <Row label={`${ai.webSearch.provider === 'brave' ? 'Brave Search' : 'Tavily'} key`}>
-            <input className="set-input" type="password" value={ai.webSearch.apiKey ?? ''} onChange={(e) => setAi({ ...ai, webSearch: { ...ai.webSearch!, apiKey: e.target.value } })} onBlur={() => saveAi({})} aria-label="Search API key" />
+        {(ai.webSearch?.provider === 'brave' || ai.webSearch?.provider === 'tavily' || ai.webSearch?.provider === 'you') && (
+          <Row label="Key" hint="Kept in your Keychain">
+            <button className="btn small" onClick={() => app.setView({ kind: 'settings', section: 'connections' as never })}>
+              Add or change it in Connections
+            </button>
+          </Row>
+        )}
+        {(ai.webSearch?.provider === 'brave' || ai.webSearch?.provider === 'tavily') && ai.webSearch.apiKey && (
+          <Row label="Older key" hint="Typed in before keys moved to the Keychain; one in the Keychain is used first">
+            <input className="set-input" type="password" value={ai.webSearch.apiKey ?? ''} onChange={(e) => setAi({ ...ai, webSearch: { ...ai.webSearch!, apiKey: e.target.value } })} onBlur={() => saveAi({})} aria-label="Older search API key" />
           </Row>
         )}
         {ai.webSearch?.provider === 'searxng' && ai.webSearch.url !== LOCAL_SEARCH && (

@@ -323,17 +323,19 @@ async function webSearchNow(query: string, opts: SearchOptions = {}): Promise<We
   const provider = cfg?.provider ?? 'wikipedia'
   if (provider === 'off') throw new Error('Web search is turned off in Settings.')
   // Keys live in the Keychain now; one typed into an older version is still read from settings
-  const key = provider === 'brave' || provider === 'tavily' || provider === 'you' ? getKey(provider) || cfg?.apiKey || '' : ''
+  const key = provider === 'you' ? getKey('you') || '' : provider === 'brave' || provider === 'tavily' ? getKey(provider) || cfg?.apiKey || '' : ''
 
   if (provider === 'you') {
     // A one-time credit, not a monthly one: stop well before it's gone (about $5 per 1,000 searches)
     if (!key) throw new Error('Add a You.com key in Settings › Connections to search the web.')
-    if (useOf('you').thisMonth >= YOU_MONTHLY) return wikipediaSearch(query)
+    const used = useOf('you')
+    if (used.thisMonth >= YOU_MONTHLY || used.total >= YOU_TOTAL) return wikipediaSearch(query)
     noteUse('you')
     const params = new URLSearchParams({ query, count: '8' })
     if (opts.when && opts.when !== 'any') params.set('freshness', opts.when)
     const res = await fetch(`https://ydc-index.io/v1/search?${params}`, { headers: { 'X-API-Key': key, Accept: 'application/json' }, signal: AbortSignal.timeout(15_000) })
-    if (!res.ok) throw new Error(`You.com answered ${res.status}`)
+    // Out of credit, a bad key or too many at once: Wikipedia answers instead
+    if (!res.ok) return wikipediaSearch(query)
     type YouHit = { title?: string; url?: string; description?: string; snippets?: string[]; page_age?: string }
     const json = (await res.json()) as { results?: { web?: YouHit[]; news?: YouHit[] } | YouHit[]; hits?: YouHit[] }
     const hits = Array.isArray(json.results) ? json.results : [...((opts.news ? json.results?.news : json.results?.web) ?? []), ...(json.hits ?? [])]
@@ -419,7 +421,7 @@ async function pdfFromResponse(res: Response, url: string): Promise<{ title: str
   }
 }
 
-async function readWebpageNow(url: string): Promise<{ title: string; text: string }> {
+async function readWebpageNow(url: string, cloudOk = true): Promise<{ title: string; text: string }> {
   if (!/^https?:\/\//i.test(url)) throw new Error('Only http(s) links can be read.')
   // arXiv abstract pages are thin; the PDF has the content
   const arxiv = url.match(/^https?:\/\/(?:www\.)?arxiv\.org\/abs\/([\w.\/-]+?)(?:v\d+)?$/)
@@ -427,7 +429,7 @@ async function readWebpageNow(url: string): Promise<{ title: string; text: strin
   const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'text/html,application/pdf;q=0.9,*/*;q=0.5' }, redirect: 'follow', signal: AbortSignal.timeout(30_000) }).catch((e: Error) => e)
   // Blocked, or built by JavaScript: Firecrawl reads it, when it's set up
   if (res instanceof Error || !res.ok) {
-    const viaFirecrawl = await firecrawl(url).catch(() => null)
+    const viaFirecrawl = cloudOk ? await firecrawl(url).catch(() => null) : null
     if (viaFirecrawl) return viaFirecrawl
     throw res instanceof Error ? res : new Error(`The page answered ${res.status}`)
   }
@@ -438,22 +440,42 @@ async function readWebpageNow(url: string): Promise<{ title: string; text: strin
   const article = new Readability(dom.window.document).parse()
   const text = (article?.textContent ?? dom.window.document.body?.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim()
   const title = article?.title || dom.window.document.title || url
-  if (text.length < 600) {
+  if (text.length < 600 && cloudOk) {
     const viaFirecrawl = await firecrawl(url).catch(() => null)
     if (viaFirecrawl && viaFirecrawl.text.length > text.length) return viaFirecrawl
   }
   return { title, text }
 }
 
-/** You.com's credit is one-time: searches a month before Tide falls back to Wikipedia (about $5 per 1,000) */
+/** You.com's credit is one-time (about $5 per 1,000 searches): Tide stops at $90 of it, and paces it at 1,500 a month */
+const YOU_TOTAL = 18_000
 const YOU_MONTHLY = 1500
 /** Firecrawl's free pages a month, kept a little short of the 1,000 */
 const FIRECRAWL_MONTHLY = 950
 
+/** Only an ordinary public address goes to Firecrawl: never your Metabase, this Mac or your network,
+ *  a link with a login in it, or a signed link whose query is a key */
+export function publicUrl(raw: string): boolean {
+  let u: URL
+  try {
+    u = new URL(raw)
+  } catch {
+    return false
+  }
+  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  const mb = metabaseHost()
+  if (mb && (host === mb || host.endsWith(`.${mb}`))) return false
+  if (u.username || u.password) return false
+  if (!host.includes('.') || /\.(local|internal|lan|home|corp|localhost)$/.test(host)) return false
+  if (/^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|0\.)/.test(host) || host === '::1' || /^f[cd]|^fe80/.test(host)) return false
+  if (/(^|[?&])(token|key|sig|signature|auth|access_token|api_key|x-amz-[a-z-]+|jwt|secret)=/i.test(u.search)) return false
+  return true
+}
+
 /** A public page read by Firecrawl as clean Markdown: only when the plain reader got little or nothing */
 async function firecrawl(url: string): Promise<{ title: string; text: string } | null> {
   const key = getKey('firecrawl')
-  if (!key || useOf('firecrawl').thisMonth >= FIRECRAWL_MONTHLY) return null
+  if (!key || !publicUrl(url) || useOf('firecrawl').thisMonth >= FIRECRAWL_MONTHLY) return null
   noteUse('firecrawl')
   const res = await fetch('https://api.firecrawl.dev/v2/scrape', {
     method: 'POST',
@@ -741,6 +763,8 @@ interface LoopContext {
   canvasPath?: string
   /** A lesson, quiz or interview: only the tools teaching needs, so the prompt stays short */
   focused?: boolean
+  /** About a private project or your Metabase: nothing from it may go to a cloud service */
+  private?: boolean
   /** This turn goes to the cloud model (Gemma takes over if it can't) */
   cloud?: { target: CloudTarget; task: RequestKind; stepId: string; fellBack?: boolean }
 }
@@ -753,7 +777,7 @@ export const webSearch = memoize<[query: string, opts?: SearchOptions], WebResul
   key: (q, opts) => JSON.stringify([getSettings().ai.webSearch?.provider ?? 'wikipedia', normalQuery(q), opts?.when ?? 'any', !!opts?.news])
 })
 export const searchPapers = memoize(searchPapersNow, { ttlMs: 60 * 60_000, key: (q) => normalQuery(q) })
-export const readWebpage = memoize(readWebpageNow, { ttlMs: 60 * 60_000, max: 40, key: (url) => url.trim() })
+export const readWebpage = memoize(readWebpageNow, { ttlMs: 60 * 60_000, max: 40, key: (url, cloudOk = true) => `${cloudOk ? 'c' : 'l'}${url.trim()}` })
 
 /** A chat request as main builds it: a stored conversation adds its running summary */
 export type TurnRequest = ChatRequest & { summary?: string; /** Only read the opening into the server's cache */ warmOnly?: boolean }
@@ -963,7 +987,7 @@ async function runTool(call: ToolCall, ctx: LoopContext, depth: number): Promise
     }
     const id = ctx.step({ kind: 'read_webpage', label: `Reading ${host}`, status: 'running', depth })
     try {
-      const page = await readWebpage(url)
+      const page = await readWebpage(url, !ctx.private)
       const n = addSource(ctx, { path: url, url, title: page.title, text: clip(page.text, 1500) })
       ctx.updateStep(id, { status: 'done', detail: page.title })
       return `[${n}] ${page.title}\n${url}\n${clip(page.text)}`
@@ -1498,6 +1522,7 @@ export async function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, 
   // Pictures need a model that can see them: Gemma
   // A private project's documents never leave this Mac
   const secret = req.scope.kind !== 'none' && req.scope.kind !== 'vault' && (await privatePath(req.scope.path).catch(() => false))
+  ctx.private = mine || secret
   const target = req.warmOnly || mine || secret || images.length ? null : routeFor(req.engine === 'cloud' ? null : job, req.engine ?? 'auto', false)
   if (target) {
     const name = providerInfo(target.provider).models.find((m) => m.id === target.model)?.label ?? target.model

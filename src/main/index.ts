@@ -288,9 +288,13 @@ function registerIpc() {
   handle('connections:setKey', (id: string, key: string | null) => {
     if (!['you', 'firecrawl', 'brave', 'tavily'].includes(id)) throw new Error('That connection’s key is set in its own section.')
     setKey(id, key)
+    // Removing a Brave or Tavily key also clears one typed into Settings by an older version
+    const ws = getSettings().ai.webSearch
+    if (!key && (id === 'brave' || id === 'tavily') && ws?.provider === id && ws.apiKey) updateSettings({ ai: { ...getSettings().ai, webSearch: { ...ws, apiKey: undefined } } })
     return listConnections(true)
   })
-  handle('connections:used', (id: string) => noteUse(id))
+  // Only Flow is noted from the window: the rest are counted where Tide calls them
+  handle('connections:used', (id: string) => id === 'flow' && noteUse(id))
   handle('sources:lesson', (topic: string, where?: string) => lessonPack(topic, where))
   handle('lessons:save', (r: Parameters<typeof saveLesson>[0]) => saveLesson(r))
   handle('lessons:list', () => listLessons())

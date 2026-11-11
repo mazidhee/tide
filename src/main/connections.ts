@@ -24,8 +24,8 @@ const startOfDay = () => {
 }
 
 /** Services with a credit or monthly allowance rather than a daily one: what Tide counts against it */
-const CREDITS: Record<string, { limit: number; label: (used: number) => string }> = {
-  you: { limit: 1500, label: (n) => `${n.toLocaleString('en-GB')} of 1,500 searches this month` },
+const CREDITS: Record<string, { limit: number; lifetime?: boolean; label: (used: number) => string }> = {
+  you: { limit: 18_000, lifetime: true, label: (n) => `${n.toLocaleString('en-GB')} of about 18,000 searches the credit allows` },
   firecrawl: { limit: 950, label: (n) => `${n.toLocaleString('en-GB')} of 950 pages this month` }
 }
 
@@ -46,11 +46,14 @@ async function build(): Promise<Connection[]> {
   const today = month.filter((r) => r.at >= startOfDay())
   const lastOf = (pred: (r: (typeof month)[number]) => boolean) => month.filter(pred).reduce((n, r) => Math.max(n, r.at), 0) || undefined
   // Requests on each of the last seven days, oldest first
+  // Calendar days, so a clock change doesn't skip or repeat one
+  const dayStart = (i: number) => {
+    const d = new Date(startOfDay())
+    d.setDate(d.getDate() - i)
+    return d.getTime()
+  }
   const weekBy = (pred: (r: (typeof month)[number]) => boolean) =>
-    Array.from({ length: 7 }, (_, i) => {
-      const from = startOfDay() - (6 - i) * 86_400_000
-      return month.filter((r) => r.at >= from && r.at < from + 86_400_000 && pred(r)).length
-    })
+    Array.from({ length: 7 }, (_, i) => month.filter((r) => r.at >= dayStart(6 - i) && r.at < dayStart(5 - i) && pred(r)).length)
   const fmt = (n: number) => n.toLocaleString('en-GB')
 
   // Model providers: each that has a key or needs none, and the ones you could add
@@ -107,7 +110,7 @@ async function build(): Promise<Connection[]> {
         today: use.today ? { requests: use.today } : undefined,
         week: weekOf(info.id),
         limits: info.free ? ([['Free', info.free]] as [string, string][]) : [],
-        ...(credit ? { credit: { share: Math.min(1, use.thisMonth / credit.limit), label: credit.label(use.thisMonth) } } : {})
+        ...(credit ? { credit: { share: Math.min(1, (credit.lifetime ? use.total : use.thisMonth) / credit.limit), label: credit.label(credit.lifetime ? use.total : use.thisMonth) } } : {})
       }
       const as = (state: ConnectionState, detail: string, active = state === 'connected' || state === 'ready'): Connection => ({ ...base, state, detail, active })
       switch (info.id) {
@@ -126,14 +129,16 @@ async function build(): Promise<Connection[]> {
         }
         case 'brave':
         case 'tavily': {
+          // The same places the search reads its key from: the Keychain, or settings from an older version
           const chosen = search === info.id
-          const key = chosen && !!s.ai.webSearch?.apiKey
-          return as(key ? 'connected' : 'needs-key', key ? 'Your web search' : 'Add a key to use it', key)
+          const key = !!getKey(info.id) || (chosen && !!s.ai.webSearch?.apiKey)
+          return as(key ? 'connected' : 'needs-key', !key ? 'Add a key to use it' : chosen ? 'Your web search' : 'Key saved, not your search now', key && chosen)
         }
         case 'you':
         case 'firecrawl': {
           const key = !!getKey(info.id)
-          return as(key ? 'connected' : 'needs-key', key ? (info.id === 'you' ? 'Searches and reads pages for readings' : 'Reads web pages for readings and lessons') : 'Add a key to use it')
+          if (info.id === 'firecrawl') return as(key ? 'connected' : 'needs-key', key ? 'Reads pages the plain reader can’t' : 'Add a key to use it')
+          return as(key ? 'connected' : 'needs-key', !key ? 'Add a key to use it' : search === 'you' ? 'Your web search' : 'Key saved: choose it as your search in Tools', key && search === 'you')
         }
         case 'arxiv':
         case 'openlibrary':

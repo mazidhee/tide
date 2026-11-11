@@ -96,11 +96,15 @@ const RECOMMENDED = ['provider:generalcompute', 'firecrawl', 'you', 'provider:op
 
 const tokens = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n))
 const errorText = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
-const DAYS = (() => {
-  const out: string[] = []
-  for (let i = 6; i >= 0; i--) out.push(i === 0 ? 'Today' : new Date(Date.now() - i * 86_400_000).toLocaleDateString('en-GB', { weekday: 'short' }))
-  return out
-})()
+/** The last seven days' names, oldest first: worked out when drawn, so they move on at midnight */
+function weekDays(): string[] {
+  return Array.from({ length: 7 }, (_, i) => {
+    if (i === 6) return 'Today'
+    const d = new Date()
+    d.setDate(d.getDate() - (6 - i))
+    return d.toLocaleDateString('en-GB', { weekday: 'short' })
+  })
+}
 
 type Filter = 'all' | 'mac' | 'cloud' | 'attention'
 
@@ -142,7 +146,7 @@ export function ConnectionsView() {
 
   const inUse = useMemo(() => (list ?? []).filter((c) => c.state !== 'needs-key' && c.state !== 'not-set-up'), [list])
   const toAdd = useMemo(() => (list ?? []).filter((c) => c.state === 'needs-key' || c.state === 'not-set-up').sort((a, b) => rank(a) - rank(b)), [list])
-  const attention = (c: Connection) => c.state === 'error' || c.state === 'resting' || (c.dayShare ?? 0) > 0.85
+  const attention = (c: Connection) => c.state === 'error' || c.state === 'resting' || (c.dayShare ?? 0) > 0.85 || (c.credit?.share ?? 0) > 0.85
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
     return inUse.filter((c) => (filter === 'all' || (filter === 'mac' ? c.runs === 'mac' : filter === 'cloud' ? c.runs === 'cloud' : attention(c))) && (!q || `${c.name} ${c.detail} ${c.usedFor.join(' ')}`.toLowerCase().includes(q)))
@@ -379,6 +383,7 @@ function Row({ c, open, fresh, onToggle, onChange }: { c: Connection; open: bool
 }
 
 function Week({ c }: { c: Connection }) {
+  const days = weekDays()
   const week = c.week ?? []
   const max = Math.max(1, ...week)
   const sum = week.reduce((a, b) => a + b, 0)
@@ -394,7 +399,7 @@ function Week({ c }: { c: Connection }) {
               {v} {v === 1 ? 'use' : 'uses'}
             </span>
             <b style={{ height: `${Math.max(3, (v / max) * 68)}px`, animationDelay: `${i * 40}ms` }} />
-            <span className="cx2-day">{DAYS[i]}</span>
+            <span className="cx2-day">{days[i]}</span>
           </div>
         ))}
       </div>
@@ -420,9 +425,13 @@ function Access({ c, onChange, goTo }: { c: Connection; onChange(next: Connectio
     }
   }
   const forget = async () => {
-    if (provider) await window.tide.cloud.setKey(provider, null)
-    else await window.tide.connections.setKey(c.id, null)
-    onChange(await window.tide.connections.list(true))
+    try {
+      if (provider) await window.tide.cloud.setKey(provider, null)
+      else await window.tide.connections.setKey(c.id, null)
+      onChange(await window.tide.connections.list(true))
+    } catch (e) {
+      setTest({ ok: false, message: `Couldn’t remove the key: ${errorText(e)}` })
+    }
   }
   return (
     <div className="cx2-pane">
@@ -450,7 +459,7 @@ function Access({ c, onChange, goTo }: { c: Connection; onChange(next: Connectio
             {test.busy ? 'Testing…' : 'Test'}
           </button>
         )}
-        {provider && keyed && !main && (
+        {provider && keyed && !main && app.settings.cloud && (
           <button className="btn small" onClick={() => app.updateSettings({ cloud: { ...app.settings.cloud!, provider, model: c.model ?? app.settings.cloud!.model } })}>
             Make main
           </button>

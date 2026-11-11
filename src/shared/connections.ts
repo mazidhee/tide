@@ -67,7 +67,7 @@ export const SERVICES: ConnectionInfo[] = [
   { id: 'searxng', name: 'SearXNG on this Mac', kind: 'search', runs: 'mac', usedFor: ['Private web search'], free: 'Free: runs in Docker on your Mac', section: 'tools' },
   { id: 'brave', name: 'Brave Search', kind: 'search', runs: 'cloud', usedFor: ['Web search'], keyUrl: 'https://api-dashboard.search.brave.com', privacy: PUBLIC_ONLY, section: 'tools' },
   { id: 'tavily', name: 'Tavily', kind: 'search', runs: 'cloud', usedFor: ['Web search'], free: '1,000 searches a month', keyUrl: 'https://app.tavily.com', privacy: PUBLIC_ONLY, section: 'tools' },
-  { id: 'you', name: 'You.com', kind: 'search', runs: 'cloud', usedFor: ['Web search', 'Page text'], free: '$100 one-time credit, about 20,000 searches; Tide stops at $90', keyUrl: 'https://you.com/platform/api-keys', privacy: PUBLIC_ONLY, section: 'connections' },
+  { id: 'you', name: 'You.com', kind: 'search', runs: 'cloud', usedFor: ['Web search'], free: '$100 one-time credit, about 20,000 searches; Tide stops at $90', keyUrl: 'https://you.com/platform/api-keys', privacy: PUBLIC_ONLY, section: 'tools' },
   { id: 'firecrawl', name: 'Firecrawl', kind: 'reader', runs: 'cloud', usedFor: ['Reading web pages', 'Lesson sources', 'Library saves'], free: '1,000 pages a month', keyUrl: 'https://www.firecrawl.dev/app/api-keys', privacy: 'Public web addresses only, never your notes.', section: 'connections' },
   { id: 'arxiv', name: 'arXiv', kind: 'reader', runs: 'cloud', usedFor: ['Papers for readings'], free: 'Free, no key', privacy: PUBLIC_ONLY, section: 'connections' },
   { id: 'openlibrary', name: 'Open Library', kind: 'reader', runs: 'cloud', usedFor: ['Checking books exist'], free: 'Free, no key', privacy: PUBLIC_ONLY, section: 'connections' },
