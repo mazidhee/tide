@@ -33,7 +33,13 @@ export function useKnowledge(on = true): KnowledgeView | null {
     else load()
     if (!following) {
       following = true
-      window.tideEvents.onBrainEvent((e) => e.kind === 'attempt' && load())
+      // Read again when an answer is marked, and once more a moment later: the lesson's own record
+      // (which the map also reads) is saved about a second after the mark
+      window.tideEvents.onBrainEvent((e) => {
+        if (e.kind !== 'attempt') return
+        load()
+        setTimeout(() => load(), 2500)
+      })
     }
     return () => {
       listeners.delete(setK)
