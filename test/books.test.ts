@@ -74,3 +74,14 @@ describe('otherLanguage', async () => {
     expect(otherLanguage('C data types', 'Variables and Data Types')).toBe(false)
   })
 })
+
+describe('a two-word topic needs both words', () => {
+  const strang: BookMap = { path: 'Library/Strang.pdf', title: 'Linear Algebra and Its Applications - Gilbert Strang', numPages: 500, mtime: 0, builtAt: 0, sections: [{ title: '2 Vector Spaces', level: 0, from: 87, to: 95, about: 'Vector spaces and subspaces, the column space and nullspace' }, { title: '3.1 Orthogonal Vectors and Subspaces', level: 1, from: 169, to: 180 }] }
+  const ddia: BookMap = { path: 'Library/DDIA.pdf', title: 'Designing Data-Intensive Applications', numPages: 600, mtime: 0, builtAt: 0, sections: [{ title: 'Version vectors', level: 1, from: 190, to: 192, about: 'Vector clocks and version vectors for concurrent writes' }] }
+  it('keeps Vector clocks out of a chapter on vector spaces', () => {
+    expect(matchSections('Vector clocks', [strang], [])).toEqual([])
+  })
+  it('still finds it where the section is about it', () => {
+    expect(matchSections('Vector clocks', [strang, ddia], []).map((r) => r.book)).toEqual(['Designing Data-Intensive Applications'])
+  })
+})

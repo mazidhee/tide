@@ -124,7 +124,10 @@ export function matchSections(topic: string, maps: BookMap[], hits: { path: stri
       // and "invention" in a chapter on the Fourier transform), isn't enough
       // Or the topic itself, as a phrase, in its summary: "B-trees" in "indexes … and B-trees", but not
       // "invention of zero" in "zero padding and the invention of the FFT"
-      const onTopic = inTitle >= 0.5 || (inTitle > 0 && overlap >= 0.6) || (phrase.length > 2 && flat(`${s.title} ${s.about ?? ''}`).includes(` ${phrase} `))
+      // Half the words of a two-word topic is one word, and one word is not the topic: "Vector
+      // clocks" is not Strang's "Vector Spaces". A short topic needs all its words in the title
+      const titled2 = want.length <= 2 ? inTitle === 1 : inTitle >= 0.5
+      const onTopic = titled2 || (inTitle > 0 && (want.length > 2 ? overlap >= 0.6 : overlap === 1)) || (phrase.length > 2 && flat(`${s.title} ${s.about ?? ''}`).includes(` ${phrase} `))
       if (!onTopic && !(found >= 2 && overlap > 0)) return
       if (/^(summary|conclusion|chapter summary|exercises|problems)$/i.test(s.title.trim())) return
       // Its chapter is the entry one level up, unless that's a part ("Part II"): then it is the chapter
