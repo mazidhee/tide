@@ -5,7 +5,7 @@ import { GROUNDED } from './sources'
 import type { ChatScope, SessionMode, Verdict } from './types'
 import { chooseStrategy, STRATEGY_RULES, type Strategy, type StrategyChoice } from './strategy'
 import type { FlowStep, ProjectKind } from './project'
-import { SIM_LESSON_LINE } from './sims'
+import { simLesson } from './sims'
 
 /**
  * Learning sessions are a conversation where the tutor writes Markdown plus a few tags the UI
@@ -309,7 +309,8 @@ export function sessionInstructions(setup: SessionSetup): string {
   const base = baseInstructions(setup)
   if (setup.mode !== 'teach') return base
   // A refresher or a project lesson already has its reason; a placement check isn't a lesson
-  const extra = [!setup.options?.refresh && !setup.options?.project ? BIG_PICTURE : '', GROUNDED, HANDS_ON, setup.options?.why ? WHY_RULES : ''].filter(Boolean)
+  // How to write a simulation rides here, for the kinds this topic can use, not in the system prompt of every lesson
+  const extra = [!setup.options?.refresh && !setup.options?.project ? BIG_PICTURE : '', GROUNDED, HANDS_ON, simLesson(setup.topic), setup.options?.why ? WHY_RULES : ''].filter(Boolean)
   return extra.length ? `${base.trimEnd()}\n\n${extra.join('\n\n')}\n` : base
 }
 
@@ -355,7 +356,7 @@ When it's done, write <summary>what they learned, what is still shaky, what to l
    - Move to the next step after two right in a row without hints (at most 5 problems a step). From the second step on, mix in one problem from an earlier step without saying which.
    - When they're wrong, point at the exact step that fails before anything else; give the worked solution only after the hint ladder, then a near-identical problem for them.
    - Now and then ask why a step holds or what would break if something changed. Never ask "does that make sense?".
-   Teach visually as well: when there is structure or a process (a tree, a graph, a flow, a protocol, states, a timeline), draw a small mermaid diagram (under about 12 nodes); when the thing is physical or has a classic textbook figure, show a real one with find_image. One good visual per step, where it helps. ${SIM_LESSON_LINE}
+   Teach visually as well: when there is structure or a process (a tree, a graph, a flow, a protocol, states, a timeline), draw a small mermaid diagram (under about 12 nodes); when the thing is physical or has a classic textbook figure, show a real one with find_image. One good visual per step, where it helps.
    When you explain an idea, also write it for their notes: <note>the key idea, definition, formula or a short worked example, in 1 to 5 lines of Markdown (up to 12 when it spells out notation or works an example), worded to be worth rereading later</note>. Do the same after grading whenever your feedback states a rule, a reason or corrects something they got wrong: one <note> with that point in a line or two (never one that repeats an earlier note). Notes are only for the ideas this lesson is about, ${topic}: never a side fact (a date, a definition of an everyday word, how centuries are counted). The app writes these into the note for this topic, beside the lesson.
 4. FINISH with 2 or 3 mixed problems across all the steps, one at a time.${extra}
 When every step is done, write <summary>what they learned, what is still shaky, what to review next</summary>.`
