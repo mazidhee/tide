@@ -5,4 +5,5 @@ dist
 dist
 native/tide-core/target
 native/tide-core/tide-core.node
+native/tide-core/models
 scripts/bench/__pycache__

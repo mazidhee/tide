@@ -22,3 +22,13 @@ lto = true
 codegen-units = 1
 opt-level = 3
 strip = true
+
+# For the retrieval evaluation (examples/retrieval) and the tests only: none of it is in the module
+[dev-dependencies]
+libc = "0.2"
+memmap2 = "0.9"
+tempfile = "3"
+unicode-normalization = "0.1"
+unicode_categories = "0.1"
+# To check that the evaluation's own WordPiece tokeniser agrees with the reference one
+tokenizers = { version = "0.21", default-features = false, features = ["fancy-regex"] }
