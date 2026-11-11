@@ -3,14 +3,25 @@
  * threads, lessons), the same way mermaid blocks become diagrams. A block still streaming in,
  * invalid JSON or an unknown kind stays visible as code.
  */
+import { createKeeper, watchBlocks } from '../liveBlocks'
 import { ASK_EVENT, askQuestion, type AskDetail } from './parts'
-import type { Mounted } from './shell'
 
 let runtime: Promise<typeof import('./runtime')> | null = null
-const mounted = new Set<Mounted>()
+
+const sourceOf = (pre: HTMLElement) => pre.querySelector('code')?.textContent ?? ''
+
+// A small model often labels the block "json" (or nothing) and gets everything else right:
+// what makes it a simulation is its "kind", not the label on the fence
+function isSimBlock(pre: HTMLElement): boolean {
+  const lang = (pre.dataset.lang ?? '').toLowerCase()
+  return lang === 'sim' || ((lang === 'json' || lang === '') && /^\s*\{\s*"kind"\s*:\s*"(neural-net|attention|gradient-descent|softmax)"/.test(sourceOf(pre)))
+}
+
+/** Simulations survive the text around them being replaced (see liveBlocks) */
+const keeper = createKeeper({ widget: 'figure.sim', isSource: isSimBlock, sourceOf })
 
 async function renderBlock(pre: HTMLElement): Promise<void> {
-  const code = pre.querySelector('code')?.textContent ?? ''
+  const code = sourceOf(pre)
   if (!code.trim() || pre.dataset.simTried === code) return
   pre.dataset.simTried = code
   // Cheap check before loading anything: a block that isn't complete JSON yet is left alone
@@ -24,25 +35,18 @@ async function renderBlock(pre: HTMLElement): Promise<void> {
     const { parseSim, mount } = await runtime
     const spec = parseSim(code)
     if (!spec || !pre.isConnected || pre.dataset.simTried !== code) return
-    mounted.add(mount(spec, (root) => pre.replaceWith(root)))
+    const slot = keeper.slot(pre)
+    const sim = mount(spec, (root) => pre.replaceWith(root))
+    keeper.keep(slot, sim.root, sim.destroy)
   } catch {
     // Leave the code visible if the simulation can't be drawn
   }
 }
 
-let timer: ReturnType<typeof setTimeout> | undefined
-
 function scan(): void {
-  for (const sim of mounted)
-    if (!sim.root.isConnected) {
-      sim.destroy()
-      mounted.delete(sim)
-    }
-  // A small model often labels the block "json" (or nothing) and gets everything else right:
-  // what makes it a simulation is its "kind", not the label on the fence
+  keeper.reclaim()
   document.querySelectorAll<HTMLElement>('pre.code-block').forEach((pre) => {
-    const lang = (pre.dataset.lang ?? '').toLowerCase()
-    if (lang === 'sim' || ((lang === 'json' || lang === '') && /^\s*\{\s*"kind"\s*:\s*"(neural-net|attention|gradient-descent|softmax)"/.test(pre.querySelector('code')?.textContent ?? ''))) void renderBlock(pre)
+    if (isSimBlock(pre)) void renderBlock(pre)
   })
 }
 
@@ -70,11 +74,7 @@ function fillNearestQuestionBox(event: Event): void {
 
 /** Watches the whole document; call once at startup */
 export function startSims(): void {
-  const observer = new MutationObserver(() => {
-    clearTimeout(timer)
-    timer = setTimeout(scan, 500)
-  })
-  observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+  watchBlocks(keeper, scan)
   document.addEventListener(ASK_EVENT, fillNearestQuestionBox)
   scan()
 }

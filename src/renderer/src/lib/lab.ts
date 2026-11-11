@@ -12,6 +12,7 @@ import hljs from 'highlight.js/lib/common'
 import { parseChartRequest, resultSummary, type ChartRequest, type LabResult } from '@shared/lab'
 import { chooseChart, columnKinds, fullNumber, isIdColumn, type ChartType } from '@shared/labChart'
 import { drawChart, drawFigure } from './labChart'
+import { createKeeper, watchBlocks } from './liveBlocks'
 
 /** Rows the table shows; the rest are counted in a line under it */
 const TABLE_ROWS = 200
@@ -82,6 +83,8 @@ export function resultTable(r: LabResult): HTMLElement {
 interface Block {
   root: HTMLElement
   run(): Promise<void>
+  /** Stops the chart and lets go of the result; a query still running is ignored when it answers */
+  destroy(): void
 }
 
 /** Builds the editor and its result. `ask` is set for a chart block: it opens on the chart, with the query folded away. */
@@ -238,21 +241,44 @@ export function labBlock(sql: string, ask?: ChartRequest): Block {
     render()
   }
 
-  return { root, run }
+  function destroy() {
+    turn++
+    stopChart?.()
+    stopChart = null
+    result = null
+    out.textContent = ''
+  }
+
+  return { root, run, destroy }
 }
 
 const DONE = 'labDone'
 
+const bodyOf = (pre: HTMLElement) => pre.querySelector('code')?.textContent ?? ''
+
+// A chart labelled "json" by mistake is still a chart: a JSON object that opens with its query
+function blockKind(pre: HTMLElement): 'chart' | 'sql' | null {
+  const lang = (pre.dataset.lang ?? '').toLowerCase()
+  if (lang === 'chart' || (lang === 'json' && /^\s*\{\s*"sql"\s*:/.test(bodyOf(pre)))) return 'chart'
+  return lang === 'sql' || lang === 'sqlite' ? 'sql' : null
+}
+
+/** Queries and charts survive the text around them being replaced (see liveBlocks): edits, results and the chosen view stay */
+const keeper = createKeeper({ widget: '.lab-block', isSource: (pre) => blockKind(pre) !== null, sourceOf: (pre) => bodyOf(pre).replace(/\s+$/, '') })
+
 function mountSql(pre: HTMLElement) {
-  const code = (pre.querySelector('code')?.textContent ?? '').replace(/\s+$/, '')
+  const code = bodyOf(pre).replace(/\s+$/, '')
   pre.dataset[DONE] = '1'
   if (!code.trim()) return
-  pre.replaceWith(labBlock(code).root)
+  const slot = keeper.slot(pre)
+  const block = labBlock(code)
+  pre.replaceWith(block.root)
+  keeper.keep(slot, block.root, block.destroy)
 }
 
 /** A chart block that doesn't parse stays a code block; once it has stopped changing, what is wrong is said under it */
 function mountChart(pre: HTMLElement) {
-  const body = pre.querySelector('code')?.textContent ?? ''
+  const body = bodyOf(pre)
   if (!body.trim()) return
   const ask = parseChartRequest(body)
   if ('error' in ask) {
@@ -270,29 +296,25 @@ function mountChart(pre: HTMLElement) {
     return
   }
   pre.dataset[DONE] = '1'
+  const slot = keeper.slot(pre)
   const block = labBlock(ask.sql.trim(), ask)
   pre.replaceWith(block.root)
+  keeper.keep(slot, block.root, block.destroy)
   void block.run()
 }
 
-let timer: ReturnType<typeof setTimeout> | undefined
-
 function scan() {
+  keeper.reclaim()
   document.querySelectorAll<HTMLElement>('pre.code-block[data-lang]').forEach((pre) => {
-    const lang = (pre.dataset.lang ?? '').toLowerCase()
     if (pre.dataset[DONE] || !pre.isConnected) return
-    // A chart labelled "json" by mistake is still a chart: a JSON object that opens with its query
-    if (lang === 'chart' || (lang === 'json' && /^\s*\{\s*"sql"\s*:/.test(pre.querySelector('code')?.textContent ?? ''))) mountChart(pre)
-    else if (lang === 'sql' || lang === 'sqlite') mountSql(pre)
+    const kind = blockKind(pre)
+    if (kind === 'chart') mountChart(pre)
+    else if (kind === 'sql') mountSql(pre)
   })
 }
 
 /** Watches the whole document; call once at startup */
 export function startLab() {
-  const observer = new MutationObserver(() => {
-    clearTimeout(timer)
-    timer = setTimeout(scan, 500)
-  })
-  observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+  watchBlocks(keeper, scan)
   scan()
 }
