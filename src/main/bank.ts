@@ -47,6 +47,9 @@ async function updateBank(topic: string, fn: (problems: BankProblem[]) => BankPr
   return run
 }
 
+/** Problems proven elsewhere (Claude's exercises, main/exercises), kept with the rest */
+export const addToBank = (topic: string, problems: BankProblem[]) => updateBank(topic, (all) => [...all.filter((p) => !problems.some((q) => q.id === p.id)), ...problems])
+
 export const markUsed = (topic: string, id: string) => updateBank(topic, (all) => all.map((p) => (p.id === id ? { ...p, usedAt: Date.now() } : p))).catch(() => {})
 
 /** Runs each problem's check, then has a second model review the batch */
