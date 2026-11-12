@@ -36,6 +36,7 @@ import { ChatPage } from './components/ChatPage'
 import { NewTopicView } from './components/NewTopicView'
 import { PracticeView } from './components/PracticeView'
 import { MathsView } from './components/MentalMaths'
+import { WorkoutView } from './components/workout/Workout'
 import { SettingsView } from './components/SettingsView'
 import { NotebookView } from './components/NotebookView'
 import { SearchPalette } from './components/SearchPalette'
@@ -227,7 +228,7 @@ export default function App() {
       ? { pose: 'book' as const, label: `Reading: ${view.path.split('/').pop()!.replace(/\.(md|pdf)$/i, '')}` }
       : view.kind === 'study'
         ? { pose: 'cards' as const, label: 'Flashcards' }
-        : view.kind === 'practice' || view.kind === 'code' || view.kind === 'lab' || view.kind === 'maths' || view.kind === 'mock'
+        : view.kind === 'practice' || view.kind === 'code' || view.kind === 'lab' || view.kind === 'maths' || view.kind === 'mock' || view.kind === 'workout'
           ? { pose: 'laptop' as const, label: view.kind === 'lab' ? 'The Linux lab' : 'Practice' }
           : view.kind === 'design' || (view.kind === 'file' && /\.canvas$/i.test(view.path))
             ? { pose: 'board' as const, label: 'System design' }
@@ -248,7 +249,7 @@ export default function App() {
           ? { label: view.path.split('/').pop()!.replace(/\.(md|pdf)$/i, ''), path: view.path, kind: 'reading' }
           : view.kind === 'study' || view.kind === 'daily'
             ? { label: view.kind === 'daily' ? 'Daily practice' : 'Flashcards', kind: 'review' }
-            : ['practice', 'code', 'lab', 'drill', 'maths', 'design'].includes(view.kind) || (view.kind === 'file' && /\.canvas$/i.test(view.path))
+            : ['practice', 'code', 'lab', 'drill', 'maths', 'workout', 'design'].includes(view.kind) || (view.kind === 'file' && /\.canvas$/i.test(view.path))
               ? { label: 'Practice', kind: 'practice' }
               : view.kind === 'chat'
                 ? { label: 'Chat with the tutor', kind: 'chat' }
@@ -433,6 +434,7 @@ export default function App() {
   else if (view.kind === 'wrapup') main = <WrapUpView />
   else if (view.kind === 'weekly') main = <WeeklyView />
   else if (view.kind === 'maths') main = <MathsView key={`${view.level ?? ''}:${view.nonce ?? ''}`} level={view.level} />
+  else if (view.kind === 'workout') main = <WorkoutView key={`${view.start ? 'run' : 'hub'}:${view.nonce ?? ''}`} start={view.start} championship={view.championship} />
   else if (view.kind === 'drill') main = <DrillView key={`${view.drill}:${view.nonce ?? ''}`} kind={view.drill} />
   else if (view.kind === 'design') main = <CanvasView key={`${view.path}:${view.nonce ?? ''}`} path={view.path} start={view.start} topic={view.topic} company={view.company} timed={view.timed} reference={view.reference} />
   else if (view.kind === 'code') main = <CodeView key={view.path ?? 'code'} path={view.path} />

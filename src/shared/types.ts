@@ -762,6 +762,12 @@ export interface TideApi {
     examTopics(): Promise<string[]>
     onEvent(cb: (e: { id: string; delta: string }) => void): () => void
   }
+  /** The morning workout (shared/workout): ratings, titles and the log, kept in the vault under .tide/ */
+  workout: {
+    state(): Promise<import('./workout').WorkoutState>
+    logRound(r: Pick<import('./workout').RoundRecord, 'morning' | 'round' | 'championship' | 'items' | 'combo'>): Promise<{ state: import('./workout').WorkoutState; events: import('./workout').RoundEvents }>
+    setReminder(r: import('./mentalMaths').Reminder): Promise<import('./mentalMaths').Reminder>
+  }
   practice: {
     /** A coding challenge on a topic, note, notebook or book chapter */
     addChallenge(input: { title: string; source: ChatScope; difficulty?: PracticeProblem['difficulty'] }): Promise<PracticeProblem>

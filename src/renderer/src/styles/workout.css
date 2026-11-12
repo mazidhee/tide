@@ -1,0 +1,1041 @@
+/*
+  The morning workout (components/workout). Neutral surfaces from the theme and one colour, the
+  theme's accent, for what is current, earned or right. Pixel moments add the accent's shades and
+  the Professor's own palette. Theme tokens only, so all seven themes work.
+*/
+
+:root {
+  --wo-accent-light: color-mix(in srgb, var(--accent) 60%, #fff);
+  --wo-accent-dark: color-mix(in srgb, var(--accent) 70%, #000);
+  --wo-good: var(--accent);
+  --wo-bad: var(--danger);
+}
+
+.wo-meta {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+.wo-h {
+  margin: 30px 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.wo-sub {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+.wo-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.wo-pill.accent {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 3px 10px;
+}
+.wo-glyph {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--bg-inset);
+  color: var(--ink-soft);
+  font-family: var(--font-code);
+  font-size: 13px;
+  font-weight: 600;
+}
+.wo-glyph.big {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  font-size: 18px;
+}
+
+/* ---------- The page ---------- */
+
+.page.wo-page .page-inner.wo-inner {
+  max-width: 900px;
+}
+.wo-hub {
+  max-width: 900px;
+}
+.wo-hub.embedded {
+  margin-top: 6px;
+}
+.wo-hero {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 24px;
+  align-items: center;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--bg-raised);
+  box-shadow: var(--lift);
+}
+.wo-hero-prof .professor {
+  display: block;
+}
+.wo-titlebadge {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-code);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.wo-hello {
+  margin: 0 0 6px;
+  font-family: var(--font-read-serif);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.wo-hero-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.wo-streak {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 6px;
+}
+.wo-streak b {
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.wo-streak small {
+  margin-top: 4px;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+}
+.wo-week {
+  display: flex;
+  gap: 5px;
+  margin-top: 10px;
+}
+.wo-week i {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  background: var(--bg-inset);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.wo-week i.on {
+  background: var(--accent);
+  box-shadow: none;
+}
+.wo-week i.is-today:not(.on) {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.wo-rounds {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+.wo-round {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-raised);
+}
+.wo-round .wo-glyph {
+  margin-bottom: 8px;
+}
+.wo-round b {
+  font-size: 14px;
+}
+.wo-round small {
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  line-height: 1.4;
+  min-height: 2.8em;
+}
+.wo-round.next {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.wo-round.next .wo-glyph,
+.wo-round.done .wo-glyph {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.wo-rating {
+  margin-top: 8px;
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.wo-rating span {
+  margin-left: 5px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.wo-rating span.up {
+  color: var(--accent);
+}
+.wo-rating span.down {
+  color: var(--ink-muted);
+}
+
+.wo-ladder {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+  align-items: end;
+}
+.wo-rung {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+.wo-bar {
+  display: grid;
+  place-items: center;
+  margin-bottom: 6px;
+  border-radius: 6px 6px 2px 2px;
+  background: var(--bg-inset);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--accent-ink);
+}
+.wo-rung.got .wo-bar {
+  background: var(--accent-soft);
+  box-shadow: none;
+  color: var(--accent);
+}
+.wo-rung.now .wo-bar {
+  background: var(--accent);
+  box-shadow: none;
+}
+.wo-rung.now {
+  color: var(--ink);
+  font-weight: 600;
+}
+.wo-next {
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.wo-champ {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px;
+  align-items: center;
+  margin-top: 22px;
+  padding: 16px 18px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 14px;
+}
+.wo-champ.open {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.wo-champ p {
+  margin: 3px 0 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.wo-two {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 28px;
+}
+.wo-shelf {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  min-height: 54px;
+  padding: 10px 12px 6px;
+  border-bottom: 3px solid var(--line-strong);
+}
+.wo-shelf .wo-meta {
+  margin: 0 0 6px;
+}
+.wo-trophy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.wo-trophy small {
+  font-size: 10.5px;
+  color: var(--ink-muted);
+}
+.wo-badges {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+.wo-badge {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  color: var(--ink-muted);
+}
+.wo-badge .px-sprite {
+  grid-row: span 2;
+}
+.wo-badge span {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.wo-badge small {
+  font-size: 11px;
+}
+.wo-badge.got {
+  background: var(--bg-raised);
+  color: var(--ink);
+}
+.wo-badge.got small {
+  color: var(--ink-muted);
+}
+.wo-bests {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0;
+}
+.wo-bests div {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+}
+.wo-bests dt {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.wo-bests dd {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.wo-reminder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+.wo-tricks {
+  margin-top: 30px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.wo-tricks summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+.wo-tricks summary::-webkit-details-marker {
+  display: none;
+}
+.wo-tricks summary .wo-meta {
+  font-weight: 400;
+}
+.wo-tricks[open] summary svg {
+  transform: rotate(90deg);
+}
+.wo-tricks .mm-ladder {
+  margin-top: 12px;
+}
+
+/* ---------- The run ---------- */
+
+.wo-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 20px;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+.wo-top b {
+  color: var(--ink);
+}
+.wo-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 4px;
+  border-radius: 6px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+.wo-back:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+.wo-dots {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.wo-dots i {
+  width: 24px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-inset);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.wo-dots i.done {
+  background: var(--accent-soft);
+  box-shadow: none;
+}
+.wo-dots i.cur {
+  background: var(--accent);
+  box-shadow: none;
+}
+.wo-timer {
+  height: 4px;
+  margin-bottom: 28px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.wo-timer i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s linear;
+}
+.wo-timer.untimed i {
+  background: var(--ink-muted);
+}
+.wo-stage {
+  animation: wo-in 0.18s var(--ease);
+}
+@keyframes wo-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.wo-q {
+  margin: 36px 0 26px;
+  text-align: center;
+  font-family: var(--font-code);
+  font-size: 48px;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.wo-q.long {
+  font-family: var(--font-ui);
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+.wo-item:not(.logic) .wo-prompt {
+  text-align: center;
+}
+.wo-prompt {
+  margin: 10px 0 18px;
+  font-size: 17px;
+  line-height: 1.55;
+}
+.wo-prompt p {
+  margin: 0 0 10px;
+  white-space: pre-line;
+}
+.wo-prompt p.wo-clues {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  font-size: 15.5px;
+}
+.wo-form {
+  display: flex;
+  justify-content: center;
+}
+.wo-input {
+  width: 300px;
+  max-width: 100%;
+  padding: 12px;
+  border: 2px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--bg-raised);
+  color: var(--ink);
+  font-family: var(--font-code);
+  font-size: 26px;
+  text-align: center;
+}
+.wo-input.code {
+  width: 380px;
+  font-size: 20px;
+}
+.wo-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.wo-input.right {
+  border-color: var(--accent);
+}
+.wo-input.wrong {
+  border-color: var(--wo-bad);
+}
+.wo-runmeta {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  margin-top: 22px;
+  color: var(--ink-muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.wo-combo {
+  color: var(--accent);
+  font-weight: 700;
+}
+.wo-hint {
+  margin-top: 18px;
+  text-align: center;
+}
+.wo-nudge {
+  margin: 14px auto 0;
+  max-width: 560px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--accent);
+  color: var(--ink);
+  font-size: 13.5px;
+  text-align: center;
+}
+.wo-code {
+  margin: 0 auto 18px;
+  max-width: 520px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  font-family: var(--font-code);
+  font-size: 14.5px;
+  line-height: 1.55;
+  overflow-x: auto;
+}
+.wo-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  max-width: 640px;
+  margin: 8px auto 0;
+}
+.wo-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line-strong);
+  background: var(--bg-raised);
+  text-align: left;
+  font-size: 14.5px;
+}
+.wo-choice:hover:not(:disabled) {
+  border-color: var(--ink-muted);
+}
+.wo-choice kbd,
+.wo-opt kbd {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+.wo-choice.right,
+.wo-opt.right {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.wo-choice.wrong,
+.wo-opt.wrong {
+  border-color: var(--wo-bad);
+}
+.wo-choice.dim,
+.wo-opt.dim {
+  opacity: 0.55;
+}
+
+/* Matrices */
+.wo-puzzle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 32px;
+  align-items: start;
+}
+.wo-grid3 {
+  display: grid;
+  grid-template-columns: repeat(3, 104px);
+  gap: 6px;
+  padding: 10px;
+  border-radius: 14px;
+  background: var(--bg-inset);
+}
+.wo-cell {
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  border-radius: 10px;
+  background: var(--bg-raised);
+}
+.wo-cell.miss {
+  background: transparent;
+  border: 2px dashed var(--line-strong);
+  color: var(--ink-muted);
+  font-size: 28px;
+}
+.wo-ask {
+  margin: 0 0 14px;
+  font-size: 17px;
+  font-weight: 600;
+}
+.wo-opts {
+  display: grid;
+  grid-template-columns: repeat(3, 94px);
+  gap: 10px;
+}
+.wo-opt {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 94px;
+  height: 94px;
+  border-radius: 10px;
+  border: 2px solid var(--line);
+  background: var(--bg-raised);
+}
+.wo-opt:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+.wo-opt kbd {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  min-width: 15px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--bg-raised);
+  line-height: 15px;
+  z-index: 1;
+}
+
+/* Chess */
+.wo-item.with-board {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.wo-board {
+  display: grid;
+  grid-template-columns: repeat(8, 46px);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+.wo-sq {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  /* A real board's light and dark, the same in every theme, tinted by the accent */
+  background: color-mix(in srgb, var(--accent) 14%, #ece8de);
+}
+.wo-sq.dark {
+  background: color-mix(in srgb, var(--accent) 50%, #4a4f57);
+}
+.wo-sq.sel {
+  box-shadow: inset 0 0 0 3px var(--accent);
+}
+.wo-sq.answer {
+  box-shadow: inset 0 0 0 3px var(--accent);
+  background: color-mix(in srgb, var(--accent) 70%, #ece8de);
+}
+.wo-sq.picked {
+  box-shadow: inset 0 0 0 3px var(--wo-bad);
+}
+.wo-pc {
+  display: block;
+  position: relative;
+}
+.wo-dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(20, 22, 26, 0.3);
+}
+.wo-rank,
+.wo-file {
+  position: absolute;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: rgba(20, 22, 26, 0.5);
+}
+.wo-rank {
+  top: 2px;
+  left: 3px;
+}
+.wo-file {
+  bottom: 1px;
+  right: 3px;
+}
+
+/* State puzzles */
+.wo-slide {
+  display: grid;
+  grid-template-columns: repeat(3, 56px);
+  gap: 5px;
+  width: max-content;
+  margin: 0 auto 18px;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--bg-inset);
+}
+.wo-slide span {
+  display: grid;
+  place-items: center;
+  height: 56px;
+  border-radius: 8px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  font-family: var(--font-code);
+  font-size: 22px;
+  font-weight: 600;
+}
+.wo-slide span.gap {
+  background: transparent;
+  border-style: dashed;
+}
+.wo-boxes {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.wo-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 64px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+.wo-box b {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+/* After an answer */
+.wo-feedback {
+  max-width: 680px;
+  margin: 22px auto 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--wo-bad);
+}
+.wo-feedback.right {
+  border-left-color: var(--accent);
+}
+.wo-verdict {
+  margin: 0 0 8px;
+  font-size: 14.5px;
+}
+.wo-rule-name {
+  color: var(--ink-muted);
+}
+.wo-steps {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.wo-steps.chain li {
+  margin-bottom: 3px;
+}
+.wo-steps li::marker {
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.wo-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 520px;
+  margin: 40px auto 0;
+  text-align: center;
+}
+.wo-intro h2 {
+  margin: 8px 0 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+.wo-intro .wo-meta {
+  margin: 4px 0 12px;
+  line-height: 1.5;
+}
+.wo-intro .wo-glyph {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.wo-prev {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 18px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.wo-prev svg {
+  color: var(--accent);
+}
+
+/* Recall */
+.wo-recall,
+.wo-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  max-width: 620px;
+  margin: 20px auto 0;
+}
+.wo-card {
+  width: 100%;
+  padding: 20px 22px;
+  border-radius: 12px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+}
+.wo-card.back {
+  border-color: var(--accent);
+}
+.wo-grades {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---------- The celebration ---------- */
+
+.wo-party {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-inset);
+}
+.wo-party-canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+.wo-party-msg {
+  position: absolute;
+  inset: 26px 16px auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  pointer-events: none;
+}
+.wo-banner {
+  display: inline-flex;
+  padding: 8px 14px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: 0 4px 0 var(--wo-accent-dark);
+}
+.wo-party-msg h1 {
+  margin: 18px 0 8px;
+  color: var(--ink);
+  filter: drop-shadow(0 3px 0 color-mix(in srgb, var(--bg) 70%, transparent));
+}
+.wo-party-msg p {
+  margin: 0;
+  padding: 4px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-inset) 82%, transparent);
+  max-width: 520px;
+  color: var(--ink-soft);
+  font-size: 14.5px;
+  line-height: 1.5;
+  text-shadow: 0 1px 0 var(--bg-inset);
+}
+.wo-results {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+.wo-tile {
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+.wo-tile small {
+  color: var(--ink-muted);
+  font-size: 12.5px;
+}
+.wo-tile b {
+  display: block;
+  margin-top: 4px;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.wo-tile b.small {
+  font-size: 17px;
+}
+.wo-tile em {
+  margin-left: 4px;
+  font-style: normal;
+  font-size: 12.5px;
+  color: var(--accent);
+}
+.wo-tile em.down {
+  color: var(--ink-muted);
+}
+.wo-new-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.wo-new-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  font-size: 13px;
+}
+.wo-done-acts {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.wo-misses {
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.wo-misses li {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.wo-miss-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+.wo-miss-q {
+  font-family: var(--font-code);
+  white-space: pre-line;
+}
+.wo-miss-row s {
+  color: var(--ink-muted);
+}
+.wo-home-title {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wo-stage {
+    animation: none;
+  }
+  .wo-timer i {
+    transition: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .wo-rounds {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .wo-hero {
+    grid-template-columns: 1fr;
+  }
+  .wo-puzzle {
+    grid-template-columns: 1fr;
+  }
+  .wo-results {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .wo-two {
+    grid-template-columns: 1fr;
+  }
+  .wo-ladder {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+.wo-item.logic .wo-boxes {
+  justify-content: flex-start;
+  margin-top: 10px;
+}

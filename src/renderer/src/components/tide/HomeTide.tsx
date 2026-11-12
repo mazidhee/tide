@@ -1,4 +1,4 @@
-import { MathsHomeCard } from '../MentalMaths'
+import { WorkoutHomeCard } from '../workout/Workout'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { ChatScope, Mastery, NoteMeta } from '@shared/types'
 import { lateText, type Forecast } from '@shared/forecast'
@@ -294,7 +294,7 @@ export function HomeTide(p: HomeTideProps) {
             </div>
           </section>
 
-          <MathsHomeCard variant="tide" />
+          <WorkoutHomeCard variant="tide" />
 
           <section>
             <div className="td-sec-head first">

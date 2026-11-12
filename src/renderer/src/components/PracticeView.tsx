@@ -5,7 +5,7 @@ import { Icon } from './Icon'
 import { PillSegment, PillSelect, PromptBox } from './PromptBox'
 import { ContextMenu, type MenuState } from './Menu'
 import { CompanyPrep } from './CompanyPrep'
-import { MathsPanel } from './MentalMaths'
+import { WorkoutHub } from './workout/Workout'
 import { QuantPanel } from './QuantPanel'
 import { DesignPanel } from './DesignPanel'
 import { PixelScene } from './PixelScene'
@@ -15,11 +15,11 @@ const STATUS_LABEL: Record<PracticeStatus, string> = { todo: 'To do', solved: 'S
 const LANGUAGES = ['python', 'javascript', 'typescript', 'java', 'c++', 'go', 'rust']
 type Filter = 'all' | PracticeStatus
 
-type Tab = 'coding' | 'problems' | 'maths' | 'quant' | 'design' | 'companies' | 'mock'
+type Tab = 'coding' | 'problems' | 'workout' | 'quant' | 'design' | 'companies' | 'mock'
 const TABS: { id: Tab; label: string; icon: 'sparkle' | 'quiz' | 'summary' | 'canvas' | 'globe' | 'timer' | 'subInterview' }[] = [
   { id: 'coding', label: 'Coding', icon: 'sparkle' },
   { id: 'problems', label: 'Problems', icon: 'quiz' },
-  { id: 'maths', label: 'Mental maths', icon: 'timer' },
+  { id: 'workout', label: 'Morning workout', icon: 'timer' },
   { id: 'quant', label: 'Quant', icon: 'summary' },
   { id: 'design', label: 'System design', icon: 'canvas' },
   { id: 'companies', label: 'Companies', icon: 'globe' },
@@ -46,7 +46,8 @@ export function PracticeView() {
   const [language, setLanguage] = useState(() => localStorage.getItem('tide.interview.lang') ?? 'python')
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [tab, setTab] = useState<Tab>(() => {
-    const saved = localStorage.getItem('tide.practice.tab') as Tab | null
+    // The old Mental maths tab grew into the morning workout
+    const saved = (localStorage.getItem('tide.practice.tab') === 'maths' ? 'workout' : localStorage.getItem('tide.practice.tab')) as Tab | null
     return saved && TABS.some((t) => t.id === saved) ? saved : 'coding'
   })
   const pickTab = (t: Tab) => {
@@ -162,7 +163,7 @@ export function PracticeView() {
 
   return (
     <div className="page practice">
-      <PixelScene key={tab} place={tab === 'coding' || tab === 'problems' ? 'terminal' : tab === 'quant' || tab === 'maths' ? 'math' : 'workshop'} rows={40} scale={3} className="page-scene" />
+      <PixelScene key={tab} place={tab === 'coding' || tab === 'problems' ? 'terminal' : tab === 'quant' || tab === 'workout' ? 'math' : 'workshop'} rows={40} scale={3} className="page-scene" />
       <div className="page-inner">
         <header className="pv-head">
           <div>
@@ -274,7 +275,7 @@ export function PracticeView() {
           </section>
         )}
 
-        {tab === 'maths' && <MathsPanel />}
+        {tab === 'workout' && <WorkoutHub embedded />}
         {tab === 'quant' && <QuantPanel />}
         {tab === 'design' && <DesignPanel />}
         {tab === 'mock' && <MockPanel />}

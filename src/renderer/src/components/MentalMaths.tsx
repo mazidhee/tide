@@ -1,18 +1,15 @@
 /**
- * Daily mental maths (shared/mentalMaths): the overview in Practice (today's session, the streak,
- * the ladder of tricks, the reminder), the session itself (a trick card, then typed answers: type,
- * Enter, next) with its scorecard, and the small card on Home.
+ * Mental maths (shared/mentalMaths): the ladder of fourteen tricks (shown on the morning workout's
+ * page, whose speed round draws on them) and a session on one level (a trick card, then typed
+ * answers: type, Enter, next) with its scorecard.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   LEVELS,
-  REMINDER_HOUR,
   SESSION_SIZE,
   TO_UNLOCK,
-  addDays,
   bests,
   buildSession,
-  byDay,
   dayKey,
   isRight,
   ladder,
@@ -27,8 +24,7 @@ import {
   type MathsLevel,
   type MathsQuestion,
   type MathsSession,
-  type MathsState,
-  type Reminder
+  type MathsState
 } from '@shared/mentalMaths'
 import { useApp } from '../state'
 import { Icon } from './Icon'
@@ -46,21 +42,6 @@ function useMaths() {
   return { state, setState, load }
 }
 
-/** Where you stand, worked out from the log */
-function summary(state: MathsState) {
-  const today = dayKey(Date.now())
-  const lad = ladder(state.sessions)
-  const st = streak(
-    state.sessions.map((s) => s.day),
-    today
-  )
-  const todays = state.sessions.filter((s) => s.day === today)
-  const lastToday = todays[todays.length - 1]
-  const level = LEVELS[lad.frontier]
-  const reminderDue = state.reminder !== 'off' && !st.doneToday && new Date().getHours() >= REMINDER_HOUR[state.reminder]
-  return { today, lad, st, todays, lastToday, level, reminderDue }
-}
-
 function Dots({ n, of, label }: { n: number; of: number; label: string }) {
   return (
     <span className="mm-dots" role="img" aria-label={label}>
@@ -68,30 +49,6 @@ function Dots({ n, of, label }: { n: number; of: number; label: string }) {
         <i key={i} className={i < n ? 'on' : ''} />
       ))}
     </span>
-  )
-}
-
-/** The last weeks, Monday to Sunday down each column: a mark for each day with a session */
-function Calendar({ sessions, weeks = 16 }: { sessions: MathsSession[]; weeks?: number }) {
-  const days = byDay(sessions)
-  const today = dayKey(Date.now())
-  const dow = (new Date(today + 'T12:00:00Z').getUTCDay() + 6) % 7
-  const start = addDays(today, -(weeks - 1) * 7 - dow)
-  const cells = Array.from({ length: weeks * 7 }, (_, i) => addDays(start, i))
-  return (
-    <div className="mm-cal" role="img" aria-label={`Sessions over the last ${weeks} weeks`}>
-      {cells.map((d) => {
-        const x = days[d]
-        const future = d > today
-        return (
-          <span
-            key={d}
-            className={`mm-cal-day${x ? (x.good ? ' good' : ' done') : ''}${d === today ? ' is-today' : ''}${future ? ' future' : ''}`}
-            title={future ? '' : `${new Date(d + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}: ${x ? `${x.sessions} session${x.sessions === 1 ? '' : 's'}${x.good ? ', a good one' : ''}` : 'none'}`}
-          />
-        )
-      })}
-    </div>
   )
 }
 
@@ -123,128 +80,42 @@ function TrickCard({ level, n, onStart, compact }: { level: MathsLevel; n: numbe
   )
 }
 
-// ---------- Practice › Mental maths ----------
+// ---------- The ladder of tricks (inside the morning workout's page) ----------
 
-export function MathsPanel() {
+export function MathsLadder() {
   const app = useApp()
-  const { state, setState } = useMaths()
+  const { state } = useMaths()
   const [open, setOpen] = useState<string | null>(null)
-  if (!state) return <p className="mm-meta">Loading…</p>
-  const { st, lad, lastToday, level, reminderDue } = summary(state)
-  const b = bests(state.sessions)
-  const start = (focus?: string) => app.setView({ kind: 'maths', ...(focus ? { level: focus } : {}), nonce: Date.now() })
-  const setReminder = (r: Reminder) => {
-    setState({ ...state, reminder: r })
-    void window.tide.maths.setReminder(r)
-  }
+  if (!state) return null
+  const lad = ladder(state.sessions)
   const stats = levelStatsFor(state.sessions)
-
+  const start = (focus: string) => app.setView({ kind: 'maths', level: focus, nonce: Date.now() })
   return (
-    <div className="mm-panel">
-      <section className="mm-today">
-        <div className="mm-today-main">
-          <p className="mm-kicker">{st.doneToday ? 'Done today' : reminderDue ? `Your ${state.reminder} session is waiting` : 'Today'}</p>
-          <h2 className="mm-today-title">
-            Level {lad.frontier + 1}: {level.title}
-          </h2>
-          <p className="mm-sub">
-            {st.doneToday && lastToday
-              ? `${scoreSession(lastToday).right} of ${scoreSession(lastToday).total} right, ${secs(scoreSession(lastToday).avgSeconds)} a question.`
-              : `${SESSION_SIZE} questions, about 5 minutes: this trick, with earlier ones mixed in.`}
-          </p>
-          <div className="mm-today-acts">
-            <button className={`btn${st.doneToday ? '' : ' primary'}`} onClick={() => start()}>
-              <Icon name="play" size={13} />
-              {st.doneToday ? 'Another session' : 'Start today’s session'}
+    <ol className="mm-ladder">
+      {LEVELS.map((l, i) => {
+        const at = i < lad.frontier ? 'done' : i === lad.frontier ? 'now' : 'locked'
+        const s = stats[l.id]
+        const isOpen = open === l.id
+        return (
+          <li key={l.id} className={`mm-rung ${at}${isOpen ? ' open' : ''}`}>
+            <button className="mm-rung-row" disabled={at === 'locked'} aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : l.id)}>
+              <span className="mm-rung-n">{at === 'done' ? <Icon name="check" size={12} /> : i + 1}</span>
+              <span className="mm-rung-title">{l.title}</span>
+              <span className="mm-meta mm-rung-state">{at === 'now' ? `${lad.good} of ${TO_UNLOCK}` : at === 'done' ? (s?.seen ? `${Math.round((s.right / s.seen) * 100)}% right` : 'Unlocked') : 'Locked'}</span>
+              {at !== 'locked' && <Icon name="chevron" size={11} className="mm-rung-chev" />}
             </button>
-            {lad.frontier < LEVELS.length - 1 && (
-              <span className="mm-progress">
-                <Dots n={lad.good} of={TO_UNLOCK} label={`${lad.good} of ${TO_UNLOCK} good sessions`} />
-                <span className="mm-meta">
-                  {lad.good} of {TO_UNLOCK} good sessions to unlock level {lad.frontier + 2}
-                </span>
-              </span>
+            {isOpen && (
+              <div className="mm-rung-body">
+                <TrickCard level={l} n={i + 1} compact />
+                <button className="btn small" onClick={() => start(l.id)}>
+                  Practise this level
+                </button>
+              </div>
             )}
-          </div>
-        </div>
-        <dl className="mm-stats">
-          <div>
-            <dt>Streak</dt>
-            <dd>
-              {st.current} <small>{st.current === 1 ? 'day' : 'days'}</small>
-            </dd>
-          </div>
-          <div>
-            <dt>Best streak</dt>
-            <dd>
-              {b.streak} <small>{b.streak === 1 ? 'day' : 'days'}</small>
-            </dd>
-          </div>
-          <div>
-            <dt>Fastest</dt>
-            <dd>{b.fastest === null ? '–' : <>{b.fastest.toFixed(1)} <small>s a question</small></>}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section className="mm-block">
-        <div className="mm-block-head">
-          <h3 className="mm-h">Last {16} weeks</h3>
-          <div className="mm-reminder">
-            <span className="mm-meta">Remind me</span>
-            <div className="pill-segment" role="radiogroup" aria-label="Reminder">
-              {(
-                [
-                  ['off', 'Off'],
-                  ['morning', 'Mornings, 8:00'],
-                  ['evening', 'Evenings, 19:00']
-                ] as [Reminder, string][]
-              ).map(([v, l]) => (
-                <button key={v} type="button" role="radio" aria-checked={state.reminder === v} className={state.reminder === v ? 'on' : ''} onClick={() => setReminder(v)}>
-                  {l}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <Calendar sessions={state.sessions} />
-        <p className="mm-meta mm-cal-key">
-          <i className="mm-key good" /> a good session <i className="mm-key done" /> practised {state.reminder !== 'off' && <>· A notification comes at {REMINDER_HOUR[state.reminder]}:00 while Tide is open, if today’s isn’t done.</>}
-        </p>
-      </section>
-
-      <section className="mm-block">
-        <div className="mm-block-head">
-          <h3 className="mm-h">The ladder</h3>
-          <span className="mm-meta">{TO_UNLOCK} good sessions on a level unlock the next. Earlier levels keep coming back, spaced.</span>
-        </div>
-        <ol className="mm-ladder">
-          {LEVELS.map((l, i) => {
-            const state = i < lad.frontier ? 'done' : i === lad.frontier ? 'now' : 'locked'
-            const s = stats[l.id]
-            const isOpen = open === l.id
-            return (
-              <li key={l.id} className={`mm-rung ${state}${isOpen ? ' open' : ''}`}>
-                <button className="mm-rung-row" disabled={state === 'locked'} aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : l.id)}>
-                  <span className="mm-rung-n">{state === 'done' ? <Icon name="check" size={12} /> : i + 1}</span>
-                  <span className="mm-rung-title">{l.title}</span>
-                  <span className="mm-meta mm-rung-state">{state === 'now' ? `${lad.good} of ${TO_UNLOCK}` : state === 'done' ? (s?.seen ? `${Math.round((s.right / s.seen) * 100)}% right` : 'Unlocked') : 'Locked'}</span>
-                  {state !== 'locked' && <Icon name="chevron" size={11} className="mm-rung-chev" />}
-                </button>
-                {isOpen && (
-                  <div className="mm-rung-body">
-                    <TrickCard level={l} n={i + 1} compact />
-                    <button className="btn small" onClick={() => start(l.id)}>
-                      Practise this level
-                    </button>
-                  </div>
-                )}
-              </li>
-            )
-          })}
-        </ol>
-      </section>
-    </div>
+          </li>
+        )
+      })}
+    </ol>
   )
 }
 
@@ -257,74 +128,6 @@ const levelStatsFor = (sessions: MathsSession[]) => {
       if (a.right) x.right++
     }
   return out
-}
-
-// ---------- Home ----------
-
-export function MathsHomeCard({ variant }: { variant: 'tide' | 'classic' }) {
-  const app = useApp()
-  const { state } = useMaths()
-  if (!state) return null
-  const { st, lad, lastToday, level, reminderDue } = summary(state)
-  const go = () => app.setView({ kind: 'maths', nonce: Date.now() })
-  const last14 = Array.from({ length: 14 }, (_, i) => addDays(dayKey(Date.now()), i - 13))
-  const days = new Set(state.sessions.map((s) => s.day))
-  const body = (
-    <>
-      <div className="mm-home-top">
-        <span className="mm-home-streak">
-          <b>{st.current}</b> {st.current === 1 ? 'day' : 'days'} in a row
-        </span>
-        <span className="mm-home-strip" aria-hidden="true">
-          {last14.map((d) => (
-            <i key={d} className={days.has(d) ? 'on' : ''} />
-          ))}
-        </span>
-      </div>
-      <p className={`mm-home-line${reminderDue ? ' due' : ''}`}>
-        {st.doneToday && lastToday
-          ? `Done today: ${scoreSession(lastToday).right} of ${scoreSession(lastToday).total} right.`
-          : reminderDue
-            ? `Your ${state.reminder} session is waiting: level ${lad.frontier + 1}, ${level.title.toLowerCase()}.`
-            : `Today: level ${lad.frontier + 1}, ${level.title.toLowerCase()}. About 5 minutes.`}
-      </p>
-      <div className="mm-home-acts">
-        <button className={`btn small${st.doneToday ? '' : ' primary'}`} onClick={go}>
-          {st.doneToday ? 'Another' : 'Start'}
-        </button>
-        <button
-          className={variant === 'tide' ? 'td-more' : 'home-link small'}
-          onClick={() => {
-            try {
-              localStorage.setItem('tide.practice.tab', 'maths')
-            } catch {
-              // Practice opens on its last tab
-            }
-            app.setView({ kind: 'practice' })
-          }}
-        >
-          The ladder
-        </button>
-      </div>
-    </>
-  )
-  if (variant === 'tide')
-    return (
-      <section className="mm-home">
-        <div className="td-sec-head first">
-          <h2 className="td-sec">Mental maths</h2>
-        </div>
-        {body}
-      </section>
-    )
-  return (
-    <section className="rail-card mm-home">
-      <div className="rail-head">
-        <h2>Mental maths</h2>
-      </div>
-      {body}
-    </section>
-  )
 }
 
 // ---------- The session ----------
@@ -434,14 +237,7 @@ export function MathsView({ level: chosen }: { level?: string }) {
 
   const lvl = levelById(focus)
   const n = levelIndex(focus) + 1
-  const back = () => {
-    try {
-      localStorage.setItem('tide.practice.tab', 'maths')
-    } catch {
-      // Practice opens on its last tab
-    }
-    app.setView({ kind: 'practice' })
-  }
+  const back = () => app.setView({ kind: 'workout', nonce: Date.now() })
 
   if (!state || !phase || !lvl) return <div className="page mm-page" />
 
@@ -451,7 +247,7 @@ export function MathsView({ level: chosen }: { level?: string }) {
         <header className="mm-head">
           <button className="mm-back" onClick={back}>
             <Icon name="back" size={13} />
-            Mental maths
+            Morning workout
           </button>
           <span className="mm-meta">
             Level {n}: {lvl.title}
@@ -660,7 +456,7 @@ function Scorecard({ session, before, all, onAgain, onBack }: { session: MathsSe
           Another session
         </button>
         <button className="btn" onClick={onBack}>
-          Back to the ladder
+          Back to the workout
         </button>
       </div>
     </div>

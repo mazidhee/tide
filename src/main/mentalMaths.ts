@@ -1,13 +1,11 @@
 /**
  * Daily mental maths (shared/mentalMaths makes and marks the questions): the log of sessions and
- * the reminder setting, kept in the vault under .tide/, and the reminder itself, a notification
- * at the chosen time when today's session isn't done.
+ * the old reminder setting, kept in the vault under .tide/. The morning workout (main/workout)
+ * took over the daily slot and the reminder; this stays for practising one level of the ladder.
  */
 import { promises as fs } from 'fs'
-import { BrowserWindow, Notification } from 'electron'
-import { dayKey, fixedExplanation, levelById, streak, REMINDER_HOUR, type MathsAnswer, type MathsSession, type MathsState, type Reminder } from '@shared/mentalMaths'
+import { dayKey, fixedExplanation, levelById, type MathsAnswer, type MathsSession, type MathsState, type Reminder } from '@shared/mentalMaths'
 import { absPath, joinRel } from './vault'
-import { getSettings } from './settings'
 
 const LOG = joinRel('.tide', 'mental-maths.jsonl')
 const PREFS = joinRel('.tide', 'mental-maths.json')
@@ -86,34 +84,4 @@ export async function explainMiss(a: Pick<MathsAnswer, 'level' | 'prompt' | 'ans
     // The fixed explanation below
   }
   return { text: fixed, by: 'tide' }
-}
-
-let notifiedOn = ''
-
-/** Checks every few minutes: past the reminder hour, today not done and not yet reminded → one notification */
-export function startMathsReminder(open: () => void) {
-  const check = async () => {
-    if (!getSettings().vaultPath) return
-    const today = dayKey(Date.now())
-    if (notifiedOn === today) return
-    const { sessions, reminder } = await mathsState()
-    if (reminder === 'off' || new Date().getHours() < REMINDER_HOUR[reminder]) return
-    const s = streak(sessions.map((x) => x.day), today)
-    if (s.doneToday) return
-    notifiedOn = today
-    if (!Notification.isSupported()) return
-    const n = new Notification({
-      title: 'Mental maths',
-      body: s.current ? `Five minutes keeps your ${s.current}-day streak going.` : 'Five minutes of mental maths for today.',
-      silent: true
-    })
-    n.on('click', () => {
-      const w = BrowserWindow.getAllWindows()[0]
-      if (w?.isMinimized()) w.restore()
-      open()
-    })
-    n.show()
-  }
-  setTimeout(() => void check().catch(() => {}), 60_000)
-  setInterval(() => void check().catch(() => {}), 5 * 60_000)
 }
