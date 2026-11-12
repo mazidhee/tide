@@ -693,7 +693,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     const out = asking ? null : (ranNow ?? runOut)
     const ran = out ? `\n\nWhen I ran it:\n\`\`\`\n${(out.stdout + out.stderr).slice(0, 1500) || '(no output)'}\n\`\`\`` : ''
     const choice = currentAsk?.type === 'choice' && currentAsk.options.length > 0
-    const pick = choice && picked !== null && currentAsk.options[picked] ? `(${String.fromCharCode(65 + picked)}) ${currentAsk.options[picked]}` : ''
+    const pick = choice && picked !== null && currentAsk.options[picked] ? currentAsk.options[picked] : ''
     const body =
       text ??
       (asking

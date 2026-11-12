@@ -376,7 +376,8 @@ export function isAnswer(req: TurnRequest, said: string): boolean {
   if (!req.session) return false
   const prev = [...req.messages].reverse().find((m) => m.role === 'assistant')
   if (!prev || !/<ask\b/i.test(text(prev.content))) return false
-  return !/^\s*(\[hint\]|my question:|(i (don'?t|do not) know|go on|continue|skip)\b)/i.test(said)
+  // Not an attempt (Go on, a hint, "I don't know" however it's typed): nothing to mark
+  return !/^\s*(\[hint\]|my question:|(i (don'?t|do not) know|i dunno|idk|no idea|not sure|no clue|i have no (idea|clue)|i'?m not sure|go on|continue|skip)\b)/i.test(said.replace(/[\u2018\u2019\u02bc]/g, "'"))
 }
 
 const MARK_SYSTEM = `You mark one answer a student gave in a lesson, for their tutor. Grade against the tutor's own solution when there is one (it is inside <solution>; the student never saw it). "correct" means complete and right, not just heading the right way; a right answer with wrong or missing reasoning is "partial". An equivalent method or ordering is not a mistake. Quote the words of their answer that earned the verdict. A code answer may come with what Tide's sandbox found when it ran their code against the question's hidden tests (the tests are in the \`\`\`tests block of the question; the results read "N of M tests passed" with each FAILED test and why): it can't be "correct" unless every test passed, and for each failed test say what that test tried and the exact line or idea in their code that makes it fail. A note from Tide on an exact check of their final answer or query is a fact: follow it. Reply with JSON only: {"verdict": "correct" | "partial" | "wrong", "score": 0.0 to 1.0, "why": "one or two sentences: what was right and why, or the exact step that's wrong and why"}.`
