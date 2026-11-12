@@ -299,13 +299,16 @@ export const EXERCISE_TAG = /<exercise\b[^>]*?\bid\s*=\s*["']?([\w-]+)["']?[^>]*
 /**
  * Swaps each <exercise id="…"/> Claude writes for the verified exercise as the lesson shows it
  * (`render`), or for nothing when there's no verified exercise by that id: the learner never sees
- * an exercise that wasn't proven. A tag split across deltas is held until it closes. `flush` sends
- * whatever is still held at the end of the turn.
+ * an exercise that wasn't proven. A tag split across deltas is held until it closes. Claude's own
+ * <ask> tags are held until they close too and go through `ask`, which takes out hidden tests
+ * Claude wrote itself (they were never checked) and gives a retry of an exercise that exercise's
+ * own. `flush` sends whatever is still held at the end of the turn.
  */
-export function exerciseTap<E extends { type: string; text?: string }>(emit: (e: E) => void, render: (id: string) => string | null) {
+export function exerciseTap<E extends { type: string; text?: string }>(emit: (e: E) => void, render: (id: string) => string | null, ask: (tag: string) => string = (t) => t) {
   let held = ''
   const out = (e: E, text: string) => text && emit({ ...e, text })
   let last: E | null = null
+  const OPEN = /<(exercise|ask)\b/i
   return {
     tap(e: E) {
       if (e.type === 'reset') held = ''
@@ -314,26 +317,64 @@ export function exerciseTap<E extends { type: string; text?: string }>(emit: (e:
       let text = held + (e.text ?? '')
       held = ''
       for (;;) {
-        const m = EXERCISE_TAG.exec(text)
+        const m = OPEN.exec(text)
         if (!m) break
-        out(e, text.slice(0, m.index))
-        out(e, render(m[1]) ?? '')
-        text = text.slice(m.index + m[0].length)
+        if (m[1].toLowerCase() === 'exercise') {
+          const tag = EXERCISE_TAG.exec(text.slice(m.index))
+          if (!tag || tag.index !== 0) break
+          out(e, text.slice(0, m.index))
+          out(e, render(tag[1]) ?? '')
+          text = text.slice(m.index + tag[0].length)
+        } else {
+          const end = text.indexOf('</ask>', m.index)
+          if (end < 0) break
+          out(e, text.slice(0, m.index))
+          out(e, ask(text.slice(m.index, end + 6)))
+          text = text.slice(end + 6)
+        }
       }
-      // Something that could still become a tag waits for the next delta
-      const open = text.lastIndexOf('<')
-      const tail = open >= 0 ? text.slice(open) : ''
-      if (tail && !tail.includes('>') && ('<exercise'.startsWith(tail.toLowerCase()) || /^<exercise\b/i.test(tail))) {
-        held = tail
-        text = text.slice(0, open)
+      // An open tag, or something that could still become one, waits for the next delta
+      const m = OPEN.exec(text)
+      if (m) {
+        held = text.slice(m.index)
+        text = text.slice(0, m.index)
+      } else {
+        const open = text.lastIndexOf('<')
+        const tail = open >= 0 ? text.slice(open) : ''
+        if (tail && !tail.includes('>') && ('<exercise'.startsWith(tail.toLowerCase()) || '<ask'.startsWith(tail.toLowerCase()))) {
+          held = tail
+          text = text.slice(0, open)
+        }
       }
       out(e, text)
     },
     flush() {
-      if (held && last) out(last, held.replace(/^<exercise\b[\s\S]*$/i, ''))
+      if (held && last) out(last, /^<ask\b/i.test(held) ? ask(held) : held.replace(/^<exercise\b[\s\S]*$/i, ''))
       held = ''
     }
   }
+}
+
+/**
+ * Claude's own ask, made safe: hidden tests it wrote itself are taken out (they were never
+ * checked), and when it asks again for the code exercise last set (its function or the same
+ * language's query), that exercise's hidden solution and tests go with it, so the retry is marked
+ * against the same proven tests.
+ */
+export function fixAsk(tag: string, lastExercise?: BankProblem): string {
+  const attrs = /^<ask\b([^>]*)>/i.exec(tag)?.[1] ?? ''
+  if (!/type\s*=\s*["']?code/i.test(attrs)) return tag
+  const stripped = tag.replace(/\n?[ \t]*```tests[ \t]*\n[\s\S]*?(\n[ \t]*```|(?=<\/ask>))/i, '')
+  const p = lastExercise
+  if (!p || p.askType !== 'code') return stripped
+  const lang = normLang(/lang\s*=\s*["']?([\w+#-]+)/i.exec(attrs)?.[1] ?? 'python')
+  if (lang !== normLang(p.lang ?? 'python')) return stripped
+  const body = stripped.replace(/^<ask\b[^>]*>/i, '').replace(/<\/ask>$/i, '')
+  const names = lang === 'python' ? pythonFunctions(p.solution.replace(/```\w*\n?/g, '')) : []
+  const same = lang === 'sql' || (names.length > 0 && names.some((n) => new RegExp(`\\b${n}\\b`).test(body)))
+  if (!same) return stripped
+  const tests = p.tests ? `\n\`\`\`tests\n${p.tests.trim()}\n\`\`\`` : ''
+  return `<solution>${p.solution}</solution>\n\n<ask${attrs}>${body.trimEnd()}${tests}</ask>`
 }
 
 /** Said to Claude after a check fails */

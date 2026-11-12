@@ -20,7 +20,7 @@ import type { ToolContext } from './agent'
 import type { ChatEvent } from '@shared/types'
 import { pickProblem, problemsSoFar, renderProblem, type BankProblem, type Direction, type Level } from '@shared/bank'
 import { answersOf, replay, type Known, type Move, type Turn } from '@shared/difficulty'
-import { exerciseId, exerciseTap, kindOf, parseExercise, repairNote, verifiedNote, verifyExercise, type ExerciseIO, type ExerciseKind } from '@shared/exercises'
+import { exerciseId, exerciseTap, fixAsk, kindOf, parseExercise, repairNote, verifiedNote, verifyExercise, type ExerciseIO, type ExerciseKind } from '@shared/exercises'
 
 export interface LessonInfo {
   topic?: string
@@ -55,6 +55,8 @@ const failed = new Map<string, { lesson: string; repaired: boolean; kind: Exerci
 /** The level of each lesson's last exercise, and what it has shown */
 const lastLevel = new Map<string, Level>()
 const shownIn = new Map<string, Set<string>>()
+/** Each lesson's last exercise shown, for a retry of it */
+const lastShown = new Map<string, BankProblem>()
 
 const MAX_FAILURES = 4
 const DAY = 86_400_000
@@ -228,14 +230,15 @@ export function exerciseStream(req: { labId?: string; chatId?: string; id: strin
     const prev = lastLevel.get(lesson)
     const dir: Direction | undefined = prev === undefined ? undefined : r.problem.level > prev ? 'harder' : r.problem.level < prev ? 'easier' : 'same'
     lastLevel.set(lesson, r.problem.level)
+    lastShown.set(lesson, r.problem)
     const seen = shownIn.get(lesson) ?? new Set<string>()
     seen.add(r.problem.id)
     shownIn.set(lesson, seen)
     void import('./bank').then((b) => b.markUsed(r.problem.topic, r.problem.id))
     return renderProblem(r.problem, problemsSoFar([...replies, sent]) + 1, dir, r.worked)
   }
-  return exerciseTap<ChatEvent>(out, render) as { tap: (e: ChatEvent) => void; flush: () => void }
+  return exerciseTap<ChatEvent>(out, render, (tag) => fixAsk(tag, lastShown.get(lesson))) as { tap: (e: ChatEvent) => void; flush: () => void }
 }
 
 /** For tests */
-export const _exerciseState = { ready, failed, lessons, lastLevel, shownIn }
+export const _exerciseState = { ready, failed, lessons, lastLevel, shownIn, lastShown }

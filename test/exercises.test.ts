@@ -17,7 +17,7 @@ const asked: string[] = []
 let haiku: (prompt: string) => string = () => ''
 vi.mock('../src/main/claudeEngine', () => ({ claudeOnce: async (prompt: string) => (asked.push(prompt), { text: haiku(prompt) }) }))
 
-const { verifyExercise, parseExercise, exerciseTap, stubFor } = await import('../src/shared/exercises')
+const { verifyExercise, parseExercise, exerciseTap, stubFor, fixAsk } = await import('../src/shared/exercises')
 const { runCode } = await import('../src/main/runner')
 const { labQuery, labSchema } = await import('../src/main/lab')
 const { schemaText } = await import('../src/shared/lab')
@@ -327,4 +327,30 @@ describe('privacy', () => {
     t.flush()
     expect(out.join('')).toBe('Before  after <b>bold</b>')
   })
+
+  it("takes out hidden tests Claude wrote itself, and gives a retry of an exercise that exercise's own", async () => {
+    const lab = 'lesson:retry'
+    ex.setLessonInfo(lab, { topic: 'Python lists', history: [] })
+    const r = await ex.setExerciseTool.run(DEDUPE, ctx(lab))
+    const id = /id (x\w+)/.exec(r)![1]
+    const out: string[] = []
+    const s1 = ex.exerciseStream({ id: 'a', labId: lab, messages: [] }, (e) => e.type === 'delta' && out.push(e.text))
+    s1.tap({ id: 'a', type: 'delta', text: `<exercise id="${id}"/>` })
+    s1.flush()
+    out.length = 0
+    // The retry, its ask streamed in pieces, with a test Claude added that nothing checked
+    const s2 = ex.exerciseStream({ id: 'b', labId: lab, messages: [] }, (e) => e.type === 'delta' && out.push(e.text))
+    for (const t of ['<grade verdict="partial">Close.</grade>\n\n<ask type="code" lang="py', 'thon">Fix your `dedupe(xs)`.\n```tests\ndef test_fast():\n    assert dedupe(list(range(9)))\n```\n</a', 'sk> after']) s2.tap({ id: 'b', type: 'delta', text: t })
+    s2.flush()
+    const reply = out.join('')
+    expect(reply).not.toContain('test_fast')
+    expect(reply).toMatch(/<\/grade>\n\n<solution>```python\ndef dedupe/)
+    const ask = parseBlocks(reply).find((b) => b.kind === 'ask') as { tests?: string; prompt: string }
+    expect(ask.prompt).toBe('Fix your `dedupe(xs)`.')
+    expect(ask.tests).toContain('def test_keeps_first_order')
+    expect(reply.endsWith(' after')).toBe(true)
+    // Another code question: its own tests go, and nothing is added
+    expect(fixAsk('<ask type="code" lang="python">Write `total(xs)`.\n```tests\ndef test_a():\n    assert total([1]) == 1\n```</ask>', ex._exerciseState.lastShown.get(lab))).toBe('<ask type="code" lang="python">Write `total(xs)`.</ask>')
+    expect(fixAsk('<ask type="short">Why?</ask>')).toBe('<ask type="short">Why?</ask>')
+  }, LONG)
 })
