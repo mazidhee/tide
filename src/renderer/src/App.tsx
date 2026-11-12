@@ -446,6 +446,7 @@ export default function App() {
     >
       {!settings.sidebarCollapsed && !focusId && !immersive && <Sidebar dueCount={due.due} />}
       {immersive && <SidebarPeek dueCount={due.due} />}
+      {settings.sidebarCollapsed && !focusId && !immersive && <SidebarPeek dueCount={due.due} keys={false} />}
       <main className="main">
         {!['file', 'graph', 'help', 'lab', 'code', 'design', 'chat', 'session', 'quiz', 'exam'].includes(view.kind) && (tide ? <TopBar /> : <div className="titlebar-drag drag" />)}
         {settings.sidebarCollapsed && !focusId && !immersive && (

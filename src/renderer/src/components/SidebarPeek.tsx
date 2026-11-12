@@ -7,7 +7,11 @@ import { useEffect, useRef, useState } from 'react'
 import { Sidebar } from './Sidebar'
 import { useApp } from '../state'
 
-export function SidebarPeek({ dueCount }: { dueCount: number }) {
+/**
+ * Also while you've collapsed the sidebar: hidden, and there when you move to the left edge, as in
+ * Notion. Then ⌘\ stays the app's own toggle (it brings the sidebar back for good), so `keys` is off.
+ */
+export function SidebarPeek({ dueCount, keys = true }: { dueCount: number; keys?: boolean }) {
   const [open, setOpen] = useState(false)
   const { view } = useApp()
   // Going somewhere from it closes it
@@ -22,6 +26,7 @@ export function SidebarPeek({ dueCount }: { dueCount: number }) {
     leave.current = setTimeout(() => setOpen(false), ms)
   }
   useEffect(() => {
+    if (!keys) return
     const key = (e: KeyboardEvent) => {
       if (e.metaKey && e.key === '\\') {
         e.preventDefault()
@@ -34,7 +39,7 @@ export function SidebarPeek({ dueCount }: { dueCount: number }) {
       window.removeEventListener('keydown', key, true)
       clearTimeout(leave.current)
     }
-  }, [])
+  }, [keys])
   return (
     <>
       <div className="peek-edge" onMouseEnter={() => (leave.current = setTimeout(show, 90))} onMouseLeave={() => clearTimeout(leave.current)} aria-hidden="true" />
