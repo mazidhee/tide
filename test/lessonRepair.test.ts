@@ -81,3 +81,11 @@ describe('stray tags', async () => {
     expect(repairReply(reply, 'Go on.').text).toMatch(/<path>\/etc\/x<\/path>/)
   })
 })
+
+import { saysDontKnow as _saysDontKnow } from '../src/shared/lessonRepair'
+describe('saying you don’t know is never marked', () => {
+  it('reads every way of saying it, after Answer: too', () => {
+    for (const s of ['Answer: i dont know i am learning from scratch', "I don't know", 'Answer: no idea', "I haven't learned this yet", 'Answer: I’m learning this from scratch', 'idk']) expect(_saysDontKnow(s)).toBe(true)
+    for (const s of ['Answer: 11', 'Answer: I know it is 11 because 8+2+1', 'Answer: fetch, decode, execute']) expect(_saysDontKnow(s)).toBe(false)
+  })
+})

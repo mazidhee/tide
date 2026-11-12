@@ -43,7 +43,7 @@ ${list}
 - Ask at most ${PLACEMENT_QUESTIONS} questions, one at a time. Each tests using an idea, not reciting a definition, and may cover more than one topic.
 - Start with the most advanced topics: a confident right answer there shows the basics before it are known too. After a miss, step down to the topic it rests on.
 - Keep questions quick: choice when picking tests the idea well, short otherwise. Don't teach during the check: after each answer, a one-line grade and the next question.
-- Stop as soon as it's clear.
+- Stop as soon as it's clear. If the student says they don't know, or that they're new to this or learning it from scratch, that is not a wrong answer: don't grade it, don't explain the answer or make a flashcard from it, and don't ask more questions on topics that build on it. When they say they're starting from scratch, end the check there: every topic not already shown is new.
 - At the end, write the result for every topic number, one per line, inside a placement tag:
 <placement>
 1: known
@@ -51,7 +51,7 @@ ${list}
 3: new
 </placement>
 known = answered right and sure, or clearly implied by a harder answer; shaky = partly right, unsure, or rusty; new = wrong, or nothing shows they know it.
-Then <summary>what they can skip, what needs a refresher, and what they'll learn</summary> and no ask tag.`
+Then <summary>what they can skip, what needs a refresher, and what they'll learn</summary> and no ask tag. When nothing is known or shaky, the summary says plainly that they'll start at the beginning and names the first topic: no "you can skip nothing".`
 }
 
 /** The result of a check, by topic id; topics the tutor left out count as new */

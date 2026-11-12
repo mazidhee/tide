@@ -18,6 +18,7 @@ import { createInterface } from 'readline'
 import { createHash } from 'crypto'
 import type { AgentStep, ChatEvent, ChatMessage, ClaudeModel, ClaudeRole } from '@shared/types'
 import { claudeModel, claudeLabel, asksForDepth, rank } from '@shared/claude'
+import { saysDontKnow } from '@shared/lessonRepair'
 import { checkClaude, childEnv, claudeArgs, findClaude, mcpConfig, parseLine, unavailableReason, userLine, type ClaudeEvent, type ClaudeStatus, type ClaudeUsage } from './claudeCli'
 import { getSettings } from './settings'
 import type { TurnRequest, ToolContext } from './agent'
@@ -376,6 +377,7 @@ export function isAnswer(req: TurnRequest, said: string): boolean {
   if (!req.session) return false
   const prev = [...req.messages].reverse().find((m) => m.role === 'assistant')
   if (!prev || !/<ask\b/i.test(text(prev.content))) return false
+  if (saysDontKnow(said)) return false
   return !/^\s*(\[hint\]|my question:|(i (don'?t|do not) know|go on|continue|skip)\b)/i.test(said)
 }
 
