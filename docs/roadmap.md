@@ -29,6 +29,12 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
   - Course lessons that have a video show it beside the course text.
   - After that: the video pauses at chosen moments for a question and goes on when you answer.
   - Videos without captions can be transcribed on the Mac, only on request and when Gemma is idle.
+- [ ] **Claude as your tutor, on your Ultra plan.** Tide runs your own logged-in Claude Code (`claude -p`, unmodified, no API key) as an engine in its model router. Tide never reads or copies your login.
+  - Opus: marking, maths, lesson plans, hard explanations. Sonnet: ordinary lesson turns. Haiku: quick background work. Gemma: private notebooks and Metabase (never sent out), offline, or near your limit.
+  - One Claude process per lesson, kept running, so turns stream in about 2 s and the lesson stays cached; Claude Code's own tools and your connectors switched off; any API key in the environment stripped so the plan is used.
+  - Tide's tools (run code, SQL, search, readings, simulations) handed to Claude as a local MCP server, so Claude teaches with them exactly as Gemma does.
+  - Usage shown in Connections; choose per notebook or per lesson which engine teaches.
+  - Then: Tide as a connector for Claude Code in Ghostty, with your notes, lessons, progress and the runner, recording your answers back to What you know.
 - [ ] **Faster lesson starts and fewer stalls.** The first answer of a new lesson takes 14–27 s. Gemma stalls in about 14% of turns, and retries run one after another. The turn after a long lesson is trimmed re-reads it all. Partial work: worktree `tide-fast2`.
 - [ ] **Everyday check: Python and ML from zero.** Run real lessons the way you use Tide ("I want to learn Python", "I want to learn ML"), over several sessions, and fix what goes wrong.
 - [ ] **Lab pack ready before it's needed.** Install the data and ML packages (about 900 MB) from Settings, in the background, so the first ML lesson doesn't stall for 30 s. Partial work: worktree `tide-voice`.
