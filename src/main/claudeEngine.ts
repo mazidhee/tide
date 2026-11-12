@@ -96,7 +96,7 @@ export interface UsageRecord extends ClaudeUsage {
 
 const usageFile = () => join(app.getPath('userData'), 'claude-usage.jsonl')
 
-function recordUse(r: UsageRecord) {
+export function recordUse(r: UsageRecord) {
   try {
     appendFileSync(usageFile(), JSON.stringify(r) + '\n')
   } catch {

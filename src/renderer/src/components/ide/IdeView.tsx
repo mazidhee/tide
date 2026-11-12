@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type * as Monaco from 'monaco-editor'
 import type { RunResult } from '@shared/types'
 import type { WorkshopState } from '@shared/workshop'
-import type { BlameLine, DebugToolStatus, FileList, GitStatus, LspServerInfo, PairStatus, Proposal, ReviewComment, TestDiscovery, TestRun, Workspace } from '@shared/ide'
+import type { BlameLine, BugHunt, DebugToolStatus, FileList, GitStatus, LibraryItem, LspServerInfo, PairEvent, PairMode, PairStatus, Proposal, ReviewComment, TestDiscovery, TestNode, TestRun, Workspace } from '@shared/ide'
 import { useApp } from '../../state'
 import { monaco } from '../../lib/monaco'
 import { enablePythonLanguageServer, setDefinitionOpener } from '../../lib/lsp/python'
@@ -22,6 +22,8 @@ import { GitDiffPane, ProposalPane } from './DiffPane'
 import { EditorPane, type Reveal } from './EditorPane'
 import { Explorer } from './Explorer'
 import { PairPanel } from './PairPanel'
+import { QuickHelp } from './QuickHelp'
+import { Library, NewProjectSheet } from './Library'
 import { Palette, type Command, type PaletteSymbol } from './Palette'
 import { ScmPane } from './ScmPane'
 import { SearchPane } from './SearchPane'
@@ -90,6 +92,7 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
   const [debug, setDebug] = useState<DebugSessionStore | null>(null)
   const [files, setFiles] = useState<FileList>({ files: [], dirs: [], truncated: false })
   const [switcher, setSwitcher] = useState(false)
+  const [treeFilter, setTreeFilter] = useState('')
   const root = ws?.root ?? null
 
   useEffect(() => {
@@ -242,7 +245,13 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
   useEffect(() => {
     if (root) store.set(`tide.ide.expanded:${root}`, [...expanded])
   }, [expanded, root])
-  const tree = useMemo(() => buildTree(files.files, files.dirs), [files])
+  const tree = useMemo(() => {
+    const q = treeFilter.trim().toLowerCase()
+    if (!q) return buildTree(files.files, files.dirs)
+    return buildTree(files.files.filter((f) => f.toLowerCase().includes(q)))
+  }, [files, treeFilter])
+  /** While filtering, every folder holding a match is open */
+  const shownExpanded = useMemo(() => (treeFilter.trim() ? new Set(files.files.filter((f) => f.toLowerCase().includes(treeFilter.trim().toLowerCase())).flatMap(parentsOf)) : expanded), [treeFilter, files, expanded])
 
   // ---------- Problems ----------
   const [problems, setProblems] = useState<Problem[]>([])
@@ -407,7 +416,15 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
   const [panel, setPanel] = useState<PanelTab | null>(() => store.get<PanelTab | null>('tide.ide.panel', null))
   const [panelHeight, setPanelHeight] = useState(() => store.get('tide.ide.panelHeight', 240))
   const [panelMax, setPanelMax] = useState(false)
-  const [right, setRight] = useState<'claude' | 'tutor' | null>(() => store.get<'claude' | 'tutor' | null>('tide.ide.right', 'claude'))
+  const [right, setRight] = useState<'help' | 'claude' | 'tutor' | null>(() => store.get<'help' | 'claude' | 'tutor' | null>('tide.ide.right', 'help'))
+  const [library, setLibrary] = useState(false)
+  const [sheet, setSheet] = useState(false)
+  const [addMenu, setAddMenu] = useState(false)
+  const [explorerNew, setExplorerNew] = useState<{ kind: 'file' | 'folder'; nonce: number } | null>(null)
+  const [pairPending, setPairPending] = useState<{ mode: PairMode; text: string; nonce: number } | null>(null)
+  /** The last run's or test run's result, for the status pill */
+  const [outcome, setOutcome] = useState<{ text: string; tone: 'idle' | 'busy' | 'good' | 'bad' | 'warn' } | null>(null)
+  const [outputKind, setOutputKind] = useState<'run' | 'tests'>('run')
   const [rightWidth, setRightWidth] = useState(() => store.get('tide.ide.rightWidth', 360))
   const [searchSeed, setSearchSeed] = useState({ text: '', nonce: 0 })
   useEffect(() => store.set('tide.ide.side', side), [side])
@@ -449,7 +466,10 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
     setPanel('output')
     try {
       await saveAll()
-      setResult(await window.tide.ide.run(root, activeFile, stdin))
+      setOutputKind('run')
+      const r = await window.tide.ide.run(root, activeFile, stdin)
+      setResult(r)
+      setOutcome(r.exitCode === 0 && !r.timedOut ? { text: `Finished in ${r.durationMs < 1000 ? `${r.durationMs} ms` : `${(r.durationMs / 1000).toFixed(1)} s`}`, tone: 'good' } : { text: r.timedOut ? 'Stopped at the time limit' : `Exited with ${r.exitCode}`, tone: 'bad' })
     } catch (e) {
       setResult({ stdout: '', stderr: clean(e), exitCode: 1, timedOut: false, durationMs: 0 })
     } finally {
@@ -527,12 +547,14 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
       if (!root || testing) return
       await saveAll()
       setTesting(ids ?? ['*'])
+      setOutputKind('tests')
+      setPanel('output')
       try {
         const r = await window.tide.ide.tests.run(root, ids)
         setTestRun(r)
         const failed = r.outcomes.filter((o) => o.status === 'fail' || o.status === 'error').length
-        if (r.error) toast(r.error, true)
-        else toast(failed ? `${failed} test${failed === 1 ? '' : 's'} failed` : `${r.outcomes.length} test${r.outcomes.length === 1 ? '' : 's'} passed`, !!failed)
+        const passed = r.outcomes.filter((o) => o.status === 'pass').length
+        setOutcome(r.error && !r.outcomes.length ? { text: 'Tests didn’t run', tone: 'bad' } : failed ? { text: `${failed} fail, ${passed} pass`, tone: 'bad' } : { text: `${passed} pass`, tone: 'good' })
       } catch (e) {
         toast(clean(e), true)
       } finally {
@@ -574,6 +596,54 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
   const [proposals, setProposals] = useState<Proposal[]>([])
   const [comments, setComments] = useState<ReviewComment[]>([])
 
+  // Claude's proposals, comments and requests to open a file
+  useEffect(() => {
+    if (!root) return
+    window.tide.ide.pair.proposals(root).then(setProposals).catch(() => {})
+    return window.tide.ide.pair.onEvent((e: PairEvent) => {
+      if (e.type === 'proposal') {
+        setProposals((ps) => [...ps.filter((x) => x.id !== e.proposal.id), e.proposal])
+        if (e.proposal.root === root) openTab({ key: `proposal:${e.proposal.id}`, kind: 'proposal', path: e.proposal.path, id: e.proposal.id })
+      } else if (e.type === 'comment' && e.comment.root === root) {
+        setComments((cs) => [...cs, e.comment])
+        openFile(e.comment.path)
+      } else if (e.type === 'opened' && e.root === root) openFile(e.path, e.line ? { line: e.line, column: 1 } : undefined)
+      else if (e.type === 'applied' && e.root === root) void docs?.diskChanged([e.path])
+    })
+  }, [root, docs, openTab, openFile])
+  // What Claude's get_diagnostics and debug_state tools read
+  useEffect(() => {
+    if (!root) return
+    const t = setTimeout(() => window.tide.ide.pair.problems(root, problems.map((p) => ({ path: p.path, line: p.line, column: p.column, severity: p.severity >= 8 ? 'error' : p.severity >= 4 ? 'warning' : 'info', message: p.message, source: p.source }))), 400)
+    return () => clearTimeout(t)
+  }, [problems, root])
+  useEffect(() => {
+    if (root && debug) window.tide.ide.pair.debugState(root, debug.describe())
+  }, [dbg, root, debug])
+
+  const openLibraryItem = async (it: LibraryItem) => {
+    setLibrary(false)
+    await saveAll()
+    try {
+      const w = await window.tide.ide.open(it.root)
+      setKnown(await window.tide.ide.workspaces())
+      setWs(w)
+      if (it.path) setTimeout(() => openFile(it.path!), 300)
+    } catch (e) {
+      toast(clean(e), true)
+    }
+  }
+  const openHunt = async (h: BugHunt) => {
+    await saveAll()
+    const w = await window.tide.ide.open(h.root).catch(() => null)
+    if (!w) return toast('The bug hunt’s copy couldn’t be opened.', true)
+    setKnown(await window.tide.ide.workspaces())
+    setWs(w)
+    setRight('claude')
+    setPairPending({ mode: 'bughunt', text: 'Plant a bug for me to find', nonce: Date.now() })
+    toast('A copy of your project, for the bug hunt. Your own project isn’t touched.')
+  }
+
   // ---------- Commands ----------
   const [palette, setPalette] = useState<string | null>(null)
   const act = useRef<Record<string, () => void>>({})
@@ -585,7 +655,7 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
     gotoLine: () => setPalette(':'),
     toggleSide: () => setSide((s) => (s ? null : 'explorer')),
     togglePanel: () => setPanel((p) => (p ? null : 'problems')),
-    toggleRight: () => setRight((r) => (r ? null : 'claude')),
+    toggleRight: () => setRight((r) => (r ? null : 'help')),
     explorer: () => setSide('explorer'),
     search: () => {
       const sel = cursor?.selection && !cursor.selection.includes('\n') ? cursor.selection : ''
@@ -636,7 +706,11 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
       if (name?.trim()) void createPath(name.trim(), 'file')
     },
     revealActive: () => activeFile && root && void window.tide.ide.reveal(root, activeFile),
-    refresh: () => (refreshFiles(), refreshGit())
+    refresh: () => (refreshFiles(), refreshGit()),
+    library: () => setLibrary((l) => !l),
+    collapseFolders: () => setExpanded(new Set()),
+    newProject: () => setSheet(true),
+    quickHelp: () => setRight('help')
   }
   const cycleTab = (d: number) => {
     const g = groupsRef.current[focusRef.current]
@@ -657,6 +731,10 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
       c('saveAll', 'File: Save All', '⌥⌘S'),
       c('newFile', 'File: New File…'),
       c('openFolder', 'File: Open Folder…'),
+      c('newProject', 'File: New Project…'),
+      c('library', 'View: Library', '⇧⌘L'),
+      c('collapseFolders', 'Files: Collapse Folders'),
+      c('quickHelp', 'View: Quick Help'),
       c('revealActive', 'File: Reveal in Finder'),
       c('toggleAutoSave', `File: ${autoSave ? 'Turn Off' : 'Turn On'} Auto Save`),
       c('toggleFormatOnSave', `Editor: ${formatOnSave ? 'Turn Off' : 'Turn On'} Format on Save`),
@@ -668,7 +746,7 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
       c('prevTab', 'View: Previous Editor', '⌃⇧Tab'),
       c('toggleSide', 'View: Toggle Side Bar', '⌘B'),
       c('togglePanel', 'View: Toggle Panel', '⌘J'),
-      c('toggleRight', 'View: Toggle Claude', '⌥⌘B'),
+      c('toggleRight', 'View: Toggle the Inspector', '⌥⌘B'),
       c('explorer', 'View: Show Explorer', '⇧⌘E'),
       c('search', 'Search: Find in Files', '⇧⌘F'),
       c('scm', 'View: Show Source Control', '⌃⇧G'),
@@ -677,7 +755,7 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
       c('problems', 'View: Toggle Problems', '⇧⌘M'),
       c('terminal', 'View: Toggle Terminal', '⌃`'),
       c('newTerminal', 'Terminal: Create New Terminal', '⌃⇧`'),
-      c('run', 'Run: Run File in the Sandbox', '⌘↩'),
+      c('run', 'Run: Run File in the Sandbox', '⌘R'),
       c('debugStart', 'Debug: Start Debugging / Continue', 'F5'),
       c('debugStop', 'Debug: Stop', '⇧F5'),
       c('debugRestart', 'Debug: Restart', '⇧⌘F5'),
@@ -686,7 +764,7 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
       c('stepIn', 'Debug: Step Into', 'F11'),
       c('stepOut', 'Debug: Step Out', '⇧F11'),
       c('toggleBreakpoint', 'Debug: Toggle Breakpoint', 'F9'),
-      c('runTests', 'Test: Run All Tests'),
+      c('runTests', 'Test: Run All Tests', '⌘U'),
       c('toggleBlame', `Git: ${blameOn ? 'Hide' : 'Show'} Inline Blame`),
       c('refresh', 'Git: Refresh')
     ]
@@ -733,6 +811,9 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
         if (k === '\\') return run('split')
         if (k === '1' || k === '2' || k === '3') return run(`focus${k}`)
         if (k === 'enter' && !e.shiftKey) return run('run')
+        if (k === 'r' && !e.shiftKey) return run('run')
+        if (k === 'l' && e.shiftKey) return run('library')
+        if (k === 'u' && !e.shiftKey) return run('runTests')
         if (k === 'f5' && e.shiftKey) return run('debugRestart')
       }
       if (cmd && e.altKey) {
@@ -1003,13 +1084,15 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
   }
 
   const sideView = side && root && (
-    <aside className="ix-side no-drag" style={{ width: sideWidth }} aria-label="Side bar">
+    <>
       {side === 'explorer' && (
         <Explorer
           name={ws?.name ?? ''}
           tree={tree}
           truncated={files.truncated}
-          expanded={expanded}
+          expanded={shownExpanded}
+          filtering={!!treeFilter.trim()}
+          newRequest={explorerNew}
           onToggle={(p) =>
             setExpanded((e) => {
               const n = new Set(e)
@@ -1041,7 +1124,7 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
           refresh={refreshGit}
           onOpenDiff={(p, staged) => openTab({ key: `diff:${p}:${staged ? 's' : 'w'}`, kind: 'diff', path: p, staged })}
           onToast={toast}
-          onReview={() => (setRight('claude'), window.dispatchEvent(new CustomEvent('tide-ide-pair', { detail: { mode: 'review' } })))}
+          onReview={() => (setRight('claude'), setPairPending({ mode: 'review', text: 'Review my changes', nonce: Date.now() }))}
           claudeReady={!!pair?.ready}
         />
       )}
@@ -1063,27 +1146,50 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
           setupBusy={setupBusy}
         />
       )}
-      <div className="ix-sash v" onMouseDown={(e) => dragSide(e, 'side')} />
-    </aside>
+    </>
   )
 
-  const activity: { id: Side; icon: Parameters<typeof Icon>[0]['name']; label: string; badge?: number }[] = [
-    { id: 'explorer', icon: 'files', label: 'Explorer (⇧⌘E)' },
+  const views: { id: Side; icon: Parameters<typeof Icon>[0]['name']; label: string; badge?: number }[] = [
+    { id: 'explorer', icon: 'files', label: 'Files (⇧⌘E)' },
     { id: 'search', icon: 'search', label: 'Search (⇧⌘F)' },
-    { id: 'scm', icon: 'branch', label: 'Source control (⌃⇧G)', badge: git?.files.length || undefined },
+    { id: 'scm', icon: 'branch', label: 'Changes (⌃⇧G)', badge: git?.files.length || undefined },
     { id: 'debug', icon: 'bug', label: 'Run and debug (⇧⌘D)' },
-    { id: 'tests', icon: 'flask', label: 'Testing' }
+    { id: 'tests', icon: 'flask', label: 'Tests' }
   ]
+  const stoppedFrame = dbg?.status === 'stopped' && dbg.frame !== null ? dbg.frames[dbg.frame] : null
+  const pill: { text: string; tone: 'idle' | 'busy' | 'good' | 'bad' | 'warn' } = running
+    ? { text: 'Running…', tone: 'busy' }
+    : testing
+      ? { text: 'Testing…', tone: 'busy' }
+      : dbg?.status === 'building' || dbg?.status === 'starting'
+        ? { text: dbg.status === 'building' ? 'Building…' : 'Starting the debugger…', tone: 'busy' }
+        : stoppedFrame
+          ? { text: `Paused at ${stoppedFrame.path ? nameOf(stoppedFrame.path) : stoppedFrame.name}:${stoppedFrame.line}`, tone: 'warn' }
+          : debugging
+            ? { text: 'Debugging', tone: 'busy' }
+            : (outcome ?? { text: 'Ready', tone: 'idle' })
+  const subtitle = [lang ? languageLabel(lang) : null, git?.repo ? (git.branch ?? git.detached) : null].filter(Boolean).join(' · ')
 
   return (
     <div className={`ix${panelMax ? ' panel-max' : ''}`}>
       <header className="doc-toolbar drag ix-head">
         <div className="ix-head-left no-drag">
+          <button className={`icon-btn small${side ? ' on' : ''}`} onClick={() => setSide((s) => (s ? null : 'explorer'))} title="Show or hide the sidebar (⌘B)" aria-label="Sidebar">
+            <Icon name="sidebar" size={15} />
+          </button>
+          {running || debugging ? (
+            <button className="icon-btn small ix-run" onClick={() => (debugging ? void debug?.stop() : undefined)} disabled={running} title={debugging ? 'Stop debugging (⇧F5)' : 'Running'} aria-label="Stop">
+              <Icon name="stop" size={14} />
+            </button>
+          ) : (
+            <button className="icon-btn small ix-run" onClick={() => void run()} disabled={!activeFile} title="Run in the sandbox (⌘R)" aria-label="Run">
+              <Icon name="play" size={15} />
+            </button>
+          )}
           <div className="popover-anchor">
             <button className="ix-ws" onClick={() => setSwitcher((s) => !s)} title={root ?? ''} aria-haspopup="menu">
-              <Icon name="folder" size={14} />
-              <span>{ws?.name ?? 'No folder'}</span>
-              <Icon name="chevron" size={10} className="ix-ws-chev" />
+              <span className="ix-ws-name">{ws?.name ?? 'No project'}</span>
+              <span className="ix-ws-sub">{subtitle || (ws?.kind === 'code' ? 'In your notes' : 'Project')}</span>
             </button>
             {switcher && (
               <div className="popover ix-ws-menu" role="menu" onMouseLeave={() => setSwitcher(false)}>
@@ -1093,28 +1199,39 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
                     <span>Code (in your notes)</span>
                   </button>
                 )}
-                {known.recent.map((w) => (
+                {known.recent.slice(0, 8).map((w) => (
                   <button key={w.root} role="menuitem" className={w.root === root ? 'on' : ''} onClick={() => void switchTo(w)} title={w.root}>
                     <Icon name={w.kind === 'bughunt' ? 'bug' : 'folder'} size={13} />
                     <span>{w.name}</span>
                     <span className="ix-row-dir">{w.root.replace(/^\/Users\/[^/]+/, '~')}</span>
                   </button>
                 ))}
-                <button role="menuitem" onClick={() => (setSwitcher(false), void openFolder())}>
+                <hr />
+                <button role="menuitem" onClick={() => (setSwitcher(false), setLibrary(true))}>
+                  <Icon name="grid" size={13} />
+                  <span>Library…</span>
+                </button>
+                <button role="menuitem" onClick={() => (setSwitcher(false), setSheet(true))}>
                   <Icon name="plus" size={13} />
+                  <span>New project…</span>
+                </button>
+                <button role="menuitem" onClick={() => (setSwitcher(false), void openFolder())}>
+                  <Icon name="folder" size={13} />
                   <span>Open folder…</span>
                 </button>
               </div>
             )}
           </div>
-          <button className="ix-cmd" onClick={() => setPalette('')} title="Go to file (⌘P), commands (⇧⌘P)">
-            <Icon name="search" size={13} />
-            <span>{ws ? `Search ${ws.name}` : 'Search'}</span>
-            <kbd className="ix-kbd">⌘P</kbd>
-          </button>
         </div>
-        <div className="toolbar-actions no-drag">
-          {activeFile && <TimeThis context={{ label: nameOf(activeFile), path: ws?.kind === 'code' ? `Code/${activeFile}` : activeFile, kind: 'session' }} />}
+        <button className={`ix-pill no-drag ${pill.tone}`} onClick={() => setPanel('output')} title="Show the output (⌘J)">
+          <span className="ix-pill-file">{activeFile ? nameOf(activeFile) : (ws?.name ?? 'Tide')}</span>
+          <Icon name="chevron" size={9} />
+          <span className="ix-pill-state">
+            <span className="ix-pill-dot" />
+            {pill.text}
+          </span>
+        </button>
+        <div className="ix-head-right no-drag">
           {project && (
             <button className="tool-btn" onClick={async () => {
               setProjectTesting(true)
@@ -1132,31 +1249,76 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
               <span>{projectTesting ? 'Testing…' : 'Stage tests'}</span>
             </button>
           )}
-          <button className="tool-btn primary-ish" onClick={() => void run()} disabled={!activeFile || running} title="Run in the sandbox (⌘Enter)">
-            <Icon name="play" />
-            <span>{running ? 'Running…' : 'Run'}</span>
+          {activeFile && <TimeThis context={{ label: nameOf(activeFile), path: ws?.kind === 'code' ? `Code/${activeFile}` : activeFile, kind: 'session' }} />}
+          <button className="icon-btn small" onClick={() => setPalette('')} title="Go to a file (⌘P) or a command (⇧⌘P)" aria-label="Go to">
+            <Icon name="search" size={15} />
           </button>
-          <button className={`tool-btn${right === 'claude' ? ' on' : ''}`} onClick={() => setRight((r) => (r ? null : 'claude'))} title="Claude, your pair programmer (⌥⌘B)">
-            <Icon name="claude" />
-            <span>Claude</span>
+          <button className={`icon-btn small${library ? ' on' : ''}`} onClick={() => setLibrary((l) => !l)} title="Library: your projects and snippets (⇧⌘L)" aria-label="Library">
+            <Icon name="grid" size={15} />
+          </button>
+          <button className="icon-btn small" onClick={() => root && void window.tide.ide.reveal(root, activeFile ?? '')} disabled={!root} title="Show in Finder" aria-label="Show in Finder">
+            <Icon name="upload" size={15} />
+          </button>
+          <button className={`icon-btn small${right ? ' on' : ''}`} onClick={() => setRight((r) => (r ? null : 'help'))} title="Inspector: Quick Help and Claude (⌥⌘B)" aria-label="Inspector">
+            <Icon name="panel" size={15} />
           </button>
         </div>
       </header>
 
       <div className="ix-body">
-        <nav className="ix-activity no-drag" aria-label="Views">
-          {activity.map((a) => (
-            <button key={a.id} className={side === a.id ? 'on' : ''} onClick={() => showSide(a.id)} title={a.label} aria-label={a.label} aria-pressed={side === a.id}>
-              <Icon name={a.icon} size={19} />
-              {a.badge ? <span className="ix-activity-badge">{a.badge > 99 ? '99+' : a.badge}</span> : null}
-              {a.id === 'debug' && debugging && <span className="ix-activity-dot" />}
-            </button>
-          ))}
-        </nav>
-        {sideView}
+        {side && root && (
+          <aside className="ix-side no-drag" style={{ width: sideWidth }} aria-label="Sidebar">
+            <nav className="ix-views" aria-label="Views">
+              {views.map((a) => (
+                <button key={a.id} className={side === a.id ? 'on' : ''} onClick={() => setSide(a.id)} title={a.label} aria-label={a.label} aria-pressed={side === a.id}>
+                  <Icon name={a.icon} size={15} />
+                  {a.badge ? <span className="ix-views-badge">{a.badge > 99 ? '99+' : a.badge}</span> : null}
+                  {a.id === 'debug' && debugging && <span className="ix-views-dot" />}
+                </button>
+              ))}
+            </nav>
+            <div className="ix-side-body">{sideView}</div>
+            {side === 'explorer' && (
+              <div className="ix-side-foot">
+                <div className="popover-anchor">
+                  <button className="icon-btn small" onClick={() => setAddMenu((m) => !m)} title="New file, folder or project" aria-label="New">
+                    <Icon name="plus" size={15} />
+                  </button>
+                  {addMenu && (
+                    <div className="popover ix-add-menu" role="menu" onMouseLeave={() => setAddMenu(false)}>
+                      <button role="menuitem" onClick={() => (setAddMenu(false), setExplorerNew({ kind: 'file', nonce: Date.now() }))}>
+                        New file
+                      </button>
+                      <button role="menuitem" onClick={() => (setAddMenu(false), setExplorerNew({ kind: 'folder', nonce: Date.now() }))}>
+                        New folder
+                      </button>
+                      <button role="menuitem" onClick={() => (setAddMenu(false), setSheet(true))}>
+                        New project…
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="ix-filter">
+                  <Icon name="search" size={12} />
+                  <input value={treeFilter} onChange={(e) => setTreeFilter(e.target.value)} placeholder="Filter" aria-label="Filter files" spellCheck={false} onKeyDown={(e) => e.key === 'Escape' && setTreeFilter('')} />
+                  {treeFilter && (
+                    <button onClick={() => setTreeFilter('')} aria-label="Clear the filter">
+                      <Icon name="x" size={10} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className="ix-sash v" onMouseDown={(e) => dragSide(e, 'side')} />
+          </aside>
+        )}
         <main className="ix-main no-drag">
-          <div className="ix-groups">{groups.map(renderGroup)}</div>
-          {panel && dbg && debug && root && (
+          {library ? (
+            <Library current={root} onNew={() => setSheet(true)} onOpen={(it) => void openLibraryItem(it)} />
+          ) : (
+            <div className="ix-groups">{groups.map(renderGroup)}</div>
+          )}
+          {panel && dbg && debug && root && !library && (
             <div className="ix-panel-wrap" style={panelMax ? undefined : { height: panelHeight }}>
               <div className="ix-sash h" onMouseDown={(e) => dragSide(e, 'panel')} />
               <BottomPanel
@@ -1188,28 +1350,44 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
                   })
                 }}
                 cwd={root}
-                testOutput={testRun ? testRun.output : null}
+                tests={outputKind === 'tests' ? testRun : null}
+                testing={!!testing}
+                onTest={(id) => {
+                  const t = findTest(discovery?.tests ?? [], id)
+                  if (t?.path) openFile(t.path, { line: t.line ?? 1, column: 1 })
+                }}
                 extra={project ? { label: 'Stage tests', node: <ProjectTests project={project} testing={projectTesting} onOpenProject={() => app.setView({ kind: 'workshop', id: project.id })} /> } : null}
               />
             </div>
           )}
         </main>
         {right && (
-          <aside className="ix-right no-drag" style={{ width: rightWidth }} aria-label="Claude">
+          <aside className="ix-right no-drag" style={{ width: rightWidth }} aria-label="Inspector">
             <div className="ix-sash v left" onMouseDown={(e) => dragSide(e, 'right')} />
             <div className="ix-right-tabs" role="tablist">
-              <button className={right === 'claude' ? 'on' : ''} onClick={() => setRight('claude')} role="tab" aria-selected={right === 'claude'}>
-                Claude
-              </button>
-              <button className={right === 'tutor' ? 'on' : ''} onClick={() => setRight('tutor')} role="tab" aria-selected={right === 'tutor'}>
-                Tutor
-              </button>
-              <span className="ix-gap" />
-              <button className="icon-btn small" onClick={() => setRight(null)} aria-label="Close" title="Close (⌥⌘B)">
-                <Icon name="x" size={12} />
-              </button>
+              {(['help', 'claude', 'tutor'] as const).map((t) => (
+                <button key={t} className={right === t ? 'on' : ''} onClick={() => setRight(t)} role="tab" aria-selected={right === t}>
+                  {t === 'help' ? 'Quick Help' : t === 'claude' ? 'Claude' : 'Tutor'}
+                </button>
+              ))}
             </div>
-            {right === 'claude' ? <PairPanel status={pair} /> : <TutorPanel file={activeFile} text={activeDoc?.model.getValue() ?? ''} language={lang ?? 'plaintext'} result={result} problems={problems} />}
+            {right === 'help' && <QuickHelp docs={docs} cursor={cursor && cursor.path === activeFile ? cursor : null} claudeReady={!!pair?.ready} onExplain={(word) => (setRight('claude'), setPairPending({ mode: 'ask', text: `Explain \`${word}\` as it's used in ${activeFile ?? 'this file'}${cursor ? ` (line ${cursor.line})` : ''}: what it is, where it comes from, and how it's used here.`, nonce: Date.now() }))} />}
+            <div className="ix-right-claude" hidden={right !== 'claude'}>
+              <PairPanel
+                status={pair}
+                root={root}
+                rootKind={ws?.kind ?? null}
+                activePath={activeFile}
+                selection={cursor?.path === activeFile ? (cursor?.selection ?? '') : ''}
+                proposals={proposals}
+                onOpenProposal={(pr) => openTab({ key: `proposal:${pr.id}`, kind: 'proposal', path: pr.path, id: pr.id })}
+                onRetry={() => window.tide.ide.pair.status(true).then(setPair).catch(() => {})}
+                onOpenHunt={(h) => void openHunt(h)}
+                pending={pairPending}
+                clearPending={() => setPairPending(null)}
+              />
+            </div>
+            {right === 'tutor' && <TutorPanel file={activeFile} text={activeDoc?.model.getValue() ?? ''} language={lang ?? 'plaintext'} result={result} problems={problems} />}
           </aside>
         )}
       </div>
@@ -1259,6 +1437,20 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
         </button>
       </footer>
 
+      {sheet && (
+        <NewProjectSheet
+          onClose={() => setSheet(false)}
+          onMade={async (w, open) => {
+            setSheet(false)
+            setLibrary(false)
+            await saveAll()
+            setKnown(await window.tide.ide.workspaces())
+            setWs(w)
+            setTimeout(() => openFile(open), 400)
+          }}
+        />
+      )}
+
       {palette !== null && root && (
         <Palette
           initial={palette}
@@ -1280,6 +1472,14 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
 }
 
 const NONE: never[] = []
+const findTest = (list: TestNode[], id: string): TestNode | null => {
+  for (const n of list) {
+    if (n.id === id) return n
+    const c = n.children && findTest(n.children, id)
+    if (c) return c
+  }
+  return null
+}
 const NO_COMMENTS: ReviewComment[] = []
 const NO_GIT: GitStatus['files'] = []
 const noopSub = () => () => {}

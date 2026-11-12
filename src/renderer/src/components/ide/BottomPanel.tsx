@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RunResult } from '@shared/types'
+import type { TestRun } from '@shared/ide'
 import type { Problem } from '../../lib/codeProject'
 import type { DebugSessionStore, DebugSnapshot } from '../../lib/ide/debugSession'
 import { Icon } from '../Icon'
@@ -40,7 +41,10 @@ export function BottomPanel(p: {
   onNewTerm(): void
   onCloseTerm(k: string): void
   cwd: string
-  testOutput: string | null
+  /** The last test run, shown in Output when it was the last thing run */
+  tests: TestRun | null
+  testing: boolean
+  onTest(id: string): void
   extra?: { label: string; node: React.ReactNode } | null
 }) {
   const [repl, setRepl] = useState('')
@@ -58,18 +62,17 @@ export function BottomPanel(p: {
     <div className="ix-panel">
       <div className="ix-panel-head">
         <div className="ix-panel-tabs" role="tablist">
-          {tab('problems', <>Problems{p.problems.length ? <span className="ix-count">{p.problems.length}</span> : null}</>)}
           {tab('output', 'Output')}
-          {tab('debug', 'Debug console')}
           {tab('terminal', 'Terminal')}
-          {p.testOutput !== null && tab('tests', 'Test results')}
+          {tab('problems', <>Problems{p.problems.length ? <span className="ix-count">{p.problems.length}</span> : null}</>)}
+          {tab('debug', 'Debug console')}
           {p.extra && (
             <button className={p.tab === 'extra' ? 'on' : ''} onClick={() => p.setTab('extra')}>
               {p.extra.label}
             </button>
           )}
         </div>
-        {p.tab === 'output' && p.result && (
+        {p.tab === 'output' && p.result && !p.tests && !p.testing && (
           <span className="ix-panel-note">
             exit {p.result.exitCode}
             {p.result.timedOut ? ', stopped at the time limit' : ''} · {p.result.durationMs} ms
@@ -124,7 +127,12 @@ export function BottomPanel(p: {
             )}
           </div>
         )}
-        {p.tab === 'output' && (
+        {p.tab === 'output' && (p.tests || p.testing) && (
+          <div className="ix-output">
+            <TestLines run={p.tests} testing={p.testing} onTest={p.onTest} />
+          </div>
+        )}
+        {p.tab === 'output' && !p.tests && !p.testing && (
           <div className="ix-output">
             <input className="ix-stdin" value={p.stdin} onChange={(e) => p.setStdin(e.target.value)} placeholder="Input for the program (stdin), optional" aria-label="Program input" />
             <pre>
@@ -178,9 +186,48 @@ export function BottomPanel(p: {
             </button>
           )}
         </div>
-        {p.tab === 'tests' && <pre className="ix-test-output">{p.testOutput || 'No output.'}</pre>}
         {p.tab === 'extra' && p.extra?.node}
       </div>
+    </div>
+  )
+}
+
+/** Test results inline, as a test runner prints them: a line per test, failures with why, a summary */
+function TestLines({ run, testing, onTest }: { run: TestRun | null; testing: boolean; onTest(id: string): void }) {
+  const [raw, setRaw] = useState(false)
+  if (testing && !run) return <pre>Running the tests in the sandbox…</pre>
+  if (!run) return null
+  const failed = run.outcomes.filter((o) => o.status === 'fail' || o.status === 'error')
+  const passed = run.outcomes.filter((o) => o.status === 'pass').length
+  const skipped = run.outcomes.filter((o) => o.status === 'skip').length
+  return (
+    <div className="ix-testlines">
+      <p className="ix-testlines-cmd">
+        {run.framework} · {(run.ms / 1000).toFixed(1)} s{testing ? ' · running again…' : ''}
+      </p>
+      <ul>
+        {run.outcomes.map((o) => (
+          <li key={o.id} className={o.status}>
+            <button onClick={() => onTest(o.id)} title="Go to the test">
+              <span className="ix-testlines-mark">{o.status === 'pass' ? '✓' : o.status === 'skip' ? '–' : '✗'}</span>
+              <span className="ix-testlines-name">{o.id.split('::').join(' › ')}</span>
+              {o.ms !== undefined && <span className="ix-testlines-ms">[{o.ms} ms]</span>}
+            </button>
+            {(o.status === 'fail' || o.status === 'error') && o.message && <pre className="ix-testlines-why">{o.message}</pre>}
+          </li>
+        ))}
+      </ul>
+      {run.error && <pre className="ix-stderr">{run.error}</pre>}
+      <p className={`ix-testlines-sum${failed.length ? ' bad' : ' good'}`}>
+        {failed.length ? `${failed.length} fail · ` : ''}
+        {passed} pass{skipped ? ` · ${skipped} skipped` : ''}
+      </p>
+      {run.output && (
+        <button className="ix-link small ix-testlines-raw" onClick={() => setRaw((r) => !r)}>
+          {raw ? 'Hide the full output' : 'Show the full output'}
+        </button>
+      )}
+      {raw && <pre>{run.output}</pre>}
     </div>
   )
 }

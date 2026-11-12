@@ -65,7 +65,9 @@ export function forget(root: string) {
 export function allowed(root: string): string {
   const r = resolve(String(root ?? ''))
   if (!root || !existsSync(r)) throw new Error('That folder isn’t there any more.')
-  if (r === codeRoot()) return r
+  const code = codeRoot()
+  // The Code folder, and any project folder in it
+  if (code && (r === code || r.startsWith(code + '/'))) return r
   if (readRecent().some((w) => w.root === r)) return r
   throw new Error('Open the folder from the IDE first.')
 }
@@ -73,7 +75,7 @@ export function allowed(root: string): string {
 export function open(root: string): Workspace {
   const r = allowed(root)
   if (r === codeRoot()) return { root: r, name: 'Code', kind: 'code' }
-  const known = readRecent().find((w) => w.root === r)!
+  const known = readRecent().find((w) => w.root === r) ?? { root: r, name: basename(r), kind: 'folder' as const }
   // Opened again: first in the list
   return remember(r, known.kind, known.name)
 }

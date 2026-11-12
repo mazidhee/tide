@@ -41,3 +41,24 @@ export function symbolBadge(k: number): { letter: string; tone: string } {
   if (name === 'enum' || name === 'enum member') return { letter: 'E', tone: 'type' }
   return { letter: '·', tone: 'other' }
 }
+
+interface HoverRegistry {
+  hoverProvider: { ordered(model: Monaco.editor.ITextModel): Monaco.languages.HoverProvider[] }
+}
+
+/** What the hover would say at a position (the Quick Help inspector shows it without hovering) */
+export async function hoverAt(model: Monaco.editor.ITextModel, position: Monaco.IPosition): Promise<string[]> {
+  try {
+    const svc = StandaloneServices.get(ILanguageFeaturesService) as HoverRegistry
+    const token = new monaco.CancellationTokenSource().token
+    const pos = new monaco.Position(position.lineNumber, position.column)
+    for (const p of svc.hoverProvider.ordered(model)) {
+      const r = await Promise.resolve(p.provideHover(model, pos, token)).catch(() => null)
+      const parts = (r?.contents ?? []).map((c) => c.value).filter((v) => v.trim())
+      if (parts.length) return parts
+    }
+  } catch (e) {
+    console.warn('[hover]', e)
+  }
+  return []
+}

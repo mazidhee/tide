@@ -30,6 +30,11 @@ export const ideApi: IdeApi = {
   search: invoke('ide:search'),
   replace: invoke('ide:replace'),
   run: invoke('ide:run'),
+  library: {
+    items: invoke('ide:library:items'),
+    setTags: invoke('ide:library:setTags'),
+    newProject: invoke('ide:library:newProject')
+  },
   git: {
     status: invoke('ide:git:status'),
     show: invoke('ide:git:show'),

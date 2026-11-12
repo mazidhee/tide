@@ -12,6 +12,10 @@ interface Props {
   tree: Node[]
   truncated: boolean
   expanded: Set<string>
+  /** The tree shows only files matching the sidebar's filter */
+  filtering?: boolean
+  /** The sidebar's + asked for a new file or folder */
+  newRequest?: { kind: 'file' | 'folder'; nonce: number } | null
   onToggle(path: string): void
   active: string | null
   dirty: Set<string>
@@ -58,6 +62,10 @@ export function Explorer(p: Props) {
   useEffect(() => {
     if (editing) requestAnimationFrame(() => input.current?.select())
   }, [editing])
+  useEffect(() => {
+    if (p.newRequest) startNew(p.newRequest.kind, newAt())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.newRequest?.nonce])
   useEffect(() => {
     if (!menu) return
     const close = () => setMenu(null)
@@ -127,6 +135,7 @@ export function Explorer(p: Props) {
         <li key={n.path}>
           <button className={`ix-row folder${changedDirs.has(n.path) ? ' changed' : ''}${selected?.path === n.path ? ' sel' : ''}`} style={pad} aria-expanded={open} onClick={() => (setSelectedNode({ path: n.path, dir: n.dir }), p.onToggle(n.path))} onContextMenu={onContext} onKeyDown={keys} title={n.path}>
             <Icon name="chevron" size={10} className={`ix-chev${open ? ' open' : ''}`} />
+            <Icon name="folder" size={14} className="ix-glyph folder" />
             <span className="ix-row-name">{n.name}</span>
           </button>
           {open && (
@@ -144,13 +153,14 @@ export function Explorer(p: Props) {
       <li key={n.path}>
         <button
           className={`ix-row file${n.path === p.active ? ' on' : ''}${selected?.path === n.path ? ' sel' : ''}${g ? ` git-${g.tone}` : ''}${pr?.errors ? ' errors' : pr?.warnings ? ' warnings' : ''}`}
-          style={{ paddingLeft: 22 + depth * 12 }}
+          style={{ paddingLeft: 21 + depth * 12 }}
           onClick={() => (setSelectedNode({ path: n.path, dir: n.dir }), p.onOpen(n.path))}
           onContextMenu={onContext}
           onKeyDown={keys}
           title={n.path}
           draggable={false}
         >
+          <FileGlyph name={n.name} />
           <span className="ix-row-name">
             {n.name}
             {p.dirty.has(n.path) && <span className="ix-dirty-dot" aria-label="unsaved" />}
@@ -189,26 +199,12 @@ export function Explorer(p: Props) {
 
   return (
     <div className="ix-explorer">
-      <div className="ix-side-head">
-        <span className="ix-side-title" title={p.name}>
-          {p.name}
-        </span>
-        <button className="icon-btn small" onClick={() => startNew('file', newAt())} title="New file" aria-label="New file">
-          <Icon name="plus" size={14} />
-        </button>
-        <button className="icon-btn small" onClick={() => startNew('folder', newAt())} title="New folder" aria-label="New folder">
-          <Icon name="folder" size={14} />
-        </button>
-        <button className="icon-btn small" onClick={p.onCollapseAll} title="Collapse folders" aria-label="Collapse folders">
-          <Icon name="collapse" size={14} />
-        </button>
-      </div>
       <div className="ix-tree-scroll" onContextMenu={(e) => (e.preventDefault(), setMenu({ x: e.clientX, y: e.clientY, node: null }))}>
         <ul className="ix-tree" role="tree">
           {editing && editing.kind !== 'rename' && editing.dir === '' && editor(0, editing.kind === 'folder' ? 'folder' : 'note')}
           {p.tree.map((n) => row(n, 0))}
         </ul>
-        {!p.tree.length && !editing && <p className="ix-empty-note">No files yet. Make one with the + above.</p>}
+        {!p.tree.length && !editing && <p className="ix-empty-note">{p.filtering ? 'No file matches.' : 'No files yet. Make one with the + below.'}</p>}
         {p.truncated && <p className="ix-empty-note">Only the first 8,000 files are listed. Quick open (⌘P) still finds the rest by name.</p>}
       </div>
       <div className={`ix-outline${outlineOpen ? ' open' : ''}`}>
@@ -268,5 +264,18 @@ export function Explorer(p: Props) {
         </div>
       )}
     </div>
+  )
+}
+
+const EXT_TONE: Record<string, string> = { py: 'py', ts: 'ts', tsx: 'ts', js: 'js', mjs: 'js', jsx: 'js', c: 'c', h: 'c', cpp: 'c', rs: 'rs', go: 'go', md: 'md', json: 'cfg', toml: 'cfg', yml: 'cfg', yaml: 'cfg', lock: 'cfg' }
+
+/** A small document glyph, its fold tinted by the file's language */
+function FileGlyph({ name }: { name: string }) {
+  const ext = name.includes('.') ? name.split('.').pop()!.toLowerCase() : ''
+  return (
+    <svg className={`ix-glyph file ${EXT_TONE[ext] ?? ''}`} width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 3h7l5 5v11.5A1.5 1.5 0 0 1 17.5 21h-10A1.5 1.5 0 0 1 6 19.5v-15A1.5 1.5 0 0 1 7.5 3z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path className="ix-glyph-fold" d="M14 3v5h5" fill="none" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
   )
 }

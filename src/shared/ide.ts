@@ -247,6 +247,31 @@ export interface BugHunt {
   answer?: { path: string; diff: string; explanation: string }[]
 }
 
+export interface LibraryItem {
+  /** The project's root, or the snippet's absolute path */
+  key: string
+  kind: 'project' | 'snippet'
+  root: string
+  /** A snippet's path in its root */
+  path?: string
+  name: string
+  workspaceKind: Workspace['kind']
+  created: number
+  language: string
+  tags: string[]
+}
+
+export interface ProjectTemplate {
+  id: 'python' | 'python-tests' | 'data' | 'node' | 'typescript' | 'c' | 'rust' | 'go' | 'empty'
+  label: string
+  about: string
+  language: string
+  defaultName: string
+  /** The file to open first */
+  open: string
+  files(name: string): Record<string, string>
+}
+
 export interface IdeApi {
   workspaces(): Promise<{ code: Workspace | null; recent: Workspace[] }>
   /** Asks for a folder with the system dialog */
@@ -265,6 +290,11 @@ export interface IdeApi {
   search(root: string, opts: SearchOptions): Promise<SearchResult>
   replace(root: string, opts: SearchOptions, replacement: string, paths: string[]): Promise<{ files: number; replacements: number }>
   run(root: string, path: string, stdin?: string): Promise<RunResult>
+  library: {
+    items(): Promise<LibraryItem[]>
+    setTags(key: string, tags: string[]): Promise<void>
+    newProject(template: ProjectTemplate['id'], name: string, where: 'code' | 'choose'): Promise<Workspace | null>
+  }
   git: {
     status(root: string): Promise<GitStatus>
     show(root: string, path: string, ref?: string): Promise<string | null>

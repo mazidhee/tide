@@ -10,6 +10,7 @@ import { inside } from './paths'
 import { registerDebug, stopAll as stopDebugging } from './debug'
 import { registerLanguageServers, stopLanguageServers } from './languageServers'
 import { registerPair } from './pair'
+import { items as libraryItems, newProject, setTags } from './library'
 import { replace, search } from './search'
 import { discover, runTests, setupPytest } from './tests'
 import * as ws from './workspace'
@@ -38,6 +39,10 @@ export function registerIde(): void {
   handle('ide:replace', (root: string, o: SearchOptions, replacement: string, paths: string[]) => replace(root, o, String(replacement ?? ''), Array.isArray(paths) ? paths : []))
   // Run: the file's folder is copied into the sandbox, as the Code folder's runs always were
   handle('ide:run', (root: string, path: string, stdin?: string) => runProject(inside(ws.allowed(root), path), String(stdin ?? '')))
+
+  handle('ide:library:items', () => libraryItems())
+  handle('ide:library:setTags', (key: string, tags: string[]) => setTags(String(key), Array.isArray(tags) ? tags.map(String) : []))
+  ipcMain.handle('ide:library:newProject', (e, template, name: string, where: 'code' | 'choose') => newProject(e.sender, template, String(name ?? ''), where === 'choose' ? 'choose' : 'code'))
 
   handle('ide:git:status', (root: string) => git.status(root))
   handle('ide:git:show', (root: string, path: string, ref?: string) => git.show(root, path, ref ?? 'HEAD'))

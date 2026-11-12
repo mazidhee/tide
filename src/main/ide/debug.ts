@@ -190,6 +190,8 @@ export async function start(cfg: DebugStart, owner: WebContents, emit: (e: Debug
   const client = new DapClient(proc, {
     onEvent: (event, body) => {
       if (event === 'initialized') initialized()
+      // Library loads come by the hundred and the window has no use for them
+      if (event === 'module' || event === 'loadedSource') return
       emit({ id, type: 'event', event, body })
       if (event === 'terminated') void stop(id)
     },

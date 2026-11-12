@@ -47,6 +47,9 @@ with open(os.path.join(os.environ["TIDE_TOOLS"], "out.json"), "w") as f:
     json.dump({"code": int(code), "outcomes": list(r.out.values())}, f)
 `
 
+/** The project's own packages import from its root, as they do when you run python from there */
+const ROOT_ON_PATH = { PYTHONPATH: '.' }
+
 /** Which framework a project uses */
 export async function frameworkOf(root: string): Promise<TestDiscovery['framework']> {
   if (hasFile(root, 'Cargo.toml')) return 'cargo'
@@ -131,7 +134,7 @@ export async function discover(rootIn: string): Promise<TestDiscovery> {
   if (framework === 'pytest') {
     const python = pythonFor(root)
     if (!(await hasPytest(python, root))) return { framework, tests: [], needsSetup: python === mathPython() || !existsSync(mathPython()) }
-    const r = await inSandbox(root, [python, join('..', 'tools', 'collect.py')], { files: { 'collect.py': COLLECT }, read: ['out.json'], timeoutMs: 60_000 })
+    const r = await inSandbox(root, [python, join('..', 'tools', 'collect.py')], { files: { 'collect.py': COLLECT }, read: ['out.json'], timeoutMs: 60_000, env: ROOT_ON_PATH })
     try {
       const j = JSON.parse(r.read['out.json']) as { code: number; items: { id: string; path: string; line: number; name: string }[] }
       // 5 is "no tests collected"
@@ -153,7 +156,7 @@ export async function runTests(rootIn: string, ids?: string[]): Promise<TestRun>
   const picked = (ids ?? []).filter((id) => id && id !== '*')
   if (framework === 'pytest') {
     const python = pythonFor(root)
-    const r = await inSandbox(root, [python, join('..', 'tools', 'run.py'), ...picked], { files: { 'run.py': RUN }, read: ['out.json'], timeoutMs: 180_000 })
+    const r = await inSandbox(root, [python, join('..', 'tools', 'run.py'), ...picked], { files: { 'run.py': RUN }, read: ['out.json'], timeoutMs: 180_000, env: ROOT_ON_PATH })
     const output = (r.stdout + (r.stderr ? `\n${r.stderr}` : '')).trim()
     try {
       const j = JSON.parse(r.read['out.json']) as { code: number; outcomes: TestOutcome[] }
