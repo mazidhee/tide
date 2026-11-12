@@ -6,7 +6,7 @@
 import { kindOfMark, recalled } from '@shared/knowledge'
 import { gradeOf, reviewItems, type ReviewItem, type ReviewSetup } from '@shared/review'
 import type { Verdict } from '@shared/types'
-import { cardsOn, conceptById, conceptOfTopic, noteReviewAnswer } from './knowledge'
+import { cardsOnMany, conceptById, conceptOfTopic, noteReviewAnswer } from './knowledge'
 import { listMistakes, retestMistake } from './mistakes'
 import { recallItems, reviewRecall } from './recall'
 
@@ -18,15 +18,21 @@ const dayStart = (ymd: string) => {
 
 /** Every question kept on a concept, in whichever store, with when it is due */
 export async function keptOn(concept: string): Promise<ReviewItem[]> {
+  return (await keptOnMany([concept])).get(concept) ?? []
+}
+
+/** Every question kept on each of several concepts, reading each store once */
+export async function keptOnMany(concepts: string[]): Promise<Map<string, ReviewItem[]>> {
+  const out = new Map<string, ReviewItem[]>(concepts.map((c) => [c, []]))
   const named = new Map<string, Promise<string | null>>()
   const on = (topic: string) => {
     if (!named.has(topic)) named.set(topic, conceptOfTopic(topic))
     return named.get(topic)!
   }
-  const out: ReviewItem[] = []
-  for (const i of recallItems()) if ((await on(i.topic)) === concept) out.push({ kind: 'recall', id: i.id, topic: i.topic, question: i.prompt, due: i.due })
-  for (const m of await listMistakes()) if (m.status === 'open' && (await on(m.topic)) === concept) out.push({ kind: 'mistake', id: m.id, topic: m.topic, question: m.question, answer: m.fix, ...(m.path ? { path: m.path } : {}), due: dayStart(m.due) })
-  for (const c of await cardsOn(concept)) out.push({ kind: 'card', id: c.id, topic: '', question: c.front, answer: c.back, path: c.path, due: c.due })
+  const add = async (topic: string, item: ReviewItem) => out.get((await on(topic)) ?? '')?.push(item)
+  for (const i of recallItems()) await add(i.topic, { kind: 'recall', id: i.id, topic: i.topic, question: i.prompt, due: i.due })
+  for (const m of await listMistakes()) if (m.status === 'open') await add(m.topic, { kind: 'mistake', id: m.id, topic: m.topic, question: m.question, answer: m.fix, ...(m.path ? { path: m.path } : {}), due: dayStart(m.due) })
+  for (const [concept, cards] of await cardsOnMany(concepts)) for (const c of cards) out.get(concept)!.push({ kind: 'card', id: c.id, topic: '', question: c.front, answer: c.back, path: c.path, due: c.due })
   return out
 }
 

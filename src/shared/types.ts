@@ -107,8 +107,10 @@ export interface Settings {
   character?: import('./characters').CharacterId
   /** Why mode in lessons: Socratic, from first principles. Foundations (the default) turns it on for early, basic topics */
   whyMode?: 'off' | 'foundations' | 'always'
-  /** Breaks while you study: paced by the tutor, a fixed rhythm, or none */
+  /** Breaks while you study (before the planner): only "off" is still read, as breaks off */
   pomodoro?: 'auto' | 'off' | '25' | '50'
+  /** Breaks while you study: planned from the research and your own signals (shared/breaks) */
+  breaks?: Partial<import('./breaks').BreakSettings>
   /** The character in the menu bar: always, only while studying, or never */
   menuBar?: 'always' | 'studying' | 'off'
   /** A stronger cloud model for the hard parts; Gemma on this Mac stays the default */
@@ -807,6 +809,13 @@ export interface TideApi {
     review(concept: string): Promise<import('./review').ReviewSetup>
     /** One question of a review was marked: scheduled in its own store and counted on the concept */
     reviewAnswer(concept: string, item: import('./review').ReviewItem, verdict: Verdict): Promise<void>
+  }
+  /** The warm-up before a lesson: quick recall cards on what it builds on (shared/warmup) */
+  warmup: {
+    /** path: the note or folder the lesson is on, so a private project's concepts stay with private lessons */
+    for(topic: string, path?: string): Promise<import('./warmup').WarmupSet>
+    /** One card was graded: scheduled in its own store and counted on its concept */
+    grade(card: import('./warmup').WarmupCard, verdict: Verdict): Promise<void>
   }
   /** Free readings found for a topic; when there are none yet, they're looked up in the background */
   readings: {

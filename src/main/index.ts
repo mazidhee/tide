@@ -394,6 +394,9 @@ function registerIpc() {
   ipcMain.handle('web:close', async () => (await import('./webView')).closeWeb())
   handle('knowledge:review', async (concept: string) => (await import('./review')).reviewFor(concept))
   handle('knowledge:reviewAnswer', async (concept: string, item: import('@shared/review').ReviewItem, verdict: import('@shared/types').Verdict) => (await import('./review')).answerReview(concept, item, verdict))
+  // The warm-up before a lesson: quick cards on what it builds on (main/warmup.ts)
+  handle('warmup:for', async (topic: string, path?: string) => (await import('./warmup')).warmupFor(String(topic ?? ''), typeof path === 'string' && path ? path : undefined))
+  handle('warmup:grade', async (card: import('@shared/warmup').WarmupCard, verdict: import('@shared/types').Verdict) => (await import('./warmup')).gradeWarmup(card, verdict))
   // ---- Guided projects and adaptive difficulty (main/workshop.ts, main/difficulty.ts) ----
   const workshop = () => import('./workshop')
   handle('workshop:list', async () => (await workshop()).listWorkshop())

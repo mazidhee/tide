@@ -53,6 +53,10 @@ import { Level } from './tide/Level'
 import { AreaMark } from './tide/AreaMark'
 import { AnswerHint, AskPill, BackPill, FOLD_MS, SelectionAsk, ThreadSlot, highlightQuote, reducedMotion, type SelectionAt } from './LessonThreads'
 import { CameUpIn } from './ExploreLater'
+import { WarmUp } from './WarmUp'
+import { warmupNote, type WarmupSet } from '@shared/warmup'
+import { breakSignals, lessonForBreaks } from '../lib/breaks'
+import { saysDontKnow } from '@shared/lessonRepair'
 import { exploreLater, lessonSubject } from '../lib/explore'
 import { THREAD_RULES, asked, newThread, outputText, readsAsQuestion, replyParts, restoreThreads, saveFallback, threadMessages, threadNotes, threadsNote, wantsSave, withNote, type LessonThread } from '@shared/lessonThreads'
 import { lessonMap, type Divider } from '@shared/lessonMap'
@@ -264,6 +268,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const send = useCallback(
     async (content: string, history: Turn[]) => {
       const id = `session:${uid()}`
+      // For the break planner: how answers are going (lib/breaks)
+      if (/^Answer:/.test(content)) {
+        const said = ownWords(content).replace(/^Answer:\s*/, '').replace(/\n\(Confidence: [^)]*\)\s*$/, '').trim()
+        breakSignals.answered({ words: said.split(/\s+/).filter(Boolean).length, dontKnow: saysDontKnow(said), skip: isMoveOn(content) || /^Answer:\s*skip\b/i.test(content), topic: setupRef.current.topic })
+        answeredHere.current = true
+      } else if (/^\[hint\]/.test(content)) breakSignals.hint()
       // Answered while the last reply's checks were still running: stop them, your answer comes first
       if (activeId.current) window.tide.ai.cancel(activeId.current).catch(() => {})
       setChecking(false)
@@ -326,6 +336,29 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // A lesson on a topic a book you own covers is taught from that section: its text rides in the
   // opening message (hidden, and cached with the start of the lesson, so it costs time once)
   const openingRef = useRef(openingMessage(setup))
+  // The warm-up before a lesson (shared/warmup): the lesson's opening waits for it; its sources load meanwhile
+  const [warm, setWarm] = useState<WarmupSet | null>(null)
+  const warmGate = useRef<Promise<string>>(Promise.resolve(''))
+  const warmDone = useRef<((note: string) => void) | null>(null)
+  const answeredHere = useRef(false)
+  const startWarmup = (): Promise<string> =>
+    new Promise<string>((resolve) => {
+      if (mode !== 'teach' || options?.placement || options?.review || options?.check || options?.retest?.length) return resolve('')
+      let settled = false
+      // Never hold a lesson up for long waiting for the cards
+      const wait = setTimeout(() => ((settled = true), resolve('')), 3000)
+      window.tide.warmup
+        .for(topic, 'path' in scope ? scope.path : undefined)
+        .then((set) => {
+          if (settled) return
+          clearTimeout(wait)
+          settled = true
+          if (!set.cards.length) return resolve('')
+          warmDone.current = resolve
+          setWarm(set)
+        })
+        .catch(() => (clearTimeout(wait), resolve('')))
+    })
   const [pack, setPack] = useState<SourcePack | null>(null)
   const begin = async () => {
     let opening = openingMessage(setup)
@@ -356,6 +389,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           opening = `${opening}\n\n(Tide: ${relatedForPrompt({ ...r, items })} Bring each in when the lesson reaches the idea it covers, not all at once; the first may fit your first explanation.)`
       }
     }
+    // The warm-up on what this builds on, when there is one: the tutor hears what held and what faded
+    const warmed = await warmGate.current
+    if (warmed) opening = `${opening}\n\n${warmed}`
     openingRef.current = opening
     // Written ahead for this exact lesson (main/bank.ts): it opens at once
     const ready = await window.tide.bank.opening(sessionInstructions(setupRef.current), opening).catch(() => null)
@@ -414,6 +450,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       return
     }
     setTurns([])
+    warmGate.current = startWarmup()
     // A close call between two ways of teaching: the model breaks the tie, in a second or two
     if (choice && !choice.clear && !options?.strategy) {
       window.tide.ai
@@ -465,6 +502,10 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   askTypeRef.current = currentAsk?.type
   const currentAskRef = useRef(currentAsk)
   currentAskRef.current = currentAsk
+  // For the break planner: a question is on screen, waiting; how long the answer takes counts from here
+  useEffect(() => {
+    if (currentAsk?.prompt) breakSignals.asked()
+  }, [currentAsk?.prompt])
   // A new code question starts from its own starter, not from your answer to the last one
   const askedCode = useRef<string | null>(null)
   const codeAsk = askIdentity(currentAsk)
@@ -810,6 +851,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           ...(recordId ? { lesson: recordId } : {})
         })
         if (b.verdict === 'correct') setCheer(Date.now() + 4500)
+        // For the break planner: a mark on an answer given here
+        if (answeredHere.current && i === parsed.length - 1) breakSignals.marked(b.verdict, topic)
         // Review now: the k-th grade is the k-th kept question, scheduled where it is kept
         const review = options?.review
         if (review?.items.length) {
@@ -1343,6 +1386,41 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
 
   // The step the lesson is on, from the lesson map
   const planDone = map.phase === 'steps' ? map.current : map.steps.length
+  // For the break planner: a step passed, or the lesson done, is a natural moment to rest
+  const stepsSeen = useRef<number | null>(null)
+  useEffect(() => {
+    if (stepsSeen.current !== null && planDone > stepsSeen.current && plan) breakSignals.boundary('step', `step ${planDone}`)
+    stepsSeen.current = planDone
+  }, [planDone, plan])
+  useEffect(() => {
+    if (finished && answeredHere.current) breakSignals.boundary('lesson-end', 'the lesson')
+  }, [finished])
+  // ...and the break screen says where the lesson stopped, and asks one question from it on the way back
+  const breakLive = useRef({ plan, planDone, currentAsk, parsed })
+  breakLive.current = { plan, planDone, currentAsk, parsed }
+  useEffect(() => {
+    const short = (s: string) => {
+      const flat = s.replace(/[*_`$#>]/g, '').replace(/\s+/g, ' ').trim()
+      return flat.length > 64 ? `${flat.slice(0, 63).replace(/\s+\S*$/, '')}…` : flat
+    }
+    lessonForBreaks({
+      where: () => {
+        const l = breakLive.current
+        const step = l.plan && l.planDone < l.plan.steps.length ? `step ${l.planDone + 1}` : ''
+        const ask = l.currentAsk?.prompt ? `“${short(l.currentAsk.prompt)}”` : ''
+        return [step, ask].filter(Boolean).join(', ') || topic
+      },
+      recall: () => {
+        const l = breakLive.current
+        const asks = l.parsed.flatMap((b) => b ?? []).filter((b): b is Extract<Block, { kind: 'ask' }> => b.kind === 'ask' && !!b.prompt && b.prompt !== l.currentAsk?.prompt && b.prompt.length < 220)
+        const fit = asks.filter((a) => a.prompt.length <= 160)
+        // An earlier question from this lesson; with none yet, the one it stopped on
+        const pick = fit[Math.max(0, fit.length - 3)] ?? (l.currentAsk?.prompt && l.currentAsk.prompt.length <= 220 ? l.currentAsk : undefined)
+        return pick ? pick.prompt.replace(/[*_`$#>]/g, '').replace(/\s+/g, ' ').trim() : null
+      }
+    })
+    return () => lessonForBreaks(null)
+  }, [topic])
 
   const scopeLabel = scope.kind === 'note' ? fileTitle(scope.path) : scope.kind === 'pages' ? pagesLabel(scope) : scope.kind === 'folder' ? scope.path.split('/').pop() : null
 
@@ -1586,6 +1664,15 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                 </button>
               ))}
             </div>
+          )}
+          {warm && (
+            <WarmUp
+              set={warm}
+              onDone={(results, skipped) => {
+                warmDone.current?.(warmupNote(warm, results, skipped))
+                warmDone.current = null
+              }}
+            />
           )}
 
           {turns.map((t, i) => {

@@ -445,16 +445,24 @@ async function recordCardHistory(k: Engine): Promise<void> {
   if (events.length) k.record(events)
 }
 
+type CardOn = { id: string; path: string; front: string; back: string; due: number }
+
 /** The flashcards on a concept, with when each is due */
-export async function cardsOn(conceptId: string): Promise<{ id: string; path: string; front: string; back: string; due: number }[]> {
+export async function cardsOn(conceptId: string): Promise<CardOn[]> {
+  return (await cardsOnMany([conceptId])).get(conceptId) ?? []
+}
+
+/** The flashcards on each of several concepts, in one pass over the cards */
+export async function cardsOnMany(conceptIds: string[]): Promise<Map<string, CardOn[]>> {
+  const out = new Map<string, CardOn[]>(conceptIds.map((id) => [id, []]))
   const k = await knowledge()
-  if (!k) return []
+  if (!k || !conceptIds.length) return out
   const { getCards } = await import('./study')
   const cards = await getCards({ kind: 'vault' }).catch(() => [])
   const cache: NoteCache = new Map()
-  const out: { id: string; path: string; front: string; back: string; due: number }[] = []
   for (const c of cards) {
-    if ((await cardConcept(k, c, cache))?.id === conceptId) out.push({ id: c.id, path: c.path, front: c.front, back: c.back, due: c.schedule?.due ?? Date.now() })
+    const on = (await cardConcept(k, c, cache))?.id
+    if (on && out.has(on)) out.get(on)!.push({ id: c.id, path: c.path, front: c.front, back: c.back, due: c.schedule?.due ?? Date.now() })
   }
   return out
 }
@@ -552,6 +560,17 @@ export async function conceptOfTopic(topic: string): Promise<string | null> {
   const k = await knowledge()
   return k?.resolve(conceptName(topic), null) ?? null
 }
+
+/** Every concept on the map as it stands now (private ones only for a reader on this Mac) */
+export async function allConcepts(privateOk: boolean): Promise<ConceptState[]> {
+  const k = await knowledge()
+  if (!k) return []
+  await syncRoadmaps(k).catch(() => {})
+  return k.all(Date.now(), privateOk)
+}
+
+/** The notebook a path is in (its subject on the map), and whether it is private */
+export const areaOf = (path: string | undefined) => placeOf(path)
 
 /** One concept as it stands, by id */
 export async function conceptById(id: string): Promise<ConceptState | null> {
