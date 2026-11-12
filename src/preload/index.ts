@@ -294,6 +294,21 @@ const api: TideApi = {
     weekReview: invoke('coach:weekReview'),
     saveReview: invoke('coach:saveReview')
   },
+  learner: {
+    view: invoke('learner:view'),
+    refresh: invoke('learner:refresh'),
+    correct: invoke('learner:correct'),
+    add: invoke('learner:add'),
+    rhythm: invoke('learner:rhythm')
+  },
+  prep: {
+    status: invoke('prep:status'),
+    opening: invoke('prep:opening'),
+    get: invoke('prep:get'),
+    discard: invoke('prep:discard'),
+    now: invoke('prep:now'),
+    weeklyReview: invoke('prep:weeklyReview')
+  },
   studying: invoke('app:study'),
   onTrayCommand: (cb) => {
     const off = subscribe('tray:command', cb as (c: unknown) => void)

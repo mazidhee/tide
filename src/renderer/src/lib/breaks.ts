@@ -63,8 +63,20 @@ function set(next: BlockState, p: Profile = profile) {
   state = next
   profile = p
   write(KEY, state)
-  if (changedP) write(PROFILE_KEY, profile)
+  if (changedP) {
+    write(PROFILE_KEY, profile)
+    shareRhythm()
+  }
   emit()
+}
+
+/** The learner profile's pace line reads the rhythm (main/learnerProfile): sent when it changes, at most once a minute */
+let sharedAt = 0
+function shareRhythm() {
+  if (Date.now() - sharedAt < 60_000 || typeof window === 'undefined' || !window.tide?.learner) return
+  sharedAt = Date.now()
+  const r = learnRhythm(profile.logs)
+  window.tide.learner.rhythm({ fadesAt: r.fadesAt, goodHours: r.goodHours, learnedFrom: r.learnedFrom }).catch(() => {})
 }
 const setUi = (u: Ui) => ((ui = u), emit())
 

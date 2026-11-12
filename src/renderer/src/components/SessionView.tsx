@@ -56,6 +56,7 @@ import { AnswerHint, AskPill, BackPill, FOLD_MS, SelectionAsk, ThreadSlot, highl
 import { CameUpIn } from './ExploreLater'
 import { WarmUp } from './WarmUp'
 import { warmupNote, type WarmupSet } from '@shared/warmup'
+import { prepNote } from '@shared/lessonPrep'
 import { breakSignals, lessonForBreaks } from '../lib/breaks'
 import { saysDontKnow } from '@shared/lessonRepair'
 import { exploreLater, lessonSubject } from '../lib/explore'
@@ -350,8 +351,10 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       let settled = false
       // Never hold a lesson up for long waiting for the cards
       const wait = setTimeout(() => ((settled = true), resolve('')), 3000)
-      window.tide.warmup
-        .for(topic, 'path' in scope ? scope.path : undefined)
+      // A prepared lesson brings its warm-up with it (main/lessonPrep)
+      const prepared = options?.prep ? window.tide.prep.get(options.prep.id).then((p) => p?.warmup ?? null).catch(() => null) : Promise.resolve(null)
+      prepared
+        .then((set) => set ?? window.tide.warmup.for(topic, 'path' in scope ? scope.path : undefined))
         .then((set) => {
           if (settled) return
           clearTimeout(wait)
@@ -364,6 +367,28 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     })
   const [pack, setPack] = useState<SourcePack | null>(null)
   const begin = async () => {
+    // Prepared ahead (main/lessonPrep): the first exchange is ready, so the lesson opens at once
+    if (options?.prep) {
+      const id = options.prep.id
+      const [prep, ready] = await Promise.all([window.tide.prep.get(id).catch(() => null), window.tide.prep.opening(id).catch(() => null)])
+      const warmed = await warmGate.current
+      if (ready) {
+        const message = warmed ? `${ready.message}\n\n${warmed}` : ready.message
+        openingRef.current = message
+        setTurns([
+          { role: 'user', content: message, at: Date.now() },
+          { role: 'assistant', content: ready.reply, at: Date.now() }
+        ])
+        return
+      }
+      // Prepared without Claude: start as usual, with what was prepared in the opening
+      if (prep) {
+        let opening = `${openingMessage(setup)}\n\n${prepNote(prep)}`
+        if (warmed) opening = `${opening}\n\n${warmed}`
+        openingRef.current = opening
+        return send(opening, [])
+      }
+    }
     let opening = openingMessage(setup)
     if ((mode === 'teach' || mode === 'quiz') && (scope.kind === 'vault' || scope.kind === 'folder')) {
       const found = await Promise.race([window.tide.books.passage(topic, 'path' in scope ? scope.path : '').catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 2000))])

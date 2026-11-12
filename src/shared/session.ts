@@ -289,6 +289,8 @@ export interface SessionSetup {
     course?: CourseRef
     /** A short side lesson, for curiosity, on something kept to explore later (shared/explore) */
     curiosity?: CuriositySetup
+    /** Prepared ahead (shared/lessonPrep): it opens on the prepared exchange, with the prepared warm-up */
+    prep?: { id: string }
   }
 }
 

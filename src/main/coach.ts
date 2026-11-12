@@ -32,7 +32,7 @@ import { parseOutline } from '@shared/outline'
 const SETTINGS = joinRel('.tide', 'coach.json')
 const WEEKS = joinRel('.tide', 'coach')
 export const COACH_FOLDER = 'Coach'
-export const PROFILE_NOTE = `${COACH_FOLDER}/Learner profile.md`
+export const PROFILE_NOTE = `${COACH_FOLDER}/About me as a learner.md`
 export const WEEK_NOTE = `${COACH_FOLDER}/This week.md`
 
 const today = () => localDate()
@@ -173,6 +173,9 @@ async function gather(settings: CoachSettings, focus = settings.focus, chosen?: 
   }
   const review = await latestReview()
   if (review) parts.push(`Their weekly review: went well: ${review.wentWell || '-'}; got in the way: ${review.inTheWay || '-'}; change: ${review.change || '-'}`)
+  // Tide's own weekly review (main/lessonPrep): what it suggests the next week focuses on
+  const tide = await import('./lessonPrep').then((m) => m.latestFocus()).catch(() => null)
+  if (tide?.focus) parts.push(`Tide's weekly review suggests: ${tide.focus}${tide.focusTopics?.length ? ` (topics: ${tide.focusTopics.join(', ')})` : ''}`)
   return { text: parts.join('\n'), candidates, facts }
 }
 
@@ -266,32 +269,17 @@ export async function planWeek(date = today(), background = false): Promise<Week
 }
 
 /**
- * Rewrites the learner profile: a short note in your vault (goal, focus, where you are, strengths,
- * weak spots, how you like to learn) that the tutor carries into every conversation instead of
- * your whole history. You can read and correct it like any note.
+ * The learner profile (main/learnerProfile): a note in your vault the tutor reads as a short
+ * digest before every lesson and chat, kept up after each lesson and tidied each week. Here the
+ * lines Tide works out itself (goals, where you are, pace, calibration, hints) are brought up to
+ * date; the note's text is returned.
  */
 export async function updateProfile(): Promise<string> {
-  const settings = await getCoach()
-  const { text } = await gather(settings)
-  const previous = await readText(PROFILE_NOTE).catch(() => '')
-  const prompt = `Write a learner profile a tutor will read before every conversation. Under 1000 characters, Markdown, these headings only: ## Goal, ## Focus, ## Where they are, ## Strengths, ## Weak spots, ## How they learn best.
-Facts:
-Goal: ${aimOf(settings) || 'not set'}
-Focus: ${settings.focus.join(', ') || 'not set'}; ${settings.hoursPerWeek} hours a week
-${text}
-${previous ? `Their previous profile (keep what still holds, especially "How they learn best", which they may have edited):\n${previous.slice(0, 1500)}` : ''}
-Only state what the facts support. Return the Markdown only.`
-  // Nothing new since the last profile: keep it (each rewrite costs the model a long read)
-  const key = hashText(prompt)
-  if (previous && (await readText(PROFILE_HASH).catch(() => '')) === key) return previous
-  const out = (await completeFor('learnerProfile', prompt, 'You write short, precise learner profiles.', { priority: 'background', text: prompt })).replace(/^```(?:markdown)?\s*|\s*```$/g, '').trim()
-  const note = `# Learner profile\n\n_Tide rewrites this each week from your progress. Edit anything that's wrong; your edits are kept._\n\n${out.replace(/^#\s+Learner profile\s*/i, '')}\n`
-  await writeText(PROFILE_NOTE, note)
-  await writeText(PROFILE_HASH, key).catch(() => {})
-  return note
+  const { refreshMeasures } = await import('./learnerProfile')
+  await refreshMeasures()
+  return readText(PROFILE_NOTE).catch(() => '')
 }
 
-const PROFILE_HASH = joinRel('.tide', 'profile.hash')
 
 /** A short fingerprint of some text, to tell whether anything changed */
 export function hashText(text: string): string {
@@ -392,13 +380,18 @@ export async function directionLine(): Promise<string> {
   return aim ? `Where this learner is heading: ${aim} Shape examples, projects and emphasis towards that, and skip what their strengths already cover.` : ''
 }
 
-/** The profile for the tutor's prompt: short, or nothing */
+/**
+ * The profile for the tutor's prompt, Claude's and Gemma's alike: where they're heading, and the
+ * learner profile's digest (300 words at most, shared/learnerProfile digest). Nothing when neither
+ * is there.
+ */
 export async function profilePrompt(): Promise<string> {
-  const note = await readText(PROFILE_NOTE).catch(() => '')
-  const body = note.replace(/^# Learner profile\s*/i, '').replace(/^_[^\n]*_\s*/m, '').trim()
+  const { profileDigest } = await import('./learnerProfile')
+  const d = await profileDigest().catch(() => '')
   const aim = aimOf(await getCoach())
-  if (!body && !aim) return ''
-  return `The learner's profile (use it to pitch and connect what you teach; don't recite it):\n${aim ? `Where they're heading: ${aim}\n` : ''}${body.slice(0, 1400)}`
+  if (!d && !aim) return ''
+  const adapt = d ? '\nAdapt to it: follow their stated preferences (when they have shown they can do something, move on rather than drilling it), check an open misconception with a question before relying on that idea, and explain differently from what didn’t land.' : ''
+  return `${aim ? `Where this learner is heading: ${aim}\n` : ''}${d}${adapt}`.trim()
 }
 
 const LINK_LABEL: Partial<Record<AgendaItem['kind'], string>> = { learn: 'Learn it in Tide', quiz: 'Quiz me in Tide', review: 'Review in Tide', test: 'Sit it in Tide', 'take-home': 'Open in Tide', practice: 'Open Practice in Tide' }

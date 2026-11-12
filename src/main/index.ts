@@ -444,6 +444,27 @@ function registerIpc() {
   handle('coach:writeJournal', (date: string, text: string) => writeJournal(date, text))
   handle('coach:weekReview', (end?: string) => weekReview(end))
   handle('coach:saveReview', (end: string, r: { wentWell: string; inTheWay: string; change: string }) => saveReview(end, r))
+  // A tutor that remembers you (main/learnerProfile) and lesson prep while you're away (main/lessonPrep)
+  handle('learner:view', async () => (await import('./learnerProfile')).learnerView())
+  handle('learner:refresh', async () => {
+    const l = await import('./learnerProfile')
+    await l.ensureProfile()
+    await l.refreshMeasures()
+    return l.learnerView()
+  })
+  handle('learner:correct', async (section: import('@shared/learnerProfile').SectionId, text: string, next: { text?: string; remove?: boolean; resolved?: boolean }) => (await import('./learnerProfile')).correctItem(section, String(text ?? ''), next ?? {}))
+  handle('learner:add', async (section: import('@shared/learnerProfile').SectionId, text: string) => (await import('./learnerProfile')).addOwnItem(section, String(text ?? '')))
+  handle('learner:rhythm', async (r: import('@shared/learnerProfile').RhythmFacts) => (await import('./learnerProfile')).setRhythm(r))
+  handle('prep:status', async () => (await import('./lessonPrep')).prepStatus())
+  handle('prep:opening', async (id: string) => (await import('./lessonPrep')).takeOpening(String(id ?? '')))
+  handle('prep:get', async (id: string) => (await import('./lessonPrep')).getPrep(String(id ?? '')))
+  handle('prep:discard', async (id: string) => (await import('./lessonPrep')).discardPrep(String(id ?? '')))
+  handle('prep:now', async () => (await import('./lessonPrep')).tick({ force: true }))
+  handle('prep:weeklyReview', async () => {
+    const p = await import('./lessonPrep')
+    const { claudeTeaches } = await import('./claudeEngine')
+    return p.writeWeeklyReview(undefined, { claude: await claudeTeaches().catch(() => false) })
+  })
   handle('window:openFocus', (view: unknown) => openFocusWindow(view))
   handle('window:focusView', (id: string) => {
     const v = focusViews.get(id) ?? null
@@ -821,6 +842,8 @@ app.whenReady().then(() => {
   loadStats()
   // The problem bank tops itself up for what's coming, with the cloud models
   startBank()
+  // Lesson prep while you're away, and the weekly review (main/lessonPrep)
+  void import('./lessonPrep').then((p) => p.startPrep())
   // The notes folder moved while Tide was closed or open: follow it, or ask where it went
   followVault(
     (path) => {

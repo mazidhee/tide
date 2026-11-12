@@ -16,6 +16,7 @@ import { Professor } from '../Professor'
 import { PromptBox } from '../PromptBox'
 import { Level } from './Level'
 import { AreaMark } from './AreaMark'
+import { ReadyCard } from '../ReadyCard'
 
 const DAY = 86_400_000
 /** "1 h 20", "40 min": time as the page says it everywhere */
@@ -47,6 +48,8 @@ export interface HomeTideProps {
   setAim(e: React.MouseEvent<HTMLButtonElement>): void
   aimMenu: ReactNode
   makeFit(plan: GoalPlan, f: Forecast): void
+  /** A lesson prepared while you were away (main/lessonPrep): it takes the next-thing block */
+  ready?: { prep: import('@shared/lessonPrep').PreparedLesson; start(): void } | null
 }
 
 /**
@@ -73,7 +76,9 @@ export function HomeTide(p: HomeTideProps) {
   const open = ongoing.find((o) => o.view.kind === 'session' || o.view.kind === 'exam')
   const next = open
     ? { title: open.title.replace(/^(Teach me|Quiz me|Exam|Interview|Review|Mixed): /, ''), detail: open.busy ? 'A reply is arriving. Carry on where you stopped.' : 'Left open. Carry on where you stopped.', action: 'Carry on', go: () => app.setView(open.view) }
-    : { title: p.upNext.title, detail: p.upNext.detail, action: p.upNext.kicker === 'Nothing due' ? 'Choose a topic' : 'Start', go: p.upNext.go }
+    : p.ready
+      ? { title: p.ready.prep.topic, detail: p.ready.prep.why, action: 'Start', go: p.ready.start }
+      : { title: p.upNext.title, detail: p.upNext.detail, action: p.upNext.kicker === 'Nothing due' ? 'Choose a topic' : 'Start', go: p.upNext.go }
   useEffect(() => {
     // Return starts it, as the page says, unless you are typing somewhere
     const onKey = (e: KeyboardEvent) => {
@@ -157,6 +162,9 @@ export function HomeTide(p: HomeTideProps) {
             )}
           </p>
 
+          {!open && p.ready ? (
+            <ReadyCard prep={p.ready.prep} variant="home" onStart={p.ready.start} onElse={() => app.setView({ kind: 'learn' })} />
+          ) : (
           <section className="td-now" aria-label="Next">
             <div className="td-now-text">
               <h2>{next.title}</h2>
@@ -184,6 +192,8 @@ export function HomeTide(p: HomeTideProps) {
               <Professor state={open ? 'writing' : 'idle'} size={56} />
             </div>
           </section>
+          )}
+          {open && p.ready && <ReadyCard prep={p.ready.prep} variant="learn" onStart={p.ready.start} />}
 
           <div className="td-ask">
             <PromptBox value={p.ask} onChange={p.setAsk} onSubmit={p.submitAsk} placeholder="Ask anything, or say what you want to learn" label="Ask the tutor" />

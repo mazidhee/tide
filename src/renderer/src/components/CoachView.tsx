@@ -126,9 +126,9 @@ export function CoachView() {
               <Icon name="check" />
               <span>Wrap up today</span>
             </button>
-            <button className="tool-btn" onClick={() => app.openPath('Coach/Learner profile.md')} title="What the tutor knows about you; edit anything that's wrong">
-              <Icon name="note" />
-              <span>Learner profile</span>
+            <button className="tool-btn" onClick={() => app.setView({ kind: 'learner' })} title="What the tutor knows about you; correct or delete anything that's wrong">
+              <Icon name="tutor" />
+              <span>What the tutor knows</span>
             </button>
           </div>
         </header>

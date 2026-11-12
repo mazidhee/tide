@@ -9,6 +9,8 @@ import { PixelScene } from './PixelScene'
 import { WorkshopShelf } from './WorkshopView'
 import { CourseShelf } from './CoursesView'
 import { ToExplore } from './ExploreLater'
+import { ReadyCard } from './ReadyCard'
+import { startPrepared, useReadyLesson } from '../lib/prep'
 
 type LearnMode = SessionMode | 'exam' | 'mixed'
 
@@ -33,6 +35,8 @@ export const LEVEL_LABEL: Record<Mastery['level'], string> = {
 
 export function LearnView() {
   const app = useApp()
+  // A lesson prepared while you were away (main/lessonPrep)
+  const { prep: ready } = useReadyLesson()
   const [topic, setTopic] = useState('')
   const [source, setSource] = useState<ChatScope>({ kind: 'none' })
   const [mode, setMode] = useState<LearnMode>('teach')
@@ -150,6 +154,8 @@ export function LearnView() {
       <PixelScene place="classroom" rows={40} scale={3} className="page-scene" />
       <div className="page-inner narrow">
         <h1 className="page-title">Learn</h1>
+
+        {ready && <ReadyCard prep={ready} variant="learn" onStart={() => startPrepared(app, ready)} />}
 
         <div className="lrn-modes" role="radiogroup" aria-label="How">
           {MODES.map((m) => (

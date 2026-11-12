@@ -22,6 +22,8 @@ import { fileTitle, useApp } from '../state'
 import { Icon, type IconName } from './Icon'
 import { useTideDesign } from '../lib/design'
 import { HomeTide } from './tide/HomeTide'
+import { startPrepared, useReadyLesson } from '../lib/prep'
+import { ReadyCard } from './ReadyCard'
 
 /** The professor's afternoon, as the day goes: tea, the chalkboard, chess, then the late fishing */
 function timeOfDayScene(): ProfessorScene {
@@ -76,6 +78,8 @@ export function Home(_: { dueCount: number; cardCount: number }) {
   const [ask, setAsk] = useState('')
   const [mastery, setMastery] = useState<Record<string, Mastery>>({})
   const daily = useDailyCount()
+  // A lesson prepared while you were away comes first (main/lessonPrep)
+  const { prep: ready } = useReadyLesson()
 
   useEffect(() => {
     window.tide.vault.notes().then(setNotes)
@@ -222,6 +226,7 @@ export function Home(_: { dueCount: number; cardCount: number }) {
     return (
       <HomeTide
         upNext={upNext}
+        ready={ready ? { prep: ready, start: () => startPrepared(app, ready) } : null}
         why={!hasDaily && planned ? planned.item.why : undefined}
         plans={plans}
         forecasts={forecasts}
@@ -290,6 +295,9 @@ export function Home(_: { dueCount: number; cardCount: number }) {
           <main className="home2-main">
             <DayTimeline
               now={
+                ready ? (
+                  <ReadyCard prep={ready} variant="learn" onStart={() => startPrepared(app, ready)} />
+                ) : (
                 <div className="up-next2" role="button" tabIndex={0} onClick={upNext.go} onKeyDown={(e) => e.key === 'Enter' && upNext.go()}>
                   <span className="up-next2-art" aria-hidden="true">
                     <PixelMoment scene={(import.meta.env.DEV && (localStorage.getItem('tide.dev.moment') as MomentScene | null)) || upNext.scene} size={72} />
@@ -304,6 +312,7 @@ export function Home(_: { dueCount: number; cardCount: number }) {
                     <Icon name="chevron" size={11} />
                   </span>
                 </div>
+                )
               }
             />
 

@@ -62,6 +62,8 @@ async function writeLesson(input: Omit<LessonRecord, 'started' | 'updated' | 'pa
   await noteLesson(record).catch(() => {})
   // And what it shows is added to the picture of what they know
   await noteLessonKnowledge(record).catch(() => {})
+  // And what it shows about how they learn goes into their learner profile, once it settles (main/learnerProfile)
+  void import('./learnerProfile').then((l) => l.noteLessonForProfile(record)).catch(() => {})
   // A course's lesson moves the course on (main/courses)
   if (record.options?.course) await import('./courses').then((c) => c.noteCourseLesson(record)).catch(() => {})
   // A side lesson on something kept to explore later marks it explored when it finishes (main/explore)
