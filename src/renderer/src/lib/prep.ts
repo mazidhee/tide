@@ -42,9 +42,11 @@ export function preparedWhen(at: number, now = Date.now()): string {
   const h = d.getHours()
   const sameDay = new Date(now).toDateString() === d.toDateString()
   const yesterday = new Date(now - 86_400_000).toDateString() === d.toDateString()
-  if ((h >= 22 || h < 7) && (sameDay || yesterday)) return 'Prepared overnight'
   const min = Math.round((now - at) / 60_000)
   if (min < 60) return `Prepared ${Math.max(1, min)} min ago`
+  // Overnight only when it's now the morning after, not for something made at 23:00 and seen at 23:50
+  const nowH = new Date(now).getHours()
+  if ((h >= 22 || h < 7) && (sameDay || yesterday) && nowH >= 5 && nowH < 14) return 'Prepared overnight'
   if (sameDay) return `Prepared at ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
   return `Prepared ${d.toLocaleDateString('en-GB', { weekday: 'long' })}`
 }

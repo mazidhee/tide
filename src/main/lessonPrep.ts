@@ -85,9 +85,18 @@ export async function waitingPreps(now = Date.now()): Promise<PreparedLesson[]> 
   return out
 }
 
+/** Topics of lessons left open in the last few days: no prep for those, and none shown, since Carry on already has them */
+export async function openTopics(now = Date.now()): Promise<string[]> {
+  const { listLessons } = await import('./lessons')
+  const lessons = await listLessons().catch(() => [])
+  return lessons.filter((l) => !l.finished && now - l.updated < 3 * DAY && l.topic).map((l) => sameTopic(l.topic))
+}
+export const sameTopic = (t: string) => t.toLowerCase().replace(/^(teach me|quiz me|review|mixed):\s*/, '').replace(/\s+/g, ' ').trim()
+
 /** What Home and Learn show as "Ready for you" */
 export async function readyPrep(): Promise<PreparedLesson | null> {
-  const all = await waitingPreps()
+  const open = await openTopics().catch(() => [] as string[])
+  const all = (await waitingPreps()).filter((p) => !open.includes(sameTopic(p.topic)))
   // The one for the soonest day, then the newest
   return all.sort((a, b) => a.forDate.localeCompare(b.forDate) || b.at - a.at)[0] ?? null
 }
@@ -176,7 +185,7 @@ export async function nextTarget(skip: string[] = []): Promise<PrepTarget | null
     for (let index = 0; index < items.length; index++) {
       const it = items[index]
       const topic = it.topic ?? it.title
-      if (it.kind !== 'learn' || it.done || !topic || skip.includes(topic)) continue
+      if (it.kind !== 'learn' || it.done || !topic || skip.includes(topic) || skip.includes(sameTopic(topic))) continue
       // The real index in that day's list, so finishing it ticks it
       const real = plan?.days.find((d) => d.date === date)?.items.indexOf(it) ?? index
       return { topic, notebook: it.notebook, topicId: it.topicId, forDate: date, ...(real >= 0 ? { agenda: { date, index: real } } : {}), ...(it.why ? { why: it.why } : {}), minutes: it.minutes, ...(it.refresh ? { refresh: true } : {}) }
@@ -189,7 +198,7 @@ export async function nextTarget(skip: string[] = []): Promise<PrepTarget | null
     const nb = notebooks.find((n) => n.name === name || n.path === name)
     if (!nb?.outline) continue
     const md = await readText(nb.outline).catch(() => '')
-    const t = nextTopics(nb.name, md, 6).find((c) => !skip.includes(c.topic))
+    const t = nextTopics(nb.name, md, 6).find((c) => !skip.includes(c.topic) && !skip.includes(sameTopic(c.topic)))
     if (t) return { topic: t.topic, notebook: nb.name, topicId: t.topicId, section: t.section, forDate: next }
   }
   return null
@@ -523,7 +532,7 @@ export async function tick(o: { force?: boolean } = {}): Promise<PrepDecision> {
     const u = await usage()
     const { busy, claude } = await claudeFacts()
     const ready = await readyPrep()
-    const target = ready ? null : await nextTarget()
+    const target = ready ? null : await nextTarget(await openTopics().catch(() => []))
     const input = { now: Date.now(), settings, idleSeconds: o.force ? 1e9 : await idleSeconds(), busy: o.force ? false : busy, claude, usedTonight: u.calls, ready: !!ready, target: !!target, lastTry: o.force ? undefined : u.lastTry }
     const decision = shouldPrep(input)
     await setUsage({ last: { at: Date.now(), decision } })
