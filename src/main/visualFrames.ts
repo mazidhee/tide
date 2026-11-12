@@ -114,6 +114,8 @@ interface Watched {
   host: string
   hot: number
   since: number
+  /** Its process, once seen */
+  pid?: number
   /** The process's CPU seconds and when they were read, for its use since */
   cpu?: { pid: number; seconds: number; at: number }
 }
@@ -202,6 +204,7 @@ function poll(): void {
       if (Date.now() - w.since > 30_000) watched.delete(w.host)
       continue
     }
+    w.pid = pid
     const m = metrics.get(pid)
     if (!m) continue
     const mb = m.memory.workingSetSize / 1024
@@ -229,8 +232,40 @@ export function watchVisual(wc: WebContents, host: string): void {
   poller ??= setInterval(poll, LIMITS.pollMs)
 }
 
-export function unwatchVisual(host: string): void {
+/**
+ * The window took a visual's frame out (scrolled away, replaced, closed). Chromium keeps an empty
+ * frame process for some seconds in case it is wanted again; a visual's never is (each frame has
+ * a host of its own), so once no frame is left in it, it is ended at once.
+ */
+export function unwatchVisual(host: string, wc?: WebContents): void {
+  const w = watched.get(host)
   watched.delete(host)
+  const owner = wc ?? w?.wc
+  if (!owner || owner.isDestroyed() || !isFrameHost(host)) return
+  const pid = w?.pid ?? visualPid(owner, host)
+  if (!pid) return
+  setTimeout(() => {
+    if (owner.isDestroyed() || pid === owner.getOSProcessId() || pid === process.pid) return
+    try {
+      // Still holding a frame (of this visual or anything else): left alone
+      if (owner.mainFrame.framesInSubtree.some((f) => {
+        try {
+          return f.osProcessId === pid
+        } catch {
+          return false
+        }
+      })) return
+    } catch {
+      return
+    }
+    // Only a process the app's metrics list as a renderer of this app
+    if (!app.getAppMetrics().some((m) => m.pid === pid && m.type === 'Tab')) return
+    try {
+      process.kill(pid, 'SIGTERM')
+    } catch {
+      // already gone
+    }
+  }, 400)
 }
 
 /** Memory and CPU of each live visual's process, for measuring */

@@ -176,6 +176,12 @@ describe('a visual in its sandbox', () => {
     expect(steps[steps.length - 1]).toMatchObject({ i: 1, n: 3, say: 'two' })
   })
 
+  it('a frame taken out has its process ended within a second', () => {
+    expect(r.teardown.pid).toBeGreaterThan(0)
+    expect(r.teardown.gone).toBeGreaterThanOrEqual(0)
+    expect(r.teardown.gone).toBeLessThan(1500)
+  })
+
   it("the examples in Claude's instructions run cleanly", () => {
     expect(r.examples).toHaveLength(2)
     for (const e of r.examples) {

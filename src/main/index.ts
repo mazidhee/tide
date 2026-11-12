@@ -342,7 +342,7 @@ function registerIpc() {
   handle('visuals:cached', (id: string) => lessonVisuals(id))
   handle('visuals:remember', (id: string, key: string, record: unknown) => rememberVisual(id, key, record))
   ipcMain.handle('visuals:watch', (e, host: string) => watchVisual(e.sender, String(host)))
-  ipcMain.handle('visuals:unwatch', (_e, host: string) => unwatchVisual(String(host)))
+  ipcMain.handle('visuals:unwatch', (e, host: string) => unwatchVisual(String(host), e.sender))
   ipcMain.handle('visuals:kill', (e, host: string, reason: string) => killVisual(e.sender, String(host), String(reason ?? 'it stopped answering').slice(0, 120)))
   ipcMain.handle('visuals:metrics', (e) => visualMetrics(e.sender))
   handle('knowledge:view', async () => (await import('./knowledge')).knowledgeView())

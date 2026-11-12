@@ -66,7 +66,7 @@ if (flag('--output-format') === 'json' || !flag('--input-format')) {
       return
     }
     if (said.includes('think')) out({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'hmm' } } })
-    const reply = `pid ${process.pid} turn ${turn} model ${model} tools ${tools || 'none'} key ${process.env.ANTHROPIC_API_KEY ?? 'none'} heard: ${said.slice(0, 60)}`
+    const reply = `pid ${process.pid} turn ${turn} model ${model} tools ${tools || 'none'} key ${process.env.ANTHROPIC_API_KEY ?? 'none'} heard: ${said.slice(0, 60)}${said.includes('custom ```visual explainer') ? ' [offered a visual]' : ''}`
     delta(reply.slice(0, 10))
     delta(reply.slice(10))
     out({ type: 'assistant', message: { content: [{ type: 'text', text: reply }] } })

@@ -4,6 +4,7 @@ import { VISUAL_GUIDE, frameUrl, parseFrameMessage, type FrameMessage } from '..
 declare const harness: {
   ports(): Promise<{ http: number; udp: number; turn: number }>
   watch(host: string): Promise<void>
+  unwatch(host: string): Promise<void>
   pid(host: string): Promise<number | null>
   kill(host: string): Promise<boolean>
   alive(pid: number): Promise<boolean>
@@ -234,6 +235,26 @@ async function main() {
     await wait(300)
     results.good = { messages: r.messages, beats: r.beats, invalid: r.invalid }
     r.frame.remove()
+  }
+
+  // A frame taken out has its process ended at once, not seconds later
+  {
+    const r = start(`<p>x</p>`)
+    await harness.watch(r.host)
+    await wait(1500)
+    const pid = await harness.pid(r.host)
+    r.frame.remove()
+    await harness.unwatch(r.host)
+    const t0 = performance.now()
+    let gone = -1
+    while (performance.now() - t0 < 5000) {
+      if (pid && !(await harness.alive(pid))) {
+        gone = Math.round(performance.now() - t0)
+        break
+      }
+      await wait(50)
+    }
+    results.teardown = { pid, gone }
   }
 
   // The examples Claude is shown run cleanly

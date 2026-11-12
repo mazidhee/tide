@@ -161,7 +161,9 @@ const BASE_CSS = `
 html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font: 13px/1.45 var(--font); -webkit-font-smoothing: antialiased; overflow: hidden; }
 body { padding: 12px 16px 14px; }
 svg { display: block; max-width: 100%; height: auto; overflow: visible; }
-svg text { font-family: var(--font); fill: var(--ink); }
+/* Zero specificity and only where no fill is given: a fill attribute or any rule of the visual's own wins */
+:where(svg text:not([fill])) { fill: var(--ink); }
+:where(svg text) { font-family: var(--font); }
 canvas { display: block; max-width: 100%; }
 button, input, select { font: inherit; color: inherit; }
 button { height: 28px; padding: 0 12px; border: 0; border-radius: 7px; background: color-mix(in srgb, var(--ink) 8%, var(--bg)); font-size: 12px; font-weight: 550; cursor: pointer; transition: background-color 120ms ease; }

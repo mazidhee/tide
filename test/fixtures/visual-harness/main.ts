@@ -9,7 +9,7 @@ import { createServer } from 'http'
 import { createServer as createTcp } from 'net'
 import { createSocket } from 'dgram'
 import { join } from 'path'
-import { VISUAL_SCHEME_PRIVILEGES, LIMITS, blockVisualRequests, denyVisualPermissions, guardVisualFrames, handleVisualProtocol, killVisual, onVisualKilled, visualPid, watchVisual } from '../../../src/main/visualFrames'
+import { VISUAL_SCHEME_PRIVILEGES, LIMITS, blockVisualRequests, unwatchVisual, denyVisualPermissions, guardVisualFrames, handleVisualProtocol, killVisual, onVisualKilled, visualPid, watchVisual } from '../../../src/main/visualFrames'
 
 protocol.registerSchemesAsPrivileged([VISUAL_SCHEME_PRIVILEGES])
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
@@ -56,6 +56,7 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('harness:ports', () => ({ http: port, udp: (udp.address() as { port: number }).port, turn: (turn.address() as { port: number }).port }))
   ipcMain.handle('harness:watch', (_e, host: string) => watchVisual(win.webContents, host))
+  ipcMain.handle('harness:unwatch', (_e, host: string) => unwatchVisual(host, win.webContents))
   ipcMain.handle('harness:pid', (_e, host: string) => visualPid(win.webContents, host))
   ipcMain.handle('harness:kill', (_e, host: string) => killVisual(win.webContents, host, 'test'))
   ipcMain.handle('harness:alive', (_e, pid: number) => {
