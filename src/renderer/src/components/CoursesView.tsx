@@ -12,6 +12,7 @@ import { Icon, type IconName } from './Icon'
 import { renderMarkdown, splitFrontmatter } from '../lib/markdown'
 import { youtubeIdOf } from '@shared/video'
 import { VideoPlayer } from './VideoPlayer'
+import { ChatPanel } from './ChatPanel'
 import { codeBlockClick } from '../lib/runBlocks'
 import { currentPage, emptyHistory, goBack, goForward, pushPage, sameTarget, targetUrl, type History, type LinkTarget } from '@shared/links'
 import { courseRepos, registerLinkHost } from '../lib/linkNav'
@@ -242,6 +243,14 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
   const [hist, setHist] = useState<History<LinkTarget>>(emptyHistory)
   const page = currentPage(hist)
   const [focus, setFocus] = useState(false)
+  // In a narrow window the outline is a drawer over the page, opened from the bar
+  const [tocOpen, setTocOpen] = useState(false)
+  const toggleFocus = () => setFocus((f) => !f)
+  // Theatre: while a lesson's video plays, it takes the stage (the outline steps aside to its handle)
+  const [theatre, setTheatre] = useState(false)
+  useEffect(() => setTheatre(false), [lessonId])
+  const away = focus || theatre
+  useEffect(() => setTocOpen(false), [lessonId])
   const load = useCallback(() => window.tide.courses.get(id).then(setD).catch(() => setD(null)), [id])
   useEffect(() => void load(), [load])
   useEffect(() => {
@@ -339,6 +348,35 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
   }, [lessonScreen, page])
   useSectionInView(proseRef, !!content && !page)
 
+  // The tutor's dock keeps to the text's column: its left edge and width, measured
+  useLayoutEffect(() => {
+    const main = mainRef.current
+    const prose = proseRef.current
+    if (!main) return
+    const clear = () => {
+      main.style.removeProperty('--dock-left')
+      main.style.removeProperty('--dock-w')
+    }
+    if (!prose || page) {
+      clear()
+      return
+    }
+    const place = () => {
+      const m = main.getBoundingClientRect()
+      const p = prose.getBoundingClientRect()
+      main.style.setProperty('--dock-left', `${Math.round(p.left - m.left)}px`)
+      main.style.setProperty('--dock-w', `${Math.round(Math.max(360, p.width))}px`)
+    }
+    place()
+    const ro = new ResizeObserver(place)
+    ro.observe(main)
+    ro.observe(prose)
+    return () => {
+      ro.disconnect()
+      clear()
+    }
+  }, [content, page, theatre])
+
   // [immersive] How far down the lesson you read, kept with its progress (and so in What you know)
   const readTo = useRef(0)
   useEffect(() => {
@@ -399,13 +437,12 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
   const isDone = !!(currentId && progress[currentId]?.done)
 
   const lessonUrl = content?.url ?? (d.imported ? null : preview?.url ?? null)
-  const tutor = (what: 'ask' | 'explain' | 'quiz') => {
-    if (what === 'ask') return app.ask('')
-    if (what === 'explain') return app.ask('Explain this part to me.')
-    app.ask('Quiz me on this: two or three short questions on what’s on my screen, one at a time. Mark each answer before the next.')
-  }
   return (
-    <div className={`doc-view crs-page crs-immersive${focus ? ' crs-focus' : ''}`}>
+    <div className={`doc-view crs-page crs-immersive${away ? ' crs-focus' : ''}${theatre ? ' crs-theatre' : ''}${tocOpen ? ' toc-open' : ''}`} onMouseLeave={() => away && setTocOpen(false)}>
+      {/* The outline, stepped aside: its handle on the stage's left edge brings it over the page */}
+      <button className="crs-outline-handle" onMouseEnter={() => setTocOpen(true)} onClick={() => setTocOpen((o) => !o)} aria-label="Course outline" title="Course outline">
+        <Icon name="list" size={14} />
+      </button>
       <main className="crs-main" ref={mainRef}>
         <ViewerBar
           back={!!page}
@@ -415,21 +452,18 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
           url={page ? targetUrl(page, courseRepos()) : lessonUrl}
           label={page ? targetTitle(page) : (content?.title ?? c.title)}
         >
-          {(d.imported && (content || page)) && (
-            <span className="lv-tutor" role="group" aria-label="Ask the tutor">
-              <button className="tool-btn" onClick={() => tutor('ask')} title="Ask the tutor about what’s on screen (it sees the section, the video’s moment, what you selected)">
-                <Icon name="tutor" size={13} /> Ask about this
-              </button>
-              <button className="tool-btn" onClick={() => tutor('explain')}>
-                Explain this part
-              </button>
-              <button className="tool-btn" onClick={() => tutor('quiz')}>
-                Quiz me on this
-              </button>
-            </span>
-          )}
-          <button className={`icon-btn small${focus ? ' on' : ''}`} onClick={() => setFocus((f) => !f)} title={focus ? 'Show the outline' : 'Focus: hide the outline'} aria-pressed={focus}>
-            <Icon name="width" size={13} />
+          <button
+            className={`icon-btn small crs-outline-btn${tocOpen ? ' on' : ''}`}
+            onClick={() => {
+              // Wide: the outline stays beside the page unless you focus; narrow: it opens over the page
+              const narrow = (mainRef.current?.parentElement?.clientWidth ?? 2000) < 1000
+              if (narrow || theatre) setTocOpen((o) => !o)
+              else toggleFocus()
+            }}
+            title="The course outline (focus hides it)"
+            aria-pressed={focus || tocOpen}
+          >
+            <Icon name={away ? 'list' : 'width'} size={13} />
           </button>
         </ViewerBar>
         {page ? (
@@ -469,7 +503,7 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
                   </p>
                   <div className="crs-article-actions">
                     <button className="btn primary" onClick={() => void learnLesson(app, c, here.m, here.l)}>
-                      <Icon name="tutor" size={14} /> {progress[here.l.id] && !isDone ? 'Carry on with the tutor' : 'Learn this with the tutor'}
+                      <Icon name="tutor" size={14} /> {progress[here.l.id]?.record && !isDone ? 'Carry on with the tutor' : 'Learn this with the tutor'}
                     </button>
                     <button className={`tool-btn${isDone ? ' on' : ''}`} onClick={() => window.tide.courses.mark(id, here.l.id, !isDone).then((p) => setD((x) => (x ? { ...x, progress: p } : x)))}>
                       <Icon name="check" size={13} /> {isDone ? 'Done' : 'Mark as done'}
@@ -479,8 +513,8 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
                     </span>
                   </div>
                 </header>
-                <div className={videos.length ? 'crs-with-video' : undefined}>
-                  {videos.length > 0 && <CourseVideos ids={videos} course={c.title} onWatched={(v, f) => void window.tide.courses.track(id, here.l.id, { video: { id: v, watched: f } }).catch(() => {})} />}
+                <div className={videos.length ? `crs-with-video${theatre ? ' theatre' : ''}` : undefined}>
+                  {videos.length > 0 && <CourseVideos ids={videos} course={c.title} onActive={setTheatre} onWatched={(v, f) => void window.tide.courses.track(id, here.l.id, { video: { id: v, watched: f } }).catch(() => {})} />}
                   <article className={`prose crs-prose${here.l.kind === 'notebook' ? ' notebook' : ''}`} dangerouslySetInnerHTML={{ __html: html }} onClick={(e) => {
                       void codeBlockClick(e.target, { cumulative: here.l.kind === 'notebook' })
                       if ((e.target as Element).closest?.('.run-code')) void window.tide.courses.track(id, here.l.id, { ran: true }).catch(() => {})
@@ -529,8 +563,12 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
           )}
         </div>
         )}
+        {/* The tutor, docked at the foot of the reading column: the right of the window stays the video's */}
+        <div className="crs-dock-wrap">
+          <ChatPanel variant="dock" />
+        </div>
       </main>
-      <aside className="crs-toc" aria-label="Course outline">
+      <aside className="crs-toc" aria-label="Course outline" onMouseLeave={() => (away || tocOpen) && setTocOpen(false)}>
         <div className="crs-toc-head">
           <p className="crs-kicker">
             {areaLabel(c.area)} · {KIND_LABEL[c.kind]}
@@ -743,7 +781,7 @@ export function videosIn(markdown: string): string[] {
 }
 
 /** A course lesson's videos beside its text: one player, a tab for each video; their transcripts are fetched and indexed for lessons to use */
-function CourseVideos({ ids, course, onWatched }: { ids: string[]; course: string; onWatched?: (id: string, fraction: number) => void }) {
+function CourseVideos({ ids, course, onWatched, onActive }: { ids: string[]; course: string; onWatched?: (id: string, fraction: number) => void; onActive?: (on: boolean) => void }) {
   const [at, setAt] = useState(0)
   useEffect(() => setAt(0), [ids.join()])
   const id = ids[Math.min(at, ids.length - 1)]
@@ -762,7 +800,7 @@ function CourseVideos({ ids, course, onWatched }: { ids: string[]; course: strin
           ))}
         </div>
       )}
-      <VideoPlayer key={id} source={{ kind: 'youtube', id, course, fetch: true }} noCinema onWatched={(f) => onWatched?.(id, f)} />
+      <VideoPlayer key={id} source={{ kind: 'youtube', id, course, fetch: true }} noCinema onActive={onActive} onWatched={(f) => onWatched?.(id, f)} />
     </aside>
   )
 }

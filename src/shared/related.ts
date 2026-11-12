@@ -54,11 +54,11 @@ export interface Related {
   notImported: { id: string; title: string; by: string }[]
 }
 
-/** Two items from the same course (or the same video) rarely add more than one does */
-const sourceKey = (i: RelatedItem) => (i.kind === 'reading' ? `c:${i.course}` : i.course ? `c:${i.course}` : `v:${i.video}`)
+/** Two readings from one course (or two moments of one video) rarely add more than one does; a course's reading and its lecture are different ways in */
+const sourceKey = (i: RelatedItem) => (i.kind === 'reading' ? `r:${i.course}` : i.course ? `v:${i.course}` : `v:${i.video}`)
 
 /**
- * The few that add the most: best first, one per course or video, the course being taught left
+ * The few that add the most: best first, one reading and one video moment at most per course, the course being taught left
  * out (its own text is already the lesson), at most `limit` (never more than three). A reading and
  * a clip are preferred over two of a kind when both are close: seeing it explained and reading the
  * code teach differently.
@@ -125,7 +125,7 @@ export function relatedForPrompt(r: Related): string {
     : ''
   return (
     `Material on “${r.topic}” from the learner's other courses and videos:\n\n${lines.join('\n\n')}${more}\n\n` +
-    `How to use it: teach the concept yourself, and bring in only what adds understanding your explanation doesn't (the code worked through, the reason why, the theory, a second angle). At most two or three for a concept, often one. Introduce each in a sentence of your own that says where it is from and what it adds, e.g. "Made With ML shows the code:" or "The MLOps Zoomcamp video at 12:40 explains why:", then its tag on its own line. Then build on it: ask about it, or connect it to what you just taught. Never paste a list of sources, and never quote more than a sentence or two of one.`
+    `How to use it: teach the concept yourself, and bring in only what adds understanding your explanation doesn't (the code worked through, the reason why, the theory, a second angle). These are the learner's own courses: when you reach what one of them covers (you're about to write example code and a reading here shows the code, say), bring it in there rather than writing your own version of it. At most two or three for a concept, often one. Introduce each in a sentence of your own that says where it is from and what it adds, e.g. "Made With ML shows the code:" or "The MLOps Zoomcamp video at 12:40 explains why:", then its tag on its own line. Then build on it: ask about it, or connect it to what you just taught. Never paste a list of sources, and never quote more than a sentence or two of one.`
   )
 }
 

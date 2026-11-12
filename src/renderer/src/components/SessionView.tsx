@@ -20,6 +20,7 @@ import { withSources, type SourcePack } from '@shared/sources'
 import { ledPrefKey, withoutEcho } from '@shared/sourceLed'
 import { formatRange, offeredClip, recapMessage, watchFirstNote, type ClipCandidate } from '@shared/video'
 import { ClipCard } from './ClipCard'
+import { relatedForPrompt } from '@shared/related'
 import { openReading } from '../lib/reading'
 import { codeBlockClick } from '../lib/runBlocks'
 import { parsePlacement, placementNote } from '@shared/placement'
@@ -296,6 +297,14 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     if (mode === 'teach') {
       const clips = await Promise.race([window.tide.videos.clips(topic, { limit: 1 }).catch(() => []), new Promise<ClipCandidate[]>((r) => setTimeout(() => r([]), 1500))])
       if (clips[0]) opening = `${opening}\n\n${watchFirstNote(clips[0])}`
+      // [immersive] What the learner's other courses and lectures add on this topic, for the tutor to
+      // bring in as it teaches (shared/related). Never for a private notebook's lesson
+      if (scope.kind === 'none' || scope.kind === 'vault' || options?.course) {
+        const r = await Promise.race([window.tide.links.related(topic, { exclude: options?.course?.id, limit: 3 }).catch(() => null), new Promise<null>((res) => setTimeout(() => res(null), 2500))])
+        const items = r?.items.filter((i) => !(i.kind === 'clip' && clips[0] && i.video === clips[0].video)) ?? []
+        if (r && (items.length || r.notImported.length))
+          opening = `${opening}\n\n(Tide: ${relatedForPrompt({ ...r, items })} Bring each in when the lesson reaches the idea it covers, not all at once; the first may fit your first explanation.)`
+      }
     }
     openingRef.current = opening
     // Written ahead for this exact lesson (main/bank.ts): it opens at once
@@ -1196,7 +1205,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           {turns.map((t, i) => {
             if (i === 0 && t.role === 'user') {
               // [videos] the section offered before the first reply
-              const first = offeredClip(t.content)
+              const first = /Tide offers the student a section/.test(t.content) ? offeredClip(t.content) : null
               return first ? <ClipCard key={i} clip={first} kicker="Watch first" /> : null
             }
             if (t.role === 'user') {

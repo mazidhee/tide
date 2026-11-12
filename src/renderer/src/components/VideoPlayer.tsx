@@ -41,6 +41,8 @@ interface Props {
   noCinema?: boolean
   /** How much of it has been watched so far, 0 to 1 (the furthest moment reached), now and then while it plays */
   onWatched?: (fraction: number) => void
+  /** The player opened (true) or went back to its thumbnail (false) */
+  onActive?: (active: boolean) => void
 }
 
 /** What both kinds of player do */
@@ -69,7 +71,7 @@ function scroller(el: HTMLElement | null): HTMLElement | null {
   return null
 }
 
-export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, noCinema, onWatched }: Props) {
+export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, noCinema, onWatched, onActive }: Props) {
   const key = keyOf(source)
   const rootRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLIFrameElement>(null)
@@ -322,6 +324,13 @@ export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, no
     }, 200)
     return () => clearInterval(id)
   }, [active, markLine, clip, clipDone, key, onClipEnd])
+
+  const activeCb = useRef(onActive)
+  activeCb.current = onActive
+  useEffect(() => {
+    activeCb.current?.(active)
+  }, [active])
+  useEffect(() => () => activeCb.current?.(false), [])
 
   // How far it has been watched, for course progress: the furthest moment reached while playing
   const furthest = useRef(0)

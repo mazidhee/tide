@@ -74,7 +74,8 @@ async function read(url: string): Promise<ReadPage> {
   const article = await readArticle(html.slice(0, MAX), at).catch(() => null)
   const docTitle = article?.title || article?.meta['og:title'] || article?.docTitle || ''
   if (!article || !article.content || !readable(article.text, at)) return { kind: 'app', url: at, title: docTitle || undefined, why: 'There is no article in it to read.' }
-  const markdown = absoluteLinks(articleMarkdown(article), at)
+  // A link wrapped round a card (a picture, a name, a date) has blank lines in its text, which Markdown can't hold: they become spaces
+  const markdown = absoluteLinks(articleMarkdown(article), at).replace(/\[([^\]\n]*(?:\n[^\]\n]*){0,12})\]\(/g, (m, t: string) => (/\n\s*\n/.test(t) ? `[${t.replace(/\s*\n\s*/g, ' ').trim()}](` : m))
   return {
     kind: 'article',
     url: at,

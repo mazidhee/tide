@@ -46,8 +46,8 @@
   color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
-  flex-shrink: 1;
-  max-width: 45%;
+  flex-shrink: 0;
+  max-width: 60%;
 }
 .lv-url {
   font-size: 12px;
@@ -328,7 +328,8 @@
   color: var(--warn);
 }
 .lv-web-box {
-  height: calc(100vh - 200px);
+  /* Main draws the page over this box: it stops short of the tutor's dock below it */
+  height: calc(100vh - 320px);
   min-height: 420px;
   background: var(--bg-raised);
 }
@@ -390,15 +391,6 @@
     background: var(--accent-soft);
     box-shadow: 0 0 0 6px var(--accent-soft);
   }
-}
-
-/* ---------- Focus: the outline away, the page wide ---------- */
-
-.crs-immersive.crs-focus {
-  grid-template-columns: minmax(0, 1fr);
-}
-.crs-immersive.crs-focus .crs-toc {
-  display: none;
 }
 
 /* ---------- Brought in from other courses (RelatedCards) ---------- */
@@ -527,4 +519,260 @@
 .chat-screen-text b {
   font-weight: 600;
   color: var(--ink);
+}
+
+.chat.chat-dock {
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-raised) 94%, transparent);
+  backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: 0 10px 34px -12px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  min-height: 0;
+}
+.chat-dock.open {
+  max-height: min(64vh, 640px);
+}
+.dock-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px 6px 14px;
+  border-bottom: 1px solid var(--line);
+  font: 600 12.5px var(--font-ui);
+  color: var(--ink);
+}
+.dock-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.dock-title svg {
+  color: var(--accent);
+}
+.dock-gap {
+  flex: 1;
+}
+.dock-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 4px 4px;
+}
+.dock-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 0;
+  min-width: 0;
+}
+.dock-row .chat-screen {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+}
+.dock-quick {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.chat-dock .composer,
+.chat-dock form {
+  margin: 0;
+}
+/* Folded and not in use, the dock is one line: the engine and web switches show when you write */
+.chat-dock:not(.open):not(:focus-within) .composer-bar {
+  display: none;
+}
+.chat-dock:not(.open):not(:focus-within) .composer {
+  padding-top: 0;
+}
+.chat-dock .composer {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* ---------- The course room ----------
+   Thesis: in a course, the course is the room. Tide's own chrome steps back to the edges and comes
+   when called (the sidebar peeks from the left edge, the outline from its handle, the tutor from
+   one line at the foot of the text). The stage holds only what you are learning from: the text,
+   and beside it the lecture with its transcript; when the lecture plays it takes the stage
+   (theatre) and the text continues under it. Nothing stands in a column it doesn't need. */
+
+.shell.immersive .td-topbar {
+  padding-left: 88px;
+}
+.peek-edge {
+  position: fixed;
+  left: 0;
+  top: 44px;
+  bottom: 0;
+  width: 10px;
+  z-index: 60;
+}
+.peek-sidebar {
+  position: fixed;
+  left: 8px;
+  top: 8px;
+  bottom: 8px;
+  z-index: 61;
+  width: var(--sidebar-w);
+  display: flex;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--bg-sidebar);
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.45);
+  transform: translateX(calc(-100% - 20px));
+  transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.peek-sidebar.open {
+  transform: none;
+}
+.peek-sidebar > * {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.crs-page.crs-immersive {
+  container: crs / inline-size;
+  position: relative;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.crs-immersive > .crs-main {
+  grid-column: 2;
+  grid-row: 1;
+}
+.crs-immersive .crs-toc {
+  grid-column: 1;
+  grid-row: 1;
+  width: 288px;
+  border-left: 0;
+  border-right: 1px solid var(--line);
+}
+.crs-outline-handle {
+  display: none;
+}
+/* Stepped aside (focus, theatre, a narrow window): a handle, and the outline over the page on hover */
+.crs-immersive.crs-focus .crs-toc {
+  display: none;
+}
+.crs-immersive.crs-focus .crs-outline-handle {
+  display: grid;
+}
+.crs-outline-handle {
+  position: absolute;
+  left: 16px;
+  top: 58px;
+  z-index: 31;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg-raised);
+  color: var(--ink-soft);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+.crs-outline-handle:hover {
+  color: var(--ink);
+}
+.crs-immersive.toc-open .crs-toc {
+  display: flex;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 32;
+  width: min(300px, 86%);
+  box-shadow: 18px 0 48px -24px rgba(0, 0, 0, 0.4);
+  animation: crs-peek 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes crs-peek {
+  from {
+    transform: translateX(-16px);
+    opacity: 0;
+  }
+}
+@container crs (max-width: 999px) {
+  .crs-immersive .crs-toc {
+    display: none;
+  }
+  .crs-immersive .crs-outline-handle {
+    display: grid;
+  }
+  .crs-article {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+}
+@container crs (max-width: 1100px) {
+  .lv-url {
+    display: none;
+  }
+}
+.crs-immersive.crs-focus .crs-main > .crs-article,
+.crs-immersive.crs-focus .crs-main > .crs-linked {
+  padding-left: 64px;
+}
+
+/* Theatre: the lecture across the stage, its transcript beside it, the text under it */
+.crs-theatre .crs-article.wide {
+  width: min(1520px, 100%);
+}
+.crs-with-video.theatre {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+.crs-with-video.theatre > .crs-videos {
+  order: 0;
+  position: static;
+}
+.crs-with-video.theatre > .crs-prose {
+  order: 1;
+  width: 100%;
+  max-width: 740px;
+  margin: 8px auto 0;
+}
+.crs-with-video.theatre .vt.side {
+  --vt-side: 380px;
+}
+
+/* The tutor: one line at the foot of the text, opening upwards over it */
+.crs-main {
+  display: flex;
+  flex-direction: column;
+}
+.crs-main > .crs-article {
+  flex: 1 0 auto;
+}
+.crs-dock-wrap {
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
+  padding: 0 0 14px;
+  pointer-events: none;
+}
+/* It keeps to the text's own column (the reader measures it), so it never covers the lecture beside it */
+.crs-dock-wrap > .chat-dock {
+  pointer-events: auto;
+  width: var(--dock-w, min(720px, calc(100% - 56px)));
+  margin-left: var(--dock-left, auto);
+  margin-right: auto;
+  transition: width 0.2s ease, margin-left 0.2s ease;
+}
+.crs-article.crs-linked {
+  width: min(880px, 100%);
+}
+.crs-article.crs-linked:has(.lv-web-page, .lv-video-page, .lv-table-wrap, .lv-pdf) {
+  width: min(1380px, 100%);
+}
+/* Over the window's drag strip, its buttons still take clicks */
+.lv-sheet,
+.peek-sidebar,
+.crs-outline-handle {
+  -webkit-app-region: no-drag;
 }

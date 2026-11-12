@@ -5,13 +5,14 @@ const reading = (course: string, courseTitle: string, score: number, heading = '
 const clip = (video: string, score: number, course?: string, courseTitle?: string): RelatedClip => ({ kind: 'clip', video, start: 760, end: 905, title: 'Lecture', ...(course ? { course, courseTitle } : {}), text: 'what is said', score })
 
 describe('lessons that draw on several courses', () => {
-  it('brings in at most three, one per course, leaving out the course being taught', () => {
+  it('brings in at most three, one reading and one clip per course at most, leaving out the course being taught', () => {
     const r = pickRelated([reading('mwml', 'Made With ML', 9), reading('mwml', 'Made With ML', 8), reading('ossu', 'OSSU', 7), reading('zoom', 'MLOps Zoomcamp', 10)], [clip('aaaaaaaaaaa', 0.9, 'zoom', 'MLOps Zoomcamp'), clip('bbbbbbbbbbb', 0.8)], { exclude: 'zoom', limit: 5 })
     expect(r.length).toBe(3)
     expect(r.some((i) => i.kind === 'reading' && i.course === 'zoom')).toBe(false)
     expect(r.some((i) => i.kind === 'clip' && i.course === 'zoom')).toBe(false)
-    const keys = r.map((i) => (i.kind === 'reading' ? i.course : (i.course ?? i.video)))
+    const keys = r.map((i) => `${i.kind}:${i.kind === 'reading' ? i.course : (i.course ?? i.video)}`)
     expect(new Set(keys).size).toBe(keys.length)
+    expect(r.filter((i) => i.kind === 'reading' && i.course === 'mwml').length).toBe(1)
   })
 
   it('prefers a reading and a clip over two readings when both are close', () => {

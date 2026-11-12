@@ -38,7 +38,15 @@ const SUGGESTIONS: Record<ScopeChoice, string[]> = {
 /** The last request from elsewhere that was passed on, so the panel coming back on screen never sends it a second time */
 let handledAsk: number | null = null
 
-export function ChatPanel() {
+/**
+ * `dock`: the tutor inside the course reader, so it never fights the video for the right of the
+ * window. Folded, it is one bar at the foot of the reading column (what it sees, Explain, Quiz me,
+ * the message box); asked something, it opens upwards over the text with the conversation, and
+ * folds away again with one click.
+ */
+export function ChatPanel({ variant = 'panel' }: { variant?: 'panel' | 'dock' } = {}) {
+  const dock = variant === 'dock'
+  const [open, setOpen] = useState(false)
   const app = useApp()
   const { view, pendingAsk } = app
   const openPath = view.kind === 'file' ? view.path : null
@@ -100,6 +108,7 @@ export function ChatPanel() {
       return
     }
     const attach = opts?.attachment ?? attachment
+    if (dock) setOpen(true)
     const now = useScreen ? screenNow() : null
     const sent = await convo.send(text, { attachment: attach, scope: opts?.scope ?? scope, instructions: opts?.instructions ?? instructionsRef.current, ...(now ? { onScreen: describeScreen(now) } : {}) })
     if (sent) {
@@ -112,6 +121,7 @@ export function ChatPanel() {
   useEffect(() => {
     if (!pendingAsk || pendingAsk.nonce === handledAsk) return
     handledAsk = pendingAsk.nonce
+    if (dock) setOpen(true)
     if (pendingAsk.scope) setExplicitScope(pendingAsk.scope)
     instructionsRef.current = pendingAsk.instructions
     if (pendingAsk.text) send(pendingAsk.text, { attachment: pendingAsk.attachment, scope: pendingAsk.scope, instructions: pendingAsk.instructions })
@@ -121,6 +131,72 @@ export function ChatPanel() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingAsk?.nonce])
+
+  const screenChip = screen && (
+    <div className={`chat-screen${useScreen ? '' : ' off'}`}>
+      <Icon name={screen.video ? 'video' : screen.kind === 'article' || screen.kind === 'web' ? 'globe' : 'course'} size={12} />
+      <span className="chat-screen-text" title={useScreen ? 'The tutor sees this with your message' : 'Not sent with your message'}>
+        {useScreen ? 'Sees ' : 'Not sending '}
+        <b>{screenLabel(screen)}</b>
+        {screen.video && !screenLabel(screen).includes(formatTime(screen.video.at)) ? ` · ${formatTime(screen.video.at)}` : ''}
+      </span>
+      <button className="icon-btn small" onClick={() => setUseScreen((u) => !u)} title={useScreen ? 'Don’t send what’s on screen' : 'Send what’s on screen'} aria-pressed={useScreen}>
+        <Icon name={useScreen ? 'x' : 'plus'} size={11} />
+      </button>
+    </div>
+  )
+
+  if (dock) {
+    return (
+      <aside className={`chat chat-dock${open ? ' open' : ''}`} aria-label="Tutor">
+        {open && (
+          <header className="dock-head">
+            <span className="dock-title">
+              <Icon name="sparkle" size={13} /> Tutor
+            </span>
+            <span className="dock-gap" />
+            {turns.length > 0 && (
+              <button className="tool-btn" onClick={() => !busy && (convo.reset(), (instructionsRef.current = undefined))} title="Start a new conversation">
+                New chat
+              </button>
+            )}
+            <button className="icon-btn small" title="All conversations" onClick={() => app.setView({ kind: 'chat', id: turns.length ? convo.chatId : undefined })}>
+              <Icon name="list" size={14} />
+            </button>
+            <button className="icon-btn small" title="Fold the tutor away (the conversation is kept)" onClick={() => setOpen(false)} aria-label="Fold the tutor away">
+              <Icon name="arrowDown" size={14} />
+            </button>
+          </header>
+        )}
+        {open && turns.length > 0 && (
+          <div className="chat-list dock-list" ref={listRef}>
+            {turns.map((t, i) => (
+              <TurnView key={t.id} turn={t} notePath={openPath ?? ''} showSummaryBreak={convo.summarized > 0 && i === convo.summarized} />
+            ))}
+          </div>
+        )}
+        <div className="dock-row">
+          {screenChip}
+          {!busy && (
+            <span className="dock-quick">
+              {!open && turns.length > 0 && (
+                <button className="tool-btn" onClick={() => setOpen(true)}>
+                  <Icon name="chat" size={12} /> {Math.ceil(turns.length / 2)} {turns.length > 2 ? 'answers' : 'answer'}
+                </button>
+              )}
+              <button className="tool-btn" onClick={() => send('Explain this part to me.')}>
+                Explain this
+              </button>
+              <button className="tool-btn" onClick={() => send('Quiz me on this: two or three short questions on what’s on my screen, one at a time. Mark each answer before the next.')}>
+                Quiz me
+              </button>
+            </span>
+          )}
+        </div>
+        <Composer value={input} onChange={setInput} onSend={() => send(input)} busy={busy} onStop={convo.stop} web={convo.web} onWeb={convo.setWeb} attachment={attachment} onClearAttachment={() => setAttachment(undefined)} inputRef={inputRef} />
+      </aside>
+    )
+  }
 
   return (
     <aside className="chat" aria-label="AI tutor">
@@ -202,19 +278,7 @@ export function ChatPanel() {
         ))}
       </div>
 
-      {screen && (
-        <div className={`chat-screen${useScreen ? '' : ' off'}`}>
-          <Icon name={screen.video ? 'video' : screen.kind === 'article' || screen.kind === 'web' ? 'globe' : 'course'} size={12} />
-          <span className="chat-screen-text" title={useScreen ? 'The tutor sees this with your message' : 'Not sent with your message'}>
-            {useScreen ? 'Sees ' : 'Not sending '}
-            <b>{screenLabel(screen)}</b>
-            {screen.video && !screenLabel(screen).includes(formatTime(screen.video.at)) ? ` · ${formatTime(screen.video.at)}` : ''}
-          </span>
-          <button className="icon-btn small" onClick={() => setUseScreen((u) => !u)} title={useScreen ? 'Don’t send what’s on screen' : 'Send what’s on screen'} aria-pressed={useScreen}>
-            <Icon name={useScreen ? 'x' : 'plus'} size={11} />
-          </button>
-        </div>
-      )}
+      {screenChip}
       <Composer
         value={input}
         onChange={setInput}
