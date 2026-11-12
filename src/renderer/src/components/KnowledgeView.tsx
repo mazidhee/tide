@@ -4,6 +4,7 @@ import { checkLength, FROM_MEMORY, type ReviewItem } from '@shared/review'
 import type { ChatScope } from '@shared/types'
 import { useApp } from '../state'
 import { BrainTabs } from './BrainTabs'
+import { Icon } from './Icon'
 import { KnowledgeMap } from './KnowledgeMap'
 import { useTideDesign } from '../lib/design'
 import { useAreaClass } from '../lib/areas'
@@ -63,6 +64,12 @@ export function KnowledgeView() {
         <div className="crumbs no-drag">
           <span className="crumb current">{tide ? 'What you know' : 'Brain'}</span>
           <BrainTabs tab="know" />
+        </div>
+        <div className="doc-actions no-drag">
+          <button className="tool-btn" onClick={() => app.setView({ kind: 'learner' })} title="Your learner profile: what the tutor reads before each lesson; correct or delete anything">
+            <Icon name="tutor" size={15} />
+            <span>What the tutor knows about you</span>
+          </button>
         </div>
       </header>
       <div className="know-scroll">

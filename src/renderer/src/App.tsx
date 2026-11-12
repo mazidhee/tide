@@ -30,6 +30,7 @@ import { useFocusCompletion } from './components/FocusTimer'
 import { CoachView } from './components/CoachView'
 import { lastBrainTab } from './components/BrainTabs'
 import { KnowledgeView } from './components/KnowledgeView'
+import { LearnerProfileView } from './components/LearnerProfileView'
 import { LessonsView } from './components/LessonsView'
 import { ChatPage } from './components/ChatPage'
 import { NewTopicView } from './components/NewTopicView'
@@ -389,7 +390,7 @@ export default function App() {
   // panel stays beside what you read (a note, a PDF, the library), one click away from Home
   // …until you ask something from Home: then it opens there with your question, and stays until you close it
   // The map of what you know and Settings are the same: the whole width, the panel on request
-  const wide = view.kind === 'home' || view.kind === 'settings' || (view.kind === 'graph' && !view.focus && (view.tab ?? lastBrainTab()) === 'know')
+  const wide = view.kind === 'home' || view.kind === 'settings' || view.kind === 'learner' || (view.kind === 'graph' && !view.focus && (view.tab ?? lastBrainTab()) === 'know')
   // A course being read is the whole window: Tide's sidebar steps back to the left edge, there on hover
   const immersive = view.kind === 'courses' && !!view.id && !focusId
   const noPanel = ownTutor || (tide && wide && homeAsked === null)
@@ -418,6 +419,7 @@ export default function App() {
   else if (view.kind === 'chat') main = <ChatPage id={view.id} />
   else if (view.kind === 'lab') main = <LabView key={`${view.terminal}:${view.topic ?? ''}:${view.nonce ?? ''}`} kind={view.terminal} topic={view.topic} />
   else if (view.kind === 'coach') main = <CoachView />
+  else if (view.kind === 'learner') main = <LearnerProfileView />
   else if (view.kind === 'lessons') main = <LessonsView />
   else if (view.kind === 'wrapup') main = <WrapUpView />
   else if (view.kind === 'weekly') main = <WeeklyView />

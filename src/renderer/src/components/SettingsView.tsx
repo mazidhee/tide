@@ -1,6 +1,7 @@
 import { SIDEBAR_ITEMS } from '@shared/sidebar'
 import { breakSettings, type BreakSettings, type Strictness } from '@shared/breaks'
 import { rhythmLine } from '@shared/breakPlanner'
+import { prepSettings, type PrepSettings, type PrepStatus } from '@shared/lessonPrep'
 import { rhythmNow } from '../lib/breaks'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { DEFAULT_VOICE, resetVoiceStatus, Speaker } from '../lib/voice'
@@ -481,7 +482,81 @@ function StudySection() {
         </Row>
       </Group>
       <BreaksGroup />
+      <PrepGroup />
     </>
+  )
+}
+
+/** Lesson prep while you're away (main/lessonPrep): on or off, when, and how much Claude a night */
+function PrepGroup() {
+  const app = useApp()
+  const p = prepSettings(app.settings.prep)
+  const put = (patch: Partial<PrepSettings>) => app.updateSettings({ prep: { ...p, ...patch } })
+  const [status, setStatus] = useState<PrepStatus | null>(null)
+  const [working, setWorking] = useState<'' | 'prep' | 'review'>('')
+  useEffect(() => {
+    window.tide.prep.status().then(setStatus).catch(() => {})
+  }, [app.settings.prep])
+  const hours = Array.from({ length: 24 }, (_, h) => ({ value: h, label: `${String(h).padStart(2, '0')}:00` }))
+  const last = status?.last
+  const lastLine = status?.ready ? `Ready: ${status.ready.topic}.` : last ? `${last.decision.why} (checked ${new Date(last.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}).` : 'Nothing prepared yet.'
+  return (
+    <Group
+      title="Lesson prep while you’re away"
+      note="When Tide is open and you’re away from the Mac, or overnight, Tide gets your next lesson ready: what’s due, the best reading, checked exercises, a visual when it helps, a short plan and the warm-up, so it starts at once. Claude is used only for lessons that aren’t private, never when your plan is near its limit, and within the allowance below; without Claude, Tide prepares what needs no model. Once a week it also writes your weekly review."
+    >
+      <Row label="Prepare lessons ahead" hint={lastLine}>
+        <Toggle label="Prepare lessons ahead" on={p.on} onChange={(on) => put({ on })} />
+      </Row>
+      {p.on && (
+        <>
+          <Row label="Overnight from" hint="Prep runs in this window while Tide is open.">
+            <span className="set-inline">
+              <Select label="From" value={p.from} onChange={(v) => put({ from: v })} options={hours} />
+              <span className="muted">to</span>
+              <Select label="To" value={p.to} onChange={(v) => put({ to: v })} options={hours} />
+            </span>
+          </Row>
+          <Row label="Also when I’m away" hint={`After ${p.idleMinutes} minutes without using the Mac.`}>
+            <span className="set-inline">
+              <Select label="Idle for" value={p.idleMinutes} onChange={(v) => put({ idleMinutes: v })} options={[10, 20, 30, 60].map((m) => ({ value: m, label: `${m} min` }))} />
+              <Toggle label="Also when I’m away" on={p.whenIdle} onChange={(whenIdle) => put({ whenIdle })} />
+            </span>
+          </Row>
+          <Row label="Claude calls a night, at most" hint={`One lesson takes about 3, the weekly review 2. ${status ? `${status.usedTonight} used tonight.` : ''}`}>
+            <Select label="Claude calls a night" value={p.maxCalls} onChange={(v) => put({ maxCalls: v })} options={[0, 3, 6, 8, 12, 20].map((n) => ({ value: n, label: n ? String(n) : 'None (prepare without Claude)' }))} />
+          </Row>
+          <Row label="Now">
+            <span className="set-inline">
+              <button
+                className="btn small"
+                disabled={!!working}
+                onClick={async () => {
+                  setWorking('prep')
+                  await window.tide.prep.now().catch(() => null)
+                  setStatus(await window.tide.prep.status().catch(() => null))
+                  setWorking('')
+                }}
+              >
+                {working === 'prep' ? 'Preparing…' : 'Prepare the next lesson'}
+              </button>
+              <button
+                className="btn small"
+                disabled={!!working}
+                onClick={async () => {
+                  setWorking('review')
+                  const r = await window.tide.prep.weeklyReview().catch(() => null)
+                  setWorking('')
+                  if (r) app.openPath(r.path)
+                }}
+              >
+                {working === 'review' ? 'Writing…' : 'Write this week’s review'}
+              </button>
+            </span>
+          </Row>
+        </>
+      )}
+    </Group>
   )
 }
 
@@ -540,6 +615,13 @@ function TutorSection() {
   const check = useCallback(() => window.tide.voice.status().then((r) => (setReady(r.ready), r)), [])
   return (
     <>
+      <Group title="What the tutor knows about you" note="Your learner profile, a note in your vault: goals, pace, what clicks, misconceptions, how sure you tend to be, hints and the preferences you’ve stated. The tutor reads a short digest of it before every lesson and chat.">
+        <Row label="Learner profile" hint="Correct or delete anything; Tide keeps your edits.">
+          <button className="btn small" onClick={() => app.setView({ kind: 'learner' })}>
+            Open
+          </button>
+        </Row>
+      </Group>
       <Group title="Your tutor" note="Their face around Tide, their voice, and how they talk when you use Talk. The teaching is the same.">
         <div className="set-pad">
           <div className="voice-choices" role="radiogroup" aria-label="Your tutor">

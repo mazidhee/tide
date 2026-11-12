@@ -135,6 +135,8 @@ export interface Settings {
   studyApi?: { enabled: boolean; port?: number; lan?: boolean }
   /** The editor a guided project opens in (shared/editor.ts): 'auto' picks by the project's language */
   editor?: import('./editor').EditorChoice
+  /** Lesson prep while you're away (shared/lessonPrep): on or off, the night window, Claude's allowance */
+  prep?: Partial<import('./lessonPrep').PrepSettings>
 }
 
 export type FileKind = 'note' | 'pdf' | 'epub' | 'image' | 'doc' | 'canvas' | 'other'
@@ -882,6 +884,28 @@ export interface TideApi {
     writeJournal(date: string, text: string): Promise<JournalEntry>
     weekReview(end?: string): Promise<WeekReview>
     saveReview(end: string, r: { wentWell: string; inTheWay: string; change: string }): Promise<string>
+  }
+  /** A tutor that remembers you (main/learnerProfile): the profile note, as the profile view shows it */
+  learner: {
+    view(): Promise<import('./learnerProfile').LearnerView>
+    /** Brings the measured lines up to date (and makes the note if there isn't one) */
+    refresh(): Promise<import('./learnerProfile').LearnerView>
+    correct(section: import('./learnerProfile').SectionId, text: string, next: { text?: string; remove?: boolean; resolved?: boolean }): Promise<import('./learnerProfile').LearnerView>
+    add(section: import('./learnerProfile').SectionId, text: string): Promise<import('./learnerProfile').LearnerView>
+    /** The break planner's rhythm, for the pace line */
+    rhythm(r: import('./learnerProfile').RhythmFacts): Promise<void>
+  }
+  /** Lesson prep while you're away (main/lessonPrep) */
+  prep: {
+    status(): Promise<import('./lessonPrep').PrepStatus>
+    /** The prepared lesson's first exchange, handed over as it starts (null: start as usual) */
+    opening(id: string): Promise<{ message: string; reply: string } | null>
+    get(id: string): Promise<import('./lessonPrep').PreparedLesson | null>
+    discard(id: string): Promise<void>
+    /** Prepare now, whatever the hour (Settings' "Prepare now") */
+    now(): Promise<import('./lessonPrep').PrepDecision>
+    /** Writes this week's review note now; its path */
+    weeklyReview(): Promise<{ path: string; by: 'claude' | 'local' }>
   }
   /** What this window is studying, for the professor in the menu bar; null when it stops */
   /** Commands from the menu bar's menu: open a view or today's item, start a focus timer */

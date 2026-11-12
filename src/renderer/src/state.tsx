@@ -24,6 +24,8 @@ export type View =
   | { kind: 'chat'; id?: string }
   | { kind: 'lab'; terminal: 'lab' | 'local'; topic?: string; nonce?: number }
   | { kind: 'coach' }
+  /** What the tutor knows about you: the learner profile (main/learnerProfile) */
+  | { kind: 'learner' }
   | { kind: 'wrapup' }
   | { kind: 'weekly' }
   | { kind: 'drill'; drill: import('@shared/drills').DrillKind; nonce?: number }

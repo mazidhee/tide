@@ -1,0 +1,382 @@
+/*
+  A tutor that remembers you (the learner profile view) and lesson prep ("Ready for you").
+  Written against the classic variable names, which the new design points at its own roles
+  (styles/tide/tokens.css), so both designs and every theme read them.
+*/
+
+/* ---------- Ready for you ---------- */
+
+.ready-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent-text, var(--accent));
+}
+
+.ready-now .ready-steps {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  max-width: 58ch;
+}
+.ready-steps li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.ready-step-n {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--ink-muted);
+  text-align: right;
+}
+.ready-step-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ready-step-min {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.ready-parts {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  max-width: 62ch;
+}
+.ready-parts li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--ink-soft);
+}
+.ready-parts svg {
+  flex: none;
+  color: var(--accent-text, var(--accent));
+}
+
+/* On Learn (and the classic Home): a card above the topic box */
+.ready-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+  margin: 0 0 22px;
+  padding: 16px 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+  border-radius: var(--radius-m, 10px);
+  background: color-mix(in srgb, var(--accent) 7%, var(--bg-raised, var(--bg)));
+}
+.ready-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.ready-why {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.ready-inline {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+.ready-card-go {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.ready-when {
+  font-size: 12px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+@container (max-width: 560px) {
+  .ready-card {
+    grid-template-columns: 1fr;
+  }
+  .ready-card-go {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+/* ---------- What the tutor knows about you ---------- */
+
+.lp {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 0 48px;
+  align-items: start;
+  max-width: 1184px;
+  margin: 0 auto;
+}
+.lp-main {
+  min-width: 0;
+}
+.lp-lede {
+  margin: 6px 0 8px;
+  max-width: 64ch;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  text-wrap: pretty;
+}
+.lp-link {
+  font: inherit;
+  color: var(--accent-text, var(--accent));
+  font-weight: 500;
+}
+.lp-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.lp-sec {
+  margin-top: 26px;
+}
+.lp-sec-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.lp-sec-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+.lp-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-muted);
+  opacity: 0.85;
+  transition: color 120ms ease;
+}
+.lp-add:hover,
+.lp-add:focus-visible {
+  color: var(--accent-text, var(--accent));
+  opacity: 1;
+}
+.lp-empty {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.lp-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.lp-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  padding: 8px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+.lp-item-text {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  text-wrap: pretty;
+}
+.lp-item.resolved .lp-item-text > span:not(.lp-dates):not(.lp-tag) {
+  color: var(--ink-soft);
+}
+.lp-item.code .lp-item-text {
+  color: var(--ink-soft);
+}
+.lp-tag {
+  display: inline-block;
+  margin-right: 8px;
+  vertical-align: 1px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--bg-inset);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  letter-spacing: 0.01em;
+  color: var(--ink-muted);
+}
+.lp-item-text > .lp-tag.yours {
+  margin: 0 0 0 8px;
+}
+.lp-tag.yours {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-text, var(--accent));
+}
+.lp-dates {
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+.lp-state {
+  font-weight: 600;
+}
+.lp-state.open {
+  color: var(--warn);
+}
+.lp-state.good {
+  color: var(--good, #1f9d55);
+}
+.lp-seen {
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.lp-acts {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.lp-item:hover .lp-acts,
+.lp-item:focus-within .lp-acts {
+  opacity: 1;
+}
+@media (hover: none) {
+  .lp-acts {
+    opacity: 1;
+  }
+}
+.lp-field {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.lp-field input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong, var(--line));
+  border-radius: 6px;
+  background: var(--bg-raised, var(--bg));
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+.lp-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.lp-rail {
+  position: sticky;
+  top: 0;
+  display: grid;
+  gap: 16px;
+  padding-top: 56px;
+}
+.lp-card {
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m, 10px);
+  background: var(--bg-raised, var(--bg));
+}
+.lp-card h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.lp-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.lp-meta {
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--ink-muted);
+}
+.lp-card > .lp-meta {
+  margin: 6px 0 0;
+}
+.lp-digest {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--bg-inset);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.lp-digest p {
+  margin: 0 0 6px;
+}
+.lp-digest p:last-child {
+  margin: 0;
+}
+.lp-changes {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.lp-changes li {
+  display: grid;
+  gap: 2px;
+}
+.lp-change-line {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+@container (max-width: 820px) {
+  .lp {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lp-rail {
+    position: static;
+    padding-top: 28px;
+  }
+}
+
+.td-now + .ready-card {
+  margin: 12px 0 0;
+}

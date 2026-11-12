@@ -52,11 +52,11 @@ export const EXTRA_TOOLS: McpTool[] = [
   },
   {
     name: 'learner_profile',
-    description: "Who the learner is: their profile and aims, what you remember about them, this week's plan, how many recall questions are due, and their most recent lessons. Read it at the start of a conversation that isn't a lesson (a lesson already has this in its prompt).",
-    inputSchema: obj({}),
-    async run(_args, ctx) {
+    description: "Who the learner is: their full learner profile (goals, pace, what clicks and what didn't land, misconceptions with dates, confidence calibration, hint use, stated preferences, strengths), their aims, what you remember about them, this week's plan, recall due and recent lessons. With a topic: also the misconceptions and past mistakes on it. Your prompt already has a short digest; read this for the full picture, or before teaching a topic they have struggled with.",
+    inputSchema: obj({ topic: { type: 'string', description: 'Optional: a topic, for the past mistakes and misconceptions on it' } }),
+    async run(args, ctx) {
       const id = ctx.step({ kind: 'read_note', label: 'Looking at what Tide knows about you', status: 'running', depth: 0 })
-      const [{ profilePrompt }, { memoryPrompt }, { recallStats }, { listLessons }, { privatePath }, agent] = await Promise.all([import('./coach'), import('./memory'), import('./recall'), import('./lessons'), import('./projects'), import('./agent')])
+      const [{ directionLine }, { memoryPrompt }, { recallStats }, { listLessons }, { privatePath }, agent, { pastOnTopic }] = await Promise.all([import('./coach'), import('./memory'), import('./recall'), import('./lessons'), import('./projects'), import('./agent'), import('./learnerProfile')])
       const plan = await agent.runTideTool('study_plan', {}, { ...ctx, step: () => '', updateStep: () => {} }).catch(() => '')
       const lessons = (await listLessons().catch(() => [])).slice(0, 30)
       const open: string[] = []
@@ -69,7 +69,8 @@ export const EXTRA_TOOLS: McpTool[] = [
       const r = recallStats()
       ctx.updateStep(id, { status: 'done' })
       return [
-        (await profilePrompt().catch(() => '')) || 'No learner profile yet.',
+        await directionLine().catch(() => ''),
+        await pastOnTopic(String(args.topic ?? '')).catch(() => 'No learner profile yet.'),
         await memoryPrompt().catch(() => ''),
         `Plan:\n${plan}`,
         `Recall: ${r.due} questions due of ${r.total} kept (${r.settled} settled).`,

@@ -89,8 +89,8 @@ async function levelFor(info: (LessonInfo & { known?: Known }) | undefined, topi
   return { level: given ?? (lesson ? lastLevel.get(lesson) : undefined) ?? 2 }
 }
 
-/** The sandbox, the lab and Haiku, for a check */
-async function ioFor(lab: string): Promise<ExerciseIO> {
+/** The sandbox, the lab and Haiku, for a check (main/lessonPrep checks its exercises the same way) */
+export async function ioFor(lab: string): Promise<ExerciseIO> {
   const [{ runCode }, { labQuery, labSchema }, { schemaText }] = await Promise.all([import('./runner'), import('./lab'), import('@shared/lab')])
   return {
     run: (lang, code, stdin, o) => runCode(lang, code, stdin, 20_000, o),

@@ -30,6 +30,13 @@ export const JOB_ROUTES = {
   readTogether: { label: 'Reading a book together', role: 'teach', privacy: 'path' },
   weekPlan: { label: 'Weekly coach plan', role: 'teach', privacy: 'text' },
   learnerProfile: { label: 'Learner profile and direction', role: 'background', privacy: 'text' },
+  // A tutor that remembers you (main/learnerProfile): small changes after each lesson, a tidy each week
+  profileUpdate: { label: 'Updating your learner profile after a lesson', role: 'background', privacy: 'text' },
+  profileWeekly: { label: 'Weekly tidy of your learner profile', role: 'hard', privacy: 'text' },
+  // Lesson prep while you're away (main/lessonPrep): Claude only; without it the prep is what code can gather
+  lessonPrep: { label: 'Preparing your next lesson', role: 'hard', privacy: 'text' },
+  prepExercises: { label: 'Exercises and the opening for your next lesson', role: 'teach', privacy: 'text' },
+  weeklyReview: { label: 'Your weekly review', role: 'hard', privacy: 'text' },
   curriculum: { label: 'Sorting roadmaps, enriching topics, readings', role: 'background', privacy: 'flag' },
   workshop: { label: 'Guided project review', role: 'teach', privacy: 'flag' },
   // Pictures go to Claude too (main/imagePrep makes them ready): a photo of handwritten maths is marked by the marking model
