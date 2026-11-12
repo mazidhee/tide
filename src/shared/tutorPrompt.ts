@@ -1,6 +1,7 @@
 import { SESSION_FORMAT } from './session'
 import { SIM_GUIDE } from './sims'
 import { VISUAL_GUIDE } from './visuals'
+import { uses } from './workarounds'
 
 /**
  * What the tutor is told on every turn, kept here (not in main/agent) so anything that measures
@@ -110,4 +111,6 @@ const CLAUDE_LESSON_RULES = `\n- Every numbered practice problem (code, SQL, a c
 
 // Custom visuals are Claude's alone: Gemma (and so every private notebook) keeps to the fixed simulations and mermaid
 export const CLAUDE_TUTOR_SYSTEM = `${CLAUDE_TOOLS}${RULES}\n${SIM_GUIDE}\n${VISUAL_GUIDE}`
-export const CLAUDE_LESSON_SYSTEM = `${CLAUDE_TOOLS}${RULES}${CLAUDE_LESSON_RULES}\n${VISUAL_GUIDE}`
+// A Claude lesson has the whole simulation guide in its (cached) prompt, where Gemma's lessons get only
+// the kinds their topic can use, with the instructions (shared/workarounds lessonSimSubset)
+export const CLAUDE_LESSON_SYSTEM = `${CLAUDE_TOOLS}${RULES}${CLAUDE_LESSON_RULES}${uses('lessonSimSubset', 'claude') ? '' : `\n${SIM_GUIDE}`}\n${VISUAL_GUIDE}`

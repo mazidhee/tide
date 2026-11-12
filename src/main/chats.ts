@@ -124,6 +124,14 @@ export function historyFor(chat: Chat): { summary?: string; messages: ChatMessag
   return { summary: chat.summary, messages: fitHistory(recent, historyBudget()) }
 }
 
+/**
+ * The whole conversation, for Claude (shared/workarounds trimHistory): its process holds it and its
+ * prompt cache reads it, so nothing is summarised away. Within Claude's own budget (main/agent buildTurn).
+ */
+export function wholeHistory(chat: Chat): ChatMessage[] {
+  return chat.messages.filter((m) => !m.error && (m.role === 'user' || m.content.trim())).map(asApi)
+}
+
 /** True when the unsummarized part of a conversation is close to its budget */
 export function needsCompaction(chat: Chat): boolean {
   const tokens = chat.messages.slice(chat.summarizedUpTo).reduce((n, m) => n + estimateTokens(m.content + (m.attachment ?? '')), 0)

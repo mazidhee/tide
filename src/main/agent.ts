@@ -5,6 +5,7 @@ import { join } from 'path'
 import { characterById, recentOpenings, splitSay, voiceRules } from '@shared/characters'
 import { isMlxVlm } from './modelServer'
 import { thingsIntent } from '@shared/learnIntent'
+import { CLAUDE_HISTORY_TOKENS, CLAUDE_PASSAGES, uses, type Engine } from '@shared/workarounds'
 import { graphCached, relatedNotes } from './learn'
 import { readTerminal, runInTerminal, terminalInfo } from './terminal'
 import { claudeState, ensureGemmaServer, inUse, markGemmaUsed, noteGemmaDemand } from './modelIdle'
@@ -842,7 +843,7 @@ export const searchPapers = memoize(searchPapersNow, { ttlMs: 60 * 60_000, key: 
 export const readWebpage = memoize(readWebpageNow, { ttlMs: 60 * 60_000, max: 40, key: (url, cloudOk = true) => `${cloudOk ? 'c' : 'l'}${url.trim()}` })
 
 /** A chat request as main builds it: a stored conversation adds its running summary */
-export type TurnRequest = ChatRequest & { summary?: string; /** Only read the opening into the server's cache */ warmOnly?: boolean }
+export type TurnRequest = ChatRequest & { summary?: string; /** Only read the opening into the server's cache */ warmOnly?: boolean; /** A stored conversation in full, for Claude (main/ai claudeRequest); `messages` holds what Gemma gets */ whole?: ChatMessage[] }
 
 /** The part of the system prompt that stays the same from turn to turn, so a local server can reuse its cache */
 export async function stablePrompt(base: string, req: TurnRequest, web: boolean, session = false): Promise<string> {
@@ -1730,7 +1731,7 @@ export function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, signal
  * the system prompt on `base`, and the messages with this turn's passages, earlier lessons, the
  * lab's tables and so on. The same for Gemma's loop and for Claude (main/claudeEngine).
  */
-export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, signal: AbortSignal, base: string = SYSTEM) {
+export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, signal: AbortSignal, base: string = SYSTEM, engine: Engine = 'gemma') {
   const sources: ContextSource[] = []
   const ctx: LoopContext = {
     signal,
@@ -1775,7 +1776,8 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
             .map((h) => ({ path: h.path, title: h.title, heading: h.heading || undefined, text: h.text }))
         : await retrieve(req.scope, question)
   // A lesson starts from a few passages (it can search for more); a chat gets a wider look
-  for (const s of initial.slice(0, req.instructions ? 4 : 8)) addSource(ctx, { path: s.path, title: s.title, heading: s.heading, text: s.text })
+  const clipped = uses('clipPassages', engine)
+  for (const s of initial.slice(0, req.instructions ? (clipped ? 4 : CLAUDE_PASSAGES.count) : 8)) addSource(ctx, { path: s.path, title: s.title, heading: s.heading, text: s.text })
   // Notes this one links to often hold what it builds on: add the best-matching passage from a few
   if (req.scope.kind === 'note' && /\.md$/i.test(req.scope.path)) {
     const graph = await graphCached().catch(() => null)
@@ -1818,7 +1820,7 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
     // Setting or marking work from a general chat: notes picked by keyword are only noise there
     // A lesson or quiz reads its notes once, at the start: fresh passages every answer would make
     // each turn longer and slower, and the tutor can still search when it needs more
-    sources.length && !((assigning || marking) && req.scope.kind === 'vault') && !(req.instructions && userTurns > 1) ? `Passages from what the student is studying right now:\n\n${sources.map((s) => `[${s.index}] ${s.title}${s.heading ? ` > ${s.heading}` : ''}\n${clip(s.text, req.instructions || req.scope.kind === 'vault' ? 1000 : 1600)}`).join('\n\n---\n\n')}` : '',
+    sources.length && !((assigning || marking) && req.scope.kind === 'vault') && !(req.instructions && userTurns > 1) ? `Passages from what the student is studying right now:\n\n${sources.map((s) => `[${s.index}] ${s.title}${s.heading ? ` > ${s.heading}` : ''}\n${clip(s.text, !clipped ? CLAUDE_PASSAGES.chars : req.instructions || req.scope.kind === 'vault' ? 1000 : 1600)}`).join('\n\n---\n\n')}` : '',
     req.onScreen ? `What the student has on screen in Tide right now:\n${req.onScreen.slice(0, 6000)}` : '',
     req.attachment ? `The student selected this passage:\n"""\n${req.attachment}\n"""` : '',
     before,
@@ -1832,8 +1834,9 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
     .filter(Boolean)
     .join('\n\n')
 
-  // Stored conversations arrive already fitted; sessions and threads keep their opening setup
-  const history = req.chatId ? req.messages : fitHistory(req.messages, historyBudget(), !!req.instructions)
+  // Stored conversations arrive already fitted; sessions and threads keep their opening setup. On
+  // Claude the lesson stays whole (shared/workarounds trimHistory): its process holds it, cached
+  const history = !uses('trimHistory', engine) ? fitHistory(req.messages, CLAUDE_HISTORY_TOKENS, !!req.instructions) : req.chatId ? req.messages : fitHistory(req.messages, historyBudget(), !!req.instructions)
   const messages: ApiMessage[] = [
     { role: 'system', content: await stablePrompt(base, req, ctx.web, !!req.session) },
     ...withStableContext(

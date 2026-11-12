@@ -19,6 +19,7 @@ import { createHash } from 'crypto'
 import type { AgentStep, ChatEvent, ChatMessage, ClaudeModel, ClaudeRole } from '@shared/types'
 import { claudeModel, claudeLabel, asksForDepth, rank } from '@shared/claude'
 import { notAnAttempt } from '@shared/lessonRepair'
+import { FIRST_WORDS_MS } from '@shared/workarounds'
 import { checkClaude, childEnv, claudeArgs, findClaude, mcpConfig, onceArgs, parseLine, unavailableReason, unavailableText, userContent, userLine, type ClaudeEvent, type ClaudeStatus, type ClaudeUsage, type ImageInput } from './claudeCli'
 import { getSettings } from './settings'
 import type { TurnRequest, ToolContext } from './agent'
@@ -345,6 +346,21 @@ export async function prewarmClaude(req: Omit<TurnRequest, 'id'>): Promise<void>
 
 // ---------- A turn ----------
 
+/** How long a turn may go without a sign of life before Gemma takes it (shared/workarounds); tests shorten it */
+export const claudeLimits = { firstWordsMs: FIRST_WORDS_MS }
+
+/** A turn Claude never started answering: kept for tuning (no lesson text), and said in the console */
+function logHang(o: { key: string; model: string; ms: number; turns: number }) {
+  console.warn(`[claude] no first words in ${Math.round(o.ms / 1000)} s on ${o.key} (${o.model}): Gemma takes the turn`)
+  try {
+    const dir = join(app.getPath('userData'), 'claude')
+    mkdirSync(dir, { recursive: true })
+    appendFileSync(join(dir, 'fallbacks.log'), JSON.stringify({ at: Date.now(), why: 'no-first-words', ...o }) + '\n')
+  } catch {
+    // only a log
+  }
+}
+
 export const fp = (s: string) => createHash('sha1').update(s).digest('hex').slice(0, 16)
 const text = (c: ChatMessage['content'] | unknown) => (typeof c === 'string' ? c : Array.isArray(c) ? c.map((p: { text?: string }) => p.text ?? '').join('\n') : String(c ?? ''))
 
@@ -607,7 +623,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   if (req.session && req.instructions) req = { ...req, instructions: (await import('@shared/exercises')).forClaude(req.instructions) }
   // A side thread saves to the lesson's notes with save_to_notes (main/tideMcpTools)
   if (req.thread && req.instructions) req = { ...req, instructions: `${req.instructions}\n${(await import('@shared/lessonThreads')).THREAD_NOTE_TOOL}` }
-  const { ctx, messages, mine, secret, images } = await buildTurn(req, emit, signal, req.session ? CLAUDE_LESSON_SYSTEM : CLAUDE_TUTOR_SYSTEM)
+  const { ctx, messages, mine, secret, images } = await buildTurn(req, emit, signal, req.session ? CLAUDE_LESSON_SYSTEM : CLAUDE_TUTOR_SYSTEM, 'claude')
   // Checked again on what the turn actually holds: never send a private turn
   if (ctx.private || mine || secret) throw new ClaudeUnavailable('Private: this stays on your Mac')
 
@@ -662,7 +678,8 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
     const prev = text([...req.messages].reverse().find((m) => m.role === 'assistant')?.content)
     const id = nextStepId()
     emit({ id: req.id, type: 'step', step: { id, kind: 'helper', label: `${claudeLabel(markModel)} is marking your answer`, status: 'running', depth: 0 } })
-    const mark = await markAnswer(prev, said + exactSaid, markModel, signal, pictures).catch(() => null)
+    // Bounded like the turn itself: a marker that never answers leaves the mark to the tutor
+    const mark = await markAnswer(prev, said + exactSaid, markModel, AbortSignal.any([signal, AbortSignal.timeout(claudeLimits.firstWordsMs)]), pictures).catch(() => null)
     verdict = mark?.verdict as typeof verdict
     emit({ id: req.id, type: 'step', step: { id, status: mark ? 'done' : 'error', detail: mark ? `${mark.verdict}, ${(mark.ms / 1000).toFixed(1)} s` : 'no mark: the tutor marks it' } as AgentStep })
     if (mark) markNote = `\n\n(Tide: ${claudeLabel(markModel)} marked this answer against your solution: verdict "${mark.verdict}", score ${mark.score}. Why: ${mark.why})`
@@ -684,7 +701,20 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   let reply = ''
   let gap = false
   let thinking = false
+  // No sign of life (words, thinking, a tool call) within the limit: the turn is taken as hung
+  let hung = false
+  let alive = false
+  const watch = setTimeout(() => {
+    if (alive || signal.aborted) return
+    hung = true
+    logHang({ key, model: String(model), ms: claudeLimits.firstWordsMs, turns: proc.turns })
+    proc.stop()
+  }, claudeLimits.firstWordsMs)
   const onEvent = (e: ClaudeEvent) => {
+      if (!alive && (e.type === 'thinking' || e.type === 'tool' || (e.type === 'text' && e.text))) {
+        alive = true
+        clearTimeout(watch)
+      }
       if (e.type === 'thinking') {
         if (!thinking && !reply) emit({ id: req.id, type: 'step', step: { id: engineStep, label: `Claude ${claudeLabel(model)} is thinking` } as AgentStep })
         thinking = true
@@ -712,7 +742,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
       result = await proc.turn(withPictures(sent.content + markNote + seeNote), model, onEvent, signal, cut)
     } catch (e) {
       // The process died before it said anything: once more, on a new one, with the whole transcript
-      if (reply || signal.aborted || e instanceof ClaudeUnavailable || unavailableReason((e as Error).message + proc.stderr)) throw e
+      if (reply || hung || signal.aborted || e instanceof ClaudeUnavailable || unavailableReason((e as Error).message + proc.stderr)) throw e
       proc.stop()
       const again = messageToSend(history, { turns: 0, first: '', alive: false })
       emit({ id: req.id, type: 'step', step: { id: engineStep, label: `Claude ${claudeLabel(model)} is teaching (started again)` } as AgentStep })
@@ -734,6 +764,10 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   } catch (e) {
     emit({ id: req.id, type: 'step', step: { id: engineStep, status: 'error' } as AgentStep })
     // Nothing shown yet and the process never answered: Gemma can take the turn
+    if (hung && !reply) {
+      live.delete(key)
+      throw new ClaudeUnavailable(`no words after ${Math.round(claudeLimits.firstWordsMs / 1000)} s`)
+    }
     const msg = (e as Error).message
     if (!reply && !(e instanceof DOMException) && (e instanceof ClaudeUnavailable || unavailableReason(msg + proc.stderr))) {
       proc.stop()
@@ -742,6 +776,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
     }
     throw e
   } finally {
+    clearTimeout(watch)
     unbindLesson(proc.binding)
   }
 }

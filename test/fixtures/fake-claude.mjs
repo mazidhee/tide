@@ -2,7 +2,7 @@
 // A stand-in for `claude -p`: replays recorded output lines, so the engine's process handling can
 // be tested without the real CLI. It says what it was given (its arguments, any API key it can
 // see, each message and model switch) in its replies. Words in a message change what it does:
-// "crash" exits, "limit" answers as a plan at its limit, "slow" writes slowly until interrupted,
+// "crash" exits, "limit" answers as a plan at its limit, "[hang]" never answers, "[thinks long]" thinks and writes late, "slow" writes slowly until interrupted,
 // "think" thinks before it writes. Pictures (image blocks) are counted in its reply; a marking call
 // sent with pictures (one-shot, stream-json in) answers with a verdict that says how many it saw.
 import { createInterface } from 'readline'
@@ -63,6 +63,13 @@ if (flag('--output-format') === 'json' || !flag('--input-format')) {
       return result(JSON.stringify({ verdict, score: verdict === 'correct' ? 1 : 0, why: `marked by ${model} seeing ${pics.length} picture${pics.length === 1 ? '' : 's'}` }))
     }
     if (said.includes('crash')) process.exit(3)
+    // "[hang]": takes the message and never answers (a stuck turn); "[thinks long]": thinks at once, writes later
+    if (said.includes('[hang]')) return
+    if (said.includes('[thinks long]')) {
+      out({ type: 'stream_event', event: { type: 'message_start' } })
+      out({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'hmm' } } })
+      return setTimeout(() => (delta('thought it through'), result('thought it through')), 400)
+    }
     if (said.includes('limit')) {
       out({ type: 'rate_limit_event', rate_limit_info: { status: 'rejected', resetsAt: Math.floor(Date.now() / 1000) + 600, rateLimitType: 'five_hour', utilization: 1 } })
       return out({ type: 'result', subtype: 'success', is_error: true, result: 'Claude usage limit reached', usage: {}, total_cost_usd: 0, duration_ms: 5 })
