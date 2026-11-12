@@ -12,12 +12,15 @@ Question 3 of 8.
     expect(b.map((x) => x.kind)).toEqual(['text', 'grade', 'card', 'text', 'ask'])
     expect(b[1]).toMatchObject({ verdict: 'partial', score: 0.5 })
     expect(b[2]).toMatchObject({ front: 'Why must the array be sorted for binary search?' })
-    expect(b[4]).toMatchObject({ type: 'choice', options: ['O(n)', 'O(log n)', 'O(n log n)', 'O(1)'] })
+    // Shown shuffled (the tutor writes the right one first), every option kept
+    expect(b[4]).toMatchObject({ type: 'choice' })
+    expect([...(b[4] as { options: string[] }).options].sort()).toEqual(['O(1)', 'O(log n)', 'O(n log n)', 'O(n)'])
   })
 
   it('reads choices written as lines, and streams questions but not other unfinished tags', () => {
     const b = parseBlocks('<ask type="choice">Pick one:\nA) red\nB) blue\n</ask>')
-    expect(b[0]).toMatchObject({ kind: 'ask', prompt: 'Pick one:', options: ['red', 'blue'] })
+    expect(b[0]).toMatchObject({ kind: 'ask', prompt: 'Pick one:' })
+    expect([...(b[0] as { options: string[] }).options].sort()).toEqual(['blue', 'red'])
     // A question being written shows as it comes; other unfinished tags stay hidden
     expect(parseBlocks('Thinking about it <ask type="short">What is')).toEqual([{ kind: 'text', text: 'Thinking about it' }, { kind: 'ask', type: 'short', prompt: 'What is', options: [], lang: undefined }])
     expect(parseBlocks('Close. <grade verdict="partial" score="0.5">You missed')).toEqual([{ kind: 'text', text: 'Close.' }])

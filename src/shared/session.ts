@@ -145,6 +145,8 @@ export function parseBlocks(full: string): Block[] {
           prompt = lines.filter((l) => !opt.includes(l)).join('\n').trim()
         }
       }
+      // The tutor writes the right option first: shown in a fixed shuffled order, so A isn't always the answer
+      if (type === 'choice') shuffleOptions(options, prompt)
       const tests = hidden.tests ?? (type === 'code' ? madeTests : undefined)
       const on = attr(attrs, 'topic')?.trim()
       blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt, options, lang: attr(attrs, 'lang'), ...(tests ? { tests } : {}), ...(on ? { topic: on } : {}) })
@@ -724,3 +726,18 @@ Choose by what you taught, taking the first that fits:
 - something physical or with a classic textbook figure: find_image.
 Never answer a waiting question.
 Everything must be exact: every number, bit pattern or formula is one you computed, labels use your explanation's names and symbols, and nothing appears that you didn't teach. In a mermaid flowchart every node is an id with its label in quotes, like A["Row 2"] --> B["Row 3"]; under about 14 nodes.)`
+
+/** Shuffles in place, the same way every time for the same question, so the order doesn't change as the lesson redraws */
+export function shuffleOptions(options: string[], prompt: string): string[] {
+  let h = 2166136261
+  for (const c of prompt + '\u0000' + options.join('\u0000')) h = Math.imul(h ^ c.charCodeAt(0), 16777619)
+  const next = () => {
+    h = Math.imul(h ^ (h >>> 15), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909)
+    return ((h ^= h >>> 16) >>> 0) / 4294967296
+  }
+  for (let i = options.length - 1; i > 0; i--) {
+    const j = Math.floor(next() * (i + 1))
+    ;[options[i], options[j]] = [options[j], options[i]]
+  }
+  return options
+}
