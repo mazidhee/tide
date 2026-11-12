@@ -8,7 +8,7 @@ import { readingLabel, type ReadingSuggestion } from '@shared/books'
 import { notesReviewRequest, wantsNotesReview } from '@shared/lessonNotes'
 import { reveal } from '../lib/scroll'
 import { Thinking } from './Thinking'
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
 import { markNote, paceNote } from '@shared/pace'
 import { markingNote } from '@shared/humanities'
@@ -52,6 +52,8 @@ import { useAreaClass } from '../lib/areas'
 import { since } from '@shared/knowledge'
 import { Level } from './tide/Level'
 import { AreaMark } from './tide/AreaMark'
+import { AnswerHint, AskPill, BackPill, FOLD_MS, SelectionAsk, ThreadSlot, highlightQuote, reducedMotion } from './LessonThreads'
+import { THREAD_RULES, asked, newThread, readsAsQuestion, restoreThreads, threadMessages, threadTakeaway, threadsNote, type LessonThread } from '@shared/lessonThreads'
 
 // Loaded when a lesson needs them: the code editor (Monaco) and the walkthrough canvas
 const answered = (said: string) => !said.startsWith(GO_ON) && !said.startsWith(ASKED)
@@ -95,6 +97,22 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const labId = useRef(`lesson:${ongoingKey ?? uid()}`)
   const app = useApp()
   const [turns, setTurns] = useState<Turn[]>([])
+  // Side threads under the tutor's outputs (shared/lessonThreads): kept apart from the turns
+  const [threads, setThreads] = useState<LessonThread[]>([])
+  const threadsRef = useRef(threads)
+  threadsRef.current = threads
+  const [openThread, setOpenThread] = useState<string | null>(null)
+  const openThreadRef = useRef(openThread)
+  openThreadRef.current = openThread
+  // The thread a reply is being written in, its tool steps and a failed reply's error
+  const [threadBusy, setThreadBusy] = useState<string | null>(null)
+  const [threadSteps, setThreadSteps] = useState<Record<string, AgentStep[]>>({})
+  const [threadError, setThreadError] = useState<Record<string, string>>({})
+  const threadReqs = useRef(new Map<string, string>())
+  // Bumped when a thread changes in a way worth saving (a reply done, folded, noted)
+  const [threadsRev, setThreadsRev] = useState(0)
+  // Typed in the answer box but it reads like a question about the explanation
+  const [hint, setHint] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [answer, setAnswer] = useState('')
@@ -247,9 +265,20 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         whyNoteRef.current,
         // What the learner did in Claude's visuals since the tutor last heard
         ...takeVisualNotes(columnRef.current),
-        mode === 'teach' && history.length > 2 ? notesNudge(history.filter((t) => t.role === 'assistant').map((t) => t.content), content) : null
+        mode === 'teach' && history.length > 2 ? notesNudge(history.filter((t) => t.role === 'assistant').map((t) => t.content), content) : null,
+        // Threads understood since the tutor last heard: one line each, never the thread itself
+        threadsNote(threadsRef.current)
       ].filter((n): n is string => !!n)
       if (notes.includes(whyNoteRef.current ?? '')) whyNoteRef.current = null
+      if (notes.some((n) => n === threadsNote(threadsRef.current))) {
+        setThreads((list) => list.map((t) => (t.understood && !t.told && asked(t) ? { ...t, told: true } : t)))
+        setThreadsRev((r) => r + 1)
+      }
+      // Starting again from the top: the threads hung off the outputs that are gone
+      if (!history.length) {
+        setThreads([])
+        setOpenThread(null)
+      }
       const stored = notes.length ? `${content}\n\n${notes.join('\n')}` : content
       const next = [...history, { role: 'user' as const, content: stored }, { role: 'assistant' as const, content: '' }]
       setTurns(next)
@@ -338,17 +367,19 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     const saved = ongoingKey ? getOngoing(ongoingKey) : undefined
     if (saved) {
       stopFollowing(ongoingKey!)
-      const st = saved.state as { turns: Turn[]; activeId: string | null }
+      const st = saved.state as { turns: Turn[]; activeId: string | null; threads?: unknown }
       // Tide closed while the tutor was replying: drop the cut-off reply and ask for it again
       if (saved.interrupted) {
         const turns = st.turns.map((t) => ({ ...t }))
         while (turns.length && turns[turns.length - 1].role === 'assistant') turns.pop()
         const answer = turns.pop()
+        setThreads(restoreThreads(st.threads, answer?.role === 'user' ? turns : st.turns))
         if (answer?.role === 'user') send(answer.content, turns)
         else setTurns(st.turns.map((t) => ({ ...t })))
         return
       }
       setTurns(st.turns.map((t) => ({ ...t })))
+      setThreads(restoreThreads(st.threads, st.turns))
       if (saved.busy && st.activeId) {
         activeId.current = st.activeId
         setBusy(true)
@@ -358,6 +389,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     // Carried over from another window: pick up where it was
     if (initialTurns?.length) {
       setTurns(initialTurns)
+      setThreads(restoreThreads(view?.kind === 'session' ? view.threads : undefined, initialTurns))
       return
     }
     setTurns([])
@@ -409,6 +441,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       (lastIsTutor && lastBlocks.length && !carryOn && !lastBlocks.some((b) => b.kind === 'summary' || b.kind === 'scores') ? { kind: 'ask' as const, type: 'short' as const, prompt: '', options: [] } : undefined))
     : undefined
   askTypeRef.current = currentAsk?.type
+  const currentAskRef = useRef(currentAsk)
+  currentAskRef.current = currentAsk
   // A new code question starts from its own starter, not from your answer to the last one
   const askedCode = useRef<string | null>(null)
   const codeAsk = askIdentity(currentAsk)
@@ -424,6 +458,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [codeAsk])
   const plan = parsed.flatMap((b) => b ?? []).filter((b): b is Extract<Block, { kind: 'plan' }> => b.kind === 'plan').pop()
+  const planSteps = useRef<string[] | undefined>(undefined)
+  planSteps.current = plan?.steps
   // You doubted a reply: the stronger model checks it against the sources; a correction is added to it
   const [challenged, setChallenged] = useState<Record<number, 'checking' | 'ok' | 'flagged'>>({})
   const [edited, setEdited] = useState(0)
@@ -536,27 +572,33 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     }
   }, [finished, recapped, mode, topic])
   // Leaving mid-way keeps the session for later; finishing it lets it go
-  const keepRef = useRef({ turns, busy, finished })
-  keepRef.current = { turns, busy, finished }
+  const keepRef = useRef({ turns, busy, finished, threads })
+  keepRef.current = { turns, busy, finished, threads }
   // Saved to disk as it goes (when you answer, and when each reply is done), so quitting Tide or
   // the Mac shutting down mid-lesson doesn't lose it
   useEffect(() => {
     const k = keepRef.current
     if (!ongoingKey || !view || k.finished || k.turns.length < 2) return
-    keepLive({ key: ongoingKey, view, title: `${MODE_LABEL[mode] ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: null }, busy: k.busy })
+    keepLive({ key: ongoingKey, view, title: `${MODE_LABEL[mode] ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: null, threads: k.threads }, busy: k.busy })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [turns.length, busy, finished, ongoingKey, edited])
+  }, [turns.length, busy, finished, ongoingKey, edited, threadsRev])
+  // A thread on a finished lesson is kept with it too
+  useEffect(() => {
+    const k = keepRef.current
+    if (threadsRev && k.finished && ongoingKey && view) keepLesson(ongoingKey, view, k.turns, true, k.threads)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threadsRev])
   useEffect(() => {
     if (!finished || !ongoingKey) return
     // Finished lessons stay in Past lessons, to read again
-    if (view) keepLesson(ongoingKey, view, keepRef.current.turns, true)
+    if (view) keepLesson(ongoingKey, view, keepRef.current.turns, true, keepRef.current.threads)
     endOngoing(ongoingKey)
   }, [finished, ongoingKey])
   useEffect(
     () => () => {
       const k = keepRef.current
       if (!ongoingKey || !view || k.finished || k.turns.length < 2) return
-      saveOngoing({ key: ongoingKey, view, title: `${MODE_LABEL[mode] ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: activeId.current }, busy: k.busy })
+      saveOngoing({ key: ongoingKey, view, title: `${MODE_LABEL[mode] ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: activeId.current, threads: k.threads }, busy: k.busy })
       if (k.busy && activeId.current) followInBackground(ongoingKey, activeId.current)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -713,7 +755,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     send(`${said ? `${said}\n\n` : ''}(From here on, teach this way: ${STRATEGY_RULES[to] || 'problem sets, one problem at a time, stepping difficulty up and down as before.'})`, turns)
   }
 
-  const submit = (text?: string, ranNow?: RunResult) => {
+  const submit = (text?: string, ranNow?: RunResult, mine?: boolean) => {
     if (busy) return
     // A code question with hidden tests is marked on their results: what is handed in is run first
     if (!text && !ranNow && !asking && currentAsk?.type === 'code' && currentAsk.tests && code.trim() && (!runOut || ranFor.current !== code)) {
@@ -748,6 +790,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       setAnswer('')
       return
     }
+    // A question about the explanation typed as the answer: offer a thread first (mine: "It's my answer")
+    if (!text && !mine && !asking && !carryOn && currentAsk && currentAsk.type !== 'code' && !pick && readsAsQuestion(body)) {
+      setHint(true)
+      return
+    }
+    setHint(false)
     const conf = confidence ? `\n(Confidence: ${CONFIDENCE.find((c) => c.value === confidence)!.label.toLowerCase()})` : ''
     send(text ? body : asking || carryOn ? `${ASKED}${body}` : `Answer: ${body}${conf}`, turns)
     setAnswer('')
@@ -774,6 +822,182 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   }, [carryOn, asking, currentAsk, turns, send])
 
   submitRef.current = () => submit()
+
+  // ---------- Threads ----------
+
+  useEffect(
+    () =>
+      window.tide.ai.onEvent((e) => {
+        const tid = threadReqs.current.get(e.id)
+        if (!tid) return
+        if (e.type === 'delta' || e.type === 'reset')
+          setThreads((list) =>
+            list.map((t) => {
+              const last = t.messages[t.messages.length - 1]
+              if (t.id !== tid || last?.role !== 'assistant') return t
+              return { ...t, messages: [...t.messages.slice(0, -1), { ...last, content: e.type === 'delta' ? last.content + e.text : '' }] }
+            })
+          )
+        if (e.type === 'step')
+          setThreadSteps((all) => {
+            const steps = [...(all[tid] ?? [])]
+            const at = steps.findIndex((x) => x.id === e.step.id)
+            if (at >= 0) steps[at] = { ...steps[at], ...e.step }
+            else steps.push(e.step)
+            return { ...all, [tid]: steps }
+          })
+        if (e.type === 'error') setThreadError((all) => ({ ...all, [tid]: e.message }))
+        if (e.type === 'done' || e.type === 'error') {
+          threadReqs.current.delete(e.id)
+          setThreadBusy((b) => (b === tid ? null : b))
+          setThreads((list) => list.map((t) => (t.id === tid ? { ...t, updated: Date.now() } : t)))
+          setThreadsRev((r) => r + 1)
+          // Folded while it was answering: its process can go now
+          if (openThreadRef.current !== tid) window.tide.ai.threadDone(labId.current).catch(() => {})
+        }
+      }),
+    []
+  )
+
+  /** Sends a thread whose last message is your question */
+  const requestThread = (thread: LessonThread) => {
+    const id = `thread:${uid()}`
+    threadReqs.current.set(id, thread.id)
+    setThreadBusy(thread.id)
+    setThreadError(({ [thread.id]: _e, ...rest }) => rest)
+    setThreadSteps(({ [thread.id]: _s, ...rest }) => rest)
+    // The lesson's context, the exact output and the thread so far; never the lesson's own conversation.
+    // Not a session turn: nothing in it is marked, and on Claude it runs in the thread's own process
+    window.tide.ai
+      .chat({
+        id,
+        messages: threadMessages({ topic: setupRef.current.topic, plan: planSteps.current, turns: turnsRef.current }, thread),
+        scope,
+        instructions: THREAD_RULES,
+        labId: labId.current,
+        topic: setupRef.current.topic,
+        web,
+        ...engineFields(engineRef.current),
+        thread: thread.id
+      })
+      .catch((err: Error) => {
+        threadReqs.current.delete(id)
+        setThreadBusy(null)
+        setThreadError((all) => ({ ...all, [thread.id]: err.message }))
+      })
+  }
+
+  const askInThread = (tid: string, q: string, base?: LessonThread) => {
+    const t = base ?? threadsRef.current.find((x) => x.id === tid)
+    if (!t || threadBusy === tid) return
+    // A reply that failed is dropped before asking again
+    const kept = t.messages.filter((m, i) => !(m.role === 'assistant' && !m.content.trim() && i === t.messages.length - 1))
+    const next: LessonThread = { ...t, messages: [...kept, { role: 'user', content: q }], updated: Date.now() }
+    setThreads((list) => {
+      const shown = { ...next, messages: [...next.messages, { role: 'assistant' as const, content: '' }] }
+      return list.some((x) => x.id === tid) ? list.map((x) => (x.id === tid ? shown : x)) : [...list, shown]
+    })
+    requestThread(next)
+  }
+
+  const retryThread = (tid: string) => {
+    const t = threadsRef.current.find((x) => x.id === tid)
+    if (!t) return
+    const kept = t.messages[t.messages.length - 1]?.role === 'assistant' ? t.messages.slice(0, -1) : t.messages
+    if (kept[kept.length - 1]?.role !== 'user') return
+    setThreads((list) => list.map((x) => (x.id === tid ? { ...x, messages: [...kept, { role: 'assistant', content: '' }] } : x)))
+    requestThread({ ...t, messages: kept })
+  }
+
+  const foldThread = (understood: boolean, quiet = false) => {
+    const id = openThreadRef.current
+    if (!id) return
+    setOpenThread(null)
+    openThreadRef.current = null
+    // A thread opened and left without a question isn't kept
+    setThreads((list) => list.flatMap((t) => (t.id !== id ? [t] : asked(t) ? [{ ...t, understood: t.understood || understood, updated: Date.now() }] : [])))
+    setThreadsRev((r) => r + 1)
+    if (threadBusy !== id) window.tide.ai.threadDone(labId.current).catch(() => {})
+    if (quiet) return
+    // Back to where the lesson is: its question, flashed, and the answer box ready
+    setTimeout(() => {
+      const col = columnRef.current
+      if (!col) return
+      const asks = col.querySelectorAll<HTMLElement>('.s-ask')
+      const target = (currentAskRef.current ? asks[asks.length - 1] : null) ?? col.querySelector<HTMLElement>('.s-answer, .s-goon')
+      if (!target) return
+      reveal(target, { block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' })
+      target.classList.add('lt-flash')
+      setTimeout(() => target.classList.remove('lt-flash'), 900)
+      answerRef.current?.focus({ preventScroll: true })
+    }, reducedMotion() ? 0 : 260)
+  }
+
+  /** Opens a thread under the output at turn `at`: the one already there, or a new one */
+  const openThreadAt = (at: number, quote?: string, first?: string, id?: string) => {
+    const mine = threadsRef.current.filter((t) => t.at === at)
+    const had = id ? mine.find((t) => t.id === id) : quote ? mine.filter((t) => t.quote === quote).pop() : mine.pop()
+    if (openThreadRef.current && openThreadRef.current !== had?.id) foldThread(false, true)
+    const t = had ?? newThread(turnsRef.current, at, quote, currentAskRef.current?.prompt)
+    if (!had) setThreads((list) => [...list, t])
+    setOpenThread(t.id)
+    openThreadRef.current = t.id
+    if (first) askInThread(t.id, first, t)
+    setTimeout(() => revealThread(t.id), 120)
+  }
+
+  /** Brings the open thread into view above the answer box, which stays at the bottom of the lesson over it */
+  const revealThread = (id: string, behavior: ScrollBehavior = reducedMotion() ? 'auto' : 'smooth') => {
+    const slot = columnRef.current?.querySelector<HTMLElement>(`[data-thread-id="${id}"]`)
+    const box = slot?.closest<HTMLElement>('.session-scroll')
+    if (!slot || !box) return
+    const view = box.getBoundingClientRect()
+    // Where its bottom will be once it has unfolded, and where it must end: above the floating Back pill
+    const top = slot.getBoundingClientRect().top
+    const bottom = top + (slot.querySelector<HTMLElement>('.lt-thread')?.scrollHeight ?? slot.scrollHeight)
+    const limit = view.bottom - 72
+    // Above the view (reopened from further down): its top comes into view; below: its bottom does, without losing its top
+    const by = top < view.top + 24 ? top - view.top - 24 : Math.min(bottom - limit, top - view.top - 24)
+    if (Math.abs(by) > 4) box.scrollBy({ top: by, behavior })
+  }
+  // A reply growing in the open thread keeps it in view
+  const openGrowth = threads.find((t) => t.id === openThread)
+  const openSize = openGrowth ? openGrowth.messages.length * 100000 + (openGrowth.messages.at(-1)?.content.length ?? 0) : 0
+  useEffect(() => {
+    if (openGrowth) revealThread(openGrowth.id, 'auto')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Math.floor(openSize / 400)])
+
+  const noteThread = (t: LessonThread) => {
+    const text = threadTakeaway(t)
+    if (!text) return
+    setPinned((p) => [...p, { at: -1, text }])
+    if (!notesOpen) setNotesOpen(true)
+    setThreads((list) => list.map((x) => (x.id === t.id ? { ...x, noted: true } : x)))
+    setThreadsRev((r) => r + 1)
+    app.toast('Added to your notes for this lesson')
+  }
+
+  // Esc folds the open thread, from anywhere but another box you're typing in
+  useEffect(() => {
+    if (!openThread) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      const t = e.target as HTMLElement | null
+      if (t?.closest?.('input, textarea, select, [contenteditable="true"]') && !t.closest('.lt-thread')) return
+      e.preventDefault()
+      foldThread(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  })
+
+  // The phrase a thread is about stays highlighted in its output while it's open
+  const openQuote = threads.find((t) => t.id === openThread)
+  useEffect(() => {
+    if (!openQuote?.quote) return
+    return highlightQuote(columnRef.current?.querySelector(`[data-thread-out="${openQuote.at}"]`) ?? null, openQuote.quote)
+  }, [openQuote?.id, openQuote?.quote, openQuote?.at, turns.length])
 
 
   // Ask about this, pressed on a part of a live simulation: in a lesson it goes straight to the
@@ -1017,7 +1241,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               className="tool-btn"
               disabled={busy}
               onClick={() => {
-                window.tide.windows.openFocus({ kind: 'session', mode, scope, topic, options, turns: turns.map((t) => ({ role: t.role, content: t.content })), nonce: Date.now() })
+                window.tide.windows.openFocus({ kind: 'session', mode, scope, topic, options, turns: turns.map((t) => ({ role: t.role, content: t.content })), threads, nonce: Date.now() })
                 app.back()
               }}
               title="Carry on in a window of its own, with nothing else on screen"
@@ -1232,8 +1456,13 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             }
             const blocks = parsed[i] ?? []
             const live = busy && i === turns.length - 1
+            const hung = threads.filter((th) => th.at === i)
+            const threaded = hung.some((th) => th.id === openThread)
+            // Ask about any finished output, in a thread under it (not in an interview)
+            const askable = !live && !!t.content.trim() && mode !== 'interview'
             return (
-              <div key={i} className="s-tutor">
+              <Fragment key={i}>
+              <div className="s-tutor">
                 {tide && (
                   <div className="td-who">
                     <Professor state={live ? 'writing' : 'idle'} size={24} />
@@ -1277,11 +1506,33 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     ))}
                   </ul>
                 )}
-                {blocks.map((b, j) => renderBlock(b, `${i}-${j}`, live))}
+                <div className={`lt-out${askable ? ' askable' : ''}${threaded ? ' threaded' : ''}`} data-thread-out={askable ? i : undefined}>
+                  {blocks.map((b, j) => renderBlock(b, `${i}-${j}`, live))}
+                  {askable && !threaded && <AskPill onAsk={() => openThreadAt(i)} />}
+                </div>
                 {live && !t.content && !t.steps?.length && (
                   <Thinking />
                 )}
               </div>
+              {hung.map((th) => (
+                <div key={th.id} className="lt-slot" data-thread-id={th.id}>
+                  <ThreadSlot
+                    thread={th}
+                    open={th.id === openThread}
+                    streaming={threadBusy === th.id}
+                    steps={threadSteps[th.id]}
+                    error={threadError[th.id]}
+                    notes={mode === 'teach'}
+                    render={(md) => renderMarkdown(md, env)}
+                    onSend={(q) => askInThread(th.id, q)}
+                    onRetry={() => retryThread(th.id)}
+                    onFold={(understood) => foldThread(understood)}
+                    onReopen={() => openThreadAt(th.at, th.quote, undefined, th.id)}
+                    onNotes={() => noteThread(th)}
+                  />
+                </div>
+              ))}
+              </Fragment>
             )
           })}
 
@@ -1294,8 +1545,27 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             </div>
           )}
 
+          {(currentAsk || carryOn) && (
+            <div className={`lt-back-dock${openThread ? ' open' : ''}`}>
+              <BackPill show={!!openThread} onBack={() => foldThread(false)} />
+            </div>
+          )}
           {currentAsk && (
-            <div className="s-answer">
+            <div className={`s-answer${openThread ? ' lt-resting' : ''}`}>
+              <AnswerHint
+                show={hint}
+                question={currentAsk.prompt.replace(/[*_`$#>]/g, '').replace(/\s+/g, ' ').trim()}
+                onThread={() => {
+                  const q = answer.trim()
+                  // On the output that asked the question: the latest of the tutor's
+                  const at = turns.map((x, k) => (x.role === 'assistant' ? k : -1)).filter((k) => k > 0).pop()
+                  setHint(false)
+                  if (!q || at === undefined) return
+                  setAnswer('')
+                  openThreadAt(at, undefined, q)
+                }}
+                onAnswer={() => submit(undefined, undefined, true)}
+              />
               {currentAsk.type === 'choice' && currentAsk.options.length > 0 ? (
                 <>
                   <div className="s-options" role="radiogroup" aria-label="Options">
@@ -1311,7 +1581,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     className="s-input small"
                     rows={2}
                     value={answer}
-                    onChange={(e) => setAnswer(e.target.value)}
+                    onChange={(e) => (setAnswer(e.target.value), setHint(false))}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit()
                     }}
@@ -1356,7 +1626,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   rows={currentAsk.type === 'explain' || currentAsk.type === 'problem' ? 5 : 3}
                   autoFocus
                   value={answer}
-                  onChange={(e) => setAnswer(e.target.value)}
+                  onChange={(e) => (setAnswer(e.target.value), setHint(false))}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit()
                   }}
@@ -1416,7 +1686,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           )}
 
           {carryOn && (
-            <div className="s-goon">
+            <div className={`s-goon${openThread ? ' lt-resting' : ''}`}>
               {asking ? (
                 <>
                   <textarea
@@ -1485,6 +1755,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             </div>
           )}
           <div ref={bottomRef} />
+          {mode !== 'interview' && <SelectionAsk column={columnRef} onAsk={(at, quote) => openThreadAt(at, quote)} />}
         </div>
       </div>
       {rail && (

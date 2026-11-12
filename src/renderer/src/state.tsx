@@ -12,7 +12,7 @@ export type View =
   | { kind: 'study'; scope: ChatScope }
   | { kind: 'daily'; nonce?: number }
   | { kind: 'quiz'; scope: ChatScope }
-  | { kind: 'session'; mode: SessionMode; scope: ChatScope; topic: string; options?: SessionSetup['options']; nonce?: number; turns?: { role: 'user' | 'assistant'; content: string }[]; /** Carrying on a past lesson: kept under the same record */ lesson?: string }
+  | { kind: 'session'; mode: SessionMode; scope: ChatScope; topic: string; options?: SessionSetup['options']; nonce?: number; turns?: { role: 'user' | 'assistant'; content: string }[]; /** Carrying on a past lesson: kept under the same record */ lesson?: string; /** ...with its side threads */ threads?: import('@shared/lessonThreads').LessonThread[] }
   | { kind: 'lessons' }
   | { kind: 'learn' }
   | { kind: 'practice' }

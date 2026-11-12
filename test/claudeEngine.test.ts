@@ -145,6 +145,49 @@ describe('Claude lessons', () => {
   })
 })
 
+describe('lesson threads on Claude', () => {
+  beforeEach(() => engine.forgetLimit())
+  it('runs a thread in its own process on the teaching model, never marking it, and leaves the lesson’s process as it was', async () => {
+    const asked = 'Base 10 is a habit. <ask type="short">Convert 45 to binary.</ask><solution>101101</solution>'
+    const lesson = [{ role: 'user', content: 'start' }, { role: 'assistant', content: asked }] as ChatMessage[]
+    // The lesson's own process, one turn in
+    const l1 = await say([{ role: 'user', content: 'start' }], { labId: 'lesson:th', session: true, instructions: 'Teach binary' }).run
+    const lessonPid = /pid (\d+)/.exec(l1)![1]
+    // A thread: its context and first question; "go deep" would put a lesson turn on Opus
+    const t1 = say([{ role: 'user', content: '(Tide: a side thread)\n\nWhy is base 10 a habit? Go deep.' }], { labId: 'lesson:th', thread: 't1', instructions: 'thread rules' })
+    const r1 = await t1.run
+    expect(r1).toContain('model sonnet')
+    expect(steps(t1.events).some((s) => /marking/.test(s))).toBe(false)
+    const threadProc = engine.liveClaude().find((p) => p.key === 'thread:lesson:th:web')
+    expect(threadProc).toBeTruthy()
+    expect(r1).not.toContain(`pid ${lessonPid}`)
+    // A follow-up sends only the new question to the same thread process
+    const r2 = await say([{ role: 'user', content: '(Tide: a side thread)\n\nWhy is base 10 a habit? Go deep.' }, { role: 'assistant', content: r1 }, { role: 'user', content: 'and base 60?' }], { labId: 'lesson:th', thread: 't1' }).run
+    expect(r2).toMatch(/turn 2 .*heard: and base 60\?$/)
+    // An answer-looking question after the lesson's <ask> in a thread is not marked
+    const t3 = say([...lesson, { role: 'user', content: '101101' }], { labId: 'lesson:th', thread: 't2' })
+    await t3.run
+    expect(steps(t3.events).some((s) => /marking/.test(s))).toBe(false)
+    // The lesson's process still holds only the lesson: its next turn is turn 2, with the new message alone
+    const l2 = await say([{ role: 'user', content: 'start' }, { role: 'assistant', content: l1 }, { role: 'user', content: 'go on' }], { labId: 'lesson:th', session: true, instructions: 'Teach binary' }).run
+    expect(l2).toMatch(new RegExp(`pid ${lessonPid} turn 2 .*heard: go on$`))
+    // Folded: the thread's process goes, the lesson's stays
+    engine.stopThreads('lesson:th')
+    expect(engine.liveClaude().some((p) => p.key.startsWith('thread:lesson:th'))).toBe(false)
+    expect(engine.liveClaude().some((p) => p.key === 'lab:lesson:th:web')).toBe(true)
+  })
+
+  it('refuses a private thread like any private turn', async () => {
+    privateTurn = true
+    await expect(say([{ role: 'user', content: 'why?' }], { labId: 'lesson:thp', thread: 't' }).run).rejects.toThrow(/Private/)
+  })
+
+  it('keys a thread apart from its lesson', () => {
+    expect(engine.lessonKey({ labId: 'lesson:k', messages: [], thread: 'x' })).toBe('thread:lesson:k')
+    expect(engine.lessonKey({ labId: 'lesson:k', messages: [] })).toBe('lab:lesson:k')
+  })
+})
+
 describe('Claude ahead of time and in the background', () => {
   it('starts a lesson’s process before it opens, and the lesson takes it over', async () => {
     engine.forgetLimit()

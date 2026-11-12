@@ -77,3 +77,16 @@ export function Professor({ state = 'idle', size = 28, title, character }: { sta
     </svg>
   )
 }
+
+/** The tutor's face, still: for small avatars that sit in a list (a lesson thread's replies), with no timer each */
+export function ProfessorStill({ size = 18, character }: { size?: number; character?: CharacterId }) {
+  const chosen = useCharacter()
+  const who = character ?? chosen
+  const g = professorFrame('idle', 0, false, who)
+  const w = g[0].length
+  return (
+    <svg className="professor p-idle" width={(size * w) / 16} height={size} viewBox={`0 0 ${w} 16`} shapeRendering="crispEdges" aria-hidden="true">
+      <g dangerouslySetInnerHTML={{ __html: drawn(g, paletteFor(who)) }} />
+    </svg>
+  )
+}

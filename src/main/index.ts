@@ -252,6 +252,8 @@ function registerIpc() {
     chat(req, (e) => send('ai:event', e))
   })
   handle('ai:cancel', (id: string) => cancelChat(id))
+  // A lesson's side thread was folded: its Claude process goes (main/claudeEngine threadKey)
+  handle('ai:threadDone', (lab: string) => import('./claudeEngine').then((c) => c.stopThreads(lab)))
   handle('ai:prewarm', (req: Omit<ChatRequest, 'id'>) => prewarmLesson(req))
   handle('ai:typing', () => noteTyping())
   setChatsChangedListener((id) => send('chats:changed', id))

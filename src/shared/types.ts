@@ -225,6 +225,8 @@ export interface ChatRequest {
   sourceLed?: boolean
   /** [courses] A lesson of an imported course: its own text is what the lesson is taught from (main/courses, main/sourceLed) */
   course?: { id: string; lesson: string }
+  /** A side thread under one of a lesson's outputs (shared/lessonThreads): its id. Never marked, kept apart from the lesson's own conversation, taught on the teaching model */
+  thread?: string
 }
 
 export interface StoredMessage {
@@ -643,6 +645,8 @@ export interface TideApi {
     /** The student is typing in a lesson: background model work holds off */
     typing(): Promise<void>
     cancel(id: string): Promise<void>
+    /** A lesson's side thread was folded: the process it ran in (on Claude) can go */
+    threadDone(lab: string): Promise<void>
     onEvent(cb: (e: ChatEvent) => void): () => void
     models(): Promise<string[]>
     test(): Promise<{ ok: boolean; message: string }>

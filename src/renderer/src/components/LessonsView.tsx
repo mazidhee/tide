@@ -47,7 +47,7 @@ export function LessonsView() {
     // Up to the last reply: a cut-off reply, or an answer that never got one, is left off
     const turns = r.turns.map(({ role, content }) => ({ role, content }))
     while (turns.length && (turns[turns.length - 1].role === 'user' || !turns[turns.length - 1].content.trim())) turns.pop()
-    app.setView({ kind: 'session', mode: r.mode, scope: r.scope, topic: r.topic, options: r.options, turns, lesson: r.id, nonce: Date.now() })
+    app.setView({ kind: 'session', mode: r.mode, scope: r.scope, topic: r.topic, options: r.options, turns, lesson: r.id, ...(r.threads?.length ? { threads: r.threads } : {}), nonce: Date.now() })
   }
 
   return (
