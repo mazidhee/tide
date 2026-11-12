@@ -9,14 +9,15 @@
  * - board: writing on a chalkboard (teaching)
  * - fishing: a float bobbing on the water (breaks, nothing due)
  * - chess: moving a piece (quizzes and exams)
+ * - party: a party hat on, dancing, an arm up (the morning workout's celebrations)
  */
 import type { CharacterId } from './characters'
 
 export type ProfessorState = 'idle' | 'thinking' | 'reading' | 'writing' | 'happy'
-export type ProfessorScene = 'tea' | 'board' | 'fishing' | 'chess' | 'book' | 'laptop' | 'cards' | 'stopwatch' | 'telescope' | 'eureka' | 'sleep' | 'wave'
+export type ProfessorScene = 'tea' | 'board' | 'fishing' | 'chess' | 'book' | 'laptop' | 'cards' | 'stopwatch' | 'telescope' | 'eureka' | 'sleep' | 'wave' | 'party'
 export type ProfessorPose = ProfessorState | ProfessorScene
 
-export const SCENES: ProfessorScene[] = ['tea', 'board', 'fishing', 'chess', 'book', 'laptop', 'cards', 'stopwatch', 'telescope', 'eureka', 'sleep', 'wave']
+export const SCENES: ProfessorScene[] = ['tea', 'board', 'fishing', 'chess', 'book', 'laptop', 'cards', 'stopwatch', 'telescope', 'eureka', 'sleep', 'wave', 'party']
 export const isScene = (p: ProfessorPose): p is ProfessorScene => (SCENES as string[]).includes(p)
 
 export const PALETTE: Record<string, string> = {
@@ -351,6 +352,25 @@ function scene(name: ProfessorScene, tick: number, blink: boolean): Grid {
     const z = tick % 6
     set(g, 6 - z, 17 + (z >> 1), 'o')
     if (z > 1) set(g, 8 - z, 19 + (z >> 1), 'x')
+  } else if (name === 'party') {
+    // A party hat on, a little hop and sway, an arm punching the air
+    eyes(g, 'squint')
+    const hop = tick % 4 === 1 || tick % 4 === 3
+    if (hop) {
+      for (let r = 0; r < 15; r++) g[r] = [...g[r + 1]]
+      g[15] = g[15].map(() => '.')
+    }
+    const top = hop ? -1 : 0
+    // The hat: a cone of lamp-light yellow with a red stripe and a pom-pom
+    const hat: [number, number, string][] = [[0, 7, 'r'], [0, 8, 'r'], [1, 7, 'Y'], [1, 8, 'Y'], [2, 6, 'Y'], [2, 7, 't'], [2, 8, 't'], [2, 9, 'Y'], [3, 5, 'Y'], [3, 6, 'Y'], [3, 7, 'Y'], [3, 8, 'Y'], [3, 9, 'Y'], [3, 10, 'Y']]
+    for (const [r, c, v] of hat) set(g, r + top, c, v)
+    // An arm up on the right, switching height with the beat
+    const high = tick % 2 === 0
+    for (let r = 9; r <= 12; r++) (set(g, r + top, 15, 'j'), set(g, r + top, 16, 'j'))
+    for (let r = high ? 4 : 6; r <= 8; r++) set(g, r + top, 17, 'j')
+    for (const [dr, dc] of [[0, 0], [0, 1], [-1, 0], [-1, 1]] as const) set(g, (high ? 3 : 5) + dr + top, 17 + dc, 'S')
+    // A mouth open in a grin on the beat
+    if (high) (set(g, 11 + top, 7, 'k'), set(g, 11 + top, 8, 'k'))
   } else if (name === 'wave') {
     // Hello! An arm up, the hand waving side to side
     eyes(g, blink ? 'closed' : 'squint')
@@ -394,7 +414,7 @@ export function professorFrame(pose: ProfessorPose, tick: number, blink: boolean
 }
 
 /** How fast each pose moves, in ms per frame */
-export const SPEED: Record<ProfessorPose, number> = { idle: 700, thinking: 520, reading: 380, writing: 260, happy: 1000, tea: 450, board: 320, fishing: 600, chess: 500, book: 500, laptop: 260, cards: 420, stopwatch: 500, telescope: 600, eureka: 380, sleep: 650, wave: 300 }
+export const SPEED: Record<ProfessorPose, number> = { idle: 700, thinking: 520, reading: 380, writing: 260, happy: 1000, tea: 450, board: 320, fishing: 600, chess: 500, book: 500, laptop: 260, cards: 420, stopwatch: 500, telescope: 600, eureka: 380, sleep: 650, wave: 300, party: 240 }
 
 /** An RGBA bitmap of a frame (for the menu bar), each pixel scale x scale */
 export function professorBitmap(pose: ProfessorPose, tick: number, scale: number, character: CharacterId = 'professor'): { width: number; height: number; data: Uint8Array } {

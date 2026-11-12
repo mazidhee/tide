@@ -538,6 +538,9 @@ function registerIpc() {
   handle('maths:log', (s: Pick<import('@shared/mentalMaths').MathsSession, 'focus' | 'answers'>) => import('./mentalMaths').then((m) => m.logMathsSession(s)))
   handle('maths:setReminder', (r: import('@shared/mentalMaths').Reminder) => import('./mentalMaths').then((m) => m.setMathsReminder(r)))
   handle('maths:explain', (a: import('@shared/mentalMaths').MathsAnswer) => import('./mentalMaths').then((m) => m.explainMiss(a)))
+  handle('workout:state', () => import('./workout').then((m) => m.workoutState()))
+  handle('workout:logRound', (r: Parameters<typeof import('./workout').logWorkoutRound>[0]) => import('./workout').then((m) => m.logWorkoutRound(r)))
+  handle('workout:setReminder', (r: import('@shared/mentalMaths').Reminder) => import('./workout').then((m) => m.setWorkoutReminder(r)))
   handle('learn:bookChapters', (p: string) => bookChapters(p))
   handle('learn:brief', () => getBrief())
   handle('learn:logFocus', (start: number, end: number, context?: { label?: string; path?: string; kind?: string }) => logFocus(start, end, context))
@@ -892,13 +895,13 @@ app.whenReady().then(() => {
       }
     }
   })
-  // Daily mental maths: a notification at the time you chose, when today's session isn't done
-  void import('./mentalMaths').then((m) =>
-    m.startMathsReminder(() => {
+  // The morning workout: a notification at the time you chose, when today's morning isn't done
+  void import('./workout').then((m) =>
+    m.startWorkoutReminder(() => {
       if (win && !win.isDestroyed()) {
         win.show()
         win.focus()
-        win.webContents.send('tray:command', { type: 'view', view: { kind: 'maths', nonce: Date.now() } })
+        win.webContents.send('tray:command', { type: 'view', view: { kind: 'workout', nonce: Date.now() } })
       }
     })
   )
