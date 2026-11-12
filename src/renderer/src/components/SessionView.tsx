@@ -31,7 +31,7 @@ import { renderMarkdown } from '../lib/markdown'
 import { Icon } from './Icon'
 import { formatEditor } from '../lib/ruff/editor'
 import type * as Monaco from 'monaco-editor'
-import { EnginePill } from './EnginePill'
+import { EnginePill, engineFields, type Engine } from './EnginePill'
 import { DictateButton, SpeakButton, useTalk } from './Voice'
 import { InterviewClock, useInterviewClock } from './InterviewClock'
 import { LessonNotes } from './LessonNotes'
@@ -198,7 +198,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
 
   // What the tutor last asked, and which model you chose: a worked answer to a problem can go to the cloud model
   const askTypeRef = useRef<string | undefined>(undefined)
-  const [engine, setEngine] = useState<'auto' | 'local' | 'cloud'>('auto')
+  const [engine, setEngine] = useState<Engine>('auto')
   // A notebook set to be taught by the cloud model starts its lessons that way (you can still switch)
   useEffect(() => {
     const where = 'path' in scope ? scope.path : ''
@@ -208,6 +208,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       .then((nbs) => {
         const nb = nbs.find((n) => where === n.path || where.startsWith(`${n.path}/`))
         if (nb?.tutor === 'cloud') setEngine((e) => (e === 'auto' ? 'cloud' : e))
+        // Gemma or Claude by the notebook: main decides that from the notebook itself (main/teacher), so Auto shows it
       })
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -251,7 +252,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         const last = messages[messages.length - 1]
         messages[messages.length - 1] = { ...last, content: `(Time left: ${clock.left() || timed} of ${timed} minutes)\n${last.content}` }
       }
-      await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setupRef.current), labId: labId.current, canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, engine: engineRef.current, sourceLed: ledRef.current, ...(setupRef.current.options?.course ? { course: { id: setupRef.current.options.course.id, lesson: setupRef.current.options.course.lesson } } : {}) })
+      await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setupRef.current), labId: labId.current, canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, ...engineFields(engineRef.current), sourceLed: ledRef.current, ...(setupRef.current.options?.course ? { course: { id: setupRef.current.options.course.id, lesson: setupRef.current.options.course.lesson } } : {}) })
     },
     [scope, setup, web, timed, clock, mode, difficulty.noteFor]
   )

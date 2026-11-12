@@ -139,6 +139,10 @@ const api: TideApi = {
     render: invoke('speed:render'),
     memory: invoke('speed:memory')
   },
+  claude: {
+    status: invoke('claude:status'),
+    usage: invoke('claude:usage')
+  },
   connections: {
     list: invoke('connections:list'),
     setKey: invoke('connections:setKey'),

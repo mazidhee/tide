@@ -120,6 +120,35 @@ async function build(): Promise<Connection[]> {
           const local = month.filter((x) => x.kind === 'local')
           return { ...base, state: r ? 'connected' : 'error', active: !!r, detail: r ? `Running: ${(loaded?.id ?? s.ai.model ?? 'a model').split('/').pop()}` : `Not answering at ${s.ai.baseUrl}`, lastUsed: lastOf((x) => x.kind === 'local'), today: { requests: today.filter((x) => x.kind === 'local').length, tokens: local.filter((x) => x.at >= startOfDay()).reduce((n, x) => n + x.input + x.output, 0) }, week: weekBy((x) => x.kind === 'local'), limits: [['Cost', 'Free: runs on your Mac'], ['Server', s.ai.baseUrl]] }
         }
+        case 'claude': {
+          const { claudeStatus, readClaudeUsage } = await import('./claudeEngine')
+          const { claudeLabel, claudeModel } = await import('@shared/claude')
+          const st = await within(15000, claudeStatus(), null)
+          const c = s.ai.claude
+          const used = readClaudeUsage(dayStart(6))
+          const todays = used.filter((r) => r.at >= startOfDay())
+          const tokens = todays.reduce((n, r) => n + r.input + r.output + r.cacheRead + r.cacheWrite, 0)
+          const byModel = [...new Set(todays.map((r) => claudeLabel(r.model)))].map((m) => `${m} ${todays.filter((r) => claudeLabel(r.model) === m).length}`).join(', ')
+          const teaching = c?.teacher !== 'gemma'
+          const state: ConnectionState = !st ? 'error' : !st.installed ? 'not-set-up' : !st.loggedIn ? 'needs-key' : st.limitedUntil ? 'resting' : teaching ? 'connected' : 'ready'
+          const detail = !st ? 'Didn’t answer in time' : !st.installed ? 'Install Claude Code, then log in with your plan' : !st.loggedIn ? (st.error ?? 'Run claude in a terminal and log in') : st.limitedUntil ? `At your plan’s limit until ${new Date(st.limitedUntil).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : teaching ? `Teaching on ${claudeLabel(claudeModel('teach', c))}, marking on ${claudeLabel(claudeModel('mark', c))}` : 'Set up: Gemma teaches (Settings › Models)'
+          return {
+            ...base,
+            state,
+            active: !!st?.loggedIn && teaching,
+            detail,
+            lastUsed: used.reduce((n, r) => Math.max(n, r.at), 0) || undefined,
+            today: { requests: todays.length, tokens },
+            week: Array.from({ length: 7 }, (_, i) => used.filter((r) => r.at >= dayStart(6 - i) && r.at < dayStart(5 - i)).length),
+            model: claudeModel('teach', c),
+            limits: [
+              ...(st?.plan ? [['Plan', `Claude ${st.plan[0].toUpperCase()}${st.plan.slice(1)}`] as [string, string]] : []),
+              ...(st?.version ? [['Claude Code', st.version] as [string, string]] : []),
+              ['Used today', todays.length ? `${fmt(todays.length)} calls (${byModel}), ${fmt(tokens)} tokens, ${fmt(todays.reduce((n, r) => n + r.cacheRead, 0))} of them cached` : 'Nothing yet'] as [string, string],
+              ...(st?.limit?.utilization != null ? [[`Plan used (${st.limit.window?.replace('_', ' ') ?? 'window'})`, `${Math.round(st.limit.utilization * 100)}%`] as [string, string]] : [])
+            ]
+          }
+        }
         case 'wikipedia':
           return as('ready', search === 'wikipedia' ? 'Your web search: free, no key' : 'Used for readings, and when search is down')
         case 'searxng': {
@@ -183,5 +212,5 @@ async function build(): Promise<Connection[]> {
       }
     })
   )
-  return [...services.slice(0, 1), ...providers, ...services.slice(1)]
+  return [...services.slice(0, 2), ...providers, ...services.slice(2)]
 }

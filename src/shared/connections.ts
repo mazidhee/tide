@@ -62,6 +62,7 @@ const PUBLIC_ONLY = 'Public text only: nothing from a private project or your Me
 
 /** Services that aren't model providers (those come from shared/providers), known to Tide */
 export const SERVICES: ConnectionInfo[] = [
+  { id: 'claude', name: 'Claude (your plan)', kind: 'model', runs: 'cloud', usedFor: ['Lessons', 'Chat', 'Marking'], free: 'Your Claude plan, through Claude Code: no API key', privacy: 'Never sees a private project or your Metabase: those stay with Gemma.', section: 'models' },
   { id: 'local-model', name: 'Gemma on this Mac', kind: 'model', runs: 'mac', usedFor: ['Lessons', 'Chat', 'Marking', 'Notes'], free: 'Free: runs on your Mac', section: 'models' },
   { id: 'wikipedia', name: 'Wikipedia', kind: 'search', runs: 'cloud', usedFor: ['Web search', 'Readings'], free: 'Free, no key', privacy: PUBLIC_ONLY, section: 'tools' },
   { id: 'searxng', name: 'SearXNG on this Mac', kind: 'search', runs: 'mac', usedFor: ['Private web search'], free: 'Free: runs in Docker on your Mac', section: 'tools' },

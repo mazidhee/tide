@@ -119,15 +119,23 @@ export function NotebookView({ path }: { path: string }) {
       y: e.clientY,
       items: [
         { label: meta?.project ? 'Project settings' : 'Make it a project…', run: () => setTab('project') },
-        {
-          // For a subject the local model gets wrong too often: the cloud model teaches all of it (within its free allowance)
-          label: meta?.tutor === 'cloud' ? 'Let Tide choose who teaches it' : 'Have the cloud model teach it',
-          run: async () => {
-            await window.tide.learn.updateNotebook(path, { tutor: meta?.tutor === 'cloud' ? 'auto' : 'cloud' })
-            app.toast(meta?.tutor === 'cloud' ? `Tide chooses who teaches ${folder?.name ?? 'this notebook'} again.` : `The cloud model teaches ${folder?.name ?? 'this notebook'}'s lessons from now on.`)
-            load()
-          }
-        },
+        // Who teaches its lessons: Tide's setting (auto), Claude, Gemma on this Mac, or the cloud model.
+        // A private project is always Gemma's, whatever is chosen here (main/teacher)
+        ...([
+          ['auto', 'Let Tide choose who teaches it', 'Tide chooses who teaches'],
+          ['claude', 'Have Claude teach it', 'Claude teaches'],
+          ['gemma', 'Have Gemma teach it (on this Mac)', 'Gemma teaches'],
+          ['cloud', 'Have the cloud model teach it', 'The cloud model teaches']
+        ] as const)
+          .filter(([v]) => (meta?.tutor ?? 'auto') !== v)
+          .map(([tutor, label, said]) => ({
+            label,
+            run: async () => {
+              await window.tide.learn.updateNotebook(path, { tutor })
+              app.toast(`${said} ${folder?.name ?? 'this notebook'}’s lessons from now on.`)
+              load()
+            }
+          })),
         {
           label: 'Choose cover image…',
           run: async () => {
