@@ -1560,6 +1560,9 @@ const warmed = new Map<string, number>()
 const WARM_FOR_MS = 5 * 60_000
 
 export async function prewarmLesson(req: Omit<ChatRequest, 'id'>): Promise<void> {
+  // When Claude will teach it, Claude Code is started ahead instead (no tokens spent): main/claudeEngine
+  const { teacherFor } = await import('./teacher')
+  if ((await teacherFor({ ...req, id: 'prewarm' }).catch(() => null))?.who === 'claude') return void (await import('./claudeEngine')).prewarmClaude(req).catch(() => {})
   if (!isMlxVlm()) return
   const key = JSON.stringify([req.messages, req.instructions, req.scope, req.voice, req.web])
   const at = warmed.get(key)

@@ -402,14 +402,17 @@ export async function chat(req: ChatRequest, emit: (e: ChatEvent) => void) {
   onChatsChanged(chatId)
   if (!saved || error) return
 
-  // Titles and compaction happen after the answer, in the background
+  // Titles and compaction happen after the answer, in the background: on Claude's background
+  // model (Haiku) when Claude teaches this conversation, else on Gemma
   void (async () => {
+    const { teacherFor } = await import('./teacher')
+    const { backgroundOnClaude } = await import('./claudeEngine')
+    const viaClaude = (await teacherFor(req).catch(() => null))?.who === 'claude'
+    const later = async (prompt: string, system: string, signal?: AbortSignal) => (viaClaude ? await backgroundOnClaude(prompt, system, signal).catch(() => null) : null) ?? complete(prompt, system, signal, 'background')
     if (!saved.title && saved.messages.length >= 2) {
-      const title = await complete(
+      const title = await later(
         `Conversation start:\nStudent: ${question.slice(0, 600)}\nTutor: ${reply.content.slice(0, 600)}\n\nGive this conversation a short title, 2 to 6 words, like a note title. Reply with the title only.`,
-        'You name conversations. Reply with a short title only, no quotes or punctuation at the end.',
-        undefined,
-        'background'
+        'You name conversations. Reply with a short title only, no quotes or punctuation at the end.'
       ).catch(() => '')
       const clean = title.split('\n')[0].replace(/^["'#*\s]+|["'.*\s]+$/g, '').slice(0, 60)
       // No title from the model (it was needed elsewhere): the first words, once, rather than asking again every turn
@@ -422,7 +425,7 @@ export async function chat(req: ChatRequest, emit: (e: ChatEvent) => void) {
       try {
         const done = await compactChat(chatId, async (system, prompt) => {
           if (controller.signal.aborted) throw new Error('cancelled')
-          return complete(prompt, system, controller.signal, 'background')
+          return later(prompt, system, controller.signal)
         })
         if (done) onChatsChanged(chatId)
       } catch {
@@ -589,7 +592,12 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
   if (teacher.who === 'claude') {
     try {
       const { claudeTurn } = await import('./claudeEngine')
-      await claudeTurn(req, emit, controller.signal)
+      // [source-led] A step taught from a source: the reading and its rules ride with the turn, Tide
+      // puts the reading into the reply as it streams, and the turn is cut at a new plan whose first
+      // step has a reading (Claude is interrupted, not stopped, so the lesson's process carries on)
+      const led = req.session ? await import('./sourceLed').then((m) => m.sourceLedTurn(req)).catch(() => null) : null
+      await claudeTurn(led ? led.request : req, led ? led.tap(emit) : emit, controller.signal, led?.signal)
+      if (led && !controller.signal.aborted) led.settle(shown, emit)
       if (req.session && !controller.signal.aborted) emit({ id: req.id, type: 'replied' })
       emit({ id: req.id, type: 'done' })
       running.delete(req.id)

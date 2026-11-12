@@ -296,7 +296,8 @@ function registerIpc() {
   handle('connections:list', (fresh?: boolean) => listConnections(fresh))
   // Claude, through the user's own Claude Code (main/claudeEngine)
   handle('claude:status', async (fresh?: boolean) => {
-    const { claudeStatus, liveClaude } = await import('./claudeEngine')
+    const { claudeStatus, liveClaude, forgetLimit } = await import('./claudeEngine')
+    if (fresh) forgetLimit()
     const st = await claudeStatus(fresh)
     return { installed: st.installed, version: st.version, loggedIn: st.loggedIn, plan: st.plan, error: st.error, limitedUntil: st.limitedUntil, limit: st.limit, live: liveClaude() }
   })

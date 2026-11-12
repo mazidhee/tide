@@ -15,6 +15,24 @@ vi.mock('../src/main/agent', () => ({
     return name === 'run_code' ? 'stdout:\n42' : 'No matching passages in the notes.'
   }
 }))
+const saved: { path: string; md: string }[] = []
+vi.mock('../src/main/study', () => ({ saveCards: async (path: string, md: string) => (saved.push({ path, md }), path.replace(/\.md$/, ' (Flashcards).md')) }))
+vi.mock('../src/main/search', () => ({
+  reindexPath: async () => {},
+  indexReady: async () => {},
+  search: async (_q: string, _n: number, filter?: (p: string) => boolean) => [{ path: 'Library/Videos/Talk.md', title: 'Talk', heading: 'Transcript', text: 'raft leader election' }, { path: 'Python/x.md', title: 'x', heading: '', text: 'raft' }].filter((h) => !filter || filter(h.path))
+}))
+vi.mock('../src/main/settings', () => ({ getSettings: () => ({ libraryFolder: 'Library', ai: {} }) }))
+vi.mock('../src/main/projects', () => ({ privatePath: async (p: string) => p.startsWith('Secret') }))
+const kept: unknown[] = []
+vi.mock('../src/main/recall', () => ({
+  keepForRecall: async (items: unknown[]) => void kept.push(...items),
+  recallItems: () => [{ id: '1', prompt: 'What does activate change?', topic: 'Python venv', due: 0 }, { id: '2', prompt: 'Later one', topic: 'Rust', due: Date.now() + 86_400_000 }]
+}))
+vi.mock('../src/main/courses', () => ({
+  searchCourses: async () => [{ course: 'pyds', path: 'notebooks/01.md', title: 'Intro', heading: 'Lists', text: 'list comprehension', score: 1 }],
+  courseFile: async (c: string, p: string) => (c === 'pyds' && p === 'notebooks/01.md' ? '# Intro\nfull text' : null)
+}))
 const knowledge: unknown[] = []
 vi.mock('../src/main/knowledge', () => ({ noteEvidence: async (e: unknown) => void knowledge.push(e) }))
 
@@ -69,5 +87,22 @@ describe("Tide's MCP server", () => {
     const bad = await ok.callTool({ name: 'record_answer', arguments: { topic: 'x', verdict: 'great' } })
     expect((bad.content as { text: string }[])[0].text).toMatch(/correct, partial or wrong/)
     await ok.close()
+  })
+
+  it('makes flashcards, keeps recall questions, and finds courses and transcripts', async () => {
+    const c = await connect(h.token, '')
+    const text = async (name: string, args: Record<string, unknown>) => ((await c.callTool({ name, arguments: args })).content as { text: string }[])[0].text
+    expect(await text('make_flashcards', { topic: 'Python venv', cards: [{ front: 'What does activate change?', back: 'Only PATH' }] })).toMatch(/Saved 1 card to Flashcards\/Python venv \(Flashcards\)\.md/)
+    expect(saved[0].md).toBe('What does activate change?::Only PATH')
+    expect(await text('make_flashcards', { topic: 'x', cards: [{ front: 'a', back: 'b' }], note: 'Secret/plan.md' })).toMatch(/private project/)
+    expect(await text('schedule_recall', { topic: 'Python venv', questions: ['Q1 (A1)'] })).toBe('Kept 1 for recall on Python venv.')
+    expect(kept[0]).toMatchObject({ prompt: 'Q1 (A1)', topic: 'Python venv' })
+    expect(await text('recall_due', { topic: 'python' })).toBe('- [due] (Python venv) What does activate change?')
+    expect(await text('search_courses', { query: 'comprehension' })).toContain('(course: pyds, path: notebooks/01.md)')
+    expect(await text('read_course', { course: 'pyds', path: 'notebooks/01.md' })).toBe('# Intro\nfull text')
+    const t = await text('search_transcripts', { query: 'raft' })
+    expect(t).toContain('Library/Videos/Talk.md')
+    expect(t).not.toContain('Python/x.md')
+    await c.close()
   })
 })
