@@ -1,0 +1,676 @@
+/*
+  Videos (components/VideoPlayer.tsx): a thumbnail until it plays, the player with its transcript
+  beside it (below it when there isn't room), and cinema, where a playing video spans the page on
+  a dark band whatever the theme, the way YouTube's theater mode does. Colours come from the
+  theme's tokens, so both designs and every theme draw it; the band has its own dark palette.
+*/
+
+.vt-host {
+  margin: 0 0 1.05em;
+}
+/* Before the player takes over (and wherever it doesn't run), the placeholder is a thumbnail link */
+.vt-host-link img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-m);
+}
+.vt-host-file {
+  display: block;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  font: 500 13px var(--font-ui);
+  color: var(--ink-soft);
+}
+
+.vt {
+  --vt-bg: var(--bg-raised);
+  --vt-ink: var(--ink);
+  --vt-ink-2: var(--ink-soft);
+  --vt-ink-3: var(--ink-muted);
+  --vt-line: var(--line);
+  --vt-hover: var(--bg-hover);
+  --vt-now: var(--accent-soft);
+  --vt-accent: var(--accent);
+  --vt-side: 340px;
+  position: relative;
+  display: grid;
+  gap: 12px;
+  margin: 0 0 1.25em;
+  font-family: var(--font-ui);
+  color: var(--vt-ink);
+  outline: none;
+  border-radius: var(--radius-l);
+  transition: background 0.2s ease;
+}
+.vt.side {
+  grid-template-columns: minmax(0, 1fr) var(--vt-side);
+  align-items: stretch;
+}
+.vt:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 1px var(--accent);
+}
+.vt .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Cinema: the band */
+.vt.cinema {
+  --vt-bg: #16171a;
+  --vt-ink: #ececee;
+  --vt-ink-2: #b9bbc1;
+  --vt-ink-3: #8b8e96;
+  --vt-line: rgba(255, 255, 255, 0.09);
+  --vt-hover: rgba(255, 255, 255, 0.06);
+  --vt-now: rgba(255, 255, 255, 0.1);
+  --vt-accent: #8ab4ff;
+  --vt-side: clamp(300px, 26%, 400px);
+  background: #0c0d0f;
+  padding: 18px;
+  border-radius: 14px;
+  color-scheme: dark;
+}
+.vt.cinema .vt-stage {
+  /* As large as the window allows, never taller than most of it */
+  width: min(100%, calc(76vh * 16 / 9));
+  justify-self: center;
+  border-radius: 8px;
+}
+.vt.cinema.stack .vt-transcript {
+  max-height: 34vh;
+}
+
+.vt-main {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The picture */
+.vt-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-m);
+  overflow: hidden;
+  background: #000;
+}
+.vt-stage iframe,
+.vt-stage video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #000;
+}
+
+.vt-facade {
+  all: unset;
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  display: block;
+}
+.vt .vt-facade img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s ease, filter 0.3s ease;
+}
+.vt-facade:hover img {
+  transform: scale(1.015);
+  filter: brightness(1.05);
+}
+.vt-file-poster {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.35);
+  background: radial-gradient(120% 90% at 30% 20%, #2a2d33, #0e0f11);
+}
+.vt-facade-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.68) 0%, rgba(0, 0, 0, 0.18) 38%, rgba(0, 0, 0, 0) 60%);
+}
+.vt-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(14, 15, 18, 0.62);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18) inset, 0 8px 24px rgba(0, 0, 0, 0.35);
+  transition: transform 0.18s ease, background 0.18s ease;
+}
+.vt-play svg {
+  margin-left: 3px;
+}
+.vt-facade:hover .vt-play,
+.vt-facade:focus-visible .vt-play {
+  transform: scale(1.06);
+  background: var(--accent);
+}
+.vt-facade:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.vt-facade-meta {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 14px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  color: #fff;
+}
+.vt-facade-title {
+  font: 600 15px/1.3 var(--font-ui);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.vt-chip {
+  flex: none;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font: 600 11.5px/1.4 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+}
+.vt.compact .vt-facade-title {
+  font-size: 13.5px;
+}
+
+.vt-error,
+.vt-clip-done {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  color: #e9e9ec;
+  background: #111214;
+  font-size: 14px;
+}
+.vt .vt-error p {
+  max-width: 34em;
+  margin: 0;
+  color: #c3c5ca;
+  line-height: 1.5;
+}
+.vt-error svg {
+  color: #7d8089;
+}
+.vt-clip-done {
+  background: rgba(10, 11, 13, 0.82);
+  backdrop-filter: blur(3px);
+}
+.vt .vt-clip-done p {
+  margin: 0;
+  font-weight: 600;
+}
+.vt-clip-done .btn.ghost {
+  color: #e9e9ec;
+}
+
+/* The bar under the picture */
+.vt-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  font-size: 12.5px;
+  color: var(--vt-ink-2);
+}
+.vt-bar-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--vt-ink-3);
+}
+.vt-bar-gap {
+  flex: 1;
+}
+.vt-btn {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 7px;
+  font: 500 12.5px var(--font-ui);
+  color: var(--vt-ink-2);
+  cursor: pointer;
+}
+.vt-btn.icon {
+  width: 28px;
+  padding: 0;
+  justify-content: center;
+}
+.vt-btn.small {
+  height: 24px;
+  font-size: 12px;
+}
+.vt-btn:hover {
+  background: var(--vt-hover);
+  color: var(--vt-ink);
+}
+.vt-btn.on {
+  color: var(--vt-ink);
+}
+.vt-btn.on svg {
+  color: var(--vt-accent);
+}
+.vt-btn:focus-visible {
+  outline: 2px solid var(--vt-accent);
+  outline-offset: 1px;
+}
+.vt-rate select {
+  appearance: none;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--vt-line);
+  border-radius: 7px;
+  background: transparent;
+  font: 600 12px var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--vt-ink);
+  cursor: pointer;
+}
+.vt-rate select:hover {
+  background: var(--vt-hover);
+}
+.vt-rate option {
+  color: initial;
+}
+.vt-cliprange {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--vt-ink);
+}
+.vt-clipbar {
+  position: relative;
+  width: 72px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--vt-line);
+  overflow: hidden;
+}
+.vt-clipbar span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--vt-accent);
+  border-radius: 2px;
+  transition: width 0.45s linear;
+}
+
+/* The transcript */
+.vt-transcript {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--vt-line);
+  border-radius: var(--radius-m);
+  background: var(--vt-bg);
+  overflow: hidden;
+}
+.vt.stack .vt-transcript {
+  height: 280px;
+}
+.vt.side .vt-transcript {
+  /* As tall as the picture and its bar, however long the transcript */
+  height: auto;
+}
+.vt.side .vt-lines {
+  position: absolute;
+  inset: 40px 0 0 0;
+}
+.vt.cinema .vt-transcript {
+  border-color: var(--vt-line);
+}
+.vt-tr-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--vt-line);
+  font: 600 12px var(--font-ui);
+  letter-spacing: 0.02em;
+  color: var(--vt-ink-2);
+  flex: none;
+}
+.vt-tr-note {
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--vt-ink-3);
+}
+.vt-lines {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 6px 40px;
+  scroll-padding: 40px;
+  user-select: text;
+}
+.vt .vt-line {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 6px;
+  margin: 0;
+  padding: 5px 8px 5px 4px;
+  border-radius: 7px;
+  font: 400 13.5px/1.5 var(--font-ui);
+  color: var(--vt-ink-2);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.vt .vt-line:hover {
+  background: var(--vt-hover);
+  color: var(--vt-ink);
+}
+.vt .vt-line.now {
+  background: var(--vt-now);
+  color: var(--vt-ink);
+}
+.vt .vt-line.now .vt-time {
+  color: var(--vt-accent);
+}
+.vt .vt-line.out {
+  opacity: 0.45;
+}
+.vt .vt-time {
+  all: unset;
+  align-self: start;
+  padding-top: 1px;
+  text-align: right;
+  font: 500 11.5px/1.75 var(--font-code);
+  font-variant-numeric: tabular-nums;
+  color: var(--vt-ink-3);
+  cursor: pointer;
+  user-select: none;
+}
+.vt .vt-time:hover {
+  color: var(--vt-accent);
+  text-decoration: underline;
+}
+.vt-said::selection,
+.vt .vt-line::selection {
+  background: var(--mark);
+}
+.vt .vt-empty {
+  margin: 0;
+  padding: 18px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--vt-ink-3);
+}
+.vt .vt-empty p {
+  margin: 0 0 6px;
+}
+
+/* A clip offered in a lesson */
+.vclip {
+  margin: 4px 0 18px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  background: var(--bg-raised);
+}
+.vclip-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-family: var(--font-ui);
+}
+.vclip-kicker {
+  font: 700 11px var(--font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.vclip-title {
+  min-width: 0;
+  font: 600 14px/1.35 var(--font-ui);
+  color: var(--ink);
+}
+.vclip-by {
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+.vclip-why {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+.vclip .vt {
+  margin: 0;
+}
+.vclip-quiet {
+  margin: 6px 0 14px;
+  font: 13px/1.5 var(--font-ui);
+  color: var(--ink-muted);
+}
+.vclip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* A course lesson's videos, beside its text */
+.crs-videos {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 22px;
+}
+.crs-videos-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 12px var(--font-ui);
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+}
+.crs-video-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.crs-video-tab {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font: 500 12px var(--font-ui);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.crs-video-tab span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  max-width: 28ch;
+}
+.crs-video-tab:hover {
+  background: var(--bg-hover);
+}
+.crs-video-tab.on {
+  border-color: var(--accent);
+  color: var(--ink);
+  background: var(--accent-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vt-facade img,
+  .vt-play,
+  .vt-line,
+  .vt-clipbar span {
+    transition: none;
+  }
+}
+
+.vclip-loading {
+  min-height: 120px;
+  opacity: 0.5;
+}
+.vclip-offer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 8px 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--bg-raised);
+  font: 13.5px/1.5 var(--font-ui);
+  color: var(--ink-soft);
+}
+.vclip-offer p {
+  flex: 1;
+  margin: 0;
+}
+.vclip-offer b {
+  color: var(--ink);
+}
+
+/* Notes while watching */
+.vt-notes {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--vt-line);
+  border-radius: var(--radius-m);
+  background: var(--vt-bg);
+}
+.vt-notes-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.vt-notes-at {
+  flex: none;
+  padding: 7px 8px 0 0;
+  font: 600 11.5px var(--font-code);
+  font-variant-numeric: tabular-nums;
+  color: var(--vt-accent);
+}
+.vt-notes textarea {
+  flex: 1;
+  min-height: 38px;
+  max-height: 160px;
+  resize: vertical;
+  padding: 7px 10px;
+  border: 1px solid var(--vt-line);
+  border-radius: 7px;
+  background: transparent;
+  font: 13.5px/1.45 var(--font-ui);
+  color: var(--vt-ink);
+  outline: none;
+}
+.vt-notes textarea:focus {
+  border-color: var(--vt-accent);
+}
+.vt-notes textarea::placeholder {
+  color: var(--vt-ink-3);
+}
+.vt-notes-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--vt-ink-3);
+}
+.vt-notes-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 140px;
+  overflow-y: auto;
+}
+.vt-notes-list li {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--vt-ink-2);
+}
+.vt-notes kbd {
+  font: 600 11px var(--font-ui);
+  color: var(--vt-ink-3);
+}
+
+/* The course reader with videos: the text and the video side by side when there's room,
+   the video above the text when there isn't */
+.crs-main {
+  container-type: inline-size;
+}
+.crs-article.wide {
+  width: min(1380px, 100%);
+}
+.crs-with-video {
+  display: grid;
+  gap: 28px;
+}
+.crs-with-video > .crs-prose {
+  max-width: 740px;
+}
+@container (min-width: 1100px) {
+  .crs-with-video {
+    grid-template-columns: minmax(0, 720px) minmax(380px, 1fr);
+    align-items: start;
+  }
+  .crs-with-video > .crs-videos {
+    order: 2;
+    position: sticky;
+    top: 16px;
+  }
+  .crs-with-video > .crs-prose {
+    order: 1;
+  }
+  .crs-videos .vt.stack .vt-transcript {
+    height: min(46vh, 420px);
+  }
+}

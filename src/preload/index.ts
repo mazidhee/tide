@@ -153,6 +153,12 @@ const api: TideApi = {
     get: invoke('lessons:get'),
     challenge: invoke('lessons:challenge')
   },
+  videos: {
+    transcript: invoke('videos:transcript'),
+    fileTranscript: invoke('videos:fileTranscript'),
+    clips: invoke('videos:clips'),
+    check: invoke('videos:check')
+  },
   courses: {
     list: invoke('courses:list'),
     get: invoke('courses:get'),

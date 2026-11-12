@@ -34,6 +34,7 @@ import './styles/livePreview.css'
 import './styles/tide/projects.css'
 // humanities: the EPUB reader, Discuss this, reading together, appraisals, free books
 import './styles/humanities.css'
+import './styles/video.css'
 import { resolveDesign } from '@shared/design'
 import { AppProvider } from './state'
 import App from './App'
@@ -41,6 +42,7 @@ import { startLab } from './lib/lab'
 import { startMermaid } from './lib/mermaid'
 import { startLightbox } from './lib/lightbox'
 import { startSims } from './lib/sims'
+import { startVideoEmbeds } from './lib/videoEmbeds'
 
 window.tide.settings.get().then((settings) => {
   // Before the first paint, so the window never shows the other design for a frame
@@ -48,6 +50,7 @@ window.tide.settings.get().then((settings) => {
   startMermaid()
   startLab()
   startSims()
+  startVideoEmbeds()
 startLightbox()
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

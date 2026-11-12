@@ -26,6 +26,7 @@ import { PERSONAS } from '@shared/personas'
 import { scopeTopic } from '../state'
 import { addQuoteToNotes } from '../lib/companion'
 import { useTideDesign } from '../lib/design'
+import { noteTranscriptSection } from '@shared/video'
 
 const SAVE_DELAY = 600
 const MIN_READALONG_CHARS = 60
@@ -149,9 +150,17 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
   const { data: props, body } = useMemo(() => splitFrontmatter(raw ?? ''), [raw])
   const fmLines = useMemo(() => fmLineCount(raw ?? ''), [raw])
   // Rendered only for reading: while editing, a long note would be rendered again on every keystroke
+  // A saved video's transcript is shown beside its player, following along, so the note's own copy
+  // of it (the same words in 45-second paragraphs) isn't shown again underneath; the file keeps it
+  const shown = useMemo(() => {
+    if (props.source_type !== 'youtube') return body
+    const at = noteTranscriptSection(body)
+    // Blank lines in its place, so every block below keeps its line number (margin threads anchor to them)
+    return at ? body.slice(0, at.from) + '\n'.repeat(body.slice(at.from, at.to).split('\n').length - 1) + body.slice(at.to) : body
+  }, [body, props.source_type])
   const html = useMemo(
-    () => (raw === null || editing ? '' : renderMarkdown(body, { notePath: path, filesByName: app.filesByName })),
-    [body, raw, path, app.filesByName, editing]
+    () => (raw === null || editing ? '' : renderMarkdown(shown, { notePath: path, filesByName: app.filesByName })),
+    [shown, raw, path, app.filesByName, editing]
   )
 
   // Jump to a heading when opened from a citation or search result

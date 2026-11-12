@@ -45,8 +45,21 @@ describe('renderMarkdown', () => {
     expect(html.match(/type="checkbox"/g)).toHaveLength(2)
   })
 
-  it('turns YouTube image links into players', () => {
-    expect(render('![](https://www.youtube.com/watch?v=aqz-KE-bpKQ)')).toContain('youtube-nocookie.com/embed/aqz-KE-bpKQ')
+  it('turns YouTube image links into a light placeholder the player takes over (no iframe until played)', () => {
+    const html = render('![](https://www.youtube.com/watch?v=aqz-KE-bpKQ&t=75)')
+    expect(html).toContain('class="vt-host"')
+    expect(html).toContain('data-yt="aqz-KE-bpKQ"')
+    expect(html).toContain('data-start="75"')
+    expect(html).toContain('i.ytimg.com/vi/aqz-KE-bpKQ/hqdefault.jpg')
+    expect(html).not.toContain('<iframe')
+  })
+
+  it('turns a YouTube iframe written as HTML into the same placeholder, and videos of your own into file players', () => {
+    const html = render('<iframe width="560" src="https://www.youtube.com/embed/aqz-KE-bpKQ?start=30" allowfullscreen></iframe>')
+    expect(html).toContain('data-yt="aqz-KE-bpKQ"')
+    expect(html).toContain('data-start="30"')
+    expect(html).not.toContain('<iframe')
+    expect(render('![[Lectures/week 1.mp4]]')).toContain('data-file="Lectures/week 1.mp4"')
   })
 
   it('strips scripts and event handlers from untrusted HTML', () => {

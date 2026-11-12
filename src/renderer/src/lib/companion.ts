@@ -32,3 +32,32 @@ export async function addQuoteToNotes(source: string, text: string, page?: numbe
   await window.tide.vault.write(target, next)
   return target
 }
+
+/**
+ * A note written while watching a video, at a moment of it: a line in the video's notes page
+ * ("<saved note> (Notes).md" beside a saved video, else "<title> (Notes).md" in the library's
+ * Videos folder), led by a timestamp link. The page opens with the video itself, so on it every
+ * timestamp seeks the player there.
+ */
+export async function addVideoNote(v: { id?: string; path?: string; file?: string; title: string; at: number; text: string }): Promise<string> {
+  const { formatTime, watchUrl } = await import('@shared/video')
+  const library = (await window.tide.settings.get()).libraryFolder || 'Library'
+  const safe = v.title.replace(/[\\/:*?"<>|#^[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Video'
+  const target = v.path ? companionPath(v.path) : v.file ? companionPath(v.file) : `${library}/Videos/${safe} (Notes).md`
+  let existing = ''
+  try {
+    existing = await window.tide.vault.read(target)
+  } catch {
+    const from = v.path ?? v.file
+    existing =
+      (from ? `---\nsource: "[[${fileName(from).replace(/\.md$/i, '')}]]"\n---\n\n` : '') +
+      `# Notes on ${safe}\n\n` +
+      (v.id ? `![](${watchUrl(v.id)})\n\n` : v.file ? `![[${v.file}]]\n\n` : '')
+  }
+  const stamp = v.id ? `[${formatTime(v.at)}](${watchUrl(v.id, Math.max(1, v.at))})` : `**${formatTime(v.at)}**`
+  const body = v.text.trim().replace(/\n+/g, ' ')
+  const prev = existing.trimEnd()
+  // Notes taken one after another stay one list
+  await window.tide.vault.write(target, `${prev}${/(^|\n)- [^\n]*$/.test(prev) ? '\n' : '\n\n'}- ${stamp} ${body}\n`)
+  return target
+}

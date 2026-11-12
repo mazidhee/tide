@@ -858,6 +858,17 @@ export interface TideApi {
     load(id: string, path: string): Promise<import('./lab').LabLoaded>
   }
   /** Guided projects (shared/workshop.ts): built in stages, reviewed against tests */
+  /** Videos (main/videos.ts, shared/video.ts): transcripts kept for YouTube videos and videos of your own, and the sections a lesson offers */
+  videos: {
+    /** A YouTube video's transcript: kept, else read from its saved note (`path`), else (with `fetch`) its captions from YouTube */
+    transcript(id: string, opts?: { path?: string; fetch?: boolean; course?: string; title?: string }): Promise<import('../main/videos').TranscriptResult>
+    /** A video file in the notes folder: its captions from a .vtt or .srt beside it */
+    fileTranscript(path: string): Promise<import('./video').Transcript | null>
+    /** Sections of kept transcripts that cover a topic, best first */
+    clips(topic: string, opts?: { limit?: number; recap?: boolean }): Promise<import('./video').ClipCandidate[]>
+    /** A clip's times checked against the real transcript */
+    check(clip: import('./video').Clip): Promise<import('./video').ClipCheck & { title?: string; channel?: string }>
+  }
   /** Open courses from GitHub (main/courses.ts, shared/courses.ts) */
   courses: {
     list(): Promise<import('../main/courses').CourseCard[]>

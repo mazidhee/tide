@@ -10,6 +10,8 @@ import type { CourseCard, CourseDetail, ImportPhase, LessonContent } from '../..
 import { useApp } from '../state'
 import { Icon, type IconName } from './Icon'
 import { renderMarkdown, splitFrontmatter } from '../lib/markdown'
+import { youtubeIdOf } from '@shared/video'
+import { VideoPlayer } from './VideoPlayer'
 import { codeBlockClick } from '../lib/runBlocks'
 
 
@@ -278,6 +280,9 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
     return renderMarkdown(text, env)
   }, [body, env, title])
 
+  // [videos] The YouTube videos the lesson links, played beside its text
+  const videos = useMemo(() => (content ? videosIn(content.markdown) : []), [content])
+
   const act = async (kind: NonNullable<typeof busy>, f: () => Promise<unknown>) => {
     setBusy(kind)
     try {
@@ -315,7 +320,7 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
   return (
     <div className="doc-view crs-page crs-immersive">
       <main className="crs-main" ref={mainRef}>
-        <div className="crs-article">
+        <div className={`crs-article${videos.length ? ' wide' : ''}`}>
           <button className="crs-back" onClick={() => app.setView({ kind: 'courses' })}>
             <Icon name="back" size={14} /> Courses
           </button>
@@ -357,7 +362,10 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
                     </span>
                   </div>
                 </header>
-                <article className={`prose crs-prose${here.l.kind === 'notebook' ? ' notebook' : ''}`} dangerouslySetInnerHTML={{ __html: html }} onClick={(e) => void codeBlockClick(e.target, { cumulative: here.l.kind === 'notebook' })} />
+                <div className={videos.length ? 'crs-with-video' : undefined}>
+                  {videos.length > 0 && <CourseVideos ids={videos} course={c.title} />}
+                  <article className={`prose crs-prose${here.l.kind === 'notebook' ? ' notebook' : ''}`} dangerouslySetInnerHTML={{ __html: html }} onClick={(e) => void codeBlockClick(e.target, { cumulative: here.l.kind === 'notebook' })} />
+                </div>
                 <nav className="crs-pager">
                   {at > 0 ? (
                     <button className="crs-pager-btn" onClick={() => goTo(flat[at - 1].l.id)}>
@@ -600,5 +608,40 @@ export function CourseShelf() {
         <p className="muted small">Data Engineering Zoomcamp, Neural Networks: Zero to Hero, the Rust book, the System Design Primer: open courses from GitHub, taught from their own text.</p>
       )}
     </section>
+  )
+}
+
+/** The YouTube videos a lesson's text links or embeds, in order, each once */
+export function videosIn(markdown: string): string[] {
+  const out: string[] = []
+  for (const m of markdown.matchAll(/https?:\/\/(?:www\.|m\.)?(?:youtube(?:-nocookie)?\.com|youtu\.be)\/[^\s)"'\]>]+/gi)) {
+    const id = youtubeIdOf(m[0])
+    if (id && !out.includes(id)) out.push(id)
+  }
+  return out
+}
+
+/** A course lesson's videos beside its text: one player, a tab for each video; their transcripts are fetched and indexed for lessons to use */
+function CourseVideos({ ids, course }: { ids: string[]; course: string }) {
+  const [at, setAt] = useState(0)
+  useEffect(() => setAt(0), [ids.join()])
+  const id = ids[Math.min(at, ids.length - 1)]
+  return (
+    <aside className="crs-videos" aria-label="This lesson's videos">
+      <div className="crs-videos-head">
+        <Icon name="video" size={14} />
+        <span>{ids.length === 1 ? 'The lesson’s video' : `The lesson’s ${ids.length} videos`}</span>
+      </div>
+      {ids.length > 1 && (
+        <div className="crs-video-tabs" role="tablist">
+          {ids.map((v, i) => (
+            <button key={v} role="tab" aria-selected={i === at} className={`crs-video-tab${i === at ? ' on' : ''}`} onClick={() => setAt(i)}>
+              <span>Video {i + 1}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <VideoPlayer key={id} source={{ kind: 'youtube', id, course, fetch: true }} noCinema />
+    </aside>
   )
 }

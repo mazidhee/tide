@@ -4,7 +4,7 @@ import { connectMetabase, disconnectMetabase, metabaseStatus } from './metabase'
 import { followVault } from './vaultHome'
 import { bankStatus, openingFor, prepare as prepareBank, previewFor, startBank, variantFor, warmups } from './bank'
 import { newStudyApiToken, setStudyApi, startStudyApi, stopStudyApi, studyApiStatus } from './studyApi'
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, protocol, shell, powerMonitor } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, protocol, session, shell, powerMonitor } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import type { CompanyPrepRequest, OutlineDraftRequest, ChatRequest, ChatScope, LearningStatus, ReviewGrade, Settings, PdfHighlight, TutorThread } from '@shared/types'
@@ -313,6 +313,14 @@ function registerIpc() {
   handle('lessons:list', () => listLessons())
   handle('lessons:get', (id: string) => getLesson(id))
   handle('knowledge:view', async () => (await import('./knowledge')).knowledgeView())
+  // ---- Videos (main/videos.ts) ----
+  const videos = () => import('./videos')
+  handle('videos:transcript', async (id: string, opts?: { path?: string; fetch?: boolean; course?: string; title?: string }) =>
+    (await videos()).getTranscript(String(id), { path: typeof opts?.path === 'string' ? opts.path : undefined, fetch: !!opts?.fetch, course: typeof opts?.course === 'string' ? opts.course : undefined, title: typeof opts?.title === 'string' ? opts.title : undefined })
+  )
+  handle('videos:fileTranscript', async (path: string) => (await videos()).fileTranscript(String(path)))
+  handle('videos:clips', async (topic: string, opts?: { limit?: number; recap?: boolean }) => (await videos()).clipsFor(String(topic ?? ''), { limit: Math.min(5, Number(opts?.limit) || 2), recap: !!opts?.recap }))
+  handle('videos:check', async (clip: import('@shared/video').Clip) => (await videos()).checkClipTimes({ video: String(clip?.video ?? ''), start: Number(clip?.start), end: Number(clip?.end), ...(typeof clip?.why === 'string' ? { why: clip.why } : {}) }))
   // ---- Courses from GitHub (main/courses.ts) ----
   const courses = () => import('./courses')
   handle('courses:list', async () => (await courses()).listCourses())
@@ -685,6 +693,14 @@ if (app.isPackaged) app.setAsDefaultProtocolClient('tide')
 
 app.whenReady().then(() => {
   nativeTheme.themeSource = themeSource(getSettings().theme)
+  // YouTube's embedded player refuses to play without a referrer saying which app embeds it
+  // (error 153), and a window loaded from a file sends none. YouTube asks apps to send their app id
+  // as an https URL; only the player's own requests are touched.
+  session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ['https://www.youtube-nocookie.com/*'] }, (d, done) => {
+    const h = d.requestHeaders
+    if (!h.Referer && !h.referer) h.Referer = 'https://app.tide.study/'
+    done({ requestHeaders: h })
+  })
   wakeSearch().catch(() => {})
   // Start the model server if it isn't running, turn on prefix caching and the draft model, then
   // load the chat and lesson prompts into it, so the first reply is quick
