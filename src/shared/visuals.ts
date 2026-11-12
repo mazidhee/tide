@@ -160,7 +160,7 @@ const BASE_CSS = `
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); font: 13px/1.45 var(--font); -webkit-font-smoothing: antialiased; overflow: hidden; }
 body { padding: 12px 16px 14px; }
-svg { display: block; max-width: 100%; overflow: visible; }
+svg { display: block; max-width: 100%; height: auto; overflow: visible; }
 svg text { font-family: var(--font); fill: var(--ink); }
 canvas { display: block; max-width: 100%; }
 button, input, select { font: inherit; color: inherit; }
@@ -306,8 +306,9 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
 
   // ---- Size ----
   var lastH = 0;
+  // The body's own height (the document's is never less than the frame's, so it could only grow)
   var measure = function () {
-    var h = Math.ceil(Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0));
+    var h = document.body ? Math.ceil(document.body.scrollHeight) : 0;
     if (Math.abs(h - lastH) > 1) { lastH = h; send({ t: 'size', h: h }); }
   };
 
@@ -340,6 +341,51 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
       resetters.forEach(function (f) { try { f(); } catch (e) { send({ t: 'error', msg: cut('Reset failed: ' + (e && e.message || e), 300) }); } });
       if (steps) go(0);
     }
+    else if (action === 'audit') audit();
+  };
+  // ---- Legibility: labels that overlap, or run off the edge ----
+  var labels = function () {
+    var out = [], els = document.body ? document.body.querySelectorAll('text, p, span, div, td, th, label, button, li, h1, h2, h3, h4, b, strong, em, code') : [];
+    for (var i = 0; i < els.length && out.length < 400; i++) {
+      var el = els[i];
+      if (el.tagName !== 'text' && el.children.length) continue;
+      var t = (el.textContent || '').trim();
+      if (!t) continue;
+      var cs = getComputedStyle(el);
+      if (cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity === 0) continue;
+      var r = el.getBoundingClientRect();
+      if (r.width < 2 || r.height < 2) continue;
+      out.push({ t: t.slice(0, 40), r: r });
+    }
+    return out;
+  };
+  var layoutProblems = function (where) {
+    var found = [], ls = labels(), W = document.documentElement.clientWidth;
+    for (var i = 0; i < ls.length && found.length < 3; i++) {
+      var a = ls[i].r;
+      if (a.right > W + 2 || a.left < -2) { found.push(where + 'the label "' + ls[i].t + '" runs off the edge of the frame.'); continue; }
+      for (var j = i + 1; j < ls.length && found.length < 3; j++) {
+        var b = ls[j].r;
+        var w = Math.min(a.right, b.right) - Math.max(a.left, b.left), h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+        if (w <= 0 || h <= 0 || ls[i].t === ls[j].t) continue;
+        var small = Math.min(a.width * a.height, b.width * b.height);
+        if (w * h > 0.25 * small) found.push(where + 'the labels "' + ls[i].t + '" and "' + ls[j].t + '" overlap.');
+      }
+    }
+    return found;
+  };
+  // Every step drawn once, before the visual is shown: errors and unreadable layouts in any of them
+  var audit = function () {
+    var problems = [], n = steps ? steps.n : 1;
+    stop();
+    for (var i = 0; i < n && problems.length < 6; i++) {
+      if (steps) {
+        try { var r = steps.draw(i); if (typeof r === 'string') steps.said = r; } catch (e) { problems.push(cut('Drawing step ' + (i + 1) + ' failed: ' + (e && e.message || e), 300)); continue; }
+      }
+      problems = problems.concat(layoutProblems(steps ? 'At step ' + (i + 1) + ', ' : ''));
+    }
+    if (steps) { at = 0; draw(); }
+    send({ t: 'audit', problems: problems.slice(0, 6) });
   };
   var clean2 = function (data) {
     if (!data || typeof data !== 'object') return undefined;
@@ -421,7 +467,7 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
     readTheme();
     setTimeout(function () {
       measure();
-      new ResizeObserver(measure).observe(document.documentElement);
+      if (document.body) new ResizeObserver(measure).observe(document.body);
       var b = document.body, drawn = false;
       if (b) {
         var els = b.querySelectorAll('svg, canvas, button, input, table, div, p, span, img');
@@ -502,6 +548,8 @@ export type FrameMessage =
   | { t: 'steps'; i: number; n: number; say: string; playing: boolean }
   | { t: 'report'; text: string; data?: Record<string, number | string | boolean> }
   | { t: 'select'; label: string; data?: Record<string, number | string | boolean> }
+  /** Every step drawn once, hidden: what was wrong in any of them */
+  | { t: 'audit'; problems: string[] }
 
 const str = (v: unknown, max: number): string | null => (typeof v === 'string' ? (v.length > max ? v.slice(0, max) : v) : null)
 const int = (v: unknown, lo: number, hi: number): number | null => (typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : null)
@@ -552,6 +600,8 @@ export function parseFrameMessage(m: unknown): FrameMessage | null {
       const text = str(o.text, 400)
       return text === null ? null : { t: 'report', text, data: data(o.data) }
     }
+    case 'audit':
+      return Array.isArray(o.problems) ? { t: 'audit', problems: o.problems.filter((p): p is string => typeof p === 'string').slice(0, 6).map((p) => p.slice(0, 300)) } : null
     case 'select': {
       const label = str(o.label, 200)
       return label === null || !label.trim() ? null : { t: 'select', label, data: data(o.data) }
@@ -606,7 +656,7 @@ export const askAboutPart = (s: VisualState) =>
 // ---------- What Claude is told ----------
 
 const EXAMPLE_STEPS = `<title>Hash map resize at load factor 0.75</title>
-<svg id="m" viewBox="0 0 640 150" role="img" aria-label="Buckets of a hash map"></svg>
+<svg id="m" viewBox="0 0 640 150" width="640" role="img" aria-label="Buckets of a hash map"></svg>
 <script>
 const keys = [12, 7, 33, 20, 5, 18, 41]
 const plan = []  // every state, computed up front so Back and Reset are exact
@@ -640,7 +690,7 @@ visual.steps(plan.map(p => p.say), i => {
 
 const EXAMPLE_SLIDER = `<title>A rise in income shifts demand</title>
 <label>Income shift <input id="s" type="range" min="0" max="40" value="0" aria-describedby="out"></label> <span id="out" class="mono"></span>
-<svg id="g" viewBox="0 0 420 260" role="img" aria-label="Supply and demand"></svg>
+<svg id="g" viewBox="0 0 420 260" width="420" role="img" aria-label="Supply and demand"></svg>
 <script>
 // Demand P = 100 - Q + s, supply P = 20 + Q: equilibrium Q* = (80 + s) / 2, P* = 20 + Q*
 const s = document.getElementById('s'), out = document.getElementById('out'), g = document.getElementById('g')
@@ -675,7 +725,7 @@ export const VISUAL_GUIDE = `- A custom visual: when the idea has moving parts o
   - visual.select(label, data?): the learner clicked or pressed Enter on a part; Tide offers "Ask about this" for it.
   - visual.onReset(fn), visual.reducedMotion, visual.theme.
   Colours only from Tide's CSS variables, so every theme works: --bg --surface --ink --ink-soft --muted --line --line-strong --accent --accent-soft --pos --neg --good --bad --warn and --c1 to --c6 for series; fonts --font and --mono. Body text and SVG text already follow the theme.
-  Make it legible and minimal: label parts directly, text at 12px or more, nothing decorative. Animate only to show a change (a short transition, never a loop for its own sake). Keyboard accessible: real <button> and <input> elements with labels; a clickable SVG part gets tabindex="0", role="button", an aria-label and Enter. Fill the width (use a viewBox), at most about 420px tall. Every number is computed in the script, never typed in by hand.
+  Make it legible and minimal: label parts directly, text at 12px or more, nothing decorative; leave room so no two labels overlap at any step (Tide draws every step before showing it and sends back overlaps). Animate only to show a change (a short transition, never a loop for its own sake). Keyboard accessible: real <button> and <input> elements with labels; a clickable SVG part gets tabindex="0", role="button", an aria-label and Enter. Give an SVG a viewBox and the same width (width="640" for viewBox="0 0 640 …"), so its text stays the size you wrote and it only shrinks on a narrow screen; at most about 420px tall. Every number is computed in the script, never typed in by hand.
   When Tide says what the learner did in a visual, answer about exactly that state, then often ask them to predict the next step as an <ask>; they check it by pressing Step.
   Two short examples:
 \`\`\`visual

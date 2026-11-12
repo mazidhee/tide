@@ -373,7 +373,7 @@ export function isAnswer(req: TurnRequest, said: string): boolean {
   if (!req.session) return false
   const prev = [...req.messages].reverse().find((m) => m.role === 'assistant')
   if (!prev || !/<ask\b/i.test(text(prev.content))) return false
-  return !/^\s*(\[hint\]|(i (don'?t|do not) know|go on|continue|skip)\b)/i.test(said)
+  return !/^\s*(\[hint\]|my question:|(i (don'?t|do not) know|go on|continue|skip)\b)/i.test(said)
 }
 
 const MARK_SYSTEM = `You mark one answer a student gave in a lesson, for their tutor. Grade against the tutor's own solution when there is one (it is inside <solution>; the student never saw it). "correct" means complete and right, not just heading the right way; a right answer with wrong or missing reasoning is "partial". An equivalent method or ordering is not a mistake. Quote the words of their answer that earned the verdict. Reply with JSON only: {"verdict": "correct" | "partial" | "wrong", "score": 0.0 to 1.0, "why": "one or two sentences: what was right and why, or the exact step that's wrong and why"}.`

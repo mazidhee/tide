@@ -28,6 +28,8 @@ export const timing = {
   loadMs: 6000,
   /** After ready, errors still count for this long */
   watchMs: 700,
+  /** Drawing every step once, hidden, may take this long */
+  auditMs: 3000,
   /** No heartbeat for this long: the frame's main thread is stuck */
   hangMs: 3000,
   /** Out of sight this long: the frame is torn down */
@@ -206,6 +208,7 @@ function startFrame(stage: HTMLElement, code: string, visible: boolean, initial:
   let finish: (r: { ok: boolean; errors: string[] }) => void = () => {}
   const outcome = new Promise<{ ok: boolean; errors: string[] }>((r) => (finish = r))
   let settled = false
+  let auditTimer: ReturnType<typeof setTimeout> | undefined
   const settle = (ok: boolean) => {
     if (settled) return
     settled = true
@@ -247,6 +250,16 @@ function startFrame(stage: HTMLElement, code: string, visible: boolean, initial:
       drawn = m.drawn
       // Errors already reported fail it at once; otherwise it has a moment more to report any
       if (errors.length || !drawn) settle(false)
+      // Checked hidden: every step is drawn once first (errors, overlapping labels), then it is put back at the start
+      else if (!visible) {
+        iframe.contentWindow?.postMessage({ tv: 1, t: 'control', action: 'audit' }, '*')
+        auditTimer = setTimeout(() => settle(true), timing.auditMs)
+      } else setTimeout(() => settle(true), timing.watchMs)
+    }
+    if (m.t === 'audit' && !settled) {
+      clearTimeout(auditTimer)
+      for (const p of m.problems) if (errors.length < 8 && !errors.includes(p)) errors.push(p)
+      if (errors.length) settle(false)
       else setTimeout(() => settle(true), timing.watchMs)
     }
     handlers.onMessage(m)
@@ -373,7 +386,8 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
   }, 'quiet sim-ask')
   askPart.hidden = true
   const readout = h('div', { class: 'sim-readout empty' }, h('div', { class: 'sim-readout-text', 'aria-live': 'polite' }, readLabel), askPart)
-  readLabel.textContent = 'Use the visual; select a part to ask about it.'
+  // Shown once the learner selects a part (a visual may have none)
+  readout.hidden = true
   root.append(readout)
   let flashTimer: ReturnType<typeof setTimeout> | undefined
   const flashAsk = (t: string) => {
@@ -485,6 +499,7 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
         widget.dirty = true
         readLabel.textContent = m.label.charAt(0).toUpperCase() + m.label.slice(1)
         readout.classList.remove('empty')
+        readout.hidden = false
         askPart.hidden = false
         break
       case 'error':

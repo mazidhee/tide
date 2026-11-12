@@ -185,5 +185,6 @@ describe('what a turn sends', () => {
     expect(engine.isAnswer(req('x = 3'), 'x = 3')).toBe(true)
     expect(engine.isAnswer(req('[hint]'), '[hint]')).toBe(false)
     expect(engine.isAnswer(req("I don't know"), "I don't know")).toBe(false)
+    expect(engine.isAnswer(req('My question: show me a split first'), 'My question: show me a split first')).toBe(false)
   })
 })

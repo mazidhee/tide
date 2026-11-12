@@ -188,6 +188,11 @@ describe('a visual in its sandbox', () => {
     expect(r.examples[0].steps).toBeGreaterThan(0)
   })
 
+  it('drawing every step once finds a step that throws and labels that overlap, then goes back to the start', () => {
+    expect(r.audit.problems).toEqual(['Drawing step 2 failed: no data for step 2', 'At step 3, the labels "sum of exp = 39.47" and "weights sum = 1.00" overlap.'])
+    expect(r.auditSteps).toMatchObject({ i: 0, n: 3 })
+  })
+
   it('errors in a visual are caught and reported, and a blank one is noticed', () => {
     expect(r.broken.reports).toEqual(['before'])
     expect(r.broken.errors.join('\n')).toMatch(/undefinedThing is not defined/)

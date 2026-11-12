@@ -245,6 +245,19 @@ async function main() {
     r.frame.remove()
   }
 
+  // Every step drawn once on request: a draw that throws at step 2, labels that overlap at step 3
+  {
+    const r = start(`<svg viewBox="0 0 300 60" width="300"><text id="a" x="10" y="30">sum of exp = 39.47</text><text id="b" x="200" y="30">weights sum = 1.00</text></svg><script>
+      visual.steps(['one', 'two', 'three'], (i) => { if (i === 1) throw new Error('no data for step 2'); document.getElementById('b').setAttribute('x', i === 2 ? '40' : '200') })
+    </script>`)
+    await wait(700)
+    r.frame.contentWindow?.postMessage({ tv: 1, t: 'control', action: 'audit' }, '*')
+    await wait(500)
+    results.audit = r.messages.find((m) => m.t === 'audit') ?? null
+    results.auditSteps = r.messages.filter((m) => m.t === 'steps').pop() ?? null
+    r.frame.remove()
+  }
+
   // Errors are caught and reported
   results.broken = await attack(`<p>x</p><script>visual.report('before'); undefinedThing.call()</script><script>let = ;</script>`, 900)
   results.blank = await attack(`<script>/* draws nothing */</script>`, 900)

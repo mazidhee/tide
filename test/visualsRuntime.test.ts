@@ -103,7 +103,7 @@ function place(code: string, scope: unknown = { kind: 'folder', path: 'Algorithm
 }
 
 beforeEach(() => {
-  Object.assign(timing, { settleMs: 0, loadMs: 300, watchMs: 30, hangMs: 150, parkMs: 40 })
+  Object.assign(timing, { settleMs: 0, loadMs: 300, watchMs: 30, auditMs: 60, hangMs: 150, parkMs: 40 })
   configureVisuals({ api: api as unknown as Window['tide']['visuals'], theme: () => ({ scheme: 'dark', tokens: { ink: 'rgb(1, 2, 3)' } }), host: () => (made++, `vtest${++n}abcd`), markdown: (t) => `<pre class="md">${t}</pre>` })
   for (const f of Object.values(api)) f.mockClear()
   made = 0
@@ -154,6 +154,17 @@ describe('the check before a visual is shown', () => {
     await until(() => w.root.dataset.state === 'live')
     expect(api.remember).toHaveBeenCalledWith(lesson, expect.any(String), expect.objectContaining({ status: 'ok', code: FIXED }))
     expect(api.repair).toHaveBeenCalledTimes(1)
+  })
+
+  it('draws every step once while hidden, and overlapping labels count as a failure', async () => {
+    place(GOOD)
+    await until(() => frames().length === 1)
+    const f = frames()[0]
+    say(f, { t: 'ready', h: 100, drawn: true, steps: 3 })
+    expect(windows.get(f)!.sent).toContainEqual({ tv: 1, t: 'control', action: 'audit' })
+    say(f, { t: 'audit', problems: ['At step 3, the labels "sum = 39.47" and "weights sum = 1.00" overlap.'] })
+    await until(() => api.repair.mock.calls.length === 1)
+    expect(api.repair.mock.calls[0][0].errors).toEqual(['At step 3, the labels "sum = 39.47" and "weights sum = 1.00" overlap.'])
   })
 
   it('falls back to a diagram when the fix fails too, and keeps that', async () => {
