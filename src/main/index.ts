@@ -367,6 +367,10 @@ function registerIpc() {
   handle('courses:search', async (q: string) => (await courses()).searchCourses(String(q ?? ''), 12))
   handle('courses:preview', async (id: string) => (await courses()).coursePreview(String(id)))
   handle('courses:saveToNotes', async (id: string) => (await courses()).saveToNotes(String(id)))
+  // Kept fresh (main/courseFresh): suggestions, dismissing one, the weekly check and its log
+  handle('courses:fresh', async () => (await import('./courseFresh')).freshStatus())
+  handle('courses:checkNow', async () => (await import('./courseFresh')).runCheck(true))
+  handle('courses:dismiss', async (id: string) => (await import('./courseFresh')).dismissSuggestion(String(id)))
   handle('courses:track', async (id: string, lesson: string, patch: { read?: number; video?: { id: string; watched: number }; ran?: boolean }) => (await courses()).trackLesson(String(id), String(lesson), patch ?? {}))
   // ---- Links that stay in Tide (shared/links): repository files, the reader view, the web view ----
   const files = () => import('./courseFiles')
@@ -833,6 +837,8 @@ app.whenReady().then(() => {
   setTimeout(() => sortRoadmaps().catch(() => {}), 150_000)
   setInterval(() => sortRoadmaps().catch(() => {}), 6 * 3_600_000)
   setInterval(() => mapNewBooks().catch(() => {}), 6 * 3_600_000)
+  // The catalogue kept fresh: new and updated courses in your subjects, looked for once a week (never while a lesson runs)
+  void import('./courseFresh').then((f) => f.startCourseWatch()).catch(() => {})
   // The tutor in the menu bar; its menu opens today's items and views in the main window
   initTray({
     agenda: async () => todayItems(await getWeek(localDate()), localDate()),

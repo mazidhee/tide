@@ -47,7 +47,9 @@ describe('the catalogue', () => {
     for (const c of CATALOGUE) {
       expect(AREAS.some((a) => a.id === c.area), c.id).toBe(true)
       expect(c.licence.length, c.id).toBeGreaterThan(2)
-      expect(c.repo, c.id).toMatch(/^[\w.-]+\/[\w.-]+$/)
+      // Read from GitHub, or from its address on the web
+      if (!c.source || c.source === 'github' || c.source === 'jupyterbook') expect(c.repo, c.id).toMatch(/^[\w.-]+\/[\w.-]+$/)
+      else expect(c.url || c.playlist, c.id).toBeTruthy()
       expect(c.topics.length, c.id).toBeGreaterThan(0)
       // Anything without an open licence says why it is personal study only
       if (c.tier === 'personal') expect(c.licenceNote, c.id).toBeTruthy()

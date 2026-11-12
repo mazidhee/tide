@@ -15,7 +15,10 @@ import { spawn } from 'child_process'
 import { promises as fs, existsSync } from 'fs'
 import { join, relative, sep } from 'path'
 import {
-  CATALOGUE,
+  allCourses,
+  fromRepo,
+  homeUrl,
+  sourceOf,
   CONTENT,
   FETCHED,
   absolutise,
@@ -35,6 +38,7 @@ import {
   type RepoFile,
   type Section
 } from '@shared/courses'
+import { asciidocMarkdown, mystMarkdown, slugify, transcriptMarkdown } from '@shared/courseSource'
 import type { Candidate } from '@shared/sourceLed'
 import type { LessonRecord } from '@shared/lessonLog'
 import { digestLesson } from '@shared/lessonMemory'
@@ -46,24 +50,34 @@ export const repoDir = (id: string) => join(root(), id, 'repo')
 const metaFile = (id: string) => join(root(), id, 'course.json')
 const progressFile = () => join(root(), 'progress.json')
 
-/** A course as imported: when, how, at which commit, and its outline */
+/** A course as imported: when, how, at which commit (or version of its pages), and its outline */
 export interface Imported {
   id: string
   importedAt: number
   updatedAt: number
   commit?: string
-  method: 'git' | 'tarball'
+  /** A course from the web: the fingerprint of its contents when it was read (main/sources) */
+  version?: string
+  method: 'git' | 'tarball' | 'web'
   outline: CourseOutline
+  /** What reading it had to say (pages skipped and why) */
+  notes?: string[]
 }
 
 export interface CourseCard extends CatalogueCourse {
   imported?: { importedAt: number; updatedAt: number; lessons: number; done: number; next?: { id: string; title: string; module: string } }
+  /** Found by the weekly check (main/courseFresh): new this week, not imported */
+  suggested?: { at: number; why: string; score: number; by: 'claude' | 'score' }
+  /** Imported, and its source has changed since: one click brings it up to date */
+  updateAvailable?: boolean
 }
 
 export interface CourseDetail {
   course: CatalogueCourse
   imported: Imported | null
   progress: CourseProgress
+  /** Its source changed since it was imported (main/courseFresh) */
+  updateAvailable?: boolean
 }
 
 export interface LessonContent {
@@ -101,7 +115,7 @@ function run(cmd: string, args: string[], cwd?: string, timeoutMs = 300_000): Pr
 
 /** The sparse checkout's patterns: the course's text and code, the licence, the READMEs that order it */
 export function sparsePatterns(c: CatalogueCourse): string[] {
-  const exts = ['md', 'markdown', 'mdx', 'ipynb', 'py', 'sql', 'rs', 'c', 'h', 'cc', 'cpp', 'js', 'ts', 'go', 'sh', 'jl', 'asm', 'toml', 'yml', 'yaml']
+  const exts = ['md', 'markdown', 'mdx', 'ipynb', 'adoc', 'asciidoc', 'py', 'sql', 'rs', 'c', 'h', 'cc', 'cpp', 'js', 'ts', 'go', 'sh', 'jl', 'asm', 'toml', 'yml', 'yaml']
   const under = c.split ? null : c.root ? `/${c.root.replace(/\/+$/, '')}/**/` : '/**/'
   const out = ['/LICENSE*', '/LICENCE*', '/COPYING*', '/*.md', '/*.markdown']
   if (c.split) out.push(`/${c.split}`)
@@ -111,6 +125,7 @@ export function sparsePatterns(c: CatalogueCourse): string[] {
 }
 
 async function gitFetch(c: CatalogueCourse, dir: string): Promise<string | null> {
+  if (!c.repo || !c.branch) return null
   const url = `https://github.com/${c.repo}.git`
   const clone = await run('git', ['clone', '--depth', '1', '--filter=blob:none', '--no-checkout', '--branch', c.branch, url, dir])
   if (clone.code !== 0) return null
@@ -122,6 +137,7 @@ async function gitFetch(c: CatalogueCourse, dir: string): Promise<string | null>
 }
 
 async function gitUpdate(c: CatalogueCourse, dir: string): Promise<string | null> {
+  if (!c.branch) return null
   // Patterns may have changed with the catalogue
   await run('git', ['sparse-checkout', 'set', '--no-cone', ...sparsePatterns(c)], dir)
   const f = await run('git', ['fetch', '--depth', '1', '--filter=blob:none', 'origin', c.branch], dir)
@@ -133,12 +149,13 @@ async function gitUpdate(c: CatalogueCourse, dir: string): Promise<string | null
 
 /** GitHub's tarball, unpacked with only the files a course is read from */
 async function tarballFetch(c: CatalogueCourse, dir: string): Promise<boolean> {
+  if (!c.repo || !c.branch) return false
   await fs.mkdir(dir, { recursive: true })
   const res = await fetch(`https://codeload.github.com/${c.repo}/tar.gz/refs/heads/${c.branch}`)
   if (!res.ok || !res.body) return false
   const file = join(dir, '..', 'repo.tar.gz')
   await fs.writeFile(file, Buffer.from(await res.arrayBuffer()))
-  const includes = ['*.md', '*.markdown', '*.mdx', '*.ipynb', '*.py', '*.sql', '*.rs', '*.c', '*.h', '*.cpp', '*.js', '*.ts', '*.go', '*.sh', '*.toml', '*.yml', '*.yaml', '*LICENSE*', '*LICENCE*', '*COPYING*'].flatMap((p) => ['--include', p])
+  const includes = ['*.md', '*.markdown', '*.mdx', '*.ipynb', '*.adoc', '*.asciidoc', '*.py', '*.sql', '*.rs', '*.c', '*.h', '*.cpp', '*.js', '*.ts', '*.go', '*.sh', '*.toml', '*.yml', '*.yaml', '*LICENSE*', '*LICENCE*', '*COPYING*'].flatMap((p) => ['--include', p])
   const x = await run('tar', ['-xzf', file, '-C', dir, '--strip-components', '1', ...includes])
   await fs.rm(file, { force: true })
   return x.code === 0
@@ -148,6 +165,7 @@ async function tarballFetch(c: CatalogueCourse, dir: string): Promise<boolean> {
 
 /** Every file of the course on disk, by repository path; the text of what is read as lessons (notebooks as Markdown) */
 async function readRepo(c: CatalogueCourse): Promise<RepoFile[]> {
+  const myst = sourceOf(c) === 'jupyterbook'
   const base = repoDir(c.id)
   const out: RepoFile[] = []
   const walk = async (dir: string, depth: number) => {
@@ -158,6 +176,10 @@ async function readRepo(c: CatalogueCourse): Promise<RepoFile[]> {
       if (e.isDirectory()) await walk(full, depth + 1)
       else if (e.isFile() && FETCHED.test(e.name)) {
         const path = relative(base, full).split(sep).join('/')
+        if (/(^|\/)_toc\.ya?ml$/.test(path)) {
+          out.push({ path, text: await fs.readFile(full, 'utf8').catch(() => '') })
+          continue
+        }
         if (!CONTENT.test(path)) {
           out.push({ path })
           continue
@@ -166,7 +188,8 @@ async function readRepo(c: CatalogueCourse): Promise<RepoFile[]> {
         // A notebook can carry megabytes of pictures in its outputs: read it, but skip one that is mostly that
         if (st.size > 8_000_000) continue
         const raw = await fs.readFile(full, 'utf8').catch(() => '')
-        out.push({ path, text: /\.ipynb$/i.test(path) ? (notebookMarkdown(raw) ?? '') : raw })
+        const text = /\.ipynb$/i.test(path) ? (notebookMarkdown(raw) ?? '') : /\.(adoc|asciidoc)$/i.test(path) ? asciidocMarkdown(raw) : raw
+        out.push({ path, text: myst ? mystMarkdown(text) : text })
       }
     }
   }
@@ -235,7 +258,70 @@ async function readAndIndex(c: CatalogueCourse, method: Imported['method'], comm
   return meta
 }
 
-/** Imports a course from the catalogue (or returns it as it is, when it already is) */
+/** A Jupyter Book read from a repository of its notebooks: its _toc.yml, fetched from where the book keeps it */
+async function fetchJbToc(c: CatalogueCourse, dir: string): Promise<void> {
+  if (!c.jbToc) return
+  const res = await fetch(c.jbToc, { signal: AbortSignal.timeout(20_000) }).catch(() => null)
+  if (res?.ok) await fs.writeFile(join(dir, '_toc.yml'), await res.text())
+}
+
+/** A course from GitHub (or a Jupyter Book kept there): a sparse clone, else the tarball */
+async function repoImport(c: CatalogueCourse, dir: string): Promise<{ method: Imported['method']; commit?: string }> {
+  broadcast({ id: c.id, phase: 'fetching', detail: `github.com/${c.repo}` })
+  let method: Imported['method'] = 'git'
+  const commit = await gitFetch(c, dir).catch(() => null)
+  if (!commit) {
+    await fs.rm(dir, { recursive: true, force: true })
+    method = 'tarball'
+    if (!(await tarballFetch(c, dir).catch(() => false))) throw new Error(`Couldn't download github.com/${c.repo}`)
+  }
+  await fetchJbToc(c, dir)
+  return { method, ...(commit ? { commit } : {}) }
+}
+
+/**
+ * A course from the web (main/sources): its adapter reads it politely, and its lessons are written
+ * into the course's own folder (a Markdown file a lesson, or the notebook it is), with its outline
+ * built from the adapter's order. Captions the source publishes are kept as its videos' transcripts.
+ */
+async function webImport(c: CatalogueCourse, dir: string, importedAt: number): Promise<Imported> {
+  const { buildCourse } = await import('./courseSources')
+  broadcast({ id: c.id, phase: 'fetching', detail: homeUrl(c).replace(/^https?:\/\/(www\.)?/, '') })
+  const built = await buildCourse(c, (detail) => broadcast({ id: c.id, phase: 'fetching', detail }))
+  broadcast({ id: c.id, phase: 'reading' })
+  await fs.mkdir(dir, { recursive: true })
+  const modules: CourseOutline['modules'] = []
+  const files: RepoFile[] = []
+  for (const [mi, m] of built.modules.entries()) {
+    const lessons: CourseOutline['modules'][number]['lessons'] = []
+    for (const [li, l] of m.lessons.entries()) {
+      const folder = `m${String(mi + 1).padStart(2, '0')}`
+      const path = `${folder}/${String(li + 1).padStart(2, '0')}-${slugify(l.title, 50)}.${l.notebook ? 'ipynb' : 'md'}`
+      await fs.mkdir(join(dir, folder), { recursive: true })
+      await fs.writeFile(join(dir, ...path.split('/')), l.notebook ?? l.markdown)
+      const text = l.notebook ? (notebookMarkdown(l.notebook) ?? l.markdown) : l.markdown
+      files.push({ path, text })
+      lessons.push({ id: path, path, title: l.title, kind: l.kind, words: (text.match(/\S+/g) ?? []).length, url: l.url })
+    }
+    if (lessons.length) modules.push({ id: `m${modules.length + 1}`, title: m.title, lessons, code: [] })
+  }
+  const outline: CourseOutline = { modules, lessons: modules.reduce((n, m) => n + m.lessons.length, 0) }
+  if (!outline.lessons) throw new Error(built.notes[0] ?? 'Nothing in it reads as lessons')
+  // OCW's own captions, kept as the lectures' transcripts (the player shows them, lessons search them)
+  if (built.captions.length) {
+    const { keepTranscript } = await import('./videos')
+    for (const cap of built.captions) await keepTranscript(cap.video, { title: cap.title, channel: c.by, segments: cap.segments }, undefined, c.title).catch(() => null)
+  }
+  broadcast({ id: c.id, phase: 'indexing', detail: `${outline.lessons} lessons` })
+  await indexCourse(c, files, outline).catch((e) => console.warn('[courses] index failed', e))
+  const meta: Imported = { id: c.id, importedAt, updatedAt: Date.now(), version: built.version, method: 'web', outline, ...(built.notes.length ? { notes: built.notes.slice(0, 40) } : {}) }
+  await writeJson(metaFile(c.id), meta)
+  broadcast({ id: c.id, phase: 'done', detail: `${outline.lessons} lessons` })
+  void import('./related').then((r) => r.fetchCourseTranscripts()).catch(() => {})
+  return meta
+}
+
+/** Imports a course from the catalogue (or returns it as it is, when it already is). Only ever on your say: nothing imports by itself */
 export function importCourse(id: string): Promise<Imported> {
   const c = catalogueCourse(id)
   if (!c) return Promise.reject(new Error('Not in the catalogue'))
@@ -247,22 +333,18 @@ export function importCourse(id: string): Promise<Imported> {
     const dir = repoDir(id)
     await fs.rm(join(root(), id), { recursive: true, force: true })
     await fs.mkdir(join(root(), id), { recursive: true })
-    broadcast({ id, phase: 'fetching', detail: `github.com/${c.repo}` })
-    let method: Imported['method'] = 'git'
-    let commit = await gitFetch(c, dir).catch(() => null)
-    if (!commit) {
-      await fs.rm(dir, { recursive: true, force: true })
-      method = 'tarball'
-      if (!(await tarballFetch(c, dir).catch(() => false))) throw new Error(`Couldn't download github.com/${c.repo}`)
-    }
-    return readAndIndex(c, method, commit ?? undefined, Date.now())
+    // A suggestion you import stays in the catalogue from now on
+    await import('./courseFresh').then((f) => f.adopt(id)).catch(() => {})
+    if (!fromRepo(c)) return webImport(c, dir, Date.now())
+    const r = await repoImport(c, dir)
+    return readAndIndex(c, r.method, r.commit, Date.now())
   })()
   busy.set(id, job)
   job.catch((e) => broadcast({ id, phase: 'error', detail: (e as Error).message })).finally(() => busy.delete(id))
   return job
 }
 
-/** Brings an imported course up to date (git pull, or a fresh download) and reads it again */
+/** Brings an imported course up to date (git pull, a fresh download, or its pages read again) and reads it again */
 export function updateCourse(id: string): Promise<Imported> {
   const c = catalogueCourse(id)
   if (!c) return Promise.reject(new Error('Not in the catalogue'))
@@ -271,20 +353,33 @@ export function updateCourse(id: string): Promise<Imported> {
   const job = (async () => {
     const meta = await importedCourse(id)
     if (!meta) return importCourse(id)
-    broadcast({ id, phase: 'fetching', detail: `github.com/${c.repo}` })
     const dir = repoDir(id)
-    let commit: string | null = null
-    let method = meta.method
-    if (existsSync(join(dir, '.git'))) commit = await gitUpdate(c, dir).catch(() => null)
-    if (!commit) {
+    let done: Imported
+    if (!fromRepo(c)) {
+      // Read into a new folder; the old one is replaced only once the new one is whole
       const fresh = `${dir}.new`
       await fs.rm(fresh, { recursive: true, force: true })
-      if (!(await tarballFetch(c, fresh).catch(() => false))) throw new Error(`Couldn't download github.com/${c.repo}`)
+      done = await webImport(c, fresh, meta.importedAt)
       await fs.rm(dir, { recursive: true, force: true })
       await fs.rename(fresh, dir)
-      method = 'tarball'
+    } else {
+      broadcast({ id, phase: 'fetching', detail: `github.com/${c.repo}` })
+      let commit: string | null = null
+      let method = meta.method
+      if (existsSync(join(dir, '.git'))) commit = await gitUpdate(c, dir).catch(() => null)
+      if (!commit) {
+        const fresh = `${dir}.new`
+        await fs.rm(fresh, { recursive: true, force: true })
+        if (!(await tarballFetch(c, fresh).catch(() => false))) throw new Error(`Couldn't download github.com/${c.repo}`)
+        await fs.rm(dir, { recursive: true, force: true })
+        await fs.rename(fresh, dir)
+        method = 'tarball'
+      }
+      await fetchJbToc(c, dir)
+      done = await readAndIndex(c, method, commit ?? undefined, meta.importedAt)
     }
-    return readAndIndex(c, method, commit ?? undefined, meta.importedAt)
+    await import('./courseFresh').then((f) => f.noteUpdated(id)).catch(() => {})
+    return done
   })()
   busy.set(id, job)
   job.catch((e) => broadcast({ id, phase: 'error', detail: (e as Error).message })).finally(() => busy.delete(id))
@@ -350,7 +445,7 @@ export async function trackLesson(course: string, lesson: string, patch: { read?
 /** The imported courses' repositories, so links into them open in the course reader */
 export async function importedRepos(): Promise<{ id: string; repo: string; branch: string }[]> {
   const out: { id: string; repo: string; branch: string }[] = []
-  for (const c of CATALOGUE) if (existsSync(metaFile(c.id))) out.push({ id: c.id, repo: c.repo, branch: c.branch })
+  for (const c of allCourses()) if (c.repo && c.branch && fromRepo(c) && existsSync(metaFile(c.id))) out.push({ id: c.id, repo: c.repo, branch: c.branch })
   return out
 }
 
@@ -380,27 +475,56 @@ export async function noteCourseLesson(record: LessonRecord): Promise<void> {
 
 export async function listCourses(): Promise<CourseCard[]> {
   const progress = await allProgress()
+  const fresh = await import('./courseFresh').then((f) => f.freshState()).catch(() => null)
   const out: CourseCard[] = []
-  for (const c of CATALOGUE) {
+  for (const c of allCourses()) {
+    // A suggestion you dismissed is gone from the catalogue
+    if (fresh?.dismissed.includes(c.id)) continue
     const meta = await importedCourse(c.id)
+    const sug = fresh?.suggestions.find((x) => x.course.id === c.id)
     if (!meta) {
-      out.push({ ...c })
+      out.push({ ...c, ...(sug ? { suggested: { at: sug.at, why: sug.why, score: sug.score, by: sug.by } } : {}) })
       continue
     }
     const p = progress[c.id]
     const next = nextLesson(meta.outline, p)
+    const latest = fresh?.updates[c.id]
     out.push({
       ...c,
-      imported: { importedAt: meta.importedAt, updatedAt: meta.updatedAt, lessons: meta.outline.lessons, done: courseDone(meta.outline, p), ...(next ? { next: { id: next.lesson.id, title: next.lesson.title, module: next.module.title } } : {}) }
+      imported: { importedAt: meta.importedAt, updatedAt: meta.updatedAt, lessons: meta.outline.lessons, done: courseDone(meta.outline, p), ...(next ? { next: { id: next.lesson.id, title: next.lesson.title, module: next.module.title } } : {}) },
+      ...(latest && latest !== (meta.version ?? meta.commit) ? { updateAvailable: true } : {})
     })
   }
   return out
 }
 
 export async function courseDetail(id: string): Promise<CourseDetail | null> {
+  const fresh = await import('./courseFresh').then((f) => f.freshState()).catch(() => null)
   const course = catalogueCourse(id)
   if (!course) return null
-  return { course, imported: await importedCourse(id), progress: (await allProgress())[id] ?? {} }
+  const imported = await importedCourse(id)
+  return { course, imported, progress: (await allProgress())[id] ?? {}, ...(imported && fresh?.updates[id] ? { updateAvailable: true } : {}) }
+}
+
+/** The transcript Tide keeps for a video, as a lesson's text, where a lesson marks its place */
+async function withTranscripts(md: string): Promise<string> {
+  const marks = [...md.matchAll(/<!-- tide:transcript ([\w-]{11}) -->/g)]
+  if (!marks.length) return md
+  const { getTranscript } = await import('./videos')
+  for (const m of marks) {
+    const r = await getTranscript(m[1]).catch(() => null)
+    const lines = r?.transcript?.lines ?? []
+    const text = lines.length ? `## Transcript\n\n${transcriptMarkdown(m[1], lines.map((l) => ({ start: l.start, text: l.text })))}` : ''
+    md = md.replace(m[0], text)
+  }
+  return md.replace(/\s+$/, '')
+}
+
+/** Where a lesson is on the web: its own page, a Jupyter Book's page on its site, else on GitHub */
+function webUrlOf(c: CatalogueCourse, lesson: { path: string; id: string; url?: string }): string {
+  if (lesson.url) return lesson.url
+  if (sourceOf(c) === 'jupyterbook' && c.url) return `${c.url.replace(/\/+$/, '')}/${lesson.path.split('/').pop()!.replace(/\.(md|ipynb)$/i, '')}.html`
+  return c.repo && c.branch ? lessonUrl(c as CatalogueCourse & { repo: string; branch: string }, lesson) : homeUrl(c)
 }
 
 /** A lesson's own text, ready to read or teach from */
@@ -416,11 +540,13 @@ export async function lessonContent(id: string, lessonId: string): Promise<Lesso
   if (!full.startsWith(repoDir(id) + sep)) return null
   const raw = await fs.readFile(full, 'utf8').catch(() => null)
   if (raw === null) return null
-  let md = /\.ipynb$/i.test(lesson.path) ? (notebookMarkdown(raw) ?? '') : raw
+  let md = /\.ipynb$/i.test(lesson.path) ? (notebookMarkdown(raw, { images: meta.method === 'web' || sourceOf(c) === 'jupyterbook' }) ?? '') : /\.(adoc|asciidoc)$/i.test(lesson.path) ? asciidocMarkdown(raw) : raw
+  if (sourceOf(c) === 'jupyterbook') md = mystMarkdown(md)
   // A part of one long file
   if (lesson.range) md = md.slice(lesson.range[0], lesson.range[1]).replace(/\s+$/, '')
-  md = absolutise(md, c, lesson.path)
-  return { id: lesson.id, title: lesson.title, kind: lesson.kind, markdown: md, url: lessonUrl(c, lesson), sections: lessonSections(md, lesson.title, lesson.kind), code: mod.code }
+  if (fromRepo(c) && c.repo && c.branch) md = absolutise(md, c as CatalogueCourse & { repo: string; branch: string }, lesson.path)
+  else md = await withTranscripts(md)
+  return { id: lesson.id, title: lesson.title, kind: lesson.kind, markdown: md, url: webUrlOf(c, lesson), sections: lessonSections(md, lesson.title, lesson.kind), code: mod.code }
 }
 
 /** A code file of a course, to read or run */
@@ -487,7 +613,7 @@ export async function saveToNotes(id: string): Promise<{ folder: string; files: 
       const content = await lessonContent(id, l.id)
       if (!content) continue
       const head = `---\ntitle: "${l.title.replace(/"/g, "'")}"\nsource: ${content.url}\ncourse: "${c.title.replace(/"/g, "'")}"\nauthor: "${c.by.replace(/"/g, "'")}"\nlicence: "${c.licence.replace(/"/g, "'")}"\nfetched: ${day(meta.updatedAt)}\n---\n\n`
-      const note = `${head}> From [${c.title}](https://github.com/${c.repo}) by ${c.by}, ${c.licence}. ${c.tier === 'personal' ? 'For your own study only.' : ''}\n\n${content.markdown}\n`
+      const note = `${head}> From [${c.title}](${homeUrl(c)}) by ${c.by}, ${c.licence}. ${c.tier === 'personal' ? 'For your own study only.' : ''}\n\n${content.markdown}\n`
       await writeText(`${folder}/${String(mi + 1).padStart(2, '0')} ${safe(m.title)}/${String(li + 1).padStart(2, '0')} ${safe(l.title)}.md`, note)
       files++
     }
@@ -506,6 +632,15 @@ const previews = new Map<string, { at: number; markdown: string | null }>()
 export async function coursePreview(id: string): Promise<{ markdown: string; url: string } | null> {
   const c = catalogueCourse(id)
   if (!c) return null
+  if (!fromRepo(c)) {
+    const had = previews.get(id)
+    if (had && Date.now() - had.at < 3_600_000) return had.markdown ? { markdown: had.markdown, url: homeUrl(c) } : null
+    const { previewCourse } = await import('./courseSources')
+    const markdown = await previewCourse(c).catch(() => null)
+    previews.set(id, { at: Date.now(), markdown })
+    return markdown ? { markdown, url: homeUrl(c) } : null
+  }
+  if (!c.repo || !c.branch) return null
   const path = c.split ?? (c.root ? `${c.root}/README.md` : 'README.md')
   const url = `https://github.com/${c.repo}/blob/${c.branch}/${path}`
   const had = previews.get(id)
@@ -518,6 +653,7 @@ export async function coursePreview(id: string): Promise<{ markdown: string; url
     const md = /\.ipynb$/i.test(p) ? notebookMarkdown(raw) : raw
     if (md?.trim()) {
       markdown = absolutise(md.length > 60_000 ? md.slice(0, 60_000) : md, c, p)
+      if (sourceOf(c) === 'jupyterbook') markdown = mystMarkdown(markdown)
       break
     }
   }

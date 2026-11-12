@@ -961,6 +961,13 @@ export interface TideApi {
     /** How far a lesson was read, a video of it watched, or its code run: kept with its progress, and felt in What you know */
     track(id: string, lesson: string, patch: { read?: number; video?: { id: string; watched: number }; ran?: boolean }): Promise<import('./courses').CourseProgress>
     onProgress(cb: (e: import('../main/courses').ImportPhase) => void): () => void
+    /** The weekly check that keeps the catalogue fresh: when it last ran, its steps and its log */
+    fresh(): Promise<import('../main/courseFresh').FreshStatus>
+    /** Runs the check now (it suggests; it never imports) */
+    checkNow(): Promise<import('../main/freshJob').FreshResult>
+    /** A suggestion you don't want: gone, and never suggested again */
+    dismiss(id: string): Promise<void>
+    onFresh(cb: (e: { running: boolean; steps: import('../main/courseFresh').FreshStatus['steps'] }) => void): () => void
   }
   /** Links that stay in Tide (shared/links) */
   links: {
