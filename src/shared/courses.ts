@@ -168,7 +168,7 @@ const joinSrc = (s: string | string[] | undefined) => (Array.isArray(s) ? s.join
  * in its language (the lesson's Run button runs them), and each cell's text output under it in an
  * ```output block (pictures and long outputs left out). Null when it isn't a notebook.
  */
-export function notebookMarkdown(raw: string): string | null {
+export function notebookMarkdown(raw: string, opts: { images?: boolean } = {}): string | null {
   let nb: { cells?: NbCell[]; metadata?: { kernelspec?: { language?: string }; language_info?: { name?: string } } }
   try {
     nb = JSON.parse(raw)
@@ -190,6 +190,8 @@ export function notebookMarkdown(raw: string): string | null {
         if (o.output_type === 'stream' && o.name !== 'stderr') out.push(joinSrc(o.text))
         else if ((o.output_type === 'execute_result' || o.output_type === 'display_data') && o.data?.['text/plain'] && !o.data['image/png']) out.push(joinSrc(o.data['text/plain']))
       }
+      // Read in the course reader: its plots too (never in the search index or a lesson's prompt)
+      const pics = opts.images ? (cell.outputs ?? []).map((o) => joinSrc(o.data?.['image/png']).replace(/\s+/g, '')).filter((b) => b && b.length < 2_000_000) : []
       let text = out.join('').replace(/\s+$/, '')
       if (text) {
         const lines = text.split('\n')
@@ -197,6 +199,7 @@ export function notebookMarkdown(raw: string): string | null {
         if (text.length > 3000) text = `${text.slice(0, 3000)}…`
         parts.push(`\`\`\`output\n${text.replace(/```/g, "'''")}\n\`\`\``)
       }
+      for (const b of pics) parts.push(`![Output](data:image/png;base64,${b})`)
     } else if (cell.cell_type === 'raw') continue
   }
   return parts.join('\n\n')
@@ -611,6 +614,19 @@ export interface LessonProgress {
   right: number
   partly: number
   wrong: number
+  /** How far down its text you read, 0 to 1 (the furthest) */
+  read?: number
+  /** How much of each of its videos you watched, 0 to 1, by video id */
+  watched?: Record<string, number>
+  /** Code of it you ran in Tide (its notebook's cells, its exercises) */
+  ran?: number
+}
+
+/** Read to the end and its videos watched: a lesson studied, though nothing about it has been asked yet */
+export function studied(p: LessonProgress | undefined, videos = 0): boolean {
+  if (!p) return false
+  const watched = Object.values(p.watched ?? {}).filter((w) => w >= 0.8).length
+  return (p.read ?? 0) >= 0.9 && watched >= Math.min(videos, 1)
 }
 
 /** Progress kept per course, by lesson id */
@@ -658,7 +674,7 @@ export interface CourseRef {
 /** What the tutor is told about a lesson taught from a course */
 export function courseRules(c: CourseRef): string {
   const plan = c.steps.map((s) => `- ${s}`).join('\n')
-  const head = `\nThis lesson follows "${c.lessonTitle}" from the course "${c.title}" by ${c.by} (an open course on GitHub, licence: ${c.licence}). The course's own text does the teaching: Tide shows it to the student a section at a time as readings, word for word with its source. Your part is to question, mark and fill gaps, never to re-explain what a reading already says.`
+  const head = `\nThis lesson follows "${c.lessonTitle}" from the course "${c.title}" by ${c.by} (an open course on GitHub, licence: ${c.licence}). The course's own text does the teaching: Tide shows it to the student a section at a time as readings, word for word with its source. Your part is to question, mark and fill gaps, never to re-explain what a reading already says.${'\n'}Where another of the learner's courses or a lecture video adds something this course leaves out (the code, the why, the theory), you may bring in one or two with related_material, if you have it (pass exclude="${c.id}").`
   const planRule = `\nKeep the probe short (one or two questions). Then write the plan as exactly these steps, in this order, word for word, leaving out only a step the probe showed they already know:\n<plan>\n${plan}\n</plan>\nWrite the plan once, and never again: after it, Tide moves the lesson on from step to step.`
   if (c.kind === 'homework')
     return `${head}\nThis is the module's HOMEWORK. Its brief is shown as the reading. Be a mentor, not a solver: never give the answers. For each question in it, ask how they would approach it, check their reasoning and their result, and point at the exact part of the course that answers it when they are stuck. Where an answer can be checked by running code (a query, a function, a number), set it as a code ask with hidden tests.${planRule}`

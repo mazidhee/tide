@@ -183,5 +183,41 @@ export const EXTRA_TOOLS: McpTool[] = [
       if (!hits.length) return 'No saved video transcript matches.'
       return hits.map((h) => `${h.title}${h.heading ? ` > ${h.heading}` : ''} (path: ${h.path})\n${h.text.slice(0, 900)}`).join('\n\n')
     }
+  },
+  {
+    name: 'related_material',
+    description:
+      "When you teach a concept: sections of the learner's OTHER imported courses and moments of course or saved videos that teach the same thing, chosen to add something (the code worked through, the why, the theory), at most three, each with how to name it and the tag that shows it in the lesson. Call it once per concept you teach, not for every message. Pass the course being taught as exclude.",
+    inputSchema: obj({ concept: { type: 'string', description: 'The concept, e.g. "experiment tracking with MLflow"' }, exclude: { type: 'string', description: 'The course id being taught, if any' } }, ['concept']),
+    async run(args, ctx) {
+      const concept = String(args.concept ?? '').trim()
+      if (!concept) return 'Give the concept.'
+      const { lessonInfo } = await import('./exercises')
+      const info = lessonInfo(ctx.labId)
+      // A private notebook's lesson never reaches Claude; checked here too
+      if (info?.private || (info?.path && (await (await import('./projects')).privatePath(info.path).catch(() => true)))) return 'This lesson is private: other courses are not brought in.'
+      const id = ctx.step({ kind: 'search_notes', label: `Looking through your other courses and videos for “${concept}”`, status: 'running', depth: 0 })
+      const [{ relatedMaterial }, { relatedForPrompt }] = await Promise.all([import('./related'), import('@shared/related')])
+      const r = await relatedMaterial(concept, { exclude: String(args.exclude ?? '').trim() || undefined, limit: 3 })
+      ctx.updateStep(id, { status: 'done', detail: r.items.length ? `${r.items.length} worth bringing in` : 'nothing to add' })
+      return relatedForPrompt(r)
+    }
+  },
+  {
+    name: 'show_in_view',
+    description:
+      "Move what the learner is looking at in Tide: seek the video on their screen to a moment (seconds or m:ss), or scroll the course page or article they're reading to a section (by its heading). Use it when you point at something on their screen (\"watch from 12:40\", \"see the section on volumes\").",
+    inputSchema: obj({ timestamp: { type: 'string', description: 'A moment of the video on screen, e.g. "12:40"' }, section: { type: 'string', description: 'A heading on the page on screen' }, video: { type: 'string', description: 'Optional: the YouTube id, when several are on screen' } }),
+    async run(args, ctx) {
+      const { parseTime, formatTime } = await import('@shared/video')
+      const t = parseTime(String(args.timestamp ?? ''))
+      const section = String(args.section ?? '').trim()
+      if (t == null && !section) return 'Give a timestamp or a section.'
+      const id = ctx.step({ kind: 'helper', label: t != null ? `Moving the video to ${formatTime(t)}` : `Showing “${section}”`, status: 'running', depth: 0 })
+      const { BrowserWindow } = await import('electron')
+      for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('view:goto', { ...(t != null ? { t } : {}), ...(section ? { section } : {}), ...(args.video ? { video: String(args.video) } : {}) })
+      ctx.updateStep(id, { status: 'done' })
+      return t != null ? `The video on their screen is now at ${formatTime(t)}.` : `Their page is scrolled to “${section}”.`
+    }
   }
 ]

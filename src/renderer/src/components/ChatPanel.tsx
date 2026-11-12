@@ -4,6 +4,27 @@ import type { ChatScope } from '@shared/types'
 import { fileTitle, useApp, pagesLabel } from '../state'
 import { Icon } from './Icon'
 import { Composer, TurnView, useConversation } from './Conversation'
+import { describeScreen, screenLabel } from '@shared/onScreen'
+import { onScreenChange, screenNow } from '../lib/onScreen'
+import { formatTime } from '@shared/video'
+
+/** What's on screen in the course reader or the reading sheet, kept fresh (a playing video's moment, once a second) */
+function useOnScreen() {
+  const [snap, setSnap] = useState(screenNow)
+  useEffect(() => {
+    const read = () => setSnap(screenNow())
+    const off = onScreenChange(read)
+    const tick = setInterval(() => {
+      const s = screenNow()
+      if (s?.video?.playing || (s?.video && snap?.video?.at !== s.video.at)) read()
+    }, 1000)
+    return () => {
+      off()
+      clearInterval(tick)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  return snap
+}
 
 type ScopeChoice = 'note' | 'notebook' | 'vault' | 'none'
 
@@ -35,6 +56,10 @@ export function ChatPanel() {
   const instructionsRef = useRef<string | undefined>(undefined)
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  // [immersive] The tutor sees what's on screen (lib/onScreen); the chip shows it, and can be turned off for a message
+  const screen = useOnScreen()
+  const [useScreen, setUseScreen] = useState(true)
+  useEffect(() => setUseScreen(true), [screen?.title, screen?.url])
 
   // Follow what the user is looking at
   useEffect(() => {
@@ -75,7 +100,8 @@ export function ChatPanel() {
       return
     }
     const attach = opts?.attachment ?? attachment
-    const sent = await convo.send(text, { attachment: attach, scope: opts?.scope ?? scope, instructions: opts?.instructions ?? instructionsRef.current })
+    const now = useScreen ? screenNow() : null
+    const sent = await convo.send(text, { attachment: attach, scope: opts?.scope ?? scope, instructions: opts?.instructions ?? instructionsRef.current, ...(now ? { onScreen: describeScreen(now) } : {}) })
     if (sent) {
       setInput('')
       setAttachment(undefined)
@@ -145,7 +171,21 @@ export function ChatPanel() {
       </div>
 
       <div className="chat-list" ref={listRef}>
-        {turns.length === 0 && (
+        {turns.length === 0 && screen && useScreen && (
+          <div className="chat-empty">
+            <p>
+              Ask about <strong>{screen.course?.lesson ?? screen.title}</strong>. The tutor sees the section you’re on{screen.video ? ', the video’s moment and what’s said around it' : ''}, and anything you select.
+            </p>
+            <div className="suggestions">
+              {['Explain this part to me.', 'Quiz me on this: two or three short questions on what’s on my screen, one at a time.', 'What should I take away from this?'].map((s) => (
+                <button key={s} onClick={() => send(s)}>
+                  {s.replace(/:.*$/, '')}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {turns.length === 0 && !(screen && useScreen) && (
           <div className="chat-empty">
             <p>Ask anything about {scope.kind === 'none' ? 'any topic' : <strong>{scopeLabel}</strong>}. Answers cite your notes so you can check them.</p>
             <div className="suggestions">
@@ -162,6 +202,19 @@ export function ChatPanel() {
         ))}
       </div>
 
+      {screen && (
+        <div className={`chat-screen${useScreen ? '' : ' off'}`}>
+          <Icon name={screen.video ? 'video' : screen.kind === 'article' || screen.kind === 'web' ? 'globe' : 'course'} size={12} />
+          <span className="chat-screen-text" title={useScreen ? 'The tutor sees this with your message' : 'Not sent with your message'}>
+            {useScreen ? 'Sees ' : 'Not sending '}
+            <b>{screenLabel(screen)}</b>
+            {screen.video && !screenLabel(screen).includes(formatTime(screen.video.at)) ? ` · ${formatTime(screen.video.at)}` : ''}
+          </span>
+          <button className="icon-btn small" onClick={() => setUseScreen((u) => !u)} title={useScreen ? 'Don’t send what’s on screen' : 'Send what’s on screen'} aria-pressed={useScreen}>
+            <Icon name={useScreen ? 'x' : 'plus'} size={11} />
+          </button>
+        </div>
+      )}
       <Composer
         value={input}
         onChange={setInput}

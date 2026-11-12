@@ -240,8 +240,8 @@ export async function clipsFor(topic: string, { limit = 2, recap = false }: { li
 }
 
 /** A clip's times checked against the video's real transcript (shared/video checkClip), with the video's title */
-export async function checkClipTimes(clip: Clip): Promise<ClipCheck & { title?: string; channel?: string }> {
+export async function checkClipTimes(clip: Clip): Promise<ClipCheck & { title?: string; channel?: string; course?: string }> {
   const t = await readKept(clip.video)
   const r = checkClip(clip, t)
-  return r.ok && t ? { ...r, title: t.title, ...(t.channel ? { channel: t.channel } : {}) } : r
+  return r.ok && t ? { ...r, title: t.title, ...(t.channel ? { channel: t.channel } : {}), ...(t.course ? { course: t.course } : {}) } : r
 }

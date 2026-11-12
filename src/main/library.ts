@@ -11,7 +11,7 @@ import { absPath, joinRel, sanitizeName, uniquePath, writeText } from './vault'
 import { readArticle, restoreFormulas, type Article } from './extract'
 import { youtubeIdOf, type Segment as VideoSegment } from '@shared/video'
 
-const BROWSER_UA =
+export const BROWSER_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36'
 
 const libraryDir = (sub: string) => joinRel(getSettings().libraryFolder || 'Library', sub)

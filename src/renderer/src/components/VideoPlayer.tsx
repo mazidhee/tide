@@ -16,6 +16,8 @@ import { RATES, activate, cinemaOn, deactivate, preferredRate, register, remembe
 import { vaultUrl } from '../lib/markdown'
 import { Icon } from './Icon'
 import { addVideoNote } from '../lib/companion'
+import { setScreenVideo } from '../lib/onScreen'
+import { transcriptAround } from '@shared/onScreen'
 
 export type VideoSource = { kind: 'youtube'; id: string; path?: string; course?: string; title?: string; fetch?: boolean } | { kind: 'file'; path: string }
 
@@ -37,6 +39,8 @@ interface Props {
   onClipEnd?: () => void
   /** Stays where it is when playing (a course's video column beside its text) */
   noCinema?: boolean
+  /** How much of it has been watched so far, 0 to 1 (the furthest moment reached), now and then while it plays */
+  onWatched?: (fraction: number) => void
 }
 
 /** What both kinds of player do */
@@ -65,7 +69,7 @@ function scroller(el: HTMLElement | null): HTMLElement | null {
   return null
 }
 
-export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, noCinema }: Props) {
+export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, noCinema, onWatched }: Props) {
   const key = keyOf(source)
   const rootRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLIFrameElement>(null)
@@ -319,6 +323,39 @@ export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, no
     return () => clearInterval(id)
   }, [active, markLine, clip, clipDone, key, onClipEnd])
 
+  // How far it has been watched, for course progress: the furthest moment reached while playing
+  const furthest = useRef(0)
+  const watchedRef = useRef(onWatched)
+  watchedRef.current = onWatched
+  useEffect(() => {
+    if (!active) return
+    const id = setInterval(() => {
+      const e = engine.current
+      const d = e?.duration() || (tr.status === 'ready' ? (tr.t.duration ?? 0) : 0)
+      if (!e || !d || !e.playing()) return
+      const f = Math.min(1, e.time() / d)
+      if (f > furthest.current + 0.02 || (f > 0.97 && furthest.current < 1)) {
+        furthest.current = f > 0.97 ? 1 : f
+        watchedRef.current?.(furthest.current)
+      }
+    }, 4000)
+    return () => clearInterval(id)
+  }, [active, tr])
+
+  // What the tutor sees of it (lib/onScreen): its moment and the words around it, while it's open
+  const linesRef = useRef<Line[]>([])
+  linesRef.current = tr.status === 'ready' ? tr.t.lines : []
+  const titleRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (!active || source.kind !== 'youtube') return
+    const id = source.id
+    return setScreenVideo(() => {
+      const e = engine.current
+      const at = e ? e.time() : (openAt ?? 0)
+      return { id, ...(titleRef.current ? { title: titleRef.current } : {}), at, playing: !!e?.playing(), around: transcriptAround(linesRef.current, at), ...(source.course ? { course: source.course } : {}) }
+    })
+  }, [active, key]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // A clip's progress, a few times a second only while it plays
   useEffect(() => {
     if (!active || !clip || !playing) return
@@ -462,6 +499,7 @@ export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, no
   )
 
   const name = title ?? (tr.status === 'ready' ? tr.t.title : source.kind === 'file' ? fileName(source.path) : source.kind === 'youtube' ? source.title : undefined)
+  titleRef.current = name
   const resume = !clip && start === undefined ? resumeAt(key, duration() || undefined) : null
   const hasLines = lines.length > 0
   const transcriptShown = showLines && (hasLines || tr.status === 'loading' || tr.status === 'missing' || (active && source.kind === 'youtube'))

@@ -144,3 +144,20 @@ describe('links to trusted explainers', () => {
     }
   })
 })
+
+describe('what a lesson brings in from other courses', () => {
+  it('turns <reading>, <suggest-course> and a <clip> into cards’ placeholders, attributed', () => {
+    const html = render('Made With ML shows the code:\n\n<reading course="made-with-ml" path="notebooks/serve.md" heading="Serving">the code, run end to end</reading>\n\nThe MLOps Zoomcamp video at 12:40 explains why:\n\n<clip video="dQw4w9WgXcQ" start="12:40" end="15:05">why behind an API</clip>\n\n<suggest-course id="de-zoomcamp">pipelines</suggest-course>')
+    expect(html).toContain('class="rel-host" data-course="made-with-ml" data-path="notebooks/serve.md" data-heading="Serving" data-why="the code, run end to end"')
+    expect(html).toContain('class="clip-host" data-video="dQw4w9WgXcQ" data-start="760" data-end="905"')
+    expect(html).toContain('class="sug-host" data-id="de-zoomcamp"')
+    expect(html).toContain('Made With ML shows the code')
+  })
+
+  it('hides a tag still being written, and escapes what it says', () => {
+    expect(render('Look at this:\n\n<reading course="x" pa')).not.toContain('<reading')
+    const doc = new DOMParser().parseFromString(render('<reading course="a&quot;onload=&quot;x" path="p.md">"><img src=x onerror=alert(1)></reading>'), 'text/html')
+    expect(doc.querySelectorAll('img').length).toBe(0)
+    expect(doc.querySelector('.rel-host')?.getAttributeNames().sort()).toEqual(['class', 'data-course', 'data-heading', 'data-path', 'data-why'])
+  })
+})

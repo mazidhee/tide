@@ -101,6 +101,8 @@ export interface SendOptions {
   terminalId?: string
   /** A system design canvas the tutor can read and draw on */
   canvasPath?: string
+  /** What the student has on screen (shared/onScreen describeScreen) */
+  onScreen?: string
 }
 
 /**
@@ -204,6 +206,7 @@ export function useConversation() {
           messages: [{ role: 'user', content: question }],
           scope: opts.scope,
           attachment: opts.attachment,
+          ...(opts.onScreen ? { onScreen: opts.onScreen } : {}),
           instructions: opts.instructions,
           terminalId: opts.terminalId,
           canvasPath: opts.canvasPath,

@@ -4,7 +4,7 @@
  * code runnable here. "Learn" starts a lesson taught from the course's own text (the source-led
  * lessons: the tutor questions and marks, the course explains).
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AREAS, areaLabel, moduleProgress, nextLesson, repoUrl, suggestCourses, type CatalogueCourse, type CourseArea, type CourseLesson, type CourseModule, type CourseProgress, type CourseRef } from '@shared/courses'
 import type { CourseCard, CourseDetail, ImportPhase, LessonContent } from '../../../main/courses'
 import { useApp } from '../state'
@@ -13,6 +13,11 @@ import { renderMarkdown, splitFrontmatter } from '../lib/markdown'
 import { youtubeIdOf } from '@shared/video'
 import { VideoPlayer } from './VideoPlayer'
 import { codeBlockClick } from '../lib/runBlocks'
+import { currentPage, emptyHistory, goBack, goForward, pushPage, sameTarget, targetUrl, type History, type LinkTarget } from '@shared/links'
+import { courseRepos, registerLinkHost } from '../lib/linkNav'
+import { clearScreen, setScreen } from '../lib/onScreen'
+import type { OnScreen } from '@shared/onScreen'
+import { LinkPage, ViewerBar, targetTitle, useSectionInView } from './LinkViewer'
 
 
 const KIND_LABEL: Record<CatalogueCourse['kind'], string> = { course: 'Course', book: 'Book', notes: 'Notes', projects: 'Projects', guide: 'Guide' }
@@ -232,6 +237,11 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
   const phases = useImports()
   const phase = phases[id]
   const mainRef = useRef<HTMLDivElement>(null)
+  const proseRef = useRef<HTMLElement>(null)
+  // Links followed from the lesson, opened here in its column (back returns to the lesson)
+  const [hist, setHist] = useState<History<LinkTarget>>(emptyHistory)
+  const page = currentPage(hist)
+  const [focus, setFocus] = useState(false)
   const load = useCallback(() => window.tide.courses.get(id).then(setD).catch(() => setD(null)), [id])
   useEffect(() => void load(), [load])
   useEffect(() => {
@@ -245,6 +255,40 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
   const currentId = lessonId ?? next?.lesson.id ?? flat[0]?.l.id
   const at = flat.findIndex((x) => x.l.id === currentId)
   const here = at >= 0 ? flat[at] : null
+
+  // Links in this course open here: another lesson of it in the outline, anything else as a page over the lesson
+  const flatRef = useRef(flat)
+  flatRef.current = flat
+  useEffect(
+    () =>
+      registerLinkHost({
+        open: (t) => {
+          if (t.kind === 'course-file' && t.course === id) {
+            const l = flatRef.current.find((x) => x.l.path === t.path && !x.l.range)
+            if (l) {
+              setHist(emptyHistory)
+              return app.setView({ kind: 'courses', id, lesson: l.l.id })
+            }
+            if (!t.path) return setHist(emptyHistory)
+          }
+          setHist((h) => pushPage(h, t, sameTarget))
+        }
+      }),
+    [id] // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  // A new lesson starts with nothing opened over it
+  useEffect(() => setHist(emptyHistory), [currentId])
+  // A page opens at its top; back on the lesson, it is where you left it
+  const lessonTop = useRef(0)
+  const wasPage = useRef(false)
+  useLayoutEffect(() => {
+    const el = mainRef.current
+    if (!el) return
+    if (page && !wasPage.current) lessonTop.current = el.scrollTop
+    if (page) el.scrollTo({ top: 0 })
+    else if (wasPage.current) el.scrollTo({ top: lessonTop.current })
+    wasPage.current = !!page
+  }, [page])
 
   // The lesson's text, or the README before it is imported
   useEffect(() => {
@@ -283,6 +327,43 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
   // [videos] The YouTube videos the lesson links, played beside its text
   const videos = useMemo(() => (content ? videosIn(content.markdown) : []), [content])
 
+  // [immersive] What the tutor sees: this lesson, the section in view, a passage selected
+  const lessonScreen = useMemo<OnScreen | null>(
+    () => (d && content && here ? { kind: 'course-lesson', title: content.title, course: { id, title: d.course.title, module: here.m.title, lesson: content.title }, path: here.l.path, url: content.url } : null),
+    [d, content, here, id]
+  )
+  useEffect(() => {
+    if (!lessonScreen || page) return
+    setScreen(lessonScreen)
+    return () => clearScreen(lessonScreen)
+  }, [lessonScreen, page])
+  useSectionInView(proseRef, !!content && !page)
+
+  // [immersive] How far down the lesson you read, kept with its progress (and so in What you know)
+  const readTo = useRef(0)
+  useEffect(() => {
+    readTo.current = 0
+    const el = mainRef.current
+    if (!el || !content || !currentId || page) return
+    let t: ReturnType<typeof setTimeout> | undefined
+    const on = () => {
+      const max = el.scrollHeight - el.clientHeight
+      const f = max <= 40 ? 1 : Math.min(1, (el.scrollTop + el.clientHeight * 0.15) / max)
+      if (f < readTo.current + 0.1 && !(f >= 0.98 && readTo.current < 0.98)) return
+      readTo.current = f
+      clearTimeout(t)
+      t = setTimeout(() => void window.tide.courses.track(id, currentId, { read: readTo.current }).then((p) => setD((x) => (x ? { ...x, progress: p } : x))).catch(() => {}), 1200)
+    }
+    el.addEventListener('scroll', on, { passive: true })
+    // A short lesson that fits on the screen is read once it has been open a while
+    const short = setTimeout(on, 20_000)
+    return () => {
+      el.removeEventListener('scroll', on)
+      clearTimeout(short)
+      clearTimeout(t)
+    }
+  }, [content, currentId, page, id])
+
   const act = async (kind: NonNullable<typeof busy>, f: () => Promise<unknown>) => {
     setBusy(kind)
     try {
@@ -317,9 +398,45 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
   const importing = busy === 'import' || (!!phase && phase.phase !== 'done' && phase.phase !== 'error' && !d.imported)
   const isDone = !!(currentId && progress[currentId]?.done)
 
+  const lessonUrl = content?.url ?? (d.imported ? null : preview?.url ?? null)
+  const tutor = (what: 'ask' | 'explain' | 'quiz') => {
+    if (what === 'ask') return app.ask('')
+    if (what === 'explain') return app.ask('Explain this part to me.')
+    app.ask('Quiz me on this: two or three short questions on what’s on my screen, one at a time. Mark each answer before the next.')
+  }
   return (
-    <div className="doc-view crs-page crs-immersive">
+    <div className={`doc-view crs-page crs-immersive${focus ? ' crs-focus' : ''}`}>
       <main className="crs-main" ref={mainRef}>
+        <ViewerBar
+          back={!!page}
+          forward={hist.at < hist.pages.length - 1}
+          onBack={() => setHist((h) => goBack(h))}
+          onForward={() => setHist((h) => goForward(h))}
+          url={page ? targetUrl(page, courseRepos()) : lessonUrl}
+          label={page ? targetTitle(page) : (content?.title ?? c.title)}
+        >
+          {(d.imported && (content || page)) && (
+            <span className="lv-tutor" role="group" aria-label="Ask the tutor">
+              <button className="tool-btn" onClick={() => tutor('ask')} title="Ask the tutor about what’s on screen (it sees the section, the video’s moment, what you selected)">
+                <Icon name="tutor" size={13} /> Ask about this
+              </button>
+              <button className="tool-btn" onClick={() => tutor('explain')}>
+                Explain this part
+              </button>
+              <button className="tool-btn" onClick={() => tutor('quiz')}>
+                Quiz me on this
+              </button>
+            </span>
+          )}
+          <button className={`icon-btn small${focus ? ' on' : ''}`} onClick={() => setFocus((f) => !f)} title={focus ? 'Show the outline' : 'Focus: hide the outline'} aria-pressed={focus}>
+            <Icon name="width" size={13} />
+          </button>
+        </ViewerBar>
+        {page ? (
+          <div className="crs-article wide crs-linked">
+            <LinkPage target={page} />
+          </div>
+        ) : (
         <div className={`crs-article${videos.length ? ' wide' : ''}`}>
           <button className="crs-back" onClick={() => app.setView({ kind: 'courses' })}>
             <Icon name="back" size={14} /> Courses
@@ -363,8 +480,11 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
                   </div>
                 </header>
                 <div className={videos.length ? 'crs-with-video' : undefined}>
-                  {videos.length > 0 && <CourseVideos ids={videos} course={c.title} />}
-                  <article className={`prose crs-prose${here.l.kind === 'notebook' ? ' notebook' : ''}`} dangerouslySetInnerHTML={{ __html: html }} onClick={(e) => void codeBlockClick(e.target, { cumulative: here.l.kind === 'notebook' })} />
+                  {videos.length > 0 && <CourseVideos ids={videos} course={c.title} onWatched={(v, f) => void window.tide.courses.track(id, here.l.id, { video: { id: v, watched: f } }).catch(() => {})} />}
+                  <article className={`prose crs-prose${here.l.kind === 'notebook' ? ' notebook' : ''}`} dangerouslySetInnerHTML={{ __html: html }} onClick={(e) => {
+                      void codeBlockClick(e.target, { cumulative: here.l.kind === 'notebook' })
+                      if ((e.target as Element).closest?.('.run-code')) void window.tide.courses.track(id, here.l.id, { ran: true }).catch(() => {})
+                    }} ref={proseRef} data-link-course={id} data-link-path={here.l.path} data-link-root />
                 </div>
                 <nav className="crs-pager">
                   {at > 0 ? (
@@ -408,6 +528,7 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
             </>
           )}
         </div>
+        )}
       </main>
       <aside className="crs-toc" aria-label="Course outline">
         <div className="crs-toc-head">
@@ -622,7 +743,7 @@ export function videosIn(markdown: string): string[] {
 }
 
 /** A course lesson's videos beside its text: one player, a tab for each video; their transcripts are fetched and indexed for lessons to use */
-function CourseVideos({ ids, course }: { ids: string[]; course: string }) {
+function CourseVideos({ ids, course, onWatched }: { ids: string[]; course: string; onWatched?: (id: string, fraction: number) => void }) {
   const [at, setAt] = useState(0)
   useEffect(() => setAt(0), [ids.join()])
   const id = ids[Math.min(at, ids.length - 1)]
@@ -641,7 +762,7 @@ function CourseVideos({ ids, course }: { ids: string[]; course: string }) {
           ))}
         </div>
       )}
-      <VideoPlayer key={id} source={{ kind: 'youtube', id, course, fetch: true }} noCinema />
+      <VideoPlayer key={id} source={{ kind: 'youtube', id, course, fetch: true }} noCinema onWatched={(f) => onWatched?.(id, f)} />
     </aside>
   )
 }

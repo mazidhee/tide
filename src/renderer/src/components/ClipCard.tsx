@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { formatRange, type Clip } from '@shared/video'
 import { VideoPlayer } from './VideoPlayer'
 
-type Checked = { ok: true; clip: Clip; title?: string; channel?: string } | { ok: false; why: string }
+type Checked = { ok: true; clip: Clip; title?: string; channel?: string; course?: string } | { ok: false; why: string }
 
 export function ClipCard({ clip, kicker, why, onDone }: { clip: Clip; kicker?: string; why?: string; onDone?: () => void }) {
   const [checked, setChecked] = useState<Checked | null>(null)
@@ -15,7 +15,7 @@ export function ClipCard({ clip, kicker, why, onDone }: { clip: Clip; kicker?: s
     let live = true
     window.tide.videos
       .check(clip)
-      .then((r) => live && setChecked(r.ok ? { ok: true, clip: r.clip, title: r.title, channel: r.channel } : { ok: false, why: r.why }))
+      .then((r) => live && setChecked(r.ok ? { ok: true, clip: r.clip, title: r.title, channel: r.channel, course: r.course } : { ok: false, why: r.why }))
       .catch(() => live && setChecked({ ok: false, why: 'It couldn’t be checked.' }))
     return () => {
       live = false
@@ -29,6 +29,7 @@ export function ClipCard({ clip, kicker, why, onDone }: { clip: Clip; kicker?: s
       <header className="vclip-head">
         <span className="vclip-kicker">
           {kicker ?? 'Watch'} {formatRange(c.start, c.end)}
+          {checked.course && <span className="vclip-course"> · {checked.course}</span>}
         </span>
         {checked.title && (
           <span className="vclip-title">

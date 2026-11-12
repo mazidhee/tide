@@ -1,7 +1,7 @@
 import { readingHtml } from './reading'
 import { explainerForUrl, type Explainer } from '@shared/explainers'
 import { normalizeMath } from '@shared/modelText'
-import { LOCAL_VIDEO, linkTime, youtubeIdOf } from '@shared/video'
+import { LOCAL_VIDEO, linkTime, parseTime, youtubeIdOf } from '@shared/video'
 import MarkdownIt from 'markdown-it'
 import type StateInline from 'markdown-it/lib/rules_inline/state_inline.mjs'
 import type StateBlock from 'markdown-it/lib/rules_block/state_block.mjs'
@@ -526,7 +526,29 @@ export function splitFrontmatter(raw: string): Frontmatter {
 // embeds are resolved with it.
 const rendered = new WeakMap<RenderEnv['filesByName'], ReturnType<typeof lru<string>>>()
 
+/**
+ * A lesson's tags for what it brings in (shared/related, shared/video) as placeholders that
+ * lib/lessonEmbeds turns into cards: <reading>, <suggest-course>, and a <clip> outside a lesson
+ * (a lesson's own clips are blocks of its reply). One still being written is hidden until it ends.
+ */
+export function lessonTags(body: string): string {
+  if (!/<(reading|suggest-course|clip)\b/i.test(body)) return body
+  const a = (attrs: string, n: string) => attrs.match(new RegExp(`\\b${n}\\s*=\\s*["']([^"']*)["']`, 'i'))?.[1] ?? ''
+  const q = (s: string) => escapeHtml(s.trim())
+  return body
+    .replace(/<reading\b([^>]*?)(?:\/>|>([\s\S]*?)<\/reading>)/gi, (_, at: string, why = '') => `\n\n<div class="rel-host" data-course="${q(a(at, 'course'))}" data-path="${q(a(at, 'path'))}" data-heading="${q(a(at, 'heading'))}" data-why="${q(why)}"></div>\n\n`)
+    .replace(/<suggest-course\b([^>]*?)(?:\/>|>([\s\S]*?)<\/suggest-course>)/gi, (_, at: string, why = '') => `\n\n<div class="sug-host" data-id="${q(a(at, 'id'))}" data-why="${q(why)}"></div>\n\n`)
+    .replace(/<clip\b([^>]*?)(?:\/>|>([\s\S]*?)<\/clip>)/gi, (all, at: string, why = '') => {
+      const id = youtubeIdOf(a(at, 'video')) ?? (/^[\w-]{11}$/.test(a(at, 'video')) ? a(at, 'video') : null)
+      const start = parseTime(a(at, 'start'))
+      const end = parseTime(a(at, 'end'))
+      return id && start != null && end != null ? `\n\n<div class="clip-host" data-video="${id}" data-start="${start}" data-end="${end}" data-why="${q(why)}"></div>\n\n` : all
+    })
+    .replace(/<(reading|suggest-course|clip)\b(?![\s\S]*<\/\1>)[^>]*$/i, '')
+}
+
 export function renderMarkdown(body: string, env: RenderEnv): string {
+  body = lessonTags(body)
   // A whole long note is rendered once by its view (and kept by it): not worth holding here too
   if (body.length > 20_000) return sanitize(instance.render(normalizeMath(body), env))
   let cache = rendered.get(env.filesByName)

@@ -41,6 +41,9 @@ export function setLessonInfo(lesson: string | undefined, info: LessonInfo) {
   lessons.set(lesson, { ...info, failures: 0, ...(known && lessons.get(lesson)?.topic === info.topic ? { known } : {}) })
 }
 
+/** What Tide knows of a lesson's turn (main/tideMcpTools reads it to keep private lessons private) */
+export const lessonInfo = (lesson: string | undefined): LessonInfo | undefined => (lesson ? lessons.get(lesson) : undefined)
+
 interface Ready {
   problem: BankProblem
   lesson: string

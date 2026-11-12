@@ -38,6 +38,23 @@ export function deactivate(p: PlayerHandle) {
   if (current === p) current = null
 }
 
+/** Seeks the open player (or the one for `video`, else the first on the page) to `t` and plays; false when there is none */
+export function seekPlayer(t: number, video?: string): boolean {
+  const all = [...players]
+  const p = (video ? all.find((x) => x.key === video) : null) ?? current ?? all[0]
+  if (!p) return false
+  p.playAt(t)
+  const el = p.el()
+  if (el) {
+    const r = el.getBoundingClientRect()
+    if (r.bottom < 60 || r.top > window.innerHeight - 60) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }
+  return true
+}
+
+/** The player that's playing now, if any */
+export const currentPlayer = () => current
+
 /** How many players have an iframe or a video open (for tests and the memory check) */
 export const openPlayers = () => (current ? 1 : 0)
 

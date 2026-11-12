@@ -14,6 +14,7 @@ import { folderOf, scopeTopic, useApp } from './state'
 import { Sidebar } from './components/Sidebar'
 import { NoteView } from './components/NoteView'
 import { ChatPanel } from './components/ChatPanel'
+import { LinkSheet } from './components/LinkSheet'
 import { Home } from './components/Home'
 import { Library } from './components/Library'
 import { StudyView, isDue } from './components/Study'
@@ -450,6 +451,7 @@ export default function App() {
         <ErrorBoundary resetKey={JSON.stringify(view)}>
           <Suspense fallback={<div className="view-loading" aria-busy="true" />}>{main}</Suspense>
         </ErrorBoundary>
+        {!focusId && <LinkSheet />}
         {!settings.chatOpen && !ownTutor && !focusId && (
           <button className="chat-fab" onClick={() => app.updateSettings({ chatOpen: true })} title="Open tutor (⌘J)">
             <Icon name="sparkle" size={16} />
