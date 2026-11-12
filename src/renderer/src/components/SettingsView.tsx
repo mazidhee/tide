@@ -1,4 +1,7 @@
 import { SIDEBAR_ITEMS } from '@shared/sidebar'
+import { breakSettings, type BreakSettings, type Strictness } from '@shared/breaks'
+import { rhythmLine } from '@shared/breakPlanner'
+import { rhythmNow } from '../lib/breaks'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { DEFAULT_VOICE, resetVoiceStatus, Speaker } from '../lib/voice'
 import { CHARACTERS, characterById } from '@shared/characters'
@@ -476,21 +479,40 @@ function StudySection() {
         <Row label="Timers" hint="The Focus timer and the timer buttons on notes and practice.">
           <Toggle label="Timers" on={settings.studyTimers !== false} onChange={(on) => app.updateSettings({ studyTimers: on })} />
         </Row>
-        <Row label="Breaks">
-          <Select
-            label="Breaks"
-            value={settings.pomodoro ?? 'auto'}
-            onChange={(v) => app.updateSettings({ pomodoro: v })}
-            options={[
-              { value: 'auto', label: 'Paced by the tutor' },
-              { value: '25', label: 'Every 25 minutes, 5 off' },
-              { value: '50', label: 'Every 50 minutes, 10 off' },
-              { value: 'off', label: 'No reminders' }
-            ]}
-          />
-        </Row>
       </Group>
+      <BreaksGroup />
     </>
+  )
+}
+
+/** Tea breaks: when (planned from the research and your own signals), how long, and how strictly */
+function BreaksGroup() {
+  const app = useApp()
+  const b = breakSettings(app.settings.breaks, app.settings.pomodoro)
+  const put = (patch: Partial<BreakSettings>) => app.updateSettings({ breaks: { ...b, ...patch } })
+  const rhythm = rhythmLine(rhythmNow())
+  return (
+    <Group
+      title="Breaks"
+      note={
+        <>
+          The Professor plans each tea break from what research supports (attention fades over 25 to 50 minutes of hard work; a short, quiet rest right after learning helps it settle) and from your own signals: answers slowing or slipping against your usual, more hints, drifting. It waits for the end of a question, ideally just after a step, and never lets you go past 90 minutes. {rhythm || 'It learns your rhythm as you study.'}
+        </>
+      }
+    >
+      <Row label="Tea breaks">
+        <Toggle label="Tea breaks" on={b.on} onChange={(on) => put({ on })} />
+      </Row>
+      <Row label="Study for" hint="Auto: when your signals and the research say, between about 25 and 50 minutes to start, then your own rhythm.">
+        <Select label="Study for" value={String(b.studyMinutes)} onChange={(v) => put({ studyMinutes: v === 'auto' ? 'auto' : Number(v) })} options={[{ value: 'auto', label: 'Auto (learns your rhythm)' }, ...[25, 45, 60, 75, 90].map((m) => ({ value: String(m), label: `${m} minutes` }))]} />
+      </Row>
+      <Row label="Break length" hint="Auto: about 5 minutes after a short block, 10 to 15 after a long or tiring one.">
+        <Select label="Break length" value={String(b.breakMinutes)} onChange={(v) => put({ breakMinutes: v === 'auto' ? 'auto' : (Number(v) as 5 | 10 | 15) })} options={[{ value: 'auto', label: 'Auto' }, ...[5, 10, 15].map((m) => ({ value: String(m), label: `${m} minutes` }))]} />
+      </Row>
+      <Row label="Strictness" hint={b.strictness === 'gentle' ? 'Offers the break; you can keep going. At 90 minutes the break screen comes, with a skip.' : b.strictness === 'firm' ? 'The break screen comes at the planned moment. "I need Tide right now" gives 10 minutes once a block, for a reason.' : 'The break screen comes at the planned moment. 10 more minutes only once a day.'}>
+        <Select label="Strictness" value={b.strictness} onChange={(v) => put({ strictness: v as Strictness })} options={[{ value: 'gentle', label: 'Gentle' }, { value: 'firm', label: 'Firm' }, { value: 'strict', label: 'Strict' }]} />
+      </Row>
+    </Group>
   )
 }
 

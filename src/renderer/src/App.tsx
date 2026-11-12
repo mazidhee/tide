@@ -1,7 +1,9 @@
 import { WrapUpView } from './components/WrapUpView'
 import { useStudying } from './lib/studying'
 import { useAutoTrack, type StudyContext } from './lib/autotrack'
-import { BreakCard } from './components/BreakCard'
+import { BreakScreen } from './components/BreakScreen'
+import { useBreaks } from './lib/breaks'
+import { breakSettings } from '@shared/breaks'
 import { startFocus } from './lib/focus'
 import { openAgendaItem } from './lib/agenda'
 import { todayItems } from '@shared/coach'
@@ -242,7 +244,10 @@ export default function App() {
               : view.kind === 'chat'
                 ? { label: 'Chat with the tutor', kind: 'chat' }
                 : null
-  useAutoTrack(studyContext, settings.pomodoro ?? 'auto')
+  useAutoTrack(studyContext)
+  // Breaks, planned from the research and your own signals, kept as strictly as Settings says (lib/breaks)
+  const breaks = useMemo(() => breakSettings(settings.breaks, settings.pomodoro), [settings.breaks, settings.pomodoro])
+  useBreaks(studyContext, breaks)
 
   // A focus window: one lesson, exam or drill and nothing else; it closes when that ends
   const focusId = useMemo(() => window.location.hash.match(/focus=(\w+)/)?.[1] ?? null, [])
@@ -472,7 +477,7 @@ export default function App() {
       {dialog === 'save-link' && <SaveLinkDialog onClose={() => app.setDialog(null)} />}
       {dragging && <div className="drop-overlay">Drop to add to your library</div>}
 
-      <BreakCard />
+      <BreakScreen settings={breaks} />
       <div className="toasts" aria-live="polite">
         {app.toasts.map((t) => (
           <div key={t.id} className={`toast${t.tone === 'error' ? ' error' : ''}`}>

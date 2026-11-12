@@ -1,0 +1,401 @@
+/* The tea break (components/BreakScreen.tsx) and the warm-up before a lesson (components/WarmUp.tsx).
+   Theme tokens only, so all seven themes and both designs carry it. */
+
+/* ---------- Heads-up and the gentle offer ---------- */
+
+.tea-toast {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 60;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  width: min(360px, calc(100vw - 44px));
+  padding: 14px 12px 14px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--bg-raised);
+  color: var(--ink);
+  box-shadow: var(--pop-shadow);
+  animation: tea-rise 0.5s var(--ease) both;
+}
+
+.tea-toast strong {
+  display: block;
+  margin-bottom: 3px;
+  font-size: var(--text-md);
+}
+
+.tea-toast span {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.tea-toast-x {
+  all: unset;
+  align-self: start;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--ink-muted);
+  font-size: 17px;
+  line-height: 22px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.tea-toast-x:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.tea-toast.offer {
+  grid-template-columns: auto 1fr;
+}
+
+.tea-toast-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+@keyframes tea-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* ---------- The break ---------- */
+
+.tea-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 32px 20px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(14px) saturate(0.7);
+  -webkit-app-region: no-drag;
+  color: var(--ink);
+  animation: tea-fade 0.9s ease both;
+}
+
+@keyframes tea-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.tea-card {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  max-width: 540px;
+  text-align: center;
+}
+
+.tea-scene {
+  display: grid;
+  place-items: center;
+  width: 250px;
+  height: 250px;
+  margin-bottom: 8px;
+  border-radius: 50%;
+  /* A quiet disc behind him, so the white cup reads on light themes too */
+  background: color-mix(in srgb, var(--ink) 11%, var(--bg));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 5%, transparent);
+}
+
+.tea-scene .professor {
+  margin-top: 22px;
+}
+
+.tea-card h1 {
+  margin: 8px 0 0;
+  font-family: var(--font-serif);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.tea-why {
+  margin: 4px 0 10px;
+  color: var(--ink-soft);
+  font-size: 15.5px;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.tea-ring {
+  position: relative;
+  width: 132px;
+  height: 132px;
+  margin: 6px 0 4px;
+}
+
+.tea-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.tea-ring circle {
+  fill: none;
+  stroke-width: 5;
+}
+
+.tea-ring .track {
+  stroke: var(--line-strong);
+}
+
+.tea-ring .fill {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear;
+}
+
+.tea-ring span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.tea-tip {
+  min-height: 28px;
+  margin: 10px 0 0;
+  font-family: var(--font-serif);
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--ink);
+  text-wrap: balance;
+  animation: tea-fade 0.6s ease both;
+}
+
+.tea-kept {
+  margin: 18px 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.tea-hatch {
+  all: unset;
+  margin-top: 16px;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.tea-hatch:hover {
+  color: var(--ink-soft);
+}
+
+.tea-hatch:focus-visible,
+.tea-back:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.tea-ask {
+  display: grid;
+  gap: 10px;
+  width: min(420px, 80vw);
+  margin-top: 16px;
+  text-align: left;
+  animation: tea-rise 0.35s var(--ease) both;
+}
+
+.tea-ask label {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+
+.tea-ask textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14.5px;
+  resize: none;
+}
+
+.tea-ask textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.tea-ask-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.tea-ask button[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.tea-back {
+  margin-top: 18px;
+}
+
+/* ---------- The warm-up before a lesson ---------- */
+
+.warmup {
+  margin: 0 0 22px;
+  padding: 16px 18px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  background: var(--bg-raised);
+  animation: tea-rise 0.35s var(--ease) both;
+}
+
+.warmup-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.warmup-head strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.warmup-dots {
+  display: flex;
+  gap: 5px;
+  margin-left: auto;
+}
+
+.warmup-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+.warmup-dots i.now {
+  background: var(--accent);
+}
+
+.warmup-dots i.held {
+  background: color-mix(in srgb, var(--accent) 55%, var(--bg));
+}
+
+.warmup-dots i.faded {
+  background: var(--warn);
+}
+
+.warmup-skip {
+  all: unset;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+
+.warmup-skip:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.warmup-from {
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  letter-spacing: 0.01em;
+}
+
+.warmup-q {
+  margin: 4px 0 0;
+  font-family: var(--font-read);
+  font-size: calc(var(--read-size) * 1.02);
+  font-weight: 560;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.warmup-a {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-s);
+  background: var(--bg-inset);
+  color: var(--ink-soft);
+  font-size: var(--text-md);
+  line-height: 1.5;
+  animation: tea-fade 0.25s ease both;
+}
+
+.warmup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.warmup-actions kbd {
+  margin-left: 6px;
+  color: var(--ink-muted);
+  font-family: var(--font-code);
+  font-size: var(--text-2xs);
+}
+
+.warmup-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 18px;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.warmup-done strong {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tea-toast,
+  .tea-veil,
+  .tea-tip,
+  .tea-ask,
+  .warmup,
+  .warmup-a {
+    animation: none;
+  }
+  .tea-ring .fill {
+    transition: none;
+  }
+}
+
+.warmup-q p,
+.warmup-a p {
+  margin: 0;
+}
+
+.warmup-q p + p,
+.warmup-a p + p {
+  margin-top: 6px;
+}

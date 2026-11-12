@@ -51,6 +51,20 @@ export const EXTRA_TOOLS: McpTool[] = [
     }
   },
   {
+    name: 'earlier_concepts',
+    description: "What the learner already studied that a topic builds on: related earlier concepts (by prerequisite, name and what their past lessons covered), each with how solid it is now (FSRS), when it was first studied, what its lesson covered and questions kept on it. Use it mid-lesson when you want to tie a new idea to something they learnt before, or to check whether an idea you are about to rely on has faded.",
+    inputSchema: obj({ topic: { type: 'string', description: 'The idea you are teaching now, e.g. "How CPUs store integers"' } }, ['topic']),
+    async run(args, ctx) {
+      const topic = String(args.topic ?? '').trim()
+      if (!topic) return 'Give a topic.'
+      const id = ctx.step({ kind: 'read_note', label: `Looking at what you learnt before that ${topic} builds on`, status: 'running', depth: 0 })
+      const { earlierConcepts } = await import('./warmup')
+      const text = await earlierConcepts(topic).catch(() => '')
+      ctx.updateStep(id, { status: 'done' })
+      return text || 'Nothing the learner studied before looks related.'
+    }
+  },
+  {
     name: 'record_answer',
     description: "Record a marked answer in What you know, Tide's map of what the learner knows, when you marked it outside a Tide lesson (in a lesson, the <grade> tag records it: don't call this there). One call per answer.",
     inputSchema: obj(

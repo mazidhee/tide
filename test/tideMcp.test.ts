@@ -63,7 +63,7 @@ describe("Tide's MCP server", () => {
   it("serves Tide's own tools, with their schemas", async () => {
     const c = await connect()
     const { tools } = await c.listTools()
-    expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(['run_code', 'search_notes', 'learner_profile', 'past_lessons', 'record_answer']))
+    expect(tools.map((t) => t.name)).toEqual(expect.arrayContaining(['run_code', 'search_notes', 'learner_profile', 'past_lessons', 'earlier_concepts', 'record_answer']))
     expect(tools.find((t) => t.name === 'run_code')?.inputSchema.required).toEqual(['language', 'code'])
     await c.close()
   })

@@ -1,0 +1,109 @@
+import { useEffect, useRef, useState } from 'react'
+import type { Verdict } from '@shared/types'
+import { WARMUP_MAX_MS, warmupTally, type WarmupResult, type WarmupSet } from '@shared/warmup'
+import { renderMarkdown } from '../lib/markdown'
+
+const ENV = { notePath: '', filesByName: new Map<string, string>() }
+const md = (s: string) => renderMarkdown(s, ENV)
+
+const GRADES: { verdict: Verdict; label: string; key: string }[] = [
+  { verdict: 'wrong', label: 'Forgot', key: '1' },
+  { verdict: 'partial', label: 'Shaky', key: '2' },
+  { verdict: 'correct', label: 'Got it', key: '3' }
+]
+
+/**
+ * The warm-up before a lesson (shared/warmup): a few quick cards on what it builds on, each
+ * recalled, revealed and graded in a few seconds (graded like any review, so FSRS hears it),
+ * then the lesson begins knowing what held and what faded. One button skips it; it never runs
+ * past two minutes.
+ */
+export function WarmUp({ set, onDone }: { set: WarmupSet; onDone(results: WarmupResult[], skipped: boolean): void }) {
+  const [i, setI] = useState(0)
+  const [shown, setShown] = useState(false)
+  const [results, setResults] = useState<WarmupResult[]>([])
+  const [done, setDone] = useState<null | { skipped: boolean }>(null)
+  const started = useRef(Date.now())
+  const card = set.cards[i]
+
+  const finish = (r: WarmupResult[], skipped: boolean) => {
+    setDone({ skipped })
+    onDone(r, skipped)
+  }
+  const grade = (verdict: Verdict) => {
+    if (!card || done) return
+    window.tide.warmup.grade(card, verdict).catch(() => {})
+    const r = [...results, { card, verdict }]
+    setResults(r)
+    setShown(false)
+    if (i + 1 >= set.cards.length || Date.now() - started.current > WARMUP_MAX_MS) finish(r, false)
+    else setI(i + 1)
+  }
+
+  // Space shows the answer, 1 2 3 grade it, when you're not typing somewhere
+  const live = useRef({ shown, grade, done })
+  live.current = { shown, grade, done }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (live.current.done || e.metaKey || e.ctrlKey || e.altKey || (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable))) return
+      if (!live.current.shown && (e.key === ' ' || e.key === 'Enter')) {
+        e.preventDefault()
+        setShown(true)
+      } else if (live.current.shown) {
+        const g = GRADES.find((x) => x.key === e.key)
+        if (g) (e.preventDefault(), live.current.grade(g.verdict))
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  if (done) {
+    const tally = warmupTally(results)
+    return (
+      <p className="warmup-done" role="status">
+        <strong>Warm-up</strong>
+        <span>{done.skipped || !results.length ? 'skipped. The tutor still knows what this builds on.' : `${tally}. The tutor picks up from here.`}</span>
+      </p>
+    )
+  }
+  if (!card) return null
+
+  return (
+    <section className="warmup" aria-label="Warm-up">
+      <div className="warmup-head">
+        <strong>Warm-up</strong>
+        <span>
+          {set.cards.length} quick card{set.cards.length === 1 ? '' : 's'} on what this builds on
+        </span>
+        <span className="warmup-dots" aria-label={`Card ${i + 1} of ${set.cards.length}`}>
+          {set.cards.map((_, k) => (
+            <i key={k} className={k === i ? 'now' : k < results.length ? (results[k].verdict === 'correct' ? 'held' : 'faded') : ''} />
+          ))}
+        </span>
+        <button className="warmup-skip" onClick={() => finish(results, true)}>
+          Skip
+        </button>
+      </div>
+      <div className="warmup-from">{card.from}</div>
+      <div className="warmup-q" dangerouslySetInnerHTML={{ __html: md(card.question) }} />
+      {shown && card.answer && <div className="warmup-a" dangerouslySetInnerHTML={{ __html: md(card.answer) }} />}
+      <div className="warmup-actions">
+        {!shown ? (
+          <button className="btn primary small" autoFocus onClick={() => setShown(true)}>
+            {card.answer ? 'Show answer' : 'I’ve thought of it'}
+            <kbd>Space</kbd>
+          </button>
+        ) : (
+          GRADES.map((g) => (
+            <button key={g.verdict} className={`btn small${g.verdict === 'correct' ? ' primary' : ''}`} onClick={() => grade(g.verdict)}>
+              {g.label}
+              <kbd>{g.key}</kbd>
+            </button>
+          ))
+        )}
+      </div>
+    </section>
+  )
+}
