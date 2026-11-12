@@ -227,7 +227,7 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
   }
 
   // Study (Learn, Practice, Review, Your week) folds under one row; open while you're in it
-  const studyActive = ['learn', 'session', 'quiz', 'exam', 'practice', 'lab', 'code', 'drill', 'design', 'study', 'coach', 'wrapup', 'weekly', 'lessons'].includes(view.kind)
+  const studyActive = ['learn', 'session', 'quiz', 'exam', 'practice', 'lab', 'code', 'drill', 'maths', 'design', 'study', 'coach', 'wrapup', 'weekly', 'lessons'].includes(view.kind)
   const [studyOpen, setStudyOpenState] = useState(() => localStorage.getItem('tide.nav.study') !== 'closed')
   const setStudyOpen = (open: boolean) => {
     setStudyOpenState(open)
@@ -326,7 +326,7 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
             <div className="nav-group-items">
               {shown('learn') && navItem('tutor', 'Learn', view.kind === 'learn' || view.kind === 'session' || view.kind === 'quiz' || view.kind === 'exam', () => app.setView({ kind: 'learn' }))}
               {shown('courses') && navItem('course', 'Courses', view.kind === 'courses', () => app.setView({ kind: 'courses' }))}
-              {shown('practice') && navItem('terminal', 'Practice', view.kind === 'practice' || view.kind === 'lab' || view.kind === 'code' || view.kind === 'drill' || view.kind === 'design', () => app.setView({ kind: 'practice' }))}
+              {shown('practice') && navItem('terminal', 'Practice', view.kind === 'practice' || view.kind === 'lab' || view.kind === 'code' || view.kind === 'drill' || view.kind === 'maths' || view.kind === 'design', () => app.setView({ kind: 'practice' }))}
               {shown('review') && navItem('cards', 'Review', view.kind === 'study', () => app.setView({ kind: 'study', scope: { kind: 'vault' } }), dueCount)}
               {navItem('list', 'Your week', view.kind === 'coach' || view.kind === 'wrapup' || view.kind === 'weekly', () => app.setView({ kind: 'coach' }))}
               {navItem('timer', 'Past lessons', view.kind === 'lessons', () => app.setView({ kind: 'lessons' }))}

@@ -1,3 +1,4 @@
+import { MathsHomeCard } from '../MentalMaths'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { ChatScope, Mastery, NoteMeta } from '@shared/types'
 import { lateText, type Forecast } from '@shared/forecast'
@@ -282,6 +283,8 @@ export function HomeTide(p: HomeTideProps) {
               </span>
             </div>
           </section>
+
+          <MathsHomeCard variant="tide" />
 
           <section>
             <div className="td-sec-head first">

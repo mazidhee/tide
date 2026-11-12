@@ -711,6 +711,14 @@ export interface TideApi {
     recordAttempt(attempt: Omit<Attempt, 'at'>): Promise<void>
     mastery(): Promise<Record<string, Mastery>>
   }
+  /** Daily mental maths (shared/mentalMaths): the log and reminder, kept in the vault under .tide/ */
+  maths: {
+    state(): Promise<import('./mentalMaths').MathsState>
+    log(s: Pick<import('./mentalMaths').MathsSession, 'focus' | 'answers'>): Promise<import('./mentalMaths').MathsSession>
+    setReminder(r: import('./mentalMaths').Reminder): Promise<import('./mentalMaths').Reminder>
+    /** Why a missed answer is what it is: Claude's quick model when it teaches, else the fixed steps */
+    explain(a: import('./mentalMaths').MathsAnswer): Promise<{ text: string; by: 'claude' | 'tide' }>
+  }
   practice: {
     /** A coding challenge on a topic, note, notebook or book chapter */
     addChallenge(input: { title: string; source: ChatScope; difficulty?: PracticeProblem['difficulty'] }): Promise<PracticeProblem>

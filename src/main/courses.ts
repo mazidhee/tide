@@ -65,7 +65,7 @@ export interface Imported {
 }
 
 export interface CourseCard extends CatalogueCourse {
-  imported?: { importedAt: number; updatedAt: number; lessons: number; done: number; next?: { id: string; title: string; module: string } }
+  imported?: { importedAt: number; updatedAt: number; lessons: number; done: number; /** When a lesson of it was last studied */ lastStudied?: number; next?: { id: string; title: string; module: string } }
   /** Found by the weekly check (main/courseFresh): new this week, not imported */
   suggested?: { at: number; why: string; score: number; by: 'claude' | 'score' }
   /** Imported, and its source has changed since: one click brings it up to date */
@@ -473,6 +473,9 @@ export async function noteCourseLesson(record: LessonRecord): Promise<void> {
 
 // ---------- What the window asks for ----------
 
+/** When you last studied any lesson of a course */
+const lastStudied = (p: CourseProgress | undefined) => Math.max(0, ...Object.values(p ?? {}).map((x) => x.updated || x.started || 0))
+
 export async function listCourses(): Promise<CourseCard[]> {
   const progress = await allProgress()
   const fresh = await import('./courseFresh').then((f) => f.freshState()).catch(() => null)
@@ -491,7 +494,7 @@ export async function listCourses(): Promise<CourseCard[]> {
     const latest = fresh?.updates[c.id]
     out.push({
       ...c,
-      imported: { importedAt: meta.importedAt, updatedAt: meta.updatedAt, lessons: meta.outline.lessons, done: courseDone(meta.outline, p), ...(next ? { next: { id: next.lesson.id, title: next.lesson.title, module: next.module.title } } : {}) },
+      imported: { importedAt: meta.importedAt, updatedAt: meta.updatedAt, lessons: meta.outline.lessons, done: courseDone(meta.outline, p), ...(lastStudied(p) ? { lastStudied: lastStudied(p) } : {}), ...(next ? { next: { id: next.lesson.id, title: next.lesson.title, module: next.module.title } } : {}) },
       ...(latest && latest !== (meta.version ?? meta.commit) ? { updateAvailable: true } : {})
     })
   }

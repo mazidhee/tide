@@ -1,3 +1,4 @@
+import { MathsHomeCard } from './MentalMaths'
 import { countsFor, forecastGoal, hoursPerTopic, lateText, type Forecast } from '@shared/forecast'
 import { DayTimeline } from './DayTimeline'
 import { HomeBanner } from './HomeBanner'
@@ -338,6 +339,8 @@ export function Home(_: { dueCount: number; cardCount: number }) {
                 </div>
               </section>
             )}
+
+            <MathsHomeCard variant="classic" />
 
             <section className="rail-card">
               <div className="rail-head">
