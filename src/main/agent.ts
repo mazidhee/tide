@@ -7,7 +7,7 @@ import { isMlxVlm } from './modelServer'
 import { thingsIntent } from '@shared/learnIntent'
 import { graphCached, relatedNotes } from './learn'
 import { readTerminal, runInTerminal, terminalInfo } from './terminal'
-import { inUse } from './modelIdle'
+import { claudeState, ensureGemmaServer, inUse, markGemmaUsed, noteGemmaDemand } from './modelIdle'
 import { afterBackground, asInteractive, inBackground } from './modelQueue'
 import { memoize } from './memo'
 import { getCoach, getWeek, profilePrompt } from './coach'
@@ -663,6 +663,8 @@ async function streamTurnOnce(
   outerSignal.addEventListener('abort', abort)
   const signal = controller.signal
   const read = turnReader()
+  // Gemma on demand: its server is started if it isn't running (main/modelIdle)
+  if (!target) await ensureGemmaServer().catch(() => {})
   const model = target ? target.model : await resolveModel()
   // A cloud model gets a plain OpenAI request: none of the local server's fields, but its real token counts back
   const payload = target
@@ -686,6 +688,8 @@ async function streamTurnOnce(
     writeFileSync(process.env.TIDE_DEBUG_AI, JSON.stringify(payload, null, 1))
   }
   if (target) noteSent(target.provider)
+  // Gemma's own use, for when it may be unloaded (main/modelIdle)
+  else markGemmaUsed()
   const startAt = performance.now()
   const timed = requestSent()
   const res = await fetch(target ? `${target.baseUrl}/chat/completions` : `${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
@@ -1563,6 +1567,14 @@ export async function prewarmLesson(req: Omit<ChatRequest, 'id'>): Promise<void>
   // When Claude will teach it, Claude Code is started ahead instead (no tokens spent): main/claudeEngine
   const { teacherFor } = await import('./teacher')
   if ((await teacherFor({ ...req, id: 'prewarm' }).catch(() => null))?.who === 'claude') return void (await import('./claudeEngine')).prewarmClaude(req).catch(() => {})
+  // A lesson Gemma will teach (a private notebook, Metabase, Claude unavailable): the reason is kept
+  // for Settings, the server started if it isn't, and warming it below loads Gemma ahead of the
+  // first reply (main/modelIdle)
+  const { isPrivateTurn } = await import('./teacher')
+  const metabase = req.messages.some((m) => typeof m.content === 'string' && /\bmetabase\b/i.test(m.content))
+  const claude = claudeState()
+  noteGemmaDemand(metabase ? 'metabase' : (await isPrivateTurn(req).catch(() => true)) ? 'private' : claude.main ? 'picked' : (claude.why ?? 'no-claude'))
+  await ensureGemmaServer().catch(() => {})
   if (!isMlxVlm()) return
   const key = JSON.stringify([req.messages, req.instructions, req.scope, req.voice, req.web])
   const at = warmed.get(key)

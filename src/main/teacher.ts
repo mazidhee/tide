@@ -70,3 +70,25 @@ export async function teacherFor(req: ChatRequest): Promise<Teacher> {
   const r = wantsClaude && !priv ? await claudeReady() : { installed, ready: false, why: undefined }
   return chooseTeacher({ engine: req.engine, notebook, setting, installed, ready: r.ready, notReady: r.why, private: priv })
 }
+
+/**
+ * Whether a job's text must stay on this Mac, for jobs without a note path to go by (the weekly
+ * coach, reading picks): anything about Metabase, or a private project named in it. Unsure counts
+ * as private.
+ */
+export async function privateText(text: string): Promise<'metabase' | 'private' | null> {
+  if (/\bmetabase\b/i.test(text)) return 'metabase'
+  try {
+    const { getNotebooks } = await import('./learn')
+    const lower = text.toLowerCase()
+    for (const nb of await getNotebooks()) {
+      if (!nb.project?.private) continue
+      const name = (nb.name || nb.path.split('/').pop() || '').toLowerCase().trim()
+      if (name && lower.includes(name)) return 'private'
+      if (lower.includes(nb.path.toLowerCase())) return 'private'
+    }
+    return null
+  } catch {
+    return 'private'
+  }
+}

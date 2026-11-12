@@ -19,7 +19,7 @@ import { createHash } from 'crypto'
 import type { AgentStep, ChatEvent, ChatMessage, ClaudeModel, ClaudeRole } from '@shared/types'
 import { claudeModel, claudeLabel, asksForDepth, rank } from '@shared/claude'
 import { notAnAttempt } from '@shared/lessonRepair'
-import { checkClaude, childEnv, claudeArgs, findClaude, mcpConfig, parseLine, unavailableReason, userLine, type ClaudeEvent, type ClaudeStatus, type ClaudeUsage } from './claudeCli'
+import { checkClaude, childEnv, claudeArgs, findClaude, mcpConfig, parseLine, unavailableReason, unavailableText, userLine, type ClaudeEvent, type ClaudeStatus, type ClaudeUsage } from './claudeCli'
 import { getSettings } from './settings'
 import type { TurnRequest, ToolContext } from './agent'
 
@@ -65,10 +65,21 @@ export const forgetLimit = () => (limitedUntil = 0)
 /** Installed without asking it anything (a file check), for routing decisions that can't wait */
 export const claudeInstalled = () => !!command()
 
+/** The Mac has a network connection (Electron's view; true when it can't say) */
+async function isOnline(): Promise<boolean> {
+  try {
+    const e = await import('electron')
+    return e.net?.isOnline?.() ?? true
+  } catch {
+    return true
+  }
+}
+
 export async function claudeReady(): Promise<{ installed: boolean; ready: boolean; why?: string }> {
   const s = await claudeStatus()
   if (!s.installed) return { installed: false, ready: false, why: 'not installed' }
   if (!s.loggedIn) return { installed: true, ready: false, why: s.error ?? 'not logged in: run claude in a terminal and log in' }
+  if (!(await isOnline())) return { installed: true, ready: false, why: 'offline: no connection to Claude' }
   if (limitedUntil > Date.now()) return { installed: true, ready: false, why: `at your plan’s limit until ${new Date(limitedUntil).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` }
   return { installed: true, ready: true }
 }
@@ -425,7 +436,7 @@ export async function claudeOnce(prompt: string, system: string, role: ClaudeRol
     child.stdout.on('data', (d) => (buf += String(d)))
     child.stderr.on('data', (d) => (err = (err + String(d)).slice(-1000)))
     child.on('error', (e) => reject(new ClaudeUnavailable(`Claude Code didn’t start: ${e.message}`)))
-    child.on('exit', () => (buf.trim() ? resolve(buf) : reject(unavailableReason(err) ? new ClaudeUnavailable(err.trim().split('\n').pop() ?? 'unavailable') : new Error(err.trim() || 'Claude gave no answer'))))
+    child.on('exit', () => (buf.trim() ? resolve(buf) : reject(unavailableReason(err) ? new ClaudeUnavailable(unavailableText(unavailableReason(err)!)) : new Error(err.trim() || 'Claude gave no answer'))))
     signal?.addEventListener('abort', () => child.kill('SIGTERM'), { once: true })
     child.stdin.end(prompt)
   })
@@ -435,7 +446,7 @@ export async function claudeOnce(prompt: string, system: string, role: ClaudeRol
   if (!r.ok) {
     const why = unavailableReason(r.error ?? '')
     if (why === 'limit') limitedUntil = Math.max(limitedUntil, Date.now() + 15 * 60_000)
-    throw why ? new ClaudeUnavailable(why === 'login' ? 'not logged in' : 'at your plan’s limit') : new Error(r.error ?? 'Claude stopped')
+    throw why ? new ClaudeUnavailable(unavailableText(why)) : new Error(r.error ?? 'Claude stopped')
   }
   return { text: r.text, usage: r.usage, ms: Date.now() - t0, model: r.model ?? model }
 }
@@ -481,12 +492,12 @@ export async function* claudeStream(prompt: string, system: string, role: Claude
   }
   await exited
   if (signal?.aborted) return
-  if (!result) throw unavailableReason(err) ? new ClaudeUnavailable(err.trim().split('\n').pop() ?? 'unavailable') : new Error(err.trim() || 'Claude gave no answer')
+  if (!result) throw unavailableReason(err) ? new ClaudeUnavailable(unavailableText(unavailableReason(err)!)) : new Error(err.trim() || 'Claude gave no answer')
   recordUse({ ...result.usage, at: Date.now(), model: result.model ?? model, role, ms: Date.now() - t0, firstTokenMs: first ? first - t0 : undefined })
   if (!result.ok) {
     const why = unavailableReason(result.error ?? '')
     if (why === 'limit') limitedUntil = Math.max(limitedUntil, Date.now() + 15 * 60_000)
-    throw why ? new ClaudeUnavailable(why === 'login' ? 'not logged in' : 'at your plan’s limit') : new Error(result.error ?? 'Claude stopped')
+    throw why ? new ClaudeUnavailable(unavailableText(why)) : new Error(result.error ?? 'Claude stopped')
   }
 }
 
@@ -512,8 +523,16 @@ export async function* draftWithClaude(system: string, user: string, role: Claud
     }
   } catch (e) {
     if (any || !(e instanceof ClaudeUnavailable)) throw e
+    await gemmaTakesOver(e)
     yield* fallback()
   }
+}
+
+/** Claude couldn't take a job: Gemma does, and Settings says why (main/modelIdle) */
+async function gemmaTakesOver(e: Error) {
+  const [{ noteGemmaDemand, refreshClaude }, { reasonFromWhy }] = await Promise.all([import('./modelIdle'), import('@shared/gemmaPolicy')])
+  noteGemmaDemand(reasonFromWhy(e.message))
+  void refreshClaude().catch(() => {})
 }
 
 /** A one-shot job on Claude's background model (Haiku) when Claude teaches and the job is not private; null to leave it to Gemma */
@@ -522,7 +541,7 @@ export async function backgroundOnClaude(prompt: string, system: string | undefi
   try {
     return (await claudeOnce(prompt, system ?? 'You are a careful assistant.', 'background', signal)).text
   } catch (e) {
-    if (e instanceof ClaudeUnavailable) return null
+    if (e instanceof ClaudeUnavailable) return (await gemmaTakesOver(e), null)
     throw e
   }
 }
@@ -549,7 +568,7 @@ export async function planOnClaude(prompt: string, system: string | undefined, s
   try {
     return (await claudeOnce(prompt, system ?? 'You are a careful expert.', 'hard', signal)).text
   } catch (e) {
-    if (e instanceof ClaudeUnavailable) return null
+    if (e instanceof ClaudeUnavailable) return (await gemmaTakesOver(e), null)
     throw e
   }
 }
@@ -697,7 +716,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
     if (!result.ok) {
       const why = unavailableReason(result.error ?? '')
       if (why === 'limit' && !limitedUntil) limitedUntil = Date.now() + 15 * 60_000
-      if (why && !reply) throw new ClaudeUnavailable(why === 'login' ? 'not logged in' : 'at your plan’s limit')
+      if (why && !reply) throw new ClaudeUnavailable(unavailableText(why))
       throw new Error(result.error ?? 'Claude stopped')
     }
     emit({ id: req.id, type: 'step', step: { id: engineStep, label: `Claude ${claudeLabel(model)} is teaching`, status: 'done', detail: `${thinking ? 'thought first, ' : ''}first words in ${(((first || Date.now()) - t0) / 1000).toFixed(1)} s` } as AgentStep })
@@ -709,7 +728,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
     if (!reply && !(e instanceof DOMException) && (e instanceof ClaudeUnavailable || unavailableReason(msg + proc.stderr))) {
       proc.stop()
       live.delete(key)
-      throw e instanceof ClaudeUnavailable ? e : new ClaudeUnavailable(unavailableReason(msg + proc.stderr) === 'login' ? 'not logged in' : 'at your plan’s limit')
+      throw e instanceof ClaudeUnavailable ? e : new ClaudeUnavailable(unavailableText(unavailableReason(msg + proc.stderr) ?? 'limit'))
     }
     throw e
   } finally {

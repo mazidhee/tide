@@ -84,7 +84,7 @@ export function DailyView() {
         item.kind === 'mistake' || item.kind === 'preview' || item.kind === 'warmup'
           ? fresh
             ? await window.tide.daily.grade({ kind: 'mistake', question: `${fresh.text}\n\n${fresh.ask}`, expected: fresh.solution, answer })
-            : await window.tide.daily.grade({ kind: 'mistake', question: (item as Extract<DailyItem, { kind: 'mistake' }>).mistake.question, expected: (item as Extract<DailyItem, { kind: 'mistake' }>).mistake.fix, answer })
+            : await window.tide.daily.grade({ kind: 'mistake', question: (item as Extract<DailyItem, { kind: 'mistake' }>).mistake.question, expected: (item as Extract<DailyItem, { kind: 'mistake' }>).mistake.fix, path: (item as Extract<DailyItem, { kind: 'mistake' }>).mistake.path, answer })
           : await window.tide.daily.grade({ kind: 'recall', question: `Explain ${item.title} from memory`, path: item.path, answer })
       setGrade(g)
       // Record it where it belongs: a mistake's retest streak, a note's explain-from-memory schedule (a first look counts for nothing)

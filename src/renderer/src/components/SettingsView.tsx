@@ -8,7 +8,7 @@ import { CHARACTERS, characterById } from '@shared/characters'
 import { CLOUD_TASKS, DEFAULT_CLOUD, PROVIDERS, modelPrice, providerInfo, type CloudSettings, type ModelPrice } from '@shared/providers'
 import { Professor } from './Professor'
 import { PillSegment } from './PromptBox'
-import type { AISettings, ClaudeModel, ClaudeRole, ClaudeStatusView, Settings, ThemeId } from '@shared/types'
+import type { AISettings, ClaudeModel, ClaudeRole, ClaudeStatusView, GemmaStatusView, Settings, ThemeId } from '@shared/types'
 import { CLAUDE_DEFAULTS, CLAUDE_MODELS, claudeLabel } from '@shared/claude'
 import type { ClaudeUseRecord } from '@shared/types'
 import { useApp } from '../state'
@@ -729,7 +729,7 @@ function LocalModel({ onStatus }: { onStatus(s: { ok: boolean; model: string }):
           <input className="set-input wide" value={ai.serverCommand ?? ''} placeholder="~/mlx-env312/bin/mlx_vlm.server --model mlx-community/gemma-4-12B-it-4bit --port 8080 --draft-block-size 3" onChange={(e) => setAi({ ...ai, serverCommand: e.target.value })} onBlur={() => saveAi({})} spellCheck={false} aria-label="Start command" />
         </Row>
       )}
-      <Row label="Free its memory when idle" hint={(ai.unloadAfterMinutes ?? 15) === 0 ? 'Gemma stays loaded: about 10 GB of this Mac’s memory, whether or not you’re studying.' : 'Gemma holds about 10 GB while loaded. Unloaded, the Mac gets it back; it reloads as you return to Tide, and your first message after a break starts a few seconds later than usual.'}>
+      <Row label="Free its memory when idle" hint={(ai.unloadAfterMinutes ?? 15) === 0 ? 'Gemma stays loaded: about 10 GB of this Mac’s memory, whether or not you’re studying.' : 'Gemma holds about 10 GB while loaded. Unloaded, the Mac gets it back. While Claude teaches it loads only when something needs it; otherwise it reloads as you return to Tide, and your first message after a break starts a few seconds later than usual.'}>
         <Select
           label="Free the model’s memory when idle"
           value={String(ai.unloadAfterMinutes ?? 15)}
@@ -777,6 +777,79 @@ const ROLE_TEXT: Record<ClaudeRole, { label: string; hint: string }> = {
   mark: { label: 'Marking', hint: 'Your answers, marked by a separate short call' },
   hard: { label: 'Hard turns', hint: 'Lesson plans, maths and proofs, and when you ask it to go deep' },
   background: { label: 'Background work', hint: 'Roadmap outlines, chat titles and summaries' }
+}
+
+/**
+ * Gemma on this Mac, loaded on demand while Claude teaches: whether it's loaded and why, a hand
+ * on it, and how soon it goes after its last use (main/modelIdle)
+ */
+function GemmaGroup() {
+  const app = useApp()
+  const ai = app.settings.ai
+  const [st, setSt] = useState<GemmaStatusView | null>(null)
+  const [busy, setBusy] = useState<'load' | 'unload' | null>(null)
+  const [note, setNote] = useState('')
+  const refresh = useCallback(() => {
+    window.tide.gemma
+      .status()
+      .then(setSt)
+      .catch(() => setSt(null))
+  }, [])
+  useEffect(() => {
+    refresh()
+    // It loads and unloads by itself: keep the line true while Settings is open
+    const t = setInterval(refresh, 15_000)
+    return () => clearInterval(t)
+  }, [refresh])
+  const act = async (what: 'load' | 'unload') => {
+    setBusy(what)
+    setNote('')
+    try {
+      const next = what === 'load' ? await window.tide.gemma.load() : await window.tide.gemma.unload()
+      setSt(next)
+      if ('busy' in next && next.busy) setNote('Not unloaded: Gemma is answering something right now.')
+    } catch (e) {
+      setNote(errorText(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+  const canControl = st?.loaded !== null && st?.loaded !== undefined
+  const minutes = ai.unloadAfterMinutes ?? 15
+  return (
+    <Group title="Gemma on this Mac" note="About 10 GB of memory while loaded. While Claude teaches, Gemma loads only for private notebooks, Metabase, or when Claude can’t answer (its limit, logged out, offline).">
+      <Row
+        label={
+          <span className="set-status-label">
+            <span className={`tool-dot${st?.loaded ? ' ok' : st ? ' off' : ''}`} aria-hidden="true" />
+            Gemma
+          </span>
+        }
+        hint={busy === 'load' ? 'Loading Gemma, about 5 s…' : busy === 'unload' ? 'Unloading…' : note || (st?.line ?? 'Checking…')}
+      >
+        {(canControl || !st?.serverUp) && (
+          <button type="button" className="btn ghost small" disabled={!!busy || !st} onClick={() => act(st?.loaded ? 'unload' : 'load')}>
+            {st?.loaded ? 'Unload' : 'Load'}
+          </button>
+        )}
+      </Row>
+      {minutes !== 0 && (
+        <Row label="While Claude teaches" hint={`Gemma is unloaded this long after it was last used (never later than “Free its memory when idle”, now ${minutes} min).`}>
+          <Select
+            label="Unload Gemma while Claude teaches"
+            value={String(ai.gemmaUnloadWithClaudeMinutes ?? 5)}
+            onChange={(v) => app.updateSettings({ ai: { ...ai, gemmaUnloadWithClaudeMinutes: Number(v) } }).then(refresh)}
+            options={[
+              { value: '2', label: 'After 2 minutes' },
+              { value: '5', label: 'After 5 minutes' },
+              { value: '10', label: 'After 10 minutes' },
+              { value: '15', label: 'After 15 minutes' }
+            ]}
+          />
+        </Row>
+      )}
+    </Group>
+  )
 }
 
 /** Claude, through your own Claude Code: whether it's set up, who teaches, and which model does what */
@@ -948,6 +1021,8 @@ function ModelsSection() {
       </div>
 
       <ClaudeGroup />
+
+      <GemmaGroup />
 
       <Group title="Cloud helper">
         <Row label="Use a cloud model" hint={cloud.mode === 'auto' ? 'For the jobs below, and whenever you pick it' : cloud.mode === 'manual' ? 'Only when you pick it in a chat or lesson' : undefined}>

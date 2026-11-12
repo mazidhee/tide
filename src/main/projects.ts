@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs'
 import { detectTools, flowsIn, markdownHeadings, type FlowStep, type ProjectInfo, type ProjectMap } from '@shared/project'
 import type { ChatEvent } from '@shared/types'
-import { complete, extractJsonArray, extractJsonObject, friendlyError, streamDraft } from './ai'
+import { completeFor, draftFor, extractJsonArray, extractJsonObject, friendlyError } from './ai'
 import { bookChapters } from './book'
 import { directionLine } from './coach'
 import { filedUnder, getNotebooks, updateNotebook } from './learn'
@@ -83,9 +83,12 @@ export async function mapProject(notebook: string, force = false): Promise<Proje
   const flows = flowsIn(headings)
   const name = notebook.split('/').pop() ?? notebook
   // The one model call: from the headings alone, what the system's parts are and what it is
-  const raw = await complete(
+  // Claude's background model unless the project is private (shared/gemmaPolicy)
+  const raw = await completeFor(
+    'projectMap',
     `These are the section headings of the documents for a project called "${name}"${tools.length ? `, which uses ${tools.map((t) => t.name).join(', ')}` : ''}:\n${headings.slice(0, 160).map((h) => `- ${h}`).join('\n')}\n\nReturn ONLY JSON: {"overview": "2 or 3 plain sentences: what this system does and how it's put together", "components": [{"name": "a part of the system, as the documents name it", "about": "what it does, in one line"}]} with 3 to 10 components.`,
-    'You read technical documents carefully and describe systems plainly. Reply with JSON only.'
+    'You read technical documents carefully and describe systems plainly. Reply with JSON only.',
+    { path: [notebook, ...docs], private: !!info?.private }
   ).catch(() => '')
   let parsed: { overview?: string; components?: { name?: string; about?: string }[] } = {}
   try {
@@ -134,7 +137,9 @@ Be concrete and specific to this project. Don't write the code: they will.`
     .join('\n\n')
   try {
     let out = ''
-    for await (const text of streamDraft(
+    const project = await projectOf(req.notebook)
+    for await (const text of draftFor(
+      'projectBrief',
       [
         { role: 'system', content: 'You are a senior engineer who mentors people building real systems themselves. You plan carefully, sequence the work so each milestone runs, and you never do the work for them.' },
         { role: 'user', content: user }
@@ -142,7 +147,8 @@ Be concrete and specific to this project. Don't write the code: they will.`
       new AbortController().signal,
       4000,
       // A private project's brief is written on this Mac only
-      (await projectOf(req.notebook))?.private ? 'other' : 'planning'
+      project?.private ? 'other' : 'planning',
+      { path: req.notebook, private: !!project?.private }
     )) {
       out += text
       emit({ id: req.id, type: 'delta', text })
@@ -187,9 +193,11 @@ export async function flowSteps(notebook: string, flow: string): Promise<FlowSte
       .slice(0, 3000)
   }
   const parts = [...(map?.components.map((c) => c.name) ?? []), ...(map?.tools.map((t) => t.name) ?? [])]
-  const raw = await complete(
+  const raw = await completeFor(
+    'projectMap',
     `A system's "${flow}", as its design document describes it:\n${section}\n\nThe system's parts: ${parts.join(', ')}.\nList the flow as ordered steps, each something passing from one part to another. Use the part names exactly as listed where they fit; outside parties (the bank, a customer) may be named as they are in the text.\nReturn ONLY a JSON array of 3 to 8 steps: [{"from": "...", "to": "...", "label": "what passes, in 2 to 5 words"}]`,
-    'You trace how systems work, step by step. Reply with JSON only.'
+    'You trace how systems work, step by step. Reply with JSON only.',
+    { path: [notebook, ...docs], private: !!(await projectOf(notebook))?.private }
   ).catch(() => '')
   const steps = ((extractJsonArray(raw) as Partial<FlowStep>[] | null) ?? [])
     .filter((s) => s?.from && s?.to && String(s.from) !== String(s.to))

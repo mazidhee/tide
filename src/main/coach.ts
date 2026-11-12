@@ -3,7 +3,7 @@ import { scheduleWeek, summaryFromPlan } from '@shared/schedule'
 import { aimOf, aimsKey, aimsOf, pickOf, catchUpPlan, thingsTitle, DEFAULT_COACH, localDate, moveUnfinished, nextStudyDay, nextTopics, planCompletion, weekMarkdown, type AgendaItem, type CoachSettings, type DayStats, type JournalEntry, type TopicCandidate, type WeekReview, type WeekPlan } from '@shared/coach'
 import { companyTrend } from '@shared/interviews'
 import { buildLink } from '@shared/deeplink'
-import { complete, extractJsonObject } from './ai'
+import { completeFor, extractJsonObject } from './ai'
 import { focusLog, getGoals, getMastery, getNotebooks, listDrills, listInterviews, studyEvents } from './learn'
 import { listMemories } from './memory'
 import { brainEvent } from './brainEvents'
@@ -214,7 +214,8 @@ const DAY = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB'
  * (and checked) for the topics to learn. Saved as data and as a note you can edit.
  */
 export async function planWeek(date = today(), background = false): Promise<WeekPlan> {
-  const ask = (prompt: string, system: string) => complete(prompt, system, undefined, background ? 'background' : 'interactive')
+  // Claude when nothing private is named in it (a private project, Metabase), else Gemma (shared/gemmaPolicy)
+  const ask = (prompt: string, system: string) => completeFor('weekPlan', prompt, system, { priority: background ? 'background' : 'interactive', text: prompt })
   const settings = await getCoach()
   const pick = pickOf(settings)
   if (pick === 'me' && !settings.focus.length) throw new Error('Pick what to focus on first.')
@@ -283,7 +284,7 @@ Only state what the facts support. Return the Markdown only.`
   // Nothing new since the last profile: keep it (each rewrite costs the model a long read)
   const key = hashText(prompt)
   if (previous && (await readText(PROFILE_HASH).catch(() => '')) === key) return previous
-  const out = (await complete(prompt, 'You write short, precise learner profiles.', undefined, 'background')).replace(/^```(?:markdown)?\s*|\s*```$/g, '').trim()
+  const out = (await completeFor('learnerProfile', prompt, 'You write short, precise learner profiles.', { priority: 'background', text: prompt })).replace(/^```(?:markdown)?\s*|\s*```$/g, '').trim()
   const note = `# Learner profile\n\n_Tide rewrites this each week from your progress. Edit anything that's wrong; your edits are kept._\n\n${out.replace(/^#\s+Learner profile\s*/i, '')}\n`
   await writeText(PROFILE_NOTE, note)
   await writeText(PROFILE_HASH, key).catch(() => {})
@@ -344,7 +345,7 @@ ${facts}
 
 Return ONLY JSON: {"direction": "one or two plain sentences in the second person: the kind of engineer or expert they're becoming, the areas it spans, and what they're strong at (e.g. 'You're heading towards low-level software engineering for payments and data systems, with blockchain on the side; your maths and problem solving are your strengths.')", "focus": ["notebook names from the list, most important first, at most 4"]}
 Only state what the facts support.`
-  const out = await complete(prompt, 'You read a learner\'s situation accurately and say it plainly.', undefined, 'background').catch(() => '')
+  const out = await completeFor('learnerProfile', prompt, 'You read a learner\'s situation accurately and say it plainly.', { priority: 'background', text: prompt }).catch(() => '')
   let parsed: { direction?: string; focus?: string[] } = {}
   try {
     parsed = extractJsonObject(out)

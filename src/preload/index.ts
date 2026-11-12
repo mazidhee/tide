@@ -146,6 +146,12 @@ const api: TideApi = {
     render: invoke('speed:render'),
     memory: invoke('speed:memory')
   },
+  gemma: {
+    status: invoke('gemma:status'),
+    load: invoke('gemma:load'),
+    unload: invoke('gemma:unload'),
+    prewarmFor: invoke('gemma:prewarmFor')
+  },
   claude: {
     status: invoke('claude:status'),
     usage: invoke('claude:usage'),

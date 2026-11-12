@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs'
 import { SKIP_TITLE, type Chapter } from '@shared/guide'
-import { complete, extractJsonArray } from './ai'
+import { completeFor, extractJsonArray } from './ai'
 import { pdfText } from './search'
 import { parseContents } from '@shared/toc'
 import { absPath, joinRel, readText, writeText } from './vault'
@@ -114,9 +114,11 @@ async function readContents(rel: string, numPages: number): Promise<Chapter[]> {
     .map((t, i) => `--- PDF page ${i + 1} ---\n${t}`)
     .join('\n')
     .slice(0, 14_000)
-  const raw = await complete(
+  const raw = await completeFor(
+    'bookContents',
     `These are the first pages of a book. Find its table of contents and list the chapters (and parts, if it has them) in order, with the page number printed next to each.\n\nReply with a JSON array only, like [{"title": "1. Reliable Applications", "page": 3, "part": false}]. Leave out the preface, index and other front or back matter. If there is no table of contents, reply [].\n\n${front}`,
-    'You extract structure from documents. Reply with JSON only.'
+    'You extract structure from documents. Reply with JSON only.',
+    { path: rel }
   )
   const rows = (extractJsonArray(raw) as { title?: unknown; page?: unknown; part?: unknown }[] | null) ?? []
   const listed = rows

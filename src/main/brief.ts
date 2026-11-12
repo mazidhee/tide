@@ -1,5 +1,5 @@
 import { lastStudyDay, type StudyDay } from '@shared/brief'
-import { complete, extractJsonArray } from './ai'
+import { completeFor, extractJsonArray } from './ai'
 import { webSearch } from './agent'
 import { getRecallQueue, studyEvents } from './learn'
 import { listProblems } from './practice'
@@ -56,9 +56,11 @@ export async function suggestReading(topics: string[]): Promise<Suggestion[]> {
   }
   let picks: { i?: unknown; why?: unknown }[] = []
   try {
-    const raw = await complete(
+    const raw = await completeFor(
+      'readingPicks',
       `A student studied: ${clean.join('; ')}.\n\nPick the 3 results that would teach them the most next: in-depth articles, guides, documentation, lecture notes or papers. Avoid shallow listicles, ads and product pages.\n\n${pool.map((r, i) => `${i}. ${r.title} (${host(r.url)})\n${r.snippet.slice(0, 200)}`).join('\n\n')}\n\nReply with JSON only: [{"i": 0, "why": "one short sentence on what they'd learn"}]`,
-      'You recommend reading for a student. Reply with JSON only.'
+      'You recommend reading for a student. Reply with JSON only.',
+      { text: clean.join('\n') }
     )
     picks = extractJsonArray(raw)
   } catch {

@@ -1,5 +1,5 @@
 import type { ChatScope, ExamMark, ExamOptions, ExamPaper, ExamQuestion } from '@shared/types'
-import { retrieve, extractJsonObject } from './ai'
+import { claudeOr, retrieve, extractJsonObject } from './ai'
 import { agentComplete } from './agent'
 
 /**
@@ -37,11 +37,9 @@ Return ONLY JSON in this shape:
     {"label": "a", "text": "...", "marks": 3, "scheme": "1 mark for ..., 2 marks for ...; answer: ..."}
   ]}
 ]}`
-  const out = await agentComplete(
-    [{ role: 'user', content: prompt }],
-    'You are an experienced university examiner who writes fair, rigorous exam papers.',
-    false
-  )
+  const system = 'You are an experienced university examiner who writes fair, rigorous exam papers.'
+  // Claude when the notes it's written from may leave this Mac, else Gemma (shared/gemmaPolicy)
+  const out = await claudeOr('examPaper', prompt, system, { path: scope.kind === 'none' || scope.kind === 'vault' ? undefined : scope.path, text: topic }, () => agentComplete([{ role: 'user', content: prompt }], system, false))
   const paper = extractJsonObject<{ title?: string; instructions?: string; questions?: ExamQuestion[] }>(out)
   const questions = (paper.questions ?? [])
     .filter((q) => Array.isArray(q.parts) && q.parts.length)
@@ -85,7 +83,9 @@ Then return ONLY JSON: {"awarded": 2, "feedback": "what earned marks, what lost 
 If you award fewer than ${part.marks} marks, "missed" must say exactly what would have earned the rest; leave it empty only for full marks.`
   const content: ApiContent = [{ type: 'text', text }, ...images.map((url) => ({ type: 'image_url' as const, image_url: { url } }))]
   // Typed answers can go to the cloud model; photos of handwriting stay with Gemma, which can read them
-  const out = await agentComplete([{ role: 'user', content }], 'You are an experienced university examiner.', true, images.length ? undefined : 'marking')
+  // Typed answers: Claude's marking model when the question may leave this Mac. Photos of handwriting stay with Gemma, which can read them
+  const gemma = () => agentComplete([{ role: 'user', content }], 'You are an experienced university examiner.', true, images.length ? undefined : 'marking')
+  const out = await claudeOr(images.length ? 'handwriting' : 'examMark', text, 'You are an experienced university examiner.', { text: `${question.text}\n${part.text}\n${part.scheme}` }, gemma)
   const m = extractJsonObject<{ awarded?: number; feedback?: string; missed?: string }>(out)
   return {
     awarded: Math.max(0, Math.min(part.marks, Number(m.awarded) || 0)),
