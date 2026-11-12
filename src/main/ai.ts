@@ -1,6 +1,7 @@
 import { recentSpeed } from './speed'
 import { inBackground, streamInteractive } from './modelQueue'
 import { STRATEGY_LABEL, type Strategy } from '@shared/strategy'
+import { noteFallback, withUsage, withUsageGen } from './usageLog'
 import { CloudUnavailable, coolingDown, coolTarget, estimateTokens, recordUsage, routeFor, type CloudTarget } from './cloud'
 import { jsonrepair } from 'jsonrepair'
 import { readStream, streamCloud, type ReplySchema } from './cloudStream'
@@ -243,6 +244,8 @@ export async function* streamCompletion(
   await ensureGemmaServer().catch(() => {})
   markGemmaUsed()
   const model = await resolveModel()
+  const t0 = Date.now()
+  let first = 0
   const res = await fetch(endpoint('/chat/completions'), {
     method: 'POST',
     headers: headers(),
@@ -257,10 +260,11 @@ export async function* streamCompletion(
   try {
     for await (const delta of readStream(res.body, createStreamFilter())) {
       out += delta.length
+      first ||= Date.now()
       yield delta
     }
   } finally {
-    recordUsage({ kind: 'local', provider: 'local', model, task, input: estimateTokens(JSON.stringify(messages).length), output: estimateTokens(out), estimated: true })
+    recordUsage({ kind: 'local', provider: 'local', model, task, input: estimateTokens(JSON.stringify(messages).length), output: estimateTokens(out), estimated: true, ms: Date.now() - t0, ...(first ? { ttftMs: first - t0 } : {}) })
   }
 }
 
@@ -559,7 +563,11 @@ async function lessonTurn(req: TurnRequest) {
   }
 }
 
-async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
+/** Each call a turn makes is logged under its lesson or conversation (main/usageLog) */
+const answer = (req: TurnRequest, send: (e: ChatEvent) => void) =>
+  withUsage({ lesson: req.chatId ?? req.labId, title: req.topic, thread: req.thread, ...(req.thread ? { job: 'thread' } : req.session ? {} : { job: 'chat' }) }, () => answerTurn(req, send))
+
+async function answerTurn(req: TurnRequest, send: (e: ChatEvent) => void) {
   const controller = new AbortController()
   running.set(req.id, controller)
   // What the window was shown is what the next turn will send back as this answer. Once it's done,
@@ -651,6 +659,7 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
       const { useGemma, refreshClaude } = await import('./modelIdle')
       void refreshClaude().catch(() => {})
       const g = await useGemma(e instanceof ClaudeUnavailable ? reasonFromWhy(why) : 'claude-failed')
+      noteFallback(e instanceof ClaudeUnavailable ? reasonFromWhy(why) : 'claude-failed')
       emit({ id: req.id, type: 'step', step: { id: 'teacher', kind: 'helper', label: takeoverNote({ why: /private/i.test(why) ? `${why}: Gemma is teaching` : `Claude is unavailable (${why}): Gemma is teaching`, loaded: g.loaded }), status: 'done', depth: 0 } })
     }
   } else if (teacher.who === 'gemma') {
@@ -658,6 +667,7 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
     const { reasonFromWhy, takeoverNote } = await import('@shared/gemmaPolicy')
     const { useGemma } = await import('./modelIdle')
     const g = await useGemma(teacher.why ? reasonFromWhy(teacher.why) : req.engine === 'local' ? 'picked' : 'gemma-only')
+    if (teacher.why) noteFallback(reasonFromWhy(teacher.why))
     if (teacher.why || !g.loaded) emit({ id: req.id, type: 'step', step: { id: 'teacher', kind: 'helper', label: takeoverNote({ why: teacher.why ?? 'Gemma is teaching', loaded: g.loaded }), status: 'done', depth: 0 } })
   }
   if (req.engine === 'claude') req = { ...req, engine: 'auto' }
@@ -1074,7 +1084,11 @@ export async function completeFor(job: JobName, prompt: string, system: string |
 }
 
 /** As completeFor, with the job's own way of asking Gemma (a tool loop, say) */
-export async function claudeOr(job: JobName, prompt: string, system: string | undefined, o: JobOpts, gemma: () => Promise<string>): Promise<string> {
+export function claudeOr(job: JobName, prompt: string, system: string | undefined, o: JobOpts, gemma: () => Promise<string>): Promise<string> {
+  return withUsage({ job }, () => claudeOrGemma(job, prompt, system, o, gemma))
+}
+
+async function claudeOrGemma(job: JobName, prompt: string, system: string | undefined, o: JobOpts, gemma: () => Promise<string>): Promise<string> {
   const route = await jobRoute(job, `${system ?? ''}\n${prompt}`, o)
   let reason: GemmaReason
   if (route.who === 'claude') {
@@ -1089,6 +1103,7 @@ export async function claudeOr(job: JobName, prompt: string, system: string | un
     }
   } else reason = route.reason
   await useGemma(reason)
+  noteFallback(reason)
   return gemma()
 }
 
@@ -1096,7 +1111,11 @@ export async function claudeOr(job: JobName, prompt: string, system: string | un
  * A long draft streamed as it's written: Claude when the job may leave the Mac and Claude can,
  * else Gemma's streamDraft. If Claude can't before writing anything, Gemma takes it.
  */
-export async function* draftFor(job: JobName, messages: ChatMessage[], signal: AbortSignal, maxTokens: number, task: RequestKind, o: JobOpts = {}): AsyncGenerator<string> {
+export function draftFor(job: JobName, messages: ChatMessage[], signal: AbortSignal, maxTokens: number, task: RequestKind, o: JobOpts = {}): AsyncGenerator<string> {
+  return withUsageGen({ job }, () => draftOn(job, messages, signal, maxTokens, task, o))
+}
+
+async function* draftOn(job: JobName, messages: ChatMessage[], signal: AbortSignal, maxTokens: number, task: RequestKind, o: JobOpts = {}): AsyncGenerator<string> {
   const system = String(messages.find((m) => m.role === 'system')?.content ?? '')
   const user = messages.filter((m) => m.role !== 'system').map((m) => String(m.content)).join('\n\n')
   const route = await jobRoute(job, `${system}\n${user}`, o)
@@ -1116,6 +1135,7 @@ export async function* draftFor(job: JobName, messages: ChatMessage[], signal: A
     }
   } else reason = route.reason
   await useGemma(reason)
+  noteFallback(reason)
   yield* streamDraft(messages, signal, maxTokens, task)
 }
 

@@ -127,10 +127,12 @@ export async function* streamCloud(target: CloudTarget, messages: ChatMessage[],
   let out = 0
   let said = false
   let stopped = ''
+  let firstAt = 0
   try {
     const usage = (u: StreamUsage) => (reported = { input: u.prompt_tokens ?? 0, output: u.completion_tokens ?? 0, cached: u.prompt_tokens_details?.cached_tokens, reasoning: u.completion_tokens_details?.reasoning_tokens })
     for await (const delta of readStream(res.body, createStreamFilter(), usage, (why) => (stopped = why))) {
       out += delta.length
+      firstAt ||= Date.now()
       said ||= !!delta.trim()
       yield delta
     }
@@ -145,7 +147,7 @@ export async function* streamCloud(target: CloudTarget, messages: ChatMessage[],
     throw new CloudUnavailable(slow.aborted ? `${target.model} took too long` : `The cloud model’s answer broke off: ${(e as Error).message}`, why)
   } finally {
     const r = reported as { input: number; output: number; cached?: number; reasoning?: number } | null
-    recordUsage({ kind: 'cloud', provider: target.provider, model: target.model, task, ...(r ?? { input: estimateTokens(JSON.stringify(messages).length), output: estimateTokens(out) }), estimated: !r, ...(stopped === 'length' ? { cut: true } : {}) })
+    recordUsage({ kind: 'cloud', provider: target.provider, model: target.model, task, ...(r ?? { input: estimateTokens(JSON.stringify(messages).length), output: estimateTokens(out) }), estimated: !r, ...(stopped === 'length' ? { cut: true } : {}), ms: took(), ...(firstAt ? { ttftMs: firstAt - started } : {}) })
   }
   const cut = stopped === 'length'
   if (!said) {

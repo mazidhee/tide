@@ -152,6 +152,9 @@ const api: TideApi = {
     unload: invoke('gemma:unload'),
     prewarmFor: invoke('gemma:prewarmFor')
   },
+  usage: {
+    report: invoke('usage:report')
+  },
   claude: {
     status: invoke('claude:status'),
     usage: invoke('claude:usage'),

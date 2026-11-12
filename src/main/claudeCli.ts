@@ -9,6 +9,7 @@ import { existsSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 import type { ClaudeModel } from '@shared/types'
+import { windowsFromEvent, type WindowReading } from '@shared/usage'
 
 /** Variables that would make the CLI bill an API key or another provider instead of the user's plan */
 export const STRIPPED_ENV = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_MODEL']
@@ -95,7 +96,8 @@ export type ClaudeEvent =
   /** The model is thinking before it writes (its thoughts aren't shown) */
   | { type: 'thinking' }
   | { type: 'tool'; id: string; name: string; input: unknown }
-  | { type: 'rate-limit'; status: string; resetsAt?: number; utilization?: number; window?: string }
+  /** `windows`: every window the event reports (Claude Code 2.1.304 puts the utilization there, under unifiedWindows) */
+  | { type: 'rate-limit'; status: string; resetsAt?: number; utilization?: number; window?: string; windows: WindowReading[] }
   | { type: 'result'; ok: boolean; text: string; error?: string; usage: ClaudeUsage; ms: number; firstTokenMs?: number; model?: string }
   | { type: 'other' }
 
@@ -121,7 +123,9 @@ export function parseLine(line: string): ClaudeEvent | null {
   }
   if (j.type === 'rate_limit_event') {
     const r = j.rate_limit_info ?? {}
-    return { type: 'rate-limit', status: String(r.status ?? ''), resetsAt: r.resetsAt, utilization: r.utilization, window: r.rateLimitType }
+    const windows = windowsFromEvent(r)
+    const own = windows.find((w) => w.window === r.rateLimitType)
+    return { type: 'rate-limit', status: String(r.status ?? ''), resetsAt: r.resetsAt, utilization: r.utilization ?? own?.utilization, window: r.rateLimitType, windows }
   }
   if (j.type === 'result') {
     const u = j.usage ?? {}

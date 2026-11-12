@@ -783,7 +783,9 @@ async function streamTurnOnce(
     model,
     task,
     ...(usage ?? { input: estimateTokens(promptChars + JSON.stringify(tools).length), output: estimateTokens(raw.length) }),
-    estimated: !usage
+    estimated: !usage,
+    ms: Date.now() - t0,
+    ...(firstAt ? { ttftMs: firstAt - t0 } : {})
   })
   let found = [...calls.values()].filter((c) => c.name)
   // The server sometimes hands a call back as text (Gemma stuttered its opening tag): run it anyway

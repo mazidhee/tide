@@ -1,4 +1,6 @@
 import { app, safeStorage } from 'electron'
+import { logCall } from './usageLog'
+import { jobFromTask } from '@shared/usage'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { costOf, DEFAULT_CLOUD, jobLine, modelPrice, providerInfo, type CloudSettings, type CloudTask, type RequestKind } from '@shared/providers'
@@ -388,6 +390,9 @@ export interface UsageRecord {
   reasoning?: number
   /** The reply stopped at max_tokens */
   cut?: boolean
+  /** Whole request and time to its first token, ms, when the caller timed it */
+  ms?: number
+  ttftMs?: number
 }
 
 const usagePath = () => join(app.getPath('userData'), 'usage.jsonl')
@@ -404,6 +409,7 @@ export function recordUsage(r: Omit<UsageRecord, 'at' | 'cost' | 'listCost' | 'p
     extra = { plan, listCost: list, cost: plan === 'free' ? 0 : list }
   }
   if (r.kind === 'cloud') noteDayUse(r, (r.input ?? 0) + (r.output ?? 0))
+  logCall({ at: Date.now(), p: r.kind === 'local' ? 'local' : r.provider, model: r.model, defaultJob: jobFromTask(r.task), in: Math.max(0, (r.input ?? 0) - (r.cached ?? 0)), out: r.output ?? 0, think: r.reasoning, cr: r.cached ?? 0, cw: 0, ms: r.ms ?? 0, ttft: r.ttftMs, usd: extra.listCost ?? 0, ok: true, est: r.estimated })
   try {
     mkdirSync(dirname(usagePath()), { recursive: true })
     appendFileSync(usagePath(), JSON.stringify({ at: Date.now(), ...r, ...extra }) + '\n')
