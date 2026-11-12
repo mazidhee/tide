@@ -609,32 +609,68 @@
   left: 0;
   top: 44px;
   bottom: 0;
-  width: 10px;
+  width: 12px;
   z-index: 60;
 }
+/* A floating card, as in Notion: it eases in from the edge with a little give, and fades away */
 .peek-sidebar {
   position: fixed;
-  left: 8px;
-  top: 8px;
-  bottom: 8px;
+  left: 10px;
+  /* Below the window's title strip, so the traffic lights stay clear, as in Notion */
+  top: 48px;
+  bottom: 10px;
   z-index: 61;
   width: var(--sidebar-w);
   display: flex;
-  border: 1px solid var(--line-strong);
-  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--line-strong) 75%, transparent);
+  border-radius: 18px;
   overflow: hidden;
-  background: var(--bg-sidebar);
-  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.45);
-  transform: translateX(calc(-100% - 20px));
-  transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  background: color-mix(in srgb, var(--bg-sidebar) 94%, transparent);
+  backdrop-filter: blur(22px) saturate(1.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 2px 6px rgba(0, 0, 0, 0.08),
+    0 22px 56px -16px rgba(0, 0, 0, 0.38);
+  transform-origin: left center;
+  transform: translateX(-28px) scale(0.985);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.22s ease,
+    visibility 0s linear 0.42s;
+  will-change: transform, opacity;
 }
 .peek-sidebar.open {
   transform: none;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    transform 0.42s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.16s ease,
+    visibility 0s;
 }
 .peek-sidebar > * {
   flex: 1;
   min-width: 0;
   height: 100%;
+}
+/* Inside the card the sidebar is the card: no edge or fill of its own, and no room kept for the traffic lights */
+:root .peek-sidebar .sidebar {
+  background: transparent;
+  border-right: 0;
+}
+:root .peek-sidebar .sidebar-top {
+  padding-left: 10px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .peek-sidebar,
+  .peek-sidebar.open {
+    transform: none;
+    transition: opacity 0.12s ease, visibility 0s;
+  }
 }
 
 .crs-page.crs-immersive {

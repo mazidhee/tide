@@ -9,6 +9,16 @@
     background: var(--rail);
     border-right: 1px solid var(--line);
   }
+  .peek-sidebar {
+    background: color-mix(in srgb, var(--rail) 94%, transparent);
+  }
+  .peek-sidebar .sidebar {
+    background: transparent;
+    border-right: 0;
+  }
+  .peek-sidebar .sidebar-top {
+    padding-left: 10px;
+  }
   .sidebar-top {
     height: var(--bar-h);
     padding: 0 8px 0 84px;
