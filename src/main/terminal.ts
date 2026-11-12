@@ -56,7 +56,8 @@ const dockerBin = () => DOCKER_PATHS.find((p) => existsSync(p)) ?? null
 
 const PATH = `${process.env.PATH ?? ''}:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/Applications/Docker.app/Contents/Resources/bin`
 
-export async function createTerminal(kind: TerminalKind, cols: number, rows: number): Promise<{ id: string }> {
+/** `cwd`: where a local shell starts (the IDE's project folder); a folder that isn't there is ignored */
+export async function createTerminal(kind: TerminalKind, cols: number, rows: number, cwdIn?: string): Promise<{ id: string }> {
   const { spawn } = await import('node-pty')
   const id = `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
   let file: string
@@ -81,7 +82,8 @@ export async function createTerminal(kind: TerminalKind, cols: number, rows: num
     file = process.env.SHELL && existsSync(process.env.SHELL) ? process.env.SHELL : '/bin/zsh'
     args = ['-l']
     const code = join(homedir(), 'Documents')
-    if (existsSync(code)) cwd = code
+    if (cwdIn && typeof cwdIn === 'string' && cwdIn.startsWith('/') && existsSync(cwdIn)) cwd = cwdIn
+    else if (existsSync(code)) cwd = code
   }
   const pty = spawn(file, args, { name: 'xterm-256color', cols: Math.max(20, cols), rows: Math.max(5, rows), cwd, env })
   const session: Session = { id, kind, pty, transcript: '', pending: '', lastOutput: Date.now(), exited: false }

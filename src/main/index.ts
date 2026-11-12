@@ -268,7 +268,7 @@ function registerIpc() {
     (id, data) => send('terminal:data', { id, data }),
     (id, code) => send('terminal:exit', { id, code })
   )
-  handle('terminal:create', (kind: TerminalKind, cols: number, rows: number) => createTerminal(kind === 'lab' ? 'lab' : 'local', cols, rows))
+  handle('terminal:create', (kind: TerminalKind, cols: number, rows: number, cwd?: string) => createTerminal(kind === 'lab' ? 'lab' : 'local', cols, rows, cwd))
   handle('terminal:write', (id: string, data: string) => writeTerminal(id, String(data)))
   handle('terminal:resize', (id: string, cols: number, rows: number) => resizeTerminal(id, cols, rows))
   handle('terminal:close', (id: string) => closeTerminal(id))
