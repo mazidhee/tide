@@ -6,6 +6,8 @@ title: Tide roadmap
 
 **Rule for every feature: build for Claude's full capabilities, and keep Tide working without it.** Claude is the main tutor: each feature should use everything Claude can do (deep thinking, Claude Code's own tools, long context, vision, generated visuals, web research) as fully as it can, without holding back to fit a smaller model. Every feature must also still work, more simply, on Gemma, on another provider, or when the plan's usage runs out. Claude-only extras (Claude Code's own tools, thinking depth, generated visuals) switch off cleanly and say so; lessons, courses, notes, recall, What you know and the reader never depend on Claude.
 
+Testing is your daily use: bugs go in the **Tide bugs** note in this notebook, and each working session starts by fixing them. No separate benchmark or rehearsal sessions.
+
 One feature at a time, in this order. Each one is built, tested, installed, and only then is the next one started. Nothing runs in parallel: the Mac has 24 GB, and Gemma needs most of it.
 
 Last updated: 12 November 2026. Courses from GitHub and the fuller code editor moved to the top at your request.
@@ -55,7 +57,6 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
   - Rubrics that name misconceptions, test transfer to new settings, and track hint dependence and confidence calibration (your Guessing, Unsure and Sure answers against what was right).
   - Time to mastery.
   - Opus reviewing finished lessons against a teaching rubric, and Tide adjusting how it teaches.
-  - The tutor benchmark run on Claude and Gemma, side by side.
   - The measures work for any model.
 - [ ] **Low-level labs.**
   - A debugger (lldb) stepping through your program with a live view of registers, stack and memory.
@@ -71,7 +72,6 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - [ ] **Claude: photos and screenshots.** Mark handwritten maths from a photo; explain a diagram or an error screenshot.
 - [ ] **Claude: mock interviews and exams.** Live coding with tests and system design on the canvas, timed and marked.
 - [ ] **Claude: a simpler, faster Tide.** Switch off the Gemma workarounds (stall guards, retries, output repair, constant trimming) on Claude lessons.
-- [ ] **Benchmark Sonnet and Opus.** Run Tide's tutor benchmark on both, and move any task where Sonnet is clearly weaker to Opus (done as part of Teaching quality, measured).
 - [ ] **Faster lesson starts and fewer stalls.** The first answer of a new lesson takes 14–27 s. Gemma stalls in about 14% of turns, and retries run one after another. The turn after a long lesson is trimmed re-reads it all. Partial work: worktree `tide-fast2`.
 - [ ] **Everyday check: Python and ML from zero.** Run real lessons the way you use Tide ("I want to learn Python", "I want to learn ML"), over several sessions, and fix what goes wrong.
 - [ ] **Lab pack ready before it's needed.** Install the data and ML packages (about 900 MB) from Settings, in the background, so the first ML lesson doesn't stall for 30 s. Partial work: worktree `tide-voice`.
@@ -104,6 +104,8 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - [ ] **PDF reading in Rust.** Removes a one-time 455 ms load.
 
 ## Not doing
+
+- Separate benchmark and rehearsal sessions: daily use and the bugs note do that job
 
 - Fine-tuning Gemma (the Mac runs out of memory; marking is already 97%)
 - The pathways graph view
