@@ -10,6 +10,7 @@ import type { FlowStep, ProjectKind } from './project'
 import { parseAppraise, type AppraiseRow } from './humanities'
 import { lessonKit, type SubjectProfile } from './subjects'
 import { courseRules, type CourseRef } from './courses'
+import { clipsIn } from './video'
 
 /**
  * Learning sessions are a conversation where the tutor writes Markdown plus a few tags the UI
@@ -27,6 +28,8 @@ export type Block =
   | { kind: 'scores'; title: 'scorecard' | 'rubric'; rows: { label: string; score: number; max: number; note: string }[] }
   | { kind: 'challenge'; quote: string; text: string }
   | { kind: 'summary'; text: string }
+  /** A section of a video to watch (shared/video): its times are checked against the transcript before it's shown */
+  | { kind: 'clip'; video: string; start: number; end: number; why?: string }
   /** A takeaway for the student's notes: written into the lesson's note as it's taught */
   | { kind: 'note'; text: string }
   /** The tutor will carry on explaining: no question this turn */
@@ -57,7 +60,7 @@ export const askIdentity = (ask: { type: string; prompt: string; lang?: string }
 
 const attr = (attrs: string, name: string) => attrs.match(new RegExp(`${name}\\s*=\\s*"([^"]*)"`, 'i'))?.[1] ?? attrs.match(new RegExp(`${name}\\s*=\\s*'([^']*)'`, 'i'))?.[1]
 
-const TAG = /<(ask|grade|plan|card|scorecard|rubric|challenge|summary|note|appraise)\b([^>]*)>([\s\S]*?)<\/\1>/gi
+const TAG = /<(ask|grade|plan|card|scorecard|rubric|challenge|summary|note|appraise|clip)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 
 function parseScores(body: string): { label: string; score: number; max: number; note: string }[] {
   return body
@@ -108,7 +111,7 @@ export function parseBlocks(full: string): Block[] {
   const carryOn = /<continue\b[^>]*\/?>/i.test(full)
   // Hidden tests Tide made for the code question from its reference solution (main/codeTests.ts)
   const madeTests = /<tests\b[^>]*>([\s\S]*?)<\/tests>/i.exec(full)?.[1]?.trim() || undefined
-  const raw = closeGrade(hideWorking(full)).replace(/<\/?continue\b[^>]*>/gi, '').replace(/<c(o(n(t(i(n(ue?)?)?)?)?)?)?$/i, '')
+  const raw = closeGrade(hideWorking(full.replace(/<clip\b([^>]*?)\/>/gi, '<clip$1></clip>'))).replace(/<\/?continue\b[^>]*>/gi, '').replace(/<c(o(n(t(i(n(ue?)?)?)?)?)?)?$/i, '')
   // What the tutor said aloud (Talk) is spoken, not shown again as a block
   const said = splitSay(raw)
   // A reply that stalled after its spoken part still shows what was said, so there's something to answer
@@ -116,7 +119,7 @@ export function parseBlocks(full: string): Block[] {
   const blocks: Block[] = []
   let last = 0
   const pushText = (t: string) => {
-    const text = t.replace(/<(ask|grade|plan|card|scorecard|rubric|challenge|summary|note|appraise)\b[^>]*>[\s\S]*$/i, '').trim()
+    const text = t.replace(/<(ask|grade|plan|card|scorecard|rubric|challenge|summary|note|appraise|clip)\b[^>]*>[\s\S]*$/i, '').trim()
     if (text) blocks.push({ kind: 'text', text })
     // A question still being written shows as it comes, styled as the question it will be
     const open = t.match(/<ask\b([^>]*)>([\s\S]*)$/i)
@@ -170,6 +173,9 @@ export function parseBlocks(full: string): Block[] {
       blocks.push({ kind: 'summary', text: body })
     } else if (name === 'note') {
       if (body.trim()) blocks.push({ kind: 'note', text: body.trim() })
+    } else if (name === 'clip') {
+      const c = clipsIn(m[0])[0]
+      if (c) blocks.push({ kind: 'clip', video: c.video, start: c.start, end: c.end, ...(c.why ? { why: c.why } : {}) })
     } else if (name === 'appraise') {
       // humanities: rows the app can read; anything else in it is shown as it was written
       const rows = parseAppraise(body)

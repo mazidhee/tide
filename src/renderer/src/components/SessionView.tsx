@@ -18,6 +18,9 @@ import { useDifficulty } from '../lib/difficulty'
 import { nothingToMark, unmarked } from '@shared/lessonRepair'
 import { withSources, type SourcePack } from '@shared/sources'
 import { ledPrefKey, withoutEcho } from '@shared/sourceLed'
+import { formatRange, offeredClip, recapMessage, watchFirstNote, type ClipCandidate } from '@shared/video'
+import { ClipCard } from './ClipCard'
+import { relatedForPrompt } from '@shared/related'
 import { openReading } from '../lib/reading'
 import { codeBlockClick } from '../lib/runBlocks'
 import { parsePlacement, placementNote } from '@shared/placement'
@@ -289,6 +292,20 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         opening = withSources(opening, found)
       }
     }
+    // [videos] A saved video or a course's video covers the topic: a section of it is offered
+    // before the first reply ("Watch 4:10–9:30 first"), and the tutor is told what's said in it
+    if (mode === 'teach') {
+      const clips = await Promise.race([window.tide.videos.clips(topic, { limit: 1 }).catch(() => []), new Promise<ClipCandidate[]>((r) => setTimeout(() => r([]), 1500))])
+      if (clips[0]) opening = `${opening}\n\n${watchFirstNote(clips[0])}`
+      // [immersive] What the learner's other courses and lectures add on this topic, for the tutor to
+      // bring in as it teaches (shared/related). Never for a private notebook's lesson
+      if (scope.kind === 'none' || scope.kind === 'vault' || options?.course) {
+        const r = await Promise.race([window.tide.links.related(topic, { exclude: options?.course?.id, limit: 3 }).catch(() => null), new Promise<null>((res) => setTimeout(() => res(null), 2500))])
+        const items = r?.items.filter((i) => !(i.kind === 'clip' && clips[0] && i.video === clips[0].video)) ?? []
+        if (r && (items.length || r.notImported.length))
+          opening = `${opening}\n\n(Tide: ${relatedForPrompt({ ...r, items })} Bring each in when the lesson reaches the idea it covers, not all at once; the first may fit your first explanation.)`
+      }
+    }
     openingRef.current = opening
     // Written ahead for this exact lesson (main/bank.ts): it opens at once
     const ready = await window.tide.bank.opening(sessionInstructions(setupRef.current), opening).catch(() => null)
@@ -504,6 +521,20 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   talkRef.current = talk
   const stopTalking = voice.stop
   const finished = !busy && turns.length > 1 && !currentAsk && !carryOn && lastBlocks.some((b) => b.kind === 'summary' || b.kind === 'scores')
+  // [videos] At the end of a lesson: a short clip on its topic to rewatch, with questions from it, once
+  const [recapClip, setRecapClip] = useState<ClipCandidate | null>(null)
+  const recapped = turns.some((t) => t.role === 'user' && t.content.startsWith('Recap from the video'))
+  useEffect(() => {
+    if (!finished || recapped || mode !== 'teach') return setRecapClip(null)
+    let live = true
+    window.tide.videos
+      .clips(topic, { limit: 1, recap: true })
+      .then((c) => live && setRecapClip(c[0] ?? null))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [finished, recapped, mode, topic])
   // Leaving mid-way keeps the session for later; finishing it lets it go
   const keepRef = useRef({ turns, busy, finished })
   keepRef.current = { turns, busy, finished }
@@ -859,6 +890,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         )
       case 'plan':
         return null
+      case 'clip':
+        return live ? null : <ClipCard key={key} clip={b} />
       case 'scores':
         return (
           <div key={key} className="s-scores">
@@ -1170,7 +1203,11 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           )}
 
           {turns.map((t, i) => {
-            if (i === 0 && t.role === 'user') return null
+            if (i === 0 && t.role === 'user') {
+              // [videos] the section offered before the first reply
+              const first = /Tide offers the student a section/.test(t.content) ? offeredClip(t.content) : null
+              return first ? <ClipCard key={i} clip={first} kicker="Watch first" /> : null
+            }
             if (t.role === 'user') {
               const isHint = t.content.startsWith('[hint]')
               const own = ownWords(t.content)
@@ -1184,6 +1221,10 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     <>
                       <div className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(text, env) }} />
                       {conf && <span className="s-conf-tag">{conf}</span>}
+                      {(() => {
+                        const recap = text.startsWith('Recap from the video') ? offeredClip(t.content) : null
+                        return recap ? <ClipCard clip={recap} kicker="Recap" /> : null
+                      })()}
                     </>
                   )}
                 </div>
@@ -1415,6 +1456,16 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             </div>
           )}
 
+          {finished && recapClip && (
+            <div className="vclip-offer">
+              <p>
+                <b>Recap from the video.</b> Rewatch {formatRange(recapClip.start, recapClip.end)} of “{recapClip.title}” and answer {mode === 'teach' ? '2 or 3' : 'a few'} questions on it. They count towards What you know.
+              </p>
+              <button className="btn" onClick={() => send(recapMessage(recapClip), turns)}>
+                <Icon name="video" size={14} /> Watch the recap
+              </button>
+            </div>
+          )}
           {finished && (
             <div className="row-gap s-finish">
               <button className="btn primary" onClick={() => send(openingRef.current, [])}>

@@ -195,6 +195,8 @@ export interface ChatRequest {
   scope: ChatScope
   /** Extra text the user attached, e.g. a selection */
   attachment?: string
+  /** What the student has on screen in Tide right now (shared/onScreen describeScreen): a course page, a video's moment, an article */
+  onScreen?: string
   /** Extra tutoring instructions, e.g. the note's tutor mode */
   instructions?: string
   /** Allow web tools for this request (agent mode only) */
@@ -928,6 +930,17 @@ export interface TideApi {
     load(id: string, path: string): Promise<import('./lab').LabLoaded>
   }
   /** Guided projects (shared/workshop.ts): built in stages, reviewed against tests */
+  /** Videos (main/videos.ts, shared/video.ts): transcripts kept for YouTube videos and videos of your own, and the sections a lesson offers */
+  videos: {
+    /** A YouTube video's transcript: kept, else read from its saved note (`path`), else (with `fetch`) its captions from YouTube */
+    transcript(id: string, opts?: { path?: string; fetch?: boolean; course?: string; title?: string }): Promise<import('../main/videos').TranscriptResult>
+    /** A video file in the notes folder: its captions from a .vtt or .srt beside it */
+    fileTranscript(path: string): Promise<import('./video').Transcript | null>
+    /** Sections of kept transcripts that cover a topic, best first */
+    clips(topic: string, opts?: { limit?: number; recap?: boolean }): Promise<import('./video').ClipCandidate[]>
+    /** A clip's times checked against the real transcript */
+    check(clip: import('./video').Clip): Promise<import('./video').ClipCheck & { title?: string; channel?: string; course?: string }>
+  }
   /** Open courses from GitHub (main/courses.ts, shared/courses.ts) */
   courses: {
     list(): Promise<import('../main/courses').CourseCard[]>
@@ -945,7 +958,32 @@ export interface TideApi {
     saveToNotes(id: string): Promise<{ folder: string; files: number }>
     /** The course's README from GitHub, to look at before importing it (not saved) */
     preview(id: string): Promise<{ markdown: string; url: string } | null>
+    /** How far a lesson was read, a video of it watched, or its code run: kept with its progress, and felt in What you know */
+    track(id: string, lesson: string, patch: { read?: number; video?: { id: string; watched: number }; ran?: boolean }): Promise<import('./courses').CourseProgress>
     onProgress(cb: (e: import('../main/courses').ImportPhase) => void): () => void
+  }
+  /** Links that stay in Tide (shared/links) */
+  links: {
+    courseFile(id: string, path: string): Promise<import('../main/courseFiles').RepoFileView | null>
+    githubFile(repo: string, ref: string, path: string): Promise<import('../main/courseFiles').RepoFileView | null>
+    repoPdf(src: { course: string } | { repo: string; ref: string }, path: string): Promise<Uint8Array | null>
+    /** A web page in Tide's reader view */
+    read(url: string, fresh?: boolean): Promise<import('../main/linkReader').ReadPage>
+    pdf(url: string): Promise<Uint8Array | null>
+    /** The imported courses' repositories, for routing links */
+    repos(): Promise<import('./links').CourseRepo[]>
+    /** Other courses' sections and video moments on a topic */
+    related(topic: string, opts?: { exclude?: string; limit?: number }): Promise<import('./related').Related>
+    /** The tutor moved the view (show_in_view): a video's moment, or a section of the page */
+    onGoto(cb: (g: { t?: number; section?: string; video?: string }) => void): () => void
+  }
+  /** Tide's sandboxed web view (main/webView) */
+  web: {
+    open(url: string, bounds: { x: number; y: number; width: number; height: number }): Promise<import('../main/webView').WebState | null>
+    place(bounds: { x: number; y: number; width: number; height: number }, visible?: boolean): Promise<void>
+    go(action: 'back' | 'forward' | 'reload' | 'stop'): Promise<void>
+    close(): Promise<void>
+    onState(cb: (s: import('../main/webView').WebState) => void): () => void
   }
   workshop: {
     list(): Promise<import('./workshop').WorkshopCard[]>

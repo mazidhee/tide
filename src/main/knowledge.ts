@@ -300,13 +300,13 @@ export async function noteAttempt(a: Attempt): Promise<void> {
  * Evidence on a concept from somewhere that keeps no lesson record of its own (a passed stage of a
  * guided project). Kept once per source and place, however often it is sent.
  */
-export async function noteEvidence(e: { topic: string; kind: 'right' | 'partly' | 'wrong'; source: string; pos: string; at: number; path?: string }): Promise<void> {
+export async function noteEvidence(e: { topic: string; kind: 'right' | 'partly' | 'wrong' | 'taught'; source: string; pos: string; at: number; path?: string; weight?: number }): Promise<void> {
   const k = await knowledge()
   if (!k || !e.topic.trim()) return
   const { area, isPrivate } = await placeOf(e.path)
   const { concept, fresh } = conceptFor(k, e.topic, area, isPrivate)
   if (fresh.length) k.upsert(fresh)
-  k.record([{ concept: concept.id, source: e.source, pos: e.pos, kind: e.kind, at: e.at, weight: 1, ...(isPrivate ? { private: true } : {}) }])
+  k.record([{ concept: concept.id, source: e.source, pos: e.pos, kind: e.kind, at: e.at, weight: e.weight ?? 1, ...(isPrivate ? { private: true } : {}) }])
 }
 
 /** A topic as the map has it, with what it builds on (private concepts only for a reader on this Mac) */

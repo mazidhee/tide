@@ -346,6 +346,14 @@ function registerIpc() {
   ipcMain.handle('visuals:kill', (e, host: string, reason: string) => killVisual(e.sender, String(host), String(reason ?? 'it stopped answering').slice(0, 120)))
   ipcMain.handle('visuals:metrics', (e) => visualMetrics(e.sender))
   handle('knowledge:view', async () => (await import('./knowledge')).knowledgeView())
+  // ---- Videos (main/videos.ts) ----
+  const videos = () => import('./videos')
+  handle('videos:transcript', async (id: string, opts?: { path?: string; fetch?: boolean; course?: string; title?: string }) =>
+    (await videos()).getTranscript(String(id), { path: typeof opts?.path === 'string' ? opts.path : undefined, fetch: !!opts?.fetch, course: typeof opts?.course === 'string' ? opts.course : undefined, title: typeof opts?.title === 'string' ? opts.title : undefined })
+  )
+  handle('videos:fileTranscript', async (path: string) => (await videos()).fileTranscript(String(path)))
+  handle('videos:clips', async (topic: string, opts?: { limit?: number; recap?: boolean }) => (await videos()).clipsFor(String(topic ?? ''), { limit: Math.min(5, Number(opts?.limit) || 2), recap: !!opts?.recap }))
+  handle('videos:check', async (clip: import('@shared/video').Clip) => (await videos()).checkClipTimes({ video: String(clip?.video ?? ''), start: Number(clip?.start), end: Number(clip?.end), ...(typeof clip?.why === 'string' ? { why: clip.why } : {}) }))
   // ---- Courses from GitHub (main/courses.ts) ----
   const courses = () => import('./courses')
   handle('courses:list', async () => (await courses()).listCourses())
@@ -359,6 +367,20 @@ function registerIpc() {
   handle('courses:search', async (q: string) => (await courses()).searchCourses(String(q ?? ''), 12))
   handle('courses:preview', async (id: string) => (await courses()).coursePreview(String(id)))
   handle('courses:saveToNotes', async (id: string) => (await courses()).saveToNotes(String(id)))
+  handle('courses:track', async (id: string, lesson: string, patch: { read?: number; video?: { id: string; watched: number }; ran?: boolean }) => (await courses()).trackLesson(String(id), String(lesson), patch ?? {}))
+  // ---- Links that stay in Tide (shared/links): repository files, the reader view, the web view ----
+  const files = () => import('./courseFiles')
+  handle('links:courseFile', async (id: string, path: string) => (await files()).courseFileView(String(id), String(path ?? '')))
+  handle('links:githubFile', async (repo: string, ref: string, path: string) => (/^[\w.-]+\/[\w.-]+$/.test(String(repo)) ? (await files()).githubFileView(String(repo), String(ref ?? 'HEAD'), String(path ?? '')) : null))
+  handle('links:repoPdf', async (src: { course?: string; repo?: string; ref?: string }, path: string) => (await files()).repoPdf(src?.course ? { course: String(src.course) } : { repo: String(src?.repo ?? ''), ref: String(src?.ref ?? 'HEAD') }, String(path)))
+  handle('links:read', async (url: string, fresh?: boolean) => (await import('./linkReader')).readPage(String(url), !!fresh))
+  handle('links:pdf', async (url: string) => (await import('./linkReader')).pdfBytes(String(url)))
+  handle('links:repos', async () => (await courses()).importedRepos())
+  handle('links:related', async (topic: string, opts?: { exclude?: string; limit?: number }) => (await import('./related')).relatedMaterial(String(topic ?? ''), { exclude: typeof opts?.exclude === 'string' ? opts.exclude : undefined, limit: Math.min(4, Number(opts?.limit) || 3) }))
+  ipcMain.handle('web:open', async (e, url: string, bounds: import('./webView').Bounds) => (await import('./webView')).openWeb(e.sender, String(url), bounds))
+  ipcMain.handle('web:place', async (_e, bounds: import('./webView').Bounds, visible?: boolean) => (await import('./webView')).placeWeb(bounds, visible !== false))
+  ipcMain.handle('web:go', async (_e, action: 'back' | 'forward' | 'reload' | 'stop') => (await import('./webView')).webGo(action))
+  ipcMain.handle('web:close', async () => (await import('./webView')).closeWeb())
   handle('knowledge:review', async (concept: string) => (await import('./review')).reviewFor(concept))
   handle('knowledge:reviewAnswer', async (concept: string, item: import('@shared/review').ReviewItem, verdict: import('@shared/types').Verdict) => (await import('./review')).answerReview(concept, item, verdict))
   // ---- Guided projects and adaptive difficulty (main/workshop.ts, main/difficulty.ts) ----
@@ -718,6 +740,14 @@ if (app.isPackaged) app.setAsDefaultProtocolClient('tide')
 
 app.whenReady().then(() => {
   nativeTheme.themeSource = themeSource(getSettings().theme)
+  // YouTube's embedded player refuses to play without a referrer saying which app embeds it
+  // (error 153), and a window loaded from a file sends none. YouTube asks apps to send their app id
+  // as an https URL; only the player's own requests are touched.
+  session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ['https://www.youtube-nocookie.com/*'] }, (d, done) => {
+    const h = d.requestHeaders
+    if (!h.Referer && !h.referer) h.Referer = 'https://app.tide.study/'
+    done({ requestHeaders: h })
+  })
   wakeSearch().catch(() => {})
   // Start the model server if it isn't running, turn on prefix caching and the draft model, then
   // load the chat and lesson prompts into it, so the first reply is quick

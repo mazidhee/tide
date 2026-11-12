@@ -1,6 +1,7 @@
 import { readingHtml } from './reading'
 import { explainerForUrl, type Explainer } from '@shared/explainers'
 import { normalizeMath } from '@shared/modelText'
+import { LOCAL_VIDEO, linkTime, parseTime, youtubeIdOf } from '@shared/video'
 import MarkdownIt from 'markdown-it'
 import type StateInline from 'markdown-it/lib/rules_inline/state_inline.mjs'
 import type StateBlock from 'markdown-it/lib/rules_block/state_block.mjs'
@@ -21,12 +22,18 @@ DOMPurify.addHook('uponSanitizeElement', (node, data) => {
 const sanitize = (html: string) =>
   !DOMPurify.isSupported
     ? escapeHtml(html)
-    : DOMPurify.sanitize(html, {
+    : DOMPurify.sanitize(withFacades(html), {
     ADD_TAGS: ['iframe'],
     ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'target', 'loading', 'type', 'checked', 'disabled'],
         // DOMPurify's default pattern (values without a scheme pass), limited to the schemes we use
         ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|vault):|data:image\/|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i
   })
+
+/** A YouTube iframe written into a note as HTML becomes the same light placeholder as an embed: nothing loads until it's played */
+const withFacades = (html: string) =>
+  html.includes('<iframe')
+    ? html.replace(/<iframe\b[^>]*\bsrc="https:\/\/www\.youtube(?:-nocookie)?\.com\/embed\/([\w-]{11})(?:\?[^"]*?\bstart=(\d+))?[^"]*"[^>]*>\s*<\/iframe>/gi, (_, id: string, start?: string) => videoFacade(id, start ? Number(start) : null))
+    : html
 
 export interface RenderEnv {
   /** Vault relative path of the note being rendered */
@@ -68,10 +75,7 @@ export function resolveRelative(target: string, env: RenderEnv): string {
   return out.join('/') || byName || clean
 }
 
-export function youtubeEmbedId(url: string): string | null {
-  const m = url.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([\w-]{6,})/)
-  return m?.[1] ?? null
-}
+export const youtubeEmbedId = (url: string): string | null => youtubeIdOf(url)
 
 // ---------- Math ----------
 
@@ -313,11 +317,10 @@ function callouts(md: MarkdownIt) {
 
 function embedHtml(target: string, env: RenderEnv, alias?: string): string {
   const yt = youtubeEmbedId(target)
-  if (yt) {
-    return `<div class="video-embed"><iframe src="https://www.youtube-nocookie.com/embed/${yt}" title="YouTube video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe></div>`
-  }
+  if (yt) return videoFacade(yt, linkTime(target), env.notePath)
   const path = /^https?:/.test(target) ? target : resolveRelative(target, env)
   const src = /^https?:/.test(path) ? path : vaultUrl(path)
+  if (LOCAL_VIDEO.test(path) && !/^https?:/.test(path)) return fileFacade(path)
   if (/\.(png|jpe?g|gif|webp|svg|avif)$/i.test(path)) {
     const width = alias && /^\d+$/.test(alias) ? ` width="${alias}"` : ''
     return `<img src="${escapeHtml(src)}" alt="${escapeHtml(alias && !width ? alias : '')}"${width} loading="lazy">`
@@ -327,6 +330,21 @@ function embedHtml(target: string, env: RenderEnv, alias?: string): string {
   }
   return `<a class="wikilink" data-wikilink="${escapeHtml(target)}" href="#">${escapeHtml(alias || target)}</a>`
 }
+
+/**
+ * A video's placeholder: its thumbnail and a link to it, which lib/videoEmbeds turns into a player
+ * (only when it's pressed does YouTube's iframe load). Where that doesn't run it is still a picture
+ * that links to the video.
+ */
+export function videoFacade(id: string, start: number | null, notePath?: string): string {
+  const at = start && start > 0 ? Math.floor(start) : 0
+  return (
+    `<div class="vt-host" data-yt="${id}"${at ? ` data-start="${at}"` : ''}${notePath ? ` data-note="${escapeHtml(notePath)}"` : ''}>` +
+    `<a class="external vt-host-link" href="https://www.youtube.com/watch?v=${id}${at ? `&amp;t=${at}s` : ''}" target="_blank"><img src="https://i.ytimg.com/vi/${id}/hqdefault.jpg" alt="YouTube video" loading="lazy"></a></div>`
+  )
+}
+
+const fileFacade = (path: string) => `<div class="vt-host" data-file="${escapeHtml(path)}"><span class="vt-host-file">${escapeHtml(path.split('/').pop() ?? path)}</span></div>`
 
 // The app's own "external" icon (components/Icon.tsx)
 const EXTERNAL_ICON = 'M14 4h6v6M20 4l-9 9M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10'
@@ -392,6 +410,7 @@ export function createMarkdown() {
     const src = token.attrGet('src') ?? ''
     const alt = token.children?.map((c) => c.content).join('') ?? ''
     if (youtubeEmbedId(src)) return embedHtml(src, env)
+    if (LOCAL_VIDEO.test(src) && !/^(https?|data):/.test(src)) return embedHtml(src, env)
     const resolved = /^(https?|data|vault):/.test(src) ? src : vaultUrl(resolveRelative(src, env))
     if (/^https?:/.test(src)) {
       let from = ''
@@ -507,7 +526,29 @@ export function splitFrontmatter(raw: string): Frontmatter {
 // embeds are resolved with it.
 const rendered = new WeakMap<RenderEnv['filesByName'], ReturnType<typeof lru<string>>>()
 
+/**
+ * A lesson's tags for what it brings in (shared/related, shared/video) as placeholders that
+ * lib/lessonEmbeds turns into cards: <reading>, <suggest-course>, and a <clip> outside a lesson
+ * (a lesson's own clips are blocks of its reply). One still being written is hidden until it ends.
+ */
+export function lessonTags(body: string): string {
+  if (!/<(reading|suggest-course|clip)\b/i.test(body)) return body
+  const a = (attrs: string, n: string) => attrs.match(new RegExp(`\\b${n}\\s*=\\s*["']([^"']*)["']`, 'i'))?.[1] ?? ''
+  const q = (s: string) => escapeHtml(s.trim())
+  return body
+    .replace(/<reading\b([^>]*?)(?:\/>|>([\s\S]*?)<\/reading>)/gi, (_, at: string, why = '') => `\n\n<div class="rel-host" data-course="${q(a(at, 'course'))}" data-path="${q(a(at, 'path'))}" data-heading="${q(a(at, 'heading'))}" data-why="${q(why)}"></div>\n\n`)
+    .replace(/<suggest-course\b([^>]*?)(?:\/>|>([\s\S]*?)<\/suggest-course>)/gi, (_, at: string, why = '') => `\n\n<div class="sug-host" data-id="${q(a(at, 'id'))}" data-why="${q(why)}"></div>\n\n`)
+    .replace(/<clip\b([^>]*?)(?:\/>|>([\s\S]*?)<\/clip>)/gi, (all, at: string, why = '') => {
+      const id = youtubeIdOf(a(at, 'video')) ?? (/^[\w-]{11}$/.test(a(at, 'video')) ? a(at, 'video') : null)
+      const start = parseTime(a(at, 'start'))
+      const end = parseTime(a(at, 'end'))
+      return id && start != null && end != null ? `\n\n<div class="clip-host" data-video="${id}" data-start="${start}" data-end="${end}" data-why="${q(why)}"></div>\n\n` : all
+    })
+    .replace(/<(reading|suggest-course|clip)\b(?![\s\S]*<\/\1>)[^>]*$/i, '')
+}
+
 export function renderMarkdown(body: string, env: RenderEnv): string {
+  body = lessonTags(body)
   // A whole long note is rendered once by its view (and kept by it): not worth holding here too
   if (body.length > 20_000) return sanitize(instance.render(normalizeMath(body), env))
   let cache = rendered.get(env.filesByName)

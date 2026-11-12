@@ -23,12 +23,13 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - Claude teaches (your plan): Sonnet turns, Opus marking and plans, Haiku background; Tide's tools over MCP (notes, code, SQL, courses, transcripts, flashcards, recall); web search for non-private lessons; usage view; Claude Code in your terminal can use Tide (Settings › Models); private notebooks stay on Gemma
 - Claude's visuals: a custom interactive explainer per concept, sandboxed (no network, no access to Tide), checked and repaired before showing, cached per lesson
 - Claude's exercises are proven first: code against hidden tests (and a known mistake), SQL against the lab, maths by SymPy; repaired once or replaced; banked for reuse
+- Courses you live in: every link, file, article and YouTube video opens inside Tide (player with synced transcript, reader view, sandboxed web view); the tutor sees the page, section or video moment; lessons bring in credited readings and clips from your other courses
 - Faster lessons: off-thread index, cached rendering, steadier prompt cache, idle unload
 - The redesign, with the classic design in Settings
+- Courses you live in (branch `videos`): every link opens inside Tide (course files rendered natively, any GitHub file, YouTube in Tide's player with its transcript, web pages in a reader with Save to library, apps in a sandboxed web view); the course room (sidebar on hover, outline beside the text, the lecture beside it and in theatre when it plays, the tutor docked under the text); the tutor sees the page, section, video moment and selection and can move the video or page; lessons open with what your other courses and lectures add, credited; reading, watching and running course material counts in What you know
 
 ## Now
 
-- [ ] **Courses you live in, with videos.** Everything opens inside Tide: course files rendered natively, YouTube in Tide's own player with its transcript, web pages in Tide's reader (or a sandboxed in-Tide view when a page can't be made readable). The tutor sees what's on screen at every step: ask about this, quiz me on this, jump to a moment. Lessons draw on several courses at once, with credit (one shows the code, a video at 12:40 explains why, a reading gives the theory). Includes the paused "Videos in Tide" work.
 - [ ] **Courses from everywhere, kept fresh.** Beyond GitHub: open university courses (MIT OpenCourseWare, Open Yale, Stanford and CMU materials), QuantEcon lectures, free books, lecture series on YouTube, and official guides. Each is checked for licence and for being free without a login. Within your subjects, Tide looks for new and updated courses on a schedule and adds them to the catalogue as suggestions, never imported without your say.
 - [ ] **Tide tuned for finance, payments and quant.** Your focus subjects: stablecoins, payments and payment rails, core banking, open banking, payment infrastructure, quantitative finance, risk, blockchain, plus ML, data engineering, data science and economics.
   - Roadmaps for each, built from the best sources.
@@ -88,6 +89,7 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - [ ] **Better web clipper and search.** Compare Defuddle with the current clipper, and try a reranker; adopt only if the numbers win.
 - [ ] **Live preview leftovers.** The properties block at the top of a note, embedded notes, and tables and maths inside lists.
 - [ ] **Small fixes.**
+  - Courses: the video pausing for a question; highlights in course PDFs; github.io and some sites won't load on this network; Medium link cards come through rough; check Claude draws on a second course's code when it's better.
   - Readings sometimes arrive before an exercise Claude meant to set; a code ask written outside set_exercise is marked by eye.
   - Claude: marking waits 4–7 s while Opus thinks; try a lower effort setting for marking. Other background jobs (margin notes and the like) still run on Gemma.
   - Code editor: pandas parameter types show "Unknown" until pandas-stubs is in Tide's Python; rename only changes open files; ⌘⇧O is taken by Add Files.

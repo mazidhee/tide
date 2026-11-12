@@ -1807,6 +1807,7 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
     // A lesson or quiz reads its notes once, at the start: fresh passages every answer would make
     // each turn longer and slower, and the tutor can still search when it needs more
     sources.length && !((assigning || marking) && req.scope.kind === 'vault') && !(req.instructions && userTurns > 1) ? `Passages from what the student is studying right now:\n\n${sources.map((s) => `[${s.index}] ${s.title}${s.heading ? ` > ${s.heading}` : ''}\n${clip(s.text, req.instructions || req.scope.kind === 'vault' ? 1000 : 1600)}`).join('\n\n---\n\n')}` : '',
+    req.onScreen ? `What the student has on screen in Tide right now:\n${req.onScreen.slice(0, 6000)}` : '',
     req.attachment ? `The student selected this passage:\n"""\n${req.attachment}\n"""` : '',
     before,
     subject,

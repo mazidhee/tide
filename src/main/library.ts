@@ -9,8 +9,9 @@ import { thumbPath } from '@shared/thumbs'
 import { getSettings } from './settings'
 import { absPath, joinRel, sanitizeName, uniquePath, writeText } from './vault'
 import { readArticle, restoreFormulas, type Article } from './extract'
+import { youtubeIdOf, type Segment as VideoSegment } from '@shared/video'
 
-const BROWSER_UA =
+export const BROWSER_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36'
 
 const libraryDir = (sub: string) => joinRel(getSettings().libraryFolder || 'Library', sub)
@@ -70,17 +71,9 @@ export function articleMarkdown(article: Pick<Article, 'content' | 'formulas' | 
 
 // ---------- YouTube ----------
 
+/** The video id in a YouTube link (shared/video), or null */
 export function youtubeId(url: string): string | null {
-  try {
-    const u = new URL(url)
-    if (u.hostname === 'youtu.be') return u.pathname.slice(1) || null
-    if (!/(^|\.)youtube\.com$/.test(u.hostname)) return null
-    if (u.pathname === '/watch') return u.searchParams.get('v')
-    const m = u.pathname.match(/^\/(shorts|embed|live)\/([\w-]{6,})/)
-    return m?.[2] ?? null
-  } catch {
-    return null
-  }
+  return youtubeIdOf(url)
 }
 
 interface CaptionTrack {
@@ -90,10 +83,7 @@ interface CaptionTrack {
   name?: { simpleText?: string; runs?: { text: string }[] }
 }
 
-interface Segment {
-  start: number
-  text: string
-}
+type Segment = VideoSegment
 
 function decodeEntities(s: string) {
   return s
@@ -107,10 +97,10 @@ function decodeEntities(s: string) {
 
 function parseCaptions(body: string): Segment[] {
   if (body.trim().startsWith('{')) {
-    const json = JSON.parse(body) as { events?: { tStartMs?: number; segs?: { utf8: string }[] }[] }
+    const json = JSON.parse(body) as { events?: { tStartMs?: number; dDurationMs?: number; segs?: { utf8: string }[] }[] }
     return (json.events ?? [])
       .filter((e) => e.segs)
-      .map((e) => ({ start: (e.tStartMs ?? 0) / 1000, text: e.segs!.map((s) => s.utf8).join('') }))
+      .map((e) => ({ start: (e.tStartMs ?? 0) / 1000, ...(e.dDurationMs ? { dur: e.dDurationMs / 1000 } : {}), text: e.segs!.map((s) => s.utf8).join('') }))
   }
   // srv3 (<p t="ms">) or srv1 (<text start="s">) XML
   const segments: Segment[] = []
@@ -118,8 +108,9 @@ function parseCaptions(body: string): Segment[] {
     const attrs = m[1]
     const start = attrs.match(/\bstart="([\d.]+)"/)?.[1]
     const t = attrs.match(/\bt="(\d+)"/)?.[1]
+    const dur = attrs.match(/\bdur="([\d.]+)"/)?.[1] ?? (attrs.match(/\bd="(\d+)"/)?.[1] ? String(Number(attrs.match(/\bd="(\d+)"/)![1]) / 1000) : undefined)
     const text = decodeEntities(m[2].replace(/<[^>]+>/g, ''))
-    segments.push({ start: start ? Number(start) : Number(t ?? 0) / 1000, text })
+    segments.push({ start: start ? Number(start) : Number(t ?? 0) / 1000, ...(dur ? { dur: Number(dur) } : {}), text })
   }
   return segments
 }
@@ -173,10 +164,31 @@ function transcriptMarkdown(videoId: string, segments: Segment[]): string {
   return paras.join('\n\n')
 }
 
-async function saveYoutube(url: string, videoId: string): Promise<ClipResult> {
+/** What YouTube says about a video, and its captions as segments. Never throws: offline, blocked or captionless gives what it can */
+export interface FetchedVideo {
+  title: string
+  channel?: string
+  /** Seconds */
+  duration?: number
+  description?: string
+  segments: { start: number; dur?: number; text: string }[]
+  /** YouTube answered at all (false offline or when every endpoint failed) */
+  reached: boolean
+}
+
+/**
+ * A video's details and captions, from YouTube's player endpoint (unofficial: the Android client,
+ * whose caption URLs work without the web player's proof-of-origin token), with the watch page's
+ * own data and the public oEmbed endpoint behind it. Any of these can fail or change; whatever
+ * fails is left out rather than stopping the rest.
+ */
+export async function fetchVideo(videoId: string): Promise<FetchedVideo> {
   const page = await fetch(`https://www.youtube.com/watch?v=${videoId}&hl=en`, {
-    headers: { 'User-Agent': BROWSER_UA, 'Accept-Language': 'en-US,en;q=0.9', Cookie: 'CONSENT=YES+1' }
-  }).then((r) => r.text())
+    headers: { 'User-Agent': BROWSER_UA, 'Accept-Language': 'en-US,en;q=0.9', Cookie: 'CONSENT=YES+1' },
+    signal: AbortSignal.timeout(15_000)
+  })
+    .then((r) => r.text())
+    .catch(() => '')
 
   const apiKey = page.match(/"INNERTUBE_API_KEY":"([^"]+)"/)?.[1]
   const pageData = (() => {
@@ -197,24 +209,39 @@ async function saveYoutube(url: string, videoId: string): Promise<ClipResult> {
     if (embed?.title) details.title = embed.title
     if (embed?.author_name && !details.author) details.author = embed.author_name
   }
-  const title: string = details.title || `YouTube video ${videoId}`
 
-  let transcript = ''
+  let segments: Segment[] = []
   for (const data of [player, pageData]) {
     const tracks: CaptionTrack[] = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? []
     const track = pickTrack(tracks)
     if (!track) continue
     try {
-      const body = await fetch(track.baseUrl, { headers: { 'User-Agent': BROWSER_UA } }).then((r) => r.text())
-      const segments = parseCaptions(body)
-      if (segments.length) {
-        transcript = transcriptMarkdown(videoId, segments)
+      const body = await fetch(track.baseUrl, { headers: { 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(15_000) }).then((r) => r.text())
+      const found = parseCaptions(body)
+      if (found.length) {
+        segments = found
         break
       }
     } catch {
       // try the next source
     }
   }
+  return {
+    title: details.title || `YouTube video ${videoId}`,
+    channel: details.author || undefined,
+    duration: Number(details.lengthSeconds) || undefined,
+    description: details.shortDescription || undefined,
+    segments,
+    reached: !!(page || player || details.title)
+  }
+}
+
+async function saveYoutube(videoId: string): Promise<ClipResult> {
+  const video = await fetchVideo(videoId)
+  if (!video.reached) throw new Error('Couldn’t reach YouTube. Check your connection and try again.')
+  const details = { title: video.title, author: video.channel, lengthSeconds: video.duration, shortDescription: video.description }
+  const title = video.title
+  const transcript = video.segments.length ? transcriptMarkdown(videoId, video.segments) : ''
 
   const description: string = details.shortDescription ?? ''
   const md =
@@ -237,6 +264,8 @@ async function saveYoutube(url: string, videoId: string): Promise<ClipResult> {
 
   const path = uniquePath(joinRel(libraryDir('Videos'), `${sanitizeName(title)}.md`))
   await writeText(path, md)
+  // The captions as fetched, line by line, for the player's transcript and the tutor's clips (main/videos)
+  if (video.segments.length) await import('./videos').then((v) => v.keepTranscript(videoId, video, path)).catch(() => {})
   return { path, title }
 }
 
@@ -357,7 +386,7 @@ export async function saveUrl(rawUrl: string): Promise<ClipResult> {
   const url = /^https?:\/\//i.test(rawUrl.trim()) ? rawUrl.trim() : `https://${rawUrl.trim()}`
   new URL(url) // throws on invalid input
   const videoId = youtubeId(url)
-  return videoId ? saveYoutube(url, videoId) : saveArticle(url)
+  return videoId ? saveYoutube(videoId) : saveArticle(url)
 }
 
 // ---------- Files ----------

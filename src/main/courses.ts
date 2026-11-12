@@ -22,6 +22,7 @@ import {
   buildOutline,
   catalogueCourse,
   courseDone,
+  studied,
   lessonSections,
   lessonUrl,
   nextLesson,
@@ -41,7 +42,7 @@ import { chunkMarkdown, openChunkIndex, type Backend } from './search'
 import { uniquePath, writeText } from './vault'
 
 const root = () => join(app.getPath('userData'), 'courses')
-const repoDir = (id: string) => join(root(), id, 'repo')
+export const repoDir = (id: string) => join(root(), id, 'repo')
 const metaFile = (id: string) => join(root(), id, 'course.json')
 const progressFile = () => join(root(), 'progress.json')
 
@@ -229,6 +230,8 @@ async function readAndIndex(c: CatalogueCourse, method: Imported['method'], comm
   const meta: Imported = { id: c.id, importedAt, updatedAt: Date.now(), ...(commit ? { commit } : {}), method, outline }
   await writeJson(metaFile(c.id), meta)
   broadcast({ id: c.id, phase: 'done', detail: `${outline.lessons} lessons` })
+  // Its lectures' captions, in the background, so lessons can draw on them (main/related)
+  void import('./related').then((r) => r.fetchCourseTranscripts()).catch(() => {})
   return meta
 }
 
@@ -312,6 +315,43 @@ async function setProgress(course: string, lesson: string, f: (p: LessonProgress
   const snapshot = JSON.stringify(all)
   progressWrite = progressWrite.then(() => writeJson(progressFile(), JSON.parse(snapshot))).catch(() => {})
   await progressWrite
+}
+
+/**
+ * How you are getting on with a lesson as you read it: how far down you read, how much of each of
+ * its videos you watched, code you ran. Once it's read to the end (and a video of it watched),
+ * What you know hears the lesson was studied: a light "taught", never a right answer.
+ */
+export async function trackLesson(course: string, lesson: string, patch: { read?: number; video?: { id: string; watched: number }; ran?: boolean }): Promise<CourseProgress> {
+  const now = Date.now()
+  let became = false
+  await setProgress(course, lesson, (p) => {
+    const base: LessonProgress = p ?? { started: now, updated: now, done: false, right: 0, partly: 0, wrong: 0 }
+    const read = Math.max(base.read ?? 0, Math.min(1, Number(patch.read) || 0))
+    const watched = { ...(base.watched ?? {}) }
+    if (patch.video && /^[\w-]{11}$/.test(patch.video.id)) watched[patch.video.id] = Math.max(watched[patch.video.id] ?? 0, Math.min(1, Number(patch.video.watched) || 0))
+    const next: LessonProgress = { ...base, updated: now, read, ...(Object.keys(watched).length ? { watched } : {}), ...(patch.ran ? { ran: (base.ran ?? 0) + 1 } : {}) }
+    became = !studied(base, Object.keys(watched).length) && studied(next, Object.keys(watched).length)
+    return next
+  })
+  if (became) {
+    const meta = await importedCourse(course)
+    const c = catalogueCourse(course)
+    const l = meta?.outline.modules.flatMap((m) => m.lessons.map((x) => ({ m, x }))).find((y) => y.x.id === lesson)
+    if (c && l) {
+      const { noteEvidence } = await import('./knowledge')
+      const topic = /^(introduction|intro|overview|readme|summary)$/i.test(l.x.title.trim()) ? l.m.title : l.x.title
+      await noteEvidence({ topic, kind: 'taught', source: `course:${course}`, pos: `${lesson}.studied`, at: now, weight: 0.5 }).catch(() => {})
+    }
+  }
+  return (await allProgress())[course] ?? {}
+}
+
+/** The imported courses' repositories, so links into them open in the course reader */
+export async function importedRepos(): Promise<{ id: string; repo: string; branch: string }[]> {
+  const out: { id: string; repo: string; branch: string }[] = []
+  for (const c of CATALOGUE) if (existsSync(metaFile(c.id))) out.push({ id: c.id, repo: c.repo, branch: c.branch })
+  return out
 }
 
 export async function markLesson(course: string, lesson: string, done: boolean): Promise<CourseProgress> {

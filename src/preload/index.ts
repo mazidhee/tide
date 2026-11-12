@@ -158,6 +158,12 @@ const api: TideApi = {
     get: invoke('lessons:get'),
     challenge: invoke('lessons:challenge')
   },
+  videos: {
+    transcript: invoke('videos:transcript'),
+    fileTranscript: invoke('videos:fileTranscript'),
+    clips: invoke('videos:clips'),
+    check: invoke('videos:check')
+  },
   visuals: {
     policy: invoke('visuals:policy'),
     repair: invoke('visuals:repair'),
@@ -182,7 +188,25 @@ const api: TideApi = {
     search: invoke('courses:search'),
     saveToNotes: invoke('courses:saveToNotes'),
     preview: invoke('courses:preview'),
+    track: invoke('courses:track'),
     onProgress: (cb) => subscribe<import('../main/courses').ImportPhase>('courses:progress', cb)
+  },
+  links: {
+    courseFile: invoke('links:courseFile'),
+    githubFile: invoke('links:githubFile'),
+    repoPdf: invoke('links:repoPdf'),
+    read: invoke('links:read'),
+    pdf: invoke('links:pdf'),
+    repos: invoke('links:repos'),
+    related: invoke('links:related'),
+    onGoto: (cb) => subscribe<{ t?: number; section?: string; video?: string }>('view:goto', cb)
+  },
+  web: {
+    open: invoke('web:open'),
+    place: invoke('web:place'),
+    go: invoke('web:go'),
+    close: invoke('web:close'),
+    onState: (cb) => subscribe<import('../main/webView').WebState>('web:state', cb)
   },
   workshop: {
     list: invoke('workshop:list'),

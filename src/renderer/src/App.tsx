@@ -14,6 +14,8 @@ import { folderOf, scopeTopic, useApp } from './state'
 import { Sidebar } from './components/Sidebar'
 import { NoteView } from './components/NoteView'
 import { ChatPanel } from './components/ChatPanel'
+import { LinkSheet } from './components/LinkSheet'
+import { SidebarPeek } from './components/SidebarPeek'
 import { Home } from './components/Home'
 import { Library } from './components/Library'
 import { StudyView, isDue } from './components/Study'
@@ -186,6 +188,8 @@ export default function App() {
 
   const app = useApp()
   const { settings, view, dialog } = app
+  // Development only: the dev copy's checks drive views from DevTools
+  if (import.meta.env.DEV) (window as unknown as { __tideApp?: typeof app }).__tideApp = app
   const [due, setDue] = useState({ due: 0, total: 0 })
   const [dragging, setDragging] = useState(false)
 
@@ -373,12 +377,15 @@ export default function App() {
   if (focusId && !focusReady) return <div className="shell focus-window" />
 
   // Views with their own tutor beside them don't get the floating Ask button or the chat panel
-  const ownTutor = ['chat', 'lab', 'code', 'design', 'drill', 'session', 'exam'].includes(view.kind) || (view.kind === 'file' && /\.canvas$/i.test(view.path))
+  // A course being read has its tutor docked in its reading column (the right is the video's)
+  const ownTutor = ['chat', 'lab', 'code', 'design', 'drill', 'session', 'exam'].includes(view.kind) || (view.kind === 'file' && /\.canvas$/i.test(view.path)) || (view.kind === 'courses' && !!view.id)
   // In the new design Home is the whole width of the window and has its own ask box: the tutor
   // panel stays beside what you read (a note, a PDF, the library), one click away from Home
   // …until you ask something from Home: then it opens there with your question, and stays until you close it
   // The map of what you know and Settings are the same: the whole width, the panel on request
   const wide = view.kind === 'home' || view.kind === 'settings' || (view.kind === 'graph' && !view.focus && (view.tab ?? lastBrainTab()) === 'know')
+  // A course being read is the whole window: Tide's sidebar steps back to the left edge, there on hover
+  const immersive = view.kind === 'courses' && !!view.id && !focusId
   const noPanel = ownTutor || (tide && wide && homeAsked === null)
   let main: React.ReactNode
   if (view.kind === 'file') {
@@ -418,7 +425,7 @@ export default function App() {
 
   return (
     <div
-      className={`shell${settings.sidebarCollapsed || focusId ? ' no-sidebar' : ''}${focusId ? ' focus-window' : ''}${settings.chatOpen && !noPanel && !focusId ? ' with-chat' : ''}`}
+      className={`shell${settings.sidebarCollapsed || focusId || immersive ? ' no-sidebar' : ''}${immersive ? ' immersive' : ''}${focusId ? ' focus-window' : ''}${settings.chatOpen && !noPanel && !focusId ? ' with-chat' : ''}`}
       onDragOver={(e) => {
         if ([...e.dataTransfer.types].some((t) => t === 'Files' || t === 'text/uri-list')) {
           e.preventDefault()
@@ -428,10 +435,11 @@ export default function App() {
       onDragLeave={(e) => e.currentTarget === e.target && setDragging(false)}
       onDrop={onDrop}
     >
-      {!settings.sidebarCollapsed && !focusId && <Sidebar dueCount={due.due} />}
+      {!settings.sidebarCollapsed && !focusId && !immersive && <Sidebar dueCount={due.due} />}
+      {immersive && <SidebarPeek dueCount={due.due} />}
       <main className="main">
         {!['file', 'graph', 'help', 'lab', 'code', 'design', 'chat', 'session', 'quiz', 'exam'].includes(view.kind) && (tide ? <TopBar /> : <div className="titlebar-drag drag" />)}
-        {settings.sidebarCollapsed && !focusId && (
+        {settings.sidebarCollapsed && !focusId && !immersive && (
           <div className="floating-controls no-drag">
             <button className="icon-btn" title="Show sidebar (⌘\)" onClick={() => app.updateSettings({ sidebarCollapsed: false })}>
               <Icon name="sidebar" />
@@ -450,6 +458,7 @@ export default function App() {
         <ErrorBoundary resetKey={JSON.stringify(view)}>
           <Suspense fallback={<div className="view-loading" aria-busy="true" />}>{main}</Suspense>
         </ErrorBoundary>
+        {!focusId && <LinkSheet />}
         {!settings.chatOpen && !ownTutor && !focusId && (
           <button className="chat-fab" onClick={() => app.updateSettings({ chatOpen: true })} title="Open tutor (⌘J)">
             <Icon name="sparkle" size={16} />

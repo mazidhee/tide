@@ -21,16 +21,27 @@ import { ASKED, GO_ON, closeGrade, ownWords, parseBlocks } from './session'
 /** "I don't know", said with the button or typed as the answer */
 const IDK = /^(Answer:\s*)?(I don['’]t know|idk|no idea)\.?\s*$/i
 
+/**
+ * Not an answer: "I don't know", however it's typed ("i dont know i am learning from scratch",
+ * "no idea, never learned this", "I haven't learned this yet"). Marking it would put a miss on the
+ * record (and a flashcard) for something the learner never tried.
+ */
+const NOT_KNOWN = /^(answer:\s*)?(i\s*(don['’]?t|do not)\s+know|idk|no idea|not a clue|no clue|i have no idea|i('ve| have)? never (learn|learnt|learned|studied|seen|done)|i haven['’]?t (learn|learnt|learned|studied|seen|done)|i['’]?m (learning|starting) (this )?(from scratch|from zero|from the beginning)|(learning|starting) from scratch|i['’]?m (new|a beginner)|pass)\b/i
+export function saysDontKnow(said: string): boolean {
+  const mine = ownWords(said).replace(/\n\(Confidence: [^)]*\)\s*$/, '').trim()
+  return IDK.test(mine) || (NOT_KNOWN.test(mine) && mine.replace(/^answer:\s*/i, '').length < 160 && !/\b(but|because|though|think|maybe|guess|probably|perhaps|is|are|=)\b|\d/i.test(mine.replace(NOT_KNOWN, '')))
+}
+
 /** Whether what the learner sent is an answer to mark: not a question of theirs, Go on, a hint request or "I don't know" */
 export function isAnswer(said: string): boolean {
   const mine = ownWords(said).replace(/\n\(Confidence: [^)]*\)\s*$/, '').trim()
-  return /^Answer:/i.test(mine) && !IDK.test(mine)
+  return /^Answer:/i.test(mine) && !IDK.test(mine) && !saysDontKnow(mine)
 }
 
 /** Whether a mark on the reply to this message has nothing to mark */
 export const nothingToMark = (said: string) => {
   const mine = ownWords(said).trim()
-  return mine.startsWith(ASKED) || mine === GO_ON || /^\[hint\]$/i.test(mine) || IDK.test(mine.replace(/\n\(Confidence: [^)]*\)\s*$/, '').trim())
+  return mine.startsWith(ASKED) || mine === GO_ON || /^\[hint\]$/i.test(mine) || saysDontKnow(mine)
 }
 
 /** Grades turned back into what they say: the feedback stays, as a paragraph, and no mark is recorded */

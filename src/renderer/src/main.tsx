@@ -35,6 +35,8 @@ import './styles/livePreview.css'
 import './styles/tide/projects.css'
 // humanities: the EPUB reader, Discuss this, reading together, appraisals, free books
 import './styles/humanities.css'
+import './styles/video.css'
+import './styles/links.css'
 import { resolveDesign } from '@shared/design'
 import { AppProvider } from './state'
 import App from './App'
@@ -42,6 +44,10 @@ import { startLab } from './lib/lab'
 import { startMermaid } from './lib/mermaid'
 import { startLightbox } from './lib/lightbox'
 import { startSims } from './lib/sims'
+import { startVideoEmbeds } from './lib/videoEmbeds'
+import { startLessonEmbeds } from './lib/lessonEmbeds'
+import { goto, listenForLinks } from './lib/linkNav'
+import { seekPlayer } from './lib/videoHub'
 import { startVisuals, configureVisuals } from './lib/visuals'
 import { renderMarkdown } from './lib/markdown'
 
@@ -51,6 +57,14 @@ window.tide.settings.get().then((settings) => {
   startMermaid()
   startLab()
   startSims()
+  startVideoEmbeds()
+  // Every link opens in Tide (lib/linkNav), and the tutor can move the view (show_in_view)
+  startLessonEmbeds()
+  listenForLinks()
+  window.tide.links.onGoto((g) => {
+    if (g.t != null) seekPlayer(g.t, g.video)
+    if (g.section) goto({ section: g.section })
+  })
   // Claude's visuals: a fallback diagram is ordinary Markdown (its mermaid is drawn like any other)
   configureVisuals({ markdown: (t) => renderMarkdown(t, { notePath: '', filesByName: new Map() }) })
   startVisuals()
