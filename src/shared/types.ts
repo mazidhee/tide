@@ -320,7 +320,8 @@ export interface ExamOptions {
   questions: number
   minutes: number
   difficulty: 'gentle' | 'normal' | 'hard' | 'olympiad'
-  style: 'university' | 'problems' | 'short'
+  /** mixed: a mock exam's paper of several question types (Practice › Mock) */
+  style: 'university' | 'problems' | 'short' | 'mixed'
 }
 
 export interface ExamPart {
@@ -741,6 +742,25 @@ export interface TideApi {
     setReminder(r: import('./mentalMaths').Reminder): Promise<import('./mentalMaths').Reminder>
     /** Why a missed answer is what it is: Claude's quick model when it teaches, else the fixed steps */
     explain(a: import('./mentalMaths').MathsAnswer): Promise<{ text: string; by: 'claude' | 'tide' }>
+  }
+  /** Mock interviews and exams (main/mocks, shared/mocks) */
+  mocks: {
+    status(): Promise<import('../main/mocks').MockStatus>
+    bank(): Promise<{ id: string; title: string; tags: import('./mockBank').BankTag[]; level: number }[]>
+    start(setup: import('../main/mocks').MockSetup): Promise<import('../main/mocks').MockStarted>
+    /** One turn with the interviewer (Claude); the reply also streams as onEvent deltas */
+    say(id: string, text: string, state: import('../main/mocks').SayState): Promise<string>
+    hint(id: string, state: import('../main/mocks').SayState): Promise<{ text: string; hints: number }>
+    /** The candidate's code against the hidden tests: names and outcomes only */
+    test(id: string, code: string): Promise<import('../main/mocks').TestOutcome>
+    answer(id: string, questionId: string, text: string): Promise<{ followUp?: string }>
+    end(id: string, input: import('../main/mocks').MockEndInput): Promise<{ debrief: import('./mocks').MockDebrief; record: import('./mocks').MockRecord; fed: import('../main/mocks').MockFed }>
+    cancel(id: string): Promise<void>
+    stop(id: string): Promise<void>
+    history(): Promise<import('./mocks').MockRecord[]>
+    record(id: string): Promise<unknown>
+    examTopics(): Promise<string[]>
+    onEvent(cb: (e: { id: string; delta: string }) => void): () => void
   }
   practice: {
     /** A coding challenge on a topic, note, notebook or book chapter */

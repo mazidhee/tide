@@ -16,6 +16,8 @@ export type View =
   | { kind: 'lessons' }
   | { kind: 'learn' }
   | { kind: 'practice' }
+  /** A mock interview or exam (components/mock): its brief, the timed session and the debrief; `review` opens a past debrief */
+  | { kind: 'mock'; mode: import('@shared/mocks').MockMode; nonce?: number; review?: string }
   // Guided projects (components/WorkshopView.tsx): the list, a project, or a roadmap's "Project:" item
   | { kind: 'workshop'; id?: string; from?: { notebook?: string; topic?: string }; nonce?: number }
   | { kind: 'new-topic'; topic?: string; goal?: string; auto?: boolean; nonce?: number }

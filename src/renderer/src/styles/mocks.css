@@ -1,0 +1,1030 @@
+/*
+  Mock interviews and exams (components/mock). Calm and plain for long sittings: neutral surfaces,
+  the one action colour (--accent) for what is live or chosen, and the chart in --series-1 only.
+  Every colour is a theme token, so it holds in all seven themes and both designs.
+*/
+
+/* ---------- Practice › Mock ---------- */
+
+.mk-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.mk-who {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 2px 0 14px;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+.mk-who svg {
+  flex-shrink: 0;
+}
+
+.mk-modes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.mk-modes li {
+  border-bottom: 1px solid var(--line);
+}
+
+.mk-mode {
+  display: grid;
+  grid-template-columns: 32px 1fr auto 14px;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 13px 10px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-mode:hover {
+  background: var(--bg-hover);
+}
+
+.mk-mode:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.mk-mode-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--bg-inset);
+  color: var(--ink-soft);
+}
+
+.mk-mode:hover .mk-mode-icon {
+  color: var(--accent);
+}
+
+.mk-mode-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mk-mode-name {
+  font-weight: 600;
+  font-size: var(--text-md);
+}
+
+.mk-mode-blurb {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+
+.mk-mode-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.mk-mode-meta strong {
+  font-size: var(--text-md);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.mk-mode-go {
+  color: var(--ink-muted);
+  opacity: 0.6;
+}
+
+.mk-history {
+  margin-top: 28px;
+}
+
+.mk-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.mk-history-head h3 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.mk-trend {
+  margin-bottom: 12px;
+}
+
+.mk-recent {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mk-recent-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto auto 48px;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-recent-row:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.mk-recent-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.mk-recent-kind,
+.mk-recent-when {
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+.mk-recent-score {
+  text-align: right;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ---------- The view ---------- */
+
+.mock .mk-error {
+  margin: 8px 24px 0;
+}
+
+.mk-clock {
+  margin-right: 8px;
+}
+
+.mk-confirm {
+  color: var(--danger);
+}
+
+.mk-wait {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex: 1;
+  color: var(--ink-soft);
+}
+
+.mk-wait p {
+  margin: 0;
+}
+
+.mk-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 6px;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+.mk-h1 {
+  margin: 0 0 8px;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.mk-lede {
+  margin: 0 0 8px;
+  max-width: 62ch;
+  font-size: var(--text-lg);
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.mk-block {
+  margin-top: 30px;
+}
+
+.mk-block h2 {
+  margin: 0 0 12px;
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.mk-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mk-block-head h2 {
+  margin: 0;
+}
+
+/* The brief */
+
+.mk-brief .mk-h1 {
+  margin-bottom: 4px;
+}
+
+.mk-brief,
+.mk-debrief {
+  max-width: 760px;
+  margin: 0 auto;
+  padding-top: 20px;
+}
+
+.mk-expect {
+  margin: 0 0 14px;
+  padding-left: 18px;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+.mk-expect li + li {
+  margin-top: 4px;
+}
+
+.mk-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.mk-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.mk-label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.mk-label .muted {
+  font-weight: 400;
+}
+
+.mk-tags .chip {
+  height: 26px;
+  font-size: var(--text-sm);
+}
+
+.mk-input {
+  width: 100%;
+  max-width: 520px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s);
+  background: var(--field, var(--bg-raised));
+  color: var(--ink);
+  font: inherit;
+}
+
+.mk-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring, 0 0 0 3px var(--accent-soft));
+}
+
+.mk-rubric {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.mk-rubric li {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 16px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--text-sm);
+}
+
+.mk-rubric-label {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.mk-rubric-what {
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.mk-rubric-what em {
+  font-style: normal;
+  color: var(--ink-muted);
+}
+
+.mk-start {
+  margin: 34px 0 20px;
+}
+
+/* ---------- The live session ---------- */
+
+.mk-live {
+  flex: 1;
+  min-height: 0;
+  border-top: 1px solid var(--line);
+}
+
+.mk-split {
+  display: grid;
+  grid-template-columns: minmax(320px, 36%) minmax(0, 1fr);
+}
+
+.mk-split.design,
+.mk-split.quant,
+.mk-split.behavioural {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 34%);
+}
+
+.mk-side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+}
+
+.mk-split:not(.design):not(.quant):not(.behavioural) .mk-side {
+  border-right: 1px solid var(--line);
+}
+
+.mk-split.design .mk-side,
+.mk-split.quant .mk-side,
+.mk-split.behavioural .mk-side {
+  border-left: 1px solid var(--line);
+}
+
+.mk-work {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.mk-problem {
+  flex-shrink: 0;
+  max-height: 46%;
+  overflow-y: auto;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.mk-problem h1 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.mk-problem p,
+.mk-problem .prose,
+.mk-problem .prose p {
+  font-family: var(--font-ui);
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.mk-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.mk-examples code {
+  display: block;
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: var(--code-bg);
+  font: 12px var(--font-code);
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mk-editor {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.mk-editor > * {
+  height: 100%;
+}
+
+/* Tests */
+
+.mk-tests {
+  flex-shrink: 0;
+  max-height: 36%;
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+  padding: 10px 16px 12px;
+  background: var(--bg);
+}
+
+.mk-tests-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.mk-tests-head .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mk-tests-count {
+  margin-left: auto;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.mk-tests-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--text-sm);
+}
+
+.mk-tests-list li {
+  display: grid;
+  grid-template-columns: 16px auto 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  color: var(--ink-muted);
+}
+
+.mk-tests-list li.pass,
+.mk-tests-list li.fail {
+  color: var(--ink);
+}
+
+.mk-test-mark {
+  display: grid;
+  place-items: center;
+  align-self: center;
+}
+
+.mk-tests-list li.pass .mk-test-mark {
+  color: var(--accent);
+}
+
+.mk-tests-list li.fail .mk-test-mark {
+  color: var(--danger);
+}
+
+.mk-test-why {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 11.5px var(--font-code);
+  color: var(--ink-muted);
+}
+
+.mk-tests-error {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--code-bg);
+  font: 12px var(--font-code);
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+}
+
+/* The interviewer */
+
+.mk-chat {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.mk-chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 22px 4px;
+}
+
+.mk-chat-title {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-muted);
+}
+
+.mk-hint-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-sm);
+}
+
+.mk-chat-lines {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 22px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mk-chat-note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-inset);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.mk-line p {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.mk-line-who {
+  display: block;
+  margin-bottom: 2px;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.mk-line.interviewer p {
+  color: var(--ink);
+}
+
+.mk-line.candidate {
+  align-self: flex-end;
+  max-width: 88%;
+}
+
+.mk-line.candidate p {
+  padding: 7px 11px;
+  border-radius: 10px;
+  background: var(--bg-inset);
+  color: var(--ink-soft);
+}
+
+.mk-line.candidate.hint p {
+  background: none;
+  padding: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+.mk-typing {
+  width: 28px;
+  height: 8px;
+  background: radial-gradient(circle, var(--ink-muted) 2px, transparent 2.5px) 0 0 / 10px 8px repeat-x;
+  opacity: 0.6;
+  animation: mk-typing 1.2s ease-in-out infinite;
+}
+
+@keyframes mk-typing {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-typing {
+    animation: none;
+  }
+}
+
+.mk-chat-box {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 0 16px 14px;
+  padding: 8px 8px 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--bg-raised);
+}
+
+.mk-chat-box:focus-within {
+  border-color: var(--accent);
+}
+
+.mk-chat .mk-chat-box textarea {
+  flex: 1;
+  padding: 2px 0;
+  box-shadow: none;
+  border-radius: 0;
+  min-height: 38px;
+  max-height: 140px;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-md);
+  line-height: 1.45;
+}
+
+.mk-chat-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Design */
+
+.mk-canvas {
+  position: relative;
+}
+
+.mk-canvas > * {
+  flex: 1;
+  min-height: 0;
+}
+
+.mk-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 22px;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.mk-notes textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-raised);
+  color: var(--ink);
+  font: 12.5px/1.5 var(--font-code);
+  font-weight: 400;
+  resize: vertical;
+}
+
+.mk-notes textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Quant and behavioural */
+
+.mk-question-col {
+  overflow-y: auto;
+  padding: 28px 40px 60px;
+}
+
+.mk-progress {
+  display: flex;
+  gap: 4px;
+  margin: 0 auto 34px;
+  padding: 0;
+  max-width: 640px;
+  width: 100%;
+  list-style: none;
+}
+
+.mk-progress li {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+
+.mk-progress li.done {
+  background: var(--ink-muted);
+}
+
+.mk-progress li.on {
+  background: var(--accent);
+}
+
+.mk-question {
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.mk-question-text {
+  margin: 0 0 18px;
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.mk-follow {
+  margin: -6px 0 16px;
+  padding-left: 12px;
+  border-left: 2px solid var(--accent);
+  font-size: var(--text-md);
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.mk-answer {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-lg);
+  line-height: 1.5;
+  resize: none;
+}
+
+.mk-answer:not(.long) {
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-answer.long {
+  resize: vertical;
+  font-size: var(--text-md);
+}
+
+.mk-answer:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring, 0 0 0 3px var(--accent-soft));
+}
+
+.mk-question-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+/* Exam */
+
+.mk-paper {
+  padding-top: 10px;
+}
+
+/* ---------- The debrief ---------- */
+
+.mk-overall {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin: 4px 0 10px;
+}
+
+.mk-overall strong {
+  font-size: 44px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.mk-verdict {
+  padding: 3px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.mk-scores {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.mk-scores li {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.mk-score-row {
+  display: grid;
+  grid-template-columns: 170px minmax(60px, 1fr) 54px;
+  align-items: center;
+  gap: 14px;
+}
+
+.mk-score-label {
+  font-weight: 600;
+  font-size: var(--text-md);
+  color: var(--ink);
+}
+
+.mk-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-inset);
+  overflow: hidden;
+}
+
+.mk-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.mk-score-num {
+  text-align: right;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.mk-score-note {
+  margin: 6px 0 0 184px;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.mk-quote {
+  margin: 8px 0 0;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--line-strong);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mk-scores .mk-quote {
+  margin-left: 184px;
+}
+
+.mk-quote.code {
+  font-family: var(--font-code);
+  font-size: 12px;
+}
+
+.mk-moments {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mk-moments .mk-quote {
+  margin: 0 0 4px;
+  color: var(--ink);
+  border-left-color: var(--accent);
+}
+
+.mk-moments p {
+  margin: 0;
+  padding-left: 14px;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.mk-canvas-review {
+  position: relative;
+  height: 440px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  overflow: hidden;
+  display: flex;
+}
+
+.mk-canvas-review > * {
+  flex: 1;
+}
+
+.mk-debrief .mk-model,
+.mk-debrief .mk-model p,
+.mk-debrief .mk-model li {
+  max-width: none;
+  font-family: var(--font-ui);
+  font-size: var(--text-md);
+  line-height: 1.6;
+}
+
+.mk-yours summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: var(--text-md);
+}
+
+.mk-yours pre {
+  margin: 10px 0 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--code-bg);
+  font: 12.5px/1.5 var(--font-code);
+  overflow-x: auto;
+}
+
+.mk-practise {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.mk-fed {
+  margin: 12px 0 0;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+.mk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 36px 0 20px;
+}
+
+.mk-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 860px) {
+  .mk-split,
+  .mk-split.design,
+  .mk-split.quant,
+  .mk-split.behavioural {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .mk-rubric li,
+  .mk-score-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .mk-score-note,
+  .mk-scores .mk-quote {
+    margin-left: 0;
+  }
+}

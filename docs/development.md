@@ -76,6 +76,8 @@ src/
     brief.ts         Home's daily recap
     exam.ts          exam papers and marking (including photos of handwritten answers)
     practice.ts      coding practice tracker with spaced re-interviews
+    mocks.ts         mock interviews and exams: Sonnet interviews, hidden tests in the sandbox, Opus marks
+                     (or code when Claude can't), the debrief fed to profile, recall and Coach/Mock practice.md
     study.ts         flashcard parsing (Spaced Repetition format + clozes), FSRS scheduling
     learn.ts         link graph (cached, shared with the tutor), notebooks, learning status,
                      attempts and mastery, tutor threads, goals, explain-from-memory queue,
@@ -93,6 +95,9 @@ src/
     canvas.ts        system design canvases (JSON Canvas): edit operations shared by the editor and
                      the tutor's canvas_edit tool, text descriptions, redraw-from-memory comparison
     interviews.ts    mock interview results: scorecard and verdict parsing, per-company trends
+    mocks.ts         Practice › Mock: rubrics, the clock, prompts, reading Opus's marks, marking in code, history
+    mockBank.ts      the coding mock's problem bank: tagged problems with hidden tests and hint ladders
+    mockQuestions.ts design briefs with reference designs, quant and finance questions, behavioural questions
     plan.ts          study plan sizes, phase dates, dated roadmaps, reading lists, plan front matter
     drills.ts        mental maths speed drills, generated and marked in code
     learnIntent.ts   spotting "I want to learn X" so it starts a plan, not a chat answer
@@ -170,6 +175,7 @@ Simple tags proved more reliable than strict JSON for small local models in the 
 | `.tide/library.json` | Subjects each library item is filed under |
 | `.tide/goals.json`, `.tide/recall.json`, `.tide/practice.json` | Goals, explain-from-memory schedule, coding practice |
 | `.tide/interviews.jsonl` | One line per mock interview round: company, round, score, verdict, timed |
+| `.tide/mocks.jsonl`, `.tide/mocks/<id>.json` | Practice › Mock history (one line per mock: kind, rubric scores, overall) and each mock's whole record for its debrief |
 
 Card ids are a hash of the note path and the card's front, so editing an answer keeps the card's history.
 

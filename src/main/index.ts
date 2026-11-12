@@ -51,6 +51,7 @@ import { labLoadTable, labQuery, labReset, labSchema } from './lab'
 import { isSql, languagesStatus } from './languages'
 import { registerLanguageServer, stopLanguageServer } from './pythonLanguageServer'
 import { registerIde, stopIde } from './ide'
+import { registerMocks } from './mocks'
 import { labStatus, librariesStatus, mathStatus, runCode, runProject, setupLab, setupLibraries, setupMath } from './runner'
 import { searchStatus, setupSearch, stopSearch, wakeSearch } from './websearch'
 import { applySpeedups, speedStatus } from './modelServer'
@@ -200,6 +201,7 @@ function registerIpc() {
 
   registerLanguageServer()
   registerIde()
+  registerMocks()
   handle('settings:get', () => getSettings())
   handle('settings:set', (patch: Partial<Settings>) => {
     const prevVault = getSettings().vaultPath

@@ -46,6 +46,8 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import { vaultUrl } from './lib/markdown'
 import { followModelBusy } from './lib/motion'
 import { measureRendering } from './lib/renderMeter'
+import { useMockPhase } from './lib/mockPhase'
+import { mockStudyContext } from '@shared/mocks'
 // The heavy views (PDF reader, terminal, code editor, canvas, graph, drills) load when first opened,
 // not with the window: Tide opens faster and holds less in memory until you need them
 const PdfView = lazy(() => import('./components/PdfView').then((m) => ({ default: m.PdfView })))
@@ -57,6 +59,7 @@ const CodeView = lazy(() => import('./components/CodeView').then((m) => ({ defau
 const CanvasView = lazy(() => import('./components/CanvasView').then((m) => ({ default: m.CanvasView })))
 const GraphView = lazy(() => import('./components/GraphView').then((m) => ({ default: m.GraphView })))
 const DrillView = lazy(() => import('./components/DrillView').then((m) => ({ default: m.DrillView })))
+const MockView = lazy(() => import('./components/mock/MockView').then((m) => ({ default: m.MockView })))
 
 const MEASURES = { narrow: '30', normal: '34', wide: '42' }
 
@@ -224,7 +227,7 @@ export default function App() {
       ? { pose: 'book' as const, label: `Reading: ${view.path.split('/').pop()!.replace(/\.(md|pdf)$/i, '')}` }
       : view.kind === 'study'
         ? { pose: 'cards' as const, label: 'Flashcards' }
-        : view.kind === 'practice' || view.kind === 'code' || view.kind === 'lab' || view.kind === 'maths'
+        : view.kind === 'practice' || view.kind === 'code' || view.kind === 'lab' || view.kind === 'maths' || view.kind === 'mock'
           ? { pose: 'laptop' as const, label: view.kind === 'lab' ? 'The Linux lab' : 'Practice' }
           : view.kind === 'design' || (view.kind === 'file' && /\.canvas$/i.test(view.path))
             ? { pose: 'board' as const, label: 'System design' }
@@ -232,8 +235,12 @@ export default function App() {
   useStudying('page', pageStudy)
 
   // Study time, tracked without a timer, and the tutor's breaks
+  // A mock: no break may interrupt its timed session (shared/mocks mockStudyContext)
+  const mock = useMockPhase()
   const studyContext: StudyContext | null =
-    view.kind === 'session' || view.kind === 'quiz'
+    view.kind === 'mock'
+      ? mockStudyContext(mock?.phase ?? 'brief', mock?.title ?? 'Mock')
+      : view.kind === 'session' || view.kind === 'quiz'
       ? { label: view.kind === 'session' ? `${view.mode}: ${view.topic}` : 'Quiz', kind: 'lesson', noBreaks: view.kind === 'session' && !!view.options?.timed, path: view.scope.kind === 'note' ? view.scope.path : undefined }
       : view.kind === 'exam'
         ? { label: `Exam: ${view.topic}`, kind: 'exam', noBreaks: true }
@@ -385,7 +392,7 @@ export default function App() {
 
   // Views with their own tutor beside them don't get the floating Ask button or the chat panel
   // A course being read has its tutor docked in its reading column (the right is the video's)
-  const ownTutor = ['chat', 'lab', 'code', 'design', 'drill', 'session', 'exam'].includes(view.kind) || (view.kind === 'file' && /\.canvas$/i.test(view.path)) || (view.kind === 'courses' && !!view.id)
+  const ownTutor = ['chat', 'lab', 'code', 'design', 'drill', 'session', 'exam', 'mock'].includes(view.kind) || (view.kind === 'file' && /\.canvas$/i.test(view.path)) || (view.kind === 'courses' && !!view.id)
   // In the new design Home is the whole width of the window and has its own ask box: the tutor
   // panel stays beside what you read (a note, a PDF, the library), one click away from Home
   // …until you ask something from Home: then it opens there with your question, and stays until you close it
@@ -393,6 +400,8 @@ export default function App() {
   const wide = view.kind === 'home' || view.kind === 'settings' || view.kind === 'learner' || (view.kind === 'graph' && !view.focus && (view.tab ?? lastBrainTab()) === 'know')
   // A course being read is the whole window: Tide's sidebar steps back to the left edge, there on hover
   const immersive = view.kind === 'courses' && !!view.id && !focusId
+  // A mock in progress is focus mode: the sidebar steps away until it is marked
+  const mockFocus = view.kind === 'mock' && (mock?.phase === 'live' || mock?.phase === 'preparing' || mock?.phase === 'marking')
   const noPanel = ownTutor || (tide && wide && homeAsked === null)
   let main: React.ReactNode
   if (view.kind === 'file') {
@@ -428,13 +437,14 @@ export default function App() {
   else if (view.kind === 'design') main = <CanvasView key={`${view.path}:${view.nonce ?? ''}`} path={view.path} start={view.start} topic={view.topic} company={view.company} timed={view.timed} reference={view.reference} />
   else if (view.kind === 'code') main = <CodeView key={view.path ?? 'code'} path={view.path} />
   else if (view.kind === 'help') main = <HelpView section={view.section} />
+  else if (view.kind === 'mock') main = <MockView key={`${view.mode}:${view.review ?? ''}:${view.nonce ?? ''}`} mode={view.mode} review={view.review} />
   else if (view.kind === 'exam') main = <ExamView key={`${view.topic}:${view.nonce ?? ''}`} scope={view.scope} topic={view.topic} options={view.options} view={view} />
   else if (view.kind === 'settings') main = <SettingsView section={view.section} />
   else main = <Home dueCount={due.due} cardCount={due.total} />
 
   return (
     <div
-      className={`shell${settings.sidebarCollapsed || focusId || immersive ? ' no-sidebar' : ''}${immersive ? ' immersive' : ''}${focusId ? ' focus-window' : ''}${settings.chatOpen && !noPanel && !focusId ? ' with-chat' : ''}`}
+      className={`shell${settings.sidebarCollapsed || focusId || immersive || mockFocus ? ' no-sidebar' : ''}${immersive ? ' immersive' : ''}${focusId ? ' focus-window' : ''}${settings.chatOpen && !noPanel && !focusId ? ' with-chat' : ''}`}
       onDragOver={(e) => {
         if ([...e.dataTransfer.types].some((t) => t === 'Files' || t === 'text/uri-list')) {
           e.preventDefault()
@@ -444,12 +454,12 @@ export default function App() {
       onDragLeave={(e) => e.currentTarget === e.target && setDragging(false)}
       onDrop={onDrop}
     >
-      {!settings.sidebarCollapsed && !focusId && !immersive && <Sidebar dueCount={due.due} />}
+      {!settings.sidebarCollapsed && !focusId && !immersive && !mockFocus && <Sidebar dueCount={due.due} />}
       {immersive && <SidebarPeek dueCount={due.due} />}
       {settings.sidebarCollapsed && !focusId && !immersive && <SidebarPeek dueCount={due.due} keys={false} />}
       <main className="main">
-        {!['file', 'graph', 'help', 'lab', 'code', 'design', 'chat', 'session', 'quiz', 'exam'].includes(view.kind) && (tide ? <TopBar /> : <div className="titlebar-drag drag" />)}
-        {settings.sidebarCollapsed && !focusId && !immersive && (
+        {!['file', 'graph', 'help', 'lab', 'code', 'design', 'chat', 'session', 'quiz', 'exam', 'mock'].includes(view.kind) && (tide ? <TopBar /> : <div className="titlebar-drag drag" />)}
+        {settings.sidebarCollapsed && !focusId && !immersive && !mockFocus && (
           <div className="floating-controls no-drag">
             <button className="icon-btn" title="Show sidebar (⌘\)" onClick={() => app.updateSettings({ sidebarCollapsed: false })}>
               <Icon name="sidebar" />
