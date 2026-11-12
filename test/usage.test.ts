@@ -566,6 +566,15 @@ describe('Claude’s calls reach the log', () => {
     })
   })
 
+  it('logs a call sent with pictures (stream-json in and out) like any other', async () => {
+    const t0 = Date.now() - 1
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+    const r = await engine.claudeOnce("The student's answer: see the photo", 'Mark it.', 'mark', undefined, undefined, [{ mediaType: 'image/png', data: png }])
+    expect(r.text).toContain('1 picture')
+    const calls = log.readUsageLines(t0, logDir).filter((l): l is CallEntry => l.k === 'call')
+    expect(calls.at(-1)).toMatchObject({ p: 'claude', job: 'marking', ok: true })
+  })
+
   it('logs a refused call as a failure with its reason', async () => {
     const t0 = Date.now() - 1
     await expect(

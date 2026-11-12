@@ -37,6 +37,7 @@ import { formatEditor } from '../lib/ruff/editor'
 import type * as Monaco from 'monaco-editor'
 import { EnginePill, engineFields, type Engine } from './EnginePill'
 import { DictateButton, SpeakButton, useTalk } from './Voice'
+import { AttachedStrip, AttachImageButton, useAttachedImages } from './AttachImages'
 import { InterviewClock, useInterviewClock } from './InterviewClock'
 import { LessonNotes } from './LessonNotes'
 import { finishAgendaItem } from '../lib/agenda'
@@ -139,6 +140,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [answer, setAnswer] = useState('')
+  // Photos of working or screenshots added to the answer or a question (AttachImages)
+  const pictures = useAttachedImages()
   const [code, setCode] = useState('')
   const codeEditorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
   const [confidence, setConfidence] = useState<1 | 2 | 3 | null>(null)
@@ -897,7 +900,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     const ran = out ? `\n\nWhen I ran it:\n\`\`\`\n${(out.stdout + out.stderr).slice(0, 1500) || '(no output)'}\n\`\`\`` : ''
     const choice = currentAsk?.type === 'choice' && currentAsk.options.length > 0
     const pick = choice && picked !== null && currentAsk.options[picked] ? currentAsk.options[picked] : ''
-    const body =
+    const typed =
       text ??
       (asking
         ? answer.trim()
@@ -906,6 +909,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         : pick
           ? `${pick}${answer.trim() ? `\nReasoning: ${answer.trim()}` : ''}`
           : answer.trim())
+    // Pictures added to the answer (a photo of their working): they go after the words, and the tutor sees them
+    const body = text ? typed : pictures.withPictures(typed.trim() || (pictures.paths.length && !asking && !carryOn ? 'My working is in the picture.' : typed))
     if (!body.trim()) return
     // Asking to be taught another way ("let's just talk it through") changes the approach from here
     const to = !text && approach ? switchFrom(body, approach) : null
@@ -928,6 +933,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     setHint(false)
     const conf = confidence ? `\n(Confidence: ${CONFIDENCE.find((c) => c.value === confidence)!.label.toLowerCase()})` : ''
     send(text ? body : asking || carryOn ? `${ASKED}${body}` : `Answer: ${body}${conf}`, turns)
+    if (!text) pictures.clear()
     setAnswer('')
     setPicked(null)
     setAsking(false)
@@ -1854,6 +1860,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     }}
                     placeholder={picked === null ? 'Pick one, or write your own answer' : 'Your reasoning (optional)'}
                     aria-label="Your reasoning"
+                    {...pictures.handlers}
                   />
                 </>
               ) : currentAsk.type === 'code' ? (
@@ -1884,7 +1891,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                       {(runOut.stdout + (runOut.stderr ? (runOut.stdout ? '\n' : '') + runOut.stderr : '')) || 'Ran with no output.'}
                     </pre>
                   )}
-                  <textarea className="s-input small" rows={2} value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder={asking ? 'What would you like to ask? Your code can wait.' : 'Explain your code or approach (optional)'} />
+                  <textarea className="s-input small" rows={2} value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder={asking ? 'What would you like to ask? Your code can wait.' : 'Explain your code or approach (optional)'} {...pictures.handlers} />
                 </>
               ) : (
                 <textarea
@@ -1907,11 +1914,13 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                         : currentAsk.type === 'error'
                           ? 'What is wrong, and why?'
                           : currentAsk.type === 'problem'
-                            ? 'Work it through step by step'
+                            ? 'Work it through step by step, or add a photo of your working'
                             : 'Your answer'
                   }
+                  {...pictures.handlers}
                 />
               )}
+              <AttachedStrip images={pictures} />
               <div className="s-answer-bar">
                 <div className="segmented text" role="radiogroup" aria-label="How sure are you?">
                   {CONFIDENCE.map((c) => (
@@ -1921,6 +1930,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   ))}
                 </div>
                 <div className="row-gap">
+                  <AttachImageButton images={pictures} />
                   {currentAsk.type !== 'code' && (
                     <DictateButton
                       target={answerRef}
@@ -1944,7 +1954,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                       <span>I don't know</span>
                     </button>
                   )}
-                  <button className="btn primary" onClick={() => submit()} disabled={asking ? !answer.trim() : currentAsk.type === 'code' ? !code.trim() : currentAsk.type === 'choice' && currentAsk.options.length > 0 ? picked === null && !answer.trim() : !answer.trim()}>
+                  <button className="btn primary" onClick={() => submit()} disabled={pictures.adding || (asking ? !answer.trim() && !pictures.paths.length : currentAsk.type === 'code' ? !code.trim() : currentAsk.type === 'choice' && currentAsk.options.length > 0 ? picked === null && !answer.trim() && !pictures.paths.length : !answer.trim() && !pictures.paths.length)}>
                     {asking ? 'Ask' : 'Submit'} <kbd>⌘↵</kbd>
                   </button>
                 </div>
@@ -1969,13 +1979,16 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     }}
                     placeholder="What would you like to ask?"
                     aria-label="Your question"
+                    {...pictures.handlers}
                   />
+                  <AttachedStrip images={pictures} />
                   <div className="row-gap s-goon-bar">
+                    <AttachImageButton images={pictures} />
                     <DictateButton target={answerRef} onStart={stopTalking} where={heardIn} />
-                    <button className="tool-btn" onClick={() => (setAsking(false), setAnswer(''))}>
+                    <button className="tool-btn" onClick={() => (setAsking(false), setAnswer(''), pictures.clear())}>
                       Cancel
                     </button>
-                    <button className="btn primary" onClick={() => submit()} disabled={!answer.trim()}>
+                    <button className="btn primary" onClick={() => submit()} disabled={pictures.adding || (!answer.trim() && !pictures.paths.length)}>
                       Ask <kbd>⌘↵</kbd>
                     </button>
                   </div>

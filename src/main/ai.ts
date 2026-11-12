@@ -1037,7 +1037,12 @@ export interface JobOpts {
   timeoutMs?: number
   /** A Claude failure throws instead of loading Gemma (for a job with its own answer when the model can't give one) */
   noFallback?: boolean
+  /** Pictures that go with the prompt (a photo of handwritten working), as data: URLs: Claude sees them, scaled down (main/imagePrep) */
+  images?: string[]
 }
+
+/** Pictures one job may send (an exam answer can run to a few pages of working) */
+const IMAGES_PER_JOB = 6
 
 /** Claude's time for a one-shot job, by its model's role, before Gemma takes it */
 const CLAUDE_JOB_MS: Record<string, number> = { background: 60_000, teach: 120_000, mark: 120_000, hard: 180_000 }
@@ -1095,7 +1100,10 @@ async function claudeOrGemma(job: JobName, prompt: string, system: string | unde
     try {
       const { claudeOnce } = await import('./claudeEngine')
       const limit = AbortSignal.timeout(o.timeoutMs ?? CLAUDE_JOB_MS[route.role] ?? 120_000)
-      const r = await claudeOnce(prompt, system ?? 'You are a careful assistant.', route.role, o.signal ? AbortSignal.any([o.signal, limit]) : limit)
+      const pictures = o.images?.length ? await (await import('./imagePrep')).prepareImages(o.images, IMAGES_PER_JOB) : []
+      // None could be made ready to send: Gemma takes the job with the pictures as they came
+      if (o.images?.length && !pictures.length) throw new Error('Those pictures couldn’t be read')
+      const r = await claudeOnce(prompt, system ?? 'You are a careful assistant.', route.role, o.signal ? AbortSignal.any([o.signal, limit]) : limit, undefined, pictures)
       return stripThinking(r.text).trim()
     } catch (e) {
       if (o.signal?.aborted || o.noFallback) throw e

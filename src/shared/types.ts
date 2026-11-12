@@ -603,6 +603,8 @@ export interface TideApi {
     write(path: string, content: string): Promise<void>
     /** Writes an image given as a data: URL, e.g. a photo of handwritten working */
     writeImage(path: string, dataUrl: string): Promise<void>
+    /** A picture as Tide and a model can use it (an iPhone HEIC becomes a JPEG, a large photo is scaled down to 1568 px), as a data: URL; null when it isn't one */
+    prepareImage(dataUrl: string): Promise<string | null>
     createNote(folder: string, name: string): Promise<string>
     createFolder(parent: string, name: string): Promise<string>
     rename(path: string, newName: string): Promise<string>

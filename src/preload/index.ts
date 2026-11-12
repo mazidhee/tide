@@ -23,6 +23,7 @@ const api: TideApi = {
     read: invoke('vault:read'),
     write: invoke('vault:write'),
     writeImage: invoke('vault:writeImage'),
+    prepareImage: invoke('vault:prepareImage'),
     createNote: invoke('vault:createNote'),
     createFolder: invoke('vault:createFolder'),
     rename: invoke('vault:rename'),

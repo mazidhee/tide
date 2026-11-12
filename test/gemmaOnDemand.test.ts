@@ -99,7 +99,7 @@ const EXPECTED: Record<string, string | null> = {
   curriculum: 'background',
   workshop: 'teach',
   lessonChecks: null,
-  handwriting: null
+  handwriting: 'mark'
 }
 
 describe('the routing table', () => {

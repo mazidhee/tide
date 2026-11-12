@@ -19,7 +19,7 @@ import { createHash } from 'crypto'
 import type { AgentStep, ChatEvent, ChatMessage, ClaudeModel, ClaudeRole } from '@shared/types'
 import { claudeModel, claudeLabel, asksForDepth, rank } from '@shared/claude'
 import { notAnAttempt } from '@shared/lessonRepair'
-import { checkClaude, childEnv, claudeArgs, findClaude, mcpConfig, parseLine, unavailableReason, unavailableText, userLine, type ClaudeEvent, type ClaudeStatus, type ClaudeUsage } from './claudeCli'
+import { checkClaude, childEnv, claudeArgs, findClaude, mcpConfig, onceArgs, parseLine, unavailableReason, unavailableText, userContent, userLine, type ClaudeEvent, type ClaudeStatus, type ClaudeUsage, type ImageInput } from './claudeCli'
 import { getSettings } from './settings'
 import { logCall, logWindows } from './usageLog'
 import { jobFromRole } from '@shared/usage'
@@ -443,11 +443,12 @@ const MARK_SYSTEM = `You mark one answer a student gave in a lesson, for their t
  * One call, no tools and no conversation: the whole prompt in, one reply out. For marking, lesson
  * plans and roadmaps, and background jobs. Throws ClaudeUnavailable when Claude can't take it.
  */
-export async function claudeOnce(prompt: string, system: string, role: ClaudeRole, signal?: AbortSignal, model: string = claudeModel(role, getSettings().ai.claude)): Promise<{ text: string; usage: ClaudeUsage; ms: number; model: string }> {
+export async function claudeOnce(prompt: string, system: string, role: ClaudeRole, signal?: AbortSignal, model: string = claudeModel(role, getSettings().ai.claude), images: ImageInput[] = []): Promise<{ text: string; usage: ClaudeUsage; ms: number; model: string }> {
   const cmd = command()
   if (!cmd) throw new ClaudeUnavailable('Claude Code isn’t installed')
   const t0 = Date.now()
-  const args = ['-p', '--model', model, '--output-format', 'json', '--tools', '', '--strict-mcp-config', '--setting-sources', '', '--no-session-persistence', '--permission-mode', 'dontAsk', '--system-prompt', system]
+  // Pictures (a photo of working, a screenshot) go as image blocks in a stream-json message
+  const args = onceArgs(model, system, images.length > 0)
   const cwd = join(app.getPath('userData'), 'claude')
   mkdirSync(cwd, { recursive: true })
   const out = await new Promise<string>((resolve, reject) => {
@@ -457,14 +458,19 @@ export async function claudeOnce(prompt: string, system: string, role: ClaudeRol
     child.stdout.on('data', (d) => (buf += String(d)))
     child.stderr.on('data', (d) => (err = (err + String(d)).slice(-1000)))
     child.on('error', (e) => reject(new ClaudeUnavailable(`Claude Code didn’t start: ${e.message}`)))
-    child.on('exit', () => (buf.trim() ? resolve(buf) : reject(unavailableReason(err) ? new ClaudeUnavailable(unavailableText(unavailableReason(err)!)) : new Error(err.trim() || 'Claude gave no answer'))))
+    // Streamed output starts with lines of its own (init) before any result: no result line is no answer
+    const answered = () => buf.split('\n').some((l) => parseLine(l)?.type === 'result')
+    child.on('exit', () => (answered() ? resolve(buf) : reject(unavailableReason(err) ? new ClaudeUnavailable(unavailableText(unavailableReason(err)!)) : new Error(err.trim() || 'Claude gave no answer'))))
     signal?.addEventListener('abort', () => child.kill('SIGTERM'), { once: true })
-    child.stdin.end(prompt)
+    child.stdin.end(images.length ? userLine(userContent(prompt, images)) : prompt)
   }).catch((e) => {
     recordFailure(model, role, t0, e)
     throw e
   })
-  const r = parseLine(out.trim().split('\n').pop() ?? '')
+  // stream-json ends with the result; plain JSON is only that line. Streamed output also says how full the plan's windows are
+  const events = out.trim().split('\n').map(parseLine)
+  for (const e of events) if (e?.type === 'rate-limit') noteLimit(e)
+  const r = [...events].reverse().find((e) => e?.type === 'result') ?? null
   if (!r || r.type !== 'result') throw new Error('Claude gave no answer')
   recordUse({ ...r.usage, at: Date.now(), model: r.model ?? model, role, ms: Date.now() - t0, firstTokenMs: r.firstTokenMs }, { ok: r.ok, error: r.error })
   if (!r.ok) {
@@ -573,8 +579,9 @@ export async function backgroundOnClaude(prompt: string, system: string | undefi
 }
 
 /** A short, separate call on the marking model: its verdict for the tutor to write */
-export async function markAnswer(question: string, answer: string, model: string, signal: AbortSignal): Promise<{ verdict: string; score: number; why: string; ms: number } | null> {
-  const r = await claudeOnce(`The tutor's message, with the question and its hidden solution:\n"""\n${question.slice(-8000)}\n"""\n\nThe student's answer:\n"""\n${answer.slice(0, 6000)}\n"""`, MARK_SYSTEM, 'mark', signal, model).catch(() => null)
+export async function markAnswer(question: string, answer: string, model: string, signal: AbortSignal, images: ImageInput[] = []): Promise<{ verdict: string; score: number; why: string; ms: number } | null> {
+  const photos = images.length ? `\n\nThe student also sent ${images.length === 1 ? 'a picture' : `${images.length} pictures`} with this answer (above): their working, a photo or a screenshot. Read it carefully and mark what it shows as part of the answer.` : ''
+  const r = await claudeOnce(`The tutor's message, with the question and its hidden solution:\n"""\n${question.slice(-8000)}\n"""\n\nThe student's answer:\n"""\n${answer.slice(0, 6000)}\n"""${photos}`, MARK_SYSTEM, 'mark', signal, model, images).catch(() => null)
   if (!r) return null
   try {
     const j = JSON.parse(/\{[\s\S]*\}/.exec(r.text)?.[0] ?? '') as { verdict?: string; score?: number; why?: string }
@@ -628,7 +635,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   if (req.session && req.instructions) req = { ...req, instructions: (await import('@shared/exercises')).forClaude(req.instructions) }
   // A side thread saves to the lesson's notes with save_to_notes (main/tideMcpTools)
   if (req.thread && req.instructions) req = { ...req, instructions: `${req.instructions}\n${(await import('@shared/lessonThreads')).THREAD_NOTE_TOOL}` }
-  const { ctx, messages, mine, secret } = await buildTurn(req, emit, signal, req.session ? CLAUDE_LESSON_SYSTEM : CLAUDE_TUTOR_SYSTEM)
+  const { ctx, messages, mine, secret, images } = await buildTurn(req, emit, signal, req.session ? CLAUDE_LESSON_SYSTEM : CLAUDE_TUTOR_SYSTEM)
   // Checked again on what the turn actually holds: never send a private turn
   if (ctx.private || mine || secret) throw new ClaudeUnavailable('Private: this stays on your Mac')
 
@@ -666,6 +673,11 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   const seeNote = asksToSee(said) || /^Draw this so I can see how it works/i.test(said) ? `\n\n${SHOW_ME_VISUAL_NOTE}` : ''
   const fresh = sent.fresh
   const users = history.filter((m) => m.role === 'user').length
+  // The pictures this turn looks at (a photo of their working, a screenshot, a note's diagram), made
+  // ready in main/noteImages, ride on this message as image blocks: the tutor and the marker see them
+  const pictures: ImageInput[] = images.map((im) => im.image)
+  const withPictures = (words: string) => userContent(words, pictures)
+  if (pictures.length) emit({ id: req.id, type: 'step', step: { id: nextStepId(), kind: 'helper', label: `Claude can see ${pictures.length === 1 ? 'your picture' : `your ${pictures.length} pictures`}`, status: 'done', depth: 0 } })
 
   // A query or a final answer is checked exactly first (the lab, SymPy), as on Gemma's lessons
   const answering = isAnswer(req, said)
@@ -678,7 +690,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
     const prev = text([...req.messages].reverse().find((m) => m.role === 'assistant')?.content)
     const id = nextStepId()
     emit({ id: req.id, type: 'step', step: { id, kind: 'helper', label: `${claudeLabel(markModel)} is marking your answer`, status: 'running', depth: 0 } })
-    const mark = await markAnswer(prev, said + exactSaid, markModel, signal).catch(() => null)
+    const mark = await markAnswer(prev, said + exactSaid, markModel, signal, pictures).catch(() => null)
     verdict = mark?.verdict as typeof verdict
     emit({ id: req.id, type: 'step', step: { id, status: mark ? 'done' : 'error', detail: mark ? `${mark.verdict}, ${(mark.ms / 1000).toFixed(1)} s` : 'no mark: the tutor marks it' } as AgentStep })
     if (mark) markNote = `\n\n(Tide: ${claudeLabel(markModel)} marked this answer against your solution: verdict "${mark.verdict}", score ${mark.score}. Why: ${mark.why})`
@@ -724,14 +736,14 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
     proc.first = firstSaid
     let result: Extract<ClaudeEvent, { type: 'result' }>
     try {
-      result = await proc.turn(sent.content + markNote + seeNote, model, onEvent, signal, cut)
+      result = await proc.turn(withPictures(sent.content + markNote + seeNote), model, onEvent, signal, cut)
     } catch (e) {
       // The process died before it said anything: once more, on a new one, with the whole transcript
       if (reply || signal.aborted || e instanceof ClaudeUnavailable || unavailableReason((e as Error).message + proc.stderr)) throw e
       proc.stop()
       const again = messageToSend(history, { turns: 0, first: '', alive: false })
       emit({ id: req.id, type: 'step', step: { id: engineStep, label: `Claude ${claudeLabel(model)} is teaching (started again)` } as AgentStep })
-      result = await proc.turn(again.content + markNote + seeNote, model, onEvent, signal, cut)
+      result = await proc.turn(withPictures(again.content + markNote + seeNote), model, onEvent, signal, cut)
     }
     proc.turns = users
     const turnCost = Math.max(0, result.usage.costUsd - proc.costSoFar)
