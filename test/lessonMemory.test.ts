@@ -22,6 +22,25 @@ const lesson = (over: Partial<LessonRecord> = {}): LessonRecord => ({
 })
 
 describe('what earlier lessons show', () => {
+  it('keeps a question they skipped, to come back as a recall question, without counting it a miss', () => {
+    const d = digestLesson(
+      lesson({
+        turns: [
+          ...lesson().turns.slice(0, 3),
+          { role: 'assistant', content: '<grade verdict="correct" score="1">Yes.</grade>\n\n<ask type="short">Write 100111 padded on the left to a multiple of 4.</ask>' },
+          { role: 'user', content: 'Answer: can we move on though i understadn this' },
+          { role: 'assistant', content: 'Moving on to hex.\n\n<ask type="short">What is 0xF in binary?</ask>' },
+          { role: 'user', content: "Answer: I don't really remember. Can you teach me again from scratch?" },
+          { role: 'assistant', content: 'Here it is again.\n\n<continue/>' }
+        ]
+      })
+    )!
+    expect(d.stuck).toEqual(['What is 0xF in binary?', 'Write 100111 padded on the left to a multiple of 4.'])
+    expect(d.asked.find((a) => a.prompt.startsWith('Write 100111'))?.mark).toBeUndefined()
+    expect(d.asked.find((a) => a.prompt.startsWith('What is 0xF'))?.mark).toBe('stuck')
+    expect([d.right, d.partly, d.wrong]).toEqual([1, 0, 0])
+  })
+
   it('reads the plan, the marks, what was missed and where it stopped, exactly', () => {
     const d = digestLesson(lesson())!
     expect(d.plan).toEqual(['Place value in base 2', 'Converting decimal to binary', 'Hexadecimal as groups of four bits'])

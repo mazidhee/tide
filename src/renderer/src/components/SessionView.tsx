@@ -9,15 +9,15 @@ import { notesReviewRequest, wantsNotesReview } from '@shared/lessonNotes'
 import { reveal } from '../lib/scroll'
 import { Thinking } from './Thinking'
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
+import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode } from '@shared/types'
 import { markNote, paceNote } from '@shared/pace'
 import { markingNote } from '@shared/humanities'
 import { teachesAsHumanities } from '@shared/subjects'
 import { AppraiseCard } from './AppraiseCard'
 import { useDifficulty } from '../lib/difficulty'
-import { nothingToMark, unmarked } from '@shared/lessonRepair'
-import { withSources, type SourcePack } from '@shared/sources'
-import { ledPrefKey, withoutEcho } from '@shared/sourceLed'
+import { SKIP_SAID, asksToMoveOn, nothingToMark, unmarked } from '@shared/lessonRepair'
+import { citeSources, withSources, type SourcePack } from '@shared/sources'
+import { ledPrefKey, ledWalk, withoutEcho } from '@shared/sourceLed'
 import { formatRange, offeredClip, recapMessage, watchFirstNote, type ClipCandidate } from '@shared/video'
 import { ClipCard } from './ClipCard'
 import { relatedForPrompt } from '@shared/related'
@@ -49,7 +49,6 @@ import { useTideDesign } from '../lib/design'
 import { characterById } from '@shared/characters'
 import { conceptFor, useKnowledge } from '../lib/knowledge'
 import { useAreaClass } from '../lib/areas'
-import { since } from '@shared/knowledge'
 import { Level } from './tide/Level'
 import { AreaMark } from './tide/AreaMark'
 import { AnswerHint, AskPill, BackPill, FOLD_MS, SelectionAsk, ThreadSlot, highlightQuote, reducedMotion } from './LessonThreads'
@@ -1055,33 +1054,29 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     await app.refreshTree()
   }
 
-  const renderBlock = (b: Block, key: string, live: boolean) => {
+  // [S2] in what the tutor wrote: the source's name, a button that opens it (shared/sources)
+  const cited = (md: string) => citeSources(md, pack?.sources ?? [])
+  /** `fromMiss`: the reply's mark was not "correct", so a flashcard in it is from a miss */
+  const renderBlock = (b: Block, key: string, live: boolean, fromMiss = true) => {
     switch (b.kind) {
       case 'text':
-        return <div key={key} className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(b.text, env) }} />
+        return <div key={key} className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(cited(b.text), env) }} />
       case 'ask':
-        // The new design: a question about something you already hold shows its level beside it
-        if (tide && concept && concept.seen > 0)
+        // A question you missed before says so (a retest); nothing on every other question, where
+        // "Holding: last right today" was only noise
+        if (tide && concept && concept.seen > 0 && options?.retest?.length)
           return (
             <div key={key} className="s-ask td-recall">
               <Level now={concept.estimate} high={concept.level} area={areaOf(concept.area)} large />
               <div>
-                <p className={`td-recall-lab${concept.status === 'fading' ? ' fading' : ''}`}>
-                  {options?.retest?.length
-                    ? 'You missed this before'
-                    : concept.status === 'fading'
-                      ? `Fading: last right ${since(concept.lastRight ?? concept.lastSeen, Date.now())}`
-                      : concept.status === 'solid'
-                        ? `Holding: last right ${since(concept.lastRight ?? concept.lastSeen, Date.now())}`
-                        : `In progress: ${concept.right} of ${concept.right + concept.partly + concept.wrong} right so far`}
-                </p>
-                <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(b.prompt, env) }} />
+                <p className="td-recall-lab fading">You missed this before</p>
+                <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(cited(b.prompt), env) }} />
               </div>
             </div>
           )
         return (
           <div key={key} className="s-ask">
-            <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(b.prompt, env) }} />
+            <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(cited(b.prompt), env) }} />
           </div>
         )
       case 'grade':
@@ -1091,14 +1086,14 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               <Icon name={b.verdict === 'correct' ? 'check' : b.verdict === 'wrong' ? 'x' : 'minus'} size={13} />
               {b.verdict === 'correct' ? 'Correct' : b.verdict === 'wrong' ? 'Not quite' : 'Partly right'}
             </span>
-            <div className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(b.text, env) }} />
+            <div className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(cited(b.text), env) }} />
           </div>
         )
       case 'card':
         return (
           <div key={key} className="s-card">
             <div className="s-card-text">
-              <span className="muted small">Flashcard from this miss</span>
+              <span className="muted small">{fromMiss ? 'Flashcard from this miss' : 'Flashcard'}</span>
               <div className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(`**${b.front}**\n\n${b.back}`, env) }} />
             </div>
             <button className="btn small" disabled={savedCards.has(b.front)} onClick={() => saveCard(b.front, b.back)}>
@@ -1170,19 +1165,26 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     }
   }
 
-  const planDone = (() => {
-    if (!plan) return 0
-    // A step is done after two right in a row, as the tutor is told to move on
-    const planTurn = parsed.findIndex((b) => b?.some((x) => x.kind === 'plan'))
-    const verdicts = parsed.slice(planTurn + 1).flatMap((b) => b ?? []).filter((b) => b.kind === 'grade').map((b) => (b as { verdict: Verdict }).verdict)
-    let steps = 0
-    let streak = 0
-    for (const v of verdicts) {
-      streak = v === 'correct' ? streak + 1 : 0
-      if (streak === 2) (steps++, (streak = 0))
-    }
-    return Math.min(plan.steps.length, steps)
-  })()
+  // Where the lesson is in its plan, the same walk main does (shared/sourceLed): a step taught from
+  // a reading is done at its first right answer, one the tutor teaches after two right in a row,
+  // and a step they asked to move on from is done there. Each tutor turn that starts a step is
+  // labelled with it, from the first.
+  const walk = useMemo(() => {
+    const at: number[] = []
+    const replies: string[] = []
+    const moved: boolean[] = []
+    turns.forEach((t, i) => {
+      if (t.role !== 'assistant') return
+      at.push(i)
+      replies.push(t.content)
+      moved.push(i > 0 && turns[i - 1].role === 'user' && asksToMoveOn(turns[i - 1].content))
+    })
+    const { state, starts } = ledWalk(replies, moved)
+    const stepAt = new Map<number, number>()
+    starts.forEach((s, k) => s !== null && stepAt.set(at[k], s))
+    return { cur: state.steps.length ? state.cur : 0, stepAt }
+  }, [turns])
+  const planDone = plan ? Math.min(plan.steps.length, walk.cur) : 0
 
   const scopeLabel = scope.kind === 'note' ? fileTitle(scope.path) : scope.kind === 'pages' ? pagesLabel(scope) : scope.kind === 'folder' ? scope.path.split('/').pop() : null
 
@@ -1366,6 +1368,14 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           data-visual-lesson={recordId ?? ''}
           // [source-led] a reading's "Open in your library at page N"
           onClick={(e) => {
+            const cite = (e.target as HTMLElement).closest?.<HTMLElement>('.s-cite')
+            const src = cite ? pack?.sources.find((s) => s.n === Number(cite.dataset.source)) : undefined
+            if (src) {
+              e.preventDefault()
+              if (src.path) app.openPath(src.path)
+              else if (src.url) void window.tide.app.openExternal(src.url)
+              return
+            }
             const open = openReading(e.target)
             if (open) (e.preventDefault(), app.openPath(open.path, open.anchor))
             // Run and Copy on the code in a reading or a reply (lib/runBlocks)
@@ -1467,7 +1477,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   <div className="td-who">
                     <Professor state={live ? 'writing' : 'idle'} size={24} />
                     <b>{characterById(app.settings.character ?? 'professor').name}</b>
-                    {plan && i === turns.length - 1 && planDone < plan.steps.length && <span className="td-meta">Step {planDone + 1}: {plan.steps[planDone].replace(/[.:]$/, '')}</span>}
+                    {plan && walk.stepAt.has(i) && plan.steps[walk.stepAt.get(i)!] && <span className="td-meta">Step {walk.stepAt.get(i)! + 1}: {plan.steps[walk.stepAt.get(i)!].replace(/[.:]$/, '')}</span>}
                   </div>
                 )}
                 {!live && t.content && (
@@ -1507,7 +1517,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   </ul>
                 )}
                 <div className={`lt-out${askable ? ' askable' : ''}${threaded ? ' threaded' : ''}`} data-thread-out={askable ? i : undefined}>
-                  {blocks.map((b, j) => renderBlock(b, `${i}-${j}`, live))}
+                  {blocks.map((b, j) => renderBlock(b, `${i}-${j}`, live, !blocks.some((x) => x.kind === 'grade' && x.verdict === 'correct')))}
                   {askable && !threaded && <AskPill onAsk={() => openThreadAt(i)} />}
                 </div>
                 {live && !t.content && !t.steps?.length && (
@@ -1675,6 +1685,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   {!asking && (
                     <button className="tool-btn" onClick={() => submit("I don't know.")}>
                       <span>I don't know</span>
+                    </button>
+                  )}
+                  {/* Moving on is the learner's call: never marked, and the point comes back later as a recall question */}
+                  {!asking && !timed && mode === 'teach' && (
+                    <button className="tool-btn" onClick={() => submit(SKIP_SAID)} title="Go on to the next step. Tide brings this question back in a later lesson">
+                      <span>Skip</span>
                     </button>
                   )}
                   <button className="btn primary" onClick={() => submit()} disabled={asking ? !answer.trim() : currentAsk.type === 'code' ? !code.trim() : currentAsk.type === 'choice' && currentAsk.options.length > 0 ? picked === null && !answer.trim() : !answer.trim()}>

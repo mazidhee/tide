@@ -154,6 +154,21 @@ describe('what a lesson brings in from other courses', () => {
     expect(html).toContain('Made With ML shows the code')
   })
 
+  it('a source quoted in a <reading> of the tutor’s own is a quotation, and nothing of it leaks', () => {
+    // Seen live: `" Source: "Binary number" (Wikipedia)">` showed after the quotation
+    const html = render('Here is the reading.\n\n<reading>\n"Binary may be converted to hexadecimal.\n\n3A₁₆ = 0011 1010₂\n"\nSource: "Binary number" (Wikipedia)\n</reading>\n\nNow try one.')
+    const doc = new DOMParser().parseFromString(html, 'text/html')
+    expect(doc.querySelector('.rel-host')).toBeNull()
+    expect(doc.querySelector('blockquote')?.textContent).toContain('3A₁₆ = 0011 1010₂')
+    expect(doc.body.textContent).not.toMatch(/">|rel-host|data-why/)
+    expect(doc.body.textContent).toContain('Now try one.')
+    // A course's section with a reason over several lines stays one card
+    const card = new DOMParser().parseFromString(render('<reading course="c" path="p.md">first line\n\nsecond line</reading>\n\nAfter.'), 'text/html')
+    expect(card.querySelectorAll('.rel-host')).toHaveLength(1)
+    expect(card.querySelector('.rel-host')?.getAttribute('data-why')).toBe('first line\n\nsecond line')
+    expect(card.body.textContent?.trim()).toBe('After.')
+  })
+
   it('hides a tag still being written, and escapes what it says', () => {
     expect(render('Look at this:\n\n<reading course="x" pa')).not.toContain('<reading')
     const doc = new DOMParser().parseFromString(render('<reading course="a&quot;onload=&quot;x" path="p.md">"><img src=x onerror=alert(1)></reading>'), 'text/html')
