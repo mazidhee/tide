@@ -114,6 +114,8 @@ export class ClaudeProcess {
   first = ''
   lastUsed = Date.now()
   stderr = ''
+  /** The CLI reports the process's cost so far; a turn's is the difference */
+  costSoFar = 0
 
   constructor(
     readonly key: string,
@@ -147,9 +149,11 @@ export class ClaudeProcess {
         s.resolve(e)
       } else this.sink.onEvent(e)
     })
-    child.on('error', (err) => this.fail(new ClaudeUnavailable(`Claude Code didn’t start: ${err.message}`)))
+    child.on('error', (err) => this.child === child && this.fail(new ClaudeUnavailable(`Claude Code didn’t start: ${err.message}`)))
     child.on('exit', (code) => {
-      if (this.child === child) this.child = null
+      // A process stopped on purpose (replaced, cancelled, idle) has no turn to fail
+      if (this.child !== child) return
+      this.child = null
       this.fail(new Error(this.stderr.trim().split('\n').pop() || `Claude Code stopped (exit ${code})`))
     })
   }
@@ -166,6 +170,7 @@ export class ClaudeProcess {
     if (!this.alive) {
       this.model = model
       this.turns = 0
+      this.costSoFar = 0
       this.start()
     }
     clearTimeout(this.idle)
@@ -287,34 +292,66 @@ export function isAnswer(req: TurnRequest, said: string): boolean {
 
 const MARK_SYSTEM = `You mark one answer a student gave in a lesson, for their tutor. Grade against the tutor's own solution when there is one (it is inside <solution>; the student never saw it). "correct" means complete and right, not just heading the right way; a right answer with wrong or missing reasoning is "partial". An equivalent method or ordering is not a mistake. Quote the words of their answer that earned the verdict. Reply with JSON only: {"verdict": "correct" | "partial" | "wrong", "score": 0.0 to 1.0, "why": "one or two sentences: what was right and why, or the exact step that's wrong and why"}.`
 
-/** A short, separate call on the marking model: its verdict for the tutor to write */
-export async function markAnswer(question: string, answer: string, model: string, signal: AbortSignal): Promise<{ verdict: string; score: number; why: string; usage?: ClaudeUsage; ms: number } | null> {
+/**
+ * One call, no tools and no conversation: the whole prompt in, one reply out. For marking, lesson
+ * plans and roadmaps, and background jobs. Throws ClaudeUnavailable when Claude can't take it.
+ */
+export async function claudeOnce(prompt: string, system: string, role: ClaudeRole, signal?: AbortSignal, model: string = claudeModel(role, getSettings().ai.claude)): Promise<{ text: string; usage: ClaudeUsage; ms: number; model: string }> {
   const cmd = command()
-  if (!cmd) return null
+  if (!cmd) throw new ClaudeUnavailable('Claude Code isn’t installed')
   const t0 = Date.now()
-  const args = ['-p', '--model', model, '--output-format', 'json', '--tools', '', '--strict-mcp-config', '--setting-sources', '', '--no-session-persistence', '--permission-mode', 'dontAsk', '--system-prompt', MARK_SYSTEM]
+  const args = ['-p', '--model', model, '--output-format', 'json', '--tools', '', '--strict-mcp-config', '--setting-sources', '', '--no-session-persistence', '--permission-mode', 'dontAsk', '--system-prompt', system]
   const cwd = join(app.getPath('userData'), 'claude')
   mkdirSync(cwd, { recursive: true })
   const out = await new Promise<string>((resolve, reject) => {
     const child = spawn(cmd, args, { cwd, env: childEnv(), stdio: ['pipe', 'pipe', 'pipe'] })
     let buf = ''
+    let err = ''
     child.stdout.on('data', (d) => (buf += String(d)))
-    child.on('error', reject)
-    child.on('exit', () => resolve(buf))
-    const kill = () => child.kill('SIGTERM')
-    signal.addEventListener('abort', kill, { once: true })
-    child.stdin.end(`The tutor's message, with the question and its hidden solution:\n"""\n${question.slice(-8000)}\n"""\n\nThe student's answer:\n"""\n${answer.slice(0, 6000)}\n"""`)
+    child.stderr.on('data', (d) => (err = (err + String(d)).slice(-1000)))
+    child.on('error', (e) => reject(new ClaudeUnavailable(`Claude Code didn’t start: ${e.message}`)))
+    child.on('exit', () => (buf.trim() ? resolve(buf) : reject(unavailableReason(err) ? new ClaudeUnavailable(err.trim().split('\n').pop() ?? 'unavailable') : new Error(err.trim() || 'Claude gave no answer'))))
+    signal?.addEventListener('abort', () => child.kill('SIGTERM'), { once: true })
+    child.stdin.end(prompt)
   })
   const r = parseLine(out.trim().split('\n').pop() ?? '')
-  if (!r || r.type !== 'result' || !r.ok) return null
-  recordUse({ ...r.usage, at: Date.now(), model: r.model ?? model, role: 'mark', ms: Date.now() - t0, firstTokenMs: r.firstTokenMs })
-  const m = /\{[\s\S]*\}/.exec(r.text)
+  if (!r || r.type !== 'result') throw new Error('Claude gave no answer')
+  recordUse({ ...r.usage, at: Date.now(), model: r.model ?? model, role, ms: Date.now() - t0, firstTokenMs: r.firstTokenMs })
+  if (!r.ok) {
+    const why = unavailableReason(r.error ?? '')
+    if (why === 'limit') limitedUntil = Math.max(limitedUntil, Date.now() + 15 * 60_000)
+    throw why ? new ClaudeUnavailable(why === 'login' ? 'not logged in' : 'at your plan’s limit') : new Error(r.error ?? 'Claude stopped')
+  }
+  return { text: r.text, usage: r.usage, ms: Date.now() - t0, model: r.model ?? model }
+}
+
+/** A short, separate call on the marking model: its verdict for the tutor to write */
+export async function markAnswer(question: string, answer: string, model: string, signal: AbortSignal): Promise<{ verdict: string; score: number; why: string; ms: number } | null> {
+  const r = await claudeOnce(`The tutor's message, with the question and its hidden solution:\n"""\n${question.slice(-8000)}\n"""\n\nThe student's answer:\n"""\n${answer.slice(0, 6000)}\n"""`, MARK_SYSTEM, 'mark', signal, model).catch(() => null)
+  if (!r) return null
   try {
-    const j = JSON.parse(m?.[0] ?? '') as { verdict?: string; score?: number; why?: string }
+    const j = JSON.parse(/\{[\s\S]*\}/.exec(r.text)?.[0] ?? '') as { verdict?: string; score?: number; why?: string }
     if (!j.verdict || !['correct', 'partial', 'wrong'].includes(j.verdict)) return null
-    return { verdict: j.verdict, score: Number(j.score ?? (j.verdict === 'correct' ? 1 : j.verdict === 'partial' ? 0.5 : 0)), why: String(j.why ?? ''), usage: r.usage, ms: Date.now() - t0 }
+    return { verdict: j.verdict, score: Number(j.score ?? (j.verdict === 'correct' ? 1 : j.verdict === 'partial' ? 0.5 : 0)), why: String(j.why ?? ''), ms: r.ms }
   } catch {
     return null
+  }
+}
+
+/**
+ * Planning work (a roadmap, a lesson plan) on Claude when Claude teaches, else on Gemma or the
+ * cloud helper as before. Only for prompts that hold nothing private (a topic, public research).
+ */
+export async function planOnClaude(prompt: string, system: string | undefined, signal?: AbortSignal): Promise<string | null> {
+  const { chooseTeacher } = await import('./teacher')
+  const r = await claudeReady()
+  const t = chooseTeacher({ setting: getSettings().ai.claude?.teacher, installed: r.installed, ready: r.ready, notReady: r.why, private: false })
+  if (t.who !== 'claude') return null
+  try {
+    return (await claudeOnce(prompt, system ?? 'You are a careful expert.', 'hard', signal)).text
+  } catch (e) {
+    if (e instanceof ClaudeUnavailable) return null
+    throw e
   }
 }
 
@@ -358,7 +395,17 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   const key = lessonKey(req)
   const mcp = await startMcp()
   const proc = processFor(key, model, system, configFor(key, mcp.port, mcp.token), [])
-  const sent = messageToSend(history, { turns: proc.turns, first: proc.first, alive: proc.alive })
+  // Known by the student's own first message, as the window sends it (the context Tide adds to it can change)
+  const firstSaid = fp(text(req.messages.find((m) => m.role === 'user')?.content))
+  const sent = messageToSend(history, { turns: proc.turns, first: proc.first === firstSaid ? fp(text(history.find((m) => m.role === 'user')?.content)) : proc.first, alive: proc.alive })
+  // Why a process was given the transcript again, for tuning (no lesson text is kept)
+  if (sent.fresh && history.length > 1) {
+    try {
+      appendFileSync(join(app.getPath('userData'), 'claude', 'restarts.log'), JSON.stringify({ at: Date.now(), key, alive: proc.alive, turns: proc.turns, users: history.filter((m) => m.role === 'user').length, sameFirst: proc.first === firstSaid }) + '\n')
+    } catch {
+      // only a log
+    }
+  }
   let markNote = ''
   const fresh = sent.fresh
   const users = history.filter((m) => m.role === 'user').length
@@ -402,7 +449,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   try {
     // A process holding some other history starts again, from the transcript
     if (fresh && proc.alive) proc.stop()
-    proc.first = fp(text(history.find((m) => m.role === 'user')?.content))
+    proc.first = firstSaid
     let result: Extract<ClaudeEvent, { type: 'result' }>
     try {
       result = await proc.turn(sent.content + markNote, model, onEvent, signal)
@@ -415,7 +462,10 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
       result = await proc.turn(again.content + markNote, model, onEvent, signal)
     }
     proc.turns = users
-    recordUse({ ...result.usage, at: Date.now(), model: result.model ?? String(model), role, ms: Date.now() - t0, firstTokenMs: first ? first - t0 : undefined })
+    const turnCost = Math.max(0, result.usage.costUsd - proc.costSoFar)
+    proc.costSoFar = result.usage.costUsd
+    result.usage.costUsd = turnCost
+    recordUse({ ...result.usage, at: Date.now(), model: result.model && result.model.includes(String(model)) ? result.model : String(model), role, ms: Date.now() - t0, firstTokenMs: first ? first - t0 : undefined })
     if (!result.ok) {
       const why = unavailableReason(result.error ?? '')
       if (why === 'limit' && !limitedUntil) limitedUntil = Date.now() + 15 * 60_000

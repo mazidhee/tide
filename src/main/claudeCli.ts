@@ -129,7 +129,8 @@ export function parseLine(line: string): ClaudeEvent | null {
       usage: { input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0, costUsd: j.total_cost_usd ?? 0 },
       ms: j.duration_ms ?? 0,
       firstTokenMs: j.ttft_ms,
-      model: models[0]
+      // modelUsage adds up the whole process, every model it has used: the caller knows which one this turn ran on
+      model: models.length === 1 ? models[0] : undefined
     }
   }
   return { type: 'other' }
