@@ -10,7 +10,8 @@ import { addMemory, forgetMatching } from './memory'
 import type { AgentStep, Chat, StoredMessage } from '@shared/types'
 import type { TurnRequest } from './agent'
 import { filedUnder } from './learn'
-import { compactChat, fallbackTitle, historyBudget, historyFor, needsCompaction, newChat, renameChat, updateChat } from './chats'
+import { compactChat, fallbackTitle, historyBudget, historyFor, needsCompaction, newChat, renameChat, updateChat, wholeHistory } from './chats'
+import { uses, withoutMarkNote } from '@shared/workarounds'
 import { fitHistory } from '@shared/context'
 import { createHash } from 'crypto'
 import { cleanModelText } from '@shared/modelText'
@@ -376,16 +377,21 @@ export async function chat(req: ChatRequest, emit: (e: ChatEvent) => void) {
   if (done.length) emit({ id: req.id, type: 'step', step: { id: 'memory', kind: 'remember', label: done.join('; '), status: 'done', depth: 0 } })
 
   const { summary, messages } = historyFor(stored)
+  // Claude takes the whole conversation, with no summary (shared/workarounds trimHistory); Gemma,
+  // and Gemma taking over from Claude, the summary and recent turns as before
+  const whole = wholeHistory(stored)
   if (done.length) {
-    const last = messages[messages.length - 1]
-    if (last?.role === 'user') messages[messages.length - 1] = { ...last, content: `${last.content}\n\n(Tide has already done this, so don't call remember or forget for it, just confirm briefly: ${done.join('; ')})` }
+    for (const list of [messages, whole]) {
+      const last = list[list.length - 1]
+      if (last?.role === 'user') list[list.length - 1] = { ...last, content: `${last.content}\n\n(Tide has already done this, so don't call remember or forget for it, just confirm briefly: ${done.join('; ')})` }
+    }
   }
   let text = ''
   let sources: ContextSource[] | undefined
   const steps = new Map<string, AgentStep>()
   if (done.length) steps.set('memory', { id: 'memory', kind: 'remember', label: done.join('; '), status: 'done', depth: 0 })
   let error: string | undefined
-  await answer({ ...req, messages, attachment: undefined, summary } as TurnRequest, (e) => {
+  await answer({ ...req, messages, attachment: undefined, summary, whole } as TurnRequest, (e) => {
     if (e.type === 'delta') text += e.text
     else if (e.type === 'reset') text = ''
     else if (e.type === 'sources') sources = e.sources
@@ -424,7 +430,8 @@ export async function chat(req: ChatRequest, emit: (e: ChatEvent) => void) {
       await renameChat(chatId, clean || fallbackTitle(question))
       onChatsChanged(chatId)
     }
-    if (needsCompaction(saved)) {
+    // Claude keeps the whole conversation in its process: nothing to fold away (shared/workarounds compactChats)
+    if (uses('compactChats', viaClaude ? 'claude' : 'gemma') && needsCompaction(saved)) {
       const controller = new AbortController()
       compacting.set(chatId, controller)
       try {
@@ -559,6 +566,18 @@ async function lessonTurn(req: TurnRequest) {
   }
 }
 
+/**
+ * A turn as Claude takes it (shared/workarounds): a stored conversation whole, with no summary, and
+ * the answer without the marking note Gemma needs said again. Gemma, if it takes over, gets the
+ * request as it came.
+ */
+export function claudeRequest(req: TurnRequest): TurnRequest {
+  const messages = req.whole ?? req.messages
+  const last = messages[messages.length - 1]
+  const plain = !uses('markNoteEachAnswer', 'claude') && last?.role === 'user' && typeof last.content === 'string' ? [...messages.slice(0, -1), { ...last, content: withoutMarkNote(last.content) }] : messages
+  return { ...req, messages: plain, ...(req.whole ? { summary: undefined, whole: undefined } : {}) }
+}
+
 async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
   const controller = new AbortController()
   running.set(req.id, controller)
@@ -604,7 +623,7 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
       const led = req.session ? await import('./sourceLed').then((m) => m.sourceLedTurn(req)).catch(() => null) : null
       // Claude's exercises reach the lesson only once proven (main/exercises): its <exercise id> tags become the verified problem
       const exercises = req.session ? await (await import('./exercises')).exerciseStream(req, led ? led.tap(emit) : emit) : null
-      await claudeTurn(led ? led.request : req, exercises ? exercises.tap : led ? led.tap(emit) : emit, controller.signal, led?.signal)
+      await claudeTurn(led ? claudeRequest(led.request) : claudeRequest(req), exercises ? exercises.tap : led ? led.tap(emit) : emit, controller.signal, led?.signal)
       exercises?.flush()
       // A picture asked for while a question waits was held: shown once it's checked against that
       // question's hidden solution, or drawn again as the setup only (the same check as Gemma's)
@@ -616,7 +635,8 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
           const step = (label: string, status: 'running' | 'done') => emit({ id: req.id, type: 'step', step: { id: 'show-setup', kind: 'helper', label, status, depth: 0 } })
           step('That picture showed the answer you are working on: drawing the setup only', 'running')
           let again = ''
-          await claudeTurn({ ...req, messages: [...req.messages, { role: 'assistant', content: heldShow }, { role: 'user', content: setupOnlyNote(what) }] }, (e) => {
+          const base = claudeRequest(req)
+          await claudeTurn({ ...base, messages: [...base.messages, { role: 'assistant', content: heldShow }, { role: 'user', content: setupOnlyNote(what) }] }, (e) => {
             if (e.type === 'delta') again += e.text
             else if (e.type === 'reset') again = ''
             else if (e.type !== 'done' && e.type !== 'error') emit(e)

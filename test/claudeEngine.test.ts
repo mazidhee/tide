@@ -145,6 +145,36 @@ describe('Claude lessons', () => {
     expect(steps(t.events)).toContain('Claude Sonnet is thinking')
   })
 
+  it('gives up on a turn with no first words in time: the process goes, it is logged, and Gemma can take it', async () => {
+    const was = engine.claudeLimits.firstWordsMs
+    engine.claudeLimits.firstWordsMs = 300
+    try {
+      const t0 = Date.now()
+      const err = await say([{ role: 'user', content: 'teach me [hang]' }], { labId: 'lesson:hang' }).run.catch((e) => e)
+      expect(err).toBeInstanceOf(engine.ClaudeUnavailable)
+      expect(err.message).toMatch(/no words after/)
+      // Not started again on a second process first: straight to Gemma
+      expect(Date.now() - t0).toBeLessThan(3000)
+      expect(engine.liveClaude().find((p) => p.key.startsWith('lab:lesson:hang'))).toBeUndefined()
+      const log = readFileSync(join(dir, 'claude', 'fallbacks.log'), 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+      expect(log.at(-1)).toMatchObject({ why: 'no-first-words', key: 'lab:lesson:hang:web', ms: 300 })
+      // The lesson goes on on Claude next time, in a new process
+      expect(await say([{ role: 'user', content: 'teach me loops' }], { labId: 'lesson:hang' }).run).toMatch(/turn 1/)
+    } finally {
+      engine.claudeLimits.firstWordsMs = was
+    }
+  })
+
+  it('counts thinking as a sign of life: a long think before the words is not a hang', async () => {
+    const was = engine.claudeLimits.firstWordsMs
+    engine.claudeLimits.firstWordsMs = 150
+    try {
+      expect(await say([{ role: 'user', content: '[thinks long]' }], { labId: 'lesson:think-long' }).run).toBe('thought it through')
+    } finally {
+      engine.claudeLimits.firstWordsMs = was
+    }
+  })
+
   it('hands the turn to Gemma when the plan is at its limit, and stays off Claude until it resets', async () => {
     await expect(say([{ role: 'user', content: 'limit' }], { labId: 'lesson:e' }).run).rejects.toBeInstanceOf(engine.ClaudeUnavailable)
     expect((await engine.claudeReady()).ready).toBe(false)
