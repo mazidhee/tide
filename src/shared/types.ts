@@ -616,6 +616,8 @@ export interface TideApi {
     query(q: string, limit?: number): Promise<SearchHit[]>
   }
   /** Python IntelliSense: the editor's link to the language server (main/pythonLanguageServer.ts) */
+  /** The Code view as an IDE (shared/ide) */
+  ide: import('./ide').IdeApi
   lsp: {
     /** A JSON-RPC message for the server */
     send(msg: unknown): void

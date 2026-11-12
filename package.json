@@ -20,6 +20,7 @@
     "@astral-sh/ruff-wasm-web": "0.17.3",
     "@modelcontextprotocol/sdk": "1.32.2",
     "@mozilla/readability": "^0.6.0",
+    "@vscode/ripgrep": "1.18.0",
     "basedpyright": "1.40.2",
     "chokidar": "^4.0.3",
     "gray-matter": "^4.0.3",
@@ -31,6 +32,8 @@
     "pdfjs-dist": "^5.3.31",
     "ts-fsrs": "^5.4.2",
     "turndown": "^7.2.0",
+    "typescript": "^5.8.3",
+    "typescript-language-server": "6.1.0",
     "zod": "4.6.7"
   },
   "devDependencies": {
@@ -54,10 +57,12 @@
     "@types/react-dom": "^19.1.6",
     "@types/turndown": "^5.0.5",
     "@vitejs/plugin-react": "^4.6.0",
+    "@vscode/debugprotocol": "1.68.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^5.5.0",
     "chess.js": "1.4.0",
     "d3-force": "^3.0.1",
+    "diff": "9.0.0",
     "dompurify": "^3.4.17",
     "electron": "42.3.0",
     "electron-builder": "^24.13.3",
@@ -75,7 +80,6 @@
     "regexp-tree": "0.1.27",
     "shiki": "4.6.0",
     "sql-formatter": "15.9.0",
-    "typescript": "^5.8.3",
     "vite": "^7.1.11",
     "vitest": "^3.2.4",
     "vscode-languageserver-types": "3.17.5"
@@ -96,7 +100,8 @@
       "!node_modules/basedpyright/index.js",
       "!node_modules/basedpyright/dist/typeshed-fallback/stubs/**",
       "node_modules/basedpyright/dist/typeshed-fallback/stubs/requests/**",
-      "node_modules/basedpyright/dist/typeshed-fallback/stubs/tqdm/**"
+      "node_modules/basedpyright/dist/typeshed-fallback/stubs/tqdm/**",
+      "!node_modules/typescript-language-server/lib/*.map"
     ],
     "mac": {
       "target": [
@@ -115,7 +120,10 @@
     "asarUnpack": [
       "node_modules/node-pty/**",
       "node_modules/pdfjs-dist/**",
-      "node_modules/basedpyright/**"
+      "node_modules/basedpyright/**",
+      "node_modules/@vscode/ripgrep*/**",
+      "node_modules/typescript-language-server/**",
+      "node_modules/typescript/**"
     ],
     "dmg": {
       "title": "Tide",
