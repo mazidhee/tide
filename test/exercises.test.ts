@@ -228,10 +228,10 @@ describe('set_exercise in a lesson', () => {
     expect(steps[0]).toMatchObject({ status: 'error' })
     // Its id never shows anything
     const shown: string[] = []
-    const s0 = ex.exerciseStream({ id: 'r0', labId: lab, messages: history }, (e) => e.type === 'delta' && shown.push(e.text))
+    const s0 = await ex.exerciseStream({ id: 'r0', labId: lab, messages: history }, (e) => e.type === 'delta' && shown.push(e.text))
     s0.tap({ id: 'r0', type: 'delta', text: `Try this.<exercise id="${id}"/>` })
     s0.flush()
-    expect(shown.join('')).toBe('Try this.')
+    expect(shown.join('')).toMatch(/^Try this\.\n\n_Tide held back an exercise here that wasn’t checked\. Press Go on for another\._\n\n<continue\/>$/)
 
     const fixed = await ex.setExerciseTool.run({ ...DEDUPE, repair_of: id }, ctx(lab, steps))
     expect(fixed).toMatch(/^Verified in \d+\.\d s \(id (x\w+)\)/)
@@ -242,7 +242,7 @@ describe('set_exercise in a lesson', () => {
 
     // The tag, split across deltas, becomes the problem as the bank renders it
     const out: string[] = []
-    const s = ex.exerciseStream({ id: 'r1', labId: lab, messages: history }, (e) => e.type === 'delta' && out.push(e.text))
+    const s = await ex.exerciseStream({ id: 'r1', labId: lab, messages: history }, (e) => e.type === 'delta' && out.push(e.text))
     for (const part of ['<grade verdict="correct">Right.</grade> Now one to write.<exer', `cise id="${good.slice(0, 4)}`, `${good.slice(4)}"/>`]) s.tap({ id: 'r1', type: 'delta', text: part })
     s.flush()
     const reply = out.join('')
@@ -282,7 +282,7 @@ describe('set_exercise in a lesson', () => {
     expect(steps.map((s) => s.label)).toEqual(['Took a checked exercise from the problem bank'])
     expect(asked).toEqual([])
     const out: string[] = []
-    const s = ex.exerciseStream({ id: 'r2', labId: lab, messages: history }, (e) => e.type === 'delta' && out.push(e.text))
+    const s = await ex.exerciseStream({ id: 'r2', labId: lab, messages: history }, (e) => e.type === 'delta' && out.push(e.text))
     s.tap({ id: 'r2', type: 'delta', text: `<exercise id="${/id (x\w+)/.exec(r)![1]}"/>` })
     s.flush()
     expect(out.join('')).toContain('```tests')
@@ -328,18 +328,28 @@ describe('privacy', () => {
     expect(out.join('')).toBe('Before  after <b>bold</b>')
   })
 
+  it('shows a verified exercise by its id after Tide restarts, from the bank', async () => {
+    const id = (await readBank('Python lists')).find((p) => p.source === 'claude')!.id
+    ex._exerciseState.ready.clear()
+    const out: string[] = []
+    const s = await ex.exerciseStream({ id: 'z', labId: 'lesson:after-restart', topic: 'Python lists', messages: [] }, (e) => e.type === 'delta' && out.push(e.text))
+    s.tap({ id: 'z', type: 'delta', text: `<exercise id="${id}"/>` })
+    s.flush()
+    expect(out.join('')).toContain('```tests')
+  })
+
   it("takes out hidden tests Claude wrote itself, and gives a retry of an exercise that exercise's own", async () => {
     const lab = 'lesson:retry'
     ex.setLessonInfo(lab, { topic: 'Python lists', history: [] })
     const r = await ex.setExerciseTool.run(DEDUPE, ctx(lab))
     const id = /id (x\w+)/.exec(r)![1]
     const out: string[] = []
-    const s1 = ex.exerciseStream({ id: 'a', labId: lab, messages: [] }, (e) => e.type === 'delta' && out.push(e.text))
+    const s1 = await ex.exerciseStream({ id: 'a', labId: lab, messages: [] }, (e) => e.type === 'delta' && out.push(e.text))
     s1.tap({ id: 'a', type: 'delta', text: `<exercise id="${id}"/>` })
     s1.flush()
     out.length = 0
     // The retry, its ask streamed in pieces, with a test Claude added that nothing checked
-    const s2 = ex.exerciseStream({ id: 'b', labId: lab, messages: [] }, (e) => e.type === 'delta' && out.push(e.text))
+    const s2 = await ex.exerciseStream({ id: 'b', labId: lab, messages: [] }, (e) => e.type === 'delta' && out.push(e.text))
     for (const t of ['<grade verdict="partial">Close.</grade>\n\n<ask type="code" lang="py', 'thon">Fix your `dedupe(xs)`.\n```tests\ndef test_fast():\n    assert dedupe(list(range(9)))\n```\n</a', 'sk> after']) s2.tap({ id: 'b', type: 'delta', text: t })
     s2.flush()
     const reply = out.join('')

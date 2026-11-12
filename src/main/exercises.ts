@@ -198,6 +198,7 @@ export const bankedExerciseTool: McpTool = {
     const { level, move } = await levelFor(info, topic, given, lesson)
     if (move && (move.kind === 'recap' || move.kind === 'prerequisite')) return `Tide's difficulty policy says to set no new exercise now: ${move.why}. Do that instead.`
     const p = await fromBank(topic, kind, level, lesson)
+    console.log(`[exercise] banked_exercise ${topic} ${kind ?? 'any'} level ${level}: ${p ? p.id : 'none'}`)
     if (!p) return `No verified ${kind ?? ''} exercise on ${topic} in the bank yet: write one with set_exercise.`.replace('  ', ' ')
     ready.set(p.id, { problem: p, lesson, at: Date.now(), ...(move?.kind === 'example' ? { worked: true } : {}) })
     ctx.step({ kind: 'helper', label: 'Took a checked exercise from the problem bank', status: 'done', depth: 0 })
@@ -211,8 +212,14 @@ export const EXERCISE_TOOLS = [setExerciseTool, bankedExerciseTool]
  * The lesson's stream with each <exercise id="…"/> swapped for its verified exercise, numbered and
  * labelled as the bank's problems are; an id that wasn't verified shows nothing. `flush` at the end.
  */
-export function exerciseStream(req: { labId?: string; chatId?: string; id: string; messages: { role: string; content: unknown }[] }, emit: (e: ChatEvent) => void) {
+export async function exerciseStream(req: { labId?: string; chatId?: string; id: string; topic?: string; messages: { role: string; content: unknown }[] }, emit: (e: ChatEvent) => void) {
   const lesson = req.labId ?? req.chatId ?? 'claude'
+  // Verified exercises are also in the bank, by id: one verified before Tide restarted still shows
+  const banked = new Map<string, BankProblem>()
+  if (req.topic) {
+    const { readBank } = await import('./bank')
+    for (const p of await readBank(req.topic).catch(() => [] as BankProblem[])) if (p.source === 'claude' && p.checked !== false) banked.set(p.id, p)
+  }
   const replies = req.messages.filter((m) => m.role === 'assistant').map((m) => (typeof m.content === 'string' ? m.content : ''))
   let sent = ''
   const out = (e: ChatEvent) => {
@@ -221,10 +228,13 @@ export function exerciseStream(req: { labId?: string; chatId?: string; id: strin
     emit(e)
   }
   const render = (id: string): string | null => {
-    const r = ready.get(id)
-    if (!r || r.lesson !== lesson) {
+    const waiting = ready.get(id)
+    const r: Ready | undefined = waiting && waiting.lesson === lesson ? waiting : banked.has(id) ? { problem: banked.get(id)!, lesson, at: Date.now() } : undefined
+    if (!r) {
+      console.log(`[exercise] held back an unverified id ${id}`)
       emit({ id: req.id, type: 'step', step: { id: `exercise-${id}`, kind: 'helper', label: 'Held back an exercise that wasn’t verified', status: 'done', depth: 0 } })
-      return null
+      // The reply mustn't end on nothing to do
+      return '\n\n_Tide held back an exercise here that wasn’t checked. Press Go on for another._\n\n<continue/>'
     }
     ready.delete(id)
     const prev = lastLevel.get(lesson)
