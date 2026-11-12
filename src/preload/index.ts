@@ -119,6 +119,12 @@ const api: TideApi = {
     recordAttempt: invoke('learn:recordAttempt'),
     mastery: invoke('learn:mastery')
   },
+  maths: {
+    state: invoke('maths:state'),
+    log: invoke('maths:log'),
+    setReminder: invoke('maths:setReminder'),
+    explain: invoke('maths:explain')
+  },
   practice: {
     list: invoke('practice:list'),
     patterns: invoke('practice:patterns'),

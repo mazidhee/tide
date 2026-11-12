@@ -27,6 +27,8 @@ export type View =
   | { kind: 'wrapup' }
   | { kind: 'weekly' }
   | { kind: 'drill'; drill: import('@shared/drills').DrillKind; nonce?: number }
+  // Daily mental maths (components/MentalMaths.tsx): today's session, or one on a level you choose
+  | { kind: 'maths'; level?: string; nonce?: number }
   | { kind: 'design'; path: string; start?: DesignMode; topic?: string; company?: string; timed?: number; reference?: string; nonce?: number }
   | { kind: 'code'; path?: string }
   | { kind: 'help'; section?: string }

@@ -5,6 +5,7 @@ import { Icon } from './Icon'
 import { PillSegment, PillSelect, PromptBox } from './PromptBox'
 import { ContextMenu, type MenuState } from './Menu'
 import { CompanyPrep } from './CompanyPrep'
+import { MathsPanel } from './MentalMaths'
 import { QuantPanel } from './QuantPanel'
 import { DesignPanel } from './DesignPanel'
 import { PixelScene } from './PixelScene'
@@ -13,10 +14,11 @@ const STATUS_LABEL: Record<PracticeStatus, string> = { todo: 'To do', solved: 'S
 const LANGUAGES = ['python', 'javascript', 'typescript', 'java', 'c++', 'go', 'rust']
 type Filter = 'all' | PracticeStatus
 
-type Tab = 'coding' | 'problems' | 'quant' | 'design' | 'companies'
-const TABS: { id: Tab; label: string; icon: 'sparkle' | 'quiz' | 'summary' | 'canvas' | 'globe' }[] = [
+type Tab = 'coding' | 'problems' | 'maths' | 'quant' | 'design' | 'companies'
+const TABS: { id: Tab; label: string; icon: 'sparkle' | 'quiz' | 'summary' | 'canvas' | 'globe' | 'timer' }[] = [
   { id: 'coding', label: 'Coding', icon: 'sparkle' },
   { id: 'problems', label: 'Problems', icon: 'quiz' },
+  { id: 'maths', label: 'Mental maths', icon: 'timer' },
   { id: 'quant', label: 'Quant', icon: 'summary' },
   { id: 'design', label: 'System design', icon: 'canvas' },
   { id: 'companies', label: 'Companies', icon: 'globe' }
@@ -158,7 +160,7 @@ export function PracticeView() {
 
   return (
     <div className="page practice">
-      <PixelScene key={tab} place={tab === 'coding' || tab === 'problems' ? 'terminal' : tab === 'quant' ? 'math' : 'workshop'} rows={40} scale={3} className="page-scene" />
+      <PixelScene key={tab} place={tab === 'coding' || tab === 'problems' ? 'terminal' : tab === 'quant' || tab === 'maths' ? 'math' : 'workshop'} rows={40} scale={3} className="page-scene" />
       <div className="page-inner">
         <header className="pv-head">
           <div>
@@ -270,6 +272,7 @@ export function PracticeView() {
           </section>
         )}
 
+        {tab === 'maths' && <MathsPanel />}
         {tab === 'quant' && <QuantPanel />}
         {tab === 'design' && <DesignPanel />}
         {tab === 'companies' && (

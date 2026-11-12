@@ -5,9 +5,10 @@
  * lessons: the tutor questions and marks, the course explains).
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { AREAS, CATALOGUE, SOURCES, areaLabel, fromRepo, homeUrl, mediaOf, moduleProgress, nextLesson, registerCourses, sourceOf, sourceSite, suggestCourses, type CatalogueCourse, type CourseArea, type CourseLesson, type CourseModule, type CourseProgress, type CourseRef } from '@shared/courses'
+import { CATALOGUE, SOURCES, areaLabel, fromRepo, homeUrl, mediaOf, moduleProgress, nextLesson, registerCourses, sourceOf, sourceSite, suggestCourses, type CatalogueCourse, type CourseArea, type CourseLesson, type CourseModule, type CourseProgress, type CourseRef } from '@shared/courses'
 import type { CourseCard, CourseDetail, ImportPhase, LessonContent } from '../../../main/courses'
 import type { FreshStatus } from '../../../main/courseFresh'
+import { NO_FILTER, SORTS, SOURCE_GROUPS, SUBJECTS, browse, counts, shelves, subjectsOf, type BrowseFilter } from '@shared/courseShelf'
 import { useApp } from '../state'
 import { Icon, type IconName } from './Icon'
 import { renderMarkdown, splitFrontmatter } from '../lib/markdown'
@@ -77,24 +78,6 @@ export function CoursesView({ id, lesson, area }: { id?: string; lesson?: string
 
 // ---------- The catalogue ----------
 
-type Tier = 'all' | 'open' | 'personal'
-type Media = 'all' | 'video' | 'text'
-type Level = 'all' | CatalogueCourse['level']
-
-/** A small segmented control: one of a few values */
-function Seg<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { id: T; label: string }[]; onChange: (v: T) => void }) {
-  return (
-    <div className="crs-seg" role="radiogroup" aria-label={label}>
-      <span className="crs-seg-label">{label}</span>
-      {options.map((o) => (
-        <button key={o.id} role="radio" aria-checked={value === o.id} className={`crs-seg-opt${value === o.id ? ' on' : ''}`} onClick={() => onChange(o.id)}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
 const ago = (ms: number) => {
   const d = Math.round((Date.now() - ms) / 86_400_000)
   return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 14 ? `${d} days ago` : day(ms)
@@ -147,18 +130,77 @@ function FreshThread({ status, onClose }: { status: FreshStatus; onClose: () => 
   )
 }
 
+/** Remembered per window: whether New for you is folded, and Browse's last filters */
+const remember = {
+  get<T>(key: string, fallback: T): T {
+    try {
+      const v = localStorage.getItem(key)
+      return v === null ? fallback : (JSON.parse(v) as T)
+    } catch {
+      return fallback
+    }
+  },
+  set(key: string, v: unknown) {
+    try {
+      localStorage.setItem(key, JSON.stringify(v))
+    } catch {
+      // Kept for this visit only
+    }
+  }
+}
+
+const GROUP_PREVIEW = 6
+/** Who wrote it, without repeating the source named beside it */
+const byline = (c: CatalogueCourse) => {
+  const src = SOURCES[sourceOf(c)].label
+  return c.by === src ? '' : c.by.replace(new RegExp(`,?\\s*${src}$`), '')
+}
+const levelLabel = (l: CatalogueCourse['level']) => l.charAt(0).toUpperCase() + l.slice(1)
+const errText = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+
+/** A small select in Browse's toolbar */
+function Pick<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { id: T; label: string }[]; onChange: (v: T) => void }) {
+  return (
+    <label className={`crs-pick${options[0] && value !== options[0].id ? ' set' : ''}`}>
+      <span className="crs-pick-label">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value as T)} aria-label={label}>
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <Icon name="chevron" size={10} className="crs-pick-caret" />
+    </label>
+  )
+}
+
+/**
+ * The Courses page, in three parts that never mix: Continue (courses under way, one click back to
+ * the next lesson), New for you (the weekly check's finds, foldable, each dismissable) and Browse
+ * (the whole catalogue by your subjects, filtered by source, format and level, searched and sorted).
+ */
 function Catalogue({ area: initialArea }: { area?: CourseArea }) {
   const app = useApp()
   const [cards, setCards] = useState<CourseCard[] | null>(null)
-  const [area, setArea] = useState<CourseArea | 'all'>(initialArea ?? 'all')
-  const [q, setQ] = useState('')
-  const [tier, setTier] = useState<Tier>('all')
-  const [media, setMedia] = useState<Media>('all')
-  const [level, setLevel] = useState<Level>('all')
+  const [filter, setFilter] = useState<BrowseFilter>(() => {
+    const saved = remember.get<Partial<BrowseFilter>>('tide.courses.browse', {})
+    return { ...NO_FILTER, ...saved, query: '', ...(initialArea ? { subject: subjectsOf({ area: initialArea, title: '', covers: '', topics: [] })[0] } : {}) }
+  })
+  const [newOpen, setNewOpen] = useState(() => remember.get('tide.courses.newOpen', true))
+  const [showFinished, setShowFinished] = useState(false)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [fresh, setFresh] = useState<FreshStatus | null>(null)
   const [threadOpen, setThreadOpen] = useState(false)
   const [leaving, setLeaving] = useState<Set<string>>(new Set())
   const phases = useImports()
+  const set = (patch: Partial<BrowseFilter>) =>
+    setFilter((f) => {
+      const next = { ...f, ...patch }
+      const { query: _q, ...keep } = next
+      remember.set('tide.courses.browse', keep)
+      return next
+    })
   const load = useCallback(
     () =>
       window.tide.courses
@@ -190,25 +232,20 @@ function Catalogue({ area: initialArea }: { area?: CourseArea }) {
     [load, loadFresh]
   )
 
-  const mine = (cards ?? []).filter((c) => c.imported).sort((a, b) => Number(!!b.updateAvailable) - Number(!!a.updateAvailable) || b.imported!.updatedAt - a.imported!.updatedAt)
-  const suggested = (cards ?? []).filter((c) => c.suggested && !c.imported).sort((a, b) => b.suggested!.at - a.suggested!.at || b.suggested!.score - a.suggested!.score)
-  const query = q.trim().toLowerCase()
-  const shown = (cards ?? []).filter(
-    (c) =>
-      (area === 'all' || c.area === area) &&
-      (tier === 'all' || c.tier === tier) &&
-      (media === 'all' || (media === 'video' ? mediaOf(c) !== 'text' : mediaOf(c) !== 'video')) &&
-      (level === 'all' || c.level === level) &&
-      (!query || `${c.title} ${c.by} ${c.covers} ${c.topics.join(' ')} ${sourceSite(c)} ${SOURCES[sourceOf(c)].label}`.toLowerCase().includes(query))
-  )
-  const counts = useMemo(() => Object.fromEntries(AREAS.map((a) => [a.id, (cards ?? []).filter((c) => c.area === a.id).length])), [cards])
-  const filtered = tier !== 'all' || media !== 'all' || level !== 'all'
+  const all = cards ?? []
+  const { continuing, finished, suggested } = useMemo(() => shelves(all), [all])
+  const groups = useMemo(() => browse(all, filter), [all, filter])
+  const tally = useMemo(() => counts(all), [all])
+  const found = new Set(groups.flatMap((g) => g.courses.map((c) => c.id))).size
+  const searching = !!filter.query.trim()
+  const narrowed = filter.source !== 'all' || filter.media !== 'all' || filter.level !== 'all'
+  const newThisWeek = suggested.filter((c) => Date.now() - c.suggested!.at < 7 * 86_400_000).length
 
   const importIt = (c: CourseCard) =>
     window.tide.courses
       .import(c.id)
       .then(() => load())
-      .catch((e) => app.toast(`Couldn’t import ${c.title}: ${(e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')}`, { tone: 'error' }))
+      .catch((e) => app.toast(`Couldn’t import ${c.title}: ${errText(e)}`, { tone: 'error' }))
   const updateIt = (c: CourseCard) =>
     window.tide.courses
       .update(c.id)
@@ -216,7 +253,7 @@ function Catalogue({ area: initialArea }: { area?: CourseArea }) {
         app.toast(`${c.title} is up to date`)
         return load()
       })
-      .catch((e) => app.toast(`Couldn’t update ${c.title}: ${(e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')}`, { tone: 'error' }))
+      .catch((e) => app.toast(`Couldn’t update ${c.title}: ${errText(e)}`, { tone: 'error' }))
   const dismiss = (c: CourseCard) => {
     // It folds away first, then is gone
     setLeaving((s) => new Set(s).add(c.id))
@@ -238,6 +275,133 @@ function Catalogue({ area: initialArea }: { area?: CourseArea }) {
         void loadFresh()
       })
   }
+  const open = (c: CourseCard, lesson?: string) => app.setView({ kind: 'courses', id: c.id, ...(lesson ? { lesson } : {}) })
+  const busyPhase = (c: CourseCard) => {
+    const ph = phases[c.id]
+    return ph && ph.phase !== 'done' && ph.phase !== 'error' ? ph : null
+  }
+
+  /** The one action a row offers: import it, bring it up to date, or show how far you are */
+  const action = (c: CourseCard) => {
+    const ph = busyPhase(c)
+    if (ph)
+      return (
+        <span className="crs-meta crs-busy">
+          <span className="spinner" /> {PHASE_LABEL[ph.phase]}…
+        </span>
+      )
+    if (c.imported && c.updateAvailable)
+      return (
+        <button className="btn small" onClick={() => updateIt(c)}>
+          <Icon name="refresh" size={12} /> Update
+        </button>
+      )
+    if (c.imported)
+      return (
+        <span className="crs-row-progress" title={`${c.imported.done} of ${c.imported.lessons} lessons done`}>
+          <Bar done={c.imported.done} total={c.imported.lessons} />
+          <span className="crs-meta">
+            {c.imported.done}/{c.imported.lessons}
+          </span>
+        </span>
+      )
+    return (
+      <button className="btn small crs-import" onClick={() => importIt(c)}>
+        Import
+      </button>
+    )
+  }
+
+  const row = (c: CourseCard) => (
+    <li key={c.id} className={`crs-row${c.imported ? ' imported' : ''}`}>
+      <button className="crs-row-main" onClick={() => open(c)}>
+        <span className="crs-row-top">
+          <span className="crs-row-title">{c.title}</span>
+          {c.suggested && <span className="crs-badge new">New</span>}
+          {c.updateAvailable && <span className="crs-badge updated">Updated</span>}
+        </span>
+        <span className="crs-row-covers">{c.covers}</span>
+        <span className="crs-row-meta">
+          <span className="crs-source" title={sourceSite(c)}>
+            {mediaOf(c) !== 'text' && <Icon name="video" size={11} />}
+            {SOURCES[sourceOf(c)].label}
+          </span>
+          <span>{levelLabel(c.level)}</span>
+          {c.tier === 'personal' && (
+            <span className="crs-personal" title={c.licenceNote ?? c.licence}>
+              Personal study
+            </span>
+          )}
+          {byline(c) && (
+            <span className="crs-row-by" title={c.by}>
+              {byline(c)}
+            </span>
+          )}
+        </span>
+      </button>
+      <span className="crs-row-act">{action(c)}</span>
+    </li>
+  )
+
+  const continueRow = (c: CourseCard) => {
+    const ph = busyPhase(c)
+    const next = c.imported!.next
+    return (
+      <li key={c.id} className="crs-go">
+        <button className="crs-go-main" onClick={() => open(c, next?.id)} title={next ? `Resume at ${next.title}` : `Open ${c.title}`}>
+          <span className="crs-go-text">
+            <span className="crs-go-title">
+              {c.title}
+              {c.updateAvailable && <span className="crs-badge updated">Updated</span>}
+            </span>
+            <span className="crs-go-next">
+              {next ? (
+                <>
+                  <span className="crs-go-label">{c.imported!.done ? 'Next' : 'Start with'}</span> {next.title}
+                  {next.module && next.module !== next.title && <span className="crs-go-module"> · {next.module}</span>}
+                </>
+              ) : (
+                'Ready to start'
+              )}
+            </span>
+          </span>
+          <span className="crs-go-progress">
+            <Bar done={c.imported!.done} total={c.imported!.lessons} />
+            <span className="crs-meta">
+              {c.imported!.done} of {c.imported!.lessons}
+            </span>
+          </span>
+          <span className="crs-go-resume" aria-hidden="true">
+            <Icon name="play" size={11} />
+            {c.imported!.done ? 'Resume' : 'Start'}
+          </span>
+        </button>
+        {continuing.some((x) => x.updateAvailable) && (
+          <span className="crs-go-side">
+            {c.updateAvailable && (
+          <button className="btn small crs-update-btn" disabled={!!ph} onClick={() => updateIt(c)}>
+            {ph ? (
+              <>
+                <span className="spinner" /> {PHASE_LABEL[ph.phase]}
+              </>
+            ) : (
+              <>
+                <Icon name="refresh" size={12} /> Update
+              </>
+            )}
+          </button>
+            )}
+          </span>
+        )}
+      </li>
+    )
+  }
+
+  const freshLine = fresh?.running
+    ? 'Checking your sources…'
+    : fresh?.lastRun
+      ? `Checked ${ago(fresh.lastRun)}${fresh.rankedBy === 'claude' ? ', ranked by Claude' : ''}`
+      : 'Checked once a week, never during a lesson'
 
   return (
     <div className="doc-view crs-page">
@@ -246,220 +410,192 @@ function Catalogue({ area: initialArea }: { area?: CourseArea }) {
           <header className="crs-head">
             <div>
               <h1 className="crs-title">Courses</h1>
-              <p className="crs-lede">Open courses from universities, books, lecture series and official guides, taught from their own text. The course explains; the tutor asks, marks and fills the gaps. Imported courses stay on this Mac.</p>
+              <p className="crs-lede">Open courses, books and lecture series, taught from their own text.</p>
             </div>
             <label className="crs-search">
               <Icon name="search" size={14} />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a course" aria-label="Find a course" />
+              <input value={filter.query} onChange={(e) => set({ query: e.target.value })} placeholder={`Search ${all.length || ''} courses`} aria-label="Search courses" onKeyDown={(e) => e.key === 'Escape' && set({ query: '' })} />
+              {searching && (
+                <button className="icon-btn small" aria-label="Clear the search" onClick={() => set({ query: '' })}>
+                  <Icon name="x" size={12} />
+                </button>
+              )}
             </label>
           </header>
 
-          <div className="crs-fresh">
-            <span className={`crs-fresh-dot${fresh?.running ? ' live' : ''}`} aria-hidden="true" />
-            <span className="crs-meta">
-              {fresh?.running
-                ? 'Checking your sources for new and updated courses…'
-                : fresh?.lastRun
-                  ? `Checked ${ago(fresh.lastRun)}${fresh.rankedBy === 'claude' ? ', ranked by Claude' : fresh.rankedBy === 'score' ? ', ranked by subject, source and recency' : ''}. Tide looks again each week, never during a lesson.`
-                  : 'Tide looks for new and updated courses in your subjects once a week, never during a lesson.'}
-            </span>
-            <button className="crs-link" onClick={() => setThreadOpen((o) => !o)}>
-              {threadOpen ? 'Hide' : 'Details'}
-            </button>
-            {!fresh?.running && (
-              <button className="crs-link" onClick={checkNow}>
-                Check now
-              </button>
-            )}
-          </div>
-          {threadOpen && fresh && <FreshThread status={fresh} onClose={() => setThreadOpen(false)} />}
-
-          {suggested.length > 0 && (
-            <section className="crs-new" aria-label="New this week">
-              <div className="crs-area-head">
-                <h2 className="crs-section">
-                  New for you <span className="crs-badge new">{suggested.filter((c) => Date.now() - c.suggested!.at < 7 * 86_400_000).length || suggested.length}</span>
-                </h2>
-                <span className="crs-meta">Found in your subjects. Nothing is imported until you choose.</span>
+          {!searching && continuing.length > 0 && (
+            <section className="crs-shelf" aria-label="Continue">
+              <div className="crs-shelf-head">
+                <h2 className="crs-section">Continue</h2>
+                <span className="crs-meta">
+                  {continuing.length} under way{finished.length ? `, ${finished.length} finished` : ''}
+                </span>
               </div>
-              <ul className="crs-new-rows">
-                {suggested.map((c, i) => {
-                  const ph = phases[c.id]
-                  const busy = ph && ph.phase !== 'done' && ph.phase !== 'error'
-                  return (
-                    <li key={c.id} className={`crs-new-row${leaving.has(c.id) ? ' leaving' : ''}`} style={{ ['--i' as string]: String(i) }}>
-                      <button className="crs-new-main" onClick={() => app.setView({ kind: 'courses', id: c.id })}>
-                        <span className="crs-new-top">
-                          <span className="crs-card-title">{c.title}</span>
-                          {Date.now() - c.suggested!.at < 7 * 86_400_000 && <span className="crs-badge new">New this week</span>}
-                        </span>
-                        <span className="crs-new-why">{c.suggested!.why}</span>
-                        <span className="crs-tags">
-                          <span className="crs-source">{SOURCES[sourceOf(c)].label}</span>
-                          <span>{c.level.charAt(0).toUpperCase() + c.level.slice(1)}</span>
-                          {mediaOf(c) !== 'text' && <span>Video</span>}
-                          <Licence c={c} />
-                          {c.suggested!.by === 'claude' && <span className="crs-by-claude">Chosen by Claude</span>}
-                        </span>
-                      </button>
-                      <span className="crs-new-actions">
-                        {busy ? (
-                          <span className="crs-meta">
-                            <span className="spinner" /> {PHASE_LABEL[ph.phase]}…
-                          </span>
-                        ) : (
-                          <button className="btn small" onClick={() => importIt(c)}>
-                            Import
-                          </button>
-                        )}
-                        <button className="icon-btn small" title="Not for me: don’t suggest it again" aria-label={`Dismiss ${c.title}`} onClick={() => dismiss(c)}>
-                          <Icon name="x" size={13} />
-                        </button>
-                      </span>
-                    </li>
-                  )
-                })}
-              </ul>
+              <ul className="crs-go-list">{continuing.map(continueRow)}</ul>
+              {finished.length > 0 && (
+                <>
+                  <button className="crs-fold" aria-expanded={showFinished} onClick={() => setShowFinished((s) => !s)}>
+                    <Icon name="chevron" size={10} className="crs-fold-chev" />
+                    Finished ({finished.length})
+                  </button>
+                  {showFinished && <ul className="crs-rows compact">{finished.map(row)}</ul>}
+                </>
+              )}
+            </section>
+          )}
+          {!searching && !continuing.length && finished.length > 0 && (
+            <section className="crs-shelf" aria-label="Finished">
+              <button className="crs-fold" aria-expanded={showFinished} onClick={() => setShowFinished((s) => !s)}>
+                <Icon name="chevron" size={10} className="crs-fold-chev" />
+                Finished ({finished.length})
+              </button>
+              {showFinished && <ul className="crs-rows compact">{finished.map(row)}</ul>}
             </section>
           )}
 
-          {mine.length > 0 && (
-            <section className="crs-mine" aria-label="Your courses">
-              <h2 className="crs-section">Your courses</h2>
-              <ul className="crs-mine-rows">
-                {mine.map((c) => {
-                  const ph = phases[c.id]
-                  const updating = ph && ph.phase !== 'done' && ph.phase !== 'error'
+          {!searching && (
+            <section className={`crs-shelf crs-new${newOpen ? '' : ' folded'}`} aria-label="New for you">
+              <div className="crs-shelf-head">
+                <button
+                  className="crs-fold crs-fold-title"
+                  aria-expanded={newOpen}
+                  onClick={() => {
+                    setNewOpen(!newOpen)
+                    remember.set('tide.courses.newOpen', !newOpen)
+                  }}
+                >
+                  <Icon name="chevron" size={10} className="crs-fold-chev" />
+                  <span className="crs-section">New for you</span>
+                  {suggested.length > 0 && <span className="crs-badge new">{newThisWeek || suggested.length}</span>}
+                </button>
+                <span className="crs-new-status">
+                  <span className={`crs-fresh-dot${fresh?.running ? ' live' : ''}`} aria-hidden="true" />
+                  <span className="crs-meta">{freshLine}</span>
+                  <button className="crs-link" onClick={() => setThreadOpen((o) => !o)}>
+                    {threadOpen ? 'Hide details' : 'Details'}
+                  </button>
+                  {!fresh?.running && (
+                    <button className="crs-link" onClick={checkNow}>
+                      Check now
+                    </button>
+                  )}
+                </span>
+              </div>
+              {threadOpen && fresh && <FreshThread status={fresh} onClose={() => setThreadOpen(false)} />}
+              {newOpen &&
+                (suggested.length ? (
+                  <ul className="crs-new-rows">
+                    {suggested.map((c, i) => {
+                      const ph = busyPhase(c)
+                      return (
+                        <li key={c.id} className={`crs-new-row${leaving.has(c.id) ? ' leaving' : ''}`} style={{ ['--i' as string]: String(i) }}>
+                          <button className="crs-new-main" onClick={() => open(c)}>
+                            <span className="crs-new-top">
+                              <span className="crs-row-title">{c.title}</span>
+                              {Date.now() - c.suggested!.at < 7 * 86_400_000 && <span className="crs-badge new">This week</span>}
+                              <span className="crs-row-meta crs-new-meta">
+                              <span className="crs-source">
+                                {mediaOf(c) !== 'text' && <Icon name="video" size={11} />}
+                                {SOURCES[sourceOf(c)].label}
+                              </span>
+                              <span>{levelLabel(c.level)}</span>
+                              {c.suggested!.by === 'claude' && <span className="crs-by-claude">Chosen by Claude</span>}
+                              </span>
+                            </span>
+                            <span className="crs-new-why">{c.suggested!.why}</span>
+                          </button>
+                          <span className="crs-new-actions">
+                            {ph ? (
+                              <span className="crs-meta">
+                                <span className="spinner" /> {PHASE_LABEL[ph.phase]}…
+                              </span>
+                            ) : (
+                              <button className="btn small" onClick={() => importIt(c)}>
+                                Import
+                              </button>
+                            )}
+                            <button className="icon-btn small" title="Not for me: don’t suggest it again" aria-label={`Dismiss ${c.title}`} onClick={() => dismiss(c)}>
+                              <Icon name="x" size={13} />
+                            </button>
+                          </span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                ) : (
+                  <p className="crs-meta crs-new-none">Nothing new yet. New and updated courses in your subjects show here; nothing is imported until you choose.</p>
+                ))}
+            </section>
+          )}
+
+          <section className="crs-browse" aria-label="Browse">
+            <div className="crs-shelf-head">
+              <h2 className="crs-section">{searching ? `Results for “${filter.query.trim()}”` : 'Browse'}</h2>
+              <span className="crs-meta">
+                {cards ? `${found} of ${all.length}` : ''}
+              </span>
+            </div>
+            <nav className="crs-subjects" aria-label="Subjects">
+              <button className={`crs-subject${filter.subject === 'all' ? ' on' : ''}`} aria-pressed={filter.subject === 'all'} onClick={() => set({ subject: 'all' })}>
+                All
+              </button>
+              {SUBJECTS.filter((s) => tally.subjects[s.id]).map((s) => (
+                <button key={s.id} className={`crs-subject${filter.subject === s.id ? ' on' : ''}`} aria-pressed={filter.subject === s.id} onClick={() => set({ subject: s.id })}>
+                  {s.label} <span className="crs-count">{tally.subjects[s.id]}</span>
+                </button>
+              ))}
+            </nav>
+            <div className="crs-toolbar">
+              <Pick label="Source" value={filter.source} onChange={(source) => set({ source })} options={[{ id: 'all', label: 'Any' }, ...SOURCE_GROUPS.filter((s) => tally.sources[s.id]).map((s) => ({ id: s.id, label: `${s.label} (${tally.sources[s.id]})` }))]} />
+              <Pick label="Format" value={filter.media} onChange={(media) => set({ media })} options={[{ id: 'all', label: 'Any' }, { id: 'video', label: 'Video' }, { id: 'text', label: 'Text' }]} />
+              <Pick label="Level" value={filter.level} onChange={(level) => set({ level })} options={[{ id: 'all', label: 'Any' }, { id: 'beginner', label: 'Beginner' }, { id: 'intermediate', label: 'Intermediate' }, { id: 'advanced', label: 'Advanced' }]} />
+              {narrowed && (
+                <button className="crs-link" onClick={() => set({ source: 'all', media: 'all', level: 'all' })}>
+                  Clear
+                </button>
+              )}
+              <span className="crs-toolbar-gap" />
+              <Pick label="Sort" value={filter.sort} onChange={(sort) => set({ sort })} options={SORTS} />
+            </div>
+
+            {!cards ? (
+              <p className="crs-meta">Loading…</p>
+            ) : !groups.length ? (
+              <p className="crs-empty">
+                {searching ? `No course matches “${filter.query.trim()}”.` : 'No course matches these filters.'}{' '}
+                {(narrowed || filter.subject !== 'all') && (
+                  <button className="crs-link" onClick={() => set({ subject: 'all', source: 'all', media: 'all', level: 'all' })}>
+                    Show every course
+                  </button>
+                )}
+              </p>
+            ) : (
+              <div className="crs-groups" key={`${filter.subject}|${filter.source}|${filter.media}|${filter.level}|${filter.sort}`}>
+                {groups.map((g) => {
+                  // Browsing everything by subject: each subject shows a few, the rest one click away
+                  const cut = filter.sort === 'subject' && filter.subject === 'all' && !searching && !expanded.has(g.id) ? GROUP_PREVIEW : Infinity
                   return (
-                    <li key={c.id} className="crs-mine-li">
-                      <button className="crs-mine-row" onClick={() => app.setView({ kind: 'courses', id: c.id })}>
-                        <span className="crs-mine-name">
-                          <span className="crs-mine-title">
-                            {c.title}
-                            {c.updateAvailable && <span className="crs-badge updated">Updated</span>}
-                          </span>
-                          <span className="crs-mine-next">{c.updateAvailable ? `${sourceSite(c)} has changed since you imported it` : c.imported!.next ? `Next: ${c.imported!.next.title}` : 'Every lesson done'}</span>
-                        </span>
-                        <span className="crs-mine-progress">
-                          <Bar done={c.imported!.done} total={c.imported!.lessons} />
-                          <span className="crs-meta">
-                            {c.imported!.done} of {c.imported!.lessons}
-                          </span>
-                        </span>
-                        <Icon name="chevron" size={13} />
-                      </button>
-                      {c.updateAvailable && (
-                        <button className="btn small crs-update-btn" disabled={!!updating} onClick={() => updateIt(c)}>
-                          {updating ? (
-                            <>
-                              <span className="spinner" /> {PHASE_LABEL[ph.phase]}
-                            </>
-                          ) : (
-                            <>
-                              <Icon name="refresh" size={12} /> Update
-                            </>
-                          )}
+                    <section key={g.id} className="crs-group">
+                      {groups.length > 1 || g.id !== 'all' ? (
+                        <h3 className="crs-group-head">
+                          <button className="crs-group-name" onClick={() => set({ subject: g.id === 'all' ? 'all' : g.id })} disabled={filter.subject === g.id}>
+                            {g.label}
+                          </button>
+                          <span className="crs-meta">{g.courses.length}</span>
+                        </h3>
+                      ) : null}
+                      <ul className="crs-rows">{g.courses.slice(0, cut).map(row)}</ul>
+                      {g.courses.length > cut && (
+                        <button className="crs-more" onClick={() => setExpanded((s) => new Set(s).add(g.id))}>
+                          Show all {g.courses.length}
                         </button>
                       )}
-                    </li>
+                    </section>
                   )
                 })}
-              </ul>
-            </section>
-          )}
-
-          <nav className="crs-areas" aria-label="Subjects">
-            <button className={`crs-area-chip${area === 'all' ? ' on' : ''}`} onClick={() => setArea('all')}>
-              All <span className="crs-count">{cards?.length ?? ''}</span>
-            </button>
-            {AREAS.filter((a) => counts[a.id]).map((a) => (
-              <button key={a.id} className={`crs-area-chip${area === a.id ? ' on' : ''}`} onClick={() => setArea(a.id)}>
-                {a.label} <span className="crs-count">{counts[a.id] ?? ''}</span>
-              </button>
-            ))}
-          </nav>
-          <div className="crs-filters">
-            <Seg label="Licence" value={tier} onChange={setTier} options={[{ id: 'all', label: 'All free' }, { id: 'open', label: 'Open' }, { id: 'personal', label: 'Personal study' }]} />
-            <Seg label="Format" value={media} onChange={setMedia} options={[{ id: 'all', label: 'Any' }, { id: 'video', label: 'Video' }, { id: 'text', label: 'Text' }]} />
-            <Seg label="Level" value={level} onChange={setLevel} options={[{ id: 'all', label: 'Any' }, { id: 'beginner', label: 'Beginner' }, { id: 'intermediate', label: 'Intermediate' }, { id: 'advanced', label: 'Advanced' }]} />
-            {filtered && (
-              <button className="crs-link" onClick={() => (setTier('all'), setMedia('all'), setLevel('all'))}>
-                Clear
-              </button>
+              </div>
             )}
-          </div>
-
-          {!cards ? (
-            <p className="crs-meta">Loading…</p>
-          ) : !shown.length ? (
-            <p className="crs-empty">{query ? `No course matches “${q}”.` : 'No course matches these filters.'}</p>
-          ) : (
-            <div className="crs-areas-list" key={`${area}|${tier}|${media}|${level}`}>
-              {AREAS.filter((a) => shown.some((c) => c.area === a.id)).map((a) => (
-                <section key={a.id} className="crs-area">
-                  <div className="crs-area-head">
-                    <h2 className="crs-section">{a.label}</h2>
-                    <span className="crs-meta">{a.blurb}</span>
-                  </div>
-                  <ul className="crs-grid">
-                    {shown
-                      .filter((c) => c.area === a.id)
-                      .map((c) => {
-                        const ph = phases[c.id]
-                        const busy = ph && ph.phase !== 'done' && ph.phase !== 'error'
-                        return (
-                          <li key={c.id} className={`crs-card${c.imported ? ' imported' : ''}`}>
-                            <button className="crs-card-main" onClick={() => app.setView({ kind: 'courses', id: c.id })}>
-                              <span className="crs-card-top">
-                                <span className="crs-card-title">
-                                  {c.title}
-                                  {c.suggested && <span className="crs-badge new">New</span>}
-                                  {c.updateAvailable && <span className="crs-badge updated">Updated</span>}
-                                </span>
-                                <span className="crs-card-by">{c.by}</span>
-                              </span>
-                              <span className="crs-card-covers">{c.covers}</span>
-                            </button>
-                            <span className="crs-card-foot">
-                              <span className="crs-tags">
-                                <span className="crs-source" title={sourceSite(c)}>
-                                  {mediaOf(c) !== 'text' && <Icon name="video" size={11} />}
-                                  {SOURCES[sourceOf(c)].label}
-                                </span>
-                                <span>{c.level.charAt(0).toUpperCase() + c.level.slice(1)}</span>
-                                <Licence c={c} />
-                              </span>
-                              {c.imported ? (
-                                c.updateAvailable ? (
-                                  <button className="btn small" disabled={!!busy} onClick={() => updateIt(c)}>
-                                    {busy ? <span className="spinner" /> : <Icon name="refresh" size={12} />} Update
-                                  </button>
-                                ) : (
-                                  <span className="crs-card-state">
-                                    <Bar done={c.imported.done} total={c.imported.lessons} />
-                                    <span className="crs-meta">
-                                      {c.imported.done}/{c.imported.lessons}
-                                    </span>
-                                  </span>
-                                )
-                              ) : busy ? (
-                                <span className="crs-card-state crs-meta">
-                                  <span className="spinner" /> {PHASE_LABEL[ph.phase]}…
-                                </span>
-                              ) : (
-                                <button className="btn small" onClick={() => importIt(c)}>
-                                  Import
-                                </button>
-                              )}
-                            </span>
-                          </li>
-                        )
-                      })}
-                  </ul>
-                </section>
-              ))}
-            </div>
-          )}
+          </section>
           <p className="crs-foot-note">
             Each course is fetched from its source when you import it (politely: robots.txt is followed and nothing behind a login or a paywall is read), kept on this Mac and shown with its source and licence. Courses without an open licence, including MIT OpenCourseWare and Open Yale, are for your own study only.
           </p>

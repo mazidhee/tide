@@ -493,6 +493,10 @@ function registerIpc() {
   handle('practice:interviews', () => listInterviews())
   handle('practice:logDrill', (r: Omit<DrillResult, 'id' | 'at'>) => logDrill(r))
   handle('practice:drills', () => listDrills())
+  handle('maths:state', () => import('./mentalMaths').then((m) => m.mathsState()))
+  handle('maths:log', (s: Pick<import('@shared/mentalMaths').MathsSession, 'focus' | 'answers'>) => import('./mentalMaths').then((m) => m.logMathsSession(s)))
+  handle('maths:setReminder', (r: import('@shared/mentalMaths').Reminder) => import('./mentalMaths').then((m) => m.setMathsReminder(r)))
+  handle('maths:explain', (a: import('@shared/mentalMaths').MathsAnswer) => import('./mentalMaths').then((m) => m.explainMiss(a)))
   handle('learn:bookChapters', (p: string) => bookChapters(p))
   handle('learn:brief', () => getBrief())
   handle('learn:logFocus', (start: number, end: number, context?: { label?: string; path?: string; kind?: string }) => logFocus(start, end, context))
@@ -857,6 +861,16 @@ app.whenReady().then(() => {
       }
     }
   })
+  // Daily mental maths: a notification at the time you chose, when today's session isn't done
+  void import('./mentalMaths').then((m) =>
+    m.startMathsReminder(() => {
+      if (win && !win.isDestroyed()) {
+        win.show()
+        win.focus()
+        win.webContents.send('tray:command', { type: 'view', view: { kind: 'maths', nonce: Date.now() } })
+      }
+    })
+  )
   startVault()
 
   app.on('activate', () => {
