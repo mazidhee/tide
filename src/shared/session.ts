@@ -1,4 +1,5 @@
 import { splitSay } from './characters'
+import { curiosityOpening, curiosityRules, type CuriositySetup } from './explore'
 import { retestInstructions } from './mistakes'
 import { quizTopics } from './curriculum'
 import { checkInstructions, reviewInstructions, type QuickCheck, type ReviewSetup } from './review'
@@ -274,6 +275,8 @@ export interface SessionSetup {
     subject?: SubjectProfile
     /** A lesson of an open course imported from GitHub (shared/courses): taught from its own text, in its sections' order */
     course?: CourseRef
+    /** A short side lesson, for curiosity, on something kept to explore later (shared/explore) */
+    curiosity?: CuriositySetup
   }
 }
 
@@ -290,7 +293,7 @@ export function withStrategy(setup: SessionSetup, scope: ChatScope): SessionSetu
 /** The router's choice for a lesson that hasn't been told how to teach, with how sure it is */
 export function strategyChoice(setup: SessionSetup, scope: ChatScope): StrategyChoice | null {
   // A course's lesson is taught in the course's own order, from its own text
-  if (setup.mode !== 'teach' || setup.options?.strategy || setup.options?.retest || setup.options?.course) return null
+  if (setup.mode !== 'teach' || setup.options?.strategy || setup.options?.retest || setup.options?.course || setup.options?.curiosity) return null
   const project = setup.options?.project
   const source = project ? (project.kind === 'build' ? 'brief' : 'design-doc') : scope.kind === 'pages' ? 'book' : scope.kind === 'note' ? 'note' : scope.kind === 'folder' ? 'notebook' : 'none'
   return chooseStrategy({ text: setup.topic, source, subject: project?.name ?? (scope.kind === 'folder' ? scope.path : undefined), can: { canvas: true, lab: true, code: true, maths: true } })
@@ -373,13 +376,14 @@ export function sessionInstructions(setup: SessionSetup): string {
   // The humanities' marking (<appraise>) and theology's rules come through it too, for a subject that is mainly texts and arguments or history
   const kit = lessonKit(setup.topic, setup.options?.subject)
   const course = setup.options?.course
-  const extra = [!setup.options?.refresh && !setup.options?.project && !course ? BIG_PICTURE : '', course ? courseRules(course).trim() : '', GROUNDED, kit.handsOn ? HANDS_ON : '', kit.sims, kit.toolkit, kit.humanities, setup.options?.why ? WHY_RULES : ''].filter(Boolean)
+  const extra = [!setup.options?.refresh && !setup.options?.project && !course && !setup.options?.curiosity ? BIG_PICTURE : '', course ? courseRules(course).trim() : '', GROUNDED, kit.handsOn ? HANDS_ON : '', kit.sims, kit.toolkit, kit.humanities, setup.options?.why ? WHY_RULES : ''].filter(Boolean)
   return extra.length ? `${base.trimEnd()}\n\n${extra.join('\n\n')}\n` : base
 }
 
 function baseInstructions({ mode, topic, options }: SessionSetup): string {
   const difficulty = options?.difficulty ?? 'normal'
   if (mode === 'teach' && options?.refresh) return `Topic: ${topic}.\n${REFRESH_RULES}\n`
+  if (mode === 'teach' && options?.curiosity) return `${curiosityRules(topic, options.curiosity)}\n`
   if (mode === 'teach' && options?.strategy && options.strategy !== 'problems' && !options.retest) {
     // Taught another way than problem sets: its own script, so the small model can't drift back
     const first: Partial<Record<Strategy, string>> = {
@@ -540,6 +544,7 @@ export const MODE_LABEL: Record<SessionMode, string> = {
 export function openingMessage({ mode, topic, options }: SessionSetup): string {
   if (options?.retest?.length) return `Retest me on the ${options.retest.length} question${options.retest.length === 1 ? "" : "s"} I got wrong before.`
   if (mode === 'teach' && options?.refresh) return `Refresh me on ${topic}: I learned it before.`
+  if (mode === 'teach' && options?.curiosity) return curiosityOpening(topic, options.curiosity)
   if (mode === 'teach') return `I want to learn ${topic} deeply. Start by finding out what I already know.`
   if (mode === 'quiz') return options?.placement ? `Check what I already know about ${options.placement.section}.` : `Quiz me on ${topic}.`
   if (mode === 'interview') return `I'm ready for the interview. ${topic}`

@@ -27,6 +27,7 @@ import { scopeTopic } from '../state'
 import { addQuoteToNotes } from '../lib/companion'
 import { useTideDesign } from '../lib/design'
 import { noteTranscriptSection } from '@shared/video'
+import { noteOpenMode } from '@shared/noteMode'
 
 const SAVE_DELAY = 600
 const MIN_READALONG_CHARS = 60
@@ -73,6 +74,10 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
   const threadSave = useRef<ReturnType<typeof setTimeout>>(undefined)
   const latest = useRef('')
   const seenAt = useRef(new Map<number, string>())
+  // Read or write is decided once per note, when it first loads (shared/noteMode)
+  const modeFor = useRef<string | null>(null)
+  const openAs = useRef({ anchor, chosen: page.mode, setting: app.settings.noteOpenMode, libraryFolder: app.settings.libraryFolder })
+  openAs.current = { anchor, chosen: page.mode, setting: app.settings.noteOpenMode, libraryFolder: app.settings.libraryFolder }
 
   const load = useCallback(async () => {
     try {
@@ -80,6 +85,10 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
       latest.current = text
       setRaw(text)
       setError(null)
+      if (modeFor.current !== path) {
+        modeFor.current = path
+        setEditing(noteOpenMode({ path, props: splitFrontmatter(text).data, ...openAs.current }) === 'write')
+      }
     } catch (e) {
       setError((e as Error).message)
     }
@@ -88,6 +97,7 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
   useEffect(() => {
     setRaw(null)
     setEditing(false)
+    modeFor.current = null
     setSelection(null)
     load()
     window.tide.learn.threads(path).then(setThreadsState)
@@ -139,12 +149,21 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
     setSelection(null)
   }, [editing, flush])
 
+  /** Read or Edit chosen by hand (the switch, or ⌘E): this note opens that way from now on */
+  const chooseMode = useCallback(
+    (edit: boolean) => {
+      updatePage({ mode: edit ? 'write' : 'read' })
+      if (edit !== editing) toggleEdit()
+    },
+    [editing, toggleEdit, updatePage]
+  )
+
   useEffect(
     () =>
       window.tideEvents.onMenu((action) => {
-        if (action === 'toggle-edit') toggleEdit()
+        if (action === 'toggle-edit') chooseMode(!editing)
       }),
-    [toggleEdit]
+    [chooseMode, editing]
   )
 
   const { data: props, body } = useMemo(() => splitFrontmatter(raw ?? ''), [raw])
@@ -523,10 +542,10 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
             )}
           </div>
           <div className="segmented" role="group" aria-label="Mode">
-            <button className={!editing ? 'on' : ''} onClick={() => editing && toggleEdit()} title="Read (⌘E)">
+            <button className={!editing ? 'on' : ''} onClick={() => chooseMode(false)} title="Read (⌘E)">
               <Icon name="book" size={15} />
             </button>
-            <button className={editing ? 'on' : ''} onClick={() => !editing && toggleEdit()} title="Edit (⌘E)">
+            <button className={editing ? 'on' : ''} onClick={() => chooseMode(true)} title="Write (⌘E)">
               <Icon name="edit" size={15} />
             </button>
           </div>

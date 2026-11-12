@@ -64,6 +64,9 @@ async function writeLesson(input: Omit<LessonRecord, 'started' | 'updated' | 'pa
   await noteLessonKnowledge(record).catch(() => {})
   // A course's lesson moves the course on (main/courses)
   if (record.options?.course) await import('./courses').then((c) => c.noteCourseLesson(record)).catch(() => {})
+  // A side lesson on something kept to explore later marks it explored when it finishes (main/explore)
+  const curious = record.options?.curiosity
+  if (curious && record.finished) await import('./explore').then((x) => x.exploredIn(curious.id, { id: record.id, topic: record.topic })).catch(() => {})
   return summarise(record)
 }
 

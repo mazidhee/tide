@@ -90,6 +90,8 @@ export interface Settings {
   tideReadingFont?: 'serif' | 'sans'
   /** The writing coach in the note editor: probes, corrects and suggests rewrites as you write */
   writingCoach?: boolean
+  /** How your own notes open: to write in (the default) or to read. Course material and saved sources always open to read */
+  noteOpenMode?: 'write' | 'read'
   /** The note editor shows plain Markdown everywhere instead of live preview (which hides it away from the cursor) */
   editorSource?: boolean
   /** Study timers: the sidebar's Focus timer and the timer buttons on notes, books and practice */
@@ -374,7 +376,7 @@ export interface OutlineDraftRequest {
 
 export interface AgentStep {
   id: string
-  kind: 'search_notes' | 'read_note' | 'web_search' | 'read_webpage' | 'delegate' | 'helper' | 'run_code' | 'run_sql' | 'load_table' | 'remember' | 'terminal' | 'canvas' | 'metabase'
+  kind: 'search_notes' | 'read_note' | 'web_search' | 'read_webpage' | 'delegate' | 'helper' | 'run_code' | 'run_sql' | 'load_table' | 'remember' | 'terminal' | 'canvas' | 'metabase' | 'save_note'
   label: string
   detail?: string
   status: 'running' | 'done' | 'error'
@@ -765,6 +767,14 @@ export interface TideApi {
     get(id: string): Promise<import('./lessonLog').LessonRecord | null>
     /** Has the cloud model check one of the tutor's replies against the lesson's sources */
     challenge(topic: string, where: string | undefined, reply: string): Promise<import('./lessonCheck').ClaimCheck & { offline?: string }>
+  }
+  /** Explore later (shared/explore): things kept from lessons for short side lessons, in .tide/explore.json */
+  explore: {
+    list(): Promise<import('./explore').ExploreItem[]>
+    add(input: import('./explore').ExploreInput): Promise<import('./explore').ExploreItem>
+    update(id: string, patch: Partial<Pick<import('./explore').ExploreItem, 'title' | 'explored'>>): Promise<import('./explore').ExploreItem[]>
+    remove(id: string): Promise<import('./explore').ExploreItem[]>
+    onChange(cb: () => void): () => void
   }
   /** Claude's visuals (shared/visuals): where they may run, repairs and fallbacks, a lesson's kept ones, and their frames' limits */
   visuals: {

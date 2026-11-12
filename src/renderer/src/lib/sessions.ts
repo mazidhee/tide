@@ -86,6 +86,10 @@ export const sessionKey = (v: { kind: string; mode?: string; topic?: string; non
 export function saveOngoing(o: Omit<Ongoing, 'at'>) {
   keepLesson(o.key, o.view, (o.state as { turns?: unknown })?.turns, false, (o.state as { threads?: unknown })?.threads)
   live.delete(o.key)
+  // The same lesson opened again (from Past lessons, or where something came up) is one entry, not two
+  const record = (x: Ongoing) => (x.view.kind === 'session' ? (x.view.lesson ?? lessonId(x.key)) : null)
+  const mine = record(o as Ongoing)
+  if (mine) for (const x of [...store.values()]) if (x.key !== o.key && record(x) === mine) store.delete(x.key)
   store.set(o.key, { ...o, at: Date.now() })
   // Keep a handful: the oldest go first
   const all = [...store.values()].sort((a, b) => b.at - a.at)

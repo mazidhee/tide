@@ -36,7 +36,8 @@ const STEP_ICON: Record<AgentStep['kind'], 'search' | 'note' | 'globe' | 'extern
   run_sql: 'terminal',
   load_table: 'terminal',
   remember: 'book',
-  terminal: 'terminal'
+  terminal: 'terminal',
+  save_note: 'note'
 }
 
 /** One line describing what the tutor did, e.g. "Searched the web twice, read 1 page, used 2 helpers" */
