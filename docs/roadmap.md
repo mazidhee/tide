@@ -17,12 +17,12 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - Live preview in the note editor (⌘⇧E for source)
 - Teaching blocks: physics, geometry and matrices, regex, chess search, SQL tidy
 - Courses from GitHub: 52 courses (zoomcamps, OSSU, Made With ML, Zero to Hero, d2l…), taught from their own text, notebooks runnable
+- A VS Code-like code editor: Python IntelliSense (basedpyright), VS Code highlighting, explorer, tabs, Problems, Tests, ⌘P
 - Faster lessons: off-thread index, cached rendering, steadier prompt cache, idle unload
 - The redesign, with the classic design in Settings
 
 ## Now
 
-- [ ] **A fuller code editor.** monaco-vscode-api, so lesson code feels like VS Code.
 - [ ] **Videos in Tide.** YouTube's own player inside Tide, so almost no added weight: one player at a time, a thumbnail until play, removed when closed. Videos are never downloaded or hosted; your own MP4s also play.
   - Player and transcript side by side: the line being spoken is marked, clicking a line jumps there, highlight or ask about a line.
   - The tutor picks a section to watch before a lesson (from saved transcripts and course videos) and a recap clip after it, with questions drawn from the transcript.
@@ -47,6 +47,7 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - [ ] **Better web clipper and search.** Compare Defuddle with the current clipper, and try a reranker; adopt only if the numbers win.
 - [ ] **Live preview leftovers.** The properties block at the top of a note, embedded notes, and tables and maths inside lists.
 - [ ] **Small fixes.**
+  - Code editor: pandas parameter types show "Unknown" until pandas-stubs is in Tide's Python; rename only changes open files; ⌘⇧O is taken by Add Files.
   - Course lessons: Gemma often writes the plan before probing; "Show me" on a course's first step shows the reading again.
   - Course notebooks needing IPython, data files or internet can't run yet; homework has no generated tests.
   - Long regex diagrams scroll sideways.

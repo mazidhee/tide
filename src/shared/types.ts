@@ -545,6 +545,16 @@ export interface TideApi {
   search: {
     query(q: string, limit?: number): Promise<SearchHit[]>
   }
+  /** Python IntelliSense: the editor's link to the language server (main/pythonLanguageServer.ts) */
+  lsp: {
+    /** A JSON-RPC message for the server */
+    send(msg: unknown): void
+    onMessage(cb: (msg: unknown) => void): () => void
+    info(): Promise<{ workspaceUri: string }>
+    status(): Promise<{ state: string; pid: number | null; rssMB: number | null; documents: number; starts: number; python: string }>
+    /** A library file's source for go to definition (file:// URI), or null when it may not be read */
+    readFile(uri: string): Promise<string | null>
+  }
   code: {
     /** Files in the vault's Code folder, newest first */
     list(): Promise<{ path: string; mtime: number }[]>
@@ -880,6 +890,8 @@ export interface TideApi {
     ask(id: string, question: string): Promise<{ answer: string; by: 'cloud' | 'local' | 'none' }>
     /** The project already written for a roadmap's "Project:" item, if any */
     forTopic(topic: string): Promise<import('./workshop').WorkshopCard | null>
+    /** The id of the project started in this folder of the notes folder, if any */
+    forFolder(folder: string): Promise<string | null>
     /** Has the stronger model design a project for a roadmap item; kept only if Tide can prove it */
     propose(o: { topic: string; notebook?: string; section?: string }): Promise<{ card: import('./workshop').WorkshopCard | null; tries: number; problems: string[] }>
     /** The editor the project opens in (main/workshopWatch.ts), or null when none is installed */

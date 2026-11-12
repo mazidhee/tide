@@ -104,6 +104,16 @@ export async function listWorkshop(): Promise<WorkshopCard[]> {
   return cards.sort((a, b) => (b.progress?.updatedAt ?? 0) - (a.progress?.updatedAt ?? 0))
 }
 
+/** The project started in this folder (or a folder inside it), for the Code view's Tests panel */
+export async function projectForFolder(folder: string): Promise<string | null> {
+  const names = await fs.readdir(absPath(DIR)).catch(() => [] as string[])
+  for (const n of names.filter((n) => n.endsWith('.json'))) {
+    const r = await readRecord(n.slice(0, -5))
+    if (r && (folder === r.folder || folder.startsWith(r.folder + '/'))) return r.project
+  }
+  return null
+}
+
 /** The generated project already written for a roadmap item, if there is one */
 export async function projectForTopic(topic: string): Promise<WorkshopCard | null> {
   const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()

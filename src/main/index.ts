@@ -46,6 +46,7 @@ import { getHighlights, saveHighlights } from './highlights'
 import { registerReading } from './reading'
 import { labLoadTable, labQuery, labReset, labSchema } from './lab'
 import { isSql, languagesStatus } from './languages'
+import { registerLanguageServer, stopLanguageServer } from './pythonLanguageServer'
 import { labStatus, librariesStatus, mathStatus, runCode, runProject, setupLab, setupLibraries, setupMath } from './runner'
 import { searchStatus, setupSearch, stopSearch, wakeSearch } from './websearch'
 import { applySpeedups, ensureModelServer, serverReady, speedStatus, tuneModelServer } from './modelServer'
@@ -189,6 +190,7 @@ function registerIpc() {
   const handle = <A extends unknown[], R>(channel: string, fn: (...args: A) => R) =>
     ipcMain.handle(channel, (_e, ...args) => fn(...(args as A)))
 
+  registerLanguageServer()
   handle('settings:get', () => getSettings())
   handle('settings:set', (patch: Partial<Settings>) => {
     const prevVault = getSettings().vaultPath
@@ -340,6 +342,7 @@ function registerIpc() {
     return w.reviewStage(String(id), undefined, typeof stage === 'number' ? stage : undefined)
   })
   handle('workshop:ask', async (id: string, question: string) => (await workshop()).askAboutStage(String(id), String(question ?? '')))
+  handle('workshop:forFolder', async (folder: string) => (await workshop()).projectForFolder(String(folder ?? '')))
   handle('workshop:forTopic', async (topic: string) => (await workshop()).projectForTopic(String(topic ?? '')))
   handle('workshop:propose', async (o: { topic: string; notebook?: string; section?: string }) => (await workshop()).proposeProject({ topic: String(o?.topic ?? ''), notebook: o?.notebook, section: o?.section }))
   handle('difficulty:known', async (topic: string, path?: string) => (await import('./difficulty')).knownFor(String(topic ?? ''), path))
@@ -781,6 +784,7 @@ app.on('before-quit', () => {
   closeAllTerminals()
   stopVoice()
   stopSearch()
+  void stopLanguageServer()
 })
 
 app.on('window-all-closed', () => {
