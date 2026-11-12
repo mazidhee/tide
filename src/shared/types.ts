@@ -778,6 +778,10 @@ export interface TideApi {
     /** A note is opening: Gemma loads ahead when it's in a private project and Claude teaches */
     prewarmFor(path: string): Promise<boolean>
   }
+  /** Every model call, from the usage log (main/usageLog): Settings › Usage */
+  usage: {
+    report(rangeDays?: number): Promise<import('./usage').UsageReport>
+  }
   claude: {
     status(fresh?: boolean): Promise<ClaudeStatusView>
     /** Each Claude call in the last `days` days (default 1) */

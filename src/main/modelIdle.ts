@@ -18,6 +18,7 @@
  * Never unloaded while another client is using the server. Quitting Tide unloads it.
  * Only for mlx-vlm on this Mac, which has the unload command and reloads by itself when asked.
  */
+import { logUnload } from './usageLog'
 import { app } from 'electron'
 import { gemmaIdleMinutes, gemmaStatusLine, reasonFromWhy, shouldWarmGemma, unloadAtLaunch, type ClaudeState, type GemmaReason } from '@shared/gemmaPolicy'
 import { ensureModelServer, isMlxVlm, serverReady, tuneModelServer } from './modelServer'
@@ -141,6 +142,7 @@ export function unloadModel(): Promise<boolean> {
     async (signal) => {
       if (!(await loaded())) return false
       const res = await fetch(`${s.origin}/unload`, { method: 'POST', headers: s.headers, signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]) }).catch(() => null)
+      if (res?.ok) logUnload()
       return !!res?.ok
     },
     undefined,

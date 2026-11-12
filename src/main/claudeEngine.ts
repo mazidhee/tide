@@ -22,6 +22,9 @@ import { notAnAttempt } from '@shared/lessonRepair'
 import { FIRST_WORDS_MS } from '@shared/workarounds'
 import { checkClaude, childEnv, claudeArgs, findClaude, mcpConfig, onceArgs, parseLine, unavailableReason, unavailableText, userContent, userLine, type ClaudeEvent, type ClaudeStatus, type ClaudeUsage, type ImageInput } from './claudeCli'
 import { getSettings } from './settings'
+import { logCall, logWindows } from './usageLog'
+import { jobFromRole } from '@shared/usage'
+import { reasonFromWhy } from '@shared/gemmaPolicy'
 import type { TurnRequest, ToolContext } from './agent'
 
 /** Claude can't take this turn: Gemma does, and the step says why */
@@ -97,12 +100,30 @@ export interface UsageRecord extends ClaudeUsage {
 
 const usageFile = () => join(app.getPath('userData'), 'claude-usage.jsonl')
 
-function recordUse(r: UsageRecord) {
+function recordUse(r: UsageRecord, outcome: { ok: boolean; error?: string } = { ok: true }) {
   try {
     appendFileSync(usageFile(), JSON.stringify(r) + '\n')
   } catch {
     // usage is a nicety
   }
+  // The detailed log (main/usageLog): the job and lesson come from the code around the call
+  logCall({ at: r.at, p: 'claude', model: r.model, defaultJob: jobFromRole(r.role), in: r.input, out: r.output, think: r.thinking, cr: r.cacheRead, cw: r.cacheWrite, ms: r.ms, ttft: r.firstTokenMs, usd: r.costUsd, ok: outcome.ok, ...(outcome.ok ? {} : { err: failWord(unavailableReason(outcome.error ?? '')) }) })
+}
+
+/** The CLI's reasons in the words the rest of the log uses (shared/gemmaPolicy GemmaReason) */
+const failWord = (why: ReturnType<typeof unavailableReason>) => (why === 'login' ? 'logged-out' : why === 'network' ? 'offline' : why ?? 'error')
+
+/** A call that ended without a result from Claude Code (it didn't start, died, or was stopped) */
+function recordFailure(model: string, role: ClaudeRole, t0: number, e: unknown) {
+  const msg = e instanceof Error ? e.message : String(e)
+  logCall({ at: Date.now(), p: 'claude', model, defaultJob: jobFromRole(role), in: 0, out: 0, cr: 0, cw: 0, ms: Date.now() - t0, usd: 0, ok: false, err: e instanceof DOMException || /abort/i.test(msg) ? 'cancelled' : e instanceof ClaudeUnavailable ? reasonFromWhy(msg) : failWord(unavailableReason(msg)) })
+}
+
+/** A rate_limit_event: the plan's windows, for routing (a refusal) and for Settings › Usage */
+function noteLimit(e: Extract<ClaudeEvent, { type: 'rate-limit' }>) {
+  lastLimit = { status: e.status, utilization: e.utilization, window: e.window, resetsAt: e.resetsAt }
+  if (e.status === 'rejected' && e.resetsAt) limitedUntil = e.resetsAt * 1000
+  logWindows(e.windows ?? [])
 }
 
 export function readClaudeUsage(since: number): UsageRecord[] {
@@ -458,11 +479,16 @@ export async function claudeOnce(prompt: string, system: string, role: ClaudeRol
     child.on('exit', () => (answered() ? resolve(buf) : reject(unavailableReason(err) ? new ClaudeUnavailable(unavailableText(unavailableReason(err)!)) : new Error(err.trim() || 'Claude gave no answer'))))
     signal?.addEventListener('abort', () => child.kill('SIGTERM'), { once: true })
     child.stdin.end(images.length ? userLine(userContent(prompt, images)) : prompt)
+  }).catch((e) => {
+    recordFailure(model, role, t0, e)
+    throw e
   })
-  // stream-json ends with the result; plain JSON is only that line
-  const r = out.trim().split('\n').reverse().map(parseLine).find((e) => e?.type === 'result') ?? null
+  // stream-json ends with the result; plain JSON is only that line. Streamed output also says how full the plan's windows are
+  const events = out.trim().split('\n').map(parseLine)
+  for (const e of events) if (e?.type === 'rate-limit') noteLimit(e)
+  const r = [...events].reverse().find((e) => e?.type === 'result') ?? null
   if (!r || r.type !== 'result') throw new Error('Claude gave no answer')
-  recordUse({ ...r.usage, at: Date.now(), model: r.model ?? model, role, ms: Date.now() - t0, firstTokenMs: r.firstTokenMs })
+  recordUse({ ...r.usage, at: Date.now(), model: r.model ?? model, role, ms: Date.now() - t0, firstTokenMs: r.firstTokenMs }, { ok: r.ok, error: r.error })
   if (!r.ok) {
     const why = unavailableReason(r.error ?? '')
     if (why === 'limit') limitedUntil = Math.max(limitedUntil, Date.now() + 15 * 60_000)
@@ -501,10 +527,8 @@ export async function* claudeStream(prompt: string, system: string, role: Claude
       if (e.type === 'text' && e.text) {
         first ||= Date.now()
         yield e.text
-      } else if (e.type === 'rate-limit') {
-        lastLimit = { status: e.status, utilization: e.utilization, window: e.window, resetsAt: e.resetsAt }
-        if (e.status === 'rejected' && e.resetsAt) limitedUntil = e.resetsAt * 1000
-      } else if (e.type === 'result') result = e
+      } else if (e.type === 'rate-limit') noteLimit(e)
+      else if (e.type === 'result') result = e
     }
   } finally {
     signal?.removeEventListener('abort', kill)
@@ -512,8 +536,12 @@ export async function* claudeStream(prompt: string, system: string, role: Claude
   }
   await exited
   if (signal?.aborted) return
-  if (!result) throw unavailableReason(err) ? new ClaudeUnavailable(unavailableText(unavailableReason(err)!)) : new Error(err.trim() || 'Claude gave no answer')
-  recordUse({ ...result.usage, at: Date.now(), model: result.model ?? model, role, ms: Date.now() - t0, firstTokenMs: first ? first - t0 : undefined })
+  if (!result) {
+    const e = unavailableReason(err) ? new ClaudeUnavailable(unavailableText(unavailableReason(err)!)) : new Error(err.trim() || 'Claude gave no answer')
+    recordFailure(model, role, t0, e)
+    throw e
+  }
+  recordUse({ ...result.usage, at: Date.now(), model: result.model ?? model, role, ms: Date.now() - t0, firstTokenMs: first ? first - t0 : undefined }, { ok: result.ok, error: result.error })
   if (!result.ok) {
     const why = unavailableReason(result.error ?? '')
     if (why === 'limit') limitedUntil = Math.max(limitedUntil, Date.now() + 15 * 60_000)
@@ -697,6 +725,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   emit({ id: req.id, type: 'step', step: { id: engineStep, kind: 'helper', label: `Claude ${claudeLabel(model)} is teaching${fresh && history.length > 1 ? ' (picking the lesson up again)' : ''}`, status: 'running', depth: 0 } })
 
   const t0 = Date.now()
+  let recorded = false
   let first = 0
   let reply = ''
   let gap = false
@@ -726,10 +755,8 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
         if (!first) first = Date.now()
         reply += sep + e.text
         emit({ id: req.id, type: 'delta', text: sep + e.text })
-      } else if (e.type === 'rate-limit') {
-        lastLimit = { status: e.status, utilization: e.utilization, window: e.window, resetsAt: e.resetsAt }
-        if (e.status === 'rejected' && e.resetsAt) limitedUntil = e.resetsAt * 1000
-      } else if (e.type === 'tool' && !e.name.startsWith('mcp__tide__')) {
+      } else if (e.type === 'rate-limit') noteLimit(e)
+      else if (e.type === 'tool' && !e.name.startsWith('mcp__tide__')) {
         emit({ id: req.id, type: 'step', step: { id: nextStepId(), kind: /fetch/i.test(e.name) ? 'read_webpage' : 'web_search', label: e.name, status: 'done', depth: 0 } })
       }
   }
@@ -752,7 +779,8 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
     const turnCost = Math.max(0, result.usage.costUsd - proc.costSoFar)
     proc.costSoFar = result.usage.costUsd
     result.usage.costUsd = turnCost
-    recordUse({ ...result.usage, at: Date.now(), model: result.model && result.model.includes(String(model)) ? result.model : String(model), role, ms: Date.now() - t0, firstTokenMs: first ? first - t0 : undefined })
+    recorded = true
+    recordUse({ ...result.usage, at: Date.now(), model: result.model && result.model.includes(String(model)) ? result.model : String(model), role, ms: Date.now() - t0, firstTokenMs: first ? first - t0 : undefined }, { ok: result.ok, error: result.error })
     if (!result.ok) {
       const why = unavailableReason(result.error ?? '')
       if (why === 'limit' && !limitedUntil) limitedUntil = Date.now() + 15 * 60_000
@@ -762,6 +790,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
     emit({ id: req.id, type: 'step', step: { id: engineStep, label: `Claude ${claudeLabel(model)} is teaching`, status: 'done', detail: `${thinking ? 'thought first, ' : ''}first words in ${(((first || Date.now()) - t0) / 1000).toFixed(1)} s` } as AgentStep })
     return reply
   } catch (e) {
+    if (!recorded) recordFailure(String(model), role, t0, e)
     emit({ id: req.id, type: 'step', step: { id: engineStep, status: 'error' } as AgentStep })
     // Nothing shown yet and the process never answered: Gemma can take the turn
     if (hung && !reply) {

@@ -325,6 +325,10 @@ function registerIpc() {
     const { runClaude } = await import('./claudeEngine')
     return setTerminal(on, runClaude)
   })
+  handle('usage:report', async (range?: number) => {
+    const [{ usageReport }, { idleMinutes }] = await Promise.all([import('./usageLog'), import('./modelIdle')])
+    return usageReport(Math.min(90, Math.max(1, range ?? 14)), Date.now(), idleMinutes() || 15)
+  })
   handle('claude:usage', async (days?: number) => {
     const { readClaudeUsage } = await import('./claudeEngine')
     return readClaudeUsage(Date.now() - (days ?? 1) * 86_400_000)

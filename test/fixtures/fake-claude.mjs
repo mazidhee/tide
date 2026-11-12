@@ -3,7 +3,7 @@
 // be tested without the real CLI. It says what it was given (its arguments, any API key it can
 // see, each message and model switch) in its replies. Words in a message change what it does:
 // "crash" exits, "limit" answers as a plan at its limit, "[hang]" never answers, "[thinks long]" thinks and writes late, "slow" writes slowly until interrupted,
-// "think" thinks before it writes. Pictures (image blocks) are counted in its reply; a marking call
+// "think" thinks before it writes, "window" reports the plan's windows. Pictures (image blocks) are counted in its reply; a marking call
 // sent with pictures (one-shot, stream-json in) answers with a verdict that says how many it saw.
 import { createInterface } from 'readline'
 const out = (o) => process.stdout.write(JSON.stringify(o) + '\n')
@@ -74,6 +74,8 @@ if (flag('--output-format') === 'json' || !flag('--input-format')) {
       out({ type: 'rate_limit_event', rate_limit_info: { status: 'rejected', resetsAt: Math.floor(Date.now() / 1000) + 600, rateLimitType: 'five_hour', utilization: 1 } })
       return out({ type: 'result', subtype: 'success', is_error: true, result: 'Claude usage limit reached', usage: {}, total_cost_usd: 0, duration_ms: 5 })
     }
+    // "window": the plan's windows as Claude Code 2.1.304 reports them (utilization under unifiedWindows)
+    if (said.includes('window')) out({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed', resetsAt: 1794963600, rateLimitType: 'seven_day', overageStatus: 'rejected', isUsingOverage: false, unifiedWindows: { seven_day: { utilization: 0.13, resetsAt: 1794963600 } } } })
     out({ type: 'stream_event', event: { type: 'message_start' } })
     if (said.includes('slow')) {
       let n = 0

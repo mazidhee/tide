@@ -45,7 +45,7 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
     - backtests, risk (VaR, stress tests), Monte Carlo and pricing
     - market data in the SQL and Python lab
   - Visuals and checked exercises for each.
-- [ ] **Usage and cost, in detail.**
+- [x] **Usage and cost, in detail.**
   - Your plan's five-hour and seven-day windows: how full, when they reset, and a projection.
   - Tokens (input, output, thinking, cache read and write) per call, lesson, day, model and job.
   - The most expensive lessons, turn by turn; cache savings; speed per model.
