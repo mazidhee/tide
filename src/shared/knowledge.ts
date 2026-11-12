@@ -52,7 +52,7 @@ export interface ConceptState {
   prerequisites: string[]
   done: boolean
   private: boolean
-  /** How solid it is now, 0 to 1: FSRS-6 retrievability, the chance of remembering it today (0 until something is asked) */
+  /** How solid it is now, 0 to 1: FSRS-6 retrievability, the chance of remembering it today (0 until something is asked); after a miss, scaled by how the latest answers went */
   estimate: number
   /** What it stood at after the last answer, before any forgetting: 1 when that answer was right */
   level: number

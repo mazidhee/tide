@@ -97,7 +97,16 @@ export async function viaJs(html: string, url: string): Promise<Article> {
       doc.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href')
     // The metadata is read first: Readability changes the document it reads
     const article = new Readability(doc).parse()
-    const text = (article?.textContent ?? doc.body?.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim()
+    // The text with raised and lowered text kept as such (2⁴, 3A₁₆): textContent would run it into
+    // the number before it. The article's HTML (what the library saves) keeps its <sup> and <sub>
+    let flat = article?.textContent ?? doc.body?.textContent ?? ''
+    if (article?.content && /<su[pb]\b/i.test(article.content)) {
+      const box = doc.createElement('div')
+      box.innerHTML = article.content
+      for (const el of [...box.querySelectorAll('sup, sub')].reverse()) if (!el.closest('pre, code, math')) el.replaceWith(doc.createTextNode(scriptText(el.textContent ?? '', el.tagName.toLowerCase() === 'sup')))
+      flat = box.textContent ?? flat
+    }
+    const text = flat.replace(/\n{3,}/g, '\n\n').trim()
     return {
       title: article?.title ?? '',
       docTitle: doc.title,
@@ -113,6 +122,22 @@ export async function viaJs(html: string, url: string): Promise<Article> {
   } finally {
     dom.window.close()
   }
+}
+
+const SUP: Record<string, string> = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '+': '⁺', '-': '⁻', '−': '⁻', '=': '⁼', '(': '⁽', ')': '⁾', n: 'ⁿ', i: 'ⁱ' }
+const SUB: Record<string, string> = { '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉', '+': '₊', '-': '₋', '−': '₋', '=': '₌', '(': '₍', ')': '₎', a: 'ₐ', e: 'ₑ', i: 'ᵢ', j: 'ⱼ', k: 'ₖ', m: 'ₘ', n: 'ₙ', o: 'ₒ', t: 'ₜ', x: 'ₓ' }
+
+/**
+ * A superscript or subscript as plain text, as the Rust reader writes it (native/tide-core
+ * extract.rs): raised or lowered characters when every character has one (2⁴, 3A₁₆), a reference
+ * mark or an ordinal as it is ([3], 5th), otherwise ^(…) or _(…) so 2^(n+k) is never read as 2n+k.
+ */
+export function scriptText(text: string, sup: boolean): string {
+  const t = text.trim()
+  const table = sup ? SUP : SUB
+  if (t && [...t].every((c) => table[c])) return [...t].map((c) => table[c]).join('')
+  if (!t || /^\[.*\]$/.test(t) || (sup && /^(st|nd|rd|th)$/.test(t))) return t
+  return [...t].length === 1 ? `${sup ? '^' : '_'}${t}` : `${sup ? '^' : '_'}(${t})`
 }
 
 /** The article in `html`, read from `url`. The Rust reader first; the old one when that fails or finds little, keeping whichever read more */

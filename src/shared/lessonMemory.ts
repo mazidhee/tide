@@ -5,6 +5,7 @@
  * tutor builds on what was learnt, goes back to what was missed, and doesn't teach it all again.
  */
 import type { LessonRecord } from './lessonLog'
+import { notAnAttempt, saysDontKnow } from './lessonRepair'
 import { ownWords, parseBlocks } from './session'
 
 export interface LessonDigest {
@@ -20,7 +21,7 @@ export interface LessonDigest {
   wrong: number
   /** The questions marked wrong or partly right, newest first */
   missed: string[]
-  /** The questions they couldn't answer, or asked to have explained again, newest first */
+  /** The questions they couldn't answer, asked to have explained again, or skipped, newest first */
   stuck: string[]
   /** The question it stopped on, unanswered */
   open?: string
@@ -50,9 +51,11 @@ export function digestLesson(r: LessonRecord): LessonDigest | null {
   }
   for (const t of r.turns) {
     if (t.role !== 'assistant') {
-      // "I don't know", a hint, or "can you explain that again" in place of an answer
-      const stuck = !!asked && STUCK.test(ownWords(t.content).replace(/^Answer:\s*/i, ''))
-      if (stuck && !d.stuck.includes(short(asked!))) d.stuck.unshift(short(asked!))
+      // "I don't know", a hint, "I've forgotten", or "can you explain that again" in place of an answer
+      const stuck = !!asked && (STUCK.test(ownWords(t.content).replace(/^Answer:\s*/i, '')) || saysDontKnow(t.content))
+      // Skipped ("can we move on", nothing tried): kept to come back as a recall question, but not a miss
+      const skipped = !!asked && !stuck && notAnAttempt(t.content)
+      if ((stuck || skipped) && !d.stuck.includes(short(asked!))) d.stuck.unshift(short(asked!))
       if (stuck) mark('stuck')
       if (asked && first && !d.opening) stuck ? (d.opening = 'stuck') : (replied = true)
       continue

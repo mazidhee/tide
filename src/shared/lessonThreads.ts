@@ -173,6 +173,31 @@ export function threadTakeaway(t: LessonThread): string {
 /** Questions you asked in a thread */
 export const asked = (t: Pick<LessonThread, 'messages'>) => t.messages.filter((m) => m.role === 'user').length
 
+/** The tutor's message ends on a question for the learner, so what they send next is their answer to it */
+const checks = (reply: string) => /\?\s*(\*{0,2}|\)|\$)\s*$/.test(reply.trim()) || /\?\s*\n[^\n]{0,80}$/.test(reply.trim())
+
+/**
+ * The questions the learner asked in a thread, for its chip: the first message, and after it only
+ * the ones that read as questions. An answer to the tutor's own check ("128", "01100?") is not one:
+ * seen live, a thread where the learner asked once showed "15 questions".
+ */
+export function questionsAsked(t: Pick<LessonThread, 'messages'>): number {
+  let n = 0
+  t.messages.forEach((m, i) => {
+    if (m.role !== 'user') return
+    const s = m.content.trim()
+    const before = t.messages[i - 1]
+    if (n === 0) return void n++
+    // Answering the tutor's check: a question only when it also asks something of its own
+    if (before?.role === 'assistant' && checks(before.content)) {
+      if (ASKING.test(s) || /\b(can|could|would) you\b|\bwhy\b/i.test(s)) n++
+      return
+    }
+    if (ASKING.test(s) || /\?/.test(s) || /\b(can|could|would) you\b/i.test(s)) n++
+  })
+  return n
+}
+
 /**
  * Threads to show again: each must still hang off the same output (the lesson can be started again
  * under the same record), and a reply cut off when Tide closed is dropped.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { excerpt, sourcesNote, withSources } from '../src/shared/sources'
+import { citeSources, excerpt, sourcesNote, withSources } from '../src/shared/sources'
 import { ownWords } from '../src/shared/session'
 
 const page = `Raft is a consensus algorithm designed to be easy to understand.
@@ -34,5 +34,24 @@ describe('lesson sources', () => {
     expect(ownWords(opening)).toBe('I want to learn Raft deeply.')
     expect(withSources('Hi', null)).toBe('Hi')
     expect(sourcesNote({ topic: 'x', at: 1, sources: [] })).toBe('')
+  })
+})
+
+describe('citations in a lesson', () => {
+  const sources = [
+    { n: 1, title: 'A Survey of Number Representations for Computer Arithmetic', url: 'https://arxiv.org/pdf/1004.4710' },
+    { n: 2, title: 'Binary, hexadecimal, number representations', path: 'Software Engineering/Binary.md' }
+  ]
+
+  it('[S2] becomes the source’s name, a button that opens it, saying where it is', () => {
+    const out = citeSources('Add the position values wherever there is a 1 [S2]. See [S1][S2] and [S1, S2].', sources)
+    expect(out).toContain('<button type="button" class="s-cite" data-source="2" title="Binary, hexadecimal, number representations, in your library. Click to open it.">Binary, hexadecimal, number representations</button>')
+    expect(out).toContain('title="A Survey of Number Representations for Computer Arithmetic, arxiv.org. Click to open it."')
+    expect(out).not.toMatch(/\[S\d/)
+  })
+
+  it('leaves code, unknown numbers and a lesson without sources alone', () => {
+    expect(citeSources('`a[S1]` and [S9]', sources)).toBe('`a[S1]` and [S9]')
+    expect(citeSources('See [S1].', [])).toBe('See [S1].')
   })
 })

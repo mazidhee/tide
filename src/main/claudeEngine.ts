@@ -18,7 +18,7 @@ import { createInterface } from 'readline'
 import { createHash } from 'crypto'
 import type { AgentStep, ChatEvent, ChatMessage, ClaudeModel, ClaudeRole } from '@shared/types'
 import { claudeModel, claudeLabel, asksForDepth, rank } from '@shared/claude'
-import { saysDontKnow } from '@shared/lessonRepair'
+import { notAnAttempt } from '@shared/lessonRepair'
 import { checkClaude, childEnv, claudeArgs, findClaude, mcpConfig, parseLine, unavailableReason, userLine, type ClaudeEvent, type ClaudeStatus, type ClaudeUsage } from './claudeCli'
 import { getSettings } from './settings'
 import type { TurnRequest, ToolContext } from './agent'
@@ -399,12 +399,13 @@ export function isAnswer(req: TurnRequest, said: string): boolean {
   if (!req.session) return false
   const prev = [...req.messages].reverse().find((m) => m.role === 'assistant')
   if (!prev || !/<ask\b/i.test(text(prev.content))) return false
-  // Not an attempt (Go on, a hint, "I don't know" however it's typed, even after "Answer:"): nothing to mark
-  if (saysDontKnow(said)) return false
+  // Not an attempt (Go on, a hint, "I don't know" however it's typed, even after "Answer:", "teach
+  // me again", "can we move on"): nothing to mark, the tutor teaches or moves on (shared/lessonRepair)
+  if (notAnAttempt(said)) return false
   return !/^\s*(\[hint\]|my question:|(i (don'?t|do not) know|i dunno|idk|no idea|not sure|no clue|i have no (idea|clue)|i'?m not sure|go on|continue|skip)\b)/i.test(said.replace(/[\u2018\u2019\u02bc]/g, "'"))
 }
 
-const MARK_SYSTEM = `You mark one answer a student gave in a lesson, for their tutor. Grade against the tutor's own solution when there is one (it is inside <solution>; the student never saw it). "correct" means complete and right, not just heading the right way; a right answer with wrong or missing reasoning is "partial". An equivalent method or ordering is not a mistake. Quote the words of their answer that earned the verdict. A code answer may come with what Tide's sandbox found when it ran their code against the question's hidden tests (the tests are in the \`\`\`tests block of the question; the results read "N of M tests passed" with each FAILED test and why): it can't be "correct" unless every test passed, and for each failed test say what that test tried and the exact line or idea in their code that makes it fail. A note from Tide on an exact check of their final answer or query is a fact: follow it. Reply with JSON only: {"verdict": "correct" | "partial" | "wrong", "score": 0.0 to 1.0, "why": "one or two sentences: what was right and why, or the exact step that's wrong and why"}.`
+const MARK_SYSTEM = `You mark one answer a student gave in a lesson, for their tutor. Grade against the tutor's own solution when there is one (it is inside <solution>; the student never saw it). "correct" means the result is right and complete, not just heading the right way. A right final result is "correct" even when the working the question asked for isn't shown: say in "why" that the working wasn't shown, and never mark it down for that alone. "partial" is for a result that is incomplete or only partly right, or reasoning they wrote that is wrong. A message that only asks for something (to be taught again, to move on) is not an answer and is never marked. An equivalent method or ordering is not a mistake. Quote the words of their answer that earned the verdict. A code answer may come with what Tide's sandbox found when it ran their code against the question's hidden tests (the tests are in the \`\`\`tests block of the question; the results read "N of M tests passed" with each FAILED test and why): it can't be "correct" unless every test passed, and for each failed test say what that test tried and the exact line or idea in their code that makes it fail. A note from Tide on an exact check of their final answer or query is a fact: follow it. Reply with JSON only: {"verdict": "correct" | "partial" | "wrong", "score": 0.0 to 1.0, "why": "one or two sentences: what was right and why, or the exact step that's wrong and why"}.`
 
 /**
  * One call, no tools and no conversation: the whole prompt in, one reply out. For marking, lesson

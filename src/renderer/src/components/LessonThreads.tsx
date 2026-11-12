@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import type { AgentStep } from '@shared/types'
-import { asked, threadReplyText, type LessonThread } from '@shared/lessonThreads'
+import { asked, questionsAsked, threadReplyText, type LessonThread } from '@shared/lessonThreads'
 import { Icon } from './Icon'
 import { ProfessorStill } from './Professor'
 
@@ -179,8 +179,9 @@ export function ThreadSlot(p: SlotProps) {
   }, [card, open])
 
   if (!card) {
-    const n = asked(thread)
-    if (!n) return null
+    if (!asked(thread)) return null
+    // Only what they asked: their answers to the tutor's checks in the thread aren't questions
+    const n = Math.max(1, questionsAsked(thread))
     const first = thread.messages.find((m) => m.role === 'user')?.content ?? ''
     return (
       <div className="lt-chip-row">

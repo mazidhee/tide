@@ -19,8 +19,9 @@ import { findExplainers } from '@shared/explainers'
 import { aboutMetabase } from '@shared/metabase'
 import { normalizeTitle } from '@shared/outline'
 import { ASKED, GO_ON, ownWords } from '@shared/session'
+import { asksToMoveOn } from '@shared/lessonRepair'
 import { ledTap, ownedCandidates, quoteNote, webCandidates, type GatherDeps, type GatherOptions } from '@shared/sourceGather'
-import { chooseReading, ledState, planTurn, turnNote, withoutReadings, type Candidate, type Said, type StepReading } from '@shared/sourceLed'
+import { chooseReading, ledState, plain, planTurn, turnNote, withoutReadings, type Candidate, type Said, type StepReading } from '@shared/sourceLed'
 import { courseReading, type Section } from '@shared/courses'
 import type { ChatEvent, ChatMessage, ChatRequest } from '@shared/types'
 import { publicUrl, readWebpage, webSearch } from './agent'
@@ -35,6 +36,8 @@ import { readText, writeText } from './vault'
 
 const DIR = '.tide/source-led'
 const KEEP_MS = 14 * 86_400_000
+/** How pages are read into text: kept pages read an earlier way are read again (2: superscripts and subscripts kept, 2⁴ not 24) */
+const READ_AS = 2
 /** Pages read from the web for one lesson, at most: the topic's, then a couple for each step that still has no reading */
 const MAX_PAGES = 12
 const MAX_STEPS = 8
@@ -64,8 +67,8 @@ const slug = (topic: string) => normalizeTitle(topic).replace(/\s+/g, '-').slice
 /** What was read from the web for a topic, kept two weeks so a lesson picked up again doesn't fetch it twice */
 async function kept(topic: string): Promise<Candidate[]> {
   try {
-    const f = JSON.parse(await readText(`${DIR}/${slug(topic)}.json`)) as { at: number; candidates: Candidate[] }
-    return Date.now() - f.at < KEEP_MS ? f.candidates : []
+    const f = JSON.parse(await readText(`${DIR}/${slug(topic)}.json`)) as { at: number; v?: number; candidates: Candidate[] }
+    return f.v === READ_AS && Date.now() - f.at < KEEP_MS ? f.candidates : []
   } catch {
     return []
   }
@@ -73,7 +76,7 @@ async function kept(topic: string): Promise<Candidate[]> {
 
 const keep = (l: Lesson) =>
   // Only what came from the web: your own files are read from the index each time, and a private lesson has nothing from the web
-  l.opts.private ? Promise.resolve() : writeText(`${DIR}/${slug(l.opts.topic)}.json`, JSON.stringify({ at: Date.now(), candidates: l.candidates.filter((c) => c.url) })).catch(() => {})
+  l.opts.private ? Promise.resolve() : writeText(`${DIR}/${slug(l.opts.topic)}.json`, JSON.stringify({ at: Date.now(), v: READ_AS, candidates: l.candidates.filter((c) => c.url) })).catch(() => {})
 
 /** Which files are in private projects, worked out once so the choice of a reading needs no waiting */
 async function privateTest(): Promise<(path: string) => boolean> {
@@ -204,22 +207,33 @@ export async function sourceLedTurn(req: ChatRequest & { warmOnly?: boolean }): 
   if (!req.session || req.warmOnly || req.sourceLed === false || !req.topic || !teaches(req.instructions)) return null
   const lesson = await lessonFor(req)
   const replies = req.messages.filter((m) => m.role === 'assistant').map(text)
-  const state = ledState(replies)
+  // Which replies answered a request to move on: the lesson went on to the next step there
+  const moved = req.messages.flatMap((m, i) => (m.role === 'assistant' ? [i > 0 && req.messages[i - 1].role === 'user' && asksToMoveOn(text(req.messages[i - 1]))] : []))
+  const state = ledState(replies, moved)
   const last = req.messages[req.messages.length - 1]
   const mine = ownWords(text(last))
-  const said: Said = mine.startsWith(GO_ON) ? 'go' : mine.startsWith(ASKED) ? 'ask' : 'answer'
+  const said: Said = mine.startsWith(GO_ON) ? 'go' : asksToMoveOn(mine) ? 'move' : mine.startsWith(ASKED) ? 'ask' : 'answer'
   // With a plan to follow, a moment for the topic's sources if they're still arriving; before it, never a wait
   if (state.steps.length) {
     await Promise.race([lesson.preparing, new Promise((r) => setTimeout(r, 2500))])
     void topUp(lesson, state.steps).catch(() => {})
   }
-  const plan = planTurn(state, said, (i) => !!readingFor(lesson, i, state.steps))
-  const shows = plan.top ?? plan.onCorrect
+  // A step whose best passage is one already shown (two steps of one page) opens without it: seen live, the same Wikipedia passage twice
+  const shownText = new Set([...state.shown.values()].map((r) => plain(r.text)))
+  const plan = planTurn(state, said, (i) => {
+    const r = readingFor(lesson, i, state.steps)
+    return !!r && !shownText.has(plain(r.text))
+  })
+  const shows = plan.top ?? plan.onCorrect ?? plan.onMove
   const reading = shows !== undefined ? readingFor(lesson, shows, state.steps) : null
   const note = turnNote(plan, state, reading)
   const request = note && last?.role === 'user' ? { ...req, messages: [...req.messages.slice(0, -1), { ...last, content: `${text(last)}\n\n${note}` }] } : req
   const stop = new AbortController()
   let placed = false
+  let tapNow: ReturnType<typeof ledTap> | null = null
+  // What the tap sends once the reply is written (settle), so settle can count it in
+  let flushed = ''
+  let flushing = false
   return {
     request,
     signal: stop.signal,
@@ -228,11 +242,16 @@ export async function sourceLedTurn(req: ChatRequest & { warmOnly?: boolean }): 
       const tap = ledTap({
         plan,
         reading,
-        emit: (t) => t && emit({ id: req.id, type: 'delta', text: t }),
+        emit: (t) => {
+          if (!t) return
+          if (flushing) flushed += t
+          emit({ id: req.id, type: 'delta', text: t })
+        },
         // Only the first plan of a lesson: its first step opens with the reading when there is one
         ...(state.steps.length ? {} : { firstReading: (steps: string[]) => !!readingFor(lesson, 0, steps) }),
         cut: () => stop.abort()
       })
+      tapNow = tap
       return (e) => {
         if (e.type === 'delta') {
           tap.delta(e.text)
@@ -244,6 +263,12 @@ export async function sourceLedTurn(req: ChatRequest & { warmOnly?: boolean }): 
       }
     },
     settle(shown, emit) {
+      // What the tap still held, and a reading still waiting for its place, close the reply
+      flushing = true
+      tapNow?.end()
+      flushing = false
+      placed = tapNow?.placed ?? placed
+      shown += flushed
       const marked = plan.marking !== undefined ? state.shown.get(plan.marking) : undefined
       const add = quoteNote(shown, marked, mine)
       if (add) emit({ id: req.id, type: 'delta', text: add })

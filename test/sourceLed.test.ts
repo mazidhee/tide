@@ -16,7 +16,10 @@ import {
   ledJob,
   ledPrefKey,
   ledState,
+  ledWalk,
   parseReading,
+  quotations,
+  READING_HERE,
   planTurn,
   quoteCheck,
   rank,
@@ -393,7 +396,7 @@ describe('placing the reading in the reply', () => {
     expect(parseBlocks(out).map((b) => b.kind)).toEqual(['text', 'ask'])
   })
 
-  it('straight after a correct mark, however the stream is cut up; not after any other mark', () => {
+  it('after a correct mark, before the next question, however the stream is cut up; not after any other mark', () => {
     for (const cut of [5, 23, 41, 47, 60]) {
       const reply = '<grade verdict="correct" score="1">Right: "a".</grade>\n\n<ask>Next?</ask>'
       let out = ''
@@ -475,5 +478,126 @@ describe('what the tutor is told', () => {
     expect(ledPrefKey({ kind: 'folder', path: 'Systems/Raft' })).toBe('tide.lesson.sources:Systems/Raft')
     expect(ledPrefKey({ kind: 'note', path: 'Systems/Raft/Elections.md' })).toBe('tide.lesson.sources:Systems/Raft')
     expect(ledPrefKey({ kind: 'vault' })).toBe('tide.lesson.sources:all')
+  })
+})
+
+describe('lessons on binary and hex, as they went live', () => {
+  const wiki: StepReading = {
+    step: 1,
+    title: 'Binary number',
+    by: 'Wikipedia',
+    url: 'https://en.wikipedia.org/wiki/Binary_number',
+    fetched: '2026-11-12',
+    format: 'text',
+    kind: 'web',
+    text: 'To convert a binary number into its hexadecimal equivalent, divide it into groups of four bits. If the number of bits is not a multiple of four, simply insert extra 0 bits at the left (called padding). For example:\n\n1010010₂ = 0101 0010 grouped with padding = 52₁₆'
+  }
+
+  it('pairs quotation marks the way a reader does, so the words between two quotations are never one', () => {
+    expect(quotations('"0011 1010 1111" is correct. Your answer calls it "16 digits", but you wrote 12. The reading: "simply insert extra 0 bits".')).toEqual(['0011 1010 1111', '16 digits', 'simply insert extra 0 bits'])
+    expect(quotations('“a “b” c” and "d “e” f"')).toEqual(['a “b', 'd “e” f'])
+    expect(quotations('An unclosed "quote at the end')).toEqual([])
+  })
+
+  it('no "Worth checking" under a mark whose quotations are all the answer’s or the reading’s', () => {
+    const answer = "Answer: 0011 1010 1111 , I think the binary was 16 digits. I'm not sure you can convert 10 bits into hex"
+    const grade = `<grade verdict="partial" score="0.5">"0011 1010 1111" is correct: each hex digit becomes its own four bits. Your answer calls it "16 digits", but you wrote 12 (three hex digits × 4 bits). The reading settles the 10-bit case: "If the number of bits is not a multiple of four, simply insert extra 0 bits at the left (called padding)." So "I'm not sure you can convert 10 bits into hex" is wrong, because any length works once you pad.</grade>`
+    expect(quoteCheck(grade, wiki.text, answer).missing).toEqual([])
+    expect(quoteNote(grade, wiki, answer)).toBe('')
+    const short = '<grade verdict="correct" score="1.0">"0010 0111" is right. You put the two zeros on the left, and the result still ends in $100111$. This is the rule in the reading: "simply insert extra 0 bits at the left (called padding)."</grade>'
+    expect(quoteNote(short, wiki, 'Answer: 0010 0111')).toBe('')
+  })
+
+  it('a made-up quotation is still caught, and said on one clean line', () => {
+    const note = quoteNote('<grade verdict="wrong">The reading says "pad the bits\n on the right side always".</grade>', wiki, 'Answer: 1111 0011')
+    expect(note).toContain('> **Worth checking:** the mark quotes “pad the bits on the right side always”, which is not in the reading.')
+    expect(note.trim().split('\n')).toHaveLength(1)
+  })
+
+  it('an excerpt never ends on a line that introduces what it leaves out', () => {
+    const long = 'Binary may be converted to and from hexadecimal more easily, since 16 = 2⁴ and one hexadecimal digit stands for four binary digits. '
+    const page = [
+      'Hexadecimal',
+      long.repeat(4).trim(),
+      long.repeat(3).trim(),
+      'To convert a hexadecimal number into its decimal equivalent, multiply the decimal equivalent of each hexadecimal digit by the corresponding power of 16 and add the resulting values:',
+      'C0E7₁₆ = (12 × 16³) + (0 × 16²) + (14 × 16¹) + (7 × 16⁰) = 49,383₁₀',
+      'Octal',
+      'Binary is also easily converted to the octal numeral system.'
+    ].join('\n\n')
+    const e = chooseExcerpt(page, 'Hexadecimal digits and converting hexadecimal to decimal', 'Binary, hexadecimal')!
+    expect(e.text.trim().endsWith(':')).toBe(false)
+    expect(e.text).toContain('49,383₁₀')
+  })
+
+  const plan = 'Decimal to binary is done.\n<plan>\n- Decimal to binary\n- Hexadecimal\n- Converting between binary and hex\n- Fixed-width numbers\n</plan>\n\n**Step 1.** <ask>Convert 45.</ask>'
+
+  it('labels each step on the reply that starts it, from the first', () => {
+    const replies = [
+      'What do you know? <ask>Convert 21.</ask>',
+      plan,
+      '<grade verdict="correct">Yes.</grade><ask>Convert 52.</ask>',
+      '<grade verdict="correct">Yes.</grade> On to hex. <ask>Why 4 bits?</ask>',
+      '<grade verdict="partial">Half.</grade><ask>Again?</ask>',
+      'Moving on, as you asked. <ask>Convert 1101 0110 to hex.</ask>'
+    ]
+    const { state, starts } = ledWalk(replies, [false, false, false, false, false, true])
+    expect(starts).toEqual([null, 0, null, 1, null, 2])
+    expect(state.cur).toBe(2)
+    // Without the request to move on, the lesson stays on the step
+    expect(ledWalk(replies).starts[5]).toBeNull()
+    expect(ledState(replies, [false, false, false, false, false, true]).cur).toBe(2)
+  })
+
+  it('a step’s reading opens the step, after the tutor has closed the last one, not under the mark', () => {
+    const block = readingBlock(wiki)
+    const reply = '<grade verdict="correct" score="1">"1101 0110, D6" is right.</grade>\n\nNext is fixed-width numbers. In the reading, look at how values are stored.\n\n<ask type="short">What is the largest number a byte holds?</ask>'
+    for (const cut of [10, 60, 75, 120, 150, reply.length - 20]) {
+      let out = ''
+      const tap = ledTap({ plan: { onCorrect: 1 }, reading: wiki, emit: (t) => (out += t) })
+      tap.delta(reply.slice(0, cut))
+      tap.delta(reply.slice(cut))
+      tap.end()
+      expect(tap.placed, String(cut)).toBe(true)
+      expect(out.indexOf(block), String(cut)).toBeGreaterThan(out.indexOf('Next is fixed-width numbers'))
+      expect(out.indexOf(block), String(cut)).toBeLessThan(out.indexOf('<ask'))
+      expect(withoutReadings(out).replace(/\s+/g, ' ')).toBe(reply.replace(/\s+/g, ' '))
+    }
+  })
+
+  it('where the tutor marks its place, and at the end when it asks nothing; the mark itself never shows', () => {
+    const marked = `<grade verdict="correct">Yes.</grade>\n\nNow hex.\n\n${READING_HERE}\n\nThe reading doesn't cover this: bytes.\n\n<ask>Why?</ask>`
+    let out = ''
+    const tap = ledTap({ plan: { onCorrect: 1 }, reading: wiki, emit: (t) => (out += t) })
+    for (const piece of marked.match(/[\s\S]{1,7}/g)!) tap.delta(piece)
+    tap.end()
+    expect(out).not.toContain('<the-reading')
+    expect(out.indexOf('```reading')).toBeGreaterThan(out.indexOf('Now hex.'))
+    expect(out.indexOf('```reading')).toBeLessThan(out.indexOf("doesn't cover"))
+    let plainOut = ''
+    const none = ledTap({ plan: { onCorrect: 1 }, reading: wiki, emit: (t) => (plainOut += t) })
+    none.delta('<grade verdict="correct">Yes.</grade>\n\nOn to the next step.')
+    none.end()
+    expect(readingsIn(plainOut)).toHaveLength(1)
+    expect(plainOut.indexOf('```reading')).toBeGreaterThan(plainOut.indexOf('On to the next step.'))
+    let stray = ''
+    const off = ledTap({ plan: {}, reading: null, emit: (t) => (stray += t) })
+    off.delta(`Hello ${READING_HERE} there <`)
+    off.delta('ask>q</ask>')
+    off.end()
+    expect(stray.replace(/\s+/g, ' ')).toBe('Hello there <ask>q</ask>')
+  })
+
+  it('asked to move on, the next step opens with its reading whatever the mark', () => {
+    const s = ledState([plan, '<grade verdict="partial">Half.</grade><ask>Again?</ask>'])
+    expect(planTurn(s, 'move', () => true)).toEqual({ onMove: 1 })
+    expect(planTurn(s, 'move', () => false)).toEqual({})
+    let out = ''
+    const tap = ledTap({ plan: { onMove: 1 }, reading: wiki, emit: (t) => (out += t) })
+    tap.delta('Fine, on to hex.\n\n<ask>Why four bits?</ask>')
+    tap.end()
+    expect(out.indexOf('```reading')).toBeGreaterThan(out.indexOf('on to hex'))
+    expect(turnNote({ onMove: 1 }, s, wiki)).toContain('they asked to move on')
+    expect(turnNote({ onCorrect: 1 }, s, wiki)).toContain(READING_HERE)
   })
 })

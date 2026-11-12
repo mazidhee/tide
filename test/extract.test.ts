@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({ app: { getAppPath: () => join(__dirname, '..'), getPath: () => '/nowhere' } }))
 vi.mock('../src/main/settings', () => ({ getSettings: () => ({ vaultPath: '/nowhere', libraryFolder: 'Library', ai: {} }) }))
 
-import { readArticle, viaJs } from '../src/main/extract'
+import { readArticle, scriptText, viaJs } from '../src/main/extract'
 import { articleMarkdown } from '../src/main/library'
 import { tideCore } from '../src/main/native'
 
@@ -105,5 +105,33 @@ describe.skipIf(!native?.extractArticle)('reading a web page with the Rust reade
     const old = await viaJs(html, 'https://example.org/blog/post')
     expect(old.image).toBe(a.image)
     expect(old.meta).toEqual(a.meta)
+  })
+})
+
+describe('raised and lowered text', () => {
+  // Seen live in a lesson's reading from Wikipedia: "16 = 24" for 2⁴, "3A16" for 3A₁₆
+  const para = 'Binary may be converted to and from hexadecimal more easily. This is because the radix of the hexadecimal system is a power of the radix of the binary system. '
+  const html = `<html><head><title>Binary number</title></head><body><article><h1>Binary number</h1>${`<p>${para.repeat(3)}</p>`.repeat(3)}<p>More specifically, 16 = 2<sup>4</sup>, so it takes four digits of binary to represent one digit of hexadecimal.<sup class="reference"><a href="#c3">[3]</a></sup></p><p>3A<sub>16</sub> = 0011 1010<sub>2</sub></p></article></body></html>`
+
+  it('reads as raised and lowered characters, the old way and the Rust way', async () => {
+    const js = await viaJs(html, 'https://en.wikipedia.org/wiki/Binary_number')
+    expect(js.text).toContain('16 = 2⁴, so')
+    expect(js.text).toContain('3A₁₆ = 0011 1010₂')
+    expect(js.text).toContain('hexadecimal.[3]')
+    expect(js.content).toContain('<sup>4</sup>')
+    if (!native?.extractArticle) return
+    const rust = await readArticle(html, 'https://en.wikipedia.org/wiki/Binary_number')
+    expect(rust.engine).toBe('rust')
+    expect(rust.text).toContain('16 = 2⁴, so')
+    expect(rust.text).toContain('3A₁₆ = 0011 1010₂')
+  })
+
+  it('marks what has no raised form, and leaves a reference or an ordinal as it is', () => {
+    expect(scriptText('n+1', true)).toBe('ⁿ⁺¹')
+    expect(scriptText('k+j', true)).toBe('^(k+j)')
+    expect(scriptText('y', true)).toBe('^y')
+    expect(scriptText('[3]', true)).toBe('[3]')
+    expect(scriptText('th', true)).toBe('th')
+    expect(scriptText('10', false)).toBe('₁₀')
   })
 })
