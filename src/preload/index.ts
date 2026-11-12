@@ -141,7 +141,8 @@ const api: TideApi = {
   },
   claude: {
     status: invoke('claude:status'),
-    usage: invoke('claude:usage')
+    usage: invoke('claude:usage'),
+    terminal: invoke('claude:terminal')
   },
   connections: {
     list: invoke('connections:list'),

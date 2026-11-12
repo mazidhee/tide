@@ -299,7 +299,12 @@ function registerIpc() {
     const { claudeStatus, liveClaude, forgetLimit } = await import('./claudeEngine')
     if (fresh) forgetLimit()
     const st = await claudeStatus(fresh)
-    return { installed: st.installed, version: st.version, loggedIn: st.loggedIn, plan: st.plan, error: st.error, limitedUntil: st.limitedUntil, limit: st.limit, live: liveClaude() }
+    return { installed: st.installed, version: st.version, loggedIn: st.loggedIn, plan: st.plan, error: st.error, limitedUntil: st.limitedUntil, limit: st.limit, live: liveClaude(), terminalPort: getSettings().ai.claude?.terminalPort }
+  })
+  handle('claude:terminal', async (on: boolean) => {
+    const { setTerminal } = await import('./tideMcp')
+    const { runClaude } = await import('./claudeEngine')
+    return setTerminal(on, runClaude)
   })
   handle('claude:usage', async (days?: number) => {
     const { readClaudeUsage } = await import('./claudeEngine')
@@ -708,6 +713,8 @@ app.whenReady().then(() => {
   ready().catch(() => {})
   // Whether Claude Code is here and logged in, asked once now so the first lesson needn't wait for it
   void import('./claudeEngine').then((c) => c.claudeStatus()).catch(() => {})
+  // Claude Code in the terminal reaches Tide's tools on a fixed port, while Tide is open (when set up)
+  if (getSettings().ai.claude?.terminalPort) void import('./tideMcp').then((m) => m.ensureMcp()).catch(() => {})
   // The model's memory goes back to the Mac when you aren't studying, and loads as you return
   watchModelIdle()
   app.on('browser-window-focus', () => wakeModel(() => warmChat()))

@@ -26,7 +26,7 @@ vi.mock('../src/main/agent', () => {
   }
 })
 const bound: string[] = []
-vi.mock('../src/main/tideMcp', () => ({ startMcp: async () => ({ port: 1, token: 't', url: '' }), bindLesson: (k: string) => bound.push(k), unbindLesson: () => {} }))
+vi.mock('../src/main/tideMcp', () => ({ ensureMcp: async () => ({ port: 1, token: 't', url: '' }), bindLesson: (k: string) => bound.push(k), unbindLesson: () => {} }))
 
 const engine = await import('../src/main/claudeEngine')
 const FAKE = resolve('test/fixtures/fake-claude.mjs')

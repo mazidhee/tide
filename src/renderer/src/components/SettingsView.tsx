@@ -6,7 +6,8 @@ import { CLOUD_TASKS, DEFAULT_CLOUD, PROVIDERS, modelPrice, providerInfo, type C
 import { Professor } from './Professor'
 import { PillSegment } from './PromptBox'
 import type { AISettings, ClaudeModel, ClaudeRole, ClaudeStatusView, Settings, ThemeId } from '@shared/types'
-import { CLAUDE_DEFAULTS, CLAUDE_MODELS } from '@shared/claude'
+import { CLAUDE_DEFAULTS, CLAUDE_MODELS, claudeLabel } from '@shared/claude'
+import type { ClaudeUseRecord } from '@shared/types'
 import { useApp } from '../state'
 import { DESIGNS, readingFace, resolveDesign, type DesignId } from '@shared/design'
 import { Icon, type IconName } from './Icon'
@@ -68,7 +69,7 @@ export const SECTIONS: { id: Section; label: string; icon: IconName; group: stri
   { id: 'connections', label: 'Connections', icon: 'link', group: 'AI', description: 'Every service Tide uses: what it’s for, where it runs, what it used today, and what you could add.' },
   { id: 'models', label: 'Models', icon: 'sparkle', group: 'AI', description: 'Who teaches: Claude on your plan, or Gemma on this Mac. Private projects and Metabase always stay with Gemma.' },
   { id: 'tools', label: 'Tools', icon: 'terminal', group: 'AI', description: 'What the tutor can use: search, code and your tasks.' },
-  { id: 'usage', label: 'Usage', icon: 'graph', group: 'AI', description: 'What each model was used for this month, and what the cloud cost.' },
+  { id: 'usage', label: 'Usage', icon: 'graph', group: 'AI', description: 'What each model was used for this month: Claude on your plan, Gemma on this Mac, and what the cloud cost.' },
   { id: 'speed', label: 'Speed', icon: 'gauge', group: 'AI', description: 'Where each answer’s time went: Tide, the model reading, the model writing, and tools.' }
 ]
 
@@ -751,6 +752,7 @@ function ClaudeGroup() {
   const c = app.settings.ai.claude ?? {}
   const [st, setSt] = useState<ClaudeStatusView | null>(null)
   const [checking, setChecking] = useState(false)
+  const [terminal, setTerminal] = useState<{ busy: boolean; message?: string }>({ busy: false })
   const check = (fresh = false) => {
     setChecking(true)
     window.tide.claude
@@ -789,6 +791,30 @@ function ClaudeGroup() {
           <Select label={ROLE_TEXT[role].label} value={c.models?.[role] ?? CLAUDE_DEFAULTS[role]} onChange={(v) => setModel(role, v)} options={CLAUDE_MODELS.map((m) => ({ value: m.id, label: `${m.label}${m.id === CLAUDE_DEFAULTS[role] ? ' (default)' : ''}` }))} />
         </Row>
       ))}
+      <Row
+        label="Claude Code in your terminal"
+        hint={
+          terminal.busy
+            ? 'Working…'
+            : terminal.message ?? (st?.terminalPort ? `Your notes, code runner and progress are Claude Code’s tools as “tide”, at 127.0.0.1:${st.terminalPort}, while Tide is open` : 'Give Claude Code in your terminal Tide’s tools: search your notes, run code, record progress')
+        }
+      >
+        <Toggle
+          on={!!st?.terminalPort}
+          disabled={!st?.loggedIn || terminal.busy}
+          label="Claude Code in your terminal"
+          onChange={async (on) => {
+            setTerminal({ busy: true })
+            try {
+              const r = await window.tide.claude.terminal(on)
+              setTerminal({ busy: false, message: r.on ? `Added: run claude in any folder and ask it to use Tide (port ${r.port})` : 'Removed from Claude Code' })
+            } catch (e) {
+              setTerminal({ busy: false, message: errorText(e) })
+            }
+            check()
+          }}
+        />
+      </Row>
       {st?.limit?.utilization != null && <Row label="Your plan" hint={`${Math.round(st.limit.utilization * 100)}% of this ${st.limit.window?.replace('_', '-') ?? ''} window used${st.limitedUntil ? `; at the limit until ${new Date(st.limitedUntil).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : ''}`} />}
     </Group>
   )
@@ -1161,6 +1187,110 @@ const TASK_LABEL: Record<string, string> = { maths: 'Hard maths', errors: 'Findi
 
 const tokens = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n))
 
+const ROLE_WORD: Record<string, string> = { teach: 'teaching', mark: 'marking', hard: 'plans and hard turns', background: 'background' }
+const median = (xs: number[]) => {
+  const v = xs.filter((x) => x > 0).sort((a, b) => a - b)
+  return v.length ? v[Math.floor(v.length / 2)] : 0
+}
+
+/** What Claude did this month on your plan: by model and job, by day, how much was cached, how fast */
+function ClaudeUsage({ offset }: { offset: number }) {
+  const [rows, setRows] = useState<ClaudeUseRecord[] | null>(null)
+  const [plan, setPlan] = useState<ClaudeStatusView | null>(null)
+  const [hover, setHover] = useState<number | null>(null)
+  useEffect(() => {
+    window.tide.claude.usage(70).then(setRows).catch(() => setRows([]))
+    window.tide.claude.status().then(setPlan).catch(() => {})
+  }, [])
+  const month = useMemo(() => {
+    const d = new Date()
+    const start = new Date(d.getFullYear(), d.getMonth() - offset, 1)
+    const end = new Date(d.getFullYear(), d.getMonth() - offset + 1, 1)
+    return { start: start.getTime(), end: end.getTime(), days: Math.round((end.getTime() - start.getTime()) / 86_400_000) }
+  }, [offset])
+  if (!rows) return null
+  const these = rows.filter((r) => r.at >= month.start && r.at < month.end)
+  if (!these.length && !plan?.loggedIn) return null
+  const all = (r: ClaudeUseRecord) => r.input + r.output + r.cacheRead + r.cacheWrite
+  const total = these.reduce((n, r) => n + all(r), 0)
+  const cached = these.reduce((n, r) => n + r.cacheRead, 0)
+  const value = these.reduce((n, r) => n + r.costUsd, 0)
+  const groups = new Map<string, ClaudeUseRecord[]>()
+  for (const r of these) {
+    const k = `${claudeLabel(r.model)}|${r.role}`
+    groups.set(k, [...(groups.get(k) ?? []), r])
+  }
+  const days = Array.from({ length: month.days }, (_, i) => {
+    const from = month.start + i * 86_400_000
+    const on = these.filter((r) => r.at >= from && r.at < from + 86_400_000)
+    return { date: new Date(from), calls: on.length, tokens: on.reduce((n, r) => n + all(r), 0) }
+  })
+  const most = Math.max(1, ...days.map((d) => d.tokens))
+  const day = hover !== null ? days[hover] : null
+  const first = median(these.filter((r) => r.role === 'teach').map((r) => r.firstTokenMs ?? 0))
+  return (
+    <>
+      <Group title="Claude, on your plan" note="Your plan covers these calls: the dollar figure is what they would cost at API prices, as Claude Code reports it, to show which jobs use the most.">
+        <div className="usage-tiles">
+          <div className="usage-tile">
+            <span className="usage-value">{these.length}</span>
+            <span className="usage-label">Calls, {tokens(total)} tokens</span>
+          </div>
+          <div className="usage-tile">
+            <span className="usage-value">{total ? `${Math.round((cached / total) * 100)}%` : '—'}</span>
+            <span className="usage-label">Read from the cache</span>
+          </div>
+          <div className="usage-tile">
+            <span className="usage-value">{first ? `${(first / 1000).toFixed(1)} s` : '—'}</span>
+            <span className="usage-label">Typical wait for the first words</span>
+          </div>
+          <div className="usage-tile">
+            <span className="usage-value">{plan?.limit?.utilization != null ? `${Math.round(plan.limit.utilization * 100)}%` : money(value)}</span>
+            <span className="usage-label">{plan?.limit?.utilization != null ? `Of your plan’s ${plan.limit.window?.replace('_', '-') ?? ''} window` : 'At API prices'}</span>
+          </div>
+        </div>
+      </Group>
+      {these.length > 0 && (
+        <Group title="Claude by day">
+          <div className="set-pad">
+            <div className="usage-chart" role="img" aria-label="Claude tokens per day" onMouseLeave={() => setHover(null)}>
+              {days.map((d, i) => (
+                <span key={i} className={`usage-bar${hover === i ? ' on' : ''}`} onMouseEnter={() => setHover(i)}>
+                  <span style={{ height: d.tokens ? `${Math.max(4, (d.tokens / most) * 100)}%` : 0 }} />
+                </span>
+              ))}
+              {day && (
+                <span className="usage-tip" style={{ left: `${((hover! + 0.5) / days.length) * 100}%` }}>
+                  <strong>{day.date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</strong>
+                  <span>{day.calls} calls</span>
+                  <span>{tokens(day.tokens)} tokens</span>
+                </span>
+              )}
+            </div>
+          </div>
+        </Group>
+      )}
+      {groups.size > 0 && (
+        <Group title="Claude by model and job">
+          {[...groups.entries()]
+            .sort((a, b) => b[1].reduce((n, r) => n + r.costUsd, 0) - a[1].reduce((n, r) => n + r.costUsd, 0))
+            .map(([k, rs]) => {
+              const [model, role] = k.split('|')
+              const t = rs.reduce((n, r) => n + all(r), 0)
+              const c = rs.reduce((n, r) => n + r.cacheRead, 0)
+              const f = median(rs.map((r) => r.firstTokenMs ?? 0))
+              return (
+                <Row key={k} label={`${model} · ${ROLE_WORD[role] ?? role}`} hint={`${rs.length} calls, ${tokens(t)} tokens, ${t ? Math.round((c / t) * 100) : 0}% cached${f ? `, first words in ${(f / 1000).toFixed(1)} s` : ''}`}>
+                  <span className="usage-num">{money(rs.reduce((n, r) => n + r.costUsd, 0))}</span>
+                </Row>
+              )
+            })}
+        </Group>
+      )}
+    </>
+  )
+}
+
 function UsageSection() {
   const [offset, setOffset] = useState(0)
   const [u, setU] = useState<Usage | null>(null)
@@ -1205,6 +1335,7 @@ function UsageSection() {
           <span className="usage-label">On this Mac, {tokens(u.local.input + u.local.output)} tokens, free</span>
         </div>
       </div>
+      <ClaudeUsage offset={offset} />
       {(u.cloud.freeValue > 0 || u.cloud.unpriced > 0) && (
         <p className="set-note">
           {u.cloud.freeValue > 0 && `Free-tier requests would have cost ${money(u.cloud.freeValue)} at list price. `}

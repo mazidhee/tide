@@ -44,6 +44,20 @@ export async function claudeStatus(fresh = false): Promise<ClaudeStatus & { limi
   return { ...status!, ...(limitedUntil > Date.now() ? { limitedUntil } : {}), limit: lastLimit }
 }
 
+/** Runs the user's Claude Code with these arguments (claude mcp add/remove) and returns what it printed */
+export function runClaude(args: string[]): Promise<string> {
+  const cmd = command()
+  if (!cmd) return Promise.reject(new Error('Claude Code isn’t installed'))
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { env: childEnv(), cwd: app.getPath('home'), stdio: ['ignore', 'pipe', 'pipe'] })
+    let out = ''
+    child.stdout.on('data', (d) => (out += String(d)))
+    child.stderr.on('data', (d) => (out += String(d)))
+    child.on('error', reject)
+    child.on('close', (code) => (code === 0 ? resolve(out.trim()) : reject(new Error(out.trim() || `claude exited with ${code}`))))
+  })
+}
+
 /** Forget a limit the plan reported (Check again in Settings: the learner may know it has reset; the next refusal sets it again) */
 export const forgetLimit = () => (limitedUntil = 0)
 
@@ -309,8 +323,8 @@ export async function prewarmClaude(req: Omit<TurnRequest, 'id'>): Promise<void>
   if (live.get(pk)?.alive) return
   // One waiting at a time
   for (const [k, p] of live) if (k.startsWith('pool:')) (p.stop(), live.delete(k))
-  const { startMcp } = await import('./tideMcp')
-  const mcp = await startMcp()
+  const { ensureMcp } = await import('./tideMcp')
+  const mcp = await ensureMcp()
   const settings = getSettings().ai.claude
   const opening = req.session && req.instructions ? claudeModel('hard', settings) : claudeModel('teach', settings, req.claudeModel)
   processFor(pk, opening, system, configFor(pk, mcp.port, mcp.token), web ? CLAUDE_WEB_TOOLS : []).warm()
@@ -530,7 +544,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   const { CLAUDE_LESSON_SYSTEM, CLAUDE_TUTOR_SYSTEM, CLAUDE_WEB_NOTE } = await import('@shared/tutorPrompt')
   const { ownWords } = await import('@shared/session')
   const { escalationFor } = await import('@shared/providers')
-  const { startMcp } = await import('./tideMcp')
+  const { ensureMcp: startMcp } = await import('./tideMcp')
   const { bindLesson, unbindLesson } = await import('./tideMcp')
 
   const ready = await claudeReady()
