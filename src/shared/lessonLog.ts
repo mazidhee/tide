@@ -5,6 +5,7 @@
  */
 import { MODE_LABEL, ownWords, parseBlocks, type Block, type SessionSetup } from './session'
 import type { ChatScope, SessionMode } from './types'
+import { threadReplyText, type LessonThread } from './lessonThreads'
 
 export interface LessonTurn {
   role: 'user' | 'assistant'
@@ -26,6 +27,8 @@ export interface LessonRecord {
   page?: string
   /** Claude's visuals as checked (shared/visuals), by the key of their source: shown again at once when the lesson is reopened */
   visuals?: Record<string, import('./visuals').VisualRecord>
+  /** Side threads under its outputs (shared/lessonThreads), kept apart from its turns */
+  threads?: import('./lessonThreads').LessonThread[]
 }
 
 export type LessonSummary = Pick<LessonRecord, 'id' | 'mode' | 'topic' | 'scope' | 'started' | 'updated' | 'finished' | 'page'> & { answers: number; preview: string }
@@ -84,6 +87,18 @@ export function yourWords(content: string): string {
     .trim()
 }
 
+/** A side thread, under the output it hangs off: a folded callout, so the lesson reads as it was taught */
+export function threadMarkdown(t: LessonThread): string {
+  const n = t.messages.filter((m) => m.role === 'user').length
+  if (!n) return ''
+  const head = `> [!question]- Thread${t.quote ? `: “${t.quote.replace(/\n/g, ' ')}”` : ''} (${n} question${n === 1 ? '' : 's'}${t.understood ? ', understood' : ''})`
+  const lines = t.messages.flatMap((m) => {
+    const text = m.role === 'user' ? `**You:** ${m.content.trim()}` : threadReplyText(m.content).trim()
+    return text ? [...text.split('\n'), ''] : []
+  })
+  return [head, ...lines.slice(0, -1).map((l) => (l.trim() ? `> ${l}` : '>'))].join('\n')
+}
+
 /** The lesson as a page to read: the conversation in order, without the tutor's working or Tide's notes */
 export function lessonMarkdown(r: LessonRecord): string {
   const when = new Date(r.started).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -99,7 +114,7 @@ export function lessonMarkdown(r: LessonRecord): string {
       else if (/^\[hint\]/.test(said)) body.push('_You asked for a hint._')
       else if (said) body.push(`**You:** ${said}`)
     } else if (t.content.trim()) {
-      body.push(parseBlocks(t.content).map(block).filter(Boolean).join('\n\n'))
+      body.push([parseBlocks(t.content).map(block).filter(Boolean).join('\n\n'), ...(r.threads ?? []).filter((th) => th.at === i).map(threadMarkdown)].filter(Boolean).join('\n\n'))
     }
   })
   return `${front.join('\n')}\n# ${r.topic}\n\n_${MODE_LABEL[r.mode] ?? 'Lesson'}, ${when}${where ? `, from ${where}` : ''}${r.finished ? '' : '. In progress: carry it on from Past lessons'}._\n\n${body.join('\n\n---\n\n')}\n`

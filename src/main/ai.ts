@@ -577,7 +577,8 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
     }
     if (e.type === 'delta') shown += e.text
     else if (e.type === 'reset') shown = ''
-    else if (e.type === 'done' && !controller.signal.aborted && answeredHere(req.id)) {
+    // A side thread isn't read back: the lesson it sits in stays the conversation kept warm
+    else if (e.type === 'done' && !controller.signal.aborted && !req.thread && answeredHere(req.id)) {
       const reply = asked.chatId ? cleanModelText(shown) : shown
       void import('./agent').then((a) => a.readBack(asked, reply))
     }

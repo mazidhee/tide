@@ -338,10 +338,30 @@ export const fp = (s: string) => createHash('sha1').update(s).digest('hex').slic
 const text = (c: ChatMessage['content'] | unknown) => (typeof c === 'string' ? c : Array.isArray(c) ? c.map((p: { text?: string }) => p.text ?? '').join('\n') : String(c ?? ''))
 
 /** Which lesson or conversation a turn belongs to: the process it goes to */
-export function lessonKey(req: Pick<TurnRequest, 'chatId' | 'labId' | 'messages' | 'session'>): string {
+export function lessonKey(req: Pick<TurnRequest, 'chatId' | 'labId' | 'messages' | 'session' | 'thread'>): string {
+  // A lesson's side threads share one light process of their own (see threadKey), never the lesson's
+  if (req.thread) return threadKey(req.labId ?? req.chatId ?? '')
   if (req.chatId) return `chat:${req.chatId}`
   if (req.labId) return `lab:${req.labId}`
   return `first:${fp(text(req.messages.find((m) => m.role === 'user')?.content))}`
+}
+
+/**
+ * The process a lesson's side threads run in (shared/lessonThreads). Apart from the lesson's own:
+ * the lesson's process holds the lesson's conversation turn by turn (it is sent only the new
+ * message, and its prompt cache holds the lesson), so a thread's questions in it would become part
+ * of the lesson the tutor remembers and throw its turn count out, making it start again from the
+ * transcript. One per lesson, on the teaching model, holding the open thread: a follow-up sends
+ * only the new question; another thread starts it again from that thread's own short transcript.
+ * Stopped when the thread is folded (stopThreads), so it costs memory only while you're in one.
+ */
+export const threadKey = (lab: string) => `thread:${lab}`
+
+/** The thread is folded: its process goes (with web tools or without) */
+export function stopThreads(lab: string) {
+  const key = threadKey(lab)
+  stopClaude(key)
+  stopClaude(`${key}:web`)
 }
 
 /**
@@ -363,6 +383,8 @@ export function messageToSend(history: { role: string; content: unknown }[], p: 
 
 /** What role this turn's model has: planning a lesson, maths, or asked to go deep → the "hard" model */
 export function turnRole(req: TurnRequest, said: string, job: string | null): ClaudeRole {
+  // A side thread is a quick question about one explanation: always the teaching model
+  if (req.thread) return 'teach'
   const users = req.messages.filter((m) => m.role === 'user').length
   if (req.session && req.instructions && users <= 1) return 'hard'
   if (asksForDepth(said)) return 'hard'
@@ -620,7 +642,8 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   bindLesson(proc.binding, toolCtx)
   // What set_exercise needs of this turn: the topic, the lesson so far and the mark, for the level (main/exercises)
   const { setLessonInfo } = await import('./exercises')
-  setLessonInfo(toolCtx.labId, { topic: req.topic, path: 'path' in req.scope ? req.scope.path : undefined, private: false, history: req.messages.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: text(m.content) })), ...(verdict ? { verdict } : {}) })
+  // A side thread mustn't change what the lesson's set_exercise knows of the lesson
+  if (!req.thread) setLessonInfo(toolCtx.labId, { topic: req.topic, path: 'path' in req.scope ? req.scope.path : undefined, private: false, history: req.messages.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: text(m.content) })), ...(verdict ? { verdict } : {}) })
   const engineStep = nextStepId()
   emit({ id: req.id, type: 'step', step: { id: engineStep, kind: 'helper', label: `Claude ${claudeLabel(model)} is teaching${fresh && history.length > 1 ? ' (picking the lesson up again)' : ''}`, status: 'running', depth: 0 } })
 

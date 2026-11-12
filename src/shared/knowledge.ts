@@ -259,18 +259,25 @@ const RECALLED: Record<EvidenceKind, EvidenceKind> = { taught: 'taught', right: 
 export const recalled = (kind: EvidenceKind) => RECALLED[kind]
 export const kindOfMark = (mark: keyof typeof KIND) => KIND[mark]
 
+/** A thread you understood counts for a little of having been taught: it is asking, not answering */
+export const THREAD_WEIGHT = 0.3
+
 /**
  * What one lesson record shows, as evidence on its topic's concept: that it was taught, and every
  * question that got a mark or couldn't be answered. The steps of its plan become parts of the
  * topic; a question counts on the step whose words it shares, and a step counts as taught once
  * the lesson has finished or a question on it or a later step has been answered.
  */
-export function lessonEvidence(record: Pick<LessonRecord, 'id' | 'mode' | 'started' | 'updated' | 'finished'>, d: LessonDigest, concept: Pick<ConceptIn, 'id' | 'area'>, isPrivate = false): { steps: ConceptIn[]; events: EvidenceIn[] } {
+export function lessonEvidence(record: Pick<LessonRecord, 'id' | 'mode' | 'started' | 'updated' | 'finished'> & Pick<Partial<LessonRecord>, 'threads'>, d: LessonDigest, concept: Pick<ConceptIn, 'id' | 'area'>, isPrivate = false): { steps: ConceptIn[]; events: EvidenceIn[] } {
   const source = `lesson:${record.id}`
   const shared = isPrivate ? { private: true } : {}
   const events: EvidenceIn[] = []
   const teach = record.mode === 'teach'
   if (teach) events.push({ concept: concept.id, source, pos: 'taught', kind: 'taught', at: record.started, weight: record.finished ? 1 : 0.6, ...shared })
+  // A side thread folded as understood (shared/lessonThreads): light evidence that it was taught, never a mark
+  ;(record.threads ?? []).forEach((t) => {
+    if (t.understood && t.messages.some((m) => m.role === 'user')) events.push({ concept: concept.id, source, pos: `thread:${t.id}`, kind: 'taught', at: t.updated, weight: THREAD_WEIGHT, ...shared })
+  })
   const marked = d.asked.map((a, i) => ({ ...a, i })).filter((a): a is typeof a & { mark: keyof typeof KIND } => !!a.mark)
   for (const a of marked) events.push({ concept: concept.id, source, pos: `q${a.i}`, kind: KIND[a.mark], at: record.updated, weight: 1, ...shared })
 

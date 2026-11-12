@@ -52,7 +52,9 @@ async function writeLesson(input: Omit<LessonRecord, 'started' | 'updated' | 'pa
   waitingVisuals.delete(input.id)
   const { visuals: _sent, ...rest } = input as typeof input & { visuals?: unknown }
   void _sent
-  const record: LessonRecord = { ...rest, started, updated: Date.now(), page, finished: input.finished || prev?.finished, ...(Object.keys(visuals).length ? { visuals } : {}) }
+  // Side threads (shared/lessonThreads) come with the turns; a save without them keeps those kept already
+  const threads = input.threads ?? prev?.threads
+  const record: LessonRecord = { ...rest, started, updated: Date.now(), page, finished: input.finished || prev?.finished, ...(Object.keys(visuals).length ? { visuals } : {}), ...(threads?.length ? { threads } : {}) }
   await fs.mkdir(absPath(DIR), { recursive: true })
   await writeText(fileFor(record.id), JSON.stringify(record))
   await writeText(page, lessonMarkdown(record))
