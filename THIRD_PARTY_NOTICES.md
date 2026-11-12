@@ -1258,11 +1258,10 @@ SOFTWARE.
 
 ## Grammars and colour themes (bundled through @shikijs/langs and @shikijs/themes)
 
-Each is loaded only when a file in its language opens, and keeps its upstream licence (permissive: MIT unless tm-grammars' index says otherwise):
+Each is loaded only when a file in its language opens. Licences checked one by one in tm-grammars 1.32.22's index (and, for YAML, the bundle's own README):
 
-- Python: MagicPython (https://github.com/MagicStack/MagicPython)
-- JavaScript and TypeScript: TypeScript-TmLanguage (https://github.com/microsoft/TypeScript-TmLanguage)
-- C: better-c-syntax (https://github.com/jeff-hykin/better-c-syntax)
-- Shell: better-shell-syntax (https://github.com/jeff-hykin/better-shell-syntax)
-- Go, Rust, Java, SQL, JSON, YAML, HTML, CSS, Markdown, Kotlin, Swift, C#, R and Scala: the grammars VS Code and its language extensions ship, as collected in shiki's tm-grammars (https://github.com/shikijs/textmate-grammars-themes)
+- MIT, as shipped in VS Code (https://github.com/microsoft/vscode): Python, JavaScript, TypeScript, C, Go, Rust, Java, SQL, Shell, JSON, HTML, CSS, Markdown and C#
+- MIT: Kotlin (https://github.com/fwcd/vscode-kotlin), Swift (https://github.com/jtbandes/swift-tmlanguage), R (https://github.com/posit-dev/positron), Scala (https://github.com/scala/vscode-scala-syntax)
+- YAML (https://github.com/textmate/yaml.tmbundle), under TextMate's bundle licence: "Permission to copy, use, modify, sell and distribute this software is granted. This software is provided "as is" without express or implied warranty, and with no claim as to its suitability for any purpose."
+- C++ and Ruby are not bundled: they embed further grammars (GLSL among them) whose licence the index doesn't state, so they keep Monaco's own highlighting.
 - Themes: Dark+ and Light+, Solarized Light and Monokai, as VS Code ships them (https://github.com/microsoft/vscode, MIT)
