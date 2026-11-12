@@ -137,13 +137,10 @@
   fill: var(--accent);
 }
 .lt-card {
-  background: linear-gradient(180deg, var(--bg-raised), var(--bg-inset));
+  background: var(--bg-raised);
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 14px 16px 12px;
-  box-shadow:
-    0 1px 0 color-mix(in srgb, var(--ink) 3%, transparent) inset,
-    0 12px 32px rgba(0, 0, 0, 0.16);
   opacity: 0;
   transform: translateY(-6px);
   transition:
@@ -325,36 +322,36 @@
   gap: 8px;
   background: var(--bg);
   border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  padding: 6px 6px 6px 12px;
-  transition:
-    border-color 0.2s,
-    box-shadow 0.2s;
+  border-radius: 10px;
+  padding: 5px 5px 5px 0;
+  transition: border-color 0.15s;
 }
+.lt-composer:hover,
 .lt-composer:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--ink-muted);
 }
-.lt-composer textarea {
+/* The box is the composer: the field inside it has no box of its own */
+.lt-composer textarea,
+.lt-composer textarea:hover,
+.lt-composer textarea:focus {
   flex: 1;
   resize: none;
   border: 0;
   outline: none;
   background: transparent;
+  box-shadow: none;
+  border-radius: 0;
   color: var(--ink);
-  font: 15px/1.45 var(--font-ui);
-  padding: 6px 0;
-  min-height: 22px;
+  font: 400 14.5px/22px var(--font-ui);
+  padding: 4px 0 4px 12px;
+  min-height: 30px;
   max-height: 140px;
 }
-.lt-composer textarea:focus-visible {
-  outline: none;
-}
 .lt-send {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   flex: none;
-  border-radius: 9px;
+  border-radius: 7px;
   display: grid;
   place-items: center;
   background: var(--accent);
@@ -489,16 +486,35 @@
   box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
-/* Above the answer box while a thread is open */
+/* While a thread is open the answer box stops floating, so the thread has the page; this pill
+   floats instead, at the bottom of the view until the answer box comes up under it */
+.s-answer.lt-resting,
+.s-goon.lt-resting {
+  position: relative;
+  bottom: auto;
+}
+.lt-back-dock {
+  position: sticky;
+  bottom: 12px;
+  height: 0;
+  margin-top: -16px;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.lt-back-dock.open {
+  height: 46px;
+  margin-top: -8px;
+}
 .lt-back {
   position: absolute;
-  left: 50%;
-  top: -48px;
-  z-index: 3;
+  bottom: 4px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   font-size: 13px;
+  white-space: nowrap;
   background: var(--lt-raised-2);
   border: 1px solid var(--line-strong);
   color: var(--ink);
@@ -507,7 +523,7 @@
   box-shadow: var(--pop-shadow, var(--shadow));
   opacity: 0;
   pointer-events: none;
-  transform: translate(-50%, 6px);
+  transform: translateY(6px);
   transition:
     opacity 0.2s var(--lt-ease),
     transform 0.25s var(--lt-spring);
@@ -515,7 +531,10 @@
 .lt-back.show {
   opacity: 1;
   pointer-events: auto;
-  transform: translate(-50%, 0);
+  transform: none;
+}
+.lt-back:hover {
+  border-color: var(--ink-muted);
 }
 
 /* The answer box's hint: a question typed where an answer goes */

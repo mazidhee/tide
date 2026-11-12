@@ -249,7 +249,9 @@ function ThreadCard(p: SlotProps) {
     stick.current = true
     p.onSend(q)
   }
-  const waiting = streaming && last?.role === 'assistant' && !last.content && !p.steps?.length
+  // Only what the tutor did with its tools (ran code, looked something up): not which model is answering
+  const tools = p.steps?.filter((x) => x.kind !== 'helper')
+  const waiting = streaming && last?.role === 'assistant' && !last.content && !tools?.length
   return (
     <div className="lt-card">
       <div className="lt-head">
@@ -282,9 +284,9 @@ function ThreadCard(p: SlotProps) {
             <div key={i} className="lt-msg">
               <TutorAvatar />
               <div>
-                {i === thread.messages.length - 1 && !!p.steps?.length && (
+                {i === thread.messages.length - 1 && !!tools?.length && (
                   <ul className="work-log lt-steps">
-                    {p.steps.map((s) => (
+                    {tools.map((s) => (
                       <li key={s.id} className={`step ${s.status}`}>
                         {s.status === 'running' ? <span className="spinner" /> : <Icon name={s.kind === 'run_code' || s.kind === 'run_sql' ? 'terminal' : s.kind === 'web_search' ? 'globe' : 'search'} size={13} />}
                         <span className="step-label">{s.label}</span>
@@ -358,7 +360,7 @@ function ThreadCard(p: SlotProps) {
           </button>
         )}
         <span className="lt-keys">
-          <kbd>↵</kbd> ask · <kbd>⇧↵</kbd> new line · <kbd>Esc</kbd> back
+          <kbd>↵</kbd> ask · <kbd>Esc</kbd> back
         </span>
       </div>
     </div>

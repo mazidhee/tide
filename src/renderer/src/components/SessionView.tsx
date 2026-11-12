@@ -934,17 +934,39 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   }
 
   /** Opens a thread under the output at turn `at`: the one already there, or a new one */
-  const openThreadAt = (at: number, quote?: string, first?: string) => {
+  const openThreadAt = (at: number, quote?: string, first?: string, id?: string) => {
     const mine = threadsRef.current.filter((t) => t.at === at)
-    const had = quote ? mine.filter((t) => t.quote === quote).pop() : mine.pop()
+    const had = id ? mine.find((t) => t.id === id) : quote ? mine.filter((t) => t.quote === quote).pop() : mine.pop()
     if (openThreadRef.current && openThreadRef.current !== had?.id) foldThread(false, true)
     const t = had ?? newThread(turnsRef.current, at, quote, currentAskRef.current?.prompt)
     if (!had) setThreads((list) => [...list, t])
     setOpenThread(t.id)
     openThreadRef.current = t.id
     if (first) askInThread(t.id, first, t)
-    setTimeout(() => reveal(columnRef.current?.querySelector(`[data-thread-id="${t.id}"]`), { block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' }), 120)
+    setTimeout(() => revealThread(t.id), 120)
   }
+
+  /** Brings the open thread into view above the answer box, which stays at the bottom of the lesson over it */
+  const revealThread = (id: string, behavior: ScrollBehavior = reducedMotion() ? 'auto' : 'smooth') => {
+    const slot = columnRef.current?.querySelector<HTMLElement>(`[data-thread-id="${id}"]`)
+    const box = slot?.closest<HTMLElement>('.session-scroll')
+    if (!slot || !box) return
+    const view = box.getBoundingClientRect()
+    // Where its bottom will be once it has unfolded, and where it must end: above the floating Back pill
+    const top = slot.getBoundingClientRect().top
+    const bottom = top + (slot.querySelector<HTMLElement>('.lt-thread')?.scrollHeight ?? slot.scrollHeight)
+    const limit = view.bottom - 72
+    // Above the view (reopened from further down): its top comes into view; below: its bottom does, without losing its top
+    const by = top < view.top + 24 ? top - view.top - 24 : Math.min(bottom - limit, top - view.top - 24)
+    if (Math.abs(by) > 4) box.scrollBy({ top: by, behavior })
+  }
+  // A reply growing in the open thread keeps it in view
+  const openGrowth = threads.find((t) => t.id === openThread)
+  const openSize = openGrowth ? openGrowth.messages.length * 100000 + (openGrowth.messages.at(-1)?.content.length ?? 0) : 0
+  useEffect(() => {
+    if (openGrowth) revealThread(openGrowth.id, 'auto')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Math.floor(openSize / 400)])
 
   const noteThread = (t: LessonThread) => {
     const text = threadTakeaway(t)
@@ -1505,7 +1527,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     onSend={(q) => askInThread(th.id, q)}
                     onRetry={() => retryThread(th.id)}
                     onFold={(understood) => foldThread(understood)}
-                    onReopen={() => openThreadAt(th.at, th.quote)}
+                    onReopen={() => openThreadAt(th.at, th.quote, undefined, th.id)}
                     onNotes={() => noteThread(th)}
                   />
                 </div>
@@ -1523,9 +1545,13 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             </div>
           )}
 
-          {currentAsk && (
-            <div className="s-answer">
+          {(currentAsk || carryOn) && (
+            <div className={`lt-back-dock${openThread ? ' open' : ''}`}>
               <BackPill show={!!openThread} onBack={() => foldThread(false)} />
+            </div>
+          )}
+          {currentAsk && (
+            <div className={`s-answer${openThread ? ' lt-resting' : ''}`}>
               <AnswerHint
                 show={hint}
                 question={currentAsk.prompt.replace(/[*_`$#>]/g, '').replace(/\s+/g, ' ').trim()}
@@ -1660,8 +1686,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           )}
 
           {carryOn && (
-            <div className="s-goon">
-              <BackPill show={!!openThread} onBack={() => foldThread(false)} />
+            <div className={`s-goon${openThread ? ' lt-resting' : ''}`}>
               {asking ? (
                 <>
                   <textarea

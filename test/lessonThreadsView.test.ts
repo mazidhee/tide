@@ -53,6 +53,7 @@ beforeAll(() => {
   ;(window as unknown as { tideEvents: unknown }).tideEvents = stub(['events'])
   window.matchMedia = ((q: string) => ({ matches: q.includes('reduce'), media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} })) as unknown as typeof window.matchMedia
   Element.prototype.scrollTo = function () {}
+  Element.prototype.scrollBy = function () {}
   ;(window as unknown as { requestAnimationFrame: (f: () => void) => number }).requestAnimationFrame = (f) => setTimeout(f, 0) as unknown as number
 })
 afterEach(() => {
