@@ -18,26 +18,12 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - Teaching blocks: physics, geometry and matrices, regex, chess search, SQL tidy
 - Courses from GitHub: 52 courses (zoomcamps, OSSU, Made With ML, Zero to Hero, d2l…), taught from their own text, notebooks runnable
 - A VS Code-like code editor: Python IntelliSense (basedpyright), VS Code highlighting, explorer, tabs, Problems, Tests, ⌘P
-- Claude teaches (your plan): Sonnet turns, Opus marking and plans, Tide's tools over MCP; private notebooks stay on Gemma
+- Claude teaches (your plan): Sonnet turns, Opus marking and plans, Haiku background; Tide's tools over MCP (notes, code, SQL, courses, transcripts, flashcards, recall); web search for non-private lessons; usage view; Claude Code in your terminal can use Tide (Settings › Models); private notebooks stay on Gemma
 - Faster lessons: off-thread index, cached rendering, steadier prompt cache, idle unload
 - The redesign, with the classic design in Settings
 
 ## Now
 
-- [ ] **Claude as Tide's tutor, on your Ultra plan, joined to Tide through MCP.** Part 1 installed 12 Nov: lessons and chat on Claude (Sonnet teaches, Opus marks and plans), Tide's MCP tools, privacy routing, usage in Connections. Part 2 next: background work on Haiku, readings, flashcard and recall tools, course and transcript search, web search, the Ghostty connector. Claude becomes the main teacher and Tide its hands and memory, instead of routing to limited free cloud models. Tide runs your own logged-in Claude Code (`claude -p`, unmodified, no API key) and never reads or copies your login.
-  - Tide serves Claude through MCP (Model Context Protocol, the standard way to give Claude tools). With it, Claude can:
-    - search and read your notes, books, courses and transcripts
-    - run code and SQL in Tide's sandbox
-    - show readings, simulations, diagrams and videos in the lesson
-    - mark answers into What you know
-    - schedule recall
-    - make flashcards
-    - see your roadmap, aims and past lessons, so it remembers you
-  - Claude's own web search and page reading are used for lessons that aren't private.
-  - Models: Opus for teaching and marking by default, Sonnet when speed matters, Haiku for background work. Gemma stays for private notebooks and Metabase (never sent out), offline use, and near your limit.
-  - One Claude process per lesson, kept running, so answers stream in about 2 s and the lesson stays cached. Your other connectors and settings are kept out of it. Any API key in the environment is stripped so your plan is used.
-  - The same MCP server registered in Claude Code (`claude mcp add --scope user tide …`), so in Ghostty Claude can teach from your notes, run your code in Tide and record progress back to Tide.
-  - Usage shown in Connections; choose per notebook or per lesson which engine teaches.
 - [ ] **Claude: visuals made for each concept.** Claude writes a custom interactive explainer for whatever you're stuck on (backprop, B-tree splits, attention, a market shift). It runs in a sandboxed frame inside the lesson, beyond the 11 fixed simulation kinds.
 - [ ] **Claude: exercises checked before you see them.** Each problem comes with tests and a reference solution, run in Tide's sandbox first, so every exercise is hard, fair and never broken.
 - [ ] **Claude: a tutor that remembers you.** A learner profile in your vault (misconceptions, pace, what clicked), kept up by Claude and read with your past lessons and mistakes before each session.
@@ -72,6 +58,7 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - [ ] **Better web clipper and search.** Compare Defuddle with the current clipper, and try a reranker; adopt only if the numbers win.
 - [ ] **Live preview leftovers.** The properties block at the top of a note, embedded notes, and tables and maths inside lists.
 - [ ] **Small fixes.**
+  - Claude: marking waits 4–7 s while Opus thinks; try a lower effort setting for marking. Other background jobs (margin notes and the like) still run on Gemma.
   - Code editor: pandas parameter types show "Unknown" until pandas-stubs is in Tide's Python; rename only changes open files; ⌘⇧O is taken by Add Files.
   - Course lessons: Gemma often writes the plan before probing; "Show me" on a course's first step shows the reading again.
   - Course notebooks needing IPython, data files or internet can't run yet; homework has no generated tests.

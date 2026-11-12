@@ -132,3 +132,58 @@ export async function startMcp(port = 0, token = randomBytes(24).toString('base6
 }
 
 export const mcpHandle = () => handle
+
+// ---------- Claude Code in a terminal ----------
+
+/** The port Tide's MCP server keeps when Claude Code in a terminal is set up to use it (opt-in) */
+export const TERMINAL_PORT = 47615
+const TOKEN_KEY = 'claude-terminal'
+
+/** A token that outlives a launch, for the terminal's registration; kept in the Keychain like other keys */
+async function terminalToken(): Promise<string> {
+  const { getKey, setKey } = await import('./cloud')
+  let t = getKey(TOKEN_KEY)
+  if (!t) {
+    t = randomBytes(24).toString('base64url')
+    setKey(TOKEN_KEY, t)
+  }
+  return t
+}
+
+/** The server as the settings want it: the fixed port and lasting token when the terminal is set up, else a random port and a token for this launch */
+export async function ensureMcp(): Promise<McpHandle> {
+  if (handle) return handle
+  const { getSettings } = await import('./settings')
+  const port = getSettings().ai.claude?.terminalPort
+  return port ? startMcp(port, await terminalToken()) : startMcp()
+}
+
+/** The command that registers Tide's server with Claude Code for the user's terminal */
+export const mcpAddArgs = (port: number, token: string) => ['mcp', 'add', '--scope', 'user', '--transport', 'http', 'tide', `http://127.0.0.1:${port}/mcp`, '--header', `Authorization: Bearer ${token}`]
+
+/**
+ * Sets up (or takes away) Tide's tools for Claude Code in a terminal: a fixed port and a lasting
+ * token, and `claude mcp add --scope user … tide` run with the user's own Claude Code. The tools
+ * work while Tide is open.
+ */
+export async function setTerminal(on: boolean, run: (args: string[]) => Promise<string>): Promise<{ on: boolean; port?: number; output: string }> {
+  const { getSettings, updateSettings } = await import('./settings')
+  const ai = getSettings().ai
+  await run(['mcp', 'remove', '--scope', 'user', 'tide']).catch(() => '')
+  // The server moves (to the fixed port, or back to a random one): lessons' processes start again
+  // on it, from their transcript
+  const { stopClaude } = await import('./claudeEngine')
+  if (!on) {
+    updateSettings({ ai: { ...ai, claude: { ...ai.claude, terminalPort: undefined } } })
+    stopClaude()
+    await handle?.close()
+    return { on: false, output: 'Removed Tide from Claude Code.' }
+  }
+  const port = ai.claude?.terminalPort ?? TERMINAL_PORT
+  updateSettings({ ai: { ...ai, claude: { ...ai.claude, terminalPort: port } } })
+  stopClaude()
+  if (handle && handle.port !== port) await handle.close()
+  await ensureMcp()
+  const output = await run(mcpAddArgs(port, await terminalToken()))
+  return { on: true, port, output: output.replace(/Bearer [\w-]+/g, 'Bearer …') }
+}

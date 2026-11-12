@@ -15,6 +15,8 @@ export interface ClaudeSettings {
   models?: Partial<Record<ClaudeRole, ClaudeModel>>
   /** Where the claude command is, when it isn't in a usual place */
   path?: string
+  /** Tide's tools are registered with Claude Code for the terminal, on this fixed port (off when unset) */
+  terminalPort?: number
 }
 
 export interface ClaudeStatusView {
@@ -26,6 +28,8 @@ export interface ClaudeStatusView {
   limitedUntil?: number
   limit?: { status: string; utilization?: number; window?: string; resetsAt?: number } | null
   live: { key: string; model: string; turns: number; lastUsed: number }[]
+  /** The fixed port Claude Code in the terminal reaches Tide on, when set up */
+  terminalPort?: number
 }
 
 export interface ClaudeUseRecord {
@@ -734,6 +738,8 @@ export interface TideApi {
     status(fresh?: boolean): Promise<ClaudeStatusView>
     /** Each Claude call in the last `days` days (default 1) */
     usage(days?: number): Promise<ClaudeUseRecord[]>
+    /** Registers Tide's tools with Claude Code for the terminal (claude mcp add), or removes them */
+    terminal(on: boolean): Promise<{ on: boolean; port?: number; output: string }>
   }
   connections: {
     list(fresh?: boolean): Promise<import('./connections').Connection[]>

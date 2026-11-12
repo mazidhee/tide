@@ -280,7 +280,12 @@ Important topics, projects or practice that are missing for the goal this roadma
 What to drop or move to "later" so the core path gets done.
 ## Next four weeks
 A concrete plan: which sections and topics, and one project.`
-    for await (const t of streamDraft([{ role: 'system', content: 'You review learning plans frankly and specifically. No filler.' }, { role: 'user', content: prompt }], new AbortController().signal, 2000, 'planning')) {
+    const system = 'You review learning plans frankly and specifically. No filler.'
+    const signal = new AbortController().signal
+    const { draftWithClaude } = await import('./claudeEngine')
+    // A private project's roadmap is reviewed on this Mac
+    const secret = await import('./projects').then((m) => m.privatePath(outlinePath)).catch(() => true)
+    for await (const t of draftWithClaude(system, prompt, 'background', signal, () => streamDraft([{ role: 'system', content: system }, { role: 'user', content: prompt }], signal, 2000, 'planning'), secret)) {
       emit({ id, type: 'delta', text: t })
     }
     emit({ id, type: 'done' })

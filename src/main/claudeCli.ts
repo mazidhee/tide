@@ -83,6 +83,8 @@ export interface ClaudeUsage {
   cacheRead: number
   cacheWrite: number
   costUsd: number
+  /** Of the output, tokens spent thinking */
+  thinking?: number
 }
 
 /** What one line of stream-json output means for a turn */
@@ -90,6 +92,8 @@ export type ClaudeEvent =
   | { type: 'init'; model: string; tools: string[]; mcp: { name: string; status: string }[] }
   | { type: 'text'; text: string }
   | { type: 'message-start' }
+  /** The model is thinking before it writes (its thoughts aren't shown) */
+  | { type: 'thinking' }
   | { type: 'tool'; id: string; name: string; input: unknown }
   | { type: 'rate-limit'; status: string; resetsAt?: number; utilization?: number; window?: string }
   | { type: 'result'; ok: boolean; text: string; error?: string; usage: ClaudeUsage; ms: number; firstTokenMs?: number; model?: string }
@@ -106,6 +110,7 @@ export function parseLine(line: string): ClaudeEvent | null {
     const e = j.event ?? {}
     if (e.type === 'content_block_delta' && e.delta?.type === 'text_delta' && !j.parent_tool_use_id) return { type: 'text', text: String(e.delta.text ?? '') }
     if (e.type === 'message_start' && !j.parent_tool_use_id) return { type: 'message-start' }
+    if (e.type === 'content_block_delta' && e.delta?.type === 'thinking_delta' && !j.parent_tool_use_id) return { type: 'thinking' }
     return { type: 'other' }
   }
   if (j.type === 'system' && j.subtype === 'init') return { type: 'init', model: String(j.model ?? ''), tools: j.tools ?? [], mcp: j.mcp_servers ?? [] }
@@ -126,7 +131,7 @@ export function parseLine(line: string): ClaudeEvent | null {
       ok: j.subtype === 'success' && !j.is_error,
       text: String(j.result ?? ''),
       error: j.subtype !== 'success' || j.is_error ? String(j.result || (j.errors ?? []).join('; ') || j.subtype || 'Claude stopped') : undefined,
-      usage: { input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0, costUsd: j.total_cost_usd ?? 0 },
+      usage: { input: u.input_tokens ?? 0, output: u.output_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0, costUsd: j.total_cost_usd ?? 0, ...(u.output_tokens_details?.thinking_tokens ? { thinking: u.output_tokens_details.thinking_tokens } : {}) },
       ms: j.duration_ms ?? 0,
       firstTokenMs: j.ttft_ms,
       // modelUsage adds up the whole process, every model it has used: the caller knows which one this turn ran on

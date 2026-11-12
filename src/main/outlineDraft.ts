@@ -119,15 +119,20 @@ ${work ? `${work}\n` : ''}- [ ] Project: the phase's project, specific to the le
     ]
       .filter(Boolean)
       .join('\n\n')
-    for await (const text of streamDraft(
-      [
-        { role: 'system', content: SYSTEM },
-        { role: 'user', content: user }
-      ],
-      controller.signal,
-      // A long plan needs room: about 25 tokens a topic with its resources
-      req.plan ? Math.min(8000, 1500 + Math.round((req.plan.hoursPerWeek * req.plan.weeks) / 2.5) * 30) : req.size === 'deep' ? 6000 : 3500
-    , 'planning')) {
+    // On Claude's background model when Claude teaches (the outline holds only the topic and public research), else Gemma
+    const { draftWithClaude } = await import('./claudeEngine')
+    for await (const text of draftWithClaude(SYSTEM, user, 'background', controller.signal, () =>
+      streamDraft(
+        [
+          { role: 'system', content: SYSTEM },
+          { role: 'user', content: user }
+        ],
+        controller.signal,
+        // A long plan needs room: about 25 tokens a topic with its resources
+        req.plan ? Math.min(8000, 1500 + Math.round((req.plan.hoursPerWeek * req.plan.weeks) / 2.5) * 30) : req.size === 'deep' ? 6000 : 3500,
+        'planning'
+      )
+    )) {
       emit({ id: req.id, type: 'delta', text })
     }
     emit({ id: req.id, type: 'done' })
