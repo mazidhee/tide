@@ -53,11 +53,7 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
   - Gemma and other providers shown the same way.
 - [ ] **Claude thinks as hard as each job needs.** Long thinking for curriculum plans, proofs and hard design questions; quick replies for chat. Tuned by measurement, cheaper overall. Without Claude: no change.
 - [ ] **Claude's coding powers in lessons, projects and interviews.** Claude Code's own tools (read, edit, run, test, debug), limited to a project folder in Tide's sandbox. Real pair programming: building a feature together, a bug planted for you to find, your changes reviewed as diffs. Without Claude: today's code lessons, runner and tests.
-- [ ] **Teaching quality, measured.**
-  - Rubrics that name misconceptions, test transfer to new settings, and track hint dependence and confidence calibration (your Guessing, Unsure and Sure answers against what was right).
-  - Time to mastery.
-  - Opus reviewing finished lessons against a teaching rubric, and Tide adjusting how it teaches.
-  - The measures work for any model.
+- [x] **Teaching quality, measured.** From your real lessons, no test sessions. Misconceptions (named by Opus's marks, tracked to resolved), near and far transfer, hint dependence, confidence calibration (accuracy by Guessing, Unsure and Sure, Brier score), time to mastery and next-day and next-week retention, for any model. Opus reviews each finished lesson against a teaching rubric, and Tide adjusts how it teaches from a fixed set of changes, each with an off switch, on "How Tide is teaching you" in What you know.
 - [ ] **Low-level labs.**
   - A debugger (lldb) stepping through your program with a live view of registers, stack and memory.
   - A disassembler showing what your C becomes.

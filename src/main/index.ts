@@ -367,6 +367,9 @@ function registerIpc() {
   ipcMain.handle('visuals:kill', (e, host: string, reason: string) => killVisual(e.sender, String(host), String(reason ?? 'it stopped answering').slice(0, 120)))
   ipcMain.handle('visuals:metrics', (e) => visualMetrics(e.sender))
   handle('knowledge:view', async () => (await import('./knowledge')).knowledgeView())
+  handle('teaching:view', async () => (await import('./teaching')).teachingView())
+  handle('teaching:setAdjustment', async (id: import('@shared/teachingAdjust').AdjustmentId, on: boolean) => (await import('./teaching')).setAdjustment(id, !!on))
+  handle('teaching:review', async (lesson: string) => (await import('./teaching')).reviewLesson(String(lesson)))
   // ---- Videos (main/videos.ts) ----
   const videos = () => import('./videos')
   handle('videos:transcript', async (id: string, opts?: { path?: string; fetch?: boolean; course?: string; title?: string }) =>

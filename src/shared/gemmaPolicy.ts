@@ -37,6 +37,8 @@ export const JOB_ROUTES = {
   lessonPrep: { label: 'Preparing your next lesson', role: 'hard', privacy: 'text' },
   prepExercises: { label: 'Exercises and the opening for your next lesson', role: 'teach', privacy: 'text' },
   weeklyReview: { label: 'Your weekly review', role: 'hard', privacy: 'text' },
+  // Opus reviewing a finished lesson against the teaching rubric (main/teaching): Claude only, never Gemma
+  lessonReview: { label: 'Reviewing a finished lesson', role: 'mark', privacy: 'scope' },
   curriculum: { label: 'Sorting roadmaps, enriching topics, readings', role: 'background', privacy: 'flag' },
   workshop: { label: 'Guided project review', role: 'teach', privacy: 'flag' },
   // Pictures go to Claude too (main/imagePrep makes them ready): a photo of handwritten maths is marked by the marking model

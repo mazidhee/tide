@@ -264,6 +264,11 @@ const api: TideApi = {
     review: invoke('knowledge:review'),
     reviewAnswer: invoke('knowledge:reviewAnswer')
   },
+  teaching: {
+    view: invoke('teaching:view'),
+    setAdjustment: invoke('teaching:setAdjustment'),
+    review: invoke('teaching:review')
+  },
   warmup: {
     for: invoke('warmup:for'),
     grade: invoke('warmup:grade')

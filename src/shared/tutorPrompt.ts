@@ -53,7 +53,10 @@ export const TUTOR_LESSON_SYSTEM = TUTOR_SYSTEM.slice(0, TUTOR_SYSTEM.length - S
  * today's date, the web note, a session's tag rules, then what Tide knows about the learner. Pure,
  * so a benchmark can fix the date and leave the learner out.
  */
-export function stableSystem(base: string, o: { today: Date; web: boolean; session?: boolean; profile?: string; memory?: string }): string {
+export function stableSystem(
+  base: string,
+  o: { today: Date; web: boolean; session?: boolean; profile?: string; memory?: string; /** How Tide adjusted its teaching for this learner (shared/teachingAdjust), for a session */ teaching?: string }
+): string {
   return (
     (o.session && base === TUTOR_SYSTEM ? TUTOR_LESSON_SYSTEM : base) +
     `\nToday is ${o.today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}.` +
@@ -63,7 +66,8 @@ export function stableSystem(base: string, o: { today: Date; web: boolean; sessi
     // A session's tag rules are the same for every lesson, so they sit here, cached with the prompt
     (o.session ? `\n\n${SESSION_FORMAT}` : '') +
     (o.profile ? `\n\n${o.profile}` : '') +
-    (o.memory ? `\n\n${o.memory}` : '')
+    (o.memory ? `\n\n${o.memory}` : '') +
+    (o.session && o.teaching ? `\n\n${o.teaching}` : '')
   )
 }
 

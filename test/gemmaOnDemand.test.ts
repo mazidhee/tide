@@ -101,6 +101,7 @@ const EXPECTED: Record<string, string | null> = {
   lessonPrep: 'hard',
   prepExercises: 'teach',
   weeklyReview: 'hard',
+  lessonReview: 'mark',
   curriculum: 'background',
   workshop: 'teach',
   lessonChecks: null,

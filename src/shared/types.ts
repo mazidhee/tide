@@ -841,6 +841,14 @@ export interface TideApi {
     /** One question of a review was marked: scheduled in its own store and counted on the concept */
     reviewAnswer(concept: string, item: import('./review').ReviewItem, verdict: Verdict): Promise<void>
   }
+  /** How Tide is teaching you: measures from real lessons, Opus's lesson reviews, and the adjustments in the tutor's prompt (main/teaching) */
+  teaching: {
+    view(): Promise<import('./teachingAdjust').TeachingView>
+    /** Switches an adjustment off, or back on */
+    setAdjustment(id: import('./teachingAdjust').AdjustmentId, on: boolean): Promise<import('./teachingAdjust').TeachingView>
+    /** Asks Opus to review one lesson now (null when it can't: private, no Claude, too short) */
+    review(lesson: string): Promise<import('./teachingAdjust').LessonReview | null>
+  }
   /** The warm-up before a lesson: quick recall cards on what it builds on (shared/warmup) */
   warmup: {
     /** path: the note or folder the lesson is on, so a private project's concepts stay with private lessons */
