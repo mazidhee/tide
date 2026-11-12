@@ -743,7 +743,7 @@ const ROLE_TEXT: Record<ClaudeRole, { label: string; hint: string }> = {
   teach: { label: 'Lessons and chat', hint: 'Ordinary turns' },
   mark: { label: 'Marking', hint: 'Your answers, marked by a separate short call' },
   hard: { label: 'Hard turns', hint: 'Lesson plans, maths and proofs, and when you ask it to go deep' },
-  background: { label: 'Background work', hint: 'Titles, summaries' }
+  background: { label: 'Background work', hint: 'Roadmap outlines, chat titles and summaries' }
 }
 
 /** Claude, through your own Claude Code: whether it's set up, who teaches, and which model does what */
@@ -1230,26 +1230,24 @@ function ClaudeUsage({ offset }: { offset: number }) {
   const first = median(these.filter((r) => r.role === 'teach').map((r) => r.firstTokenMs ?? 0))
   return (
     <>
-      <Group title="Claude, on your plan" note="Your plan covers these calls: the dollar figure is what they would cost at API prices, as Claude Code reports it, to show which jobs use the most.">
+      <section className="set-group">
+        <h2 className="set-group-title">Claude, on your plan</h2>
         <div className="usage-tiles">
           <div className="usage-tile">
             <span className="usage-value">{these.length}</span>
-            <span className="usage-label">Calls, {tokens(total)} tokens</span>
+            <span className="usage-label">Calls, {tokens(total)} tokens{first ? `; first words in about ${(first / 1000).toFixed(1)} s` : ''}</span>
           </div>
           <div className="usage-tile">
             <span className="usage-value">{total ? `${Math.round((cached / total) * 100)}%` : '—'}</span>
             <span className="usage-label">Read from the cache</span>
           </div>
           <div className="usage-tile">
-            <span className="usage-value">{first ? `${(first / 1000).toFixed(1)} s` : '—'}</span>
-            <span className="usage-label">Typical wait for the first words</span>
-          </div>
-          <div className="usage-tile">
             <span className="usage-value">{plan?.limit?.utilization != null ? `${Math.round(plan.limit.utilization * 100)}%` : money(value)}</span>
             <span className="usage-label">{plan?.limit?.utilization != null ? `Of your plan’s ${plan.limit.window?.replace('_', '-') ?? ''} window` : 'At API prices'}</span>
           </div>
         </div>
-      </Group>
+        <p className="set-note">Your plan covers these calls. The dollar figures below are what they would cost at API prices, as Claude Code reports it ({money(value)} this month), to show which jobs use the most.</p>
+      </section>
       {these.length > 0 && (
         <Group title="Claude by day">
           <div className="set-pad">
