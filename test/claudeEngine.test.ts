@@ -89,6 +89,15 @@ describe('Claude lessons', () => {
     expect(r3).not.toContain(`pid ${/pid (\d+)/.exec(r1)![1]}`)
   })
 
+  it('Show me and Draw it offer Claude a custom visual; an ordinary message does not', async () => {
+    const shown = say([{ role: 'user', content: 'My question: Show me that as a picture.' }], { chatId: 'visual-1' })
+    expect(await shown.run).toContain('[offered a visual]')
+    const drawn = say([{ role: 'user', content: 'Draw this so I can see how it works: a diagram (mermaid) or a step-by-step trace table, then a one-line takeaway.' }], { chatId: 'visual-2' })
+    expect(await drawn.run).toContain('[offered a visual]')
+    const plain = say([{ role: 'user', content: 'What is a B-tree?' }], { chatId: 'visual-3' })
+    expect(await plain.run).not.toContain('[offered a visual]')
+  })
+
   it('refuses a private turn even if it got this far', async () => {
     privateTurn = true
     await expect(say([{ role: 'user', content: 'x' }], { labId: 'lesson:f' }).run).rejects.toThrow(/Private/)
@@ -185,5 +194,6 @@ describe('what a turn sends', () => {
     expect(engine.isAnswer(req('x = 3'), 'x = 3')).toBe(true)
     expect(engine.isAnswer(req('[hint]'), '[hint]')).toBe(false)
     expect(engine.isAnswer(req("I don't know"), "I don't know")).toBe(false)
+    expect(engine.isAnswer(req('My question: show me a split first'), 'My question: show me a split first')).toBe(false)
   })
 })

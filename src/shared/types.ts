@@ -760,6 +760,21 @@ export interface TideApi {
     /** Has the cloud model check one of the tutor's replies against the lesson's sources */
     challenge(topic: string, where: string | undefined, reply: string): Promise<import('./lessonCheck').ClaimCheck & { offline?: string }>
   }
+  /** Claude's visuals (shared/visuals): where they may run, repairs and fallbacks, a lesson's kept ones, and their frames' limits */
+  visuals: {
+    policy(scope: ChatScope): Promise<{ show: boolean; repair: boolean; why?: string }>
+    repair(req: { code: string; errors: string[]; scope: ChatScope }): Promise<{ code: string } | null>
+    fallback(req: { code: string; title: string; scope: ChatScope }): Promise<string | null>
+    cached(lessonId: string): Promise<Record<string, import('./visuals').VisualRecord>>
+    remember(lessonId: string, key: string, record: import('./visuals').VisualRecord): Promise<boolean>
+    /** Main watches this frame's process (memory, CPU) and kills it past its limits */
+    watch(host: string): Promise<void>
+    unwatch(host: string): Promise<void>
+    /** Kill a frame's process (it stopped answering) */
+    kill(host: string, reason: string): Promise<boolean>
+    metrics(): Promise<{ host: string; pid: number; mb: number; cpu: number }[]>
+    onKilled(cb: (e: { host: string; reason: string }) => void): () => void
+  }
   /** The knowledge map: every concept with how solid it is today, what is ready next, what is fading, and retention by week */
   knowledge: {
     view(): Promise<import('./knowledge').KnowledgeView>

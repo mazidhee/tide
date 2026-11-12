@@ -4,7 +4,10 @@ import { connectMetabase, disconnectMetabase, metabaseStatus } from './metabase'
 import { followVault } from './vaultHome'
 import { bankStatus, openingFor, prepare as prepareBank, previewFor, startBank, variantFor, warmups } from './bank'
 import { newStudyApiToken, setStudyApi, startStudyApi, stopStudyApi, studyApiStatus } from './studyApi'
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, protocol, shell, powerMonitor } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, protocol, session, shell, powerMonitor } from 'electron'
+import { APP_CSP } from '@shared/appCsp'
+import { VISUAL_SCHEME_PRIVILEGES, blockVisualRequests, denyVisualPermissions, devFrameSrc, guardVisualFrames, handleVisualProtocol, killVisual, unwatchVisual, visualMetrics, watchVisual } from './visualFrames'
+import { lessonVisuals, rememberVisual, repairVisual, visualFallback, visualPolicy } from './visuals'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import type { CompanyPrepRequest, OutlineDraftRequest, ChatRequest, ChatScope, LearningStatus, ReviewGrade, Settings, PdfHighlight, TutorThread } from '@shared/types'
@@ -95,7 +98,9 @@ import { getCards, reviewCard, saveCards } from './study'
 import { registerEditorIpc, runNow } from './workshopWatch'
 
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'vault', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } }
+  { scheme: 'vault', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } },
+  // Claude's visuals, each in a sandboxed frame of its own (main/visualFrames)
+  VISUAL_SCHEME_PRIVILEGES
 ])
 
 let win: BrowserWindow | null = null
@@ -125,6 +130,7 @@ function createWindow() {
   })
 
   win.once('ready-to-show', () => (testCopy ? win?.showInactive() : win?.show()))
+  guardVisualFrames(win.webContents)
 
   // Links in notes open in the user's real browser, never inside the app
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -169,6 +175,7 @@ function openFocusWindow(view: unknown) {
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false, contextIsolation: true, nodeIntegration: false, backgroundThrottling: !testCopy }
   })
   w.once('ready-to-show', () => (testCopy ? w.showInactive() : w.show()))
+  guardVisualFrames(w.webContents)
   w.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) shell.openExternal(url)
     return { action: 'deny' }
@@ -328,6 +335,16 @@ function registerIpc() {
   handle('lessons:save', (r: Parameters<typeof saveLesson>[0]) => saveLesson(r))
   handle('lessons:list', () => listLessons())
   handle('lessons:get', (id: string) => getLesson(id))
+  // Claude's visuals: main/visuals (policy, repair, fallback, kept with the lesson), main/visualFrames (limits)
+  handle('visuals:policy', (scope: unknown) => visualPolicy(scope))
+  handle('visuals:repair', (req: { code: string; errors: string[]; scope: unknown }) => repairVisual(req))
+  handle('visuals:fallback', (req: { code: string; title: string; scope: unknown }) => visualFallback(req))
+  handle('visuals:cached', (id: string) => lessonVisuals(id))
+  handle('visuals:remember', (id: string, key: string, record: unknown) => rememberVisual(id, key, record))
+  ipcMain.handle('visuals:watch', (e, host: string) => watchVisual(e.sender, String(host)))
+  ipcMain.handle('visuals:unwatch', (e, host: string) => unwatchVisual(String(host), e.sender))
+  ipcMain.handle('visuals:kill', (e, host: string, reason: string) => killVisual(e.sender, String(host), String(reason ?? 'it stopped answering').slice(0, 120)))
+  ipcMain.handle('visuals:metrics', (e) => visualMetrics(e.sender))
   handle('knowledge:view', async () => (await import('./knowledge')).knowledgeView())
   // ---- Courses from GitHub (main/courses.ts) ----
   const courses = () => import('./courses')
@@ -734,6 +751,12 @@ app.whenReady().then(() => {
   // After sleep, the server may have dropped what it had ready: get Gemma ready again before you ask
   powerMonitor.on('resume', () => setTimeout(() => ready().catch(() => {}), 4000))
   powerMonitor.on('unlock-screen', () => setTimeout(() => ready().catch(() => {}), 2000))
+
+  // Claude's visuals: their frames' documents, no permissions, no web requests, and (in development, which has no page CSP) frame-src
+  handleVisualProtocol()
+  denyVisualPermissions(session.defaultSession)
+  blockVisualRequests(session.defaultSession)
+  if (process.env.ELECTRON_RENDERER_URL) devFrameSrc(session.defaultSession, process.env.ELECTRON_RENDERER_URL, APP_CSP)
 
   // Serves vault files (images, PDFs) to the renderer: vault://file/<relative path>
   protocol.handle('vault', (req) => {

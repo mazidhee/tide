@@ -1,0 +1,140 @@
+/* Claude's visuals (lib/visuals): Tide's simulation frame around a sandboxed frame of the visual's own */
+
+.sim.visual .sim-body {
+  padding: 6px 0 0;
+}
+
+.visual-stage {
+  position: relative;
+  min-height: 72px;
+}
+
+.visual-frame {
+  display: block;
+  width: 100%;
+  height: 240px;
+  border: 0;
+  background: transparent;
+  color-scheme: normal;
+}
+
+/* Checked before it is shown: laid out where it will sit, but not seen and not reachable */
+.visual-frame.checking {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.visual-stage.pending,
+.visual-stage.parked {
+  margin: 0 16px 6px;
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--ink) 3.5%, transparent);
+}
+
+.visual-stage.pending::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ink) 4%, transparent), transparent);
+  background-size: 200% 100%;
+  animation: visual-wait 1.6s var(--ease) infinite;
+}
+
+@keyframes visual-wait {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .visual-stage.pending::after {
+    animation: none;
+  }
+}
+
+:root[data-model-busy] .visual-stage.pending::after {
+  animation-play-state: paused;
+}
+
+.visual-status {
+  transition: color 160ms ease;
+}
+
+.sim.visual[data-state='checking'] .visual-status,
+.sim.visual[data-state='fixing'] .visual-status {
+  color: var(--ink-soft);
+}
+
+.visual-caption {
+  margin-bottom: 4px;
+}
+
+.visual-bar {
+  gap: 6px;
+}
+
+.visual-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 6px;
+}
+
+.visual-stepper[hidden] {
+  display: none;
+}
+
+.visual-stepper .sim-tour-count {
+  min-width: 44px;
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.visual-gap {
+  flex: 1 1 0;
+}
+
+.visual-note {
+  margin: 6px 16px 4px !important;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  text-wrap: pretty;
+}
+
+.visual-fallback {
+  padding: 6px 16px 8px;
+}
+
+.visual-code {
+  margin: 4px 16px 12px;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.visual-code summary {
+  cursor: pointer;
+}
+
+.visual-code pre {
+  max-height: 240px;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border-radius: var(--radius-s);
+  background: var(--code-bg);
+  font-family: var(--font-code);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+.sim.visual:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

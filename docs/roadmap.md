@@ -19,12 +19,12 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - Courses from GitHub: 52 courses (zoomcamps, OSSU, Made With ML, Zero to Hero, d2l…), taught from their own text, notebooks runnable
 - A VS Code-like code editor: Python IntelliSense (basedpyright), VS Code highlighting, explorer, tabs, Problems, Tests, ⌘P
 - Claude teaches (your plan): Sonnet turns, Opus marking and plans, Haiku background; Tide's tools over MCP (notes, code, SQL, courses, transcripts, flashcards, recall); web search for non-private lessons; usage view; Claude Code in your terminal can use Tide (Settings › Models); private notebooks stay on Gemma
+- Claude's visuals: a custom interactive explainer per concept, sandboxed (no network, no access to Tide), checked and repaired before showing, cached per lesson
 - Faster lessons: off-thread index, cached rendering, steadier prompt cache, idle unload
 - The redesign, with the classic design in Settings
 
 ## Now
 
-- [ ] **Claude: visuals made for each concept.** Claude writes a custom interactive explainer for whatever you're stuck on (backprop, B-tree splits, attention, a market shift). It runs in a sandboxed frame inside the lesson, beyond the 11 fixed simulation kinds.
 - [ ] **Claude: exercises checked before you see them.** Each problem comes with tests and a reference solution, run in Tide's sandbox first, so every exercise is hard, fair and never broken.
 - [ ] **Claude: a tutor that remembers you.** A learner profile in your vault (misconceptions, pace, what clicked), kept up by Claude and read with your past lessons and mistakes before each session.
 - [ ] **Claude: lesson prep while you're away.** Background prep before tomorrow's lesson: what's due, the best reading, exercises, a custom visual, a short plan. Plus a weekly review.

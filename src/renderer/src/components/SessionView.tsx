@@ -1,5 +1,6 @@
 import { testNames } from '@shared/codeTests'
 import { showMeOffered } from '@shared/showMe'
+import { ASK_VISUAL_EVENT, takeVisualNotes } from '../lib/visuals'
 import { TimeThis } from './TimeThis'
 import { drawSteps, stepsReached } from '@shared/project'
 import { parseCanvas, serializeCanvas } from '@shared/canvas'
@@ -84,6 +85,8 @@ const inFocusWindow = /[#&]focus=/.test(window.location.hash)
 export function SessionView({ mode, scope, topic, options, initialTurns, view }: { mode: SessionMode; scope: ChatScope; topic: string; options?: SessionSetup['options']; initialTurns?: { role: 'user' | 'assistant'; content: string }[]; view?: View }) {
   const ongoingKey = view ? sessionKey(view as { kind: string; mode?: string; topic?: string; nonce?: number }) : null
   // The record a lesson or quiz is kept under (lib/sessions.ts keepLesson): its answers are read from there
+  // The lesson's column: Claude's visuals in it report to the tutor
+  const columnRef = useRef<HTMLDivElement>(null)
   const recordId = view?.kind === 'session' && ongoingKey && (mode === 'teach' || mode === 'quiz') ? (view.lesson ?? lessonId(ongoingKey)) : undefined
   // The lesson's data lab: the tutor's run_sql and the queries you run in the lesson share it
   const labId = useRef(`lesson:${ongoingKey ?? uid()}`)
@@ -239,6 +242,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           ? markingNote(markNote(content), [...history].reverse().find((t) => t.role === 'assistant')?.content ?? '', setupRef.current.topic, teachesAsHumanities(setupRef.current.topic, setupRef.current.options?.subject))
           : null,
         whyNoteRef.current,
+        // What the learner did in Claude's visuals since the tutor last heard
+        ...takeVisualNotes(columnRef.current),
         mode === 'teach' && history.length > 2 ? notesNudge(history.filter((t) => t.role === 'assistant').map((t) => t.content), content) : null
       ].filter((n): n is string => !!n)
       if (notes.includes(whyNoteRef.current ?? '')) whyNoteRef.current = null
@@ -744,6 +749,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // tutor as your question, saying which part and what it showed
   const askAboutRef = useRef<(label: string) => void>(() => {})
   askAboutRef.current = (label) => submit(`${ASKED}In the simulation, explain ${label}: what it is doing here, and why it has that value.`)
+  const askVisualRef = useRef<(question: string) => void>(() => {})
+  askVisualRef.current = (question) => submit(`${ASKED}${question}`)
   useEffect(() => {
     const onAsk = (e: Event) => {
       const label = (e as CustomEvent<{ label?: string }>).detail?.label
@@ -752,8 +759,20 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       e.stopImmediatePropagation()
       askAboutRef.current(label)
     }
+    // Claude's visuals: "What's happening here?" and "Ask about this" go straight to the tutor, with what the visual shows
+    const onAskVisual = (e: Event) => {
+      const question = (e as CustomEvent<{ question?: string }>).detail?.question
+      if (!question || !columnRef.current?.contains(e.target as Node)) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      askVisualRef.current(question)
+    }
     document.addEventListener('tide:ask-about', onAsk, true)
-    return () => document.removeEventListener('tide:ask-about', onAsk, true)
+    document.addEventListener(ASK_VISUAL_EVENT, onAskVisual, true)
+    return () => {
+      document.removeEventListener('tide:ask-about', onAsk, true)
+      document.removeEventListener(ASK_VISUAL_EVENT, onAskVisual, true)
+    }
   }, [])
   const runMine = async (): Promise<RunResult | null> => {
     if (!currentAsk || running) return null
@@ -1083,7 +1102,11 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       <div className="doc-scroll session-scroll">
         <div
           className="session-column"
+          ref={columnRef}
           data-lab={labId.current}
+          // Claude's visuals (lib/visuals): where they may run, and the lesson that keeps them
+          data-visual-scope={JSON.stringify(scope)}
+          data-visual-lesson={recordId ?? ''}
           // [source-led] a reading's "Open in your library at page N"
           onClick={(e) => {
             const open = openReading(e.target)

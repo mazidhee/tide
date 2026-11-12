@@ -597,6 +597,26 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
       // step has a reading (Claude is interrupted, not stopped, so the lesson's process carries on)
       const led = req.session ? await import('./sourceLed').then((m) => m.sourceLedTurn(req)).catch(() => null) : null
       await claudeTurn(led ? led.request : req, led ? led.tap(emit) : emit, controller.signal, led?.signal)
+      // A picture asked for while a question waits was held: shown once it's checked against that
+      // question's hidden solution, or drawn again as the setup only (the same check as Gemma's)
+      if (waiting && holdShow && !controller.signal.aborted) {
+        holdShow = false
+        const what = givesAway(heldShow, waiting)
+        let picture = heldShow
+        if (what) {
+          const step = (label: string, status: 'running' | 'done') => emit({ id: req.id, type: 'step', step: { id: 'show-setup', kind: 'helper', label, status, depth: 0 } })
+          step('That picture showed the answer you are working on: drawing the setup only', 'running')
+          let again = ''
+          await claudeTurn({ ...req, messages: [...req.messages, { role: 'assistant', content: heldShow }, { role: 'user', content: setupOnlyNote(what) }] }, (e) => {
+            if (e.type === 'delta') again += e.text
+            else if (e.type === 'reset') again = ''
+            else if (e.type !== 'done' && e.type !== 'error') emit(e)
+          }, controller.signal).catch(() => {})
+          picture = again.trim() && !givesAway(again, waiting) ? again : WITHHELD
+          step(picture === WITHHELD ? 'Held the picture back: it gave the answer away' : 'Drew the setup only', 'done')
+        }
+        emit({ id: req.id, type: 'delta', text: picture })
+      }
       if (led && !controller.signal.aborted) led.settle(shown, emit)
       if (req.session && !controller.signal.aborted) emit({ id: req.id, type: 'replied' })
       emit({ id: req.id, type: 'done' })
