@@ -361,6 +361,17 @@ function GeneralSection() {
         <Row label="Library folder" hint="Saved links, videos, PDFs and docs go here, inside your notes folder.">
           <input className="set-input" defaultValue={settings.libraryFolder} aria-label="Library folder" onBlur={(e) => e.target.value.trim() && app.updateSettings({ libraryFolder: e.target.value.trim() })} />
         </Row>
+        <Row label="Notes open in" hint="Courses, readings and saved sources always open to read. A note you switch yourself opens the way you left it.">
+          <PillSegment
+            label="Notes open in"
+            value={settings.noteOpenMode ?? 'write'}
+            onChange={(v) => app.updateSettings({ noteOpenMode: v as 'write' | 'read' })}
+            options={[
+              { value: 'write', label: 'Write' },
+              { value: 'read', label: 'Read' }
+            ]}
+          />
+        </Row>
       </Group>
     </>
   )

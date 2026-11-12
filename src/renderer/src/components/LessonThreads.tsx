@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import type { AgentStep } from '@shared/types'
-import { asked, threadReplyText, type LessonThread } from '@shared/lessonThreads'
+import { asked, replyParts, type LessonThread } from '@shared/lessonThreads'
 import { Icon } from './Icon'
 import { ProfessorStill } from './Professor'
 
@@ -52,12 +52,23 @@ export function AskPill({ onAsk }: { onAsk(): void }) {
   )
 }
 
+/** Where a selection was made: a tutor's output (by its turn), or a reply in one of its threads */
+export interface SelectionAt {
+  turn: number
+  quote: string
+  thread?: string
+  reply?: number
+}
+
 /**
- * "Ask about this" over text selected in an output. Watches selections in the column; an output
- * is any element marked data-thread-out with its turn index, and a thread's own card never counts.
+ * "Ask about this" and "Explore later" over text selected in an output. Watches selections in the
+ * column; an output is any element marked data-thread-out with its turn index. In a thread's reply
+ * (data-thread-reply) only "Explore later" is offered: you are already asking there.
  */
-export function SelectionAsk({ column, onAsk }: { column: RefObject<HTMLElement | null>; onAsk(at: number, quote: string): void }) {
-  const [at, setAt] = useState<{ x: number; y: number; turn: number; quote: string } | null>(null)
+export function SelectionAsk({ column, onAsk, onExplore }: { column: RefObject<HTMLElement | null>; onAsk(at: number, quote: string): void; onExplore?(at: SelectionAt): void }) {
+  const [at, setAt] = useState<(SelectionAt & { x: number; y: number }) | null>(null)
+  const canExplore = useRef(!!onExplore)
+  canExplore.current = !!onExplore
   useEffect(() => {
     const root = column.current
     if (!root) return
@@ -67,11 +78,21 @@ export function SelectionAsk({ column, onAsk }: { column: RefObject<HTMLElement 
         const text = sel?.toString().trim() ?? ''
         const node = sel?.anchorNode
         const el = node ? (node.nodeType === 1 ? (node as Element) : node.parentElement) : null
-        const out = el?.closest<HTMLElement>('[data-thread-out]')
         const focus = sel?.focusNode ? (sel.focusNode.nodeType === 1 ? (sel.focusNode as Element) : sel.focusNode.parentElement) : null
-        if (!sel || !text || text.length > 300 || !out || !root.contains(out) || el?.closest('.lt-thread') || focus?.closest('[data-thread-out]') !== out) return setAt(null)
+        if (!sel || !text || text.length > 600) return setAt(null)
         const r = sel.getRangeAt(0).getBoundingClientRect()
-        setAt({ x: r.left + r.width / 2, y: r.top, turn: Number(out.dataset.threadOut), quote: text.replace(/\s+/g, ' ') })
+        const quote = text.replace(/\s+/g, ' ')
+        // In a thread's reply: kept to explore later, with the thread and the reply it came up in
+        const reply = el?.closest<HTMLElement>('[data-thread-reply]')
+        if (reply) {
+          const slot = reply.closest<HTMLElement>('[data-thread-id]')
+          const hung = slot?.closest<HTMLElement>('[data-thread-at]')
+          if (!canExplore.current || !slot || !root.contains(reply) || focus?.closest('[data-thread-reply]') !== reply) return setAt(null)
+          return setAt({ x: r.left + r.width / 2, y: r.top, turn: Number(hung?.dataset.threadAt ?? -1), quote, thread: slot.dataset.threadId, reply: Number(reply.dataset.threadReply) })
+        }
+        const out = el?.closest<HTMLElement>('[data-thread-out]')
+        if (!out || !root.contains(out) || el?.closest('.lt-thread') || focus?.closest('[data-thread-out]') !== out) return setAt(null)
+        setAt({ x: r.left + r.width / 2, y: r.top, turn: Number(out.dataset.threadOut), quote })
       })
     const onDown = (e: MouseEvent) => {
       if (!(e.target as Element)?.closest?.('.lt-sel-pop')) setAt(null)
@@ -87,20 +108,40 @@ export function SelectionAsk({ column, onAsk }: { column: RefObject<HTMLElement 
     }
   }, [column])
   if (!at) return null
+  const done = () => {
+    window.getSelection()?.removeAllRanges()
+    setAt(null)
+  }
+  const ask = !at.thread && at.quote.length <= 300
+  const width = (ask ? 128 : 0) + (onExplore ? 124 : 0)
   return (
-    <button
-      type="button"
-      className="lt-sel-pop"
-      style={{ left: Math.max(8, at.x - 64), top: Math.max(8, at.y - 44) }}
-      onClick={() => {
-        window.getSelection()?.removeAllRanges()
-        setAt(null)
-        onAsk(at.turn, at.quote)
-      }}
-    >
-      <ThreadGlyph />
-      Ask about this
-    </button>
+    <div className="lt-sel-pop" role="toolbar" aria-label="With the selected text" style={{ left: Math.max(8, at.x - width / 2), top: Math.max(8, at.y - 44) }}>
+      {ask && (
+        <button
+          type="button"
+          onClick={() => {
+            done()
+            onAsk(at.turn, at.quote)
+          }}
+        >
+          <ThreadGlyph />
+          Ask about this
+        </button>
+      )}
+      {onExplore && (
+        <button
+          type="button"
+          title="Keep this to explore later, in a short side lesson"
+          onClick={() => {
+            done()
+            onExplore(at)
+          }}
+        >
+          <Icon name="compass" size={13} />
+          Explore later
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -151,7 +192,10 @@ interface SlotProps {
   onRetry(): void
   onFold(understood: boolean): void
   onReopen(): void
-  onNotes(): void
+  /** "Save to notes" on one reply, by its index in the thread's messages */
+  onSaveReply(at: number): void
+  /** "Explore later" on one reply */
+  onExplore?(at: number): void
 }
 
 /** One thread under its output: the card while it's open, the folded line once it's done */
@@ -283,7 +327,7 @@ function ThreadCard(p: SlotProps) {
           ) : (
             <div key={i} className="lt-msg">
               <TutorAvatar />
-              <div>
+              <div data-thread-reply={i}>
                 {i === thread.messages.length - 1 && !!tools?.length && (
                   <ul className="work-log lt-steps">
                     {tools.map((s) => (
@@ -301,7 +345,7 @@ function ThreadCard(p: SlotProps) {
                     <i />
                   </span>
                 ) : (
-                  <div className="prose compact lt-tutor" dangerouslySetInnerHTML={{ __html: withCaret(p.render(threadReplyText(m.content)), streaming && i === thread.messages.length - 1) }} />
+                  <Reply {...p} at={i} content={m.content} writing={streaming && i === thread.messages.length - 1} />
                 )}
               </div>
             </div>
@@ -347,23 +391,51 @@ function ThreadCard(p: SlotProps) {
           <Icon name="check" size={13} />
           Got it · back to the lesson
         </button>
-        {p.notes && (
-          <button type="button" className={`btn small${thread.noted ? ' lt-done' : ''}`} onClick={p.onNotes} disabled={thread.noted || streaming || !thread.messages.some((m) => m.role === 'assistant' && m.content.trim())}>
-            {thread.noted ? (
-              <>
-                <Icon name="check" size={13} />
-                Added to notes
-              </>
-            ) : (
-              'Add to notes'
-            )}
-          </button>
-        )}
         <span className="lt-keys">
           <kbd>↵</kbd> ask · <kbd>Esc</kbd> back
         </span>
       </div>
     </div>
+  )
+}
+
+/**
+ * One tutor reply in a thread: what it says, any point it saved to your notes (marked as added),
+ * and, once it's written, small actions: save it to your notes as it is, or keep it to explore later.
+ */
+function Reply(p: SlotProps & { at: number; content: string; writing: boolean }) {
+  const { text, notes } = replyParts(p.content)
+  const saved = !!p.thread.saved?.includes(p.at)
+  const done = !p.writing && !!text.trim()
+  return (
+    <>
+      {(text || p.writing) && <div className="prose compact lt-tutor" dangerouslySetInnerHTML={{ __html: withCaret(p.render(text), p.writing && !notes.length) }} />}
+      {notes.map((n, k) => (
+        <div key={k} className="s-takeaway lt-takeaway">
+          <span className="s-takeaway-label">
+            <Icon name="note" size={12} />
+            {p.notes ? 'Added to your notes' : 'Key idea'}
+          </span>
+          <div className="prose compact" dangerouslySetInnerHTML={{ __html: p.render(n) }} />
+        </div>
+      ))}
+      {done && (p.notes || p.onExplore) && (
+        <div className="lt-acts">
+          {p.notes && (
+            <button type="button" className={`lt-act${saved ? ' on' : ''}`} onClick={() => p.onSaveReply(p.at)} disabled={saved} title={saved ? 'In your notes for this lesson' : 'Save this answer to your notes for this lesson'}>
+              <Icon name={saved ? 'check' : 'note'} size={12} />
+              {saved ? 'Saved to notes' : 'Save to notes'}
+            </button>
+          )}
+          {p.onExplore && (
+            <button type="button" className="lt-act" onClick={() => p.onExplore!(p.at)} title="Keep this to explore later in a short side lesson">
+              <Icon name="compass" size={12} />
+              Explore later
+            </button>
+          )}
+        </div>
+      )}
+    </>
   )
 }
 

@@ -580,6 +580,8 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
 
   // Problems are set through set_exercise, proven first (main/exercises), not written with their own checks
   if (req.session && req.instructions) req = { ...req, instructions: (await import('@shared/exercises')).forClaude(req.instructions) }
+  // A side thread saves to the lesson's notes with save_to_notes (main/tideMcpTools)
+  if (req.thread && req.instructions) req = { ...req, instructions: `${req.instructions}\n${(await import('@shared/lessonThreads')).THREAD_NOTE_TOOL}` }
   const { ctx, messages, mine, secret } = await buildTurn(req, emit, signal, req.session ? CLAUDE_LESSON_SYSTEM : CLAUDE_TUTOR_SYSTEM)
   // Checked again on what the turn actually holds: never send a private turn
   if (ctx.private || mine || secret) throw new ClaudeUnavailable('Private: this stays on your Mac')

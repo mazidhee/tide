@@ -14,6 +14,8 @@ export interface PageSettings {
   /** Free text instructions for the tutor on this page, e.g. "Quiz me before Friday" */
   tutorInstructions: string
   showResolved: boolean
+  /** Read or write, when you switched this note yourself: it opens that way again (shared/noteMode) */
+  mode?: 'write' | 'read'
 }
 
 const DEFAULTS: PageSettings = {

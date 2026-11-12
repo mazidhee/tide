@@ -337,6 +337,11 @@ function registerIpc() {
   handle('lessons:save', (r: Parameters<typeof saveLesson>[0]) => saveLesson(r))
   handle('lessons:list', () => listLessons())
   handle('lessons:get', (id: string) => getLesson(id))
+  // Explore later (main/explore): kept from lessons, for short side lessons
+  handle('explore:list', async () => (await import('./explore')).listExplore())
+  handle('explore:add', async (input: import('@shared/explore').ExploreInput) => (await import('./explore')).addExplore(input))
+  handle('explore:update', async (id: string, patch: Parameters<typeof import('./explore').updateExplore>[1]) => (await import('./explore')).updateExplore(id, patch))
+  handle('explore:remove', async (id: string) => (await import('./explore')).removeExplore(id))
   // Claude's visuals: main/visuals (policy, repair, fallback, kept with the lesson), main/visualFrames (limits)
   handle('visuals:policy', (scope: unknown) => visualPolicy(scope))
   handle('visuals:repair', (req: { code: string; errors: string[]; scope: unknown }) => repairVisual(req))
