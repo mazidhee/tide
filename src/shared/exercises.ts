@@ -377,6 +377,17 @@ export function fixAsk(tag: string, lastExercise?: BankProblem): string {
   return `<solution>${p.solution}</solution>\n\n<ask${attrs}>${body.trimEnd()}${tests}</ask>`
 }
 
+/** What Claude is told instead of the lesson format's rules on writing a problem's own solution, check and tests */
+export const CLAUDE_PROBLEM_RULE =
+  '- Every problem you set for the learner to work (a calculation, code to write, a query, a question to answer at length) goes through set_exercise first, the first problem too: give its proof and a common mistake, and when it is verified end your reply with <exercise id="…"/>. Tide writes the problem, its hidden <solution> and its tests into the lesson. Never write a problem\'s <solution>, <check> or ```tests yourself.'
+
+/** A lesson's instructions as Claude gets them: the rules for writing problems by hand become set_exercise */
+export function forClaude(instructions: string): string {
+  return instructions
+    .replace(/^- Before you set a problem, solve it yourself[^\n]*$/m, CLAUDE_PROBLEM_RULE)
+    .replace(/^- A code ask can carry hidden tests[^\n]*\n?/m, '')
+}
+
 /** Said to Claude after a check fails */
 export const repairNote = (id: string, why: string) =>
   `Not verified, so the learner won't see it (id ${id}). What failed:\n${why}\n\nFix it and call set_exercise again with repair_of="${id}" (one repair), or set a different exercise.`

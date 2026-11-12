@@ -17,7 +17,7 @@ const asked: string[] = []
 let haiku: (prompt: string) => string = () => ''
 vi.mock('../src/main/claudeEngine', () => ({ claudeOnce: async (prompt: string) => (asked.push(prompt), { text: haiku(prompt) }) }))
 
-const { verifyExercise, parseExercise, exerciseTap, stubFor, fixAsk } = await import('../src/shared/exercises')
+const { verifyExercise, parseExercise, exerciseTap, stubFor, fixAsk, forClaude } = await import('../src/shared/exercises')
 const { runCode } = await import('../src/main/runner')
 const { labQuery, labSchema } = await import('../src/main/lab')
 const { schemaText } = await import('../src/shared/lab')
@@ -363,4 +363,13 @@ describe('privacy', () => {
     expect(fixAsk('<ask type="code" lang="python">Write `total(xs)`.\n```tests\ndef test_a():\n    assert total([1]) == 1\n```</ask>', ex._exerciseState.lastShown.get(lab))).toBe('<ask type="code" lang="python">Write `total(xs)`.</ask>')
     expect(fixAsk('<ask type="short">Why?</ask>')).toBe('<ask type="short">Why?</ask>')
   }, LONG)
+
+  it("gives Claude set_exercise in place of the lesson format's hand-written solution, check and tests", async () => {
+    const { SESSION_FORMAT } = await import('../src/shared/session')
+    const before = `${SESSION_FORMAT}\n- A code ask can carry hidden tests in a \`\`\`tests block inside it, which the student doesn't see.\n- Next rule.`
+    const after = forClaude(before)
+    expect(after).not.toMatch(/<check lang="python">|A code ask can carry hidden tests/)
+    expect(after).toContain('goes through set_exercise first, the first problem too')
+    expect(after).toContain('- Next rule.')
+  })
 })

@@ -318,7 +318,8 @@ export async function prewarmClaude(req: Omit<TurnRequest, 'id'>): Promise<void>
   const { stablePrompt } = await import('./agent')
   const { CLAUDE_LESSON_SYSTEM, CLAUDE_TUTOR_SYSTEM, CLAUDE_WEB_NOTE } = await import('@shared/tutorPrompt')
   const web = req.web !== false
-  const system = (await stablePrompt(req.session ? CLAUDE_LESSON_SYSTEM : CLAUDE_TUTOR_SYSTEM, { ...req, id: 'prewarm' }, web, !!req.session)) + (web ? `\n\n${CLAUDE_WEB_NOTE}` : '')
+  const { forClaude } = await import('@shared/exercises')
+  const system = forClaude(await stablePrompt(req.session ? CLAUDE_LESSON_SYSTEM : CLAUDE_TUTOR_SYSTEM, { ...req, id: 'prewarm' }, web, !!req.session)) + (web ? `\n\n${CLAUDE_WEB_NOTE}` : '')
   const pk = poolKey(system, web)
   if (live.get(pk)?.alive) return
   // One waiting at a time
@@ -550,6 +551,8 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   const ready = await claudeReady()
   if (!ready.ready) throw new ClaudeUnavailable(ready.why ?? 'not ready')
 
+  // Problems are set through set_exercise, proven first (main/exercises), not written with their own checks
+  if (req.session && req.instructions) req = { ...req, instructions: (await import('@shared/exercises')).forClaude(req.instructions) }
   const { ctx, messages, mine, secret } = await buildTurn(req, emit, signal, req.session ? CLAUDE_LESSON_SYSTEM : CLAUDE_TUTOR_SYSTEM)
   // Checked again on what the turn actually holds: never send a private turn
   if (ctx.private || mine || secret) throw new ClaudeUnavailable('Private: this stays on your Mac')
@@ -562,7 +565,8 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
 
   // Claude's own web search and page reading, for a lesson with Web on (Claude never gets a private one)
   const web = req.web !== false
-  const system = String(messages[0].content) + (web ? `\n\n${CLAUDE_WEB_NOTE}` : '')
+  const { forClaude } = await import('@shared/exercises')
+  const system = forClaude(String(messages[0].content)) + (web ? `\n\n${CLAUDE_WEB_NOTE}` : '')
   const history = messages.slice(1)
   // Web on or off is fixed when a process starts: switching it starts another, from the transcript
   const key = lessonKey(req) + (web ? ':web' : '')
@@ -588,20 +592,24 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   const fresh = sent.fresh
   const users = history.filter((m) => m.role === 'user').length
 
+  // A query or a final answer is checked exactly first (the lab, SymPy), as on Gemma's lessons
+  const answering = isAnswer(req, said)
+  const exact = answering ? await import('./lessonGuard').then((g) => g.exactCheck(req)).catch(() => null) : null
+  const exactSaid = exact ? `\n\n${(await import('@shared/answerCheck')).exactNote(exact)}` : ''
+  if (exact) emit({ id: req.id, type: 'step', step: { id: nextStepId(), kind: 'helper', label: exact.kind === 'sql' ? (exact.result === 'match' ? 'Ran your query beside the reference: the same rows' : 'Ran your query beside the reference: the rows differ') : exact.result === 'match' ? 'Checked your final answer: it’s right' : 'Checked your final answer: it isn’t right yet', status: 'done', depth: 0 } })
   // An answer is marked first by the marking model, when it's stronger than the one teaching
   const markModel = claudeModel('mark', settings)
-  if (isAnswer(req, said) && rank(markModel) > rank(model)) {
+  if (answering && rank(markModel) > rank(model)) {
     const prev = text([...req.messages].reverse().find((m) => m.role === 'assistant')?.content)
     const id = nextStepId()
     emit({ id: req.id, type: 'step', step: { id, kind: 'helper', label: `${claudeLabel(markModel)} is marking your answer`, status: 'running', depth: 0 } })
-    // A query or a final answer is checked exactly first (the lab, SymPy), as on Gemma's lessons
-    const exact = await import('./lessonGuard').then((g) => g.exactCheck(req)).catch(() => null)
-    const exactSaid = exact ? `\n\n${(await import('@shared/answerCheck')).exactNote(exact)}` : ''
     const mark = await markAnswer(prev, said + exactSaid, markModel, signal).catch(() => null)
     verdict = mark?.verdict as typeof verdict
     emit({ id: req.id, type: 'step', step: { id, status: mark ? 'done' : 'error', detail: mark ? `${mark.verdict}, ${(mark.ms / 1000).toFixed(1)} s` : 'no mark: the tutor marks it' } as AgentStep })
     if (mark) markNote = `\n\n(Tide: ${claudeLabel(markModel)} marked this answer against your solution: verdict "${mark.verdict}", score ${mark.score}. Why: ${mark.why})`
   }
+  // No separate marker (the tutor is already the strongest model): the exact check goes to the tutor itself
+  if (exactSaid && !markNote) markNote = exactSaid
 
   const toolCtx: ToolContext = { signal, sources: ctx.sources, emitSources: ctx.emitSources, step: ctx.step, updateStep: ctx.updateStep, web: false, chatId: req.chatId, labId: req.labId ?? req.chatId }
   bindLesson(proc.binding, toolCtx)
