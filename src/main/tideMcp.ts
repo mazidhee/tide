@@ -43,6 +43,15 @@ async function allTools(): Promise<McpTool[]> {
   return tools
 }
 
+/**
+ * A pair-programming session in the IDE (key "ide:<session>") gets only the IDE's coding tools,
+ * confined to its project (main/ide/pair); every other caller gets the tutor's tools and none of them.
+ */
+async function toolsFor(lesson: string): Promise<McpTool[]> {
+  if (lesson.startsWith('ide:')) return (await import('./ide/pair')).IDE_TOOLS
+  return allTools()
+}
+
 export interface McpHandle {
   port: number
   token: string
@@ -85,9 +94,9 @@ export async function startMcp(port = 0, token = randomBytes(24).toString('base6
     }
     const lesson = String(req.headers['x-tide-lesson'] ?? '')
     const server = new Server({ name: 'tide', version: '0.1.0' }, { capabilities: { tools: {} }, instructions: 'Tide is the learner’s study app. Its tools search and read their notes, run code and SQL in its sandbox, and read and record what they know.' })
-    server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: (await allTools()).map(({ name, description, inputSchema }) => ({ name, description, inputSchema: inputSchema as { type: 'object' } })) }))
+    server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: (await toolsFor(lesson)).map(({ name, description, inputSchema }) => ({ name, description, inputSchema: inputSchema as { type: 'object' } })) }))
     server.setRequestHandler(CallToolRequestSchema, async (r) => {
-      const t = (await allTools()).find((x) => x.name === r.params.name)
+      const t = (await toolsFor(lesson)).find((x) => x.name === r.params.name)
       if (!t) return { content: [{ type: 'text', text: `No tool called ${r.params.name}.` }], isError: true }
       try {
         const text = await t.run((r.params.arguments ?? {}) as Record<string, unknown>, bindings.get(lesson) ?? looseContext(lesson))

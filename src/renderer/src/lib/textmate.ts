@@ -26,6 +26,9 @@ const GRAMMARS: Record<string, Loader<LanguageRegistration[]>> = {
   python: () => import('@shikijs/langs/python'),
   javascript: () => import('@shikijs/langs/javascript'),
   typescript: () => import('@shikijs/langs/typescript'),
+  // The IDE's TypeScript and JavaScript, served by typescript-language-server (lib/ide/languages)
+  'typescript-ide': () => import('@shikijs/langs/tsx'),
+  'javascript-ide': () => import('@shikijs/langs/javascript'),
   c: () => import('@shikijs/langs/c'),
   go: () => import('@shikijs/langs/go'),
   rust: () => import('@shikijs/langs/rust'),
@@ -43,7 +46,7 @@ const GRAMMARS: Record<string, Loader<LanguageRegistration[]>> = {
   r: () => import('@shikijs/langs/r'),
   scala: () => import('@shikijs/langs/scala')
 }
-const SHIKI_NAME: Record<string, string> = { shell: 'shellscript' }
+const SHIKI_NAME: Record<string, string> = { shell: 'shellscript', 'typescript-ide': 'tsx', 'javascript-ide': 'javascript' }
 
 const THEMES: Record<TokenThemeName, Loader<ThemeRegistrationRaw>> = {
   'dark-plus': () => import('@shikijs/themes/dark-plus') as Promise<{ default: ThemeRegistrationRaw }>,

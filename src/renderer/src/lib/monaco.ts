@@ -61,7 +61,20 @@ function themeColors() {
   const css = getComputedStyle(document.documentElement)
   const v = (name: string, fb: string) => hex(css.getPropertyValue(name).trim() || fb, fb)
   const bg = v('--code-bg', '#151515')
-  return { bg, ink: v('--ink', '#e8e8e8'), muted: v('--ink-muted', '#8a8a8a'), accent: v('--accent', '#4f8cff'), line: v('--bg-hover', '#222222'), dark: isDark(bg) }
+  return {
+    bg,
+    ink: v('--ink', '#e8e8e8'),
+    muted: v('--ink-muted', '#8a8a8a'),
+    accent: v('--accent', '#4f8cff'),
+    line: v('--bg-hover', '#222222'),
+    raised: v('--bg-raised', bg),
+    border: v('--line-strong', '#333333'),
+    danger: v('--danger', '#e5534b'),
+    warn: v('--warn', '#d29922'),
+    info: v('--info', '#4f8cff'),
+    ok: v('--good-mark', '#3fb950'),
+    dark: isDark(bg)
+  }
 }
 
 const tokenTheme = () => tokenThemeFor(document.documentElement.dataset.theme, themeColors().dark)
@@ -72,7 +85,8 @@ const tokenTheme = () => tokenThemeFor(document.documentElement.dataset.theme, t
  * then, and for languages without a grammar, Monaco's own light or dark rules.
  */
 export function tideTheme(): string {
-  const { bg, ink, muted, accent, line, dark } = themeColors()
+  const { bg, ink, muted, accent, line, raised, border, danger, warn, info, ok, dark } = themeColors()
+  const a = (c: string, alpha: string) => c.slice(0, 7) + alpha
   monaco.editor.defineTheme('tide', {
     base: dark ? 'vs-dark' : 'vs',
     inherit: true,
@@ -93,7 +107,47 @@ export function tideTheme(): string {
       'peekViewResult.background': bg,
       'scrollbarSlider.background': muted.slice(0, 7) + '33',
       'scrollbarSlider.hoverBackground': muted.slice(0, 7) + '55',
-      focusBorder: '#00000000'
+      focusBorder: '#00000000',
+      // Widgets (suggestions, hovers, find, peek) sit on Tide's raised surface
+      'editorWidget.border': border,
+      'editorSuggestWidget.background': raised,
+      'editorSuggestWidget.border': border,
+      'editorSuggestWidget.selectedBackground': a(accent, '2e'),
+      'editorHoverWidget.background': raised,
+      'editorHoverWidget.border': border,
+      'editorError.foreground': danger,
+      'editorWarning.foreground': warn,
+      'editorInfo.foreground': info,
+      'editorOverviewRuler.errorForeground': danger,
+      'editorOverviewRuler.warningForeground': warn,
+      // Diffs: Claude's proposals and git, in Tide's own green and red
+      'diffEditor.insertedTextBackground': a(ok, '30'),
+      'diffEditor.removedTextBackground': a(danger, '30'),
+      'diffEditor.insertedLineBackground': a(ok, '18'),
+      'diffEditor.removedLineBackground': a(danger, '18'),
+      'diffEditorGutter.insertedLineBackground': a(ok, '24'),
+      'diffEditorGutter.removedLineBackground': a(danger, '24'),
+      'diffEditor.diagonalFill': a(muted, '22'),
+      'diffEditor.unchangedRegionBackground': raised,
+      'diffEditor.unchangedRegionForeground': muted,
+      'editor.findMatchHighlightBackground': a(accent, '30'),
+      'editor.findMatchBackground': a(accent, '55'),
+      'editor.wordHighlightBackground': a(accent, '1f'),
+      'editor.wordHighlightStrongBackground': a(accent, '2e'),
+      'editorBracketMatch.background': a(accent, '22'),
+      'editorBracketMatch.border': '#00000000',
+      'editorIndentGuide.background1': a(muted, '22'),
+      'editorIndentGuide.activeBackground1': a(muted, '55'),
+      'editorGhostText.foreground': a(muted, 'aa'),
+      'peekView.border': accent,
+      'peekViewTitle.background': raised,
+      'list.hoverBackground': line,
+      'list.activeSelectionBackground': a(accent, '2e'),
+      'list.focusBackground': a(accent, '2e'),
+      'list.highlightForeground': accent,
+      'quickInput.background': raised,
+      'input.background': bg,
+      'input.border': border
     }
   })
   return 'tide'

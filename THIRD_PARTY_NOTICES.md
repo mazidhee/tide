@@ -1265,3 +1265,88 @@ Each is loaded only when a file in its language opens. Licences checked one by o
 - YAML (https://github.com/textmate/yaml.tmbundle), under TextMate's bundle licence: "Permission to copy, use, modify, sell and distribute this software is granted. This software is provided "as is" without express or implied warranty, and with no claim as to its suitability for any purpose."
 - C++ and Ruby are not bundled: they embed further grammars (GLSL among them) whose licence the index doesn't state, so they keep Monaco's own highlighting.
 - Themes: Dark+ and Light+, Solarized Light and Monokai, as VS Code ships them (https://github.com/microsoft/vscode, MIT)
+
+## @vscode/ripgrep 1.18.0 and @vscode/ripgrep-darwin-arm64 1.18.0 (npm packages: the IDE's search across files and its file list)
+
+- Source: https://github.com/microsoft/vscode-ripgrep, packaging ripgrep (https://github.com/BurntSushi/ripgrep), the same build VS Code ships
+- Files: the `rg` binary, run unmodified as its own process
+- Licence: MIT (the package); ripgrep itself is dual-licensed under the Unlicense and MIT, used here under MIT (Copyright (c) 2015 Andrew Gallant)
+
+```
+vscode-ripgrep
+
+Copyright (c) Microsoft Corporation
+
+All rights reserved.
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the ""Software""), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED *AS IS*, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+```
+
+## typescript-language-server 6.1.0 (npm package: TypeScript and JavaScript IntelliSense in the IDE)
+
+- Source: https://github.com/typescript-language-server/typescript-language-server
+- Files: its language server (lib/cli.mjs), run unmodified as its own process
+- Licence: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0), with parts from VS Code under MIT; its LICENSE file is kept in the package
+
+## TypeScript 5.8 (npm package `typescript`: tsserver, behind typescript-language-server)
+
+- Source: https://github.com/microsoft/TypeScript
+- Files: its compiler and language service, unmodified
+- Licence: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0), Copyright (c) Microsoft Corporation; its ThirdPartyNoticeText.txt is kept in the package
+
+## jsdiff (npm package `diff` 9.0.0: line changes for the git gutter and Claude's proposed edits)
+
+- Source: https://github.com/kpdecker/jsdiff
+- Licence: BSD 3-Clause
+
+```
+BSD 3-Clause License
+
+Copyright (c) 2009-2015, Kevin Decker <kpdecker@gmail.com>
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+## @vscode/debugprotocol 1.68.0 (npm package: the Debug Adapter Protocol's types, used at build time only)
+
+- Source: https://github.com/microsoft/vscode-debugadapter-node
+- Licence: MIT, Copyright (c) Microsoft Corporation
+
+## Tools the IDE runs but does not ship
+
+- debugpy (https://github.com/microsoft/debugpy, MIT): installed into Tide's own Python environment when you set up Python debugging
+- pytest (https://github.com/pytest-dev/pytest, MIT): installed into Tide's own Python environment when you set up the test explorer
+- lldb-dap, clangd (LLVM, Apache License 2.0 with LLVM exceptions): from Xcode's command line tools, when installed
+- rust-analyzer (MIT or Apache-2.0) and gopls (BSD 3-Clause): used when you have installed them
+- The TSX grammar (MIT, as shipped in VS Code) is loaded through @shikijs/langs for the IDE's TypeScript files

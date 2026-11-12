@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { ChatEvent, TideApi } from '@shared/types'
+import { ideApi } from './ide'
 
 const invoke =
   <R>(channel: string) =>
@@ -40,6 +41,7 @@ const api: TideApi = {
     list: invoke('code:list'),
     create: invoke('code:create')
   },
+  ide: ideApi,
   lsp: {
     send: (msg) => ipcRenderer.send('lsp:send', msg),
     onMessage: (cb) => subscribe<unknown>('lsp:message', cb),

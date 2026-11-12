@@ -620,6 +620,8 @@ export interface TideApi {
     query(q: string, limit?: number): Promise<SearchHit[]>
   }
   /** Python IntelliSense: the editor's link to the language server (main/pythonLanguageServer.ts) */
+  /** The Code view as an IDE (shared/ide) */
+  ide: import('./ide').IdeApi
   lsp: {
     /** A JSON-RPC message for the server */
     send(msg: unknown): void
@@ -637,7 +639,7 @@ export interface TideApi {
   }
   terminal: {
     /** Starts a Linux lab container or a shell on this Mac */
-    create(kind: 'lab' | 'local', cols: number, rows: number): Promise<{ id: string }>
+    create(kind: 'lab' | 'local', cols: number, rows: number, cwd?: string): Promise<{ id: string }>
     write(id: string, data: string): Promise<void>
     resize(id: string, cols: number, rows: number): Promise<void>
     close(id: string): Promise<void>
