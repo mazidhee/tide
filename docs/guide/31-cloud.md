@@ -1,7 +1,7 @@
 ---
 title: The cloud helper
 group: Everyday
-summary: Gemma on your Mac is always the tutor. A cloud model can help with four jobs where a bigger model makes a real difference.
+summary: When Gemma teaches, a cloud model can help with four jobs where a bigger model makes a real difference. With Claude set up, Claude teaches instead (see Claude as your tutor).
 ---
 - **Hard maths:** checking each step of worked answers.
 - **Finding mistakes:** “check my working”, find-the-error questions and code answers.

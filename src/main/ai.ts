@@ -402,14 +402,17 @@ export async function chat(req: ChatRequest, emit: (e: ChatEvent) => void) {
   onChatsChanged(chatId)
   if (!saved || error) return
 
-  // Titles and compaction happen after the answer, in the background
+  // Titles and compaction happen after the answer, in the background: on Claude's background
+  // model (Haiku) when Claude teaches this conversation, else on Gemma
   void (async () => {
+    const { teacherFor } = await import('./teacher')
+    const { backgroundOnClaude } = await import('./claudeEngine')
+    const viaClaude = (await teacherFor(req).catch(() => null))?.who === 'claude'
+    const later = async (prompt: string, system: string, signal?: AbortSignal) => (viaClaude ? await backgroundOnClaude(prompt, system, signal).catch(() => null) : null) ?? complete(prompt, system, signal, 'background')
     if (!saved.title && saved.messages.length >= 2) {
-      const title = await complete(
+      const title = await later(
         `Conversation start:\nStudent: ${question.slice(0, 600)}\nTutor: ${reply.content.slice(0, 600)}\n\nGive this conversation a short title, 2 to 6 words, like a note title. Reply with the title only.`,
-        'You name conversations. Reply with a short title only, no quotes or punctuation at the end.',
-        undefined,
-        'background'
+        'You name conversations. Reply with a short title only, no quotes or punctuation at the end.'
       ).catch(() => '')
       const clean = title.split('\n')[0].replace(/^["'#*\s]+|["'.*\s]+$/g, '').slice(0, 60)
       // No title from the model (it was needed elsewhere): the first words, once, rather than asking again every turn
@@ -422,7 +425,7 @@ export async function chat(req: ChatRequest, emit: (e: ChatEvent) => void) {
       try {
         const done = await compactChat(chatId, async (system, prompt) => {
           if (controller.signal.aborted) throw new Error('cancelled')
-          return complete(prompt, system, controller.signal, 'background')
+          return later(prompt, system, controller.signal)
         })
         if (done) onChatsChanged(chatId)
       } catch {
@@ -580,6 +583,66 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
     }
     send(e)
   }
+  // Claude teaches when it's chosen and allowed (main/teacher): a private project or Metabase never
+  // leaves the Mac. When it can't (not installed, logged out, at the plan's limit), Gemma does, and
+  // a step says why. Gemma's lesson checks (lessonGuard, the problem bank, hidden tests written by
+  // Gemma) are workarounds for a small model and don't run on Claude's turns: Claude runs its checks itself.
+  const { teacherFor } = await import('./teacher')
+  const teacher = await teacherFor(req).catch(() => ({ who: 'gemma' as const, why: undefined }))
+  if (teacher.who === 'claude') {
+    try {
+      const { claudeTurn } = await import('./claudeEngine')
+      // [source-led] A step taught from a source: the reading and its rules ride with the turn, Tide
+      // puts the reading into the reply as it streams, and the turn is cut at a new plan whose first
+      // step has a reading (Claude is interrupted, not stopped, so the lesson's process carries on)
+      const led = req.session ? await import('./sourceLed').then((m) => m.sourceLedTurn(req)).catch(() => null) : null
+      // Claude's exercises reach the lesson only once proven (main/exercises): its <exercise id> tags become the verified problem
+      const exercises = req.session ? await (await import('./exercises')).exerciseStream(req, led ? led.tap(emit) : emit) : null
+      await claudeTurn(led ? led.request : req, exercises ? exercises.tap : led ? led.tap(emit) : emit, controller.signal, led?.signal)
+      exercises?.flush()
+      // A picture asked for while a question waits was held: shown once it's checked against that
+      // question's hidden solution, or drawn again as the setup only (the same check as Gemma's)
+      if (waiting && holdShow && !controller.signal.aborted) {
+        holdShow = false
+        const what = givesAway(heldShow, waiting)
+        let picture = heldShow
+        if (what) {
+          const step = (label: string, status: 'running' | 'done') => emit({ id: req.id, type: 'step', step: { id: 'show-setup', kind: 'helper', label, status, depth: 0 } })
+          step('That picture showed the answer you are working on: drawing the setup only', 'running')
+          let again = ''
+          await claudeTurn({ ...req, messages: [...req.messages, { role: 'assistant', content: heldShow }, { role: 'user', content: setupOnlyNote(what) }] }, (e) => {
+            if (e.type === 'delta') again += e.text
+            else if (e.type === 'reset') again = ''
+            else if (e.type !== 'done' && e.type !== 'error') emit(e)
+          }, controller.signal).catch(() => {})
+          picture = again.trim() && !givesAway(again, waiting) ? again : WITHHELD
+          step(picture === WITHHELD ? 'Held the picture back: it gave the answer away' : 'Drew the setup only', 'done')
+        }
+        emit({ id: req.id, type: 'delta', text: picture })
+      }
+      if (led && !controller.signal.aborted) led.settle(shown, emit)
+      if (req.session && !controller.signal.aborted) emit({ id: req.id, type: 'replied' })
+      emit({ id: req.id, type: 'done' })
+      running.delete(req.id)
+      return
+    } catch (e) {
+      const { ClaudeUnavailable } = await import('./claudeEngine')
+      if (controller.signal.aborted) {
+        emit({ id: req.id, type: 'done' })
+        running.delete(req.id)
+        return
+      }
+      if (!(e instanceof ClaudeUnavailable)) {
+        emit({ id: req.id, type: 'error', message: `Claude: ${(e as Error).message}` })
+        running.delete(req.id)
+        return
+      }
+      emit({ id: req.id, type: 'step', step: { id: 'teacher', kind: 'helper', label: `Claude can’t teach right now (${e.message}), so Gemma is teaching`, status: 'done', depth: 0 } })
+    }
+  } else if (teacher.who === 'gemma' && teacher.why) {
+    emit({ id: req.id, type: 'step', step: { id: 'teacher', kind: 'helper', label: teacher.why, status: 'done', depth: 0 } })
+  }
+  if (req.engine === 'claude') req = { ...req, engine: 'auto' }
   // Everything goes through the tool harness when it's on, so threads can run code and check maths too
   if (getSettings().ai.agent !== false) {
     try {

@@ -139,6 +139,11 @@ const api: TideApi = {
     render: invoke('speed:render'),
     memory: invoke('speed:memory')
   },
+  claude: {
+    status: invoke('claude:status'),
+    usage: invoke('claude:usage'),
+    terminal: invoke('claude:terminal')
+  },
   connections: {
     list: invoke('connections:list'),
     setKey: invoke('connections:setKey'),
@@ -158,6 +163,18 @@ const api: TideApi = {
     fileTranscript: invoke('videos:fileTranscript'),
     clips: invoke('videos:clips'),
     check: invoke('videos:check')
+  },
+  visuals: {
+    policy: invoke('visuals:policy'),
+    repair: invoke('visuals:repair'),
+    fallback: invoke('visuals:fallback'),
+    cached: invoke('visuals:cached'),
+    remember: invoke('visuals:remember'),
+    watch: invoke('visuals:watch'),
+    unwatch: invoke('visuals:unwatch'),
+    kill: invoke('visuals:kill'),
+    metrics: invoke('visuals:metrics'),
+    onKilled: (cb: (e: { host: string; reason: string }) => void) => subscribe<{ host: string; reason: string }>('visuals:killed', cb)
   },
   courses: {
     list: invoke('courses:list'),

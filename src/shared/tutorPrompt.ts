@@ -1,5 +1,6 @@
 import { SESSION_FORMAT } from './session'
 import { SIM_GUIDE } from './sims'
+import { VISUAL_GUIDE } from './visuals'
 
 /**
  * What the tutor is told on every turn, kept here (not in main/agent) so anything that measures
@@ -72,3 +73,37 @@ export function withInstructions<T extends { role: string; content: string | unk
   if (first < 0) return messages
   return messages.map((m, i) => (i === first ? { ...m, content: `How to tutor me here:\n${instructions}\n\n---\n\n${String(m.content)}` } : m))
 }
+
+/**
+ * The tutor's prompt when Claude teaches (main/claudeEngine): the same rules and visuals as
+ * Gemma's, with the tools Tide serves it over MCP. Claude's own web tools, when a lesson has them,
+ * are named in a line added at the end.
+ */
+const CLAUDE_TOOLS = `You are Tide, a patient tutor helping a student learn, inside Tide, their study app. Tide's tools (mcp__tide__*) are your hands:
+- search_notes / read_note: look things up in the student's own notes first.
+- learner_profile: who they are, their aims, this week's plan, recall due and recent lessons (a lesson's first message already carries what you need, so use it in open conversations).
+- past_lessons: what earlier lessons on a topic showed, before you teach it again.
+- study_plan: their goal, focus and this week's plan.
+- run_code: run code in Tide's sandbox: Python (with SymPy, NumPy, pandas, Matplotlib), JavaScript, TypeScript, C, C++, shell, and Rust, Go, Swift, Java, Ruby if installed. Run every example before you show its output, test the student's code on real cases (and hidden tests, with tests) before you judge it, and check maths with SymPy step by step before you call a step right or wrong. If something isn't installed, say how to add it; never invent output.
+- run_sql / load_table: SQL on this lesson's lab database (SQLite with sample shop and product-analytics data); load_table adds one of their .csv or .tsv files. Run every query before you show it, show queries as \`\`\`sql blocks (the student can run and change them there), and draw a result with a \`\`\`chart block holding JSON: {"sql": "...", "type": "bar" | "line" | "scatter" (optional), "title": "..."}.
+- remember: save one lasting fact about the student (a goal, a deadline, how they like to learn) as a short third-person sentence.
+- make_flashcards: save cards for ideas worth keeping (in a lesson, prefer a <card> tag, which the learner adds with one click).
+- schedule_recall / recall_due: keep a missed idea as a question Tide brings back on a spaced schedule; see what is due on a topic.
+- search_courses / read_course: the open courses they imported (books, lecture notes, exercises), searched and read in full.
+- search_transcripts: the transcripts of videos they saved.
+- record_answer: only outside a lesson; in a lesson the <grade> tag records the mark in What you know.
+- set_exercise / banked_exercise: set a practice exercise, proven in Tide's sandbox before the learner sees it; reuse one you verified before.`
+
+/** Added to Claude's prompt when it has its own web tools */
+export const CLAUDE_WEB_NOTE = `You also have WebSearch and WebFetch. Use them for anything that changes (versions, releases, prices, laws, news, recent research) and to read a page before you rely on it or quote it; cite the page as a Markdown link. Their notes come first, then the web.`
+
+const RULES = TUTOR_SYSTEM.slice(TUTOR_SYSTEM.indexOf('\nRules:'), TUTOR_SYSTEM.length - SIM_GUIDE.length - 1)
+  // find_image and the web tools are Gemma's; Claude draws mermaid instead, or uses its own web tools when it has them
+  .replace(/ When the thing exists physically[^.]*find_image\./, '')
+
+/** In a lesson Tide runs no checks for Claude: it runs them itself */
+const CLAUDE_LESSON_RULES = `\n- Every numbered practice problem (code, SQL, a calculation, or a conceptual problem to answer at length) goes through Tide: first banked_exercise for one you verified before, else set_exercise with its proof and a common mistake. When it's verified, end your reply with <exercise id="…"/> and Tide sets it, numbered, with its hidden solution and tests: don't write that problem, its <solution> or its <ask> yourself. If the check fails, fix what it says and call set_exercise once more with repair_of; if that fails too, take the bank's exercise it offers or set a different one. Never show an exercise that wasn't verified, and never write a \`\`\`tests block yourself. To have them try an exercise again after a miss, ask with a plain code <ask> naming the same function: Tide gives it the exercise's hidden tests again. Quick questions while you teach (predict, a short check, explain back) are ordinary <ask> tags. A note from Tide giving a mark ("(Tide: … marked this answer …") comes from a second, careful marker: write your <grade> with that verdict and score, in your own words.`
+
+// Custom visuals are Claude's alone: Gemma (and so every private notebook) keeps to the fixed simulations and mermaid
+export const CLAUDE_TUTOR_SYSTEM = `${CLAUDE_TOOLS}${RULES}\n${SIM_GUIDE}\n${VISUAL_GUIDE}`
+export const CLAUDE_LESSON_SYSTEM = `${CLAUDE_TOOLS}${RULES}${CLAUDE_LESSON_RULES}\n${VISUAL_GUIDE}`

@@ -33,6 +33,8 @@ export const TIDE_TAG = 'tide'
 async function config(): Promise<{ url: string; token: string } | null> {
   // Development only: point a test copy at a stand-in Things server instead of the real one
   if (process.env.TIDE_THINGS_API && !app.isPackaged) return { url: process.env.TIDE_THINGS_API.replace(/\/+$/, ''), token: 'test' }
+  // A test copy (a throwaway profile) never writes into the real Things
+  if (process.env.TIDE_USER_DATA && !app.isPackaged) return null
   try {
     const raw = JSON.parse(await fs.readFile(join(homedir(), 'Library', 'Application Support', 'Things4', 'api.json'), 'utf8'))
     return typeof raw.url === 'string' && typeof raw.token === 'string' ? { url: raw.url.replace(/\/+$/, ''), token: raw.token } : null

@@ -5,6 +5,9 @@ import { followVault } from './vaultHome'
 import { bankStatus, openingFor, prepare as prepareBank, previewFor, startBank, variantFor, warmups } from './bank'
 import { newStudyApiToken, setStudyApi, startStudyApi, stopStudyApi, studyApiStatus } from './studyApi'
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, protocol, session, shell, powerMonitor } from 'electron'
+import { APP_CSP } from '@shared/appCsp'
+import { VISUAL_SCHEME_PRIVILEGES, blockVisualRequests, denyVisualPermissions, devFrameSrc, guardVisualFrames, handleVisualProtocol, killVisual, unwatchVisual, visualMetrics, watchVisual } from './visualFrames'
+import { lessonVisuals, rememberVisual, repairVisual, visualFallback, visualPolicy } from './visuals'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import type { CompanyPrepRequest, OutlineDraftRequest, ChatRequest, ChatScope, LearningStatus, ReviewGrade, Settings, PdfHighlight, TutorThread } from '@shared/types'
@@ -95,7 +98,9 @@ import { getCards, reviewCard, saveCards } from './study'
 import { registerEditorIpc, runNow } from './workshopWatch'
 
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'vault', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } }
+  { scheme: 'vault', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } },
+  // Claude's visuals, each in a sandboxed frame of its own (main/visualFrames)
+  VISUAL_SCHEME_PRIVILEGES
 ])
 
 let win: BrowserWindow | null = null
@@ -125,6 +130,7 @@ function createWindow() {
   })
 
   win.once('ready-to-show', () => (testCopy ? win?.showInactive() : win?.show()))
+  guardVisualFrames(win.webContents)
 
   // Links in notes open in the user's real browser, never inside the app
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -169,6 +175,7 @@ function openFocusWindow(view: unknown) {
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false, contextIsolation: true, nodeIntegration: false, backgroundThrottling: !testCopy }
   })
   w.once('ready-to-show', () => (testCopy ? w.showInactive() : w.show()))
+  guardVisualFrames(w.webContents)
   w.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) shell.openExternal(url)
     return { action: 'deny' }
@@ -294,6 +301,22 @@ function registerIpc() {
   handle('curriculum:addTopic', (notebook: string, afterId: string, title: string) => addTopicAfter(notebook, afterId, title))
   handle('lessons:challenge', (topic: string, where: string | undefined, reply: string) => challengeReply(topic, where, reply))
   handle('connections:list', (fresh?: boolean) => listConnections(fresh))
+  // Claude, through the user's own Claude Code (main/claudeEngine)
+  handle('claude:status', async (fresh?: boolean) => {
+    const { claudeStatus, liveClaude, forgetLimit } = await import('./claudeEngine')
+    if (fresh) forgetLimit()
+    const st = await claudeStatus(fresh)
+    return { installed: st.installed, version: st.version, loggedIn: st.loggedIn, plan: st.plan, error: st.error, limitedUntil: st.limitedUntil, limit: st.limit, live: liveClaude(), terminalPort: getSettings().ai.claude?.terminalPort }
+  })
+  handle('claude:terminal', async (on: boolean) => {
+    const { setTerminal } = await import('./tideMcp')
+    const { runClaude } = await import('./claudeEngine')
+    return setTerminal(on, runClaude)
+  })
+  handle('claude:usage', async (days?: number) => {
+    const { readClaudeUsage } = await import('./claudeEngine')
+    return readClaudeUsage(Date.now() - (days ?? 1) * 86_400_000)
+  })
   // Only the services added from the Connections page: other keys have their own checked flows
   handle('connections:setKey', (id: string, key: string | null) => {
     if (!['you', 'firecrawl', 'brave', 'tavily'].includes(id)) throw new Error('That connection’s key is set in its own section.')
@@ -312,6 +335,16 @@ function registerIpc() {
   handle('lessons:save', (r: Parameters<typeof saveLesson>[0]) => saveLesson(r))
   handle('lessons:list', () => listLessons())
   handle('lessons:get', (id: string) => getLesson(id))
+  // Claude's visuals: main/visuals (policy, repair, fallback, kept with the lesson), main/visualFrames (limits)
+  handle('visuals:policy', (scope: unknown) => visualPolicy(scope))
+  handle('visuals:repair', (req: { code: string; errors: string[]; scope: unknown }) => repairVisual(req))
+  handle('visuals:fallback', (req: { code: string; title: string; scope: unknown }) => visualFallback(req))
+  handle('visuals:cached', (id: string) => lessonVisuals(id))
+  handle('visuals:remember', (id: string, key: string, record: unknown) => rememberVisual(id, key, record))
+  ipcMain.handle('visuals:watch', (e, host: string) => watchVisual(e.sender, String(host)))
+  ipcMain.handle('visuals:unwatch', (e, host: string) => unwatchVisual(String(host), e.sender))
+  ipcMain.handle('visuals:kill', (e, host: string, reason: string) => killVisual(e.sender, String(host), String(reason ?? 'it stopped answering').slice(0, 120)))
+  ipcMain.handle('visuals:metrics', (e) => visualMetrics(e.sender))
   handle('knowledge:view', async () => (await import('./knowledge')).knowledgeView())
   // ---- Videos (main/videos.ts) ----
   const videos = () => import('./videos')
@@ -711,6 +744,10 @@ app.whenReady().then(() => {
     if (r !== 'unsupported' && inUse()) await warmChat().then(() => warmLessons())
   }
   ready().catch(() => {})
+  // Whether Claude Code is here and logged in, asked once now so the first lesson needn't wait for it
+  void import('./claudeEngine').then((c) => c.claudeStatus()).catch(() => {})
+  // Claude Code in the terminal reaches Tide's tools on a fixed port, while Tide is open (when set up)
+  if (getSettings().ai.claude?.terminalPort) void import('./tideMcp').then((m) => m.ensureMcp()).catch(() => {})
   // The model's memory goes back to the Mac when you aren't studying, and loads as you return
   watchModelIdle()
   app.on('browser-window-focus', () => wakeModel(() => warmChat()))
@@ -730,6 +767,12 @@ app.whenReady().then(() => {
   // After sleep, the server may have dropped what it had ready: get Gemma ready again before you ask
   powerMonitor.on('resume', () => setTimeout(() => ready().catch(() => {}), 4000))
   powerMonitor.on('unlock-screen', () => setTimeout(() => ready().catch(() => {}), 2000))
+
+  // Claude's visuals: their frames' documents, no permissions, no web requests, and (in development, which has no page CSP) frame-src
+  handleVisualProtocol()
+  denyVisualPermissions(session.defaultSession)
+  blockVisualRequests(session.defaultSession)
+  if (process.env.ELECTRON_RENDERER_URL) devFrameSrc(session.defaultSession, process.env.ELECTRON_RENDERER_URL, APP_CSP)
 
   // Serves vault files (images, PDFs) to the renderer: vault://file/<relative path>
   protocol.handle('vault', (req) => {
@@ -796,6 +839,8 @@ app.whenReady().then(() => {
 
 // No lab container outlives the app
 app.on('before-quit', () => {
+  void import('./claudeEngine').then((c) => c.stopClaude()).catch(() => {})
+  void import('./tideMcp').then((m) => m.mcpHandle()?.close()).catch(() => {})
   stopStudyApi().catch(() => {})
   closeAllTerminals()
   stopVoice()

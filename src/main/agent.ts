@@ -821,6 +821,8 @@ interface LoopContext {
   focused?: boolean
   /** About a private project or your Metabase: nothing from it may go to a cloud service */
   private?: boolean
+  /** The answer goes off this Mac (Claude): a private project's notes are never searched or read */
+  leavesMac?: boolean
   /** This turn goes to the cloud model (Gemma takes over if it can't) */
   cloud?: { target: CloudTarget; task: RequestKind; stepId: string; fellBack?: boolean }
 }
@@ -964,7 +966,9 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     const q = str('query')
     const id = ctx.step({ kind: 'search_notes', label: `Searching your notes for “${q}”`, status: 'running', depth })
     await indexReady()
-    const hits = await search(q, 6)
+    const found = await search(q, ctx.leavesMac ? 12 : 6)
+    const hidden = ctx.leavesMac ? await Promise.all(found.map((h) => privatePath(h.path).catch(() => true))) : []
+    const hits = found.filter((_, i) => !hidden[i]).slice(0, 6)
     ctx.updateStep(id, { status: 'done', detail: `${hits.length} passages` })
     if (!hits.length) return 'No matching passages in the notes.'
     return hits
@@ -978,6 +982,10 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
   if (call.name === 'read_note') {
     const path = str('path')
     const id = ctx.step({ kind: 'read_note', label: `Reading ${path.split('/').pop()?.replace(/\.md$/, '')}`, status: 'running', depth })
+    if (ctx.leavesMac && (await privatePath(path).catch(() => true))) {
+      ctx.updateStep(id, { status: 'error', detail: 'private' })
+      return 'That note is in a private project, which never leaves this Mac, so it cannot be read here.'
+    }
     try {
       const chunks = await getChunks(path)
       const text = chunks.length ? chunks.map((c) => (c.heading ? `## ${c.heading}\n` : '') + c.text).join('\n\n') : await readText(path)
@@ -1552,6 +1560,9 @@ const warmed = new Map<string, number>()
 const WARM_FOR_MS = 5 * 60_000
 
 export async function prewarmLesson(req: Omit<ChatRequest, 'id'>): Promise<void> {
+  // When Claude will teach it, Claude Code is started ahead instead (no tokens spent): main/claudeEngine
+  const { teacherFor } = await import('./teacher')
+  if ((await teacherFor({ ...req, id: 'prewarm' }).catch(() => null))?.who === 'claude') return void (await import('./claudeEngine')).prewarmClaude(req).catch(() => {})
   if (!isMlxVlm()) return
   const key = JSON.stringify([req.messages, req.instructions, req.scope, req.voice, req.web])
   const at = warmed.get(key)
@@ -1702,7 +1713,12 @@ export function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, signal
   return timeTurn(req.id, req.instructions ? 'lesson' : 'chat', () => agentChatNow(req, emit, signal))
 }
 
-async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, signal: AbortSignal) {
+/**
+ * Everything a turn sends before the model runs: the tool context (steps and sources go to emit),
+ * the system prompt on `base`, and the messages with this turn's passages, earlier lessons, the
+ * lab's tables and so on. The same for Gemma's loop and for Claude (main/claudeEngine).
+ */
+export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, signal: AbortSignal, base: string = SYSTEM) {
   const sources: ContextSource[] = []
   const ctx: LoopContext = {
     signal,
@@ -1736,12 +1752,6 @@ async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, sign
   // A private project's documents never leave this Mac
   const secret = req.scope.kind !== 'none' && req.scope.kind !== 'vault' && (await privatePath(req.scope.path).catch(() => false))
   ctx.private = mine || secret
-  const target = req.warmOnly || mine || secret || images.length ? null : routeFor(req.engine === 'cloud' ? null : job, req.engine ?? 'auto', false)
-  if (target) {
-    const name = providerInfo(target.provider).models.find((m) => m.id === target.model)?.label ?? target.model
-    const why = job === 'maths' ? 'checking the maths' : job === 'errors' ? 'finding the mistake' : 'answering'
-    ctx.cloud = { target, task: job ?? (req.instructions ? 'tutor' : 'chat'), stepId: ctx.step({ kind: 'helper', label: `${name} is ${why}`, status: 'running', depth: 0 }) }
-  }
   // All notes: only the few passages that really match (the tutor searches for more if it needs
   // them); a note, notebook or pages: what retrieval picks for that scope
   const initial =
@@ -1812,7 +1822,7 @@ async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, sign
   // Stored conversations arrive already fitted; sessions and threads keep their opening setup
   const history = req.chatId ? req.messages : fitHistory(req.messages, historyBudget(), !!req.instructions)
   const messages: ApiMessage[] = [
-    { role: 'system', content: await stablePrompt(SYSTEM, req, ctx.web, !!req.session) },
+    { role: 'system', content: await stablePrompt(base, req, ctx.web, !!req.session) },
     ...withStableContext(
       // A lesson's instructions ride in its first message, not the system prompt: then the system
       // prompt and tools are the same for every lesson and stay cached between them
@@ -1827,6 +1837,17 @@ async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, sign
     )
   ]
 
+  return { ctx, messages, images, job, mine, secret }
+}
+
+async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, signal: AbortSignal) {
+  const { ctx, messages, images, job, mine, secret } = await buildTurn(req, emit, signal)
+  const target = req.warmOnly || mine || secret || images.length ? null : routeFor(req.engine === 'cloud' ? null : job, (req.engine === 'claude' ? 'auto' : req.engine) ?? 'auto', false)
+  if (target) {
+    const name = providerInfo(target.provider).models.find((m) => m.id === target.model)?.label ?? target.model
+    const why = job === 'maths' ? 'checking the maths' : job === 'errors' ? 'finding the mistake' : 'answering'
+    ctx.cloud = { target, task: job ?? (req.instructions ? 'tutor' : 'chat'), stepId: ctx.step({ kind: 'helper', label: `${name} is ${why}`, status: 'running', depth: 0 }) }
+  }
   if (req.warmOnly) return warmTurn(messages, await turnTools(ctx, 0), signal)
   // The pictures ride on this turn's message only: the start of the prompt stays the same, and cached
   const last = messages[messages.length - 1]
@@ -1853,3 +1874,20 @@ function taskLink(open: Record<string, unknown> | null, kind: string, title: str
   const label = { exam: 'Sit it in Tide', quiz: 'Quiz me in Tide', teach: 'Learn it in Tide', note: 'Read it in Tide', drill: 'Run the drill in Tide', practice: 'Open Practice in Tide' }[type] ?? 'Open in Tide'
   return { label, url: buildLink(link) }
 }
+
+// ---------- Tide's tools for Claude (main/tideMcp) ----------
+
+/** The tutor's tools Tide serves to Claude over MCP: the same definitions and handlers Gemma uses */
+export const MCP_TUTOR_TOOLS = [...NOTE_TOOLS, CODE_TOOL, SQL_TOOL, LOAD_TABLE_TOOL, STUDY_PLAN, MEMORY_TOOLS[0]] as { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }[]
+
+/** What a tool call from outside the loop needs: where its steps and sources go */
+export type ToolContext = Pick<LoopContext, 'signal' | 'sources' | 'emitSources' | 'step' | 'updateStep' | 'web' | 'chatId' | 'labId'>
+
+/** Runs one of Tide's tools by name, as the tutor's loop would, and returns what the model reads */
+export function runTideTool(name: string, args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
+  // Claude is never given a private turn (main/teacher), so nothing private may reach it
+  return runTool({ id: `mcp_${++stepCounter}`, name, arguments: JSON.stringify(args) }, { ...ctx, focused: true, private: false, leavesMac: true }, 0)
+}
+
+/** A step id for a step made outside the loop */
+export const nextStepId = () => `s${++stepCounter}`

@@ -18,17 +18,23 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - Teaching blocks: physics, geometry and matrices, regex, chess search, SQL tidy
 - Courses from GitHub: 52 courses (zoomcamps, OSSU, Made With ML, Zero to Hero, d2l…), taught from their own text, notebooks runnable
 - A VS Code-like code editor: Python IntelliSense (basedpyright), VS Code highlighting, explorer, tabs, Problems, Tests, ⌘P
+- Claude teaches (your plan): Sonnet turns, Opus marking and plans, Haiku background; Tide's tools over MCP (notes, code, SQL, courses, transcripts, flashcards, recall); web search for non-private lessons; usage view; Claude Code in your terminal can use Tide (Settings › Models); private notebooks stay on Gemma
+- Claude's visuals: a custom interactive explainer per concept, sandboxed (no network, no access to Tide), checked and repaired before showing, cached per lesson
+- Claude's exercises are proven first: code against hidden tests (and a known mistake), SQL against the lab, maths by SymPy; repaired once or replaced; banked for reuse
 - Faster lessons: off-thread index, cached rendering, steadier prompt cache, idle unload
 - The redesign, with the classic design in Settings
 
 ## Now
 
-- [ ] **Videos in Tide.** YouTube's own player inside Tide, so almost no added weight: one player at a time, a thumbnail until play, removed when closed. Videos are never downloaded or hosted; your own MP4s also play.
-  - Player and transcript side by side: the line being spoken is marked, clicking a line jumps there, highlight or ask about a line.
-  - The tutor picks a section to watch before a lesson (from saved transcripts and course videos) and a recap clip after it, with questions drawn from the transcript.
-  - Course lessons that have a video show it beside the course text.
-  - After that: the video pauses at chosen moments for a question and goes on when you answer.
-  - Videos without captions can be transcribed on the Mac, only on request and when Gemma is idle.
+- [ ] **Courses you live in, with videos.** Everything opens inside Tide: course files rendered natively, YouTube in Tide's own player with its transcript, web pages in Tide's reader (or a sandboxed in-Tide view when a page can't be made readable). The tutor sees what's on screen at every step: ask about this, quiz me on this, jump to a moment. Lessons draw on several courses at once, with credit (one shows the code, a video at 12:40 explains why, a reading gives the theory). Includes the paused "Videos in Tide" work.
+- [ ] **Claude: a tutor that remembers you.** A learner profile in your vault (misconceptions, pace, what clicked), kept up by Claude and read with your past lessons and mistakes before each session.
+- [ ] **Claude: lesson prep while you're away.** Background prep before tomorrow's lesson: what's due, the best reading, exercises, a custom visual, a short plan. Plus a weekly review.
+- [ ] **Claude: a mentor for your projects.** Reads your whole project across sessions, reviews it like a senior engineer, runs your tests, and proposes edits in the Code view that you approve line by line.
+- [ ] **Claude: reading primary sources together.** Papers, documentation and classics read in full, with web search and page reading. A seminar that argues, steelmans and critiques your writing.
+- [ ] **Claude: photos and screenshots.** Mark handwritten maths from a photo; explain a diagram or an error screenshot.
+- [ ] **Claude: mock interviews and exams.** Live coding with tests and system design on the canvas, timed and marked.
+- [ ] **Claude: a simpler, faster Tide.** Switch off the Gemma workarounds (stall guards, retries, output repair, constant trimming) on Claude lessons.
+- [ ] **Benchmark Sonnet and Opus.** Run Tide's tutor benchmark on both, and move any task where Sonnet is clearly weaker to Opus.
 - [ ] **Faster lesson starts and fewer stalls.** The first answer of a new lesson takes 14–27 s. Gemma stalls in about 14% of turns, and retries run one after another. The turn after a long lesson is trimmed re-reads it all. Partial work: worktree `tide-fast2`.
 - [ ] **Everyday check: Python and ML from zero.** Run real lessons the way you use Tide ("I want to learn Python", "I want to learn ML"), over several sessions, and fix what goes wrong.
 - [ ] **Lab pack ready before it's needed.** Install the data and ML packages (about 900 MB) from Settings, in the background, so the first ML lesson doesn't stall for 30 s. Partial work: worktree `tide-voice`.
@@ -47,6 +53,8 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - [ ] **Better web clipper and search.** Compare Defuddle with the current clipper, and try a reranker; adopt only if the numbers win.
 - [ ] **Live preview leftovers.** The properties block at the top of a note, embedded notes, and tables and maths inside lists.
 - [ ] **Small fixes.**
+  - Readings sometimes arrive before an exercise Claude meant to set; a code ask written outside set_exercise is marked by eye.
+  - Claude: marking waits 4–7 s while Opus thinks; try a lower effort setting for marking. Other background jobs (margin notes and the like) still run on Gemma.
   - Code editor: pandas parameter types show "Unknown" until pandas-stubs is in Tide's Python; rename only changes open files; ⌘⇧O is taken by Add Files.
   - Course lessons: Gemma often writes the plan before probing; "Show me" on a course's first step shows the reading again.
   - Course notebooks needing IPython, data files or internet can't run yet; homework has no generated tests.

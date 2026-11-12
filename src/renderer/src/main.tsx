@@ -11,6 +11,7 @@ import './styles/prose.css'
 import './styles/lab.css'
 import './styles/sims.css'
 import './styles/simKinds.css'
+import './styles/visuals.css'
 import './styles/knowledge.css'
 import './styles/workshop.css'
 import './styles/courses.css'
@@ -43,6 +44,8 @@ import { startMermaid } from './lib/mermaid'
 import { startLightbox } from './lib/lightbox'
 import { startSims } from './lib/sims'
 import { startVideoEmbeds } from './lib/videoEmbeds'
+import { startVisuals, configureVisuals } from './lib/visuals'
+import { renderMarkdown } from './lib/markdown'
 
 window.tide.settings.get().then((settings) => {
   // Before the first paint, so the window never shows the other design for a frame
@@ -51,6 +54,9 @@ window.tide.settings.get().then((settings) => {
   startLab()
   startSims()
   startVideoEmbeds()
+  // Claude's visuals: a fallback diagram is ordinary Markdown (its mermaid is drawn like any other)
+  configureVisuals({ markdown: (t) => renderMarkdown(t, { notePath: '', filesByName: new Map() }) })
+  startVisuals()
 startLightbox()
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

@@ -59,7 +59,7 @@ describe('renderMarkdown', () => {
     expect(html).toContain('data-yt="aqz-KE-bpKQ"')
     expect(html).toContain('data-start="30"')
     expect(html).not.toContain('<iframe')
-    expect(render('![[Lectures/week 1.mp4]]')).toContain('data-file="Lectures/week 1.mp4"')
+    expect(render('![[Lectures/week 1.mp4]]')).toContain('data-file="Maths/Ch 6/Lectures/week 1.mp4"')
   })
 
   it('strips scripts and event handlers from untrusted HTML', () => {

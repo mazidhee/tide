@@ -21,10 +21,14 @@ export interface BankProblem {
   askType: 'problem' | 'short' | 'explain' | 'code' | 'error' | 'choice'
   solution: string
   check?: CheckCode
+  /** A code exercise's language and hidden tests (pytest functions, or JSON input and output cases), run against the answer */
+  lang?: string
+  tests?: string
   /** Its check ran and passed (null: nothing to compute); a second model found it sound (null: not reviewed) */
   checked: boolean | null
   reviewed: boolean | null
-  source: 'prep' | 'lesson' | 'variant'
+  /** 'claude': set by Claude in a lesson and proven in Tide's sandbox first (main/exercises) */
+  source: 'prep' | 'lesson' | 'variant' | 'claude'
   createdAt: number
   usedAt?: number
   /** Written for one lesson, aimed at a mistake made in it */
@@ -194,14 +198,18 @@ export function solutionSteps(solution: string): string[] {
  * it comes worked out but for its last step, which the student finishes: how a new idea is best
  * learned (a worked example first, then less and less of it shown).
  */
-export function renderProblem(p: BankProblem, n: number, dir: Direction, fade = false): string {
+export function renderProblem(p: BankProblem, n: number, dir?: Direction, fade = false): string {
+  const label = dir ? ` · ${DIR_LABEL[dir]}` : ''
   // Only working that's really worked (a calculation with a check), never an argument cut into lines
   const steps = fade && p.askType === 'problem' && p.check ? solutionSteps(p.solution) : []
   if (steps.length >= 3) {
     const shown = steps.slice(0, -1).map((s) => `- ${s}`).join('\n')
-    return `\n\n**Problem ${n} · ${DIR_LABEL[dir]}, worked for you up to the last step**\n\n${p.text}\n\nHere's how it goes:\n${shown}\n\n<solution>${p.solution}</solution>\n\n<ask type="problem">Finish it: the last step and the final answer.</ask>`
+    return `\n\n**Problem ${n}${label}, worked for you up to the last step**\n\n${p.text}\n\nHere's how it goes:\n${shown}\n\n<solution>${p.solution}</solution>\n\n<ask type="problem">Finish it: the last step and the final answer.</ask>`
   }
-  return `\n\n**Problem ${n} · ${DIR_LABEL[dir]}**${p.text ? `\n\n${p.text}` : ''}\n\n<solution>${p.solution}</solution>\n\n<ask type="${p.askType === 'choice' ? 'short' : p.askType}">${p.ask}</ask>`
+  // A code exercise asks in its language, with its hidden tests inside the ask (shared/session splitTests)
+  const lang = p.askType === 'code' && p.lang ? ` lang="${p.lang}"` : ''
+  const tests = p.askType === 'code' && p.tests ? `\n\`\`\`tests\n${p.tests.trim()}\n\`\`\`` : ''
+  return `\n\n**Problem ${n}${label}**${p.text ? `\n\n${p.text}` : ''}\n\n<solution>${p.solution}</solution>\n\n<ask type="${p.askType === 'choice' ? 'short' : p.askType}"${lang}>${p.ask}${tests}</ask>`
 }
 
 /** How many numbered problems a lesson has set so far */

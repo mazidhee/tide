@@ -1,5 +1,6 @@
 import { testNames } from '@shared/codeTests'
 import { showMeOffered } from '@shared/showMe'
+import { ASK_VISUAL_EVENT, takeVisualNotes } from '../lib/visuals'
 import { TimeThis } from './TimeThis'
 import { drawSteps, stepsReached } from '@shared/project'
 import { parseCanvas, serializeCanvas } from '@shared/canvas'
@@ -33,7 +34,7 @@ import { renderMarkdown } from '../lib/markdown'
 import { Icon } from './Icon'
 import { formatEditor } from '../lib/ruff/editor'
 import type * as Monaco from 'monaco-editor'
-import { EnginePill } from './EnginePill'
+import { EnginePill, engineFields, type Engine } from './EnginePill'
 import { DictateButton, SpeakButton, useTalk } from './Voice'
 import { InterviewClock, useInterviewClock } from './InterviewClock'
 import { LessonNotes } from './LessonNotes'
@@ -86,6 +87,8 @@ const inFocusWindow = /[#&]focus=/.test(window.location.hash)
 export function SessionView({ mode, scope, topic, options, initialTurns, view }: { mode: SessionMode; scope: ChatScope; topic: string; options?: SessionSetup['options']; initialTurns?: { role: 'user' | 'assistant'; content: string }[]; view?: View }) {
   const ongoingKey = view ? sessionKey(view as { kind: string; mode?: string; topic?: string; nonce?: number }) : null
   // The record a lesson or quiz is kept under (lib/sessions.ts keepLesson): its answers are read from there
+  // The lesson's column: Claude's visuals in it report to the tutor
+  const columnRef = useRef<HTMLDivElement>(null)
   const recordId = view?.kind === 'session' && ongoingKey && (mode === 'teach' || mode === 'quiz') ? (view.lesson ?? lessonId(ongoingKey)) : undefined
   // The lesson's data lab: the tutor's run_sql and the queries you run in the lesson share it
   const labId = useRef(`lesson:${ongoingKey ?? uid()}`)
@@ -200,7 +203,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
 
   // What the tutor last asked, and which model you chose: a worked answer to a problem can go to the cloud model
   const askTypeRef = useRef<string | undefined>(undefined)
-  const [engine, setEngine] = useState<'auto' | 'local' | 'cloud'>('auto')
+  const [engine, setEngine] = useState<Engine>('auto')
   // A notebook set to be taught by the cloud model starts its lessons that way (you can still switch)
   useEffect(() => {
     const where = 'path' in scope ? scope.path : ''
@@ -210,6 +213,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       .then((nbs) => {
         const nb = nbs.find((n) => where === n.path || where.startsWith(`${n.path}/`))
         if (nb?.tutor === 'cloud') setEngine((e) => (e === 'auto' ? 'cloud' : e))
+        // Gemma or Claude by the notebook: main decides that from the notebook itself (main/teacher), so Auto shows it
       })
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -240,6 +244,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           ? markingNote(markNote(content), [...history].reverse().find((t) => t.role === 'assistant')?.content ?? '', setupRef.current.topic, teachesAsHumanities(setupRef.current.topic, setupRef.current.options?.subject))
           : null,
         whyNoteRef.current,
+        // What the learner did in Claude's visuals since the tutor last heard
+        ...takeVisualNotes(columnRef.current),
         mode === 'teach' && history.length > 2 ? notesNudge(history.filter((t) => t.role === 'assistant').map((t) => t.content), content) : null
       ].filter((n): n is string => !!n)
       if (notes.includes(whyNoteRef.current ?? '')) whyNoteRef.current = null
@@ -253,7 +259,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         const last = messages[messages.length - 1]
         messages[messages.length - 1] = { ...last, content: `(Time left: ${clock.left() || timed} of ${timed} minutes)\n${last.content}` }
       }
-      await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setupRef.current), labId: labId.current, canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, engine: engineRef.current, sourceLed: ledRef.current, ...(setupRef.current.options?.course ? { course: { id: setupRef.current.options.course.id, lesson: setupRef.current.options.course.lesson } } : {}) })
+      await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setupRef.current), labId: labId.current, canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, ...engineFields(engineRef.current), sourceLed: ledRef.current, ...(setupRef.current.options?.course ? { course: { id: setupRef.current.options.course.id, lesson: setupRef.current.options.course.lesson } } : {}) })
     },
     [scope, setup, web, timed, clock, mode, difficulty.noteFor]
   )
@@ -765,6 +771,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // tutor as your question, saying which part and what it showed
   const askAboutRef = useRef<(label: string) => void>(() => {})
   askAboutRef.current = (label) => submit(`${ASKED}In the simulation, explain ${label}: what it is doing here, and why it has that value.`)
+  const askVisualRef = useRef<(question: string) => void>(() => {})
+  askVisualRef.current = (question) => submit(`${ASKED}${question}`)
   useEffect(() => {
     const onAsk = (e: Event) => {
       const label = (e as CustomEvent<{ label?: string }>).detail?.label
@@ -773,8 +781,20 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       e.stopImmediatePropagation()
       askAboutRef.current(label)
     }
+    // Claude's visuals: "What's happening here?" and "Ask about this" go straight to the tutor, with what the visual shows
+    const onAskVisual = (e: Event) => {
+      const question = (e as CustomEvent<{ question?: string }>).detail?.question
+      if (!question || !columnRef.current?.contains(e.target as Node)) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      askVisualRef.current(question)
+    }
     document.addEventListener('tide:ask-about', onAsk, true)
-    return () => document.removeEventListener('tide:ask-about', onAsk, true)
+    document.addEventListener(ASK_VISUAL_EVENT, onAskVisual, true)
+    return () => {
+      document.removeEventListener('tide:ask-about', onAsk, true)
+      document.removeEventListener(ASK_VISUAL_EVENT, onAskVisual, true)
+    }
   }, [])
   const runMine = async (): Promise<RunResult | null> => {
     if (!currentAsk || running) return null
@@ -1106,7 +1126,11 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       <div className="doc-scroll session-scroll">
         <div
           className="session-column"
+          ref={columnRef}
           data-lab={labId.current}
+          // Claude's visuals (lib/visuals): where they may run, and the lesson that keeps them
+          data-visual-scope={JSON.stringify(scope)}
+          data-visual-lesson={recordId ?? ''}
           // [source-led] a reading's "Open in your library at page N"
           onClick={(e) => {
             const open = openReading(e.target)

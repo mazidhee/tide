@@ -24,6 +24,8 @@ export interface LessonRecord {
   finished?: boolean
   /** The page in your vault, fixed when the lesson is first kept */
   page?: string
+  /** Claude's visuals as checked (shared/visuals), by the key of their source: shown again at once when the lesson is reopened */
+  visuals?: Record<string, import('./visuals').VisualRecord>
 }
 
 export type LessonSummary = Pick<LessonRecord, 'id' | 'mode' | 'topic' | 'scope' | 'started' | 'updated' | 'finished' | 'page'> & { answers: number; preview: string }

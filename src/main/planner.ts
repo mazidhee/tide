@@ -4,7 +4,12 @@ import { applyResourceChecks, outlineResources, parseOutline, serializeOutline, 
 import { readText, writeText } from './vault'
 import { addProject, getProject, thingsAvailable } from './things'
 import { buildLink } from '@shared/deeplink'
-import { complete, extractJsonObject, friendlyError, streamDraft } from './ai'
+import { complete as completeHere, extractJsonObject, friendlyError, streamDraft } from './ai'
+import { planOnClaude } from './claudeEngine'
+
+/** Plans are Claude's (the "hard" model, Opus by default) when Claude teaches; otherwise as before */
+const complete: typeof completeHere = async (prompt, system, signal, priority, task, routine, schema) =>
+  (task === 'planning' ? await planOnClaude(prompt, system, signal) : null) ?? completeHere(prompt, system, signal, priority, task, routine, schema)
 import { readWebpage, webSearch } from './agent'
 import { getSettings } from './settings'
 import { directionLine } from './coach'
@@ -275,7 +280,12 @@ Important topics, projects or practice that are missing for the goal this roadma
 What to drop or move to "later" so the core path gets done.
 ## Next four weeks
 A concrete plan: which sections and topics, and one project.`
-    for await (const t of streamDraft([{ role: 'system', content: 'You review learning plans frankly and specifically. No filler.' }, { role: 'user', content: prompt }], new AbortController().signal, 2000, 'planning')) {
+    const system = 'You review learning plans frankly and specifically. No filler.'
+    const signal = new AbortController().signal
+    const { draftWithClaude } = await import('./claudeEngine')
+    // A private project's roadmap is reviewed on this Mac
+    const secret = await import('./projects').then((m) => m.privatePath(outlinePath)).catch(() => true)
+    for await (const t of draftWithClaude(system, prompt, 'background', signal, () => streamDraft([{ role: 'system', content: system }, { role: 'user', content: prompt }], signal, 2000, 'planning'), secret)) {
       emit({ id, type: 'delta', text: t })
     }
     emit({ id, type: 'done' })
