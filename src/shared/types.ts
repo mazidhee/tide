@@ -19,6 +19,18 @@ export interface ClaudeSettings {
   terminalPort?: number
 }
 
+export interface GemmaStatusView {
+  /** Null when the server can't say (not mlx-vlm, or not running) */
+  loaded: boolean | null
+  serverUp: boolean
+  /** Claude is the main tutor (set up, logged in, not at its limit, online) */
+  claudeMain: boolean
+  reason?: import('./gemmaPolicy').GemmaReason
+  idleMinutes: number
+  /** The plain sentence Settings shows */
+  line: string
+}
+
 export interface ClaudeStatusView {
   installed: boolean
   version?: string
@@ -60,6 +72,8 @@ export interface AISettings {
   /** Start the local model server when it isn't running (default on), with this command */
   /** Minutes without use before the local model is unloaded to give its memory back (default 15; 0 keeps it loaded) */
   unloadAfterMinutes?: number
+  /** While Claude is the main tutor, Gemma is unloaded sooner after its last use (default 5 minutes, never later than unloadAfterMinutes) */
+  gemmaUnloadWithClaudeMinutes?: number
   autoStart?: boolean
   serverCommand?: string
   /** Claude, run through the user's own logged-in Claude Code (main/claudeEngine) */
@@ -743,6 +757,15 @@ export interface TideApi {
     memory(): Promise<MacMemory>
   }
   /** Claude, run through the user's own Claude Code */
+  /** Gemma on demand (main/modelIdle): loaded only when a job is routed to it while Claude teaches */
+  gemma: {
+    status(): Promise<GemmaStatusView>
+    load(): Promise<GemmaStatusView>
+    /** `busy`: not unloaded, the server is answering a request */
+    unload(): Promise<GemmaStatusView & { busy?: boolean }>
+    /** A note is opening: Gemma loads ahead when it's in a private project and Claude teaches */
+    prewarmFor(path: string): Promise<boolean>
+  }
   claude: {
     status(fresh?: boolean): Promise<ClaudeStatusView>
     /** Each Claude call in the last `days` days (default 1) */

@@ -94,6 +94,11 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
     }
   }, [path])
 
+  // A note in a private project: Gemma (which teaches it while Claude teaches everything else) starts loading now
+  useEffect(() => {
+    window.tide.gemma?.prewarmFor(path).catch(() => {})
+  }, [path])
+
   useEffect(() => {
     setRaw(null)
     setEditing(false)

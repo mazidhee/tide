@@ -58,7 +58,12 @@ export function drafterPath(): string | null {
   }
 }
 
-export async function tuneModelServer(): Promise<'enabled' | 'already' | 'unsupported'> {
+/**
+ * `apply: false` only looks (and notes whether the server is mlx-vlm): applying a change reloads
+ * the model, which mustn't happen while Gemma isn't wanted (main/modelIdle). Then 'needed' says
+ * a change is waiting for the next time Gemma is.
+ */
+export async function tuneModelServer(o: { apply?: boolean } = {}): Promise<'enabled' | 'already' | 'unsupported' | 'needed'> {
   const { baseUrl, apiKey } = getSettings().ai
   let origin: string
   try {
@@ -83,6 +88,7 @@ export async function tuneModelServer(): Promise<'enabled' | 'already' | 'unsupp
     if (models?.data?.some((m) => /gemma-4-12b/i.test(m.id))) Object.assign(changes, { draft_model: drafter, draft_kind: 'mtp' })
   }
   if (!Object.keys(changes).length) return 'already'
+  if (o.apply === false) return 'needed'
   // Both changes reload the model once, together
   const patch = await fetch(`${origin}/v1/settings`, { method: 'PATCH', headers, body: JSON.stringify(changes), signal: AbortSignal.timeout(30_000) }).catch(() => null)
   return patch?.ok ? 'enabled' : 'unsupported'

@@ -52,11 +52,11 @@ import { isSql, languagesStatus } from './languages'
 import { registerLanguageServer, stopLanguageServer } from './pythonLanguageServer'
 import { labStatus, librariesStatus, mathStatus, runCode, runProject, setupLab, setupLibraries, setupMath } from './runner'
 import { searchStatus, setupSearch, stopSearch, wakeSearch } from './websearch'
-import { applySpeedups, ensureModelServer, serverReady, speedStatus, tuneModelServer } from './modelServer'
+import { applySpeedups, speedStatus } from './modelServer'
 import { labFlashcards } from './labCards'
 import { prewarmLesson, warmChat, warmLessons } from './agent'
-import { inUse, wakeModel, watchModelIdle } from './modelIdle'
-import { inBackground, noteTyping, onModelBusy } from './modelQueue'
+import { gemmaStatus, getGemmaReady, loadGemmaNow, minuteCheck, unloadGemmaNow, unloadIdleAtLaunch, wakeModel, watchModelIdle } from './modelIdle'
+import { noteTyping, onModelBusy } from './modelQueue'
 import { cancelDraft, draftOutline } from './outlineDraft'
 import { cancelCompanyPrep, draftCompanyPrep } from './companyPrep'
 import { adjustPlan, auditRoadmap, checkOutlineResources, planReadings, planToThings, sizePlan, syncFromThings, type PlanRequest } from './planner'
@@ -255,6 +255,11 @@ function registerIpc() {
   // A lesson's side thread was folded: its Claude process goes (main/claudeEngine threadKey)
   handle('ai:threadDone', (lab: string) => import('./claudeEngine').then((c) => c.stopThreads(lab)))
   handle('ai:prewarm', (req: Omit<ChatRequest, 'id'>) => prewarmLesson(req))
+  // Gemma on demand (main/modelIdle): what it's doing for Settings, a hand on it, and a note about to open that will need it
+  handle('gemma:status', () => gemmaStatus())
+  handle('gemma:load', () => loadGemmaNow())
+  handle('gemma:unload', () => unloadGemmaNow())
+  handle('gemma:prewarmFor', (path: string) => import('./ai').then((a) => a.prewarmForPath(path)))
   handle('ai:typing', () => noteTyping())
   setChatsChangedListener((id) => send('chats:changed', id))
   setTerminalListeners(
@@ -760,36 +765,24 @@ app.whenReady().then(() => {
     done({ requestHeaders: h })
   })
   wakeSearch().catch(() => {})
-  // Start the model server if it isn't running, turn on prefix caching and the draft model, then
-  // load the chat and lesson prompts into it, so the first reply is quick
-  const ready = async () => {
-    if ((await ensureModelServer()) === 'started') await serverReady()
-    const r = await tuneModelServer()
-    // Not when you haven't used the model for a while (the Mac just woke with Tide in the background): it stays unloaded until you come back
-    if (r !== 'unsupported' && inUse()) await warmChat().then(() => warmLessons())
-  }
-  ready().catch(() => {})
-  // Whether Claude Code is here and logged in, asked once now so the first lesson needn't wait for it
-  void import('./claudeEngine').then((c) => c.claudeStatus()).catch(() => {})
+  // Gemma loads on demand while Claude teaches (main/modelIdle). When Claude can't (not set up,
+  // logged out, at its limit, offline, or Gemma chosen), as before: start the model server if it
+  // isn't running, turn on prefix caching and the draft model, then load the chat and lesson
+  // prompts into it, so the first reply is quick
+  const warm = () => warmChat().then(() => warmLessons())
+  const ready = () => getGemmaReady(warm)
+  // Claude teaching and Gemma loaded with nobody using it: its 10 GB go back to the Mac now
+  ready()
+    .then(() => unloadIdleAtLaunch())
+    .catch(() => {})
   // Claude Code in the terminal reaches Tide's tools on a fixed port, while Tide is open (when set up)
   if (getSettings().ai.claude?.terminalPort) void import('./tideMcp').then((m) => m.ensureMcp()).catch(() => {})
-  // The model's memory goes back to the Mac when you aren't studying, and loads as you return
+  // The model's memory goes back to the Mac when you aren't studying, and loads as you return (when Gemma is wanted)
   watchModelIdle()
   app.on('browser-window-focus', () => wakeModel(() => warmChat()))
-  // A restarted (or closed) server forgets all that: check each minute, when the model is free
-  setInterval(() => {
-    inBackground(
-      async () => {
-        if ((await ensureModelServer()) === 'started') await serverReady()
-        return tuneModelServer()
-      },
-      undefined,
-      false
-    )
-      .then((r) => (r === 'enabled' && inUse() ? warmChat().then(() => warmLessons()) : undefined))
-      .catch(() => {})
-  }, 60_000)
-  // After sleep, the server may have dropped what it had ready: get Gemma ready again before you ask
+  // A restarted (or closed) server forgets all that, and Claude may have hit its limit: check each minute
+  setInterval(() => void minuteCheck(warm).catch(() => {}), 60_000)
+  // After sleep, the server may have dropped what it had ready: get Gemma ready again before you ask (when it's wanted)
   powerMonitor.on('resume', () => setTimeout(() => ready().catch(() => {}), 4000))
   powerMonitor.on('unlock-screen', () => setTimeout(() => ready().catch(() => {}), 2000))
 

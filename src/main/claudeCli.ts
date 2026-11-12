@@ -142,11 +142,16 @@ export function parseLine(line: string): ClaudeEvent | null {
 }
 
 /** Errors that mean "use Gemma for now": not installed, not logged in, out of plan */
-export function unavailableReason(text: string): 'login' | 'limit' | null {
+export function unavailableReason(text: string): 'login' | 'limit' | 'network' | null {
   if (/not logged in|please run \/login|invalid api key|authentication|unauthori[sz]ed|oauth/i.test(text)) return 'login'
   if (/usage limit|rate limit|limit reached|out of (extra )?usage|429|overloaded/i.test(text)) return 'limit'
+  // No connection to Claude: Gemma takes the turn as it does at a limit (main/modelIdle)
+  if (/ENOTFOUND|ECONNREFUSED|ECONNRESET|ETIMEDOUT|EAI_AGAIN|getaddrinfo|network error|fetch failed|unable to connect|connection error|request timed out/i.test(text)) return 'network'
   return null
 }
+
+/** A reason as the few words a step shows */
+export const unavailableText = (why: 'login' | 'limit' | 'network') => (why === 'login' ? 'not logged in' : why === 'network' ? 'offline: no connection to Claude' : 'at your plan’s limit')
 
 export interface ClaudeStatus {
   installed: boolean

@@ -26,7 +26,7 @@ import {
   type SectionClass,
   type SortedRoadmap
 } from '@shared/curriculum'
-import { askCloud, complete, extractJsonObject, NoCloud } from './ai'
+import { askCloud, completeFor, extractJsonObject, jobRoute, NoCloud } from './ai'
 import type { ReplySchema } from './cloudStream'
 import { ENRICH_SCHEMA, PROPOSALS_SCHEMA, SORT_SCHEMA } from './replySchemas'
 import { getCoach } from './coach'
@@ -70,7 +70,7 @@ export async function setOverride(id: string, cls: SectionClass | null): Promise
   return all
 }
 
-/** One model answer: the cloud planning model when it may see this, else Gemma in the background lane */
+/** One model answer: the cloud planning model when it may see this, then Claude's background model, else Gemma in the background lane */
 export async function ask(system: string, prompt: string, onMac: boolean, signal: AbortSignal, schema?: ReplySchema): Promise<{ text: string; model: string }> {
   if (!onMac) {
     try {
@@ -81,7 +81,9 @@ export async function ask(system: string, prompt: string, onMac: boolean, signal
       if (!(e instanceof NoCloud)) throw e
     }
   }
-  return { text: await complete(prompt, system, signal, 'background', 'background'), model: 'gemma' }
+  const route = await jobRoute('curriculum', `${system}\n${prompt}`, { private: onMac })
+  const text = await completeFor('curriculum', prompt, system, { signal, priority: 'background', task: 'background', private: onMac })
+  return { text, model: route.who === 'claude' ? 'claude' : 'gemma' }
 }
 
 export interface SortStatus {

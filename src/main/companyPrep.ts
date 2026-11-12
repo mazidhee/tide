@@ -1,5 +1,5 @@
 import type { ChatEvent, CompanyPrepRequest } from '@shared/types'
-import { friendlyError, streamDraft } from './ai'
+import { draftFor, friendlyError } from './ai'
 import { readWebpage, webSearch } from './agent'
 import { getSettings } from './settings'
 import { filedUnder } from './learn'
@@ -105,14 +105,18 @@ export async function draftCompanyPrep(req: CompanyPrepRequest, emit: (e: ChatEv
     ]
       .filter(Boolean)
       .join('\n\n')
-    for await (const text of streamDraft(
+    // Claude when nothing filed under the company is in a private project, else Gemma (shared/gemmaPolicy)
+    for await (const text of draftFor(
+      'companyPrep',
       [
         { role: 'system', content: SYSTEM },
         { role: 'user', content: user }
       ],
       controller.signal,
-      3500
-    , 'planning')) {
+      3500,
+      'planning',
+      { path: filed, text: `${req.company}\n${req.role ?? ''}\n${req.notes ?? ''}` }
+    )) {
       emit({ id: req.id, type: 'delta', text })
     }
     // The pages it was written from, so the plan can be checked

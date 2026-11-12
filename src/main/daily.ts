@@ -1,4 +1,4 @@
-import { complete, extractJsonObject } from './ai'
+import { completeFor, extractJsonObject } from './ai'
 import { readText } from './vault'
 
 export interface DailyGrade {
@@ -23,7 +23,8 @@ ${req.answer.trim() || '(no answer)'}
 """
 ${req.kind === 'recall' ? 'Correct means they got the main ideas of the note across in their own words; partial means some key ideas are missing or muddled; wrong means it misses the point.' : 'Correct means they now have the right idea; partial means they are close but missing or confusing something; wrong means the mistake is still there.'}
 Return ONLY JSON: {"verdict": "correct|partial|wrong", "feedback": "one or two sentences, speaking to them as you (never \"the student\"): what was right, then what was missing or wrong and the key idea"}`
-  const out = await complete(prompt, SYSTEM, undefined, 'interactive', 'errors')
+  // Claude's marking model when the note or mistake may leave this Mac, else Gemma (shared/gemmaPolicy)
+  const out = await completeFor('dailyMark', prompt, SYSTEM, { path: req.path, text: `${req.question}\n${req.expected ?? ''}`, task: 'errors' })
   const json = extractJsonObject<{ verdict?: string; feedback?: string }>(out)
   const verdict = json.verdict === 'correct' || json.verdict === 'partial' ? json.verdict : 'wrong'
   return { verdict, feedback: String(json.feedback ?? '').trim() || (verdict === 'correct' ? 'That’s it.' : 'Not quite.') }

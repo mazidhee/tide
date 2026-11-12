@@ -380,14 +380,15 @@ export interface WorkshopModels {
   /** The stronger cloud model's whole answer; throws when none can take it */
   cloud(prompt: string, system: string, task: 'errors' | 'planning', signal: AbortSignal): Promise<string>
   /** The model on this Mac */
-  local(prompt: string, system: string, signal: AbortSignal): Promise<string>
+  local(prompt: string, system: string, signal: AbortSignal, mayLeave?: boolean): Promise<string>
   /** The existing rule for whether a turn may leave this Mac (a private project, anything about your Metabase) */
   mayLeave(notebook: string | undefined, text: string): Promise<boolean>
 }
 
 const realModels: WorkshopModels = {
   cloud: async (prompt, system, task, signal) => (await import('./ai')).askCloud(prompt, system, task, signal, false, 1500),
-  local: async (prompt, system, signal) => (await import('./ai')).complete(prompt, system, signal),
+  // Claude when the turn may leave this Mac, else Gemma (shared/gemmaPolicy)
+  local: async (prompt, system, signal, mayLeave) => (await import('./ai')).completeFor('workshop', prompt, system, { signal, private: !mayLeave }),
   mayLeave: async (notebook, text) => {
     const { mayLeaveMac } = await import('./lessonGuard')
     return mayLeaveMac({ id: 'workshop', scope: notebook ? { kind: 'folder', path: notebook } : { kind: 'none' }, messages: [{ role: 'user', content: text }] } as ChatRequest)
@@ -396,12 +397,13 @@ const realModels: WorkshopModels = {
 
 /** The stronger cloud model when the turn may leave this Mac and one can take it; otherwise the model on this Mac */
 async function askTutor(models: WorkshopModels, notebook: string | undefined, prompt: string, system: string, signal: AbortSignal): Promise<{ text: string; by: 'cloud' | 'local' | 'none' }> {
-  if (await models.mayLeave(notebook, prompt).catch(() => false)) {
+  const leave = await models.mayLeave(notebook, prompt).catch(() => false)
+  if (leave) {
     const text = await models.cloud(prompt, system, 'errors', signal).catch(() => '')
     if (text.trim()) return { text, by: 'cloud' }
   }
   if (signal.aborted) return { text: '', by: 'none' }
-  const text = await models.local(prompt, system, signal).catch(() => '')
+  const text = await models.local(prompt, system, signal, leave).catch(() => '')
   return text.trim() ? { text, by: 'local' } : { text: '', by: 'none' }
 }
 
