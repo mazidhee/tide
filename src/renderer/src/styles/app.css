@@ -246,7 +246,8 @@ kbd {
   z-index: 1;
 }
 
-.main {
+/* The page's own main (Monaco's suggest widget has a .main too, which this must not reach) */
+.shell > .main {
   position: relative;
   min-width: 0;
   height: 100%;
@@ -530,7 +531,7 @@ kbd {
   font-weight: 500;
 }
 
-.tree {
+ul.tree {
   list-style: none;
   margin: 0;
   padding: 0 8px 12px;
@@ -539,7 +540,7 @@ kbd {
   min-height: 0;
 }
 
-.tree ul {
+ul.tree ul {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -8787,7 +8788,7 @@ button.menu-row:hover {
 html,
 #root,
 .shell,
-.main,
+.shell > .main,
 .doc-view,
 .pdf-split,
 .chat,
@@ -9346,6 +9347,388 @@ html,
 .ide-terminal {
   flex: 1;
   min-height: 0;
+}
+
+/* ---------- The Code view as VS Code lays it out: explorer, problems, tests, status bar, quick open ---------- */
+
+.ide.with-explorer .ide-body {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+.ide.with-explorer.with-tutor .ide-body {
+  grid-template-columns: 220px minmax(0, 1fr) minmax(320px, 380px);
+}
+
+.ide-head .ide-tabs .icon-btn {
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+.ide-tab.has-errors > button:first-child {
+  color: var(--danger);
+}
+
+.ide-explorer {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+  background: var(--bg-sidebar);
+  font-size: 13px;
+}
+
+.ide-explorer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.ide-explorer .ide-picker {
+  left: 0;
+  right: auto;
+}
+
+.ide-tree,
+.ide-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ide-tree {
+  padding-bottom: 12px;
+}
+
+.ide-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  height: 24px;
+  padding-right: 8px;
+  text-align: left;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.ide-tree-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ide-tree-row:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.ide-tree-row.on {
+  background: var(--bg-active);
+  color: var(--ink);
+}
+
+.ide-tree-row.has-errors .ide-tree-name {
+  color: var(--danger);
+}
+
+.ide-tree-row.has-warnings .ide-tree-name {
+  color: var(--warn);
+}
+
+.ide-tree-chev {
+  flex-shrink: 0;
+  color: var(--ink-muted);
+  transition: transform 0.12s var(--ease);
+}
+
+.ide-tree-chev.open {
+  transform: rotate(90deg);
+}
+
+.ide-tree-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: inherit;
+  opacity: 0.85;
+}
+
+.ide-tree-row.has-errors .ide-tree-count {
+  color: var(--danger);
+}
+
+.ide-tree-row.has-warnings .ide-tree-count {
+  color: var(--warn);
+}
+
+.ide-tree-empty {
+  padding: 0 12px;
+}
+
+.ide-badge {
+  display: inline-block;
+  min-width: 16px;
+  margin-left: 6px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--bg-active);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.ide-panel-note {
+  padding: 4px 12px;
+}
+
+.ide-problems,
+.ide-tests {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 6px 8px;
+}
+
+.ide-problems ul,
+.ide-tests ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ide-problem {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 6px;
+  border-radius: var(--radius-s);
+  text-align: left;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+
+.ide-problem:hover {
+  background: var(--bg-hover);
+}
+
+.ide-problem-msg {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ide-problem-where {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--ink-muted);
+  font-size: 11.5px;
+}
+
+.ide-sev {
+  flex-shrink: 0;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--info);
+  transform: translateY(-1px);
+}
+
+.ide-sev.error {
+  background: var(--danger);
+}
+
+.ide-sev.warning {
+  background: var(--warn);
+  border-radius: 1px;
+  transform: translateY(-1px) rotate(45deg) scale(0.9);
+}
+
+.ide-sev.none {
+  opacity: 0.35;
+}
+
+.ide-test {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 2px 6px;
+  padding: 3px 6px;
+  font-size: 12.5px;
+}
+
+.ide-test-mark {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  color: var(--bg);
+  background: var(--danger);
+  transform: translateY(2px);
+}
+
+.ide-test-mark.pass {
+  background: var(--accent);
+}
+
+.ide-test-msg {
+  grid-column: 2;
+  font-family: var(--font-code);
+  font-size: 12px;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+}
+
+.ide-test-error,
+.ide-test-output pre {
+  margin: 4px 6px 8px;
+  font-family: var(--font-code);
+  font-size: 12px;
+  white-space: pre-wrap;
+  color: var(--danger);
+}
+
+.ide-test-output {
+  margin: 6px 6px 0;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.ide-test-output pre {
+  color: var(--ink);
+}
+
+.ide-project-link {
+  margin: 10px 6px 0;
+  font-size: 12px;
+}
+
+.ide-status {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 24px;
+  padding: 0 8px;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  flex-shrink: 0;
+}
+
+.ide-status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-s);
+  color: inherit;
+  white-space: nowrap;
+}
+
+button.ide-status-item:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.ide-status-item .ide-sev + .ide-sev {
+  margin-left: 6px;
+}
+
+.ide-status-gap {
+  flex: 1;
+}
+
+.ide-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-muted);
+  opacity: 0.6;
+}
+
+.ide-dot.on {
+  background: var(--accent);
+  opacity: 1;
+}
+
+.ide-dot.busy {
+  background: var(--warn);
+  opacity: 1;
+}
+
+.ide-quick-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 72px;
+}
+
+.ide-quick {
+  width: min(560px, calc(100vw - 32px));
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-m);
+  box-shadow: var(--pop-shadow, var(--shadow));
+}
+
+.ide-quick input {
+  width: 100%;
+  font-size: 13.5px;
+  margin-bottom: 4px;
+}
+
+.ide-quick ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.ide-quick button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: var(--radius-s);
+  text-align: left;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.ide-quick button.on {
+  background: var(--bg-active);
+}
+
+.ide-quick-dir {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.ide-quick-none {
+  padding: 6px 8px;
 }
 
 .primary-ish:not(:disabled) svg {
@@ -13322,7 +13705,7 @@ img.lightbox-item {
 }
 
 /* Page changes: only the page cross-fades and settles; the sidebar and window stay still */
-.main {
+.shell > .main {
   view-transition-name: page;
 }
 
