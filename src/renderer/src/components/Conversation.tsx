@@ -496,7 +496,8 @@ export function Composer({ value, onChange, onSend, busy, onStop, web, onWeb, at
   const canSend = !!value.trim() || !!attachment
   const latest = useRef(value)
   latest.current = value
-  // A screenshot pasted or dropped in is saved to the vault and goes with the message; Gemma sees it
+  const picker = useRef<HTMLInputElement>(null)
+  // A screenshot pasted or dropped in is saved to the vault and goes with the message: Claude sees it (Gemma when Claude can’t)
   const addImages = (files: File[]) => {
     if (!files.length) return false
     ;(async () => {
@@ -547,6 +548,20 @@ export function Composer({ value, onChange, onSend, busy, onStop, web, onWeb, at
         <div className="composer-tools">
           {tools}
           <EnginePill />
+          <button type="button" className="pill" title="Add a screenshot or a photo (or paste or drop one in)" aria-label="Add a picture" onClick={() => picker.current?.click()}>
+            <Icon name="image" size={13} />
+          </button>
+          <input
+            ref={picker}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/heic,image/heif,.heic,.heif"
+            multiple
+            hidden
+            onChange={(e) => {
+              addImages(pastedImageFiles(e.target.files))
+              e.target.value = ''
+            }}
+          />
           <button
             type="button"
             className={`pill${web ? ' on' : ''}`}

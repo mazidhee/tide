@@ -77,6 +77,28 @@ export function userLine(content: string | unknown[]): string {
   return JSON.stringify({ type: 'user', message: { role: 'user', content } }) + '\n'
 }
 
+/** A picture ready to send (main/imagePrep) */
+export interface ImageInput {
+  mediaType: string
+  data: string
+}
+
+/**
+ * A message's content: the text alone, or with pictures as base64 image blocks (the shape the
+ * CLI's stream-json input takes, tried against the real `claude -p`). The pictures go first and
+ * the words after, as Anthropic advises, so the question is read with the pictures in view.
+ */
+export function userContent(text: string, images: ImageInput[] = []): string | unknown[] {
+  if (!images.length) return text
+  return [...images.map((im) => ({ type: 'image', source: { type: 'base64', media_type: im.mediaType, data: im.data } })), { type: 'text', text }]
+}
+
+/** A one-shot call's command line: stream-json in and out when its message carries pictures, plain JSON out otherwise */
+export function onceArgs(model: string, system: string, withImages: boolean): string[] {
+  const io = withImages ? ['--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose'] : ['--output-format', 'json']
+  return ['-p', '--model', model, ...io, '--tools', '', '--strict-mcp-config', '--setting-sources', '', '--no-session-persistence', '--permission-mode', 'dontAsk', '--system-prompt', system]
+}
+
 export interface ClaudeUsage {
   input: number
   output: number

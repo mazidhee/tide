@@ -3,7 +3,8 @@
 // be tested without the real CLI. It says what it was given (its arguments, any API key it can
 // see, each message and model switch) in its replies. Words in a message change what it does:
 // "crash" exits, "limit" answers as a plan at its limit, "slow" writes slowly until interrupted,
-// "think" thinks before it writes.
+// "think" thinks before it writes. Pictures (image blocks) are counted in its reply; a marking call
+// sent with pictures (one-shot, stream-json in) answers with a verdict that says how many it saw.
 import { createInterface } from 'readline'
 const out = (o) => process.stdout.write(JSON.stringify(o) + '\n')
 const args = process.argv.slice(2)
@@ -54,6 +55,13 @@ if (flag('--output-format') === 'json' || !flag('--input-format')) {
     if (m.type !== 'user') return
     turn++
     const said = typeof m.message.content === 'string' ? m.message.content : JSON.stringify(m.message.content)
+    const blocks = Array.isArray(m.message.content) ? m.message.content : []
+    const pics = blocks.filter((b) => b.type === 'image' && b.source?.type === 'base64' && b.source.data && b.source.media_type)
+    const words = blocks.length ? blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n') : said
+    if (!flag('--mcp-config') && words.includes("The student's answer")) {
+      const verdict = words.includes('42') || pics.length ? 'correct' : 'wrong'
+      return result(JSON.stringify({ verdict, score: verdict === 'correct' ? 1 : 0, why: `marked by ${model} seeing ${pics.length} picture${pics.length === 1 ? '' : 's'}` }))
+    }
     if (said.includes('crash')) process.exit(3)
     if (said.includes('limit')) {
       out({ type: 'rate_limit_event', rate_limit_info: { status: 'rejected', resetsAt: Math.floor(Date.now() / 1000) + 600, rateLimitType: 'five_hour', utilization: 1 } })
@@ -66,7 +74,7 @@ if (flag('--output-format') === 'json' || !flag('--input-format')) {
       return
     }
     if (said.includes('think')) out({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'hmm' } } })
-    const reply = `pid ${process.pid} turn ${turn} model ${model} tools ${tools || 'none'} key ${process.env.ANTHROPIC_API_KEY ?? 'none'} heard: ${said.slice(0, 60)}${said.includes('custom ```visual explainer') ? ' [offered a visual]' : ''}`
+    const reply = `pid ${process.pid} turn ${turn} model ${model} tools ${tools || 'none'} key ${process.env.ANTHROPIC_API_KEY ?? 'none'} heard: ${(pics.length ? words : said).slice(0, 60)}${pics.length ? ` [pictures ${pics.map((b) => b.source.media_type).join(',')}]` : ''}${said.includes('custom ```visual explainer') ? ' [offered a visual]' : ''}`
     delta(reply.slice(0, 10))
     delta(reply.slice(10))
     out({ type: 'assistant', message: { content: [{ type: 'text', text: reply }] } })

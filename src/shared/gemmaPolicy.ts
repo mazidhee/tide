@@ -32,9 +32,10 @@ export const JOB_ROUTES = {
   learnerProfile: { label: 'Learner profile and direction', role: 'background', privacy: 'text' },
   curriculum: { label: 'Sorting roadmaps, enriching topics, readings', role: 'background', privacy: 'flag' },
   workshop: { label: 'Guided project review', role: 'teach', privacy: 'flag' },
+  // Pictures go to Claude too (main/imagePrep makes them ready): a photo of handwritten maths is marked by the marking model
+  handwriting: { label: 'Marking photos of handwritten working', role: 'mark', privacy: 'scope' },
   // Only on Gemma's own lessons (Claude runs its own checks): they stay where they are
-  lessonChecks: { label: 'Gemma lesson checks, problem bank, hidden tests, read-back', role: null, privacy: 'none' },
-  handwriting: { label: 'Marking photos of handwritten working', role: null, privacy: 'none' }
+  lessonChecks: { label: 'Gemma lesson checks, problem bank, hidden tests, read-back', role: null, privacy: 'none' }
 } as const satisfies Record<string, { label: string; role: ClaudeRole | null; privacy: 'none' | 'path' | 'scope' | 'text' | 'flag' }>
 
 export type JobName = keyof typeof JOB_ROUTES

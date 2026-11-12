@@ -1,20 +1,24 @@
 import { promises as fs } from 'fs'
 import { posix } from 'path'
 import { imageRefs } from '@shared/noteImages'
+import { dataUrlOf, MAX_IMAGES, prepareImage, type PreparedImage } from './imagePrep'
 import { absPath, resolveLink } from './vault'
 
 /**
- * The pictures a note or message embeds, read from the vault for Gemma to look at: a screenshot
- * of a textbook page, a diagram, a photo of working. A few at most, so a turn stays quick.
+ * The pictures a note or message embeds, read from the vault for the tutor to look at: a
+ * screenshot of a textbook page, a diagram, a photo of working. Each is made ready for a model
+ * (main/imagePrep: an iPhone HEIC becomes a JPEG, a large photo is scaled down), a few at most,
+ * so a turn stays quick.
  */
 
-const MAX_IMAGES = 4
-const MAX_BYTES = 6_000_000
-const MIME: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }
+/** Read at all: a phone photo can be large before it is scaled down */
+const MAX_FILE_BYTES = 30_000_000
 
 export interface NoteImage {
   /** Its vault path */
   path: string
+  /** Ready to send: base64 and its type */
+  image: PreparedImage
   dataUrl: string
 }
 
@@ -27,8 +31,9 @@ export async function loadImages(md: string, fromPath: string, max = MAX_IMAGES)
     const path = (await resolveLink(rel, fromPath).catch(() => null)) ?? (await resolveLink(ref.replace(/^\//, ''), fromPath).catch(() => null))
     if (!path || out.some((i) => i.path === path)) continue
     const buf = await fs.readFile(absPath(path)).catch(() => null)
-    if (!buf || buf.length > MAX_BYTES) continue
-    out.push({ path, dataUrl: `data:${MIME[path.split('.').pop()!.toLowerCase()] ?? 'image/png'};base64,${buf.toString('base64')}` })
+    if (!buf || buf.length > MAX_FILE_BYTES) continue
+    const image = await prepareImage(buf).catch(() => null)
+    if (image) out.push({ path, image, dataUrl: dataUrlOf(image) })
   }
   return out
 }

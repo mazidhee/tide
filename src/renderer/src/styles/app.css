@@ -19022,3 +19022,39 @@ button.tl-dot:focus-visible {
   border-radius: var(--radius-m);
   background: var(--bg-inset);
 }
+
+/* Pictures waiting to go with an answer or a question (AttachImages) */
+.attached-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 2px 2px;
+}
+
+.attached-pic {
+  position: relative;
+}
+
+.attached-pic img,
+.attached-pic.loading {
+  display: block;
+  height: 64px;
+  min-width: 48px;
+  max-width: 160px;
+  object-fit: cover;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--line);
+}
+
+.attached-pic.loading {
+  width: 64px;
+  background: var(--bg-hover);
+}
+
+.attached-pic .icon-btn {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  background: var(--bg-raised);
+}

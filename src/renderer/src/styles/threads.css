@@ -684,3 +684,12 @@
     transition: none;
   }
 }
+/* A picture sent in a thread (a photo of working, a screenshot) */
+.lt-me-pic {
+  display: block;
+  max-height: 120px;
+  max-width: 100%;
+  margin-top: 6px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--line);
+}

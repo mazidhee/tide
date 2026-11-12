@@ -10,6 +10,8 @@ const settings = { ai: { claude: {} as Record<string, unknown> } }
 vi.mock('../src/main/settings', () => ({ getSettings: () => settings }))
 vi.mock('../src/main/claudeCli', async (orig) => ({ ...(await orig<object>()), checkClaude: async () => ({ installed: true, loggedIn: true, checkedAt: Date.now() }) }))
 let privateTurn = false
+/** The pictures buildTurn found for the turn (main/noteImages), as the next turn will have them */
+let turnImages: { path: string; image: { mediaType: string; data: string }; dataUrl: string }[] = []
 vi.mock('../src/main/agent', () => {
   let n = 0
   return {
@@ -18,7 +20,7 @@ vi.mock('../src/main/agent', () => {
     buildTurn: async (req: { messages: ChatMessage[] }, emit: (e: ChatEvent) => void, _s: AbortSignal, base: string) => ({
       ctx: { private: privateTurn, sources: [], emitSources: () => {}, step: () => `s${++n}`, updateStep: () => {} },
       messages: [{ role: 'system', content: `SYSTEM ${base.length}` }, ...req.messages],
-      images: [],
+      images: turnImages,
       mine: false,
       secret: false,
       emit
@@ -42,6 +44,7 @@ const steps = (events: ChatEvent[]) => events.filter((e) => e.type === 'step').m
 
 beforeEach(() => {
   privateTurn = false
+  turnImages = []
   settings.ai.claude = {}
 })
 afterAll(() => engine.stopClaude())
@@ -77,6 +80,19 @@ describe('Claude lessons', () => {
     const use = engine.readClaudeUsage(0)
     expect(use.some((u) => u.role === 'mark' && /opus/.test(u.model))).toBe(true)
     expect(use.some((u) => u.role === 'teach' && /sonnet/.test(u.model))).toBe(true)
+  })
+
+  it('sends a photo of the working with an answer: Opus marks what it shows, and the tutor sees it too', async () => {
+    turnImages = [{ path: 'Chat images/working.png', image: { mediaType: 'image/png', data: 'iVBORw0KGgo=' }, dataUrl: 'data:image/png;base64,iVBORw0KGgo=' }]
+    const asked = 'Factorise x^2-1. <ask type="problem">Factorise</ask><solution>(x-1)(x+1)</solution>'
+    const t = say([{ role: 'user', content: 'start' }, { role: 'assistant', content: asked }, { role: 'user', content: 'Answer: My working is in the picture.\n\n![working](/Chat%20images/working.png)' }], { labId: 'lesson:photo', session: true })
+    const r = await t.run
+    expect(steps(t.events)).toContain('Claude can see your picture')
+    expect(steps(t.events)).toContain('Opus is marking your answer')
+    // The marker saw the picture: its verdict reaches the tutor, with why
+    expect(t.events.some((e) => e.type === 'step' && /correct/.test(String((e as { step: { detail?: string } }).step.detail)))).toBe(true)
+    expect(r).toContain('[pictures image/png]')
+    expect(r).toMatch(/model sonnet/)
   })
 
   it('starts again with the transcript when the process died', async () => {
