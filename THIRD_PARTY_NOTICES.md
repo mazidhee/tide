@@ -1128,3 +1128,141 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## basedpyright 1.40.2 (npm package: the Python language server behind the code editor's IntelliSense)
+
+- Source: https://github.com/DetachHead/basedpyright, a fork of Pyright (https://github.com/microsoft/pyright)
+- Files: its language server, run unmodified as its own process; with it, typeshed's standard-library stubs and the stubs for requests and tqdm
+- Licence: MIT
+
+```
+MIT License
+
+Pyright - A static type checker for the Python language
+Copyright (c) Microsoft Corporation. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE
+```
+
+## typeshed (the stubs inside basedpyright, at node_modules/basedpyright/dist/typeshed-fallback)
+
+- Source: https://github.com/python/typeshed
+- Licence: Apache-2.0, with some parts under MIT. The full text ships beside the stubs, in `typeshed-fallback/LICENSE`; its opening lines:
+
+```
+The "typeshed" project is licensed under the terms of the Apache license, as
+reproduced below.
+
+```
+
+## shiki 4.6.0, with @shikijs/core, @shikijs/engine-javascript, @shikijs/langs, @shikijs/themes, @shikijs/types, @shikijs/primitive and @shikijs/vscode-textmate 4.6.0 (npm packages: VS Code's TextMate highlighting in the code editor)
+
+- Source: https://github.com/shikijs/shiki
+- Licence: MIT
+
+```
+MIT License
+
+Copyright (c) 2021 Pine Wu
+Copyright (c) 2023 Anthony Fu <https://github.com/antfu>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+@shikijs/vscode-textmate is a fork of vscode-textmate (https://github.com/microsoft/vscode-textmate), MIT:
+
+```
+The MIT License (MIT)
+
+Copyright (c) Microsoft Corporation
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## oniguruma-to-es, oniguruma-parser, regex, regex-recursion and regex-utilities (npm packages, used by shiki's JavaScript regex engine)
+
+- Source: https://github.com/slevithan
+- Licence: MIT
+
+```
+MIT License
+
+Copyright (c) 2024-2026 Steven Levithan
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## Grammars and colour themes (bundled through @shikijs/langs and @shikijs/themes)
+
+Each is loaded only when a file in its language opens, and keeps its upstream licence (permissive: MIT unless tm-grammars' index says otherwise):
+
+- Python: MagicPython (https://github.com/MagicStack/MagicPython)
+- JavaScript and TypeScript: TypeScript-TmLanguage (https://github.com/microsoft/TypeScript-TmLanguage)
+- C: better-c-syntax (https://github.com/jeff-hykin/better-c-syntax)
+- Shell: better-shell-syntax (https://github.com/jeff-hykin/better-shell-syntax)
+- Go, Rust, Java, SQL, JSON, YAML, HTML, CSS, Markdown, Kotlin, Swift, C#, R and Scala: the grammars VS Code and its language extensions ship, as collected in shiki's tm-grammars (https://github.com/shikijs/textmate-grammars-themes)
+- Themes: Dark+ and Light+, Solarized Light and Monokai, as VS Code ships them (https://github.com/microsoft/vscode, MIT)

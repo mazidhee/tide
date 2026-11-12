@@ -39,6 +39,13 @@ const api: TideApi = {
     list: invoke('code:list'),
     create: invoke('code:create')
   },
+  lsp: {
+    send: (msg) => ipcRenderer.send('lsp:send', msg),
+    onMessage: (cb) => subscribe<unknown>('lsp:message', cb),
+    info: invoke('lsp:info'),
+    status: invoke('lsp:status'),
+    readFile: invoke('lsp:readFile')
+  },
   terminal: {
     create: invoke('terminal:create'),
     write: invoke('terminal:write'),
@@ -169,6 +176,7 @@ const api: TideApi = {
     review: invoke('workshop:review'),
     ask: invoke('workshop:ask'),
     forTopic: invoke('workshop:forTopic'),
+    forFolder: invoke('workshop:forFolder'),
     propose: invoke('workshop:propose'),
     editor: invoke('workshop:editor'),
     openEditor: invoke('workshop:openEditor'),

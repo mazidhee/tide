@@ -19,6 +19,7 @@
   "dependencies": {
     "@astral-sh/ruff-wasm-web": "0.17.3",
     "@mozilla/readability": "^0.6.0",
+    "basedpyright": "1.40.2",
     "chokidar": "^4.0.3",
     "gray-matter": "^4.0.3",
     "jsdom": "^26.1.0",
@@ -41,6 +42,8 @@
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@fontsource-variable/source-serif-4": "^5.3.1",
     "@lezer/highlight": "^1.2.5",
+    "@shikijs/langs": "4.6.0",
+    "@shikijs/themes": "4.6.0",
     "@types/d3-force": "^3.0.10",
     "@types/jsdom": "^21.1.7",
     "@types/markdown-it": "^14.1.2",
@@ -68,10 +71,12 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "regexp-tree": "0.1.27",
+    "shiki": "4.6.0",
     "sql-formatter": "15.9.0",
     "typescript": "^5.8.3",
     "vite": "^7.1.11",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "vscode-languageserver-types": "3.17.5"
   },
   "build": {
     "appId": "app.tide.study",
@@ -83,7 +88,13 @@
     "files": [
       "out/**/*",
       "package.json",
-      "THIRD_PARTY_NOTICES.md"
+      "THIRD_PARTY_NOTICES.md",
+      "!node_modules/basedpyright/dist/*.map",
+      "!node_modules/basedpyright/dist/pyright.js",
+      "!node_modules/basedpyright/index.js",
+      "!node_modules/basedpyright/dist/typeshed-fallback/stubs/**",
+      "node_modules/basedpyright/dist/typeshed-fallback/stubs/requests/**",
+      "node_modules/basedpyright/dist/typeshed-fallback/stubs/tqdm/**"
     ],
     "mac": {
       "target": [
@@ -101,7 +112,8 @@
     },
     "asarUnpack": [
       "node_modules/node-pty/**",
-      "node_modules/pdfjs-dist/**"
+      "node_modules/pdfjs-dist/**",
+      "node_modules/basedpyright/**"
     ],
     "dmg": {
       "title": "Tide",
