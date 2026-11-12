@@ -26,6 +26,7 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 
 ## Now
 
+- [ ] **Courses you live in, with videos.** Everything opens inside Tide: course files rendered natively, YouTube in Tide's own player with its transcript, web pages in Tide's reader (or a sandboxed in-Tide view when a page can't be made readable). The tutor sees what's on screen at every step: ask about this, quiz me on this, jump to a moment. Lessons draw on several courses at once, with credit (one shows the code, a video at 12:40 explains why, a reading gives the theory). Includes the paused "Videos in Tide" work.
 - [ ] **Claude: a tutor that remembers you.** A learner profile in your vault (misconceptions, pace, what clicked), kept up by Claude and read with your past lessons and mistakes before each session.
 - [ ] **Claude: lesson prep while you're away.** Background prep before tomorrow's lesson: what's due, the best reading, exercises, a custom visual, a short plan. Plus a weekly review.
 - [ ] **Claude: a mentor for your projects.** Reads your whole project across sessions, reviews it like a senior engineer, runs your tests, and proposes edits in the Code view that you approve line by line.
@@ -34,12 +35,6 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - [ ] **Claude: mock interviews and exams.** Live coding with tests and system design on the canvas, timed and marked.
 - [ ] **Claude: a simpler, faster Tide.** Switch off the Gemma workarounds (stall guards, retries, output repair, constant trimming) on Claude lessons.
 - [ ] **Benchmark Sonnet and Opus.** Run Tide's tutor benchmark on both, and move any task where Sonnet is clearly weaker to Opus.
-- [ ] **Videos in Tide.** Paused for Claude: partial work in worktree `tide-video` (player, captions and cinema view working). YouTube's own player inside Tide, so almost no added weight: one player at a time, a thumbnail until play, removed when closed. Videos are never downloaded or hosted; your own MP4s also play.
-  - Player and transcript side by side: the line being spoken is marked, clicking a line jumps there, highlight or ask about a line.
-  - The tutor picks a section to watch before a lesson (from saved transcripts and course videos) and a recap clip after it, with questions drawn from the transcript.
-  - Course lessons that have a video show it beside the course text.
-  - After that: the video pauses at chosen moments for a question and goes on when you answer.
-  - Videos without captions can be transcribed on the Mac, only on request and when Gemma is idle.
 - [ ] **Faster lesson starts and fewer stalls.** The first answer of a new lesson takes 14–27 s. Gemma stalls in about 14% of turns, and retries run one after another. The turn after a long lesson is trimmed re-reads it all. Partial work: worktree `tide-fast2`.
 - [ ] **Everyday check: Python and ML from zero.** Run real lessons the way you use Tide ("I want to learn Python", "I want to learn ML"), over several sessions, and fix what goes wrong.
 - [ ] **Lab pack ready before it's needed.** Install the data and ML packages (about 900 MB) from Settings, in the background, so the first ML lesson doesn't stall for 30 s. Partial work: worktree `tide-voice`.
