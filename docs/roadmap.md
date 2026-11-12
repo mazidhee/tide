@@ -61,8 +61,8 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
   - A blockchain built from scratch (hashing, Merkle trees, signatures), checked by tests.
   - Reading real codebases together (SQLite, Redis, Bitcoin).
   - The tools work without Claude; Claude narrates them best.
-- [ ] **Claude: a tutor that remembers you.** A learner profile in your vault (misconceptions, pace, what clicked), kept up by Claude and read with your past lessons and mistakes before each session.
-- [ ] **Claude: lesson prep while you're away.** Background prep before tomorrow's lesson: what's due, the best reading, exercises, a custom visual, a short plan. Plus a weekly review.
+- [x] **Claude: a tutor that remembers you.** A learner profile in your vault (misconceptions, pace, what clicked), kept up by Claude and read with your past lessons and mistakes before each session.
+- [x] **Claude: lesson prep while you're away.** Background prep before tomorrow's lesson: what's due, the best reading, exercises, a custom visual, a short plan. Plus a weekly review.
 - [ ] **Claude: a mentor for your projects.** Reads your whole project across sessions, reviews it like a senior engineer, runs your tests, and proposes edits in the Code view that you approve line by line.
 - [ ] **Claude: reading primary sources together.** Papers, documentation and classics read in full, with web search and page reading. A seminar that argues, steelmans and critiques your writing.
 - [x] **Claude: photos and screenshots.** Mark handwritten maths from a photo; explain a diagram or an error screenshot. Pictures in chat, lessons, threads, notes and exams go to Claude as image blocks (scaled to 1568 px, HEIC to JPEG), Gemma when Claude can’t or the work is private.
