@@ -308,7 +308,8 @@ const api: TideApi = {
   },
   recall: {
     queue: invoke('recall:queue'),
-    review: invoke('recall:review')
+    review: invoke('recall:review'),
+    keep: invoke('recall:keep')
   },
   goals: {
     list: invoke('goals:list'),

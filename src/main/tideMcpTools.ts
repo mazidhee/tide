@@ -9,6 +9,48 @@ const obj = (properties: Record<string, unknown>, required: string[] = []) => ({
 
 export const EXTRA_TOOLS: McpTool[] = [
   {
+    name: 'lesson_progress',
+    description:
+      "In a lesson: keep the learner's lesson map true. Call it when a step of your <plan> starts (the first one too), when they pass a step's check (with a note of what they showed, in a few words), when you close a step they asked to skip, or to add a step when something doesn't click. Steps are numbered from 1 as in your plan. For the question in a reply, put <progress checking=\"…\" left=\"N\"/> in the reply instead of calling this.",
+    inputSchema: obj(
+      {
+        event: { type: 'string', enum: ['started', 'passed', 'skipped', 'added', 'checking'] },
+        step: { type: 'number', description: 'The step, numbered from 1. For added: the step it goes after' },
+        note: { type: 'string', description: 'passed: what they showed, in a few words, e.g. "Converted 52 and 150 with a check"' },
+        title: { type: 'string', description: 'added: the new step\'s short title' },
+        about: { type: 'string', description: 'added: what it covers, in one line' },
+        done_when: { type: 'string', description: 'added: "Done when …", the check that shows they have it' },
+        minutes: { type: 'number', description: 'added: rough minutes' },
+        checking: { type: 'string', description: 'What the current question checks, e.g. "padding goes on the left"' },
+        checks_left: { type: 'number', description: 'Checks left in the current step, this question included' }
+      },
+      ['event']
+    ),
+    async run(args, ctx) {
+      const { progressTag } = await import('@shared/lessonPlan')
+      const n = Math.round(Number(args.step))
+      const step = Number.isFinite(n) && n >= 0 && n < 100 ? n : undefined
+      const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 160) : undefined)
+      const event = String(args.event ?? '')
+      const left = Number(args.checks_left)
+      const report = {
+        ...(event === 'started' && step ? { step } : {}),
+        ...(event === 'passed' && step ? { passed: step, ...(str(args.note) ? { note: str(args.note) } : {}) } : {}),
+        ...(event === 'skipped' && step ? { skipped: step } : {}),
+        ...(event === 'added' && str(args.title)
+          ? { add: { title: str(args.title)!, ...(str(args.about) ? { about: str(args.about) } : {}), ...(str(args.done_when) ? { doneWhen: str(args.done_when) } : {}), ...(Number(args.minutes) > 0 ? { minutes: Math.round(Number(args.minutes)) } : {}) }, ...(step !== undefined ? { after: step } : {}) }
+          : {}),
+        ...(str(args.checking) ? { checking: str(args.checking) } : {}),
+        ...(Number.isFinite(left) && left >= 0 ? { left: Math.round(left) } : {})
+      }
+      if (!Object.keys(report).length) return 'Nothing to show: give an event with its step (and a title for added).'
+      // The lesson takes it as the same tag Gemma writes, kept in the reply (SessionView): it survives reopening the lesson
+      const label = report.passed ? `Step ${report.passed} done` : report.skipped ? `Step ${report.skipped} moved to your reviews` : report.add ? `Added a step: ${report.add.title}` : report.step ? `Step ${report.step} started` : 'Lesson map updated'
+      ctx.step({ kind: 'progress', label, detail: progressTag(report), status: 'done', depth: 0 })
+      return 'Shown on the lesson map.'
+    }
+  },
+  {
     name: 'learner_profile',
     description: "Who the learner is: their profile and aims, what you remember about them, this week's plan, how many recall questions are due, and their most recent lessons. Read it at the start of a conversation that isn't a lesson (a lesson already has this in its prompt).",
     inputSchema: obj({}),

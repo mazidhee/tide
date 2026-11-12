@@ -1,0 +1,24 @@
+/*
+  The lesson map in the new design (the base is styles/lessonmap.css): its column width, type
+  scale and radii. Scoped to data-design='tide'.
+*/
+
+:root[data-design='tide'] {
+  .lm-col {
+    --lm-w: 720px;
+  }
+  .lm-track {
+    padding-inline: 40px;
+  }
+  .lm-goal {
+    font-family: var(--read);
+  }
+  .lm-end {
+    border-radius: var(--r-box, var(--radius-l));
+    border-color: var(--line-2);
+    background: var(--raised);
+  }
+  .s-ask .lm-purpose {
+    font: 400 var(--t-meta, 13px) / 18px var(--ui);
+  }
+}

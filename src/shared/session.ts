@@ -11,6 +11,7 @@ import { parseAppraise, type AppraiseRow } from './humanities'
 import { lessonKit, type SubjectProfile } from './subjects'
 import { courseRules, type CourseRef } from './courses'
 import { clipsIn } from './video'
+import { MAP_RULES, parsePlanBody, parseProgress, type PlanStep, type ProgressReport } from './lessonPlan'
 
 /**
  * Learning sessions are a conversation where the tutor writes Markdown plus a few tags the UI
@@ -23,7 +24,10 @@ export type Block =
   | { kind: 'text'; text: string }
   | { kind: 'ask'; type: AskType; prompt: string; options: string[]; lang?: string; tests?: string; /** In a quiz on several topics: the one this question is on */ topic?: string }
   | { kind: 'grade'; verdict: Verdict; score: number; text: string }
-  | { kind: 'plan'; steps: string[] }
+  /** steps: the titles; detail: each with what it covers, when it's done and rough minutes (shared/lessonPlan) */
+  | { kind: 'plan'; steps: string[]; detail: PlanStep[]; goal?: string; ends?: string }
+  /** Where the lesson is on its plan, for the lesson map (shared/lessonMap): never shown as text */
+  | { kind: 'progress'; report: ProgressReport }
   | { kind: 'card'; front: string; back: string }
   | { kind: 'scores'; title: 'scorecard' | 'rubric'; rows: { label: string; score: number; max: number; note: string }[] }
   | { kind: 'challenge'; quote: string; text: string }
@@ -60,7 +64,7 @@ export const askIdentity = (ask: { type: string; prompt: string; lang?: string }
 
 const attr = (attrs: string, name: string) => attrs.match(new RegExp(`${name}\\s*=\\s*"([^"]*)"`, 'i'))?.[1] ?? attrs.match(new RegExp(`${name}\\s*=\\s*'([^']*)'`, 'i'))?.[1]
 
-const TAG = /<(ask|grade|plan|card|scorecard|rubric|challenge|summary|note|appraise|clip)\b([^>]*)>([\s\S]*?)<\/\1>/gi
+const TAG = /<(ask|grade|plan|card|scorecard|rubric|challenge|summary|note|appraise|clip|progress)\b([^>]*)>([\s\S]*?)<\/\1>/gi
 
 function parseScores(body: string): { label: string; score: number; max: number; note: string }[] {
   return body
@@ -111,7 +115,11 @@ export function parseBlocks(full: string): Block[] {
   const carryOn = /<continue\b[^>]*\/?>/i.test(full)
   // Hidden tests Tide made for the code question from its reference solution (main/codeTests.ts)
   const madeTests = /<tests\b[^>]*>([\s\S]*?)<\/tests>/i.exec(full)?.[1]?.trim() || undefined
-  const raw = closeGrade(hideWorking(full.replace(/<clip\b([^>]*?)\/>/gi, '<clip$1></clip>'))).replace(/<\/?continue\b[^>]*>/gi, '').replace(/<c(o(n(t(i(n(ue?)?)?)?)?)?)?$/i, '')
+  const raw = closeGrade(hideWorking(full.replace(/<clip\b([^>]*?)\/>/gi, '<clip$1></clip>').replace(/<progress\b([^>]*?)\/?>(?:[ \t]*<\/progress>)?/gi, '<progress$1></progress>')))
+    .replace(/<\/?continue\b[^>]*>/gi, '')
+    .replace(/<c(o(n(t(i(n(ue?)?)?)?)?)?)?$/i, '')
+    // A progress tag still being written is never shown
+    .replace(/<pr(o(g(r(e(s(s\b[^>]*)?)?)?)?)?)?$/i, '')
   // What the tutor said aloud (Talk) is spoken, not shown again as a block
   const said = splitSay(raw)
   // A reply that stalled after its spoken part still shows what was said, so there's something to answer
@@ -119,7 +127,7 @@ export function parseBlocks(full: string): Block[] {
   const blocks: Block[] = []
   let last = 0
   const pushText = (t: string) => {
-    const text = t.replace(/<(ask|grade|plan|card|scorecard|rubric|challenge|summary|note|appraise|clip)\b[^>]*>[\s\S]*$/i, '').trim()
+    const text = t.replace(/<(ask|grade|plan|card|scorecard|rubric|challenge|summary|note|appraise|clip|progress)\b[^>]*>[\s\S]*$/i, '').trim()
     if (text) blocks.push({ kind: 'text', text })
     // A question still being written shows as it comes, styled as the question it will be
     const open = t.match(/<ask\b([^>]*)>([\s\S]*)$/i)
@@ -158,7 +166,11 @@ export function parseBlocks(full: string): Block[] {
       const score = Number(attr(attrs, 'score') ?? (verdict === 'correct' ? 1 : verdict === 'wrong' ? 0 : 0.5))
       blocks.push({ kind: 'grade', verdict: ['correct', 'partial', 'wrong'].includes(verdict) ? verdict : 'partial', score: Math.max(0, Math.min(1, isNaN(score) ? 0.5 : score)), text: body })
     } else if (name === 'plan') {
-      blocks.push({ kind: 'plan', steps: body.split('\n').map((l) => l.replace(/^\s*(?:[-*]|\d+[.)])\s*/, '').trim()).filter(Boolean) })
+      const plan = parsePlanBody(body)
+      if (plan.steps.length) blocks.push({ kind: 'plan', steps: plan.steps.map((s) => s.title), detail: plan.steps, ...(plan.goal ? { goal: plan.goal } : {}), ...(plan.ends ? { ends: plan.ends } : {}) })
+    } else if (name === 'progress') {
+      const report = parseProgress(attrs)
+      if (report) blocks.push({ kind: 'progress', report })
     } else if (name === 'card') {
       const front = attr(attrs, 'front')
       const back = attr(attrs, 'back')
@@ -403,12 +415,13 @@ When it's done, write <summary>what they learned, what is still shaky, what to l
     const start = difficulty === 'hard' ? 'at a hard level' : difficulty === 'gentle' ? 'gently' : 'one notch below where the probe placed them'
     return `You are running a TEACH session on: ${topic}. They learn by doing: you explain briefly, they solve.
 1. PROBE: place them with 2 to 4 short questions, one at a time. Start near the hardest thing this topic needs; after a confident right answer, step up; after a miss, step down. Stop once you know where they're solid and where they break. Don't teach yet.
-2. PLAN: from what you learned, write a short path from what they know to the goal, skipping what they've shown they know:
+2. PLAN: from what you learned, write a short path (3 to 6 steps) to the goal, skipping what they've shown they know; it's their map:
 <plan>
-- first step
-- second step
+Goal: By the end you can …
+1. Title | what it covers | Done when … | 6 min
 </plan>
 3. TEACH each step in order:
+${MAP_RULES}
    - Explain the idea in under 150 words with one worked example, tied to where they're heading when it fits. If the probe showed they already have the background, skip the example and go straight to a problem.
    - Then a problem set, one problem per message (problem, code, error or explain asks), starting ${start}. Start each with its place, like "**Problem 2 · harder**". Never repeat a problem: change the details.
    - Right first time with no hint: the next one is harder. Right but with hints, or unsure: same level, new problem. Wrong: an easier one, or re-teach only the missing piece.

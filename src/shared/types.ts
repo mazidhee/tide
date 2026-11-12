@@ -374,7 +374,8 @@ export interface OutlineDraftRequest {
 
 export interface AgentStep {
   id: string
-  kind: 'search_notes' | 'read_note' | 'web_search' | 'read_webpage' | 'delegate' | 'helper' | 'run_code' | 'run_sql' | 'load_table' | 'remember' | 'terminal' | 'canvas' | 'metabase'
+  /** progress: the tutor's report for the lesson map (its detail is the <progress/> tag), never shown as a step */
+  kind: 'search_notes' | 'read_note' | 'web_search' | 'read_webpage' | 'delegate' | 'helper' | 'run_code' | 'run_sql' | 'load_table' | 'remember' | 'terminal' | 'canvas' | 'metabase' | 'progress'
   label: string
   detail?: string
   status: 'running' | 'done' | 'error'
@@ -915,6 +916,8 @@ export interface TideApi {
   recall: {
     queue(): Promise<{ path: string; title: string; due: number; first: boolean }[]>
     review(path: string, grade: ReviewGrade): Promise<void>
+    /** Keeps a question for a later lesson on its topic (a step skipped with "I've got this"); when it's due, or null */
+    keep(item: { prompt: string; topic: string; lesson: string; path?: string }): Promise<number | null>
   }
   goals: {
     list(): Promise<Goal[]>

@@ -575,6 +575,7 @@ function registerIpc() {
   handle('goals:list', () => getGoals())
   handle('recall:queue', () => getRecallQueue())
   handle('recall:review', (p: string, grade: 'again' | 'hard' | 'good' | 'easy') => reviewRecall(p, grade))
+  handle('recall:keep', (item: { prompt: string; topic: string; lesson: string; path?: string }) => import('./recall').then((r) => r.keepSkipped(item)))
   handle('goals:save', (goals: Parameters<typeof saveGoals>[0]) => saveGoals(goals))
   handle('exam:generate', (scope: ChatScope, topic: string, opts: Parameters<typeof generateExam>[2]) => generateExam(scope, topic, opts))
   handle('exam:mark', (q: Parameters<typeof markPart>[0], i: number, answer: string, images: string[]) => markPart(q, i, answer, images))

@@ -542,16 +542,18 @@ export interface LedState {
   fresh: boolean
 }
 
-const PLAN = /<plan>([\s\S]*?)<\/plan>/gi
+const PLAN = /<plan\b[^>]*>([\s\S]*?)<\/plan>/gi
+/** A plan's goal or end line (shared/lessonPlan), not a step */
+const GOAL_LINE = /^\**(goal|aim|by the end|ends?|when it ends)\**\s*[:—–-]/i
 
 export const planSteps = (reply: string): string[] => {
   const last = [...reply.matchAll(PLAN)].pop()
-  return last
-    ? last[1]
-        .split('\n')
-        .map((l) => l.replace(/^\s*(?:[-*]|\d+[.)])\s*/, '').trim())
-        .filter(Boolean)
-    : []
+  // The step titles only: a plan written for the lesson map has a goal line and "title | what | done when | minutes" lines
+  if (!last) return []
+  return last[1]
+    .split('\n')
+    .map((l) => l.replace(/^\s*(?:[-*]|\d+[.)])\s*/, '').split(/\s*\|\s*/)[0].trim())
+    .filter((l) => l && !GOAL_LINE.test(l))
 }
 
 /**

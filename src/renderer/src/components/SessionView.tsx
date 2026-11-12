@@ -49,14 +49,20 @@ import { useTideDesign } from '../lib/design'
 import { characterById } from '@shared/characters'
 import { conceptFor, useKnowledge } from '../lib/knowledge'
 import { useAreaClass } from '../lib/areas'
-import { since } from '@shared/knowledge'
 import { Level } from './tide/Level'
 import { AreaMark } from './tide/AreaMark'
 import { AnswerHint, AskPill, BackPill, FOLD_MS, SelectionAsk, ThreadSlot, highlightQuote, reducedMotion } from './LessonThreads'
 import { THREAD_RULES, asked, newThread, readsAsQuestion, restoreThreads, threadMessages, threadTakeaway, threadsNote, type LessonThread } from '@shared/lessonThreads'
+import { lessonMap, type Divider } from '@shared/lessonMap'
+import { isMoveOn, moveOnRequest } from '@shared/lessonPlan'
+import { localDate, todayItems } from '@shared/coach'
+import type { AgendaItem } from '@shared/coach'
+import { loadDaily } from '../lib/daily'
+import { startAgendaLesson } from '../lib/agenda'
+import { AskPurpose, LessonEnd, LessonTrack, MoveOnChip, StepDivider } from './LessonTrack'
 
 // Loaded when a lesson needs them: the code editor (Monaco) and the walkthrough canvas
-const answered = (said: string) => !said.startsWith(GO_ON) && !said.startsWith(ASKED)
+const answered = (said: string) => !said.startsWith(GO_ON) && !said.startsWith(ASKED) && !isMoveOn(said)
 
 const CodeEditor = lazy(() => import('./CodeEditor').then((m) => ({ default: m.CodeEditor })))
 const LessonCanvas = lazy(() => import('./LessonCanvas').then((m) => ({ default: m.LessonCanvas })))
@@ -66,6 +72,17 @@ interface Turn {
   role: 'user' | 'assistant'
   content: string
   steps?: AgentStep[]
+  /** When it was sent: kept with a lesson in progress, for the lesson map's minutes */
+  at?: number
+}
+
+/** The tutor's lesson_progress reports (Claude), as the tags its reply would carry */
+const progressOf = (t: Turn) => (t.steps ?? []).filter((x) => x.kind === 'progress' && x.detail).map((x) => x.detail!)
+/** Kept in the reply once it's written, so the map comes back when the lesson is reopened */
+const foldProgress = (t: Turn): Turn => {
+  const tags = progressOf(t).filter((tag) => !t.content.includes(tag))
+  const steps = t.steps?.filter((x) => x.kind !== 'progress')
+  return tags.length || steps?.length !== t.steps?.length ? { ...t, content: tags.length ? `${t.content.trimEnd()}\n\n${tags.join('\n')}` : t.content, steps } : t
 }
 
 const CONFIDENCE = [
@@ -202,6 +219,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             else steps.push(e.step)
             next[next.length - 1] = { ...last, steps }
           }
+          if (e.type === 'replied' || e.type === 'done') next[next.length - 1] = foldProgress(next[next.length - 1])
           return next
         })
         if (e.type === 'error') setError(e.message)
@@ -280,7 +298,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         setOpenThread(null)
       }
       const stored = notes.length ? `${content}\n\n${notes.join('\n')}` : content
-      const next = [...history, { role: 'user' as const, content: stored }, { role: 'assistant' as const, content: '' }]
+      const now = Date.now()
+      const next: Turn[] = [...history, { role: 'user', content: stored, at: now }, { role: 'assistant', content: '', at: now }]
       setTurns(next)
       const messages: ChatMessage[] = next.slice(0, -1).map((t) => ({ role: t.role, content: t.content }))
       // In a timed round the interviewer sees the time left with each answer, to pace the round
@@ -340,8 +359,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     const ready = await window.tide.bank.opening(sessionInstructions(setupRef.current), opening).catch(() => null)
     if (ready) {
       setTurns([
-        { role: 'user', content: opening },
-        { role: 'assistant', content: ready }
+        { role: 'user', content: opening, at: Date.now() },
+        { role: 'assistant', content: ready, at: Date.now() }
       ])
       return
     }
@@ -424,7 +443,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         // Nor has a question of yours, Go on or "I don't know": a mark on one is shown as the plain
         // feedback it is, while it streams as well as after main has put the reply right (lessonRepair)
         // [source-led] the tutor's own copy of a reading Tide already shows is left out (shared/sourceLed)
-        const content = withoutEcho(t.content)
+        // (with the map's reports from Claude that aren't in the reply yet)
+        const content = withoutEcho(progressOf(t).length ? `${t.content}\n${progressOf(t).join('\n')}` : t.content)
         const blocks = parseBlocks(i > 1 && nothingToMark(turns[i - 1]?.content ?? '') ? unmarked(content) : content)
         return i <= 1 ? blocks.filter((b) => b.kind !== 'grade' && b.kind !== 'card') : blocks
       }),
@@ -557,6 +577,93 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   talkRef.current = talk
   const stopTalking = voice.stop
   const finished = !busy && turns.length > 1 && !currentAsk && !carryOn && lastBlocks.some((b) => b.kind === 'summary' || b.kind === 'scores')
+
+  // ---------- The lesson map (shared/lessonMap): where the lesson is on its plan ----------
+  const map = useMemo(() => lessonMap(turns, parsed, { finished }), [turns, parsed, finished])
+  // A lesson taught in problem sets probes first, then plans: the track says so until the plan comes
+  const showMap = mode === 'teach' && (map.steps.length > 0 || (!options?.refresh && !options?.course && (!approach || approach === 'problems') && turns.length > 1 && !finished))
+  const mapRef = useRef(map)
+  mapRef.current = map
+  // The next lesson on your roadmap: today's first lesson still to do, other than this one
+  const [nextUp, setNextUp] = useState<{ item: AgendaItem; date: string; index: number } | null>(null)
+  const planned = map.steps.length > 0
+  useEffect(() => {
+    if (mode !== 'teach' || !planned) return
+    let live = true
+    const date = localDate()
+    window.tide.coach
+      .week(date)
+      .then((w) => {
+        if (!live) return
+        const items = todayItems(w, date)
+        const index = items.findIndex((it) => it.kind === 'learn' && !it.done && (it.topic ?? it.title).toLowerCase() !== topic.toLowerCase())
+        setNextUp(index >= 0 ? { item: items[index], date, index } : null)
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [mode, planned, topic, finished])
+  // Today's flashcards, counted when the lesson ends
+  const [cardsToday, setCardsToday] = useState<number | null>(null)
+  useEffect(() => {
+    if (!finished || mode !== 'teach') return
+    let live = true
+    loadDaily()
+      .then((items) => live && setCardsToday(items.filter((i) => i.kind === 'card').length))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [finished, mode])
+  // Steps skipped with "I've got this": when each comes back in recall, for the end card
+  const skipsKey = `tide.lesson.skips:${recordId ?? ongoingKey ?? topic}`
+  const [skipDays, setSkipDays] = useState<Record<number, number>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(skipsKey) ?? '{}') as Record<number, number>
+    } catch {
+      return {}
+    }
+  })
+  /** "I've got this, move on": a request, never an answer; the point goes to your recall reviews */
+  const moveOn = () => {
+    if (busy) return
+    const m = mapRef.current
+    const at = m.phase === 'steps' && m.current < m.steps.length ? m.current : null
+    const st = at !== null ? m.steps[at] : undefined
+    const q = currentAsk?.prompt.replace(/```[\s\S]*?```/g, ' ').replace(/[*_`#>$]/g, '').replace(/\s+/g, ' ').trim()
+    if (st && q) {
+      const prompt = `${q.slice(0, 400)} (${st.title}${st.doneWhen ? `. ${st.doneWhen}` : ''})`
+      window.tide.recall
+        .keep({ prompt, topic, lesson: recordId ?? `lesson:${topic}`, ...(sourcePath ? { path: sourcePath } : {}) })
+        .then((due) => {
+          if (!due) return
+          setSkipDays((d) => {
+            const next = { ...d, [at!]: Math.max(1, Math.round((due - Date.now()) / 86_400_000)) }
+            try {
+              localStorage.setItem(skipsKey, JSON.stringify(next))
+            } catch {
+              // only for the end card
+            }
+            return next
+          })
+        })
+        .catch(() => {})
+    }
+    send(moveOnRequest(at === null ? null : at + 1, m.steps.length), turns)
+    setAnswer('')
+    setPicked(null)
+    setAsking(false)
+    setConfidence(null)
+    setHintLevel(0)
+    setHint(false)
+  }
+  const tutorName = characterById(app.settings.character ?? 'professor').name
+  /** The step boundaries drawn before block `j` of turn `i` (`after`: those after its last block) */
+  const dividersAt = (i: number, j: number, after = false) =>
+    (map.dividers.get(i) ?? [])
+      .filter((d: Divider) => (after ? d.block >= (parsed[i]?.length ?? 0) : d.block === j))
+      .map((d, k) => <StepDivider key={`d${i}-${j}-${k}`} d={d} total={map.steps.length} fresh={i === turns.length - 1} />)
   // [videos] At the end of a lesson: a short clip on its topic to rewatch, with questions from it, once
   const [recapClip, setRecapClip] = useState<ClipCandidate | null>(null)
   const recapped = turns.some((t) => t.role === 'user' && t.content.startsWith('Recap from the video'))
@@ -1055,35 +1162,36 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     await app.refreshTree()
   }
 
-  const renderBlock = (b: Block, key: string, live: boolean) => {
+  const renderBlock = (b: Block, key: string, live: boolean, at = -1) => {
     switch (b.kind) {
       case 'text':
         return <div key={key} className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(b.text, env) }} />
-      case 'ask':
+      case 'ask': {
+        // The lesson map: what this question checks and what getting it right does, and on the
+        // question waiting for you, a way to move on (a request: never marked)
+        const purpose = showMap ? map.purposes.get(at) : undefined
+        const head = purpose ? <AskPurpose p={purpose} title={map.steps[purpose.step]?.title} /> : null
+        const skip = showMap && !live && !busy && at === turns.length - 1 && !!currentAsk && map.phase === 'steps' ? <MoveOnChip onMove={moveOn} /> : null
         // The new design: a question about something you already hold shows its level beside it
         if (tide && concept && concept.seen > 0)
           return (
             <div key={key} className="s-ask td-recall">
               <Level now={concept.estimate} high={concept.level} area={areaOf(concept.area)} large />
               <div>
-                <p className={`td-recall-lab${concept.status === 'fading' ? ' fading' : ''}`}>
-                  {options?.retest?.length
-                    ? 'You missed this before'
-                    : concept.status === 'fading'
-                      ? `Fading: last right ${since(concept.lastRight ?? concept.lastSeen, Date.now())}`
-                      : concept.status === 'solid'
-                        ? `Holding: last right ${since(concept.lastRight ?? concept.lastSeen, Date.now())}`
-                        : `In progress: ${concept.right} of ${concept.right + concept.partly + concept.wrong} right so far`}
-                </p>
+                {options?.retest?.length ? <p className="td-recall-lab">You missed this before</p> : head}
                 <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(b.prompt, env) }} />
+                {skip}
               </div>
             </div>
           )
         return (
-          <div key={key} className="s-ask">
+          <div key={key} className={`s-ask${head ? ' lm-has-purpose' : ''}`}>
+            {head}
             <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(b.prompt, env) }} />
+            {skip}
           </div>
         )
+      }
       case 'grade':
         return (
           <div key={key} className={`s-grade v-${b.verdict}`}>
@@ -1113,6 +1221,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           </div>
         )
       case 'plan':
+      case 'progress':
         return null
       case 'clip':
         return live ? null : <ClipCard key={key} clip={b} />
@@ -1170,27 +1279,17 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     }
   }
 
-  const planDone = (() => {
-    if (!plan) return 0
-    // A step is done after two right in a row, as the tutor is told to move on
-    const planTurn = parsed.findIndex((b) => b?.some((x) => x.kind === 'plan'))
-    const verdicts = parsed.slice(planTurn + 1).flatMap((b) => b ?? []).filter((b) => b.kind === 'grade').map((b) => (b as { verdict: Verdict }).verdict)
-    let steps = 0
-    let streak = 0
-    for (const v of verdicts) {
-      streak = v === 'correct' ? streak + 1 : 0
-      if (streak === 2) (steps++, (streak = 0))
-    }
-    return Math.min(plan.steps.length, steps)
-  })()
+  // The step the lesson is on, from the lesson map
+  const planDone = map.phase === 'steps' ? map.current : map.steps.length
 
   const scopeLabel = scope.kind === 'note' ? fileTitle(scope.path) : scope.kind === 'pages' ? pagesLabel(scope) : scope.kind === 'folder' ? scope.path.split('/').pop() : null
 
-  const difficultyLine = difficulty.line(turns, plan && planDone < plan.steps.length ? plan.steps[planDone] : undefined)
+  const difficultyLine = difficulty.line(turns, planDone < map.steps.length ? map.steps[planDone].title : undefined)
   // The rail of the new design: only when there is something to put in it
   const checks = Object.values(challenged)
   const hasSources = toRead.length > 0 || found.length > 0 || !!pack?.sources.length || checks.length > 0
-  const rail = tide && !withNotes && railOpen && (!!plan || hasSources)
+  // (the plan itself is on the lesson map's track; the rail keeps the level and the sources)
+  const rail = tide && !withNotes && railOpen && (!!difficultyLine || hasSources)
   const moreFound = found.filter((r) => !pack?.sources.some((x) => x.url === r.url)).slice(0, 4)
 
   return (
@@ -1335,8 +1434,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   return !o
                 })
               }
-              title={railOpen ? 'Hide the plan and sources' : 'Show the plan and what this is checked against'}
-              aria-label="The plan and sources"
+              title={railOpen ? 'Hide the level and sources' : 'Show the level and what this is checked against'}
+              aria-label="The level and sources"
             >
               <Icon name="panel" />
             </button>
@@ -1356,6 +1455,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       </header>
 
       <div className={`${withNotes ? 'session-split' : 'session-solo'}${rail ? ' td-with-rail' : ''}`}>
+      <div className="lm-col">
+      {showMap && <LessonTrack map={map} tutor={tutorName} nextLesson={nextUp ? (nextUp.item.topic ?? nextUp.item.title) : null} />}
       <div className="doc-scroll session-scroll">
         <div
           className="session-column"
@@ -1415,16 +1516,6 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               ))}
             </div>
           )}
-          {plan && !rail && (
-            <ol className="s-plan" aria-label="Lesson plan">
-              {plan.steps.map((s, i) => (
-                <li key={i} className={i < planDone ? 'done' : i === planDone ? 'current' : ''}>
-                  <span className="s-plan-dot">{i < planDone ? <Icon name="check" size={11} /> : i + 1}</span>
-                  <span>{s}</span>
-                </li>
-              ))}
-            </ol>
-          )}
 
           {turns.map((t, i) => {
             if (i === 0 && t.role === 'user') {
@@ -1433,6 +1524,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               return first ? <ClipCard key={i} clip={first} kicker="Watch first" /> : null
             }
             if (t.role === 'user') {
+              if (isMoveOn(t.content))
+                return (
+                  <div key={i} className="s-you hint">
+                    <span className="muted small">You said you've got this and moved on</span>
+                  </div>
+                )
               const isHint = t.content.startsWith('[hint]')
               const own = ownWords(t.content)
               const text = own.replace(/^Answer: /, '').replace(/^My question: /, '').replace(/\n\(Confidence: \w+\)$/, '')
@@ -1462,12 +1559,13 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             const askable = !live && !!t.content.trim() && mode !== 'interview'
             return (
               <Fragment key={i}>
+              {showMap && dividersAt(i, 0)}
               <div className="s-tutor">
                 {tide && (
                   <div className="td-who">
                     <Professor state={live ? 'writing' : 'idle'} size={24} />
                     <b>{characterById(app.settings.character ?? 'professor').name}</b>
-                    {plan && i === turns.length - 1 && planDone < plan.steps.length && <span className="td-meta">Step {planDone + 1}: {plan.steps[planDone].replace(/[.:]$/, '')}</span>}
+                    {showMap && i === turns.length - 1 && map.phase === 'steps' && planDone < map.steps.length && <span className="td-meta">Step {planDone + 1}: {map.steps[planDone].title}</span>}
                   </div>
                 )}
                 {!live && t.content && (
@@ -1496,9 +1594,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     )}
                   </div>
                 )}
-                {!!t.steps?.length && (
+                {!!t.steps?.some((s) => s.kind !== 'progress') && (
                   <ul className="work-log">
-                    {t.steps.map((s) => (
+                    {t.steps!.filter((s) => s.kind !== 'progress').map((s) => (
                       <li key={s.id} className={`step ${s.status}${s.depth ? ' nested' : ''}`}>
                         {s.status === 'running' ? <span className="spinner" /> : <Icon name={s.kind === 'web_search' ? 'globe' : s.kind === 'read_webpage' ? 'external' : s.kind === 'delegate' ? 'agents' : s.kind === 'run_code' || s.kind === 'run_sql' ? 'terminal' : 'search'} size={13} />}
                         <span className="step-label">{s.label}</span>
@@ -1507,7 +1605,13 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   </ul>
                 )}
                 <div className={`lt-out${askable ? ' askable' : ''}${threaded ? ' threaded' : ''}`} data-thread-out={askable ? i : undefined}>
-                  {blocks.map((b, j) => renderBlock(b, `${i}-${j}`, live))}
+                  {blocks.map((b, j) => (
+                    <Fragment key={`${i}-${j}`}>
+                      {showMap && j > 0 && dividersAt(i, j)}
+                      {renderBlock(b, `${i}-${j}`, live, i)}
+                    </Fragment>
+                  ))}
+                  {showMap && blocks.length > 0 && dividersAt(i, -1, true)}
                   {askable && !threaded && <AskPill onAsk={() => openThreadAt(i)} />}
                 </div>
                 {live && !t.content && !t.steps?.length && (
@@ -1736,9 +1840,22 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               </button>
             </div>
           )}
+          {finished && showMap && map.steps.length > 0 && (
+            <LessonEnd
+              map={map}
+              topic={topic}
+              reviewDays={skipDays}
+              flashcards={cardsToday}
+              nextLesson={nextUp ? (nextUp.item.topic ?? nextUp.item.title) : null}
+              onFlashcards={() => app.setView({ kind: 'daily', nonce: Date.now() })}
+              onNext={() => nextUp && startAgendaLesson(app, nextUp.item, nextUp)}
+              onDone={() => app.setView({ kind: 'home' })}
+            />
+          )}
           {finished && (
-            <div className="row-gap s-finish">
-              <button className="btn primary" onClick={() => send(openingRef.current, [])}>
+            <div className={`row-gap s-finish${showMap && map.steps.length > 0 ? ' lm-after-end' : ''}`}>
+              {/* Under the lesson map's end card, which has the primary action, these are secondary */}
+              <button className={`btn${showMap && map.steps.length > 0 ? '' : ' primary'}`} onClick={() => send(openingRef.current, [])}>
                 <Icon name="refresh" size={14} />
                 Go again
               </button>
@@ -1758,26 +1875,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           {mode !== 'interview' && <SelectionAsk column={columnRef} onAsk={(at, quote) => openThreadAt(at, quote)} />}
         </div>
       </div>
+      </div>
       {rail && (
-        <aside className="td-lesson-rail" aria-label="The plan and sources">
-          {plan && (
-            <section>
-              <h2 className="td-rail-h">
-                Plan
-                <span className="td-meta">
-                  {Math.min(planDone + 1, plan.steps.length)} of {plan.steps.length}
-                </span>
-              </h2>
-              <ol className="td-plan">
-                {plan.steps.map((st, i) => (
-                  <li key={i} className={i < planDone ? 'done' : i === planDone ? 'current' : ''} aria-current={i === planDone ? 'step' : undefined}>
-                    <span className="td-plan-n">{i < planDone ? <Icon name="check" size={11} /> : i + 1}</span>
-                    <span>{st}</span>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          )}
+        <aside className="td-lesson-rail" aria-label="The level and sources">
           {/* Hook (shared/difficulty.ts): one line on what Tide is doing with the level, and why */}
           {difficultyLine && (
             <section className="td-rail-level" aria-live="polite">
