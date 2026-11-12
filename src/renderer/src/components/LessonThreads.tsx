@@ -2,6 +2,13 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 're
 import type { AgentStep } from '@shared/types'
 import { asked, questionsAsked, replyParts, type LessonThread } from '@shared/lessonThreads'
 import { Icon } from './Icon'
+import { AttachedStrip, AttachImageButton, useAttachedImages } from './AttachImages'
+import { vaultUrl } from '../lib/markdown'
+
+/** Markdown images in a message (the pictures sent with it), shown as pictures, not as text */
+const PICTURE = /!\[[^\]]*\]\((\/[^)\s]+)\)/g
+const picturesIn = (s: string) => [...s.matchAll(PICTURE)].map((m) => decodeURIComponent(m[1].slice(1)))
+const withoutPictures = (s: string) => s.replace(PICTURE, '').trim()
 import { ProfessorStill } from './Professor'
 
 /**
@@ -286,9 +293,11 @@ function ThreadCard(p: SlotProps) {
     el.style.height = 'auto'
     el.style.height = `${Math.min(el.scrollHeight, 140)}px`
   }
+  const pictures = useAttachedImages()
   const go = () => {
-    const q = text.trim()
-    if (!q || streaming) return
+    const q = pictures.withPictures(text.trim())
+    if (!q || streaming || pictures.adding) return
+    pictures.clear()
     setText('')
     requestAnimationFrame(fit)
     stick.current = true
@@ -323,7 +332,12 @@ function ThreadCard(p: SlotProps) {
           m.role === 'user' ? (
             <div key={i} className="lt-msg">
               <YouAvatar />
-              <div className="lt-me-text">{m.content}</div>
+              <div className="lt-me-text">
+                {withoutPictures(m.content)}
+                {picturesIn(m.content).map((path) => (
+                  <img key={path} className="lt-me-pic" src={vaultUrl(path)} alt={path.split('/').pop()} />
+                ))}
+              </div>
             </div>
           ) : (
             <div key={i} className="lt-msg">
@@ -361,6 +375,7 @@ function ThreadCard(p: SlotProps) {
           </div>
         )}
       </div>
+      <AttachedStrip images={pictures} />
       <div className="lt-composer">
         <textarea
           ref={box}
@@ -382,8 +397,10 @@ function ThreadCard(p: SlotProps) {
               p.onFold(false)
             }
           }}
+          {...pictures.handlers}
         />
-        <button type="button" className="lt-send" aria-label="Ask" disabled={!text.trim() || streaming} onClick={go}>
+        <AttachImageButton images={pictures} />
+        <button type="button" className="lt-send" aria-label="Ask" disabled={(!text.trim() && !pictures.paths.length) || streaming || pictures.adding} onClick={go}>
           <Icon name="send" size={14} />
         </button>
       </div>

@@ -1,6 +1,6 @@
 /** Pictures in a note, as the tutor sees them: Obsidian embeds (![[shot.png]]) and Markdown images */
 
-const IMAGE = /\.(png|jpe?g|gif|webp)$/i
+const IMAGE = /\.(png|jpe?g|gif|webp|heic|heif)$/i
 
 /** The images a note or message embeds, in order and without repeats; web images are left out */
 export function imageRefs(md: string): string[] {

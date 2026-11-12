@@ -225,6 +225,11 @@ function registerIpc() {
     await writeText(p, content)
     await reindexPath(p)
   })
+  handle('vault:prepareImage', async (dataUrl: string) => {
+    const { dataUrlOf, prepareImage } = await import('./imagePrep')
+    const p = await prepareImage(String(dataUrl)).catch(() => null)
+    return p ? dataUrlOf(p) : null
+  })
   handle('vault:writeImage', async (p: string, dataUrl: string) => {
     const m = dataUrl.match(/^data:image\/(png|jpeg|webp);base64,(.+)$/)
     if (!m) throw new Error('Not an image')

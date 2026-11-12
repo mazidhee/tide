@@ -9,6 +9,9 @@ import { cardsToMarkdown } from '@shared/cards'
 import { useApp } from '../state'
 import { renderMarkdown } from '../lib/markdown'
 import { Icon } from './Icon'
+import { readImageFile } from '../lib/pastedImages'
+
+const isHeic = (f: File) => /^image\/hei[cf]$/.test(f.type) || /\.hei[cf]$/i.test(f.name)
 
 type Phase = 'writing' | 'sitting' | 'marking' | 'results' | 'error'
 
@@ -20,13 +23,14 @@ interface Answer {
 
 const key = (q: number, p: number) => `${q}:${p}`
 
-/** Downscales a photo so marking stays fast: longest side 1600px, JPEG */
-function shrink(file: Blob): Promise<string> {
+/** Downscales a photo so marking stays fast: longest side 1568px (the most Claude uses), JPEG. An iPhone HEIC is converted by the main process */
+function shrink(file: File): Promise<string> {
+  if (isHeic(file)) return readImageFile(file)
   return new Promise((resolve, reject) => {
     const img = new Image()
     const url = URL.createObjectURL(file)
     img.onload = () => {
-      const scale = Math.min(1, 1600 / Math.max(img.width, img.height))
+      const scale = Math.min(1, 1568 / Math.max(img.width, img.height))
       const canvas = document.createElement('canvas')
       canvas.width = Math.round(img.width * scale)
       canvas.height = Math.round(img.height * scale)
@@ -130,8 +134,8 @@ export function ExamView({ scope, topic, options, view }: { scope: ChatScope; to
 
   const setAnswer = (k: string, patch: Partial<Answer>) => setAnswers((a) => ({ ...a, [k]: { ...{ text: '', images: [] }, ...a[k], ...patch } }))
 
-  const addImages = async (k: string, files: Blob[]) => {
-    const urls = await Promise.all(files.filter((f) => f.type.startsWith('image/')).map(shrink))
+  const addImages = async (k: string, files: File[]) => {
+    const urls = (await Promise.all(files.filter((f) => f.type.startsWith('image/') || isHeic(f)).map((f) => shrink(f).catch(() => '')))).filter(Boolean)
     if (urls.length) setAnswers((a) => ({ ...a, [k]: { text: a[k]?.text ?? '', images: [...(a[k]?.images ?? []), ...urls] } }))
   }
 
@@ -321,7 +325,7 @@ export function ExamView({ scope, topic, options, view }: { scope: ChatScope; to
                           {phase === 'sitting' ? (
                             <div className="exam-answer" onPaste={(e) => {
                               const files = [...e.clipboardData.files]
-                              if (files.some((f) => f.type.startsWith('image/'))) {
+                              if (files.some((f) => f.type.startsWith('image/') || isHeic(f))) {
                                 e.preventDefault()
                                 addImages(k, files)
                               }
@@ -424,7 +428,7 @@ export function ExamView({ scope, topic, options, view }: { scope: ChatScope; to
       <input
         ref={fileInput}
         type="file"
-        accept="image/*"
+        accept="image/*,.heic,.heif"
         multiple
         hidden
         onChange={(e) => {
