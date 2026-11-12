@@ -376,7 +376,7 @@ export function isAnswer(req: TurnRequest, said: string): boolean {
   return !/^\s*(\[hint\]|my question:|(i (don'?t|do not) know|go on|continue|skip)\b)/i.test(said)
 }
 
-const MARK_SYSTEM = `You mark one answer a student gave in a lesson, for their tutor. Grade against the tutor's own solution when there is one (it is inside <solution>; the student never saw it). "correct" means complete and right, not just heading the right way; a right answer with wrong or missing reasoning is "partial". An equivalent method or ordering is not a mistake. Quote the words of their answer that earned the verdict. Reply with JSON only: {"verdict": "correct" | "partial" | "wrong", "score": 0.0 to 1.0, "why": "one or two sentences: what was right and why, or the exact step that's wrong and why"}.`
+const MARK_SYSTEM = `You mark one answer a student gave in a lesson, for their tutor. Grade against the tutor's own solution when there is one (it is inside <solution>; the student never saw it). "correct" means complete and right, not just heading the right way; a right answer with wrong or missing reasoning is "partial". An equivalent method or ordering is not a mistake. Quote the words of their answer that earned the verdict. A code answer may come with what Tide's sandbox found when it ran their code against the question's hidden tests (the tests are in the \`\`\`tests block of the question; the results read "N of M tests passed" with each FAILED test and why): it can't be "correct" unless every test passed, and for each failed test say what that test tried and the exact line or idea in their code that makes it fail. A note from Tide on an exact check of their final answer or query is a fact: follow it. Reply with JSON only: {"verdict": "correct" | "partial" | "wrong", "score": 0.0 to 1.0, "why": "one or two sentences: what was right and why, or the exact step that's wrong and why"}.`
 
 /**
  * One call, no tools and no conversation: the whole prompt in, one reply out. For marking, lesson
@@ -580,6 +580,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
     }
   }
   let markNote = ''
+  let verdict: 'correct' | 'partial' | 'wrong' | undefined
   // Show me and Draw it: on Claude, a custom visual is one of the pictures it can choose
   const { asksToSee } = await import('@shared/showMe')
   const { SHOW_ME_VISUAL_NOTE } = await import('@shared/visuals')
@@ -593,13 +594,20 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
     const prev = text([...req.messages].reverse().find((m) => m.role === 'assistant')?.content)
     const id = nextStepId()
     emit({ id: req.id, type: 'step', step: { id, kind: 'helper', label: `${claudeLabel(markModel)} is marking your answer`, status: 'running', depth: 0 } })
-    const mark = await markAnswer(prev, said, markModel, signal).catch(() => null)
+    // A query or a final answer is checked exactly first (the lab, SymPy), as on Gemma's lessons
+    const exact = await import('./lessonGuard').then((g) => g.exactCheck(req)).catch(() => null)
+    const exactSaid = exact ? `\n\n${(await import('@shared/answerCheck')).exactNote(exact)}` : ''
+    const mark = await markAnswer(prev, said + exactSaid, markModel, signal).catch(() => null)
+    verdict = mark?.verdict as typeof verdict
     emit({ id: req.id, type: 'step', step: { id, status: mark ? 'done' : 'error', detail: mark ? `${mark.verdict}, ${(mark.ms / 1000).toFixed(1)} s` : 'no mark: the tutor marks it' } as AgentStep })
     if (mark) markNote = `\n\n(Tide: ${claudeLabel(markModel)} marked this answer against your solution: verdict "${mark.verdict}", score ${mark.score}. Why: ${mark.why})`
   }
 
   const toolCtx: ToolContext = { signal, sources: ctx.sources, emitSources: ctx.emitSources, step: ctx.step, updateStep: ctx.updateStep, web: false, chatId: req.chatId, labId: req.labId ?? req.chatId }
   bindLesson(proc.binding, toolCtx)
+  // What set_exercise needs of this turn: the topic, the lesson so far and the mark, for the level (main/exercises)
+  const { setLessonInfo } = await import('./exercises')
+  setLessonInfo(toolCtx.labId, { topic: req.topic, path: 'path' in req.scope ? req.scope.path : undefined, private: false, history: req.messages.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: text(m.content) })), ...(verdict ? { verdict } : {}) })
   const engineStep = nextStepId()
   emit({ id: req.id, type: 'step', step: { id: engineStep, kind: 'helper', label: `Claude ${claudeLabel(model)} is teaching${fresh && history.length > 1 ? ' (picking the lesson up again)' : ''}`, status: 'running', depth: 0 } })
 

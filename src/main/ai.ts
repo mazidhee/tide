@@ -596,7 +596,10 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
       // puts the reading into the reply as it streams, and the turn is cut at a new plan whose first
       // step has a reading (Claude is interrupted, not stopped, so the lesson's process carries on)
       const led = req.session ? await import('./sourceLed').then((m) => m.sourceLedTurn(req)).catch(() => null) : null
-      await claudeTurn(led ? led.request : req, led ? led.tap(emit) : emit, controller.signal, led?.signal)
+      // Claude's exercises reach the lesson only once proven (main/exercises): its <exercise id> tags become the verified problem
+      const exercises = req.session ? (await import('./exercises')).exerciseStream(req, led ? led.tap(emit) : emit) : null
+      await claudeTurn(led ? led.request : req, exercises ? exercises.tap : led ? led.tap(emit) : emit, controller.signal, led?.signal)
+      exercises?.flush()
       // A picture asked for while a question waits was held: shown once it's checked against that
       // question's hidden solution, or drawn again as the setup only (the same check as Gemma's)
       if (waiting && holdShow && !controller.signal.aborted) {
