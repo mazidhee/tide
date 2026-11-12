@@ -158,6 +158,18 @@ const api: TideApi = {
     get: invoke('lessons:get'),
     challenge: invoke('lessons:challenge')
   },
+  visuals: {
+    policy: invoke('visuals:policy'),
+    repair: invoke('visuals:repair'),
+    fallback: invoke('visuals:fallback'),
+    cached: invoke('visuals:cached'),
+    remember: invoke('visuals:remember'),
+    watch: invoke('visuals:watch'),
+    unwatch: invoke('visuals:unwatch'),
+    kill: invoke('visuals:kill'),
+    metrics: invoke('visuals:metrics'),
+    onKilled: (cb: (e: { host: string; reason: string }) => void) => subscribe<{ host: string; reason: string }>('visuals:killed', cb)
+  },
   courses: {
     list: invoke('courses:list'),
     get: invoke('courses:get'),

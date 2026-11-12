@@ -10,6 +10,7 @@ import { knowledgeNoteFor, noteLessonKnowledge } from './knowledge'
 import { privatePath } from './projects'
 import { noteLesson, recallNote } from './recall'
 import { absPath, readText, uniquePath, writeText } from './vault'
+import type { VisualRecord } from '@shared/visuals'
 
 const DIR = '.tide/lessons'
 const fileFor = (id: string) => `${DIR}/${id.replace(/[^a-z0-9-]/gi, '')}.json`
@@ -22,15 +23,36 @@ export async function getLesson(id: string): Promise<LessonRecord | null> {
   }
 }
 
+/** Writes to one lesson's record, one at a time (a save and a visual kept at the same moment would race) */
+const queues = new Map<string, Promise<unknown>>()
+function inTurn<T>(id: string, fn: () => Promise<T>): Promise<T> {
+  const run = (queues.get(id) ?? Promise.resolve()).catch(() => undefined).then(fn)
+  queues.set(id, run)
+  void run.finally(() => queues.get(id) === run && queues.delete(id)).catch(() => undefined)
+  return run
+}
+
+/** Visuals checked before their lesson's first save, kept with it when it is saved */
+const waitingVisuals = new Map<string, Record<string, VisualRecord>>()
+
 /** Keeps a lesson: its turns as they are now. A lesson with nothing said yet isn't kept */
-export async function saveLesson(input: Omit<LessonRecord, 'started' | 'updated' | 'page'> & { started?: number }): Promise<LessonSummary | null> {
-  if (!input.id || input.turns.filter((t) => t.role === 'assistant' && t.content.trim()).length < 1) return null
+export function saveLesson(input: Omit<LessonRecord, 'started' | 'updated' | 'page'> & { started?: number }): Promise<LessonSummary | null> {
+  if (!input.id || input.turns.filter((t) => t.role === 'assistant' && t.content.trim()).length < 1) return Promise.resolve(null)
+  return inTurn(input.id, () => writeLesson(input))
+}
+
+async function writeLesson(input: Omit<LessonRecord, 'started' | 'updated' | 'page'> & { started?: number }): Promise<LessonSummary | null> {
   const prev = await getLesson(input.id)
   // An older copy (a backup from before) never overwrites a longer, newer one
   if (prev && prev.turns.length > input.turns.length && !input.finished) return summarise(prev)
   const started = prev?.started ?? input.started ?? Date.now()
   const page = prev?.page ?? uniquePath(lessonPage({ topic: input.topic, started, mode: input.mode }))
-  const record: LessonRecord = { ...input, started, updated: Date.now(), page, finished: input.finished || prev?.finished }
+  // The window never sends the visuals: those kept already stay
+  const visuals = { ...prev?.visuals, ...waitingVisuals.get(input.id) }
+  waitingVisuals.delete(input.id)
+  const { visuals: _sent, ...rest } = input as typeof input & { visuals?: unknown }
+  void _sent
+  const record: LessonRecord = { ...rest, started, updated: Date.now(), page, finished: input.finished || prev?.finished, ...(Object.keys(visuals).length ? { visuals } : {}) }
   await fs.mkdir(absPath(DIR), { recursive: true })
   await writeText(fileFor(record.id), JSON.stringify(record))
   await writeText(page, lessonMarkdown(record))
@@ -41,6 +63,25 @@ export async function saveLesson(input: Omit<LessonRecord, 'started' | 'updated'
   // A course's lesson moves the course on (main/courses)
   if (record.options?.course) await import('./courses').then((c) => c.noteCourseLesson(record)).catch(() => {})
   return summarise(record)
+}
+
+/** Keeps one checked visual in its lesson's record (or until the lesson is first saved) */
+export function keepLessonVisual(id: string, key: string, visual: VisualRecord): Promise<boolean> {
+  return inTurn(id, async () => {
+    const prev = await getLesson(id)
+    if (!prev) {
+      const waiting = waitingVisuals.get(id) ?? {}
+      // A handful at most, for a lesson that is never saved
+      if (Object.keys(waiting).length < 24) waitingVisuals.set(id, { ...waiting, [key]: visual })
+      return true
+    }
+    const visuals = { ...prev.visuals, [key]: visual }
+    // At most the latest 40 in one lesson
+    const keys = Object.keys(visuals).sort((a, b) => visuals[a].at - visuals[b].at)
+    for (const k of keys.slice(0, Math.max(0, keys.length - 40))) delete visuals[k]
+    await writeText(fileFor(id), JSON.stringify({ ...prev, visuals }))
+    return true
+  })
 }
 
 /** Every lesson kept, latest first */

@@ -1,5 +1,6 @@
 import { SESSION_FORMAT } from './session'
 import { SIM_GUIDE } from './sims'
+import { VISUAL_GUIDE } from './visuals'
 
 /**
  * What the tutor is told on every turn, kept here (not in main/agent) so anything that measures
@@ -102,5 +103,6 @@ const RULES = TUTOR_SYSTEM.slice(TUTOR_SYSTEM.indexOf('\nRules:'), TUTOR_SYSTEM.
 /** In a lesson Tide runs no checks for Claude: it runs them itself */
 const CLAUDE_LESSON_RULES = `\n- Before you set a problem, run its <check> yourself with run_code and fix the problem or your answer if it fails: Tide does not run checks for you. A note from Tide giving a mark ("(Tide: … marked this answer …") comes from a second, careful marker: write your <grade> with that verdict and score, in your own words.`
 
-export const CLAUDE_TUTOR_SYSTEM = `${CLAUDE_TOOLS}${RULES}\n${SIM_GUIDE}`
-export const CLAUDE_LESSON_SYSTEM = `${CLAUDE_TOOLS}${RULES}${CLAUDE_LESSON_RULES}`
+// Custom visuals are Claude's alone: Gemma (and so every private notebook) keeps to the fixed simulations and mermaid
+export const CLAUDE_TUTOR_SYSTEM = `${CLAUDE_TOOLS}${RULES}\n${SIM_GUIDE}\n${VISUAL_GUIDE}`
+export const CLAUDE_LESSON_SYSTEM = `${CLAUDE_TOOLS}${RULES}${CLAUDE_LESSON_RULES}\n${VISUAL_GUIDE}`

@@ -580,6 +580,10 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
     }
   }
   let markNote = ''
+  // Show me and Draw it: on Claude, a custom visual is one of the pictures it can choose
+  const { asksToSee } = await import('@shared/showMe')
+  const { SHOW_ME_VISUAL_NOTE } = await import('@shared/visuals')
+  const seeNote = asksToSee(said) || /^Draw this so I can see how it works/i.test(said) ? `\n\n${SHOW_ME_VISUAL_NOTE}` : ''
   const fresh = sent.fresh
   const users = history.filter((m) => m.role === 'user').length
 
@@ -629,14 +633,14 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
     proc.first = firstSaid
     let result: Extract<ClaudeEvent, { type: 'result' }>
     try {
-      result = await proc.turn(sent.content + markNote, model, onEvent, signal, cut)
+      result = await proc.turn(sent.content + markNote + seeNote, model, onEvent, signal, cut)
     } catch (e) {
       // The process died before it said anything: once more, on a new one, with the whole transcript
       if (reply || signal.aborted || e instanceof ClaudeUnavailable || unavailableReason((e as Error).message + proc.stderr)) throw e
       proc.stop()
       const again = messageToSend(history, { turns: 0, first: '', alive: false })
       emit({ id: req.id, type: 'step', step: { id: engineStep, label: `Claude ${claudeLabel(model)} is teaching (started again)` } as AgentStep })
-      result = await proc.turn(again.content + markNote, model, onEvent, signal, cut)
+      result = await proc.turn(again.content + markNote + seeNote, model, onEvent, signal, cut)
     }
     proc.turns = users
     const turnCost = Math.max(0, result.usage.costUsd - proc.costSoFar)

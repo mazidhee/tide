@@ -19,6 +19,14 @@ if (flag('--output-format') === 'json' || !flag('--input-format')) {
   process.stdin.on('data', (d) => (input += d))
   process.stdin.on('end', () => {
     if (flag('--output-format') === 'json') {
+      // A visual's repair: the broken call taken out (a visual marked "unfixable" comes back as broken as it was)
+      if (input.includes('This visual failed when Tide ran it')) {
+        const code = /```visual\n([\s\S]*?)\n```/.exec(input)?.[1] ?? ''
+        const fixed = input.includes('unfixable') ? code : code.replace(/undefinedThing\.call\(\);?/g, '')
+        return result(`Fixed:\n\`\`\`visual\n${fixed}\n\`\`\``)
+      }
+      // A visual's fallback: a mermaid diagram (by the model it was asked of)
+      if (input.includes('that failed:')) return result(`\`\`\`mermaid\nflowchart LR\n  A["${model}"] --> B["fallback"]\n\`\`\`\nFollow the arrow.`)
       const verdict = input.includes('42') ? 'correct' : 'wrong'
       return result(JSON.stringify({ verdict, score: verdict === 'correct' ? 1 : 0, why: `marked by ${model}` }))
     }
