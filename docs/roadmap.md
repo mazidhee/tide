@@ -27,13 +27,13 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - Claude's exercises are proven first: code against hidden tests (and a known mistake), SQL against the lab, maths by SymPy; repaired once or replaced; banked for reuse
 - Courses you live in: every link, file, article and YouTube video opens inside Tide (player with synced transcript, reader view, sandboxed web view); the tutor sees the page, section or video moment; lessons bring in credited readings and clips from your other courses
 - Lesson threads: ask about any explanation in a thread under it, follow up as long as you like, fold it when you've got it; the lesson stays clean
+- Courses from everywhere: MIT OpenCourseWare, Open Yale, QuantEcon, free books, university lecture series and official guides, with 47 picked for your subjects; a weekly check suggests new and updated courses, never importing on its own
 - Faster lessons: off-thread index, cached rendering, steadier prompt cache, idle unload
 - The redesign, with the classic design in Settings
 - Courses you live in (branch `videos`): every link opens inside Tide (course files rendered natively, any GitHub file, YouTube in Tide's player with its transcript, web pages in a reader with Save to library, apps in a sandboxed web view); the course room (sidebar on hover, outline beside the text, the lecture beside it and in theatre when it plays, the tutor docked under the text); the tutor sees the page, section, video moment and selection and can move the video or page; lessons open with what your other courses and lectures add, credited; reading, watching and running course material counts in What you know
 
 ## Now
 
-- [ ] **Courses from everywhere, kept fresh.** Beyond GitHub: open university courses (MIT OpenCourseWare, Open Yale, Stanford and CMU materials), QuantEcon lectures, free books, lecture series on YouTube, and official guides. Each is checked for licence and for being free without a login. Within your subjects, Tide looks for new and updated courses on a schedule and adds them to the catalogue as suggestions, never imported without your say.
 - [ ] **Tide tuned for finance, payments and quant.** Your focus subjects: stablecoins, payments and payment rails, core banking, open banking, payment infrastructure, quantitative finance, risk, blockchain, plus ML, data engineering, data science and economics.
   - Roadmaps for each, built from the best sources.
   - Trusted sources: BIS, central banks, ISO 20022, Bitcoin and Ethereum docs, QuantEcon, the Fed and ECB.
@@ -90,6 +90,7 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - [ ] **Better web clipper and search.** Compare Defuddle with the current clipper, and try a reranker; adopt only if the numbers win.
 - [ ] **Live preview leftovers.** The properties block at the top of a note, embedded notes, and tables and maths inside lists.
 - [ ] **Small fixes.**
+  - Courses: no open-banking course yet (the UK standards site is on github.io, blocked here); QuantEcon's websites unreachable here, so it's read from GitHub; ranking without Claude lets weak GitHub repos through; long lessons can show step names like "part 3" with no part 2.
   - Threads: "Add to notes" text isn't kept on reopen; threads may not follow a lesson into its own window; "Ask first" still asks in the main lesson; Gemma path checked by tests only.
   - Courses: the video pausing for a question; highlights in course PDFs; github.io and some sites won't load on this network; Medium link cards come through rough; check Claude draws on a second course's code when it's better.
   - Readings sometimes arrive before an exercise Claude meant to set; a code ask written outside set_exercise is marked by eye.

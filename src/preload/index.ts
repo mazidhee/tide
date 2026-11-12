@@ -190,6 +190,10 @@ const api: TideApi = {
     saveToNotes: invoke('courses:saveToNotes'),
     preview: invoke('courses:preview'),
     track: invoke('courses:track'),
+    fresh: invoke('courses:fresh'),
+    checkNow: invoke('courses:checkNow'),
+    dismiss: invoke('courses:dismiss'),
+    onFresh: (cb) => subscribe<{ running: boolean; steps: import('../main/courseFresh').FreshStatus['steps'] }>('courses:fresh', cb),
     onProgress: (cb) => subscribe<import('../main/courses').ImportPhase>('courses:progress', cb)
   },
   links: {

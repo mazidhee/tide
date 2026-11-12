@@ -795,6 +795,436 @@
   }
 }
 
+
+/* ---------- Kept fresh: the weekly check, new courses, updates, filters ---------- */
+
+.crs-fresh {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: -6px 0 18px;
+}
+.crs-fresh-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ink-muted);
+  opacity: 0.55;
+}
+.crs-fresh-dot.live {
+  background: var(--accent);
+  opacity: 1;
+  animation: crs-breathe 1.6s var(--ease, ease) infinite;
+}
+@keyframes crs-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+}
+
+/* The check as a thread: beads on a line that fills as it goes */
+.crs-thread-panel {
+  margin: 0 0 26px;
+  padding: 14px 18px 12px;
+  border-radius: var(--radius-m, 10px);
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--line);
+  animation: crs-unfold 0.24s var(--ease, ease) both;
+}
+@keyframes crs-unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.crs-thread-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.crs-thread {
+  --fill: 0;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* The thread itself, behind the beads, and the part already travelled */
+.crs-thread::before,
+.crs-thread::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  left: calc(100% / 14);
+  height: 2px;
+  border-radius: 1px;
+}
+.crs-thread::before {
+  right: calc(100% / 14);
+  background: var(--line-strong, var(--line));
+}
+.crs-thread::after {
+  width: calc((100% - 100% / 7) * var(--fill));
+  background: var(--accent);
+  transition: width 0.6s var(--ease, ease);
+}
+/* While it runs, a light travels along the thread */
+.crs-thread.live::before {
+  background: linear-gradient(90deg, var(--line-strong, var(--line)) 0%, var(--line-strong, var(--line)) 40%, color-mix(in srgb, var(--accent) 60%, transparent) 50%, var(--line-strong, var(--line)) 60%, var(--line-strong, var(--line)) 100%);
+  background-size: 250% 100%;
+  animation: crs-travel 2.2s linear infinite;
+}
+@keyframes crs-travel {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -150% 0;
+  }
+}
+.crs-bead {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  text-align: center;
+}
+.crs-bead-dot {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 2px var(--line-strong, var(--line));
+  color: var(--accent-ink, #fff);
+  transition: background 0.3s var(--ease, ease), box-shadow 0.3s var(--ease, ease), transform 0.3s var(--ease, ease);
+}
+.crs-bead.running .crs-bead-dot {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  transform: scale(1.12);
+  animation: crs-breathe 1.4s var(--ease, ease) infinite;
+}
+.crs-bead.paused .crs-bead-dot {
+  box-shadow: inset 0 0 0 2px var(--ink-muted);
+  animation: crs-dim 2.4s var(--ease, ease) infinite;
+}
+@keyframes crs-dim {
+  50% {
+    opacity: 0.45;
+  }
+}
+.crs-bead.done .crs-bead-dot {
+  background: var(--accent);
+  box-shadow: none;
+  animation: crs-pop 0.32s var(--ease, ease);
+}
+@keyframes crs-pop {
+  50% {
+    transform: scale(1.25);
+  }
+}
+.crs-bead.failed .crs-bead-dot {
+  box-shadow: inset 0 0 0 2px var(--danger);
+}
+.crs-bead-label {
+  max-width: 100%;
+  padding: 0 4px;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+.crs-bead.waiting .crs-bead-label {
+  color: var(--ink-muted);
+}
+.crs-bead-detail {
+  max-width: 100%;
+  min-height: 18px;
+  overflow: hidden;
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.crs-log {
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+.crs-log summary {
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.crs-log ul {
+  max-height: 240px;
+  margin: 8px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.crs-log-row {
+  display: grid;
+  grid-template-columns: 112px 150px 78px minmax(0, 1fr);
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 17px;
+}
+.crs-log-when,
+.crs-log-res {
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.crs-log-what {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.crs-log-row.changed .crs-log-res,
+.crs-log-row.found .crs-log-res {
+  color: var(--accent);
+}
+.crs-log-row.failed .crs-log-res,
+.crs-log-row.refused .crs-log-res {
+  color: var(--danger);
+}
+.crs-log-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Badges: new and updated */
+.crs-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+.crs-badge.new {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+.crs-badge.updated {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+}
+.crs-section .crs-badge {
+  margin-left: 2px;
+}
+
+/* New for you: found by the weekly check */
+.crs-new {
+  margin-bottom: 30px;
+}
+.crs-new-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+.crs-new-row {
+  --i: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  animation: crs-rise 0.36s var(--ease, ease) both;
+  animation-delay: calc(var(--i) * 45ms);
+  transition: opacity 0.2s var(--ease, ease), transform 0.2s var(--ease, ease), max-height 0.22s var(--ease, ease);
+  max-height: 140px;
+}
+.crs-new-row.leaving {
+  opacity: 0;
+  transform: translateX(12px);
+  max-height: 0;
+  overflow: hidden;
+}
+@keyframes crs-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.crs-new-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 11px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.crs-new-main:hover {
+  background: var(--bg-hover);
+}
+.crs-new-top {
+  display: flex;
+  align-items: center;
+}
+.crs-new-why {
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 19px;
+}
+.crs-new-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding-right: 4px;
+}
+.crs-by-claude {
+  color: var(--ink-muted);
+  font-style: italic;
+}
+.crs-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* Your courses: an Update beside a course whose source changed */
+.crs-mine-li {
+  display: flex;
+  align-items: center;
+}
+.crs-mine-li .crs-mine-row {
+  flex: 1;
+  min-width: 0;
+}
+.crs-update-btn {
+  flex: none;
+  margin-left: 8px;
+}
+.crs-mine-title .crs-badge {
+  vertical-align: 2px;
+}
+
+/* Filters: licence, format, level */
+.crs-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin: -14px 0 24px;
+}
+.crs-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.crs-seg-label {
+  padding: 0 6px 0 8px;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+.crs-seg-opt {
+  height: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s var(--ease, ease), color 0.15s var(--ease, ease);
+}
+.crs-seg-opt:hover {
+  color: var(--ink);
+}
+.crs-seg-opt.on {
+  background: var(--bg-active);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line-strong, var(--line));
+}
+/* A change of filter settles in rather than jumping */
+.crs-areas-list {
+  animation: crs-settle 0.22s var(--ease, ease) both;
+}
+@keyframes crs-settle {
+  from {
+    opacity: 0.35;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 760px) {
+  .crs-thread {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .crs-thread::before,
+  .crs-thread::after {
+    display: none;
+  }
+  .crs-bead {
+    flex-direction: row;
+    text-align: left;
+  }
+  .crs-log-row {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .crs-thread-panel,
+  .crs-new-row,
+  .crs-areas-list,
+  .crs-fresh-dot.live,
+  .crs-bead .crs-bead-dot,
+  .crs-thread.live::before {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 /* ---------- The new design ---------- */
 
 :root[data-design='tide'] {
@@ -879,6 +1309,32 @@
   }
   .crs-bar-begun {
     background: color-mix(in srgb, var(--ink-2) 30%, transparent);
+  }
+
+  .crs-thread-panel {
+    background: var(--paper);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .crs-bead:not(.done) .crs-bead-dot {
+    background: var(--paper);
+  }
+  .crs-seg {
+    border-radius: var(--r-ctl, 8px);
+  }
+  .crs-seg-opt.on {
+    background: var(--active);
+    box-shadow: inset 0 0 0 1px var(--line-2);
+  }
+  .crs-new-why,
+  .crs-source {
+    color: var(--ink-2);
+  }
+  .crs-seg-label,
+  .crs-by-claude {
+    color: var(--ink-3);
+  }
+  .crs-badge {
+    border-radius: var(--r-mark, 4px);
   }
 
 }

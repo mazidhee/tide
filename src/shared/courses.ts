@@ -7,6 +7,7 @@
  */
 import { CATALOGUE, type CatalogueCourse } from './courseCatalogue'
 import { chooseExcerpt, EXCERPT, faithful, type Candidate, type StepReading } from './sourceLed'
+import { parseJbToc } from './courseSource'
 
 export * from './courseCatalogue'
 
@@ -25,6 +26,8 @@ export interface CourseLesson {
   words: number
   /** A part of one long file (a course read from a single file): where it is in the file's text */
   range?: [number, number]
+  /** Its page on the web (a course not read from GitHub) */
+  url?: string
 }
 
 export interface CourseModule {
@@ -48,10 +51,10 @@ export interface RepoFile {
   text?: string
 }
 
-export const CONTENT = /\.(md|markdown|mdx|ipynb)$/i
+export const CONTENT = /\.(md|markdown|mdx|ipynb|adoc|asciidoc)$/i
 export const CODE = /\.(py|sql|rs|c|h|cc|cpp|hpp|js|ts|go|java|sh|jl|r|scala|asm)$/i
 /** What is fetched: lessons, code and the licence (images and data are left on GitHub) */
-export const FETCHED = /\.(md|markdown|mdx|ipynb|py|sql|rs|c|h|cc|cpp|hpp|js|ts|go|java|sh|jl|r|scala|asm|toml|yml|yaml)$|(^|\/)(LICEN[CS]E|COPYING)[^/]*$/i
+export const FETCHED = /\.(md|markdown|mdx|ipynb|adoc|asciidoc|py|sql|rs|c|h|cc|cpp|hpp|js|ts|go|java|sh|jl|r|scala|asm|toml|yml|yaml)$|(^|\/)(LICEN[CS]E|COPYING)[^/]*$/i
 
 const META = /^(licen[cs]e|copying|contributing|code_of_conduct|security|support|changelog|agents|claude|pull_request_template|issue_template|sponsors?|authors|governance|citation|todo|maintainers|translations?|summary|readme-template|style-guide)(\.|$)/i
 const NEVER_DIRS = /(^|\/)(\.[^/]*|node_modules|translations?|translated_images|i18n|locales?|__pycache__|\.ipynb_checkpoints|_book|site-packages)(\/|$)/i
@@ -100,7 +103,7 @@ const words = (t: string) => (t.match(/\S+/g) ?? []).length
 /** A file name as a title: "03-dockerizing-pipeline.md" → "Dockerizing pipeline" */
 export function prettyName(name: string): string {
   const t = name
-    .replace(/\.(en\.)?(md|markdown|mdx|ipynb)$/i, '')
+    .replace(/\.(en\.)?(md|markdown|mdx|ipynb|adoc|asciidoc)$/i, '')
     .replace(/^(chapter_|ch|lab|part|week_?)?\d+[a-z]?([._-]\d+)*[._\s-]*/i, '')
     .replace(/[_-]+/g, ' ')
     .trim()
@@ -176,7 +179,7 @@ export function notebookMarkdown(raw: string, opts: { images?: boolean } = {}): 
     return null
   }
   if (!Array.isArray(nb.cells)) return null
-  const lang = (nb.metadata?.language_info?.name ?? nb.metadata?.kernelspec?.language ?? 'python').toLowerCase()
+  const lang = (nb.metadata?.language_info?.name ?? nb.metadata?.kernelspec?.language ?? 'python').toLowerCase().replace(/^(python[23]?|ipython[23]?)$/, 'python')
   const parts: string[] = []
   for (const cell of nb.cells) {
     const src = joinSrc(cell.source).replace(/\s+$/, '')
@@ -341,6 +344,9 @@ const isIndex = (p: string) => /^(readme|index)\.(en\.)?(md|markdown|mdx)$/i.tes
  */
 export function buildOutline(c: CatalogueCourse, files: RepoFile[]): CourseOutline {
   const byPath = new Map(files.map((f) => [f.path, f]))
+  // A Jupyter Book: its _toc.yml gives the parts and their order
+  const jb = jbOutline(c, files)
+  if (jb) return jb
   if (c.split) {
     const f = byPath.get(c.split)
     return f?.text ? splitOutline(f.text, f.path) : { modules: [], lessons: 0 }
@@ -442,13 +448,50 @@ export function buildOutline(c: CatalogueCourse, files: RepoFile[]): CourseOutli
       const size = Math.ceil(flat.length / Math.ceil(flat.length / 8))
       for (let i = 0; i < flat.length; i += size) {
         const part = flat.slice(i, i + size)
-        modules.push({ id: `m${modules.length + 1}`, title: flat.length <= 8 ? 'Lessons' : part.length === 1 ? `Lesson ${i + 1}` : `Lessons ${i + 1}–${i + part.length}`, lessons: part, code: [] })
+        const unit = c.kind === 'book' ? 'Chapter' : 'Lesson'
+        modules.push({ id: `m${modules.length + 1}`, title: flat.length <= 8 ? `${unit}s` : part.length === 1 ? `${unit} ${i + 1}` : `${unit}s ${i + 1}–${i + part.length}`, lessons: part, code: [] })
       }
       if (modules.length === 1) modules[0].code = code.filter((p) => !p.includes('/')).slice(0, 40)
     }
   }
   modules.forEach((m, i) => (m.id = `m${i + 1}`))
   return { modules, lessons: modules.reduce((n, m) => n + m.lessons.length, 0) }
+}
+
+/**
+ * A Jupyter Book's outline from its _toc.yml (in the course's root, or fetched beside it): each part
+ * a module, each chapter a lesson, read from its .md or .ipynb. A lesson with code to run is a
+ * notebook. Null when there is no _toc.yml.
+ */
+export function jbOutline(c: Pick<CatalogueCourse, 'root'>, files: RepoFile[]): CourseOutline | null {
+  const root = c.root ? c.root.replace(/\/+$/, '') : ''
+  const tocFile = files.find((f) => f.text && (f.path === (root ? `${root}/_toc.yml` : '_toc.yml') || f.path === '_toc.yml'))
+  if (!tocFile) return null
+  const toc = parseJbToc(tocFile.text!)
+  const byStem = new Map<string, RepoFile>()
+  for (const f of files) {
+    if (!f.text || !/\.(md|ipynb)$/i.test(f.path)) continue
+    const rel = root && f.path.startsWith(`${root}/`) ? f.path.slice(root.length + 1) : f.path
+    const stem = rel.replace(/\.(md|ipynb)$/i, '')
+    // A notebook wins over Markdown of the same name: it has the outputs
+    if (!byStem.has(stem) || /\.ipynb$/i.test(f.path)) byStem.set(stem, f)
+    // A notebooks repository keeps them flat: found by name alone
+    const name = stem.split('/').pop()!
+    if (!byStem.has(`#${name}`) || /\.ipynb$/i.test(f.path)) byStem.set(`#${name}`, f)
+  }
+  const modules: CourseModule[] = []
+  for (const part of toc.parts) {
+    const lessons: CourseLesson[] = []
+    for (const stem of part.files) {
+      const f = byStem.get(stem) ?? byStem.get(`#${stem.split('/').pop()}`)
+      if (!f || words(f.text ?? '') < 25) continue
+      const l = lessonOf(f)
+      const code = /\.ipynb$/i.test(f.path) || /```\{code-cell\}|^```(python|ipython3?|julia)\s*$/m.test(f.text ?? '')
+      lessons.push({ ...l, kind: code ? 'notebook' : l.kind })
+    }
+    if (lessons.length) modules.push({ id: `m${modules.length + 1}`, title: part.title, lessons, code: [] })
+  }
+  return modules.length ? { modules, lessons: modules.reduce((n, m) => n + m.lessons.length, 0) } : null
 }
 
 // ---------- A lesson's sections: the steps it is taught in ----------
@@ -461,7 +504,7 @@ export interface Section {
   words: number
 }
 
-const AROUND = /^(homework|resources|further reading|references|bibliography|table of contents|contents|navigation|previous|next|community notes|notes|videos?|video|links|useful links|additional resources|summary of links|credits|acknowledg|license|licen[cs]e|post-lecture quiz|pre-lecture quiz|quiz|review (&|and) self study|self study|assignment|🚀 challenge|challenge|\[?edit\]?|see also|faq|discussion|exercises? for the reader|footnotes)\b/i
+const AROUND = /^(solutions?( to (exercise|problem)s?.*)?$|homework|resources|further reading|references|bibliography|table of contents|contents|navigation|previous|next|community notes|notes|videos?|video|links|useful links|additional resources|summary of links|credits|acknowledg|license|licen[cs]e|post-lecture quiz|pre-lecture quiz|quiz|review (&|and) self study|self study|assignment|🚀 challenge|challenge|\[?edit\]?|see also|faq|discussion|exercises? for the reader|footnotes)\b/i
 export const SECTION_MAX = 600
 export const MAX_STEPS = 10
 

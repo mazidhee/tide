@@ -136,7 +136,7 @@ async function courseBytes(id: string, path: string): Promise<Buffer | null> {
   if (!bytes) {
     const c = catalogueCourse(id)
     const meta = await importedCourse(id)
-    if (!c) return null
+    if (!c?.repo || !c.branch) return null
     bytes = await rawBytes(githubRawUrl({ repo: c.repo, branch: meta?.commit ?? c.branch }, normalisePath(path)))
   }
   if (!bytes) return null
@@ -209,10 +209,11 @@ function asView(base: Omit<RepoFileView, 'kind'>, kind: FileKind, bytes: Buffer 
 export async function courseFileView(id: string, path: string): Promise<RepoFileView | null> {
   const c = catalogueCourse(id)
   const meta = await importedCourse(id)
-  if (!c || !meta) return null
+  // A course from the web has no repository to browse: its links point at the web
+  if (!c || !meta || !c.repo || !c.branch) return null
   const clean = normalisePath(path)
   const repo = { repo: c.repo, branch: meta.commit ?? c.branch }
-  const base = { source: { course: id }, repo: c.repo, branch: c.branch, path: clean }
+  const base = { source: { course: id }, repo: c.repo as string, branch: c.branch as string, path: clean }
   const tree = await courseTree(id)
   const isFolder = clean === '' || (!tree.includes(clean) && tree.some((p) => p.startsWith(`${clean}/`)))
   if (isFolder) {

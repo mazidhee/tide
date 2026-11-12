@@ -15,9 +15,15 @@
  * areas, licences and options). Layout options are described on `CatalogueCourse`.
  */
 
-export type CourseArea = 'data' | 'mlops' | 'ml' | 'dl' | 'cs' | 'systems' | 'swe' | 'design' | 'algo' | 'maths' | 'physics'
+import { WEB_COURSES } from './courseCatalogueWeb'
+
+export type CourseArea = 'payments' | 'blockchain' | 'quant' | 'econ' | 'data' | 'mlops' | 'ml' | 'dl' | 'cs' | 'systems' | 'swe' | 'design' | 'algo' | 'maths' | 'physics'
 
 export const AREAS: { id: CourseArea; label: string; blurb: string }[] = [
+  { id: 'payments', label: 'Payments and banking', blurb: 'Payment rails, messaging, core and open banking, ledgers' },
+  { id: 'blockchain', label: 'Blockchain and stablecoins', blurb: 'Bitcoin, Ethereum, cryptography and digital money' },
+  { id: 'quant', label: 'Quantitative finance and risk', blurb: 'Asset pricing, derivatives, risk and financial markets' },
+  { id: 'econ', label: 'Economics', blurb: 'Micro, macro, game theory and computational economics' },
   { id: 'data', label: 'Data engineering', blurb: 'Pipelines, warehouses, orchestration, streaming' },
   { id: 'mlops', label: 'ML engineering', blurb: 'Shipping, serving and running models' },
   { id: 'ml', label: 'Machine learning', blurb: 'Models, statistics and data science' },
@@ -33,12 +39,58 @@ export const AREAS: { id: CourseArea; label: string; blurb: string }[] = [
 
 export type LicenceTier = 'open' | 'personal'
 
+/**
+ * Where a course comes from, and so which adapter reads it (main/sources):
+ *   github       a repository (the original kind), its Markdown and notebooks
+ *   ocw          an MIT OpenCourseWare course: lectures with their videos, captions and notes, problem sets
+ *   yale         an Open Yale Courses course: sessions with video, transcript and readings, exams
+ *   jupyterbook  a Jupyter Book: its _toc.yml order, its notebooks runnable (QuantEcon)
+ *   site         a free online book with an open table of contents (mdBook, Jupyter Book, Sphinx, Quarto, bookdown)
+ *   youtube      a YouTube playlist of a lecture series: each video a lesson, with its transcript
+ *   docs         official guides and docs read in a set order (pages listed, HTML or PDF)
+ */
+export type SourceKind = 'github' | 'ocw' | 'yale' | 'jupyterbook' | 'site' | 'youtube' | 'docs'
+
+export const SOURCES: Record<SourceKind, { label: string; site: string }> = {
+  github: { label: 'GitHub', site: 'github.com' },
+  ocw: { label: 'MIT OpenCourseWare', site: 'ocw.mit.edu' },
+  yale: { label: 'Open Yale Courses', site: 'oyc.yale.edu' },
+  jupyterbook: { label: 'Jupyter Book', site: '' },
+  site: { label: 'Online book', site: '' },
+  youtube: { label: 'YouTube lectures', site: 'youtube.com' },
+  docs: { label: 'Official guide', site: '' }
+}
+
+/** A page of a guide read as a course, in order */
+export interface GuidePage {
+  title: string
+  url: string
+  /** The module it starts or belongs to (pages without one join the module before them) */
+  module?: string
+}
+
 export interface CatalogueCourse {
   /** Stable: progress and the copy on disk are kept under it */
   id: string
-  /** owner/name on GitHub */
-  repo: string
-  branch: string
+  /** Where it comes from (GitHub when unset) */
+  source?: SourceKind
+  /** owner/name on GitHub (a github or jupyterbook course) */
+  repo?: string
+  branch?: string
+  /** Its home on the web: the course page, the book's contents page, the guide's start (anything not on GitHub) */
+  url?: string
+  /** A YouTube playlist's id (a youtube course) */
+  playlist?: string
+  /** A book site's table of contents, when Tide can't find it by itself: a CSS selector */
+  toc?: string
+  /** A Jupyter Book's _toc.yml, as a URL, when the repository read is not the one that holds it (a .notebooks repository) */
+  jbToc?: string
+  /** A guide's pages, in order (a docs course) */
+  pages?: GuidePage[]
+  /** What it is mostly made of, for the filters (worked out from the source when unset) */
+  media?: 'video' | 'text' | 'mixed'
+  /** At most this many pages are fetched (a big book is cut short, politely) */
+  maxPages?: number
   title: string
   /** Who wrote it, as they name themselves */
   by: string
@@ -74,7 +126,7 @@ export interface CatalogueCourse {
 
 const PERSONAL = 'No licence is stated: fetched to this Mac for your own study only, never redistributed'
 
-export const CATALOGUE: CatalogueCourse[] = [
+const GITHUB_COURSES: CatalogueCourse[] = [
   // ---------- Data engineering ----------
   {
     id: 'de-zoomcamp',
@@ -938,6 +990,46 @@ export const CATALOGUE: CatalogueCourse[] = [
   }
 ]
 
-export const catalogueCourse = (id: string) => CATALOGUE.find((c) => c.id === id)
+/** Every course Tide ships with: GitHub's, then those from the open web (courseCatalogueWeb) */
+export const CATALOGUE: CatalogueCourse[] = [...GITHUB_COURSES, ...WEB_COURSES]
+
+// ---------- Courses beyond the built-in list ----------
+
+/**
+ * Courses Tide found for you (main/courseFresh: suggestions, and suggestions you imported), added
+ * at run time beside the built-in list. Main registers them as it loads them; the window registers
+ * the ones it is shown.
+ */
+const extra = new Map<string, CatalogueCourse>()
+export function registerCourses(list: CatalogueCourse[]): void {
+  for (const c of list) if (!CATALOGUE.some((b) => b.id === c.id)) extra.set(c.id, c)
+}
+export const unregisterCourse = (id: string) => void extra.delete(id)
+/** The built-in catalogue and the courses found for you */
+export const allCourses = (): CatalogueCourse[] => [...CATALOGUE, ...extra.values()]
+
+export const catalogueCourse = (id: string) => CATALOGUE.find((c) => c.id === id) ?? extra.get(id)
 export const areaLabel = (a: CourseArea) => AREAS.find((x) => x.id === a)?.label ?? a
-export const repoUrl = (c: Pick<CatalogueCourse, 'repo'>) => `https://github.com/${c.repo}`
+export const sourceOf = (c: Pick<CatalogueCourse, 'source'>): SourceKind => c.source ?? 'github'
+/** Read with git from GitHub (its own repository): a github course or a Jupyter Book kept on GitHub */
+export const fromRepo = (c: Pick<CatalogueCourse, 'source' | 'repo'>) => !!c.repo && (sourceOf(c) === 'github' || sourceOf(c) === 'jupyterbook')
+/** Where the course lives: its repository on GitHub, else its page on the web */
+export const homeUrl = (c: Pick<CatalogueCourse, 'source' | 'repo' | 'url' | 'playlist'>) =>
+  c.url ?? (c.playlist ? `https://www.youtube.com/playlist?list=${c.playlist}` : c.repo ? `https://github.com/${c.repo}` : '')
+export const repoUrl = (c: Pick<CatalogueCourse, 'repo' | 'source' | 'url' | 'playlist'>) => homeUrl(c)
+/** The host a course is read from, as shown on its card */
+export function sourceSite(c: Pick<CatalogueCourse, 'source' | 'repo' | 'url' | 'playlist'>): string {
+  const s = SOURCES[sourceOf(c)]
+  if (s.site) return s.site
+  try {
+    return new URL(homeUrl(c)).hostname.replace(/^www\./, '')
+  } catch {
+    return s.label
+  }
+}
+/** What it is mostly made of */
+export function mediaOf(c: Pick<CatalogueCourse, 'source' | 'media'>): 'video' | 'text' | 'mixed' {
+  if (c.media) return c.media
+  const s = sourceOf(c)
+  return s === 'youtube' ? 'video' : s === 'ocw' || s === 'yale' ? 'mixed' : 'text'
+}
