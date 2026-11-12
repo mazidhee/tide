@@ -10,6 +10,7 @@
  * model for that turn; an answer to a question is first marked by a short separate call on the
  * marking model (Opus), whose verdict the tutor writes into its grade.
  */
+import { parseMark } from '@shared/teachingQuality'
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
 import { app } from 'electron'
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
@@ -453,7 +454,7 @@ export function isAnswer(req: TurnRequest, said: string): boolean {
   return !/^\s*(\[hint\]|my question:|(i (don'?t|do not) know|i dunno|idk|no idea|not sure|no clue|i have no (idea|clue)|i'?m not sure|go on|continue|skip)\b)/i.test(said.replace(/[\u2018\u2019\u02bc]/g, "'"))
 }
 
-const MARK_SYSTEM = `You mark one answer a student gave in a lesson, for their tutor. Grade against the tutor's own solution when there is one (it is inside <solution>; the student never saw it). "correct" means the result is right and complete, not just heading the right way. A right final result is "correct" even when the working the question asked for isn't shown: say in "why" that the working wasn't shown, and never mark it down for that alone. "partial" is for a result that is incomplete or only partly right, or reasoning they wrote that is wrong. A message that only asks for something (to be taught again, to move on) is not an answer and is never marked. An equivalent method or ordering is not a mistake. Quote the words of their answer that earned the verdict. A code answer may come with what Tide's sandbox found when it ran their code against the question's hidden tests (the tests are in the \`\`\`tests block of the question; the results read "N of M tests passed" with each FAILED test and why): it can't be "correct" unless every test passed, and for each failed test say what that test tried and the exact line or idea in their code that makes it fail. A note from Tide on an exact check of their final answer or query is a fact: follow it. Reply with JSON only: {"verdict": "correct" | "partial" | "wrong", "score": 0.0 to 1.0, "why": "one or two sentences: what was right and why, or the exact step that's wrong and why"}.`
+const MARK_SYSTEM = `You mark one answer a student gave in a lesson, for their tutor. Grade against the tutor's own solution when there is one (it is inside <solution>; the student never saw it). "correct" means the result is right and complete, not just heading the right way. A right final result is "correct" even when the working the question asked for isn't shown: say in "why" that the working wasn't shown, and never mark it down for that alone. "partial" is for a result that is incomplete or only partly right, or reasoning they wrote that is wrong. A message that only asks for something (to be taught again, to move on) is not an answer and is never marked. An equivalent method or ordering is not a mistake. Quote the words of their answer that earned the verdict. A code answer may come with what Tide's sandbox found when it ran their code against the question's hidden tests (the tests are in the \`\`\`tests block of the question; the results read "N of M tests passed" with each FAILED test and why): it can't be "correct" unless every test passed, and for each failed test say what that test tried and the exact line or idea in their code that makes it fail. A note from Tide on an exact check of their final answer or query is a fact: follow it. Reply with JSON only: {"verdict": "correct" | "partial" | "wrong", "score": 0.0 to 1.0, "why": "one or two sentences: what was right and why, or the exact step that's wrong and why", "misconception": optional, only when a partial or wrong answer comes from a specific wrong belief rather than a slip or a gap: {"name": "a short name, under 8 words", "description": "one sentence: what they believe and why it's wrong"}}. When it is one of the learner's known misconceptions listed with the answer, use that exact name.`
 
 /**
  * One call, no tools and no conversation: the whole prompt in, one reply out. For marking, lesson
@@ -595,18 +596,14 @@ export async function backgroundOnClaude(prompt: string, system: string | undefi
 }
 
 /** A short, separate call on the marking model: its verdict for the tutor to write */
-export async function markAnswer(question: string, answer: string, model: string, signal: AbortSignal, images: ImageInput[] = []): Promise<{ verdict: string; score: number; why: string; ms: number } | null> {
+export async function markAnswer(question: string, answer: string, model: string, signal: AbortSignal, images: ImageInput[] = [], known: string[] = []): Promise<{ verdict: string; score: number; why: string; ms: number; misconception?: { name: string; text: string } } | null> {
   const photos = images.length ? `\n\nThe student also sent ${images.length === 1 ? 'a picture' : `${images.length} pictures`} with this answer (above): their working, a photo or a screenshot. Read it carefully and mark what it shows as part of the answer.` : ''
-  const r = await claudeOnce(`The tutor's message, with the question and its hidden solution:\n"""\n${question.slice(-8000)}\n"""\n\nThe student's answer:\n"""\n${answer.slice(0, 6000)}\n"""${photos}`, MARK_SYSTEM, 'mark', signal, model, images).catch(() => null)
+  const knownNote = known.length ? `\n\nThe learner's known misconceptions on this topic: ${known.map((k) => `"${k}"`).join(', ')}.` : ''
+  const r = await claudeOnce(`The tutor's message, with the question and its hidden solution:\n"""\n${question.slice(-8000)}\n"""\n\nThe student's answer:\n"""\n${answer.slice(0, 6000)}\n"""${photos}${knownNote}`, MARK_SYSTEM, 'mark', signal, model, images).catch(() => null)
   if (!r) return null
-  try {
-    const j = JSON.parse(/\{[\s\S]*\}/.exec(r.text)?.[0] ?? '') as { verdict?: string; score?: number; why?: string }
-    if (!j.verdict || !['correct', 'partial', 'wrong'].includes(j.verdict)) return null
-    return { verdict: j.verdict, score: Number(j.score ?? (j.verdict === 'correct' ? 1 : j.verdict === 'partial' ? 0.5 : 0)), why: String(j.why ?? ''), ms: r.ms }
-  } catch {
-    return null
-  }
+  return parseMark(r.text, r.ms)
 }
+
 
 /**
  * Planning work (a roadmap, a lesson plan) on Claude when Claude teaches, else on Gemma or the
@@ -682,6 +679,8 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
     }
   }
   let markNote = ''
+  // A misconception the marker named: kept in the reply as Tide's tag (shared/teachingQuality), never shown
+  let misconception: { name: string; text: string } | undefined
   let verdict: 'correct' | 'partial' | 'wrong' | undefined
   // Show me and Draw it: on Claude, a custom visual is one of the pictures it can choose
   const { asksToSee } = await import('@shared/showMe')
@@ -707,10 +706,12 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
     const id = nextStepId()
     emit({ id: req.id, type: 'step', step: { id, kind: 'helper', label: `${claudeLabel(markModel)} is marking your answer`, status: 'running', depth: 0 } })
     // Bounded like the turn itself: a marker that never answers leaves the mark to the tutor
-    const mark = await markAnswer(prev, said + exactSaid, markModel, AbortSignal.any([signal, AbortSignal.timeout(claudeLimits.firstWordsMs)]), pictures).catch(() => null)
+    const known = req.topic ? await import('./teaching').then((t) => t.knownMisconceptions(req.topic!)).catch(() => [] as string[]) : []
+    const mark = await markAnswer(prev, said + exactSaid, markModel, AbortSignal.any([signal, AbortSignal.timeout(claudeLimits.firstWordsMs)]), pictures, known).catch(() => null)
     verdict = mark?.verdict as typeof verdict
     emit({ id: req.id, type: 'step', step: { id, status: mark ? 'done' : 'error', detail: mark ? `${mark.verdict}, ${(mark.ms / 1000).toFixed(1)} s` : 'no mark: the tutor marks it' } as AgentStep })
-    if (mark) markNote = `\n\n(Tide: ${claudeLabel(markModel)} marked this answer against your solution: verdict "${mark.verdict}", score ${mark.score}. Why: ${mark.why})`
+    if (mark) markNote = `\n\n(Tide: ${claudeLabel(markModel)} marked this answer against your solution: verdict "${mark.verdict}", score ${mark.score}. Why: ${mark.why}${mark.misconception ? ` The misconception behind it: ${mark.misconception.name}${mark.misconception.text ? ` (${mark.misconception.text})` : ''}. Address it directly.` : ''})`
+    if (mark?.misconception) misconception = mark.misconception
   }
   // No separate marker (the tutor is already the strongest model): the exact check goes to the tutor itself
   if (exactSaid && !markNote) markNote = exactSaid
@@ -788,6 +789,11 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
       throw new Error(result.error ?? 'Claude stopped')
     }
     emit({ id: req.id, type: 'step', step: { id: engineStep, label: `Claude ${claudeLabel(model)} is teaching`, status: 'done', detail: `${thinking ? 'thought first, ' : ''}first words in ${(((first || Date.now()) - t0) / 1000).toFixed(1)} s` } as AgentStep })
+    if (misconception && reply && !/<misconception\b/i.test(reply)) {
+      const tag = `\n\n${(await import('@shared/teachingQuality')).misconceptionTag(misconception)}`
+      reply += tag
+      emit({ id: req.id, type: 'delta', text: tag })
+    }
     return reply
   } catch (e) {
     if (!recorded) recordFailure(String(model), role, t0, e)

@@ -356,7 +356,7 @@ async function recordAttempts(k: Engine, known?: LessonRecord[]): Promise<void> 
   if (events.length) k.record(events)
 }
 
-async function lessonRecords(): Promise<LessonRecord[]> {
+export async function lessonRecords(): Promise<LessonRecord[]> {
   const dir = '.tide/lessons'
   const names = await fs.readdir(absPath(dir)).catch(() => [] as string[])
   const records: LessonRecord[] = []
@@ -583,4 +583,23 @@ export async function conceptState(name: string, area?: string): Promise<Concept
   const k = await knowledge()
   const id = k?.resolve(conceptName(name), area ?? null)
   return (id && k?.state(id, Date.now(), true)) || null
+}
+
+/**
+ * Every concept with its evidence and FSRS stability, for the teaching measures (time to mastery
+ * and retention, shared/teachingQuality): the store's own file, read after it is flushed.
+ */
+export async function conceptEvidence(): Promise<import('@shared/teachingQuality').ConceptEvidence[]> {
+  const k = await knowledge()
+  if (!k) return []
+  k.flush()
+  const stable = new Map(k.all(Date.now(), true).map((c) => [c.id, c.stability]))
+  try {
+    const store = JSON.parse(await readText('.tide/knowledge.json')) as { concepts?: { id: string; name: string; area: string; parent?: string; private?: boolean; evidence?: { kind: string; at: number; source: string }[] }[] }
+    return (store.concepts ?? [])
+      .filter((c) => c.evidence?.length)
+      .map((c) => ({ id: c.id, name: c.name, area: c.area, ...(c.parent ? { parent: c.parent } : {}), evidence: c.evidence!.map((e) => ({ kind: e.kind, at: e.at, source: e.source })), ...(stable.get(c.id) !== undefined ? { stability: stable.get(c.id) } : {}), ...(c.private ? { private: true } : {}) }))
+  } catch {
+    return []
+  }
 }

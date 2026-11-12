@@ -848,10 +848,12 @@ export const readWebpage = memoize(readWebpageNow, { ttlMs: 60 * 60_000, max: 40
 export type TurnRequest = ChatRequest & { summary?: string; /** Only read the opening into the server's cache */ warmOnly?: boolean; /** A stored conversation in full, for Claude (main/ai claudeRequest); `messages` holds what Gemma gets */ whole?: ChatMessage[] }
 
 /** The part of the system prompt that stays the same from turn to turn, so a local server can reuse its cache */
-export async function stablePrompt(base: string, req: TurnRequest, web: boolean, session = false): Promise<string> {
+export async function stablePrompt(base: string, req: TurnRequest, web: boolean, session = false, privateTurn = false): Promise<string> {
   const memory = await memoryPrompt().catch(() => '')
   const profile = await profilePrompt().catch(() => '')
-  return stableSystem(base, { today: new Date(), web, session, profile, memory })
+  // How Tide has adjusted its teaching for this learner (main/teaching): lessons only, the same for Claude and Gemma
+  const teaching = session ? await import('./teaching').then((t) => t.teachingPrompt(privateTurn)).catch(() => '') : ''
+  return stableSystem(base, { today: new Date(), web, session, profile, memory, teaching })
 }
 
 /**
@@ -1840,7 +1842,7 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
   // Claude the lesson stays whole (shared/workarounds trimHistory): its process holds it, cached
   const history = !uses('trimHistory', engine) ? fitHistory(req.messages, CLAUDE_HISTORY_TOKENS, !!req.instructions) : req.chatId ? req.messages : fitHistory(req.messages, historyBudget(), !!req.instructions)
   const messages: ApiMessage[] = [
-    { role: 'system', content: await stablePrompt(base, req, ctx.web, !!req.session) },
+    { role: 'system', content: await stablePrompt(base, req, ctx.web, !!req.session, !!ctx.private) },
     ...withStableContext(
       // A lesson's instructions ride in its first message, not the system prompt: then the system
       // prompt and tools are the same for every lesson and stay cached between them

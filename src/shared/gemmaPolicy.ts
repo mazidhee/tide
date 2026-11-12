@@ -30,6 +30,8 @@ export const JOB_ROUTES = {
   readTogether: { label: 'Reading a book together', role: 'teach', privacy: 'path' },
   weekPlan: { label: 'Weekly coach plan', role: 'teach', privacy: 'text' },
   learnerProfile: { label: 'Learner profile and direction', role: 'background', privacy: 'text' },
+  // Opus reviewing a finished lesson against the teaching rubric (main/teaching): Claude only, never Gemma
+  lessonReview: { label: 'Reviewing a finished lesson', role: 'mark', privacy: 'scope' },
   curriculum: { label: 'Sorting roadmaps, enriching topics, readings', role: 'background', privacy: 'flag' },
   workshop: { label: 'Guided project review', role: 'teach', privacy: 'flag' },
   // Pictures go to Claude too (main/imagePrep makes them ready): a photo of handwritten maths is marked by the marking model

@@ -2,18 +2,20 @@ import { useMemo, useState } from 'react'
 import type { KnowledgeView } from '@shared/knowledge'
 import { KnowSubjects, type Actions } from './KnowSubjects'
 import { KnowTimeline } from './KnowTimeline'
+import { KnowTeaching } from './KnowTeaching'
 
 /**
  * What you know, in the new design: one sentence carrying the numbers, then either view, by
  * subject (each roadmap as a syllabus being filled in) or over time (weeks, with what fades and
  * each aim's forecast). The choice is remembered on this Mac.
  */
-type Mode = 'subject' | 'time'
+type Mode = 'subject' | 'time' | 'teaching'
 const KEY = 'tide.know.view'
 
 const remembered = (): Mode => {
   try {
-    return localStorage.getItem(KEY) === 'time' ? 'time' : 'subject'
+    const m = localStorage.getItem(KEY)
+    return m === 'time' || m === 'teaching' ? m : 'subject'
   } catch {
     return 'subject'
   }
@@ -50,7 +52,8 @@ export function KnowPage({ data, areaClass, actions }: { data: KnowledgeView; ar
             {(
               [
                 ['subject', 'By subject'],
-                ['time', 'Over time']
+                ['time', 'Over time'],
+                ['teaching', 'How Tide is teaching you']
               ] as const
             ).map(([m, label]) => (
               <button key={m} aria-pressed={mode === m} className={mode === m ? 'on' : ''} onClick={() => choose(m)}>
@@ -59,39 +62,44 @@ export function KnowPage({ data, areaClass, actions }: { data: KnowledgeView; ar
             ))}
           </div>
         </div>
-        <p className="kp-say">
-          {begun === 0 ? (
-            <>
-              {plural(topics.length, 'topic')} across {plural(notebooks, 'notebook')}, none studied here yet. Each lesson and answer fills this in.
-            </>
-          ) : (
-            <>
-              <b>{solid.toLocaleString('en-GB')}</b> of {plural(topics.length, 'topic')} {solid === 1 ? 'is' : 'are'} solid
-              {fading > 0 && (
-                <>
-                  , <b>{fading}</b> {fading === 1 ? 'is' : 'are'} fading
-                </>
-              )}
-              {learning > 0 && (
-                <>
-                  {fading > 0 ? ' and ' : ', '}
-                  <b>{learning}</b> {learning === 1 ? 'is' : 'are'} being learnt
-                </>
-              )}
-              .{' '}
-              {readyNew > 0 && (
-                <>
-                  <b>{readyNew.toLocaleString('en-GB')}</b> {readyNew === 1 ? 'is' : 'are'} ready to start.
-                </>
-              )}
-            </>
-          )}
-        </p>
+        {mode !== 'teaching' && (
+          <p className="kp-say">
+            {begun === 0 ? (
+              <>
+                {plural(topics.length, 'topic')} across {plural(notebooks, 'notebook')}, none studied here yet. Each lesson and answer fills this in.
+              </>
+            ) : (
+              <>
+                <b>{solid.toLocaleString('en-GB')}</b> of {plural(topics.length, 'topic')} {solid === 1 ? 'is' : 'are'} solid
+                {fading > 0 && (
+                  <>
+                    , <b>{fading}</b> {fading === 1 ? 'is' : 'are'} fading
+                  </>
+                )}
+                {learning > 0 && (
+                  <>
+                    {fading > 0 ? ' and ' : ', '}
+                    <b>{learning}</b> {learning === 1 ? 'is' : 'are'} being learnt
+                  </>
+                )}
+                .{' '}
+                {readyNew > 0 && (
+                  <>
+                    <b>{readyNew.toLocaleString('en-GB')}</b> {readyNew === 1 ? 'is' : 'are'} ready to start.
+                  </>
+                )}
+              </>
+            )}
+          </p>
+        )}
       </header>
-      {mode === 'subject' ? <KnowSubjects data={data} ready={ready} areaClass={areaClass} actions={actions} /> : <KnowTimeline data={data} areaClass={areaClass} actions={actions} />}
-      <p className="know-foot">
-        An estimate, not a mark: the chance you would remember a topic today, by the same model as your reviews (FSRS). Each answer is a review: a right one after a gap makes it last much longer, a wrong one makes it harder to keep, and it fades with the time since. Solid means your last answer was right and the chance is still 85% or more; fading means it has dropped below.
-      </p>
+      {mode === 'teaching' ? <KnowTeaching /> : mode === 'subject' ? <KnowSubjects data={data} ready={ready} areaClass={areaClass} actions={actions} /> : <KnowTimeline data={data} areaClass={areaClass} actions={actions} />}
+      {mode !== 'teaching' && (
+        <p className="know-foot">
+          An estimate, not a mark: the chance you would remember a topic today, by the same model as your reviews (FSRS). Each answer is a review: a right one after a gap makes it last much longer, a wrong one makes it harder to keep, and it fades
+          with the time since. Solid means your last answer was right and the chance is still 85% or more; fading means it has dropped below.
+        </p>
+      )}
     </div>
   )
 }

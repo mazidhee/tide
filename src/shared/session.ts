@@ -23,7 +23,7 @@ export type AskType = 'predict' | 'short' | 'choice' | 'explain' | 'error' | 'pr
 
 export type Block =
   | { kind: 'text'; text: string }
-  | { kind: 'ask'; type: AskType; prompt: string; options: string[]; lang?: string; tests?: string; /** In a quiz on several topics: the one this question is on */ topic?: string }
+  | { kind: 'ask'; type: AskType; prompt: string; options: string[]; lang?: string; tests?: string; /** In a quiz on several topics: the one this question is on */ topic?: string; /** The tutor's tag: the idea taught, asked in a new setting (shared/teachingQuality) */ transfer?: 'near' | 'far' }
   | { kind: 'grade'; verdict: Verdict; score: number; text: string }
   /** steps: the titles; detail: each with what it covers, when it's done and rough minutes (shared/lessonPlan) */
   | { kind: 'plan'; steps: string[]; detail: PlanStep[]; goal?: string; ends?: string }
@@ -84,7 +84,10 @@ export const hideWorking = (raw: string) =>
     .replace(/<tests\b[^>]*>[\s\S]*?(<\/tests>|$)/gi, '')
     .replace(/<next\b[^>]*\/?>/gi, '')
     .replace(/<placement>[\s\S]*?(<\/placement>|$)/gi, '')
+    .replace(/<misconception\b[^>]*\/>/gi, '')
+    .replace(/<misconception\b[^>]*>[\s\S]*?(<\/misconception>|$)/gi, '')
     .replace(/<(solution|check)\b[\s\S]*$/i, '')
+    .replace(/<m(i(s(c(o(n(c(e(p(t(i(on?)?)?)?)?)?)?)?)?)?)?)?$/i, '')
 
 /**
  * A grade the tutor opened and never closed, closed where its feedback ends: the first blank line
@@ -161,7 +164,8 @@ export function parseBlocks(full: string): Block[] {
       if (type === 'choice') shuffleOptions(options, prompt)
       const tests = hidden.tests ?? (type === 'code' ? madeTests : undefined)
       const on = attr(attrs, 'topic')?.trim()
-      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt, options, lang: attr(attrs, 'lang'), ...(tests ? { tests } : {}), ...(on ? { topic: on } : {}) })
+      const far = attr(attrs, 'transfer')?.trim().toLowerCase()
+      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt, options, lang: attr(attrs, 'lang'), ...(tests ? { tests } : {}), ...(on ? { topic: on } : {}), ...(far === 'near' || far === 'far' ? { transfer: far } : {}) })
     } else if (name === 'grade') {
       const verdict = (attr(attrs, 'verdict')?.toLowerCase() ?? 'partial') as Verdict
       const score = Number(attr(attrs, 'score') ?? (verdict === 'correct' ? 1 : verdict === 'wrong' ? 0 : 0.5))
@@ -233,8 +237,10 @@ export const SESSION_FORMAT = `Format rules (the app turns these tags into inter
      The student can only answer inside an ask tag, so never ask a question in plain text, not even the first one.
   b) <continue/> when your next message should carry on explaining: an idea that needs more than one message, or when Tide's note says to explain. Then ask nothing. After two explaining messages in a row, check their understanding with a question.
   Types: predict (they guess before you explain), short (a sentence or two), explain (explain it back in their own words), choice (multiple choice, put options in the tag: <ask type="choice" options="first|second|third|fourth">question</ask>), error (show a flawed statement or code and ask them to find the mistake), problem (a worked problem or calculation), code (they write code in an editor that runs it: <ask type="code" lang="python">task</ask>; lang is the language being taught: python, javascript, c or cpp run here).
+- Transfer: once an idea is taught and answered right, test it in a new setting. Mark such a question transfer="near" (the same idea in a new context or form) or transfer="far" (a different kind of problem or field that needs it): <ask type="problem" transfer="near">…</ask>.
 - Use choice when picking is the real test (spotting the right idea, the next step, or a misconception) and typing would only slow them down. Write the correct option first, then make each wrong option from one specific misconception, the same length and shape, with nothing that gives the answer away. They may add their reasoning to their pick: mark the reasoning too.
 - When they answer, judge it first: <grade verdict="correct|partial|wrong" score="0.0-1.0">one or two sentences: what was right and why, or the exact step that's wrong and why; no empty praise</grade>
+- When a partial or wrong answer comes from a specific wrong belief (not a slip), name it on the grade: <grade verdict="wrong" score="0.2" misconception="short name: what they believe">. Reuse the same short name when the same belief comes back.
 - Grade against your own solution, and quote the words of their answer that earned the verdict. "correct" means the result is right and complete, not just heading the right way. A right final result without the working you asked for is still "correct": say in a few words that the working wasn't shown, or ask for the one check in your next question. "partial" is for a result that is incomplete, or reasoning they wrote that is wrong.
 - Before you set a problem, solve it yourself, and put your answer and the key steps after it in <solution>...</solution>. The student never sees it (so this isn't answering your own question); you grade their answer against it. When the answer is a number or an expression, also add <check lang="python">Python that works the answer out from scratch and asserts it equals yours (SymPy is available)</check>; for a code problem, a check that runs your reference solution on test cases with asserts. Tide runs every check before the student sees the problem: if it fails, the problem or your answer is wrong. A problem must be well posed: every quantity it asks about is defined and it has one clear answer.
 - If they got something wrong or partly wrong, capture the idea they missed as a flashcard: <card>question :: answer</card>. Never after a "correct" mark: a right answer isn't a miss.

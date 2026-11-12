@@ -58,6 +58,8 @@ async function writeLesson(input: Omit<LessonRecord, 'started' | 'updated' | 'pa
   await fs.mkdir(absPath(DIR), { recursive: true })
   await writeText(fileFor(record.id), JSON.stringify(record))
   await writeText(page, lessonMarkdown(record))
+  // The teaching measures change, and a lesson that has just finished is reviewed (main/teaching)
+  void import('./teaching').then((t) => t.lessonKept(record, !!record.finished && !prev?.finished)).catch(() => {})
   // What was missed is kept for recall; never a reason for a save to fail
   await noteLesson(record).catch(() => {})
   // And what it shows is added to the picture of what they know
