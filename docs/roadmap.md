@@ -30,6 +30,7 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 
 ## Now
 
+- [ ] **Lesson threads.** Ask about any tutor explanation (hover Ask, or select a phrase): a thread opens under it, with as many follow-ups as you need, and folds into one line when you've got it, so the lesson stays clean. Design approved from the prototype.
 - [ ] **Courses from everywhere, kept fresh.** Beyond GitHub: open university courses (MIT OpenCourseWare, Open Yale, Stanford and CMU materials), QuantEcon lectures, free books, lecture series on YouTube, and official guides. Each is checked for licence and for being free without a login. Within your subjects, Tide looks for new and updated courses on a schedule and adds them to the catalogue as suggestions, never imported without your say.
 - [ ] **Tide tuned for finance, payments and quant.** Your focus subjects: stablecoins, payments and payment rails, core banking, open banking, payment infrastructure, quantitative finance, risk, blockchain, plus ML, data engineering, data science and economics.
   - Roadmaps for each, built from the best sources.
