@@ -37,6 +37,16 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
   - One Claude process per lesson, kept running, so answers stream in about 2 s and the lesson stays cached. Your other connectors and settings are kept out of it. Any API key in the environment is stripped so your plan is used.
   - The same MCP server registered in Claude Code (`claude mcp add --scope user tide …`), so in Ghostty Claude can teach from your notes, run your code in Tide and record progress back to Tide.
   - Usage shown in Connections; choose per notebook or per lesson which engine teaches.
+- [ ] **Claude: visuals made for each concept.** Claude writes a custom interactive explainer for whatever you're stuck on (backprop, B-tree splits, attention, a market shift). It runs in a sandboxed frame inside the lesson, beyond the 11 fixed simulation kinds.
+- [ ] **Claude: exercises checked before you see them.** Each problem comes with tests and a reference solution, run in Tide's sandbox first, so every exercise is hard, fair and never broken.
+- [ ] **Claude: a tutor that remembers you.** A learner profile in your vault (misconceptions, pace, what clicked), kept up by Claude and read with your past lessons and mistakes before each session.
+- [ ] **Claude: lesson prep while you're away.** Background prep before tomorrow's lesson: what's due, the best reading, exercises, a custom visual, a short plan. Plus a weekly review.
+- [ ] **Claude: a mentor for your projects.** Reads your whole project across sessions, reviews it like a senior engineer, runs your tests, and proposes edits in the Code view that you approve line by line.
+- [ ] **Claude: reading primary sources together.** Papers, documentation and classics read in full, with web search and page reading. A seminar that argues, steelmans and critiques your writing.
+- [ ] **Claude: photos and screenshots.** Mark handwritten maths from a photo; explain a diagram or an error screenshot.
+- [ ] **Claude: mock interviews and exams.** Live coding with tests and system design on the canvas, timed and marked.
+- [ ] **Claude: a simpler, faster Tide.** Switch off the Gemma workarounds (stall guards, retries, output repair, constant trimming) on Claude lessons.
+- [ ] **Benchmark Sonnet and Opus.** Run Tide's tutor benchmark on both, and move any task where Sonnet is clearly weaker to Opus.
 - [ ] **Videos in Tide.** Paused for Claude: partial work in worktree `tide-video` (player, captions and cinema view working). YouTube's own player inside Tide, so almost no added weight: one player at a time, a thumbnail until play, removed when closed. Videos are never downloaded or hosted; your own MP4s also play.
   - Player and transcript side by side: the line being spoken is marked, clicking a line jumps there, highlight or ask about a line.
   - The tutor picks a section to watch before a lesson (from saved transcripts and course videos) and a recap clip after it, with questions drawn from the transcript.
