@@ -308,7 +308,11 @@ export function EditorPane(p: Props) {
         body.textContent = c.body
         node.append(head, body)
         const lines = Math.min(12, 2 + Math.ceil(c.body.length / 90) + (c.body.match(/\n/g)?.length ?? 0))
-        zones.current.push(acc.addZone({ afterLineNumber: c.line, heightInLines: lines, domNode: node, suppressMouseDown: false }))
+        // Monaco sizes the zone's own node; the card sits inside it
+        const zone = document.createElement('div')
+        zone.className = 'ix-comment-zone'
+        zone.append(node)
+        zones.current.push(acc.addZone({ afterLineNumber: c.line, heightInLines: lines, domNode: zone, suppressMouseDown: false }))
       }
     })
     decorate('comments', list.map((c) => ({ range: new monaco.Range(c.line, 1, c.line, 1), options: { glyphMarginClassName: `ix-comment-glyph ${c.severity}`, isWholeLine: true, className: 'ix-comment-line' } })))

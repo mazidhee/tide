@@ -19,7 +19,7 @@ export const TEMPLATES: ProjectTemplate[] = [
   },
   {
     id: 'python-tests',
-    label: 'Python package with tests',
+    label: 'Python + pytest',
     about: 'A package, pytest tests and a pyproject',
     language: 'Python',
     defaultName: 'python-package',

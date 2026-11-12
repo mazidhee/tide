@@ -1826,8 +1826,13 @@ body.ix-resizing .ix-editor {
   color: var(--ink);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
   overflow: auto;
-  max-height: calc(100% - 8px);
+  height: calc(100% - 8px);
+  box-sizing: border-box;
   white-space: pre-wrap;
+}
+
+.ix-comment-zone {
+  padding-left: 6px;
 }
 
 .ix-comment.issue {
@@ -2819,7 +2824,28 @@ button.ix-status-item:hover {
 }
 
 .ix-pair-claude .prose {
+  font-family: var(--font-ui);
   font-size: 13px;
+  line-height: 1.5;
+}
+
+.ix-pair-claude .prose :is(h1, h2, h3, h4) {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 650;
+  margin: 12px 0 4px;
+}
+
+.ix-pair-claude .prose :is(p, ul, ol) {
+  margin: 0 0 8px;
+}
+
+.ix-pair-claude .prose li {
+  margin: 2px 0;
+}
+
+.ix-help-body.prose {
+  font-family: var(--font-ui);
 }
 
 .ix-pair-tools {
@@ -3224,4 +3250,37 @@ button.ix-status-item:hover {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* A signature in Quick Help or Claude's reply isn't a program to run */
+.ix-help .run-code,
+.ix-help .copy-code {
+  display: none;
+}
+
+.ix-comment {
+  max-width: 720px;
+}
+
+/* Claude's replies and Quick Help read in the interface font, not the reading serif */
+.ix-pair-claude .prose :not(code, pre, pre *),
+.ix-help-body.prose :not(code, pre, pre *) {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* The diff bar keeps its buttons whole in a narrow group; the names give way */
+.ix-diff-bar > * {
+  flex-shrink: 0;
+}
+
+.ix-diff-bar > .ix-link,
+.ix-diff-bar > .ix-diff-title,
+.ix-diff-bar > .muted {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

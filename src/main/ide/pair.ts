@@ -310,21 +310,25 @@ async function ensureProcess(s: Session): Promise<import('../claudeEngine').Clau
 
 const TOOL_LABELS: Record<string, string> = { list_files: 'Listing files', read_file: 'Reading', search_code: 'Searching', get_diagnostics: 'Reading the problems', git_diff: 'Reading your changes', propose_edit: 'Proposing an edit', write_file: 'Proposing a file', run_command: 'Running', run_tests: 'Running the tests', debug_state: 'Reading the debugger', add_review_comment: 'Commenting', open_in_editor: 'Opening' }
 
+/** The session for this conversation: a new one when the project or the mode changed */
+export function ensureSession(id: string, root: string, mode: PairMode, owner: WebContents, model: string): Session {
+  let s = sessions.get(id)
+  if (!s || s.root !== root || s.mode !== mode) {
+    s?.proc?.stop()
+    s = { id, root, mode, owner, proc: null, busy: null, notes: [], model }
+    sessions.set(id, s)
+  }
+  s.owner = owner
+  return s
+}
+
 export async function send(owner: WebContents, req: { session: string; root: string; mode: PairMode; text: string; activePath?: string; selection?: string; model?: string }): Promise<void> {
   const root = allowed(req.root)
   const { claudeReady, recordUse } = await import('../claudeEngine')
   const ready = await claudeReady()
-  let s = sessions.get(req.session)
-  const fresh = !s || s.root !== root || s.mode !== req.mode
-  if (fresh) {
-    s?.proc?.stop()
-    const { claudeModel } = await import('@shared/claude')
-    const { getSettings } = await import('../settings')
-    s = { id: req.session, root, mode: req.mode, owner, proc: null, busy: null, notes: [], model: req.model ?? claudeModel('teach', getSettings().ai.claude) }
-    sessions.set(req.session, s)
-  }
-  const sess = s!
-  sess.owner = owner
+  const { claudeModel } = await import('@shared/claude')
+  const { getSettings } = await import('../settings')
+  const sess = ensureSession(req.session, root, req.mode, owner, req.model ?? claudeModel('teach', getSettings().ai.claude))
   if (!ready.ready) {
     emit(sess, { type: 'error', message: `Claude isn’t available: ${ready.why ?? 'not ready'}. The IDE works without it; the Tutor tab can help on this Mac.` })
     return

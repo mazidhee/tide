@@ -771,7 +771,7 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
     // Monaco's own editor actions (rename, references, fold, comment…), as VS Code lists them
     const ed = focusedEditor()
     for (const a of ed?.getSupportedActions() ?? [])
-      if (a.label && !list.some((x) => x.label === a.label))
+      if (a.label && !list.some((x) => x.label === (a.label.startsWith('Editor') ? a.label : `Editor: ${a.label}`)))
         list.push({
           id: `editor:${a.id}`,
           label: a.label.startsWith('Editor') ? a.label : `Editor: ${a.label}`,

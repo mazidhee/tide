@@ -31,6 +31,15 @@ interface Item {
   run(): void
 }
 
+/** Commands whose words hold every word typed come first, in their order; scattered letters only when nothing does */
+function commandFilter(commands: Command[], q: string): Command[] {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean)
+  if (!words.length) return commands.slice(0, 80)
+  const hits = commands.filter((c) => words.every((w) => c.label.toLowerCase().includes(w)))
+  if (hits.length) return hits.sort((a, b) => Number(!a.label.toLowerCase().split(/[\s:]+/).some((x) => x.startsWith(words[0]))) - Number(!b.label.toLowerCase().split(/[\s:]+/).some((x) => x.startsWith(words[0])))).slice(0, 80)
+  return fuzzyFilter(commands, q, (c) => c.label, 80)
+}
+
 /**
  * VS Code's quick open in one box, chosen by the first character as there: a file by name, > a
  * command, @ a symbol in this file, # a symbol anywhere in the project, : a line.
@@ -84,7 +93,7 @@ export function Palette({
 
   const items: Item[] = useMemo(() => {
     if (mode === 'commands')
-      return fuzzyFilter(commands, q, (c) => c.label, 80).map((c) => ({ key: c.id, label: c.label, keys: c.keys, run: c.run }))
+      return commandFilter(commands, q).map((c) => ({ key: c.id, label: c.label, keys: c.keys, run: c.run }))
     if (mode === 'symbols') {
       const all = syms ?? []
       const shown = q.trim() ? fuzzyFilter(all, q, (s) => s.name, 100) : all

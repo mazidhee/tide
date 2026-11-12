@@ -32,8 +32,9 @@ function useDiffEditor(host: React.RefObject<HTMLDivElement | null>, opts: Monac
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-design', 'style', 'class'] })
     return () => {
       mo.disconnect()
-      d.dispose()
+      // Cleared first, so the panes' own cleanups (which run after) leave a disposed editor alone
       ref.current = null
+      d.dispose()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -60,7 +61,7 @@ export function GitDiffPane({ docs, path, base, label, modified: modifiedText }:
       d.updateOptions({ readOnly: true })
       void highlight(lang)
       return () => {
-        d.setModel(null)
+        if (diff.current === d) d.setModel(null)
         original?.dispose()
         right.dispose()
       }
@@ -83,7 +84,7 @@ export function GitDiffPane({ docs, path, base, label, modified: modifiedText }:
     return () => {
       live = false
       const m = d.getModel()
-      d.setModel(null)
+      if (diff.current === d) d.setModel(null)
       original?.dispose()
       if (m?.modified.uri.scheme === 'git-gone') m.modified.dispose()
     }
@@ -130,7 +131,7 @@ export function ProposalPane({ proposal, current, onResolve, onOpenFile }: { pro
     d.setModel({ original, modified })
     void highlight(lang)
     return () => {
-      d.setModel(null)
+      if (diff.current === d) d.setModel(null)
       original.dispose()
       modified.dispose()
       models.current = null
@@ -211,7 +212,7 @@ export function ProposalPane({ proposal, current, onResolve, onOpenFile }: { pro
         <button className="btn small" onClick={() => setDecisions(list.map(() => 'keep'))} disabled={!pending}>
           Keep all
         </button>
-        <button className="btn small primary" onClick={() => onResolve(text)} disabled={kept === 0 && pending === list.length} title={pending ? 'Writes the kept changes and the ones not decided yet' : 'Writes the kept changes'}>
+        <button className="btn small primary" onClick={() => onResolve(text)} disabled={undone === list.length} title={pending ? 'Writes the kept changes and the ones not decided yet' : 'Writes the kept changes'}>
           {pending && kept ? `Apply ${list.length - undone}` : 'Apply'}
         </button>
       </div>
