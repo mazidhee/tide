@@ -364,8 +364,10 @@ export function messageToSend(history: { role: string; content: unknown }[], p: 
 export function turnRole(req: TurnRequest, said: string, job: string | null): ClaudeRole {
   const users = req.messages.filter((m) => m.role === 'user').length
   if (req.session && req.instructions && users <= 1) return 'hard'
-  if (job === 'maths' || job === 'errors' || job === 'planning') return 'hard'
   if (asksForDepth(said)) return 'hard'
+  // An answer is marked by the marking model in its own short call: the lesson goes on in the teaching model
+  if (isAnswer(req, said)) return 'teach'
+  if (job === 'maths' || job === 'errors' || job === 'planning') return 'hard'
   return 'teach'
 }
 
