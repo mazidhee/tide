@@ -1,4 +1,5 @@
 import { ASKED, GO_ON, closeGrade, ownWords, parseBlocks } from './session'
+import { isMoveOn } from './lessonPlan'
 
 /**
  * A lesson reply put right before it is kept, where the fault is one a rule can see and fix
@@ -81,7 +82,8 @@ export function isAnswer(said: string): boolean {
 /** Whether a mark on the reply to this message has nothing to mark */
 export const nothingToMark = (said: string) => {
   const mine = ownWords(said).trim()
-  return mine.startsWith(ASKED) || mine === GO_ON || /^\[hint\]$/i.test(mine) || notAnAttempt(mine)
+  // "I've got this, move on" (shared/lessonPlan) is a request too
+  return mine.startsWith(ASKED) || mine === GO_ON || /^\[hint\]$/i.test(mine) || isMoveOn(mine) || notAnAttempt(mine)
 }
 
 /** Grades turned back into what they say: the feedback stays, as a paragraph, and no mark is recorded (nor a flashcard from the "miss") */

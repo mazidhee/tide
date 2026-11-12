@@ -18,6 +18,7 @@
  *
  * The pure parts are here; main/exercises.ts holds the tool, the bank and the lesson's stream.
  */
+import { MAP_RULES, MAP_RULES_CLAUDE } from './lessonPlan'
 import { slugOf, BANK_VERSION, type BankProblem, type Level } from './bank'
 import { comparePython, finalAnswer, toSympy } from './answerCheck'
 import { pythonFunctions, readsStdin, splitTestFunctions } from './codeTests'
@@ -386,6 +387,8 @@ export function forClaude(instructions: string): string {
   return instructions
     .replace(/^- Before you set a problem, solve it yourself[^\n]*$/m, CLAUDE_PROBLEM_RULE)
     .replace(/^- A code ask can carry hidden tests[^\n]*\n?/m, '')
+    // The lesson map: Claude reports a step starting, passing or added with Tide's lesson_progress tool
+    .replace(MAP_RULES, MAP_RULES_CLAUDE)
 }
 
 /** Said to Claude after a check fails */

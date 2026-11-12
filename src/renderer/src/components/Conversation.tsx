@@ -25,6 +25,7 @@ export interface Turn {
 
 const STEP_ICON: Record<AgentStep['kind'], 'search' | 'note' | 'globe' | 'external' | 'agents' | 'sparkle' | 'terminal' | 'book' | 'canvas'> = {
   canvas: 'canvas',
+  progress: 'sparkle',
   search_notes: 'search',
   metabase: 'search',
   read_note: 'note',

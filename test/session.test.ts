@@ -28,7 +28,7 @@ Question 3 of 8.
 
   it('parses plans, scorecards, rubrics and challenges', () => {
     const b = parseBlocks(`<plan>\n1. Halving\n2. Invariants\n</plan><scorecard>\n- Problem solving: 3/4 — clear\n- **Communication**: 2/4 - quiet\n</scorecard><challenge quote="it is always faster">Always? What about tiny arrays?</challenge>`)
-    expect(b[0]).toEqual({ kind: 'plan', steps: ['Halving', 'Invariants'] })
+    expect(b[0]).toEqual({ kind: 'plan', steps: ['Halving', 'Invariants'], detail: [{ title: 'Halving' }, { title: 'Invariants' }] })
     expect(b[1]).toMatchObject({ kind: 'scores', rows: [{ label: 'Problem solving', score: 3, max: 4, note: 'clear' }, { label: 'Communication', score: 2, max: 4, note: 'quiet' }] })
     expect(b[2]).toMatchObject({ kind: 'challenge', quote: 'it is always faster' })
   })

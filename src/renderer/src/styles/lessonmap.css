@@ -1,0 +1,492 @@
+/*
+  The lesson map (components/LessonTrack): the track under a lesson's toolbar and the teacher's
+  plan it opens, the divider where a step starts, the purpose line and "move on" chip on a
+  question, and the card at the end. Built from the classic token names, which the new design
+  points at its own roles, so it works in every theme and in both designs.
+*/
+
+.lm-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  --lm-done: var(--good-mark, var(--accent));
+  --lm-done-ink: var(--good, var(--accent));
+  --lm-w: 736px;
+}
+.lm-col > .doc-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---------- The track ---------- */
+.lm-track {
+  flex: none;
+  padding: 6px 32px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.lm-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  max-width: var(--lm-w);
+  margin: 0 auto;
+  padding: 6px 8px 5px;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+}
+.lm-btn.static {
+  cursor: default;
+}
+.lm-btn:not(.static):hover {
+  background: var(--bg-hover);
+}
+.lm-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.lm-top {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+  font-size: var(--text-md);
+  line-height: 20px;
+}
+.lm-now {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--ink);
+}
+.lm-left {
+  margin-left: auto;
+  flex: none;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.lm-chev {
+  flex: none;
+  align-self: center;
+  color: var(--ink-muted);
+  transform: rotate(90deg);
+  transition: transform 0.2s var(--ease);
+}
+.lm-track.probe .lm-left {
+  margin-left: 0;
+}
+.lm-track.open .lm-chev {
+  transform: rotate(-90deg);
+}
+.lm-segs,
+.lm-labels {
+  display: grid;
+  grid-template-columns: var(--lm-cols);
+  gap: 4px;
+}
+.lm-segs {
+  margin-top: 8px;
+}
+.lm-seg {
+  position: relative;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--line-strong);
+}
+.lm-seg.done {
+  background: var(--lm-done);
+  opacity: 0.8;
+}
+.lm-seg.skipped {
+  background: repeating-linear-gradient(-45deg, var(--warn) 0 3px, transparent 3px 6px);
+  opacity: 0.7;
+}
+.lm-seg.now {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.lm-seg.now i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 0.5s var(--ease);
+}
+.lm-seg.end {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.lm-seg.end.done {
+  background: var(--lm-done);
+  box-shadow: none;
+}
+.lm-labels {
+  margin-top: 5px;
+  font-size: var(--text-xs);
+  line-height: 16px;
+  color: var(--ink-muted);
+}
+.lm-labels span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lm-labels .now {
+  color: var(--accent);
+  font-weight: 600;
+}
+.lm-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- The teacher's plan ---------- */
+.lm-plan {
+  display: grid;
+  grid-template-rows: 0fr;
+  max-width: var(--lm-w);
+  margin: 0 auto;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows 0.32s var(--ease),
+    opacity 0.2s,
+    visibility 0s 0.32s;
+}
+.lm-track.open .lm-plan {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    grid-template-rows 0.32s var(--ease),
+    opacity 0.25s;
+}
+.lm-plan-in {
+  min-height: 0;
+  max-height: min(62vh, 640px);
+  overflow-y: auto;
+  padding: 0 8px;
+}
+.lm-track.open .lm-plan-in {
+  padding: 12px 8px 8px;
+}
+.lm-goal {
+  margin: 0 0 14px;
+  font-family: var(--font-read-serif, var(--font-serif));
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--ink);
+  text-wrap: pretty;
+}
+.lm-goal small {
+  display: block;
+  margin-bottom: 3px;
+  font: 500 var(--text-sm) / 18px var(--font-ui);
+  color: var(--ink-muted);
+}
+.lm-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.lm-steps li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 7px 0;
+}
+/* The line joining the dots */
+.lm-steps li::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 31px;
+  bottom: -7px;
+  width: 2px;
+  background: var(--line);
+}
+.lm-steps li:last-child::before {
+  display: none;
+}
+.lm-dot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  border: 2px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--bg);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.lm-steps .done .lm-dot {
+  border-color: var(--lm-done);
+  background: var(--lm-done);
+  color: var(--bg);
+}
+.lm-steps .skipped .lm-dot {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.lm-steps .cur .lm-dot {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.lm-steps h5 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 1px 0 2px;
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--ink);
+}
+.lm-steps .done h5,
+.lm-steps .skipped h5 {
+  color: var(--ink-soft);
+}
+.lm-added {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bg-inset);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+.lm-steps p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+.lm-steps .cur p {
+  color: var(--ink-soft);
+}
+.lm-passed {
+  color: var(--lm-done-ink);
+}
+.lm-skipped {
+  color: var(--warn);
+}
+.lm-meta {
+  padding-top: 1px;
+  font-size: var(--text-xs);
+  line-height: 20px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.lm-steps .cur .lm-meta {
+  color: var(--accent);
+}
+.lm-finish {
+  margin: 10px 0 0;
+  padding: 11px 14px;
+  border-radius: var(--radius-s);
+  background: var(--bg-inset);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.lm-finish b {
+  color: var(--ink);
+}
+.lm-why {
+  margin: 10px 0 2px;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+/* ---------- Where a step starts, in the lesson ---------- */
+.lm-turn {
+  display: grid;
+  grid-template-columns: minmax(16px, 1fr) auto minmax(16px, 1fr);
+  align-items: center;
+  gap: 14px;
+  margin: 14px 0 6px;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+.lm-turn::before,
+.lm-turn::after {
+  content: '';
+  height: 1px;
+  background: var(--line-strong);
+}
+.lm-turn > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 480px;
+  text-align: center;
+  text-wrap: balance;
+}
+.lm-turn b {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--ink);
+}
+.lm-turn-ok {
+  color: var(--lm-done-ink);
+}
+.lm-turn-skip {
+  color: var(--warn);
+}
+.lm-turn.landing {
+  animation: lm-land 0.6s var(--ease) both;
+}
+@keyframes lm-land {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* ---------- A question: what it's for, and moving on ---------- */
+.lm-purpose {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0 0 8px;
+  font-size: var(--text-sm);
+  line-height: 18px;
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+.lm-purpose b {
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.lm-purpose span {
+  color: var(--accent);
+}
+.lm-skip {
+  margin-top: 12px;
+}
+.lm-chip {
+  all: unset;
+  box-sizing: border-box;
+  padding: 4px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: var(--text-sm);
+  line-height: 18px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.lm-chip:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+.lm-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.lm-chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---------- The end of the lesson ---------- */
+.lm-end {
+  padding: 20px 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-l);
+  background: var(--bg-raised);
+}
+.lm-end h3 {
+  margin: 0 0 4px;
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.lm-end-sub {
+  margin: 0 0 14px;
+  font-size: var(--text-md);
+  color: var(--ink-muted);
+}
+.lm-end ul {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+.lm-end li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 14.5px;
+  color: var(--ink);
+}
+.lm-end li small {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.lm-end-mark {
+  display: inline-grid;
+  place-items: center;
+  align-self: center;
+  font-size: 10px;
+}
+.lm-end .solid .lm-end-mark {
+  color: var(--lm-done-ink);
+}
+.lm-end .shaky .lm-end-mark,
+.lm-end .shaky small {
+  color: var(--warn);
+}
+.lm-end .unreached {
+  color: var(--ink-muted);
+}
+.lm-end-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.s-finish.lm-after-end {
+  margin-top: -4px;
+}
+
+@container (max-width: 640px) {
+  .lm-labels span:not(.now) {
+    visibility: hidden;
+  }
+  .lm-track {
+    padding-inline: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lm-chev,
+  .lm-seg.now i,
+  .lm-plan,
+  .lm-track.open .lm-plan {
+    transition: none;
+  }
+  .lm-turn.landing {
+    animation: none;
+  }
+}

@@ -376,7 +376,8 @@ export interface OutlineDraftRequest {
 
 export interface AgentStep {
   id: string
-  kind: 'search_notes' | 'read_note' | 'web_search' | 'read_webpage' | 'delegate' | 'helper' | 'run_code' | 'run_sql' | 'load_table' | 'remember' | 'terminal' | 'canvas' | 'metabase' | 'save_note'
+  /** progress: the tutor's report for the lesson map (its detail is the <progress/> tag), never shown as a step */
+  kind: 'search_notes' | 'read_note' | 'web_search' | 'read_webpage' | 'delegate' | 'helper' | 'run_code' | 'run_sql' | 'load_table' | 'remember' | 'terminal' | 'canvas' | 'metabase' | 'save_note' | 'progress'
   label: string
   detail?: string
   status: 'running' | 'done' | 'error'

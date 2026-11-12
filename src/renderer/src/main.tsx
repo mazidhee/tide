@@ -22,6 +22,8 @@ import './styles/tide/base.css'
 import './styles/tide/shell.css'
 import './styles/tide/home.css'
 import './styles/tide/lesson.css'
+import './styles/lessonmap.css'
+import './styles/tide/lessonmap.css'
 // [source-led] the reading block: classic styles, then the new design's
 import './styles/reading.css'
 import './styles/tide/reading.css'
