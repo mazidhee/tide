@@ -4,7 +4,7 @@ title: Tide roadmap
 
 # Tide roadmap
 
-**Rule for every feature: Tide works fully without Claude.** Claude makes Tide smarter, but every feature must still work, perhaps more simply, on Gemma, on another provider, or when the plan's usage runs out. Claude-only extras (Claude Code's own tools, thinking depth, generated visuals) switch off cleanly and say so; lessons, courses, notes, recall, What you know and the reader never depend on Claude.
+**Rule for every feature: build for Claude's full capabilities, and keep Tide working without it.** Claude is the main tutor: each feature should use everything Claude can do (deep thinking, Claude Code's own tools, long context, vision, generated visuals, web research) as fully as it can, without holding back to fit a smaller model. Every feature must also still work, more simply, on Gemma, on another provider, or when the plan's usage runs out. Claude-only extras (Claude Code's own tools, thinking depth, generated visuals) switch off cleanly and say so; lessons, courses, notes, recall, What you know and the reader never depend on Claude.
 
 One feature at a time, in this order. Each one is built, tested, installed, and only then is the next one started. Nothing runs in parallel: the Mac has 24 GB, and Gemma needs most of it.
 
