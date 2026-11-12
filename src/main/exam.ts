@@ -10,7 +10,9 @@ import { agentComplete } from './agent'
 const STYLE: Record<ExamOptions['style'], string> = {
   university: 'a university exam paper: structured questions with parts (a), (b), (c) that build on each other, mixing definitions, explanations, calculations or proofs, and one harder question at the end',
   problems: 'a problem sheet: worked problems that need full working, each with a clear final answer',
-  short: 'a short-answer test: many small questions, a few marks each'
+  short: 'a short-answer test: many small questions, a few marks each',
+  mixed:
+    'a mixed paper across the topics listed: short definitions, a multiple-choice question (options in the text as (A)–(D)), a calculation or worked problem, an explain-why question, and one longer applied question; at least one question on each topic, marks in proportion to the time each takes'
 }
 
 const LEVEL: Record<ExamOptions['difficulty'], string> = {

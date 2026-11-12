@@ -9,19 +9,21 @@ import { MathsPanel } from './MentalMaths'
 import { QuantPanel } from './QuantPanel'
 import { DesignPanel } from './DesignPanel'
 import { PixelScene } from './PixelScene'
+import { MockPanel } from './mock/MockPanel'
 
 const STATUS_LABEL: Record<PracticeStatus, string> = { todo: 'To do', solved: 'Solved', struggled: 'Struggled', redo: 'Try again' }
 const LANGUAGES = ['python', 'javascript', 'typescript', 'java', 'c++', 'go', 'rust']
 type Filter = 'all' | PracticeStatus
 
-type Tab = 'coding' | 'problems' | 'maths' | 'quant' | 'design' | 'companies'
-const TABS: { id: Tab; label: string; icon: 'sparkle' | 'quiz' | 'summary' | 'canvas' | 'globe' | 'timer' }[] = [
+type Tab = 'coding' | 'problems' | 'maths' | 'quant' | 'design' | 'companies' | 'mock'
+const TABS: { id: Tab; label: string; icon: 'sparkle' | 'quiz' | 'summary' | 'canvas' | 'globe' | 'timer' | 'subInterview' }[] = [
   { id: 'coding', label: 'Coding', icon: 'sparkle' },
   { id: 'problems', label: 'Problems', icon: 'quiz' },
   { id: 'maths', label: 'Mental maths', icon: 'timer' },
   { id: 'quant', label: 'Quant', icon: 'summary' },
   { id: 'design', label: 'System design', icon: 'canvas' },
-  { id: 'companies', label: 'Companies', icon: 'globe' }
+  { id: 'companies', label: 'Companies', icon: 'globe' },
+  { id: 'mock', label: 'Mock', icon: 'subInterview' }
 ]
 
 const ago = (t: number) => {
@@ -275,6 +277,7 @@ export function PracticeView() {
         {tab === 'maths' && <MathsPanel />}
         {tab === 'quant' && <QuantPanel />}
         {tab === 'design' && <DesignPanel />}
+        {tab === 'mock' && <MockPanel />}
         {tab === 'companies' && (
           <section className="pv-prompt wide">
             <h2 className="pv-title">Prepare for a company</h2>

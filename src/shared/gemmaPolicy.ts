@@ -43,6 +43,10 @@ export const JOB_ROUTES = {
   workshop: { label: 'Guided project review', role: 'teach', privacy: 'flag' },
   // Pictures go to Claude too (main/imagePrep makes them ready): a photo of handwritten maths is marked by the marking model
   handwriting: { label: 'Marking photos of handwritten working', role: 'mark', privacy: 'scope' },
+  // Mock interviews (main/mocks): Sonnet is the interviewer, Opus marks. Neither falls back to Gemma: without
+  // Claude the mock runs with no interviewer and is marked in code
+  mockInterviewer: { label: 'Mock interviewer', role: 'teach', privacy: 'none' },
+  mockMark: { label: 'Marking a mock interview', role: 'mark', privacy: 'none' },
   // Only on Gemma's own lessons (Claude runs its own checks): they stay where they are
   lessonChecks: { label: 'Gemma lesson checks, problem bank, hidden tests, read-back', role: null, privacy: 'none' }
 } as const satisfies Record<string, { label: string; role: ClaudeRole | null; privacy: 'none' | 'path' | 'scope' | 'text' | 'flag' }>

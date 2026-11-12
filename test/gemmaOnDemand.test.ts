@@ -105,7 +105,9 @@ const EXPECTED: Record<string, string | null> = {
   curriculum: 'background',
   workshop: 'teach',
   lessonChecks: null,
-  handwriting: 'mark'
+  handwriting: 'mark',
+  mockInterviewer: 'teach',
+  mockMark: 'mark'
 }
 
 describe('the routing table', () => {

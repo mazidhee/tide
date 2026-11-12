@@ -475,6 +475,16 @@ export async function addOwnItem(section: SectionId, text: string): Promise<Lear
   return learnerView()
 }
 
+/**
+ * A mock interview's debrief (main/mocks): a few small changes worked out by code from its rubric
+ * scores (shared/mocks profileOps), applied like any update, so the learner's own lines stay
+ * theirs. Works without Claude.
+ */
+export function noteMock(ops: ProfileOp[], from: string): Promise<Change[]> {
+  if (!ops.length) return Promise.resolve([])
+  return change(from, 'code', async (p, ownership) => applyOps(p, ops, { date: noteDate(), ownership, maxOps: 3, sections: ['strengths', 'missed', 'hints'] }))
+}
+
 /** Makes the note now if there isn't one (the profile view's first open), with what code knows */
 export async function ensureProfile(): Promise<void> {
   const md = await readText(LEARNER_NOTE).catch(() => '')

@@ -144,6 +144,22 @@ const api: TideApi = {
     logDrill: invoke('practice:logDrill'),
     drills: invoke('practice:drills')
   },
+  mocks: {
+    status: invoke('mocks:status'),
+    bank: invoke('mocks:bank'),
+    start: invoke('mocks:start'),
+    say: invoke('mocks:say'),
+    hint: invoke('mocks:hint'),
+    test: invoke('mocks:test'),
+    answer: invoke('mocks:answer'),
+    end: invoke('mocks:end'),
+    cancel: invoke('mocks:cancel'),
+    stop: invoke('mocks:stop'),
+    history: invoke('mocks:history'),
+    record: invoke('mocks:record'),
+    examTopics: invoke('mocks:examTopics'),
+    onEvent: (cb) => subscribe<{ id: string; delta: string }>('mock:event', cb)
+  },
   speed: {
     recent: invoke('speed:recent'),
     render: invoke('speed:render'),
