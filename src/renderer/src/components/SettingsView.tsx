@@ -5,7 +5,8 @@ import { CHARACTERS, characterById } from '@shared/characters'
 import { CLOUD_TASKS, DEFAULT_CLOUD, PROVIDERS, modelPrice, providerInfo, type CloudSettings, type ModelPrice } from '@shared/providers'
 import { Professor } from './Professor'
 import { PillSegment } from './PromptBox'
-import type { AISettings, Settings, ThemeId } from '@shared/types'
+import type { AISettings, ClaudeModel, ClaudeRole, ClaudeStatusView, Settings, ThemeId } from '@shared/types'
+import { CLAUDE_DEFAULTS, CLAUDE_MODELS } from '@shared/claude'
 import { useApp } from '../state'
 import { DESIGNS, readingFace, resolveDesign, type DesignId } from '@shared/design'
 import { Icon, type IconName } from './Icon'
@@ -65,7 +66,7 @@ export const SECTIONS: { id: Section; label: string; icon: IconName; group: stri
   { id: 'tutor', label: 'Tutor and voice', icon: 'tutor', group: 'Learning', description: 'Who teaches you, and how they sound.' },
   { id: 'study', label: 'Study time', icon: 'timer', group: 'Learning', description: 'Timers and breaks while you study.' },
   { id: 'connections', label: 'Connections', icon: 'link', group: 'AI', description: 'Every service Tide uses: what it’s for, where it runs, what it used today, and what you could add.' },
-  { id: 'models', label: 'Models', icon: 'sparkle', group: 'AI', description: 'Gemma on this Mac does the tutoring. A cloud model can help with the hardest parts.' },
+  { id: 'models', label: 'Models', icon: 'sparkle', group: 'AI', description: 'Who teaches: Claude on your plan, or Gemma on this Mac. Private projects and Metabase always stay with Gemma.' },
   { id: 'tools', label: 'Tools', icon: 'terminal', group: 'AI', description: 'What the tutor can use: search, code and your tasks.' },
   { id: 'usage', label: 'Usage', icon: 'graph', group: 'AI', description: 'What each model was used for this month, and what the cloud cost.' },
   { id: 'speed', label: 'Speed', icon: 'gauge', group: 'AI', description: 'Where each answer’s time went: Tide, the model reading, the model writing, and tools.' }
@@ -737,6 +738,62 @@ function Disclosure({ title, children }: { title: string; children: ReactNode })
   )
 }
 
+const ROLE_TEXT: Record<ClaudeRole, { label: string; hint: string }> = {
+  teach: { label: 'Lessons and chat', hint: 'Ordinary turns' },
+  mark: { label: 'Marking', hint: 'Your answers, marked by a separate short call' },
+  hard: { label: 'Hard turns', hint: 'Lesson plans, maths and proofs, and when you ask it to go deep' },
+  background: { label: 'Background work', hint: 'Titles, summaries' }
+}
+
+/** Claude, through your own Claude Code: whether it's set up, who teaches, and which model does what */
+function ClaudeGroup() {
+  const app = useApp()
+  const c = app.settings.ai.claude ?? {}
+  const [st, setSt] = useState<ClaudeStatusView | null>(null)
+  const [checking, setChecking] = useState(false)
+  const check = (fresh = false) => {
+    setChecking(true)
+    window.tide.claude
+      .status(fresh)
+      .then(setSt)
+      .catch(() => setSt(null))
+      .finally(() => setChecking(false))
+  }
+  useEffect(() => check(), [])
+  const save = (patch: Partial<NonNullable<AISettings['claude']>>) => app.updateSettings({ ai: { ...app.settings.ai, claude: { ...c, ...patch } } })
+  const setModel = (role: ClaudeRole, m: ClaudeModel) => save({ models: { ...c.models, [role]: m } })
+  const state = !st ? (checking ? 'Checking…' : 'Couldn’t check') : !st.installed ? 'Claude Code isn’t installed' : !st.loggedIn ? (st.error ?? 'Not logged in: run claude in a terminal and log in') : `Set up${st.plan ? `: Claude ${st.plan[0].toUpperCase()}${st.plan.slice(1)}` : ''}${st.version ? `, Claude Code ${st.version}` : ''}`
+  return (
+    <Group
+      title="Claude"
+      note="Tide runs your own logged-in Claude Code (no API key: any key in the environment is left out) and never reads your login. Private projects and Metabase lessons are always taught by Gemma on this Mac."
+    >
+      <Row label="Claude Code" hint={state}>
+        <button type="button" className="btn ghost small" disabled={checking} onClick={() => check(true)}>
+          {checking ? 'Checking…' : 'Check again'}
+        </button>
+      </Row>
+      <Row label="Who teaches" hint="Each notebook and lesson can choose too">
+        <Select
+          label="Who teaches"
+          value={c.teacher ?? 'claude'}
+          onChange={(v) => save({ teacher: v })}
+          options={[
+            { value: 'claude', label: st?.loggedIn ? 'Claude' : 'Claude, once set up' },
+            { value: 'gemma', label: 'Gemma on this Mac' }
+          ]}
+        />
+      </Row>
+      {(Object.keys(ROLE_TEXT) as ClaudeRole[]).map((role) => (
+        <Row key={role} label={ROLE_TEXT[role].label} hint={ROLE_TEXT[role].hint}>
+          <Select label={ROLE_TEXT[role].label} value={c.models?.[role] ?? CLAUDE_DEFAULTS[role]} onChange={(v) => setModel(role, v)} options={CLAUDE_MODELS.map((m) => ({ value: m.id, label: `${m.label}${m.id === CLAUDE_DEFAULTS[role] ? ' (default)' : ''}` }))} />
+        </Row>
+      ))}
+      {st?.limit?.utilization != null && <Row label="Your plan" hint={`${Math.round(st.limit.utilization * 100)}% of this ${st.limit.window?.replace('_', '-') ?? ''} window used${st.limitedUntil ? `; at the limit until ${new Date(st.limitedUntil).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : ''}`} />}
+    </Group>
+  )
+}
+
 function ModelsSection() {
   const app = useApp()
   const cloud = cloudOf(app.settings.cloud)
@@ -830,6 +887,8 @@ function ModelsSection() {
           <span className="model-card-detail">{cloud.mode === 'off' ? 'For the hardest maths, mistakes, marking and plans' : `${info.name}, ${modeText.toLowerCase()}${keys[cloud.provider] ? '' : ', needs a key'}`}</span>
         </div>
       </div>
+
+      <ClaudeGroup />
 
       <Group title="Cloud helper">
         <Row label="Use a cloud model" hint={cloud.mode === 'auto' ? 'For the jobs below, and whenever you pick it' : cloud.mode === 'manual' ? 'Only when you pick it in a chat or lesson' : undefined}>

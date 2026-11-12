@@ -4,7 +4,12 @@ import { applyResourceChecks, outlineResources, parseOutline, serializeOutline, 
 import { readText, writeText } from './vault'
 import { addProject, getProject, thingsAvailable } from './things'
 import { buildLink } from '@shared/deeplink'
-import { complete, extractJsonObject, friendlyError, streamDraft } from './ai'
+import { complete as completeHere, extractJsonObject, friendlyError, streamDraft } from './ai'
+import { planOnClaude } from './claudeEngine'
+
+/** Plans are Claude's (the "hard" model, Opus by default) when Claude teaches; otherwise as before */
+const complete: typeof completeHere = async (prompt, system, signal, priority, task, routine, schema) =>
+  (task === 'planning' ? await planOnClaude(prompt, system, signal) : null) ?? completeHere(prompt, system, signal, priority, task, routine, schema)
 import { readWebpage, webSearch } from './agent'
 import { getSettings } from './settings'
 import { directionLine } from './coach'

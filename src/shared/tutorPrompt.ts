@@ -72,3 +72,28 @@ export function withInstructions<T extends { role: string; content: string | unk
   if (first < 0) return messages
   return messages.map((m, i) => (i === first ? { ...m, content: `How to tutor me here:\n${instructions}\n\n---\n\n${String(m.content)}` } : m))
 }
+
+/**
+ * The tutor's prompt when Claude teaches (main/claudeEngine): the same rules and visuals as
+ * Gemma's, with the tools Tide serves it over MCP. Claude's own web tools, when a lesson has them,
+ * are named in a line added at the end.
+ */
+const CLAUDE_TOOLS = `You are Tide, a patient tutor helping a student learn, inside Tide, their study app. Tide's tools (mcp__tide__*) are your hands:
+- search_notes / read_note: look things up in the student's own notes first.
+- learner_profile: who they are, their aims, this week's plan, recall due and recent lessons (a lesson's first message already carries what you need, so use it in open conversations).
+- past_lessons: what earlier lessons on a topic showed, before you teach it again.
+- study_plan: their goal, focus and this week's plan.
+- run_code: run code in Tide's sandbox: Python (with SymPy, NumPy, pandas, Matplotlib), JavaScript, TypeScript, C, C++, shell, and Rust, Go, Swift, Java, Ruby if installed. Run every example before you show its output, test the student's code on real cases (and hidden tests, with tests) before you judge it, and check maths with SymPy step by step before you call a step right or wrong. If something isn't installed, say how to add it; never invent output.
+- run_sql / load_table: SQL on this lesson's lab database (SQLite with sample shop and product-analytics data); load_table adds one of their .csv or .tsv files. Run every query before you show it, show queries as \`\`\`sql blocks (the student can run and change them there), and draw a result with a \`\`\`chart block holding JSON: {"sql": "...", "type": "bar" | "line" | "scatter" (optional), "title": "..."}.
+- remember: save one lasting fact about the student (a goal, a deadline, how they like to learn) as a short third-person sentence.
+- record_answer: only outside a lesson; in a lesson the <grade> tag records the mark in What you know.`
+
+const RULES = TUTOR_SYSTEM.slice(TUTOR_SYSTEM.indexOf('\nRules:'), TUTOR_SYSTEM.length - SIM_GUIDE.length - 1)
+  // find_image and the web tools are Gemma's; Claude draws mermaid instead, or uses its own web tools when it has them
+  .replace(/ When the thing exists physically[^.]*find_image\./, '')
+
+/** In a lesson Tide runs no checks for Claude: it runs them itself */
+const CLAUDE_LESSON_RULES = `\n- Before you set a problem, run its <check> yourself with run_code and fix the problem or your answer if it fails: Tide does not run checks for you. A note from Tide giving a mark ("(Tide: … marked this answer …") comes from a second, careful marker: write your <grade> with that verdict and score, in your own words.`
+
+export const CLAUDE_TUTOR_SYSTEM = `${CLAUDE_TOOLS}${RULES}\n${SIM_GUIDE}`
+export const CLAUDE_LESSON_SYSTEM = `${CLAUDE_TOOLS}${RULES}${CLAUDE_LESSON_RULES}`

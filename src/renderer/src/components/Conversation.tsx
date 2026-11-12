@@ -8,7 +8,7 @@ import { asksForWeb } from '@shared/modelText'
 import { useApp } from '../state'
 import { renderMarkdown, resolveRelative, vaultUrl } from '../lib/markdown'
 import { Icon } from './Icon'
-import { chatEngine, EnginePill } from './EnginePill'
+import { chatEngine, engineFields, EnginePill } from './EnginePill'
 import { Professor, type ProfessorState } from './Professor'
 import { SpeakButton } from './Voice'
 
@@ -209,7 +209,7 @@ export function useConversation() {
           canvasPath: opts.canvasPath,
           voice: opts.voice,
           web: useWeb,
-          engine: chatEngine()
+          ...engineFields(chatEngine())
         })
       } catch (e) {
         activeId.current = null

@@ -18,12 +18,13 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - Teaching blocks: physics, geometry and matrices, regex, chess search, SQL tidy
 - Courses from GitHub: 52 courses (zoomcamps, OSSU, Made With ML, Zero to Hero, d2l…), taught from their own text, notebooks runnable
 - A VS Code-like code editor: Python IntelliSense (basedpyright), VS Code highlighting, explorer, tabs, Problems, Tests, ⌘P
+- Claude teaches (your plan): Sonnet turns, Opus marking and plans, Tide's tools over MCP; private notebooks stay on Gemma
 - Faster lessons: off-thread index, cached rendering, steadier prompt cache, idle unload
 - The redesign, with the classic design in Settings
 
 ## Now
 
-- [ ] **Claude as Tide's tutor, on your Ultra plan, joined to Tide through MCP.** Claude becomes the main teacher and Tide its hands and memory, instead of routing to limited free cloud models. Tide runs your own logged-in Claude Code (`claude -p`, unmodified, no API key) and never reads or copies your login.
+- [ ] **Claude as Tide's tutor, on your Ultra plan, joined to Tide through MCP.** Part 1 installed 12 Nov: lessons and chat on Claude (Sonnet teaches, Opus marks and plans), Tide's MCP tools, privacy routing, usage in Connections. Part 2 next: background work on Haiku, readings, flashcard and recall tools, course and transcript search, web search, the Ghostty connector. Claude becomes the main teacher and Tide its hands and memory, instead of routing to limited free cloud models. Tide runs your own logged-in Claude Code (`claude -p`, unmodified, no API key) and never reads or copies your login.
   - Tide serves Claude through MCP (Model Context Protocol, the standard way to give Claude tools). With it, Claude can:
     - search and read your notes, books, courses and transcripts
     - run code and SQL in Tide's sandbox

@@ -2,6 +2,45 @@ import type { InterviewRecord } from './interviews'
 import type { JournalEntry, WeekReview } from './coach'
 export type ThemeId = 'system' | 'light' | 'dark' | 'graphite' | 'midnight' | 'ember' | 'sepia'
 
+/** A Claude model, by the CLI's alias, or a full model id (Fable: claude-fable-5-1) */
+export type ClaudeModel = 'opus' | 'sonnet' | 'haiku' | 'claude-fable-5-1'
+
+/** What a Claude call is for: each has its own model (shared/claude.ts has the defaults) */
+export type ClaudeRole = 'teach' | 'mark' | 'hard' | 'background'
+
+export interface ClaudeSettings {
+  /** Who teaches lessons and the tutor chat: Claude (the default once Claude Code is set up) or Gemma on this Mac */
+  teacher?: 'claude' | 'gemma'
+  /** The model for each kind of work: ordinary turns, marking answers, maths, plans and hard explanations, background jobs */
+  models?: Partial<Record<ClaudeRole, ClaudeModel>>
+  /** Where the claude command is, when it isn't in a usual place */
+  path?: string
+}
+
+export interface ClaudeStatusView {
+  installed: boolean
+  version?: string
+  loggedIn: boolean
+  plan?: string
+  error?: string
+  limitedUntil?: number
+  limit?: { status: string; utilization?: number; window?: string; resetsAt?: number } | null
+  live: { key: string; model: string; turns: number; lastUsed: number }[]
+}
+
+export interface ClaudeUseRecord {
+  at: number
+  model: string
+  role: ClaudeRole
+  input: number
+  output: number
+  cacheRead: number
+  cacheWrite: number
+  costUsd: number
+  ms: number
+  firstTokenMs?: number
+}
+
 export interface AISettings {
   /** Base URL of an OpenAI compatible API, e.g. http://localhost:8080/v1 */
   baseUrl: string
@@ -19,6 +58,8 @@ export interface AISettings {
   unloadAfterMinutes?: number
   autoStart?: boolean
   serverCommand?: string
+  /** Claude, run through the user's own logged-in Claude Code (main/claudeEngine) */
+  claude?: ClaudeSettings
   webSearch?: {
     /** 'auto': the fastest available for each search (You.com when keyed, else the engine on this Mac, else Wikipedia) */
     provider: 'auto' | 'wikipedia' | 'brave' | 'tavily' | 'you' | 'searxng' | 'off'
@@ -164,8 +205,10 @@ export interface ChatRequest {
   canvasPath?: string
   /** Talk is on: reply with a short spoken part first, in this character's way of talking */
   voice?: import('./characters').CharacterId
-  /** Which model answers: auto (Gemma, or the cloud model for jobs set to escalate), or one you picked */
-  engine?: 'auto' | 'local' | 'cloud'
+  /** Which model answers: auto (who teaches, from Settings and the notebook), Gemma only, the cloud model, or Claude */
+  engine?: 'auto' | 'local' | 'cloud' | 'claude'
+  /** With Claude: the model for this lesson's ordinary turns, in place of the setting */
+  claudeModel?: import('./types').ClaudeModel
   /** A learning session (teach, quiz, interview…): the session tag rules go in the system prompt */
   session?: boolean
   /** The tutor's current question type in a session, so a worked answer to a problem can be escalated */
@@ -352,8 +395,8 @@ export interface NotebookMeta {
   outline?: string
   /** A project: something you're building or need to understand, with its documents */
   project?: import('./project').ProjectInfo
-  /** Who teaches its lessons: Tide decides (Gemma, the cloud model for hard parts), or the cloud model throughout */
-  tutor?: 'auto' | 'cloud'
+  /** Who teaches its lessons: Tide decides (the "Who teaches" setting), the cloud model throughout, Claude, or Gemma on this Mac */
+  tutor?: 'auto' | 'cloud' | 'claude' | 'gemma'
 }
 
 export interface NoteProgress {
@@ -685,6 +728,12 @@ export interface TideApi {
     render(id: string, r: NonNullable<TurnSpeed['render']>): Promise<void>
     /** What holds this Mac's memory right now (takes about a second) */
     memory(): Promise<MacMemory>
+  }
+  /** Claude, run through the user's own Claude Code */
+  claude: {
+    status(fresh?: boolean): Promise<ClaudeStatusView>
+    /** Each Claude call in the last `days` days (default 1) */
+    usage(days?: number): Promise<ClaudeUseRecord[]>
   }
   connections: {
     list(fresh?: boolean): Promise<import('./connections').Connection[]>

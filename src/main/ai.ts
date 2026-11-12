@@ -580,6 +580,38 @@ async function answer(req: TurnRequest, send: (e: ChatEvent) => void) {
     }
     send(e)
   }
+  // Claude teaches when it's chosen and allowed (main/teacher): a private project or Metabase never
+  // leaves the Mac. When it can't (not installed, logged out, at the plan's limit), Gemma does, and
+  // a step says why. Gemma's lesson checks (lessonGuard, the problem bank, hidden tests written by
+  // Gemma) are workarounds for a small model and don't run on Claude's turns: Claude runs its checks itself.
+  const { teacherFor } = await import('./teacher')
+  const teacher = await teacherFor(req).catch(() => ({ who: 'gemma' as const, why: undefined }))
+  if (teacher.who === 'claude') {
+    try {
+      const { claudeTurn } = await import('./claudeEngine')
+      await claudeTurn(req, emit, controller.signal)
+      if (req.session && !controller.signal.aborted) emit({ id: req.id, type: 'replied' })
+      emit({ id: req.id, type: 'done' })
+      running.delete(req.id)
+      return
+    } catch (e) {
+      const { ClaudeUnavailable } = await import('./claudeEngine')
+      if (controller.signal.aborted) {
+        emit({ id: req.id, type: 'done' })
+        running.delete(req.id)
+        return
+      }
+      if (!(e instanceof ClaudeUnavailable)) {
+        emit({ id: req.id, type: 'error', message: `Claude: ${(e as Error).message}` })
+        running.delete(req.id)
+        return
+      }
+      emit({ id: req.id, type: 'step', step: { id: 'teacher', kind: 'helper', label: `Claude can’t teach right now (${e.message}), so Gemma is teaching`, status: 'done', depth: 0 } })
+    }
+  } else if (teacher.who === 'gemma' && teacher.why) {
+    emit({ id: req.id, type: 'step', step: { id: 'teacher', kind: 'helper', label: teacher.why, status: 'done', depth: 0 } })
+  }
+  if (req.engine === 'claude') req = { ...req, engine: 'auto' }
   // Everything goes through the tool harness when it's on, so threads can run code and check maths too
   if (getSettings().ai.agent !== false) {
     try {

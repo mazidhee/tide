@@ -294,6 +294,16 @@ function registerIpc() {
   handle('curriculum:addTopic', (notebook: string, afterId: string, title: string) => addTopicAfter(notebook, afterId, title))
   handle('lessons:challenge', (topic: string, where: string | undefined, reply: string) => challengeReply(topic, where, reply))
   handle('connections:list', (fresh?: boolean) => listConnections(fresh))
+  // Claude, through the user's own Claude Code (main/claudeEngine)
+  handle('claude:status', async (fresh?: boolean) => {
+    const { claudeStatus, liveClaude } = await import('./claudeEngine')
+    const st = await claudeStatus(fresh)
+    return { installed: st.installed, version: st.version, loggedIn: st.loggedIn, plan: st.plan, error: st.error, limitedUntil: st.limitedUntil, limit: st.limit, live: liveClaude() }
+  })
+  handle('claude:usage', async (days?: number) => {
+    const { readClaudeUsage } = await import('./claudeEngine')
+    return readClaudeUsage(Date.now() - (days ?? 1) * 86_400_000)
+  })
   // Only the services added from the Connections page: other keys have their own checked flows
   handle('connections:setKey', (id: string, key: string | null) => {
     if (!['you', 'firecrawl', 'brave', 'tavily'].includes(id)) throw new Error('That connection’s key is set in its own section.')
@@ -695,6 +705,8 @@ app.whenReady().then(() => {
     if (r !== 'unsupported' && inUse()) await warmChat().then(() => warmLessons())
   }
   ready().catch(() => {})
+  // Whether Claude Code is here and logged in, asked once now so the first lesson needn't wait for it
+  void import('./claudeEngine').then((c) => c.claudeStatus()).catch(() => {})
   // The model's memory goes back to the Mac when you aren't studying, and loads as you return
   watchModelIdle()
   app.on('browser-window-focus', () => wakeModel(() => warmChat()))
@@ -780,6 +792,8 @@ app.whenReady().then(() => {
 
 // No lab container outlives the app
 app.on('before-quit', () => {
+  void import('./claudeEngine').then((c) => c.stopClaude()).catch(() => {})
+  void import('./tideMcp').then((m) => m.mcpHandle()?.close()).catch(() => {})
   stopStudyApi().catch(() => {})
   closeAllTerminals()
   stopVoice()
