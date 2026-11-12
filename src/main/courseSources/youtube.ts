@@ -66,12 +66,45 @@ export function parsePlaylist(html: string): { title: string; channel?: string; 
   return { title: meta?.title ?? head?.title?.simpleText ?? '', ...(channel ? { channel } : {}), ...(meta?.description ? { description: meta.description } : {}), videos }
 }
 
-/** A video's title without the series' name around it: "Lecture 3: Options | MIT 18.S096" → "Lecture 3: Options" */
-export const lessonTitle = (t: string, series: string) =>
-  t
-    .replace(new RegExp(`\\s*[|·–-]\\s*${series.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i'), '')
-    .replace(/\s*\|\s*MIT [^|]+$/i, '')
-    .trim() || t
+/**
+ * The words most of a playlist's titles carry (the course's name, "Stanford CS229: Machine
+ * Learning"), wherever in the title they are: the longest run of words in at least 60% of them.
+ */
+export function sharedPrefix(titles: string[]): string {
+  if (titles.length < 3) return ''
+  const words = titles[0].split(/\s+/)
+  let best = ''
+  for (let i = 0; i < words.length; i++) {
+    for (let j = i + 2; j <= Math.min(words.length, i + 10); j++) {
+      const run = words.slice(i, j).join(' ').replace(/^[|·–:-]+|[|·–:-]+$/g, '').trim()
+      if (run.length < 10 || run.length <= best.length) continue
+      if (titles.filter((t) => t.includes(run)).length >= Math.max(2, titles.length * 0.6)) best = run
+    }
+  }
+  return best
+}
+
+/**
+ * A video's title as a lesson's: the course's name taken out, and a lecture's number put first.
+ * "Stanford CS229: Machine Learning - Linear Regression | Lecture 2 (Autumn 2018)" → "Lecture 2: Linear Regression"
+ */
+export function lessonTitle(t: string, series: string, shared = ''): string {
+  let x = t.replace(/\s+/g, ' ').trim()
+  if (shared && x.includes(shared) && x.replace(shared, '').replace(/[\s|·–:-]+/g, '').length > 3) x = x.replace(shared, ' | ')
+  x = x.replace(new RegExp(`\\s*[|·–-]\\s*${series.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i'), '').replace(/\s*\|\s*MIT [^|]+$/i, '')
+  // "Lecture 2 (Autumn 2018)" or "Course, Lecture 1 - Andrew Ng": the number goes first, the rest is the title
+  const n = x.match(/(?:^|[\s,|·–-])Lecture\s+(\d+)\b(\s*\([^)]*\))?/i)
+  if (n) {
+    const rest = (x.slice(0, n.index) + ' ' + x.slice(n.index! + n[0].length))
+      .replace(/\(\s*(autumn|fall|spring|winter|summer)[^)]*\)/gi, '')
+      .replace(/^[\s|·–:,-]+|[\s|·–:,-]+$/g, '')
+      .replace(/\s*[|·]\s*/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+    x = rest ? `Lecture ${n[1]}: ${rest.replace(/^course\b/i, '').replace(/^[\s|·–:,-]+/, '')}` : `Lecture ${n[1]}`
+  }
+  return x.replace(/^[\s:|·–-]+|[\s:|·–-]+$/g, '').replace(/\s{2,}/g, ' ').trim() || t
+}
 
 async function playlist(id: string, f: Fetcher) {
   if (!/^[\w-]{10,64}$/.test(id)) throw new Error(`${id} isn't a playlist id`)
@@ -89,8 +122,9 @@ export const youtube: Adapter = {
   async build(c, f, progress) {
     const { pl, version } = await playlist(c.playlist!, f)
     progress(`${pl.videos.length} videos`)
+    const shared = sharedPrefix(pl.videos.map((v) => v.title))
     const lessons: BuiltLesson[] = pl.videos.map((v) => ({
-      title: lessonTitle(v.title, pl.title) || `Video ${v.id}`,
+      title: lessonTitle(v.title, pl.title, shared) || `Video ${v.id}`,
       url: `https://www.youtube.com/watch?v=${v.id}&list=${c.playlist}`,
       kind: 'reading',
       markdown: `**The lecture:** [${v.title.replace(/[[\]]/g, '')}](https://www.youtube.com/watch?v=${v.id})${v.length ? ` (${Math.round(v.length / 60)} min)` : ''}\n\n<!-- tide:transcript ${v.id} -->`

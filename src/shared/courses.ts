@@ -179,7 +179,7 @@ export function notebookMarkdown(raw: string, opts: { images?: boolean } = {}): 
     return null
   }
   if (!Array.isArray(nb.cells)) return null
-  const lang = (nb.metadata?.language_info?.name ?? nb.metadata?.kernelspec?.language ?? 'python').toLowerCase()
+  const lang = (nb.metadata?.language_info?.name ?? nb.metadata?.kernelspec?.language ?? 'python').toLowerCase().replace(/^(python[23]?|ipython[23]?)$/, 'python')
   const parts: string[] = []
   for (const cell of nb.cells) {
     const src = joinSrc(cell.source).replace(/\s+$/, '')
@@ -448,7 +448,8 @@ export function buildOutline(c: CatalogueCourse, files: RepoFile[]): CourseOutli
       const size = Math.ceil(flat.length / Math.ceil(flat.length / 8))
       for (let i = 0; i < flat.length; i += size) {
         const part = flat.slice(i, i + size)
-        modules.push({ id: `m${modules.length + 1}`, title: flat.length <= 8 ? 'Lessons' : part.length === 1 ? `Lesson ${i + 1}` : `Lessons ${i + 1}–${i + part.length}`, lessons: part, code: [] })
+        const unit = c.kind === 'book' ? 'Chapter' : 'Lesson'
+        modules.push({ id: `m${modules.length + 1}`, title: flat.length <= 8 ? `${unit}s` : part.length === 1 ? `${unit} ${i + 1}` : `${unit}s ${i + 1}–${i + part.length}`, lessons: part, code: [] })
       }
       if (modules.length === 1) modules[0].code = code.filter((p) => !p.includes('/')).slice(0, 40)
     }
@@ -503,7 +504,7 @@ export interface Section {
   words: number
 }
 
-const AROUND = /^(homework|resources|further reading|references|bibliography|table of contents|contents|navigation|previous|next|community notes|notes|videos?|video|links|useful links|additional resources|summary of links|credits|acknowledg|license|licen[cs]e|post-lecture quiz|pre-lecture quiz|quiz|review (&|and) self study|self study|assignment|🚀 challenge|challenge|\[?edit\]?|see also|faq|discussion|exercises? for the reader|footnotes)\b/i
+const AROUND = /^(solutions?( to (exercise|problem)s?.*)?$|homework|resources|further reading|references|bibliography|table of contents|contents|navigation|previous|next|community notes|notes|videos?|video|links|useful links|additional resources|summary of links|credits|acknowledg|license|licen[cs]e|post-lecture quiz|pre-lecture quiz|quiz|review (&|and) self study|self study|assignment|🚀 challenge|challenge|\[?edit\]?|see also|faq|discussion|exercises? for the reader|footnotes)\b/i
 export const SECTION_MAX = 600
 export const MAX_STEPS = 10
 

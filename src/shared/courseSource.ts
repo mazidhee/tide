@@ -249,7 +249,12 @@ const ADMONITION = /^(note|tip|hint|important|warning|caution|attention|danger|e
  * in a closed block below its exercise, and roles ({doc}, {ref}, {cite}, {math}) become text.
  */
 export function mystMarkdown(md: string, lang = 'python'): string {
-  const lines = md.replace(/\r/g, '').split('\n')
+  const lines = md
+    .replace(/\r/g, '')
+    // QuantEcon's notebook header and the anchors its notebooks carry
+    .replace(/<div id="qe-notebook-header"[\s\S]*?<\/div>\s*/g, '')
+    .replace(/<a id=['"][^'"]*['"]><\/a>\s*/g, '')
+    .split('\n')
   const out: string[] = []
   // Open directives: their fence, and what they were
   const stack: { fence: string; kind: 'code' | 'math' | 'quote' | 'drop' | 'raw'; depth: number }[] = []
@@ -367,10 +372,10 @@ const clock = (s: number) => {
 
 /**
  * A lecture's transcript as the lesson's text: paragraphs of about a minute, each starting with a
- * link to its moment in the video, under a heading every ten minutes or so (the parts the tutor
- * takes it in).
+ * link to its moment in the video, under a heading every four minutes or so (each about a
+ * reading's length: the parts the tutor takes it in, joined where there are too many).
  */
-export function transcriptMarkdown(videoId: string, segs: { start: number; text: string }[], every = 600): string {
+export function transcriptMarkdown(videoId: string, segs: { start: number; text: string }[], every = 240): string {
   if (!segs.length) return ''
   const out: string[] = []
   let para: string[] = []
@@ -408,6 +413,8 @@ export function transcriptMarkdown(videoId: string, segs: { start: number; text:
  */
 export function asciidocMarkdown(src: string): string {
   const lines = src.replace(/\r/g, '').split('\n')
+  // A chapter's title is its highest section (== in a book's chapter): it becomes the # heading
+  const top = Math.min(6, ...lines.map((l) => l.match(/^(={1,6})\s+\S/)?.[1].length ?? 9))
   const out: string[] = []
   let block: { end: string; kind: 'code' | 'quote' | 'table' | 'drop'; lang?: string } | null = null
   let pendingLang: string | null = null
@@ -416,6 +423,8 @@ export function asciidocMarkdown(src: string): string {
   const inline = (s: string) =>
     s
       .replace(/\(\(\(([^)]*)\)\)\)/g, '')
+      // [.role]#text# (a role on a span of text): the text
+      .replace(/\[\.[\w-]+\]#([^#]*)#?/g, '$1')
       .replace(/indexterm:\[[^\]]*\]/g, '')
       .replace(/<<([^,>]+),\s*([^>]+)>>/g, '$2')
       .replace(/<<([^>]+)>>/g, (_, id: string) => id.replace(/^[a-z]+\d*_/, '').replace(/[-_]/g, ' '))
@@ -480,7 +489,7 @@ export function asciidocMarkdown(src: string): string {
     }
     const h = line.match(/^(={1,6})\s+(.+)$/)
     if (h) {
-      out.push(`${'#'.repeat(h[1].length)} ${inline(h[2])}`)
+      out.push(`${'#'.repeat(Math.max(1, h[1].length - top + 1))} ${inline(h[2])}`)
       pendingTitle = null
       continue
     }

@@ -12,10 +12,10 @@ import { allCourses, catalogueCourse, CATALOGUE, fromRepo, homeUrl, mediaOf, reg
 import { WEB_COURSES } from '@shared/courseCatalogueWeb'
 import { jbOutline, lessonSections } from '@shared/courses'
 import { politeFetcher, SourceRefused, type Fetcher } from '../src/main/courseSources/fetcher'
-import { flatten, parseHtml, parseToc } from '../src/main/courseSources/html'
+import { flatten, htmlToMarkdown, parseHtml, parseToc } from '../src/main/courseSources/html'
 import { lectureNumber, ocw, ocwNav, ocwResources, ocwVideo } from '../src/main/courseSources/ocw'
 import { yale, yaleSession, yaleSessions } from '../src/main/courseSources/yale'
-import { parsePlaylist, youtube } from '../src/main/courseSources/youtube'
+import { lessonTitle, parsePlaylist, sharedPrefix, youtube } from '../src/main/courseSources/youtube'
 import { docs, guidePlan, site, tocModules } from '../src/main/courseSources/site'
 import { pdfParagraphs } from '../src/main/courseSources/pdf'
 
@@ -303,6 +303,14 @@ describe('a YouTube playlist', () => {
     expect(pl.videos).toHaveLength(23)
     expect(pl.videos[0]).toMatchObject({ id: 'WQui_3Hpmmc', title: '1. Introduction and What this Course Will Do for You and Your Purposes', length: 4452 })
   })
+  it('names lessons without the series around them', () => {
+    const titles = ['Stanford CS229: Machine Learning Course, Lecture 1 - Andrew Ng (Autumn 2018)', 'Stanford CS229: Machine Learning - Linear Regression and Gradient Descent |  Lecture 2 (Autumn 2018)', 'Locally Weighted & Logistic Regression | Stanford CS229: Machine Learning - Lecture 3 (Autumn 2018)', 'Stanford CS229: Machine Learning - GDA & Naive Bayes |  Lecture 5 (Autumn 2018)']
+    const shared = sharedPrefix(titles)
+    expect(shared).toBe('Stanford CS229: Machine Learning')
+    const series = 'Stanford CS229: Machine Learning led by Andrew Ng | Autumn 2018'
+    expect(titles.map((t) => lessonTitle(t, series, shared))).toEqual(['Lecture 1: Andrew Ng', 'Lecture 2: Linear Regression and Gradient Descent', 'Lecture 3: Locally Weighted & Logistic Regression', 'Lecture 5: GDA & Naive Bayes'])
+    expect(lessonTitle('1. Introduction and What this Course Will Do for You', 'Financial Markets (2011)', '')).toBe('1. Introduction and What this Course Will Do for You')
+  })
   it('makes each video a lesson that shows the kept transcript, reading only the playlist page', async () => {
     const f = fetcherOver({ 'https://www.youtube.com/robots.txt': 'User-agent: *\nDisallow: /api/\nDisallow: /youtubei/', 'https://www.youtube.com/playlist?list=PL8FB14A2200B87185': fixture('youtube-playlist.html') })
     const c: CatalogueCourse = { id: 'x', source: 'youtube', playlist: 'PL8FB14A2200B87185', title: 'x', by: 'y', area: 'quant', licence: 'Standard YouTube licence', tier: 'personal', covers: 'c', kind: 'course', level: 'beginner', topics: [] }
@@ -369,6 +377,13 @@ describe('online books', () => {
     expect(built.modules[0].lessons.map((l) => l.title)).toEqual(['A', 'Paper'])
     expect(built.modules[0].lessons[1].markdown).toContain('[The document as a PDF](https://g.org/p.pdf)')
     expect(await docs.probe(g, fetcherOver({ 'https://g.org/a': '<main><h1>A</h1><p>' + 'pay '.repeat(80) + '</p></main>', 'https://g.org/p.pdf': { status: 200, body: '%PDF-1.4 fake', type: 'application/pdf' } }))).toBe(built.version)
+  })
+  it('turns a page’s tables and code into Markdown (Quarto’s and Sphinx’s markup)', () => {
+    const doc = parseHtml('<main><p>Intro</p><table><thead><tr><th>Rail</th><th>Speed</th></tr></thead><tbody><tr><td>ACH</td><td>Days</td></tr><tr><td>FedNow</td><td>Seconds</td></tr></tbody></table><div class="sourceCode"><pre class="sourceCode python"><code class="sourceCode python"><span>import pandas as pd</span></code></pre></div><div class="highlight-ipython3"><pre>x = 1</pre></div></main>', 'https://b.org/')
+    const md = htmlToMarkdown(doc.querySelector('main')!, 'https://b.org/')
+    expect(md).toContain('| Rail | Speed |\n| --- | --- |\n| ACH | Days |\n| FedNow | Seconds |')
+    expect(md).toContain('```python\nimport pandas as pd\n```')
+    expect(md).toContain('```python\nx = 1\n```')
   })
   it('turns a PDF’s text into paragraphs', () => {
     expect(pdfParagraphs('Value at risk is a quan-\ntile of losses.\n\n3\nIt is used by banks')).toBe('Value at risk is a quantile of losses.\n\nIt is used by banks')
@@ -475,7 +490,7 @@ NOTE: A note.
 ** Two
 image::images/mbc3_0401.png["Public key"]
 `)
-    expect(md).toContain('## Keys and Addresses')
+    expect(md).toContain('# Keys and Addresses')
     expect(md).not.toContain('[[ch04')
     expect(md).toContain('Bitcoin uses **public key** cryptography, see wallets and [the site](https://bitcoin.org).')
     expect(md).toContain('```python\nprint("hello")\n```')
@@ -484,5 +499,6 @@ image::images/mbc3_0401.png["Public key"]
     expect(md).toContain('> **Note**: A note.')
     expect(md).toContain('- One\n  - Two')
     expect(md).toContain('![Public key](images/mbc3_0401.png)')
+    expect(asciidocMarkdown('== The Bitcoin Whitepaper [.keep-together]#by Satoshi Nakamoto#\n\ntext')).toContain('# The Bitcoin Whitepaper by Satoshi Nakamoto')
   })
 })

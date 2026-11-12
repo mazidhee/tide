@@ -30,6 +30,8 @@ export interface FreshState {
   baselines: Record<string, string>
   /** OCW course pages already seen, so only new ones are considered */
   seenOcw?: string[]
+  /** How each step of the last run ended, to show after a restart */
+  lastSteps?: { id: FreshStep; state: 'done' | 'failed'; detail?: string }[]
 }
 
 export const emptyState = (): FreshState => ({ suggestions: [], dismissed: [], adopted: [], updates: {}, baselines: {} })
@@ -37,8 +39,8 @@ export const emptyState = (): FreshState => ({ suggestions: [], dismissed: [], a
 export type FreshStep = 'subjects' | 'ocw' | 'youtube' | 'quantecon' | 'github' | 'updates' | 'ranking'
 export const STEPS: { id: FreshStep; label: string }[] = [
   { id: 'subjects', label: 'Your subjects' },
-  { id: 'ocw', label: 'MIT OpenCourseWare' },
-  { id: 'youtube', label: 'University lectures on YouTube' },
+  { id: 'ocw', label: 'MIT OCW' },
+  { id: 'youtube', label: 'Lectures on YouTube' },
   { id: 'quantecon', label: 'QuantEcon' },
   { id: 'github', label: 'GitHub' },
   { id: 'updates', label: 'Your courses' },
@@ -179,6 +181,12 @@ export function githubFound(json: string): Found[] {
   }
   return items
     .filter((r) => !r.archived && !r.fork)
+    // Material to learn from, not an app, a library or a template
+    .filter((r) => {
+      const name = r.full_name.split('/')[1].toLowerCase().replace(/[-_.]+/g, ' ')
+      const text = `${name} ${(r.description ?? '').toLowerCase()} ${(r.topics ?? []).join(' ')}`
+      return /\b(course|courses|tutorials?|lectures?|book|guide|handbook|curriculum|learn|learning|workshop|notes|roadmap|bootcamp|zoomcamp|syllabus)\b/.test(text) && !/\b(frontend|backend|app|website|clone|bot|sdk|api|plugin|template|starter|dashboard|wallet|exchange|integration|gateway)\b/.test(name)
+    })
     .map((r) => {
       const spdx = r.license?.spdx_id && r.license.spdx_id !== 'NOASSERTION' ? r.license.spdx_id : 'None stated'
       const name = r.full_name.split('/')[1].replace(/[-_]+/g, ' ')
@@ -216,10 +224,13 @@ export function quanteconFound(json: string): Found[] {
   }
   if (!Array.isArray(repos)) return []
   return repos
-    .filter((r) => /^QuantEcon\/lecture-[\w-]+\.notebooks$/i.test(r.full_name) && !r.archived)
+    // Python series only (the Julia ones are read another way), and not the download bundles
+    .filter((r) => /^QuantEcon\/lecture-[\w-]+\.notebooks$/i.test(r.full_name) && !r.archived && !/julia|wasm/i.test(`${r.full_name} ${r.description ?? ''}`))
     .map((r) => {
       const src = r.full_name.replace(/\.notebooks$/i, '')
-      const name = src.split('/')[1].replace(/^lecture-/, '').replace(/[-.]/g, ' ')
+      const name = src.split('/')[1].replace(/^lecture-/, '').replace(/^python-?/, '').replace(/[-.]/g, ' ').trim() || 'python'
+      const about = (r.description ?? '').replace(/^(companion )?notebooks?( repository)? for (the )?/i, '').replace(/^lecture-[\w-]+$/i, '').trim()
+      const pretty = name.length <= 4 ? name.toUpperCase() : name.replace(/\b\w/g, (x) => x.toUpperCase())
       return {
         course: {
           id: `quantecon-${slugify(name, 40)}`,
@@ -227,7 +238,7 @@ export function quanteconFound(json: string): Found[] {
           repo: r.full_name,
           branch: r.default_branch,
           jbToc: `https://raw.githubusercontent.com/${src}/${r.default_branch}/lectures/_toc.yml`,
-          title: `QuantEcon: ${r.description?.replace(/^Notebooks? for /i, '').trim() || name}`,
+          title: `QuantEcon lectures: ${about && !/^lecture-/i.test(about) ? about : pretty}`,
           by: 'QuantEcon (Thomas J. Sargent and John Stachurski)',
           area: 'econ' as const,
           licence: 'CC-BY-SA-4.0',
@@ -242,6 +253,20 @@ export function quanteconFound(json: string): Found[] {
         weight: 1000
       }
     })
+}
+
+/** The best of each source, up to `per` from any one, best first overall */
+export function diverse<T extends { found: Found; score: number }>(ranked: T[], per: number, max: number): T[] {
+  const taken = new Map<string, number>()
+  const out: T[] = []
+  for (const r of ranked) {
+    const s = r.found.course.source ?? 'github'
+    if ((taken.get(s) ?? 0) >= per) continue
+    taken.set(s, (taken.get(s) ?? 0) + 1)
+    out.push(r)
+    if (out.length >= max) break
+  }
+  return out
 }
 
 // ---------- The job ----------
@@ -260,7 +285,11 @@ export async function runFreshCheck(deps: FreshDeps, opts: { force?: boolean } =
   if (!opts.force && !checkDue(state.lastRun, now, deps.lessonRunning())) return { ran: false, why: deps.lessonRunning() ? 'A lesson is running' : 'Checked this week', suggestions: state.suggestions, updates: Object.keys(state.updates) }
   const log: CheckLog[] = []
   const note = (e: Omit<CheckLog, 'at'>) => log.push({ at: deps.now(), ...e })
-  const step = (s: FreshStep, st: 'running' | 'done' | 'paused' | 'failed', d?: string) => deps.onStep?.(s, st, d)
+  const ended: NonNullable<FreshState['lastSteps']> = []
+  const step = (s: FreshStep, st: 'running' | 'done' | 'paused' | 'failed', d?: string) => {
+    if (st === 'done' || st === 'failed') ended.push({ id: s, state: st, ...(d ? { detail: d } : {}) })
+    deps.onStep?.(s, st, d)
+  }
 
   /** Waits while a lesson runs: the check stays out of its way */
   const idle = async (s: FreshStep) => {
@@ -336,7 +365,7 @@ export async function runFreshCheck(deps: FreshDeps, opts: { force?: boolean } =
       found.push(...f)
       note({ what: 'quantecon', url: 'https://api.github.com/orgs/QuantEcon/repos', result: 'ok', detail: `${f.length} lecture series` })
     }
-    step('quantecon', qe ? 'done' : 'failed')
+    step('quantecon', qe ? 'done' : 'failed', qe ? `${quanteconFound(qe).length} series` : undefined)
 
     // 2d. GitHub's search, for your first few subjects (it allows ten searches a minute)
     await idle('github')
@@ -395,8 +424,8 @@ export async function runFreshCheck(deps: FreshDeps, opts: { force?: boolean } =
       suitable.push(f)
     }
     const scored = rankFound(suitable, terms, now)
-    // The simple score picks a shortlist; Claude (when there) reads it and chooses
-    const shortlist = scored.slice(0, 30)
+    // The simple score picks a shortlist, a few from each kind of source so one (OCW's 2,500 courses) can't fill it; Claude (when there) reads it and chooses
+    const shortlist = diverse(scored, 8, 30)
     let ranked: Suggestion[] = []
     let rankedBy: 'claude' | 'score' = 'score'
     const reply = shortlist.length
@@ -414,9 +443,12 @@ export async function runFreshCheck(deps: FreshDeps, opts: { force?: boolean } =
     step('ranking', 'done', `${ranked.length} suggested`)
 
     const imported = (await deps.imported()).map((x) => x.course.id)
-    state.suggestions = keepSuggestions(state.suggestions, ranked, { now, dismissed: state.dismissed, imported })
+    // Suggestions kept from earlier weeks must still pass today's rules
+    const still = state.suggestions.filter((x) => !unsuitable({ course: x.course }, have.filter((h) => h.id !== x.course.id), state.dismissed))
+    state.suggestions = keepSuggestions(still, ranked, { now, dismissed: state.dismissed, imported })
     state.lastRun = now
     state.rankedBy = rankedBy
+    state.lastSteps = ended
     await deps.write(state)
     await deps.log(log)
     return { ran: true, suggestions: state.suggestions, updates: Object.keys(state.updates), rankedBy }

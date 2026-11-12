@@ -105,8 +105,22 @@ export function unsuitable(f: Found, have: CatalogueCourse[], dismissed: string[
   if (dismissed.includes(c.id)) return 'dismissed'
   const same = have.find((h) => h.id === c.id || (c.repo && h.repo?.toLowerCase() === c.repo.toLowerCase()) || (c.url && h.url && h.url.replace(/\/+$/, '') === c.url.replace(/\/+$/, '')) || (c.playlist && h.playlist === c.playlist))
   if (same) return 'already in the catalogue'
+  // The same course from another source: MIT 18.642's playlist when its OCW course is here
+  const codes = courseCodes(c.title)
+  if (codes.length && have.some((h) => courseCodes(h.title).some((x) => codes.includes(x)))) return 'already in the catalogue from another source'
   return null
 }
+
+/** A title's course numbers, normalised: "MIT 18.642", "Stanford CS229", "ECON 252" → ["18.642", "CS229", "ECON252"] */
+export function courseCodes(title: string): string[] {
+  const out = new Set<string>()
+  for (const m of title.matchAll(/\b(\d{1,2}\.[A-Z]?\d{2,4}[A-Z]?x?)\b/gi)) out.add(m[1].toUpperCase())
+  for (const m of title.matchAll(/\b([A-Z]{2,5})[\s-]?(\d{3}[A-Z]?)\b/g)) if (!/^(MIT|RES|IAP|ISO|ERC|BIP|FIX|SQL)$/.test(m[1])) out.add(`${m[1]}${m[2]}`)
+  return [...out]
+}
+
+/** Words of a subject that say little on their own */
+const GENERIC = new Set(['science', 'engineering', 'systems', 'system', 'infrastructure', 'theory', 'topics', 'principles', 'introduction', 'applied', 'advanced', 'methods', 'design', 'open', 'core', 'rails', 'quantitative', 'analysis', 'studies', 'special', 'modern', 'foundations'])
 
 /** Source quality, 0 to 1: university courses and official material over a random repository */
 export function sourceQuality(f: Found): number {
@@ -132,12 +146,16 @@ export function scoreFound(f: Found, terms: string[], now = Date.now()): { score
   let match = 0
   terms.forEach((t, i) => {
     const words = t.split(' ')
-    const whole = text.includes(` ${t} `) || text.includes(` ${t}s `)
-    const most = words.length > 1 && words.filter((w) => text.includes(` ${w} `) || text.includes(` ${w}s `)).length >= Math.ceil(words.length * 0.75)
-    if (!whole && !most) return
+    const has = (w: string) => text.includes(` ${w} `) || text.includes(` ${w}s `)
+    const whole = has(t)
+    const most = words.length > 1 && words.filter(has).length >= Math.ceil(words.length * 0.75)
+    // One telling word of it: "Public Finance" is about quantitative finance a little; "Data Science" isn't about rocket science
+    const some = words.length > 1 && words.some((w) => w.length >= 4 && !GENERIC.has(w) && has(w))
+    if (!whole && !most && !some) return
     // Your focus subjects come first in the list and count most
-    match += (whole ? 1 : 0.6) * (i < FOCUS_SUBJECTS.length ? 1.5 : 1)
-    hits.push(t)
+    match += (whole ? 1 : most ? 0.6 : 0.35) * (i < FOCUS_SUBJECTS.length ? 1.5 : 1)
+    const word = whole || most ? t : words.find((w) => w.length >= 4 && !GENERIC.has(w) && has(w))!
+    if (!hits.includes(word)) hits.push(word)
   })
   const subject = Math.min(1, match / 2.5)
   const quality = sourceQuality(f)
@@ -149,7 +167,7 @@ export function scoreFound(f: Found, terms: string[], now = Date.now()): { score
 }
 
 /** Ranks found courses with the simple score, best first, leaving out what isn't about your subjects */
-export function rankFound(found: Found[], terms: string[], now = Date.now(), min = 4): { found: Found; score: number; why: string }[] {
+export function rankFound(found: Found[], terms: string[], now = Date.now(), min = 3.5): { found: Found; score: number; why: string }[] {
   return found
     .map((f) => ({ found: f, ...scoreFound(f, terms, now) }))
     .filter((x) => x.score >= min)
@@ -173,7 +191,7 @@ export function readRanking(text: string, ids: string[]): { id: string; score: n
 /** The prompt Claude ranks found courses with */
 export function rankingPrompt(terms: string[], found: Found[]): string {
   const rows = found.map((f) => ({ id: f.course.id, title: f.course.title, by: f.course.by, source: f.course.source ?? 'github', covers: f.course.covers, level: f.course.level, licence: f.course.licence, ...(f.updatedAt ? { updated: new Date(f.updatedAt).toISOString().slice(0, 10) } : {}), ...(f.weight ? { weight: f.weight } : {}) }))
-  return `A learner studies these subjects (most important first):\n${terms.slice(0, 30).map((t) => `- ${t}`).join('\n')}\n\nThese free courses were found this week:\n${JSON.stringify(rows, null, 1)}\n\nRank the ones worth suggesting to this learner: real courses or books that teach (not link lists, not marketing, not one-off talks), about their subjects, from a trustworthy source. Reply with only a JSON array, best first, at most 12 items: [{"id": "...", "score": 0-10, "why": "one plain sentence on what it teaches them"}]. Leave out anything below 5.`
+  return `A learner studies these subjects (most important first):\n${terms.slice(0, 30).map((t) => `- ${t}`).join('\n')}\n\nThese free courses were found this week:\n${JSON.stringify(rows, null, 1)}\n\nRank the ones worth suggesting to this learner: real courses or books that teach (not link lists, not marketing, not one-off talks), about their subjects, from a trustworthy source. Prefer recent material: leave out anything more than about 15 years old unless it is a classic still taught, and anything only loosely related to their subjects. Reply with only a JSON array, best first, at most 12 items: [{"id": "...", "score": 0-10, "why": "one plain sentence on what it teaches them"}]. Leave out anything below 5.`
 }
 
 export const RANK_SYSTEM = 'You choose study material for one learner. You are strict: you prefer university courses, official guides and well-known books, and leave out anything thin. You answer with JSON only.'

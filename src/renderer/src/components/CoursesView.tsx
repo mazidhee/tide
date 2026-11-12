@@ -338,7 +338,7 @@ function Catalogue({ area: initialArea }: { area?: CourseArea }) {
                             {c.title}
                             {c.updateAvailable && <span className="crs-badge updated">Updated</span>}
                           </span>
-                          <span className="crs-mine-next">{c.updateAvailable ? `${SOURCES[sourceOf(c)].label} has changed since you imported it` : c.imported!.next ? `Next: ${c.imported!.next.title}` : 'Every lesson done'}</span>
+                          <span className="crs-mine-next">{c.updateAvailable ? `${sourceSite(c)} has changed since you imported it` : c.imported!.next ? `Next: ${c.imported!.next.title}` : 'Every lesson done'}</span>
                         </span>
                         <span className="crs-mine-progress">
                           <Bar done={c.imported!.done} total={c.imported!.lessons} />

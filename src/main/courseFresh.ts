@@ -111,7 +111,9 @@ export async function freshStatus(): Promise<FreshStatus> {
   } catch {
     // none yet
   }
-  return { ...(s.lastRun ? { lastRun: s.lastRun } : {}), ...(s.rankedBy ? { rankedBy: s.rankedBy } : {}), running: !!running, steps, log: log.slice(-150).reverse(), suggestions: s.suggestions.length, updates: Object.keys(s.updates).length }
+  // Not running: how the last run ended (kept across restarts)
+  const shown = running || !s.lastSteps?.length ? steps : STEPS.map((x) => ({ ...x, ...(s.lastSteps!.find((y) => y.id === x.id) ?? { state: 'waiting' as const }) }))
+  return { ...(s.lastRun ? { lastRun: s.lastRun } : {}), ...(s.rankedBy ? { rankedBy: s.rankedBy } : {}), running: !!running, steps: shown, log: log.slice(-150).reverse(), suggestions: s.suggestions.length, updates: Object.keys(s.updates).length }
 }
 
 /** Your subjects: focus subjects, aims, roadmaps (notebooks with one) and What you know; nothing from a private notebook */

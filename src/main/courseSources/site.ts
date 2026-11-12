@@ -9,6 +9,16 @@
  * says), one a second.
  */
 import { fingerprint } from '@shared/courseSource'
+
+/**
+ * A page's fingerprint that a small, passing change doesn't move (a date in a footer, a count, a
+ * rotated banner): its headings, and its length to the nearest two hundred words.
+ */
+export function pagePrint(md: string): string {
+  const heads = md.match(/^#{1,4} .+$/gm) ?? []
+  const words = (md.match(/[\p{L}]{2,}/gu) ?? []).length
+  return fingerprint(`${heads.join('|')}#${Math.round(words / 200)}`)
+}
 import { splitOutline } from '@shared/courses'
 import type { CatalogueCourse } from '@shared/courseCatalogue'
 import { SourceRefused, type Fetcher } from './fetcher'
@@ -79,8 +89,9 @@ export function notebookLink(doc: Doc, base: string): string | null {
 /** The table of contents: on the contents page, or (a newer mdBook) in its toc.html */
 async function contents(c: CatalogueCourse, f: Fetcher): Promise<{ base: string; nodes: TocNode[]; version: string }> {
   const start = c.url!
-  const base = bookBase(start)
   const page = await f.page(start)
+  // Where the book really is (a redirect may have moved it: /docs/current/ → /docs/stable/)
+  const base = bookBase(page.url || start)
   let nodes = parseToc(parseHtml(page.text, page.url), page.url, c.toc)
   if (nodes.length < 2 && /toc\.js|mdbook/i.test(page.text)) {
     const toc = await f.page(new URL('toc.html', base).toString(), { allowMissing: true }).catch(() => null)
@@ -117,7 +128,7 @@ async function readPages(c: CatalogueCourse, f: Fetcher, plan: { title: string; 
         const page = await f.page(p.url)
         const doc = parseHtml(page.text, page.url)
         const md = mainText(doc, page.url)
-        prints.push(`${p.url}:${fingerprint(md)}`)
+        prints.push(`${p.url}:${pagePrint(md)}`)
         const nbUrl = notebooks ? notebookLink(doc, base) : null
         const nb = nbUrl ? await f.page(nbUrl).catch(() => null) : null
         const raw = nb && /^\s*\{/.test(nb.text) ? nb.text : undefined
@@ -181,7 +192,7 @@ export const docs: Adapter = {
         continue
       }
       const page = await f.page(p.url).catch(() => null)
-      parts.push(`${p.url}:${page ? fingerprint(mainText(parseHtml(page.text, page.url), page.url)) : '-'}`)
+      parts.push(`${p.url}:${page ? pagePrint(mainText(parseHtml(page.text, page.url), page.url)) : '-'}`)
     }
     return fingerprint(parts.join('\n'))
   },

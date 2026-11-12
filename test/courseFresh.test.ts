@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 import { CATALOGUE, type CatalogueCourse } from '@shared/courseCatalogue'
 import { FOCUS_SUBJECTS, WEEK, areaFor, checkDue, isNew, keepSuggestions, rankFound, readRanking, scoreFound, subjectTerms, unsuitable, type CheckLog, type Found } from '@shared/courseFresh'
 import { politeFetcher } from '../src/main/courseSources/fetcher'
-import { channelPlaylists, emptyState, githubFound, ocwCourseUrls, ocwFound, ocwSlugTitle, quanteconFound, runFreshCheck, type FreshDeps, type FreshState } from '../src/main/freshJob'
+import { channelPlaylists, diverse, emptyState, githubFound, ocwCourseUrls, ocwFound, ocwSlugTitle, quanteconFound, runFreshCheck, type FreshDeps, type FreshState } from '../src/main/freshJob'
 
 const FIX = join(__dirname, 'fixtures', 'sources')
 
@@ -47,6 +47,16 @@ describe('the simple ranking (no Claude)', () => {
   })
 })
 
+describe('the shortlist', () => {
+  it('takes a few from each source, so OCW’s thousands can’t crowd out the rest', () => {
+    const f = (id: string, source: CatalogueCourse['source'], score: number) => ({ found: { course: course({ id, source }) }, score })
+    const ranked = [...Array.from({ length: 20 }, (_, i) => f(`o${i}`, 'ocw', 9 - i * 0.01)), f('y', 'youtube', 6), f('g', undefined, 5)]
+    const d = diverse(ranked, 8, 30)
+    expect(d.filter((x) => x.found.course.source === 'ocw')).toHaveLength(8)
+    expect(d.map((x) => x.found.course.id)).toEqual(expect.arrayContaining(['y', 'g']))
+  })
+})
+
 describe('what may be suggested', () => {
   const have = [course({ id: 'in', repo: 'a/b' })]
   it('only free courses, without a login, with a known licence, not already here, not dismissed', () => {
@@ -56,6 +66,12 @@ describe('what may be suggested', () => {
     expect(unsuitable({ course: course({ id: 'gone', url: 'https://x.org' }) }, have, ['gone'])).toBe('dismissed')
     expect(unsuitable({ course: course({ id: 'x', url: 'https://x.org', licence: 'CC BY-NC 4.0', tier: 'open' }) }, have, [])).toMatch(/open/)
     expect(unsuitable({ course: course({ id: 'ok', url: 'https://x.org' }) }, have, [])).toBeNull()
+  })
+  it('knows the same course from another source by its number', () => {
+    const here = [course({ id: 'ocw', source: 'ocw', title: 'Topics in Mathematics with Applications in Finance (MIT 18.642, 2024)' }), course({ id: 'cs', title: 'Machine Learning (Stanford CS229, 2018)' })]
+    expect(unsuitable({ course: course({ id: 'yt', source: 'youtube', playlist: 'PLx', title: 'MIT 18.642 Topics in Mathematics with Applications in Finance, Fall 2024' }) }, here, [])).toMatch(/another source/)
+    expect(unsuitable({ course: course({ id: 'yt2', source: 'youtube', playlist: 'PLy', title: 'Stanford CS 229: Machine Learning, 2026' }) }, here, [])).toMatch(/another source/)
+    expect(unsuitable({ course: course({ id: 'yt3', source: 'youtube', playlist: 'PLz', title: 'MIT 18.650 Statistics for Applications' }) }, here, [])).toBeNull()
   })
   it('reads Claude’s ranking, only for the courses it was given', () => {
     expect(readRanking('Here: [{"id":"a","score":8,"why":"Teaches ISO 20022"},{"id":"zz","score":9}]', ['a', 'b'])).toEqual([{ id: 'a', score: 8, why: 'Teaches ISO 20022' }])
@@ -102,6 +118,8 @@ describe('reading the sources', () => {
     const gh = githubFound(JSON.stringify({ items: [{ full_name: 'pay/iso20022-course', default_branch: 'main', description: 'ISO 20022 payments course', stargazers_count: 400, pushed_at: '2026-10-01T00:00:00Z', license: { spdx_id: 'MIT' }, topics: ['payments'], owner: { login: 'pay' } }, { full_name: 'x/fork', default_branch: 'main', description: '', stargazers_count: 1, pushed_at: '2026-10-01T00:00:00Z', license: null, owner: { login: 'x' }, fork: true }] }))
     expect(gh).toHaveLength(1)
     expect(gh[0].course).toMatchObject({ repo: 'pay/iso20022-course', tier: 'open', area: 'payments' })
+    // An app or a library isn't a course
+    expect(githubFound(JSON.stringify({ items: [{ full_name: 'x/dnb-frontend', default_branch: 'main', description: 'Blockchain course platform', stargazers_count: 400, pushed_at: '2026-10-01T00:00:00Z', license: null, owner: { login: 'x' } }, { full_name: 'x/payments-sdk', default_branch: 'main', description: 'SDK', stargazers_count: 900, pushed_at: '2026-10-01T00:00:00Z', license: null, owner: { login: 'x' } }] }))).toHaveLength(0)
     const qe = quanteconFound(JSON.stringify([{ full_name: 'QuantEcon/lecture-dp.notebooks', default_branch: 'main', description: 'Dynamic programming', stargazers_count: 3, pushed_at: '2026-11-01T00:00:00Z', license: null, owner: { login: 'QuantEcon' } }, { full_name: 'QuantEcon/QuantEcon.py', default_branch: 'main', description: '', stargazers_count: 3, pushed_at: '2026-11-01T00:00:00Z', license: null, owner: { login: 'QuantEcon' } }]))
     expect(qe).toHaveLength(1)
     expect(qe[0].course).toMatchObject({ source: 'jupyterbook', tier: 'open', jbToc: 'https://raw.githubusercontent.com/QuantEcon/lecture-dp/main/lectures/_toc.yml' })
@@ -169,6 +187,8 @@ describe('the weekly check', () => {
     expect(h.logs.some((l) => l.what === 'ranking' && /simple score/.test(l.detail ?? ''))).toBe(true)
     expect(h.logs.some((l) => l.what === 'ocw' && l.result === 'ok')).toBe(true)
     expect(h.state.lastRun).toBeTruthy()
+    // How each step ended, for after a restart
+    expect(h.state.lastSteps?.map((x) => x.id)).toEqual(['subjects', 'ocw', 'youtube', 'quantecon', 'github', 'updates', 'ranking'])
     // It doesn't run again within the week
     expect((await runFreshCheck(h.deps)).ran).toBe(false)
   })
@@ -212,6 +232,12 @@ describe('the weekly check', () => {
     expect(r.updates).toEqual(['old-course'])
     expect(h.state.updates['old-course']).toBe('b'.repeat(40))
     expect(h.logs.find((l) => l.what === 'update:web')?.result).toBe('unchanged')
+  })
+  it('drops an earlier week’s suggestion that today’s rules turn down', async () => {
+    const dup = { course: course({ id: 'yt-dup', source: 'youtube', playlist: 'PLdup', title: 'MIT 18.642 Topics in Mathematics with Applications in Finance, Fall 2024' }), at: Date.UTC(2026, 10, 1), score: 6, why: 'x', by: 'score' as const }
+    const h = harness({ state: { suggestions: [dup] } })
+    await runFreshCheck(h.deps)
+    expect(h.state.suggestions.some((s) => s.course.id === 'yt-dup')).toBe(false)
   })
   it('never suggests what you dismissed, and lets OCW’s already-seen courses be', async () => {
     const h = harness({ state: { dismissed: ['ocw-15-999-stablecoins-and-payment-systems-fall-2026'] } })

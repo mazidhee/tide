@@ -36,9 +36,10 @@ td.addRule('code-lang', {
   filter: (node) => node.nodeName === 'PRE',
   replacement: (_content, node) => {
     const el = node as HTMLElement
-    const code = el.querySelector('code') ?? el
-    const cls = `${code.getAttribute('class') ?? ''} ${el.getAttribute('class') ?? ''} ${el.parentElement?.getAttribute('class') ?? ''} ${el.parentElement?.parentElement?.getAttribute('class') ?? ''}`
-    const lang = cls.match(/(?:language|lang|highlight|sourceCode)-([\w+#-]+)/)?.[1]?.replace(/^(ipython3?|python3|default|none|text|console)$/, (m) => (m.startsWith('ipython') || m === 'python3' ? 'python' : '')) ?? (el.getAttribute('data-lang') || '')
+    const code = (Array.from(el.childNodes ?? []).find((n) => n.nodeName === 'CODE') as HTMLElement | undefined) ?? el
+    const attr = (n: Node | null | undefined) => (n && (n as Element).getAttribute ? ((n as Element).getAttribute('class') ?? '') : '')
+    const cls = `${attr(code)} ${attr(el)} ${attr(el.parentNode)} ${attr(el.parentNode?.parentNode)}`
+    const lang = (cls.match(/(?:language|lang|highlight)-([\w+#-]+)/) ?? cls.match(/\bsourceCode\s+(\w+)/))?.[1]?.replace(/^(ipython3?|python3|default|none|text|console)$/, (m) => (m.startsWith('ipython') || m === 'python3' ? 'python' : '')) ?? ((el.getAttribute?.('data-lang') as string | null) || '')
     const text = (code.textContent ?? '').replace(/\n+$/, '')
     const fence = '`'.repeat(Math.max(3, ...(text.match(/`{3,}/g) ?? []).map((t) => t.length + 1)))
     return `\n\n${fence}${lang}\n${text}\n${fence}\n\n`
@@ -47,7 +48,15 @@ td.addRule('code-lang', {
 td.addRule('table', {
   filter: 'table',
   replacement: (_c, node) => {
-    const rows = [...(node as HTMLTableElement).querySelectorAll('tr')].map((tr) => [...tr.querySelectorAll('th,td')].map((c) => (c.textContent ?? '').replace(/\s+/g, ' ').replace(/\|/g, '\\|').trim()))
+    // Turndown's own DOM has no querySelectorAll: the rows and cells are found by walking it
+    const find = (n: Node, names: string[], out: Node[] = []): Node[] => {
+      for (const ch of Array.from(n.childNodes ?? [])) {
+        if (names.includes(ch.nodeName)) out.push(ch)
+        else if (ch.nodeName !== 'TABLE') find(ch, names, out)
+      }
+      return out
+    }
+    const rows = find(node, ['TR']).map((tr) => find(tr, ['TH', 'TD']).map((c) => (c.textContent ?? '').replace(/\s+/g, ' ').replace(/\|/g, '\\|').trim()))
     const wide = Math.max(0, ...rows.map((r) => r.length))
     if (!rows.length || !wide) return ''
     const pad = (r: string[]) => [...r, ...Array(wide - r.length).fill('')]
@@ -123,6 +132,8 @@ export function htmlToMarkdown(el: Element, base: string): string {
   return td
     .turndown(clone.innerHTML)
     .replace(/TIDEMATH(\d+)X/g, (_, i) => formulas[Number(i)])
+    // A row of bare links (a section's sub-navigation) isn't text
+    .replace(/^(?:\s*\[[^\]\n]+\]\([^)\s]+\)\s*(?:\||·)?){3,}\s*$/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
