@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { parseBlocks, sessionInstructions } from '@shared/session'
 import { estimate, lessonMap, minutesLabel, stepOutcome, type MapStep, type MapTurn } from '@shared/lessonMap'
 import { MAP_RULES, MAP_RULES_CLAUDE, isMoveOn, moveOnRequest, parsePlanBody, parseProgress, parseStep, progressTag } from '@shared/lessonPlan'
-import { nothingToMark, isAnswer as gemmaIsAnswer } from '@shared/lessonRepair'
+import { nothingToMark, notAnAttempt, isAnswer as gemmaIsAnswer } from '@shared/lessonRepair'
+import { digestLesson } from '@shared/lessonMemory'
 import { forClaude } from '@shared/exercises'
 import { planSteps } from '@shared/sourceLed'
 
@@ -163,8 +164,8 @@ describe('move on', () => {
     expect(isMoveOn(said)).toBe(true)
     expect(nothingToMark(said)).toBe(true)
     expect(gemmaIsAnswer(said)).toBe(false)
-    // claudeEngine's isAnswer passes over anything starting "skip"
-    expect(/^\s*(skip)\b/i.test(said)).toBe(true)
+    // claudeEngine's isAnswer and the lesson digest both read it as a request (lessonRepair)
+    expect(notAnAttempt(said)).toBe(true)
     expect(said).toContain('<progress skipped="1"/>')
     expect(said).toContain('<progress step="2"/>')
   })
@@ -175,6 +176,18 @@ describe('move on', () => {
     expect(m.current).toBe(1)
     expect(m.questions).toBe(0)
     expect(m.dividers.get(3)?.[0]).toMatchObject({ block: 0, closed: { index: 0, skipped: true }, start: { index: 1 } })
+  })
+
+  it('keeps the skipped question for recall when the lesson is saved (one recall path)', () => {
+    const d = digestLesson({ id: 'x', mode: 'teach', topic: 'Binary', scope: { kind: 'vault' }, turns, started: 0, updated: 0, finished: false } as unknown as Parameters<typeof digestLesson>[0])
+    expect(d?.stuck).toEqual(['Next?'])
+  })
+
+  it('without reports, moves on where the walk main uses says (one source for step labels)', () => {
+    const t = turns.map((x) => ({ ...x, content: x.content.replace(/<progress[^>]*\/>\n?/g, '') }))
+    const m = lessonMap(t, blocksOf(t))
+    expect(m.reported).toBe(false)
+    expect(m.steps.map((s) => s.state)).toEqual(['skipped', 'now', 'next'])
   })
 
   it('agrees with the tutor when it reports the skip itself', () => {

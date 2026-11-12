@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { THREAD_RULES, anchorOf, newThread, readsAsQuestion, restoreThreads, threadContext, threadMessages, threadReplyText, threadTakeaway, threadsNote, type LessonThread } from '../src/shared/lessonThreads'
+import { THREAD_RULES, anchorOf, newThread, questionsAsked, readsAsQuestion, restoreThreads, threadContext, threadMessages, threadReplyText, threadTakeaway, threadsNote, type LessonThread } from '../src/shared/lessonThreads'
 import { lessonMarkdown, type LessonRecord } from '../src/shared/lessonLog'
 import { lessonEvidence, THREAD_WEIGHT } from '../src/shared/knowledge'
 import { digestLesson } from '../src/shared/lessonMemory'
@@ -119,5 +119,26 @@ describe('kept with the lesson', () => {
     const t = withQs(newThread(turns, 1), 'Why a habit?', 'Any base works.\n\nTen won because of fingers.')
     expect(threadTakeaway(t)).toBe('> **Why a habit?**\n>\n> Any base works.\n>\n> Ten won because of fingers.')
     expect(threadTakeaway(withQs(newThread(turns, 1), 'q'))).toBe('')
+  })
+})
+
+describe('the thread’s chip', () => {
+  it('counts the questions they asked, not their answers to the tutor’s checks', () => {
+    // Shortened from a live thread that showed "15 questions"
+    const messages: LessonThread['messages'] = [
+      { role: 'user', content: 'Uhm i still do not understand this part' },
+      { role: 'assistant', content: 'Think of five boxes. Quick check: in 1001, which boxes do you take?' },
+      { role: 'user', content: '01100?' },
+      { role: 'assistant', content: 'Yes. Now try 7 in boxes. What do you get?' },
+      { role: 'user', content: '00111' },
+      { role: 'assistant', content: 'Correct. Which position holds the 1 in 1000000?' },
+      { role: 'user', content: '128' },
+      { role: 'assistant', content: 'Correct, it is 128.' },
+      { role: 'user', content: 'but why do we start from the right?' },
+      { role: 'assistant', content: 'Because the place values grow to the left. And 100 in decimal?' },
+      { role: 'user', content: '4' }
+    ]
+    expect(questionsAsked({ messages })).toBe(2)
+    expect(questionsAsked({ messages: messages.slice(0, 2) })).toBe(1)
   })
 })

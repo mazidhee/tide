@@ -517,6 +517,31 @@
   color: var(--accent-ink);
 }
 
+/* A lesson's citation: the source's name, in the line, opening the source (shared/sources citeSources) */
+.s-cite {
+  display: inline;
+  padding: 0.05em 0.45em;
+  margin: 0 0.1em;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font: inherit;
+  font-family: var(--font-ui);
+  font-size: 0.78em;
+  font-weight: 600;
+  line-height: 1.4;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+
+.s-cite:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
 .mermaid-diagram {
   margin: 0 0 1.05em;
   padding: 14px;

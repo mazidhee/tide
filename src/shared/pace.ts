@@ -13,7 +13,7 @@
  * the same text (the model server's prefix cache). The problem bank stands aside on a turn with one.
  */
 
-import { isAnswer } from './lessonRepair'
+import { asksToBeTaughtAgain, asksToMoveOn, isAnswer as marksAnswer } from './lessonRepair'
 
 export const PACE_MARK = '(Tide: This turn:'
 
@@ -25,10 +25,10 @@ export const PACE_MARK = '(Tide: This turn:'
  * window function. A 12B model follows the last, most concrete thing it was told, so the rule
  * rides with the answer it applies to.
  */
-export const MARK_NOTE = '(Tide: mark this first. A right result by a different method from yours is correct. If it is partial or wrong, add <card>question :: answer</card> for the idea they missed.)'
+export const MARK_NOTE = '(Tide: mark this first. A right result is correct, by any method and even without the working asked for. If partial or wrong, add <card>question :: answer</card> for the idea missed.)'
 
 /** The marking note for what you're sending, when it is an answer to mark */
-export const markNote = (said: string): string | null => (isAnswer(said) ? MARK_NOTE : null)
+export const markNote = (said: string): string | null => (marksAnswer(said) ? MARK_NOTE : null)
 
 const EXPLAIN = /\b(just|please|can you|could you)\s+(explain|teach|walk me through|show me)\b|\b(keep|carry on|continue)\s+(explaining|going)\b|\bstop (asking|quizzing)\b|\bno (more )?questions\b/i
 const CHECK = /\b(quiz|test|check) me\b|\bask me (a|some|more)\b|\bharder (one|question|problem)s?\b|\bgive me (a|another) (problem|question)\b/i
@@ -46,6 +46,10 @@ const verdictOf = (reply: string) => [...reply.matchAll(/<grade\b[^>]*verdict\s*
 /** The hidden note for this turn, or null to let the tutor choose. `said` is what you're sending now */
 export function paceNote(history: PaceTurn[], said: string): string | null {
   const words = said.replace(/^Answer:\s*/i, '').replace(/\n\(Confidence: [^)]*\)\s*$/, '')
+  // Asked to move on: never kept on the point, and never marked for asking (an answer sent with it is marked)
+  if (asksToMoveOn(said)) return `${PACE_MARK} they asked to move on. Don't mark the request or ask about this point again${marksAnswer(said) ? '; mark the answer they sent with it' : ''}. Go on to the next step now. Tide brings this point back later as a recall question.)`
+  // Forgotten, or "teach me again": taught again from the start, not marked
+  if (asksToBeTaughtAgain(said)) return `${PACE_MARK} they've forgotten this or asked to be taught it again. Don't mark it. Teach it again from the start, simply, with one small worked example, then ask one easy question on it.)`
   if (CHECK.test(words)) return `${PACE_MARK} they asked to be tested. Check their understanding now with one question.)`
   if (EXPLAIN.test(words)) return `${PACE_MARK} they asked you to explain. Explain the next part clearly, ask nothing, and end with <continue/>.)`
 

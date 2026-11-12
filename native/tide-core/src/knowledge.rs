@@ -20,7 +20,8 @@
 //!
 //!   retrievability R(t) = (1 + F t / S) ^ -decay,   F = 0.9 ^ (-1 / decay) - 1
 //!
-//! t is the days since the last review; R is 0.9 when t = S. The estimate shown for a concept is R.
+//! t is the days since the last review; R is 0.9 when t = S. The estimate shown for a concept is R,
+//! and after a miss R scaled by how its latest answers went (see `estimate`).
 //!
 //! Status: "new" with no evidence; "solid" while R is 0.85 or more and the last answer was right;
 //! "fading" when the last answer was right but time has taken R below 0.85, where it keeps falling
@@ -235,7 +236,12 @@ struct Fold {
   right: u32,
   partly: u32,
   wrong: u32,
+  /// The last few ratings, oldest first: how the latest answers went
+  recent: Vec<u32>,
 }
+
+/// How many of the latest answers count towards a concept's standing after a miss
+const RECENT: usize = 4;
 
 thread_local! {
   static MODEL: FSRS = FSRS::new(&FSRS6_DEFAULT_PARAMETERS).expect("the FSRS-6 default parameters are valid");
@@ -304,6 +310,10 @@ fn fold<'a>(events: impl Iterator<Item = &'a Evidence>) -> Fold {
           }
           f.last_review = Some(e.at);
           f.proven = r == 3;
+          f.recent.push(r);
+          if f.recent.len() > RECENT {
+            f.recent.remove(0);
+          }
           match r {
             3 => {
               f.right += 1;
@@ -326,11 +336,28 @@ fn fold<'a>(events: impl Iterator<Item = &'a Evidence>) -> Fold {
 }
 
 /// R at `now`: the chance of remembering it, from its memory state and the time since the last review
-fn estimate(f: &Fold, now: f64) -> f64 {
+fn retention(f: &Fold, now: f64) -> f64 {
   match (f.memory, f.last_review) {
     (Some(m), Some(t)) => retrievability(m.stability as f64, (now - t) / DAY_MS),
     _ => 0.0,
   }
+}
+
+/// How solid it is now, as shown. While the last answer was right that is R. After a miss FSRS
+/// counts the idea as relearnt on the spot, so R is back near 1 within the hour: shown as it is,
+/// a concept you had just forgotten read "You hold this at 100%". So after a miss R is scaled by
+/// how the latest answers went (right 1, partly 0.5, a miss 0), and climbs back as they come right.
+fn estimate(f: &Fold, now: f64) -> f64 {
+  let r = retention(f, now);
+  if f.proven || f.recent.is_empty() {
+    return r;
+  }
+  let share = f.recent.iter().map(|x| match x {
+    3 | 4 => 1.0,
+    2 => 0.5,
+    _ => 0.0,
+  });
+  r * share.sum::<f64>() / f.recent.len() as f64
 }
 
 fn status(f: &Fold, now: f64) -> &'static str {
@@ -1064,9 +1091,19 @@ mod tests {
     // A wrong answer leaves it in progress, however high FSRS puts R once it has been put right;
     // the next right answer makes it solid again
     let missed = fold([one("right", T0), one("right", T0 + 3.0 * DAY_MS), one("wrong", T0 + 4.0 * DAY_MS)].iter());
-    assert!(estimate(&missed, T0 + 4.0 * DAY_MS + HOUR) > SOLID);
+    assert!(retention(&missed, T0 + 4.0 * DAY_MS + HOUR) > SOLID);
+    // What is shown counts the miss: two right and one wrong of the last three, not 100%
+    let shown = estimate(&missed, T0 + 4.0 * DAY_MS + HOUR);
+    assert!(shown < 0.7 && shown > 0.5, "{shown}");
     assert_eq!(status(&missed, T0 + 4.0 * DAY_MS + HOUR), "learning");
     assert!(fades_in(&missed, T0 + 4.0 * DAY_MS + HOUR).is_none());
+    // Seen live: right once, stuck in a lesson, then stuck on the next day's opening recall question.
+    // The lesson said "You hold this at 100%"; what it holds now is far less, and each miss lowers it
+    let forgot = [one("right", T0), one("stuck", T0 + 2.0 * HOUR), one("right", T0 + 3.0 * HOUR), one("stuck", T0 + 4.0 * HOUR), one("recalled-wrong", T0 + DAY_MS)];
+    let before = estimate(&fold(forgot[..4].iter()), T0 + DAY_MS);
+    let after = estimate(&fold(forgot.iter()), T0 + DAY_MS + 60_000.0);
+    assert!(after < 0.3, "{after}");
+    assert!(after < before);
     let fixed = fold([one("right", T0), one("right", T0 + 3.0 * DAY_MS), one("wrong", T0 + 4.0 * DAY_MS), one("right", T0 + 5.0 * DAY_MS)].iter());
     assert_eq!(status(&fixed, T0 + 5.0 * DAY_MS + HOUR), "solid");
     // Partly right isn't shown either

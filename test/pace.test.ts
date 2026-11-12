@@ -111,8 +111,33 @@ describe('the marking note', () => {
 
   it('says the two things in few words: a different method is correct, and a miss gets a flashcard', () => {
     expect(MARK_NOTE).toMatch(/^\(Tide: mark this first\./)
-    expect(MARK_NOTE).toContain('A right result by a different method from yours is correct.')
+    expect(MARK_NOTE).toContain('A right result is correct, by any method and even without the working asked for.')
     expect(MARK_NOTE).toContain('<card>question :: answer</card>')
     expect(MARK_NOTE.split(/\s+/).length).toBeLessThanOrEqual(32)
+  })
+})
+
+describe('asked to move on, or to be taught again', () => {
+  const history = [
+    { role: 'assistant' as const, content: '<ask type="short">Write 100111 padded on the left to a multiple of 4.</ask>' },
+    { role: 'user' as const, content: 'Answer: 0111' },
+    { role: 'assistant' as const, content: '<grade verdict="partial" score="0.4">Half the number.</grade>\n\n<ask type="short">Try again.</ask>' }
+  ]
+
+  it('moves on when asked, marks nothing for asking, and marks an answer sent with it', () => {
+    const note = paceNote(history, 'Answer: can we move on though i understadn this')!
+    expect(note.startsWith(PACE_MARK)).toBe(true)
+    expect(note).toContain('asked to move on')
+    expect(note).toContain("Don't mark the request")
+    expect(note).not.toContain('mark the answer they sent')
+    expect(paceNote(history, 'Answer: 0010 0111, can we move on?')).toContain('mark the answer they sent with it')
+    expect(markNote('Answer: can we move on though i understadn this')).toBeNull()
+  })
+
+  it('teaches again, unmarked, when they have forgotten', () => {
+    const note = paceNote(history, "Answer: I don't really remember the conversion. Can you teach me again from scratch?")!
+    expect(note).toContain('taught it again')
+    expect(note).toContain("Don't mark it")
+    expect(markNote("Answer: I don't really remember the conversion. Can you teach me again from scratch?")).toBeNull()
   })
 })

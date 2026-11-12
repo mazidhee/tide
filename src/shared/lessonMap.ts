@@ -4,8 +4,9 @@
  *
  * What the tutor reported comes first: <progress/> tags in its replies (Gemma writes them; Claude's
  * lesson_progress calls are added to its reply as the same tags). When a lesson has no reports at
- * all (an older lesson, or a model that forgot), the map follows the tutor's own rule instead: a
- * step is done after two right in a row. "I've got this, move on" closes a step either way.
+ * all (an older lesson, or a model that forgot), the map follows the same walk main uses to place
+ * the lesson (shared/sourceLed ledWalk): a step taught from a reading is done at its first right
+ * answer, one the tutor teaches after two right in a row, and a request to move on closes it.
  *
  * Minutes left come from this lesson's own pace where there is enough of it (minutes per check,
  * and how the finished steps compared with the tutor's guesses), and from the plan's guesses
@@ -13,6 +14,8 @@
  */
 import { ASKED, GO_ON, type Block } from './session'
 import { isMoveOn, type PlanStep } from './lessonPlan'
+import { asksToMoveOn } from './lessonRepair'
+import { ledWalk } from './sourceLed'
 
 export type StepState = 'done' | 'skipped' | 'now' | 'next'
 
@@ -108,6 +111,21 @@ export function lessonMap(turns: MapTurn[], blocks: (Block[] | null)[], opts: { 
   // Reported if any reply moved a step itself
   map.reported = blocks.some((bs) => bs?.some((b) => b.kind === 'progress' && (b.report.step || b.report.passed || b.report.skipped)))
   let planned = ''
+  // Not reported: where each reply starts a step, by the walk main uses (one source for step labels)
+  const walked = new Map<number, number>()
+  if (!map.reported) {
+    const at: number[] = []
+    const replies: string[] = []
+    const moved: boolean[] = []
+    turns.forEach((t, i) => {
+      if (t.role !== 'assistant') return
+      at.push(i)
+      replies.push(t.content)
+      const prev = turns[i - 1]
+      moved.push(prev?.role === 'user' && (isMoveOn(prev.content) || asksToMoveOn(prev.content)))
+    })
+    ledWalk(replies, moved).starts.forEach((s, k) => s !== null && walked.set(at[k], s))
+  }
   let streak = 0
   let lastLeft: number | undefined
   let leftAt = 0
@@ -207,11 +225,18 @@ export function lessonMap(turns: MapTurn[], blocks: (Block[] | null)[], opts: { 
         st.checks++
         if (b.verdict === 'correct') st.right++
         streak = b.verdict === 'correct' ? streak + 1 : 0
-        if (!map.reported && streak >= 2) closeStep(map.current, 'done', i, j + 1)
       } else if (b.kind === 'summary') {
         map.phase = 'finished'
       }
     })
+    // Not reported: the walk says this reply starts a later step. It starts after the reply's last
+    // mark (at the top when they asked to move on)
+    const next = walked.get(i)
+    if (next !== undefined && map.phase === 'steps' && next > map.current) {
+      const lastMark = bs.map((b) => b.kind).lastIndexOf('grade')
+      const block = pendingSkip !== null || lastMark < 0 ? 0 : lastMark + 1
+      for (let k = map.current; k < Math.min(next, map.steps.length); k++) closeStep(k, pendingSkip === k ? 'skipped' : 'done', i, block)
+    }
     // "Move on" that the reply didn't close itself: closed where the reply starts
     if (pendingSkip !== null && pendingSkip === map.current) closeStep(pendingSkip, 'skipped', i, 0)
     pendingSkip = null

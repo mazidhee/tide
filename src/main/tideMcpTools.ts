@@ -246,6 +246,20 @@ export const EXTRA_TOOLS: McpTool[] = [
     }
   },
   {
+    name: 'save_to_notes',
+    description:
+      "Save a point to the learner's notes for this lesson, under \"From the lesson\", where they will reread it later. Use it in a lesson's side thread when they ask you to save or note something, or when you have just explained a point worth keeping (a rule, a reason, a definition, a correction). One point per call, 1 to 5 lines of Markdown (up to 12 for notation or a worked example), worded to make sense on its own later. They see it marked \"Added to your notes\".",
+    inputSchema: obj({ text: { type: 'string', description: 'The point, in Markdown, as it should read in their notes' } }, ['text']),
+    async run(args, ctx) {
+      const { cleanNoteText } = await import('@shared/lessonThreads')
+      const text = cleanNoteText(String(args.text ?? ''))
+      if (!text) return 'Nothing to save: give the point as text.'
+      // The lesson on screen adds it to its notes and shows it where it was said (renderer/SessionView)
+      ctx.step({ kind: 'save_note', label: 'Added to your notes', detail: text, status: 'done', depth: 0 })
+      return 'Saved to their notes for this lesson. Don\'t repeat it in your reply; carry on with what you were saying.'
+    }
+  },
+  {
     name: 'show_in_view',
     description:
       "Move what the learner is looking at in Tide: seek the video on their screen to a moment (seconds or m:ss), or scroll the course page or article they're reading to a section (by its heading). Use it when you point at something on their screen (\"watch from 12:40\", \"see the section on volumes\").",

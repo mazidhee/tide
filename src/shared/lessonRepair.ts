@@ -28,26 +28,71 @@ const IDK = /^(Answer:\s*)?(I don['’]t know|idk|no idea)\.?\s*$/i
  * record (and a flashcard) for something the learner never tried.
  */
 const NOT_KNOWN = /^(answer:\s*)?(i\s*(don['’]?t|do not)\s+know|idk|no idea|not a clue|no clue|i have no idea|i('ve| have)? never (learn|learnt|learned|studied|seen|done)|i haven['’]?t (learn|learnt|learned|studied|seen|done)|i['’]?m (learning|starting) (this )?(from scratch|from zero|from the beginning)|(learning|starting) from scratch|i['’]?m (new|a beginner)|pass)\b/i
+/**
+ * Forgotten, or asked to be taught again, anywhere in the message: "I don't really remember the
+ * conversion. Can you teach me again from scratch?" (seen live, marked "Not quite" with a
+ * flashcard), "I forgot how", "explain it again".
+ */
+const RETEACH = /\b(i\s*(really\s+)?(don't|do not|can't|cannot)\s+(really\s+|quite\s+)?(remember|recall)|i\s+(\w+\s+){0,2}forg[eo]t|i've forgotten|(teach|explain|show|walk) (me |us )?(through )?(it |this |that |the \w+ )?(again|from scratch|from the (start|beginning|top))|(can|could|shall) (we|you) (please )?(restart|start (over|again)|go (over|through) (it|this|that) again)|let's (restart|start (over|again)))\b/i
+
+/**
+ * Asked to move on: "can we move on though i understand this" (seen live, marked "Not quite"),
+ * "skip this", "next topic".
+ */
+const MOVE_ON = /\b(move on|moving on|skip (this|it|that|ahead|this one|the rest)|(to|onto|on to) the next (topic|step|part|section|phase|stage|thing)|next (topic|step|part|section) please)\b/i
+
+/** Something in the message that could be marked: a number, a sum, code or maths, or a guess put as one */
+const ATTEMPT = /\d|=|`|\$|\b(i think|maybe|i guess|probably|perhaps|is it|it['’]?s|would be|equals)\b/i
+
+const ownText = (said: string) =>
+  ownWords(said)
+    .replace(/\n\(Confidence: [^)]*\)\s*$/, '')
+    .trim()
+    .replace(/[\u2018\u2019\u02bc]/g, "'")
+
 export function saysDontKnow(said: string): boolean {
-  const mine = ownWords(said).replace(/\n\(Confidence: [^)]*\)\s*$/, '').trim()
-  return IDK.test(mine) || (NOT_KNOWN.test(mine) && mine.replace(/^answer:\s*/i, '').length < 160 && !/\b(but|because|though|think|maybe|guess|probably|perhaps|is|are|=)\b|\d/i.test(mine.replace(NOT_KNOWN, '')))
+  const mine = ownText(said)
+  if (IDK.test(mine)) return true
+  if (NOT_KNOWN.test(mine) && mine.replace(/^answer:\s*/i, '').length < 160 && !/\b(but|because|though|think|maybe|guess|probably|perhaps|is|are|=)\b|\d/i.test(mine.replace(NOT_KNOWN, ''))) return true
+  return asksToBeTaughtAgain(mine)
 }
 
-/** Whether what the learner sent is an answer to mark: not a question of theirs, Go on, a hint request or "I don't know" */
+/** Forgotten, or "teach me again", with nothing tried */
+export const asksToBeTaughtAgain = (said: string) => {
+  const mine = ownText(said)
+  return RETEACH.test(mine) && mine.length < 400 && !ATTEMPT.test(mine.replace(/^answer:\s*/i, ''))
+}
+
+/** The learner asked to move on (with or without an answer beside it) */
+export const asksToMoveOn = (said: string) => MOVE_ON.test(ownText(said))
+
+/**
+ * Nothing to mark: "I don't know", forgotten, "teach me again", or a request to move on with no
+ * answer beside it. Requests and questions get a teaching reply, never a mark (and so never a
+ * miss on the record or a flashcard from one).
+ */
+export const notAnAttempt = (said: string) => saysDontKnow(said) || (asksToMoveOn(said) && !ATTEMPT.test(ownText(said).replace(/^answer:\s*/i, '')))
+
+/** Whether what the learner sent is an answer to mark: not a question of theirs, Go on, a hint request, "I don't know" or a request */
 export function isAnswer(said: string): boolean {
   const mine = ownWords(said).replace(/\n\(Confidence: [^)]*\)\s*$/, '').trim()
-  return /^Answer:/i.test(mine) && !IDK.test(mine) && !saysDontKnow(mine)
+  return /^Answer:/i.test(mine) && !IDK.test(mine) && !notAnAttempt(mine)
 }
 
 /** Whether a mark on the reply to this message has nothing to mark */
 export const nothingToMark = (said: string) => {
   const mine = ownWords(said).trim()
   // "I've got this, move on" (shared/lessonPlan) is a request too
-  return mine.startsWith(ASKED) || mine === GO_ON || /^\[hint\]$/i.test(mine) || isMoveOn(mine) || saysDontKnow(mine)
+  return mine.startsWith(ASKED) || mine === GO_ON || /^\[hint\]$/i.test(mine) || isMoveOn(mine) || notAnAttempt(mine)
 }
 
-/** Grades turned back into what they say: the feedback stays, as a paragraph, and no mark is recorded */
-export const unmarked = (reply: string) => closeGrade(reply).replace(/<grade\b[^>]*>([\s\S]*?)<\/grade>/gi, (_, body: string) => body.trim())
+/** Grades turned back into what they say: the feedback stays, as a paragraph, and no mark is recorded (nor a flashcard from the "miss") */
+export const unmarked = (reply: string) =>
+  /<grade\b/i.test(reply)
+    ? closeGrade(reply)
+        .replace(/<grade\b[^>]*>([\s\S]*?)<\/grade>/gi, (_, body: string) => body.trim())
+        .replace(/\s*<card>[\s\S]*?<\/card>/gi, '')
+    : reply
 
 export function repairReply(reply: string, said: string): { text: string; repaired: string[] } {
   const repaired: string[] = []
@@ -77,4 +122,7 @@ export function repairReply(reply: string, said: string): { text: string; repair
 }
 
 /** A line that is only an invented tag: <file_path>…</file_path>, <tool_call>…</tool_call> and the like */
-const STRAY_TAG_LINE = /^[ \t]*<(file_path|filepath|file|path|tool_call|tool_code|function_call|image_path|source_path)\b[^>]*>[^\n]*?(?:<\/\1>)?[ \t]*$\n?/gim
+const STRAY_TAG_LINE = /^[ \t]*<(file_path|filepath|file|path|tool_call|tool_code|function_call|image_path|source_path|the-reading)\b[^>]*>[^\n]*?(?:<\/\1>)?[ \t]*$\n?/gim
+
+/** What Skip sends: a request to move on, so it is never marked (notAnAttempt) and the point is kept for recall (lessonMemory) */
+export const SKIP_SAID = 'Skip this one: can we move on?'

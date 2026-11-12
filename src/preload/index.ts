@@ -159,6 +159,13 @@ const api: TideApi = {
     get: invoke('lessons:get'),
     challenge: invoke('lessons:challenge')
   },
+  explore: {
+    list: invoke('explore:list'),
+    add: invoke('explore:add'),
+    update: invoke('explore:update'),
+    remove: invoke('explore:remove'),
+    onChange: (cb) => subscribe<void>('explore:changed', () => cb())
+  },
   videos: {
     transcript: invoke('videos:transcript'),
     fileTranscript: invoke('videos:fileTranscript'),
@@ -308,8 +315,7 @@ const api: TideApi = {
   },
   recall: {
     queue: invoke('recall:queue'),
-    review: invoke('recall:review'),
-    keep: invoke('recall:keep')
+    review: invoke('recall:review')
   },
   goals: {
     list: invoke('goals:list'),

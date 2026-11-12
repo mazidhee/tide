@@ -9,14 +9,14 @@ import { notesReviewRequest, wantsNotesReview } from '@shared/lessonNotes'
 import { reveal } from '../lib/scroll'
 import { Thinking } from './Thinking'
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode, Verdict } from '@shared/types'
+import type { AgentStep, ChatMessage, ChatScope, RunResult, SessionMode } from '@shared/types'
 import { markNote, paceNote } from '@shared/pace'
 import { markingNote } from '@shared/humanities'
 import { teachesAsHumanities } from '@shared/subjects'
 import { AppraiseCard } from './AppraiseCard'
 import { useDifficulty } from '../lib/difficulty'
 import { nothingToMark, unmarked } from '@shared/lessonRepair'
-import { withSources, type SourcePack } from '@shared/sources'
+import { citeSources, withSources, type SourcePack } from '@shared/sources'
 import { ledPrefKey, withoutEcho } from '@shared/sourceLed'
 import { formatRange, offeredClip, recapMessage, watchFirstNote, type ClipCandidate } from '@shared/video'
 import { ClipCard } from './ClipCard'
@@ -51,8 +51,10 @@ import { conceptFor, useKnowledge } from '../lib/knowledge'
 import { useAreaClass } from '../lib/areas'
 import { Level } from './tide/Level'
 import { AreaMark } from './tide/AreaMark'
-import { AnswerHint, AskPill, BackPill, FOLD_MS, SelectionAsk, ThreadSlot, highlightQuote, reducedMotion } from './LessonThreads'
-import { THREAD_RULES, asked, newThread, readsAsQuestion, restoreThreads, threadMessages, threadTakeaway, threadsNote, type LessonThread } from '@shared/lessonThreads'
+import { AnswerHint, AskPill, BackPill, FOLD_MS, SelectionAsk, ThreadSlot, highlightQuote, reducedMotion, type SelectionAt } from './LessonThreads'
+import { CameUpIn } from './ExploreLater'
+import { exploreLater, lessonSubject } from '../lib/explore'
+import { THREAD_RULES, asked, newThread, outputText, readsAsQuestion, replyParts, restoreThreads, saveFallback, threadMessages, threadNotes, threadsNote, wantsSave, withNote, type LessonThread } from '@shared/lessonThreads'
 import { lessonMap, type Divider } from '@shared/lessonMap'
 import { isMoveOn, moveOnRequest } from '@shared/lessonPlan'
 import { localDate, todayItems } from '@shared/coach'
@@ -529,9 +531,13 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const takeaways = useMemo(
     () => [
       ...parsed.flatMap((blocks, i) => (blocks && !(busy && i === parsed.length - 1) ? blocks.filter((b): b is Extract<Block, { kind: 'note' }> => b.kind === 'note').map((b) => b.text) : [])),
-      ...pinned.map((p) => p.text)
+      ...pinned.map((p) => p.text),
+      // Saved by Claude's save_to_notes in the lesson itself
+      ...turns.flatMap((t) => (t.steps ?? []).filter((x) => x.kind === 'save_note' && x.detail).map((x) => x.detail!)),
+      // What the tutor saved in a side thread, and replies you saved there
+      ...threads.flatMap((t) => threadNotes(t, threadBusy === t.id))
     ],
-    [parsed, busy, pinned]
+    [parsed, busy, pinned, turns, threads, threadBusy]
   )
   const [notesOpen, setNotesOpen] = useState(() => localStorage.getItem('tide.lesson.notes') !== 'closed')
   const withNotes = mode === 'teach' && notesOpen
@@ -616,40 +622,14 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       live = false
     }
   }, [finished, mode])
-  // Steps skipped with "I've got this": when each comes back in recall, for the end card
-  const skipsKey = `tide.lesson.skips:${recordId ?? ongoingKey ?? topic}`
-  const [skipDays, setSkipDays] = useState<Record<number, number>>(() => {
-    try {
-      return JSON.parse(localStorage.getItem(skipsKey) ?? '{}') as Record<number, number>
-    } catch {
-      return {}
-    }
-  })
-  /** "I've got this, move on": a request, never an answer; the point goes to your recall reviews */
+  /**
+   * "I've got this, move on", the one way to move on from a question: a request, never an answer
+   * (notAnAttempt), and lessonMemory keeps the question for recall when the lesson is saved
+   */
   const moveOn = () => {
     if (busy) return
     const m = mapRef.current
     const at = m.phase === 'steps' && m.current < m.steps.length ? m.current : null
-    const st = at !== null ? m.steps[at] : undefined
-    const q = currentAsk?.prompt.replace(/```[\s\S]*?```/g, ' ').replace(/[*_`#>$]/g, '').replace(/\s+/g, ' ').trim()
-    if (st && q) {
-      const prompt = `${q.slice(0, 400)} (${st.title}${st.doneWhen ? `. ${st.doneWhen}` : ''})`
-      window.tide.recall
-        .keep({ prompt, topic, lesson: recordId ?? `lesson:${topic}`, ...(sourcePath ? { path: sourcePath } : {}) })
-        .then((due) => {
-          if (!due) return
-          setSkipDays((d) => {
-            const next = { ...d, [at!]: Math.max(1, Math.round((due - Date.now()) / 86_400_000)) }
-            try {
-              localStorage.setItem(skipsKey, JSON.stringify(next))
-            } catch {
-              // only for the end card
-            }
-            return next
-          })
-        })
-        .catch(() => {})
-    }
     send(moveOnRequest(at === null ? null : at + 1, m.steps.length), turns)
     setAnswer('')
     setPicked(null)
@@ -945,7 +925,20 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               return { ...t, messages: [...t.messages.slice(0, -1), { ...last, content: e.type === 'delta' ? last.content + e.text : '' }] }
             })
           )
-        if (e.type === 'step')
+        // Claude saved a point with save_to_notes: it goes into the reply, shown as added to your notes
+        if (e.type === 'step' && e.step.kind === 'save_note') {
+          if (e.step.detail) {
+            const note = e.step.detail
+            setThreads((list) =>
+              list.map((t) => {
+                const last = t.messages[t.messages.length - 1]
+                if (t.id !== tid || last?.role !== 'assistant') return t
+                return { ...t, messages: [...t.messages.slice(0, -1), { ...last, content: withNote(last.content, note) }] }
+              })
+            )
+            threadSaved()
+          }
+        } else if (e.type === 'step')
           setThreadSteps((all) => {
             const steps = [...(all[tid] ?? [])]
             const at = steps.findIndex((x) => x.id === e.step.id)
@@ -957,7 +950,25 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         if (e.type === 'done' || e.type === 'error') {
           threadReqs.current.delete(e.id)
           setThreadBusy((b) => (b === tid ? null : b))
-          setThreads((list) => list.map((t) => (t.id === tid ? { ...t, updated: Date.now() } : t)))
+          setThreads((list) =>
+            list.map((t) => {
+              if (t.id !== tid) return t
+              // Asked to save and the reply saved nothing: what they meant is saved for them
+              const msgs = t.messages
+              const last = msgs[msgs.length - 1]
+              const q = [...msgs].reverse().find((m) => m.role === 'user')?.content ?? ''
+              const noted = last?.role === 'assistant' && replyParts(last.content).notes.length > 0
+              if (noted) setTimeout(threadSaved)
+              if (e.type === 'done' && last?.role === 'assistant' && last.content.trim() && wantsSave(q) && !noted) {
+                const point = saveFallback(t, turnsRef.current[t.at]?.content)
+                if (point) {
+                  setTimeout(threadSaved)
+                  return { ...t, messages: [...msgs.slice(0, -1), { ...last, content: withNote(last.content, point) }], updated: Date.now() }
+                }
+              }
+              return { ...t, updated: Date.now() }
+            })
+          )
           setThreadsRev((r) => r + 1)
           // Folded while it was answering: its process can go now
           if (openThreadRef.current !== tid) window.tide.ai.threadDone(labId.current).catch(() => {})
@@ -1075,15 +1086,62 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [Math.floor(openSize / 400)])
 
-  const noteThread = (t: LessonThread) => {
-    const text = threadTakeaway(t)
-    if (!text) return
-    setPinned((p) => [...p, { at: -1, text }])
-    if (!notesOpen) setNotesOpen(true)
-    setThreads((list) => list.map((x) => (x.id === t.id ? { ...x, noted: true } : x)))
+  // ---------- Explore later (shared/explore) ----------
+
+  /** Keeps a selection, a tutor's message or a thread reply to explore later, linked to where it came up */
+  const keepToExplore = (at: SelectionAt) => {
+    const th = at.thread ? threadsRef.current.find((t) => t.id === at.thread) : undefined
+    void exploreLater(app, {
+      text: at.quote,
+      subject: lessonSubject(topic, scope, options?.subject),
+      from: { ...(recordId ? { lesson: recordId } : {}), topic, mode, turn: th ? th.at : at.turn, ...(at.thread ? { thread: at.thread, reply: at.reply } : {}) },
+      scope
+    })
+  }
+
+  // Opened at a message ("Open where it came up"): brought into view and flashed, its thread reopened
+  const focused = useRef(false)
+  const focus = view?.kind === 'session' ? view.focus : undefined
+  useEffect(() => {
+    if (!focus || focused.current || turns.length <= focus.turn) return
+    focused.current = true
+    const t = setTimeout(() => {
+      const flash = (el: HTMLElement | null | undefined) => {
+        if (!el) return
+        el.classList.add('xp-flash')
+        setTimeout(() => el.classList.remove('xp-flash'), 2400)
+      }
+      // In a thread: the thread opens under its message, and the reply it came up in glows
+      if (focus.thread && threadsRef.current.some((x) => x.id === focus.thread)) {
+        openThreadAt(focus.turn, undefined, undefined, focus.thread)
+        setTimeout(() => {
+          const reply = columnRef.current?.querySelector<HTMLElement>(`[data-thread-id="${focus.thread}"] [data-thread-reply="${focus.reply ?? -1}"]`)
+          reply?.scrollIntoView({ block: 'nearest', behavior: reducedMotion() ? 'auto' : 'smooth' })
+          flash(reply?.closest<HTMLElement>('.lt-msg'))
+        }, reducedMotion() ? 50 : 600)
+        return
+      }
+      const el = columnRef.current?.querySelector<HTMLElement>(`[data-turn="${focus.turn}"]`)
+      if (el) reveal(el, { block: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' })
+      flash(el)
+    }, 250)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turns.length])
+
+  /** Something from a thread went into the notes: the notes pane opens, so it's written there now */
+  const threadSaved = () => {
+    if (mode === 'teach') setNotesOpen(true)
+  }
+
+  /** "Save to notes" on one thread reply */
+  const saveReply = (tid: string, at: number) => {
+    setThreads((list) => list.map((x) => (x.id === tid && !x.saved?.includes(at) ? { ...x, saved: [...(x.saved ?? []), at] } : x)))
     setThreadsRev((r) => r + 1)
+    threadSaved()
     app.toast('Added to your notes for this lesson')
   }
+
 
   // Esc folds the open thread, from anywhere but another box you're typing in
   useEffect(() => {
@@ -1162,24 +1220,28 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     await app.refreshTree()
   }
 
-  const renderBlock = (b: Block, key: string, live: boolean, at = -1) => {
+  // [S2] in what the tutor wrote: the source's name, a button that opens it (shared/sources)
+  const cited = (md: string) => citeSources(md, pack?.sources ?? [])
+  /** `at`: the turn it's in, for the lesson map. `fromMiss`: the reply's mark was not "correct", so a flashcard in it is from a miss */
+  const renderBlock = (b: Block, key: string, live: boolean, at = -1, fromMiss = true) => {
     switch (b.kind) {
       case 'text':
-        return <div key={key} className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(b.text, env) }} />
+        return <div key={key} className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(cited(b.text), env) }} />
       case 'ask': {
         // The lesson map: what this question checks and what getting it right does, and on the
-        // question waiting for you, a way to move on (a request: never marked)
+        // question waiting for you, the one way to move on (a request: never marked, kept for recall)
         const purpose = showMap ? map.purposes.get(at) : undefined
         const head = purpose ? <AskPurpose p={purpose} title={map.steps[purpose.step]?.title} /> : null
-        const skip = showMap && !live && !busy && at === turns.length - 1 && !!currentAsk && map.phase === 'steps' ? <MoveOnChip onMove={moveOn} /> : null
-        // The new design: a question about something you already hold shows its level beside it
-        if (tide && concept && concept.seen > 0)
+        const skip = mode === 'teach' && !timed && !live && !busy && at === turns.length - 1 && !!currentAsk && map.phase !== 'recap' && map.phase !== 'finished' ? <MoveOnChip onMove={moveOn} /> : null
+        // A question you missed before says so (a retest); nothing on every other question, where
+        // "Holding: last right today" was only noise
+        if (tide && concept && concept.seen > 0 && options?.retest?.length)
           return (
             <div key={key} className="s-ask td-recall">
               <Level now={concept.estimate} high={concept.level} area={areaOf(concept.area)} large />
               <div>
-                {options?.retest?.length ? <p className="td-recall-lab">You missed this before</p> : head}
-                <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(b.prompt, env) }} />
+                <p className="td-recall-lab fading">You missed this before</p>
+                <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(cited(b.prompt), env) }} />
                 {skip}
               </div>
             </div>
@@ -1187,7 +1249,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         return (
           <div key={key} className={`s-ask${head ? ' lm-has-purpose' : ''}`}>
             {head}
-            <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(b.prompt, env) }} />
+            <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(cited(b.prompt), env) }} />
             {skip}
           </div>
         )
@@ -1199,14 +1261,14 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               <Icon name={b.verdict === 'correct' ? 'check' : b.verdict === 'wrong' ? 'x' : 'minus'} size={13} />
               {b.verdict === 'correct' ? 'Correct' : b.verdict === 'wrong' ? 'Not quite' : 'Partly right'}
             </span>
-            <div className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(b.text, env) }} />
+            <div className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(cited(b.text), env) }} />
           </div>
         )
       case 'card':
         return (
           <div key={key} className="s-card">
             <div className="s-card-text">
-              <span className="muted small">Flashcard from this miss</span>
+              <span className="muted small">{fromMiss ? 'Flashcard from this miss' : 'Flashcard'}</span>
               <div className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(`**${b.front}**\n\n${b.back}`, env) }} />
             </div>
             <button className="btn small" disabled={savedCards.has(b.front)} onClick={() => saveCard(b.front, b.back)}>
@@ -1467,6 +1529,14 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           data-visual-lesson={recordId ?? ''}
           // [source-led] a reading's "Open in your library at page N"
           onClick={(e) => {
+            const cite = (e.target as HTMLElement).closest?.<HTMLElement>('.s-cite')
+            const src = cite ? pack?.sources.find((s) => s.n === Number(cite.dataset.source)) : undefined
+            if (src) {
+              e.preventDefault()
+              if (src.path) app.openPath(src.path)
+              else if (src.url) void window.tide.app.openExternal(src.url)
+              return
+            }
             const open = openReading(e.target)
             if (open) (e.preventDefault(), app.openPath(open.path, open.anchor))
             // Run and Copy on the code in a reading or a reply (lib/runBlocks)
@@ -1493,6 +1563,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               </p>
             </header>
           )}
+          {options?.curiosity && <CameUpIn curiosity={options.curiosity} />}
           {!rail && (toRead.length > 0 || found.length > 0 || !!pack?.sources.length) && (
             <div className="s-read" aria-label="Read alongside">
               <Icon name="book" size={13} />
@@ -1560,12 +1631,11 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             return (
               <Fragment key={i}>
               {showMap && dividersAt(i, 0)}
-              <div className="s-tutor">
+              <div className="s-tutor" data-turn={i}>
                 {tide && (
                   <div className="td-who">
                     <Professor state={live ? 'writing' : 'idle'} size={24} />
                     <b>{characterById(app.settings.character ?? 'professor').name}</b>
-                    {showMap && i === turns.length - 1 && map.phase === 'steps' && planDone < map.steps.length && <span className="td-meta">Step {planDone + 1}: {map.steps[planDone].title}</span>}
                   </div>
                 )}
                 {!live && t.content && (
@@ -1579,6 +1649,11 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     {mode === 'teach' && i === turns.length - 1 && showMeOffered(turns) && (
                       <button className="icon-btn small" title="Show me: see this as a diagram, a trace or a plot" aria-label="Show me this as a picture" disabled={busy} onClick={() => submit(SHOW_ME)}>
                         <Icon name="image" size={13} />
+                      </button>
+                    )}
+                    {mode !== 'interview' && (
+                      <button className="icon-btn small" title="Explore later: keep this for a short side lesson" aria-label="Explore later" onClick={() => keepToExplore({ turn: i, quote: outputText(t.content) })}>
+                        <Icon name="compass" size={13} />
                       </button>
                     )}
                     {mode === 'teach' && (
@@ -1608,7 +1683,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   {blocks.map((b, j) => (
                     <Fragment key={`${i}-${j}`}>
                       {showMap && j > 0 && dividersAt(i, j)}
-                      {renderBlock(b, `${i}-${j}`, live, i)}
+                      {renderBlock(b, `${i}-${j}`, live, i, !blocks.some((x) => x.kind === 'grade' && x.verdict === 'correct'))}
                     </Fragment>
                   ))}
                   {showMap && blocks.length > 0 && dividersAt(i, -1, true)}
@@ -1619,7 +1694,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                 )}
               </div>
               {hung.map((th) => (
-                <div key={th.id} className="lt-slot" data-thread-id={th.id}>
+                <div key={th.id} className="lt-slot" data-thread-id={th.id} data-thread-at={th.at}>
                   <ThreadSlot
                     thread={th}
                     open={th.id === openThread}
@@ -1632,7 +1707,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     onRetry={() => retryThread(th.id)}
                     onFold={(understood) => foldThread(understood)}
                     onReopen={() => openThreadAt(th.at, th.quote, undefined, th.id)}
-                    onNotes={() => noteThread(th)}
+                    onSaveReply={(at) => saveReply(th.id, at)}
+                    onExplore={mode !== 'interview' ? (at) => keepToExplore({ turn: th.at, quote: replyParts(th.messages[at]?.content ?? '').text, thread: th.id, reply: at }) : undefined}
                   />
                 </div>
               ))}
@@ -1844,7 +1920,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             <LessonEnd
               map={map}
               topic={topic}
-              reviewDays={skipDays}
+              reviewDays={{}}
               flashcards={cardsToday}
               nextLesson={nextUp ? (nextUp.item.topic ?? nextUp.item.title) : null}
               onFlashcards={() => app.setView({ kind: 'daily', nonce: Date.now() })}
@@ -1872,7 +1948,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             </div>
           )}
           <div ref={bottomRef} />
-          {mode !== 'interview' && <SelectionAsk column={columnRef} onAsk={(at, quote) => openThreadAt(at, quote)} />}
+          {mode !== 'interview' && <SelectionAsk column={columnRef} onAsk={(at, quote) => openThreadAt(at, quote)} onExplore={keepToExplore} />}
         </div>
       </div>
       </div>

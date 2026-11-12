@@ -534,9 +534,21 @@ const rendered = new WeakMap<RenderEnv['filesByName'], ReturnType<typeof lru<str
 export function lessonTags(body: string): string {
   if (!/<(reading|suggest-course|clip)\b/i.test(body)) return body
   const a = (attrs: string, n: string) => attrs.match(new RegExp(`\\b${n}\\s*=\\s*["']([^"']*)["']`, 'i'))?.[1] ?? ''
-  const q = (s: string) => escapeHtml(s.trim())
+  // On one line: a blank line inside an attribute ends Markdown's HTML block, and the rest leaked as text
+  const q = (s: string) => escapeHtml(s.trim()).replace(/\r?\n/g, '&#10;')
   return body
-    .replace(/<reading\b([^>]*?)(?:\/>|>([\s\S]*?)<\/reading>)/gi, (_, at: string, why = '') => `\n\n<div class="rel-host" data-course="${q(a(at, 'course'))}" data-path="${q(a(at, 'path'))}" data-heading="${q(a(at, 'heading'))}" data-why="${q(why)}"></div>\n\n`)
+    .replace(/<reading\b([^>]*?)(?:\/>|>([\s\S]*?)<\/reading>)/gi, (_, at: string, why = '') =>
+      a(at, 'course') && a(at, 'path')
+        ? `\n\n<div class="rel-host" data-course="${q(a(at, 'course'))}" data-path="${q(a(at, 'path'))}" data-heading="${q(a(at, 'heading'))}" data-why="${q(why)}"></div>\n\n`
+        : // Not a course's section: the tutor quoting a source in a tag of its own, shown as the quotation it is
+          why.trim()
+          ? `\n\n${why
+              .trim()
+              .split('\n')
+              .map((l: string) => `> ${l}`.trimEnd())
+              .join('\n')}\n\n`
+          : ''
+    )
     .replace(/<suggest-course\b([^>]*?)(?:\/>|>([\s\S]*?)<\/suggest-course>)/gi, (_, at: string, why = '') => `\n\n<div class="sug-host" data-id="${q(a(at, 'id'))}" data-why="${q(why)}"></div>\n\n`)
     .replace(/<clip\b([^>]*?)(?:\/>|>([\s\S]*?)<\/clip>)/gi, (all, at: string, why = '') => {
       const id = youtubeIdOf(a(at, 'video')) ?? (/^[\w-]{11}$/.test(a(at, 'video')) ? a(at, 'video') : null)

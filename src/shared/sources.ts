@@ -92,3 +92,41 @@ export const withSources = (opening: string, pack: SourcePack | null) => {
   const note = sourcesNote(pack)
   return note ? `${opening}\n\n${note}` : opening
 }
+
+const escapeAttr = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+/**
+ * A lesson's citations as the learner sees them: [S2] (or [S2][S3], [S2, S3]) becomes the name of
+ * the source, a button the lesson opens it with (shown beside "Read" and in the rail). Code is left
+ * as it is, and so is a number the lesson has no source for.
+ */
+export function citeSources(md: string, sources: Pick<LessonSource, 'n' | 'title' | 'url' | 'path'>[]): string {
+  if (!sources.length || !/\[S\d/.test(md)) return md
+  const chip = (n: number) => {
+    const s = sources.find((x) => x.n === n)
+    if (!s) return null
+    const name = s.title.length > 48 ? `${s.title.slice(0, 47).trimEnd()}…` : s.title
+    let where = 'a source for this lesson'
+    if (s.path) where = 'in your library'
+    else if (s.url) {
+      try {
+        where = new URL(s.url).hostname.replace(/^www\./, '')
+      } catch {
+        // as it is
+      }
+    }
+    return `<button type="button" class="s-cite" data-source="${n}" title="${escapeAttr(`${s.title}, ${where}. Click to open it.`)}">${escapeAttr(name)}</button>`
+  }
+  // Fenced and inline code split out, so a citation-like string in code stays code
+  return md
+    .split(/(```[\s\S]*?```|`[^`\n]*`)/)
+    .map((part, i) =>
+      i % 2
+        ? part
+        : part.replace(/\[(S\d{1,2}(?:\s*,\s*S?\d{1,2})*)\]/g, (all, group: string) => {
+            const chips = group.split(/\s*,\s*/).map((g) => chip(Number(g.replace(/^S/, ''))))
+            return chips.every(Boolean) ? chips.join(' ') : all
+          })
+    )
+    .join('')
+}

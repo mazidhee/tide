@@ -1,0 +1,124 @@
+/*
+  Explore later (components/ExploreLater.tsx): Learn's "To explore" list, and a side lesson's
+  "Came up in" line. Colours from the theme tokens only.
+*/
+.xp-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 8px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+.xp-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+.xp-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.xp-mark {
+  display: grid;
+  place-items: center;
+  align-self: start;
+  margin-top: 2px;
+  color: var(--accent);
+}
+.xp-row.done .xp-mark {
+  color: var(--good, var(--accent));
+}
+.xp-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.xp-title {
+  font-weight: 500;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.xp-row.done .xp-title {
+  color: var(--ink-soft);
+}
+.xp-from {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.xp-acts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.xp-x {
+  color: var(--ink-muted);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.xp-row:hover .xp-x,
+.xp-x:focus-visible {
+  opacity: 1;
+}
+@container (max-width: 640px) {
+  .xp-row {
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+  .xp-acts {
+    grid-column: 2;
+  }
+}
+
+/* A side lesson: where it came up */
+.xp-came-up {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 18px;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+/* "Open where it came up": the message, brought into view, glows for a moment */
+.xp-flash {
+  animation: xp-flash 2.2s ease-out;
+  border-radius: var(--radius-m);
+}
+@keyframes xp-flash {
+  0%,
+  35% {
+    box-shadow: 0 0 0 6px var(--accent-soft);
+    background: var(--accent-soft);
+  }
+  100% {
+    box-shadow: 0 0 0 6px transparent;
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .xp-flash {
+    animation: none;
+    background: var(--accent-soft);
+  }
+  .xp-x {
+    transition: none;
+  }
+}

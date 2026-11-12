@@ -34,6 +34,8 @@ export interface LessonThread {
   told?: boolean
   /** Its takeaway was added to the lesson's notes */
   noted?: boolean
+  /** Replies you saved to the lesson's notes with "Save to notes", by their index in messages */
+  saved?: number[]
   started: number
   updated: number
 }
@@ -71,13 +73,19 @@ export function newThread(turns: { role: string; content: string }[], at: number
  * The rules a thread's replies follow, sent as its instructions. The same on Claude and on Gemma:
  * Claude (the teaching model) keeps them for the thread's whole process; Gemma reads them each turn.
  */
+const NOTE_HOW = '<note>the point in 1 to 5 lines of Markdown (up to 12 for notation or a worked example), worded to make sense on its own later</note>'
+
 export const THREAD_RULES = `You are the tutor in a lesson. The learner has opened a side thread under one of your own explanations to ask about it. This thread is apart from the lesson: the lesson's question waits for them, and they go back to it when they understand.
 - Answer exactly what they ask, about that explanation (and the phrase they selected, when there is one). Stay on it; don't move the lesson on, start a new topic, or teach the next step.
 - Plain prose, short: usually under 150 words, more only if they ask for it. One idea at a time. A small worked example, a few lines of code or a table when it makes the point faster.
 - No analogies or jokes unless they ask. No praise or filler.
 - Never give away the answer to the lesson's waiting question, even if they ask: help them understand the idea so they can answer it themselves.
-- Don't set questions, mark anything, or write lesson tags (<ask>, <grade>, <plan>, <continue/>, <note>, <summary>, <card>). A quick check question in plain words is fine when it helps.
+- Don't set questions, mark anything, or write lesson tags (<ask>, <grade>, <plan>, <continue/>, <summary>, <card>). A quick check question in plain words is fine when it helps.
+- You can write to their notes for this lesson. When they ask you to save, note or keep something ("save this to my notes"), or when you have just explained a point worth rereading later (a rule, a reason, a definition, a correction of what they misunderstood), end your reply with ${NOTE_HOW}. It goes into their notes under "From the lesson", and they see it marked "Added to your notes". At most one a reply, never one that repeats an earlier note. Never say you can't write to their notes.
 - You may use your tools (run code, query the lesson's data, draw a visual) when showing is clearer than telling.`
+
+/** On Claude a thread saves with Tide's save_to_notes tool (main/tideMcpTools); the tag works there too */
+export const THREAD_NOTE_TOOL = `- Here you have Tide's save_to_notes tool: save a point to their notes by calling it with the point, rather than writing a <note> tag, then say in a few words that it's in their notes.`
 
 /** One tutor turn of the lesson, briefly, for the thread's context */
 function lessonLine(t: { role: string; content: string }): string {
@@ -144,6 +152,74 @@ export function threadReplyText(content: string): string {
     .join('\n\n')
 }
 
+/** A thread reply split into what is said and what went into the notes (its <note> blocks) */
+export function replyParts(content: string): { text: string; notes: string[] } {
+  const blocks = parseBlocks(hideWorking(content))
+  return {
+    text: blocks
+      .map((b) => (b.kind === 'text' || b.kind === 'summary' || b.kind === 'grade' || b.kind === 'challenge' ? b.text : b.kind === 'ask' ? b.prompt : ''))
+      .filter(Boolean)
+      .join('\n\n'),
+    notes: blocks.filter((b): b is Extract<Block, { kind: 'note' }> => b.kind === 'note').map((b) => b.text.trim()).filter(Boolean)
+  }
+}
+
+/** A point to save, as the tool or the model gave it: its own tags taken off, kept to a sane length */
+export function cleanNoteText(s: string): string {
+  return s.replace(/<\/?note>/gi, '').trim().slice(0, 2400).trim()
+}
+
+/** Adds a saved point to a reply, as a <note> block, so it shows there and goes into the notes with it */
+export const withNote = (content: string, note: string) => {
+  const t = cleanNoteText(note)
+  if (!t) return content
+  return `${content.replace(/\s+$/, '')}${content.trim() ? '\n\n' : ''}<note>${t}</note>`
+}
+
+/** Asked, in the thread, to save something to their notes */
+export const wantsSave = (text: string) =>
+  /\b(save|add|put|write|keep|copy|jot)\b[^.?!]{0,40}\b(to|in|into|on)\b[^.?!]{0,12}\bnotes?\b/i.test(text) || /\bnote (this|that|it) down\b|\bmake a note\b/i.test(text)
+
+/**
+ * What to save when they asked to and the reply saved nothing: the thread's previous answer, else
+ * the phrase the thread is about, else the explanation it hangs off. Empty when there is nothing.
+ */
+export function saveFallback(t: Pick<LessonThread, 'messages' | 'quote'>, output = ''): string {
+  const asks = t.messages.map((m, i) => (m.role === 'user' ? i : -1)).filter((i) => i >= 0)
+  const last = asks[asks.length - 1] ?? t.messages.length
+  const before = t.messages.slice(0, last).reverse().find((m) => m.role === 'assistant' && m.content.trim())
+  if (before) return replyParts(before.content).text.trim()
+  if (t.quote) return t.quote
+  return outputText(output).slice(0, 1200).trim()
+}
+
+/**
+ * Everything a thread put in the lesson's notes: each finished reply's <note> blocks, and the
+ * replies you saved with "Save to notes". A reply still being written adds nothing yet.
+ */
+export function threadNotes(t: LessonThread, writing = false): string[] {
+  const out: string[] = []
+  t.messages.forEach((m, i) => {
+    if (m.role !== 'assistant' || (writing && i === t.messages.length - 1)) return
+    out.push(...replyParts(m.content).notes)
+    if (t.saved?.includes(i)) {
+      const r = replyTakeaway(t, i)
+      if (r) out.push(r)
+    }
+  })
+  return out
+}
+
+/** One reply saved as it is: the question it answered in bold, then the answer, as a quote */
+export function replyTakeaway(t: Pick<LessonThread, 'messages'>, at: number): string {
+  const reply = t.messages[at]
+  if (reply?.role !== 'assistant') return ''
+  const body = replyParts(reply.content).text.trim()
+  if (!body) return ''
+  const q = t.messages.slice(0, at).reverse().find((m) => m.role === 'user')?.content.trim() ?? ''
+  return [...(q ? [`**${oneLine(q)}**`, ''] : []), body].join('\n').split('\n').map((l) => (l.trim() ? `> ${l}` : '>')).join('\n')
+}
+
 /** What a thread was about, in a few words: the selected phrase, else its first question */
 export function threadAbout(t: Pick<LessonThread, 'quote' | 'messages'>): string {
   const q = t.messages.find((m) => m.role === 'user')?.content ?? ''
@@ -172,6 +248,31 @@ export function threadTakeaway(t: LessonThread): string {
 
 /** Questions you asked in a thread */
 export const asked = (t: Pick<LessonThread, 'messages'>) => t.messages.filter((m) => m.role === 'user').length
+
+/** The tutor's message ends on a question for the learner, so what they send next is their answer to it */
+const checks = (reply: string) => /\?\s*(\*{0,2}|\)|\$)\s*$/.test(reply.trim()) || /\?\s*\n[^\n]{0,80}$/.test(reply.trim())
+
+/**
+ * The questions the learner asked in a thread, for its chip: the first message, and after it only
+ * the ones that read as questions. An answer to the tutor's own check ("128", "01100?") is not one:
+ * seen live, a thread where the learner asked once showed "15 questions".
+ */
+export function questionsAsked(t: Pick<LessonThread, 'messages'>): number {
+  let n = 0
+  t.messages.forEach((m, i) => {
+    if (m.role !== 'user') return
+    const s = m.content.trim()
+    const before = t.messages[i - 1]
+    if (n === 0) return void n++
+    // Answering the tutor's check: a question only when it also asks something of its own
+    if (before?.role === 'assistant' && checks(before.content)) {
+      if (ASKING.test(s) || /\b(can|could|would) you\b|\bwhy\b/i.test(s)) n++
+      return
+    }
+    if (ASKING.test(s) || /\?/.test(s) || /\b(can|could|would) you\b/i.test(s)) n++
+  })
+  return n
+}
 
 /**
  * Threads to show again: each must still hang off the same output (the lesson can be started again

@@ -6,7 +6,7 @@
  * the real ones.
  */
 import { isBlocked } from './readings'
-import { hostOf, planSteps, quoteCheck, readingBlock, unreadable, type Candidate, type LedPlan, type StepReading } from './sourceLed'
+import { READING_HERE, hostOf, plain, planSteps, quoteCheck, readingBlock, unreadable, type Candidate, type LedPlan, type StepReading } from './sourceLed'
 import { AUTHORITY, UNLISTED, academicHost, statedLicence, trustedSite } from './trustedSources'
 
 /** A passage from the search index of your notes folder */
@@ -173,11 +173,27 @@ export interface TapOptions {
   cut?: () => void
 }
 
+const HERE = /<the-reading\s*\/?>/i
+/** Where a next step's reading goes when the tutor didn't say: before its question or problem */
+const BEFORE = /<the-reading\s*\/?>|<ask\b|<exercise\b|\*\*Problem\b/i
+const OPENERS = [READING_HERE, '<ask', '<exercise', '**Problem']
+
+/** How much of the end of `t` might be the start of a place for the reading, still arriving */
+const partial = (t: string, all: boolean) => {
+  for (let k = Math.min(t.length, 15); k > 0; k--) {
+    const tail = t.slice(-k).toLowerCase()
+    if ((all ? OPENERS : OPENERS.slice(0, 1)).some((o) => o.toLowerCase().startsWith(tail))) return k
+  }
+  return 0
+}
+
 /**
  * The tutor's reply as it streams, with the reading put in by Tide, never by the model: at the top
- * of the reply, or straight after the mark once the mark is "correct". And when the plan has just
- * been written and its first step has a reading, the turn ends at the plan with "carry on", so the
- * step opens with the reading instead of the tutor's own explanation.
+ * of the reply, or with the next step's opening. That is after a mark that is "correct" (or at once
+ * when the learner asked to move on), and not straight under the mark: once the tutor has closed
+ * this step and opened the next, where it writes <the-reading/>, or else just before its question.
+ * And when the plan has just been written and its first step has a reading, the turn ends at the
+ * plan with "carry on", so the step opens with the reading instead of the tutor's own explanation.
  */
 export function ledTap(o: TapOptions) {
   let seen = ''
@@ -185,13 +201,45 @@ export function ledTap(o: TapOptions) {
   let decided = false
   let planChecked = false
   let ended = false
+  // The reading waits for its place in the reply
+  let pending = false
+  // Text held back: it may be the start of that place
+  let held = ''
   const block = o.reading ? readingBlock(o.reading) : ''
+  /** Passes text on, putting a waiting reading in its place and taking out the tutor's marker */
+  const out = (text: string) => {
+    let t = held + text
+    held = ''
+    for (;;) {
+      const m = (pending ? BEFORE : HERE).exec(t)
+      if (!m) break
+      const lead = t.slice(0, m.index)
+      const marker = HERE.test(m[0])
+      if (pending) {
+        o.emit(`${lead.replace(/\s+$/, '')}\n\n${block}\n\n`)
+        pending = false
+        placed = true
+        t = marker ? t.slice(m.index + m[0].length).replace(/^\s+/, '') : t.slice(m.index)
+      } else {
+        o.emit(lead)
+        t = t.slice(m.index + m[0].length)
+      }
+    }
+    const k = partial(t, pending)
+    held = k ? t.slice(-k) : ''
+    o.emit(k ? t.slice(0, -k) : t)
+  }
   return {
     delta(text: string) {
       if (ended) return
       if (o.plan.top !== undefined && block && !placed) {
         placed = true
         o.emit(`${block}\n\n`)
+      }
+      // Moving on, as the learner asked: the next step's reading opens it, mark or no mark
+      if (o.plan.onMove !== undefined && block && !placed && !decided) {
+        decided = true
+        pending = true
       }
       const before = seen.length
       seen += text
@@ -201,12 +249,9 @@ export function ledTap(o: TapOptions) {
           decided = true
           const end = at + '</grade>'.length
           const verdict = /<grade\b[^>]*verdict\s*=\s*["']?(correct|partial|wrong)/i.exec(seen.slice(0, end))?.[1]?.toLowerCase()
-          o.emit(text.slice(0, Math.max(0, end - before)))
-          if (verdict === 'correct') {
-            placed = true
-            o.emit(`\n\n${block}\n\n`)
-          }
-          o.emit(text.slice(Math.max(0, end - before)).replace(placed ? /^\s+/ : /^$/, ''))
+          out(text.slice(0, Math.max(0, end - before)))
+          if (verdict === 'correct') pending = true
+          out(text.slice(Math.max(0, end - before)))
           return
         }
       }
@@ -218,13 +263,27 @@ export function ledTap(o: TapOptions) {
           const steps = planSteps(seen.slice(0, end))
           if (steps.length && o.firstReading(steps)) {
             ended = true
-            o.emit(`${text.slice(0, Math.max(0, end - before))}\n\n<continue/>`)
+            out(text.slice(0, Math.max(0, end - before)))
+            o.emit(`${held}\n\n<continue/>`)
+            held = ''
             o.cut?.()
             return
           }
         }
       }
-      o.emit(text)
+      out(text)
+    },
+    /** The reply is written: what was held back goes out, and a reading still waiting for its place closes the reply */
+    end() {
+      if (ended) return
+      const rest = held.replace(HERE, '')
+      held = ''
+      if (rest) o.emit(rest)
+      if (pending) {
+        pending = false
+        placed = true
+        o.emit(`\n\n${block}`)
+      }
     },
     /** The reply is being written again from the start */
     reset() {
@@ -232,6 +291,8 @@ export function ledTap(o: TapOptions) {
       placed = false
       decided = false
       planChecked = false
+      pending = false
+      held = ''
     },
     /** A reading was put into this reply */
     get placed() {
@@ -245,5 +306,8 @@ export function quoteNote(reply: string, reading: StepReading | undefined, answe
   if (!reading) return ''
   const grade = /<grade\b[^>]*>([\s\S]*?)<\/grade>/i.exec(reply)?.[1] ?? ''
   const missing = quoteCheck(grade, reading.text, answer).missing
-  return missing.length ? `\n\n> **Worth checking:** the mark quotes “${missing[0]}”, which is not in the reading. Read the passage itself before relying on that line.` : ''
+  if (!missing.length) return ''
+  // On one line, so the quotation stays inside the note however it was laid out
+  const quote = plain(missing[0]).replace(/^[\s,;:.]+|[\s,;:]+$/g, '')
+  return `\n\n> **Worth checking:** the mark quotes “${quote}”, which is not in the reading. Read the passage itself before relying on that line.`
 }

@@ -1405,7 +1405,7 @@ async function loop(messages: ApiMessage[], ctx: LoopContext, depth: number, onT
       const key = `${call.name}:${call.arguments.replace(/\s+/g, '')}`
       const content = seen.has(key)
         ? 'You already ran exactly this call; its results are above. Use them, try a different query, or answer.'
-        : (await runTool(call, ctx, depth)) + '\n\n(When you use any of these, cite their numbers like [3].)'
+        : (await runTool(call, ctx, depth)) + '\n\n(When you use any of these, cite their numbers like [3]; in a lesson, link a note by its title, [[Note title]], instead.)'
       seen.add(key)
       messages.push({ role: 'tool', tool_call_id: call.id, name: call.name, content })
     }

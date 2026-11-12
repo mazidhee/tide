@@ -167,15 +167,6 @@ export async function reviewRecall(id: string, grade: 'again' | 'hard' | 'good' 
 export const recallStats = () => recall()?.stats(Date.now()) ?? { total: 0, due: 0, settled: 0 }
 export const recallItems = (): RecallItem[] => recall()?.all() ?? []
 
-/** A lesson step skipped with "I've got this, move on": kept for recall, and when it comes back (null when nothing was kept) */
-export async function keepSkipped(item: { prompt: string; topic: string; lesson: string; path?: string }): Promise<number | null> {
-  const prompt = String(item?.prompt ?? '').trim().slice(0, 600)
-  const topic = String(item?.topic ?? '').trim()
-  if (!prompt || !topic) return null
-  await keepForRecall([{ prompt, topic, lesson: String(item.lesson ?? 'lesson') }], item.path)
-  return recallItems().find((i) => i.prompt === prompt && i.topic === topic)?.due ?? null
-}
-
 // ---------- Hook for guided projects (main/workshop.ts) ----------
 
 /** Questions to bring back in a later lesson on their topic, from outside a lesson. Nothing from a private project is kept */

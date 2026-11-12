@@ -239,4 +239,10 @@ describe('what a turn sends', () => {
     expect(engine.isAnswer(req("I don't know"), "I don't know")).toBe(false)
     expect(engine.isAnswer(req('My question: show me a split first'), 'My question: show me a split first')).toBe(false)
   })
+
+  it('gives a request no marking call: "teach me again" and "can we move on" (seen live, marked by Opus)', () => {
+    const req = (said: string) => ({ id: 'x', scope: { kind: 'none' as const }, session: true, messages: [{ role: 'assistant' as const, content: 'Q <ask type="short">?</ask>' }, { role: 'user' as const, content: said }] })
+    for (const said of ["Answer: I don't really remember the conversion. Can you teach me again from scratch?", 'Answer: can we move on though i understadn this']) expect(engine.isAnswer(req(said), said)).toBe(false)
+    expect(engine.isAnswer(req('Answer: 10010110, can we move on'), 'Answer: 10010110, can we move on')).toBe(true)
+  })
 })

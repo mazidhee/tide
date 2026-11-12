@@ -224,12 +224,16 @@ fn tex_of(math_tag: &Tag, inner: &str) -> Option<String> {
       break;
     }
   }
-  let tex = tex.filter(|t| !t.is_empty()).or_else(|| {
-    // Wikipedia's Parsoid output keeps the source in data-mw
-    let mw = attr(math_tag.attrs, "data-mw")?;
-    let v: serde_json::Value = serde_json::from_str(&mw).ok()?;
-    v.pointer("/body/extsrc")?.as_str().map(|s| s.trim().to_string())
-  })?;
+  let tex = tex
+    .filter(|t| !t.is_empty())
+    .or_else(|| {
+      // Wikipedia's Parsoid output keeps the source in data-mw
+      let mw = attr(math_tag.attrs, "data-mw")?;
+      let v: serde_json::Value = serde_json::from_str(&mw).ok()?;
+      v.pointer("/body/extsrc")?.as_str().map(|s| s.trim().to_string())
+    })
+    // And every MathML formula Wikipedia writes says itself in TeX in its alttext
+    .or_else(|| attr(math_tag.attrs, "alttext").map(|a| a.trim().to_string()).filter(|a| !a.is_empty()))?;
   // Wikipedia wraps every formula in {\displaystyle ...}
   let t = tex.trim();
   let clean = t.strip_prefix(r"{\displaystyle").and_then(|r| r.strip_suffix('}')).map(str::trim).unwrap_or(t);
@@ -458,11 +462,47 @@ impl TextOut {
   }
 }
 
+/// A superscript's or subscript's text in the characters that write it raised or lowered (2⁴, 3A₁₆),
+/// when every character has one; None when one hasn't
+fn scripted(text: &str, sup: bool) -> Option<String> {
+  const SUP: &[(char, char)] = &[('0', '⁰'), ('1', '¹'), ('2', '²'), ('3', '³'), ('4', '⁴'), ('5', '⁵'), ('6', '⁶'), ('7', '⁷'), ('8', '⁸'), ('9', '⁹'), ('+', '⁺'), ('-', '⁻'), ('−', '⁻'), ('=', '⁼'), ('(', '⁽'), (')', '⁾'), ('n', 'ⁿ'), ('i', 'ⁱ')];
+  const SUB: &[(char, char)] = &[('0', '₀'), ('1', '₁'), ('2', '₂'), ('3', '₃'), ('4', '₄'), ('5', '₅'), ('6', '₆'), ('7', '₇'), ('8', '₈'), ('9', '₉'), ('+', '₊'), ('-', '₋'), ('−', '₋'), ('=', '₌'), ('(', '₍'), (')', '₎'), ('a', 'ₐ'), ('e', 'ₑ'), ('i', 'ᵢ'), ('j', 'ⱼ'), ('k', 'ₖ'), ('m', 'ₘ'), ('n', 'ₙ'), ('o', 'ₒ'), ('t', 'ₜ'), ('x', 'ₓ')];
+  let table = if sup { SUP } else { SUB };
+  let t = text.trim();
+  if t.is_empty() {
+    return None;
+  }
+  t.chars().map(|c| table.iter().find(|(from, _)| *from == c).map(|(_, to)| *to)).collect()
+}
+
+/// A superscript or subscript as it reads in plain text: raised or lowered characters when they
+/// exist (16 = 2⁴, 3A₁₆), a reference mark ([3]) as it is, otherwise ^(…) or _(…) so 2^(n+k) is
+/// never read as the number 2n+k
+fn script_text(text: &str, sup: bool) -> String {
+  let t = text.trim();
+  if let Some(s) = scripted(t, sup) {
+    return s;
+  }
+  if t.is_empty() || (t.starts_with('[') && t.ends_with(']')) || (sup && ["st", "nd", "rd", "th"].contains(&t)) {
+    // [3], or an ordinal's "th" / "er": nothing to raise
+    return t.to_string();
+  }
+  let mark = if sup { '^' } else { '_' };
+  if t.chars().count() == 1 {
+    format!("{mark}{t}")
+  } else {
+    format!("{mark}({t})")
+  }
+}
+
 /// The article's HTML as plain text: blocks apart by a blank line, list items and table rows on lines
-/// of their own, and preformatted text (code) exactly as laid out
+/// of their own, preformatted text (code) exactly as laid out, and superscripts and subscripts kept
+/// (2⁴, not 24)
 pub fn html_to_text(html: &str) -> String {
   let mut out = TextOut { s: String::with_capacity(html.len() / 2), space: false };
   let mut pre = 0usize;
+  // Inside a <sup> or <sub>: where its text starts in the output, and which it is
+  let mut script: Option<(usize, bool, usize)> = None;
   let mut at = 0;
   let text = |out: &mut TextOut, raw: &str, pre: usize| {
     let t = html_escape::decode_html_entities(raw);
@@ -491,6 +531,32 @@ pub fn html_to_text(html: &str) -> String {
         continue;
       }
       "td" | "th" if t.closing => out.space = true,
+      "sup" | "sub" if pre == 0 => {
+        let sup = name == "sup";
+        match (&mut script, t.closing) {
+          // A space before it stays before it
+          (None, false) => {
+            if out.space && !out.s.is_empty() && !out.s.ends_with('\n') {
+              out.s.push(' ');
+            }
+            out.space = false;
+            script = Some((out.s.len(), sup, 1));
+          }
+          (Some((_, _, depth)), false) => *depth += 1,
+          (Some((start, outer, depth)), true) => {
+            *depth -= 1;
+            if *depth == 0 {
+              let (start, outer) = (*start, *outer);
+              let inner = out.s.split_off(start.min(out.s.len()));
+              out.s.push_str(&script_text(&inner, outer));
+              out.space = false;
+              script = None;
+            }
+          }
+          (None, true) => {}
+        }
+        continue;
+      }
       _ => {}
     }
     if pre > 0 {
@@ -555,6 +621,23 @@ pub fn extract(html: &str, url: &str) -> Result<Page, String> {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn keeps_superscripts_and_subscripts() {
+    let t = html_to_text("<p>More specifically, 16 = 2<sup>4</sup>, so 3A<sub>16</sub> = 0011 1010<sub>2</sub>.</p>");
+    assert_eq!(t.trim(), "More specifically, 16 = 2⁴, so 3A₁₆ = 0011 1010₂.");
+    // A reference mark stays as it is, and what has no raised form is still marked as raised
+    let t = html_to_text("<p>for this reason.<sup class=\"reference\">[3]</sup> It is 2<sup>n+k</sup> and x<sup>y</sup>, the 5<sup>th</sup>.</p>");
+    assert_eq!(t.trim(), "for this reason.[3] It is 2^(n+k) and x^y, the 5th.");
+    assert_eq!(html_to_text("<p>a <sub>12</sub> b</p>").trim(), "a ₁₂ b");
+  }
+
+  #[test]
+  fn a_formula_without_annotation_is_read_from_its_alttext() {
+    let (out, formulas) = take_formulas(r#"<p>Add them: <math alttext="{\displaystyle 12\times 16^{3}}"><mi>x</mi></math></p>"#);
+    assert_eq!(formulas, vec![r"$12\times 16^{3}$".to_string()]);
+    assert!(out.contains("TIDEMATH0X"));
+  }
 
   #[test]
   fn reads_attributes_and_tags() {

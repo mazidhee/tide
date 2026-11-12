@@ -279,6 +279,13 @@ export function chooseExcerpt(text: string, step: string, topic = '', max = EXCE
   }
   // Never end on a heading with nothing under it
   while (b > seed && paras[b].heading) words -= paras[b--].words
+  // Nor on a line that introduces what comes next ("…and add the resulting values:"): what it
+  // introduces (a formula, an example, code) comes too, or the line goes
+  if (/:\s*$/.test(paras[b].text)) {
+    const next = paras[b + 1]
+    if (next && !next.junk && !next.heading && words + next.words <= limit) words += paras[++b].words
+    else if (b > seed) words -= paras[b--].words
+  }
   const start = paras[a].start
   const end = paras[b].end
   const out = text.slice(start, end)
@@ -317,16 +324,38 @@ export function quoteCheck(grade: string, reading: string, answer = ''): { found
   const found: string[] = []
   const missing: string[] = []
   // Tags out first: an attribute's quotes (verdict="correct") would otherwise pair with a quotation's
-  for (const m of grade.replace(/<[^>]*>/g, ' ').matchAll(/[\u201c"]([^\u201c\u201d"]{12,400})[\u201d"]/g)) {
-    const parts = m[1]
+  for (const q of quotations(grade.replace(/<[^>]*>/g, ' '))) {
+    if (q.length < 12 || q.length > 400) continue
+    const parts = q
       .split(/\s*(?:\u2026|\.{3}|\[\u2026\]|\[\.{3}\])\s*/)
       .map((p) => norm(p).replace(/^[\s,;:.]+|[\s,;:.!?]+$/g, ''))
       .filter((p) => p.split(' ').length >= 4)
     if (!parts.length) continue
-    if (parts.every((p) => source.includes(p))) found.push(m[1])
-    else if (!parts.every((p) => own.includes(p))) missing.push(m[1])
+    if (parts.every((p) => source.includes(p))) found.push(q)
+    else if (!parts.every((p) => own.includes(p))) missing.push(q)
   }
   return { found, missing }
+}
+
+/**
+ * The quotations in some text, paired the way a reader pairs them: in order, a straight quote
+ * opening and the next one closing, a curly one by its direction. Every quotation is paired,
+ * however short, so a short one ("0010 0111") can't leave its closing quote to open the next, and
+ * the words between two quotations are never taken for one.
+ */
+export function quotations(text: string): string[] {
+  const out: string[] = []
+  let open = -1
+  let curly = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    // Inside a quotation, a quote of the other kind is part of it (“he said "no"”); a closing one opens nothing
+    if (c === '\u201c' && open < 0) (open = i), (curly = true)
+    else if (c === '\u201d' && open >= 0 && curly) out.push(text.slice(open + 1, i)), (open = -1)
+    else if (c === '"' && open < 0) (open = i), (curly = false)
+    else if (c === '"' && open >= 0 && !curly) out.push(text.slice(open + 1, i)), (open = -1)
+  }
+  return out
 }
 
 // ---------- Ranking ----------
@@ -560,9 +589,20 @@ export const planSteps = (reply: string): string[] => {
  * Where a lesson is, read from the tutor's replies alone (so it survives a restart and needs no
  * memory): the plan, which step it is on and which readings have been shown. A step taught from a
  * reading is done at the first answer marked correct; a step the tutor teaches itself is done
- * after two right in a row, as its own rules say.
+ * after two right in a row, as its own rules say. `moved` says which replies answered a request to
+ * move on: the tutor was told to go to the next step, so the lesson does too.
  */
-export function ledState(replies: string[]): LedState {
+export function ledState(replies: string[], moved: boolean[] = []): LedState {
+  return ledWalk(replies, moved).state
+}
+
+/**
+ * The same walk through the replies, with the step each reply starts: the plan's reply starts the
+ * first, and a reply whose mark (or reading, or a move on) takes the lesson to a new step starts
+ * that one. Null for a reply that starts none. What the lesson shows as "Step 3: …" comes from this.
+ */
+export function ledWalk(replies: string[], moved: boolean[] = []): { state: LedState; starts: (number | null)[] } {
+  const starts: (number | null)[] = replies.map(() => null)
   let planAt = -1
   let planned = ''
   replies.forEach((r, i) => {
@@ -574,10 +614,12 @@ export function ledState(replies: string[]): LedState {
     }
   })
   const state: LedState = { steps: [], cur: 0, streak: 0, shown: new Map(), fresh: false }
-  if (planAt < 0) return state
+  if (planAt < 0) return { state, starts }
   state.steps = planSteps(replies[planAt])
+  starts[planAt] = 0
   let taught = false
   for (let i = planAt; i < replies.length; i++) {
+    const was = state.cur
     const text = i === planAt ? replies[i].slice(replies[i].toLowerCase().lastIndexOf('</plan>') + 7) : replies[i]
     if (text.replace(/<\/?continue\b[^>]*>/gi, '').trim()) taught = true
     const events: { at: number; verdict?: string; reading?: StepReading }[] = []
@@ -590,9 +632,14 @@ export function ledState(replies: string[]): LedState {
         state.streak = 0
       } else state.cur = afterMark(state, e.verdict!, true)
     }
+    if (i > planAt && moved[i] && state.cur === was && state.cur < state.steps.length) {
+      state.cur++
+      state.streak = 0
+    }
+    if (i > planAt && state.cur !== was && state.cur < state.steps.length) starts[i] = state.cur
   }
   state.fresh = !taught
-  return state
+  return { state, starts }
 }
 
 /** The step the lesson is on after a mark (and, when `keep`, the streak kept in the state) */
@@ -608,13 +655,16 @@ export function afterMark(state: LedState, verdict: string, keep = false): numbe
   return streak >= 2 ? state.cur + 1 : state.cur
 }
 
-export type Said = 'answer' | 'go' | 'ask'
+/** move: they asked to move on (an answer may come with it) */
+export type Said = 'answer' | 'go' | 'ask' | 'move'
 
 export interface LedPlan {
   /** This step's reading opens the reply */
   top?: number
-  /** This step's reading follows the mark, if the mark is "correct" */
+  /** This step's reading opens the next step, if the mark is "correct" */
   onCorrect?: number
+  /** This step's reading opens the next step, which the learner asked to move on to */
+  onMove?: number
   /** The answer is to a question on this step's reading: it is marked against it */
   marking?: number
 }
@@ -625,6 +675,11 @@ export function planTurn(state: LedState, said: Said, has: (step: number) => boo
   if (!state.steps.length || state.cur >= state.steps.length) return plan
   if (state.fresh && !state.shown.has(state.cur) && has(state.cur)) {
     plan.top = state.cur
+    return plan
+  }
+  if (said === 'move') {
+    const next = state.cur + 1
+    if (next < state.steps.length && !state.shown.has(next) && has(next)) plan.onMove = next
     return plan
   }
   if (said !== 'answer') return plan
@@ -638,6 +693,9 @@ export function planTurn(state: LedState, said: Said, has: (step: number) => boo
 
 /** Marks a turn as source-led, for routing (main/agent) and for tests */
 export const LED_MARK = '(Tide: source-led.'
+
+/** Where the tutor says the next step's reading goes: once it has closed one step and opened the next */
+export const READING_HERE = '<the-reading/>'
 
 /** The tutor's part when a reading is put in front of the student */
 export const READING_RULES = `Your part in a step taught from a reading:
@@ -661,9 +719,15 @@ export function turnNote(plan: LedPlan, state: LedState, reading: StepReading | 
   const parts: string[] = []
   const marked = plan.marking !== undefined ? state.shown.get(plan.marking) : undefined
   if (marked) parts.push(`${MARKING_RULES.replace(/^Mark this answer against the reading/, `Mark this answer against the reading ${quoted(marked)} shown earlier`)}`)
-  if (reading && (plan.top !== undefined || plan.onCorrect !== undefined)) {
+  if (reading && (plan.top !== undefined || plan.onCorrect !== undefined || plan.onMove !== undefined)) {
     const step = state.steps[reading.step] ?? ''
-    const when = plan.top !== undefined ? 'at the top of your reply' : 'straight after your mark, if (and only if) you mark this answer correct. If you do not, stay on the current step and ignore the rest of this note'
+    const opening = `close the step you were on and open this one in a sentence or two, then write ${READING_HERE} on a line of its own where the reading belongs, then your question on it`
+    const when =
+      plan.top !== undefined
+        ? 'at the top of your reply'
+        : plan.onMove !== undefined
+          ? `as this step opens: they asked to move on, so ${opening}`
+          : `as this step opens, if (and only if) you mark this answer correct: after your mark, ${opening}. If you do not mark it correct, stay on the current step and ignore the rest of this note`
     parts.push(`The step "${step}" is taught from a source, not from your memory. Tide shows the student the reading below, word for word, ${when}. You never write it out yourself.\n${READING_RULES}\nThe reading, from ${quoted(reading)}:\n"""\n${reading.text}\n"""`)
   }
   return parts.length ? `${LED_MARK} ${parts.join('\n\n')})` : ''

@@ -1,4 +1,5 @@
 import { splitSay } from './characters'
+import { curiosityOpening, curiosityRules, type CuriositySetup } from './explore'
 import { retestInstructions } from './mistakes'
 import { quizTopics } from './curriculum'
 import { checkInstructions, reviewInstructions, type QuickCheck, type ReviewSetup } from './review'
@@ -234,15 +235,19 @@ export const SESSION_FORMAT = `Format rules (the app turns these tags into inter
   Types: predict (they guess before you explain), short (a sentence or two), explain (explain it back in their own words), choice (multiple choice, put options in the tag: <ask type="choice" options="first|second|third|fourth">question</ask>), error (show a flawed statement or code and ask them to find the mistake), problem (a worked problem or calculation), code (they write code in an editor that runs it: <ask type="code" lang="python">task</ask>; lang is the language being taught: python, javascript, c or cpp run here).
 - Use choice when picking is the real test (spotting the right idea, the next step, or a misconception) and typing would only slow them down. Write the correct option first, then make each wrong option from one specific misconception, the same length and shape, with nothing that gives the answer away. They may add their reasoning to their pick: mark the reasoning too.
 - When they answer, judge it first: <grade verdict="correct|partial|wrong" score="0.0-1.0">one or two sentences: what was right and why, or the exact step that's wrong and why; no empty praise</grade>
-- Grade against your own solution, and quote the words of their answer that earned the verdict. "correct" means complete and right, not just heading the right way; a right answer with wrong or missing reasoning is "partial".
+- Grade against your own solution, and quote the words of their answer that earned the verdict. "correct" means the result is right and complete, not just heading the right way. A right final result without the working you asked for is still "correct": say in a few words that the working wasn't shown, or ask for the one check in your next question. "partial" is for a result that is incomplete, or reasoning they wrote that is wrong.
 - Before you set a problem, solve it yourself, and put your answer and the key steps after it in <solution>...</solution>. The student never sees it (so this isn't answering your own question); you grade their answer against it. When the answer is a number or an expression, also add <check lang="python">Python that works the answer out from scratch and asserts it equals yours (SymPy is available)</check>; for a code problem, a check that runs your reference solution on test cases with asserts. Tide runs every check before the student sees the problem: if it fails, the problem or your answer is wrong. A problem must be well posed: every quantity it asks about is defined and it has one clear answer.
-- If they got something wrong or partly wrong, capture the idea they missed as a flashcard: <card>question :: answer</card>
+- If they got something wrong or partly wrong, capture the idea they missed as a flashcard: <card>question :: answer</card>. Never after a "correct" mark: a right answer isn't a miss.
 - The student may send [hint]. Give the smallest hint that unblocks their thinking, and give more each time they ask again: a nudge, then a hint, then one worked step, then the answer.
-- The student may say they don't know. Then teach the idea briefly and ask an easier question.
+- The student may say they don't know, have forgotten, or ask you to teach it again. That is not an answer: never grade it. Teach the idea again, simply, then ask an easier question.
+- The student may ask to move on or skip. Respect it: never grade the request or argue for more practice. Mark an answer they sent with it, then go straight to the next step; Tide brings the skipped point back later as a recall question.
 - Their answers note how sure they were. Sure and wrong is a misconception: name it plainly, and test it again later in a new form. Unsure and right: give one more like it.
 - Never repeat a question in the same words. Before the summary, retest anything they missed in a new form.
 - Tide may add a note at the end of their message, starting "(Tide:". Follow it; they don't see it.
 - Never answer your own question. Ask one thing at a time. Keep your turns short. No greetings, no introductions, no preamble: start with the substance.
+- Write questions in plain words about the thing itself ("Convert 150 to binary"): no invented people, stories or labels.
+- Cite the lesson's sources as [S1], [S2] and nothing else. For one of their notes you read with a tool, link it by its title, [[Note title]], never by a result number like [2].
+- Never write a source's words out in a tag of your own: Tide shows readings.
 - Math in LaTeX ($...$, $$...$$). Code in fenced blocks.`
 
 export interface SessionSetup {
@@ -282,6 +287,8 @@ export interface SessionSetup {
     subject?: SubjectProfile
     /** A lesson of an open course imported from GitHub (shared/courses): taught from its own text, in its sections' order */
     course?: CourseRef
+    /** A short side lesson, for curiosity, on something kept to explore later (shared/explore) */
+    curiosity?: CuriositySetup
   }
 }
 
@@ -298,7 +305,7 @@ export function withStrategy(setup: SessionSetup, scope: ChatScope): SessionSetu
 /** The router's choice for a lesson that hasn't been told how to teach, with how sure it is */
 export function strategyChoice(setup: SessionSetup, scope: ChatScope): StrategyChoice | null {
   // A course's lesson is taught in the course's own order, from its own text
-  if (setup.mode !== 'teach' || setup.options?.strategy || setup.options?.retest || setup.options?.course) return null
+  if (setup.mode !== 'teach' || setup.options?.strategy || setup.options?.retest || setup.options?.course || setup.options?.curiosity) return null
   const project = setup.options?.project
   const source = project ? (project.kind === 'build' ? 'brief' : 'design-doc') : scope.kind === 'pages' ? 'book' : scope.kind === 'note' ? 'note' : scope.kind === 'folder' ? 'notebook' : 'none'
   return chooseStrategy({ text: setup.topic, source, subject: project?.name ?? (scope.kind === 'folder' ? scope.path : undefined), can: { canvas: true, lab: true, code: true, maths: true } })
@@ -381,13 +388,14 @@ export function sessionInstructions(setup: SessionSetup): string {
   // The humanities' marking (<appraise>) and theology's rules come through it too, for a subject that is mainly texts and arguments or history
   const kit = lessonKit(setup.topic, setup.options?.subject)
   const course = setup.options?.course
-  const extra = [!setup.options?.refresh && !setup.options?.project && !course ? BIG_PICTURE : '', course ? courseRules(course).trim() : '', GROUNDED, kit.handsOn ? HANDS_ON : '', kit.sims, kit.toolkit, kit.humanities, setup.options?.why ? WHY_RULES : ''].filter(Boolean)
+  const extra = [!setup.options?.refresh && !setup.options?.project && !course && !setup.options?.curiosity ? BIG_PICTURE : '', course ? courseRules(course).trim() : '', GROUNDED, kit.handsOn ? HANDS_ON : '', kit.sims, kit.toolkit, kit.humanities, setup.options?.why ? WHY_RULES : ''].filter(Boolean)
   return extra.length ? `${base.trimEnd()}\n\n${extra.join('\n\n')}\n` : base
 }
 
 function baseInstructions({ mode, topic, options }: SessionSetup): string {
   const difficulty = options?.difficulty ?? 'normal'
   if (mode === 'teach' && options?.refresh) return `Topic: ${topic}.\n${REFRESH_RULES}\n`
+  if (mode === 'teach' && options?.curiosity) return `${curiosityRules(topic, options.curiosity)}\n`
   if (mode === 'teach' && options?.strategy && options.strategy !== 'problems' && !options.retest) {
     // Taught another way than problem sets: its own script, so the small model can't drift back
     const first: Partial<Record<Strategy, string>> = {
@@ -549,6 +557,7 @@ export const MODE_LABEL: Record<SessionMode, string> = {
 export function openingMessage({ mode, topic, options }: SessionSetup): string {
   if (options?.retest?.length) return `Retest me on the ${options.retest.length} question${options.retest.length === 1 ? "" : "s"} I got wrong before.`
   if (mode === 'teach' && options?.refresh) return `Refresh me on ${topic}: I learned it before.`
+  if (mode === 'teach' && options?.curiosity) return curiosityOpening(topic, options.curiosity)
   if (mode === 'teach') return `I want to learn ${topic} deeply. Start by finding out what I already know.`
   if (mode === 'quiz') return options?.placement ? `Check what I already know about ${options.placement.section}.` : `Quiz me on ${topic}.`
   if (mode === 'interview') return `I'm ready for the interview. ${topic}`
