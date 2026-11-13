@@ -33,12 +33,12 @@ Claude uses Tide's tools, and each call shows as a step above its answer:
 - make flashcards and keep questions for recall
 - record marks in **What you know**
 
-Lessons that aren't private can also use Claude's own web search and page reading, while **Web** is on.
+Lessons can also use Claude's own web search and page reading, while **Web** is on.
 
 Lessons draw the same simulations, diagrams, charts and readings whoever teaches.
 
 > [!warning] What never goes to Claude
-> A private project's notes and anything about your Metabase are always taught by Gemma on your Mac, whatever you pick. When this happens, the step above the answer says so.
+> Claude teaches everything, work projects and Metabase included. Gemma on your Mac takes over only when Claude can't answer (not installed, logged out, at its limit, offline, an error or a hang) or when you pick it, and the step above the answer says so.
 
 If Claude Code is missing or logged out, or your plan is at its limit, Gemma takes the turn and the step says why. **Settings → Usage** shows what Claude did: calls by model and job, how much was read from the cache, and how long the first words took.
 

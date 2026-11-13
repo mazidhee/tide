@@ -1,7 +1,7 @@
 /**
  * Source-led lessons: gathering the candidates a reading is chosen from, and placing the reading
  * in the tutor's reply as it streams. What touches the outside (the search index, web search, the
- * page reader) is passed in, so the rules here (what a private lesson may use, which pages are
+ * page reader) is passed in, so the rules here (which pages are
  * read, where the reading goes) are tested without the app or the network. main/sourceLed wires
  * the real ones.
  */
@@ -24,13 +24,11 @@ export interface GatherDeps {
   search(q: string, limit: number): Passage[]
   /** Every passage of one file, in reading order */
   chunks(path: string): Passage[]
-  /** The file is in a private project */
-  isPrivate(path: string): boolean
   webSearch(q: string): Promise<{ title: string; url: string }[]>
   read(url: string): Promise<{ title: string; text: string }>
   /** Pages already known for the topic: readings found for it, and explainers kept for it */
   known(topic: string): Promise<{ title: string; by?: string; url: string; explainer?: boolean }[]>
-  /** An ordinary public address (never this Mac, your network, your Metabase, or a signed link) */
+  /** An ordinary public address (never this Mac, your network, your Metabase, or a signed link): for third-party page readers */
   publicUrl(url: string): boolean
   now(): number
   /** The licence note recorded for a book added from a free library (Project Gutenberg, Standard Ebooks) */
@@ -39,8 +37,6 @@ export interface GatherDeps {
 
 export interface GatherOptions {
   topic: string
-  /** The lesson is in a private project or about your Metabase: only your own material, nothing looked up */
-  private: boolean
   /** Web search is on for this lesson */
   web: boolean
 }
@@ -52,11 +48,10 @@ const startOf = (id: string) => Number(id.match(/#p(\d+)-(\d+)$/)?.[2] ?? 0)
 
 /**
  * What you own that might teach this: the pages around the best match in up to three of your books
- * (their exact pages recorded), and the best-matching section of up to two of your notes. A file
- * in a private project is only ever used by a lesson that is itself private.
+ * (their exact pages recorded), and the best-matching section of up to two of your notes.
  */
 export function ownedCandidates(deps: GatherDeps, query: string, opts: GatherOptions): Candidate[] {
-  const hits = deps.search(query, 24).filter((h) => !NOT_A_SOURCE.test(h.path) && (opts.private || !deps.isPrivate(h.path)))
+  const hits = deps.search(query, 24).filter((h) => !NOT_A_SOURCE.test(h.path))
   const best = new Map<string, Passage>()
   for (const h of hits) if (!best.has(h.path)) best.set(h.path, h)
   const out: Candidate[] = []
@@ -117,11 +112,11 @@ const authority = (url: string) => {
 /**
  * Pages from the web that might teach this: what is already known for the topic, then what a
  * search finds, the trusted ones first (up to three), and one page nobody has listed only when
- * fewer than two trusted ones turned up. Nothing at all for a private lesson or with the web off:
- * no search, no page read, so not even the topic's name leaves this Mac.
+ * fewer than two trusted ones turned up. Nothing at all with the web off: no search, no page
+ * read, so not even the topic's name leaves this Mac.
  */
 export async function webCandidates(deps: GatherDeps, query: string, opts: GatherOptions, have: Set<string>, withKnown = false): Promise<Candidate[]> {
-  if (opts.private || !opts.web) return []
+  if (!opts.web) return []
   const known = withKnown ? await deps.known(opts.topic).catch(() => []) : []
   const found = await deps.webSearch(query).catch(() => [])
   const explainers = new Set(known.filter((k) => k.explainer).map((k) => k.url))

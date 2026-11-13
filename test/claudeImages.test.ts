@@ -1,8 +1,8 @@
 /**
  * Pictures go to Claude (main/imagePrep, main/claudeCli, main/ai claudeOr, main/exam): a photo of
  * handwritten working, a screenshot, a note's diagram is scaled down, sent as a stream-json image
- * block, and marked on Claude's marking model; Gemma takes it when Claude can't (its limit,
- * offline) or the work is private. Against a stand-in `claude` and a fake mlx-vlm server, never
+ * block, and marked on Claude's marking model; Gemma takes it only when Claude can't (its limit,
+ * offline). Against a stand-in `claude` and a fake mlx-vlm server, never
  * the real ones.
  */
 import { execFileSync } from 'child_process'
@@ -17,7 +17,6 @@ const dir = mkdtempSync(join(tmpdir(), 'tide-images-'))
 vi.mock('electron', () => ({ app: { getPath: () => dir, getAppPath: () => process.cwd(), on: () => {}, isPackaged: false }, net: { isOnline: () => true } }))
 const settings = { vaultPath: dir, libraryFolder: 'Library', ai: { baseUrl: 'http://127.0.0.1:9/v1', model: 'gemma', temperature: 0.3, autoStart: false, unloadAfterMinutes: 15, claude: {} } }
 vi.mock('../src/main/settings', () => ({ getSettings: () => settings }))
-vi.mock('../src/main/projects', async (orig) => ({ ...(await orig<object>()), privatePath: async (p: string) => p.startsWith('Secret') }))
 vi.mock('../src/main/learn', async (orig) => ({ ...(await orig<object>()), getNotebooks: async () => [{ path: 'Secret', name: 'Secret', project: { private: true, docs: [] } }] }))
 
 const policy = await import('../src/shared/gemmaPolicy')
@@ -210,11 +209,9 @@ beforeEach(async () => {
 })
 
 describe('routing pictures', () => {
-  it('marks photos of handwriting on Claude’s marking model, unless private, Metabase or Claude can’t', () => {
+  it('marks photos of handwriting on Claude’s marking model unless Claude can’t', () => {
     expect(policy.JOB_ROUTES.handwriting.role).toBe('mark')
     expect(policy.routeJob('handwriting', { claude: { main: true } })).toEqual({ who: 'claude', role: 'mark' })
-    expect(policy.routeJob('handwriting', { claude: { main: true }, private: true })).toEqual({ who: 'gemma', reason: 'private' })
-    expect(policy.routeJob('handwriting', { claude: { main: true }, metabase: true })).toEqual({ who: 'gemma', reason: 'metabase' })
     for (const why of ['limit', 'offline', 'logged-out', 'no-claude'] as const) expect(policy.routeJob('handwriting', { claude: { main: false, why } })).toEqual({ who: 'gemma', reason: why })
   })
   it('sends a job’s pictures to Claude as image blocks', async () => {
@@ -254,10 +251,10 @@ describe('exam photos of handwritten working', () => {
     expect(m.feedback).toBe('gemma saw 1')
     expect(fake.chats).toBe(1)
   })
-  it('stay on the Mac when the question names a private project', async () => {
+  it('go to Opus when the question names a once-private project or Metabase', async () => {
     await claudeIs({ main: true })
-    const m = await exam.markPart({ ...question, text: 'About the Secret project.' } as never, 0, '', [dataUrl(png(80, 60))])
-    expect(m.feedback).toBe('gemma saw 1')
-    expect(idle.gemmaDemand()?.reason).toBe('private')
+    const m = await exam.markPart({ ...question, text: 'About the Secret project and its Metabase.' } as never, 0, '', [dataUrl(png(80, 60))])
+    expect(m.feedback).toBe('marked by opus, saw 1 picture (image/png)')
+    expect(fake.chats).toBe(0)
   })
 })

@@ -32,7 +32,7 @@ export function ProjectHome({
   onEditor
 }: {
   plan: ProjectPlan
-  /** Claude can pair on this project (ready, and the project isn't private) */
+  /** Claude can pair on this project (it is ready) */
   claude: boolean
   onPlan(p: ProjectPlan): void
   onPair(mode: PairMode, text: string): void
@@ -197,7 +197,7 @@ export function ProjectHome({
             <h1>{plan.name}</h1>
             <p className="ip-meta">
               {plan.tier ? `${tierLabel(plan.tier)}${plan.area ? ` in ${areaLabel(plan.area).toLowerCase()}` : ''} · ` : ''}
-              {languageLabel(plan.language)} · {prog.done} of {prog.total} milestones · about {prog.hoursLeft} hours left{plan.private ? ' · Private, on this Mac' : ''}
+              {languageLabel(plan.language)} · {prog.done} of {prog.total} milestones · about {prog.hoursLeft} hours left
             </p>
             {score && (
               <p className="ip-score" title={score.next ? `${score.next.at - score.points} points to ${score.next.title}` : 'The top level'}>

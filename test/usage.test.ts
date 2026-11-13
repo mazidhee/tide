@@ -294,7 +294,7 @@ describe('aggregation', () => {
     expect(f.handedOver).toEqual([
       {
         reason: 'private',
-        label: 'Private notebook (stays on this Mac)',
+        label: 'Private notebook (older Tide)',
         count: 1
       },
       { reason: 'limit', label: 'Claude at its plan’s limit', count: 1 }

@@ -7,7 +7,6 @@ import { promises as fs } from 'fs'
 import { lessonMarkdown, lessonPage, summarise, type LessonRecord, type LessonSummary } from '@shared/lessonLog'
 import { digestLesson, openingNotes, priorLessonsNote, type LessonDigest } from '@shared/lessonMemory'
 import { knowledgeNoteFor, noteLessonKnowledge } from './knowledge'
-import { privatePath } from './projects'
 import { noteLesson, recallNote } from './recall'
 import { absPath, readText, uniquePath, writeText } from './vault'
 import type { VisualRecord } from '@shared/visuals'
@@ -106,22 +105,18 @@ export async function listLessons(): Promise<LessonSummary[]> {
 
 /**
  * What earlier lessons on this topic, or close to it, show: for the tutor, as a new lesson opens.
- * A lesson from a private project is left out unless this one is private too, since the note
- * goes wherever the lesson's first message goes.
  */
-export async function earlierLessons(topic: string, privateTurn: boolean, notId?: string): Promise<string> {
+export async function earlierLessons(topic: string, notId?: string): Promise<string> {
   const names = await fs.readdir(absPath(DIR)).catch(() => [] as string[])
   const digests: LessonDigest[] = []
   for (const n of names.filter((n) => n.endsWith('.json'))) {
     const r = await getLesson(n.replace(/\.json$/, ''))
     if (!r || r.id === notId || r.options?.placement) continue
-    const path = 'path' in r.scope ? r.scope.path : ''
-    if (!privateTurn && path && (await privatePath(path).catch(() => false))) continue
     const d = digestLesson(r)
     if (d) digests.push(d)
   }
   // Questions due for recall come first: the lesson opens with one of them. Then what those lessons
   // show, and last the wider picture: what around this topic is solid, shaky, or not yet in place
-  const known = await knowledgeNoteFor(topic, privateTurn).catch(() => '')
+  const known = await knowledgeNoteFor(topic).catch(() => '')
   return [openingNotes(recallNote(topic), priorLessonsNote(topic, digests)), known].filter(Boolean).join('\n\n')
 }

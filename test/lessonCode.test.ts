@@ -17,7 +17,6 @@ vi.mock('electron', () => ({
 }))
 vi.mock('../src/main/settings', () => ({ getSettings: () => ({ libraryFolder: 'Library', ai: { claude: {} } }), updateSettings: () => {} }))
 vi.mock('../src/main/claudeCli', async (orig) => ({ ...(await orig<object>()), checkClaude: async () => ({ installed: true, loggedIn: true, checkedAt: Date.now() }) }))
-let privateTurn = false
 vi.mock('../src/main/agent', () => {
   let n = 0
   return {
@@ -26,11 +25,9 @@ vi.mock('../src/main/agent', () => {
     nextStepId: () => `s${++n}`,
     stablePrompt: async (base: string) => `SYSTEM ${base.length}`,
     buildTurn: async (req: { messages: ChatMessage[] }, emit: (e: ChatEvent) => void, _s: AbortSignal, base: string) => ({
-      ctx: { private: privateTurn, sources: [], emitSources: () => {}, step: () => `s${++n}`, updateStep: () => {} },
+      ctx: { sources: [], emitSources: () => {}, step: () => `s${++n}`, updateStep: () => {} },
       messages: [{ role: 'system', content: `SYSTEM ${base.length}` }, ...req.messages],
       images: [],
-      mine: false,
-      secret: false,
       emit
     })
   }
@@ -212,10 +209,8 @@ describe('a coding lesson on Claude', () => {
     expect(r).not.toContain('their editor shows')
   })
 
-  it('a private coding lesson never reaches Claude', async () => {
-    privateTurn = true
-    await expect(say([{ role: 'user', content: 'x' }], { labId: 'lesson:private1', codeLesson: { file: 'exercise-1.py' } })).rejects.toThrow(/Private/)
-    privateTurn = false
+  it('a work project’s coding lesson goes to Claude like any other', async () => {
+    expect(await say([{ role: 'user', content: 'x' }], { labId: 'lesson:work1', codeLesson: { file: 'exercise-1.py' }, scope: { kind: 'folder', path: 'Secret project' } })).toBeTruthy()
   })
 
   it('keeps the rules short, for the prompt cache, and leaves what Gemma is told alone', () => {

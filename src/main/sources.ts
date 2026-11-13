@@ -1,14 +1,12 @@
 /**
  * Source packs: for a topic, the most relevant paragraphs of the free readings found for it
  * (main/readings), read once and kept in .tide/sources for two weeks. Built in the background when
- * readings are found for the week, so a lesson starts with them at once. Never for a private
- * project, and nothing is fetched when web search is off.
+ * readings are found for the week, so a lesson starts with them at once. Nothing is fetched when
+ * web search is off.
  */
 import { normalizeTitle } from '@shared/outline'
 import { excerpt, type SourcePack } from '@shared/sources'
 import { readWebpage } from './agent'
-import { getNotebooks } from './learn'
-import { privatePath } from './projects'
 import { findReadings, readingsFor } from './readings'
 import { pdfText } from './search'
 import { getSettings } from './settings'
@@ -29,14 +27,6 @@ export async function packFor(topic: string): Promise<SourcePack | null> {
   }
 }
 
-/** Whether a lesson's place (its note or folder) is in a private project */
-async function isPrivate(where?: string): Promise<boolean> {
-  if (!where) return false
-  const nb = (await getNotebooks()).find((n) => n.name === where || where === n.path || where.startsWith(`${n.path}/`))
-  for (const p of [nb?.path, where]) if (p && (await privatePath(p).catch(() => true))) return true
-  return false
-}
-
 async function textOf(r: { url: string; path?: string }): Promise<string> {
   if (r.path && /\.pdf$/i.test(r.path)) return (await pdfText(r.path)).slice(0, 40).join('\n\n')
   if (r.path) return readText(r.path)
@@ -54,7 +44,7 @@ export function buildPack(topic: string, where?: string): Promise<SourcePack | n
     // A recent pack is kept as it is: rebuilding it would change a lesson's opening for nothing
     const have = await packFor(topic)
     if (have) return have
-    if (getSettings().ai.webSearch?.provider === 'off' || (await isPrivate(where))) return null
+    if (getSettings().ai.webSearch?.provider === 'off') return null
     let readings = await readingsFor(topic)
     if (!readings.length) readings = await findReadings({ topic, path: where, notebook: where }).catch(() => [])
     const sources: SourcePack['sources'] = []
@@ -78,10 +68,9 @@ export function buildPack(topic: string, where?: string): Promise<SourcePack | n
 
 /** For a lesson starting now: the pack if there is one; otherwise it's built in the background, for the checks and next time */
 export async function lessonPack(topic: string, where?: string): Promise<SourcePack | null> {
-  // A kept pack is public text (one is only built outside private projects): quick to hand over
+  // A kept pack is quick to hand over
   const have = await packFor(topic)
   if (have) return have
-  if (await isPrivate(where)) return null
   buildPack(topic, where).catch(() => null)
   return null
 }

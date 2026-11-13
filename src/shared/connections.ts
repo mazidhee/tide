@@ -58,11 +58,11 @@ export const KIND_LABEL: Record<ConnectionKind, string> = {
   tools: 'Tools on this Mac'
 }
 
-const PUBLIC_ONLY = 'Public text only: nothing from a private project or your Metabase.'
+const PUBLIC_ONLY = 'Search words only, never your notes or files.'
 
 /** Services that aren't model providers (those come from shared/providers), known to Tide */
 export const SERVICES: ConnectionInfo[] = [
-  { id: 'claude', name: 'Claude (your plan)', kind: 'model', runs: 'cloud', usedFor: ['Lessons', 'Chat', 'Marking'], free: 'Your Claude plan, through Claude Code: no API key', privacy: 'Never sees a private project or your Metabase: those stay with Gemma.', section: 'models' },
+  { id: 'claude', name: 'Claude (your plan)', kind: 'model', runs: 'cloud', usedFor: ['Lessons', 'Chat', 'Marking'], free: 'Your Claude plan, through Claude Code: no API key', privacy: 'Takes every lesson and job, Metabase included; Gemma steps in when Claude can’t.', section: 'models' },
   { id: 'local-model', name: 'Gemma on this Mac', kind: 'model', runs: 'mac', usedFor: ['Lessons', 'Chat', 'Marking', 'Notes'], free: 'Free: runs on your Mac', section: 'models' },
   { id: 'wikipedia', name: 'Wikipedia', kind: 'search', runs: 'cloud', usedFor: ['Web search', 'Readings'], free: 'Free, no key', privacy: PUBLIC_ONLY, section: 'tools' },
   { id: 'searxng', name: 'SearXNG on this Mac', kind: 'search', runs: 'mac', usedFor: ['Private web search'], free: 'Free: runs in Docker on your Mac', section: 'tools' },
@@ -73,11 +73,11 @@ export const SERVICES: ConnectionInfo[] = [
   { id: 'arxiv', name: 'arXiv', kind: 'reader', runs: 'cloud', usedFor: ['Papers for readings'], free: 'Free, no key', privacy: PUBLIC_ONLY, section: 'connections' },
   { id: 'openlibrary', name: 'Open Library', kind: 'reader', runs: 'cloud', usedFor: ['Checking books exist'], free: 'Free, no key', privacy: PUBLIC_ONLY, section: 'connections' },
   { id: 'voice', name: 'Kokoro and Parakeet', kind: 'voice', runs: 'mac', usedFor: ['The tutor’s voice', 'Dictation'], free: 'Free: runs on your Mac', section: 'tutor' },
-  { id: 'deepgram', name: 'Deepgram', kind: 'voice', runs: 'cloud', usedFor: ['Dictation'], free: '$200 credit', keyUrl: 'https://console.deepgram.com', privacy: 'Not for private projects or Metabase lessons: those use Parakeet.', section: 'tutor' },
+  { id: 'deepgram', name: 'Deepgram', kind: 'voice', runs: 'cloud', usedFor: ['Dictation'], free: '$200 credit', keyUrl: 'https://console.deepgram.com', privacy: 'Parakeet on this Mac takes anything Deepgram can’t.', section: 'tutor' },
   { id: 'flow', name: 'Wispr Flow', kind: 'voice', runs: 'cloud', usedFor: ['Dictation', 'Hands-free talk'], free: 'Your Pro plan', privacy: 'Flow sends speech to its own service; Tide can’t keep it on this Mac.', section: 'tutor' },
   { id: 'handy', name: 'Handy', kind: 'voice', runs: 'mac', usedFor: ['Dictation'], free: 'Free: runs on your Mac', section: 'tutor' },
   { id: 'things', name: 'Things 4', kind: 'tasks', runs: 'mac', usedFor: ['Your week as to-dos', 'Ticking off'], free: 'Your Things app', section: 'tools' },
-  { id: 'metabase', name: 'Metabase', kind: 'data', runs: 'cloud', usedFor: ['Learning your data', 'Read-only queries'], privacy: 'Answered by Gemma on this Mac only, never a cloud model.', section: 'tools' },
+  { id: 'metabase', name: 'Metabase', kind: 'data', runs: 'cloud', usedFor: ['Learning your data', 'Read-only queries'], privacy: 'Read-only. Answered by Claude, or Gemma when Claude can’t.', section: 'tools' },
   { id: 'study-api', name: 'Study data API', kind: 'data', runs: 'mac', usedFor: ['Your study time, for other apps'], free: 'On this Mac', section: 'tools' },
   { id: 'maths', name: 'SymPy maths checker', kind: 'tools', runs: 'mac', usedFor: ['Checking answers exactly'], free: 'Free: runs on your Mac', section: 'tools' },
   { id: 'libraries', name: 'Data libraries', kind: 'tools', runs: 'mac', usedFor: ['NumPy, pandas, plots in code'], free: 'Free: runs on your Mac', section: 'tools' },

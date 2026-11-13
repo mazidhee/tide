@@ -267,8 +267,7 @@ describe('a project in the notes folder', () => {
   const folder = 'Code/A key-value store with a write-ahead log'
   const at = (...p: string[]) => join(vault, folder, ...p)
   const calls: string[] = []
-  const models = (o: { leave?: boolean; cloud?: string | null; local?: string | null } = {}): import('../src/main/workshop').WorkshopModels => ({
-    mayLeave: async () => o.leave ?? true,
+  const models = (o: { cloud?: string | null; local?: string | null } = {}): import('../src/main/workshop').WorkshopModels => ({
     cloud: async (_p, _s, task) => {
       calls.push(`cloud:${task}`)
       if (o.cloud == null) throw new Error('no cloud')
@@ -310,17 +309,13 @@ describe('a project in the notes folder', () => {
     expect(readFileSync(at('notes.md'), 'utf8')).toBe('my notes')
   })
 
-  it('reviews a failing run with the cloud model when the turn may leave the Mac, and with the local one when it may not', async () => {
+  it('reviews a failing run with the cloud model when one is set up, else Claude or Gemma, for every project', async () => {
     const reply = '<failure>The first test builds a store and yours raises in `__init__` before the table exists. Look at what line 8 of kv.py does.</failure><question>What will `path` be used for once the table is in memory?</question>'
     calls.length = 0
     let s = await ws.reviewStage('kv-wal', models({ cloud: reply }))
     expect(calls).toEqual(['cloud:errors'])
     expect(s.stages[0].review).toMatchObject({ by: 'cloud', passed: 0, total: 5, question: 'What will `path` be used for once the table is in memory?' })
     expect(s.recap.lines.at(-1)).toBe('The tutor asked: What will `path` be used for once the table is in memory?')
-    calls.length = 0
-    s = await ws.reviewStage('kv-wal', models({ leave: false, cloud: reply, local: reply }))
-    expect(calls).toEqual(['local'])
-    expect(s.stages[0].review!.by).toBe('local')
     calls.length = 0
     s = await ws.reviewStage('kv-wal', models({ cloud: null, local: reply }))
     expect(calls).toEqual(['cloud:errors', 'local'])
@@ -367,7 +362,6 @@ describe('a project in the notes folder', () => {
 
 describe('a project proposed for a roadmap item', () => {
   const topic = 'Project: running statistics without storing the data'
-  const leave = async () => true
   const local = async () => ''
 
   it('asks in the library’s own format, for the item on the roadmap', () => {
@@ -390,7 +384,7 @@ describe('a project proposed for a roadmap item', () => {
     const wrong = tiny({ solution: tiny().solution[0].content.replace('self.squares / self.n - self.mean() ** 2', 'self.squares / self.n') })
     const prompts: string[] = []
     const replies = [JSON.stringify(wrong), JSON.stringify(tiny())]
-    const got = await ws.proposeProject({ topic }, { mayLeave: leave, local, cloud: async (p, s, task) => (prompts.push(`${task}|${s === GENERATE_SYSTEM}|${p}`), replies.shift()!) })
+    const got = await ws.proposeProject({ topic }, { local, cloud: async (p, s, task) => (prompts.push(`${task}|${s === GENERATE_SYSTEM}|${p}`), replies.shift()!) })
     expect(got.tries).toBe(2)
     expect(got.problems).toEqual([])
     expect(got.card).toMatchObject({ id: 'running-stats', origin: 'generated', stages: 4 })
@@ -399,7 +393,7 @@ describe('a project proposed for a roadmap item', () => {
     expect(prompts[1]).toContain('- The reference solution fails “variance of three numbers” (stage variance): variance() of 2, 4, 9 should be 8.667, got 33.6')
     // Kept, offered with the library, and found again for the same roadmap item without asking anyone
     expect((await ws.listWorkshop()).some((c) => c.id === 'running-stats' && c.origin === 'generated')).toBe(true)
-    const again = await ws.proposeProject({ topic }, { mayLeave: leave, local, cloud: async () => { throw new Error('should not be asked') } })
+    const again = await ws.proposeProject({ topic }, { local, cloud: async () => { throw new Error('should not be asked') } })
     expect(again).toMatchObject({ tries: 0, card: { id: 'running-stats' } })
     // And it can be started like any other
     const s = await ws.startProject('running-stats', { topic })
@@ -408,21 +402,22 @@ describe('a project proposed for a roadmap item', () => {
 
   it('is refused when a stage passes with the starting files untouched, or the reply never becomes valid; nothing is kept', async () => {
     let asked = 0
-    const vacuous = await ws.proposeProject({ topic: 'Project: something else' }, { mayLeave: leave, local, cloud: async () => (asked++, JSON.stringify({ ...tiny({ vacuous: true }), id: 'vacuous-one' })) })
+    const vacuous = await ws.proposeProject({ topic: 'Project: something else' }, { local, cloud: async () => (asked++, JSON.stringify({ ...tiny({ vacuous: true }), id: 'vacuous-one' })) })
     expect(asked).toBe(3)
     expect(vacuous.card).toBeNull()
     expect(vacuous.problems).toEqual(['Stage “The lowest” passes with the starting files untouched: its tests check nothing the learner writes.'])
-    const rubbish = await ws.proposeProject({ topic: 'Project: a third thing' }, { mayLeave: leave, local, cloud: async () => 'Sorry, no.' })
+    const rubbish = await ws.proposeProject({ topic: 'Project: a third thing' }, { local, cloud: async () => 'Sorry, no.' })
     expect(rubbish).toMatchObject({ card: null, tries: 3, problems: ['The reply had no JSON object in it.'] })
     expect(await ws.projectById('vacuous-one')).toBeNull()
     expect(readdirSync(join(vault, '.tide/workshop/generated'))).toEqual(['running-stats.json'])
   }, 60_000)
 
-  it('does not ask a cloud model about a private project’s roadmap, and says why when none can take it', async () => {
-    const priv = await ws.proposeProject({ topic: 'Project: the secret system', notebook: 'Secret' }, { mayLeave: async () => false, local, cloud: async () => { throw new Error('must not be called') } })
-    expect(priv).toMatchObject({ card: null, tries: 0 })
-    expect(priv.problems[0]).toMatch(/private project/)
-    const none = await ws.proposeProject({ topic: 'Project: no cloud today' }, { mayLeave: leave, local, cloud: async () => { throw new Error('No cloud model can take this now') } })
+  it('asks a cloud model about a work project’s roadmap like any other, and says why when none can take it', async () => {
+    let asked = 0
+    const work = await ws.proposeProject({ topic: 'Project: the secret system', notebook: 'Secret' }, { local, cloud: async () => (asked++, 'Sorry, no.') })
+    expect(asked).toBeGreaterThan(0)
+    expect(work.problems.join(' ')).not.toMatch(/private/)
+    const none = await ws.proposeProject({ topic: 'Project: no cloud today' }, { local, cloud: async () => { throw new Error('No cloud model can take this now') } })
     expect(none.problems[0]).toMatch(/^No cloud model could take it just now/)
   })
 })

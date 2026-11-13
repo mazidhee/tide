@@ -106,10 +106,10 @@ describe('deciding a profile once', () => {
     expect(s.ask).toHaveBeenCalledTimes(1)
   })
 
-  it('never asks for private material, and stays unclear on a bad, failed or slow answer', async () => {
+  it('asks the model about any topic (no private gate), and stays unclear on a bad, failed or slow answer', async () => {
     const s = store()
-    expect((await resolveProfile('Zorblax', s.deps, { private: true })).from).toBe('unclear')
-    expect(s.ask).not.toHaveBeenCalled()
+    await resolveProfile('Zorblax', s.deps, { private: true } as never)
+    expect(s.ask).toHaveBeenCalledTimes(1)
     const bad: ResolveDeps = { ...s.deps, ask: async () => '{"kinds":["wizardry"]}' }
     expect((await resolveProfile('Quuxing', bad)).from).toBe('unclear')
     const down: ResolveDeps = { ...s.deps, ask: async () => Promise.reject(new Error('no cloud')) }

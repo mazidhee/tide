@@ -214,7 +214,6 @@ function SubjectHead({ s }: { s: Subject }) {
           <p className="ks-head-say">
             {solid} of {plural(roadmapTotal, 'topic')} solid
             {s.counts.fading > 0 && `, ${s.counts.fading} fading`}
-            {s.private && ', private'}
           </p>
           <div className="ks-fill" role="img" aria-label={`${solid} of ${roadmapTotal} solid, ${s.counts.fading} fading, ${s.counts.learning} learning`}>
             {(['solid', 'fading', 'learning'] as const).map((k) => (s.counts[k] ? <i key={k} className={k} style={{ width: `${Math.max(0.6, (s.counts[k] / Math.max(1, s.total)) * 100)}%` }} /> : null))}

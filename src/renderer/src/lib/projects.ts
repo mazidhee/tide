@@ -6,7 +6,7 @@ const IDEA_KEY = (notebook: string) => `tide.project.idea:${notebook}`
 export async function startProject(app: ReturnType<typeof useApp>, p: { name: string; idea: string }) {
   try {
     const path = await window.tide.vault.createFolder('', p.name)
-    await window.tide.projects.set(path, { kind: 'build', private: false, docs: [] })
+    await window.tide.projects.set(path, { kind: 'build', docs: [] })
     try {
       localStorage.setItem(IDEA_KEY(path), p.idea)
     } catch {

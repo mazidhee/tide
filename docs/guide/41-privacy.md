@@ -18,4 +18,4 @@ summary: Your notes are ordinary files. Tide's own data sits beside them in a hi
 
 ## What leaves your Mac
 
-The text the tutor needs (your question, the relevant passages, the conversation so far) goes to the model server you set. With a local server it stays on your Mac. Web searches go to the provider you choose. The cloud helper, if you turn it on, gets only the jobs you let it take, and never private projects, Metabase or pictures. Nothing else is sent anywhere.
+The text the tutor needs (your question, the relevant passages, the conversation so far) goes to the model server you set. With a local server it stays on your Mac. Web searches go to the provider you choose. Claude, when it's set up, takes every lesson and job, work projects and Metabase included. The cloud helper, if you turn it on, gets only the jobs you let it take, and never pictures. Nothing else is sent anywhere.

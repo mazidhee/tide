@@ -36,7 +36,6 @@ import {
   recallPrompt,
   SEMINAR_SYSTEM,
   seminarPrompt,
-  talkRoute,
   type KeepItem,
   type SeminarStage,
   type Talk,
@@ -461,13 +460,13 @@ function readUpTo(chapters: ReaderChapter[], loc: PassageLoc | undefined, max: n
 
 async function ask(job: 'readChallenge' | 'readArgument' | 'readSeminar' | 'readKeep', prompt: string, system: string, path: string): Promise<string> {
   const { completeFor } = await import('./ai')
-  return completeFor(job, prompt, system, { task: 'tutor', ...talkRoute(path) })
+  return completeFor(job, prompt, system, { task: 'tutor' })
 }
 
 /** Who will answer for this book: Claude, or Gemma when Claude can't */
 export async function talkWho(path: string): Promise<'claude' | 'gemma'> {
   const { jobRoute } = await import('./ai')
-  const r = await jobRoute('readChallenge', '', talkRoute(path))
+  const r = await jobRoute('readChallenge')
   return r.who
 }
 

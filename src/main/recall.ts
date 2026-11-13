@@ -2,8 +2,7 @@
  * Recall: what you missed or couldn't answer in a lesson comes back as the opening question of a
  * later lesson on that topic, when it is about to be forgotten. The schedule (FSRS-6) and the
  * store are Tide's Rust module (native/tide-core/src/recall.rs); the store is one plain file in
- * your vault, .tide/recall.json. Every review also goes in the review log (revlog.ts). Lessons
- * in a private project add nothing to either.
+ * your vault, .tide/recall.json. Every review also goes in the review log (revlog.ts).
  */
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
@@ -11,7 +10,6 @@ import type { LessonRecord } from '@shared/lessonLog'
 import { digestLesson, recallDueNote, type LessonDigest } from '@shared/lessonMemory'
 import { noteRecallReview } from './knowledge'
 import { tideCore } from './native'
-import { privatePath } from './projects'
 import { appendRevlog, elapsedDays, type RevlogEntry } from './revlog'
 import { vaultRoot } from './vault'
 
@@ -101,8 +99,6 @@ export async function noteLesson(record: LessonRecord): Promise<void> {
     }
     opened.delete(key(record.topic))
   }
-  const path = 'path' in record.scope ? record.scope.path : ''
-  if (path && (await privatePath(path).catch(() => false))) return
   // A review of questions already kept: a miss there is scheduled where the question is kept, not kept twice
   if (record.options?.review?.items.length) return
   // Not the question this lesson itself opened with: that one is already kept
@@ -181,10 +177,9 @@ export const recallItems = (): RecallItem[] => recall()?.all() ?? []
 
 // ---------- Hook for guided projects (main/workshop.ts) ----------
 
-/** Questions to bring back in a later lesson on their topic, from outside a lesson. Nothing from a private project is kept */
+/** Questions to bring back in a later lesson on their topic, from outside a lesson */
 export async function keepForRecall(items: { prompt: string; topic: string; lesson: string }[], path?: string): Promise<void> {
   const r = recall()
   if (!r || !items.length) return
-  if (path && (await privatePath(path).catch(() => true))) return
   await keep(r, items)
 }

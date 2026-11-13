@@ -5,8 +5,8 @@
  * it fades) and the store are Tide's Rust module (native/tide-core/src/knowledge.rs); the store is
  * one plain file in your vault, .tide/knowledge.json. Nothing here asks a model.
  *
- * What comes from a private project is kept, marked private, and counted only for a reader on
- * this Mac: the page always, the tutor only in a lesson that is itself private.
+ * Everything counts everywhere. The Rust store still takes a privateOk flag (from when private
+ * projects were kept apart); Tide always passes true, so every concept and answer is counted.
  */
 import { promises as fs } from 'fs'
 import { join } from 'path'
@@ -38,7 +38,6 @@ import type { PlacementStore } from '@shared/placement'
 import type { Attempt, ChatScope, ReviewGrade } from '@shared/types'
 import { getGoals, getNotebooks, readJsonl } from './learn'
 import { tideCore } from './native'
-import { privatePath } from './projects'
 import { recallItems } from './recall'
 import { REVLOG_FILE } from './revlog'
 import { absPath, getNoteMeta, readText, vaultRoot } from './vault'
@@ -146,13 +145,12 @@ async function syncRoadmaps(k: Engine, force = false): Promise<void> {
     const md = await readText(nb.outline).catch(() => null)
     // A roadmap that can't be read just now is left as it was
     if (md === null) continue
-    const isPrivate = await privatePath(nb.path).catch(() => true)
-    const concepts = roadmapConcepts(roadmapTopics(nb.name, md), isPrivate)
+    const concepts = roadmapConcepts(roadmapTopics(nb.name, md))
     k.syncRoadmap(nb.name, concepts)
     // A placement check that found a topic known or shaky: a little evidence, less than an answer in a lesson
     for (const c of concepts) {
       const p = placement[c.id]
-      if (p && p.state !== 'new') events.push({ concept: c.id, source: `placement:${c.id}`, pos: '0', kind: p.state === 'known' ? 'right' : 'partly', at: p.at, weight: 0.7, ...(isPrivate ? { private: true } : {}) })
+      if (p && p.state !== 'new') events.push({ concept: c.id, source: `placement:${c.id}`, pos: '0', kind: p.state === 'known' ? 'right' : 'partly', at: p.at, weight: 0.7 })
     }
   }
   // A notebook that no longer has a roadmap keeps only the topics there is evidence on
@@ -161,27 +159,27 @@ async function syncRoadmaps(k: Engine, force = false): Promise<void> {
   if (events.length) k.record(events)
 }
 
-/** The notebook a lesson or an answer belongs to, and whether it is in a private project */
-async function placeOf(path: string | undefined): Promise<{ area: string; isPrivate: boolean }> {
-  if (!path) return { area: '', isPrivate: false }
+/** The notebook a lesson or an answer belongs to */
+async function placeOf(path: string | undefined): Promise<{ area: string }> {
+  if (!path) return { area: '' }
   const notebooks = await getNotebooks().catch(() => [])
   const nb = notebooks.find((n) => path === n.path || path.startsWith(`${n.path}/`))
-  return { area: nb?.name ?? '', isPrivate: await privatePath(path).catch(() => true) }
+  return { area: nb?.name ?? '' }
 }
 
 const scopePath = (scope: ChatScope) => ('path' in scope ? scope.path : undefined)
 
 /** The concept a topic is: the roadmap topic or earlier lesson topic of that name, or a new one of its own */
-function conceptFor(k: Engine, topic: string, area: string, isPrivate: boolean): { concept: Pick<ConceptIn, 'id' | 'area'>; fresh: ConceptIn[] } {
+function conceptFor(k: Engine, topic: string, area: string): { concept: Pick<ConceptIn, 'id' | 'area'>; fresh: ConceptIn[] } {
   const name = conceptName(topic)
   const id = k.resolve(name, area || null)
   const found = id ? k.state(id, Date.now(), true) : null
   if (found) {
-    // A topic first met in a private project and now studied in the open is no longer private
-    const opened: ConceptIn[] = found.private && !isPrivate && found.origin === 'lesson' ? [{ id: found.id, name: found.name, area: found.area, origin: 'lesson', order: found.order, prerequisites: found.prerequisites }] : []
+    // A topic marked private by an older Tide is opened up the next time it is studied
+    const opened: ConceptIn[] = found.private && found.origin === 'lesson' ? [{ id: found.id, name: found.name, area: found.area, origin: 'lesson', order: found.order, prerequisites: found.prerequisites }] : []
     return { concept: { id: found.id, area: found.area }, fresh: opened }
   }
-  const made: ConceptIn = { id: lessonConceptId(area, name), name, area, origin: 'lesson', order: 0, prerequisites: [], ...(isPrivate ? { private: true } : {}) }
+  const made: ConceptIn = { id: lessonConceptId(area, name), name, area, origin: 'lesson', order: 0, prerequisites: [] }
   return { concept: made, fresh: [made] }
 }
 
@@ -196,20 +194,19 @@ async function lessonParts(k: Engine, record: LessonRecord): Promise<{ concepts:
   const d = digestLesson(record)
   if (!d) return null
   // A course's lesson counts under the course, as a subject of its own on the map
-  const { area, isPrivate } = record.options?.course ? { area: record.options.course.title, isPrivate: false } : await placeOf(scopePath(record.scope))
-  const shared = isPrivate ? { private: true } : {}
+  const { area } = record.options?.course ? { area: record.options.course.title } : await placeOf(scopePath(record.scope))
   const source = `lesson:${record.id}`
   // Review now with nothing kept, or a Quick check: on the concept they were started from (a topic, or a part of one)
   const on = record.options?.review?.concept ?? record.options?.check?.concept
   const fixed = on ? k.state(on, Date.now(), true) : null
   if (fixed && record.options?.review) {
     // Questions from memory on something learnt before: every answer is a return
-    const events = d.asked.flatMap((a, i): EvidenceIn[] => (a.mark ? [{ concept: fixed.id, source, pos: `q${i}`, kind: recalled(kindOfMark(a.mark)), at: record.updated, weight: 1, ...shared }] : []))
+    const events = d.asked.flatMap((a, i): EvidenceIn[] => (a.mark ? [{ concept: fixed.id, source, pos: `q${i}`, kind: recalled(kindOfMark(a.mark)), at: record.updated, weight: 1 }] : []))
     return events.length ? { concepts: [], events } : null
   }
   if (fixed && fixed.parent) {
     // A check on one part of a topic: its answers are on that part
-    const events = d.asked.flatMap((a, i): EvidenceIn[] => (a.mark ? [{ concept: fixed.id, source, pos: `q${i}`, kind: kindOfMark(a.mark), at: record.updated, weight: 1, ...shared }] : []))
+    const events = d.asked.flatMap((a, i): EvidenceIn[] => (a.mark ? [{ concept: fixed.id, source, pos: `q${i}`, kind: kindOfMark(a.mark), at: record.updated, weight: 1 }] : []))
     return events.length ? { concepts: [], events } : null
   }
   if (record.mode === 'quiz' && !fixed) {
@@ -221,9 +218,9 @@ async function lessonParts(k: Engine, record: LessonRecord): Promise<{ concepts:
       d.asked.forEach((a, i) => {
         const t = a.mark && questionTopic(topics, a.prompt, a.topic)
         if (!t || !a.mark) return
-        const { concept, fresh } = conceptFor(k, t, area, isPrivate)
+        const { concept, fresh } = conceptFor(k, t, area)
         if (fresh.length && !concepts.some((c) => c.id === concept.id)) concepts.push(...fresh)
-        events.push({ concept: concept.id, source, pos: `q${i}`, kind: kindOfMark(a.mark), at: record.updated, weight: 1, ...shared })
+        events.push({ concept: concept.id, source, pos: `q${i}`, kind: kindOfMark(a.mark), at: record.updated, weight: 1 })
       })
       return events.length ? { concepts, events } : null
     }
@@ -235,14 +232,14 @@ async function lessonParts(k: Engine, record: LessonRecord): Promise<{ concepts:
     const events: EvidenceIn[] = []
     d.asked.forEach((a, i) => {
       if (!a.mark || !retest[i]?.topic) return
-      const { concept, fresh } = conceptFor(k, retest[i].topic, '', isPrivate)
+      const { concept, fresh } = conceptFor(k, retest[i].topic, '')
       concepts.push(...fresh)
-      events.push({ concept: concept.id, source: `lesson:${record.id}`, pos: `q${i}`, kind: recalled(kindOfMark(a.mark)), at: record.updated, weight: 1, ...(isPrivate ? { private: true } : {}) })
+      events.push({ concept: concept.id, source: `lesson:${record.id}`, pos: `q${i}`, kind: recalled(kindOfMark(a.mark)), at: record.updated, weight: 1 })
     })
     return events.length ? { concepts, events } : null
   }
-  const { concept, fresh } = fixed ? { concept: { id: fixed.id, area: fixed.area }, fresh: [] } : conceptFor(k, record.mode === 'quiz' ? (quizTopics(record.topic)[0] ?? record.topic) : record.topic, area, isPrivate)
-  const { steps, events } = lessonEvidence(record, d, concept, isPrivate)
+  const { concept, fresh } = fixed ? { concept: { id: fixed.id, area: fixed.area }, fresh: [] } : conceptFor(k, record.mode === 'quiz' ? (quizTopics(record.topic)[0] ?? record.topic) : record.topic, area)
+  const { steps, events } = lessonEvidence(record, d, concept)
   return events.length ? { concepts: [...fresh, ...steps], events } : null
 }
 
@@ -266,17 +263,17 @@ export async function noteRecallReview(item: { id: string; topic: string; review
   const kind: EvidenceKind | null = opening === 'correct' ? 'recalled-right' : opening === 'partial' ? 'partly' : opening === 'wrong' || opening === 'stuck' ? 'recalled-wrong' : null
   const k = await knowledge()
   if (!k || !kind) return
-  const { area, isPrivate } = await placeOf(scopePath(record.scope))
-  const { concept, fresh } = conceptFor(k, item.topic, area, isPrivate)
+  const { area } = await placeOf(scopePath(record.scope))
+  const { concept, fresh } = conceptFor(k, item.topic, area)
   if (fresh.length) k.upsert(fresh)
-  k.record([{ concept: concept.id, source: `recall:${item.id}`, pos: String(item.reviews), kind, at: Date.now(), weight: 1, supersedes: `lesson:${record.id}#q0`, ...(isPrivate ? { private: true } : {}) }])
+  k.record([{ concept: concept.id, source: `recall:${item.id}`, pos: String(item.reviews), kind, at: Date.now(), weight: 1, supersedes: `lesson:${record.id}#q0` }])
 }
 
-function attemptEvent(k: Engine, a: Attempt, area: string, isPrivate: boolean): { fresh: ConceptIn[]; event: EvidenceIn } | null {
+function attemptEvent(k: Engine, a: Attempt, area: string): { fresh: ConceptIn[]; event: EvidenceIn } | null {
   if (!a.topic?.trim() || !a.at) return null
-  const { concept, fresh } = conceptFor(k, a.topic, area, isPrivate)
+  const { concept, fresh } = conceptFor(k, a.topic, area)
   const kind: EvidenceKind = a.verdict === 'correct' ? 'right' : a.verdict === 'partial' ? 'partly' : 'wrong'
-  return { fresh, event: { concept: concept.id, source: `attempt:${a.at}`, pos: '0', kind: a.mode === 'recall' ? recalled(kind) : kind, at: a.at, weight: 1, ...(isPrivate ? { private: true } : {}) } }
+  return { fresh, event: { concept: concept.id, source: `attempt:${a.at}`, pos: '0', kind: a.mode === 'recall' ? recalled(kind) : kind, at: a.at, weight: 1 } }
 }
 
 /**
@@ -287,8 +284,8 @@ export async function noteAttempt(a: Attempt): Promise<void> {
   if (a.lesson || a.mode === 'teach') return
   const k = await knowledge()
   if (!k) return
-  const { area, isPrivate } = await placeOf(a.path)
-  const made = attemptEvent(k, a, area, isPrivate)
+  const { area } = await placeOf(a.path)
+  const made = attemptEvent(k, a, area)
   if (!made) return
   if (made.fresh.length) k.upsert(made.fresh)
   k.record([made.event])
@@ -303,18 +300,18 @@ export async function noteAttempt(a: Attempt): Promise<void> {
 export async function noteEvidence(e: { topic: string; kind: 'right' | 'partly' | 'wrong' | 'taught'; source: string; pos: string; at: number; path?: string; weight?: number }): Promise<void> {
   const k = await knowledge()
   if (!k || !e.topic.trim()) return
-  const { area, isPrivate } = await placeOf(e.path)
-  const { concept, fresh } = conceptFor(k, e.topic, area, isPrivate)
+  const { area } = await placeOf(e.path)
+  const { concept, fresh } = conceptFor(k, e.topic, area)
   if (fresh.length) k.upsert(fresh)
-  k.record([{ concept: concept.id, source: e.source, pos: e.pos, kind: e.kind, at: e.at, weight: e.weight ?? 1, ...(isPrivate ? { private: true } : {}) }])
+  k.record([{ concept: concept.id, source: e.source, pos: e.pos, kind: e.kind, at: e.at, weight: e.weight ?? 1 }])
 }
 
-/** A topic as the map has it, with what it builds on (private concepts only for a reader on this Mac) */
-export async function conceptPicture(topic: string, privateOk: boolean): Promise<Picture | null> {
+/** A topic as the map has it, with what it builds on */
+export async function conceptPicture(topic: string): Promise<Picture | null> {
   const k = await knowledge()
   if (!k) return null
   await syncRoadmaps(k).catch(() => {})
-  return k.around(conceptName(topic), Date.now(), privateOk, 3)
+  return k.around(conceptName(topic), Date.now(), true, 3)
 }
 
 /** The one time the file isn't there: every roadmap, every lesson kept, every marked answer, read in */
@@ -343,12 +340,12 @@ async function recordAttempts(k: Engine, known?: LessonRecord[]): Promise<void> 
   // In a lesson record: said so (since answers name their record), or a lesson or quiz on that topic going on at the time
   const covered = (a: Attempt) => !!a.lesson || ((a.mode === 'teach' || a.mode === 'quiz') && records.some((r) => (r.mode === 'teach' || r.mode === 'quiz') && r.topic === a.topic && a.at >= r.started - 60_000 && a.at <= r.updated + 60_000))
   const attempts = (await readJsonl<Attempt>('.tide/attempts.jsonl')).filter((a) => !covered(a))
-  const places = new Map<string, { area: string; isPrivate: boolean }>()
+  const places = new Map<string, { area: string }>()
   const events: EvidenceIn[] = []
   for (const a of attempts) {
     const key = a.path ?? ''
     if (!places.has(key)) places.set(key, await placeOf(a.path))
-    const made = attemptEvent(k, a, places.get(key)!.area, places.get(key)!.isPrivate)
+    const made = attemptEvent(k, a, places.get(key)!.area)
     if (!made) continue
     if (made.fresh.length) k.upsert(made.fresh)
     events.push(made.event)
@@ -396,25 +393,24 @@ async function readCardNote(path: string, cache: NoteCache) {
  * The concept a flashcard is on: the first of the names its headings, tags and note give it that
  * is a topic on the map (a roadmap topic first). Null when none is: a card is never made a topic of its own.
  */
-async function cardConcept(k: Engine, card: { id: string; path: string }, cache: NoteCache): Promise<{ id: string; isPrivate: boolean } | null> {
+async function cardConcept(k: Engine, card: { id: string; path: string }, cache: NoteCache): Promise<{ id: string } | null> {
   const note = await readCardNote(card.path, cache)
   const line = note?.cards.find((c) => c.id === card.id)?.line ?? Number.MAX_SAFE_INTEGER
-  const { area, isPrivate } = await placeOf(card.path)
+  const { area } = await placeOf(card.path)
   for (const name of cardTopics({ path: card.path, line: note ? line : 0 }, note?.raw ?? '', note?.tags ?? [])) {
     const id = k.resolve(name, area || null)
-    if (id) return { id, isPrivate }
+    if (id) return { id }
   }
   return null
 }
 
-const cardEvent = (concept: string, r: { id: string; grade: ReviewGrade; at: number }, first: boolean, isPrivate: boolean): EvidenceIn => ({
+const cardEvent = (concept: string, r: { id: string; grade: ReviewGrade; at: number }, first: boolean): EvidenceIn => ({
   concept,
   source: `card:${r.id}`,
   pos: String(r.at),
   kind: cardKind(r.grade, first),
   at: r.at,
-  weight: CARD_WEIGHT,
-  ...(isPrivate ? { private: true } : {})
+  weight: CARD_WEIGHT
 })
 
 /** A flashcard was reviewed: evidence on its topic, when it has one on the map */
@@ -423,7 +419,7 @@ export async function noteCardReview(r: { id: string; path: string; grade: Revie
   if (!k) return
   await syncRoadmaps(k).catch(() => {})
   const c = await cardConcept(k, r, new Map())
-  if (c) k.record([cardEvent(c.id, r, r.first, c.isPrivate)])
+  if (c) k.record([cardEvent(c.id, r, r.first)])
 }
 
 /** Every flashcard review in the review log, read in once */
@@ -432,14 +428,14 @@ async function recordCardHistory(k: Engine): Promise<void> {
   if (!lines.length) return
   const cache: NoteCache = new Map()
   const seen = new Set<string>()
-  const concepts = new Map<string, { id: string; isPrivate: boolean } | null>()
+  const concepts = new Map<string, { id: string } | null>()
   const events: EvidenceIn[] = []
   for (const r of [...lines].sort((a, b) => a.at - b.at)) {
     if (!r?.id || !r.path || !r.at) continue
     const key = `${r.path}\u0000${r.id}`
     if (!concepts.has(key)) concepts.set(key, await cardConcept(k, r, cache))
     const c = concepts.get(key)
-    if (c) events.push(cardEvent(c.id, r, !seen.has(r.id), c.isPrivate))
+    if (c) events.push(cardEvent(c.id, r, !seen.has(r.id)))
     seen.add(r.id)
   }
   if (events.length) k.record(events)
@@ -471,25 +467,23 @@ export async function cardsOnMany(conceptIds: string[]): Promise<Map<string, Car
 export async function noteReviewAnswer(e: { concept: string; source: string; pos: string; kind: EvidenceKind; at: number; path?: string }): Promise<void> {
   const k = await knowledge()
   if (!k || !k.state(e.concept, Date.now(), true)) return
-  const { isPrivate } = await placeOf(e.path)
-  k.record([{ concept: e.concept, source: e.source, pos: e.pos, kind: e.kind, at: e.at, weight: 1, ...(isPrivate ? { private: true } : {}) }])
+  k.record([{ concept: e.concept, source: e.source, pos: e.pos, kind: e.kind, at: e.at, weight: 1 }])
 }
 
 // ---------- What it is read for ----------
 
 /**
  * For a lesson that is opening: what is solid around its topic, what is shaky or fading, and what
- * it builds on that isn't solid yet. Private concepts and evidence only when the lesson's own
- * first message stays on this Mac.
+ * it builds on that isn't solid yet.
  */
-export async function knowledgeNoteFor(topic: string, privateTurn: boolean): Promise<string> {
+export async function knowledgeNoteFor(topic: string): Promise<string> {
   const k = await knowledge()
   if (!k) return ''
   await syncRoadmaps(k).catch(() => {})
-  return knowledgeNote(k.around(conceptName(topic), Date.now(), privateTurn, 3))
+  return knowledgeNote(k.around(conceptName(topic), Date.now(), true, 3))
 }
 
-/** The "What you know" page: read on this Mac by the learner, so private work is in it */
+/** The "What you know" page */
 export async function knowledgeView(): Promise<KnowledgeView> {
   const now = Date.now()
   const k = await knowledge()
@@ -561,15 +555,15 @@ export async function conceptOfTopic(topic: string): Promise<string | null> {
   return k?.resolve(conceptName(topic), null) ?? null
 }
 
-/** Every concept on the map as it stands now (private ones only for a reader on this Mac) */
-export async function allConcepts(privateOk: boolean): Promise<ConceptState[]> {
+/** Every concept on the map as it stands now */
+export async function allConcepts(): Promise<ConceptState[]> {
   const k = await knowledge()
   if (!k) return []
   await syncRoadmaps(k).catch(() => {})
-  return k.all(Date.now(), privateOk)
+  return k.all(Date.now(), true)
 }
 
-/** The notebook a path is in (its subject on the map), and whether it is private */
+/** The notebook a path is in (its subject on the map) */
 export const areaOf = (path: string | undefined) => placeOf(path)
 
 /** One concept as it stands, by id */
@@ -595,10 +589,10 @@ export async function conceptEvidence(): Promise<import('@shared/teachingQuality
   k.flush()
   const stable = new Map(k.all(Date.now(), true).map((c) => [c.id, c.stability]))
   try {
-    const store = JSON.parse(await readText('.tide/knowledge.json')) as { concepts?: { id: string; name: string; area: string; parent?: string; private?: boolean; evidence?: { kind: string; at: number; source: string }[] }[] }
+    const store = JSON.parse(await readText('.tide/knowledge.json')) as { concepts?: { id: string; name: string; area: string; parent?: string; evidence?: { kind: string; at: number; source: string }[] }[] }
     return (store.concepts ?? [])
       .filter((c) => c.evidence?.length)
-      .map((c) => ({ id: c.id, name: c.name, area: c.area, ...(c.parent ? { parent: c.parent } : {}), evidence: c.evidence!.map((e) => ({ kind: e.kind, at: e.at, source: e.source })), ...(stable.get(c.id) !== undefined ? { stability: stable.get(c.id) } : {}), ...(c.private ? { private: true } : {}) }))
+      .map((c) => ({ id: c.id, name: c.name, area: c.area, ...(c.parent ? { parent: c.parent } : {}), evidence: c.evidence!.map((e) => ({ kind: e.kind, at: e.at, source: e.source })), ...(stable.get(c.id) !== undefined ? { stability: stable.get(c.id) } : {}) }))
   } catch {
     return []
   }

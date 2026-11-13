@@ -51,7 +51,6 @@ export interface AnswerEvent {
   /** The plan step it belonged to (0-based), -1 before the plan */
   step?: number
   misconception?: Misconception
-  private?: boolean
 }
 
 const VERDICT_SCORE: Record<Verdict, number> = {
@@ -117,9 +116,7 @@ const confidenceOf = (said: string): Confidence | undefined => {
  * transfer tag, its plan step, and any misconception the mark named.
  */
 export function lessonAnswers(
-  record: Pick<LessonRecord, 'id' | 'topic' | 'turns' | 'started'> & {
-    private?: boolean
-  }
+  record: Pick<LessonRecord, 'id' | 'topic' | 'turns' | 'started'>
 ): AnswerEvent[] {
   const turns = record.turns as (MapTurn & { at?: number })[]
   const blocks = turns.map((t) => (t.role === 'assistant' ? parseBlocks(t.content) : null))
@@ -158,8 +155,7 @@ export function lessonAnswers(
         ...(ask ? { askType: ask.type } : {}),
         ...(ask?.transfer ? { transfer: ask.transfer } : {}),
         ...(askTurn >= 0 && steps.get(askTurn) ? { step: steps.get(askTurn)!.step } : {}),
-        ...(mis ? { misconception: mis } : {}),
-        ...(record.private ? { private: true } : {})
+        ...(mis ? { misconception: mis } : {})
       })
     }
     // A reply after an answer (or anything but a hint) starts the count again for its question
@@ -235,7 +231,6 @@ export interface MisconceptionRecord {
   lessons: string[]
   /** Set once later answers on the topic show it's gone */
   resolvedAt?: number
-  private?: boolean
 }
 
 export const misconceptionKey = (name: string) =>
@@ -273,15 +268,13 @@ export function trackMisconceptions(answers: AnswerEvent[]): MisconceptionRecord
         firstSeen: a.at,
         lastSeen: a.at,
         recurrences: 0,
-        lessons: [a.lesson],
-        ...(a.private ? { private: true } : {})
+        lessons: [a.lesson]
       })
     } else {
       r.recurrences++
       r.lastSeen = a.at
       if (!r.text && a.misconception.text) r.text = a.misconception.text
       if (!r.lessons.includes(a.lesson)) r.lessons.push(a.lesson)
-      if (!a.private) delete r.private
     }
   }
   for (const r of byKey.values()) {
@@ -491,7 +484,6 @@ export interface ConceptEvidence {
   evidence: EvidenceLite[]
   /** FSRS stability now (days), from the knowledge map */
   stability?: number
-  private?: boolean
 }
 
 /** Stability (days) at which recall counts as stable */
@@ -522,7 +514,6 @@ export interface Mastery {
   /** Answers it took (marked answers and recalls up to mastery, or so far) */
   answers: number
   how?: 'spaced' | 'stability'
-  private?: boolean
 }
 
 /**
@@ -564,8 +555,7 @@ export function timeToMastery(concepts: ConceptEvidence[]): Mastery[] {
       ...(c.parent ? { parent: c.parent } : {}),
       taughtAt: taught.at,
       ...(masteredAt !== undefined ? { masteredAt, days: (masteredAt - taught.at) / DAY, how } : {}),
-      answers,
-      ...(c.private ? { private: true } : {})
+      answers
     })
   }
   return out.sort((a, b) => b.taughtAt - a.taughtAt)
@@ -588,7 +578,6 @@ export interface Retention {
     taughtAt: number
     day?: number
     week?: number
-    private?: boolean
   }[]
 }
 
@@ -630,8 +619,7 @@ export function retention(concepts: ConceptEvidence[]): Retention {
           name: c.name,
           taughtAt: t.at,
           ...(d ? { day: OUTCOME[d.kind] } : {}),
-          ...(wk ? { week: OUTCOME[wk.kind] } : {}),
-          ...(c.private ? { private: true } : {})
+          ...(wk ? { week: OUTCOME[wk.kind] } : {})
         })
     }
   }
@@ -669,7 +657,7 @@ export interface TeachingMeasures {
 }
 
 /** Lessons that count: taught lessons and quizzes with at least one marked answer */
-export function measureTeaching(records: (Pick<LessonRecord, 'id' | 'topic' | 'turns' | 'started' | 'mode'> & { private?: boolean })[], concepts: ConceptEvidence[], now = Date.now()): TeachingMeasures {
+export function measureTeaching(records: (Pick<LessonRecord, 'id' | 'topic' | 'turns' | 'started' | 'mode'>)[], concepts: ConceptEvidence[], now = Date.now()): TeachingMeasures {
   const answers: AnswerEvent[] = []
   const pacing = {
     drilledAfterMastery: 0,

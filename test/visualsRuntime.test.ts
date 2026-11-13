@@ -69,7 +69,7 @@ const codeOf = (f: HTMLIFrameElement) => fromBase64Url(new URL(f.src).searchPara
 let n = 0
 let made = 0
 const api = {
-  policy: vi.fn(async (scope: { kind: string; path?: string }) => (scope.path?.startsWith('Secret') ? { show: false, repair: false, why: 'Private: this stays on your Mac' } : { show: true, repair: true })),
+  policy: vi.fn(async (scope: { kind: string; path?: string }) => (scope.path?.startsWith('Broken') ? Promise.reject(new Error('no answer')) : { show: true, repair: true })),
   repair: vi.fn(async (_r: { code: string; errors: string[] }) => ({ code: FIXED })),
   fallback: vi.fn(async () => '```mermaid\nflowchart LR\n  A --> B\n```'),
   cached: vi.fn(async (_id: string): Promise<Record<string, unknown>> => ({})),
@@ -215,13 +215,13 @@ describe('kept with the lesson', () => {
   })
 })
 
-describe('privacy', () => {
-  it('a private notebook runs no visual and asks Claude nothing', async () => {
-    const { w } = place(GOOD, { kind: 'folder', path: 'Secret project' })
+describe('when Tide can’t check a lesson', () => {
+  it('runs no visual and asks Claude nothing', async () => {
+    const { w } = place(GOOD, { kind: 'folder', path: 'Broken notebook' })
     await until(() => w.root.dataset.state === 'done')
     await wait(20)
     expect(frames()).toEqual([])
-    expect(w.root.textContent).toContain('Private: this stays on your Mac')
+    expect(w.root.textContent).toContain('Tide could not check this lesson')
     expect(api.repair).not.toHaveBeenCalled()
     expect(api.fallback).not.toHaveBeenCalled()
   })

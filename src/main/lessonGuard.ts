@@ -3,12 +3,9 @@ import { checksOf, claimsPrompt, makesClaims, parseClaimCheck, CLAIMS_SYSTEM, ty
 import type { RequestKind } from '@shared/providers'
 import { humanitiesProblems } from '@shared/humanities'
 import { teachesAsHumanities } from '@shared/subjects'
-import { aboutMetabase } from '@shared/metabase'
 import { ownWords, posedProblem, repeatsEarlier } from '@shared/session'
 import type { ChatEvent, ChatMessage, ChatRequest } from '@shared/types'
 import { routeFor } from './cloud'
-import { metabaseHost, metabaseReady } from './metabase'
-import { privatePath } from './projects'
 import { comparePython, finalAnswer, overruled, type Exact } from '@shared/answerCheck'
 import { createHash } from 'crypto'
 import { sourcesForCheck } from '@shared/sources'
@@ -50,13 +47,6 @@ async function rememberSolution(key: string, solution: string) {
   } catch {
     // a cache, never a reason to fail the lesson
   }
-}
-
-/** The cloud model may see this lesson: not a private project, nothing about your Metabase */
-export async function mayLeaveMac(req: ChatRequest): Promise<boolean> {
-  if (req.scope.kind !== 'none' && req.scope.kind !== 'vault' && (await privatePath(req.scope.path).catch(() => true))) return false
-  if (metabaseReady() && req.messages.some((m) => aboutMetabase(text(m), metabaseHost()))) return false
-  return true
 }
 
 /**
@@ -185,7 +175,7 @@ export async function checkLessonReply(
     }
     step('lesson-check', 'Checked the answer to this problem', 'done')
   }
-  const cloud = !!routeFor('marking') && (await mayLeaveMac(req))
+  const cloud = !!routeFor('marking')
   const hard = isHardTopic(`${req.topic ?? ''}`)
   // Diagnostics and questions in passing aren't problems to solve or review
   const sets = setsProblem(reply)
@@ -287,11 +277,9 @@ export async function checkLessonReply(
 
 /**
  * You challenged something the tutor said: the cloud model checks that one reply, carefully,
- * against the lesson's sources. Never for a private project or anything about your Metabase.
+ * against the lesson's sources.
  */
 export async function challengeReply(topic: string, where: string | undefined, reply: string): Promise<ClaimCheck & { offline?: string }> {
-  if (where && (await privatePath(where).catch(() => true))) return { ok: true, errors: [], unsure: [], offline: 'This lesson is in a private project, so it stays on your Mac and isn’t sent to be checked.' }
-  if (metabaseReady() && aboutMetabase(`${topic}\n${reply}`, metabaseHost())) return { ok: true, errors: [], unsure: [], offline: 'This is about your Metabase, so it stays on your Mac.' }
   const { askCloud, NoCloud } = await import('./ai')
   const pack = await import('./sources').then((m) => m.packFor(topic)).catch(() => null)
   try {

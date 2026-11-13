@@ -30,19 +30,6 @@ export async function projectDocs(notebook: string, info?: ProjectInfo | null): 
   return [...new Set([...(p?.docs ?? []), ...(p?.brief ? [p.brief] : []), ...filed])].filter((d) => /\.(md|pdf)$/i.test(d))
 }
 
-/** Whether a vault path belongs to a private project (so it must stay on this Mac) */
-export async function privatePath(path: string): Promise<boolean> {
-  if (!path) return false
-  for (const nb of await getNotebooks()) {
-    if (!nb.project?.private) continue
-    if (path === nb.path || path.startsWith(`${nb.path}/`) || nb.project.docs.includes(path)) return true
-    // Its code folder, and anything in it
-    if (nb.project.code && (path === nb.project.code || path.startsWith(`${nb.project.code}/`))) return true
-    if ((await filedUnder(nb.name).catch(() => [] as string[])).includes(path)) return true
-  }
-  return false
-}
-
 const versionKey = async (docs: string[]) =>
   (await Promise.all(docs.map(async (d) => `${d}@${(await fs.stat(absPath(d)).catch(() => null))?.mtimeMs ?? 0}`))).join('|')
 
@@ -85,12 +72,11 @@ export async function mapProject(notebook: string, force = false): Promise<Proje
   const flows = flowsIn(headings)
   const name = notebook.split('/').pop() ?? notebook
   // The one model call: from the headings alone, what the system's parts are and what it is
-  // Claude's background model unless the project is private (shared/gemmaPolicy)
+  // Claude's background model, else Gemma (shared/gemmaPolicy)
   const raw = await completeFor(
     'projectMap',
     `These are the section headings of the documents for a project called "${name}"${tools.length ? `, which uses ${tools.map((t) => t.name).join(', ')}` : ''}:\n${headings.slice(0, 160).map((h) => `- ${h}`).join('\n')}\n\nReturn ONLY JSON: {"overview": "2 or 3 plain sentences: what this system does and how it's put together", "components": [{"name": "a part of the system, as the documents name it", "about": "what it does, in one line"}]} with 3 to 10 components.`,
-    'You read technical documents carefully and describe systems plainly. Reply with JSON only.',
-    { path: [notebook, ...docs], private: !!info?.private }
+    'You read technical documents carefully and describe systems plainly. Reply with JSON only.'
   ).catch(() => '')
   let parsed: { overview?: string; components?: { name?: string; about?: string }[] } = {}
   try {
@@ -148,9 +134,7 @@ Be concrete and specific to this project. Don't write the code: they will.`
       ],
       new AbortController().signal,
       4000,
-      // A private project's brief is written on this Mac only
-      project?.private ? 'other' : 'planning',
-      { path: req.notebook, private: !!project?.private }
+      'planning'
     )) {
       out += text
       emit({ id: req.id, type: 'delta', text })
@@ -198,8 +182,7 @@ export async function flowSteps(notebook: string, flow: string): Promise<FlowSte
   const raw = await completeFor(
     'projectMap',
     `A system's "${flow}", as its design document describes it:\n${section}\n\nThe system's parts: ${parts.join(', ')}.\nList the flow as ordered steps, each something passing from one part to another. Use the part names exactly as listed where they fit; outside parties (the bank, a customer) may be named as they are in the text.\nReturn ONLY a JSON array of 3 to 8 steps: [{"from": "...", "to": "...", "label": "what passes, in 2 to 5 words"}]`,
-    'You trace how systems work, step by step. Reply with JSON only.',
-    { path: [notebook, ...docs], private: !!(await projectOf(notebook))?.private }
+    'You trace how systems work, step by step. Reply with JSON only.'
   ).catch(() => '')
   const steps = ((extractJsonArray(raw) as Partial<FlowStep>[] | null) ?? [])
     .filter((s) => s?.from && s?.to && String(s.from) !== String(s.to))

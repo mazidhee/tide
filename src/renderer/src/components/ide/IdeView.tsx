@@ -1422,7 +1422,7 @@ export function IdeView({ path: initialVaultPath, root: initialRoot, file: initi
           ) : home && ideaPlan ? (
             <ProjectHome
               plan={ideaPlan}
-              claude={!!pair?.ready && !ideaPlan.private}
+              claude={!!pair?.ready}
               onPlan={setIdeaPlan}
               onPair={(mode, text) => {
                 setRight('claude')
@@ -1506,7 +1506,7 @@ export function IdeView({ path: initialVaultPath, root: initialRoot, file: initi
               <PairPanel
                 planned={!!ideaPlan}
                 writes={!!ideaPlan?.claudeWrites}
-                status={ideaPlan?.private ? { ready: false, installed: !!pair?.installed, why: 'this project is private, so it stays on this Mac' } : pair}
+                status={pair}
                 root={root}
                 rootKind={ws?.kind ?? null}
                 activePath={activeFile}

@@ -214,7 +214,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // At zero the interviewer is told to stop and score, as in a real round
   const clock = useInterviewClock(timed, () => sendRef.current("[time] Time's up. Stop here and give me the scorecard and verdict.", turnsRef.current))
   const sourcePath = scope.kind === 'note' || scope.kind === 'pages' ? scope.path : undefined
-  // Dictation: a private project's answers stay on this Mac; the topic helps it spell the jargon
+  // Dictation: the topic helps it spell the jargon
   const heardIn = useMemo(() => ({ path: 'path' in scope ? scope.path : undefined, topic }), [JSON.stringify(scope), topic])
   const env = { notePath: sourcePath ?? '', filesByName: app.filesByName }
 
@@ -274,7 +274,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const engineRef = useRef(engine)
   engineRef.current = engine
   // Hook (lib/difficulty.ts): how hard the next problem is follows how the answers are going
-  const difficulty = useDifficulty(topic, scope, mode === 'teach' || (mode === 'quiz' && !setup.options?.placement), busy)
+  const difficulty = useDifficulty(topic, mode === 'teach' || (mode === 'quiz' && !setup.options?.placement), busy)
   const send = useCallback(
     async (content: string, history: Turn[]) => {
       const id = `session:${uid()}`
@@ -418,13 +418,11 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       const clips = await Promise.race([window.tide.videos.clips(topic, { limit: 1 }).catch(() => []), new Promise<ClipCandidate[]>((r) => setTimeout(() => r([]), 1500))])
       if (clips[0]) opening = `${opening}\n\n${watchFirstNote(clips[0])}`
       // [immersive] What the learner's other courses and lectures add on this topic, for the tutor to
-      // bring in as it teaches (shared/related). Never for a private notebook's lesson
-      if (scope.kind === 'none' || scope.kind === 'vault' || options?.course) {
-        const r = await Promise.race([window.tide.links.related(topic, { exclude: options?.course?.id, limit: 3 }).catch(() => null), new Promise<null>((res) => setTimeout(() => res(null), 2500))])
-        const items = r?.items.filter((i) => !(i.kind === 'clip' && clips[0] && i.video === clips[0].video)) ?? []
-        if (r && (items.length || r.notImported.length))
-          opening = `${opening}\n\n(Tide: ${relatedForPrompt({ ...r, items })} Bring each in when the lesson reaches the idea it covers, not all at once; the first may fit your first explanation.)`
-      }
+      // bring in as it teaches (shared/related)
+      const r = await Promise.race([window.tide.links.related(topic, { exclude: options?.course?.id, limit: 3 }).catch(() => null), new Promise<null>((res) => setTimeout(() => res(null), 2500))])
+      const items = r?.items.filter((i) => !(i.kind === 'clip' && clips[0] && i.video === clips[0].video)) ?? []
+      if (r && (items.length || r.notImported.length))
+        opening = `${opening}\n\n(Tide: ${relatedForPrompt({ ...r, items })} Bring each in when the lesson reaches the idea it covers, not all at once; the first may fit your first explanation.)`
     }
     // The warm-up on what this builds on, when there is one: the tutor hears what held and what faded
     const warmed = await warmGate.current
@@ -1231,8 +1229,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     void exploreLater(app, {
       text: at.quote,
       subject: lessonSubject(topic, scope, options?.subject),
-      from: { ...(recordId ? { lesson: recordId } : {}), topic, mode, turn: th ? th.at : at.turn, ...(at.thread ? { thread: at.thread, reply: at.reply } : {}) },
-      scope
+      from: { ...(recordId ? { lesson: recordId } : {}), topic, mode, turn: th ? th.at : at.turn, ...(at.thread ? { thread: at.thread, reply: at.reply } : {}) }
     })
   }
 

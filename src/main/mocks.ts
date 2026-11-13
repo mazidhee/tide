@@ -213,14 +213,11 @@ export async function mockRecord(id: string): Promise<unknown> {
 
 /** What a mock exam would cover, from what has been studied */
 export async function suggestExamTopics(): Promise<string[]> {
-  const [{ listLessons }, { knowledgeView }, { privatePath }] = await Promise.all([import('./lessons'), import('./knowledge'), import('./projects')])
-  const lessons = await listLessons().catch(() => [])
-  const withPrivacy = await Promise.all(
-    lessons.slice(0, 80).map(async (l) => ({ topic: l.topic, updated: l.updated, mode: l.mode, private: 'path' in l.scope && l.scope.path ? await privatePath(l.scope.path).catch(() => true) : false }))
-  )
+  const [{ listLessons }, { knowledgeView }] = await Promise.all([import('./lessons'), import('./knowledge')])
+  const lessons = (await listLessons().catch(() => [])).slice(0, 80).map((l) => ({ topic: l.topic, updated: l.updated, mode: l.mode }))
   const view = await knowledgeView().catch(() => null)
-  const concepts = (view?.concepts ?? []).filter((c) => c.seen > 0).map((c) => ({ name: c.name, mastery: c.estimate, private: c.private }))
-  return examTopics({ lessons: withPrivacy, concepts, now: Date.now() }, 5)
+  const concepts = (view?.concepts ?? []).filter((c) => c.seen > 0).map((c) => ({ name: c.name, mastery: c.estimate }))
+  return examTopics({ lessons, concepts, now: Date.now() }, 5)
 }
 
 /** Starts a mock: picks its problem or questions (writes the exam paper), and starts its clock */

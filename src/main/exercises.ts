@@ -12,8 +12,7 @@
  *
  * The level comes from Tide's difficulty policy (shared/difficulty decide), replayed over the
  * lesson's marked answers with what the knowledge map knows; Claude's own level is used only when
- * there's nothing to replay. Private lessons never reach Claude (main/teacher); a lesson marked
- * private is refused here too, and Claude is only ever offered exercises Claude itself verified.
+ * there's nothing to replay. Claude is only ever offered exercises Claude itself verified.
  */
 import type { McpTool } from './tideMcp'
 import type { ToolContext } from './agent'
@@ -26,7 +25,6 @@ export interface LessonInfo {
   topic?: string
   /** The lesson's notebook, for the knowledge map */
   path?: string
-  private?: boolean
   /** The lesson so far, the learner's answer last */
   history?: Turn[]
   /** The marking model's verdict on that answer, when it marked one */
@@ -41,7 +39,7 @@ export function setLessonInfo(lesson: string | undefined, info: LessonInfo) {
   lessons.set(lesson, { ...info, failures: 0, ...(known && lessons.get(lesson)?.topic === info.topic ? { known } : {}) })
 }
 
-/** What Tide knows of a lesson's turn (main/tideMcpTools reads it to keep private lessons private) */
+/** What Tide knows of a lesson's turn */
 export const lessonInfo = (lesson: string | undefined): LessonInfo | undefined => (lesson ? lessons.get(lesson) : undefined)
 
 interface Ready {
@@ -80,7 +78,7 @@ async function levelFor(info: (LessonInfo & { known?: Known }) | undefined, topi
     if (answers.length) {
       if (!info.known) {
         const { knownFor } = await import('./difficulty')
-        info.known = await knownFor(topic, info.path).catch(() => ({ concept: null, prerequisites: [] }))
+        info.known = await knownFor(topic).catch(() => ({ concept: null, prerequisites: [] }))
       }
       const { state, last } = replay(answers, info.known)
       return { level: state.level, ...(last ? { move: last } : {}) }
@@ -104,15 +102,13 @@ export async function ioFor(lab: string): Promise<ExerciseIO> {
 /** A verified exercise Claude set before, at about this level, not yet shown in this lesson */
 async function fromBank(topic: string, kind: ExerciseKind | undefined, level: Level, lesson: string): Promise<BankProblem | undefined> {
   const { readBank } = await import('./bank')
-  // Only Claude's own: the bank also holds problems Gemma wrote for private lessons, which never leave the Mac
+  // Only Claude's own: the bank also holds problems Gemma wrote, checked less strictly
   const bank = (await readBank(topic).catch(() => [] as BankProblem[])).filter((p) => p.source === 'claude' && (!kind || kindOf(p) === kind))
   const seen = shownIn.get(lesson) ?? new Set<string>()
   return pickProblem(bank, level, (p) => seen.has(p.id))
 }
 
 const offer = (p: BankProblem, why: string) => `${why} A verified exercise from the bank (id ${p.id}, ${['easy', 'medium', 'hard'][p.level - 1]}):\n${p.text.slice(0, 600)}\nQuestion: ${p.ask}\n\nPut <exercise id="${p.id}"/> as the last thing in your reply to set it: Tide puts in the problem, its hidden solution and tests. Don't restate it.`
-
-const privateNote = 'This lesson is private: it stays on the Mac, and its exercises are set by Tide’s local model.'
 
 const KIND_WORD: Record<ExerciseKind, string> = { code: 'a code', sql: 'a SQL', maths: 'a maths', concept: 'a' }
 
@@ -144,7 +140,6 @@ export const setExerciseTool: McpTool = {
     sweep()
     const lesson = ctx.labId ?? 'claude'
     const info = lessons.get(lesson)
-    if (info?.private) return privateNote
     const parsed = parseExercise(args, info?.topic)
     if ('error' in parsed) return parsed.error
     const x = parsed.exercise
@@ -193,7 +188,6 @@ export const bankedExerciseTool: McpTool = {
   async run(args, ctx: ToolContext) {
     const lesson = ctx.labId ?? 'claude'
     const info = lessons.get(lesson)
-    if (info?.private) return privateNote
     const topic = info?.topic || String(args.topic ?? '').trim()
     if (!topic) return 'Give the topic.'
     const kind = ['code', 'sql', 'maths', 'concept'].includes(String(args.kind)) ? (String(args.kind) as ExerciseKind) : undefined

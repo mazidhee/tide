@@ -1,7 +1,7 @@
 /**
  * Tools Tide serves to Claude that Gemma's loop has no need of (it gets the same text in its
  * prompt): the learner's profile, plan and what's due, past lessons on a topic, and recording a
- * marked answer into What you know. Private projects are left out of everything here.
+ * marked answer into What you know.
  */
 import type { McpTool } from './tideMcp'
 
@@ -56,13 +56,11 @@ export const EXTRA_TOOLS: McpTool[] = [
     inputSchema: obj({ topic: { type: 'string', description: 'Optional: a topic, for the past mistakes and misconceptions on it' } }),
     async run(args, ctx) {
       const id = ctx.step({ kind: 'read_note', label: 'Looking at what Tide knows about you', status: 'running', depth: 0 })
-      const [{ directionLine }, { memoryPrompt }, { recallStats }, { listLessons }, { privatePath }, agent, { pastOnTopic }] = await Promise.all([import('./coach'), import('./memory'), import('./recall'), import('./lessons'), import('./projects'), import('./agent'), import('./learnerProfile')])
+      const [{ directionLine }, { memoryPrompt }, { recallStats }, { listLessons }, agent, { pastOnTopic }] = await Promise.all([import('./coach'), import('./memory'), import('./recall'), import('./lessons'), import('./agent'), import('./learnerProfile')])
       const plan = await agent.runTideTool('study_plan', {}, { ...ctx, step: () => '', updateStep: () => {} }).catch(() => '')
       const lessons = (await listLessons().catch(() => [])).slice(0, 30)
       const open: string[] = []
       for (const l of lessons) {
-        const path = 'path' in l.scope ? l.scope.path : ''
-        if (path && (await privatePath(path).catch(() => true))) continue
         open.push(`- ${new Date(l.updated).toISOString().slice(0, 10)} ${l.mode}: ${l.topic} (${l.answers} answers${l.finished ? ', finished' : ''})`)
         if (open.length >= 12) break
       }
@@ -88,7 +86,7 @@ export const EXTRA_TOOLS: McpTool[] = [
       const topic = String(args.topic ?? '').trim()
       const id = ctx.step({ kind: 'read_note', label: `Looking at your earlier lessons on ${topic}`, status: 'running', depth: 0 })
       const { earlierLessons } = await import('./lessons')
-      const text = await earlierLessons(topic, false).catch(() => '')
+      const text = await earlierLessons(topic).catch(() => '')
       ctx.updateStep(id, { status: 'done' })
       return text || 'No earlier lessons on this topic.'
     }
@@ -146,8 +144,6 @@ export const EXTRA_TOOLS: McpTool[] = [
       const cards = (Array.isArray(args.cards) ? args.cards : []).map((c: { front?: unknown; back?: unknown }) => ({ front: String(c?.front ?? '').trim(), back: String(c?.back ?? '').trim() })).filter((c) => c.front && c.back).slice(0, 30)
       if (!topic || !cards.length) return 'Give a topic and at least one card with a front and a back.'
       const note = String(args.note ?? '').trim()
-      const { privatePath } = await import('./projects')
-      if (note && (await privatePath(note).catch(() => true))) return 'That note is in a private project, which never leaves this Mac: cards for it are made there.'
       const id = ctx.step({ kind: 'remember', label: `Making ${cards.length} flashcard${cards.length === 1 ? '' : 's'} on ${topic}`, status: 'running', depth: 0 })
       const [{ saveCards }, { cardsToMarkdown }, { reindexPath }] = await Promise.all([import('./study'), import('@shared/cards'), import('./search')])
       const path = await saveCards(note || `Flashcards/${topic.replace(/[\\/:*?"<>|#^[\]]/g, ' ').slice(0, 60).trim()}.md`, cardsToMarkdown(cards))
@@ -230,12 +226,10 @@ export const EXTRA_TOOLS: McpTool[] = [
     async run(args, ctx) {
       const q = String(args.query ?? '').trim()
       const id = ctx.step({ kind: 'search_notes', label: `Searching your video transcripts for “${q}”`, status: 'running', depth: 0 })
-      const [{ search, indexReady }, { getSettings }, { privatePath }] = await Promise.all([import('./search'), import('./settings'), import('./projects')])
+      const [{ search, indexReady }, { getSettings }] = await Promise.all([import('./search'), import('./settings')])
       await indexReady()
       const videos = `${(getSettings().libraryFolder || 'Library').replace(/\/+$/, '')}/Videos/`
-      const found = await search(q, 8, (p) => p.startsWith(videos))
-      const hits: typeof found = []
-      for (const h of found) if (!(await privatePath(h.path).catch(() => true))) hits.push(h)
+      const hits = await search(q, 8, (p) => p.startsWith(videos))
       ctx.updateStep(id, { status: 'done', detail: `${hits.length} passages` })
       if (!hits.length) return 'No saved video transcript matches.'
       return hits.map((h) => `${h.title}${h.heading ? ` > ${h.heading}` : ''} (path: ${h.path})\n${h.text.slice(0, 900)}`).join('\n\n')
@@ -249,10 +243,6 @@ export const EXTRA_TOOLS: McpTool[] = [
     async run(args, ctx) {
       const concept = String(args.concept ?? '').trim()
       if (!concept) return 'Give the concept.'
-      const { lessonInfo } = await import('./exercises')
-      const info = lessonInfo(ctx.labId)
-      // A private notebook's lesson never reaches Claude; checked here too
-      if (info?.private || (info?.path && (await (await import('./projects')).privatePath(info.path).catch(() => true)))) return 'This lesson is private: other courses are not brought in.'
       const id = ctx.step({ kind: 'search_notes', label: `Looking through your other courses and videos for “${concept}”`, status: 'running', depth: 0 })
       const [{ relatedMaterial }, { relatedForPrompt }] = await Promise.all([import('./related'), import('@shared/related')])
       const r = await relatedMaterial(concept, { exclude: String(args.exclude ?? '').trim() || undefined, limit: 3 })

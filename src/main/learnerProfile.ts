@@ -5,8 +5,7 @@
  *
  * - After a lesson: code rewrites the measured lines (pace, calibration, hints) from the records,
  *   and the background model (Haiku) proposes a few small changes from the lesson's transcript,
- *   marks, skips and threads, which code applies. A private or Metabase lesson's content never
- *   goes to Claude: those lessons count towards the measurements only.
+ *   marks, skips and threads, which code applies.
  * - Each week: the planning model (Opus) tidies it (merges, resolves, drops), in the same small
  *   steps.
  * - The learner's own edits stay: what they wrote or changed isn't reworded or removed, and what
@@ -241,25 +240,17 @@ export async function setRhythm(r: RhythmFacts): Promise<void> {
 
 // ---------- After a lesson ----------
 
-/** Whether a lesson's content must stay on this Mac: a private project, or about Metabase */
-export async function lessonIsPrivate(r: LessonRecord): Promise<boolean> {
-  const path = 'path' in r.scope ? r.scope.path : ''
-  const { jobRoute } = await import('./ai')
-  const route = await jobRoute('profileUpdate', `${r.topic}\n${r.turns.map((t) => t.content).join('\n').slice(0, 20_000)}`, { path: path || undefined, text: r.topic })
-  return route.who === 'gemma' && (route.reason === 'private' || route.reason === 'metabase')
-}
-
 export interface UpdateDeps {
   /** Asks the background model; null when it can't (Claude unavailable and Gemma not loaded) */
-  ask?: (prompt: string, system: string, isPrivate: boolean) => Promise<{ text: string; by: 'claude' | 'gemma' } | null>
+  ask?: (prompt: string, system: string) => Promise<{ text: string; by: 'claude' | 'gemma' } | null>
 }
 
 /** The background model, as the job's route says: Claude's Haiku; Gemma only when it is loaded already */
-async function askModel(prompt: string, system: string, isPrivate: boolean): Promise<{ text: string; by: 'claude' | 'gemma' } | null> {
+async function askModel(prompt: string, system: string): Promise<{ text: string; by: 'claude' | 'gemma' } | null> {
   const { jobRoute, completeFor } = await import('./ai')
-  const route = await jobRoute('profileUpdate', prompt, { private: isPrivate })
+  const route = await jobRoute('profileUpdate')
   if (route.who === 'claude') {
-    const text = await completeFor('profileUpdate', prompt, system, { priority: 'background', private: isPrivate, noFallback: true }).catch(() => null)
+    const text = await completeFor('profileUpdate', prompt, system, { priority: 'background', noFallback: true }).catch(() => null)
     if (text !== null) return { text, by: 'claude' }
   }
   // Gemma only if it's in memory anyway: the profile never loads 10 GB on its own
@@ -272,11 +263,9 @@ async function askModel(prompt: string, system: string, isPrivate: boolean): Pro
 
 /**
  * Updates the profile from one lesson: the measured lines always; the model's few changes when the
- * lesson may go to it. A private or Metabase lesson's content never leaves the Mac: it is skipped
- * for the model (its marks still count in the measurements).
+ * lesson is worth reading.
  */
 export async function updateFromLesson(r: LessonRecord, deps: UpdateDeps = {}): Promise<Change[]> {
-  const isPrivate = await lessonIsPrivate(r).catch(() => true)
   const ask = deps.ask ?? askModel
   return change(r.topic, 'code', async (p, ownership, st) => {
     const measured = await codeLines(p, st)
@@ -286,8 +275,8 @@ export async function updateFromLesson(r: LessonRecord, deps: UpdateDeps = {}): 
     // Keep the record of lessons read small
     const ids = Object.keys(st.lessons)
     for (const k of ids.slice(0, Math.max(0, ids.length - 400))) delete st.lessons[k]
-    if (isPrivate || !worthReading(r)) return { profile, changes }
-    const reply = await ask(profileUpdatePrompt(renderProfile(profile), lessonText(r)), PROFILE_UPDATE_SYSTEM, false).catch(() => null)
+    if (!worthReading(r)) return { profile, changes }
+    const reply = await ask(profileUpdatePrompt(renderProfile(profile), lessonText(r)), PROFILE_UPDATE_SYSTEM).catch(() => null)
     if (!reply) return { profile, changes }
     const ops = parseOps(reply.text)
     const applied = applyOps(profile, ops, { date: noteDate(), ownership, maxOps: 4, sections: ['clicks', 'missed', 'misconceptions', 'preferences', 'strengths', 'goals'] })
@@ -331,7 +320,6 @@ async function weekFacts(): Promise<string> {
   const records = (await recentRecords(7)).sort((a, b) => a.updated - b.updated)
   const lines: string[] = []
   for (const r of records) {
-    if (await lessonIsPrivate(r).catch(() => true)) continue
     const m = measure([r])
     lines.push(`${new Date(r.updated).toISOString().slice(0, 10)} ${r.topic}: ${m.answered} marked, ${m.hinted} with hints${r.finished ? ', finished' : ''}`)
     const t = lessonText(r, 900).split('\n').filter((l) => /^ {2}Marked (wrong|partial)|^Learner (said|asked)/.test(l))
@@ -386,12 +374,10 @@ export async function pastOnTopic(topic: string): Promise<string> {
   }
   if (t) {
     const { listMistakes } = await import('./mistakes')
-    const { privatePath } = await import('./projects')
     const all = await listMistakes().catch(() => [] as Awaited<ReturnType<typeof listMistakes>>)
     const near: typeof all = []
     for (const m of all) {
       if (similarity(m.topic, t) < 0.5 && !norm(m.topic).includes(norm(t)) && !norm(t).includes(norm(m.topic))) continue
-      if (m.path && (await privatePath(m.path).catch(() => true))) continue
       near.push(m)
     }
     if (near.length)

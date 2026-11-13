@@ -1,7 +1,7 @@
 /**
  * Lesson threads in main: on Gemma a thread goes through the normal chat path (not a lesson turn:
- * no lesson checks, no read-back that would push the lesson out of the model's cache), and a
- * private notebook's thread never reaches Claude.
+ * no lesson checks, no read-back that would push the lesson out of the model's cache), and every
+ * notebook's thread goes to Claude when Claude is chosen.
  */
 import { describe, expect, it, vi } from 'vitest'
 import type { ChatEvent, ChatRequest } from '../src/shared/types'
@@ -22,7 +22,6 @@ vi.mock('../src/main/claudeEngine', () => ({
     return 'from claude'
   }
 }))
-vi.mock('../src/main/projects', () => ({ privatePath: async (p: string) => p.startsWith('Secret') }))
 vi.mock('../src/main/learn', () => ({ getNotebooks: async () => [], filedUnder: () => null }))
 vi.mock('../src/main/metabase', () => ({ metabaseHost: () => '', metabaseReady: () => false }))
 const toGemma: ChatRequest[] = []
@@ -66,10 +65,10 @@ describe('a lesson thread in main', () => {
 })
 
 describe('who answers a thread', () => {
-  it('a private notebook’s thread stays on Gemma, even with Claude chosen; a public one goes to Claude', async () => {
+  it('a work project’s thread and a Metabase one go to Claude like any other', async () => {
     const { teacherFor } = await vi.importActual<typeof import('../src/main/teacher')>('../src/main/teacher')
-    const thread = { id: 'p', messages: [{ role: 'user' as const, content: 'why?' }], thread: 't', engine: 'claude' as const }
-    expect((await teacherFor({ ...thread, scope: { kind: 'folder', path: 'Secret project' } })).who).toBe('gemma')
+    const thread = { id: 'p', messages: [{ role: 'user' as const, content: 'why does our Metabase dashboard do this?' }], thread: 't', engine: 'claude' as const }
+    expect((await teacherFor({ ...thread, scope: { kind: 'folder', path: 'Secret project' } })).who).toBe('claude')
     expect((await teacherFor({ ...thread, scope: { kind: 'folder', path: 'Python' } })).who).toBe('claude')
   })
 })

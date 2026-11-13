@@ -44,6 +44,3 @@ export function rowsTable(cols: MbColumn[], rows: unknown[][], limit = 25): stri
   if (rows.length > limit) lines.push(`(${rows.length - limit} more rows not shown)`)
   return lines.join('\n')
 }
-
-/** Whether a question is about Metabase or its data, so that conversation stays on this Mac */
-export const aboutMetabase = (text: string, host?: string) => /\bmetabase\b/i.test(text) || (!!host && text.toLowerCase().includes(host.toLowerCase()))

@@ -429,12 +429,6 @@ export async function send(owner: WebContents, req: { session: string; root: str
   const { claudeModel } = await import('@shared/claude')
   const { getSettings } = await import('../settings')
   const sess = ensureSession(req.session, root, req.mode, owner, req.model ?? claudeModel(req.mode === 'mentor' ? 'hard' : 'teach', getSettings().ai.claude))
-  // A private project never goes to Claude (nor does a bug hunt in its copy)
-  const { privateRoot } = await import('../ideaProjects')
-  if (await privateRoot(huntFor(root)?.source ?? root).catch(() => true)) {
-    emit(sess, { type: 'error', message: 'This project is private, so Claude isn’t used for it. The Tutor tab helps on this Mac, and the project home’s mentor review runs on Gemma.' })
-    return
-  }
   if (!ready.ready) {
     emit(sess, { type: 'error', message: `Claude isn’t available: ${ready.why ?? 'not ready'}. The IDE works without it; the Tutor tab can help on this Mac.` })
     return
@@ -524,8 +518,6 @@ export function resolve(id: string, text: string | null) {
 /** A copy of the project for a bug hunt, in Tide's own folder, opened as a workspace of its own */
 export async function startHunt(rootIn: string): Promise<BugHunt> {
   const source = allowed(rootIn)
-  const { privateRoot } = await import('../ideaProjects')
-  if (await privateRoot(source).catch(() => true)) throw new Error('This project is private: a bug hunt needs Claude, which isn’t used for it.')
   const id = randomUUID().slice(0, 8)
   const root = join(huntsDir(), `${basename(source)}-bug-hunt-${id}`)
   await fs.mkdir(root, { recursive: true })

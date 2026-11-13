@@ -817,8 +817,6 @@ export interface TideApi {
     load(): Promise<GemmaStatusView>
     /** `busy`: not unloaded, the server is answering a request */
     unload(): Promise<GemmaStatusView & { busy?: boolean }>
-    /** A note is opening: Gemma loads ahead when it's in a private project and Claude teaches */
-    prewarmFor(path: string): Promise<boolean>
   }
   /** Every model call, from the usage log (main/usageLog): Settings › Usage */
   usage: {
@@ -886,19 +884,19 @@ export interface TideApi {
     view(): Promise<import('./teachingAdjust').TeachingView>
     /** Switches an adjustment off, or back on */
     setAdjustment(id: import('./teachingAdjust').AdjustmentId, on: boolean): Promise<import('./teachingAdjust').TeachingView>
-    /** Asks Opus to review one lesson now (null when it can't: private, no Claude, too short) */
+    /** Asks Opus to review one lesson now (null when it can't: no Claude, too short) */
     review(lesson: string): Promise<import('./teachingAdjust').LessonReview | null>
   }
   /** The warm-up before a lesson: quick recall cards on what it builds on (shared/warmup) */
   warmup: {
-    /** path: the note or folder the lesson is on, so a private project's concepts stay with private lessons */
+    /** path: the note or folder the lesson is on (its subject on the map) */
     for(topic: string, path?: string): Promise<import('./warmup').WarmupSet>
     /** One card was graded: scheduled in its own store and counted on its concept */
     grade(card: import('./warmup').WarmupCard, verdict: Verdict): Promise<void>
   }
   /** Free readings found for a topic; when there are none yet, they're looked up in the background */
   readings: {
-    /** path: the note or folder the lesson is on, so a private project's topics are never looked up */
+    /** path: the note or folder the lesson is on */
     for(topic: string, path?: string): Promise<import('./readings').Reading[]>
   }
   /** Your roadmaps sorted against your aims (main/curriculum) */
@@ -1043,7 +1041,7 @@ export interface TideApi {
     status(): Promise<{ ready: boolean; detail: string }>
     setup(): Promise<{ ready: boolean; detail: string }>
     speak(text: string, voice?: string, speed?: number): Promise<Uint8Array>
-    /** where: the lesson's note and topic, so a private project's answers stay on this Mac */
+    /** where: the lesson's note and topic (the topic helps Deepgram spell its jargon) */
     transcribe(wav: Uint8Array, where?: { path?: string; topic?: string }): Promise<string>
     hasDeepgram(): Promise<boolean>
     /** Checks the key with Deepgram, then keeps it in the Keychain (null forgets it) */
@@ -1176,7 +1174,7 @@ export interface TideApi {
   }
   difficulty: {
     /** What the knowledge map has on a lesson's topic and what it builds on (shared/difficulty.ts) */
-    known(topic: string, path?: string): Promise<import('./difficulty').Known>
+    known(topic: string): Promise<import('./difficulty').Known>
   }
   runner: {
     /** `tests`: a code question's hidden tests (Python); `labId`: the data lab that SQL is run in */

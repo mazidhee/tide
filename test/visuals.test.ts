@@ -156,7 +156,7 @@ describe("Claude's instructions", () => {
     expect(VISUAL_GUIDE).toMatch(/keyboard accessible/i)
   })
 
-  it("Gemma's prompts never mention them: private notebooks keep to the fixed simulations and mermaid", () => {
+  it("Gemma's prompts never mention them: Gemma keeps to the fixed simulations and mermaid", () => {
     for (const sys of [TUTOR_SYSTEM, TUTOR_LESSON_SYSTEM]) {
       expect(sys).not.toContain('```visual')
       expect(sys).not.toMatch(/visual\.steps|custom visual/i)

@@ -1841,18 +1841,6 @@
   color: var(--ink-muted);
 }
 
-.ipf-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 13px;
-  color: var(--ink-soft);
-}
-
-.ipf-toggle input {
-  accent-color: var(--accent);
-}
-
 /* A question, one per screen */
 .ipf-count {
   margin: 0 0 12px;

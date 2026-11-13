@@ -63,7 +63,6 @@ export function ProjectsShelf() {
                     {c.current ? `Milestone ${c.progress.index + 1} of ${c.progress.total}: ${c.current}` : 'Every milestone done'}
                     {c.step && c.step !== 'finished' ? ` · ${SESSION_STEPS.find((s) => s.id === c.step)?.label ?? ''} next` : ''}
                     {` · ${languageLabel(c.language)}`}
-                    {c.private ? ' · Private' : ''}
                   </span>
                 </span>
                 <span className="ip-shelf-bar" aria-label={`${c.progress.done} of ${c.progress.total} milestones done`}>

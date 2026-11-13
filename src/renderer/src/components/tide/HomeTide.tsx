@@ -387,8 +387,8 @@ export function HomeTide(p: HomeTideProps) {
               {conns === null
                 ? 'Nothing to show yet.'
                 : mac + cloudCalls === 0
-                  ? 'No answers yet today. Lessons are written on this Mac; a cloud model is asked only to check the hard parts, and never about a private notebook.'
-                  : `${mac.toLocaleString('en-GB')} ${mac === 1 ? 'answer' : 'answers'} from the model on this Mac. ${cloudCalls ? `${cloudCalls.toLocaleString('en-GB')} ${cloudCalls === 1 ? 'call' : 'calls'} sent to ${cloud.map((c) => c.name).join(', ')}, none from a private notebook.` : 'Nothing was sent to a cloud service.'}`}
+                  ? 'No answers yet today from the model on this Mac or the cloud helpers.'
+                  : `${mac.toLocaleString('en-GB')} ${mac === 1 ? 'answer' : 'answers'} from the model on this Mac. ${cloudCalls ? `${cloudCalls.toLocaleString('en-GB')} ${cloudCalls === 1 ? 'call' : 'calls'} sent to ${cloud.map((c) => c.name).join(', ')}.` : 'Nothing was sent to a cloud service.'}`}
             </p>
             {p.problems > 0 && (
               <button className="td-more td-retry" onClick={() => app.setView({ kind: 'practice' })}>

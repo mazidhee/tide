@@ -113,7 +113,7 @@ const RULES = TUTOR_SYSTEM.slice(TUTOR_SYSTEM.indexOf('\nRules:'), TUTOR_SYSTEM.
 /** In a lesson Tide runs no checks for Claude: it runs them itself */
 const CLAUDE_LESSON_RULES = `\n- Every numbered practice problem (code, SQL, a calculation, or a conceptual problem to answer at length) goes through Tide: first banked_exercise for one you verified before, else set_exercise with its proof and a common mistake. When it's verified, end your reply with <exercise id="…"/> and Tide sets it, numbered, with its hidden solution and tests: don't write that problem, its <solution> or its <ask> yourself. If the check fails, fix what it says and call set_exercise once more with repair_of; if that fails too, take the bank's exercise it offers or set a different one. Never show an exercise that wasn't verified, and never write a \`\`\`tests block yourself. To have them try an exercise again after a miss, ask with a plain code <ask> naming the same function: Tide gives it the exercise's hidden tests again. Quick questions while you teach (predict, a short check, explain back) are ordinary <ask> tags. A note from Tide giving a mark ("(Tide: … marked this answer …") comes from a second, careful marker: write your <grade> with that verdict and score, in your own words.`
 
-// Custom visuals are Claude's alone: Gemma (and so every private notebook) keeps to the fixed simulations and mermaid
+// Custom visuals are Claude's alone: Gemma keeps to the fixed simulations and mermaid
 export const CLAUDE_TUTOR_SYSTEM = `${CLAUDE_TOOLS}${RULES}\n${SIM_GUIDE}\n${VISUAL_GUIDE}`
 // A Claude lesson has the whole simulation guide in its (cached) prompt, where Gemma's lessons get only
 // the kinds their topic can use, with the instructions (shared/workarounds lessonSimSubset)

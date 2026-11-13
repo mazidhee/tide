@@ -1,6 +1,6 @@
 /**
  * Gemma on demand (shared/gemmaPolicy, main/modelIdle, main/ai completeFor): while Claude teaches,
- * nothing loads Gemma ahead of time; a job routed to Gemma (private, or Claude failed) loads it;
+ * nothing loads Gemma ahead of time; a job routed to Gemma (picked, or Claude failed) loads it;
  * it is unloaded at launch only when nobody is using it. Against a fake mlx-vlm server and a
  * stand-in `claude`, never the real ones.
  */
@@ -15,7 +15,6 @@ let online = true
 vi.mock('electron', () => ({ app: { getPath: () => dir, getAppPath: () => process.cwd(), on: () => {}, isPackaged: false }, net: { isOnline: () => online } }))
 const settings = { vaultPath: dir, libraryFolder: 'Library', ai: { baseUrl: 'http://127.0.0.1:9/v1', model: 'gemma', temperature: 0.3, autoStart: false, unloadAfterMinutes: 15 as number | undefined, gemmaUnloadWithClaudeMinutes: undefined as number | undefined, claude: {} } }
 vi.mock('../src/main/settings', () => ({ getSettings: () => settings }))
-vi.mock('../src/main/projects', async (orig) => ({ ...(await orig<object>()), privatePath: async (p: string) => p.startsWith('Secret') }))
 vi.mock('../src/main/learn', async (orig) => ({ ...(await orig<object>()), getNotebooks: async () => [{ path: 'Secret', name: 'Secret', project: { private: true, docs: [] } }] }))
 
 const policy = await import('../src/shared/gemmaPolicy')
@@ -126,15 +125,19 @@ describe('the routing table', () => {
   it('lists every audited job, each on the expected Claude model', () => {
     expect(Object.fromEntries(jobs.map((j) => [j, policy.JOB_ROUTES[j].role]))).toEqual(EXPECTED)
   })
-  it('sends each job to Claude while Claude teaches, unless it is private, about Metabase, or Gemma’s alone', () => {
+  it('sends every job to Claude while Claude teaches, with no privacy gate: Gemma only when picked or the job is Gemma’s alone', () => {
     const main = { main: true }
     for (const job of jobs) {
       const role = EXPECTED[job]
       expect(policy.routeJob(job, { claude: main })).toEqual(role ? { who: 'claude', role } : { who: 'gemma', reason: 'gemma-only' })
-      expect(policy.routeJob(job, { claude: main, private: true })).toEqual({ who: 'gemma', reason: 'private' })
-      expect(policy.routeJob(job, { claude: main, metabase: true })).toEqual({ who: 'gemma', reason: 'metabase' })
       expect(policy.routeJob(job, { claude: main, picked: 'gemma' })).toEqual({ who: 'gemma', reason: 'picked' })
+      // Old callers' privacy flags are ignored: routeJob takes none
+      expect(policy.routeJob(job, { claude: main, private: true, metabase: true } as never)).toEqual(role ? { who: 'claude', role } : { who: 'gemma', reason: 'gemma-only' })
     }
+  })
+  it('has no privacy field on any job, and no private or Metabase reason', () => {
+    for (const job of jobs) expect(Object.keys(policy.JOB_ROUTES[job]).sort()).toEqual(['label', 'role'])
+    expect(policy.reasonFromWhy('Private: this stays on your Mac')).toBe('claude-failed')
   })
   it('sends everything to Gemma, with Claude’s reason, when Claude can’t teach', () => {
     for (const why of ['limit', 'logged-out', 'offline', 'no-claude'] as const)
@@ -169,8 +172,8 @@ describe('when Gemma loads and unloads', () => {
     expect(policy.shouldWarmGemma({ claudeMain: true, demandAt: now - 6 * 60_000, now, idleMinutes: 5 })).toBe(false)
   })
   it('says plainly whether Gemma is loaded and why', () => {
-    expect(policy.gemmaStatusLine({ loaded: false, claudeMain: true, idleMinutes: 5 })).toBe('Gemma: not loaded. Claude is teaching. It loads when a private notebook or offline lesson needs it.')
-    expect(policy.gemmaStatusLine({ loaded: true, claudeMain: true, reason: 'private', idleMinutes: 5 })).toBe('Gemma: loaded for your private notebook, unloads after 5 min unused.')
+    expect(policy.gemmaStatusLine({ loaded: false, claudeMain: true, idleMinutes: 5 })).toBe('Gemma: not loaded. Claude is teaching. It loads when Claude can’t answer or you pick Gemma.')
+    expect(policy.gemmaStatusLine({ loaded: true, claudeMain: true, reason: 'limit', idleMinutes: 5 })).toBe('Gemma: loaded for teaching while Claude is at its limit, unloads after 5 min unused.')
     expect(policy.takeoverNote({ why: 'Claude is unavailable (at your plan’s limit): Gemma is teaching', loaded: false })).toBe('Claude is unavailable (at your plan’s limit): Gemma is teaching, about 5 s to load')
     expect(policy.takeoverNote({ why: 'Gemma is teaching', loaded: true })).toBe('Gemma is teaching')
   })
@@ -189,7 +192,7 @@ describe('no warm-up while Claude teaches', () => {
     expect(warm).not.toHaveBeenCalled()
     expect(fake).toMatchObject({ chats: 0, patches: 0, loaded: false })
     expect(idle.idleMinutes()).toBe(5)
-    expect((await idle.gemmaStatus()).line).toBe('Gemma: not loaded. Claude is teaching. It loads when a private notebook or offline lesson needs it.')
+    expect((await idle.gemmaStatus()).line).toBe('Gemma: not loaded. Claude is teaching. It loads when Claude can’t answer or you pick Gemma.')
   })
   it('keeps Gemma ready as before when Claude can’t teach', async () => {
     await claudeIs({ main: false, why: 'logged-out' })
@@ -201,35 +204,29 @@ describe('no warm-up while Claude teaches', () => {
 })
 
 describe('on-demand load', () => {
-  it('sends a private job to Gemma, loading it, and a public one to Claude', async () => {
+  it('sends a job from a once-private project to Claude, leaving Gemma unloaded', async () => {
     await claudeIs({ main: true })
-    expect(await ai.completeFor('flashcards', 'cards on loops', undefined, { path: 'Python/loops.md' })).toBe('claude sonnet: ok')
-    expect(await ai.completeFor('marginNote', 'a margin note', undefined, { path: 'Python/loops.md' })).toBe('claude haiku: ok')
+    expect(await ai.completeFor('flashcards', 'cards on loops', undefined)).toBe('claude sonnet: ok')
+    expect(await ai.completeFor('marginNote', 'a margin note', undefined)).toBe('claude haiku: ok')
+    expect(await ai.completeFor('flashcards', 'cards on the design in Secret/design.md', undefined)).toBe('claude sonnet: ok')
+    expect(fake).toMatchObject({ chats: 0, loaded: false })
+  })
+  it('sends Metabase work and private projects named in a job’s text to Claude', async () => {
+    await claudeIs({ main: true })
+    expect(await ai.completeFor('weekPlan', 'plan a week with the metabase dashboards', 'You plan.')).toBe('claude sonnet: ok')
+    expect(await ai.completeFor('weekPlan', 'plan a week: Notebooks: Secret, Python', 'You plan.')).toBe('claude sonnet: ok')
     expect(fake.chats).toBe(0)
-    expect(await ai.completeFor('flashcards', 'cards on the design', undefined, { path: 'Secret/design.md' })).toBe('gemma: ok')
-    expect(fake).toMatchObject({ chats: 1, loaded: true })
-    expect(idle.gemmaDemand()?.reason).toBe('private')
-    expect((await idle.gemmaStatus()).line).toBe('Gemma: loaded for your private notebook, unloads after 5 min unused.')
   })
-  it('keeps Metabase and private projects named in a job’s text on the Mac', async () => {
-    await claudeIs({ main: true })
-    expect(await ai.completeFor('weekPlan', 'plan a week with the metabase dashboards', 'You plan.', { text: 'x' })).toBe('gemma: ok')
-    expect(idle.gemmaDemand()?.reason).toBe('metabase')
-    expect(await ai.completeFor('weekPlan', 'plan a week', 'You plan.', { text: 'Notebooks: Secret, Python' })).toBe('gemma: ok')
-    expect(idle.gemmaDemand()?.reason).toBe('private')
-    expect(fake.chats).toBe(2)
-  })
-  it('loads Gemma ahead when a private note opens or Claude hits its limit', async () => {
+  it('loads Gemma ahead when Claude hits its limit, not because a note opens', async () => {
     const warm = vi.fn(async () => {})
     idle.setGemmaWarmer(warm)
     await claudeIs({ main: true })
-    expect(await ai.prewarmForPath('Python/loops.md')).toBe(false)
-    expect(await ai.prewarmForPath('Secret/plan.md')).toBe(true)
+    expect('prewarmForPath' in ai).toBe(false)
     await new Promise((r) => setTimeout(r, 50))
-    expect(warm).toHaveBeenCalledTimes(1)
+    expect(warm).not.toHaveBeenCalled()
     await claudeIs({ main: false, why: 'limit' })
     await new Promise((r) => setTimeout(r, 50))
-    expect(warm).toHaveBeenCalledTimes(2)
+    expect(warm).toHaveBeenCalledTimes(1)
     expect(idle.gemmaDemand()?.reason).toBe('limit')
   })
 })

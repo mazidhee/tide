@@ -98,10 +98,6 @@ export function ProjectPanel({ notebook, name, info, onChange }: { notebook: str
     <div className="project">
       <div className="project-head">
         <span className="project-kind">{info.kind === 'build' ? 'Building it yourself' : 'Understanding a system'}</span>
-        <label className="check" title="Private: anything about this project is answered by Gemma on this Mac, never a cloud model">
-          <input type="checkbox" checked={info.private} onChange={(e) => save({ ...info, private: e.target.checked })} />
-          Private, on this Mac only
-        </label>
         <button className="link-btn" onClick={() => save(null)}>
           Not a project
         </button>
@@ -234,7 +230,6 @@ function learnFirst(md: string): string {
 
 function ProjectSetup({ name, onCreate }: { name: string; onCreate(info: ProjectInfo): void }) {
   const [kind, setKind] = useState<ProjectKind>('understand')
-  const [secret, setSecret] = useState(true)
   return (
     <div className="project project-setup">
       <p className="project-lead">Make {name} a project: Tide teaches it in the project's own terms, from its documents, as you need it.</p>
@@ -248,11 +243,7 @@ function ProjectSetup({ name, onCreate }: { name: string; onCreate(info: Project
           <span>Something new you'll build to learn. Tide drafts the brief with you, maps what to learn first, and mentors each milestone without writing it for you.</span>
         </button>
       </div>
-      <label className="check">
-        <input type="checkbox" checked={secret} onChange={(e) => setSecret(e.target.checked)} />
-        Private: answered by Gemma on this Mac only (for work and anything confidential)
-      </label>
-      <button className="btn primary" onClick={() => onCreate({ kind, private: secret, docs: [] })}>
+      <button className="btn primary" onClick={() => onCreate({ kind, docs: [] })}>
         Make it a project
       </button>
     </div>

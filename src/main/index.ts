@@ -81,7 +81,7 @@ import { resultText } from '@shared/lab'
 import type { SectionClass } from '@shared/curriculum'
 import type { Known, PlacementSetup } from '@shared/placement'
 import { getBrain } from './brain'
-import { draftBrief, flowSteps, mapProject, privatePath, projectDocs, projectMap, setProject } from './projects'
+import { draftBrief, flowSteps, mapProject, projectDocs, projectMap, setProject } from './projects'
 import { onBrainEvent, recentBrainEvents } from './brainEvents'
 import { getCoach, getWeek, planWeek, saveCoach, updateProfile, inferDirection, autoPlanWeek, weekToThings, setItemDone, catchUp, rollOver, dayStats, journal, writeJournal, weekReview, saveReview, savePlacement, addTopicAfter } from './coach'
 import { clearPhoto, getProfile, getSourcePhoto, setProfile, setSourcePhoto } from './profile'
@@ -281,7 +281,6 @@ function registerIpc() {
   handle('gemma:status', () => gemmaStatus())
   handle('gemma:load', () => loadGemmaNow())
   handle('gemma:unload', () => unloadGemmaNow())
-  handle('gemma:prewarmFor', (path: string) => import('./ai').then((a) => a.prewarmForPath(path)))
   handle('ai:typing', () => noteTyping())
   setChatsChangedListener((id) => send('chats:changed', id))
   setTerminalListeners(
@@ -321,7 +320,7 @@ function registerIpc() {
   })
   handle('readings:for', async (topic: string, path?: string) => {
     const have = await readingsFor(topic)
-    // Nothing yet: look it up in the background, for next time (never for a private project)
+    // Nothing yet: look it up in the background, for next time
     if (!have.length) findReadings({ topic, path }).catch(() => {})
     return have
   })
@@ -374,7 +373,7 @@ function registerIpc() {
   handle('explore:update', async (id: string, patch: Parameters<typeof import('./explore').updateExplore>[1]) => (await import('./explore')).updateExplore(id, patch))
   handle('explore:remove', async (id: string) => (await import('./explore')).removeExplore(id))
   // Claude's visuals: main/visuals (policy, repair, fallback, kept with the lesson), main/visualFrames (limits)
-  handle('visuals:policy', (scope: unknown) => visualPolicy(scope))
+  handle('visuals:policy', () => visualPolicy())
   handle('visuals:repair', (req: { code: string; errors: string[]; scope: unknown }) => repairVisual(req))
   handle('visuals:fallback', (req: { code: string; title: string; scope: unknown }) => visualFallback(req))
   handle('visuals:cached', (id: string) => lessonVisuals(id))
@@ -448,7 +447,7 @@ function registerIpc() {
   handle('workshop:forFolder', async (folder: string) => (await workshop()).projectForFolder(String(folder ?? '')))
   handle('workshop:forTopic', async (topic: string) => (await workshop()).projectForTopic(String(topic ?? '')))
   handle('workshop:propose', async (o: { topic: string; notebook?: string; section?: string }) => (await workshop()).proposeProject({ topic: String(o?.topic ?? ''), notebook: o?.notebook, section: o?.section }))
-  handle('difficulty:known', async (topic: string, path?: string) => (await import('./difficulty')).knownFor(String(topic ?? ''), path))
+  handle('difficulty:known', async (topic: string) => (await import('./difficulty')).knownFor(String(topic ?? '')))
   // ---- end of guided projects and adaptive difficulty ----
   handle('curriculum:status', async () => ({ notebooks: await curriculumStatus(), error: sortError() }))
   handle('curriculum:sort', () => sortRoadmaps())
@@ -661,7 +660,7 @@ function registerIpc() {
   handle('lab:query', (id: string, sql: string) => labQuery(String(id ?? ''), String(sql ?? '')))
   handle('lab:schema', (id: string) => labSchema(String(id ?? '')))
   handle('lab:reset', (id: string) => labReset(String(id ?? '')))
-  handle('lab:load', (id: string, path: string) => labLoadTable(String(id ?? ''), String(path ?? ''), privatePath))
+  handle('lab:load', (id: string, path: string) => labLoadTable(String(id ?? ''), String(path ?? '')))
   handle('runner:run', (language: string, code: string, stdin?: string, opts?: { tests?: string; labId?: string }) => {
     // SQL in a code question runs in the lesson's data lab, like its ```sql blocks
     if (isSql(String(language ?? '')) && opts?.labId) {

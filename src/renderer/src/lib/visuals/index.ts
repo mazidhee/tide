@@ -115,8 +115,8 @@ function scopeOf(el: Element): ChatScope {
   try {
     return JSON.parse(raw) as ChatScope
   } catch {
-    // Unreadable: treated as private, so nothing runs
-    return { kind: 'folder', path: '\u0000unknown' }
+    // Unreadable: as if outside any notebook
+    return { kind: 'none' }
   }
 }
 const lessonOf = (el: Element) => el.closest<HTMLElement>('[data-visual-lesson]')?.dataset.visualLesson || ''

@@ -73,7 +73,7 @@ export const SECTIONS: { id: Section; label: string; icon: IconName; group: stri
   { id: 'tutor', label: 'Tutor and voice', icon: 'tutor', group: 'Learning', description: 'Who teaches you, and how they sound.' },
   { id: 'study', label: 'Study time', icon: 'timer', group: 'Learning', description: 'Timers and breaks while you study.' },
   { id: 'connections', label: 'Connections', icon: 'link', group: 'AI', description: 'Every service Tide uses: what it’s for, where it runs, what it used today, and what you could add.' },
-  { id: 'models', label: 'Models', icon: 'sparkle', group: 'AI', description: 'Who teaches: Claude on your plan, or Gemma on this Mac. Private projects and Metabase always stay with Gemma.' },
+  { id: 'models', label: 'Models', icon: 'sparkle', group: 'AI', description: 'Who teaches: Claude on your plan for everything, with Gemma on this Mac when Claude can’t answer or you pick it.' },
   { id: 'tools', label: 'Tools', icon: 'terminal', group: 'AI', description: 'What the tutor can use: search, code and your tasks.' },
   { id: 'usage', label: 'Usage', icon: 'graph', group: 'AI', description: 'Every model call: how full your Claude plan is, tokens by day, model, job and lesson, speed, and Gemma on this Mac.' },
   { id: 'speed', label: 'Speed', icon: 'gauge', group: 'AI', description: 'Where each answer’s time went: Tide, the model reading, the model writing, and tools.' }
@@ -213,7 +213,7 @@ function MetabaseGroup() {
   }
   const connected = !!state?.url && state.detail !== 'Not connected'
   return (
-    <Group title="Metabase" note="Read-only: the tutor can look and run SELECT queries, never change anything. Anything about Metabase is answered by Gemma on this Mac, never a cloud model.">
+    <Group title="Metabase" note="Read-only: the tutor (Claude, or Gemma when Claude can’t) can look and run SELECT queries, never change anything.">
       {connected ? (
         <Row
           label={
@@ -505,7 +505,7 @@ function PrepGroup() {
   return (
     <Group
       title="Lesson prep while you’re away"
-      note="When Tide is open and you’re away from the Mac, or overnight, Tide gets your next lesson ready: what’s due, the best reading, checked exercises, a visual when it helps, a short plan and the warm-up, so it starts at once. Claude is used only for lessons that aren’t private, never when your plan is near its limit, and within the allowance below; without Claude, Tide prepares what needs no model. Once a week it also writes your weekly review."
+      note="When Tide is open and you’re away from the Mac, or overnight, Tide gets your next lesson ready: what’s due, the best reading, checked exercises, a visual when it helps, a short plan and the warm-up, so it starts at once. Claude is used for every lesson, never when your plan is near its limit, and within the allowance below; without Claude, Tide prepares what needs no model. Once a week it also writes your weekly review."
     >
       <Row label="Prepare lessons ahead" hint={lastLine}>
         <Toggle label="Prepare lessons ahead" on={p.on} onChange={(on) => put({ on })} />
@@ -690,9 +690,9 @@ function TutorSection() {
 }
 
 const DICTATION_HINT = {
-  flow: 'Wispr Flow types what you say into the answer box: hold your Flow key and speak. With Talk and Hands-free on, Tide sends what Flow types as soon as it finishes, and leaves the microphone to Flow. Flow works through its own service, so it isn’t limited to this Mac; use it outside private projects if that matters to you.',
+  flow: 'Wispr Flow types what you say into the answer box: hold your Flow key and speak. With Talk and Hands-free on, Tide sends what Flow types as soon as it finishes, and leaves the microphone to Flow. Flow works through its own service, so it isn’t limited to this Mac.',
   tide: 'Speak records you and Tide writes it out on this Mac (Parakeet).',
-  deepgram: 'Deepgram writes out what you say, with the lesson’s topic as a hint for its jargon. Private projects and Metabase lessons still use Parakeet on this Mac, as does anything Deepgram can’t take.',
+  deepgram: 'Deepgram writes out what you say, with the lesson’s topic as a hint for its jargon. Parakeet on this Mac takes anything Deepgram can’t.',
   handy: 'Speak puts the cursor in the box; press your Handy shortcut and Handy types what you say. Hands-free talk still uses Tide’s model.'
 }
 
@@ -905,7 +905,7 @@ function GemmaGroup() {
       title="Gemma on this Mac"
       note={
         <>
-          About 10 GB of memory while loaded. While Claude teaches, Gemma loads only for private notebooks, Metabase, or when Claude can’t answer (its limit, logged out, offline).{' '}
+          About 10 GB of memory while loaded. While Claude teaches, Gemma loads only when Claude can’t answer (not installed, logged out, at its limit, offline, an error) or you pick it.{' '}
           <button type="button" className="link-btn" onClick={() => app.setView({ kind: 'settings', section: 'usage' })}>
             Its calls and time loaded
           </button>
@@ -968,7 +968,7 @@ function ClaudeGroup() {
   return (
     <Group
       title="Claude"
-      note="Tide runs your own logged-in Claude Code (no API key: any key in the environment is left out) and never reads your login. Private projects and Metabase lessons are always taught by Gemma on this Mac."
+      note="Tide runs your own logged-in Claude Code (no API key: any key in the environment is left out) and never reads your login. Claude takes every lesson and job, Metabase included; Gemma on this Mac steps in when Claude can’t."
     >
       <Row label="Claude Code" hint={state}>
         <button type="button" className="btn ghost small" disabled={checking} onClick={() => check(true)}>
@@ -1327,7 +1327,7 @@ function ToolsSection() {
         </Row>
         {ai.webSearch?.provider === 'auto' && (
           <Row label="How it chooses" hint="Each search goes to the quickest thing that can answer it">
-            <p className="set-note">You.com when its key is saved and its credit isn’t spent: one call, about half a second, with passages from each page, and nothing running on this Mac. Otherwise the search engine on this Mac, then Wikipedia. Lessons on a private project or your Metabase always search from this Mac.</p>
+            <p className="set-note">You.com when its key is saved and its credit isn’t spent: one call, about half a second, with passages from each page, and nothing running on this Mac. Otherwise the search engine on this Mac, then Wikipedia.</p>
           </Row>
         )}
         {(ai.webSearch?.provider === 'brave' || ai.webSearch?.provider === 'tavily' || ai.webSearch?.provider === 'you') && (

@@ -287,10 +287,10 @@ export async function discuss(req: DiscussRequest, signal?: AbortSignal): Promis
   const prompt = discussPrompt({ work: work.title, author: work.author, loc, passage: d.passage, before, after, turns: d.turns.slice(0, -1).map((t) => ({ ...t, text: t.text })), said: req.said.trim() })
   const claimed = makesClaim(req.said)
   const opts = { loc, ...(narrative ? { index, position } : {}), learnerClaimed: claimed }
-  let reply = await completeFor('readAlong', prompt, system, { signal, task: 'tutor', path: req.path })
+  let reply = await completeFor('readAlong', prompt, system, { signal, task: 'tutor' })
   let check = checkDiscussReply(reply, opts)
   if (check.problems.length) {
-    const again = await completeFor('readAlong', `${prompt}\n\nYour first reply was:\n"""\n${reply}\n"""\n${discussFix(check.problems)}`, system, { signal, task: 'tutor', path: req.path }).catch(() => '')
+    const again = await completeFor('readAlong', `${prompt}\n\nYour first reply was:\n"""\n${reply}\n"""\n${discussFix(check.problems)}`, system, { signal, task: 'tutor' }).catch(() => '')
     const second = again ? checkDiscussReply(again, opts) : null
     if (second && !second.withheld && second.problems.length <= check.problems.length) {
       reply = again
@@ -394,7 +394,7 @@ export async function togetherOrient(path: string, chapter: number, signal?: Abo
   if (!next) return ''
   const position = lastLoc(work, chapter - 1) ?? next.units[0]?.loc
   const read = contextText(work.chapters.filter((c) => c.n < chapter).flatMap((c) => c.units), 6000)
-  const text = await completeFor('readTogether', orientationPrompt({ title: work.title, kind: record.kind, next: chapterName(next), record: recordToMarkdown(record), read }), READ_TOGETHER_SYSTEM, { signal, task: 'tutor', path })
+  const text = await completeFor('readTogether', orientationPrompt({ title: work.title, kind: record.kind, next: chapterName(next), record: recordToMarkdown(record), read }), READ_TOGETHER_SYSTEM, { signal, task: 'tutor' })
   if (!position) return text
   const f = findSpoilers(text, index, position, chapterName(next))
   const fixed = repairSpoilers(text, f)
@@ -417,11 +417,11 @@ export async function togetherDiscuss(t: TogetherTurn, signal?: AbortSignal): Pr
   if (!ch || !position) throw new Error('That chapter isn’t in the book.')
   const read = contextText(work.chapters.filter((c) => c.n <= t.chapter).flatMap((c) => c.units))
   const prompt = discussionPrompt({ title: work.title, kind: record.kind, chapter: chapterName(ch), position, record: recordToMarkdown(record), read, turns: t.turns, said: t.said })
-  let raw = await completeFor('readTogether', prompt, READ_TOGETHER_SYSTEM, { signal, task: 'tutor', path: t.path })
+  let raw = await completeFor('readTogether', prompt, READ_TOGETHER_SYSTEM, { signal, task: 'tutor' })
   let f = findSpoilers(withoutRecord(raw), index, position)
   let fixed = repairSpoilers(withoutRecord(raw), f)
   if (fixed.withheld) {
-    raw = await completeFor('readTogether', `${prompt}\n\n${SPOILER_NUDGE(f)}`, READ_TOGETHER_SYSTEM, { signal, task: 'tutor', path: t.path }).catch(() => '')
+    raw = await completeFor('readTogether', `${prompt}\n\n${SPOILER_NUDGE(f)}`, READ_TOGETHER_SYSTEM, { signal, task: 'tutor' }).catch(() => '')
     f = findSpoilers(withoutRecord(raw), index, position)
     fixed = repairSpoilers(withoutRecord(raw), f)
   }
