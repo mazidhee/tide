@@ -104,7 +104,7 @@ export interface WorkingMarking {
 }
 
 /** Each line marked: SymPy's exact checks first, then Opus with them as facts; SymPy's alone without Claude */
-export async function markWorking(req: { question: string; lines: string[]; path?: string; angle?: Angle }): Promise<WorkingMarking> {
+export async function markWorking(req: { question: string; lines: string[]; path?: string; angle?: Angle; /** The lesson's topic, for the learning event log */ topic?: string }): Promise<WorkingMarking> {
   const lines = req.lines.map((l) => l.trim()).filter(Boolean)
   const { checkSteps } = await import('./calculator')
   const checks = await checkSteps(lines, req.angle).catch(() => null)
@@ -117,8 +117,25 @@ export async function markWorking(req: { question: string; lines: string[]; path
     })
     const marks = r ? parseLineMarks(r.text, lines.length) : null
     if (marks) {
+      logWorking(req, marks)
       return { marks, checks }
     }
   }
-  return { marks: marksFromSympy(checks ?? [], lines.length), checks }
+  const marks = marksFromSympy(checks ?? [], lines.length)
+  logWorking(req, marks)
+  return { marks, checks }
+}
+
+/** Maths working marked, in the learning event log: the answer, and a misconception the marker named */
+function logWorking(req: { question: string; lines: string[]; path?: string; topic?: string }, marks: Marked): void {
+  const at = Date.now()
+  const about = { ...(req.topic ? { topic: req.topic } : {}), ...(req.path ? { path: req.path } : {}) }
+  void Promise.all([import('@shared/learningEvents'), import('./learningLog')])
+    .then(([, { learningEvent }]) =>
+      learningEvent([
+        ...(marks.verdict ? [{ key: `maths:${at}`, at, kind: 'answered' as const, source: 'maths', ...about, outcome: marks.verdict, level: 3 as const, note: req.question.slice(0, 200), data: { lines: req.lines.length, by: marks.by } }] : []),
+        ...(marks.misconception ? [{ key: `maths:${at}:mis`, at, kind: 'misconception_seen' as const, source: 'maths', ...about, note: `${marks.misconception.name}: ${marks.misconception.text}`, data: { name: marks.misconception.name } }] : [])
+      ])
+    )
+    .catch(() => {})
 }

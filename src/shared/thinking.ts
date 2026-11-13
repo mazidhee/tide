@@ -98,6 +98,7 @@ const JOB_EFFORT: Record<JobName, Effort> = {
   prepExercises: 'medium',
   weeklyReview: 'medium',
   weekProgress: 'low',
+  modelLinks: 'low',
   lessonReview: 'high',
   curriculum: 'low',
   workshop: 'medium',

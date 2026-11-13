@@ -61,3 +61,18 @@ export function toAnswerBox(from: HTMLElement, text: string): 'answer' | 'ask' |
   void navigator.clipboard?.writeText(text).catch(() => undefined)
   return 'copied'
 }
+
+/**
+ * What they found in an explorable, told to the tutor, is a learning act: kept in the learning
+ * event log (main/learnerModel) as an explanation not yet marked. Never in the way of the button.
+ */
+export function tellModel(title: string, said: string): void {
+  try {
+    const at = Date.now()
+    void (window as unknown as { tide?: { model?: { event(e: unknown): Promise<void> } } }).tide?.model
+      ?.event({ key: `explorable:${at}`, at, kind: 'explained', source: 'explorable', topic: title.slice(0, 200), note: said.slice(0, 300), data: { from: 'Tell the tutor' } })
+      .catch(() => undefined)
+  } catch {
+    // Not in Tide's window (a test, a pop-out without the bridge)
+  }
+}

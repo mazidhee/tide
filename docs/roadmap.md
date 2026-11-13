@@ -107,6 +107,8 @@ Last updated: 13 November 2026.
 
 - [x] **North Star.** One woven path toward one goal, mastery-gated stages, learned-once foundations; press Build my North Star in Your week or Learn.
 
+- [x] **The learner model and one learning event log.** Depth levels from evidence, a graph of concepts, skills and goals, Your model in What you know.
+
 ## Next
 
 - [ ] **Humanities, tested live.** Meditations, The Prophet, a Russian novel: Discuss this, highlights, notes, challenging your arguments.

@@ -42,6 +42,17 @@ import { recallItems } from './recall'
 import { REVLOG_FILE } from './revlog'
 import { absPath, getNoteMeta, readText, vaultRoot } from './vault'
 
+/** The learning event log hears each piece of evidence a feature records here (main/learningLog); never a reason to fail */
+async function toLog(e: EvidenceIn, extra: Partial<import('@shared/learningEvents').EventIn> = {}): Promise<void> {
+  try {
+    const [{ evidenceEvent }, { learningEvent }] = await Promise.all([import('@shared/learningEvents'), import('./learningLog')])
+    const ev = evidenceEvent(e)
+    if (ev) learningEvent({ ...ev, ...extra })
+  } catch {
+    // The log is additive
+  }
+}
+
 interface Engine {
   existed(): boolean
   flush(): void
@@ -266,7 +277,9 @@ export async function noteRecallReview(item: { id: string; topic: string; review
   const { area } = await placeOf(scopePath(record.scope))
   const { concept, fresh } = conceptFor(k, item.topic, area)
   if (fresh.length) k.upsert(fresh)
-  k.record([{ concept: concept.id, source: `recall:${item.id}`, pos: String(item.reviews), kind, at: Date.now(), weight: 1, supersedes: `lesson:${record.id}#q0` }])
+  const ev: EvidenceIn = { concept: concept.id, source: `recall:${item.id}`, pos: String(item.reviews), kind, at: Date.now(), weight: 1, supersedes: `lesson:${record.id}#q0` }
+  k.record([ev])
+  await toLog(ev, { lesson: record.id })
 }
 
 function attemptEvent(k: Engine, a: Attempt, area: string): { fresh: ConceptIn[]; event: EvidenceIn } | null {
@@ -303,7 +316,9 @@ export async function noteEvidence(e: { topic: string; kind: 'right' | 'partly' 
   const { area } = await placeOf(e.path)
   const { concept, fresh } = conceptFor(k, e.topic, area)
   if (fresh.length) k.upsert(fresh)
-  k.record([{ concept: concept.id, source: e.source, pos: e.pos, kind: e.kind, at: e.at, weight: e.weight ?? 1 }])
+  const ev: EvidenceIn = { concept: concept.id, source: e.source, pos: e.pos, kind: e.kind, at: e.at, weight: e.weight ?? 1 }
+  k.record([ev])
+  await toLog(ev, e.path ? { path: e.path } : {})
 }
 
 /** A topic as the map has it, with what it builds on */
@@ -419,7 +434,11 @@ export async function noteCardReview(r: { id: string; path: string; grade: Revie
   if (!k) return
   await syncRoadmaps(k).catch(() => {})
   const c = await cardConcept(k, r, new Map())
-  if (c) k.record([cardEvent(c.id, r, r.first)])
+  if (c) {
+    const ev = cardEvent(c.id, r, r.first)
+    k.record([ev])
+    await toLog(ev, { grade: r.grade === 'again' || r.grade === 'hard' || r.grade === 'good' || r.grade === 'easy' ? r.grade : undefined, path: r.path })
+  }
 }
 
 /** Every flashcard review in the review log, read in once */
@@ -467,7 +486,9 @@ export async function cardsOnMany(conceptIds: string[]): Promise<Map<string, Car
 export async function noteReviewAnswer(e: { concept: string; source: string; pos: string; kind: EvidenceKind; at: number; path?: string; /** Less than a full answer: exposure from reading counts for half */ weight?: number }): Promise<void> {
   const k = await knowledge()
   if (!k || !k.state(e.concept, Date.now(), true)) return
-  k.record([{ concept: e.concept, source: e.source, pos: e.pos, kind: e.kind, at: e.at, weight: e.weight ?? 1 }])
+  const ev: EvidenceIn = { concept: e.concept, source: e.source, pos: e.pos, kind: e.kind, at: e.at, weight: e.weight ?? 1 }
+  k.record([ev])
+  await toLog(ev, e.path ? { path: e.path } : {})
 }
 
 // ---------- What it is read for ----------

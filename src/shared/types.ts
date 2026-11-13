@@ -951,6 +951,18 @@ export interface TideApi {
     onKilled(cb: (e: { host: string; reason: string }) => void): () => void
   }
   /** The knowledge map: every concept with how solid it is today, what is ready next, what is fading, and retention by week */
+  /** The learner model (main/learnerModel): What you know › Your model */
+  model: {
+    view(fresh?: boolean): Promise<import('./learnerModelView').ModelView>
+    /** One concept or skill: its depth, the evidence level by level, recent events, links */
+    node(id: string): Promise<import('./learnerModelView').ModelNodeDetail | null>
+    /** You correct Tide's judgement ("I actually know this"): kept as an event */
+    correct(id: string, depth: number, note?: string): Promise<import('./learnerModelView').ModelNodeDetail | null>
+    /** How deep something should go; null takes your target away */
+    setTarget(node: string, depth: number | null): Promise<number>
+    /** A learning act from the window (an explorable's "Tell the tutor") */
+    event(e: import('./learningEvents').EventIn): Promise<void>
+  }
   knowledge: {
     view(): Promise<import('./knowledge').KnowledgeView>
     /** Review now: the concept's kept questions that are due */

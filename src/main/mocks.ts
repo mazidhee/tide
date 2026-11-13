@@ -544,6 +544,8 @@ export async function endMock(id: string, input: MockEndInput): Promise<{ debrie
 async function feed(m: Live, debrief: MockDebrief, record: MockRecord, graded: { question: string; answer: string; score: number; note: string; hints?: number }[], input: MockEndInput): Promise<MockFed> {
   await fs.mkdir(absPath('.tide/mocks'), { recursive: true })
   await fs.appendFile(absPath(HISTORY), JSON.stringify(record) + '\n')
+  // The mock's result in the learning event log; each marked item goes in on its topic through the knowledge map below
+  await Promise.all([import('@shared/learningEvents'), import('./learningLog')]).then(([{ mockEvent }, { learningEvent }]) => learningEvent({ ...mockEvent(record, 'mock'), ...(m.exam?.topic ? { topic: m.exam.topic } : {}) })).catch(() => {})
   await writeText(recordFile(m.id), JSON.stringify({ record, debrief, transcript: m.transcript, problem: m.problem?.id, design: m.design?.id, canvas: input.canvas, code: input.code, notes: input.notes, answers: input.answers?.map((a) => ({ ...a, images: undefined })), quant: m.quant?.map((q) => q.id), exam: m.exam ? { title: m.exam.title, topic: m.exam.topic } : undefined }))
   const fed: MockFed = { roadmap: 0, recall: 0, profile: 0, lesson: false }
   const rubric = rubricFor(m.mode, m.exam)

@@ -238,6 +238,14 @@ async function check(ref: NbRef, id: string, session?: string): Promise<CheckRes
   const spec = await exerciseSpec(id)
   if (!spec) throw new Error('This exercise’s checks aren’t on this Mac any more.')
   const r = await runChecks(kernelOf(ref), spec.tests)
+  // A checked exercise in a notebook, in the learning event log
+  {
+    const passed = r.results.filter((x) => x.ok).length
+    const at = Date.now()
+    await Promise.all([import('@shared/learningEvents'), import('../learningLog')])
+      .then(([, { learningEvent }]) => learningEvent({ key: `notebook:${id}#${at}`, at, kind: 'answered', source: 'notebook', topic: (spec as { topic?: string }).topic ?? spec.title, outcome: r.passed ? 'correct' : passed ? 'partial' : 'wrong', tests: { passed, total: r.results.length }, level: 3, note: spec.title, skills: r.passed ? [] : ['debugging'] }))
+      .catch(() => {})
+  }
   if (session) {
     const { noteForTutor } = await import('./tutor')
     noteForTutor(session, `the learner checked the exercise "${spec.title}": ${r.results.filter((x) => x.ok).length} of ${r.results.length} tests passed${r.passed ? '' : `; failing: ${r.results.filter((x) => !x.ok).map((x) => `${x.name} (${x.message ?? ''})`).join('; ')}`}.`)
