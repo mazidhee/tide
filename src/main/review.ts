@@ -60,6 +60,12 @@ export async function answerReview(concept: string, item: ReviewItem, verdict: V
     if (r) await noteReviewAnswer({ concept, source: `recall:${r.id}`, pos: String(r.reviews), kind, at: r.last ?? Date.now() })
     return
   }
+  if (item.kind === 'memory') {
+    // A question from memory (a mixed review, a phase's firm-up): nothing keeps it, so it counts only on the concept
+    const at = Date.now()
+    await noteReviewAnswer({ concept, source: `review:${item.id}`, pos: String(at), kind, at })
+    return
+  }
   if (item.kind === 'mistake') {
     await retestMistake(item.id, verdict === 'correct')
     const at = Date.now()

@@ -10,6 +10,7 @@ import { ContextMenu, type MenuState } from './Menu'
 import { Masonry, TopicPicker } from './Library'
 import { hasTopic, useLibrary } from '../lib/library'
 import { OutlineView } from './OutlineView'
+import { TrackView } from './TrackView'
 
 export const STATUS_LABEL: Record<LearningStatus, string> = {
   untested: 'Not started',
@@ -229,6 +230,8 @@ export function NotebookView({ path, tab: initialTab }: { path: string; tab?: 'p
         </div>
 
         {activeTab === 'project' && <ProjectPanel notebook={path} name={folder.name} info={meta?.project ?? null} onChange={load} />}
+
+        {activeTab === 'outline' && meta?.outline && !meta.project && <TrackView notebook={folder.name} path={path} />}
 
         {activeTab === 'outline' && (
           <OutlineView

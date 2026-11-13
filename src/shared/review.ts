@@ -10,7 +10,7 @@
  * marked without teaching, to see where it stands now.
  */
 
-export type ReviewItemKind = 'recall' | 'card' | 'mistake'
+export type ReviewItemKind = 'recall' | 'card' | 'mistake' | 'memory'
 
 export interface ReviewItem {
   kind: ReviewItemKind
@@ -24,6 +24,8 @@ export interface ReviewItem {
   path?: string
   /** When it is due (ms) */
   due: number
+  /** The concept it counts on, when a review spans several (a mixed review, a phase's firm-up); else the review's own */
+  concept?: string
 }
 
 export interface ReviewSetup {

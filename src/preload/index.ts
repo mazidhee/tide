@@ -387,6 +387,16 @@ const api: TideApi = {
     replan: invoke('portfolio:replan'),
     bringForward: invoke('portfolio:bringForward')
   },
+  track: {
+    view: invoke('track:view'),
+    override: invoke('track:override'),
+    undoOverride: invoke('track:undoOverride'),
+    startCheck: invoke('track:startCheck'),
+    submitCheck: invoke('track:submitCheck'),
+    setupCapstone: invoke('track:setupCapstone'),
+    firmUp: invoke('track:firmUp'),
+    mixedReview: invoke('track:mixedReview')
+  },
   learner: {
     view: invoke('learner:view'),
     refresh: invoke('learner:refresh'),

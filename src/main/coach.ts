@@ -15,6 +15,7 @@ import { pagesToRead } from './books'
 import { readingLabel } from '@shared/books'
 import { isSorted, roadmapTopics, sectionsOf, topicsLeft } from '@shared/curriculum'
 import { balanceWeek, type Balance, type BalanceNotebook } from '@shared/balance'
+import { gateFilter } from '@shared/track'
 import type { Known, PlacementSetup, PlacementStore } from '@shared/placement'
 import { curriculumStatus, getOverrides, loadSorted, sortRoadmaps, sortRunning } from './curriculum'
 import { readingsForWeek } from './readings'
@@ -239,6 +240,9 @@ export async function planWeek(date = today(), background = false): Promise<Week
   const start = date
   // Which roadmaps get the week, and what from each, from your aims; then the facts for those
   const balance = await balanceFor(settings, await goalFacts())
+  // A roadmap's next phase waits behind its gate (shared/track)
+  const held = await import('./track').then((m) => m.heldTopics()).catch(() => new Set<string>())
+  balance.candidates = gateFilter(balance.candidates, held)
   const { text, facts } = await gather(settings, balance.focus, balance.candidates)
   const candidates = balance.candidates
   if (!candidates.length) throw new Error(pick === 'me' ? 'Your focus notebooks have no roadmap topics left to plan from.' : 'None of your roadmaps has anything your aims need right now. Add an aim, or pick the roadmaps yourself.')

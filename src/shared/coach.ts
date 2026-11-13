@@ -110,6 +110,10 @@ export interface AgendaItem {
   mode?: import('./mocks').MockMode
   /** The book (reading) or the project's notebook (project) */
   path?: string
+  /** A roadmap's gate step (shared/track): firm up the phase's shaky concepts, take its check, or build its capstone */
+  gate?: { phase: string; step: 'firm-up' | 'check' | 'capstone' }
+  /** The week's mixed review across every track (shared/track mixedReview) */
+  mixed?: boolean
 }
 
 export interface WeekPlan {

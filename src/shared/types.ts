@@ -1014,6 +1014,22 @@ export interface TideApi {
     replan(): Promise<import('./coach').WeekPlan | null>
     bringForward(date: string, index: number): Promise<import('./coach').WeekPlan | null>
   }
+  /** Roadmap continuity (main/track, shared/track): a roadmap's phases and gates */
+  track: {
+    view(notebook: string): Promise<import('./track').TrackView | null>
+    /** Move on before the gate passes; recorded */
+    override(notebook: string, phase: string, note?: string): Promise<import('./track').TrackView | null>
+    undoOverride(notebook: string, phase: string): Promise<import('./track').TrackView | null>
+    /** The phase check: written by Opus (or waiting already); answers are never sent to the page */
+    startCheck(notebook: string, phase: string, fresh?: boolean): Promise<{ questions: Omit<import('./track').CheckQuestion, 'answer'>[]; by: 'claude' | 'gemma' | 'tide' }>
+    /** Marked by Opus; `needsSelf` when no model could, to be sent again with your own marks */
+    submitCheck(notebook: string, phase: string, answers: Record<string, string>, selfMarks?: Record<string, 'correct' | 'partial' | 'wrong'>): Promise<import('./track').CheckResult & { needsSelf?: boolean }>
+    setupCapstone(notebook: string, phase?: string): Promise<{ notebook: string } | null>
+    /** Review now on the current phase's shaky concepts */
+    firmUp(notebook: string): Promise<{ topic: string; scope: string; review: import('./review').ReviewSetup } | null>
+    /** This week's mixed review across every track */
+    mixedReview(): Promise<{ topic: string; review: import('./review').ReviewSetup; tracks: number } | null>
+  }
   /** A tutor that remembers you (main/learnerProfile): the profile note, as the profile view shows it */
   learner: {
     view(): Promise<import('./learnerProfile').LearnerView>
