@@ -154,6 +154,9 @@ function sane(p: Partial<SharpPrefs>): SharpPrefs {
   return { version: 1, ratings, methods: { reached: m.reached ?? {}, hinted: m.hinted ?? {}, unlocked: m.unlocked ?? {}, needed: m.needed ?? {} } }
 }
 
+/** The ratings, for readiness (main/milestone) */
+export const sharpPrefs = () => readPrefs()
+
 async function readPrefs(): Promise<SharpPrefs> {
   try {
     return sane(JSON.parse(await readText(PREFS)) as Partial<SharpPrefs>)

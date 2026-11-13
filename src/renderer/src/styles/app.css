@@ -20524,3 +20524,37 @@ button.wkp-tile:hover {
   color: var(--ink-soft);
   white-space: pre;
 }
+
+/* Your week › Edit: time per study day, in hours, and the week's total */
+.coach-hours-field input {
+  width: 4.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.coach-hours-field.is-bad input {
+  border-color: var(--danger);
+}
+.coach-hours-foot {
+  margin-top: 12px;
+}
+.coach-hours-total {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+.coach-hours-total b {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.coach-hours-total span {
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+.coach-hours-total {
+  flex: 1 1 320px;
+}

@@ -116,6 +116,10 @@ export interface AgendaItem {
   mixed?: boolean
   /** A session of a course's lessons (shared/coursePlan): the course, and the lessons in it, in order */
   course?: { id: string; title: string; lessons: { id: string; title: string; n: string; minutes: number }[] }
+  /** Sharpness practice (kind practice): the category */
+  sharp?: 'algorithms' | 'quant' | 'design'
+  /** What it's for: the North Star stage and the dated milestone (its title), and the milestone scope it covers */
+  serves?: { stage?: number; milestone?: string; scope?: string[] }
   /** Set by the proactive coach (shared/proactiveCoach): what kind of intervention, why, and the concept it is about */
   coach?: { kind: import('./proactiveCoach').InterventionKind; reason: string; at: number; id?: string }
 }

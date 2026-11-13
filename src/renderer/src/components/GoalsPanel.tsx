@@ -20,8 +20,8 @@ const WEIGHTS: { value: GoalWeight; label: string; hint: string }[] = [
   { value: 'curious', label: 'Curious', hint: 'Kept alive with short sessions' }
 ]
 
-const KIND_WORD: Record<GoalNeed['kind'], string> = { roadmap: 'Roadmap', project: 'Project', mock: 'Mocks', workout: 'Workout', reading: 'Book', topic: 'Topic' }
-const KIND_ICON: Record<GoalNeed['kind'], IconName> = { roadmap: 'subRoadmap', project: 'branch', mock: 'subInterview', workout: 'gauge', reading: 'book', topic: 'tutor' }
+const KIND_WORD: Record<GoalNeed['kind'], string> = { roadmap: 'Roadmap', project: 'Project', mock: 'Mocks', workout: 'Workout', reading: 'Book', topic: 'Topic', practice: 'Practice' }
+const KIND_ICON: Record<GoalNeed['kind'], IconName> = { roadmap: 'subRoadmap', project: 'branch', mock: 'subInterview', workout: 'gauge', reading: 'book', topic: 'tutor', practice: 'terminal' }
 
 const shortDate = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
 const weeksTo = (d: string) => Math.max(0, Math.round((Date.parse(d) - Date.parse(localDate())) / (7 * 86_400_000)))

@@ -20,7 +20,7 @@
  */
 import type { AgendaItem, WeekPlan } from './coach'
 
-export type ThreadKind = 'roadmap' | 'project' | 'mock' | 'workout' | 'reading' | 'topic'
+export type ThreadKind = 'roadmap' | 'project' | 'mock' | 'workout' | 'reading' | 'topic' | 'practice'
 
 /** One line of work: a roadmap, a project, a kind of mock, the workout, a book, or a topic with no roadmap */
 export interface Thread {
@@ -54,6 +54,12 @@ export interface Thread {
   paused?: boolean
   /** An ongoing interest with no date */
   standing?: boolean
+  /** No new material for now (shared/milestone parkThreads): only a short review every maxGap days */
+  parked?: boolean
+  /** A floor group it counts towards ("maths": at least its share of the week) */
+  group?: string
+  /** Its weekly value under a milestone (shared/milestone): long-term and deadline, and the scope behind the deadline */
+  value?: { longTerm: number; deadline: number; scope: string[] }
 }
 
 export interface DayBudget {
@@ -73,6 +79,8 @@ export interface PortfolioInput {
   fading: number
   /** Hours of the day you do your best work (the break planner's rhythm) */
   bestHours?: number[]
+  /** Shares of the week a group of threads gets at least ("maths": 0.15) */
+  groupFloors?: Record<string, number>
 }
 
 export interface MixShare {
@@ -150,6 +158,7 @@ export const weeksTo = (today: string, date: string) => Math.max(0.5, daysBetwee
 
 /** A thread's pull on the week: its weight, raised as a date nears, for momentum and fading */
 export function pullOf(t: Thread, today: string): number {
+  if (t.parked) return 0
   let w = Math.max(0.05, t.weight)
   if (t.deadline && (t.hoursLeft ?? 0) > 0) w *= 1 + 1.5 * Math.max(0, 1 - weeksTo(today, t.deadline) / 12)
   if ((t.recent ?? 0) >= 90) w *= 1.1
@@ -161,7 +170,7 @@ export function pullOf(t: Thread, today: string): number {
  * Minutes for each thread: floors first (touches, a date's need), the rest by pull. Water-filling:
  * find the level x where sum(max(floor, pull * x)) fills the time.
  */
-export function shareMinutes(threads: Thread[], window: DayBudget[], today: string, minutes: number): Map<string, { minutes: number; floor: number; need: number; touches: number }> {
+export function shareMinutes(threads: Thread[], window: DayBudget[], today: string, minutes: number, groupFloors: Record<string, number> = {}): Map<string, { minutes: number; floor: number; need: number; touches: number }> {
   const out = new Map<string, { minutes: number; floor: number; need: number; touches: number }>()
   const live = threads.filter(active)
   if (!live.length || minutes <= 0) return out
@@ -185,9 +194,17 @@ export function shareMinutes(threads: Thread[], window: DayBudget[], today: stri
   const needTotal = rows.reduce((n, r) => n + Math.max(0, r.need - r.keep), 0)
   const k = needTotal > room ? room / needTotal : 1
   const floors = rows.map((r) => r.keep + Math.max(0, r.need - r.keep) * k)
+  // A group's floor (maths at 15% of the week): its threads lifted together, in proportion to their pull
+  for (const [group, share] of Object.entries(groupFloors)) {
+    const idx = rows.map((r, i) => (r.t.group === group && !r.t.parked ? i : -1)).filter((i) => i >= 0)
+    if (!idx.length) continue
+    const want = share * minutes
+    const pullSum = idx.reduce((n, i) => n + Math.max(1e-6, rows[i].pull), 0)
+    for (const i of idx) floors[i] = Math.max(floors[i], (want * Math.max(1e-6, rows[i].pull)) / pullSum)
+  }
   const fill = (x: number) => rows.reduce((n, r, i) => n + Math.max(floors[i], r.pull * x), 0)
   let lo = 0
-  let hi = minutes / Math.max(1e-6, Math.min(...rows.map((r) => r.pull)))
+  let hi = minutes / Math.max(1e-6, Math.min(...rows.filter((r) => r.pull > 0).map((r) => r.pull), Infinity))
   for (let i = 0; i < 60; i++) {
     const mid = (lo + hi) / 2
     if (fill(mid) > minutes) hi = mid
@@ -207,7 +224,7 @@ export function sessionsFor(t: Thread, minutes: number, touches: number, days = 
   return Array.from({ length: n }, () => Math.max(t.touch, Math.min(t.session * 2, round5(each))))
 }
 
-const KIND_WORD: Record<ThreadKind, string> = { roadmap: '', project: 'project', mock: 'mocks', workout: '', reading: '', topic: '' }
+const KIND_WORD: Record<ThreadKind, string> = { roadmap: '', project: 'project', mock: 'mocks', workout: '', reading: '', topic: '', practice: '' }
 export const threadName = (t: Pick<Thread, 'label' | 'kind'>) => (KIND_WORD[t.kind] && !t.label.toLowerCase().includes(KIND_WORD[t.kind]) ? `${t.label} ${KIND_WORD[t.kind]}` : t.label)
 
 const shortDate = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })
@@ -219,6 +236,9 @@ const hours = (m: number) => {
 /** Why a thread got its time, in a few words */
 function reasonFor(t: Thread, row: { minutes: number; floor: number; need: number; touches: number }, today: string, top: boolean): string {
   const gap = gapOf(t, today)
+  if (t.parked) return 'reviews only, until the milestone'
+  if (t.value && t.value.deadline > 0 && t.value.longTerm > 0) return 'interview bar and the long term'
+  if (t.value && t.value.deadline > 0) return 'the interview bar'
   if (t.deadline && (t.hoursLeft ?? 0) > 0 && row.need > 0 && row.need >= row.minutes * 0.6)
     return `${t.goal ? `${t.goal} ` : ''}on ${shortDate(t.deadline)} needs about ${hours((t.hoursLeft! * 60) / weeksTo(today, t.deadline))} a week`
   if (row.touches && gap >= t.maxGap - 1 && gap < 99) return `untouched for ${gap} days`
@@ -355,6 +375,21 @@ function place(threads: Thread[], plan: Map<string, number[]>, rows: Map<string,
       delete grow.s!.touch
       room[i] -= more
     }
+    // Still room on a long day and every share met: the day's sessions grow in proportion to
+    // their thread's pull (never a parked one, never past three usual sessions), so a planned
+    // day is a full day
+    for (let guard = 0; guard < 4 && room[i] >= 15; guard++) {
+      const open = placed[i].map((p) => ({ p, t: byId.get(p.thread)! })).filter(({ p, t }) => !t.parked && !p.touch && p.minutes < t.session * 3)
+      const pullSum = open.reduce((n, x) => n + pullOf(x.t, today), 0)
+      if (!open.length || pullSum <= 0) break
+      const spare = room[i]
+      for (const { p, t } of open) {
+        const more = Math.floor(Math.min(t.session * 3 - p.minutes, (spare * pullOf(t, today)) / pullSum, room[i]) / 5) * 5
+        if (more < 5) continue
+        p.minutes += more
+        room[i] -= more
+      }
+    }
   }
   return { placed, unplaced }
 }
@@ -386,7 +421,7 @@ export function planPortfolio(input: PortfolioInput): PortfolioWeek {
   // (every day while there's a pile of cards; otherwise every other day, which spaces it anyway)
   const review = days.map((_, i) => (input.dueCards || input.fading ? reviewMinutes(input.dueCards, input.fading, i) : 0)).map((m, i) => (i > 0 && input.dueCards < 20 && i % 2 === 1 ? 0 : m))
   const total = days.reduce((n, d) => n + d.minutes, 0) - review.reduce((a, b) => a + b, 0)
-  const rows = shareMinutes(input.threads, days, input.today, total)
+  const rows = shareMinutes(input.threads, days, input.today, total, input.groupFloors)
   const live = input.threads.filter((t) => rows.has(t.id))
   const plan = new Map<string, number[]>()
   for (const t of live) {
@@ -456,6 +491,11 @@ export interface ReplanInput {
   /** The item that ran long on a day, if one did: its title, the minutes it took and was planned for */
   ranLong?: Record<string, { title: string; minutes: number; planned: number }>
   threads: Thread[]
+  /**
+   * Minutes that make a full day (the realistic low, shared/milestone plannedDay): a past day that
+   * reached it isn't behind, so what's left of it moves on quietly as the next items, without a notice
+   */
+  dayFloor?: number
   /** The item for a short keep-alive session on a thread (main fills in the next topic, the project's milestone…) */
   touchItem?: (t: Thread, minutes: number) => AgendaItem
 }
@@ -501,7 +541,7 @@ export function replanWeek(input: ReplanInput): ReplanResult {
     const spentToday = d === today ? Math.max(input.spent[d] ?? 0, used(items.filter((it) => it.done))) : used(items.filter((it) => it.done))
     return input.budgets[d] - spentToday - used(items.filter((it) => !it.done))
   }
-  const pending: { item: AgendaItem; from: string; why: string }[] = []
+  const pending: { item: AgendaItem; from: string; why: string; quiet?: boolean }[] = []
 
   // 1. Past days: what's left moves on
   for (const d of plan.days.filter((x) => x.date < today)) {
@@ -510,8 +550,10 @@ export function replanWeek(input: ReplanInput): ReplanResult {
     d.items = d.items.filter((it) => it.done)
     if (!left.length) continue
     const long = input.ranLong?.[d.date]
-    const why = long ? `${weekday(d.date)}’s ${long.title} ran long (${long.minutes} min of ${long.planned})` : `you didn’t get to it on ${weekday(d.date)}`
-    for (const it of left) pending.push({ item: it, from: d.date, why })
+    // A full day (the realistic low reached) isn't a miss: its leftovers are just the next things
+    const full = !!input.dayFloor && (input.spent[d.date] ?? 0) >= input.dayFloor
+    const why = full ? 'next up' : long ? `${weekday(d.date)}’s ${long.title} ran long (${long.minutes} min of ${long.planned})` : `you didn’t get to it on ${weekday(d.date)}`
+    for (const it of left) pending.push({ item: it, from: d.date, why, ...(full ? { quiet: true } : {}) })
   }
   // 2. Today: if what's studied plus what's left runs past the day, the lightest items move
   if (ahead[0] === today) {
@@ -552,10 +594,10 @@ export function replanWeek(input: ReplanInput): ReplanResult {
       continue
     }
     const minutes = Math.min(p.item.minutes, Math.max(20, roomOn(squeezed)))
-    const moved: AgendaItem = { ...p.item, minutes, carried: true, movedFrom: p.from }
+    const moved: AgendaItem = { ...p.item, minutes, carried: !p.quiet, movedFrom: p.from }
     dayOf(squeezed).items.push(moved)
     moves.push({ item: moved, from: p.from, to: squeezed, why: p.why })
-    notices.push({ kind: 'moved', on: today, text: `Moved ${itemName(p.item)} to ${squeezed === today ? 'today' : weekday(squeezed)} because ${p.why}.`, ...(p.item.thread ? { thread: p.item.thread } : {}) })
+    if (!p.quiet) notices.push({ kind: 'moved', on: today, text: `Moved ${itemName(p.item)} to ${squeezed === today ? 'today' : weekday(squeezed)} because ${p.why}.`, ...(p.item.thread ? { thread: p.item.thread } : {}) })
   }
   // 4. Neglect: a thread whose limit falls before its next planned session gets a short one in time
   for (const t of input.threads.filter(active)) {

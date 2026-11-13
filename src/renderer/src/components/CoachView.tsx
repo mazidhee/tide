@@ -11,6 +11,7 @@ import { WeekProgressSection } from './WeekProgress'
 import { firstSentence } from '@shared/goalGlance'
 import { NorthStarGlance } from './NorthStarView'
 import { WeekCoachNote } from './CoachNote'
+import { dayTimeText, parseDayTime } from '@shared/milestone'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const today = () => localDate()
@@ -198,17 +199,9 @@ export function CoachView() {
               </div>
             </div>
             )}
-            <div className="pv-row">
-              <label className="field-inline" title="Minutes on each weekday you study">
-                Weekdays
-                <input type="number" min={15} max={600} step={15} value={weekdayMins} onChange={(e) => setMinutes('weekdayMinutes', Number(e.target.value))} />
-                <span className="muted small">min</span>
-              </label>
-              <label className="field-inline" title="Minutes on Saturday or Sunday, if you study then: longer, deeper work">
-                Weekends
-                <input type="number" min={0} max={720} step={15} value={weekendMins} onChange={(e) => setMinutes('weekendMinutes', Number(e.target.value))} />
-                <span className="muted small">min</span>
-              </label>
+            <div className="pv-row coach-hours">
+              <DayHours label="Weekdays" minutes={weekdayMins} onChange={(m) => setMinutes('weekdayMinutes', m)} />
+              <DayHours label="Weekends" minutes={weekendMins} onChange={(m) => setMinutes('weekendMinutes', m)} />
               <div className="coach-days" role="group" aria-label="Study days">
                 {DAYS.map((d, i) => (
                   <button key={d} className={settings.days.includes(i) ? 'on' : ''} aria-pressed={settings.days.includes(i)} onClick={() => save({ ...settings, days: settings.days.includes(i) ? settings.days.filter((x) => x !== i) : [...settings.days, i].sort() })}>
@@ -216,6 +209,13 @@ export function CoachView() {
                   </button>
                 ))}
               </div>
+
+            </div>
+            <div className="pv-row coach-hours-foot">
+              <p className="coach-hours-total">
+                <b>≈ {Math.round((settings.days.reduce((n, d) => n + (d === 0 || d === 6 ? weekendMins : weekdayMins), 0) / 60) * 10) / 10} h a week</b>
+                <span>A target per study day: the plan fills it, and a longer day is bonus that brings the next items forward.</span>
+              </p>
               <button className="btn primary pv-go" onClick={plan} disabled={!!busy || (!threads && (pickOf(settings) === 'me' ? !settings.focus.length : !aimsOf(settings).length))}>
                 {busy === 'plan' ? (
                   <>
@@ -250,6 +250,38 @@ export function CoachView() {
         <WeekProgressSection />
       </div>
     </div>
+  )
+}
+
+/** Time on a study day, in hours: 4.5, 4:30 or 4h30. Kept as minutes in the settings */
+function DayHours({ label, minutes, onChange }: { label: string; minutes: number; onChange: (m: number) => void }) {
+  const [text, setText] = useState(dayTimeText(minutes))
+  const [bad, setBad] = useState(false)
+  useEffect(() => setText(dayTimeText(minutes)), [minutes])
+  const commit = () => {
+    const m = parseDayTime(text)
+    if (m === null || m > 16 * 60) return setBad(true)
+    setBad(false)
+    if (m !== minutes) onChange(m)
+    else setText(dayTimeText(m))
+  }
+  return (
+    <label className={`field-inline coach-hours-field${bad ? ' is-bad' : ''}`} title="Hours on each of these days: 4.5, 4:30 or 4h30">
+      {label}
+      <input
+        type="text"
+        inputMode="decimal"
+        value={text}
+        aria-invalid={bad}
+        onChange={(e) => {
+          setText(e.target.value)
+          setBad(false)
+        }}
+        onBlur={commit}
+        onKeyDown={(e) => e.key === 'Enter' && commit()}
+      />
+      <span className="muted small">h a day</span>
+    </label>
   )
 }
 

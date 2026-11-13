@@ -11,6 +11,7 @@ import { addMixedReview, gateFilter, gateItem, type GateInfo } from '@shared/tra
 import { joinRel, readText, writeText } from './vault'
 import { courseItem } from '@shared/coursePlan'
 import { NORTH_STAR_GOAL } from '@shared/northStar'
+import { plannedDay } from '@shared/milestone'
 import type { CoursePlanResult } from './coursePlan'
 
 /**
@@ -171,6 +172,9 @@ async function threadLog(goals: PlanGoal[]): Promise<ThreadLog[]> {
   }
   const mocks = await import('./mocks').then((m) => m.mockHistory()).catch(() => [])
   for (const m of mocks) if (m.at >= since) out.push({ thread: threadId('mock', m.mode), date: localDate(new Date(m.at)), minutes: m.used || m.minutes })
+  // Sharpness attempts are practice on their category (the milestone's algorithms, quant and design practice)
+  const sharp = await import('./sharpness').then((m) => m.sharpAttempts()).catch(() => [])
+  for (const a of sharp) if (a.at >= since) out.push({ thread: threadId('practice', a.category), date: localDate(new Date(a.at)), minutes: Math.round(a.usedMs / 60_000) || a.minutes })
   const workout = await import('./workout').then((m) => m.workoutState()).catch(() => null)
   for (const r of workout?.rounds ?? []) out.push({ thread: threadId('workout', r.round), date: r.day, minutes: 3 })
   const room = await import('./readingRoom').then((m) => m.loadRoom()).catch(() => null)
@@ -207,18 +211,28 @@ async function bestHours(): Promise<number[]> {
   return (r?.learnedFrom ?? 0) >= 4 ? (r?.goodHours ?? []) : []
 }
 
-/** Everything the scheduler and the page need, gathered once */
-export async function snapshot() {
+/**
+ * Everything the scheduler and the page need, gathered once. `shape: false` leaves out the
+ * milestone's weighing (it reads the learner model, which itself reads the goals from here)
+ */
+export async function snapshot(o: { shape?: boolean } = {}) {
   const { getCoach } = await import('./coach')
   const [store, coach, inv] = await Promise.all([loadGoals(), getCoach(), inventory()])
   // North Star's current stage is a goal too: its tracks and weights shape the week (main/northStar)
   const star = await import('./northStar').then((m) => m.schedulerGoal()).catch(() => null)
-  const own = star ? { ...store, goals: [...store.goals.filter((g) => g.id !== star.id), star] } : store
+  // A dated milestone (main/milestone): its scope as a goal of its own, weighed by the value rule below
+  const mm = await import('./milestone')
+  const ms = star ? await mm.milestoneGoal().catch(() => null) : null
+  const extra = [star, ms].filter((g): g is NonNullable<typeof g> => !!g)
+  const own = extra.length ? { ...store, goals: [...store.goals.filter((g) => !extra.some((x) => x.id === g.id)), ...extra] } : store
   const log = await threadLog(own.goals)
   const goals = withStanding(own, await inProgress(inv, log, coach), Date.now())
   const fading = await fadingByThread()
-  const threads = buildThreads(goals, log, { today: today(), fading: fading.by })
-  return { store, coach, inv, log, goals, threads, fading }
+  const built = buildThreads(goals, log, { today: today(), fading: fading.by })
+  // Long-term value plus deadline value, the maths floor, parked tracks and the language gates
+  const shaped = star && o.shape !== false ? await mm.shapeThreads(built).catch(() => null) : null
+  const threads = shaped?.threads ?? built
+  return { store, coach, inv, log, goals, threads, fading, groupFloors: shaped?.groupFloors ?? {}, milestone: shaped?.state ?? null, stageTracks: shaped?.stageTracks ?? [] }
 }
 
 // ---------- The page ----------
@@ -229,7 +243,8 @@ export async function goalsView(): Promise<GoalsView> {
   const s = await snapshot()
   const t = today()
   // North Star's stage is shown on its own page, not as a goal to edit here
-  const rows: GoalRow[] = s.goals.filter((g) => g.id !== NORTH_STAR_GOAL).map((g) => {
+  // …and so is the dated milestone it plans with (main/milestone)
+  const rows: GoalRow[] = s.goals.filter((g) => g.id !== NORTH_STAR_GOAL && g.id !== 'milestone').map((g) => {
     const created = new Date(g.createdAt).toISOString().slice(0, 10)
     const spentOf = (n: GoalNeed) => s.log.filter((l) => l.thread === needThread(n) && l.date >= created).reduce((m, l) => m + l.minutes, 0) / 60
     const live = g.needs.filter((n) => !n.dropped)
@@ -414,7 +429,22 @@ export function studyDays(start: string, coach: CoachSettings, n = 7): { date: s
 }
 
 /** A thread's item: the next topic, the project's milestone, the mock, the book */
-function itemMaker(threads: Thread[], goals: PlanGoal[], inv: Inventory, queues: Map<string, TopicCandidate[]>, lastTopic: Map<string, string>, gates: Map<string, GateInfo> = new Map(), courses: CoursePlanResult | null = null) {
+/** What a thread's items serve: the North Star stage (its tracks) and the milestone (scope in its value) */
+function servesOf(s: Awaited<ReturnType<typeof snapshot>>): (t: Thread) => AgendaItem['serves'] | undefined {
+  const star = s.goals.find((g) => g.id === NORTH_STAR_GOAL)
+  const stage = Number(star?.title.match(/Stage (\d+)/)?.[1]) || undefined
+  const stageThreads = new Set((star?.needs ?? []).map(needThread))
+  const ms = s.milestone?.milestone
+  return (t) => {
+    const out: NonNullable<AgendaItem['serves']> = {}
+    if (stage && stageThreads.has(t.id)) out.stage = stage
+    if (ms && (t.value?.deadline ?? 0) > 0) out.milestone = ms.title
+    if (t.value?.scope.length) out.scope = t.value.scope
+    return out.stage || out.milestone ? out : undefined
+  }
+}
+
+function itemMaker(threads: Thread[], goals: PlanGoal[], inv: Inventory, queues: Map<string, TopicCandidate[]>, lastTopic: Map<string, string>, gates: Map<string, GateInfo> = new Map(), courses: CoursePlanResult | null = null, serves: (t: Thread) => AgendaItem['serves'] | undefined = () => undefined) {
   const byId = new Map(threads.map((t) => [t.id, t]))
   const checked = new Set<string>()
   // Each roadmap's full sessions, counted in the order they're made, so the course's sessions fall where they were planned
@@ -423,7 +453,16 @@ function itemMaker(threads: Thread[], goals: PlanGoal[], inv: Inventory, queues:
   return (threadIdOf: string, minutes: number, touch: boolean): AgendaItem[] => {
     const t = byId.get(threadIdOf)
     if (!t) return []
-    const base = { thread: t.id, minutes, ...(touch ? { touch: true } : {}) }
+    const sv = serves(t)
+    const base = { thread: t.id, minutes, ...(touch ? { touch: true } : {}), ...(sv ? { serves: sv } : {}) }
+    // A parked track: only its review, until the milestone (shared/milestone parkThreads)
+    if (t.parked) return [{ kind: 'review', title: `Review ${t.label}`, notebook: t.label, ...base, why: 'Parked until the milestone: its reviews keep it alive' }]
+    // Sharpness practice on the milestone's bar: unseen problems just past your level
+    if (t.kind === 'practice') {
+      const ref = t.id.replace(/^practice:/, '') as 'algorithms' | 'quant' | 'design'
+      const title = ref === 'algorithms' ? 'Unseen algorithms problems' : ref === 'quant' ? 'Probability and brainteasers' : 'System design brief'
+      return [{ kind: 'practice', title, sharp: ref, ...base }]
+    }
     if (t.kind === 'roadmap') {
       // A session the course has (shared/coursePlan): its next lessons, as the course numbers them
       if (!touch && courses) {
@@ -488,10 +527,11 @@ export async function planGoalsWeek(date = today(), background = false): Promise
   // North Star's depth targets into the learner model first, so the week and the coach read the map's depths
   await import('./northStar').then((m) => m.syncTargets()).catch(() => 0)
   const s = await snapshot()
-  const days = studyDays(date, s.coach)
+  // Planned to the realistic day when a milestone says what that is; more is bonus (shared/milestone plannedDay)
+  const days = studyDays(date, s.coach).map((d) => ({ ...d, minutes: s.milestone ? plannedDay(d.minutes, s.milestone.milestone.hours).plan : d.minutes }))
   const due = await dueCards()
   const hours = await bestHours()
-  const week = planPortfolio({ today: date, days, threads: s.threads, dueCards: due, fading: s.fading.total, bestHours: hours })
+  const week = planPortfolio({ today: date, days, threads: s.threads, dueCards: due, fading: s.fading.total, bestHours: hours, groupFloors: s.groupFloors })
   if (!week.days.length) throw new Error('No study days are set this week. Pick your days in Your week.')
   const { byNotebook, checks } = await roadmapCandidates(s.threads, s.goals, s.coach)
   // What last week left undone goes first in its roadmap's queue
@@ -515,7 +555,7 @@ export async function planGoalsWeek(date = today(), background = false): Promise
   for (const d of week.days) for (const sess of d.sessions) if (!sess.touch) sessionsBy.set(sess.thread, [...(sessionsBy.get(sess.thread) ?? []), sess.minutes])
   const courses = await import('./coursePlan').then((m) => m.planCourses(s.threads, sessionsBy)).catch(() => null)
   for (const [nb, covered] of courses?.covered ?? []) byNotebook.set(nb, (byNotebook.get(nb) ?? []).filter((c) => !c.topicId || !covered.has(c.topicId)))
-  const make = itemMaker(s.threads, s.goals, s.inv, byNotebook, lastTopic, gates, courses)
+  const make = itemMaker(s.threads, s.goals, s.inv, byNotebook, lastTopic, gates, courses, servesOf(s))
   let planDays = week.days.map((d) => {
     const items: AgendaItem[] = []
     for (const sess of d.sessions)
@@ -652,8 +692,9 @@ async function replanInner(date: string): Promise<WeekPlan | null> {
   // Topics already in the plan aren't offered again
   const planned = new Set(plan.days.flatMap((d) => d.items.map((it) => it.topic)).filter(Boolean))
   for (const [nb, q] of queues) queues.set(nb, q.filter((c: TopicCandidate) => !planned.has(c.topic)))
-  const make = itemMaker(s.threads, s.goals, inv, queues, new Map())
-  const r = replanWeek({ plan, today: date, budgets, spent, ranLong, threads: s.threads, touchItem: (t, m) => make(t.id, m, true)[0] ?? { kind: 'learn', title: t.label } })
+  const make = itemMaker(s.threads, s.goals, inv, queues, new Map(), new Map(), null, servesOf(s))
+  const dayFloor = s.milestone ? s.milestone.hours.full : undefined
+  const r = replanWeek({ plan, today: date, budgets, spent, ranLong, threads: s.threads, ...(dayFloor ? { dayFloor } : {}), touchItem: (t, m) => make(t.id, m, true)[0] ?? { kind: 'learn', title: t.label } })
   // Drift: once a day, the worst behind of each dated goal
   const drift = (plan.replannedOn === date ? [] : driftOf(s.goals, s.log, date)).map((d): PlanNotice => ({ kind: 'drift', on: date, thread: d.thread, text: d.text }))
   const keep = (plan.notices ?? []).filter((n) => n.on >= addDays(date, -1))

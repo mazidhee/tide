@@ -391,7 +391,8 @@ const SHAPE: Record<ThreadKind, { session: number; touch: number; hard: boolean 
   project: { session: 60, touch: 30, hard: true },
   mock: { session: 45, touch: 45, hard: true },
   workout: { session: 15, touch: 15, hard: false },
-  reading: { session: 30, touch: 20, hard: false }
+  reading: { session: 30, touch: 20, hard: false },
+  practice: { session: 40, touch: 25, hard: true }
 }
 
 /** How long a thread may go untouched: a week with a date, ten days standing, a fortnight for something you're only curious about */
