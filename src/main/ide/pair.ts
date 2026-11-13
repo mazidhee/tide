@@ -79,11 +79,38 @@ function emit(s: Session, e: PairBody) {
 
 const sessionOf = (key: string): Session | null => (key.startsWith('ide:') ? (sessions.get(key.slice(4)) ?? null) : null)
 
+/**
+ * Who a tool call works for: an IDE pair session, or a coding lesson (main/lessonCode), whose
+ * folder the same confinement applies to and whose window gets the same proposals and comments.
+ */
+export interface Target {
+  root: string
+  send(e: PairBody): void
+}
+let lessonTarget: (labId: string) => Target | null = () => null
+/** main/lessonCode hands its coding lessons' folders to the tools */
+export const setLessonTargets = (fn: (labId: string) => Target | null) => (lessonTarget = fn)
+/** A lesson's folder opened in the IDE: Claude there teaches as the lesson's tutor does */
+let lessonNote: (root: string) => string = () => ''
+export const setLessonNote = (fn: (root: string) => string) => (lessonNote = fn)
+
+function targetOf(ctx: { labId?: string }): Target {
+  const key = ctx.labId?.replace(/^claude:/, '') ?? ''
+  const s = sessionOf(key)
+  if (s) return { root: s.root, send: (e) => emit(s, e) }
+  const l = key.startsWith('ide:') ? null : lessonTarget(key)
+  if (l) return l
+  throw new Error('No project or lesson files are open for these tools.')
+}
+
+/** Proposals the learner kept or undid, told to whoever works in that folder (pair sessions here, lessons in main/lessonCode) */
+export const resolvedListeners: ((root: string, note: string) => void)[] = []
+
 const MAX_READ = 60_000
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}\n… (${s.length - n} more characters)` : s)
 
 /** The text Claude's next edit applies to: its own pending proposal for the file, else the file */
-async function currentText(s: Session, rel: string): Promise<{ text: string; exists: boolean; pending?: Proposal }> {
+async function currentText(s: Target, rel: string): Promise<{ text: string; exists: boolean; pending?: Proposal }> {
   const pending = [...proposals.values()].find((p) => p.root === s.root && p.path === rel)
   if (pending) return { text: pending.proposed, exists: true, pending }
   const abs = inside(s.root, rel)
@@ -94,7 +121,7 @@ async function currentText(s: Session, rel: string): Promise<{ text: string; exi
 }
 
 /** Writes now (let-Claude-edit, or a bug hunt's copy) or shows a proposal; what Claude is told */
-async function propose(s: Session, rel: string, next: string, explanation: string): Promise<string> {
+async function propose(s: Target, rel: string, next: string, explanation: string): Promise<string> {
   const path = cleanRel(rel)
   if (!path) throw new Error('Give the file’s path in the project.')
   const cur = await currentText(s, path)
@@ -112,13 +139,13 @@ async function propose(s: Session, rel: string, next: string, explanation: strin
       saveHunts(list)
       return `Written to ${path} in the bug hunt's copy. Don't tell the learner where it is.`
     }
-    emit(s, { type: 'applied', root: s.root, path })
+    s.send({ type: 'applied', root: s.root, path })
     return `Written to ${path} (the learner lets you edit this project directly).`
   }
   const id = cur.pending?.id ?? randomUUID()
   const p: Proposal = { id, root: s.root, path, original: cur.pending?.original ?? cur.text, proposed: next, explanation: [cur.pending?.explanation, explanation].filter(Boolean).join('\n\n').slice(0, 3000), created: Date.now(), ...(cur.exists ? {} : { isNew: true }) }
   proposals.set(id, p)
-  emit(s, { type: 'proposal', proposal: p })
+  s.send({ type: 'proposal', proposal: p })
   return `Proposed a change to ${path}. The learner sees it as a diff and keeps or undoes each change; nothing is written until they do. Further edits to this file are added to the same proposal.`
 }
 
@@ -132,7 +159,7 @@ export const IDE_TOOLS: McpTool[] = [
     description: 'List the files in the project (paths relative to its root), optionally under a folder. Ignores dependencies and build output.',
     inputSchema: obj({ folder: { type: 'string', description: 'A folder in the project, e.g. "src"' } }),
     async run(args, ctx) {
-      const s = sessionOf(ctx.labId?.replace(/^claude:/, '') ?? '')!
+      const s = targetOf(ctx)
       const l = await listFiles(s.root)
       const f = cleanRel(str(args.folder))
       const files = f ? l.files.filter((x) => x.startsWith(f + '/')) : l.files
@@ -144,7 +171,7 @@ export const IDE_TOOLS: McpTool[] = [
     description: 'Read a file of the project, with line numbers. For a long file, give start_line and end_line.',
     inputSchema: obj({ path: { type: 'string' }, start_line: { type: 'number' }, end_line: { type: 'number' } }, ['path']),
     async run(args, ctx) {
-      const s = sessionOf(ctx.labId?.replace(/^claude:/, '') ?? '')!
+      const s = targetOf(ctx)
       const path = cleanRel(str(args.path))
       const r = await readFile(s.root, path)
       if (r.binary) return `${path} is not a text file.`
@@ -161,7 +188,7 @@ export const IDE_TOOLS: McpTool[] = [
     description: 'Search the project’s files with ripgrep. Returns path:line: text for each match.',
     inputSchema: obj({ query: { type: 'string' }, regex: { type: 'boolean' }, include: { type: 'string', description: 'Globs, e.g. "*.py" or "src"' } }, ['query']),
     async run(args, ctx) {
-      const s = sessionOf(ctx.labId?.replace(/^claude:/, '') ?? '')!
+      const s = targetOf(ctx)
       const r = await search(s.root, { query: str(args.query), regex: !!args.regex, include: str(args.include) || undefined, maxResults: 300 })
       if (r.error) return `Search failed: ${r.error}`
       if (!r.total) return 'No matches.'
@@ -173,7 +200,7 @@ export const IDE_TOOLS: McpTool[] = [
     description: 'The errors and warnings the editor shows for the files the learner has open (from the language servers and Ruff).',
     inputSchema: obj({ path: { type: 'string' } }),
     async run(args, ctx) {
-      const s = sessionOf(ctx.labId?.replace(/^claude:/, '') ?? '')!
+      const s = targetOf(ctx)
       const p = cleanRel(str(args.path))
       const list = (problems.get(s.root) ?? []).filter((x) => !p || x.path === p)
       return list.length ? list.slice(0, 120).map((x) => `${x.path}:${x.line}:${x.column} ${x.severity}: ${x.message}${x.source ? ` (${x.source})` : ''}`).join('\n') : 'No problems in the open files.'
@@ -184,7 +211,7 @@ export const IDE_TOOLS: McpTool[] = [
     description: "The learner's uncommitted changes as a unified diff (staged and unstaged), and the git status.",
     inputSchema: obj({ path: { type: 'string' } }),
     async run(args, ctx) {
-      const s = sessionOf(ctx.labId?.replace(/^claude:/, '') ?? '')!
+      const s = targetOf(ctx)
       const st = await git.status(s.root)
       if (!st.repo) return 'This project is not a git repository.'
       const path = cleanRel(str(args.path)) || undefined
@@ -200,7 +227,7 @@ export const IDE_TOOLS: McpTool[] = [
       'Propose replacing old_string with new_string in a file (old_string must appear exactly once; include enough surrounding lines). The learner reviews it as a diff and keeps or undoes each change; it is not written until they do. Several edits to one file join one proposal.',
     inputSchema: obj({ path: { type: 'string' }, old_string: { type: 'string' }, new_string: { type: 'string' }, explanation: { type: 'string', description: 'Why, in a sentence or two, for the learner' } }, ['path', 'old_string', 'new_string']),
     async run(args, ctx) {
-      const s = sessionOf(ctx.labId?.replace(/^claude:/, '') ?? '')!
+      const s = targetOf(ctx)
       const path = cleanRel(str(args.path))
       const cur = await currentText(s, path)
       if (!cur.exists) return `${path} doesn't exist. Use write_file to make it.`
@@ -215,7 +242,7 @@ export const IDE_TOOLS: McpTool[] = [
     description: 'Propose a whole file: a new one, or a full rewrite of a short one. Shown to the learner as a diff to keep or undo.',
     inputSchema: obj({ path: { type: 'string' }, content: { type: 'string' }, explanation: { type: 'string' } }, ['path', 'content']),
     async run(args, ctx) {
-      const s = sessionOf(ctx.labId?.replace(/^claude:/, '') ?? '')!
+      const s = targetOf(ctx)
       return propose(s, str(args.path), str(args.content), str(args.explanation))
     }
   },
@@ -225,7 +252,7 @@ export const IDE_TOOLS: McpTool[] = [
       "Run a shell command (zsh) in Tide's sandbox on a copy of the project: no network, and nothing it writes reaches the project. For running the program, a build, a linter or a script. Up to 2 minutes.",
     inputSchema: obj({ command: { type: 'string' } }, ['command']),
     async run(args, ctx) {
-      const s = sessionOf(ctx.labId?.replace(/^claude:/, '') ?? '')!
+      const s = targetOf(ctx)
       const id = ctx.step({ kind: 'helper', label: `Running ${str(args.command).slice(0, 60)}`, status: 'running', depth: 0 })
       const r = await shellInSandbox(s.root, str(args.command), 120_000)
       ctx.updateStep(id, { status: 'done' })
@@ -237,7 +264,7 @@ export const IDE_TOOLS: McpTool[] = [
     description: "Run the project's tests (pytest, cargo test, go test or node --test) in Tide's sandbox; optionally only some, by pytest node id.",
     inputSchema: obj({ ids: { type: 'array', items: { type: 'string' } } }),
     async run(args, ctx) {
-      const s = sessionOf(ctx.labId?.replace(/^claude:/, '') ?? '')!
+      const s = targetOf(ctx)
       const r = await runTests(s.root, Array.isArray(args.ids) ? args.ids.map(str) : undefined)
       if (r.error && !r.outcomes.length) return `${r.error}\n${clip(r.output, 6000)}`
       const failed = r.outcomes.filter((o) => o.status === 'fail' || o.status === 'error')
@@ -249,7 +276,7 @@ export const IDE_TOOLS: McpTool[] = [
     description: 'Where the learner’s debugger is stopped: the reason, the call stack and the variables in view. Read only.',
     inputSchema: obj({}),
     async run(_args, ctx) {
-      const s = sessionOf(ctx.labId?.replace(/^claude:/, '') ?? '')!
+      const s = targetOf(ctx)
       return debugText.get(s.root) ?? 'Not debugging.'
     }
   },
@@ -258,12 +285,12 @@ export const IDE_TOOLS: McpTool[] = [
     description: 'Put a review comment in the editor under a line of a file, as a reviewer does on a pull request. line is the line number in the file as it is now.',
     inputSchema: obj({ path: { type: 'string' }, line: { type: 'number' }, severity: { type: 'string', enum: ['issue', 'suggestion', 'praise', 'question'] }, body: { type: 'string' } }, ['path', 'line', 'body']),
     async run(args, ctx) {
-      const s = sessionOf(ctx.labId?.replace(/^claude:/, '') ?? '')!
+      const s = targetOf(ctx)
       const path = cleanRel(str(args.path))
       inside(s.root, path)
       const sev = ['issue', 'suggestion', 'praise', 'question'].includes(str(args.severity)) ? (str(args.severity) as ReviewComment['severity']) : 'suggestion'
       const c: ReviewComment = { id: randomUUID(), root: s.root, path, line: Math.max(1, Math.round(Number(args.line) || 1)), severity: sev, body: str(args.body).slice(0, 2000) }
-      emit(s, { type: 'comment', comment: c })
+      s.send({ type: 'comment', comment: c })
       return 'Shown in the editor.'
     }
   },
@@ -272,10 +299,10 @@ export const IDE_TOOLS: McpTool[] = [
     description: 'Open a file in the learner’s editor at a line, to show them something.',
     inputSchema: obj({ path: { type: 'string' }, line: { type: 'number' } }, ['path']),
     async run(args, ctx) {
-      const s = sessionOf(ctx.labId?.replace(/^claude:/, '') ?? '')!
+      const s = targetOf(ctx)
       const path = cleanRel(str(args.path))
       inside(s.root, path)
-      emit(s, { type: 'opened', root: s.root, path, line: Number(args.line) || undefined })
+      s.send({ type: 'opened', root: s.root, path, line: Number(args.line) || undefined })
       return 'Opened.'
     }
   }
@@ -303,7 +330,8 @@ async function ensureProcess(s: Session): Promise<import('../claudeEngine').Clau
   const file = join(dir, `mcp-ide-${s.id.slice(0, 12)}.json`)
   // This launch's token for Tide's own server only; readable by the user alone
   writeFileSync(file, mcpConfig(mcp.port, mcp.token, `ide:${s.id}`), { mode: 0o600 })
-  const system = `${BASE}\n\nThe project is "${basename(s.root)}".\n\n${MODES[s.mode]}`
+  const lesson = lessonNote(s.root)
+  const system = `${BASE}\n\nThe project is "${basename(s.root)}".\n\n${MODES[s.mode]}${lesson ? `\n\n${lesson}` : ''}`
   s.proc = new ClaudeProcess(`ide:${s.id}`, s.model, system, file, [])
   return s.proc
 }
@@ -399,6 +427,7 @@ export function resolve(id: string, text: string | null) {
   proposals.delete(id)
   const note = text === null ? `the learner undid your proposed change to ${p.path}.` : text === p.proposed ? `the learner kept your change to ${p.path}.` : `the learner kept part of your change to ${p.path} (some hunks undone); read it again before editing it.`
   for (const s of sessions.values()) if (s.root === p.root) s.notes.push(note)
+  for (const fn of resolvedListeners) fn(p.root, note)
 }
 
 /** A copy of the project for a bug hunt, in Tide's own folder, opened as a workspace of its own */
