@@ -126,6 +126,9 @@ export function rankPrior(topic: string, concepts: PriorConcept[], topicArea = '
 
 // ---------- Claude's rerank ----------
 
+/** A lesson prepared ahead (main/lessonPrep) isn't in a hurry: Claude's rerank gets this long */
+export const RERANK_PREP_MS = 15_000
+
 /** What a concept Claude picked adds to its relevance: about a prerequisite's worth */
 export const RERANK_WEIGHT = 1.1
 /** How many earlier concepts Claude is shown: the best by name and roadmap, then the most recent */

@@ -57,8 +57,6 @@ function prerequisitesOf(topicId: string | null, byId: Map<string, ConceptState>
 
 /** How long a live warm-up waits for the rerank (the window waits a little longer for the cards) */
 export const RERANK_LIVE_MS = 4500
-/** A lesson prepared ahead isn't in a hurry */
-export const RERANK_PREP_MS = 15_000
 const RERANK_KEEP_MS = 24 * 60 * 60_000
 
 /** The rerank, as Claude answers it: in tests, a stand-in. Null when Claude doesn't teach */
