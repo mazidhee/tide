@@ -216,7 +216,7 @@ export function seedPlan(seed: LadderSeed, idea: string, now: number, isPrivate:
     links = [...links, ...seed.more.links]
     milestones = [...milestones, ...seed.more.milestones.map((m) => ({ ...m, readings: [], recall: [], status: 'todo' as const }))]
   }
-  const raw = { ...base, name: seed.title, slug: seed.id, summary: seed.milestones ? `${seed.about}. ${base.summary.split('. ')[0]}.` : base.summary + (seed.more ? ` ${seed.about}.` : ''), components, links, milestones, idea: idea.trim() || seed.about, template: t.id, seed: seed.id, tier: seed.tier, area: seed.areas[0], private: isPrivate, by: 'template', createdAt: now }
+  const raw = { ...base, name: seed.title, slug: seed.id, summary: seed.milestones ? `${seed.about}, built on its own: the first step towards ${t.name.charAt(0).toLowerCase()}${t.name.slice(1)}.` : base.summary + (seed.more ? ` ${seed.about}.` : ''), components, links, milestones, idea: idea.trim() || seed.about, template: t.id, seed: seed.id, tier: seed.tier, area: seed.areas[0], private: isPrivate, by: 'template', createdAt: now }
   return validatePlan(raw, { by: 'template', private: isPrivate, tier: seed.tier, area: seed.areas[0], seed: seed.id, template: t.id, createdAt: now }).plan!
 }
 

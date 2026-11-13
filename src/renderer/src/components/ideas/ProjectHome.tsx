@@ -496,14 +496,6 @@ export function ProjectHome({
                 <p className="ip-hint">Reading…</p>
               )}
             </div>
-            <div className="ip-card ip-side-card ip-files-note">
-              <h3>Files</h3>
-              <button className="ip-reading" onClick={() => onOpenFile('README.md')}>
-                <Icon name="note" size={12} />
-                <span>README.md</span>
-              </button>
-              <p className="ip-hint">{plan.root?.replace(/^\/Users\/[^/]+/, '~')}</p>
-            </div>
           </aside>
         </div>
       </div>

@@ -332,7 +332,7 @@ export async function projectBriefing(root: string, withMemory: boolean): Promis
     const parts = [
       `The project is planned in Tide: ${plan.name}. ${plan.summary}`,
       `Components: ${plan.components.map((c) => `${c.name} (${c.about})`).join('; ')}.`,
-      cur ? `Current milestone ${prog.index + 1} of ${prog.total}: ${cur.title}. ${cur.build}\nDone when:\n${cur.doneWhen.map((d) => `- ${d}`).join('\n')}${cur.lessons.length ? `\nConcepts it teaches: ${cur.lessons.map((l) => l.concept).join(', ')}.` : ''}` : 'Every milestone is done.',
+      cur ? `Current milestone ${prog.index + 1} of ${prog.total}: ${cur.title}. ${cur.build}\nDone when:\n${cur.doneWhen.map((d) => `- ${d}`).join('\n')}${cur.lessons.length ? `\nConcepts it teaches: ${cur.lessons.map((l) => l.concept).join(', ')}.` : ''}${cur.testsUnlocked ? '' : "\nIts tests are held back until the learner passes the milestone's ready check, so they aren't in the project yet: that is expected, not a gap."}` : 'Every milestone is done.',
       `Milestones done: ${plan.milestones.filter((m) => m.status === 'done').map((m) => m.title).join('; ') || 'none yet'}.`
     ]
     if (withMemory && plan.notebook) {

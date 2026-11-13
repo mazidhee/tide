@@ -196,7 +196,7 @@ export interface ClarifyQuestion {
 
 // ---------- Validation ----------
 
-export const LIMITS = { components: [2, 10], milestones: [2, 10], hours: [1, 60], files: 30, fileChars: 40_000 } as const
+export const LIMITS = { components: [1, 12], milestones: [1, 12], hours: [1, 60], files: 30, fileChars: 40_000 } as const
 
 const str = (v: unknown, max = 400) => (typeof v === 'string' ? v.trim().slice(0, max) : typeof v === 'number' ? String(v) : '')
 const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
@@ -956,6 +956,7 @@ export function planPrompt(o: { idea: string; answers: { question: string; answe
 }
 Rules:
 - 4 to 9 components, as the real thing is built; links show how data or control flows.
+- Each milestone's tests are released after a ready check, so don't write in 'build' that tests already exist.
 - 5 to 9 milestones in build order. The first is small and runs end to end in a few hours. Each later one adds one component or one hard part. 1 to 3 lessons each, 3 to 6 doneWhen tests each.
 - The scaffold is the starting structure: ${TEST_RULES[o.language]} Write REAL failing tests for milestone 1 only, one per doneWhen line, that pass once the learner implements the stubs. Write stub files with signatures and docstrings, never the implementation. Add a .gitignore. No README (Tide writes it from the plan). At most 14 files.`
   ]
