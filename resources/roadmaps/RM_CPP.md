@@ -1,6 +1,6 @@
 # C++ Roadmap
 
-From the basics to modern C++: the language, how objects live and die, templates and the standard library, performance, then concurrency and systems work. Write and run every example with clang on this Mac (`clang++ -std=c++20 -Wall -Wextra -fsanitize=address,undefined`), and keep the sanitizers on.
+From the basics to modern C++: the language, how objects live and die, templates and the standard library, performance, then concurrency and systems work. Write and run every example with clang on this Mac (`clang++ -std=c++20 -Wall -Wextra -fsanitize=address,undefined`), and keep the sanitizers on. The C++ pack (Settings › Tools) adds CMake; clangd, the debugger and the projects' tests then work in Tide's IDE.
 
 ## 1. The language core — CORE
 
@@ -30,7 +30,7 @@ From the basics to modern C++: the language, how objects live and die, templates
 
 **Capstone**
 
-- [ ] Project: A command-line ledger in C++ with classes, RAII file handling and unit tests
+- [ ] Project: A command-line ledger in C++ with classes, RAII file handling and unit tests (project: cpp-ledger)
 
 ## 2. Memory and object lifetime — CORE
 
@@ -114,7 +114,7 @@ From the basics to modern C++: the language, how objects live and die, templates
 
 **Capstone**
 
-- [ ] Project: A limit order book in C++ matching a million orders a second, with benchmarks and a profile
+- [ ] Project: A limit order book in C++ matching a million orders a second, with benchmarks and a profile (project: cpp-order-book)
 
 ## 5. Concurrency and systems — CORE
 

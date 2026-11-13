@@ -1,6 +1,6 @@
 # Backend Engineering Roadmap
 
-Building services that stay correct under load and failure: HTTP APIs, Postgres in depth, caching and queues, auth, observability and deployment. Practise against the SQL lab and your own projects.
+Building services that stay correct under load and failure: HTTP APIs, Postgres in depth, caching and queues, auth, observability and deployment. Practise against the SQL lab and your own projects. With the Postgres pack (Settings › Tools) the lab runs real PostgreSQL beside SQLite: indexes, EXPLAIN ANALYZE, transactions, and a second session to watch isolation levels and locks.
 
 ## 1. HTTP and APIs — CORE
 

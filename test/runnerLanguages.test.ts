@@ -34,7 +34,8 @@ describe('the language table', () => {
       expect(l.entry).toMatch(/^[Mm]ain\.\w+$/)
       expect(l.run({ ...c, entry: l.entry }).length).toBeGreaterThan(0)
       if (l.tool) {
-        expect(l.tool.paths.length).toBeGreaterThan(0)
+        // A pack's toolchain is found in Tide's tools folder at run time (locate) rather than at a fixed path
+        expect(l.tool.paths.length + (l.tool.locate ? 1 : 0)).toBeGreaterThan(0)
         expect(l.tool.version.length).toBeGreaterThan(0)
         expect(missingText(l)).toMatch(new RegExp(`^${l.name.replace(/\+/g, '\\+')} isn't installed on this Mac`))
         expect(missingText(l)).not.toContain('\n')

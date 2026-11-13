@@ -734,7 +734,8 @@ describe('the starting files', () => {
   })
 
   it.skipIf(!hasPython)('every template’s tests fail on its stubs and pass on a working solution', () => {
-    for (const t of IDEA_TEMPLATES) {
+    // The C++ and Solidity templates are run with their own toolchains in test/trackPackRuns.test.ts
+    for (const t of IDEA_TEMPLATES.filter((x) => x.plan.language === 'python')) {
       const files = scaffoldFiles(planFromTemplate(t, t.about, NOW, false))
       const before = runPy(files)
       const names = Object.keys(before)

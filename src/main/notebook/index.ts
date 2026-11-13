@@ -16,6 +16,8 @@ import { QUANT_PACK, YAHOO_PACK } from '@shared/labPack'
 import { Kernel } from './kernel'
 import { duBytes, findUv, installArgs, installPack, packStatusOf, realInstaller, rememberedSize, STATUS_CODE } from './pack'
 import TIDE_NB from './tide_nb.py?raw'
+import TIDE_RUNS from '../packs/tide_runs.py?raw'
+import { experimentFor } from '@shared/runs'
 
 const userData = () => app.getPath('userData')
 const nbDir = () => join(userData(), 'notebook')
@@ -95,6 +97,7 @@ function site(): Promise<string> {
     const { writeFinanceHelper } = await import('../finance/helper')
     await writeFinanceHelper(dir)
     await fs.writeFile(join(dir, 'tide_nb.py'), TIDE_NB)
+    await fs.writeFile(join(dir, 'tide_runs.py'), TIDE_RUNS)
     return dir
   })().catch((e) => {
     siteReady = null
@@ -143,14 +146,18 @@ async function start(ref: NbRef, theme: NbTheme): Promise<KernelStartResult> {
   await fs.mkdir(mplDir(), { recursive: true }).catch(() => {})
   const mpl = await fs.realpath(mplDir()).catch(() => mplDir())
   const realFolder = await fs.realpath(folder).catch(() => folder)
+  // Training runs logged with tide_runs go to Tide's runs folder, under the notebook's name
+  const { runsDir } = await import('../runner')
+  await fs.mkdir(runsDir(), { recursive: true }).catch(() => {})
+  const runs = await fs.realpath(runsDir()).catch(() => runsDir())
   const { getSettings } = await import('../settings')
   const network = !!getSettings().notebook?.internet
   const kernel = new Kernel(
     {
       python: notebookPython(),
       cwd: folder,
-      env: await kernelEnv(),
-      writable: [realFolder, mpl],
+      env: { ...(await kernelEnv()), TIDE_RUNS_DIR: runs, TIDE_RUNS_EXPERIMENT: experimentFor(abs) },
+      writable: [realFolder, mpl, runs],
       network,
       bootstrap: `import tide_nb as _tide_nb\n${themeCode(theme)}`,
       onEvent: (event) => send('notebook:kernel', { key, event })

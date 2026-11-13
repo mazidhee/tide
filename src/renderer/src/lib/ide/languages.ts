@@ -19,7 +19,7 @@ const BY_EXT: Record<string, string> = {
   ts: TS_IDE, tsx: TS_IDE, mts: TS_IDE, cts: TS_IDE,
   js: JS_IDE, jsx: JS_IDE, mjs: JS_IDE, cjs: JS_IDE,
   c: 'c', h: 'cpp', cc: 'cpp', cpp: 'cpp', cxx: 'cpp', hpp: 'cpp', hh: 'cpp',
-  rs: 'rust', go: 'go', java: 'java', kt: 'kotlin', swift: 'swift', rb: 'ruby', r: 'r', scala: 'scala', cs: 'csharp',
+  rs: 'rust', go: 'go', sol: 'sol', java: 'java', kt: 'kotlin', swift: 'swift', rb: 'ruby', r: 'r', scala: 'scala', cs: 'csharp',
   sql: 'sql', sh: 'shell', bash: 'shell', zsh: 'shell',
   json: 'json', jsonc: 'json', yml: 'yaml', yaml: 'yaml', toml: 'ini', ini: 'ini', cfg: 'ini',
   html: 'html', htm: 'html', css: 'css', scss: 'scss', less: 'less',
@@ -38,21 +38,22 @@ export function languageOf(path: string, tsServer = true): string {
 }
 
 /** The language server for a Monaco language (Python's is separate, lib/lsp/python) */
-export const SERVER_FOR: Record<string, LspServerId> = { [TS_IDE]: 'typescript', [JS_IDE]: 'typescript', rust: 'rust', c: 'clangd', cpp: 'clangd', go: 'go' }
+export const SERVER_FOR: Record<string, LspServerId> = { [TS_IDE]: 'typescript', [JS_IDE]: 'typescript', rust: 'rust', c: 'clangd', cpp: 'clangd', go: 'go', sol: 'solidity' }
 
 /** The languageId the server expects for a file */
 export function lspLanguageId(monacoId: string, path: string): string {
   const ext = path.split('.').pop()?.toLowerCase()
   if (monacoId === TS_IDE) return ext === 'tsx' ? 'typescriptreact' : 'typescript'
   if (monacoId === JS_IDE) return ext === 'jsx' ? 'javascriptreact' : 'javascript'
+  if (monacoId === 'sol') return 'solidity'
   return monacoId
 }
 
-const LABELS: Record<string, string> = { [TS_IDE]: 'TypeScript', [JS_IDE]: 'JavaScript', typescript: 'TypeScript', javascript: 'JavaScript', cpp: 'C++', c: 'C', csharp: 'C#', plaintext: 'Plain text', ini: 'Config', json: 'JSON', yaml: 'YAML', html: 'HTML', css: 'CSS', sql: 'SQL', shell: 'Shell', go: 'Go' }
+const LABELS: Record<string, string> = { [TS_IDE]: 'TypeScript', [JS_IDE]: 'JavaScript', typescript: 'TypeScript', javascript: 'JavaScript', cpp: 'C++', c: 'C', sol: 'Solidity', csharp: 'C#', plaintext: 'Plain text', ini: 'Config', json: 'JSON', yaml: 'YAML', html: 'HTML', css: 'CSS', sql: 'SQL', shell: 'Shell', go: 'Go' }
 export const languageLabel = (id: string) => LABELS[id] ?? id.charAt(0).toUpperCase() + id.slice(1)
 
 /** What Run does for a file: the sandbox runs these (main/languages) */
-export const RUNNABLE = new Set(['python', 'javascript', JS_IDE, 'typescript', TS_IDE, 'c', 'cpp', 'rust', 'go', 'java', 'ruby', 'swift', 'kotlin', 'shell'])
+export const RUNNABLE = new Set(['python', 'javascript', JS_IDE, 'typescript', TS_IDE, 'c', 'cpp', 'rust', 'go', 'java', 'ruby', 'swift', 'kotlin', 'shell', 'sol'])
 
 let registered = false
 /** Registers the IDE's TypeScript and JavaScript ids with Monaco, once */

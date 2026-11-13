@@ -44,9 +44,11 @@ const GRAMMARS: Record<string, Loader<LanguageRegistration[]>> = {
   swift: () => import('@shikijs/langs/swift'),
   csharp: () => import('@shikijs/langs/csharp'),
   r: () => import('@shikijs/langs/r'),
-  scala: () => import('@shikijs/langs/scala')
+  scala: () => import('@shikijs/langs/scala'),
+  // Monaco's id for Solidity is sol
+  sol: () => import('@shikijs/langs/solidity')
 }
-const SHIKI_NAME: Record<string, string> = { shell: 'shellscript', 'typescript-ide': 'tsx', 'javascript-ide': 'javascript' }
+const SHIKI_NAME: Record<string, string> = { sol: 'solidity', shell: 'shellscript', 'typescript-ide': 'tsx', 'javascript-ide': 'javascript' }
 
 const THEMES: Record<TokenThemeName, Loader<ThemeRegistrationRaw>> = {
   'dark-plus': () => import('@shikijs/themes/dark-plus') as Promise<{ default: ThemeRegistrationRaw }>,

@@ -8,7 +8,46 @@
  * (!pip, %matplotlib) are left out, since the runner is plain Python.
  */
 
+import { trackPack, type TrackPackId } from '@shared/trackPacks'
+
 const MARK = '__tide_cell_output_starts__'
+
+const PACK_NAMES: Record<string, TrackPackId> = { 'C++': 'cpp', Foundry: 'foundry', 'Big data': 'bigdata', Postgres: 'postgres' }
+
+/**
+ * When a run says it needs a track pack ("needs the Foundry pack"), an Install button under its
+ * output, with the pack's size; it installs in the background and says when to run again.
+ */
+export function offerPack(out: HTMLElement, stderr: string) {
+  if (out.nextElementSibling?.classList.contains('pack-offer')) out.nextElementSibling.remove()
+  const id = PACK_NAMES[/needs the (C\+\+|Foundry|Big data|Postgres) pack\b/.exec(stderr)?.[1] ?? '']
+  if (!id) return
+  const pack = trackPack(id)!
+  const box = document.createElement('div')
+  box.className = 'pack-offer'
+  const text = document.createElement('div')
+  text.className = 'pack-offer-text'
+  const title = document.createElement('strong')
+  title.textContent = `This needs the ${pack.title}`
+  const line = document.createElement('span')
+  line.textContent = `${pack.contents}. ${pack.download} to download, ${pack.size} on disk, into Tide’s own tools folder.`
+  text.append(title, line)
+  const button = document.createElement('button')
+  button.className = 'btn small primary'
+  button.textContent = `Install · ${pack.download.replace(/^about /, '')}`
+  button.addEventListener('click', async () => {
+    button.remove()
+    const off = window.tide.packs.onProgress((p) => p.id === id && (line.textContent = p.step))
+    try {
+      const s = await window.tide.packs.install(id)
+      line.textContent = s.ready ? `Installed (${s.detail}). Run it again.` : s.detail
+    } finally {
+      off()
+    }
+  })
+  box.append(text, button)
+  out.after(box)
+}
 
 const jupyterOnly = (code: string) =>
   code
@@ -69,6 +108,7 @@ export async function codeBlockClick(target: EventTarget | null, opts: { cumulat
     out.textContent =
       stdout + (stderr ? (stdout ? '\n' : '') + stderr : '') + (r.timedOut ? '\nStopped after 10 seconds.' : '') + (!stdout && !stderr && !r.timedOut ? 'Ran with no output.' : '')
     out.dataset.meta = r.timedOut ? 'timed out' : `exit ${r.exitCode}, ${r.durationMs} ms${cumulative ? ', with the cells above' : ''}`
+    offerPack(out, stderr)
   } catch (e) {
     out.classList.add('failed')
     out.textContent = (e as Error).message

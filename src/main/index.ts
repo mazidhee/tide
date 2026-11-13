@@ -60,6 +60,7 @@ import { registerIde, stopIde } from './ide'
 import { registerNotebook, stopNotebooks } from './notebook'
 import { registerMocks } from './mocks'
 import { registerIdeas } from './ideaProjects'
+import { registerPacks, stopPacks } from './packs'
 import { labStatus, librariesStatus, mathStatus, runCode, runProject, setupLab, setupLibraries, setupMath } from './runner'
 import { searchStatus, setupSearch, stopSearch, wakeSearch } from './websearch'
 import { applySpeedups, speedStatus } from './modelServer'
@@ -216,6 +217,7 @@ function registerIpc() {
   registerNotebook()
   registerMocks()
   registerIdeas()
+  registerPacks()
   registerBackups(handle)
   registerBugReports()
   registerWeekProgress(handle)
@@ -735,6 +737,13 @@ function registerIpc() {
       const r = labQuery(String(opts.labId), String(code ?? ''))
       return { stdout: r.error ? '' : resultText(r), stderr: r.error ? `Error: ${r.error}` : '', exitCode: r.error ? 1 : 0, timedOut: false, durationMs: Math.round(r.elapsedMs) }
     }
+    // Postgres in a code question runs in the lesson's Postgres database (the Postgres pack)
+    if (/^(postgres(ql)?|pgsql|psql)$/i.test(String(language ?? ''))) {
+      return import('./packs/postgres').then(async (m) => {
+        const r = await m.pgQuery(String(opts?.labId ?? 'scratch'), String(code ?? ''), { session: m.sessionOf(String(code ?? '')) })
+        return { stdout: r.error ? '' : resultText(r), stderr: r.error ? `Error: ${r.error}` : '', exitCode: r.error ? 1 : 0, timedOut: false, durationMs: Math.round(r.elapsedMs) }
+      })
+    }
     return runCode(language, code, stdin, undefined, { tests: typeof opts?.tests === 'string' ? opts.tests : undefined })
   })
   // A link that arrived before the window was ready is picked up once, when the app has loaded
@@ -1078,6 +1087,7 @@ app.on('before-quit', () => {
   void stopLanguageServer()
   void stopIde()
   void stopNotebooks()
+  void stopPacks()
 })
 
 app.on('window-all-closed', () => {

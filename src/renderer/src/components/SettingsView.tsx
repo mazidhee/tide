@@ -23,6 +23,8 @@ import { UsageView } from './UsageView'
 import { ConnectionsView } from './ConnectionsView'
 import { LAB_PACK, QUANT_PACK } from '@shared/labPack'
 import { usePackInstall } from './notebook/PackCard'
+import { trackPack, TRACK_PACKS, type TrackPackId } from '@shared/trackPacks'
+import { installLabel, PackProgress, useTrackPack } from './TrackPacks'
 import { teardownTopic } from '@shared/metabaseData'
 import type { EditorChoice, InstalledEditor } from '@shared/editor'
 
@@ -225,6 +227,54 @@ function QuantPackSetup() {
         </Row>
       )}
     </>
+  )
+}
+
+const PACK_ICONS: Record<TrackPackId, IconName> = { cpp: 'subCode', foundry: 'subBlockchain', bigdata: 'subPipeline', postgres: 'subDatabase', runs: 'subLearning' }
+
+/** One track pack: what it makes hands-on, its state on this Mac, and Install with its measured size */
+function TrackPackRow({ id }: { id: TrackPackId }) {
+  const pack = trackPack(id)!
+  const { status, step, busy, note, install, appleTools, check } = useTrackPack(id)
+  const detail = !status ? 'Checking…' : status.unavailable && !status.ready ? `${status.detail}. ${status.unavailable}.` : status.detail
+  return (
+    <div className="set-row pack-row">
+      <span className={`pack-icon${status?.ready ? ' ok' : ''}`} aria-hidden="true">
+        <Icon name={PACK_ICONS[id]} size={16} />
+      </span>
+      <div className="set-label">
+        <span className="set-status-label">
+          {pack.title}
+          <span className={`tool-dot${status?.ready ? ' ok' : status ? ' off' : ''}`} aria-label={status?.ready ? 'Installed' : 'Not installed'} />
+        </span>
+        <span className="set-hint">{pack.about}</span>
+        {busy ? <PackProgress step={step} /> : <span className={`set-hint pack-detail${status?.ready ? ' ok' : ''}`}>{detail}</span>}
+        {note && <span className="set-hint">{note}</span>}
+      </div>
+      {status && !status.ready && !busy && pack.files.length > 0 && (
+        <div className="set-control pack-actions">
+          {status.needs === 'xcode' && note && (
+            <button className="btn small" onClick={() => void check()}>
+              Check again
+            </button>
+          )}
+          <button className="btn small" onClick={() => void (status.needs === 'xcode' ? appleTools() : install())}>
+            {installLabel(id, status)}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The track packs: one-click installs that make C++, Solidity, big data, Postgres and ML tracking hands-on */
+function TrackPacksGroup() {
+  return (
+    <Group title="Track packs" note="Each installs only when you press Install, in the background, into Tide’s own tools folder; nothing goes into the system. Sizes measured on an Apple silicon Mac.">
+      {TRACK_PACKS.map((p) => (
+        <TrackPackRow key={p.id} id={p.id} />
+      ))}
+    </Group>
   )
 }
 
@@ -1549,6 +1599,7 @@ function ToolsSection() {
           </Row>
         )}
       </Group>
+      <TrackPacksGroup />
       <Group title="Helpers on this Mac">
         {(provider === 'local' || provider === 'auto') && (
           <ToolSetup label="Web search engine" hint="Starts when you search, stops when you don’t" check={window.tide.runner.searchStatus} setup={window.tide.runner.setupSearch} onReady={() => provider === 'local' && saveAi({ webSearch: { ...ai.webSearch, provider: 'searxng', url: LOCAL_SEARCH } })} />

@@ -6,6 +6,7 @@
  */
 import type { ChatScope } from '@shared/types'
 import { capabilityNote, type CapabilityStatus } from '@shared/capability'
+import type { TrackPackId } from '@shared/trackPacks'
 import { isUnclear, toolkitText, type SubjectProfile } from '@shared/subjects'
 import { HUMANITIES_RULES } from '@shared/humanities'
 import { askCloud } from './ai'
@@ -31,10 +32,23 @@ function runnable(): Promise<Omit<CapabilityStatus, 'web'>> {
   if (!status || Date.now() - status.at > 10 * 60_000) {
     status = {
       at: Date.now(),
-      value: Promise.all([languageStates().catch(() => []), mathStatus().catch(() => ({ ready: false })), labStatus().catch(() => ({ ready: false }))]).then(([languages, maths, lab]) => ({ languages, maths: maths.ready, labPack: lab.ready }))
+      value: Promise.all([languageStates().catch(() => []), mathStatus().catch(() => ({ ready: false })), labStatus().catch(() => ({ ready: false })), packsInstalled().catch(() => ({}))]).then(([languages, maths, lab, packs]) => ({ languages, maths: maths.ready, labPack: lab.ready, packs }))
     }
   }
   return status.value
+}
+
+/** Which track packs are installed (the run tracker is built in, so it is never missing) */
+async function packsInstalled(): Promise<Partial<Record<TrackPackId, boolean>>> {
+  const { statusOf } = await import('./packs')
+  const ids: TrackPackId[] = ['cpp', 'foundry', 'bigdata', 'postgres']
+  const all = await Promise.all(ids.map((id) => statusOf(id).then((s) => s.ready, () => false)))
+  return Object.fromEntries(ids.map((id, i) => [id, all[i]]))
+}
+
+/** After a pack is installed, the next lesson asks again */
+export const forgetRunnable = () => {
+  status = null
 }
 
 const notebookOf = (scope: ChatScope) => (scope.kind === 'folder' ? scope.path : scope.kind === 'note' || scope.kind === 'pages' ? scope.path.split('/').slice(0, -1).join('/') || undefined : undefined)

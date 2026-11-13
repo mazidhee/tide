@@ -20413,3 +20413,114 @@ button.wkp-tile:hover {
   width: 120px;
   flex: none;
 }
+
+/* ---------- Track packs (Settings › Tools, a lesson's offer) ---------- */
+
+.pack-row {
+  align-items: flex-start;
+}
+
+.pack-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-top: 1px;
+  flex-shrink: 0;
+  border-radius: var(--radius-s);
+  background: var(--bg-inset);
+  color: var(--ink-muted);
+}
+
+.pack-icon.ok {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.pack-detail {
+  font-variant-numeric: tabular-nums;
+}
+
+.pack-detail.ok {
+  color: var(--ink-soft);
+}
+
+.pack-actions {
+  display: flex;
+  gap: 6px;
+  align-self: center;
+}
+
+.pack-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.pack-bar {
+  display: block;
+  height: 3px;
+  max-width: 260px;
+  border-radius: 2px;
+  background: var(--bg-inset);
+  overflow: hidden;
+}
+
+.pack-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.3s ease-out;
+}
+
+.pack-offer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--bg-inset);
+  font-size: 12.5px;
+}
+
+.pack-offer.done {
+  gap: 6px;
+  color: var(--ink-soft);
+}
+
+.pack-offer-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+
+.pack-offer-text strong {
+  color: var(--ink);
+  font-weight: 560;
+}
+
+.pack-offer-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.lab-plan {
+  margin: 0;
+  padding: 10px 14px 12px;
+  overflow-x: auto;
+  font: 12px/1.6 var(--font-code);
+  color: var(--ink-soft);
+  white-space: pre;
+}

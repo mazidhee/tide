@@ -6,6 +6,7 @@
  * they are, so a project can be started with no model at all.
  */
 import type { ProjectPlan, ScaffoldFile } from './ideaProject'
+import { PACK_TEMPLATES } from './ideaTemplatesPacks'
 
 export interface IdeaTemplate {
   id: string
@@ -1206,13 +1207,14 @@ const proofChecker: IdeaTemplate = {
   }
 }
 
-export const IDEA_TEMPLATES: IdeaTemplate[] = [paymentRail, blockchain, stablecoin, coreBanking, mlProject, dataPipeline, marketTerminal, exchange, optionsPricer, numerics, proofChecker]
+export const IDEA_TEMPLATES: IdeaTemplate[] = [paymentRail, blockchain, stablecoin, coreBanking, mlProject, dataPipeline, marketTerminal, exchange, optionsPricer, numerics, proofChecker, ...PACK_TEMPLATES]
 
 export const ideaTemplate = (id: string | null | undefined) => IDEA_TEMPLATES.find((t) => t.id === id) ?? null
 
 /** The template an idea is closest to: the first whose words it uses */
 export function matchTemplate(idea: string): IdeaTemplate | null {
-  return IDEA_TEMPLATES.find((t) => t.match.test(idea)) ?? null
+  // The C++ and Solidity maps are asked first: their words are narrower (a ledger in C++, a vault in Solidity)
+  return PACK_TEMPLATES.find((t) => t.match.test(idea)) ?? IDEA_TEMPLATES.find((t) => t.match.test(idea)) ?? null
 }
 
 /** A template as a whole plan, ready to check and show */

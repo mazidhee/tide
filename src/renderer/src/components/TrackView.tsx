@@ -3,6 +3,9 @@ import type { CheckQuestion, CheckResult, TrackPhaseView, TrackView as TrackData
 import { useApp } from '../state'
 import { finishAgendaItem, openAgendaItem } from '../lib/agenda'
 import { Icon } from './Icon'
+import { READY_ROADMAPS } from '@shared/finance/roadmaps'
+import { packForRoadmap, trackPack } from '@shared/trackPacks'
+import { PackOffer, useTrackPack } from './TrackPacks'
 import '../styles/track.css'
 
 /**
@@ -106,6 +109,8 @@ export function TrackView({ notebook, path }: { notebook: string; path: string }
           )}
         </div>
       </header>
+
+      <TrackPackNote notebook={notebook} />
 
       <ol className="track-strip" aria-label="Phases">
         {data.phases.map((p) => {
@@ -390,4 +395,18 @@ function PhaseCheck({ notebook, phase, marker, onClose, onDone }: { notebook: st
       </div>
     </div>
   )
+}
+
+/** A track a pack makes hands-on (C++, Solidity, Spark and Kafka, Postgres): the offer, until it is installed */
+function TrackPackNote({ notebook }: { notebook: string }) {
+  const roadmap = READY_ROADMAPS.find((r) => r.title.toLowerCase() === notebook.trim().toLowerCase())
+  const pack = roadmap ? packForRoadmap(roadmap.id) : undefined
+  if (!pack || pack.id === 'runs') return null
+  return <TrackPackOffer id={pack.id} track={roadmap!.title} />
+}
+
+function TrackPackOffer({ id, track }: { id: Parameters<typeof useTrackPack>[0]; track: string }) {
+  const { status } = useTrackPack(id)
+  if (!status || status.ready) return null
+  return <PackOffer id={id} why={`${track} is hands-on with the ${trackPack(id)!.title}`} />
 }

@@ -1,6 +1,6 @@
 # Big Data Engineering Roadmap
 
-Data at a scale one machine can't handle: distributed batch and stream processing, Spark and Kafka in depth, lakehouse tables, orchestration and data quality. Builds on the Data Engineering roadmap (SQL, modelling and first pipelines).
+Data at a scale one machine can't handle: distributed batch and stream processing, Spark and Kafka in depth, lakehouse tables, orchestration and data quality. Builds on the Data Engineering roadmap (SQL, modelling and first pipelines). The big data pack (Settings › Tools) runs real Spark jobs in lessons on a portable Java, and gives any run that names Kafka a broker of its own to produce to and consume from.
 
 ## 1. Distributed data foundations — CORE
 
