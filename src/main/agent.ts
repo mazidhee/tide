@@ -39,7 +39,8 @@ import { explainerToolResult, findExplainers } from '@shared/explainers'
 import { readText, writeText } from './vault'
 import { applyCanvasOps, describeCanvas, parseCanvas, serializeCanvas } from '@shared/canvas'
 import { retrieve } from './ai'
-import { aboutSql, dataFiles, labSchemaNote, loadHint, loadTableTool, runSqlTool } from './lab'
+import { aboutSql, dataFiles, ensureFinanceTables, labSchemaNote, loadHint, loadTableTool, runSqlTool } from './lab'
+import { wantsFinanceTables } from '@shared/finance/labs'
 import { looksAtLabFirst } from '@shared/sqlCheck'
 import { toolArgs } from '@shared/modelText'
 import { isSql } from './languages'
@@ -1781,9 +1782,14 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
   const before = req.session && req.instructions && userTurns <= 1 && req.topic ? await earlierLessons(req.topic).catch(() => '') : ''
   // Subject hook (any-subject, src/main/subjects.ts): a toolkit the topic's words couldn't decide, and what Tide can't do for this subject
   const subject = req.session && req.instructions && userTurns <= 1 && req.topic ? await subjectContext({ topic: req.topic, scope: req.scope, instructions: req.instructions, web: !!ctx.web }).catch(() => '') : ''
+  // Maths mode (shared/mathsMode): first principles, predict then reveal, explorables and poke-holes, in this engine's own words
+  const maths = req.session && req.instructions && userTurns <= 1 && req.topic ? await (await import('./maths')).mathsContext({ topic: req.topic, scope: req.scope, instructions: req.instructions }, engine).catch(() => '') : ''
   const assigning = thingsOn && wanted === 'assign'
   // A SQL lesson knows the lab's tables before it writes its first query
-  const labNote = req.session && req.instructions && aboutSql(`${req.topic ?? ''} ${question}`) ? labSchemaNote(req.labId ?? req.chatId ?? 'scratch', dataFiles()) : ''
+  // A finance lesson's lab holds the market data and the core bank's tables, and is told so
+  const financeLab = !!req.session && !!req.instructions && wantsFinanceTables(req.topic ?? '')
+  if (financeLab) ensureFinanceTables(req.labId ?? req.chatId ?? 'scratch')
+  const labNote = req.session && req.instructions && (financeLab || aboutSql(`${req.topic ?? ''} ${question}`)) ? labSchemaNote(req.labId ?? req.chatId ?? 'scratch', dataFiles()) : ''
   // ...and looks at the data with run_sql before it sets or marks anything: told to, Gemma never
   // did (no tool call in any SQL lesson turn of the rehearsal), so the turn's first step is that call
   if (labNote && looksAtLabFirst(String([...req.messages].reverse().find((m) => m.role === 'user')?.content ?? ''))) ctx.firstTool = 'run_sql'
@@ -1805,6 +1811,7 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
     req.attachment ? `The student selected this passage:\n"""\n${req.attachment}\n"""` : '',
     before,
     subject,
+    maths,
     labNote,
     // Asked to load one of their files: which tool, and the path (in a lesson too)
     loadHint(question, /\.(csv|tsv)\b|\b(csv|tsv|my data|spreadsheet)\b/i.test(question) ? dataFiles() : []),

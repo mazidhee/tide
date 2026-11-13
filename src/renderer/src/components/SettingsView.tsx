@@ -1357,6 +1357,7 @@ function ToolsSection() {
         <ToolSetup label="Maths checker" hint="Python with SymPy" check={window.tide.runner.mathStatus} setup={window.tide.runner.setupMath} />
         <ToolSetup label="Data libraries" hint="NumPy, pandas, Matplotlib" check={window.tide.runner.librariesStatus} setup={window.tide.runner.setupLibraries} />
         <LabPackSetup />
+        <ToolSetup label="Market data" hint="US Treasury yields and ECB euro rates for the finance labs" check={window.tide.learn.marketStatus} setup={window.tide.learn.fetchMarketData} busyText="Fetching from the US Treasury and the ECB…" actionText="Fetch newer" />
         <ToolSetup label="Languages" hint="What code in lessons can be written in" check={window.tide.runner.languagesStatus} setup={window.tide.runner.languagesStatus} busyText="Checking…" actionText="Check again" />
         <ToolSetup label="Things 4" hint="Tasks and deadlines" check={window.tide.learn.thingsStatus} setup={window.tide.learn.thingsStatus} busyText="Checking…" actionText="Check again" />
       </Group>

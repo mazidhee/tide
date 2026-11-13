@@ -237,6 +237,20 @@ async function main() {
     r.frame.remove()
   }
 
+  // Tide's maths library is in every frame (served from tide-visual:, main/visualLibs), and its bridge reaches Tide
+  {
+    const r = start(`<title>Library</title><div id="p"></div><script>
+      const f = TideMath.parse('x^2 - 3x + 2').f
+      TideMath.plane(document.getElementById('p'), { x: [-1, 4], y: [-1, 3] }).fn('x^2 - 3x + 2')
+      visual.predict('Where is the minimum?', '1.5')
+      visual.goal('Find a root', f(1) === 0)
+      visual.report('f(1) = ' + f(1), { root: f(1) === 0, svg: document.querySelectorAll('svg path').length })
+    </script>`)
+    await wait(900)
+    results.library = { messages: r.messages, invalid: r.invalid }
+    r.frame.remove()
+  }
+
   // A frame taken out has its process ended at once, not seconds later
   {
     const r = start(`<p>x</p>`)

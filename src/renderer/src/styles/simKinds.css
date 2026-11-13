@@ -3812,3 +3812,378 @@ button.sim-ht-index:hover {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---------- Finance: ledger, payments, stablecoin, risk ----------
+   One accent for what is live or chosen; the diverging pair for in and out of money; --danger
+   only for something refused or broken. */
+
+.sim-led-params .sim-led-amount,
+.sim-pay-amount {
+  width: 92px;
+}
+
+.sim-led-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.sim-led-side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sim-led-head {
+  padding: 0 6px 4px;
+  font-size: var(--text-2xs);
+  font-weight: 550;
+  color: var(--ink-soft);
+}
+
+.sim-led-row,
+.sim-led-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 6px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-xs);
+  text-align: left;
+}
+
+.sim-led-row.static {
+  color: var(--ink-soft);
+}
+
+.sim-led-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sim-led-amt,
+.sim-pay-money {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sim-led-total {
+  margin-top: 4px;
+  border-top: 1px solid var(--line);
+  padding-top: 6px;
+  font-weight: 550;
+}
+
+.sim-led-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.sim-led-tb,
+.sim-led-eq,
+.sim-sc-sheet {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 4px 6px;
+}
+
+.sim-led-link {
+  border: 0;
+  background: none;
+  padding: 0 4px;
+  color: var(--ink-muted);
+  font: inherit;
+}
+
+.sim ol.sim-led-journal {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sim-led-journal li {
+  padding: 6px 8px;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.sim-led-memo {
+  margin-bottom: 3px;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+.sim-led-leg {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  gap: 6px;
+  font-size: var(--text-2xs);
+  color: var(--ink);
+}
+
+.sim-led-leg.credit span:nth-child(2) {
+  padding-left: 14px;
+}
+
+.sim-led-leg span:first-child {
+  color: var(--ink-muted);
+}
+
+.sim-note.bad,
+.sim-led-msg.bad {
+  color: var(--danger);
+}
+
+/* Payments */
+
+.sim-pay-send[hidden],
+.sim-pay .sim-btn[hidden] {
+  display: none;
+}
+
+.sim-pay-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sim-pay-banks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sim-pay-bank {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 96px;
+  padding: 8px 12px;
+  border: 0;
+  background: var(--bg-inset);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+
+.sim-pay-bank-name {
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+}
+
+.sim-pay-bank-value {
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  font-weight: 550;
+}
+
+.sim-pay-bank-sub {
+  font-size: var(--text-2xs);
+  color: var(--ink-soft);
+}
+
+.sim-pay-bank-sub.pos,
+.sim-chip.pos {
+  color: var(--sim-pos);
+}
+
+.sim-pay-bank-sub.neg {
+  color: var(--sim-neg);
+}
+
+.sim ol.sim-pay-list,
+.sim ol.sim-pay-flow,
+.sim ol.sim-pay-chain {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sim-pay-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+  font-size: var(--text-xs);
+}
+
+.sim-pay-item.dim {
+  color: var(--ink-muted);
+}
+
+.sim-pay-step {
+  display: grid;
+  grid-template-columns: 120px 150px minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 5px 8px;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.sim-pay-step.on {
+  color: var(--ink);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.sim-pay-when {
+  color: var(--ink-muted);
+}
+
+.sim-pay-who {
+  font-weight: 500;
+}
+
+.sim ol.sim-pay-chain {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sim-pay-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 150px;
+  padding: 7px 10px;
+  border: 0;
+  background: var(--bg-inset);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-xs);
+  text-align: left;
+}
+
+.sim-pay-msg.on {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.sim-pay-msg-check {
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+}
+
+.sim-pay-msg.bad .sim-pay-msg-check,
+.sim-pay-problems li.bad {
+  color: var(--danger);
+}
+
+.sim pre.sim-pay-xml {
+  max-height: 300px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border-radius: var(--radius-s);
+  background: var(--bg-inset);
+  font-size: var(--text-2xs);
+  line-height: 1.5;
+  white-space: pre;
+}
+
+/* Stablecoin */
+
+.sim-sc-canvas,
+.sim-risk-canvas {
+  height: 240px;
+}
+
+.sim-sc-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sim-sc-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-2xs);
+}
+
+.sim-sc-bar-label {
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sim-sc-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-inset);
+  overflow: hidden;
+}
+
+.sim-sc-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent);
+}
+
+.sim-sc-fill.soft {
+  background: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+.sim-sc-fill.ink {
+  background: var(--ink-muted);
+}
+
+.sim-sc-fill.bad {
+  background: var(--danger);
+}
+
+.sim-sc-bar-value {
+  font-family: var(--font-mono);
+  color: var(--ink);
+}
+
+.sim-swatch.sim-sc-accent,
+.sim-swatch.sim-risk-accent {
+  background: var(--accent);
+}
+
+.sim-swatch.sim-sc-red {
+  background: color-mix(in srgb, var(--sim-neg) 25%, transparent);
+}
+
+.sim-swatch.sim-risk-band {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.sim-risk .sim-params[hidden],
+.sim-stat[hidden] {
+  display: none;
+}
+
+@container sim (max-width: 560px) {
+  .sim-led-cols,
+  .sim-pay-step {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sim-risk > .sim-stats,
+.sim-sc .sim-stats {
+  margin-top: 4px;
+}

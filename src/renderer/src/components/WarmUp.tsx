@@ -22,6 +22,8 @@ export function WarmUp({ set, onDone }: { set: WarmupSet; onDone(results: Warmup
   const [i, setI] = useState(0)
   const [shown, setShown] = useState(false)
   const [results, setResults] = useState<WarmupResult[]>([])
+  // What they recall, typed or dictated (Wispr Flow, macOS dictation), however rough: the tutor reads it
+  const [said, setSaid] = useState('')
   const [done, setDone] = useState<null | { skipped: boolean }>(null)
   const started = useRef(Date.now())
   const card = set.cards[i]
@@ -33,9 +35,10 @@ export function WarmUp({ set, onDone }: { set: WarmupSet; onDone(results: Warmup
   const grade = (verdict: Verdict) => {
     if (!card || done) return
     window.tide.warmup.grade(card, verdict).catch(() => {})
-    const r = [...results, { card, verdict }]
+    const r = [...results, { card, verdict, ...(said.trim() ? { said: said.trim() } : {}) }]
     setResults(r)
     setShown(false)
+    setSaid('')
     if (i + 1 >= set.cards.length || Date.now() - started.current > WARMUP_MAX_MS) finish(r, false)
     else setI(i + 1)
   }
@@ -88,10 +91,25 @@ export function WarmUp({ set, onDone }: { set: WarmupSet; onDone(results: Warmup
       </div>
       <div className="warmup-from">{card.from}</div>
       <div className="warmup-q" dangerouslySetInnerHTML={{ __html: md(card.question) }} />
+      {!shown ? (
+        <textarea
+          className="warmup-said"
+          rows={2}
+          value={said}
+          onChange={(e) => setSaid(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) (e.preventDefault(), setShown(true))
+          }}
+          placeholder="Say it in your own words, if you like: type or dictate, messy is fine. The tutor reads it and corrects what’s off."
+          aria-label="What you remember, in your own words"
+        />
+      ) : (
+        said.trim() && <p className="warmup-yours"><span>You wrote</span> {said.trim()}</p>
+      )}
       {shown && card.answer && <div className="warmup-a" dangerouslySetInnerHTML={{ __html: md(card.answer) }} />}
       <div className="warmup-actions">
         {!shown ? (
-          <button className="btn primary small" autoFocus onClick={() => setShown(true)}>
+          <button className="btn primary small" onClick={() => setShown(true)}>
             {card.answer ? 'Show answer' : 'I’ve thought of it'}
             <kbd>Space</kbd>
           </button>

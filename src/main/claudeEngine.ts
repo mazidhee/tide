@@ -435,9 +435,11 @@ export function messageToSend(history: { role: string; content: unknown }[], p: 
 }
 
 /** What role this turn's model has: planning a lesson, maths, or asked to go deep → the "hard" model */
-export function turnRole(req: TurnRequest, said: string, job: string | null): ClaudeRole {
+export function turnRole(req: TurnRequest, said: string, job: string | null, maths = false): ClaudeRole {
   // A side thread is a quick question about one explanation: always the teaching model
   if (req.thread) return 'teach'
+  // A maths lesson (shared/mathsMode) is taught on the hard model throughout: deriving, choosing the next small step and the next question is the hard part
+  if (maths && req.session) return 'hard'
   const users = req.messages.filter((m) => m.role === 'user').length
   if (req.session && req.instructions && users <= 1) return 'hard'
   if (asksForDepth(said)) return 'hard'
@@ -672,7 +674,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
 
   const settings = getSettings().ai.claude
   const said = ownWords(text([...req.messages].reverse().find((m) => m.role === 'user')?.content))
-  const role = turnRole(req, said, escalationFor(said, req.askType) ?? null)
+  const role = turnRole(req, said, escalationFor(said, req.askType) ?? null, await (await import('./maths')).isMathsLesson(req).catch(() => false))
   const teachModel = claudeModel('teach', settings, req.claudeModel)
   const model = role === 'hard' ? (rank(claudeModel('hard', settings)) > rank(teachModel) ? claudeModel('hard', settings) : teachModel) : teachModel
 

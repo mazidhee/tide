@@ -3,6 +3,7 @@ import { BANK_SYSTEM, bankPrompt, batchReviewPrompt, parseBank, parseBatchReview
 import { localDate, nextStudyDay, todayItems } from '@shared/coach'
 import { openingKey, openingMessage, parseBlocks, sessionInstructions, SESSION_FORMAT, strategyChoice, whyByDefault, withPassage, type SessionSetup } from '@shared/session'
 import { withSources } from '@shared/sources'
+import { financeBankProblems } from '@shared/finance/exercises'
 import { getSettings } from './settings'
 import type { ChatScope } from '@shared/types'
 import type { CloudTask } from '@shared/providers'
@@ -26,10 +27,13 @@ const DIR = '.tide/bank'
 const fileOf = (topic: string) => `${DIR}/${slugOf(topic)}.json`
 
 export async function readBank(topic: string): Promise<BankProblem[]> {
-  return fs
+  const kept = await fs
     .readFile(absPath(fileOf(topic)), 'utf8')
     .then((t) => (JSON.parse(t) as { problems: BankProblem[] }).problems ?? [])
-    .catch(() => [])
+    .catch(() => [] as BankProblem[])
+  // The finance labs' own checked problems, for a topic one of them fits (once kept, the copy on disk with its usedAt wins)
+  const have = new Set(kept.map((p) => p.id))
+  return [...kept, ...financeBankProblems(topic).filter((p) => !have.has(p.id))]
 }
 
 // One write at a time per topic: a lesson and the half-hourly top-up can land together

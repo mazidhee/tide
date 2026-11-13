@@ -19,6 +19,8 @@ import './styles/knowledge.css'
 import './styles/workshop.css'
 import './styles/courses.css'
 import './styles/maths.css'
+import './styles/mathsLessons.css'
+import './styles/ladder.css'
 import './styles/workout.css'
 import './styles/profile.css'
 // The new design: every rule in these is scoped to data-design='tide' (see shared/design.ts)
@@ -59,6 +61,8 @@ import { startLab } from './lib/lab'
 import { startMermaid } from './lib/mermaid'
 import { startLightbox } from './lib/lightbox'
 import { startSims } from './lib/sims'
+import { startChallenges } from './lib/maths/challenge'
+import { startGraphs } from './lib/graphs'
 import { startVideoEmbeds } from './lib/videoEmbeds'
 import { startLessonEmbeds } from './lib/lessonEmbeds'
 import { goto, listenForLinks } from './lib/linkNav'
@@ -74,6 +78,8 @@ window.tide.settings.get().then((settings) => {
   startMermaid()
   startLab()
   startSims()
+  startChallenges()
+  startGraphs()
   startVideoEmbeds()
   // Every link opens in Tide (lib/linkNav), and the tutor can move the view (show_in_view)
   startLessonEmbeds()

@@ -712,6 +712,12 @@ export interface TideApi {
     /** Real books, courses and docs for each phase of a plan */
     /** Drops the books a drafted roadmap names that can't be found, and corrects their authors */
     checkResources(md: string): Promise<string>
+    /** A ready roadmap's Markdown (shared/finance/roadmaps), bundled with Tide */
+    readyRoadmap(id: string): Promise<string>
+    /** The finance lab's market data: what is bundled and when newer series were last fetched */
+    marketStatus(): Promise<{ ready: boolean; detail: string }>
+    /** Fetches this year's and last year's Treasury and ECB series into Market data/ in the notes folder */
+    fetchMarketData(): Promise<{ ready: boolean; detail: string }>
     planReadings(topic: string, plan: import('./plan').StudyPlan, research: string): Promise<{ phase: string; items: { title: string; by?: string; why?: string; url?: string; unverified?: boolean }[] }[]>
     /** Sends a dated roadmap to Things 4 as a project */
     planToThings(path: string, name: string, notebook?: string): Promise<{ project: string; todos: number }>
@@ -883,7 +889,8 @@ export interface TideApi {
     repair(req: { code: string; errors: string[]; scope: ChatScope }): Promise<{ code: string } | null>
     fallback(req: { code: string; title: string; scope: ChatScope }): Promise<string | null>
     cached(lessonId: string): Promise<Record<string, import('./visuals').VisualRecord>>
-    remember(lessonId: string, key: string, record: import('./visuals').VisualRecord): Promise<boolean>
+    /** source: the visual as written, so a working explorable can join the library (main/explorables) */
+    remember(lessonId: string, key: string, record: import('./visuals').VisualRecord, source?: string): Promise<boolean>
     /** Main watches this frame's process (memory, CPU) and kills it past its limits */
     watch(host: string): Promise<void>
     unwatch(host: string): Promise<void>

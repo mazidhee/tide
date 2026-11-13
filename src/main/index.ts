@@ -383,7 +383,7 @@ function registerIpc() {
   handle('visuals:repair', (req: { code: string; errors: string[]; scope: unknown }) => repairVisual(req))
   handle('visuals:fallback', (req: { code: string; title: string; scope: unknown }) => visualFallback(req))
   handle('visuals:cached', (id: string) => lessonVisuals(id))
-  handle('visuals:remember', (id: string, key: string, record: unknown) => rememberVisual(id, key, record))
+  handle('visuals:remember', (id: string, key: string, record: unknown, source?: unknown) => rememberVisual(id, key, record, source))
   ipcMain.handle('visuals:watch', (e, host: string) => watchVisual(e.sender, String(host)))
   ipcMain.handle('visuals:unwatch', (e, host: string) => unwatchVisual(String(host), e.sender))
   ipcMain.handle('visuals:kill', (e, host: string, reason: string) => killVisual(e.sender, String(host), String(reason ?? 'it stopped answering').slice(0, 120)))
@@ -535,6 +535,14 @@ function registerIpc() {
   handle('mistakes:add', (items: NewMistake[]) => addMistakes(items))
   handle('mistakes:retest', (id: string, correct: boolean) => retestMistake(id, correct))
   handle('learn:checkResources', (md: string) => checkOutlineResources(md))
+  handle('finance:marketStatus', () => import('./finance/marketFetch').then((m) => m.marketDataStatus(absPath)))
+  handle('finance:fetchMarketData', async () => {
+    const m = await import('./finance/marketFetch')
+    const y = new Date().getFullYear()
+    await m.fetchMarketData({ fromYear: y - 1, toYear: y, write: (path, text) => writeText(path, text) })
+    return m.marketDataStatus(absPath)
+  })
+  handle('learn:readyRoadmap', (id: string) => import('./finance/roadmaps').then((m) => m.readyRoadmapText(String(id ?? ''))))
   handle('learn:planReadings', (topic: string, plan: StudyPlan, research: string) => planReadings(topic, plan, research ?? ''))
   handle('learn:planToThings', (path: string, name: string, notebook?: string) => planToThings(path, name, notebook))
   handle('learn:syncFromThings', (path: string) => syncFromThings(path))
@@ -895,6 +903,8 @@ app.whenReady().then(() => {
 
   // Claude's visuals: their frames' documents, no permissions, no web requests, and (in development, which has no page CSP) frame-src
   handleVisualProtocol()
+  // The maths libraries a visual may load (main/visualLibs), built into the app
+  void import('./visualLibs').then((l) => import('./visualFrames').then((f) => f.serveVisualLibraries(l.libraryFor)))
   denyVisualPermissions(session.defaultSession)
   blockVisualRequests(session.defaultSession)
   if (process.env.ELECTRON_RENDERER_URL) devFrameSrc(session.defaultSession, process.env.ELECTRON_RENDERER_URL, APP_CSP)

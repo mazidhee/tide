@@ -8,6 +8,7 @@ import { LAB_PACK } from '@shared/labPack'
 import type { RunResult, TestResults } from '@shared/types'
 import { isSql, LANGUAGE_NAMES, languageOf, missingText, toolFor, type Language, type RunContext } from './languages'
 import { TEACH_SERVER, TEST_RUNNER, TIDE_HTTP_HELPER } from './runnerScripts'
+import { usesFinanceHelper, writeFinanceHelper } from './finance/helper'
 
 /**
  * Runs code for notes, lessons, interviews and maths checks: Python and JavaScript always, and
@@ -380,6 +381,8 @@ async function execute(job: Job): Promise<RunResult> {
   await fs.mkdir(figures)
   await fs.writeFile(join(site, 'sitecustomize.py'), SITE_CUSTOMIZE)
   await fs.writeFile(join(site, 'tide_http.py'), TIDE_HTTP_HELPER)
+  // The finance lab's helper and its market data, only for code that imports it
+  if (usesFinanceHelper(job.source)) await writeFinanceHelper(site)
   if (job.tests) await fs.writeFile(join(site, '_tide_tests.py'), TEST_RUNNER)
   await fs.mkdir(mplConfig(), { recursive: true }).catch(() => {})
   if (lang.tool) await fs.mkdir(runCache(), { recursive: true }).catch(() => {})

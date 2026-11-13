@@ -1,6 +1,6 @@
 /**
  * The kinds of simulation, and mounting one from a checked spec. Loaded on first use. The kinds
- * built on a larger open-source library (planck.js, Mafs, regexp-tree, chess.js) are loaded only
+ * built on a larger open-source library (planck.js, Mafs, regexp-tree, chess.js; the explorables on Mafs) are loaded only
  * when a block of that kind is first shown: see load().
  */
 import { attention } from './kinds/attention'
@@ -14,11 +14,15 @@ import { cpuKind } from './kinds/cpu'
 import { tokeniserKind } from './kinds/tokeniser'
 import { blockchainKind } from './kinds/blockchain'
 import { plotKind } from './kinds/plot'
+import { ledgerKind } from './kinds/ledger'
+import { paymentsKind } from './kinds/payments'
+import { stablecoinKind } from './kinds/stablecoin'
+import { riskKind } from './kinds/risk'
 import { mountSim, type Mounted, type SimKindDef } from './shell'
 import type { SimKind, SimSpec } from './spec'
 
 /** The kinds whose library is loaded on first use */
-export const LAZY_KINDS = ['physics', 'geometry', 'regex', 'chess'] as const
+export const LAZY_KINDS = ['physics', 'geometry', 'regex', 'chess', 'explore'] as const
 type LazyKind = (typeof LAZY_KINDS)[number]
 type EagerKind = Exclude<SimKind, LazyKind>
 type Def<K extends SimKind> = SimKindDef<Extract<SimSpec, { kind: K }>>
@@ -34,14 +38,19 @@ export const KINDS: { [K in EagerKind]: Def<K> } = {
   cpu: cpuKind,
   tokeniser: tokeniserKind,
   blockchain: blockchainKind,
-  plot: plotKind
+  plot: plotKind,
+  ledger: ledgerKind,
+  payments: paymentsKind,
+  stablecoin: stablecoinKind,
+  risk: riskKind
 }
 
 const LAZY: { [K in LazyKind]: () => Promise<Def<K>> } = {
   physics: () => import('./kinds/physics').then((m) => m.physicsKind),
   geometry: () => import('./kinds/geometry').then((m) => m.geometryKind),
   regex: () => import('./kinds/regex').then((m) => m.regexKind),
-  chess: () => import('./kinds/chess').then((m) => m.chessKind)
+  chess: () => import('./kinds/chess').then((m) => m.chessKind),
+  explore: () => import('./kinds/explore').then((m) => m.exploreKind)
 }
 const loaded = new Map<SimKind, SimKindDef<SimSpec>>()
 

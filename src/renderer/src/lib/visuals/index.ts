@@ -14,10 +14,11 @@
  * The outcome is kept in the lesson's record (main/lessons), so a reopened lesson shows its
  * visuals at once without checking or asking Claude again.
  */
-import { MAX_MESSAGES_PER_SECOND, askAboutPart, frameUrl, isVisualSource, looksComplete, parseFrameMessage, themeCss, visualKey, visualNote, visualTitle, whatsHappening, type FrameMessage, type VisualRecord, type VisualState, type VisualTheme } from '@shared/visuals'
+import { MAX_MESSAGES_PER_SECOND, askAboutPart, frameUrl, isVisualSource, looksComplete, parseFrameMessage, themeCss, visualKey, tellTutor, visualNote, visualTitle, whatsHappening, type FrameMessage, type VisualRecord, type VisualState, type VisualTheme } from '@shared/visuals'
 import type { ChatScope } from '@shared/types'
 import { createKeeper, watchBlocks } from '../liveBlocks'
 import { button, h } from '../sims/dom'
+import { toAnswerBox } from '../sims/exploreBus'
 
 // ---------- Settings, for tests ----------
 
@@ -142,12 +143,12 @@ const cachedFor = (lesson: string) => {
   if (!c) caches.set(lesson, (c = d().api.cached(lesson).catch(() => ({}))))
   return c
 }
-async function remember(lesson: string, key: string, record: VisualRecord) {
+async function remember(lesson: string, key: string, record: VisualRecord, source?: string) {
   if (!lesson) return
   const all = await cachedFor(lesson)
   all[key] = record
   await d()
-    .api.remember(lesson, key, record)
+    .api.remember(lesson, key, record, source)
     .catch(() => false)
 }
 
@@ -377,6 +378,9 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
   root.append(captionBox)
   const stage = h('div', { class: 'visual-stage' })
   root.append(h('div', { class: 'sim-body' }, stage))
+  // A goal the visual set (visual.goal), met or not
+  const goalLine = h('p', { class: 'sim-ex-goal visual-goal', hidden: true, 'aria-live': 'polite' })
+  root.append(goalLine)
 
   // Readout and asking
   const readLabel = h('span', { class: 'sim-readout-label' })
@@ -413,7 +417,14 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
   reset.title = 'R'
   const stepper = h('span', { class: 'visual-stepper' }, back, play, next, count)
   stepper.hidden = true
-  const bar = h('div', { class: 'sim-bar visual-bar' }, stepper, reset, h('span', { class: 'visual-gap' }), happening)
+  // What they found, into their answer, to finish in their own words (like the explorables)
+  const tell = button('Tell the tutor', () => {
+    const where = toAnswerBox(root, tellTutor(state))
+    tell.textContent = where === 'answer' ? 'In your answer' : where === 'ask' ? 'Added to your question' : 'Copied'
+    setTimeout(() => (tell.textContent = 'Tell the tutor'), 1600)
+    widget.dirty = false
+  }, 'quiet')
+  const bar = h('div', { class: 'sim-bar visual-bar' }, stepper, reset, h('span', { class: 'visual-gap' }), tell, happening)
   root.append(bar)
   bar.hidden = true
 
@@ -493,6 +504,18 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
       case 'report':
         state.report = { text: m.text, data: m.data }
         widget.dirty = true
+        break
+      case 'predict':
+        state.predicted = { question: m.question, value: m.value }
+        widget.dirty = true
+        break
+      case 'goal':
+        // Once met, it stays met
+        state.goal = { text: m.text, met: m.met || (state.goal?.text === m.text && state.goal.met) }
+        goalLine.hidden = false
+        goalLine.classList.toggle('met', state.goal.met)
+        goalLine.textContent = state.goal.met ? `Reached: ${m.text.replace(/^Goal:\s*/i, '')}` : m.text
+        if (m.met) widget.dirty = true
         break
       case 'select':
         state.selected = { label: m.label, data: m.data }
@@ -604,7 +627,7 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
     stage.style.height = ''
     if (r.ok) {
       verified = true
-      void remember(lesson, key, { status: 'ok', ...(repaired ? { code } : {}), at: Date.now() })
+      void remember(lesson, key, { status: 'ok', ...(repaired ? { code } : {}), at: Date.now() }, code)
       if (r.run && near && !dead) return showLive(r.run)
       r.run?.stop()
       return near ? showLive() : setPhase('waiting', 'Interactive visual')

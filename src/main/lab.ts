@@ -10,6 +10,9 @@ import { readdirSync, readFileSync, realpathSync, statSync, type Dirent } from '
 import { extname, join, relative, resolve, sep } from 'path'
 import { CSV_LIMITS, megabytes, readCsvTable, tableNameFor } from '@shared/csvTable'
 import { loadedText, resultText, schemaText, type LabLoaded, type LabResult, type LabTable } from '@shared/lab'
+import { bankTables, marketTables, type Table } from '@shared/finance/marketData'
+import TREASURY_CSV from '../../resources/marketdata/us_treasury_yields.csv?raw'
+import ECB_FX_CSV from '../../resources/marketdata/ecb_fx_rates.csv?raw'
 import { tideCore } from './native'
 import { absPath, vaultRoot } from './vault'
 
@@ -28,6 +31,29 @@ interface Held {
   told: boolean
   /** The learner's own files loaded as tables: table name to the file's path in the notes folder */
   loaded: Map<string, { path: string }>
+  /** The finance tables (market data and a core bank's journal) are in it */
+  finance?: boolean
+}
+
+// ---------- Finance tables ----------
+
+let financeData: Table[] | null = null
+/** The market data (bundled US Treasury and ECB series, synthetic prices) and the core bank's tables, made once */
+const financeTables = () => (financeData ??= [...marketTables(TREASURY_CSV, ECB_FX_CSV), ...bankTables()])
+export const FINANCE_TABLE_NAMES = ['assets', 'prices', 'treasury_yields', 'fx_rates', 'bank_customers', 'gl_accounts', 'postings']
+const NAMES_FINANCE = new RegExp(`\\b(${FINANCE_TABLE_NAMES.join('|')})\\b`, 'i')
+
+function loadFinance(held: Held): void {
+  const have = new Set(held.engine.schema().map((t) => t.name.toLowerCase()))
+  for (const t of financeTables()) if (!have.has(t.name)) held.engine.loadTable(t.name, t.columns, t.types, t.rows)
+  held.finance = true
+  held.told = false
+}
+
+/** Puts the finance tables in a lab (a finance lesson's, or one whose query names them); once per lab */
+export function ensureFinanceTables(id: string): void {
+  const held = lab(id)
+  if (held && !held.finance) loadFinance(held)
 }
 
 const DATASETS = ['shop', 'events']
@@ -70,6 +96,8 @@ export function labQuery(id: string, sql: string, maxRows = VIEW_ROWS): LabResul
   if (!held) return failed(UNAVAILABLE)
   if (!String(sql ?? '').trim()) return failed('There is no query to run.')
   try {
+    // A query that names a finance table brings them in the first time
+    if (!held.finance && NAMES_FINANCE.test(sql) && !held.engine.schema().some((t) => NAMES_FINANCE.test(t.name))) loadFinance(held)
     return held.engine.query(String(sql), Math.max(1, Math.min(maxRows, VIEW_ROWS)))
   } catch (e) {
     return failed((e as Error).message)
@@ -90,6 +118,7 @@ export function labReset(id: string): void {
   if (!held) return
   held.engine.reset()
   held.told = false
+  if (held.finance) loadFinance(held)
   const files = [...held.loaded]
   held.loaded.clear()
   // A file that can't be read again is gone with everything else

@@ -65,7 +65,8 @@ export function visualKey(code: string): string {
  */
 export const VISUAL_CSP = [
   "default-src 'none'",
-  "script-src 'unsafe-inline'",
+  // Inline scripts, and Tide's own libraries served to the frame at /lib/ (main visualLibs)
+  "script-src 'unsafe-inline' tide-visual:",
   "style-src 'unsafe-inline'",
   'img-src data: blob:',
   'font-src data:',
@@ -424,6 +425,10 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
       lastReport = now;
       send({ t: 'report', text: cut(text, 400), data: clean2(data) });
     },
+    /** predict(question, value): the learner locked in a prediction before the answer was shown */
+    predict: function (question, value) { send({ t: 'predict', question: cut(question, 200), value: cut(value, 80) }); },
+    /** goal(text, met): a small target for the learner, and whether it is met now */
+    goal: function (text, met) { send({ t: 'goal', text: cut(text, 200), met: !!met }); },
     /** select(label[, data]): the learner picked a part; Tide offers "Ask about this" */
     select: function (label, data) { send({ t: 'select', label: cut(label, 200), data: clean2(data) }); },
     theme: {},
@@ -484,7 +489,7 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
 /** The whole document the frame is served: Tide's base look, the theme, the bootstrap, then the visual */
 export function frameDocument(code: string, theme: VisualTheme | null): string {
   // The visual's text goes in the body as written: it can't reach outside the frame whatever it holds
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${BASE_CSS}</style><style id="tide-theme">${themeCss(theme)}</style><script>${FRAME_BOOTSTRAP}</script></head><body>\n${code}\n</body></html>`
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${BASE_CSS}</style><style id="tide-theme">${themeCss(theme)}</style><script>${FRAME_BOOTSTRAP}</script><script src="/lib/tide-math.js"></script></head><body>\n${code}\n</body></html>`
 }
 
 // base64url of UTF-8, both ways (the frame's code travels in its URL, so its document needs no state in main)
@@ -552,6 +557,10 @@ export type FrameMessage =
   | { t: 'select'; label: string; data?: Record<string, number | string | boolean> }
   /** Every step drawn once, hidden: what was wrong in any of them */
   | { t: 'audit'; problems: string[] }
+  /** The learner's prediction, locked in before the answer showed */
+  | { t: 'predict'; question: string; value: string }
+  /** A small target, and whether it is met */
+  | { t: 'goal'; text: string; met: boolean }
 
 const str = (v: unknown, max: number): string | null => (typeof v === 'string' ? (v.length > max ? v.slice(0, max) : v) : null)
 const int = (v: unknown, lo: number, hi: number): number | null => (typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : null)
@@ -604,6 +613,15 @@ export function parseFrameMessage(m: unknown): FrameMessage | null {
     }
     case 'audit':
       return Array.isArray(o.problems) ? { t: 'audit', problems: o.problems.filter((p): p is string => typeof p === 'string').slice(0, 6).map((p) => p.slice(0, 300)) } : null
+    case 'predict': {
+      const question = str(o.question, 200)
+      const value = str(o.value, 80)
+      return question === null || value === null || !value.trim() ? null : { t: 'predict', question, value }
+    }
+    case 'goal': {
+      const text = str(o.text, 200)
+      return text === null || !text.trim() ? null : { t: 'goal', text, met: o.met === true }
+    }
     case 'select': {
       const label = str(o.label, 200)
       return label === null || !label.trim() ? null : { t: 'select', label, data: data(o.data) }
@@ -623,6 +641,9 @@ export interface VisualState {
   step?: { i: number; n: number; say: string }
   report?: { text: string; data?: Record<string, number | string | boolean> }
   selected?: { label: string; data?: Record<string, number | string | boolean> }
+  /** What they predicted before the answer showed */
+  predicted?: { question: string; value: string }
+  goal?: { text: string; met: boolean }
 }
 
 const values = (d?: Record<string, number | string | boolean>) =>
@@ -638,6 +659,8 @@ export function describeState(s: VisualState): string {
   if (s.step) parts.push(`it is at step ${s.step.i + 1} of ${s.step.n}${s.step.say ? ` ("${s.step.say}")` : ''}`)
   if (s.report) parts.push(`the visual reports: ${s.report.text}${values(s.report.data)}`)
   if (s.selected) parts.push(`the learner selected ${s.selected.label}${values(s.selected.data)}`)
+  if (s.predicted) parts.push(`they predicted "${s.predicted.value}" for "${s.predicted.question}"`)
+  if (s.goal) parts.push(`its goal "${s.goal.text}" is ${s.goal.met ? 'met' : 'not met yet'}`)
   return parts.join('; ')
 }
 
@@ -646,6 +669,9 @@ export const visualNote = (s: VisualState) => {
   const d = describeState(s)
   return d ? `(Tide: the learner has been using your visual${s.title ? ` "${s.title}"` : ''}: ${d}. If it bears on what they say, answer about exactly that state.)` : ''
 }
+
+/** "Tell the tutor": what the learner found, at the start of their answer, for them to finish */
+export const tellTutor = (s: VisualState) => `From the visual${s.title ? ` "${s.title}"` : ''}: ${describeState(s) || 'I tried it'}. `
 
 /** "What's happening here?" pressed on a visual */
 export const whatsHappening = (s: VisualState) =>
@@ -726,6 +752,7 @@ export const VISUAL_GUIDE = `- A custom visual: when the idea has moving parts o
   - visual.report(text, data?): tell the tutor what the learner just did and what it shows now, with the numbers (on each change they make, not each frame).
   - visual.select(label, data?): the learner clicked or pressed Enter on a part; Tide offers "Ask about this" for it.
   - visual.onReset(fn), visual.reducedMotion, visual.theme.
+  Maths helpers are already loaded in the frame as TideMath (served by Tide, no network): TideMath.parse(expr, ['x']) is Tide's safe expression reader (.f(x)); TideMath.plane(el, {x:[lo,hi], y:[lo,hi]}) is an SVG plane with axes and .fn(f or "x^2"), .point([x,y], {drag:true, onMove}), .segment, .line, .vector, .polygon, .text; TideMath.slider(label, {min,max,step,value,into}, onInput); TideMath.predict(question, onLocked) holds the answer back until they guess; TideMath.goal(text) returns met(true) to call when they reach it; TideMath.katex(el, tex) and TideMath.three() (three.js with THREE.OrbitControls) load on first use and return promises; TideMath.fmt(v, digits). No other libraries.
   Colours only from Tide's CSS variables, so every theme works: --bg --surface --ink --ink-soft --muted --line --line-strong --accent --accent-soft --pos --neg --good --bad --warn and --c1 to --c6 for series; fonts --font and --mono. Body text and SVG text already follow the theme.
   Make it legible and minimal: label parts directly, text at 12px or more, nothing decorative; leave room so no two labels overlap at any step (Tide draws every step before showing it and sends back overlaps). Animate only to show a change (a short transition, never a loop for its own sake). Keyboard accessible: real <button> and <input> elements with labels; a clickable SVG part gets tabindex="0", role="button", an aria-label and Enter. Give an SVG a viewBox and the same width (width="640" for viewBox="0 0 640 …"), so its text stays the size you wrote and it only shrinks on a narrow screen; at most about 420px tall. Every number is computed in the script, never typed in by hand.
   When Tide says what the learner did in a visual, answer about exactly that state, then often ask them to predict the next step as an <ask>; they check it by pressing Step.
@@ -741,8 +768,8 @@ ${EXAMPLE_SLIDER}
 export const SHOW_ME_VISUAL_NOTE = `(Tide: you can also answer this with a custom \`\`\`visual explainer, as your instructions describe: choose it when the idea is a process or has moving parts, a step-by-step visual with captions usually beats a static table or diagram for that. Exact numbers, computed in the script.)`
 
 /** The repair call's instructions */
-export const VISUAL_REPAIR_SYSTEM = `You fix interactive visuals that a tutor wrote for Tide, a study app. A visual is an HTML fragment (SVG or canvas, inline style and script) that runs in a sandboxed frame with no network: no external scripts, fonts, images, fetch, storage, iframes or alert. Tide's host API is the global visual: visual.steps(captions, draw, ms?), visual.report(text, data?), visual.select(label, data?), visual.onReset(fn), visual.theme. Colours come from CSS variables (--bg --ink --muted --line --accent --accent-soft --pos --neg --good --bad --warn --c1 to --c6).
-Reply with the corrected visual only, as one fenced block whose language is visual. Keep what it teaches and how it looks; fix the errors reported and anything else that would break it. If it relied on a library, rewrite that part in plain JavaScript and SVG.`
+export const VISUAL_REPAIR_SYSTEM = `You fix interactive visuals that a tutor wrote for Tide, a study app. A visual is an HTML fragment (SVG or canvas, inline style and script) that runs in a sandboxed frame with no network: no external scripts, fonts, images, fetch, storage, iframes or alert. Tide's host API is the global visual: visual.steps(captions, draw, ms?), visual.report(text, data?), visual.select(label, data?), visual.predict(question, value), visual.goal(text, met), visual.onReset(fn), visual.theme. Colours come from CSS variables (--bg --ink --muted --line --accent --accent-soft --pos --neg --good --bad --warn --c1 to --c6).
+Reply with the corrected visual only, as one fenced block whose language is visual. Keep what it teaches and how it looks; fix the errors reported and anything else that would break it. TideMath (Tide's maths helpers: parse, plane, slider, predict, goal, katex, three, fmt) is available in the frame; any other library is not: rewrite that part with TideMath or plain JavaScript and SVG.`
 
 export const repairPrompt = (code: string, errors: string[]) => `This visual failed when Tide ran it.\n\nErrors:\n${errors.map((e) => `- ${e}`).join('\n')}\n\nThe visual:\n\`\`\`visual\n${code.slice(0, MAX_VISUAL)}\n\`\`\``
 

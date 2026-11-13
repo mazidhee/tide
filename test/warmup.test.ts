@@ -78,6 +78,14 @@ describe('what the tutor is told', () => {
     expect(warmupTally([{ card: set.cards[0], verdict: 'correct' }, { card: set.cards[1], verdict: 'partial' }])).toBe('1 held · 1 to refresh')
   })
 
+  it('what they wrote or dictated from memory reaches the tutor, to be checked for misconceptions', () => {
+    const note = warmupNote(set, [{ card: set.cards[0], verdict: 'correct', said: 'um so hex is like 4 bits per digit, two digits a byte i think' }], false)
+    expect(note).toMatch(/in their own words, before looking: "um so hex is like 4 bits per digit, two digits a byte i think"/)
+    expect(note).toMatch(/correct any misconception/)
+    // Nothing written: no such instruction
+    expect(warmupNote(set, [{ card: set.cards[0], verdict: 'correct' }], false)).not.toMatch(/own words/)
+  })
+
   it('skipped: still told what the lesson builds on', () => {
     expect(warmupNote(set, [], true)).toMatch(/builds on topics the learner studied before: Binary, hexadecimal and number bases \(fading, 55% now\)/)
   })

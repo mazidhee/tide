@@ -28,7 +28,7 @@ const shared = {
 let bare: any
 
 function runHarness(out: string, page: string) {
-  const run = spawnSync(electron, [out], { encoding: 'utf8', timeout: 110_000, env: { ...process.env, HARNESS_PAGE: page } })
+  const run = spawnSync(electron, [out], { encoding: 'utf8', timeout: 110_000, env: { ...process.env, HARNESS_PAGE: page, TIDE_MATH_JS: resolve('src/shared/frame/tideMath.js') } })
   const line = (run.stdout ?? '').split('\n').find((l) => l.startsWith('RESULT '))
   if (!line) throw new Error(`the harness gave no result:\n${run.stdout}\n${run.stderr}`)
   return JSON.parse(line.slice(7))
@@ -161,6 +161,15 @@ describe('a visual in its sandbox', () => {
   it('a frame that keeps a core busy is killed by the watchdog', () => {
     expect(r.cpu.alive).toBe(false)
     expect(r.cpu.killed[0].reason).toMatch(/processor/)
+  })
+
+  it('Tide’s maths library loads in the frame from the app, and its predict, goal and report reach Tide', () => {
+    const m = r.library.messages as { t: string; [k: string]: unknown }[]
+    expect(m.filter((x) => x.t === 'error')).toEqual([])
+    expect(m).toContainEqual(expect.objectContaining({ t: 'predict', question: 'Where is the minimum?', value: '1.5' }))
+    expect(m).toContainEqual(expect.objectContaining({ t: 'goal', text: 'Find a root', met: true }))
+    expect(m).toContainEqual(expect.objectContaining({ t: 'report', text: 'f(1) = 0', data: { root: true, svg: 1 } }))
+    expect(r.library.invalid).toBe(0)
   })
 
   it('a good visual is ready, drawn, stepped and reports, with every message valid', () => {

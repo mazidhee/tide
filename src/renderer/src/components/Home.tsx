@@ -16,6 +16,7 @@ import { useDailyCount } from '../lib/daily'
 import { openingRequest } from '../lib/openingRequest'
 import { PromptBox } from './PromptBox'
 import { learnIntent, projectIntent } from '@shared/learnIntent'
+import { climbLadder } from '../lib/mathsLadder'
 import { startProject } from '../lib/projects'
 import { listTopics, type StudyDay } from '@shared/brief'
 import { fileTitle, useApp } from '../state'
@@ -193,6 +194,7 @@ export function Home(_: { dueCount: number; cardCount: number }) {
       setAsk('')
       return void startProject(app, build)
     }
+    if (climbLadder(text, app.setView)) return setAsk('')
     const wants = learnIntent(text)
     if (wants) app.setView({ kind: 'new-topic', topic: wants.topic, goal: wants.goal, auto: true, nonce: Date.now() })
     else app.ask(text)
