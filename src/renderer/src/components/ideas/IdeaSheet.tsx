@@ -33,7 +33,8 @@ function GrowingText({ value, onChange, onSubmit, placeholder, autoFocus, classN
     const el = ref.current
     if (!el) return
     el.style.height = 'auto'
-    el.style.height = `${el.scrollHeight}px`
+    // Borders included, so the bordered field never clips its last line
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`
   }, [value])
   useEffect(() => {
     if (!autoFocus) return

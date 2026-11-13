@@ -18,10 +18,13 @@ import { CHAT_IMAGES } from '../lib/pastedImages'
 import { useTideDesign } from '../lib/design'
 import { useKnowledge } from '../lib/knowledge'
 import { AreaMark } from './tide/AreaMark'
+import { TIDE_FOLDER, tidyTree } from '@shared/sidebarTree'
+import { useOutlines } from '../lib/outlines'
 
 const EXPANDED_KEY = 'tide.expanded'
 /** Folders Tide keeps for itself: shown together, folded away, under "Tide's files" */
-const SYSTEM_FOLDERS = new Set(['Coach', 'Exams', 'Designs', 'Lessons', CHAT_IMAGES])
+// Flashcards: cards the tutor saved for a topic; they're studied from Review, not browsed as a notebook
+const SYSTEM_FOLDERS = new Set(['Coach', 'Exams', 'Designs', 'Lessons', 'Flashcards', CHAT_IMAGES])
 const TIDE_GROUP = '__tide__'
 
 function iconFor(node: FileNode, libraryFolder: string): IconName {
@@ -74,6 +77,8 @@ export function Sidebar({ dueCount, peek = false }: { dueCount: number; peek?: b
   useEffect(() => {
     if (!activePath) return
     const parts = activePath.split('/')
+    // Tide's own notes live under the folded "Tide's files" row
+    if ((parts[0] === TIDE_FOLDER || SYSTEM_FOLDERS.has(parts[0])) && !expanded.has(TIDE_GROUP)) toggle(TIDE_GROUP, true)
     for (let i = 1; i < parts.length; i++) {
       const p = parts.slice(0, i).join('/')
       if (!expanded.has(p)) toggle(p, true)
@@ -218,11 +223,13 @@ export function Sidebar({ dueCount, peek = false }: { dueCount: number; peek?: b
     )
   }
 
-  // Folders holding only images (like Obsidian's attachments folder) aren't notebooks
-  const onlyImages = (n: FileNode): boolean =>
-    n.type === 'file' ? n.kind === 'image' : (n.children ?? []).every(onlyImages)
-  const notebooks =
-    tree?.children?.filter((n) => n.path !== settings.libraryFolder && n.path !== 'Code' && !(n.type === 'folder' && n.children?.length && onlyImages(n))) ?? []
+  // Roadmaps are drawn in their notebook (and on Learn), and image-only folders are attachments:
+  // neither takes a row here. Tide's own notes (Tide bugs, its roadmap) fold under Tide's files.
+  const outlines = useOutlines(tree)
+  const tidy = useMemo(() => tidyTree(tree?.children ?? [], outlines), [tree, outlines])
+  const notebooks = tidy.filter((n) => n.path !== settings.libraryFolder && n.path !== 'Code')
+  const ownNotes = notebooks.find((n) => n.path === TIDE_FOLDER && n.type === 'folder')?.children ?? []
+  const isSystem = (n: FileNode) => SYSTEM_FOLDERS.has(n.path) || n.path === TIDE_FOLDER
   const hidden = new Set(settings.sidebarHidden ?? [])
   const shown = (id: SidebarItem) => !hidden.has(id)
 
@@ -425,10 +432,10 @@ export function Sidebar({ dueCount, peek = false }: { dueCount: number; peek?: b
         </button>
       </div>
       <ul className="tree" role="tree">
-        {notebooks.filter((n) => !SYSTEM_FOLDERS.has(n.path)).map((n) => renderNode(n, 0))}
+        {notebooks.filter((n) => !isSystem(n)).map((n) => renderNode(n, 0))}
         {tree && notebooks.length === 0 && <li className="tree-empty">This folder has no notes yet.</li>}
-        {/* Tide's own folders (your week, journal, exams, designs) fold away under one row */}
-        {notebooks.some((n) => SYSTEM_FOLDERS.has(n.path)) && (
+        {/* Tide's own notes and folders (bugs, its roadmap, your week, lessons, exams) fold away under one row */}
+        {notebooks.some(isSystem) && (
           <li>
             <div className="tree-row tree-system" style={{ paddingLeft: 10 }} onClick={() => toggle(TIDE_GROUP)} role="treeitem" aria-expanded={expanded.has(TIDE_GROUP)} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && toggle(TIDE_GROUP)}>
               <span className="tree-chevron-hit">
@@ -437,7 +444,12 @@ export function Sidebar({ dueCount, peek = false }: { dueCount: number; peek?: b
               <Icon name="sparkle" size={15} className="tree-icon" />
               <span className="tree-label">Tide’s files</span>
             </div>
-            {expanded.has(TIDE_GROUP) && <ul role="group">{notebooks.filter((n) => SYSTEM_FOLDERS.has(n.path)).map((n) => renderNode(n, 1))}</ul>}
+            {expanded.has(TIDE_GROUP) && (
+              <ul role="group">
+                {ownNotes.map((n) => renderNode(n, 1))}
+                {notebooks.filter((n) => SYSTEM_FOLDERS.has(n.path)).map((n) => renderNode(n, 1))}
+              </ul>
+            )}
           </li>
         )}
       </ul>

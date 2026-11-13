@@ -10,6 +10,7 @@ import { ContextMenu, type MenuState } from './Menu'
 import { Masonry, TopicPicker } from './Library'
 import { hasTopic, useLibrary } from '../lib/library'
 import { OutlineView } from './OutlineView'
+import { outlinesChanged } from '../lib/outlines'
 
 export const STATUS_LABEL: Record<LearningStatus, string> = {
   untested: 'Not started',
@@ -238,6 +239,7 @@ export function NotebookView({ path, tab: initialTab }: { path: string; tab?: 'p
             mastery={mastery}
             onSetOutline={async (p) => {
               await window.tide.learn.updateNotebook(path, { outline: p ?? undefined })
+              outlinesChanged()
               load()
             }}
           />

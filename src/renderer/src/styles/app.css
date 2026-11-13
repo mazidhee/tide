@@ -12688,101 +12688,24 @@ button.home-prof {
   color: var(--ink);
 }
 
-.coach-settings-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  margin: 4px 0 26px;
-  padding: 12px 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-m);
-  font-size: 13.5px;
-  text-align: left;
-  transition:
-    background 140ms ease,
-    border-color 140ms ease;
-}
 
-.coach-settings-row:hover {
-  background: var(--bg-hover);
-  border-color: var(--line-strong);
-}
 
-.coach-settings-goal {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--ink);
-}
 
-.coach-settings-row > .muted {
-  white-space: nowrap;
-}
 
-.coach-settings-edit {
-  color: var(--ink-soft);
-  font-weight: 500;
-}
 
-@media (max-width: 900px) {
-  .coach-settings-row > .muted:nth-of-type(n + 3) {
-    display: none;
-  }
-}
 
 /* ---------- Your week ---------- */
 
-.wk-why {
-  margin: 4px 0 28px;
-  max-width: 760px;
-}
 
-.wk-lede {
-  margin: 0;
-  font-family: var(--font-read);
-  font-size: 19px;
-  line-height: 1.5;
-  color: var(--ink);
-}
 
-.wk-more {
-  margin-left: 8px;
-  font-family: var(--font-ui);
-  font-size: 13px;
-}
 
-.wk-rest {
-  margin: 8px 0 0;
-  font-size: 14.5px;
-  line-height: 1.6;
-  color: var(--ink-soft);
-}
 
-.wk-split {
-  margin-top: 18px;
-}
 
-.wk-split-bar {
-  display: flex;
-  gap: 3px;
-  height: 8px;
-}
 
 .wk-split-bar span {
   border-radius: 999px;
 }
 
-.wk-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 18px;
-  margin-top: 10px;
-  font-size: 13px;
-  color: var(--ink-soft);
-}
 
 .wk-legend span {
   display: inline-flex;
@@ -12843,16 +12766,6 @@ button.home-prof {
   line-height: 1.1;
 }
 
-.wk-day.today .wk-date {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  background: var(--primary, var(--accent));
-  color: var(--primary-ink, var(--accent-ink));
-  font-size: 15px;
-}
 
 .wk-dots {
   display: flex;
@@ -12961,99 +12874,25 @@ button.home-prof {
   white-space: nowrap;
 }
 
-.wk-changes {
-  margin: -8px 0 24px;
-  max-width: 760px;
-}
 
-.wk-changes-head {
-  margin: 0 0 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-soft);
-}
 
 /* ---------- Goals (Your week) ---------- */
 
-.gl {
-  margin: 0 0 30px;
-  max-width: 860px;
-}
 
-.gl-head {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  margin-bottom: 10px;
-}
 
-.gl-head h2 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-}
 
-.gl-add {
-  margin-left: auto;
-  align-self: center;
-}
 
-.gl-empty {
-  margin: 0 0 12px;
-  max-width: 70ch;
-  font-size: 14px;
-  line-height: 1.6;
-}
 
-.gl-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-m);
-  overflow: hidden;
-}
 
-.gl-goal {
-  padding: 12px 16px;
-}
 
-.gl-goal + .gl-goal {
-  border-top: 1px solid var(--line);
-}
 
 .gl-goal.open {
   background: color-mix(in srgb, var(--bg-hover) 45%, transparent);
 }
 
-.gl-goal-top {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
 
-.gl-goal-title {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 2px 12px;
-  text-align: left;
-}
 
-.gl-goal-title b {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--ink);
-}
 
-.gl-goal-title:hover b {
-  text-decoration: underline;
-  text-decoration-color: var(--line-strong);
-  text-underline-offset: 3px;
-}
 
 .segmented.small button {
   height: 22px;
@@ -13070,39 +12909,10 @@ button.home-prof {
   color: var(--warn);
 }
 
-.gl-needs {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 10px 0 0;
-  padding: 0;
-}
 
-.gl-need {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  color: var(--ink-soft);
-  font-size: 12.5px;
-}
 
-.gl-need svg {
-  color: var(--ink-muted);
-}
 
-.gl-need.optional {
-  border-style: dashed;
-}
 
-.gl-need-h {
-  color: var(--ink-muted);
-  font-variant-numeric: tabular-nums;
-}
 
 .gl-thinking {
   display: flex;
@@ -13173,7 +12983,7 @@ button.home-prof {
 }
 
 .gl-hours input {
-  width: 56px;
+  width: 68px;
   height: 28px;
   margin-right: 4px;
   text-align: right;
@@ -13290,68 +13100,14 @@ button.home-prof {
   gap: 6px;
 }
 
-.gl-standing {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  margin-top: 14px;
-}
 
-.gl-standing-head {
-  flex: none;
-  width: 84px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ink-muted);
-}
 
-.gl-standing ul {
-  list-style: none;
-  flex: 1;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 2px 18px;
-}
 
-.gl-st {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 30px;
-  font-size: 13.5px;
-  border-bottom: 1px solid var(--line);
-}
 
-.gl-st svg {
-  flex: none;
-  color: var(--ink-muted);
-}
 
-.gl-st-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--ink);
-}
 
-.gl-st-when {
-  flex: none;
-  font-size: 12px;
-  color: var(--ink-muted);
-  font-variant-numeric: tabular-nums;
-}
 
-.gl-st-when.late {
-  color: var(--warn);
-}
 
-.gl-st.paused .gl-st-name {
-  color: var(--ink-muted);
-}
 
 .gl-st-weight {
   flex: none;
@@ -13397,16 +13153,427 @@ button.home-prof {
   color: var(--warn);
 }
 
-@media (max-width: 760px) {
-  .gl-goal-top {
-    flex-wrap: wrap;
+/* ---------- Your week, at a glance ----------
+   Goals are rows (name and date, a progress bar, a status, how much it matters); the week is one
+   line of why, one bar of how the time splits, and one line of what changed. Detail is on request. */
+
+.gl {
+  margin: 0 0 34px;
+}
+
+.gl-head,
+.wk-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  margin-bottom: 10px;
+}
+
+.gl-head h2,
+.wk-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.gl-how {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  color: var(--ink-muted);
+}
+
+.gl-how:hover,
+.gl-how.on {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.gl-add {
+  margin-left: auto;
+}
+
+.gl-about {
+  margin: -2px 0 12px;
+  max-width: 72ch;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
+
+.gl-suggest {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 10px 12px 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  font-size: 14px;
+}
+
+.gl-suggest > svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.gl-suggest-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink);
+}
+
+.gl-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  overflow: hidden;
+}
+
+.gl-list > li + li {
+  border-top: 1px solid var(--line);
+}
+
+.gl-goal.open {
+  background: color-mix(in srgb, var(--bg-hover) 45%, transparent);
+}
+
+.gl-goal > :not(.gl-row) {
+  margin-left: 16px;
+  margin-right: 16px;
+}
+
+.gl-goal.open > :last-child {
+  padding-bottom: 14px;
+}
+
+/* name · bar · status · weight, the same columns on every row so the eye runs straight down */
+.gl-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 200px) 92px 168px;
+  align-items: center;
+  gap: 18px;
+  min-height: 56px;
+  padding: 8px 16px;
+}
+
+.gl-row-name {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 1px;
+  min-width: 0;
+  text-align: left;
+}
+
+.gl-row-name > svg {
+  grid-row: span 2;
+  color: var(--ink-muted);
+}
+
+.gl-chev {
+  transition: transform 140ms ease;
+}
+
+.gl-chev.open {
+  transform: rotate(90deg);
+}
+
+.gl-row-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.gl-goal-title:hover .gl-row-title {
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+}
+
+.gl-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.gl-meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.gl-meter-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg-active);
+  overflow: hidden;
+}
+
+.gl-meter-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.gl-meter-pct {
+  flex: none;
+  width: 34px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.gl-status {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--ink-soft);
+}
+
+.gl-status::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--ink-muted);
+}
+
+.gl-status.s-on-track::before {
+  background: var(--good-mark, var(--good));
+}
+
+.gl-status.s-behind {
+  color: var(--warn);
+}
+
+.gl-status.s-behind::before {
+  background: var(--warn-mark, var(--warn));
+}
+
+.gl-status.s-paused,
+.gl-status.s-not-started {
+  color: var(--ink-muted);
+}
+
+.gl-row > .segmented,
+.gl-row > .gl-st-weight {
+  justify-self: end;
+}
+
+.gl-st.paused .gl-row-title {
+  color: var(--ink-muted);
+}
+
+.wk-head {
+  justify-content: space-between;
+}
+
+.wk-hours {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.wk-hours:hover {
+  background: var(--bg-hover);
+  color: var(--ink-soft);
+}
+
+.wk-hours-edit {
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.wk-why {
+  margin: 0 0 20px;
+}
+
+.wk-lede {
+  margin: 0;
+  max-width: 90ch;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.wk-more {
+  margin-left: 8px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.wk-split {
+  margin-top: 14px;
+}
+
+.wk-split-bar {
+  display: flex;
+  gap: 3px;
+  height: 8px;
+}
+
+.wk-split-bar span {
+  border-radius: 999px;
+}
+
+.wk-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.wk-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.wk-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 3px;
+}
+
+.wk-explain {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--bg-hover) 60%, transparent);
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.wk-explain p,
+.wk-explain ul {
+  margin: 0;
+  max-width: 80ch;
+}
+
+.wk-explain > * + * {
+  margin-top: 8px;
+}
+
+.wk-explain ul {
+  padding-left: 18px;
+}
+
+.wk-explain b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.wk-changes {
+  margin: 0 0 20px;
+}
+
+.wk-changes-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  font-size: 13px;
+  text-align: left;
+}
+
+button.wk-changes-line:hover {
+  background: var(--bg-hover);
+}
+
+.wk-changes.open {
+  padding: 4px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+}
+
+.wk-changes.open .wk-changes-line {
+  padding: 0;
+  border: 0;
+  justify-content: space-between;
+}
+
+.wk-changes-head {
+  flex: none;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.wk-changes-first {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--ink-muted);
+}
+
+.wk-changes-more {
+  flex: none;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+/* Today stands out in the strip whichever day is picked: its name in the accent and an accent edge */
+.wk-day.today {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+
+.wk-day.today .wk-dow {
+  color: var(--accent);
+}
+
+.wk-day.today.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+@media (max-width: 900px) {
+  .gl-row {
+    grid-template-columns: minmax(0, 1fr) 92px auto;
   }
-  .gl-standing {
-    display: block;
-  }
-  .gl-standing-head {
-    display: block;
-    margin-bottom: 4px;
+  .gl-row > .gl-meter {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
   .gl-table td:nth-child(4) {
     display: none;
@@ -13611,6 +13778,17 @@ button.home-prof {
 
 .pv-prompt.wide {
   max-width: none;
+}
+
+/* On Practice every tab fills the same column as the header and tabs above it, so nothing ends
+   short of their right edge; only running text keeps a reading measure */
+.page.practice .pv-prompt,
+.page.practice .wo-hub.embedded {
+  max-width: none;
+}
+
+.page.practice .pv-sub {
+  max-width: 72ch;
 }
 
 .pv-meta-note {
@@ -16518,18 +16696,8 @@ button.tl-dot:focus-visible {
   line-height: 1.5;
 }
 
-.wk-reason {
-  margin-left: 6px;
-}
 
-.wk-reason::before {
-  content: '· ';
-}
 
-.wk-note {
-  margin: 8px 0 0;
-  max-width: 70ch;
-}
 
 .sort-status {
   margin: 8px 0 0;
@@ -20220,4 +20388,28 @@ button.wkp-tile:hover {
   .s-sure {
     animation: none;
   }
+}
+
+/* Learn: roadmaps without a notebook */
+.rm-shelf-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rm-shelf-row .ws-shelf-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.rm-shelf-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.rm-shelf-progress .gl-meter-bar {
+  width: 120px;
+  flex: none;
 }
