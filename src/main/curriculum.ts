@@ -114,6 +114,9 @@ export function sortRoadmaps(): Promise<SortStatus[]> {
 
 export const sortRunning = () => !!running
 
+/** A notebook's topics: its roadmap's, or a track's modules' (main/modules) */
+const topicsOf = (nb: { name: string; path: string; outline?: string; track?: string }) => import('./modules').then((m) => m.notebookTopics(nb))
+
 async function sortAll(): Promise<SortStatus[]> {
   const aims = aimsOf(await getCoach())
   if (!aims.length) return curriculumStatus()
@@ -121,9 +124,9 @@ async function sortAll(): Promise<SortStatus[]> {
   const signal = new AbortController().signal
   lastError = ''
   for (const nb of await getNotebooks()) {
-    if (!nb.outline) continue
+    if (!nb.outline && !nb.track) continue
     try {
-      await sortOne(nb.name, nb.outline, aims, key, signal)
+      await sortOne(nb, aims, key, signal)
     } catch (e) {
       // A run that fails part-way keeps what it saved; the next run carries on from there
       lastError = (e as Error).message
@@ -132,8 +135,9 @@ async function sortAll(): Promise<SortStatus[]> {
   return curriculumStatus()
 }
 
-async function sortOne(notebook: string, outline: string, aims: ReturnType<typeof aimsOf>, key: string, signal: AbortSignal) {
-  const topics = roadmapTopics(notebook, await readText(outline))
+async function sortOne(nb: { name: string; path: string; outline?: string; track?: string }, aims: ReturnType<typeof aimsOf>, key: string, signal: AbortSignal) {
+  const notebook = nb.name
+  const topics = await topicsOf(nb)
   const sections = sectionsOf(topics)
   const prev = await loadSorted(notebook)
   // What the sections are for depends on the aims; which topics are history doesn't
@@ -189,8 +193,8 @@ export async function curriculumStatus(): Promise<SortStatus[]> {
   const key = aimsKey(aimsOf(await getCoach()))
   const out: SortStatus[] = []
   for (const nb of await getNotebooks()) {
-    if (!nb.outline) continue
-    const sections = sectionsOf(roadmapTopics(nb.name, await readText(nb.outline).catch(() => '')))
+    if (!nb.outline && !nb.track) continue
+    const sections = sectionsOf(await topicsOf(nb).catch(() => []))
     const sorted = await loadSorted(nb.name)
     const done = sorted?.aimsKey === key ? sections.filter((s) => sorted.sections[s.id]).length : 0
     out.push({ notebook: nb.name, sorted: isSorted(sorted, sections, key), sections: sections.length, done })
@@ -203,10 +207,10 @@ export const sortError = () => lastError
 /** What the roadmap page shows next to each topic */
 export async function curriculumView(notebook: string): Promise<CurriculumView> {
   const nb = (await getNotebooks()).find((n) => n.name === notebook || n.path === notebook)
-  if (!nb?.outline) return { sorted: false, topics: {} }
+  if (!nb?.outline && !nb?.track) return { sorted: false, topics: {} }
   const aims = aimsOf(await getCoach())
   const key = aimsKey(aims)
-  const topics = roadmapTopics(nb.name, await readText(nb.outline))
+  const topics = await topicsOf(nb)
   const [sorted, overrides] = await Promise.all([loadSorted(nb.name), getOverrides()])
   // History found for other aims still holds; what sections are for doesn't
   const live = sorted && (sorted.aimsKey === key ? sorted : { ...sorted, sections: {} })
@@ -218,9 +222,9 @@ export async function curriculumView(notebook: string): Promise<CurriculumView> 
 /** Suggested changes to a roadmap, from your aims: nothing changes until you accept one */
 export async function proposeChanges(notebook: string): Promise<Proposal[]> {
   const nb = (await getNotebooks()).find((n) => n.name === notebook || n.path === notebook)
-  if (!nb?.outline) return []
+  if (!nb?.outline && !nb?.track) return []
   const aims = aimsOf(await getCoach())
-  const sections = sectionsOf(roadmapTopics(nb.name, await readText(nb.outline)))
+  const sections = sectionsOf(await topicsOf(nb))
   // Big roadmaps are shown a few topics a section, so the request stays a sensible size
   const perSection = Math.max(1, Math.min(12, Math.floor(240 / Math.max(1, sections.length))))
   const { prompt, topics } = proposePrompt(aims, nb.name, sections, perSection)

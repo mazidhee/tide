@@ -27,6 +27,10 @@ export async function getBrain(): Promise<BrainData> {
   // How far along each roadmap is, from its ticks
   const progress = await Promise.all(
     shown.map(async (n) => {
+      if (n.track) {
+        const topics = await import('./modules').then((m) => m.notebookTopics(n)).catch(() => [])
+        return topics.length ? topics.filter((t) => t.checked).length / topics.length : undefined
+      }
       if (!n.outline) return undefined
       const md = await readText(n.outline).catch(() => '')
       const all = (md.match(/^\s*- \[[ xX]\] /gm) ?? []).length

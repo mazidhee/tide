@@ -11,6 +11,7 @@ import { promises as fs } from 'fs'
 import { join } from 'path'
 import { allCourses, catalogueCourse, type CourseOutline } from '@shared/courses'
 import { roadmapTopics } from '@shared/curriculum'
+import { moduleParts as import_parts } from '@shared/modules'
 import { localDate, type AgendaItem, type WeekPlan } from '@shared/coach'
 import { threadId } from '@shared/goals'
 import type { Thread } from '@shared/portfolio'
@@ -90,13 +91,16 @@ interface Roadmap {
 async function roadmap(notebook: string): Promise<Roadmap | null> {
   const { getNotebooks } = await import('./learn')
   const nb = (await getNotebooks().catch(() => [])).find((n) => n.name === notebook)
-  if (!nb?.outline) return null
-  const md = await readText(nb.outline).catch(() => null)
-  if (md === null) return null
-  const phases = phasesOf(nb.name, md)
+  if (!nb?.outline && !nb?.track) return null
+  const mm = await import('./modules')
+  const t = nb.track ? await mm.trackOf(nb) : null
+  const md = nb.outline ? await readText(nb.outline).catch(() => null) : null
+  if (md === null && !t) return null
+  // A track's phases are its modules' parts
+  const phases = t ? (await import('@shared/modules')).trackModules(t.cat, t.track).flatMap((m) => import_parts(m, nb.name)) : phasesOf(nb.name, md!)
   const phaseOf = new Map<string, { id: string; title: string }>()
   for (const p of phases) for (const t of p.topics) phaseOf.set(t.id, { id: p.id, title: p.title })
-  const topics = roadmapTopics(nb.name, md)
+  const topics = (t ? await mm.notebookTopics(nb) : roadmapTopics(nb.name, md!))
     .filter((t) => !t.project && phaseOf.has(t.id))
     .map((t) => ({ id: t.id, title: t.title, phase: phaseOf.get(t.id)!.id, phaseTitle: phaseOf.get(t.id)!.title }))
   return { name: nb.name, topics }
@@ -188,7 +192,7 @@ export async function alignAll(waitMs = 30_000): Promise<CourseAlignment[]> {
   const { getNotebooks } = await import('./learn')
   const { importedCourse } = await import('./courses')
   const out: CourseAlignment[] = []
-  const notebooks = (await getNotebooks().catch(() => [])).filter((n) => n.outline)
+  const notebooks = (await getNotebooks().catch(() => [])).filter((n) => n.outline || n.track)
   for (const c of allCourses()) {
     if (!(await importedCourse(c.id))) continue
     for (const nb of notebooks) {

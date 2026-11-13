@@ -170,8 +170,25 @@ export async function catalogue(): Promise<CatalogueTrack[]> {
   const store = await loadStore()
   const out: CatalogueTrack[] = []
   const usedFiles = new Set<string>()
+  // Tracks of modules: each module a phase, the DAG beside it (shared/northStar catalogueModules)
+  if (notebooks.some((nb) => nb.track)) {
+    const mm = await import('./modules')
+    const cat = await mm.loadCatalogue().catch(() => null)
+    const gates = await mm.moduleState().catch(() => null)
+    const { catalogueModules } = await import('@shared/northStar')
+    const { tracksOfModule } = await import('@shared/modules')
+    const passed = new Set([...(gates?.values() ?? [])].filter((g) => g.passed).map((g) => g.module.id))
+    const names = new Map(notebooks.filter((n) => n.track).map((n) => [n.track!, n.name]))
+    for (const nb of notebooks) {
+      const t = cat?.tracks.find((x) => x.id === nb.track)
+      if (!t || !cat) continue
+      out.push(catalogueModules(nb.name, mm.planOrder(cat, t), { id: t.id, ...(t.about ? { about: t.about } : {}), passed, shared: (id) => tracksOfModule(cat, id).filter((x) => x.id !== t.id).map((x) => names.get(x.id) ?? x.title) }))
+    }
+    // Every old roadmap the modules took over is used up: not offered again as a ready roadmap
+    for (const r of READY_ROADMAPS) usedFiles.add(r.file)
+  }
   for (const nb of notebooks) {
-    if (!nb.outline || nb.project) continue
+    if (!nb.outline || nb.project || nb.track) continue
     const md = await readText(nb.outline).catch(() => null)
     if (!md) continue
     const file = nb.outline.split('/').pop() ?? ''
@@ -196,7 +213,14 @@ export async function catalogue(): Promise<CatalogueTrack[]> {
 async function topicsOf(cat: CatalogueTrack[]): Promise<Map<string, RoadmapTopic[]>> {
   const { ROADMAP_TEXT } = await import('./finance/roadmaps')
   const out = new Map<string, RoadmapTopic[]>()
+  const { getNotebooks } = await import('./learn')
+  const tracks = (await getNotebooks().catch(() => [])).filter((n) => n.track)
   for (const t of cat) {
+    if (t.modules) {
+      const nb = tracks.find((n) => n.name === t.name)
+      if (nb) out.set(t.name, await import('./modules').then((m) => m.notebookTopics(nb)))
+      continue
+    }
     const md = t.outline ? await readText(t.outline).catch(() => null) : t.file ? ROADMAP_TEXT[t.file] : null
     if (md) out.set(t.name, roadmapTopics(t.name, md))
   }
@@ -214,8 +238,10 @@ export async function sharedGroups(tracks?: string[]): Promise<{ groups: SharedG
   const key = [...names].sort().join('|')
   if (sharedCache && sharedCache.key === key && Date.now() - sharedCache.at < 5 * 60_000) return sharedCache
   const cat = (await catalogue()).filter((c) => names.includes(c.name))
-  const topics = await topicsOf(cat)
-  const groups = sharedTopics([...topics].map(([track, t]) => ({ track, topics: t })))
+  // Modules several tracks share are learned once exactly; titles are matched only between roadmaps that aren't modules
+  const topics = await topicsOf(cat.filter((c) => !c.modules))
+  const { sharedModules } = await import('@shared/northStar')
+  const groups = [...sharedModules(cat), ...sharedTopics([...topics].map(([track, t]) => ({ track, topics: t })))]
   sharedCache = { at: Date.now(), key, groups, siblings: siblingIndex(groups) }
   return sharedCache
 }
@@ -260,6 +286,21 @@ export async function trackScope(track: string): Promise<{ scope: string[]; stag
   if (!staged && !pulled.length) return null
   const scope = [...(staged ?? [])]
   for (const h of pulled) if (!scope.some((x) => bare(x) === bare(h))) scope.push(h)
+  // A track of modules: a module in scope brings what it requires from the same track (never a dead end behind a gate)
+  const mm = await import('./modules')
+  const nb = (await import('./learn').then((l) => l.getNotebooks()).catch(() => [])).find((n) => n.name === track && n.track)
+  const t = nb ? await mm.trackOf(nb) : null
+  if (t) {
+    const { ancestors } = await import('@shared/modules')
+    const gates = await mm.moduleState().catch(() => null)
+    const mods = t.track.modules.map((id) => t.cat.modules.find((m) => m.id === id)).filter((m): m is NonNullable<typeof m> => !!m)
+    const named = mods.filter((m) => scope.some((x) => bare(x) === bare(m.title)))
+    for (const m of named)
+      for (const r of ancestors(t.cat.modules, m.id)) {
+        const req = mods.find((x) => x.id === r)
+        if (req && !gates?.get(r)?.passed && !scope.some((x) => bare(x) === bare(req.title))) scope.push(req.title)
+      }
+  }
   return { scope, stage: ns.current, title: ns.stages.find((s) => s.n === ns.current)?.title ?? '' }
 }
 
@@ -410,6 +451,17 @@ async function checkedTopics(cat: CatalogueTrack[]): Promise<Set<string>> {
   const store = await loadTracks().catch(() => null)
   const out = new Set<string>()
   if (!store) return out
+  // A module part's checks are kept under the module
+  if (cat.some((t) => t.modules)) {
+    const mm = await import('./modules')
+    const mods = await mm.loadCatalogue().catch(() => null)
+    const { moduleParts, moduleRecordKey } = await import('@shared/modules')
+    for (const m of mods?.modules ?? []) {
+      const rec = store.tracks[moduleRecordKey(m.id)]
+      if (!rec) continue
+      for (const p of moduleParts(m)) if (rec.phases[p.id]?.checks?.some((c) => c.passed)) p.topics.forEach((x) => out.add(x.id))
+    }
+  }
   for (const t of cat) {
     const rec = store.tracks[t.name]
     if (!rec || !t.outline) continue
@@ -459,7 +511,8 @@ async function hoursLeft(g: Gathered): Promise<Record<number, number>> {
     if (i < cur) continue
     if (i === cur) out[s.n] = (await progressOfStage(g, s.n)).hoursLeft
     else out[s.n] = stageHours(s, g.topics, learned)
-    for (const st of s.tracks) for (const t of g.topics.get(st.track) ?? []) if (st.scope.length && t.path.some((p) => st.scope.some((x) => bare(x) === bare(p)))) (sib.get(t.id) ?? []).forEach((x) => learned.add(x))
+    // A topic learned once (its own id too: a shared module's topics are the same ids in every track)
+    for (const st of s.tracks) for (const t of g.topics.get(st.track) ?? []) if (st.scope.length && t.path.some((p) => st.scope.some((x) => bare(x) === bare(p)))) [t.id, ...(sib.get(t.id) ?? [])].forEach((x) => learned.add(x))
   }
   return out
 }
@@ -545,13 +598,17 @@ export async function synthesise(input: { goal: string; hoursPerWeek?: number })
     const milestones = parseMilestones(note).filter((m) => m.date >= today())
     const prompt = synthesisPrompt({ ...(milestones.length ? { milestones: milestones.map((m) => milestoneText(m, today())).join('\n') } : {}), goal, ...(note ? { goalNote: note } : {}), today: today(), hoursPerWeek, ...(pace.measured ? { measuredHours: pace.hours } : {}), catalogue: cat, known: knownText(all), profile, shared: groups.slice(0, 40).map((g) => ({ topic: g.title, tracks: [...new Set(g.members.map((m) => m.track))] })) })
     let ns: NorthStar | null = null
+    const { withRequires } = await import('@shared/northStar')
     try {
       const out = await ask('northStar', prompt, SYNTH_SYSTEM)
       const { extractJsonObject } = await import('./ai')
       ns = parseSynthesis(extractJsonObject(out.text), cat, { today: today(), hoursPerWeek, goal: goal || firstPara(note), by: out.by })
+      // Over modules: every module a stage takes comes with what it requires
+      if (ns) ns = withRequires(ns, cat)
     } catch (e) {
       console.warn(`[northstar] synthesis: ${(e as Error).message}`)
     }
+    // Mastery first: the fallback orders modules by long-term value, not by the interview date
     ns ??= heuristicNorthStar(cat, { goal: goal || firstPara(note), today: today(), hoursPerWeek })
     draft = await preview(ns)
     return draft
@@ -798,6 +855,33 @@ export interface NorthStarView {
   capstone?: { notebook: string; title: string }
   /** The dated milestone: countdown, readiness and its projection, the gates */
   milestone?: import('./milestone').MilestoneState
+  /** Over modules: the ones in progress (and next), with the depth they've reached against the stage's target */
+  modules?: { id: string; title: string; track: string; status: string; solid: number; total: number; depth: number; target: number; hoursLeft: number; inStage: boolean }[]
+  /** Projects: the milestones being built and the next ones */
+  projects?: import('@shared/modules').ProjectRow[]
+}
+
+/** The modules worth showing on the map: in progress first, then the stage's open ones, with their depth */
+async function moduleDepths(ns: NorthStar, g: Gathered): Promise<NonNullable<NorthStarView['modules']>> {
+  const mm = await import('./modules')
+  const gates = await mm.moduleState().catch(() => null)
+  const cat = await mm.loadCatalogue().catch(() => null)
+  if (!gates || !cat) return []
+  const stage = ns.stages.find((s) => s.n === ns.current)
+  const inStage = new Set((stage?.tracks ?? []).flatMap((t) => t.scope.map(bare)))
+  const { moduleTopics, moduleHoursLeft, tracksOfModule } = await import('@shared/modules')
+  const out: NonNullable<NorthStarView['modules']> = []
+  for (const m of cat.modules) {
+    const gt = gates.get(m.id)
+    if (!gt) continue
+    const here = inStage.has(bare(m.title))
+    if (!(gt.status === 'active' || (here && gt.status !== 'passed' && gt.status !== 'locked'))) continue
+    const ts = moduleTopics(m).filter((t) => !t.project)
+    const depths = ts.map((t) => measuredDepth(g.concept(t.id), { checkPassed: g.checked.has(t.id) }) as number).sort((a, b) => a - b)
+    const target = Math.max(stage?.depth ?? 3, ...(stage?.deep ?? []).filter((d) => bare(d.topic) === bare(m.title)).map((d) => d.depth))
+    out.push({ id: m.id, title: m.title, track: tracksOfModule(cat, m.id)[0]?.title ?? m.track, status: gt.status, solid: gt.solid, total: gt.total, depth: depths.length ? depths[Math.floor(depths.length / 2)] : 0, target, hoursLeft: moduleHoursLeft(gt), inStage: here })
+  }
+  return out.sort((a, b) => Number(b.status === 'active') - Number(a.status === 'active') || Number(b.inStage) - Number(a.inStage)).slice(0, 12)
 }
 
 export async function view(): Promise<NorthStarView | null> {
@@ -821,12 +905,13 @@ export async function view(): Promise<NorthStarView | null> {
     progress: p,
     estimate: durationWords(est.weeks),
     pace,
-    missing: stage.tracks.filter((t) => !g.topics.has(t.track) || !g.cat.find((c) => c.name === t.track)?.outline).map((t) => t.track),
+    missing: stage.tracks.filter((t) => !g.topics.has(t.track) || !(g.cat.find((c) => c.name === t.track)?.outline || g.cat.find((c) => c.name === t.track)?.modules)).map((t) => t.track),
     minutes: await minutesByTrack(stage.tracks.map((t) => t.track)),
     shared: { groups: g.groups.length, saved: hoursSaved(g.groups), top: ns.shared.slice(0, 12) },
     proposals: r.store.proposals,
     ...(r.store.lastReview ? { review: { at: r.store.lastReview, summary: r.store.reviewSummary, by: r.store.reviewBy } } : {}),
     ...(r.store.capstones[String(ns.current)] ? { capstone: r.store.capstones[String(ns.current)] } : {}),
+    ...(g.cat.some((c) => c.modules) ? { modules: await moduleDepths(ns, g).catch(() => []), projects: await import('./modules').then((m) => m.projectsView()).catch(() => []) } : {}),
     ...(await import('./milestone')
       .then(async (m) => {
         if (!r.store!.milestones) await m.syncMilestones()

@@ -112,12 +112,25 @@ export async function getNotebooks(): Promise<NotebookMeta[]> {
         color: stored[folder.path]?.color,
         description: stored[folder.path]?.description,
         tutor: stored[folder.path]?.tutor,
-        outline: stored[folder.path]?.outline ?? (outlines.has(tracks[folder.name]?.outline ?? '') ? undefined : tracks[folder.name]?.outline),
+        // A track of modules has no outline of its own: its topics are its modules' (main/modules)
+        ...(stored[folder.path]?.track ? { track: stored[folder.path]!.track } : { outline: stored[folder.path]?.outline ?? (outlines.has(tracks[folder.name]?.outline ?? '') ? undefined : tracks[folder.name]?.outline) }),
         ...(stored[folder.path]?.project ? { project: stored[folder.path]!.project } : {})
       }
     })
-    .filter((nb) => isNotebook(tree, nb.path, outlines))
-    .concat(virtualNotebooks(tree, stored, tracks))
+    .filter((nb) => nb.track || isNotebook(tree, nb.path, outlines))
+    .concat(virtualNotebooks(tree, stored, tracks), await trackNotebooks(tree, stored))
+}
+
+/**
+ * A track of modules with no folder of its own (main/modules): a notebook all the same, never a
+ * sidebar item, its name the track's title
+ */
+async function trackNotebooks(tree: Awaited<ReturnType<typeof getTree>>, stored: Record<string, Partial<NotebookMeta>>): Promise<NotebookMeta[]> {
+  const folders = new Set((tree?.children ?? []).filter((n) => n.type === 'folder').map((n) => n.path))
+  const loose = Object.entries(stored).filter(([path, m]) => m?.track && !folders.has(path))
+  if (!loose.length) return []
+  const cat = await import('./modules').then((m) => m.loadCatalogue()).catch(() => null)
+  return loose.map(([path, m]) => ({ path, name: cat?.tracks.find((t) => t.id === m.track)?.title ?? path, noteCount: 0, fileCount: 0, mastered: 0, learning: 0, lastModified: 0, track: m.track, virtual: true }))
 }
 
 /**
@@ -148,7 +161,7 @@ function isNotebook(tree: Awaited<ReturnType<typeof getTree>>, path: string, out
   return !files.every((f) => outlines.has(f.path))
 }
 
-export async function updateNotebook(path: string, patch: Partial<Pick<NotebookMeta, 'cover' | 'color' | 'description' | 'outline' | 'project' | 'tutor'>>) {
+export async function updateNotebook(path: string, patch: Partial<Pick<NotebookMeta, 'cover' | 'color' | 'description' | 'outline' | 'project' | 'tutor' | 'track'>>) {
   await updateJson<Record<string, Partial<NotebookMeta>>>(NOTEBOOKS_FILE, {}, (stored) => ({ ...stored, [path]: { ...stored[path], ...patch } }))
 }
 

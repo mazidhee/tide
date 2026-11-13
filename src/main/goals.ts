@@ -111,9 +111,10 @@ const HOURS_PER_TOPIC = 2.5
 export async function inventory(): Promise<Inventory> {
   const { getNotebooks } = await import('./learn')
   const roadmaps: Inventory['roadmaps'] = []
+  const mm = await import('./modules')
   for (const nb of await getNotebooks().catch(() => [])) {
-    if (!nb.outline) continue
-    const topics = roadmapTopics(nb.name, await readText(nb.outline).catch(() => '')).filter((t) => !t.project)
+    if (!nb.outline && !nb.track) continue
+    const topics = (await mm.notebookTopics(nb).catch(() => [])).filter((t) => !t.project)
     if (!topics.length) continue
     const sections = [...new Set(topics.map((t) => t.section).filter(Boolean))]
     roadmaps.push({ name: nb.name, left: topics.filter((t) => !t.checked).length, total: topics.length, sections })
@@ -223,14 +224,16 @@ export async function snapshot(o: { shape?: boolean } = {}) {
   // A dated milestone (main/milestone): its scope as a goal of its own, weighed by the value rule below
   const mm = await import('./milestone')
   const ms = star ? await mm.milestoneGoal().catch(() => null) : null
-  const extra = [star, ms].filter((g): g is NonNullable<typeof g> => !!g)
+  // Projects from day one (main/modules): the next open milestone of each, as building work
+  const pj = star ? await import('./modules').then((m) => m.projectsGoal()).catch(() => null) : null
+  const extra = [star, ms, pj].filter((g): g is NonNullable<typeof g> => !!g)
   const own = extra.length ? { ...store, goals: [...store.goals.filter((g) => !extra.some((x) => x.id === g.id)), ...extra] } : store
   const log = await threadLog(own.goals)
   const goals = withStanding(own, await inProgress(inv, log, coach), Date.now())
   const fading = await fadingByThread()
   const built = buildThreads(goals, log, { today: today(), fading: fading.by })
   // Long-term value plus deadline value, the maths floor, parked tracks and the language gates
-  const shaped = star && o.shape !== false ? await mm.shapeThreads(built).catch(() => null) : null
+  const shaped = star && o.shape !== false ? await mm.shapeThreads(built, { projectTracks: pj?.tracksOf ?? {} }).catch(() => null) : null
   const threads = shaped?.threads ?? built
   return { store, coach, inv, log, goals, threads, fading, groupFloors: shaped?.groupFloors ?? {}, milestone: shaped?.state ?? null, stageTracks: shaped?.stageTracks ?? [] }
 }
@@ -391,9 +394,10 @@ async function roadmapCandidates(threads: Thread[], goals: PlanGoal[], coach: Co
   const aims = aimsOf(coach)
   const key = aimsKey(aims)
   const notebooks: BalanceNotebook[] = []
+  const mm = await import('./modules')
   for (const nb of all) {
-    if (!nb.outline || !names.includes(nb.name)) continue
-    const topics = roadmapTopics(nb.name, await readText(nb.outline).catch(() => ''))
+    if ((!nb.outline && !nb.track) || !names.includes(nb.name)) continue
+    const topics = await mm.notebookTopics(nb).catch(() => [])
     const sorted = await loadSorted(nb.name).catch(() => null)
     notebooks.push({ name: nb.name, topics, sorted, ready: isSorted(sorted, sectionsOf(topics), key) })
   }
@@ -412,6 +416,25 @@ async function roadmapCandidates(threads: Thread[], goals: PlanGoal[], coach: Co
   // North Star: shared topics learned once, key topics taken deeper (main/northStar)
   const adjusted = await import('./northStar').then((m) => m.adjustQueues(byNotebook)).catch(() => byNotebook)
   for (const [nb, list] of adjusted) byNotebook.set(nb, list)
+  // A track's open modules run side by side: interleaved, the most valuable most often (shared/modules)
+  const tracks = all.filter((nb) => nb.track && byNotebook.has(nb.name))
+  if (tracks.length) {
+    const cat = await mm.loadCatalogue().catch(() => null)
+    if (cat) {
+      const { dependents, interleaveModules, moduleValue } = await import('@shared/modules')
+      const { moduleOfId } = await import('@shared/moduleMigration')
+      const fan = dependents(cat.modules)
+      const byId = new Map(cat.modules.map((m) => [m.id, m]))
+      // Mastery first: long-term value (fan-out and depth) orders them, never the interview date
+      const of = moduleOfId(cat.modules)
+      const planned = new Set<string>()
+      for (const nb of tracks) {
+        const q = interleaveModules(byNotebook.get(nb.name)!, of, (id) => (byId.get(id) ? moduleValue(byId.get(id)!, fan.get(id) ?? 0) : 0.5))
+        // A shared module's topic is planned in one track only
+        byNotebook.set(nb.name, q.filter((c) => !c.topicId || (!planned.has(c.topicId) && planned.add(c.topicId))))
+      }
+    }
+  }
   for (const [nb, list] of byNotebook) {
     const want = wanted.get(nb)
     if (want) byNotebook.set(nb, [...list.filter((c) => want.has(c.section)), ...list.filter((c) => !want.has(c.section))])
@@ -493,7 +516,10 @@ function itemMaker(threads: Thread[], goals: PlanGoal[], inv: Inventory, queues:
     }
     if (t.kind === 'project') {
       const p = inv.projects.find((x) => threadId('project', x.notebook) === t.id)
-      return [{ kind: 'project', title: p?.current ? `${t.label}: ${p.current}` : t.label, path: p?.notebook ?? needOf(t.id)?.ref, ...base }]
+      const ref = needOf(t.id)?.ref
+      // A vault project not yet set up: its first session sets it up in Projects
+      if (!p && ref?.startsWith('vault-project:')) return [{ kind: 'project', title: `Start ${t.label}`, ...base, why: 'Set it up in Projects, then build its first milestone' }]
+      return [{ kind: 'project', title: p?.current ? `${t.label}: ${p.current}` : t.label, path: p?.notebook ?? ref, ...base }]
     }
     if (t.kind === 'mock') {
       const mode = (needOf(t.id)?.ref ?? 'coding') as AgendaItem['mode']

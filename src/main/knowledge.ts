@@ -75,6 +75,20 @@ interface Engine {
 
 let engine: Engine | null = null
 let engineFor = ''
+
+/** Whatever the map holds is written, and the file read again next time (after main/modules moves ids in it) */
+export function resetKnowledge(): void {
+  try {
+    engine?.flush()
+  } catch {
+    // Nothing to write
+  }
+  engine = null
+  engineFor = ''
+  filling = null
+  refilling = null
+  syncedAt = 0
+}
 /** The first read-in of earlier records, once per vault */
 let filling: Promise<void> | null = null
 let syncedAt = 0
@@ -150,8 +164,26 @@ async function syncRoadmaps(k: Engine, force = false): Promise<void> {
   }
   const events: EvidenceIn[] = []
   const withRoadmap = new Set<string>()
+  const addPlacement = (concepts: ConceptIn[]) => {
+    for (const c of concepts) {
+      const p = placement[c.id]
+      if (p && p.state !== 'new') events.push({ concept: c.id, source: `placement:${c.id}`, pos: '0', kind: p.state === 'known' ? 'right' : 'partly', at: p.at, weight: 0.7 })
+    }
+  }
+  // Tracks of modules: every module's topics once, under its home track (a shared module's topics exist once)
+  if (notebooks.some((nb) => nb.track)) {
+    const cat = await import('./modules').then((m) => m.loadCatalogue()).catch(() => null)
+    if (cat) {
+      const { moduleConcepts } = await import('@shared/modules')
+      for (const [area, concepts] of moduleConcepts(cat)) {
+        withRoadmap.add(area)
+        k.syncRoadmap(area, concepts)
+        addPlacement(concepts)
+      }
+    }
+  }
   for (const nb of notebooks) {
-    if (!nb.outline) continue
+    if (!nb.outline || withRoadmap.has(nb.name)) continue
     withRoadmap.add(nb.name)
     const md = await readText(nb.outline).catch(() => null)
     // A roadmap that can't be read just now is left as it was
@@ -159,10 +191,7 @@ async function syncRoadmaps(k: Engine, force = false): Promise<void> {
     const concepts = roadmapConcepts(roadmapTopics(nb.name, md))
     k.syncRoadmap(nb.name, concepts)
     // A placement check that found a topic known or shaky: a little evidence, less than an answer in a lesson
-    for (const c of concepts) {
-      const p = placement[c.id]
-      if (p && p.state !== 'new') events.push({ concept: c.id, source: `placement:${c.id}`, pos: '0', kind: p.state === 'known' ? 'right' : 'partly', at: p.at, weight: 0.7 })
-    }
+    addPlacement(concepts)
   }
   // A notebook that no longer has a roadmap keeps only the topics there is evidence on
   const gone = new Set(k.all(Date.now(), true).filter((c) => c.origin === 'roadmap' && !withRoadmap.has(c.area)).map((c) => c.area))
@@ -561,10 +590,10 @@ async function aimsIn(notebooks: Awaited<ReturnType<typeof getNotebooks>>): Prom
   const out: AimIn[] = []
   for (const g of goals) {
     const nb = notebooks.find((n) => n.path === g.notebook || n.name === g.notebook)
-    if (!nb?.outline || !/^\d{4}-\d{2}-\d{2}$/.test(g.deadline ?? '')) continue
-    const md = await readText(nb.outline).catch(() => null)
-    if (md === null) continue
-    const topics = roadmapTopics(nb.name, md).filter((t) => !t.project && (!g.section || underHeading(t, g.section)))
+    if (!(nb?.outline || nb?.track) || !/^\d{4}-\d{2}-\d{2}$/.test(g.deadline ?? '')) continue
+    const all = await import('./modules').then((m) => m.notebookTopics(nb)).catch(() => null)
+    if (!all) continue
+    const topics = all.filter((t) => !t.project && (!g.section || underHeading(t, g.section)))
     out.push({ id: g.id, area: nb.name, ...(g.section ? { section: splitTag(g.section).title.replace(/^\s*\d+[.)]\s*/, '') } : {}), deadline: g.deadline, createdAt: g.createdAt, topics: topics.map((t) => t.id) })
   }
   return out

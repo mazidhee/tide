@@ -10,6 +10,13 @@ import type { PlanGoal, GoalNeed } from '@shared/goals'
 import {
   activeMilestone,
   addReading,
+  habitThreads,
+  interviewMinutes,
+  weekFloors,
+  moduleChannels,
+  type Channel,
+  type ModuleLite,
+  type ScopeDef,
   checklistDepths,
   countdown,
   CPP_CHECKLIST,
@@ -36,6 +43,42 @@ import {
 } from '@shared/milestone'
 
 const today = () => localDate()
+
+/** The interview tags the milestone in force names (shared/modules roleTags); none without one */
+export async function milestoneTags(): Promise<string[]> {
+  const ms = await currentMilestone().catch(() => null)
+  if (!ms) return []
+  const { roleTags } = await import('@shared/modules')
+  return roleTags(ms.roles)
+}
+
+/**
+ * With tracks of modules: the modules as the milestone sees them (each under the track that holds
+ * it), each scope item's channels from them, and each track's fan-out over the DAG. Null without.
+ */
+async function moduleSide(): Promise<{ channels: (def: ScopeDef) => Channel[]; fanOut: Map<string, number> } | null> {
+  const { getNotebooks } = await import('./learn')
+  const tracks = (await getNotebooks().catch(() => [])).filter((n) => n.track)
+  if (!tracks.length) return null
+  const mm = await import('./modules')
+  const cat = await mm.loadCatalogue().catch(() => null)
+  if (!cat) return null
+  const { dependents, tracksOfModule } = await import('@shared/modules')
+  const nbOf = new Map(tracks.map((n) => [n.track!, n.name]))
+  const lite: ModuleLite[] = cat.modules.map((m) => ({ id: m.id, title: m.title, track: nbOf.get(tracksOfModule(cat, m.id)[0]?.id ?? '') ?? '', interview: m.interview })).filter((m) => m.track)
+  const tags = await milestoneTags()
+  const dep = dependents(cat.modules)
+  const most = Math.max(1, ...dep.values())
+  const gates = await mm.moduleState().catch(() => null)
+  const fanOut = new Map<string, number>()
+  for (const nb of tracks) {
+    const t = cat.tracks.find((x) => x.id === nb.track)
+    const open = (t?.modules ?? []).filter((id) => gates?.get(id) && !gates.get(id)!.passed && gates.get(id)!.status !== 'locked')
+    // How much later work builds on what's open now, on the old scale (0 to 4 later stages)
+    fanOut.set(nb.name.toLowerCase(), open.length ? (open.reduce((n, id) => n + (dep.get(id) ?? 0), 0) / open.length / most) * 4 : 0)
+  }
+  return { channels: (def) => (tags.length ? moduleChannels(def, lite, tags) : def.channels), fanOut }
+}
 
 /** The milestones in the goal note, written to the store when they changed. Called when building, reviewing and viewing */
 export async function syncMilestones(): Promise<Milestone[]> {
@@ -70,6 +113,8 @@ export interface MilestoneState {
   history: ReadingPoint[]
   /** Hours a day: planned, bonus, what makes a full day (minutes) */
   hours: ReturnType<typeof plannedDay>
+  /** The daily interview habit, and the extra the date adds when readiness is behind (minutes a day) */
+  habit: { habit: number; extra: number }
 }
 
 let cache: { at: number; state: MilestoneState | null } | null = null
@@ -134,7 +179,8 @@ export async function milestoneState(fresh = false): Promise<MilestoneState | nu
     cpp,
     os,
     history: history.slice(-90),
-    hours: plannedDay(setting, ms.hours)
+    hours: plannedDay(setting, ms.hours),
+    habit: interviewMinutes(projection, ms.bar)
   }
   cache = { at: Date.now(), state }
   return state
@@ -159,12 +205,13 @@ export async function milestoneGoal(): Promise<(PlanGoal & { maxGap: number }) |
   const weeks = daysBetween(today(), ms.readyBy) / 7
   const needs: GoalNeed[] = []
   const seen = new Set<string>()
+  const mods = await moduleSide().catch(() => null)
   for (const s of ms.scope) {
     const def = scopeDef(s.id)
     if (!def || (def.within && weeks > def.within)) continue
-    for (const c of def.channels) {
+    for (const c of mods ? mods.channels(def) : def.channels) {
       if (c.kind === 'roadmap') {
-        const track = cat.find((t) => c.track.test(t.name) && t.outline)
+        const track = cat.find((t) => c.track.test(t.name) && (t.outline || t.modules?.length))
         if (!track) continue
         const headings = track.phases.flatMap((p) => [p.title, ...p.sections.map((x) => x.title)]).filter((h) => c.headings.test(h))
         const key = `roadmap:${track.name}`
@@ -200,18 +247,31 @@ export async function milestoneSections(track: string): Promise<string[]> {
  * The threads as the milestone shapes them: parked tracks kept to their reviews, and every thread
  * weighted by long-term value plus deadline value. No language is ordered before another here.
  */
-export async function shapeThreads(threads: Thread[]): Promise<{ threads: Thread[]; groupFloors: Record<string, number>; state: MilestoneState | null; stageTracks: string[] }> {
+export async function shapeThreads(threads: Thread[], o: { projectTracks?: Record<string, string[]> } = {}): Promise<{ threads: Thread[]; groupFloors: Record<string, number>; state: MilestoneState | null; stageTracks: string[] }> {
   const ns = await import('./northStar')
   const star = await ns.activeNorthStar()
   const state = await milestoneState().catch(() => null)
   const stage = star?.stages.find((s) => s.n === star.current)
   const stageTracks = stage?.tracks.map((t) => t.track) ?? []
-  let out = parkThreads(threads, { milestone: state?.milestone ?? null, today: today(), stageTracks })
+  const inStage = (x: string) => stageTracks.some((s) => s.toLowerCase() === x.toLowerCase())
+  // A project being built keeps its tracks alive; one outside the stage's tracks is a love interest
+  const pt = o.projectTracks ?? {}
+  const active = [...new Set(Object.values(pt).flat())]
+  const love = new Set<string>()
+  for (const [id, tracks] of Object.entries(pt)) if (tracks.length && !tracks.some(inStage)) love.add(id)
+  for (const t of threads) if (t.kind === 'roadmap' && active.some((a) => a.toLowerCase() === t.label.toLowerCase()) && !inStage(t.label)) love.add(t.id)
+  let out = parkThreads(threads, { milestone: state?.milestone ?? null, today: today(), stageTracks, active })
   if (star) {
-    const values = threadValues(out, { stages: star.stages, current: star.current, milestone: state?.milestone ?? null, gaps: state?.readiness.gaps ?? {}, urgency: state?.urgency ?? 0, today: today() })
+    const mods = await moduleSide().catch(() => null)
+    const values = threadValues(out, { stages: star.stages, current: star.current, milestone: state?.milestone ?? null, gaps: state?.readiness.gaps ?? {}, urgency: state?.urgency ?? 0, today: today(), ...(mods ? { fanOut: mods.fanOut, channels: mods.channels } : {}) })
     out = valueThreads(out, values)
   }
-  return { threads: out, groupFloors: { maths: MATHS_FLOOR }, state, stageTracks }
+  // The interview-practice track (its primer and problem sets) is the habit, not study
+  const ivTracks = new Set((await import('./learn').then((l) => l.getNotebooks()).catch(() => [])).filter((n) => n.track && (/interview/i.test(n.track) || /interview/i.test(n.name))).map((n) => `roadmap:${n.name.toLowerCase()}`))
+  out = habitThreads(out, { love, interview: ivTracks })
+  const habit = state ? interviewMinutes(state.projection, state.milestone.bar) : null
+  const groupFloors = weekFloors(state?.hours.plan ?? 0, out.some((t) => t.group === 'interview') ? habit : null, { projects: out.some((t) => t.group === 'projects'), love: out.some((t) => t.group === 'love') })
+  return { threads: out, groupFloors, state, stageTracks }
 }
 
 /** For the coach's monthly check and the weekly review: readiness, its projection and whether it's on pace */

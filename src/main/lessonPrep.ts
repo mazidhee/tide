@@ -175,7 +175,7 @@ export interface PrepTarget {
 /** The next lesson: the week plan's next unfinished one (today or the next study day), else the first focus roadmap's next topic */
 export async function nextTarget(skip: string[] = []): Promise<PrepTarget | null> {
   const { getWeek, getCoach } = await import('./coach')
-  const { nextStudyDay, todayItems, nextTopics } = await import('@shared/coach')
+  const { nextStudyDay, todayItems, nextTopicsOf } = await import('@shared/coach')
   const today = localDate()
   const settings = await getCoach().catch(() => null)
   const next = settings ? nextStudyDay(today, settings.days) : today
@@ -196,9 +196,8 @@ export async function nextTarget(skip: string[] = []): Promise<PrepTarget | null
   const notebooks = await getNotebooks().catch(() => [])
   for (const name of settings.focus) {
     const nb = notebooks.find((n) => n.name === name || n.path === name)
-    if (!nb?.outline) continue
-    const md = await readText(nb.outline).catch(() => '')
-    const t = nextTopics(nb.name, md, 6).find((c) => !skip.includes(c.topic) && !skip.includes(sameTopic(c.topic)))
+    if (!nb?.outline && !nb?.track) continue
+    const t = nextTopicsOf(nb.name, await import('./modules').then((m) => m.openTopics(nb)), 6).find((c) => !skip.includes(c.topic) && !skip.includes(sameTopic(c.topic)))
     if (t) return { topic: t.topic, notebook: nb.name, topicId: t.topicId, section: t.section, forDate: next }
   }
   return null
@@ -452,13 +451,13 @@ export async function weekFacts(end = localDate()): Promise<WeekFacts> {
   // The roadmaps' next topics
   const settings = await getCoach().catch(() => null)
   const { getNotebooks } = await import('./learn')
-  const { nextTopics } = await import('@shared/coach')
+  const { nextTopicsOf } = await import('@shared/coach')
   const notebooks = await getNotebooks().catch(() => [])
   const next: string[] = []
   for (const name of settings?.focus ?? []) {
     const nb = notebooks.find((x) => x.name === name || x.path === name)
-    if (!nb?.outline) continue
-    next.push(...nextTopics(nb.name, await readText(nb.outline).catch(() => ''), 2).map((c) => c.topic))
+    if (!nb?.outline && !nb?.track) continue
+    next.push(...nextTopicsOf(nb.name, await import('./modules').then((m) => m.openTopics(nb)), 2).map((c) => c.topic))
     if (next.length >= 3) break
   }
   return {

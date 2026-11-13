@@ -452,6 +452,8 @@ export interface NotebookMeta {
   tutor?: 'auto' | 'cloud' | 'claude' | 'gemma'
   /** A North Star track: a ready roadmap in the hidden Roadmaps folder, with no folder of its own (main/northStar) */
   virtual?: boolean
+  /** A track of modules (shared/modules): its id in Roadmaps/Tracks. Its topics are its modules', not an outline's */
+  track?: string
 }
 
 export interface NoteProgress {
@@ -1065,6 +1067,23 @@ export interface TideApi {
     bringForward(date: string, index: number): Promise<import('./coach').WeekPlan | null>
   }
   /** Roadmap continuity (main/track, shared/track): a roadmap's phases and gates */
+  modules: {
+    status(): Promise<{ available: boolean; modules: number; tracks: number; moves: boolean; switched: boolean; at?: number; backup?: string; issues: number }>
+    /** A track's modules: status, hours, gate, requires */
+    track(notebook: string): Promise<import('./modules').TrackModulesView | null>
+    /** "I'm there": the learner says a module's gate is met (or takes it back) */
+    there(id: string, on: boolean, note?: string): Promise<void>
+    /** What the switch would move, before anything is written */
+    preview(): Promise<import('./moduleMigration').MovePreview & { switched: boolean; at?: number; backup?: string }>
+    /** The switch, checked: FSRS state before and after, evidence kept, what re-pointed, what had no home */
+    switch(): Promise<import('./moduleMigration').SwitchVerification>
+    /** The empty folders you confirmed, removed */
+    removeFolders(paths: string[]): Promise<string[]>
+    switchBack(): Promise<{ ok: boolean; restored: number; kept: number }>
+    projects(): Promise<import('./modules').ProjectRow[]>
+    /** A vault project set up in Projects (levels, ready check, mentor) */
+    startProject(id: string): Promise<{ notebook: string }>
+  }
   track: {
     view(notebook: string): Promise<import('./track').TrackView | null>
     /** Move on before the gate passes; recorded */

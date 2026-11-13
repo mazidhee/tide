@@ -16,6 +16,12 @@ import {
   osGate,
   PARK_INTERVAL,
   parkThreads,
+  habitThreads,
+  interviewMinutes,
+  weekFloors,
+  HABIT_MINUTES,
+  EXTRA_CAP,
+  LOVE_SHARE,
   parseDayTime,
   parseMilestones,
   plannedDay,
@@ -136,7 +142,7 @@ describe('the value function', () => {
     expect(longTermOf('Blockchain', STAGES, 1)).toBe(0)
   })
 
-  it('deadline value only for threads in the milestone scope, and topics that score on both win', () => {
+  it('deadline value (shown, never a weight) only for threads in the milestone scope', () => {
     const threads = [th('Software Engineering'), th('Mathematics'), th('C++'), th('Machine Learning'), practice('algorithms')]
     const v = threadValues(threads, { stages: STAGES, current: 1, milestone: ms(), gaps: {}, urgency: 1, today: TODAY })
     expect(v.get('roadmap:machine learning')!.deadline).toBe(0)
@@ -157,7 +163,7 @@ describe('the value function', () => {
     expect(tv.get('roadmap:alpha')!.deadline).toBe(0)
   })
 
-  it('values become weights that keep the total, and the deadline mass is urgency × gap', () => {
+  it('long-term values become weights that keep the total; the deadline mass is urgency × gap', () => {
     const threads = [th('Software Engineering', { weight: 3 }), th('Mathematics', { weight: 2 }), practice('algorithms', { weight: 1 })]
     const values = threadValues(threads, { stages: STAGES, current: 1, milestone: ms(), gaps: {}, urgency: 2, today: TODAY })
     const out = valueThreads(threads, values)
@@ -171,6 +177,65 @@ describe('the value function', () => {
     const threads = [th('Software Engineering')]
     expect(threadValues(threads, { stages: STAGES, current: 1, milestone: null, gaps: {}, urgency: 2, today: TODAY }).get('roadmap:software engineering')!.deadline).toBe(0)
     expect(threadValues(threads, { stages: STAGES, current: 1, milestone: ms(), gaps: {}, urgency: 2, today: '2027-10-01' }).get('roadmap:software engineering')!.deadline).toBe(0)
+  })
+})
+
+describe('mastery first: the date only adds practice', () => {
+  it('study threads are weighed by long-term value alone: the deadline never reorders them', () => {
+    const threads = [th('Software Engineering', { weight: 3 }), th('Machine Learning', { weight: 3 }), practice('algorithms', { weight: 1 })]
+    const values = threadValues(threads, { stages: STAGES, current: 1, milestone: ms(), gaps: {}, urgency: 2.5, today: TODAY })
+    const calm = threadValues(threads, { stages: STAGES, current: 1, milestone: ms(), gaps: {}, urgency: 0, today: TODAY })
+    const a = valueThreads(threads, values)
+    const b = valueThreads(threads, calm)
+    // The same weights whatever the urgency; the deadline value is still shown on the thread
+    expect(a.map((t) => t.weight)).toEqual(b.map((t) => t.weight))
+    expect(a[0].value!.deadline).toBeGreaterThan(0)
+    // Practice keeps its own weight: its time is the habit's floor
+    expect(a[2].weight).toBe(1)
+  })
+
+  it('interview prep is a daily habit; the date adds at most 30 minutes, only when behind', () => {
+    expect(interviewMinutes(null)).toEqual({ habit: HABIT_MINUTES, extra: 0 })
+    expect(interviewMinutes({ status: 'on', projected: 76 })).toEqual({ habit: HABIT_MINUTES, extra: 0 })
+    expect(interviewMinutes({ status: 'ahead', projected: 90 }).extra).toBe(0)
+    const behind = interviewMinutes({ status: 'behind', projected: 60 })
+    expect(behind.extra).toBeGreaterThan(0)
+    expect(interviewMinutes({ status: 'behind', projected: 5 }).extra).toBe(EXTRA_CAP)
+    expect(HABIT_MINUTES).toBeGreaterThanOrEqual(45)
+    expect(HABIT_MINUTES).toBeLessThanOrEqual(60)
+  })
+
+  it('a week: the habit is its floor and no more, study keeps the rest, projects and love interests their shares', () => {
+    const love = new Set(['project:payments-rail'])
+    const raw: Thread[] = [
+      th('Software Engineering', { weight: 3, lastTouched: TODAY }),
+      th('Mathematics', { weight: 2, lastTouched: TODAY }),
+      practice('algorithms', { weight: 5 }),
+      { ...practice('ledger'), id: 'project:ledger', kind: 'project', label: 'Ledger' },
+      { ...practice('payments-rail'), id: 'project:payments-rail', kind: 'project', label: 'Payments rail' }
+    ]
+    const threads = habitThreads(parkThreads(raw, { milestone: ms(), today: TODAY, stageTracks: ['Software Engineering', 'Mathematics'] }), { love })
+    expect(threads.find((t) => t.id === 'practice:algorithms')).toMatchObject({ group: 'interview' })
+    expect(threads.find((t) => t.id === 'project:payments-rail')!.group).toBe('love')
+    expect(threads.find((t) => t.id === 'project:ledger')!.group).toBe('projects')
+    const day = 270
+    const floors = weekFloors(day, interviewMinutes(null), { projects: true, love: true })
+    const w = planPortfolio({ today: TODAY, days: Array.from({ length: 6 }, (_, i) => ({ date: addDays(TODAY, i), minutes: day })), threads, dueCards: 0, fading: 0, groupFloors: floors })
+    const all = w.days.flatMap((d) => d.sessions).reduce((n, s) => n + s.minutes, 0)
+    const of = (pred: (id: string) => boolean) => w.days.flatMap((d) => d.sessions).filter((s) => pred(s.thread)).reduce((n, s) => n + s.minutes, 0) / all
+    const habit = of((id) => id.startsWith('practice:'))
+    expect(habit).toBeGreaterThan(0.1)
+    expect(habit).toBeLessThan(0.3)
+    expect(of((id) => id.startsWith('project:'))).toBeGreaterThanOrEqual(0.28)
+    expect(of((id) => id === 'project:payments-rail')).toBeGreaterThanOrEqual(LOVE_SHARE - 0.03)
+    expect(of((id) => id.startsWith('roadmap:'))).toBeGreaterThan(0.35)
+  })
+
+  it('a track with a project milestone being built is never parked; it is a love interest', () => {
+    const t = parkThreads([th('Blockchain'), th('Payments and Payment Rails')], { milestone: ms(), today: TODAY, stageTracks: [], active: ['Payments and Payment Rails'] })
+    expect(t[0].parked).toBe(true)
+    expect(t[1].parked).toBeFalsy()
+    expect(t[1].group).toBe('love')
   })
 })
 

@@ -433,6 +433,17 @@ const api: TideApi = {
     firmUp: invoke('track:firmUp'),
     mixedReview: invoke('track:mixedReview')
   },
+  modules: {
+    status: invoke('modules:status'),
+    track: invoke('modules:track'),
+    there: invoke('modules:there'),
+    preview: invoke('modules:preview'),
+    switch: invoke('modules:switch'),
+    removeFolders: invoke('modules:removeFolders'),
+    switchBack: invoke('modules:switchBack'),
+    projects: invoke('modules:projects'),
+    startProject: invoke('modules:startProject')
+  },
   northStar: {
     view: invoke('northStar:view'),
     glance: invoke('northStar:glance'),

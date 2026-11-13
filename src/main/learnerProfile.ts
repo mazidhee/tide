@@ -178,18 +178,19 @@ async function recentRecords(days = 60): Promise<LessonRecord[]> {
 /** Goals and roadmap position, from the coach's settings and the focus roadmaps */
 async function planLines(): Promise<{ heading: string; roadmap: string }> {
   try {
-    const [{ getCoach }, { aimOf }, { getNotebooks }, { nextTopics }] = await Promise.all([import('./coach'), import('@shared/coach'), import('./learn'), import('@shared/coach')])
+    const [{ getCoach }, { aimOf }, { getNotebooks }, { nextTopicsOf }] = await Promise.all([import('./coach'), import('@shared/coach'), import('./learn'), import('@shared/coach')])
     const settings = await getCoach()
     const heading = (settings.direction?.trim() || aimOf(settings)).slice(0, 220)
     const notebooks = await getNotebooks().catch(() => [])
     const parts: string[] = []
     for (const name of settings.focus.slice(0, 2)) {
       const nb = notebooks.find((n) => n.name === name || n.path === name)
-      if (!nb?.outline) continue
-      const md = await readText(nb.outline).catch(() => '')
-      const all = (md.match(/^\s*- \[[ xX]\] /gm) ?? []).length
-      const done = (md.match(/^\s*- \[[xX]\] /gm) ?? []).length
-      const next = nextTopics(nb.name, md, 1)[0]
+      if (!nb?.outline && !nb?.track) continue
+      const mm = await import('./modules')
+      const topics = await mm.notebookTopics(nb)
+      const all = topics.length
+      const done = topics.filter((t) => t.checked).length
+      const next = nextTopicsOf(nb.name, await mm.openTopics(nb), 1)[0]
       if (all) parts.push(`${nb.name}, ${done} of ${all} topics done${next ? `, next: ${next.topic}` : ''}`)
     }
     return { heading, roadmap: parts.join('; ') }
