@@ -4,6 +4,8 @@
  * the celebration at the end; and the compact card on Home.
  */
 import { usePopOutSurface } from '../../lib/popout'
+import { breakSignals } from '../../lib/breaks'
+import { workoutBoundary } from '@shared/breakPlanner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReviewGrade, StudyCard } from '@shared/types'
 import { addDays, dayKey, REMINDER_HOUR, type Reminder } from '@shared/mentalMaths'
@@ -728,6 +730,8 @@ export function WorkoutView({ start, championship: wantChamp }: { start?: boolea
     async (round: number, items: ItemResult[], combo?: number) => {
       const id = ROUNDS[round].id
       setRoundResults((r) => ({ ...r, [id]: items }))
+      // Each round is a block of practice: a moment the break planner can use
+      if (items.length) breakSignals.boundary('practice', workoutBoundary(round + 1, ROUNDS.length, round >= ROUNDS.length - 1))
       setSaving(true)
       try {
         const out = await window.tide.workout.logRound({ morning, round: id, championship: champ, items, ...(combo !== undefined ? { combo } : {}) })

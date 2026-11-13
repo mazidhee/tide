@@ -149,3 +149,27 @@ describe('learning the learner’s rhythm', () => {
     expect(noteRecall([l], { at: at(60), topic: 'Binary', mark: 'correct' })[0].recall).toBeUndefined()
   })
 })
+
+describe('practice blocks tell the planner where they end', () => {
+  it('a flashcard session ends a block when the queue empties, and every twenty cards in a long one', async () => {
+    const { flashcardBoundary, FLASHCARD_BLOCK } = await import('@shared/breakPlanner')
+    expect(flashcardBoundary(7, 0)).toBe('7 flashcards')
+    expect(flashcardBoundary(1, 0)).toBe('1 flashcard')
+    expect(flashcardBoundary(5, 3)).toBeNull()
+    expect(flashcardBoundary(FLASHCARD_BLOCK, 12)).toBe('20 flashcards')
+    expect(flashcardBoundary(0, 0)).toBeNull()
+  })
+
+  it("a workout's rounds each end one, and the last says the whole morning", async () => {
+    const { workoutBoundary } = await import('@shared/breakPlanner')
+    expect(workoutBoundary(2, 5, false)).toBe('round 2 of 5 of the workout')
+    expect(workoutBoundary(5, 5, true)).toBe('the morning workout')
+  })
+
+  it('a practice boundary is a moment to break once the window is reached', async () => {
+    const { addBoundary, freshState, decide, DEFAULT_BREAKS } = await import('@shared/breaks')
+    const now = Date.now()
+    const s = addBoundary({ ...freshState(now), blockStart: now - 45 * 60_000, lastActive: now }, { at: now, kind: 'practice', label: '20 flashcards' })
+    expect(decide(s, now, DEFAULT_BREAKS, { midQuestion: false }).kind).toBe('take')
+  })
+})
