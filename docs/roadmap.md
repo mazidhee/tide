@@ -42,6 +42,8 @@ Last updated: 13 November 2026.
 
 ## Now
 
+**Agreed 13 Nov:** after the four builds in progress (course page notes and cells, tabs, courses in the plan, track tool packs), the general UI pass and the small fixes, no new features for a week or two. Tide gets used daily; bugs go in Tide bugs (⌃⌘B) and sessions fix them.
+
 - [ ] **End-to-end check of every main flow (you're doing this yourself, through daily use).** One scripted pass in a test copy with real Claude: click through each feature once (lessons and the lesson map, threads, warm-ups and breaks, workout, courses, reading room, IDE and coding lessons, projects with the ready check and debrief, mocks, maths tutor and explorables, finance labs, goals and planning, backups and restore, the bug shortcut, pop-outs) and report what breaks between features. Not a benchmark.
 - [x] **Morning drills tracker.** Time on the workout, daily practice and mental maths each day, with today's and this week's minutes, the streak and today's score in one row on the workout page and a line on Home's card; one "Morning drills" to-do a day in Things, ticked when the morning is done in Tide; the streak counts only drills done in Tide (never the real Things in a test copy).
 - [x] **Pop-out windows everywhere.** Open a lesson, project, course, note, the reader or a mock in its own window, from a clear button, ⌥⌘N or right-click.
