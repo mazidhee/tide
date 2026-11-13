@@ -141,3 +141,46 @@ describe('stopping a request is not the model failing', () => {
     expect(statFor(t, 'maths')?.why?.['gave-up']?.[0]).toBe(1)
   })
 })
+
+describe("the cloud's failures in the usage log", () => {
+  const usage = async () => {
+    const log = await import('../src/main/usageLog')
+    const logDir = mkdtempSync(join(tmpdir(), 'tide-cloudfail-'))
+    log.setUsageDir(logDir)
+    return { lines: () => log.readUsageLines(0, logDir).filter((l) => l.k === 'call'), done: () => log.setUsageDir(null) }
+  }
+
+  it('a refused request, a broken answer and an empty one each leave a failed line; an answer an ok one', async () => {
+    const u = await usage()
+    try {
+      const t = fresh()
+      answer([], { status: 429 })
+      await expect(run(t)).rejects.toBeInstanceOf(CloudUnavailable)
+      answer([said('half an ')], { fail: true })
+      await expect(run(t)).rejects.toBeInstanceOf(CloudUnavailable)
+      answer([thought('thinking only', 'length')])
+      await expect(run(t)).rejects.toBeInstanceOf(CloudUnavailable)
+      answer([said('42', 'stop')])
+      expect(await run(fresh())).toBe('42')
+      const lines = u.lines()
+      expect(lines.map((l) => (l.k === 'call' ? [l.p, l.ok, l.err ?? null] : null))).toEqual([
+        ['test', false, 'cloud-rate'],
+        ['test', false, 'cloud-broken'],
+        ['test', false, 'cloud-spent'],
+        ['test', true, null]
+      ])
+    } finally {
+      u.done()
+    }
+  })
+
+  it('reads as plain words in Settings › Usage', async () => {
+    const { fallbackLabel, fallbacks } = await import('@shared/usage')
+    expect(fallbackLabel('cloud-rate')).toBe('A cloud model was rate limited')
+    expect(fallbackLabel('cloud-http-401')).toBe('A cloud key was refused')
+    expect(fallbackLabel('cloud-http-502')).toBe('A cloud model answered HTTP 502')
+    expect(fallbackLabel('limit')).toBe('Claude at its plan’s limit')
+    const call = (err?: string) => ({ k: 'call' as const, at: 1, p: err ? 'groq' : 'claude', model: 'm', job: 'lesson', in: 0, out: 0, cr: 0, cw: 0, ms: 1, usd: 0, ok: !err, ...(err ? { err } : {}) })
+    expect(fallbacks([call('cloud-rate'), call('cloud-rate'), call()]).failed).toEqual([{ reason: 'cloud-rate', label: 'A cloud model was rate limited', count: 2 }])
+  })
+})

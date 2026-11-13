@@ -1,6 +1,6 @@
 import { app, safeStorage } from 'electron'
 import { logCall } from './usageLog'
-import { jobFromTask } from '@shared/usage'
+import { cloudFailWord, jobFromTask } from '@shared/usage'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { costOf, DEFAULT_CLOUD, jobLine, modelPrice, providerInfo, type CloudSettings, type CloudTask, type RequestKind } from '@shared/providers'
@@ -400,7 +400,17 @@ const usagePath = () => join(app.getPath('userData'), 'usage.jsonl')
 /** Tokens from text, when a server doesn't report them (about 4 characters a token in English) */
 export const estimateTokens = (chars: number) => Math.round(chars / 4)
 
-export function recordUsage(r: Omit<UsageRecord, 'at' | 'cost' | 'listCost' | 'plan'>) {
+/**
+ * A cloud request that failed before it answered anything (couldn't connect, refused, rate
+ * limited, stopped): one line in the usage log, like a failed Claude call, so Settings › Usage
+ * counts the cloud's failures too. The model's own record is noteOutcome's.
+ */
+export function recordCloudFailure(t: { provider: string; model: string }, task: RequestKind, why: FailCode, ms: number) {
+  logCall({ at: Date.now(), p: t.provider, model: t.model, defaultJob: jobFromTask(task), in: 0, out: 0, cr: 0, cw: 0, ms, usd: 0, ok: false, err: cloudFailWord(why) })
+}
+
+/** `failed`: the request ended without an answer it could use (its tokens still count) */
+export function recordUsage(r: Omit<UsageRecord, 'at' | 'cost' | 'listCost' | 'plan'> & { failed?: FailCode }) {
   const s = cloudSettings()
   let extra: Partial<UsageRecord> = {}
   if (r.kind === 'cloud') {
@@ -409,10 +419,11 @@ export function recordUsage(r: Omit<UsageRecord, 'at' | 'cost' | 'listCost' | 'p
     extra = { plan, listCost: list, cost: plan === 'free' ? 0 : list }
   }
   if (r.kind === 'cloud') noteDayUse(r, (r.input ?? 0) + (r.output ?? 0))
-  logCall({ at: Date.now(), p: r.kind === 'local' ? 'local' : r.provider, model: r.model, defaultJob: jobFromTask(r.task), in: Math.max(0, (r.input ?? 0) - (r.cached ?? 0)), out: r.output ?? 0, think: r.reasoning, cr: r.cached ?? 0, cw: 0, ms: r.ms ?? 0, ttft: r.ttftMs, usd: extra.listCost ?? 0, ok: true, est: r.estimated })
+  const { failed, ...rec } = r
+  logCall({ at: Date.now(), p: r.kind === 'local' ? 'local' : r.provider, model: r.model, defaultJob: jobFromTask(r.task), in: Math.max(0, (r.input ?? 0) - (r.cached ?? 0)), out: r.output ?? 0, think: r.reasoning, cr: r.cached ?? 0, cw: 0, ms: r.ms ?? 0, ttft: r.ttftMs, usd: extra.listCost ?? 0, ok: !failed, ...(failed ? { err: cloudFailWord(failed) } : {}), est: r.estimated })
   try {
     mkdirSync(dirname(usagePath()), { recursive: true })
-    appendFileSync(usagePath(), JSON.stringify({ at: Date.now(), ...r, ...extra }) + '\n')
+    appendFileSync(usagePath(), JSON.stringify({ at: Date.now(), ...rec, ...extra }) + '\n')
   } catch {
     // Usage is a record, never a reason to fail a request
   }
