@@ -28,6 +28,8 @@ interface LessonCode {
   linked: boolean
   /** Proposals kept or undone since the tutor last heard */
   notes: string[]
+  /** A lesson inside a planned project keeps its rules: the learner writes, Claude hints (main/ideaProjects) */
+  rules: { hintsOnly: boolean; hintOk: boolean }
 }
 
 const lessons = new Map<string, LessonCode>()
@@ -63,7 +65,7 @@ export function lessonWorkspace(labId: string, topic = '', linkedRoot?: string):
     mkdirSync(root, { recursive: true })
   }
   const had = lessons.get(labId)
-  const l: LessonCode = { labId, root, topic: topic || had?.topic || '', linked, notes: had?.root === root ? had.notes : [] }
+  const l: LessonCode = { labId, root, topic: topic || had?.topic || '', linked, notes: had?.root === root ? had.notes : [], rules: had?.root === root ? had.rules : { hintsOnly: false, hintOk: false } }
   lessons.set(labId, l)
   return l
 }
@@ -81,7 +83,7 @@ const FORWARDED = new Set(['proposal', 'applied', 'comment', 'opened'])
 
 setLessonTargets((labId) => {
   const l = lessons.get(labId)
-  return l ? { root: l.root, send: (e) => FORWARDED.has(e.type) && broadcast({ labId, ...e } as LessonCodeEvent) } : null
+  return l ? { root: l.root, send: (e) => FORWARDED.has(e.type) && broadcast({ labId, ...e } as LessonCodeEvent), rules: l.rules } : null
 })
 resolvedListeners.push((root, note) => {
   for (const l of lessons.values()) if (l.root === root) l.notes.push(note)
@@ -101,6 +103,27 @@ export function lessonTurnNote(labId: string, file?: string): string {
   const note = codeTurnNote(shown, l.notes)
   l.notes = []
   return note
+}
+
+/**
+ * A lesson in a planned project's folder: the project's rules for this turn. The learner writes the
+ * code (unless they let Claude write), so the tutor hears the tutoring rules, and one hint as code is
+ * allowed only when they ask to be shown or after repeated failed test runs.
+ */
+export async function projectTurnNote(labId: string, said: string): Promise<string> {
+  const l = lessons.get(labId)
+  if (!l?.linked) return ''
+  const { planForRoot, failedRuns } = await import('../ideaProjects')
+  const plan = await planForRoot(l.root).catch(() => null)
+  l.rules.hintsOnly = !!plan && !plan.claudeWrites
+  if (!l.rules.hintsOnly) {
+    l.rules.hintOk = false
+    return ''
+  }
+  const { hintAllowed, TUTOR_MODE } = await import('@shared/ideaProject')
+  const h = hintAllowed({ text: said, failedRuns: failedRuns(l.root) })
+  l.rules.hintOk = h.ok
+  return `${TUTOR_MODE}${h.ok ? `\n(${h.why === 'asked' ? 'They asked you to show them.' : `Their tests have failed ${failedRuns(l.root)} times running.`} You may give one hint as code with propose_edit: a few lines, the one idea they need.)` : ''}`
 }
 
 const str = (v: unknown) => (typeof v === 'string' ? v : v === undefined || v === null ? '' : String(v))

@@ -37,8 +37,8 @@ export type View =
   // The morning workout (components/workout): its page, or a morning under way
   | { kind: 'workout'; start?: boolean; championship?: boolean; nonce?: number }
   | { kind: 'design'; path: string; start?: DesignMode; topic?: string; company?: string; timed?: number; reference?: string; nonce?: number }
-  /** The IDE: a file in the notes' Code folder (`path`), or a project folder of its own (`root`, a pop-out's) */
-  | { kind: 'code'; path?: string; root?: string; /** The file to show first, in `root` */ file?: string }
+  /** The IDE: a file in the notes' Code folder (`path`), or a project folder (`root`); `home` opens on the project's home, `file` on a file (a pop-out's) */
+  | { kind: 'code'; path?: string; root?: string; home?: boolean; nonce?: number; /** The file to show first, in `root` */ file?: string }
   | { kind: 'help'; section?: string }
   | { kind: 'exam'; scope: ChatScope; topic: string; options: ExamOptions; nonce?: number; resume?: { paper: unknown; answers: unknown; startedAt: number } }
   | { kind: 'settings'; section?: import('./components/SettingsView').Section | 'ai' | 'notes' }

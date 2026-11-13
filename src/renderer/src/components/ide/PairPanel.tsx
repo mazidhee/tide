@@ -18,6 +18,8 @@ const MODES: { id: PairMode; label: string; hint: string; starters: string[] }[]
   { id: 'ask', label: 'Ask', hint: 'Questions about this project, answered from its code', starters: ['How does this project fit together?', 'Explain the file I have open', 'Why does this fail?'] },
   { id: 'build', label: 'Build together', hint: 'Plan a feature; you write it, Claude explains and proposes the boilerplate', starters: ['Let’s add a feature: ', 'Write tests for the file I have open', 'Help me refactor this'] },
   { id: 'review', label: 'Review my changes', hint: 'Your uncommitted changes, reviewed like a pull request, with comments in the editor', starters: ['Review my changes'] },
+  { id: 'tutor', label: 'I write', hint: 'You write the code; Claude asks how you’ll do it, checks what you wrote, and hints with questions. Code only when you say “show me”, or after failing runs, as a counted hint', starters: ['How should I start this milestone?', 'Check what I wrote', 'Why does my test fail?'] },
+  { id: 'mentor', label: 'Mentor', hint: 'Your mentor on this project across sessions: reviews the whole of it like a senior engineer, runs the tests, proposes fixes as diffs and keeps the project’s memory', starters: ['Review the whole project', 'What should I do next?', 'Check the money handling for safety'] },
   { id: 'bughunt', label: 'Find the bug', hint: 'Claude plants one bug in a copy of the project; you hunt it down', starters: ['Plant a bug for me to find'] }
 ]
 
@@ -31,6 +33,8 @@ const clean = (e: unknown) => (e as Error).message.replace(/^Error invoking remo
  * says why and points to the tutor, and the rest of the IDE works as before.
  */
 export function PairPanel({
+  planned = false,
+  writes = false,
   status,
   root,
   rootKind,
@@ -43,6 +47,10 @@ export function PairPanel({
   pending,
   clearPending
 }: {
+  /** The project is planned in Tide: the mentor knows its plan and keeps its memory */
+  planned?: boolean
+  /** The learner lets Claude write code in this planned project */
+  writes?: boolean
   status: PairStatus | null
   root: string | null
   rootKind: string | null
@@ -77,17 +85,27 @@ export function PairPanel({
     else setHunt(null)
     setAnswer(null)
   }, [root, isHunt])
+  // The mentor is only for a planned project
+  useEffect(() => {
+    if (!planned && (mode === 'mentor' || mode === 'tutor')) setMode('ask')
+    if (planned && !writes && mode === 'build') setMode('tutor')
+  }, [planned, writes, mode])
   // A bug hunt's copy talks in bug hunt mode
   useEffect(() => {
     if (isHunt) setMode('bughunt')
   }, [isHunt])
   // A new project or mode is a new conversation
+  // The conversation the current project and mode belong to: a message sent from elsewhere waits for it
+  const current = useRef(session)
   useEffect(() => {
+    const id = newSession()
+    current.current = id
     setSession((s) => {
       void window.tide.ide.pair.end(s)
-      return newSession()
+      return id
     })
     setMsgs([])
+    setBusy(false)
   }, [root, mode])
   useEffect(() => () => void window.tide.ide.pair.end(session), [session])
 
@@ -135,6 +153,8 @@ export function PairPanel({
       setMode(pending.mode)
       return
     }
+    // Not until the new mode's conversation has begun, or the replies go to the old one
+    if (current.current !== session) return
     clearPending()
     void send(pending.text, pending.mode)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -171,7 +191,7 @@ export function PairPanel({
   return (
     <div className="ix-pair">
       <div className="ix-pair-modes" role="tablist" aria-label="How to pair">
-        {MODES.filter((x) => !isHunt || x.id === 'bughunt').map((x) => (
+        {MODES.filter((x) => (!isHunt || x.id === 'bughunt') && (planned ? x.id !== 'build' || writes : x.id !== 'mentor' && x.id !== 'tutor')).map((x) => (
           <button key={x.id} className={x.id === mode ? 'on' : ''} onClick={() => setMode(x.id)} role="tab" aria-selected={x.id === mode} title={x.hint}>
             {x.label}
           </button>

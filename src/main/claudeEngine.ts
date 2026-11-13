@@ -708,7 +708,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   // Show me and Draw it: on Claude, a custom visual is one of the pictures it can choose
   const { asksToSee } = await import('@shared/showMe')
   const { SHOW_ME_VISUAL_NOTE } = await import('@shared/visuals')
-  const seeNote = (asksToSee(said) || /^Draw this so I can see how it works/i.test(said) ? `\n\n${SHOW_ME_VISUAL_NOTE}` : '') + (coding ? codeNote(coding.lessonTurnNote(req.labId!, req.codeLesson?.file)) : '')
+  const seeNote = (asksToSee(said) || /^Draw this so I can see how it works/i.test(said) ? `\n\n${SHOW_ME_VISUAL_NOTE}` : '') + (coding ? codeNote([coding.lessonTurnNote(req.labId!, req.codeLesson?.file), await coding.projectTurnNote(req.labId!, said).catch(() => '')].filter(Boolean).join('\n\n')) : '')
   const fresh = sent.fresh
   const users = history.filter((m) => m.role === 'user').length
   // The pictures this turn looks at (a photo of their working, a screenshot, a note's diagram), made

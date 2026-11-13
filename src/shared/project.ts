@@ -22,6 +22,8 @@ export interface ProjectInfo {
   docs: string[]
   /** For a build: the brief Tide drafted with you */
   brief?: string
+  /** For a project planned from an idea: its code folder (vault path, in the Code folder) */
+  code?: string
 }
 
 export interface ProjectMap {

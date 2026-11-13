@@ -142,6 +142,8 @@ describe('what can have a window of its own', () => {
   it('keys code by its project folder, a project and a note by their paths', () => {
     expect(popKeyOf({ kind: 'code', root: '/Users/me/rail', file: 'main.py' })).toBe('code:/Users/me/rail')
     expect(popKeyOf({ kind: 'code', path: 'Code/x.py' })).toBe('code:Code/x.py')
+    // A project from an idea, on its home, is still that project
+    expect(popKeyOf({ kind: 'code', root: '/Users/me/rail', home: true, nonce: 4 })).toBe('code:/Users/me/rail')
     expect(popKeyOf({ kind: 'notebook', path: 'Payments', tab: 'project' })).toBe('project:Payments')
     expect(popKeyOf({ kind: 'file', path: 'a.md', anchor: 'x', nonce: 1 })).toBe(popKeyOf({ kind: 'file', path: 'a.md', nonce: 2 }))
   })
