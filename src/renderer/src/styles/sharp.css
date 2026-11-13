@@ -775,7 +775,7 @@
 }
 
 .sh-result.solved {
-  box-shadow: inset 3px 0 0 var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
 }
 
 .sh-result-top {
@@ -855,8 +855,7 @@
   align-items: flex-start;
   gap: 5px;
   padding: 10px 12px;
-  border-left: 2px solid var(--accent);
-  border-radius: 0 var(--radius-s) var(--radius-s) 0;
+  border-radius: var(--radius-s);
   background: var(--bg-inset);
   font-size: var(--text-md);
   line-height: 1.5;
