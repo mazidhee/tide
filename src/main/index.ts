@@ -891,7 +891,8 @@ function setMenu() {
       label: 'File',
       submenu: [
         { label: 'New Note', accelerator: 'CmdOrCtrl+N', click: () => send('menu', 'new-note') },
-        { label: 'New Topic…', accelerator: 'CmdOrCtrl+Shift+N', click: () => send('menu', 'new-topic') },
+        // From the key, the page may own ⌘⇧N (a course's notes): renderer lib/shiftN decides
+        { label: 'New Topic…', accelerator: 'CmdOrCtrl+Shift+N', click: (_item, _win, e) => send('menu', e.triggeredByAccelerator ? 'new-topic-key' : 'new-topic') },
         { label: 'Save Link…', accelerator: 'CmdOrCtrl+Shift+S', click: () => send('menu', 'save-link') },
         { label: 'Add Files…', accelerator: 'CmdOrCtrl+Shift+O', click: () => send('menu', 'import') },
         { type: 'separator' },

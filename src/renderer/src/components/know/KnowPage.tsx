@@ -41,7 +41,6 @@ export function KnowPage({ data, areaClass, actions }: { data: KnowledgeView; ar
   const fading = count('fading')
   const learning = count('learning')
   const readyNew = topics.filter((c) => c.status === 'new' && ready.has(c.id)).length
-  const begun = solid + fading + learning
   const notebooks = new Set(topics.map((c) => c.area)).size
 
   return (
@@ -65,42 +64,39 @@ export function KnowPage({ data, areaClass, actions }: { data: KnowledgeView; ar
           </div>
         </div>
         {mode !== 'teaching' && mode !== 'model' && (
-          <p className="kp-say">
-            {begun === 0 ? (
-              <>
-                {plural(topics.length, 'topic')} across {plural(notebooks, 'notebook')}, none studied here yet. Each lesson and answer fills this in.
-              </>
-            ) : (
-              <>
-                <b>{solid.toLocaleString('en-GB')}</b> of {plural(topics.length, 'topic')} {solid === 1 ? 'is' : 'are'} solid
-                {fading > 0 && (
-                  <>
-                    , <b>{fading}</b> {fading === 1 ? 'is' : 'are'} fading
-                  </>
-                )}
-                {learning > 0 && (
-                  <>
-                    {fading > 0 ? ' and ' : ', '}
-                    <b>{learning}</b> {learning === 1 ? 'is' : 'are'} being learnt
-                  </>
-                )}
-                .{' '}
-                {readyNew > 0 && (
-                  <>
-                    <b>{readyNew.toLocaleString('en-GB')}</b> {readyNew === 1 ? 'is' : 'are'} ready to start.
-                  </>
-                )}
-              </>
-            )}
-          </p>
+          <div className="td-glance kp-glance" aria-label="Your topics">
+            {(
+              [
+                ['solid', solid],
+                ['learning', learning],
+                ['fading', fading],
+                ['ready to start', readyNew]
+              ] as const
+            )
+              .filter(([k, n]) => n > 0 || k === 'solid')
+              .map(([k, n]) => (
+                <div key={k} className="td-glance-i">
+                  <span className="td-glance-v">
+                    <b>{n.toLocaleString('en-GB')}</b>
+                    <span>{k}</span>
+                  </span>
+                </div>
+              ))}
+            <div className="td-glance-i">
+              <span className="td-glance-v" title={`${plural(topics.length, 'topic')} across ${plural(notebooks, 'notebook')}`}>
+                <span>of {topics.length.toLocaleString('en-GB')}</span>
+              </span>
+            </div>
+          </div>
         )}
       </header>
       {mode === 'teaching' ? <KnowTeaching /> : mode === 'model' ? <KnowModel /> : mode === 'subject' ? <KnowSubjects data={data} ready={ready} areaClass={areaClass} actions={actions} /> : <KnowTimeline data={data} areaClass={areaClass} actions={actions} />}
       {mode !== 'teaching' && mode !== 'model' && (
-        <p className="know-foot">
+        <details className="know-foot">
+          <summary>How it’s estimated</summary>
           An estimate, not a mark: the chance you would remember a topic today, by the same model as your reviews (FSRS). Each answer is a review: a right one after a gap makes it last much longer, a wrong one makes it harder to keep, and it fades
           with the time since. Solid means your last answer was right and the chance is still 85% or more; fading means it has dropped below.
-        </p>
+        </details>
       )}
     </div>
   )

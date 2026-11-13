@@ -13,6 +13,13 @@
   .know.kp {
     max-width: 1480px;
     margin: 0 auto;
+    /* The maths keypad (styles/mathsAnswer.css) is also .kp: none of its tile here */
+    padding: 0;
+    border-radius: 0;
+    background: none;
+  }
+  .kp-glance {
+    margin-top: 14px;
   }
   .kp-title {
     display: flex;
@@ -43,6 +50,21 @@
     font-size: var(--t-meta);
     line-height: 18px;
     color: var(--ink-3);
+  }
+  .kp .know-foot summary {
+    width: fit-content;
+    font-weight: 500;
+    cursor: pointer;
+    list-style: none;
+  }
+  .kp .know-foot summary::-webkit-details-marker {
+    display: none;
+  }
+  .kp .know-foot summary:hover {
+    color: var(--ink);
+  }
+  .kp .know-foot[open] summary {
+    margin-bottom: 6px;
   }
 
   /* ---------- By subject ---------- */

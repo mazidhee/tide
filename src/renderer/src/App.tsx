@@ -1,3 +1,4 @@
+import { shiftNToOwner } from './lib/shiftN'
 import { WrapUpView } from './components/WrapUpView'
 import { useStudying } from './lib/studying'
 import { useAutoTrack, type StudyContext } from './lib/autotrack'
@@ -416,7 +417,7 @@ export default function App() {
         if (action === 'save-link') app.setDialog('save-link')
         if (action === 'report-bug') app.setDialog('report-bug')
         if (action === 'new-note') newNote()
-        if (action === 'new-topic') app.setView({ kind: 'new-topic' })
+        if (action === 'new-topic' || (action === 'new-topic-key' && !shiftNToOwner())) app.setView({ kind: 'new-topic' })
         if (action === 'help') app.setView({ kind: 'help' })
         if (action === 'choose-vault') window.tide.vault.choose().then((p) => {
             if (p) app.updateSettings({ vaultPath: p })

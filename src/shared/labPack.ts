@@ -29,14 +29,15 @@ export const LAB_PACK = {
  */
 export const QUANT_PACK = {
   /** What the installer is asked for (cvxpy comes after, see below) */
-  packages: ['ipykernel', 'jupyter_client', 'scipy', 'statsmodels', 'scikit-learn', 'polars', 'duckdb', 'pyarrow', 'QuantLib', 'arch', 'plotly', 'jinja2', 'clarabel', 'scs', 'qdldl', 'highspy', 'sparsediffpy>=0.6,<0.7'],
+  packages: ['ipykernel', 'jupyter_client', 'scipy', 'statsmodels', 'scikit-learn', 'polars', 'duckdb', 'pyarrow', 'QuantLib', 'arch', 'plotly', 'seaborn', 'jinja2', 'clarabel', 'scs', 'qdldl', 'highspy', 'sparsediffpy>=0.6,<0.7'],
   /** cvxpy on its own: first with all its solvers, else without OSQP */
   optimiser: 'cvxpy',
   /** Package names as installed (importlib.metadata), for the status check */
-  dists: ['ipykernel', 'jupyter_client', 'scipy', 'statsmodels', 'scikit-learn', 'polars', 'duckdb', 'pyarrow', 'QuantLib', 'arch', 'plotly', 'cvxpy'],
+  dists: ['ipykernel', 'jupyter_client', 'scipy', 'statsmodels', 'scikit-learn', 'polars', 'duckdb', 'pyarrow', 'QuantLib', 'arch', 'plotly', 'seaborn', 'cvxpy'],
   /** Import names, in the same order */
-  modules: ['ipykernel', 'jupyter_client', 'scipy', 'statsmodels', 'sklearn', 'polars', 'duckdb', 'pyarrow', 'QuantLib', 'arch', 'plotly', 'cvxpy'],
-  contents: 'the Jupyter kernel, SciPy, statsmodels, scikit-learn, Polars, DuckDB, PyArrow, cvxpy, QuantLib, arch and Plotly',
+  // seaborn: course notebooks import it (a small wheel on top of Matplotlib and pandas)
+  modules: ['ipykernel', 'jupyter_client', 'scipy', 'statsmodels', 'sklearn', 'polars', 'duckdb', 'pyarrow', 'QuantLib', 'arch', 'plotly', 'seaborn', 'cvxpy'],
+  contents: 'the Jupyter kernel, SciPy, statsmodels, scikit-learn, Polars, DuckDB, PyArrow, cvxpy, QuantLib, arch, Plotly and seaborn',
   size: 'about 780 MB',
   download: 'about 180 MB',
   needsBytes: 1_300_000_000,

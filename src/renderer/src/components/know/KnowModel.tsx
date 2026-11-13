@@ -29,11 +29,11 @@ export function KnowModel() {
   const studied = Object.values(data.counts).reduce((a, b) => a + b, 0)
   if (!data.events) return <p className="tq-lede">Nothing to go on yet. Every lesson, answer, review, build and mock adds to this.</p>
   const toggle = (id: string) => setOpen((o) => (o === id ? null : id))
-  const row = (n: ModelNodeView) => <ModelRow key={n.id} n={n} open={open === n.id} onToggle={() => toggle(n.id)} onCorrected={() => load(true)} />
+  const row = (n: ModelNodeView, group?: string) => <ModelRow key={n.id} n={n} group={group} open={open === n.id} onToggle={() => toggle(n.id)} onCorrected={() => load(true)} />
   return (
     <div className="tq km">
-      <p className="tq-lede">
-        From <b>{plural(data.events, 'learning event')}</b> on <b>{plural(studied, 'concept')}</b>. Depth climbs from recall to apply, transfer to an unseen problem, and building or teaching it; the tick is where your goals want it.
+      <p className="tq-lede km-lede" title="Depth climbs from recall to apply, transfer to an unseen problem, and building or teaching it; the tick is where your goals want it">
+        <b>{data.events.toLocaleString('en-GB')}</b> learning events · <b>{studied.toLocaleString('en-GB')}</b> {studied === 1 ? 'concept' : 'concepts'}
       </p>
       <DepthStrip counts={data.counts} />
       {data.goals.map((g) => (
@@ -44,7 +44,7 @@ export function KnowModel() {
               {g.atTarget} of {plural(g.total, 'concept')} at target{g.begun < g.total ? ` · ${g.begun} begun` : ''}{g.date ? ` · by ${short(Date.parse(g.date))}` : ''}
             </span>
           </div>
-          <List items={g.concepts} row={row} />
+          <List items={g.concepts} row={(n) => row(n, g.name)} />
         </section>
       ))}
       <div className="tq-pair">
@@ -125,13 +125,13 @@ function Meter({ depth, target }: { depth: number; target?: number }) {
   )
 }
 
-function ModelRow({ n, open, onToggle, onCorrected }: { n: ModelNodeView; open: boolean; onToggle(): void; onCorrected(): void }) {
+function ModelRow({ n, group, open, onToggle, onCorrected }: { n: ModelNodeView; group?: string; open: boolean; onToggle(): void; onCorrected(): void }) {
   return (
     <li className={`km-row${open ? ' open' : ''}`}>
       <button className="km-line" aria-expanded={open} onClick={onToggle}>
         <span className="km-name">
           {n.name}
-          {n.area && <small>{n.area}</small>}
+          {n.area && n.area !== group && <small>{n.area}</small>}
         </span>
         <Meter depth={n.depth} target={n.target} />
         <span className="km-depth">
