@@ -164,12 +164,10 @@ export function ModulesView({ notebook, path, notes, mastery }: { notebook: stri
         </p>
       )}
 
-      <TrackView notebook={notebook} path={path} modular />
-
       {mode === 'list' ? (
         <ol className="md-list">
           {data.modules.map((m) => (
-            <li key={m.id} className={`md-row is-${m.status}${open === m.id ? ' is-open' : ''}`} id={`md-${m.id}`}>
+            <li key={m.id} className={`md-row is-${m.status}${open === m.id ? ' is-expanded' : ''}`} id={`md-${m.id}`}>
               <button className="md-row-main" onClick={() => setOpen(open === m.id ? null : m.id)} aria-expanded={open === m.id}>
                 <StatusMark status={m.status} />
                 <span className="md-title">
@@ -180,13 +178,15 @@ export function ModulesView({ notebook, path, notes, mastery }: { notebook: stri
                     <span className="md-sub">{m.now.replace(/^\d+\.\s*/, '')}</span>
                   ) : null}
                 </span>
-                {m.shared.length > 0 && (
+                {m.shared.length > 0 ? (
                   <span className="md-shared" title={`Also in ${m.shared.join(', ')}: learned once, one progress`}>
                     <Icon name="link" size={11} />
                     {m.shared.length}
                   </span>
+                ) : (
+                  <span aria-hidden="true" />
                 )}
-                {m.level !== 'core' && <span className="md-level">{m.level}</span>}
+                {m.level !== 'core' ? <span className="md-level">{m.level}</span> : <span aria-hidden="true" />}
                 <Bar solid={m.solid} shaky={m.shaky} total={m.total} />
                 <span className="md-num" title={`${m.solid} of ${m.total} topics solid`}>
                   {m.solid}
@@ -204,7 +204,10 @@ export function ModulesView({ notebook, path, notes, mastery }: { notebook: stri
         <ModuleMap modules={data.modules} onPick={(id) => (pickMode('list'), setOpen(id), requestAnimationFrame(() => document.getElementById(`md-${id}`)?.scrollIntoView({ block: 'nearest' })))} />
       )}
 
-      {data.projects.length > 0 && <Projects projects={data.projects} onChange={load} />}
+      {data.projects.length > 0 && <Projects projects={data.projects} titles={new Map(data.modules.map((m) => [m.id, m.title]))} onChange={load} />}
+
+      {/* The part being worked on now: its gate, the check, what's next */}
+      <TrackView notebook={notebook} path={path} modular />
     </section>
   )
 }
@@ -247,7 +250,7 @@ function ModuleDetail({ m, busy, onOutline, onThere, onJump }: { m: ModuleRow; b
   const [gate, setGate] = useState(false)
   return (
     <div className="md-detail">
-      {m.depthGoal && <p className="md-goal">{m.depthGoal}</p>}
+      {m.depthGoal && <p className="md-goal">{m.depthGoal.replace(/^./, (c) => c.toUpperCase())}</p>}
       <div className="md-detail-row">
         <span className="md-label">{STATUS_WORD[m.status]}</span>
         {m.requires.length > 0 && (
@@ -350,7 +353,7 @@ function ModuleMap({ modules, onPick }: { modules: ModuleRow[]; onPick: (id: str
   )
 }
 
-function Projects({ projects, onChange }: { projects: TrackModulesView['projects']; onChange: () => void }) {
+function Projects({ projects, titles, onChange }: { projects: TrackModulesView['projects']; titles: Map<string, string>; onChange: () => void }) {
   const app = useApp()
   const [busy, setBusy] = useState('')
   const start = async (id: string, notebook?: string) => {
@@ -378,7 +381,16 @@ function Projects({ projects, onChange }: { projects: TrackModulesView['projects
                 <span key={m.id} className={`md-step is-${m.status}`} title={`${m.title}: ${m.status === 'done' ? 'built' : m.status === 'open' ? 'ready to build' : `needs ${m.waiting.join(', ')}`}`} />
               ))}
             </span>
-            <span className="md-project-next">{p.next ? p.next.title : p.done === p.of ? 'Built' : 'Waits on its modules'}</span>
+            <span className="md-project-next">
+              {p.next
+                ? p.next.title
+                : p.done === p.of
+                  ? 'Built'
+                  : (() => {
+                      const w = p.milestones.find((m) => m.status === 'locked')?.waiting ?? []
+                      return w.length ? `Opens when you start ${w.map((id) => titles.get(id) ?? id.replace(/-/g, ' ')).join(', ')}` : 'Waits on its modules'
+                    })()}
+            </span>
             {(p.next || p.notebook) && (
               <button className="btn md-project-go" onClick={() => start(p.id, p.notebook)} disabled={busy === p.id}>
                 {p.notebook ? 'Open' : busy === p.id ? 'Setting up…' : 'Set it up'}

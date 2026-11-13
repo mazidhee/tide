@@ -298,14 +298,15 @@ function Gate({ data, stage, onAct, busy }: { data: ViewData; stage: Stage; onAc
 const PACE_WORD = { ahead: 'Ahead', on: 'On pace', behind: 'Behind', unknown: 'Too early to tell' } as const
 const fmtDay = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
 
+/** The dated milestone: a guardrail beside the work, so a small panel (days left, readiness, pace; the rest behind Why) */
 function Milestone({ m }: { m: NonNullable<ViewData['milestone']> }) {
   const [why, setWhy] = useState(false)
   const r = m.readiness
   const p = m.projection
   return (
-    <section className="ns-ms" aria-label={m.milestone.title}>
+    <section className="ns-ms is-side" aria-label={m.milestone.title}>
       <div className="ns-ms-main">
-        <Ring value={r.value / 100} tick={m.milestone.bar / 100} size={76} stroke={7} label={`Readiness ${r.value}, estimated between ${r.low} and ${r.high}; the bar is ${m.milestone.bar}`}>
+        <Ring value={r.value / 100} tick={m.milestone.bar / 100} size={52} stroke={5} label={`Readiness ${r.value}, estimated between ${r.low} and ${r.high}; the bar is ${m.milestone.bar}`}>
           <b>{r.value}</b>
           <small>
             {r.low}–{r.high}
@@ -366,9 +367,237 @@ function Milestone({ m }: { m: NonNullable<ViewData['milestone']> }) {
               <dd>{p.projected ?? '–'}</dd>
             </div>
           </dl>
-          <p className="ns-num ns-num-soft">Estimate, from Sharpness, mocks, depth and the capstone</p>
+          <p className="ns-num ns-num-soft" title="Interview prep is a daily habit; the date only adds practice time, never reorders your study">
+            Practice {m.habit.habit}
+            {m.habit.extra ? ` + ${m.habit.extra}` : ''} min a day · estimate from Sharpness, mocks, depth and the capstone
+          </p>
         </div>
       )}
+    </section>
+  )
+}
+
+// ---------- Depth first: the modules in progress, and the projects being built ----------
+
+function InProgress({ modules, projects }: { modules: NonNullable<ViewData['modules']>; projects: NonNullable<ViewData['projects']> }) {
+  const app = useApp()
+  const building = projects.filter((p) => p.next || (p.notebook && p.done < p.milestones.length))
+  return (
+    <section className="ns-depth" aria-label="In progress">
+      <div className="ns-depth-mods">
+        <h3 className="ns-h" title={DEPTHS.map((d) => `${d.n} ${d.word}`).join(' · ')}>
+          Modules
+        </h3>
+        <ul>
+          {modules.map((m) => (
+            <li key={m.id} className={`ns-mod is-${m.status}`}>
+              <button className="ns-mod-row" onClick={() => app.setView({ kind: 'notebook', path: m.track, tab: 'outline' })} title={`${m.track} · ${m.solid}/${m.total} solid · about ${m.hoursLeft} h left (rough; scaled to your pace after a few weeks)`}>
+                <span className="ns-mod-name">{m.title}</span>
+                <span className="ns-mod-track">{m.track}</span>
+                <DepthBar reached={m.depth} target={m.target} />
+                <span className="ns-num">
+                  {m.solid}
+                  <small>/{m.total}</small>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {building.length > 0 && (
+        <div className="ns-depth-build">
+          <h3 className="ns-h">Building</h3>
+          <ul>
+            {building.map((p) => (
+              <li key={p.id} className="ns-build">
+                <span className="ns-build-steps" aria-label={`${p.done} of ${p.milestones.length} built`}>
+                  {p.milestones.map((m) => (
+                    <span key={m.id} className={`ns-build-step is-${m.status}`} title={m.title} />
+                  ))}
+                </span>
+                <span className="ns-build-text">
+                  <b>{p.next?.title ?? 'Next milestone'}</b>
+                  <span>{p.title}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
+  )
+}
+
+// ---------- The switch to modules: a preview of what moves, then one button ----------
+
+type Preview = Awaited<ReturnType<typeof window.tide.modules.preview>>
+
+export function ModulesSwitch() {
+  const app = useApp()
+  const [status, setStatus] = useState<Awaited<ReturnType<typeof window.tide.modules.status>> | null>(null)
+  const [preview, setPreview] = useState<Preview | null>(null)
+  const [busy, setBusy] = useState('')
+  const [done, setDone] = useState<Awaited<ReturnType<typeof window.tide.modules.switch>> | null>(null)
+  const [folders, setFolders] = useState<Set<string>>(new Set())
+  const [back, setBack] = useState(false)
+  useEffect(() => {
+    void window.tide.modules.status().then(setStatus).catch(() => setStatus(null))
+  }, [])
+  if (!status?.available) return null
+  const run = async (what: string, fn: () => Promise<void>) => {
+    setBusy(what)
+    try {
+      await fn()
+    } catch (e) {
+      app.toast(clean(e), { tone: 'error' })
+    } finally {
+      setBusy('')
+    }
+  }
+  const look = () => run('preview', async () => setPreview(await window.tide.modules.preview()))
+  const go = () =>
+    run('switch', async () => {
+      const r = await window.tide.modules.switch()
+      setDone(r)
+      setFolders(new Set(preview?.emptyFolders ?? []))
+      setStatus(await window.tide.modules.status())
+      app.refreshTree?.()
+    })
+
+  // Switched: the empty folders, offered once; Switch back, always there
+  if (status.switched)
+    return (
+      <section className="ns-switch is-done" aria-label="Modules">
+        {done && preview && preview.emptyFolders.length > 0 ? (
+          <div className="ns-switch-folders">
+            <p>
+              <b>{preview.emptyFolders.length}</b> empty folders are left from the old roadmaps. Remove them?
+            </p>
+            <ul>
+              {preview.emptyFolders.map((f) => (
+                <li key={f}>
+                  <label>
+                    <input type="checkbox" checked={folders.has(f)} onChange={(e) => setFolders((s) => (e.target.checked ? new Set([...s, f]) : new Set([...s].filter((x) => x !== f))))} />
+                    {f}
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <div className="ns-actions">
+              <button className="btn" disabled={!folders.size || !!busy} onClick={() => run('folders', async () => (await window.tide.modules.removeFolders([...folders]), setDone(null), app.refreshTree?.()))}>
+                Remove {folders.size}
+              </button>
+              <button className="link-btn" onClick={() => setDone(null)}>
+                Keep them
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="ns-switch-line">
+            <Icon name="check" size={12} />
+            On modules{status.at ? ` since ${new Date(status.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}
+            {back ? (
+              <span className="ns-switch-confirm">
+                Restore the backup?
+                <button className="link-btn" disabled={!!busy} onClick={() => run('back', async () => (await window.tide.modules.switchBack(), setStatus(await window.tide.modules.status()), setBack(false), app.refreshTree?.()))}>
+                  Switch back
+                </button>
+                <button className="link-btn" onClick={() => setBack(false)}>
+                  Stay
+                </button>
+              </span>
+            ) : (
+              <button className="link-btn ns-quiet" onClick={() => setBack(true)} title={status.backup}>
+                Switch back
+              </button>
+            )}
+          </p>
+        )}
+      </section>
+    )
+
+  if (!preview)
+    return (
+      <section className="ns-switch" aria-label="Modules">
+        <p className="ns-switch-line">
+          <b>{status.modules}</b> modules in <b>{status.tracks}</b> tracks are ready to replace your roadmaps.
+          <button className="btn" onClick={look} disabled={!!busy || !status.moves}>
+            {busy === 'preview' ? 'Reading…' : 'See what moves'}
+          </button>
+        </p>
+      </section>
+    )
+
+  const pr = preview.progress
+  return (
+    <section className="ns-switch is-open" aria-label="Switch to modules">
+      <dl className="ns-switch-figs">
+        <div>
+          <dt>Topics placed</dt>
+          <dd>
+            {preview.topics.placed.toLocaleString('en-GB')}
+            {preview.topics.folded ? <small title="Given a module, whose topics cover them in other words"> +{preview.topics.folded} folded</small> : null}
+          </dd>
+        </div>
+        <div title={`${pr.evidence} answers and lessons on them; their memory state moves with them`}>
+          <dt>With progress</dt>
+          <dd>{pr.concepts}</dd>
+        </div>
+        <div title="Depth targets and learning events, re-pointed at the new topics">
+          <dt>Targets · events</dt>
+          <dd>
+            {pr.targets}
+            <small> · {pr.events}</small>
+          </dd>
+        </div>
+        <div title="Ticks, lesson links and placement results carried over">
+          <dt>Ticks · links</dt>
+          <dd>
+            {pr.ticks + pr.placement}
+            <small> · {pr.links}</small>
+          </dd>
+        </div>
+      </dl>
+      <div className="ns-switch-cols">
+        <div>
+          <h3 className="ns-h">Tracks</h3>
+          <ul className="ns-switch-list">
+            {preview.tracks.map((t) => (
+              <li key={t.id}>
+                <span>{t.title}</span>
+                <span className="ns-num ns-num-soft">
+                  {t.modules}
+                  {t.folder ? '' : ' · new folder'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h3 className="ns-h">Where things go</h3>
+          <ul className="ns-switch-list is-moves">
+            {preview.sample.map((x) => (
+              <li key={x.from} title={x.from}>
+                <span>{x.to}</span>
+                <span className="ns-num ns-num-soft">{x.module}</span>
+              </li>
+            ))}
+          </ul>
+          {preview.orphans.length > 0 && <p className="ns-small is-warn">{preview.orphans.length} topics with progress have no home; their progress stays as it is.</p>}
+        </div>
+      </div>
+      <p className="ns-small">
+        Your roadmap files stay as they are. Tide keeps a full backup first, and Switch back restores it.
+        {preview.emptyFolders.length ? ` Afterwards you can remove ${preview.emptyFolders.length} empty folders, if you choose.` : ''}
+      </p>
+      <div className="ns-actions">
+        <button className="btn primary" onClick={go} disabled={!!busy}>
+          {busy === 'switch' ? 'Switching…' : 'Switch to modules'}
+        </button>
+        <button className="link-btn" onClick={() => setPreview(null)}>
+          Not now
+        </button>
+      </div>
     </section>
   )
 }
@@ -471,6 +700,7 @@ function MapView({ data, onChange, reload }: { data: ViewData; onChange: (d: Vie
         </div>
       </header>
 
+      <ModulesSwitch />
       {data.error && <p className="ns-banner is-warn">{data.error}</p>}
       {(data.goalEdited || (data.edited && !data.error)) && (
         <div className="ns-banner">
@@ -530,8 +760,9 @@ function MapView({ data, onChange, reload }: { data: ViewData; onChange: (d: Vie
             )}
           </div>
         </div>
-        {data.milestone && <Milestone m={data.milestone} />}
       </section>
+
+      {data.modules && data.modules.length > 0 && <InProgress modules={data.modules} projects={data.projects ?? []} />}
 
       {data.proposals.length > 0 && (
         <section className="ns-props" aria-label="Proposed changes">
@@ -569,6 +800,7 @@ function MapView({ data, onChange, reload }: { data: ViewData; onChange: (d: Vie
       <div className="ns-grid">
         <StageBody stage={stage} data={data} onAct={act} busy={busy} />
         <aside className="ns-side">
+          {data.milestone && <Milestone m={data.milestone} />}
           <Gate data={data} stage={stage} onAct={act} busy={busy} />
           {ns.thisMonth.length > 0 && (
             <details className="ns-more">
@@ -823,6 +1055,7 @@ function Build({ onBuilt }: { onBuilt: () => void }) {
           Every roadmap, woven into one path towards one goal.
         </p>
       </header>
+      <ModulesSwitch />
       {notePath && (
         <div className="ns-from-note">
           <Icon name="note" size={14} />

@@ -372,7 +372,9 @@ export function remapScope(oldTrack: string, scope: string[], old: Map<string, R
   const total = [...count.values()].reduce((a, b) => a + b, 0)
   const tracks = new Map<string, { share: number; scope: string[] }>()
   for (const [mid, n] of [...count].sort((a, b) => b[1] - a[1])) {
-    const tr = tracksOfModule(cat, mid)[0]
+    // A module several tracks list stays in the old track when that track lists it, else its first track
+    const listing = tracksOfModule(cat, mid)
+    const tr = listing.find((t) => t.title.toLowerCase() === oldTrack.toLowerCase()) ?? listing[0]
     const m = by.get(mid)
     if (!tr || !m) continue
     const e = tracks.get(tr.title) ?? { share: 0, scope: [] }

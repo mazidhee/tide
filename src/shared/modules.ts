@@ -312,10 +312,13 @@ export interface Catalogue {
 
 export const moduleById = (c: Catalogue) => new Map(c.modules.map((m) => [m.id, m]))
 
-/** The tracks that list a module (its home track first, then the others in file order) */
+/**
+ * The tracks that list a module: its home track first; for a shared module, the track that lists
+ * it earliest (where it is most foundational), then by how many modules the track has
+ */
 export function tracksOfModule(c: Catalogue, id: string): TrackDef[] {
   const m = c.modules.find((x) => x.id === id)
-  const listing = c.tracks.filter((t) => t.modules.includes(id))
+  const listing = c.tracks.filter((t) => t.modules.includes(id)).sort((a, b) => a.modules.indexOf(id) / Math.max(1, a.modules.length) - b.modules.indexOf(id) / Math.max(1, b.modules.length) || b.modules.length - a.modules.length)
   const home = listing.find((t) => t.id === m?.track)
   return home ? [home, ...listing.filter((t) => t !== home)] : listing
 }

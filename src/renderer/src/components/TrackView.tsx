@@ -115,7 +115,7 @@ export function TrackView({ notebook, path, modular }: { notebook: string; path:
       {data.star && (
         <button className="track-star" onClick={() => app.setView({ kind: 'northstar' })} title="Open your North Star">
           <Icon name="northstar" size={13} />
-          North Star stage {data.star.stage}: {data.star.title} · {data.star.phases} of {data.star.of} phases in scope now
+          North Star stage {data.star.stage}: {data.star.title} · {data.star.phases} of {data.star.of} {modular ? 'parts' : 'phases'} in scope now
         </button>
       )}
 

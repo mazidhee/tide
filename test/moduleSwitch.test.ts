@@ -173,8 +173,8 @@ describe('the switch to modules', () => {
     expect(evidenceKeys(after)).toEqual(evidenceKeys(before0).map(placed).sort())
     const binary = NEW(F, 'Binary')
     const got = after.concepts.find((c: { id: string }) => c.id === binary)
-    // A shared module counts under the first track that lists it
-    expect(got.area).toBe('Mathematics')
+    // A shared module counts under the track where it is most foundational (listed first, the larger track on a tie)
+    expect(got.area).toBe('Software Engineering')
     expect(got.evidence).toHaveLength(5)
     expect(after.concepts.find((c: { id: string }) => c.id === `${binary}##converting between binary and hex`).parent).toBe(binary)
     // Boolean algebra was in two roadmaps and is one topic now: both histories, merged
