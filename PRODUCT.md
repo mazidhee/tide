@@ -20,7 +20,7 @@ Tide is a local-first study system: it decides what to learn next from the learn
 
 ## Positioning
 
-A tutor that runs on the learner's own Mac (Gemma 4 12B through a local MLX server), with free cloud models brought in only to check the hard parts, and never for private material. It plans from the learner's own roadmaps and aims, teaches from cited sources, verifies its own claims, and keeps everything as plain files in the learner's Obsidian vault.
+A tutor that runs on the learner's own Mac (Gemma 4 12B through a local MLX server), with free cloud models brought in only to check the hard parts. It plans from the learner's own roadmaps and aims, teaches from cited sources, verifies its own claims, and keeps everything as plain files in the learner's Obsidian vault.
 
 ## Operating Context
 
@@ -34,7 +34,7 @@ A tutor that runs on the learner's own Mac (Gemma 4 12B through a local MLX serv
 - Electron + React + TypeScript; CSS custom properties in src/renderer/src/styles/theme.css drive seven themes; component styles in app.css.
 - Custom icon set (src/renderer/src/components/Icon.tsx) the owner wants kept for app chrome; third-party services shown with their real logos.
 - Performance matters: Gemma shares the Mac's GPU, so the interface avoids heavy continuous animation while a model is working (data-model-busy).
-- Privacy: private-project and Metabase content never leaves the Mac; the interface states where each service runs.
+- Claude for everything: Claude takes every lesson and job, Metabase included; Gemma is the fallback when Claude can't answer. The interface states where each service runs.
 - Undecided: whether to adopt a full visual redesign of the whole app (a prototype is to be shown first).
 
 ## Brand Commitments

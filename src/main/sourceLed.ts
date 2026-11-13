@@ -6,17 +6,11 @@
  * step of the plan is chosen from them, and each turn is given what it needs: the reading to show,
  * the tutor's rules for it, and a tap on the reply that puts the reading in.
  *
- * Privacy: a lesson in a private project, or about your Metabase, uses only what is on this Mac
- * (nothing is searched for or read online, so not even its topic leaves), and its turns stay on
- * the local model (main/agent decides that, as for every private turn). A file in a private
- * project is never used as a reading in a lesson outside it.
- *
  * Hooks: main/ai.ts `answer` calls sourceLedTurn; main/agent.ts asks ledJob for the cloud job.
  */
 import { createHash } from 'crypto'
 import { otherLanguage } from '@shared/books'
 import { findExplainers } from '@shared/explainers'
-import { aboutMetabase } from '@shared/metabase'
 import { normalizeTitle } from '@shared/outline'
 import { ASKED, GO_ON, ownWords } from '@shared/session'
 import { asksToMoveOn } from '@shared/lessonRepair'
@@ -26,9 +20,6 @@ import { courseReading, type Section } from '@shared/courses'
 import type { ChatEvent, ChatMessage, ChatRequest } from '@shared/types'
 import { publicUrl, readWebpage, webSearch } from './agent'
 import { primaryPagesFor } from '@shared/finance/sources'
-import { filedUnder, getNotebooks } from './learn'
-import { metabaseHost, metabaseReady } from './metabase'
-import { privatePath } from './projects'
 import { readingsFor } from './readings'
 import { chunksNow, searchNow } from './search'
 import { bookSourceSync } from './reading'
@@ -76,38 +67,21 @@ async function kept(topic: string): Promise<Candidate[]> {
 }
 
 const keep = (l: Lesson) =>
-  // Only what came from the web: your own files are read from the index each time, and a private lesson has nothing from the web
-  l.opts.private ? Promise.resolve() : writeText(`${DIR}/${slug(l.opts.topic)}.json`, JSON.stringify({ at: Date.now(), v: READ_AS, candidates: l.candidates.filter((c) => c.url) })).catch(() => {})
-
-/** Which files are in private projects, worked out once so the choice of a reading needs no waiting */
-async function privateTest(): Promise<(path: string) => boolean> {
-  const roots: string[] = []
-  const files = new Set<string>()
-  for (const nb of await getNotebooks().catch(() => [])) {
-    if (!nb.project?.private) continue
-    roots.push(nb.path)
-    for (const d of nb.project.docs ?? []) files.add(d)
-    for (const f of await filedUnder(nb.name).catch(() => [] as string[])) files.add(f)
-  }
-  return (path) => files.has(path) || roots.some((r) => path === r || path.startsWith(`${r}/`))
-}
+  // Only what came from the web: your own files are read from the index each time
+  writeText(`${DIR}/${slug(l.opts.topic)}.json`, JSON.stringify({ at: Date.now(), v: READ_AS, candidates: l.candidates.filter((c) => c.url) })).catch(() => {})
 
 async function lessonFor(req: ChatRequest): Promise<Lesson> {
   const topic = req.topic!
   const key = createHash('sha1').update(`${topic}\n${req.course ? `${req.course.id}/${req.course.lesson}\n` : ''}${text(req.messages.find((m) => m.role === 'user'))}`).digest('hex')
   const had = lessons.get(key)
   if (had) return had
-  // Private: its place is a private project (when that can't be told, it is treated as one), or it is about your Metabase
   const where = req.scope.kind !== 'none' && req.scope.kind !== 'vault' ? req.scope.path : ''
-  const secret = (where ? await privatePath(where).catch(() => true) : false) || (metabaseReady() && (aboutMetabase(topic, metabaseHost()) || req.messages.some((m) => aboutMetabase(text(m), metabaseHost()))))
-  const isPrivate = await privateTest().catch(() => () => true)
   // [courses] A course's lesson is taught from the course: nothing is searched for online
   const course = req.course ? await import('./courses').then((c) => c.courseLessonSource(req.course!.id, req.course!.lesson)).catch(() => null) : null
-  const web = !course && !secret && req.web !== false && getSettings().ai.webSearch?.provider !== 'off'
+  const web = !course && req.web !== false && getSettings().ai.webSearch?.provider !== 'off'
   const deps: GatherDeps = {
     search: (q, limit) => searchNow(q, limit),
     chunks: (path) => chunksNow(path),
-    isPrivate,
     webSearch: (q) => webSearch(q),
     read: (url) => readWebpage(url),
     known: async (t) => [
@@ -121,11 +95,11 @@ async function lessonFor(req: ChatRequest): Promise<Lesson> {
     // humanities: a free book's licence goes under readings taken from it
     licenceOf: bookSourceSync
   }
-  const lesson: Lesson = { opts: { topic, private: secret, web }, where, deps, candidates: course ? [course.candidate] : [], have: new Set(), owned: new Set(), searched: new Set(), chosen: new Map(), preparing: Promise.resolve(), ...(course ? { course } : {}) }
+  const lesson: Lesson = { opts: { topic, web }, where, deps, candidates: course ? [course.candidate] : [], have: new Set(), owned: new Set(), searched: new Set(), chosen: new Map(), preparing: Promise.resolve(), ...(course ? { course } : {}) }
   // The topic's sources are gathered while the tutor finds out what you know: ready by the time it plans
   lesson.preparing = (async () => {
     own(lesson, topic)
-    // [courses] The lessons of courses you imported that teach the topic: on this Mac, so private lessons may use them too
+    // [courses] The lessons of courses you imported that teach the topic
     if (!course) for (const c of await import('./courses').then((m) => m.courseCandidates(topic)).catch(() => [] as Candidate[])) lesson.candidates.push(c)
     if (!web) return
     for (const c of await kept(topic)) if (c.url && !lesson.have.has(c.url)) (lesson.have.add(c.url), lesson.candidates.push(c))

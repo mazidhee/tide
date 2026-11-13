@@ -246,7 +246,7 @@ describe('ranking', () => {
   })
 })
 
-describe('gathering, and what a private lesson may use', () => {
+describe('gathering, from everything you have', () => {
   const lib = 'Library/Distributed Systems.pdf'
   const secret = 'Work/Ledger/design.md'
   const notes: Passage[] = [
@@ -262,7 +262,6 @@ describe('gathering, and what a private lesson may use', () => {
       calls,
       search: () => [bookChunks(lib)[2], secretNote, notes[1], lessonPage],
       chunks: (path) => (path === lib ? bookChunks(lib) : path === secret ? [secretNote] : notes),
-      isPrivate: (path) => path.startsWith('Work/Ledger/'),
       webSearch: async (q) => {
         calls.push(`search:${q}`)
         return ['wikipedia-raft', 'blog-raft', 'wall', 'python-classes', 'mdn-closures', 'postgres-mvcc'].map((n) => ({ title: page(n).title, url: page(n).url }))
@@ -284,7 +283,7 @@ describe('gathering, and what a private lesson may use', () => {
   }
 
   it('your books come back as their pages, whole again, with the page numbers kept', () => {
-    const got = ownedCandidates(deps(), 'Leader election and terms Raft', { topic: 'Raft', private: false, web: true })
+    const got = ownedCandidates(deps(), 'Leader election and terms Raft', { topic: 'Raft', web: true })
     const book = got.find((c) => c.kind === 'book')!
     expect(book.text).toBe(BOOK_PAGES.join('\n\n'))
     expect(book.pages?.map((p) => p.page)).toEqual([41, 42, 43])
@@ -292,31 +291,30 @@ describe('gathering, and what a private lesson may use', () => {
   })
 
   it('a note of yours comes back as the one section that matched; pages Tide wrote are not sources', () => {
-    const got = ownedCandidates(deps(), 'x', { topic: 'Raft', private: false, web: true })
-    const note = got.find((c) => c.kind === 'note')!
+    const got = ownedCandidates(deps(), 'x', { topic: 'Raft', web: true })
+    const note = got.find((c) => c.kind === 'note' && c.path === 'Notes/Raft.md')!
     expect(note).toMatchObject({ title: 'Raft: Elections', by: 'Your notes', path: 'Notes/Raft.md', format: 'md' })
     expect(note.text).toBe(`${notes[0].text}\n\n${notes[1].text}`)
     expect(got.some((c) => c.path?.startsWith('Lessons/'))).toBe(false)
   })
 
-  it('a file in a private project is used only by a private lesson', () => {
-    const open = ownedCandidates(deps(), 'x', { topic: 'Raft', private: false, web: true })
-    expect(open.some((c) => c.path === secret)).toBe(false)
-    const closed = ownedCandidates(deps(), 'x', { topic: 'Ledger', private: true, web: false })
-    expect(closed.some((c) => c.path === secret)).toBe(true)
+  it('a work project’s file is a source for every lesson', () => {
+    expect(ownedCandidates(deps(), 'x', { topic: 'Raft', web: true }).some((c) => c.path === secret)).toBe(true)
   })
 
-  it('a private lesson looks nothing up: no search, no page read, not even what is already known', async () => {
+  it('looks things up for a work project’s lesson too, and nothing at all with the web off', async () => {
     const d = deps()
-    expect(await webCandidates(d, 'Leader election Raft', { topic: 'Ledger failover', private: true, web: true }, new Set(), true)).toEqual([])
-    expect(await webCandidates(d, 'Leader election Raft', { topic: 'Raft', private: false, web: false }, new Set(), true)).toEqual([])
-    expect(d.calls).toEqual([])
+    expect((await webCandidates(d, 'Leader election Raft', { topic: 'Ledger failover', web: true }, new Set(), true)).length).toBeGreaterThan(0)
+    expect(d.calls.length).toBeGreaterThan(0)
+    const off = deps()
+    expect(await webCandidates(off, 'Leader election Raft', { topic: 'Raft', web: false }, new Set(), true)).toEqual([])
+    expect(off.calls).toEqual([])
   })
 
   it('reads the trusted pages first, at most three, and never a blocked, local or already-read address', async () => {
     const d = deps()
     const have = new Set([page('mdn-closures').url])
-    const got = await webCandidates(d, 'Leader election and terms Raft consensus', { topic: 'Raft consensus', private: false, web: true }, have, true)
+    const got = await webCandidates(d, 'Leader election and terms Raft consensus', { topic: 'Raft consensus', web: true }, have, true)
     const read = d.calls.filter((c) => c.startsWith('read:')).map((c) => c.slice(5))
     expect(read).toHaveLength(3)
     expect(read.every((u) => trustedSite(u))).toBe(true)
@@ -327,12 +325,12 @@ describe('gathering, and what a private lesson may use', () => {
 
   it('reads one unlisted page only when fewer than two trusted ones turned up, and drops a page behind a login', async () => {
     const d = deps({ webSearch: async () => ['wall', 'blog-raft', 'wikipedia-raft'].map((n) => ({ title: page(n).title, url: page(n).url })), known: async () => [] })
-    const got = await webCandidates(d, 'q', { topic: 'Raft', private: false, web: true }, new Set())
+    const got = await webCandidates(d, 'q', { topic: 'Raft', web: true }, new Set())
     expect(d.calls.filter((c) => c.startsWith('read:'))).toHaveLength(2)
     expect(got.map((c) => c.url)).toEqual([page('wikipedia-raft').url])
     // A failed search or read is no source, never an error
     const down = deps({ webSearch: vi.fn().mockRejectedValue(new Error('offline')), known: async () => [] })
-    expect(await webCandidates(down, 'q', { topic: 'Raft', private: false, web: true }, new Set())).toEqual([])
+    expect(await webCandidates(down, 'q', { topic: 'Raft', web: true }, new Set())).toEqual([])
   })
 })
 

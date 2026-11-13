@@ -59,7 +59,7 @@ export interface FreshDeps {
   imported: () => Promise<{ course: CatalogueCourse; current?: string }[]>
   /** A web course's fingerprint now (main/sources) */
   probe: (c: CatalogueCourse) => Promise<string>
-  /** Claude's background model; null when Claude isn't there (or the job is private) */
+  /** Claude's background model; null when Claude isn't there */
   rank: (prompt: string, system: string) => Promise<string | null>
   read: () => Promise<FreshState>
   write: (s: FreshState) => Promise<void>

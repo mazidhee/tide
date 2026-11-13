@@ -11,7 +11,7 @@ summary: When Gemma teaches, a cloud model can help with four jobs where a bigge
 Set it up in **Settings → Models**: **Automatically** or **When I ask**, a provider and your key (kept in your Mac's Keychain). In Chat and lessons, the picker beside the box chooses **Auto**, **Gemma only** or the cloud model. When a turn goes to the cloud, the step above the reply says so.
 
 > [!warning] What never goes to the cloud
-> Private projects, your Metabase and turns with pictures always stay on Gemma, even with the cloud helper on.
+> Turns with pictures never go to the cloud helper.
 
 If the cloud model can't take a request (rate limited, offline, key refused, over your monthly budget), Gemma answers instead and says why. On Groq's free tier, Tide reads how much is left after each request and goes straight to Gemma when the next one won't fit.
 
@@ -44,7 +44,7 @@ Change any of them under **Settings → Models**. Tide paces itself at about 35 
 
 ## The problem bank
 
-Every half hour while Tide is open, the cloud model writes problems for what's coming (today's and your next study day's topics, and lessons in progress) at three levels, each solved and checked, and a different model reviews them. During the day this counts as routine work, so it stops once a model is 70% through its day and leaves the rest for your lessons. In the evening it spends what's left before the allowance resets: free allowances don't carry over. **Settings → Models → Problem bank** shows the last run, and **Prepare now** runs it at once. Private projects are never sent; their problems are written by Gemma.
+Every half hour while Tide is open, the cloud model writes problems for what's coming (today's and your next study day's topics, and lessons in progress) at three levels, each solved and checked, and a different model reviews them. During the day this counts as routine work, so it stops once a model is 70% through its day and leaves the rest for your lessons. In the evening it spends what's left before the allowance resets: free allowances don't carry over. **Settings → Models → Problem bank** shows the last run, and **Prepare now** runs it at once.
 
 
 

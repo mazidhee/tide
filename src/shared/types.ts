@@ -106,6 +106,8 @@ export interface Settings {
   writingCoach?: boolean
   /** How your own notes open: to write in (the default) or to read. Course material and saved sources always open to read */
   noteOpenMode?: 'write' | 'read'
+  /** Backups of Tide's own data (main/backup): where the snapshots go, when not the default folder in Tide's app data */
+  backups?: { folder?: string }
   /** The note editor shows plain Markdown everywhere instead of live preview (which hides it away from the cursor) */
   editorSource?: boolean
   /** Study timers: the sidebar's Focus timer and the timer buttons on notes, books and practice */
@@ -818,13 +820,30 @@ export interface TideApi {
   }
   /** Claude, run through the user's own Claude Code */
   /** Gemma on demand (main/modelIdle): loaded only when a job is routed to it while Claude teaches */
+  /** Report a bug from anywhere (main/bugReport): the sheet's picture and version, and filing it in Tide/Tide bugs.md */
+  bugs: {
+    info(): Promise<import('./bugNote').BugSheetInfo>
+    /** Takes the picture of this window, then opens the sheet in it */
+    open(): Promise<void>
+    file(r: import('./bugNote').BugReport): Promise<{ note: string; shot: string | null; line: string }>
+    discard(): Promise<void>
+  }
+  /** Backups of Tide's own data (main/backup): Settings › Backups */
+  backups: {
+    status(): Promise<import('./backup').BackupStatus>
+    now(): Promise<{ snapshot: import('./backup').Snapshot; status: import('./backup').BackupStatus }>
+    /** Shows the folder, or one snapshot in it, in Finder */
+    reveal(name?: string): Promise<void>
+    chooseFolder(): Promise<import('./backup').BackupStatus>
+    defaultFolder(): Promise<import('./backup').BackupStatus>
+    /** Keeps a safety snapshot, puts this one back, and starts Tide again */
+    restore(name: string): Promise<{ safety: string; files: number }>
+  }
   gemma: {
     status(): Promise<GemmaStatusView>
     load(): Promise<GemmaStatusView>
     /** `busy`: not unloaded, the server is answering a request */
     unload(): Promise<GemmaStatusView & { busy?: boolean }>
-    /** A note is opening: Gemma loads ahead when it's in a private project and Claude teaches */
-    prewarmFor(path: string): Promise<boolean>
   }
   /** Every model call, from the usage log (main/usageLog): Settings › Usage */
   usage: {
@@ -893,19 +912,19 @@ export interface TideApi {
     view(): Promise<import('./teachingAdjust').TeachingView>
     /** Switches an adjustment off, or back on */
     setAdjustment(id: import('./teachingAdjust').AdjustmentId, on: boolean): Promise<import('./teachingAdjust').TeachingView>
-    /** Asks Opus to review one lesson now (null when it can't: private, no Claude, too short) */
+    /** Asks Opus to review one lesson now (null when it can't: no Claude, too short) */
     review(lesson: string): Promise<import('./teachingAdjust').LessonReview | null>
   }
   /** The warm-up before a lesson: quick recall cards on what it builds on (shared/warmup) */
   warmup: {
-    /** path: the note or folder the lesson is on, so a private project's concepts stay with private lessons */
+    /** path: the note or folder the lesson is on (its subject on the map) */
     for(topic: string, path?: string): Promise<import('./warmup').WarmupSet>
     /** One card was graded: scheduled in its own store and counted on its concept */
     grade(card: import('./warmup').WarmupCard, verdict: Verdict): Promise<void>
   }
   /** Free readings found for a topic; when there are none yet, they're looked up in the background */
   readings: {
-    /** path: the note or folder the lesson is on, so a private project's topics are never looked up */
+    /** path: the note or folder the lesson is on */
     for(topic: string, path?: string): Promise<import('./readings').Reading[]>
   }
   /** Your roadmaps sorted against your aims (main/curriculum) */
@@ -926,6 +945,10 @@ export interface TideApi {
     get(): Promise<import('./coach').CoachSettings>
     save(s: import('./coach').CoachSettings): Promise<import('./coach').CoachSettings>
     week(date?: string): Promise<import('./coach').WeekPlan | null>
+    /** This week's progress for Your week, with the line kept for it (or fixed words) */
+    progress(): Promise<{ progress: import('./weekProgress').WeekProgress; summary: { text: string; by: 'claude' | 'tide' } }>
+    /** Claude's line on the week, written when the numbers changed; the fixed words without Claude */
+    progressSummary(): Promise<{ text: string; by: 'claude' | 'tide' }>
     planWeek(): Promise<import('./coach').WeekPlan>
     profile(): Promise<string>
     /** Works out where you're heading (at most every few days unless forced); returns the settings */
@@ -1050,7 +1073,7 @@ export interface TideApi {
     status(): Promise<{ ready: boolean; detail: string }>
     setup(): Promise<{ ready: boolean; detail: string }>
     speak(text: string, voice?: string, speed?: number): Promise<Uint8Array>
-    /** where: the lesson's note and topic, so a private project's answers stay on this Mac */
+    /** where: the lesson's note and topic (the topic helps Deepgram spell its jargon) */
     transcribe(wav: Uint8Array, where?: { path?: string; topic?: string }): Promise<string>
     hasDeepgram(): Promise<boolean>
     /** Checks the key with Deepgram, then keeps it in the Keychain (null forgets it) */
@@ -1183,7 +1206,7 @@ export interface TideApi {
   }
   difficulty: {
     /** What the knowledge map has on a lesson's topic and what it builds on (shared/difficulty.ts) */
-    known(topic: string, path?: string): Promise<import('./difficulty').Known>
+    known(topic: string): Promise<import('./difficulty').Known>
   }
   runner: {
     /** `tests`: a code question's hidden tests (Python); `labId`: the data lab that SQL is run in */

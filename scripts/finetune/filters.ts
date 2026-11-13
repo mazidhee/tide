@@ -13,7 +13,6 @@
 import { splitSay } from '../../src/shared/characters'
 import { missingQuestion } from '../../src/shared/lessonCheck'
 import type { LessonRecord } from '../../src/shared/lessonLog'
-import { aboutMetabase } from '../../src/shared/metabase'
 import type { ProjectInfo } from '../../src/shared/project'
 import { ownWords, repeatsEarlier, sessionInstructions, type SessionSetup } from '../../src/shared/session'
 import { TUTOR_SYSTEM, stableSystem, withInstructions } from '../../src/shared/tutorPrompt'
@@ -39,6 +38,9 @@ export interface PrivacyMap {
   folders: string[]
   docs: string[]
 }
+
+/** About Metabase or its data, by name or by its address (training data leaves the owner's work out) */
+const aboutMetabase = (text: string, host?: string) => /\bmetabase\b/i.test(text) || (!!host && text.toLowerCase().includes(host.toLowerCase()))
 
 /** What is private, from the vault's own records (.tide/notebooks.json and .tide/library.json), as main/projects.privatePath reads them */
 export function privacyMap(notebooks: Record<string, { project?: Partial<ProjectInfo> }>, library: Record<string, { topics?: string[] }>): PrivacyMap {

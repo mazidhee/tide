@@ -41,7 +41,7 @@ export interface CallEntry {
   ok: boolean
   /** Why the call failed: limit, login, network, error */
   err?: string
-  /** This call took over from another model, and why (a GemmaReason: limit, offline, private…) */
+  /** This call took over from another model, and why (a GemmaReason: limit, offline, failed…) */
   fb?: string
   /** Token counts estimated from text length: the server didn't report them */
   est?: boolean
@@ -373,8 +373,9 @@ const FALLBACK_WORDS: Record<string, string> = {
   'logged-out': 'Claude logged out',
   'no-claude': 'Claude Code not set up',
   'claude-failed': 'A Claude call failed',
-  private: 'Private notebook (stays on this Mac)',
-  metabase: 'Metabase lesson (stays on this Mac)',
+  // Kept for calls logged before every job went to Claude
+  private: 'Private notebook (older Tide)',
+  metabase: 'Metabase lesson (older Tide)',
   picked: 'Gemma picked by hand',
   'gemma-only': 'A job only Gemma does',
   manual: 'Loaded by hand',

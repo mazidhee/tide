@@ -15,7 +15,7 @@ List your **aims** in **Edit**: as many as you have, in your own words, each **M
 
 ## How Tide sorts your roadmaps
 
-In the background, Tide sorts every roadmap against your aims: what each section is for, how much each aim needs it, and which topics are history or background rather than skills. Your own heading tags (CORE, LATER, OPTIONAL…) are kept, except that a main aim can bring a LATER section forward. Sorting is redone only for what changes: new topics, or new aims. Private projects are sorted on your Mac.
+In the background, Tide sorts every roadmap against your aims: what each section is for, how much each aim needs it, and which topics are history or background rather than skills. Your own heading tags (CORE, LATER, OPTIONAL…) are kept, except that a main aim can bring a LATER section forward. Sorting is redone only for what changes: new topics, or new aims.
 
 On a roadmap page, each topic shows where it sits: **Weekdays**, **When needed**, **Weekend**, **Later** or **Skip**. Click it to move that topic, or its whole section; your choice always wins. The roadmap's **Next** follows the plan, not just the order of the file.
 
@@ -45,7 +45,7 @@ The first time a section comes up, a **Check** goes just before its first lesson
 
 ## Free readings
 
-For the week's lessons, Tide finds a few free, legal readings: a landmark paper, an RFC or spec, official docs, an open textbook chapter, and Wikipedia. Each is checked to exist before it's kept. Small PDFs from open archives (arXiv, RFCs, project and course sites) are saved into the Library under the notebook, so lessons use them too. Piracy sites are never used, and nothing is looked up for private projects. Turn web search off in Settings to stop it.
+For the week's lessons, Tide finds a few free, legal readings: a landmark paper, an RFC or spec, official docs, an open textbook chapter, and Wikipedia. Each is checked to exist before it's kept. Small PDFs from open archives (arXiv, RFCs, project and course sites) are saved into the Library under the notebook, so lessons use them too. Piracy sites are never used. Turn web search off in Settings to stop it.
 
 ## Reading the page
 

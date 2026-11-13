@@ -25,7 +25,6 @@ export interface ConceptIn {
   prerequisites: string[]
   /** Ticked on the roadmap */
   done?: boolean
-  private?: boolean
 }
 
 export interface EvidenceIn {
@@ -36,7 +35,6 @@ export interface EvidenceIn {
   kind: EvidenceKind
   at: number
   weight: number
-  private?: boolean
   /** The source#pos of evidence this stands in place of */
   supersedes?: string
 }
@@ -51,6 +49,7 @@ export interface ConceptState {
   order: number
   prerequisites: string[]
   done: boolean
+  /** Set by an older Tide that kept private projects apart; nothing sets it now */
   private: boolean
   /** How solid it is now, 0 to 1: FSRS-6 retrievability, the chance of remembering it today (0 until something is asked); after a miss, scaled by how the latest answers went */
   estimate: number
@@ -222,7 +221,7 @@ export const CARD_WEIGHT = 0.5
  * A roadmap's topics as concepts, in its order. Each builds on the topic before it in its section
  * unless its line says otherwise; projects aren't taught, so they are neither concepts nor links.
  */
-export function roadmapConcepts(topics: RoadmapTopic[], isPrivate = false): ConceptIn[] {
+export function roadmapConcepts(topics: RoadmapTopic[]): ConceptIn[] {
   const taught = topics.filter((t) => !t.project)
   const named = taught.map((t) => needsOf(t.title.replace(/\*\*/g, '')))
   const byName = new Map<string, string>()
@@ -243,8 +242,7 @@ export function roadmapConcepts(topics: RoadmapTopic[], isPrivate = false): Conc
       origin: 'roadmap' as const,
       order: i,
       prerequisites: [...new Set(prerequisites)],
-      ...(t.checked ? { done: true } : {}),
-      ...(isPrivate ? { private: true } : {})
+      ...(t.checked ? { done: true } : {})
     }
   })
 }
@@ -268,18 +266,17 @@ export const THREAD_WEIGHT = 0.3
  * topic; a question counts on the step whose words it shares, and a step counts as taught once
  * the lesson has finished or a question on it or a later step has been answered.
  */
-export function lessonEvidence(record: Pick<LessonRecord, 'id' | 'mode' | 'started' | 'updated' | 'finished'> & Pick<Partial<LessonRecord>, 'threads'>, d: LessonDigest, concept: Pick<ConceptIn, 'id' | 'area'>, isPrivate = false): { steps: ConceptIn[]; events: EvidenceIn[] } {
+export function lessonEvidence(record: Pick<LessonRecord, 'id' | 'mode' | 'started' | 'updated' | 'finished'> & Pick<Partial<LessonRecord>, 'threads'>, d: LessonDigest, concept: Pick<ConceptIn, 'id' | 'area'>): { steps: ConceptIn[]; events: EvidenceIn[] } {
   const source = `lesson:${record.id}`
-  const shared = isPrivate ? { private: true } : {}
   const events: EvidenceIn[] = []
   const teach = record.mode === 'teach'
-  if (teach) events.push({ concept: concept.id, source, pos: 'taught', kind: 'taught', at: record.started, weight: record.finished ? 1 : 0.6, ...shared })
+  if (teach) events.push({ concept: concept.id, source, pos: 'taught', kind: 'taught', at: record.started, weight: record.finished ? 1 : 0.6 })
   // A side thread folded as understood (shared/lessonThreads): light evidence that it was taught, never a mark
   ;(record.threads ?? []).forEach((t) => {
-    if (t.understood && t.messages.some((m) => m.role === 'user')) events.push({ concept: concept.id, source, pos: `thread:${t.id}`, kind: 'taught', at: t.updated, weight: THREAD_WEIGHT, ...shared })
+    if (t.understood && t.messages.some((m) => m.role === 'user')) events.push({ concept: concept.id, source, pos: `thread:${t.id}`, kind: 'taught', at: t.updated, weight: THREAD_WEIGHT })
   })
   const marked = d.asked.map((a, i) => ({ ...a, i })).filter((a): a is typeof a & { mark: keyof typeof KIND } => !!a.mark)
-  for (const a of marked) events.push({ concept: concept.id, source, pos: `q${a.i}`, kind: KIND[a.mark], at: record.updated, weight: 1, ...shared })
+  for (const a of marked) events.push({ concept: concept.id, source, pos: `q${a.i}`, kind: KIND[a.mark], at: record.updated, weight: 1 })
 
   // The step a question is about: the one sharing most of its words, when at least half of the step's are there
   const stepOf = (prompt: string) => {
@@ -299,9 +296,9 @@ export function lessonEvidence(record: Pick<LessonRecord, 'id' | 'mode' | 'start
     const id = `${concept.id}##${norm(name)}`
     if (j > reached || seen.has(id) || !norm(name)) return
     seen.add(id)
-    steps.push({ id, name, area: concept.area, parent: concept.id, origin: 'step', order: j, prerequisites: [], ...shared })
-    if (teach) events.push({ concept: id, source, pos: `s${j}.taught`, kind: 'taught', at: record.started, weight: 1, ...shared })
-    for (const x of onStep.filter((x) => x.j === j)) events.push({ concept: id, source, pos: `s${j}.q${x.a.i}`, kind: KIND[x.a.mark], at: record.updated, weight: 1, ...shared })
+    steps.push({ id, name, area: concept.area, parent: concept.id, origin: 'step', order: j, prerequisites: [] })
+    if (teach) events.push({ concept: id, source, pos: `s${j}.taught`, kind: 'taught', at: record.started, weight: 1 })
+    for (const x of onStep.filter((x) => x.j === j)) events.push({ concept: id, source, pos: `s${j}.q${x.a.i}`, kind: KIND[x.a.mark], at: record.updated, weight: 1 })
   })
   return { steps, events }
 }

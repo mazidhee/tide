@@ -358,23 +358,24 @@ describe('the debrief feeds the profile, recall, the roadmap and the teaching me
 // ---------- The mock exam ----------
 
 describe('the mock exam', () => {
-  it('is set on what was studied lately and what is weak, leaving out private and mock topics', () => {
+  it('is set on what was studied lately and what is weak, work and Metabase topics included, mock topics left out', () => {
     const now = Date.now()
     const day = 86_400_000
     const topics = examTopics({
       lessons: [
         { topic: 'Python generators', updated: now - day },
         { topic: 'Metabase dashboards', updated: now },
-        { topic: 'Acme billing', updated: now, private: true },
+        { topic: 'Acme billing', updated: now },
         { topic: 'Mock coding: LRU cache', updated: now, mode: 'interview' },
         { topic: 'Very old topic', updated: now - 200 * day }
       ],
       concepts: [{ name: 'Bayes theorem', mastery: 0.1 }, { name: 'Python generators', mastery: 0.5 }],
       now
     })
-    expect(topics[0]).toBe('Python generators')
-    expect(topics).toContain('Bayes theorem')
-    expect(topics.join(' ')).not.toMatch(/Metabase|Acme|LRU|Very old/)
+    expect(topics).toContain('Python generators')
+    expect(topics).toContain('Metabase dashboards')
+    expect(topics).toContain('Acme billing')
+    expect(topics.join(' ')).not.toMatch(/LRU|Very old/)
   })
 
   it('a rubric item per question, and a debrief from the per-part marks', () => {

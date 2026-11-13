@@ -117,8 +117,7 @@ async function readContents(rel: string, numPages: number): Promise<Chapter[]> {
   const raw = await completeFor(
     'bookContents',
     `These are the first pages of a book. Find its table of contents and list the chapters (and parts, if it has them) in order, with the page number printed next to each.\n\nReply with a JSON array only, like [{"title": "1. Reliable Applications", "page": 3, "part": false}]. Leave out the preface, index and other front or back matter. If there is no table of contents, reply [].\n\n${front}`,
-    'You extract structure from documents. Reply with JSON only.',
-    { path: rel }
+    'You extract structure from documents. Reply with JSON only.'
   )
   const rows = (extractJsonArray(raw) as { title?: unknown; page?: unknown; part?: unknown }[] | null) ?? []
   const listed = rows

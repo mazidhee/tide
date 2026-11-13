@@ -1,8 +1,7 @@
 /**
  * Gemma on demand. Claude teaches; Gemma (about 10 GB of a 24 GB Mac while loaded) is loaded only
- * when a job is actually routed to it: something private (a private project, Metabase), Claude not
- * set up, logged out, at its plan's limit, offline, a Claude call that failed, or Gemma picked by
- * hand. Pure rules here; main/modelIdle and main/ai (completeFor) apply them.
+ * when a job is actually routed to it: Claude not set up, logged out, at its plan's limit, offline,
+ * a Claude call that failed or hung, or Gemma picked by hand. Everything else goes to Claude. Pure rules here; main/modelIdle and main/ai (completeFor) apply them.
  */
 import type { ClaudeRole } from './types'
 
@@ -10,64 +9,66 @@ import type { ClaudeRole } from './types'
  * Every job that used to run on Gemma while Claude was teaching, and where it goes now. `role` is
  * the Claude model's role (shared/claude: background → Haiku, teach → Sonnet, mark and hard →
  * Opus); null keeps the job on Gemma (it only exists on Gemma's own turns, or needs what only
- * Gemma has here). `privacy` says how a job knows it must stay on the Mac.
+ * Gemma has here).
  */
 export const JOB_ROUTES = {
-  flashcards: { label: 'Flashcards from a note or chapter', role: 'teach', privacy: 'path' },
-  labCards: { label: 'Flashcards from lab commands', role: 'background', privacy: 'none' },
-  marginNote: { label: 'Margin tutor and writing coach', role: 'background', privacy: 'path' },
-  marginQuestion: { label: 'Margin tutor “test me” question', role: 'teach', privacy: 'path' },
-  dailyMark: { label: 'Daily practice marking', role: 'mark', privacy: 'path' },
-  tieBreak: { label: 'Choosing how to teach a topic', role: 'background', privacy: 'none' },
-  examPaper: { label: 'Writing a practice exam', role: 'teach', privacy: 'scope' },
-  examMark: { label: 'Marking a typed exam answer', role: 'mark', privacy: 'scope' },
-  bookContents: { label: 'A book’s chapters from its contents page', role: 'background', privacy: 'path' },
-  readingPicks: { label: 'Picking reading for what you studied', role: 'background', privacy: 'text' },
-  projectMap: { label: 'A project’s map and flows', role: 'background', privacy: 'path' },
-  projectBrief: { label: 'A project’s build brief', role: 'teach', privacy: 'path' },
-  // Projects from an idea (main/ideaProjects): Opus asks and plans; a private project's stays on Gemma
-  projectQuestions: { label: 'Questions about a project idea', role: 'hard', privacy: 'flag' },
-  projectPlan: { label: 'Planning a project from an idea', role: 'hard', privacy: 'flag' },
-  projectMentor: { label: 'Reviewing a project you’re building', role: 'hard', privacy: 'flag' },
-  projectReady: { label: 'A project milestone’s ready check', role: 'hard', privacy: 'flag' },
-  projectReadyMark: { label: 'Marking a ready check', role: 'mark', privacy: 'flag' },
-  projectDebrief: { label: 'A milestone’s debrief', role: 'hard', privacy: 'flag' },
-  projectIdeas: { label: 'Suggesting your next project', role: 'teach', privacy: 'flag' },
-  companyPrep: { label: 'Interview prep plan', role: 'teach', privacy: 'path' },
-  readAlong: { label: 'Discussing a passage you’re reading', role: 'teach', privacy: 'path' },
-  readTogether: { label: 'Reading a book together', role: 'teach', privacy: 'path' },
-  // The reading room (main/readingRoom): a private book stays on Gemma, as every reading job does
-  readChallenge: { label: 'Challenge me, beside a book', role: 'teach', privacy: 'path' },
-  readArgument: { label: 'Mapping a book’s core argument', role: 'hard', privacy: 'path' },
-  readSeminar: { label: 'End-of-chapter seminar', role: 'teach', privacy: 'path' },
-  readKeep: { label: 'What to keep from a seminar', role: 'background', privacy: 'path' },
-  weekPlan: { label: 'Weekly coach plan', role: 'teach', privacy: 'text' },
-  learnerProfile: { label: 'Learner profile and direction', role: 'background', privacy: 'text' },
+  flashcards: { label: 'Flashcards from a note or chapter', role: 'teach' },
+  labCards: { label: 'Flashcards from lab commands', role: 'background' },
+  marginNote: { label: 'Margin tutor and writing coach', role: 'background' },
+  marginQuestion: { label: 'Margin tutor “test me” question', role: 'teach' },
+  dailyMark: { label: 'Daily practice marking', role: 'mark' },
+  tieBreak: { label: 'Choosing how to teach a topic', role: 'background' },
+  examPaper: { label: 'Writing a practice exam', role: 'teach' },
+  examMark: { label: 'Marking a typed exam answer', role: 'mark' },
+  bookContents: { label: 'A book’s chapters from its contents page', role: 'background' },
+  readingPicks: { label: 'Picking reading for what you studied', role: 'background' },
+  projectMap: { label: 'A project’s map and flows', role: 'background' },
+  projectBrief: { label: 'A project’s build brief', role: 'teach' },
+  // Projects from an idea (main/ideaProjects): Opus asks and plans
+  projectQuestions: { label: 'Questions about a project idea', role: 'hard' },
+  projectPlan: { label: 'Planning a project from an idea', role: 'hard' },
+  projectMentor: { label: 'Reviewing a project you’re building', role: 'hard' },
+  projectReady: { label: 'A project milestone’s ready check', role: 'hard' },
+  projectReadyMark: { label: 'Marking a ready check', role: 'mark' },
+  projectDebrief: { label: 'A milestone’s debrief', role: 'hard' },
+  projectIdeas: { label: 'Suggesting your next project', role: 'teach' },
+  companyPrep: { label: 'Interview prep plan', role: 'teach' },
+  readAlong: { label: 'Discussing a passage you’re reading', role: 'teach' },
+  readTogether: { label: 'Reading a book together', role: 'teach' },
+  // The reading room (main/readingRoom)
+  readChallenge: { label: 'Challenge me, beside a book', role: 'teach' },
+  readArgument: { label: 'Mapping a book’s core argument', role: 'hard' },
+  readSeminar: { label: 'End-of-chapter seminar', role: 'teach' },
+  readKeep: { label: 'What to keep from a seminar', role: 'background' },
+  weekPlan: { label: 'Weekly coach plan', role: 'teach' },
+  learnerProfile: { label: 'Learner profile and direction', role: 'background' },
   // A tutor that remembers you (main/learnerProfile): small changes after each lesson, a tidy each week
-  profileUpdate: { label: 'Updating your learner profile after a lesson', role: 'background', privacy: 'text' },
-  profileWeekly: { label: 'Weekly tidy of your learner profile', role: 'hard', privacy: 'text' },
+  profileUpdate: { label: 'Updating your learner profile after a lesson', role: 'background' },
+  profileWeekly: { label: 'Weekly tidy of your learner profile', role: 'hard' },
   // Lesson prep while you're away (main/lessonPrep): Claude only; without it the prep is what code can gather
-  lessonPrep: { label: 'Preparing your next lesson', role: 'hard', privacy: 'text' },
-  prepExercises: { label: 'Exercises and the opening for your next lesson', role: 'teach', privacy: 'text' },
-  weeklyReview: { label: 'Your weekly review', role: 'hard', privacy: 'text' },
+  lessonPrep: { label: 'Preparing your next lesson', role: 'hard' },
+  prepExercises: { label: 'Exercises and the opening for your next lesson', role: 'teach' },
+  weeklyReview: { label: 'Your weekly review', role: 'hard' },
+  // This week's progress in Your week (main/weekProgress): one line, Claude only; without it, fixed words
+  weekProgress: { label: 'A line on this week’s progress', role: 'background' },
   // Opus reviewing a finished lesson against the teaching rubric (main/teaching): Claude only, never Gemma
-  lessonReview: { label: 'Reviewing a finished lesson', role: 'mark', privacy: 'scope' },
-  curriculum: { label: 'Sorting roadmaps, enriching topics, readings', role: 'background', privacy: 'flag' },
-  workshop: { label: 'Guided project review', role: 'teach', privacy: 'flag' },
+  lessonReview: { label: 'Reviewing a finished lesson', role: 'mark' },
+  curriculum: { label: 'Sorting roadmaps, enriching topics, readings', role: 'background' },
+  workshop: { label: 'Guided project review', role: 'teach' },
   // Pictures go to Claude too (main/imagePrep makes them ready): a photo of handwritten maths is marked by the marking model
-  handwriting: { label: 'Marking photos of handwritten working', role: 'mark', privacy: 'scope' },
+  handwriting: { label: 'Marking photos of handwritten working', role: 'mark' },
   // Mock interviews (main/mocks): Sonnet is the interviewer, Opus marks. Neither falls back to Gemma: without
   // Claude the mock runs with no interviewer and is marked in code
-  mockInterviewer: { label: 'Mock interviewer', role: 'teach', privacy: 'none' },
-  mockMark: { label: 'Marking a mock interview', role: 'mark', privacy: 'none' },
+  mockInterviewer: { label: 'Mock interviewer', role: 'teach' },
+  mockMark: { label: 'Marking a mock interview', role: 'mark' },
   // Only on Gemma's own lessons (Claude runs its own checks): they stay where they are
-  lessonChecks: { label: 'Gemma lesson checks, problem bank, hidden tests, read-back', role: null, privacy: 'none' }
-} as const satisfies Record<string, { label: string; role: ClaudeRole | null; privacy: 'none' | 'path' | 'scope' | 'text' | 'flag' }>
+  lessonChecks: { label: 'Gemma lesson checks, problem bank, hidden tests, read-back', role: null }
+} as const satisfies Record<string, { label: string; role: ClaudeRole | null }>
 
 export type JobName = keyof typeof JOB_ROUTES
 
 /** Why Gemma is (or was last) needed */
-export type GemmaReason = 'private' | 'metabase' | 'no-claude' | 'logged-out' | 'limit' | 'offline' | 'claude-failed' | 'picked' | 'gemma-only' | 'manual'
+export type GemmaReason = 'no-claude' | 'logged-out' | 'limit' | 'offline' | 'claude-failed' | 'picked' | 'gemma-only' | 'manual'
 
 export type Route = { who: 'claude'; role: ClaudeRole } | { who: 'gemma'; reason: GemmaReason }
 
@@ -78,11 +79,9 @@ export interface ClaudeState {
   why?: GemmaReason
 }
 
-/** Where a job goes: Claude on its role's model, unless the job is private, Claude can't, or it's Gemma's alone */
-export function routeJob(job: JobName, o: { private?: boolean; metabase?: boolean; claude: ClaudeState; picked?: 'gemma' }): Route {
+/** Where a job goes: Claude on its role's model, unless Gemma was picked, Claude can't, or it's Gemma's alone */
+export function routeJob(job: JobName, o: { claude: ClaudeState; picked?: 'gemma' }): Route {
   const role = JOB_ROUTES[job].role
-  if (o.metabase) return { who: 'gemma', reason: 'metabase' }
-  if (o.private) return { who: 'gemma', reason: 'private' }
   if (o.picked === 'gemma') return { who: 'gemma', reason: 'picked' }
   if (!role) return { who: 'gemma', reason: 'gemma-only' }
   if (!o.claude.main) return { who: 'gemma', reason: o.claude.why ?? 'no-claude' }
@@ -96,7 +95,6 @@ export function reasonFromWhy(why: string | undefined): GemmaReason {
   if (/limit/i.test(w)) return 'limit'
   if (/log/i.test(w)) return 'logged-out'
   if (/install/i.test(w)) return 'no-claude'
-  if (/private/i.test(w)) return 'private'
   return 'claude-failed'
 }
 
@@ -116,7 +114,7 @@ export function gemmaIdleMinutes(o: { unloadAfterMinutes?: number; withClaudeMin
 /**
  * Whether Tide should load Gemma ahead of being asked (at launch, on focus, after sleep, each
  * minute's check): always when Claude isn't the main tutor (as before), and otherwise only while
- * a job needed Gemma recently (a private notebook, Claude at its limit).
+ * a job needed Gemma recently (Claude at its limit, offline, or Gemma picked).
  */
 export function shouldWarmGemma(o: { claudeMain: boolean; demandAt?: number; now: number; idleMinutes: number }): boolean {
   if (!o.claudeMain) return true
@@ -137,8 +135,6 @@ export function unloadAtLaunch(o: { claudeMain: boolean; loaded: boolean; idle: 
 }
 
 const FOR: Record<GemmaReason, string> = {
-  private: 'your private notebook',
-  metabase: 'your Metabase lesson',
   'no-claude': 'teaching (Claude Code isn’t set up)',
   'logged-out': 'teaching while Claude is logged out',
   limit: 'teaching while Claude is at its limit',
@@ -154,10 +150,10 @@ export const reasonText = (r: GemmaReason) => FOR[r]
 /** The words Settings shows about Gemma */
 export function gemmaStatusLine(o: { loaded: boolean | null; claudeMain: boolean; reason?: GemmaReason; idleMinutes: number; serverUp?: boolean }): string {
   const unloads = o.idleMinutes ? `unloads after ${o.idleMinutes} min unused` : 'stays loaded (Free its memory when idle is set to Never)'
-  if (o.loaded === null) return o.serverUp === false ? (o.claudeMain ? 'Gemma: not running. Claude is teaching. The server starts when a private notebook or offline lesson needs it.' : 'Gemma: the server isn’t running.') : 'Gemma: can’t tell whether it’s loaded (only an mlx-vlm server on this Mac says).'
+  if (o.loaded === null) return o.serverUp === false ? (o.claudeMain ? 'Gemma: not running. Claude is teaching. The server starts when Claude can’t answer or you pick Gemma.' : 'Gemma: the server isn’t running.') : 'Gemma: can’t tell whether it’s loaded (only an mlx-vlm server on this Mac says).'
   if (!o.loaded) {
     return o.claudeMain
-      ? 'Gemma: not loaded. Claude is teaching. It loads when a private notebook or offline lesson needs it.'
+      ? 'Gemma: not loaded. Claude is teaching. It loads when Claude can’t answer or you pick Gemma.'
       : `Gemma: not loaded. It loads when you next ask it something${o.reason ? `, for ${reasonText(o.reason)}` : ''}.`
   }
   if (o.reason) return `Gemma: loaded for ${reasonText(o.reason)}, ${unloads}.`

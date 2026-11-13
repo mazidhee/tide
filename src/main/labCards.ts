@@ -24,7 +24,7 @@ Rules:
 - The back is the command in backticks, then a short explanation of its flags, e.g. "\`tail -n 20 -f app.log\`: -n 20 shows 20 lines, -f keeps reading as the file grows".
 - Generalise file names only when that makes the card clearer.
 - Return ONLY a JSON array like [{"front": "...", "back": "..."}].`
-  const cards = extractJsonArray<LabCard>(await completeFor('labCards', prompt, undefined, { text: prompt })).filter((c) => typeof c?.front === 'string' && typeof c?.back === 'string' && c.back.includes('`'))
+  const cards = extractJsonArray<LabCard>(await completeFor('labCards', prompt, undefined)).filter((c) => typeof c?.front === 'string' && typeof c?.back === 'string' && c.back.includes('`'))
   if (!cards.length) throw new Error("The tutor couldn't turn these commands into cards. Try again.")
   const current = await readText(LAB_CARDS_NOTE).catch(() => '')
   const day = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })

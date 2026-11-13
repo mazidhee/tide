@@ -8,9 +8,8 @@
  * While Claude is the main tutor (set up, logged in, not at its limit, online), Gemma is loaded on
  * demand (shared/gemmaPolicy):
  * - nothing loads it at launch, on focus, after sleep or in the minute's check;
- * - a job routed to Gemma loads it (a private notebook, Metabase, a Claude call that failed), and
- *   the obvious cases load it ahead: a private lesson about to open, Claude hitting its limit,
- *   logging out or going offline;
+ * - a job routed to Gemma loads it (Gemma picked, a Claude call that failed or hung), and the
+ *   obvious cases load it ahead: Claude hitting its limit, logging out or going offline;
  * - it is unloaded 5 minutes after its last use (never later than the setting), and once at
  *   launch when it is loaded and nobody is using it.
  * When Claude isn't the main tutor, Gemma is kept ready as before: loaded at launch and as you come
@@ -197,7 +196,7 @@ export async function useGemma(reason: GemmaReason): Promise<{ loaded: boolean }
 }
 
 let prewarming: Promise<void> | null = null
-/** Loads Gemma now, ahead of a job that will need it (a private notebook opening, Claude at its limit) */
+/** Loads Gemma now, ahead of a job that will need it (Claude at its limit, offline) */
 export function prewarmGemma(reason: GemmaReason): Promise<void> {
   noteGemmaDemand(reason)
   prewarming ??= (async () => {

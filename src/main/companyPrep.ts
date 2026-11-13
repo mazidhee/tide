@@ -105,7 +105,7 @@ export async function draftCompanyPrep(req: CompanyPrepRequest, emit: (e: ChatEv
     ]
       .filter(Boolean)
       .join('\n\n')
-    // Claude when nothing filed under the company is in a private project, else Gemma (shared/gemmaPolicy)
+    // Claude, else Gemma when Claude can't (shared/gemmaPolicy)
     for await (const text of draftFor(
       'companyPrep',
       [
@@ -114,8 +114,7 @@ export async function draftCompanyPrep(req: CompanyPrepRequest, emit: (e: ChatEv
       ],
       controller.signal,
       3500,
-      'planning',
-      { path: filed, text: `${req.company}\n${req.role ?? ''}\n${req.notes ?? ''}` }
+      'planning'
     )) {
       emit({ id: req.id, type: 'delta', text })
     }

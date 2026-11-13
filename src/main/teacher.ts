@@ -1,8 +1,7 @@
 /**
  * Who teaches a turn: Claude (the user's own plan, through Claude Code) or Gemma on this Mac.
- * The hard rule first: a private project or anything about the user's Metabase is always Gemma's,
- * whatever was chosen. Then the lesson's own choice, the notebook's, and the "Who teaches" setting
- * (Claude by default once it is set up).
+ * The lesson's own choice, the notebook's, and the "Who teaches" setting (Claude by default once
+ * it is set up). Gemma teaches only when picked or when Claude can't.
  */
 import type { ChatRequest, ClaudeSettings } from '@shared/types'
 
@@ -19,8 +18,6 @@ export interface TeacherInput {
   ready: boolean
   /** Why it isn't ready, in a few words */
   notReady?: string
-  /** A private project or Metabase */
-  private: boolean
 }
 
 export function chooseTeacher(o: TeacherInput): Teacher {
@@ -30,23 +27,9 @@ export function chooseTeacher(o: TeacherInput): Teacher {
   // Asked for in so many words (here, or the notebook or setting says Claude while Claude Code is
   // installed): when it can't, say why. Never installed and never chosen: Gemma, without a word.
   const explicit = o.engine === 'claude' || o.notebook === 'claude' || o.setting === 'claude' || o.installed
-  if (o.private) return { who: 'gemma', why: explicit ? 'Private: this stays on your Mac, so Gemma is teaching' : undefined }
   if (!o.installed) return { who: 'gemma', why: explicit ? 'Claude Code isn’t installed, so Gemma is teaching' : undefined }
   if (!o.ready) return { who: 'gemma', why: `Claude can’t teach right now (${o.notReady ?? 'not ready'}), so Gemma is teaching` }
   return { who: 'claude' }
-}
-
-/** A private project's documents, or anything about the user's Metabase: never sent off this Mac */
-export async function isPrivateTurn(req: Pick<ChatRequest, 'scope' | 'messages'>): Promise<boolean> {
-  const { metabaseHost, metabaseReady } = await import('./metabase')
-  const { aboutMetabase } = await import('@shared/metabase')
-  if (metabaseReady() && req.messages.some((m) => aboutMetabase(m.content, metabaseHost()))) return true
-  // Lessons that talk about Metabase by name are kept on the Mac even before it's connected
-  if (req.messages.some((m) => typeof m.content === 'string' && /\bmetabase\b/i.test(m.content))) return true
-  if (req.scope.kind === 'none' || req.scope.kind === 'vault') return false
-  const { privatePath } = await import('./projects')
-  // Unsure counts as private
-  return privatePath(req.scope.path).catch(() => true)
 }
 
 /** The notebook a lesson or chat is in, for its "Who teaches" */
@@ -62,33 +45,11 @@ export async function notebookTutor(req: Pick<ChatRequest, 'scope'>): Promise<Te
 export async function teacherFor(req: ChatRequest): Promise<Teacher> {
   const { getSettings } = await import('./settings')
   const { claudeInstalled, claudeReady } = await import('./claudeEngine')
-  const [priv, notebook] = await Promise.all([isPrivateTurn(req), notebookTutor(req)])
+  const notebook = await notebookTutor(req)
   const setting = getSettings().ai.claude?.teacher
   const installed = claudeInstalled()
   // Only ask the CLI when Claude could be the one
-  const wantsClaude = chooseTeacher({ engine: req.engine, notebook, setting, installed, ready: true, private: false }).who === 'claude'
-  const r = wantsClaude && !priv ? await claudeReady() : { installed, ready: false, why: undefined }
-  return chooseTeacher({ engine: req.engine, notebook, setting, installed, ready: r.ready, notReady: r.why, private: priv })
-}
-
-/**
- * Whether a job's text must stay on this Mac, for jobs without a note path to go by (the weekly
- * coach, reading picks): anything about Metabase, or a private project named in it. Unsure counts
- * as private.
- */
-export async function privateText(text: string): Promise<'metabase' | 'private' | null> {
-  if (/\bmetabase\b/i.test(text)) return 'metabase'
-  try {
-    const { getNotebooks } = await import('./learn')
-    const lower = text.toLowerCase()
-    for (const nb of await getNotebooks()) {
-      if (!nb.project?.private) continue
-      const name = (nb.name || nb.path.split('/').pop() || '').toLowerCase().trim()
-      if (name && lower.includes(name)) return 'private'
-      if (lower.includes(nb.path.toLowerCase())) return 'private'
-    }
-    return null
-  } catch {
-    return 'private'
-  }
+  const wantsClaude = chooseTeacher({ engine: req.engine, notebook, setting, installed, ready: true }).who === 'claude'
+  const r = wantsClaude ? await claudeReady() : { installed, ready: false, why: undefined }
+  return chooseTeacher({ engine: req.engine, notebook, setting, installed, ready: r.ready, notReady: r.why })
 }

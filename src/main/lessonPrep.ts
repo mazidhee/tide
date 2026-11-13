@@ -9,7 +9,7 @@
  *   so the lesson sets them by id at no cost;
  * - the lesson's first reply (Sonnet), with a custom visual when the plan asks for one.
  * Starting it is instant: the lesson opens on the prepared exchange. Picking something else keeps
- * it for later. Claude is used only for non-private topics, never near the plan's limit, and
+ * it for later. Claude is used never near the plan's limit, and
  * within the night's allowance (Settings › Study time); without Claude, prep gathers what needs no
  * model. Also, once a week, the weekly review note and the profile's tidy.
  */
@@ -149,12 +149,12 @@ export type PrepAsk = (job: JobName, prompt: string, system: string) => Promise<
 function claudeAsk(counter: { calls: number }): PrepAsk {
   return async (job, prompt, system) => {
     const { jobRoute, completeFor } = await import('./ai')
-    const route = await jobRoute(job, prompt, { text: prompt })
+    const route = await jobRoute(job)
     if (route.who !== 'claude') return null
     counter.calls++
     const u = await usage()
     await setUsage({ calls: u.calls + 1 })
-    return completeFor(job, prompt, system, { priority: 'background', noFallback: true, text: prompt, timeoutMs: 240_000 }).catch((e) => (console.warn(`[prep] ${job}: ${(e as Error).message}`), null))
+    return completeFor(job, prompt, system, { priority: 'background', noFallback: true, timeoutMs: 240_000 }).catch((e) => (console.warn(`[prep] ${job}: ${(e as Error).message}`), null))
   }
 }
 
@@ -202,16 +202,6 @@ export async function nextTarget(skip: string[] = []): Promise<PrepTarget | null
     if (t) return { topic: t.topic, notebook: nb.name, topicId: t.topicId, section: t.section, forDate: next }
   }
   return null
-}
-
-/** Whether a topic must stay on the Mac: a private project's notebook, or Metabase */
-async function privateTopic(t: PrepTarget): Promise<boolean> {
-  const { privatePath } = await import('./projects')
-  const { getNotebooks } = await import('./learn')
-  const nb = t.notebook ? (await getNotebooks().catch(() => [])).find((n) => n.name === t.notebook || n.path === t.notebook) : undefined
-  if (nb && (await privatePath(nb.path).catch(() => true))) return true
-  const { privateText } = await import('./teacher')
-  return (await privateText(`${t.topic} ${t.notebook ?? ''}`).catch(() => 'private')) !== null
 }
 
 // ---------- Preparing ----------
@@ -295,8 +285,7 @@ async function readingFor(t: PrepTarget, allowWeb: boolean): Promise<PreparedLes
  */
 export async function prepareLesson(t: PrepTarget, o: { claude: boolean; note?: string }, deps: PrepDeps = {}): Promise<PreparedLesson> {
   const { strategyChoice, whyByDefault, openingMessage, withPassage, sessionInstructions, SESSION_FORMAT } = await import('@shared/session')
-  const secret = await privateTopic(t).catch(() => true)
-  const useClaude = o.claude && !secret
+  const useClaude = o.claude
   const scope: ChatScope = t.notebook ? { kind: 'folder', path: t.notebook } : { kind: 'vault' }
   const choice = strategyChoice({ mode: 'teach', topic: t.topic }, scope)
   const why = whyByDefault(getSettings().whyMode, t.topic, t.topicId)
@@ -305,7 +294,7 @@ export async function prepareLesson(t: PrepTarget, o: { claude: boolean; note?: 
   const counter = { calls: 0 }
   const ask = deps.ask ?? claudeAsk(counter)
   const verify = deps.verify ?? verifyOne
-  const [due, reading] = await Promise.all([dueFor(t, scope), readingFor(t, !secret && getSettings().ai.webSearch?.provider !== 'off').catch(() => undefined)])
+  const [due, reading] = await Promise.all([dueFor(t, scope), readingFor(t, getSettings().ai.webSearch?.provider !== 'off').catch(() => undefined)])
   const prep: PreparedLesson = {
     id,
     at: Date.now(),
@@ -323,7 +312,7 @@ export async function prepareLesson(t: PrepTarget, o: { claude: boolean; note?: 
     exercises: [],
     by: 'local',
     calls: 0,
-    ...(secret ? { note: 'Private: prepared on this Mac only' } : !useClaude && o.note ? { note: o.note } : {})
+    ...(!useClaude && o.note ? { note: o.note } : {})
   }
   if (!useClaude) {
     prep.exercises = await bankedFor(t.topic, 4)
@@ -334,7 +323,7 @@ export async function prepareLesson(t: PrepTarget, o: { claude: boolean; note?: 
   // 1. The plan and why today (Opus)
   const [{ profilePrompt }, { earlierLessons }] = await Promise.all([import('./coach'), import('./lessons')])
   const profile = await profilePrompt().catch(() => '')
-  const earlier = await earlierLessons(t.topic, false).catch(() => '')
+  const earlier = await earlierLessons(t.topic).catch(() => '')
   const dueText = [due.due.onTopic.length ? `recall due on it: ${due.due.onTopic.join(' / ')}` : '', due.due.fading.length ? `fading: ${due.due.fading.join(', ')}` : ''].filter(Boolean).join('; ')
   const planOut = await ask('lessonPrep', prepPlanPrompt({ topic: t.topic, notebook: t.notebook, section: t.section, agendaWhy: t.why, profile, earlier, due: dueText, reading: reading?.title, minutes: t.minutes }), PREP_PLAN_SYSTEM)
   const plan = planOut ? parsePrepPlan(extractJson(planOut)) : null
@@ -401,7 +390,7 @@ export async function weekFacts(end = localDate()): Promise<WeekFacts> {
   const { scoreSession, levelById } = await import('@shared/mentalMaths')
   const { digestLesson } = await import('@shared/lessonMemory')
   const { parseProfile } = await import('@shared/learnerProfile')
-  const { LEARNER_NOTE, lessonIsPrivate } = await import('./learnerProfile')
+  const { LEARNER_NOTE } = await import('./learnerProfile')
   const week = await weekReview(end).catch(() => null)
   const endMs = new Date(end + 'T23:59:59').getTime()
   const since = endMs - 7 * DAY
@@ -411,12 +400,11 @@ export async function weekFacts(end = localDate()): Promise<WeekFacts> {
   for (const n of names.filter((x) => x.endsWith('.json'))) {
     const r = await readText(`.tide/lessons/${n}`).then((x) => JSON.parse(x)).catch(() => null)
     if (!r || r.updated < since || r.updated > endMs) continue
-    if (await lessonIsPrivate(r).catch(() => true)) continue
     const d = digestLesson(r)
     if (d) lessons.push({ topic: r.topic, finished: !!r.finished, right: d.right, asked: d.right + d.partly + d.wrong })
   }
   // Knowledge
-  const concepts = await allConcepts(false).catch(() => [])
+  const concepts = await allConcepts().catch(() => [])
   const learned = concepts.filter((c) => !c.parent && c.status === 'solid' && (c.lastRight ?? 0) >= since).map((c) => c.name).slice(0, 8)
   const fading = concepts
     .filter((c) => !c.parent && c.status === 'fading')

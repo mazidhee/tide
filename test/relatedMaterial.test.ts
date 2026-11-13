@@ -1,10 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-const flags = vi.hoisted(() => ({ priv: false }))
-vi.mock('../src/main/exercises', () => ({ lessonInfo: () => (flags.priv ? { private: true } : { path: 'Open/notebook' }), EXERCISE_TOOLS: [] }))
+vi.mock('../src/main/exercises', () => ({ lessonInfo: () => ({ path: 'Work/Secret', private: true }), EXERCISE_TOOLS: [] }))
 const dir = mkdtempSync(join(tmpdir(), 'tide-related-'))
 vi.mock('electron', () => ({ app: { getPath: () => dir }, BrowserWindow: { getAllWindows: () => [] } }))
 
@@ -20,11 +19,10 @@ vi.mock('../src/main/courses', () => ({
 vi.mock('../src/main/videos', () => ({
   getTranscript: async () => ({ transcript: null, why: 'offline' }),
   clipsFor: async () => [
-    { video: 'PPPPPPPPPPP', start: 10, end: 100, title: 'My private recording', text: 'secret', score: 0.95, path: 'Work/Secret/video.md' },
-    { video: 'AAAAAAAAAAA', start: 760, end: 905, title: 'Deploying models', text: 'why we serve behind an API', score: 0.9 }
+    { video: 'AAAAAAAAAAA', start: 760, end: 905, title: 'Deploying models', text: 'why we serve behind an API', score: 0.9 },
+    { video: 'PPPPPPPPPPP', start: 10, end: 100, title: 'My work recording', text: 'how our team deploys models', score: 0.88, path: 'Work/Secret/video.md' }
   ]
 }))
-vi.mock('../src/main/projects', () => ({ privatePath: async (p: string) => p.startsWith('Work/Secret') }))
 
 for (const id of ['mlops-zoomcamp', 'made-with-ml']) {
   mkdirSync(join(dir, 'courses', id), { recursive: true })
@@ -34,9 +32,9 @@ for (const id of ['mlops-zoomcamp', 'made-with-ml']) {
 const { relatedMaterial } = await import('../src/main/related')
 
 describe('the cross-course search behind related_material', () => {
-  it('finds both courses’ material, attributed, and never a private note’s video', async () => {
+  it('finds both courses’ material, attributed, and a work project’s video too', async () => {
     const r = await relatedMaterial('model deployment', { limit: 3 })
-    expect(r.items.some((i) => i.kind === 'clip' && i.video === 'PPPPPPPPPPP')).toBe(false)
+    expect(r.items.some((i) => i.kind === 'clip' && i.video === 'PPPPPPPPPPP')).toBe(true)
     const clip = r.items.find((i) => i.kind === 'clip')
     expect(clip).toMatchObject({ video: 'AAAAAAAAAAA', course: 'mlops-zoomcamp', courseTitle: 'MLOps Zoomcamp' })
     const reading = r.items.find((i) => i.kind === 'reading')
@@ -53,19 +51,14 @@ describe('the cross-course search behind related_material', () => {
 })
 
 describe('related_material, the MCP tool', () => {
-  beforeEach(() => {
-    flags.priv = false
-  })
   const ctx = { signal: new AbortController().signal, sources: [], emitSources: () => {}, step: () => 's1', updateStep: () => {}, web: false, labId: 'lesson-1', chatId: undefined }
 
-  it('teaches from both courses with attribution, and refuses a private lesson', async () => {
+  it('teaches from both courses with attribution, in a work project’s lesson too', async () => {
     const { EXTRA_TOOLS } = await import('../src/main/tideMcpTools')
     const tool = EXTRA_TOOLS.find((t) => t.name === 'related_material')!
     const out = await tool.run({ concept: 'model deployment' }, ctx as never)
     expect(out).toContain('READING from Made With ML')
     expect(out).toContain('the MLOps Zoomcamp video at 12:40')
-    expect(out).not.toContain('My private recording')
-    flags.priv = true
-    expect(await tool.run({ concept: 'model deployment' }, ctx as never)).toMatch(/private/)
+    expect(out).not.toMatch(/private/)
   })
 })

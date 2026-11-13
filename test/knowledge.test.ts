@@ -46,7 +46,7 @@ describe('concepts from a roadmap', () => {
     expect(by('Shortest paths').section).toBe('Graphs')
     expect(concepts.map((c) => c.order)).toEqual([0, 1, 2, 3, 4, 5])
     expect(concepts.every((c) => c.origin === 'roadmap' && c.area === 'Algorithms')).toBe(true)
-    expect(roadmapConcepts(roadmapTopics('Algorithms', ROADMAP), true).every((c) => c.private)).toBe(true)
+    expect(concepts.some((c) => 'private' in c)).toBe(false)
   })
 
   it('reads what a line says it needs', () => {
@@ -102,10 +102,10 @@ describe('evidence from a lesson record', () => {
     expect(new Set(events.map((e) => `${e.source}#${e.pos}`)).size).toBe(events.length)
 
     const done = lesson({ finished: true })
-    const all = lessonEvidence(done, digestLesson(done)!, { id: 'c', area: 'Algorithms' }, true)
+    const all = lessonEvidence(done, digestLesson(done)!, { id: 'c', area: 'Algorithms' })
     expect(all.steps.map((s) => s.name)).toEqual(['Hash functions', 'Collisions and chaining', 'Load factor and resizing'])
     expect(all.events.find((e) => e.pos === 'taught')!.weight).toBe(1)
-    expect(all.events.every((e) => e.private) && all.steps.every((s) => s.private)).toBe(true)
+    expect(all.events.some((e) => 'private' in e) || all.steps.some((s) => 'private' in s)).toBe(false)
 
     // A quiz teaches nothing: only its answers count
     const quiz = lesson({ mode: 'quiz' })
@@ -224,10 +224,10 @@ describe('the knowledge map, through lessons, recall and answers', () => {
     const view = await knowledgeView()
     expect(existsSync(FILE)).toBe(true)
     expect(view.areas.map((a) => a.name).sort()).toEqual(['Algorithms', 'Bank'])
-    // Both roadmaps, in order, with the private one marked
+    // Both roadmaps, in order; the once-private project's is marked private no longer
     const top = view.concepts.filter((c) => !c.parent)
     expect(top.filter((c) => c.area === 'Algorithms' && c.origin === 'roadmap').map((c) => c.name)).toEqual(['Arrays', 'Hash tables', 'Bloom filters', 'Tries', 'Breadth-first search', 'Shortest paths'])
-    expect(top.filter((c) => c.area === 'Bank').every((c) => c.private)).toBe(true)
+    expect(top.filter((c) => c.area === 'Bank').some((c) => c.private)).toBe(false)
 
     // The old lesson counts on its roadmap topic; its own answers in the attempts log are not counted again;
     // the recall a week later is, as a recall
@@ -336,24 +336,19 @@ describe('the knowledge map, through lessons, recall and answers', () => {
     expect(aim.say).toMatch(/^Too early to forecast Algorithms/)
   })
 
-  it('keeps private work for a reader on this Mac only', async () => {
+  it('counts a work project’s lessons like any other, for every lesson’s tutor', async () => {
     const r = lesson({ id: 'bank-1', topic: 'Ledger reconciliation', scope: { kind: 'folder', path: 'Bank' } })
     await saveLesson({ id: r.id, mode: r.mode, topic: r.topic, scope: r.scope, turns: r.turns })
     const ledger = keptNamed('Ledger reconciliation')
-    expect(ledger.private).toBe(true)
-    expect(ledger.evidence.every((e) => e.private)).toBe(true)
-    // The page is read here, so it is in it
+    expect(ledger.private).toBeUndefined()
+    expect(ledger.evidence.some((e) => e.private)).toBe(false)
     const view = await knowledgeView()
     expect(view.concepts.find((c) => c.id === ledger.id)!.seen).toBe(4)
-    // The next topic on that roadmap builds on it: said to a private lesson's tutor, never to one that may leave the Mac
-    expect(await earlierLessons('Settlement files', true)).toContain('"Ledger reconciliation"')
-    expect(await earlierLessons('Settlement files', false)).not.toContain('Ledger')
-    expect(await earlierLessons('Ledger reconciliation', false)).not.toContain('This topic itself')
-    // Private evidence on an open topic is left out of an open lesson's note as well
+    // The next topic on that roadmap builds on it, and every lesson hears so
+    expect(await earlierLessons('Settlement files')).toContain('"Ledger reconciliation"')
     const quiet = lesson({ id: 'bank-2', topic: 'Tries', scope: { kind: 'folder', path: 'Bank' }, finished: true })
     await saveLesson({ id: quiet.id, mode: quiet.mode, topic: quiet.topic, scope: quiet.scope, turns: quiet.turns, finished: true })
     expect(keptNamed('Tries').private).toBeUndefined()
-    expect(await earlierLessons('Tries', true, 'bank-2')).toContain('This topic itself')
-    expect(await earlierLessons('Tries', false, 'bank-2')).not.toContain('This topic itself')
+    expect(await earlierLessons('Tries', 'bank-2')).toContain('This topic itself')
   })
 })

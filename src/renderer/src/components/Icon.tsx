@@ -125,6 +125,8 @@ export const PATHS = {
   // Pop-out windows (lib/popout): a window with its title bar, an arrow leaving it; and coming back in
   popout: 'M4.5 8.5h8.5A1.5 1.5 0 0 1 14.5 10v9A1.5 1.5 0 0 1 13 20.5H4.5A1.5 1.5 0 0 1 3 19v-9a1.5 1.5 0 0 1 1.5-1.5zM3 12h11.5M5.6 10.25h.01M11 15l9.5-9.5M15 4h5.5v5.5',
   popin: 'M4 6A1.5 1.5 0 0 1 5.5 4.5h13A1.5 1.5 0 0 1 20 6v12.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5zM4 8.5h16M6.5 6.5h.01M17 11l-6.5 6.5M10.5 12.5v5h5',
+  // Backups: a box with its lid and handle
+  archive: 'M3.5 5h17v4h-17zM5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9M10 12.5h4',
   claude: 'M12 3.5v4M12 16.5v4M3.5 12h4M16.5 12h4M6 6l2.8 2.8M15.2 15.2L18 18M6 18l2.8-2.8M15.2 8.8L18 6',
 } as const
 

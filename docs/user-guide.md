@@ -15,7 +15,7 @@ The guide is one page per topic in [`guide/`](guide/), and the same pages are in
 - [Understand a system at work](guide/13-flow-system.md): Give Tide a design doc or spec. It maps the system's parts and flows, and teaches you each one using your system's own names and data.
 - [Talk with your tutor](guide/14-flow-voice.md): Set up the natural voice once, pick who you hear, and have a spoken lesson without touching the keyboard.
 - [Prepare for an interview](guide/15-flow-interview.md): Research the company, plan the prep, then run rounds that feel like the real thing and track your score.
-- [Learn your Metabase](guide/16-flow-metabase.md): Connect Tide to your Metabase and ask the tutor what dashboards measure and how charts are built, with real numbers. Read-only, and on your Mac.
+- [Learn your Metabase](guide/16-flow-metabase.md): Connect Tide to your Metabase and ask the tutor what dashboards measure and how charts are built, with real numbers. Read-only, taught by Claude.
 
 ## Everyday
 

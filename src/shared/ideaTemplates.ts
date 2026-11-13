@@ -13,7 +13,7 @@ export interface IdeaTemplate {
   about: string
   /** Words in an idea that point to it */
   match: RegExp
-  plan: Omit<ProjectPlan, 'createdAt' | 'private' | 'by' | 'idea' | 'answers'>
+  plan: Omit<ProjectPlan, 'createdAt' | 'by' | 'idea' | 'answers'>
 }
 
 const PY_GITIGNORE = '__pycache__/\n.pytest_cache/\n.venv/\n*.pyc\n'
@@ -1216,8 +1216,8 @@ export function matchTemplate(idea: string): IdeaTemplate | null {
 }
 
 /** A template as a whole plan, ready to check and show */
-export function planFromTemplate(t: IdeaTemplate, idea: string, now: number, isPrivate: boolean): ProjectPlan {
+export function planFromTemplate(t: IdeaTemplate, idea: string, now: number): ProjectPlan {
   // A template whole is a system, or a flagship for the long ones
   const tier = t.plan.tier ?? (['market-terminal', 'exchange'].includes(t.id) ? 4 : 3)
-  return JSON.parse(JSON.stringify({ ...t.plan, tier, idea: idea.trim() || t.about, template: t.id, by: 'template', private: isPrivate, createdAt: now })) as ProjectPlan
+  return JSON.parse(JSON.stringify({ ...t.plan, tier, idea: idea.trim() || t.about, template: t.id, by: 'template', createdAt: now })) as ProjectPlan
 }

@@ -182,11 +182,24 @@ const api: TideApi = {
     render: invoke('speed:render'),
     memory: invoke('speed:memory')
   },
+  bugs: {
+    info: invoke('bugs:info'),
+    open: invoke('bugs:open'),
+    file: invoke('bugs:file'),
+    discard: invoke('bugs:discard')
+  },
+  backups: {
+    status: invoke('backups:status'),
+    now: invoke('backups:now'),
+    reveal: invoke('backups:reveal'),
+    chooseFolder: invoke('backups:chooseFolder'),
+    defaultFolder: invoke('backups:defaultFolder'),
+    restore: invoke('backups:restore')
+  },
   gemma: {
     status: invoke('gemma:status'),
     load: invoke('gemma:load'),
-    unload: invoke('gemma:unload'),
-    prewarmFor: invoke('gemma:prewarmFor')
+    unload: invoke('gemma:unload')
   },
   usage: {
     report: invoke('usage:report')
@@ -324,6 +337,8 @@ const api: TideApi = {
     get: invoke('coach:get'),
     save: invoke('coach:save'),
     week: invoke('coach:week'),
+    progress: invoke('coach:progress'),
+    progressSummary: invoke('coach:progressSummary'),
     planWeek: invoke('coach:planWeek'),
     profile: invoke('coach:profile'),
     infer: invoke('coach:infer'),

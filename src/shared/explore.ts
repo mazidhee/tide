@@ -36,16 +36,12 @@ export interface ExploreItem {
   from: ExploreFrom
   /** When it was kept */
   at: number
-  /** The lesson was private (a private project, Metabase): its side lesson stays on this Mac */
-  private?: boolean
-  /** A private lesson's scope, so its side lesson is kept on this Mac as well */
-  scope?: ChatScope
   /** The side lesson it was explored in, once that finished */
   explored?: { at: number; lesson?: string; topic: string }
 }
 
 /** What a capture sends: everything but what main fills in */
-export type ExploreInput = Pick<ExploreItem, 'text' | 'subject' | 'from'> & { scope?: ChatScope }
+export type ExploreInput = Pick<ExploreItem, 'text' | 'subject' | 'from'>
 
 /** The side lesson a curiosity item starts (SessionSetup options.curiosity) */
 export interface CuriositySetup {

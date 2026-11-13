@@ -197,7 +197,7 @@ export const LADDER: LadderSeed[] = [
 export const ladderSeed = (id: string | null | undefined) => LADDER.find((s) => s.id === id) ?? null
 
 /** A seed's starting map: its template cut to size, or with a flagship's weeks on top */
-export function seedPlan(seed: LadderSeed, idea: string, now: number, isPrivate: boolean): ProjectPlan {
+export function seedPlan(seed: LadderSeed, idea: string, now: number): ProjectPlan {
   const t: IdeaTemplate | null = ideaTemplate(seed.template)
   if (!t) throw new Error(`No template ${seed.template}`)
   const base = JSON.parse(JSON.stringify(t.plan)) as IdeaTemplate['plan']
@@ -216,14 +216,14 @@ export function seedPlan(seed: LadderSeed, idea: string, now: number, isPrivate:
     links = [...links, ...seed.more.links]
     milestones = [...milestones, ...seed.more.milestones.map((m) => ({ ...m, readings: [], recall: [], status: 'todo' as const }))]
   }
-  const raw = { ...base, name: seed.title, slug: seed.id, summary: seed.milestones ? `${seed.about}, built on its own: the first step towards ${t.name.charAt(0).toLowerCase()}${t.name.slice(1)}.` : base.summary + (seed.more ? ` ${seed.about}.` : ''), components, links, milestones, idea: idea.trim() || seed.about, template: t.id, seed: seed.id, tier: seed.tier, area: seed.areas[0], private: isPrivate, by: 'template', createdAt: now }
-  return validatePlan(raw, { by: 'template', private: isPrivate, tier: seed.tier, area: seed.areas[0], seed: seed.id, template: t.id, createdAt: now }).plan!
+  const raw = { ...base, name: seed.title, slug: seed.id, summary: seed.milestones ? `${seed.about}, built on its own: the first step towards ${t.name.charAt(0).toLowerCase()}${t.name.slice(1)}.` : base.summary + (seed.more ? ` ${seed.about}.` : ''), components, links, milestones, idea: idea.trim() || seed.about, template: t.id, seed: seed.id, tier: seed.tier, area: seed.areas[0], by: 'template', createdAt: now }
+  return validatePlan(raw, { by: 'template', tier: seed.tier, area: seed.areas[0], seed: seed.id, template: t.id, createdAt: now }).plan!
 }
 
 /** The concepts a seed teaches: its milestones' lessons */
 export function seedConcepts(seed: LadderSeed): string[] {
   try {
-    return seedPlan(seed, '', 0, false).milestones.flatMap((m) => m.lessons.map((l) => l.concept))
+    return seedPlan(seed, '', 0).milestones.flatMap((m) => m.lessons.map((l) => l.concept))
   } catch {
     return []
   }

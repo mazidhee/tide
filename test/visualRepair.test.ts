@@ -1,5 +1,5 @@
 /**
- * Claude's visuals in main: where they may run (never a private notebook), one repair and a
+ * Claude's visuals in main: where they may run (every lesson), one repair and a
  * fallback through the stand-in CLI, and each lesson's kept visuals in its record.
  */
 import { mkdirSync, mkdtempSync, readFileSync, existsSync } from 'fs'
@@ -13,7 +13,6 @@ mkdirSync(join(vault, '.tide', 'lessons'), { recursive: true })
 vi.mock('electron', () => ({ app: { getPath: () => root, getAppPath: () => process.cwd(), isPackaged: false } }))
 vi.mock('../src/main/settings', () => ({ getSettings: () => ({ vaultPath: vault, libraryFolder: 'Library', ai: { claude: {} } }) }))
 vi.mock('../src/main/claudeCli', async (orig) => ({ ...(await orig<object>()), checkClaude: async () => ({ installed: true, loggedIn: true, checkedAt: Date.now() }) }))
-vi.mock('../src/main/projects', async (orig) => ({ ...(await orig<object>()), privatePath: async (p: string) => p.startsWith('Secret project') }))
 
 const engine = await import('../src/main/claudeEngine')
 engine.setClaudeCommand(() => resolve('test/fixtures/fake-claude.mjs'))
@@ -27,17 +26,13 @@ const secret = { kind: 'folder' as const, path: 'Secret project' }
 
 describe('where visuals run', () => {
   it('in an ordinary lesson, with Claude to repair them', async () => {
-    expect(await visualPolicy(open)).toEqual({ show: true, repair: true })
-    expect(await visualPolicy({ kind: 'none' })).toEqual({ show: true, repair: true })
+    expect(await visualPolicy()).toEqual({ show: true, repair: true })
   })
-  it('never in a private notebook, and nothing goes to Claude from one', async () => {
+  it('in a once-private notebook too, repaired by Claude like any other', async () => {
     const before = calls().length
-    expect(await visualPolicy(secret)).toMatchObject({ show: false, repair: false })
-    expect(await repairVisual({ code: BROKEN, errors: ['undefinedThing is not defined'], scope: secret })).toBeNull()
-    expect(await visualFallback({ code: BROKEN, title: 'Split', scope: secret })).toBeNull()
-    // A malformed scope is read as none, which is not private
-    expect(await visualPolicy({ kind: 'note', path: 42 })).toMatchObject({ show: true })
-    expect(calls().length).toBe(before)
+    expect(await visualPolicy()).toMatchObject({ show: true, repair: true })
+    expect(await repairVisual({ code: BROKEN, errors: ['undefinedThing is not defined'], scope: secret })).not.toBeNull()
+    expect(calls().length).toBe(before + 1)
   })
 })
 

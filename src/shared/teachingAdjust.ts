@@ -347,8 +347,7 @@ export function deriveAdjustments(m: TeachingMeasures | null, reviews: LessonRev
 
 /**
  * The lines the tutor gets, in the stable part of its prompt (they change only when a lesson is
- * measured or reviewed, or a switch is flipped). Known misconceptions are named only when the
- * turn may hear about them (a private lesson's misconceptions stay out of a Claude turn).
+ * measured or reviewed, or a switch is flipped), with the known misconceptions named.
  */
 export function adjustmentsPrompt(states: AdjustmentState[], misconceptions: string[] = []): string {
   const active = states.filter((s) => s.active)
@@ -374,7 +373,7 @@ export interface TeachingView {
   adjustments: AdjustmentState[]
   /** Reviews can be written (Claude is the main tutor) */
   canReview: boolean
-  /** Lessons with answers that have no review yet and may have one (not private), newest first */
+  /** Lessons with answers that have no review yet, newest first */
   unreviewed: {
     id: string
     topic: string

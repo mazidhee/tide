@@ -16,8 +16,6 @@ export type ProjectKind = 'understand' | 'build'
 
 export interface ProjectInfo {
   kind: ProjectKind
-  /** Answered only by the model on this Mac, never a cloud model */
-  private: boolean
   /** Its documents, by vault path (anything filed under the project in the Library counts too) */
   docs: string[]
   /** For a build: the brief Tide drafted with you */

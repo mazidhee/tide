@@ -2,7 +2,7 @@
  * Sorting your roadmaps against your aims, in the background: what each section is for and how
  * much each aim needs it (the model, except where your own heading tags already say), and which
  * topics are history or background for weekend primers. Kept in .tide/curriculum and redone only
- * for what changed: new sections, new topics, or different aims. Private projects stay on Gemma.
+ * for what changed: new sections, new topics, or different aims.
  */
 import { aimsKey, aimsOf } from '@shared/coach'
 import {
@@ -31,7 +31,6 @@ import type { ReplySchema } from './cloudStream'
 import { ENRICH_SCHEMA, PROPOSALS_SCHEMA, SORT_SCHEMA } from './replySchemas'
 import { getCoach } from './coach'
 import { getNotebooks } from './learn'
-import { privatePath } from './projects'
 import { readText, writeText } from './vault'
 
 const DIR = '.tide/curriculum'
@@ -70,19 +69,17 @@ export async function setOverride(id: string, cls: SectionClass | null): Promise
   return all
 }
 
-/** One model answer: the cloud planning model when it may see this, then Claude's background model, else Gemma in the background lane */
-export async function ask(system: string, prompt: string, onMac: boolean, signal: AbortSignal, schema?: ReplySchema): Promise<{ text: string; model: string }> {
-  if (!onMac) {
-    try {
-      let model = 'cloud'
-      const text = await askCloud(prompt, system, 'planning', signal, true, 3000, (t) => (model = t.model), schema)
-      return { text, model }
-    } catch (e) {
-      if (!(e instanceof NoCloud)) throw e
-    }
+/** One model answer: the cloud planning model when one is set up, then Claude's background model, else Gemma in the background lane */
+export async function ask(system: string, prompt: string, signal: AbortSignal, schema?: ReplySchema): Promise<{ text: string; model: string }> {
+  try {
+    let model = 'cloud'
+    const text = await askCloud(prompt, system, 'planning', signal, true, 3000, (t) => (model = t.model), schema)
+    return { text, model }
+  } catch (e) {
+    if (!(e instanceof NoCloud)) throw e
   }
-  const route = await jobRoute('curriculum', `${system}\n${prompt}`, { private: onMac })
-  const text = await completeFor('curriculum', prompt, system, { signal, priority: 'background', task: 'background', private: onMac })
+  const route = await jobRoute('curriculum')
+  const text = await completeFor('curriculum', prompt, system, { signal, priority: 'background', task: 'background' })
   return { text, model: route.who === 'claude' ? 'claude' : 'gemma' }
 }
 
@@ -126,7 +123,7 @@ async function sortAll(): Promise<SortStatus[]> {
   for (const nb of await getNotebooks()) {
     if (!nb.outline) continue
     try {
-      await sortOne(nb.name, nb.outline, await privatePath(nb.path).catch(() => true), aims, key, signal)
+      await sortOne(nb.name, nb.outline, aims, key, signal)
     } catch (e) {
       // A run that fails part-way keeps what it saved; the next run carries on from there
       lastError = (e as Error).message
@@ -135,7 +132,7 @@ async function sortAll(): Promise<SortStatus[]> {
   return curriculumStatus()
 }
 
-async function sortOne(notebook: string, outline: string, onMac: boolean, aims: ReturnType<typeof aimsOf>, key: string, signal: AbortSignal) {
+async function sortOne(notebook: string, outline: string, aims: ReturnType<typeof aimsOf>, key: string, signal: AbortSignal) {
   const topics = roadmapTopics(notebook, await readText(outline))
   const sections = sectionsOf(topics)
   const prev = await loadSorted(notebook)
@@ -165,7 +162,7 @@ async function sortOne(notebook: string, outline: string, onMac: boolean, aims: 
   const todo = sections.filter((s) => !sorted.sections[s.id] || (!s.tagged && !sorted.sections[s.id].class))
   for (let i = 0; i < todo.length; i += SECTION_BATCH) {
     const batch = todo.slice(i, i + SECTION_BATCH)
-    const { text, model } = await ask(SORT_SYSTEM, sortPrompt(aims, notebook, batch), onMac, signal, SORT_SCHEMA)
+    const { text, model } = await ask(SORT_SYSTEM, sortPrompt(aims, notebook, batch), signal, SORT_SCHEMA)
     const got = parseSort(extractJsonObject(text), aims, batch)
     // An untagged section the model gave no class: from what the aims said, so it isn't asked about forever
     for (const s of batch) if (!s.tagged && got[s.id] && !got[s.id].class) got[s.id].class = Math.max(0, ...Object.values(got[s.id].serves)) >= 0.6 ? 'core' : 'skip'
@@ -178,7 +175,7 @@ async function sortOne(notebook: string, outline: string, onMac: boolean, aims: 
   const toLook = topics.filter((t) => !t.project && !looked.has(t.id) && !['elective', 'skip'].includes(classOf(t, sorted, {}, aims) ?? ''))
   for (let i = 0; i < toLook.length; i += TOPIC_BATCH) {
     const batch = toLook.slice(i, i + TOPIC_BATCH)
-    const { text, model } = await ask(ENRICH_SYSTEM, enrichPrompt(batch), onMac, signal, ENRICH_SCHEMA)
+    const { text, model } = await ask(ENRICH_SYSTEM, enrichPrompt(batch), signal, ENRICH_SCHEMA)
     const found = parseEnrich(extractJsonObject(text), batch)
     sorted.enrichment = [...new Set([...sorted.enrichment, ...found])]
     sorted.looked = [...sorted.looked, ...batch.map((t) => t.id)]
@@ -227,7 +224,6 @@ export async function proposeChanges(notebook: string): Promise<Proposal[]> {
   // Big roadmaps are shown a few topics a section, so the request stays a sensible size
   const perSection = Math.max(1, Math.min(12, Math.floor(240 / Math.max(1, sections.length))))
   const { prompt, topics } = proposePrompt(aims, nb.name, sections, perSection)
-  const onMac = await privatePath(nb.path).catch(() => true)
-  const { text } = await ask(PROPOSE_SYSTEM, prompt, onMac, new AbortController().signal, PROPOSALS_SCHEMA)
+  const { text } = await ask(PROPOSE_SYSTEM, prompt, new AbortController().signal, PROPOSALS_SCHEMA)
   return parseProposals(extractJsonObject(text), sections, topics)
 }

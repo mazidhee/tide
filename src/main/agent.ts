@@ -13,12 +13,10 @@ import { afterBackground, asInteractive, inBackground } from './modelQueue'
 import { memoize } from './memo'
 import { getCoach, getWeek, profilePrompt } from './coach'
 import { todayItems } from '@shared/coach'
-import { aboutMetabase } from '@shared/metabase'
 import { metabaseHost, metabaseReady, metabaseTool } from './metabase'
 import { loadImages, type NoteImage } from './noteImages'
 import { pagesToRead } from './books'
 import { ensureSearch, LOCAL_URL, nativeSearch } from './websearch'
-import { privatePath } from './projects'
 import { earlierLessons } from './lessons'
 import { requestSent, timeTurn, toolRan } from './speed'
 import { readingLabel } from '@shared/books'
@@ -264,8 +262,6 @@ interface WebResult {
 export interface SearchOptions {
   when?: 'any' | 'year' | 'month' | 'week' | 'day'
   news?: boolean
-  /** The turn is about a private project or your Metabase: "fastest available" keeps the search on this Mac */
-  onThisMac?: boolean
 }
 
 const isoDay = (d: unknown) => {
@@ -342,14 +338,14 @@ const stripTags = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&quot;/g, '"
  * "Fastest available" picks for each search: You.com when its key is saved and its credit isn't
  * spent (one call, about half a second, several passages from each page, nothing running on this
  * Mac); otherwise Tide's own engine on this Mac (started for the search, a second or so once up);
- * otherwise Wikipedia. A turn about a private project or your Metabase never uses the cloud one.
+ * otherwise Wikipedia.
  */
 async function webSearchNow(query: string, opts: SearchOptions = {}): Promise<WebResult[]> {
   const cfg = getSettings().ai.webSearch
   const chosen = cfg?.provider ?? 'wikipedia'
   if (chosen !== 'auto') return searchWith(chosen, cfg?.url, query, opts)
   const used = useOf('you')
-  if (!opts.onThisMac && getKey('you') && used.thisMonth < YOU_MONTHLY && used.total < YOU_TOTAL) {
+  if (getKey('you') && used.thisMonth < YOU_MONTHLY && used.total < YOU_TOTAL) {
     const found = await searchWith('you', undefined, query, opts, true).catch(() => [] as WebResult[])
     if (found.length) return found
   }
@@ -827,10 +823,6 @@ interface LoopContext {
   canvasPath?: string
   /** A lesson, quiz or interview: only the tools teaching needs, so the prompt stays short */
   focused?: boolean
-  /** About a private project or your Metabase: nothing from it may go to a cloud service */
-  private?: boolean
-  /** The answer goes off this Mac (Claude): a private project's notes are never searched or read */
-  leavesMac?: boolean
   /** This turn goes to the cloud model (Gemma takes over if it can't) */
   cloud?: { target: CloudTarget; task: RequestKind; stepId: string; fellBack?: boolean }
 }
@@ -840,7 +832,7 @@ interface LoopContext {
 const normalQuery = (q: string) => q.trim().toLowerCase().replace(/\s+/g, ' ')
 export const webSearch = memoize<[query: string, opts?: SearchOptions], WebResult[]>(webSearchNow, {
   ttlMs: (_q, opts) => (opts?.news || opts?.when === 'day' ? 5 * 60_000 : 30 * 60_000),
-  key: (q, opts) => JSON.stringify([getSettings().ai.webSearch?.provider ?? 'wikipedia', normalQuery(q), opts?.when ?? 'any', !!opts?.news, !!opts?.onThisMac])
+  key: (q, opts) => JSON.stringify([getSettings().ai.webSearch?.provider ?? 'wikipedia', normalQuery(q), opts?.when ?? 'any', !!opts?.news])
 })
 export const searchPapers = memoize(searchPapersNow, { ttlMs: 60 * 60_000, key: (q) => normalQuery(q) })
 export const readWebpage = memoize(readWebpageNow, { ttlMs: 60 * 60_000, max: 40, key: (url, cloudOk = true) => `${cloudOk ? 'c' : 'l'}${url.trim()}` })
@@ -849,11 +841,11 @@ export const readWebpage = memoize(readWebpageNow, { ttlMs: 60 * 60_000, max: 40
 export type TurnRequest = ChatRequest & { summary?: string; /** Only read the opening into the server's cache */ warmOnly?: boolean; /** A stored conversation in full, for Claude (main/ai claudeRequest); `messages` holds what Gemma gets */ whole?: ChatMessage[] }
 
 /** The part of the system prompt that stays the same from turn to turn, so a local server can reuse its cache */
-export async function stablePrompt(base: string, req: TurnRequest, web: boolean, session = false, privateTurn = false): Promise<string> {
+export async function stablePrompt(base: string, req: TurnRequest, web: boolean, session = false): Promise<string> {
   const memory = await memoryPrompt().catch(() => '')
   const profile = await profilePrompt().catch(() => '')
   // How Tide has adjusted its teaching for this learner (main/teaching): lessons only, the same for Claude and Gemma
-  const teaching = session ? await import('./teaching').then((t) => t.teachingPrompt(privateTurn)).catch(() => '') : ''
+  const teaching = session ? await import('./teaching').then((t) => t.teachingPrompt()).catch(() => '') : ''
   return stableSystem(base, { today: new Date(), web, session, profile, memory, teaching })
 }
 
@@ -976,9 +968,7 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     const q = str('query')
     const id = ctx.step({ kind: 'search_notes', label: `Searching your notes for “${q}”`, status: 'running', depth })
     await indexReady()
-    const found = await search(q, ctx.leavesMac ? 12 : 6)
-    const hidden = ctx.leavesMac ? await Promise.all(found.map((h) => privatePath(h.path).catch(() => true))) : []
-    const hits = found.filter((_, i) => !hidden[i]).slice(0, 6)
+    const hits = await search(q, 6)
     ctx.updateStep(id, { status: 'done', detail: `${hits.length} passages` })
     if (!hits.length) return 'No matching passages in the notes.'
     return hits
@@ -992,10 +982,6 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
   if (call.name === 'read_note') {
     const path = str('path')
     const id = ctx.step({ kind: 'read_note', label: `Reading ${path.split('/').pop()?.replace(/\.md$/, '')}`, status: 'running', depth })
-    if (ctx.leavesMac && (await privatePath(path).catch(() => true))) {
-      ctx.updateStep(id, { status: 'error', detail: 'private' })
-      return 'That note is in a private project, which never leaves this Mac, so it cannot be read here.'
-    }
     try {
       const chunks = await getChunks(path)
       const text = chunks.length ? chunks.map((c) => (c.heading ? `## ${c.heading}\n` : '') + c.text).join('\n\n') : await readText(path)
@@ -1037,7 +1023,7 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     const label = papers ? `Searching papers for “${q}”` : `Searching ${news ? 'the news' : 'the web'} for “${q}”${when ? ` (past ${when})` : ''}`
     const id = ctx.step({ kind: 'web_search', label, status: 'running', depth })
     try {
-      const results = papers ? await searchPapers(q) : await webSearch(q, { when, news, onThisMac: !!ctx.private })
+      const results = papers ? await searchPapers(q) : await webSearch(q, { when, news })
       const real = results.filter((r) => r.url)
       ctx.updateStep(id, { status: 'done', detail: `${real.length} result${real.length === 1 ? '' : 's'}` })
       if (!results.length) return 'No results. Try different words.'
@@ -1085,7 +1071,7 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     }
     const id = ctx.step({ kind: 'read_webpage', label: `Reading ${host}`, status: 'running', depth })
     try {
-      const page = await readWebpage(url, !ctx.private)
+      const page = await readWebpage(url)
       const n = addSource(ctx, { path: url, url, title: page.title, text: clip(page.text, 1500) })
       ctx.updateStep(id, { status: 'done', detail: page.title })
       return `[${n}] ${page.title}\n${url}\n${clip(page.text)}`
@@ -1282,8 +1268,7 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     const sql = String(args.sql ?? '')
     const firstLine = sql.split('\n').find((l) => l.trim() && !l.trim().startsWith('--'))?.trim() ?? ''
     const id = ctx.step({ kind: 'run_sql', label: `Running SQL${firstLine ? `: ${firstLine.slice(0, 60)}` : ''}`, status: 'running', depth })
-    // A lab holding a private project's file answers only on a turn that stays on this Mac
-    const r = runSqlTool(ctx.labId ?? ctx.chatId ?? 'scratch', sql, !!ctx.private)
+    const r = runSqlTool(ctx.labId ?? ctx.chatId ?? 'scratch', sql)
     ctx.updateStep(id, { status: r.ok ? 'done' : 'error', detail: r.detail })
     return clip(r.text, TOOL_TEXT_LIMIT)
   }
@@ -1291,8 +1276,7 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
   if (call.name === 'load_table') {
     const path = str('path')
     const id = ctx.step({ kind: 'load_table', label: `Loading ${path.split('/').pop() || 'a file'} into the lab`, status: 'running', depth })
-    // A private project's file goes into the lab only on a turn that stays on this Mac
-    const r = await loadTableTool(ctx.labId ?? ctx.chatId ?? 'scratch', path, { private: !!ctx.private, isPrivate: (p) => privatePath(p) })
+    const r = await loadTableTool(ctx.labId ?? ctx.chatId ?? 'scratch', path)
     ctx.updateStep(id, { status: r.ok ? 'done' : 'error', detail: r.detail })
     return clip(r.text, TOOL_TEXT_LIMIT)
   }
@@ -1362,7 +1346,7 @@ async function turnTools(ctx: LoopContext, depth: number): Promise<unknown[]> {
   const top = depth === 0 && !ctx.focused
   // Checking maths or finding a mistake in the cloud needs only the code tool (SymPy), which keeps the request small
   const lean = !!ctx.cloud && !ctx.cloud.fellBack && (ctx.cloud.task === 'maths' || ctx.cloud.task === 'errors' || ctx.cloud.task === 'marking')
-  return toolSet({ top, web: ctx.web, focused: !!ctx.focused, things: top && (await thingsAvailable()), metabase: top && !ctx.cloud && metabaseReady(), helpers: !!ctx.cloud && !ctx.cloud.fellBack, terminal: terminalTools, canvas: canvasTools, lean })
+  return toolSet({ top, web: ctx.web, focused: !!ctx.focused, things: top && (await thingsAvailable()), metabase: top && metabaseReady(), helpers: !!ctx.cloud && !ctx.cloud.fellBack, terminal: terminalTools, canvas: canvasTools, lean })
 }
 
 async function loop(messages: ApiMessage[], ctx: LoopContext, depth: number, onText: (t: string) => void): Promise<string> {
@@ -1573,13 +1557,10 @@ export async function prewarmLesson(req: Omit<ChatRequest, 'id'>): Promise<void>
   // When Claude will teach it, Claude Code is started ahead instead (no tokens spent): main/claudeEngine
   const { teacherFor } = await import('./teacher')
   if ((await teacherFor({ ...req, id: 'prewarm' }).catch(() => null))?.who === 'claude') return void (await import('./claudeEngine')).prewarmClaude(req).catch(() => {})
-  // A lesson Gemma will teach (a private notebook, Metabase, Claude unavailable): the reason is kept
-  // for Settings, the server started if it isn't, and warming it below loads Gemma ahead of the
-  // first reply (main/modelIdle)
-  const { isPrivateTurn } = await import('./teacher')
-  const metabase = req.messages.some((m) => typeof m.content === 'string' && /\bmetabase\b/i.test(m.content))
+  // A lesson Gemma will teach (picked, or Claude unavailable): the reason is kept for Settings, the
+  // server started if it isn't, and warming it below loads Gemma ahead of the first reply (main/modelIdle)
   const claude = claudeState()
-  noteGemmaDemand(metabase ? 'metabase' : (await isPrivateTurn(req).catch(() => true)) ? 'private' : claude.main ? 'picked' : (claude.why ?? 'no-claude'))
+  noteGemmaDemand(claude.main ? 'picked' : (claude.why ?? 'no-claude'))
   await ensureGemmaServer().catch(() => {})
   if (!isMlxVlm()) return
   const key = JSON.stringify([req.messages, req.instructions, req.scope, req.voice, req.web])
@@ -1763,13 +1744,8 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
   // The cloud model takes this turn if you picked it, or if it's a job set to escalate (worked maths, finding a mistake)
   // [source-led] a turn that asks about a reading or marks against one is a marking job (shared/sourceLed)
   const job = escalationFor(question, req.askType) ?? ledJob(req.messages)
-  // Anything about your Metabase stays on this Mac: its data never goes to a cloud model
-  const mine = metabaseReady() && req.messages.some((m) => aboutMetabase(m.content, metabaseHost()))
   const images = req.warmOnly ? [] : await turnImages(req, question)
   // Pictures need a model that can see them: Gemma
-  // A private project's documents never leave this Mac
-  const secret = req.scope.kind !== 'none' && req.scope.kind !== 'vault' && (await privatePath(req.scope.path).catch(() => false))
-  ctx.private = mine || secret
   // All notes: only the few passages that really match (the tutor searches for more if it needs
   // them); a note, notebook or pages: what retrieval picks for that scope
   const initial =
@@ -1803,9 +1779,9 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
   // A lesson opens knowing where its topic is in the books they own, so it can send them to the pages
   const own = req.session && req.instructions && userTurns <= 1 && req.scope.kind !== 'pages' ? await pagesToRead(question, 2, `${req.topic ?? ''} ${'path' in req.scope ? req.scope.path : ''}`).catch(() => []) : []
   // And what earlier lessons on this topic (or close to it) show, so it builds on them
-  const before = req.session && req.instructions && userTurns <= 1 && req.topic ? await earlierLessons(req.topic, !!ctx.private).catch(() => '') : ''
+  const before = req.session && req.instructions && userTurns <= 1 && req.topic ? await earlierLessons(req.topic).catch(() => '') : ''
   // Subject hook (any-subject, src/main/subjects.ts): a toolkit the topic's words couldn't decide, and what Tide can't do for this subject
-  const subject = req.session && req.instructions && userTurns <= 1 && req.topic ? await subjectContext({ topic: req.topic, scope: req.scope, instructions: req.instructions, private: !!ctx.private, web: !!ctx.web }).catch(() => '') : ''
+  const subject = req.session && req.instructions && userTurns <= 1 && req.topic ? await subjectContext({ topic: req.topic, scope: req.scope, instructions: req.instructions, web: !!ctx.web }).catch(() => '') : ''
   // Maths mode (shared/mathsMode): first principles, predict then reveal, explorables and poke-holes, in this engine's own words
   const maths = req.session && req.instructions && userTurns <= 1 && req.topic ? await (await import('./maths')).mathsContext({ topic: req.topic, scope: req.scope, instructions: req.instructions }, engine).catch(() => '') : ''
   const assigning = thingsOn && wanted === 'assign'
@@ -1813,7 +1789,7 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
   // A finance lesson's lab holds the market data and the core bank's tables, and is told so
   const financeLab = !!req.session && !!req.instructions && wantsFinanceTables(req.topic ?? '')
   if (financeLab) ensureFinanceTables(req.labId ?? req.chatId ?? 'scratch')
-  const labNote = req.session && req.instructions && (financeLab || aboutSql(`${req.topic ?? ''} ${question}`)) ? labSchemaNote(req.labId ?? req.chatId ?? 'scratch', !!ctx.private, dataFiles()) : ''
+  const labNote = req.session && req.instructions && (financeLab || aboutSql(`${req.topic ?? ''} ${question}`)) ? labSchemaNote(req.labId ?? req.chatId ?? 'scratch', dataFiles()) : ''
   // ...and looks at the data with run_sql before it sets or marks anything: told to, Gemma never
   // did (no tool call in any SQL lesson turn of the rehearsal), so the turn's first step is that call
   if (labNote && looksAtLabFirst(String([...req.messages].reverse().find((m) => m.role === 'user')?.content ?? ''))) ctx.firstTool = 'run_sql'
@@ -1849,7 +1825,7 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
   // Claude the lesson stays whole (shared/workarounds trimHistory): its process holds it, cached
   const history = !uses('trimHistory', engine) ? fitHistory(req.messages, CLAUDE_HISTORY_TOKENS, !!req.instructions) : req.chatId ? req.messages : fitHistory(req.messages, historyBudget(), !!req.instructions)
   const messages: ApiMessage[] = [
-    { role: 'system', content: await stablePrompt(base, req, ctx.web, !!req.session, !!ctx.private) },
+    { role: 'system', content: await stablePrompt(base, req, ctx.web, !!req.session) },
     ...withStableContext(
       // A lesson's instructions ride in its first message, not the system prompt: then the system
       // prompt and tools are the same for every lesson and stay cached between them
@@ -1864,12 +1840,12 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
     )
   ]
 
-  return { ctx, messages, images, job, mine, secret }
+  return { ctx, messages, images, job }
 }
 
 async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, signal: AbortSignal) {
-  const { ctx, messages, images, job, mine, secret } = await buildTurn(req, emit, signal)
-  const target = req.warmOnly || mine || secret || images.length ? null : routeFor(req.engine === 'cloud' ? null : job, (req.engine === 'claude' ? 'auto' : req.engine) ?? 'auto', false)
+  const { ctx, messages, images, job } = await buildTurn(req, emit, signal)
+  const target = req.warmOnly || images.length ? null : routeFor(req.engine === 'cloud' ? null : job, (req.engine === 'claude' ? 'auto' : req.engine) ?? 'auto', false)
   if (target) {
     const name = providerInfo(target.provider).models.find((m) => m.id === target.model)?.label ?? target.model
     const why = job === 'maths' ? 'checking the maths' : job === 'errors' ? 'finding the mistake' : 'answering'
@@ -1907,13 +1883,15 @@ function taskLink(open: Record<string, unknown> | null, kind: string, title: str
 /** The tutor's tools Tide serves to Claude over MCP: the same definitions and handlers Gemma uses */
 export const MCP_TUTOR_TOOLS = [...NOTE_TOOLS, CODE_TOOL, SQL_TOOL, LOAD_TABLE_TOOL, STUDY_PLAN, MEMORY_TOOLS[0]] as { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }[]
 
+/** The Metabase tool, served to Claude over MCP while a Metabase is connected (Settings › Connections) */
+export const MCP_METABASE_TOOL = METABASE as { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }
+
 /** What a tool call from outside the loop needs: where its steps and sources go */
 export type ToolContext = Pick<LoopContext, 'signal' | 'sources' | 'emitSources' | 'step' | 'updateStep' | 'web' | 'chatId' | 'labId'>
 
 /** Runs one of Tide's tools by name, as the tutor's loop would, and returns what the model reads */
 export function runTideTool(name: string, args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
-  // Claude is never given a private turn (main/teacher), so nothing private may reach it
-  return runTool({ id: `mcp_${++stepCounter}`, name, arguments: JSON.stringify(args) }, { ...ctx, focused: true, private: false, leavesMac: true }, 0)
+  return runTool({ id: `mcp_${++stepCounter}`, name, arguments: JSON.stringify(args) }, { ...ctx, focused: true }, 0)
 }
 
 /** A step id for a step made outside the loop */

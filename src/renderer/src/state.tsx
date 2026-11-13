@@ -86,8 +86,8 @@ interface AppState {
   toasts: Toast[]
   toast(text: string, opts?: Omit<Toast, 'id' | 'text'>): void
   dismissToast(id: number): void
-  dialog: 'search' | 'save-link' | null
-  setDialog(d: 'search' | 'save-link' | null): void
+  dialog: 'search' | 'save-link' | 'report-bug' | null
+  setDialog(d: 'search' | 'save-link' | 'report-bug' | null): void
 }
 
 const Ctx = createContext<AppState | null>(null)

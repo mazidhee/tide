@@ -742,8 +742,8 @@ draw()
 </script>`
 
 /**
- * What Claude is told about visuals (CLAUDE_TUTOR_SYSTEM and CLAUDE_LESSON_SYSTEM only: Gemma and
- * private notebooks keep to the fixed simulations and mermaid).
+ * What Claude is told about visuals (CLAUDE_TUTOR_SYSTEM and CLAUDE_LESSON_SYSTEM only: Gemma
+ * keeps to the fixed simulations and mermaid).
  */
 export const VISUAL_GUIDE = `- A custom visual: when the idea has moving parts or a process that none of the fixed simulation kinds shows exactly (backprop through one weight, a B-tree split, attention weights for a real sentence, a supply and demand shift, TCP's handshake, a hash map resize), write a small interactive explainer in a fenced block whose language is visual. Tide runs it inside the lesson, in a sandboxed frame. One visual per answer, then one sentence on what to look at or try. Prefer a fixed simulation when one fits, and mermaid for a static structure.
   Format: an HTML fragment (no <html> or <head> needed): an optional <title>, inline <style>, SVG or a <canvas>, and inline <script>. It must be self-contained: the frame has no network at all, so no CDN libraries, fetch, fonts, images or links (only data: URLs you make yourself), no localStorage, no alert, no iframes. Under about 150 lines.

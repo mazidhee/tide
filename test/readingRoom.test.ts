@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { addArgumentSteps, applyAdditions, argumentSteps, bookPagePath, isBookPage, newBookPage, pageAdditions, readFront, setFront, HINTS, QUOTES, THINKING } from '../src/shared/bookPage'
 import { artHostAllowed, coverOf, coverSrc, creditFor, mixArt, parseAic, parseMetObject, parseMetSearch, withCover, withCoverY } from '../src/shared/noteCover'
 import { daysLeftInWeek, findUnit, logMinutes, markAnchor, minutesThisWeek, parseReaderAnchor, planReading, progressAt, reanchor, segments, tonight, weekStartOf, wpmOf, type Mark, type RoomState, type ShelfBook } from '../src/shared/readingRoom'
-import { keepFallback, nextStage, parseArgument, parseKeep, recallPrompt, stageOpening, STAGES, talkRoute } from '../src/shared/readingTalk'
+import { keepFallback, nextStage, parseArgument, parseKeep, recallPrompt, stageOpening, STAGES } from '../src/shared/readingTalk'
 import { dialogueVoices, pieceAt, sentenceSpans, speechKey, speechPlan } from '../src/shared/speech'
 import { routeJob } from '../src/shared/gemmaPolicy'
 import type { AgendaItem } from '../src/shared/coach'
@@ -381,12 +381,11 @@ describe('Challenge me and the argument map', () => {
   it('sends every book to Claude, with Gemma only when Claude can’t answer', async () => {
     const room = await rr()
     await room.challenge({ path: BOOK, passage: P2 })
-    expect(asked[0].o).toEqual({ task: 'tutor', path: BOOK })
+    expect(asked[0].o).toEqual({ task: 'tutor' })
     expect(asked[0].o).not.toHaveProperty('private')
     expect(await room.talkWho(BOOK)).toBe('claude')
     route = 'gemma'
     expect(await room.talkWho(BOOK)).toBe('gemma')
-    expect(talkRoute(BOOK)).toEqual({ path: BOOK })
     for (const job of ['readChallenge', 'readArgument', 'readSeminar', 'readKeep'] as const) {
       expect(routeJob(job, { claude: { main: true } }).who).toBe('claude')
       expect(routeJob(job, { claude: { main: false, why: 'limit' } })).toEqual({ who: 'gemma', reason: 'limit' })

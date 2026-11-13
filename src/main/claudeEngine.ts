@@ -142,7 +142,7 @@ export function readClaudeUsage(since: number): UsageRecord[] {
 // ---------- Processes ----------
 
 const IDLE_MS = 20 * 60_000
-/** Claude Code's own web tools, offered to lessons that aren't private and have Web on */
+/** Claude Code's own web tools, offered to lessons that have Web on */
 export const CLAUDE_WEB_TOOLS = ['WebSearch', 'WebFetch']
 /** Each process takes a few hundred MB: the Mac also holds Gemma */
 const MAX_LIVE = 3
@@ -556,20 +556,19 @@ export async function* claudeStream(prompt: string, system: string, role: Claude
   }
 }
 
-/** Claude teaches (the setting, with Claude Code set up and not at its limit): for work with nothing private in it */
+/** Claude teaches (the setting, with Claude Code set up and not at its limit) */
 export async function claudeTeaches(): Promise<boolean> {
   const { chooseTeacher } = await import('./teacher')
   const r = await claudeReady()
-  return chooseTeacher({ setting: getSettings().ai.claude?.teacher, installed: r.installed, ready: r.ready, notReady: r.why, private: false }).who === 'claude'
+  return chooseTeacher({ setting: getSettings().ai.claude?.teacher, installed: r.installed, ready: r.ready, notReady: r.why }).who === 'claude'
 }
 
 /**
  * A draft streamed by Claude on the given role's model when Claude teaches, else by `fallback`
  * (Gemma's streamDraft). Gemma also takes over if Claude can't before writing anything.
- * Only for prompts with nothing private in them.
  */
-export async function* draftWithClaude(system: string, user: string, role: ClaudeRole, signal: AbortSignal, fallback: () => AsyncGenerator<string>, isPrivate = false): AsyncGenerator<string> {
-  if (isPrivate || !(await claudeTeaches())) return yield* fallback()
+export async function* draftWithClaude(system: string, user: string, role: ClaudeRole, signal: AbortSignal, fallback: () => AsyncGenerator<string>): AsyncGenerator<string> {
+  if (!(await claudeTeaches())) return yield* fallback()
   let any = false
   try {
     for await (const t of claudeStream(user, system, role, signal)) {
@@ -590,9 +589,9 @@ async function gemmaTakesOver(e: Error) {
   void refreshClaude().catch(() => {})
 }
 
-/** A one-shot job on Claude's background model (Haiku) when Claude teaches and the job is not private; null to leave it to Gemma */
-export async function backgroundOnClaude(prompt: string, system: string | undefined, signal?: AbortSignal, isPrivate = false): Promise<string | null> {
-  if (isPrivate || !(await claudeTeaches())) return null
+/** A one-shot job on Claude's background model (Haiku) when Claude teaches; null to leave it to Gemma */
+export async function backgroundOnClaude(prompt: string, system: string | undefined, signal?: AbortSignal): Promise<string | null> {
+  if (!(await claudeTeaches())) return null
   try {
     return (await claudeOnce(prompt, system ?? 'You are a careful assistant.', 'background', signal)).text
   } catch (e) {
@@ -613,7 +612,7 @@ export async function markAnswer(question: string, answer: string, model: string
 
 /**
  * Planning work (a roadmap, a lesson plan) on Claude when Claude teaches, else on Gemma or the
- * cloud helper as before. Only for prompts that hold nothing private (a topic, public research).
+ * cloud helper as before.
  */
 export async function planOnClaude(prompt: string, system: string | undefined, signal?: AbortSignal): Promise<string | null> {
   if (!(await claudeTeaches())) return null
@@ -671,9 +670,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   if (req.session && req.instructions) req = { ...req, instructions: (await import('@shared/exercises')).forClaude(req.instructions) }
   // A side thread saves to the lesson's notes with save_to_notes (main/tideMcpTools)
   if (req.thread && req.instructions) req = { ...req, instructions: `${req.instructions}\n${(await import('@shared/lessonThreads')).THREAD_NOTE_TOOL}` }
-  const { ctx, messages, mine, secret, images } = await buildTurn(req, emit, signal, req.session ? CLAUDE_LESSON_SYSTEM : CLAUDE_TUTOR_SYSTEM, 'claude')
-  // Checked again on what the turn actually holds: never send a private turn
-  if (ctx.private || mine || secret) throw new ClaudeUnavailable('Private: this stays on your Mac')
+  const { ctx, messages, images } = await buildTurn(req, emit, signal, req.session ? CLAUDE_LESSON_SYSTEM : CLAUDE_TUTOR_SYSTEM, 'claude')
 
   const settings = getSettings().ai.claude
   const said = ownWords(text([...req.messages].reverse().find((m) => m.role === 'user')?.content))
@@ -681,7 +678,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   const teachModel = claudeModel('teach', settings, req.claudeModel)
   const model = role === 'hard' ? (rank(claudeModel('hard', settings)) > rank(teachModel) ? claudeModel('hard', settings) : teachModel) : teachModel
 
-  // Claude's own web search and page reading, for a lesson with Web on (Claude never gets a private one)
+  // Claude's own web search and page reading, for a lesson with Web on
   const web = req.web !== false
   const { forClaude } = await import('@shared/exercises')
   // Web on or off is fixed when a process starts: switching it starts another, from the transcript
@@ -746,7 +743,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   // What set_exercise needs of this turn: the topic, the lesson so far and the mark, for the level (main/exercises)
   const { setLessonInfo } = await import('./exercises')
   // A side thread mustn't change what the lesson's set_exercise knows of the lesson
-  if (!req.thread) setLessonInfo(toolCtx.labId, { topic: req.topic, path: 'path' in req.scope ? req.scope.path : undefined, private: false, history: req.messages.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: text(m.content) })), ...(verdict ? { verdict } : {}) })
+  if (!req.thread) setLessonInfo(toolCtx.labId, { topic: req.topic, path: 'path' in req.scope ? req.scope.path : undefined, history: req.messages.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: text(m.content) })), ...(verdict ? { verdict } : {}) })
   const engineStep = nextStepId()
   emit({ id: req.id, type: 'step', step: { id: engineStep, kind: 'helper', label: `Claude ${claudeLabel(model)} is teaching${fresh && history.length > 1 ? ' (picking the lesson up again)' : ''}`, status: 'running', depth: 0 } })
 

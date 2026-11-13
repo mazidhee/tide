@@ -22,7 +22,7 @@ Last updated: 13 November 2026.
 - Teaching blocks: physics, geometry and matrices, regex, chess search, SQL tidy
 - Courses from GitHub: 52 courses (zoomcamps, OSSU, Made With ML, Zero to Hero, d2l…), taught from their own text, notebooks runnable
 - A VS Code-like code editor: Python IntelliSense (basedpyright), VS Code highlighting, explorer, tabs, Problems, Tests, ⌘P
-- Claude teaches (your plan): Sonnet turns, Opus marking and plans, Haiku background; Tide's tools over MCP (notes, code, SQL, courses, transcripts, flashcards, recall); web search for non-private lessons; usage view; Claude Code in your terminal can use Tide (Settings › Models); private notebooks stay on Gemma
+- Claude teaches (your plan): Sonnet turns, Opus marking and plans, Haiku background; Tide's tools over MCP (notes, code, SQL, courses, transcripts, flashcards, recall); web search in lessons; usage view; Claude Code in your terminal can use Tide (Settings › Models)
 - Claude's visuals: a custom interactive explainer per concept, sandboxed (no network, no access to Tide), checked and repaired before showing, cached per lesson
 - Claude's exercises are proven first: code against hidden tests (and a known mistake), SQL against the lab, maths by SymPy; repaired once or replaced; banked for reuse
 - Courses you live in: every link, file, article and YouTube video opens inside Tide (player with synced transcript, reader view, sandboxed web view); the tutor sees the page, section or video moment; lessons bring in credited readings and clips from your other courses
@@ -46,10 +46,10 @@ Last updated: 13 November 2026.
 - [x] **Pop-out windows everywhere.** Open a lesson, project, course, note, the reader or a mock in its own window, from a clear button, ⌥⌘N or right-click.
 - [x] **The reading room.** Library › Reading: tonight's chapter in "Then today", an immersive reader (highlight, quote, margin notes, Challenge me, the core argument), a book page with a cover banner, an end-of-chapter seminar, and listening with a mini player.
 - [x] **Maths tutor.** First-principles, Socratic teaching for maths and statistics; drift detection that switches format; explorables you drag (derivatives, matrices, distributions, random walks); poke-holes challenges; a maths-to-quant ladder.
-- [ ] **Claude for everything.** Remove the privacy routing: private notebooks and Metabase go to Claude; Gemma only when Claude is unavailable.
-- [ ] **Backups of Tide's own data.** A nightly local backup of `.tide/` and app data (lessons, ratings, profile, usage, workout), kept for weeks, with restore in Settings.
-- [ ] **Report a bug from anywhere.** One shortcut adds a line to the Tide bugs note, with a screenshot of the screen.
-- [ ] **Weekly progress, in Your week.** Mastered, workout ratings, projects, books and time, on the existing page (no new sidebar item).
+- [x] **Claude for everything.** Remove the privacy routing: private notebooks and Metabase go to Claude; Gemma only when Claude is unavailable.
+- [x] **Backups of Tide's own data.** A nightly local backup of `.tide/` and app data (lessons, ratings, profile, usage, workout), kept for weeks, with restore in Settings.
+- [x] **Report a bug from anywhere.** One shortcut adds a line to the Tide bugs note, with a screenshot of the screen.
+- [x] **Weekly progress, in Your week.** Mastered, workout ratings, projects, books and time, on the existing page (no new sidebar item).
 - [ ] **Learn Metabase on your own data.** Tide maps your connected Metabase (databases, tables, links, the dashboards people use) into a "Your data" note and a roadmap; lessons on your real tables from the query builder to SQL and data science (filters and summaries, combining data with joins and models, custom columns and metrics, window functions, cohorts, funnels, a first regression, good dashboards); exercises checked by running your query and a reference read-only and comparing; "take apart this dashboard" lessons; Metabase open beside the tutor in Tide's web view. Read-only by default, small row limits, nothing written to Metabase unless you ask. Needs Metabase connected in Settings › Connections.
 - [ ] **Leftovers from 13 Nov.** Everything in the "Dropped along the way" line under Small fixes.
 - [ ] **Claude thinks as hard as each job needs, plus three fixes.** The coding tutor runs your code; review comments and suggestions survive a reload; sharper eyes on pixel avatars.

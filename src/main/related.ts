@@ -3,8 +3,7 @@
  * the choosing and the wording): the course index (main/courses) for readings, the transcript
  * index (main/videos) for video moments. A course's videos have their captions fetched in the
  * background once it's imported (a few seconds apart, nothing but caption text), so its lectures
- * can be searched before you've watched them. Transcripts kept from notes in a private project are
- * never offered: private notebooks stay on Gemma and never get this.
+ * can be searched before you've watched them.
  */
 import { existsSync, promises as fs } from 'fs'
 import { join } from 'path'
@@ -14,7 +13,6 @@ import { pickRelated, type Related, type RelatedClip, type RelatedReading } from
 import { youtubeIdOf } from '@shared/video'
 import { importedCourse, lessonContent, searchCourses } from './courses'
 import { clipsFor, getTranscript } from './videos'
-import { privatePath } from './projects'
 
 interface CourseVideo {
   video: string
@@ -104,7 +102,6 @@ export async function relatedMaterial(topic: string, { exclude, limit = 3 }: { e
   }
   const clipItems: RelatedClip[] = []
   for (const c of clips) {
-    if (c.path && (await privatePath(c.path).catch(() => true))) continue
     const o = owner.get(c.video)
     clipItems.push({ kind: 'clip', video: c.video, start: c.start, end: c.end, title: c.title, ...(c.channel ? { channel: c.channel } : {}), ...(o ? { course: o.id, courseTitle: o.title, lessonTitle: o.lessonTitle } : {}), text: c.text, score: c.score })
   }

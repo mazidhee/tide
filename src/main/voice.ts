@@ -4,9 +4,6 @@ import { existsSync, promises as fs } from 'fs'
 import { join } from 'path'
 import SERVER_SCRIPT from './voiceServer.py?raw'
 import { getKey, setKey } from './cloud'
-import { aboutMetabase } from '@shared/metabase'
-import { metabaseHost, metabaseReady } from './metabase'
-import { privatePath } from './projects'
 import { getSettings } from './settings'
 import { noteUse } from './connectionUse'
 
@@ -150,7 +147,7 @@ export async function speak(text: string, voice = 'bm_george', speed = 1): Promi
   return new Uint8Array(await (await call('/speak', { text, voice, speed })).arrayBuffer())
 }
 
-/** Where you were speaking: a private project or anything about your Metabase stays on this Mac */
+/** Where you were speaking: the topic helps Deepgram spell its jargon */
 export type Heard = { path?: string; topic?: string }
 
 /**
@@ -159,7 +156,7 @@ export type Heard = { path?: string; topic?: string }
  * right); otherwise, or when Deepgram fails, Parakeet on this Mac does.
  */
 export async function transcribe(wav: Uint8Array, where: Heard = {}): Promise<string> {
-  if (getSettings().voice?.dictation === 'deepgram' && getKey(DEEPGRAM) && !(await staysHere(where))) {
+  if (getSettings().voice?.dictation === 'deepgram' && getKey(DEEPGRAM)) {
     try {
       noteUse('deepgram')
       return await deepgram(wav, getKey(DEEPGRAM), where.topic)
@@ -172,11 +169,6 @@ export async function transcribe(wav: Uint8Array, where: Heard = {}): Promise<st
 }
 
 const DEEPGRAM = 'deepgram'
-
-async function staysHere(where: Heard): Promise<boolean> {
-  if (where.path && (await privatePath(where.path).catch(() => true))) return true
-  return !!where.topic && metabaseReady() && aboutMetabase(where.topic, metabaseHost())
-}
 
 async function deepgram(wav: Uint8Array, key: string, topic?: string): Promise<string> {
   const q = new URLSearchParams({ model: 'nova-3', language: 'en', smart_format: 'true' })

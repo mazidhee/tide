@@ -304,15 +304,12 @@ export async function proveProject(p: WorkshopProject): Promise<{ ok: boolean; p
 
 // ---------- Starting, resuming, running ----------
 
-/** Whether a notebook is a private project: its reviews then stay on this Mac. Unsure means private */
-const isPrivate = async (notebook?: string) => (notebook ? import('./projects').then((m) => m.privatePath(notebook)).catch(() => true) : false)
-
 export async function workshopState(id: string): Promise<WorkshopState | null> {
   const p = await projectById(id)
   const r = p && (await readRecord(id))
   if (!p || !r) return null
   const files = (await folderFiles(r.folder)).map((f) => joinRel(r.folder, f.path))
-  return stateOf(p, r, files, Date.now(), await isPrivate(r.notebook))
+  return stateOf(p, r, files, Date.now())
 }
 
 /** Starts a project (its folder, the first stage's files) or returns it as it stands when already started */
@@ -379,31 +376,22 @@ async function notePassed(p: WorkshopProject, r: WorkshopRecord, index: number):
 export interface WorkshopModels {
   /** The stronger cloud model's whole answer; throws when none can take it */
   cloud(prompt: string, system: string, task: 'errors' | 'planning', signal: AbortSignal): Promise<string>
-  /** The model on this Mac */
-  local(prompt: string, system: string, signal: AbortSignal, mayLeave?: boolean): Promise<string>
-  /** The existing rule for whether a turn may leave this Mac (a private project, anything about your Metabase) */
-  mayLeave(notebook: string | undefined, text: string): Promise<boolean>
+  /** Claude, else the model on this Mac (shared/gemmaPolicy) */
+  local(prompt: string, system: string, signal: AbortSignal): Promise<string>
 }
 
 const realModels: WorkshopModels = {
   cloud: async (prompt, system, task, signal) => (await import('./ai')).askCloud(prompt, system, task, signal, false, 1500),
-  // Claude when the turn may leave this Mac, else Gemma (shared/gemmaPolicy)
-  local: async (prompt, system, signal, mayLeave) => (await import('./ai')).completeFor('workshop', prompt, system, { signal, private: !mayLeave }),
-  mayLeave: async (notebook, text) => {
-    const { mayLeaveMac } = await import('./lessonGuard')
-    return mayLeaveMac({ id: 'workshop', scope: notebook ? { kind: 'folder', path: notebook } : { kind: 'none' }, messages: [{ role: 'user', content: text }] } as ChatRequest)
-  }
+  // Claude, else Gemma (shared/gemmaPolicy)
+  local: async (prompt, system, signal) => (await import('./ai')).completeFor('workshop', prompt, system, { signal })
 }
 
-/** The stronger cloud model when the turn may leave this Mac and one can take it; otherwise the model on this Mac */
-async function askTutor(models: WorkshopModels, notebook: string | undefined, prompt: string, system: string, signal: AbortSignal): Promise<{ text: string; by: 'cloud' | 'local' | 'none' }> {
-  const leave = await models.mayLeave(notebook, prompt).catch(() => false)
-  if (leave) {
-    const text = await models.cloud(prompt, system, 'errors', signal).catch(() => '')
-    if (text.trim()) return { text, by: 'cloud' }
-  }
+/** The stronger cloud model when one can take it; otherwise Claude or the model on this Mac */
+async function askTutor(models: WorkshopModels, prompt: string, system: string, signal: AbortSignal): Promise<{ text: string; by: 'cloud' | 'local' | 'none' }> {
+  const cloud = await models.cloud(prompt, system, 'errors', signal).catch(() => '')
+  if (cloud.trim()) return { text: cloud, by: 'cloud' }
   if (signal.aborted) return { text: '', by: 'none' }
-  const text = await models.local(prompt, system, signal, leave).catch(() => '')
+  const text = await models.local(prompt, system, signal).catch(() => '')
   return text.trim() ? { text, by: 'local' } : { text: '', by: 'none' }
 }
 
@@ -437,7 +425,7 @@ export async function reviewStage(id: string, models: WorkshopModels = realModel
   reviewing.set(id, controller)
   const files = (await folderFiles(r.folder)).filter((f) => !/^(README|STAGE-\d+)\.md$/.test(f.path))
   const prompt = reviewPrompt({ project: p, stage, stageNumber: index + 1, files, run: progress.lastRun, hintsUsed: progress.hints })
-  const { text, by } = await askTutor(models, r.notebook, prompt, REVIEW_SYSTEM, controller.signal)
+  const { text, by } = await askTutor(models, prompt, REVIEW_SYSTEM, controller.signal)
   if (reviewing.get(id) === controller) reviewing.delete(id)
   const review: StageReview = by === 'none' ? bareReview(progress.lastRun, Date.now()) : parseReview(text, progress.lastRun, by, Date.now(), p.solution, files)
   // Written against the record as it is now: a run may have finished meanwhile
@@ -456,7 +444,7 @@ export async function askAboutStage(id: string, question: string, models: Worksh
   const files = (await folderFiles(r.folder)).filter((f) => !/^(README|STAGE-\d+)\.md$/.test(f.path))
   const run = r.stages[stage.id]?.lastRun ?? { at: 0, stage: stage.id, passed: false, tests: [], durationMs: 0 }
   const prompt = askPrompt({ project: p, stage, stageNumber: index + 1, files, run, question: question.slice(0, 2000) })
-  const { text, by } = await askTutor(models, r.notebook, prompt, ASK_SYSTEM, new AbortController().signal)
+  const { text, by } = await askTutor(models, prompt, ASK_SYSTEM, new AbortController().signal)
   return { answer: by === 'none' ? '' : withoutFix(text, p.solution, files), by }
 }
 
@@ -480,8 +468,6 @@ export async function proposeProject(o: { topic: string; notebook?: string; sect
   const existing = await projectForTopic(o.topic)
   if (existing) return { card: existing, tries: 0, problems: [] }
   const first = generatePrompt(o)
-  // A private project's roadmap never leaves this Mac, and Gemma is not asked to write tests it cannot be trusted with
-  if (!(await models.mayLeave(o.notebook, first).catch(() => false))) return { card: null, tries: 0, problems: ['This roadmap belongs to a private project, so a cloud model cannot be asked to design for it.'] }
   let prompt = first
   let problems: string[] = []
   for (let tries = 1; tries <= GENERATE_TRIES; tries++) {

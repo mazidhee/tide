@@ -142,7 +142,7 @@ describe('a SQL answer, marked by running it beside the reference', () => {
 describe('the lab in a SQL lesson', () => {
   it('tells the tutor the lab and the learner’s files are there, through its tools', async () => {
     const { labSchemaNote, loadHint } = await import('../src/main/lab')
-    const note = labSchemaNote('sqlcheck-note', false, ['Data/orders.csv'])
+    const note = labSchemaNote('sqlcheck-note', ['Data/orders.csv'])
     expect(note).toMatch(/run_sql/)
     expect(note).toMatch(/load_table/)
     expect(note).toMatch(/Never say you can't see their data or files/)

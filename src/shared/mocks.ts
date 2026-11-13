@@ -831,25 +831,24 @@ export function rubricAverages(records: MockRecord[], mode: Exclude<MockMode, 'e
 
 /**
  * What a mock exam is set on: topics studied recently and lately weak, from the lessons, the
- * knowledge map and courses in progress, with private ones (a private project, Metabase) left out.
- * Recent lessons count most; a weak concept counts more than a strong one.
+ * knowledge map and courses in progress. Recent lessons count most; a weak concept counts more than a strong one.
  */
-export function examTopics(o: { lessons: { topic: string; updated: number; private?: boolean; mode?: string }[]; concepts?: { name: string; mastery: number; private?: boolean }[]; courses?: string[]; now: number }, n = 4): string[] {
+export function examTopics(o: { lessons: { topic: string; updated: number; mode?: string }[]; concepts?: { name: string; mastery: number }[]; courses?: string[]; now: number }, n = 4): string[] {
   const score = new Map<string, { label: string; s: number }>()
   const add = (label: string, s: number) => {
     const clean = label.replace(/^(mock \w+:|quiz:|review:)\s*/i, '').trim()
-    if (!clean || /\bmetabase\b/i.test(clean)) return
+    if (!clean) return
     const key = clean.toLowerCase()
     const cur = score.get(key)
     score.set(key, { label: cur?.label ?? clean, s: (cur?.s ?? 0) + s })
   }
   for (const l of o.lessons) {
-    if (l.private || l.mode === 'interview') continue
+    if (l.mode === 'interview') continue
     const days = (o.now - l.updated) / 86_400_000
     if (days > 60) continue
     add(l.topic, 1 / (1 + days / 7))
   }
-  for (const c of o.concepts ?? []) if (!c.private) add(c.name, (1 - Math.max(0, Math.min(1, c.mastery))) * 0.8)
+  for (const c of o.concepts ?? []) add(c.name, (1 - Math.max(0, Math.min(1, c.mastery))) * 0.8)
   for (const c of o.courses ?? []) add(c, 0.5)
   return [...score.values()].sort((a, b) => b.s - a.s).slice(0, n).map((x) => x.label)
 }
