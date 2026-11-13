@@ -348,6 +348,8 @@ function adopt(system: string, web: boolean, key: string): ClaudeProcess | null 
  * also wait for the process to load and reach Tide's tools. No message is sent: it costs nothing.
  */
 export async function prewarmClaude(req: Omit<TurnRequest, 'id'>): Promise<void> {
+  // A coding lesson's process is listed its code tools when it starts: one started ahead without them wouldn't do
+  if (req.codeLesson) return
   const { teacherFor } = await import('./teacher')
   if ((await teacherFor({ ...req, id: 'prewarm' }).catch(() => null))?.who !== 'claude') return
   const { stablePrompt } = await import('./agent')
@@ -387,10 +389,12 @@ export const fp = (s: string) => createHash('sha1').update(s).digest('hex').slic
 const text = (c: ChatMessage['content'] | unknown) => (typeof c === 'string' ? c : Array.isArray(c) ? c.map((p: { text?: string }) => p.text ?? '').join('\n') : String(c ?? ''))
 
 /** Which lesson or conversation a turn belongs to: the process it goes to */
-export function lessonKey(req: Pick<TurnRequest, 'chatId' | 'labId' | 'messages' | 'session' | 'thread'>): string {
+export function lessonKey(req: Pick<TurnRequest, 'chatId' | 'labId' | 'messages' | 'session' | 'thread' | 'codeLesson'>): string {
   // A lesson's side threads share one light process of their own (see threadKey), never the lesson's
   if (req.thread) return threadKey(req.labId ?? req.chatId ?? '')
   if (req.chatId) return `chat:${req.chatId}`
+  // A coding lesson: its key is what gives its process the IDE's code tools (main/tideMcp)
+  if (req.labId && req.session && req.codeLesson) return `code:${req.labId}`
   if (req.labId) return `lab:${req.labId}`
   return `first:${fp(text(req.messages.find((m) => m.role === 'user')?.content))}`
 }
@@ -619,6 +623,23 @@ export async function planOnClaude(prompt: string, system: string | undefined, s
   }
 }
 
+/** A coding lesson's folder for the code tools (main/ide/lesson); null when it can't have one */
+async function codingLesson(labId: string, topic?: string, root?: string) {
+  const code = await import('./ide/lesson')
+  try {
+    code.lessonWorkspace(labId, topic, root)
+  } catch {
+    // A linked folder the IDE can't open: the lesson's own
+    try {
+      code.lessonWorkspace(labId, topic)
+    } catch {
+      return null
+    }
+  }
+  return code
+}
+const codeNote = (note: string) => (note ? `\n\n${note}` : '')
+
 let configDir = ''
 function configFor(key: string, port: number, token: string): string {
   configDir ||= join(app.getPath('userData'), 'claude')
@@ -661,12 +682,14 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   // Claude's own web search and page reading, for a lesson with Web on (Claude never gets a private one)
   const web = req.web !== false
   const { forClaude } = await import('@shared/exercises')
-  const system = forClaude(String(messages[0].content)) + (web ? `\n\n${CLAUDE_WEB_NOTE}` : '')
-  const history = messages.slice(1)
   // Web on or off is fixed when a process starts: switching it starts another, from the transcript
   const key = lessonKey(req) + (web ? ':web' : '')
+  // A coding lesson: its folder, which the code tools work in, and the rules for using them (shared/lessonCode)
+  const coding = key.startsWith('code:') && req.labId ? await codingLesson(req.labId, req.topic, req.codeLesson?.root) : null
+  const system = forClaude(String(messages[0].content)) + (web ? `\n\n${CLAUDE_WEB_NOTE}` : '') + (coding ? `\n\n${(await import('@shared/lessonCode')).CLAUDE_CODE_LESSON_NOTE}` : '')
+  const history = messages.slice(1)
   const mcp = await startMcp()
-  const proc = (live.get(key)?.alive ? null : adopt(system, web, key)) ?? processFor(key, model, system, configFor(key, mcp.port, mcp.token), web ? CLAUDE_WEB_TOOLS : [])
+  const proc = (live.get(key)?.alive || coding ? null : adopt(system, web, key)) ?? processFor(key, model, system, configFor(key, mcp.port, mcp.token), web ? CLAUDE_WEB_TOOLS : [])
   // Known by the student's own first message, as the window sends it (the context Tide adds to it can change)
   const firstSaid = fp(text(req.messages.find((m) => m.role === 'user')?.content))
   const sent = messageToSend(history, { turns: proc.turns, first: proc.first === firstSaid ? fp(text(history.find((m) => m.role === 'user')?.content)) : proc.first, alive: proc.alive })
@@ -685,7 +708,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   // Show me and Draw it: on Claude, a custom visual is one of the pictures it can choose
   const { asksToSee } = await import('@shared/showMe')
   const { SHOW_ME_VISUAL_NOTE } = await import('@shared/visuals')
-  const seeNote = asksToSee(said) || /^Draw this so I can see how it works/i.test(said) ? `\n\n${SHOW_ME_VISUAL_NOTE}` : ''
+  const seeNote = (asksToSee(said) || /^Draw this so I can see how it works/i.test(said) ? `\n\n${SHOW_ME_VISUAL_NOTE}` : '') + (coding ? codeNote([coding.lessonTurnNote(req.labId!, req.codeLesson?.file), await coding.projectTurnNote(req.labId!, said).catch(() => '')].filter(Boolean).join('\n\n')) : '')
   const fresh = sent.fresh
   const users = history.filter((m) => m.role === 'user').length
   // The pictures this turn looks at (a photo of their working, a screenshot, a note's diagram), made

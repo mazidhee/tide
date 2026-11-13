@@ -3,12 +3,15 @@
  * and rising balloons for a new title; a quieter scene for a finished morning; balloons for a
  * streak milestone; a trophy on a plinth for a championship win. Tinted from the theme's accent
  * and the Professor's palette. Still (one frame) when the system asks for reduced motion.
+ * If you've made a pixel self (Settings › You), you join him, bobbing along beside him.
  */
 import { useEffect, useRef } from 'react'
 import { paletteFor, professorFrame } from '@shared/professorArt'
 import { motionPaused } from '../../lib/motion'
 import { useCharacter } from '../../state'
 import { TROPHY } from './pixel'
+import { useProfile } from '../../lib/profile'
+import { blinkPixels, sceneSprite } from '@shared/pixelise'
 
 export type PartyKind = 'party' | 'done' | 'streak' | 'trophy'
 
@@ -31,6 +34,7 @@ export function PartyScene({ kind, height = 300, className }: { kind: PartyKind;
   const canvas = useRef<HTMLCanvasElement>(null)
   const box = useRef<HTMLDivElement>(null)
   const character = useCharacter()
+  const pixel = useProfile().pixel
 
   useEffect(() => {
     const el = canvas.current
@@ -76,6 +80,20 @@ export function PartyScene({ kind, height = 300, className }: { kind: PartyKind;
           ctx.fillRect(Math.round(x) + i, Math.round(y) + j, 1, 1)
         }
       })
+    // You, at his scale, if you've made a pixel self
+    const me = pixel ? sceneSprite(pixel) : null
+    const meShut = me ? blinkPixels(me) : null
+    const drawMe = (x: number, y: number, shut: boolean) => {
+      if (!me) return
+      const px = shut && meShut ? meShut : me.pixels
+      for (let j = 0; j < me.size; j++)
+        for (let i = 0; i < me.size; i++) {
+          const v = px[j * me.size + i]
+          if (v < 0) continue
+          ctx.fillStyle = me.palette[v]
+          ctx.fillRect(Math.round(x) + i, Math.round(y) + j, 1, 1)
+        }
+    }
     let t = 0
     const pose = kind === 'done' ? 'wave' : 'party'
     const tick = () => {
@@ -92,7 +110,7 @@ export function PartyScene({ kind, height = 300, className }: { kind: PartyKind;
         ctx.fillRect(Math.round(p.x + Math.sin((p.y + p.d) / 6) * 2), Math.round(p.y), 1, (t + p.d) % 8 < 4 ? 2 : 1)
       }
       // The trophy on its plinth, glinting
-      let px = Math.floor(W / 2 - 12)
+      let px = Math.floor(W / 2 - (me ? 18 : 12))
       if (kind === 'trophy') {
         const tx = Math.floor(W / 2 - 8)
         draw(PLINTH, tx, ground - 5, (v) => (v === '.' ? null : pal[v]))
@@ -109,6 +127,12 @@ export function PartyScene({ kind, height = 300, className }: { kind: PartyKind;
         ground - 16,
         (v) => (v === '.' ? null : pal[v])
       )
+      if (me) {
+        // Beside him, or beside the trophy: a little bob to the beat, and a blink now and then
+        const mx = kind === 'trophy' ? Math.floor(W / 2 + 10) : px + 20
+        const bob = !reduced && kind !== 'done' && Math.floor(t / 9) % 2 ? 1 : 0
+        drawMe(mx, ground - 16 - bob, !reduced && t % 110 > 104)
+      }
       for (const b of balloons) {
         if (!reduced) {
           b.y -= b.v
@@ -122,7 +146,7 @@ export function PartyScene({ kind, height = 300, className }: { kind: PartyKind;
     if (reduced) return
     const id = setInterval(() => !motionPaused() && tick(), 40)
     return () => clearInterval(id)
-  }, [kind, height, character])
+  }, [kind, height, character, pixel])
 
   return (
     <div ref={box} className={`wo-party-canvas${className ? ` ${className}` : ''}`} style={{ height }} aria-hidden="true">

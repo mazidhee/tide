@@ -24,6 +24,8 @@ import { useTideDesign } from '../lib/design'
 import { HomeTide } from './tide/HomeTide'
 import { startPrepared, useReadyLesson } from '../lib/prep'
 import { ReadyCard } from './ReadyCard'
+import { greetingLine, greetingName } from '@shared/profile'
+import { useProfile } from '../lib/profile'
 
 /** The professor's afternoon, as the day goes: tea, the chalkboard, chess, then the late fishing */
 function timeOfDayScene(): ProfessorScene {
@@ -31,10 +33,6 @@ function timeOfDayScene(): ProfessorScene {
   return h >= 5 && h < 11 ? 'tea' : h < 17 && h >= 11 ? 'board' : h >= 17 && h < 22 ? 'chess' : 'fishing'
 }
 
-function greeting() {
-  const h = new Date().getHours()
-  return h < 5 ? 'Working late' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
-}
 
 export function sourceIcon(meta: Pick<NoteMeta, 'sourceType' | 'path'>): IconName {
   if (/\.pdf$/i.test(meta.path)) return 'pdf'
@@ -47,6 +45,7 @@ export function sourceIcon(meta: Pick<NoteMeta, 'sourceType' | 'path'>): IconNam
 
 export function Home(_: { dueCount: number; cardCount: number }) {
   const app = useApp()
+  const me = useProfile()
   const [banner, setBanner] = useState(() => {
     try {
       return localStorage.getItem('tide.home.banner') !== 'off'
@@ -259,7 +258,7 @@ export function Home(_: { dueCount: number; cardCount: number }) {
       <div className={`page-inner home2${banner ? ' with-banner' : ''}`}>
         <header className="home2-head">
           <div>
-            <h1 className="home2-greeting">{greeting()}.</h1>
+            <h1 className="home2-greeting">{greetingLine(greetingName(me))}</h1>
             <p className="home2-sub">
               {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
               {last && last.topics.length > 0 && (

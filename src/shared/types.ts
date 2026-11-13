@@ -247,6 +247,8 @@ export interface ChatRequest {
   course?: { id: string; lesson: string }
   /** A side thread under one of a lesson's outputs (shared/lessonThreads): its id. Never marked, kept apart from the lesson's own conversation, taught on the teaching model */
   thread?: string
+  /** A coding lesson (shared/lessonCode): on Claude, the tutor gets the IDE's code tools on its folder. `file`: the lesson file the editor shows; `root`: a linked project's folder */
+  codeLesson?: { file?: string; root?: string }
 }
 
 export interface StoredMessage {
@@ -598,6 +600,15 @@ export interface TideApi {
   settings: {
     get(): Promise<Settings>
     set(patch: Partial<Settings>): Promise<Settings>
+  }
+  /** You: your name and picture, in Tide's app data (main/profile) */
+  profile: {
+    get(): Promise<import('./profile').Profile>
+    set(patch: Partial<import('./profile').Profile>): Promise<import('./profile').Profile>
+    /** The photo as you chose it, scaled down, for framing again */
+    source(): Promise<string | null>
+    setSource(dataUrl: string): Promise<void>
+    clearPhoto(alsoSprite?: boolean): Promise<import('./profile').Profile>
   }
   vault: {
     choose(): Promise<string | null>

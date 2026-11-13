@@ -82,5 +82,10 @@ export const ideApi: IdeApi = {
     bugHunt: invoke('ide:pair:bugHunt'),
     reveal: invoke('ide:pair:reveal'),
     hunts: invoke('ide:pair:hunts')
+  },
+  lesson: {
+    open: invoke('ide:lesson:open'),
+    openInIde: invoke('ide:lesson:openInIde'),
+    onEvent: (cb) => subscribe('ide:lesson:event', cb)
   }
 }

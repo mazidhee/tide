@@ -277,6 +277,8 @@ export interface SessionSetup {
     strategy?: Strategy
     /** Part of a project: taught in its terms, or as a mentor while you build it */
     project?: { name: string; kind: ProjectKind; milestone?: string; warmedUp?: boolean }
+    /** A coding lesson about a project on disk: its folder (an IDE workspace), which the tutor's code tools work in instead of the lesson's own (shared/lessonCode) */
+    codeRoot?: string
     /** A walkthrough's steps, in order: the app draws each on the canvas as the lesson reaches it */
     flow?: FlowStep[]
     /** A Quick check (a quiz): a short fresh diagnostic of one topic, on the knowledge map's concept */

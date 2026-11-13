@@ -46,6 +46,7 @@ import { lessonId } from '@shared/lessonLog'
 import { endOngoing, followInBackground, getOngoing, keepLesson, keepLive, saveOngoing, sessionKey, stopFollowing } from '../lib/sessions'
 import type { View } from '../state'
 import { Professor, type ProfessorPose } from './Professor'
+import { YouBeside } from './Avatar'
 import { useTideDesign } from '../lib/design'
 import { characterById } from '@shared/characters'
 import { conceptFor, useKnowledge } from '../lib/knowledge'
@@ -73,6 +74,9 @@ import { AskPurpose, LessonEnd, LessonTrack, MoveOnChip, StepDivider } from './L
 const answered = (said: string) => !said.startsWith(GO_ON) && !said.startsWith(ASKED) && !isMoveOn(said)
 
 const CodeEditor = lazy(() => import('./CodeEditor').then((m) => ({ default: m.CodeEditor })))
+const LessonProposal = lazy(() => import('./LessonProposal'))
+import { exerciseFile, exerciseNumber, isCodingLesson } from '@shared/lessonCode'
+import { useLessonCode } from '../lib/lessonCode'
 const LessonCanvas = lazy(() => import('./LessonCanvas').then((m) => ({ default: m.LessonCanvas })))
 import { parseVerdict, scorecardScore } from '@shared/interviews'
 
@@ -144,6 +148,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // Photos of working or screenshots added to the answer or a question (AttachImages)
   const pictures = useAttachedImages()
   const [code, setCode] = useState('')
+  const codeRef = useRef<import('../lib/lessonCode').LessonCode | null>(null)
   const codeEditorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
   const [confidence, setConfidence] = useState<1 | 2 | 3 | null>(null)
   // The last reply is written but its checks are still running: its mark isn't final yet
@@ -324,7 +329,10 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         const last = messages[messages.length - 1]
         messages[messages.length - 1] = { ...last, content: `(Time left: ${clock.left() || timed} of ${timed} minutes)\n${last.content}` }
       }
-      await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setupRef.current), labId: labId.current, canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, ...engineFields(engineRef.current), sourceLed: ledRef.current, ...(setupRef.current.options?.course ? { course: { id: setupRef.current.options.course.id, lesson: setupRef.current.options.course.lesson } } : {}) })
+      // A coding lesson: what's in the editor is on disk before the tutor's tools read it
+      const coding = codeRef.current
+      if (coding) await coding.flush()
+      await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setupRef.current), labId: labId.current, ...(coding ? { codeLesson: { file: coding.file ?? undefined, root: setupRef.current.options?.codeRoot } } : {}), canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, ...engineFields(engineRef.current), sourceLed: ledRef.current, ...(setupRef.current.options?.course ? { course: { id: setupRef.current.options.course.id, lesson: setupRef.current.options.course.lesson } } : {}) })
     },
     [scope, setup, web, timed, clock, mode, difficulty.noteFor]
   )
@@ -534,6 +542,45 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   useEffect(() => {
     if (currentAsk?.prompt) breakSignals.asked()
   }, [currentAsk?.prompt])
+  // A coding lesson (shared/lessonCode): each code question is answered in a file of the lesson's
+  // folder, which the tutor reads, runs and reviews on Claude, and the IDE can open
+  const coding = useMemo(() => isCodingLesson({ mode, topic, options }), [])
+  const codeAsks = useMemo(() => {
+    const seen: string[] = []
+    let lang = options?.language ?? 'python'
+    for (const blocks of parsed)
+      for (const b of blocks ?? []) {
+        const id = b.kind === 'ask' ? askIdentity(b) : null
+        if (!id) continue
+        if (!seen.includes(id)) seen.push(id)
+        lang = (b.kind === 'ask' && b.lang) || lang
+      }
+    return { seen, lang }
+  }, [parsed])
+  const lastCodeAsk = codeAsks.seen[codeAsks.seen.length - 1]
+  const lessonCode = useLessonCode({
+    on: coding,
+    labId: labId.current,
+    topic,
+    linkedRoot: options?.codeRoot,
+    exercise: lastCodeAsk ? exerciseFile(exerciseNumber(codeAsks.seen, lastCodeAsk), codeAsks.lang) : null,
+    code,
+    setCode,
+    busy
+  })
+  codeRef.current = coding ? lessonCode : null
+  const openInIde = async () => {
+    try {
+      await lessonCode.flush()
+      const w = await window.tide.ide.lesson.openInIde(labId.current, topic, options?.codeRoot)
+      localStorage.setItem('tide.ide.root', JSON.stringify(w.root))
+      localStorage.setItem('tide.ide.right', JSON.stringify('claude'))
+      if (lessonCode.file) localStorage.setItem('tide.ide.openFile', JSON.stringify({ root: w.root, path: lessonCode.file }))
+      app.setView({ kind: 'code' })
+    } catch (e) {
+      app.toast((e as Error).message, { tone: 'error' })
+    }
+  }
   // A new code question starts from its own starter, not from your answer to the last one
   const askedCode = useRef<string | null>(null)
   const codeAsk = askIdentity(currentAsk)
@@ -543,7 +590,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     askedCode.current = codeAsk
     // A lesson picked up again keeps what was being typed for the question it reopens on
     if (first) return
-    setCode(askStarter(currentAsk?.prompt ?? ''))
+    // A coding lesson whose tutor opened a file for this question (a planted bug): the editor keeps it
+    if (!coding || lessonCode.newExercise()) setCode(askStarter(currentAsk?.prompt ?? ''))
     setRunOut(null)
     ranFor.current = ''
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1567,6 +1615,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               <span>{led ? 'Teach from sources' : 'Let the tutor explain'}</span>
             </button>
           )}
+          {coding && (
+            <button className="tool-btn" onClick={() => void openInIde()} title="Open this lesson’s files in the Code view, with Claude beside them">
+              <Icon name="files" />
+              <span>Open in the IDE</span>
+            </button>
+          )}
           {mode === 'teach' && (
             <button className={`tool-btn${why ? ' on' : ''}`} aria-pressed={why} onClick={toggleWhy} title={why ? 'Why mode: teaching the reasons behind each idea, Socratically. Click for plain explanations.' : 'Why mode: have the tutor lead you to why each idea is so, from first principles'}>
               <Icon name="sparkle" />
@@ -1723,8 +1777,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               const own = ownWords(t.content)
               const text = own.replace(/^Answer: /, '').replace(/^My question: /, '').replace(/\n\(Confidence: \w+\)$/, '')
               const conf = own.match(/\(Confidence: (\w+)\)$/)?.[1]
-              return (
-                <div key={i} className={`s-you${isHint ? ' hint' : ''}`}>
+              const bubble = (
+                <div key={isHint ? i : undefined} className={`s-you${isHint ? ' hint' : ''}`}>
                   {isHint ? (
                     <span className="muted small">You asked for a {t.content.match(/\((.+) please\)/)?.[1] ?? 'hint'}</span>
                   ) : (
@@ -1739,6 +1793,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   )}
                 </div>
               )
+              return isHint ? bubble : <YouBeside key={i}>{bubble}</YouBeside>
             }
             const blocks = parsed[i] ?? []
             const live = busy && i === turns.length - 1
@@ -1843,6 +1898,22 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             </div>
           )}
 
+          {coding && lessonCode.proposals.length > 0 && (
+            <div className="lc-proposals" aria-label="The tutor’s proposed changes">
+              <Suspense fallback={<div className="view-loading small" aria-busy="true" />}>
+                {lessonCode.proposals.map((p) => (
+                  <LessonProposal
+                    key={p.id}
+                    proposal={p}
+                    current={lessonCode.currentOf(p)}
+                    onResolve={(text) => void lessonCode.resolve(p, text).catch((e: Error) => app.toast(e.message, { tone: 'error' }))}
+                    onOpenFile={() => void openInIde()}
+                  />
+                ))}
+              </Suspense>
+            </div>
+          )}
+
           {(currentAsk || carryOn) && (
             <div className={`lt-back-dock${openThread ? ' open' : ''}`}>
               <BackPill show={!!openThread} onBack={() => foldThread(false)} />
@@ -1890,8 +1961,33 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                 </>
               ) : currentAsk.type === 'code' ? (
                 <>
+                  {coding && lessonCode.file && (
+                    <div className="lc-bar">
+                      <span className="lc-file" title={lessonCode.ws ? `${lessonCode.ws.root}/${lessonCode.file}` : lessonCode.file}>
+                        <Icon name="files" size={12} />
+                        <span>{lessonCode.file}</span>
+                      </span>
+                      {lessonCode.comments.length > 0 && <span className="lc-tag">{lessonCode.comments.length === 1 ? '1 comment' : `${lessonCode.comments.length} comments`}</span>}
+                      {lessonCode.file !== (lastCodeAsk ? exerciseFile(exerciseNumber(codeAsks.seen, lastCodeAsk), codeAsks.lang) : null) && (
+                        <button className="link-btn" onClick={lessonCode.backToExercise}>
+                          Back to this question’s file
+                        </button>
+                      )}
+                      <span className="lc-gap" />
+                      <button className="link-btn" onClick={() => void openInIde()} title="Open this lesson’s files in the Code view, with Claude beside them">
+                        Open in the IDE
+                      </button>
+                    </div>
+                  )}
                   <Suspense fallback={<div className="view-loading small" aria-busy="true" />}>
-                    <CodeEditor value={code} onChange={setCode} language={currentAsk.lang ?? options?.language ?? 'python'} onSubmit={() => submit()} editorRef={codeEditorRef} />
+                    <CodeEditor
+                      value={code}
+                      onChange={setCode}
+                      language={currentAsk.lang ?? options?.language ?? 'python'}
+                      onSubmit={() => submit()}
+                      editorRef={codeEditorRef}
+                      {...(coding ? { comments: lessonCode.comments, onDismissComment: lessonCode.dismissComment, onProblems: lessonCode.problems, reveal: lessonCode.reveal } : {})}
+                    />
                   </Suspense>
                   <div className="s-run-row">
                     <button className="btn small" onClick={() => void runMine()} disabled={running || !code.trim()} title="Run your code in a sandbox">

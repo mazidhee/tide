@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react'
 import { highlight, monaco, monacoLanguage, refreshTheme, tideTheme } from '../lib/monaco'
 import { watchPython } from '../lib/ruff/editor'
 import { enablePythonLanguageServer, isLibraryModel } from '../lib/lsp/python'
+import type { ProblemReport, ReviewComment } from '@shared/ide'
+import '../styles/lessoncode.css'
 
 interface Props {
   value: string
@@ -23,6 +25,13 @@ interface Props {
    * each file's undo history and scroll position, as tabs do in VS Code.
    */
   path?: string
+  /** The tutor's review comments on this code (a coding lesson), each under its line */
+  comments?: ReviewComment[]
+  onDismissComment?(id: string): void
+  /** The errors and warnings shown in it (Ruff, the language server), for the tutor's get_diagnostics */
+  onProblems?(list: ProblemReport[]): void
+  /** Scroll to and select this line (the tutor showed it); a new nonce shows it again */
+  reveal?: { line: number; nonce: number } | null
 }
 
 /** Where each file was scrolled to, by model URI */
@@ -64,7 +73,7 @@ function replaceText(model: monaco.editor.ITextModel, value: string) {
  * signatures, go to definition, type errors). Python also gets live Ruff diagnostics and Format
  * Document (Shift+Alt+F).
  */
-export function CodeEditor({ value, onChange, language = 'python', onSubmit, fill = false, minLines = 8, maxLines = 24, readOnly = false, editorRef, path }: Props) {
+export function CodeEditor({ value, onChange, language = 'python', onSubmit, fill = false, minLines = 8, maxLines = 24, readOnly = false, editorRef, path, comments, onDismissComment, onProblems, reveal }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const ed = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const onChangeRef = useRef(onChange)
@@ -72,6 +81,9 @@ export function CodeEditor({ value, onChange, language = 'python', onSubmit, fil
   const onSubmitRef = useRef(onSubmit)
   onSubmitRef.current = onSubmit
   const settingValue = useRef(false)
+  // Lines the tutor's comments add, and the sizing that counts them
+  const extraLines = useRef(0)
+  const sizeRef = useRef<() => void>(() => {})
   const shownPath = useRef(path)
   const lang = monacoLanguage(language)
 
@@ -125,9 +137,10 @@ export function CodeEditor({ value, onChange, language = 'python', onSubmit, fil
     const size = () => {
       if (fill) return
       const lines = Math.min(maxLines, Math.max(minLines, editor.getModel()?.getLineCount() ?? minLines))
-      el.style.height = `${lines * 21 + 20}px`
+      el.style.height = `${Math.round((lines + extraLines.current) * 21 + 20)}px`
       editor.layout()
     }
+    sizeRef.current = size
     size()
     const sizeSub = editor.onDidChangeModelContent(size)
     const stopRuff = watchPython(monaco, editor)
@@ -187,5 +200,102 @@ export function CodeEditor({ value, onChange, language = 'python', onSubmit, fil
     ed.current?.updateOptions({ readOnly })
   }, [readOnly])
 
+  // The tutor's review comments, each in a zone under its line, as the IDE shows Claude's
+  const zones = useRef<string[]>([])
+  const marks = useRef<monaco.editor.IEditorDecorationsCollection | null>(null)
+  const dismissRef = useRef(onDismissComment)
+  dismissRef.current = onDismissComment
+  useEffect(() => {
+    const editor = ed.current
+    if (!editor) return
+    const list = comments ?? []
+    const lines = editor.getModel()?.getLineCount() ?? 1
+    let extra = 0
+    editor.changeViewZones((acc) => {
+      for (const z of zones.current) acc.removeZone(z)
+      zones.current = []
+      for (const c of list) {
+        const zone = document.createElement('div')
+        zone.className = 'lc-comment-zone'
+        zone.append(commentCard(c, () => dismissRef.current?.(c.id)))
+        // The card's head and padding, and its text at about 88 characters a line (a little more with code in it)
+        const rows = Math.ceil((c.body.length * (c.body.includes('`') ? 1.12 : 1)) / 88) + (c.body.match(/\n/g)?.length ?? 0)
+        const height = Math.min(220, 50 + 19 * rows)
+        extra += height / 21
+        zones.current.push(acc.addZone({ afterLineNumber: Math.min(c.line, lines), heightInPx: height, domNode: zone, suppressMouseDown: false }))
+      }
+    })
+    marks.current?.clear()
+    marks.current = editor.createDecorationsCollection(list.map((c) => ({ range: new monaco.Range(Math.min(c.line, lines), 1, Math.min(c.line, lines), 1), options: { isWholeLine: true, className: 'lc-comment-line', linesDecorationsClassName: 'lc-comment-mark' } })))
+    // The editor grows by the comments, not only the code
+    extraLines.current = extra
+    sizeRef.current()
+  }, [comments])
+
+  // Problems in this editor, told to the tutor (debounced: Ruff marks as you type)
+  const problemsRef = useRef(onProblems)
+  problemsRef.current = onProblems
+  useEffect(() => {
+    if (!onProblems) return
+    let t: ReturnType<typeof setTimeout> | undefined
+    const report = () => {
+      clearTimeout(t)
+      t = setTimeout(() => {
+        const model = ed.current?.getModel()
+        if (!model || model.isDisposed()) return
+        const list = monaco.editor.getModelMarkers({ resource: model.uri }).map((m) => ({ path: '', line: m.startLineNumber, column: m.startColumn, severity: m.severity >= 8 ? ('error' as const) : m.severity >= 4 ? ('warning' as const) : ('info' as const), message: m.message, source: m.source }))
+        problemsRef.current?.(list)
+      }, 400)
+    }
+    const sub = monaco.editor.onDidChangeMarkers(report)
+    report()
+    return () => {
+      clearTimeout(t)
+      sub.dispose()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!onProblems])
+
+  useEffect(() => {
+    const editor = ed.current
+    if (!editor || !reveal) return
+    const line = Math.max(1, Math.min(reveal.line, editor.getModel()?.getLineCount() ?? 1))
+    editor.revealLineInCenter(line)
+    editor.setSelection(new monaco.Range(line, 1, line, editor.getModel()?.getLineMaxColumn(line) ?? 1))
+  }, [reveal?.nonce])
+
   return <div className={`code-editor${fill ? ' fill' : ''}`} ref={host} />
+}
+
+const SEVERITY: Record<ReviewComment['severity'], string> = { issue: 'Issue', suggestion: 'Suggestion', praise: 'Good', question: 'Question' }
+
+/** A review comment's card: who and what kind, the text, and Dismiss */
+function commentCard(c: ReviewComment, dismiss: () => void): HTMLElement {
+  const node = document.createElement('div')
+  node.className = `lc-comment ${c.severity}`
+  const head = document.createElement('div')
+  head.className = 'lc-comment-head'
+  const who = document.createElement('span')
+  who.textContent = `Tutor · ${SEVERITY[c.severity] ?? 'Note'}`
+  const x = document.createElement('button')
+  x.type = 'button'
+  x.textContent = 'Dismiss'
+  x.onmousedown = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dismiss()
+  }
+  head.append(who, x)
+  const body = document.createElement('div')
+  body.className = 'lc-comment-body'
+  // `code` spans as code, built as nodes (the text is never parsed as HTML)
+  c.body.split(/(`[^`\n]+`)/).forEach((part) => {
+    if (/^`[^`]+`$/.test(part)) {
+      const code = document.createElement('code')
+      code.textContent = part.slice(1, -1)
+      body.append(code)
+    } else if (part) body.append(document.createTextNode(part))
+  })
+  node.append(head, body)
+  return node
 }

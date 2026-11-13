@@ -12,7 +12,7 @@ const userData = join(base, 'ud')
 mkdirSync(vault, { recursive: true })
 mkdirSync(userData, { recursive: true })
 
-vi.mock('electron', () => ({ app: { getPath: () => userData, isPackaged: false }, shell: { trashItem: vi.fn(), showItemInFolder: vi.fn() }, ipcMain: { on: vi.fn(), handle: vi.fn() }, dialog: {}, BrowserWindow: {} }))
+vi.mock('electron', () => ({ app: { getPath: () => userData, isPackaged: false }, shell: { trashItem: vi.fn(), showItemInFolder: vi.fn() }, ipcMain: { on: vi.fn(), handle: vi.fn() }, dialog: {}, BrowserWindow: { getAllWindows: () => [] } }))
 vi.mock('../src/main/settings', () => ({ getSettings: () => ({ vaultPath: vault, libraryFolder: 'Library', ai: { claude: {} } }) }))
 
 // Notebooks, in memory
@@ -334,6 +334,28 @@ describe('the mentor in the IDE', () => {
     await ideas.savePlan({ ...(await ideas.planForRoot(made.root))!, claudeWrites: true })
     await pair.send(owner(events), { session: 'tut1', root: made.root, mode: 'tutor', text: 'Write the ledger' })
     expect(await tool('write_file').run({ path: 'rail/new.py', content: 'x = 1\n' }, ctx)).toMatch(/Proposed/)
+  })
+})
+
+describe('a lesson inside a planned project', () => {
+  it('keeps the project’s rules: no write_file, and a hint as code only when asked', async () => {
+    const plan = planFromTemplate(IDEA_TEMPLATES[1], 'blocks', Date.now(), false)
+    const made = await ideas.createProject(plan)
+    const code = await import('../src/main/ide/lesson')
+    code.lessonWorkspace('lab-proj', 'hashing', made.root)
+    const ctx = { signal: new AbortController().signal, sources: [], emitSources: () => {}, step: () => 's', updateStep: () => {}, web: false, labId: 'lab-proj', chatId: undefined }
+    const tool = (n: string) => pair.IDE_TOOLS.find((t) => t.name === n)!
+    expect(await code.projectTurnNote('lab-proj', 'How do I hash the header?')).toMatch(/tutor, not the author/)
+    expect(await tool('write_file').run({ path: 'chain/x.py', content: 'x = 1\n' }, ctx)).toMatch(/write_file is off/)
+    const old = '"""SHA-256 of the header, as 64 hex characters."""\n        raise NotImplementedError'
+    const fix = old.replace('raise NotImplementedError', 'return hashlib.sha256(self.header()).hexdigest()')
+    expect(await tool('propose_edit').run({ path: 'chain/blocks.py', old_string: old, new_string: fix }, ctx)).toMatch(/^Not proposed/)
+    expect(await code.projectTurnNote('lab-proj', 'Just show me how')).toMatch(/You may give one hint as code/)
+    expect(await tool('propose_edit').run({ path: 'chain/blocks.py', old_string: old, new_string: fix, explanation: 'hash the header' }, ctx)).toMatch(/Proposed a change/)
+    expect((await ideas.planForRoot(made.root))!.milestones[0].hints).toBe(1)
+    // A lesson in its own folder isn't held to a project's rules
+    code.lessonWorkspace('lab-own', 'hashing')
+    expect(await code.projectTurnNote('lab-own', 'show me')).toBe('')
   })
 })
 

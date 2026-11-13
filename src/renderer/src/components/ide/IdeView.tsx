@@ -650,6 +650,14 @@ export function IdeView({ path: initialVaultPath, root: initialRoot, home: initi
       else if (e.type === 'applied' && e.root === root) void docs?.diskChanged([e.path])
     })
   }, [root, docs, openTab, openFile])
+  // Opened from a coding lesson ("Open in the IDE"): the file its editor showed
+  useEffect(() => {
+    if (!root || !docs) return
+    const want = store.get<{ root: string; path: string } | null>('tide.ide.openFile', null)
+    if (!want || want.root !== root) return
+    localStorage.removeItem('tide.ide.openFile')
+    openFile(want.path)
+  }, [root, docs, openFile])
   // What Claude's get_diagnostics and debug_state tools read
   useEffect(() => {
     if (!root) return

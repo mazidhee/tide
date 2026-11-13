@@ -19,6 +19,8 @@ const MAX_READ = 4_000_000
 const ideDir = () => join(app.getPath('userData'), 'ide')
 const recentFile = () => join(ideDir(), 'workspaces.json')
 export const huntsDir = () => join(ideDir(), 'bughunts')
+/** Coding lessons' own folders (main/lessonCode), one per lesson */
+export const lessonsDir = () => join(ideDir(), 'lessons')
 
 /** The notes' Code folder, made if it isn't there yet */
 export function codeRoot(): string | null {
@@ -68,6 +70,8 @@ export function allowed(root: string): string {
   const code = codeRoot()
   // The Code folder, and any project folder in it
   if (code && (r === code || r.startsWith(code + '/'))) return r
+  // A coding lesson's own folder, which Tide made
+  if (dirname(r) === resolve(lessonsDir())) return r
   if (readRecent().some((w) => w.root === r)) return r
   throw new Error('Open the folder from the IDE first.')
 }

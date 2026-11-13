@@ -19,6 +19,13 @@ const api: TideApi = {
     get: invoke('settings:get'),
     set: invoke('settings:set')
   },
+  profile: {
+    get: invoke('profile:get'),
+    set: invoke('profile:set'),
+    source: invoke('profile:source'),
+    setSource: invoke('profile:setSource'),
+    clearPhoto: invoke('profile:clearPhoto')
+  },
   vault: {
     choose: invoke('vault:choose'),
     tree: invoke('vault:tree'),

@@ -10,6 +10,7 @@ import { inside } from './paths'
 import { registerDebug, stopAll as stopDebugging } from './debug'
 import { registerLanguageServers, stopLanguageServers } from './languageServers'
 import { registerPair } from './pair'
+import { registerLessonCode } from './lesson'
 import { items as libraryItems, newProject, setTags } from './library'
 import { replace, search } from './search'
 import { discover, runTests, setupPytest } from './tests'
@@ -70,6 +71,7 @@ export function registerIde(): void {
   registerLanguageServers()
   registerDebug()
   registerPair()
+  registerLessonCode()
 }
 
 export async function stopIde(): Promise<void> {

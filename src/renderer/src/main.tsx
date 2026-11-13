@@ -17,6 +17,7 @@ import './styles/workshop.css'
 import './styles/courses.css'
 import './styles/maths.css'
 import './styles/workout.css'
+import './styles/profile.css'
 // The new design: every rule in these is scoped to data-design='tide' (see shared/design.ts)
 import './styles/tide/fonts.css'
 import './styles/tide/tokens.css'

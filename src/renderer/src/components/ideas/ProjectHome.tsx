@@ -139,7 +139,7 @@ export function ProjectHome({
   }
 
   const lesson = (concept: string, warmedUp = true) => {
-    app.setView({ kind: 'session', mode: 'teach', scope: { kind: 'folder', path: nb }, topic: concept, options: { length: 6, project: { name: plan.name, kind: 'build', milestone: m.title, warmedUp } }, nonce: Date.now() })
+    app.setView({ kind: 'session', mode: 'teach', scope: { kind: 'folder', path: nb }, topic: concept, options: { length: 6, project: { name: plan.name, kind: 'build', milestone: m.title, warmedUp }, ...(plan.root ? { codeRoot: plan.root } : {}) }, nonce: Date.now() })
   }
 
   const mentorReview = async (end = false) => {

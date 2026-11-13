@@ -10,6 +10,7 @@ import { renderMarkdown, resolveRelative, vaultUrl } from '../lib/markdown'
 import { Icon } from './Icon'
 import { chatEngine, engineFields, EnginePill } from './EnginePill'
 import { Professor, type ProfessorState } from './Professor'
+import { YouMark } from './Avatar'
 import { SpeakButton } from './Voice'
 
 export interface Turn {
@@ -403,6 +404,7 @@ export function TurnView({
             {t.attachment && <blockquote>{t.attachment.length > 280 ? t.attachment.slice(0, 280) + '…' : t.attachment}</blockquote>}
             <UserText text={t.content} />
           </div>
+          <YouMark />
         </div>
       </>
     )
