@@ -323,6 +323,37 @@ describe('pop-out windows', () => {
   })
 })
 
+describe('what the main window’s tabs hold', () => {
+  beforeEach(() => setup())
+
+  it('other windows learn it, and asking for one brings the main window forward on that tab', async () => {
+    await call('window:openFocus', main, { kind: 'notebook', path: 'Rail' })
+    const w = loaded[0].w
+    await call('window:mainHolds', main, [popKeyOf(lesson)])
+    // The pop-out is told; the main window isn't told about its own tabs
+    expect(await call('window:held', w)).toEqual([popKeyOf(lesson)])
+    expect(await call('window:held', main)).toEqual(['project:Rail'])
+    w.focus()
+    expect(await call('window:focusKey', w, popKeyOf(lesson))).toBe(true)
+    expect(main.focused).toBe(true)
+    expect(main.sent.find((m) => m.channel === 'windows:showKey')?.payload).toBe(popKeyOf(lesson))
+    // A pop-out opening the same lesson brings that tab forward instead of a second copy
+    main.sent.length = 0
+    expect(await call('window:openFocus', w, lesson)).toBe('focused')
+    expect(loaded).toHaveLength(1)
+    expect(main.sent.some((m) => m.channel === 'windows:showKey')).toBe(true)
+  })
+
+  it('a tab moving out to a window of its own opens there, and the main window lets its key go', async () => {
+    await call('window:mainHolds', main, [popKeyOf(lesson)])
+    expect(await call('window:openFocus', main, lesson)).toBe('opened')
+    const w = loaded[0].w
+    // The new window isn't sent straight back to the main window for its own lesson
+    expect(await call('window:held', w)).toEqual([])
+    expect(main.sent.some((m) => m.channel === 'windows:showKey')).toBe(false)
+  })
+})
+
 function setupAgainWith(file: string) {
   popout.resetPopouts()
   handlers.clear()

@@ -644,35 +644,10 @@
   color: var(--vt-ink-3);
 }
 
-/* The course reader with videos: the text and the video side by side when there's room,
-   the video above the text when there isn't */
+/* The course reader's video column: courses.css (.crs-with-side) */
 .crs-main {
   container-type: inline-size;
 }
 .crs-article.wide {
   width: min(1380px, 100%);
-}
-.crs-with-video {
-  display: grid;
-  gap: 28px;
-}
-.crs-with-video > .crs-prose {
-  max-width: 740px;
-}
-@container (min-width: 940px) {
-  .crs-with-video {
-    grid-template-columns: minmax(460px, 720px) minmax(360px, 1fr);
-    align-items: start;
-  }
-  .crs-with-video > .crs-videos {
-    order: 2;
-    position: sticky;
-    top: 16px;
-  }
-  .crs-with-video > .crs-prose {
-    order: 1;
-  }
-  .crs-videos .vt.stack .vt-transcript {
-    height: min(46vh, 420px);
-  }
 }

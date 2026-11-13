@@ -1,0 +1,244 @@
+/*
+  Tabs (components/TabStrip, lib/tabs): a quiet row at the top of the main area, there only while
+  more than one tab is open. It reads as part of the window's frame (the sidebar's colour), the tab
+  in front is a raised pill in the page's colour, and the accent appears only for keyboard focus
+  and a lesson whose reply is arriving behind. Both designs share it through the classic names.
+*/
+
+.td-tabs {
+  --tabs-h: 38px;
+  position: relative;
+  z-index: 4;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--tabs-h);
+  padding: 0 8px 0 8px;
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--line);
+  user-select: none;
+}
+
+/* The sidebar hidden: its buttons float at the top left, and the traffic lights before them */
+.shell.no-sidebar .td-tabs {
+  padding-left: 214px;
+}
+/* A course or a book being read: only the traffic lights to clear (the sidebar peeks from the edge) */
+.shell.immersive .td-tabs {
+  padding-left: 84px;
+}
+
+.td-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  flex: 0 1 auto;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.td-tabs-row::-webkit-scrollbar {
+  display: none;
+}
+
+.td-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 196px;
+  min-width: 76px;
+  height: 28px;
+  padding: 0 4px 0 9px;
+  border-radius: var(--radius-s, 6px);
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  line-height: 1;
+  cursor: default;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    transform 160ms var(--ease, ease);
+}
+.td-tabs.dragging .td-tab {
+  transition: background-color 120ms ease;
+}
+.td-tabs.dragging .td-tab:not(.lifted) {
+  transition: transform 160ms var(--ease, ease);
+}
+
+/* Between two tabs at rest, a hairline, as in a browser; never beside the one in front or a hovered one */
+.td-tab + .td-tab::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: var(--line);
+}
+.td-tab.active::before,
+.td-tab.active + .td-tab::before,
+.td-tab:hover::before,
+.td-tab:hover + .td-tab::before,
+.td-tabs.dragging .td-tab::before {
+  display: none;
+}
+
+.td-tab:hover {
+  background: var(--bg-hover);
+  color: var(--ink-soft);
+}
+
+.td-tab.active {
+  background: var(--bg-raised);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+:root .td-tabs .td-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+:root .td-tabs .td-tab.active:focus-visible {
+  background-color: var(--bg-raised);
+}
+
+.td-tab.lifted {
+  z-index: 2;
+  background: var(--bg-raised);
+  color: var(--ink);
+  box-shadow: var(--pop-shadow, var(--shadow));
+}
+/* Far enough from the row to leave it: it will open in a window of its own */
+.td-tab.tearing {
+  opacity: 0.72;
+  box-shadow:
+    0 0 0 1.5px var(--accent),
+    var(--pop-shadow, var(--shadow));
+}
+
+.td-tab-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  opacity: 0.85;
+}
+.td-tab.active .td-tab-icon {
+  opacity: 1;
+}
+
+/* A lesson behind, its reply still arriving */
+.td-tab-busy {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: td-tab-pulse 1.6s ease-in-out infinite;
+}
+@keyframes td-tab-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.td-tab-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  /* A long name fades out rather than ending in an ellipsis crammed against the × */
+  mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+  text-overflow: clip;
+}
+
+.td-tab-x {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink-muted);
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+.td-tab:hover .td-tab-x,
+.td-tab.active .td-tab-x,
+.td-tab:focus-visible .td-tab-x {
+  opacity: 1;
+}
+.td-tab-x:hover {
+  background: var(--bg-active);
+  color: var(--ink);
+}
+
+.td-tab-new {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-s, 6px);
+  background: none;
+  color: var(--ink-muted);
+}
+.td-tab-new:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+/* The page under the row: what used to start at the top of the main area */
+.tab-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: clip;
+}
+
+/*
+  With the row there, the floating sidebar buttons and the traffic lights sit in it, so the page's
+  own toolbar no longer needs to start after them.
+*/
+.shell.with-tabs.no-sidebar .page {
+  --toolbar-left: 0px;
+}
+.shell.with-tabs.no-sidebar .doc-toolbar,
+.shell.with-tabs.no-sidebar .cp-head {
+  --toolbar-left: 0px;
+  margin-left: 0;
+}
+.shell.with-tabs.no-sidebar .titlebar-drag {
+  left: 0;
+}
+:root[data-design='tide'] .shell.with-tabs.no-sidebar .td-topbar {
+  padding-left: 24px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .td-tab,
+  .td-tabs.dragging .td-tab:not(.lifted),
+  .td-tab-x {
+    transition: none;
+  }
+  .td-tab-busy {
+    animation: none;
+  }
+}

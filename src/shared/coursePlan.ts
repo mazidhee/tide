@@ -73,7 +73,15 @@ export function planLessons(outline: CourseOutline, minutes: Record<string, numb
     const readings = lessons.filter((l) => l.kind === 'reading').length
     // A module's README that only lists its lessons is its contents page, not a lesson
     const contents = (l: (typeof lessons)[number]) => /^(readme|index)\./i.test(base(l.path)) && l.words < 400 && lessons.length >= 3
-    const kept = lessons.filter((l) => !(l.kind === 'notebook' && readings >= 3) && !contents(l))
+    // A notebook beside its reading (same file name) is part of that lesson: its code runs there, its time counts with it
+    const stem = (p: string) => base(p).replace(/\.[^.]+$/, '').toLowerCase()
+    const twinOf = (l: (typeof lessons)[number]) => (l.kind === 'notebook' ? lessons.find((r) => r.kind === 'reading' && stem(r.path) === stem(l.path)) : undefined)
+    const twins = new Map<string, number>()
+    for (const l of lessons) {
+      const r = twinOf(l)
+      if (r) twins.set(r.id, (twins.get(r.id) ?? 0) + Math.min(20, round5(l.words / 120)))
+    }
+    const kept = lessons.filter((l) => !twinOf(l) && !(l.kind === 'notebook' && readings >= 3) && !contents(l))
     // A lesson's own number when the files carry one each (and no two the same), else its place
     const nums = kept.map((l) => (l.kind === 'homework' || /^(readme|index)\./i.test(base(l.path)) ? null : lead(base(l.path))))
     const own = nums.filter((n): n is number => n !== null)
@@ -85,7 +93,7 @@ export function planLessons(outline: CourseOutline, minutes: Record<string, numb
       else if (unique && nums[i] !== null) n = `${moduleNo}.${nums[i]}`
       else if (unique && /^(readme|index)\./i.test(base(l.path))) n = `${moduleNo}.0`
       else n = `${moduleNo}.${++place}`
-      out.push({ id: l.id, title: l.title, n, module: m.title, moduleNo, kind: l.kind, words: l.words, minutes: minutes[l.id] ?? lessonMinutes(l), topics: align[l.id] ?? [] })
+      out.push({ id: l.id, title: l.title, n, module: m.title, moduleNo, kind: l.kind, words: l.words, minutes: (minutes[l.id] ?? lessonMinutes(l)) + (twins.get(l.id) ?? 0), topics: align[l.id] ?? [] })
     }
   }
   return out

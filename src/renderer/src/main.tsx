@@ -45,6 +45,8 @@ import './styles/tide/rest.css'
 // The note editor's live preview, after both designs' prose so it can match them
 import './styles/livePreview.css'
 import './styles/tide/projects.css'
+// Tabs at the top of the main area, for both designs
+import './styles/tabs.css'
 import './styles/memory.css'
 // humanities: the EPUB reader, Discuss this, reading together, appraisals, free books
 import './styles/humanities.css'

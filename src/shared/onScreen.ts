@@ -32,6 +32,10 @@ export interface OnScreen {
   excerpt?: string
   video?: ScreenVideo
   selection?: string
+  /** What they have written in their own notes on this lesson (a course's notes panel) */
+  notes?: string
+  /** The lesson's code cells as they are now: the code, edited or not, and what it printed or drew */
+  cells?: string
 }
 
 /** The lines said within `before` seconds before and `after` after a moment, each with its time */
@@ -67,6 +71,8 @@ export function describeScreen(s: OnScreen | null): string {
     const v = s.video
     parts.push(`A video is open${v.title ? `: “${v.title}”` : ''} (YouTube ${v.id}), ${v.playing ? 'playing' : 'paused'} at ${formatTime(v.at)}.${v.around ? ` Said around that moment (▶ marks it):\n${cut(v.around, 1800)}` : ''}`)
   }
+  if (s.notes?.trim()) parts.push(`Their own notes on this lesson so far:\n"""\n${cut(s.notes.trim(), 2400)}\n"""`)
+  if (s.cells?.trim()) parts.push(`The lesson's code cells as they stand (they can edit and run them):\n${cut(s.cells.trim(), 3000)}`)
   if (s.selection) parts.push(`They selected:\n"""\n${cut(s.selection.trim(), 1500)}\n"""`)
   else if (s.excerpt) parts.push(`The text in view:\n"""\n${cut(s.excerpt.trim(), 1800)}\n"""`)
   return parts.join('\n')
@@ -79,5 +85,7 @@ export function screenLabel(s: OnScreen | null): string {
   if (s.section && s.section !== bits[0]) bits.push(s.section)
   if (s.video) bits.push(formatTime(s.video.at))
   if (s.selection) bits.push('selection')
+  if (s.notes?.trim()) bits.push('your notes')
+  if (s.cells?.trim()) bits.push('cells')
   return bits.filter(Boolean).join(' · ')
 }

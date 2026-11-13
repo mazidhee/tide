@@ -434,6 +434,8 @@ const api: TideApi = {
     held: invoke('window:held'),
     onHeld: (cb) => subscribe('windows:held', cb),
     onAdopt: (cb) => subscribe('windows:adopt', cb),
+    mainHolds: invoke('window:mainHolds'),
+    onShowKey: (cb) => subscribe('windows:showKey', cb),
     onClosing: (cb) => subscribe('windows:closing', () => cb()),
     closeNow: invoke('window:closeNow'),
     relay: (channel, payload) => ipcRenderer.send('windows:relay', channel, payload),

@@ -26,6 +26,10 @@ import type { OnScreen } from '@shared/onScreen'
 import { LinkPage, ViewerBar, targetTitle, useSectionInView } from './LinkViewer'
 import { CoursesHome } from './CoursesHome'
 import { CourseQuiz } from './CourseQuiz'
+import { CourseNotes, type NotesQuote } from './CourseNotes'
+import { LessonCells } from './LessonCells'
+import { currentPlayer } from '../lib/videoHub'
+import { formatTime } from '@shared/video'
 
 
 const KIND_LABEL: Record<CatalogueCourse['kind'], string> = { course: 'Course', book: 'Book', notes: 'Notes', projects: 'Projects', guide: 'Guide' }
@@ -595,7 +599,25 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
   // Theatre: while a lesson's video plays, it takes the stage (the outline steps aside to its handle)
   const [theatre, setTheatre] = useState(false)
   useEffect(() => setTheatre(false), [lessonId])
-  const away = focus || theatre
+  // Your notes beside the lesson (⌘⇧N), open or not as you last left them
+  const [notesOpen, setNotesOpenState] = useState(() => remember.get('tide.course.notes', false))
+  const [notesFocus, setNotesFocus] = useState(false)
+  const [quote, setQuote] = useState<NotesQuote | null>(null)
+  const setNotesOpen = useCallback((open: boolean) => {
+    setNotesOpenState(open)
+    remember.set('tide.course.notes', open)
+    setNotesFocus(open)
+    if (open) setSideTab('notes')
+  }, [])
+  // The side column: the video, its transcript and your notes, stacked when there's room, tabs when not
+  const [sideTab, setSideTab] = useState<'video' | 'transcript' | 'notes'>('video')
+  const [lay, setLay] = useState({ single: false, tabbed: false, tall: false })
+  const [trHost, setTrHost] = useState<HTMLDivElement | null>(null)
+  const [cellsBar, setCellsBar] = useState<HTMLSpanElement | null>(null)
+  const [proseEl, setProseEl] = useState<HTMLElement | null>(null)
+  const [tip, setTip] = useState<{ x: number; y: number; text: string; label: string; url?: string } | null>(null)
+  const theatreOn = theatre && !notesOpen
+  const away = focus || theatreOn
   useEffect(() => setTocOpen(false), [lessonId])
   const load = useCallback(() => window.tide.courses.get(id).then(setD).catch(() => setD(null)), [id])
   useEffect(() => void load(), [load])
@@ -691,6 +713,124 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
   // [videos] The YouTube videos the lesson links, played beside its text
   const videos = useMemo(() => (content ? videosIn(content.markdown) : []), [content])
 
+  // How the side column fits: beside the text, stacked or in tabs, or above it in a narrow window
+  useLayoutEffect(() => {
+    const main = mainRef.current
+    if (!main) return
+    const place = () => {
+      const w = main.clientWidth
+      const h = main.clientHeight
+      main.style.setProperty('--crs-vh', `${h}px`)
+      const single = w < 860
+      const tabbed = single || w < 1000 || h < 640
+      const tall = h >= 1000
+      setLay((l) => (l.single === single && l.tabbed === tabbed && l.tall === tall ? l : { single, tabbed, tall }))
+    }
+    place()
+    const ro = new ResizeObserver(place)
+    ro.observe(main)
+    return () => ro.disconnect()
+  }, [d === undefined])
+  const hasVideo = videos.length > 0
+  const side = !!content && !page && (hasVideo || notesOpen)
+
+  // The column fits what's visible of it: under the lesson's header at the top of the page, the
+  // whole height once that scrolls away (set on the element, so scrolling never redraws the page)
+  useLayoutEffect(() => {
+    const main = mainRef.current
+    if (!main || !side) return
+    let frame = 0
+    const fit = () => {
+      frame = 0
+      const el = main.querySelector<HTMLElement>('.crs-side')
+      if (!el || lay.single || theatreOn) return el?.style.removeProperty('--side-h')
+      const host = el.parentElement!.getBoundingClientRect().top - main.getBoundingClientRect().top
+      el.style.setProperty('--side-h', `${Math.max(360, main.clientHeight - Math.max(58, host) - 16)}px`)
+    }
+    const on = () => (frame ||= requestAnimationFrame(fit))
+    fit()
+    main.addEventListener('scroll', on, { passive: true })
+    const ro = new ResizeObserver(on)
+    ro.observe(main)
+    return () => {
+      main.removeEventListener('scroll', on)
+      ro.disconnect()
+      cancelAnimationFrame(frame)
+    }
+  }, [side, lay.single, theatreOn, content])
+  // A tab that isn't there falls back to one that is
+  const tabs = [...(hasVideo ? (['video', 'transcript'] as const) : []), ...(notesOpen ? (['notes'] as const) : [])]
+  const tab = (tabs as readonly string[]).includes(sideTab) ? sideTab : (tabs[0] ?? 'notes')
+  // Stacked but not tall enough for all three: the video stays in view, its transcript and your notes share a pane in tabs
+  const paneTabs = !lay.tabbed && !lay.tall && hasVideo && notesOpen
+  const paneTab = tab === 'transcript' ? 'transcript' : 'notes'
+  const toggleNotes = useCallback(() => setNotesOpen(!notesOpen), [notesOpen, setNotesOpen])
+  // A reading and the notebook of the same name beside it in its module: one click between them
+  const twin = useMemo(() => {
+    if (!here) return null
+    const stem = (p: string) => p.split('/').pop()!.replace(/\.[^.]+$/, '').toLowerCase()
+    const want = here.l.kind === 'notebook' ? 'reading' : here.l.kind === 'reading' ? 'notebook' : null
+    return (want && here.m.lessons.find((l) => l.kind === want && l.id !== here.l.id && stem(l.path) === stem(here.l.path))) || null
+  }, [here])
+  const onRan = useCallback(() => {
+    if (currentId) void window.tide.courses.track(id, currentId, { ran: true }).catch(() => {})
+  }, [id, currentId])
+
+  // ⌘⇧N: the notes beside the lesson (before the menu's New topic, which it stands for here)
+  useEffect(() => {
+    if (!content || page) return
+    const on = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || e.altKey || e.key.toLowerCase() !== 'n') return
+      e.preventDefault()
+      e.stopPropagation()
+      toggleNotes()
+    }
+    window.addEventListener('keydown', on, true)
+    return () => window.removeEventListener('keydown', on, true)
+  }, [content, page, toggleNotes])
+
+  // A passage selected in the lesson: "Quote in notes" beside it
+  const onProseUp = () => {
+    setTimeout(() => {
+      const sel = window.getSelection()
+      const text = sel && !sel.isCollapsed ? sel.toString().trim() : ''
+      const prose = proseRef.current
+      if (!text || !sel || !prose || !sel.anchorNode || !prose.contains(sel.anchorNode) || (sel.anchorNode.parentElement?.closest('.lc') ?? null)) return setTip(null)
+      const r = sel.getRangeAt(0).getBoundingClientRect()
+      // The section it is in, for the quote's link back
+      let el: Element | null = sel.anchorNode.nodeType === 1 ? (sel.anchorNode as Element) : sel.anchorNode.parentElement
+      while (el && el.parentElement !== prose) el = el.parentElement
+      let head: Element | null = el
+      while (head && !/^H[1-3]$/.test(head.tagName)) head = head.previousElementSibling
+      const section = head?.textContent?.trim() ?? ''
+      const slug = section.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, '').trim().replace(/\s+/g, '-')
+      const title = content?.title ?? ''
+      setTip({ x: r.left + r.width / 2, y: r.top, text, label: section && section !== title ? `${title} § ${section}` : title, url: content?.url ? `${content.url.split('#')[0]}${slug ? `#${slug}` : ''}` : undefined })
+    }, 0)
+  }
+  useEffect(() => {
+    if (!tip) return
+    const off = () => setTip(null)
+    const el = mainRef.current
+    el?.addEventListener('scroll', off, { passive: true })
+    window.addEventListener('resize', off)
+    return () => {
+      el?.removeEventListener('scroll', off)
+      window.removeEventListener('resize', off)
+    }
+  }, [tip])
+  useEffect(() => setTip(null), [currentId])
+  // The notes take the cursor when you open them, not when you move to another lesson
+  useEffect(() => setNotesFocus(false), [currentId])
+  const quoteTip = () => {
+    if (!tip) return
+    setQuote({ text: tip.text, label: tip.label, url: tip.url, nonce: Date.now() })
+    if (!notesOpen) setNotesOpen(true)
+    else setSideTab('notes')
+    setTip(null)
+    window.getSelection()?.removeAllRanges()
+  }
+
   // [immersive] What the tutor sees: this lesson, the section in view, a passage selected
   const lessonScreen = useMemo<OnScreen | null>(
     () => (d && content && here ? { kind: 'course-lesson', title: content.title, course: { id, title: d.course.title, module: here.m.title, lesson: content.title }, path: here.l.path, url: content.url } : null),
@@ -730,7 +870,7 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
       ro.disconnect()
       clear()
     }
-  }, [content, page, theatre])
+  }, [content, page, theatre, notesOpen, lay])
 
   // [immersive] How far down the lesson you read, kept with its progress (and so in What you know)
   const readTo = useRef(0)
@@ -817,7 +957,7 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
 
   const lessonUrl = content?.url ?? (d.imported ? null : preview?.url ?? null)
   return (
-    <div className={`doc-view crs-page crs-immersive${away ? ' crs-focus' : ''}${theatre ? ' crs-theatre' : ''}${tocOpen ? ' toc-open' : ''}`} onMouseLeave={() => away && setTocOpen(false)}>
+    <div className={`doc-view crs-page crs-immersive${away ? ' crs-focus' : ''}${theatreOn ? ' crs-theatre' : ''}${tocOpen ? ' toc-open' : ''}`} onMouseLeave={() => away && setTocOpen(false)}>
       {/* The outline, stepped aside: its handle on the stage's left edge brings it over the page */}
       <button className="crs-outline-handle" onMouseEnter={() => setTocOpen(true)} onClick={() => setTocOpen((o) => !o)} aria-label="Course outline" title="Course outline">
         <Icon name="list" size={14} />
@@ -831,6 +971,11 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
           url={page ? targetUrl(page, courseRepos()) : lessonUrl}
           label={page ? targetTitle(page) : (content?.title ?? c.title)}
         >
+          {content && !page && (
+            <button className={`icon-btn small crs-notes-btn${notesOpen ? ' on' : ''}`} onClick={toggleNotes} title={notesOpen ? 'Close your notes (⌘⇧N)' : 'Take notes beside the lesson (⌘⇧N)'} aria-pressed={notesOpen}>
+              <Icon name="edit" size={13} />
+            </button>
+          )}
           <button
             className={`icon-btn small crs-outline-btn${tocOpen ? ' on' : ''}`}
             onClick={() => {
@@ -850,7 +995,7 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
             <LinkPage target={page} />
           </div>
         ) : (
-        <div className={`crs-article${videos.length ? ' wide' : ''}`}>
+        <div className={`crs-article${side ? ' wide' : ''}`}>
           <button className="crs-back" onClick={() => app.setView({ kind: 'courses' })}>
             <Icon name="back" size={14} /> Courses
           </button>
@@ -896,18 +1041,90 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
                     >
                       <Icon name="check" size={13} /> {isDone ? 'Done' : 'Mark as done'}
                     </button>
-                    <span className="crs-meta">
+                    {twin ? (
+                      <button className="tool-btn" onClick={() => goTo(twin.id)} title={twin.title}>
+                        <Icon name={twin.kind === 'notebook' ? 'terminal' : 'article'} size={13} /> {twin.kind === 'notebook' ? 'Its notebook' : 'Its reading'}
+                      </button>
+                    ) : null}
+                    <span className="crs-cells-bar" ref={setCellsBar} />
+                    <span className="crs-meta crs-parts">
                       {content.sections.length > 1 ? `The tutor takes you through it in ${content.sections.length} parts` : 'The tutor takes you through it'}
                     </span>
                   </div>
                 </header>
-                <div className={videos.length ? `crs-with-video${theatre ? ' theatre' : ''}` : undefined}>
-                  {videos.length > 0 && <CourseVideos ids={videos} course={c.title} onActive={setTheatre} onWatched={(v, f) => void window.tide.courses.track(id, here.l.id, { video: { id: v, watched: f } }).catch(() => {})} />}
-                  <article className={`prose crs-prose${here.l.kind === 'notebook' ? ' notebook' : ''}`} dangerouslySetInnerHTML={{ __html: html }} onClick={(e) => {
+                <div className={side ? `crs-with-side${theatreOn ? ' theatre' : ''}${lay.single ? ' single' : ''}${lay.tabbed ? ' tabbed' : ''}` : undefined}>
+                  {side && (
+                    <aside className={`crs-side${lay.tabbed ? ' tabbed' : ' stacked'}${notesOpen ? ' with-notes' : ''}${hasVideo ? ' with-video' : ''}`} aria-label="Beside the lesson">
+                      {lay.tabbed && tabs.length > 1 && (
+                        <div className="crs-side-tabs" role="tablist">
+                          {tabs.map((t) => (
+                            <button key={t} role="tab" aria-selected={tab === t} className={`crs-side-tab${tab === t ? ' on' : ''}`} onClick={() => setSideTab(t)}>
+                              <Icon name={t === 'video' ? 'video' : t === 'transcript' ? 'list' : 'edit'} size={12} />
+                              {t === 'video' ? 'Video' : t === 'transcript' ? 'Transcript' : 'Notes'}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {lay.tabbed && hasVideo && tab !== 'video' && <SideMini video={videos} onShow={() => setSideTab('video')} />}
+                      {hasVideo && (
+                        <div className={`crs-side-video${lay.tabbed && tab !== 'video' ? ' tucked' : ''}`}>
+                          <CourseVideos ids={videos} course={c.title} onActive={setTheatre} transcriptHost={trHost} onNotes={toggleNotes} notesOn={notesOpen} onWatched={(v, f) => void window.tide.courses.track(id, here.l.id, { video: { id: v, watched: f } }).catch(() => {})} />
+                        </div>
+                      )}
+                      {(hasVideo || notesOpen) && (
+                        <div className={`crs-side-panes${paneTabs ? ' paired' : ''}`}>
+                          {paneTabs && (
+                            <div className="crs-side-tabs" role="tablist">
+                              {(['transcript', 'notes'] as const).map((t) => (
+                                <button key={t} role="tab" aria-selected={paneTab === t} className={`crs-side-tab${paneTab === t ? ' on' : ''}`} onClick={() => setSideTab(t)}>
+                                  <Icon name={t === 'transcript' ? 'list' : 'edit'} size={12} />
+                                  {t === 'transcript' ? 'Transcript' : 'Notes'}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {hasVideo && <div className="vt crs-side-pane crs-tr-pane" ref={setTrHost} hidden={(lay.tabbed && tab !== 'transcript') || (paneTabs && paneTab !== 'transcript')} />}
+                          {notesOpen && (
+                            <div className="crs-side-pane crs-notes-pane" hidden={(lay.tabbed && tab !== 'notes') || (paneTabs && paneTab !== 'notes')}>
+                              <CourseNotes
+                                course={{ id, title: c.title, by: c.by, url: homeUrl(c) }}
+                                lesson={{ id: here.l.id, title: content.title, url: content.url }}
+                                video={hasVideo ? videos[0] : undefined}
+                                quote={quote}
+                                onQuoted={() => setQuote(null)}
+                                focusOnOpen={notesFocus}
+                                onClose={() => setNotesOpen(false)}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </aside>
+                  )}
+                  <article
+                    className={`prose crs-prose${here.l.kind === 'notebook' ? ' notebook' : ''}`}
+                    dangerouslySetInnerHTML={{ __html: html }}
+                    onMouseUp={onProseUp}
+                    onMouseDown={() => tip && setTip(null)}
+                    onClick={(e) => {
                       void codeBlockClick(e.target, { cumulative: here.l.kind === 'notebook' })
                       if ((e.target as Element).closest?.('.run-code')) void window.tide.courses.track(id, here.l.id, { ran: true }).catch(() => {})
-                    }} ref={proseRef} data-link-course={id} data-link-path={here.l.path} data-link-root />
+                    }}
+                    ref={(el) => {
+                      proseRef.current = el
+                      setProseEl(el)
+                    }}
+                    data-link-course={id}
+                    data-link-path={here.l.path}
+                    data-link-root
+                  />
+                  <LessonCells root={proseEl} html={html} course={{ id, title: c.title }} lesson={{ id: here.l.id, title: content.title, url: content.url }} markdown={content.markdown} barHost={cellsBar} onRan={onRan} />
                 </div>
+                {tip && (
+                  <button className="crs-quote-tip" style={{ left: tip.x, top: tip.y }} onMouseDown={(e) => e.preventDefault()} onClick={quoteTip}>
+                    <Icon name="quote" size={12} /> Quote in notes
+                  </button>
+                )}
                 {quiz === 'check' ? (
                   <CourseQuiz course={id} lessons={[here.l.id]} kind="check" variant="inline" onClose={() => setQuiz(null)} onDone={(r) => (setChecked(r), void load())} />
                 ) : (
@@ -1206,7 +1423,7 @@ export function videosIn(markdown: string): string[] {
 }
 
 /** A course lesson's videos beside its text: one player, a tab for each video; their transcripts are fetched and indexed for lessons to use */
-function CourseVideos({ ids, course, onWatched, onActive }: { ids: string[]; course: string; onWatched?: (id: string, fraction: number) => void; onActive?: (on: boolean) => void }) {
+function CourseVideos({ ids, course, onWatched, onActive, transcriptHost, onNotes, notesOn }: { ids: string[]; course: string; onWatched?: (id: string, fraction: number) => void; onActive?: (on: boolean) => void; transcriptHost?: HTMLElement | null; onNotes?: () => void; notesOn?: boolean }) {
   const [at, setAt] = useState(0)
   useEffect(() => setAt(0), [ids.join()])
   const id = ids[Math.min(at, ids.length - 1)]
@@ -1225,7 +1442,37 @@ function CourseVideos({ ids, course, onWatched, onActive }: { ids: string[]; cou
           ))}
         </div>
       )}
-      <VideoPlayer key={id} source={{ kind: 'youtube', id, course, fetch: true }} noCinema onActive={onActive} onWatched={(f) => onWatched?.(id, f)} />
+      <VideoPlayer key={id} source={{ kind: 'youtube', id, course, fetch: true }} noCinema onActive={onActive} onWatched={(f) => onWatched?.(id, f)} transcriptHost={transcriptHost} onNotes={onNotes} notesOn={notesOn} keepPlaying />
     </aside>
+  )
+}
+
+/**
+ * The lesson's video, docked in the side column while another tab is showing: its moment, play or
+ * pause, and the way back to it. In the column's own flow, so it never covers the text.
+ */
+function SideMini({ video, onShow }: { video: string[]; onShow: () => void }) {
+  const [now, setNow] = useState<{ at: number; playing: boolean } | null>(null)
+  useEffect(() => {
+    const read = () => {
+      const p = currentPlayer()
+      setNow(p && video.includes(p.key) && p.time ? { at: p.time(), playing: !!p.playing?.() } : null)
+    }
+    read()
+    const t = setInterval(read, 1000)
+    return () => clearInterval(t)
+  }, [video.join()])
+  if (!now) return null
+  return (
+    <div className="crs-side-mini" role="group" aria-label="The lesson’s video">
+      <button className="icon-btn small" onClick={() => currentPlayer()?.toggle?.()} aria-label={now.playing ? 'Pause' : 'Play'}>
+        <Icon name={now.playing ? 'pause' : 'play'} size={12} />
+      </button>
+      <span className="crs-side-mini-at">{formatTime(now.at)}</span>
+      <span className="crs-meta">{now.playing ? 'Playing' : 'Paused'}</span>
+      <button className="link-btn small" onClick={onShow}>
+        Show the video
+      </button>
+    </div>
   )
 }

@@ -84,6 +84,11 @@ describe('a course’s lessons, as the plan counts them', () => {
     // A module's README that only lists its lessons is its contents page
     expect(titles).not.toContain('2. Machine Learning for Regression')
   })
+  it('counts a notebook twin with its reading, not as a lesson of its own', () => {
+    const o: CourseOutline = { modules: [{ id: 'm1', title: 'Module 1: Intro', lessons: [L('01-intro/07-numpy.md', 'Introduction to NumPy', 600), L('01-intro/07-numpy.ipynb', 'Introduction to NumPy: notebook', 1200, 'notebook')], code: [] }], lessons: 2 }
+    const ls = planLessons(o, { '01-intro/07-numpy.md': 25 })
+    expect(ls.map((l) => [l.n, l.title, l.minutes])).toEqual([['1.7', 'Introduction to NumPy', 35]])
+  })
   it('sizes a lesson by its words, its videos and its work', () => {
     expect(lessonMinutes({ words: 600, kind: 'reading' }, 1)).toBe(25)
     expect(lessonMinutes({ words: 600, kind: 'reading' }, 0)).toBe(10)

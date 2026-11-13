@@ -1870,3 +1870,542 @@ button.crh-next:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ---------- The course page: your notes, the video and its transcript in a side column ---------- */
+
+/* Beside the text when there's room; the column stays in view as the text scrolls */
+.crs-with-side {
+  display: grid;
+  grid-template-columns: minmax(0, 720px) minmax(340px, 1fr);
+  gap: 32px;
+  align-items: start;
+}
+.crs-with-side > .crs-prose {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
+.crs-side {
+  grid-column: 2;
+  grid-row: 1;
+  position: sticky;
+  /* Under the page's bar, clear of the window's foot */
+  top: 58px;
+  height: var(--side-h, calc(var(--crs-vh, 100vh) - 58px - 16px));
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.crs-side-video {
+  flex: none;
+}
+.crs-side-video .crs-videos {
+  margin: 0;
+}
+.crs-side-video .vt {
+  margin: 0;
+}
+/* Another tab showing: the video keeps playing, out of sight (SideMini stands in for it) */
+.crs-side-video.tucked {
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+.crs-side-panes {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.crs-side-pane {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.crs-side .crs-side-pane[hidden] {
+  display: none !important;
+}
+.crs-side-panes.paired {
+  gap: 8px;
+}
+.crs-side.stacked.with-video.with-notes .crs-side-panes:not(.paired) .crs-tr-pane {
+  flex: 0.8 1 0;
+  min-height: 120px;
+}
+.crs-side.stacked.with-video.with-notes .crs-side-panes:not(.paired) .crs-notes-pane {
+  flex: 1.2 1 0;
+  min-height: 200px;
+}
+/* The transcript, drawn by the player (VideoPlayer) into a pane of its own */
+.crs-side .crs-tr-pane.vt {
+  display: flex;
+  gap: 0;
+  margin: 0;
+}
+.crs-tr-pane .vt-transcript {
+  flex: 1;
+  min-height: 0;
+}
+.crs-tr-pane:empty {
+  display: none;
+}
+
+/* Tabs when the column is short or narrow: Video · Transcript · Notes */
+.crs-side-tabs {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--bg-inset);
+}
+.crs-side-tab {
+  all: unset;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  border-radius: 7px;
+  font: 500 12.5px var(--font-ui);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.crs-side-tab:hover {
+  color: var(--ink);
+}
+.crs-side-tab.on {
+  background: var(--bg-raised);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--line), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.crs-side-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* The video docked while another tab shows: in the column's flow, never over the text */
+.crs-side-mini {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  font: 500 12.5px var(--font-ui);
+}
+.crs-side-mini-at {
+  font-family: var(--font-code);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.crs-side-mini .link-btn {
+  margin-left: auto;
+}
+
+/* A narrow window: the column above the text, a fixed height, in tabs */
+.crs-with-side.single {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+.crs-with-side.single > .crs-side {
+  grid-column: 1;
+  grid-row: 1;
+  position: relative;
+  top: auto;
+  height: min(60vh, 540px);
+}
+.crs-with-side.single > .crs-prose {
+  grid-row: 2;
+}
+
+/* Theatre (the video playing, notes closed): the lecture across the stage, its transcript beside it */
+.crs-with-side.theatre {
+  grid-template-columns: minmax(0, 1fr);
+}
+.crs-with-side.theatre > .crs-side {
+  grid-column: 1;
+  grid-row: 1;
+  position: relative;
+  top: auto;
+  height: auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  align-items: stretch;
+}
+.crs-with-side.theatre > .crs-side > .crs-side-tabs,
+.crs-with-side.theatre > .crs-side > .crs-side-mini {
+  display: none;
+}
+.crs-with-side.theatre .crs-side-video.tucked {
+  height: auto;
+  visibility: visible;
+}
+.crs-with-side.theatre .crs-side-panes {
+  position: relative;
+}
+.crs-with-side.theatre .crs-side .crs-tr-pane[hidden] {
+  display: flex !important;
+}
+.crs-with-side.theatre .crs-tr-pane {
+  position: absolute;
+  inset: 0;
+}
+.crs-with-side.theatre > .crs-prose {
+  grid-row: 2;
+  width: 100%;
+  max-width: 740px;
+  margin: 8px auto 0;
+}
+.crs-theatre .crs-article.wide {
+  width: min(1520px, 100%);
+}
+
+/* The notes panel (components/CourseNotes) */
+.cn {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+.cn-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 6px 0 14px;
+  border-bottom: 1px solid var(--line);
+  font: 600 12px var(--font-ui);
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+}
+.cn-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.cn-where {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--ink-muted);
+}
+.cn-where::before {
+  content: '·';
+  margin-right: 6px;
+}
+.cn-gap {
+  flex: 1;
+}
+.cn-stamp {
+  all: unset;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font: 500 12px var(--font-code);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  color: var(--accent);
+  background: var(--accent-soft);
+  cursor: pointer;
+}
+.cn-stamp:disabled {
+  color: var(--ink-muted);
+  background: transparent;
+  cursor: default;
+}
+.cn-stamp:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.cn-saved {
+  flex: none;
+  min-width: 44px;
+  text-align: right;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--ink-muted);
+}
+.cn-saved.failed {
+  color: var(--danger);
+}
+.cn-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px 0;
+  cursor: text;
+}
+.cn-body .editor {
+  height: auto;
+  min-height: 100%;
+}
+.cn-body .cm-content {
+  font-size: 14.5px;
+  line-height: 1.6;
+  padding-bottom: 80px !important;
+}
+.cn-hint {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  right: 16px;
+  margin: 0;
+  font: 400 14.5px/1.6 var(--font-read);
+  color: var(--ink-muted);
+  pointer-events: none;
+}
+.cn-loading {
+  height: 14px;
+  width: 60%;
+  border-radius: 7px;
+  background: var(--bg-inset);
+}
+
+/* "Quote in notes", over a passage you selected */
+.crs-quote-tip {
+  position: fixed;
+  z-index: 40;
+  transform: translate(-50%, calc(-100% - 8px));
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-raised);
+  color: var(--ink);
+  font: 500 12.5px var(--font-ui);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  animation: crs-tip 0.12s ease-out;
+}
+.crs-quote-tip:hover {
+  color: var(--accent);
+}
+@keyframes crs-tip {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% - 4px));
+  }
+}
+.crs-notes-btn.on {
+  color: var(--accent);
+}
+.crs-cells-bar:empty {
+  display: none;
+}
+
+/* ---------- Code cells in a lesson (components/LessonCells) ---------- */
+
+.lc-replaced {
+  display: none !important;
+}
+.lc-host {
+  margin: 0 0 1.1em;
+}
+.lc-host.practice {
+  margin-top: -0.4em;
+}
+.lc-frame {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--code-bg);
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+.lc-frame:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+.lc.practice .lc-frame {
+  border-style: dashed;
+  background: transparent;
+}
+.lc.practice .lc-code .cm-content:empty::before,
+.lc.practice .lc-code .cm-line:only-child:empty::before {
+  content: none;
+}
+.lc-code .cm-editor {
+  min-height: 40px;
+}
+.lc-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  padding: 0 6px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  font: 500 12px var(--font-ui);
+}
+.lc-run {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px 0 7px;
+  border-radius: 6px;
+  color: var(--accent);
+  cursor: pointer;
+}
+.lc-run:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+.lc-run:disabled {
+  color: var(--ink-muted);
+  cursor: default;
+}
+.lc-run:focus-visible,
+.lc-tool:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.lc-run .spinner {
+  width: 10px;
+  height: 10px;
+}
+.lc-count {
+  color: var(--ink-muted);
+  font-family: var(--font-code);
+  font-size: 11.5px;
+}
+.lc-gap {
+  flex: 1;
+}
+.lc-tool {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 6px;
+  color: var(--ink-muted);
+  cursor: pointer;
+  opacity: 0.85;
+}
+.lc-tool:hover {
+  color: var(--ink);
+  background: var(--bg-hover);
+  opacity: 1;
+}
+.lc-frame:not(:hover):not(:focus-within) .lc-tool {
+  opacity: 0.55;
+}
+.lc-out {
+  position: relative;
+  margin: 6px 0 0;
+  padding: 2px 0 2px 12px;
+  box-shadow: inset 2px 0 0 var(--line);
+  font-size: 14px;
+}
+.lc.running .lc-out {
+  opacity: 0.55;
+}
+.lc-out.course {
+  opacity: 0.85;
+}
+.lc-out-label {
+  display: block;
+  margin: 2px 0 2px;
+  font: 600 10.5px var(--font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.lc-out .nb-outputs {
+  margin-top: 0;
+}
+.lc-out .nb-image {
+  max-width: min(100%, 640px);
+  border-radius: 6px;
+  background: transparent;
+}
+.lc-hint {
+  margin: 6px 0 0;
+  font: 400 12.5px var(--font-ui);
+  color: var(--ink-soft);
+}
+.lc-install {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 8px 10px 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--bg-raised);
+  font: 400 12.5px/1.45 var(--font-ui);
+  color: var(--ink-soft);
+}
+.lc-install > svg {
+  flex: none;
+  color: var(--accent);
+}
+.lc-install-text {
+  flex: 1;
+  min-width: 0;
+}
+.lc-install b {
+  font-family: var(--font-code);
+  font-weight: 600;
+  color: var(--ink);
+}
+.lc-install-step {
+  color: var(--ink-muted);
+}
+.lc-bar-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.lc-kernel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 12.5px var(--font-ui);
+  color: var(--ink-muted);
+}
+.lc-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-muted);
+  opacity: 0.6;
+}
+.lc-kernel.kernel .lc-dot,
+.lc-kernel.plain .lc-dot {
+  background: var(--accent);
+  opacity: 1;
+}
+.lc-kernel.starting .lc-dot {
+  background: var(--accent);
+  animation: crs-pulse 1s ease-in-out infinite;
+}
+/* The reading column's type never reaches the code */
+.lc-code .cm-content,
+.lc-code .cm-line {
+  font-family: var(--font-code) !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+}

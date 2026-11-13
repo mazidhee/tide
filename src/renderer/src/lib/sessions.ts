@@ -136,8 +136,23 @@ export async function loadOngoing() {
     // nothing saved yet, or unreadable
   }
   loaded = true
+  emit()
 }
 void loadOngoing()
+
+/** Whether the lessons left open last time have been read yet */
+export const ongoingLoaded = () => loaded
+
+export function useOngoingLoaded(): boolean {
+  const [ready, setReady] = useState(loaded)
+  useEffect(() => {
+    if (loaded) return setReady(true)
+    const l = () => loaded && setReady(true)
+    listeners.add(l)
+    return () => void listeners.delete(l)
+  }, [])
+  return ready
+}
 try {
   // The main window keeps a reply coming for a lesson whose window closed mid-reply
   const follow = !/[#&]focus=/.test(window.location.hash)

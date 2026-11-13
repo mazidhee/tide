@@ -7,9 +7,11 @@ import type { KernelEventShape } from './kernelEvents'
 export interface NbRef {
   vault?: string
   abs?: string
+  /** A course lesson's code cells: "<course id>/<lesson id>", a kernel of its own, run in the course's scratch folder */
+  course?: string
 }
 
-export const refKey = (r: NbRef) => (r.vault ? `vault:${r.vault}` : `abs:${r.abs}`)
+export const refKey = (r: NbRef) => (r.vault ? `vault:${r.vault}` : r.course ? `course:${r.course}` : `abs:${r.abs}`)
 export const refName = (r: NbRef) => (r.vault ?? r.abs ?? '').split('/').pop()?.replace(/\.ipynb$/i, '') ?? 'Notebook'
 
 export interface NbFile {

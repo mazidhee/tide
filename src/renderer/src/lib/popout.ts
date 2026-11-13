@@ -111,6 +111,9 @@ export function usePopOutSurface(s: PopSurface) {
   useEffect(() => surfaceChanged(), [s.name, s.busy])
 }
 
+/** The page on screen's account of itself, if it gave one */
+export const currentSurface = (): PopSurface | null => surface
+
 /** Tests only: what a page would have registered */
 export function setSurfaceForTests(s: PopSurface | null) {
   surface = s

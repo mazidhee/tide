@@ -1076,6 +1076,10 @@ export interface TideApi {
     onHeld(cb: (keys: string[]) => void): () => void
     /** The main window: a pop-out handed its view back */
     onAdopt(cb: (view: unknown) => void): () => void
+    /** The main window: the keys its tabs hold, so other windows bring it forward rather than open them twice */
+    mainHolds(keys: string[]): Promise<void>
+    /** The main window: another window asked for what one of its tabs holds; that tab comes forward */
+    onShowKey(cb: (key: string) => void): () => void
     /** This pop-out is closing: save, then call closeNow */
     onClosing(cb: () => void): () => void
     closeNow(): Promise<void>

@@ -56,7 +56,13 @@ export const CODE = /\.(py|sql|rs|c|h|cc|cpp|hpp|js|ts|go|java|sh|jl|r|scala|asm
 /** What is fetched: lessons, code and the licence (images and data are left on GitHub) */
 export const FETCHED = /\.(md|markdown|mdx|ipynb|adoc|asciidoc|py|sql|rs|c|h|cc|cpp|hpp|js|ts|go|java|sh|jl|r|scala|asm|toml|yml|yaml)$|(^|\/)(LICEN[CS]E|COPYING)[^/]*$/i
 
-const META = /^(licen[cs]e|copying|contributing|code_of_conduct|security|support|changelog|agents|claude|pull_request_template|issue_template|sponsors?|authors|governance|citation|todo|maintainers|translations?|summary|readme-template|style-guide)(\.|$)/i
+const META = /^(licen[cs]e|copying|contributing|code_of_conduct|security|support|changelog|agents|claude|gemini|copilot-instructions|pull_request_template|issue_template|sponsors?|authors|governance|citation|todo|maintainers|translations?|summary|readme-template|style-guide)(\.|$)/i
+/** The repository's housekeeping kept beside the lessons (an audit of its pictures, a provenance log): never a lesson */
+const META_ANY = /(^|[-_. ])(provenance|audit|ledger|removal-evidence|repair-log)([-_. ]|$)/i
+/** Folders of pictures and other media: what is written there is about the pictures, not a lesson */
+const ASSET_DIRS = /(^|\/)(images?|imgs?|assets|figures?|media|static|_static|_images|screenshots|pics|diagrams)\//i
+/** Whether a file of the course is housekeeping rather than something to learn from */
+export const notLesson = (path: string) => META.test(basename(path)) || META_ANY.test(basename(path)) || ASSET_DIRS.test(path)
 const NEVER_DIRS = /(^|\/)(\.[^/]*|node_modules|translations?|translated_images|i18n|locales?|__pycache__|\.ipynb_checkpoints|_book|site-packages)(\/|$)/i
 
 /** Natural order: "2-x" before "10-x", "part2" before "part10" */
@@ -337,6 +343,100 @@ function readmeOrder(readme: string, dirs: string[], root = ''): Map<string, { a
 
 const isIndex = (p: string) => /^(readme|index)\.(en\.)?(md|markdown|mdx)$/i.test(basename(p))
 
+const stemOf = (p: string) => basename(p).replace(/\.[^.]+$/, '').toLowerCase()
+
+/**
+ * A module's files in the order its README links them: the README, then each linked file, a
+ * notebook of the same name straight after its reading, then the notebooks and the files at the
+ * module's top that it doesn't link, and the README of a folder inside it (a workshop, say). What
+ * else sits in its folders, unlinked (a plan, notes about its pictures), isn't a lesson. Null
+ * when the README doesn't list the lessons (fewer than two of them linked).
+ */
+export function linkedLessons(group: RepoFile[], index: RepoFile): RepoFile[] | null {
+  const dir = dirOf(index.path)
+  const have = new Map(group.map((f) => [f.path, f]))
+  const order: RepoFile[] = []
+  for (const m of (index.text ?? '').matchAll(/\[[^\]]*\]\(\s*<?([^)\s>#]+)/g)) {
+    const href = decodeURIComponent(m[1])
+    if (/^([a-z][a-z0-9+.-]*:|\/\/|mailto:)/i.test(href)) continue
+    const parts = `${dir ? `${dir}/` : ''}${href.replace(/^\.\//, '')}`.split('/')
+    const out: string[] = []
+    for (const x of parts) x === '..' ? out.pop() : x && x !== '.' && out.push(x)
+    const f = have.get(out.join('/'))
+    if (f && f !== index && !order.includes(f)) order.push(f)
+  }
+  if (order.length < 2) return null
+  const depth = (p: string) => p.split('/').length - (dir ? dir.split('/').length : 0)
+  const notebooks = group.filter((f) => /\.ipynb$/i.test(f.path) && !order.includes(f)).sort((a, b) => natural(a.path, b.path))
+  const out: RepoFile[] = [index]
+  for (const f of order) {
+    out.push(f)
+    const twin = notebooks.findIndex((n) => stemOf(n.path) === stemOf(f.path))
+    if (twin >= 0) out.push(...notebooks.splice(twin, 1))
+  }
+  const rest = group.filter((f) => !out.includes(f) && !notebooks.includes(f) && (depth(f.path) === 1 || isIndex(f.path))).sort((a, b) => natural(a.path, b.path))
+  return [...out, ...notebooks, ...rest]
+}
+
+/** A title without its numbering ("1.", "Module 2:", "Week 3 -") or its marks, to compare */
+const coreTitle = (t: string) =>
+  t
+    .toLowerCase()
+    .replace(/^\s*((module|week|unit|part|chapter|lesson|session)\s*)?\d+(\.\d+)*\s*[.:)\-–—]?\s*/i, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '')
+const SIGNPOST = /^(community notes|notes|contents|table of contents|links|resources|navigation)$/i
+
+/**
+ * A module's lessons named so no two read the same: its README is its overview (when its title
+ * only repeats the module's, or is a signpost like "Community notes"), a notebook titled with the
+ * course's or the module's name is named for its reading ("Introduction to NumPy: notebook") or its
+ * file, and of two lessons left with the same title, a copy of the other's text is dropped and
+ * the rest are told apart by their file.
+ */
+export function tidyLessons(lessons: CourseLesson[], module: string, course: string, files: Map<string, RepoFile> = new Map()): CourseLesson[] {
+  const mod = coreTitle(module)
+  const crs = coreTitle(course)
+  const vague = (t: string) => {
+    const k = coreTitle(t)
+    return !k || k === mod || k === crs || k === 'notebook' || SIGNPOST.test(t.trim())
+  }
+  const readings = lessons.filter((l) => l.kind === 'reading')
+  const overview = readings.some((l) => !isIndex(l.path) && coreTitle(l.title) === 'overview') ? 'About this module' : 'Overview'
+  const top = Math.min(...readings.filter((l) => isIndex(l.path)).map((l) => l.path.split('/').length))
+  let out = lessons.map((l) => {
+    if (isIndex(l.path) && l.path.split('/').length === top && lessons.length > 1 && l.kind === 'reading' && !l.range && (vague(l.title) || !/^#\s/m.test(files.get(l.path)?.text ?? '# '))) return { ...l, title: overview }
+    if (l.kind !== 'notebook') return l
+    const twin = readings.find((r) => stemOf(r.path) === stemOf(l.path))
+    if (twin) return { ...l, title: `${twin.title}: notebook` }
+    if (!vague(l.title)) return l
+    const name = prettyName(basename(l.path))
+    return { ...l, title: /notebook/i.test(name) ? name : `${name} (notebook)` }
+  })
+  const seen = new Map<string, CourseLesson>()
+  out = out.filter((l) => {
+    const k = coreTitle(l.title)
+    const first = seen.get(k)
+    if (!first) {
+      seen.set(k, l)
+      return true
+    }
+    // The same text twice (a plan beside the README it copies): once is enough
+    return !(first.kind === l.kind && Math.abs(first.words - l.words) <= Math.max(8, first.words * 0.08))
+  })
+  const count = new Map<string, number>()
+  for (const l of out) count.set(coreTitle(l.title), (count.get(coreTitle(l.title)) ?? 0) + 1)
+  const used = new Set<string>()
+  return out.map((l) => {
+    const k = coreTitle(l.title)
+    if ((count.get(k) ?? 0) < 2 || !used.has(k)) {
+      used.add(k)
+      return l
+    }
+    const file = prettyName(basename(l.path))
+    return { ...l, title: `${l.title} (${coreTitle(file) === k ? prettyName(basename(dirOf(l.path)) || file) : file})` }
+  })
+}
+
 /**
  * A repository's files as a course: modules in order (an mdBook's SUMMARY.md, else the order its
  * README links its folders in, else folder names in natural order), the lessons in each (its
@@ -353,7 +453,7 @@ export function buildOutline(c: CatalogueCourse, files: RepoFile[]): CourseOutli
   }
   const root = c.root ? c.root.replace(/\/+$/, '') : ''
   const rel = (p: string) => (root ? p.slice(root.length + 1) : p)
-  let content = files.filter((f) => CONTENT.test(f.path) && inCourse(c, f.path) && !META.test(basename(f.path)) && (f.text ?? '').trim().length > 0)
+  let content = files.filter((f) => CONTENT.test(f.path) && inCourse(c, f.path) && !notLesson(f.path) && (f.text ?? '').trim().length > 0)
   // Two languages side by side: the English file where there is one
   if (c.english === 'suffix') {
     const en = new Set(content.filter((f) => /\.en\.(md|markdown)$/i.test(f.path)).map((f) => f.path.replace(/\.en\.(md|markdown)$/i, '.$1')))
@@ -428,16 +528,20 @@ export function buildOutline(c: CatalogueCourse, files: RepoFile[]): CourseOutli
     return []
   }
   for (const dir of dirs) {
-    const lessons = [...lessonsIn(groups.get(dir)!), ...homeworkFor(dir)]
+    const group = groups.get(dir)!
+    const index = group.find((f) => isIndex(f.path) && rel(f.path).split('/').length === 2)
+    // The module's own README, when it lists its lessons, says what they are and in which order
+    const listed = index ? linkedLessons(group, index) : null
+    const read = listed ? listed.map(lessonOf).filter((l) => l.words >= (isIndex(l.path) ? 60 : 25)) : lessonsIn(group)
+    const lessons = [...read, ...homeworkFor(dir)]
     if (!lessons.length) continue
-    const index = groups.get(dir)!.find((f) => isIndex(f.path) && rel(f.path).split('/').length === 2)
     const fromIndex = index?.text ? headingsOf(index.text, frontMatter(index.text).body).find((h) => h.level === 1)?.text : undefined
     // The course's own name for it: its README's link, else the folder's name, else its README's heading
     const fromDir = prettyName(dir)
     const named = c.moduleTitles?.[dir] ?? (useLinks ? linked.get(dir)?.title : undefined) ?? (/\p{L}{3}/u.test(fromDir) ? fromDir : undefined) ?? fromIndex ?? fromDir
     const title = named.charAt(0).toUpperCase() + named.slice(1)
     const prefix = `${root ? `${root}/` : ''}${dir}/`
-    modules.push({ id: `m${modules.length + 1}`, title, lessons, code: code.filter((p) => p.startsWith(prefix)).sort(natural).slice(0, 40) })
+    modules.push({ id: `m${modules.length + 1}`, title, lessons: tidyLessons(lessons, title, c.title, byPath), code: code.filter((p) => p.startsWith(prefix)).sort(natural).slice(0, 40) })
   }
   // Files straight under the root: the lessons of a flat course; beside modules, only the README introduces them
   const flat = lessonsIn(modules.length ? loose.filter((f) => isIndex(f.path) || orderAt(rel(f.path)) < Infinity) : loose)

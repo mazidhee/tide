@@ -114,8 +114,8 @@ describe('aligning a course to a roadmap, once', () => {
     expect(a!.lessons).toEqual({ '03-classification/06-mutual-info.md': [expect.stringContaining('mutual information')], '03-classification/09-logistic-regression.md': [expect.stringContaining('logistic regression')] })
     // Only the phase the course is about went to Haiku
     expect(prompt).not.toMatch(/TCP/)
-    // Its lessons' minutes, with the video counted
-    expect(a!.minutes!['03-classification/06-mutual-info.md']).toBe(25)
+    // Its lessons' minutes, with the video counted (its words as read from the file)
+    expect(a!.minutes!['03-classification/06-mutual-info.md']).toBe(20)
     resetCoursePlan()
     await alignCourse('ml-zoomcamp', 'Software Engineering')
     expect(asked).toBe(1)
@@ -128,7 +128,7 @@ describe('the week’s course, sized to the roadmap’s time', () => {
     data.topics = [...new Set(Object.values(a.lessons).flat())].map((id) => ({ id, title: id }))
     const thread = { id: 'roadmap:software engineering', label: 'Software Engineering', kind: 'roadmap' as const, weight: 1, maxGap: 7, hard: true, session: 60, touch: 15 }
     const { planCourses } = await import('../src/main/coursePlan')
-    const r = await planCourses([thread], new Map([[thread.id, [30, 60, 30]]]))
+    const r = await planCourses([thread], new Map([[thread.id, [20, 60, 30]]]))
     const slots = r.slots.get(thread.id)!
     expect(slots[0]!.map((l) => l.n)).toEqual(['3.6'])
     expect(slots.flatMap((x) => x ?? []).map((l) => l.n)).toEqual(['3.6', '3.9'])
