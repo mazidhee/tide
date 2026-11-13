@@ -13,6 +13,8 @@ export interface ClaudeSettings {
   teacher?: 'claude' | 'gemma'
   /** The model for each kind of work: ordinary turns, marking answers, maths, plans and hard explanations, background jobs */
   models?: Partial<Record<ClaudeRole, ClaudeModel>>
+  /** How hard Claude thinks, per job or turn kind, where it differs from shared/thinking's table */
+  thinking?: Partial<Record<string, import('./thinking').Effort>>
   /** Where the claude command is, when it isn't in a usual place */
   path?: string
   /** Tide's tools are registered with Claude Code for the terminal, on this fixed port (off when unset) */

@@ -11,7 +11,7 @@ vi.mock('electron', () => ({ app: { getPath: () => dir, getAppPath: () => proces
 
 const { EMPTY_PROFILE, cleanSprite, greetingLine, greetingName, hasProfile, initials, mergeProfile, nameLine, normaliseProfile, shownPicture, tutorName } = await import('../src/shared/profile')
 const { clampCrop, cropRect, dragCrop, offsetLimits, previewBox, zoomCrop } = await import('../src/shared/avatarCrop')
-const { blinkPixels, paintPixel, pixelise, resampleSprite, sceneSprite, spriteRects, toggleEye, withColour, withoutBackdrop } = await import('../src/shared/pixelise')
+const { blinkPixels, eyeCells, findEyes, paintPixel, pixelise, resampleSprite, sceneSprite, spriteRects, toggleEye, withColour, withoutBackdrop } = await import('../src/shared/pixelise')
 const store = await import('../src/main/profile')
 
 const PHOTO = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAEB'
@@ -230,7 +230,8 @@ describe('the pixel self', () => {
   })
 
   it('takes touch-ups: paint, erase, a new colour, eyes that blink', () => {
-    let s = pixelise(face, { size: 24, colours: 8, background: false })
+    // Eyes marked by hand, from none
+    let s = { ...pixelise(face, { size: 24, colours: 8, background: false }), eyes: [] }
     const i = 12 * 24 + 12
     s = paintPixel(s, i, 0)
     expect(s.pixels[i]).toBe(0)
@@ -245,6 +246,32 @@ describe('the pixel self', () => {
     const shut = blinkPixels(s)
     expect(shut[i]).toBe(s.pixels[i - 24])
     expect(blinkPixels({ ...s, eyes: [] })).toBe(s.pixels)
+  })
+
+  it('keeps the eyes: found in the photo, drawn as solid dark pixels with a catchlight, and they blink', () => {
+    const found = findEyes(face)!
+    // The portrait's irises are at x 0.42 and 0.58, y 0.45
+    expect(found.centres).toHaveLength(2)
+    expect(found.centres[0][0]).toBeCloseTo(0.42, 1)
+    expect(found.centres[1][0]).toBeCloseTo(0.58, 1)
+    for (const [, y] of found.centres) expect(y).toBeCloseTo(0.45, 1)
+    const s = pixelise(face, { size: 32, colours: 10, background: false })
+    const { dark, light } = eyeCells(found, 32)
+    expect(dark.length).toBeGreaterThanOrEqual(2)
+    expect(light).toHaveLength(2)
+    // The darkest colour of the face itself (the outline, index 0, is darker still), and the lightest
+    const darkest = Math.min(...dark.map((i) => s.pixels[i]))
+    for (const i of dark) expect(s.pixels[i]).toBe(darkest)
+    expect(darkest).toBeLessThanOrEqual(1)
+    for (const i of light) expect(s.pixels[i]).toBe(s.palette.length - 1)
+    // Both eyes in the same row, on either side of the middle; they close for a blink
+    expect(new Set(dark.map((i) => Math.floor(i / 32))).size).toBe(1)
+    expect(s.eyes.sort((p, q) => p - q)).toEqual([...dark, ...light].sort((p, q) => p - q))
+    expect(blinkPixels(s).filter((v, i) => v !== s.pixels[i]).length).toBeGreaterThan(0)
+    // A picture with no face has no eyes, and is drawn as before
+    const flat = { width: 64, height: 64, data: new Uint8ClampedArray(64 * 64 * 4).map((_, i) => (i % 4 === 3 ? 255 : 120)) }
+    expect(findEyes(flat)).toBeNull()
+    expect(pixelise(flat, { size: 16, colours: 6, background: false }).eyes).toEqual([])
   })
 
   it('stands in a scene at the Professor’s size, without its backdrop', () => {

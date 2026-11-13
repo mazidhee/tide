@@ -654,13 +654,20 @@ export function IdeView({ path: initialVaultPath, root: initialRoot, file: initi
   // Claude's proposals, comments and requests to open a file
   useEffect(() => {
     if (!root) return
-    window.tide.ide.pair.proposals(root).then(setProposals).catch(() => {})
+    // Kept across reloads per folder (main/ide/pair): those whose code changed under them are gone, comments follow their lines
+    window.tide.ide.pair
+      .review(root)
+      .then((r) => {
+        setProposals(r.proposals)
+        setComments((cs) => [...cs.filter((c) => c.root !== root), ...r.comments])
+      })
+      .catch(() => {})
     return window.tide.ide.pair.onEvent((e: PairEvent) => {
       if (e.type === 'proposal') {
         setProposals((ps) => [...ps.filter((x) => x.id !== e.proposal.id), e.proposal])
         if (e.proposal.root === root) openTab({ key: `proposal:${e.proposal.id}`, kind: 'proposal', path: e.proposal.path, id: e.proposal.id })
       } else if (e.type === 'comment' && e.comment.root === root) {
-        setComments((cs) => [...cs, e.comment])
+        setComments((cs) => [...cs.filter((c) => c.id !== e.comment.id), e.comment])
         openFile(e.comment.path)
       } else if (e.type === 'opened' && e.root === root) openFile(e.path, e.line ? { line: e.line, column: 1 } : undefined)
       else if (e.type === 'applied' && e.root === root) void docs?.diskChanged([e.path])
@@ -1128,7 +1135,10 @@ export function IdeView({ path: initialVaultPath, root: initialRoot, file: initi
                 gitBase={tab?.kind === 'file' && git?.repo ? (bases[tab.path] ?? null) : null}
                 blame={blameOn && tab?.kind === 'file' ? (blame[tab.path] ?? null) : null}
                 comments={tab?.kind === 'file' ? comments.filter((c) => c.path === tab.path && c.root === root) : NO_COMMENTS}
-                onDismissComment={(id) => setComments((cs) => cs.filter((c) => c.id !== id))}
+                onDismissComment={(id) => {
+                  setComments((cs) => cs.filter((c) => c.id !== id))
+                  void window.tide.ide.pair.dismissComment(id).catch(() => {})
+                }}
                 reveal={reveal[g.id] ?? null}
               />
             </div>

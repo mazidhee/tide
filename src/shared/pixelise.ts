@@ -9,7 +9,10 @@
  *    gentle lift in contrast and colour so it reads as a sprite rather than a blurry photo.
  * 4. Clean up: drop lone pixels and specks, then draw a soft outline around the silhouette in a
  *    darker shade of your own darkest colour, as the Professor's sprites have.
- * 5. The backdrop is either a flat colour from the photo or nothing (transparent).
+ * 5. Eyes: found in the photo (two dark, compact patches ringed by skin, side by side in the
+ *    band where eyes are) and drawn as solid dark pixels with a light catchlight, so they don't
+ *    melt into the face at 32 px. They are also the sprite's blinking pixels.
+ * 6. The backdrop is either a flat colour from the photo or nothing (transparent).
  *
  * The palette counts every colour drawn, outline and backdrop included, sorted dark to light.
  */
@@ -304,6 +307,158 @@ function despeckle(px: number[], size: number): number[] {
   return out
 }
 
+// ---------- 5. Eyes ----------
+
+/** The resolution eyes are looked for at: fine enough for an eye to be a patch of cells */
+const EYE_RES = 96
+
+export interface FoundEyes {
+  /** Each eye's darkest point, as fractions of the picture (x, y) */
+  centres: [number, number][]
+  /** The eye's width, as a fraction of the picture */
+  width: number
+}
+
+/**
+ * Two eyes in a framed photo, or none. Skin is told apart by colour (warm, any lightness); an eye
+ * is a patch much darker than the face around it, small and wider than tall, mostly ringed by skin
+ * (hair and the backdrop aren't), with something light beside it (the white of the eye) and a twin
+ * at about its height on the other side of the face. Of a brow and an eye, the eye: lower, darker
+ * and with the white beside it.
+ */
+export function findEyes(img: RGBAImage): FoundEyes | null {
+  const R = Math.min(EYE_RES, img.width, img.height)
+  if (R < 32) return null
+  const { lab, alpha } = downscale(img, R)
+  const mask = backdropMask(lab, alpha, R)
+  // Skin of any shade is warm (a hue from pink through red to yellow) with a little colour to it
+  const isSkin = (p: Lab) => {
+    const hue = (Math.atan2(p[2], p[1]) * 180) / Math.PI
+    return Math.hypot(p[1], p[2]) > 0.012 && hue > -60 && hue < 100 && p[0] > 0.22 && p[0] < 0.98
+  }
+  // The face: skin in the middle half of the picture's width, above the shoulders
+  const skin = lab.map((p, i) => !mask[i] && isSkin(p))
+  const face: number[] = []
+  for (let y = Math.floor(R * 0.15); y < Math.floor(R * 0.8); y++) for (let x = Math.floor(R * 0.2); x < Math.ceil(R * 0.8); x++) if (skin[y * R + x]) face.push(y * R + x)
+  if (face.length < R * R * 0.04) return null
+  const Ls = face.map((i) => lab[i][0]).sort((p, q) => p - q)
+  const skinL = Ls[Math.floor(Ls.length / 2)]
+  const xs = face.map((i) => i % R).sort((p, q) => p - q)
+  const left = xs[Math.floor(xs.length * 0.03)]
+  const right = xs[Math.floor(xs.length * 0.97)]
+  const fw = Math.max(8, right - left)
+  const cx = (left + right) / 2
+  // Dark cells inside the face's columns, in the band a framed face has its eyes in (hairlines,
+  // bald heads and fringes make the face's own top no guide): darker than the skin, and than the
+  // cells around them (a shadowed cheek is dark, but evenly)
+  const y0 = Math.floor(R * 0.22)
+  const y1 = Math.ceil(R * 0.68)
+  const around = (i: number, r: number) => {
+    const x = i % R
+    const y = (i - x) / R
+    let s = 0
+    let n = 0
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++) {
+        const nx = x + dx
+        const ny = y + dy
+        if (nx < 0 || ny < 0 || nx >= R || ny >= R || mask[ny * R + nx]) continue
+        s += lab[ny * R + nx][0]
+        n++
+      }
+    return n ? s / n : lab[i][0]
+  }
+  const r = Math.max(2, Math.round(fw * 0.1))
+  const inBand = (i: number) => {
+    const x = i % R
+    const y = (i - x) / R
+    return !mask[i] && y >= y0 && y <= y1 && x > left && x < right
+  }
+  const dark = (i: number) => inBand(i) && lab[i][0] < skinL - 0.06 && lab[i][0] < around(i, r) - 0.045
+  const seen = new Set<number>()
+  type Blob = { cells: number[]; x: number; y: number; w: number; h: number; minL: number; core: number; ring: number; white: number }
+  const blobs: Blob[] = []
+  for (let i = 0; i < lab.length; i++) {
+    if (seen.has(i) || !dark(i)) continue
+    const cells = [i]
+    seen.add(i)
+    for (let q = 0; q < cells.length; q++)
+      for (const n of neighbours8(cells[q], R))
+        if (!seen.has(n) && dark(n)) {
+          seen.add(n)
+          cells.push(n)
+        }
+    if (cells.length > fw * fw * 0.05) continue
+    const cxs = cells.map((c) => c % R)
+    const cys = cells.map((c) => Math.floor(c / R))
+    const w = Math.max(...cxs) - Math.min(...cxs) + 1
+    const h = Math.max(...cys) - Math.min(...cys) + 1
+    if (w > fw * 0.38 || h > fw * 0.22 || w < h * 0.7) continue
+    const core = cells.reduce((b, c) => (lab[c][0] < lab[b][0] ? c : b), cells[0])
+    const inBlob = new Set(cells)
+    const edge = [...new Set(cells.flatMap((c) => neighbours8(c, R)).filter((n) => !inBlob.has(n)))]
+    const ring = edge.filter((n) => skin[n] || (!mask[n] && lab[n][0] >= skinL - 0.12)).length / (edge.length || 1)
+    const white = edge.filter((n) => !mask[n] && lab[n][0] > skinL + 0.02 && Math.hypot(lab[n][1], lab[n][2]) < 0.05).length
+    blobs.push({ cells, x: cxs.reduce((s, v) => s + v, 0) / cells.length, y: cys.reduce((s, v) => s + v, 0) / cells.length, w, h, minL: lab[core][0], core, ring, white })
+  }
+  // An eye is a patch of a few cells, ringed by skin
+  const eyeLike = blobs.filter((b) => b.ring >= 0.5 && b.cells.length >= 2)
+  // An eye: dark, ringed by skin, with the white of the eye beside it (a brow has none), a little off the middle, near where framed eyes sit
+  const single = (b: Blob) => (skinL - b.minL) * 4 + b.ring + Math.min(3, b.white) * 0.3 - Math.abs(Math.abs(b.x - cx) - fw * 0.22) / fw - Math.abs(b.y / R - 0.43) * 3
+  let best: { a: Blob; b: Blob; score: number } | null = null
+  for (const a of eyeLike)
+    for (const b of eyeLike) {
+      if (a.x >= b.x) continue
+      const dx = b.x - a.x
+      const dy = Math.abs(a.y - b.y)
+      // Side by side, about an eye's width apart or more, either side of the face's middle
+      if (dx < fw * 0.3 || dx > fw * 0.72 || dy > fw * 0.1 || a.x > cx + fw * 0.06 || b.x < cx - fw * 0.06) continue
+      const score = single(a) + single(b) - (dy / fw) * 2 - (Math.abs((a.x + b.x) / 2 - cx) / fw) * 1.5
+      if (!best || score > best.score) best = { a, b, score }
+    }
+  const at = (c: number): [number, number] => [((c % R) + 0.5) / R, (Math.floor(c / R) + 0.5) / R]
+  if (best) return { centres: [at(best.a.core), at(best.b.core)], width: Math.max(best.a.w, best.b.w) / R }
+  // One clear eye (the other behind a glint on glasses, or in shadow): its twin is the darkest
+  // spot near its mirror image across the face, if that is darker than the skin around it
+  const one = eyeLike.filter((b) => Math.abs(b.x - cx) > fw * 0.1 && Math.abs(b.x - cx) < fw * 0.4).sort((p, q) => single(q) - single(p))[0]
+  if (!one) return null
+  const mx = Math.round(2 * cx - one.x)
+  const my = Math.round(one.y)
+  let twin = -1
+  for (let y = my - Math.ceil(fw * 0.06); y <= my + Math.ceil(fw * 0.06); y++)
+    for (let x = mx - Math.ceil(fw * 0.12); x <= mx + Math.ceil(fw * 0.12); x++) {
+      if (x < 0 || y < 0 || x >= R || y >= R) continue
+      const i = y * R + x
+      if (inBand(i) && (twin < 0 || lab[i][0] < lab[twin][0])) twin = i
+    }
+  if (twin < 0 || lab[twin][0] > Math.min(skinL - 0.04, around(twin, r) - 0.02)) return null
+  return { centres: [at(one.core), at(twin)].sort((p, q) => p[0] - q[0]), width: one.w / R }
+}
+
+/** Which sprite cells draw each eye: the dark ones, and the catchlight beside them */
+export function eyeCells(found: FoundEyes, size: number): { dark: number[]; light: number[] } {
+  const dark: number[] = []
+  const light: number[] = []
+  const wide = found.width * size >= 1.6 && size >= 28
+  for (const [fx, fy] of found.centres) {
+    const x = Math.min(size - 1, Math.floor(fx * size))
+    const y = Math.min(size - 1, Math.floor(fy * size))
+    const d = [y * size + x]
+    // A bigger sprite has room for an eye two pixels wide: the second on the side the eye's middle leans to
+    if (wide) {
+      const nx = fx * size - x < 0.5 ? x - 1 : x + 1
+      if (nx >= 0 && nx < size) d.push(y * size + nx)
+    }
+    dark.push(...d)
+    // The catchlight: on the same side of both eyes, as one light would make it
+    if (size >= 24) {
+      const lx = Math.min(...d.map((i) => i % size)) - 1
+      if (lx >= 0) light.push(y * size + lx)
+    }
+  }
+  return { dark, light: light.filter((i) => !dark.includes(i)) }
+}
+
 // ---------- The whole thing ----------
 
 export function pixelise(img: RGBAImage, opts: PixelOptions): PixelSprite {
@@ -416,6 +571,20 @@ export function pixelise(img: RGBAImage, opts: PixelOptions): PixelSprite {
     cleaned = next
   }
 
+  // The eyes: solid dark pixels and a catchlight, in your own darkest and lightest colours
+  let eyes: number[] = []
+  const found = fgPts.length ? findEyes(img) : null
+  if (found && centres.length >= 2) {
+    const { dark, light } = eyeCells(found, size)
+    const byL = centres.map((c, k) => ({ k, L: c[0] })).sort((p, q) => p.L - q.L)
+    const darkest = byL[0].k
+    const lightest = byL[byL.length - 1].k
+    const own = (i: number) => !mask[i] && cleaned[i] >= 0
+    for (const i of dark) if (own(i)) cleaned[i] = darkest
+    for (const i of light) if (own(i)) cleaned[i] = lightest
+    eyes = [...dark, ...light].filter(own)
+  }
+
   // Unused colours go; the rest sorted dark to light, the same every time
   const used = [...new Set(cleaned.filter((v) => v >= 0))]
   const order = used.map((i) => ({ i, rgb: labToRgb(palette[i]), L: palette[i][0] })).sort((p, q) => p.L - q.L || hex(p.rgb).localeCompare(hex(q.rgb)))
@@ -431,7 +600,7 @@ export function pixelise(img: RGBAImage, opts: PixelOptions): PixelSprite {
     }
     remap.set(o.i, at)
   }
-  return { size, palette: hexes, pixels: cleaned.map((v) => (v < 0 ? -1 : remap.get(v)!)), colours, background: opts.background && hasBackdrop, eyes: [] }
+  return { size, palette: hexes, pixels: cleaned.map((v) => (v < 0 ? -1 : remap.get(v)!)), colours, background: opts.background && hasBackdrop, eyes }
 }
 
 // ---------- Using a sprite ----------

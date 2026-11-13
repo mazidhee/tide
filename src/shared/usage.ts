@@ -45,6 +45,8 @@ export interface CallEntry {
   fb?: string
   /** Token counts estimated from text length: the server didn't report them */
   est?: boolean
+  /** Claude's effort level for the call (shared/thinking), when Tide set one */
+  eff?: string
 }
 
 /** How full one of the plan's windows was when Claude Code last said */

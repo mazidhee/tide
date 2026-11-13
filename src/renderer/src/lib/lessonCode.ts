@@ -75,6 +75,23 @@ export function useLessonCode(o: Options): LessonCode {
     }
   }, [o.on, o.labId, o.topic, o.linkedRoot])
 
+  // The tutor's proposals and review comments from before a reload (main/ide/pair keeps them per folder; those whose code changed are gone)
+  useEffect(() => {
+    if (!root) return
+    let live = true
+    window.tide.ide.pair
+      .review(root)
+      .then((r) => {
+        if (!live) return
+        setProposals((ps) => [...ps.filter((p) => !r.proposals.some((x) => x.id === p.id)), ...r.proposals])
+        setComments((cs) => [...cs.filter((c) => !r.comments.some((x) => x.id === c.id)), ...r.comments])
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [root])
+
   // The file on screen: what's on disk is read in (a lesson picked up again, a file the tutor opened)
   useEffect(() => {
     if (!root || !file) return
@@ -131,7 +148,7 @@ export function useLessonCode(o: Options): LessonCode {
       const path = e.type === 'proposal' ? e.proposal.path : e.type === 'comment' ? e.comment.path : e.type === 'opened' ? e.path : null
       if (path && ref.current.busy) turnFile.current = path
       if (e.type === 'proposal') setProposals((ps) => [...ps.filter((x) => x.id !== e.proposal.id), e.proposal])
-      else if (e.type === 'comment') setComments((cs) => [...cs, e.comment])
+      else if (e.type === 'comment') setComments((cs) => [...cs.filter((c) => c.id !== e.comment.id), e.comment])
       else if (e.type === 'opened') {
         setOpened(e.path === ref.current.exercise ? null : e.path)
         if (e.planted && e.path === fileRef.current) {
@@ -184,7 +201,10 @@ export function useLessonCode(o: Options): LessonCode {
     proposals: root ? proposals.filter((p) => p.root === root) : [],
     comments: root && file ? comments.filter((c) => c.root === root && c.path === file) : [],
     reveal,
-    dismissComment: (id) => setComments((cs) => cs.filter((c) => c.id !== id)),
+    dismissComment: (id) => {
+      setComments((cs) => cs.filter((c) => c.id !== id))
+      void window.tide.ide.pair.dismissComment(id).catch(() => {})
+    },
     currentOf: (p) => (p.path === file ? o.code : (texts[p.path] ?? null)),
     resolve,
     newExercise: () => {

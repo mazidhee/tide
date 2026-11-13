@@ -21,9 +21,10 @@ import type { AgentStep, ChatEvent, ChatMessage, ClaudeModel, ClaudeRole } from 
 import { claudeModel, claudeLabel, asksForDepth, rank } from '@shared/claude'
 import { notAnAttempt } from '@shared/lessonRepair'
 import { FIRST_WORDS_MS } from '@shared/workarounds'
-import { checkClaude, childEnv, claudeArgs, findClaude, mcpConfig, onceArgs, parseLine, unavailableReason, unavailableText, userContent, userLine, type ClaudeEvent, type ClaudeStatus, type ClaudeUsage, type ImageInput } from './claudeCli'
+import { checkClaude, childEnv, claudeArgs, effortLine, findClaude, mcpConfig, onceArgs, parseLine, unavailableReason, unavailableText, userContent, userLine, type ClaudeEvent, type ClaudeStatus, type ClaudeUsage, type ImageInput } from './claudeCli'
 import { getSettings } from './settings'
-import { logCall, logWindows } from './usageLog'
+import { currentScope, logCall, logWindows } from './usageLog'
+import { effortFor, type Effort } from '@shared/thinking'
 import { jobFromRole } from '@shared/usage'
 import { reasonFromWhy } from '@shared/gemmaPolicy'
 import type { TurnRequest, ToolContext } from './agent'
@@ -97,6 +98,8 @@ export interface UsageRecord extends ClaudeUsage {
   role: ClaudeRole
   ms: number
   firstTokenMs?: number
+  /** The effort it ran at (shared/thinking) */
+  effort?: Effort
 }
 
 const usageFile = () => join(app.getPath('userData'), 'claude-usage.jsonl')
@@ -108,7 +111,7 @@ export function recordUse(r: UsageRecord, outcome: { ok: boolean; error?: string
     // usage is a nicety
   }
   // The detailed log (main/usageLog): the job and lesson come from the code around the call
-  logCall({ at: r.at, p: 'claude', model: r.model, defaultJob: jobFromRole(r.role), in: r.input, out: r.output, think: r.thinking, cr: r.cacheRead, cw: r.cacheWrite, ms: r.ms, ttft: r.firstTokenMs, usd: r.costUsd, ok: outcome.ok, ...(outcome.ok ? {} : { err: failWord(unavailableReason(outcome.error ?? '')) }) })
+  logCall({ at: r.at, p: 'claude', model: r.model, defaultJob: jobFromRole(r.role), in: r.input, out: r.output, think: r.thinking, cr: r.cacheRead, cw: r.cacheWrite, ms: r.ms, ttft: r.firstTokenMs, usd: r.costUsd, ...(r.effort ? { eff: r.effort } : {}), ok: outcome.ok, ...(outcome.ok ? {} : { err: failWord(unavailableReason(outcome.error ?? '')) }) })
 }
 
 /** The CLI's reasons in the words the rest of the log uses (shared/gemmaPolicy GemmaReason) */
@@ -170,6 +173,8 @@ export class ClaudeProcess {
   stderr = ''
   /** The CLI reports the process's cost so far; a turn's is the difference */
   costSoFar = 0
+  /** How hard it thinks now: set when it starts, changed between messages (shared/thinking) */
+  effort?: Effort
 
   /** The lesson key its MCP config names, for tool calls' steps; stays the same if the process is adopted under another key */
   readonly binding: string
@@ -179,10 +184,12 @@ export class ClaudeProcess {
     model: ClaudeModel | string,
     private readonly system: string,
     private readonly configFile: string,
-    private readonly builtIn: string[] = []
+    private readonly builtIn: string[] = [],
+    effort?: Effort
   ) {
     this.model = model
     this.binding = key
+    this.effort = effort
   }
 
   get alive() {
@@ -194,7 +201,7 @@ export class ClaudeProcess {
     if (!cmd) throw new ClaudeUnavailable('Claude Code isn’t installed')
     const cwd = join(app.getPath('userData'), 'claude')
     mkdirSync(cwd, { recursive: true })
-    const child = spawn(cmd, claudeArgs({ model: this.model, system: this.system, mcpConfig: this.configFile, builtIn: this.builtIn }), { cwd, env: childEnv(), stdio: ['pipe', 'pipe', 'pipe'] })
+    const child = spawn(cmd, claudeArgs({ model: this.model, system: this.system, mcpConfig: this.configFile, builtIn: this.builtIn, effort: this.effort }), { cwd, env: childEnv(), stdio: ['pipe', 'pipe', 'pipe'] })
     this.child = child
     this.stderr = ''
     child.stderr.on('data', (d) => (this.stderr = (this.stderr + String(d)).slice(-2000)))
@@ -228,10 +235,15 @@ export class ClaudeProcess {
    * wrote so far, and the turn resolves as done (Tide takes over from there, as source-led
    * teaching does when a plan's first step opens with a reading).
    */
-  turn(content: string | unknown[], model: ClaudeModel | string, onEvent: (e: ClaudeEvent) => void, signal: AbortSignal, cut?: AbortSignal): Promise<Extract<ClaudeEvent, { type: 'result' }>> {
+  /**
+   * `effort`: how hard to think for this message. A running process is told with a control request
+   * before the message (it keeps its prompt cache); a new one starts at it.
+   */
+  turn(content: string | unknown[], model: ClaudeModel | string, onEvent: (e: ClaudeEvent) => void, signal: AbortSignal, cut?: AbortSignal, effort?: Effort): Promise<Extract<ClaudeEvent, { type: 'result' }>> {
     if (this.sink) return Promise.reject(new Error('Claude is still answering the last message'))
     if (!this.alive) {
       this.model = model
+      if (effort) this.effort = effort
       this.turns = 0
       this.costSoFar = 0
       this.start()
@@ -270,6 +282,10 @@ export class ClaudeProcess {
       if (model !== this.model) {
         this.child!.stdin.write(JSON.stringify({ type: 'control_request', request_id: `m${Date.now()}`, request: { subtype: 'set_model', model } }) + '\n')
         this.model = model
+      }
+      if (effort && effort !== this.effort) {
+        this.child!.stdin.write(effortLine(effort))
+        this.effort = effort
       }
       this.child!.stdin.write(userLine(content))
     })
@@ -312,7 +328,7 @@ export function stopClaude(key?: string) {
 /** Live processes, for the usage view and tests */
 export const liveClaude = () => [...live.values()].filter((p) => p.alive).map((p) => ({ key: p.key, model: p.model, turns: p.turns, lastUsed: p.lastUsed }))
 
-function processFor(key: string, model: string, system: string, config: string, builtIn: string[]): ClaudeProcess {
+function processFor(key: string, model: string, system: string, config: string, builtIn: string[], effort?: Effort): ClaudeProcess {
   let p = live.get(key)
   if (!p) {
     // Room for one more: the one used longest ago goes
@@ -322,7 +338,7 @@ function processFor(key: string, model: string, system: string, config: string, 
       oldest.stop()
       live.delete(oldest.key)
     }
-    p = new ClaudeProcess(key, model, system, config, builtIn)
+    p = new ClaudeProcess(key, model, system, config, builtIn, effort)
     live.set(key, p)
   }
   return p
@@ -365,7 +381,8 @@ export async function prewarmClaude(req: Omit<TurnRequest, 'id'>): Promise<void>
   const mcp = await ensureMcp()
   const settings = getSettings().ai.claude
   const opening = req.session && req.instructions ? claudeModel('hard', settings) : claudeModel('teach', settings, req.claudeModel)
-  processFor(pk, opening, system, configFor(pk, mcp.port, mcp.token), web ? CLAUDE_WEB_TOOLS : []).warm()
+  const effort = effortFor(req.session ? (req.instructions ? 'lessonPlan' : 'lesson') : 'chat', settings?.thinking)
+  processFor(pk, opening, system, configFor(pk, mcp.port, mcp.token), web ? CLAUDE_WEB_TOOLS : [], effort).warm()
 }
 
 // ---------- A turn ----------
@@ -449,6 +466,25 @@ export function turnRole(req: TurnRequest, said: string, job: string | null, mat
   return 'teach'
 }
 
+/**
+ * How hard this turn is thought about (shared/thinking): a side thread or a chat reply quickly; a
+ * lesson's opening plan, a proof or derivation, a hard design question or "go deeper" at length;
+ * a maths lesson's other turns and ordinary teaching in between.
+ */
+export function turnDepth(req: TurnRequest, said: string, job: string | null, maths = false): 'thread' | 'chat' | 'lessonPlan' | 'deepTurn' | 'mathsLesson' | 'lesson' {
+  if (req.thread) return 'thread'
+  if (!req.session) return asksForDepth(said) || job === 'maths' ? 'deepTurn' : 'chat'
+  const users = req.messages.filter((m) => m.role === 'user').length
+  if (req.instructions && users <= 1) return 'lessonPlan'
+  if (asksForDepth(said) || hardDesign(said)) return 'deepTurn'
+  if (isAnswer(req, said)) return maths ? 'mathsLesson' : 'lesson'
+  if (job === 'maths' || job === 'errors' || job === 'planning') return 'deepTurn'
+  return maths ? 'mathsLesson' : 'lesson'
+}
+
+/** A design question asked in so many words: trade-offs, an architecture, how a system should be built */
+export const hardDesign = (said: string) => /\b(trade-?offs?|architect(ure)?|system design|design (a|an|the) [a-z ]{0,30}(system|service|api|schema|ledger|engine)|how would you (design|structure|architect)|(compare|weigh) (the )?(approaches|designs|options))\b/i.test(said)
+
 /** The student is answering the question the tutor's last message asked */
 export function isAnswer(req: TurnRequest, said: string): boolean {
   if (!req.session) return false
@@ -466,12 +502,18 @@ const MARK_SYSTEM = `You mark one answer a student gave in a lesson, for their t
  * One call, no tools and no conversation: the whole prompt in, one reply out. For marking, lesson
  * plans and roadmaps, and background jobs. Throws ClaudeUnavailable when Claude can't take it.
  */
-export async function claudeOnce(prompt: string, system: string, role: ClaudeRole, signal?: AbortSignal, model: string = claudeModel(role, getSettings().ai.claude), images: ImageInput[] = []): Promise<{ text: string; usage: ClaudeUsage; ms: number; model: string }> {
+/** How hard a one-shot call thinks: its own depth key, else the job it runs for, else its role's (shared/thinking) */
+export function callEffort(role: ClaudeRole, depth?: string): Effort {
+  return effortFor(depth ?? currentScope().job ?? jobFromRole(role), getSettings().ai.claude?.thinking)
+}
+
+export async function claudeOnce(prompt: string, system: string, role: ClaudeRole, signal?: AbortSignal, model: string = claudeModel(role, getSettings().ai.claude), images: ImageInput[] = [], depth?: string): Promise<{ text: string; usage: ClaudeUsage; ms: number; model: string }> {
   const cmd = command()
   if (!cmd) throw new ClaudeUnavailable('Claude Code isn’t installed')
   const t0 = Date.now()
+  const effort = callEffort(role, depth)
   // Pictures (a photo of working, a screenshot) go as image blocks in a stream-json message
-  const args = onceArgs(model, system, images.length > 0)
+  const args = onceArgs(model, system, images.length > 0, effort)
   const cwd = join(app.getPath('userData'), 'claude')
   mkdirSync(cwd, { recursive: true })
   const out = await new Promise<string>((resolve, reject) => {
@@ -495,7 +537,7 @@ export async function claudeOnce(prompt: string, system: string, role: ClaudeRol
   for (const e of events) if (e?.type === 'rate-limit') noteLimit(e)
   const r = [...events].reverse().find((e) => e?.type === 'result') ?? null
   if (!r || r.type !== 'result') throw new Error('Claude gave no answer')
-  recordUse({ ...r.usage, at: Date.now(), model: r.model ?? model, role, ms: Date.now() - t0, firstTokenMs: r.firstTokenMs }, { ok: r.ok, error: r.error })
+  recordUse({ ...r.usage, at: Date.now(), model: r.model ?? model, role, ms: Date.now() - t0, firstTokenMs: r.firstTokenMs, effort }, { ok: r.ok, error: r.error })
   if (!r.ok) {
     const why = unavailableReason(r.error ?? '')
     if (why === 'limit') limitedUntil = Math.max(limitedUntil, Date.now() + 15 * 60_000)
@@ -509,11 +551,12 @@ export async function claudeOnce(prompt: string, system: string, role: ClaudeRol
  * outline) where the learner watches it appear. Throws ClaudeUnavailable before any text when
  * Claude can't take it.
  */
-export async function* claudeStream(prompt: string, system: string, role: ClaudeRole, signal?: AbortSignal, model: string = claudeModel(role, getSettings().ai.claude)): AsyncGenerator<string> {
+export async function* claudeStream(prompt: string, system: string, role: ClaudeRole, signal?: AbortSignal, model: string = claudeModel(role, getSettings().ai.claude), depth?: string): AsyncGenerator<string> {
   const cmd = command()
   if (!cmd) throw new ClaudeUnavailable('Claude Code isn’t installed')
   const t0 = Date.now()
-  const args = ['-p', '--model', model, '--output-format', 'stream-json', '--include-partial-messages', '--verbose', '--tools', '', '--strict-mcp-config', '--setting-sources', '', '--no-session-persistence', '--permission-mode', 'dontAsk', '--system-prompt', system]
+  const effort = callEffort(role, depth)
+  const args = ['-p', '--model', model, '--output-format', 'stream-json', '--include-partial-messages', '--verbose', '--tools', '', '--strict-mcp-config', '--setting-sources', '', '--no-session-persistence', '--permission-mode', 'dontAsk', '--effort', effort, '--system-prompt', system]
   const cwd = join(app.getPath('userData'), 'claude')
   mkdirSync(cwd, { recursive: true })
   const child = spawn(cmd, args, { cwd, env: childEnv(), stdio: ['pipe', 'pipe', 'pipe'] })
@@ -548,7 +591,7 @@ export async function* claudeStream(prompt: string, system: string, role: Claude
     recordFailure(model, role, t0, e)
     throw e
   }
-  recordUse({ ...result.usage, at: Date.now(), model: result.model ?? model, role, ms: Date.now() - t0, firstTokenMs: first ? first - t0 : undefined }, { ok: result.ok, error: result.error })
+  recordUse({ ...result.usage, at: Date.now(), model: result.model ?? model, role, ms: Date.now() - t0, firstTokenMs: first ? first - t0 : undefined, effort }, { ok: result.ok, error: result.error })
   if (!result.ok) {
     const why = unavailableReason(result.error ?? '')
     if (why === 'limit') limitedUntil = Math.max(limitedUntil, Date.now() + 15 * 60_000)
@@ -567,11 +610,11 @@ export async function claudeTeaches(): Promise<boolean> {
  * A draft streamed by Claude on the given role's model when Claude teaches, else by `fallback`
  * (Gemma's streamDraft). Gemma also takes over if Claude can't before writing anything.
  */
-export async function* draftWithClaude(system: string, user: string, role: ClaudeRole, signal: AbortSignal, fallback: () => AsyncGenerator<string>): AsyncGenerator<string> {
+export async function* draftWithClaude(system: string, user: string, role: ClaudeRole, signal: AbortSignal, fallback: () => AsyncGenerator<string>, depth?: string): AsyncGenerator<string> {
   if (!(await claudeTeaches())) return yield* fallback()
   let any = false
   try {
-    for await (const t of claudeStream(user, system, role, signal)) {
+    for await (const t of claudeStream(user, system, role, signal, undefined, depth)) {
       any = true
       yield t
     }
@@ -601,10 +644,10 @@ export async function backgroundOnClaude(prompt: string, system: string | undefi
 }
 
 /** A short, separate call on the marking model: its verdict for the tutor to write */
-export async function markAnswer(question: string, answer: string, model: string, signal: AbortSignal, images: ImageInput[] = [], known: string[] = []): Promise<{ verdict: string; score: number; why: string; ms: number; misconception?: { name: string; text: string } } | null> {
+export async function markAnswer(question: string, answer: string, model: string, signal: AbortSignal, images: ImageInput[] = [], known: string[] = [], maths = false): Promise<{ verdict: string; score: number; why: string; ms: number; misconception?: { name: string; text: string } } | null> {
   const photos = images.length ? `\n\nThe student also sent ${images.length === 1 ? 'a picture' : `${images.length} pictures`} with this answer (above): their working, a photo or a screenshot. Read it carefully and mark what it shows as part of the answer.` : ''
   const knownNote = known.length ? `\n\nThe learner's known misconceptions on this topic: ${known.map((k) => `"${k}"`).join(', ')}.` : ''
-  const r = await claudeOnce(`The tutor's message, with the question and its hidden solution:\n"""\n${question.slice(-8000)}\n"""\n\nThe student's answer:\n"""\n${answer.slice(0, 6000)}\n"""${photos}${knownNote}`, MARK_SYSTEM, 'mark', signal, model, images).catch(() => null)
+  const r = await claudeOnce(`The tutor's message, with the question and its hidden solution:\n"""\n${question.slice(-8000)}\n"""\n\nThe student's answer:\n"""\n${answer.slice(0, 6000)}\n"""${photos}${knownNote}`, MARK_SYSTEM, 'mark', signal, model, images, maths ? 'mathsMarking' : 'marking').catch(() => null)
   if (!r) return null
   return parseMark(r.text, r.ms)
 }
@@ -674,7 +717,10 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
 
   const settings = getSettings().ai.claude
   const said = ownWords(text([...req.messages].reverse().find((m) => m.role === 'user')?.content))
-  const role = turnRole(req, said, escalationFor(said, req.askType) ?? null, await (await import('./maths')).isMathsLesson(req).catch(() => false))
+  const maths = await (await import('./maths')).isMathsLesson(req).catch(() => false)
+  const escalation = escalationFor(said, req.askType) ?? null
+  const role = turnRole(req, said, escalation, maths)
+  const effort = effortFor(turnDepth(req, said, escalation, maths), settings?.thinking)
   const teachModel = claudeModel('teach', settings, req.claudeModel)
   const model = role === 'hard' ? (rank(claudeModel('hard', settings)) > rank(teachModel) ? claudeModel('hard', settings) : teachModel) : teachModel
 
@@ -688,7 +734,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   const system = forClaude(String(messages[0].content)) + (web ? `\n\n${CLAUDE_WEB_NOTE}` : '') + (coding ? `\n\n${(await import('@shared/lessonCode')).CLAUDE_CODE_LESSON_NOTE}` : '')
   const history = messages.slice(1)
   const mcp = await startMcp()
-  const proc = (live.get(key)?.alive || coding ? null : adopt(system, web, key)) ?? processFor(key, model, system, configFor(key, mcp.port, mcp.token), web ? CLAUDE_WEB_TOOLS : [])
+  const proc = (live.get(key)?.alive || coding ? null : adopt(system, web, key)) ?? processFor(key, model, system, configFor(key, mcp.port, mcp.token), web ? CLAUDE_WEB_TOOLS : [], effort)
   // Known by the student's own first message, as the window sends it (the context Tide adds to it can change)
   const firstSaid = fp(text(req.messages.find((m) => m.role === 'user')?.content))
   const sent = messageToSend(history, { turns: proc.turns, first: proc.first === firstSaid ? fp(text(history.find((m) => m.role === 'user')?.content)) : proc.first, alive: proc.alive })
@@ -718,6 +764,10 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
 
   // A query or a final answer is checked exactly first (the lab, SymPy), as on Gemma's lessons
   const answering = isAnswer(req, said)
+  // A coding lesson's answer, or a request to check, run or review their code: the tutor runs it itself before it judges (shared/lessonCode)
+  const lessonCodeRules = coding ? await import('@shared/lessonCode') : null
+  const mustRun = !!lessonCodeRules && !req.thread && (answering || lessonCodeRules.asksToRunCode(said))
+  const runNote = mustRun ? `\n\n${lessonCodeRules!.RUN_FIRST_NOTE}` : ''
   const exact = answering ? await import('./lessonGuard').then((g) => g.exactCheck(req)).catch(() => null) : null
   const exactSaid = exact ? `\n\n${(await import('@shared/answerCheck')).exactNote(exact)}` : ''
   if (exact) emit({ id: req.id, type: 'step', step: { id: nextStepId(), kind: 'helper', label: exact.kind === 'sql' ? (exact.result === 'match' ? 'Ran your query beside the reference: the same rows' : 'Ran your query beside the reference: the rows differ') : exact.result === 'match' ? 'Checked your final answer: it’s right' : 'Checked your final answer: it isn’t right yet', status: 'done', depth: 0 } })
@@ -729,7 +779,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
     emit({ id: req.id, type: 'step', step: { id, kind: 'helper', label: `${claudeLabel(markModel)} is marking your answer`, status: 'running', depth: 0 } })
     // Bounded like the turn itself: a marker that never answers leaves the mark to the tutor
     const known = req.topic ? await import('./teaching').then((t) => t.knownMisconceptions(req.topic!)).catch(() => [] as string[]) : []
-    const mark = await markAnswer(prev, said + exactSaid, markModel, AbortSignal.any([signal, AbortSignal.timeout(claudeLimits.firstWordsMs)]), pictures, known).catch(() => null)
+    const mark = await markAnswer(prev, said + exactSaid, markModel, AbortSignal.any([signal, AbortSignal.timeout(claudeLimits.firstWordsMs)]), pictures, known, maths).catch(() => null)
     verdict = mark?.verdict as typeof verdict
     emit({ id: req.id, type: 'step', step: { id, status: mark ? 'done' : 'error', detail: mark ? `${mark.verdict}, ${(mark.ms / 1000).toFixed(1)} s` : 'no mark: the tutor marks it' } as AgentStep })
     if (mark) markNote = `\n\n(Tide: ${claudeLabel(markModel)} marked this answer against your solution: verdict "${mark.verdict}", score ${mark.score}. Why: ${mark.why}${mark.misconception ? ` The misconception behind it: ${mark.misconception.name}${mark.misconception.text ? ` (${mark.misconception.text})` : ''}. Address it directly.` : ''})`
@@ -760,6 +810,8 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   // No sign of life (words, thinking, a tool call) within the limit: the turn is taken as hung
   let hung = false
   let alive = false
+  // Ran the learner's code in this turn (run_tests, run_command)
+  let ran = false
   const watch = setTimeout(() => {
     if (alive || signal.aborted) return
     hung = true
@@ -783,7 +835,8 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
         reply += sep + e.text
         emit({ id: req.id, type: 'delta', text: sep + e.text })
       } else if (e.type === 'rate-limit') noteLimit(e)
-      else if (e.type === 'tool' && !e.name.startsWith('mcp__tide__')) {
+      else if (e.type === 'tool' && lessonCodeRules?.RUN_TOOLS.test(e.name)) ran = true
+      if (e.type === 'tool' && !e.name.startsWith('mcp__tide__')) {
         emit({ id: req.id, type: 'step', step: { id: nextStepId(), kind: /fetch/i.test(e.name) ? 'read_webpage' : 'web_search', label: e.name, status: 'done', depth: 0 } })
       }
   }
@@ -793,21 +846,21 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
     proc.first = firstSaid
     let result: Extract<ClaudeEvent, { type: 'result' }>
     try {
-      result = await proc.turn(withPictures(sent.content + markNote + seeNote), model, onEvent, signal, cut)
+      result = await proc.turn(withPictures(sent.content + markNote + seeNote + runNote), model, onEvent, signal, cut, effort)
     } catch (e) {
       // The process died before it said anything: once more, on a new one, with the whole transcript
       if (reply || hung || signal.aborted || e instanceof ClaudeUnavailable || unavailableReason((e as Error).message + proc.stderr)) throw e
       proc.stop()
       const again = messageToSend(history, { turns: 0, first: '', alive: false })
       emit({ id: req.id, type: 'step', step: { id: engineStep, label: `Claude ${claudeLabel(model)} is teaching (started again)` } as AgentStep })
-      result = await proc.turn(withPictures(again.content + markNote + seeNote), model, onEvent, signal, cut)
+      result = await proc.turn(withPictures(again.content + markNote + seeNote + runNote), model, onEvent, signal, cut, effort)
     }
     proc.turns = users
     const turnCost = Math.max(0, result.usage.costUsd - proc.costSoFar)
     proc.costSoFar = result.usage.costUsd
     result.usage.costUsd = turnCost
     recorded = true
-    recordUse({ ...result.usage, at: Date.now(), model: result.model && result.model.includes(String(model)) ? result.model : String(model), role, ms: Date.now() - t0, firstTokenMs: first ? first - t0 : undefined }, { ok: result.ok, error: result.error })
+    recordUse({ ...result.usage, at: Date.now(), model: result.model && result.model.includes(String(model)) ? result.model : String(model), role, ms: Date.now() - t0, firstTokenMs: first ? first - t0 : undefined, effort }, { ok: result.ok, error: result.error })
     if (!result.ok) {
       const why = unavailableReason(result.error ?? '')
       if (why === 'limit' && !limitedUntil) limitedUntil = Date.now() + 15 * 60_000
@@ -815,6 +868,19 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
       throw new Error(result.error ?? 'Claude stopped')
     }
     emit({ id: req.id, type: 'step', step: { id: engineStep, label: `Claude ${claudeLabel(model)} is teaching`, status: 'done', detail: `${thinking ? 'thought first, ' : ''}first words in ${(((first || Date.now()) - t0) / 1000).toFixed(1)} s` } as AgentStep })
+    // Judged their code without running it (it went by the marker or the test summary): it runs it now, in the same reply, and corrects itself
+    if (mustRun && !ran && reply && !signal.aborted && !cut?.aborted) {
+      const runStep = nextStepId()
+      emit({ id: req.id, type: 'step', step: { id: runStep, kind: 'helper', label: `Claude ${claudeLabel(model)} is running your code to check`, status: 'running', depth: 0 } })
+      const t1 = Date.now()
+      const again = await proc.turn(lessonCodeRules!.RAN_NOTHING_NOTE, model, onEvent, signal, cut, effort).catch(() => null)
+      if (again) {
+        const cost = Math.max(0, again.usage.costUsd - proc.costSoFar)
+        proc.costSoFar = again.usage.costUsd
+        recordUse({ ...again.usage, costUsd: cost, at: Date.now(), model: String(model), role, ms: Date.now() - t1, effort }, { ok: again.ok, error: again.error })
+      }
+      emit({ id: req.id, type: 'step', step: { id: runStep, status: again?.ok && ran ? 'done' : 'error', detail: ran ? 'ran it' : 'didn’t run it' } as AgentStep })
+    }
     if (misconception && reply && !/<misconception\b/i.test(reply)) {
       const tag = `\n\n${(await import('@shared/teachingQuality')).misconceptionTag(misconception)}`
       reply += tag

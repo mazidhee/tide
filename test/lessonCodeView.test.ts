@@ -8,7 +8,7 @@
 import { act, createElement, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LessonCodeEvent, Proposal } from '../src/shared/ide'
+import type { LessonCodeEvent, Proposal, ReviewComment } from '../src/shared/ide'
 import { useLessonCode, type LessonCode } from '../src/renderer/src/lib/lessonCode'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -17,12 +17,17 @@ const ROOT = '/data/ide/lessons/python-functions-abc'
 let disk: Record<string, string> = {}
 const writes: [string, string, string][] = []
 const resolved: [string, string | null][] = []
+const dismissed: string[] = []
+/** What main kept of the folder's proposals and comments from before (main/ide/pair reviewOf) */
+let saved: { proposals: Proposal[]; comments: ReviewComment[] } = { proposals: [], comments: [] }
 let fire: (e: LessonCodeEvent) => void = () => {}
 
 beforeEach(() => {
   disk = {}
   writes.length = 0
   resolved.length = 0
+  dismissed.length = 0
+  saved = { proposals: [], comments: [] }
   ;(window as unknown as { tide: unknown }).tide = {
     ide: {
       lesson: {
@@ -31,7 +36,7 @@ beforeEach(() => {
       },
       read: async (_r: string, p: string) => (p in disk ? { text: disk[p] } : Promise.reject(new Error('missing'))),
       write: async (r: string, p: string, t: string) => void (writes.push([r, p, t]), (disk[p] = t)),
-      pair: { resolve: async (id: string, text: string | null) => void resolved.push([id, text]), problems: vi.fn() }
+      pair: { resolve: async (id: string, text: string | null) => void resolved.push([id, text]), problems: vi.fn(), review: async (r: string) => (r === ROOT ? saved : { proposals: [], comments: [] }), dismissComment: async (id: string) => void dismissed.push(id) }
     }
   }
 })
@@ -113,6 +118,18 @@ describe("a coding lesson's editor and its files", () => {
     expect(lc.comments.map((c) => c.id)).toEqual(['c1'])
     await act(async () => lc.dismissComment('c1'))
     expect(lc.comments).toEqual([])
+    // Dismissed for good: main forgets it too
+    expect(dismissed).toEqual(['c1'])
+  })
+
+  it('shows the comments and proposals kept from before a reload', async () => {
+    saved = { proposals: [proposal({ id: 'kept' })], comments: [{ id: 'c9', root: ROOT, path: 'exercise-1.py', line: 3, severity: 'suggestion', body: 'Name it.', anchor: 'x = 1' }] }
+    await mount('exercise-1.py')
+    expect(lc.proposals.map((p) => p.id)).toEqual(['kept'])
+    expect(lc.comments.map((c) => c.id)).toEqual(['c9'])
+    // The same comment arriving again isn't shown twice
+    await act(async () => fire({ labId: 'lesson:1', type: 'comment', comment: saved.comments[0] }))
+    expect(lc.comments).toHaveLength(1)
   })
 
   it('a file planted while the tutor writes is the one the next question is answered in', async () => {

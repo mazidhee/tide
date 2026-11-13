@@ -12,6 +12,7 @@ import { Professor } from './Professor'
 import { PillSegment } from './PromptBox'
 import type { AISettings, ClaudeModel, ClaudeRole, ClaudeStatusView, GemmaStatusView, Settings, ThemeId } from '@shared/types'
 import { CLAUDE_DEFAULTS, CLAUDE_MODELS } from '@shared/claude'
+import { EFFORTS, THINKING, type Effort } from '@shared/thinking'
 import { useApp } from '../state'
 import { DESIGNS, readingFace, resolveDesign, type DesignId } from '@shared/design'
 import { Icon, type IconName } from './Icon'
@@ -1119,6 +1120,48 @@ function ClaudeGroup() {
   )
 }
 
+/** How hard Claude thinks for each job (shared/thinking): the defaults, and the learner's changes */
+function ClaudeThinking() {
+  const app = useApp()
+  const c = app.settings.ai.claude ?? {}
+  const own = c.thinking ?? {}
+  const set = (key: string, v: Effort | '') => {
+    const next = { ...own }
+    if (v) next[key] = v
+    else delete next[key]
+    return app.updateSettings({ ai: { ...app.settings.ai, claude: { ...c, thinking: next } } })
+  }
+  const label = (e: Effort) => EFFORTS.find((x) => x.id === e)?.label ?? e
+  const row = (key: string) => {
+    const t = THINKING[key]
+    return (
+      <Row key={key} label={t.label}>
+        <Select<Effort | ''> label={t.label} value={own[key] ?? ''} onChange={(v) => void set(key, v)} options={[{ value: '', label: `${label(t.effort)} (default)` }, ...EFFORTS.filter((e) => e.id !== t.effort).map((e) => ({ value: e.id, label: e.label }))]} />
+      </Row>
+    )
+  }
+  const keys = (g: 'turns' | 'calls' | 'jobs') => Object.keys(THINKING).filter((k) => THINKING[k].group === g)
+  const changed = Object.keys(own).filter((k) => THINKING[k]).length
+  return (
+    <>
+      <Group title="How hard Claude thinks" note="Claude Code’s effort level for each kind of work. Higher thinks longer before answering: slower, and more of your plan, for little gain on easy work. Gemma isn’t affected.">
+        {keys('turns').map(row)}
+        {keys('calls').map(row)}
+        {changed > 0 && (
+          <Row label={`${changed} changed from the defaults`}>
+            <button type="button" className="btn ghost small" onClick={() => void app.updateSettings({ ai: { ...app.settings.ai, claude: { ...c, thinking: {} } } })}>
+              Reset
+            </button>
+          </Row>
+        )}
+      </Group>
+      <Disclosure title="How hard Claude thinks, job by job">
+        <Group title="Each job">{keys('jobs').map(row)}</Group>
+      </Disclosure>
+    </>
+  )
+}
+
 function ModelsSection() {
   const app = useApp()
   const cloud = cloudOf(app.settings.cloud)
@@ -1342,6 +1385,7 @@ function ModelsSection() {
       )}
 
       <Disclosure title="Advanced">
+        <ClaudeThinking />
         {cloud.mode !== 'off' && (
           <Group title="Cloud model">
             <Row label="Reasoning effort" hint="Higher is slower and better for proofs">

@@ -9,6 +9,7 @@ import { existsSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 import type { ClaudeModel } from '@shared/types'
+import type { Effort } from '@shared/thinking'
 import { windowsFromEvent, type WindowReading } from '@shared/usage'
 
 /** Variables that would make the CLI bill an API key or another provider instead of the user's plan */
@@ -41,6 +42,8 @@ export interface ClaudeArgs {
   mcpConfig: string
   /** Built-in tools Claude may use as well as Tide's (WebSearch, WebFetch), for lessons with Web on */
   builtIn?: string[]
+  /** How hard it thinks to begin with (shared/thinking); a running process is changed with effortLine */
+  effort?: Effort
 }
 
 /**
@@ -64,8 +67,18 @@ export function claudeArgs(o: ClaudeArgs): string[] {
     '--no-session-persistence',
     '--permission-mode', 'dontAsk',
     '--allowedTools', ['mcp__tide', ...builtIn].join(','),
+    ...(o.effort ? ['--effort', o.effort] : []),
     '--system-prompt', o.system
   ]
+}
+
+/**
+ * Changes a running process's effort from its next message on: the CLI merges it into its flag
+ * settings (tried against Claude Code 2.1.304: get_settings then reports the new effort, and the
+ * prompt cache is kept across the change).
+ */
+export function effortLine(effort: Effort, id = `e${Date.now()}`): string {
+  return JSON.stringify({ type: 'control_request', request_id: id, request: { subtype: 'apply_flag_settings', settings: { effortLevel: effort } } }) + '\n'
 }
 
 /** The MCP config for one process: Tide's server, with this launch's token and the lesson it serves */
@@ -95,9 +108,9 @@ export function userContent(text: string, images: ImageInput[] = []): string | u
 }
 
 /** A one-shot call's command line: stream-json in and out when its message carries pictures, plain JSON out otherwise */
-export function onceArgs(model: string, system: string, withImages: boolean): string[] {
+export function onceArgs(model: string, system: string, withImages: boolean, effort?: Effort): string[] {
   const io = withImages ? ['--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose'] : ['--output-format', 'json']
-  return ['-p', '--model', model, ...io, '--tools', '', '--strict-mcp-config', '--setting-sources', '', '--no-session-persistence', '--permission-mode', 'dontAsk', '--system-prompt', system]
+  return ['-p', '--model', model, ...io, '--tools', '', '--strict-mcp-config', '--setting-sources', '', '--no-session-persistence', '--permission-mode', 'dontAsk', ...(effort ? ['--effort', effort] : []), '--system-prompt', system]
 }
 
 export interface ClaudeUsage {
