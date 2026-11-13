@@ -8,9 +8,9 @@ title: Tide roadmap
 
 Testing is your daily use: bugs go in the **Tide bugs** note in this notebook, and each working session starts by fixing them. No separate benchmark or rehearsal sessions.
 
-One feature at a time, in this order. Each one is built, tested, installed, and only then is the next one started. Nothing runs in parallel: the Mac has 24 GB, and Gemma needs most of it.
+Up to three builds at a time, each in its own folder, merged, tested and installed as it lands. Gemma no longer stays loaded while Claude teaches, so there's room.
 
-Last updated: 12 November 2026. Courses from GitHub and the fuller code editor moved to the top at your request.
+Last updated: 13 November 2026.
 
 ## In the app now
 
@@ -32,8 +32,21 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - The redesign, with the classic design in Settings
 - Courses you live in (branch `videos`): every link opens inside Tide (course files rendered natively, any GitHub file, YouTube in Tide's player with its transcript, web pages in a reader with Save to library, apps in a sandboxed web view); the course room (sidebar on hover, outline beside the text, the lecture beside it and in theatre when it plays, the tutor docked under the text); the tutor sees the page, section, video moment and selection and can move the video or page; lessons open with what your other courses and lectures add, credited; reading, watching and running course material counts in What you know
 
+- Lesson fixes from your bugs note, the lesson map (where a lesson is heading, the step you're on, when it ends), notes open to write, thread replies save to notes, Explore later side lessons
+- Warm-up on what a lesson builds on; tea breaks timed by your own signals; the morning workout (five adaptive rounds, thinking puzzles and chess, titles, streaks, a pixel party)
+- A tidier Courses page; Gemma loads only when needed; images go to Claude; usage and cost in detail
+- A tutor that remembers you, lesson prep while you're away, teaching quality measured
+- A full IDE in the Code view (debugger, git, search, languages, tests) with Claude pair-programming; coding lessons get the same tools
+- Mock interviews and exams; projects from an idea with levels up to flagship systems, a ready check, you write the code and Claude tutors, a mentor and debriefs
+- You in Tide: name, photo and a pixel self; the sidebar peeks from the left edge when collapsed
+
 ## Now
 
+- [ ] **Pop-out windows everywhere.** Open a lesson, project, course, note, the reader or a mock in its own window, from a clear button, ⌥⌘N or right-click. Being built (worktree `tide-popout`).
+- [ ] **The reading room.** Library › Reading: tonight's chapter in "Then today", an immersive reader (highlight, quote, margin notes, Challenge me, the core argument), a book page with a cover banner, an end-of-chapter seminar, and listening with a mini player. Being built (worktree `tide-reading`).
+- [ ] **Maths tutor.** First-principles, Socratic teaching for maths and statistics; drift detection that switches format; explorables you drag (derivatives, matrices, distributions, random walks); poke-holes challenges; a maths-to-quant ladder. Being built (worktree `tide-maths`).
+- [ ] **Notebook and quant lab.** A Jupyter-compatible notebook in Tide with the tutor in the margin (build on Jupyter's kernel or marimo); the lab pack (scipy, statsmodels, scikit-learn, polars, DuckDB, cvxpy, QuantLib, arch); market data from free sources; finance visuals (yield curve, option payoffs and Greeks, Monte Carlo, efficient frontier, order book). Check each licence first (OpenBB is AGPL).
+- [ ] **Audiobook voices.** Download two or three local voices (Chatterbox, Orpheus, VibeVoice or newer) after asking, play the same passage in each, and keep the one you pick; render chapters ahead while idle; narrator plus character voices. ElevenLabs as an option for public-domain books.
 - [ ] **Tide tuned for finance, payments and quant.** Your focus subjects: stablecoins, payments and payment rails, core banking, open banking, payment infrastructure, quantitative finance, risk, blockchain, plus ML, data engineering, data science and economics.
   - Roadmaps for each, built from the best sources.
   - Trusted sources: BIS, central banks, ISO 20022, Bitcoin and Ethereum docs, QuantEcon, the Fed and ECB.
@@ -52,7 +65,7 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
   - Dollar figures labelled as API-price equivalents, since the plan isn't billed per token.
   - Gemma and other providers shown the same way.
 - [ ] **Claude thinks as hard as each job needs.** Long thinking for curriculum plans, proofs and hard design questions; quick replies for chat. Tuned by measurement, cheaper overall. Without Claude: no change.
-- [ ] **Claude's coding powers in lessons, projects and interviews.** Claude Code's own tools (read, edit, run, test, debug), limited to a project folder in Tide's sandbox. Real pair programming: building a feature together, a bug planted for you to find, your changes reviewed as diffs. Without Claude: today's code lessons, runner and tests.
+- [x] **Claude's coding powers in lessons, projects and interviews.** Claude Code's own tools (read, edit, run, test, debug), limited to a project folder in Tide's sandbox. Real pair programming: building a feature together, a bug planted for you to find, your changes reviewed as diffs. Without Claude: today's code lessons, runner and tests.
 - [x] **Teaching quality, measured.** From your real lessons, no test sessions. Misconceptions (named by Opus's marks, tracked to resolved), near and far transfer, hint dependence, confidence calibration (accuracy by Guessing, Unsure and Sure, Brier score), time to mastery and next-day and next-week retention, for any model. Opus reviews each finished lesson against a teaching rubric, and Tide adjusts how it teaches from a fixed set of changes, each with an off switch, on "How Tide is teaching you" in What you know.
 - [ ] **Low-level labs.**
   - A debugger (lldb) stepping through your program with a live view of registers, stack and memory.
@@ -63,7 +76,7 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
   - The tools work without Claude; Claude narrates them best.
 - [x] **Claude: a tutor that remembers you.** A learner profile in your vault (misconceptions, pace, what clicked), kept up by Claude and read with your past lessons and mistakes before each session.
 - [x] **Claude: lesson prep while you're away.** Background prep before tomorrow's lesson: what's due, the best reading, exercises, a custom visual, a short plan. Plus a weekly review.
-- [ ] **Claude: a mentor for your projects.** Reads your whole project across sessions, reviews it like a senior engineer, runs your tests, and proposes edits in the Code view that you approve line by line.
+- [x] **Claude: a mentor for your projects.** Reads your whole project across sessions, reviews it like a senior engineer, runs your tests, and proposes edits in the Code view that you approve line by line.
 - [ ] **Claude: reading primary sources together.** Papers, documentation and classics read in full, with web search and page reading. A seminar that argues, steelmans and critiques your writing.
 - [x] **Claude: photos and screenshots.** Mark handwritten maths from a photo; explain a diagram or an error screenshot. Pictures in chat, lessons, threads, notes and exams go to Claude as image blocks (scaled to 1568 px, HEIC to JPEG), Gemma when Claude can’t or the work is private.
 - [x] **Claude: mock interviews and exams.** Live coding with tests and system design on the canvas, timed and marked.
@@ -86,6 +99,7 @@ Last updated: 12 November 2026. Courses from GitHub and the fuller code editor m
 - [ ] **Better web clipper and search.** Compare Defuddle with the current clipper, and try a reranker; adopt only if the numbers win.
 - [ ] **Live preview leftovers.** The properties block at the top of a note, embedded notes, and tables and maths inside lists.
 - [ ] **Small fixes.**
+  - From 13 Nov: the coding tutor sometimes trusts the hidden tests instead of running your code; review comments and pending proposals are lost on reload; Node/JS debugging; ⌘W, ⌘J and ⌘\ with physical keys in the IDE; Go projects untested; the pixel self's eyes come out soft on real photos at 32 px; lesson prep's near-limit check should use the plan-window figures; the mock history chart mixes kinds; the design canvas's own colours per component; project ready checks and debriefs need a live run; the Opus project plan takes 3–4 minutes.
   - Courses: no open-banking course yet (the UK standards site is on github.io, blocked here); QuantEcon's websites unreachable here, so it's read from GitHub; ranking without Claude lets weak GitHub repos through; long lessons can show step names like "part 3" with no part 2.
   - Threads: "Add to notes" text isn't kept on reopen; threads may not follow a lesson into its own window; "Ask first" still asks in the main lesson; Gemma path checked by tests only.
   - Courses: the video pausing for a question; highlights in course PDFs; github.io and some sites won't load on this network; Medium link cards come through rough; check Claude draws on a second course's code when it's better.
