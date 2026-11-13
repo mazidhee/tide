@@ -105,6 +105,8 @@ Last updated: 13 November 2026.
 - [x] **Track tool packs.** One-click installs that turn "partly" tracks into hands-on ones: C++ (clang is on the Mac; a roadmap and courses), blockchain (Foundry for Solidity), big data (PySpark and a light Kafka-compatible broker), backend (an embedded Postgres), MLE (tracking your training runs). Built on branch `track-packs`: C++ pack (CMake, 93 MB down, 51 MB on disk), Foundry pack (153 MB, 282 MB), big data pack (PySpark, Temurin Java and the Nisshi broker; 566 MB, about 890 MB), Postgres pack (71 MB, 154 MB) and a built-in run tracker; C++ and Solidity project templates on the ladder.
 - [ ] **General UI pass.** Calm, consistent, less text, wherever pages are crowded. After the bug fixes.
 
+- [x] **North Star.** One woven path toward one goal, mastery-gated stages, learned-once foundations; press Build my North Star in Your week or Learn.
+
 ## Next
 
 - [ ] **Humanities, tested live.** Meditations, The Prophet, a Russian novel: Discuss this, highlights, notes, challenging your arguments.

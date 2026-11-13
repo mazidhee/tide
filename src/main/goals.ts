@@ -10,6 +10,7 @@ import { readingLabel } from '@shared/books'
 import { addMixedReview, gateFilter, gateItem, type GateInfo } from '@shared/track'
 import { joinRel, readText, writeText } from './vault'
 import { courseItem } from '@shared/coursePlan'
+import { NORTH_STAR_GOAL } from '@shared/northStar'
 import type { CoursePlanResult } from './coursePlan'
 
 /**
@@ -210,8 +211,11 @@ async function bestHours(): Promise<number[]> {
 export async function snapshot() {
   const { getCoach } = await import('./coach')
   const [store, coach, inv] = await Promise.all([loadGoals(), getCoach(), inventory()])
-  const log = await threadLog(store.goals)
-  const goals = withStanding(store, await inProgress(inv, log, coach), Date.now())
+  // North Star's current stage is a goal too: its tracks and weights shape the week (main/northStar)
+  const star = await import('./northStar').then((m) => m.schedulerGoal()).catch(() => null)
+  const own = star ? { ...store, goals: [...store.goals.filter((g) => g.id !== star.id), star] } : store
+  const log = await threadLog(own.goals)
+  const goals = withStanding(own, await inProgress(inv, log, coach), Date.now())
   const fading = await fadingByThread()
   const threads = buildThreads(goals, log, { today: today(), fading: fading.by })
   return { store, coach, inv, log, goals, threads, fading }
@@ -224,7 +228,8 @@ const thinking = new Set<string>()
 export async function goalsView(): Promise<GoalsView> {
   const s = await snapshot()
   const t = today()
-  const rows: GoalRow[] = s.goals.map((g) => {
+  // North Star's stage is shown on its own page, not as a goal to edit here
+  const rows: GoalRow[] = s.goals.filter((g) => g.id !== NORTH_STAR_GOAL).map((g) => {
     const created = new Date(g.createdAt).toISOString().slice(0, 10)
     const spentOf = (n: GoalNeed) => s.log.filter((l) => l.thread === needThread(n) && l.date >= created).reduce((m, l) => m + l.minutes, 0) / 60
     const live = g.needs.filter((n) => !n.dropped)
@@ -389,6 +394,9 @@ async function roadmapCandidates(threads: Thread[], goals: PlanGoal[], coach: Co
   // A roadmap's next phase waits behind its gate (shared/track): its topics aren't planned yet
   const held = await import('./track').then((m) => m.heldTopics()).catch(() => new Set<string>())
   for (const [nb, list] of byNotebook) byNotebook.set(nb, gateFilter(list, held))
+  // North Star: shared topics learned once, key topics taken deeper (main/northStar)
+  const adjusted = await import('./northStar').then((m) => m.adjustQueues(byNotebook)).catch(() => byNotebook)
+  for (const [nb, list] of adjusted) byNotebook.set(nb, list)
   for (const [nb, list] of byNotebook) {
     const want = wanted.get(nb)
     if (want) byNotebook.set(nb, [...list.filter((c) => want.has(c.section)), ...list.filter((c) => !want.has(c.section))])

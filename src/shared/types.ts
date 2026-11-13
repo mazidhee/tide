@@ -421,6 +421,17 @@ export interface GraphData {
   edges: { source: string; target: string }[]
 }
 
+export interface NorthStarDraft {
+  ns: import('./northStar').NorthStar
+  note: string
+  files: import('./northStar').BuildFile[]
+  notePath: string
+  estimate: string
+  /** Hours saved by learning shared topics once, and how many there are */
+  saved: number
+  shared: number
+}
+
 export interface NotebookMeta {
   path: string
   name: string
@@ -439,6 +450,8 @@ export interface NotebookMeta {
   project?: import('./project').ProjectInfo
   /** Who teaches its lessons: Tide decides (the "Who teaches" setting), the cloud model throughout, Claude, or Gemma on this Mac */
   tutor?: 'auto' | 'cloud' | 'claude' | 'gemma'
+  /** A North Star track: a ready roadmap in the hidden Roadmaps folder, with no folder of its own (main/northStar) */
+  virtual?: boolean
 }
 
 export interface NoteProgress {
@@ -1032,6 +1045,24 @@ export interface TideApi {
     mixedReview(): Promise<{ topic: string; review: import('./review').ReviewSetup; tracks: number } | null>
   }
   /** A tutor that remembers you (main/learnerProfile): the profile note, as the profile view shows it */
+  northStar: {
+    view(): Promise<import('../main/northStar').NorthStarView | null>
+    glance(): Promise<Awaited<ReturnType<typeof import('../main/northStar').glance>>>
+    suggested(): Promise<{ goal: string; hoursPerWeek: number; notePath?: string }>
+    /** Opus weaves the map (minutes); nothing is written until build */
+    synthesise(input: { goal: string; hoursPerWeek?: number }): Promise<NorthStarDraft>
+    status(): Promise<{ running: boolean; startedAt?: number; error?: string; draft?: boolean }>
+    draft(): Promise<NorthStarDraft | null>
+    discard(): Promise<void>
+    /** Writes new files only */
+    build(): Promise<{ notePath: string; wrote: string[]; tracks: string[]; week: boolean }>
+    decide(id: string, ok: boolean): Promise<import('../main/northStar').NorthStarView | null>
+    review(): Promise<import('../main/northStar').NorthStarView | null>
+    moveOn(): Promise<import('../main/northStar').NorthStarView | null>
+    confirmDepth(topic: string, depth: number): Promise<import('../main/northStar').NorthStarView | null>
+    startCapstone(): Promise<{ notebook: string } | null>
+    install(): Promise<string[]>
+  }
   learner: {
     view(): Promise<import('./learnerProfile').LearnerView>
     /** Brings the measured lines up to date (and makes the note if there isn't one) */

@@ -310,6 +310,7 @@ const TITLES: Record<string, string> = {
   learner: 'What the tutor knows',
   wrapup: 'Evening wrap-up',
   weekly: 'Weekly review',
+  northstar: 'North Star',
   maths: 'Mental maths',
   help: 'Guide',
   settings: 'Settings',
@@ -410,6 +411,8 @@ export function tabIcon(v: TabView): string {
     case 'wrapup':
     case 'weekly':
       return 'list'
+    case 'northstar':
+      return 'northstar'
     case 'workshop':
       return 'branch'
     case 'help':
