@@ -12,8 +12,16 @@ import { VISUAL_SCHEME, frameResponse, isFrameHost } from '@shared/visuals'
 /** For protocol.registerSchemesAsPrivileged, before the app is ready: standard (so hosts work) and secure; no fetch, CORS or CSP bypass */
 export const VISUAL_SCHEME_PRIVILEGES = { scheme: VISUAL_SCHEME, privileges: { standard: true, secure: true } }
 
+/** Tide's own libraries for frames (main/visualLibs), when the app serves them: kept out of this module so it stays plain to bundle */
+type Libraries = (url: string, method: string) => { body: string; headers: Record<string, string> } | null
+let libraries: Libraries | null = null
+export const serveVisualLibraries = (fn: Libraries) => (libraries = fn)
+
 export function handleVisualProtocol(): void {
   protocol.handle(VISUAL_SCHEME, (req) => {
+    // Tide's own libraries for the frame (main visualLibs): only GET, only a frame's host, only these paths
+    const lib = libraries?.(req.url, req.method) ?? null
+    if (lib) return new Response(lib.body, { status: 200, headers: lib.headers })
     const r = frameResponse(req.url, req.method)
     return r ? new Response(r.body, { status: 200, headers: r.headers }) : new Response('Not found', { status: 404, headers: { 'content-type': 'text/plain' } })
   })

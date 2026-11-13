@@ -80,11 +80,17 @@ export async function lessonVisuals(lessonId: string): Promise<Record<string, Vi
   return (await getLesson(lessonId))?.visuals ?? {}
 }
 
-export async function rememberVisual(lessonId: string, key: string, record: unknown): Promise<boolean> {
+export async function rememberVisual(lessonId: string, key: string, record: unknown, source?: unknown): Promise<boolean> {
   if (typeof lessonId !== 'string' || !lessonId || typeof key !== 'string' || !/^v[a-z0-9]{4,32}$/.test(key)) return false
   const clean = cleanRecord(record)
   if (!clean) return false
-  const { keepLessonVisual } = await import('./lessons')
+  const { keepLessonVisual, getLesson } = await import('./lessons')
+  // A working explorable in a maths lesson joins the library (main/explorables), as it finally ran
+  if (clean.status === 'ok') {
+    const code = clean.code ?? (typeof source === 'string' ? source : '')
+    const topic = (await getLesson(lessonId).catch(() => null))?.topic ?? ''
+    if (code && topic) await (await import('./explorables')).keepExplorable(code, topic).catch(() => false)
+  }
   return keepLessonVisual(lessonId, key, clean)
 }
 

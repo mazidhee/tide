@@ -108,3 +108,6 @@ export const checkGraphTool: McpTool = {
 }
 
 export const MATHS_TOOLS = [placeExplorableTool, setChallengeTool, checkGraphTool]
+
+/** With the library of explorables made on the fly (main/explorables) */
+export const allMathsTools = async () => [...MATHS_TOOLS, (await import('./explorables')).explorableLibraryTool]

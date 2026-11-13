@@ -82,7 +82,8 @@ describe('the frame', () => {
     expect(VISUAL_CSP).toMatch(/connect-src 'none'/)
     expect(VISUAL_CSP).toMatch(/frame-src 'none'/)
     expect(VISUAL_CSP).toMatch(/form-action 'none'/)
-    expect(VISUAL_CSP).toMatch(/script-src 'unsafe-inline'(;|$)/)
+    // Inline scripts, and Tide's own libraries served to the frame from tide-visual: (main/visualLibs), nothing else
+    expect(VISUAL_CSP).toMatch(/script-src 'unsafe-inline' tide-visual:(;|$)/)
     expect(VISUAL_CSP).not.toMatch(/https?:|\*|'self'/)
     expect(VISUAL_CSP).toMatch(/img-src data: blob:/)
   })
