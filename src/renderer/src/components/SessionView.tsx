@@ -91,6 +91,7 @@ const LessonCanvas = lazy(() => import('./LessonCanvas').then((m) => ({ default:
 const MetabasePane = lazy(() => import('./MetabasePane').then((m) => ({ default: m.MetabasePane })))
 import { parseVerdict, scorecardScore } from '@shared/interviews'
 import { dollarsAsCode, isMetabaseLesson, teardownOf } from '@shared/metabaseData'
+import { pageKey } from '../lib/typing'
 
 interface Turn {
   role: 'user' | 'assistant'
@@ -397,12 +398,13 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     new Promise<string>((resolve) => {
       if (mode !== 'teach' || options?.placement || options?.review || options?.check || options?.retest?.length || options?.project?.warmedUp) return resolve('')
       let settled = false
-      // Never hold a lesson up for long waiting for the cards (main/warmup gives Claude's rerank 4.5 s of it, only when names don't fill the warm-up)
+      // Never hold a lesson up for long waiting for the cards (main/warmup gives Claude's relevance check 4.5 s; past it, only plainly related cards, or none)
       const wait = setTimeout(() => ((settled = true), resolve('')), 5500)
       // A prepared lesson brings its warm-up with it (main/lessonPrep)
       const prepared = options?.prep ? window.tide.prep.get(options.prep.id).then((p) => p?.warmup ?? null).catch(() => null) : Promise.resolve(null)
       prepared
-        .then((set) => set ?? window.tide.warmup.for(topic, 'path' in scope ? scope.path : undefined))
+        // One prepared before the strict relevance rules could hold unrelated cards: made again
+        .then((set) => (set?.judged ? set : window.tide.warmup.for(topic, 'path' in scope ? scope.path : undefined)))
         .then((set) => {
           if (settled) return
           clearTimeout(wait)
@@ -1132,7 +1134,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // Keys: ⌘↵ carries on; 1 to 4 pick an option (when you're not typing)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const typing = (e.target as HTMLElement)?.closest?.('input, textarea, [contenteditable="true"]')
+      const typing = !pageKey(e)
       if (carryOn && !asking && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         send(GO_ON, turns)

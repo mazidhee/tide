@@ -1,5 +1,6 @@
 import { addDays, bestHoursLabel, planPortfolio, replanWeek, thingsChanges, type PlanNotice, type PortfolioWeek, type Thread } from '@shared/portfolio'
-import { aimsFromGoals, buildThreads, decomposePrompt, driftOf, guessNeeds, needThread, parseDecomposition, parseGoalDate, threadId, tradeOffs, withStanding, EMPTY_GOALS, type Decomposition, type GoalNeed, type GoalsStore, type GoalWeight, type InProgress, type Inventory, type PlanGoal, type ThreadLog, type TradeOption, type GoalRow, type GoalsView } from '@shared/goals'
+import type { Goal } from '@shared/types'
+import { asDeadline, aimsFromGoals, buildThreads, readGoalsFile, decomposePrompt, driftOf, guessNeeds, needThread, parseDecomposition, parseGoalDate, threadId, tradeOffs, withStanding, EMPTY_GOALS, type Decomposition, type GoalNeed, type GoalsStore, type GoalWeight, type InProgress, type Inventory, type PlanGoal, type ThreadLog, type TradeOption, type GoalRow, type GoalsView } from '@shared/goals'
 import { aimsKey, aimsOf, localDate, thingsTitle, type AgendaItem, type CoachSettings, type TopicCandidate, type WeekPlan } from '@shared/coach'
 import { roadmapTopics, isSorted, sectionsOf } from '@shared/curriculum'
 import { balanceWeek, type BalanceNotebook } from '@shared/balance'
@@ -16,6 +17,8 @@ import { joinRel, readText, writeText } from './vault'
  */
 
 const STORE = joinRel('.tide', 'goals.json')
+/** A copy of goals.json as it was, when it was in an older shape, made before the first write */
+const BEFORE = joinRel('.tide', 'goals.before-upgrade.json')
 const today = () => localDate()
 const uid = () => Math.random().toString(36).slice(2, 10)
 
@@ -24,12 +27,18 @@ let cache: GoalsStore | null = null
 export async function loadGoals(): Promise<GoalsStore> {
   if (cache) return cache
   let store: GoalsStore
+  const text = await readText(STORE).catch(() => null)
+  let raw: unknown = null
   try {
-    const raw = JSON.parse(await readText(STORE)) as Partial<GoalsStore>
-    store = { ...EMPTY_GOALS, ...raw, goals: Array.isArray(raw.goals) ? raw.goals : [], standing: raw.standing ?? {} }
+    raw = text === null ? null : JSON.parse(text)
   } catch {
-    store = { ...EMPTY_GOALS, goals: [], standing: {} }
+    raw = undefined
   }
+  // Any shape the file has had (the old roadmap deadlines array, a map of goals, broken JSON): sorted
+  // out in memory. A file in an older shape is copied aside once before Tide ever writes it.
+  const canonical = !!raw && typeof raw === 'object' && !Array.isArray(raw) && Array.isArray((raw as GoalsStore).goals)
+  if (text !== null && text.trim() && !canonical) await writeText(BEFORE, text).catch(() => {})
+  store = readGoalsFile(raw ?? null)
   // Your aims come in as goals once, broken down by Tide's own guess (Think it through asks Opus)
   if (!store.migrated) {
     const { getCoach } = await import('./coach')
@@ -57,6 +66,33 @@ export async function saveGoals(store: GoalsStore): Promise<GoalsStore> {
     import('./curriculum').then((c) => c.sortRoadmaps()).catch(() => {})
   }
   return store
+}
+
+/** The file as it is now, in any shape it has had (nothing written) */
+const readNow = async (): Promise<GoalsStore> => {
+  const text = await readText(STORE).catch(() => null)
+  try {
+    return readGoalsFile(text === null ? null : JSON.parse(text))
+  } catch {
+    return readGoalsFile(null)
+  }
+}
+
+/** Roadmap deadlines (the older kind of goal), kept in the same file beside the goals; read fresh each time */
+export async function getDeadlines(): Promise<Goal[]> {
+  return [...((await readNow()).deadlines ?? [])]
+}
+
+export async function saveDeadlines(list: Goal[]): Promise<Goal[]> {
+  const deadlines = (Array.isArray(list) ? list : []).map(asDeadline).filter((d): d is Goal => !!d)
+  const store = cache ?? (await readNow())
+  // An older-shaped file is copied aside before its first write, as loadGoals does
+  const text = await readText(STORE).catch(() => null)
+  if (text?.trim() && !/^\s*\{/.test(text)) await writeText(BEFORE, text).catch(() => {})
+  const next: GoalsStore = { ...store, deadlines }
+  if (cache) cache = next
+  await writeText(STORE, JSON.stringify(next, null, 1))
+  return deadlines
 }
 
 /** For tests: forget what was read */

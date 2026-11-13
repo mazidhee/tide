@@ -20,6 +20,7 @@ import type {
 } from '@shared/types'
 import { absPath, allNotes, flattenFiles, getTree, joinRel, readText, resolveLink, writeText } from './vault'
 import { getCards } from './study'
+import { withoutOverlaps } from '@shared/activeTime'
 
 const hash = (s: string) => createHash('sha1').update(s).digest('hex')
 
@@ -348,11 +349,11 @@ export async function getMastery(): Promise<Record<string, Mastery>> {
 
 // ---------- Goals ----------
 
-const GOALS = joinRel('.tide', 'goals.json')
+// Roadmap deadlines share .tide/goals.json with Goals (main/goals), which reads every shape the
+// file has had. Reading it here as a bare array broke once Goals wrote its store there.
+export const getGoals = (): Promise<Goal[]> => import('./goals').then((m) => m.getDeadlines())
 
-export const getGoals = () => readJson<Goal[]>(GOALS, [])
-
-export const saveGoals = (goals: Goal[]) => updateJson<Goal[]>(GOALS, [], () => goals)
+export const saveGoals = (goals: Goal[]): Promise<Goal[]> => import('./goals').then((m) => m.saveDeadlines(goals))
 
 // ---------- Explain from memory ----------
 
@@ -473,7 +474,8 @@ export async function onPathMoved(from: string, to: string) {
     Object.fromEntries(Object.entries(rekey(s)).map(([k, v]) => [k, v?.outline ? { ...v, outline: move(v.outline) } : v]))
   )
   await updateJson<LibraryStore>(LIBRARY, {}, rekey)
-  await updateJson<Goal[]>(GOALS, [], (goals) => goals.map((g) => ({ ...g, notebook: move(g.notebook) })))
+  const deadlines = await getGoals().catch(() => [] as Goal[])
+  if (deadlines.some((g) => move(g.notebook) !== g.notebook)) await saveGoals(deadlines.map((g) => ({ ...g, notebook: move(g.notebook) })))
 }
 
 // ---------- Daily brief ----------
@@ -492,7 +494,8 @@ export async function logFocus(start: number, end: number, context?: { label?: s
 /** Study sessions logged since a time, for forecasts */
 export async function focusLog(since: number): Promise<{ start: number; minutes: number; label?: string; path?: string; kind?: string }[]> {
   const all = await readJsonl<{ start: number; end: number; minutes: number; label?: string; path?: string; kind?: string }>(FOCUS_LOG).catch(() => [])
-  return all.filter((e) => e.start >= since).map(({ start, minutes, label, path, kind }) => ({ start, minutes, label, path, kind }))
+  // Two windows could once log the same minutes: each minute is counted once (shared/activeTime)
+  return withoutOverlaps(all.filter((e) => e.start >= since).map(({ start, minutes, label, path, kind }) => ({ start, minutes, label, path, kind })))
 }
 
 const INTERVIEW_LOG = joinRel('.tide', 'interviews.jsonl')

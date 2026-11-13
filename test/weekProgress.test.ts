@@ -105,22 +105,29 @@ describe('what counts', () => {
     expect(p.reading.books).toEqual([{ title: 'Designing Data-Intensive Applications', minutes: 46 }])
   })
   it('lessons, their minutes each day (time away left out), and last week to compare', () => {
-    expect(p.lessons).toMatchObject({ count: 2, finished: 1, minutes: 25, byDay: [17, 0, 8, 0, 0, 0, 0], lastWeekMinutes: 20 })
+    // Turn to turn, a gap over five minutes is time away (a lesson left in Carry on)
+    expect(p.lessons).toMatchObject({ count: 2, finished: 1, minutes: 18, byDay: [10, 0, 8, 0, 0, 0, 0], lastWeekMinutes: 0 })
     expect(p.lessons.topics).toEqual(['Conditional probability', 'Bayes’ theorem'])
+  })
+  it('a day the focus log has decides by active time: a lesson left open in Carry on adds nothing', () => {
+    // Monday: the lesson was open 9:00 to 10:00 by its turns, but you were in it 12 minutes
+    const q = weekProgress({ ...input(), focus: [{ start: at('2026-11-09', 9), minutes: 7, kind: 'lesson' }, { start: at('2026-11-09', 9, 50), minutes: 5, kind: 'lesson' }, { start: at('2026-11-09', 11), minutes: 30, kind: 'reading' }] })
+    expect(q.lessons.byDay).toEqual([12, 0, 8, 0, 0, 0, 0])
   })
   it('mock scores from this week', () => {
     expect(p.mocks).toEqual([{ title: 'LRU cache', mode: 'coding', at: at('2026-11-10', 10), score: 72 }])
   })
   it('counts a lesson’s minutes only inside the window asked about', () => {
     const l = input().lessons[0]
-    expect(lessonMinutesBetween(l, at('2026-11-09', 9, 6), at('2026-11-09', 9, 10))).toBe(4)
+    expect(lessonMinutesBetween(l, at('2026-11-09', 9, 6), at('2026-11-09', 9, 10))).toBe(0)
+    expect(lessonMinutesBetween(l, at('2026-11-09', 9, 1), at('2026-11-09', 9, 4))).toBe(3)
     expect(lessonMinutesBetween({ ...l, turns: [] }, 0, Number.MAX_SAFE_INTEGER)).toBe(45)
   })
 })
 
 describe('in words', () => {
   it('says the week in fixed words without Claude', () => {
-    expect(progressLine(weekProgress(input()))).toBe('So far: 2 lessons (25 min), 1 topic solid, 46 min reading, 3 workouts (+23), 1 milestone done and 1 mock.')
+    expect(progressLine(weekProgress(input()))).toBe('So far: 2 lessons (18 min), 1 topic solid, 46 min reading, 3 workouts (+23), 1 milestone done and 1 mock.')
     const empty = weekProgress({ ...input(), concepts: [], evidence: [], workout: null, projects: [], books: [], lessons: [], mocks: [] })
     expect(anyProgress(empty)).toBe(false)
     expect(progressLine(empty)).toMatch(/^Nothing yet this week/)

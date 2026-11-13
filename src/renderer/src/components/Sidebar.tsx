@@ -57,7 +57,7 @@ function useExpanded() {
   return { expanded, toggle }
 }
 
-export function Sidebar({ dueCount }: { dueCount: number }) {
+export function Sidebar({ dueCount, peek = false }: { dueCount: number; peek?: boolean }) {
   const app = useApp()
   const { settings, tree, view } = app
   const { expanded, toggle } = useExpanded()
@@ -334,9 +334,17 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
           >
             <Icon name="plus" />
           </button>
-          <button className="icon-btn" title="Hide sidebar (⌘\)" onClick={() => app.updateSettings({ sidebarCollapsed: true })}>
-            <Icon name="sidebar" />
-          </button>
+          {/* In the card that slides over a collapsed sidebar, this brings the sidebar back for good;
+              "Hide" there did nothing, as it was already hidden */}
+          {peek && settings.sidebarCollapsed ? (
+            <button className="icon-btn" title="Keep the sidebar open (⌘\)" aria-label="Keep the sidebar open" onClick={() => app.updateSettings({ sidebarCollapsed: false })}>
+              <Icon name="sidebar" />
+            </button>
+          ) : !peek ? (
+            <button className="icon-btn" title="Hide sidebar (⌘\)" onClick={() => app.updateSettings({ sidebarCollapsed: true })}>
+              <Icon name="sidebar" />
+            </button>
+          ) : null}
         </div>
       </div>
 

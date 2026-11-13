@@ -19907,24 +19907,24 @@ button.tl-dot:focus-visible {
 
 /* ---------- Your week › This week's progress ---------- */
 
-.wp {
+.wkp {
   margin: 34px 0 12px;
 }
 
-.wp-head {
+.wkp-head {
   display: flex;
   align-items: baseline;
   gap: 10px;
   margin-bottom: 6px;
 }
 
-.wp-head h2 {
+.wkp-head h2 {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
 }
 
-.wp-line {
+.wkp-line {
   margin: 0 0 14px;
   max-width: 64ch;
   font-size: 14px;
@@ -19932,13 +19932,13 @@ button.tl-dot:focus-visible {
   color: var(--ink-soft);
 }
 
-.wp-grid {
+.wkp-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
-.wp-tile {
+.wkp-tile {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -19953,29 +19953,29 @@ button.tl-dot:focus-visible {
   font: inherit;
 }
 
-button.wp-tile {
+button.wkp-tile {
   cursor: pointer;
   transition: border-color 120ms ease-out;
 }
 
-button.wp-tile:hover {
+button.wkp-tile:hover {
   border-color: var(--line-strong);
 }
 
-.wp-time {
+.wkp-time {
   grid-row: span 3;
 }
 
-.wp-know {
+.wkp-know {
   grid-column: span 2;
 }
 
-.wp-label {
+.wkp-label {
   font-size: 12px;
   color: var(--ink-muted);
 }
 
-.wp-big {
+.wkp-big {
   font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -19983,24 +19983,24 @@ button.wp-tile:hover {
   color: var(--ink);
 }
 
-.wp-unit {
+.wkp-unit {
   font-size: 13px;
   font-weight: 500;
   color: var(--ink-soft);
 }
 
-.wp-delta {
+.wkp-delta {
   font-size: 13px;
   font-weight: 600;
   color: var(--ink-muted);
 }
 
-.wp-delta.up {
+.wkp-delta.up {
   color: var(--accent);
 }
 
-.wp-sub,
-.wp-names {
+.wkp-sub,
+.wkp-names {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -20009,12 +20009,12 @@ button.wp-tile:hover {
   color: var(--ink-soft);
 }
 
-.wp-names {
+.wkp-names {
   white-space: nowrap;
   color: var(--ink-muted);
 }
 
-.wp-chart {
+.wkp-chart {
   position: relative;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -20024,13 +20024,13 @@ button.wp-tile:hover {
   padding-top: 14px;
 }
 
-.wp-day {
+.wkp-day {
   display: grid;
   justify-items: center;
   gap: 5px;
 }
 
-.wp-bar {
+.wkp-bar {
   position: relative;
   display: block;
   width: 100%;
@@ -20040,28 +20040,28 @@ button.wp-tile:hover {
   background: color-mix(in srgb, var(--ink) 5%, transparent);
 }
 
-.wp-bar > span {
+.wkp-bar > span {
   position: absolute;
   inset: auto 0 0;
   border-radius: 4px 4px 0 0;
   background: var(--accent);
 }
 
-.wp-day.later .wp-bar {
+.wkp-day.later .wkp-bar {
   background: color-mix(in srgb, var(--ink) 2.5%, transparent);
 }
 
-.wp-dow {
+.wkp-dow {
   font-size: 11.5px;
   color: var(--ink-muted);
 }
 
-.wp-day.is-today .wp-dow {
+.wkp-day.is-today .wkp-dow {
   color: var(--ink);
   font-weight: 600;
 }
 
-.wp-tip {
+.wkp-tip {
   position: absolute;
   bottom: calc(100% - 6px);
   transform: translateX(-50%);
@@ -20080,39 +20080,39 @@ button.wp-tile:hover {
   pointer-events: none;
 }
 
-.wp-tip b {
+.wkp-tip b {
   font-weight: 600;
   color: var(--ink);
 }
 
-.wp-dots {
+.wkp-dots {
   display: inline-flex;
   gap: 5px;
   margin-top: 4px;
 }
 
-.wp-dots i {
+.wkp-dots i {
   width: 9px;
   height: 9px;
   border-radius: 50%;
   border: 1.5px solid var(--line-strong);
 }
 
-.wp-dots i.on {
+.wkp-dots i.on {
   border-color: var(--accent);
   background: var(--accent);
 }
 
-.wp-dots i.later {
+.wkp-dots i.later {
   border-style: dashed;
 }
 
 @media (max-width: 760px) {
-  .wp-grid {
+  .wkp-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .wp-time,
-  .wp-know {
+  .wkp-time,
+  .wkp-know {
     grid-column: 1 / -1;
     grid-row: auto;
   }

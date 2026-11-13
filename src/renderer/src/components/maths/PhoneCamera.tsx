@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../Icon'
 import { grabFrame, isPhoneCamera } from './paperPages'
+import { pageKey } from '../../lib/typing'
 
 /**
  * Your iPhone as the camera (macOS Continuity Camera): with the phone near the Mac, locked, and on
@@ -86,7 +87,7 @@ export function PhoneCamera({ onTake, onCancel }: { onTake(dataUrl: string): voi
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === ' ' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
+      if ((e.key === ' ' && pageKey(e)) || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
         e.preventDefault()
         e.stopPropagation()
         void take()

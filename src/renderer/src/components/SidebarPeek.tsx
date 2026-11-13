@@ -116,7 +116,7 @@ export function SidebarPeek({ dueCount, keys = true }: { dueCount: number; keys?
         aria-hidden="true"
       />
       <div ref={card} className={`peek-sidebar${open ? ' open' : ''}`} onPointerEnter={show} onPointerLeave={(e) => !held(e.clientX, e.clientY) && hideSoon()}>
-        <Sidebar dueCount={dueCount} />
+        <Sidebar dueCount={dueCount} peek />
       </div>
     </>
   )

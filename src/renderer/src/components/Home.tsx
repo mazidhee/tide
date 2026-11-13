@@ -102,7 +102,7 @@ export function Home(_: { dueCount: number; cardCount: number }) {
       const log = await window.tide.learn.focusLog(now - 60 * DAY).catch(() => [])
       setWeek(weekOf(log, now))
       setLog(log)
-      for (const g of goals as Goal[]) {
+      for (const g of (Array.isArray(goals) ? goals : []) as Goal[]) {
         const outline = nbs.find((n) => n.path === g.notebook)?.outline
         if (!outline) continue
         const md = await window.tide.vault.read(outline).catch(() => '')

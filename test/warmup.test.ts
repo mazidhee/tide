@@ -30,8 +30,12 @@ describe('finding what a lesson builds on', () => {
 
   it('ranks by relevance and by how much has faded', () => {
     const solid = concept('Bytes and words', { estimate: 0.98, status: 'solid' })
-    const ranked = rankPrior('Bytes in memory', [solid, { ...binary, steps: ['Bytes in memory'] }, french, sql])
+    const all = [solid, { ...binary, steps: ['Bytes in memory'] }, french, sql]
+    // Claude judged binary related too: the faded one comes first
+    const ranked = rankPrior('Bytes in memory', all, '', 4, [binary.id, solid.id])
     expect(ranked.map((c) => c.name)).toEqual(['Binary, hexadecimal and number bases', 'Bytes and words'])
+    // Without Claude only the name that plainly matches comes up
+    expect(rankPrior('Bytes in memory', all).map((c) => c.name)).toEqual(['Bytes and words'])
   })
 })
 
@@ -44,11 +48,12 @@ describe('the warm-up cards', () => {
     expect(cards).toHaveLength(2)
   })
 
-  it('asks from memory when nothing is kept, checked against what the lesson covered', () => {
-    const [c] = warmupCards([binary], new Map(), NOW)
-    expect(c.item).toBeNull()
-    expect(c.question).toMatch(/From memory/)
-    expect(c.answer).toBe('Your lesson covered: Place value in any base · Hex digits as four bits · Bytes')
+  it('no card on a concept with nothing kept: never a vague "key idea of <lesson>" card', () => {
+    expect(warmupCards([binary], new Map(), NOW)).toEqual([])
+    const kept = new Map([[sql.id, [card('What does a LEFT JOIN keep?', 'Every left row', NOW)]]])
+    const cards = warmupCards([binary, sql], kept, NOW)
+    expect(cards.map((c) => c.conceptName)).toEqual(['SQL joins'])
+    expect(cards.some((c) => /key idea/i.test(c.question))).toBe(false)
   })
 
   it('never more than five', () => {
@@ -64,7 +69,11 @@ describe('the warm-up cards', () => {
 })
 
 describe('what the tutor is told', () => {
-  const set: WarmupSet = { topic: 'Bytes', cards: warmupCards([binary, sql], new Map(), NOW), concepts: [{ name: binary.name, estimate: 0.55, status: 'fading' }] }
+  const kept = new Map([
+    [binary.id, [card('How many bits in a hex digit?', '4', NOW)]],
+    [sql.id, [card('What does a LEFT JOIN keep?', 'Every left row', NOW)]]
+  ])
+  const set: WarmupSet = { topic: 'Bytes', cards: warmupCards([binary, sql], kept, NOW), concepts: [{ name: binary.name, estimate: 0.55, status: 'fading' }] }
 
   it('what held, what faded, and to link and re-teach', () => {
     const note = warmupNote(set, [

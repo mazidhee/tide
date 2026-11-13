@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Verdict } from '@shared/types'
 import { WARMUP_MAX_MS, warmupTally, type WarmupResult, type WarmupSet } from '@shared/warmup'
 import { renderMarkdown } from '../lib/markdown'
+import { pageKey } from '../lib/typing'
 
 const ENV = { notePath: '', filesByName: new Map<string, string>() }
 const md = (s: string) => renderMarkdown(s, ENV)
@@ -25,6 +26,7 @@ export function WarmUp({ set, onDone, onProgress }: { set: WarmupSet; onDone(res
   // What they recall, typed or dictated (Wispr Flow, macOS dictation), however rough: the tutor reads it
   const [said, setSaid] = useState('')
   const [done, setDone] = useState<null | { skipped: boolean }>(null)
+  const [inBox, setInBox] = useState(false)
   const started = useRef(Date.now())
   const card = set.cards[i]
 
@@ -49,8 +51,8 @@ export function WarmUp({ set, onDone, onProgress }: { set: WarmupSet; onDone(res
   live.current = { shown, grade, done }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null
-      if (live.current.done || e.metaKey || e.ctrlKey || e.altKey || (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable))) return
+      // Never while you type: in its own-words box, the tutor's box, the notes, a code editor
+      if (live.current.done || !pageKey(e)) return
       if (!live.current.shown && (e.key === ' ' || e.key === 'Enter')) {
         e.preventDefault()
         setShown(true)
@@ -98,6 +100,8 @@ export function WarmUp({ set, onDone, onProgress }: { set: WarmupSet; onDone(res
           rows={2}
           value={said}
           onChange={(e) => setSaid(e.target.value)}
+          onFocus={() => setInBox(true)}
+          onBlur={() => setInBox(false)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) (e.preventDefault(), setShown(true))
           }}
@@ -112,7 +116,8 @@ export function WarmUp({ set, onDone, onProgress }: { set: WarmupSet; onDone(res
         {!shown ? (
           <button className="btn primary small" onClick={() => setShown(true)}>
             {card.answer ? 'Show answer' : 'I’ve thought of it'}
-            <kbd>Space</kbd>
+            {/* In the own-words box Space is a space: ⌘↩ shows it from there */}
+            <kbd>{inBox ? '⌘↩' : 'Space'}</kbd>
           </button>
         ) : (
           GRADES.map((g) => (

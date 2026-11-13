@@ -52,6 +52,7 @@ import { MathsLadder } from '../MentalMaths'
 import { BADGE_ART, lockedArt, PixelText, Sprite, TROPHY, TROPHY_EMPTY } from './pixel'
 import { PartyScene, type PartyKind } from './PartyScene'
 import { Boxes, ChessBoard, CodeBlock, MatrixCellSvg, SlideGrid } from './Visuals'
+import { pageKey } from '../../lib/typing'
 
 const today = () => dayKey(Date.now())
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
@@ -421,7 +422,7 @@ function ItemView({ item, answered, onAnswer, nudge, logic }: { item: WorkoutIte
   useEffect(() => {
     if (!choice || answered) return
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === 'INPUT') return
+      if (!pageKey(e)) return
       const n = Number(e.key)
       if (n >= 1 && n <= (a.type === 'choice' ? a.options.length : 0)) {
         e.preventDefault()
@@ -568,7 +569,7 @@ function RecallRound({ count, onDone }: { count: number; onDone(items: ItemResul
   )
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!card) return
+      if (!card || !pageKey(e)) return
       if (!flipped && (e.key === ' ' || e.key === 'Enter')) {
         e.preventDefault()
         setFlipped(true)
@@ -872,7 +873,7 @@ function RoundIntro({ round, state, championship, last, lastRound, onStart }: { 
   const plan = roundPlan(round, championship)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' && !(e.target as HTMLElement)?.closest?.('button')) {
+      if (e.key === 'Enter' && pageKey(e)) {
         e.preventDefault()
         onStart()
       }

@@ -5,6 +5,7 @@ import { motionPaused } from '../lib/motion'
 import { reveal } from '../lib/scroll'
 import { useApp, type View } from '../state'
 import { Icon } from './Icon'
+import { pageKey } from '../lib/typing'
 
 /**
  * The guide, bundled with the app: docs/guide, one Markdown page each (see shared/docs.ts). A
@@ -321,8 +322,7 @@ function GuideSearch({ onGo, compact }: { onGo(to: string): void; compact?: bool
   // "/" finds, like most docs
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const el = document.activeElement as HTMLElement | null
-      if (e.key === '/' && !/INPUT|TEXTAREA/.test(el?.tagName ?? '') && !el?.isContentEditable) {
+      if (e.key === '/' && pageKey(e)) {
         e.preventDefault()
         ref.current?.focus()
       }

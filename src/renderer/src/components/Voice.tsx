@@ -3,6 +3,7 @@ import { characterById } from '@shared/characters'
 import { useApp } from '../state'
 import { DEFAULT_VOICE, listen, LiveSpeaker, record, Speaker } from '../lib/voice'
 import { Icon } from './Icon'
+import { pageKey } from '../lib/typing'
 
 let handyInfo: Promise<{ installed: boolean; shortcut: string; model: string }> | null = null
 const getHandy = () => (handyInfo ??= window.tide.app.handy())
@@ -229,8 +230,7 @@ export function useTalk(latest: { content: string; streaming: boolean; key: stri
   useEffect(() => {
     if (!talk) return
     const onKey = (e: KeyboardEvent) => {
-      const typing = (e.target as HTMLElement)?.closest?.('input, textarea, [contenteditable="true"]')
-      if (e.key === 'Escape' || (e.key === ' ' && !typing)) {
+      if (e.key === 'Escape' || (e.key === ' ' && pageKey(e))) {
         if (live.current?.speaker.speaking) {
           e.preventDefault()
           stop()

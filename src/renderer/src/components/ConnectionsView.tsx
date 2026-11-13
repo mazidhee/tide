@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { KIND_LABEL, whenUsed, type Connection, type ConnectionKind } from '@shared/connections'
 import { useApp } from '../state'
 import { Icon } from './Icon'
+import { pageKey } from '../lib/typing'
 
 // ---------- Logos: each service's own mark ----------
 
@@ -136,7 +137,7 @@ export function ConnectionsView() {
     load()
     const t = setInterval(() => load(), 30_000)
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === '/' && !(e.target as HTMLElement)?.closest?.('input, textarea')) {
+      if (e.key === '/' && pageKey(e)) {
         e.preventDefault()
         searchRef.current?.focus()
       }

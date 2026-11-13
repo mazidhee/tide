@@ -71,9 +71,16 @@ export function CellView({
     const e = ed.current
     if (!e) return
     a.register(cell.id, e)
-    e.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Enter, () => actions.current.run(cell.id, true))
+    // On this editor's own keys (addCommand would bind to the last cell's editor and run that one)
+    const k = e.onKeyDown((ev) => {
+      if (ev.keyCode !== monaco.KeyCode.Enter || !ev.shiftKey || ev.metaKey || ev.ctrlKey || ev.altKey) return
+      ev.preventDefault()
+      ev.stopPropagation()
+      actions.current.run(cell.id, true)
+    })
     const f = e.onDidFocusEditorText(() => actions.current.focus(cell.id))
     return () => {
+      k.dispose()
       f.dispose()
       actions.current.register(cell.id, null)
     }
@@ -91,10 +98,12 @@ export function CellView({
     >
       <div className="nb-gutter">
         {isCode && (
-          <button className="nb-run" title="Run (⇧↩ runs and moves on)" onClick={() => a.run(cell.id, false)} aria-label={`Run cell ${index + 1}`}>
-            <span className="nb-count">[{count}]</span>
-            <Icon name="play" size={13} />
-          </button>
+          <div className="nb-run">
+            <button className="nb-run-btn" title="Run this cell (⌘↩; ⇧↩ runs and moves on)" onClick={() => a.run(cell.id, false)} aria-label={`Run cell ${index + 1}`} disabled={running && current}>
+              <Icon name="play" size={12} />
+            </button>
+            <span className="nb-count" aria-hidden>[{count}]</span>
+          </div>
         )}
       </div>
       <div className="nb-body">
@@ -159,6 +168,11 @@ export function CellView({
         {isCode && cell.outputs && <Outputs outputs={cell.outputs} stale={flagged || state === 'earlier'} />}
       </div>
       <div className="nb-cell-tools" role="toolbar" aria-label="Cell">
+        {isCode && (
+          <button className="nb-run-tool" title="Run this cell (⌘↩; ⇧↩ runs and moves on)" onClick={() => a.run(cell.id, false)}>
+            <Icon name="play" size={12} /> Run <kbd>⇧↩</kbd>
+          </button>
+        )}
         {!isCode && editing && (
           <button className="icon-btn small" title="Done (⇧↩)" onClick={() => setEditing(false)}>
             <Icon name="check" size={13} />

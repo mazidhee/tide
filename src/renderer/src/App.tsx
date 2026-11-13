@@ -55,6 +55,7 @@ import { mockStudyContext } from '@shared/mocks'
 import { chromeFor, infoFor, handoverView, inFocusWindow, popOut, returnToMain, useSurface } from './lib/popout'
 import { canPopOut, type PopView } from '@shared/popout'
 import { PopOutButton } from './components/PopOutButton'
+import { typingIn } from './lib/typing'
 // The heavy views (PDF reader, terminal, code editor, canvas, graph, drills) load when first opened,
 // not with the window: Tide opens faster and holds less in memory until you need them
 const PdfView = lazy(() => import('./components/PdfView').then((m) => ({ default: m.PdfView })))
@@ -380,12 +381,22 @@ export default function App() {
   // Back with Cmd+[ like a browser, Escape closes dialogs
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey && e.key === '[' && app.canGoBack) app.back()
-      if (e.metaKey && e.key === ']' && app.canGoForward) app.forward()
+      // Not in an editor or field, where ⌘[ and ⌘] indent and outdent
+      if (e.metaKey && e.key === '[' && app.canGoBack && !typingIn(e)) app.back()
+      if (e.metaKey && e.key === ']' && app.canGoForward && !typingIn(e)) app.forward()
       if (e.key === 'Escape' && dialog) app.setDialog(null)
     }
+    // A mouse's own back and forward buttons, as in a browser
+    const onMouse = (e: MouseEvent) => {
+      if (e.button === 3 && app.canGoBack) (e.preventDefault(), app.back())
+      if (e.button === 4 && app.canGoForward) (e.preventDefault(), app.forward())
+    }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('mouseup', onMouse)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('mouseup', onMouse)
+    }
   }, [app, dialog])
 
   const onDrop = async (e: React.DragEvent) => {

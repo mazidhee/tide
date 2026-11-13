@@ -5,6 +5,7 @@ import { tierLabel } from '@shared/ideaLadder'
 import { Icon } from '../Icon'
 import { cleanError, PlanMap, PrereqChip, PrereqLegend } from './PlanParts'
 import '../../styles/ideas.css'
+import { pageKey } from '../../lib/typing'
 
 type Stage = 'idea' | 'ladder' | 'questions' | 'drafting' | 'review' | 'creating' | 'made'
 type Tab = 'map' | 'plan' | 'files'
@@ -228,8 +229,7 @@ export function IdeaSheet({ onClose, onOpen, onNotebook, initialIdea = '', initi
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       const { stage: s, qi: i, steps: st } = live.current
-      const t = e.target as HTMLElement | null
-      if (s !== 'questions' || e.metaKey || e.ctrlKey || e.altKey || (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT'))) return
+      if (s !== 'questions' || !pageKey(e)) return
       const n = Number(e.key)
       const q = st[i]
       if (q && n >= 1 && n <= q.options.length) {

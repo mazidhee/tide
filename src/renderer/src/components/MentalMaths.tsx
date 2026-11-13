@@ -29,6 +29,7 @@ import {
 } from '@shared/mentalMaths'
 import { useApp } from '../state'
 import { Icon } from './Icon'
+import { pageKey } from '../lib/typing'
 
 const secs = (s: number) => `${s < 10 ? s.toFixed(1) : Math.round(s)} s`
 const clock = (ms: number) => {
@@ -225,7 +226,7 @@ export function MathsView({ level: chosen }: { level?: string }) {
   // Return on the trick card starts; Escape ends the session with what is answered
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (phase === 'card' && e.key === 'Enter' && !(e.target as HTMLElement)?.closest?.('button')) {
+      if (phase === 'card' && e.key === 'Enter' && pageKey(e)) {
         e.preventDefault()
         begin()
       }

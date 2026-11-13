@@ -17,6 +17,13 @@ export function useStudying(key: string, status: { pose: ProfessorPose; label: s
   const pose = status?.pose
   const label = status?.label
   const until = status?.until
+  // A new thing studied starts its own count: the menu bar's "minutes so far" is for this one, not
+  // for everything since the window opened
+  const was = useRef(label)
+  if (was.current !== label) {
+    was.current = label
+    since.current = Date.now()
+  }
   useEffect(() => {
     if (pose && label) reports.set(key, { pose, label, since: since.current, at: reports.get(key)?.at ?? Date.now(), until })
     else reports.delete(key)

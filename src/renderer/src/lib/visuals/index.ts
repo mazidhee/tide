@@ -19,6 +19,7 @@ import type { ChatScope } from '@shared/types'
 import { createKeeper, watchBlocks } from '../liveBlocks'
 import { button, h } from '../sims/dom'
 import { toAnswerBox } from '../sims/exploreBus'
+import { typingIn } from '../typing'
 
 // ---------- Settings, for tests ----------
 
@@ -698,7 +699,7 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
 
   root.addEventListener('keydown', (e) => {
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || !steps) return
-    if ((e.target as HTMLElement).closest('input, textarea, select')) return
+    if (typingIn(e)) return
     if (e.key === 'ArrowRight') control('next')
     else if (e.key === 'ArrowLeft') control('back')
     else if (e.key === ' ' && !(e.target as HTMLElement).closest('button')) control(playing ? 'pause' : 'play')

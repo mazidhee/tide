@@ -50,6 +50,8 @@ export interface WarmupSet {
   cards: WarmupCard[]
   /** The concepts the cards are on, with how they stand: told to the tutor if the warm-up is skipped */
   concepts: { name: string; estimate: number; status: PriorConcept['status'] }[]
+  /** Picked by the strict rules (Claude's filter, else plain relevance): a warm-up prepared before them is made again */
+  judged?: true
 }
 
 export interface WarmupResult {
@@ -105,19 +107,33 @@ export function relevance(topic: string, c: PriorConcept, topicArea = ''): numbe
 export const fadeWeight = (estimate: number) => 0.6 + (1 - Math.max(0, Math.min(1, estimate)))
 
 /**
+ * Real evidence that the topic builds on a concept, without asking a model: the roadmap says it is
+ * a prerequisite, or the two names share most of their words ("Pandas" and "pandas for time
+ * series"). Being in the same subject, or a search hit on an old lesson page, is not enough: that
+ * is how a Docker lesson once warmed up on hexadecimal and a pandas lesson on "Introduction to
+ * Machine Learning".
+ */
+export function plainlyRelated(topic: string, c: PriorConcept): boolean {
+  if (norm(c.name) === norm(topic)) return false
+  return !!c.prerequisite || overlap(keyWords(topic), keyWords(c.name)) >= 0.5
+}
+
+/**
  * The earlier concepts a lesson on `topic` should warm up on, the most worth it first. `picked` is
- * Claude's rerank (rerankPool, parseRerank): the pool's concepts it says the topic builds on, most
- * first. They count as related whatever they're called, so a topic whose name shares no word with
- * its groundwork still finds it; without it (no Claude, too slow) names and the roadmap decide.
+ * Claude's (Haiku's) judgement of the pool (rerankPool, parseRerank), and it is a filter: when
+ * Claude answered, only what it picked (and the roadmap's own prerequisites) can come up, whatever
+ * names share. Without an answer (no Claude, too slow) only what is plainly related does, so a
+ * lesson gets no warm-up rather than an unrelated one. Fewer real cards beat three loose ones.
  */
 export function rankPrior(topic: string, concepts: PriorConcept[], topicArea = '', max = WARMUP_MAX_CONCEPTS, picked: string[] | null = null): PriorConcept[] {
   const boost = (c: PriorConcept) => {
     const at = picked ? picked.indexOf(c.id) : -1
     return at < 0 ? 0 : Math.max(MIN_RELEVANCE + 0.1, RERANK_WEIGHT - 0.1 * at)
   }
+  const allowed = (c: PriorConcept) => (picked ? picked.includes(c.id) || !!c.prerequisite : plainlyRelated(topic, c))
   return concepts
-    .filter((c) => c.seen > 0 && c.status !== 'new')
-    .map((c) => ({ c, r: norm(c.name) === norm(topic) ? 0 : relevance(topic, c, topicArea) + boost(c) }))
+    .filter((c) => c.seen > 0 && c.status !== 'new' && norm(c.name) !== norm(topic) && allowed(c))
+    .map((c) => ({ c, r: relevance(topic, c, topicArea) + boost(c) }))
     .filter((x) => x.r >= MIN_RELEVANCE)
     .sort((a, b) => b.r * fadeWeight(b.c.estimate) - a.r * fadeWeight(a.c.estimate) || (b.c.lastSeen ?? 0) - (a.c.lastSeen ?? 0))
     .slice(0, max)
@@ -133,9 +149,6 @@ export const RERANK_PREP_MS = 15_000
 export const RERANK_WEIGHT = 1.1
 /** How many earlier concepts Claude is shown: the best by name and roadmap, then the most recent */
 export const RERANK_POOL = 18
-/** Strong by name alone: when this many concepts already score this, the rerank isn't asked */
-const STRONG = 1
-
 /** The concepts Claude chooses among (none when there's nothing studied to choose from) */
 export function rerankPool(topic: string, concepts: PriorConcept[], topicArea = '', size = RERANK_POOL): PriorConcept[] {
   return concepts
@@ -146,18 +159,20 @@ export function rerankPool(topic: string, concepts: PriorConcept[], topicArea = 
     .map((x) => x.c)
 }
 
-/** Whether to ask Claude at all: names and the roadmap already found a full warm-up, or there's nothing to pick */
-export function rerankWorthIt(topic: string, pool: PriorConcept[], topicArea = '', max = WARMUP_MAX_CONCEPTS): boolean {
-  if (!pool.length) return false
-  return pool.filter((c) => relevance(topic, c, topicArea) >= STRONG).length < max
+/**
+ * Whether to ask Claude: whenever there is anything studied to judge. Claude is the filter on
+ * relevance, not only a filler for a thin warm-up; a cached answer makes a reopened lesson free.
+ */
+export function rerankWorthIt(_topic: string, pool: PriorConcept[], _topicArea = '', _max = WARMUP_MAX_CONCEPTS): boolean {
+  return pool.length > 0
 }
 
-export const RERANK_SYSTEM = 'You decide which topics a learner studied before a new lesson builds on: knowledge it uses, extends or contrasts with, whatever the topics are called. Reply with JSON only.'
+export const RERANK_SYSTEM = 'You decide which topics a learner studied before a new lesson really builds on: a prerequisite it uses directly, or a close conceptual link (the same idea extended or contrasted), whatever the topics are called. Being in the same broad field is not a link. When in doubt, leave it out: an empty list is a good answer. Reply with JSON only.'
 
 /** The question for Claude (Haiku): the new topic and the numbered pool */
 export function rerankPrompt(topic: string, pool: PriorConcept[]): string {
   const lines = pool.map((c, i) => `${i + 1}. ${c.name}${c.steps.length ? ` (covered: ${c.steps.slice(0, 4).join('; ')})` : ''}`)
-  return `A learner is about to start a lesson on: "${topic}".\nTopics they studied before:\n${lines.join('\n')}\n\nWhich of these does the new lesson build on, most first? Leave out any that are unrelated. Reply with JSON only: {"related": [numbers]}`
+  return `A learner is about to start a lesson on: "${topic}".\nTopics they studied before:\n${lines.join('\n')}\n\nWhich of these does the new lesson genuinely build on, most first? Only a prerequisite it uses directly, or a close conceptual link a tutor would point out in the first minutes. Not ones that merely share a field (two programming tools, two parts of a course). Most lessons build on none or one of them; [] is a fine answer. Reply with JSON only: {"related": [numbers]}`
 }
 
 /** Claude's reply as the pool's concept ids, most related first; null when it can't be read */
@@ -191,41 +206,37 @@ export function fromLabel(name: string, when: number | undefined, now = Date.now
   return `From ${short} · ${d.getDate()} ${MONTHS[d.getMonth()]}${year}`
 }
 
-/** The question for a concept with nothing kept on it: recalled from memory, checked against its lesson's plan */
-const fromMemory = (c: PriorConcept): Pick<WarmupCard, 'question' | 'answer'> => ({
-  question: `From memory: what's the key idea of ${c.name}?`,
-  ...(c.steps.length ? { answer: `Your lesson covered: ${c.steps.slice(0, 5).join(' · ')}` } : {})
-})
-
 /** Kept items to ask first: the most overdue, then the soonest due */
 const byDue = (items: ReviewItem[]) => [...items].sort((a, b) => a.due - b.due)
 
 /**
- * The cards for a warm-up: one on each concept (a kept question when there is one, otherwise from
- * memory), then a second on the most faded ones while there's room, two to five in all. None when
- * nothing earlier is related.
+ * The cards for a warm-up: a kept question (a flashcard, a recall question, a mistake) on each
+ * concept, then a second on the most faded ones while there's room, five at most. A concept with
+ * nothing kept on it gets no card: a vague "what's the key idea of <lesson title>?" isn't worth
+ * the learner's time. None when nothing earlier is related.
  */
 export function warmupCards(ranked: PriorConcept[], kept: Map<string, ReviewItem[]>, now = Date.now(), max = WARMUP_MAX_CARDS): WarmupCard[] {
-  const card = (c: PriorConcept, item: ReviewItem | null): WarmupCard => ({
+  const card = (c: PriorConcept, item: ReviewItem): WarmupCard => ({
     concept: c.id,
     conceptName: c.name,
     from: fromLabel(c.name, c.firstSeen ?? c.lastSeen, now),
-    ...(item ? { question: item.question, ...(item.answer ? { answer: item.answer } : {}) } : fromMemory(c)),
+    question: item.question,
+    ...(item.answer ? { answer: item.answer } : {}),
     item,
     estimate: c.estimate
   })
-  const queues = ranked.map((c) => ({ c, items: byDue(kept.get(c.id) ?? []) }))
+  const queues = ranked.map((c) => ({ c, items: byDue(kept.get(c.id) ?? []) })).filter((q) => q.items.length)
   const out: WarmupCard[] = []
   const asked = new Set<string>()
   for (const q of queues) {
     if (out.length >= max) break
-    const item = q.items.shift() ?? null
-    if (item) asked.add(item.question)
+    const item = q.items.shift()!
+    asked.add(item.question)
     out.push(card(q.c, item))
   }
-  // Room for more: second questions on the most faded first, only ones actually kept
+  // Room for more: second questions on the most faded first
   const faded = [...queues].sort((a, b) => a.c.estimate - b.c.estimate)
-  for (let round = 0; out.length < max && out.length < 2 + ranked.length && round < 3; round++) {
+  for (let round = 0; out.length < max && out.length < 2 + queues.length && round < 3; round++) {
     let added = false
     for (const q of faded) {
       if (out.length >= max) break

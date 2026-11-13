@@ -7,6 +7,7 @@ import { flashcardBoundary } from '@shared/breakPlanner'
 import { Icon } from './Icon'
 import { PixelScene } from './PixelScene'
 import { PillToggle } from './PromptBox'
+import { pageKey, typingIn } from '../lib/typing'
 
 const NEW_PER_SESSION = 20
 
@@ -245,11 +246,11 @@ export function StudyView({ scope: initialScope }: { scope: ChatScope }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest('input, textarea, select')) {
+      if (typingIn(e)) {
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !flipped) setFlipped(true)
         return
       }
-      if (!card) return
+      if (!card || !pageKey(e)) return
       if (!flipped && (e.key === ' ' || e.key === 'Enter')) {
         e.preventDefault()
         setFlipped(true)
