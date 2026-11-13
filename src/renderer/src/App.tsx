@@ -437,7 +437,7 @@ export default function App() {
   else if (view.kind === 'workout') main = <WorkoutView key={`${view.start ? 'run' : 'hub'}:${view.nonce ?? ''}`} start={view.start} championship={view.championship} />
   else if (view.kind === 'drill') main = <DrillView key={`${view.drill}:${view.nonce ?? ''}`} kind={view.drill} />
   else if (view.kind === 'design') main = <CanvasView key={`${view.path}:${view.nonce ?? ''}`} path={view.path} start={view.start} topic={view.topic} company={view.company} timed={view.timed} reference={view.reference} />
-  else if (view.kind === 'code') main = <CodeView key={view.path ?? 'code'} path={view.path} />
+  else if (view.kind === 'code') main = <CodeView key={`${view.path ?? 'code'}:${view.root ?? ''}:${view.nonce ?? ''}`} path={view.path} root={view.root} home={view.home} />
   else if (view.kind === 'help') main = <HelpView section={view.section} />
   else if (view.kind === 'mock') main = <MockView key={`${view.mode}:${view.review ?? ''}:${view.nonce ?? ''}`} mode={view.mode} review={view.review} />
   else if (view.kind === 'exam') main = <ExamView key={`${view.topic}:${view.nonce ?? ''}`} scope={view.scope} topic={view.topic} options={view.options} view={view} />

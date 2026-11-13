@@ -36,7 +36,7 @@ export type View =
   // The morning workout (components/workout): its page, or a morning under way
   | { kind: 'workout'; start?: boolean; championship?: boolean; nonce?: number }
   | { kind: 'design'; path: string; start?: DesignMode; topic?: string; company?: string; timed?: number; reference?: string; nonce?: number }
-  | { kind: 'code'; path?: string }
+  | { kind: 'code'; path?: string; root?: string; home?: boolean; nonce?: number }
   | { kind: 'help'; section?: string }
   | { kind: 'exam'; scope: ChatScope; topic: string; options: ExamOptions; nonce?: number; resume?: { paper: unknown; answers: unknown; startedAt: number } }
   | { kind: 'settings'; section?: import('./components/SettingsView').Section | 'ai' | 'notes' }

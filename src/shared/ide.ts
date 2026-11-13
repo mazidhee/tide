@@ -188,7 +188,7 @@ export interface TestDiscovery {
 
 // ---------- Claude, pair programming ----------
 
-export type PairMode = 'build' | 'bughunt' | 'review' | 'ask'
+export type PairMode = 'build' | 'bughunt' | 'review' | 'ask' | 'mentor' | 'tutor'
 
 export interface Proposal {
   id: string
@@ -200,6 +200,8 @@ export interface Proposal {
   explanation: string
   created: number
   isNew?: boolean
+  /** A small snippet given as a hint (the learner asked to be shown, or kept failing): counted */
+  hint?: boolean
 }
 
 export interface ReviewComment {
