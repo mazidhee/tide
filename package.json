@@ -74,6 +74,7 @@
     "katex": "^0.16.22",
     "mafs": "0.21.0",
     "markdown-it": "^14.1.0",
+    "mathlive": "0.111.1",
     "mermaid": "^12.3.0",
     "monaco-editor": "^0.52.2",
     "planck": "1.5.1",
@@ -120,7 +121,7 @@
       "identity": null,
       "darkModeSupport": true,
       "extendInfo": {
-        "NSCameraUsageDescription": "Tide uses the camera only when you take a profile photo in Settings. The photo stays on this Mac."
+        "NSCameraUsageDescription": "Tide uses the camera only when you take a profile photo in Settings, or a photo of your maths working with your iPhone (Continuity Camera) or the Mac's camera. Photos stay on this Mac."
       }
     },
     "asarUnpack": [

@@ -670,6 +670,9 @@ function TutorSection() {
             ]}
           />
         </Row>
+        <Row label="Read back maths answers" hint="In maths lessons, an answer you say or type in words is shown back as maths (“I read this as…”) before it’s marked, so a misreading costs one word to fix. Uses Claude’s quick model.">
+          <Toggle label="Read back maths answers" on={app.settings.maths?.readBack !== false} onChange={(on) => app.updateSettings({ maths: { ...app.settings.maths, readBack: on } })} />
+        </Row>
       </Group>
       <Group title="Voice">
         <ToolSetup label="Natural voice" hint="Kokoro and Parakeet, running on this Mac" check={check} setup={setup} onReady={() => setReady(true)} busyText={step || 'Setting up (about 1 GB the first time)…'} />

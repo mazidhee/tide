@@ -137,6 +137,8 @@ export interface Settings {
   editor?: import('./editor').EditorChoice
   /** Lesson prep while you're away (shared/lessonPrep): on or off, the night window, Claude's allowance */
   prep?: Partial<import('./lessonPrep').PrepSettings>
+  /** The maths answer box: read back what you said before it's marked (on by default), and the calculator's angle unit */
+  maths?: { readBack?: boolean; angle?: 'rad' | 'deg' }
 }
 
 export type FileKind = 'note' | 'pdf' | 'epub' | 'image' | 'doc' | 'canvas' | 'other'
@@ -754,6 +756,15 @@ export interface TideApi {
     mastery(): Promise<Record<string, Mastery>>
   }
   /** Daily mental maths (shared/mentalMaths): the log and reminder, kept in the vault under .tide/ */
+  /** The maths answer box: the calculator and step checks (SymPy, no model), read-back (Haiku), paper (Opus) */
+  mathsAnswer: {
+    evaluate(latex: string, angle?: 'rad' | 'deg'): Promise<import('./mathsAnswer').CalcResult>
+    checkSteps(lines: string[], angle?: 'rad' | 'deg'): Promise<import('./mathsAnswer').StepCheck[] | null>
+    status(path?: string): Promise<{ claude: boolean; why?: string }>
+    readBack(words: string, question?: string, path?: string): Promise<{ latex: string; unclear: string; by: 'claude' | 'gemma' } | null>
+    readPaper(paths: string[], question?: string, path?: string): Promise<{ ok: true; lines: import('./mathsAnswer').PaperLine[]; ms: number } | { ok: false; needsClaude?: boolean; error: string }>
+    mark(req: { question: string; lines: string[]; path?: string; angle?: 'rad' | 'deg' }): Promise<{ marks: import('./mathsAnswer').Marked; checks: import('./mathsAnswer').StepCheck[] | null }>
+  }
   maths: {
     state(): Promise<import('./mentalMaths').MathsState>
     log(s: Pick<import('./mentalMaths').MathsSession, 'focus' | 'answers'>): Promise<import('./mentalMaths').MathsSession>

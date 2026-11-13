@@ -56,6 +56,10 @@ export const JOB_ROUTES = {
   workshop: { label: 'Guided project review', role: 'teach', privacy: 'flag' },
   // Pictures go to Claude too (main/imagePrep makes them ready): a photo of handwritten maths is marked by the marking model
   handwriting: { label: 'Marking photos of handwritten working', role: 'mark', privacy: 'scope' },
+  // The maths answer box (main/mathsAnswers): Haiku reads back what you said; Opus reads a photo of your working and marks it line by line
+  mathsReadBack: { label: 'Reading back maths you said or typed', role: 'background', privacy: 'path' },
+  paperRead: { label: 'Reading handwritten working from a photo', role: 'mark', privacy: 'path' },
+  workingMark: { label: 'Marking maths working line by line', role: 'mark', privacy: 'path' },
   // Mock interviews (main/mocks): Sonnet is the interviewer, Opus marks. Neither falls back to Gemma: without
   // Claude the mock runs with no interviewer and is marked in code
   mockInterviewer: { label: 'Mock interviewer', role: 'teach', privacy: 'none' },

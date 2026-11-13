@@ -738,6 +738,10 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
     if (mark) markNote = `\n\n(Tide: ${claudeLabel(markModel)} marked this answer against your solution: verdict "${mark.verdict}", score ${mark.score}. Why: ${mark.why}${mark.misconception ? ` The misconception behind it: ${mark.misconception.name}${mark.misconception.text ? ` (${mark.misconception.text})` : ''}. Address it directly.` : ''})`
     if (mark?.misconception) misconception = mark.misconception
   }
+  // Working marked line by line in the maths answer box (shared/mathsAnswer): its verdict and misconception count as the marker's
+  const working = answering ? (await import('@shared/mathsAnswer')).parseWorkingMarks(text([...req.messages].reverse().find((m) => m.role === 'user')?.content)) : null
+  if (working?.marks.verdict && !verdict) verdict = working.marks.verdict
+  if (working?.marks.misconception && !misconception) misconception = working.marks.misconception
   // No separate marker (the tutor is already the strongest model): the exact check goes to the tutor itself
   if (exactSaid && !markNote) markNote = exactSaid
 

@@ -1,0 +1,1019 @@
+/*
+  The maths answer box (components/maths): three ways in, a calculator, a keypad, and a page of
+  working marked line by line. Only the shared tokens (--bg-*, --ink-*, --line*, the one --accent,
+  --danger), so it takes on every theme and both designs. Calm on purpose: one accent, quiet
+  borders, numbers in tabular figures, nothing that moves while you think.
+*/
+
+.ma {
+  --ma-bad: var(--danger);
+  --ma-bad-soft: color-mix(in srgb, var(--danger) 9%, transparent);
+  --ma-bad-line: color-mix(in srgb, var(--danger) 55%, transparent);
+  --ma-ok-line: color-mix(in srgb, var(--accent) 45%, transparent);
+  --ma-key: var(--bg-raised);
+  --ma-key-op: var(--bg-inset);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+/* ---------- The three ways in ---------- */
+
+.ma-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 0;
+}
+/* A quiet segmented control: the chosen way in is the one lifted */
+.ma-seg {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border-radius: 8px;
+  background: var(--bg-inset);
+}
+.ma-seg button {
+  all: unset;
+  padding: 3px 11px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.ma-seg button:hover {
+  color: var(--ink);
+}
+.ma-seg button.on {
+  color: var(--ink);
+  background: var(--bg-raised);
+  box-shadow: 0 0 0 1px var(--line), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.ma-seg button:focus-visible,
+.ma-tool:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.ma-tools {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.ma-tool {
+  all: unset;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.ma-tool:hover {
+  color: var(--ink);
+  background: var(--bg-hover);
+}
+.ma-tool.on {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+
+.ma-pane {
+  padding: 8px 12px 6px;
+  min-width: 0;
+}
+.ma-quiet {
+  margin: 6px 2px 2px;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+.ma-status {
+  margin: 8px 2px 2px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.ma-status::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: 1px;
+  animation: ma-breathe 1.6s ease-in-out infinite;
+}
+@keyframes ma-breathe {
+  50% {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ma-status::before {
+    animation: none;
+  }
+}
+.ma-error {
+  margin: 8px 2px 2px;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
+/* ---------- Say or type ---------- */
+
+.ma-words .s-input {
+  padding: 4px 2px 6px;
+  min-height: 72px;
+}
+/* The read-back: one quiet line under what you wrote */
+.ma-readback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin: 2px 0 4px;
+  padding: 8px 2px 2px;
+  border-top: 1px dashed var(--line);
+}
+.ma-rb-label {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.ma-rb-tex {
+  flex: 1;
+  min-width: 0;
+  font-size: 15.5px;
+  color: var(--ink);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ma-rb-wait {
+  flex: 1;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+.ma-rb-again {
+  all: unset;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.ma-rb-again:hover {
+  color: var(--accent);
+}
+.ma-rb-unclear {
+  flex-basis: 100%;
+  margin: 0 0 0 58px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+
+/* ---------- Maths: working, calculator, keypad ---------- */
+
+.ma-maths {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+@container (min-width: 620px) {
+  .ma-maths.with-calc {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
+  }
+  .ma-maths.with-calc .kp {
+    grid-column: 1 / -1;
+  }
+}
+
+.mf-host math-field {
+  display: block;
+  width: 100%;
+  min-height: 34px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 18px;
+  outline: none;
+  --caret-color: var(--accent);
+  --selection-background-color: color-mix(in srgb, var(--accent) 22%, transparent);
+  --selection-color: var(--ink);
+  --contains-highlight-background-color: color-mix(in srgb, var(--accent) 7%, transparent);
+  --placeholder-color: var(--ink-muted);
+  --placeholder-opacity: 0.8;
+  --smart-fence-color: var(--ink-muted);
+  --primary: var(--accent);
+}
+.mf-host math-field::part(virtual-keyboard-toggle),
+.mf-host math-field::part(menu-toggle) {
+  display: none;
+}
+.mf-host math-field::part(placeholder) {
+  font-size: 14px;
+}
+
+/* Your working: ruled lines, like a page; the line you're on is lifted */
+.wl {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.wl-line {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 6px;
+  align-items: start;
+  border-bottom: 1px solid var(--line);
+}
+.wl-line:last-child {
+  border-bottom-color: transparent;
+}
+.wl-n {
+  padding-top: 10px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--ink-muted);
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+.wl-body {
+  min-width: 0;
+  padding: 2px 0;
+}
+.wl-line:focus-within .mf-host math-field {
+  background: var(--bg-inset);
+}
+.wl-line:focus-within .wl-n {
+  color: var(--accent);
+  opacity: 1;
+}
+.wl-line.bad .mf-host math-field {
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+.wl-note {
+  display: flex;
+  gap: 6px;
+  margin: 0 8px 6px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.wl-line.ok .wl-mark {
+  color: var(--accent);
+}
+.wl-line.bad .wl-mark {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+/* The calculator: a tape, then the display */
+.calc {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: 10px;
+  background: var(--bg-inset);
+  overflow: hidden;
+}
+.calc-tape {
+  position: relative;
+  flex: 1;
+  min-height: 48px;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 6px 4px 4px;
+  font-variant-numeric: tabular-nums;
+  scrollbar-width: thin;
+}
+.calc-clear {
+  all: unset;
+  position: sticky;
+  top: 0;
+  float: right;
+  z-index: 1;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  background: var(--bg-inset);
+  cursor: pointer;
+  opacity: 0;
+}
+.calc-tape:hover .calc-clear,
+.calc-clear:focus-visible {
+  opacity: 1;
+}
+.calc-clear:hover {
+  color: var(--ink);
+}
+.calc-empty {
+  margin: 8px 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+.calc-row {
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+}
+.calc-row:hover {
+  background: var(--bg-hover);
+}
+.calc-row-main {
+  all: unset;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  padding: 3px 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.calc-row-main:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.calc-in,
+.calc-eq,
+.calc-dec {
+  color: var(--ink-muted);
+}
+.calc-out {
+  color: var(--ink);
+}
+.calc-dec {
+  font-size: 0.92em;
+}
+.calc-tag {
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+.calc-row-insert {
+  all: unset;
+  display: none;
+  font-size: 11px;
+  color: var(--accent);
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.calc-row:hover .calc-row-insert,
+.calc-row-insert:focus-visible {
+  display: block;
+}
+.calc-display {
+  position: relative;
+  margin: 0 4px 4px;
+  padding: 18px 6px 6px;
+  border-radius: 8px;
+  background: var(--bg-raised);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.calc-display:focus-within {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+.calc-angle {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  display: flex;
+  gap: 1px;
+}
+.calc-angle button {
+  all: unset;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.calc-angle button.on {
+  color: var(--ink);
+  background: var(--bg-inset);
+}
+.calc-display .mf-host math-field {
+  font-size: 18px;
+  padding: 2px 4px;
+  background: transparent !important;
+}
+.calc-lcd {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  min-height: 26px;
+  padding: 0 4px 2px;
+  font-variant-numeric: tabular-nums;
+  overflow-x: auto;
+}
+.calc-big {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 19px;
+  color: var(--ink);
+}
+.calc-preview {
+  font-size: 15px;
+  color: var(--ink-muted);
+}
+.calc-busy {
+  font-size: 12px;
+  color: var(--ink-muted);
+  padding-top: 4px;
+}
+.calc-error {
+  font-size: 12px;
+  color: var(--danger);
+  text-align: right;
+  padding-top: 2px;
+}
+.calc-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 6px 6px;
+}
+.calc-insert {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--accent);
+  cursor: pointer;
+}
+.calc-insert:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.calc-insert kbd {
+  font-size: 10px;
+}
+
+/* The keys: flat tiles, digits a touch stronger */
+.kp {
+  min-width: 0;
+  border-radius: 10px;
+  background: var(--bg-inset);
+  padding: 6px;
+}
+.kp-pages {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+.kp-pages button {
+  all: unset;
+  cursor: pointer;
+  padding: 2px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.kp-pages button:hover {
+  color: var(--ink);
+}
+.kp-pages button.on {
+  color: var(--ink);
+  background: var(--bg-raised);
+}
+.kp-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(48px, 0.14fr);
+  gap: 4px;
+}
+.kp-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+.kp-actions {
+  display: grid;
+  grid-auto-rows: 1fr;
+  gap: 4px;
+}
+.kp-key {
+  all: unset;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  min-height: 32px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-raised) 70%, transparent);
+  color: var(--ink);
+  font-size: 13.5px;
+  cursor: pointer;
+  overflow: hidden;
+  user-select: none;
+}
+.kp-key:hover {
+  background: var(--bg-raised);
+}
+.kp-key:active {
+  transform: translateY(1px);
+}
+.kp-key:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.kp-key.digit {
+  background: var(--bg-raised);
+  font-size: 15px;
+}
+.kp-key.op,
+.kp-key.act {
+  background: transparent;
+  color: var(--ink-soft);
+}
+.kp-key.op:hover,
+.kp-key.act:hover {
+  background: var(--bg-hover);
+}
+.kp-tex .katex {
+  font-size: 1em;
+}
+.kp-key .kp-tex .katex .mtable {
+  font-size: 0.82em;
+}
+.kp-text {
+  font-size: 11.5px;
+}
+
+/* ---------- Paper ---------- */
+
+.ma-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 12px 14px;
+  border-radius: 10px;
+  border: 1px dashed var(--line-strong);
+  text-align: center;
+}
+.ma-drop.has-pages {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 10px 12px;
+}
+.ma-drop-say {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.ma-drop-acts {
+  display: flex;
+  gap: 6px;
+}
+.ma-drop-or {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+.ma-drop.has-pages .ma-drop-or {
+  display: none;
+}
+.ma-pages {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.ma-thumb {
+  position: relative;
+  margin: 0;
+  width: 92px;
+}
+.ma-thumb img {
+  display: block;
+  width: 92px;
+  height: 116px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+}
+.ma-thumb figcaption {
+  font-size: 11px;
+  color: var(--ink-muted);
+  text-align: center;
+  margin-top: 3px;
+}
+.ma-thumb.loading {
+  display: grid;
+  place-items: center;
+  height: 116px;
+  border-radius: 8px;
+  border: 1px dashed var(--line-strong);
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+.ma-thumb-x {
+  all: unset;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--bg-raised);
+  color: var(--ink-soft);
+  box-shadow: 0 0 0 1px var(--line-strong);
+  cursor: pointer;
+}
+.ma-needs {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bg-inset);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.ma-needs b {
+  color: var(--ink);
+}
+.ma-paper-again {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* The camera */
+.cam-stage {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  max-height: 46vh;
+  margin: 0 auto;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0d0f12;
+}
+.cam-stage video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.cam-wait {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+  color: #c9ccd2;
+  font-size: 13px;
+}
+.cam-wait.error {
+  color: #f0a59a;
+}
+.cam-frame {
+  position: absolute;
+  inset: 6%;
+  border-radius: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+.cam-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.cam-pick {
+  max-width: 50%;
+  font-size: 12.5px;
+}
+.cam-gap {
+  flex: 1;
+}
+.cam-help {
+  margin: 8px 2px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+
+/* Your page beside Claude's reading */
+.wp {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: 16px;
+  align-items: start;
+}
+@container (max-width: 560px) {
+  .wp {
+    grid-template-columns: 1fr;
+  }
+}
+.wp-pages {
+  position: sticky;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 72vh;
+  overflow-y: auto;
+  border-radius: 10px;
+}
+.wp-page {
+  position: relative;
+  flex-shrink: 0;
+  margin: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  background: #fff;
+}
+.wp-page img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border-radius: 0;
+  user-select: none;
+}
+.wp-page figcaption {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+}
+/* The boxes sit on a photo, so they keep their own colours: ink on paper reads the same in every theme */
+.wp-box {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 5px;
+  border: 1.5px solid rgba(40, 110, 200, 0.45);
+  cursor: pointer;
+  transition: opacity 120ms ease, box-shadow 120ms ease;
+}
+.wp-box.ok {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.wp-box.none {
+  border-color: rgba(110, 110, 120, 0.35);
+}
+.wp-box.unsure {
+  border-color: rgba(214, 140, 0, 0.8);
+  border-style: dashed;
+}
+.wp-box.bad {
+  border: 2px solid #d63b2f;
+  background: rgba(214, 59, 47, 0.1);
+}
+.wp-box.active {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 60%, transparent);
+  border-color: var(--accent);
+}
+.wp.focusing .wp-box:not(.active) {
+  opacity: 0.35;
+}
+.wp-badge {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  margin-left: 4px;
+  transform: translate(0, -50%);
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(40, 110, 200, 0.85);
+  color: #fff;
+  font: 700 10.5px/1 var(--font-ui);
+  white-space: nowrap;
+}
+.wp-box.edge .wp-badge {
+  left: auto;
+  right: 4px;
+}
+.wp-box.ok .wp-badge {
+  background: color-mix(in srgb, var(--accent) 85%, #000);
+}
+.wp-box.none .wp-badge {
+  background: rgba(90, 90, 100, 0.7);
+}
+.wp-box.unsure .wp-badge {
+  background: #c97f00;
+}
+.wp-box.bad .wp-badge {
+  background: #d63b2f;
+}
+.wp-reading h4 {
+  margin: 0 0 4px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.wp-sub {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+.wp-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wp-line {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px 8px 8px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.wp-line:hover {
+  background: var(--bg-hover);
+}
+.wp-line.active {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+.wp-line.bad {
+  background: var(--ma-bad-soft);
+}
+.wp-line.unsure .wp-tex {
+  text-decoration: underline dotted color-mix(in srgb, var(--warn) 70%, transparent);
+  text-underline-offset: 6px;
+}
+.wp-n {
+  padding-top: 3px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.wp-line.ok .wp-n {
+  color: var(--accent);
+}
+.wp-line.bad .wp-n {
+  color: var(--ma-bad);
+}
+.wp-main {
+  min-width: 0;
+}
+.wp-tex {
+  display: block;
+  font-size: 14px;
+  scrollbar-width: thin;
+  color: var(--ink);
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 1px 0;
+}
+.wp-note {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.wp-note.warn {
+  color: var(--warn);
+}
+.wp-tools {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--bg-raised);
+  box-shadow: 0 0 0 1px var(--line);
+  visibility: hidden;
+}
+.wp-line:hover .wp-tools,
+.wp-line.unsure .wp-tools,
+.wp-tools:focus-within {
+  visibility: visible;
+}
+.wp-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wp-verdict {
+  margin-top: 12px;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--line-strong);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.wp-verdict b {
+  color: var(--ink);
+}
+.wp-verdict.correct {
+  border-left-color: var(--accent);
+}
+.wp-verdict.partial,
+.wp-verdict.wrong {
+  border-left-color: var(--ma-bad);
+}
+.wp-verdict.correct b {
+  color: var(--accent);
+}
+.wp-verdict.partial b,
+.wp-verdict.wrong b {
+  color: var(--ma-bad);
+}
+.wp-by {
+  color: var(--ink-muted);
+}
+.wp.compact .wp-pages {
+  max-height: 56vh;
+}
+
+/* ---------- In the transcript ---------- */
+
+.s-you:has(.wcard) {
+  max-width: 100% !important;
+  width: 100%;
+  box-sizing: border-box;
+  container-type: inline-size;
+}
+.wcard.steps .wc-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wc-line {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 7px;
+}
+.wc-line.bad {
+  background: var(--ma-bad-soft, color-mix(in srgb, var(--danger) 9%, transparent));
+}
+.wc-mark {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-muted);
+  padding-top: 2px;
+}
+.wc-line.ok .wc-mark {
+  color: var(--accent);
+}
+.wc-line.bad .wc-mark {
+  color: var(--danger);
+}
+.wc-tex {
+  display: block;
+  font-size: 15px;
+  overflow-x: auto;
+}
+.wc-note {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.wc-verdict {
+  margin: 8px 6px 2px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.wc-verdict.correct b {
+  color: var(--accent);
+}
+.wc-verdict.partial b,
+.wc-verdict.wrong b {
+  color: var(--danger);
+}
+.wcard .wp {
+  --ma-bad: var(--danger);
+  --ma-bad-soft: color-mix(in srgb, var(--danger) 9%, transparent);
+  --ma-bad-line: color-mix(in srgb, var(--danger) 55%, transparent);
+}

@@ -85,7 +85,7 @@ sys.meta_path.insert(0, _Finder())
 `
 
 
-const pythonCmd = () => (existsSync(mathPython()) ? [mathPython()] : ['/usr/bin/env', 'python3'])
+export const pythonCmd = () => (existsSync(mathPython()) ? [mathPython()] : ['/usr/bin/env', 'python3'])
 
 let userTemp: string | null = null
 /** Where Metal keeps compiled graphs for PyTorch on the GPU (MPS); it ignores TMPDIR, so the sandbox lets it write there */

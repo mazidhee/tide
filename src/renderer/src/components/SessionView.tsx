@@ -63,6 +63,9 @@ import { prepNote } from '@shared/lessonPrep'
 import { breakSignals, lessonAnswers, lessonForBreaks } from '../lib/breaks'
 import { MATHS_ANSWER_EVENT, takeExploreNotes, type MathsAnswerDetail } from '../lib/sims/exploreBus'
 import { AREA_SCENES, mathsMode } from '@shared/mathsMode'
+import { parseWorkingMarks } from '@shared/mathsAnswer'
+import { MathsAnswerBox, type BoxStatus, type MathsBoxHandle } from './maths/MathsAnswerBox'
+import { WorkingCard } from './maths/WorkingCard'
 import { driftCheck, driftNote, FORMAT_LABEL, switchIn } from '@shared/mathsDrift'
 import { saysDontKnow } from '@shared/lessonRepair'
 import { exploreLater, lessonSubject } from '../lib/explore'
@@ -155,6 +158,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const codeRef = useRef<import('../lib/lessonCode').LessonCode | null>(null)
   const codeEditorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
   const [confidence, setConfidence] = useState<1 | 2 | 3 | null>(null)
+  // The maths answer box (components/maths): its own Submit, and what its button says
+  const mathsBoxRef = useRef<MathsBoxHandle | null>(null)
+  const [boxStatus, setBoxStatus] = useState<BoxStatus>({ mode: 'words', ready: false, busy: false, label: 'Submit' })
   // The last reply is written but its checks are still running: its mark isn't final yet
   const [checking, setChecking] = useState(false)
   const [hintLevel, setHintLevel] = useState(0)
@@ -562,6 +568,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       (lastIsTutor && lastBlocks.length && !carryOn && !lastBlocks.some((b) => b.kind === 'summary' || b.kind === 'scores') ? { kind: 'ask' as const, type: 'short' as const, prompt: '', options: [] } : undefined))
     : undefined
   askTypeRef.current = currentAsk?.type
+  // A maths lesson answers in the maths answer box: words read back, maths with a calculator, or paper
+  const mathsBox = maths.on && !!currentAsk && !asking && currentAsk.type !== 'code' && !(currentAsk.type === 'choice' && currentAsk.options.length > 0)
   const currentAskRef = useRef(currentAsk)
   currentAskRef.current = currentAsk
   // For the break planner: a question is on screen, waiting; how long the answer takes counts from here
@@ -1001,8 +1009,27 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     send(`${said ? `${said}\n\n` : ''}(From here on, teach this way: ${STRATEGY_RULES[to] || 'problem sets, one problem at a time, stepping difficulty up and down as before.'})`, turns)
   }
 
+  /** An answer from the maths answer box: what the transcript shows, with Tide's note for the tutor (never shown) */
+  const sendMaths = (body: string, note?: string) => {
+    if (busy) return
+    const conf = confidence ? `\n(Confidence: ${CONFIDENCE.find((c) => c.value === confidence)!.label.toLowerCase()})` : ''
+    send(`Answer: ${body}${conf}${note ? `\n\n(Tide: ${note})` : ''}`, turns)
+    pictures.clear()
+    setAnswer('')
+    setPicked(null)
+    setAsking(false)
+    setConfidence(null)
+    setHintLevel(0)
+    setRunOut(null)
+    setHint(false)
+  }
+
   const submit = (text?: string, ranNow?: RunResult, mine?: boolean) => {
     if (busy) return
+    if (!text && mathsBox) {
+      mathsBoxRef.current?.submit()
+      return
+    }
     // A code question with hidden tests is marked on their results: what is handed in is run first
     if (!text && !ranNow && !asking && currentAsk?.type === 'code' && currentAsk.tests && code.trim() && (!runOut || ranFor.current !== code)) {
       if (running) return
@@ -1826,7 +1853,10 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     <span className="muted small">You asked for a {t.content.match(/\((.+) please\)/)?.[1] ?? 'hint'}</span>
                   ) : (
                     <>
-                      <div className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(text, env) }} />
+                      {(() => {
+                        const working = parseWorkingMarks(t.content)
+                        return working ? <WorkingCard working={working} /> : <div className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(text, env) }} />
+                      })()}
                       {conf && <span className="s-conf-tag">{conf}</span>}
                       {(() => {
                         const recap = text.startsWith('Recap from the video') ? offeredClip(t.content) : null
@@ -2068,6 +2098,22 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   )}
                   <textarea className="s-input small" rows={2} value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder={asking ? 'What would you like to ask? Your code can wait.' : 'Explain your code or approach (optional)'} {...pictures.handlers} />
                 </>
+              ) : mathsBox ? (
+                <MathsAnswerBox
+                  key={turns.length}
+                  handle={mathsBoxRef}
+                  onStatus={setBoxStatus}
+                  onSend={sendMaths}
+                  words={answer}
+                  setWords={(v) => (setAnswer(v), setHint(false))}
+                  wordsRef={answerRef}
+                  wordsPlaceholder={currentAsk.type === 'predict' ? 'Make your best guess, in words or maths' : 'Say or type it as you would to a tutor: “x squared plus 3x, all over 2”'}
+                  wordsProps={pictures.handlers}
+                  askPrompt={currentAsk.prompt}
+                  question={[...turns].reverse().find((x) => x.role === 'assistant')?.content ?? currentAsk.prompt}
+                  path={'path' in scope ? scope.path : undefined}
+                  footer={null}
+                />
               ) : (
                 <textarea
                   ref={answerRef}
@@ -2095,7 +2141,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   {...pictures.handlers}
                 />
               )}
-              <AttachedStrip images={pictures} />
+              {(!mathsBox || boxStatus.mode === 'words') && <AttachedStrip images={pictures} />}
               <div className="s-answer-bar">
                 <div className="segmented text" role="radiogroup" aria-label="How sure are you?">
                   {CONFIDENCE.map((c) => (
@@ -2105,8 +2151,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   ))}
                 </div>
                 <div className="row-gap">
-                  <AttachImageButton images={pictures} />
-                  {currentAsk.type !== 'code' && (
+                  {(!mathsBox || boxStatus.mode === 'words') && <AttachImageButton images={pictures} />}
+                  {currentAsk.type !== 'code' && (!mathsBox || boxStatus.mode === 'words') && (
                     <DictateButton
                       target={answerRef}
                       onStart={stopTalking}
@@ -2129,9 +2175,15 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                       <span>I don't know</span>
                     </button>
                   )}
+                  {mathsBox ? (
+                    <button className="btn primary" onClick={() => submit()} disabled={!boxStatus.ready || boxStatus.busy} aria-busy={boxStatus.busy}>
+                      {boxStatus.label} <kbd>⌘↵</kbd>
+                    </button>
+                  ) : (
                   <button className="btn primary" onClick={() => submit()} disabled={pictures.adding || (asking ? !answer.trim() && !pictures.paths.length : currentAsk.type === 'code' ? !code.trim() : currentAsk.type === 'choice' && currentAsk.options.length > 0 ? picked === null && !answer.trim() && !pictures.paths.length : !answer.trim() && !pictures.paths.length)}>
                     {asking ? 'Ask' : 'Submit'} <kbd>⌘↵</kbd>
                   </button>
+                  )}
                 </div>
               </div>
             </div>

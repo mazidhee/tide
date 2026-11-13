@@ -569,6 +569,13 @@ function registerIpc() {
   handle('practice:interviews', () => listInterviews())
   handle('practice:logDrill', (r: Omit<DrillResult, 'id' | 'at'>) => logDrill(r))
   handle('practice:drills', () => listDrills())
+  // The maths answer box (main/calculator, main/mathsAnswers): the calculator, step checks, read-back and paper
+  handle('mathsAnswer:evaluate', (latex: string, angle?: 'rad' | 'deg') => import('./calculator').then((m) => m.evaluate(String(latex ?? ''), angle === 'deg' ? 'deg' : 'rad')))
+  handle('mathsAnswer:checkSteps', (lines: string[], angle?: 'rad' | 'deg') => import('./calculator').then((m) => m.checkSteps((lines ?? []).map(String), angle === 'deg' ? 'deg' : 'rad')))
+  handle('mathsAnswer:status', (path?: string) => import('./mathsAnswers').then((m) => m.mathsClaude(path)))
+  handle('mathsAnswer:readBack', (words: string, question?: string, path?: string) => import('./mathsAnswers').then((m) => m.readBack(String(words ?? ''), question, path)))
+  handle('mathsAnswer:readPaper', (paths: string[], question?: string, path?: string) => import('./mathsAnswers').then((m) => m.readPaper((paths ?? []).map(String), question, path)))
+  handle('mathsAnswer:mark', (req: { question: string; lines: string[]; path?: string; angle?: 'rad' | 'deg' }) => import('./mathsAnswers').then((m) => m.markWorking(req)))
   handle('maths:state', () => import('./mentalMaths').then((m) => m.mathsState()))
   handle('maths:log', (s: Pick<import('@shared/mentalMaths').MathsSession, 'focus' | 'answers'>) => import('./mentalMaths').then((m) => m.logMathsSession(s)))
   handle('maths:setReminder', (r: import('@shared/mentalMaths').Reminder) => import('./mentalMaths').then((m) => m.setMathsReminder(r)))
@@ -981,6 +988,7 @@ app.whenReady().then(() => {
 app.on('before-quit', () => {
   setQuitting()
   void import('./claudeEngine').then((c) => c.stopClaude()).catch(() => {})
+  void import('./calculator').then((c) => c.stopCalculator()).catch(() => {})
   void import('./tideMcp').then((m) => m.mcpHandle()?.close()).catch(() => {})
   stopStudyApi().catch(() => {})
   closeAllTerminals()
