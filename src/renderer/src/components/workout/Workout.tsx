@@ -107,7 +107,7 @@ function WeekStrip({ state, day, small }: { state: WorkoutState; day: string; sm
 
 /**
  * Time on the morning drills (the workout, daily practice and the mental maths sprint) today and
- * this week, the streak (a day ticked off in Things counts) and today's score: one compact row on
+ * this week, the streak (the same count as the header's) and today's score: one compact row on
  * the workout page, one line on Home (shared/morningDrills).
  */
 export function DrillsTally({ compact }: { compact?: boolean }) {

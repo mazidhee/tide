@@ -3,11 +3,11 @@
  * today's score. The drills are the morning workout, daily practice (Review) and the mental maths
  * sprint. Nothing new is measured except time, and that comes from what each already records:
  * the workout's answer times, the sprint's length, and the study clock on daily practice. A day
- * ticked off in Things ("Morning drills") counts for the streak too. Pure: main/morningDrills
+ * ticked off in Things only keeps its to-do in step: the streak counts drills done in Tide. Pure: main/morningDrills
  * gathers the records.
  */
-import { addDays, dayKey, streak } from './mentalMaths'
-import { averageRating, morningPercent, morningScore, todaysMorning, workoutDays, type WorkoutState } from './workout'
+import { addDays, dayKey } from './mentalMaths'
+import { averageRating, morningPercent, morningScore, todaysMorning, workoutStreak, type WorkoutState } from './workout'
 
 export type DrillKind = 'workout' | 'review' | 'mental'
 
@@ -31,7 +31,7 @@ export interface DrillRecords {
   sprints: { at: number; seconds: number }[]
   /** Study-clock stretches on daily practice */
   review: { start: number; minutes: number }[]
-  /** Days ticked off as done in Things */
+  /** Days ticked off in Things (kept for the to-do; never counted in the streak) */
   ticked: string[]
 }
 
@@ -66,7 +66,8 @@ export function drillTally(r: DrillRecords, today: string, tz?: number): DrillTa
   return {
     today: roundUp(by[today] ?? zero()),
     week: roundUp(week),
-    streak: streak([...new Set([...workoutDays(r.workout), ...r.ticked])], today),
+    // Only drills done in Tide count: the same streak as the workout's own header
+    streak: workoutStreak(r.workout, today),
     score: whole ? morningScore(whole) : null,
     percent: whole ? morningPercent(whole) : null,
     rating: averageRating(r.workout.prefs)

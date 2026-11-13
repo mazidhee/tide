@@ -1,7 +1,7 @@
 /**
  * The morning drills tracker: minutes per drill per day from what each already records, today
- * and this week, the streak (a day ticked in Things counts) and today's score; and the one
- * "Morning drills" to-do a day in Things, whose tick comes back. Things is mocked.
+ * and this week, the streak (only drills done in Tide) and today's score; and the one
+ * "Morning drills" to-do a day in Things, kept in step. Things is mocked.
  */
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
@@ -45,13 +45,13 @@ describe('the tally', () => {
     expect(by[FRI]).toEqual({ workout: 2, mental: 2, review: 9, total: 13 })
   })
 
-  it('gives today, the week from Monday, the streak with Things ticks, and today’s score', () => {
+  it('gives today, the week from Monday, the streak (only drills done in Tide), and today’s score', () => {
     const t = drillTally(
       {
         workout: state([...wholeMorning('2026-11-08'), ...wholeMorning('2026-11-11'), ...wholeMorning(FRI)]),
         sprints: [{ at: Date.parse('2026-11-12T08:00:00Z'), seconds: 120 }],
         review: [{ start: Date.parse('2026-11-10T08:00:00Z'), minutes: 12 }],
-        // Thursday ticked off in Things without a workout: still a day done
+        // Thursday ticked off in Things without a workout: not a day done
         ticked: ['2026-11-12']
       },
       FRI,
@@ -61,7 +61,7 @@ describe('the tally', () => {
     expect(t.today).toEqual({ workout: 10, review: 0, mental: 0, total: 10 })
     // Sunday's morning is last week's
     expect(t.week).toEqual({ workout: 20, review: 12, mental: 2, total: 34 })
-    expect(t.streak).toMatchObject({ current: 3, doneToday: true })
+    expect(t.streak).toMatchObject({ current: 1, doneToday: true })
     expect(t.score).toBe(1400)
     expect(t.percent).toBe(100)
     expect(minutesLabel(65)).toBe('1 h 05')
@@ -75,7 +75,7 @@ describe('the tally', () => {
 })
 
 describe('the Morning drills to-do in Things (mocked)', () => {
-  it('is added once a day, and a tick there marks the day done', async () => {
+  it('is added once a day, and a tick there doesn’t extend the streak', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-11-13T07:00:00'))
     const { syncThings, drillsTally } = await import('../src/main/morningDrills')
@@ -84,7 +84,7 @@ describe('the Morning drills to-do in Things (mocked)', () => {
     expect(calls.filter((c) => c.fn === 'addTask')).toHaveLength(1)
     expect(calls[0].args[0]).toMatchObject({ title: 'Morning drills', when: '2026-11-13', tags: ['drill'] })
     status = 'completed'
-    expect((await drillsTally()).streak).toMatchObject({ current: 1, doneToday: true })
+    expect((await drillsTally()).streak).toMatchObject({ current: 0, doneToday: false })
     vi.useRealTimers()
   })
 

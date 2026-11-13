@@ -1,8 +1,8 @@
 /**
  * The morning drills tracker (shared/morningDrills): the records each drill already keeps, put
  * together for the workout page and Home, and one to-do a day in Things, "Morning drills". The
- * to-do is added the first time Tide looks each day; ticking it in Things marks the day done, and
- * finishing the whole workout ticks it there. Which to-do belongs to which day, and the days
+ * to-do is added the first time Tide looks each day and kept in step: finishing the whole workout
+ * ticks it there, and a tick in Things is noted, but only drills done in Tide count for the streak. Which to-do belongs to which day, and the days
  * ticked, are kept in .tide/morning-drills.json. A test copy never reaches the real Things
  * (main/things).
  */
