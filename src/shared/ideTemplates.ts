@@ -3,6 +3,154 @@ import type { ProjectTemplate } from './ide'
 
 const PY_GITIGNORE = '__pycache__/\n.pytest_cache/\n.venv/\n*.pyc\n'
 
+/**
+ * A tiny test helper for C++ projects, Tide's own (no framework to install): TEST(name) blocks
+ * with CHECK, CHECK_EQ and CHECK_THROWS, run by check::run_all(), which prints cargo-style lines
+ * (test name ... ok) that the test explorer reads.
+ */
+export const CHECK_HPP = `// check.hpp: a tiny test helper. Write TEST(name) { CHECK(...); CHECK_EQ(a, b); CHECK_THROWS(f()); FAIL("why"); }
+// and end the file with int main() { return check::run_all(); }
+#pragma once
+#include <exception>
+#include <functional>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace check {
+struct Failure {
+    std::string message;
+};
+using Case = std::pair<std::string, std::function<void()>>;
+inline std::vector<Case>& cases() {
+    static std::vector<Case> all;
+    return all;
+}
+struct Register {
+    Register(const char* name, std::function<void()> body) { cases().emplace_back(name, std::move(body)); }
+};
+inline int run_all() {
+    std::vector<std::pair<std::string, std::string>> failed;
+    for (auto& [name, body] : cases()) {
+        try {
+            body();
+            std::cout << "test " << name << " ... ok\\n";
+        } catch (const Failure& f) {
+            failed.emplace_back(name, f.message);
+            std::cout << "test " << name << " ... FAILED\\n";
+        } catch (const std::exception& e) {
+            failed.emplace_back(name, std::string("threw ") + e.what());
+            std::cout << "test " << name << " ... FAILED\\n";
+        }
+    }
+    if (!failed.empty()) {
+        std::cout << "\\nfailures:\\n\\n";
+        for (auto& [name, why] : failed) std::cout << "---- " << name << " stdout ----\\n" << why << "\\n\\n";
+        std::cout << "failures:\\n";
+    }
+    std::cout << "\\ntest result: " << (failed.empty() ? "ok" : "FAILED") << ". " << cases().size() - failed.size() << " passed; " << failed.size() << " failed\\n";
+    return failed.empty() ? 0 : 1;
+}
+}  // namespace check
+
+#define CHECK_JOIN2(a, b) a##b
+#define CHECK_JOIN(a, b) CHECK_JOIN2(a, b)
+#define TEST(name) \\
+    static void name(); \\
+    static ::check::Register CHECK_JOIN(check_register_, name)(#name, name); \\
+    static void name()
+#define CHECK(cond) \\
+    do { \\
+        if (!(cond)) { \\
+            std::ostringstream check_o; \\
+            check_o << __FILE__ << ":" << __LINE__ << ": CHECK(" #cond ") failed"; \\
+            throw ::check::Failure{check_o.str()}; \\
+        } \\
+    } while (0)
+#define CHECK_EQ(a, b) \\
+    do { \\
+        /* copies, so a value read from a temporary (*opt()) outlives the expression */ \\
+        const auto check_a = (a); \\
+        const auto check_b = (b); \\
+        if (!(check_a == check_b)) { \\
+            std::ostringstream check_o; \\
+            check_o << __FILE__ << ":" << __LINE__ << ": CHECK_EQ(" #a ", " #b ") failed: " << check_a << " != " << check_b; \\
+            throw ::check::Failure{check_o.str()}; \\
+        } \\
+    } while (0)
+#define FAIL(msg) throw ::check::Failure{std::string(__FILE__) + ":" + std::to_string(__LINE__) + ": " + (msg)}
+#define CHECK_THROWS(expr) \\
+    do { \\
+        bool check_threw = false; \\
+        try { \\
+            (void)(expr); \\
+        } catch (...) { \\
+            check_threw = true; \\
+        } \\
+        if (!check_threw) { \\
+            std::ostringstream check_o; \\
+            check_o << __FILE__ << ":" << __LINE__ << ": CHECK_THROWS(" #expr ") did not throw"; \\
+            throw ::check::Failure{check_o.str()}; \\
+        } \\
+    } while (0)
+`
+
+/**
+ * A C++ project's build files: CMake for the terminal and ctest (it finds src/, include/ and
+ * tests/test_*.cpp by itself, so files added later build too), and compile_flags.txt for clangd,
+ * Run and the test explorer.
+ */
+export function cppBuildFiles(name: string): Record<string, string> {
+  const target = name.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').replace(/^(\d)/, '_$1') || 'app'
+  return {
+    'CMakeLists.txt': [
+      'cmake_minimum_required(VERSION 3.20)',
+      `project(${target} LANGUAGES CXX)`,
+      '',
+      'set(CMAKE_CXX_STANDARD 20)',
+      'set(CMAKE_CXX_STANDARD_REQUIRED ON)',
+      'set(CMAKE_EXPORT_COMPILE_COMMANDS ON)',
+      'add_compile_options(-Wall -Wextra -fsanitize=address,undefined -fno-omit-frame-pointer)',
+      'add_link_options(-fsanitize=address,undefined)',
+      'include_directories(include tests)',
+      '',
+      '# Everything in src/ but main.cpp is the library the program and the tests share',
+      'file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS src/*.cpp)',
+      'list(FILTER CORE_SOURCES EXCLUDE REGEX ".*/main\\.cpp$")',
+      'if(CORE_SOURCES)',
+      `  add_library(${target}_core STATIC \${CORE_SOURCES})`,
+      'else()',
+      `  add_library(${target}_core INTERFACE)`,
+      'endif()',
+      '',
+      'if(EXISTS ${CMAKE_SOURCE_DIR}/src/main.cpp)',
+      `  add_executable(${target} src/main.cpp)`,
+      `  target_link_libraries(${target} PRIVATE ${target}_core)`,
+      'endif()',
+      '',
+      'enable_testing()',
+      'file(GLOB TEST_SOURCES CONFIGURE_DEPENDS tests/test_*.cpp)',
+      'foreach(test_source ${TEST_SOURCES})',
+      '  get_filename_component(test_name ${test_source} NAME_WE)',
+      '  add_executable(${test_name} ${test_source})',
+      `  target_link_libraries(\${test_name} PRIVATE ${target}_core)`,
+      '  add_test(NAME ${test_name} COMMAND ${test_name})',
+      'endforeach()',
+      ''
+    ].join('\n'),
+    'compile_flags.txt': '-std=c++20\n-Wall\n-Wextra\n-Iinclude\n-Itests\n',
+    '.gitignore': 'build/\n*.o\n*.dSYM/\n.cache/\n'
+  }
+}
+
+/** A Foundry project's files: foundry.toml, and forge-std from Tide's tools folder (no git submodule) */
+export const FOUNDRY_FILES = {
+  'foundry.toml': '[profile.default]\nsrc = "src"\ntest = "test"\nscript = "script"\nout = "out"\nlibs = ["lib"]\noptimizer = true\noptimizer_runs = 200\n\n[fmt]\nline_length = 100\n',
+  '.gitignore': 'out/\ncache/\nbroadcast/\n'
+}
+
 export const TEMPLATES: ProjectTemplate[] = [
   {
     id: 'python',
@@ -85,6 +233,37 @@ export const TEMPLATES: ProjectTemplate[] = [
       'main.c': '#include <stdio.h>\n\nint square(int x) { return x * x; }\n\nint main(void) {\n    for (int i = 1; i <= 5; i++) printf("%d squared is %d\\n", i, square(i));\n    return 0;\n}\n',
       Makefile: 'CFLAGS = -std=c17 -Wall -Wextra -g\n\nmain: main.c\n\t$(CC) $(CFLAGS) -o main main.c\n\nclean:\n\trm -f main\n',
       '.gitignore': 'main\n*.o\n*.dSYM/\n'
+    })
+  },
+  {
+    id: 'cpp',
+    label: 'C++',
+    about: 'C++20 with CMake, clangd and tests (C++ pack)',
+    language: 'C++',
+    defaultName: 'cpp-project',
+    open: 'src/money.cpp',
+    files: (name) => ({
+      ...cppBuildFiles(name),
+      'include/money.hpp': '#pragma once\n#include <cstdint>\n#include <string>\n\n// An amount in minor units (pence, cents): never a float\nclass Money {\npublic:\n    explicit Money(std::int64_t minor = 0) : minor_(minor) {}\n    std::int64_t minor() const { return minor_; }\n    Money operator+(Money other) const;\n    bool operator==(const Money&) const = default;\n    std::string str() const;\n\nprivate:\n    std::int64_t minor_;\n};\n',
+      'src/money.cpp': '#include "money.hpp"\n\n#include <cstdio>\n\nMoney Money::operator+(Money other) const { return Money(minor_ + other.minor_); }\n\nstd::string Money::str() const {\n    char buf[32];\n    std::snprintf(buf, sizeof buf, "%lld.%02lld", static_cast<long long>(minor_ / 100), static_cast<long long>(minor_ % 100));\n    return buf;\n}\n',
+      'src/main.cpp': '#include <iostream>\n\n#include "money.hpp"\n\nint main() {\n    Money a(1250), b(399);\n    std::cout << a.str() << " + " << b.str() << " = " << (a + b).str() << "\\n";\n}\n',
+      'tests/check.hpp': CHECK_HPP,
+      'tests/test_money.cpp': '#include "check.hpp"\n#include "money.hpp"\n\nTEST(adds_minor_units) { CHECK_EQ((Money(1250) + Money(399)).minor(), 1649); }\n\nTEST(prints_pounds_and_pence) { CHECK_EQ(Money(1649).str(), std::string("16.49")); }\n\nint main() { return check::run_all(); }\n',
+      'README.md': `# ${name}\n\nRun src/main.cpp with Run, and the tests from the Testing view. In the terminal: \`cmake -S . -B build && cmake --build build && ctest --test-dir build\`.\n`
+    })
+  },
+  {
+    id: 'foundry',
+    label: 'Solidity (Foundry)',
+    about: 'A contract with forge tests (Foundry pack)',
+    language: 'Solidity',
+    defaultName: 'solidity-project',
+    open: 'src/Vault.sol',
+    files: (name) => ({
+      ...FOUNDRY_FILES,
+      'src/Vault.sol': '// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\n/// @notice Holds ether for each depositor; each withdraws only their own\ncontract Vault {\n    mapping(address => uint256) public balanceOf;\n\n    event Deposited(address indexed who, uint256 amount);\n    event Withdrawn(address indexed who, uint256 amount);\n\n    error Insufficient(uint256 have, uint256 want);\n\n    function deposit() external payable {\n        balanceOf[msg.sender] += msg.value;\n        emit Deposited(msg.sender, msg.value);\n    }\n\n    function withdraw(uint256 amount) external {\n        uint256 have = balanceOf[msg.sender];\n        if (have < amount) revert Insufficient(have, amount);\n        // Effects before the interaction: the balance is reduced before ether leaves\n        balanceOf[msg.sender] = have - amount;\n        (bool ok,) = msg.sender.call{value: amount}("");\n        require(ok, "transfer failed");\n        emit Withdrawn(msg.sender, amount);\n    }\n}\n',
+      'test/Vault.t.sol': '// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\nimport {Test} from "forge-std/Test.sol";\nimport {Vault} from "../src/Vault.sol";\n\ncontract VaultTest is Test {\n    Vault vault;\n    address alice = makeAddr("alice");\n\n    function setUp() public {\n        vault = new Vault();\n        vm.deal(alice, 10 ether);\n    }\n\n    function test_DepositThenWithdraw() public {\n        vm.startPrank(alice);\n        vault.deposit{value: 1 ether}();\n        vault.withdraw(0.4 ether);\n        vm.stopPrank();\n        assertEq(vault.balanceOf(alice), 0.6 ether);\n        assertEq(alice.balance, 9.4 ether);\n    }\n\n    function test_CannotWithdrawMoreThanDeposited() public {\n        vm.prank(alice);\n        vm.expectRevert(abi.encodeWithSelector(Vault.Insufficient.selector, 0, 1));\n        vault.withdraw(1);\n    }\n\n    function testFuzz_BalanceMatchesDeposits(uint96 amount) public {\n        vm.deal(alice, amount);\n        vm.prank(alice);\n        vault.deposit{value: amount}();\n        assertEq(vault.balanceOf(alice), amount);\n    }\n}\n',
+      'README.md': `# ${name}\n\nRun the tests from the Testing view (forge test in Tide's sandbox, offline). forge-std comes from Tide's Foundry pack.\n`
     })
   },
   {

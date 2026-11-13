@@ -3,6 +3,7 @@ import type { ChatEvent, TideApi } from '@shared/types'
 import { ideApi } from './ide'
 import { ideasApi } from './ideas'
 import { notebookApi } from './notebook'
+import { packsApi } from './packs'
 
 const invoke =
   <R>(channel: string) =>
@@ -52,6 +53,7 @@ const api: TideApi = {
   },
   ide: ideApi,
   ideas: ideasApi,
+  packs: packsApi,
   notebook: notebookApi,
   lsp: {
     send: (msg) => ipcRenderer.send('lsp:send', msg),
@@ -357,6 +359,13 @@ const api: TideApi = {
   difficulty: {
     known: invoke('difficulty:known')
   },
+  model: {
+    view: invoke('model:view'),
+    node: invoke('model:node'),
+    correct: invoke('model:correct'),
+    setTarget: invoke('model:setTarget'),
+    event: invoke('model:event')
+  },
   knowledge: {
     view: invoke('knowledge:view'),
     review: invoke('knowledge:review'),
@@ -421,6 +430,22 @@ const api: TideApi = {
     setupCapstone: invoke('track:setupCapstone'),
     firmUp: invoke('track:firmUp'),
     mixedReview: invoke('track:mixedReview')
+  },
+  northStar: {
+    view: invoke('northStar:view'),
+    glance: invoke('northStar:glance'),
+    suggested: invoke('northStar:suggested'),
+    synthesise: invoke('northStar:synthesise'),
+    status: invoke('northStar:status'),
+    draft: invoke('northStar:draft'),
+    discard: invoke('northStar:discard'),
+    build: invoke('northStar:build'),
+    decide: invoke('northStar:decide'),
+    review: invoke('northStar:review'),
+    moveOn: invoke('northStar:moveOn'),
+    confirmDepth: invoke('northStar:confirmDepth'),
+    startCapstone: invoke('northStar:startCapstone'),
+    install: invoke('northStar:install')
   },
   learner: {
     view: invoke('learner:view'),
@@ -621,7 +646,9 @@ const api: TideApi = {
     query: invoke('lab:query'),
     schema: invoke('lab:schema'),
     reset: invoke('lab:reset'),
-    load: invoke('lab:load')
+    load: invoke('lab:load'),
+    pgQuery: invoke('lab:pgQuery'),
+    pgReset: invoke('lab:pgReset')
   },
   metabase: {
     status: invoke('metabase:status'),

@@ -13,6 +13,7 @@ import { Icon } from '../Icon'
 import { CellView, type CellActions } from './CellView'
 import { ProposalCard } from './Proposal'
 import { PackCard } from './PackCard'
+import { RunsPane } from './RunsPane'
 import { engineLabel, TutorPane, VariablesPane, type Turn } from './Margin'
 import '../../styles/notebook.css'
 
@@ -48,7 +49,7 @@ export function JupyterView({ refIn }: { refIn: NbRef }) {
   useSyncExternalStore(store.subscribe, store.getVersion)
   const [active, setActive] = useState<string | null>(null)
   const [editing, setEditing] = useState<Set<string>>(new Set())
-  const [side, setSide] = useState<'tutor' | 'variables' | null>(() => (localStorage.getItem('tide.nb.side') as 'tutor' | 'variables' | null) ?? 'tutor')
+  const [side, setSide] = useState<'tutor' | 'variables' | 'runs' | null>(() => (localStorage.getItem('tide.nb.side') as 'tutor' | 'variables' | 'runs' | null) ?? 'tutor')
   const [checks, setChecks] = useState<Record<string, CheckResult | 'running'>>({})
   const [proposals, setProposals] = useState<CellProposal[]>([])
   const [turns, setTurns] = useState<Turn[]>([])
@@ -282,6 +283,9 @@ export function JupyterView({ refIn }: { refIn: NbRef }) {
             <button role="tab" aria-selected={side === 'variables'} className={side === 'variables' ? 'on' : ''} onClick={() => setSide(side === 'variables' ? null : 'variables')}>
               <Icon name="list" size={14} /> Variables
             </button>
+            <button role="tab" aria-selected={side === 'runs'} className={side === 'runs' ? 'on' : ''} onClick={() => setSide(side === 'runs' ? null : 'runs')} title="Training runs logged with tide_runs, compared">
+              <Icon name="graph" size={14} /> Runs
+            </button>
             <button role="tab" aria-selected={side === 'tutor'} className={side === 'tutor' ? 'on' : ''} onClick={() => setSide(side === 'tutor' ? null : 'tutor')}>
               <Icon name="claude" size={14} /> Tutor
             </button>
@@ -336,7 +340,9 @@ export function JupyterView({ refIn }: { refIn: NbRef }) {
         </main>
         {side && (
           <aside className="nb-side">
-            {side === 'tutor' ? (
+            {side === 'runs' ? (
+              <RunsPane notebook={refIn.vault ?? refIn.abs ?? store.name} kernel={store.kernel} />
+            ) : side === 'tutor' ? (
               <TutorPane turns={turns} busy={busy} claude={claude} activeHasError={activeHasError} onAsk={(a, t) => ask(a, t)} onStop={() => void window.tide.notebook.tutor.stop(session)} />
             ) : (
               <VariablesPane vars={store.variables} kernel={store.kernel} />

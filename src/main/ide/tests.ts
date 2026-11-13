@@ -47,6 +47,33 @@ with open(os.path.join(os.environ["TIDE_TOOLS"], "out.json"), "w") as f:
     json.dump({"code": int(code), "outcomes": list(r.out.values())}, f)
 `
 
+/**
+ * A C++ project's tests, in the sandbox: every tests/test_*.cpp is compiled with the project's
+ * sources that have no main(), the include folders from compile_flags.txt (as clangd reads them),
+ * C++20 and the address and undefined-behaviour sanitizers, then run. Each prints cargo-style
+ * lines (tests/check.hpp does), so they are read as cargo's are.
+ */
+const CPP_TESTS = `set -u
+flags=(-std=c++20 -g -O0 -Wall -Wextra -fsanitize=address,undefined -fno-omit-frame-pointer)
+[[ -f compile_flags.txt ]] && flags+=($(grep -E '^-(I|D)[A-Za-z0-9_./=-]+$' compile_flags.txt))
+srcs=()
+for f in src/**/*.(cpp|cc|cxx)(N) *.(cpp|cc|cxx)(N); do grep -qE 'int[[:space:]]+main[[:space:]]*\\(' "$f" || srcs+=("$f"); done
+mkdir -p "$TMPDIR/tide-tests"
+result=0
+for t in tests/test_*.(cpp|cc|cxx)(N) test/test_*.(cpp|cc|cxx)(N); do
+  bin="$TMPDIR/tide-tests/\${\${t:t}%.*}"
+  if /usr/bin/clang++ "\${flags[@]}" "\${srcs[@]}" "$t" -o "$bin"; then "$bin" || result=1; else result=1; fi
+done
+exit $result
+`
+
+/** Each tests/test_*.cpp built with the project's other sources (not main.cpp) and run, sanitizers on */
+export async function cppTests(root: string): Promise<{ outcomes: TestOutcome[]; output: string; error?: string }> {
+  const r = await inSandbox(root, ['/bin/zsh', '-f', '-c', CPP_TESTS], { timeoutMs: 300_000 })
+  const outcomes = parseCargo(r.stdout)
+  return { outcomes, output: (r.stdout + (r.stderr ? `\n${r.stderr}` : '')).trim(), ...(r.exitCode !== 0 && !outcomes.length ? { error: r.stderr.trim().split('\n').slice(-12).join('\n') || 'The tests didn’t build' } : {}) }
+}
+
 /** The project's own packages import from its root, as they do when you run python from there */
 const ROOT_ON_PATH = { PYTHONPATH: '.' }
 
@@ -54,7 +81,10 @@ const ROOT_ON_PATH = { PYTHONPATH: '.' }
 export async function frameworkOf(root: string): Promise<TestDiscovery['framework']> {
   if (hasFile(root, 'Cargo.toml')) return 'cargo'
   if (hasFile(root, 'go.mod')) return 'go'
+  if (hasFile(root, 'foundry.toml')) return 'forge'
   const files = (await listFiles(root)).files
+  // A C++ project: test_*.cpp files in tests/ (with Tide's check.hpp, or anything printing cargo-style lines)
+  if ((hasFile(root, 'CMakeLists.txt') || hasFile(root, 'compile_flags.txt')) && files.some((f) => /^tests?\/test_[\w-]+\.(cpp|cc|cxx)$/.test(f))) return 'cpp'
   if (files.some((f) => /\.py$/.test(f))) return 'pytest'
   if (hasFile(root, 'package.json') || files.some((f) => /\.test\.(m?js|cjs)$/.test(f))) return 'node'
   return null
@@ -144,6 +174,8 @@ export async function discover(rootIn: string): Promise<TestDiscovery> {
     }
   }
   if (framework === 'cargo') return { framework, tests: [{ id: '*', label: 'cargo test (all tests)' }] }
+  if (framework === 'forge') return { framework, tests: [{ id: '*', label: 'forge test (all tests)' }] }
+  if (framework === 'cpp') return { framework, tests: [{ id: '*', label: 'C++ tests in tests/ (all)' }] }
   if (framework === 'go') return { framework, tests: [{ id: '*', label: 'go test ./...' }] }
   if (framework === 'node') return { framework, tests: [{ id: '*', label: 'node --test (all tests)' }] }
   return { framework: null, tests: [] }
@@ -170,6 +202,12 @@ export async function runTests(rootIn: string, ids?: string[]): Promise<TestRun>
     const output = (r.stderr + '\n' + r.stdout).trim()
     return { framework, outcomes: parseCargo(r.stdout), output, ms: Date.now() - t0, ...(r.exitCode !== 0 && !parseCargo(r.stdout).length ? { error: r.stderr.trim().split('\n').slice(-6).join('\n') } : {}) }
   }
+  if (framework === 'forge') {
+    const { forgeTest } = await import('../packs/foundry')
+    const r = await forgeTest(root, picked)
+    return { framework, outcomes: r.outcomes, output: r.output, ms: Date.now() - t0, ...(r.error ? { error: r.error } : {}) }
+  }
+  if (framework === 'cpp') return { framework, ...(await cppTests(root)), ms: Date.now() - t0 }
   if (framework === 'go') {
     const r = await inSandbox(root, ['go', 'test', '-v', './...'], { timeoutMs: 300_000 })
     const outcomes = [...r.stdout.matchAll(/^\s*--- (PASS|FAIL|SKIP): (\S+)/gm)].map((m) => ({ id: m[2], status: (m[1] === 'PASS' ? 'pass' : m[1] === 'SKIP' ? 'skip' : 'fail') as TestOutcome['status'] }))
@@ -179,7 +217,7 @@ export async function runTests(rootIn: string, ids?: string[]): Promise<TestRun>
     const r = await inSandbox(root, [process.execPath, '--test', '--test-reporter=tap'], { timeoutMs: 180_000, env: { ELECTRON_RUN_AS_NODE: '1' } })
     return { framework, outcomes: parseTap(r.stdout), output: (r.stdout + r.stderr).trim(), ms: Date.now() - t0 }
   }
-  return { framework: 'none', outcomes: [], output: '', ms: 0, error: 'No tests found: Tide runs pytest, cargo test, go test and node --test.' }
+  return { framework: 'none', outcomes: [], output: '', ms: 0, error: 'No tests found: Tide runs pytest, cargo test, go test, node --test, forge test and C++ tests in tests/.' }
 }
 
 export async function setupPytest(): Promise<{ ready: boolean; detail: string }> {

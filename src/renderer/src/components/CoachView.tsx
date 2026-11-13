@@ -9,6 +9,7 @@ import { Professor } from './Professor'
 import { GoalsPanel, PlanNotices } from './GoalsPanel'
 import { WeekProgressSection } from './WeekProgress'
 import { firstSentence } from '@shared/goalGlance'
+import { NorthStarGlance } from './NorthStarView'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const today = () => localDate()
@@ -151,6 +152,8 @@ export function CoachView() {
             </button>
           </div>
         </header>
+
+        <NorthStarGlance />
 
         <GoalsPanel guess={settings.direction} onWeek={(w) => w && setWeek(w)} onThreads={setThreads} />
 

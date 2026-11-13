@@ -52,7 +52,7 @@ import {
   type RiemannRule
 } from '../exploreMaths'
 import { DISTS, RUNNING, SCENE_LABEL, SCENE_PARTS, type ExploreSpec, type Scene } from '../explore'
-import { registerExplorable, toAnswerBox } from '../exploreBus'
+import { registerExplorable, tellModel, toAnswerBox } from '../exploreBus'
 import type { PartInfo } from '../parts'
 import type { SimHost, SimKindDef, SimView } from '../shell'
 
@@ -188,7 +188,9 @@ function create(spec: ExploreSpec, host: SimHost): SimView {
   const readout = h('dl', { class: 'sim-ex-read' })
   const goalLine = h('p', { class: 'sim-ex-goal', hidden: true })
   const tell = button('Tell the tutor', () => {
-    const where = toAnswerBox(el, `From the explorable (${spec.title || SCENE_LABEL[scene]}): ${summaryLine()}. `)
+    const said = `From the explorable (${spec.title || SCENE_LABEL[scene]}): ${summaryLine()}. `
+    const where = toAnswerBox(el, said)
+    tellModel(spec.title || SCENE_LABEL[scene], said)
     tell.textContent = where === 'answer' ? 'In your answer' : where === 'ask' ? 'Added to your question' : 'Copied'
     setTimeout(() => (tell.textContent = 'Tell the tutor'), 1800)
   }, 'quiet sim-ex-tell')

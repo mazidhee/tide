@@ -6,9 +6,14 @@ import { homedir, tmpdir } from 'os'
 import { dirname, join, relative } from 'path'
 import { LAB_PACK } from '@shared/labPack'
 import type { RunResult, TestResults } from '@shared/types'
-import { isSql, LANGUAGE_NAMES, languageOf, missingText, toolFor, type Language, type RunContext } from './languages'
+import { isSql, LANGUAGE_NAMES, languageOf, missingText, setToolsDir, toolFor, type Language, type RunContext } from './languages'
+import { packMissingText, trackPack } from '@shared/trackPacks'
+import { foundryBin, javaHome, nisshiBin, toolsRoot } from './packs/paths'
+import TIDE_RUNS from './packs/tide_runs.py?raw'
 import { TEACH_SERVER, TEST_RUNNER, TIDE_HTTP_HELPER } from './runnerScripts'
 import { usesFinanceHelper, writeFinanceHelper } from './finance/helper'
+
+setToolsDir(toolsRoot)
 
 /**
  * Runs code for notes, lessons, interviews and maths checks: Python and JavaScript always, and
@@ -24,6 +29,15 @@ const PROJECT_TIMEOUT_MS = 30_000
 const COMPILE_TIMEOUT_MS = 60_000
 /** These take seconds to import before the program's first line runs, so a snippet using them gets a project's time */
 const HEAVY_IMPORT = /^\s*(?:import|from)\s+(?:torch|sklearn|scipy)\b/m
+/** Spark starts a Java process (about 5 s) and its sandbox takes about 3.5 s to compile (see profile) */
+const SPARK = /^\s*(?:import|from)\s+pyspark\b/m
+const SPARK_TIMEOUT_MS = 120_000
+/** A run that talks to Kafka gets a broker of its own (the big data pack's Nisshi) */
+const KAFKA = /\bkafka\b|TIDE_KAFKA|KAFKA_BOOTSTRAP/i
+/** A run that talks to a chain gets an anvil of its own (the Foundry pack) */
+const CHAIN = /\bETH_RPC_URL\b|\bTIDE_ANVIL\b|\banvil\b|\bcast (?:send|call|balance|block-number|chain-id|receipt|tx)\b/
+/** Where training runs logged with tide_runs are kept (the notebook's Runs tab reads them) */
+export const runsDir = () => join(app.getPath('userData'), 'runs')
 const OUTPUT_LIMIT = 20_000
 const MAX_IMAGES = 4
 const MAX_IMAGE_BYTES = 3_000_000
@@ -116,18 +130,36 @@ const bothForms = (p: string) => (/^\/(var|tmp)\//.test(p) ? [p, `/private${p}`]
  * it runs, which the sandbox cannot tell from a loopback bind. (The one file under /tmp is where
  * OpenMP, inside PyTorch and scikit-learn, notes that it is loaded; without it every run warns.)
  */
-export const profile = (writable: string[], openPorts: number[] = []) => `(version 1)
+export const profile = (writable: string[], openPorts: number[] = [], o: { ephemeral?: boolean } = {}) => `(version 1)
 (allow default)
 (deny network*)
 (allow network-inbound (local ip "localhost:*"))
 (allow network-bind (local ip "localhost:*"))
-${openPorts.filter((p) => Number.isInteger(p) && p > 0 && p < 65536).map((p) => `(allow network-outbound (remote ip "localhost:${p}"))`).join('\n')}
+${openPorts.filter((p) => Number.isInteger(p) && p > 0 && p < 65536).map((p) => `(allow network-outbound (remote ip "localhost:${p}"))`).join('\n')}${o.ephemeral ? `\n${EPHEMERAL_RULES()}` : ''}
 (deny file-write*)
 (allow file-write* ${writable.flatMap(bothForms).map((p) => `(subpath ${JSON.stringify(p)})`).join(' ')} (literal "/dev/null") (literal "/dev/stdout") (literal "/dev/stderr") (literal "/dev/tty") (regex #"^/(private/)?tmp/__KMP_REGISTERED_LIB_[0-9_]+$"))
 `
 
+/**
+ * Spark's Python and Java halves talk over loopback ports the system picks at random (Py4J's
+ * gateway, each collect()), so they can't be named in advance. Its runs may connect to macOS's
+ * ephemeral range on this Mac (49152 to 65535), where only programs' own random ports are, and
+ * nowhere else: the services on fixed ports (the model server, a search engine, databases) stay
+ * closed. The sandbox has no port ranges, so it is a rule per port, which takes it about 3.5 s
+ * to compile: only runs that import pyspark pay for it.
+ */
+let ephemeral: string | null = null
+const EPHEMERAL_RULES = () => {
+  if (ephemeral === null) {
+    const lines: string[] = []
+    for (let p = 49152; p <= 65535; p++) lines.push(`(allow network-outbound (remote ip "localhost:${p}"))`)
+    ephemeral = lines.join('\n')
+  }
+  return ephemeral
+}
+
 /** A port nothing is using now, for a server the program starts itself */
-const freePort = () =>
+export const freePort = () =>
   new Promise<number>((resolve) => {
     const s = createServer()
     s.once('error', () => resolve(0))
@@ -212,6 +244,8 @@ export async function runCode(language: string, code: string, stdin = '', timeou
   const lang = languageOf(language)
   if (!lang) return failed(`Running ${language} isn't supported yet. ${LANGUAGE_NAMES} are.`)
   const tests = opts.tests?.trim() ?? ''
+  // Solidity runs through Foundry; its hidden tests are a test contract
+  if (lang.id === 'solidity') return (await import('./packs/foundry')).runSolidity(code, tests, timeoutMs ?? 60_000)
   const cases = tests ? parseCases(tests) : null
   if (tests && !cases && lang.id !== 'python') return failed(`Hidden tests in ${lang.name} are input and output cases, as JSON: [{"name": "adds", "stdin": "2 3", "expect": "5"}]. (Test functions are for Python, run with pytest.)`)
   const pyTests = !!tests && !cases
@@ -232,7 +266,7 @@ export async function runCode(language: string, code: string, stdin = '', timeou
   } else {
     await fs.writeFile(join(work, entry), code)
   }
-  const limit = timeoutMs ?? (lang.id === 'python' && HEAVY_IMPORT.test(code) ? PROJECT_TIMEOUT_MS : TIMEOUT_MS)
+  const limit = timeoutMs ?? (lang.id === 'python' && SPARK.test(code) ? SPARK_TIMEOUT_MS : lang.id === 'python' && HEAVY_IMPORT.test(code) ? PROJECT_TIMEOUT_MS : TIMEOUT_MS)
   return execute({ lang, tool: tool.path, scratch, entry, stdin, timeoutMs: limit, source: code, tests: pyTests, ...(cases ? { cases } : {}) })
 }
 
@@ -245,9 +279,12 @@ export async function runProject(entryAbs: string, stdin = ''): Promise<RunResul
   const ext = entryAbs.split('.').pop() ?? ''
   const lang = languageOf(ext)
   if (!lang) return failed(`Running .${ext} files isn't supported yet. ${LANGUAGE_NAMES} are; use the terminal for the rest.`)
+  if (lang.id === 'solidity') return (await import('./packs/foundry')).runSolidityFile(entryAbs)
   const tool = await toolFor(lang)
   if (!tool) return failed(missingText(lang))
-  const root = dirname(entryAbs)
+  // A C or C++ file in a project with build files (src/main.cpp beside include/) is built from the project's folder, with its other sources
+  const project = lang.id === 'c' || lang.id === 'cpp' ? nativeRoot(entryAbs) : null
+  const root = project ?? dirname(entryAbs)
   const scratch = await fs.mkdtemp(join(tmpdir(), 'tide-run-'))
   const work = join(scratch, 'work')
   await fs.mkdir(work)
@@ -273,8 +310,50 @@ export async function runProject(entryAbs: string, stdin = ''): Promise<RunResul
   }
   await copy(root, 0)
   const source = await fs.readFile(entryAbs, 'utf8').catch(() => '')
+  const entry = relative(root, entryAbs)
+  // C and C++: the other sources beside it are compiled and linked with it (not a second main(), not tests)
+  // (a file on its own, or one that #includes its neighbours, is compiled alone, as before)
+  const native = project ? await nativeSources(work, entry, lang.id === 'c') : undefined
   // A project's TypeScript is run by Node as it is, so its imports of other .ts files work
-  return execute({ lang, tool: tool.path, scratch, entry: relative(root, entryAbs), stdin, timeoutMs: PROJECT_TIMEOUT_MS, source, tests: false })
+  return execute({ lang, tool: tool.path, scratch, entry, stdin, timeoutMs: SPARK.test(source) ? SPARK_TIMEOUT_MS : PROJECT_TIMEOUT_MS, source, tests: false, ...(native ? { native } : {}) })
+}
+
+/** The nearest folder above a C or C++ file (up to three up) with compile_flags.txt or CMakeLists.txt */
+export function nativeRoot(file: string): string | null {
+  let d = dirname(file)
+  for (let i = 0; i < 4; i++) {
+    if (existsSync(join(d, 'compile_flags.txt')) || existsSync(join(d, 'CMakeLists.txt'))) return d
+    const up = dirname(d)
+    if (up === d) break
+    d = up
+  }
+  return null
+}
+
+/**
+ * The sources a C or C++ project's program is built from: the entry, and every other source in
+ * the copy that has no main() of its own and isn't a test; with the flags its compile_flags.txt
+ * gives clangd (include folders, the standard), so Run builds it as the editor reads it.
+ */
+export async function nativeSources(work: string, entry: string, c: boolean): Promise<{ sources: string[]; flags: string[] }> {
+  const ext = c ? /\.c$/i : /\.(cc|cpp|cxx)$/i
+  const found: string[] = []
+  const walk = async (dir: string, depth: number) => {
+    if (depth > 4) return
+    for (const e of await fs.readdir(join(work, dir), { withFileTypes: true }).catch(() => [])) {
+      const rel = dir ? join(dir, e.name) : e.name
+      if (e.isDirectory()) {
+        if (!/^(tests?|build|out|cmake-build[\w-]*)$/i.test(e.name)) await walk(rel, depth + 1)
+      } else if (ext.test(e.name) && rel !== entry) found.push(rel)
+    }
+  }
+  await walk('', 0)
+  const others: string[] = []
+  for (const f of found.sort()) if (!/\bint\s+main\s*\(/.test(await fs.readFile(join(work, f), 'utf8').catch(() => ''))) others.push(f)
+  const flagsFile = await fs.readFile(join(work, 'compile_flags.txt'), 'utf8').catch(() => '')
+  // Include folders only: the standard and warnings are the runner's, and nothing that writes or loads
+  const flags = flagsFile.split('\n').map((l) => l.trim()).filter((l) => /^-I[\w./-]+$/.test(l) || /^-D\w+(=\w+)?$/.test(l))
+  return { sources: [entry, ...others], flags }
 }
 
 interface Ran {
@@ -286,7 +365,7 @@ interface Ran {
 }
 
 /** One command inside the sandbox, with its own time limit; everything it started is stopped with it */
-function sandboxed(sb: string, cmd: string[], o: { cwd: string; env: Record<string, string>; stdin?: string; timeoutMs: number }): Promise<Ran> {
+export function sandboxed(sb: string, cmd: string[], o: { cwd: string; env: Record<string, string>; stdin?: string; timeoutMs: number }): Promise<Ran> {
   return new Promise<Ran>((resolve) => {
     // Its own process group, so a timeout also stops what it started (a script's `sleep`, a compiler's linker)
     const child = spawn('/usr/bin/sandbox-exec', ['-f', sb, ...cmd], { cwd: o.cwd, env: o.env, detached: true })
@@ -369,6 +448,8 @@ interface Job {
   tests: boolean
   /** Run the program once on each case's input, instead of once on stdin */
   cases?: IoCase[]
+  /** A C or C++ project: what to compile together */
+  native?: { sources: string[]; flags: string[] }
 }
 
 async function execute(job: Job): Promise<RunResult> {
@@ -381,6 +462,7 @@ async function execute(job: Job): Promise<RunResult> {
   await fs.mkdir(figures)
   await fs.writeFile(join(site, 'sitecustomize.py'), SITE_CUSTOMIZE)
   await fs.writeFile(join(site, 'tide_http.py'), TIDE_HTTP_HELPER)
+  await fs.writeFile(join(site, 'tide_runs.py'), TIDE_RUNS)
   // The finance lab's helper and its market data, only for code that imports it
   if (usesFinanceHelper(job.source)) await writeFinanceHelper(site)
   if (job.tests) await fs.writeFile(join(site, '_tide_tests.py'), TEST_RUNNER)
@@ -390,10 +472,18 @@ async function execute(job: Job): Promise<RunResult> {
   const mpl = await fs.realpath(mplConfig()).catch(() => mplConfig())
   const cache = await fs.realpath(runCache()).catch(() => runCache())
   const sb = join(scratch, 'profile.sb')
-  const writable = [scratch, mpl, cache, metalCache()]
+  // Training runs logged with tide_runs outlive the run, for the notebook's Runs tab
+  const runs = /\btide_runs\b/.test(job.source) ? await fs.mkdir(runsDir(), { recursive: true }).then(() => fs.realpath(runsDir())).catch(() => '') : ''
+  const writable = [scratch, mpl, cache, metalCache(), ...(runs ? [runs] : [])]
   const lessonPort = await freePort()
+  const spark = lang.id === 'python' && SPARK.test(job.source)
+  const packs = await packEnv(job.source, lang.id, scratch, spark)
+  if (packs.missing) {
+    await fs.rm(scratch, { recursive: true, force: true }).catch(() => {})
+    return failed(packs.missing)
+  }
 
-  const c: RunContext = { tool: job.tool, entry: job.entry, cache, python: pythonCmd(), node: process.execPath }
+  const c: RunContext = { tool: job.tool, entry: job.entry, cache, python: pythonCmd(), node: process.execPath, ...(job.native ?? {}) }
   const env: Record<string, string> = {
     PATH: '/opt/homebrew/bin:/usr/bin:/bin',
     HOME: scratch,
@@ -414,12 +504,15 @@ async function execute(job: Job): Promise<RunResult> {
     // A system proxy must not be asked for an address on this Mac
     NO_PROXY: 'localhost,127.0.0.1,::1',
     no_proxy: 'localhost,127.0.0.1,::1',
+    ...(runs ? { TIDE_RUNS_DIR: runs, TIDE_RUNS_EXPERIMENT: 'lessons' } : {}),
+    ...packs.env,
     ...lang.env?.(c)
   }
   const started = Date.now()
   const clean = pathCleaner(scratch, cache)
   const finish = async (r: Omit<RunResult, 'durationMs'>): Promise<RunResult> => {
     server?.stop()
+    for (const s of services) s.stop()
     await fs.rm(scratch, { recursive: true, force: true }).catch(() => {})
     return { ...r, durationMs: Date.now() - started }
   }
@@ -435,7 +528,24 @@ async function execute(job: Job): Promise<RunResult> {
     else serverNote = '\nTide’s practice server (TIDE_HTTP) could not start: it needs Python 3 on this Mac.'
   }
 
-  await fs.writeFile(sb, profile(writable, [lessonPort, ...(server ? [Number(new URL(server.url).port)] : [])]))
+  // A Kafka broker or a chain for this run alone, in the same sandbox, on ports the program may reach
+  const services: { stop(): void }[] = []
+  const servicePorts: number[] = []
+  const notes: string[] = []
+  for (const want of packs.services) {
+    const port = await freePort()
+    const servicesSb = join(scratch, `${want}.sb`)
+    await fs.writeFile(servicesSb, profile(writable))
+    const started = want === 'kafka' ? await startBroker(servicesSb, scratch, port, env) : await (await import('./packs/foundry')).startAnvil(servicesSb, scratch, port, env)
+    if (started) {
+      services.push(started)
+      servicePorts.push(port)
+      Object.assign(env, want === 'kafka' ? { TIDE_KAFKA: `127.0.0.1:${port}`, KAFKA_BOOTSTRAP_SERVERS: `127.0.0.1:${port}` } : { ETH_RPC_URL: `http://127.0.0.1:${port}`, TIDE_ANVIL: `http://127.0.0.1:${port}` })
+    } else notes.push(want === 'kafka' ? '\nThe Kafka broker for this run did not start.' : '\nThe local chain (anvil) for this run did not start.')
+  }
+  serverNote += notes.join('')
+
+  await fs.writeFile(sb, profile(writable, [lessonPort, ...servicePorts, ...(server ? [Number(new URL(server.url).port)] : [])], { ephemeral: spark }))
 
   let warnings = ''
   if (lang.compile) {
@@ -477,6 +587,7 @@ async function execute(job: Job): Promise<RunResult> {
       stdout += `${stdout && !stdout.endsWith('\n') ? '\n' : ''}${testSummary(tests)}`
     }
   }
+  if (spark) stderr = quietSpark(stderr)
   if (lang.id === 'python') stderr += libraryNote(stderr)
   if (ran.exitCode !== 0 || /TIDE_HTTP|TIDE_PORT/.test(job.source)) stderr += networkNote(stderr, job.source)
   return finish({ stdout, stderr: stderr + serverNote, exitCode: ran.exitCode, timedOut: ran.timedOut, ...(images.length ? { images } : {}), ...(tests ? { tests } : {}) })
@@ -526,6 +637,7 @@ export function libraryNote(stderr: string): string {
   const name = /ModuleNotFoundError: No module named '([\w.]+)'/.exec(stderr)?.[1]?.split('.')[0]
   if (!name) return ''
   const line = (text: string) => `${stderr.endsWith('\n') ? '' : '\n'}${text}\n`
+  if (name === 'pyspark' || name === 'kafka') return line(packMissingText('bigdata', name === 'pyspark' ? 'PySpark' : 'kafka-python'))
   if (LAB_PACK.modules.includes(name)) return line(`${name} is in Tide's lab pack (${LAB_PACK.contents}), which isn't installed. The learner can add it in ${LAB_PACK.where} (${LAB_PACK.size}); until then this code cannot run here.`)
   if (name === 'sympy') return line("SymPy isn't installed. The learner can add it in Settings › Tools › Maths checker.")
   if (PYTHON_LIBRARIES.includes(name)) return line(`${name} isn't installed. The learner can add it in Settings › Tools › Data libraries.`)
@@ -716,3 +828,76 @@ export function setupLab(onProgress?: (step: string) => void): Promise<Status> {
   })
   return labInstall
 }
+
+/**
+ * What a run needs from the track packs, from its code: Spark's environment (Java, scratch
+ * folders, Tide's Python for its workers), a Kafka broker, a chain; or why it can't run yet.
+ */
+export async function packEnv(source: string, lang: string, scratch: string, spark: boolean): Promise<{ env: Record<string, string>; services: ('kafka' | 'chain')[]; missing?: string }> {
+  const env: Record<string, string> = {}
+  const services: ('kafka' | 'chain')[] = []
+  if (spark) {
+    const java = await javaHome()
+    if (!java) return { env, services, missing: packMissingText('bigdata', 'Spark (it runs on Java)') }
+    const py = pythonCmd()[0]
+    Object.assign(env, {
+      JAVA_HOME: java,
+      SPARK_LOCAL_IP: '127.0.0.1',
+      SPARK_LOCAL_DIRS: scratch,
+      // Java ignores TMPDIR; Spark's driver is told where it may write
+      PYSPARK_SUBMIT_ARGS: `--driver-java-options -Djava.io.tmpdir=${scratch} --conf spark.ui.enabled=false --conf spark.ui.showConsoleProgress=false pyspark-shell`,
+      PYSPARK_PYTHON: py === '/usr/bin/env' ? 'python3' : py,
+      PYSPARK_DRIVER_PYTHON: py === '/usr/bin/env' ? 'python3' : py
+    })
+  }
+  if (lang === 'python' || lang === 'bash' || lang === 'zsh' || lang === 'javascript' || lang === 'typescript') {
+    if (KAFKA.test(source)) {
+      if (!existsSync(nisshiBin())) return { env, services, missing: packMissingText('bigdata', 'Kafka (a broker to produce to and consume from)') }
+      services.push('kafka')
+    }
+    if (CHAIN.test(source)) {
+      if (!existsSync(foundryBin('anvil'))) return { env, services, missing: packMissingText('foundry', 'A local chain (anvil)') }
+      services.push('chain')
+      env.PATH = `${join(toolsRoot(), 'foundry', 'bin')}:/opt/homebrew/bin:/usr/bin:/bin`
+      env.FOUNDRY_DISABLE_NIGHTLY_WARNING = '1'
+    }
+  }
+  return { env, services }
+}
+
+/** A Kafka-compatible broker for one run: Nisshi, topics in memory, on the run's open port */
+export async function startBroker(sb: string, cwd: string, port: number, env: Record<string, string>): Promise<{ stop(): void } | null> {
+  return new Promise((resolve) => {
+    const url = `tcp://127.0.0.1:${port}`
+    const child = spawn('/usr/bin/sandbox-exec', ['-f', sb, nisshiBin(), 'broker', '--listener-url', url, '--advertised-listener-url', url, '--storage-engine', 'memory://tide/', '--group-initial-rebalance-delay', '0s'], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] })
+    const stop = () => child.kill('SIGKILL')
+    let out = ''
+    const done = (v: { stop(): void } | null) => {
+      clearTimeout(timer)
+      resolve(v)
+    }
+    const timer = setTimeout(() => {
+      stop()
+      done(null)
+    }, 8000)
+    const watch = (d: Buffer) => {
+      out += d.toString()
+      if (/ready in/.test(out)) done({ stop })
+    }
+    child.stdout.on('data', watch)
+    child.stderr.on('data', watch)
+    child.on('error', () => done(null))
+    child.on('close', () => done(null))
+  })
+}
+
+/** Spark's start-up chatter (log4j's banner, the native-Hadoop warning) taken out of what the learner reads */
+export function quietSpark(stderr: string): string {
+  return stderr
+    .split('\n')
+    .filter((l) => !/^WARNING: Using incubator modules|^Using Spark's default log4j profile|^Setting default log level to|^To adjust logging level use|WARN NativeCodeLoader|WARN Utils: Service 'SparkUI'|WARN SparkConf: Note that spark.local.dir|^\s*$/.test(l))
+    .join('\n')
+    .replace(/^\n+/, '')
+}
+
+export const bigDataPack = () => trackPack('bigdata')!

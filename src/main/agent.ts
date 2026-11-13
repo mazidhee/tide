@@ -221,9 +221,9 @@ const TERMINAL_RUN = tool(
 
 const CODE_TOOL = tool(
   'run_code',
-  'Run code in a sandbox (no internet, no files kept). Use it for any exact calculation (large numbers, sequences, probabilities, algebra) rather than working it out in your head, and to run a code example before you show its output. Returns stdout, stderr and the exit code. Python has SymPy, NumPy, pandas and Matplotlib; PyTorch, scikit-learn, SciPy, pytest, requests, httpx and aiohttp only when the learner has added the lab pack. Compiled languages show their warnings, and C and C++ have an undefined-behaviour checker, so their messages are worth showing. A language or Python library that is not installed on this Mac says so in the result, with how to add it: tell the student that, never guess the output. For HTTP and async code a practice server is at the address in the environment variable TIDE_HTTP (/json?delay=1, /flaky?rate=0.3 or ?fail=2, /stream?n=5&delay=0.2, /echo, /status/404); a server the program starts itself must use 127.0.0.1 and the port in TIDE_PORT. sql is sent to run_sql.',
+  'Run code in a sandbox (no internet, no files kept). Use it for any exact calculation (large numbers, sequences, probabilities, algebra) rather than working it out in your head, and to run a code example before you show its output. Returns stdout, stderr and the exit code. Python has SymPy, NumPy, pandas and Matplotlib; PyTorch, scikit-learn, SciPy, pytest, requests, httpx and aiohttp only when the learner has added the lab pack. Compiled languages show their warnings, and C and C++ have an undefined-behaviour checker, so their messages are worth showing. A language or Python library that is not installed on this Mac says so in the result, with how to add it: tell the student that, never guess the output. For HTTP and async code a practice server is at the address in the environment variable TIDE_HTTP (/json?delay=1, /flaky?rate=0.3 or ?fail=2, /stream?n=5&delay=0.2, /echo, /status/404); a server the program starts itself must use 127.0.0.1 and the port in TIDE_PORT. With the track packs: solidity runs through Foundry (a test contract runs with forge test, a contract with run() as a script, console.log from forge-std prints; its hidden tests are a Solidity test contract importing ../src/Main.sol); Python that imports pyspark runs Spark locally (master local[*]); code that names kafka gets a broker at TIDE_KAFKA (kafka-python is there); code that names ETH_RPC_URL or anvil gets a fresh local chain at ETH_RPC_URL, with cast on the PATH in bash. A pack that is not installed says so in the result. sql is sent to run_sql.',
   {
-    language: { type: 'string', enum: ['python', 'javascript', 'typescript', 'c', 'cpp', 'rust', 'go', 'swift', 'java', 'ruby', 'bash', 'zsh', 'sql'] },
+    language: { type: 'string', enum: ['python', 'javascript', 'typescript', 'c', 'cpp', 'rust', 'go', 'swift', 'java', 'ruby', 'bash', 'zsh', 'solidity', 'sql'] },
     code: { type: 'string' },
     stdin: { type: 'string' },
     tests: { type: 'string', description: 'Hidden tests. Python: pytest-style test_ functions run against code (its names are imported for them). Any language: input and output cases as JSON, [{"stdin": "2 3", "expect": "5"}], each run as its own program. The result lists which passed and which failed, and why.' }
@@ -233,8 +233,8 @@ const CODE_TOOL = tool(
 
 const SQL_TOOL = tool(
   'run_sql',
-  "Run SQL on this conversation's data lab: SQLite with sample data (a shop: customers, products, orders, order_items; product analytics: users, events). Use it to run every query before you show it and to check the student's queries. Several statements may be given; the last result comes back as a table (the first 30 rows), with the row count and the time, or SQLite's error message.",
-  { sql: { type: 'string' } },
+  "Run SQL on this conversation's data lab: SQLite with sample data (a shop: customers, products, orders, order_items; product analytics: users, events). Use it to run every query before you show it and to check the student's queries. Several statements may be given; the last result comes back as a table (the first 30 rows), with the row count and the time, or SQLite's error message. engine postgres runs it on real PostgreSQL 18 instead (the Postgres pack: the same sample data with real dates and keys; EXPLAIN ANALYZE, indexes, transactions); session B is a second connection for showing isolation levels and locks. In lesson text, a ```postgres block runs on Postgres, and -- session: B on its first line sends it to session B.",
+  { sql: { type: 'string' }, engine: { type: 'string', enum: ['sqlite', 'postgres'] }, session: { type: 'string', enum: ['A', 'B'] } },
   ['sql']
 )
 const LOAD_TABLE_TOOL = tool('load_table', "Load a .csv or .tsv file from the student's notes folder into the data lab as a table for run_sql; returns its name, columns and row count.", { path: { type: 'string', description: 'Path in the notes folder' } }, ['path'])
@@ -1259,6 +1259,7 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
 
   // SQL asked of run_code goes to the data lab, as run_sql
   if (call.name === 'run_code' && isSql(str('language'))) return runToolNow({ ...call, name: 'run_sql', arguments: JSON.stringify({ sql: String(args.code ?? '') }) }, ctx, depth)
+  if (call.name === 'run_code' && /^(postgres(ql)?|pgsql|psql)$/i.test(str('language'))) return runToolNow({ ...call, name: 'run_sql', arguments: JSON.stringify({ sql: String(args.code ?? ''), engine: 'postgres' }) }, ctx, depth)
 
   if (call.name === 'run_code') {
     const language = str('language') || 'python'
@@ -1274,7 +1275,7 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     const sql = String(args.sql ?? '')
     const firstLine = sql.split('\n').find((l) => l.trim() && !l.trim().startsWith('--'))?.trim() ?? ''
     const id = ctx.step({ kind: 'run_sql', label: `Running SQL${firstLine ? `: ${firstLine.slice(0, 60)}` : ''}`, status: 'running', depth })
-    const r = runSqlTool(ctx.labId ?? ctx.chatId ?? 'scratch', sql)
+    const r = /^postgres(ql)?$/i.test(str('engine')) ? await (await import('./packs/postgres')).runPgTool(ctx.labId ?? ctx.chatId ?? 'scratch', sql, str('session') || undefined) : runSqlTool(ctx.labId ?? ctx.chatId ?? 'scratch', sql)
     ctx.updateStep(id, { status: r.ok ? 'done' : 'error', detail: r.detail })
     return clip(r.text, TOOL_TEXT_LIMIT)
   }

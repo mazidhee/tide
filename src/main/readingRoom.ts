@@ -185,11 +185,15 @@ export async function setProgress(path: string, p: Progress): Promise<void> {
 /** Reading time: minutes on today's date, and the words read in it for the pace */
 export async function logTime(path: string, seconds: number, wordsRead = 0): Promise<void> {
   if (!(seconds > 0) || seconds > 3600) return
-  await updateBook(path, (b) => {
+  const book = await updateBook(path, (b) => {
     const next = logMinutes(b, today(), seconds / 60)
     if (wordsRead > 0) next.pace = { words: (b.pace?.words ?? 0) + wordsRead, seconds: (b.pace?.seconds ?? 0) + seconds }
     return next
   })
+  // Today's minutes in this book, in the learning event log (one row a day, kept up to date)
+  const day = today()
+  const minutes = book?.days?.[day]
+  if (book && minutes) await Promise.all([import('@shared/learningEvents'), import('./learningLog')]).then(([{ readingEvent }, { learningEvent }]) => learningEvent(readingEvent(book, day, minutes))).catch(() => {})
 }
 
 /** Tonight's reading, for Home and the reading room: the week plan's, else the goal's */

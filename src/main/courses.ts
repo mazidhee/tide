@@ -514,6 +514,8 @@ async function noteExposure(course: string, lesson: string, at: number): Promise
   const meta = await importedCourse(course)
   const c = catalogueCourse(course)
   const l = meta?.outline.modules.flatMap((m) => m.lessons.map((x) => ({ m, x }))).find((y) => y.x.id === lesson)
+  // The lesson studied, in the learning event log (its concepts hear of it through the knowledge map below)
+  await Promise.all([import('@shared/learningEvents'), import('./learningLog')]).then(([{ courseLessonEvent }, { learningEvent }]) => learningEvent(courseLessonEvent(course, lesson, at, l?.x.title))).catch(() => {})
   if (!c || !l) return
   const topics = await import('./coursePlan').then((m) => m.topicsOfLesson(course, lesson)).catch(() => [] as string[])
   const k = await import('./knowledge')

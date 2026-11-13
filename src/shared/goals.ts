@@ -55,6 +55,8 @@ export interface PlanGoal {
   standing?: boolean
   /** Paused with no end */
   off?: boolean
+  /** The longest any of its threads may go untouched, in days, when tighter than usual (North Star's stage: every few days, so the week interleaves its tracks) */
+  maxGap?: number
 }
 
 export interface GoalsStore {
@@ -434,7 +436,7 @@ export function buildThreads(goals: PlanGoal[], log: ThreadLog[], o: { today: st
         paused: true
       }
       t.weight += (WEIGHT_VALUE[g.weight] * n.hours) / totalHours * (n.optional ? 0.6 : 1)
-      t.maxGap = Math.min(t.maxGap, gapLimit(n.kind, dated, g.weight))
+      t.maxGap = Math.min(t.maxGap, gapLimit(n.kind, dated, g.weight), g.maxGap ?? 99)
       if (!g.standing) t.standing = false
       if (!paused) t.paused = false
       if (dated && !paused) {

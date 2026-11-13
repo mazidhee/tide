@@ -421,6 +421,17 @@ export interface GraphData {
   edges: { source: string; target: string }[]
 }
 
+export interface NorthStarDraft {
+  ns: import('./northStar').NorthStar
+  note: string
+  files: import('./northStar').BuildFile[]
+  notePath: string
+  estimate: string
+  /** Hours saved by learning shared topics once, and how many there are */
+  saved: number
+  shared: number
+}
+
 export interface NotebookMeta {
   path: string
   name: string
@@ -439,6 +450,8 @@ export interface NotebookMeta {
   project?: import('./project').ProjectInfo
   /** Who teaches its lessons: Tide decides (the "Who teaches" setting), the cloud model throughout, Claude, or Gemma on this Mac */
   tutor?: 'auto' | 'cloud' | 'claude' | 'gemma'
+  /** A North Star track: a ready roadmap in the hidden Roadmaps folder, with no folder of its own (main/northStar) */
+  virtual?: boolean
 }
 
 export interface NoteProgress {
@@ -645,6 +658,7 @@ export interface TideApi {
   /** The Code view as an IDE (shared/ide) */
   ide: import('./ide').IdeApi
   ideas: import('./ideaProject').IdeasApi
+  packs: import('./trackPacks').PacksApi
   /** Jupyter notebooks and the quant lab (shared/notebook) */
   notebook: import('./notebook/api').NotebookApi
   lsp: {
@@ -957,6 +971,18 @@ export interface TideApi {
     onKilled(cb: (e: { host: string; reason: string }) => void): () => void
   }
   /** The knowledge map: every concept with how solid it is today, what is ready next, what is fading, and retention by week */
+  /** The learner model (main/learnerModel): What you know › Your model */
+  model: {
+    view(fresh?: boolean): Promise<import('./learnerModelView').ModelView>
+    /** One concept or skill: its depth, the evidence level by level, recent events, links */
+    node(id: string): Promise<import('./learnerModelView').ModelNodeDetail | null>
+    /** You correct Tide's judgement ("I actually know this"): kept as an event */
+    correct(id: string, depth: number, note?: string): Promise<import('./learnerModelView').ModelNodeDetail | null>
+    /** How deep something should go; null takes your target away */
+    setTarget(node: string, depth: number | null): Promise<number>
+    /** A learning act from the window (an explorable's "Tell the tutor") */
+    event(e: import('./learningEvents').EventIn): Promise<void>
+  }
   knowledge: {
     view(): Promise<import('./knowledge').KnowledgeView>
     /** Review now: the concept's kept questions that are due */
@@ -1051,6 +1077,24 @@ export interface TideApi {
     mixedReview(): Promise<{ topic: string; review: import('./review').ReviewSetup; tracks: number } | null>
   }
   /** A tutor that remembers you (main/learnerProfile): the profile note, as the profile view shows it */
+  northStar: {
+    view(): Promise<import('../main/northStar').NorthStarView | null>
+    glance(): Promise<Awaited<ReturnType<typeof import('../main/northStar').glance>>>
+    suggested(): Promise<{ goal: string; hoursPerWeek: number; notePath?: string }>
+    /** Opus weaves the map (minutes); nothing is written until build */
+    synthesise(input: { goal: string; hoursPerWeek?: number }): Promise<NorthStarDraft>
+    status(): Promise<{ running: boolean; startedAt?: number; error?: string; draft?: boolean }>
+    draft(): Promise<NorthStarDraft | null>
+    discard(): Promise<void>
+    /** Writes new files only */
+    build(): Promise<{ notePath: string; wrote: string[]; tracks: string[]; week: boolean }>
+    decide(id: string, ok: boolean): Promise<import('../main/northStar').NorthStarView | null>
+    review(): Promise<import('../main/northStar').NorthStarView | null>
+    moveOn(): Promise<import('../main/northStar').NorthStarView | null>
+    confirmDepth(topic: string, depth: number): Promise<import('../main/northStar').NorthStarView | null>
+    startCapstone(): Promise<{ notebook: string } | null>
+    install(): Promise<string[]>
+  }
   learner: {
     view(): Promise<import('./learnerProfile').LearnerView>
     /** Brings the measured lines up to date (and makes the note if there isn't one) */
@@ -1210,6 +1254,9 @@ export interface TideApi {
     reset(id: string): Promise<void>
     /** Loads a .csv or .tsv file from the notes folder (a path relative to it) into that lab as a table named after the file */
     load(id: string, path: string): Promise<import('./lab').LabLoaded>
+    /** The same lab's Postgres database (the Postgres pack), in session A or B */
+    pgQuery(id: string, sql: string, session?: string): Promise<import('./lab').LabResult & { session: string; transaction: 'idle' | 'open' | 'failed' }>
+    pgReset(id: string): Promise<void>
   }
   /** Guided projects (shared/workshop.ts): built in stages, reviewed against tests */
   /** Videos (main/videos.ts, shared/video.ts): transcripts kept for YouTube videos and videos of your own, and the sections a lesson offers */

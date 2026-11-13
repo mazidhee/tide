@@ -46,6 +46,8 @@ import {
   type TrackView
 } from '@shared/track'
 import { joinRel, readText, writeText } from './vault'
+import { roadmapTopics } from '@shared/curriculum'
+import { creditShared, scopePhases } from '@shared/northStar'
 
 const STORE = joinRel('.tide', 'tracks.json')
 const today = () => localDate()
@@ -87,6 +89,8 @@ interface Gathered {
   record: TrackRecord
   capstones: Record<string, CapstoneSuggestion | null>
   progress: Record<string, { done: number; total: number; hoursLeft: number }>
+  /** Cut to North Star's current stage */
+  star?: { stage: number; title: string; phases: number; of: number }
 }
 
 async function roadmapOf(notebook: string): Promise<{ name: string; path: string; md: string } | null> {
@@ -106,10 +110,18 @@ async function projectRecords(): Promise<ProjectRecord[]> {
 async function gather(notebook: string, concepts?: ConceptState[], store?: TracksStore): Promise<Gathered | null> {
   const rm = await roadmapOf(notebook)
   if (!rm) return null
-  const phases = phasesOf(rm.name, rm.md)
+  const full = phasesOf(rm.name, rm.md)
+  // North Star decides what this track needs now: its phases cut to the stage's scope (shared/northStar)
+  const star = await import('./northStar').then((m) => m.trackScope(rm.name)).catch(() => null)
+  const phases = star ? scopePhases(full, star.scope) : full
   if (!phases.length) return null
   const all = concepts ?? (await import('./knowledge').then((k) => k.allConcepts()).catch(() => [] as ConceptState[]))
-  const byId = new Map(all.filter((c) => c.area === rm.name).map((c) => [c.id, c]))
+  let byId = new Map(all.filter((c) => c.area === rm.name).map((c) => [c.id, c]))
+  // A topic another roadmap shares counts here once it's solid there (learned once, credited to all)
+  if (star) {
+    const { siblings } = await import('./northStar').then((m) => m.sharedGroups())
+    byId = creditShared(byId, new Map(all.map((c) => [c.id, c])), siblings, phases.flatMap((p) => p.topics.map((t) => t.id)))
+  }
   const record = recordOf(store ?? (await loadTracks()), rm.name)
   const started = await projectRecords()
   const { readPlan } = await import('./ideaProjects')
@@ -132,7 +144,7 @@ async function gather(notebook: string, concepts?: ConceptState[], store?: Track
     // Not set up: the roadmap's own line counts once ticked; a ladder project not yet started is still needed
     states[p.id] = s ? { needed: true, done: !!s.line?.checked } : { needed: false, done: false }
   }
-  return { notebook: rm.name, path: rm.path, phases, gates: trackGates(phases, byId, record, states), record, capstones, progress }
+  return { notebook: rm.name, path: rm.path, phases, gates: trackGates(phases, byId, record, states), record, capstones, progress, ...(star ? { star: { stage: star.stage, title: star.title, phases: phases.length, of: full.length } } : {}) }
 }
 
 // ---------- What the scheduler holds back ----------
@@ -150,6 +162,15 @@ export async function heldTopics(): Promise<Set<string>> {
     if (!nb.outline) continue
     const g = await gather(nb.name, concepts, store).catch(() => null)
     for (const id of g?.gates.held ?? []) held.add(id)
+    // North Star uses this track only in later stages: nothing of it is planned yet
+    if (!g) {
+      const star = await import('./northStar').then((m) => m.trackScope(nb.name)).catch(() => null)
+      if (star) for (const t of roadmapTopics(nb.name, await readText(nb.outline).catch(() => ''))) held.add(t.id)
+    } else if (g.star) {
+      // Topics outside the stage's scope wait for their stage
+      const inScope = new Set(g.phases.flatMap((p) => [...p.topics, ...p.practice].map((t) => t.id)))
+      for (const t of roadmapTopics(nb.name, await readText(nb.outline).catch(() => ''))) if (!inScope.has(t.id) && !t.project) held.add(t.id)
+    }
   }
   heldCache = { at: Date.now(), held }
   return held
@@ -259,7 +280,8 @@ export async function trackView(notebook: string): Promise<TrackView | null> {
     hoursLeft: hours,
     minutesPerWeek: minutes,
     finish: finishDate(hours, minutes, today()),
-    marker: await marker().catch(() => 'self' as const)
+    marker: await marker().catch(() => 'self' as const),
+    ...(g.star ? { star: g.star } : {})
   }
 }
 

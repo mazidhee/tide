@@ -380,7 +380,7 @@ export function Sidebar({ dueCount, peek = false }: { dueCount: number; peek?: b
               {shown('courses') && navItem('course', 'Courses', view.kind === 'courses', () => app.setView({ kind: 'courses' }), undefined, { kind: 'courses' })}
               {shown('practice') && navItem('terminal', 'Practice', view.kind === 'practice' || view.kind === 'lab' || view.kind === 'code' || view.kind === 'drill' || view.kind === 'maths' || view.kind === 'design', () => app.setView({ kind: 'practice' }))}
               {shown('review') && navItem('cards', 'Review', view.kind === 'study', () => app.setView({ kind: 'study', scope: { kind: 'vault' } }), dueCount)}
-              {navItem('list', 'Your week', view.kind === 'coach' || view.kind === 'wrapup' || view.kind === 'weekly', () => app.setView({ kind: 'coach' }))}
+              {navItem('list', 'Your week', view.kind === 'coach' || view.kind === 'wrapup' || view.kind === 'weekly' || view.kind === 'northstar', () => app.setView({ kind: 'coach' }))}
               {navItem('timer', 'Past lessons', view.kind === 'lessons', () => app.setView({ kind: 'lessons' }))}
             </div>
           )}

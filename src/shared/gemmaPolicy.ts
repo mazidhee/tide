@@ -48,6 +48,9 @@ export const JOB_ROUTES = {
   // Goals and the week mixed across them (main/goals): Opus breaks a goal down and explains the mix; the numbers are code's
   goalPlan: { label: 'Breaking a goal down into what it needs', role: 'hard' },
   weekMix: { label: 'Explaining the week’s mix across your goals', role: 'hard' },
+  // North Star (main/northStar): Opus weaves every roadmap into one path, and checks it once a week; without a model, a simpler map from code
+  northStar: { label: 'Building your North Star', role: 'hard' },
+  northStarReview: { label: 'The weekly check of your North Star', role: 'hard' },
   // Roadmap continuity (main/track): Opus writes and marks a phase check; without a model, plain questions you mark yourself
   phaseCheck: { label: 'Writing a phase check', role: 'hard' },
   phaseCheckMark: { label: 'Marking a phase check', role: 'mark' },
@@ -67,6 +70,8 @@ export const JOB_ROUTES = {
   weeklyReview: { label: 'Your weekly review', role: 'hard' },
   // This week's progress in Your week (main/weekProgress): one line, Claude only; without it, fixed words
   weekProgress: { label: 'A line on this week’s progress', role: 'background' },
+  // The learner model (main/learnerModel): Haiku proposes "used in" links and skill tags; Claude only, the name heuristics stand in without it
+  modelLinks: { label: 'Linking what you know: uses and skills', role: 'background' },
   // Opus reviewing a finished lesson against the teaching rubric (main/teaching): Claude only, never Gemma
   lessonReview: { label: 'Reviewing a finished lesson', role: 'mark' },
   // Your Metabase mapped (main/metabaseMap): what each collection holds, from its fields and a tiny example

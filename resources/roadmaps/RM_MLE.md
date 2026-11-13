@@ -1,6 +1,6 @@
 # ML Engineering Roadmap
 
-Getting models into production and keeping them right: pipelines and experiment tracking, data and features, serving, monitoring, and the platforms that run it all. Builds on the Machine Learning roadmap.
+Getting models into production and keeping them right: pipelines and experiment tracking, data and features, serving, monitoring, and the platforms that run it all. Builds on the Machine Learning roadmap. Track every training run with tide_runs (built in): parameters, metrics and curves, compared in the notebook's Runs tab.
 
 ## 1. From notebook to pipeline — CORE
 

@@ -93,9 +93,11 @@ export async function getNotebooks(): Promise<NotebookMeta[]> {
   const stored = await readJson<Record<string, Partial<NotebookMeta>>>(NOTEBOOKS_FILE, {})
   const notes = await allNotes()
   const outlines = new Set(Object.values(stored).flatMap((m) => (m?.outline ? [m.outline] : [])))
+  // A North Star track whose folder now exists (notes made in it): the folder is the notebook, with the track's roadmap
+  const tracks = await import('./northStar').then((m) => m.installedTracks()).catch(() => ({}) as Record<string, { outline: string }>)
   return (tree?.children ?? [])
     .filter((n) => n.type === 'folder')
-    .map((folder) => {
+    .map((folder): NotebookMeta => {
       const files = flattenFiles(folder)
       const inFolder = notes.filter((n) => n.path.startsWith(folder.path + '/'))
       return {
@@ -110,11 +112,25 @@ export async function getNotebooks(): Promise<NotebookMeta[]> {
         color: stored[folder.path]?.color,
         description: stored[folder.path]?.description,
         tutor: stored[folder.path]?.tutor,
-        outline: stored[folder.path]?.outline,
+        outline: stored[folder.path]?.outline ?? (outlines.has(tracks[folder.name]?.outline ?? '') ? undefined : tracks[folder.name]?.outline),
         ...(stored[folder.path]?.project ? { project: stored[folder.path]!.project } : {})
       }
     })
     .filter((nb) => isNotebook(tree, nb.path, outlines))
+    .concat(virtualNotebooks(tree, stored, tracks))
+}
+
+/**
+ * North Star's tracks (main/northStar): a ready roadmap installed into the hidden Roadmaps folder
+ * is a notebook with no folder, so nothing new appears in the sidebar. Its path is its name; once
+ * a folder of that name exists (notes made in it), the folder is the notebook as usual.
+ */
+function virtualNotebooks(tree: Awaited<ReturnType<typeof getTree>>, stored: Record<string, Partial<NotebookMeta>>, tracks: Record<string, { outline: string }>): NotebookMeta[] {
+  const folders = new Set((tree?.children ?? []).filter((n) => n.type === 'folder').map((n) => n.name.toLowerCase()))
+  const outlines = new Set(Object.values(stored).flatMap((m) => (m?.outline ? [m.outline] : [])))
+  return Object.entries(tracks)
+    .filter(([name, t]) => !folders.has(name.toLowerCase()) && !outlines.has(t.outline))
+    .map(([name, t]) => ({ path: name, name, noteCount: 0, fileCount: 0, mastered: 0, learning: 0, lastModified: 0, outline: t.outline, virtual: true }))
 }
 
 /**
@@ -269,6 +285,8 @@ export async function recordAttempt(a: Omit<Attempt, 'at'>) {
   await fs.mkdir(absPath('.tide'), { recursive: true })
   const attempt: Attempt = { ...a, at: Date.now() }
   await fs.appendFile(absPath(ATTEMPTS), JSON.stringify(attempt) + '\n')
+  // The learning event log: an answer no lesson record holds (a lesson's own answers are read from its record)
+  if (!a.lesson && a.mode !== 'teach') await Promise.all([import('@shared/learningEvents'), import('./learningLog')]).then(([{ attemptEvent }, { learningEvent }]) => learningEvent(attemptEvent(attempt))).catch(() => {})
   // The knowledge map takes answers from sessions that keep no lesson record of their own; never a reason to fail
   await import('./knowledge').then((k) => k.noteAttempt(attempt)).catch(() => {})
   const { brainEvent } = await import('./brainEvents')
@@ -488,7 +506,10 @@ export async function logFocus(start: number, end: number, context?: { label?: s
   if (!Number.isFinite(minutes) || minutes < 1 || minutes > 24 * 60) return
   const clean = (s?: string) => (typeof s === 'string' && s.trim() ? s.trim().slice(0, 200) : undefined)
   await fs.mkdir(absPath(joinRel('.tide')), { recursive: true })
-  await fs.appendFile(absPath(FOCUS_LOG), JSON.stringify({ start, end, minutes, label: clean(context?.label), path: clean(context?.path), kind: clean(context?.kind) }) + '\n')
+  const row = { start, end, minutes, label: clean(context?.label), path: clean(context?.path), kind: clean(context?.kind) }
+  await fs.appendFile(absPath(FOCUS_LOG), JSON.stringify(row) + '\n')
+  // Time studied, in the learning event log
+  await Promise.all([import('@shared/learningEvents'), import('./learningLog')]).then(([{ focusEvent }, { learningEvent }]) => learningEvent(focusEvent(row))).catch(() => {})
 }
 
 /** Study sessions logged since a time, for forecasts */
@@ -518,6 +539,7 @@ export async function logInterview(r: Omit<InterviewRecord, 'id' | 'at'>): Promi
   }
   await fs.mkdir(absPath(joinRel('.tide')), { recursive: true })
   await fs.appendFile(absPath(INTERVIEW_LOG), JSON.stringify(record) + '\n')
+  await Promise.all([import('@shared/learningEvents'), import('./learningLog')]).then(([{ mockEvent }, { learningEvent }]) => learningEvent(mockEvent(record, 'interview'))).catch(() => {})
   return record
 }
 
@@ -531,6 +553,7 @@ export async function logDrill(r: Omit<DrillResult, 'id' | 'at'>): Promise<Drill
   const record: DrillResult = { id: Math.random().toString(36).slice(2, 10), at: Date.now(), kind: r.kind, correct: Math.round(r.correct), attempted: Math.round(r.attempted), seconds: Math.max(0, Math.round(r.seconds)), perOp: r.perOp ?? {} }
   await fs.mkdir(absPath(joinRel('.tide')), { recursive: true })
   await fs.appendFile(absPath(DRILL_LOG), JSON.stringify(record) + '\n')
+  await Promise.all([import('@shared/learningEvents'), import('./learningLog')]).then(([{ drillEvent }, { learningEvent }]) => learningEvent(drillEvent(record, 'drill'))).catch(() => {})
   return record
 }
 

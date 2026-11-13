@@ -495,7 +495,10 @@ function standIns(o: { claude: boolean; ask?: Ask; runTests?: Verifier['runTests
   return calls
 }
 
-const events = async () => L.readLearningEvents()
+const LL = await import('../src/main/learningLog')
+// Synchronous in tests, so a read straight after sees the write (the app's sink is the same call, not awaited)
+L.setLearningEventSink((es) => LL.learningEvent(es))
+const events = async () => LL.readEvents({}).filter((e) => e.source === 'sharpness')
 
 describe('a Sharpness attempt from start to card', () => {
   beforeEach(() => {
@@ -532,8 +535,11 @@ describe('a Sharpness attempt from start to card', () => {
     expect(after.postmortems[0].id).toBe(pm.postmortem.id)
     expect(after.cards).toBe(1)
     const ev = await events()
-    expect(ev.map((e) => e.kind)).toEqual(expect.arrayContaining(['attempt', 'hint', 'postmortem']))
-    expect(ev.find((e) => e.kind === 'attempt')).toMatchObject({ source: 'sharpness', subject: 'Quant and probability', correct: false })
+    expect(ev.map((e) => e.kind)).toEqual(expect.arrayContaining(['transfer', 'answered', 'misconception_seen']))
+    const first = ev.find((e) => e.key === `sharpness:${st.id}`)!
+    expect(first).toMatchObject({ kind: 'transfer', outcome: 'wrong', skills: ['estimation', 'modelling'], data: { category: 'quant', ratingBefore: r.before, rating: r.after, rated: true } })
+    expect(ev.find((e) => e.key === `sharpness:${st.id}#hint1`)).toMatchObject({ kind: 'answered', outcome: 'stuck' })
+    expect(ev.find((e) => e.key === `sharpness:${st.id}#pm`)).toMatchObject({ kind: 'misconception_seen', topic: pm.postmortem.pattern })
   })
 
   it.skipIf(!python)('with Claude: an original algorithms problem is written, verified in the sandbox, then used', async () => {
@@ -606,7 +612,9 @@ describe('a Sharpness attempt from start to card', () => {
     expect(t.by).toBe('opus')
     const pm = await S.pmFinish(st.id, { stuck: 'a', tried: 'b', unlock: 'pool wait alerts', pattern: 'batch work on the primary' })
     expect(pm.postmortem.kind).toBe('incident')
-    expect((await events()).some((e) => e.kind === 'drill-step' && e.detail?.effect === 'mitigates')).toBe(true)
+    const drill = (await events()).filter((e) => e.key.startsWith(`sharpness:${st.id}`))
+    expect(drill.some((e) => e.kind === 'studied' && e.data?.effect === 'mitigates')).toBe(true)
+    expect(drill.find((e) => e.key === `sharpness:${st.id}`)).toMatchObject({ kind: 'transfer', outcome: 'correct', skills: ['incident-response', 'debugging'] })
   })
 
   it('mocks feed the ratings, and read them back to set the coding level', async () => {
@@ -618,38 +626,56 @@ describe('a Sharpness attempt from start to card', () => {
     expect(after.attempts).toBe(before.attempts + 4)
     expect(await S.mockLevelFromSharpness()).toBeGreaterThanOrEqual(1)
     expect((await S.weakMockModes())[0].rating).toBeLessThanOrEqual((await S.weakMockModes()).at(-1)!.rating)
-    expect((await events()).some((e) => e.kind === 'mock')).toBe(true)
+    // Mocks log themselves: Sharpness adds no second event for them
+    expect((await events()).some((e) => e.key.startsWith('sharpness:mock-'))).toBe(false)
   })
 })
 
 // ---------- The event log adapter ----------
 
 describe('the learning event log adapter', () => {
-  it('writes every event to the fallback file until a real sink is set, then only to the sink', async () => {
+  it('maps acts onto the log’s kinds, with skills, and skips what the log has another way', () => {
     const rec = { id: 'a1', at: 5, category: 'proofs', problem: 'root-two', title: '√2', pattern: 'contradiction', difficulty: 1150, origin: 'bank', score: 1, solved: true, usedMs: 1000, minutes: 12, before: 1000, after: 1010, reached: [], methodHints: 0, solutionHints: 0, by: 'opus' } as const
-    const n0 = (await events()).length
-    await L.logLearningEvents(attemptEvent(rec))
-    expect((await events()).length).toBe(n0 + 1)
-    expect(readFileSync(join(dir, '.tide/sharpness/events.jsonl'), 'utf8')).toContain('"item":"root-two"')
+    expect(attemptEvent(rec)).toMatchObject({ key: 'sharpness:a1', kind: 'transfer', outcome: 'correct', skills: ['proof'], topic: 'contradiction', data: { rating: 1010 } })
+    expect(attemptEvent({ ...rec, origin: 'mock' })).toBeNull()
     const got: unknown[] = []
-    L.setLearningEventSink(async (es) => void got.push(...es))
-    await L.logLearningEvents(attemptEvent(rec), attemptEvent(rec))
-    expect(got).toHaveLength(2)
-    expect((await events()).length).toBe(n0 + 1)
+    L.setLearningEventSink((es) => void got.push(...es))
+    L.logLearningEvents(attemptEvent(rec), null, attemptEvent({ ...rec, origin: 'mock' }))
+    expect(got).toHaveLength(1)
     // A failing sink never breaks the caller
-    L.setLearningEventSink(async () => {
+    L.setLearningEventSink(() => {
       throw new Error('disk full')
     })
-    await expect(L.logLearningEvents(attemptEvent(rec))).resolves.toBeUndefined()
-    L.setLearningEventSink(null)
+    expect(() => L.logLearningEvents(attemptEvent(rec))).not.toThrow()
+    L.setLearningEventSink((es) => LL.learningEvent(es))
   })
 
-  it('every event has the shared shape', async () => {
-    for (const e of await events()) {
-      expect(e).toMatchObject({ v: 1, source: 'sharpness' })
-      expect(typeof e.id).toBe('string')
-      expect(typeof e.at).toBe('number')
-      expect(e.subject.length).toBeGreaterThan(0)
-    }
+  it('reads the first build’s events.jsonl into the log once, then retires it', async () => {
+    const old = [
+      { v: 1, id: 'se-1', at: 10, kind: 'attempt', subject: 'Algorithms', topic: 'monotonic deque', item: 'sliding-max-latency', score: 0, correct: false, ms: 900000, detail: { title: 'Worst latency per window', before: 1000, after: 978 } },
+      { v: 1, id: 'se-2', at: 11, kind: 'hint', subject: 'Algorithms', topic: 'monotonic deque', item: 'sliding-max-latency', detail: { hint: 'method', method: 'invariant' } },
+      { v: 1, id: 'se-3', at: 12, kind: 'postmortem', subject: 'Algorithms', topic: 'monotonic deque', item: 'sh-1', detail: { method: 'invariant' } },
+      { v: 1, id: 'se-4', at: 13, kind: 'mock', subject: 'Algorithms', topic: 'mock interview', item: 'coin-change' }
+    ]
+    const { mkdirSync, existsSync } = await import('fs')
+    mkdirSync(join(dir, '.tide/sharpness'), { recursive: true })
+    writeFileSync(join(dir, '.tide/sharpness/events.jsonl'), old.map((o) => JSON.stringify(o)).join('\n') + '\n')
+    expect(await L.backfillOldEvents()).toBe(3)
+    expect(existsSync(join(dir, '.tide/sharpness/events.jsonl'))).toBe(false)
+    expect(readFileSync(join(dir, '.tide/sharpness/events.jsonl.migrated'), 'utf8')).toContain('se-1')
+    const back = (await events()).filter((e) => e.key.startsWith('sharpness:old:'))
+    expect(back.map((e) => e.kind).sort()).toEqual(['answered', 'misconception_seen', 'transfer'])
+    expect(back.find((e) => e.kind === 'transfer')).toMatchObject({ outcome: 'wrong', skills: ['algorithms', 'problem-decomposition'], data: { rating: 978 } })
+    // Once only
+    expect(await L.backfillOldEvents()).toBe(0)
+  })
+
+  it('the ratings reach the learner model: a line for its digest, and skills it knows', async () => {
+    const line = await S.sharpRatingsLine()
+    expect(line).toMatch(/^Sharpness ratings/)
+    expect(line).toMatch(/Algorithms \d+ ±\d+/)
+    const { SKILLS } = await import('@shared/learnerModel')
+    const { CATEGORY_SKILLS } = await import('@shared/sharpEvents')
+    for (const s of Object.values(CATEGORY_SKILLS).flat()) expect(SKILLS.some((k) => k.id === s), s).toBe(true)
   })
 })

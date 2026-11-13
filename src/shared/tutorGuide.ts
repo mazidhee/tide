@@ -15,11 +15,11 @@
  */
 
 /** Groups of Tide's tools: a session is given the packs that fit it */
-export type ToolPack = 'notes' | 'learner' | 'run' | 'data' | 'courses' | 'lesson' | 'chat' | 'maths' | 'graph' | 'metabase' | 'thread'
+export type ToolPack = 'notes' | 'learner' | 'run' | 'data' | 'courses' | 'lesson' | 'chat' | 'maths' | 'graph' | 'metabase' | 'thread' | 'model'
 
 export const PACK_TOOLS: Record<ToolPack, string[]> = {
   notes: ['search_notes', 'read_note', 'related_notes'],
-  learner: ['learner_profile', 'past_lessons', 'earlier_concepts'],
+  learner: ['learner_profile', 'past_lessons', 'earlier_concepts', 'learner_standing'],
   run: ['run_code'],
   data: ['run_sql', 'load_table'],
   courses: ['search_courses', 'read_course', 'search_transcripts', 'related_material', 'show_in_view'],
@@ -28,12 +28,15 @@ export const PACK_TOOLS: Record<ToolPack, string[]> = {
   maths: ['place_explorable', 'set_challenge', 'check_graph', 'explorable_library', 'render_animation', 'animation_library'],
   graph: ['check_graph'],
   metabase: ['metabase'],
-  thread: ['save_to_notes']
+  thread: ['save_to_notes'],
+  // The learner model in full (main/learnerModel): for the coach and planning sessions, not lessons (they get learner_standing)
+  model: ['learner_model']
 }
 
 /** What a session is, for its packs and its prompt */
 export interface SessionShape {
-  kind: 'lesson' | 'chat' | 'thread'
+  /** coach and plan: the coach's and North Star's planning sessions, which read the learner model in full */
+  kind: 'lesson' | 'chat' | 'thread' | 'coach' | 'plan'
   /** A lesson in maths mode (shared/mathsMode): explorables, challenges, graphs, animations */
   maths?: boolean
   /** The lesson works with data: SQL, a finance lab, a hands-on topic, or one of their files */
@@ -49,6 +52,7 @@ export interface SessionShape {
 /** The packs a session is given */
 export function toolPacks(s: SessionShape): ToolPack[] {
   if (s.kind === 'thread') return ['notes', 'run', ...(s.data ? (['data'] as const) : []), 'thread']
+  if (s.kind === 'coach' || s.kind === 'plan') return ['notes', 'learner', 'courses', 'model']
   const packs: ToolPack[] = ['notes', 'learner', 'run', 'courses']
   if (s.kind === 'chat') packs.push('data', 'chat')
   else {
@@ -108,6 +112,8 @@ export const THREAD_CORE = `You are Tide, the learner's tutor inside Tide, their
 const TOOL_LINES: { tools: string[]; line: string }[] = [
   { tools: ['search_notes', 'read_note', 'related_notes'], line: 'search_notes / read_note: their own notes, first. related_notes: how a note links to the rest and how well they know each.' },
   { tools: ['learner_profile', 'past_lessons', 'earlier_concepts'], line: 'learner_profile (the full profile; a digest is below; with a topic, its misconceptions and past mistakes), past_lessons, earlier_concepts (what this builds on and how solid each is now): read them before re-teaching something they struggled with, and re-teach briefly what has faded before relying on it.' },
+  { tools: ['learner_standing'], line: 'learner_standing: how deep their grasp of a topic is (recall, apply, transfer, build) from real answers; pitch the step to it.' },
+  { tools: ['learner_model'], line: 'learner_model: Tide\'s model of them: standing with evidence, what fades, the weakest concepts for a goal, what a topic is used in, transfer gaps, recent learning.' },
   { tools: ['run_code'], line: 'run_code: run each example before you show its output, test their code before you judge it, and check maths step by step with SymPy.' },
   { tools: ['run_sql', 'load_table'], line: 'run_sql / load_table: the SQLite lab (sample shop and product-analytics data; load_table adds their .csv or .tsv). Run every query before you show it, as a ```sql block they can run; draw a result with a ```chart block of JSON {"sql": "...", "type": "bar" | "line" | "scatter", "title": "..."}.' },
   { tools: ['search_courses', 'read_course', 'search_transcripts'], line: 'search_courses / read_course / search_transcripts: the courses they imported and the videos they saved.' },

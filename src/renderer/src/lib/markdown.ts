@@ -372,7 +372,8 @@ export function createMarkdown() {
     highlight: (code, lang) => {
       const language = lang && hljs.getLanguage(lang) ? lang : null
       const html = language ? hljs.highlight(code, { language, ignoreIllegals: true }).value : escapeHtml(code)
-      const runnable = /^(python|py|javascript|js)$/i.test(lang)
+      // Every language the sandbox runs (main/languages); one whose toolchain or pack is missing says how to add it
+      const runnable = /^(python|py|javascript|js|typescript|ts|c|cpp|c\+\+|rust|rs|go|swift|java|ruby|rb|bash|sh|zsh|solidity|sol)$/i.test(lang)
       return `<pre class="code-block" data-lang="${escapeHtml(lang || '')}">${runnable ? '<button class="run-code" type="button">Run</button>' : ''}<button class="copy-code" type="button">Copy</button><code class="hljs">${html}</code></pre>`
     }
   })

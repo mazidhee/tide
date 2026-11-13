@@ -42,6 +42,8 @@ export type View =
   | { kind: 'learner' }
   | { kind: 'wrapup' }
   | { kind: 'weekly' }
+  /** North Star: one woven path towards your goal (components/NorthStarView) */
+  | { kind: 'northstar' }
   | { kind: 'drill'; drill: import('@shared/drills').DrillKind; nonce?: number }
   // Daily mental maths (components/MentalMaths.tsx): today's session, or one on a level you choose
   | { kind: 'maths'; level?: string; nonce?: number }
@@ -159,7 +161,7 @@ const HOME: View = { kind: 'home' }
 export const tabRoot: { current: HTMLElement | null } = { current: null }
 
 const TABS_KEY = 'tide.tabs'
-const VIEW_KINDS = new Set<string>(['home', 'file', 'library', 'reading', 'reader', 'notebook', 'graph', 'study', 'daily', 'quiz', 'session', 'lessons', 'ladder', 'learn', 'practice', 'mock', 'workshop', 'new-topic', 'courses', 'chat', 'lab', 'coach', 'learner', 'wrapup', 'weekly', 'drill', 'maths', 'workout', 'sharp', 'design', 'code', 'ipynb', 'help', 'exam', 'settings'])
+const VIEW_KINDS = new Set<string>(['home', 'file', 'library', 'reading', 'reader', 'notebook', 'graph', 'study', 'daily', 'quiz', 'session', 'lessons', 'ladder', 'learn', 'practice', 'mock', 'workshop', 'new-topic', 'courses', 'chat', 'lab', 'coach', 'learner', 'wrapup', 'weekly', 'northstar', 'drill', 'maths', 'workout', 'sharp', 'design', 'code', 'ipynb', 'help', 'exam', 'settings'])
 
 /** The tabs kept last time (the main window only), or one on Home */
 function loadTabs(): T.Tabs<View> {

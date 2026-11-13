@@ -17,7 +17,7 @@
 import { ipcMain } from 'electron'
 import { promises as fs } from 'fs'
 import { basename, resolve } from 'path'
-import {
+import { languageLabel,
   advanceSession,
   catalogueReadings,
   currentMilestone,
@@ -268,7 +268,7 @@ export async function draftPlan(req: DraftRequest, now = Date.now()): Promise<{ 
   if (req.source === 'template') {
     if (!template) throw new Error('No template fits that idea. Pick one, or draft the plan with a model.')
     const plan = startMap()
-    return { ...(await checkPlan(plan)), ...(language !== plan.language ? { note: `The ${template.name} template is in Python; ask Claude to plan it for another language.` } : {}) }
+    return { ...(await checkPlan(plan)), ...(language !== plan.language ? { note: `The ${template.name} template is in ${languageLabel(plan.language)}; ask Claude to plan it for another language.` } : {}) }
   }
 
   const known = knownSummary(await knownConcepts())
@@ -394,7 +394,7 @@ export async function createProject(planIn: ProjectPlan, now = Date.now()): Prom
   }
 
   // The first milestone's tests are held until its ready check passes
-  const tests: Created['tests'] = { passed: 0, failed: 0, framework: plan.language === 'python' ? 'pytest' : plan.language === 'rust' ? 'cargo' : plan.language === 'go' ? 'go' : 'node', held: testsForMilestone(plan, 0).length }
+  const tests: Created['tests'] = { passed: 0, failed: 0, framework: plan.language === 'python' ? 'pytest' : plan.language === 'rust' ? 'cargo' : plan.language === 'go' ? 'go' : plan.language === 'cpp' ? 'cpp' : plan.language === 'solidity' ? 'forge' : 'node', held: testsForMilestone(plan, 0).length }
   await score(notebook, 'project', `starting ${plan.name}`, plan).catch(() => null)
   return { notebook, root, tests, coach }
 }
@@ -461,6 +461,24 @@ export async function stepSession(notebook: string, id: string, step: SessionSte
   if (step === 'debrief' && outcome === 'done' && !m.debrief) throw new Error('Write the debrief first.')
   m.session = advanceSession(m.session ?? newSession(now), step, outcome, tests ? { ...tests, at: now } : undefined, m.gate)
   await writePlan(plan)
+  // A step of building a milestone, in the learning event log: tests run count as built, a skip as skipped
+  const project = plan.notebook ?? plan.slug
+  const concepts = m.lessons.map((l) => l.concept)
+  await Promise.all([import('@shared/learningEvents'), import('./learningLog')])
+    .then(([, { learningEvent }]) =>
+      learningEvent({
+        key: `project:${project}#${id}:${step}`,
+        at: now,
+        kind: outcome === 'skipped' ? 'skipped' : tests ? 'built' : 'studied',
+        source: 'project',
+        project,
+        ...(concepts[0] ? { topic: concepts[0] } : {}),
+        ...(tests ? { tests, outcome: tests.total && tests.passed >= tests.total ? 'correct' : tests.passed ? 'partial' : 'wrong' } : {}),
+        note: `${m.title}: ${step}`,
+        data: { milestone: id, step, concepts }
+      })
+    )
+    .catch(() => {})
   return plan
 }
 
@@ -520,6 +538,15 @@ export async function markReady(notebook: string, id: string, answers: Record<st
   }
   const tries = (mm.gate!.tries ?? 0) + 1
   mm.gate = gateOf(qs, clean, results, by === 'plan' && mm.gate!.by === 'claude' ? 'plan' : by, now, tries)
+  // The ready check, in the learning event log: explaining the design and the reading before building
+  {
+    const project = plan.notebook ?? plan.slug
+    const concepts = mm.lessons.map((l) => l.concept)
+    const ready = mm.gate.ready
+    await Promise.all([import('@shared/learningEvents'), import('./learningLog')])
+      .then(([, { learningEvent }]) => learningEvent({ key: `project:${project}#${id}:ready${tries}`, at: now, kind: 'explained', source: 'project', project, ...(concepts[0] ? { topic: concepts[0] } : {}), outcome: ready ? 'correct' : 'partial', quality: ready ? 0.8 : 0.5, note: `Ready check: ${mm.title}`, data: { milestone: id, concepts, tries } }))
+      .catch(() => {})
+  }
   let celebrate: Celebration | null = null
   if (mm.gate.ready) {
     await unlockTests(plan, mm)

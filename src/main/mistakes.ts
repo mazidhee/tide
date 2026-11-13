@@ -37,6 +37,7 @@ function update(fn: (list: Mistake[]) => Mistake[]): Promise<Mistake[]> {
 
 export async function addMistakes(items: NewMistake[]): Promise<number> {
   let added = 0
+  let fresh: Mistake[] = []
   await update((list) => {
     let out = list
     for (const m of items) {
@@ -44,20 +45,28 @@ export async function addMistakes(items: NewMistake[]): Promise<number> {
       if (next !== out) added++
       out = next
     }
+    fresh = out.filter((m) => !list.some((x) => x.id === m.id))
     return out
   })
+  // Each new one is a misconception seen, in the learning event log
+  if (fresh.length) await Promise.all([import('@shared/learningEvents'), import('./learningLog')]).then(([{ mistakeEvents }, { learningEvent }]) => learningEvent(fresh.flatMap((m) => mistakeEvents(m)))).catch(() => {})
   return added
 }
 
 export async function retestMistake(id: string, correct: boolean): Promise<Mistake | null> {
   let result: Mistake | null = null
+  let was = ''
   await update((list) =>
     list.map((m) => {
       if (m.id !== id) return m
+      was = m.status
       result = retested(m, correct, today())
       return result
     })
   )
+  // Fixed now: the misconception is resolved, in the learning event log
+  const r = result as Mistake | null
+  if (r && r.status === 'fixed' && was !== 'fixed') await Promise.all([import('@shared/learningEvents'), import('./learningLog')]).then(([{ mistakeEvents }, { learningEvent }]) => learningEvent(mistakeEvents(r, Date.now()))).catch(() => {})
   return result
 }
 

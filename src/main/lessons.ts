@@ -63,6 +63,10 @@ async function writeLesson(input: Omit<LessonRecord, 'started' | 'updated' | 'pa
   await noteLesson(record).catch(() => {})
   // And what it shows is added to the picture of what they know
   await noteLessonKnowledge(record).catch(() => {})
+  // And each learning act in it goes in the learning event log, in place of what the same lesson said before (main/learningLog)
+  await Promise.all([import('@shared/learningEvents'), import('./learningLog')])
+    .then(([{ lessonEvents }, { learningEvent }]) => learningEvent(lessonEvents(record), { replace: `lesson:${record.id}#` }))
+    .catch(() => {})
   // And what it shows about how they learn goes into their learner profile, once it settles (main/learnerProfile)
   void import('./learnerProfile').then((l) => l.noteLessonForProfile(record)).catch(() => {})
   // A course's lesson moves the course on (main/courses)

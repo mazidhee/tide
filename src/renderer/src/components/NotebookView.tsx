@@ -97,7 +97,8 @@ export function NotebookView({ path, tab: initialTab }: { path: string; tab?: 'p
     load()
   }, [load, app.files])
 
-  const folder = useMemo(() => app.tree?.children?.find((c) => c.path === path), [app.tree, path])
+  // A North Star track has no folder of its own until you make notes in it (main/learn virtualNotebooks)
+  const folder = useMemo(() => app.tree?.children?.find((c) => c.path === path) ?? (meta?.virtual ? { type: 'folder' as const, path, name: meta.name, children: [] } : undefined), [app.tree, path, meta])
   const chapters = useMemo(() => (folder ? chaptersOf(folder) : []), [folder])
   const allNotes = chapters.flatMap((c) => c.notes).filter((n) => n.kind === 'note')
   const counts = useMemo(() => {
@@ -113,7 +114,7 @@ export function NotebookView({ path, tab: initialTab }: { path: string; tab?: 'p
   const firstNote = chapters[0]?.notes.find((n) => n.kind === 'note')?.path
   const scope = { kind: 'folder' as const, path }
 
-  if (!folder) return <div className="page"><div className="page-inner muted">This notebook doesn't exist anymore.</div></div>
+  if (!folder) return meta === null && !app.tree?.children?.some((c) => c.path === path) ? <div className="page"><div className="page-inner muted">This notebook doesn't exist anymore.</div></div> : <div className="page" />
 
   const total = allNotes.length || 1
   const nbMeta: NotebookMeta = meta ?? { path, name: folder.name, noteCount: allNotes.length, fileCount: 0, mastered: 0, learning: 0, lastModified: 0 }

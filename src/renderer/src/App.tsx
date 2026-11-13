@@ -8,6 +8,7 @@ import { startFocus } from './lib/focus'
 import { openAgendaItem } from './lib/agenda'
 import { todayItems } from '@shared/coach'
 import { WeeklyView } from './components/WeeklyView'
+import { NorthStarView } from './components/NorthStarView'
 import { openTideLink } from './lib/links'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ThemeId } from '@shared/types'
@@ -553,6 +554,7 @@ export default function App() {
   else if (view.kind === 'ladder') main = <LadderView go={view.go} />
   else if (view.kind === 'wrapup') main = <WrapUpView />
   else if (view.kind === 'weekly') main = <WeeklyView />
+  else if (view.kind === 'northstar') main = <NorthStarView />
   else if (view.kind === 'maths') main = <MathsView key={`${view.level ?? ''}:${view.nonce ?? ''}`} level={view.level} />
   else if (view.kind === 'workout') main = <WorkoutView key={`${view.start ? 'run' : 'hub'}:${view.nonce ?? ''}`} start={view.start} championship={view.championship} />
   else if (view.kind === 'drill') main = <DrillView key={`${view.drill}:${view.nonce ?? ''}`} kind={view.drill} />

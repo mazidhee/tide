@@ -58,7 +58,7 @@ import {
   type StreamItem
 } from '@shared/sharpness'
 import type { MockRecord } from '@shared/mocks'
-import { logLearningEvents } from './sharpEventLog'
+import { backfillOldEvents, logLearningEvents } from './sharpEventLog'
 import { absPath, readText, writeText } from './vault'
 
 // ---------- The models and the sandbox (a stand-in in tests) ----------
@@ -238,6 +238,8 @@ async function weakFromMocks(): Promise<SharpCategory[]> {
 }
 
 export async function sharpStatus(): Promise<SharpStatus> {
+  // The first build's event file, read into the learning log once
+  void backfillOldEvents().catch(() => {})
   const now = Date.now()
   const [ready, prefs, attempts, pms, cards, weak] = await Promise.all([models.claude().catch(() => ({ ready: false, why: 'Claude isn’t set up' })), readPrefs(), sharpAttempts(), sharpPostmortems(), readCards(), weakFromMocks()])
   const report = methodReport(prefs.methods)
@@ -527,7 +529,7 @@ function revealOf(p: SharpProblem): Reveal {
 }
 
 /** Keeps a rated attempt: the rating, the method counts, the log, the card if a revisit, the event */
-function keepAttempt(m: Live, rec: AttemptRecord, reached: MethodId[], solved: boolean): Promise<void> {
+function keepAttempt(m: Live, rec: AttemptRecord, reached: MethodId[], solved: boolean, tests?: { passed: number; total: number }): Promise<void> {
   return serial(async () => {
     const p = await readPrefs()
     p.ratings[rec.category] = rateAttempt(p.ratings[rec.category], rec.difficulty, rec.score, rec.at)
@@ -542,9 +544,9 @@ function keepAttempt(m: Live, rec: AttemptRecord, reached: MethodId[], solved: b
         cards[i] = reviewCard(cards[i], solved, rec.at)
         await writeCards(cards)
       }
-      void logLearningEvents(cardReviewEvent({ at: rec.at, category: rec.category, pattern: m.card.pattern, card: m.card.id, solved }))
+      void logLearningEvents(cardReviewEvent({ at: rec.at, attempt: rec.id, category: rec.category, pattern: m.card.pattern, card: m.card.id, solved }))
     }
-    void logLearningEvents(attemptEvent(rec))
+    logLearningEvents(attemptEvent(rec, tests))
   })
 }
 
@@ -565,7 +567,7 @@ export async function submitSharp(id: string, input: SharpSubmitInput): Promise<
     const prefs = await readPrefs()
     const before = Math.round(prefs.ratings[m.category].r)
     const rec: AttemptRecord = { id: m.id, at: Date.now(), category: m.category, problem: p.id, title: p.title, pattern: p.pattern, difficulty: p.difficulty, origin: p.origin, score, solved, usedMs, minutes: p.minutes, before, after: before, reached, methodHints: 0, solutionHints: 0, by: g.by }
-    await keepAttempt(m, rec, reached, solved)
+    await keepAttempt(m, rec, reached, solved, g.tests && !g.tests.error ? { passed: g.tests.passed.length, total: g.tests.total } : undefined)
     m.record = rec
     m.hints = { ...m.hints, submitted: true, missed: !solved }
     return { score, solved, grade: g, before: rec.before, after: rec.after, ...(solved ? { reveal: revealOf(p) } : {}) }
@@ -593,7 +595,7 @@ export async function hintSharp(id: string, asked: 'method' | 'solution' = 'meth
   if (next.kind === 'solution') {
     const text = p.hints[m.hints.solutionHints] ?? 'No more solution hints. The worked solution is there when you want it.'
     m.hints = afterHint(m.hints, 'solution')
-    void logLearningEvents(hintEvent({ at, category: m.category, pattern: p.pattern, item: p.id, kind: 'solution' }))
+    logLearningEvents(hintEvent({ attempt: m.id, n: m.hints.methodHints + m.hints.solutionHints, at, category: m.category, pattern: p.pattern, item: p.id, kind: 'solution' }))
     return { kind: 'solution', text }
   }
   const prefs = await readPrefs()
@@ -615,7 +617,7 @@ export async function hintSharp(id: string, asked: 'method' | 'solution' = 'meth
     pr.methods = noteMethods(pr.methods, { hinted: [id2] })
     await writePrefs(pr)
   })
-  void logLearningEvents(hintEvent({ at, category: m.category, pattern: p.pattern, item: p.id, kind: 'method', method: id2 }))
+  logLearningEvents(hintEvent({ attempt: m.id, n: m.hints.methodHints + m.hints.solutionHints, at, category: m.category, pattern: p.pattern, item: p.id, kind: 'method', method: id2 }))
   return { kind: 'method', text, method: { id: id2, name: meth.name } }
 }
 
@@ -649,7 +651,7 @@ export async function retrySharp(id: string, input: { answer?: string; code?: st
         await writePrefs(pr)
       })
     }
-    void logLearningEvents(retryEvent({ at: Date.now(), category: m.category, pattern: p.pattern, item: p.id, score: g.raw, solved, afterMethod: m.lastMethod }))
+    logLearningEvents(retryEvent({ attempt: m.id, n: m.hints.retries, at: Date.now(), category: m.category, pattern: p.pattern, item: p.id, score: g.raw, solved, hints: m.hints.methodHints + m.hints.solutionHints, afterMethod: m.lastMethod }))
     return { score: g.raw, solved, grade: g, ...(unlockedBy ? { unlockedBy: { id: unlockedBy, name: method(unlockedBy).name } } : {}), ...(solved ? { reveal: revealOf(p) } : {}) }
   } finally {
     m.busy = false
@@ -704,7 +706,7 @@ export async function drillAsk(id: string, text: string): Promise<DrillReply> {
   const voiced = (await models.claude().catch(() => ({ ready: false }))).ready ? await voice(m, 'ask', req, src) : null
   const r = askData(m.scenario!, m.drill!, req, Date.now(), voiced ?? undefined)
   m.drill = r.state
-  void logLearningEvents(drillStepEvent({ at: Date.now(), item: m.scenario!.id, pattern: m.scenario!.pattern, step: 'ask', text: req, source: r.source?.id }))
+  logLearningEvents(drillStepEvent({ attempt: m.id, n: m.drill!.entries.length, at: Date.now(), item: m.scenario!.id, pattern: m.scenario!.pattern, step: 'ask', text: req, source: r.source?.id }))
   return { reply: r.reply, ...(r.source ? { source: r.source.id } : {}), by: voiced ? 'opus' : 'code', state: m.drill }
 }
 
@@ -714,7 +716,7 @@ export async function drillHypothesis(id: string, text: string): Promise<DrillRe
   if (!h) throw new Error('Say the hypothesis.')
   const voiced = (await models.claude().catch(() => ({ ready: false }))).ready ? await voice(m, 'hypothesis', h, null) : null
   m.drill = hypothesise(m.drill!, h, Date.now(), voiced ?? 'Noted. What data would confirm it, and what would rule it out?')
-  void logLearningEvents(drillStepEvent({ at: Date.now(), item: m.scenario!.id, pattern: m.scenario!.pattern, step: 'hypothesis', text: h }))
+  logLearningEvents(drillStepEvent({ attempt: m.id, n: m.drill!.entries.length, at: Date.now(), item: m.scenario!.id, pattern: m.scenario!.pattern, step: 'hypothesis', text: h }))
   return { reply: m.drill.entries[m.drill.entries.length - 1].reply, by: voiced ? 'opus' : 'code', state: m.drill }
 }
 
@@ -727,7 +729,7 @@ export async function drillAct(id: string, text: string): Promise<DrillReply> {
   const voiced = (await models.claude().catch(() => ({ ready: false }))).ready ? await voice(m, 'action', a, null, effect) : null
   const r = act(m.scenario!, m.drill!, a, Date.now(), voiced ?? undefined)
   m.drill = r.state
-  void logLearningEvents(drillStepEvent({ at: Date.now(), item: m.scenario!.id, pattern: m.scenario!.pattern, step: 'action', text: a, effect: r.effect }))
+  logLearningEvents(drillStepEvent({ attempt: m.id, n: m.drill!.entries.length, at: Date.now(), item: m.scenario!.id, pattern: m.scenario!.pattern, step: 'action', text: a, effect: r.effect }))
   return { reply: r.reply, effect: r.effect, by: voiced ? 'opus' : 'code', state: m.drill }
 }
 
@@ -844,7 +846,7 @@ export async function pmFinish(id: string, answers: PmAnswers): Promise<PmFinish
   } catch (e) {
     console.warn('[sharpness] recall', (e as Error).message)
   }
-  void logLearningEvents(postmortemEvent(pm))
+  logLearningEvents(postmortemEvent(pm))
   return { postmortem: pm, recall }
 }
 
@@ -872,7 +874,8 @@ export async function noteMockForSharpness(r: MockRecord): Promise<void> {
     await append(ATTEMPTS, rec)
     await writePrefs(p)
   })
-  void logLearningEvents(attemptEvent(rec))
+  // Mocks log themselves (main/mocks): attemptEvent gives null for a mock's
+  logLearningEvents(attemptEvent(rec))
 }
 
 /** The coding mock's level from the algorithms rating: it escalates as you get sharper */
@@ -892,9 +895,30 @@ export async function weakMockModes(): Promise<{ mode: 'coding' | 'design' | 'qu
     .sort((a, b) => a.rating - b.rating)
 }
 
+// ---------- For the learner model ----------
+
+/**
+ * Sharpness's ratings in a line for the learner model's digest (main/learnerModel learnerDigest),
+ * so Claude sees them beside the skills: only rated categories, with the band and the nearest bar.
+ */
+export async function sharpRatingsLine(now = Date.now()): Promise<string> {
+  const p = await readPrefs()
+  const rated = CATEGORIES.filter((c) => p.ratings[c.id].n > 0)
+  if (!rated.length) return ''
+  return `Sharpness ratings (Elo on unseen problems, 1000 = start): ${rated
+    .map((c) => {
+      const rt = p.ratings[c.id]
+      const bar = benchmarks(c.id, rt, now).find((b) => !b.met)
+      return `${c.label} ${Math.round(rt.r)} ±${ratingBand(rt, now)} (${rt.n} attempt${rt.n === 1 ? '' : 's'}${bar && rt.n >= 5 ? `; ${bar.label}: ${Math.round(bar.chance * 100)}% est.` : ''})`
+    })
+    .join('; ')}`
+}
+
 // ---------- Wiring ----------
 
 export function registerSharpness() {
+  // The first build's event file, read into the learning log once the vault is there
+  setTimeout(() => void backfillOldEvents().catch(() => {}), 20_000)
   ipcMain.handle('sharp:status', () => sharpStatus())
   ipcMain.handle('sharp:start', (_e, input: SharpStartInput) => startSharp(input ?? { category: 'algorithms' }))
   ipcMain.handle('sharp:test', (_e, id: string, code: string) => testSharp(String(id), String(code ?? '')))

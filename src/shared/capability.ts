@@ -6,6 +6,7 @@
  */
 import type { SubjectProfile } from "./subjects";
 import type { Need } from "./subjectMap";
+import { trackPack, type TrackPackId } from "./trackPacks";
 
 export interface CapabilityStatus {
   /** Languages whose toolchain answered, by runner id (python, javascript, c, rust, go...) */
@@ -16,10 +17,12 @@ export interface CapabilityStatus {
   labPack: boolean;
   /** Web search is on for this lesson */
   web: boolean;
+  /** The track packs, installed or not (absent: not known, nothing is said) */
+  packs?: Partial<Record<TrackPackId, boolean>>;
 }
 
 export interface Gap {
-  need: Need | "maths" | "lab-pack";
+  need: Need | "maths" | "lab-pack" | `pack:${TrackPackId}`;
   /** One line for the tutor to say, with the substitute */
   line: string;
 }
@@ -161,6 +164,49 @@ export function capabilityGaps(
       need: "lab-pack",
       line: "The lab pack (PyTorch, scikit-learn, SciPy, pytest) isn't installed, so that code won't run yet. Add it in Settings › Tools; until then I'll show it marked not run.",
     });
+  out.push(...packGaps(topic, s));
+  return out;
+}
+
+/** Topics a track pack makes hands-on, and what the lesson does until it is installed */
+const PACK_TOPICS: { id: TrackPackId; words: RegExp; what: string; meanwhile: string }[] = [
+  {
+    id: "foundry",
+    words: /\b(solidity|foundry|forge test|smart contracts?|evm|erc-?20|erc-?721|anvil|hardhat|vyper)\b/i,
+    what: "Solidity can't be compiled, tested or deployed to a local chain here yet",
+    meanwhile: "I'll show Solidity exactly as written, marked not run, and run the same logic in Python where it helps",
+  },
+  {
+    id: "bigdata",
+    words: /\b(spark|pyspark|kafka|stream processing|structured streaming|dataframes? at scale|rdds?|consumer groups?|topics? and partitions)\b/i,
+    what: "Spark jobs and Kafka topics can't run here yet",
+    meanwhile: "I'll run the same ideas on one machine with pandas or DuckDB and plain Python queues, and show Spark and Kafka code as written, marked not run",
+  },
+  {
+    id: "postgres",
+    words: /\b(postgres(ql)?|explain analy[sz]e|isolation levels?|mvcc|vacuum|jsonb|row[- ]level locks?|serializable|repeatable read|pg_\w+|b-?tree index(es)?|query planner)\b/i,
+    what: "real Postgres isn't set up, so its planner, isolation levels and locks can't be shown live",
+    meanwhile: "I'll use the SQLite lab for the SQL itself and show Postgres-only features and plans as written, marked not run",
+  },
+  {
+    id: "cpp",
+    words: /\b(cmake|ctest|clangd)\b/i,
+    what: "CMake isn't installed, so a CMake build can't run here yet (single files still compile with clang)",
+    meanwhile: "I'll build with clang directly and show the CMake files as written",
+  },
+];
+
+/** One line per track pack the topic needs that isn't installed, saying where to add it */
+export function packGaps(topic: string, s: Pick<CapabilityStatus, "packs">): Gap[] {
+  const out: Gap[] = [];
+  for (const p of PACK_TOPICS) {
+    if (s.packs?.[p.id] !== false || !p.words.test(topic)) continue;
+    const pack = trackPack(p.id)!;
+    out.push({
+      need: `pack:${p.id}`,
+      line: `The ${pack.title} isn't installed, so ${p.what}. Offer it once: it installs in ${pack.where} (${pack.download} to download, ${pack.size} on disk, into Tide's own tools folder). Until then ${p.meanwhile}.`,
+    });
+  }
   return out;
 }
 

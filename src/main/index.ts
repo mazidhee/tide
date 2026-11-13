@@ -61,6 +61,7 @@ import { registerNotebook, stopNotebooks } from './notebook'
 import { registerMocks } from './mocks'
 import { registerSharpness } from './sharpness'
 import { registerIdeas } from './ideaProjects'
+import { registerPacks, stopPacks } from './packs'
 import { labStatus, librariesStatus, mathStatus, runCode, runProject, setupLab, setupLibraries, setupMath } from './runner'
 import { searchStatus, setupSearch, stopSearch, wakeSearch } from './websearch'
 import { applySpeedups, speedStatus } from './modelServer'
@@ -218,6 +219,7 @@ function registerIpc() {
   registerMocks()
   registerSharpness()
   registerIdeas()
+  registerPacks()
   registerBackups(handle)
   registerBugReports()
   registerWeekProgress(handle)
@@ -395,6 +397,13 @@ function registerIpc() {
   ipcMain.handle('visuals:kill', (e, host: string, reason: string) => killVisual(e.sender, String(host), String(reason ?? 'it stopped answering').slice(0, 120)))
   ipcMain.handle('visuals:metrics', (e) => visualMetrics(e.sender))
   handle('knowledge:view', async () => (await import('./knowledge')).knowledgeView())
+  // The learner model (main/learnerModel): What you know › Your model, a correction, a target, an act from the window
+  const depthIn = (d: unknown) => Math.max(0, Math.min(6, Math.round(Number(d) || 0))) as import('@shared/learningEvents').Depth
+  handle('model:view', async (fresh?: boolean) => (await import('./learnerModel')).modelView(!!fresh))
+  handle('model:node', async (id: string) => (await import('./learnerModel')).nodeDetail(String(id ?? '')))
+  handle('model:correct', async (id: string, depth: number, note?: string) => (await import('./learnerModel')).correctJudgement(String(id ?? ''), depthIn(depth), typeof note === 'string' ? note.slice(0, 300) : undefined))
+  handle('model:setTarget', async (node: string, depth: number | null) => (await import('./learnerModel')).setTarget(String(node ?? ''), depth === null ? null : depthIn(depth), { by: 'you' }))
+  handle('model:event', async (e: import('@shared/learningEvents').EventIn) => (await import('./learnerModel')).eventFromWindow(e))
   handle('teaching:view', async () => (await import('./teaching')).teachingView())
   handle('teaching:setAdjustment', async (id: import('@shared/teachingAdjust').AdjustmentId, on: boolean) => (await import('./teaching')).setAdjustment(id, !!on))
   handle('teaching:review', async (lesson: string) => (await import('./teaching')).reviewLesson(String(lesson)))
@@ -503,6 +512,21 @@ function registerIpc() {
   handle('track:setupCapstone', async (notebook: string, phase?: string) => (await import('./track')).setupCapstone(String(notebook), phase ? String(phase) : undefined))
   handle('track:firmUp', async (notebook: string) => (await import('./track')).firmUp(String(notebook)))
   handle('track:mixedReview', async () => (await import('./track')).mixedReviewSetup())
+  // North Star: one woven path (main/northStar)
+  handle('northStar:view', async () => (await import('./northStar')).view())
+  handle('northStar:glance', async () => (await import('./northStar')).glance())
+  handle('northStar:suggested', async () => (await import('./northStar')).suggestedGoal())
+  handle('northStar:synthesise', async (input: { goal: string; hoursPerWeek?: number }) => (await import('./northStar')).synthesise({ goal: String(input?.goal ?? ''), hoursPerWeek: Number(input?.hoursPerWeek) || undefined }))
+  handle('northStar:status', async () => (await import('./northStar')).synthStatus())
+  handle('northStar:draft', async () => (await import('./northStar')).currentDraft())
+  handle('northStar:discard', async () => (await import('./northStar')).discardDraft())
+  handle('northStar:build', async () => (await import('./northStar')).build())
+  handle('northStar:decide', async (id: string, ok: boolean) => (await import('./northStar')).decide(String(id ?? ''), !!ok))
+  handle('northStar:review', async () => (await import('./northStar')).review(true))
+  handle('northStar:moveOn', async () => (await import('./northStar')).moveOn())
+  handle('northStar:confirmDepth', async (topic: string, depth: number) => (await import('./northStar')).confirmDepth(String(topic ?? ''), Number(depth) || 0))
+  handle('northStar:startCapstone', async () => (await import('./northStar')).startCapstone())
+  handle('northStar:install', async () => (await import('./northStar')).installCurrent())
   handle('portfolio:bringForward', async (date: string, index: number) => (await import('./goals')).bringForward(date, index))
   // A tutor that remembers you (main/learnerProfile) and lesson prep while you're away (main/lessonPrep)
   handle('learner:view', async () => (await import('./learnerProfile')).learnerView())
@@ -743,6 +767,13 @@ function registerIpc() {
     if (isSql(String(language ?? '')) && opts?.labId) {
       const r = labQuery(String(opts.labId), String(code ?? ''))
       return { stdout: r.error ? '' : resultText(r), stderr: r.error ? `Error: ${r.error}` : '', exitCode: r.error ? 1 : 0, timedOut: false, durationMs: Math.round(r.elapsedMs) }
+    }
+    // Postgres in a code question runs in the lesson's Postgres database (the Postgres pack)
+    if (/^(postgres(ql)?|pgsql|psql)$/i.test(String(language ?? ''))) {
+      return import('./packs/postgres').then(async (m) => {
+        const r = await m.pgQuery(String(opts?.labId ?? 'scratch'), String(code ?? ''), { session: m.sessionOf(String(code ?? '')) })
+        return { stdout: r.error ? '' : resultText(r), stderr: r.error ? `Error: ${r.error}` : '', exitCode: r.error ? 1 : 0, timedOut: false, durationMs: Math.round(r.elapsedMs) }
+      })
     }
     return runCode(language, code, stdin, undefined, { tests: typeof opts?.tests === 'string' ? opts.tests : undefined })
   })
@@ -1038,6 +1069,9 @@ app.whenReady().then(() => {
   // Yesterday's leftovers move on even if Home isn't open: soon after starting, then each hour
   setTimeout(() => catchUp().catch(() => {}), 20_000)
   setInterval(() => catchUp().catch(() => {}), 3_600_000)
+  // North Star's weekly check: Opus proposes small changes from your progress (main/northStar)
+  setTimeout(() => void import('./northStar').then((m) => m.weeklyCheck()).catch(() => {}), 300_000)
+  setInterval(() => void import('./northStar').then((m) => m.weeklyCheck()).catch(() => {}), 3_600_000)
   setInterval(() => autoPlanWeek().catch(() => {}), 4 * 3_600_000)
   // Books you own get a map (chapters, pages, what each covers) in the background, a few at a time
   setTimeout(() => mapNewBooks().catch(() => {}), 180_000)
@@ -1092,6 +1126,7 @@ app.on('before-quit', () => {
   void stopLanguageServer()
   void stopIde()
   void stopNotebooks()
+  void stopPacks()
 })
 
 app.on('window-all-closed', () => {

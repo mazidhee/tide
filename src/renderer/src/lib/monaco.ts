@@ -26,14 +26,14 @@ export function monacoLanguage(name: string | undefined): string {
   const map: Record<string, string> = {
     py: 'python', python: 'python', js: 'javascript', javascript: 'javascript', node: 'javascript', ts: 'typescript', typescript: 'typescript',
     'c++': 'cpp', cpp: 'cpp', c: 'c', java: 'java', go: 'go', golang: 'go', rust: 'rust', rs: 'rust', sql: 'sql', bash: 'shell', sh: 'shell', shell: 'shell', zsh: 'shell',
-    json: 'json', yaml: 'yaml', yml: 'yaml', html: 'html', css: 'css', md: 'markdown', markdown: 'markdown', kotlin: 'kotlin', swift: 'swift', ruby: 'ruby', r: 'r', scala: 'scala', csharp: 'csharp', 'c#': 'csharp'
+    json: 'json', yaml: 'yaml', yml: 'yaml', html: 'html', css: 'css', md: 'markdown', markdown: 'markdown', kotlin: 'kotlin', swift: 'swift', ruby: 'ruby', r: 'r', scala: 'scala', csharp: 'csharp', 'c#': 'csharp', sol: 'sol', solidity: 'sol'
   }
   return map[n] ?? (monaco.languages.getLanguages().some((l) => l.id === n) ? n : 'plaintext')
 }
 
 export function languageForFile(path: string): string {
   const ext = path.split('.').pop()?.toLowerCase() ?? ''
-  const byExt: Record<string, string> = { py: 'python', js: 'javascript', mjs: 'javascript', ts: 'typescript', tsx: 'typescript', jsx: 'javascript', cpp: 'cpp', cc: 'cpp', h: 'cpp', hpp: 'cpp', c: 'c', java: 'java', go: 'go', rs: 'rust', sql: 'sql', sh: 'shell', json: 'json', yml: 'yaml', yaml: 'yaml', html: 'html', css: 'css', md: 'markdown', rb: 'ruby', kt: 'kotlin', swift: 'swift' }
+  const byExt: Record<string, string> = { py: 'python', js: 'javascript', mjs: 'javascript', ts: 'typescript', tsx: 'typescript', jsx: 'javascript', cpp: 'cpp', cc: 'cpp', h: 'cpp', hpp: 'cpp', c: 'c', java: 'java', go: 'go', rs: 'rust', sql: 'sql', sh: 'shell', json: 'json', yml: 'yaml', yaml: 'yaml', html: 'html', css: 'css', md: 'markdown', rb: 'ruby', kt: 'kotlin', swift: 'swift', sol: 'sol' }
   return byExt[ext] ?? 'plaintext'
 }
 
