@@ -42,6 +42,7 @@ import {
   clockWords
 } from '@shared/workout'
 import { markItem, type Mark, type WorkoutItem } from '@shared/workoutItems'
+import { minutesLabel, type DrillTally } from '@shared/morningDrills'
 import { useApp } from '../../state'
 import { renderMarkdown } from '../../lib/markdown'
 import { Icon } from '../Icon'
@@ -104,6 +105,77 @@ function WeekStrip({ state, day, small }: { state: WorkoutState; day: string; sm
     </span>
   )
 }
+
+// ---------- The morning drills at a glance ----------
+
+/**
+ * Time on the morning drills (the workout, daily practice and the mental maths sprint) today and
+ * this week, the streak (the same count as the header's) and today's score: one compact row on
+ * the workout page, one line on Home (shared/morningDrills).
+ */
+export function DrillsTally({ compact }: { compact?: boolean }) {
+  const [t, setT] = useState<DrillTally | null>(null)
+  useEffect(() => {
+    let live = true
+    const load = () => window.tide.workout.drills().then((x) => live && setT(x)).catch(() => {})
+    void load()
+    window.addEventListener('focus', load)
+    return () => {
+      live = false
+      window.removeEventListener('focus', load)
+    }
+  }, [])
+  if (!t) return null
+  const parts = (['workout', 'review', 'mental'] as const).filter((k) => t.today[k] > 0).map((k) => `${DRILL_NAME[k]} ${t.today[k]}`)
+  if (compact)
+    return (
+      <p className="wo-tally compact">
+        <span>
+          <b>{minutesLabel(t.today.total)}</b> today
+        </span>
+        <span>
+          <b>{minutesLabel(t.week.total)}</b> this week
+        </span>
+        <span>{t.score !== null ? <><b>{t.score}</b> today</> : <>rating <b>{t.rating}</b></>}</span>
+      </p>
+    )
+  return (
+    <dl className="wo-tally" aria-label="Morning drills">
+      <div>
+        <dt>Today</dt>
+        <dd>
+          <b>{minutesLabel(t.today.total)}</b>
+          {parts.length > 0 && <small>{parts.join(' · ')}</small>}
+        </dd>
+      </div>
+      <div>
+        <dt>This week</dt>
+        <dd>
+          <b>{minutesLabel(t.week.total)}</b>
+          <small>
+            workout {t.week.workout} · review {t.week.review} · mental maths {t.week.mental}
+          </small>
+        </dd>
+      </div>
+      <div>
+        <dt>Streak</dt>
+        <dd>
+          <b>{plural(t.streak.current, 'day')}</b>
+          <small>best {t.streak.best}</small>
+        </dd>
+      </div>
+      <div>
+        <dt>{t.score !== null ? 'Today’s score' : 'Rating'}</dt>
+        <dd>
+          <b>{t.score !== null ? t.score : t.rating}</b>
+          <small>{t.score !== null ? `${t.percent}% right` : 'No full morning yet today'}</small>
+        </dd>
+      </div>
+    </dl>
+  )
+}
+
+const DRILL_NAME = { workout: 'workout', review: 'review', mental: 'mental maths' } as const
 
 // ---------- The page: this morning, rounds, titles, championship, trophies ----------
 
@@ -171,6 +243,8 @@ export function WorkoutHub({ embedded }: { embedded?: boolean }) {
           <WeekStrip state={state} day={day} />
         </div>
       </section>
+
+      <DrillsTally />
 
       <h2 className="wo-h">Your rounds</h2>
       <div className="wo-rounds">
@@ -984,6 +1058,7 @@ export function WorkoutHomeCard({ variant }: { variant: 'tide' | 'classic' }) {
         </span>
       </div>
       <p className={`mm-home-line${reminderDue || (sunday && !st.doneToday) ? ' due' : ''}`}>{line}</p>
+      <DrillsTally compact />
       <div className="mm-home-acts">
         <button className={`btn small${st.doneToday && !inProgress && !sunday ? '' : ' primary'}`} onClick={go}>
           {inProgress ? 'Continue' : st.doneToday ? (sunday ? 'Championship' : 'Open') : 'Start'}

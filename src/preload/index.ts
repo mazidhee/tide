@@ -153,7 +153,8 @@ const api: TideApi = {
   workout: {
     state: invoke('workout:state'),
     logRound: invoke('workout:logRound'),
-    setReminder: invoke('workout:setReminder')
+    setReminder: invoke('workout:setReminder'),
+    drills: invoke('workout:drills')
   },
   practice: {
     list: invoke('practice:list'),

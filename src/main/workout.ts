@@ -154,6 +154,8 @@ export function workoutReminder(state: WorkoutState, now: Date, reminded: string
 export function startWorkoutReminder(open: () => void, opts: { anyHour?: boolean; firstAfterMs?: number; inApp?: (r: { title: string; body: string }) => void } = {}) {
   const check = async () => {
     if (!getSettings().vaultPath) return
+    // Today's "Morning drills" to-do in Things: added, its tick read back (main/morningDrills)
+    await import('./morningDrills').then((m) => m.syncThings(dayKey(Date.now()))).catch(() => {})
     const due = workoutReminder(await workoutState(), new Date(), notifiedOn, opts.anyHour)
     if (!due) return
     notifiedOn = dayKey(Date.now())

@@ -600,6 +600,7 @@ function registerIpc() {
   handle('maths:explain', (a: import('@shared/mentalMaths').MathsAnswer) => import('./mentalMaths').then((m) => m.explainMiss(a)))
   handle('workout:state', () => import('./workout').then((m) => m.workoutState()))
   handle('workout:logRound', (r: Parameters<typeof import('./workout').logWorkoutRound>[0]) => import('./workout').then((m) => m.logWorkoutRound(r)))
+  handle('workout:drills', () => import('./morningDrills').then((m) => m.drillsTally()))
   handle('workout:setReminder', (r: import('@shared/mentalMaths').Reminder) => import('./workout').then((m) => m.setWorkoutReminder(r)))
   handle('learn:bookChapters', (p: string) => bookChapters(p))
   handle('learn:brief', () => getBrief())
