@@ -19,6 +19,7 @@
  */
 import { simGuide, simKindsFor, simLesson, type SimKind } from './sims'
 import { HUMANITIES_RULES, THEOLOGY_RULES, humanitiesArea } from './humanities'
+import { financeLabNote } from './finance/labs'
 import { SUBJECTS, SUBJECT_KINDS, type Need, type SubjectEntry, type SubjectKind } from './subjectMap'
 
 export type { SubjectKind } from './subjectMap'
@@ -274,6 +275,9 @@ export function lessonKit(topic: string, profile?: SubjectProfile, notebook?: st
   const handsOn = !!p.hands
   const parts = p.kinds.map((k) => TOOLKITS[k].rules)
   if (p.lab && !handsOn) parts.push(LAB_LINE)
+  // Finance, payments and quant: the lab that fits (its simulation is in `sims`; this is the Python helper and the tables)
+  const finance = financeLabNote(topic)
+  if (finance) parts.push(finance)
   return { handsOn, sims, toolkit: parts.length ? `How to teach this subject (${p.kinds.map((k) => TOOLKITS[k].label).join('; ')}):\n${parts.join('\n')}` : '', humanities: humanitiesText(topic, p) }
 }
 

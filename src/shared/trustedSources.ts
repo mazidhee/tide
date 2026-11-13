@@ -147,7 +147,22 @@ export const TRUSTED: Record<string, TrustedSite[]> = {
     site('fdic.gov', 'US Federal Deposit Insurance Corporation', 'primary'),
     site('eba.europa.eu', 'European Banking Authority', 'primary'),
     site('handbook.fca.org.uk', 'FCA Handbook (UK Financial Conduct Authority)', 'primary'),
-    site('investor.gov', 'US SEC, Investor.gov', 'official')
+    site('investor.gov', 'US SEC, Investor.gov', 'official'),
+    // Payments, open banking, stablecoins and the official data series (finance build, checked 13 November 2026)
+    site('newyorkfed.org', 'Federal Reserve Bank of New York', 'primary'),
+    site('frbservices.org', 'Federal Reserve Financial Services (Fedwire, FedACH, FedNow)', 'official'),
+    site('standards.openbanking.org.uk', 'UK Open Banking Standard', 'primary'),
+    site('openbanking.org.uk', 'Open Banking Limited (UK)', 'official'),
+    site('emvco.com', 'EMVCo (card payment specifications)', 'primary'),
+    site('developers.circle.com', 'Circle (USDC) developer documentation', 'official'),
+    site('docs.makerdao.com', 'MakerDAO documentation', 'official'),
+    site('home.treasury.gov', 'US Department of the Treasury', 'primary')
+  ],
+  // QuantEcon's lectures are read from their sources on GitHub: the lecture sites themselves are in
+  // UNCHECKED_TRUSTED (they didn't answer from the owner's network)
+  'Quantitative economics and finance': [
+    site('raw.githubusercontent.com', 'Thomas J. Sargent and John Stachurski, QuantEcon', 'book', 'CC BY-SA 4.0', '/QuantEcon'),
+    site('github.com', 'Thomas J. Sargent and John Stachurski, QuantEcon', 'book', 'CC BY-SA 4.0', '/QuantEcon')
   ],
   'Products and analytics tools': [
     site('docs.mixpanel.com', 'Mixpanel documentation', 'official'),
@@ -292,6 +307,16 @@ export const UNCHECKED_TRUSTED: Record<string, TrustedSite[]> = {
     site('sec.gov', 'US Securities and Exchange Commission', 'primary')
   ],
   Accounting: [site('fasb.org', 'Financial Accounting Standards Board', 'primary')],
+  'Quantitative economics and finance': [
+    site('quantecon.org', 'QuantEcon', 'book', 'CC BY-SA 4.0'),
+    site('python.quantecon.org', 'QuantEcon, Quantitative Economics with Python', 'book', 'CC BY-SA 4.0'),
+    site('intro.quantecon.org', 'QuantEcon, A First Course in Quantitative Economics with Python', 'book', 'CC BY-SA 4.0'),
+    site('python-advanced.quantecon.org', 'QuantEcon, Advanced Quantitative Economics with Python', 'book', 'CC BY-SA 4.0')
+  ],
+  'Payments and banking (unreachable from the owner’s network)': [
+    site('npci.org.in', 'NPCI (UPI)', 'primary'),
+    site('wearepay.uk', 'Pay.UK (Faster Payments, Bacs)', 'primary')
+  ],
   Law: [site('eur-lex.europa.eu', 'EUR-Lex (EU law)', 'primary'), site('congress.gov', 'Congress.gov', 'primary'), site('courtlistener.com', 'CourtListener (Free Law Project)', 'primary')],
   'Game development and graphics': [
     site('raytracing.github.io', 'Peter Shirley, Ray Tracing in One Weekend', 'book'),
