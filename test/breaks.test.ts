@@ -129,3 +129,40 @@ describe('signals', () => {
     expect(breakSettings({ studyMinutes: 200, breakMinutes: 7 as never }).studyMinutes).toBe(90)
   })
 })
+
+describe('one break for every window', () => {
+  it('two windows deciding on the same tick: one starts it and logs it, the other follows', async () => {
+    const { claimBreak, CLAIM_HOLD_MS } = await import('@shared/breaks')
+    // Main's record, shared by both windows
+    let granted = 0
+    const ask = (now: number) => {
+      const r = claimBreak(granted, now)
+      granted = r.lastGranted
+      return r.granted
+    }
+    const s = studied(70)
+    const now = at(70)
+    const d = decide(s, now, DEFAULT_BREAKS, { midQuestion: false })
+    expect(d.kind).toBe('take')
+    let profile = emptyProfile()
+    let shared: BlockState = s
+    for (const win of ['main', 'pop-out']) {
+      if (!ask(now + (win === 'main' ? 0 : 900))) continue
+      const r = startBreak(shared, profile, now, { minutes: 10, studied: 70 })
+      shared = r.state
+      profile = r.profile
+    }
+    expect(profile.logs).toHaveLength(1)
+    expect(onBreak(shared, now + MIN)).toBe(true)
+    // The next break, long after, is anyone's
+    expect(ask(now + CLAIM_HOLD_MS + 1)).toBe(true)
+  })
+
+  it("main refuses a second claim within the hold, and the pop-out window module agrees", async () => {
+    const { claimBreakFor, resetPopouts } = await import('../src/main/popout')
+    resetPopouts()
+    expect(claimBreakFor(1_000_000)).toBe(true)
+    expect(claimBreakFor(1_000_500)).toBe(false)
+    expect(claimBreakFor(1_000_000 + 61_000)).toBe(true)
+  })
+})

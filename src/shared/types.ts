@@ -1040,6 +1040,8 @@ export interface TideApi {
     /** A small message to every other window */
     relay(channel: string, payload: unknown): void
     onRelay(cb: (m: { channel: string; payload: unknown }) => void): () => void
+    /** This window may start the break its planner decided on: false when another window just did (it follows that one) */
+    claimBreak(): Promise<boolean>
   }
   cloud: {
     /** Which providers have a saved key (the keys themselves never leave the main process) */

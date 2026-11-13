@@ -287,3 +287,18 @@ export const BREAK_TIPS = [
 /** "Five minutes rested", "Fifteen minutes rested" */
 const WORDS: Record<number, string> = { 5: 'Five', 10: 'Ten', 15: 'Fifteen', 20: 'Twenty' }
 export const restedLine = (minutes: number) => `${WORDS[minutes] ?? minutes} minute${minutes === 1 ? '' : 's'} rested.`
+
+// ---------- One break for every window ----------
+
+/** How long after one window starts a break the others are refused one (they follow it instead) */
+export const CLAIM_HOLD_MS = 60_000
+
+/**
+ * Main's side of "only one window starts a break" (main/popout): every Tide window runs the
+ * planner, and two that decide on the same tick would each start the break and log it. The first
+ * to ask gets it; any that asks within CLAIM_HOLD_MS of that is refused and follows the first.
+ */
+export function claimBreak(lastGranted: number, now: number, hold = CLAIM_HOLD_MS): { granted: boolean; lastGranted: number } {
+  if (lastGranted && now - lastGranted < hold && now >= lastGranted) return { granted: false, lastGranted }
+  return { granted: true, lastGranted: now }
+}

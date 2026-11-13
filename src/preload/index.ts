@@ -403,7 +403,8 @@ const api: TideApi = {
     onClosing: (cb) => subscribe('windows:closing', () => cb()),
     closeNow: invoke('window:closeNow'),
     relay: (channel, payload) => ipcRenderer.send('windows:relay', channel, payload),
-    onRelay: (cb) => subscribe('windows:relayed', cb)
+    onRelay: (cb) => subscribe('windows:relayed', cb),
+    claimBreak: invoke('windows:claimBreak')
   },
   cloud: {
     keys: invoke('cloud:keys'),
