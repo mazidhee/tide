@@ -1,5 +1,6 @@
 import { registerBackups, watchBackups } from './backup'
 import { openBugSheet, registerBugReports } from './bugReport'
+import { registerWeekProgress } from './weekProgress'
 import { gradeAnswer } from './daily'
 import { hasKeys, listCloudModels, loadDayUse, loadStats, setKey, testCloud, usageSummary } from './cloud'
 import { connectMetabase, disconnectMetabase, metabaseStatus } from './metabase'
@@ -213,6 +214,7 @@ function registerIpc() {
   registerIdeas()
   registerBackups(handle)
   registerBugReports()
+  registerWeekProgress(handle)
   handle('settings:get', () => getSettings())
   // You (main/profile): your name and picture, kept in app data
   handle('profile:get', () => getProfile())

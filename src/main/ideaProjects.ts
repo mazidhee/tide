@@ -104,7 +104,7 @@ async function writePlan(plan: ProjectPlan): Promise<void> {
   await writeText(planFile(plan.notebook), JSON.stringify(plan, null, 1))
 }
 
-async function allPlans(): Promise<ProjectPlan[]> {
+export async function allPlans(): Promise<ProjectPlan[]> {
   const names = await fs.readdir(absPath(PLANS)).catch(() => [] as string[])
   const out: ProjectPlan[] = []
   for (const n of names.filter((x) => x.endsWith('.plan.json'))) {

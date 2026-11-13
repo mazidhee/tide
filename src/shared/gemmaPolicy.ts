@@ -49,6 +49,8 @@ export const JOB_ROUTES = {
   lessonPrep: { label: 'Preparing your next lesson', role: 'hard' },
   prepExercises: { label: 'Exercises and the opening for your next lesson', role: 'teach' },
   weeklyReview: { label: 'Your weekly review', role: 'hard' },
+  // This week's progress in Your week (main/weekProgress): one line, Claude only; without it, fixed words
+  weekProgress: { label: 'A line on this week’s progress', role: 'background' },
   // Opus reviewing a finished lesson against the teaching rubric (main/teaching): Claude only, never Gemma
   lessonReview: { label: 'Reviewing a finished lesson', role: 'mark' },
   curriculum: { label: 'Sorting roadmaps, enriching topics, readings', role: 'background' },

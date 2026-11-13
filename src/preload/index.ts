@@ -334,6 +334,8 @@ const api: TideApi = {
     get: invoke('coach:get'),
     save: invoke('coach:save'),
     week: invoke('coach:week'),
+    progress: invoke('coach:progress'),
+    progressSummary: invoke('coach:progressSummary'),
     planWeek: invoke('coach:planWeek'),
     profile: invoke('coach:profile'),
     infer: invoke('coach:infer'),

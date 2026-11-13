@@ -938,6 +938,10 @@ export interface TideApi {
     get(): Promise<import('./coach').CoachSettings>
     save(s: import('./coach').CoachSettings): Promise<import('./coach').CoachSettings>
     week(date?: string): Promise<import('./coach').WeekPlan | null>
+    /** This week's progress for Your week, with the line kept for it (or fixed words) */
+    progress(): Promise<{ progress: import('./weekProgress').WeekProgress; summary: { text: string; by: 'claude' | 'tide' } }>
+    /** Claude's line on the week, written when the numbers changed; the fixed words without Claude */
+    progressSummary(): Promise<{ text: string; by: 'claude' | 'tide' }>
     planWeek(): Promise<import('./coach').WeekPlan>
     profile(): Promise<string>
     /** Works out where you're heading (at most every few days unless forced); returns the settings */
