@@ -27,7 +27,7 @@ import { parsePlacement, placementNote } from '@shared/placement'
 import { correctionText } from '@shared/lessonCheck'
 import type { Reading } from '@shared/readings'
 import { whyByDefault } from '../lib/agenda'
-import { ASKED, END_NOW, GO_ON, SHOW_ME, askIdentity, askStarter, shouldSumUp, MODE_LABEL, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
+import { ASKED, END_NOW, GO_ON, SHOW_ME, askIdentity, askStarter, shouldSumUp, modeLabel, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
 import { cardsToMarkdown } from '@shared/cards'
 import { fileTitle, useApp, pagesLabel } from '../state'
@@ -819,7 +819,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   useEffect(() => {
     const k = keepRef.current
     if (!ongoingKey || !view || k.finished || k.turns.length < 2) return
-    keepLive({ key: ongoingKey, view, title: `${MODE_LABEL[mode] ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: null, threads: k.threads }, busy: k.busy })
+    keepLive({ key: ongoingKey, view, title: `${modeLabel(mode, options) ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: null, threads: k.threads }, busy: k.busy })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turns.length, busy, finished, ongoingKey, edited, threadsRev])
   // A thread on a finished lesson is kept with it too
@@ -852,7 +852,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     () => () => {
       const k = keepRef.current
       if (handedOver.current || !ongoingKey || !view || k.finished || k.turns.length < 2) return
-      saveOngoing({ key: ongoingKey, view, title: `${MODE_LABEL[mode] ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: activeId.current, threads: k.threads }, busy: k.busy })
+      saveOngoing({ key: ongoingKey, view, title: `${modeLabel(mode, options) ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: activeId.current, threads: k.threads }, busy: k.busy })
       if (k.busy && activeId.current) followInBackground(ongoingKey, activeId.current)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -861,7 +861,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // The professor's scene: at the board while he teaches, tea (or chess, in a quiz) on your turn
   const yourTurnScene: ProfessorPose = mode === 'teach' || mode === 'review' ? 'tea' : 'chess'
   const pose: ProfessorPose = busy ? 'board' : cheer ? 'eureka' : finished ? 'happy' : currentAsk ? yourTurnScene : 'idle'
-  useStudying('view', finished ? null : { pose: busy ? 'board' : currentAsk ? yourTurnScene : 'board', label: `${MODE_LABEL[mode] ?? 'Session'}: ${topic}` })
+  useStudying('view', finished ? null : { pose: busy ? 'board' : currentAsk ? yourTurnScene : 'board', label: `${modeLabel(mode, options) ?? 'Session'}: ${topic}` })
   useEffect(() => {
     // A check is ticked off once what it found is saved (below), not just because it ended
     if (finished && !options?.placement) finishAgendaItem(topic)
@@ -907,7 +907,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       const right = grades.filter((g) => g.verdict === 'correct').length
       const date = new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
       const lines = [
-        `> [!summary] ${MODE_LABEL[mode]}, ${date}${grades.length ? `: ${right} of ${grades.length} right` : ''}`,
+        `> [!summary] ${modeLabel(mode, options)}, ${date}${grades.length ? `: ${right} of ${grades.length} right` : ''}`,
         ...summary.trim().split('\n').map((l) => `> ${l}`),
         ...(savedCards.size ? [`>`, `> Flashcards made: ${savedCards.size}`] : [])
       ]
@@ -1602,10 +1602,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           <span className="session-prof" title={busy ? 'Teaching' : currentAsk ? 'Your turn' : ''}>
             <Professor state={pose} size={20} />
           </span>
-          <span className="crumb">{MODE_LABEL[mode]}</span>
+          <span className="crumb">{modeLabel(mode, options)}</span>
           <Icon name="chevron" size={11} />
           <span className="crumb current">{topic}</span>
-          {scopeLabel && scopeLabel !== topic && (
+          {options?.curiosity ? (
+            <span className="muted page-count">came up in {options.curiosity.from.topic}</span>
+          ) : scopeLabel && scopeLabel !== topic && (
             <span className="muted page-count">
               {tide && 'path' in scope && <AreaMark area={scope.path} size={14} />}
               from {scopeLabel}
@@ -1781,7 +1783,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             <header className="td-lesson-head">
               <h1>{topic}</h1>
               <p>
-                <span>{MODE_LABEL[mode]}</span>
+                <span>{modeLabel(mode, options)}</span>
                 {scopeLabel && scopeLabel !== topic && (
                   <span className="td-area">
                     {'path' in scope && <AreaMark area={scope.path} size={14} />}

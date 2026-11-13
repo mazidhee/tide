@@ -572,6 +572,9 @@ export const MODE_LABEL: Record<SessionMode, string> = {
   recall: 'Explain from memory'
 }
 
+/** What a session is called in its header: a side lesson from Explore later says so, not "Teach me" */
+export const modeLabel = (mode: SessionMode, options?: SessionSetup['options']) => (mode === 'teach' && options?.curiosity ? 'Side lesson' : MODE_LABEL[mode])
+
 /** The opening message that starts a session */
 export function openingMessage({ mode, topic, options }: SessionSetup): string {
   if (options?.retest?.length) return `Retest me on the ${options.retest.length} question${options.retest.length === 1 ? "" : "s"} I got wrong before.`

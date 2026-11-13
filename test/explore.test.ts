@@ -122,3 +122,13 @@ describe('explore later: kept in the vault', async () => {
     expect(after).toHaveLength(before.length - 1)
   })
 })
+
+describe('a side lesson says what it is', () => {
+  it('its header reads "Side lesson", not "Teach me"; other lessons are unchanged', async () => {
+    const { modeLabel } = await import('@shared/session')
+    const curiosity = { text: 'Hex was used because…', from: { topic: 'Binary', lesson: 'l1' } }
+    expect(modeLabel('teach', { curiosity } as never)).toBe('Side lesson')
+    expect(modeLabel('teach')).toBe('Teach me')
+    expect(modeLabel('quiz', { curiosity } as never)).toBe('Quiz me')
+  })
+})
