@@ -106,6 +106,8 @@ export interface Settings {
   writingCoach?: boolean
   /** How your own notes open: to write in (the default) or to read. Course material and saved sources always open to read */
   noteOpenMode?: 'write' | 'read'
+  /** Backups of Tide's own data (main/backup): where the snapshots go, when not the default folder in Tide's app data */
+  backups?: { folder?: string }
   /** The note editor shows plain Markdown everywhere instead of live preview (which hides it away from the cursor) */
   editorSource?: boolean
   /** Study timers: the sidebar's Focus timer and the timer buttons on notes, books and practice */
@@ -812,6 +814,17 @@ export interface TideApi {
   }
   /** Claude, run through the user's own Claude Code */
   /** Gemma on demand (main/modelIdle): loaded only when a job is routed to it while Claude teaches */
+  /** Backups of Tide's own data (main/backup): Settings › Backups */
+  backups: {
+    status(): Promise<import('./backup').BackupStatus>
+    now(): Promise<{ snapshot: import('./backup').Snapshot; status: import('./backup').BackupStatus }>
+    /** Shows the folder, or one snapshot in it, in Finder */
+    reveal(name?: string): Promise<void>
+    chooseFolder(): Promise<import('./backup').BackupStatus>
+    defaultFolder(): Promise<import('./backup').BackupStatus>
+    /** Keeps a safety snapshot, puts this one back, and starts Tide again */
+    restore(name: string): Promise<{ safety: string; files: number }>
+  }
   gemma: {
     status(): Promise<GemmaStatusView>
     load(): Promise<GemmaStatusView>

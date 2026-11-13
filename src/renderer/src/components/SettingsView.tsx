@@ -16,6 +16,7 @@ import { DESIGNS, readingFace, resolveDesign, type DesignId } from '@shared/desi
 import { Icon, type IconName } from './Icon'
 import { SpeedView } from './SpeedView'
 import { ProfileSettings } from './ProfileSettings'
+import { BackupsSettings } from './BackupsSettings'
 import { UsageView } from './UsageView'
 import { ConnectionsView } from './ConnectionsView'
 import { LAB_PACK } from '@shared/labPack'
@@ -64,11 +65,12 @@ const ACCENTS = [
 
 const LOCAL_SEARCH = 'http://127.0.0.1:8888'
 
-export type Section = 'you' | 'general' | 'appearance' | 'tutor' | 'study' | 'connections' | 'models' | 'tools' | 'usage' | 'speed'
+export type Section = 'you' | 'general' | 'backups' | 'appearance' | 'tutor' | 'study' | 'connections' | 'models' | 'tools' | 'usage' | 'speed'
 
 export const SECTIONS: { id: Section; label: string; icon: IconName; group: string; description: string }[] = [
   { id: 'you', label: 'You', icon: 'person', group: 'App', description: 'Your name and picture. Kept on this Mac, never sent anywhere.' },
   { id: 'general', label: 'General', icon: 'settings', group: 'App', description: 'Where your notes live.' },
+  { id: 'backups', label: 'Backups', icon: 'archive', group: 'App', description: 'Tide’s own data, kept safe: your lessons, What you know, ratings, profile and settings, backed up each night and restored from here.' },
   { id: 'appearance', label: 'Appearance', icon: 'highlight', group: 'App', description: 'Theme, colour, reading and the sidebar.' },
   { id: 'tutor', label: 'Tutor and voice', icon: 'tutor', group: 'Learning', description: 'Who teaches you, and how they sound.' },
   { id: 'study', label: 'Study time', icon: 'timer', group: 'Learning', description: 'Timers and breaks while you study.' },
@@ -1431,6 +1433,7 @@ export function SettingsView({ section = 'general' }: { section?: Section | 'ai'
         </header>
         {tab === 'you' && <ProfileSettings />}
         {tab === 'general' && <GeneralSection />}
+        {tab === 'backups' && <BackupsSettings />}
         {tab === 'appearance' && <AppearanceSection />}
         {tab === 'tutor' && <TutorSection />}
         {tab === 'study' && <StudySection />}

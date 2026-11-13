@@ -1,3 +1,4 @@
+import { registerBackups, watchBackups } from './backup'
 import { gradeAnswer } from './daily'
 import { hasKeys, listCloudModels, loadDayUse, loadStats, setKey, testCloud, usageSummary } from './cloud'
 import { connectMetabase, disconnectMetabase, metabaseStatus } from './metabase'
@@ -209,6 +210,7 @@ function registerIpc() {
   registerIde()
   registerMocks()
   registerIdeas()
+  registerBackups(handle)
   handle('settings:get', () => getSettings())
   // You (main/profile): your name and picture, kept in app data
   handle('profile:get', () => getProfile())
@@ -874,6 +876,7 @@ app.whenReady().then(() => {
   if (getSettings().ai.claude?.terminalPort) void import('./tideMcp').then((m) => m.ensureMcp()).catch(() => {})
   // The model's memory goes back to the Mac when you aren't studying, and loads as you return (when Gemma is wanted)
   watchModelIdle()
+  watchBackups()
   app.on('browser-window-focus', () => wakeModel(() => warmChat()))
   // A restarted (or closed) server forgets all that, and Claude may have hit its limit: check each minute
   setInterval(() => void minuteCheck(warm).catch(() => {}), 60_000)

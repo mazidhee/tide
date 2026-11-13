@@ -179,6 +179,14 @@ const api: TideApi = {
     render: invoke('speed:render'),
     memory: invoke('speed:memory')
   },
+  backups: {
+    status: invoke('backups:status'),
+    now: invoke('backups:now'),
+    reveal: invoke('backups:reveal'),
+    chooseFolder: invoke('backups:chooseFolder'),
+    defaultFolder: invoke('backups:defaultFolder'),
+    restore: invoke('backups:restore')
+  },
   gemma: {
     status: invoke('gemma:status'),
     load: invoke('gemma:load'),
