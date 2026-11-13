@@ -595,9 +595,13 @@ export function moduleGates(
     const phases = partsOf(m)
     inner.set(m.id, { phases, parts: trackGates(phases, concepts, records.parts[moduleRecordKey(m.id)] ?? emptyTrack(), capstones(m)) })
   }
+  // Passed: every core part passed (or skipped past); a module whose parts are all optional needs them all; an empty one never passes on its own
   const passedOf = (id: string) => {
     const i = inner.get(id)
-    return !!records.there[id] || (!!i && i.parts.current === null)
+    if (records.there[id]) return true
+    if (!i || !i.parts.gates.length) return false
+    const core = i.parts.gates.filter((g) => !g.optional)
+    return core.length ? i.parts.current === null : i.parts.gates.every((g) => g.passed || g.override)
   }
   const out = new Map<string, ModuleGate>()
   for (const m of modules) {

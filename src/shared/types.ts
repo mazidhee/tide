@@ -1075,7 +1075,8 @@ export interface TideApi {
     there(id: string, on: boolean, note?: string): Promise<void>
     /** What the switch would move, before anything is written */
     preview(): Promise<import('./moduleMigration').MovePreview & { switched: boolean; at?: number; backup?: string }>
-    switch(): Promise<{ ok: boolean; already?: boolean; backup: string; counts: Record<string, number> }>
+    /** The switch, checked: FSRS state before and after, evidence kept, what re-pointed, what had no home */
+    switch(): Promise<import('./moduleMigration').SwitchVerification>
     /** The empty folders you confirmed, removed */
     removeFolders(paths: string[]): Promise<string[]>
     switchBack(): Promise<{ ok: boolean; restored: number; kept: number }>

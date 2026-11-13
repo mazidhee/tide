@@ -136,7 +136,7 @@ describe('the switch to modules', () => {
     const p = await m.switchPreview()
     expect(p.switched).toBe(false)
     expect(p.modules).toBe(5)
-    expect(p.topics).toMatchObject({ dropped: 1, unplaced: 1 })
+    expect(p.topics).toMatchObject({ dropped: 1, unplaced: 1, folded: 0 })
     expect(p.topics.placed).toBe(10)
     // Four with answers, and one a placement check found known
     expect(p.progress.concepts).toBe(5)

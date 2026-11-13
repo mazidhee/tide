@@ -48,7 +48,7 @@ export interface MovePlan {
   /** Old phase id → the module part every one of its placed topics went to (when they all went to one) */
   phases: Record<string, { module: string; part: string }>
   /** Per old roadmap file: its topics, how many found a home, how many were dropped */
-  files: Record<string, { notebook: string; total: number; placed: number; dropped: number }>
+  files: Record<string, { notebook: string; total: number; placed: number; dropped: number; /** Given a module by the moves file but no topic of the same words there (folded into others) */ folded: number }>
 }
 
 const tnorm = (s: string) =>
@@ -107,7 +107,7 @@ export function planMoves(old: OldRoadmap[], moves: Moves, cat: Catalogue): Move
     const map = idx.get(file)
     used = new Set<string>()
     const topics = roadmapTopics(rm.notebook, rm.md)
-    const stat = { notebook: rm.notebook, total: topics.length, placed: 0, dropped: 0 }
+    const stat = { notebook: rm.notebook, total: topics.length, placed: 0, dropped: 0, folded: 0 }
     plan.files[rm.file] = stat
     for (const t of topics) {
       const key = tnorm(t.title)
@@ -120,19 +120,31 @@ export function planMoves(old: OldRoadmap[], moves: Moves, cat: Catalogue): Move
       let hit: { module: string; t: RoadmapTopic; how: IdPair['how'] } | null = null
       if (dest && by.has(dest)) {
         const inMod = topicsOf.get(dest) ?? []
-        const same = inMod.filter((x) => tnorm(x.title) === key && !used.has(x.id))
-        const pick = same.find((x) => tnorm(x.section) === tnorm(t.section)) ?? same[0]
+        const all = inMod.filter((x) => tnorm(x.title) === key)
+        const same = all.filter((x) => !used.has(x.id))
+        // The same wording twice in one roadmap, once in the module: one concept, both histories on it
+        const pick = same.find((x) => tnorm(x.section) === tnorm(t.section)) ?? same[0] ?? all[0]
         if (pick) hit = { module: dest, t: pick, how: 'moves' }
         else {
           const tok = topicTokens(t.title)
           const close = inMod.filter((x) => !used.has(x.id) && sameTopic(tok, topicTokens(x.title)))
-          if (close.length === 1) hit = { module: dest, t: close[0], how: 'fuzzy' }
+          // Else the one topic whose words hold all of the old one's (the shortest such), else the closest by shared words
+          const holds = inMod.filter((x) => tok.length && tok.every((w) => topicTokens(x.title).includes(w))).sort((a2, b2) => a2.title.length - b2.title.length)
+          const jac = (x: RoadmapTopic) => {
+            const xt = topicTokens(x.title)
+            const inter = tok.filter((w) => xt.includes(w)).length
+            return inter / new Set([...tok, ...xt]).size
+          }
+          const best = [...inMod].sort((a2, b2) => jac(b2) - jac(a2))[0]
+          const found = close.length === 1 ? close[0] : (holds[0] ?? (best && jac(best) >= 0.5 ? best : undefined))
+          if (found) hit = { module: dest, t: found, how: 'fuzzy' }
         }
       } else if (dest === undefined) {
         const same = (anywhere.get(key) ?? []).filter((x) => !used.has(x.t.id))
         if (same.length && new Set(same.map((x) => x.module)).size === 1) hit = { ...(same.find((x) => tnorm(x.t.section) === tnorm(t.section)) ?? same[0]), how: 'text' }
       }
       if (!hit) {
+        if (dest) stat.folded++
         plan.unplaced.push({ id: t.id, title: t.title, notebook: rm.notebook, ...(dest ? { module: dest } : {}) })
         continue
       }
@@ -159,7 +171,7 @@ export function planMoves(old: OldRoadmap[], moves: Moves, cat: Catalogue): Move
  * Whether an old roadmap's items went somewhere (placed, or dropped on purpose), nearly all of them:
  * its notebook can leave its outline. An item with no home keeps whatever progress it has on the map.
  */
-export const fileCovered = (s: MovePlan['files'][string] | undefined, share = 0.9) => !!s && s.total > 0 && s.placed + s.dropped >= Math.ceil(s.total * share)
+export const fileCovered = (s: MovePlan['files'][string] | undefined, share = 0.9) => !!s && s.total > 0 && s.placed + s.dropped + (s.folded ?? 0) >= Math.ceil(s.total * share)
 
 // ---------- Rewriting ids ----------
 
@@ -417,7 +429,7 @@ export interface MovePreview {
   modules: number
   tracks: { id: string; title: string; modules: number; notebook: string; folder: boolean }[]
   /** Topics with somewhere to go, and those with progress on them */
-  topics: { placed: number; dropped: number; unplaced: number; withProgress: number }
+  topics: { placed: number; dropped: number; unplaced: number; folded: number; withProgress: number }
   /** Progress moving: evidence on concepts, ticks, lesson links, placement results */
   progress: { concepts: number; evidence: number; ticks: number; links: number; placement: number; events: number; targets: number; lessons: number }
   /** Notebooks that stop using an old roadmap as their outline */
@@ -429,4 +441,21 @@ export interface MovePreview {
   /** Old topics with progress on them that have no home (their progress stays as it is) */
   orphans: { title: string; notebook: string }[]
   issues: number
+}
+
+export interface SwitchVerification {
+  ok: boolean
+  already?: boolean
+  backup: string
+  /** Module, track and project files copied into the vault from a source folder (new files only) */
+  installed: number
+  concepts: { before: number; after: number; withEvidenceBefore: number; withEvidenceAfter: number }
+  /** Every concept with evidence before: its FSRS state (stability, difficulty, status, answers) after, on its new id */
+  fsrs: { checked: number; same: number; merged: number; changed: { id: string; name: string; before: string; after: string }[] }
+  evidence: { before: number; after: number; lost: number }
+  /** Learning-log rows and records re-pointed at the new ids */
+  events: { log: number; files: number; checks: number; ticks: number }
+  /** Topics no module took (none in the moves file), folded into a module's other topics, dropped on purpose, and any with progress (it stays where it was) */
+  unmapped: { topics: number; folded: number; dropped: number; withProgress: { title: string; notebook: string }[] }
+  counts: Record<string, number>
 }

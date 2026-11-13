@@ -266,7 +266,9 @@ export async function shapeThreads(threads: Thread[], o: { projectTracks?: Recor
     const values = threadValues(out, { stages: star.stages, current: star.current, milestone: state?.milestone ?? null, gaps: state?.readiness.gaps ?? {}, urgency: state?.urgency ?? 0, today: today(), ...(mods ? { fanOut: mods.fanOut, channels: mods.channels } : {}) })
     out = valueThreads(out, values)
   }
-  out = habitThreads(out, { love })
+  // The interview-practice track (its primer and problem sets) is the habit, not study
+  const ivTracks = new Set((await import('./learn').then((l) => l.getNotebooks()).catch(() => [])).filter((n) => n.track && (/interview/i.test(n.track) || /interview/i.test(n.name))).map((n) => `roadmap:${n.name.toLowerCase()}`))
+  out = habitThreads(out, { love, interview: ivTracks })
   const habit = state ? interviewMinutes(state.projection, state.milestone.bar) : null
   const groupFloors = weekFloors(state?.hours.plan ?? 0, out.some((t) => t.group === 'interview') ? habit : null, { projects: out.some((t) => t.group === 'projects'), love: out.some((t) => t.group === 'love') })
   return { threads: out, groupFloors, state, stageTracks }

@@ -61,6 +61,7 @@ import {
   rewriteDeep,
   type KFile,
   type MovePlan,
+  type SwitchVerification,
   type MovePreview,
   type Moves,
   type OldRoadmap
@@ -522,7 +523,7 @@ export async function switchPreview(): Promise<MovePreview & { switched: boolean
     ...(state.switched ? { at: state.switched.at, backup: state.switched.backup } : {}),
     modules: p.cat.modules.length,
     tracks: p.tracks.map((t) => ({ ...t, modules: p.cat.tracks.find((x) => x.id === t.id)?.modules.length ?? 0 })),
-    topics: { placed: p.plan.pairs.length, dropped: p.plan.dropped.length, unplaced: p.plan.unplaced.length, withProgress: progressIds.size },
+    topics: { placed: p.plan.pairs.length, dropped: p.plan.dropped.length, unplaced: p.plan.unplaced.filter((u) => !u.module).length, folded: p.plan.unplaced.filter((u) => u.module).length, withProgress: progressIds.size },
     progress: { concepts: withEv.filter((c) => !c.parent).length, evidence: withEv.reduce((n, c) => n + (c.evidence?.length ?? 0), 0), ticks: p.plan.pairs.filter((x) => x.checked).length, links: p.plan.pairs.filter((x) => x.link).length, placement, events: db.events, targets: db.targets, lessons },
     notebooks: Object.entries(p.outlines).map(([name, from]) => ({ name, from, ...(trackOfNb.has(name) ? { to: trackOfNb.get(name) } : {}) })),
     emptyFolders: p.empty,
@@ -927,6 +928,91 @@ export function switchToModules(o: { now?: number } = {}): Promise<SwitchResult>
     await afterwards()
     return { ok: true, backup, counts }
   })
+}
+
+// ---------- The switch, verified: what the button and scripts/modules run ----------
+
+export type { SwitchVerification } from '@shared/moduleMigration'
+
+/** Copies a module source folder (Modules, Tracks, Projects, _moves.json) into Roadmaps: new files only, nothing overwritten */
+export async function installModules(sourceDir: string): Promise<number> {
+  const { join: pj } = await import('path')
+  let n = 0
+  for (const [from, to] of [
+    ['Modules', MODULES_DIR],
+    ['Tracks', TRACKS_DIR],
+    ['Projects', PROJECTS_DIR]
+  ] as const) {
+    const names = await fs.readdir(pj(sourceDir, from)).catch(() => [] as string[])
+    for (const name of names.filter((x) => x.endsWith('.md') || x.endsWith('.json'))) {
+      const dest = `${to}/${name}`
+      if (existsSync(absPath(dest))) continue
+      await fs.mkdir(absPath(to), { recursive: true })
+      await fs.copyFile(pj(sourceDir, from, name), absPath(dest))
+      n++
+    }
+  }
+  if (existsSync(pj(sourceDir, '_moves.json')) && !(await loadMoves())) {
+    await fs.copyFile(pj(sourceDir, '_moves.json'), absPath('Roadmaps/_moves.json'))
+    n++
+  }
+  resetModules()
+  return n
+}
+
+const stateKey = (c: ConceptState) => `stability ${c.stability?.toFixed(4) ?? '-'} · difficulty ${c.difficulty?.toFixed(4) ?? '-'} · ${c.status} · seen ${c.seen} right ${c.right} partly ${c.partly} wrong ${c.wrong}`
+
+/**
+ * Switch to modules and check it: the knowledge map's FSRS state for every concept with evidence,
+ * before and after (the same on its new id, or merged with a twin), every piece of evidence still
+ * there, what the log and records re-pointed, what had no home. With `sourceDir`, the modules are
+ * first copied in (new files only).
+ */
+export async function verifiedSwitch(o: { sourceDir?: string; now?: number } = {}): Promise<SwitchVerification> {
+  const installed = o.sourceDir ? await installModules(o.sourceDir) : 0
+  const k = await import('./knowledge')
+  const before = await k.allConcepts()
+  const file0 = await readKnowledgeFile()
+  const ev0 = (file0?.concepts ?? []).flatMap((c) => (c.evidence ?? []).map((e) => `${e.source} ${e.pos}`))
+  const p = await planned().catch(() => null)
+  const r = await switchToModules({ ...(o.now ? { now: o.now } : {}) })
+  const after = await k.allConcepts()
+  const file1 = await readKnowledgeFile()
+  const ev1 = new Set((file1?.concepts ?? []).flatMap((c) => (c.evidence ?? []).map((e) => `${e.source} ${e.pos}`)))
+  const map = p ? idMapper(p.plan) : (x: string) => x
+  const into = new Map<string, number>()
+  for (const c of before) if (c.seen) into.set(map(c.id), (into.get(map(c.id)) ?? 0) + 1)
+  const now = new Map(after.map((c) => [c.id, c]))
+  const fsrs: SwitchVerification['fsrs'] = { checked: 0, same: 0, merged: 0, changed: [] }
+  for (const c of before) {
+    if (!c.seen) continue
+    fsrs.checked++
+    const n = now.get(map(c.id))
+    if ((into.get(map(c.id)) ?? 0) > 1) {
+      fsrs.merged++
+      continue
+    }
+    if (n && stateKey(n) === stateKey(c)) fsrs.same++
+    else fsrs.changed.push({ id: c.id, name: c.name, before: stateKey(c), after: n ? stateKey(n) : 'missing' })
+  }
+  const placed = (key: string) => {
+    const [src, pos] = key.split(' ')
+    return `${map(src)} ${pos}`
+  }
+  const lost = ev0.filter((e) => !ev1.has(placed(e))).length
+  const withProgress = p ? p.plan.unplaced.filter((u) => (file0?.concepts ?? []).some((c) => (c.id === u.id || c.parent === u.id) && c.evidence?.length)).map((u) => ({ title: u.title, notebook: u.notebook })) : []
+  return {
+    ok: r.ok && lost === 0 && fsrs.changed.length === 0,
+    ...(r.already ? { already: true } : {}),
+    backup: r.backup,
+    installed,
+    concepts: { before: before.length, after: after.length, withEvidenceBefore: before.filter((c) => c.seen).length, withEvidenceAfter: after.filter((c) => c.seen).length },
+    fsrs,
+    evidence: { before: ev0.length, after: ev1.size, lost },
+    events: { log: r.counts.log ?? 0, files: r.counts.files ?? 0, checks: r.counts.checks ?? 0, ticks: r.counts.lines ?? 0 },
+    unmapped: { topics: p?.plan.unplaced.filter((u) => !u.module).length ?? 0, folded: p?.plan.unplaced.filter((u) => u.module).length ?? 0, dropped: p?.plan.dropped.length ?? 0, withProgress },
+    counts: r.counts
+  }
 }
 
 /** Removes the empty folders you confirmed (only ones the switch listed, and only while still empty) */

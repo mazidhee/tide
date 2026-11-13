@@ -585,9 +585,9 @@ export const LOVE_SHARE = 0.12
  * pull is the floor's, so they never crowd out study), projects as building work, and the love
  * interests (projects and tracks outside the stage the learner wants kept alive) as their share.
  */
-export function habitThreads<T extends Thread>(threads: T[], o: { love: ReadonlySet<string> }): T[] {
+export function habitThreads<T extends Thread>(threads: T[], o: { love: ReadonlySet<string>; /** The interview-practice track's threads: part of the habit too */ interview?: ReadonlySet<string> }): T[] {
   return threads.map((t) => {
-    if (t.kind === 'practice' || t.kind === 'mock') return { ...t, group: 'interview', weight: Math.min(t.weight, 0.01), hard: false }
+    if (t.kind === 'practice' || t.kind === 'mock' || o.interview?.has(t.id)) return { ...t, group: 'interview', weight: Math.min(t.weight, 0.01), hard: false, parked: false }
     if (o.love.has(t.id)) return { ...t, group: 'love' }
     if (t.kind === 'project') return { ...t, group: 'projects' }
     return t

@@ -23,7 +23,7 @@ const hours = (m: number) => `${Math.round((m / 60) * 10) / 10} h`
 
 const STEP_WORD: Record<TrackPhaseView['step'], string> = { learn: 'Learning', 'firm-up': 'Firming up', check: 'Phase check', capstone: 'Capstone', passed: 'Passed' }
 
-export function TrackView({ notebook, path }: { notebook: string; path: string }) {
+export function TrackView({ notebook, path, modular }: { notebook: string; path: string; /** A track of modules: the current part's gate only; its modules are listed below it */ modular?: boolean }) {
   const app = useApp()
   const [data, setData] = useState<TrackData | null>(null)
   const [picked, setPicked] = useState<string | null>(null)
@@ -90,7 +90,7 @@ export function TrackView({ notebook, path }: { notebook: string; path: string }
     <section className="track" aria-label={`${notebook} as a track`}>
       <header className="track-head">
         <div className="track-where">
-          <span className="track-kicker">{current ? `Phase ${current.index + 1} of ${data.phases.length}` : 'Track complete'}</span>
+          {!modular && <span className="track-kicker">{current ? `Phase ${current.index + 1} of ${data.phases.length}` : 'Track complete'}</span>}
           <span className="track-phase">{current?.title ?? notebook}</span>
         </div>
         <div className="track-eta" title={`${data.hoursLeft} hours left at ${hours(data.minutesPerWeek)} a week`}>
@@ -119,6 +119,7 @@ export function TrackView({ notebook, path }: { notebook: string; path: string }
         </button>
       )}
 
+      {!modular && (
       <ol className="track-strip" aria-label="Phases">
         {data.phases.map((p) => {
           const n = Math.max(1, p.topics)
@@ -135,9 +136,12 @@ export function TrackView({ notebook, path }: { notebook: string; path: string }
           )
         })}
       </ol>
-      <div className="track-scale" aria-hidden>
-        <span>{Math.round((data.phases.reduce((m, p) => m + (p.passed ? p.topics : p.solid), 0) / total) * 100)}% solid</span>
-      </div>
+      )}
+      {!modular && (
+        <div className="track-scale" aria-hidden>
+          <span>{Math.round((data.phases.reduce((m, p) => m + (p.passed ? p.topics : p.solid), 0) / total) * 100)}% solid</span>
+        </div>
+      )}
 
       <div className="track-grid">
         <div className="track-card track-gate">

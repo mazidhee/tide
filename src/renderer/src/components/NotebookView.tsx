@@ -13,6 +13,7 @@ import { hasTopic, useLibrary } from '../lib/library'
 import { OutlineView } from './OutlineView'
 import { outlinesChanged } from '../lib/outlines'
 import { TrackView } from './TrackView'
+import { ModulesView } from './ModulesView'
 
 export const STATUS_LABEL: Record<LearningStatus, string> = {
   untested: 'Not started',
@@ -111,7 +112,7 @@ export function NotebookView({ path, tab: initialTab }: { path: string; tab?: 'p
   // A lab (Quant lab, or a folder of Jupyter notebooks and no notes) has no outline to start: it opens on its notebooks
   const isLab = !meta?.outline && !meta?.project && (folder?.name === QUANT_LAB_FOLDER || (allNotes.length === 0 && chapters.some((c) => c.notes.some((n) => /\.ipynb$/i.test(n.path)))))
   // Open on the outline when the notebook has one, otherwise on its notes
-  const picked = tab ?? (meta?.project ? 'project' : meta?.outline ? 'outline' : 'notes')
+  const picked = tab ?? (meta?.project ? 'project' : meta?.outline || meta?.track ? 'outline' : 'notes')
   const activeTab = isLab && picked === 'outline' ? 'notes' : picked
   const reading = folder ? library.items.filter((i) => hasTopic(i, folder.name)) : []
   const pickerItem = picker ? library.items.find((i) => i.path === picker.path) : undefined
@@ -241,7 +242,10 @@ export function NotebookView({ path, tab: initialTab }: { path: string; tab?: 'p
 
         {activeTab === 'outline' && meta?.outline && !meta.project && <TrackView notebook={folder.name} path={path} />}
 
-        {activeTab === 'outline' && (
+        {/* A track of modules: its modules, and each module's outline from there */}
+        {activeTab === 'outline' && meta?.track && <ModulesView notebook={meta.name} path={path} notes={notes} mastery={mastery} />}
+
+        {activeTab === 'outline' && !meta?.track && (
           <OutlineView
             notebook={path}
             outlinePath={meta?.outline}

@@ -520,7 +520,7 @@ function registerIpc() {
   handle('modules:track', async (notebook: string) => (await import('./modules')).trackView(String(notebook ?? '')))
   handle('modules:there', async (id: string, on: boolean, note?: string) => (await import('./modules')).setThere(String(id), !!on, typeof note === 'string' ? note : undefined))
   handle('modules:preview', async () => (await import('./modules')).switchPreview())
-  handle('modules:switch', async () => (await import('./modules')).switchToModules())
+  handle('modules:switch', async () => (await import('./modules')).verifiedSwitch())
   handle('modules:removeFolders', async (paths: string[]) => (await import('./modules')).removeEmptyFolders(Array.isArray(paths) ? paths.map(String) : []))
   handle('modules:switchBack', async () => (await import('./modules')).switchBack())
   handle('modules:projects', async () => (await import('./modules')).projectsView())
