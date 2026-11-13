@@ -1,4 +1,6 @@
 import { TimeThis } from './TimeThis'
+import { usePopOutSurface } from '../lib/popout'
+import { PopOutButton } from './PopOutButton'
 import { reveal } from '../lib/scroll'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import * as pdfjs from 'pdfjs-dist'
@@ -468,6 +470,8 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
   }, [scale])
 
   const scope = { kind: 'note' as const, path }
+  // In a window of its own, at the same page (lib/popout)
+  usePopOutSurface({ view: () => ({ kind: 'file', path, anchor: `page=${current}`, nonce: Date.now() }) })
 
   return (
     <div className="doc-view">
@@ -566,6 +570,7 @@ export function PdfView({ path, anchor }: { path: string; anchor?: string }) {
             <Icon name="panel" />
             <span>Notes</span>
           </button>
+          <PopOutButton />
         </div>
       </header>
 

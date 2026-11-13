@@ -1,4 +1,5 @@
 import { smoothly } from './lib/smoothly'
+import { focusIfHeld } from './lib/popout'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ChatScope, ExamOptions, FileNode, SessionMode, Settings } from '@shared/types'
 import type { DesignMode, SessionSetup } from '@shared/session'
@@ -7,7 +8,7 @@ export type View =
   | { kind: 'home' }
   | { kind: 'file'; path: string; anchor?: string; nonce?: number }
   | { kind: 'library' }
-  | { kind: 'notebook'; path: string }
+  | { kind: 'notebook'; path: string; /** The tab it opens on (a pop-out carries it over) */ tab?: 'project' | 'outline' | 'notes' | 'reading' }
   | { kind: 'graph'; focus?: string; /** Which side of Brain: what you know, or the graph (the one last used when not said) */ tab?: 'know' | 'graph' }
   | { kind: 'study'; scope: ChatScope }
   | { kind: 'daily'; nonce?: number }
@@ -36,7 +37,8 @@ export type View =
   // The morning workout (components/workout): its page, or a morning under way
   | { kind: 'workout'; start?: boolean; championship?: boolean; nonce?: number }
   | { kind: 'design'; path: string; start?: DesignMode; topic?: string; company?: string; timed?: number; reference?: string; nonce?: number }
-  | { kind: 'code'; path?: string; root?: string; home?: boolean; nonce?: number }
+  /** The IDE: a file in the notes' Code folder (`path`), or a project folder (`root`); `home` opens on the project's home, `file` on a file (a pop-out's) */
+  | { kind: 'code'; path?: string; root?: string; home?: boolean; nonce?: number; /** The file to show first, in `root` */ file?: string }
   | { kind: 'help'; section?: string }
   | { kind: 'exam'; scope: ChatScope; topic: string; options: ExamOptions; nonce?: number; resume?: { paper: unknown; answers: unknown; startedAt: number } }
   | { kind: 'settings'; section?: import('./components/SettingsView').Section | 'ai' | 'notes' }
@@ -143,6 +145,8 @@ export function AppProvider({ initial, children }: { initial: Settings; children
   const future = useRef<View[]>([])
   const [canGoForward, setCanGoForward] = useState(false)
   const setView = useCallback((v: View) => {
+    // Already open in a window of its own: that window comes forward (lib/popout)
+    if (focusIfHeld(v)) return
     smoothly(() => setViewState((prev) => {
       if (JSON.stringify(prev) === JSON.stringify(v)) return prev
       history.current.push(prev)

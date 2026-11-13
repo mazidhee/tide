@@ -117,6 +117,9 @@ export const PATHS = {
   diff: 'M7 4v9M2.5 8.5h9M3 18.5h8M17 4v16M14 17l3 3 3-3',
   restart: 'M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4v4.5H9',
   collapse: 'M8 4l4 4 4-4M8 20l4-4 4 4M5 12h14',
+  // Pop-out windows (lib/popout): a window with its title bar, an arrow leaving it; and coming back in
+  popout: 'M4.5 8.5h8.5A1.5 1.5 0 0 1 14.5 10v9A1.5 1.5 0 0 1 13 20.5H4.5A1.5 1.5 0 0 1 3 19v-9a1.5 1.5 0 0 1 1.5-1.5zM3 12h11.5M5.6 10.25h.01M11 15l9.5-9.5M15 4h5.5v5.5',
+  popin: 'M4 6A1.5 1.5 0 0 1 5.5 4.5h13A1.5 1.5 0 0 1 20 6v12.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5zM4 8.5h16M6.5 6.5h.01M17 11l-6.5 6.5M10.5 12.5v5h5',
   claude: 'M12 3.5v4M12 16.5v4M3.5 12h4M16.5 12h4M6 6l2.8 2.8M15.2 15.2L18 18M6 18l2.8-2.8M15.2 8.8L18 6',
 } as const
 

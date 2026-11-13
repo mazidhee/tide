@@ -4,6 +4,7 @@
  * code runnable here. "Learn" starts a lesson taught from the course's own text (the source-led
  * lessons: the tutor questions and marks, the course explains).
  */
+import { usePopOutSurface } from '../lib/popout'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CATALOGUE, SOURCES, areaLabel, fromRepo, homeUrl, mediaOf, moduleProgress, nextLesson, registerCourses, sourceOf, sourceSite, suggestCourses, type CatalogueCourse, type CourseArea, type CourseLesson, type CourseModule, type CourseProgress, type CourseRef } from '@shared/courses'
 import type { CourseCard, CourseDetail, ImportPhase, LessonContent } from '../../../main/courses'
@@ -652,6 +653,8 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
   const currentId = lessonId ?? next?.lesson.id ?? flat[0]?.l.id
   const at = flat.findIndex((x) => x.l.id === currentId)
   const here = at >= 0 ? flat[at] : null
+  // In a window of its own, at the same lesson, under the course's name (lib/popout)
+  usePopOutSurface({ name: d?.course.title, view: () => ({ kind: 'courses', id, ...(currentId ? { lesson: currentId } : {}) }) })
 
   // Links in this course open here: another lesson of it in the outline, anything else as a page over the lesson
   const flatRef = useRef(flat)

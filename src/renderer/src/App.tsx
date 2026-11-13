@@ -49,6 +49,9 @@ import { followModelBusy } from './lib/motion'
 import { measureRendering } from './lib/renderMeter'
 import { useMockPhase } from './lib/mockPhase'
 import { mockStudyContext } from '@shared/mocks'
+import { chromeFor, infoFor, handoverView, inFocusWindow, popOut, returnToMain, useSurface } from './lib/popout'
+import { canPopOut, type PopView } from '@shared/popout'
+import { PopOutButton } from './components/PopOutButton'
 // The heavy views (PDF reader, terminal, code editor, canvas, graph, drills) load when first opened,
 // not with the window: Tide opens faster and holds less in memory until you need them
 const PdfView = lazy(() => import('./components/PdfView').then((m) => ({ default: m.PdfView })))
@@ -259,8 +262,9 @@ export default function App() {
   const breaks = useMemo(() => breakSettings(settings.breaks, settings.pomodoro), [settings.breaks, settings.pomodoro])
   useBreaks(studyContext, breaks)
 
-  // A focus window: one lesson, exam or drill and nothing else; it closes when that ends
-  const focusId = useMemo(() => window.location.hash.match(/focus=(\w+)/)?.[1] ?? null, [])
+  // A focus window (a pop-out, lib/popout): one lesson, project, course, note, book, workout, mock
+  // or chat, and nothing else; it closes when that ends
+  const focusId = useMemo(() => (inFocusWindow ? (window.location.hash.match(/focus=(\w+)/)?.[1] ?? null) : null), [])
   const [focusReady, setFocusReady] = useState(!focusId)
   useEffect(() => {
     if (!focusId) return
@@ -281,6 +285,21 @@ export default function App() {
     if (view.kind !== 'home') focusShown.current = true
     else if (focusShown.current) window.tide.windows.close()
   }, [focusId, focusReady, view.kind])
+
+  // A pop-out's title says what it holds ("Payment rail — Tide"), and its key which thing that is
+  const surface = useSurface()
+  const surfaceName = surface?.name
+  useEffect(() => {
+    if (!focusId || !focusReady) return
+    const info = infoFor(handoverView(view), view)
+    if (info) void window.tide.windows.setInfo(info)
+  }, [focusId, focusReady, view, surfaceName])
+  // A pop-out handed its view back: it carries on here
+  useEffect(() => {
+    if (focusId) return
+    return window.tide.windows.onAdopt((v) => app.setView(v as typeof view))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId])
 
   // Dev only: lets screenshot tooling drive navigation
   useEffect(() => {
@@ -321,6 +340,10 @@ export default function App() {
   useEffect(
     () =>
       window.tideEvents.onMenu((action) => {
+        if (action === 'pop-out' && !focusId) void popOut(app)
+        if (action === 'return-to-main' && focusId) void returnToMain(app)
+        // A pop-out has no sidebar or tutor panel to show
+        if (focusId && (action === 'toggle-sidebar' || action === 'toggle-chat')) return
         if (action === 'toggle-sidebar') app.updateSettings({ sidebarCollapsed: !settings.sidebarCollapsed })
         if (action === 'toggle-chat' && view.kind !== 'chat') app.updateSettings({ chatOpen: !settings.chatOpen })
         if (action === 'search') app.setDialog(dialog === 'search' ? null : 'search')
@@ -340,7 +363,7 @@ export default function App() {
             app.openPath(res[0].path)
           })
       }),
-    [app, settings.sidebarCollapsed, settings.chatOpen, dialog, newNote, view]
+    [app, settings.sidebarCollapsed, settings.chatOpen, dialog, newNote, view, focusId]
   )
 
   // Back with Cmd+[ like a browser, Escape closes dialogs
@@ -404,6 +427,8 @@ export default function App() {
   // A mock in progress is focus mode: the sidebar steps away until it is marked
   const mockFocus = view.kind === 'mock' && (mock?.phase === 'live' || mock?.phase === 'preparing' || mock?.phase === 'marking')
   const noPanel = ownTutor || (tide && wide && homeAsked === null)
+  // A pop-out has none of Tide's chrome (lib/popout chromeFor)
+  const chrome = chromeFor({ focus: !!focusId, collapsed: settings.sidebarCollapsed, immersive, mockFocus })
   let main: React.ReactNode
   if (view.kind === 'file') {
     if (/\.pdf$/i.test(view.path)) main = <PdfView key={view.path} path={view.path} anchor={view.anchor} />
@@ -413,7 +438,7 @@ export default function App() {
     else if (/\.canvas$/i.test(view.path)) main = <CanvasView key={view.path} path={view.path} />
     else main = <NoteView key={view.path} path={view.path} anchor={view.anchor} nonce={view.nonce} />
   } else if (view.kind === 'library') main = <Library />
-  else if (view.kind === 'notebook') main = <NotebookView key={view.path} path={view.path} />
+  else if (view.kind === 'notebook') main = <NotebookView key={view.path} path={view.path} tab={view.tab} />
   // Brain: what you know, or the graph. Asked for around a note, it is always the graph
   else if (view.kind === 'graph') main = !view.focus && (view.tab ?? lastBrainTab()) === 'know' ? <KnowledgeView /> : <GraphView key={view.focus ?? 'all'} focus={view.focus} />
   else if (view.kind === 'study') main = <StudyView scope={view.scope} />
@@ -437,7 +462,7 @@ export default function App() {
   else if (view.kind === 'workout') main = <WorkoutView key={`${view.start ? 'run' : 'hub'}:${view.nonce ?? ''}`} start={view.start} championship={view.championship} />
   else if (view.kind === 'drill') main = <DrillView key={`${view.drill}:${view.nonce ?? ''}`} kind={view.drill} />
   else if (view.kind === 'design') main = <CanvasView key={`${view.path}:${view.nonce ?? ''}`} path={view.path} start={view.start} topic={view.topic} company={view.company} timed={view.timed} reference={view.reference} />
-  else if (view.kind === 'code') main = <CodeView key={`${view.path ?? 'code'}:${view.root ?? ''}:${view.nonce ?? ''}`} path={view.path} root={view.root} home={view.home} />
+  else if (view.kind === 'code') main = <CodeView key={`${view.root ?? view.path ?? 'code'}:${view.nonce ?? ''}`} path={view.path} root={view.root} file={view.file} home={view.home} />
   else if (view.kind === 'help') main = <HelpView section={view.section} />
   else if (view.kind === 'mock') main = <MockView key={`${view.mode}:${view.review ?? ''}:${view.nonce ?? ''}`} mode={view.mode} review={view.review} />
   else if (view.kind === 'exam') main = <ExamView key={`${view.topic}:${view.nonce ?? ''}`} scope={view.scope} topic={view.topic} options={view.options} view={view} />
@@ -456,12 +481,17 @@ export default function App() {
       onDragLeave={(e) => e.currentTarget === e.target && setDragging(false)}
       onDrop={onDrop}
     >
-      {!settings.sidebarCollapsed && !focusId && !immersive && !mockFocus && <Sidebar dueCount={due.due} />}
-      {immersive && <SidebarPeek dueCount={due.due} />}
-      {settings.sidebarCollapsed && !focusId && !immersive && <SidebarPeek dueCount={due.due} keys={false} />}
+      {chrome.sidebar && <Sidebar dueCount={due.due} />}
+      {chrome.peek && <SidebarPeek dueCount={due.due} keys={chrome.peekKeys} />}
       <main className="main">
         {!['file', 'graph', 'help', 'lab', 'code', 'design', 'chat', 'session', 'quiz', 'exam', 'mock'].includes(view.kind) && (tide ? <TopBar /> : <div className="titlebar-drag drag" />)}
-        {settings.sidebarCollapsed && !focusId && !immersive && !mockFocus && (
+        {/* The classic design has no top bar: pages that can pop out (a project, a course, the workout) get the button on their own */}
+        {!tide && canPopOut(view as PopView) && ['notebook', 'courses', 'workout'].includes(view.kind) && (
+          <div className="pop-float no-drag">
+            <PopOutButton className="icon-btn" label={false} />
+          </div>
+        )}
+        {chrome.floatingControls && (
           <div className="floating-controls no-drag">
             <button className="icon-btn" title="Show sidebar (⌘\)" onClick={() => app.updateSettings({ sidebarCollapsed: false })}>
               <Icon name="sidebar" />
@@ -488,7 +518,7 @@ export default function App() {
           </button>
         )}
       </main>
-      {settings.chatOpen && !noPanel && !focusId && <ChatPanel />}
+      {settings.chatOpen && !noPanel && chrome.tutorPanel && <ChatPanel />}
 
       {dialog === 'search' && <SearchPalette onClose={() => app.setDialog(null)} />}
       {dialog === 'save-link' && <SaveLinkDialog onClose={() => app.setDialog(null)} />}

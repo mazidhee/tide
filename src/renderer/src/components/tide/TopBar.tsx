@@ -3,8 +3,12 @@ import { createPortal } from 'react-dom'
 import { useApp, type View } from '../../state'
 import { Icon } from '../Icon'
 import { AreaMark } from './AreaMark'
+import { PopOutButton } from '../PopOutButton'
+import { canPopOut, type PopView } from '@shared/popout'
 
 const SLOT = 'td-topbar-slot'
+/** Pages whose only toolbar is this bar, and that pop out (the rest have the button in their own) */
+const POP_HERE = new Set<View['kind']>(['notebook', 'courses', 'workout'])
 
 const TITLES: Partial<Record<View['kind'], string>> = {
   home: 'Home',
@@ -52,6 +56,8 @@ export function TopBar() {
         ))}
       </div>
       <div className="td-topbar-actions no-drag" id={SLOT} />
+      {/* A project, a course, the workout: in a window of their own (lib/popout) */}
+      {POP_HERE.has(app.view.kind) && canPopOut(app.view as PopView) && <PopOutButton className="tool-btn td-pop no-drag" />}
       <button className="td-search no-drag" onClick={() => app.setDialog('search')} title="Search your notes, or ask the tutor (⌘K)">
         <Icon name="search" size={14} />
         <span>Search or ask</span>
