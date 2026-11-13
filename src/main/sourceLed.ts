@@ -25,6 +25,7 @@ import { chooseReading, ledState, plain, planTurn, turnNote, withoutReadings, ty
 import { courseReading, type Section } from '@shared/courses'
 import type { ChatEvent, ChatMessage, ChatRequest } from '@shared/types'
 import { publicUrl, readWebpage, webSearch } from './agent'
+import { primaryPagesFor } from '@shared/finance/sources'
 import { filedUnder, getNotebooks } from './learn'
 import { metabaseHost, metabaseReady } from './metabase'
 import { privatePath } from './projects'
@@ -111,7 +112,9 @@ async function lessonFor(req: ChatRequest): Promise<Lesson> {
     read: (url) => readWebpage(url),
     known: async (t) => [
       ...(await readingsFor(t).catch(() => [])).filter((r) => r.kind !== 'book').map((r) => ({ title: r.title, by: r.by, url: r.url })),
-      ...findExplainers(t).map((e) => ({ title: e.title, by: e.by, url: e.url, explainer: true }))
+      ...findExplainers(t).map((e) => ({ title: e.title, by: e.by, url: e.url, explainer: true })),
+      // Finance, payments and blockchains: the primary texts (BIS, central banks, ISO 20022, the Bitcoin and Ethereum docs, QuantEcon)
+      ...primaryPagesFor(t).map((x) => ({ title: x.title, by: x.by, url: x.url }))
     ],
     publicUrl,
     now: () => Date.now(),

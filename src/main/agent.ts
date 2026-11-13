@@ -41,7 +41,8 @@ import { explainerToolResult, findExplainers } from '@shared/explainers'
 import { readText, writeText } from './vault'
 import { applyCanvasOps, describeCanvas, parseCanvas, serializeCanvas } from '@shared/canvas'
 import { retrieve } from './ai'
-import { aboutSql, dataFiles, labSchemaNote, loadHint, loadTableTool, runSqlTool } from './lab'
+import { aboutSql, dataFiles, ensureFinanceTables, labSchemaNote, loadHint, loadTableTool, runSqlTool } from './lab'
+import { wantsFinanceTables } from '@shared/finance/labs'
 import { looksAtLabFirst } from '@shared/sqlCheck'
 import { toolArgs } from '@shared/modelText'
 import { isSql } from './languages'
@@ -1807,7 +1808,10 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
   const subject = req.session && req.instructions && userTurns <= 1 && req.topic ? await subjectContext({ topic: req.topic, scope: req.scope, instructions: req.instructions, private: !!ctx.private, web: !!ctx.web }).catch(() => '') : ''
   const assigning = thingsOn && wanted === 'assign'
   // A SQL lesson knows the lab's tables before it writes its first query
-  const labNote = req.session && req.instructions && aboutSql(`${req.topic ?? ''} ${question}`) ? labSchemaNote(req.labId ?? req.chatId ?? 'scratch', !!ctx.private, dataFiles()) : ''
+  // A finance lesson's lab holds the market data and the core bank's tables, and is told so
+  const financeLab = !!req.session && !!req.instructions && wantsFinanceTables(req.topic ?? '')
+  if (financeLab) ensureFinanceTables(req.labId ?? req.chatId ?? 'scratch')
+  const labNote = req.session && req.instructions && (financeLab || aboutSql(`${req.topic ?? ''} ${question}`)) ? labSchemaNote(req.labId ?? req.chatId ?? 'scratch', !!ctx.private, dataFiles()) : ''
   // ...and looks at the data with run_sql before it sets or marks anything: told to, Gemma never
   // did (no tool call in any SQL lesson turn of the rehearsal), so the turn's first step is that call
   if (labNote && looksAtLabFirst(String([...req.messages].reverse().find((m) => m.role === 'user')?.content ?? ''))) ctx.firstTool = 'run_sql'

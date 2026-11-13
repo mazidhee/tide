@@ -14,6 +14,10 @@ import { cpuKind } from './kinds/cpu'
 import { tokeniserKind } from './kinds/tokeniser'
 import { blockchainKind } from './kinds/blockchain'
 import { plotKind } from './kinds/plot'
+import { ledgerKind } from './kinds/ledger'
+import { paymentsKind } from './kinds/payments'
+import { stablecoinKind } from './kinds/stablecoin'
+import { riskKind } from './kinds/risk'
 import { mountSim, type Mounted, type SimKindDef } from './shell'
 import type { SimKind, SimSpec } from './spec'
 
@@ -34,7 +38,11 @@ export const KINDS: { [K in EagerKind]: Def<K> } = {
   cpu: cpuKind,
   tokeniser: tokeniserKind,
   blockchain: blockchainKind,
-  plot: plotKind
+  plot: plotKind,
+  ledger: ledgerKind,
+  payments: paymentsKind,
+  stablecoin: stablecoinKind,
+  risk: riskKind
 }
 
 const LAZY: { [K in LazyKind]: () => Promise<Def<K>> } = {

@@ -29,6 +29,7 @@ import { parseHashTableSpec } from './hashTable'
 import { parsePlotSpec } from './plotExpr'
 import { parseRaftSpec } from './raft'
 import { parseTokeniserSpec } from './bpe'
+import { parseLedgerSpec, parsePaymentsSpec, parseRiskSpec, parseStablecoinSpec, type LedgerSpec, type PaymentsSpec, type RiskSpec, type StablecoinSpec } from './finance'
 import { int, num, onlyVerbs, parseBase as base, pick, text, TOUR_LIMITS, type Raw, type SimBase } from './specUtil'
 import { SIM_KINDS, type SimKind } from '@shared/sims'
 
@@ -96,6 +97,10 @@ export type SimSpec =
   | GeometrySpec
   | RegexSpec
   | ChessSpec
+  | LedgerSpec
+  | PaymentsSpec
+  | StablecoinSpec
+  | RiskSpec
 
 export const LIMITS = {
   hiddenLayers: 3,
@@ -221,7 +226,23 @@ const KIND_ALIASES: Record<string, SimKind> = {
   railroad: 'regex',
   minimax: 'chess',
   'game-tree': 'chess',
-  'alpha-beta': 'chess'
+  'alpha-beta': 'chess',
+  'double-entry': 'ledger',
+  'core-banking': 'ledger',
+  bank: 'ledger',
+  settlement: 'payments',
+  payment: 'payments',
+  rtgs: 'payments',
+  netting: 'payments',
+  iso20022: 'payments',
+  'iso-20022': 'payments',
+  'stable-coin': 'stablecoin',
+  peg: 'stablecoin',
+  var: 'risk',
+  'value-at-risk': 'risk',
+  'monte-carlo': 'risk',
+  'option-pricing': 'risk',
+  backtest: 'risk'
 }
 
 /** Turns the body of a ```sim block into a checked spec, or null when it isn't one (yet) */
@@ -266,6 +287,14 @@ export function parseSim(source: string): SimSpec | null {
       return parseRegexSpec(obj, base(obj))
     case 'chess':
       return parseChessSpec(obj, base(obj))
+    case 'ledger':
+      return parseLedgerSpec(obj, base(obj))
+    case 'payments':
+      return parsePaymentsSpec(obj, base(obj))
+    case 'stablecoin':
+      return parseStablecoinSpec(obj, base(obj))
+    case 'risk':
+      return parseRiskSpec(obj, base(obj))
     default:
       return null
   }

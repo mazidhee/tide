@@ -5,6 +5,7 @@ import { normalizeOutlineDraft, parseOutline, type OutlineLine } from '@shared/o
 import { addPlanDates, datePhases, planFrontmatter, planLength, readingList, rescalePlan, shortDate, type StudyPlan } from '@shared/plan'
 import { PixelScene } from './PixelScene'
 import { CourseSuggestions } from './CoursesView'
+import { readyRoadmapsFor, type ReadyRoadmap } from '@shared/finance/roadmaps'
 import { useApp } from '../state'
 import { Icon } from './Icon'
 import { PillInput, PillSelect, PillToggle, PromptBox } from './PromptBox'
@@ -164,6 +165,28 @@ export function NewTopicView({ initial, initialGoal, auto }: { initial?: string;
     if (runId.current) window.tide.learn.cancelDraft(runId.current)
   }
 
+  // A roadmap Tide ships for this subject: a notebook with it as the outline, no model needed
+  const ready = useMemo(() => readyRoadmapsFor(topic), [topic])
+  const startReady = async (r: ReadyRoadmap) => {
+    setCreating(true)
+    setError('')
+    try {
+      const body = await window.tide.learn.readyRoadmap(r.id)
+      const folder = await window.tide.vault.createFolder('', r.title)
+      const taken = new Set(app.files.map((f) => f.path.toLowerCase()))
+      let path = `Roadmaps/${r.file}`
+      for (let i = 2; taken.has(path.toLowerCase()); i++) path = `Roadmaps/${r.file.replace(/\.md$/, ` ${i}.md`)}`
+      await window.tide.vault.write(path, body)
+      await window.tide.learn.updateNotebook(folder, { outline: path, description: (goal.trim() || r.about).slice(0, 240) })
+      await app.refreshTree()
+      app.setView({ kind: 'notebook', path: folder })
+      app.toast(`Started ${r.title}`)
+    } catch (e) {
+      setError((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+      setCreating(false)
+    }
+  }
+
   const create = async (body: string) => {
     const name = fileSafe(topic)
     if (!name) return focusTopic()
@@ -211,6 +234,27 @@ export function NewTopicView({ initial, initialGoal, auto }: { initial?: string;
       <div className="page-inner narrow">
         <h1 className="page-title">New topic</h1>
         {/* Courses from GitHub that teach it (components/CoursesView.tsx) */}
+        {phase === 'form' && ready.length > 0 && (
+          <section className="crs-suggest nt-ready" aria-label="Ready roadmaps">
+            <div className="crs-suggest-head">
+              <h2 className="crs-section">A ready roadmap for this</h2>
+            </div>
+            <ul className="crs-suggest-rows">
+              {ready.map((r) => (
+                <li key={r.id}>
+                  <button className="crs-suggest-row" disabled={creating} onClick={() => startReady(r)}>
+                    <span className="crs-suggest-name">
+                      <span className="crs-card-title">{r.title}</span>
+                      <span className="crs-meta">{r.about}</span>
+                    </span>
+                    <span className="crs-meta">Start it</span>
+                    <Icon name="chevron" size={13} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <CourseSuggestions topic={topic} />
 
         {phase === 'form' && (

@@ -710,6 +710,12 @@ export interface TideApi {
     /** Real books, courses and docs for each phase of a plan */
     /** Drops the books a drafted roadmap names that can't be found, and corrects their authors */
     checkResources(md: string): Promise<string>
+    /** A ready roadmap's Markdown (shared/finance/roadmaps), bundled with Tide */
+    readyRoadmap(id: string): Promise<string>
+    /** The finance lab's market data: what is bundled and when newer series were last fetched */
+    marketStatus(): Promise<{ ready: boolean; detail: string }>
+    /** Fetches this year's and last year's Treasury and ECB series into Market data/ in the notes folder */
+    fetchMarketData(): Promise<{ ready: boolean; detail: string }>
     planReadings(topic: string, plan: import('./plan').StudyPlan, research: string): Promise<{ phase: string; items: { title: string; by?: string; why?: string; url?: string; unverified?: boolean }[] }[]>
     /** Sends a dated roadmap to Things 4 as a project */
     planToThings(path: string, name: string, notebook?: string): Promise<{ project: string; todos: number }>

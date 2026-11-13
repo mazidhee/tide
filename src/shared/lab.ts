@@ -4,6 +4,7 @@
  * one lab per conversation or lesson (src/main/lab.ts); the renderer runs and draws the ```sql
  * and ```chart blocks in tutor text (src/renderer/src/lib/lab.ts).
  */
+import { FINANCE_TABLES_NOTE } from './finance/marketData'
 
 export type LabCell = string | number | null
 
@@ -114,6 +115,7 @@ export function schemaText(tables: LabTable[]): string {
   const notes = [
     has('orders') ? 'The shop tables cover orders from 2024-01-01 to 2025-06-30; orders.status is completed, processing, cancelled or refunded; revenue is quantity * unit_price.' : '',
     has('events') ? 'The events tables cover 2025-01-06 to 2025-07-13; events.event is signup, view_item, add_to_cart, checkout_started or purchase; item_id and category are set on view_item and add_to_cart, amount on purchase.' : '',
+    has('prices') && has('postings') ? FINANCE_TABLES_NOTE : '',
     'Dates are text as YYYY-MM-DD and timestamps as YYYY-MM-DD HH:MM:SS (use date(), strftime() and julianday()). Foreign keys are enforced.'
   ].filter(Boolean)
   return `The lab's tables (SQLite, sample data, the same every time). ${parts.join('. ')}. ${notes.join(' ')}`
