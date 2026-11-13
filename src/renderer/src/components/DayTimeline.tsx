@@ -102,9 +102,17 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
 
   if (tide) {
     const KIND_ICON = { learn: 'tutor', practice: 'terminal', quiz: 'quiz', review: 'cards', 'take-home': 'note', test: 'timer', check: 'quiz', project: 'branch', mock: 'subInterview', workout: 'gauge', read: 'book', course: 'course' } as const
+    // A detail line said once: rows in a run with the same one ("Next in your … roadmap") drop it
+    let lastDetail = ''
+    const detailOnce = (d: string) => {
+      const same = d === lastDetail
+      lastDetail = d
+      return same ? '' : d
+    }
     const line = (s: DaySlot) => {
       const canOpen = !!s.plan || !!s.task?.link || !!s.task?.url
       const minutes = s.plan?.item.minutes
+      const detail = detailOnce(s.plan?.item.course ? s.plan.item.course.lessons.map((l) => `${l.n} ${l.title}`).join(' · ') : (s.plan?.item.why ?? s.task?.where ?? s.meta.replace(/ · /g, ', ')))
       return (
         <li key={s.key} className={`td-row${s.done ? ' done' : ''}`}>
           <span className="td-row-when">{s.task?.at ?? ''}</span>
@@ -113,7 +121,7 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
           </button>
           <button className="td-row-what" onClick={() => open(s)} disabled={!canOpen} title={s.task && !s.plan && !s.task.link ? 'Open in Things' : undefined}>
             <b>{s.title}</b>
-            <span>{s.plan?.item.course ? s.plan.item.course.lessons.map((l) => `${l.n} ${l.title}`).join(' · ') : (s.plan?.item.why ?? s.task?.where ?? s.meta.replace(/ · /g, ', '))}</span>
+            {detail && <span>{detail}</span>}
           </button>
           {canOpen && !s.done ? (
             <button className="btn small td-row-go" onClick={() => open(s)}>
@@ -168,7 +176,6 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
               <b>
                 Retest {due.length} mistake{due.length === 1 ? '' : 's'} from before
               </b>
-              <span>Each comes back until you get it right</span>
             </button>
             <button className="btn small td-row-go" onClick={() => startRetest(app, due)}>
               Start
@@ -187,7 +194,6 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
             </span>
             <button className="td-row-what" onClick={() => app.setView({ kind: 'wrapup' })}>
               <b>Wrap up the day</b>
-              <span>What you did, what stuck, and tomorrow</span>
             </button>
             <span />
             <span className="td-row-dur" />
@@ -196,7 +202,7 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
         {reading?.done && readingRow()}
         {done.filter((s) => !readingPlan(s)).map(line)}
         {loaded && !slots.length && !due.length && !reading && hour < 16 && (
-          <li className="td-row-empty">{tasks === null ? 'Connect Things 4 in Settings, or ask the tutor to plan your day, and it shows here.' : 'Nothing else is on today. Ask the tutor to plan the rest of your day.'}</li>
+          <li className="td-row-empty">{tasks === null ? 'Nothing planned. Plan the week, or connect Things 4 in Settings.' : 'Nothing else today.'}</li>
         )}
       </ol>
       {notes.length > 0 && (

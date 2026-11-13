@@ -29,6 +29,12 @@ const ago = (gap: number | null) => (gap === null ? 'not started' : gap === 0 ? 
 const BY: Record<NonNullable<PlanGoal['by']>, string> = { claude: 'Thought through by Claude', gemma: 'Thought through by Gemma', tide: 'Tide’s first guess', you: 'Your breakdown' }
 const clean = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 
+/** The guess's main clause: "You're heading towards becoming a software engineer focused on …", without the trailing aside */
+const guessHeadline = (guess: string) =>
+  firstSentence(guess)
+    .split(/,\s+(?:and|but|while|though)\s+|;\s+|\s+[—–]\s+/)[0]
+    .replace(/[.\s]+$/, '')
+
 export function GoalsPanel({ guess, onWeek, onThreads }: { guess?: string; onWeek(w: WeekPlan | null): void; onThreads?(n: number): void }) {
   const app = useApp()
   const [view, setView] = useState<GoalsView | null>(null)
@@ -128,15 +134,16 @@ export function GoalsPanel({ guess, onWeek, onThreads }: { guess?: string; onWee
           <Icon name="sparkle" size={14} />
           {guess ? (
             <>
+              <span className="gl-suggest-label">Tide’s guess</span>
               <span className="gl-suggest-text" title={guess}>
-                <span className="muted">Tide’s guess:</span> {firstSentence(guess)}
+                {guessHeadline(guess)}
               </span>
               <button className="btn small" onClick={() => add({ title: guess, weight: 'main' })}>
                 Use it
               </button>
             </>
           ) : (
-            <span className="gl-suggest-text muted">No goals of your own yet. Add one and Tide plans each week towards it.</span>
+            <span className="gl-suggest-text muted">No goals of your own yet</span>
           )}
         </div>
       )}

@@ -103,7 +103,7 @@ export function HomeTide(p: HomeTideProps) {
   // The next thing: a lesson left open comes before anything new
   const open = ongoing.find((o) => o.view.kind === 'session' || o.view.kind === 'exam')
   const next = open
-    ? { title: open.title.replace(/^(Teach me|Quiz me|Exam|Interview|Review|Mixed): /, ''), detail: open.busy ? 'A reply is arriving. Carry on where you stopped.' : 'Left open. Carry on where you stopped.', action: 'Carry on', go: () => app.setView(open.view) }
+    ? { title: open.title.replace(/^(Teach me|Quiz me|Exam|Interview|Review|Mixed): /, ''), detail: open.busy ? 'A reply is arriving' : 'Left open', action: 'Carry on', go: () => app.setView(open.view) }
     : p.ready
       ? { title: p.ready.prep.topic, detail: p.ready.prep.why, action: 'Start', go: p.ready.start }
       : { title: p.upNext.title, detail: p.upNext.detail, action: p.upNext.kicker === 'Nothing due' ? 'Choose a topic' : 'Start', go: p.upNext.go }
@@ -158,16 +158,15 @@ export function HomeTide(p: HomeTideProps) {
     .sort((a, b) => b.misconceptions - a.misconceptions || a.score - b.score)
     .slice(0, 4)
 
-  // One sentence on the day, from what is actually there
-  const lede = [
-    today?.planned ? `${hm(today.planned)} planned today${today.done ? `, ${hm(today.done)} done` : ''}.` : today?.done ? `${hm(today.done)} studied today.` : 'Nothing is planned for today yet.',
-    open ? 'One lesson is open.' : '',
-    p.dueToday?.items ? `${p.dueToday.items} ${p.dueToday.items === 1 ? 'thing is' : 'things are'} due for daily practice, about ${hm(p.dueToday.minutes)}.` : '',
-    fadingAll ? `${fadingAll} ${fadingAll === 1 ? 'concept is' : 'concepts are'} fading.` : ''
-  ]
-    .filter(Boolean)
-    .join(' ')
-
+  // The day at a glance: numbers set as numbers, no sentences
+  const glance = [
+    today && (today.planned || today.done)
+      ? { key: 'today', value: hm(today.done), label: today.planned ? `of ${hm(today.planned)} today` : 'today', bar: today.planned ? Math.min(1, today.done / today.planned) : null }
+      : { key: 'today', value: '', label: 'Nothing planned today', bar: null },
+    p.dueToday?.items ? { key: 'due', value: String(p.dueToday.items), label: `due · ${hm(p.dueToday.minutes)}`, bar: null } : null,
+    fadingAll ? { key: 'fading', value: String(fadingAll), label: 'fading', bar: null } : null
+  ].filter((g): g is NonNullable<typeof g> => !!g)
+  const lastWhen = p.last ? p.last.when.replace(/^on /, '') : ''
 
   return (
     <div className="page td-home-page">
@@ -176,18 +175,35 @@ export function HomeTide(p: HomeTideProps) {
           {/* Your name above the date, once you've given it (Settings › You); the page is otherwise as it was */}
           {hello && <p className="td-hello">{greetingLine(hello)}</p>}
           <h1 className="page-title">{new Date(now).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</h1>
-          <p className="td-lede">
-            {lede}
-            {p.last && p.last.topics.length > 0 && (
-              <>
-                {' '}
-                {p.lastLine}{' '}
-                <button className="td-link" onClick={p.quiz}>
-                  Quiz me on it
-                </button>
-              </>
-            )}
-          </p>
+          <div className="td-glance" aria-label="Today">
+            {glance.map((g) => (
+              <div key={g.key} className={`td-glance-i${g.bar !== null ? ' has-bar' : ''}`}>
+                <span className="td-glance-v">
+                  {g.value && <b>{g.value}</b>}
+                  <span>{g.label}</span>
+                </span>
+                {g.bar !== null && (
+                  <span className="td-glance-bar" role="img" aria-label={`${Math.round(g.bar * 100)}% of today's plan done`}>
+                    <i style={{ width: `${Math.round(g.bar * 100)}%` }} />
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+          {p.last && p.last.topics.length > 0 && (
+            <p className="td-yday" title={p.lastLine}>
+              <span className="td-yday-when">{lastWhen[0].toUpperCase() + lastWhen.slice(1)}</span>
+              <span className="td-yday-topics">
+                {p.last.topics.slice(0, 2).map((t) => (
+                  <span key={t.title}>{t.title}</span>
+                ))}
+              </span>
+              {p.last.topics.length > 2 && <span className="td-yday-more">+{p.last.topics.length - 2}</span>}
+              <button className="td-link" onClick={p.quiz}>
+                Quiz me
+              </button>
+            </p>
+          )}
 
           {!open && p.ready ? (
             <ReadyCard prep={p.ready.prep} variant="home" onStart={p.ready.start} onElse={() => app.setView({ kind: 'learn' })} />
@@ -210,8 +226,8 @@ export function HomeTide(p: HomeTideProps) {
                 <button className="btn" onClick={() => app.setView({ kind: 'learn' })}>
                   Choose something else
                 </button>
-                <span className="td-meta td-now-key">
-                  or press <kbd>↵</kbd>
+                <span className="td-meta td-now-key" title="Press Return to start">
+                  <kbd>↵</kbd>
                 </span>
               </div>
             </div>
@@ -228,14 +244,14 @@ export function HomeTide(p: HomeTideProps) {
 
           <div className="td-sec-head">
             <h2 className="td-sec">Then today</h2>
-            {!!today?.planned && <span className="td-meta">{leftToday ? `${hm(leftToday)} left of ${hm(today.planned)}` : `All ${hm(today.planned)} done`}</span>}
+            {!!today?.planned && <span className="td-meta">{leftToday ? `${hm(leftToday)} left` : 'All done'}</span>}
           </div>
           <DayTimeline now={null} tide />
 
           <div className="td-sec-head">
             <h2 className="td-sec">Fading</h2>
             {fading.length > 0 ? (
-              <span className="td-meta td-fading-key">The line is how well you held it; the fill is where it stands now</span>
+              <span className="td-meta td-fading-key">Line: held · fill: now</span>
             ) : (
               <button className="td-more" onClick={() => app.setView({ kind: 'graph', tab: 'know' })}>
                 What you know
@@ -293,7 +309,7 @@ export function HomeTide(p: HomeTideProps) {
               )}
             </div>
           ) : (
-            <p className="td-none">{known ? (known.concepts.some((c) => c.seen) ? 'Nothing is fading. What you have learnt is holding.' : 'What you learn is tracked here. When something you held starts to slip, it is listed with a question to bring it back.') : ''}</p>
+            <p className="td-none">{known ? (known.concepts.some((c) => c.seen) ? 'Nothing fading.' : 'Nothing tracked yet.') : ''}</p>
           )}
         </div>
 
@@ -350,10 +366,9 @@ export function HomeTide(p: HomeTideProps) {
                     <Aim key={plan.goal.id} plan={plan} forecast={p.forecasts[plan.goal.id]} area={areaOf(plan.goal.notebook)} makeFit={p.makeFit} />
                   ))}
                 </div>
-                <p className="td-meta td-aims-key">The mark on each bar is where today’s pace should be.</p>
               </>
             ) : (
-              <p className="td-none">Set a deadline on a roadmap and Tide paces it for you.</p>
+              <p className="td-none">No deadlines yet.</p>
             )}
             {p.aimMenu}
           </section>
@@ -424,7 +439,7 @@ function WeekBars({ days }: { days: { key: string; label: string; long: string; 
           {d.done > 0 && <path className="td-bar-done" d={bar(i, d.done)} />}
           {d.planned === 0 && d.done === 0 && <rect className="td-bar-none" x={x(i)} y={base - 2} width={bw} height={2} />}
           {d.today && d.done > 0 && (
-            <text className="td-bar-val" x={x(i) + bw / 2} y={y(d.done) - 6} textAnchor="middle">
+            <text className="td-bar-val" x={x(i) + bw / 2} y={y(Math.max(d.done, d.planned)) - 6} textAnchor="middle">
               {hm(d.done)}
             </text>
           )}

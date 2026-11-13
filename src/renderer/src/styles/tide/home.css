@@ -30,6 +30,97 @@
     color: var(--ink-2);
     text-wrap: pretty;
   }
+  /* The day at a glance: three figures on one baseline, today's with a thin bar under it */
+  .td-glance {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px 0;
+    margin: 12px 0 0;
+  }
+  .td-glance-i {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 0 20px;
+    border-left: 1px solid var(--line);
+  }
+  .td-glance-i:first-child {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .td-glance-v {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: var(--t-base);
+    line-height: 20px;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+  .td-glance-v b {
+    font-size: var(--t-lede);
+    font-weight: 600;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.005em;
+  }
+  .td-glance-bar {
+    display: block;
+    width: 100%;
+    min-width: 132px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--line);
+    overflow: hidden;
+  }
+  .td-glance-bar i {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+  }
+  /* Last time, as one quiet line of names */
+  .td-yday {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    margin: 14px 0 0;
+    font-size: var(--t-meta);
+    line-height: 18px;
+    color: var(--ink-3);
+  }
+  .td-yday-when {
+    flex: none;
+  }
+  .td-yday-topics {
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .td-yday-topics span {
+    min-width: 0;
+    max-width: 30ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--ink-2);
+  }
+  .td-yday-topics span + span::before {
+    content: '·';
+    margin-right: 6px;
+    color: var(--ink-3);
+  }
+  .td-yday-more {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .td-yday .td-link {
+    flex: none;
+    margin-left: 4px;
+  }
   .td-link,
   .td-more {
     font-weight: 500;
@@ -229,6 +320,19 @@
     text-align: right;
     color: var(--ink-3);
     white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Start shows on the row you're on; the title opens it too */
+  .td-row-go {
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .td-row:hover .td-row-go,
+  .td-row:focus-within .td-row-go {
+    opacity: 1;
+  }
+  .td-row:hover {
+    background: var(--hover);
   }
   .td-row-empty,
   .td-none {
@@ -503,17 +607,15 @@
   .td-coach-items li {
     display: grid;
     grid-template-columns: 22px minmax(0, 1fr) auto;
-    column-gap: 8px;
-    align-items: baseline;
-    padding: 8px 0;
+    column-gap: 10px;
+    align-items: center;
+    padding: 7px 0;
     border-top: 1px solid var(--line);
   }
   .td-coach-items li:last-child {
     border-bottom: 1px solid var(--line);
   }
   .td-coach-ic {
-    grid-row: span 2;
-    align-self: start;
     display: grid;
     place-items: center;
     width: 22px;
@@ -534,15 +636,6 @@
     font-size: var(--t-meta);
     color: var(--ink-3);
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-  .td-coach-why {
-    grid-column: 2 / -1;
-    font-size: 12px;
-    line-height: 17px;
-    color: var(--ink-3);
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
   }
   .td-coach-items li.done b {

@@ -51,7 +51,8 @@ export function WeekProgressSection() {
         <h2 id="wkp-title">This week’s progress</h2>
         <span className="muted small">{range(p)}</span>
       </header>
-      {line && (
+      {/* Tide's own line only restates the tiles below; Claude's says something about them */}
+      {line && line.by === 'claude' && (
         <p className={`wkp-line${line.by === 'claude' ? ' by-claude' : ''}`} title={line.by === 'claude' ? 'Written by Claude from the numbers below' : undefined}>
           {line.text}
         </p>

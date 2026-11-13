@@ -588,11 +588,10 @@ export function NorthStarGlance() {
   const open = () => app.setView({ kind: 'northstar' })
   if (!g)
     return (
-      <button className="ns-glance" onClick={open}>
+      <button className="ns-glance" onClick={open} title="One path towards one goal, from every interest">
         <Icon name="northstar" size={18} />
         <span className="ns-glance-main">
           <span className="ns-glance-title">Build my North Star</span>
-          <span className="ns-glance-mix">Weave every interest into one path towards one goal</span>
         </span>
         <Icon name="chevron" size={12} />
       </button>

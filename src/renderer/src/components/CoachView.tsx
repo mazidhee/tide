@@ -134,8 +134,8 @@ export function CoachView() {
             <h1 className="page-title">Your week</h1>
             <p className="practice-summary">
               {week
-                ? `${dayLabel(week.days[0]?.date ?? week.weekStart)} to ${dayLabel(week.days[week.days.length - 1]?.date ?? week.weekStart)} · ${settings.hoursPerWeek} hours across ${week.mix ? `${week.mix.length} threads` : week.priorities.map((p) => p.notebook).join(' and ') || 'no focus set'}`
-                : 'Tell Tide what you’re working towards; it mixes each week across all of it.'}
+                ? `${shortDay(week.days[0]?.date ?? week.weekStart)} – ${shortDay(week.days[week.days.length - 1]?.date ?? week.weekStart)}`
+                : 'Add a goal and Tide plans each week towards it.'}
             </p>
           </div>
           <div className="pv-tools">
@@ -253,10 +253,11 @@ export function CoachView() {
   )
 }
 
+/** "12 Nov" */
+const shortDay = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+
 /** One accent, lighter down the list, every share still visible however many threads there are */
 const tint = (i: number, n: number) => Math.round(90 - (i * 65) / Math.max(1, n - 1))
-
-const KIND_DOT: Record<string, string> = { learn: 'var(--accent)', practice: 'var(--info)', 'take-home': 'var(--info)', quiz: 'var(--warn)', review: 'var(--warn)', test: 'var(--danger)', check: 'var(--info)', project: 'var(--ink-muted)', mock: 'var(--ink-muted)', workout: 'var(--ink-muted)', read: 'var(--ink-muted)', course: 'var(--accent)' }
 
 /**
  * The week at a glance: why it's shaped the way it is (in a sentence, with more on request), how
@@ -275,6 +276,10 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy, onPlan, planni
   const [more, setMore] = useState(false)
   const [changesOpen, setChangesOpen] = useState(false)
   const day = week.days.find((d) => d.date === picked)
+  // A reason said once: items in a run with the same one ("Next in your … roadmap") drop it
+  const whys = (day?.items ?? []).map((it, i, all) => (it.why && it.why !== all[i - 1]?.why ? it.why : ''))
+  // Two readings per item; the rest on request
+  const [allReadings, setAllReadings] = useState<Set<string>>(new Set())
   const first = firstSentence(week.summary)
   const rest = week.summary.slice(first.length).trim()
   const suggested = week.suggested && week.suggested.map((s) => s.notebook).join() !== week.priorities.map((p) => p.notebook).join() ? week.suggested : null
@@ -310,15 +315,7 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy, onPlan, planni
             <span className="wk-hours static">{hours}</span>
           )}
         </header>
-        <p className="wk-lede">
-          <span>{first}</span>
-          {explains && (
-            <button className="link-btn quiet wk-more" onClick={() => setMore(!more)} aria-expanded={more}>
-              {more ? 'Less' : 'Why'}
-            </button>
-          )}
-        </p>
-        {week.priorities.length > 0 && (
+        {week.priorities.length > 0 ? (
           <div className="wk-split" aria-label="How the week's time is split">
             <div className="wk-split-bar">
               {week.priorities.map((p, i) => (
@@ -329,14 +326,29 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy, onPlan, planni
               {week.priorities.map((p, i) => (
                 <span key={p.notebook} title={p.reason}>
                   <i style={{ background: `color-mix(in srgb, var(--accent) ${tint(i, week.priorities.length)}%, var(--bg-active))` }} />
-                  {p.notebook} <span className="muted">{p.share}%</span>
+                  {p.notebook} <b className="wk-share">{p.share}%</b>
                 </span>
               ))}
+              {(first || explains) && (
+                <button className="link-btn quiet wk-more" onClick={() => setMore(!more)} aria-expanded={more}>
+                  {more ? 'Less' : 'Why'}
+                </button>
+              )}
             </div>
           </div>
+        ) : (
+          <p className="wk-lede">
+            <span>{first}</span>
+            {explains && (
+              <button className="link-btn quiet wk-more" onClick={() => setMore(!more)} aria-expanded={more}>
+                {more ? 'Less' : 'Why'}
+              </button>
+            )}
+          </p>
         )}
         {more && (
           <div className="wk-explain">
+            {week.priorities.length > 0 && first && <p>{first}</p>}
             {rest && <p>{rest}</p>}
             {week.priorities.some((p) => p.reason) && (
               <ul>
@@ -391,7 +403,7 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy, onPlan, planni
               <span className="wk-date">{date.getUTCDate()}</span>
               <span className="wk-dots">
                 {items.slice(0, 5).map((it, i) => (
-                  <i key={i} className={it.done ? 'done' : ''} style={{ background: KIND_DOT[it.kind] }} />
+                  <i key={i} className={it.done ? 'done' : ''} title={`${AGENDA_LABEL[it.kind]}${it.done ? ', done' : ''}`} />
                 ))}
               </span>
               <span className="wk-mins">{mins ? `${mins}m` : 'Rest'}</span>
@@ -421,23 +433,37 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy, onPlan, planni
                     {it.movedFrom && <span className="wk-tag" title="Moved here by the replanner">From {new Date(it.movedFrom + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' })}</span>}
                     <span className="today-min">{it.minutes} min</span>
                   </button>
-                  {(it.why || it.readings?.length || it.course) && (
-                    <div className="wk-item-more">
-                      {it.why && <span className="muted small">{it.why}</span>}
-                      {it.course?.lessons.map((l) => (
-                        <button key={l.id} className="wk-reading" onClick={() => app.setView({ kind: 'courses', id: it.course!.id, lesson: l.id })} title={`${l.n} ${l.title}, about ${l.minutes} min`}>
+                  {(whys[i] || it.readings?.length || it.course) && (() => {
+                    const chips = [
+                      ...(it.course?.lessons.map((l) => (
+                        <button key={`c${l.id}`} className="wk-reading" onClick={() => app.setView({ kind: 'courses', id: it.course!.id, lesson: l.id })} title={`${l.n} ${l.title}, about ${l.minutes} min`}>
                           <Icon name="course" size={11} />
-                          {l.n} {l.title}
+                          <span>
+                            {l.n} {l.title}
+                          </span>
                         </button>
-                      ))}
-                      {it.readings?.map((r, j) => (
-                        <a key={j} className="wk-reading" href={r.url ?? '#'} onClick={(e) => (e.preventDefault(), r.path ? app.openPath(r.path, `page=${r.page ?? 1}`) : r.url && window.tide.app.openExternal(r.url))} title={r.by ? `${r.title}, ${r.by}` : r.title}>
+                      )) ?? []),
+                      ...(it.readings?.map((r, j) => (
+                        <a key={`r${j}`} className="wk-reading" href={r.url ?? '#'} onClick={(e) => (e.preventDefault(), r.path ? app.openPath(r.path, `page=${r.page ?? 1}`) : r.url && window.tide.app.openExternal(r.url))} title={r.by ? `${r.title}, ${r.by}` : r.title}>
                           <Icon name="book" size={11} />
-                          {r.title}
+                          <span>{r.title}</span>
                         </a>
-                      ))}
-                    </div>
-                  )}
+                      )) ?? [])
+                    ]
+                    const key = `${picked}:${i}`
+                    const shown = allReadings.has(key) ? chips : chips.slice(0, 2)
+                    return (
+                      <div className="wk-item-more">
+                        {whys[i] && <span className="wk-item-why">{whys[i]}</span>}
+                        {shown}
+                        {chips.length > shown.length && (
+                          <button className="wk-reading wk-reading-more" onClick={() => setAllReadings(new Set(allReadings).add(key))} title="Show every reading">
+                            +{chips.length - shown.length}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               </li>
             ))}
@@ -445,7 +471,7 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy, onPlan, planni
         ) : (
           <div className="today-empty">
             <Professor state="fishing" size={26} title="Gone fishing" />
-            <p className="muted small">A rest day. Rest is part of the plan.</p>
+            <p className="muted small">Rest day</p>
           </div>
         )}
       </section>
