@@ -2,6 +2,7 @@ import { SIDEBAR_ITEMS } from '@shared/sidebar'
 import { breakSettings, type BreakSettings, type Strictness } from '@shared/breaks'
 import { rhythmLine } from '@shared/breakPlanner'
 import { prepSettings, type PrepSettings, type PrepStatus } from '@shared/lessonPrep'
+import { MANIM_PACK, TEX_PACK } from '@shared/manim'
 import { rhythmNow } from '../lib/breaks'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { DEFAULT_VOICE, resetVoiceStatus, Speaker } from '../lib/voice'
@@ -177,6 +178,46 @@ function LabPackSetup() {
   const [step, setStep] = useState('')
   useEffect(() => window.tide.runner.onLabProgress(setStep), [])
   return <ToolSetup label="Lab pack" hint={LAB_PACK.contents} check={window.tide.runner.labStatus} setup={window.tide.runner.setupLab} busyText={step || 'Starting…'} actionText={`Install (${LAB_PACK.size})`} />
+}
+
+/** Maths animations: Manim, then TinyTeX for typeset equations, each installed only when pressed; narration in Tide's voice */
+function AnimationsSetup() {
+  const [step, setStep] = useState('')
+  const [texStep, setTexStep] = useState('')
+  const [anim, setAnim] = useState<{ narration: boolean; quality: 'low' | 'medium' } | null>(null)
+  const [manimReady, setManimReady] = useState(false)
+  useEffect(() => window.tide.manim.onInstallProgress(setStep), [])
+  useEffect(() => window.tide.manim.onTexProgress(setTexStep), [])
+  useEffect(() => {
+    window.tide.manim
+      .status()
+      .then((s) => {
+        setAnim(s.settings)
+        setManimReady(s.manim.ready)
+      })
+      .catch(() => {})
+  }, [])
+  const checkManim = useCallback(() => window.tide.manim.status().then((s) => s.manim), [])
+  const checkTex = useCallback(() => window.tide.manim.status().then((s) => s.tex), [])
+  const install = useCallback(() => window.tide.manim.install(), [])
+  const installTex = useCallback(() => window.tide.manim.installTex(), [])
+  const save = (patch: { narration?: boolean; quality?: 'low' | 'medium' }) => window.tide.manim.settings(patch).then(setAnim)
+  return (
+    <>
+      <ToolSetup label="Maths animations" hint={`Manim: narrated animations in maths lessons (${MANIM_PACK.download} to download)`} check={checkManim} setup={install} onReady={() => setManimReady(true)} busyText={step || 'Starting…'} actionText={`Install maths animations (${MANIM_PACK.download})`} />
+      {manimReady && <ToolSetup label="Equations in animations" hint="TinyTeX, so equations are typeset; without it they are drawn as plain text" check={checkTex} setup={installTex} busyText={texStep || 'Starting…'} actionText={`Install (${TEX_PACK.download})`} />}
+      {manimReady && anim && (
+        <>
+          <Row label="Narrate animations" hint="In Tide’s voice, each beat as long as its line; captions either way">
+            <Toggle label="Narrate animations" on={anim.narration} onChange={(on) => void save({ narration: on })} />
+          </Row>
+          <Row label="Animation quality" hint="Standard is 720p; quick is 480p and renders about twice as fast">
+            <Select label="Animation quality" value={anim.quality} onChange={(v) => void save({ quality: v })} options={[{ value: 'medium', label: 'Standard (720p)' }, { value: 'low', label: 'Quick (480p)' }]} />
+          </Row>
+        </>
+      )}
+    </>
+  )
 }
 
 /** Your Metabase, read-only, so the tutor can teach you your own dashboards and data */
@@ -1355,6 +1396,7 @@ function ToolsSection() {
         <ToolSetup label="Maths checker" hint="Python with SymPy" check={window.tide.runner.mathStatus} setup={window.tide.runner.setupMath} />
         <ToolSetup label="Data libraries" hint="NumPy, pandas, Matplotlib" check={window.tide.runner.librariesStatus} setup={window.tide.runner.setupLibraries} />
         <LabPackSetup />
+        <AnimationsSetup />
         <ToolSetup label="Market data" hint="US Treasury yields and ECB euro rates for the finance labs" check={window.tide.learn.marketStatus} setup={window.tide.learn.fetchMarketData} busyText="Fetching from the US Treasury and the ECB…" actionText="Fetch newer" />
         <ToolSetup label="Languages" hint="What code in lessons can be written in" check={window.tide.runner.languagesStatus} setup={window.tide.runner.languagesStatus} busyText="Checking…" actionText="Check again" />
         <ToolSetup label="Things 4" hint="Tasks and deadlines" check={window.tide.learn.thingsStatus} setup={window.tide.learn.thingsStatus} busyText="Checking…" actionText="Check again" />

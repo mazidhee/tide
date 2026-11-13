@@ -9,4 +9,4 @@
 export const APP_CSP =
   "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' vault: data: https:; " +
   "font-src 'self' data:; connect-src 'self' vault:; frame-src https://www.youtube-nocookie.com https://www.youtube.com tide-visual:; " +
-  "worker-src 'self' blob:; media-src 'self' vault: https:"
+  "worker-src 'self' blob:; media-src 'self' vault: tide-anim: https:"

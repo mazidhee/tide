@@ -108,7 +108,9 @@ import { registerEditorIpc, runNow } from './workshopWatch'
 protocol.registerSchemesAsPrivileged([
   { scheme: 'vault', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } },
   // Claude's visuals, each in a sandboxed frame of its own (main/visualFrames)
-  VISUAL_SCHEME_PRIVILEGES
+  VISUAL_SCHEME_PRIVILEGES,
+  // Rendered maths animations (main/manim), streamed to the lesson's video player
+  { scheme: 'tide-anim', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }
 ])
 
 let win: BrowserWindow | null = null
@@ -692,6 +694,15 @@ function registerIpc() {
   handle('runner:setupLibraries', () => setupLibraries())
   handle('runner:labStatus', () => labStatus())
   handle('runner:setupLab', () => setupLab((step) => send('runner:labProgress', step)))
+  // Maths animations (main/manim): installing, rendering and the cache
+  void import('./manim').then((m) => m.onAnimStatus((s) => send('manim:status', s)))
+  handle('manim:status', () => import('./manim').then(async (m) => ({ manim: await m.manimStatus(true), tex: await m.texStatus(), settings: await m.animSettings() })))
+  handle('manim:install', () => import('./manim').then((m) => m.setupManim((step) => send('manim:installProgress', step))))
+  handle('manim:installTex', () => import('./manim').then((m) => m.setupTex((step) => send('manim:texProgress', step))))
+  handle('manim:settings', (patch: unknown) => import('./manim').then((m) => m.setAnimSettings(patch && typeof patch === 'object' ? (patch as never) : {})))
+  handle('manim:request', (req: unknown) => import('./manim').then((m) => (req && typeof req === 'object' ? m.requestAnimation(req as never) : null)))
+  handle('manim:get', (key: string) => import('./manim').then((m) => m.animationStatus(String(key ?? ''))))
+  handle('manim:used', (key: string) => import('./manim').then((m) => m.animationUsed(String(key ?? ''))))
   handle('runner:languagesStatus', () => languagesStatus())
   handle('runner:setupMath', () => setupMath())
   handle('websearch:status', () => searchStatus())
@@ -907,6 +918,14 @@ app.whenReady().then(() => {
     } catch {
       return new Response('Not found', { status: 404 })
     }
+  })
+
+  // Maths animations: tide-anim://v/<key>.mp4, only from the animation cache (main/manim)
+  protocol.handle('tide-anim', async (req) => {
+    const key = /^\/(m[a-z0-9]+)\.mp4$/.exec(new URL(req.url).pathname)?.[1] ?? ''
+    const f = key ? (await import('./manim')).videoPath(key) : null
+    if (!f) return new Response('Not found', { status: 404 })
+    return (await import('./manim')).videoResponse(f, req.headers.get('range'))
   })
 
   registerIpc()

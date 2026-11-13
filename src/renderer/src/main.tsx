@@ -15,6 +15,7 @@ import './styles/lab.css'
 import './styles/sims.css'
 import './styles/simKinds.css'
 import './styles/visuals.css'
+import './styles/animations.css'
 import './styles/knowledge.css'
 import './styles/workshop.css'
 import './styles/courses.css'
@@ -63,6 +64,7 @@ import { startLightbox } from './lib/lightbox'
 import { startSims } from './lib/sims'
 import { startChallenges } from './lib/maths/challenge'
 import { startGraphs } from './lib/graphs'
+import { startAnimations } from './lib/animations'
 import { startVideoEmbeds } from './lib/videoEmbeds'
 import { startLessonEmbeds } from './lib/lessonEmbeds'
 import { goto, listenForLinks } from './lib/linkNav'
@@ -80,6 +82,7 @@ window.tide.settings.get().then((settings) => {
   startSims()
   startChallenges()
   startGraphs()
+  startAnimations()
   startVideoEmbeds()
   // Every link opens in Tide (lib/linkNav), and the tutor can move the view (show_in_view)
   startLessonEmbeds()

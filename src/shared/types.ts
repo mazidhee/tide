@@ -114,6 +114,8 @@ export interface Settings {
   sidebarHidden?: string[]
   fontSize: number
   ai: AISettings
+  /** Maths animations (shared/manim): narration in Tide's voice, render quality, and whether the one-time install offer was answered */
+  animations?: { narration?: boolean; quality?: 'low' | 'medium'; prompted?: boolean }
   /** How the tutor sounds: Tide's natural voice (Kokoro, set up in Settings) or the Mac's own */
   /** custom: a Kokoro voice that replaces the character's; dictation: who writes out what you say */
   voice?: { engine: 'natural' | 'system'; name: string; speed: number; custom?: string; dictation?: 'tide' | 'handy' | 'deepgram' | 'flow' }
@@ -865,6 +867,18 @@ export interface TideApi {
     onChange(cb: () => void): () => void
   }
   /** Claude's visuals (shared/visuals): where they may run, repairs and fallbacks, a lesson's kept ones, and their frames' limits */
+  manim: {
+    status(): Promise<{ manim: { ready: boolean; detail: string }; tex: { ready: boolean; detail: string }; settings: { narration: boolean; quality: 'low' | 'medium'; prompted: boolean } }>
+    install(): Promise<{ ready: boolean; detail: string }>
+    installTex(): Promise<{ ready: boolean; detail: string }>
+    settings(patch: { narration?: boolean; quality?: 'low' | 'medium'; prompted?: boolean }): Promise<{ narration: boolean; quality: 'low' | 'medium'; prompted: boolean }>
+    request(req: { block: string; lesson?: string; topic?: string; palette?: import('./manim').AnimPalette; quality?: import('./manim').AnimQuality }): Promise<import('./manim').AnimStatus | null>
+    get(key: string): Promise<import('./manim').AnimStatus | null>
+    used(key: string): Promise<boolean>
+    onStatus(cb: (s: import('./manim').AnimStatus) => void): () => void
+    onInstallProgress(cb: (step: string) => void): () => void
+    onTexProgress(cb: (step: string) => void): () => void
+  }
   visuals: {
     policy(scope: ChatScope): Promise<{ show: boolean; repair: boolean; why?: string }>
     repair(req: { code: string; errors: string[]; scope: ChatScope }): Promise<{ code: string } | null>

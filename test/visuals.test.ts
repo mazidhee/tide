@@ -91,9 +91,9 @@ describe('the frame', () => {
   it('the app page lets visual frames in, and nothing new besides', () => {
     expect(APP_CSP).toMatch(/frame-src https:\/\/www\.youtube-nocookie\.com https:\/\/www\.youtube\.com tide-visual:;/)
     expect(APP_CSP).toMatch(/script-src 'self' 'wasm-unsafe-eval';/)
-    // The only change to the app's own policy: tide-visual: in frame-src
+    // The only changes to the app's own policy: tide-visual: in frame-src, and tide-anim: (the maths animations' videos, main/manim) in media-src
     const before = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' vault: data: https:; font-src 'self' data:; connect-src 'self' vault:; frame-src https://www.youtube-nocookie.com https://www.youtube.com; worker-src 'self' blob:; media-src 'self' vault: https:"
-    expect(APP_CSP.replace(' tide-visual:', '')).toBe(before)
+    expect(APP_CSP.replace(' tide-visual:', '').replace(' tide-anim:', '')).toBe(before)
   })
 
   it('runs the bootstrap before the visual, and passes theme tokens only when they are colours', () => {
