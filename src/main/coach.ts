@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs'
 import { scheduleWeek, summaryFromPlan } from '@shared/schedule'
-import { aimOf, aimsKey, aimsOf, pickOf, catchUpPlan, thingsTitle, DEFAULT_COACH, localDate, moveUnfinished, nextStudyDay, nextTopics, planCompletion, weekMarkdown, type AgendaItem, type CoachSettings, type DayStats, type JournalEntry, type TopicCandidate, type WeekReview, type WeekPlan } from '@shared/coach'
+import { aimOf, aimsKey, aimsOf, pickOf, catchUpPlan, thingsTitle, DEFAULT_COACH, localDate, moveUnfinished, nextStudyDay, nextTopicsOf, planCompletion, weekMarkdown, type AgendaItem, type CoachSettings, type DayStats, type JournalEntry, type TopicCandidate, type WeekReview, type WeekPlan } from '@shared/coach'
 import { companyTrend } from '@shared/interviews'
 import { buildLink } from '@shared/deeplink'
 import { completeFor, extractJsonObject } from './ai'
@@ -121,14 +121,15 @@ async function gather(settings: CoachSettings, focus = settings.focus, chosen?: 
   const parts: string[] = []
   for (const name of focus) {
     const nb = notebooks.find((n) => n.name === name || n.path === name)
-    if (!nb?.outline) {
+    if (!nb?.outline && !nb?.track) {
       parts.push(`${name}: no roadmap yet.`)
       continue
     }
-    const md = await readText(nb.outline).catch(() => '')
-    const next = chosen ? chosen.filter((c) => c.notebook === nb.name).slice(0, 14) : nextTopics(nb.name, md, 14)
-    const all = (md.match(/^\s*- \[[ xX]\] /gm) ?? []).length
-    const done = (md.match(/^\s*- \[[xX]\] /gm) ?? []).length
+    const mm = await import('./modules')
+    const topics = await mm.notebookTopics(nb)
+    const next = chosen ? chosen.filter((c) => c.notebook === nb.name).slice(0, 14) : nextTopicsOf(nb.name, await mm.openTopics(nb), 14)
+    const all = topics.length
+    const done = topics.filter((t) => t.checked).length
     candidates.push(...next)
     parts.push(`${nb.name} roadmap: ${done} of ${all} topics done. Next, in order:\n${next.map((c) => `  - ${c.topic} (in ${c.section})${c.why ? `: ${c.why}` : ''}`).join('\n')}`)
   }
@@ -190,8 +191,8 @@ async function goalFacts(): Promise<Facts['goals']> {
   for (const g of await getGoals().catch(() => [])) {
     const nb = notebooks.find((n) => n.path === g.notebook)
     if (!nb) continue
-    const md = nb.outline ? await readText(nb.outline).catch(() => '') : ''
-    out.push({ notebook: nb.name, left: topicsLeft(roadmapTopics(nb.name, md), g.section), daysLeft: Math.ceil((Date.parse(g.deadline) - Date.now()) / 86_400_000), name: g.name })
+    const topics = await import('./modules').then((m) => m.notebookTopics(nb)).catch(() => [])
+    out.push({ notebook: nb.name, left: topicsLeft(topics, g.section), daysLeft: Math.ceil((Date.parse(g.deadline) - Date.now()) / 86_400_000), name: g.name })
   }
   return out
 }
@@ -205,8 +206,8 @@ async function balanceFor(settings: CoachSettings, goals: Facts['goals']): Promi
   const notebooks: BalanceNotebook[] = []
   const recent: Record<string, number> = {}
   for (const nb of all) {
-    if (!nb.outline) continue
-    const topics = roadmapTopics(nb.name, await readText(nb.outline).catch(() => ''))
+    if (!nb.outline && !nb.track) continue
+    const topics = await import('./modules').then((m) => m.notebookTopics(nb)).catch(() => [])
     const sorted = await loadSorted(nb.name)
     notebooks.push({ name: nb.name, topics, sorted, ready: isSorted(sorted, sectionsOf(topics), key) })
     recent[nb.name] = log.filter((e) => e.path?.startsWith(`${nb.path}/`) || e.label === nb.name).reduce((n, e) => n + e.minutes, 0)
@@ -490,6 +491,8 @@ export async function tickTopic(notebook: string, topicId: string, done: boolean
 /** Several at once (a placement check's known topics), in one write; returns how many changed */
 export async function tickTopics(notebook: string, topicIds: string[], done: boolean): Promise<number> {
   const nb = (await getNotebooks()).find((n) => n.name === notebook)
+  // A track's topics are ticked in their module files
+  if (nb?.track) return import('./modules').then((m) => m.tickModuleTopics(topicIds, done))
   if (!nb?.outline || !topicIds.length) return 0
   const md = await readText(nb.outline)
   const want = new Set(topicIds)
@@ -514,9 +517,11 @@ export async function tickTopics(notebook: string, topicIds: string[], done: boo
 export async function addTopicAfter(notebook: string, afterId: string, title: string): Promise<boolean> {
   const nb = (await getNotebooks()).find((n) => n.name === notebook || n.path === notebook)
   const clean = title.replace(/\s+/g, ' ').trim()
-  if (!nb?.outline || !clean) return false
-  const md = await readText(nb.outline)
-  const all = roadmapTopics(nb.name, md)
+  // A track's topic: the line goes into the module file the topic is in
+  const file = nb?.track ? (await import('./modules').then((m) => m.notebookTopics(nb))).find((t) => t.id === afterId)?.file : nb?.outline
+  if (!nb || !file || !clean) return false
+  const md = await readText(file)
+  const all = nb.track ? (await import('./modules').then((m) => m.notebookTopics(nb))).filter((t) => t.file === file) : roadmapTopics(nb.name, md)
   const after = all.find((t) => t.id === afterId)
   // Not a topic its section already has, ticked or not (it would shift that topic's id)
   const same = (a: string) => a.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
@@ -530,7 +535,8 @@ export async function addTopicAfter(notebook: string, afterId: string, title: st
   while (end < lines.length && lines[end].trim() && (lines[end].match(/^(\s*)/)?.[1].length ?? 0) > indent.length) end++
   // Keep the file's line endings (Windows-style files end each line with \r)
   lines.splice(end, 0, `${indent}- [ ] ${clean}${lines[at].endsWith('\r') ? '\r' : ''}`)
-  await writeText(nb.outline, lines.join('\n'))
+  await writeText(file, lines.join('\n'))
+  if (nb.track) await import('./modules').then((m) => m.resetModules())
   return true
 }
 

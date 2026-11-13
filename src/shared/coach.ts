@@ -3,7 +3,7 @@
  * decides priorities and the week; code supplies the facts (next topics in each roadmap, weak
  * spots, deadlines) and checks the plan only uses topics that really exist.
  */
-import { roadmapTopics } from './curriculum'
+import { roadmapTopics, type RoadmapTopic } from './curriculum'
 import { normalizeTitle } from './outline'
 
 export type AimWeight = 'main' | 'side' | 'curious'
@@ -264,7 +264,12 @@ export interface TopicCandidate {
 
 /** The next unfinished topics in a roadmap, in order, with the section each sits in (projects are practised, not taught) */
 export function nextTopics(notebook: string, outlineMd: string, n = 12): TopicCandidate[] {
-  return roadmapTopics(notebook, outlineMd)
+  return nextTopicsOf(notebook, roadmapTopics(notebook, outlineMd), n)
+}
+
+/** The same from topics already read (a track's modules' topics, shared/modules) */
+export function nextTopicsOf(notebook: string, topics: RoadmapTopic[], n = 12): TopicCandidate[] {
+  return topics
     .filter((t) => !t.checked && !t.project && !/^(Exam|Project|Practice):/i.test(t.title))
     .slice(0, n)
     .map((t) => ({ notebook, topic: t.title, section: t.section, topicId: t.id, ...(t.source ? { source: t.source } : {}) }))

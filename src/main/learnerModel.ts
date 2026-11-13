@@ -39,6 +39,10 @@ import { learningEvent, onLogChange, readEvents, readGoals, readLinks, readTarge
 
 let cached: { model: LearnerModel; events: LearningEvent[]; at: number } | null = null
 let building: Promise<{ model: LearnerModel; events: LearningEvent[] }> | null = null
+/** Built again on the next ask (after main/modules moves ids) */
+export const resetLearnerModel = () => {
+  cached = null
+}
 const FRESH_MS = 60_000
 onLogChange(() => (cached = null))
 

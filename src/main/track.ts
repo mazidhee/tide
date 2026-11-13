@@ -71,10 +71,19 @@ function update(fn: (s: TracksStore) => TracksStore): Promise<TracksStore> {
     const next = fn(await loadTracks())
     await writeText(STORE, JSON.stringify(next, null, 1))
     heldCache = null
+    await import('./modules').then((m) => m.resetModules()).catch(() => {})
     return next
   })
   queue = run.catch(() => {})
   return run
+}
+
+/** The modules' own records ("I'm there"), changed one at a time like the rest */
+export const updateModules = (fn: (m: NonNullable<TracksStore['modules']>) => NonNullable<TracksStore['modules']>) => update((s) => ({ ...s, modules: fn(s.modules ?? { there: {} }) }))
+
+/** After a switch to modules or back: nothing cached */
+export const resetTracks = () => {
+  heldCache = null
 }
 
 const recordOf = (s: TracksStore, notebook: string): TrackRecord => s.tracks[notebook] ?? emptyTrack()
@@ -86,7 +95,10 @@ interface Gathered {
   path: string
   phases: Phase[]
   gates: TrackGates
+  /** The records of its phases (a track's are its modules', merged) */
   record: TrackRecord
+  /** Where a phase's record is kept: the roadmap's notebook, or the module it is part of */
+  keyOf: (phaseId: string) => string
   capstones: Record<string, CapstoneSuggestion | null>
   progress: Record<string, { done: number; total: number; hoursLeft: number }>
   /** Cut to North Star's current stage */
@@ -106,8 +118,50 @@ async function projectRecords(): Promise<ProjectRecord[]> {
   return (await allPlans().catch(() => [])).map((p) => ({ ...(p.seed ? { seed: p.seed } : {}), ...(p.area ? { area: p.area } : {}), ...(p.tier ? { tier: p.tier } : {}), finished: p.milestones.every((m) => m.status === 'done') }))
 }
 
+/**
+ * A track's phases are its modules' parts, in plan order; its gates are the modules' gates over the
+ * DAG (shared/modules), with North Star's scope naming whole modules or parts. Records are kept per
+ * module, so a module several tracks share has one.
+ */
+async function gatherModules(nb: { name: string; path: string; track?: string }, concepts?: ConceptState[], store?: TracksStore): Promise<Gathered | null> {
+  const mm = await import('./modules')
+  const t = await mm.trackOf(nb)
+  if (!t) return null
+  const { moduleParts, trackGatesOf, moduleRecordKey } = await import('@shared/modules')
+  const all = concepts ?? (await import('./knowledge').then((k) => k.allConcepts()).catch(() => [] as ConceptState[]))
+  const st = store ?? (await loadTracks())
+  const gates = await mm.moduleState({ concepts: all, store: st })
+  if (!gates) return null
+  const order = mm.planOrder(t.cat, t.track)
+  const full = order.flatMap((m) => moduleParts(m, nb.name))
+  const star = await import('./northStar').then((m) => m.trackScope(nb.name)).catch(() => null)
+  const phases = star ? scopePhases(full, star.scope) : full
+  if (!phases.length) return null
+  const tg = trackGatesOf(order, gates)
+  const want = new Set(phases.map((p) => p.id))
+  // Only the parts in scope; topics a scope cut away stay held (heldTopics)
+  const kept = tg.gates.filter((g) => want.has(g.phase.id))
+  const cur = tg.current !== null ? tg.gates[tg.current] : null
+  const current = cur ? kept.indexOf(cur) : -1
+  const firstOpen = kept.findIndex((g) => g.open && !g.passed && !g.override && !g.optional)
+  const gatesOut: TrackGates = { gates: kept.map((g) => ({ ...g, phase: phases.find((p) => p.id === g.phase.id) ?? g.phase })), current: current >= 0 ? current : firstOpen >= 0 ? firstOpen : null, held: tg.held }
+  const moduleOf = new Map(full.map((p) => [p.id, p.module ?? '']))
+  const keyOf = (phaseId: string) => (moduleOf.get(phaseId) ? moduleRecordKey(moduleOf.get(phaseId)!) : nb.name)
+  const record: TrackRecord = { phases: {}, log: [] }
+  for (const m of order) {
+    const r = st.tracks[moduleRecordKey(m.id)]
+    if (r) Object.assign(record.phases, r.phases)
+  }
+  const capstones: Record<string, CapstoneSuggestion | null> = {}
+  for (const p of phases) capstones[p.id] = p.projects[0] ? suggestCapstone(nb.name, p, phases.length, []) : null
+  return { notebook: nb.name, path: nb.path, phases, gates: gatesOut, record, keyOf, capstones, progress: {}, ...(star ? { star: { stage: star.stage, title: star.title, phases: phases.length, of: full.length } } : {}) }
+}
+
 /** A roadmap's phases, gates and capstones, from what is known now */
 async function gather(notebook: string, concepts?: ConceptState[], store?: TracksStore): Promise<Gathered | null> {
+  const { getNotebooks } = await import('./learn')
+  const nb = (await getNotebooks().catch(() => [])).find((n) => n.name === notebook || n.path === notebook)
+  if (nb?.track) return gatherModules(nb, concepts, store)
   const rm = await roadmapOf(notebook)
   if (!rm) return null
   const full = phasesOf(rm.name, rm.md)
@@ -144,7 +198,7 @@ async function gather(notebook: string, concepts?: ConceptState[], store?: Track
     // Not set up: the roadmap's own line counts once ticked; a ladder project not yet started is still needed
     states[p.id] = s ? { needed: true, done: !!s.line?.checked } : { needed: false, done: false }
   }
-  return { notebook: rm.name, path: rm.path, phases, gates: trackGates(phases, byId, record, states), record, capstones, progress, ...(star ? { star: { stage: star.stage, title: star.title, phases: phases.length, of: full.length } } : {}) }
+  return { notebook: rm.name, path: rm.path, phases, gates: trackGates(phases, byId, record, states), record, keyOf: () => rm.name, capstones, progress, ...(star ? { star: { stage: star.stage, title: star.title, phases: phases.length, of: full.length } } : {}) }
 }
 
 // ---------- What the scheduler holds back ----------
@@ -159,6 +213,26 @@ export async function heldTopics(): Promise<Set<string>> {
   const concepts = await import('./knowledge').then((k) => k.allConcepts()).catch(() => [] as ConceptState[])
   const store = await loadTracks()
   for (const nb of await getNotebooks().catch(() => [])) {
+    if (nb.track) {
+      // A track: locked modules and later parts, and what North Star's stage doesn't need yet
+      const g = await gather(nb.name, concepts, store).catch(() => null)
+      const mm = await import('./modules')
+      const all = await mm.notebookTopics(nb).catch(() => [])
+      if (!g) {
+        const star = await import('./northStar').then((m) => m.trackScope(nb.name)).catch(() => null)
+        const gates = await mm.moduleState({ concepts, store }).catch(() => null)
+        const { moduleHeld } = await import('@shared/modules')
+        for (const id of gates ? moduleHeld(gates) : []) held.add(id)
+        if (star) for (const t of all) held.add(t.id)
+        continue
+      }
+      for (const id of g.gates.held) held.add(id)
+      if (g.star) {
+        const inScope = new Set(g.phases.flatMap((p) => [...p.topics, ...p.practice].map((t) => t.id)))
+        for (const t of all) if (!inScope.has(t.id) && !t.project) held.add(t.id)
+      }
+      continue
+    }
     if (!nb.outline) continue
     const g = await gather(nb.name, concepts, store).catch(() => null)
     for (const id of g?.gates.held ?? []) held.add(id)
@@ -292,14 +366,16 @@ export async function overridePhase(notebook: string, phaseId: string, note?: st
   const gate = g?.gates.gates.find((x) => x.phase.id === phaseId)
   if (!g || !gate) throw new Error('That phase is gone from the roadmap.')
   if (gate.passed) return trackView(notebook)
-  await update((s) => ({ ...s, tracks: { ...s.tracks, [g.notebook]: overrideGate(recordOf(s, g.notebook), gate, Date.now(), note) } }))
+  const key = g.keyOf(phaseId)
+  await update((s) => ({ ...s, tracks: { ...s.tracks, [key]: overrideGate(recordOf(s, key), gate, Date.now(), note) } }))
   return trackView(notebook)
 }
 
 export async function undoPhaseOverride(notebook: string, phaseId: string): Promise<TrackView | null> {
-  const rm = await roadmapOf(notebook)
-  if (!rm) return null
-  await update((s) => ({ ...s, tracks: { ...s.tracks, [rm.name]: undoOverride(recordOf(s, rm.name), phaseId, Date.now()) } }))
+  const g = await gather(notebook)
+  if (!g) return null
+  const key = g.keyOf(phaseId)
+  await update((s) => ({ ...s, tracks: { ...s.tracks, [key]: undoOverride(recordOf(s, key), phaseId, Date.now()) } }))
   return trackView(notebook)
 }
 
@@ -339,9 +415,10 @@ export async function startCheck(notebook: string, phaseId: string, fresh = fals
     by = 'tide'
   }
   const pending = { at: Date.now(), by, questions }
+  const key = g.keyOf(phaseId)
   await update((s) => {
-    const r = recordOf(s, g.notebook)
-    return { ...s, tracks: { ...s.tracks, [g.notebook]: { ...r, phases: { ...r.phases, [phaseId]: { ...(r.phases[phaseId] ?? { checks: [] }), pending } } } } }
+    const r = recordOf(s, key)
+    return { ...s, tracks: { ...s.tracks, [key]: { ...r, phases: { ...r.phases, [phaseId]: { ...(r.phases[phaseId] ?? { checks: [] }), pending } } } } }
   })
   return { questions: strip(questions), by }
 }
@@ -352,10 +429,12 @@ export async function startCheck(notebook: string, phaseId: string, fresh = fals
  * in What you know, as a return to something learnt before; what was missed goes in the mistakes.
  */
 export async function submitCheck(notebook: string, phaseId: string, answers: Record<string, string>, selfMarks?: Record<string, 'correct' | 'partial' | 'wrong'>): Promise<CheckResult & { needsSelf?: boolean; answers?: Record<string, string> }> {
-  const rm = await roadmapOf(notebook)
-  if (!rm) throw new Error('That roadmap is gone.')
+  const g = await gather(notebook)
+  if (!g) throw new Error('That roadmap is gone.')
+  const rm = { name: g.notebook, path: g.path }
+  const key = g.keyOf(phaseId)
   const store = await loadTracks()
-  const pending = recordOf(store, rm.name).phases[phaseId]?.pending
+  const pending = recordOf(store, key).phases[phaseId]?.pending
   if (!pending) throw new Error('There is no phase check waiting. Start one first.')
   const clean = Object.fromEntries(pending.questions.map((q) => [q.id, String(answers?.[q.id] ?? '').slice(0, 6000)]))
   let marks: CheckResult['marks'] | null = null
@@ -378,9 +457,9 @@ export async function submitCheck(notebook: string, phaseId: string, answers: Re
   const at = Date.now()
   const result = scoreCheck(marks, by, at)
   await update((s) => {
-    const r = recordOf(s, rm.name)
+    const r = recordOf(s, key)
     const { pending: _done, ...rest } = r.phases[phaseId] ?? { checks: [] }
-    return { ...s, tracks: { ...s.tracks, [rm.name]: { ...r, phases: { ...r.phases, [phaseId]: { ...rest, checks: [...(rest.checks ?? []), result].slice(-10) } } } } }
+    return { ...s, tracks: { ...s.tracks, [key]: { ...r, phases: { ...r.phases, [phaseId]: { ...rest, checks: [...(rest.checks ?? []), result].slice(-10) } } } } }
   })
   // Each answer on its concept: a return to something learnt before
   const { noteReviewAnswer } = await import('./knowledge')
@@ -415,10 +494,11 @@ export async function setupCapstone(notebook: string, phaseId?: string): Promise
     const { plan } = await draftPlan({ idea: `${idea}. It is the capstone of "${gate.phase.title}" in ${g.notebook}, so it should apply: ${gate.phase.topics.map((t) => t.title.replace(/\*\*/g, '')).slice(0, 12).join('; ')}.`, answers: [], source: 'model' })
     made = await createProject({ ...plan, tier: s.tier })
   }
+  const key = g.keyOf(gate.phase.id)
   await update((st) => {
-    const r = recordOf(st, g.notebook)
+    const r = recordOf(st, key)
     const capstone = { notebook: made.notebook, ...(s.seed ? { seed: s.seed.id } : {}), tier: s.tier, title: s.title, at: Date.now() }
-    return { ...st, tracks: { ...st.tracks, [g.notebook]: { ...r, phases: { ...r.phases, [gate.phase.id]: { ...(r.phases[gate.phase.id] ?? { checks: [] }), capstone } } } } }
+    return { ...st, tracks: { ...st.tracks, [key]: { ...r, phases: { ...r.phases, [gate.phase.id]: { ...(r.phases[gate.phase.id] ?? { checks: [] }), capstone } } } } }
   })
   return { notebook: made.notebook }
 }
@@ -440,7 +520,7 @@ export async function autoCapstone(notebook: string): Promise<boolean> {
 export async function autoCapstones(): Promise<number> {
   const { getNotebooks } = await import('./learn')
   let n = 0
-  for (const nb of await getNotebooks().catch(() => [])) if (nb.outline && (await autoCapstone(nb.name).catch(() => false))) n++
+  for (const nb of await getNotebooks().catch(() => [])) if ((nb.outline || nb.track) && (await autoCapstone(nb.name).catch(() => false))) n++
   return n
 }
 

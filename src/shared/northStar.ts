@@ -17,6 +17,7 @@
  */
 import { roadmapTopics, splitTag, type RoadmapTopic } from './curriculum'
 import { phasesOf, type Phase } from './track'
+import { dependents, moduleParts, moduleTopics, moduleValue, safeRequires, topoOrder, type ModuleDef } from './modules'
 import type { ConceptState } from './knowledge'
 import type { PlanGoal, GoalNeed } from './goals'
 import { addDays } from './portfolio'
@@ -163,6 +164,42 @@ export interface CatalogueTrack {
   phases: CataloguePhase[]
   topics: number
   left: number
+  /** A track of modules (shared/modules): its phases are its modules, and these are they */
+  modules?: CatalogueModule[]
+}
+
+export interface CatalogueModule {
+  id: string
+  title: string
+  level: string
+  hours: number
+  interview: string[]
+  requires: string[]
+  topics: number
+  left: number
+  /** Passed its gate already (or "I'm there") */
+  passed?: boolean
+  /** The other tracks that list it */
+  shared: string[]
+}
+
+/**
+ * A track of modules as the catalogue lists it: each module a phase (its parts as sections), so
+ * scopes name a whole module by its title or one part by the part's heading
+ */
+export function catalogueModules(name: string, modules: ModuleDef[], o: { id: string; about?: string; passed?: ReadonlySet<string>; shared?: (id: string) => string[] }): CatalogueTrack {
+  let topics = 0
+  let left = 0
+  const mods: CatalogueModule[] = []
+  const phases: CataloguePhase[] = modules.map((m) => {
+    const ts = moduleTopics(m, name).filter((t) => !t.project)
+    topics += ts.length
+    left += ts.filter((t) => !t.checked).length
+    mods.push({ id: m.id, title: m.title, level: m.level, hours: m.hours, interview: m.interview, requires: m.requires, topics: ts.length, left: ts.filter((t) => !t.checked).length, ...(o.passed?.has(m.id) ? { passed: true } : {}), shared: o.shared?.(m.id) ?? [] })
+    const sections = moduleParts(m, name).map((p) => ({ title: p.title, topics: p.topics.length, sample: p.topics.slice(0, 3).map((t) => cleanTitle(t.title).slice(0, 60)) }))
+    return { title: m.title, tag: m.level, topics: ts.length, sections }
+  })
+  return { name, source: 'own', id: o.id, ...(o.about ? { about: o.about } : {}), phases, topics, left, modules: mods }
 }
 
 const cleanTitle = (t: string) => t.replace(/\*\*/g, '').replace(/\s+—\s+_.*$/, '').trim()
@@ -397,6 +434,7 @@ export function synthesisPrompt(i: SynthInput): string {
     })
     .join('\n\n')
   const shared = i.shared.length ? i.shared.slice(0, 40).map((s) => `- ${s.topic}: ${s.tracks.join(', ')}`).join('\n') : '(none found)'
+  const modular = i.catalogue.some((t) => t.modules?.length)
   return `Today is ${i.today}. Build this learner's North Star: one integrated path towards their goal, weaving every roadmap below into a single master map.
 
 ${i.goalNote ? `## Their goal and interests: their own note, the primary input (authoritative; follow it where anything else disagrees)
@@ -413,11 +451,23 @@ About ${i.hoursPerWeek} hours a week${i.measuredHours !== undefined ? ` planned;
 ## What they already know (Tide's knowledge map)
 ${i.known || 'Very little is recorded yet: treat them as near the start, but let placement checks skip what they know.'}
 ${i.profile ? `\n## What the tutor knows about them\n${i.profile.slice(0, 1500)}\n` : ''}
-## The roadmaps (track name, its phases, and sections with topic counts and sample topics)
+${modular ? `## The modules (a course catalogue: a DAG of prerequisites)
+${moduleLines(i.catalogue)}
+
+` : ''}## The ${modular ? 'tracks (track name, its modules or phases, and their parts with topic counts and sample topics)' : 'roadmaps (track name, its phases, and sections with topic counts and sample topics)'}
 ${tracks}
 
-## Topics several roadmaps share (found by matching titles)
-${shared}
+## ${modular ? 'Learned once: modules several tracks share (one progress, credited to every track that lists them), and topics roadmaps share' : 'Topics several roadmaps share (found by matching titles)'}
+${shared}${modular ? `
+
+## Planning over modules
+- A stage picks modules: each track's scope names whole modules by their exact title, or a single part by its exact heading.
+- A module can start only when every module it "requires" has passed its gate: put each required module in the same stage or an earlier one. "passed" modules need no time.
+- Use the hours as given: a stage's size is the sum of its modules' hours left at the learner's pace.
+- Interleave modules that don't depend on each other inside a stage (two or three side by side), rather than one long track at a time.
+- Level: core first; supporting when what needs it comes; later and optional after the milestone or at the end.
+- Mastery comes first: order modules by what builds on them (fan-out) and the depth they need, never by an interview date. Interview prep is a fixed daily habit of its own (a short primer and problems, 45–60 minutes); the date only adds practice time.
+- Projects from day one: about a third of the time goes to building, each project's next milestone as soon as the modules it needs are under way; keep the learner's love interests alive through a project, even outside the current stage.` : ''}
 ${i.milestones ? `
 ## Dated milestones (plan with them, alongside the long-term path)
 ${i.milestones}
@@ -453,6 +503,122 @@ Use the track names exactly as written above. Return ONLY JSON:
    "gate": "…"${i.milestones ? ', "serves": ["milestone title"]' : ''}}],
  "timeline": {"summary": "the honest estimate and why, 3–5 sentences", "cracked": "what it realistically requires, 2–4 sentences", "compress": ["how it was made faster", "…"]},
  "shared": [{"topic": "…", "tracks": ["…", "…"]}]}`
+}
+
+/** The module DAG for the prompt: one line a module, its hours, level, interview tags and what it requires */
+export function moduleLines(cat: CatalogueTrack[]): string {
+  const seen = new Set<string>()
+  const lines: string[] = []
+  for (const t of cat)
+    for (const m of t.modules ?? []) {
+      if (seen.has(m.id)) continue
+      seen.add(m.id)
+      const tracks = [t.name, ...m.shared].join(', ')
+      lines.push(`- ${m.id} "${m.title}" [${tracks}] ${m.hours ? `${m.hours} h` : `${Math.round(m.topics * 2.5)} h (est.)`}, ${m.level}${m.interview.length ? `, interview: ${m.interview.join('/')}` : ''}${m.requires.length ? `, requires: ${m.requires.join(', ')}` : ''}${m.passed ? ', PASSED' : `, ${m.left} of ${m.topics} topics left`}`)
+    }
+  return lines.join('\n')
+}
+
+/**
+ * A map's stages made to respect the module DAG: a module a stage takes whose required module no
+ * stage before it (or it) takes gets that module added, in its own track when the stage has it or
+ * room for it (passed modules need nothing).
+ */
+export function withRequires(ns: NorthStar, cat: CatalogueTrack[]): NorthStar {
+  const mods = new Map<string, { m: CatalogueModule; track: string }>()
+  for (const t of cat) for (const m of t.modules ?? []) if (!mods.has(m.id)) mods.set(m.id, { m, track: t.name })
+  if (!mods.size) return ns
+  const byTitle = new Map([...mods.values()].map((x) => [bare(x.m.title), x]))
+  const taken = new Set<string>()
+  const stages = ns.stages.map((s) => {
+    const tracks = s.tracks.map((t) => ({ ...t, scope: [...t.scope] }))
+    const here = () => tracks.flatMap((t) => t.scope.map((x) => byTitle.get(bare(x))?.m.id).filter((x): x is string => !!x))
+    const want = [...here()]
+    for (let i = 0; i < want.length; i++) {
+      for (const r of mods.get(want[i])?.m.requires ?? []) {
+        const need = mods.get(r)
+        if (!need || need.m.passed || taken.has(r) || here().includes(r)) continue
+        let st = tracks.find((t) => t.track === need.track)
+        if (!st && tracks.length < MAX_TRACKS) {
+          st = { track: need.track, weight: MIN_SHARE, scope: [] }
+          tracks.push(st)
+        }
+        if (!st) continue
+        st.scope.unshift(need.m.title)
+        want.push(r)
+      }
+    }
+    for (const id of here()) taken.add(id)
+    const w = normaliseWeights(tracks.map((t) => t.weight))
+    return { ...s, tracks: tracks.map((t, i) => ({ ...t, weight: w[i] })) }
+  })
+  return { ...ns, stages }
+}
+
+/**
+ * Without a model, over modules: every module in a topological order, the most valuable ready one
+ * first (its level, how much builds on it, the milestone's interview bars), cut into stages of about
+ * a term's work each (at most four tracks a stage), each stage after the ones holding what it
+ * requires. Passed modules are left out.
+ */
+export function heuristicModuleStar(cat: CatalogueTrack[], o: { goal: string; today: string; hoursPerWeek: number; tags?: string[] }): NorthStar {
+  const all = new Map<string, { m: CatalogueModule; track: string }>()
+  for (const t of cat) for (const m of t.modules ?? []) if (!all.has(m.id)) all.set(m.id, { m, track: t.name })
+  const list = [...all.values()].map((x) => ({ id: x.m.id, requires: x.m.requires, level: x.m.level as ModuleDef['level'], interview: x.m.interview, x }))
+  const fan = dependents(list)
+  const later = (l: string) => l === 'later' || l === 'optional'
+  const value = (m: (typeof list)[number]) => moduleValue(m, fan.get(m.id) ?? 0, { tags: o.tags ?? [] }) - (later(m.level) ? 5 : 0)
+  const order = topoOrder(list, value).filter((m) => !m.x.m.passed)
+  const hoursOf = (m: CatalogueModule) => m.hours || Math.round(m.topics * 2.5)
+  const budget = Math.max(120, o.hoursPerWeek * 12)
+  const deps = safeRequires(list)
+  const stageOf = new Map<string, number>()
+  const groups: { mods: CatalogueModule[]; tracks: Map<string, number>; hours: number }[] = []
+  for (const m of order) {
+    const cur = groups[groups.length - 1]
+    const track = m.x.track
+    const fits = cur && cur.hours + hoursOf(m.x.m) <= budget * 1.15 && (cur.tracks.has(track) || cur.tracks.size < MAX_TRACKS) && later(m.level) === later(cur.mods[0].level as string)
+    const g = fits ? cur : { mods: [], tracks: new Map<string, number>(), hours: 0 }
+    if (!fits) groups.push(g)
+    g.mods.push(m.x.m)
+    g.tracks.set(track, (g.tracks.get(track) ?? 0) + hoursOf(m.x.m))
+    g.hours += hoursOf(m.x.m)
+    stageOf.set(m.id, groups.length)
+  }
+  const stages: Stage[] = groups.map((g, i) => {
+    const n = i + 1
+    const names = [...g.tracks.keys()]
+    const weights = normaliseWeights(names.map((t) => g.tracks.get(t)!))
+    const tracks: StageTrack[] = names.map((t, j) => ({ track: t, weight: weights[j], scope: g.mods.filter((m) => all.get(m.id)!.track === t).map((m) => m.title) }))
+    const after = [...new Set(g.mods.flatMap((m) => (deps.get(m.id) ?? []).map((r) => stageOf.get(r)).filter((x): x is number => !!x && x < n)))].sort((a, b) => a - b)
+    const key = [...g.mods].sort((a, b) => (fan.get(b.id) ?? 0) - (fan.get(a.id) ?? 0)).slice(0, 2)
+    const core = g.mods.some((m) => m.level === 'core')
+    return {
+      n,
+      title: g.mods.slice(0, 2).map((m) => m.title).join(' and ') + (g.mods.length > 2 ? ` (+${g.mods.length - 2})` : ''),
+      after: after.length ? after : n > 1 ? [n - 1] : [],
+      depth: core ? 4 : 3,
+      tracks,
+      deep: key.map((m) => ({ topic: m.title, depth: (core ? 4 : 3) as Depth })),
+      synergies: names.length > 1 ? [`${names.join(' and ')} side by side: ${g.mods.slice(0, 3).map((m) => m.title).join(', ')}.`] : [],
+      capstone: { title: `A project using ${key.map((m) => m.title).join(' and ')}`, brief: '', joins: names.slice(0, 3) },
+      gate: `Every module's gate passed: ${g.mods.map((m) => m.title).join(', ')}.`
+    }
+  })
+  return {
+    version: 1,
+    goal: o.goal,
+    hoursPerWeek: o.hoursPerWeek,
+    started: o.today,
+    current: 1,
+    by: 'tide',
+    assumptions: ['Made without a model: your modules in prerequisite order, the most valuable first. Build it again with Claude for one made for you.'],
+    thisMonth: stages[0] ? [`Start ${stages[0].tracks.flatMap((t) => t.scope).slice(0, 3).join(', ')}.`] : [],
+    stages,
+    timeline: { summary: '', cracked: '', compress: ['A module several tracks share is learned once and counts in each.'] },
+    shared: [...all.values()].filter((x) => x.m.shared.length).map((x) => ({ topic: x.m.title, tracks: [x.track, ...x.m.shared] })).slice(0, 16),
+    log: []
+  }
 }
 
 // ---------- Without a model: a simpler map ----------
@@ -557,8 +723,9 @@ const TEMPLATES: Template[] = [
   }
 ]
 
-/** The map code can make on its own: a fixed weave over whichever roadmaps exist */
-export function heuristicNorthStar(catalogue: CatalogueTrack[], o: { goal: string; today: string; hoursPerWeek: number }): NorthStar {
+/** The map code can make on its own: a fixed weave over whichever roadmaps exist (over the module DAG when there are modules) */
+export function heuristicNorthStar(catalogue: CatalogueTrack[], o: { goal: string; today: string; hoursPerWeek: number; tags?: string[] }): NorthStar {
+  if (catalogue.some((t) => t.modules?.length)) return heuristicModuleStar(catalogue, o)
   const stages: Stage[] = []
   for (const t of TEMPLATES) {
     const tracks: StageTrack[] = []
@@ -845,6 +1012,23 @@ export interface SharedGroup {
   /** The shortest title, as the group's name */
   title: string
   members: { track: string; id: string; title: string }[]
+  /** A module several tracks list: learned once exactly, and its hours */
+  module?: string
+  hours?: number
+}
+
+/** Modules several tracks list: each one group, exactly (no matching of titles) */
+export function sharedModules(cat: CatalogueTrack[]): SharedGroup[] {
+  const by = new Map<string, { title: string; hours: number; tracks: string[] }>()
+  for (const t of cat)
+    for (const m of t.modules ?? []) {
+      const g = by.get(m.id) ?? { title: m.title, hours: m.hours || m.topics * 2.5, tracks: [] }
+      if (!g.tracks.includes(t.name)) g.tracks.push(t.name)
+      by.set(m.id, g)
+    }
+  return [...by]
+    .filter(([, g]) => g.tracks.length >= 2)
+    .map(([id, g]) => ({ title: g.title, module: id, hours: g.hours, members: g.tracks.map((track) => ({ track, id: `module:${id}`, title: g.title })) }))
 }
 
 /**
@@ -907,7 +1091,7 @@ export function creditShared<C extends Pick<ConceptState, 'id' | 'status' | 'sta
 }
 
 /** Hours saved by learning each shared topic once instead of in every roadmap that has it */
-export const hoursSaved = (groups: SharedGroup[], perTopic = 2.5) => Math.round(groups.reduce((n, g) => n + (g.members.length - 1) * perTopic, 0))
+export const hoursSaved = (groups: SharedGroup[], perTopic = 2.5) => Math.round(groups.reduce((n, g) => n + (g.members.length - 1) * (g.hours ?? perTopic), 0))
 
 // ---------- Scope: what the stage needs from each track ----------
 
@@ -948,7 +1132,8 @@ export function scopePhases(phases: Phase[], scope: string[]): Phase[] {
   const want = new Set(scope.map(bare))
   return phases
     .map((p) => {
-      const whole = want.has(bare(p.title))
+      // A module's part is whole when the scope names the part, or the whole module
+      const whole = want.has(bare(p.title)) || (!!p.moduleTitle && want.has(bare(p.moduleTitle)))
       const keep = (t: RoadmapTopic) => whole || inScope(t, scope)
       return { ...p, topics: p.topics.filter(keep), practice: p.practice.filter(keep), projects: whole ? p.projects : [], ...(whole ? {} : { seed: undefined }) }
     })

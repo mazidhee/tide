@@ -27,6 +27,9 @@ export interface RoadmapTopic {
   project: boolean
   /** From the learner's heading tags, nearest heading first; undefined when untagged */
   tagged?: SectionClass
+  /** A module's topic (shared/modules): the module id, and its file (where `line` is) */
+  module?: string
+  file?: string
 }
 
 const norm = (s: string) =>

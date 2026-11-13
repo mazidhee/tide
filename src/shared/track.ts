@@ -40,6 +40,9 @@ export interface Phase {
   courses: string[]
   /** A ladder project named on a project line: "Project: … (project: merkle)" */
   seed?: string
+  /** A part of a module (shared/modules): the module's id and title */
+  module?: string
+  moduleTitle?: string
 }
 
 const norm = (s: string) =>
@@ -209,6 +212,8 @@ export interface TracksStore {
   tracks: Record<string, TrackRecord>
   /** Mixed reviews taken, by week (yyyy-mm-dd of the Monday) */
   mixed?: Record<string, number>
+  /** Modules (shared/modules): the learner's "I'm there" on a module's gate. Part gates are kept in `tracks` as module:<id> */
+  modules?: { there: Record<string, { at: number; note?: string }>; /** Vault projects (Roadmaps/Projects) set up in Projects: their notebooks */ projects?: Record<string, { notebook: string; at: number }> }
 }
 
 export const EMPTY_TRACKS: TracksStore = { version: 1, tracks: {} }

@@ -477,7 +477,7 @@ export interface StageLite {
  * Long-term value of a track: its weight in the current stage (or in its next stage, discounted
  * by how far away that is) times its fan-out: how many later stages build on it.
  */
-export function longTermOf(track: string, stages: StageLite[], current: number): number {
+export function longTermOf(track: string, stages: StageLite[], current: number, fanOverride?: number): number {
   const at = stages.findIndex((s) => s.n === current)
   const ahead = stages.slice(Math.max(0, at))
   const key = track.toLowerCase()
@@ -485,7 +485,8 @@ export function longTermOf(track: string, stages: StageLite[], current: number):
   if (!uses.length) return 0
   const first = uses[0]
   const stageWeight = (first.w / 100) * 0.75 ** first.i
-  const fanOut = uses.length - 1
+  // With modules, fan-out is the DAG's: how much later work builds on what the track has open now
+  const fanOut = fanOverride ?? uses.length - 1
   return stageWeight * (1 + fanOut / 4)
 }
 
@@ -506,9 +507,12 @@ export const channelThread = (c: Channel, threads: Pick<Thread, 'id' | 'kind' | 
  * threads that have any; deadline values sum to urgency × (how far the scope is from the bar), split
  * by each scope item's channels (a channel with no thread passes its share to the others).
  */
-export function threadValues(threads: Pick<Thread, 'id' | 'kind' | 'label'>[], o: { stages: StageLite[]; current: number; milestone: Milestone | null; gaps: Partial<Record<ScopeId, number>>; urgency: number; today: string }): Map<string, ValueRow> {
+export function threadValues(
+  threads: Pick<Thread, 'id' | 'kind' | 'label'>[],
+  o: { stages: StageLite[]; current: number; milestone: Milestone | null; gaps: Partial<Record<ScopeId, number>>; urgency: number; today: string; /** Tracks of modules: each track's fan-out from the DAG, by its label in lower case */ fanOut?: Map<string, number>; /** A scope item's channels, where modules give them (moduleChannels) */ channels?: (def: ScopeDef) => Channel[] }
+): Map<string, ValueRow> {
   const out = new Map<string, ValueRow>(threads.map((t) => [t.id, { id: t.id, longTerm: 0, deadline: 0, scope: [] }]))
-  const lt = threads.map((t) => (t.kind === 'roadmap' ? longTermOf(t.label, o.stages, o.current) : 0))
+  const lt = threads.map((t) => (t.kind === 'roadmap' ? longTermOf(t.label, o.stages, o.current, o.fanOut?.get(t.label.toLowerCase())) : 0))
   const ltSum = lt.reduce((a, b) => a + b, 0)
   threads.forEach((t, i) => (out.get(t.id)!.longTerm = ltSum ? lt[i] / ltSum : 0))
   const ms = o.milestone
@@ -520,7 +524,7 @@ export function threadValues(threads: Pick<Thread, 'id' | 'kind' | 'label'>[], o
     const def = scopeDef(s.id)
     if (!def) continue
     const gap = clamp01(o.gaps[s.id] ?? 1)
-    const chans = def.channels.map((c) => ({ c, t: channelThread(c, threads) })).filter((x) => x.t)
+    const chans = (o.channels?.(def) ?? def.channels).map((c) => ({ c, t: channelThread(c, threads) })).filter((x) => x.t)
     const shareSum = chans.reduce((n, x) => n + x.c.share, 0)
     for (const { c, t } of chans) {
       const row = out.get(t!.id)!
@@ -532,23 +536,99 @@ export function threadValues(threads: Pick<Thread, 'id' | 'kind' | 'label'>[], o
 }
 
 /**
- * The threads with their values as weights: value = long-term + deadline, scaled so the valued
- * threads keep the same total weight they had (threads with neither keep theirs). Threads that
- * score on both come out on top without any rule saying so.
+ * The threads with their values as weights. Mastery comes first: study threads are weighed by
+ * long-term value alone (fan-out and depth), scaled so they keep the total weight they had. The
+ * deadline never reorders or starves them: it shows as each thread's value (and its scope), and
+ * buys only extra practice time, as the interview habit's floor (interviewMinutes).
  */
 export function valueThreads<T extends Thread>(threads: T[], values: Map<string, ValueRow>): T[] {
   const valued = threads.filter((t) => {
     const v = values.get(t.id)
-    return v && v.longTerm + v.deadline > 0 && !t.parked
+    return v && v.longTerm > 0 && !t.parked && t.kind === 'roadmap'
   })
   const before = valued.reduce((n, t) => n + t.weight, 0)
-  const sum = valued.reduce((n, t) => n + values.get(t.id)!.longTerm + values.get(t.id)!.deadline, 0)
+  const sum = valued.reduce((n, t) => n + values.get(t.id)!.longTerm, 0)
   const k = sum > 0 ? before / sum : 0
   return threads.map((t) => {
     const v = values.get(t.id)
-    if (!v || !valued.includes(t)) return t
-    return { ...t, weight: (v.longTerm + v.deadline) * k, value: { longTerm: Math.round(v.longTerm * 1000) / 1000, deadline: Math.round(v.deadline * 1000) / 1000, scope: v.scope } }
+    if (!v) return t
+    const value = { longTerm: Math.round(v.longTerm * 1000) / 1000, deadline: Math.round(v.deadline * 1000) / 1000, scope: v.scope }
+    if (!valued.includes(t)) return v.longTerm + v.deadline > 0 ? { ...t, value } : t
+    return { ...t, weight: v.longTerm * k, value }
   })
+}
+
+// ---------- Interview prep: a fixed daily habit ----------
+
+/** Minutes a day of interview prep: a short primer to read, then problems (Sharpness, the interview modules) */
+export const HABIT_MINUTES = 50
+export const HABIT_RANGE: [number, number] = [45, 60]
+/** The most the deadline adds, a day, and only when readiness is behind its trajectory */
+export const EXTRA_CAP = 30
+
+/**
+ * The habit and what the date adds to it: nothing unless the projection is behind the trajectory,
+ * then in proportion to how far behind, at most EXTRA_CAP minutes a day (rounded to fives).
+ */
+export function interviewMinutes(p: Pick<Projection, 'status' | 'projected'> | null, bar = BAR): { habit: number; extra: number } {
+  if (!p || p.status !== 'behind') return { habit: HABIT_MINUTES, extra: 0 }
+  const short = p.projected !== null ? Math.max(0, (bar - p.projected) / bar) : 0.5
+  return { habit: HABIT_MINUTES, extra: Math.min(EXTRA_CAP, Math.max(5, Math.round((EXTRA_CAP * Math.min(1, short * 2.5)) / 5) * 5)) }
+}
+
+/** Shares of the week: project work (about a third, a love-interest part of it kept alive always) */
+export const PROJECT_SHARE = 0.23
+export const LOVE_SHARE = 0.12
+
+/**
+ * The threads grouped for the week's floors: interview practice and mocks as the daily habit (their
+ * pull is the floor's, so they never crowd out study), projects as building work, and the love
+ * interests (projects and tracks outside the stage the learner wants kept alive) as their share.
+ */
+export function habitThreads<T extends Thread>(threads: T[], o: { love: ReadonlySet<string> }): T[] {
+  return threads.map((t) => {
+    if (t.kind === 'practice' || t.kind === 'mock') return { ...t, group: 'interview', weight: Math.min(t.weight, 0.01), hard: false }
+    if (o.love.has(t.id)) return { ...t, group: 'love' }
+    if (t.kind === 'project') return { ...t, group: 'projects' }
+    return t
+  })
+}
+
+/** The week's floors as shares, from a day's planned minutes and the habit */
+export function weekFloors(dayMinutes: number, h: { habit: number; extra: number } | null, o: { projects: boolean; love: boolean }): Record<string, number> {
+  const out: Record<string, number> = { maths: MATHS_FLOOR }
+  if (h && dayMinutes > 0) out.interview = Math.min(0.35, (h.habit + h.extra) / dayMinutes)
+  if (o.projects) out.projects = PROJECT_SHARE
+  if (o.love) out.love = LOVE_SHARE
+  return out
+}
+
+/** A module, as the milestone sees it: its title, the track that holds it, its interview tags */
+export interface ModuleLite {
+  id: string
+  title: string
+  track: string
+  interview: string[]
+}
+
+const reEsc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const exactRe = (names: string[]) => new RegExp(`^(${names.map((n) => reEsc(n.trim())).join('|')})$`, 'i')
+
+/**
+ * A scope item's channels where there are modules: its roadmap share goes to the modules whose
+ * interview tags the milestone's roles name and whose title is about the item (Operating Systems for
+ * "OS and concurrency"), split by track, each channel naming its modules as the headings to plan.
+ * Practice and mocks are as before. With no such module, the item's own channels stand.
+ */
+export function moduleChannels(def: ScopeDef, modules: ModuleLite[], tags: string[]): Channel[] {
+  const hits = modules.filter((m) => m.interview.some((t) => tags.includes(t)) && (def.topic.test(m.title) || def.detect.test(m.title) || def.topic.test(m.id.replace(/-/g, ' '))))
+  if (!hits.length) return def.channels
+  const roadShare = def.channels.filter((c) => c.kind === 'roadmap').reduce((n, c) => n + c.share, 0)
+  if (!roadShare) return def.channels
+  const byTrack = new Map<string, string[]>()
+  for (const m of hits) byTrack.set(m.track, [...(byTrack.get(m.track) ?? []), m.title])
+  const rest = def.channels.filter((c) => c.kind !== 'roadmap')
+  return [...rest, ...[...byTrack].map(([track, titles]): Channel => ({ kind: 'roadmap', track: exactRe([track]), headings: exactRe(titles), share: (roadShare * titles.length) / hits.length }))]
 }
 
 // ---------- Floors: maths and parked tracks ----------
@@ -565,11 +645,13 @@ export const isMaths = (label: string) => /^math/i.test(label)
  * kept alive with a short review every PARK_INTERVAL days (their learned cards keep their reviews
  * in the daily warm-up as before). Maths threads join the maths floor.
  */
-export function parkThreads<T extends Thread>(threads: T[], o: { milestone: Milestone | null; today: string; stageTracks: string[] }): T[] {
+export function parkThreads<T extends Thread>(threads: T[], o: { milestone: Milestone | null; today: string; stageTracks: string[]; /** Tracks with a project milestone being built: alive, never parked (a love interest) */ active?: string[] }): T[] {
   const before = !!o.milestone && o.milestone.date >= o.today
+  const active = new Set((o.active ?? []).map((a) => a.toLowerCase()))
   return threads.map((t) => {
     const inStage = o.stageTracks.some((s) => s.toLowerCase() === t.label.toLowerCase())
     const out: T = isMaths(t.label) ? { ...t, group: 'maths' } : t
+    if (active.has(t.label.toLowerCase()) && !inStage && t.kind === 'roadmap') return { ...out, group: out.group ?? 'love' }
     if (before && t.kind === 'roadmap' && !inStage && PARKED.test(t.label)) return { ...out, parked: true, paused: false, session: 15, touch: 15, maxGap: PARK_INTERVAL, hard: false }
     return out
   })
