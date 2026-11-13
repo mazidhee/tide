@@ -14,11 +14,13 @@
  * aren't used.
  */
 import { app, ipcMain, type WebContents } from 'electron'
-import { randomUUID } from 'crypto'
-import { existsSync, mkdirSync, promises as fs, readFileSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, promises as fs, readFileSync, rmSync, writeFileSync } from 'fs'
+import { createHash, randomUUID } from 'crypto'
 import { basename, join } from 'path'
 import type { BugHunt, PairEvent, PairMode, ProblemReport, Proposal, ReviewComment } from '@shared/ide'
 import { unified } from '@shared/hunks'
+import { effortFor } from '@shared/thinking'
+import { anchorOf, restoreReview, type SavedReview } from '@shared/reviewKeep'
 import type { McpTool } from '../tideMcp'
 import { cleanRel, inside, insideReal } from './paths'
 import { copyProject, shellInSandbox } from './sandbox'
@@ -45,12 +47,15 @@ interface Session {
 
 const sessions = new Map<string, Session>()
 const proposals = new Map<string, Proposal>()
+const comments = new Map<string, ReviewComment>()
 const problems = new Map<string, ProblemReport[]>()
 const debugText = new Map<string, string>()
 
 const ideDir = () => join(app.getPath('userData'), 'ide')
 const autoFile = () => join(ideDir(), 'auto-edit.json')
 const huntsFile = () => join(ideDir(), 'hunts.json')
+/** A folder's pending proposals and review comments, kept across reloads and restarts */
+const reviewFile = (root: string) => join(ideDir(), 'review', `${createHash('sha1').update(root).digest('hex').slice(0, 16)}.json`)
 
 function readJson<T>(file: string, fallback: T): T {
   try {
@@ -69,6 +74,67 @@ export function autoEdit(root: string, on?: boolean): boolean {
   const list = readJson<string[]>(autoFile(), [])
   if (on !== undefined) writeJson(autoFile(), on ? [...new Set([...list, root])] : list.filter((r) => r !== root))
   return on ?? list.includes(root)
+}
+
+// ---------- Proposals and comments, kept per folder ----------
+
+/** Folders whose saved review has been read back this run */
+const hydrated = new Set<string>()
+
+function persist(root: string) {
+  const file = reviewFile(root)
+  const saved: SavedReview & { root: string } = { root, proposals: [...proposals.values()].filter((p) => p.root === root), comments: [...comments.values()].filter((c) => c.root === root) }
+  try {
+    if (!saved.proposals.length && !saved.comments.length) {
+      if (existsSync(file)) rmSync(file, { force: true })
+      return
+    }
+    mkdirSync(join(ideDir(), 'review'), { recursive: true })
+    writeFileSync(file, JSON.stringify(saved))
+  } catch {
+    // Kept for the next reload when it can be; never a reason for a tool call to fail
+  }
+}
+
+/** The text of a file of the folder now, or null when it's gone or can't be read */
+function textNow(root: string, rel: string): string | null {
+  try {
+    return readFileSync(insideReal(root, rel), 'utf8')
+  } catch {
+    return null
+  }
+}
+
+/** Reads a folder's saved proposals and comments back (once a run): those whose code changed under them go, comments follow their lines */
+export function hydrate(root: string) {
+  if (hydrated.has(root)) return
+  hydrated.add(root)
+  const saved = readJson<SavedReview | null>(reviewFile(root), null)
+  if (!saved) return
+  const kept = restoreReview({ proposals: (saved.proposals ?? []).filter((p) => p.root === root), comments: (saved.comments ?? []).filter((c) => c.root === root) }, (path) => textNow(root, path))
+  for (const p of kept.proposals) if (!proposals.has(p.id)) proposals.set(p.id, p)
+  for (const c of kept.comments) if (!comments.has(c.id)) comments.set(c.id, c)
+  if (kept.dropped) persist(root)
+}
+
+/** What the folder's windows show on opening: its pending proposals and review comments */
+export function reviewOf(root: string): SavedReview {
+  hydrate(root)
+  return { proposals: [...proposals.values()].filter((p) => p.root === root), comments: [...comments.values()].filter((c) => c.root === root) }
+}
+
+export function dismissComment(id: string) {
+  const c = comments.get(id)
+  if (!c) return
+  comments.delete(id)
+  persist(c.root)
+}
+
+/** For tests: forget what's held in memory, as a restart would */
+export function forgetReview() {
+  proposals.clear()
+  comments.clear()
+  hydrated.clear()
 }
 
 const hunts = (): BugHunt[] => readJson<BugHunt[]>(huntsFile(), [])
@@ -117,6 +183,7 @@ const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}\n… ($
 
 /** The text Claude's next edit applies to: its own pending proposal for the file, else the file */
 async function currentText(s: Target, rel: string): Promise<{ text: string; exists: boolean; pending?: Proposal }> {
+  hydrate(s.root)
   const pending = [...proposals.values()].find((p) => p.root === s.root && p.path === rel)
   if (pending) return { text: pending.proposed, exists: true, pending }
   const abs = inside(s.root, rel)
@@ -162,6 +229,7 @@ async function propose(s: Target, rel: string, next: string, explanation: string
   const id = cur.pending?.id ?? randomUUID()
   const p: Proposal = { id, root: s.root, path, original: cur.pending?.original ?? cur.text, proposed: next, explanation: [cur.pending?.explanation, hint ? `Hint: ${explanation}` : explanation].filter(Boolean).join('\n\n').slice(0, 3000), created: Date.now(), ...(cur.exists ? {} : { isNew: true }), ...(hint ? { hint: true } : {}) }
   proposals.set(id, p)
+  persist(s.root)
   s.send({ type: 'proposal', proposal: p })
   return `Proposed a change to ${path}. The learner sees it as a diff and keeps or undoes each change; nothing is written until they do. Further edits to this file are added to the same proposal.`
 }
@@ -307,7 +375,12 @@ export const IDE_TOOLS: McpTool[] = [
       const path = cleanRel(str(args.path))
       inside(s.root, path)
       const sev = ['issue', 'suggestion', 'praise', 'question'].includes(str(args.severity)) ? (str(args.severity) as ReviewComment['severity']) : 'suggestion'
-      const c: ReviewComment = { id: randomUUID(), root: s.root, path, line: Math.max(1, Math.round(Number(args.line) || 1)), severity: sev, body: str(args.body).slice(0, 2000) }
+      const line = Math.max(1, Math.round(Number(args.line) || 1))
+      const now = textNow(s.root, path)
+      const c: ReviewComment = { id: randomUUID(), root: s.root, path, line, severity: sev, body: str(args.body).slice(0, 2000), ...(now !== null ? { anchor: anchorOf(now, line) } : {}) }
+      hydrate(s.root)
+      comments.set(c.id, c)
+      persist(s.root)
       s.send({ type: 'comment', comment: c })
       return 'Shown in the editor.'
     }
@@ -404,8 +477,14 @@ async function ensureProcess(s: Session): Promise<import('../claudeEngine').Clau
   const lesson = lessonNote(s.root)
   const tutoring = s.hintsOnly && s.mode !== 'bughunt'
   const system = `${BASE}\n\nThe project is "${basename(s.root)}".${brief ? `\n\n${brief}` : ''}\n\n${s.mode === 'tutor' ? 'Tutor the learner through the current milestone: they build it.' : MODES[s.mode]}${lesson ? `\n\n${lesson}` : ''}${tutoring ? `\n\n${TUTOR_MODE}` : brief && s.mode === 'build' ? "\n\nWork on the current milestone. If its tests aren't written yet, start by proposing failing tests for its done-when lines (write_file), then help the learner make them pass." : ''}`
-  s.proc = new ClaudeProcess(`ide:${s.id}`, s.model, system, file, [])
+  s.proc = new ClaudeProcess(`ide:${s.id}`, s.model, system, file, [], await pairEffort(s.mode))
   return s.proc
+}
+
+/** How hard Claude thinks in the Code view: reviews and mentor sessions at length, the rest as a lesson (shared/thinking) */
+async function pairEffort(mode: PairMode) {
+  const { getSettings } = await import('../settings')
+  return effortFor(mode === 'review' || mode === 'mentor' ? 'pairReview' : 'pair', getSettings().ai.claude?.thinking)
 }
 
 const TOOL_LABELS: Record<string, string> = { list_files: 'Listing files', read_file: 'Reading', search_code: 'Searching', get_diagnostics: 'Reading the problems', git_diff: 'Reading your changes', propose_edit: 'Proposing an edit', write_file: 'Proposing a file', run_command: 'Running', run_tests: 'Running the tests', debug_state: 'Reading the debugger', add_review_comment: 'Commenting', open_in_editor: 'Opening', project_memory: 'Reading the project memory', update_project_memory: 'Updating the project memory' }
@@ -480,10 +559,10 @@ export async function send(owner: WebContents, req: { session: string; root: str
         const input = (e.input ?? {}) as Record<string, unknown>
         emit(sess, { type: 'tool', name, label: `${TOOL_LABELS[name] ?? name}${input.path ? ` ${str(input.path)}` : input.command ? ` ${str(input.command).slice(0, 50)}` : input.query ? ` “${str(input.query).slice(0, 40)}”` : ''}` })
       }
-    }, ctrl.signal)
+    }, ctrl.signal, undefined, await pairEffort(sess.mode))
     const cost = Math.max(0, result.usage.costUsd - proc.costSoFar)
     proc.costSoFar = result.usage.costUsd
-    recordUse({ ...result.usage, costUsd: cost, at: Date.now(), model: result.model ?? sess.model, role: 'teach', ms: Date.now() - t0 })
+    recordUse({ ...result.usage, costUsd: cost, at: Date.now(), model: result.model ?? sess.model, role: 'teach', ms: Date.now() - t0, effort: proc.effort })
     if (!result.ok) emit(sess, { type: 'error', message: result.error ?? 'Claude stopped.' })
     else emit(sess, { type: 'done', ms: Date.now() - t0, costUsd: cost })
   } catch (e) {
@@ -510,6 +589,9 @@ export function resolve(id: string, text: string | null) {
   const p = proposals.get(id)
   if (!p) return
   proposals.delete(id)
+  // A kept change moves the file's lines: its comments no longer point where they did (the windows drop them too)
+  if (text !== null) for (const c of [...comments.values()]) if (c.root === p.root && c.path === p.path) comments.delete(c.id)
+  persist(p.root)
   const note = text === null ? `the learner undid your proposed change to ${p.path}.` : text === p.proposed ? `the learner kept your change to ${p.path}.` : `the learner kept part of your change to ${p.path} (some hunks undone); read it again before editing it.`
   for (const s of sessions.values()) if (s.root === p.root) s.notes.push(note)
   for (const fn of resolvedListeners) fn(p.root, note)
@@ -550,7 +632,9 @@ export function registerPair(): void {
   ipcMain.handle('ide:pair:send', (e, req) => send(e.sender, req))
   ipcMain.handle('ide:pair:stop', (_e, id: string) => stop(id))
   ipcMain.handle('ide:pair:end', (_e, id: string) => end(id))
-  ipcMain.handle('ide:pair:proposals', (_e, root: string) => [...proposals.values()].filter((p) => p.root === root))
+  ipcMain.handle('ide:pair:proposals', (_e, root: string) => reviewOf(root).proposals)
+  ipcMain.handle('ide:pair:review', (_e, root: string) => reviewOf(root))
+  ipcMain.handle('ide:pair:dismissComment', (_e, id: string) => dismissComment(id))
   ipcMain.handle('ide:pair:resolve', (_e, id: string, text: string | null) => resolve(id, text))
   ipcMain.handle('ide:pair:autoEdit', (_e, root: string, on?: boolean) => autoEdit(allowed(root), on))
   ipcMain.on('ide:pair:problems', (_e, root: string, list: ProblemReport[]) => {

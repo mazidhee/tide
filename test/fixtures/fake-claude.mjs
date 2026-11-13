@@ -6,10 +6,15 @@
 // "think" thinks before it writes, "window" reports the plan's windows, "[tail]" also says the end of the message, of its system prompt and its MCP config's path. Pictures (image blocks) are counted in its reply; a marking call
 // sent with pictures (one-shot, stream-json in) answers with a verdict that says how many it saw.
 import { createInterface } from 'readline'
+import { appendFileSync } from 'fs'
+// FAKE_CLAUDE_LOG: each start's arguments and each control request are appended there, one JSON line each
+const log = (o) => process.env.FAKE_CLAUDE_LOG && appendFileSync(process.env.FAKE_CLAUDE_LOG, JSON.stringify(o) + '\n')
+log({ args: process.argv.slice(2) })
 const out = (o) => process.stdout.write(JSON.stringify(o) + '\n')
 const args = process.argv.slice(2)
 const flag = (f) => (args.includes(f) ? args[args.indexOf(f) + 1] : undefined)
 let model = flag('--model')
+let effort = flag('--effort')
 const tools = flag('--tools')
 const delta = (text) => out({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } } })
 const result = (text, extra = {}) => out({ type: 'result', subtype: 'success', is_error: false, result: text, usage: { input_tokens: 3, output_tokens: 20, cache_read_input_tokens: 0, cache_creation_input_tokens: 100 }, total_cost_usd: 0.001, duration_ms: 12, ttft_ms: 5, modelUsage: { [`claude-${model}-5-5`]: {} }, ...extra })
@@ -43,6 +48,12 @@ if (flag('--output-format') === 'json' || !flag('--input-format')) {
   let slow = null
   createInterface({ input: process.stdin }).on('line', (line) => {
     const m = JSON.parse(line)
+    if (m.type === 'control_request') log({ control: m.request })
+    // How hard it thinks from the next message on (Claude Code merges it into its flag settings)
+    if (m.type === 'control_request' && m.request.subtype === 'apply_flag_settings') {
+      if (m.request.settings?.effortLevel) effort = m.request.settings.effortLevel
+      return out({ type: 'control_response', response: { subtype: 'success', request_id: m.request_id } })
+    }
     if (m.type === 'control_request' && m.request.subtype === 'set_model') {
       model = m.request.model
       return out({ type: 'control_response', response: { subtype: 'success', request_id: m.request_id } })
@@ -82,6 +93,9 @@ if (flag('--output-format') === 'json' || !flag('--input-format')) {
       slow = setInterval(() => delta(`word${++n} `), 20)
       return
     }
+    log({ turn, effort: effort ?? null })
+    // "[runs]": runs the learner's code with Tide's run_tests tool before it answers
+    if (said.includes('[runs]')) out({ type: 'assistant', message: { content: [{ type: 'tool_use', id: `t${turn}`, name: 'mcp__tide__run_tests', input: {} }] } })
     if (said.includes('think')) out({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'hmm' } } })
     const reply = `pid ${process.pid} turn ${turn} model ${model} tools ${tools || 'none'} key ${process.env.ANTHROPIC_API_KEY ?? 'none'} heard: ${(pics.length ? words : said).slice(0, 60)}${pics.length ? ` [pictures ${pics.map((b) => b.source.media_type).join(',')}]` : ''}${said.includes('custom ```visual explainer') ? ' [offered a visual]' : ''}${said.includes('[tail]') ? ` [tail ${said.slice(-200)}] [system ${(flag('--system-prompt') ?? '').slice(-400)}] [config ${flag('--mcp-config')}]` : ''}`
     delta(reply.slice(0, 10))

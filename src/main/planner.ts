@@ -283,7 +283,7 @@ A concrete plan: which sections and topics, and one project.`
     const system = 'You review learning plans frankly and specifically. No filler.'
     const signal = new AbortController().signal
     const { draftWithClaude } = await import('./claudeEngine')
-    for await (const t of draftWithClaude(system, prompt, 'background', signal, () => streamDraft([{ role: 'system', content: system }, { role: 'user', content: prompt }], signal, 2000, 'planning'))) {
+    for await (const t of draftWithClaude(system, prompt, 'background', signal, () => streamDraft([{ role: 'system', content: system }, { role: 'user', content: prompt }], signal, 2000, 'planning'), 'planAudit')) {
       emit({ id, type: 'delta', text: t })
     }
     emit({ id, type: 'done' })

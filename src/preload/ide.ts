@@ -75,6 +75,8 @@ export const ideApi: IdeApi = {
     end: invoke('ide:pair:end'),
     onEvent: (cb) => subscribe('ide:pair:event', cb),
     proposals: invoke('ide:pair:proposals'),
+    review: invoke('ide:pair:review'),
+    dismissComment: invoke('ide:pair:dismissComment'),
     resolve: invoke('ide:pair:resolve'),
     autoEdit: invoke('ide:pair:autoEdit'),
     problems: (root, list) => ipcRenderer.send('ide:pair:problems', root, list),

@@ -131,7 +131,8 @@ ${work ? `${work}\n` : ''}- [ ] Project: the phase's project, specific to the le
         // A long plan needs room: about 25 tokens a topic with its resources
         req.plan ? Math.min(8000, 1500 + Math.round((req.plan.hoursPerWeek * req.plan.weeks) / 2.5) * 30) : req.size === 'deep' ? 6000 : 3500,
         'planning'
-      )
+      ),
+      'outline'
     )) {
       emit({ id: req.id, type: 'delta', text })
     }

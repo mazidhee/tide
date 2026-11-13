@@ -211,6 +211,8 @@ export interface ReviewComment {
   line: number
   severity: 'issue' | 'suggestion' | 'praise' | 'question'
   body: string
+  /** The line's text when the comment was made (trimmed), to find the line again after a reload (shared/reviewKeep) */
+  anchor?: string
 }
 
 export interface ProblemReport {
@@ -346,6 +348,9 @@ export interface IdeApi {
     end(session: string): Promise<void>
     onEvent(cb: (e: PairEvent) => void): () => void
     proposals(root: string): Promise<Proposal[]>
+    /** The folder's pending proposals and review comments, kept across reloads (those whose code changed under them are gone) */
+    review(root: string): Promise<{ proposals: Proposal[]; comments: ReviewComment[] }>
+    dismissComment(id: string): Promise<void>
     /** Accepted: the text to write (all of it, or the hunks the learner kept); null rejects */
     resolve(id: string, text: string | null): Promise<void>
     autoEdit(root: string, on?: boolean): Promise<boolean>

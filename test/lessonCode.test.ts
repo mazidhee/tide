@@ -132,6 +132,48 @@ describe("a coding lesson's folder and its tools", () => {
     expect(sent[0]).toMatchObject({ labId: 'lesson:rev', comment: { path: 'exercise-1.py', line: 2, severity: 'issue' } })
   })
 
+  it('keeps review comments and pending proposals across a reload, dropping or moving them when the code changed', async () => {
+    const l = lesson.lessonWorkspace('lesson:keep', 'Python functions')
+    const file = join(l.root, 'exercise-1.py')
+    writeFileSync(file, 'def add(a, b):\n    return a - b\n')
+    await tools('lesson:keep')('add_review_comment', { path: 'exercise-1.py', line: 2, severity: 'issue', body: 'This subtracts.' })
+    await tools('lesson:keep')('propose_edit', { path: 'exercise-1.py', old_string: 'a - b', new_string: 'a + b', explanation: 'add' })
+    // A reload (or a restart): nothing in memory, all of it read back
+    pair.forgetReview()
+    let r = pair.reviewOf(l.root)
+    expect(r.comments).toMatchObject([{ path: 'exercise-1.py', line: 2, anchor: 'return a - b', body: 'This subtracts.' }])
+    expect(r.proposals).toMatchObject([{ path: 'exercise-1.py', proposed: 'def add(a, b):\n    return a + b\n' }])
+    // The learner added a line above it while Tide was closed: the comment follows its line, the proposal (against the old text) goes
+    writeFileSync(file, '# adds two numbers\ndef add(a, b):\n    return a - b\n')
+    pair.forgetReview()
+    r = pair.reviewOf(l.root)
+    expect(r.comments.map((c) => c.line)).toEqual([3])
+    expect(r.proposals).toEqual([])
+    // The line itself is gone: so is its comment
+    writeFileSync(file, 'def add(a, b):\n    return b + a\n')
+    pair.forgetReview()
+    expect(pair.reviewOf(l.root).comments).toEqual([])
+    // Dismissed stays dismissed
+    await tools('lesson:keep')('add_review_comment', { path: 'exercise-1.py', line: 1, severity: 'praise', body: 'Good name.' })
+    const id = pair.reviewOf(l.root).comments[0].id
+    pair.dismissComment(id)
+    pair.forgetReview()
+    expect(pair.reviewOf(l.root).comments).toEqual([])
+  })
+
+  it('a kept proposal takes its file’s comments with it, after a reload too', async () => {
+    const l = lesson.lessonWorkspace('lesson:keep2', 'Python functions')
+    writeFileSync(join(l.root, 'exercise-1.py'), 'x = 1\n')
+    await tools('lesson:keep2')('add_review_comment', { path: 'exercise-1.py', line: 1, body: 'Name it.' })
+    sent.length = 0
+    await tools('lesson:keep2')('propose_edit', { path: 'exercise-1.py', old_string: 'x = 1', new_string: 'count = 1', explanation: 'a name' })
+    const p = sent.find((e) => e.type === 'proposal')
+    if (p?.type !== 'proposal') throw new Error('no proposal')
+    pair.resolve(p.proposal.id, 'count = 1\n')
+    pair.forgetReview()
+    expect(pair.reviewOf(l.root)).toEqual({ proposals: [], comments: [] })
+  })
+
   it('plants a bug without a diff, only in the lesson’s own files', async () => {
     const l = lesson.lessonWorkspace('lesson:bug', 'Python functions')
     writeFileSync(join(l.root, 'exercise-1.py'), 'def mean(xs):\n    return sum(xs) / len(xs)\n')
@@ -211,6 +253,31 @@ describe('a coding lesson on Claude', () => {
 
   it('a work project’s coding lesson goes to Claude like any other', async () => {
     expect(await say([{ role: 'user', content: 'x' }], { labId: 'lesson:work1', codeLesson: { file: 'exercise-1.py' }, scope: { kind: 'folder', path: 'Secret project' } })).toBeTruthy()
+  })
+
+  it('runs the learner’s code itself before judging it when asked to check it, and is sent back to run it when it didn’t', async () => {
+    // It ran the tests (run_tests) before answering: one message, with the run-first note on it
+    const ran = await say([{ role: 'user', content: 'can you check my code [runs] [tail]' }], { labId: 'lesson:run1', codeLesson: { file: 'exercise-1.py' } })
+    expect(ran).toContain(shared.RUN_FIRST_NOTE)
+    expect(ran).not.toContain('you judged their code without running it')
+    // It judged without running: Tide sends it back to run the code, in the same reply
+    const skipped = await say([{ role: 'user', content: 'is my code right?' }], { labId: 'lesson:run2', codeLesson: { file: 'exercise-1.py' } })
+    expect(skipped).toMatch(/turn 1 [\s\S]*turn 2 [\s\S]*heard: \(Tide: you judged their code without running it/)
+    // An answer to a code question counts too, marker or not
+    const ask = { role: 'assistant' as const, content: 'Write add(a, b). <ask type="code">Your code</ask>' }
+    const answered = await say([{ role: 'user', content: 'start' }, ask, { role: 'user', content: 'def add(a, b): return a + b [runs] [tail]' }], { labId: 'lesson:run3', codeLesson: { file: 'exercise-1.py' } })
+    expect(answered).toContain(shared.RUN_FIRST_NOTE)
+    // An ordinary message isn't sent back, and a lesson without code is as before
+    const plain = await say([{ role: 'user', content: 'teach me closures' }], { labId: 'lesson:run4', codeLesson: { file: 'exercise-1.py' } })
+    expect(plain).not.toContain('turn 2')
+    const other = await say([{ role: 'user', content: 'can you check my essay [tail]' }], { labId: 'lesson:run5' })
+    expect(other).not.toContain(shared.RUN_FIRST_NOTE)
+    expect(other).not.toContain('turn 2')
+  })
+
+  it('knows a request to run or check the code from an ordinary message', () => {
+    for (const t of ['run it', 'can you check this?', 'review my solution', 'does my code work', 'why does this fail', 'what’s wrong with it', "what's wrong"]) expect(shared.asksToRunCode(t), t).toBe(true)
+    for (const t of ['teach me closures', 'test me on loops', 'go on', 'what is a decorator']) expect(shared.asksToRunCode(t), t).toBe(false)
   })
 
   it('keeps the rules short, for the prompt cache, and leaves what Gemma is told alone', () => {
