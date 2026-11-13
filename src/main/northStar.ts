@@ -100,6 +100,10 @@ export interface NorthStarStore {
   stageSince?: number
   /** The goal note as last planned from (a hash): a difference is the learner's edit */
   goalHash?: string
+  /** Dated milestones, parsed from the goal note's milestone sections (shared/milestone) */
+  milestones?: import('@shared/milestone').Milestone[]
+  /** Readiness readings, one a day (shared/milestone projectReadiness) */
+  readings?: import('@shared/milestone').ReadingPoint[]
   createdAt: number
 }
 
@@ -117,7 +121,7 @@ export async function loadStore(): Promise<NorthStarStore | null> {
 }
 
 /** One change to the store at a time, read fresh */
-function update(fn: (s: NorthStarStore) => NorthStarStore): Promise<NorthStarStore> {
+export function update(fn: (s: NorthStarStore) => NorthStarStore): Promise<NorthStarStore> {
   const run = queue.then(async () => {
     const cur = await loadStore()
     if (!cur) throw new Error('There is no North Star yet.')
@@ -250,8 +254,12 @@ export const resetNorthStar = () => {
 export async function trackScope(track: string): Promise<{ scope: string[]; stage: number; title: string } | null> {
   const ns = await activeNorthStar()
   if (!ns) return null
-  const scope = scopeOf(ns, track, ns.current)
-  if (!scope) return null
+  const staged = scopeOf(ns, track, ns.current)
+  // A dated milestone pulls the headings its bar needs forward, before their stage (main/milestone)
+  const pulled = await import('./milestone').then((m) => m.milestoneSections(track)).catch(() => [] as string[])
+  if (!staged && !pulled.length) return null
+  const scope = [...(staged ?? [])]
+  for (const h of pulled) if (!scope.some((x) => bare(x) === bare(h))) scope.push(h)
   return { scope, stage: ns.current, title: ns.stages.find((s) => s.n === ns.current)?.title ?? '' }
 }
 
@@ -385,7 +393,7 @@ async function minutesByTrack(tracks: string[]): Promise<Record<string, number>>
 
 // ---------- Progress ----------
 
-async function capstoneState(store: NorthStarStore | null, n: number): Promise<StageProgress['capstone']> {
+export async function capstoneState(store: NorthStarStore | null, n: number): Promise<StageProgress['capstone']> {
   const cap = store?.capstones[String(n)]
   if (!cap) return 'none'
   const { readPlan } = await import('./ideaProjects')
@@ -533,7 +541,9 @@ export async function synthesise(input: { goal: string; hoursPerWeek?: number })
     const { groups } = await sharedGroups(cat.map((c) => c.name))
     const profile = await import('./learnerProfile').then((m) => m.profileDigest()).catch(() => '')
     const pace = paceOf(hoursPerWeek, await minutesByWeek())
-    const prompt = synthesisPrompt({ goal, ...(note ? { goalNote: note } : {}), today: today(), hoursPerWeek, ...(pace.measured ? { measuredHours: pace.hours } : {}), catalogue: cat, known: knownText(all), profile, shared: groups.slice(0, 40).map((g) => ({ topic: g.title, tracks: [...new Set(g.members.map((m) => m.track))] })) })
+    const { parseMilestones, milestoneText } = await import('@shared/milestone')
+    const milestones = parseMilestones(note).filter((m) => m.date >= today())
+    const prompt = synthesisPrompt({ ...(milestones.length ? { milestones: milestones.map((m) => milestoneText(m, today())).join('\n') } : {}), goal, ...(note ? { goalNote: note } : {}), today: today(), hoursPerWeek, ...(pace.measured ? { measuredHours: pace.hours } : {}), catalogue: cat, known: knownText(all), profile, shared: groups.slice(0, 40).map((g) => ({ topic: g.title, tracks: [...new Set(g.members.map((m) => m.track))] })) })
     let ns: NorthStar | null = null
     try {
       const out = await ask('northStar', prompt, SYNTH_SYSTEM)
@@ -598,7 +608,9 @@ export async function build(): Promise<{ notePath: string; wrote: string[]; trac
   const wrote: string[] = []
   if (!(await writeNew(d.notePath, d.note))) throw new Error(`${d.notePath} appeared meanwhile; nothing was written. Try again.`)
   wrote.push(d.notePath)
-  const store: NorthStarStore = { ...EMPTY, notePath: d.notePath, written: d.note, createdAt: Date.now(), stageSince: Date.now(), goalHash: hash(await goalNote()), lastReview: Date.now() }
+  const { parseMilestones } = await import('@shared/milestone')
+  const prevReadings = (await loadStore())?.readings
+  const store: NorthStarStore = { ...EMPTY, notePath: d.notePath, written: d.note, createdAt: Date.now(), stageSince: Date.now(), goalHash: hash(await goalNote()), lastReview: Date.now(), milestones: parseMilestones(await goalNote()), ...(prevReadings?.length ? { readings: prevReadings } : {}) }
   // An earlier record is kept beside it, never overwritten
   if (!(await writeNew(STORE, JSON.stringify(store, null, 1)))) {
     const prev = await readText(STORE).catch(() => '')
@@ -728,11 +740,16 @@ export async function review(force = false): Promise<NorthStarView | null> {
     const note = await readText(r.store.notePath).catch(() => r.store!.written)
     const goal = await goalNote()
     const goalEdited = !!r.store.goalHash && hash(goal) !== r.store.goalHash
+    // The milestones are read again from the note, and readiness is part of the check
+    const mm = await import('./milestone')
+    await mm.syncMilestones().catch(() => [])
+    mm.resetMilestone()
+    const milestone = await mm.milestoneLine().catch(() => '')
     let summary = ''
     let proposals: Proposal[] = []
     let by: NorthStarStore['reviewBy'] = 'tide'
     try {
-      const out = await ask('northStarReview', reviewPrompt({ note, today: today(), progress: p, minutes, pace: pace.hours, edited: r.edited, rejected, ...(goal ? { goalNote: goal, goalEdited } : {}) }), REVIEW_SYSTEM)
+      const out = await ask('northStarReview', reviewPrompt({ note, today: today(), progress: p, minutes, pace: pace.hours, edited: r.edited, rejected, ...(goal ? { goalNote: goal, goalEdited } : {}), ...(milestone ? { milestone } : {}) }), REVIEW_SYSTEM)
       const { extractJsonObject } = await import('./ai')
       const parsed = parseProposals(extractJsonObject(out.text), r.ns, g.cat)
       summary = parsed.summary
@@ -779,6 +796,8 @@ export interface NorthStarView {
   proposals: Proposal[]
   review?: { at: number; summary?: string; by?: string }
   capstone?: { notebook: string; title: string }
+  /** The dated milestone: countdown, readiness and its projection, the gates */
+  milestone?: import('./milestone').MilestoneState
 }
 
 export async function view(): Promise<NorthStarView | null> {
@@ -807,7 +826,14 @@ export async function view(): Promise<NorthStarView | null> {
     shared: { groups: g.groups.length, saved: hoursSaved(g.groups), top: ns.shared.slice(0, 12) },
     proposals: r.store.proposals,
     ...(r.store.lastReview ? { review: { at: r.store.lastReview, summary: r.store.reviewSummary, by: r.store.reviewBy } } : {}),
-    ...(r.store.capstones[String(ns.current)] ? { capstone: r.store.capstones[String(ns.current)] } : {})
+    ...(r.store.capstones[String(ns.current)] ? { capstone: r.store.capstones[String(ns.current)] } : {}),
+    ...(await import('./milestone')
+      .then(async (m) => {
+        if (!r.store!.milestones) await m.syncMilestones()
+        const st = await m.milestoneState()
+        return st ? { milestone: st } : {}
+      })
+      .catch(() => ({})))
   }
 }
 

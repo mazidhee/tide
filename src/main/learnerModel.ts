@@ -47,7 +47,8 @@ async function goalsIn(): Promise<ModelGoal[]> {
   const out: ModelGoal[] = []
   try {
     const [{ snapshot }, { getNotebooks }] = await Promise.all([import('./goals'), import('./learn')])
-    const s = await snapshot()
+    // The goals only: the milestone's weighing reads this model, so it isn't asked for here
+    const s = await snapshot({ shape: false })
     const notebooks = await getNotebooks().catch(() => [])
     const nameOf = (ref: string) => notebooks.find((n) => n.path === ref || n.name === ref)?.name ?? ref.split('/').pop() ?? ref
     for (const g of s.goals) {

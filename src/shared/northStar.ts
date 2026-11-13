@@ -95,6 +95,8 @@ export interface Stage {
   capstone: { title: string; brief: string; joins: string[] }
   /** What passing the stage means, in a line */
   gate: string
+  /** The dated milestones it serves (their titles), when a milestone's scope is in it */
+  serves?: string[]
 }
 
 export interface NorthStar {
@@ -323,7 +325,8 @@ export function parseSynthesis(raw: unknown, catalogue: CatalogueTrack[], o: { t
       deep,
       synergies: strs(s.synergies, 5, 280),
       capstone: { title: str(cap.title, 120) || `A project joining ${kept.map((t) => t.track).join(' and ')}`, brief: str(cap.brief, 500), joins: joins.length >= 2 ? joins : kept.slice(0, 3).map((t) => t.track) },
-      gate: str(s.gate, 300)
+      gate: str(s.gate, 300),
+      ...(strs(s.serves, 3, 120).length ? { serves: strs(s.serves, 3, 120) } : {})
     })
   })
   if (!stages.length) return null
@@ -378,6 +381,8 @@ export interface SynthInput {
   shared: { topic: string; tracks: string[] }[]
   /** Their own note on their goal and interests: the primary input, in their words */
   goalNote?: string
+  /** Dated milestones parsed from the note (shared/milestone milestoneText), already as lines */
+  milestones?: string
 }
 
 export function synthesisPrompt(i: SynthInput): string {
@@ -413,7 +418,17 @@ ${tracks}
 
 ## Topics several roadmaps share (found by matching titles)
 ${shared}
+${i.milestones ? `
+## Dated milestones (plan with them, alongside the long-term path)
+${i.milestones}
 
+Keep the foundation-first outline: foundations still come first and go deep. Within it, order the year so the foundations the milestone's interviews test come first and are learned deeply:
+- Data structures and algorithms, C++ from zero (memory, ownership, the standard library), operating systems and concurrency, and networking come early, in the first stages.
+- Probability and brainteasers stay warm throughout for quant rounds; SQL early enough for data roles; system design basics before the date.
+- Languages are topics like any other: no fixed order between them. Place each where what depends on it and the milestone's bar put it, with prerequisites from the roadmaps.
+- Tracks the milestone doesn't test (for example payments, blockchain, economics) get no new material before the milestone's date: put their stages after it. Their learned flashcards keep their reviews.
+- Give each stage that carries milestone scope "serves": ["the milestone's title"].
+` : ''}
 ## What to build
 1. One integrated goal statement in their terms (2–4 sentences): where all of this is heading.
 2. A master map: a DAG of stages. Shared foundations first and reused everywhere: maths (linear algebra, calculus, optimisation), probability and statistics, programming and software engineering, computer systems. Then branches that converge, for example: risk ↔ data science ↔ ML; backend and infrastructure ↔ ML engineering; quant ↔ ML ↔ computational economics; payments and blockchain ↔ backend and distributed systems. The final stage is research: reading papers, reproducing results, writing a paper.
@@ -435,7 +450,7 @@ Use the track names exactly as written above. Return ONLY JSON:
    "deep": [{"topic": "Linear algebra", "depth": 5}],
    "synergies": ["…"],
    "capstone": {"title": "…", "brief": "2–3 sentences: what to build and what it proves", "joins": ["track", "track"]},
-   "gate": "…"}],
+   "gate": "…"${i.milestones ? ', "serves": ["milestone title"]' : ''}}],
  "timeline": {"summary": "the honest estimate and why, 3–5 sentences", "cracked": "what it realistically requires, 2–4 sentences", "compress": ["how it was made faster", "…"]},
  "shared": [{"topic": "…", "tracks": ["…", "…"]}]}`
 }
@@ -609,6 +624,7 @@ export function toNote(ns: NorthStar, o: { estimates?: Record<number, string>; t
     for (const x of s.synergies) L.push(`- Synergy: ${x}`)
     L.push(`- Capstone: ${s.capstone.title}${s.capstone.brief ? ` — ${s.capstone.brief}` : ''} (joins ${s.capstone.joins.join(', ')})`)
     if (s.gate) L.push(`- Gate: ${s.gate}`)
+    if (s.serves?.length) L.push(`- Serves: ${s.serves.join('; ')}`)
     if (o.estimates?.[s.n]) L.push(`- Estimate: ${o.estimates[s.n]}`)
     L.push('')
   }
@@ -673,7 +689,8 @@ function parseStage(n: number, title: string, lines: string[]): Stage {
     deep,
     synergies: all('synergy'),
     capstone: { title: (capTitle ?? '').trim(), brief: capRest.join(' — ').trim(), joins: joinsM ? joinsM[1].split(/\s*,\s*/).filter(Boolean) : [] },
-    gate: get('gate') ?? ''
+    gate: get('gate') ?? '',
+    ...(get('serves') ? { serves: get('serves')!.split(/\s*;\s*/).filter(Boolean) } : {})
   }
 }
 
@@ -1183,7 +1200,7 @@ export function applyProposal(ns: NorthStar, p: Proposal, today: string): NorthS
 export const REVIEW_SYSTEM =
   'You are the learner’s mentor, checking their North Star once a week. You propose only small, concrete changes that their progress justifies, and you propose nothing when nothing needs to change. You answer with JSON only.'
 
-export function reviewPrompt(o: { note: string; today: string; progress: StageProgress; minutes: Record<string, number>; pace: number; edited: boolean; rejected: string[]; goalNote?: string; goalEdited?: boolean }): string {
+export function reviewPrompt(o: { note: string; today: string; progress: StageProgress; minutes: Record<string, number>; pace: number; edited: boolean; rejected: string[]; goalNote?: string; goalEdited?: boolean; milestone?: string }): string {
   const p = o.progress
   return `Today is ${o.today}.${o.goalNote ? `
 
@@ -1201,7 +1218,7 @@ ${p.tracks.map((t) => `- ${t.track}: ${t.solid}/${t.total} solid, ${t.shaky} sha
 ${p.deep.map((d) => `- Key topic ${d.topic}: depth ${d.reached} of ${d.target}`).join('\n')}
 - Capstone: ${p.capstone}
 - Pace: about ${o.pace} h a week.
-${o.rejected.length ? `\nThey rejected these before; don't propose them again:\n${o.rejected.map((r) => `- ${r}`).join('\n')}\n` : ''}
+${o.milestone ? `\n## The dated milestone and readiness (an estimate from Sharpness, mocks, depth and gates)\n${o.milestone}\nIf readiness is behind the trajectory, a change that brings milestone scope forward within the foundation-first order is justified; if ahead, nothing needs to move for it.\n` : ''}${o.rejected.length ? `\nThey rejected these before; don't propose them again:\n${o.rejected.map((r) => `- ${r}`).join('\n')}\n` : ''}
 Propose at most 3 small changes, only where progress or their edits justify one. Kinds:
 - {"kind": "advance", "to": <stage n>} only when the stage's gate is really met
 - {"kind": "weights", "stage": n, "weights": {"Track": percent, ...}} to rebalance a stage's tracks (each at least 15)

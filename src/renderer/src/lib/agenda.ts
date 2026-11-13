@@ -104,7 +104,7 @@ export function openAgendaItem(app: ReturnType<typeof useApp>, it: AgendaItem, a
     else app.setView({ kind: 'session', mode: 'teach', scope, topic, options: { why: whyByDefault(app.settings.whyMode, topic, it.topicId) }, nonce: Date.now() })
   } else if (it.kind === 'quiz') app.setView({ kind: 'session', mode: 'quiz', scope, topic, options: { length: 6 }, nonce: Date.now() })
   else if (it.kind === 'review') app.setView({ kind: 'study', scope })
-  else if (it.kind === 'practice') app.setView({ kind: 'practice' })
+  else if (it.kind === 'practice') app.setView(it.sharp ? { kind: 'sharp', category: it.sharp, nonce: Date.now() } : { kind: 'practice' })
   else if (it.kind === 'project') it.path ? app.setView({ kind: 'notebook', path: it.path, tab: 'project' }) : app.setView({ kind: 'practice' })
   else if (it.kind === 'mock') app.setView({ kind: 'mock', mode: it.mode ?? 'coding', nonce: Date.now() })
   else if (it.kind === 'workout') app.setView({ kind: 'workout' })

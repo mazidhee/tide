@@ -553,12 +553,15 @@ export async function runMonthly(date = localDate(), o: { overdueDays?: number }
   }
   const ns = await northStarText()
   const bench = await benchmarks()
+  // The dated milestone: readiness now, projected to the date (an estimate), and whether it's on pace
+  const milestone = await import('./milestone').then((m) => m.milestoneLine()).catch(() => '')
   const log = await readText(LOG_NOTE).catch(() => '')
   const weeks = log.split(/^(?=## )/m).filter((x) => /· The week/.test(x)).slice(0, 4).join('\n').slice(0, 3000)
   const prompt = [
     await goalLine(),
     ns.text,
     bench || 'No external ratings yet (Sharpness keeps them once its problems are rated): say so plainly, don\'t invent any.',
+    milestone ? `The dated milestone (numbers from code, an estimate; quote them, don't recompute):\n${milestone}` : '',
     weeks ? `Your last weekly entries:\n${weeks}` : '',
     `This is the monthly strategy check against North Star. Use learner_model (digest, weakest for "North Star", fading, transfer_gaps) for the evidence: at most six calls. Be honest: if the pace is behind the estimate or depth is thin, say it with numbers.
 Answer with JSON only:
@@ -569,12 +572,15 @@ Answer with JSON only:
   const r = await ask('coachMonthly', prompt, COACH_SYSTEM, gate)
   const json = r ? await parseJson(r.text) : null
   let lines = json ? linesOf(json.report, 6) : []
+  // The milestone's projection always leads, in code's own numbers
+  const pace = milestonePace(milestone)
+  if (pace) lines = [pace, ...lines.filter((l) => l !== pace)].slice(0, 7)
   if (json && Array.isArray(json.proposals) && json.proposals.length) {
     const fresh = await import('./northStar').then((m) => m.coachProposals(json.proposals, String(json.summary ?? ''), r!.by)).catch(() => [])
     if (fresh.length) lines.push(`Proposed for your North Star (waiting for you): ${fresh.map((p) => p.text).join('; ')}.`)
   }
   if (json?.beliefs) await writeBeliefs(json.beliefs, date).catch(() => null)
-  if (!lines.length) lines = [ns.text.split('\n')[0], bench || 'No external ratings yet.', 'Written from the numbers, without a model.']
+  if (!lines.length || (pace && lines.length === 1)) lines = [...(pace ? [pace] : []), ns.text.split('\n')[0], bench || 'No external ratings yet.', 'Written from the numbers, without a model.']
   const rec = await record('monthly', date, r, gate)
   await writeLog({ kind: 'monthly', date, lines, by: json ? byLine(r, gate) : byLine(null, gate), cost: r?.usage ? costWords(rec.usd, rec.tokens) : undefined })
   return { kind: 'monthly', ran: true, lines, record: rec }
@@ -644,3 +650,14 @@ export const _reset = () => {
   queue = Promise.resolve()
 }
 export { emptyBeliefs }
+
+/** The milestone's pace line for the monthly report, from main/milestone milestoneLine: "Interview-ready …: readiness 31 (24–38), projected 70 by 2027-07-14 (estimate): behind pace" */
+export function milestonePace(text: string): string {
+  if (!text) return ''
+  const [head, ready, est] = text.split('\n')
+  const title = head.split(':')[0]
+  const r = ready?.match(/^Readiness (\d+) \((\d+)–(\d+)\)/)
+  const p = est?.match(/projected (\d+)/)
+  const status = est?.match(/: (ahead of pace|on pace|behind pace|too early to say[^.]*)\.?$/)?.[1] ?? ''
+  return `${title}: readiness ${r ? `${r[1]} (${r[2]}–${r[3]})` : '?'}${p ? `, projected ${p[1]} by the ready-by date (estimate)` : ''}${status ? `: ${status}` : ''}.`
+}
