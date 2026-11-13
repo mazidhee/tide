@@ -493,6 +493,9 @@ function registerIpc() {
   handle('coach:writeJournal', (date: string, text: string) => writeJournal(date, text))
   handle('coach:weekReview', (end?: string) => weekReview(end))
   handle('coach:saveReview', (end: string, r: { wentWell: string; inTheWay: string; change: string }) => saveReview(end, r))
+  // The proactive coach (main/proactiveCoach): today's note, the week's and month's, and a run on request
+  handle('coach:proactive', async () => (await import('./proactiveCoach')).coachView())
+  handle('coach:runCoach', async (kind: 'daily' | 'weekly' | 'monthly') => (await import('./proactiveCoach')).runNow(kind === 'weekly' || kind === 'monthly' ? kind : 'daily'))
   // Goals and the week mixed across them (main/goals)
   handle('portfolio:view', async () => (await import('./goals')).goalsView())
   handle('portfolio:add', async (g: { title: string; date?: string; weight?: import('@shared/goals').GoalWeight }) => (await import('./goals')).addGoal(g))
@@ -1044,6 +1047,8 @@ app.whenReady().then(() => {
   startBank()
   // Lesson prep while you're away, and the weekly review (main/lessonPrep)
   void import('./lessonPrep').then((p) => p.startPrep())
+  // The proactive coach: the daily look on the first open of the day, the weekly and monthly reviews when due
+  void import('./proactiveCoach').then((c) => c.startCoach())
   // The notes folder moved while Tide was closed or open: follow it, or ask where it went
   followVault(
     (path) => {

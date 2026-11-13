@@ -11,7 +11,7 @@ import { tmpdir } from 'os'
 import { join, relative } from 'path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
-const { data } = vi.hoisted(() => ({ data: { dir: '', planned: 0, prompts: [] as string[], reply: '' as string } }))
+const { data } = vi.hoisted(() => ({ data: { dir: '', planned: 0, prompts: [] as string[], reply: '' as string, targets: [] as { node: string; depth: number | null; goal?: string }[] } }))
 
 vi.mock('electron', () => ({ app: { getPath: () => data.dir, getAppPath: () => data.dir }, BrowserWindow: { getAllWindows: () => [] } }))
 vi.mock('../src/main/settings', () => ({ getSettings: () => ({ vaultPath: join(data.dir, 'vault'), ai: {} }) }))
@@ -25,6 +25,9 @@ vi.mock('../src/main/coach', () => ({
   planWeek: async () => void data.planned++
 }))
 vi.mock('../src/main/ai', () => ({ extractJsonObject: (t: string) => JSON.parse(t) }))
+// The learner model's side of North Star's depth targets (main/learnerModel setTargetsFrom), recorded
+vi.mock('../src/main/learnerModel', () => ({ setTargetsFrom: (by: string, list: { node: string; depth: number | null; goal?: string }[]) => (by === 'northstar' && data.targets.push(...list), list.length) }))
+vi.mock('../src/main/learningLog', () => ({ readTargets: () => data.targets.filter((t) => t.depth !== null).map((t) => ({ ...t, by: 'northstar', at: 0 })) }))
 vi.mock('../src/main/learn', async () => {
   const ns = await import('../src/main/northStar')
   return {
@@ -167,6 +170,11 @@ describe('Build my North Star', () => {
     // Ready roadmaps already in the vault are tracks without being copied; no folders were made
     expect(r.tracks.sort()).toEqual(['Data Science', 'Risk'])
     expect(readdirSync(vault()).sort()).toEqual(['.tide', 'Coach', 'Mathematics', 'Roadmaps', 'Tide'])
+    // Its key topics' depths reach the learner model as targets: stage 1's Linear Algebra at build (5)
+    expect(data.targets.map((t) => [t.node, t.depth, t.goal])).toEqual([
+      ['mathematics::abstraction and rigour > linear algebra::vectors and vector spaces', 5, 'north-star'],
+      ['mathematics::abstraction and rigour > linear algebra::eigenvalues and eigenvectors', 5, 'north-star']
+    ])
     // Started right away: the week was planned
     expect(r.week).toBe(true)
     expect(data.planned).toBe(1)

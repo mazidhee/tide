@@ -116,6 +116,8 @@ export interface AgendaItem {
   mixed?: boolean
   /** A session of a course's lessons (shared/coursePlan): the course, and the lessons in it, in order */
   course?: { id: string; title: string; lessons: { id: string; title: string; n: string; minutes: number }[] }
+  /** Set by the proactive coach (shared/proactiveCoach): what kind of intervention, why, and the concept it is about */
+  coach?: { kind: import('./proactiveCoach').InterventionKind; reason: string; at: number; id?: string }
 }
 
 export interface WeekPlan {
@@ -171,8 +173,9 @@ export function nextStudyDay(date: string, days: number[]): string {
  */
 export function moveUnfinished(plan: WeekPlan, from: string, to: string): { plan: WeekPlan; moved: AgendaItem[] } {
   const day = plan.days.find((d) => d.date === from)
-  const moved = (day?.items ?? []).filter((it) => !it.done).map((it) => ({ ...it, carried: true }))
-  if (!moved.length) return { plan, moved }
+  // The coach's interventions belong to their day (shared/proactiveCoach): dropped, not moved
+  const moved = (day?.items ?? []).filter((it) => !it.done && !it.coach).map((it) => ({ ...it, carried: true }))
+  if (!moved.length) return { plan: day?.items.some((it) => it.coach && !it.done) ? { ...plan, days: plan.days.map((d) => (d.date === from ? { ...d, items: d.items.filter((it) => it.done) } : d)) } : plan, moved }
   const end = plusDays(plan.weekStart, 6)
   const days = plan.days.map((d) => (d.date === from ? { ...d, items: d.items.filter((it) => it.done) } : d))
   if (to > end) return { plan: { ...plan, days, carry: [...(plan.carry ?? []), ...moved] }, moved }
@@ -191,7 +194,7 @@ export function catchUpPlan(plan: WeekPlan, today: string, studyDays: number[]):
   const isStudyDay = !studyDays.length || studyDays.includes(new Date(today + 'T12:00:00Z').getUTCDay())
   const to = isStudyDay ? today : nextStudyDay(today, studyDays)
   const past = [...plan.days].filter((d) => d.date < today).sort((x, y) => x.date.localeCompare(y.date))
-  const moved = past.flatMap((d) => d.items.filter((it) => !it.done).map((it) => ({ ...it, carried: true })))
+  const moved = past.flatMap((d) => d.items.filter((it) => !it.done && !it.coach).map((it) => ({ ...it, carried: true })))
   if (!moved.length) return { plan, moved, to }
   const days = plan.days.map((d) => (d.date < today ? { ...d, items: d.items.filter((it) => it.done) } : d))
   if (to > plusDays(plan.weekStart, 6)) return { plan: { ...plan, days, carry: [...(plan.carry ?? []), ...moved] }, moved, to }

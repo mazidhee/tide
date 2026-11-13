@@ -58,6 +58,7 @@ import './styles/breaks.css'
 import './styles/mocks.css'
 // The reading room, its reader and cover banners on notes
 import './styles/readingRoom.css'
+import './styles/coach.css'
 import { resolveDesign } from '@shared/design'
 import { AppProvider } from './state'
 import App from './App'

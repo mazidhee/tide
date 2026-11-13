@@ -1025,6 +1025,10 @@ export interface TideApi {
     writeJournal(date: string, text: string): Promise<JournalEntry>
     weekReview(end?: string): Promise<WeekReview>
     saveReview(end: string, r: { wentWell: string; inTheWay: string; change: string }): Promise<string>
+    /** The proactive coach: today's note, the latest weekly and monthly entries, today's interventions, the runs' cost */
+    proactive(): Promise<import('./proactiveCoach').CoachView>
+    /** Runs the coach now (the daily look, the weekly review or the monthly check) */
+    runCoach(kind: import('./proactiveCoach').RunKind): Promise<{ kind: import('./proactiveCoach').RunKind; ran: boolean; why?: string; lines: string[] }>
   }
   /** Goals and the week mixed across them (shared/goals, shared/portfolio, main/goals) */
   portfolio: {

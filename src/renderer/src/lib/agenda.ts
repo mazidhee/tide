@@ -38,6 +38,24 @@ export function openAgendaItem(app: ReturnType<typeof useApp>, it: AgendaItem, a
   remember(it, at)
   const scope = it.notebook ? ({ kind: 'folder', path: it.notebook } as const) : ({ kind: 'vault' } as const)
   const topic = it.topic ?? it.title
+  // The coach's interventions (shared/proactiveCoach): each opens the work its reason asks for
+  if (it.coach?.kind === 'transfer') {
+    app.setView({ kind: 'exam', scope, topic: `${topic}: one unseen problem that needs it in a new setting`, options: { questions: 1, minutes: it.minutes, difficulty: 'hard', style: 'problems' }, nonce: Date.now() })
+    return
+  }
+  if (it.coach?.kind === 'deeper') {
+    app.setView({ kind: 'session', mode: 'teach', scope, topic, options: { why: true }, nonce: Date.now() })
+    return
+  }
+  if (it.coach?.kind === 'post-mortem') {
+    const key = topic.toLowerCase()
+    void window.tide.mistakes
+      .list()
+      .then((all) => all.filter((m) => m.status !== 'fixed' && (m.topic.toLowerCase().includes(key) || key.includes(m.topic.toLowerCase()))).slice(0, 6))
+      .then((mine) => (mine.length ? startRetest(app, mine) : app.setView({ kind: 'session', mode: 'quiz', scope, topic, options: { length: 5, difficulty: 'hard' }, nonce: Date.now() })))
+      .catch(() => app.setView({ kind: 'session', mode: 'quiz', scope, topic, options: { length: 5 }, nonce: Date.now() }))
+    return
+  }
   if (it.kind === 'check' && it.check) {
     app.setView({ kind: 'session', mode: 'quiz', scope, topic: checkTopic(it.title), options: { placement: it.check, length: 6 }, nonce: Date.now() })
     return
