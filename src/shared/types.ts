@@ -1227,6 +1227,19 @@ export interface TideApi {
     dismiss(id: string): Promise<void>
     onFresh(cb: (e: { running: boolean; steps: import('../main/courseFresh').FreshStatus['steps'] }) => void): () => void
   }
+  /** Courses in the plan, and quizzes from the course you're taking (main/coursePlan, main/courseQuiz) */
+  coursePlan: {
+    /** This week's course(s) from the plan: the lessons, why, how far along */
+    thisWeek(): Promise<import('../main/coursePlan').CourseWeekView[]>
+    /** Every imported course aligned to your roadmaps (Haiku once each, kept) */
+    alignAll(): Promise<import('./coursePlan').CourseAlignment[]>
+    /** Writes a check (one lesson, three questions) or a quiz (what you studied) from the course's own passages */
+    startQuiz(input: { course: string; lessons?: string[]; kind?: 'check' | 'quiz'; size?: number }): Promise<import('../main/courseQuiz').QuizStart>
+    /** Marked by Opus; `needsSelf` when no model could, to be sent again with your own marks */
+    submitQuiz(id: string, answers: Record<string, string>, selfMarks?: Record<string, 'correct' | 'partial' | 'wrong'>): Promise<import('../main/courseQuiz').QuizResult>
+    /** The last check on a lesson, if it was checked */
+    checked(course: string, lesson: string): Promise<{ score: number; total: number; passed: boolean; at: number } | null>
+  }
   /** Links that stay in Tide (shared/links) */
   links: {
     courseFile(id: string, path: string): Promise<import('../main/courseFiles').RepoFileView | null>

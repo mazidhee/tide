@@ -101,7 +101,7 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
   )
 
   if (tide) {
-    const KIND_ICON = { learn: 'tutor', practice: 'terminal', quiz: 'quiz', review: 'cards', 'take-home': 'note', test: 'timer', check: 'quiz', project: 'branch', mock: 'subInterview', workout: 'gauge', read: 'book' } as const
+    const KIND_ICON = { learn: 'tutor', practice: 'terminal', quiz: 'quiz', review: 'cards', 'take-home': 'note', test: 'timer', check: 'quiz', project: 'branch', mock: 'subInterview', workout: 'gauge', read: 'book', course: 'course' } as const
     const line = (s: DaySlot) => {
       const canOpen = !!s.plan || !!s.task?.link || !!s.task?.url
       const minutes = s.plan?.item.minutes
@@ -113,7 +113,7 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
           </button>
           <button className="td-row-what" onClick={() => open(s)} disabled={!canOpen} title={s.task && !s.plan && !s.task.link ? 'Open in Things' : undefined}>
             <b>{s.title}</b>
-            <span>{s.plan?.item.why ?? s.task?.where ?? s.meta.replace(/ · /g, ', ')}</span>
+            <span>{s.plan?.item.course ? s.plan.item.course.lessons.map((l) => `${l.n} ${l.title}`).join(' · ') : (s.plan?.item.why ?? s.task?.where ?? s.meta.replace(/ · /g, ', '))}</span>
           </button>
           {canOpen && !s.done ? (
             <button className="btn small td-row-go" onClick={() => open(s)}>

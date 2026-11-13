@@ -73,7 +73,7 @@ function render() {
   tray.setTitle(title, { fontType: 'monospacedDigit' })
 }
 
-const AGENDA_VERB: Record<AgendaItem['kind'], string> = { learn: 'Learn', practice: 'Practise', quiz: 'Quiz', review: 'Review', 'take-home': 'Take-home', test: 'Test', check: 'Check', project: 'Build', mock: 'Mock', workout: 'Workout', read: 'Read' }
+const AGENDA_VERB: Record<AgendaItem['kind'], string> = { learn: 'Learn', practice: 'Practise', quiz: 'Quiz', review: 'Review', 'take-home': 'Take-home', test: 'Test', check: 'Check', project: 'Build', mock: 'Mock', workout: 'Workout', read: 'Read', course: 'Study' }
 
 async function buildMenu(): Promise<Menu> {
   const s = latest()

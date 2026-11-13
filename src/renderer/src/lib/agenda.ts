@@ -42,6 +42,15 @@ export function openAgendaItem(app: ReturnType<typeof useApp>, it: AgendaItem, a
     app.setView({ kind: 'session', mode: 'quiz', scope, topic: checkTopic(it.title), options: { placement: it.check, length: 6 }, nonce: Date.now() })
     return
   }
+  // A session of the course you're taking: its first lesson not yet done, in the course room
+  if (it.kind === 'course' && it.course) {
+    const c = it.course
+    void window.tide.courses
+      .get(c.id)
+      .then((d) => app.setView({ kind: 'courses', id: c.id, lesson: (c.lessons.find((l) => !d?.progress[l.id]?.done) ?? c.lessons[0])?.id }))
+      .catch(() => app.setView({ kind: 'courses', id: c.id, lesson: c.lessons[0]?.id }))
+    return
+  }
   // Roadmap continuity (shared/track): the week's mixed review, a phase's firm-up, check or capstone
   if (it.mixed) {
     void window.tide.track.mixedReview().then((r) => {

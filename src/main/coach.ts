@@ -414,7 +414,7 @@ export async function profilePrompt(): Promise<string> {
   return `${name ? `${name}\n` : ''}${aim ? `Where this learner is heading: ${aim}\n` : ''}${d}${adapt}`.trim()
 }
 
-const LINK_LABEL: Partial<Record<AgendaItem['kind'], string>> = { learn: 'Learn it in Tide', quiz: 'Quiz me in Tide', review: 'Review in Tide', test: 'Sit it in Tide', 'take-home': 'Open in Tide', practice: 'Open Practice in Tide', project: 'Open the project in Tide', mock: 'Start the mock in Tide', workout: 'Open the workout in Tide', read: 'Read it in Tide' }
+const LINK_LABEL: Partial<Record<AgendaItem['kind'], string>> = { learn: 'Learn it in Tide', quiz: 'Quiz me in Tide', review: 'Review in Tide', test: 'Sit it in Tide', 'take-home': 'Open in Tide', practice: 'Open Practice in Tide', project: 'Open the project in Tide', mock: 'Start the mock in Tide', workout: 'Open the workout in Tide', read: 'Read it in Tide', course: 'Open the lessons in Tide' }
 
 /** The week as one Things 4 project: a heading per day, each item a dated to-do with a brief and a link */
 export async function weekToThings(date = today()): Promise<{ project: string; todos: number }> {
@@ -435,7 +435,7 @@ export async function weekToThings(date = today()): Promise<{ project: string; t
           ? buildLink({ to: 'open', path: it.path })
           : it.kind === 'mock' || it.kind === 'workout'
           ? buildLink({ to: 'practice', tab: it.kind === 'mock' ? `mock:${it.mode ?? 'coding'}` : 'workout' })
-          : it.kind === 'check' || it.refresh
+          : it.kind === 'check' || it.kind === 'course' || it.refresh
           ? buildLink({ to: 'agenda', date: d.date, index })
           : it.kind === 'learn' || it.kind === 'review'
           ? buildLink({ to: 'session', mode: 'teach', topic: it.topic ?? it.title, scope })
@@ -444,13 +444,14 @@ export async function weekToThings(date = today()): Promise<{ project: string; t
             : it.kind === 'test' || it.kind === 'take-home'
               ? buildLink({ to: 'exam', topic: it.title, scope, style: it.kind === 'take-home' ? 'problems' : 'university', questions: it.kind === 'take-home' ? 1 : 4, minutes: it.minutes })
               : buildLink({ to: 'practice' })
+      const lessons = it.course?.lessons.length ? `\n\n**Lessons:**\n${it.course.lessons.map((l) => `- ${l.n} ${l.title} (about ${l.minutes} min)`).join('\n')}` : ''
       const reading = it.readings?.length ? `\n\n**Read:**\n${it.readings.map((r) => `- ${r.url ? `[${r.title}](${r.url})` : r.title}${r.by ? `, ${r.by}` : ''}`).join('\n')}` : ''
       return {
         title: thingsTitle(it),
         when: d.date,
         deadline: d.date,
         tags: [it.kind],
-        notes: `${it.why ? `${it.why}\n\n` : ''}About ${it.minutes} minutes.${reading}\n\n[${LINK_LABEL[it.kind] ?? 'Open in Tide'}](${url})`
+        notes: `${it.why ? `${it.why}\n\n` : ''}About ${it.minutes} minutes.${lessons}${reading}\n\n[${LINK_LABEL[it.kind] ?? 'Open in Tide'}](${url})`
       }
     })
   }))
@@ -471,6 +472,8 @@ export async function setItemDone(date: string, index: number, done: boolean): P
   item.done = done
   await savePlan(plan)
   if (item.kind === 'learn' && item.notebook && item.topicId) await tickTopic(item.notebook, item.topicId, done).catch(() => {})
+  // A course's lessons are marked read with it (reading ticks no roadmap topic: that takes an answer)
+  if (item.kind === 'course') await import('./coursePlan').then((m) => m.tickCourseItem(item, done)).catch(() => {})
   const todo = await thingsTodo(plan, item).catch(() => null)
   if (todo) await updateTask(todo, { completed: done }).catch(() => {})
   return plan
@@ -595,8 +598,12 @@ export async function syncDone(date = today()): Promise<WeekPlan | null> {
   const project = await getProject(plan.thingsProject).catch(() => null)
   const completed = new Set((project?.['to-dos'] ?? []).filter((t) => t.status === 'completed').map((t) => t.title))
   let changed = false
+  const before = structuredClone(plan)
   for (const d of plan.days) for (const it of d.items) if (!it.done && completed.has(thingsTitle(it))) changed = it.done = true
-  if (changed) await savePlan(plan)
+  if (changed) {
+    await savePlan(plan)
+    await import('./coursePlan').then((m) => m.syncTicked(before, plan)).catch(() => {})
+  }
   return plan
 }
 

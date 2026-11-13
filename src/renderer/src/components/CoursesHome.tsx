@@ -11,6 +11,8 @@ import { coursePlace, glyphFor, subjectShelves, subjectsOf, timeLeft, type Cours
 import { parseOutline } from '@shared/outline'
 import { Icon } from './Icon'
 import { CourseArt } from './CourseArt'
+import { useWeekCourses } from './CourseWeek'
+import { aboutTime, phaseWord } from '@shared/coursePlan'
 
 const sourceLabel = (c: CourseCard) => SOURCES[sourceOf(c)].label
 const levelLabel = (l: CourseCard['level']) => l.charAt(0).toUpperCase() + l.slice(1)
@@ -96,8 +98,10 @@ export function CoursesHome({
   onBrowse(subject: SubjectId | 'all'): void
   finishedList: ReactNode
 }) {
-  const hero = continuing[0] ?? null
-  const others = continuing.slice(1)
+  // This week's course from the plan leads, when the plan has one (main/coursePlan); else the course you're in
+  const planned = useWeekCourses(cards.length)?.find((w) => cards.some((c) => c.id === w.course && c.imported)) ?? null
+  const hero = (planned && cards.find((c) => c.id === planned.course)) || continuing[0] || null
+  const others = continuing.filter((c) => c.id !== hero?.id)
   const [place, setPlace] = useState<CoursePlace | null>(null)
   const [showFinished, setShowFinished] = useState(false)
   useEffect(() => {
@@ -116,7 +120,7 @@ export function CoursesHome({
   const shelvesBySubject = useMemo(() => subjectShelves(cards), [cards])
   const newNames = suggested.slice(0, 2).map((c) => c.title)
 
-  const heroNext = place?.next ?? (hero?.imported?.next ? { id: hero.imported.next.id, title: hero.imported.next.title } : null)
+  const heroNext = planned?.next ? { id: planned.next.id, title: `${planned.next.n} ${planned.next.title}` } : (place?.next ?? (hero?.imported?.next ? { id: hero.imported.next.id, title: hero.imported.next.title } : null))
   const action = (c: CourseCard, label: string, primary = false) => {
     const b = busy(c)
     if (b)
@@ -140,27 +144,37 @@ export function CoursesHome({
           <section className="crh-now" aria-label="Continue">
             <CourseCover course={hero} size="hero" />
             <div className="crh-now-body">
-              <span className="crh-kicker">Continue</span>
+              <span className="crh-kicker">{planned ? 'This week’s course' : 'Continue'}</span>
               <button className="crh-now-title" onClick={() => onOpen(hero)} title="Open the course outline">
                 {hero.title}
               </button>
               <span className="crh-now-where">
-                {place ? `Module ${place.module} of ${place.modules} · ${place.moduleTitle}${place.minutesLeft ? ` · ${timeLeft(place.minutesLeft)} left in this module` : ''}` : `${hero.imported!.done} of ${hero.imported!.lessons} lessons`}
+                {planned
+                  ? `${planned.modules ? `${planned.modules.charAt(0).toUpperCase()}${planned.modules.slice(1)} · ` : ''}${planned.lessons.length === 1 ? 'lesson' : 'lessons'} ${planned.range} · ${aboutTime(planned.minutes)}${planned.done.length ? ` · ${planned.done.length} of ${planned.lessons.length} done` : ''}`
+                  : place
+                    ? `Module ${place.module} of ${place.modules} · ${place.moduleTitle}${place.minutesLeft ? ` · ${timeLeft(place.minutesLeft)} left in this module` : ''}`
+                    : `${hero.imported!.done} of ${hero.imported!.lessons} lessons`}
               </span>
+              {planned && <p className="crh-plan-why">Because it covers {phaseWord(planned.phaseTitle)}, the phase you’re in on {planned.notebook}. {planned.why.replace(/^It covers [^.]*\.\s*/, '')}</p>}
               {heroNext && (
                 <button className="crh-next" onClick={() => onOpen(hero, heroNext.id)}>
-                  <span className="crh-next-label">{hero.imported!.done ? 'Next lesson' : 'First lesson'}</span>
+                  <span className="crh-next-label">{planned ? (planned.done.length ? 'Next this week' : 'First this week') : hero.imported!.done ? 'Next lesson' : 'First lesson'}</span>
                   <span className="crh-next-title">{heroNext.title}</span>
                 </button>
               )}
               <div className="crh-now-progress">
-                <Progress done={hero.imported!.done} total={hero.imported!.lessons} />
-                <span className="crs-meta">
-                  {hero.imported!.done} of {hero.imported!.lessons}
-                </span>
+                <Progress done={planned ? planned.done.length : hero.imported!.done} total={planned ? planned.lessons.length : hero.imported!.lessons} />
+                <span className="crs-meta">{planned ? `${planned.done.length} of ${planned.lessons.length} this week · ${hero.imported!.done} of ${hero.imported!.lessons} in all` : `${hero.imported!.done} of ${hero.imported!.lessons}`}</span>
               </div>
               <div className="crh-now-acts">
-                {action(hero, hero.imported!.done ? 'Resume' : 'Start', true)}
+                {planned && heroNext ? (
+                  <button className="btn primary crh-act" onClick={() => onOpen(hero, heroNext.id)}>
+                    <Icon name="play" size={11} />
+                    {planned.done.length || hero.imported!.done ? 'Resume' : 'Start'}
+                  </button>
+                ) : (
+                  action(hero, hero.imported!.done ? 'Resume' : 'Start', true)
+                )}
                 <button className="btn crh-act" onClick={() => onOpen(hero)}>
                   Course outline
                 </button>

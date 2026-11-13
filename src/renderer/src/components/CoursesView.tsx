@@ -25,6 +25,7 @@ import { clearScreen, setScreen } from '../lib/onScreen'
 import type { OnScreen } from '@shared/onScreen'
 import { LinkPage, ViewerBar, targetTitle, useSectionInView } from './LinkViewer'
 import { CoursesHome } from './CoursesHome'
+import { CourseQuiz } from './CourseQuiz'
 
 
 const KIND_LABEL: Record<CatalogueCourse['kind'], string> = { course: 'Course', book: 'Book', notes: 'Notes', projects: 'Projects', guide: 'Guide' }
@@ -756,6 +757,30 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
     }
   }, [content, currentId, page, id])
 
+  // [courseplan] A short check from the lesson once it's finished (optional, one tap), and Quiz me from the course
+  const [quiz, setQuiz] = useState<'check' | 'quiz' | null>(null)
+  const [checked, setChecked] = useState<{ score: number; total: number; passed: boolean } | null | undefined>(undefined)
+  useEffect(() => {
+    setQuiz(null)
+    setChecked(undefined)
+    if (!imported || !currentId) return
+    let live = true
+    window.tide.coursePlan
+      .checked(id, currentId)
+      .then((c) => live && setChecked(c))
+      .catch(() => live && setChecked(null))
+    return () => {
+      live = false
+    }
+    // On whether it's imported, not the object: progress saved as you read replaces it
+  }, [!!imported, id, currentId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const on = () => imported && currentId && setQuiz('quiz')
+    window.addEventListener('tide:course-quiz', on)
+    return () => window.removeEventListener('tide:course-quiz', on)
+  }, [!!imported, currentId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const finished = !!currentId && (!!progress[currentId]?.done || (progress[currentId]?.read ?? 0) >= 0.9)
+
   const act = async (kind: NonNullable<typeof busy>, f: () => Promise<unknown>) => {
     setBusy(kind)
     try {
@@ -860,7 +885,15 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
                     <button className="btn primary" onClick={() => void learnLesson(app, c, here.m, here.l)}>
                       <Icon name="tutor" size={14} /> {progress[here.l.id]?.record && !isDone ? 'Carry on with the tutor' : 'Learn this with the tutor'}
                     </button>
-                    <button className={`tool-btn${isDone ? ' on' : ''}`} onClick={() => window.tide.courses.mark(id, here.l.id, !isDone).then((p) => setD((x) => (x ? { ...x, progress: p } : x)))}>
+                    <button
+                      className={`tool-btn${isDone ? ' on' : ''}`}
+                      onClick={() =>
+                        window.tide.courses.mark(id, here.l.id, !isDone).then((p) => {
+                          setD((x) => (x ? { ...x, progress: p } : x))
+                          if (!isDone && checked === null) app.toast('Lesson done. Three questions to check it?', { action: { label: 'Check me', run: () => setQuiz('check') } })
+                        })
+                      }
+                    >
                       <Icon name="check" size={13} /> {isDone ? 'Done' : 'Mark as done'}
                     </button>
                     <span className="crs-meta">
@@ -875,6 +908,31 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
                       if ((e.target as Element).closest?.('.run-code')) void window.tide.courses.track(id, here.l.id, { ran: true }).catch(() => {})
                     }} ref={proseRef} data-link-course={id} data-link-path={here.l.path} data-link-root />
                 </div>
+                {quiz === 'check' ? (
+                  <CourseQuiz course={id} lessons={[here.l.id]} kind="check" variant="inline" onClose={() => setQuiz(null)} onDone={(r) => (setChecked(r), void load())} />
+                ) : (
+                  finished &&
+                  checked === null && (
+                    <div className="cq-offer">
+                      <Icon name="quiz" size={15} />
+                      <span>
+                        <b>Check it?</b> Three questions from this lesson{videos.length ? ', its text and video' : ''}, marked against the course. Optional.
+                      </span>
+                      <button className="btn small" onClick={() => setQuiz('check')}>
+                        Check me
+                      </button>
+                    </div>
+                  )
+                )}
+                {quiz !== 'check' && checked && (
+                  <p className="cq-checked">
+                    <Icon name={checked.passed ? 'check' : 'refresh'} size={12} /> Checked: {checked.score} of {checked.total}
+                    {checked.passed ? '' : '. What you missed comes back for recall.'}{' '}
+                    <button className="link-btn" onClick={() => setQuiz('check')}>
+                      Check again
+                    </button>
+                  </p>
+                )}
                 <nav className="crs-pager">
                   {at > 0 ? (
                     <button className="crs-pager-btn" onClick={() => goTo(flat[at - 1].l.id)}>
@@ -923,6 +981,7 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
           )}
         </div>
         )}
+        {quiz === 'quiz' && currentId && <CourseQuiz course={id} lessons={[currentId]} kind="quiz" onClose={() => setQuiz(null)} onDone={() => void load()} />}
         {/* The tutor, docked at the foot of the reading column: the right of the window stays the video's */}
         <div className="crs-dock-wrap">
           <ChatPanel variant="dock" />

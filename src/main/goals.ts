@@ -9,6 +9,8 @@ import { ROUNDS } from '@shared/workout'
 import { readingLabel } from '@shared/books'
 import { addMixedReview, gateFilter, gateItem, type GateInfo } from '@shared/track'
 import { joinRel, readText, writeText } from './vault'
+import { courseItem } from '@shared/coursePlan'
+import type { CoursePlanResult } from './coursePlan'
 
 /**
  * Goals and the week mixed across them (shared/goals, shared/portfolio). Here: the store, what
@@ -404,15 +406,25 @@ export function studyDays(start: string, coach: CoachSettings, n = 7): { date: s
 }
 
 /** A thread's item: the next topic, the project's milestone, the mock, the book */
-function itemMaker(threads: Thread[], goals: PlanGoal[], inv: Inventory, queues: Map<string, TopicCandidate[]>, lastTopic: Map<string, string>, gates: Map<string, GateInfo> = new Map()) {
+function itemMaker(threads: Thread[], goals: PlanGoal[], inv: Inventory, queues: Map<string, TopicCandidate[]>, lastTopic: Map<string, string>, gates: Map<string, GateInfo> = new Map(), courses: CoursePlanResult | null = null) {
   const byId = new Map(threads.map((t) => [t.id, t]))
   const checked = new Set<string>()
+  // Each roadmap's full sessions, counted in the order they're made, so the course's sessions fall where they were planned
+  const sessionNo = new Map<string, number>()
   const needOf = (id: string) => goals.flatMap((g) => g.needs).find((n) => needThread(n) === id && !n.dropped)
   return (threadIdOf: string, minutes: number, touch: boolean): AgendaItem[] => {
     const t = byId.get(threadIdOf)
     if (!t) return []
     const base = { thread: t.id, minutes, ...(touch ? { touch: true } : {}) }
     if (t.kind === 'roadmap') {
+      // A session the course has (shared/coursePlan): its next lessons, as the course numbers them
+      if (!touch && courses) {
+        const n = sessionNo.get(t.id) ?? 0
+        sessionNo.set(t.id, n + 1)
+        const lessons = courses.slots.get(t.id)?.[n]
+        const pick = courses.picks.get(t.id)
+        if (lessons?.length && pick) return [courseItem(pick, lessons, minutes, t.id)]
+      }
       const q = queues.get(t.label) ?? []
       // A short touch: recall the last thing learned there, if there is one, else a short lesson
       const last = lastTopic.get(t.label)
@@ -487,7 +499,13 @@ export async function planGoalsWeek(date = today(), background = false): Promise
     const g = await track.gateStep(t.label).catch(() => null)
     if (g) gates.set(t.label, g)
   }
-  const make = itemMaker(s.threads, s.goals, s.inv, byNotebook, lastTopic, gates)
+  // Courses in the plan: the course that best covers the phase you're in takes some of each roadmap's
+  // sessions, its next lessons sized to them; the topics those lessons teach aren't planned again
+  const sessionsBy = new Map<string, number[]>()
+  for (const d of week.days) for (const sess of d.sessions) if (!sess.touch) sessionsBy.set(sess.thread, [...(sessionsBy.get(sess.thread) ?? []), sess.minutes])
+  const courses = await import('./coursePlan').then((m) => m.planCourses(s.threads, sessionsBy)).catch(() => null)
+  for (const [nb, covered] of courses?.covered ?? []) byNotebook.set(nb, (byNotebook.get(nb) ?? []).filter((c) => !c.topicId || !covered.has(c.topicId)))
+  const make = itemMaker(s.threads, s.goals, s.inv, byNotebook, lastTopic, gates, courses)
   let planDays = week.days.map((d) => {
     const items: AgendaItem[] = []
     for (const sess of d.sessions)
@@ -528,7 +546,8 @@ export async function planGoalsWeek(date = today(), background = false): Promise
     days: planDays.filter((d) => d.items.length),
     notices: [],
     replannedOn: date,
-    ...(hours.length ? { bestHours: bestHoursLabel(hours) } : {})
+    ...(hours.length ? { bestHours: bestHoursLabel(hours) } : {}),
+    ...(courses?.weeks.length ? { courses: courses.weeks } : {})
   }
   plan.summary = await explainWeek(week, s.goals, s.coach, background).catch(() => week.note)
   // What to read: the pages in books you own, then the source your roadmap names for the topic

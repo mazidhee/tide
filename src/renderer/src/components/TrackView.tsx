@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { CiteLink } from './CourseQuiz'
 import type { CheckQuestion, CheckResult, TrackPhaseView, TrackView as TrackData } from '@shared/track'
 import { useApp } from '../state'
 import { finishAgendaItem, openAgendaItem } from '../lib/agenda'
@@ -338,6 +339,10 @@ function PhaseCheck({ notebook, phase, marker, onClose, onDone }: { notebook: st
             <li key={i} className={`is-${m.verdict}`}>
               <span className="track-mark-topic">{m.topic}</span>
               {m.feedback && <span className="track-mark-fb">{m.feedback}</span>}
+              {(() => {
+                const cite = qs?.find((q) => q.question === m.question)?.cite
+                return cite ? <CiteLink cite={cite} quote /> : null
+              })()}
             </li>
           ))}
         </ol>
@@ -356,6 +361,7 @@ function PhaseCheck({ notebook, phase, marker, onClose, onDone }: { notebook: st
         {qs.map((q, i) => (
           <li key={q.id}>
             <p className="track-q">{q.question}</p>
+            {q.cite && <CiteLink cite={q.cite} />}
             {result?.needsSelf ? (
               <>
                 <p className="track-a">{answers[q.id] || 'No answer.'}</p>

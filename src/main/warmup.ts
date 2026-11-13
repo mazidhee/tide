@@ -134,6 +134,9 @@ async function prior(topic: string, path: string | undefined, max = WARMUP_MAX_C
   const ranked = rankPrior(topic, concepts, place.area, max, picked)
   const { keptOnMany } = await import('./review')
   const kept = ranked.length ? await keptOnMany(ranked.map((c) => c.id)) : new Map<string, ReviewItem[]>()
+  // A concept with nothing kept on it: the course you're taking's own questions on it, with where they're from
+  const bare = ranked.filter((c) => !kept.get(c.id)?.length).map((c) => c.id)
+  if (bare.length) for (const [id, items] of await import('./courseQuiz').then((m) => m.courseItemsFor(bare)).catch(() => new Map<string, ReviewItem[]>())) kept.set(id, items.slice(0, 2))
   return { ranked, kept }
 }
 

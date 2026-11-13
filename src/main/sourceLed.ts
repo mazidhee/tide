@@ -100,7 +100,12 @@ async function lessonFor(req: ChatRequest): Promise<Lesson> {
   lesson.preparing = (async () => {
     own(lesson, topic)
     // [courses] The lessons of courses you imported that teach the topic
-    if (!course) for (const c of await import('./courses').then((m) => m.courseCandidates(topic)).catch(() => [] as Candidate[])) lesson.candidates.push(c)
+    // The course you're taking that teaches the topic comes first (main/coursePlan), so the lesson and the course reinforce each other
+    if (!course) {
+      const taking = await import('./coursePlan').then((m) => m.takingCandidates(topic)).catch(() => [] as Candidate[])
+      const seen = new Set(taking.map((c) => `${c.url}|${c.title}`))
+      for (const c of [...taking, ...(await import('./courses').then((m) => m.courseCandidates(topic)).catch(() => [] as Candidate[])).filter((c) => !seen.has(`${c.url}|${c.title}`))]) lesson.candidates.push(c)
+    }
     if (!web) return
     for (const c of await kept(topic)) if (c.url && !lesson.have.has(c.url)) (lesson.have.add(c.url), lesson.candidates.push(c))
     if (lesson.candidates.some((c) => c.url)) return
