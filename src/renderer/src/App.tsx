@@ -221,6 +221,8 @@ export default function App() {
       window.tide.onTrayCommand(async (c) => {
         if (c.type === 'view') app.setView(c.view as typeof view)
         else if (c.type === 'focus') startFocus(c.minutes)
+        // A reminder macOS wouldn't show (notifications off for Tide): said here instead
+        else if (c.type === 'remind') app.toast(`${c.title}: ${c.body}`, { action: { label: 'Start', run: () => app.setView(c.view as typeof view) } })
         else {
           const week = await window.tide.coach.week(c.date).catch(() => null)
           const it = todayItems(week, c.date)[c.index]

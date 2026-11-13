@@ -1016,7 +1016,7 @@ export interface TideApi {
   }
   /** What this window is studying, for the professor in the menu bar; null when it stops */
   /** Commands from the menu bar's menu: open a view or today's item, start a focus timer */
-  onTrayCommand(cb: (c: { type: 'view'; view: unknown } | { type: 'agenda'; date: string; index: number } | { type: 'focus'; minutes: number }) => void): () => void
+  onTrayCommand(cb: (c: { type: 'view'; view: unknown } | { type: 'agenda'; date: string; index: number } | { type: 'focus'; minutes: number } | { type: 'remind'; title: string; body: string; view: unknown }) => void): () => void
   studying(status: { pose: import('./professorArt').ProfessorPose; label: string; since: number; until?: number } | null): Promise<void>
   windows: {
     /**

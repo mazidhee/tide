@@ -38,7 +38,8 @@ import {
   type RoundEvents,
   type RoundId,
   type RatedRound,
-  type WorkoutState
+  type WorkoutState,
+  clockWords
 } from '@shared/workout'
 import { markItem, type Mark, type WorkoutItem } from '@shared/workoutItems'
 import { useApp } from '../../state'
@@ -822,7 +823,7 @@ function RoundIntro({ round, state, championship, last, lastRound, onStart }: { 
       <p className="wo-meta">
         {round === 'recall'
           ? `Up to ${plan.count} cards due from your lessons, on their spaced schedule.`
-          : `${plan.seconds ? `${plan.seconds / 60} minutes on the clock, up to ${plan.count} questions` : `${plan.count} puzzles, no clock`}. Each answer moves the rating; the next question follows it${championship ? ', a step harder today' : ''}.`}
+          : `${plan.seconds ? `${clockWords(plan.seconds)} on the clock, up to ${plan.count} questions` : `${plan.count} puzzles, no clock`}. Each answer moves the rating; the next question follows it${championship ? ', a step harder today' : ''}.`}
       </p>
       <button className="btn primary" autoFocus onClick={onStart}>
         Start <kbd>↵</kbd>
@@ -904,7 +905,7 @@ function Celebration({ state, events, results, onDone }: { state: WorkoutState; 
             return (
               <span key={id} className="wo-new-badge">
                 <Sprite rows={BADGE_ART[id]} px={3} />
-                New badge: <b>{bd.name}</b> · {bd.why.toLowerCase()}
+                New badge: <b>{bd.name}</b> · {bd.why.replace(/^[A-Z](?![A-Z])/, (c) => c.toLowerCase())}
               </span>
             )
           })}

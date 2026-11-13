@@ -995,6 +995,10 @@ app.whenReady().then(() => {
         win.focus()
         win.webContents.send('tray:command', { type: 'view', view: { kind: 'workout', nonce: Date.now() } })
       }
+    }, {
+      // Notifications off for Tide: said in the window instead
+      inApp: (r) => win && !win.isDestroyed() && win.webContents.send('tray:command', { type: 'remind', title: r.title, body: r.body, view: { kind: 'workout', nonce: Date.now() } }),
+      ...(!app.isPackaged && process.env.TIDE_TEST_COPY && process.env.TIDE_REMINDER_NOW ? { anyHour: true, firstAfterMs: 8000 } : {})
     })
   )
   startVault()

@@ -79,6 +79,14 @@ export function roundPlan(id: RoundId, championship: boolean): { seconds: number
   return { seconds: s.seconds ? Math.round(s.seconds * CHAMPIONSHIP.timeScale) : null, count: Math.round(s.count * CHAMPIONSHIP.countScale) }
 }
 
+/** A round's clock in words: "3 minutes", a championship's 241 s as "4 minutes", 270 s as "4½ minutes" */
+export function clockWords(seconds: number): string {
+  const halves = Math.max(1, Math.round(seconds / 30))
+  const whole = Math.floor(halves / 2)
+  const n = halves % 2 ? `${whole || ''}½` : String(whole)
+  return `${n} minute${n === '1' ? '' : 's'}`
+}
+
 /** A seed from text (the day, the round, the item's place) */
 export function seedOf(...parts: (string | number)[]): number {
   let h = 2166136261
