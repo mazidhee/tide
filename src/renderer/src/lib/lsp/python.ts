@@ -79,9 +79,16 @@ function ruffMarkers(model: Model): Marker[] {
   }))
 }
 
+/**
+ * Models whose problems aren't shown: a notebook's cells, where a name defined in another cell
+ * would read as undefined. Completions, hovers and signatures still work in them.
+ */
+export const quietModels = new Set<string>()
+
 function showMarkers(model: Model) {
   const raw = pyrightRaw.get(model.uri.toString())
   if (!raw || model.isDisposed()) return
+  if (quietModels.has(model.uri.toString())) return void monacoRef!.editor.setModelMarkers(model, PYRIGHT_OWNER, [])
   const ruff = ruffMarkers(model)
   ruffSeen.set(model.uri.toString(), JSON.stringify(ruff.map((r) => [r.code, r.startLineNumber])))
   monacoRef!.editor.setModelMarkers(model, PYRIGHT_OWNER, withoutRuffDuplicates(raw, ruff))

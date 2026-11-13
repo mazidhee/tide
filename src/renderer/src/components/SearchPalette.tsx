@@ -63,12 +63,12 @@ export function SearchPalette({ onClose }: { onClose(): void }) {
       return [...recent, ...actions]
     }
     const titles = app.files
-      .filter((f) => f.kind === 'note' || f.kind === 'pdf' || f.kind === 'epub' || f.kind === 'doc' || f.kind === 'canvas')
+      .filter((f) => f.kind === 'note' || f.kind === 'pdf' || f.kind === 'epub' || f.kind === 'doc' || f.kind === 'canvas' || f.kind === 'notebook')
       .map((f) => ({ f, score: fuzzy(query, fileTitle(f.name)) }))
       .filter((x) => x.score >= 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, 8)
-      .map<Result>(({ f }) => ({ key: f.path, icon: f.kind === 'pdf' ? 'pdf' : f.kind === 'epub' ? 'book' : f.kind === 'canvas' ? 'canvas' : 'note', title: fileTitle(f.name), sub: folderOf(f.path), run: open(f.path) }))
+      .map<Result>(({ f }) => ({ key: f.path, icon: f.kind === 'pdf' ? 'pdf' : f.kind === 'epub' ? 'book' : f.kind === 'canvas' ? 'canvas' : f.kind === 'notebook' ? 'subNotebook' : 'note', title: fileTitle(f.name), sub: folderOf(f.path), run: open(f.path) }))
     const seen = new Set(titles.map((t) => t.key))
     const content = hits
       .filter((h) => !seen.has(h.path))

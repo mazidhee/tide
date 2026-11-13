@@ -57,6 +57,7 @@ import { labLoadTable, labQuery, labReset, labSchema } from './lab'
 import { isSql, languagesStatus } from './languages'
 import { registerLanguageServer, stopLanguageServer } from './pythonLanguageServer'
 import { registerIde, stopIde } from './ide'
+import { registerNotebook, stopNotebooks } from './notebook'
 import { registerMocks } from './mocks'
 import { registerIdeas } from './ideaProjects'
 import { labStatus, librariesStatus, mathStatus, runCode, runProject, setupLab, setupLibraries, setupMath } from './runner'
@@ -212,6 +213,7 @@ function registerIpc() {
 
   registerLanguageServer()
   registerIde()
+  registerNotebook()
   registerMocks()
   registerIdeas()
   registerBackups(handle)
@@ -1035,6 +1037,7 @@ app.on('before-quit', () => {
   stopSearch()
   void stopLanguageServer()
   void stopIde()
+  void stopNotebooks()
 })
 
 app.on('window-all-closed', () => {

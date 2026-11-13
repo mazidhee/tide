@@ -115,6 +115,8 @@ export interface Settings {
   /** Sidebar items the user chose to hide (ids from shared/sidebar.ts) */
   sidebarHidden?: string[]
   fontSize: number
+  /** Notebooks (main/notebook): `internet` lets a notebook's kernel reach the internet, for yfinance (off unless turned on) */
+  notebook?: { internet?: boolean }
   ai: AISettings
   /** Maths animations (shared/manim): narration in Tide's voice, render quality, and whether the one-time install offer was answered */
   animations?: { narration?: boolean; quality?: 'low' | 'medium'; prompted?: boolean }
@@ -145,7 +147,7 @@ export interface Settings {
   maths?: { readBack?: boolean; angle?: 'rad' | 'deg' }
 }
 
-export type FileKind = 'note' | 'pdf' | 'epub' | 'image' | 'doc' | 'canvas' | 'other'
+export type FileKind = 'note' | 'pdf' | 'epub' | 'image' | 'doc' | 'canvas' | 'notebook' | 'other'
 
 export interface FileNode {
   name: string
@@ -641,6 +643,8 @@ export interface TideApi {
   /** The Code view as an IDE (shared/ide) */
   ide: import('./ide').IdeApi
   ideas: import('./ideaProject').IdeasApi
+  /** Jupyter notebooks and the quant lab (shared/notebook) */
+  notebook: import('./notebook/api').NotebookApi
   lsp: {
     /** A JSON-RPC message for the server */
     send(msg: unknown): void

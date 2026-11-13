@@ -30,6 +30,7 @@ function iconFor(node: FileNode, libraryFolder: string): IconName {
   if (node.kind === 'epub') return 'book'
   if (node.kind === 'image') return 'image'
   if (node.kind === 'canvas') return 'canvas'
+  if (node.kind === 'notebook') return 'subNotebook'
   if (node.path.startsWith(`${libraryFolder}/Videos/`)) return 'video'
   if (node.path.startsWith(`${libraryFolder}/Articles/`) || node.path.startsWith(`${libraryFolder}/Links/`)) return 'article'
   return 'note'
@@ -88,6 +89,14 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
     setRenaming(path)
   }
 
+  /** A Jupyter notebook (.ipynb), opened in the notebook view */
+  const newJupyter = async (folder: string) => {
+    const path = await window.tide.notebook.create(folder, 'Untitled')
+    await app.refreshTree()
+    if (folder) toggle(folder, true)
+    app.openPath(path)
+  }
+
   const newFolder = async (parent: string) => {
     const path = await window.tide.vault.createFolder(parent, 'New notebook')
     await app.refreshTree()
@@ -129,6 +138,7 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
         ...(isFolder
           ? [
               { label: 'New note', run: () => newNote(node.path), separatorBefore: !!own },
+              { label: 'New Jupyter notebook', run: () => newJupyter(node.path) },
               { label: 'New folder', run: () => newFolder(node.path) }
             ]
           : []),
@@ -314,6 +324,7 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
                 y: r.bottom + 4,
                 items: [
                   { label: 'New note', run: () => newNote(currentFolder) },
+                  { label: 'New Jupyter notebook', run: () => newJupyter(currentFolder) },
                   { label: 'New topic to learn', run: () => app.setView({ kind: 'new-topic' }) },
                   { label: 'Save a link', run: () => app.setDialog('save-link'), separatorBefore: true },
                   { label: 'Add files', run: addFiles }

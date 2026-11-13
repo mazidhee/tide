@@ -45,6 +45,8 @@ export type View =
   | { kind: 'design'; path: string; start?: DesignMode; topic?: string; company?: string; timed?: number; reference?: string; nonce?: number }
   /** The IDE: a file in the notes' Code folder (`path`), or a project folder (`root`); `home` opens on the project's home, `file` on a file (a pop-out's) */
   | { kind: 'code'; path?: string; root?: string; home?: boolean; nonce?: number; /** The file to show first, in `root` */ file?: string }
+  /** A Jupyter notebook in a project the IDE has open (one in the vault opens as a file) */
+  | { kind: 'ipynb'; abs: string }
   | { kind: 'help'; section?: string }
   | { kind: 'exam'; scope: ChatScope; topic: string; options: ExamOptions; nonce?: number; resume?: { paper: unknown; answers: unknown; startedAt: number } }
   | { kind: 'settings'; section?: import('./components/SettingsView').Section | 'ai' | 'notes' }
@@ -257,7 +259,7 @@ export function AppProvider({ initial, children }: { initial: Settings; children
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
 
-export const fileTitle = (path: string) => path.split('/').pop()!.replace(/\.(md|markdown)$/i, '')
+export const fileTitle = (path: string) => path.split('/').pop()!.replace(/\.(md|markdown|ipynb)$/i, '')
 
 /** A readable name for what a session covers */
 /** "Designing Data-Intensive Applications, pages 23–51" */

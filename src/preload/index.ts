@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { ChatEvent, TideApi } from '@shared/types'
 import { ideApi } from './ide'
 import { ideasApi } from './ideas'
+import { notebookApi } from './notebook'
 
 const invoke =
   <R>(channel: string) =>
@@ -51,6 +52,7 @@ const api: TideApi = {
   },
   ide: ideApi,
   ideas: ideasApi,
+  notebook: notebookApi,
   lsp: {
     send: (msg) => ipcRenderer.send('lsp:send', msg),
     onMessage: (cb) => subscribe<unknown>('lsp:message', cb),

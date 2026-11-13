@@ -62,6 +62,8 @@ export const JOB_ROUTES = {
   lessonReview: { label: 'Reviewing a finished lesson', role: 'mark' },
   curriculum: { label: 'Sorting roadmaps, enriching topics, readings', role: 'background' },
   workshop: { label: 'Guided project review', role: 'teach' },
+  // The tutor in a notebook's margin (main/notebook/tutor): Claude with the notebook's tools; Gemma answers from its text
+  notebookTutor: { label: 'Tutor in a notebook’s margin', role: 'teach' },
   // Pictures go to Claude too (main/imagePrep makes them ready): a photo of handwritten maths is marked by the marking model
   handwriting: { label: 'Marking photos of handwritten working', role: 'mark' },
   // Mock interviews (main/mocks): Sonnet is the interviewer, Opus marks. Neither falls back to Gemma: without
