@@ -122,8 +122,7 @@ export function NotebookView({ path, tab: initialTab }: { path: string; tab?: 'p
       y: e.clientY,
       items: [
         { label: meta?.project ? 'Project settings' : 'Make it a project…', run: () => setTab('project') },
-        // Who teaches its lessons: Tide's setting (auto), Claude, Gemma on this Mac, or the cloud model.
-        // A private project is always Gemma's, whatever is chosen here (main/teacher)
+        // Who teaches its lessons: Tide's setting (auto), Claude, Gemma on this Mac, or the cloud model
         ...([
           ['auto', 'Let Tide choose who teaches it', 'Tide chooses who teaches'],
           ['claude', 'Have Claude teach it', 'Claude teaches'],

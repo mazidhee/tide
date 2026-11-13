@@ -20,9 +20,7 @@ vi.mock('../src/main/warmup', () => ({ warmupFor: async () => ({ topic: 'Two’s
 vi.mock('../src/main/books', () => ({ pagesToRead: async () => [] }))
 vi.mock('../src/main/sources', () => ({ packFor: async () => ({ topic: 'Two’s complement', at: Date.now(), sources: [{ n: 1, title: 'Two’s complement (Cornell CS 3410 notes)', url: 'https://example.edu/twos', text: 'Negate by inverting and adding one.' }] }), buildPack: async () => null }))
 vi.mock('../src/main/readings', () => ({ readingsFor: async () => [] }))
-vi.mock('../src/main/projects', () => ({ privatePath: async (p: string) => p.startsWith('Acme') }))
 vi.mock('../src/main/learn', () => ({ getNotebooks: async () => [{ name: 'Software engineering', path: 'Software engineering' }, { name: 'Acme', path: 'Acme', project: { private: true } }] }))
-vi.mock('../src/main/teacher', () => ({ privateText: async (t: string) => (/metabase/i.test(t) ? 'metabase' : /acme/i.test(t) ? 'private' : null) }))
 vi.mock('../src/main/ai', () => ({ lessonPassage: async () => null, jobRoute: async () => ({ who: 'claude', role: 'hard' }) }))
 const banked: { id: string; topic: string }[] = []
 vi.mock('../src/main/bank', () => ({ readBank: async () => [], addToBank: async (topic: string, ps: { id: string }[]) => void banked.push(...ps.map((p) => ({ id: p.id, topic }))) }))
@@ -160,14 +158,13 @@ describe('preparing a lesson', () => {
     expect(await M.readyPrep()).toBeNull()
   })
 
-  it('never uses Claude for a private topic, and without Claude prepares what needs no model', async () => {
+  it('uses Claude for a work project’s topic like any other, and without Claude prepares what needs no model', async () => {
     const asked: string[] = []
     const ask = async (job: string) => (asked.push(job), PLAN_REPLY)
     const p = await M.prepareLesson({ topic: 'Acme ledger design', notebook: 'Acme', forDate: '2026-11-13' }, { claude: true }, { ask })
-    expect(asked).toEqual([])
-    expect(p).toMatchObject({ by: 'local', note: 'Private: prepared on this Mac only', exercises: [] })
-    expect(p.opening).toBeUndefined()
-    expect(p.warmup?.cards).toHaveLength(1)
+    expect(asked.length).toBeGreaterThan(0)
+    expect(p.note ?? '').not.toMatch(/Private/)
+    asked.length = 0
     const q = await M.prepareLesson({ topic: 'Two’s complement', notebook: 'Software engineering', forDate: '2026-11-13' }, { claude: false, note: 'Claude is near your plan’s limit' }, { ask })
     expect(asked).toEqual([])
     expect(q).toMatchObject({ by: 'local', note: 'Claude is near your plan’s limit' })

@@ -31,6 +31,7 @@ import { useFocusCompletion } from './components/FocusTimer'
 import { CoachView } from './components/CoachView'
 import { lastBrainTab } from './components/BrainTabs'
 import { KnowledgeView } from './components/KnowledgeView'
+import { LadderView } from './components/LadderView'
 import { LearnerProfileView } from './components/LearnerProfileView'
 import { LessonsView } from './components/LessonsView'
 import { ChatPage } from './components/ChatPage'
@@ -42,6 +43,7 @@ import { SettingsView } from './components/SettingsView'
 import { NotebookView } from './components/NotebookView'
 import { SearchPalette } from './components/SearchPalette'
 import { SaveLinkDialog } from './components/SaveLink'
+import { BugReportSheet } from './components/BugReportSheet'
 import { Icon } from './components/Icon'
 import { TopBar } from './components/tide/TopBar'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -353,6 +355,7 @@ export default function App() {
         if (action === 'toggle-chat' && view.kind !== 'chat') app.updateSettings({ chatOpen: !settings.chatOpen })
         if (action === 'search') app.setDialog(dialog === 'search' ? null : 'search')
         if (action === 'save-link') app.setDialog('save-link')
+        if (action === 'report-bug') app.setDialog('report-bug')
         if (action === 'new-note') newNote()
         if (action === 'new-topic') app.setView({ kind: 'new-topic' })
         if (action === 'help') app.setView({ kind: 'help' })
@@ -465,6 +468,7 @@ export default function App() {
   else if (view.kind === 'coach') main = <CoachView />
   else if (view.kind === 'learner') main = <LearnerProfileView />
   else if (view.kind === 'lessons') main = <LessonsView />
+  else if (view.kind === 'ladder') main = <LadderView go={view.go} />
   else if (view.kind === 'wrapup') main = <WrapUpView />
   else if (view.kind === 'weekly') main = <WeeklyView />
   else if (view.kind === 'maths') main = <MathsView key={`${view.level ?? ''}:${view.nonce ?? ''}`} level={view.level} />
@@ -533,6 +537,7 @@ export default function App() {
 
       {dialog === 'search' && <SearchPalette onClose={() => app.setDialog(null)} />}
       {dialog === 'save-link' && <SaveLinkDialog onClose={() => app.setDialog(null)} />}
+      {dialog === 'report-bug' && <BugReportSheet onClose={() => app.setDialog(null)} />}
       {dragging && <div className="drop-overlay">Drop to add to your library</div>}
 
       <BreakScreen settings={breaks} />

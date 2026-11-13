@@ -15,9 +15,9 @@ animation: map
 map: Bank file, Parser, Matcher, Ledger, Exceptions, Report
 ```
 
-## Work stays on your Mac
+## Who answers
 
-**Private** is on for every project by default. Everything about a private project is answered by Gemma on your Mac, never a cloud model, even with the cloud helper turned on. Turn it off only for projects that aren't confidential.
+Claude answers everything about a project, work projects included. Gemma on your Mac takes over only when Claude can't (not set up, logged out, at its limit, offline) or when you pick Gemma for the notebook.
 
 ## Building something yourself instead
 

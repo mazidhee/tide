@@ -3,6 +3,7 @@ import { BANK_SYSTEM, bankPrompt, batchReviewPrompt, parseBank, parseBatchReview
 import { localDate, nextStudyDay, todayItems } from '@shared/coach'
 import { openingKey, openingMessage, parseBlocks, sessionInstructions, SESSION_FORMAT, strategyChoice, whyByDefault, withPassage, type SessionSetup } from '@shared/session'
 import { withSources } from '@shared/sources'
+import { financeBankProblems } from '@shared/finance/exercises'
 import { getSettings } from './settings'
 import type { ChatScope } from '@shared/types'
 import type { CloudTask } from '@shared/providers'
@@ -10,7 +11,6 @@ import { askCloud, complete, NoCloud } from './ai'
 import { noteReviewed, type CloudTarget } from './cloud'
 import { getCoach, getWeek } from './coach'
 import { mistakesDue } from './mistakes'
-import { privatePath } from './projects'
 import { runCode } from './runner'
 import { absPath } from './vault'
 
@@ -27,10 +27,13 @@ const DIR = '.tide/bank'
 const fileOf = (topic: string) => `${DIR}/${slugOf(topic)}.json`
 
 export async function readBank(topic: string): Promise<BankProblem[]> {
-  return fs
+  const kept = await fs
     .readFile(absPath(fileOf(topic)), 'utf8')
     .then((t) => (JSON.parse(t) as { problems: BankProblem[] }).problems ?? [])
-    .catch(() => [])
+    .catch(() => [] as BankProblem[])
+  // The finance labs' own checked problems, for a topic one of them fits (once kept, the copy on disk with its usedAt wins)
+  const have = new Set(kept.map((p) => p.id))
+  return [...kept, ...financeBankProblems(topic).filter((p) => !have.has(p.id))]
 }
 
 // One write at a time per topic: a lesson and the half-hourly top-up can land together
@@ -79,19 +82,17 @@ async function verify(problems: BankProblem[], signal: AbortSignal, cloud: boole
  * else by Gemma when it's free (only computable ones end up trusted then: no second model checks
  * the others). Returns how many it added.
  */
-export async function writeProblems(topic: string, counts: Partial<Record<Level, number>>, o: { signal: AbortSignal; local: boolean; routine: boolean; cloudOnly?: boolean; source?: BankProblem['source'] }): Promise<number> {
+export async function writeProblems(topic: string, counts: Partial<Record<Level, number>>, o: { signal: AbortSignal; routine: boolean; cloudOnly?: boolean; source?: BankProblem['source'] }): Promise<number> {
   if (!Object.values(counts).some((n) => n && n > 0)) return 0
   const prompt = bankPrompt(topic, counts)
   let out = ''
   let cloud = false
   let writer: CloudTarget | undefined
-  if (!o.local) {
-    out = await askCloud(prompt, BANK_SYSTEM, 'maths' as CloudTask, o.signal, o.routine, 4000, (t) => (writer = t)).catch((e) => {
-      if (e instanceof NoCloud) return ''
-      throw e
-    })
-    cloud = !!out
-  }
+  out = await askCloud(prompt, BANK_SYSTEM, 'maths' as CloudTask, o.signal, o.routine, 4000, (t) => (writer = t)).catch((e) => {
+    if (e instanceof NoCloud) return ''
+    throw e
+  })
+  cloud = !!out
   if (!out) {
     if (o.cloudOnly) return 0
     out = await complete(prompt, BANK_SYSTEM, o.signal, 'background')
@@ -101,9 +102,6 @@ export async function writeProblems(topic: string, counts: Partial<Record<Level,
   await updateBank(topic, (all) => [...all, ...fresh])
   return fresh.filter(trusted).length
 }
-
-/** Whether this topic's notebook is a private project: then only Gemma writes for it */
-const isPrivate = (notebook?: string) => (notebook ? privatePath(notebook).catch(() => true) : Promise.resolve(false))
 
 /** What to prepare: today's and the next study day's topics, and lessons in progress */
 async function comingTopics(): Promise<{ topic: string; notebook?: string; lesson?: boolean; topicId?: string; refresh?: boolean }[]> {
@@ -149,9 +147,8 @@ export async function prepare(): Promise<typeof status> {
     const routine = !spendingHours()
     const topics = await comingTopics()
     for (const t of topics) {
-      if (await isPrivate(t.notebook)) continue
       const need = shortfall(await readBank(t.topic), 3)
-      added += await writeProblems(t.topic, need, { signal: controller.signal, local: false, routine, cloudOnly: true })
+      added += await writeProblems(t.topic, need, { signal: controller.signal, routine, cloudOnly: true })
     }
     added += await prepareVariants(controller.signal, routine)
     await prepareOpenings(topics, controller.signal, routine)
@@ -183,7 +180,6 @@ async function prepareVariants(signal: AbortSignal, routine: boolean): Promise<n
   let added = 0
   for (const m of due) {
     if (have[m.id] || signal.aborted) continue
-    if (m.path && (await isPrivate(m.path.split('/')[0]))) continue
     const out = await askCloud(variantPrompt(m.question, m.fix, m.topic), BANK_SYSTEM, 'maths', signal, routine).catch((e) => {
       if (e instanceof NoCloud) return ''
       throw e
@@ -210,14 +206,14 @@ export async function previewFor(topic: string): Promise<BankProblem | null> {
  * While you answer, makes sure a checked problem is waiting at each level around where the lesson
  * is: by the cloud when it may (routine, so a busy day leaves it alone), else by Gemma when idle.
  */
-export async function prepareAround(topic: string, level: Level, local: boolean): Promise<void> {
+export async function prepareAround(topic: string, level: Level): Promise<void> {
   const bank = await readBank(topic)
   const need: Partial<Record<Level, number>> = {}
   for (const l of [level - 1, level, level + 1].filter((x) => x >= 1 && x <= 3) as Level[]) {
     if (!pickProblem(bank.filter((p) => p.level === l), l, () => false)) need[l] = 1
   }
   if (!Object.keys(need).length) return
-  await writeProblems(topic, need, { signal: new AbortController().signal, local, routine: true, source: 'lesson' }).catch((e: Error) => (console.warn(`[bank] topping up ${topic}: ${e.message}`), 0))
+  await writeProblems(topic, need, { signal: new AbortController().signal, routine: true, source: 'lesson' }).catch((e: Error) => (console.warn(`[bank] topping up ${topic}: ${e.message}`), 0))
 }
 
 let timer: ReturnType<typeof setInterval> | null = null
@@ -261,7 +257,7 @@ async function prepareOpenings(topics: { topic: string; notebook?: string; lesso
   const week = Date.now() - 7 * 86_400_000
   for (const k of Object.keys(all)) if (all[k].at < week) delete all[k]
   for (const t of topics.filter((x) => x.lesson)) {
-    if (signal.aborted || (await isPrivate(t.notebook))) continue
+    if (signal.aborted) continue
     const scope: ChatScope = t.notebook ? { kind: 'folder', path: t.notebook } : { kind: 'vault' }
     // A close call between two ways of teaching is settled when the lesson starts: nothing to write ahead
     const choice = strategyChoice({ mode: 'teach', topic: t.topic }, scope)
@@ -293,15 +289,11 @@ async function prepareOpenings(topics: { topic: string; notebook?: string; lesso
  * After a miss in a lesson: one problem on exactly the idea that was missed (from the tutor's
  * feedback), at the lesson's level, kept for that lesson so it comes next.
  */
-export async function aimAt(topic: string, problem: string, missed: string, lesson: string, level: Level, local: boolean): Promise<void> {
+export async function aimAt(topic: string, problem: string, missed: string, lesson: string, level: Level): Promise<void> {
   const signal = new AbortController().signal
   const prompt = variantPrompt(problem, missed, topic)
-  let out = ''
-  let cloud = false
-  if (!local) {
-    out = await askCloud(prompt, BANK_SYSTEM, 'maths', signal, false).catch(() => '')
-    cloud = !!out
-  }
+  let out = await askCloud(prompt, BANK_SYSTEM, 'maths', signal, false).catch(() => '')
+  const cloud = !!out
   if (!out) out = await complete(prompt, BANK_SYSTEM, signal, 'background').catch(() => '')
   const [p] = await verify(parseBank(out, topic, 'variant'), signal, cloud).catch(() => [] as BankProblem[])
   if (!p) return

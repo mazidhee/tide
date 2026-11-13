@@ -308,13 +308,12 @@ describe('set_exercise in a lesson', () => {
   }, LONG)
 })
 
-describe('privacy', () => {
-  it('refuses a private lesson, and never offers Claude a problem it did not verify itself', async () => {
-    ex.setLessonInfo('lesson:secret', { topic: 'Python lists', private: true })
-    expect(await ex.setExerciseTool.run(DEDUPE, ctx('lesson:secret'))).toMatch(/private/)
-    expect(await ex.bankedExerciseTool.run({}, ctx('lesson:secret'))).toMatch(/private/)
-    // A problem Gemma wrote for a lesson (perhaps a private one) is in the same bank
-    await addToBank('Rust ownership', [{ id: 'g1', topic: 'Rust ownership', level: 2, text: 'From my private notes: what does borrowck reject here?', ask: 'Why?', askType: 'short', solution: 'Two mutable borrows.', checked: true, reviewed: true, source: 'lesson', createdAt: Date.now(), v: 2 }])
+describe('what Claude is offered', () => {
+  it('serves a work project’s lesson like any other, and never offers Claude a problem it did not verify itself', async () => {
+    ex.setLessonInfo('lesson:secret', { topic: 'Python lists', private: true } as never)
+    expect(await ex.bankedExerciseTool.run({}, ctx('lesson:secret'))).not.toMatch(/private/)
+    // A problem Gemma wrote for a lesson is in the same bank
+    await addToBank('Rust ownership', [{ id: 'g1', topic: 'Rust ownership', level: 2, text: 'From my notes: what does borrowck reject here?', ask: 'Why?', askType: 'short', solution: 'Two mutable borrows.', checked: true, reviewed: true, source: 'lesson', createdAt: Date.now(), v: 2 }])
     ex.setLessonInfo('lesson:rust', { topic: 'Rust ownership' })
     expect(await ex.bankedExerciseTool.run({}, ctx('lesson:rust'))).toMatch(/No verified exercise on Rust ownership/)
   })

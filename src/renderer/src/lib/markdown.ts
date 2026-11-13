@@ -9,6 +9,7 @@ import type Token from 'markdown-it/lib/token.mjs'
 import katex from 'katex'
 import hljs from 'highlight.js/lib/common'
 import DOMPurify from 'dompurify'
+import { tagsToBlocks } from '@shared/graphSpec'
 
 // Notes can contain raw HTML and clipped pages are untrusted, so everything rendered is sanitized.
 // Only YouTube players may be embedded as iframes.
@@ -560,7 +561,8 @@ export function lessonTags(body: string): string {
 }
 
 export function renderMarkdown(body: string, env: RenderEnv): string {
-  body = lessonTags(body)
+  // <plot …/> tags become ```graph blocks (shared/graphSpec), drawn by lib/graphs
+  body = tagsToBlocks(lessonTags(body))
   // A whole long note is rendered once by its view (and kept by it): not worth holding here too
   if (body.length > 20_000) return sanitize(instance.render(normalizeMath(body), env))
   let cache = rendered.get(env.filesByName)

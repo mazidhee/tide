@@ -69,7 +69,7 @@ const codeOf = (f: HTMLIFrameElement) => fromBase64Url(new URL(f.src).searchPara
 let n = 0
 let made = 0
 const api = {
-  policy: vi.fn(async (scope: { kind: string; path?: string }) => (scope.path?.startsWith('Secret') ? { show: false, repair: false, why: 'Private: this stays on your Mac' } : { show: true, repair: true })),
+  policy: vi.fn(async (scope: { kind: string; path?: string }) => (scope.path?.startsWith('Broken') ? Promise.reject(new Error('no answer')) : { show: true, repair: true })),
   repair: vi.fn(async (_r: { code: string; errors: string[] }) => ({ code: FIXED })),
   fallback: vi.fn(async () => '```mermaid\nflowchart LR\n  A --> B\n```'),
   cached: vi.fn(async (_id: string): Promise<Record<string, unknown>> => ({})),
@@ -134,7 +134,7 @@ describe('the check before a visual is shown', () => {
     // The step bar learned its steps while it was hidden
     expect(w.root.querySelector('.visual-stepper .sim-tour-count')!.textContent).toBe('1 / 3')
     expect(w.root.querySelector('.visual-say')!.textContent).toBe('a')
-    expect(api.remember).toHaveBeenCalledWith(lesson, expect.stringMatching(/^v/), expect.objectContaining({ status: 'ok' }))
+    expect(api.remember).toHaveBeenCalledWith(lesson, expect.stringMatching(/^v/), expect.objectContaining({ status: 'ok' }), expect.any(String))
     expect(api.repair).not.toHaveBeenCalled()
     expect(liveVisuals()).toBe(1)
     w.destroy()
@@ -152,7 +152,7 @@ describe('the check before a visual is shown', () => {
     await until(() => frames().length === 1 && codeOf(frames()[0]) === FIXED)
     say(frames()[0], { t: 'ready', h: 100, drawn: true, steps: 0 })
     await until(() => w.root.dataset.state === 'live')
-    expect(api.remember).toHaveBeenCalledWith(lesson, expect.any(String), expect.objectContaining({ status: 'ok', code: FIXED }))
+    expect(api.remember).toHaveBeenCalledWith(lesson, expect.any(String), expect.objectContaining({ status: 'ok', code: FIXED }), FIXED)
     expect(api.repair).toHaveBeenCalledTimes(1)
   })
 
@@ -179,7 +179,7 @@ describe('the check before a visual is shown', () => {
     expect(api.fallback).toHaveBeenCalledTimes(1)
     expect(w.root.querySelector('.visual-fallback pre.md')!.textContent).toContain('flowchart LR')
     expect(frames()).toEqual([])
-    expect(api.remember).toHaveBeenCalledWith(lesson, expect.any(String), expect.objectContaining({ status: 'fallback', errors: ['still broken'] }))
+    expect(api.remember).toHaveBeenCalledWith(lesson, expect.any(String), expect.objectContaining({ status: 'fallback', errors: ['still broken'] }), undefined)
   })
 
   it('a frame that never says it is ready fails its check', async () => {
@@ -215,13 +215,13 @@ describe('kept with the lesson', () => {
   })
 })
 
-describe('privacy', () => {
-  it('a private notebook runs no visual and asks Claude nothing', async () => {
-    const { w } = place(GOOD, { kind: 'folder', path: 'Secret project' })
+describe('when Tide can’t check a lesson', () => {
+  it('runs no visual and asks Claude nothing', async () => {
+    const { w } = place(GOOD, { kind: 'folder', path: 'Broken notebook' })
     await until(() => w.root.dataset.state === 'done')
     await wait(20)
     expect(frames()).toEqual([])
-    expect(w.root.textContent).toContain('Private: this stays on your Mac')
+    expect(w.root.textContent).toContain('Tide could not check this lesson')
     expect(api.repair).not.toHaveBeenCalled()
     expect(api.fallback).not.toHaveBeenCalled()
   })

@@ -146,7 +146,7 @@ async function threadLog(goals: PlanGoal[]): Promise<ThreadLog[]> {
 
 /** Fading concepts by thread: each concept's area is its roadmap's notebook */
 async function fadingByThread(): Promise<{ by: Record<string, number>; total: number }> {
-  const concepts = await import('./knowledge').then((k) => k.allConcepts(true)).catch(() => [])
+  const concepts = await import('./knowledge').then((k) => k.allConcepts()).catch(() => [])
   const by: Record<string, number> = {}
   let total = 0
   for (const c of concepts) {
@@ -245,8 +245,8 @@ export type Asker = (prompt: string, system: string) => Promise<{ text: string; 
 
 const realAsk: Asker = async (prompt, system) => {
   const { completeFor, jobRoute } = await import('./ai')
-  const route = await jobRoute('goalPlan', `${system}\n${prompt}`).catch(() => ({ who: 'gemma' as const }))
-  const text = await completeFor('goalPlan', prompt, system, { priority: 'interactive', text: prompt })
+  const route = await jobRoute('goalPlan').catch(() => ({ who: 'gemma' as const }))
+  const text = await completeFor('goalPlan', prompt, system, { priority: 'interactive' })
   return { text, by: route.who === 'claude' ? 'claude' : 'gemma' }
 }
 let ask: Asker = realAsk

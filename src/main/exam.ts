@@ -40,8 +40,8 @@ Return ONLY JSON in this shape:
   ]}
 ]}`
   const system = 'You are an experienced university examiner who writes fair, rigorous exam papers.'
-  // Claude when the notes it's written from may leave this Mac, else Gemma (shared/gemmaPolicy)
-  const out = await claudeOr('examPaper', prompt, system, { path: scope.kind === 'none' || scope.kind === 'vault' ? undefined : scope.path, text: topic }, () => agentComplete([{ role: 'user', content: prompt }], system, false))
+  // Claude, else Gemma when Claude can't (shared/gemmaPolicy)
+  const out = await claudeOr('examPaper', prompt, system, {}, () => agentComplete([{ role: 'user', content: prompt }], system, false))
   const paper = extractJsonObject<{ title?: string; instructions?: string; questions?: ExamQuestion[] }>(out)
   const questions = (paper.questions ?? [])
     .filter((q) => Array.isArray(q.parts) && q.parts.length)
@@ -84,10 +84,10 @@ Give method marks for correct working even when the final answer is wrong. If th
 Then return ONLY JSON: {"awarded": 2, "feedback": "what earned marks, what lost marks and why, in 2-4 sentences", "missed": "the key idea or step they missed, as one sentence"}
 If you award fewer than ${part.marks} marks, "missed" must say exactly what would have earned the rest; leave it empty only for full marks.`
   const content: ApiContent = [{ type: 'text', text }, ...images.map((url) => ({ type: 'image_url' as const, image_url: { url } }))]
-  // Claude's marking model (Opus) when the question may leave this Mac, photos of handwriting and
-  // all: it reads them as image blocks. Gemma marks when Claude can't (its limit, offline, private)
+  // Claude's marking model (Opus), photos of handwriting and all: it reads them as image blocks.
+  // Gemma marks when Claude can't (its limit, offline, an error)
   const gemma = () => agentComplete([{ role: 'user', content }], 'You are an experienced university examiner.', true, images.length ? undefined : 'marking')
-  const out = await claudeOr(images.length ? 'handwriting' : 'examMark', text, 'You are an experienced university examiner.', { text: `${question.text}\n${part.text}\n${part.scheme}`, images }, gemma)
+  const out = await claudeOr(images.length ? 'handwriting' : 'examMark', text, 'You are an experienced university examiner.', { images }, gemma)
   const m = extractJsonObject<{ awarded?: number; feedback?: string; missed?: string }>(out)
   return {
     awarded: Math.max(0, Math.min(part.marks, Number(m.awarded) || 0)),

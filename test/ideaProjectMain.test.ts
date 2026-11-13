@@ -27,6 +27,7 @@ vi.mock('../src/main/learn', () => ({
 }))
 vi.mock('../src/main/book', () => ({}))
 vi.mock('../src/main/search', () => ({}))
+const flags = vi.hoisted(() => ({ claudeDown: false }))
 const coach = { focus: ['Software Engineering'] as string[] }
 vi.mock('../src/main/coach', () => ({
   getCoach: async () => ({ goal: '', focus: [...coach.focus], hoursPerWeek: 10, days: [1, 2, 3] }),
@@ -35,7 +36,7 @@ vi.mock('../src/main/coach', () => ({
 }))
 const evidence: { topic: string; kind: string; path?: string }[] = []
 vi.mock('../src/main/knowledge', () => ({
-  allConcepts: async (privateOk: boolean) => [{ id: 'k1', name: 'Double-entry bookkeeping', status: 'solid', seen: 3, private: false }, ...(privateOk ? [{ id: 'k2', name: 'Idempotency keys', status: 'fading', seen: 2 }] : [])],
+  allConcepts: async () => [{ id: 'k1', name: 'Double-entry bookkeeping', status: 'solid', seen: 3 }, { id: 'k2', name: 'Idempotency keys', status: 'fading', seen: 2 }],
   noteEvidence: async (e: { topic: string; kind: string; path?: string }) => void evidence.push(e)
 }))
 vi.mock('../src/main/courses', () => ({ searchCourses: async () => [] }))
@@ -47,7 +48,7 @@ vi.mock('../src/main/ide/tests', () => ({
 }))
 const gemmaPrompts: string[] = []
 vi.mock('../src/main/ai', () => ({
-  jobRoute: async (_job: string, _p: string, o: { private?: boolean }) => (o.private ? { who: 'gemma', reason: 'private' } : { who: 'claude', role: 'hard' }),
+  jobRoute: async () => (flags.claudeDown ? { who: 'gemma', reason: 'limit' } : { who: 'claude', role: 'hard' }),
   extractJsonObject: (t: string) => JSON.parse(t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1)),
   complete: async (prompt: string) => (gemmaPrompts.push(prompt), '{}'),
   claudeOr: async () => '{}',
@@ -80,11 +81,10 @@ const profileOps: { do: string; section: string; text: string }[] = []
 vi.mock('../src/main/learnerProfile', () => ({ noteFromProject: async (ops: { do: string; section: string; text: string }[]) => (profileOps.push(...ops), []) }))
 
 const ideas = await import('../src/main/ideaProjects')
-const { privatePath } = await import('../src/main/projects')
 const { IDEA_TEMPLATES, planFromTemplate } = await import('../src/shared/ideaTemplates')
 const pair = await import('../src/main/ide/pair')
 
-const asked: { job: string; private: boolean; prompt: string }[] = []
+const asked: { job: string; prompt: string }[] = []
 const CLAUDE_PLAN = JSON.stringify({
   name: 'Payment rail',
   summary: 'A rail.',
@@ -105,9 +105,10 @@ const CLAUDE_PLAN = JSON.stringify({
 
 beforeEach(() => {
   asked.length = 0
-  ideas.setAsker(async (job, prompt, _system, o, gemma) => {
-    asked.push({ job, private: o.private, prompt })
-    if (o.private) return { text: gemma ? await gemma() : '{}', by: 'gemma' }
+  flags.claudeDown = false
+  ideas.setAsker(async (job, prompt, _system, _o, gemma) => {
+    asked.push({ job, prompt })
+    if (flags.claudeDown) return { text: gemma ? await gemma() : '{}', by: 'gemma' }
     if (job === 'projectReady') return { text: JSON.stringify({ questions: [...[1, 2, 3, 4, 5].map((i) => ({ id: `d${i}`, kind: 'design', question: `Design question ${i}?`, points: ['ledger'], revisit: 'double-entry bookkeeping' })), { id: 'r1', kind: 'reading', question: 'Reading question?', points: ['balance'], revisit: 'Accounting for developers' }, { id: 'r2', kind: 'reading', question: 'Second reading question?', points: ['minor units'] }] }), by: 'claude' }
     if (job === 'projectReadyMark') {
       const answers = [...prompt.matchAll(/Question (\w+) \(\w+\): [^\n]*\n[^\n]*\nTheir answer: ([^\n]*)/g)]
@@ -122,50 +123,53 @@ beforeEach(() => {
 const owner = (events: PairEvent[]) => ({ isDestroyed: () => false, send: (_c: string, e: PairEvent) => events.push(e) }) as unknown as Electron.WebContents
 
 describe('a project from an idea', () => {
-  it('asks Claude its questions, and asks a private idea’s plainly, without a model', async () => {
-    const q = await ideas.questions('I want to build a payment rail', false)
+  it('asks Claude its questions, and asks them plainly, without a model, only when Claude can’t', async () => {
+    const q = await ideas.questions('I want to build a payment rail for work')
     expect(q.by).toBe('claude')
     expect(q.questions[0].question).toBe('Which rails?')
-    const p = await ideas.questions('I want to build a payment rail', true)
+    flags.claudeDown = true
+    const p = await ideas.questions('I want to build a payment rail')
     expect(p.by).toBe('none')
     expect(p.questions.map((x) => x.id)).toEqual(['scope', 'language', 'depth'])
     expect(asked.filter((a) => a.job === 'projectQuestions')).toHaveLength(1)
   })
 
   it('has Claude write the plan, marked against what you know, with the template as its starting map', async () => {
-    const r = await ideas.draftPlan({ idea: 'I want to build a payment rail', answers: [{ question: 'Language?', answer: 'Python' }], private: false, source: 'model' })
+    const r = await ideas.draftPlan({ idea: 'I want to build a payment rail', answers: [{ question: 'Language?', answer: 'Python' }], source: 'model' })
     expect(r.plan.by).toBe('claude')
     expect(r.problems).toEqual([])
-    expect(asked[0]).toMatchObject({ job: 'projectPlan', private: false })
+    expect(asked[0]).toMatchObject({ job: 'projectPlan' })
     expect(asked[0].prompt).toContain('A starting map for this kind of project')
     expect(asked[0].prompt).toContain('Double-entry bookkeeping')
     const ledger = r.plan.components.find((c) => c.id === 'ledger')!
-    // Private concepts aren't read for a plan Claude sees
-    expect(ledger.prerequisites.map((p) => p.status)).toEqual(['known', 'new'])
+    // Every concept on the map is read: nothing is held back from Claude
+    expect(asked[0].prompt).toContain('Idempotency keys')
+    expect(ledger.prerequisites.map((p) => p.status)[0]).toBe('known')
+    expect(ledger.prerequisites.map((p) => p.status)[1]).not.toBe('new')
   })
 
-  it('keeps a private plan on Gemma: no starting code, placeholder tests, private concepts allowed', async () => {
-    const r = await ideas.draftPlan({ idea: 'I want to build a payment rail', answers: [], private: true, source: 'model' })
-    expect(asked.every((a) => a.private)).toBe(true)
+  it('plans on Gemma only when Claude can’t: no starting code, placeholder tests', async () => {
+    flags.claudeDown = true
+    const r = await ideas.draftPlan({ idea: 'I want to build a payment rail', answers: [], source: 'model' })
     // Gemma is given its own, smaller prompt, with no starting code asked for
     expect(gemmaPrompts.at(-1)).toMatch(/^Plan a project a learner will build themselves/)
     expect(gemmaPrompts.at(-1)).not.toContain('scaffold')
     // Gemma's answer here is empty JSON, so the template stands in, and says so
-    expect(r.plan.private).toBe(true)
+    expect(r.plan).not.toHaveProperty('private')
     expect(r.note).toMatch(/template/)
   })
 
   it('works with no model at all: a template, or a blank plan', async () => {
-    const t = await ideas.draftPlan({ idea: 'blockchain', answers: [], private: false, source: 'template', template: 'blockchain' })
+    const t = await ideas.draftPlan({ idea: 'blockchain', answers: [], source: 'template', template: 'blockchain' })
     expect(t.plan.by).toBe('template')
     expect(t.plan.milestones[0].title).toBe('Blocks linked by hashes')
-    const b = await ideas.draftPlan({ idea: 'I want to build a tiny shell', answers: [], private: false, source: 'blank' })
+    const b = await ideas.draftPlan({ idea: 'I want to build a tiny shell', answers: [], source: 'blank' })
     expect(b.plan).toMatchObject({ by: 'manual', name: 'A tiny shell' })
     expect(asked).toHaveLength(0)
   })
 
   it('makes the notebook, the notes, a git repository (tests held for the ready check), the roadmap and the coach', async () => {
-    const plan = planFromTemplate(IDEA_TEMPLATES[0], 'I want to build a payment rail', Date.now(), false)
+    const plan = planFromTemplate(IDEA_TEMPLATES[0], 'I want to build a payment rail', Date.now())
     const made = await ideas.createProject(plan)
     expect(made.notebook).toBe('Payment rail')
     expect(made.root).toBe(join(vault, 'Code', 'payment-rail'))
@@ -180,7 +184,8 @@ describe('a project from an idea', () => {
     for (const f of ['README.md', 'pyproject.toml', 'requirements.txt', 'rail/ledger.py']) expect(existsSync(join(made.root, f)), f).toBe(true)
     // The notes and the notebook
     const nb = notebooks.get('Payment rail')!
-    expect(nb.project).toMatchObject({ kind: 'build', private: false, brief: 'Payment rail/Payment rail plan.md', code: 'Code/payment-rail' })
+    expect(nb.project).not.toHaveProperty('private')
+    expect(nb.project).toMatchObject({ kind: 'build', brief: 'Payment rail/Payment rail plan.md', code: 'Code/payment-rail' })
     expect(nb.outline).toBe('Payment rail/Payment rail roadmap.md')
     expect(readFileSync(join(vault, 'Payment rail/Payment rail roadmap.md'), 'utf8')).toContain('## Milestone 1: A double-entry ledger')
     expect(readFileSync(join(vault, 'Payment rail/Project memory.md'), 'utf8')).toContain('Milestone 1: A double-entry ledger. Make its failing tests pass.')
@@ -194,7 +199,7 @@ describe('a project from an idea', () => {
   })
 
   it('runs a milestone’s session: the ready check unlocks the tests, the debrief ends it, points are kept', async () => {
-    const plan = planFromTemplate(IDEA_TEMPLATES[2], 'stablecoin', Date.now(), false)
+    const plan = planFromTemplate(IDEA_TEMPLATES[2], 'stablecoin', Date.now())
     const { notebook, root } = await ideas.createProject(plan)
     await expect(ideas.startMilestoneSession(notebook, 'm2')).rejects.toThrow(/before it/)
     await ideas.startMilestoneSession(notebook, 'm1')
@@ -254,34 +259,24 @@ describe('a project from an idea', () => {
   })
 })
 
-describe('privacy', () => {
-  it('a private project’s folder is private, Claude refuses it, and a bug hunt can’t start in it', async () => {
-    const plan = planFromTemplate(IDEA_TEMPLATES[3], 'core banking for work', Date.now(), true)
+describe('a work project', () => {
+  it('goes to Claude like any other: the pair session runs and a bug hunt can start', async () => {
+    const plan = planFromTemplate(IDEA_TEMPLATES[3], 'core banking for work', Date.now())
     const made = await ideas.createProject(plan)
-    expect(await privatePath('Code/core-banking/bank/accounts.py')).toBe(true)
-    expect(await ideas.privateRoot(made.root)).toBe(true)
+    expect('privateRoot' in ideas).toBe(false)
     const events: PairEvent[] = []
     const before = launched.length
-    await pair.send(owner(events), { session: 'priv1', root: made.root, mode: 'mentor', text: 'Review the whole project' })
-    expect(launched.length).toBe(before)
-    expect(events.find((e) => e.type === 'error')).toMatchObject({ message: expect.stringMatching(/private/) })
-    await expect(pair.startHunt(made.root)).rejects.toThrow(/private/)
-    // Its ready check is the plan's own, marked on this Mac with no model asked
-    await ideas.startMilestoneSession(made.notebook, 'm1')
-    asked.length = 0
-    const p = await ideas.readyQuestions(made.notebook, 'm1')
-    expect(p.milestones[0].gate?.by).toBe('plan')
-    const r = await ideas.markReady(made.notebook, 'm1', { d1: 'too short' })
-    expect(r.plan.milestones[0].gate?.ready).toBe(false)
-    expect(asked).toEqual([])
-    // Its debrief stays out of the profile (written by Gemma, here an empty answer, so from what Tide recorded)
-    for (const st of ['warmup', 'lesson'] as const) await ideas.stepSession(made.notebook, 'm1', st, 'skipped')
+    await pair.send(owner(events), { session: 'work1', root: made.root, mode: 'mentor', text: 'Review the whole project' })
+    expect(launched.length).toBe(before + 1)
+    expect(events.find((e) => e.type === 'error')).toBeUndefined()
+    const hunt = await pair.startHunt(made.root)
+    expect(hunt.root).toContain('bug-hunt')
   })
 })
 
 describe('the mentor in the IDE', () => {
   it('knows the plan and its memory, and keeps the memory with its tool', async () => {
-    const plan = planFromTemplate(IDEA_TEMPLATES[1], 'a blockchain', Date.now(), false)
+    const plan = planFromTemplate(IDEA_TEMPLATES[1], 'a blockchain', Date.now())
     const made = await ideas.createProject(plan)
     const events: PairEvent[] = []
     await pair.send(owner(events), { session: 'mentor1', root: made.root, mode: 'mentor', text: 'Review the whole project' })
@@ -302,7 +297,7 @@ describe('the mentor in the IDE', () => {
     expect(memory['What’s next']).toEqual([])
   })
   it('lets the learner write: no write_file, and code only as a small, counted hint when asked or after failed runs', async () => {
-    const plan = planFromTemplate(IDEA_TEMPLATES[0], 'a payment rail', Date.now(), false)
+    const plan = planFromTemplate(IDEA_TEMPLATES[0], 'a payment rail', Date.now())
     const made = await ideas.createProject(plan)
     const events: PairEvent[] = []
     await pair.send(owner(events), { session: 'tut1', root: made.root, mode: 'tutor', text: 'How should I start?' })
@@ -339,7 +334,7 @@ describe('the mentor in the IDE', () => {
 
 describe('a lesson inside a planned project', () => {
   it('keeps the project’s rules: no write_file, and a hint as code only when asked', async () => {
-    const plan = planFromTemplate(IDEA_TEMPLATES[1], 'blocks', Date.now(), false)
+    const plan = planFromTemplate(IDEA_TEMPLATES[1], 'blocks', Date.now())
     const made = await ideas.createProject(plan)
     const code = await import('../src/main/ide/lesson')
     code.lessonWorkspace('lab-proj', 'hashing', made.root)
@@ -372,7 +367,7 @@ describe('the ladder and suggestions, from what you study', () => {
     await ideas.ideaSuggestions()
     expect(asked).toEqual([])
     // A step starts a plan already mapped out, with its tier
-    const d = await ideas.draftPlan({ idea: '', answers: [], private: false, source: 'template', seed: 'ledger-module' })
+    const d = await ideas.draftPlan({ idea: '', answers: [], source: 'template', seed: 'ledger-module' })
     expect(d.plan).toMatchObject({ seed: 'ledger-module', tier: 1, area: 'payments' })
     expect(d.plan.milestones).toHaveLength(1)
   })

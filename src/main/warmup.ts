@@ -3,7 +3,7 @@
  * learner already studied, from the knowledge map (with the roadmap's prerequisites and each
  * lesson's plan steps), what a search for the new topic finds in their past lesson pages, and the
  * questions kept on each concept (flashcards, recall, mistakes). No model is asked, so it is quick
- * and the same with Claude or Gemma. A private lesson draws on private concepts; an open one never does.
+ * and the same with Claude or Gemma.
  */
 import type { ConceptState } from '@shared/knowledge'
 import { kindOfMark, recalled } from '@shared/knowledge'
@@ -11,12 +11,11 @@ import type { ReviewItem } from '@shared/review'
 import type { Verdict } from '@shared/types'
 import { priorText, rankPrior, warmupCards, WARMUP_MAX_CONCEPTS, type PriorConcept, type WarmupCard, type WarmupSet } from '@shared/warmup'
 import { allConcepts, areaOf, conceptOfTopic, noteReviewAnswer } from './knowledge'
-import { privatePath } from './projects'
 
 const normName = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
 
 /** How strongly a search for the topic hits each concept's past lesson pages, 0 to 1 */
-async function searchedConcepts(topic: string, privateOk: boolean): Promise<Map<string, number>> {
+async function searchedConcepts(topic: string): Promise<Map<string, number>> {
   const out = new Map<string, number>()
   try {
     const [{ search }, { listLessons }] = await Promise.all([import('./search'), import('./lessons')])
@@ -29,8 +28,6 @@ async function searchedConcepts(topic: string, privateOk: boolean): Promise<Map<
     for (const h of hits) {
       const l = byPage.get(h.path)
       if (!l || normName(l.topic) === normName(topic)) continue
-      const path = 'path' in l.scope ? l.scope.path : ''
-      if (!privateOk && path && (await privatePath(path).catch(() => true))) continue
       const id = await conceptOfTopic(l.topic)
       if (id) out.set(id, Math.max(out.get(id) ?? 0, h.score / top))
     }
@@ -54,8 +51,7 @@ function prerequisitesOf(topicId: string | null, byId: Map<string, ConceptState>
 
 /** The earlier concepts a lesson on this topic builds on, ranked, with what's kept on each */
 async function prior(topic: string, path: string | undefined, max = WARMUP_MAX_CONCEPTS): Promise<{ ranked: PriorConcept[]; kept: Map<string, ReviewItem[]> }> {
-  const privateOk = !!path && (await privatePath(path).catch(() => true))
-  const [all, place, topicId, searched] = await Promise.all([allConcepts(privateOk), areaOf(path), conceptOfTopic(topic), searchedConcepts(topic, privateOk)])
+  const [all, place, topicId, searched] = await Promise.all([allConcepts(), areaOf(path), conceptOfTopic(topic), searchedConcepts(topic)])
   const byId = new Map(all.map((c) => [c.id, c]))
   const prereqs = prerequisitesOf(topicId, byId)
   const steps = new Map<string, string[]>()

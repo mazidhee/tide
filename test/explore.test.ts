@@ -11,12 +11,11 @@ mkdirSync(vault, { recursive: true })
 const sent: string[] = []
 vi.mock('electron', () => ({ app: { getPath: () => root, getAppPath: () => process.cwd() }, BrowserWindow: { getAllWindows: () => [{ webContents: { isDestroyed: () => false, send: (c: string) => sent.push(c) } }] } }))
 vi.mock('../src/main/settings', () => ({ getSettings: () => ({ vaultPath: vault, libraryFolder: 'Library', ai: {} }) }))
-const titles: { prompt: string; private: boolean }[] = []
-vi.mock('../src/main/teacher', () => ({ isPrivateTurn: async (req: { messages: { content: string }[] }) => /metabase/i.test(req.messages[0].content) }))
+const titles: { prompt: string; args: number }[] = []
 vi.mock('../src/main/claudeEngine', () => ({
-  backgroundOnClaude: async (prompt: string, _s: string, _sig: unknown, priv: boolean) => {
-    titles.push({ prompt, private: priv })
-    return priv ? null : 'Why the Babylonians counted in 60s.'
+  backgroundOnClaude: async (prompt: string, ...rest: unknown[]) => {
+    titles.push({ prompt, args: rest.length + 1 })
+    return /metabase/i.test(prompt) ? 'Metabase question ids.' : 'Why the Babylonians counted in 60s.'
   }
 }))
 vi.mock('../src/main/ai', () => ({ complete: async () => 'Title: Metabase question ids' }))
@@ -92,21 +91,21 @@ describe('explore later: kept in the vault', async () => {
     expect(file()[0].id).toBe(x.id)
     await settle()
     expect(file()[0]).toMatchObject({ id: x.id, title: 'Why the Babylonians counted in 60s', titled: true })
-    expect(titles[0].private).toBe(false)
+    expect(titles[0].args).toBe(3)
     expect(sent).toContain('explore:changed')
   })
 
-  it('keeps a private lesson’s item on this Mac: titled by Gemma, its side lesson in the same scope', async () => {
-    const scope = { kind: 'folder' as const, path: 'Work' }
-    const x = await store.addExplore({ text: 'Metabase stores questions by id.', from: { topic: 'Our Metabase' }, scope })
-    expect(x).toMatchObject({ private: true, scope })
+  it('titles a work or Metabase item on Claude like any other, with no private flag or scope kept', async () => {
+    const x = await store.addExplore({ text: 'Metabase stores questions by id.', from: { topic: 'Our Metabase' } })
+    expect(x).not.toHaveProperty('private')
+    expect(x).not.toHaveProperty('scope')
     await settle()
-    expect(titles.at(-1)?.private).toBe(true)
+    expect(titles.at(-1)?.prompt).toMatch(/Metabase/)
     expect((await store.listExplore()).find((i) => i.id === x.id)?.title).toBe('Metabase question ids')
   })
 
   it('marks the item explored when its side lesson finishes, linked to it', async () => {
-    const [first] = (await store.listExplore()).filter((i) => !i.private)
+    const first = (await store.listExplore()).find((i) => /Babylonians/.test(i.text))!
     const lesson = { id: 'side1', mode: 'teach' as const, topic: first.title, scope: { kind: 'none' as const }, options: { curiosity: { id: first.id, text: first.text, from: first.from } } }
     await saveLesson({ ...lesson, turns: [{ role: 'user', content: 'go' }, { role: 'assistant', content: 'Sixty divides well.' }], finished: false })
     expect((await store.listExplore()).find((i) => i.id === first.id)?.explored).toBeUndefined()

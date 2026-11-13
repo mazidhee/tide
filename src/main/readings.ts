@@ -3,7 +3,7 @@
  * legal readings per topic (suggested by the planning model, then checked to exist: Open Library,
  * arXiv, the web), Wikipedia's article, and the source your roadmap names. Small PDFs from open
  * archives (arXiv, RFCs, course and project sites) are saved into the Library and filed under the
- * notebook, so lessons on it can use them. Private projects are skipped.
+ * notebook, so lessons on it can use them.
  */
 import { aimOf, todayItems, type AgendaItem, type WeekPlan } from '@shared/coach'
 import { normalizeTitle } from '@shared/outline'
@@ -15,11 +15,8 @@ import { ask } from './curriculum'
 import { getNotebooks, getLibraryTopics, setLibraryTopics } from './learn'
 import { downloadPdf } from './library'
 import { verifyItems } from './planner'
-import { privatePath } from './projects'
 import { reindexPath } from './search'
 import { getSettings } from './settings'
-import { aboutMetabase } from '@shared/metabase'
-import { metabaseHost, metabaseReady } from './metabase'
 import { readText, writeText } from './vault'
 import { noteUse } from './connectionUse'
 
@@ -70,8 +67,7 @@ const RETRY_EMPTY = 86_400_000
 
 /**
  * Finds readings for one topic, unless it has them (or is being looked up) already. `path` is the
- * note or folder the lesson is about: anything in a private project, or about your Metabase, is
- * never looked up.
+ * note or folder the lesson is about.
  */
 export async function findReadings(it: { topic: string; notebook?: string; path?: string; source?: string; section?: string }): Promise<Reading[]> {
   const key = keyOf(it.topic)
@@ -81,9 +77,6 @@ export async function findReadings(it: { topic: string; notebook?: string; path?
   if (getSettings().ai.webSearch?.provider === 'off') return []
   const notebooks = await getNotebooks()
   const nb = notebooks.find((n) => n.name === it.notebook || n.path === it.notebook) ?? (it.path ? notebooks.find((n) => it.path === n.path || it.path!.startsWith(`${n.path}/`)) : undefined)
-  // A private project's topics stay on this Mac: nothing is looked up for them
-  for (const p of [nb?.path, it.path]) if (p && (await privatePath(p).catch(() => true))) return []
-  if (metabaseReady() && aboutMetabase(it.topic, metabaseHost())) return []
   findingNow.add(key)
   try {
     const items = await gather({ ...it, notebook: nb?.name ?? it.notebook })
@@ -98,7 +91,7 @@ async function gather(it: { topic: string; notebook?: string; source?: string; s
   const aims = aimOf(await getCoach())
   const signal = new AbortController().signal
   // Suggested by the planning model (the topic and section only leave the Mac), then checked
-  const { text } = await ask(READINGS_SYSTEM, readingsPrompt(it.topic, it.section ?? '', it.notebook ?? '', aims), false, signal)
+  const { text } = await ask(READINGS_SYSTEM, readingsPrompt(it.topic, it.section ?? '', it.notebook ?? '', aims), signal)
   const suggested: { title: string; by?: string; why?: string; kind: Reading['kind']; url?: string; unverified?: boolean }[] = parseReadings(extractJsonObject(text))
   // The source your roadmap names, if it isn't already there
   if (it.source && !suggested.some((s) => normalizeTitle(s.title) === normalizeTitle(it.source!))) suggested.push({ title: it.source, kind: 'book', why: 'Named in your roadmap' })

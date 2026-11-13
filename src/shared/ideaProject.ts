@@ -169,8 +169,6 @@ export interface ProjectPlan {
   milestones: PlanMilestone[]
   /** The starting files: structure, stubs, and failing tests for the first milestone */
   scaffold: ScaffoldFile[]
-  /** Answered by Gemma on this Mac only; never sent to Claude */
-  private: boolean
   /** Where it sits on the ladder: 1 a component, 2 a service, 3 an end-to-end system, 4 a flagship over weeks */
   tier?: 1 | 2 | 3 | 4
   area?: 'software' | 'data' | 'blockchain' | 'payments' | 'quant' | 'maths'
@@ -361,7 +359,6 @@ export function validatePlan(raw: unknown, base: Partial<ProjectPlan> = {}): { p
     links,
     milestones,
     scaffold,
-    private: base.private ?? r.private === true,
     by,
     ...([1, 2, 3, 4].includes(Number(base.tier ?? r.tier)) ? { tier: Number(base.tier ?? r.tier) as 1 | 2 | 3 | 4 } : {}),
     ...(['software', 'data', 'blockchain', 'payments', 'quant', 'maths'].includes(String(base.area ?? r.area)) ? { area: String(base.area ?? r.area) as NonNullable<ProjectPlan['area']> } : {}),
@@ -1000,7 +997,6 @@ export interface IdeaProjectCard {
   name: string
   root: string
   language: IdeaLanguage
-  private: boolean
   progress: { done: number; total: number; hoursLeft: number; index: number }
   current: string | null
   step?: MilestoneSession['step']
@@ -1020,10 +1016,10 @@ export interface IdeasApi {
   /** Which template the idea is closest to, if any */
   matchTemplate(idea: string): Promise<string | null>
   /** Where the plan will be written: Claude (and which model), Gemma, or no model */
-  route(isPrivate: boolean): Promise<{ who: 'claude' | 'gemma' | 'none'; label: string }>
-  questions(idea: string, isPrivate: boolean): Promise<{ questions: ClarifyQuestion[]; by: 'claude' | 'gemma' | 'none' }>
+  route(): Promise<{ who: 'claude' | 'gemma' | 'none'; label: string }>
+  questions(idea: string): Promise<{ questions: ClarifyQuestion[]; by: 'claude' | 'gemma' | 'none' }>
   /** Writes the plan (not saved): from a model, a template, or blank */
-  draft(req: { idea: string; answers: { question: string; answer: string }[]; language?: IdeaLanguage; depth?: IdeaDepth; private: boolean; template?: string | null; seed?: string | null; source: 'model' | 'template' | 'blank' }): Promise<{ plan: ProjectPlan; problems: string[]; note?: string }>
+  draft(req: { idea: string; answers: { question: string; answer: string }[]; language?: IdeaLanguage; depth?: IdeaDepth; template?: string | null; seed?: string | null; source: 'model' | 'template' | 'blank' }): Promise<{ plan: ProjectPlan; problems: string[]; note?: string }>
   /** The plan checked again after the learner edited it (prerequisites marked, readings found) */
   check(plan: ProjectPlan): Promise<{ plan: ProjectPlan; problems: string[] }>
   /** Makes it: the notebook, the notes, the project folder with git and failing tests, the roadmap and the coach */
@@ -1037,7 +1033,7 @@ export interface IdeasApi {
   finish(notebook: string, milestone: string): Promise<ProjectPlan>
   reopen(notebook: string, milestone: string): Promise<ProjectPlan>
   memory(notebook: string): Promise<{ path: string; memory: ProjectMemory }>
-  /** The mentor's review on this Mac (private projects, or no Claude): Gemma reads the code and the tests */
+  /** The mentor's review without Claude's tools (no Claude): the code and the tests read in one go */
   reviewLocal(notebook: string): Promise<{ review: string; tests: string }>
   /** The ready check's questions for a milestone (Opus writes them; without Claude, the plan's own) */
   readyQuestions(notebook: string, milestone: string): Promise<ProjectPlan>

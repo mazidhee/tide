@@ -12,6 +12,7 @@ import { CourseShelf } from './CoursesView'
 import { ToExplore } from './ExploreLater'
 import { ReadyCard } from './ReadyCard'
 import { startPrepared, useReadyLesson } from '../lib/prep'
+import { LadderShelf } from './LadderView'
 
 type LearnMode = SessionMode | 'exam' | 'mixed'
 
@@ -289,6 +290,8 @@ export function LearnView() {
         </div>
         <p className="lrn-desc">{selected.description}</p>
 
+        {/* The maths-to-quant ladder (components/LadderView): where you are and what's next */}
+        <LadderShelf />
         {/* Projects from an idea (components/ideas): continue one, or start one */}
         <ProjectsShelf />
         {/* Hook: guided projects (components/WorkshopView.tsx) */}

@@ -14,12 +14,8 @@ vi.mock('../src/main/coach', () => ({
 }))
 vi.mock('../src/main/learn', () => ({ getNotebooks: async () => [], focusLog: async () => [] }))
 vi.mock('../src/main/mistakes', () => ({ listMistakes: async () => [{ id: 'm1', topic: 'Binary numbers', question: 'Group 101101 into nibbles', answer: '1011 01', fix: 'Pad on the left: 0010 1101', status: 'open', at: Date.now(), source: 'lesson' }] }))
-vi.mock('../src/main/projects', () => ({ privatePath: async (p: string) => p.startsWith('Acme') }))
-// Routing: a lesson in the Acme project (private) or about Metabase stays on the Mac
-vi.mock('../src/main/ai', () => ({
-  jobRoute: async (_job: string, prompt: string, o: { path?: string }) =>
-    /metabase/i.test(prompt) ? { who: 'gemma', reason: 'metabase' } : o.path?.startsWith('Acme') ? { who: 'gemma', reason: 'private' } : { who: 'claude', role: 'background' }
-}))
+// Routing: every lesson goes to Claude, a work project's and Metabase's too
+vi.mock('../src/main/ai', () => ({ jobRoute: async () => ({ who: 'claude', role: 'background' }) }))
 
 const P = await import('../src/shared/learnerProfile')
 const L = await import('../src/main/learnerProfile')
@@ -235,13 +231,12 @@ describe('after a lesson', () => {
     expect(view.sections.find((s) => s.id === 'preferences')!.items[0]).toMatchObject({ yours: true })
   })
 
-  it('never sends a private or Metabase lesson’s content to the model', async () => {
+  it('reads a work project’s or a Metabase lesson’s content like any other', async () => {
     const asked: string[] = []
     const ask = async (p: string) => (asked.push(p), { text: reply, by: 'claude' as const })
     await L.updateFromLesson(lesson('p', { scope: { kind: 'folder', path: 'Acme payments' } }), { ask })
     await L.updateFromLesson(lesson('m', { topic: 'Metabase questions and dashboards' }), { ask })
-    expect(asked).toEqual([])
-    // Their marks still count in the measured lines
+    expect(asked).toHaveLength(2)
     expect(note()).toMatch(/Measured: /)
   })
 

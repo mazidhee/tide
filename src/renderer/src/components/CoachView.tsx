@@ -6,6 +6,7 @@ import { Icon } from './Icon'
 import { PixelScene } from './PixelScene'
 import { Professor } from './Professor'
 import { GoalsPanel, PlanNotices } from './GoalsPanel'
+import { WeekProgressSection } from './WeekProgress'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const today = () => localDate()
@@ -226,6 +227,8 @@ export function CoachView() {
         )}
 
         {week && <WeekBoard week={week} onChange={setWeek} thingsReady={thingsReady} onThings={toThings} busy={busy === 'things'} onPlan={plan} planning={busy === 'plan'} />}
+
+        <WeekProgressSection />
       </div>
     </div>
   )

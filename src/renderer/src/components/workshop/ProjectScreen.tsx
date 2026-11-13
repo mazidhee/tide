@@ -236,7 +236,6 @@ export function ProjectScreen(p: ProjectScreenProps) {
             </ul>
             <p className="ws-rail-note">In {state.folder}. Edit them here or in any editor; a run reads them as they are.</p>
           </section>
-          {state.private && <p className="ws-rail-note">This project belongs to a private notebook: reviews and questions stay on this Mac.</p>}
         </aside>
       </div>
     </div>

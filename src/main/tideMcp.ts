@@ -39,7 +39,7 @@ async function allTools(): Promise<McpTool[]> {
     inputSchema: t.function.parameters,
     run: (args, ctx) => agent.runTideTool(t.function.name, args, ctx)
   }))
-  tools = [...wrapped, ...(await import('./tideMcpTools')).EXTRA_TOOLS, ...(await import('./exercises')).EXERCISE_TOOLS]
+  tools = [...wrapped, ...(await import('./tideMcpTools')).EXTRA_TOOLS, ...(await import('./exercises')).EXERCISE_TOOLS, ...(await (await import('./maths')).allMathsTools())]
   return tools
 }
 
@@ -51,11 +51,21 @@ async function allTools(): Promise<McpTool[]> {
  */
 export async function toolsFor(lesson: string): Promise<McpTool[]> {
   if (lesson.startsWith('ide:')) return (await import('./ide/pair')).IDE_TOOLS
+  const base = [...(await allTools()), ...(await metabaseTools())]
   if (lesson.startsWith('code:')) {
     const code = await import('./ide/lesson')
-    return [...(await allTools()), ...code.lessonTools(code.labOfKey(lesson))]
+    return [...base, ...code.lessonTools(code.labOfKey(lesson))]
   }
-  return allTools()
+  return base
+}
+
+/** The student's Metabase, read-only, while one is connected: Claude takes Metabase work like anything else */
+async function metabaseTools(): Promise<McpTool[]> {
+  const { metabaseReady } = await import('./metabase')
+  if (!metabaseReady()) return []
+  const agent = await import('./agent')
+  const t = agent.MCP_METABASE_TOOL.function
+  return [{ name: t.name, description: t.description, inputSchema: t.parameters, run: (args, ctx) => agent.runTideTool(t.name, args, ctx) }]
 }
 
 export interface McpHandle {

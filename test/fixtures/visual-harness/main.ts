@@ -9,7 +9,8 @@ import { createServer } from 'http'
 import { createServer as createTcp } from 'net'
 import { createSocket } from 'dgram'
 import { join } from 'path'
-import { VISUAL_SCHEME_PRIVILEGES, LIMITS, blockVisualRequests, unwatchVisual, denyVisualPermissions, guardVisualFrames, handleVisualProtocol, killVisual, onVisualKilled, visualPid, watchVisual } from '../../../src/main/visualFrames'
+import { readFileSync } from 'fs'
+import { VISUAL_SCHEME_PRIVILEGES, serveVisualLibraries, LIMITS, blockVisualRequests, unwatchVisual, denyVisualPermissions, guardVisualFrames, handleVisualProtocol, killVisual, onVisualKilled, visualPid, watchVisual } from '../../../src/main/visualFrames'
 
 protocol.registerSchemesAsPrivileged([VISUAL_SCHEME_PRIVILEGES])
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
@@ -37,6 +38,9 @@ app.whenReady().then(async () => {
   await new Promise<void>((r) => turn.listen(0, '127.0.0.1', () => r()))
 
   handleVisualProtocol()
+  // The frame's maths library, as the app serves it (main/visualLibs), read from the source here
+  const tideMath = readFileSync(process.env.TIDE_MATH_JS ?? '', 'utf8')
+  serveVisualLibraries((url, method) => (method === 'GET' && new URL(url).pathname === '/lib/tide-math.js' ? { body: tideMath, headers: { 'content-type': 'text/javascript; charset=utf-8', 'cross-origin-resource-policy': 'cross-origin' } } : null))
   denyVisualPermissions(session.defaultSession)
   if (!process.env.HARNESS_NO_BLOCK) blockVisualRequests(session.defaultSession)
   LIMITS.memoryMb = Number(process.env.HARNESS_MEMORY_MB ?? 250)

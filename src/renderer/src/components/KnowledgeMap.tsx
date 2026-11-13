@@ -41,7 +41,6 @@ interface Area {
   label: string
   topics: ConceptState[]
   counts: Record<ConceptStatus, number>
-  private: boolean
 }
 
 export function KnowledgeMap({ data, onLesson, onCheck, onReview, onMissed, onNewTopic, tide, areaClass = () => '' }: KnowledgeMapProps) {
@@ -62,10 +61,9 @@ export function KnowledgeMap({ data, onLesson, onCheck, onReview, onMissed, onNe
   const areas = useMemo(() => {
     const m = new Map<string, Area>()
     for (const c of topics) {
-      const a = m.get(c.area) ?? { name: c.area, label: c.area || NO_AREA, topics: [], counts: { solid: 0, fading: 0, learning: 0, new: 0 }, private: true }
+      const a = m.get(c.area) ?? { name: c.area, label: c.area || NO_AREA, topics: [], counts: { solid: 0, fading: 0, learning: 0, new: 0 } }
       a.topics.push(c)
       a.counts[c.status]++
-      a.private &&= c.private
       m.set(c.area, a)
     }
     for (const a of m.values()) a.topics.sort((x, y) => Number(x.origin !== 'roadmap') - Number(y.origin !== 'roadmap') || x.order - y.order || x.name.localeCompare(y.name))
@@ -269,7 +267,6 @@ export function KnowledgeMap({ data, onLesson, onCheck, onReview, onMissed, onNe
                 <span className="know-area-meta">
                   {narrowed ? `${rows.length} of ${a.topics.length}` : `${done} of ${a.topics.length} solid`}
                   {!narrowed && a.counts.fading > 0 && <span className="know-warn"> · {a.counts.fading} fading</span>}
-                  {a.private && ' · private, stays on this Mac'}
                 </span>
               </button>
               {a.topics.length >= STRIP_FROM && <Strip topics={a.topics} dim={narrowed ? (c) => !matches(c) : undefined} picked={picked} onPick={goTo} />}

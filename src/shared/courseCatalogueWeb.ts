@@ -296,6 +296,109 @@ export const WEB_COURSES: CatalogueCourse[] = [
     ]
   },
 
+  // Added in the finance build (13 Nov 2026): open banking, ISO 20022 from the operators, banks and
+  // money, stablecoin research and Basel market risk. Each page answered 200 and its site's
+  // robots.txt allows it; none needs a login.
+  {
+    id: 'open-banking-standards',
+    source: 'docs',
+    url: 'https://www.openbanking.org.uk/what-is-open-banking/',
+    title: 'Open banking: the law and the UK standard',
+    by: 'Open Banking Limited, the European Central Bank and the European Banking Authority',
+    area: 'payments',
+    licence: 'Open Banking Limited, ECB and EBA pages (all rights reserved; the ECB allows reproduction with the source)',
+    tier: 'personal',
+    licenceNote: PERSONAL_SITE,
+    covers: 'Why open banking exists, PSD2’s access-to-account rules and strong customer authentication, and the UK Open Banking Standard’s account information and payment initiation APIs and security profile',
+    kind: 'guide',
+    level: 'intermediate',
+    topics: ['open banking', 'open finance', 'psd2', 'payment initiation', 'account information', 'strong customer authentication', 'open banking apis', 'fapi', 'aisp', 'pisp'],
+    pages: [
+      { title: 'What is open banking', url: 'https://www.openbanking.org.uk/what-is-open-banking/', module: 'The idea' },
+      { title: 'The revised Payment Services Directive (PSD2)', url: 'https://www.ecb.europa.eu/paym/intro/mip-online/2018/html/1803_revisedpsd.en.html', module: 'The law' },
+      { title: 'Payment services and electronic money', url: 'https://www.eba.europa.eu/regulation-and-policy/payment-services-and-electronic-money' },
+      { title: 'Open Banking API specifications', url: 'https://standards.openbanking.org.uk/api-specifications/', module: 'The standard' }
+    ]
+  },
+  {
+    id: 'iso20022-operators',
+    source: 'docs',
+    url: 'https://www.bis.org/cpmi/publ/d218.htm',
+    title: 'ISO 20022 from the people who run the rails',
+    by: 'CPMI (BIS) and Federal Reserve Financial Services',
+    area: 'payments',
+    licence: '© BIS, brief excerpts with the source stated; Federal Reserve Financial Services pages',
+    tier: 'personal',
+    licenceNote: 'BIS publications may be quoted in part with the source; the Fed’s service pages are kept for your own study',
+    covers: 'The harmonised ISO 20022 data requirements the G20 set for cross-border payments, and how Fedwire Funds moved to ISO 20022 messages',
+    kind: 'guide',
+    level: 'intermediate',
+    topics: ['iso 20022', 'pacs.008', 'cross-border payments', 'payment messages', 'fedwire', 'cbpr+', 'swift mx'],
+    pages: [
+      { title: 'Harmonised ISO 20022 data requirements for enhancing cross-border payments', url: 'https://www.bis.org/cpmi/publ/d218.htm', module: 'The data' },
+      { title: 'ISO 20022 implementation for Fedwire Funds', url: 'https://www.frbservices.org/resources/financial-services/wires/iso-20022-implementation-center', module: 'A real migration' }
+    ]
+  },
+  {
+    id: 'banks-and-money',
+    source: 'docs',
+    url: 'https://www.bankofengland.co.uk/quarterly-bulletin/2014/q1/money-creation-in-the-modern-economy',
+    title: 'How banks create money',
+    by: 'Bank of England',
+    area: 'payments',
+    licence: '© Bank of England (all rights reserved)',
+    tier: 'personal',
+    licenceNote: PERSONAL_SITE,
+    covers: 'The Bank of England’s account of commercial banks creating deposits by lending, the limits on it, and what central bank reserves are for: the balance-sheet view behind core banking',
+    kind: 'guide',
+    level: 'beginner',
+    topics: ['money creation', 'core banking', 'bank balance sheet', 'deposits', 'reserves', 'central bank', 'how banks work', 'fractional reserve'],
+    pages: [{ title: 'Money creation in the modern economy', url: 'https://www.bankofengland.co.uk/quarterly-bulletin/2014/q1/money-creation-in-the-modern-economy', module: 'Banks and money' }]
+  },
+  {
+    id: 'stablecoin-research',
+    source: 'docs',
+    url: 'https://www.federalreserve.gov/econres/notes/feds-notes/primary-and-secondary-markets-for-stablecoins-20240223.html',
+    title: 'Stablecoins: how they hold the peg and how they break it',
+    by: 'Federal Reserve Board, Federal Reserve Bank of New York, BIS, Circle and ethereum.org',
+    area: 'blockchain',
+    licence: 'Federal Reserve: US public domain; BIS: brief excerpts with the source; Circle: all rights reserved; ethereum.org: MIT',
+    tier: 'personal',
+    licenceNote: 'Mixed sources: the Fed’s are US government works, the others are read on this Mac for your own study',
+    covers: 'How fiat-backed stablecoins are minted, redeemed and arbitraged, why they run like money market funds, the policy questions their growth raises, and how crypto-collateralised designs differ',
+    kind: 'guide',
+    level: 'intermediate',
+    topics: ['stablecoins', 'usdc', 'depeg', 'stablecoin runs', 'mint and redeem', 'reserves', 'dai', 'algorithmic stablecoins'],
+    pages: [
+      { title: 'Stablecoins', url: 'https://ethereum.org/en/stablecoins/', module: 'What they are' },
+      { title: 'What is USDC', url: 'https://developers.circle.com/stablecoins/what-is-usdc' },
+      { title: 'Primary and secondary markets for stablecoins', url: 'https://www.federalreserve.gov/econres/notes/feds-notes/primary-and-secondary-markets-for-stablecoins-20240223.html', module: 'Holding the peg' },
+      { title: 'Runs and flights to safety: are stablecoins the new money market funds?', url: 'https://www.newyorkfed.org/research/staff_reports/sr1073', module: 'Breaking it' },
+      { title: 'Stablecoin growth: policy challenges and approaches', url: 'https://www.bis.org/publ/bisbull108.htm', module: 'Policy' }
+    ]
+  },
+  {
+    id: 'basel-market-risk',
+    source: 'docs',
+    url: 'https://www.bis.org/bcbs/publ/d457.htm',
+    title: 'Market risk under Basel: VaR, expected shortfall and backtesting',
+    by: 'Basel Committee on Banking Supervision (BIS)',
+    area: 'quant',
+    licence: '© BIS, brief excerpts with the source stated',
+    tier: 'personal',
+    licenceNote: 'BIS publications may be quoted in part with the source: read on this Mac for your own study',
+    covers: 'The rules banks measure market risk by: the FRTB standard, the internal models approach’s 97.5% expected shortfall and stressed periods, and VaR backtesting with its traffic-light zones',
+    kind: 'guide',
+    level: 'advanced',
+    topics: ['market risk', 'value at risk', 'expected shortfall', 'frtb', 'basel', 'backtesting var', 'risk management', 'capital requirements', 'stress testing'],
+    pages: [
+      { title: 'Minimum capital requirements for market risk', url: 'https://www.bis.org/bcbs/publ/d457.htm', module: 'The standard' },
+      { title: 'MAR30: Internal models approach, general provisions', url: 'https://www.bis.org/basel_framework/chapter/MAR/30.htm', module: 'Internal models' },
+      { title: 'MAR32: Backtesting and P&L attribution', url: 'https://www.bis.org/basel_framework/chapter/MAR/32.htm' },
+      { title: 'MAR33: Capital requirements calculation (expected shortfall)', url: 'https://www.bis.org/basel_framework/chapter/MAR/33.htm' }
+    ]
+  },
+
   // ---------- Quantitative finance and risk ----------
   {
     ...OCW,

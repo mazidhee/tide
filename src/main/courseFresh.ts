@@ -116,7 +116,7 @@ export async function freshStatus(): Promise<FreshStatus> {
   return { ...(s.lastRun ? { lastRun: s.lastRun } : {}), ...(s.rankedBy ? { rankedBy: s.rankedBy } : {}), running: !!running, steps: shown, log: log.slice(-150).reverse(), suggestions: s.suggestions.length, updates: Object.keys(s.updates).length }
 }
 
-/** Your subjects: focus subjects, aims, roadmaps (notebooks with one) and What you know; nothing from a private notebook */
+/** Your subjects: focus subjects, aims, roadmaps (notebooks with one) and What you know */
 async function terms(): Promise<string[]> {
   const aims: string[] = []
   const roadmaps: string[] = []
@@ -130,11 +130,11 @@ async function terms(): Promise<string[]> {
     // no coach settings
   }
   try {
-    const [{ knowledgeView }, { privatePath }] = await Promise.all([import('./knowledge'), import('./projects')])
+    const { knowledgeView } = await import('./knowledge')
     const view = await knowledgeView()
-    for (const a of view.areas) if (!(await privatePath(a.path).catch(() => true))) roadmaps.push(a.name)
+    for (const a of view.areas) roadmaps.push(a.name)
     // The concepts you are working on now, most recent first
-    for (const c of view.concepts.filter((c) => !c.private && !c.done).slice(0, 25)) known.push(c.name)
+    for (const c of view.concepts.filter((c) => !c.done).slice(0, 25)) known.push(c.name)
   } catch {
     // What you know isn't there yet
   }

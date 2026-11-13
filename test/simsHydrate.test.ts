@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { startSims } from '../src/renderer/src/lib/sims'
 import { ASK_EVENT, askDetail, dispatchAsk } from '../src/renderer/src/lib/sims/parts'
-import { SIM_GUIDE, SIM_KINDS, simGuide, simKindsFor, simLesson } from '../src/shared/sims'
+import { FULL_SIM_GUIDE, SIM_GUIDE, SIM_KINDS, simGuide, simKindsFor, simLesson } from '../src/shared/sims'
 import { TUTOR_LESSON_SYSTEM, TUTOR_SYSTEM, stableSystem } from '../src/shared/tutorPrompt'
 import { parseSim } from '../src/renderer/src/lib/sims/spec'
 import { sessionInstructions } from '../src/shared/session'
@@ -47,7 +47,7 @@ describe('sim blocks in the page', () => {
 
 describe('what the tutor is told', () => {
   it('every example in the guide is a valid simulation, and every kind and part is named', () => {
-    const examples = SIM_GUIDE.match(/\{"kind":[^\n]*?\}(?=[.\s])/g) ?? []
+    const examples = FULL_SIM_GUIDE.match(/\{"kind":[^\n]*?\}(?=[.\s])/g) ?? []
     expect(examples.map((e) => parseSim(e)?.kind)).toEqual([...SIM_KINDS])
     for (const part of ['neuron:1:2', 'edge:0:1:2', 'surface', 'loss', 'token:3', 'row:3', 'scores', 'weights', 'mix', 'point', 'gradient', 'path', 'minimum', 'logit:2', 'probabilities', 'temperature', '"tour"', '"run"', '"pause"', '"sample"'])
       expect(SIM_GUIDE).toContain(part)
@@ -58,13 +58,13 @@ describe('what the tutor is told', () => {
   it('every part and every "do" the guide names exists in its simulation', async () => {
     const { mount } = await import('../src/renderer/src/lib/sims/runtime')
     const { load } = await import('../src/renderer/src/lib/sims/runtime')
-    const examples = SIM_GUIDE.match(/\{"kind":[^\n]*?\}(?=[.\s])/g) ?? []
-    const partsText = SIM_GUIDE.slice(SIM_GUIDE.indexOf('Parts to point at:'), SIM_GUIDE.indexOf('Counting starts at 1'))
+    const examples = FULL_SIM_GUIDE.match(/\{"kind":[^\n]*?\}(?=[.\s])/g) ?? []
+    const partsText = FULL_SIM_GUIDE.slice(FULL_SIM_GUIDE.indexOf('Parts to point at:'), FULL_SIM_GUIDE.indexOf('Counting starts at 1'))
     for (const kind of SIM_KINDS) {
       const named = new RegExp(`${kind} ([^;.]*)[;.]`).exec(partsText)?.[1] ?? ''
       const parts = named.replace(/ \([^)]*\)/g, '').split(',').map((p) => p.trim()).filter(Boolean)
       expect(parts.length, kind).toBeGreaterThan(2)
-      const line = SIM_GUIDE.split('\n').find((l) => l.trim().startsWith(`- ${kind},`)) ?? ''
+      const line = FULL_SIM_GUIDE.split('\n').find((l) => l.trim().startsWith(`- ${kind},`)) ?? ''
       const verbs = (line.split(' do: ')[1] ?? '').match(/\{"[a-z]+":(\[\[.*?\]\]|\{.*?\}|[^{}]*?)\}/g) ?? []
       const spec = parseSim(JSON.stringify({ ...JSON.parse(examples[SIM_KINDS.indexOf(kind)]), tour: verbs.map((v) => ({ say: 'x', do: JSON.parse(v) })) }))!
       // The kind keeps every verb the guide teaches
@@ -84,7 +84,7 @@ describe('what the tutor is told', () => {
   }, 30000)
 
   it('a block labelled json, or not labelled, is a simulation when its "kind" is one', async () => {
-    const examples = SIM_GUIDE.match(/\{"kind":[^\n]*?\}(?=[.\s])/g) ?? []
+    const examples = FULL_SIM_GUIDE.match(/\{"kind":[^\n]*?\}(?=[.\s])/g) ?? []
     document.body.innerHTML = examples.map((e, i) => block(e).replace('data-lang="sim"', i % 2 ? 'data-lang="json"' : 'data-lang=""')).join('') + block('{"kind":"quantum-foam"}').replace('"sim"', '"json"') + block('{"type":"x","kind":"raft"}').replace('"sim"', '"json"')
     startSims()
     // The kinds built on a library load it first
@@ -98,7 +98,9 @@ describe('what the tutor is told', () => {
     expect(simKindsFor('Momentum in gradient descent')).toEqual(['gradient-descent'])
     expect(simKindsFor('Raft leader election')).toEqual(['raft'])
     expect(simKindsFor('Composite B-tree indexes')).toEqual(['b-tree'])
-    for (const plain of ['Integer promotion in C', 'Consistent hashing', 'Window functions: running totals', 'Two-phase commit', 'Variance of sums of random variables']) expect(simKindsFor(plain), plain).toEqual([])
+    // Maths and statistics get an explorable
+    expect(simKindsFor('Variance of sums of random variables')).toEqual(['explore'])
+    for (const plain of ['Integer promotion in C', 'Consistent hashing', 'Window functions: running totals', 'Two-phase commit']) expect(simKindsFor(plain), plain).toEqual([])
 
     const lesson = sessionInstructions({ mode: 'teach', topic: 'Backpropagation' })
     expect(lesson).toContain('A live simulation fits this topic (neural-net).')
@@ -112,7 +114,10 @@ describe('what the tutor is told', () => {
   })
 
   it('the guide for every kind is the whole guide, and for a few is far shorter', () => {
-    expect(simGuide(SIM_KINDS)).toBe(SIM_GUIDE)
+    expect(simGuide(SIM_KINDS)).toBe(FULL_SIM_GUIDE)
+    // The chat guide names the finance kinds in one line; a finance lesson gets them written out
+    expect(SIM_GUIDE).toContain('- Maths and finance (explore; ledger, payments, stablecoin, risk)')
+    expect(simLesson('Netting and RTGS settlement')).toContain('- payments, money between banks')
     const words = (t: string) => t.split(/\s+/).filter(Boolean).length
     expect(words(SIM_GUIDE)).toBeGreaterThan(550)
     expect(words(simLesson('Momentum in gradient descent'))).toBeLessThan(240)

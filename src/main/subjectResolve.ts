@@ -26,8 +26,6 @@ export interface StoredProfile {
 
 export interface ResolveOptions {
   notebook?: string
-  /** Private material never leaves the Mac: no model is asked */
-  private?: boolean
   /** How long the model may take before the lesson goes on without it */
   timeoutMs?: number
 }
@@ -48,7 +46,6 @@ export async function resolveProfile(topic: string, deps: ResolveDeps, o: Resolv
     const kept = all[k] && fromStored(all[k])
     if (kept) return kept
   }
-  if (o.private) return mapped
   const stop = new AbortController()
   const timer = setTimeout(() => stop.abort(), o.timeoutMs ?? 8000)
   try {

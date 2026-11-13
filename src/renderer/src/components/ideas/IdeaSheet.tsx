@@ -70,7 +70,6 @@ function GrowingText({ value, onChange, onSubmit, placeholder, autoFocus, classN
 export function IdeaSheet({ onClose, onOpen, onNotebook, initialIdea = '', initialSeed = null }: { onClose(): void; onOpen(made: Made): void; onNotebook?(notebook: string): void; initialIdea?: string; initialSeed?: string | null }) {
   const [stage, setStage] = useState<Stage>('idea')
   const [idea, setIdea] = useState(initialIdea)
-  const [secret, setSecret] = useState(false)
   const [matched, setMatched] = useState<string | null>(null)
   const [seed, setSeed] = useState<string | null>(initialSeed)
   const [ladder, setLadder] = useState<LadderView | null>(null)
@@ -109,8 +108,8 @@ export function IdeaSheet({ onClose, onOpen, onNotebook, initialIdea = '', initi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   useEffect(() => {
-    window.tide.ideas.route(secret).then(setRoute).catch(() => setRoute({ who: 'none', label: 'No model' }))
-  }, [secret])
+    window.tide.ideas.route().then(setRoute).catch(() => setRoute({ who: 'none', label: 'No model' }))
+  }, [])
   useEffect(() => {
     const t = setTimeout(() => window.tide.ideas.matchTemplate(idea).then(setMatched).catch(() => {}), 250)
     return () => clearTimeout(t)
@@ -149,7 +148,7 @@ export function IdeaSheet({ onClose, onOpen, onNotebook, initialIdea = '', initi
     setError('')
     setBusy(true)
     try {
-      const r = await window.tide.ideas.questions(idea, secret)
+      const r = await window.tide.ideas.questions(idea)
       const own = r.questions.filter((q) => !/\blanguage\b|\bdeep\b|\bdepth\b/i.test(q.question))
       const langQ = r.questions.find((q) => /\blanguage\b/i.test(q.question))
       const guess = IDEA_LANGUAGES.find((l) => langQ?.options[0]?.toLowerCase().includes(l.label.toLowerCase()))?.id
@@ -174,7 +173,7 @@ export function IdeaSheet({ onClose, onOpen, onNotebook, initialIdea = '', initi
     setStarted(Date.now())
     try {
       const list = steps.filter((q) => q.kind === 'ask' && answers[q.id]?.trim()).map((q) => ({ question: q.question, answer: answers[q.id].trim() }))
-      const r = await window.tide.ideas.draft({ idea: idea.trim(), answers: [...list, { question: 'Language?', answer: languageLabel(language) }, { question: 'How deep?', answer: DEPTHS.find((d) => d.id === depth)!.label }], language, depth, private: secret, template: template ?? null, seed: source === 'blank' ? null : fromSeed, source })
+      const r = await window.tide.ideas.draft({ idea: idea.trim(), answers: [...list, { question: 'Language?', answer: languageLabel(language) }, { question: 'How deep?', answer: DEPTHS.find((d) => d.id === depth)!.label }], language, depth, template: template ?? null, seed: source === 'blank' ? null : fromSeed, source })
       setPlan(r.plan)
       setProblems(r.problems)
       setNote(r.note ?? '')
@@ -308,10 +307,6 @@ export function IdeaSheet({ onClose, onOpen, onNotebook, initialIdea = '', initi
           )}
           {error && <p className="ip-error">{error}</p>}
           <footer className="ipf-foot">
-            <label className="ipf-toggle" title="Planned and mentored by Gemma on this Mac; Claude never sees it">
-              <input type="checkbox" checked={secret} onChange={(e) => setSecret(e.target.checked)} />
-              <span>Private</span>
-            </label>
             <span className="ipf-route">
               <Icon name={route?.who === 'claude' ? 'claude' : 'laptop'} size={12} />
               {route ? (route.who === 'claude' ? `${route.label} plans it` : `${route.label}`) : ''}
@@ -434,7 +429,6 @@ export function IdeaSheet({ onClose, onOpen, onNotebook, initialIdea = '', initi
             <p className="ipf-meta">
               {plan.tier ? `${tierLabel(plan.tier)} · ` : ''}
               {languageLabel(plan.language)} · {plan.milestones.length} milestone{plan.milestones.length === 1 ? '' : 's'} · about {hours} hours · {BY[plan.by]}
-              {plan.private && ' · Private'}
             </p>
             <input className="ipf-name" value={plan.name} onChange={(e) => edit({ name: e.target.value })} aria-label="Project name" spellCheck={false} />
             <GrowingText className="ipf-summary" value={plan.summary} onChange={(v) => edit({ summary: v })} onSubmit={() => {}} placeholder="What it is, and what building it teaches" label="Summary" />

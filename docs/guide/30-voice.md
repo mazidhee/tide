@@ -26,7 +26,7 @@ The voice you pick replaces the character's everywhere. **Use the Mac's own voic
 
 ## Dictation
 
-**Wispr Flow** types what you say into the answer box: **Speak** puts the cursor there and you hold your Flow key (Tide shows which). With **Talk** and **Hands-free** on, Tide leaves the microphone to Flow and sends what Flow types as soon as it finishes; start typing yourself and it waits. Use headphones in hands-free, so Flow doesn't hear the tutor. **Tide (Parakeet)** records you and writes it out on your Mac. **Deepgram (Nova-3)** writes it out in the cloud: more accurate on jargon, as the lesson's topic goes along as a hint. Paste a key from console.deepgram.com; it's checked, then kept in your Keychain. Private projects and Metabase lessons still use Parakeet, and so does anything Deepgram can't take. **Handy** leaves the typing to Handy: **Speak** puts the cursor in the box and you press your Handy shortcut.
+**Wispr Flow** types what you say into the answer box: **Speak** puts the cursor there and you hold your Flow key (Tide shows which). With **Talk** and **Hands-free** on, Tide leaves the microphone to Flow and sends what Flow types as soon as it finishes; start typing yourself and it waits. Use headphones in hands-free, so Flow doesn't hear the tutor. **Tide (Parakeet)** records you and writes it out on your Mac. **Deepgram (Nova-3)** writes it out in the cloud: more accurate on jargon, as the lesson's topic goes along as a hint. Paste a key from console.deepgram.com; it's checked, then kept in your Keychain. Parakeet takes anything Deepgram can't. **Handy** leaves the typing to Handy: **Speak** puts the cursor in the box and you press your Handy shortcut.
 
 ## In the menu bar
 

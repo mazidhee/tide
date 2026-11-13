@@ -64,12 +64,12 @@ export async function openWhereItCameUp(app: App, from: ExploreFrom) {
   })
 }
 
-/** Starts the short side lesson on an item: on this Mac when the lesson it came from was private */
+/** Starts the short side lesson on an item */
 export function startSideLesson(app: App, item: ExploreItem) {
   app.setView({
     kind: 'session',
     mode: 'teach',
-    scope: item.private && item.scope ? item.scope : { kind: 'none' },
+    scope: { kind: 'none' },
     topic: item.title,
     options: { curiosity: { id: item.id, text: item.text, from: item.from } },
     nonce: Date.now()

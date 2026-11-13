@@ -733,7 +733,7 @@ export function turnNote(plan: LedPlan, state: LedState, reading: StepReading | 
   return parts.length ? `${LED_MARK} ${parts.join('\n\n')})` : ''
 }
 
-/** A source-led turn is one for the marking model, when the turn may leave this Mac */
+/** A source-led turn is one for the marking model */
 export const ledJob = (messages: { role: string; content: unknown }[]): 'marking' | null => {
   const last = [...messages].reverse().find((m) => m.role === 'user')
   return typeof last?.content === 'string' && last.content.includes(LED_MARK) ? 'marking' : null

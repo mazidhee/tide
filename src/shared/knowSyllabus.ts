@@ -32,7 +32,6 @@ export interface Subject {
   /** The notebook's name; empty for topics in no notebook */
   area: string
   label: string
-  private: boolean
   phases: Phase[]
   /** Studied in this notebook, not on its roadmap: the latest first */
   also: ConceptState[]
@@ -59,7 +58,7 @@ export function syllabus(concepts: ConceptState[], ready: ReadonlySet<string>, n
   const by = new Map<string, Subject>()
   const subject = (area: string) => {
     let s = by.get(area)
-    if (!s) by.set(area, (s = { area, label: area || NO_NOTEBOOK, private: true, phases: [], also: [], total: 0, counts: emptyCounts(), here: -1, begun: false }))
+    if (!s) by.set(area, (s = { area, label: area || NO_NOTEBOOK, phases: [], also: [], total: 0, counts: emptyCounts(), here: -1, begun: false }))
     return s
   }
   const roadmap = concepts.filter((c) => !c.parent && c.origin === 'roadmap').sort((a, b) => a.order - b.order)
@@ -77,7 +76,6 @@ export function syllabus(concepts: ConceptState[], ready: ReadonlySet<string>, n
     s.total = all.length
     for (const c of all) {
       s.counts[kindOf(c, ready)]++
-      s.private &&= c.private
       if (c.lastSeen && (!s.last || c.lastSeen > s.last)) s.last = c.lastSeen
     }
     let latest = 0

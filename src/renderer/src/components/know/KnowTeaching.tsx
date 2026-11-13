@@ -486,7 +486,7 @@ function Reviews({ data, onChange }: { data: TeachingView; onChange(d: TeachingV
     <Card title="Lesson reviews" id="tq-rev" wide>
       <p className="tq-say">
         {data.canReview
-          ? 'After a lesson finishes, Opus reads it against a teaching rubric and says what to do differently next time. Private lessons are never sent.'
+          ? 'After a lesson finishes, Opus reads it against a teaching rubric and says what to do differently next time.'
           : 'Reviews need Claude, which isn’t teaching right now. The measures above don’t: they come from your lessons alone.'}
       </p>
       {shown.map((r) => (

@@ -27,7 +27,6 @@ vi.mock('../src/main/settings', () => ({ getSettings: () => settings, updateSett
 const keys = new Map<string, string>()
 vi.mock('../src/main/cloud', () => ({ getKey: (k: string) => keys.get(k), setKey: (k: string, v: string) => keys.set(k, v) }))
 vi.mock('../src/main/claudeEngine', () => ({ stopClaude: () => {} }))
-vi.mock('../src/main/projects', () => ({ privatePath: async (p: string) => p.startsWith('Secret') }))
 const kept: unknown[] = []
 vi.mock('../src/main/recall', () => ({
   keepForRecall: async (items: unknown[]) => void kept.push(...items),
@@ -98,7 +97,7 @@ describe("Tide's MCP server", () => {
     const text = async (name: string, args: Record<string, unknown>) => ((await c.callTool({ name, arguments: args })).content as { text: string }[])[0].text
     expect(await text('make_flashcards', { topic: 'Python venv', cards: [{ front: 'What does activate change?', back: 'Only PATH' }] })).toMatch(/Saved 1 card to Flashcards\/Python venv \(Flashcards\)\.md/)
     expect(saved[0].md).toBe('What does activate change?::Only PATH')
-    expect(await text('make_flashcards', { topic: 'x', cards: [{ front: 'a', back: 'b' }], note: 'Secret/plan.md' })).toMatch(/private project/)
+    expect(await text('make_flashcards', { topic: 'x', cards: [{ front: 'a', back: 'b' }], note: 'Secret/plan.md' })).toMatch(/Saved 1 card to Secret\/plan/)
     expect(await text('schedule_recall', { topic: 'Python venv', questions: ['Q1 (A1)'] })).toBe('Kept 1 for recall on Python venv.')
     expect(kept[0]).toMatchObject({ prompt: 'Q1 (A1)', topic: 'Python venv' })
     expect(await text('recall_due', { topic: 'python' })).toBe('- [due] (Python venv) What does activate change?')

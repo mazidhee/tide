@@ -229,8 +229,8 @@ export async function planWeek(date = today(), background = false): Promise<Week
     readingsForWeek(getWeek, savePlan, date).catch(() => {})
     return plan
   }
-  // Claude when nothing private is named in it (a private project, Metabase), else Gemma (shared/gemmaPolicy)
-  const ask = (prompt: string, system: string) => completeFor('weekPlan', prompt, system, { priority: background ? 'background' : 'interactive', text: prompt })
+  // Claude, else Gemma when Claude can't (shared/gemmaPolicy)
+  const ask = (prompt: string, system: string) => completeFor('weekPlan', prompt, system, { priority: background ? 'background' : 'interactive' })
   const settings = await getCoach()
   const pick = pickOf(settings)
   if (pick === 'me' && !settings.focus.length) throw new Error('Pick what to focus on first.')
@@ -345,7 +345,7 @@ ${facts}
 
 Return ONLY JSON: {"direction": "one or two plain sentences in the second person: the kind of engineer or expert they're becoming, the areas it spans, and what they're strong at (e.g. 'You're heading towards low-level software engineering for payments and data systems, with blockchain on the side; your maths and problem solving are your strengths.')", "focus": ["notebook names from the list, most important first, at most 4"]}
 Only state what the facts support.`
-  const out = await completeFor('learnerProfile', prompt, 'You read a learner\'s situation accurately and say it plainly.', { priority: 'background', text: prompt }).catch(() => '')
+  const out = await completeFor('learnerProfile', prompt, 'You read a learner\'s situation accurately and say it plainly.', { priority: 'background' }).catch(() => '')
   let parsed: { direction?: string; focus?: string[] } = {}
   try {
     parsed = extractJsonObject(out)

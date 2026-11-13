@@ -1,26 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { difficultyNoteFor, railLine, type Known, type Turn } from '@shared/difficulty'
-import type { ChatScope } from '@shared/types'
 
 /**
  * Adaptive difficulty for a lesson (shared/difficulty.ts has the policy): reads what the knowledge
  * map has on the topic once, when the lesson opens, times each answer from the moment the tutor's
  * reply finished, and gives the lesson screen the hidden note for an answer and the side rail's line.
  */
-export function useDifficulty(topic: string, scope: ChatScope, on: boolean, busy: boolean) {
+export function useDifficulty(topic: string, on: boolean, busy: boolean) {
   const [known, setKnown] = useState<Known | null>(null)
-  const path = 'path' in scope ? scope.path : undefined
   useEffect(() => {
     if (!on) return
     let live = true
     window.tide.difficulty
-      .known(topic, path)
+      .known(topic)
       .then((k) => live && setKnown(k))
       .catch(() => {})
     return () => {
       live = false
     }
-  }, [on, topic, path])
+  }, [on, topic])
   const knownRef = useRef(known)
   knownRef.current = known
 

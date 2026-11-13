@@ -1,10 +1,10 @@
 /**
  * Projects from an idea, main side (shared/ideaProject.ts has the idea and the format). The idea
- * becomes questions, then a plan (Opus, Gemma for a private project or without Claude, a template,
+ * becomes questions, then a plan (Opus, Gemma without Claude, a template,
  * or blank), checked against What you know and given readings from the catalogue and your
  * courses. Nothing is made until the learner approves; then it makes:
  *
- * - a notebook for the project, made a build project (private if asked), with the plan as its
+ * - a notebook for the project, made a build project, with the plan as its
  *   brief, a roadmap of the milestones' concepts as its outline (so the knowledge map and the
  *   weekly coach see it), and the mentor's memory note;
  * - the project folder in the notes' Code folder: the starting files, the toolchain's files, the
@@ -104,7 +104,7 @@ async function writePlan(plan: ProjectPlan): Promise<void> {
   await writeText(planFile(plan.notebook), JSON.stringify(plan, null, 1))
 }
 
-async function allPlans(): Promise<ProjectPlan[]> {
+export async function allPlans(): Promise<ProjectPlan[]> {
   const names = await fs.readdir(absPath(PLANS)).catch(() => [] as string[])
   const out: ProjectPlan[] = []
   for (const n of names.filter((x) => x.endsWith('.plan.json'))) {
@@ -122,25 +122,12 @@ export async function planForRoot(root: string): Promise<ProjectPlan | null> {
   return (await allPlans()).find((p) => p.root && resolve(p.root) === r) ?? null
 }
 
-/** Whether a folder is a private project's (Claude never sees it) */
-export async function privateRoot(root: string): Promise<boolean> {
-  const p = await planForRoot(root).catch(() => null)
-  if (p) return p.private
-  // A folder inside the notes that a private notebook names as its code
-  try {
-    const { privatePath } = await import('./projects')
-    return await privatePath(toRel(resolve(root)))
-  } catch {
-    return false
-  }
-}
-
 // ---------- What you know ----------
 
-async function knownConcepts(isPrivate: boolean): Promise<KnownConcept[]> {
+async function knownConcepts(): Promise<KnownConcept[]> {
   try {
     const { allConcepts } = await import('./knowledge')
-    return (await allConcepts(isPrivate)).map((c) => ({ id: c.id, name: c.name, status: c.status, seen: c.seen }))
+    return (await allConcepts()).map((c) => ({ id: c.id, name: c.name, status: c.status, seen: c.seen }))
   } catch {
     return []
   }
@@ -148,13 +135,13 @@ async function knownConcepts(isPrivate: boolean): Promise<KnownConcept[]> {
 
 // ---------- Questions ----------
 
-type Asker = (job: 'projectQuestions' | 'projectPlan' | 'projectMentor' | 'projectReady' | 'projectReadyMark' | 'projectDebrief' | 'projectIdeas', prompt: string, system: string, o: { private: boolean; noFallback?: boolean; timeoutMs?: number }, gemma?: () => Promise<string>) => Promise<{ text: string; by: 'claude' | 'gemma' }>
+type Asker = (job: 'projectQuestions' | 'projectPlan' | 'projectMentor' | 'projectReady' | 'projectReadyMark' | 'projectDebrief' | 'projectIdeas', prompt: string, system: string, o: { noFallback?: boolean; timeoutMs?: number }, gemma?: () => Promise<string>) => Promise<{ text: string; by: 'claude' | 'gemma' }>
 
-/** The model call, as main/ai routes it (Claude unless private or unavailable, else Gemma) */
+/** The model call, as main/ai routes it (Claude unless unavailable, else Gemma) */
 const realAsk: Asker = async (job, prompt, system, o, gemma) => {
   const ai = await import('./ai')
   let usedGemma = false
-  const text = await ai.claudeOr(job, prompt, system, { private: o.private, ...(o.noFallback ? { noFallback: true } : {}), ...(o.timeoutMs ? { timeoutMs: o.timeoutMs } : {}) }, () => {
+  const text = await ai.claudeOr(job, prompt, system, { ...(o.noFallback ? { noFallback: true } : {}), ...(o.timeoutMs ? { timeoutMs: o.timeoutMs } : {}) }, () => {
     usedGemma = true
     return gemma ? gemma() : ai.complete(prompt, system, undefined, 'interactive', 'other')
   })
@@ -165,28 +152,28 @@ let ask: Asker = realAsk
 export const setAsker = (fn: Asker | null) => (ask = fn ?? realAsk)
 
 /** Where the plan will be written, for the window to say */
-export async function planRoute(isPrivate: boolean): Promise<{ who: 'claude' | 'gemma' | 'none'; label: string }> {
+export async function planRoute(): Promise<{ who: 'claude' | 'gemma' | 'none'; label: string }> {
   const { jobRoute } = await import('./ai')
-  const r = await jobRoute('projectPlan', '', { private: isPrivate })
+  const r = await jobRoute('projectPlan')
   if (r.who === 'claude') {
     const { claudeModel } = await import('@shared/claude')
     const { getSettings } = await import('./settings')
     const model = claudeModel(r.role, getSettings().ai.claude)
     return { who: 'claude', label: `Claude ${model[0].toUpperCase()}${model.slice(1)}` }
   }
-  return { who: 'gemma', label: r.reason === 'private' ? 'Gemma, on this Mac (private)' : 'Gemma, on this Mac' }
+  return { who: 'gemma', label: 'Gemma, on this Mac' }
 }
 
-export async function questions(idea: string, isPrivate: boolean): Promise<{ questions: ClarifyQuestion[]; by: 'claude' | 'gemma' | 'none' }> {
+export async function questions(idea: string): Promise<{ questions: ClarifyQuestion[]; by: 'claude' | 'gemma' | 'none' }> {
   const text = String(idea ?? '').trim()
   if (!text) throw new Error('Say what you want to build first.')
   // Only Claude asks: the plain questions need no model, so Gemma isn't loaded for them
-  const route = await planRoute(isPrivate).catch(() => ({ who: 'none' as const }))
+  const route = await planRoute().catch(() => ({ who: 'none' as const }))
   if (route.who !== 'claude') return { questions: fallbackQuestions(text), by: 'none' }
   try {
-    const known = knownSummary(await knownConcepts(false), 30)
+    const known = knownSummary(await knownConcepts(), 30)
     const { extractJsonObject } = await import('./ai')
-    const r = await ask('projectQuestions', questionsPrompt(text, known), QUESTIONS_SYSTEM, { private: false, noFallback: true, timeoutMs: 90_000 })
+    const r = await ask('projectQuestions', questionsPrompt(text, known), QUESTIONS_SYSTEM, { noFallback: true, timeoutMs: 90_000 })
     const qs = parseQuestions(extractJsonObject(r.text))
     return qs.length ? { questions: qs, by: 'claude' } : { questions: fallbackQuestions(text), by: 'none' }
   } catch {
@@ -201,7 +188,6 @@ export interface DraftRequest {
   answers: { question: string; answer: string }[]
   language?: IdeaLanguage
   depth?: IdeaDepth
-  private: boolean
   template?: string | null
   /** A step on the ladder to start from */
   seed?: string | null
@@ -209,7 +195,7 @@ export interface DraftRequest {
 }
 
 /** A plan with nothing in it but the idea: two components and two milestones to edit */
-export function blankPlan(idea: string, language: IdeaLanguage, depth: IdeaDepth, isPrivate: boolean, now: number): ProjectPlan {
+export function blankPlan(idea: string, language: IdeaLanguage, depth: IdeaDepth, now: number): ProjectPlan {
   const name = idea.trim().replace(/^i (want|would like) to (build|make|write)\s+/i, '').replace(/[.!?]+$/, '').slice(0, 60) || 'New project'
   const cap = name[0].toUpperCase() + name.slice(1)
   return validatePlan(
@@ -226,7 +212,7 @@ export function blankPlan(idea: string, language: IdeaLanguage, depth: IdeaDepth
         { id: 'm2', title: 'The hard part, done properly', build: '', components: ['core'], lessons: [], doneWhen: ['the edge cases are tested'], hours: 6 }
       ]
     },
-    { idea, language, depth, private: isPrivate, by: 'manual', createdAt: now }
+    { idea, language, depth, by: 'manual', createdAt: now }
   ).plan!
 }
 
@@ -247,7 +233,7 @@ async function addReadings(plan: ProjectPlan): Promise<ProjectPlan> {
     const add: PlanReading[] = []
     for (const r of catalogueReadings(concepts.length ? concepts : [m.title], catalogue, 2)) if (!have.has(`c:${r.courseId}:`)) add.push(r)
     // A lesson from a course you've imported (taught from its own text: source-led reading)
-    if (search && !plan.private)
+    if (search)
       for (const concept of concepts.slice(0, 2)) {
         const hit = (await search(concept, 3).catch(() => []))[0]
         if (hit && !have.has(`c:${hit.course}:${hit.path}`) && !add.some((a) => a.lessonPath === hit.path)) add.push({ title: hit.heading && hit.heading !== hit.title ? `${hit.title}: ${hit.heading}` : hit.title, kind: 'lesson', courseId: hit.course, lessonPath: hit.path, why: `From a course you have, on ${concept}` })
@@ -259,9 +245,9 @@ async function addReadings(plan: ProjectPlan): Promise<ProjectPlan> {
 
 /** Prerequisites marked against What you know, readings added: what the window shows for approval */
 export async function checkPlan(planIn: ProjectPlan): Promise<{ plan: ProjectPlan; problems: string[] }> {
-  const { plan, problems } = validatePlan(planIn, { by: planIn.by, private: !!planIn.private, idea: planIn.idea, createdAt: planIn.createdAt, ...(planIn.template ? { template: planIn.template } : {}), ...(planIn.answers ? { answers: planIn.answers } : {}) })
+  const { plan, problems } = validatePlan(planIn, { by: planIn.by, idea: planIn.idea, createdAt: planIn.createdAt, ...(planIn.template ? { template: planIn.template } : {}), ...(planIn.answers ? { answers: planIn.answers } : {}) })
   if (!plan) throw new Error(problems.join(' ') || 'That plan can’t be used.')
-  const marked = markPrereqs(plan, await knownConcepts(plan.private))
+  const marked = markPrereqs(plan, await knownConcepts())
   return { plan: await addReadings(marked).catch(() => marked), problems: problems.filter((p) => !/scaffold has no test/.test(p) || plan.by === 'claude') }
 }
 
@@ -273,23 +259,22 @@ export async function draftPlan(req: DraftRequest, now = Date.now()): Promise<{ 
   const picked = fromAnswers(answers)
   const language = req.language ?? picked.language ?? 'python'
   const depth = req.depth ?? picked.depth ?? 'solid'
-  const isPrivate = !!req.private
   const seed = ladderSeed(req.seed)
   const template = seed ? ideaTemplate(seed.template) : req.template ? ideaTemplate(req.template) : matchTemplate(idea)
   // The starting map: the ladder step's when one was picked, else the template's
-  const startMap = (): ProjectPlan => (seed ? { ...seedPlan(seed, idea, now, isPrivate), answers } : { ...planFromTemplate(template!, idea, now, isPrivate), answers })
+  const startMap = (): ProjectPlan => (seed ? { ...seedPlan(seed, idea, now), answers } : { ...planFromTemplate(template!, idea, now), answers })
 
-  if (req.source === 'blank') return { ...(await checkPlan(blankPlan(idea, language, depth, isPrivate, now))), note: 'A blank plan: fill in the components and milestones.' }
+  if (req.source === 'blank') return { ...(await checkPlan(blankPlan(idea, language, depth, now))), note: 'A blank plan: fill in the components and milestones.' }
   if (req.source === 'template') {
     if (!template) throw new Error('No template fits that idea. Pick one, or draft the plan with a model.')
     const plan = startMap()
     return { ...(await checkPlan(plan)), ...(language !== plan.language ? { note: `The ${template.name} template is in Python; ask Claude to plan it for another language.` } : {}) }
   }
 
-  const known = knownSummary(await knownConcepts(isPrivate))
+  const known = knownSummary(await knownConcepts())
   const { directionLine } = await import('./coach').catch(() => ({ directionLine: async () => '' }))
-  const direction = isPrivate ? '' : await directionLine().catch(() => '')
-  const base = { idea, language, depth, private: isPrivate, createdAt: now, answers, ...(template ? { template: template.id } : {}), ...(seed ? { seed: seed.id, tier: seed.tier, area: seed.areas[0] } : {}) }
+  const direction = await directionLine().catch(() => '')
+  const base = { idea, language, depth, createdAt: now, answers, ...(template ? { template: template.id } : {}), ...(seed ? { seed: seed.id, tier: seed.tier, area: seed.areas[0] } : {}) }
   const { extractJsonObject } = await import('./ai')
   const parse = (text: string) => {
     try {
@@ -303,16 +288,16 @@ export async function draftPlan(req: DraftRequest, now = Date.now()): Promise<{ 
   let first: { text: string; by: 'claude' | 'gemma' }
   try {
     const { complete } = await import('./ai')
-    first = await ask('projectPlan', prompt, PLAN_SYSTEM, { private: isPrivate, timeoutMs: 300_000 }, () => complete(gemmaPrompt, 'You plan software projects for learners. Reply with JSON only.', undefined, 'interactive', 'other'))
+    first = await ask('projectPlan', prompt, PLAN_SYSTEM, { timeoutMs: 300_000 }, () => complete(gemmaPrompt, 'You plan software projects for learners. Reply with JSON only.', undefined, 'interactive', 'other'))
   } catch (e) {
     if (template) return { ...(await checkPlan(startMap())), note: `No model could write the plan (${(e as Error).message}); this is the ${template.name} template, ready to edit.` }
-    return { ...(await checkPlan(blankPlan(idea, language, depth, isPrivate, now))), note: `No model could write the plan (${(e as Error).message}). Here is a blank one to fill in.` }
+    return { ...(await checkPlan(blankPlan(idea, language, depth, now))), note: `No model could write the plan (${(e as Error).message}). Here is a blank one to fill in.` }
   }
   let { plan, problems } = validatePlan(parse(first.text), { ...base, by: first.by })
   // One repair round, on Claude, when the plan came back unusable or without its tests
   if (first.by === 'claude' && problems.length) {
     try {
-      const again = await ask('projectPlan', `${prompt}\n\nYour previous answer:\n${first.text.slice(0, 30_000)}\n\n${repairPlanPrompt(problems)}`, PLAN_SYSTEM, { private: false, noFallback: true, timeoutMs: 300_000 })
+      const again = await ask('projectPlan', `${prompt}\n\nYour previous answer:\n${first.text.slice(0, 30_000)}\n\n${repairPlanPrompt(problems)}`, PLAN_SYSTEM, { noFallback: true, timeoutMs: 300_000 })
       const second = validatePlan(parse(again.text), { ...base, by: 'claude' })
       if (second.plan && second.problems.length <= problems.length) ({ plan, problems } = second)
     } catch {
@@ -321,10 +306,10 @@ export async function draftPlan(req: DraftRequest, now = Date.now()): Promise<{ 
   }
   if (!plan) {
     if (template) return { ...(await checkPlan(startMap())), note: `The model’s plan couldn’t be used; this is the ${template.name} template, ready to edit.` }
-    return { ...(await checkPlan(blankPlan(idea, language, depth, isPrivate, now))), note: 'The model’s plan couldn’t be used. Here is a blank one to fill in.' }
+    return { ...(await checkPlan(blankPlan(idea, language, depth, now))), note: 'The model’s plan couldn’t be used. Here is a blank one to fill in.' }
   }
   const checked = await checkPlan(plan)
-  return { ...checked, problems: [...new Set([...problems, ...checked.problems])], ...(first.by === 'gemma' ? { note: isPrivate ? 'Planned by Gemma on this Mac, as the project is private: no starting code, so the first tests say what to write.' : 'Planned by Gemma (Claude wasn’t available): no starting code, so the first tests say what to write.' } : {}) }
+  return { ...checked, problems: [...new Set([...problems, ...checked.problems])], ...(first.by === 'gemma' ? { note: 'Planned by Gemma (Claude wasn’t available): no starting code, so the first tests say what to write.' } : {}) }
 }
 
 // ---------- Making it ----------
@@ -362,7 +347,7 @@ async function syncNotes(plan: ProjectPlan, fresh = false): Promise<void> {
 }
 
 export async function createProject(planIn: ProjectPlan, now = Date.now()): Promise<Created> {
-  const { plan: valid, problems } = validatePlan(planIn, { by: planIn.by, private: !!planIn.private, idea: planIn.idea, createdAt: planIn.createdAt || now })
+  const { plan: valid, problems } = validatePlan(planIn, { by: planIn.by, idea: planIn.idea, createdAt: planIn.createdAt || now })
   if (!valid) throw new Error(problems.join(' ') || 'That plan can’t be used.')
   const { createFolder } = await import('./vault')
   const { codeRoot, remember } = await import('./ide/workspace')
@@ -389,7 +374,7 @@ export async function createProject(planIn: ProjectPlan, now = Date.now()): Prom
 
   const { setProject } = await import('./projects')
   const { updateNotebook } = await import('./learn')
-  await setProject(notebook, { kind: 'build', private: plan.private, docs: [], brief: planNotePath(plan), code: toRel(root) })
+  await setProject(notebook, { kind: 'build', docs: [], brief: planNotePath(plan), code: toRel(root) })
   await updateNotebook(notebook, { outline: roadmapPath(plan), ...(plan.summary ? { description: plan.summary.slice(0, 280) } : {}) })
   await writePlan(plan)
 
@@ -428,7 +413,7 @@ export async function listProjects(): Promise<IdeaProjectCard[]> {
     } catch {
       // as made
     }
-    out.push({ notebook: p.notebook!, name: p.name, root: p.root, language: p.language, private: p.private, progress: progressOf(p), current: cur?.title ?? null, ...(cur?.session ? { step: cur.session.step } : {}), updated })
+    out.push({ notebook: p.notebook!, name: p.name, root: p.root, language: p.language, progress: progressOf(p), current: cur?.title ?? null, ...(cur?.session ? { step: cur.session.step } : {}), updated })
   }
   return out.sort((a, b) => b.updated - a.updated)
 }
@@ -443,7 +428,7 @@ const mustPlan = async (notebook: string) => {
 export async function savePlan(planIn: ProjectPlan): Promise<ProjectPlan> {
   const old = planIn.notebook ? await readPlan(planIn.notebook) : null
   if (!old) throw new Error('That project has no plan.')
-  const { plan } = validatePlan(planIn, { by: old.by, private: old.private, idea: old.idea, createdAt: old.createdAt, notebook: old.notebook, root: old.root })
+  const { plan } = validatePlan(planIn, { by: old.by, idea: old.idea, createdAt: old.createdAt, notebook: old.notebook, root: old.root })
   if (!plan) throw new Error('That plan can’t be used.')
   await writePlan(plan)
   await syncNotes(plan)
@@ -489,11 +474,11 @@ export async function readyQuestions(notebook: string, id: string, now = Date.no
   if (m.gate?.ready) return plan
   let qs = planReadyQuestions(plan, m)
   let by: 'claude' | 'plan' = 'plan'
-  const route = plan.private ? null : await planRoute(false).catch(() => null)
+  const route = await planRoute().catch(() => null)
   if (route?.who === 'claude') {
     try {
       const { extractJsonObject } = await import('./ai')
-      const r = await ask('projectReady', readyPrompt(plan, m), READY_SYSTEM, { private: false, noFallback: true, timeoutMs: 150_000 })
+      const r = await ask('projectReady', readyPrompt(plan, m), READY_SYSTEM, { noFallback: true, timeoutMs: 150_000 })
       const got = readyQuestionsFrom((extractJsonObject(r.text) as { questions?: unknown }).questions)
       if (got.filter((q) => q.kind === 'design').length >= 3 && got.some((q) => q.kind === 'reading')) {
         qs = got
@@ -520,10 +505,10 @@ export async function markReady(notebook: string, id: string, answers: Record<st
   const clean = Object.fromEntries(qs.map((q) => [q.id, String(answers[q.id] ?? '').slice(0, 4000)]))
   let results = qs.map((q) => markByPoints(q, clean[q.id]))
   let by: 'claude' | 'gemma' | 'plan' = 'plan'
-  if (mm.gate!.by === 'claude' && !plan.private) {
+  if (mm.gate!.by === 'claude') {
     try {
       const { extractJsonObject } = await import('./ai')
-      const r = await ask('projectReadyMark', readyMarkPrompt(qs, clean), READY_MARK_SYSTEM, { private: false, noFallback: true, timeoutMs: 150_000 })
+      const r = await ask('projectReadyMark', readyMarkPrompt(qs, clean), READY_MARK_SYSTEM, { noFallback: true, timeoutMs: 150_000 })
       const got = parseReadyResults(extractJsonObject(r.text), qs)
       if (got) {
         results = got
@@ -619,7 +604,7 @@ export async function writeDebrief(notebook: string, id: string, now = Date.now(
   let by: 'claude' | 'gemma' | 'plan' = 'plan'
   try {
     const { extractJsonObject } = await import('./ai')
-    const r = await ask('projectDebrief', debriefPrompt({ plan, m, diff, memory: memoryText, failedRuns: m.failedRuns ?? 0 }), DEBRIEF_SYSTEM, { private: plan.private, timeoutMs: 200_000 })
+    const r = await ask('projectDebrief', debriefPrompt({ plan, m, diff, memory: memoryText, failedRuns: m.failedRuns ?? 0 }), DEBRIEF_SYSTEM, { timeoutMs: 200_000 })
     const got = parseDebrief(extractJsonObject(r.text))
     if (got) {
       d = { ...got, recall: got.recall.length ? got.recall : d.recall }
@@ -635,26 +620,24 @@ export async function writeDebrief(notebook: string, id: string, now = Date.now(
   m.debrief = path
   m.session = advanceSession(m.session, 'debrief', 'done', undefined, m.gate)
   await writePlan(plan)
-  // Recall cards: brought back in a later lesson on their topic (nothing from a private project is kept)
+  // Recall cards: brought back in a later lesson on their topic
   const { keepForRecall } = await import('./recall').catch(() => ({ keepForRecall: null }))
   const topic = m.lessons[0]?.concept ?? m.title
   await keepForRecall?.(d.recall.map((prompt) => ({ prompt, topic, lesson: `${plan.name}: ${m.title}` })), plan.notebook).catch(() => {})
-  // The learner profile hears what went wrong and well, and the hints (never a private project's)
-  if (!plan.private) {
-    try {
-      const { noteFromProject } = await import('./learnerProfile')
-      await noteFromProject(
-        [
-          ...d.wrong.slice(0, 1).map((t) => ({ do: 'add' as const, section: 'missed' as const, text: `${plan.name}, ${m.title}: ${t}` })),
-          ...d.strengths.slice(0, 1).map((t) => ({ do: 'add' as const, section: 'strengths' as const, text: `${plan.name}, ${m.title}: ${t}` })),
-          ...(m.hints ? [{ do: 'add' as const, section: 'hints' as const, text: `Built ${m.title} (${plan.name}) with ${m.hints} hint${m.hints === 1 ? '' : 's'} as code.` }] : [])
-        ],
-        `${plan.name}: ${m.title}`,
-        by === 'claude' ? 'claude' : by === 'gemma' ? 'gemma' : 'code'
-      )
-    } catch {
-      // The profile catches up from lessons
-    }
+  // The learner profile hears what went wrong and well, and the hints
+  try {
+    const { noteFromProject } = await import('./learnerProfile')
+    await noteFromProject(
+      [
+        ...d.wrong.slice(0, 1).map((t) => ({ do: 'add' as const, section: 'missed' as const, text: `${plan.name}, ${m.title}: ${t}` })),
+        ...d.strengths.slice(0, 1).map((t) => ({ do: 'add' as const, section: 'strengths' as const, text: `${plan.name}, ${m.title}: ${t}` })),
+        ...(m.hints ? [{ do: 'add' as const, section: 'hints' as const, text: `Built ${m.title} (${plan.name}) with ${m.hints} hint${m.hints === 1 ? '' : 's'} as code.` }] : [])
+      ],
+      `${plan.name}: ${m.title}`,
+      by === 'claude' ? 'claude' : by === 'gemma' ? 'gemma' : 'code'
+    )
+  } catch {
+    // The profile catches up from lessons
   }
   await rememberThat(notebook, { add: { Reviews: [`Debrief, milestone ${index}: ${d.built.slice(0, 160)}`] } })
   const celebrate = await score(notebook, 'debrief', `the debrief of ${m.title}`, plan)
@@ -721,8 +704,8 @@ export async function rememberThat(notebook: string, u: Parameters<typeof update
 }
 
 /**
- * The mentor's review without Claude's tools (a private project, or no Claude): the code and a
- * test run read in one go, by Gemma when private, else by whichever model can. Kept in the memory.
+ * The mentor's review without Claude's tools (no Claude): the code and a test run read in one
+ * go, by whichever model can. Kept in the memory.
  */
 export async function reviewLocal(notebook: string): Promise<{ review: string; tests: string }> {
   const plan = await mustPlan(notebook)
@@ -740,7 +723,7 @@ export async function reviewLocal(notebook: string): Promise<{ review: string; t
   const failed = run.outcomes.filter((o) => o.status === 'fail' || o.status === 'error')
   const tests = `${run.framework}: ${run.outcomes.length - failed.length} passed, ${failed.length} failed${run.error ? ` (${run.error})` : ''}\n${failed.map((f) => `FAILED ${f.id}: ${(f.message ?? '').slice(0, 300)}`).join('\n')}`
   const { text } = await readMemory(notebook)
-  const r = await ask('projectMentor', localReviewPrompt({ plan, files, tests, memory: text }), LOCAL_REVIEW_SYSTEM, { private: plan.private, timeoutMs: 240_000 })
+  const r = await ask('projectMentor', localReviewPrompt({ plan, files, tests, memory: text }), LOCAL_REVIEW_SYSTEM, { timeoutMs: 240_000 })
   const review = r.text.trim()
   const first = review.split('\n').find((l) => l.trim() && !l.startsWith('#'))?.replace(/^[-*]\s*/, '').slice(0, 200) ?? 'Reviewed.'
   await rememberThat(notebook, { add: { Reviews: [`${new Date().toLocaleDateString('en-GB')} (${r.by === 'gemma' ? 'Gemma' : 'Claude'}): ${first}`] } })
@@ -757,8 +740,8 @@ export function registerIdeas(): void {
   const handle = <A extends unknown[], R>(channel: string, fn: (...args: A) => R) => ipcMain.handle(channel, (_e, ...args) => fn(...(args as A)))
   handle('ideas:templates', () => templateCards())
   handle('ideas:matchTemplate', (idea: string) => matchTemplate(String(idea ?? ''))?.id ?? null)
-  handle('ideas:route', (isPrivate: boolean) => planRoute(!!isPrivate))
-  handle('ideas:questions', (idea: string, isPrivate: boolean) => questions(String(idea ?? ''), !!isPrivate))
+  handle('ideas:route', () => planRoute())
+  handle('ideas:questions', (idea: string) => questions(String(idea ?? '')))
   handle('ideas:draft', (req: DraftRequest) => draftPlan(req))
   handle('ideas:check', (plan: ProjectPlan) => checkPlan(plan))
   handle('ideas:create', (plan: ProjectPlan) => createProject(plan))
@@ -817,14 +800,14 @@ async function signals(): Promise<StudySignals> {
   let known: StudySignals['known'] = []
   try {
     const { allConcepts } = await import('./knowledge')
-    known = (await allConcepts(false)).map((c) => ({ id: c.id, name: c.name, status: c.status, seen: c.seen, ...(c.lastSeen ? { lastSeen: c.lastSeen } : {}) }))
+    known = (await allConcepts()).map((c) => ({ id: c.id, name: c.name, status: c.status, seen: c.seen, ...(c.lastSeen ? { lastSeen: c.lastSeen } : {}) }))
   } catch {
     known = []
   }
   const { getNotebooks } = await import('./learn')
   const notebooks = await getNotebooks().catch(() => [])
   const focus = await import('./coach').then((c) => c.getCoach()).then((c) => c.focus).catch(() => [] as string[])
-  return { known, roadmaps: notebooks.filter((n) => !n.project?.private).map((n) => n.name), focus, projects: await projectRecords(), now: Date.now() }
+  return { known, roadmaps: notebooks.map((n) => n.name), focus, projects: await projectRecords(), now: Date.now() }
 }
 
 /** Tiers newly open since last seen (each celebrated once) */
@@ -865,7 +848,7 @@ export async function ideaSuggestions(refresh = false): Promise<IdeaSuggestion[]
     .then((t) => JSON.parse(t) as { day: string; ideas: IdeaSuggestion[] })
     .catch(() => null)
   if (cached && cached.day === today && !refresh) return cached.ideas
-  const route = await planRoute(false).catch(() => null)
+  const route = await planRoute().catch(() => null)
   if (route?.who !== 'claude') return cached?.ideas ?? []
   const s = await signals()
   const recent = s.known.filter((c) => c.lastSeen && s.now - c.lastSeen < 30 * 86_400_000).slice(0, 40).map((c) => c.name)
@@ -879,7 +862,7 @@ Open tiers by area: ${open}
 Suggest 4 projects: at least one at their highest open tier, at least one that ties what they studied recently to a system they could build. Return ONLY JSON: {"ideas": [{"title": "short", "idea": "one or two sentences they could type as the idea", "tier": 2, "area": "payments|data|blockchain|software|quant|maths", "why": "one line tying it to what they study"}]}`
   try {
     const { extractJsonObject } = await import('./ai')
-    const r = await ask('projectIdeas', prompt, IDEAS_SYSTEM, { private: false, noFallback: true, timeoutMs: 120_000 })
+    const r = await ask('projectIdeas', prompt, IDEAS_SYSTEM, { noFallback: true, timeoutMs: 120_000 })
     const raw = (extractJsonObject(r.text) as { ideas?: unknown[] }).ideas ?? []
     const ideas = raw
       .map((x) => x as Record<string, unknown>)

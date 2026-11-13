@@ -1,7 +1,7 @@
 /**
  * Explore later (shared/explore): the things you kept to come back to for curiosity, in the vault
  * at .tide/explore.json beside Tide's other data. Each gets a short title in the background, on
- * Claude's background model (Haiku) when Claude teaches and the lesson isn't private, else on Gemma.
+ * Claude's background model (Haiku) when Claude teaches, else on Gemma.
  * A side lesson that finishes marks its item explored (main/lessons).
  */
 import { existsSync, promises as fs } from 'fs'
@@ -47,11 +47,7 @@ export const listExplore = async () => sortExplore(await read())
 export async function addExplore(input: ExploreInput): Promise<ExploreItem> {
   const item = newExploreItem(input)
   if (!item.text) throw new Error('Nothing to keep')
-  // A private project's lesson, or anything about Metabase: its title and side lesson stay on this Mac
-  const { isPrivateTurn } = await import('./teacher')
-  const scope = input.scope ?? { kind: 'none' as const }
-  const priv = await isPrivateTurn({ scope, messages: [{ role: 'user', content: `${input.from.topic}\n${item.text}` }] }).catch(() => true)
-  const kept: ExploreItem = { ...item, ...(priv ? { private: true, ...(scope.kind !== 'none' ? { scope } : {}) } : {}) }
+  const kept: ExploreItem = item
   await change((list) => [kept, ...list.filter((x) => x.id !== kept.id)])
   void nameIt(kept)
   return kept
@@ -63,7 +59,7 @@ async function nameIt(item: ExploreItem) {
     const { backgroundOnClaude } = await import('./claudeEngine')
     const { complete } = await import('./ai')
     const prompt = titlePrompt(item.text, item.from.topic)
-    const reply = (await backgroundOnClaude(prompt, TITLE_SYSTEM, undefined, !!item.private).catch(() => null)) ?? (await complete(prompt, TITLE_SYSTEM, undefined, 'background'))
+    const reply = (await backgroundOnClaude(prompt, TITLE_SYSTEM, undefined).catch(() => null)) ?? (await complete(prompt, TITLE_SYSTEM, undefined, 'background'))
     const title = cleanTitle(reply)
     if (title) await change((list) => list.map((x) => (x.id === item.id ? { ...x, title, titled: true } : x)))
   } catch {

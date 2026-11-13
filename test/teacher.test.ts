@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { chooseTeacher, type TeacherInput } from '../src/main/teacher'
 import { claudeModel, CLAUDE_DEFAULTS } from '../src/shared/claude'
 
-const base: TeacherInput = { installed: true, ready: true, private: false }
+const base: TeacherInput = { installed: true, ready: true }
 
 describe('who teaches', () => {
   it('is Claude by default once it is set up', () => {
@@ -11,14 +11,12 @@ describe('who teaches', () => {
   it('is Gemma, quietly, when Claude Code was never installed or chosen', () => {
     expect(chooseTeacher({ ...base, installed: false, ready: false })).toEqual({ who: 'gemma', why: undefined })
   })
-  it('never sends a private project or Metabase to Claude, whatever was chosen', () => {
+  it('sends everything to Claude when it can teach, with no privacy gate', () => {
     for (const engine of ['auto', 'claude', undefined] as const)
       for (const notebook of ['claude', 'auto', undefined] as const)
-        for (const setting of ['claude', undefined] as const) {
-          const t = chooseTeacher({ ...base, engine, notebook, setting, private: true })
-          expect(t.who).toBe('gemma')
-        }
-    expect(chooseTeacher({ ...base, engine: 'claude', private: true })).toMatchObject({ who: 'gemma', why: expect.stringMatching(/Private/) })
+        for (const setting of ['claude', undefined] as const) expect(chooseTeacher({ ...base, engine, notebook, setting }).who).toBe('claude')
+    // An old caller's private flag changes nothing
+    expect(chooseTeacher({ ...base, private: true } as TeacherInput)).toEqual({ who: 'claude' })
   })
   it('falls back to Gemma and says why when Claude can’t', () => {
     expect(chooseTeacher({ ...base, ready: false, notReady: 'not logged in' })).toMatchObject({ who: 'gemma', why: expect.stringMatching(/not logged in/) })

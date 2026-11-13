@@ -9,7 +9,6 @@ vi.mock('electron', () => ({ app: { getPath: () => dir, isPackaged: false } }))
 const settings = { ai: { claude: {} as Record<string, unknown> } }
 vi.mock('../src/main/settings', () => ({ getSettings: () => settings }))
 vi.mock('../src/main/claudeCli', async (orig) => ({ ...(await orig<object>()), checkClaude: async () => ({ installed: true, loggedIn: true, checkedAt: Date.now() }) }))
-let privateTurn = false
 /** The pictures buildTurn found for the turn (main/noteImages), as the next turn will have them */
 let turnImages: { path: string; image: { mediaType: string; data: string }; dataUrl: string }[] = []
 vi.mock('../src/main/agent', () => {
@@ -18,11 +17,9 @@ vi.mock('../src/main/agent', () => {
     nextStepId: () => `s${++n}`,
     stablePrompt: async (base: string) => `SYSTEM ${base.length}`,
     buildTurn: async (req: { messages: ChatMessage[] }, emit: (e: ChatEvent) => void, _s: AbortSignal, base: string) => ({
-      ctx: { private: privateTurn, sources: [], emitSources: () => {}, step: () => `s${++n}`, updateStep: () => {} },
+      ctx: { sources: [], emitSources: () => {}, step: () => `s${++n}`, updateStep: () => {} },
       messages: [{ role: 'system', content: `SYSTEM ${base.length}` }, ...req.messages],
       images: turnImages,
-      mine: false,
-      secret: false,
       emit
     })
   }
@@ -43,7 +40,6 @@ const say = (messages: ChatMessage[], extra: Record<string, unknown> = {}) => {
 const steps = (events: ChatEvent[]) => events.filter((e) => e.type === 'step').map((e) => (e as { step: { label?: string } }).step.label).filter(Boolean)
 
 beforeEach(() => {
-  privateTurn = false
   turnImages = []
   settings.ai.claude = {}
 })
@@ -114,9 +110,9 @@ describe('Claude lessons', () => {
     expect(await plain.run).not.toContain('[offered a visual]')
   })
 
-  it('refuses a private turn even if it got this far', async () => {
-    privateTurn = true
-    await expect(say([{ role: 'user', content: 'x' }], { labId: 'lesson:f' }).run).rejects.toThrow(/Private/)
+  it('takes a turn in a work project, or about Metabase, like any other', async () => {
+    const r = await say([{ role: 'user', content: 'what does our Metabase dashboard 4 show?' }], { labId: 'lesson:f', scope: { kind: 'folder', path: 'Secret project' } }).run
+    expect(r).toBeTruthy()
   })
 
   it('gives Claude no web tools when Web is off, in a process of its own', async () => {
@@ -223,9 +219,8 @@ describe('lesson threads on Claude', () => {
     expect(engine.liveClaude().some((p) => p.key === 'lab:lesson:th:web')).toBe(true)
   })
 
-  it('refuses a private thread like any private turn', async () => {
-    privateTurn = true
-    await expect(say([{ role: 'user', content: 'why?' }], { labId: 'lesson:thp', thread: 't' }).run).rejects.toThrow(/Private/)
+  it('takes a thread in a work project like any other', async () => {
+    expect(await say([{ role: 'user', content: 'why?' }], { labId: 'lesson:thp', thread: 't', scope: { kind: 'folder', path: 'Secret project' } }).run).toBeTruthy()
   })
 
   it('keys a thread apart from its lesson', () => {
@@ -253,13 +248,6 @@ describe('Claude ahead of time and in the background', () => {
     }))
       parts.push(t)
     expect(parts.join('')).toBe('draft by haiku: an outline of Python')
-    const priv: string[] = []
-    for await (const t of engine.draftWithClaude('S', 'x', 'background', new AbortController().signal, async function* () {
-      yield 'gemma'
-    }, true))
-      priv.push(t)
-    expect(priv).toEqual(['gemma'])
-    expect(await engine.backgroundOnClaude('Name this conversation', 'S', undefined, true)).toBeNull()
     expect(engine.readClaudeUsage(0).some((u) => u.role === 'background' && u.model.includes('haiku'))).toBe(true)
   })
 })

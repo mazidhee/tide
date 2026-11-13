@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aboutMetabase, rowsTable, sqlProblem } from '../src/shared/metabase'
+import { rowsTable, sqlProblem } from '../src/shared/metabase'
 
 describe('sqlProblem', () => {
   it('lets plain reads through', () => {
@@ -36,13 +36,5 @@ describe('rowsTable', () => {
       2
     )
     expect(out.split('\n')).toEqual(['| Day | total |', '| --- | --- |', '| Mon | 3 |', '| Tue |  |', '(1 more rows not shown)'])
-  })
-})
-
-describe('aboutMetabase', () => {
-  it('spots Metabase by name or by its address', () => {
-    expect(aboutMetabase('teach me our Metabase')).toBe(true)
-    expect(aboutMetabase('what is on analytic.rank.africa/dashboard/4', 'analytic.rank.africa')).toBe(true)
-    expect(aboutMetabase('explain base rates')).toBe(false)
   })
 })

@@ -66,7 +66,7 @@ export const PROVIDERS: ProviderInfo[] = [
     keyUrl: 'https://build.nvidia.com/settings/api-keys',
     pricingUrl: 'https://build.nvidia.com/models',
     checked: '2026-11-09',
-    freeTier: 'Free with an NVIDIA Developer account (phone verification): about 40 requests a minute, no published daily cap. Trial use: prompts may be logged to improve NVIDIA’s products, so private projects and Metabase never go here.',
+    freeTier: 'Free with an NVIDIA Developer account (phone verification): about 40 requests a minute, no published daily cap. Trial use: prompts may be logged to improve NVIDIA’s products.',
     perMinute: 35,
     // Each job on its own model, so one model's limit isn't shared by everything
     // Models on NVIDIA's API list (checked 9 Nov 2026; Kimi K3.1 Pro has a page but isn't served by the API yet)
@@ -196,7 +196,7 @@ export const PROVIDERS: ProviderInfo[] = [
     baseUrl: 'https://api.kilo.ai/api/gateway',
     pricingUrl: 'https://kilo.ai',
     checked: '2026-11-09',
-    freeTier: 'No key or account. About 200 requests an hour per address. Its free models may train on prompts, so private projects, Metabase and pictures never go here; only problems and answers do. Tested 9 Nov 2026: right answer in about 15 seconds.',
+    freeTier: 'No key or account. About 200 requests an hour per address. Its free models may train on prompts, so pictures never go here; only problems and answers do. Tested 9 Nov 2026: right answer in about 15 seconds.',
     keyless: true,
     perMinute: 3,
     models: [

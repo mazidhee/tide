@@ -39,7 +39,7 @@ export interface ClaudeArgs {
   model: ClaudeModel | string
   system: string
   mcpConfig: string
-  /** Built-in tools Claude may use as well as Tide's (WebSearch, WebFetch), only for lessons that aren't private */
+  /** Built-in tools Claude may use as well as Tide's (WebSearch, WebFetch), for lessons with Web on */
   builtIn?: string[]
 }
 

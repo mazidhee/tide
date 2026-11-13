@@ -74,7 +74,6 @@ async function build(): Promise<Connection[]> {
       usedFor: id === cloud.provider ? ['Hard maths', 'Marking', 'Planning', 'Checks'] : ['Backup when the main one is busy'],
       free: p.freeTier,
       keyUrl: p.keyUrl,
-      privacy: 'Never sees a private project or your Metabase.',
       section: 'models'
     }
     return {
@@ -154,7 +153,7 @@ async function build(): Promise<Connection[]> {
         case 'searxng': {
           const { searchStatus } = await import('./websearch')
           const st = await within(4000, searchStatus(), { ready: false, detail: 'Didn’t answer in time' })
-          return as(st.ready ? 'connected' : 'not-set-up', search === 'searxng' ? st.detail : !st.ready ? st.detail : search === 'auto' ? 'Used for private lessons, and when You.com can’t answer' : 'Set up, not your search now', st.ready && (search === 'searxng' || search === 'auto'))
+          return as(st.ready ? 'connected' : 'not-set-up', search === 'searxng' ? st.detail : !st.ready ? st.detail : search === 'auto' ? 'Used when You.com can’t answer' : 'Set up, not your search now', st.ready && (search === 'searxng' || search === 'auto'))
         }
         case 'brave':
         case 'tavily': {

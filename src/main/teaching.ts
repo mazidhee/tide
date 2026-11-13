@@ -4,9 +4,8 @@
  * Kept in the vault's .tide/teaching.json: the reviews and the learner's switches. The measures
  * are worked out again from the lesson records and the knowledge map whenever they're read.
  *
- * Reviews need Claude (Opus, the marking model) and are never written for a private lesson or a
- * Metabase one; without Claude the page shows the measures only, and the adjustments come from
- * the measures alone, for Claude's lessons and Gemma's alike.
+ * Reviews need Claude (Opus, the marking model); without Claude the page shows the measures
+ * only, and the adjustments come from the measures alone, for Claude's lessons and Gemma's alike.
  */
 import type { LessonRecord } from '@shared/lessonLog'
 import { measureTeaching, lessonAnswers, lessonPacing, misconceptionKey, type TeachingMeasures } from '@shared/teachingQuality'
@@ -51,21 +50,11 @@ function change(fn: (s: TeachingStore) => TeachingStore | void): Promise<Teachin
   return run
 }
 
-// ---------- Lessons, with whether each is private ----------
+// ---------- Lessons ----------
 
-interface Lesson extends LessonRecord {
-  private: boolean
-}
-
-async function lessons(): Promise<Lesson[]> {
-  const [{ lessonRecords }, { privatePath }] = await Promise.all([import('./knowledge'), import('./projects')])
-  const out: Lesson[] = []
-  for (const r of await lessonRecords().catch(() => [] as LessonRecord[])) {
-    const path = 'path' in r.scope ? r.scope.path : undefined
-    const priv = /\bmetabase\b/i.test(r.topic) || (path ? await privatePath(path).catch(() => true) : false)
-    out.push({ ...r, private: priv })
-  }
-  return out
+async function lessons(): Promise<LessonRecord[]> {
+  const { lessonRecords } = await import('./knowledge')
+  return lessonRecords().catch(() => [] as LessonRecord[])
 }
 
 // ---------- Measures (cached briefly: the prompt asks for them each lesson turn) ----------
@@ -73,7 +62,6 @@ async function lessons(): Promise<Lesson[]> {
 let cache: {
   at: number
   measures: TeachingMeasures
-  open: TeachingMeasures
   store: TeachingStore
 } | null = null
 const CACHE_MS = 5 * 60_000
@@ -86,12 +74,6 @@ async function measured() {
   cache = {
     at: now,
     measures: measureTeaching(all, concepts, now),
-    // What may go to Claude: nothing from a private lesson
-    open: measureTeaching(
-      all.filter((l) => !l.private),
-      concepts.filter((c) => !c.private),
-      now
-    ),
     store
   }
   return cache
@@ -101,7 +83,7 @@ export async function teachingView(): Promise<TeachingView> {
   const [m, all] = await Promise.all([measured(), lessons()])
   const reviewed = new Set(m.store.reviews.map((r) => r.lesson))
   const unreviewed = all
-    .filter((l) => !l.private && l.mode === 'teach' && !reviewed.has(l.id) && lessonAnswers(l).length >= 2)
+    .filter((l) => l.mode === 'teach' && !reviewed.has(l.id) && lessonAnswers(l).length >= 2)
     .sort((a, b) => b.started - a.started)
     .slice(0, 6)
     .map((l) => ({
@@ -133,13 +115,13 @@ export async function setAdjustment(id: AdjustmentId, on: boolean): Promise<Teac
 }
 
 /**
- * The adjustments for the tutor's prompt: the measures (without private lessons unless the turn is
- * private itself) and the reviews, with the learner's switches. Empty when nothing applies.
+ * The adjustments for the tutor's prompt: the measures and the reviews, with the learner's
+ * switches. Empty when nothing applies.
  */
-export async function teachingPrompt(privateTurn: boolean): Promise<string> {
+export async function teachingPrompt(): Promise<string> {
   try {
     const m = await measured()
-    const measures = privateTurn ? m.measures : m.open
+    const measures = m.measures
     const states = deriveAdjustments(measures, m.store.reviews, m.store.switches)
     const known = measures.misconceptions.filter((x) => !x.resolvedAt).map((x) => x.name)
     return adjustmentsPrompt(states, known)
@@ -148,11 +130,11 @@ export async function teachingPrompt(privateTurn: boolean): Promise<string> {
   }
 }
 
-/** Open misconceptions on a topic, by name, for the marker to reuse (never a private lesson's) */
+/** Open misconceptions on a topic, by name, for the marker to reuse */
 export async function knownMisconceptions(topic: string): Promise<string[]> {
   const m = await measured()
   const key = topic.toLowerCase()
-  return m.open.misconceptions
+  return m.measures.misconceptions
     .filter((x) => !x.resolvedAt && x.topic.toLowerCase() === key)
     .map((x) => x.name)
     .filter((n, i, all) => all.findIndex((y) => misconceptionKey(y) === misconceptionKey(n)) === i)
@@ -164,16 +146,15 @@ export async function knownMisconceptions(topic: string): Promise<string[]> {
 const reviewing = new Set<string>()
 
 /**
- * Opus reviews one lesson against the rubric, in the background. Never a private or Metabase
- * lesson, and never on Gemma: without Claude there is no review. Returns the review, or null.
+ * Opus reviews one lesson against the rubric, in the background. Never on Gemma: without Claude
+ * there is no review. Returns the review, or null.
  */
 export async function reviewLesson(id: string, o: { signal?: AbortSignal } = {}): Promise<LessonReview | null> {
   if (reviewing.has(id)) return null
   const record = (await lessons()).find((l) => l.id === id)
-  if (!record || record.private) return null
+  if (!record) return null
   const answers = lessonAnswers(record)
   if (answers.length < 2) return null
-  const path = 'path' in record.scope ? record.scope.path : undefined
   const transcript = reviewTranscript(record.turns)
   const prompt = reviewPrompt({
     topic: record.topic,
@@ -182,10 +163,7 @@ export async function reviewLesson(id: string, o: { signal?: AbortSignal } = {})
     answers
   })
   const { jobRoute } = await import('./ai')
-  const route = await jobRoute('lessonReview', prompt, {
-    path,
-    text: `${record.topic}\n${transcript.slice(0, 4000)}`
-  })
+  const route = await jobRoute('lessonReview')
   if (route.who !== 'claude') return null
   reviewing.add(id)
   try {

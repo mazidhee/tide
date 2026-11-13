@@ -482,7 +482,7 @@ export interface WorkshopRecord {
   title: string
   /** The project's folder in the notes folder: plain files, the learner's to keep */
   folder: string
-  /** The notebook (roadmap) it was started from: decides whether it is private, and where its evidence counts */
+  /** The notebook (roadmap) it was started from: where its evidence counts */
   notebook?: string
   /** The roadmap item it was started from */
   topic?: string
@@ -679,8 +679,6 @@ export interface WorkshopState {
   current: number
   stages: StageView[]
   recap: Recap
-  /** Reviews and questions for this project stay on this Mac */
-  private: boolean
 }
 
 export function cardOf(p: WorkshopProject, r?: WorkshopRecord | null): WorkshopCard {
@@ -703,7 +701,7 @@ export function cardOf(p: WorkshopProject, r?: WorkshopRecord | null): WorkshopC
  * A project and its record as the screen may see them: test names but never their code, hints only
  * once asked for, a stage's brief only once it has opened, and nothing of the reference solution.
  */
-export function stateOf(p: WorkshopProject, r: WorkshopRecord, files: string[], now: number, isPrivate = false): WorkshopState {
+export function stateOf(p: WorkshopProject, r: WorkshopRecord, files: string[], now: number): WorkshopState {
   const stages: StageView[] = p.stages.map((s, i) => {
     const sp = r.stages[s.id]
     const status: StageView['status'] = sp?.passedAt ? 'done' : i === r.stage ? 'current' : 'locked'
@@ -722,7 +720,7 @@ export function stateOf(p: WorkshopProject, r: WorkshopRecord, files: string[], 
       ...(sp?.review ? { review: sp.review } : {})
     }
   })
-  return { card: cardOf(p, r), folder: r.folder, files, current: r.stage, stages, recap: recapOf(p, r, now), private: isPrivate }
+  return { card: cardOf(p, r), folder: r.folder, files, current: r.stage, stages, recap: recapOf(p, r, now) }
 }
 
 // ---------- The tutor's review of a run ----------

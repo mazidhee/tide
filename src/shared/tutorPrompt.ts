@@ -101,7 +101,8 @@ const CLAUDE_TOOLS = `You are Tide, a patient tutor helping a student learn, ins
 - show_in_view: seek the video on their screen to a moment, or scroll the page they're reading to a section, when you point at it.
 When a message carries "What the student has on screen", that is what they are looking at in Tide right now (a course page and section, a video and the words around its current moment, an article, a passage they selected): answer about that, and point at moments as m:ss and at sections by their heading.
 - record_answer: only outside a lesson; in a lesson the <grade> tag records the mark in What you know.
-- set_exercise / banked_exercise: set a practice exercise, proven in Tide's sandbox before the learner sees it; reuse one you verified before.`
+- set_exercise / banked_exercise: set a practice exercise, proven in Tide's sandbox before the learner sees it; reuse one you verified before.
+- place_explorable / set_challenge / check_graph / explorable_library (maths lessons): check an explorable's settings, prove a poke-holes challenge with SymPy, check a graph (each hands back the block to paste); reuse an explorable made on the fly before.`
 
 /** Added to Claude's prompt when it has its own web tools */
 export const CLAUDE_WEB_NOTE = `You also have WebSearch and WebFetch. Use them for anything that changes (versions, releases, prices, laws, news, recent research) and to read a page before you rely on it or quote it; cite the page as a Markdown link. Their notes come first, then the web.`
@@ -113,7 +114,7 @@ const RULES = TUTOR_SYSTEM.slice(TUTOR_SYSTEM.indexOf('\nRules:'), TUTOR_SYSTEM.
 /** In a lesson Tide runs no checks for Claude: it runs them itself */
 const CLAUDE_LESSON_RULES = `\n- Every numbered practice problem (code, SQL, a calculation, or a conceptual problem to answer at length) goes through Tide: first banked_exercise for one you verified before, else set_exercise with its proof and a common mistake. When it's verified, end your reply with <exercise id="…"/> and Tide sets it, numbered, with its hidden solution and tests: don't write that problem, its <solution> or its <ask> yourself. If the check fails, fix what it says and call set_exercise once more with repair_of; if that fails too, take the bank's exercise it offers or set a different one. Never show an exercise that wasn't verified, and never write a \`\`\`tests block yourself. To have them try an exercise again after a miss, ask with a plain code <ask> naming the same function: Tide gives it the exercise's hidden tests again. Quick questions while you teach (predict, a short check, explain back) are ordinary <ask> tags. A note from Tide giving a mark ("(Tide: … marked this answer …") comes from a second, careful marker: write your <grade> with that verdict and score, in your own words.`
 
-// Custom visuals are Claude's alone: Gemma (and so every private notebook) keeps to the fixed simulations and mermaid
+// Custom visuals are Claude's alone: Gemma keeps to the fixed simulations and mermaid
 export const CLAUDE_TUTOR_SYSTEM = `${CLAUDE_TOOLS}${RULES}\n${SIM_GUIDE}\n${VISUAL_GUIDE}`
 // A Claude lesson has the whole simulation guide in its (cached) prompt, where Gemma's lessons get only
 // the kinds their topic can use, with the instructions (shared/workarounds lessonSimSubset)

@@ -22,7 +22,7 @@ import { bankDirection, plannedMove } from '@shared/difficulty'
 import { BANK_NUDGE, levelAfter, nextDirection, pickProblem, problemsSoFar, renderProblem, type BankProblem, type Direction, type Level } from '@shared/bank'
 import type { ChatEvent, ChatMessage, ChatRequest, ChatScope, ContextSource, ReadAlongNote } from '@shared/types'
 import { getSettings } from './settings'
-import { claudeState, ensureGemmaServer, markGemmaUsed, prewarmGemma, refreshClaude, useGemma } from './modelIdle'
+import { claudeState, ensureGemmaServer, markGemmaUsed, refreshClaude, useGemma } from './modelIdle'
 import { routeJob, type GemmaReason, type JobName, type Route } from '@shared/gemmaPolicy'
 import { localSampling } from './sampling'
 import { createLineGuard, createStreamFilter, isLooping } from '@shared/modelText'
@@ -466,7 +466,6 @@ async function lessonTurn(req: TurnRequest) {
   if (!topic) return null
   const { readBank, markUsed, prepareAround, aimAt } = await import('./bank')
   const { readable } = await import('@shared/lessonCheck')
-  const { mayLeaveMac } = await import('./lessonGuard')
   const key = createHash('sha1').update(`${topic}\n${String(req.messages.find((m) => m.role === 'user')?.content ?? '')}`).digest('hex')
   const replies = req.messages.filter((m) => m.role === 'assistant').map((m) => String(m.content))
   const transcript = replies.join('\n')
@@ -481,7 +480,6 @@ async function lessonTurn(req: TurnRequest) {
   const paced = typeof last?.content === 'string' && last.content.includes(PACE_MARK)
   const ready = started && !paced && ([1, 2, 3] as Level[]).some((l) => pickProblem(bank, l, seen))
   if (ready && last?.role === 'user' && typeof last.content === 'string') messages[messages.length - 1] = { ...last, content: `${last.content}\n\n${BANK_NUDGE}` }
-  const local = !(await mayLeaveMac(req))
   // While the reply streams: when the tutor starts a new problem right after short feedback, it's
   // stopped there and a checked problem from the bank takes its place (small models don't reliably
   // use the <next> tag). Text that might be the start of "**Problem" is held back a moment.
@@ -564,8 +562,8 @@ async function lessonTurn(req: TurnRequest) {
       // Missed: a problem aimed at exactly what was missed comes next (the tutor's own feedback says what)
       const g = /<grade\s+verdict\s*=\s*["']?(partial|wrong)["']?[^>]*>([\s\S]*?)<\/grade>/i.exec(reply)
       const previous = replies[replies.length - 1]
-      if (g && previous) void aimAt(topic, readable(previous), g[2].trim(), key, lessonLevels.get(key) ?? 2, local)
-      void prepareAround(topic, lessonLevels.get(key) ?? 2, local)
+      if (g && previous) void aimAt(topic, readable(previous), g[2].trim(), key, lessonLevels.get(key) ?? 2)
+      void prepareAround(topic, lessonLevels.get(key) ?? 2)
     }
   }
 }
@@ -616,8 +614,8 @@ async function answerTurn(req: TurnRequest, send: (e: ChatEvent) => void) {
     }
     send(e)
   }
-  // Claude teaches when it's chosen and allowed (main/teacher): a private project or Metabase never
-  // leaves the Mac. When it can't (not installed, logged out, at the plan's limit), Gemma does, and
+  // Claude teaches when it's chosen (main/teacher). When it can't (not installed, logged out, at
+  // the plan's limit, offline, an error or a hang), Gemma does, and
   // a step says why. Gemma's lesson checks (lessonGuard, the problem bank, hidden tests written by
   // Gemma) are workarounds for a small model and don't run on Claude's turns: Claude runs its checks itself.
   const { teacherFor } = await import('./teacher')
@@ -680,7 +678,7 @@ async function answerTurn(req: TurnRequest, send: (e: ChatEvent) => void) {
       void refreshClaude().catch(() => {})
       const g = await useGemma(e instanceof ClaudeUnavailable ? reasonFromWhy(why) : 'claude-failed')
       noteFallback(e instanceof ClaudeUnavailable ? reasonFromWhy(why) : 'claude-failed')
-      emit({ id: req.id, type: 'step', step: { id: 'teacher', kind: 'helper', label: takeoverNote({ why: /private/i.test(why) ? `${why}: Gemma is teaching` : `Claude is unavailable (${why}): Gemma is teaching`, loaded: g.loaded }), status: 'done', depth: 0 } })
+      emit({ id: req.id, type: 'step', step: { id: 'teacher', kind: 'helper', label: takeoverNote({ why: `Claude is unavailable (${why}): Gemma is teaching`, loaded: g.loaded }), status: 'done', depth: 0 } })
     }
   } else if (teacher.who === 'gemma') {
     // Gemma on demand (main/modelIdle): loaded now if it isn't, and the reason kept for Settings
@@ -1038,21 +1036,13 @@ async function completeNow(prompt: string, system: string | undefined, signal: A
 
 // ---------- Jobs: Claude first, Gemma on demand ----------
 
-/**
- * How a job knows whether it must stay on this Mac (shared/gemmaPolicy JOB_ROUTES says which
- * applies): the note paths it reads, the text to look through for Metabase or a private
- * project's name, or the caller's own answer. Anything about Metabase always stays.
- */
+/** A one-shot job's options. Every job goes to Claude when Claude can take it (shared/gemmaPolicy) */
 export interface JobOpts {
   signal?: AbortSignal
   priority?: 'interactive' | 'background'
   task?: RequestKind
   routine?: boolean
   schema?: ReplySchema
-  path?: string | string[]
-  /** Looked through for a private project's name (the prompt itself is always looked through for Metabase) */
-  text?: string
-  private?: boolean
   /** How long Claude has before Gemma takes the job instead */
   timeoutMs?: number
   /** A Claude failure throws instead of loading Gemma (for a job with its own answer when the model can't give one) */
@@ -1067,27 +1057,9 @@ const IMAGES_PER_JOB = 6
 /** Claude's time for a one-shot job, by its model's role, before Gemma takes it */
 const CLAUDE_JOB_MS: Record<string, number> = { background: 60_000, teach: 120_000, mark: 120_000, hard: 180_000 }
 
-/** Where this job goes now (shared/gemmaPolicy routeJob, with privacy looked up) */
-export async function jobRoute(job: JobName, prompt: string, o: JobOpts = {}): Promise<Route> {
-  let priv = !!o.private
-  let metabase = /\bmetabase\b/i.test(prompt)
-  if (!priv && !metabase && o.path) {
-    const { privatePath } = await import('./projects')
-    for (const p of [o.path].flat()) {
-      // Unsure counts as private
-      if (p && (await privatePath(p).catch(() => true))) {
-        priv = true
-        break
-      }
-    }
-  }
-  if (!priv && !metabase && o.text !== undefined) {
-    const { privateText } = await import('./teacher')
-    const t = await privateText(o.text)
-    metabase = t === 'metabase'
-    priv = t === 'private'
-  }
-  return routeJob(job, { private: priv, metabase, claude: claudeState() })
+/** Where this job goes now (shared/gemmaPolicy routeJob) */
+export async function jobRoute(job: JobName): Promise<Route> {
+  return routeJob(job, { claude: claudeState() })
 }
 
 /** Why Gemma takes a job Claude couldn't */
@@ -1100,8 +1072,7 @@ async function failedReason(e: unknown): Promise<GemmaReason> {
 }
 
 /**
- * One job's whole answer: on Claude (its role's model) when the job may leave this Mac and Claude
- * can take it, else on Gemma, loaded for it if it isn't. A Claude call that fails or takes too long
+ * One job's whole answer: on Claude (its role's model) when Claude can take it, else on Gemma, loaded for it if it isn't. A Claude call that fails or takes too long
  * is handed to Gemma (it loads, and the job goes on).
  */
 export async function completeFor(job: JobName, prompt: string, system: string | undefined, o: JobOpts = {}): Promise<string> {
@@ -1114,7 +1085,7 @@ export function claudeOr(job: JobName, prompt: string, system: string | undefine
 }
 
 async function claudeOrGemma(job: JobName, prompt: string, system: string | undefined, o: JobOpts, gemma: () => Promise<string>): Promise<string> {
-  const route = await jobRoute(job, `${system ?? ''}\n${prompt}`, o)
+  const route = await jobRoute(job)
   let reason: GemmaReason
   if (route.who === 'claude') {
     try {
@@ -1136,7 +1107,7 @@ async function claudeOrGemma(job: JobName, prompt: string, system: string | unde
 }
 
 /**
- * A long draft streamed as it's written: Claude when the job may leave the Mac and Claude can,
+ * A long draft streamed as it's written: Claude when Claude can,
  * else Gemma's streamDraft. If Claude can't before writing anything, Gemma takes it.
  */
 export function draftFor(job: JobName, messages: ChatMessage[], signal: AbortSignal, maxTokens: number, task: RequestKind, o: JobOpts = {}): AsyncGenerator<string> {
@@ -1146,7 +1117,7 @@ export function draftFor(job: JobName, messages: ChatMessage[], signal: AbortSig
 async function* draftOn(job: JobName, messages: ChatMessage[], signal: AbortSignal, maxTokens: number, task: RequestKind, o: JobOpts = {}): AsyncGenerator<string> {
   const system = String(messages.find((m) => m.role === 'system')?.content ?? '')
   const user = messages.filter((m) => m.role !== 'system').map((m) => String(m.content)).join('\n\n')
-  const route = await jobRoute(job, `${system}\n${user}`, o)
+  const route = await jobRoute(job)
   let reason: GemmaReason
   if (route.who === 'claude') {
     let any = false
@@ -1165,24 +1136,6 @@ async function* draftOn(job: JobName, messages: ChatMessage[], signal: AbortSign
   await useGemma(reason)
   noteFallback(reason)
   yield* streamDraft(messages, signal, maxTokens, task)
-}
-
-const prewarmedPaths = new Map<string, number>()
-/**
- * A note is opening: when it is in a private project and Claude is the main tutor, Gemma loads
- * now, so its margin tutor or lesson isn't the reply that waits for the load. At most once a
- * minute per note.
- */
-export async function prewarmForPath(path: string): Promise<boolean> {
-  if (!path || !claudeState().main) return false
-  const at = prewarmedPaths.get(path)
-  if (at && Date.now() - at < 60_000) return false
-  prewarmedPaths.set(path, Date.now())
-  if (prewarmedPaths.size > 50) prewarmedPaths.delete(prewarmedPaths.keys().next().value!)
-  const { privatePath } = await import('./projects')
-  if (!(await privatePath(path).catch(() => false))) return false
-  void prewarmGemma('private').catch(() => {})
-  return true
 }
 
 const stripThinking = (s: string) => s.replace(/<think>[\s\S]*?<\/think>/g, '')
@@ -1340,7 +1293,7 @@ Rules:
 
 Material:
 ${material}`
-  const cards = extractJsonArray<{ front: string; back: string }>(await completeFor('flashcards', prompt, undefined, { path }))
+  const cards = extractJsonArray<{ front: string; back: string }>(await completeFor('flashcards', prompt, undefined))
   return cards.filter((c) => c?.front && c?.back).slice(0, count)
 }
 
@@ -1366,7 +1319,7 @@ ${context}
 
 <passage>
 ${passage}
-</passage>`, undefined, { path })
+</passage>`, undefined)
     const text = out.replace(/^["'\s]+|["'\s]+$/g, '')
     return text ? { kind: 'question', text } : null
   }
@@ -1387,7 +1340,7 @@ ${context}
 <passage>
 ${passage}
 </passage>`
-  const out = await completeFor('marginNote', prompt, undefined, { path, priority: 'background' })
+  const out = await completeFor('marginNote', prompt, undefined, { priority: 'background' })
   if (/^\s*NONE\b/i.test(out)) return null
   const json = out.match(/\{[\s\S]*\}/)?.[0]
   if (!json) return null
@@ -1423,8 +1376,8 @@ ${context}
 <paragraph>
 ${passage}
 </paragraph>`
-  // Feedback while writing: Haiku when the note may leave this Mac; on Gemma it waits for the model to be free, your chat and lessons first
-  const out = await completeFor('marginNote', prompt, undefined, { path, priority: 'background' })
+  // Feedback while writing: Haiku when Claude can; on Gemma it waits for the model to be free, your chat and lessons first
+  const out = await completeFor('marginNote', prompt, undefined, { priority: 'background' })
   return parseCoachNote(out, passage)
 }
 
@@ -1457,7 +1410,7 @@ export async function tieBreak(topic: string, options: Strategy[], context = '')
     `A learner is starting a lesson on: ${topic}${context ? ` (${context})` : ''}.\nWhich way of teaching fits it best?\n${letters}\nReply with the letter only.`,
     'You choose how to teach a topic. Reply with one letter.',
     // Claude gets the same few seconds; past them the router's first choice stands, without loading Gemma for it
-    { text: `${topic} ${context}`, timeoutMs: 5000, noFallback: true }
+    { timeoutMs: 5000, noFallback: true }
   ).then((out) => options[(out.trim().toUpperCase().charCodeAt(0) || 65) - 65] ?? options[0])
   const timeout = new Promise<Strategy>((resolve) => setTimeout(() => resolve(options[0]), 5000))
   return Promise.race([ask, timeout]).catch(() => options[0])

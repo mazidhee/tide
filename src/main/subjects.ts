@@ -23,7 +23,7 @@ const deps: ResolveDeps = {
 }
 
 /** A topic's profile, decided once: the map's, a kept one, or the stronger model's */
-export const subjectProfile = (topic: string, o: { notebook?: string; private?: boolean; timeoutMs?: number } = {}) => resolveProfile(topic, deps, o)
+export const subjectProfile = (topic: string, o: { notebook?: string; timeoutMs?: number } = {}) => resolveProfile(topic, deps, o)
 
 // What runs here changes rarely (an install), and asking costs a few process starts: kept for ten minutes
 let status: { at: number; value: Promise<Omit<CapabilityStatus, 'web'>> } | null = null
@@ -47,9 +47,9 @@ const teaches = (instructions: string) => /You are running a TEACH session|REFRE
  * decide it (the roadmap or the model did), and one line for each thing Tide can't do for it,
  * with the substitute. '' for most lessons.
  */
-export async function subjectContext(req: { topic: string; scope: ChatScope; instructions: string; private: boolean; web: boolean }): Promise<string> {
+export async function subjectContext(req: { topic: string; scope: ChatScope; instructions: string; web: boolean }): Promise<string> {
   if (!teaches(req.instructions)) return ''
-  const p: SubjectProfile = await subjectProfile(req.topic, { notebook: notebookOf(req.scope), private: req.private, timeoutMs: 6000 })
+  const p: SubjectProfile = await subjectProfile(req.topic, { notebook: notebookOf(req.scope), timeoutMs: 6000 })
   if (isUnclear(p)) return ''
   // The lesson screen composes the toolkit from the topic's words; only a profile found otherwise needs adding
   // The humanities' rules may be there already, from the topic's own words (shared/humanities), so they aren't added twice
