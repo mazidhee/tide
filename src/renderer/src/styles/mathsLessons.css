@@ -112,7 +112,13 @@
 }
 
 .sim-ex-controls .sim-field-range {
+  flex: none;
   min-width: 0;
+  max-width: none;
+}
+
+.sim-ex-controls:empty {
+  display: none;
 }
 
 .sim-ex-params {
@@ -257,6 +263,7 @@
 /* ---------- Poke-holes challenges ---------- */
 
 .challenge {
+  font-family: var(--font-ui);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -513,4 +520,86 @@
   .sim-ex-dot {
     transition: none;
   }
+}
+
+/* ---------- Graphs (lib/graphs) ---------- */
+
+.graph {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0;
+  padding: 12px;
+  border-radius: var(--radius-m, 10px);
+  background: var(--bg-raised);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.graph-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.graph-stage {
+  min-width: 0;
+}
+
+.graph .MafsView {
+  --mafs-bg: var(--bg-raised);
+  --mafs-fg: var(--ink);
+  --mafs-origin-color: var(--ink-muted);
+  --mafs-line-color: color-mix(in srgb, var(--line-strong) 70%, transparent);
+  border-radius: var(--radius-s);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+}
+
+.graph-3d canvas {
+  display: block;
+  border-radius: var(--radius-s);
+  cursor: grab;
+  touch-action: none;
+}
+
+.graph-3d canvas:active {
+  cursor: grabbing;
+}
+
+.graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+.graph-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.graph-legend i {
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.graph-hint {
+  margin: 0;
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+}
+
+.graph.graph-error {
+  padding: 8px 12px;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.graph-error p {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
 }

@@ -79,8 +79,6 @@ export const setChallengeTool: McpTool = {
     ['challenge']
   ),
   async run(args, ctx: ToolContext) {
-    const { lessonInfo } = await import('./exercises')
-    if (lessonInfo(ctx.labId)?.private) return 'This lesson is private: its challenges are written as blocks directly, checked on the Mac as the learner answers.'
     const c = parseChallenge(typeof args.challenge === 'string' ? args.challenge : JSON.stringify(args.challenge ?? {}))
     if (!c) return 'That isn’t a challenge Tide can show: see the formats (counterexample with vars, lhs, rel, rhs; wrong-step with steps and wrong; asn with statement and answer).'
     const asStrings = (v: unknown) => (v && typeof v === 'object' ? Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, String(x)])) : undefined)
@@ -88,9 +86,25 @@ export const setChallengeTool: McpTool = {
     const { ioFor } = await import('./exercises')
     const proof = await proveChallenge(c, { witness: asStrings(args.witness), example: asStrings(args.example), check: typeof args.check === 'string' ? args.check : undefined }, await ioFor(ctx.labId ?? 'claude'))
     ctx.updateStep(step, proof.ok ? { status: 'done', label: 'Checked a poke-holes challenge before you see it', detail: proof.detail } : { status: 'error', detail: proof.why.slice(0, 140) })
-    if (!proof.ok) return `${proof.fatal ? 'Tide couldn’t check it' : 'It failed its check'}: ${proof.why}`
+    // SymPy can't run here: set it anyway (the learner's pick is still checked in the app), and say it is unproven
+    if (!proof.ok && proof.fatal) return `Tide couldn't prove it here (${proof.why}), so it goes out unproven: be certain of it yourself. Paste this block, then an <ask type="explain"> asking them to justify their answer:\n${challengeBlock(c)}`
+    if (!proof.ok) return `It failed its check: ${proof.why}`
     return `Proven (${proof.detail}). Paste this block, then an <ask type="explain"> asking them to justify their answer:\n${challengeBlock(c)}`
   }
 }
 
-export const MATHS_TOOLS = [placeExplorableTool, setChallengeTool]
+export const checkGraphTool: McpTool = {
+  name: 'check_graph',
+  description: 'Check a lesson graph before you write it: give the graph as JSON (kind plane, scatter, histogram, line, bar, transform, surface or space, as in your instructions). Tide reads it exactly as the lesson will and answers with the ```graph block to paste, or what is wrong with it. It shows nothing by itself.',
+  inputSchema: obj({ graph: { type: 'string', description: 'The graph as JSON, e.g. {"kind":"plane","fn":["x^2","2x"],"x":[-3,3],"tangent":[{"fn":1,"at":1}]}' } }, ['graph']),
+  async run(args) {
+    const { parseGraph } = await import('@shared/graphSpec')
+    const source = typeof args.graph === 'string' ? args.graph : JSON.stringify(args.graph ?? {})
+    const parsed = parseGraph(source)
+    if (!parsed.ok) return `Not drawable: ${parsed.error}`
+    // The block is what was given (checked), not Tide's reading of it: that is the form the lesson reads
+    return `Ready (${parsed.graph.kind}). Paste this where it belongs:\n\`\`\`graph\n${JSON.stringify(JSON.parse(source))}\n\`\`\``
+  }
+}
+
+export const MATHS_TOOLS = [placeExplorableTool, setChallengeTool, checkGraphTool]

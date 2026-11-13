@@ -14,6 +14,8 @@ export type View =
   | { kind: 'quiz'; scope: ChatScope }
   | { kind: 'session'; mode: SessionMode; scope: ChatScope; topic: string; options?: SessionSetup['options']; nonce?: number; turns?: { role: 'user' | 'assistant'; content: string }[]; /** Carrying on a past lesson: kept under the same record */ lesson?: string; /** ...with its side threads */ threads?: import('@shared/lessonThreads').LessonThread[]; /** A message to bring into view and flash once it opens (Explore later's "Open where it came up") */ focus?: { turn: number; thread?: string; reply?: number } }
   | { kind: 'lessons' }
+  /** The maths-to-quant ladder (components/LadderView); go: start the next lesson on arrival, once */
+  | { kind: 'ladder'; go?: number }
   | { kind: 'learn' }
   | { kind: 'practice' }
   /** A mock interview or exam (components/mock): its brief, the timed session and the debrief; `review` opens a past debrief */

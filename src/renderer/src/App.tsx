@@ -30,6 +30,7 @@ import { useFocusCompletion } from './components/FocusTimer'
 import { CoachView } from './components/CoachView'
 import { lastBrainTab } from './components/BrainTabs'
 import { KnowledgeView } from './components/KnowledgeView'
+import { LadderView } from './components/LadderView'
 import { LearnerProfileView } from './components/LearnerProfileView'
 import { LessonsView } from './components/LessonsView'
 import { ChatPage } from './components/ChatPage'
@@ -431,6 +432,7 @@ export default function App() {
   else if (view.kind === 'coach') main = <CoachView />
   else if (view.kind === 'learner') main = <LearnerProfileView />
   else if (view.kind === 'lessons') main = <LessonsView />
+  else if (view.kind === 'ladder') main = <LadderView go={view.go} />
   else if (view.kind === 'wrapup') main = <WrapUpView />
   else if (view.kind === 'weekly') main = <WeeklyView />
   else if (view.kind === 'maths') main = <MathsView key={`${view.level ?? ''}:${view.nonce ?? ''}`} level={view.level} />

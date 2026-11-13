@@ -3,20 +3,19 @@ import type { KnowledgeView } from '@shared/knowledge'
 import { KnowSubjects, type Actions } from './KnowSubjects'
 import { KnowTimeline } from './KnowTimeline'
 import { KnowTeaching } from './KnowTeaching'
-import { KnowLadder } from './KnowLadder'
 
 /**
  * What you know, in the new design: one sentence carrying the numbers, then either view, by
  * subject (each roadmap as a syllabus being filled in) or over time (weeks, with what fades and
  * each aim's forecast). The choice is remembered on this Mac.
  */
-type Mode = 'subject' | 'time' | 'teaching' | 'ladder'
+type Mode = 'subject' | 'time' | 'teaching'
 const KEY = 'tide.know.view'
 
 const remembered = (): Mode => {
   try {
     const m = localStorage.getItem(KEY)
-    return m === 'time' || m === 'teaching' || m === 'ladder' ? m : 'subject'
+    return m === 'time' || m === 'teaching' ? m : 'subject'
   } catch {
     return 'subject'
   }
@@ -54,7 +53,6 @@ export function KnowPage({ data, areaClass, actions }: { data: KnowledgeView; ar
               [
                 ['subject', 'By subject'],
                 ['time', 'Over time'],
-                ['ladder', 'Maths ladder'],
                 ['teaching', 'How Tide is teaching you']
               ] as const
             ).map(([m, label]) => (
@@ -95,8 +93,8 @@ export function KnowPage({ data, areaClass, actions }: { data: KnowledgeView; ar
           </p>
         )}
       </header>
-      {mode === 'teaching' ? <KnowTeaching /> : mode === 'ladder' ? <KnowLadder data={data} actions={actions} /> : mode === 'subject' ? <KnowSubjects data={data} ready={ready} areaClass={areaClass} actions={actions} /> : <KnowTimeline data={data} areaClass={areaClass} actions={actions} />}
-      {mode !== 'teaching' && mode !== 'ladder' && (
+      {mode === 'teaching' ? <KnowTeaching /> : mode === 'subject' ? <KnowSubjects data={data} ready={ready} areaClass={areaClass} actions={actions} /> : <KnowTimeline data={data} areaClass={areaClass} actions={actions} />}
+      {mode !== 'teaching' && (
         <p className="know-foot">
           An estimate, not a mark: the chance you would remember a topic today, by the same model as your reviews (FSRS). Each answer is a review: a right one after a gap makes it last much longer, a wrong one makes it harder to keep, and it fades
           with the time since. Solid means your last answer was right and the chance is still 85% or more; fading means it has dropped below.

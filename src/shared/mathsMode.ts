@@ -15,6 +15,7 @@
  * Pure, so the lesson screen, main and the tests agree.
  */
 import { subjectMatches } from './subjects'
+import { GRAPH_GUIDE } from './graphSpec'
 
 export type MathsArea = 'algebra' | 'functions' | 'calculus' | 'linear-algebra' | 'probability' | 'statistics' | 'stochastic' | 'pricing'
 
@@ -159,8 +160,9 @@ const CLAUDE_RULES = `MATHS MODE. This lesson is maths, statistics, probability 
 - Worked example → faded example → solo problem, for every new technique: you work one in full, saying why each step; then a near-identical one with the last step or two left for them; then one on their own (set_exercise, proven first).
 - Socratic questions that make them reason: "what would happen if…", "why can't h be 0 here?", "which assumption did we just use?", "what's the simplest case you could check?". Never "does that make sense?" or "any questions?".
 - Concrete → visual → symbolic. Start from numbers or a situation they can picture, then a picture (an explorable, a plot, a diagram), and only then the symbols. When it's natural, end on a real quant or finance hook (a price, a risk, a trading decision, an ML model) in one or two sentences, not a lecture.
+- Draw the maths: a graph (below) whenever a shape, a region, a tangent, a distribution or a transformation says it faster than words; static graphs for showing, explorables for moving.
 - Explorables are part of the teaching, not decoration: place one where moving something is how the idea is understood (secants closing in on a tangent, means piling into a bell curve), with a precise question and usually a "predict". Then ask about what they saw. Use place_explorable to check a block before you write it when you're unsure of the settings.
-- Poke holes: at least once a lesson, give a poke-holes challenge (a claim to break with a counterexample, a derivation with one wrong step, or always/sometimes/never) and have them justify it. Prove it first with set_challenge, which checks your challenge with SymPy, and paste the block it returns.
+- Poke holes: at least once a lesson, give a poke-holes challenge (a claim to break with a counterexample, a derivation with one wrong step, or always/sometimes/never) and have them justify it. Prove it first with set_challenge, which checks your challenge with SymPy, and paste the \`\`\`challenge block it returns: always as that block (the app makes it clickable and checks their pick), never as plain text.
 - Check every number and step with SymPy before you call it right or wrong; name the exact step that fails.
 - When Tide notes that their attention is drifting, switch format at once as it says: start your reply with "Let's try this a different way." and do that thing.`
 
@@ -171,7 +173,7 @@ const GEMMA_RULES = `MATHS MODE. This lesson is maths, statistics, probability o
 4. New technique: (a) you work one example fully, saying why each step; (b) a near-identical one with the last step left for them; (c) one on their own.
 5. Ask questions that make them reason ("Why can't h be 0?", "What if n doubles?"). Never ask "does that make sense?".
 6. Numbers first, then a picture, then symbols. One sentence on where it is used in finance or data, when it fits.
-7. Use an explorable (a sim block of kind explore) when moving something shows the idea, with a "question" and a "predict".
+7. Draw a graph (a plot tag or a graph block) whenever a picture says it faster. Use an explorable (a sim block of kind explore) when moving something shows the idea, with a "question" and a "predict".
 8. Once a lesson, a poke-holes challenge (a challenge block), then an explain ask for their reasons.
 9. If a note from Tide says their attention is drifting, start your reply with "Let's try this a different way." and do what it says.`
 
@@ -180,7 +182,7 @@ export function mathsRules(engine: 'claude' | 'gemma', topic: string, notebook?:
   const mode = mathsMode(topic, notebook)
   if (!mode.on) return ''
   const area = mode.area ? ` It sits on the ${AREA_LABEL[mode.area]} rung of their maths ladder.` : ''
-  return `${engine === 'claude' ? CLAUDE_RULES : GEMMA_RULES}${area}\n\n${exploreGuide(mode.area, engine === 'gemma')}\n\n${POKE_GUIDE}`
+  return `${engine === 'claude' ? CLAUDE_RULES : GEMMA_RULES}${area}\n\n${GRAPH_GUIDE}${engine === 'claude' ? ' Check one with check_graph when unsure.' : ''}\n\n${exploreGuide(mode.area, engine === 'gemma')}\n\n${POKE_GUIDE}`
 }
 
 export const AREA_LABEL: Record<MathsArea, string> = {

@@ -525,10 +525,10 @@ function create(spec: ExploreSpec, host: SimHost): SimView {
             <Plot.OfX y={f} color={INK} weight={2.25} />
             {st.revealed && <Line.PointSlope point={p} slope={d} color={on === 'tangent' ? ACCENT : MUTED} style="dashed" weight={on === 'tangent' ? 2.5 : 1.5} />}
             {Number.isFinite(q[1]) && <Line.ThroughPoints point1={p} point2={q} color={ACCENT} weight={on === 'secant' ? 3.5 : 2.5} />}
-            {Number.isFinite(q[1]) && <Line.Segment point1={[p[0], view.y[0] + (view.y[1] - view.y[0]) * 0.03]} point2={[q[0], view.y[0] + (view.y[1] - view.y[0]) * 0.03]} color={on === 'h' ? ACCENT : SOFT} weight={on === 'h' ? 3 : 2} />}
+            {Number.isFinite(q[1]) && <Line.Segment point1={[p[0], view.y[0] + (view.y[1] - view.y[0]) * 0.07]} point2={[q[0], view.y[0] + (view.y[1] - view.y[0]) * 0.07]} color={on === 'h' ? ACCENT : SOFT} weight={on === 'h' ? 3 : 2} />}
             <MovablePoint point={p} constrain={([x]) => [x, f(x)]} onMove={([x]) => ((st.x0 = clampX(x, -10, 10)), touched(), update())} color={INK} />
             {Number.isFinite(q[1]) && <MovablePoint point={q} constrain={([x]) => [x, f(x)]} onMove={([x]) => ((st.h = nonZero(x - st.x0)), touched(), syncs.forEach((s) => s()), update())} color={ACCENT} />}
-            <Text x={(p[0] + q[0]) / 2} y={view.y[0] + (view.y[1] - view.y[0]) * 0.03} attach="n" size={13} color={SOFT}>{`h = ${tidy(st.h, 3)}`}</Text>
+            <Text x={(p[0] + q[0]) / 2} y={view.y[0] + (view.y[1] - view.y[0]) * 0.07} attach="n" attachDistance={12} size={13} color={SOFT}>{`h = ${tidy(st.h, 3)}`}</Text>
           </Frame>
         )
       }

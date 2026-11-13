@@ -135,6 +135,9 @@ export const starterConcept = (name: string, rung: MathsArea, i: number): Concep
   wrong: 0
 })
 
+/** A roadmap item that is a task to do rather than an idea to learn */
+const TASK = /^(implement|build|write|code|simulate|use|derive and implement|compute|backtest)\b/i
+
 export interface Ladder {
   rungs: RungState[]
   /** The rung to work on: the lowest not yet strong (the last when all are) */
@@ -162,7 +165,9 @@ export function ladder(concepts: ConceptState[]): Ladder {
     const learning = count('learning')
     const begun = topics.filter((c) => c.seen > 0).length
     const score = topics.length ? topics.reduce((s, c) => s + (c.estimate || 0), 0) / topics.length : 0
-    const next = topics.find((c) => c.status === 'fading') ?? topics.find((c) => c.status === 'learning') ?? topics.find((c) => c.status === 'new' && !c.done) ?? null
+    // An idea before an application task ("Implement …"): the task is for once the idea is held
+    const fresh = topics.filter((c) => c.status === 'new' && !c.done)
+    const next = topics.find((c) => c.status === 'fading') ?? topics.find((c) => c.status === 'learning') ?? fresh.find((c) => !TASK.test(c.name)) ?? fresh[0] ?? null
     const chapters = [...new Set(own.filter((c) => c.origin === 'roadmap' && c.section).map((c) => c.section!))]
     return { rung, topics, solid, fading, learning, begun, score, level: levelOf(topics.length, solid, begun, fading), chapters, next, starters }
   })
