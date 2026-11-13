@@ -42,6 +42,7 @@ Last updated: 13 November 2026.
 
 ## Now
 
+- [ ] **End-to-end check of every main flow (next session).** One scripted pass in a test copy with real Claude: click through each feature once (lessons and the lesson map, threads, warm-ups and breaks, workout, courses, reading room, IDE and coding lessons, projects with the ready check and debrief, mocks, maths tutor and explorables, finance labs, goals and planning, backups and restore, the bug shortcut, pop-outs) and report what breaks between features. Not a benchmark.
 - [x] **Pop-out windows everywhere.** Open a lesson, project, course, note, the reader or a mock in its own window, from a clear button, ⌥⌘N or right-click.
 - [x] **The reading room.** Library › Reading: tonight's chapter in "Then today", an immersive reader (highlight, quote, margin notes, Challenge me, the core argument), a book page with a cover banner, an end-of-chapter seminar, and listening with a mini player.
 - [ ] **Maths tutor.** First-principles, Socratic teaching for maths and statistics; drift detection that switches format; explorables you drag (derivatives, matrices, distributions, random walks); poke-holes challenges; a maths-to-quant ladder. Being built (worktree `tide-maths`).
