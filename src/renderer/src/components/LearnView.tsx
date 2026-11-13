@@ -13,6 +13,7 @@ import { ToExplore } from './ExploreLater'
 import { ReadyCard } from './ReadyCard'
 import { startPrepared, useReadyLesson } from '../lib/prep'
 import { LadderShelf } from './LadderView'
+import { NorthStarGlance } from './NorthStarView'
 import { looseRoadmaps } from '@shared/sidebarTree'
 import { outlinesChanged, useOutlines } from '../lib/outlines'
 
@@ -292,6 +293,8 @@ export function LearnView() {
         </div>
         <p className="lrn-desc">{selected.description}</p>
 
+        {/* North Star: where you are on the one path (components/NorthStarView) */}
+        <NorthStarGlance />
         {/* The maths-to-quant ladder (components/LadderView): where you are and what's next */}
         <LadderShelf />
         {/* Projects from an idea (components/ideas): continue one, or start one */}

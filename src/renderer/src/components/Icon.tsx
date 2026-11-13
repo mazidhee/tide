@@ -127,6 +127,8 @@ export const PATHS = {
   popin: 'M4 6A1.5 1.5 0 0 1 5.5 4.5h13A1.5 1.5 0 0 1 20 6v12.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5zM4 8.5h16M6.5 6.5h.01M17 11l-6.5 6.5M10.5 12.5v5h5',
   // Backups: a box with its lid and handle
   archive: 'M3.5 5h17v4h-17zM5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9M10 12.5h4',
+  // North Star: a four-pointed star, its long ray pointing down to where you are
+  northstar: 'M12 2.5l1.6 7.9L21 12l-7.4 1.6L12 21.5l-1.6-7.9L3 12l7.4-1.6z',
   claude: 'M12 3.5v4M12 16.5v4M3.5 12h4M16.5 12h4M6 6l2.8 2.8M15.2 15.2L18 18M6 18l2.8-2.8M15.2 8.8L18 6',
 } as const
 

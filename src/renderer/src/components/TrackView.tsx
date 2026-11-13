@@ -108,6 +108,13 @@ export function TrackView({ notebook, path }: { notebook: string; path: string }
         </div>
       </header>
 
+      {data.star && (
+        <button className="track-star" onClick={() => app.setView({ kind: 'northstar' })} title="Open your North Star">
+          <Icon name="northstar" size={13} />
+          North Star stage {data.star.stage}: {data.star.title} · {data.star.phases} of {data.star.of} phases in scope now
+        </button>
+      )}
+
       <ol className="track-strip" aria-label="Phases">
         {data.phases.map((p) => {
           const n = Math.max(1, p.topics)

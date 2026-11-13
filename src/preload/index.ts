@@ -404,6 +404,22 @@ const api: TideApi = {
     firmUp: invoke('track:firmUp'),
     mixedReview: invoke('track:mixedReview')
   },
+  northStar: {
+    view: invoke('northStar:view'),
+    glance: invoke('northStar:glance'),
+    suggested: invoke('northStar:suggested'),
+    synthesise: invoke('northStar:synthesise'),
+    status: invoke('northStar:status'),
+    draft: invoke('northStar:draft'),
+    discard: invoke('northStar:discard'),
+    build: invoke('northStar:build'),
+    decide: invoke('northStar:decide'),
+    review: invoke('northStar:review'),
+    moveOn: invoke('northStar:moveOn'),
+    confirmDepth: invoke('northStar:confirmDepth'),
+    startCapstone: invoke('northStar:startCapstone'),
+    install: invoke('northStar:install')
+  },
   learner: {
     view: invoke('learner:view'),
     refresh: invoke('learner:refresh'),

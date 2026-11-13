@@ -93,9 +93,11 @@ export async function getNotebooks(): Promise<NotebookMeta[]> {
   const stored = await readJson<Record<string, Partial<NotebookMeta>>>(NOTEBOOKS_FILE, {})
   const notes = await allNotes()
   const outlines = new Set(Object.values(stored).flatMap((m) => (m?.outline ? [m.outline] : [])))
+  // A North Star track whose folder now exists (notes made in it): the folder is the notebook, with the track's roadmap
+  const tracks = await import('./northStar').then((m) => m.installedTracks()).catch(() => ({}) as Record<string, { outline: string }>)
   return (tree?.children ?? [])
     .filter((n) => n.type === 'folder')
-    .map((folder) => {
+    .map((folder): NotebookMeta => {
       const files = flattenFiles(folder)
       const inFolder = notes.filter((n) => n.path.startsWith(folder.path + '/'))
       return {
@@ -110,11 +112,25 @@ export async function getNotebooks(): Promise<NotebookMeta[]> {
         color: stored[folder.path]?.color,
         description: stored[folder.path]?.description,
         tutor: stored[folder.path]?.tutor,
-        outline: stored[folder.path]?.outline,
+        outline: stored[folder.path]?.outline ?? (outlines.has(tracks[folder.name]?.outline ?? '') ? undefined : tracks[folder.name]?.outline),
         ...(stored[folder.path]?.project ? { project: stored[folder.path]!.project } : {})
       }
     })
     .filter((nb) => isNotebook(tree, nb.path, outlines))
+    .concat(virtualNotebooks(tree, stored, tracks))
+}
+
+/**
+ * North Star's tracks (main/northStar): a ready roadmap installed into the hidden Roadmaps folder
+ * is a notebook with no folder, so nothing new appears in the sidebar. Its path is its name; once
+ * a folder of that name exists (notes made in it), the folder is the notebook as usual.
+ */
+function virtualNotebooks(tree: Awaited<ReturnType<typeof getTree>>, stored: Record<string, Partial<NotebookMeta>>, tracks: Record<string, { outline: string }>): NotebookMeta[] {
+  const folders = new Set((tree?.children ?? []).filter((n) => n.type === 'folder').map((n) => n.name.toLowerCase()))
+  const outlines = new Set(Object.values(stored).flatMap((m) => (m?.outline ? [m.outline] : [])))
+  return Object.entries(tracks)
+    .filter(([name, t]) => !folders.has(name.toLowerCase()) && !outlines.has(t.outline))
+    .map(([name, t]) => ({ path: name, name, noteCount: 0, fileCount: 0, mastered: 0, learning: 0, lastModified: 0, outline: t.outline, virtual: true }))
 }
 
 /**

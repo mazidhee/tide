@@ -646,6 +646,8 @@ export interface TrackView {
   finish: { weeks: number; date: string } | null
   /** Whether the check is marked by Claude, Gemma, or by you */
   marker: 'claude' | 'gemma' | 'self'
+  /** Cut to North Star's current stage: only the phases (or parts of them) that stage needs */
+  star?: { stage: number; title: string; phases: number; of: number }
 }
 
 /** What's next on a track: the current phase's next topics, or its gate's step, then the phase after */
