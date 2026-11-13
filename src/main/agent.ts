@@ -1825,7 +1825,8 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
     subject,
     maths,
     metabaseNote,
-    labNote,
+    // Claude's process keeps the lesson: the lab's tables are told once, with the first message (Gemma's turns are rebuilt, so it rides each one)
+    engine === 'claude' && userTurns > 1 ? '' : labNote,
     // Asked to load one of their files: which tool, and the path (in a lesson too)
     loadHint(question, /\.(csv|tsv)\b|\b(csv|tsv|my data|spreadsheet)\b/i.test(question) ? dataFiles() : []),
     own.length ? `Where this is covered in books the student owns (they open in Tide; point them to the pages when it helps, as a markdown link like [${readingLabel(own[0])}](/${own[0].path.split('/').map(encodeURIComponent).join('/')}#page=${own[0].from})): ${own.map(readingLabel).join('; ')}` : '',

@@ -368,7 +368,19 @@ describe('what Claude is offered', () => {
     const before = `${SESSION_FORMAT}\n- A code ask can carry hidden tests in a \`\`\`tests block inside it, which the student doesn't see.\n- Next rule.`
     const after = forClaude(before)
     expect(after).not.toMatch(/<check lang="python">|A code ask can carry hidden tests/)
-    expect(after).toContain('goes through set_exercise first, the first problem too')
+    // One rule, said once: banked first, else set_exercise, the first problem too; the repair, the retry and the marker's note with it
+    expect(after).toContain('goes through Tide, the first problem too: banked_exercise for one verified before, else set_exercise')
+    expect(after).toMatch(/repair_of/)
+    expect(after).toMatch(/marked this answer/)
+    expect(after.match(/set_exercise/g)!.length).toBeLessThanOrEqual(3)
     expect(after).toContain('- Next rule.')
+  })
+
+  it('takes out of Claude’s instructions what is Gemma’s or said once elsewhere', async () => {
+    const { sessionInstructions } = await import('../src/shared/session')
+    const s = forClaude(sessionInstructions({ mode: 'teach', topic: 'Python generators and yield' }))
+    // find_image is Gemma's tool; the core guide says how to teach visually; Tide numbers a set exercise itself
+    expect(s).not.toMatch(/find_image|Teach visually as well|Problem 2 · harder/)
+    expect(s).toMatch(/one problem per message/)
   })
 })

@@ -399,7 +399,7 @@ export function fixAsk(tag: string, lastExercise?: BankProblem): string {
 
 /** What Claude is told instead of the lesson format's rules on writing a problem's own solution, check and tests */
 export const CLAUDE_PROBLEM_RULE =
-  '- Every problem you set for the learner to work (a calculation, code to write, a query, a question to answer at length) goes through set_exercise first, the first problem too: give its proof and a common mistake, and when it is verified end your reply with <exercise id="…"/>. Tide writes the problem, its hidden <solution> and its tests into the lesson. Never write a problem\'s <solution>, <check> or ```tests yourself.'
+  '- Every problem you set for the learner to work (a calculation, code to write, a query, a question to answer at length) goes through Tide, the first problem too: banked_exercise for one verified before, else set_exercise with its proof and a common mistake. When it is verified, end your reply with <exercise id="…"/>: Tide writes the problem, numbered, with its hidden <solution> and tests. Never write that problem, its <solution>, <check> or ```tests yourself, and never show one that wasn\'t verified. If the check fails, fix what it says and call set_exercise once more with repair_of; if that fails too, take the bank\'s exercise it offers or set a different one. To have them retry an exercise after a miss, ask with a plain code <ask> naming the same function: Tide gives it the hidden tests again. Quick questions while you teach (predict, a short check, explain back) are ordinary <ask> tags.\n- A "(Tide: … marked this answer …)" note comes from a second, careful marker: write your <grade> with its verdict and score, in your own words.'
 
 /** A lesson's instructions as Claude gets them: the rules for writing problems by hand become set_exercise */
 export function forClaude(instructions: string): string {
@@ -408,6 +408,15 @@ export function forClaude(instructions: string): string {
     .replace(/^- A code ask can carry hidden tests[^\n]*\n?/m, '')
     // The lesson map: Claude reports a step starting, passing or added with Tide's lesson_progress tool
     .replace(MAP_RULES, MAP_RULES_CLAUDE)
+    // Tide numbers a set exercise itself (<exercise id>)
+    .replace(/ Start each with its place, like "\*\*Problem 2 · harder\*\*"\./, '')
+    // The core guide says how to teach visually once (shared/tutorGuide); find_image is Gemma's tool
+    .replace(/^[ \t]*Teach visually as well:[^\n]*\n?/m, '')
+    .replace(/ or a real figure from find_image/g, '')
+    .replace(/ Show places with a real map from find_image\./g, '')
+    // Said once in the core guide
+    .replace(/^- Never answer your own question\. Ask one thing at a time\. Keep your turns short\. No greetings, no introductions, no preamble: start with the substance\.$/m, '- Never answer your own question. Ask one thing at a time.')
+    .replace(/^- Math in LaTeX \(\$\.\.\.\$, \$\$\.\.\.\$\$\)\. Code in fenced blocks\.\n?/m, '')
 }
 
 /** Said to Claude after a check fails */

@@ -12,7 +12,8 @@
  * the problem bank, hidden tests written after the fact, the SQL problem rewrite, the forced first
  * tool call, the read-back and warm-ups that keep Gemma's cache, and transient context.
  *
- * Kept on both on purpose: privacy routing, "a request is not an answer" (shared/lessonRepair
+ * Kept on both on purpose: a lesson gets only the simulation kinds its topic can use (once Gemma's
+ * workaround; on Claude the whole guide sat in every lesson's prompt beside the same kinds again, shared/tutorGuide), privacy routing, "a request is not an answer" (shared/lessonRepair
  * notAnAttempt, nothingToMark), the reading's quote check (main/sourceLed), the Show me give-away
  * check (shared/showMe), the exact answer check (SymPy, SQL) and the pace notes, which are teaching
  * policy rather than model repair.
@@ -32,8 +33,6 @@ export const WORKAROUNDS = {
   compactChats: { gemma: true, claude: false },
   /** The marking rule said again with every answer, because a 12B model drops it when it sits only in the format rules (shared/pace MARK_NOTE) */
   markNoteEachAnswer: { gemma: true, claude: false },
-  /** A lesson's prompt without the simulation guide (some 400 words), only the kinds its topic can use, to keep Gemma's prompt short */
-  lessonSimSubset: { gemma: true, claude: false },
   /** A lesson's opening passages: four, at 1,000 characters each */
   clipPassages: { gemma: true, claude: false }
 } as const satisfies Record<string, Record<Engine, boolean>>

@@ -83,9 +83,8 @@ export const sourcesForCheck = (pack: SourcePack | null, max = 3500) =>
 /** The rules for teaching technical material from sources, added to every lesson */
 export const GROUNDED = `Getting it right:
 - When the lesson has sources ([S1], [S2]…), teach from them and cite them for facts. Never contradict a source; if you know otherwise, say so and why.
-- Never state a specific number, parameter, version or date (a block time, a gas limit, a timeout, a protocol constant, a version number) unless a source or a search shows it; otherwise say it's approximate, or that it's worth checking.
-- For systems that change (blockchains, protocols with upgrades, cloud services), say which version or year a fact is from.
-- When something can be shown by running code (hashing, encodings, signatures, Merkle roots, a small simulation of a protocol), run it with run_code and show the real output instead of stating the result.`
+- Never state a specific number, constant, version or date unless a source, a search or a run shows it; otherwise say it's approximate or worth checking, and for things that change, say which version or year a fact is from.
+- When something can be shown by running code, run it and show the real output instead of stating the result.`
 
 /** A lesson's opening with its sources added (the same on both sides, so openings written ahead still match) */
 export const withSources = (opening: string, pack: SourcePack | null) => {

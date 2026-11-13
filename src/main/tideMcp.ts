@@ -49,15 +49,20 @@ async function allTools(): Promise<McpTool[]> {
  * tools and those code tools, confined to the lesson's folder (main/ide/lesson); every other
  * caller gets the tutor's tools and none of them.
  */
-export async function toolsFor(lesson: string): Promise<McpTool[]> {
+export async function toolsFor(lesson: string, packs?: string): Promise<McpTool[]> {
   if (lesson.startsWith('ide:')) return (await import('./ide/pair')).IDE_TOOLS
-  const base = [...(await allTools()), ...(await metabaseTools())]
-  // A notebook's margin tutor (main/notebook/tutor): the tutor's tools and the notebook's
+  const all = [...(await allTools()), ...(await metabaseTools())]
+  // A session started by Tide names its tool packs (shared/tutorGuide): only their tools are listed,
+  // so a side thread or a history lesson isn't handed thirty. No packs (Claude Code in a terminal): all of them
+  const { packTools, parsePacks, toolDescription } = await import('@shared/tutorGuide')
+  const wanted = parsePacks(packs)
+  const allowed = wanted ? packTools(wanted) : null
+  const base = allowed ? all.filter((t) => allowed.has(t.name)).map((t) => ({ ...t, description: toolDescription(t.name, t.description, allowed) })) : all
+  // A notebook's margin tutor (main/notebook/tutor): the notebook's tools, with the notes and the learner's
   if (lesson.startsWith('nb:')) {
-    // The notebook's own tools win a clash of names (a lesson's set_exercise puts nothing in a notebook)
     const nb = (await import('./notebook/tutor')).NOTEBOOK_TOOLS
-    const lessonOnly = new Set(['set_exercise', 'banked_exercise', 'check_exercise'])
-    return [...nb, ...base.filter((t) => !nb.some((n) => n.name === t.name) && !lessonOnly.has(t.name))]
+    const fits = packTools(['notes', 'learner'])
+    return [...nb, ...all.filter((t) => fits.has(t.name) && !nb.some((n) => n.name === t.name))]
   }
   if (lesson.startsWith('code:')) {
     const code = await import('./ide/lesson')
@@ -125,10 +130,11 @@ export async function startMcp(port = 0, token = randomBytes(24).toString('base6
       return
     }
     const lesson = decodeLesson(String(req.headers['x-tide-lesson'] ?? ''))
+    const packs = req.headers['x-tide-tools'] ? String(req.headers['x-tide-tools']) : undefined
     const server = new Server({ name: 'tide', version: '0.1.0' }, { capabilities: { tools: {} }, instructions: 'Tide is the learner’s study app. Its tools search and read their notes, run code and SQL in its sandbox, and read and record what they know.' })
-    server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: (await toolsFor(lesson)).map(({ name, description, inputSchema }) => ({ name, description, inputSchema: inputSchema as { type: 'object' } })) }))
+    server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: (await toolsFor(lesson, packs)).map(({ name, description, inputSchema }) => ({ name, description, inputSchema: inputSchema as { type: 'object' } })) }))
     server.setRequestHandler(CallToolRequestSchema, async (r) => {
-      const t = (await toolsFor(lesson)).find((x) => x.name === r.params.name)
+      const t = (await toolsFor(lesson, packs)).find((x) => x.name === r.params.name)
       if (!t) return { content: [{ type: 'text', text: `No tool called ${r.params.name}.` }], isError: true }
       try {
         const text = await t.run((r.params.arguments ?? {}) as Record<string, unknown>, bindings.get(lesson) ?? looseContext(lesson))

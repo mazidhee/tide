@@ -44,12 +44,13 @@ describe('the switches', () => {
       expect(uses(w, 'gemma'), w).toBe(true)
       expect(uses(w, 'claude'), w).toBe(false)
     }
-    expect(Object.keys(WORKAROUNDS).sort()).toEqual(['clipPassages', 'compactChats', 'lessonSimSubset', 'markNoteEachAnswer', 'trimHistory'])
+    expect(Object.keys(WORKAROUNDS).sort()).toEqual(['clipPassages', 'compactChats', 'markNoteEachAnswer', 'trimHistory'])
   })
 
-  it('gives a Claude lesson the whole simulation guide; Gemma’s lesson prompt stays as it was', () => {
-    expect(CLAUDE_LESSON_SYSTEM).toContain(SIM_GUIDE)
+  it('gives a Claude chat the whole simulation guide and a lesson only its topic’s kinds, as Gemma’s lessons; Gemma’s lesson prompt stays as it was', () => {
     expect(CLAUDE_TUTOR_SYSTEM).toContain(SIM_GUIDE)
+    // A lesson's kinds ride with its instructions (shared/subjects lessonKit), for both engines: never the whole guide a second time
+    expect(CLAUDE_LESSON_SYSTEM).not.toContain(SIM_GUIDE.slice(0, 120))
     expect(TUTOR_LESSON_SYSTEM).not.toContain(SIM_GUIDE.slice(0, 120))
   })
 
@@ -94,16 +95,18 @@ describe('a long lesson', () => {
 
   it('no longer starts Claude’s process again from a cut transcript as the lesson grows', () => {
     // Replays a 40-turn lesson through what each turn would send to a process that took every turn before it
-    const restarts = (budget: number) => {
+    const restarts = (budget: number, wholeCount = false) => {
       const p = { turns: 0, first: '', alive: false }
       let fresh = 0
       for (let n = 1; n <= 40; n++) {
         const history = fitHistory(lesson(n), budget, true)
-        const sent = engine.messageToSend(history, p)
+        // As claudeTurn counts: the learner's messages in the whole lesson, not in the cut transcript
+        const said = wholeCount ? lesson(n).filter((m) => m.role === 'user').length : undefined
+        const sent = engine.messageToSend(history, p, said)
         if (sent.fresh && n > 1) fresh++
         p.alive = true
         p.first = engine.fp(String(history.find((m) => m.role === 'user')!.content))
-        p.turns = history.filter((m) => m.role === 'user').length
+        p.turns = said ?? history.filter((m) => m.role === 'user').length
       }
       return fresh
     }
@@ -111,6 +114,9 @@ describe('a long lesson', () => {
     console.log(`Claude process restarts in a 40-turn lesson: ${gemmaBudget} with Gemma's history budget, ${restarts(CLAUDE_HISTORY_TOKENS)} kept whole`)
     expect(gemmaBudget).toBeGreaterThan(3)
     expect(restarts(CLAUDE_HISTORY_TOKENS)).toBe(0)
+    // Past Claude's own cap (a long lesson with visuals and code passes 120,000 tokens), the transcript is
+    // cut, but a live process still holds the whole lesson: it isn't restarted from the cut every turn
+    expect(restarts(historyBudget(), true)).toBe(0)
   })
 })
 

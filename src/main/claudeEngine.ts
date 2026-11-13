@@ -344,12 +344,12 @@ function processFor(key: string, model: string, system: string, config: string, 
   return p
 }
 
-/** A process started before its lesson is known (main/agent prewarmLesson), by its system prompt and web tools */
-const poolKey = (system: string, web: boolean) => `pool:${fp(system)}:${web ? 'web' : 'noweb'}`
+/** A process started before its lesson is known (main/agent prewarmLesson), by its system prompt, tool packs and web tools */
+const poolKey = (system: string, web: boolean, packs = '') => `pool:${fp(`${system}\n${packs}`)}:${web ? 'web' : 'noweb'}`
 
 /** A process started ahead for this prompt, taken over by the lesson that's starting */
-function adopt(system: string, web: boolean, key: string): ClaudeProcess | null {
-  const pk = poolKey(system, web)
+function adopt(system: string, web: boolean, key: string, packs = ''): ClaudeProcess | null {
+  const pk = poolKey(system, web, packs)
   const p = live.get(pk)
   if (!p || !p.alive || p.turns > 0) return null
   live.delete(pk)
@@ -369,11 +369,14 @@ export async function prewarmClaude(req: Omit<TurnRequest, 'id'>): Promise<void>
   const { teacherFor } = await import('./teacher')
   if ((await teacherFor({ ...req, id: 'prewarm' }).catch(() => null))?.who !== 'claude') return
   const { stablePrompt } = await import('./agent')
-  const { CLAUDE_LESSON_SYSTEM, CLAUDE_TUTOR_SYSTEM, CLAUDE_WEB_NOTE } = await import('@shared/tutorPrompt')
+  const { claudeSystemBase, CLAUDE_WEB_NOTE } = await import('@shared/tutorPrompt')
   const web = req.web !== false
   const { forClaude } = await import('@shared/exercises')
-  const system = forClaude(await stablePrompt(req.session ? CLAUDE_LESSON_SYSTEM : CLAUDE_TUTOR_SYSTEM, { ...req, id: 'prewarm' }, web, !!req.session)) + (web ? `\n\n${CLAUDE_WEB_NOTE}` : '')
-  const pk = poolKey(system, web)
+  const shape = await sessionShape(req, await (await import('./maths')).isMathsLesson(req).catch(() => false))
+  const { toolPacks, packsHeader } = await import('@shared/tutorGuide')
+  const packs = toolPacks(shape)
+  const system = forClaude(await stablePrompt(claudeSystemBase(shape, packs), { ...req, id: 'prewarm' }, web, !!req.session)) + (web ? `\n\n${CLAUDE_WEB_NOTE}` : '')
+  const pk = poolKey(system, web, packsHeader(packs))
   if (live.get(pk)?.alive) return
   // One waiting at a time
   for (const [k, p] of live) if (k.startsWith('pool:')) (p.stop(), live.delete(k))
@@ -382,7 +385,29 @@ export async function prewarmClaude(req: Omit<TurnRequest, 'id'>): Promise<void>
   const settings = getSettings().ai.claude
   const opening = req.session && req.instructions ? claudeModel('hard', settings) : claudeModel('teach', settings, req.claudeModel)
   const effort = effortFor(req.session ? (req.instructions ? 'lessonPlan' : 'lesson') : 'chat', settings?.thinking)
-  processFor(pk, opening, system, configFor(pk, mcp.port, mcp.token), web ? CLAUDE_WEB_TOOLS : [], effort).warm()
+  processFor(pk, opening, system, configFor(pk, mcp.port, mcp.token, packsHeader(packs)), web ? CLAUDE_WEB_TOOLS : [], effort).warm()
+}
+
+/**
+ * What a session is, for its tool packs and its prompt (shared/tutorGuide): a side thread, a chat
+ * or a lesson, and for a lesson whether it is maths, works with data or draws graphs, is on their
+ * Metabase, or is taught as the humanities. Fixed when its process starts, from the lesson's topic
+ * and instructions, which stay the same through the lesson.
+ */
+export async function sessionShape(req: Pick<TurnRequest, 'thread' | 'session' | 'topic' | 'instructions' | 'scope' | 'codeLesson'>, maths: boolean): Promise<import('@shared/tutorGuide').SessionShape> {
+  const topic = req.topic ?? ''
+  const { aboutSql } = await import('./lab')
+  const { metabaseReady } = await import('./metabase')
+  const { isMetabaseLesson } = await import('@shared/metabaseData')
+  const { teachesAsHumanities } = await import('@shared/subjects')
+  const path = 'path' in req.scope ? req.scope.path : undefined
+  const humanities = !!topic && teachesAsHumanities(topic)
+  const said = req.instructions ?? ''
+  const data = !humanities && (aboutSql(topic) || /\brun_sql\b|\bload_table\b|SQL lab/.test(said) || !!req.codeLesson)
+  if (req.thread) return { kind: 'thread', data, humanities }
+  const mb = metabaseReady()
+  if (!req.session) return { kind: 'chat', metabase: mb }
+  return { kind: 'lesson', maths, data, humanities, graphs: /language is graph/.test(said), metabase: mb && isMetabaseLesson(req.topic, path) }
 }
 
 // ---------- A turn ----------
@@ -438,11 +463,13 @@ export function stopThreads(lab: string) {
  * What to send: the new message alone when the process already holds everything before it,
  * otherwise (a new process, or the history changed under it) the transcript so far with it.
  */
-export function messageToSend(history: { role: string; content: unknown }[], p: { turns: number; first: string; alive: boolean }): { content: string; fresh: boolean } {
+export function messageToSend(history: { role: string; content: unknown }[], p: { turns: number; first: string; alive: boolean }, /** The learner's messages in the whole lesson, when the history was cut to fit (past CLAUDE_HISTORY_TOKENS) */ said?: number): { content: string; fresh: boolean } {
   const users = history.filter((m) => m.role === 'user')
   const last = text(history[history.length - 1]?.content)
   const first = fp(text(users[0]?.content))
-  if (p.alive && p.first === first && p.turns === users.length - 1) return { content: last, fresh: false }
+  // Counted on the whole lesson: a process that took every turn still holds it all after the
+  // transcript is cut to fit, so it is sent only the new message, not restarted from the cut every turn
+  if (p.alive && p.first === first && p.turns === (said ?? users.length) - 1) return { content: last, fresh: false }
   if (history.length <= 1) return { content: last, fresh: true }
   const before = history
     .slice(0, -1)
@@ -685,12 +712,12 @@ async function codingLesson(labId: string, topic?: string, root?: string) {
 const codeNote = (note: string) => (note ? `\n\n${note}` : '')
 
 let configDir = ''
-function configFor(key: string, port: number, token: string): string {
+function configFor(key: string, port: number, token: string, packs?: string): string {
   configDir ||= join(app.getPath('userData'), 'claude')
   mkdirSync(configDir, { recursive: true })
   const file = join(configDir, `mcp-${fp(key)}.json`)
   // Holds this launch's token for Tide's own server only (never the user's Claude login); readable by the user alone
-  writeFileSync(file, mcpConfig(port, token, key), { mode: 0o600 })
+  writeFileSync(file, mcpConfig(port, token, key, packs), { mode: 0o600 })
   return file
 }
 
@@ -700,7 +727,8 @@ function configFor(key: string, port: number, token: string): string {
  */
 export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void, signal: AbortSignal, cut?: AbortSignal): Promise<string> {
   const { buildTurn, nextStepId } = await import('./agent')
-  const { CLAUDE_LESSON_SYSTEM, CLAUDE_TUTOR_SYSTEM, CLAUDE_WEB_NOTE } = await import('@shared/tutorPrompt')
+  const { claudeSystemBase, CLAUDE_WEB_NOTE } = await import('@shared/tutorPrompt')
+  const { toolPacks, packsHeader } = await import('@shared/tutorGuide')
   const { ownWords } = await import('@shared/session')
   const { escalationFor } = await import('@shared/providers')
   const { ensureMcp: startMcp } = await import('./tideMcp')
@@ -713,11 +741,15 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   if (req.session && req.instructions) req = { ...req, instructions: (await import('@shared/exercises')).forClaude(req.instructions) }
   // A side thread saves to the lesson's notes with save_to_notes (main/tideMcpTools)
   if (req.thread && req.instructions) req = { ...req, instructions: `${req.instructions}\n${(await import('@shared/lessonThreads')).THREAD_NOTE_TOOL}` }
-  const { ctx, messages, images } = await buildTurn(req, emit, signal, req.session ? CLAUDE_LESSON_SYSTEM : CLAUDE_TUTOR_SYSTEM, 'claude')
+  const maths = await (await import('./maths')).isMathsLesson(req).catch(() => false)
+  if (maths && req.instructions) req = { ...req, instructions: (await import('@shared/subjects')).withoutQuantToolkit(req.instructions) }
+  // What this session is decides its tools and the layers of its prompt (shared/tutorGuide)
+  const shape = await sessionShape(req, maths)
+  const packs = toolPacks(shape)
+  const { ctx, messages, images } = await buildTurn(req, emit, signal, claudeSystemBase(shape, packs), 'claude')
 
   const settings = getSettings().ai.claude
   const said = ownWords(text([...req.messages].reverse().find((m) => m.role === 'user')?.content))
-  const maths = await (await import('./maths')).isMathsLesson(req).catch(() => false)
   const escalation = escalationFor(said, req.askType) ?? null
   const role = turnRole(req, said, escalation, maths)
   const effort = effortFor(turnDepth(req, said, escalation, maths), settings?.thinking)
@@ -734,10 +766,12 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   const system = forClaude(String(messages[0].content)) + (web ? `\n\n${CLAUDE_WEB_NOTE}` : '') + (coding ? `\n\n${(await import('@shared/lessonCode')).CLAUDE_CODE_LESSON_NOTE}` : '')
   const history = messages.slice(1)
   const mcp = await startMcp()
-  const proc = (live.get(key)?.alive || coding ? null : adopt(system, web, key)) ?? processFor(key, model, system, configFor(key, mcp.port, mcp.token), web ? CLAUDE_WEB_TOOLS : [], effort)
+  const proc = (live.get(key)?.alive || coding ? null : adopt(system, web, key, packsHeader(packs))) ?? processFor(key, model, system, configFor(key, mcp.port, mcp.token, packsHeader(packs)), web ? CLAUDE_WEB_TOOLS : [], effort)
   // Known by the student's own first message, as the window sends it (the context Tide adds to it can change)
   const firstSaid = fp(text(req.messages.find((m) => m.role === 'user')?.content))
-  const sent = messageToSend(history, { turns: proc.turns, first: proc.first === firstSaid ? fp(text(history.find((m) => m.role === 'user')?.content)) : proc.first, alive: proc.alive })
+  // The learner's messages in the whole lesson (the history may be cut to fit the context)
+  const learnerTurns = req.messages.filter((m) => m.role === 'user').length
+  const sent = messageToSend(history, { turns: proc.turns, first: proc.first === firstSaid ? fp(text(history.find((m) => m.role === 'user')?.content)) : proc.first, alive: proc.alive }, learnerTurns)
   // Why a process was given the transcript again, for tuning (no lesson text is kept)
   if (sent.fresh && history.length > 1) {
     try {
@@ -755,7 +789,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   const { SHOW_ME_VISUAL_NOTE } = await import('@shared/visuals')
   const seeNote = (asksToSee(said) || /^Draw this so I can see how it works/i.test(said) ? `\n\n${SHOW_ME_VISUAL_NOTE}` : '') + (coding ? codeNote([coding.lessonTurnNote(req.labId!, req.codeLesson?.file), await coding.projectTurnNote(req.labId!, said).catch(() => '')].filter(Boolean).join('\n\n')) : '')
   const fresh = sent.fresh
-  const users = history.filter((m) => m.role === 'user').length
+  const users = learnerTurns
   // The pictures this turn looks at (a photo of their working, a screenshot, a note's diagram), made
   // ready in main/noteImages, ride on this message as image blocks: the tutor and the marker see them
   const pictures: ImageInput[] = images.map((im) => im.image)

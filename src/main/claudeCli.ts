@@ -82,9 +82,9 @@ export function effortLine(effort: Effort, id = `e${Date.now()}`): string {
 }
 
 /** The MCP config for one process: Tide's server, with this launch's token and the lesson it serves */
-export function mcpConfig(port: number, token: string, lesson: string): string {
+export function mcpConfig(port: number, token: string, lesson: string, /** The session's tool packs (shared/tutorGuide): the server lists only their tools */ packs?: string): string {
   // Encoded: a header carries ASCII only, and a lesson's key can hold its topic's curly quotes or accents
-  return JSON.stringify({ mcpServers: { tide: { type: 'http', url: `http://127.0.0.1:${port}/mcp`, headers: { Authorization: `Bearer ${token}`, 'X-Tide-Lesson': lesson.replace(/[^\x20-\x24\x26-\x7e]/gu, (c) => encodeURIComponent(c)) } } } })
+  return JSON.stringify({ mcpServers: { tide: { type: 'http', url: `http://127.0.0.1:${port}/mcp`, headers: { Authorization: `Bearer ${token}`, 'X-Tide-Lesson': lesson.replace(/[^\x20-\x24\x26-\x7e]/gu, (c) => encodeURIComponent(c)), ...(packs ? { 'X-Tide-Tools': packs } : {}) } } } })
 }
 
 /** One user message, as stream-json input takes it */
