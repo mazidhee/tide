@@ -690,10 +690,13 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
     wasPage.current = !!page
   }, [page])
 
-  // The lesson's text, or the README before it is imported
+  // The lesson's text, or the README before it is imported. Keyed on whether it's imported, not on
+  // the course object: saving reading progress as you scroll replaces that object, and reloading the
+  // lesson then threw you back to the top of the page
+  const imported = d ? d.imported : undefined
   useEffect(() => {
-    if (!d) return
-    if (!d.imported) {
+    if (imported === undefined) return
+    if (!imported) {
       if (preview === undefined) window.tide.courses.preview(id).then(setPreview).catch(() => setPreview(null))
       return
     }
@@ -708,7 +711,7 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
     return () => {
       live = false
     }
-  }, [d, id, currentId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [imported, id, currentId]) // eslint-disable-line react-hooks/exhaustive-deps
   // The module you are in stays open
   useEffect(() => {
     if (here) setOpen((o) => (o.has(here.m.id) ? o : new Set(o).add(here.m.id)))
