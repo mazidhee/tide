@@ -91,6 +91,7 @@ export const USAGE_JOBS: Record<string, string> = {
   chat: 'Conversation',
   draft: 'Long draft',
   background: 'Background job',
+  warmup: 'Warm-up rerank',
   ...Object.fromEntries(Object.entries(JOB_ROUTES).map(([k, v]) => [k, v.label])),
   other: 'Other'
 }

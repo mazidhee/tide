@@ -104,15 +104,75 @@ export function relevance(topic: string, c: PriorConcept, topicArea = ''): numbe
 /** What has faded counts for more: refreshing it is what the warm-up is for */
 export const fadeWeight = (estimate: number) => 0.6 + (1 - Math.max(0, Math.min(1, estimate)))
 
-/** The earlier concepts a lesson on `topic` should warm up on, the most worth it first */
-export function rankPrior(topic: string, concepts: PriorConcept[], topicArea = '', max = WARMUP_MAX_CONCEPTS): PriorConcept[] {
+/**
+ * The earlier concepts a lesson on `topic` should warm up on, the most worth it first. `picked` is
+ * Claude's rerank (rerankPool, parseRerank): the pool's concepts it says the topic builds on, most
+ * first. They count as related whatever they're called, so a topic whose name shares no word with
+ * its groundwork still finds it; without it (no Claude, too slow) names and the roadmap decide.
+ */
+export function rankPrior(topic: string, concepts: PriorConcept[], topicArea = '', max = WARMUP_MAX_CONCEPTS, picked: string[] | null = null): PriorConcept[] {
+  const boost = (c: PriorConcept) => {
+    const at = picked ? picked.indexOf(c.id) : -1
+    return at < 0 ? 0 : Math.max(MIN_RELEVANCE + 0.1, RERANK_WEIGHT - 0.1 * at)
+  }
   return concepts
     .filter((c) => c.seen > 0 && c.status !== 'new')
-    .map((c) => ({ c, r: relevance(topic, c, topicArea) }))
+    .map((c) => ({ c, r: norm(c.name) === norm(topic) ? 0 : relevance(topic, c, topicArea) + boost(c) }))
     .filter((x) => x.r >= MIN_RELEVANCE)
     .sort((a, b) => b.r * fadeWeight(b.c.estimate) - a.r * fadeWeight(a.c.estimate) || (b.c.lastSeen ?? 0) - (a.c.lastSeen ?? 0))
     .slice(0, max)
     .map((x) => x.c)
+}
+
+// ---------- Claude's rerank ----------
+
+/** What a concept Claude picked adds to its relevance: about a prerequisite's worth */
+export const RERANK_WEIGHT = 1.1
+/** How many earlier concepts Claude is shown: the best by name and roadmap, then the most recent */
+export const RERANK_POOL = 18
+/** Strong by name alone: when this many concepts already score this, the rerank isn't asked */
+const STRONG = 1
+
+/** The concepts Claude chooses among (none when there's nothing studied to choose from) */
+export function rerankPool(topic: string, concepts: PriorConcept[], topicArea = '', size = RERANK_POOL): PriorConcept[] {
+  return concepts
+    .filter((c) => c.seen > 0 && c.status !== 'new' && norm(c.name) !== norm(topic))
+    .map((c) => ({ c, r: relevance(topic, c, topicArea) }))
+    .sort((a, b) => b.r - a.r || (b.c.lastSeen ?? 0) - (a.c.lastSeen ?? 0))
+    .slice(0, size)
+    .map((x) => x.c)
+}
+
+/** Whether to ask Claude at all: names and the roadmap already found a full warm-up, or there's nothing to pick */
+export function rerankWorthIt(topic: string, pool: PriorConcept[], topicArea = '', max = WARMUP_MAX_CONCEPTS): boolean {
+  if (!pool.length) return false
+  return pool.filter((c) => relevance(topic, c, topicArea) >= STRONG).length < max
+}
+
+export const RERANK_SYSTEM = 'You decide which topics a learner studied before a new lesson builds on: knowledge it uses, extends or contrasts with, whatever the topics are called. Reply with JSON only.'
+
+/** The question for Claude (Haiku): the new topic and the numbered pool */
+export function rerankPrompt(topic: string, pool: PriorConcept[]): string {
+  const lines = pool.map((c, i) => `${i + 1}. ${c.name}${c.steps.length ? ` (covered: ${c.steps.slice(0, 4).join('; ')})` : ''}`)
+  return `A learner is about to start a lesson on: "${topic}".\nTopics they studied before:\n${lines.join('\n')}\n\nWhich of these does the new lesson build on, most first? Leave out any that are unrelated. Reply with JSON only: {"related": [numbers]}`
+}
+
+/** Claude's reply as the pool's concept ids, most related first; null when it can't be read */
+export function parseRerank(text: string, pool: PriorConcept[]): string[] | null {
+  const m = text.match(/\{[\s\S]*\}/)
+  let list: unknown
+  try {
+    list = m ? (JSON.parse(m[0]) as { related?: unknown }).related : JSON.parse(text.match(/\[[\s\S]*?\]/)?.[0] ?? 'null')
+  } catch {
+    return null
+  }
+  if (!Array.isArray(list)) return null
+  const ids: string[] = []
+  for (const n of list) {
+    const c = pool[Number(n) - 1]
+    if (c && !ids.includes(c.id)) ids.push(c.id)
+  }
+  return ids
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']

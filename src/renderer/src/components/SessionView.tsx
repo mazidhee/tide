@@ -391,8 +391,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     new Promise<string>((resolve) => {
       if (mode !== 'teach' || options?.placement || options?.review || options?.check || options?.retest?.length || options?.project?.warmedUp) return resolve('')
       let settled = false
-      // Never hold a lesson up for long waiting for the cards
-      const wait = setTimeout(() => ((settled = true), resolve('')), 3000)
+      // Never hold a lesson up for long waiting for the cards (main/warmup gives Claude's rerank 4.5 s of it, only when names don't fill the warm-up)
+      const wait = setTimeout(() => ((settled = true), resolve('')), 5500)
       // A prepared lesson brings its warm-up with it (main/lessonPrep)
       const prepared = options?.prep ? window.tide.prep.get(options.prep.id).then((p) => p?.warmup ?? null).catch(() => null) : Promise.resolve(null)
       prepared
