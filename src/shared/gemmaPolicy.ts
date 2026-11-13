@@ -81,6 +81,13 @@ export const JOB_ROUTES = {
   // Claude the mock runs with no interviewer and is marked in code
   mockInterviewer: { label: 'Mock interviewer', role: 'teach' },
   mockMark: { label: 'Marking a mock interview', role: 'mark' },
+  // Sharpness training (main/sharpness): Opus writes unseen problems (checked in the sandbox before use; without
+  // Claude they come from the fixed bank, never Gemma), marks written answers, coaches the post-mortem and plays the
+  // system in incident drills. Marking and coaching fall back to Gemma, then to code; the drill's system to its own data
+  sharpWrite: { label: 'Writing an unseen problem (Sharpness)', role: 'hard' },
+  sharpMark: { label: 'Marking a Sharpness answer', role: 'mark' },
+  sharpCoach: { label: 'Method hints and post-mortems (Sharpness)', role: 'hard' },
+  sharpSystem: { label: 'Playing the system in an incident drill', role: 'hard' },
   // Only on Gemma's own lessons (Claude runs its own checks): they stay where they are
   lessonChecks: { label: 'Gemma lesson checks, problem bank, hidden tests, read-back', role: null }
 } as const satisfies Record<string, { label: string; role: ClaudeRole | null }>

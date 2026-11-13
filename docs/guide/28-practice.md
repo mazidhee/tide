@@ -1,9 +1,19 @@
 ---
 title: Practice
 group: Everyday
-summary: Learn by doing: coding challenges, interview problems, quant drills, system design and company prep.
+summary: Learn by doing: sharpness training, coding challenges, interview problems, quant drills, system design and company prep.
 ---
 ![Each tab starts from one box. Pills along its bottom set the level, language and sources.](img/practice.jpg)
+
+## Sharpness
+
+The **Sharpness** tab is a stream of problems you haven't seen, each just past your level: algorithms (LeetCode-medium to hard style, in Python, with hidden tests), system design (a feature store, a ledger at 50,000 postings a second, a blockchain indexer…), production incidents, ML problem-solving, quant brainteasers and maths proofs. With Claude, Opus writes each one and Tide checks it in the sandbox before you see it; without Claude they come from a fixed bank whose answers are checked in code.
+
+The first attempt is timed and has no hints. Tick the methods you tried and submit (or give up); it's marked and your rating for that category moves. After a miss, **I'm stuck** gives a method hint (try a smaller case, find the invariant, work backwards…), never the answer; a solution hint only comes after two method hints and a retry. Then a five-minute post-mortem (where you got stuck, what you tried, what would have unlocked it, the pattern), with Opus asking back, ends as a card about the method. It goes into recall and comes back in the stream as a fresh problem of the same pattern.
+
+Incident drills start with a page. Ask for data (logs, metrics, deploys, a query), say hypotheses, act, then name the root cause. Opus plays the system and your on-call partner; without Claude the system answers from its own data. Drills are graded on method, speed and correctness and end in a blameless post-mortem.
+
+Each category has a rating with a ± band, a trend, and estimates against real bars (LeetCode-hard-style in about 35 minutes, a senior design rubric, trading-firm brainteasers), said only after five rated attempts. Mock interviews move the same ratings, and a higher algorithms rating raises the coding mock's level.
 
 ## Coding challenges
 

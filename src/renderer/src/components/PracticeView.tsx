@@ -10,13 +10,15 @@ import { QuantPanel } from './QuantPanel'
 import { DesignPanel } from './DesignPanel'
 import { PixelScene } from './PixelScene'
 import { MockPanel } from './mock/MockPanel'
+import { SharpPanel } from './sharp/SharpPanel'
 
 const STATUS_LABEL: Record<PracticeStatus, string> = { todo: 'To do', solved: 'Solved', struggled: 'Struggled', redo: 'Try again' }
 const LANGUAGES = ['python', 'javascript', 'typescript', 'java', 'c++', 'go', 'rust']
 type Filter = 'all' | PracticeStatus
 
-type Tab = 'coding' | 'problems' | 'workout' | 'quant' | 'design' | 'companies' | 'mock'
-const TABS: { id: Tab; label: string; icon: 'sparkle' | 'quiz' | 'summary' | 'canvas' | 'globe' | 'timer' | 'subInterview' }[] = [
+type Tab = 'sharp' | 'coding' | 'problems' | 'workout' | 'quant' | 'design' | 'companies' | 'mock'
+const TABS: { id: Tab; label: string; icon: 'sparkle' | 'quiz' | 'summary' | 'canvas' | 'globe' | 'timer' | 'subInterview' | 'gauge' }[] = [
+  { id: 'sharp', label: 'Sharpness', icon: 'gauge' },
   { id: 'coding', label: 'Coding', icon: 'sparkle' },
   { id: 'problems', label: 'Problems', icon: 'quiz' },
   { id: 'workout', label: 'Morning workout', icon: 'timer' },
@@ -279,6 +281,7 @@ export function PracticeView() {
         {tab === 'quant' && <QuantPanel />}
         {tab === 'design' && <DesignPanel />}
         {tab === 'mock' && <MockPanel />}
+        {tab === 'sharp' && <SharpPanel />}
         {tab === 'companies' && (
           <section className="pv-prompt wide">
             <h2 className="pv-title">Prepare for a company</h2>

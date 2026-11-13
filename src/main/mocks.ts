@@ -11,7 +11,8 @@
  *
  * At the debrief, what it shows is fed on: the history (.tide/mocks.jsonl, with each mock's whole
  * record in .tide/mocks/), the learner profile, recall questions, the practice roadmap note
- * (Coach/Mock practice.md), the knowledge map, and a lesson record that the teaching measures read.
+ * (Coach/Mock practice.md), the knowledge map, a lesson record that the teaching measures read, and
+ * Sharpness's ratings (which also raise the coding mock's level as they climb).
  */
 import { ipcMain, type WebContents } from 'electron'
 import { promises as fs } from 'fs'
@@ -233,7 +234,9 @@ export async function startMock(s: MockSetup): Promise<MockStarted> {
   const seed = Date.now()
   const m: Live = { id, mode: s.mode, title: '', minutes: Math.max(5, Math.min(120, Math.round(s.minutes))), startedAt: 0, claude: ready.ready && s.mode !== 'exam', transcript: [], hints: 0, runs: 0, lastTests: null, told: [], busy: null }
   if (s.mode === 'coding') {
-    const level = levelFrom(history.filter((h) => h.mode === 'coding').map((h) => h.overall))
+    // Sharpness escalates it: a higher algorithms rating raises the level (main/sharpness)
+    const sharp = await import('./sharpness').then((x) => x.mockLevelFromSharpness()).catch(() => null)
+    const level = Math.max(levelFrom(history.filter((h) => h.mode === 'coding').map((h) => h.overall)), sharp ?? 1) as BankLevel
     const recent = history.filter((h) => h.mode === 'coding').slice(-8).map((h) => h.ref ?? '')
     m.problem = (s.ref && bankProblem(s.ref)) || pickProblem({ level, tags: s.tags, recent, seed })
     m.title = m.problem.title
@@ -548,6 +551,14 @@ async function feed(m: Live, debrief: MockDebrief, record: MockRecord, graded: {
   const fed: MockFed = { roadmap: 0, recall: 0, profile: 0, lesson: false }
   const rubric = rubricFor(m.mode, m.exam)
   const from = `${modeInfo(m.mode).short} mock: ${m.title}`
+
+  // Sharpness: the mock moves the matching category's rating (coding → algorithms, design, quant)
+  try {
+    const { noteMockForSharpness } = await import('./sharpness')
+    await noteMockForSharpness(record)
+  } catch (e) {
+    console.warn('[mocks] sharpness', (e as Error).message)
+  }
 
   // The learner profile: small changes from the scores, by code
   try {

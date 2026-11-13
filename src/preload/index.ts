@@ -190,6 +190,24 @@ const api: TideApi = {
     resume: invoke('mocks:resume'),
     onEvent: (cb) => subscribe<{ id: string; delta: string }>('mock:event', cb)
   },
+  sharp: {
+    status: invoke('sharp:status'),
+    start: invoke('sharp:start'),
+    test: invoke('sharp:test'),
+    submit: invoke('sharp:submit'),
+    hint: invoke('sharp:hint'),
+    retry: invoke('sharp:retry'),
+    reveal: invoke('sharp:reveal'),
+    drillAsk: invoke('sharp:drillAsk'),
+    drillHypothesis: invoke('sharp:drillHypothesis'),
+    drillAct: invoke('sharp:drillAct'),
+    drillResolve: invoke('sharp:drillResolve'),
+    pmTurn: invoke('sharp:pmTurn'),
+    pmFinish: invoke('sharp:pmFinish'),
+    end: invoke('sharp:end'),
+    cancel: invoke('sharp:cancel'),
+    weakModes: invoke('sharp:weakModes')
+  },
   speed: {
     recent: invoke('speed:recent'),
     render: invoke('speed:render'),
