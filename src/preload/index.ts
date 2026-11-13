@@ -409,7 +409,9 @@ const api: TideApi = {
     journal: invoke('coach:journal'),
     writeJournal: invoke('coach:writeJournal'),
     weekReview: invoke('coach:weekReview'),
-    saveReview: invoke('coach:saveReview')
+    saveReview: invoke('coach:saveReview'),
+    proactive: invoke('coach:proactive'),
+    runCoach: invoke('coach:runCoach')
   },
   portfolio: {
     view: invoke('portfolio:view'),

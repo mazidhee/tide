@@ -70,6 +70,11 @@ export const JOB_ROUTES = {
   weeklyReview: { label: 'Your weekly review', role: 'hard' },
   // This week's progress in Your week (main/weekProgress): one line, Claude only; without it, fixed words
   weekProgress: { label: 'A line on this week’s progress', role: 'background' },
+  // The proactive coach (main/proactiveCoach): Opus reads the learner model through Tide's tools and acts on it; near the
+  // plan's limits Haiku or Sonnet; without Claude the daily look is Tide's own rules and the reviews are written from the numbers
+  coachDaily: { label: 'The coach’s morning look at today', role: 'hard' },
+  coachWeekly: { label: 'The coach’s weekly review', role: 'hard' },
+  coachMonthly: { label: 'The coach’s monthly strategy check', role: 'hard' },
   // The learner model (main/learnerModel): Haiku proposes "used in" links and skill tags; Claude only, the name heuristics stand in without it
   modelLinks: { label: 'Linking what you know: uses and skills', role: 'background' },
   // Opus reviewing a finished lesson against the teaching rubric (main/teaching): Claude only, never Gemma

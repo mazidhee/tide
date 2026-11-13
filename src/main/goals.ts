@@ -485,6 +485,8 @@ export async function planGoalsWeek(date = today(), background = false): Promise
   const track = await import('./track')
   // A phase that has reached its end gets its capstone set up first, so the week can plan it
   await track.autoCapstones().catch(() => 0)
+  // North Star's depth targets into the learner model first, so the week and the coach read the map's depths
+  await import('./northStar').then((m) => m.syncTargets()).catch(() => 0)
   const s = await snapshot()
   const days = studyDays(date, s.coach)
   const due = await dueCards()
@@ -641,6 +643,7 @@ async function replanInner(date: string): Promise<WeekPlan | null> {
   const { getWeek, saveWeekPlan } = await import('./coach')
   const plan = await getWeek(date)
   if (!plan?.mix) return plan
+  await import('./northStar').then((m) => m.syncTargets()).catch(() => 0)
   const s = await snapshot()
   const budgets = Object.fromEntries(studyDays(plan.weekStart, s.coach).map((d) => [d.date, d.minutes]))
   const { spent, ranLong } = await dayActuals(plan)

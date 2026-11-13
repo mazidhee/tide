@@ -2,7 +2,6 @@ import { WorkoutHomeCard } from '../workout/Workout'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { ChatScope, Mastery, NoteMeta } from '@shared/types'
 import { lateText, type Forecast } from '@shared/forecast'
-import type { Connection } from '@shared/connections'
 import { localDate, type WeekPlan } from '@shared/coach'
 import { since, type ConceptState } from '@shared/knowledge'
 import type { GoalPlan } from '../../lib/goals'
@@ -11,6 +10,7 @@ import { useAreaClass } from '../../lib/areas'
 import { useKnowledge } from '../../lib/knowledge'
 import { fileTitle, useApp } from '../../state'
 import { DayTimeline } from '../DayTimeline'
+import { HomeCoachCard } from '../CoachNote'
 import { Icon } from '../Icon'
 import { Professor } from '../Professor'
 import { PromptBox } from '../PromptBox'
@@ -96,10 +96,8 @@ export function HomeTide(p: HomeTideProps) {
   const date = localDate()
 
   const [week, setWeek] = useState<WeekPlan | null>(null)
-  const [conns, setConns] = useState<Connection[] | null>(null)
   useEffect(() => {
     window.tide.coach.week(date).then(setWeek).catch(() => setWeek(null))
-    window.tide.connections.list().then(setConns).catch(() => setConns(null))
   }, [date, app.files])
 
   // The next thing: a lesson left open comes before anything new
@@ -170,9 +168,6 @@ export function HomeTide(p: HomeTideProps) {
     .filter(Boolean)
     .join(' ')
 
-  const mac = (conns ?? []).filter((c) => c.runs === 'mac' && c.kind === 'model').reduce((n, c) => n + (c.today?.requests ?? 0), 0)
-  const cloud = (conns ?? []).filter((c) => c.runs === 'cloud' && (c.today?.requests ?? 0) > 0)
-  const cloudCalls = cloud.reduce((n, c) => n + (c.today?.requests ?? 0), 0)
 
   return (
     <div className="page td-home-page">
@@ -303,6 +298,17 @@ export function HomeTide(p: HomeTideProps) {
         </div>
 
         <aside className="td-home-side" aria-label="Your progress">
+          {/* The proactive coach: today's note, the week on request, the log (it replaces "Where it ran today", which Settings › Usage shows in full) */}
+          <HomeCoachCard
+            extra={
+              p.problems > 0 && (
+                <button className="td-more td-retry" onClick={() => app.setView({ kind: 'practice' })}>
+                  {p.problems} problem{p.problems === 1 ? '' : 's'} to retry
+                </button>
+              )
+            }
+          />
+
           <section>
             <div className="td-sec-head first">
               <h2 className="td-sec">This week</h2>
@@ -376,26 +382,6 @@ export function HomeTide(p: HomeTideProps) {
             </section>
           )}
 
-          <section>
-            <div className="td-sec-head first">
-              <h2 className="td-sec">Where it ran today</h2>
-              <button className="td-more" onClick={() => app.setView({ kind: 'settings', section: 'connections' })}>
-                Connections
-              </button>
-            </div>
-            <p className="td-ran">
-              {conns === null
-                ? 'Nothing to show yet.'
-                : mac + cloudCalls === 0
-                  ? 'No answers yet today from the model on this Mac or the cloud helpers.'
-                  : `${mac.toLocaleString('en-GB')} ${mac === 1 ? 'answer' : 'answers'} from the model on this Mac. ${cloudCalls ? `${cloudCalls.toLocaleString('en-GB')} ${cloudCalls === 1 ? 'call' : 'calls'} sent to ${cloud.map((c) => c.name).join(', ')}.` : 'Nothing was sent to a cloud service.'}`}
-            </p>
-            {p.problems > 0 && (
-              <button className="td-more td-retry" onClick={() => app.setView({ kind: 'practice' })}>
-                {p.problems} problem{p.problems === 1 ? '' : 's'} to retry
-              </button>
-            )}
-          </section>
         </aside>
       </div>
     </div>

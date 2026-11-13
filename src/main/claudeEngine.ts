@@ -574,6 +574,65 @@ export async function claudeOnce(prompt: string, system: string, role: ClaudeRol
 }
 
 /**
+ * One background job that reads Tide through its MCP tools (the proactive coach): a single
+ * `claude -p` with only the given tool packs listed, a cap on round trips, and no built-in tools.
+ * The prompt stays small: Claude asks the learner model for what it needs instead of being handed
+ * all of it. Returns the final text, the tools it called, and the run's usage and cost.
+ */
+export async function claudeWithTools(
+  prompt: string,
+  system: string,
+  o: { role: ClaudeRole; effort: Effort; packs: string; key: string; maxTurns: number; model?: string; signal?: AbortSignal }
+): Promise<{ text: string; usage: ClaudeUsage; ms: number; model: string; tools: string[] }> {
+  const cmd = command()
+  if (!cmd) throw new ClaudeUnavailable('Claude Code isn’t installed')
+  const model = o.model ?? claudeModel(o.role, getSettings().ai.claude)
+  const t0 = Date.now()
+  const { ensureMcp } = await import('./tideMcp')
+  const mcp = await ensureMcp()
+  const config = configFor(o.key, mcp.port, mcp.token, o.packs)
+  const args = ['-p', '--model', model, '--output-format', 'stream-json', '--verbose', '--tools', '', '--strict-mcp-config', '--mcp-config', config, '--setting-sources', '', '--no-session-persistence', '--permission-mode', 'dontAsk', '--allowedTools', 'mcp__tide', '--max-turns', String(o.maxTurns), '--effort', o.effort, '--system-prompt', system]
+  const cwd = join(app.getPath('userData'), 'claude')
+  mkdirSync(cwd, { recursive: true })
+  const out = await new Promise<string>((resolve, reject) => {
+    const child = spawn(cmd, args, { cwd, env: childEnv(), stdio: ['pipe', 'pipe', 'pipe'] })
+    let buf = ''
+    let err = ''
+    child.stdout.on('data', (d) => (buf += String(d)))
+    child.stderr.on('data', (d) => (err = (err + String(d)).slice(-1000)))
+    child.on('error', (e) => reject(new ClaudeUnavailable(`Claude Code didn’t start: ${e.message}`)))
+    const answered = () => buf.split('\n').some((l) => parseLine(l)?.type === 'result')
+    child.on('exit', () => (answered() ? resolve(buf) : reject(unavailableReason(err) ? new ClaudeUnavailable(unavailableText(unavailableReason(err)!)) : new Error(err.trim() || 'Claude gave no answer'))))
+    o.signal?.addEventListener('abort', () => child.kill('SIGTERM'), { once: true })
+    child.stdin.end(prompt)
+  }).catch((e) => {
+    recordFailure(model, o.role, t0, e)
+    throw e
+  })
+  const lines = out.trim().split('\n')
+  const tools: string[] = []
+  for (const l of lines) {
+    try {
+      const j = JSON.parse(l)
+      if (j.type === 'assistant') for (const c of j.message?.content ?? []) if (c.type === 'tool_use') tools.push(String(c.name).replace(/^mcp__tide__/, '') + (c.input?.ask ? `:${c.input.ask}` : ''))
+    } catch {
+      // not JSON
+    }
+  }
+  const events = lines.map(parseLine)
+  for (const e of events) if (e?.type === 'rate-limit') noteLimit(e)
+  const r = [...events].reverse().find((e) => e?.type === 'result') ?? null
+  if (!r || r.type !== 'result') throw new Error('Claude gave no answer')
+  recordUse({ ...r.usage, at: Date.now(), model: r.model ?? model, role: o.role, ms: Date.now() - t0, firstTokenMs: r.firstTokenMs, effort: o.effort }, { ok: r.ok, error: r.error })
+  if (!r.ok) {
+    const why = unavailableReason(r.error ?? '')
+    if (why === 'limit') limitedUntil = Math.max(limitedUntil, Date.now() + 15 * 60_000)
+    throw why ? new ClaudeUnavailable(unavailableText(why)) : new Error(r.error ?? 'Claude stopped')
+  }
+  return { text: r.text, usage: r.usage, ms: Date.now() - t0, model: r.model ?? model, tools }
+}
+
+/**
  * One call streamed as it's written: no tools, no conversation. For long drafts (a roadmap's
  * outline) where the learner watches it appear. Throws ClaudeUnavailable before any text when
  * Claude can't take it.

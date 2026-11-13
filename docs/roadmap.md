@@ -110,6 +110,8 @@ Last updated: 13 November 2026.
 
 - [x] **The learner model and one learning event log.** Depth levels from evidence, a graph of concepts, skills and goals, Your model in What you know.
 
+- [x] **The proactive coach.** Acts on the learner model before you ask: a morning look at today (up to two interventions, each with its reason in Then today: a firm-up, an unseen problem, a go-deeper lesson, a post-mortem drill, a lighter day), a weekly review (what it noticed and changed, the stage's weights tilted, North Star proposals) and a monthly strategy check. Claude reads the model through Tide's tools; near the plan's limits Haiku or Sonnet, and without Claude, Tide's own rules. Everything in Coach/Coach log.md; its beliefs in Coach/What the coach believes about me.md, which you can edit. North Star's depth targets now reach the model. Branch `proactive-coach`.
+
 ## Next
 
 - [ ] **Humanities, tested live.** Meditations, The Prophet, a Russian novel: Discuss this, highlights, notes, challenging your arguments.

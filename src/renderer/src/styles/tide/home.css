@@ -486,6 +486,131 @@
     margin-top: 10px;
   }
 
+  /* The coach: the day's headline, what it added (rows), the why and the week on request */
+  .td-coach-head {
+    margin: 0;
+    font-size: var(--t-base);
+    font-weight: 500;
+    line-height: 20px;
+    color: var(--ink);
+    text-wrap: pretty;
+  }
+  .td-coach-items {
+    list-style: none;
+    margin: 12px 0 0;
+    padding: 0;
+  }
+  .td-coach-items li {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    column-gap: 8px;
+    align-items: baseline;
+    padding: 8px 0;
+    border-top: 1px solid var(--line);
+  }
+  .td-coach-items li:last-child {
+    border-bottom: 1px solid var(--line);
+  }
+  .td-coach-ic {
+    grid-row: span 2;
+    align-self: start;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    background: var(--accent-soft);
+    color: var(--accent-text);
+  }
+  .td-coach-items b {
+    font-size: var(--t-meta);
+    font-weight: 500;
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .td-coach-min {
+    font-size: var(--t-meta);
+    color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .td-coach-why {
+    grid-column: 2 / -1;
+    font-size: 12px;
+    line-height: 17px;
+    color: var(--ink-3);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .td-coach-items li.done b {
+    color: var(--ink-3);
+    text-decoration: line-through;
+    text-decoration-color: var(--line-2);
+  }
+  .td-coach-items li.done .td-coach-ic {
+    background: var(--hover);
+    color: var(--ink-3);
+  }
+  .td-coach-more {
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+    animation: td-coach-in 160ms ease-out;
+  }
+  .td-coach-more ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .td-coach-more li {
+    position: relative;
+    padding: 3px 0 3px 12px;
+    font-size: 12.5px;
+    line-height: 18px;
+    color: var(--ink-2);
+    text-wrap: pretty;
+  }
+  .td-coach-more li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 10px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--line-2);
+  }
+  .td-coach-all {
+    margin-top: 6px;
+    font-size: 12px;
+  }
+  .td-coach-acts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin-top: 12px;
+  }
+  .td-coach-acts .td-more.on {
+    color: var(--accent-text);
+  }
+  .td-coach-acts .td-more:disabled {
+    opacity: 0.6;
+  }
+  @keyframes td-coach-in {
+    from {
+      opacity: 0;
+      transform: translateY(-2px);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .td-coach-more {
+      animation: none;
+    }
+  }
+
   /* Narrower windows: the columns close up, then the right column goes under the main one */
   @container (max-width: 1100px) {
     .td-home {

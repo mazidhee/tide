@@ -27,6 +27,8 @@ import {
   heuristicNorthStar,
   heuristicProposals,
   hoursSaved,
+  inScope,
+  NORTH_STAR_GOAL,
   keyTopicsIn,
   measuredDepth,
   NOTE_PATH,
@@ -253,13 +255,74 @@ export async function trackScope(track: string): Promise<{ scope: string[]; stag
   return { scope, stage: ns.current, title: ns.stages.find((s) => s.n === ns.current)?.title ?? '' }
 }
 
-/** The current stage as a goal for the scheduler (main/goals snapshot) */
+/**
+ * The current stage as a goal for the scheduler (main/goals snapshot). The proactive coach may tilt
+ * the stage's track weights a few points within the stage (main/proactiveCoach coachTilt); the map
+ * itself is unchanged, and the tilt is in the coach log.
+ */
 export async function schedulerGoal() {
   const ns = await activeNorthStar()
   if (!ns) return null
   const store = await loadStore()
   const cap = store?.capstones[String(ns.current)]
-  return stageGoal(ns, { createdAt: store?.stageSince ?? store?.createdAt ?? Date.now(), ...(cap ? { capstone: cap } : {}) })
+  const tilt = await import('./proactiveCoach').then((m) => m.coachTilt(ns.current)).catch(() => ({}))
+  const { tiltWeights } = await import('@shared/proactiveCoach')
+  const tilted = Object.keys(tilt).length ? { ...ns, stages: ns.stages.map((s) => (s.n === ns.current ? { ...s, tracks: tiltWeights(s.tracks, tilt).map((w, i) => ({ ...s.tracks[i], weight: w.weight })) } : s)) } : ns
+  return stageGoal(tilted, { createdAt: store?.stageSince ?? store?.createdAt ?? Date.now(), ...(cap ? { capstone: cap } : {}) })
+}
+
+// ---------- Depth targets into the learner model ----------
+
+/**
+ * Every stage's key topics, as targets in the learner model (main/learnerModel setTargetsFrom): the
+ * roadmap topics each key topic names, at its depth (the deepest where two stages name the same).
+ * Targets North Star set before and no longer names are cleared. Called when the map is built or
+ * changed and when the week is planned or replanned, so What you know's depth-against-target is
+ * the map's. Returns how many targets changed.
+ */
+let lastSync = { key: '', at: 0 }
+export async function syncTargets(force = false): Promise<number> {
+  const ns = await activeNorthStar()
+  // The map's depths and scopes as they stand: unchanged since the last sync (within six hours), nothing to do
+  const key = ns ? hash(JSON.stringify(ns.stages.map((s) => [s.n, s.deep, s.tracks.map((t) => [t.track, t.scope])]))) : 'none'
+  if (!force && key === lastSync.key && Date.now() - lastSync.at < 6 * 3_600_000) return 0
+  lastSync = { key, at: Date.now() }
+  const { setTargetsFrom } = await import('./learnerModel')
+  const { readTargets } = await import('./learningLog')
+  const before = readTargets().filter((t) => t.by === 'northstar')
+  const want = new Map<string, number>()
+  if (ns) {
+    const cat = await catalogue()
+    const topics = await topicsOf(cat.filter((c) => northStarTracks(ns).includes(c.name)))
+    for (const s of ns.stages) {
+      const inStage = s.tracks.flatMap((st) => (topics.get(st.track) ?? []).filter((t) => !t.project && inScope(t, st.scope)))
+      for (const k of s.deep) for (const t of keyTopicsIn(k, inStage)) want.set(t.id, Math.max(want.get(t.id) ?? 0, k.depth))
+    }
+  }
+  const list: { node: string; depth: Depth | null; goal?: string }[] = []
+  for (const [node, depth] of want) if (before.find((b) => b.node === node)?.depth !== depth) list.push({ node, depth: depth as Depth, goal: NORTH_STAR_GOAL })
+  for (const b of before) if (!want.has(b.node)) list.push({ node: b.node, depth: null })
+  return list.length ? setTargetsFrom('northstar', list) : 0
+}
+
+const syncSoon = () => void syncTargets(true).catch((e) => console.warn(`[northstar] targets: ${(e as Error).message}`))
+
+// ---------- The coach's proposals ----------
+
+/**
+ * The proactive coach's weekly review proposes changes to the map through the same flow as the
+ * weekly check: checked (parseProposals), never one already decided or pending, waiting for you to
+ * approve. It counts as this week's check, so Opus isn't asked twice.
+ */
+export async function coachProposals(raw: unknown, summary: string, by: 'claude' | 'gemma' | 'tide'): Promise<Proposal[]> {
+  const r = await readMap()
+  if (!r.ns || !r.store) return []
+  const parsed = parseProposals({ proposals: raw, summary }, r.ns, await catalogue())
+  const decided = new Set(r.store.decided.map((d) => d.key))
+  const pending = new Set(r.store.proposals.map(proposalKey))
+  const fresh = parsed.proposals.filter((x) => !decided.has(proposalKey(x)) && !pending.has(proposalKey(x)))
+  await update((s) => ({ ...s, proposals: [...s.proposals, ...fresh].slice(-6), lastReview: Date.now(), ...(parsed.summary ? { reviewSummary: parsed.summary } : {}), reviewBy: by }))
+  return fresh
 }
 
 // ---------- Knowledge ----------
@@ -546,6 +609,7 @@ export async function build(): Promise<{ notePath: string; wrote: string[]; trac
   wrote.push(...(await installFor(d.ns, d.ns.current)))
   draft = null
   resetNorthStar()
+  await syncTargets(true).catch((e) => console.warn(`[northstar] targets: ${(e as Error).message}`))
   const tracks = Object.keys((await loadStore())?.tracks ?? {})
   // Start right away: this week planned from the first stage
   const week = await import('./coach')
@@ -587,7 +651,10 @@ export async function decide(id: string, ok: boolean): Promise<NorthStarView | n
     await writeMap({ ...r.ns, log: [...r.ns.log, { date: today(), text: `Rejected: ${p.text}` }] })
   }
   await update((s) => ({ ...s, proposals: s.proposals.filter((x) => x.id !== id), decided: [...s.decided, { key: proposalKey(p), at: Date.now(), ok, text: p.text }].slice(-60) }))
-  if (ok) void import('./goals').then((m) => m.replanNow()).catch(() => {})
+  if (ok) {
+    syncSoon()
+    void import('./goals').then((m) => m.replanNow()).catch(() => {})
+  }
   return view()
 }
 
@@ -602,6 +669,7 @@ export async function moveOn(): Promise<NorthStarView | null> {
   await writeMap(ns)
   await installFor(ns, next.n)
   await update((s) => ({ ...s, stageSince: Date.now() }))
+  syncSoon()
   return view()
 }
 

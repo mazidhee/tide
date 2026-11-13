@@ -505,9 +505,10 @@ export function replanWeek(input: ReplanInput): ReplanResult {
 
   // 1. Past days: what's left moves on
   for (const d of plan.days.filter((x) => x.date < today)) {
-    const left = d.items.filter((it) => !it.done)
-    if (!left.length) continue
+    // The coach's interventions belong to their day: tomorrow's look decides afresh (shared/proactiveCoach)
+    const left = d.items.filter((it) => !it.done && !it.coach)
     d.items = d.items.filter((it) => it.done)
+    if (!left.length) continue
     const long = input.ranLong?.[d.date]
     const why = long ? `${weekday(d.date)}’s ${long.title} ran long (${long.minutes} min of ${long.planned})` : `you didn’t get to it on ${weekday(d.date)}`
     for (const it of left) pending.push({ item: it, from: d.date, why })
@@ -520,7 +521,8 @@ export function replanWeek(input: ReplanInput): ReplanResult {
       const long = input.ranLong?.[today]
       const movable = day.items
         .map((it, i) => ({ it, i }))
-        .filter(({ it }) => !it.done && !it.peak)
+        // The coach's interventions stay on their day: the plan's lightest sessions make room for them
+        .filter(({ it }) => !it.done && !it.peak && !it.coach)
         .sort((a, b) => (byId.get(a.it.thread ?? '')?.weight ?? 0) - (byId.get(b.it.thread ?? '')?.weight ?? 0) || b.i - a.i)
       const out = new Set<AgendaItem>()
       for (const { it } of movable) {
