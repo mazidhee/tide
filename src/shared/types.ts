@@ -814,6 +814,14 @@ export interface TideApi {
   }
   /** Claude, run through the user's own Claude Code */
   /** Gemma on demand (main/modelIdle): loaded only when a job is routed to it while Claude teaches */
+  /** Report a bug from anywhere (main/bugReport): the sheet's picture and version, and filing it in Tide/Tide bugs.md */
+  bugs: {
+    info(): Promise<import('./bugNote').BugSheetInfo>
+    /** Takes the picture of this window, then opens the sheet in it */
+    open(): Promise<void>
+    file(r: import('./bugNote').BugReport): Promise<{ note: string; shot: string | null; line: string }>
+    discard(): Promise<void>
+  }
   /** Backups of Tide's own data (main/backup): Settings › Backups */
   backups: {
     status(): Promise<import('./backup').BackupStatus>

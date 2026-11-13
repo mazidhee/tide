@@ -1,4 +1,5 @@
 import { registerBackups, watchBackups } from './backup'
+import { openBugSheet, registerBugReports } from './bugReport'
 import { gradeAnswer } from './daily'
 import { hasKeys, listCloudModels, loadDayUse, loadStats, setKey, testCloud, usageSummary } from './cloud'
 import { connectMetabase, disconnectMetabase, metabaseStatus } from './metabase'
@@ -211,6 +212,7 @@ function registerIpc() {
   registerMocks()
   registerIdeas()
   registerBackups(handle)
+  registerBugReports()
   handle('settings:get', () => getSettings())
   // You (main/profile): your name and picture, kept in app data
   handle('profile:get', () => getProfile())
@@ -811,7 +813,12 @@ function setMenu() {
     { role: 'windowMenu' },
     {
       role: 'help',
-      submenu: [{ label: 'Tide Guide', accelerator: 'CmdOrCtrl+?', click: () => send('menu', 'help') }]
+      submenu: [
+        { label: 'Tide Guide', accelerator: 'CmdOrCtrl+?', click: () => send('menu', 'help') },
+        { type: 'separator' },
+        // ⌃⌘B: free in Tide (⌘B and ⌥⌘B are the code editor's), and not one of macOS's own
+        { label: 'Report a Bug…', accelerator: 'Ctrl+Cmd+B', click: () => void openBugSheet() }
+      ]
     }
   ]
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))

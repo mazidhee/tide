@@ -42,6 +42,7 @@ import { SettingsView } from './components/SettingsView'
 import { NotebookView } from './components/NotebookView'
 import { SearchPalette } from './components/SearchPalette'
 import { SaveLinkDialog } from './components/SaveLink'
+import { BugReportSheet } from './components/BugReportSheet'
 import { Icon } from './components/Icon'
 import { TopBar } from './components/tide/TopBar'
 import { ErrorBoundary } from './components/ErrorBoundary'
@@ -353,6 +354,7 @@ export default function App() {
         if (action === 'toggle-chat' && view.kind !== 'chat') app.updateSettings({ chatOpen: !settings.chatOpen })
         if (action === 'search') app.setDialog(dialog === 'search' ? null : 'search')
         if (action === 'save-link') app.setDialog('save-link')
+        if (action === 'report-bug') app.setDialog('report-bug')
         if (action === 'new-note') newNote()
         if (action === 'new-topic') app.setView({ kind: 'new-topic' })
         if (action === 'help') app.setView({ kind: 'help' })
@@ -533,6 +535,7 @@ export default function App() {
 
       {dialog === 'search' && <SearchPalette onClose={() => app.setDialog(null)} />}
       {dialog === 'save-link' && <SaveLinkDialog onClose={() => app.setDialog(null)} />}
+      {dialog === 'report-bug' && <BugReportSheet onClose={() => app.setDialog(null)} />}
       {dragging && <div className="drop-overlay">Drop to add to your library</div>}
 
       <BreakScreen settings={breaks} />

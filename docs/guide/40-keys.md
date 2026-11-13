@@ -18,6 +18,7 @@ summary: The ones worth learning first are at the top.
 | <kbd>⌘⇧S</kbd> | Save a link |
 | <kbd>⌘⇧O</kbd> | Add files |
 | <kbd>⌘\</kbd> | Toggle the sidebar |
+| <kbd>⌃⌘B</kbd> | Report a bug: a line at the top of Open in Tide bugs, with a screenshot |
 | <kbd>⌘[</kbd> <kbd>⌘]</kbd> | Back and forward |
 | <kbd>Space</kbd> or <kbd>Esc</kbd> | Interrupt the tutor while it's speaking |
 | <kbd>Enter</kbd>, <kbd>Tab</kbd>, <kbd>⌥↑</kbd> <kbd>⌥↓</kbd> | Add, indent and move topics in an outline |

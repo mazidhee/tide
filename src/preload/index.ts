@@ -179,6 +179,12 @@ const api: TideApi = {
     render: invoke('speed:render'),
     memory: invoke('speed:memory')
   },
+  bugs: {
+    info: invoke('bugs:info'),
+    open: invoke('bugs:open'),
+    file: invoke('bugs:file'),
+    discard: invoke('bugs:discard')
+  },
   backups: {
     status: invoke('backups:status'),
     now: invoke('backups:now'),
