@@ -959,11 +959,31 @@ export interface TideApi {
   onTrayCommand(cb: (c: { type: 'view'; view: unknown } | { type: 'agenda'; date: string; index: number } | { type: 'focus'; minutes: number }) => void): () => void
   studying(status: { pose: import('./professorArt').ProfessorPose; label: string; since: number; until?: number } | null): Promise<void>
   windows: {
-    /** Opens the view in its own window, with nothing else on screen */
-    openFocus(view: unknown): Promise<void>
+    /**
+     * Opens the view in a window of its own, with nothing else on screen (shared/popout). If a
+     * window already holds it, that one comes forward instead.
+     */
+    openFocus(view: unknown, info?: Partial<import('./popout').PopInfo>): Promise<'opened' | 'focused' | 'refused'>
     /** The view handed to this focus window, once */
     focusView(id: string): Promise<unknown>
     close(): Promise<void>
+    /** Brings forward the window holding this key; false when none does */
+    focusKey(key: string): Promise<boolean>
+    /** What this pop-out now shows: its key and window title */
+    setInfo(info: Partial<import('./popout').PopInfo>): Promise<void>
+    /** Hands the view (with its state) back to the main window and closes this one */
+    returnToMain(view: unknown): Promise<void>
+    /** The keys other windows hold */
+    held(): Promise<string[]>
+    onHeld(cb: (keys: string[]) => void): () => void
+    /** The main window: a pop-out handed its view back */
+    onAdopt(cb: (view: unknown) => void): () => void
+    /** This pop-out is closing: save, then call closeNow */
+    onClosing(cb: () => void): () => void
+    closeNow(): Promise<void>
+    /** A small message to every other window */
+    relay(channel: string, payload: unknown): void
+    onRelay(cb: (m: { channel: string; payload: unknown }) => void): () => void
   }
   cloud: {
     /** Which providers have a saved key (the keys themselves never leave the main process) */

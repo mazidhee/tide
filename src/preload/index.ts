@@ -355,7 +355,17 @@ const api: TideApi = {
   windows: {
     openFocus: invoke('window:openFocus'),
     focusView: invoke('window:focusView'),
-    close: invoke('window:close')
+    close: invoke('window:close'),
+    focusKey: invoke('window:focusKey'),
+    setInfo: invoke('window:setInfo'),
+    returnToMain: invoke('window:returnToMain'),
+    held: invoke('window:held'),
+    onHeld: (cb) => subscribe('windows:held', cb),
+    onAdopt: (cb) => subscribe('windows:adopt', cb),
+    onClosing: (cb) => subscribe('windows:closing', () => cb()),
+    closeNow: invoke('window:closeNow'),
+    relay: (channel, payload) => ipcRenderer.send('windows:relay', channel, payload),
+    onRelay: (cb) => subscribe('windows:relayed', cb)
   },
   cloud: {
     keys: invoke('cloud:keys'),

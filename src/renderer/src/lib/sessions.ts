@@ -36,20 +36,74 @@ const FILE = '.tide/ongoing.json'
 let saving: ReturnType<typeof setTimeout> | undefined
 let loaded = false
 
+/** What goes in the file: the lessons left, and the ones on screen in any window */
+export function ongoingSnapshot(): Ongoing[] {
+  const all = new Map<string, Ongoing>()
+  for (const o of [...store.values(), ...live.values()]) if (!all.has(o.key) || all.get(o.key)!.at < o.at) all.set(o.key, o)
+  return [...all.values()].sort((a, b) => b.at - a.at).slice(0, 6)
+}
+
+const writeNow = () => window.tide.vault.write(FILE, JSON.stringify(ongoingSnapshot())).catch(() => {})
+
 function persist() {
   clearTimeout(saving)
   saving = setTimeout(() => {
     // Not before what was saved last time has been read, or it would be written over
     if (!loaded) return persist()
-    const all = new Map<string, Ongoing>()
-    for (const o of [...store.values(), ...live.values()]) if (!all.has(o.key) || all.get(o.key)!.at < o.at) all.set(o.key, o)
-    window.tide.vault.write(FILE, JSON.stringify([...all.values()].sort((a, b) => b.at - a.at).slice(0, 6))).catch(() => {})
+    void writeNow()
   }, 400)
+}
+
+// ---------- Every window holds the same list ----------
+// A lesson can be open in a pop-out while the main window lists the others. Each change is passed
+// to the other windows as it happens (main/popout relay), so whichever window writes the file next
+// writes everything, and none drops what another holds.
+
+type Op = { op: 'set'; o: Ongoing } | { op: 'live'; o: Ongoing } | { op: 'end'; key: string }
+const share = (op: Op) => {
+  try {
+    window.tide?.windows?.relay?.('ongoing', op)
+  } catch {
+    // one window only
+  }
+}
+
+/** A change made in another window */
+export function applyOngoingOp(op: Op, opts: { follow?: boolean } = {}) {
+  if (op.op === 'set') {
+    live.delete(op.o.key)
+    store.set(op.o.key, op.o)
+    // A lesson's window closed while a reply was arriving: this window keeps it coming
+    const activeId = (op.o.state as { activeId?: string | null } | null)?.activeId
+    if (opts.follow && op.o.busy && activeId) followInBackground(op.o.key, activeId)
+  } else if (op.op === 'live') live.set(op.o.key, op.o)
+  else {
+    live.delete(op.key)
+    store.delete(op.key)
+  }
+  emit()
+}
+
+/** Writes now what would be written in a moment (a window about to close) */
+export async function flushOngoing() {
+  clearTimeout(saving)
+  if (loaded) await writeNow()
+  await flushLessons()
 }
 
 // ---------- Past lessons: every lesson kept as it goes, to read again or carry on ----------
 
 const lessonTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const lessonSaves = new Map<string, () => Promise<unknown>>()
+
+/** Saves at once the lessons waiting for their second to pass */
+export async function flushLessons() {
+  const saves = [...lessonSaves.values()]
+  for (const id of lessonTimers.keys()) clearTimeout(lessonTimers.get(id))
+  lessonTimers.clear()
+  lessonSaves.clear()
+  await Promise.all(saves.map((s) => s()))
+}
 
 /** Keeps a lesson in Past lessons (a second after its last change, or now when it finishes) */
 export function keepLesson(key: string, view: View, turns: unknown, finished = false, threads?: unknown) {
@@ -58,12 +112,16 @@ export function keepLesson(key: string, view: View, turns: unknown, finished = f
   clearTimeout(lessonTimers.get(id))
   const save = () => {
     lessonTimers.delete(id)
-    window.tide.lessons
+    lessonSaves.delete(id)
+    return window.tide.lessons
       .save({ id, mode: view.mode, topic: view.topic, scope: view.scope, ...(view.options ? { options: view.options } : {}), turns: (turns as { role: 'user' | 'assistant'; content: string }[]).map(({ role, content }) => ({ role, content })), ...(Array.isArray(threads) ? { threads: threads as LessonThread[] } : {}), finished })
       .catch(() => {})
   }
-  if (finished) save()
-  else lessonTimers.set(id, setTimeout(save, 1000))
+  if (finished) void save()
+  else {
+    lessonSaves.set(id, save)
+    lessonTimers.set(id, setTimeout(save, 1000))
+  }
 }
 
 /** What was in progress when Tide last closed, the lesson on screen included: back under "In progress" */
@@ -80,6 +138,13 @@ export async function loadOngoing() {
   loaded = true
 }
 void loadOngoing()
+try {
+  // The main window keeps a reply coming for a lesson whose window closed mid-reply
+  const follow = !/[#&]focus=/.test(window.location.hash)
+  window.tide?.windows?.onRelay?.((m) => m.channel === 'ongoing' && applyOngoingOp(m.payload as Op, { follow }))
+} catch {
+  // tests, outside Tide
+}
 
 export const sessionKey = (v: { kind: string; mode?: string; topic?: string; nonce?: number }) => `${v.kind}:${v.mode ?? ''}:${v.topic ?? ''}:${v.nonce ?? ''}`
 
@@ -90,19 +155,23 @@ export function saveOngoing(o: Omit<Ongoing, 'at'>) {
   const record = (x: Ongoing) => (x.view.kind === 'session' ? (x.view.lesson ?? lessonId(x.key)) : null)
   const mine = record(o as Ongoing)
   if (mine) for (const x of [...store.values()]) if (x.key !== o.key && record(x) === mine) store.delete(x.key)
-  store.set(o.key, { ...o, at: Date.now() })
+  const kept = { ...o, at: Date.now() }
+  store.set(o.key, kept)
   // Keep a handful: the oldest go first
   const all = [...store.values()].sort((a, b) => b.at - a.at)
   for (const old of all.slice(6)) store.delete(old.key)
   emit()
   persist()
+  share({ op: 'set', o: kept })
 }
 
 /** The one on screen, as it goes: kept on disk, listed only if Tide closes before you leave it */
 export function keepLive(o: Omit<Ongoing, 'at'>) {
   keepLesson(o.key, o.view, (o.state as { turns?: unknown })?.turns, false, (o.state as { threads?: unknown })?.threads)
-  live.set(o.key, { ...o, at: Date.now() })
+  const kept = { ...o, at: Date.now() }
+  live.set(o.key, kept)
   persist()
+  share({ op: 'live', o: kept })
 }
 
 export const getOngoing = (key: string) => store.get(key)
@@ -111,6 +180,7 @@ export function endOngoing(key: string) {
   live.delete(key)
   if (store.delete(key)) emit()
   persist()
+  share({ op: 'end', key })
 }
 
 const followers = new Map<string, () => void>()

@@ -16,6 +16,8 @@ import { replace, search } from './search'
 import { discover, runTests, setupPytest } from './tests'
 import * as ws from './workspace'
 
+const watching = new Set<number>()
+
 export function registerIde(): void {
   const handle = <A extends unknown[], R>(channel: string, fn: (...args: A) => R) => ipcMain.handle(channel, (_e, ...args) => fn(...(args as A)))
 
@@ -35,7 +37,18 @@ export function registerIde(): void {
   handle('ide:rename', (root: string, from: string, to: string) => ws.rename(root, from, to))
   handle('ide:remove', (root: string, path: string) => ws.remove(root, path))
   handle('ide:reveal', (root: string, path: string) => ws.reveal(root, path))
-  ipcMain.handle('ide:watch', (e, root: string | null) => ws.watchRoot(root, (ev) => !e.sender.isDestroyed() && e.sender.send('ide:fs', ev)))
+  // Each window watches its own project; a closed window's watcher goes with it
+  ipcMain.handle('ide:watch', (e, root: string | null) => {
+    const owner = e.sender.id
+    if (root && !watching.has(owner)) {
+      watching.add(owner)
+      e.sender.once('destroyed', () => {
+        watching.delete(owner)
+        ws.stopWatching(owner)
+      })
+    }
+    return ws.watchRoot(root, (ev) => !e.sender.isDestroyed() && e.sender.send('ide:fs', ev), owner)
+  })
   handle('ide:search', (root: string, o: SearchOptions) => search(root, o))
   handle('ide:replace', (root: string, o: SearchOptions, replacement: string, paths: string[]) => replace(root, o, String(replacement ?? ''), Array.isArray(paths) ? paths : []))
   // Run: the file's folder is copied into the sandbox, as the Code folder's runs always were

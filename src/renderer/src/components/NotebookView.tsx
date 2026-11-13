@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ProjectPanel } from './ProjectPanel'
+import { usePopOutSurface } from '../lib/popout'
 import type { FileNode, LearningStatus, Mastery, NotebookMeta, NoteMeta } from '@shared/types'
 import { LEVEL_LABEL } from './LearnView'
 import { fileTitle, useApp } from '../state'
@@ -65,13 +66,15 @@ function chaptersOf(folder: FileNode): Chapter[] {
   return out
 }
 
-export function NotebookView({ path }: { path: string }) {
+export function NotebookView({ path, tab: initialTab }: { path: string; tab?: 'project' | 'outline' | 'notes' | 'reading' }) {
   const app = useApp()
   const [meta, setMeta] = useState<NotebookMeta | null>(null)
   const [notes, setNotes] = useState<Map<string, NoteMeta>>(new Map())
   const [due, setDue] = useState(0)
   const [menu, setMenu] = useState<MenuState | null>(null)
-  const [tab, setTab] = useState<'project' | 'outline' | 'notes' | 'reading' | null>(null)
+  const [tab, setTab] = useState<'project' | 'outline' | 'notes' | 'reading' | null>(initialTab ?? null)
+  // In a window of its own, on the same tab (lib/popout)
+  usePopOutSurface({ name: path.split('/').pop(), view: () => ({ kind: 'notebook', path, ...(tab ? { tab } : {}) }) })
   const library = useLibrary()
   const [picker, setPicker] = useState<{ path: string; at: { x: number; y: number } } | null>(null)
   const [mastery, setMastery] = useState<Record<string, Mastery>>({})

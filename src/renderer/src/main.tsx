@@ -60,6 +60,8 @@ import { goto, listenForLinks } from './lib/linkNav'
 import { seekPlayer } from './lib/videoHub'
 import { startVisuals, configureVisuals } from './lib/visuals'
 import { renderMarkdown } from './lib/markdown'
+import { inFocusWindow } from './lib/popout'
+import { flushOngoing } from './lib/sessions'
 
 window.tide.settings.get().then((settings) => {
   // Before the first paint, so the window never shows the other design for a frame
@@ -79,11 +81,23 @@ window.tide.settings.get().then((settings) => {
   configureVisuals({ markdown: (t) => renderMarkdown(t, { notePath: '', filesByName: new Map() }) })
   startVisuals()
 startLightbox()
-  createRoot(document.getElementById('root')!).render(
+  const root = createRoot(document.getElementById('root')!)
+  root.render(
     <StrictMode>
       <AppProvider initial={settings}>
         <App />
       </AppProvider>
     </StrictMode>
   )
+  // A pop-out closing: its page leaves as if you had gone elsewhere (a lesson is kept under Carry
+  // on, as when you leave one), what's waiting to be written is written, and then it closes
+  if (inFocusWindow)
+    window.tide.windows.onClosing(async () => {
+      try {
+        root.unmount()
+        await flushOngoing()
+      } finally {
+        await window.tide.windows.closeNow()
+      }
+    })
 })

@@ -3,6 +3,7 @@
  * Sunday championship, trophies and badges (also Practice's first tab); the run of five rounds;
  * the celebration at the end; and the compact card on Home.
  */
+import { usePopOutSurface } from '../../lib/popout'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReviewGrade, StudyCard } from '@shared/types'
 import { addDays, dayKey, REMINDER_HOUR, type Reminder } from '@shared/mentalMaths'
@@ -720,6 +721,8 @@ export function WorkoutView({ start, championship: wantChamp }: { start?: boolea
   }, [state, phase, start, wantChamp, day])
 
   const back = () => app.setView({ kind: 'workout', nonce: Date.now() })
+  // In a window of its own between rounds: the morning carries on at the next one (lib/popout)
+  usePopOutSurface({ busy: phase?.t === 'play', busyText: 'It can move between rounds.', view: () => ({ kind: 'workout', ...(start ? { start } : {}), ...(wantChamp ? { championship: wantChamp } : {}) }) })
 
   const finishRound = useCallback(
     async (round: number, items: ItemResult[], combo?: number) => {
