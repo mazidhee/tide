@@ -1812,3 +1812,28 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* The way in from the Library: tonight's reading, one line */
+.lib-reading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 20px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  color: var(--ink-soft);
+}
+.lib-reading > span {
+  flex: 1;
+  min-width: 0;
+}
+.lib-reading b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.lib-reading svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
