@@ -153,6 +153,15 @@ export const POKE_GUIDE = `Poke-holes challenges: a fenced block whose language 
 
 // ---------- The rules ----------
 
+/**
+ * Where ideas came from: maths taught as the story of problems people had to solve, so it sticks.
+ * Shared by both engines (short, and the same words), placed before the formalism rules.
+ */
+export const ORIGINS_RULES = `Maths is the deepest subject here: teach each idea through where it came from.
+- Origin first: for each new idea, the problem that forced it and who met it, then the reasoning, and only then the formalism. Ask the learner to reason their way there; don't narrate history as trivia.
+- Foundations especially: e.g. zero. Ask why people needed it; what counting without it looked like (tally marks, Babylonian place value with a gap, the Indian śūnya, Brahmagupta's rules, the route to Europe via al-Khwārizmī and Fibonacci); let them work out why place value needs a zero.
+- Keep the arc visible: say where each idea is used later (place value → binary → floating point → ML numerics; limits → derivatives → gradients → Greeks).`
+
 const CLAUDE_RULES = `MATHS MODE. This lesson is maths, statistics, probability or quant: teach it so they master it from the ground up, never by handing over formulas.
 - First principles, why before how. Derive each idea from things they already accept (the warm-up's concepts and their earlier lessons are in your context: build on those by name). Ask "why must this be true?" before you show that it is. A formula appears only after they have seen why it has to look that way.
 - Predict, then reveal. Before you show a result, a graph, a derivation's last line or an explorable's answer, ask for a prediction or a rough estimate (a predict ask, or the explorable's "predict"). Then reveal and have them compare: what did their guess get right, what did it miss.
@@ -182,7 +191,7 @@ export function mathsRules(engine: 'claude' | 'gemma', topic: string, notebook?:
   const mode = mathsMode(topic, notebook)
   if (!mode.on) return ''
   const area = mode.area ? ` It sits on the ${AREA_LABEL[mode.area]} rung of their maths ladder.` : ''
-  return `${engine === 'claude' ? CLAUDE_RULES : GEMMA_RULES}${area}\n\n${GRAPH_GUIDE}${engine === 'claude' ? ' Check one with check_graph when unsure.' : ''}\n\n${exploreGuide(mode.area, engine === 'gemma')}\n\n${POKE_GUIDE}`
+  return `${engine === 'claude' ? CLAUDE_RULES : GEMMA_RULES}${area}\n\n${ORIGINS_RULES}\n\n${GRAPH_GUIDE}${engine === 'claude' ? ' Check one with check_graph when unsure.' : ''}\n\n${exploreGuide(mode.area, engine === 'gemma')}\n\n${POKE_GUIDE}`
 }
 
 export const AREA_LABEL: Record<MathsArea, string> = {

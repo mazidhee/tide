@@ -248,3 +248,19 @@ describe('maths mode: code about maths', () => {
     expect(mathsMode('Gradient descent momentum').on).toBe(false)
   })
 })
+
+describe('maths mode: where ideas came from', () => {
+  it('both engines are told origin first, the zero example, and the forward arc, compactly', async () => {
+    const { ORIGINS_RULES } = await import('../src/shared/mathsMode')
+    for (const engine of ['claude', 'gemma'] as const) {
+      const r = mathsRules(engine, 'The invention of zero', 'Roadmaps/RM_MATH.md')
+      expect(r).toContain(ORIGINS_RULES)
+      expect(r).toMatch(/problem that forced it/)
+      expect(r).toMatch(/Brahmagupta/)
+      expect(r).toMatch(/al-Khwārizmī and Fibonacci/)
+      expect(r).toMatch(/place value → binary → floating point → ML numerics/)
+      expect(r.indexOf(ORIGINS_RULES)).toBeLessThan(r.indexOf('Explorables:'))
+    }
+    expect(ORIGINS_RULES.split(/\s+/).length).toBeLessThan(130)
+  })
+})
