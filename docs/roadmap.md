@@ -45,6 +45,13 @@ Last updated: 13 November 2026.
 - [x] **Pop-out windows everywhere.** Open a lesson, project, course, note, the reader or a mock in its own window, from a clear button, ⌥⌘N or right-click.
 - [ ] **The reading room.** Library › Reading: tonight's chapter in "Then today", an immersive reader (highlight, quote, margin notes, Challenge me, the core argument), a book page with a cover banner, an end-of-chapter seminar, and listening with a mini player. Being built (worktree `tide-reading`).
 - [ ] **Maths tutor.** First-principles, Socratic teaching for maths and statistics; drift detection that switches format; explorables you drag (derivatives, matrices, distributions, random walks); poke-holes challenges; a maths-to-quant ladder. Being built (worktree `tide-maths`).
+- [ ] **Claude for everything.** Remove the privacy routing: private notebooks and Metabase go to Claude; Gemma only when Claude is unavailable.
+- [ ] **Backups of Tide's own data.** A nightly local backup of `.tide/` and app data (lessons, ratings, profile, usage, workout), kept for weeks, with restore in Settings.
+- [ ] **Report a bug from anywhere.** One shortcut adds a line to the Tide bugs note, with a screenshot of the screen.
+- [ ] **Weekly progress, in Your week.** Mastered, workout ratings, projects, books and time, on the existing page (no new sidebar item).
+- [ ] **Claude in Metabase.** Claude more integrated with Metabase work (to define with you).
+- [ ] **Leftovers from 13 Nov.** Everything in the "Dropped along the way" line under Small fixes.
+- [ ] **Claude thinks as hard as each job needs, plus three fixes.** The coding tutor runs your code; review comments and suggestions survive a reload; sharper eyes on pixel avatars.
 - [ ] **Notebook and quant lab.** A Jupyter-compatible notebook in Tide with the tutor in the margin (build on Jupyter's kernel or marimo); the lab pack (scipy, statsmodels, scikit-learn, polars, DuckDB, cvxpy, QuantLib, arch); market data from free sources; finance visuals (yield curve, option payoffs and Greeks, Monte Carlo, efficient frontier, order book). Check each licence first (OpenBB is AGPL).
 - [ ] **Audiobook voices.** Download two or three local voices (Chatterbox, Orpheus, VibeVoice or newer) after asking, play the same passage in each, and keep the one you pick; render chapters ahead while idle; narrator plus character voices. ElevenLabs as an option for public-domain books.
 - [ ] **Tide tuned for finance, payments and quant.** Your focus subjects: stablecoins, payments and payment rails, core banking, open banking, payment infrastructure, quantitative finance, risk, blockchain, plus ML, data engineering, data science and economics.
@@ -84,7 +91,6 @@ Last updated: 13 November 2026.
 - [ ] **Faster lesson starts and fewer stalls.** The first answer of a new lesson takes 14–27 s. Gemma stalls in about 14% of turns, and retries run one after another. The turn after a long lesson is trimmed re-reads it all. Partial work: worktree `tide-fast2`.
 - [ ] **Everyday check: Python and ML from zero.** Run real lessons the way you use Tide ("I want to learn Python", "I want to learn ML"), over several sessions, and fix what goes wrong.
 - [ ] **Lab pack ready before it's needed.** Install the data and ML packages (about 900 MB) from Settings, in the background, so the first ML lesson doesn't stall for 30 s. Partial work: worktree `tide-voice`.
-- [ ] **Cloud models, tested live.** Route hard questions to stronger cloud models, with your keys in a throwaway test profile (approved), keeping private-project and Metabase content on the Mac.
 
 ## Next
 
@@ -116,6 +122,8 @@ Last updated: 13 November 2026.
 - [ ] **PDF reading in Rust.** Removes a one-time 455 ms load.
 
 ## Not doing
+
+- Cloud models tested live: dropped 13 Nov, Claude is the tutor.
 
 - Separate benchmark and rehearsal sessions: daily use and the bugs note do that job
 
