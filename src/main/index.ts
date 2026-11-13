@@ -59,6 +59,7 @@ import { registerLanguageServer, stopLanguageServer } from './pythonLanguageServ
 import { registerIde, stopIde } from './ide'
 import { registerNotebook, stopNotebooks } from './notebook'
 import { registerMocks } from './mocks'
+import { registerSharpness } from './sharpness'
 import { registerIdeas } from './ideaProjects'
 import { registerPacks, stopPacks } from './packs'
 import { labStatus, librariesStatus, mathStatus, runCode, runProject, setupLab, setupLibraries, setupMath } from './runner'
@@ -216,6 +217,7 @@ function registerIpc() {
   registerIde()
   registerNotebook()
   registerMocks()
+  registerSharpness()
   registerIdeas()
   registerPacks()
   registerBackups(handle)

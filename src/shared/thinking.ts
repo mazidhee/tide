@@ -105,6 +105,10 @@ const JOB_EFFORT: Record<JobName, Effort> = {
   handwriting: 'high',
   mockInterviewer: 'medium',
   mockMark: 'high',
+  sharpWrite: 'high',
+  sharpMark: 'high',
+  sharpCoach: 'medium',
+  sharpSystem: 'medium',
   lessonChecks: 'medium'
 }
 

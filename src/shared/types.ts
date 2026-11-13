@@ -819,6 +819,26 @@ export interface TideApi {
     resume(id: string): Promise<{ started: import('../main/mocks').MockStarted; state: import('./mocks').MockLiveState } | null>
     onEvent(cb: (e: { id: string; delta: string }) => void): () => void
   }
+  /** Sharpness training (main/sharpness): unseen problems, method hints, post-mortems, incident drills, ratings */
+  sharp: {
+    status(): Promise<import('../main/sharpness').SharpStatus>
+    start(input: import('../main/sharpness').SharpStartInput): Promise<import('../main/sharpness').SharpStarted>
+    /** The code so far against the hidden tests: names and outcomes only */
+    test(id: string, code: string): Promise<import('../main/sharpness').TestOutcome>
+    submit(id: string, input: import('../main/sharpness').SharpSubmitInput): Promise<import('../main/sharpness').SharpSubmitted>
+    hint(id: string, kind: 'method' | 'solution'): Promise<import('../main/sharpness').SharpHint>
+    retry(id: string, input: { answer?: string; code?: string }): Promise<import('../main/sharpness').SharpRetried>
+    reveal(id: string): Promise<import('../main/sharpness').Reveal & { postmortem?: string; rootCause?: string }>
+    drillAsk(id: string, text: string): Promise<import('../main/sharpness').DrillReply>
+    drillHypothesis(id: string, text: string): Promise<import('../main/sharpness').DrillReply>
+    drillAct(id: string, text: string): Promise<import('../main/sharpness').DrillReply>
+    drillResolve(id: string, text: string, gaveUp?: boolean): Promise<import('../main/sharpness').DrillResolved>
+    pmTurn(id: string, step: import('./sharpPostmortem').PmStep, said: string): Promise<import('../main/sharpness').PmTurn>
+    pmFinish(id: string, answers: import('./sharpPostmortem').PmAnswers): Promise<import('../main/sharpness').PmFinished>
+    end(id: string): Promise<void>
+    cancel(id: string): Promise<void>
+    weakModes(): Promise<{ mode: 'coding' | 'design' | 'quant'; category: import('./sharpness').SharpCategory; rating: number }[]>
+  }
   /** The morning workout (shared/workout): ratings, titles and the log, kept in the vault under .tide/ */
   workout: {
     state(): Promise<import('./workout').WorkoutState>

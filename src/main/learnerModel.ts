@@ -140,7 +140,10 @@ export async function recent(o: { node?: string; limit?: number; since?: number 
 
 /** A few lines for a prompt: each goal's standing, what fades, the transfer gaps, the skills */
 export async function learnerDigest(goal?: string): Promise<string> {
-  return modelDigest((await learnerModel()).model, { goal })
+  const digest = modelDigest((await learnerModel()).model, { goal })
+  // Sharpness keeps its own ratings (main/sharpness): they ride along so the tutor sees them
+  const sharp = await import('./sharpness').then((m) => m.sharpRatingsLine()).catch(() => '')
+  return [digest, sharp].filter(Boolean).join('\n')
 }
 
 /**
@@ -415,7 +418,7 @@ export const MODEL_TOOLS: McpTool[] = [
           break
         }
         case 'digest':
-          out = modelDigest(model, { goal: goal || undefined }) || 'Not enough evidence yet for a picture.'
+          out = [modelDigest(model, { goal: goal || undefined }), await import('./sharpness').then((m) => m.sharpRatingsLine()).catch(() => '')].filter(Boolean).join('\n') || 'Not enough evidence yet for a picture.'
           break
         default:
           out = 'ask is one of standing, fading, weakest, used_in, transfer_gaps, recent, digest.'

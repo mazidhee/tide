@@ -31,6 +31,8 @@ Each carries concept ids (or a topic resolved when the model is built), skills, 
 
 **Writing.** `learningEvent(e | e[], { replace? })` in `main/learningLog.ts`. Never throws, never awaited on by anything that matters. The key names the act (`lesson:<id>#t<turn>`, `ev:<source>#<pos>@<concept>`, `workout:<id>`…): writing the same act again replaces its row, so a live write and the read-in agree. `replace: 'lesson:<id>#'` drops rows of that prefix the new set doesn't have (a lesson saved again).
 
+**Sharpness** writes through one adapter (`main/sharpEventLog.ts`, mapping in `shared/sharpEvents.ts`): a rated first attempt or a drill's outcome is `transfer` (with the rating before and after in `data`), a retry is `answered` with its hints, "I'm stuck" is `answered` with outcome `stuck`, a post-mortem is `misconception_seen` on the pattern and a solved revisit `misconception_resolved`, and drill steps are `studied`. Skills come from the category (`algorithms`, `system-design`, `incident-response`, `debugging`, `modelling`, `estimation`, `proof`). The ratings themselves ride along in the digest (`learnerDigest` and the `learner_model` tool's `digest`).
+
 Evidence that goes through the knowledge map (`noteEvidence`, `noteReviewAnswer`, `noteCardReview`, `noteRecallReview`) is logged there, so any feature using those is already wired.
 
 **Read-in.** `main/learningBackfill.ts` reads every earlier record once per vault (lessons, loose answers, the knowledge map's evidence, focus, workout, mental maths, drills, mocks, interviews, mistakes, the reading room, course progress). It only reads.
@@ -39,7 +41,7 @@ Evidence that goes through the knowledge map (`noteEvidence`, `noteReviewAnswer`
 
 `shared/learnerModel.ts` (pure) and `main/learnerModel.ts` (gathers, caches for a minute or until the log changes).
 
-- **Nodes**: concepts (the knowledge map's topics; plan steps roll into their topic), skills (`SKILLS`: debugging, proof, system design, problem decomposition, estimation, SQL and pipelines, modelling, mental arithmetic), goals (your goals and any registered from elsewhere), interests (subjects), projects, courses. Ids: concept ids as the map has them, `skill:<id>`, `goal:<id>`, `interest:<area>`, `project:<notebook>`, `course:<id>`.
+- **Nodes**: concepts (the knowledge map's topics; plan steps roll into their topic), skills (`SKILLS`: debugging, proof, system design, problem decomposition, estimation, SQL and pipelines, modelling, mental arithmetic, algorithms, incident response), goals (your goals and any registered from elsewhere), interests (subjects), projects, courses. Ids: concept ids as the map has them, `skill:<id>`, `goal:<id>`, `interest:<area>`, `project:<notebook>`, `course:<id>`.
 - **Edges**: `needs` (prerequisite), `used_in`, `serves` (goal), `covered_by` (course or project), `in` (subject), `exercises` (skill).
 - **Depth** 0–6: 1 recall, 2 explain, 3 apply, 4 transfer to an unseen problem, 5 build or teach, 6 research. A level is shown when its credit (right 1, partly ½, hinted halved) meets its need and the latest tries hold up; the ladder climbs 1 → 3 → 4 → 5 → 6, with explain shown beside it. Every level keeps the keys of the events behind it.
 - **Targets**: a goal's concepts default to 3 (2 for a curious goal); a target set outright wins.

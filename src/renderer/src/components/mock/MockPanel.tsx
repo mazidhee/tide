@@ -25,6 +25,14 @@ export function MockPanel() {
       .then(setStatus)
       .catch(() => setStatus({ claude: false, why: 'unavailable', level: 2, history: [] }))
   }, [])
+  // Sharpness's weakest category that a mock covers, to suggest it (main/sharpness weakMockModes)
+  const [weak, setWeak] = useState<{ mode: MockMode; rating: number } | null>(null)
+  useEffect(() => {
+    window.tide.sharp
+      .weakModes()
+      .then((w) => setWeak(w.length >= 2 ? w[0] : null))
+      .catch(() => {})
+  }, [])
   const history: MockRecord[] = useMemo(() => status?.history ?? [], [status])
   const points = trendPoints(history, filter)
   const summary = trendSummary(history, filter)
@@ -39,6 +47,18 @@ export function MockPanel() {
         <Icon name="claude" size={13} />
         {status === null ? 'Checking for Claude…' : status.claude ? 'Claude interviews (Sonnet) and marks (Opus).' : `Claude isn’t ready${status.why ? ` (${status.why})` : ''}: mocks run without an interviewer and are marked in code.`}
       </p>
+
+      {weak && (
+        <p className="mk-who mk-weak">
+          <Icon name="gauge" size={13} />
+          <span>
+            Sharpness has <strong>{modeInfo(weak.mode).short}</strong> as your weakest of these (rating {weak.rating}).{' '}
+            <button className="link-btn" onClick={() => open(weak.mode)}>
+              Take a {modeInfo(weak.mode).short} mock
+            </button>
+          </span>
+        </p>
+      )}
 
       <ul className="mk-modes">
         {MOCK_MODES.map((m) => {

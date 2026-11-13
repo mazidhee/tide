@@ -49,6 +49,8 @@ export type View =
   | { kind: 'maths'; level?: string; nonce?: number }
   // The morning workout (components/workout): its page, or a morning under way
   | { kind: 'workout'; start?: boolean; championship?: boolean; nonce?: number }
+  // Sharpness training (components/sharp): one unseen problem or incident drill, from its brief to the post-mortem
+  | { kind: 'sharp'; category: import('@shared/sharpness').SharpCategory; method?: import('@shared/sharpMethods').MethodId; card?: string; bank?: boolean; ref?: string; nonce?: number }
   | { kind: 'design'; path: string; start?: DesignMode; topic?: string; company?: string; timed?: number; reference?: string; nonce?: number }
   /** The IDE: a file in the notes' Code folder (`path`), or a project folder (`root`); `home` opens on the project's home, `file` on a file (a pop-out's) */
   | { kind: 'code'; path?: string; root?: string; home?: boolean; nonce?: number; /** The file to show first, in `root` */ file?: string }
@@ -159,7 +161,7 @@ const HOME: View = { kind: 'home' }
 export const tabRoot: { current: HTMLElement | null } = { current: null }
 
 const TABS_KEY = 'tide.tabs'
-const VIEW_KINDS = new Set<string>(['home', 'file', 'library', 'reading', 'reader', 'notebook', 'graph', 'study', 'daily', 'quiz', 'session', 'lessons', 'ladder', 'learn', 'practice', 'mock', 'workshop', 'new-topic', 'courses', 'chat', 'lab', 'coach', 'learner', 'wrapup', 'weekly', 'northstar', 'drill', 'maths', 'workout', 'design', 'code', 'ipynb', 'help', 'exam', 'settings'])
+const VIEW_KINDS = new Set<string>(['home', 'file', 'library', 'reading', 'reader', 'notebook', 'graph', 'study', 'daily', 'quiz', 'session', 'lessons', 'ladder', 'learn', 'practice', 'mock', 'workshop', 'new-topic', 'courses', 'chat', 'lab', 'coach', 'learner', 'wrapup', 'weekly', 'northstar', 'drill', 'maths', 'workout', 'sharp', 'design', 'code', 'ipynb', 'help', 'exam', 'settings'])
 
 /** The tabs kept last time (the main window only), or one on Home */
 function loadTabs(): T.Tabs<View> {

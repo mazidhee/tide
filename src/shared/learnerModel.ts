@@ -31,7 +31,10 @@ export const SKILLS: { id: string; name: string; match: RegExp }[] = [
   { id: 'estimation', name: 'Estimation', match: /\b(estimat\w*|fermi|back.of.the.envelope|expected value|odds|orders? of magnitude)\b/i },
   { id: 'sql-pipelines', name: 'SQL and pipelines', match: /\b(sql|quer(y|ies)|joins?|etl|elt|pipelines?|warehous\w*|dbt|spark|kafka|metabase|window functions?|cohorts?|duckdb|postgres)\b/i },
   { id: 'modelling', name: 'Modelling', match: /\b(model(l)?ing|regressions?|monte carlo|simulations?|pricing|forecast\w*|stochastic|bayes\w*|black.?scholes|value at risk|var)\b/i },
-  { id: 'mental-arithmetic', name: 'Mental arithmetic', match: /\b(mental (maths|math|arithmetic)|arithmetic|times tables)\b/i }
+  { id: 'mental-arithmetic', name: 'Mental arithmetic', match: /\b(mental (maths|math|arithmetic)|arithmetic|times tables)\b/i },
+  // Sharpness training writes these (shared/sharpEvents CATEGORY_SKILLS)
+  { id: 'algorithms', name: 'Algorithms', match: /\b(algorithms?|data structures?|leetcode|big.o|time complexity)\b/i },
+  { id: 'incident-response', name: 'Incident response', match: /\b(incidents?|on.?call|post.?mortems?|outages?|site reliability|sre)\b/i }
 ]
 export const skillId = (id: string) => `skill:${id}`
 
