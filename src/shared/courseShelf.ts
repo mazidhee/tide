@@ -3,7 +3,7 @@
  * found (New for you) and everything else (Browse, by your subjects and by where it comes from).
  * Pure, so the grouping and filters are tested (test/courseShelf.test.ts).
  */
-import { mediaOf, sourceOf, SOURCES, sourceSite, type CatalogueCourse } from './courses'
+import { mediaOf, nextLesson, sourceOf, SOURCES, sourceSite, type CatalogueCourse, type CourseOutline, type CourseProgress } from './courses'
 
 /** A catalogue course as the page lists it (main/courses CourseCard) */
 export interface ShelfCourse extends CatalogueCourse {
@@ -135,4 +135,71 @@ export function counts(cards: CatalogueCourse[]): { subjects: Record<SubjectId, 
     sources[sourceGroupOf(c)]++
   }
   return { subjects, sources }
+}
+
+// ---------- The page's home: the course you're in, then shelves ----------
+
+/** Where you are in a course: its module, how much of that module is left, and the next lesson */
+export interface CoursePlace {
+  /** 1-based */
+  module: number
+  modules: number
+  moduleTitle: string
+  /** Reading time left in the module, from its lessons' length (about 200 words a minute) */
+  minutesLeft: number
+  next: { id: string; title: string } | null
+}
+
+export function coursePlace(o: CourseOutline, p: CourseProgress | undefined): CoursePlace | null {
+  const at = nextLesson(o, p)
+  const mods = o.modules.filter((m) => m.lessons.length)
+  if (!mods.length) return null
+  const mod = at?.module ?? mods[mods.length - 1]
+  const i = Math.max(0, mods.findIndex((m) => m.id === mod.id))
+  const words = mod.lessons.filter((l) => !p?.[l.id]?.done).reduce((n, l) => n + (l.words || 0), 0)
+  return { module: i + 1, modules: mods.length, moduleTitle: mod.title, minutesLeft: words ? Math.max(1, Math.round(words / 200)) : 0, next: at ? { id: at.lesson.id, title: at.lesson.title } : null }
+}
+
+/** "about 6 h", "about 40 min" */
+export function timeLeft(minutes: number): string {
+  if (minutes < 60) return `about ${Math.max(5, Math.round(minutes / 5) * 5)} min`
+  const h = Math.round(minutes / 30) / 2
+  return `about ${h % 1 ? h.toFixed(1) : h} h`
+}
+
+/** Quiet marks for each subject's covers; a course always gets the same one */
+export const SUBJECT_GLYPHS: Record<SubjectId, string[]> = {
+  payments: ['$', '€', '£', '¤'],
+  blockchain: ['#', '⛓', '⊕', '0x'],
+  quant: ['σ', 'Δ', 'π', '∫', 'Γ'],
+  econ: ['λ', '%', '∂', 'ε'],
+  ml: ['θ', '∂', '∇', 'λ', 'ŷ'],
+  data: ['⋈', '∪', '→', '⊆'],
+  datasci: ['μ', 'σ²', 'x̄', 'ρ'],
+  cs: ['{ }', '< >', '⊢', 'λ', '∅'],
+  other: ['∑', '√', '∞', 'φ']
+}
+
+export function glyphFor(c: Pick<CatalogueCourse, 'id' | 'area' | 'title' | 'covers' | 'topics'>): string {
+  const set = SUBJECT_GLYPHS[subjectsOf(c)[0] ?? 'other']
+  let h = 0
+  for (const ch of c.id) h = (h * 31 + ch.charCodeAt(0)) >>> 0
+  return set[h % set.length]
+}
+
+/**
+ * The catalogue as shelves by subject: subjects of the courses you're in first, then the usual
+ * order; each shelf a handful of courses you haven't started, new finds first.
+ */
+export function subjectShelves<T extends ShelfCourse>(cards: T[], perShelf = 5): { id: SubjectId; label: string; total: number; courses: T[] }[] {
+  const { continuing } = shelves(cards)
+  const mine: SubjectId[] = []
+  for (const c of continuing) for (const s of subjectsOf(c)) if (!mine.includes(s)) mine.push(s)
+  const order = [...mine, ...SUBJECTS.map((s) => s.id).filter((id) => !mine.includes(id))]
+  const groups = browse(cards, { ...NO_FILTER })
+  return order
+    .map((id) => groups.find((g) => g.id === id))
+    .filter((g): g is NonNullable<typeof g> => !!g)
+    .map((g) => ({ id: g.id as SubjectId, label: g.label, total: g.courses.length, courses: g.courses.filter((c) => !c.imported).slice(0, perShelf) }))
+    .filter((g) => g.courses.length)
 }

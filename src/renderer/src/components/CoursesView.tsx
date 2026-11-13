@@ -24,6 +24,7 @@ import { courseRepos, registerLinkHost } from '../lib/linkNav'
 import { clearScreen, setScreen } from '../lib/onScreen'
 import type { OnScreen } from '@shared/onScreen'
 import { LinkPage, ViewerBar, targetTitle, useSectionInView } from './LinkViewer'
+import { CoursesHome } from './CoursesHome'
 
 
 const KIND_LABEL: Record<CatalogueCourse['kind'], string> = { course: 'Course', book: 'Book', notes: 'Notes', projects: 'Projects', guide: 'Guide' }
@@ -191,7 +192,8 @@ function Catalogue({ area: initialArea }: { area?: CourseArea }) {
     return { ...NO_FILTER, ...saved, query: '', ...(initialArea ? { subject: subjectsOf({ area: initialArea, title: '', covers: '', topics: [] })[0] } : {}) }
   })
   const [newOpen, setNewOpen] = useState(() => remember.get('tide.courses.newOpen', true))
-  const [showFinished, setShowFinished] = useState(false)
+  // Home (continue first, then shelves), the whole catalogue with its filters, or the weekly check's finds
+  const [mode, setMode] = useState<'home' | 'browse' | 'new'>(initialArea ? 'browse' : 'home')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [fresh, setFresh] = useState<FreshStatus | null>(null)
   const [threadOpen, setThreadOpen] = useState(false)
@@ -346,60 +348,6 @@ function Catalogue({ area: initialArea }: { area?: CourseArea }) {
     </li>
   )
 
-  const continueRow = (c: CourseCard) => {
-    const ph = busyPhase(c)
-    const next = c.imported!.next
-    return (
-      <li key={c.id} className="crs-go">
-        <button className="crs-go-main" onClick={() => open(c, next?.id)} title={next ? `Resume at ${next.title}` : `Open ${c.title}`}>
-          <span className="crs-go-text">
-            <span className="crs-go-title">
-              {c.title}
-              {c.updateAvailable && <span className="crs-badge updated">Updated</span>}
-            </span>
-            <span className="crs-go-next">
-              {next ? (
-                <>
-                  <span className="crs-go-label">{c.imported!.done ? 'Next' : 'Start with'}</span> {next.title}
-                  {next.module && next.module !== next.title && <span className="crs-go-module"> · {next.module}</span>}
-                </>
-              ) : (
-                'Ready to start'
-              )}
-            </span>
-          </span>
-          <span className="crs-go-progress">
-            <Bar done={c.imported!.done} total={c.imported!.lessons} />
-            <span className="crs-meta">
-              {c.imported!.done} of {c.imported!.lessons}
-            </span>
-          </span>
-          <span className="crs-go-resume" aria-hidden="true">
-            <Icon name="play" size={11} />
-            {c.imported!.done ? 'Resume' : 'Start'}
-          </span>
-        </button>
-        {continuing.some((x) => x.updateAvailable) && (
-          <span className="crs-go-side">
-            {c.updateAvailable && (
-          <button className="btn small crs-update-btn" disabled={!!ph} onClick={() => updateIt(c)}>
-            {ph ? (
-              <>
-                <span className="spinner" /> {PHASE_LABEL[ph.phase]}
-              </>
-            ) : (
-              <>
-                <Icon name="refresh" size={12} /> Update
-              </>
-            )}
-          </button>
-            )}
-          </span>
-        )}
-      </li>
-    )
-  }
-
   const freshLine = fresh?.running
     ? 'Checking your sources…'
     : fresh?.lastRun
@@ -412,8 +360,17 @@ function Catalogue({ area: initialArea }: { area?: CourseArea }) {
         <div className="crs-wrap">
           <header className="crs-head">
             <div>
-              <h1 className="crs-title">Courses</h1>
-              <p className="crs-lede">Open courses, books and lecture series, taught from their own text.</p>
+              {mode !== 'home' && !searching && (
+                <button className="crs-link crh-back" onClick={() => setMode('home')}>
+                  <Icon name="back" size={12} /> Courses
+                </button>
+              )}
+              <h1 className="crs-title">{mode === 'new' && !searching ? 'New for you' : mode === 'browse' && !searching ? 'All courses' : 'Courses'}</h1>
+              <p className="crs-lede">
+                {mode === 'home' && cards
+                  ? `${continuing.length} in progress · ${all.length} in the catalogue`
+                  : 'Open courses, books and lecture series, taught from their own text.'}
+              </p>
             </div>
             <label className="crs-search">
               <Icon name="search" size={14} />
@@ -426,37 +383,32 @@ function Catalogue({ area: initialArea }: { area?: CourseArea }) {
             </label>
           </header>
 
-          {!searching && continuing.length > 0 && (
-            <section className="crs-shelf" aria-label="Continue">
-              <div className="crs-shelf-head">
-                <h2 className="crs-section">Continue</h2>
-                <span className="crs-meta">
-                  {continuing.length} under way{finished.length ? `, ${finished.length} finished` : ''}
-                </span>
-              </div>
-              <ul className="crs-go-list">{continuing.map(continueRow)}</ul>
-              {finished.length > 0 && (
-                <>
-                  <button className="crs-fold" aria-expanded={showFinished} onClick={() => setShowFinished((s) => !s)}>
-                    <Icon name="chevron" size={10} className="crs-fold-chev" />
-                    Finished ({finished.length})
-                  </button>
-                  {showFinished && <ul className="crs-rows compact">{finished.map(row)}</ul>}
-                </>
-              )}
-            </section>
-          )}
-          {!searching && !continuing.length && finished.length > 0 && (
-            <section className="crs-shelf" aria-label="Finished">
-              <button className="crs-fold" aria-expanded={showFinished} onClick={() => setShowFinished((s) => !s)}>
-                <Icon name="chevron" size={10} className="crs-fold-chev" />
-                Finished ({finished.length})
-              </button>
-              {showFinished && <ul className="crs-rows compact">{finished.map(row)}</ul>}
-            </section>
+          {mode === 'home' && !searching && cards && (
+            <CoursesHome
+              cards={all}
+              continuing={continuing}
+              finished={finished}
+              suggested={suggested}
+              busy={(c) => {
+                const ph = busyPhase(c)
+                return ph ? PHASE_LABEL[ph.phase] : null
+              }}
+              onOpen={open}
+              onImport={importIt}
+              onUpdate={updateIt}
+              onLookNew={() => {
+                setMode('new')
+                setNewOpen(true)
+              }}
+              onBrowse={(subject) => {
+                set({ subject, source: 'all', media: 'all', level: 'all' })
+                setMode('browse')
+              }}
+              finishedList={<ul className="crs-rows compact crh-finished-list">{finished.map(row)}</ul>}
+            />
           )}
 
-          {!searching && (
+          {mode === 'new' && !searching && (
             <section className={`crs-shelf crs-new${newOpen ? '' : ' folded'}`} aria-label="New for you">
               <div className="crs-shelf-head">
                 <button
@@ -531,6 +483,7 @@ function Catalogue({ area: initialArea }: { area?: CourseArea }) {
             </section>
           )}
 
+          {(mode === 'browse' || searching) && (
           <section className="crs-browse" aria-label="Browse">
             <div className="crs-shelf-head">
               <h2 className="crs-section">{searching ? `Results for “${filter.query.trim()}”` : 'Browse'}</h2>
@@ -599,6 +552,7 @@ function Catalogue({ area: initialArea }: { area?: CourseArea }) {
               </div>
             )}
           </section>
+          )}
           <p className="crs-foot-note">
             Each course is fetched from its source when you import it (politely: robots.txt is followed and nothing behind a login or a paywall is read), kept on this Mac and shown with its source and licence. Courses without an open licence, including MIT OpenCourseWare and Open Yale, are for your own study only.
           </p>
