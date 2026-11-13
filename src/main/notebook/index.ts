@@ -151,6 +151,8 @@ async function start(ref: NbRef, theme: NbTheme): Promise<KernelStartResult> {
   if (had && had.kernel.state !== 'dead') return had.starting ?? { ok: true }
   if (!(await hasKernelPackage())) return { ok: false, needsPack: true, detail: `The notebook runs on the Jupyter kernel, which is in the quant pack (${QUANT_PACK.size}).` }
   const folder = ref.course ? await courseRunDir(ref.course) : dirname(await resolveRef(ref))
+  // A course lesson's runs are named after the lesson; a notebook's after its file
+  const runsName = ref.course ? folder : await resolveRef(ref)
   const kdir = join(nbDir(), 'kernels', createHash('sha1').update(key).digest('hex').slice(0, 12))
   // The sandbox matches real paths, not links: Tide's Python folder may be one
   await fs.mkdir(mplDir(), { recursive: true }).catch(() => {})
@@ -166,7 +168,7 @@ async function start(ref: NbRef, theme: NbTheme): Promise<KernelStartResult> {
     {
       python: notebookPython(),
       cwd: folder,
-      env: { ...(await kernelEnv()), TIDE_RUNS_DIR: runs, TIDE_RUNS_EXPERIMENT: experimentFor(abs) },
+      env: { ...(await kernelEnv()), TIDE_RUNS_DIR: runs, TIDE_RUNS_EXPERIMENT: experimentFor(runsName) },
       writable: [realFolder, mpl, runs],
       network,
       bootstrap: `import tide_nb as _tide_nb\n${themeCode(theme)}`,
