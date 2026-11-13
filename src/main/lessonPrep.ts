@@ -258,8 +258,8 @@ async function dueFor(t: PrepTarget, scope: ChatScope): Promise<Pick<PreparedLes
   const all = recallItems()
   const onTopic = all.filter((r) => r.due <= now + DAY && (similarity(r.topic, t.topic) >= 0.5 || r.topic.toLowerCase() === t.topic.toLowerCase())).map((r) => r.prompt.slice(0, 160))
   const recall = all.filter((r) => r.due <= now).length
-  const { warmupFor } = await import('./warmup')
-  const warmup = await warmupFor(t.topic, 'path' in scope ? scope.path : undefined).catch(() => null)
+  const [{ warmupFor }, { RERANK_PREP_MS }] = await Promise.all([import('./warmup'), import('@shared/warmup')])
+  const warmup = await warmupFor(t.topic, 'path' in scope ? scope.path : undefined, RERANK_PREP_MS).catch(() => null)
   const fading = (warmup?.concepts ?? []).filter((c) => c.status === 'fading').map((c) => c.name)
   return { due: { recall, fading, onTopic: onTopic.slice(0, 4) }, ...(warmup?.cards.length ? { warmup } : {}) }
 }

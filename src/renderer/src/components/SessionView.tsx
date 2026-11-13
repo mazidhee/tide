@@ -27,7 +27,7 @@ import { parsePlacement, placementNote } from '@shared/placement'
 import { correctionText } from '@shared/lessonCheck'
 import type { Reading } from '@shared/readings'
 import { whyByDefault } from '../lib/agenda'
-import { ASKED, END_NOW, GO_ON, SHOW_ME, askIdentity, askStarter, shouldSumUp, MODE_LABEL, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
+import { ASKED, END_NOW, GO_ON, SHOW_ME, askIdentity, askStarter, shouldSumUp, modeLabel, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
 import { cardsToMarkdown } from '@shared/cards'
 import { fileTitle, useApp, pagesLabel } from '../state'
@@ -58,7 +58,7 @@ import { AreaMark } from './tide/AreaMark'
 import { AnswerHint, AskPill, BackPill, FOLD_MS, SelectionAsk, ThreadSlot, highlightQuote, reducedMotion, type SelectionAt } from './LessonThreads'
 import { CameUpIn } from './ExploreLater'
 import { WarmUp } from './WarmUp'
-import { warmupNote, type WarmupSet } from '@shared/warmup'
+import { warmupNote, type WarmupSet, type WarmupStage } from '@shared/warmup'
 import { prepNote } from '@shared/lessonPrep'
 import { breakSignals, lessonAnswers, lessonForBreaks } from '../lib/breaks'
 import { MATHS_ANSWER_EVENT, takeExploreNotes, type MathsAnswerDetail } from '../lib/sims/exploreBus'
@@ -77,6 +77,7 @@ import type { AgendaItem } from '@shared/coach'
 import { loadDaily } from '../lib/daily'
 import { startAgendaLesson } from '../lib/agenda'
 import { AskPurpose, LessonEnd, LessonTrack, MoveOnChip, StepDivider } from './LessonTrack'
+import { hasConfidence, withConfidence } from '@shared/teachingQuality'
 
 // Loaded when a lesson needs them: the code editor (Monaco) and the walkthrough canvas
 const answered = (said: string) => !said.startsWith(GO_ON) && !said.startsWith(ASKED) && !isMoveOn(said)
@@ -382,6 +383,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const openingRef = useRef(openingMessage(setup))
   // The warm-up before a lesson (shared/warmup): the lesson's opening waits for it; its sources load meanwhile
   const [warm, setWarm] = useState<WarmupSet | null>(null)
+  // Where the warm-up stands, for the lesson map's first stage (once the lesson opens, its opening message says)
+  const [warmStage, setWarmStage] = useState<WarmupStage | null>(null)
   const warmGate = useRef<Promise<string>>(Promise.resolve(''))
   const warmDone = useRef<((note: string) => void) | null>(null)
   const answeredHere = useRef(false)
@@ -389,8 +392,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     new Promise<string>((resolve) => {
       if (mode !== 'teach' || options?.placement || options?.review || options?.check || options?.retest?.length || options?.project?.warmedUp) return resolve('')
       let settled = false
-      // Never hold a lesson up for long waiting for the cards
-      const wait = setTimeout(() => ((settled = true), resolve('')), 3000)
+      // Never hold a lesson up for long waiting for the cards (main/warmup gives Claude's rerank 4.5 s of it, only when names don't fill the warm-up)
+      const wait = setTimeout(() => ((settled = true), resolve('')), 5500)
       // A prepared lesson brings its warm-up with it (main/lessonPrep)
       const prepared = options?.prep ? window.tide.prep.get(options.prep.id).then((p) => p?.warmup ?? null).catch(() => null) : Promise.resolve(null)
       prepared
@@ -402,6 +405,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           if (!set.cards.length) return resolve('')
           warmDone.current = resolve
           setWarm(set)
+          setWarmStage({ state: 'now', cards: set.cards.length, done: 0, held: 0 })
         })
         .catch(() => (clearTimeout(wait), resolve('')))
     })
@@ -733,10 +737,23 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const stopTalking = voice.stop
   const finished = !busy && turns.length > 1 && !currentAsk && !carryOn && lastBlocks.some((b) => b.kind === 'summary' || b.kind === 'scores')
 
+  // ---------- How sure were you? One tap after an answer sent without it (shared/teachingQuality) ----------
+  const [sureDismissed, setSureDismissed] = useState<number | null>(null)
+  const sureAt = useMemo(() => {
+    if ((mode !== 'teach' && mode !== 'quiz') || !answeredHere.current) return -1
+    for (let i = turns.length - 1; i >= 0; i--) {
+      const t = turns[i]
+      if (t.role !== 'user' || t.content.startsWith('[hint]')) continue
+      return /^Answer:/.test(t.content) && !hasConfidence(t.content) && !isMoveOn(t.content) && i !== sureDismissed ? i : -1
+    }
+    return -1
+  }, [turns, mode, sureDismissed])
+
   // ---------- The lesson map (shared/lessonMap): where the lesson is on its plan ----------
-  const map = useMemo(() => lessonMap(turns, parsed, { finished }), [turns, parsed, finished])
-  // A lesson taught in problem sets probes first, then plans: the track says so until the plan comes
-  const showMap = mode === 'teach' && (map.steps.length > 0 || (!options?.refresh && !options?.course && (!approach || approach === 'problems') && turns.length > 1 && !finished))
+  const map = useMemo(() => lessonMap(turns, parsed, { finished, warmup: warmStage }), [turns, parsed, finished, warmStage])
+  // A lesson taught in problem sets probes first, then plans: the track says so until the plan comes.
+  // The warm-up is the track's first stage, shown while its cards are up
+  const showMap = mode === 'teach' && (map.steps.length > 0 || map.phase === 'warmup' || (!!map.warmup && !finished && !options?.curiosity) || (!options?.refresh && !options?.course && (!approach || approach === 'problems') && turns.length > 1 && !finished))
   const mapRef = useRef(map)
   mapRef.current = map
   // The next lesson on your roadmap: today's first lesson still to do, other than this one
@@ -815,7 +832,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   useEffect(() => {
     const k = keepRef.current
     if (!ongoingKey || !view || k.finished || k.turns.length < 2) return
-    keepLive({ key: ongoingKey, view, title: `${MODE_LABEL[mode] ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: null, threads: k.threads }, busy: k.busy })
+    keepLive({ key: ongoingKey, view, title: `${modeLabel(mode, options) ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: null, threads: k.threads }, busy: k.busy })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turns.length, busy, finished, ongoingKey, edited, threadsRev])
   // A thread on a finished lesson is kept with it too
@@ -848,7 +865,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     () => () => {
       const k = keepRef.current
       if (handedOver.current || !ongoingKey || !view || k.finished || k.turns.length < 2) return
-      saveOngoing({ key: ongoingKey, view, title: `${MODE_LABEL[mode] ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: activeId.current, threads: k.threads }, busy: k.busy })
+      saveOngoing({ key: ongoingKey, view, title: `${modeLabel(mode, options) ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: activeId.current, threads: k.threads }, busy: k.busy })
       if (k.busy && activeId.current) followInBackground(ongoingKey, activeId.current)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -857,7 +874,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // The professor's scene: at the board while he teaches, tea (or chess, in a quiz) on your turn
   const yourTurnScene: ProfessorPose = mode === 'teach' || mode === 'review' ? 'tea' : 'chess'
   const pose: ProfessorPose = busy ? 'board' : cheer ? 'eureka' : finished ? 'happy' : currentAsk ? yourTurnScene : 'idle'
-  useStudying('view', finished ? null : { pose: busy ? 'board' : currentAsk ? yourTurnScene : 'board', label: `${MODE_LABEL[mode] ?? 'Session'}: ${topic}` })
+  useStudying('view', finished ? null : { pose: busy ? 'board' : currentAsk ? yourTurnScene : 'board', label: `${modeLabel(mode, options) ?? 'Session'}: ${topic}` })
   useEffect(() => {
     // A check is ticked off once what it found is saved (below), not just because it ended
     if (finished && !options?.placement) finishAgendaItem(topic)
@@ -903,7 +920,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       const right = grades.filter((g) => g.verdict === 'correct').length
       const date = new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
       const lines = [
-        `> [!summary] ${MODE_LABEL[mode]}, ${date}${grades.length ? `: ${right} of ${grades.length} right` : ''}`,
+        `> [!summary] ${modeLabel(mode, options)}, ${date}${grades.length ? `: ${right} of ${grades.length} right` : ''}`,
         ...summary.trim().split('\n').map((l) => `> ${l}`),
         ...(savedCards.size ? [`>`, `> Flashcards made: ${savedCards.size}`] : [])
       ]
@@ -1598,10 +1615,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           <span className="session-prof" title={busy ? 'Teaching' : currentAsk ? 'Your turn' : ''}>
             <Professor state={pose} size={20} />
           </span>
-          <span className="crumb">{MODE_LABEL[mode]}</span>
+          <span className="crumb">{modeLabel(mode, options)}</span>
           <Icon name="chevron" size={11} />
           <span className="crumb current">{topic}</span>
-          {scopeLabel && scopeLabel !== topic && (
+          {options?.curiosity ? (
+            <span className="muted page-count">came up in {options.curiosity.from.topic}</span>
+          ) : scopeLabel && scopeLabel !== topic && (
             <span className="muted page-count">
               {tide && 'path' in scope && <AreaMark area={scope.path} size={14} />}
               from {scopeLabel}
@@ -1777,7 +1796,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             <header className="td-lesson-head">
               <h1>{topic}</h1>
               <p>
-                <span>{MODE_LABEL[mode]}</span>
+                <span>{modeLabel(mode, options)}</span>
                 {scopeLabel && scopeLabel !== topic && (
                   <span className="td-area">
                     {'path' in scope && <AreaMark area={scope.path} size={14} />}
@@ -1820,7 +1839,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           {warm && (
             <WarmUp
               set={warm}
+              onProgress={(results) => setWarmStage({ state: 'now', cards: warm.cards.length, done: results.length, held: results.filter((r) => r.verdict === 'correct').length })}
               onDone={(results, skipped) => {
+                setWarmStage({ state: skipped || !results.length ? 'skipped' : 'done', cards: warm.cards.length, done: results.length, held: results.filter((r) => r.verdict === 'correct').length })
                 warmDone.current?.(warmupNote(warm, results, skipped))
                 warmDone.current = null
               }}
@@ -1872,6 +1893,13 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                       <span className="s-switch-say">Let’s try this a different way</span>
                       <span className="s-switch-what">{FORMAT_LABEL[switched]}</span>
                     </div>
+                  </Fragment>
+                )
+              if (i === sureAt)
+                return (
+                  <Fragment key={i}>
+                    <YouBeside>{bubble}</YouBeside>
+                    <SureAfter onPick={(c) => setTurns((ts) => ts.map((x, k) => (k === i ? { ...x, content: withConfidence(x.content, c) } : x)))} onDismiss={() => setSureDismissed(i)} />
                   </Fragment>
                 )
               return isHint ? bubble : <YouBeside key={i}>{bubble}</YouBeside>
@@ -2373,6 +2401,23 @@ function SideTabs({ tab, onTab }: { tab: 'canvas' | 'notes'; onTab(t: 'canvas' |
       </button>
       <button role="tab" aria-selected={tab === 'notes'} className={tab === 'notes' ? 'on' : ''} onClick={() => onTab('notes')}>
         Notes
+      </button>
+    </div>
+  )
+}
+
+/** "How sure were you?" after an answer sent without saying: one tap, or dismissed (it's then inferred, marked as such) */
+function SureAfter({ onPick, onDismiss }: { onPick(c: 1 | 2 | 3): void; onDismiss(): void }) {
+  return (
+    <div className="s-sure" role="group" aria-label="How sure were you?">
+      <span>How sure were you?</span>
+      {CONFIDENCE.map((c) => (
+        <button key={c.value} className="s-sure-chip" onClick={() => onPick(c.value)}>
+          {c.label}
+        </button>
+      ))}
+      <button className="icon-btn small s-sure-x" onClick={onDismiss} title="Not now: Tide infers it from how you answered, marked as inferred" aria-label="Dismiss">
+        <Icon name="x" size={12} />
       </button>
     </div>
   )

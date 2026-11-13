@@ -133,6 +133,40 @@ export interface MockTurn {
 }
 
 /** Which question of a quant or behavioural mock, with the candidate's answer */
+/**
+ * A running mock's work as the window holds it (the code, the canvas and notes, the answers, the
+ * conversation with the interviewer): kept in main beside the mock, so it can move to a window of
+ * its own (or back) and carry on exactly where it was.
+ */
+export interface MockLiveState {
+  code?: string
+  canvas?: Canvas
+  notes?: string
+  answers?: MockAnswer[]
+  /** The exam's answers by part (components/mock/MockExam ExamAnswers) */
+  examAnswers?: Record<string, unknown>
+  lines?: { role: 'candidate' | 'interviewer'; text: string }[]
+  hints?: number
+}
+
+/** Bigger than this (a canvas full of pasted images) isn't kept: the window still has it */
+export const MOCK_KEEP_MAX = 4_000_000
+
+/** A live state worth keeping: the known fields only, and not too big */
+export function keepableLive(s: unknown): MockLiveState | null {
+  if (!s || typeof s !== 'object') return null
+  const v = s as Record<string, unknown>
+  const out: MockLiveState = {}
+  if (typeof v.code === 'string') out.code = v.code
+  if (v.canvas && typeof v.canvas === 'object') out.canvas = v.canvas as Canvas
+  if (typeof v.notes === 'string') out.notes = v.notes
+  if (Array.isArray(v.answers)) out.answers = v.answers as MockAnswer[]
+  if (v.examAnswers && typeof v.examAnswers === 'object') out.examAnswers = v.examAnswers as Record<string, unknown>
+  if (Array.isArray(v.lines)) out.lines = (v.lines as MockLiveState['lines'])!.filter((l) => l && (l.role === 'candidate' || l.role === 'interviewer') && typeof l.text === 'string')
+  if (typeof v.hints === 'number') out.hints = v.hints
+  return JSON.stringify(out).length > MOCK_KEEP_MAX ? null : out
+}
+
 export interface MockAnswer {
   id: string
   text: string

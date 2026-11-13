@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChatScope, ReviewGrade, ReviewStats, StudyCard } from '@shared/types'
 import { fileTitle, useApp } from '../state'
 import { renderMarkdown } from '../lib/markdown'
+import { breakSignals } from '../lib/breaks'
+import { flashcardBoundary } from '@shared/breakPlanner'
 import { Icon } from './Icon'
 import { PixelScene } from './PixelScene'
 import { PillToggle } from './PromptBox'
@@ -225,6 +227,10 @@ export function StudyView({ scope: initialScope }: { scope: ChatScope }) {
       await window.tide.study.review(card.id, g, card.path)
       setFlipped(false)
       setTyped('')
+      // A block of practice done (the queue emptied, or another twenty cards): a moment the break planner can use
+      const left = (queue?.length ?? 1) - (g === 'again' ? 0 : 1)
+      const ended = flashcardBoundary(done + 1, left)
+      if (ended) breakSignals.boundary('practice', ended)
       setDone((d) => d + 1)
       // "Again" puts the card back a few places so it comes up again this session
       setQueue((q) => {
@@ -234,7 +240,7 @@ export function StudyView({ scope: initialScope }: { scope: ChatScope }) {
         return [...rest.slice(0, at), first, ...rest.slice(at)]
       })
     },
-    [card]
+    [card, queue, done]
   )
 
   useEffect(() => {

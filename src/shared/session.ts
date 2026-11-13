@@ -327,6 +327,13 @@ export function lessonCanvasPath(scope: ChatScope, topic: string): string {
   return `${dir || 'Lessons'}/${topic.replace(/[\\/:*?"<>|#^[\]]+/g, ' ').trim().slice(0, 60)} (map).canvas`
 }
 
+/**
+ * A lighter plan, for lessons not taught in problem sets (a walkthrough, a dialogue, a refresher):
+ * it gives them the lesson map's track too (shared/lessonMap). No "done when" needed
+ */
+export const lightPlan = (shape: string, first = false) =>
+  `${first ? 'Before your first problem' : 'PLAN, in the same message as your first teaching'}, write a short plan of the lesson (${shape}), so the student can see where it is going: <plan>\nGoal: By the end you can …\n1. Title | what it covers | 4 min\n</plan>`
+
 /** How a project frames a lesson */
 function projectRules(p: NonNullable<NonNullable<SessionSetup['options']>['project']>): string {
   return p.kind === 'build'
@@ -404,7 +411,7 @@ export function sessionInstructions(setup: SessionSetup): string {
 
 function baseInstructions({ mode, topic, options }: SessionSetup): string {
   const difficulty = options?.difficulty ?? 'normal'
-  if (mode === 'teach' && options?.refresh) return `Topic: ${topic}.\n${REFRESH_RULES}\n`
+  if (mode === 'teach' && options?.refresh) return `Topic: ${topic}.\n${REFRESH_RULES}\n- ${lightPlan('one step per problem, 2 or 3 in all', true)}\n${MAP_RULES}\n`
   if (mode === 'teach' && options?.curiosity) return `${curiosityRules(topic, options.curiosity)}\n`
   if (mode === 'teach' && options?.strategy && options.strategy !== 'problems' && !options.retest) {
     // Taught another way than problem sets: its own script, so the small model can't drift back
@@ -422,9 +429,11 @@ function baseInstructions({ mode, topic, options }: SessionSetup): string {
       : ''
     return `You are running a TEACH session on: ${topic}.
 1. PROBE: ask one or two short questions, one at a time, to find what they already know. Don't teach yet.
-2. Then teach it this way: ${flow ? 'trace it step by step like following one real record through the system.' : STRATEGY_RULES[options.strategy]}
+2. ${lightPlan(flow ? 'one step per stage of the flow, grouping small stages so there are 3 to 5' : options.strategy === 'dialogue' ? 'one step per part of the question you will think through together' : '3 to 5 steps')}
+3. Then teach it this way: ${flow ? 'trace it step by step like following one real record through the system.' : STRATEGY_RULES[options.strategy]}
    ${flow || (first[options.strategy] ?? '')}
-3. Grade every answer. Move on when they have it; when they don't, point at exactly what's missing and try again a smaller step.
+${MAP_RULES}
+4. Grade every answer. Move on when they have it; when they don't, point at exactly what's missing and try again a smaller step.
 When you explain an idea, also write it for their notes: <note>the key idea in 1 to 5 lines of Markdown (up to 12 for notation, a formula or a worked example), worth rereading later</note>.${options?.project ? projectRules(options.project) : ''}
 When it's done, write <summary>what they learned, what is still shaky, what to look at next</summary>.`
   }
@@ -562,6 +571,9 @@ export const MODE_LABEL: Record<SessionMode, string> = {
   probe: 'Test my thinking',
   recall: 'Explain from memory'
 }
+
+/** What a session is called in its header: a side lesson from Explore later says so, not "Teach me" */
+export const modeLabel = (mode: SessionMode, options?: SessionSetup['options']) => (mode === 'teach' && options?.curiosity ? 'Side lesson' : MODE_LABEL[mode])
 
 /** The opening message that starts a session */
 export function openingMessage({ mode, topic, options }: SessionSetup): string {

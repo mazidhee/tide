@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { rubricLabel, RUBRIC_IDS, type AdjustmentState, type LessonReview, type TeachingView } from '@shared/teachingAdjust'
-import { CONFIDENCE_LABEL, type Calibration, type MisconceptionRecord, type WeekHints } from '@shared/teachingQuality'
+import { CALIBRATION_MIN, CONFIDENCE_LABEL, type Calibration, type MisconceptionRecord, type WeekHints } from '@shared/teachingQuality'
 import { useApp } from '../../state'
 
 /**
@@ -51,7 +51,7 @@ function TeachingBody({ data, setData }: { data: TeachingView; setData(d: Teachi
       </p>
       <Adjustments list={data.adjustments} onChange={setData} />
       <div className="tq-pair">
-        <CalibrationCard c={m.calibration} />
+        <CalibrationCard stated={m.calibration} inferred={m.inferredCalibration} />
         <HintsCard weeks={m.hintWeeks} share={m.hints.share} right={m.hints.right} hinted={m.hints.hinted} dontKnow={m.hints.dontKnow} />
       </div>
       <Misconceptions list={m.misconceptions} />
@@ -183,13 +183,20 @@ function TableToggle({ table, set }: { table: boolean; set(t: boolean): void }) 
 
 // ---------- Calibration ----------
 
-function CalibrationCard({ c }: { c: Calibration }) {
+function CalibrationCard({ stated, inferred }: { stated: Calibration; inferred?: Calibration }) {
   const [table, setTable] = useState(false)
+  // What you said, and what was inferred where you said nothing: shown apart, never mixed
+  const both = !!inferred?.answers
+  const [which, setWhich] = useState<'stated' | 'inferred'>(both && stated.answers < CALIBRATION_MIN ? 'inferred' : 'stated')
+  const c = which === 'inferred' && inferred ? inferred : stated
+  const guessed = which === 'inferred'
   const say =
     c.verdict === 'too-few'
-      ? c.answers
-        ? `Only ${plural(c.answers, 'answer')} came with how sure you were. Pick Guessing, Unsure or Sure when you answer, and this fills in.`
-        : 'None of your answers came with how sure you were yet. Pick Guessing, Unsure or Sure when you answer, and this fills in.'
+      ? guessed
+        ? `Only ${plural(c.answers, 'answer')} to infer from so far.`
+        : c.answers
+          ? `Only ${plural(c.answers, 'answer')} came with how sure you were. Tap Guessing, Unsure or Sure under “How sure were you?” after you answer, and this fills in.`
+          : 'None of your answers came with how sure you were yet. Tap Guessing, Unsure or Sure under “How sure were you?” after you answer, and this fills in.'
       : c.verdict === 'overconfident'
         ? `You’re overconfident: right ${pct(Math.abs(c.bias!))} less often than you claim.`
         : c.verdict === 'underconfident'
@@ -206,11 +213,21 @@ function CalibrationCard({ c }: { c: Calibration }) {
   }))
   return (
     <Card
-      title="How sure you were, and how often you were right"
+      title={guessed ? 'How sure you seemed, and how often you were right' : 'How sure you were, and how often you were right'}
       id="tq-cal"
       aside={
-        c.answers > 0 && (
+        (c.answers > 0 || both) && (
           <>
+            {both && (
+              <div className="segmented text tq-which" role="radiogroup" aria-label="Whose confidence">
+                <button role="radio" aria-checked={!guessed} className={guessed ? '' : 'on'} onClick={() => setWhich('stated')}>
+                  You said
+                </button>
+                <button role="radio" aria-checked={guessed} className={guessed ? 'on' : ''} onClick={() => setWhich('inferred')}>
+                  Inferred
+                </button>
+              </div>
+            )}
             <ul className="tq-legend" aria-label="Key">
               <li>
                 <i className="sw-bar" />
@@ -227,6 +244,7 @@ function CalibrationCard({ c }: { c: Calibration }) {
       }
     >
       <p className="tq-say">
+        {guessed && <span className="tq-meta">Inferred on {plural(c.answers, 'answer')} you didn’t rate, from hedging words (“I think”, “maybe”) and how long each answer took. A rough guide, kept apart from what you said. </span>}
         {say}
         {c.brier !== null && c.answers >= 3 && <span className="tq-meta"> Brier score {c.brier.toFixed(2)} (0 is perfect; always saying 50% scores 0.25).</span>}
       </p>
@@ -234,7 +252,7 @@ function CalibrationCard({ c }: { c: Calibration }) {
         <table className="tq-table">
           <thead>
             <tr>
-              <th>You said</th>
+              <th>{guessed ? 'You seemed' : 'You said'}</th>
               <th className="r">Answers</th>
               <th className="r">Right</th>
               <th className="r">Claims</th>

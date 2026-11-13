@@ -80,6 +80,40 @@ function shareRhythm() {
 }
 const setUi = (u: Ui) => ((ui = u), emit())
 
+// ---------- One break for every window ----------
+// Every Tide window (pop-outs too) runs the planner. The first to decide on a break asks main for
+// it and starts it; the others are refused and follow that break, so it's taken and logged once.
+
+let claiming = false
+let followUntil = 0
+const claim = async (): Promise<boolean> => {
+  try {
+    return window.tide?.windows?.claimBreak ? await window.tide.windows.claimBreak() : true
+  } catch {
+    return true
+  }
+}
+/** The break just started here, for the other windows to follow */
+function shareBreak() {
+  try {
+    window.tide?.windows?.relay?.('breaks', state)
+  } catch {
+    // one window only
+  }
+}
+/** Another window started a break: this one shows the same one */
+export function followBreak(s: BlockState) {
+  if (!s || typeof s !== 'object' || !s.breakUntil) return
+  followUntil = Date.now() + 30_000
+  setUi({})
+  set({ ...s })
+}
+try {
+  window.tide?.windows?.onRelay?.((m) => m.channel === 'breaks' && followBreak(m.payload as BlockState))
+} catch {
+  // tests, outside Tide
+}
+
 // Another window changed it
 if (typeof window !== 'undefined')
   window.addEventListener('storage', (e) => {
@@ -244,11 +278,24 @@ export function useBreaks(ctx: Studying | null, settings: BreakSettings) {
         s = headsUpGiven(s)
         setUi({ ...ui, headsUp: d.line })
       } else if (d.kind === 'offer' && !ui.offer) setUi({ ...ui, offer: { studied: Math.round(d.studied), minutes: d.minutes, line: d.line }, headsUp: undefined })
-      else if (d.kind === 'take') {
-        const r = startBreak(s, p, now, { minutes: d.minutes, studied: d.studied, line: d.line, fatigue: d.fatigue, why: d.why, skippable: d.skippable })
-        s = r.state
-        p = r.profile
-        setUi({})
+      else if (d.kind === 'take' && !claiming && now >= followUntil) {
+        // Only one window starts it (main/popout claimBreak); the others follow that one's break
+        claiming = true
+        const take = { minutes: d.minutes, studied: d.studied, line: d.line, fatigue: d.fatigue, why: d.why, skippable: d.skippable }
+        void claim().then((mine) => {
+          claiming = false
+          if (!mine) {
+            // Another window started it: its state arrives by relay (or storage); don't start another
+            followUntil = Date.now() + 30_000
+            return
+          }
+          const at = Date.now()
+          if (onBreak(state, at)) return
+          const r = startBreak(settle(state, at), profile, at, take)
+          setUi({})
+          set(r.state, r.profile)
+          shareBreak()
+        })
       }
       const nowOn = onBreak(s, now)
       if (wasOnBreak && !nowOn && s.welcome && document.hidden) {

@@ -799,6 +799,10 @@ export interface TideApi {
     history(): Promise<import('./mocks').MockRecord[]>
     record(id: string): Promise<unknown>
     examTopics(): Promise<string[]>
+    /** The window's work on a running mock, kept in main so it can move to another window */
+    keep(id: string, state: import('./mocks').MockLiveState): Promise<boolean>
+    /** A running mock taken over by this window (a pop-out, or back in the main one): null once it has ended */
+    resume(id: string): Promise<{ started: import('../main/mocks').MockStarted; state: import('./mocks').MockLiveState } | null>
     onEvent(cb: (e: { id: string; delta: string }) => void): () => void
   }
   /** The morning workout (shared/workout): ratings, titles and the log, kept in the vault under .tide/ */
@@ -1032,7 +1036,7 @@ export interface TideApi {
   }
   /** What this window is studying, for the professor in the menu bar; null when it stops */
   /** Commands from the menu bar's menu: open a view or today's item, start a focus timer */
-  onTrayCommand(cb: (c: { type: 'view'; view: unknown } | { type: 'agenda'; date: string; index: number } | { type: 'focus'; minutes: number }) => void): () => void
+  onTrayCommand(cb: (c: { type: 'view'; view: unknown } | { type: 'agenda'; date: string; index: number } | { type: 'focus'; minutes: number } | { type: 'remind'; title: string; body: string; view: unknown }) => void): () => void
   studying(status: { pose: import('./professorArt').ProfessorPose; label: string; since: number; until?: number } | null): Promise<void>
   windows: {
     /**
@@ -1060,6 +1064,8 @@ export interface TideApi {
     /** A small message to every other window */
     relay(channel: string, payload: unknown): void
     onRelay(cb: (m: { channel: string; payload: unknown }) => void): () => void
+    /** This window may start the break its planner decided on: false when another window just did (it follows that one) */
+    claimBreak(): Promise<boolean>
   }
   cloud: {
     /** Which providers have a saved key (the keys themselves never leave the main process) */

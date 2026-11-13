@@ -16,6 +16,7 @@ import { ASKED, GO_ON, type Block } from './session'
 import { isMoveOn, type PlanStep } from './lessonPlan'
 import { asksToMoveOn } from './lessonRepair'
 import { ledWalk } from './sourceLed'
+import { warmupStageOf, type WarmupStage } from './warmup'
 
 export type StepState = 'done' | 'skipped' | 'now' | 'next'
 
@@ -58,7 +59,10 @@ export interface LessonMap {
   steps: MapStep[]
   /** The step being worked on (0-based); steps.length once every step is closed */
   current: number
-  phase: 'probe' | 'steps' | 'recap' | 'finished'
+  /** warmup: the warm-up cards are on screen, before the lesson's first word */
+  phase: 'warmup' | 'probe' | 'steps' | 'recap' | 'finished'
+  /** The warm-up before step 1, when the lesson had one: the track's first stage */
+  warmup?: WarmupStage
   /** How far through the current step (0 to 1) */
   fill: number
   /** Checks left in the current step, as the tutor said or as the rule implies */
@@ -106,8 +110,11 @@ function activeMinutes(turns: MapTurn[], from: number, to: number): number | und
   return seen ? total : undefined
 }
 
-export function lessonMap(turns: MapTurn[], blocks: (Block[] | null)[], opts: { finished?: boolean; now?: number } = {}): LessonMap {
+export function lessonMap(turns: MapTurn[], blocks: (Block[] | null)[], opts: { finished?: boolean; now?: number; warmup?: WarmupStage | null } = {}): LessonMap {
   const map: LessonMap = { steps: [], current: 0, phase: 'probe', fill: 0, questions: 0, reported: false, dividers: new Map(), purposes: new Map() }
+  // The warm-up: as the window has it while it runs, else as the opening message says it went
+  const warm = opts.warmup ?? (turns[0]?.role === 'user' ? warmupStageOf(turns[0].content) : null)
+  if (warm) map.warmup = warm
   // Reported if any reply moved a step itself
   map.reported = blocks.some((bs) => bs?.some((b) => b.kind === 'progress' && (b.report.step || b.report.passed || b.report.skipped)))
   let planned = ''
@@ -250,6 +257,11 @@ export function lessonMap(turns: MapTurn[], blocks: (Block[] | null)[], opts: { 
 
   if (opts.finished) map.phase = 'finished'
   else if (map.phase === 'steps' && map.current >= map.steps.length) map.phase = 'recap'
+  // Still on the warm-up's cards: the lesson hasn't said a word yet
+  else if (map.phase === 'probe' && warm?.state === 'now') {
+    map.phase = 'warmup'
+    map.fill = warm.cards ? Math.min(0.92, warm.done / warm.cards) : 0
+  }
 
   // ---- Where the current step is ----
   const cur = map.steps[map.current]
@@ -306,7 +318,7 @@ const lastAsk = (purposes: Map<number, Purpose>) => Math.max(-1, ...purposes.key
  */
 export function estimate(map: Pick<LessonMap, 'steps' | 'current' | 'phase' | 'checksLeft'>): { total?: number; perStep: (number | undefined)[]; pace: number } {
   const perStep: (number | undefined)[] = map.steps.map(() => undefined)
-  if (map.phase === 'finished' || map.phase === 'probe') return { total: undefined, perStep, pace: DEFAULT_PACE }
+  if (map.phase === 'finished' || map.phase === 'probe' || map.phase === 'warmup') return { total: undefined, perStep, pace: DEFAULT_PACE }
   const closed = map.steps.filter((s) => s.state === 'done' || s.state === 'skipped')
   // Minutes per check: this lesson's, once there are a few, else the plan's guess per check
   const timed = map.steps.filter((s) => s.spent !== undefined && s.checks > 0)

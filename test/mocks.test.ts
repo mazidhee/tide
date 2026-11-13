@@ -564,3 +564,32 @@ describe('a mock from start to debrief', () => {
     expect(s.quality).toBe(3)
   })
 })
+
+describe('a running mock moves to its own window', () => {
+  it('main keeps the work as the window sends it, and a new window resumes exactly there', async () => {
+    standIns({ claude: false })
+    const m = await M.startMock({ mode: 'design', minutes: 30 })
+    expect(M.resumeMock(m.id)).toEqual({ started: m, state: {} })
+    const canvas = { nodes: [{ id: 'a', type: 'text', text: 'API', x: 0, y: 0, width: 100, height: 40 }], edges: [] }
+    expect(M.keepMock(m.id, { canvas, notes: 'Peak 2,000/s', lines: [{ role: 'candidate', text: 'Start with requirements' }, { role: 'bogus', text: 'x' }], hints: 1, stray: 'ignored' })).toBe(true)
+    const r = M.resumeMock(m.id)!
+    expect(r.started.id).toBe(m.id)
+    expect(r.started.startedAt).toBe(m.startedAt)
+    expect(r.state).toEqual({ canvas, notes: 'Peak 2,000/s', lines: [{ role: 'candidate', text: 'Start with requirements' }], hints: 1 })
+  })
+
+  it('an ended mock has nothing to resume, and a state too big to keep is refused', async () => {
+    standIns({ claude: false })
+    const m = await M.startMock({ mode: 'coding', minutes: 30, ref: 'two-sum' })
+    expect(M.keepMock(m.id, { code: 'x'.repeat(5_000_000) })).toBe(false)
+    M.cancelMock(m.id)
+    expect(M.resumeMock(m.id)).toBeNull()
+    expect(M.keepMock(m.id, { code: 'def f(): pass' })).toBe(false)
+  })
+
+  it('pops out under the same key as the mock it is, so the main window brings it forward', async () => {
+    const { popKeyOf, popKindOf } = await import('../src/shared/popout')
+    expect(popKindOf({ kind: 'mock', mode: 'design', live: 'design-1' })).toBe('mock')
+    expect(popKeyOf({ kind: 'mock', mode: 'design', live: 'design-1' })).toBe(popKeyOf({ kind: 'mock', mode: 'design' }))
+  })
+})

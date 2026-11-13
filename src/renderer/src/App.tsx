@@ -222,6 +222,8 @@ export default function App() {
       window.tide.onTrayCommand(async (c) => {
         if (c.type === 'view') app.setView(c.view as typeof view)
         else if (c.type === 'focus') startFocus(c.minutes)
+        // A reminder macOS wouldn't show (notifications off for Tide): said here instead
+        else if (c.type === 'remind') app.toast(`${c.title}: ${c.body}`, { action: { label: 'Start', run: () => app.setView(c.view as typeof view) } })
         else {
           const week = await window.tide.coach.week(c.date).catch(() => null)
           const it = todayItems(week, c.date)[c.index]
@@ -480,7 +482,7 @@ export default function App() {
   else if (view.kind === 'code') main = <CodeView key={`${view.root ?? view.path ?? 'code'}:${view.nonce ?? ''}`} path={view.path} root={view.root} file={view.file} home={view.home} />
   else if (view.kind === 'ipynb') main = <JupyterView key={view.abs} refIn={{ abs: view.abs }} />
   else if (view.kind === 'help') main = <HelpView section={view.section} />
-  else if (view.kind === 'mock') main = <MockView key={`${view.mode}:${view.review ?? ''}:${view.nonce ?? ''}`} mode={view.mode} review={view.review} />
+  else if (view.kind === 'mock') main = <MockView key={`${view.mode}:${view.review ?? ''}:${view.nonce ?? ''}:${view.live ?? ''}`} mode={view.mode} review={view.review} live={view.live} />
   else if (view.kind === 'exam') main = <ExamView key={`${view.topic}:${view.nonce ?? ''}`} scope={view.scope} topic={view.topic} options={view.options} view={view} />
   else if (view.kind === 'settings') main = <SettingsView section={view.section} />
   else main = <Home dueCount={due.due} cardCount={due.total} />

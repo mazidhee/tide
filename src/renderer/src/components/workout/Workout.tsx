@@ -4,6 +4,8 @@
  * the celebration at the end; and the compact card on Home.
  */
 import { usePopOutSurface } from '../../lib/popout'
+import { breakSignals } from '../../lib/breaks'
+import { workoutBoundary } from '@shared/breakPlanner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReviewGrade, StudyCard } from '@shared/types'
 import { addDays, dayKey, REMINDER_HOUR, type Reminder } from '@shared/mentalMaths'
@@ -36,7 +38,8 @@ import {
   type RoundEvents,
   type RoundId,
   type RatedRound,
-  type WorkoutState
+  type WorkoutState,
+  clockWords
 } from '@shared/workout'
 import { markItem, type Mark, type WorkoutItem } from '@shared/workoutItems'
 import { useApp } from '../../state'
@@ -728,6 +731,8 @@ export function WorkoutView({ start, championship: wantChamp }: { start?: boolea
     async (round: number, items: ItemResult[], combo?: number) => {
       const id = ROUNDS[round].id
       setRoundResults((r) => ({ ...r, [id]: items }))
+      // Each round is a block of practice: a moment the break planner can use
+      if (items.length) breakSignals.boundary('practice', workoutBoundary(round + 1, ROUNDS.length, round >= ROUNDS.length - 1))
       setSaving(true)
       try {
         const out = await window.tide.workout.logRound({ morning, round: id, championship: champ, items, ...(combo !== undefined ? { combo } : {}) })
@@ -818,7 +823,7 @@ function RoundIntro({ round, state, championship, last, lastRound, onStart }: { 
       <p className="wo-meta">
         {round === 'recall'
           ? `Up to ${plan.count} cards due from your lessons, on their spaced schedule.`
-          : `${plan.seconds ? `${plan.seconds / 60} minutes on the clock, up to ${plan.count} questions` : `${plan.count} puzzles, no clock`}. Each answer moves the rating; the next question follows it${championship ? ', a step harder today' : ''}.`}
+          : `${plan.seconds ? `${clockWords(plan.seconds)} on the clock, up to ${plan.count} questions` : `${plan.count} puzzles, no clock`}. Each answer moves the rating; the next question follows it${championship ? ', a step harder today' : ''}.`}
       </p>
       <button className="btn primary" autoFocus onClick={onStart}>
         Start <kbd>↵</kbd>
@@ -900,7 +905,7 @@ function Celebration({ state, events, results, onDone }: { state: WorkoutState; 
             return (
               <span key={id} className="wo-new-badge">
                 <Sprite rows={BADGE_ART[id]} px={3} />
-                New badge: <b>{bd.name}</b> · {bd.why.toLowerCase()}
+                New badge: <b>{bd.name}</b> · {bd.why.replace(/^[A-Z](?![A-Z])/, (c) => c.toLowerCase())}
               </span>
             )
           })}

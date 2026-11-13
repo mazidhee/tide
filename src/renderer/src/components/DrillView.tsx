@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DRILLS, OP_LABEL, isCorrect, makeQuestion, rng, type DrillKind, type DrillOp, type DrillQuestion, type DrillResult } from '@shared/drills'
 import { useApp } from '../state'
+import { breakSignals } from '../lib/breaks'
 import { Icon } from './Icon'
 import { PopOutButton } from './PopOutButton'
 
@@ -50,6 +51,8 @@ export function DrillView({ kind }: { kind: DrillKind }) {
     if (result) return
     const perOp = Object.fromEntries(Object.entries(times.current).map(([op, ts]) => [op, Math.round((ts!.reduce((x, y) => x + y, 0) / ts!.length) * 10) / 10])) as DrillResult['perOp']
     const r = { kind, correct: c, attempted: a, seconds: Math.round(startedAt ? (Date.now() - startedAt) / 1000 : 0), perOp }
+    // A drill done is a block of practice ended: a moment the break planner can use
+    if (a > 0) breakSignals.boundary('practice', 'the drill')
     window.tide.practice
       .logDrill(r)
       .then((saved) => {

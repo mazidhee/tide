@@ -892,6 +892,8 @@
 }
 .wo-party-msg {
   position: absolute;
+  /* Above the balloons and confetti: they drift behind the words, never over them */
+  z-index: 1;
   inset: 26px 16px auto;
   display: flex;
   flex-direction: column;
@@ -916,7 +918,7 @@
   margin: 0;
   padding: 4px 12px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--bg-inset) 82%, transparent);
+  background: color-mix(in srgb, var(--bg-inset) 94%, transparent);
   max-width: 520px;
   color: var(--ink-soft);
   font-size: 14.5px;

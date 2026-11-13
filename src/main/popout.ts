@@ -15,6 +15,7 @@ import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname } from 'path'
 import { placeWindow, popInfoOf, windowTitle, type PopInfo, type PopKind, type PopView, type Rect } from '@shared/popout'
+import { claimBreak } from '@shared/breaks'
 
 export interface PopoutDeps {
   /** The main window, made again if it was closed */
@@ -208,6 +209,14 @@ export function relay(fromId: number, channel: string, payload: unknown) {
   for (const w of BrowserWindow.getAllWindows()) if (live(w) && w.webContents.id !== fromId) w.webContents.send('windows:relayed', { channel, payload })
 }
 
+/** When a window last started a break: the others follow it rather than start their own (shared/breaks claimBreak) */
+let breakGranted = 0
+export function claimBreakFor(now = Date.now()): boolean {
+  const r = claimBreak(breakGranted, now)
+  breakGranted = r.lastGranted
+  return r.granted
+}
+
 export function registerPopouts(d: PopoutDeps) {
   deps = d
   loadBounds()
@@ -220,6 +229,7 @@ export function registerPopouts(d: PopoutDeps) {
   ipcMain.handle('window:closeNow', (e) => closeNow(e.sender.id))
   ipcMain.handle('window:close', (e) => BrowserWindow.fromWebContents(e.sender)?.close())
   ipcMain.on('windows:relay', (e, channel: string, payload: unknown) => relay(e.sender.id, String(channel), payload))
+  ipcMain.handle('windows:claimBreak', () => claimBreakFor())
 }
 
 /** The View menu's two items: out to a window of its own (⌥⌘N), and back in */
@@ -243,6 +253,7 @@ export function resetPopouts() {
   quitting = false
   deps = null
   bounds = {}
+  breakGranted = 0
 }
 
 export const boundsFor = (kind: PopKind) => bounds[kind]

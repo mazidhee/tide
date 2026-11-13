@@ -760,7 +760,11 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   // ready in main/noteImages, ride on this message as image blocks: the tutor and the marker see them
   const pictures: ImageInput[] = images.map((im) => im.image)
   const withPictures = (words: string) => userContent(words, pictures)
-  if (pictures.length) emit({ id: req.id, type: 'step', step: { id: nextStepId(), kind: 'helper', label: `Claude can see ${pictures.length === 1 ? 'your picture' : `your ${pictures.length} pictures`}`, status: 'done', depth: 0 } })
+  const pages = images.filter((im) => /\.pdf#page=\d+$/i.test(im.path))
+  const yours = pictures.length - pages.length
+  if (yours) emit({ id: req.id, type: 'step', step: { id: nextStepId(), kind: 'helper', label: `Claude can see ${yours === 1 ? 'your picture' : `your ${yours} pictures`}`, status: 'done', depth: 0 } })
+  // Pictures inside PDFs (main/pdfFigures): the figures on the pages it's teaching from
+  if (pages.length) emit({ id: req.id, type: 'step', step: { id: nextStepId(), kind: 'helper', label: `Claude can see the figures on ${pages.map((p) => `page ${p.path.split('#page=')[1]}`).join(' and ')}`, status: 'done', depth: 0 } })
 
   // A query or a final answer is checked exactly first (the lab, SymPy), as on Gemma's lessons
   const answering = isAnswer(req, said)

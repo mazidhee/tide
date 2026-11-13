@@ -93,6 +93,7 @@ export const USAGE_JOBS: Record<string, string> = {
   chat: 'Conversation',
   draft: 'Long draft',
   background: 'Background job',
+  warmup: 'Warm-up rerank',
   ...Object.fromEntries(Object.entries(JOB_ROUTES).map(([k, v]) => [k, v.label])),
   other: 'Other'
 }
@@ -388,7 +389,34 @@ const FALLBACK_WORDS: Record<string, string> = {
   cloud: 'A cloud model couldn’t take it'
 }
 
-export const fallbackLabel = (r: string) => FALLBACK_WORDS[r] ?? r
+/** A cloud provider's failure as the log says it: its FailCode (main/cloud), marked as the cloud's */
+export const cloudFailWord = (why: string) => `cloud-${why}`
+
+const CLOUD_FAIL_WORDS: Record<string, string> = {
+  rate: 'A cloud model was rate limited',
+  minute: 'A cloud model’s per-minute limit was used up',
+  silent: 'A cloud model didn’t start answering',
+  slow: 'A cloud model took too long',
+  midstream: 'A cloud model took too long mid-answer',
+  network: 'Couldn’t reach a cloud model',
+  broken: 'A cloud model’s answer broke off',
+  empty: 'A cloud model sent back nothing',
+  spent: 'A cloud model spent its tokens thinking',
+  cancelled: 'A cloud call was stopped',
+  'gave-up': 'A cloud call was given up on',
+  'tool-loop': 'A cloud model went round in circles'
+}
+
+export const fallbackLabel = (r: string) => {
+  if (FALLBACK_WORDS[r]) return FALLBACK_WORDS[r]
+  const cloud = r.match(/^cloud-(.+)$/)?.[1]
+  if (!cloud) return r
+  if (CLOUD_FAIL_WORDS[cloud]) return CLOUD_FAIL_WORDS[cloud]
+  const http = cloud.match(/^http-(\d+)$/)?.[1]
+  if (http === '401' || http === '403') return 'A cloud key was refused'
+  if (http === '404') return 'A cloud model wasn’t found'
+  return http ? `A cloud model answered HTTP ${http}` : `A cloud call failed (${cloud})`
+}
 
 export interface ReasonRow {
   reason: string

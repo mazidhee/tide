@@ -376,3 +376,22 @@ export function updateBaseline(b: TopicBaseline | undefined, a: AnswerSignal): T
     ...(a.latencyMs ? { latency: prev.latency ? Math.round(prev.latency * 0.8 + a.latencyMs * 0.2) : a.latencyMs } : prev.latency ? { latency: prev.latency } : {})
   }
 }
+
+// ---------- Practice blocks ----------
+
+/** Flashcards in a row that make one block of practice */
+export const FLASHCARD_BLOCK = 20
+
+/**
+ * Where a flashcard session ends a block of practice, for the break planner: the queue emptied,
+ * or another FLASHCARD_BLOCK cards done in a long session. The label is said on the break screen;
+ * null when this card isn't the end of one.
+ */
+export function flashcardBoundary(done: number, left: number, every = FLASHCARD_BLOCK): string | null {
+  if (done <= 0) return null
+  if (left <= 0) return `${done} flashcard${done === 1 ? '' : 's'}`
+  return done % every === 0 ? `${every} flashcards` : null
+}
+
+/** A round of the morning workout finished: the label for the break screen */
+export const workoutBoundary = (round: number, of: number, last: boolean) => (last ? 'the morning workout' : `round ${round} of ${of} of the workout`)

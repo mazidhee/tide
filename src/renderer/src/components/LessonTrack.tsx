@@ -14,12 +14,25 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 function headline(map: LessonMap): { now: string; left: string | null } {
   const time = minutesLabel(map.minutesLeft)
+  if (map.phase === 'warmup' && map.warmup) {
+    const w = map.warmup
+    return { now: `Warm-up: card ${Math.min(w.done + 1, w.cards)} of ${w.cards}`, left: 'on what this builds on, then the lesson' }
+  }
   if (map.phase === 'probe') return { now: 'Finding where you start', left: 'a few questions, then the plan' }
   if (map.phase === 'finished') return { now: 'Lesson finished', left: [map.minutes !== undefined ? `${Math.max(1, Math.round(map.minutes))} min` : null, map.questions ? plural(map.questions, 'question') : null].filter(Boolean).join(' · ') || null }
   if (map.phase === 'recap') return { now: 'Recap: a final mixed problem or two', left: time }
   const st = map.steps[map.current]
   const checks = map.checksLeft !== undefined ? `${plural(map.checksLeft, 'check')} left in this step` : null
   return { now: `Step ${map.current + 1} of ${map.steps.length}: ${lower(st?.title ?? '')}`, left: [checks, time].filter(Boolean).join(' · ') || null }
+}
+
+/** The warm-up's stage on the track: its state, and its line when the plan is open */
+function warmSeg(map: LessonMap): { state: 'done' | 'skipped' | 'now'; label: string; title: string } | null {
+  const w = map.warmup
+  if (!w) return null
+  if (w.state === 'now') return { state: 'now', label: 'Warm-up', title: `Warm-up: ${w.done} of ${w.cards} cards` }
+  if (w.state === 'skipped') return { state: 'skipped', label: 'Warm-up', title: 'Warm-up skipped' }
+  return { state: 'done', label: 'Warm-up', title: `Warm-up: ${w.held} of ${w.cards} held` }
 }
 
 function stepMeta(s: MapStep, k: number, map: LessonMap): string {
@@ -60,8 +73,15 @@ export function LessonTrack({ map, tutor, nextLesson }: { map: LessonMap; tutor:
     return () => document.removeEventListener('keydown', onKey)
   })
   const { now, left } = headline(map)
-  const planned = map.phase !== 'probe' && map.steps.length > 0
-  const cols = { '--lm-cols': `repeat(${map.steps.length}, minmax(0, 1fr)) 52px` } as CSSProperties
+  const planned = map.phase !== 'probe' && map.phase !== 'warmup' && map.steps.length > 0
+  const warm = warmSeg(map)
+  const cols = { '--lm-cols': `${warm ? '60px ' : ''}repeat(${map.steps.length}, minmax(0, 1fr)) 52px` } as CSSProperties
+  const warmBar = warm && (
+    <span className={`lm-seg ${warm.state}`} title={warm.title}>
+      {warm.state === 'now' && <i style={{ width: `${Math.max(4, map.fill * 100)}%` }} />}
+    </span>
+  )
+  const warmLabel = warm && <span className={warm.state === 'now' ? 'now' : 'past'}>{warm.label}</span>
   const total = map.steps.length
   const top = (
     <div className="lm-top">
@@ -70,17 +90,35 @@ export function LessonTrack({ map, tutor, nextLesson }: { map: LessonMap; tutor:
       {planned && <Icon name="chevron" size={14} className="lm-chev" />}
     </div>
   )
-  if (!planned)
+  if (!planned) {
+    // Before the plan: the warm-up as the first stage, then the lesson still to be planned
+    const early = { '--lm-cols': '60px minmax(0, 1fr)' } as CSSProperties
     return (
-      <div className="lm-track probe" role="status">
-        <div className="lm-btn static">{top}</div>
+      <div className={`lm-track probe${warm ? ' warm' : ''}`} role="status">
+        <div className="lm-btn static">
+          {top}
+          {warm && (
+            <>
+              <div className="lm-segs" style={early} aria-hidden="true">
+                {warmBar}
+                <span className={`lm-seg${map.phase === 'probe' ? ' now' : ''}`}>{map.phase === 'probe' && <i style={{ width: '4%' }} />}</span>
+              </div>
+              <div className="lm-labels" style={early} aria-hidden="true">
+                {warmLabel}
+                <span className={map.phase === 'probe' ? 'now' : ''}>{map.phase === 'probe' ? 'Finding where you start' : 'The lesson'}</span>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     )
+  }
   return (
     <div className={`lm-track${open ? ' open' : ''}`}>
       <button className="lm-btn" aria-expanded={open} aria-controls={id} onClick={toggle} title={open ? 'Fold the plan' : "Open the teacher's plan"}>
         {top}
         <div className="lm-segs" style={cols} aria-hidden="true">
+          {warmBar}
           {map.steps.map((s, k) => {
             const state = s.state === 'done' || s.state === 'skipped' ? s.state : k === map.current && map.phase === 'steps' ? 'now' : 'next'
             return <span key={k} className={`lm-seg ${state}`}>{state === 'now' && <i style={{ width: `${Math.max(4, map.fill * 100)}%` }} />}</span>
@@ -90,6 +128,7 @@ export function LessonTrack({ map, tutor, nextLesson }: { map: LessonMap; tutor:
           </span>
         </div>
         <div className="lm-labels" style={cols} aria-hidden="true">
+          {warmLabel}
           {map.steps.map((s, k) => (
             <span key={k} className={k === map.current && map.phase === 'steps' ? 'now' : s.state === 'done' || s.state === 'skipped' ? 'past' : ''}>
               {s.title}
@@ -110,6 +149,16 @@ export function LessonTrack({ map, tutor, nextLesson }: { map: LessonMap; tutor:
             </p>
           )}
           <ol className="lm-steps">
+            {warm && map.warmup && (
+              <li className={warm.state === 'skipped' ? 'skipped' : 'done'}>
+                <span className="lm-dot">{warm.state === 'skipped' ? <Icon name="minus" size={12} /> : <Icon name="check" size={12} />}</span>
+                <div>
+                  <h5>Warm-up</h5>
+                  <p>{warm.state === 'skipped' ? 'Skipped. The tutor still knows what this builds on.' : `Quick recall on what this builds on: ${map.warmup.held} of ${map.warmup.cards} held.`}</p>
+                </div>
+                <span className="lm-meta">{warm.state === 'skipped' ? 'skipped' : 'done'}</span>
+              </li>
+            )}
             {map.steps.map((s, k) => {
               const cur = k === map.current && map.phase === 'steps'
               return (

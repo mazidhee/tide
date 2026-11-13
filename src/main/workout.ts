@@ -133,31 +133,46 @@ export function setWorkoutReminder(r: Reminder): Promise<Reminder> {
 
 let notifiedOn = ''
 
-/** Every few minutes: past the reminder hour, today's morning not done and not yet reminded → one notification */
-export function startWorkoutReminder(open: () => void) {
+/**
+ * The reminder due now, if any: past the hour you chose, today's morning not done, not yet reminded
+ * today. `anyHour` (a development test copy's TIDE_REMINDER_NOW) skips the hour, to see it fire.
+ */
+export function workoutReminder(state: WorkoutState, now: Date, reminded: string, anyHour = false): { title: string; body: string } | null {
+  const today = dayKey(now.getTime())
+  const reminder = state.prefs.reminder
+  if (reminded === today || reminder === 'off' || (!anyHour && now.getHours() < REMINDER_HOUR[reminder])) return null
+  const s = workoutStreak(state, today)
+  if (s.doneToday) return null
+  return { title: 'Morning workout', body: s.current ? `Fifteen minutes keeps your ${s.current}-day streak going.` : 'Five rounds, about fifteen minutes.' }
+}
+
+/**
+ * Every few minutes: past the reminder hour, today's morning not done and not yet reminded → one
+ * notification. When macOS won't show it (notifications off for Tide), `inApp` says it in Tide's
+ * window instead, so the reminder isn't lost without a trace.
+ */
+export function startWorkoutReminder(open: () => void, opts: { anyHour?: boolean; firstAfterMs?: number; inApp?: (r: { title: string; body: string }) => void } = {}) {
   const check = async () => {
     if (!getSettings().vaultPath) return
-    const today = dayKey(Date.now())
-    if (notifiedOn === today) return
-    const state = await workoutState()
-    const reminder = state.prefs.reminder
-    if (reminder === 'off' || new Date().getHours() < REMINDER_HOUR[reminder]) return
-    const s = workoutStreak(state, today)
-    if (s.doneToday) return
-    notifiedOn = today
-    if (!Notification.isSupported()) return
-    const n = new Notification({
-      title: 'Morning workout',
-      body: s.current ? `Fifteen minutes keeps your ${s.current}-day streak going.` : 'Five rounds, about fifteen minutes.',
-      silent: true
-    })
+    const due = workoutReminder(await workoutState(), new Date(), notifiedOn, opts.anyHour)
+    if (!due) return
+    notifiedOn = dayKey(Date.now())
+    if (opts.anyHour) console.log(`[workout] reminder due (notifications ${Notification.isSupported() ? 'supported' : 'not supported'})`)
+    if (!Notification.isSupported()) return opts.inApp?.(due)
+    const n = new Notification({ ...due, silent: true })
+    n.on('failed', () => opts.inApp?.(due))
     n.on('click', () => {
       const w = BrowserWindow.getAllWindows()[0]
       if (w?.isMinimized()) w.restore()
       open()
     })
+    if (opts.anyHour) {
+      n.on('show', () => console.log(`[workout] reminder shown: ${due.title}: ${due.body}`))
+      n.on('failed', (_e, err) => console.log(`[workout] reminder failed: ${err}`))
+    }
     n.show()
   }
+  setTimeout(() => void check().catch(() => {}), opts.firstAfterMs ?? 60_000)
   setTimeout(() => void check().catch(() => {}), 60_000)
   setInterval(() => void check().catch(() => {}), 5 * 60_000)
 }

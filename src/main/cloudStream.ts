@@ -1,7 +1,7 @@
 import { createStreamFilter } from '@shared/modelText'
 import { PROVIDERS, type RequestKind } from '@shared/providers'
 import type { ChatMessage } from '@shared/types'
-import { canTake, CloudUnavailable, cloudError, coolTarget, deadlineFor, estimateTokens, headersFor, noteLimits, noteOutcome, noteSent, noteWhy, recordUsage, secondsUntilReset, stopCode, type CloudTarget, type FailCode } from './cloud'
+import { canTake, CloudUnavailable, cloudError, coolTarget, deadlineFor, estimateTokens, headersFor, noteLimits, noteOutcome, noteSent, noteWhy, recordCloudFailure, recordUsage, secondsUntilReset, stopCode, type CloudTarget, type FailCode } from './cloud'
 import { getSettings } from './settings'
 
 type StreamUsage = { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number }; completion_tokens_details?: { reasoning_tokens?: number } }
@@ -100,12 +100,14 @@ export async function* streamCloud(target: CloudTarget, messages: ChatMessage[],
   } catch (e) {
     if (signal.aborted) {
       noteWhy(target, task, stopCode(signal), took())
+      recordCloudFailure(target, task, stopCode(signal), took())
       throw e
     }
     const why: FailCode = silent.signal.aborted ? 'silent' : slow.aborted ? 'slow' : 'network'
     // An endpoint that said nothing is left alone for ten minutes: it is down, not busy
     coolTarget(target, why === 'silent' ? 600 : why === 'slow' ? 120 : 60)
     noteOutcome(target, task, false, took(), why)
+    recordCloudFailure(target, task, why, took())
     throw new CloudUnavailable(why === 'silent' ? `${target.model} didn’t start answering` : why === 'slow' ? `${target.model} took too long` : `Couldn't reach the cloud model: ${(e as Error).message}`, why)
   } finally {
     clearTimeout(noSign)
@@ -120,6 +122,7 @@ export async function* streamCloud(target: CloudTarget, messages: ChatMessage[],
   if (!res.ok || !res.body) {
     const refused = await cloudError(res, target)
     noteOutcome(target, task, false, took(), refused.why)
+    recordCloudFailure(target, task, refused.why, took())
     throw refused
   }
   noteLimits(res.headers, target)
@@ -128,6 +131,8 @@ export async function* streamCloud(target: CloudTarget, messages: ChatMessage[],
   let said = false
   let stopped = ''
   let firstAt = 0
+  // How it ended, when it gave nothing usable: the usage log's line says so
+  let failed: FailCode | undefined
   try {
     const usage = (u: StreamUsage) => (reported = { input: u.prompt_tokens ?? 0, output: u.completion_tokens ?? 0, cached: u.prompt_tokens_details?.cached_tokens, reasoning: u.completion_tokens_details?.reasoning_tokens })
     for await (const delta of readStream(res.body, createStreamFilter(), usage, (why) => (stopped = why))) {
@@ -139,15 +144,19 @@ export async function* streamCloud(target: CloudTarget, messages: ChatMessage[],
   } catch (e) {
     if (signal.aborted) {
       noteWhy(target, task, stopCode(signal), took())
+      failed = stopCode(signal)
       throw e
     }
     const why: FailCode = slow.aborted ? 'midstream' : 'broken'
+    failed = why
     coolTarget(target, slow.aborted ? 120 : 60)
     noteOutcome(target, task, false, took(), why)
     throw new CloudUnavailable(slow.aborted ? `${target.model} took too long` : `The cloud model’s answer broke off: ${(e as Error).message}`, why)
   } finally {
     const r = reported as { input: number; output: number; cached?: number; reasoning?: number } | null
-    recordUsage({ kind: 'cloud', provider: target.provider, model: target.model, task, ...(r ?? { input: estimateTokens(JSON.stringify(messages).length), output: estimateTokens(out) }), estimated: !r, ...(stopped === 'length' ? { cut: true } : {}), ms: took(), ...(firstAt ? { ttftMs: firstAt - started } : {}) })
+    // Nothing to read is a failure too (all thinking, or nothing at all)
+    failed ??= said ? undefined : stopped === 'length' ? 'spent' : 'empty'
+    recordUsage({ kind: 'cloud', provider: target.provider, model: target.model, task, ...(r ?? { input: estimateTokens(JSON.stringify(messages).length), output: estimateTokens(out) }), estimated: !r, ...(stopped === 'length' ? { cut: true } : {}), ms: took(), ...(firstAt ? { ttftMs: firstAt - started } : {}), ...(failed ? { failed } : {}) })
   }
   const cut = stopped === 'length'
   if (!said) {

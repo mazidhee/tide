@@ -4,6 +4,7 @@
  * answers: type, Enter, next) with its scorecard.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { breakSignals } from '../lib/breaks'
 import {
   LEVELS,
   SESSION_SIZE,
@@ -182,6 +183,8 @@ export function MathsView({ level: chosen }: { level?: string }) {
     async (all: MathsAnswer[]) => {
       setPhase('done')
       if (!all.length) return
+      // A round done is a block of practice ended: a moment the break planner can use
+      breakSignals.boundary('practice', 'the mental maths round')
       try {
         const s = await window.tide.maths.log({ focus, answers: all })
         setSaved(s)

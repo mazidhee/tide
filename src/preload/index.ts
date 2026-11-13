@@ -185,6 +185,8 @@ const api: TideApi = {
     history: invoke('mocks:history'),
     record: invoke('mocks:record'),
     examTopics: invoke('mocks:examTopics'),
+    keep: invoke('mocks:keep'),
+    resume: invoke('mocks:resume'),
     onEvent: (cb) => subscribe<{ id: string; delta: string }>('mock:event', cb)
   },
   speed: {
@@ -417,7 +419,8 @@ const api: TideApi = {
     onClosing: (cb) => subscribe('windows:closing', () => cb()),
     closeNow: invoke('window:closeNow'),
     relay: (channel, payload) => ipcRenderer.send('windows:relay', channel, payload),
-    onRelay: (cb) => subscribe('windows:relayed', cb)
+    onRelay: (cb) => subscribe('windows:relayed', cb),
+    claimBreak: invoke('windows:claimBreak')
   },
   cloud: {
     keys: invoke('cloud:keys'),
