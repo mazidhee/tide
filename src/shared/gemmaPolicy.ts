@@ -36,6 +36,11 @@ export const JOB_ROUTES = {
   companyPrep: { label: 'Interview prep plan', role: 'teach', privacy: 'path' },
   readAlong: { label: 'Discussing a passage you’re reading', role: 'teach', privacy: 'path' },
   readTogether: { label: 'Reading a book together', role: 'teach', privacy: 'path' },
+  // The reading room (main/readingRoom): a private book stays on Gemma, as every reading job does
+  readChallenge: { label: 'Challenge me, beside a book', role: 'teach', privacy: 'path' },
+  readArgument: { label: 'Mapping a book’s core argument', role: 'hard', privacy: 'path' },
+  readSeminar: { label: 'End-of-chapter seminar', role: 'teach', privacy: 'path' },
+  readKeep: { label: 'What to keep from a seminar', role: 'background', privacy: 'path' },
   weekPlan: { label: 'Weekly coach plan', role: 'teach', privacy: 'text' },
   learnerProfile: { label: 'Learner profile and direction', role: 'background', privacy: 'text' },
   // A tutor that remembers you (main/learnerProfile): small changes after each lesson, a tidy each week

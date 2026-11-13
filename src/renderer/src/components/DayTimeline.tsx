@@ -19,11 +19,14 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
   const [week, setWeek] = useState<WeekPlan | null>(null)
   const [due, setDue] = useState<Mistake[]>([])
   const [loaded, setLoaded] = useState(false)
+  // Tonight's reading (the reading room): one more item in the day, sized in minutes
+  const [reading, setReading] = useState<Awaited<ReturnType<typeof window.tide.room.tonight>>>(null)
   // Slots that arrive after the first load slide in, so a task the tutor just set is easy to spot
   const seen = useRef<Set<string> | null>(null)
 
   const load = async () => {
-    const [t, w, m] = await Promise.all([window.tide.learn.thingsToday().catch(() => null), window.tide.coach.syncDone().catch(() => null), window.tide.mistakes.due(6).catch(() => [] as Mistake[])])
+    const [t, w, m, r] = await Promise.all([window.tide.learn.thingsToday().catch(() => null), window.tide.coach.syncDone().catch(() => null), window.tide.mistakes.due(6).catch(() => [] as Mistake[]), window.tide.room.tonight().catch(() => null)])
+    setReading(r)
     setTasks(t)
     setWeek(w)
     setDue(m)
@@ -47,6 +50,9 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
   useEffect(() => {
     if (loaded) seen.current = new Set(slots.map((s) => s.key))
   })
+
+  /** The week plan's reading item is shown once, as the reading row */
+  const readingPlan = (s: DaySlot) => !!reading && reading.from === 'plan' && !!s.plan && (s.plan.item.readings?.some((r) => r.path === reading.path) || (/^read\b/i.test(s.plan.item.title) && s.plan.item.title.toLowerCase().includes(reading.title.toLowerCase())))
 
   const toggle = async (s: DaySlot) => {
     const done = !s.done
@@ -117,6 +123,33 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
         </li>
       )
     }
+    const readingRow = () => {
+      const r = reading!
+      const go = () => app.setView({ kind: 'reader', path: r.path })
+      return (
+        <li key="reading" className={`td-row td-row-reading${r.done ? ' done' : ''}`}>
+          <span className="td-row-when" />
+          <span className="td-row-tick still" aria-hidden="true">
+            <Icon name={r.done ? 'check' : 'book'} size={15} />
+          </span>
+          <button className="td-row-what" onClick={go}>
+            <b>
+              Read: {r.title}
+              {r.book.atLabel ? `, ${r.book.atLabel}` : ''}
+            </b>
+            <span>{r.done ? `${r.readToday} min read today` : r.book.atWhere ? `Where you stopped: “${r.book.atWhere}”` : 'From the beginning'}</span>
+          </button>
+          {!r.done ? (
+            <button className="btn small td-row-go" onClick={go}>
+              Read
+            </button>
+          ) : (
+            <span />
+          )}
+          <span className="td-row-dur">{r.minutes} min</span>
+        </li>
+      )
+    }
     return (
       <ol className={`td-today${loaded ? '' : ' is-loading'}${slots.some((s) => s.task?.at) ? '' : ' no-times'}`} aria-label="The rest of today">
         {due.length > 0 && (
@@ -137,8 +170,9 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
             <span className="td-row-dur">{Math.max(5, due.length * 3)} min</span>
           </li>
         )}
-        {upcoming.map(line)}
-        {evening.map(line)}
+        {upcoming.filter((s) => !readingPlan(s)).map(line)}
+        {reading && !reading.done && readingRow()}
+        {evening.filter((s) => !readingPlan(s)).map(line)}
         {(evening.length > 0 || hour >= 16) && (
           <li className="td-row">
             <span className="td-row-when" />
@@ -153,8 +187,9 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
             <span className="td-row-dur" />
           </li>
         )}
-        {done.map(line)}
-        {loaded && !slots.length && !due.length && hour < 16 && (
+        {reading?.done && readingRow()}
+        {done.filter((s) => !readingPlan(s)).map(line)}
+        {loaded && !slots.length && !due.length && !reading && hour < 16 && (
           <li className="td-row-empty">{tasks === null ? 'Connect Things 4 in Settings, or ask the tutor to plan your day, and it shows here.' : 'Nothing else is on today. Ask the tutor to plan the rest of your day.'}</li>
         )}
       </ol>
@@ -187,7 +222,22 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
         </li>
       )}
 
-      {upcoming.map((s, i) => row(s, s.task?.at ? undefined : i === 0 ? 'Then' : 'Later'))}
+      {upcoming.filter((s) => !readingPlan(s)).map((s, i) => row(s, s.task?.at ? undefined : i === 0 ? 'Then' : 'Later'))}
+
+      {reading && (
+        <li className={`tl-slot${reading.done ? ' is-done' : ''}`}>
+          <span className="tl-dot" aria-hidden="true">
+            {reading.done && <Icon name="check" size={9} />}
+          </span>
+          <button className="tl-body" onClick={() => app.setView({ kind: 'reader', path: reading.path })}>
+            <span className="tl-meta">Read · {reading.minutes} min</span>
+            <span className="tl-title">
+              {reading.title}
+              {reading.book.atLabel ? `, ${reading.book.atLabel}` : ''}
+            </span>
+          </button>
+        </li>
+      )}
 
       {(evening.length > 0 || hour >= 16) && (
         <>

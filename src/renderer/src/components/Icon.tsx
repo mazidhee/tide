@@ -117,6 +117,11 @@ export const PATHS = {
   diff: 'M7 4v9M2.5 8.5h9M3 18.5h8M17 4v16M14 17l3 3 3-3',
   restart: 'M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4v4.5H9',
   collapse: 'M8 4l4 4 4-4M8 20l4-4 4 4M5 12h14',
+  // The reading room: a quote, listening, and the reader's day and night paper
+  quote: 'M10 7.5C7 8.3 5.5 10.5 5.5 13.5v3h4v-4h-2.4c.2-1.6 1.2-2.6 2.9-3.1zM18.5 7.5c-3 .8-4.5 3-4.5 6v3h4v-4h-2.4c.2-1.6 1.2-2.6 2.9-3.1z',
+  headphones: 'M4.5 15.5V13a7.5 7.5 0 0 1 15 0v2.5M4.5 15.5A1.5 1.5 0 0 1 6 14h1.5v6H6a1.5 1.5 0 0 1-1.5-1.5zM19.5 15.5A1.5 1.5 0 0 0 18 14h-1.5v6H18a1.5 1.5 0 0 0 1.5-1.5z',
+  sun: 'M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM12 3.5v1.8M12 18.7v1.8M3.5 12h1.8M18.7 12h1.8M6 6l1.3 1.3M16.7 16.7L18 18M6 18l1.3-1.3M16.7 7.3L18 6',
+  moon: 'M19 14.6A7 7 0 0 1 9.4 5 7.2 7.2 0 1 0 19 14.6z',
   // Pop-out windows (lib/popout): a window with its title bar, an arrow leaving it; and coming back in
   popout: 'M4.5 8.5h8.5A1.5 1.5 0 0 1 14.5 10v9A1.5 1.5 0 0 1 13 20.5H4.5A1.5 1.5 0 0 1 3 19v-9a1.5 1.5 0 0 1 1.5-1.5zM3 12h11.5M5.6 10.25h.01M11 15l9.5-9.5M15 4h5.5v5.5',
   popin: 'M4 6A1.5 1.5 0 0 1 5.5 4.5h13A1.5 1.5 0 0 1 20 6v12.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5zM4 8.5h16M6.5 6.5h.01M17 11l-6.5 6.5M10.5 12.5v5h5',

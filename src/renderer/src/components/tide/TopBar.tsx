@@ -32,6 +32,7 @@ const TITLES: Partial<Record<View['kind'], string>> = {
 /** Where you are, for the bar: a notebook by its name, a study session by what it is over */
 function titleOf(view: View): string[] {
   if (view.kind === 'notebook') return [view.path.split('/').pop() ?? 'Notebook']
+  if (view.kind === 'reading') return ['Library', 'Reading']
   if (view.kind === 'study' && view.scope.kind !== 'vault') return ['Review', view.scope.kind === 'none' ? '' : (view.scope.path.split('/').pop() ?? '').replace(/\.(md|pdf)$/i, '')].filter(Boolean)
   return [TITLES[view.kind] ?? 'Tide']
 }

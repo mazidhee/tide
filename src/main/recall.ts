@@ -111,6 +111,18 @@ export async function noteLesson(record: LessonRecord): Promise<void> {
   if (fresh.length) await keep(r, fresh.map((prompt) => ({ prompt, topic: d.topic, lesson: d.id })))
 }
 
+/**
+ * Ideas kept from reading (the reading room's seminar): each one's question comes back in a later
+ * lesson on the book, like a question missed in a lesson. `source` names where it came from.
+ */
+export async function keepFromReading(items: { prompt: string; topic: string }[], source: string): Promise<number> {
+  const r = recall()
+  if (!r || !items.length) return 0
+  const before = r.all().length
+  await keep(r, items.map((i) => ({ ...i, lesson: source })))
+  return r.all().length - before
+}
+
 /** For a lesson that is opening: what is due on its topic, as a note for the tutor (empty when nothing is) */
 export function recallNote(topic: string): string {
   const out = retired()

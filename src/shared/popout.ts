@@ -53,6 +53,8 @@ export function popKindOf(v: PopView | null | undefined): PopKind | null {
     }
     // The reading room (and anything else built later) says itself that it is reading
     case 'reading':
+    // A book open in the reading room's reader
+    case 'reader':
       return 'reading'
     case 'workout':
       return 'workout'
@@ -95,6 +97,7 @@ export function popKeyOf(v: PopView): string {
     case 'file':
       return `file:${str(v.path)}`
     case 'reading':
+    case 'reader':
       return `reading:${str(v.path) || str(v.id)}`
     case 'workout':
       return 'workout'
@@ -130,6 +133,7 @@ export function popNameOf(v: PopView): string {
       return str(v.title) || (str(v.id) ? humanize(str(v.id)) : 'Courses')
     case 'file':
     case 'reading':
+    case 'reader':
       return str(v.title) || noExt(base(str(v.path))) || 'Reading'
     case 'workout':
       return 'Morning workout'

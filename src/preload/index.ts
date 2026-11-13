@@ -454,6 +454,48 @@ const api: TideApi = {
     togetherDiscuss: invoke('reading:togetherDiscuss'),
     togetherFinish: invoke('reading:togetherFinish')
   },
+  // The reading room (src/main/readingRoom)
+  room: {
+    shelf: invoke('room:shelf'),
+    tonight: invoke('room:tonight'),
+    book: invoke('room:book'),
+    add: invoke('room:add'),
+    addFree: invoke('room:addFree'),
+    import: invoke('room:import'),
+    remove: invoke('room:remove'),
+    patch: invoke('room:patch'),
+    goal: invoke('room:goal'),
+    progress: invoke('room:progress'),
+    time: invoke('room:time'),
+    marks: invoke('room:marks'),
+    saveMark: invoke('room:saveMark'),
+    removeMark: invoke('room:removeMark'),
+    page: invoke('room:page'),
+    pageInfo: invoke('room:pageInfo'),
+    talks: invoke('room:talks'),
+    who: invoke('room:who'),
+    challenge: invoke('room:challenge'),
+    argument: invoke('room:argument'),
+    keepTalk: invoke('room:keepTalk'),
+    seminarTurn: invoke('room:seminarTurn'),
+    seminarKeep: invoke('room:seminarKeep'),
+    seminarSave: invoke('room:seminarSave')
+  },
+  covers: {
+    search: invoke('covers:search'),
+    art: invoke('covers:art'),
+    thumb: invoke('covers:thumb'),
+    own: invoke('covers:own'),
+    y: invoke('covers:y'),
+    remove: invoke('covers:remove'),
+    icon: invoke('covers:icon')
+  },
+  tts: {
+    engines: invoke('tts:engines'),
+    synth: invoke('tts:synth'),
+    prerender: invoke('tts:prerender'),
+    cachedCount: invoke('tts:cachedCount')
+  },
   study: {
     cards: invoke('study:cards'),
     review: invoke('study:review'),
