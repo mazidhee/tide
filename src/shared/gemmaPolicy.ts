@@ -51,6 +51,12 @@ export const JOB_ROUTES = {
   // Roadmap continuity (main/track): Opus writes and marks a phase check; without a model, plain questions you mark yourself
   phaseCheck: { label: 'Writing a phase check', role: 'hard' },
   phaseCheckMark: { label: 'Marking a phase check', role: 'mark' },
+  // Courses in the plan and quizzes from them (main/coursePlan, main/courseQuiz): Haiku aligns a course to a roadmap
+  // once; questions are written on the course's own passages and Opus marks them; without a model, the course's own
+  // exercises and plain questions you mark yourself
+  courseAlign: { label: 'Aligning a course to your roadmap', role: 'background' },
+  courseQuiz: { label: 'Questions from the course you’re taking', role: 'teach' },
+  courseQuizMark: { label: 'Marking a course check', role: 'mark' },
   learnerProfile: { label: 'Learner profile and direction', role: 'background' },
   // A tutor that remembers you (main/learnerProfile): small changes after each lesson, a tidy each week
   profileUpdate: { label: 'Updating your learner profile after a lesson', role: 'background' },

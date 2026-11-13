@@ -151,6 +151,8 @@ export interface CheckQuestion {
   question: string
   /** What a full answer contains: for marking, never shown before answering */
   answer: string
+  /** The passage of the course you're taking it was based on (shared/courseQuiz), when there is one */
+  cite?: import('./courseQuiz').CourseCite
 }
 
 /** A phase check written and waiting to be answered */
@@ -353,15 +355,15 @@ export function interleave<T>(items: T[]): T[] {
 
 export const CHECK_SYSTEM = `You write a phase check for a self-taught learner: a short, mixed, unaided quiz across everything one phase of their roadmap taught. It decides whether they move on, so it tests understanding, not recall of wording: explain why, predict what happens, apply the idea to a new case, find the flaw, or a small calculation. One question per concept listed, each answerable in a few sentences or a few lines of working without looking anything up. No hints in the questions, no multiple choice. Reply with JSON only.`
 
-export function checkPrompt(notebook: string, phase: Phase, picked: RoadmapTopic[], profile = ''): string {
+export function checkPrompt(notebook: string, phase: Phase, picked: RoadmapTopic[], profile = '', passages = ''): string {
   return `Roadmap: ${notebook}
 Phase: ${phase.title} (${phase.topics.length} topics: ${phase.topics.map((t) => t.title.replace(/\*\*/g, '')).join('; ').slice(0, 1500)})
 ${profile ? `\nWhat Tide knows about this learner:\n${profile.slice(0, 1200)}\n` : ''}
 Write one question for each of these concepts, in this order (C1 is the first):
 ${picked.map((t, i) => `C${i + 1}. ${t.title.replace(/\*\*/g, '')}`).join('\n')}
 
-Where it fits, make a question draw on an earlier concept in the phase as well, so the check is mixed rather than one topic at a time.
-Return ONLY JSON: {"questions":[{"concept":"C1","question":"…","answer":"what a full answer must contain, in 1 to 3 sentences"}]}`
+Where it fits, make a question draw on an earlier concept in the phase as well, so the check is mixed rather than one topic at a time.${passages}
+Return ONLY JSON: {"questions":[{"concept":"C1",${passages ? '"p":"P1 or null","quote":"…",' : ''}"question":"…","answer":"what a full answer must contain, in 1 to 3 sentences"}]}`
 }
 
 /** The model's check, checked: one question per known concept, in order; null when it's unusable */
@@ -393,7 +395,7 @@ export const MARK_SYSTEM = `You mark a phase check: a learner's unaided answers 
 
 export function markPrompt(questions: CheckQuestion[], answers: Record<string, string>): string {
   return `${questions
-    .map((q, i) => `Q${i + 1} (${q.topic}): ${q.question}\nA full answer: ${q.answer || '(not given; use your own knowledge)'}\nThe learner wrote: ${(answers[q.id] ?? '').trim().slice(0, 3000) || '(nothing)'}`)
+    .map((q, i) => `Q${i + 1} (${q.topic}): ${q.question}${q.cite ? `\nFrom the course they took (${q.cite.courseTitle} ${q.cite.n}): ${q.cite.excerpt}` : ''}\nA full answer: ${q.answer || '(not given; use your own knowledge)'}\nThe learner wrote: ${(answers[q.id] ?? '').trim().slice(0, 3000) || '(nothing)'}`)
     .join('\n\n')}
 
 Return ONLY JSON: {"marks":[{"q":"Q1","verdict":"correct|partial|wrong","feedback":"…"}]}`

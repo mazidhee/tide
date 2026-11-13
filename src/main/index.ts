@@ -421,6 +421,13 @@ function registerIpc() {
   handle('courses:fresh', async () => (await import('./courseFresh')).freshStatus())
   handle('courses:checkNow', async () => (await import('./courseFresh')).runCheck(true))
   handle('courses:dismiss', async (id: string) => (await import('./courseFresh')).dismissSuggestion(String(id)))
+  handle('coursePlan:thisWeek', async () => (await import('./coursePlan')).thisWeek())
+  handle('coursePlan:alignAll', async () => (await import('./coursePlan')).alignAll())
+  handle('coursePlan:startQuiz', async (input: { course: string; lessons?: string[]; kind?: 'check' | 'quiz'; size?: number }) =>
+    (await import('./courseQuiz')).startCourseQuiz({ course: String(input?.course ?? ''), ...(Array.isArray(input?.lessons) ? { lessons: input.lessons.map(String).slice(0, 6) } : {}), ...(input?.kind === 'check' ? { kind: 'check' as const } : {}), ...(Number.isFinite(input?.size) ? { size: Math.max(1, Math.min(8, Number(input.size))) } : {}) })
+  )
+  handle('coursePlan:submitQuiz', async (id: string, answers: Record<string, string>, selfMarks?: Record<string, 'correct' | 'partial' | 'wrong'>) => (await import('./courseQuiz')).submitCourseQuiz(String(id), answers && typeof answers === 'object' ? answers : {}, selfMarks && typeof selfMarks === 'object' ? selfMarks : undefined))
+  handle('coursePlan:checked', async (course: string, lesson: string) => (await import('./courseQuiz')).lessonChecked(String(course), String(lesson)))
   handle('courses:track', async (id: string, lesson: string, patch: { read?: number; video?: { id: string; watched: number }; ran?: boolean }) => (await courses()).trackLesson(String(id), String(lesson), patch ?? {}))
   // ---- Links that stay in Tide (shared/links): repository files, the reader view, the web view ----
   const files = () => import('./courseFiles')

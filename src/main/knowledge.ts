@@ -464,10 +464,10 @@ export async function cardsOnMany(conceptIds: string[]): Promise<Map<string, Car
 }
 
 /** A question kept elsewhere was answered in a review: evidence on the concept the review is on */
-export async function noteReviewAnswer(e: { concept: string; source: string; pos: string; kind: EvidenceKind; at: number; path?: string }): Promise<void> {
+export async function noteReviewAnswer(e: { concept: string; source: string; pos: string; kind: EvidenceKind; at: number; path?: string; /** Less than a full answer: exposure from reading counts for half */ weight?: number }): Promise<void> {
   const k = await knowledge()
   if (!k || !k.state(e.concept, Date.now(), true)) return
-  k.record([{ concept: e.concept, source: e.source, pos: e.pos, kind: e.kind, at: e.at, weight: 1 }])
+  k.record([{ concept: e.concept, source: e.source, pos: e.pos, kind: e.kind, at: e.at, weight: e.weight ?? 1 }])
 }
 
 // ---------- What it is read for ----------

@@ -165,6 +165,19 @@ export async function gateStep(notebook: string): Promise<{ phase: string; title
   return { phase: gate.phase.id, title: gate.phase.title, step: gate.step, ...(gate.step === 'capstone' && link?.notebook ? { capstone: link.notebook } : {}) }
 }
 
+/**
+ * Where a roadmap stands for the courses in the plan (main/coursePlan): its phases, the phase
+ * you're in and its open topics (to learn, or shaky), and how many of its topics are solid.
+ */
+export async function phaseNow(notebook: string): Promise<{ notebook: string; phases: Phase[]; current: Phase | null; open: string[]; solid: number } | null> {
+  const g = await gather(notebook).catch(() => null)
+  if (!g) return null
+  const at = g.gates.current
+  const gate = at !== null ? g.gates.gates[at] : null
+  const solid = g.gates.gates.reduce((n, x) => n + x.solid.length, 0)
+  return { notebook: g.notebook, phases: g.phases, current: gate?.phase ?? null, open: gate ? [...gate.fresh, ...gate.shaky].map((t) => t.id) : [], solid }
+}
+
 // ---------- The view ----------
 
 /** Minutes a week the scheduler gives this roadmap: this week's mix, else an even share of your hours */
@@ -283,12 +296,18 @@ export async function startCheck(notebook: string, phaseId: string, fresh = fals
   if (!picked.length) throw new Error('This phase has no topics to check.')
   let questions: CheckQuestion[] | null = null
   let by: 'claude' | 'gemma' | 'tide' = 'tide'
+  // The course you're taking: where it taught a concept, the question is based on its passage, and cites it
+  const labels = picked.map((t) => ({ id: t.id, label: t.title.replace(/\*\*/g, '') }))
+  const cq = await import('@shared/courseQuiz')
+  const passages = await import('./courseQuiz').then((m) => m.phasePassages(labels)).catch(() => [])
   try {
     const { completeFor, jobRoute, extractJsonObject } = await import('./ai')
     const route = await jobRoute('phaseCheck')
     const profile = await import('./learnerProfile').then((m) => m.profileDigest()).catch(() => '')
-    const text = await completeFor('phaseCheck', checkPrompt(g.notebook, gate.phase, picked, profile), CHECK_SYSTEM, { priority: 'interactive' })
-    questions = parseCheck(extractJsonObject(text), picked)
+    const text = await completeFor('phaseCheck', checkPrompt(g.notebook, gate.phase, picked, profile, cq.phasePassagesText(passages, labels)), CHECK_SYSTEM, { priority: 'interactive' })
+    const raw = extractJsonObject(text)
+    questions = parseCheck(raw, picked)
+    if (questions && passages.length) questions = cq.attachCites(raw, questions, passages, picked)
     by = route.who === 'claude' ? 'claude' : 'gemma'
   } catch {
     questions = null
@@ -405,13 +424,14 @@ export async function autoCapstones(): Promise<number> {
 
 // ---------- Firm-up and the mixed review: Review now, over several concepts ----------
 
-/** One question for each concept: the kept one due soonest, else one from memory */
+/** One question for each concept: the kept one due soonest, else one from the course you're taking, else one from memory */
 async function itemsFor(concepts: Pick<ConceptState, 'id' | 'name'>[]): Promise<ReviewItem[]> {
   const { keptOnMany } = await import('./review')
   const kept = await keptOnMany(concepts.map((c) => c.id)).catch(() => new Map<string, ReviewItem[]>())
+  const fromCourse = await import('./courseQuiz').then((m) => m.courseItemsFor(concepts.map((c) => c.id))).catch(() => new Map<string, ReviewItem[]>())
   const now = Date.now()
   return concepts.map((c) => {
-    const k = [...(kept.get(c.id) ?? [])].sort((a, b) => a.due - b.due)[0]
+    const k = [...(kept.get(c.id) ?? [])].sort((a, b) => a.due - b.due)[0] ?? [...(fromCourse.get(c.id) ?? [])].sort((a, b) => a.due - b.due)[0]
     if (k) return { ...k, concept: c.id }
     return { kind: 'memory', id: `${c.id}@${localDate()}`, topic: c.name, question: `From memory: what is ${c.name}, and where does it matter? Give an example or a small case.`, due: now, concept: c.id }
   })

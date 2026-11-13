@@ -33,6 +33,8 @@ export interface Candidate {
   text: string
   /** 'md' when the text is Markdown (your notes, a page read as Markdown) */
   format?: 'text' | 'md'
+  /** A lesson of a course you're taking that teaches the topic (main/coursePlan): taught from first, so the lesson and the course reinforce each other */
+  taking?: boolean
 }
 
 /** The reading chosen for a step: an excerpt and the record of where it is from */
@@ -363,6 +365,8 @@ export function quotations(text: string): string[] {
 export const WEIGHTS = { coverage: 0.5, authority: 0.25, readability: 0.15, licence: 0.1 }
 /** A book you own wins over a web page that covers the step a little better: it is the one you chose, and it opens at the page */
 export const OWNED_BONUS = 0.1
+/** The course you're taking, on the topic it teaches, wins over other material that covers the step a little better */
+export const TAKING_BONUS = 0.12
 
 /**
  * A source is taught from only when its score reaches this and its excerpt holds at least half the
@@ -434,7 +438,7 @@ export function rank(c: Candidate, step: string, topic = ''): Ranked | null {
   const excerpt = chooseExcerpt(c.text, step, topic, excerptCeiling(c))
   if (!excerpt || !faithful(excerpt.text, c.text)) return null
   const parts = { coverage: excerpt.coverage, authority: authorityOf(c), readability: readabilityOf(c, excerpt), licence: licenceScore(c) }
-  const score = WEIGHTS.coverage * parts.coverage + WEIGHTS.authority * parts.authority + WEIGHTS.readability * parts.readability + WEIGHTS.licence * parts.licence + (c.kind === 'book' ? OWNED_BONUS : 0)
+  const score = WEIGHTS.coverage * parts.coverage + WEIGHTS.authority * parts.authority + WEIGHTS.readability * parts.readability + WEIGHTS.licence * parts.licence + (c.kind === 'book' ? OWNED_BONUS : 0) + (c.taking ? TAKING_BONUS : 0)
   return { candidate: c, excerpt, score, parts }
 }
 

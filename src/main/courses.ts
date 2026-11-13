@@ -295,6 +295,8 @@ async function readAndIndex(c: CatalogueCourse, method: Imported['method'], comm
   broadcast({ id: c.id, phase: 'done', detail: `${outline.lessons} lessons` })
   // Its lectures' captions, in the background, so lessons can draw on them (main/related)
   void import('./related').then((r) => r.fetchCourseTranscripts()).catch(() => {})
+  // Its lessons mapped to your roadmaps, once, in the background (main/coursePlan)
+  void import('./coursePlan').then((m) => m.alignAll()).catch(() => {})
   return meta
 }
 
@@ -469,16 +471,7 @@ export async function trackLesson(course: string, lesson: string, patch: { read?
     became = !studied(base, Object.keys(watched).length) && studied(next, Object.keys(watched).length)
     return next
   })
-  if (became) {
-    const meta = await importedCourse(course)
-    const c = catalogueCourse(course)
-    const l = meta?.outline.modules.flatMap((m) => m.lessons.map((x) => ({ m, x }))).find((y) => y.x.id === lesson)
-    if (c && l) {
-      const { noteEvidence } = await import('./knowledge')
-      const topic = /^(introduction|intro|overview|readme|summary)$/i.test(l.x.title.trim()) ? l.m.title : l.x.title
-      await noteEvidence({ topic, kind: 'taught', source: `course:${course}`, pos: `${lesson}.studied`, at: now, weight: 0.5 }).catch(() => {})
-    }
-  }
+  if (became) await noteExposure(course, lesson, now)
   return (await allProgress())[course] ?? {}
 }
 
@@ -491,8 +484,46 @@ export async function importedRepos(): Promise<{ id: string; repo: string; branc
 
 export async function markLesson(course: string, lesson: string, done: boolean): Promise<CourseProgress> {
   const now = Date.now()
+  const was = !!(await allProgress())[course]?.[lesson]?.done
   await setProgress(course, lesson, (p) => (done ? { right: 0, partly: 0, wrong: 0, started: now, ...p, updated: now, done: true } : p?.record ? { ...p, done: false, updated: now } : undefined))
+  if (done && !was) {
+    // Read is exposure in What you know, and the plan's item ticks once all its lessons are done
+    await noteExposure(course, lesson, now)
+    await import('./coursePlan').then((m) => m.noteLessonDone(course, lesson)).catch(() => {})
+  }
   return (await allProgress())[course] ?? {}
+}
+
+/** Every course's progress, by course id and lesson id */
+export const courseProgressAll = async (): Promise<Record<string, CourseProgress>> => allProgress()
+
+/** A check on a lesson was marked: its answers kept with its progress (a check passed marks it done separately) */
+export async function noteLessonCheck(course: string, lesson: string, r: { right: number; partly: number; wrong: number }): Promise<CourseProgress> {
+  const now = Date.now()
+  await setProgress(course, lesson, (p) => ({ started: now, done: false, ...p, updated: now, right: (p?.right ?? 0) + r.right, partly: (p?.partly ?? 0) + r.partly, wrong: (p?.wrong ?? 0) + r.wrong }))
+  return (await allProgress())[course] ?? {}
+}
+
+/**
+ * A lesson studied (read to the end, its video watched, or marked done) is exposure in What you
+ * know: a light "taught" on each roadmap concept it teaches (by the course's alignment), never a
+ * right answer, so a concept only moves towards solid when a question on it is answered. A course
+ * not aligned to any roadmap counts on the lesson's own title, as before.
+ */
+async function noteExposure(course: string, lesson: string, at: number): Promise<void> {
+  const meta = await importedCourse(course)
+  const c = catalogueCourse(course)
+  const l = meta?.outline.modules.flatMap((m) => m.lessons.map((x) => ({ m, x }))).find((y) => y.x.id === lesson)
+  if (!c || !l) return
+  const topics = await import('./coursePlan').then((m) => m.topicsOfLesson(course, lesson)).catch(() => [] as string[])
+  const k = await import('./knowledge')
+  if (topics.length) {
+    const { exposureEvidence } = await import('@shared/courseQuiz')
+    for (const e of exposureEvidence(topics, course, lesson, at)) await k.noteReviewAnswer({ concept: e.concept, source: e.source, pos: e.pos, kind: e.kind, at: e.at, weight: e.weight }).catch(() => {})
+    return
+  }
+  const topic = /^(introduction|intro|overview|readme|summary)$/i.test(l.x.title.trim()) ? l.m.title : l.x.title
+  await k.noteEvidence({ topic, kind: 'taught', source: `course:${course}`, pos: `${lesson}.studied`, at, weight: 0.5 }).catch(() => {})
 }
 
 /** A lesson was saved (main/lessons): when it is a course's, its progress follows it */
@@ -509,6 +540,7 @@ export async function noteCourseLesson(record: LessonRecord): Promise<void> {
     partly: d?.partly ?? 0,
     wrong: d?.wrong ?? 0
   }))
+  if (record.finished) await import('./coursePlan').then((m) => m.noteLessonDone(ref.id, ref.lesson)).catch(() => {})
 }
 
 // ---------- What the window asks for ----------

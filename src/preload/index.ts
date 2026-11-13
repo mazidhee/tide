@@ -292,6 +292,13 @@ const api: TideApi = {
     onFresh: (cb) => subscribe<{ running: boolean; steps: import('../main/courseFresh').FreshStatus['steps'] }>('courses:fresh', cb),
     onProgress: (cb) => subscribe<import('../main/courses').ImportPhase>('courses:progress', cb)
   },
+  coursePlan: {
+    thisWeek: invoke('coursePlan:thisWeek'),
+    alignAll: invoke('coursePlan:alignAll'),
+    startQuiz: invoke('coursePlan:startQuiz'),
+    submitQuiz: invoke('coursePlan:submitQuiz'),
+    checked: invoke('coursePlan:checked')
+  },
   links: {
     courseFile: invoke('links:courseFile'),
     githubFile: invoke('links:githubFile'),

@@ -75,7 +75,7 @@ export function aimsKey(aims: Aim[]): string {
 
 export const DEFAULT_COACH: CoachSettings = { goal: '', focus: [], hoursPerWeek: 10, days: [1, 2, 3, 4, 5, 6] }
 
-export type AgendaKind = 'learn' | 'practice' | 'quiz' | 'review' | 'take-home' | 'test' | 'check' | 'project' | 'mock' | 'workout' | 'read'
+export type AgendaKind = 'learn' | 'practice' | 'quiz' | 'review' | 'take-home' | 'test' | 'check' | 'project' | 'mock' | 'workout' | 'read' | 'course'
 
 export interface AgendaItem {
   kind: AgendaKind
@@ -114,6 +114,8 @@ export interface AgendaItem {
   gate?: { phase: string; step: 'firm-up' | 'check' | 'capstone' }
   /** The week's mixed review across every track (shared/track mixedReview) */
   mixed?: boolean
+  /** A session of a course's lessons (shared/coursePlan): the course, and the lessons in it, in order */
+  course?: { id: string; title: string; lessons: { id: string; title: string; n: string; minutes: number }[] }
 }
 
 export interface WeekPlan {
@@ -138,6 +140,8 @@ export interface WeekPlan {
   replannedOn?: string
   /** Your best hours, as words ("9–11"), when the rhythm knows them */
   bestHours?: string
+  /** The week's courses (shared/coursePlan): which lessons, why, and what was left out */
+  courses?: import('./coursePlan').CourseWeek[]
 }
 
 /** Today's date where you are (yyyy-mm-dd), not in UTC: an evening wrap-up belongs to today */
@@ -355,18 +359,20 @@ export function todayItems(plan: WeekPlan | null, date: string): AgendaItem[] {
 }
 
 const dayName = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })
-export const KIND_LABEL: Record<AgendaKind, string> = { learn: 'Learn', practice: 'Practise', quiz: 'Quiz', review: 'Review', 'take-home': 'Take-home', test: 'Test', check: 'Check', project: 'Build', mock: 'Mock', workout: 'Workout', read: 'Read' }
+export const KIND_LABEL: Record<AgendaKind, string> = { learn: 'Learn', practice: 'Practise', quiz: 'Quiz', review: 'Review', 'take-home': 'Take-home', test: 'Test', check: 'Check', project: 'Build', mock: 'Mock', workout: 'Workout', read: 'Read', course: 'Course' }
 
 /** The week as a note you can read and edit */
 export function weekMarkdown(plan: WeekPlan): string {
   const out = [`# Week of ${dayName(plan.weekStart)}`, '', plan.summary, '']
   if (plan.priorities.length) out.push(plan.mix ? '## The mix' : '## Priorities', '', ...plan.priorities.map((p) => `- **${p.notebook}** (${p.share}%): ${p.reason}`), '')
   if (plan.notices?.length) out.push('## What changed', '', ...plan.notices.map((n) => `- ${n.text}`), '')
+  if (plan.courses?.length) out.push('## This week’s course', '', ...plan.courses.map((c) => `- **${c.title}**, lessons ${c.range} (${c.minutes} min): ${c.why}`), '')
   for (const d of plan.days) {
     out.push(`## ${dayName(d.date)}`, '')
     for (const it of d.items) {
       out.push(`- [${it.done ? 'x' : ' '}] **${KIND_LABEL[it.kind]}:** ${it.topic && it.kind === 'learn' ? `[[${it.topic}]]` : it.title} (${it.minutes} min)${it.why ? ` — ${it.why}` : ''}`)
       for (const r of it.readings ?? []) out.push(`    - ${r.url ? `[${r.title}](${r.url})` : r.title}${r.by ? `, ${r.by}` : ''}`)
+      for (const l of it.course?.lessons ?? []) out.push(`    - ${l.n} ${l.title} (about ${l.minutes} min)`)
     }
     out.push('')
   }

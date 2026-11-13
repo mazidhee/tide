@@ -3,6 +3,7 @@ import { aimsOf, pickOf, DEFAULT_COACH, localDate, type CoachSettings, type Week
 import { useApp } from '../state'
 import { AGENDA_LABEL, openAgendaItem } from '../lib/agenda'
 import { Icon } from './Icon'
+import { useWeekCourses, WeekCourses } from './CourseWeek'
 import { PixelScene } from './PixelScene'
 import { Professor } from './Professor'
 import { GoalsPanel, PlanNotices } from './GoalsPanel'
@@ -249,7 +250,7 @@ export function CoachView() {
 /** One accent, lighter down the list, every share still visible however many threads there are */
 const tint = (i: number, n: number) => Math.round(90 - (i * 65) / Math.max(1, n - 1))
 
-const KIND_DOT: Record<string, string> = { learn: 'var(--accent)', practice: 'var(--info)', 'take-home': 'var(--info)', quiz: 'var(--warn)', review: 'var(--warn)', test: 'var(--danger)', check: 'var(--info)', project: 'var(--ink-muted)', mock: 'var(--ink-muted)', workout: 'var(--ink-muted)', read: 'var(--ink-muted)' }
+const KIND_DOT: Record<string, string> = { learn: 'var(--accent)', practice: 'var(--info)', 'take-home': 'var(--info)', quiz: 'var(--warn)', review: 'var(--warn)', test: 'var(--danger)', check: 'var(--info)', project: 'var(--ink-muted)', mock: 'var(--ink-muted)', workout: 'var(--ink-muted)', read: 'var(--ink-muted)', course: 'var(--accent)' }
 
 /**
  * The week at a glance: why it's shaped the way it is (in a sentence, with more on request), how
@@ -273,6 +274,8 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy, onPlan, planni
   const suggested = week.suggested && week.suggested.map((s) => s.notebook).join() !== week.priorities.map((p) => p.notebook).join() ? week.suggested : null
   const explains = !!(rest || week.bestHours || suggested || week.unsorted?.length || week.priorities.some((p) => p.reason))
   const notices = week.notices ?? []
+  // This week's course from the plan, with how far along it is (refreshed as items are ticked)
+  const courses = useWeekCourses(`${week.createdAt}:${week.days.flatMap((d) => d.items.map((i) => (i.done ? 1 : 0))).join('')}`)
 
   const toggle = (index: number) => {
     const next = structuredClone(week)
@@ -347,6 +350,8 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy, onPlan, planni
         )}
       </section>
 
+      {week.courses?.length ? <WeekCourses weeks={courses ?? []} /> : null}
+
       {notices.length > 0 && (
         <section className={`wk-changes${changesOpen ? ' open' : ''}`} aria-label="What changed">
           {changesOpen ? (
@@ -410,9 +415,15 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy, onPlan, planni
                     {it.movedFrom && <span className="wk-tag" title="Moved here by the replanner">From {new Date(it.movedFrom + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' })}</span>}
                     <span className="today-min">{it.minutes} min</span>
                   </button>
-                  {(it.why || it.readings?.length) && (
+                  {(it.why || it.readings?.length || it.course) && (
                     <div className="wk-item-more">
                       {it.why && <span className="muted small">{it.why}</span>}
+                      {it.course?.lessons.map((l) => (
+                        <button key={l.id} className="wk-reading" onClick={() => app.setView({ kind: 'courses', id: it.course!.id, lesson: l.id })} title={`${l.n} ${l.title}, about ${l.minutes} min`}>
+                          <Icon name="course" size={11} />
+                          {l.n} {l.title}
+                        </button>
+                      ))}
                       {it.readings?.map((r, j) => (
                         <a key={j} className="wk-reading" href={r.url ?? '#'} onClick={(e) => (e.preventDefault(), r.path ? app.openPath(r.path, `page=${r.page ?? 1}`) : r.url && window.tide.app.openExternal(r.url))} title={r.by ? `${r.title}, ${r.by}` : r.title}>
                           <Icon name="book" size={11} />

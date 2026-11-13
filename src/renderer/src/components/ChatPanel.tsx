@@ -189,7 +189,13 @@ export function ChatPanel({ variant = 'panel' }: { variant?: 'panel' | 'dock' } 
               <button className="tool-btn" onClick={() => send('Explain this part to me.')}>
                 Explain this
               </button>
-              <button className="tool-btn" onClick={() => send('Quiz me on this: two or three short questions on what’s on my screen, one at a time. Mark each answer before the next.')}>
+              <button
+                className="tool-btn"
+                onClick={() =>
+                  // [courseplan] In a course lesson: questions from the course's own passages, each citing where it comes from
+                  view.kind === 'courses' && view.id ? window.dispatchEvent(new CustomEvent('tide:course-quiz')) : send('Quiz me on this: two or three short questions on what’s on my screen, one at a time. Mark each answer before the next.')
+                }
+              >
                 Quiz me
               </button>
             </span>
