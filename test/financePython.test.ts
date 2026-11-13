@@ -180,7 +180,8 @@ print(json.dumps({
   it('runs every lab’s example code as written', async () => {
     const { FINANCE_LABS } = await import('../src/shared/finance/labs')
     for (const lab of FINANCE_LABS) expect(() => run(lab.python, dir), lab.id).not.toThrow()
-  })
+    // Each lab starts its own Python with pandas: about a second each once the quant pack is in
+  }, 60_000)
 
   it('says plainly when the data isn’t there', () => {
     const bare = mkdtempSync(join(tmpdir(), 'tide-fin-bare-'))
