@@ -645,6 +645,7 @@ export interface TideApi {
   /** The Code view as an IDE (shared/ide) */
   ide: import('./ide').IdeApi
   ideas: import('./ideaProject').IdeasApi
+  packs: import('./trackPacks').PacksApi
   /** Jupyter notebooks and the quant lab (shared/notebook) */
   notebook: import('./notebook/api').NotebookApi
   lsp: {
@@ -1190,6 +1191,9 @@ export interface TideApi {
     reset(id: string): Promise<void>
     /** Loads a .csv or .tsv file from the notes folder (a path relative to it) into that lab as a table named after the file */
     load(id: string, path: string): Promise<import('./lab').LabLoaded>
+    /** The same lab's Postgres database (the Postgres pack), in session A or B */
+    pgQuery(id: string, sql: string, session?: string): Promise<import('./lab').LabResult & { session: string; transaction: 'idle' | 'open' | 'failed' }>
+    pgReset(id: string): Promise<void>
   }
   /** Guided projects (shared/workshop.ts): built in stages, reviewed against tests */
   /** Videos (main/videos.ts, shared/video.ts): transcripts kept for YouTube videos and videos of your own, and the sections a lesson offers */

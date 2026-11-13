@@ -14,6 +14,7 @@ import { parseChartRequest, resultSummary, type ChartRequest, type LabResult } f
 import { chooseChart, columnKinds, fullNumber, isIdColumn, type ChartType } from '@shared/labChart'
 import { drawChart, drawFigure } from './labChart'
 import { createKeeper, watchBlocks } from './liveBlocks'
+import { offerPack } from './runBlocks'
 
 /** Rows the table shows; the rest are counted in a line under it */
 const TABLE_ROWS = 200
@@ -88,10 +89,14 @@ interface Block {
   destroy(): void
 }
 
-/** Builds the editor and its result. `ask` is set for a chart block: it opens on the chart, with the query folded away. */
-export function labBlock(sql: string, ask?: ChartRequest): Block {
+/**
+ * Builds the editor and its result. `ask` is set for a chart block: it opens on the chart, with the
+ * query folded away. `postgres` runs it on the lesson's Postgres database (the Postgres pack)
+ * instead of SQLite; a first line of -- session: B runs it in the second session.
+ */
+export function labBlock(sql: string, ask?: ChartRequest, postgres = false): Block {
   const charting = !!ask
-  const root = el('div', `lab-block${charting ? ' lab-chart-block' : ''}`)
+  const root = el('div', `lab-block${charting ? ' lab-chart-block' : ''}${postgres ? ' lab-pg' : ''}`)
   let view: 'table' | 'chart' = charting ? 'chart' : 'table'
   let type: ChartType | undefined = ask?.type
   let result: LabResult | null = null
@@ -128,8 +133,10 @@ export function labBlock(sql: string, ask?: ChartRequest): Block {
 
   const actions = el('div', 'lab-actions')
   const lang = el('span', 'lab-lang', 'SQL')
-  lang.title = 'Runs on SQLite, on the sample data kept for this conversation'
-  const engine = el('span', 'lab-engine', 'SQLite · sample data')
+  lang.title = postgres ? 'Runs on PostgreSQL 18, in this lesson’s own database with the sample data' : 'Runs on SQLite, on the sample data kept for this conversation'
+  const session = () => (/^\s*--\s*session\s*:?\s*b\b/im.test(input.value.split('\n').slice(0, 3).join('\n')) ? 'B' : 'A')
+  const engine = el('span', 'lab-engine', postgres ? `PostgreSQL 18 · session ${session()}` : 'SQLite · sample data')
+  if (postgres) input.addEventListener('input', () => (engine.textContent = `PostgreSQL 18 · session ${session()}`))
   const copy = button('lab-quiet', 'Copy', 'Copy the query')
   copy.addEventListener('click', () => {
     void navigator.clipboard?.writeText(input.value)
@@ -199,8 +206,10 @@ export function labBlock(sql: string, ask?: ChartRequest): Block {
     if (r.error) {
       const box = el('div', 'lab-error')
       box.setAttribute('role', 'alert')
-      box.append(el('span', 'lab-error-label', 'SQLite says'), el('code', 'lab-error-text', r.error))
+      box.append(el('span', 'lab-error-label', postgres ? 'Postgres says' : 'SQLite says'), el('code', 'lab-error-text', r.error))
       out.append(box)
+      // Postgres not installed yet: the install is offered right here
+      if (postgres) offerPack(box, r.error)
       // The query is what needs fixing, so it is put in front of you
       if (charting) openQuery(true)
       return
@@ -212,12 +221,18 @@ export function labBlock(sql: string, ask?: ChartRequest): Block {
       const reset = button('lab-quiet', 'Reset data', 'Put the sample data back as it was')
       reset.addEventListener('click', async () => {
         reset.disabled = true
-        await window.tide.lab.reset(labId())
+        await (postgres ? window.tide.lab.pgReset(labId()) : window.tide.lab.reset(labId()))
         meta.textContent = 'The sample data is back as it was'
         reset.remove()
       })
       bar.append(meta, el('span', 'lab-space'), reset)
       out.append(bar)
+      return
+    }
+    // A query plan reads as the indented tree Postgres prints, not as a table
+    if (r.columns.length === 1 && r.columns[0] === 'QUERY PLAN') {
+      bar.append(el('span', 'lab-meta', 'Query plan'), el('span', 'lab-space'), meta)
+      out.append(bar, el('pre', 'lab-plan', r.rows.map((row) => String(row[0] ?? '')).join('\n')))
       return
     }
     const picture = chooseChart(r, { type, x: ask?.x, y: ask?.y })
@@ -250,7 +265,12 @@ export function labBlock(sql: string, ask?: ChartRequest): Block {
     root.classList.add('running')
     let r: LabResult
     try {
-      r = await window.tide.lab.query(labId(), input.value)
+      if (postgres) {
+        const pg = await window.tide.lab.pgQuery(labId(), input.value, session())
+        r = pg
+        // A transaction left open is worth seeing: the other session's queries depend on it
+        engine.textContent = `PostgreSQL 18 · session ${pg.session}${pg.transaction === 'open' ? ' · in a transaction' : pg.transaction === 'failed' ? ' · transaction failed' : ''}`
+      } else r = await window.tide.lab.query(labId(), input.value)
     } catch (e) {
       r = { columns: [], types: [], rows: [], rowCount: 0, truncated: false, elapsedMs: 0, error: (e as Error).message }
     }
@@ -278,21 +298,22 @@ const DONE = 'labDone'
 const bodyOf = (pre: HTMLElement) => pre.querySelector('code')?.textContent ?? ''
 
 // A chart labelled "json" by mistake is still a chart: a JSON object that opens with its query
-function blockKind(pre: HTMLElement): 'chart' | 'sql' | null {
+function blockKind(pre: HTMLElement): 'chart' | 'sql' | 'postgres' | null {
   const lang = (pre.dataset.lang ?? '').toLowerCase()
   if (lang === 'chart' || (lang === 'json' && /^\s*\{\s*"sql"\s*:/.test(bodyOf(pre)))) return 'chart'
+  if (lang === 'postgres' || lang === 'postgresql' || lang === 'pgsql' || lang === 'psql') return 'postgres'
   return lang === 'sql' || lang === 'sqlite' ? 'sql' : null
 }
 
 /** Queries and charts survive the text around them being replaced (see liveBlocks): edits, results and the chosen view stay */
 const keeper = createKeeper({ widget: '.lab-block', isSource: (pre) => blockKind(pre) !== null, sourceOf: (pre) => bodyOf(pre).replace(/\s+$/, '') })
 
-function mountSql(pre: HTMLElement) {
+function mountSql(pre: HTMLElement, postgres = false) {
   const code = bodyOf(pre).replace(/\s+$/, '')
   pre.dataset[DONE] = '1'
   if (!code.trim()) return
   const slot = keeper.slot(pre)
-  const block = labBlock(code)
+  const block = labBlock(code, undefined, postgres)
   pre.replaceWith(block.root)
   keeper.keep(slot, block.root, block.destroy)
 }
@@ -331,6 +352,7 @@ function scan() {
     const kind = blockKind(pre)
     if (kind === 'chart') mountChart(pre)
     else if (kind === 'sql') mountSql(pre)
+    else if (kind === 'postgres') mountSql(pre, true)
   })
 }
 

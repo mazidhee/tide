@@ -3,6 +3,7 @@ import type { ChatEvent, TideApi } from '@shared/types'
 import { ideApi } from './ide'
 import { ideasApi } from './ideas'
 import { notebookApi } from './notebook'
+import { packsApi } from './packs'
 
 const invoke =
   <R>(channel: string) =>
@@ -52,6 +53,7 @@ const api: TideApi = {
   },
   ide: ideApi,
   ideas: ideasApi,
+  packs: packsApi,
   notebook: notebookApi,
   lsp: {
     send: (msg) => ipcRenderer.send('lsp:send', msg),
@@ -603,7 +605,9 @@ const api: TideApi = {
     query: invoke('lab:query'),
     schema: invoke('lab:schema'),
     reset: invoke('lab:reset'),
-    load: invoke('lab:load')
+    load: invoke('lab:load'),
+    pgQuery: invoke('lab:pgQuery'),
+    pgReset: invoke('lab:pgReset')
   },
   metabase: {
     status: invoke('metabase:status'),

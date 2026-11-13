@@ -11,7 +11,7 @@
 import { app, ipcMain, type WebContents } from 'electron'
 import { execFile, spawn } from 'child_process'
 import { existsSync, promises as fs } from 'fs'
-import { dirname, extname, join } from 'path'
+import { dirname, extname, join, relative } from 'path'
 import { createHash } from 'crypto'
 import type { DebugEvent, DebugKind, DebugStart, DebugToolStatus } from '@shared/ide'
 import { mathPython, setupMath } from '../runner'
@@ -109,6 +109,15 @@ export async function buildNative(root: string, file: string): Promise<{ program
   }
   // C and C++: the file and the other sources beside it of the same language
   const cpp = ext !== '.c'
+  // In a project with build files (compile_flags.txt, CMakeLists.txt), the project's sources and include folders, as Run builds it
+  const { nativeRoot, nativeSources } = await import('../runner')
+  const project = nativeRoot(file)
+  if (project) {
+    const { sources, flags } = await nativeSources(project, relative(project, file), !cpp)
+    const program = join(out, 'main')
+    const r = await run(cpp ? '/usr/bin/clang++' : '/usr/bin/clang', ['-g', '-O0', ...(cpp ? ['-std=c++20'] : ['-std=c17']), ...flags, '-o', program, ...sources], project)
+    return r.code === 0 ? { program } : { error: r.err.trim() || 'The compiler failed' }
+  }
   const dir = dirname(file)
   const siblings = (await fs.readdir(dir)).filter((f) => (cpp ? /\.(cc|cpp|cxx)$/i : /\.c$/i).test(f)).map((f) => join(dir, f))
   // Two files with main() can't be linked together: then only the one being debugged

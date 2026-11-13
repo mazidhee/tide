@@ -86,6 +86,7 @@ const CodeEditor = lazy(() => import('./CodeEditor').then((m) => ({ default: m.C
 const LessonProposal = lazy(() => import('./LessonProposal'))
 import { exerciseFile, exerciseNumber, isCodingLesson } from '@shared/lessonCode'
 import { useLessonCode } from '../lib/lessonCode'
+import { PackOffer, packNamedIn } from './TrackPacks'
 const LessonCanvas = lazy(() => import('./LessonCanvas').then((m) => ({ default: m.LessonCanvas })))
 // Loaded only when opened: the web view's frame comes with the link viewer (and its PDF reader)
 const MetabasePane = lazy(() => import('./MetabasePane').then((m) => ({ default: m.MetabasePane })))
@@ -2161,6 +2162,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                       {(runOut.stdout + (runOut.stderr ? (runOut.stdout ? '\n' : '') + runOut.stderr : '')) || 'Ran with no output.'}
                     </pre>
                   )}
+                  {runOut && packNamedIn(runOut.stderr) && <PackOffer id={packNamedIn(runOut.stderr)!} />}
                   <textarea className="s-input small" rows={2} value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder={asking ? 'What would you like to ask? Your code can wait.' : 'Explain your code or approach (optional)'} {...pictures.handlers} />
                 </>
               ) : mathsBox ? (

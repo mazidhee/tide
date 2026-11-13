@@ -30,6 +30,7 @@ import { useTideDesign } from '../lib/design'
 import { noteTranscriptSection } from '@shared/video'
 import { noteOpenMode } from '@shared/noteMode'
 import { NoteCover } from './NoteCover'
+import { offerPack } from '../lib/runBlocks'
 
 /** Obsidian's cssclasses from the frontmatter, as classes on the page (a book page is "tide-book") */
 const cssClasses = (props: Record<string, unknown>) => {
@@ -396,6 +397,7 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
         (r.timedOut ? '\nStopped after 10 seconds.' : '') +
         (!r.stdout && !r.stderr && !r.timedOut ? 'Ran with no output.' : '')
       out.dataset.meta = r.timedOut ? 'timed out' : `exit ${r.exitCode}, ${r.durationMs} ms`
+      offerPack(out, r.stderr || '')
       return
     }
     const copy = target.closest('.copy-code')

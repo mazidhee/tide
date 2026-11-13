@@ -105,7 +105,7 @@ export interface GitCommit {
 
 // ---------- Language servers ----------
 
-export type LspServerId = 'typescript' | 'rust' | 'clangd' | 'go'
+export type LspServerId = 'typescript' | 'rust' | 'clangd' | 'go' | 'solidity'
 
 export interface LspServerInfo {
   id: LspServerId
@@ -179,7 +179,7 @@ export interface TestRun {
 }
 
 export interface TestDiscovery {
-  framework: 'pytest' | 'cargo' | 'node' | 'go' | null
+  framework: 'pytest' | 'cargo' | 'node' | 'go' | 'forge' | 'cpp' | null
   tests: TestNode[]
   error?: string
   /** pytest isn't in Tide's Python yet */
@@ -275,7 +275,7 @@ export interface LibraryItem {
 }
 
 export interface ProjectTemplate {
-  id: 'python' | 'python-tests' | 'data' | 'node' | 'typescript' | 'c' | 'rust' | 'go' | 'empty'
+  id: 'python' | 'python-tests' | 'data' | 'node' | 'typescript' | 'c' | 'cpp' | 'rust' | 'go' | 'foundry' | 'empty'
   label: string
   about: string
   language: string

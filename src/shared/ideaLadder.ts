@@ -67,6 +67,7 @@ export const LADDER: LadderSeed[] = [
   { id: 'black-scholes', title: 'Black-Scholes from scratch', about: 'The normal CDF, then call and put prices', tier: 1, areas: ['maths', 'quant'], template: 'options-pricer', milestones: 1 },
   { id: 'logic', title: 'Formulas and truth tables', about: 'A parser for propositional logic and a tautology checker', tier: 1, areas: ['maths', 'software'], template: 'proof-checker', milestones: 1 },
   { id: 'vault', title: 'A collateralised vault', about: 'Mint against collateral, keep the ratio', tier: 1, areas: ['blockchain', 'quant'], template: 'stablecoin', milestones: 1 },
+  { id: 'cpp-ledger', title: 'A ledger in C++', about: 'Balanced entries and a journal file with RAII, tested with the sanitizers on (C++ pack)', tier: 1, areas: ['software', 'payments'], template: 'cpp-ledger', milestones: 2 },
   // ---------- 2. Services ----------
   { id: 'payments-api', title: 'An idempotent payments service', about: 'A ledger behind an API that never pays twice, reading ISO 20022', tier: 2, areas: ['payments', 'software'], template: 'payment-rail', milestones: 3 },
   { id: 'etl-job', title: 'An ETL job', about: 'Validate, transform and load idempotently into a warehouse', tier: 2, areas: ['data', 'software'], template: 'data-pipeline', milestones: 3 },
@@ -76,6 +77,8 @@ export const LADDER: LadderSeed[] = [
   { id: 'greeks-trees', title: 'Greeks and binomial trees', about: 'Black-Scholes, its Greeks checked numerically, and American options on a tree', tier: 2, areas: ['maths', 'quant'], template: 'options-pricer', milestones: 3 },
   { id: 'linear-algebra', title: 'Roots and linear systems', about: 'Root finding, then matrices and LU decomposition', tier: 2, areas: ['maths'], template: 'numerics', milestones: 2 },
   { id: 'deduction', title: 'Natural deduction rules', about: 'Formulas, truth, and rules that check one proof step', tier: 2, areas: ['maths'], template: 'proof-checker', milestones: 2 },
+  { id: 'cpp-order-book', title: 'A fast order book in C++', about: 'Price-time matching, then a million orders a second, every gain measured (C++ pack)', tier: 2, areas: ['quant', 'software'], template: 'cpp-order-book' },
+  { id: 'sol-vault', title: 'A collateralised vault in Solidity', about: 'Mint a stablecoin against ether, an oracle, liquidations and invariant tests in Foundry (Foundry pack)', tier: 2, areas: ['blockchain', 'quant'], template: 'sol-vault' },
   { id: 'bank-accounts', title: 'Accounts on a general ledger', about: 'Customer accounts, overdrafts and transfers on double entry', tier: 2, areas: ['payments'], template: 'core-banking', milestones: 3 },
   // ---------- 3. Systems ----------
   { id: 'payment-rail', title: 'A payment rail', about: 'Ledger, ISO 20022, idempotent API, fraud checks, settlement and reconciliation', tier: 3, areas: ['payments', 'software'], template: 'payment-rail' },
@@ -83,6 +86,7 @@ export const LADDER: LadderSeed[] = [
   { id: 'data-pipeline', title: 'A data pipeline', about: 'Orchestrated ETL into a warehouse, with data-quality checks', tier: 3, areas: ['data'], template: 'data-pipeline' },
   { id: 'ml-project', title: 'An ML project end to end', about: 'Data, a model from scratch, training and honest evaluation', tier: 3, areas: ['data', 'quant'], template: 'ml-project' },
   { id: 'blockchain', title: 'A blockchain from scratch', about: 'Hashing, Merkle trees, signatures, proof of work and a P2P network', tier: 3, areas: ['blockchain', 'software'], template: 'blockchain' },
+  { id: 'sol-audit', title: 'A smart contract audit', about: 'Find the bugs, prove each with a Foundry exploit, fix it and write the report (Foundry pack)', tier: 3, areas: ['blockchain', 'software'], template: 'sol-audit' },
   { id: 'stablecoin-sim', title: 'A stablecoin simulator', about: 'Vaults, an oracle, liquidations and the peg under shocks', tier: 3, areas: ['blockchain', 'quant'], template: 'stablecoin' },
   { id: 'options-pricer', title: 'An options pricer from first principles', about: 'Black-Scholes, Greeks, trees, Monte Carlo and implied volatility', tier: 3, areas: ['maths', 'quant'], template: 'options-pricer' },
   { id: 'numerical-library', title: 'A numerical library', about: 'Roots, LU, integration and ODEs, with errors measured', tier: 3, areas: ['maths', 'software'], template: 'numerics' },

@@ -22,13 +22,16 @@
  */
 import { keyWords } from './warmup'
 
-export type IdeaLanguage = 'python' | 'rust' | 'go' | 'javascript' | 'typescript'
+export type IdeaLanguage = 'python' | 'rust' | 'go' | 'javascript' | 'typescript' | 'cpp' | 'solidity'
 export const IDEA_LANGUAGES: { id: IdeaLanguage; label: string }[] = [
   { id: 'python', label: 'Python' },
   { id: 'rust', label: 'Rust' },
   { id: 'go', label: 'Go' },
   { id: 'typescript', label: 'TypeScript' },
-  { id: 'javascript', label: 'JavaScript' }
+  { id: 'javascript', label: 'JavaScript' },
+  // With the track packs: C++ builds with clang and CMake, Solidity with Foundry
+  { id: 'cpp', label: 'C++' },
+  { id: 'solidity', label: 'Solidity' }
 ]
 export const languageLabel = (l: IdeaLanguage) => IDEA_LANGUAGES.find((x) => x.id === l)?.label ?? l
 
@@ -222,6 +225,8 @@ export function isTestFile(path: string, content = ''): boolean {
   if (/_test\.go$/.test(name)) return true
   if (/\.test\.(m?[jt]s|cjs)$/.test(name)) return true
   if (/\.rs$/.test(name) && (path.startsWith('tests/') || /#\[test\]/.test(content))) return true
+  if (/^test_.*\.(cpp|cc|cxx)$/.test(name)) return true
+  if (/\.t\.sol$/.test(name)) return true
   return false
 }
 
@@ -892,10 +897,10 @@ export function questionsPrompt(idea: string, known: string): string {
 
 /** Without a model: the same three things, asked plainly */
 export function fallbackQuestions(idea: string): ClarifyQuestion[] {
-  const lang = /\brust\b/i.test(idea) ? 'Rust' : /\bgo(lang)?\b/i.test(idea) ? 'Go' : /typescript|\bnode\b/i.test(idea) ? 'TypeScript' : 'Python'
+  const lang = /\b(solidity|smart contracts?|evm|foundry)\b/i.test(idea) ? 'Solidity' : /\b(c\+\+|cpp)(?![\w+])/i.test(idea) ? 'C++' : /\brust\b/i.test(idea) ? 'Rust' : /\bgo(lang)?\b/i.test(idea) ? 'Go' : /typescript|\bnode\b/i.test(idea) ? 'TypeScript' : 'Python'
   return [
     { id: 'scope', question: 'Which part matters most to you?', options: ['The core, end to end', 'One hard part, done well', 'All of it, slowly'] },
-    { id: 'language', question: 'Which language?', options: [lang, ...['Python', 'Rust', 'Go', 'TypeScript'].filter((l) => l !== lang)].slice(0, 4) },
+    { id: 'language', question: 'Which language?', options: [lang, ...(/\b(solidity|smart contracts?|evm|foundry)\b/i.test(idea) ? ['Solidity', 'Python'] : /\b(c\+\+|cpp)\b/i.test(idea) ? ['C++', 'Rust'] : ['Python', 'Rust', 'Go', 'TypeScript']).filter((l) => l !== lang)].slice(0, 4) },
     { id: 'depth', question: 'How deep should it go?', options: DEPTHS.map((d) => d.label) }
   ]
 }
@@ -916,7 +921,7 @@ export function parseQuestions(raw: string | Record<string, unknown> | null): Cl
 /** The language and depth the answers name, if they do */
 export function fromAnswers(answers: { question: string; answer: string }[]): { language?: IdeaLanguage; depth?: IdeaDepth } {
   const all = answers.map((a) => a.answer).join(' ').toLowerCase()
-  const language = IDEA_LANGUAGES.find((l) => new RegExp(`\\b${l.label.toLowerCase()}\\b`).test(all))?.id
+  const language = IDEA_LANGUAGES.find((l) => new RegExp(`(?:^|[^\\w+])${l.label.toLowerCase().replace(/[+]/g, '\\+')}(?![\\w+])`).test(all))?.id
   const depth = DEPTHS.find((d) => all.includes(d.label.toLowerCase()))?.id ?? (/\bproduction|real systems|in depth|deep\b/.test(all) ? 'deep' : /\bfirst|weekend|simple|minimal\b/.test(all) ? 'first' : undefined)
   return { ...(language ? { language } : {}), ...(depth ? { depth } : {}) }
 }
@@ -928,6 +933,8 @@ const TEST_RULES: Record<IdeaLanguage, string> = {
   rust: 'A Cargo library crate (Cargo.toml, src/lib.rs, modules). Tests in tests/*.rs using the crate. Stub bodies are todo!(). No external crates unless essential.',
   go: 'A Go module (go.mod, go 1.22). Tests in *_test.go in the package. Stubs return zero values and an errors.New("not implemented") error, or panic("not implemented").',
   javascript: 'Node ES modules (package.json with "type": "module" and "test": "node --test"). Tests in test/*.test.js with node:test and node:assert/strict. Stubs throw new Error("not implemented").',
+  cpp: 'C++20 built with clang (the C++ pack): CMakeLists.txt, compile_flags.txt (-std=c++20, -Iinclude, -Itests), headers in include/, sources in src/ (src/main.cpp holds main), and tests in tests/test_*.cpp using tests/check.hpp (TEST(name) { CHECK(...); CHECK_EQ(a, b); CHECK_THROWS(expr); } and int main() { return check::run_all(); }); Tide writes check.hpp itself, so do not write it. Stubs throw std::logic_error("not implemented").',
+  solidity: 'Solidity 0.8 with Foundry (the Foundry pack): foundry.toml, contracts in src/, tests in test/*.t.sol importing {Test} from "forge-std/Test.sol" (forge-std comes from Tide, no lib/ folder). Stub functions revert("not implemented").',
   typescript: 'TypeScript run by Node 22+ with type stripping (package.json with "type": "module", "test": "node --test"; tsconfig.json strict). Tests in test/*.test.ts with node:test. Use only erasable syntax (no enums or namespaces). Stubs throw new Error("not implemented").'
 }
 

@@ -100,6 +100,20 @@ export const SERVERS: ServerDef[] = [
     }
   },
   {
+    // Foundry's own language server (built on Solar): diagnostics, completion, hover and go-to-definition for Solidity
+    id: 'solidity',
+    name: 'Solidity (forge lsp)',
+    languages: ['sol'],
+    install: 'Install the Foundry pack in Settings › Tools.',
+    async find() {
+      const { foundryBin, forgeStd } = await import('../packs/paths')
+      const forge = foundryBin('forge')
+      if (!(await answers(forge))) return null
+      // forge-std comes from Tide's tools folder unless the project has its own lib/forge-std
+      return { command: forge, args: ['lsp', '--stdio'], env: { FOUNDRY_OFFLINE: 'true', FOUNDRY_SOLC: foundryBin('solc'), FOUNDRY_REMAPPINGS: `forge-std/=${forgeStd()}/`, NO_COLOR: '1' } }
+    }
+  },
+  {
     id: 'go',
     name: 'gopls',
     languages: ['go'],
@@ -114,9 +128,16 @@ export const SERVERS: ServerDef[] = [
 const found = new Map<LspServerId, Promise<Found | null>>()
 const findServer = (d: ServerDef) => {
   let f = found.get(d.id)
-  if (!f) found.set(d.id, (f = d.find()))
+  if (!f) {
+    found.set(d.id, (f = d.find()))
+    // One that wasn't there is looked for again next time: a pack may have been installed since
+    void f.then((x) => !x && found.get(d.id) === f && found.delete(d.id))
+  }
   return f
 }
+
+/** After a pack is installed: every server is looked for again */
+export const forgetServers = () => found.clear()
 
 export async function serverInfo(): Promise<LspServerInfo[]> {
   return Promise.all(

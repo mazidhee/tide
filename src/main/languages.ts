@@ -13,6 +13,8 @@ import { join } from 'path'
 export interface Toolchain {
   /** Where the binary may be (~ is the home folder); the first that answers its version probe wins */
   paths: string[]
+  /** Paths only known at run time (Tide's tools folder), looked at before `paths` */
+  locate?(): string[]
   /** Arguments that print the version, proving it is really there (macOS ships empty stand-ins) */
   version: string[]
   /** A command that must succeed before anything is probed: Apple's stand-ins open an install dialog when run without the tools */
@@ -32,6 +34,9 @@ export interface RunContext {
   tool: string
   /** The source file, relative to the working folder */
   entry: string
+  /** For a C or C++ project: every source file to compile and link (the entry among them), and flags from its compile_flags.txt */
+  sources?: string[]
+  flags?: string[]
   /** A folder that outlives the run, for compiler caches */
   cache: string
   /** Tide's Python, as a command */
@@ -56,7 +61,14 @@ export interface Language {
 
 const APPLE_TOOLS = 'Apple’s command line tools. Install them with: xcode-select --install'
 const XCODE = ['/usr/bin/xcode-select', '-p']
-const clang = (compiler: string, std: string, entry: string): Language['compile'] => (c) => [compiler, std, '-Wall', '-Wextra', '-g', '-fsanitize=undefined,bounds', '-fno-omit-frame-pointer', '-o', 'prog', c.entry || entry]
+const clang = (compiler: string, std: string, entry: string): Language['compile'] => (c) => [compiler, std, '-Wall', '-Wextra', '-g', '-fsanitize=undefined,bounds', '-fno-omit-frame-pointer', ...(c.flags ?? []), '-o', 'prog', ...(c.sources?.length ? c.sources : [c.entry || entry])]
+
+/** Tide's tools folder, where the track packs install (main/packs/paths sets it; this file stays free of Electron) */
+let toolsDir: () => string = () => process.env.TIDE_TOOLS_DIR ?? ''
+export const setToolsDir = (f: () => string) => {
+  toolsDir = f
+}
+const FOUNDRY = 'the Foundry pack (forge and the Solidity compiler). Add it in Settings › Tools › Foundry pack'
 
 export const LANGUAGES: Language[] = [
   { id: 'python', name: 'Python', aliases: ['py', 'python3'], entry: 'main.py', run: (c) => [...c.python, c.entry] },
@@ -110,6 +122,11 @@ export const LANGUAGES: Language[] = [
     // One file, compiled in memory and run (JDK 11 and later)
     run: (c) => [c.tool, '-XX:-UsePerfData', c.entry]
   },
+  /**
+   * Solidity runs through Foundry from the Foundry pack (main/packs/foundry): a snippet is tested,
+   * run as a script or compiled in a scratch Foundry project, in the sandbox, with no network.
+   */
+  { id: 'solidity', name: 'Solidity', aliases: ['sol'], entry: 'Main.sol', tool: { paths: [], locate: () => (toolsDir() ? [join(toolsDir(), 'foundry', 'bin', 'forge')] : []), version: ['--version'], install: FOUNDRY }, run: (c) => [c.tool, 'test'] },
   { id: 'ruby', name: 'Ruby', aliases: ['rb'], entry: 'main.rb', tool: { paths: ['/opt/homebrew/opt/ruby/bin/ruby', '/usr/local/opt/ruby/bin/ruby', '/usr/bin/ruby'], version: ['--version'], install: 'Ruby. Install it with: brew install ruby' }, run: (c) => [c.tool, c.entry] },
   { id: 'bash', name: 'Bash', aliases: ['sh', 'shell'], entry: 'main.sh', tool: { paths: ['/bin/bash'], version: ['--version'], install: 'Bash at /bin/bash' }, run: (c) => [c.tool, c.entry] },
   { id: 'zsh', name: 'zsh', aliases: [], entry: 'main.zsh', tool: { paths: ['/bin/zsh'], version: ['--version'], install: 'zsh at /bin/zsh' }, run: (c) => [c.tool, c.entry] }
@@ -151,7 +168,7 @@ const realProbe: Probe = {
 /** Finds a toolchain: the first candidate that exists and answers its version probe */
 export async function detect(t: Toolchain, probe: Probe = realProbe, home = homedir()): Promise<Found | null> {
   if (t.guard && (await probe.run(t.guard)) === null) return null
-  const candidates = t.paths.map((p) => p.replace(/^~(?=\/)/, home))
+  const candidates = [...(t.locate?.() ?? []), ...t.paths].map((p) => p.replace(/^~(?=\/)/, home))
   const perTool = !!t.home?.cmd.includes('{tool}')
   if (t.home && !perTool) {
     const dir = await probe.run(t.home.cmd)

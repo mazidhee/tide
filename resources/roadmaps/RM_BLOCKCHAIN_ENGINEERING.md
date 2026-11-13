@@ -1,6 +1,6 @@
 # Blockchain Engineering Roadmap
 
-Building on blockchains: applied cryptography, consensus as it really runs, the EVM in depth, Solidity with Foundry, security and auditing, and layer 2s. Builds on the Blockchain roadmap (hashes, Bitcoin and Ethereum basics); practise in Tide's blockchain lab.
+Building on blockchains: applied cryptography, consensus as it really runs, the EVM in depth, Solidity with Foundry, security and auditing, and layer 2s. Builds on the Blockchain roadmap (hashes, Bitcoin and Ethereum basics); practise in Tide's blockchain lab. The Foundry pack (Settings › Tools) runs Solidity in lessons and projects: forge test in the sandbox, a fresh anvil chain per run, and the Solidity language server in the IDE.
 
 ## 1. Applied cryptography — CORE
 
@@ -99,7 +99,7 @@ Courses: Ethereum’s developer docs (ethereum-docs)
 
 **Capstone**
 
-- [ ] Project: A collateralised vault in Solidity with an oracle and liquidations, invariant-tested in Foundry
+- [ ] Project: A collateralised vault in Solidity with an oracle and liquidations, invariant-tested in Foundry (project: sol-vault)
 
 ## 5. Security and auditing — CORE
 
@@ -129,7 +129,7 @@ Courses: Ethereum’s developer docs (ethereum-docs)
 
 **Capstone**
 
-- [ ] Project: Audit an open-source protocol's contracts and write a report with proofs of concept in Foundry
+- [ ] Project: Audit an open-source protocol's contracts and write a report with proofs of concept in Foundry (project: sol-audit)
 
 ## 6. Layer 2s and scaling — CORE
 

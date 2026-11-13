@@ -17,7 +17,7 @@
 import { ipcMain } from 'electron'
 import { promises as fs } from 'fs'
 import { basename, resolve } from 'path'
-import {
+import { languageLabel,
   advanceSession,
   catalogueReadings,
   currentMilestone,
@@ -268,7 +268,7 @@ export async function draftPlan(req: DraftRequest, now = Date.now()): Promise<{ 
   if (req.source === 'template') {
     if (!template) throw new Error('No template fits that idea. Pick one, or draft the plan with a model.')
     const plan = startMap()
-    return { ...(await checkPlan(plan)), ...(language !== plan.language ? { note: `The ${template.name} template is in Python; ask Claude to plan it for another language.` } : {}) }
+    return { ...(await checkPlan(plan)), ...(language !== plan.language ? { note: `The ${template.name} template is in ${languageLabel(plan.language)}; ask Claude to plan it for another language.` } : {}) }
   }
 
   const known = knownSummary(await knownConcepts())
@@ -394,7 +394,7 @@ export async function createProject(planIn: ProjectPlan, now = Date.now()): Prom
   }
 
   // The first milestone's tests are held until its ready check passes
-  const tests: Created['tests'] = { passed: 0, failed: 0, framework: plan.language === 'python' ? 'pytest' : plan.language === 'rust' ? 'cargo' : plan.language === 'go' ? 'go' : 'node', held: testsForMilestone(plan, 0).length }
+  const tests: Created['tests'] = { passed: 0, failed: 0, framework: plan.language === 'python' ? 'pytest' : plan.language === 'rust' ? 'cargo' : plan.language === 'go' ? 'go' : plan.language === 'cpp' ? 'cpp' : plan.language === 'solidity' ? 'forge' : 'node', held: testsForMilestone(plan, 0).length }
   await score(notebook, 'project', `starting ${plan.name}`, plan).catch(() => null)
   return { notebook, root, tests, coach }
 }
