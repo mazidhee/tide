@@ -24,6 +24,8 @@ const TITLES: Partial<Record<View['kind'], string>> = {
   coach: 'Your week',
   wrapup: 'Evening wrap-up',
   weekly: 'Weekly review',
+  northstar: 'North Star',
+  learner: 'What the tutor knows',
   drill: 'Speed drill',
   maths: 'Mental maths',
   workout: 'Morning workout',

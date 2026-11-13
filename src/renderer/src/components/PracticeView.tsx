@@ -170,15 +170,11 @@ export function PracticeView() {
         <header className="pv-head">
           <div>
             <h1 className="page-title">Practice</h1>
-            <p className="practice-summary">
-              {problems && problems.some((p) => p.attempts.length) ? (
-                <>
-                  <strong>{counts.solved}</strong> solved, <strong>{counts.struggled}</strong> struggled, <strong>{counts.redo}</strong> ready to try again.
-                </>
-              ) : (
-                'Learn by doing.'
-              )}
-            </p>
+            {problems && problems.some((p) => p.attempts.length) && (
+              <p className="practice-summary">
+                <strong>{counts.solved}</strong> solved · <strong>{counts.struggled}</strong> struggled · <strong>{counts.redo}</strong> to try again
+              </p>
+            )}
           </div>
           <div className="pv-tools">
             <button className="tool-btn" onClick={() => app.setView({ kind: 'code' })} title="Editor, Run and a terminal">

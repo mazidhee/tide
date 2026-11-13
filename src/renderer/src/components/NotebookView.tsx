@@ -1,3 +1,4 @@
+import { QUANT_LAB_FOLDER } from './QuantPanel'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ProjectPanel } from './ProjectPanel'
 import { usePopOutSurface } from '../lib/popout'
@@ -107,8 +108,11 @@ export function NotebookView({ path, tab: initialTab }: { path: string; tab?: 'p
     return c
   }, [allNotes, notes])
   const continuePath = app.recent.find((p) => p.startsWith(path + '/'))
+  // A lab (Quant lab, or a folder of Jupyter notebooks and no notes) has no outline to start: it opens on its notebooks
+  const isLab = !meta?.outline && !meta?.project && (folder?.name === QUANT_LAB_FOLDER || (allNotes.length === 0 && chapters.some((c) => c.notes.some((n) => /\.ipynb$/i.test(n.path)))))
   // Open on the outline when the notebook has one, otherwise on its notes
-  const activeTab = tab ?? (meta?.project ? 'project' : meta?.outline ? 'outline' : 'notes')
+  const picked = tab ?? (meta?.project ? 'project' : meta?.outline ? 'outline' : 'notes')
+  const activeTab = isLab && picked === 'outline' ? 'notes' : picked
   const reading = folder ? library.items.filter((i) => hasTopic(i, folder.name)) : []
   const pickerItem = picker ? library.items.find((i) => i.path === picker.path) : undefined
   const firstNote = chapters[0]?.notes.find((n) => n.kind === 'note')?.path
@@ -220,9 +224,11 @@ export function NotebookView({ path, tab: initialTab }: { path: string; tab?: 'p
               Project
             </button>
           )}
-          <button role="tab" aria-selected={activeTab === 'outline'} className={activeTab === 'outline' ? 'on' : ''} onClick={() => setTab('outline')}>
-            Outline
-          </button>
+          {!isLab && (
+            <button role="tab" aria-selected={activeTab === 'outline'} className={activeTab === 'outline' ? 'on' : ''} onClick={() => setTab('outline')}>
+              Outline
+            </button>
+          )}
           <button role="tab" aria-selected={activeTab === 'notes'} className={activeTab === 'notes' ? 'on' : ''} onClick={() => setTab('notes')}>
             Notes
           </button>

@@ -4,6 +4,7 @@
  * code runnable here. "Learn" starts a lesson taught from the course's own text (the source-led
  * lessons: the tutor questions and marks, the course explains).
  */
+import { ownShiftN, shiftNHandled } from '../lib/shiftN'
 import { usePopOutSurface } from '../lib/popout'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CATALOGUE, SOURCES, areaLabel, fromRepo, homeUrl, mediaOf, moduleProgress, nextLesson, registerCourses, sourceOf, sourceSite, suggestCourses, type CatalogueCourse, type CourseArea, type CourseLesson, type CourseModule, type CourseProgress, type CourseRef } from '@shared/courses'
@@ -776,17 +777,23 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
     if (currentId) void window.tide.courses.track(id, currentId, { ran: true }).catch(() => {})
   }, [id, currentId])
 
-  // ⌘⇧N: the notes beside the lesson (before the menu's New topic, which it stands for here)
+  // ⌘⇧N: the notes beside the lesson (before the menu's New topic, which it stands for here).
+  // The page hears the key first; if the menu gets it instead, lib/shiftN hands it back here
   useEffect(() => {
     if (!content || page) return
     const on = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || e.altKey || e.key.toLowerCase() !== 'n') return
       e.preventDefault()
       e.stopPropagation()
+      shiftNHandled()
       toggleNotes()
     }
     window.addEventListener('keydown', on, true)
-    return () => window.removeEventListener('keydown', on, true)
+    const release = ownShiftN(toggleNotes)
+    return () => {
+      window.removeEventListener('keydown', on, true)
+      release()
+    }
   }, [content, page, toggleNotes])
 
   // A passage selected in the lesson: "Quote in notes" beside it
@@ -1179,11 +1186,10 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
                 <p className="crs-attrib">
                   {preview ? (
                     <span>
-                      {fromRepo(c) ? 'Its README, read from ' : 'What it is, read from '}
+                      {fromRepo(c) ? 'README from ' : 'From '}
                       <a href={preview.url} target="_blank" rel="noreferrer">
                         {fromRepo(c) ? 'GitHub' : sourceSite(c)}
                       </a>
-                      . Import the course to read every lesson here.
                     </span>
                   ) : preview === null ? (
                     `It could not be read from ${fromRepo(c) ? 'GitHub' : sourceSite(c)} just now.`
@@ -1220,8 +1226,7 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
             </div>
           ) : (
             <div className="crs-toc-import">
-              <p className="crs-meta">Import it to read every lesson here, run its code and learn it with the tutor. It is fetched from {fromRepo(c) ? 'GitHub' : sourceSite(c)} into Tide’s own data, not your notes.</p>
-              <button className="btn primary wide" disabled={importing} onClick={() => act('import', () => window.tide.courses.import(id))}>
+              <button className="btn primary wide" disabled={importing} title={`Read every lesson here, run its code and learn it with the tutor. Fetched from ${fromRepo(c) ? 'GitHub' : sourceSite(c)} into Tide’s own data, not your notes.`} onClick={() => act('import', () => window.tide.courses.import(id))}>
                 {importing ? (
                   <>
                     <span className="spinner" /> {phase ? PHASE_LABEL[phase.phase] : 'Starting'}…

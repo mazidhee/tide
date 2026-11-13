@@ -16,7 +16,7 @@ const when = (t: number) => {
 
 /** A small rating trend: one line in --series-1, the latest point marked */
 function Spark({ points, label }: { points: { at: number; r: number }[]; label: string }) {
-  if (points.length < 2) return <span className="sh-spark-empty">{points.length ? 'One attempt' : 'No attempts'}</span>
+  if (points.length < 2) return <span className="sh-spark-empty">{points.length ? 'One attempt' : '—'}</span>
   const W = 120
   const H = 30
   const lo = Math.min(...points.map((p) => p.r)) - 10
@@ -49,7 +49,7 @@ function StreamRow({ item, onStart }: { item: StreamItem; onStart(): void }) {
           </span>
         </span>
         <span className="sh-stream-why">
-          <span>{item.why}</span>
+          {item.why !== 'Not tried yet' && item.why !== title && <span>{item.why}</span>}
           {item.method && <span className="sh-train">Trains: {method(item.method).name.toLowerCase()}</span>}
         </span>
         <span className="sh-go">
@@ -97,11 +97,26 @@ function RatingRow({ c }: { c: CategoryStatus }) {
         {bar && (!bar.met || !met.length) && (
           <>
             <span className="sh-bench-bar">{bar.label}</span>
-            <span className="sh-bench-say">{bar.say}</span>
+            <BenchSay say={bar.say} />
           </>
         )}
       </td>
     </tr>
+  )
+}
+
+/** "Not enough attempts yet: 2 of 5." as five dots, two filled; anything else as it is */
+function BenchSay({ say }: { say: string }) {
+  const m = /^Not enough attempts yet: (\d+) of (\d+)\.?$/.exec(say)
+  if (!m) return <span className="sh-bench-say">{say}</span>
+  const n = +m[1]
+  const of = +m[2]
+  return (
+    <span className="sh-bench-dots" role="img" aria-label={say} title={`${n} of ${of} rated attempts before Tide estimates this`}>
+      {Array.from({ length: of }, (_, i) => (
+        <i key={i} className={i < n ? 'on' : ''} />
+      ))}
+    </span>
   )
 }
 
@@ -139,6 +154,15 @@ function PostmortemItem({ pm }: { pm: Postmortem }) {
   )
 }
 
+function HowButton({ open, onClick, label }: { open: boolean; onClick(): void; label: string }) {
+  return (
+    <button className={`sh-how${open ? ' on' : ''}`} onClick={onClick} aria-expanded={open} title={label}>
+      <Icon name="quiz" size={13} />
+      <span className="sr-only">{label}</span>
+    </button>
+  )
+}
+
 /** Practice › Sharpness: the stream, the ratings with honest benchmarks, the methods, and the post-mortem library */
 export function SharpPanel() {
   const app = useApp()
@@ -154,19 +178,13 @@ export function SharpPanel() {
   const start = (category: SharpCategory, extra: { method?: StreamItem['method']; card?: string; bank?: boolean } = {}) => app.setView({ kind: 'sharp', category, ...extra, nonce: Date.now() })
   const pms = useMemo(() => (status?.postmortems ?? []).filter((p) => pmFilter === 'all' || p.category === pmFilter), [status, pmFilter])
   const train = new Set(status?.methods.train ?? [])
-  const rated = (status?.categories ?? []).some((c) => c.attempts > 0)
+  const [how, setHow] = useState<'ratings' | 'methods' | null>(null)
 
   return (
     <section className="pv-prompt wide sh-panel">
-      <h2 className="pv-title">Sharpness</h2>
-      <p className="pv-sub">Problems you haven’t seen, just past your level. The first attempt is timed, with no hints, and it moves your rating. After a miss you get method hints, never the answer, then a short post-mortem that becomes a card.</p>
-      <p className="mk-who" role="status">
+      <p className="sh-who" role="status" title={status?.claude ? 'Opus writes each problem and Tide checks it in the sandbox before you see it. Opus marks, coaches and plays the system in drills.' : status?.why}>
         <Icon name="claude" size={13} />
-        {status === null
-          ? 'Checking for Claude…'
-          : status.claude
-            ? 'Opus writes each problem and Tide checks it in the sandbox before you see it. Opus marks, coaches and plays the system in drills.'
-            : `Claude isn’t ready${status.why ? ` (${status.why})` : ''}: problems come from the fixed bank, with answers checked in code.`}
+        {status === null ? 'Checking for Claude…' : status.claude ? 'Written by Opus · checked in the sandbox' : 'Fixed bank · answers checked in code'}
       </p>
       {error && <p className="error-text">{error}</p>}
 
@@ -178,7 +196,7 @@ export function SharpPanel() {
         {status === null && <li className="sh-stream-loading muted small">Picking what’s next…</li>}
       </ul>
       <div className="sh-any">
-        <span className="muted small">Or any category:</span>
+        <span className="muted small">Any category</span>
         {CATEGORIES.map((c) => (
           <button key={c.id} className="sh-cat-btn" onClick={() => start(c.id)} title={c.blurb}>
             <Icon name={CATEGORY_ICON[c.id]} size={13} />
@@ -187,10 +205,15 @@ export function SharpPanel() {
         ))}
       </div>
 
-      <h3 className="sh-h">Ratings</h3>
-      <p className="sh-note">
-        Elo against each problem’s difficulty; ± is how sure it is. The bars are estimates of how often a first attempt at that level would succeed, said only after {5} rated attempts. Mock interviews count too.
-      </p>
+      <div className="sh-h-row">
+        <h3 className="sh-h">Ratings</h3>
+        <HowButton open={how === 'ratings'} onClick={() => setHow(how === 'ratings' ? null : 'ratings')} label="How ratings work" />
+      </div>
+      {how === 'ratings' && (
+        <p className="sh-note">
+          Elo against each problem’s difficulty; ± is how sure it is. Every category starts at 1000 with a wide band. The bars are estimates of how often a first attempt at that level would succeed, said only after 5 rated attempts. Mock interviews count too.
+        </p>
+      )}
       <div className="sh-table-wrap">
         <table className="sh-ratings">
           <thead>
@@ -208,17 +231,21 @@ export function SharpPanel() {
           </tbody>
         </table>
       </div>
-      {!rated && status && <p className="sh-note">Every category starts at 1000 with a wide band. A few attempts each and it settles.</p>}
 
-      <h3 className="sh-h">Ways in</h3>
-      <p className="sh-note">Ten methods, after Pólya’s How to Solve It. Tick the ones you used when you submit; Tide counts which ones unlock you and which you never reach for, and trains those.</p>
+      <div className="sh-h-row">
+        <h3 className="sh-h">Ways in</h3>
+        <HowButton open={how === 'methods'} onClick={() => setHow(how === 'methods' ? null : 'methods')} label="How methods are counted" />
+      </div>
+      {how === 'methods' && <p className="sh-note">Ten methods, after Pólya’s How to Solve It. Tick the ones you used when you submit; Tide counts which ones unlock you and which you never reach for, and trains those.</p>}
       <ul className="sh-methods">
         {METHODS.map((m) => {
           const r = status?.methods.methods.find((x) => x.id === m.id)
           return (
             <li key={m.id} className={`sh-method${train.has(m.id) ? ' train' : ''}`}>
               <span className="sh-method-name">{m.name}</span>
-              <span className="sh-method-what">{m.what}</span>
+              <span className="sh-method-what" title={m.what}>
+                {m.what}
+              </span>
               <span className="sh-method-counts tabular">
                 {train.has(m.id) ? <span className="sh-train">Training</span> : r?.neverReached ? <span className="sh-never">Never reached for</span> : null}
                 {r && (r.reached || r.unlocked) ? (
@@ -245,8 +272,8 @@ export function SharpPanel() {
         )}
       </div>
       {status && status.cards > 0 && (
-        <p className="sh-note">
-          {status.cards} card{status.cards === 1 ? '' : 's'} about methods and patterns; {status.cardsDue ? `${status.cardsDue} due back in the stream` : 'none due yet'}.
+        <p className="sh-note sh-cards">
+          <b>{status.cards}</b> card{status.cards === 1 ? '' : 's'} · <b>{status.cardsDue}</b> due
         </p>
       )}
       {pms.length ? (
@@ -256,7 +283,7 @@ export function SharpPanel() {
           ))}
         </ul>
       ) : (
-        status && <p className="sh-empty">After a miss, a five-minute post-mortem lands here: where you got stuck, what would have unlocked it, and the pattern, as a card about the method.</p>
+        status && <p className="sh-empty" title="Where you got stuck, what would have unlocked it, and the pattern, as a card about the method">None yet. A miss brings a five-minute post-mortem.</p>
       )}
     </section>
   )

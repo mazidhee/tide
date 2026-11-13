@@ -49,6 +49,8 @@ export function HomeCoachCard({ extra }: { extra?: ReactNode }) {
   }
   const toggle = (k: 'why' | 'week') => setOpen((o) => (o === k ? null : k))
   const items = fresh ? v.scheduled : []
+  // The reasons sit behind Why: the coach's own lines, then each added item's
+  const reasons = [...why, ...items.map((it) => `${it.title}: ${it.reason}`)]
   return (
     <section className="td-coach" aria-labelledby="td-coach-title">
       <div className="td-sec-head first">
@@ -60,7 +62,7 @@ export function HomeCoachCard({ extra }: { extra?: ReactNode }) {
       {headline ? (
         <p className="td-coach-head">{headline}</p>
       ) : (
-        <p className="td-none">A look at your day, each morning.</p>
+        <p className="td-none">Looks at your day each morning.</p>
       )}
       {items.length > 0 && (
         <ul className="td-coach-items" aria-label="Added to today by the coach">
@@ -71,14 +73,13 @@ export function HomeCoachCard({ extra }: { extra?: ReactNode }) {
               </span>
               <b>{it.title}</b>
               <span className="td-coach-min">{it.minutes} min</span>
-              <span className="td-coach-why">{it.reason}</span>
             </li>
           ))}
         </ul>
       )}
-      {open === 'why' && why.length > 0 && (
+      {open === 'why' && reasons.length > 0 && (
         <ul className="td-coach-more">
-          {why.map((l) => (
+          {reasons.map((l) => (
             <li key={l}>{l}</li>
           ))}
         </ul>
@@ -96,25 +97,25 @@ export function HomeCoachCard({ extra }: { extra?: ReactNode }) {
                   ))}
               </ul>
               <button className="td-more td-coach-all" onClick={() => app.setView({ kind: 'coach' })}>
-                What it noticed, in Your week
+                Your week
               </button>
             </>
           ) : (
-            <p className="td-none">The first weekly review comes after a week of study.</p>
+            <p className="td-none">First review after a week of study.</p>
           )}
         </div>
       )}
       <div className="td-coach-acts">
-        {why.length > 0 && (
+        {reasons.length > 0 && (
           <button className={`td-more${open === 'why' ? ' on' : ''}`} aria-expanded={open === 'why'} onClick={() => toggle('why')}>
             Why
           </button>
         )}
         <button className={`td-more${open === 'week' ? ' on' : ''}`} aria-expanded={open === 'week'} onClick={() => toggle('week')}>
-          What changed this week
+          This week
         </button>
         <button className="td-more" onClick={() => app.openPath(v.logPath)}>
-          Open the log
+          Log
         </button>
         {!fresh && (
           <button className="td-more" onClick={run} disabled={busy}>
@@ -132,6 +133,8 @@ export function WeekCoachNote() {
   const app = useApp()
   const [v, reload] = useCoach()
   const [busy, setBusy] = useState(false)
+  // Each line on one row; the whole text on request
+  const [full, setFull] = useState(false)
   if (!v) return null
   const w = v.week
   const run = async () => {
@@ -145,11 +148,16 @@ export function WeekCoachNote() {
   const other = w?.lines.filter((l) => !/^(Noticed|Changed): /.test(l)) ?? []
   const icon = (l: string): IconName => (/^Weights/.test(l) ? 'gauge' : /^Proposed/.test(l) ? 'northstar' : 'person')
   return (
-    <section className="wk-coach" aria-labelledby="wk-coach-title">
+    <section className={`wk-coach${full ? ' full' : ''}`} aria-labelledby="wk-coach-title">
       <header className="wk-coach-head">
         <h2 id="wk-coach-title">The coach’s week</h2>
         {w && <span className="muted small">to {new Date(w.date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</span>}
         <span className="wk-coach-links">
+          {w && noticed.length + changed.length > 0 && (
+            <button className="link-btn" onClick={() => setFull(!full)} aria-expanded={full}>
+              {full ? 'Less' : 'Read in full'}
+            </button>
+          )}
           <button className="link-btn" onClick={() => app.openPath(v.logPath)}>
             Log
           </button>
@@ -168,11 +176,11 @@ export function WeekCoachNote() {
           <div className="wk-coach-grid">
             <div className="wk-coach-col">
               <h3>Noticed</h3>
-              <ul>{noticed.length ? noticed.map((l) => <li key={l}>{l}</li>) : <li className="muted">Nothing new.</li>}</ul>
+              <ul>{noticed.length ? noticed.map((l) => <li key={l} title={full ? undefined : l}>{l}</li>) : <li className="muted">Nothing new.</li>}</ul>
             </div>
             <div className="wk-coach-col">
               <h3>Changed</h3>
-              <ul>{changed.length ? changed.map((l) => <li key={l}>{l}</li>) : <li className="muted">Nothing.</li>}</ul>
+              <ul>{changed.length ? changed.map((l) => <li key={l} title={full ? undefined : l}>{l}</li>) : <li className="muted">Nothing.</li>}</ul>
             </div>
           </div>
           {other.length > 0 && (
@@ -187,7 +195,7 @@ export function WeekCoachNote() {
           )}
         </>
       ) : (
-        <p className="wk-coach-empty">Reviewed once a week, against your North Star.</p>
+        <p className="wk-coach-empty">Weekly, against your North Star.</p>
       )}
     </section>
   )

@@ -1044,8 +1044,8 @@ export function WorkoutHomeCard({ variant }: { variant: 'tide' | 'classic' }) {
       : sunday
         ? 'Sunday championship today: a longer, harder set.'
         : reminderDue
-          ? `Your ${state.prefs.reminder} workout is waiting: five rounds, about 15 minutes.`
-          : 'Five rounds, about 15 minutes.'
+          ? `Your ${state.prefs.reminder} workout is waiting.`
+          : ''
   const body = (
     <>
       <div className="mm-home-top">
@@ -1058,10 +1058,10 @@ export function WorkoutHomeCard({ variant }: { variant: 'tide' | 'classic' }) {
           ))}
         </span>
       </div>
-      <p className={`mm-home-line${reminderDue || (sunday && !st.doneToday) ? ' due' : ''}`}>{line}</p>
+      {line && <p className={`mm-home-line${reminderDue || (sunday && !st.doneToday) ? ' due' : ''}`}>{line}</p>}
       <DrillsTally compact />
       <div className="mm-home-acts">
-        <button className={`btn small${st.doneToday && !inProgress && !sunday ? '' : ' primary'}`} onClick={go}>
+        <button className={`btn small${st.doneToday && !inProgress && !sunday ? '' : ' primary'}`} onClick={go} title="Five rounds, about 15 minutes">
           {inProgress ? 'Continue' : st.doneToday ? (sunday ? 'Championship' : 'Open') : 'Start'}
         </button>
         <span className="wo-home-title">{title.name}</span>

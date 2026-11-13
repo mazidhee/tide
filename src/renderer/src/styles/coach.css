@@ -108,3 +108,91 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ---- Your week: one accent plus neutrals ---- */
+/* The day strip's dots: one per item, filled when done */
+.wk-dots i {
+  background: color-mix(in srgb, var(--ink-muted) 55%, transparent);
+}
+.wk-dots i.done {
+  background: var(--accent);
+  opacity: 1;
+}
+/* Item kinds as quiet labels, not a colour code */
+.today-kind,
+.today-kind.k-learn,
+.today-kind.k-practice,
+.today-kind.k-take-home,
+.today-kind.k-quiz,
+.today-kind.k-review,
+.today-kind.k-test {
+  --k: var(--ink-muted);
+  font-weight: 500;
+}
+.wk-item-why {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+.wk-reading-more {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.wk-legend .wk-share {
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.wk-legend .wk-more {
+  margin-left: auto;
+}
+/* What the replanner changed: one quiet line, no box until it's open */
+.wk-changes-line {
+  min-height: 32px;
+  padding: 0 10px;
+  border-color: transparent;
+  background: var(--bg-hover);
+  font-size: 12.5px;
+}
+.wk-changes-head {
+  font-weight: 500;
+}
+
+/* The coach's week: one row per line until you ask for the whole text */
+.wk-coach:not(.full) .wk-coach-col li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wk-coach-col h3 {
+  letter-spacing: 0;
+}
+
+/* Goals: Tide's guess as a label and one clause, the full guess in the tooltip */
+.gl-suggest {
+  padding: 8px 8px 8px 14px;
+  border-style: dashed;
+  font-size: 13.5px;
+}
+.gl-suggest-label {
+  flex: none;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+.gl-suggest-text {
+  color: var(--ink-soft);
+}
+
+/* The day card for today also carries .today, which is the old checklist block's class */
+.wk-day.today {
+  margin-bottom: 0;
+}
+.wk-reading > svg {
+  flex: none;
+}
+.wk-reading > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
