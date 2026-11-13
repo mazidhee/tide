@@ -13,6 +13,8 @@ import { ToExplore } from './ExploreLater'
 import { ReadyCard } from './ReadyCard'
 import { startPrepared, useReadyLesson } from '../lib/prep'
 import { LadderShelf } from './LadderView'
+import { looseRoadmaps } from '@shared/sidebarTree'
+import { outlinesChanged, useOutlines } from '../lib/outlines'
 
 type LearnMode = SessionMode | 'exam' | 'mixed'
 
@@ -296,6 +298,8 @@ export function LearnView() {
         <ProjectsShelf />
         {/* Hook: guided projects (components/WorkshopView.tsx) */}
         <WorkshopShelf />
+        {/* Roadmaps no notebook uses yet: drawn here, since the sidebar leaves roadmap files out */}
+        <RoadmapShelf />
         {/* Hook: open courses from GitHub (components/CoursesView.tsx) */}
         <CourseShelf />
         {/* Things kept from lessons to explore later (components/ExploreLater.tsx) */}
@@ -329,5 +333,73 @@ export function LearnView() {
         )}
       </div>
     </div>
+  )
+}
+
+/** Roadmaps in the Roadmaps folder that no notebook has as its outline, with their progress */
+function RoadmapShelf() {
+  const app = useApp()
+  const outlines = useOutlines(app.tree)
+  const loose = useMemo(() => looseRoadmaps(app.tree, outlines), [app.tree, outlines])
+  const [counts, setCounts] = useState<Record<string, { done: number; total: number }>>({})
+  useEffect(() => {
+    let live = true
+    for (const f of loose)
+      window.tide.vault
+        .read(f.path)
+        .then((md: string) => {
+          const done = (md.match(/^\s*[-*] \[[xX]\]/gm) ?? []).length
+          const total = done + (md.match(/^\s*[-*] \[ \]/gm) ?? []).length
+          if (live) setCounts((c) => ({ ...c, [f.path]: { done, total } }))
+        })
+        .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [loose])
+  if (!loose.length) return null
+  // A roadmap becomes a notebook's outline: the notebook draws it with its progress and topics
+  const adopt = async (path: string) => {
+    try {
+      const folder = await window.tide.vault.createFolder('', fileTitle(path.split('/').pop()!))
+      await window.tide.learn.updateNotebook(folder, { outline: path })
+      await app.refreshTree()
+      outlinesChanged()
+      app.setView({ kind: 'notebook', path: folder, tab: 'outline' })
+    } catch (e) {
+      app.toast((e as Error).message, { tone: 'error' })
+    }
+  }
+  return (
+    <section className="ws-shelf rm-shelf">
+      <div className="ws-shelf-head">
+        <h2 className="section-title">Roadmaps</h2>
+      </div>
+      <ul className="ws-shelf-rows">
+        {loose.map((f) => {
+          const c = counts[f.path]
+          return (
+            <li key={f.path} className="rm-shelf-row">
+              <button className="ws-shelf-row" onClick={() => app.openPath(f.path)}>
+                <span className="ws-shelf-title">{fileTitle(f.name)}</span>
+                {c && c.total > 0 && (
+                  <span className="rm-shelf-progress">
+                    <span className="gl-meter-bar">
+                      <i style={{ width: `${Math.round((c.done / c.total) * 100)}%` }} />
+                    </span>
+                    <span className="muted small">
+                      {c.done} of {c.total} topics
+                    </span>
+                  </span>
+                )}
+              </button>
+              <button className="tool-btn" onClick={() => adopt(f.path)} title="Give this roadmap a notebook of its own, where Tide draws it">
+                Make it a notebook
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
   )
 }

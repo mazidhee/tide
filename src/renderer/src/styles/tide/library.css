@@ -170,10 +170,13 @@
     background: var(--raised);
     box-shadow: var(--shadow-pop);
   }
-  .empty-block {
-    border: 1px dashed var(--line-2);
+  /* An empty state is a quiet inset panel: no dashed outline, and its words sit inside it */
+  .empty-block,
+  .empty-block:first-of-type {
+    padding: 26px 28px;
+    border: 0;
     border-radius: var(--r-box);
-    background: transparent;
+    background: var(--sunk);
   }
   @media (prefers-reduced-motion: reduce) {
     .lib-card:hover {

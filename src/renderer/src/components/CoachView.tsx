@@ -7,9 +7,18 @@ import { PixelScene } from './PixelScene'
 import { Professor } from './Professor'
 import { GoalsPanel, PlanNotices } from './GoalsPanel'
 import { WeekProgressSection } from './WeekProgress'
+import { firstSentence } from '@shared/goalGlance'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const today = () => localDate()
+/** "Mon–Sat", or the days themselves when they don't run on */
+const dayRange = (days: number[]) => {
+  const order = [1, 2, 3, 4, 5, 6, 0].filter((d) => days.includes(d))
+  if (!order.length) return 'no days set'
+  const idx = order.map((d) => (d + 6) % 7)
+  const runs = idx.every((v, i) => i === 0 || v === idx[i - 1] + 1)
+  return runs && order.length > 2 ? `${DAYS[order[0]]}–${DAYS[order[order.length - 1]]}` : order.map((d) => DAYS[d]).join(' ')
+}
 const dayLabel = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })
 
 /**
@@ -142,15 +151,6 @@ export function CoachView() {
           </div>
         </header>
 
-        {week && !editing && (
-          <button className="coach-settings-row" onClick={() => setEditing(true)} title="Change your hours or days">
-            <span className="coach-settings-goal">{settings.hoursPerWeek} hours a week</span>
-            <span className="muted">{DAYS.filter((_, i) => settings.days.includes(i)).join(' ')}</span>
-            {settings.weekdayMinutes !== undefined && <span className="muted">{weekdayMins} min weekdays, {weekendMins} weekends</span>}
-            <span className="coach-settings-edit">Edit</span>
-          </button>
-        )}
-
         <GoalsPanel guess={settings.direction} onWeek={(w) => w && setWeek(w)} onThreads={setThreads} />
 
         {week && !editing ? null : (
@@ -226,7 +226,19 @@ export function CoachView() {
         </section>
         )}
 
-        {week && <WeekBoard week={week} onChange={setWeek} thingsReady={thingsReady} onThings={toThings} busy={busy === 'things'} onPlan={plan} planning={busy === 'plan'} />}
+        {week && (
+          <WeekBoard
+            week={week}
+            onChange={setWeek}
+            thingsReady={thingsReady}
+            onThings={toThings}
+            busy={busy === 'things'}
+            onPlan={plan}
+            planning={busy === 'plan'}
+            hours={`${settings.hoursPerWeek} h a week · ${dayRange(settings.days)}`}
+            onEdit={editing ? undefined : () => setEditing(true)}
+          />
+        )}
 
         <WeekProgressSection />
       </div>
@@ -244,7 +256,7 @@ const KIND_DOT: Record<string, string> = { learn: 'var(--accent)', practice: 'va
  * the time splits between subjects, then a strip of seven days to pick from, and the chosen day's
  * items as a checklist.
  */
-function WeekBoard({ week, onChange, thingsReady, onThings, busy, onPlan, planning }: { week: WeekPlan; onChange(w: WeekPlan): void; thingsReady: boolean; onThings(): void; busy: boolean; onPlan(): void; planning: boolean }) {
+function WeekBoard({ week, onChange, thingsReady, onThings, busy, onPlan, planning, hours, onEdit }: { week: WeekPlan; onChange(w: WeekPlan): void; thingsReady: boolean; onThings(): void; busy: boolean; onPlan(): void; planning: boolean; hours: string; onEdit?(): void }) {
   const app = useApp()
   const dates = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(week.weekStart + 'T12:00:00Z')
@@ -252,10 +264,15 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy, onPlan, planni
     return d.toISOString().slice(0, 10)
   })
   const [picked, setPicked] = useState(() => (dates.includes(today()) ? today() : dates[0]))
+  // The why behind the week, and what the replanner changed: one line each, the rest on request
   const [more, setMore] = useState(false)
+  const [changesOpen, setChangesOpen] = useState(false)
   const day = week.days.find((d) => d.date === picked)
-  const first = week.summary.split(/(?<=\.)\s/)[0]
+  const first = firstSentence(week.summary)
   const rest = week.summary.slice(first.length).trim()
+  const suggested = week.suggested && week.suggested.map((s) => s.notebook).join() !== week.priorities.map((p) => p.notebook).join() ? week.suggested : null
+  const explains = !!(rest || week.bestHours || suggested || week.unsorted?.length || week.priorities.some((p) => p.reason))
+  const notices = week.notices ?? []
 
   const toggle = (index: number) => {
     const next = structuredClone(week)
@@ -272,22 +289,31 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy, onPlan, planni
 
   return (
     <>
-      <section className="wk-why">
+      <section className="wk-why" aria-label="This week">
+        <header className="wk-head">
+          <h2>This week</h2>
+          {onEdit ? (
+            <button className="wk-hours" onClick={onEdit} title="Change your hours or days">
+              {hours}
+              <span className="wk-hours-edit">Edit</span>
+            </button>
+          ) : (
+            <span className="wk-hours static">{hours}</span>
+          )}
+        </header>
         <p className="wk-lede">
-          {first}
-          {rest && !more && (
-            <button className="link-btn quiet wk-more" onClick={() => setMore(true)}>
-              More
+          <span>{first}</span>
+          {explains && (
+            <button className="link-btn quiet wk-more" onClick={() => setMore(!more)} aria-expanded={more}>
+              {more ? 'Less' : 'Why'}
             </button>
           )}
         </p>
-        {more && rest && <p className="wk-rest">{rest}</p>}
-        {week.bestHours && <p className="muted small wk-note">Hard work goes {week.days.some((d) => d.items[d.items.length - 1]?.peak && d.items.length > 1) ? 'last' : 'first'} in the day, in your best hours ({week.bestHours}).</p>}
         {week.priorities.length > 0 && (
           <div className="wk-split" aria-label="How the week's time is split">
             <div className="wk-split-bar">
               {week.priorities.map((p, i) => (
-                <span key={p.notebook} style={{ flexGrow: Math.max(1, p.share), background: `color-mix(in srgb, var(--accent) ${tint(i, week.priorities.length)}%, var(--bg-active))` }} title={p.reason} />
+                <span key={p.notebook} style={{ flexGrow: Math.max(1, p.share), background: `color-mix(in srgb, var(--accent) ${tint(i, week.priorities.length)}%, var(--bg-active))` }} title={`${p.notebook} ${p.share}%${p.reason ? `: ${p.reason}` : ''}`} />
               ))}
             </div>
             <div className="wk-legend">
@@ -295,24 +321,53 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy, onPlan, planni
                 <span key={p.notebook} title={p.reason}>
                   <i style={{ background: `color-mix(in srgb, var(--accent) ${tint(i, week.priorities.length)}%, var(--bg-active))` }} />
                   {p.notebook} <span className="muted">{p.share}%</span>
-                  {p.reason && <span className="muted wk-reason">{p.reason}</span>}
                 </span>
               ))}
             </div>
           </div>
         )}
-        {week.suggested && week.suggested.map((s) => s.notebook).join() !== week.priorities.map((p) => p.notebook).join() && (
-          <p className="muted small wk-note">Tide would have picked {week.suggested.map((s) => `${s.notebook} (${s.reason})`).join(' and ')}.</p>
+        {more && (
+          <div className="wk-explain">
+            {rest && <p>{rest}</p>}
+            {week.priorities.some((p) => p.reason) && (
+              <ul>
+                {week.priorities
+                  .filter((p) => p.reason)
+                  .map((p) => (
+                    <li key={p.notebook}>
+                      <b>{p.notebook}</b>: {p.reason}
+                    </li>
+                  ))}
+              </ul>
+            )}
+            {week.bestHours && <p>Hard work goes {week.days.some((d) => d.items[d.items.length - 1]?.peak && d.items.length > 1) ? 'last' : 'first'} in the day, in your best hours ({week.bestHours}).</p>}
+            {suggested && <p>Tide would have picked {suggested.map((x) => `${x.notebook} (${x.reason})`).join(' and ')}.</p>}
+            {week.unsorted?.length ? <p>{week.unsorted.join(' and ')} {week.unsorted.length === 1 ? 'is' : 'are'} in roadmap order this week: Tide hasn’t finished sorting {week.unsorted.length === 1 ? 'it' : 'them'} against your aims.</p> : null}
+          </div>
         )}
-        {week.unsorted?.length ? <p className="muted small wk-note">{week.unsorted.join(' and ')} {week.unsorted.length === 1 ? 'is' : 'are'} in roadmap order this week: Tide hasn’t finished sorting {week.unsorted.length === 1 ? 'it' : 'them'} against your aims.</p> : null}
       </section>
 
-      {week.notices?.length ? (
-        <section className="wk-changes" aria-label="What changed">
-          <h2 className="wk-changes-head">What changed</h2>
-          <PlanNotices week={week} onWeek={(w) => w && onChange(w)} />
+      {notices.length > 0 && (
+        <section className={`wk-changes${changesOpen ? ' open' : ''}`} aria-label="What changed">
+          {changesOpen ? (
+            <>
+              <header className="wk-changes-line">
+                <span className="wk-changes-head">What changed</span>
+                <button className="link-btn quiet wk-more" onClick={() => setChangesOpen(false)} aria-expanded>
+                  Less
+                </button>
+              </header>
+              <PlanNotices week={week} onWeek={(w) => w && onChange(w)} />
+            </>
+          ) : (
+            <button className="wk-changes-line" onClick={() => setChangesOpen(true)} aria-expanded={false} title={notices[0].text}>
+              <span className="wk-changes-head">What changed</span>
+              <span className="wk-changes-first">{notices[0].text}</span>
+              <span className="wk-changes-more">{notices.length > 1 ? `${notices.length - 1} more` : 'More'}</span>
+            </button>
+          )}
         </section>
-      ) : null}
+      )}
 
       <div className="wk-strip" role="tablist" aria-label="Days">
         {dates.map((d) => {
@@ -321,7 +376,7 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy, onPlan, planni
           const date = new Date(d + 'T12:00:00Z')
           return (
             <button key={d} role="tab" aria-selected={picked === d} className={`wk-day${picked === d ? ' on' : ''}${d === today() ? ' today' : ''}${d < today() ? ' past' : ''}`} onClick={() => setPicked(d)}>
-              <span className="wk-dow">{date.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' })}</span>
+              <span className="wk-dow">{d === today() ? 'Today' : date.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' })}</span>
               <span className="wk-date">{date.getUTCDate()}</span>
               <span className="wk-dots">
                 {items.slice(0, 5).map((it, i) => (

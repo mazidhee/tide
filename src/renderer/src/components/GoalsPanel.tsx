@@ -6,6 +6,7 @@ import { parseGoalDate } from '@shared/goals'
 import { localDate } from '@shared/coach'
 import { useApp } from '../state'
 import { Icon, type IconName } from './Icon'
+import { firstSentence, goalProgress, goalStatus, STATUS_WORD, type GoalStatus } from '@shared/goalGlance'
 
 /**
  * Your goals on Your week: what you're working towards (with or without a date), what each needs
@@ -35,6 +36,8 @@ export function GoalsPanel({ guess, onWeek, onThreads }: { guess?: string; onWee
   const [open, setOpen] = useState<string | null>(null)
   const [thinking, setThinking] = useState<Set<string>>(new Set())
   const [choosing, setChoosing] = useState('')
+  // How goals work, on request rather than always on screen
+  const [about, setAbout] = useState(false)
 
   const load = () => window.tide.portfolio.view().then(setView).catch(() => {})
   useEffect(() => {
@@ -94,12 +97,16 @@ export function GoalsPanel({ guess, onWeek, onThreads }: { guess?: string; onWee
   const standing = view.goals.filter((g) => g.standing)
   const threadOf = (g: GoalRow) => view.threads.find((t) => t.id === g.id)
   const drift = (g: GoalRow) => view.drift.find((d) => d.goal === g.id)
+  const day = localDate()
 
   return (
     <section className="gl" aria-label="Goals">
       <header className="gl-head">
         <h2>Goals</h2>
-        <span className="muted small">The week is mixed across all of them, and nothing goes untouched for long.</span>
+        <button className={`gl-how${about ? ' on' : ''}`} onClick={() => setAbout(!about)} aria-expanded={about} title="How goals shape your week">
+          <Icon name="quiz" size={14} />
+          <span className="sr-only">How goals shape your week</span>
+        </button>
         {!adding && (
           <button className="tool-btn gl-add" onClick={() => setAdding(true)}>
             <Icon name="plus" />
@@ -108,28 +115,64 @@ export function GoalsPanel({ guess, onWeek, onThreads }: { guess?: string; onWee
         )}
       </header>
 
-      {adding && <NewGoal first={!mine.length} onAdd={add} onCancel={() => setAdding(false)} />}
-
-      {!mine.length && !adding && (
-        <p className="gl-empty muted">
-          Add what you’re working towards, with a date if there is one: “Bloomberg SWE interview in mid-March”, “Ship the payment rail”, “Get strong at ML”. Tide works out what each needs.
-          {guess && (
-            <>
-              {' '}
-              Tide’s guess from your notebooks: {guess}{' '}
-              <button className="link-btn" onClick={() => add({ title: guess, weight: 'main' })}>
-                Use it
-              </button>
-            </>
-          )}
+      {about && (
+        <p className="gl-about">
+          Add what you’re working towards, with a date if there is one: “Bloomberg SWE interview in mid-March”, “Ship the payment rail”. Tide works out what each needs and mixes every week across all of them, so nothing goes untouched for long.
         </p>
       )}
 
-      {mine.length > 0 && (
+      {adding && <NewGoal first={!mine.length} onAdd={add} onCancel={() => setAdding(false)} />}
+
+      {!mine.length && !adding && (
+        <div className="gl-suggest">
+          <Icon name="sparkle" size={14} />
+          {guess ? (
+            <>
+              <span className="gl-suggest-text" title={guess}>
+                <span className="muted">Tide’s guess:</span> {firstSentence(guess)}
+              </span>
+              <button className="btn small" onClick={() => add({ title: guess, weight: 'main' })}>
+                Use it
+              </button>
+            </>
+          ) : (
+            <span className="gl-suggest-text muted">No goals of your own yet. Add one and Tide plans each week towards it.</span>
+          )}
+        </div>
+      )}
+
+      {mine.length + standing.length > 0 && (
         <ul className="gl-list">
           {mine.map((g) => (
-            <GoalItem key={g.id} goal={g} drift={drift(g)?.text} inventory={view.inventory} open={open === g.id} thinking={thinking.has(g.id) || view.thinking.includes(g.id)} onToggle={() => setOpen(open === g.id ? null : g.id)} onChange={update} onThink={() => think(g.id)} onRemove={() => remove(g)} />
+            <GoalItem key={g.id} goal={g} drift={drift(g)?.text} inventory={view.inventory} progress={goalProgress(g, view.inventory)} status={goalStatus(g, view, day)} open={open === g.id} thinking={thinking.has(g.id) || view.thinking.includes(g.id)} onToggle={() => setOpen(open === g.id ? null : g.id)} onChange={update} onThink={() => think(g.id)} onRemove={() => remove(g)} />
           ))}
+          {standing.map((g) => {
+            const t = threadOf(g)
+            const status = goalStatus(g, view, day)
+            const paused = status === 'paused'
+            const progress = goalProgress(g, view.inventory)
+            return (
+              <li key={g.id} className={`gl-row gl-st${paused ? ' paused' : ''}`}>
+                <div className="gl-row-name">
+                  <Icon name={KIND_ICON[g.needs[0]?.kind ?? 'roadmap']} size={14} />
+                  <span className="gl-row-title">{g.title}</span>
+                  <span className="gl-row-meta" title={t ? `Kept going at least every ${t.maxGap} days` : undefined}>
+                    Kept alive · {paused ? (g.pausedUntil ? `paused until ${shortDate(g.pausedUntil)}` : 'paused') : t?.gap == null ? 'not started' : `last ${ago(t.gap)}`}
+                  </span>
+                </div>
+                <Meter value={progress} />
+                <StatusPill status={status} why={t && status === 'behind' ? `Due a session: it goes no more than ${t.maxGap} days untouched` : undefined} />
+                <select className="gl-st-weight" value={paused ? 'off' : g.weight} aria-label={`How much ${g.title} matters`} onChange={(e) => update(e.target.value === 'off' ? { ...g, off: true } : { ...g, off: false, pausedUntil: undefined, weight: e.target.value as GoalWeight })}>
+                  {WEIGHTS.map((w) => (
+                    <option key={w.value} value={w.value}>
+                      {w.label}
+                    </option>
+                  ))}
+                  <option value="off">Paused</option>
+                </select>
+              </li>
+            )
+          })}
         </ul>
       )}
 
@@ -151,37 +194,29 @@ export function GoalsPanel({ guess, onWeek, onThreads }: { guess?: string; onWee
           </div>
         </div>
       ))}
-
-      {standing.length > 0 && (
-        <div className="gl-standing">
-          <span className="gl-standing-head">Kept alive</span>
-          <ul>
-            {standing.map((g) => {
-              const t = threadOf(g)
-              const paused = !!g.off || (!!g.pausedUntil && g.pausedUntil > localDate())
-              const late = !!t && t.gap !== null && t.gap >= t.maxGap - 1
-              return (
-                <li key={g.id} className={`gl-st${paused ? ' paused' : ''}`}>
-                  <Icon name={KIND_ICON[g.needs[0]?.kind ?? 'roadmap']} size={13} />
-                  <span className="gl-st-name">{g.title}</span>
-                  <span className={`gl-st-when${late && !paused ? ' late' : ''}`} title={t ? `Touched at least every ${t.maxGap} days` : undefined}>
-                    {paused ? (g.pausedUntil ? `paused until ${shortDate(g.pausedUntil)}` : 'paused') : ago(t?.gap ?? null)}
-                  </span>
-                  <select className="gl-st-weight" value={paused ? 'off' : g.weight} aria-label={`How much ${g.title} matters`} onChange={(e) => update(e.target.value === 'off' ? { ...g, off: true } : { ...g, off: false, pausedUntil: undefined, weight: e.target.value as GoalWeight })}>
-                    {WEIGHTS.map((w) => (
-                      <option key={w.value} value={w.value}>
-                        {w.label}
-                      </option>
-                    ))}
-                    <option value="off">Paused</option>
-                  </select>
-                </li>
-              )
-            })}
-          </ul>
-        </div>
-      )}
     </section>
+  )
+}
+
+/** A thin bar in the accent, with the percentage beside it; blank when there's nothing to measure */
+function Meter({ value }: { value: number | null }) {
+  if (value === null) return <span className="gl-meter none" aria-hidden />
+  const pct = Math.round(value * 100)
+  return (
+    <span className="gl-meter" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label="Progress">
+      <span className="gl-meter-bar">
+        <i style={{ width: `${value > 0 ? Math.max(2, pct) : 0}%` }} />
+      </span>
+      <span className="gl-meter-pct">{pct}%</span>
+    </span>
+  )
+}
+
+function StatusPill({ status, why }: { status: GoalStatus; why?: string }) {
+  return (
+    <span className={`gl-status s-${status}`} title={why}>
+      {STATUS_WORD[status]}
+    </span>
   )
 }
 
@@ -222,22 +257,26 @@ function NewGoal({ first, onAdd, onCancel }: { first: boolean; onAdd(g: { title:
   )
 }
 
-function GoalItem({ goal, drift, inventory, open, thinking, onToggle, onChange, onThink, onRemove }: { goal: GoalRow; drift?: string; inventory: Inventory; open: boolean; thinking: boolean; onToggle(): void; onChange(g: PlanGoal): void; onThink(): void; onRemove(): void }) {
+function GoalItem({ goal, drift, inventory, progress, status, open, thinking, onToggle, onChange, onThink, onRemove }: { goal: GoalRow; drift?: string; inventory: Inventory; progress: number | null; status: GoalStatus; open: boolean; thinking: boolean; onToggle(): void; onChange(g: PlanGoal): void; onThink(): void; onRemove(): void }) {
   const live = goal.needs.filter((n) => !n.dropped)
   const dropped = goal.needs.filter((n) => n.dropped)
   const setNeed = (id: string, patch: Partial<GoalNeed>) => onChange({ ...goal, by: 'you', needs: goal.needs.map((n) => (n.id === id ? { ...n, ...patch } : n)) })
-  const meta = [
-    goal.date ? `${shortDate(goal.date)} · ${weeksTo(goal.date)} weeks` : 'No date',
-    live.length ? `${goal.hoursLeft} h left` : '',
-    goal.perWeek ? `about ${goal.perWeek} h a week` : ''
-  ].filter(Boolean)
+  // One short line: the date and what's left; the breakdown is a click away
+  const meta = [goal.date ? `${shortDate(goal.date)} · ${weeksTo(goal.date)} wk` : 'No date', live.length ? `${goal.hoursLeft} h left` : thinking ? '' : 'Not broken down'].filter(Boolean)
+  const why = [drift, goal.perWeek ? `About ${goal.perWeek} h a week to make it` : ''].filter(Boolean).join('. ')
   return (
     <li className={`gl-goal${open ? ' open' : ''}`}>
-      <div className="gl-goal-top">
-        <button className="gl-goal-title" onClick={onToggle} aria-expanded={open}>
-          <b>{goal.title}</b>
-          <span className="muted small">{meta.join(' · ')}</span>
+      <div className="gl-row">
+        <button className="gl-row-name gl-goal-title" onClick={onToggle} aria-expanded={open} title={open ? 'Hide the breakdown' : 'What it needs'}>
+          <Icon name="chevron" size={11} className={`gl-chev${open ? ' open' : ''}`} />
+          <span className="gl-row-title">{goal.title}</span>
+          <span className="gl-row-meta">
+            {thinking && <span className="spinner" />}
+            {meta.join(' · ')}
+          </span>
         </button>
+        <Meter value={progress} />
+        <StatusPill status={status} why={why || undefined} />
         <div className="segmented text small" role="radiogroup" aria-label={`How much ${goal.title} matters`}>
           {WEIGHTS.map((w) => (
             <button key={w.value} role="radio" aria-checked={goal.weight === w.value} className={goal.weight === w.value ? 'on' : ''} title={w.hint} onClick={() => onChange({ ...goal, weight: w.value })}>
@@ -246,22 +285,13 @@ function GoalItem({ goal, drift, inventory, open, thinking, onToggle, onChange, 
           ))}
         </div>
       </div>
-      {drift && <p className="gl-drift">{drift}</p>}
-      {thinking ? (
+      {open && drift && <p className="gl-drift">{drift}</p>}
+      {open && thinking && (
         <p className="gl-thinking muted small">
           <span className="spinner" /> Thinking through what it takes…
         </p>
-      ) : live.length ? (
-        <ul className="gl-needs" aria-label="What it needs">
-          {live.map((n) => (
-            <li key={n.id} className={`gl-need${n.optional ? ' optional' : ''}`} title={n.why}>
-              <Icon name={KIND_ICON[n.kind]} size={12} />
-              <span>{n.label}</span>
-              <span className="gl-need-h">{n.hours} h</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
+      )}
+      {open && !thinking && !live.length && (
         <p className="muted small gl-thinking">
           Nothing broken down yet.{' '}
           <button className="link-btn" onClick={onThink}>
