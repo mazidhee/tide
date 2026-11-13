@@ -1,5 +1,6 @@
 import { Professor } from './Professor'
 import { learnIntent, projectIntent } from '@shared/learnIntent'
+import { climbLadder } from '../lib/mathsLadder'
 import { startProject } from '../lib/projects'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChatScope, ChatSummary, Memory, NotebookMeta } from '@shared/types'
@@ -138,6 +139,7 @@ export function ChatPage({ id }: { id?: string }) {
       setInput('')
       return startProject(app, build)
     }
+    if (climbLadder(text, app.setView)) return setInput('')
     const plan = learnIntent(text)
     if (plan) {
       setInput('')

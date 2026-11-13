@@ -58,7 +58,10 @@ import { CameUpIn } from './ExploreLater'
 import { WarmUp } from './WarmUp'
 import { warmupNote, type WarmupSet } from '@shared/warmup'
 import { prepNote } from '@shared/lessonPrep'
-import { breakSignals, lessonForBreaks } from '../lib/breaks'
+import { breakSignals, lessonAnswers, lessonForBreaks } from '../lib/breaks'
+import { MATHS_ANSWER_EVENT, takeExploreNotes, type MathsAnswerDetail } from '../lib/sims/exploreBus'
+import { AREA_SCENES, mathsMode } from '@shared/mathsMode'
+import { driftCheck, driftNote, FORMAT_LABEL, switchIn } from '@shared/mathsDrift'
 import { saysDontKnow } from '@shared/lessonRepair'
 import { exploreLater, lessonSubject } from '../lib/explore'
 import { THREAD_RULES, asked, newThread, outputText, readsAsQuestion, replyParts, restoreThreads, saveFallback, threadMessages, threadNotes, threadsNote, wantsSave, withNote, type LessonThread } from '@shared/lessonThreads'
@@ -272,6 +275,24 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   }, [])
   const engineRef = useRef(engine)
   engineRef.current = engine
+  // Maths mode (shared/mathsMode): told from the topic and the notebook it sits in
+  const maths = useMemo(() => mathsMode(topic, 'path' in scope ? scope.path : undefined), [topic, scope])
+  // When the last reply finished, for the quiet spell since the tutor spoke
+  const repliedAt = useRef(0)
+  useEffect(() => {
+    if (!busy) repliedAt.current = Date.now()
+  }, [busy])
+  /** A note switching format when a maths lesson is losing them (shared/mathsDrift), or null */
+  const driftNow = (history: Turn[]): string | null => {
+    if (!maths.on) return null
+    const users = history.filter((x) => x.role === 'user')
+    const switched = users.map((x, k) => ({ x, k, f: switchIn(x.content) })).filter((s) => s.f)
+    const last = switched[switched.length - 1]
+    const from = history[0]?.at ?? 0
+    const scenes = maths.area ? AREA_SCENES[maths.area] : []
+    const d = driftCheck({ now: Date.now(), answers: lessonAnswers(from), tutorAt: repliedAt.current || undefined, lastSwitch: last ? { at: last.x.at ?? 0, turn: last.k, format: last.f! } : undefined, switches: switched.length, turn: users.length, canExplore: !maths.area || scenes.length > 0 })
+    return d ? driftNote(d, scenes) : null
+  }
   // Hook (lib/difficulty.ts): how hard the next problem is follows how the answers are going
   const difficulty = useDifficulty(topic, scope, mode === 'teach' || (mode === 'quiz' && !setup.options?.placement), busy)
   const send = useCallback(
@@ -304,6 +325,10 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         whyNoteRef.current,
         // What the learner did in Claude's visuals since the tutor last heard
         ...takeVisualNotes(columnRef.current),
+        // ...and in the explorables, the values they left them at (lib/sims/exploreBus)
+        ...takeExploreNotes(columnRef.current),
+        // A maths lesson losing them: switch format (shared/mathsDrift)
+        mode === 'teach' ? driftNow(history) : null,
         mode === 'teach' && history.length > 2 ? notesNudge(history.filter((t) => t.role === 'assistant').map((t) => t.content), content) : null,
         // Threads understood since the tutor last heard: one line each, never the thread itself
         threadsNote(threadsRef.current)
@@ -1309,11 +1334,27 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       e.stopImmediatePropagation()
       askVisualRef.current(question)
     }
+    // An explorable's "Tell the tutor" or a challenge's "Use as my answer": into the answer box, to finish in their own words
+    const onMathsAnswer = (e: Event) => {
+      const text = (e as CustomEvent<MathsAnswerDetail>).detail?.text
+      if (!text || !columnRef.current?.contains(e.target as Node)) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      setAnswer((was) => (was.trim() ? `${was.trimEnd()}\n${text}` : text))
+      requestAnimationFrame(() => {
+        const box = answerRef.current
+        if (!box) return
+        box.focus({ preventScroll: false })
+        box.setSelectionRange(box.value.length, box.value.length)
+      })
+    }
     document.addEventListener('tide:ask-about', onAsk, true)
     document.addEventListener(ASK_VISUAL_EVENT, onAskVisual, true)
+    document.addEventListener(MATHS_ANSWER_EVENT, onMathsAnswer, true)
     return () => {
       document.removeEventListener('tide:ask-about', onAsk, true)
       document.removeEventListener(ASK_VISUAL_EVENT, onAskVisual, true)
+      document.removeEventListener(MATHS_ANSWER_EVENT, onMathsAnswer, true)
     }
   }, [])
   const runMine = async (): Promise<RunResult | null> => {
@@ -1793,6 +1834,17 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   )}
                 </div>
               )
+              const switched = switchIn(t.content)
+              if (switched)
+                return (
+                  <Fragment key={i}>
+                    {isHint ? bubble : <YouBeside>{bubble}</YouBeside>}
+                    <div className="s-switch" role="note">
+                      <span className="s-switch-say">Let’s try this a different way</span>
+                      <span className="s-switch-what">{FORMAT_LABEL[switched]}</span>
+                    </div>
+                  </Fragment>
+                )
               return isHint ? bubble : <YouBeside key={i}>{bubble}</YouBeside>
             }
             const blocks = parsed[i] ?? []

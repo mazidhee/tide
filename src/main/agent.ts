@@ -1805,6 +1805,8 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
   const before = req.session && req.instructions && userTurns <= 1 && req.topic ? await earlierLessons(req.topic, !!ctx.private).catch(() => '') : ''
   // Subject hook (any-subject, src/main/subjects.ts): a toolkit the topic's words couldn't decide, and what Tide can't do for this subject
   const subject = req.session && req.instructions && userTurns <= 1 && req.topic ? await subjectContext({ topic: req.topic, scope: req.scope, instructions: req.instructions, private: !!ctx.private, web: !!ctx.web }).catch(() => '') : ''
+  // Maths mode (shared/mathsMode): first principles, predict then reveal, explorables and poke-holes, in this engine's own words
+  const maths = req.session && req.instructions && userTurns <= 1 && req.topic ? await (await import('./maths')).mathsContext({ topic: req.topic, scope: req.scope, instructions: req.instructions }, engine).catch(() => '') : ''
   const assigning = thingsOn && wanted === 'assign'
   // A SQL lesson knows the lab's tables before it writes its first query
   const labNote = req.session && req.instructions && aboutSql(`${req.topic ?? ''} ${question}`) ? labSchemaNote(req.labId ?? req.chatId ?? 'scratch', !!ctx.private, dataFiles()) : ''
@@ -1829,6 +1831,7 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
     req.attachment ? `The student selected this passage:\n"""\n${req.attachment}\n"""` : '',
     before,
     subject,
+    maths,
     labNote,
     // Asked to load one of their files: which tool, and the path (in a lesson too)
     loadHint(question, /\.(csv|tsv)\b|\b(csv|tsv|my data|spreadsheet)\b/i.test(question) ? dataFiles() : []),

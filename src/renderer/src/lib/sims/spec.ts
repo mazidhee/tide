@@ -16,6 +16,8 @@ import type { PhysicsSpec } from './physics'
 import type { GeometrySpec } from './geometry'
 import type { RegexSpec } from './regex'
 import type { ChessSpec } from './chess'
+import type { ExploreSpec } from './explore'
+import { parseExploreSpec } from './explore'
 import { parsePhysicsSpec } from './physics'
 import { parseGeometrySpec } from './geometry'
 import { parseRegexSpec } from './regex'
@@ -96,6 +98,7 @@ export type SimSpec =
   | GeometrySpec
   | RegexSpec
   | ChessSpec
+  | ExploreSpec
 
 export const LIMITS = {
   hiddenLayers: 3,
@@ -221,7 +224,11 @@ const KIND_ALIASES: Record<string, SimKind> = {
   railroad: 'regex',
   minimax: 'chess',
   'game-tree': 'chess',
-  'alpha-beta': 'chess'
+  'alpha-beta': 'chess',
+  explorable: 'explore',
+  explorer: 'explore',
+  maths: 'explore',
+  math: 'explore'
 }
 
 /** Turns the body of a ```sim block into a checked spec, or null when it isn't one (yet) */
@@ -266,6 +273,8 @@ export function parseSim(source: string): SimSpec | null {
       return parseRegexSpec(obj, base(obj))
     case 'chess':
       return parseChessSpec(obj, base(obj))
+    case 'explore':
+      return parseExploreSpec(obj, base(obj))
     default:
       return null
   }

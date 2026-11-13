@@ -50,8 +50,8 @@ export interface SimHost {
 
 export interface SimKindDef<S extends SimSpec = SimSpec> {
   label: string
-  /** Whether Play, Step and speed make sense for this kind */
-  transport: boolean
+  /** Whether Play, Step and speed make sense for this kind (or for this spec of it) */
+  transport: boolean | ((spec: S) => boolean)
   autoplay(spec: S): boolean
   create(spec: S, host: SimHost): SimView
 }
@@ -113,6 +113,7 @@ export function mountSim<S extends SimSpec>(spec: S, def: SimKindDef<S>, place: 
     }
   }
   const view = def.create(spec, host)
+  const transport = typeof def.transport === 'function' ? def.transport(spec) : def.transport
 
   // ---------- Tour ----------
   const tour: TourStep[] = spec.tour
@@ -207,7 +208,7 @@ export function mountSim<S extends SimSpec>(spec: S, def: SimKindDef<S>, place: 
   stepBtn.title = 'S'
   resetBtn.title = 'R'
   const bar = h('div', { class: 'sim-bar' })
-  if (def.transport) {
+  if (transport) {
     const speedField = selectField('Speed', SPEEDS, '1', (v) => (speed = Number(v)))
     bar.append(play, stepBtn, resetBtn, speedField.el, status)
   } else {
@@ -224,7 +225,7 @@ export function mountSim<S extends SimSpec>(spec: S, def: SimKindDef<S>, place: 
   }
 
   function setPlaying(on: boolean): void {
-    if (!def.transport) return
+    if (!transport) return
     if (on && view.done?.()) return
     playing = on
     if (on) note = ''
@@ -244,7 +245,7 @@ export function mountSim<S extends SimSpec>(spec: S, def: SimKindDef<S>, place: 
   }
 
   function stepOnce(): void {
-    if (!def.transport) return
+    if (!transport) return
     setPlaying(false)
     if (!finishIfDone()) {
       view.step()
@@ -316,7 +317,7 @@ export function mountSim<S extends SimSpec>(spec: S, def: SimKindDef<S>, place: 
       return
     }
     if (field && (field as HTMLInputElement).type !== 'range') return
-    if (e.key === ' ' && !target.closest('button, select, [data-arrows]') && def.transport) {
+    if (e.key === ' ' && !target.closest('button, select, [data-arrows]') && transport) {
       setPlaying(!playing)
       e.preventDefault()
     } else if (e.key === 's' || e.key === 'S') stepOnce()
@@ -364,7 +365,7 @@ export function mountSim<S extends SimSpec>(spec: S, def: SimKindDef<S>, place: 
   document.addEventListener('visibilitychange', onShow)
 
   if (tour.length) goTo(0)
-  else if (def.transport && def.autoplay(spec) && !reducedMotion) playing = true
+  else if (transport && def.autoplay(spec) && !reducedMotion) playing = true
   // The first picture doesn't wait for a frame
   if (root.isConnected) paint()
   schedule()
