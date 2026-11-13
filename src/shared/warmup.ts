@@ -199,7 +199,7 @@ export function warmupNote(set: WarmupSet, results: WarmupResult[], skipped: boo
   const line = (r: WarmupResult) => `${r.card.conceptName}: "${clip(r.card.question, 140)}"${r.card.answer ? ` (answer: ${clip(r.card.answer, 160)})` : ''}${r.said?.trim() ? `; in their own words, before looking: "${clip(r.said.trim(), 600)}"` : ''}`
   const wrote = results.some((r) => r.said?.trim())
   return [
-    `(Tide: before this lesson, the learner did a ${results.length}-card warm-up on earlier topics it builds on.`,
+    `(Tide: before this lesson, the learner did a ${results.length}-card warm-up on earlier topics it builds on: ${held.length} held, ${faded.length} faded.`,
     held.length ? `Held: ${held.map(line).join('; ')}.` : '',
     faded.length ? `Faded (${faded.map((r) => (r.verdict === 'partial' ? 'shaky' : 'forgotten')).join(', ')}): ${faded.map(line).join('; ')}.` : '',
     held.length ? 'Open by tying the new topic to what held, explicitly: name the earlier idea and show how this one builds on it (for example, "you know hex is four bits a digit, so a byte is two hex digits").' : '',
@@ -209,6 +209,30 @@ export function warmupNote(set: WarmupSet, results: WarmupResult[], skipped: boo
   ]
     .filter(Boolean)
     .join('\n')
+}
+
+/** Where the warm-up stands, for the lesson map's first stage (shared/lessonMap) */
+export interface WarmupStage {
+  state: 'now' | 'done' | 'skipped'
+  /** Cards in it, and how many are graded so far */
+  cards: number
+  done: number
+  /** Of those graded, how many held */
+  held: number
+}
+
+/**
+ * The warm-up a lesson had, read back from its opening message (warmupNote rides in it), so a
+ * reopened lesson's map still shows it. Null when the lesson had none.
+ */
+export function warmupStageOf(opening: string): WarmupStage | null {
+  const did = opening.match(/did a (\d+)-card warm-up on earlier topics it builds on(?:: (\d+) held, (\d+) faded)?/)
+  if (did) {
+    const n = Number(did[1])
+    return { state: 'done', cards: n, done: n, held: did[2] !== undefined ? Number(did[2]) : 0 }
+  }
+  if (/They skipped the warm-up on them\./.test(opening)) return { state: 'skipped', cards: 0, done: 0, held: 0 }
+  return null
 }
 
 /** The warm-up's tally for the line it leaves behind: "2 held · 1 to refresh" */

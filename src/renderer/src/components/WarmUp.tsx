@@ -18,7 +18,7 @@ const GRADES: { verdict: Verdict; label: string; key: string }[] = [
  * then the lesson begins knowing what held and what faded. One button skips it; it never runs
  * past two minutes.
  */
-export function WarmUp({ set, onDone }: { set: WarmupSet; onDone(results: WarmupResult[], skipped: boolean): void }) {
+export function WarmUp({ set, onDone, onProgress }: { set: WarmupSet; onDone(results: WarmupResult[], skipped: boolean): void; onProgress?(results: WarmupResult[]): void }) {
   const [i, setI] = useState(0)
   const [shown, setShown] = useState(false)
   const [results, setResults] = useState<WarmupResult[]>([])
@@ -37,6 +37,7 @@ export function WarmUp({ set, onDone }: { set: WarmupSet; onDone(results: Warmup
     window.tide.warmup.grade(card, verdict).catch(() => {})
     const r = [...results, { card, verdict, ...(said.trim() ? { said: said.trim() } : {}) }]
     setResults(r)
+    onProgress?.(r)
     setShown(false)
     setSaid('')
     if (i + 1 >= set.cards.length || Date.now() - started.current > WARMUP_MAX_MS) finish(r, false)

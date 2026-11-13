@@ -58,7 +58,7 @@ import { AreaMark } from './tide/AreaMark'
 import { AnswerHint, AskPill, BackPill, FOLD_MS, SelectionAsk, ThreadSlot, highlightQuote, reducedMotion, type SelectionAt } from './LessonThreads'
 import { CameUpIn } from './ExploreLater'
 import { WarmUp } from './WarmUp'
-import { warmupNote, type WarmupSet } from '@shared/warmup'
+import { warmupNote, type WarmupSet, type WarmupStage } from '@shared/warmup'
 import { prepNote } from '@shared/lessonPrep'
 import { breakSignals, lessonAnswers, lessonForBreaks } from '../lib/breaks'
 import { MATHS_ANSWER_EVENT, takeExploreNotes, type MathsAnswerDetail } from '../lib/sims/exploreBus'
@@ -382,6 +382,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const openingRef = useRef(openingMessage(setup))
   // The warm-up before a lesson (shared/warmup): the lesson's opening waits for it; its sources load meanwhile
   const [warm, setWarm] = useState<WarmupSet | null>(null)
+  // Where the warm-up stands, for the lesson map's first stage (once the lesson opens, its opening message says)
+  const [warmStage, setWarmStage] = useState<WarmupStage | null>(null)
   const warmGate = useRef<Promise<string>>(Promise.resolve(''))
   const warmDone = useRef<((note: string) => void) | null>(null)
   const answeredHere = useRef(false)
@@ -402,6 +404,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           if (!set.cards.length) return resolve('')
           warmDone.current = resolve
           setWarm(set)
+          setWarmStage({ state: 'now', cards: set.cards.length, done: 0, held: 0 })
         })
         .catch(() => (clearTimeout(wait), resolve('')))
     })
@@ -734,9 +737,10 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const finished = !busy && turns.length > 1 && !currentAsk && !carryOn && lastBlocks.some((b) => b.kind === 'summary' || b.kind === 'scores')
 
   // ---------- The lesson map (shared/lessonMap): where the lesson is on its plan ----------
-  const map = useMemo(() => lessonMap(turns, parsed, { finished }), [turns, parsed, finished])
-  // A lesson taught in problem sets probes first, then plans: the track says so until the plan comes
-  const showMap = mode === 'teach' && (map.steps.length > 0 || (!options?.refresh && !options?.course && (!approach || approach === 'problems') && turns.length > 1 && !finished))
+  const map = useMemo(() => lessonMap(turns, parsed, { finished, warmup: warmStage }), [turns, parsed, finished, warmStage])
+  // A lesson taught in problem sets probes first, then plans: the track says so until the plan comes.
+  // The warm-up is the track's first stage, shown while its cards are up
+  const showMap = mode === 'teach' && (map.steps.length > 0 || map.phase === 'warmup' || (!!map.warmup && !finished && !options?.curiosity) || (!options?.refresh && !options?.course && (!approach || approach === 'problems') && turns.length > 1 && !finished))
   const mapRef = useRef(map)
   mapRef.current = map
   // The next lesson on your roadmap: today's first lesson still to do, other than this one
@@ -1820,7 +1824,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           {warm && (
             <WarmUp
               set={warm}
+              onProgress={(results) => setWarmStage({ state: 'now', cards: warm.cards.length, done: results.length, held: results.filter((r) => r.verdict === 'correct').length })}
               onDone={(results, skipped) => {
+                setWarmStage({ state: skipped || !results.length ? 'skipped' : 'done', cards: warm.cards.length, done: results.length, held: results.filter((r) => r.verdict === 'correct').length })
                 warmDone.current?.(warmupNote(warm, results, skipped))
                 warmDone.current = null
               }}

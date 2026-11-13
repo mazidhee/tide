@@ -250,3 +250,58 @@ describe('estimates', () => {
     expect(stepOutcome(step({ state: 'next' })).label).toBe('not reached')
   })
 })
+
+describe('the warm-up on the track', () => {
+  const opening = (note: string): MapTurn => ({ role: 'user', content: `Teach me binary.\n\n${note}` })
+
+  it('is the first stage while its cards are up, before the lesson says a word', () => {
+    const map = lessonMap([], [], { warmup: { state: 'now', cards: 4, done: 1, held: 1 } })
+    expect(map.phase).toBe('warmup')
+    expect(map.warmup).toEqual({ state: 'now', cards: 4, done: 1, held: 1 })
+    expect(map.fill).toBeCloseTo(0.25)
+    expect(map.minutesLeft).toBeUndefined()
+  })
+
+  it("comes back from the opening message when a lesson is reopened, before step 1", async () => {
+    const { warmupNote } = await import('@shared/warmup')
+    const card = { concept: 'c', conceptName: 'Hex', from: 'From Hex', question: 'Bits per hex digit?', answer: '4', item: null, estimate: 0.5 }
+    const note = warmupNote({ topic: 'Bytes', cards: [card, { ...card, question: 'Two hex digits?' }], concepts: [] }, [{ card, verdict: 'correct' }, { card, verdict: 'wrong' }], false)
+    const turns: MapTurn[] = [opening(note), { role: 'assistant', content: `${PLAN}\n<progress step="1"/>\n${ask()}` }]
+    const map = lessonMap(turns, blocksOf(turns))
+    expect(map.warmup).toEqual({ state: 'done', cards: 2, done: 2, held: 1 })
+    expect(map.phase).toBe('steps')
+    expect(map.current).toBe(0)
+  })
+
+  it('remembers a skipped warm-up, and a lesson without one has no stage', async () => {
+    const { warmupNote } = await import('@shared/warmup')
+    const note = warmupNote({ topic: 'Bytes', cards: [{ concept: 'c', conceptName: 'Hex', from: '', question: 'q', item: null, estimate: 0.4 }], concepts: [{ name: 'Hex', estimate: 0.4, status: 'fading' }] }, [], true)
+    expect(lessonMap([opening(note)], [null]).warmup?.state).toBe('skipped')
+    expect(lessonMap([opening('no warm-up here')], [null]).warmup).toBeUndefined()
+  })
+})
+
+describe('a lesson map for every teaching style', () => {
+  const setup = (options: Record<string, unknown>) => sessionInstructions({ mode: 'teach', topic: 'Card payments', options })
+
+  it('walkthrough, dialogue and refresher lessons are asked for a light plan and the map tags', () => {
+    for (const options of [{ strategy: 'walkthrough' }, { strategy: 'dialogue' }, { refresh: true }, { strategy: 'walkthrough', flow: [{ from: 'Card', to: 'Acquirer', label: 'auth' }] }]) {
+      const text = setup(options)
+      expect(text, JSON.stringify(options)).toMatch(/<plan>\nGoal: By the end you can …\n1\. Title \| what it covers \| 4 min\n<\/plan>/)
+      expect(text).toContain(MAP_RULES)
+      expect(forClaude(text)).toContain(MAP_RULES_CLAUDE)
+    }
+  })
+
+  it("a dialogue's light plan becomes a track like any other", () => {
+    const turns: MapTurn[] = [
+      { role: 'user', content: 'Teach me idempotency keys.' },
+      { role: 'assistant', content: `What would you do if a client retried a payment?\n${ask()}` },
+      { role: 'user', content: 'Answer: dedupe it' },
+      { role: 'assistant', content: `<plan>\nGoal: By the end you can design retries that never pay twice\n1. Why retries double-pay | the failure | 4 min\n2. Keys and where they live | 5 min\n</plan>\n<progress step="1"/>\nSo, first.\n${ask()}` }
+    ]
+    const map = lessonMap(turns, blocksOf(turns))
+    expect(map.phase).toBe('steps')
+    expect(map.steps.map((s) => s.title)).toEqual(['Why retries double-pay', 'Keys and where they live'])
+  })
+})
