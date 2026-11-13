@@ -9,7 +9,7 @@ import { Icon } from '../Icon'
  * Beside the page: Claude (Challenge me, the argument map, the end-of-chapter seminar), your notes
  * on the book, and the chapter list. Claude never just summarises: it states the argument, asks
  * for yours, and pushes on the weakest step. An exchange worth keeping goes to the book page in
- * one click. A private book is read with Gemma on this Mac, and the drawer says so.
+ * one click. When Claude can't answer, Gemma on this Mac does, and the drawer says so.
  */
 
 export type DrawerTab = 'claude' | 'notes' | 'chapter'
@@ -36,7 +36,6 @@ export function ReaderDrawer(p: {
   tab: DrawerTab
   setTab(t: DrawerTab): void
   ask: DrawerAsk | null
-  isPrivate: boolean
   seminarDone: boolean
   onJump(loc: PassageLoc, mark?: string): void
   onChapter(i: number): void
@@ -48,7 +47,7 @@ export function ReaderDrawer(p: {
   const [who, setWho] = useState<'claude' | 'gemma' | null>(null)
   useEffect(() => {
     window.tide.room.who(p.path).then(setWho).catch(() => setWho(null))
-  }, [p.path, p.isPrivate])
+  }, [p.path])
   const tutor = who === 'gemma' ? 'Gemma' : 'Claude'
   return (
     <aside className="rr-drawer" aria-label="Beside the book">
@@ -185,7 +184,7 @@ function ClaudeTab(p: Parameters<typeof ReaderDrawer>[0] & { tutor: string; who:
     <>
       <div className="rr-drawer-body" ref={bodyRef}>
         <p className="rr-who">
-          {p.who === 'gemma' ? (p.isPrivate ? 'A private book: Gemma reads it with you, on this Mac.' : 'Gemma, on this Mac (Claude isn’t available).') : 'Claude reads with you. It challenges; it won’t summarise.'}
+          {p.who === 'gemma' ? 'Gemma, on this Mac (Claude isn’t available).' : 'Claude reads with you. It challenges; it won’t summarise.'}
         </p>
         {!talk && (
           <div className="rr-drawer-empty">

@@ -184,10 +184,7 @@ export function keepFallback(marks: { kind: string; text: string }[], turns: Tal
 /** The recall question for a kept idea */
 export const recallPrompt = (book: string, chapter: string, k: KeepItem) => k.question?.trim() || `${book}, ${chapter}: explain in your own words why “${k.text.replace(/[.]$/, '')}”.`
 
-// ---------- Privacy ----------
+// ---------- Routing ----------
 
-/**
- * How a reading job is routed (shared/gemmaPolicy): by the book's path, as every reading job is,
- * and kept on this Mac outright when the book is marked private in the reading room.
- */
-export const talkRoute = (path: string, book?: { private?: boolean }) => ({ path, ...(book?.private ? { private: true } : {}) })
+/** How a reading job is asked: by the book's path, as every reading job is; Claude takes it, Gemma when Claude can't */
+export const talkRoute = (path: string) => ({ path })

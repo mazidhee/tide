@@ -1245,7 +1245,7 @@ export interface RoomApi {
   addFree(book: import('./freeBooks').FreeBook): Promise<import('./readingRoom').ShelfBook>
   import(): Promise<import('./readingRoom').ShelfBook[]>
   remove(path: string): Promise<import('./readingRoom').RoomState>
-  patch(path: string, p: { private?: boolean; voice?: import('./readingRoom').BookVoice; finished?: string | null; current?: boolean }): Promise<import('./readingRoom').RoomState>
+  patch(path: string, p: { voice?: import('./readingRoom').BookVoice; finished?: string | null; current?: boolean }): Promise<import('./readingRoom').RoomState>
   goal(weeklyMinutes: number): Promise<import('./readingRoom').RoomState>
   progress(path: string, p: { loc: import('./passage').PassageLoc; progress: number; label?: string; where?: string; chapterLeft?: number }): Promise<void>
   time(path: string, seconds: number, wordsRead?: number): Promise<void>

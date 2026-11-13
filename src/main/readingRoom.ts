@@ -144,7 +144,6 @@ export async function removeFromShelf(path: string): Promise<RoomState> {
 }
 
 export interface ShelfPatch {
-  private?: boolean
   voice?: ShelfBook['voice']
   finished?: string | null
   current?: boolean
@@ -153,7 +152,6 @@ export interface ShelfPatch {
 export async function patchBook(path: string, patch: ShelfPatch): Promise<RoomState> {
   await updateBook(path, (b) => {
     const next = { ...b }
-    if (patch.private !== undefined) next.private = patch.private || undefined
     if (patch.voice !== undefined) next.voice = patch.voice
     if (patch.finished !== undefined) next.finished = patch.finished ?? undefined
     return next
@@ -425,7 +423,7 @@ export async function setNoteIcon(notePath: string, icon: string | null): Promis
 /** A first cover for a free classic, so the shelf has art from the start (not for your own files) */
 export async function firstCover(path: string): Promise<void> {
   const b = await bookOf(path)
-  if (!b || b.cover || b.private) return
+  if (!b || b.cover) return
   const { subjects } = await readerBook(path).catch(() => ({ subjects: [] as string[] }))
   const found = await artSearch(coverQuery({ title: b.title, subjects }))
   const pick = found.find((a) => a.museum === 'Art Institute of Chicago') ?? found[0]
@@ -463,13 +461,13 @@ function readUpTo(chapters: ReaderChapter[], loc: PassageLoc | undefined, max: n
 
 async function ask(job: 'readChallenge' | 'readArgument' | 'readSeminar' | 'readKeep', prompt: string, system: string, path: string): Promise<string> {
   const { completeFor } = await import('./ai')
-  return completeFor(job, prompt, system, { task: 'tutor', ...talkRoute(path, await bookOf(path)) })
+  return completeFor(job, prompt, system, { task: 'tutor', ...talkRoute(path) })
 }
 
-/** Who will answer for this book: Claude, unless it's private or Claude can't */
+/** Who will answer for this book: Claude, or Gemma when Claude can't */
 export async function talkWho(path: string): Promise<'claude' | 'gemma'> {
   const { jobRoute } = await import('./ai')
-  const r = await jobRoute('readChallenge', '', talkRoute(path, await bookOf(path)))
+  const r = await jobRoute('readChallenge', '', talkRoute(path))
   return r.who
 }
 
@@ -589,8 +587,7 @@ export async function seminarSave(req: { path: string; chapter: number; items: K
     await writeText(page, applyAdditions(await readText(page), [{ section: THINKING, block }]))
   }
   const { keepFromReading } = await import('./recall')
-  const book = await bookOf(req.path)
-  const recall = book?.private ? 0 : await keepFromReading(ideas.map((k) => ({ prompt: recallPrompt(b.title, name, k), topic: b.title })), `reading:${sha(req.path).slice(0, 10)}:${req.chapter}`).catch(() => 0)
+  const recall = await keepFromReading(ideas.map((k) => ({ prompt: recallPrompt(b.title, name, k), topic: b.title })), `reading:${sha(req.path).slice(0, 10)}:${req.chapter}`).catch(() => 0)
   await updateBook(req.path, (x) => ({ ...x, seminars: [...new Set([...(x.seminars ?? []), req.chapter])] }))
   await saveTalk({ id: uid(), kind: 'seminar', path: req.path, chapter: name, turns: req.turns, at: Date.now() })
   return { quotes, ideas: ideas.length, recall }

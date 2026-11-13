@@ -51,7 +51,7 @@ vi.mock('../src/main/ai', () => ({
     asked.push({ job, prompt, system, o })
     return answer(job)
   },
-  jobRoute: async (_job: string, _p: string, o: { private?: boolean }) => (o.private || route === 'gemma' ? { who: 'gemma', reason: 'private' } : { who: 'claude', role: 'teach' })
+  jobRoute: async () => (route === 'gemma' ? { who: 'gemma', reason: 'limit' } : { who: 'claude', role: 'teach' })
 }))
 const recalled: { prompt: string; topic: string }[][] = []
 vi.mock('../src/main/recall', () => ({ keepFromReading: async (items: { prompt: string; topic: string }[]) => (recalled.push(items), items.length) }))
@@ -378,20 +378,20 @@ describe('Challenge me and the argument map', () => {
     expect(parseArgument('1. Already there in the map', ['Already there in the map']).steps).toEqual([])
   })
 
-  it('keeps a private book on Gemma: the job is sent as private, and the route says so', async () => {
+  it('sends every book to Claude, with Gemma only when Claude can’t answer', async () => {
     const room = await rr()
-    await room.patchBook(BOOK, { private: true })
     await room.challenge({ path: BOOK, passage: P2 })
-    expect(asked[0].o).toMatchObject({ path: BOOK, private: true })
+    expect(asked[0].o).toEqual({ task: 'tutor', path: BOOK })
+    expect(asked[0].o).not.toHaveProperty('private')
+    expect(await room.talkWho(BOOK)).toBe('claude')
+    route = 'gemma'
     expect(await room.talkWho(BOOK)).toBe('gemma')
-    expect(talkRoute(BOOK, { private: true })).toEqual({ path: BOOK, private: true })
-    expect(talkRoute(BOOK, {})).toEqual({ path: BOOK })
+    expect(talkRoute(BOOK)).toEqual({ path: BOOK })
     for (const job of ['readChallenge', 'readArgument', 'readSeminar', 'readKeep'] as const) {
-      expect(routeJob(job, { claude: { main: true }, private: true })).toEqual({ who: 'gemma', reason: 'private' })
+      expect(routeJob(job, { claude: { main: true } }).who).toBe('claude')
       expect(routeJob(job, { claude: { main: false, why: 'limit' } })).toEqual({ who: 'gemma', reason: 'limit' })
     }
     expect(routeJob('readArgument', { claude: { main: true } })).toEqual({ who: 'claude', role: 'hard' })
-    await room.patchBook(BOOK, { private: false })
   })
 
   it('still answers with a question when no model can', async () => {

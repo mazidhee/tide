@@ -64,8 +64,6 @@ export interface ShelfBook {
   cover?: string
   coverY?: number
   coverCredit?: string
-  /** Kept on this Mac: Claude is never asked about it (Gemma reads it with you) */
-  private?: boolean
   voice?: BookVoice
   /** Minutes read, by day (yyyy-mm-dd) */
   days?: Record<string, number>

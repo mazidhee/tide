@@ -81,7 +81,7 @@ export function ReadingRoom() {
       items: [
         { label: 'Read', run: () => read(b) },
         { label: 'Book page', run: () => page(b) },
-        { label: b.private ? 'Let Claude read it with you' : 'Keep it on this Mac (private)', run: () => window.tide.room.patch(b.path, { private: !b.private }).then(refreshShelf), separatorBefore: true },
+        { label: 'Choose a cover…', run: () => page(b), separatorBefore: true },
         { label: b.finished ? 'Not finished' : 'Mark as finished', run: () => window.tide.room.patch(b.path, { finished: b.finished ? null : new Date().toISOString().slice(0, 10) }).then(refreshShelf) },
         { label: 'Remove from the shelf', run: () => window.tide.room.remove(b.path).then(refreshShelf), danger: true, separatorBefore: true }
       ]
@@ -156,7 +156,6 @@ export function ReadingRoom() {
                 <button className="rr-btn" onClick={() => page(lead)}>
                   <Icon name="note" size={14} /> Book page
                 </button>
-                {lead.private && <span className="rr-private">Private: Gemma on this Mac</span>}
               </div>
             </div>
           </section>
@@ -286,7 +285,7 @@ function AddBook({ onClose, onAdded }: { onClose(): void; onAdded(b: ShelfBook):
             <button className="rr-btn primary" disabled={!!busy} onClick={() => run('import', () => window.tide.room.import())}>
               {busy === 'import' ? 'Adding…' : 'Choose an EPUB or PDF…'}
             </button>
-            <span className="rr-muted rr-small">It’s copied into Library/Books or Library/PDFs. Your own books are yours: mark one private and Claude never sees it.</span>
+            <span className="rr-muted rr-small">It’s copied into Library/Books or Library/PDFs. Choose a cover for it on its book page.</span>
           </div>
           {inVault.length > 0 && (
             <>

@@ -643,7 +643,6 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
           tab={drawer}
           setTab={setDrawer}
           ask={ask}
-          isPrivate={!!shelfBook?.private}
           seminarDone={seminarDone}
           onJump={jump}
           onChapter={go}
