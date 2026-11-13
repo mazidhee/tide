@@ -142,7 +142,9 @@ describe('each feature writes its events', () => {
     await noteReviewAnswer({ concept: p, source: `warmup:${p}`, pos: String(at), kind: 'recalled-right', at })
     await noteReviewAnswer({ concept: p, source: `phasecheck:ph1:${at}`, pos: 'q0', kind: 'recalled-wrong', at })
     await noteReviewAnswer({ concept: p, source: `coursecheck:c1`, pos: 'q0', kind: 'right', at })
-    const evs = log.readEvents({ since: at })
+    // Only this test's acts: under a loaded run, a background write from an earlier step can land in the same window
+    const mine = new Set(['claude', 'course', 'phasecheck', 'project', 'mock', 'warmup'])
+    const evs = log.readEvents({ since: at }).filter((e) => mine.has(e.source))
     expect(evs.map((e) => `${e.kind}/${e.source}`).sort()).toEqual(['answered/claude', 'answered/course', 'answered/phasecheck', 'built/project', 'mock/mock', 'recalled/warmup'])
     expect(evs.every((e) => e.concepts.length === 1)).toBe(true)
   })
