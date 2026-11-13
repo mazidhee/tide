@@ -23,7 +23,8 @@ import { useOutlines } from '../lib/outlines'
 
 const EXPANDED_KEY = 'tide.expanded'
 /** Folders Tide keeps for itself: shown together, folded away, under "Tide's files" */
-const SYSTEM_FOLDERS = new Set(['Coach', 'Exams', 'Designs', 'Lessons', CHAT_IMAGES])
+// Flashcards: cards the tutor saved for a topic; they're studied from Review, not browsed as a notebook
+const SYSTEM_FOLDERS = new Set(['Coach', 'Exams', 'Designs', 'Lessons', 'Flashcards', CHAT_IMAGES])
 const TIDE_GROUP = '__tide__'
 
 function iconFor(node: FileNode, libraryFolder: string): IconName {
