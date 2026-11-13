@@ -250,9 +250,6 @@ function MapView({ data, onChange, reload }: { data: ViewData; onChange: (d: Vie
     <div className="page-inner ns-inner">
       <header className="ns-head">
         <div className="ns-head-main">
-          <span className="ns-kicker">
-            <Icon name="northstar" size={13} /> North Star
-          </span>
           <p className="ns-goal">{ns.goal}</p>
         </div>
         <div className="ns-head-tools">
@@ -531,17 +528,16 @@ function Build({ onBuilt }: { onBuilt: () => void }) {
   return (
     <div className="page-inner narrow ns-inner">
       <header className="ns-intro">
-        <span className="ns-kicker">
-          <Icon name="northstar" size={13} /> North Star
-        </span>
-        <h1 className="page-title">One path, every interest</h1>
-        <p className="ns-lede">Your roadmaps woven into one map towards one goal: shared foundations first, tracks that reinforce each other side by side, each topic learned once, and each stage going as deep as it needs.</p>
+        <h1 className="page-title">North Star</h1>
+        <p className="ns-lede" title="Shared foundations first, tracks that reinforce each other side by side, each topic learned once, and each stage going as deep as it needs">
+          Every roadmap, woven into one path towards one goal.
+        </p>
       </header>
       {notePath && (
         <div className="ns-from-note">
-          <Icon name="note" size={15} />
-          <span>
-            Planned from your note <b>{notePath.split('/').pop()?.replace(/\.md$/, '')}</b>: your goal, how you want to learn and every interest. Edit the note to change it.
+          <Icon name="note" size={14} />
+          <span title="Your goal, how you want to learn and every interest. Edit the note to change it.">
+            From <b>{notePath.split('/').pop()?.replace(/\.md$/, '')}</b>
           </span>
           <button className="link-btn" onClick={() => app.openPath(notePath)}>
             Open the note
@@ -549,15 +545,15 @@ function Build({ onBuilt }: { onBuilt: () => void }) {
         </div>
       )}
       <label className="ns-field">
-        <span>{notePath ? 'Anything to add for this plan (optional)' : 'Where you’re heading, in your own words'}</span>
-        <textarea value={goal} onChange={(e) => setGoal(e.target.value)} rows={notePath ? 3 : 6} placeholder={notePath ? 'A constraint, a deadline, what to leave out' : 'What you want to become, the fields you care about, how deep you want to go'} disabled={thinking !== null} />
+        <span>{notePath ? 'Anything to add' : 'Where you’re heading, in your own words'}</span>
+        <textarea value={goal} onChange={(e) => setGoal(e.target.value)} rows={notePath ? 2 : 5} placeholder={notePath ? 'A constraint, a deadline, what to leave out' : 'What you want to become, the fields you care about, how deep you want to go'} disabled={thinking !== null} />
       </label>
       <div className="ns-build-bar">
         <label className="field-inline">
           Hours a week
           <input type="number" min={1} max={80} value={hours} onChange={(e) => setHours(Number(e.target.value))} disabled={thinking !== null} />
         </label>
-        <button className="btn primary" onClick={think} disabled={thinking !== null || (!goal.trim() && !notePath)}>
+        <button className="btn primary" onClick={think} disabled={thinking !== null || (!goal.trim() && !notePath)} title="Nothing is written until you’ve seen the map and pressed Build">
           {thinking !== null ? (
             <>
               <span className="spinner" /> Thinking it through · {Math.max(0, Math.round((now - thinking) / 1000))} s
@@ -567,7 +563,7 @@ function Build({ onBuilt }: { onBuilt: () => void }) {
           )}
         </button>
       </div>
-      <p className="ns-small muted">{thinking !== null ? 'Claude is reading every roadmap and what you know. This takes a few minutes; you can leave and come back.' : 'Nothing is written until you’ve seen the map and pressed Build.'}</p>
+      {thinking !== null && <p className="ns-small muted">A few minutes. You can leave and come back.</p>}
       {error && <p className="error-text">{error}</p>}
     </div>
   )
