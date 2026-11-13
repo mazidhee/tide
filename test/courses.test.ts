@@ -296,3 +296,44 @@ describe('quotations in a mark', () => {
     expect(quoteCheck(grade, reading)).toEqual({ found: ['An experiment is the larger modeling activity… Each trial is a run.'], missing: [] })
   })
 })
+
+describe('a course outline holds only its lessons, each named once', () => {
+  // The shape of DataTalksClub's ML Zoomcamp in late 2026: a module README listing its lessons,
+  // notebooks titled with the course's name, and audits of the module's pictures beside them
+  const nb = (title: string, code: string) => `# ${title}\n\n${words(60)}\n\n\`\`\`python\n${code}\n\`\`\``
+  const files: RepoFile[] = [
+    { path: 'README.md', text: `# Machine Learning Zoomcamp\n\n${words(200)}\n\n- [Intro](01-intro/)\n- [Regression](02-regression/)` },
+    { path: '01-intro/README.md', text: '﻿## 1. Introduction to Machine Learning\n\n- 1.1 [Introduction to Machine Learning](01-what-is-ml.md)\n- 1.2 [NumPy](07-numpy.md)\n- 1.3 [Summary](10-summary.md)\n\n## Community notes\n\n' + words(80) },
+    { path: '01-intro/01-what-is-ml.md', text: `# Introduction to Machine Learning\n\n${words(300)}` },
+    { path: '01-intro/07-numpy.md', text: `# Introduction to NumPy\n\n${words(300)}` },
+    { path: '01-intro/10-summary.md', text: `# Summary\n\n${words(120)}` },
+    { path: '01-intro/notebooks/07-numpy.ipynb', text: nb('Machine Learning Zoomcamp', 'import numpy as np') },
+    { path: '01-intro/notebooks/08-extra.ipynb', text: nb('Machine Learning Zoomcamp', 'x = 1') },
+    { path: '01-intro/images/2026-09-08-imagegen-repair-provenance.md', text: `# Imagegen repair provenance: 2026-09-08\n\n${words(300)}` },
+    { path: '01-intro/images/2026-09-09-provenance-ledger.md', text: `# Strict provenance audit — 20 active refs\n\n${words(300)}` },
+    { path: '01-intro/code/plan.md', text: `# Plan\n\n${words(150)}` },
+    { path: '02-regression/README.md', text: `# 2. Regression\n\n${words(80)}` },
+    { path: '02-regression/01-car.md', text: `# Car price prediction\n\n${words(200)}` },
+    { path: '02-regression/visual-audit-provenance-2026-09-09.md', text: `# FastAPI workshop visual audit\n\n${words(200)}` },
+    { path: '02-regression/AGENTS.md', text: `# Agents\n\n${words(200)}` }
+  ]
+  const o = buildOutline({ ...base, title: 'Machine Learning Zoomcamp' }, files)
+  const titles = o.modules.flatMap((m) => m.lessons.map((l) => l.title))
+  const paths = o.modules.flatMap((m) => m.lessons.map((l) => l.path))
+
+  it('leaves out the housekeeping: notes on pictures, provenance logs, agent files, unlinked files deep in a module', () => {
+    expect(paths.some((p) => /images\/|provenance|AGENTS|plan\.md/.test(p))).toBe(false)
+  })
+  it('follows the module README: its order, each notebook after its reading', () => {
+    const intro = o.modules.find((m) => m.lessons.some((l) => l.path.startsWith('01-intro/')))!
+    expect(intro.lessons.map((l) => l.path)).toEqual(['01-intro/README.md', '01-intro/01-what-is-ml.md', '01-intro/07-numpy.md', '01-intro/notebooks/07-numpy.ipynb', '01-intro/10-summary.md', '01-intro/notebooks/08-extra.ipynb'])
+  })
+  it('names no two lessons alike: the README is the overview, notebooks by their reading or file', () => {
+    for (const m of o.modules) expect(new Set(m.lessons.map((l) => l.title)).size, m.title).toBe(m.lessons.length)
+    expect(titles).toContain('Overview')
+    expect(titles).toContain('Introduction to NumPy: notebook')
+    expect(titles).toContain('Extra (notebook)')
+    expect(titles.filter((t) => t === 'Machine Learning Zoomcamp')).toHaveLength(0)
+    expect(titles.filter((t) => /Introduction to Machine Learning/.test(t))).toHaveLength(1)
+  })
+})

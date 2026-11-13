@@ -756,26 +756,7 @@
   padding-left: 64px;
 }
 
-/* Theatre: the lecture across the stage, its transcript beside it, the text under it */
-.crs-theatre .crs-article.wide {
-  width: min(1520px, 100%);
-}
-.crs-with-video.theatre {
-  grid-template-columns: minmax(0, 1fr) !important;
-}
-.crs-with-video.theatre > .crs-videos {
-  order: 0;
-  position: static;
-}
-.crs-with-video.theatre > .crs-prose {
-  order: 1;
-  width: 100%;
-  max-width: 740px;
-  margin: 8px auto 0;
-}
-.crs-with-video.theatre .vt.side {
-  --vt-side: 380px;
-}
+/* Theatre: courses.css (.crs-with-side.theatre) */
 
 /* The tutor: one line at the foot of the text, opening upwards over it */
 .crs-main {

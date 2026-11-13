@@ -10,6 +10,7 @@
  * its end. Playing, it opens in cinema: across the page on a dark band, unless you turn that off.
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { formatRange, formatTime, lineAt, thumbUrl, watchUrl, type Line, type Transcript } from '@shared/video'
 import { embedUrl, errorText, STATE, YouTubeBridge } from '../lib/youtubeBridge'
 import { RATES, activate, cinemaOn, deactivate, preferredRate, register, rememberCinema, rememberPosition, rememberRate, resumeAt, type PlayerHandle } from '../lib/videoHub'
@@ -43,6 +44,13 @@ interface Props {
   onWatched?: (fraction: number) => void
   /** The player opened (true) or went back to its thumbnail (false) */
   onActive?: (active: boolean) => void
+  /** The transcript drawn here instead of beside the player (a course's side column gives it a pane of its own) */
+  transcriptHost?: HTMLElement | null
+  /** Notes are taken elsewhere (a course's notes panel): the Notes button opens that instead */
+  onNotes?: () => void
+  notesOn?: boolean
+  /** Never put back to its thumbnail for being out of view (a sticky column that tucks it behind a tab keeps it playing) */
+  keepPlaying?: boolean
 }
 
 /** What both kinds of player do */
@@ -71,7 +79,7 @@ function scroller(el: HTMLElement | null): HTMLElement | null {
   return null
 }
 
-export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, noCinema, onWatched, onActive }: Props) {
+export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, noCinema, onWatched, onActive, transcriptHost, onNotes, notesOn, keepPlaying }: Props) {
   const key = keyOf(source)
   const rootRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLIFrameElement>(null)
@@ -182,7 +190,15 @@ export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, no
 
   // One player at a time, and timestamp links on the page find it
   useEffect(() => {
-    const h: PlayerHandle = { key, stop: () => stop(), playAt: (t) => seekRef.current(t), el: () => rootRef.current }
+    const h: PlayerHandle = {
+      key,
+      stop: () => stop(),
+      playAt: (t) => seekRef.current(t),
+      el: () => rootRef.current,
+      time: () => engine.current?.time() ?? 0,
+      playing: () => !!engine.current?.playing(),
+      toggle: () => (engine.current ? engine.current.toggle() : seekRef.current(-1))
+    }
     handle.current = h
     const off = register(h)
     return () => {
@@ -196,11 +212,11 @@ export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, no
 
   // Scrolled far away (more than a screen and a half), it goes back to its thumbnail
   useEffect(() => {
-    if (!active || !rootRef.current) return
+    if (!active || !rootRef.current || keepPlaying) return
     const io = new IntersectionObserver((es) => es.forEach((e) => !e.isIntersecting && stop()), { root: scroller(rootRef.current), rootMargin: '150% 0px 150% 0px' })
     io.observe(rootRef.current)
     return () => io.disconnect()
-  }, [active, stop])
+  }, [active, stop, keepPlaying])
 
   // ---------- The YouTube player ----------
 
@@ -447,7 +463,8 @@ export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, no
       changeRate(RATES[Math.max(0, Math.min(RATES.length - 1, (i < 0 ? 1 : i) + (k === '>' ? 1 : -1)))])
     } else if (k === 'n' || k === 'N') {
       e.preventDefault()
-      setNotesOpen(true)
+      if (onNotes) onNotes()
+      else setNotesOpen(true)
     } else if (k === 'Escape' && active) {
       e.preventDefault()
       stop()
@@ -512,14 +529,54 @@ export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, no
   const resume = !clip && start === undefined ? resumeAt(key, duration() || undefined) : null
   const hasLines = lines.length > 0
   const transcriptShown = showLines && (hasLines || tr.status === 'loading' || tr.status === 'missing' || (active && source.kind === 'youtube'))
-  const side = transcriptShown && (wide || !!band)
+  const side = !transcriptHost && transcriptShown && (wide || !!band)
   const ytUrl = source.kind === 'youtube' ? watchUrl(source.id, engine.current?.time() ?? openAt ?? clip?.start) : null
   const clipPct = clip && active ? Math.max(0, Math.min(1, ((clock || clip.start) - clip.start) / (clip.end - clip.start))) : 0
+
+  const transcriptPane = (
+        <aside className="vt-transcript" aria-label="Transcript">
+          <header className="vt-tr-head">
+            <span>Transcript</span>
+            {tr.status === 'ready' && tr.t.from === 'note' && <span className="vt-tr-note" title="Read from the note's paragraphs: each line's time is estimated within its paragraph">times approximate</span>}
+            <span className="vt-bar-gap" />
+            {hasLines && !follow && (
+              <button className="vt-btn small" onClick={() => (setFollow(true), (userScrolled.current = 0), engine.current && ((marked.current = -1), markLine(engine.current.time())))}>
+                Follow along
+              </button>
+            )}
+          </header>
+          <div
+            className="vt-lines"
+            ref={listRef}
+            onWheel={() => {
+              userScrolled.current = Date.now()
+              if (active && playing) setFollow(false)
+            }}
+          >
+            {hasLines ? (
+              linesView
+            ) : tr.status === 'loading' ? (
+              <p className="vt-empty">Reading the captions…</p>
+            ) : tr.status === 'missing' ? (
+              <div className="vt-empty">
+                <p>{tr.why === 'offline' ? 'Couldn’t reach YouTube for the captions.' : 'This video has no captions, so there’s no transcript to follow.'}</p>
+                {tr.why === 'offline' && (
+                  <button className="link-btn small" onClick={() => void loadTranscript(true)}>
+                    Try again
+                  </button>
+                )}
+              </div>
+            ) : (
+              <p className="vt-empty">The transcript appears as it plays.</p>
+            )}
+          </div>
+        </aside>
+  )
 
   return (
     <div
       ref={rootRef}
-      className={`vt${active ? ' on' : ''}${band ? ' cinema' : ''}${side ? ' side' : ' stack'}${transcriptShown ? '' : ' bare'}${compact ? ' compact' : ''}`}
+      className={`vt${active ? ' on' : ''}${band ? ' cinema' : ''}${side ? ' side' : ' stack'}${transcriptShown && !transcriptHost ? '' : ' bare'}${compact ? ' compact' : ''}`}
       style={band ? { marginLeft: band.left, width: band.width } : undefined}
       tabIndex={0}
       onKeyDown={onKeyDown}
@@ -555,13 +612,13 @@ export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, no
               ref={frameRef}
               src={embedUrl(source.id, { start: openAt, origin: location.origin })}
               title={name ? `YouTube video: ${name}` : 'YouTube video'}
-              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+              allow="autoplay; encrypted-media; fullscreen"
               allowFullScreen
               referrerPolicy="strict-origin-when-cross-origin"
               onLoad={onFrameLoad}
             />
           ) : (
-            <video ref={videoRef} src={vaultUrl(source.path)} controls preload="metadata" playsInline />
+            <video ref={videoRef} src={vaultUrl(source.path)} controls preload="metadata" playsInline disablePictureInPicture />
           )}
           {active && clipDone && clip && (
             <div className="vt-clip-done">
@@ -615,7 +672,7 @@ export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, no
                 </select>
               </label>
             )}
-            {(hasLines || tr.status === 'missing') && (
+            {!transcriptHost && (hasLines || tr.status === 'missing') && (
               <button className={`vt-btn${showLines ? ' on' : ''}`} onClick={() => setShowLines((v) => !v)} aria-pressed={showLines} title={showLines ? 'Hide the transcript' : 'Show the transcript'}>
                 <Icon name="list" size={14} />
                 <span>Transcript</span>
@@ -635,7 +692,7 @@ export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, no
                 <span>Cinema</span>
               </button>
             )}
-            <button className={`vt-btn${notesOpen ? ' on' : ''}`} onClick={() => setNotesOpen((v) => !v)} aria-pressed={notesOpen} title="Write notes as you watch, each at its moment (N)">
+            <button className={`vt-btn${(onNotes ? notesOn : notesOpen) ? ' on' : ''}`} onClick={() => (onNotes ? onNotes() : setNotesOpen((v) => !v))} aria-pressed={onNotes ? !!notesOn : notesOpen} title={onNotes ? 'Your notes on this lesson, beside it (⌘⇧N)' : 'Write notes as you watch, each at its moment (N)'}>
               <Icon name="edit" size={14} />
               <span>Notes</span>
             </button>
@@ -651,7 +708,7 @@ export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, no
             )}
           </div>
         )}
-        {notesOpen && (
+        {notesOpen && !onNotes && (
           <div className="vt-notes">
             <div className="vt-notes-row">
               <span className="vt-notes-at">{formatTime(noteAt ?? engine.current?.time() ?? clock)}</span>
@@ -700,45 +757,7 @@ export function VideoPlayer({ source, start, clip, title, compact, onClipEnd, no
           </div>
         )}
       </div>
-      {transcriptShown && (
-        <aside className="vt-transcript" aria-label="Transcript">
-          <header className="vt-tr-head">
-            <span>Transcript</span>
-            {tr.status === 'ready' && tr.t.from === 'note' && <span className="vt-tr-note" title="Read from the note's paragraphs: each line's time is estimated within its paragraph">times approximate</span>}
-            <span className="vt-bar-gap" />
-            {hasLines && !follow && (
-              <button className="vt-btn small" onClick={() => (setFollow(true), (userScrolled.current = 0), engine.current && ((marked.current = -1), markLine(engine.current.time())))}>
-                Follow along
-              </button>
-            )}
-          </header>
-          <div
-            className="vt-lines"
-            ref={listRef}
-            onWheel={() => {
-              userScrolled.current = Date.now()
-              if (active && playing) setFollow(false)
-            }}
-          >
-            {hasLines ? (
-              linesView
-            ) : tr.status === 'loading' ? (
-              <p className="vt-empty">Reading the captions…</p>
-            ) : tr.status === 'missing' ? (
-              <div className="vt-empty">
-                <p>{tr.why === 'offline' ? 'Couldn’t reach YouTube for the captions.' : 'This video has no captions, so there’s no transcript to follow.'}</p>
-                {tr.why === 'offline' && (
-                  <button className="link-btn small" onClick={() => void loadTranscript(true)}>
-                    Try again
-                  </button>
-                )}
-              </div>
-            ) : (
-              <p className="vt-empty">The transcript appears as it plays.</p>
-            )}
-          </div>
-        </aside>
-      )}
+      {transcriptHost ? createPortal(transcriptPane, transcriptHost) : transcriptShown && transcriptPane}
     </div>
   )
 }

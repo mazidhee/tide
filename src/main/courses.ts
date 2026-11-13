@@ -63,7 +63,16 @@ export interface Imported {
   outline: CourseOutline
   /** What reading it had to say (pages skipped and why) */
   notes?: string[]
+  /** Which reading of the files built its outline (OUTLINE_VERSION): an older one is read again from the copy on this Mac */
+  outlineVersion?: number
 }
+
+/**
+ * Raised whenever buildOutline reads a course differently. 2: the repository's housekeeping (notes
+ * about its pictures, provenance logs) is left out, a module's README orders it, and no two lessons
+ * of a module share a title.
+ */
+export const OUTLINE_VERSION = 2
 
 export interface CourseCard extends CatalogueCourse {
   imported?: { importedAt: number; updatedAt: number; lessons: number; done: number; /** When a lesson of it was last studied */ lastStudied?: number; next?: { id: string; title: string; module: string } }
@@ -190,7 +199,7 @@ async function readRepo(c: CatalogueCourse): Promise<RepoFile[]> {
         const st = await fs.stat(full)
         // A notebook can carry megabytes of pictures in its outputs: read it, but skip one that is mostly that
         if (st.size > 8_000_000) continue
-        const raw = await fs.readFile(full, 'utf8').catch(() => '')
+        const raw = (await fs.readFile(full, 'utf8').catch(() => '')).replace(/^\uFEFF/, '')
         const text = /\.ipynb$/i.test(path) ? (notebookMarkdown(raw) ?? '') : /\.(adoc|asciidoc)$/i.test(path) ? asciidocMarkdown(raw) : raw
         out.push({ path, text: myst ? mystMarkdown(text) : text })
       }
@@ -214,7 +223,35 @@ const writeJson = async (file: string, v: unknown) => {
   await fs.rename(tmp, file)
 }
 
-export const importedCourse = (id: string) => readJson<Imported | null>(metaFile(id), null)
+const rereading = new Map<string, Promise<Imported>>()
+
+/**
+ * A course as imported. One whose outline an older Tide built is read again from the copy already
+ * on this Mac (nothing is fetched): lesson ids are their files' paths, so progress is untouched,
+ * and a lesson that is no longer listed keeps its progress in case it comes back.
+ */
+export async function importedCourse(id: string): Promise<Imported | null> {
+  const meta = await readJson<Imported | null>(metaFile(id), null)
+  if (!meta || meta.method === 'web' || (meta.outlineVersion ?? 1) >= OUTLINE_VERSION || busy.has(id)) return meta
+  const c = catalogueCourse(id)
+  if (!c || !fromRepo(c) || !existsSync(repoDir(id))) return meta
+  let job = rereading.get(id)
+  if (!job) {
+    job = (async () => {
+      const files = await readRepo(c)
+      const outline = buildOutline(c, files)
+      if (!outline.lessons) return meta
+      const next: Imported = { ...meta, outline, outlineVersion: OUTLINE_VERSION }
+      await writeJson(metaFile(id), next)
+      void indexCourse(c, files, outline).catch((e) => console.warn('[courses] index failed', e))
+      return next
+    })()
+      .catch(() => meta)
+      .finally(() => rereading.delete(id))
+    rereading.set(id, job)
+  }
+  return job
+}
 
 // ---------- The index ----------
 
@@ -253,7 +290,7 @@ async function readAndIndex(c: CatalogueCourse, method: Imported['method'], comm
   if (!outline.lessons) throw new Error('Nothing in it reads as lessons')
   broadcast({ id: c.id, phase: 'indexing', detail: `${outline.lessons} lessons` })
   await indexCourse(c, files, outline).catch((e) => console.warn('[courses] index failed', e))
-  const meta: Imported = { id: c.id, importedAt, updatedAt: Date.now(), ...(commit ? { commit } : {}), method, outline }
+  const meta: Imported = { id: c.id, importedAt, updatedAt: Date.now(), ...(commit ? { commit } : {}), method, outline, outlineVersion: OUTLINE_VERSION }
   await writeJson(metaFile(c.id), meta)
   broadcast({ id: c.id, phase: 'done', detail: `${outline.lessons} lessons` })
   // Its lectures' captions, in the background, so lessons can draw on them (main/related)
@@ -544,7 +581,7 @@ export async function lessonContent(id: string, lessonId: string): Promise<Lesso
   const full = join(repoDir(id), ...lesson.path.split('/'))
   // Never outside the course's own copy
   if (!full.startsWith(repoDir(id) + sep)) return null
-  const raw = await fs.readFile(full, 'utf8').catch(() => null)
+  const raw = (await fs.readFile(full, 'utf8').catch(() => null))?.replace(/^\uFEFF/, '') ?? null
   if (raw === null) return null
   let md = /\.ipynb$/i.test(lesson.path) ? (notebookMarkdown(raw, { images: meta.method === 'web' || sourceOf(c) === 'jupyterbook' }) ?? '') : /\.(adoc|asciidoc)$/i.test(lesson.path) ? asciidocMarkdown(raw) : raw
   if (sourceOf(c) === 'jupyterbook') md = mystMarkdown(md)
