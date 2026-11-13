@@ -98,6 +98,8 @@ const EXPECTED: Record<string, string | null> = {
   readSeminar: 'teach',
   readKeep: 'background',
   weekPlan: 'teach',
+  goalPlan: 'hard',
+  weekMix: 'hard',
   learnerProfile: 'background',
   profileUpdate: 'background',
   profileWeekly: 'hard',

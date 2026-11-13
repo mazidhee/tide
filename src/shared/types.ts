@@ -963,6 +963,20 @@ export interface TideApi {
     weekReview(end?: string): Promise<WeekReview>
     saveReview(end: string, r: { wentWell: string; inTheWay: string; change: string }): Promise<string>
   }
+  /** Goals and the week mixed across them (shared/goals, shared/portfolio, main/goals) */
+  portfolio: {
+    view(): Promise<import('./goals').GoalsView>
+    add(g: { title: string; date?: string; weight?: import('./goals').GoalWeight }): Promise<import('./goals').PlanGoal>
+    update(g: import('./goals').PlanGoal): Promise<import('./goals').GoalsView>
+    remove(id: string): Promise<import('./goals').GoalsView>
+    /** Opus breaks it down (again); Tide's own guess when Claude isn't there */
+    decompose(id: string): Promise<import('./goals').GoalsView>
+    /** A way out of a trade-off, chosen: the goal changes and the week is planned again */
+    resolve(goal: string, option: import('./goals').TradeOption): Promise<{ view: import('./goals').GoalsView; week: import('./coach').WeekPlan | null }>
+    /** Reshuffles the rest of the week now */
+    replan(): Promise<import('./coach').WeekPlan | null>
+    bringForward(date: string, index: number): Promise<import('./coach').WeekPlan | null>
+  }
   /** A tutor that remembers you (main/learnerProfile): the profile note, as the profile view shows it */
   learner: {
     view(): Promise<import('./learnerProfile').LearnerView>

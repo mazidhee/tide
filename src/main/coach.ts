@@ -100,6 +100,9 @@ async function savePlan(plan: WeekPlan) {
   await writeText(WEEK_NOTE, weekMarkdown(plan))
 }
 
+/** Saves a week as data and as the This week note (main/goals replans through this) */
+export const saveWeekPlan = (plan: WeekPlan) => savePlan(plan)
+
 /** The facts the coach plans from, as compact text (never the whole history) */
 interface Facts {
   weak: { title: string; notebook?: string }[]
@@ -217,6 +220,15 @@ const DAY = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB'
  * (and checked) for the topics to learn. Saved as data and as a note you can edit.
  */
 export async function planWeek(date = today(), background = false): Promise<WeekPlan> {
+  // Mixed across your goals and everything in progress (main/goals), when there's anything to mix
+  const goals = await import('./goals')
+  if (await goals.goalsActive().catch(() => false)) {
+    const plan = await goals.planGoalsWeek(date, background)
+    await savePlan(plan)
+    brainEvent({ kind: 'week', label: `Planned your week across ${plan.mix?.length ?? 0} threads` })
+    readingsForWeek(getWeek, savePlan, date).catch(() => {})
+    return plan
+  }
   // Claude, else Gemma when Claude can't (shared/gemmaPolicy)
   const ask = (prompt: string, system: string) => completeFor('weekPlan', prompt, system, { priority: background ? 'background' : 'interactive' })
   const settings = await getCoach()
@@ -361,9 +373,11 @@ export async function autoPlanWeek(): Promise<WeekPlan | null> {
   if (Date.now() - autoFailedAt < 12 * 3_600_000 || (await getWeek(date))) return null
   let settings = await getCoach()
   if (pickOf(settings) === 'me' && !settings.focus.length) settings = await inferDirection()
-  if (pickOf(settings) === 'me' && !settings.focus.length) return null
+  if (pickOf(settings) === 'me' && !settings.focus.length && !(await import('./goals').then((g) => g.goalsActive()).catch(() => false))) return null
+  const mixed = await import('./goals').then((g) => g.goalsActive()).catch(() => false)
   // Tide picks the roadmaps from how they're sorted: wait for that, rather than plan a week on guesses
-  if (pickOf(settings) === 'tide' && (sortRunning() || (await curriculumStatus()).some((n) => !n.sorted))) {
+  // (a week mixed across goals plans every thread, in roadmap order until sorted)
+  if (!mixed && pickOf(settings) === 'tide' && (sortRunning() || (await curriculumStatus()).some((n) => !n.sorted))) {
     sortRoadmaps().catch(() => {})
     return null
   }
@@ -396,7 +410,7 @@ export async function profilePrompt(): Promise<string> {
   return `${name ? `${name}\n` : ''}${aim ? `Where this learner is heading: ${aim}\n` : ''}${d}${adapt}`.trim()
 }
 
-const LINK_LABEL: Partial<Record<AgendaItem['kind'], string>> = { learn: 'Learn it in Tide', quiz: 'Quiz me in Tide', review: 'Review in Tide', test: 'Sit it in Tide', 'take-home': 'Open in Tide', practice: 'Open Practice in Tide' }
+const LINK_LABEL: Partial<Record<AgendaItem['kind'], string>> = { learn: 'Learn it in Tide', quiz: 'Quiz me in Tide', review: 'Review in Tide', test: 'Sit it in Tide', 'take-home': 'Open in Tide', practice: 'Open Practice in Tide', project: 'Open the project in Tide', mock: 'Start the mock in Tide', workout: 'Open the workout in Tide', read: 'Read it in Tide' }
 
 /** The week as one Things 4 project: a heading per day, each item a dated to-do with a brief and a link */
 export async function weekToThings(date = today()): Promise<{ project: string; todos: number }> {
@@ -409,8 +423,15 @@ export async function weekToThings(date = today()): Promise<{ project: string; t
     todos: d.items.map((it, index) => {
       const scope = it.notebook ? `folder:${it.notebook}` : undefined
       const url =
-        // Opened as the week opens them: a Check with its questions, a refresher as a refresher
-        it.kind === 'check' || it.refresh
+        // Opened as the week opens them: a Check with its questions, a refresher as a refresher; a
+        // project, mock, workout or book where it lives
+        it.kind === 'project' && it.path
+          ? buildLink({ to: 'notebook', path: it.path })
+          : it.kind === 'read' && it.path
+          ? buildLink({ to: 'open', path: it.path })
+          : it.kind === 'mock' || it.kind === 'workout'
+          ? buildLink({ to: 'practice', tab: it.kind === 'mock' ? `mock:${it.mode ?? 'coding'}` : 'workout' })
+          : it.kind === 'check' || it.refresh
           ? buildLink({ to: 'agenda', date: d.date, index })
           : it.kind === 'learn' || it.kind === 'review'
           ? buildLink({ to: 'session', mode: 'teach', topic: it.topic ?? it.title, scope })
@@ -421,7 +442,7 @@ export async function weekToThings(date = today()): Promise<{ project: string; t
               : buildLink({ to: 'practice' })
       const reading = it.readings?.length ? `\n\n**Read:**\n${it.readings.map((r) => `- ${r.url ? `[${r.title}](${r.url})` : r.title}${r.by ? `, ${r.by}` : ''}`).join('\n')}` : ''
       return {
-        title: `${it.kind === 'learn' ? '' : `${it.kind[0].toUpperCase()}${it.kind.slice(1)}: `}${it.title}`.slice(0, 250),
+        title: thingsTitle(it),
         when: d.date,
         deadline: d.date,
         tags: [it.kind],
@@ -596,6 +617,8 @@ export async function rollOver(date = today()): Promise<{ moved: number; to: str
 export async function catchUp(date = today()): Promise<WeekPlan | null> {
   const plan = await syncDone(date)
   if (!plan) return plan
+  // A week mixed across your goals reshuffles the rest of the week, saying what moved and why
+  if (plan.mix) return import('./goals').then((g) => g.replanNow(date)).catch(() => plan)
   const { plan: next, moved, to } = catchUpPlan(plan, date, (await getCoach()).days)
   if (!moved.length) return plan
   await savePlan(next)

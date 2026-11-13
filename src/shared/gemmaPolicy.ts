@@ -41,6 +41,9 @@ export const JOB_ROUTES = {
   readSeminar: { label: 'End-of-chapter seminar', role: 'teach' },
   readKeep: { label: 'What to keep from a seminar', role: 'background' },
   weekPlan: { label: 'Weekly coach plan', role: 'teach' },
+  // Goals and the week mixed across them (main/goals): Opus breaks a goal down and explains the mix; the numbers are code's
+  goalPlan: { label: 'Breaking a goal down into what it needs', role: 'hard' },
+  weekMix: { label: 'Explaining the week’s mix across your goals', role: 'hard' },
   learnerProfile: { label: 'Learner profile and direction', role: 'background' },
   // A tutor that remembers you (main/learnerProfile): small changes after each lesson, a tidy each week
   profileUpdate: { label: 'Updating your learner profile after a lesson', role: 'background' },

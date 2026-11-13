@@ -65,8 +65,11 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
       setWeek(next)
     }
     try {
-      // A planned item ticks its Things to-do too
-      if (s.plan) await window.tide.coach.setDone(date, s.plan.index, done)
+      // A planned item ticks its Things to-do too; a week mixed across goals reshuffles what's left
+      if (s.plan) {
+        await window.tide.coach.setDone(date, s.plan.index, done)
+        if (week?.mix) window.tide.portfolio.replan().then((w) => w && setWeek(w)).catch(() => {})
+      }
       else if (s.task) await window.tide.learn.thingsSetDone(s.task.id, done)
     } catch {
       app.toast('Couldn’t save that. Try again.', { tone: 'error' })
@@ -98,7 +101,7 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
   )
 
   if (tide) {
-    const KIND_ICON = { learn: 'tutor', practice: 'terminal', quiz: 'quiz', review: 'cards', 'take-home': 'note', test: 'timer', check: 'quiz' } as const
+    const KIND_ICON = { learn: 'tutor', practice: 'terminal', quiz: 'quiz', review: 'cards', 'take-home': 'note', test: 'timer', check: 'quiz', project: 'branch', mock: 'subInterview', workout: 'gauge', read: 'book' } as const
     const line = (s: DaySlot) => {
       const canOpen = !!s.plan || !!s.task?.link || !!s.task?.url
       const minutes = s.plan?.item.minutes
@@ -150,7 +153,10 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
         </li>
       )
     }
+    // What the replanner moved or raised today, in a line or two under the day
+    const notes = (week?.notices ?? []).filter((n) => n.on === date && n.kind !== 'early').slice(0, 2)
     return (
+      <>
       <ol className={`td-today${loaded ? '' : ' is-loading'}${slots.some((s) => s.task?.at) ? '' : ' no-times'}`} aria-label="The rest of today">
         {due.length > 0 && (
           <li className="td-row">
@@ -193,6 +199,22 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
           <li className="td-row-empty">{tasks === null ? 'Connect Things 4 in Settings, or ask the tutor to plan your day, and it shows here.' : 'Nothing else is on today. Ask the tutor to plan the rest of your day.'}</li>
         )}
       </ol>
+      {notes.length > 0 && (
+        <ul className="td-replan" aria-label="What changed today">
+          {notes.map((n) => (
+            <li key={n.text}>
+              <Icon name={n.kind === 'neglect' ? 'timer' : n.kind === 'drift' ? 'gauge' : 'arrowDown'} size={13} />
+              <span>{n.text}</span>
+            </li>
+          ))}
+          <li>
+            <button className="td-more" onClick={() => app.setView({ kind: 'coach' })}>
+              Your week
+            </button>
+          </li>
+        </ul>
+      )}
+      </>
     )
   }
 

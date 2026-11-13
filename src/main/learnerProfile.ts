@@ -230,6 +230,9 @@ async function codeLines(p: Profile, st: State): Promise<{ profile: Profile; cha
 /** Rewrites the measured lines now (the profile view asks, so it opens up to date) */
 export const refreshMeasures = () => change('measured', 'code', (p, _o, st) => codeLines(p, st))
 
+/** The rhythm as last saved: your best hours, for putting hard work in them (main/goals) */
+export const rhythmNow = async (): Promise<RhythmFacts | undefined> => (await readState()).rhythm
+
 /** The break planner's rhythm, from the window (it keeps the logs): used for the pace line */
 export async function setRhythm(r: RhythmFacts): Promise<void> {
   await inTurn(async () => {

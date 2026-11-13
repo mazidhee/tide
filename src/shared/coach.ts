@@ -69,7 +69,7 @@ export function aimsKey(aims: Aim[]): string {
 
 export const DEFAULT_COACH: CoachSettings = { goal: '', focus: [], hoursPerWeek: 10, days: [1, 2, 3, 4, 5, 6] }
 
-export type AgendaKind = 'learn' | 'practice' | 'quiz' | 'review' | 'take-home' | 'test' | 'check'
+export type AgendaKind = 'learn' | 'practice' | 'quiz' | 'review' | 'take-home' | 'test' | 'check' | 'project' | 'mock' | 'workout' | 'read'
 
 export interface AgendaItem {
   kind: AgendaKind
@@ -92,6 +92,18 @@ export interface AgendaItem {
   done?: boolean
   /** Moved here from an earlier day you didn't get to */
   carried?: boolean
+  /** The thread it belongs to (shared/portfolio), when the week was mixed across your goals */
+  thread?: string
+  /** Hard work, put in your best hours */
+  peak?: boolean
+  /** A short session that keeps a thread alive */
+  touch?: boolean
+  /** The day it was moved from, when a replan moved it */
+  movedFrom?: string
+  /** A mock's kind, for a mock interview */
+  mode?: import('./mocks').MockMode
+  /** The book (reading) or the project's notebook (project) */
+  path?: string
 }
 
 export interface WeekPlan {
@@ -108,6 +120,14 @@ export interface WeekPlan {
   suggested?: { notebook: string; share: number; reason: string }[]
   /** Roadmaps planned in roadmap order because Tide hasn't sorted them against your aims yet */
   unsorted?: string[]
+  /** Mixed across your goals (shared/portfolio): each thread's share of the week and why */
+  mix?: import('./portfolio').MixShare[]
+  /** What the replanner moved or raised, newest first (shared/portfolio replanWeek) */
+  notices?: import('./portfolio').PlanNotice[]
+  /** The day the rest of the week was last reshuffled */
+  replannedOn?: string
+  /** Your best hours, as words ("9–11"), when the rhythm knows them */
+  bestHours?: string
 }
 
 /** Today's date where you are (yyyy-mm-dd), not in UTC: an evening wrap-up belongs to today */
@@ -325,12 +345,13 @@ export function todayItems(plan: WeekPlan | null, date: string): AgendaItem[] {
 }
 
 const dayName = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' })
-const KIND_LABEL: Record<AgendaKind, string> = { learn: 'Learn', practice: 'Practise', quiz: 'Quiz', review: 'Review', 'take-home': 'Take-home', test: 'Test', check: 'Check' }
+export const KIND_LABEL: Record<AgendaKind, string> = { learn: 'Learn', practice: 'Practise', quiz: 'Quiz', review: 'Review', 'take-home': 'Take-home', test: 'Test', check: 'Check', project: 'Build', mock: 'Mock', workout: 'Workout', read: 'Read' }
 
 /** The week as a note you can read and edit */
 export function weekMarkdown(plan: WeekPlan): string {
   const out = [`# Week of ${dayName(plan.weekStart)}`, '', plan.summary, '']
-  if (plan.priorities.length) out.push('## Priorities', '', ...plan.priorities.map((p) => `- **${p.notebook}** (${p.share}%): ${p.reason}`), '')
+  if (plan.priorities.length) out.push(plan.mix ? '## The mix' : '## Priorities', '', ...plan.priorities.map((p) => `- **${p.notebook}** (${p.share}%): ${p.reason}`), '')
+  if (plan.notices?.length) out.push('## What changed', '', ...plan.notices.map((n) => `- ${n.text}`), '')
   for (const d of plan.days) {
     out.push(`## ${dayName(d.date)}`, '')
     for (const it of d.items) {

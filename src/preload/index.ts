@@ -352,6 +352,16 @@ const api: TideApi = {
     weekReview: invoke('coach:weekReview'),
     saveReview: invoke('coach:saveReview')
   },
+  portfolio: {
+    view: invoke('portfolio:view'),
+    add: invoke('portfolio:add'),
+    update: invoke('portfolio:update'),
+    remove: invoke('portfolio:remove'),
+    decompose: invoke('portfolio:decompose'),
+    resolve: invoke('portfolio:resolve'),
+    replan: invoke('portfolio:replan'),
+    bringForward: invoke('portfolio:bringForward')
+  },
   learner: {
     view: invoke('learner:view'),
     refresh: invoke('learner:refresh'),

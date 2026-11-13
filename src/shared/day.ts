@@ -3,7 +3,7 @@
  * merges Things 4 (anything you or the tutor put on Today) with the coach's plan for the day,
  * showing a planned item once even when it's also a to-do in Things.
  */
-import { thingsTitle, type AgendaItem } from './coach'
+import { KIND_LABEL, thingsTitle, type AgendaItem } from './coach'
 
 /** A to-do on today's list in Things 4, cut down to what the timeline shows */
 export interface DayTask {
@@ -37,7 +37,7 @@ export interface DaySlot {
   task?: DayTask
 }
 
-const LABEL: Record<AgendaItem['kind'], string> = { learn: 'Learn', practice: 'Practise', quiz: 'Quiz', review: 'Review', 'take-home': 'Take-home', test: 'Test', check: 'Check' }
+const LABEL: Record<AgendaItem['kind'], string> = KIND_LABEL
 
 const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 
