@@ -134,6 +134,14 @@ const api: TideApi = {
     recordAttempt: invoke('learn:recordAttempt'),
     mastery: invoke('learn:mastery')
   },
+  mathsAnswer: {
+    evaluate: invoke('mathsAnswer:evaluate'),
+    checkSteps: invoke('mathsAnswer:checkSteps'),
+    status: invoke('mathsAnswer:status'),
+    readBack: invoke('mathsAnswer:readBack'),
+    readPaper: invoke('mathsAnswer:readPaper'),
+    mark: invoke('mathsAnswer:mark')
+  },
   maths: {
     state: invoke('maths:state'),
     log: invoke('maths:log'),

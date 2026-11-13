@@ -12,6 +12,10 @@ import type { ClaudeRole } from './types'
  * Gemma has here).
  */
 export const JOB_ROUTES = {
+  // Maths answers (main/mathsAnswers): the read-back, a photo of working, and line-by-line marks
+  mathsReadBack: { label: 'Reading back maths you said or typed', role: 'background' },
+  paperRead: { label: 'Reading handwritten working from a photo', role: 'mark' },
+  workingMark: { label: 'Marking maths working line by line', role: 'mark' },
   flashcards: { label: 'Flashcards from a note or chapter', role: 'teach' },
   labCards: { label: 'Flashcards from lab commands', role: 'background' },
   marginNote: { label: 'Margin tutor and writing coach', role: 'background' },
