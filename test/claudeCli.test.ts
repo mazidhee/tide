@@ -29,9 +29,15 @@ describe('the Claude child process', () => {
     expect(web[web.indexOf('--allowedTools') + 1]).toBe('mcp__tide,WebSearch,WebFetch')
   })
 
-  it('gives the MCP server its token and lesson in headers', () => {
+  it('gives the MCP server its token and lesson in headers', async () => {
     const c = JSON.parse(mcpConfig(4567, 'tok', 'lab:lesson:1'))
     expect(c.mcpServers.tide).toEqual({ type: 'http', url: 'http://127.0.0.1:4567/mcp', headers: { Authorization: 'Bearer tok', 'X-Tide-Lesson': 'lab:lesson:1' } })
+    // A key holding a topic's curly quotes or accents goes as ASCII (a header can't carry them), and comes back whole
+    const odd = 'lab:lesson:Take apart the dashboard “Revenue” (#1) café 100%'
+    const sent = JSON.parse(mcpConfig(1, 't', odd)).mcpServers.tide.headers['X-Tide-Lesson'] as string
+    expect(sent).toMatch(/^[\x20-\x7e]+$/)
+    const { decodeLesson } = await import('../src/main/tideMcp')
+    expect(decodeLesson(sent)).toBe(odd)
   })
 
   it('writes messages as stream-json input', () => {

@@ -25,8 +25,9 @@ import { pythonFunctions, readsStdin, splitTestFunctions } from './codeTests'
 import { compareResults, isQuery, needsOrder, sqlIn, unanswerable } from './sqlCheck'
 import type { LabResult } from './lab'
 import type { RunResult } from './types'
+import { solutionBlock, verifyMetabase, type MbRef, type MetabaseIO } from './metabaseExercise'
 
-export type ExerciseKind = 'code' | 'sql' | 'maths' | 'concept'
+export type ExerciseKind = 'code' | 'sql' | 'maths' | 'concept' | 'metabase'
 
 export interface Exercise {
   kind: ExerciseKind
@@ -54,6 +55,11 @@ export interface Exercise {
   mistakeNote?: string
   /** The id of the exercise this one repairs, after its check failed */
   repairOf?: string
+  /** metabase: the database and (for a pipeline) the collection it runs on */
+  database?: number
+  collection?: string
+  /** metabase: the reference as it runs, once verified */
+  mbRef?: MbRef
 }
 
 const LEVELS: Record<string, Level> = { easy: 1, medium: 2, hard: 3, '1': 1, '2': 2, '3': 3 }
@@ -70,7 +76,7 @@ export function parseExercise(args: Record<string, unknown>, lessonTopic?: strin
   let kind = str(args.kind).toLowerCase() as ExerciseKind
   const lang = normLang(str(args.lang) || (kind === 'code' ? 'python' : ''))
   if (kind === 'code' && lang === 'sql') kind = 'sql'
-  if (!['code', 'sql', 'maths', 'concept'].includes(kind)) return { error: 'kind must be code, sql, maths or concept.' }
+  if (!['code', 'sql', 'maths', 'concept', 'metabase'].includes(kind)) return { error: 'kind must be code, sql, maths, concept or metabase.' }
   const x: Exercise = {
     kind,
     topic: lessonTopic || str(args.topic),
@@ -85,11 +91,14 @@ export function parseExercise(args: Record<string, unknown>, lessonTopic?: strin
     ...(str(args.check) ? { check: unfence(str(args.check)) } : {}),
     ...(str(args.mistake) ? { mistake: kind === 'code' || kind === 'sql' ? unfence(str(args.mistake)) : str(args.mistake) } : {}),
     ...(str(args.mistake_note) ? { mistakeNote: str(args.mistake_note) } : {}),
-    ...(str(args.repair_of) ? { repairOf: str(args.repair_of) } : {})
+    ...(str(args.repair_of) ? { repairOf: str(args.repair_of) } : {}),
+    ...(kind === 'metabase' && Number.isFinite(Number(args.database)) && str(args.database) ? { database: Number(args.database) } : {}),
+    ...(kind === 'metabase' && str(args.collection) ? { collection: str(args.collection) } : {})
   }
   const need: Record<ExerciseKind, (keyof Exercise)[]> = {
     code: ['problem', 'question', 'tests', 'reference', 'mistake'],
     sql: ['problem', 'question', 'reference', 'mistake'],
+    metabase: ['problem', 'question', 'reference', 'mistake'],
     maths: ['problem', 'question', 'solution', 'answer', 'check', 'mistake'],
     concept: ['problem', 'question', 'solution', 'mistake']
   }
@@ -108,6 +117,8 @@ export interface ExerciseIO {
   schema?(): string
   /** A quick second look by a small model (Haiku); rejects or gives '' when there's none */
   ask?(prompt: string, system: string): Promise<string>
+  /** The learner's Metabase, read-only (main/metabaseLearn) */
+  metabase?: MetabaseIO
 }
 
 export type Verdict = { ok: true; problem: BankProblem; detail: string; ms: number } | { ok: false; why: string; ms: number; /** Not the exercise's fault (a language Tide can't run here): repairing it won't help */ fatal?: boolean }
@@ -259,10 +270,18 @@ async function verifyConcept(x: Exercise, io: ExerciseIO): Promise<{ detail: str
   return { detail: 'a second look found it well posed, its model answer right, and the weak answer short of full marks' }
 }
 
+async function verifyMb(x: Exercise, io: ExerciseIO): Promise<{ detail: string } | { why: string; fatal?: boolean }> {
+  if (!io.metabase) return { why: 'Metabase isn’t connected here, so an exercise on it can’t be checked.', fatal: true }
+  const r = await verifyMetabase({ problem: x.problem, question: x.question, reference: x.reference!, mistake: x.mistake!, mistakeNote: x.mistakeNote, database: x.database, collection: x.collection }, io.metabase)
+  if ('ref' in r) x.mbRef = r.ref
+  return r
+}
+
 /** The exercise as the problem bank keeps it */
 export function toProblem(x: Exercise, id: string, now = Date.now()): BankProblem {
   const base = { id, topic: x.topic, level: x.level ?? 2, text: x.problem, ask: x.question, source: 'claude' as const, createdAt: now, v: BANK_VERSION }
   if (x.kind === 'code') return { ...base, askType: 'code', lang: x.lang ?? 'python', tests: x.tests, solution: `\`\`\`${x.lang ?? 'python'}\n${x.reference}\n\`\`\``, checked: true, reviewed: null }
+  if (x.kind === 'metabase' && x.mbRef) return { ...base, ask: /metabase question|link/i.test(x.question) ? x.question : `${x.question} (Or paste the link of a question you built in Metabase.)`, askType: 'code', lang: x.mbRef.sql !== undefined ? 'metabase-sql' : 'mongodb', solution: solutionBlock(x.mbRef), checked: true, reviewed: null }
   if (x.kind === 'sql') return { ...base, askType: 'code', lang: 'sql', solution: `\`\`\`sql\n${sqlIn(x.reference!) ?? x.reference}\n\`\`\``, checked: true, reviewed: null }
   if (x.kind === 'maths') {
     // Ends on its final answer, so the learner's is compared with it exactly (shared/answerCheck)
@@ -278,7 +297,7 @@ export async function verifyExercise(x: Exercise, io: ExerciseIO, id: string, no
   const t0 = Date.now()
   let r: { detail: string } | { why: string; fatal?: boolean }
   try {
-    r = x.kind === 'code' ? await verifyCode(x, io) : x.kind === 'sql' ? await verifySql(x, io) : x.kind === 'maths' ? await verifyMaths(x, io) : await verifyConcept(x, io)
+    r = x.kind === 'metabase' ? await verifyMb(x, io) : x.kind === 'code' ? await verifyCode(x, io) : x.kind === 'sql' ? await verifySql(x, io) : x.kind === 'maths' ? await verifyMaths(x, io) : await verifyConcept(x, io)
   } catch (e) {
     r = { why: `Tide couldn't run the check: ${(e as Error).message}`, fatal: true }
   }
@@ -288,7 +307,7 @@ export async function verifyExercise(x: Exercise, io: ExerciseIO, id: string, no
 }
 
 /** Which kind a banked problem is */
-export const kindOf = (p: BankProblem): ExerciseKind => (p.lang === 'sql' ? 'sql' : p.askType === 'code' ? 'code' : p.check ? 'maths' : 'concept')
+export const kindOf = (p: BankProblem): ExerciseKind => (p.lang === 'mongodb' || p.lang === 'metabase-sql' ? 'metabase' : p.lang === 'sql' ? 'sql' : p.askType === 'code' ? 'code' : p.check ? 'maths' : 'concept')
 
 /** A short new id for an exercise */
 export const exerciseId = (topic: string, now = Date.now()) => `x${slugOf(topic).slice(0, 12).replace(/-/g, '')}${now.toString(36).slice(-5)}${Math.random().toString(36).slice(2, 5)}`

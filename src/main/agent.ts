@@ -198,12 +198,14 @@ const THINGS_FEEDBACK = tool(
 )
 const METABASE = tool(
   'metabase',
-  "Read the student's Metabase (read-only): search it, open a dashboard, question or table, list databases, run a saved question, or run a SELECT.",
+  "Read the student's Metabase (read-only, rows capped): the map of their data, search, a dashboard, question or table (a collection on MongoDB), list databases, run a saved question, run an aggregation pipeline on a MongoDB collection, or run a SELECT on a SQL database. It can never create or change anything.",
   {
-    action: { type: 'string', enum: ['search', 'databases', 'dashboard', 'question', 'table', 'run_question', 'sql'] },
+    action: { type: 'string', enum: ['map', 'search', 'databases', 'dashboard', 'question', 'table', 'run_question', 'pipeline', 'sql'] },
     q: { type: 'string', description: 'search: words to look for' },
-    id: { type: 'number', description: 'Needed for dashboard, question, table and run_question: the id from a search' },
-    database: { type: 'number', description: 'sql: the database id' },
+    id: { type: 'number', description: 'Needed for dashboard, question, table and run_question: the id from a search or the map' },
+    database: { type: 'number', description: 'pipeline and sql: the database id' },
+    collection: { type: 'string', description: 'pipeline: the collection, unless the pipeline is written db.<collection>.aggregate([...])' },
+    pipeline: { type: 'string', description: 'pipeline: db.<collection>.aggregate([...]) or a [...] list of stages; Tide adds a $limit' },
     sql: { type: 'string', description: 'sql: one SELECT; add a LIMIT' }
   },
   ['action']
@@ -1201,7 +1203,7 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
 
   if (call.name === 'metabase') {
     const action = str('action')
-    const label = action === 'sql' || action === 'run_question' ? 'Running a query in Metabase' : action === 'search' ? `Searching Metabase for “${clip(str('q'), 40)}”` : `Reading Metabase: ${action} ${str('id')}`.trim()
+    const label = action === 'sql' || action === 'run_question' || action === 'pipeline' ? 'Running a query in Metabase' : action === 'search' ? `Searching Metabase for “${clip(str('q'), 40)}”` : `Reading Metabase: ${action} ${str('id')}`.trim()
     const id = ctx.step({ kind: 'metabase', label, status: 'running', depth })
     try {
       const out = await metabaseTool(args)
@@ -1784,12 +1786,15 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
   const subject = req.session && req.instructions && userTurns <= 1 && req.topic ? await subjectContext({ topic: req.topic, scope: req.scope, instructions: req.instructions, web: !!ctx.web }).catch(() => '') : ''
   // Maths mode (shared/mathsMode): first principles, predict then reveal, explorables and poke-holes, in this engine's own words
   const maths = req.session && req.instructions && userTurns <= 1 && req.topic ? await (await import('./maths')).mathsContext({ topic: req.topic, scope: req.scope, instructions: req.instructions }, engine).catch(() => '') : ''
+  // A lesson on their own Metabase: the rules, the map of their data, a dashboard's cards (main/metabaseLearn)
+  const mbLesson = !!req.session && metabaseReady() && (await import('@shared/metabaseData')).isMetabaseLesson(req.topic, 'path' in req.scope ? req.scope.path : undefined)
+  const metabaseNote = mbLesson && req.instructions && userTurns <= 1 ? await import('./metabaseLearn').then((m) => m.metabaseContext(req)).catch(() => '') : ''
   const assigning = thingsOn && wanted === 'assign'
   // A SQL lesson knows the lab's tables before it writes its first query
   // A finance lesson's lab holds the market data and the core bank's tables, and is told so
   const financeLab = !!req.session && !!req.instructions && wantsFinanceTables(req.topic ?? '')
   if (financeLab) ensureFinanceTables(req.labId ?? req.chatId ?? 'scratch')
-  const labNote = req.session && req.instructions && (financeLab || aboutSql(`${req.topic ?? ''} ${question}`)) ? labSchemaNote(req.labId ?? req.chatId ?? 'scratch', dataFiles()) : ''
+  const labNote = req.session && req.instructions && !mbLesson && (financeLab || aboutSql(`${req.topic ?? ''} ${question}`)) ? labSchemaNote(req.labId ?? req.chatId ?? 'scratch', dataFiles()) : ''
   // ...and looks at the data with run_sql before it sets or marks anything: told to, Gemma never
   // did (no tool call in any SQL lesson turn of the rehearsal), so the turn's first step is that call
   if (labNote && looksAtLabFirst(String([...req.messages].reverse().find((m) => m.role === 'user')?.content ?? ''))) ctx.firstTool = 'run_sql'
@@ -1812,6 +1817,7 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
     before,
     subject,
     maths,
+    metabaseNote,
     labNote,
     // Asked to load one of their files: which tool, and the path (in a lesson too)
     loadHint(question, /\.(csv|tsv)\b|\b(csv|tsv|my data|spreadsheet)\b/i.test(question) ? dataFiles() : []),

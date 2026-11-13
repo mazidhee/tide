@@ -34,8 +34,9 @@ vi.mock('electron', () => {
   return { BrowserWindow: { fromWebContents: () => win }, WebContentsView, session: { fromPartition: ses, get defaultSession() { return ses('default') } } }
 })
 vi.mock('../src/main/adblock', () => ({ blockAdsIn }))
+vi.mock('../src/main/metabase', () => ({ metabaseHost: () => 'mb.example.com' }))
 
-import { WEB_PARTITION, closeWeb, openWeb } from '../src/main/webView'
+import { METABASE_PARTITION, WEB_PARTITION, closeWeb, openWeb, partitionFor } from '../src/main/webView'
 
 const box = { x: 0, y: 0, width: 800, height: 600 }
 
@@ -59,5 +60,18 @@ describe('ad blocking in the web view', () => {
     release()
     expect(await opening).toBeNull()
     expect(loads).toEqual([])
+  })
+
+  it('your Metabase opens in its own session, kept for its sign-in, with no blocker', async () => {
+    expect(partitionFor('https://mb.example.com/question/1', 'mb.example.com')).toBe(METABASE_PARTITION)
+    expect(partitionFor('https://evil.example.com/question/1', 'mb.example.com')).toBe(WEB_PARTITION)
+    expect(partitionFor('https://mb.example.com/', '')).toBe(WEB_PARTITION)
+    loads.length = 0
+    blockAdsIn.mockClear()
+    await openWeb({} as never, 'https://mb.example.com/dashboard/1', box)
+    expect(sessions.has(METABASE_PARTITION)).toBe(true)
+    expect(blockAdsIn).not.toHaveBeenCalled()
+    expect(loads).toEqual(['https://mb.example.com/dashboard/1'])
+    closeWeb()
   })
 })

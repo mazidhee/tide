@@ -575,6 +575,26 @@ function registerIpc() {
   handle('studyApi:newToken', () => newStudyApiToken())
   handle('metabase:connect', (url: string, key: string) => connectMetabase(url, key))
   handle('metabase:disconnect', () => disconnectMetabase())
+  handle('metabase:map', async () => {
+    const r = await (await import('./metabaseMap')).refreshMap()
+    return { note: r.note, roadmap: r.roadmap, collections: r.map.collections.length, dashboards: r.map.dashboards.length }
+  })
+  handle('metabase:mapInfo', async () => {
+    const { readMap } = await import('./metabaseMap')
+    const { YOUR_DATA_NOTE, METABASE_ROADMAP_FILE, METABASE_NOTEBOOK } = await import('@shared/metabaseData')
+    const m = await readMap()
+    return m ? { at: m.at, host: m.host, collections: m.collections.map((c) => ({ name: c.name, count: c.count, kind: c.kind })), dashboards: m.dashboards.map((d) => ({ id: d.id, name: d.name, cards: d.cards.length, views: d.views })), note: YOUR_DATA_NOTE, roadmap: `Roadmaps/${METABASE_ROADMAP_FILE}`, notebook: METABASE_NOTEBOOK } : null
+  })
+  handle('metabase:screen', async () => {
+    const page = await (await import('./webView')).webText()
+    if (!page) return null
+    const { metabaseUrl } = await import('./metabase')
+    const { metabasePage, pageLabel } = await import('@shared/metabaseData')
+    const p = metabaseUrl() ? metabasePage(page.url, metabaseUrl()) : null
+    if (!p) return null
+    const text = await (await import('./metabaseLearn')).describeMetabasePage(page.url, page.text)
+    return { text, label: pageLabel(p), url: page.url }
+  })
   handle('learn:adjustPlan', (req: Parameters<typeof adjustPlan>[0]) => adjustPlan(req))
   handle('learn:sizePlan', (id: string, req: PlanRequest) => sizePlan(req, (step) => send('ai:event', { id, type: 'step', step })))
   handle('practice:draftCompanyPrep', (req: CompanyPrepRequest) => {
@@ -694,6 +714,10 @@ function registerIpc() {
   handle('lab:reset', (id: string) => labReset(String(id ?? '')))
   handle('lab:load', (id: string, path: string) => labLoadTable(String(id ?? ''), String(path ?? '')))
   handle('runner:run', (language: string, code: string, stdin?: string, opts?: { tests?: string; labId?: string }) => {
+    // A pipeline or SQL on their own Metabase runs there, read-only (main/metabaseLearn)
+    // (a pipeline in a ```js block is one too: db.<collection>.aggregate([...]) means nothing to Node)
+    const pipelineInJs = /^(js|javascript|mongo)$/i.test(String(language ?? '')) && /^\s*(\/\/[^\n]*\n\s*)*db\.[\w$-]+\.aggregate\s*\(/.test(String(code ?? ''))
+    if (language === 'mongodb' || language === 'metabase-sql' || pipelineInJs) return import('./metabaseLearn').then((m) => m.runAnswer(pipelineInJs ? 'mongodb' : String(language), String(code ?? '')))
     // SQL in a code question runs in the lesson's data lab, like its ```sql blocks
     if (isSql(String(language ?? '')) && opts?.labId) {
       const r = labQuery(String(opts.labId), String(code ?? ''))
@@ -867,6 +891,8 @@ if (!app.isPackaged && process.env.TIDE_USER_DATA) {
   // Lets the window's tooling hooks on (see preload); never set in the packaged app
   process.env.TIDE_TEST_COPY = '1'
   app.setPath('userData', process.env.TIDE_USER_DATA)
+  // Keys a test copy saves (a mock Metabase's, say) are encrypted with a stand-in keychain, never the Mac's
+  app.commandLine.appendSwitch('use-mock-keychain')
   // A test copy runs behind other windows; keep it rendering so measurements are real
   app.commandLine.appendSwitch('disable-renderer-backgrounding')
   app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')

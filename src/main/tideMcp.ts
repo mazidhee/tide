@@ -68,6 +68,15 @@ async function metabaseTools(): Promise<McpTool[]> {
   return [{ name: t.name, description: t.description, inputSchema: t.parameters, run: (args, ctx) => agent.runTideTool(t.name, args, ctx) }]
 }
 
+/** The lesson's key from its header (sent encoded by main/claudeCli mcpConfig) */
+export function decodeLesson(header: string): string {
+  try {
+    return decodeURIComponent(header)
+  } catch {
+    return header
+  }
+}
+
 export interface McpHandle {
   port: number
   token: string
@@ -108,7 +117,7 @@ export async function startMcp(port = 0, token = randomBytes(24).toString('base6
       res.writeHead(404).end()
       return
     }
-    const lesson = String(req.headers['x-tide-lesson'] ?? '')
+    const lesson = decodeLesson(String(req.headers['x-tide-lesson'] ?? ''))
     const server = new Server({ name: 'tide', version: '0.1.0' }, { capabilities: { tools: {} }, instructions: 'Tide is the learner’s study app. Its tools search and read their notes, run code and SQL in its sandbox, and read and record what they know.' })
     server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: (await toolsFor(lesson)).map(({ name, description, inputSchema }) => ({ name, description, inputSchema: inputSchema as { type: 'object' } })) }))
     server.setRequestHandler(CallToolRequestSchema, async (r) => {

@@ -720,7 +720,9 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   const answering = isAnswer(req, said)
   const exact = answering ? await import('./lessonGuard').then((g) => g.exactCheck(req)).catch(() => null) : null
   const exactSaid = exact ? `\n\n${(await import('@shared/answerCheck')).exactNote(exact)}` : ''
-  if (exact) emit({ id: req.id, type: 'step', step: { id: nextStepId(), kind: 'helper', label: exact.kind === 'sql' ? (exact.result === 'match' ? 'Ran your query beside the reference: the same rows' : 'Ran your query beside the reference: the rows differ') : exact.result === 'match' ? 'Checked your final answer: it’s right' : 'Checked your final answer: it isn’t right yet', status: 'done', depth: 0 } })
+  // A Metabase answer: the learner sees where the numbers differ before the tutor explains why
+  const lead = exact?.kind === 'metabase' ? (await import('./metabaseLearn')).comparisonBlock(exact) : ''
+  if (exact) emit({ id: req.id, type: 'step', step: { id: nextStepId(), kind: 'helper', label: exact.kind === 'sql' || exact.kind === 'metabase' ? (exact.result === 'match' ? 'Ran your query beside the reference: the same rows' : 'Ran your query beside the reference: the rows differ') : exact.result === 'match' ? 'Checked your final answer: it’s right' : 'Checked your final answer: it isn’t right yet', status: 'done', depth: 0 } })
   // An answer is marked first by the marking model, when it's stronger than the one teaching
   const markModel = claudeModel('mark', settings)
   if (answering && rank(markModel) > rank(model)) {
@@ -754,7 +756,8 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   const t0 = Date.now()
   let recorded = false
   let first = 0
-  let reply = ''
+  let reply = lead
+  if (lead) emit({ id: req.id, type: 'delta', text: lead })
   let gap = false
   let thinking = false
   // No sign of life (words, thinking, a tool call) within the limit: the turn is taken as hung

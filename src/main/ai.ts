@@ -703,8 +703,9 @@ async function answerTurn(req: TurnRequest, send: (e: ChatEvent) => void) {
         const { exactNote } = await import('@shared/answerCheck')
         const last = req.messages[req.messages.length - 1]
         req = { ...req, messages: [...req.messages.slice(0, -1), { ...last, content: `${String(last.content)}\n\n${exactNote(exact)}` }] }
-        const label = exact.kind === 'sql' ? (exact.result === 'match' ? 'Ran your query beside the reference: the same rows' : 'Ran your query beside the reference: the rows differ') : exact.result === 'match' ? 'Checked your final answer: it’s right' : 'Checked your final answer: it isn’t right yet'
+        const label = exact.kind === 'sql' || exact.kind === 'metabase' ? (exact.result === 'match' ? 'Ran your query beside the reference: the same rows' : 'Ran your query beside the reference: the rows differ') : exact.result === 'match' ? 'Checked your final answer: it’s right' : 'Checked your final answer: it isn’t right yet'
         emit({ id: req.id, type: 'step', step: { id: 'exact', kind: 'helper', label, status: 'done', depth: 0 } })
+        if (exact.kind === 'metabase') emit({ id: req.id, type: 'delta', text: (await import('./metabaseLearn')).comparisonBlock(exact) })
       }
       // [source-led] A step taught from a source (main/sourceLed.ts): the reading and the tutor's rules
       // for it ride with this turn, Tide puts the reading into the reply as it streams (`out`), and the

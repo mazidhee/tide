@@ -21,6 +21,7 @@ import { BackupsSettings } from './BackupsSettings'
 import { UsageView } from './UsageView'
 import { ConnectionsView } from './ConnectionsView'
 import { LAB_PACK } from '@shared/labPack'
+import { teardownTopic } from '@shared/metabaseData'
 import type { EditorChoice, InstalledEditor } from '@shared/editor'
 
 const THEMES: { id: ThemeId; name: string; bg: string; side: string; ink: string; accent: string }[] = [
@@ -256,7 +257,7 @@ function MetabaseGroup() {
   }
   const connected = !!state?.url && state.detail !== 'Not connected'
   return (
-    <Group title="Metabase" note="Read-only: the tutor (Claude, or Gemma when Claude can’t) can look and run SELECT queries, never change anything.">
+    <Group title="Metabase" note="Read-only: Tide reads your Metabase and runs pipelines and SELECT queries with small row limits and a time limit. It never creates or changes a question, dashboard or anything else.">
       {connected ? (
         <Row
           label={
@@ -271,7 +272,9 @@ function MetabaseGroup() {
             Disconnect
           </button>
         </Row>
-      ) : (
+      ) : null}
+      {connected && state.ready && <MetabaseData />}
+      {connected ? null : (
         <>
           <Row label="Address">
             <input className="set-input wide" value={url} placeholder="https://analytics.example.com" onChange={(e) => setUrl(e.target.value)} spellCheck={false} aria-label="Metabase address" />
@@ -287,6 +290,70 @@ function MetabaseGroup() {
         </>
       )}
     </Group>
+  )
+}
+
+/** Your data, mapped: the note, the roadmap and dashboards to take apart (main/metabaseMap) */
+function MetabaseData() {
+  const app = useApp()
+  const [info, setInfo] = useState<Awaited<ReturnType<typeof window.tide.metabase.mapInfo>> | undefined>(undefined)
+  const [mapping, setMapping] = useState(false)
+  const [error, setError] = useState('')
+  const [pick, setPick] = useState<number | null>(null)
+  const load = useCallback(() => window.tide.metabase.mapInfo().then(setInfo).catch(() => setInfo(null)), [])
+  useEffect(() => void load(), [load])
+  const map = async () => {
+    setMapping(true)
+    setError('')
+    try {
+      const r = await window.tide.metabase.map()
+      await app.refreshTree()
+      await load()
+      app.toast(`Mapped ${r.collections} collections and ${r.dashboards} dashboards`, { action: { label: 'Open', run: () => app.openPath(r.note) } })
+    } catch (e) {
+      setError(errorText(e))
+    } finally {
+      setMapping(false)
+    }
+  }
+  const dashboards = info?.dashboards ?? []
+  const chosen = dashboards.find((d) => d.id === pick) ?? dashboards[0]
+  const when = info ? new Date(info.at).toLocaleDateString([], { day: 'numeric', month: 'short' }) : ''
+  return (
+    <>
+      <Row
+        label="Your data"
+        hint={error ? <span className="set-error">{error}</span> : mapping ? 'Reading the shape of each collection, how they link and how documents arrive. A minute or so.' : info ? `Mapped ${when}: ${info.collections.length} collections, ${dashboards.length} dashboards people use` : 'Not mapped yet. Tide samples each collection to learn its fields, links and how it grows; it keeps only that and a few tiny examples.'}
+      >
+        <span className="set-inline">
+          {info && (
+            <button className="btn small ghost" onClick={() => app.openPath(info.note)}>
+              Open
+            </button>
+          )}
+          <button className="btn small" onClick={() => void map()} disabled={mapping}>
+            {mapping ? 'Mapping…' : info ? 'Refresh' : 'Map my data'}
+          </button>
+        </span>
+      </Row>
+      {info && (
+        <Row label="Roadmap" hint="Metabase and MongoDB on your data: the query builder, pipelines, joins, cohorts, funnels, a first regression, good dashboards">
+          <button className="btn small ghost" onClick={() => app.setView({ kind: 'notebook', path: info.notebook })}>
+            Open
+          </button>
+        </Row>
+      )}
+      {info && dashboards.length > 0 && (
+        <Row label="Take apart a dashboard" hint="A lesson that rebuilds it card by card, then you rebuild one, checked against the real card">
+          <span className="set-inline">
+            {chosen && <Select<number> value={chosen.id} onChange={(v) => setPick(v)} label="Dashboard" options={dashboards.map((d) => ({ value: d.id, label: `${d.name} (${d.cards} cards)` }))} />}
+            <button className="btn small primary" disabled={!chosen} onClick={() => chosen && app.setView({ kind: 'session', mode: 'teach', scope: { kind: 'folder', path: info.notebook }, topic: teardownTopic(chosen), nonce: Date.now() })}>
+              Start
+            </button>
+          </span>
+        </Row>
+      )}
+    </>
   )
 }
 

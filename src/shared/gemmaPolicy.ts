@@ -60,6 +60,8 @@ export const JOB_ROUTES = {
   weekProgress: { label: 'A line on this week’s progress', role: 'background' },
   // Opus reviewing a finished lesson against the teaching rubric (main/teaching): Claude only, never Gemma
   lessonReview: { label: 'Reviewing a finished lesson', role: 'mark' },
+  // Your Metabase mapped (main/metabaseMap): what each collection holds, from its fields and a tiny example
+  dataMap: { label: 'Describing your Metabase data', role: 'teach' },
   curriculum: { label: 'Sorting roadmaps, enriching topics, readings', role: 'background' },
   workshop: { label: 'Guided project review', role: 'teach' },
   // Pictures go to Claude too (main/imagePrep makes them ready): a photo of handwritten maths is marked by the marking model

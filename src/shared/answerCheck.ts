@@ -91,11 +91,15 @@ except Exception:
 `
 }
 
-export type Exact = { result: 'match' | 'mismatch'; theirs: string; expected: string; kind?: 'clocks' | 'sql'; why?: string }
+export type Exact = { result: 'match' | 'mismatch'; theirs: string; expected: string; kind?: 'clocks' | 'sql' | 'metabase'; why?: string; /** metabase: where the numbers differ, a small Markdown table shown to the learner */ table?: string }
 
 /** Said to the tutor (not shown) with what SymPy found, before it marks the answer */
 export const exactNote = (e: Exact) =>
-  e.kind === 'sql'
+  e.kind === 'metabase'
+    ? e.result === 'match'
+      ? `(Tide: Tide ran their query and the reference read-only on their Metabase and compared the results. ${e.why} This is a fact: their query is right, by whatever method. Mark it correct unless it is right only by accident of today's data (say which documents would break it); never mark it wrong. Write your <grade> and feedback as usual before anything else.)`
+      : `(Tide: Tide ran their query and the reference read-only on their Metabase and compared the results. ${e.why}${e.table ? `\n${e.table}` : ''}\nThis is a fact: it can't be marked correct. Tide has shown them this comparison above your reply, numbers only. Your reply still starts with your <grade> and feedback, as for any answer: name the stage of their query that makes the numbers differ and why, in their own data's terms (don't repeat the table). Only then go on.)`
+    : e.kind === 'sql'
     ? e.result === 'match'
       ? `(Tide: Tide ran their query and the reference query on the lab's data. ${e.why} This is a fact, not an opinion: their query is right, by whatever method. Mark it correct unless it is right only by accident of this data (say which row would break it); never mark it wrong.)`
       : `(Tide: Tide ran their query and the reference query on the lab's data. ${e.why} This is a fact: it can't be marked correct. Point at the part of their query that gives the different rows.)`
@@ -127,7 +131,7 @@ export function objectsToMethodOnly(feedback: string): boolean {
  */
 export function overruled(exact: Exact | null | undefined, verdict: string | undefined, feedback: string): { verdict: 'correct' | 'partial' | 'wrong'; why: string } | undefined {
   if (!exact || !verdict) return undefined
-  if (exact.kind === 'sql') {
+  if (exact.kind === 'sql' || exact.kind === 'metabase') {
     if (exact.result === 'mismatch') return verdict === 'correct' ? { verdict: 'wrong', why: exact.why ?? 'Tide ran your query and the reference query on the lab, and they return different rows.' } : undefined
     return verdict === 'wrong' ? { verdict: 'partial', why: `Tide ran your query and the reference query on the lab, and they return the same rows, so this is not wrong.` } : undefined
   }

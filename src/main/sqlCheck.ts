@@ -10,6 +10,7 @@ import { ownWords } from '@shared/session'
 import { compareResults, isQuery, needsOrder, sqlIn, sqlProblem, sqlWhy, unanswerable } from '@shared/sqlCheck'
 import type { ChatEvent, ChatMessage, ChatRequest } from '@shared/types'
 import { aboutSql, labQuery, labSchema } from './lab'
+import { isMetabaseLesson } from '@shared/metabaseData'
 
 const text = (m?: ChatMessage) => (typeof m?.content === 'string' ? m.content : '')
 
@@ -17,7 +18,7 @@ const text = (m?: ChatMessage) => (typeof m?.content === 'string' ? m.content : 
 export const labOf = (req: Pick<ChatRequest, 'labId' | 'chatId'>) => req.labId ?? req.chatId ?? 'scratch'
 
 /** A lesson whose problems are SQL: the data lab is its workbench */
-export const sqlLesson = (req: ChatRequest) => !!req.session && aboutSql(req.topic ?? '')
+export const sqlLesson = (req: ChatRequest) => !!req.session && aboutSql(req.topic ?? '') && !isMetabaseLesson(req.topic, 'path' in req.scope ? req.scope.path : undefined)
 
 /**
  * Their query against the reference query of the problem they were set, both run on the lesson's

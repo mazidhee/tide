@@ -22,10 +22,24 @@ import { blockAdsIn } from './adblock'
 
 /** The web view's session: not "persist:", so it lives in memory only */
 export const WEB_PARTITION = 'tide-web'
+/**
+ * Your own Metabase (Settings › Connections) keeps its sign-in between launches, in a session of
+ * its own: nothing of it is shared with other web pages or Tide's window, and Tide never reads it.
+ */
+export const METABASE_PARTITION = 'persist:tide-metabase'
 
-export function webPreferences(): WebPreferences {
+/** The session a page opens in: its own for your Metabase, the in-memory one for everything else */
+export function partitionFor(url: string, metabaseHost: string): string {
+  try {
+    return metabaseHost && new URL(url).host === metabaseHost ? METABASE_PARTITION : WEB_PARTITION
+  } catch {
+    return WEB_PARTITION
+  }
+}
+
+export function webPreferences(partition = WEB_PARTITION): WebPreferences {
   return {
-    partition: WEB_PARTITION,
+    partition,
     sandbox: true,
     contextIsolation: true,
     nodeIntegration: false,
@@ -84,6 +98,7 @@ export function guardContents(wc: WebContents) {
 }
 
 let view: WebContentsView | null = null
+let viewPartition = WEB_PARTITION
 let owner: BrowserWindow | null = null
 let lastBlocked: string | undefined
 /** Each open and close: an open that waited for the blocker gives up if the view was closed meanwhile */
@@ -119,20 +134,28 @@ export async function openWeb(sender: WebContents, url: string, bounds: Bounds):
   if (!webAllowed(url)) return null
   const win = BrowserWindow.fromWebContents(sender)
   if (!win) return null
-  if (view && owner !== win) closeWeb()
-  const gen = ++generation
+  let gen = ++generation
+  const host = await import('./metabase').then((m) => m.metabaseHost()).catch(() => '')
+  if (gen !== generation || win.isDestroyed()) return null
+  const partition = partitionFor(url, host)
+  if (view && (owner !== win || viewPartition !== partition)) {
+    closeWeb()
+    gen = ++generation
+  }
   if (!view) {
     lastBlocked = undefined
-    const ses = session.fromPartition(WEB_PARTITION)
+    const ses = session.fromPartition(partition)
     guardSession(ses, (what) => {
       lastBlocked = what
       report()
     })
-    // Before the first page loads, so its ads never do (the page still opens if the blocker can't start)
-    await blockAdsIn(ses).catch((e) => console.warn('[web] ad blocking unavailable', (e as Error).message))
+    // Before the first page loads, so its ads never do (the page still opens if the blocker can't start).
+    // Not on your own Metabase: its pages are yours, and a cosmetic filter could hide part of one
+    if (partition === WEB_PARTITION) await blockAdsIn(ses).catch((e) => console.warn('[web] ad blocking unavailable', (e as Error).message))
     if (gen !== generation || win.isDestroyed()) return null
     if (view) return placeAndLoad(url, bounds)
-    view = new WebContentsView({ webPreferences: webPreferences() })
+    viewPartition = partition
+    view = new WebContentsView({ webPreferences: webPreferences(partition) })
     owner = win
     win.once('closed', () => {
       if (owner === win) {
@@ -184,6 +207,17 @@ export function closeWeb() {
     // the window is going too
   }
   if (!v.webContents.isDestroyed()) v.webContents.close()
+}
+
+/**
+ * The text the page shows, for the tutor beside it (your Metabase's question or dashboard). Read in
+ * an isolated world, so the page's own scripts can't see or change what is asked.
+ */
+export async function webText(max = 6000): Promise<{ url: string; title: string; text: string } | null> {
+  const wc = view?.webContents
+  if (!wc || wc.isDestroyed()) return null
+  const text = await wc.executeJavaScriptInIsolatedWorld(1042, [{ code: `(document.body ? document.body.innerText : '').slice(0, ${Math.max(0, Math.min(20000, max))})` }]).catch(() => '')
+  return { url: wc.getURL(), title: wc.getTitle(), text: typeof text === 'string' ? text : '' }
 }
 
 /** Whether a web view is open (for the memory check and tests) */
