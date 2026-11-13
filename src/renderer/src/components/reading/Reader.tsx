@@ -6,6 +6,9 @@ import { Icon } from '../Icon'
 import { MEASURE, readerPrefs, refreshShelf, saveReaderPrefs, useShelf, type ReaderPrefs } from '../../lib/readingRoom'
 import { DEFAULT_BOOK_VOICE, nowPiece, playerState, prerenderChapter, seek, startReading, toggle as togglePlay, usePlayer } from '../../lib/readAloud'
 import { ReaderDrawer, type DrawerAsk, type DrawerTab } from './ReaderDrawer'
+import { inFocusWindow, usePopOutSurface } from '../../lib/popout'
+import { PopOutButton } from '../PopOutButton'
+import { locAnchor } from '@shared/passage'
 import { PlayerBar } from './Player'
 
 /**
@@ -426,6 +429,10 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
   })
 
   const title = book?.title ?? path.split('/').pop()!.replace(/\.\w+$/, '')
+  // A window of its own (lib/popout): the book goes with you, open where you are
+  const placeRef = useRef<PassageLoc | undefined>(undefined)
+  placeRef.current = current?.units[atUnit]?.loc
+  usePopOutSurface({ view: () => ({ kind: 'reader', path, ...(placeRef.current ? { anchor: locAnchor(placeRef.current) } : {}), nonce: Date.now() }), name: book?.title })
   const seminarDone = !!shelfBook?.seminars?.includes(current?.n ?? -1)
   const last = book ? chapter >= book.chapters.length - 1 : false
 
@@ -479,7 +486,8 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
             <Icon name="note" size={15} />
             <span>Book page</span>
           </button>
-          <button className="rr-tool" onClick={() => app.setView({ kind: 'reading' })} title="Back to the reading room">
+          <PopOutButton className="rr-tool" />
+          <button className="rr-tool" onClick={() => (inFocusWindow ? window.tide.windows.close() : app.setView({ kind: 'reading' }))} title={inFocusWindow ? 'Close this window' : 'Back to the reading room'}>
             <span>Close</span>
           </button>
         </div>

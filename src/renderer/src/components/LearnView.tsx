@@ -7,6 +7,7 @@ import { PillSegment, PromptBox } from './PromptBox'
 import { openingRequest } from '../lib/openingRequest'
 import { PixelScene } from './PixelScene'
 import { WorkshopShelf } from './WorkshopView'
+import { ProjectsShelf } from './ideas/ProjectsShelf'
 import { CourseShelf } from './CoursesView'
 import { ToExplore } from './ExploreLater'
 import { ReadyCard } from './ReadyCard'
@@ -288,6 +289,8 @@ export function LearnView() {
         </div>
         <p className="lrn-desc">{selected.description}</p>
 
+        {/* Projects from an idea (components/ideas): continue one, or start one */}
+        <ProjectsShelf />
         {/* Hook: guided projects (components/WorkshopView.tsx) */}
         <WorkshopShelf />
         {/* Hook: open courses from GitHub (components/CoursesView.tsx) */}

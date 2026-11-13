@@ -1,4 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { ContextMenu, type MenuState } from './Menu'
+import { popOutItem } from './PopOutButton'
 import { createPortal } from 'react-dom'
 import type { NoteMeta } from '@shared/types'
 import { useApp } from '../state'
@@ -300,6 +302,17 @@ export function Library() {
 
   const pickerItem = picker ? items.find((i) => i.path === picker.path) : undefined
   const openPicker = (i: Item, at: { x: number; y: number }) => setPicker({ path: i.path, at })
+  // Right-click: open it here or in a window of its own, or sort it under topics
+  const [rowMenu, setRowMenu] = useState<MenuState | null>(null)
+  const openRowMenu = (i: Item, at: { x: number; y: number }) =>
+    setRowMenu({
+      ...at,
+      items: [
+        { label: 'Open', run: () => app.openPath(i.path) },
+        popOutItem(app, { kind: 'file', path: i.path }),
+        { label: 'Topics…', run: () => openPicker(i, at), separatorBefore: true }
+      ]
+    })
 
   // The new design's shelves take the whole window: the page's own header folds into the top bar,
   // and the tutor panel steps aside until you leave the shelves
@@ -455,11 +468,11 @@ export function Library() {
         ) : layout === 'shelf' ? (
           <Bookcase items={shelfItems} subjects={subjects} setStatus={setStatus} tide={tide} />
         ) : layout === 'grid' ? (
-          visible.length ? <Masonry items={visible} onOpen={(i) => app.openPath(i.path)} onTopics={openPicker} /> : <p className="muted">Nothing matches that filter.</p>
+          visible.length ? <Masonry items={visible} onOpen={(i) => app.openPath(i.path)} onTopics={openRowMenu} /> : <p className="muted">Nothing matches that filter.</p>
         ) : (
           <ul className="library-list">
             {visible.map((i) => (
-              <li key={i.path} className="library-row" onContextMenu={(e) => (e.preventDefault(), openPicker(i, { x: e.clientX, y: e.clientY }))}>
+              <li key={i.path} className="library-row" onContextMenu={(e) => (e.preventDefault(), openRowMenu(i, { x: e.clientX, y: e.clientY }))}>
                 <button className="library-item" onClick={() => app.openPath(i.path)}>
                   <Icon name={sourceIcon({ path: i.path, sourceType: i.type as NoteMeta['sourceType'] })} size={18} />
                   <div className="library-text">
@@ -491,6 +504,7 @@ export function Library() {
           </ul>
         )}
       </div>
+      <ContextMenu menu={rowMenu} onClose={() => setRowMenu(null)} />
       {picker && pickerItem && <TopicPicker at={picker.at} selected={pickerItem.topics} subjects={subjects} onChange={(next) => setTopics(pickerItem.path, next)} onClose={() => setPicker(null)} />}
     </div>
   )

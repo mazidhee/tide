@@ -1,4 +1,5 @@
 import { TimeThis } from './TimeThis'
+import { PopOutButton } from './PopOutButton'
 import { passageSaying } from '../lib/passage'
 import { readyForMargin } from '@shared/lessonNotes'
 import { savePastedImage } from '../lib/pastedImages'
@@ -569,6 +570,7 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
             </button>
             {menuOpen && <PageMenu settings={page} update={updatePage} onClose={() => setMenuOpen(false)} />}
           </div>
+          <PopOutButton />
         </div>
       </header>
 

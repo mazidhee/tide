@@ -83,6 +83,21 @@ describe('workspaces', () => {
   })
 })
 
+describe('watching, one project per window', () => {
+  it('a project in a pop-out and another in the main window each keep their watcher', async () => {
+    const a = project()
+    const b = project()
+    await ws.watchRoot(a, () => {}, 1)
+    await ws.watchRoot(b, () => {}, 2)
+    expect(ws.watchedRoots()).toEqual(expect.arrayContaining([{ owner: 1, root: a }, { owner: 2, root: b }]))
+    // The pop-out closes: only its watcher goes
+    ws.stopWatching(2)
+    expect(ws.watchedRoots()).toEqual([{ owner: 1, root: a }])
+    await ws.watchRoot(null, () => {}, 1)
+    expect(ws.watchedRoots()).toEqual([])
+  })
+})
+
 describe('search across files', () => {
   it('reads ripgrep JSON with character columns for non-ASCII text', () => {
     const line = JSON.stringify({ type: 'match', data: { path: { text: './a.py' }, lines: { text: 'é = "foo"\n' }, line_number: 3, submatches: [{ match: { text: 'foo' }, start: 7, end: 10 }] } })

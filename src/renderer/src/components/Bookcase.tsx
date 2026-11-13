@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { ContextMenu, type MenuState } from './Menu'
+import { popOutItem } from './PopOutButton'
 import type { ReadStatus } from '@shared/types'
 import { useApp } from '../state'
 import { hasTopic, readStatusOf, type LibraryItem } from '../lib/library'
@@ -169,6 +171,8 @@ function PreviewCover({ e }: { e: Entry }) {
 
 export function Bookcase({ items, subjects, setStatus, tide }: { items: LibraryItem[]; subjects: string[]; setStatus(path: string, s: ReadStatus): void; /** The new design: no index down the left; the shelves fill the window, with what to pick up next laid over them */ tide?: boolean }) {
   const app = useApp()
+  // Right-click a book: open it, here or in a window of its own
+  const [rowMenu, setRowMenu] = useState<MenuState | null>(null)
   const [sort, setSort] = useState<Sort>('shelf')
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
@@ -692,7 +696,16 @@ export function Bookcase({ items, subjects, setStatus, tide }: { items: LibraryI
                   <div className="bc-rows">
                     {g.entries.map((e) =>
                       anyQ && !matches(e) ? null : (
-                        <button key={e.item.path} className={`bc-r${sel === e ? ' sel' : ''}`} data-i={e.i} onClick={() => openPreview(e, true)}>
+                        <button
+                          key={e.item.path}
+                          className={`bc-r${sel === e ? ' sel' : ''}`}
+                          data-i={e.i}
+                          onClick={() => openPreview(e, true)}
+                          onContextMenu={(ev) => {
+                            ev.preventDefault()
+                            setRowMenu({ x: ev.clientX, y: ev.clientY, items: [{ label: 'Open', run: () => app.openPath(e.item.path) }, popOutItem(app, { kind: 'file', path: e.item.path })] })
+                          }}
+                        >
                           <span className="bc-t">
                             <Mark text={e.short} q={q} />
                           </span>
@@ -936,6 +949,7 @@ export function Bookcase({ items, subjects, setStatus, tide }: { items: LibraryI
           })()}
         </section>
       )}
+      <ContextMenu menu={rowMenu} onClose={() => setRowMenu(null)} />
     </div>
   )
 }

@@ -239,17 +239,22 @@ export function reveal(rootIn: string, rel: string) {
 
 // ---------- Watching ----------
 
-let watcher: FSWatcher | null = null
-let watched: string | null = null
+/** One watcher per window: a project in a pop-out and another in the main window each hear their own */
+const watchers = new Map<number, { watcher: FSWatcher | null; watched: string | null }>()
 
 /** Watches one workspace (the window's) and reports changed paths, gathered over a moment */
-export async function watchRoot(rootIn: string | null, emit: (e: { root: string; paths: string[] }) => void): Promise<void> {
+export async function watchRoot(rootIn: string | null, emit: (e: { root: string; paths: string[] }) => void, owner = 0): Promise<void> {
   const root = rootIn ? allowed(rootIn) : null
-  if (root === watched) return
-  await watcher?.close()
-  watcher = null
-  watched = root
-  if (!root) return
+  const mine = watchers.get(owner) ?? { watcher: null, watched: null }
+  watchers.set(owner, mine)
+  if (root === mine.watched) return
+  await mine.watcher?.close()
+  mine.watcher = null
+  mine.watched = root
+  if (!root) {
+    watchers.delete(owner)
+    return
+  }
   let pending = new Set<string>()
   let timer: NodeJS.Timeout | null = null
   const w = watch(root, {
@@ -263,14 +268,14 @@ export async function watchRoot(rootIn: string | null, emit: (e: { root: string;
     },
     awaitWriteFinish: { stabilityThreshold: 120, pollInterval: 40 }
   })
-  watcher = w
+  mine.watcher = w
   w.on('all', (_e, full) => {
     pending.add(relOf(root, full))
     timer ??= setTimeout(() => {
       timer = null
       const paths = [...pending]
       pending = new Set()
-      if (watched === root) emit({ root, paths })
+      if (mine.watched === root) emit({ root, paths })
     }, 200)
   })
   // The .git folder isn't watched (it churns), but its HEAD and index say a commit or a stage happened
@@ -278,8 +283,13 @@ export async function watchRoot(rootIn: string | null, emit: (e: { root: string;
   if (existsSync(git)) w.add([join(git, 'HEAD'), join(git, 'index')])
 }
 
-export function stopWatching() {
-  void watcher?.close()
-  watcher = null
-  watched = null
+/** What each window is watching (tests) */
+export const watchedRoots = () => [...watchers.entries()].map(([owner, w]) => ({ owner, root: w.watched }))
+
+export function stopWatching(owner?: number) {
+  for (const [id, w] of [...watchers]) {
+    if (owner !== undefined && id !== owner) continue
+    void w.watcher?.close()
+    watchers.delete(id)
+  }
 }

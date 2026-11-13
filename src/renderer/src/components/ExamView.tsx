@@ -9,6 +9,8 @@ import { cardsToMarkdown } from '@shared/cards'
 import { useApp } from '../state'
 import { renderMarkdown } from '../lib/markdown'
 import { Icon } from './Icon'
+import { PopOutButton } from './PopOutButton'
+import { usePopOutSurface } from '../lib/popout'
 import { readImageFile } from '../lib/pastedImages'
 
 const isHeic = (f: File) => /^image\/hei[cf]$/.test(f.type) || /\.hei[cf]$/i.test(f.name)
@@ -49,7 +51,6 @@ const clock = (ms: number) => {
   return `${Math.floor(s / 3600) ? Math.floor(s / 3600) + ':' : ''}${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`
 }
 
-const inFocusWindow = /[#&]focus=/.test(window.location.hash)
 
 export function ExamView({ scope, topic, options, view }: { scope: ChatScope; topic: string; options: ExamOptions; view?: View }) {
   const ongoingKey = view ? sessionKey(view as { kind: string; topic?: string; nonce?: number }) : null
@@ -105,6 +106,18 @@ export function ExamView({ scope, topic, options, view }: { scope: ChatScope; to
   const moved = useRef(false)
   const keepRef = useRef({ phase, paper, answers, startedAt })
   keepRef.current = { phase, paper, answers, startedAt }
+  // The same paper and clock in a window of its own, or back (lib/popout)
+  usePopOutSurface({
+    name: `Exam: ${topic}`,
+    view: () => {
+      const k = keepRef.current
+      return k.phase === 'sitting' && k.paper ? { kind: 'exam', scope, topic, options, nonce: view?.kind === 'exam' ? view.nonce : undefined, resume: { paper: k.paper, answers: k.answers, startedAt: k.startedAt } } : null
+    },
+    handedOver: () => {
+      if (ongoingKey) endOngoing(ongoingKey)
+      moved.current = true
+    }
+  })
   useEffect(() => {
     if (ongoingKey && (phase === 'marking' || phase === 'results')) endOngoing(ongoingKey)
   }, [phase, ongoingKey])
@@ -238,22 +251,7 @@ export function ExamView({ scope, topic, options, view }: { scope: ChatScope; to
               {timeUp ? "Time's up" : clock(left)}
             </span>
           )}
-          {phase === 'sitting' && paper && !inFocusWindow && (
-            <button
-              className="tool-btn"
-              onClick={() => {
-                // Nothing else on screen: the same paper and clock, in a window of its own
-                window.tide.windows.openFocus({ kind: 'exam', scope, topic, options, nonce: Date.now(), resume: { paper, answers, startedAt } })
-                if (ongoingKey) endOngoing(ongoingKey)
-                moved.current = true
-                app.back()
-              }}
-              title="Sit the exam in a window of its own, with nothing else on screen"
-            >
-              <Icon name="width" />
-              <span>Own window</span>
-            </button>
-          )}
+          {phase === 'sitting' && paper && <PopOutButton />}
           {phase === 'sitting' && (
             <button className="btn primary small" onClick={handIn}>
               Hand in

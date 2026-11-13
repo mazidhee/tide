@@ -510,3 +510,15 @@ describe('chapter names', () => {
     expect(chapterName({ n: 4, title: '' })).toBe('Chapter 4')
   })
 })
+
+describe('the reader in a window of its own', () => {
+  it('pops out as reading, keyed by its book, named by its title', async () => {
+    const { popKindOf, popKeyOf, popInfoOf } = await import('../src/shared/popout')
+    const v = { kind: 'reader', path: BOOK, anchor: 'loc=3.1' }
+    expect(popKindOf(v)).toBe('reading')
+    expect(popKeyOf(v)).toBe(`reading:${BOOK}`)
+    // The same book from the file tree or the room is the same window
+    expect(popKeyOf({ kind: 'reading', path: BOOK })).toBe(popKeyOf(v))
+    expect(popInfoOf(v, 'Meditations')?.title).toBe('Meditations — Tide')
+  })
+})

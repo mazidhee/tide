@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { ChatEvent, TideApi } from '@shared/types'
 import { ideApi } from './ide'
+import { ideasApi } from './ideas'
 
 const invoke =
   <R>(channel: string) =>
@@ -49,6 +50,7 @@ const api: TideApi = {
     create: invoke('code:create')
   },
   ide: ideApi,
+  ideas: ideasApi,
   lsp: {
     send: (msg) => ipcRenderer.send('lsp:send', msg),
     onMessage: (cb) => subscribe<unknown>('lsp:message', cb),
@@ -355,7 +357,17 @@ const api: TideApi = {
   windows: {
     openFocus: invoke('window:openFocus'),
     focusView: invoke('window:focusView'),
-    close: invoke('window:close')
+    close: invoke('window:close'),
+    focusKey: invoke('window:focusKey'),
+    setInfo: invoke('window:setInfo'),
+    returnToMain: invoke('window:returnToMain'),
+    held: invoke('window:held'),
+    onHeld: (cb) => subscribe('windows:held', cb),
+    onAdopt: (cb) => subscribe('windows:adopt', cb),
+    onClosing: (cb) => subscribe('windows:closing', () => cb()),
+    closeNow: invoke('window:closeNow'),
+    relay: (channel, payload) => ipcRenderer.send('windows:relay', channel, payload),
+    onRelay: (cb) => subscribe('windows:relayed', cb)
   },
   cloud: {
     keys: invoke('cloud:keys'),

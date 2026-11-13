@@ -485,6 +485,11 @@ export function noteMock(ops: ProfileOp[], from: string): Promise<Change[]> {
   return change(from, 'code', async (p, ownership) => applyOps(p, ops, { date: noteDate(), ownership, maxOps: 3, sections: ['strengths', 'missed', 'hints'] }))
 }
 
+/** A finished project milestone's debrief, told to the profile (a few lines, as a lesson's update is) */
+export function noteFromProject(ops: ProfileOp[], from: string, by: 'claude' | 'gemma' | 'code'): Promise<Change[]> {
+  return change(from, by, async (p, ownership) => applyOps(p, ops, { date: noteDate(), ownership, maxOps: 3, sections: ['missed', 'strengths', 'hints'] }))
+}
+
 /** Makes the note now if there isn't one (the profile view's first open), with what code knows */
 export async function ensureProfile(): Promise<void> {
   const md = await readText(LEARNER_NOTE).catch(() => '')
