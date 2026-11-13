@@ -338,6 +338,8 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
           )}
         </div>
         {shown('library') && navItem('library', 'Library', view.kind === 'library', () => app.setView({ kind: 'library' }))}
+        {/* The reading room sits under the Library (components/reading) */}
+        {shown('library') && <div className="nav-group-items nav-sub-reading">{navItem('book', 'Reading', view.kind === 'reading' || view.kind === 'reader', () => app.setView({ kind: 'reading' }))}</div>}
         {shown('graph') && navItem('graph', tide ? 'What you know' : 'Brain', view.kind === 'graph', () => app.setView({ kind: 'graph' }), tide && fading ? `${fading} fading` : undefined)}
       </nav>
 

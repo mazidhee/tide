@@ -47,6 +47,8 @@ import {
 import { importFile, libraryThumb, saveUrl } from './library'
 import { getHighlights, saveHighlights } from './highlights'
 import { registerReading } from './reading'
+import { addToShelf, registerReadingRoom } from './readingRoom'
+import { registerTts } from './tts'
 import { labLoadTable, labQuery, labReset, labSchema } from './lab'
 import { isSql, languagesStatus } from './languages'
 import { registerLanguageServer, stopLanguageServer } from './pythonLanguageServer'
@@ -678,6 +680,19 @@ function registerIpc() {
   handle('highlights:save', (p: string, list: PdfHighlight[]) => saveHighlights(p, list))
   // humanities: books, free books, Discuss this, reading together, the notes page (src/main/reading)
   registerReading(handle)
+  // The reading room (Library › Reading), covers for any note, and reading aloud (main/readingRoom, main/tts)
+  registerReadingRoom(handle, async (filters) => {
+    const res = await dialog.showOpenDialog(win!, { properties: ['openFile'], filters })
+    return res.canceled ? null : res.filePaths[0]
+  })
+  registerTts(handle)
+  handle('room:import', async () => {
+    const res = await dialog.showOpenDialog(win!, { title: 'Add a book to your shelf', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Books', extensions: ['epub', 'pdf'] }] })
+    if (res.canceled) return []
+    const added = []
+    for (const r of await importPaths(res.filePaths)) added.push(await addToShelf(r.path))
+    return added
+  })
 
   handle('study:cards', (scope: ChatScope) => getCards(scope))
   handle('study:review', (id: string, grade: ReviewGrade, path: string) => reviewCard(id, grade, path))

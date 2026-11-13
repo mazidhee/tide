@@ -344,3 +344,21 @@ export async function epubBook(rel: string, abs: (rel: string) => string, write:
   if (memo.size > 6) memo.delete(memo.keys().next().value!)
   return book
 }
+
+/** The book's own cover image, from its package (null when it has none) */
+export async function epubCover(data: Buffer): Promise<{ bytes: Buffer; type: string } | null> {
+  ensureDom()
+  const zip = openZip(data)
+  if (!zip.has('META-INF/container.xml')) return null
+  const book = await new EPUB({
+    loadText: (name) => zip.text(name),
+    loadBlob: (name) => new Blob([new Uint8Array(zip.bytes(name) ?? Buffer.alloc(0))]),
+    getSize: (name) => zip.size(name),
+    sha1
+  }).init()
+  const blob = await book.getCover().catch(() => null)
+  if (!blob || !blob.size) return null
+  const type = blob.type || 'image/jpeg'
+  if (!/^image\/(jpeg|png|gif|webp)$/.test(type)) return null
+  return { bytes: Buffer.from(await blob.arrayBuffer()), type }
+}

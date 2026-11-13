@@ -18,6 +18,7 @@ import { NoteView } from './components/NoteView'
 import { ChatPanel } from './components/ChatPanel'
 import { LinkSheet } from './components/LinkSheet'
 import { SidebarPeek } from './components/SidebarPeek'
+import { MiniPlayer } from './components/reading/Player'
 import { Home } from './components/Home'
 import { Library } from './components/Library'
 import { StudyView, isDue } from './components/Study'
@@ -52,7 +53,9 @@ import { mockStudyContext } from '@shared/mocks'
 // The heavy views (PDF reader, terminal, code editor, canvas, graph, drills) load when first opened,
 // not with the window: Tide opens faster and holds less in memory until you need them
 const PdfView = lazy(() => import('./components/PdfView').then((m) => ({ default: m.PdfView })))
-const EpubView = lazy(() => import('./components/EpubView').then((m) => ({ default: m.EpubView })))
+// The reading room and its immersive reader (components/reading)
+const Reader = lazy(() => import('./components/reading/Reader').then((m) => ({ default: m.Reader })))
+const ReadingRoom = lazy(() => import('./components/reading/ReadingRoom').then((m) => ({ default: m.ReadingRoom })))
 const LabView = lazy(() => import('./components/LabView').then((m) => ({ default: m.LabView })))
 const WorkshopView = lazy(() => import('./components/WorkshopView').then((m) => ({ default: m.WorkshopView })))
 const CoursesView = lazy(() => import('./components/CoursesView').then((m) => ({ default: m.CoursesView })))
@@ -224,7 +227,9 @@ export default function App() {
   )
   // What you're doing, for the menu bar: reading, flashcards, practising (lessons and exams report their own)
   const pageStudy =
-    view.kind === 'file' && /\.(md|pdf|epub)$/i.test(view.path)
+    view.kind === 'reader'
+      ? { pose: 'book' as const, label: `Reading: ${view.path.split('/').pop()!.replace(/\.(md|pdf|epub)$/i, '')}` }
+      : view.kind === 'file' && /\.(md|pdf|epub)$/i.test(view.path)
       ? { pose: 'book' as const, label: `Reading: ${view.path.split('/').pop()!.replace(/\.(md|pdf)$/i, '')}` }
       : view.kind === 'study'
         ? { pose: 'cards' as const, label: 'Flashcards' }
@@ -245,8 +250,8 @@ export default function App() {
       ? { label: view.kind === 'session' ? `${view.mode}: ${view.topic}` : 'Quiz', kind: 'lesson', noBreaks: view.kind === 'session' && !!view.options?.timed, path: view.scope.kind === 'note' ? view.scope.path : undefined }
       : view.kind === 'exam'
         ? { label: `Exam: ${view.topic}`, kind: 'exam', noBreaks: true }
-        : view.kind === 'file' && /\.(md|pdf|epub)$/i.test(view.path)
-          ? { label: view.path.split('/').pop()!.replace(/\.(md|pdf)$/i, ''), path: view.path, kind: 'reading' }
+        : (view.kind === 'file' && /\.(md|pdf|epub)$/i.test(view.path)) || view.kind === 'reader'
+          ? { label: view.path.split('/').pop()!.replace(/\.(md|pdf|epub)$/i, ''), path: view.path, kind: 'reading' }
           : view.kind === 'study' || view.kind === 'daily'
             ? { label: view.kind === 'daily' ? 'Daily practice' : 'Flashcards', kind: 'review' }
             : ['practice', 'code', 'lab', 'drill', 'maths', 'workout', 'design'].includes(view.kind) || (view.kind === 'file' && /\.canvas$/i.test(view.path))
@@ -393,14 +398,16 @@ export default function App() {
 
   // Views with their own tutor beside them don't get the floating Ask button or the chat panel
   // A course being read has its tutor docked in its reading column (the right is the video's)
-  const ownTutor = ['chat', 'lab', 'code', 'design', 'drill', 'session', 'exam', 'mock'].includes(view.kind) || (view.kind === 'file' && /\.canvas$/i.test(view.path)) || (view.kind === 'courses' && !!view.id)
+  const ownTutor = ['chat', 'lab', 'code', 'design', 'drill', 'session', 'exam', 'mock', 'reader'].includes(view.kind) || (view.kind === 'file' && /\.canvas$/i.test(view.path)) || (view.kind === 'courses' && !!view.id)
   // In the new design Home is the whole width of the window and has its own ask box: the tutor
   // panel stays beside what you read (a note, a PDF, the library), one click away from Home
   // …until you ask something from Home: then it opens there with your question, and stays until you close it
   // The map of what you know and Settings are the same: the whole width, the panel on request
   const wide = view.kind === 'home' || view.kind === 'settings' || view.kind === 'learner' || (view.kind === 'graph' && !view.focus && (view.tab ?? lastBrainTab()) === 'know')
   // A course being read is the whole window: Tide's sidebar steps back to the left edge, there on hover
-  const immersive = view.kind === 'courses' && !!view.id && !focusId
+  // A book being read is the same: the reader has the window (components/reading/Reader)
+  // Pop-out windows (tide-popout): the reader is meant to be a pop-out kind ({ kind: 'reader', path }) once that lands
+  const immersive = ((view.kind === 'courses' && !!view.id) || view.kind === 'reader') && !focusId
   // A mock in progress is focus mode: the sidebar steps away until it is marked
   const mockFocus = view.kind === 'mock' && (mock?.phase === 'live' || mock?.phase === 'preparing' || mock?.phase === 'marking')
   const noPanel = ownTutor || (tide && wide && homeAsked === null)
@@ -408,11 +415,13 @@ export default function App() {
   if (view.kind === 'file') {
     if (/\.pdf$/i.test(view.path)) main = <PdfView key={view.path} path={view.path} anchor={view.anchor} />
     // humanities: EPUB books open in their own reader, at a chapter and paragraph
-    else if (/\.epub$/i.test(view.path)) main = <EpubView key={view.path} path={view.path} anchor={view.anchor} />
+    else if (/\.epub$/i.test(view.path)) main = <Reader key={view.path} path={view.path} anchor={view.anchor} />
     else if (/\.(png|jpe?g|gif|webp|svg|avif)$/i.test(view.path)) main = <ImageView path={view.path} />
     else if (/\.canvas$/i.test(view.path)) main = <CanvasView key={view.path} path={view.path} />
     else main = <NoteView key={view.path} path={view.path} anchor={view.anchor} nonce={view.nonce} />
   } else if (view.kind === 'library') main = <Library />
+  else if (view.kind === 'reading') main = <ReadingRoom />
+  else if (view.kind === 'reader') main = <Reader key={view.path} path={view.path} anchor={view.anchor} />
   else if (view.kind === 'notebook') main = <NotebookView key={view.path} path={view.path} />
   // Brain: what you know, or the graph. Asked for around a note, it is always the graph
   else if (view.kind === 'graph') main = !view.focus && (view.tab ?? lastBrainTab()) === 'know' ? <KnowledgeView /> : <GraphView key={view.focus ?? 'all'} focus={view.focus} />
@@ -460,7 +469,7 @@ export default function App() {
       {immersive && <SidebarPeek dueCount={due.due} />}
       {settings.sidebarCollapsed && !focusId && !immersive && <SidebarPeek dueCount={due.due} keys={false} />}
       <main className="main">
-        {!['file', 'graph', 'help', 'lab', 'code', 'design', 'chat', 'session', 'quiz', 'exam', 'mock'].includes(view.kind) && (tide ? <TopBar /> : <div className="titlebar-drag drag" />)}
+        {!['file', 'graph', 'help', 'lab', 'code', 'design', 'chat', 'session', 'quiz', 'exam', 'mock', 'reader'].includes(view.kind) && (tide ? <TopBar /> : <div className="titlebar-drag drag" />)}
         {settings.sidebarCollapsed && !focusId && !immersive && !mockFocus && (
           <div className="floating-controls no-drag">
             <button className="icon-btn" title="Show sidebar (⌘\)" onClick={() => app.updateSettings({ sidebarCollapsed: false })}>
@@ -481,6 +490,8 @@ export default function App() {
           <Suspense fallback={<div className="view-loading" aria-busy="true" />}>{main}</Suspense>
         </ErrorBoundary>
         {!focusId && <LinkSheet />}
+        {/* A book being read aloud keeps going anywhere in Tide, its line shown here */}
+        {!focusId && <MiniPlayer />}
         {!settings.chatOpen && !ownTutor && !focusId && (
           <button className="chat-fab" onClick={() => app.updateSettings({ chatOpen: true })} title="Open tutor (⌘J)">
             <Icon name="sparkle" size={16} />

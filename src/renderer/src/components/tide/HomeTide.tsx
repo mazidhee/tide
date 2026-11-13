@@ -19,6 +19,33 @@ import { AreaMark } from './AreaMark'
 import { ReadyCard } from '../ReadyCard'
 import { greetingLine, greetingName } from '@shared/profile'
 import { useProfile } from '../../lib/profile'
+import { useShelf } from '../../lib/readingRoom'
+
+/** The reading room in Home's right column: minutes this week against the goal, and the book you're in */
+function HomeReading() {
+  const app = useApp()
+  const shelf = useShelf()
+  const room = shelf?.room
+  const book = room?.books.find((b) => b.path === room.current && !b.finished) ?? room?.books.find((b) => !b.finished)
+  if (!room || !book) return null
+  return (
+    <section>
+      <div className="td-sec-head first">
+        <h2 className="td-sec">Reading</h2>
+        <button className="td-more" onClick={() => app.setView({ kind: 'reading' })}>
+          Reading room
+        </button>
+      </div>
+      <p className="td-ran">
+        {shelf.week} of {room.goal.weeklyMinutes} minutes this week ·{' '}
+        <button className="td-link" onClick={() => app.setView({ kind: 'reader', path: book.path })}>
+          {book.title}
+        </button>
+        , {Math.round((book.progress ?? 0) * 100)}%
+      </p>
+    </section>
+  )
+}
 
 const DAY = 86_400_000
 /** "1 h 20", "40 min": time as the page says it everywhere */
@@ -300,6 +327,8 @@ export function HomeTide(p: HomeTideProps) {
           </section>
 
           <WorkoutHomeCard variant="tide" />
+
+          <HomeReading />
 
           <section>
             <div className="td-sec-head first">

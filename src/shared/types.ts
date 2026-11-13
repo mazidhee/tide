@@ -1199,6 +1199,26 @@ export interface TideApi {
   }
   /** humanities: reading books in any format (src/main/reading) */
   reading: ReadingApi
+  /** The reading room (Library › Reading, src/main/readingRoom) */
+  room: RoomApi
+  /** A cover banner for any note (shared/noteCover), from public-domain art or your own image */
+  covers: {
+    search(q: string): Promise<import('./noteCover').Artwork[]>
+    art(notePath: string, art: import('./noteCover').Artwork): Promise<import('./noteCover').NoteCover>
+    /** A picker thumbnail as a data URL (fetched in the main process) */
+    thumb(url: string): Promise<string | null>
+    own(notePath: string): Promise<import('./noteCover').NoteCover | null>
+    y(notePath: string, y: number): Promise<void>
+    remove(notePath: string): Promise<string>
+    icon(notePath: string, icon: string | null): Promise<void>
+  }
+  /** Reading aloud: pluggable speech engines and their audio cache (src/main/tts) */
+  tts: {
+    engines(): Promise<import('./speech').TtsEngineInfo[]>
+    synth(engine: string, text: string, voice: string, speed: number): Promise<Uint8Array>
+    prerender(job: { key: string; engine: string; voice: string; speed: number; pieces: { text: string; voice: string }[] }): Promise<{ queued: boolean; reason?: string }>
+    cachedCount(engine: string, speed: number, pieces: { text: string; voice: string }[]): Promise<number>
+  }
   study: {
     cards(scope: ChatScope): Promise<StudyCard[]>
     review(cardId: string, grade: ReviewGrade, path: string): Promise<CardSchedule>
@@ -1213,6 +1233,35 @@ export interface TideApi {
     /** Started from the source with a test profile, so check tooling can drive it */
     testCopy?: boolean
   }
+}
+
+// ---------- the reading room (src/main/readingRoom) ----------
+
+export interface RoomApi {
+  shelf(): Promise<{ room: import('./readingRoom').RoomState; week: number }>
+  tonight(): Promise<(import('./readingRoom').Tonight & { book: import('./readingRoom').ShelfBook; week: number; goal: number }) | null>
+  book(path: string): Promise<{ title: string; author?: string; kind: import('./readingRoom').BookKind; chapters: import('./readingRoom').ReaderChapter[]; subjects: string[]; narrative: boolean }>
+  add(path: string): Promise<import('./readingRoom').ShelfBook>
+  addFree(book: import('./freeBooks').FreeBook): Promise<import('./readingRoom').ShelfBook>
+  import(): Promise<import('./readingRoom').ShelfBook[]>
+  remove(path: string): Promise<import('./readingRoom').RoomState>
+  patch(path: string, p: { private?: boolean; voice?: import('./readingRoom').BookVoice; finished?: string | null; current?: boolean }): Promise<import('./readingRoom').RoomState>
+  goal(weeklyMinutes: number): Promise<import('./readingRoom').RoomState>
+  progress(path: string, p: { loc: import('./passage').PassageLoc; progress: number; label?: string; where?: string; chapterLeft?: number }): Promise<void>
+  time(path: string, seconds: number, wordsRead?: number): Promise<void>
+  marks(path: string): Promise<import('./readingRoom').Mark[]>
+  saveMark(path: string, m: import('./readingRoom').Mark): Promise<import('./readingRoom').Mark[]>
+  removeMark(path: string, id: string): Promise<import('./readingRoom').Mark[]>
+  page(path: string): Promise<string>
+  pageInfo(pagePath: string): Promise<{ book: string; author?: string; chapter?: string; progress?: number; quotes: number; notes: number; started?: string } | null>
+  talks(path: string): Promise<import('./readingTalk').Talk[]>
+  who(path: string): Promise<'claude' | 'gemma'>
+  challenge(req: { path: string; passage: string; loc?: import('./passage').PassageLoc; chapter?: string; id?: string; said?: string }): Promise<import('./readingTalk').Talk>
+  argument(req: { path: string; passage?: string; loc?: import('./passage').PassageLoc; chapter?: string }): Promise<{ steps: string[]; added: number; note: string; talk: import('./readingTalk').Talk; who: 'claude' | 'gemma' }>
+  keepTalk(path: string, id: string): Promise<string>
+  seminarTurn(req: { path: string; chapter: number; stage: Exclude<import('./readingTalk').SeminarStage, 'keep'>; turns: import('./readingTalk').TalkTurn[]; said: string }): Promise<string>
+  seminarKeep(req: { path: string; chapter: number; turns: import('./readingTalk').TalkTurn[] }): Promise<import('./readingTalk').KeepItem[]>
+  seminarSave(req: { path: string; chapter: number; items: import('./readingTalk').KeepItem[]; turns: import('./readingTalk').TalkTurn[] }): Promise<{ quotes: number; ideas: number; recall: number }>
 }
 
 // ---------- humanities: reading (src/main/reading) ----------
