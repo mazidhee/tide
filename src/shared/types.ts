@@ -804,6 +804,8 @@ export interface TideApi {
     state(): Promise<import('./workout').WorkoutState>
     logRound(r: Pick<import('./workout').RoundRecord, 'morning' | 'round' | 'championship' | 'items' | 'combo'>): Promise<{ state: import('./workout').WorkoutState; events: import('./workout').RoundEvents }>
     setReminder(r: import('./mentalMaths').Reminder): Promise<import('./mentalMaths').Reminder>
+    /** The morning drills at a glance: minutes today and this week, the streak, today's score (shared/morningDrills) */
+    drills(): Promise<import('./morningDrills').DrillTally>
   }
   practice: {
     /** A coding challenge on a topic, note, notebook or book chapter */

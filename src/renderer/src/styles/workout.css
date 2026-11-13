@@ -1039,3 +1039,62 @@
   justify-content: flex-start;
   margin-top: 10px;
 }
+
+/* The morning drills at a glance (shared/morningDrills) */
+.wo-tally {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 18px 0 6px;
+  border-radius: var(--radius-m, 10px);
+  overflow: hidden;
+  background: var(--line);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.wo-tally > div {
+  padding: 10px 14px;
+  background: var(--bg-raised);
+}
+.wo-tally dt {
+  font-size: var(--text-2xs, 11px);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-muted);
+}
+.wo-tally dd {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0 0;
+}
+.wo-tally dd b {
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.wo-tally dd small {
+  font-size: var(--text-xs, 12px);
+  color: var(--ink-soft);
+}
+.wo-tally.compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 2px 0 10px;
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  font-size: var(--text-xs, 12px);
+  color: var(--ink-muted);
+}
+.wo-tally.compact b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+@media (max-width: 720px) {
+  .wo-tally {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
