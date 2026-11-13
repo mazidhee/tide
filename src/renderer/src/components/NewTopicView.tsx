@@ -212,7 +212,7 @@ export function NewTopicView({ initial, initialGoal, auto }: { initial?: string;
           for (const ex of plan.phases.flatMap((p) => p.practice ?? []).slice(0, 12))
             await window.tide.practice.addChallenge({ title: ex.slice(0, 120), source: { kind: 'folder', path: folder } }).catch(() => {})
         const goals = await window.tide.goals.list()
-        await window.tide.goals.save([...goals, { id: Math.random().toString(36).slice(2, 10), name: `Finish ${name}`, notebook: folder, deadline: dated[dated.length - 1].end, createdAt: Date.now() }])
+        await window.tide.goals.save([...(Array.isArray(goals) ? goals : []), { id: Math.random().toString(36).slice(2, 10), name: `Finish ${name}`, notebook: folder, deadline: dated[dated.length - 1].end, createdAt: Date.now() }])
         if (thingsReady && toThings)
           await window.tide.learn
             .planToThings(path, name, folder)

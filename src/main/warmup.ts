@@ -142,7 +142,10 @@ export async function warmupFor(topic: string, path?: string, rerankMs = RERANK_
   const t = topic.trim()
   if (!t) return { topic, cards: [], concepts: [] }
   const { ranked, kept } = await prior(t, path, WARMUP_MAX_CONCEPTS, rerankMs)
-  return { topic: t, cards: warmupCards(ranked, kept), concepts: ranked.map((c) => ({ name: c.name, estimate: c.estimate, status: c.status })) }
+  const cards = warmupCards(ranked, kept)
+  // Only the concepts with a card: the tutor is told about what was actually warmed up on
+  const carded = new Set(cards.map((c) => c.concept))
+  return { topic: t, cards, concepts: ranked.filter((c) => carded.has(c.id)).map((c) => ({ name: c.name, estimate: c.estimate, status: c.status })), judged: true }
 }
 
 /**

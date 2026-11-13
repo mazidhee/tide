@@ -174,7 +174,7 @@ export function OutlineView({ notebook, outlinePath, notes, mastery, onSetOutlin
   const collapseKey = `tide.outline.collapsed.${outlinePath}`
 
   useEffect(() => {
-    window.tide.goals.list().then(setGoals)
+    window.tide.goals.list().then((g) => setGoals(Array.isArray(g) ? g : []))
   }, [])
   const saveGoals = (next: Goal[]) => {
     setGoals(next)

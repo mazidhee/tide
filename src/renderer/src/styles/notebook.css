@@ -197,36 +197,82 @@
 
 .nb-run {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  height: 22px;
+  gap: 2px;
   color: var(--ink-muted);
   font-family: var(--font-code);
-  font-size: 11.5px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 
-.nb-run svg {
-  display: none;
+/* The run button: always there, a clear target beside every code cell (⇧↩ and ⌘↩ too) */
+.nb-run-btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  background: var(--bg);
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    border-color 120ms ease;
 }
 
-.nb-cell:hover .nb-run .nb-count,
-.nb-cell.active .nb-run .nb-count {
-  display: none;
+.nb-run-btn svg {
+  margin-left: 1px;
 }
 
-.nb-cell:hover .nb-run svg,
-.nb-cell.active .nb-run svg {
-  display: block;
+.nb-cell:hover .nb-run-btn,
+.nb-cell.active .nb-run-btn,
+.nb-cell:focus-within .nb-run-btn,
+.nb-run-btn:focus-visible {
   color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.nb-run-btn:hover {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.nb-run-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .nb-cell.running .nb-run .nb-count {
-  display: inline;
   color: var(--accent);
 }
 
-.nb-cell.running .nb-run svg {
-  display: none;
+.nb-cell.running .nb-run-btn {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* In the cell's own toolbar too, named, with its keys */
+.nb-run-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  height: 24px;
+  border-radius: var(--radius-s);
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.nb-run-tool:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.nb-run-tool kbd {
+  font: 10.5px var(--font-code);
+  color: var(--ink-muted);
 }
 
 .nb-body {
@@ -309,7 +355,8 @@
 }
 
 .nb-cell:hover .nb-cell-tools,
-.nb-cell.active .nb-cell-tools {
+.nb-cell.active .nb-cell-tools,
+.nb-cell:focus-within .nb-cell-tools {
   opacity: 1;
   pointer-events: auto;
 }

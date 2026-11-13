@@ -9,6 +9,7 @@
  */
 import type { AimWeight } from './coach'
 import type { MockMode } from './mocks'
+import type { Goal } from './types'
 import { addDays, daysBetween, weeksTo, type Thread, type ThreadKind } from './portfolio'
 
 export type GoalWeight = AimWeight
@@ -63,9 +64,97 @@ export interface GoalsStore {
   standing: Record<string, { weight?: GoalWeight; pausedUntil?: string; off?: boolean }>
   /** Your aims have been brought in as goals */
   migrated?: boolean
+  /**
+   * Roadmap deadlines ("finish Maths Part II by 17 Nov"), the older kind of goal. They lived in this
+   * same file as a bare array before Goals came; now they sit here beside the goals.
+   */
+  deadlines?: Goal[]
+  /** Anything in the file Tide couldn't read as either, kept as it was so nothing is lost */
+  unread?: unknown[]
 }
 
 export const EMPTY_GOALS: GoalsStore = { version: 1, goals: [], standing: {} }
+
+// ---------- Reading the file, whatever shape it's in ----------
+
+const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
+const str = (x: unknown) => (typeof x === 'string' ? x : '')
+const WEIGHTS: GoalWeight[] = ['main', 'side', 'curious']
+const NEED_KINDS: ThreadKind[] = ['roadmap', 'project', 'mock', 'workout', 'reading', 'topic']
+
+/** An older roadmap deadline: a notebook to finish by a date */
+export function asDeadline(x: unknown): Goal | null {
+  if (!isObj(x) || !str(x.notebook) || !str(x.deadline) || Array.isArray(x.needs)) return null
+  const name = str(x.name) || str(x.title) || `Finish ${str(x.notebook)}`
+  return {
+    id: str(x.id) || `deadline-${str(x.notebook)}-${str(x.deadline)}`,
+    name,
+    notebook: str(x.notebook),
+    ...(str(x.section) ? { section: str(x.section) } : {}),
+    deadline: str(x.deadline),
+    createdAt: typeof x.createdAt === 'number' ? x.createdAt : 0
+  }
+}
+
+/** A goal, from the current shape or an older one (an aim's {text, weight, since}, a {name} goal, needs missing) */
+export function asPlanGoal(x: unknown): PlanGoal | null {
+  if (typeof x === 'string') return x.trim() ? { id: `goal-${norm(x).replace(/ /g, '-').slice(0, 40)}`, title: x.trim(), weight: 'side', needs: [], createdAt: 0 } : null
+  if (!isObj(x)) return null
+  const title = (str(x.title) || str(x.text) || str(x.name)).trim()
+  if (!title) return null
+  const needs = (Array.isArray(x.needs) ? x.needs : [])
+    .filter((n): n is Record<string, unknown> => isObj(n) && NEED_KINDS.includes(n.kind as ThreadKind) && !!(str(n.ref) || str(n.label)))
+    .map((n, i): GoalNeed => ({ ...(n as unknown as GoalNeed), id: str(n.id) || `n${i}`, ref: str(n.ref) || str(n.label), label: str(n.label) || str(n.ref), hours: typeof n.hours === 'number' && n.hours >= 0 ? n.hours : 0 }))
+  const date = str(x.date) || str(x.deadline)
+  return {
+    ...(x as unknown as PlanGoal),
+    id: str(x.id) || `goal-${norm(title).replace(/ /g, '-').slice(0, 40)}`,
+    title,
+    weight: WEIGHTS.includes(x.weight as GoalWeight) ? (x.weight as GoalWeight) : 'side',
+    needs,
+    createdAt: typeof x.createdAt === 'number' ? x.createdAt : typeof x.since === 'number' ? x.since : 0,
+    ...(/^\d{4}-\d{2}-\d{2}$/.test(date) ? { date } : { date: undefined })
+  }
+}
+
+/**
+ * Reads .tide/goals.json in any shape it has had: the old bare array of roadmap deadlines, the Goals
+ * store, a store whose goals are a map by id, or a mix. Goals and deadlines are sorted apart; what
+ * reads as neither is kept untouched in `unread`, so saving never drops it. Pure: nothing is written.
+ */
+export function readGoalsFile(raw: unknown): GoalsStore {
+  const goals: PlanGoal[] = []
+  const deadlines: Goal[] = []
+  const unread: unknown[] = []
+  const take = (x: unknown) => {
+    const d = asDeadline(x)
+    if (d) return void deadlines.push(d)
+    const g = asPlanGoal(x)
+    if (g) return void goals.push(g)
+    if (x !== null && x !== undefined) unread.push(x)
+  }
+  const list = (x: unknown): unknown[] => (Array.isArray(x) ? x : isObj(x) ? Object.values(x) : [])
+  if (Array.isArray(raw)) raw.forEach(take)
+  else if (isObj(raw)) {
+    list(raw.goals).forEach(take)
+    list(raw.deadlines).forEach(take)
+    if (Array.isArray(raw.unread)) unread.push(...raw.unread)
+  }
+  const seen = new Set<string>()
+  const once = <T extends { id: string }>(xs: T[]) => xs.filter((x) => !seen.has(x.id) && !!seen.add(x.id))
+  const store: GoalsStore = {
+    ...(isObj(raw) ? (raw as Partial<GoalsStore>) : {}),
+    version: 1,
+    goals: once(goals),
+    standing: isObj(raw) && isObj(raw.standing) ? (raw.standing as GoalsStore['standing']) : {}
+  }
+  const d = once(deadlines)
+  if (d.length) store.deadlines = d
+  else delete store.deadlines
+  if (unread.length) store.unread = unread
+  else delete store.unread
+  return store
+}
 
 /** What Tide has to draw a goal's needs from */
 export interface Inventory {

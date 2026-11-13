@@ -129,7 +129,14 @@ export function CodeEditor({ value, onChange, language = 'python', onSubmit, fil
       if (state) editor.restoreViewState(state)
     }
     void highlight(lang)
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => onSubmitRef.current?.())
+    // ⌘↩ on this editor's own keys: Monaco's addCommand binds to whichever editor registered last,
+    // so with several on a page (a notebook's cells) it ran the wrong one
+    editor.onKeyDown((e) => {
+      if (e.keyCode !== monaco.KeyCode.Enter || !(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey || !onSubmitRef.current) return
+      e.preventDefault()
+      e.stopPropagation()
+      onSubmitRef.current()
+    })
     // VS Code's command palette (Monaco has it on F1)
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyP, () => editor.trigger('keyboard', 'editor.action.quickCommand', null))
     const sub = editor.onDidChangeModelContent(() => {

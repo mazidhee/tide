@@ -42,8 +42,14 @@ export const pickOf = (s: Pick<CoachSettings, 'pick' | 'aims' | 'goal'>): 'tide'
 
 /** Your aims: the list, else the old single goal as a main aim */
 export function aimsOf(s: Pick<CoachSettings, 'aims' | 'goal'>): Aim[] {
-  if (s.aims?.length) return s.aims
-  return s.goal.trim() ? [{ id: 'goal', text: s.goal.trim(), weight: 'main', since: 0 }] : []
+  // Older coach files: aims as plain strings, or missing fields; no goal line at all
+  if (Array.isArray(s.aims) && s.aims.length) {
+    if (s.aims.every((a) => a && typeof a === 'object' && typeof a.text === 'string' && a.id && a.weight)) return s.aims
+    return (s.aims as unknown as (Aim | string | null)[])
+      .map((a, i): Aim | null => (typeof a === 'string' ? (a.trim() ? { id: `aim${i}`, text: a.trim(), weight: 'main', since: 0 } : null) : a && typeof a.text === 'string' && a.text.trim() ? { ...a, id: a.id || `aim${i}`, weight: a.weight ?? 'main', since: a.since ?? 0 } : null))
+      .filter((a): a is Aim => !!a)
+  }
+  return typeof s.goal === 'string' && s.goal.trim() ? [{ id: 'goal', text: s.goal.trim(), weight: 'main', since: 0 }] : []
 }
 
 const WEIGHT_WORD: Record<AimWeight, string> = { main: 'Main aims', side: 'Also', curious: 'Curious about' }

@@ -25,7 +25,7 @@ const safe = async <T>(f: () => Promise<T>, fallback: T): Promise<T> => {
 
 /** Every record the week is counted from; any that can't be read counts as nothing */
 export async function progressInput(today = localDate()): Promise<ProgressInput> {
-  const [concepts, evidence, workout, projects, books, lessons, mocks] = await Promise.all([
+  const [concepts, evidence, workout, projects, books, lessons, mocks, focus] = await Promise.all([
     safe(async () => (await import('./knowledge')).allConcepts(), []),
     safe(async () => (await import('./knowledge')).conceptEvidence(), []),
     safe(async () => {
@@ -37,7 +37,8 @@ export async function progressInput(today = localDate()): Promise<ProgressInput>
     safe(async () => (await (await import('./ideaProjects')).allPlans()).map((p) => ({ name: p.name, milestones: p.milestones.map((m) => ({ title: m.title, status: m.status, doneAt: m.doneAt })) })), []),
     safe(async () => (await (await import('./readingRoom')).loadRoom()).books.map((b) => ({ title: b.title, days: b.days })), []),
     safe(async () => (await import('./knowledge')).lessonRecords(), []),
-    safe(async () => (await import('./mocks')).mockHistory(), [])
+    safe(async () => (await import('./mocks')).mockHistory(), []),
+    safe(async () => (await import('./learn')).focusLog(Date.now() - 21 * 86_400_000), [])
   ])
   return {
     today,
@@ -47,7 +48,8 @@ export async function progressInput(today = localDate()): Promise<ProgressInput>
     projects,
     books,
     lessons: lessons.map((l) => ({ topic: l.topic, mode: l.mode, started: l.started, updated: l.updated, finished: l.finished, turns: (l.turns as { role: string; at?: number }[]).map((t) => ({ role: t.role, ...(typeof t.at === 'number' ? { at: t.at } : {}) })) })),
-    mocks: mocks.map((m) => ({ title: m.title, mode: m.mode, at: m.at, overall: m.overall }))
+    mocks: mocks.map((m) => ({ title: m.title, mode: m.mode, at: m.at, overall: m.overall })),
+    focus: focus.map((f) => ({ start: f.start, minutes: f.minutes, ...(f.kind ? { kind: f.kind } : {}) }))
   }
 }
 

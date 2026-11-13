@@ -10,6 +10,7 @@ import { inFocusWindow, usePopOutSurface } from '../../lib/popout'
 import { PopOutButton } from '../PopOutButton'
 import { locAnchor } from '@shared/passage'
 import { PlayerBar } from './Player'
+import { IDLE_MS } from '@shared/activeTime'
 
 /**
  * The immersive reader. Opening a book gives it the window: Tide's sidebar steps away (the left
@@ -203,7 +204,8 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
   useEffect(() => {
     const t = setInterval(() => {
       const listening = playerState()?.path === path && playerState()?.playing
-      if (document.hidden || (!listening && Date.now() - lastActive.current > 120_000)) return
+      // Reading counts only with this window in front and you at it (shared/activeTime); listening, while it plays
+      if (document.hidden || (!listening && (!document.hasFocus() || Date.now() - lastActive.current > IDLE_MS))) return
       const w = furthest.current.words
       furthest.current = { ...furthest.current, words: 0 }
       window.tide.room.time(path, 30, w).catch(() => {})

@@ -8,15 +8,16 @@
  *   the streak, and the mornings done.
  * - Projects: milestones finished this week.
  * - Reading: minutes and books, from the reading room's daily minutes.
- * - Lessons: how many, finished, and minutes on them (turn to turn, a gap over 10 minutes is time
- *   away), each day of the week.
+ * - Lessons: how many, finished, and minutes on them, each day of the week: the time you were
+ *   actively in them (the focus log); for a day without it, turn to turn with any gap over five
+ *   minutes taken as time away.
  * - Mock interviews and exams: their overall scores.
  * - One line about the week: Claude's when it can write it, else fixed words from the numbers.
  */
 
 const DAY = 86_400_000
-/** A gap between turns longer than this is time away, as the lesson map counts it */
-const IDLE_MS = 10 * 60_000
+/** A gap between turns longer than this is time away (a lesson left in Carry on doesn't count) */
+const IDLE_MS = 5 * 60_000
 
 const pad = (n: number) => String(n).padStart(2, '0')
 export const dayOf = (at: number) => {
@@ -60,6 +61,11 @@ export interface ProgressInput {
   projects: { name: string; milestones: { title: string; status: string; doneAt?: number }[] }[]
   books: { title: string; days?: Record<string, number> }[]
   lessons: { topic: string; mode: string; started: number; updated: number; finished?: boolean; turns: { role: string; at?: number }[] }[]
+  /**
+   * Time actually spent in lessons, as the focus log has it (shared/activeTime: the window in front,
+   * the lesson on screen, input in the last couple of minutes). Where a day has it, it decides.
+   */
+  focus?: { start: number; minutes: number; kind?: string }[]
   mocks: { title: string; mode: string; at: number; overall: number }[]
 }
 
@@ -81,7 +87,7 @@ export interface WeekProgress {
 const RIGHT = new Set(['right', 'recalled-right'])
 const ANSWER = new Set(['right', 'recalled-right', 'partly', 'wrong', 'recalled-wrong', 'stuck'])
 
-/** Minutes spent in a lesson within [from, to): turn to turn, gaps over 10 minutes left out */
+/** Minutes spent in a lesson within [from, to): turn to turn, gaps over five minutes left out */
 export function lessonMinutesBetween(l: ProgressInput['lessons'][number], from: number, to: number): number {
   const ats = l.turns.map((t) => t.at).filter((a): a is number => typeof a === 'number' && a > 0)
   if (ats.length < 2) {
@@ -156,11 +162,22 @@ export function weekProgress(input: ProgressInput): WeekProgress {
   // Lessons
   // Mock interviews count under Mocks, not as lessons
   const lessonsIn = input.lessons.filter((l) => l.mode !== 'interview' && l.updated >= from && l.started < to)
+  const lessonFocus = (input.focus ?? []).filter((e) => e.kind === 'lesson' || e.kind === 'exam')
+  // A day's minutes: the focus log's active time when it has any for that day, else turn to turn
+  const minutesIn = (lessons: ProgressInput['lessons'], s: number, e: number) => {
+    const logged = lessonFocus.filter((f) => f.start >= s && f.start < e)
+    if (logged.length) return logged.reduce((n, f) => n + f.minutes, 0)
+    return lessons.reduce((n, l) => n + lessonMinutesBetween(l, s, e), 0)
+  }
   const byDay = dates.map((d) => {
     const s = noon(d).getTime() - 12 * 3600_000
-    return Math.round(lessonsIn.reduce((n, l) => n + lessonMinutesBetween(l, s, s + DAY), 0))
+    return Math.round(minutesIn(lessonsIn, s, s + DAY))
   })
-  const lastWeekMinutes = Math.round(input.lessons.filter((l) => l.mode !== 'interview').reduce((n, l) => n + lessonMinutesBetween(l, from - 7 * DAY, from), 0))
+  const before = input.lessons.filter((l) => l.mode !== 'interview')
+  const lastWeekMinutes = Math.round(weekDates(dayOf(from - 7 * DAY + 12 * 3600_000)).reduce((n, d) => {
+    const s = noon(d).getTime() - 12 * 3600_000
+    return n + minutesIn(before, s, s + DAY)
+  }, 0))
   const counted = [...lessonsIn]
   const topics = [...new Set(counted.sort((a, b) => b.updated - a.updated).map((l) => l.topic))].slice(0, 6)
 

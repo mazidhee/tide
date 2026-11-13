@@ -8,6 +8,7 @@ import { renderMarkdown } from '../lib/markdown'
 import { useStudying } from '../lib/studying'
 import { Icon } from './Icon'
 import { PixelScene } from './PixelScene'
+import { pageKey } from '../lib/typing'
 
 type Grade = { verdict: 'correct' | 'partial' | 'wrong'; feedback: string }
 type Outcome = 'right' | 'close' | 'missed' | 'seen'
@@ -101,7 +102,7 @@ export function DailyView() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!item) return
-      const typing = (e.target as HTMLElement)?.tagName === 'TEXTAREA'
+      const typing = !pageKey(e)
       if (item.kind === 'card' && !typing) {
         if (!flipped && (e.key === ' ' || e.key === 'Enter')) (e.preventDefault(), setFlipped(true))
         else if (flipped) {

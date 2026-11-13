@@ -33,10 +33,11 @@ describe("the warm-up's rerank on Claude", () => {
     expect(parseRerank('```json\n{"related": [2, 2, 99]}\n```', pool)).toEqual([pool[1].id])
   })
 
-  it("isn't asked when names already fill the warm-up, or there's nothing studied", () => {
+  it('is asked whenever anything studied could be judged, and not when nothing is', () => {
     expect(rerankWorthIt(TOPIC, [], 'Crypto')).toBe(false)
     const named = [1, 2, 3, 4].map((n) => concept(`s${n}`, `Stablecoin redemption runs part ${n}`))
-    expect(rerankWorthIt('Stablecoin redemption runs', named, 'Finance', 4)).toBe(false)
+    // Even when names alone would fill it: Claude is the filter, not only a filler
+    expect(rerankWorthIt('Stablecoin redemption runs', named, 'Finance', 4)).toBe(true)
     expect(rerankWorthIt(TOPIC, rerankPool(TOPIC, studied), 'Crypto')).toBe(true)
   })
 

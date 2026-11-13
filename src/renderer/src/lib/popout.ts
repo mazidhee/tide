@@ -49,6 +49,11 @@ export function useHeld(): Set<string> {
  * Going to a view another window holds brings that window forward instead (true when it did).
  * Called by the app's setView, so every way there (the sidebar, Carry on, a link) behaves alike.
  */
+/** Another window holds this view */
+export function heldView(v: View): boolean {
+  return !!popKindOf(v as PopView) && held.has(popKeyOf(v as PopView))
+}
+
 export function focusIfHeld(v: View): boolean {
   if (!popKindOf(v as PopView)) return false
   const key = popKeyOf(v as PopView)

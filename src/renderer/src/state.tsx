@@ -1,6 +1,7 @@
 import { smoothly } from './lib/smoothly'
 import { onShelf } from './lib/readingRoom'
-import { focusIfHeld } from './lib/popout'
+import { focusIfHeld, heldView } from './lib/popout'
+import { canBack, navBack, navForward, navGo, navLeave, type Nav } from './lib/history'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ChatScope, ExamOptions, FileNode, SessionMode, Settings } from '@shared/types'
 import type { DesignMode, SessionSetup } from '@shared/session'
@@ -119,11 +120,12 @@ const loadRecent = (): string[] => {
   }
 }
 
+const HOME: View = { kind: 'home' }
+
 export function AppProvider({ initial, children }: { initial: Settings; children: ReactNode }) {
   const [settings, setSettings] = useState(initial)
   const [tree, setTree] = useState<FileNode | null>(null)
   const [view, setViewState] = useState<View>({ kind: 'home' })
-  const history = useRef<View[]>([])
   const [canGoBack, setCanGoBack] = useState(false)
   const [recent, setRecent] = useState<string[]>(loadRecent)
   const [pendingAsk, setPendingAsk] = useState<PendingAsk | null>(null)
@@ -149,58 +151,31 @@ export function AppProvider({ initial, children }: { initial: Settings; children
     setSettings(await window.tide.settings.set(patch))
   }, [])
 
-  // Back and forward, like a browser: going somewhere new clears the way forward
-  const future = useRef<View[]>([])
+  // Back and forward, like a browser (lib/history): kept in a ref and set outside React's updaters,
+  // which may run twice, so a step is never recorded twice
+  const nav = useRef<Nav<View>>({ past: [], current: { kind: 'home' }, future: [] })
   const [canGoForward, setCanGoForward] = useState(false)
-  const setView = useCallback((v: View) => {
-    // Already open in a window of its own: that window comes forward (lib/popout)
-    if (focusIfHeld(v)) return
-    smoothly(() => setViewState((prev) => {
-      if (JSON.stringify(prev) === JSON.stringify(v)) return prev
-      history.current.push(prev)
-      if (history.current.length > 50) history.current.shift()
-      return v
-    }))
-    future.current = []
-    setCanGoBack(true)
-    setCanGoForward(false)
+  const apply = useCallback((next: Nav<View> | null) => {
+    if (!next || next === nav.current) return
+    nav.current = next
+    smoothly(() => setViewState(next.current))
+    setCanGoBack(canBack(next, HOME))
+    setCanGoForward(next.future.length > 0)
   }, [])
+  const setView = useCallback(
+    (v: View) => {
+      // Already open in a window of its own: that window comes forward (lib/popout)
+      if (focusIfHeld(v)) return
+      apply(navGo(nav.current, v))
+    },
+    [apply]
+  )
 
-  const back = useCallback(() => {
-    const prev = history.current.pop()
-    if (prev)
-      smoothly(() =>
-        setViewState((cur) => {
-          future.current.push(cur)
-          return prev
-        })
-      )
-    setCanGoBack(history.current.length > 0)
-    setCanGoForward(future.current.length > 0 || !!prev)
-  }, [])
+  const back = useCallback(() => apply(navBack(nav.current, heldView, HOME)), [apply])
 
-  const leaveSettings = useCallback(() => {
-    let prev = history.current.pop()
-    while (prev && prev.kind === 'settings') prev = history.current.pop()
-    const to: View = prev ?? { kind: 'home' }
-    smoothly(() => setViewState(to))
-    future.current = []
-    setCanGoBack(history.current.length > 0)
-    setCanGoForward(false)
-  }, [])
+  const leaveSettings = useCallback(() => apply(navLeave(nav.current, (v) => v.kind === 'settings', heldView, HOME)), [apply])
 
-  const forward = useCallback(() => {
-    const next = future.current.pop()
-    if (!next) return
-    smoothly(() =>
-      setViewState((cur) => {
-        history.current.push(cur)
-        return next
-      })
-    )
-    setCanGoBack(true)
-    setCanGoForward(future.current.length > 0)
-  }, [])
+  const forward = useCallback(() => apply(navForward(nav.current, heldView)), [apply])
 
   const openPath = useCallback(
     (path: string, anchor?: string) => {
