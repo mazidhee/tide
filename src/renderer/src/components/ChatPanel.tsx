@@ -1,4 +1,5 @@
 import { learnIntent } from '@shared/learnIntent'
+import { climbLadder } from '../lib/mathsLadder'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChatScope } from '@shared/types'
 import { fileTitle, useApp, pagesLabel } from '../state'
@@ -101,6 +102,7 @@ export function ChatPanel({ variant = 'panel' }: { variant?: 'panel' | 'dock' } 
   }, [turns])
 
   const send = async (text: string, opts?: { attachment?: string; scope?: ChatScope; instructions?: string }) => {
+    if (!opts?.attachment && climbLadder(text, app.setView)) return setInput('')
     const plan = !opts?.attachment ? learnIntent(text) : null
     if (plan) {
       setInput('')

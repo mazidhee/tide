@@ -378,7 +378,7 @@ function registerIpc() {
   handle('visuals:repair', (req: { code: string; errors: string[]; scope: unknown }) => repairVisual(req))
   handle('visuals:fallback', (req: { code: string; title: string; scope: unknown }) => visualFallback(req))
   handle('visuals:cached', (id: string) => lessonVisuals(id))
-  handle('visuals:remember', (id: string, key: string, record: unknown) => rememberVisual(id, key, record))
+  handle('visuals:remember', (id: string, key: string, record: unknown, source?: unknown) => rememberVisual(id, key, record, source))
   ipcMain.handle('visuals:watch', (e, host: string) => watchVisual(e.sender, String(host)))
   ipcMain.handle('visuals:unwatch', (e, host: string) => unwatchVisual(String(host), e.sender))
   ipcMain.handle('visuals:kill', (e, host: string, reason: string) => killVisual(e.sender, String(host), String(reason ?? 'it stopped answering').slice(0, 120)))
@@ -892,6 +892,8 @@ app.whenReady().then(() => {
 
   // Claude's visuals: their frames' documents, no permissions, no web requests, and (in development, which has no page CSP) frame-src
   handleVisualProtocol()
+  // The maths libraries a visual may load (main/visualLibs), built into the app
+  void import('./visualLibs').then((l) => import('./visualFrames').then((f) => f.serveVisualLibraries(l.libraryFor)))
   denyVisualPermissions(session.defaultSession)
   blockVisualRequests(session.defaultSession)
   if (process.env.ELECTRON_RENDERER_URL) devFrameSrc(session.defaultSession, process.env.ELECTRON_RENDERER_URL, APP_CSP)

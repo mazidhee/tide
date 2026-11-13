@@ -870,7 +870,8 @@ export interface TideApi {
     repair(req: { code: string; errors: string[]; scope: ChatScope }): Promise<{ code: string } | null>
     fallback(req: { code: string; title: string; scope: ChatScope }): Promise<string | null>
     cached(lessonId: string): Promise<Record<string, import('./visuals').VisualRecord>>
-    remember(lessonId: string, key: string, record: import('./visuals').VisualRecord): Promise<boolean>
+    /** source: the visual as written, so a working explorable can join the library (main/explorables) */
+    remember(lessonId: string, key: string, record: import('./visuals').VisualRecord, source?: string): Promise<boolean>
     /** Main watches this frame's process (memory, CPU) and kills it past its limits */
     watch(host: string): Promise<void>
     unwatch(host: string): Promise<void>

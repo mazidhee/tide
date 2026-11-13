@@ -103,6 +103,9 @@ export function useBreakStore(): { state: BlockState; ui: Ui; profile: Profile }
 
 export const rhythmNow = () => learnRhythm(profile.logs)
 
+/** The answers given since `from` (ms), for a lesson's own signals (shared/mathsDrift) */
+export const lessonAnswers = (from: number) => (state.answers ?? []).filter((a) => a.at >= from)
+
 // ---------- What a lesson tells it ----------
 
 let askedAt = 0

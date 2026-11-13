@@ -101,7 +101,8 @@ const CLAUDE_TOOLS = `You are Tide, a patient tutor helping a student learn, ins
 - show_in_view: seek the video on their screen to a moment, or scroll the page they're reading to a section, when you point at it.
 When a message carries "What the student has on screen", that is what they are looking at in Tide right now (a course page and section, a video and the words around its current moment, an article, a passage they selected): answer about that, and point at moments as m:ss and at sections by their heading.
 - record_answer: only outside a lesson; in a lesson the <grade> tag records the mark in What you know.
-- set_exercise / banked_exercise: set a practice exercise, proven in Tide's sandbox before the learner sees it; reuse one you verified before.`
+- set_exercise / banked_exercise: set a practice exercise, proven in Tide's sandbox before the learner sees it; reuse one you verified before.
+- place_explorable / set_challenge / check_graph / explorable_library (maths lessons): check an explorable's settings, prove a poke-holes challenge with SymPy, check a graph (each hands back the block to paste); reuse an explorable made on the fly before.`
 
 /** Added to Claude's prompt when it has its own web tools */
 export const CLAUDE_WEB_NOTE = `You also have WebSearch and WebFetch. Use them for anything that changes (versions, releases, prices, laws, news, recent research) and to read a page before you rely on it or quote it; cite the page as a Markdown link. Their notes come first, then the web.`

@@ -55,6 +55,8 @@ export interface WarmupSet {
 export interface WarmupResult {
   card: WarmupCard
   verdict: Verdict
+  /** What they wrote or dictated from memory before looking, however rough (optional) */
+  said?: string
 }
 
 /** Never more than this: a warm-up is a few seconds a card, two minutes at most */
@@ -194,13 +196,15 @@ export function warmupNote(set: WarmupSet, results: WarmupResult[], skipped: boo
   }
   const held = results.filter((r) => r.verdict === 'correct')
   const faded = results.filter((r) => r.verdict !== 'correct')
-  const line = (r: WarmupResult) => `${r.card.conceptName}: "${clip(r.card.question, 140)}"${r.card.answer ? ` (answer: ${clip(r.card.answer, 160)})` : ''}`
+  const line = (r: WarmupResult) => `${r.card.conceptName}: "${clip(r.card.question, 140)}"${r.card.answer ? ` (answer: ${clip(r.card.answer, 160)})` : ''}${r.said?.trim() ? `; in their own words, before looking: "${clip(r.said.trim(), 600)}"` : ''}`
+  const wrote = results.some((r) => r.said?.trim())
   return [
     `(Tide: before this lesson, the learner did a ${results.length}-card warm-up on earlier topics it builds on.`,
     held.length ? `Held: ${held.map(line).join('; ')}.` : '',
     faded.length ? `Faded (${faded.map((r) => (r.verdict === 'partial' ? 'shaky' : 'forgotten')).join(', ')}): ${faded.map(line).join('; ')}.` : '',
     held.length ? 'Open by tying the new topic to what held, explicitly: name the earlier idea and show how this one builds on it (for example, "you know hex is four bits a digit, so a byte is two hex digits").' : '',
     faded.length ? 'Before relying on anything that faded, re-teach it briefly, in two or three sentences, then move on.' : '',
+    wrote ? "Where they wrote what they remembered, read it closely: their words show what they really know better than their own grade does. Say briefly what in it is right, and correct any misconception or gap in it specifically (quote their words), before you rely on it. Rough or dictated wording isn't a mistake." : '',
     "Don't ask the warm-up's questions again.)"
   ]
     .filter(Boolean)

@@ -39,7 +39,7 @@ async function allTools(): Promise<McpTool[]> {
     inputSchema: t.function.parameters,
     run: (args, ctx) => agent.runTideTool(t.function.name, args, ctx)
   }))
-  tools = [...wrapped, ...(await import('./tideMcpTools')).EXTRA_TOOLS, ...(await import('./exercises')).EXERCISE_TOOLS]
+  tools = [...wrapped, ...(await import('./tideMcpTools')).EXTRA_TOOLS, ...(await import('./exercises')).EXERCISE_TOOLS, ...(await (await import('./maths')).allMathsTools())]
   return tools
 }
 

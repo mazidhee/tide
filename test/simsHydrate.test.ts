@@ -98,7 +98,9 @@ describe('what the tutor is told', () => {
     expect(simKindsFor('Momentum in gradient descent')).toEqual(['gradient-descent'])
     expect(simKindsFor('Raft leader election')).toEqual(['raft'])
     expect(simKindsFor('Composite B-tree indexes')).toEqual(['b-tree'])
-    for (const plain of ['Integer promotion in C', 'Consistent hashing', 'Window functions: running totals', 'Two-phase commit', 'Variance of sums of random variables']) expect(simKindsFor(plain), plain).toEqual([])
+    // Maths and statistics get an explorable
+    expect(simKindsFor('Variance of sums of random variables')).toEqual(['explore'])
+    for (const plain of ['Integer promotion in C', 'Consistent hashing', 'Window functions: running totals', 'Two-phase commit']) expect(simKindsFor(plain), plain).toEqual([])
 
     const lesson = sessionInstructions({ mode: 'teach', topic: 'Backpropagation' })
     expect(lesson).toContain('A live simulation fits this topic (neural-net).')
@@ -114,7 +116,7 @@ describe('what the tutor is told', () => {
   it('the guide for every kind is the whole guide, and for a few is far shorter', () => {
     expect(simGuide(SIM_KINDS)).toBe(FULL_SIM_GUIDE)
     // The chat guide names the finance kinds in one line; a finance lesson gets them written out
-    expect(SIM_GUIDE).toContain('- Finance (ledger, payments, stablecoin, risk)')
+    expect(SIM_GUIDE).toContain('- Maths and finance (explore; ledger, payments, stablecoin, risk)')
     expect(simLesson('Netting and RTGS settlement')).toContain('- payments, money between banks')
     const words = (t: string) => t.split(/\s+/).filter(Boolean).length
     expect(words(SIM_GUIDE)).toBeGreaterThan(550)

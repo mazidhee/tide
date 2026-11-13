@@ -16,6 +16,8 @@ import type { PhysicsSpec } from './physics'
 import type { GeometrySpec } from './geometry'
 import type { RegexSpec } from './regex'
 import type { ChessSpec } from './chess'
+import type { ExploreSpec } from './explore'
+import { parseExploreSpec } from './explore'
 import { parsePhysicsSpec } from './physics'
 import { parseGeometrySpec } from './geometry'
 import { parseRegexSpec } from './regex'
@@ -97,6 +99,7 @@ export type SimSpec =
   | GeometrySpec
   | RegexSpec
   | ChessSpec
+  | ExploreSpec
   | LedgerSpec
   | PaymentsSpec
   | StablecoinSpec
@@ -227,6 +230,10 @@ const KIND_ALIASES: Record<string, SimKind> = {
   minimax: 'chess',
   'game-tree': 'chess',
   'alpha-beta': 'chess',
+  explorable: 'explore',
+  explorer: 'explore',
+  maths: 'explore',
+  math: 'explore',
   'double-entry': 'ledger',
   'core-banking': 'ledger',
   bank: 'ledger',
@@ -287,6 +294,8 @@ export function parseSim(source: string): SimSpec | null {
       return parseRegexSpec(obj, base(obj))
     case 'chess':
       return parseChessSpec(obj, base(obj))
+    case 'explore':
+      return parseExploreSpec(obj, base(obj))
     case 'ledger':
       return parseLedgerSpec(obj, base(obj))
     case 'payments':
