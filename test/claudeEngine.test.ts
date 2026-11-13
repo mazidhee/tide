@@ -280,3 +280,15 @@ describe('what a turn sends', () => {
     expect(engine.isAnswer(req('Answer: 10010110, can we move on'), 'Answer: 10010110, can we move on')).toBe(true)
   })
 })
+
+describe('the tools a process is listed', () => {
+  it('names its session’s tool packs in its MCP config: a side thread few, a lesson its own, a chat the learner’s', async () => {
+    const packsOf = (key: string) => JSON.parse(readFileSync(join(dir, 'claude', `mcp-${engine.fp(key)}.json`), 'utf8')).mcpServers.tide.headers['X-Tide-Tools'] as string
+    await say([{ role: 'user', content: 'why is that?' }], { labId: 'lesson:packs', thread: 't1', instructions: 'Answer the side question.' }).run
+    expect(packsOf('thread:lesson:packs:web')).toBe('notes,run,thread')
+    await say([{ role: 'user', content: 'start' }], { labId: 'lesson:packs2', session: true, topic: 'Augustine, Confessions book 8', instructions: 'Teach' }).run
+    expect(packsOf('lab:lesson:packs2:web').split(',')).toEqual(['notes', 'learner', 'run', 'courses', 'lesson'])
+    await say([{ role: 'user', content: 'what is a join?' }], { chatId: 'packs3' }).run
+    expect(packsOf('chat:packs3:web').split(',')).toEqual(expect.arrayContaining(['chat', 'data']))
+  })
+})

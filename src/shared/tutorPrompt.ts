@@ -1,7 +1,7 @@
 import { SESSION_FORMAT } from './session'
 import { SIM_GUIDE } from './sims'
 import { VISUAL_GUIDE } from './visuals'
-import { uses } from './workarounds'
+import { claudeBase, toolPacks, type SessionShape, type ToolPack } from './tutorGuide'
 
 /**
  * What the tutor is told on every turn, kept here (not in main/agent) so anything that measures
@@ -80,43 +80,20 @@ export function withInstructions<T extends { role: string; content: string | unk
 }
 
 /**
- * The tutor's prompt when Claude teaches (main/claudeEngine): the same rules and visuals as
- * Gemma's, with the tools Tide serves it over MCP. Claude's own web tools, when a lesson has them,
- * are named in a line added at the end.
+ * The tutor's prompt when Claude teaches (main/claudeEngine), in layers (shared/tutorGuide): core
+ * pedagogy, the tools this session has (its tool packs, which also decide what Tide's MCP server
+ * lists), and the picture guides that fit. A lesson's format rules, the date and the learner follow
+ * in stableSystem; its subject modules ride with its instructions. Claude's own web tools, when a
+ * session has them, are named in a line added at the end.
  */
-const CLAUDE_TOOLS = `You are Tide, a patient tutor helping a student learn, inside Tide, their study app. Tide's tools (mcp__tide__*) are your hands:
-- search_notes / read_note: look things up in the student's own notes first.
-- learner_profile: their full learner profile (a digest is already in this prompt), aims, plan, recall due and recent lessons; with a topic, the misconceptions and past mistakes on it. Read it before teaching something they've struggled with.
-- past_lessons: what earlier lessons on a topic showed, before you teach it again.
-- earlier_concepts: what they studied before that the current idea builds on, and how solid each is now; tie new ideas to those explicitly, and re-teach briefly what has faded before relying on it.
-- study_plan: their goal, focus and this week's plan.
-- run_code: run code in Tide's sandbox: Python (with SymPy, NumPy, pandas, Matplotlib), JavaScript, TypeScript, C, C++, shell, and Rust, Go, Swift, Java, Ruby if installed. Run every example before you show its output, test the student's code on real cases (and hidden tests, with tests) before you judge it, and check maths with SymPy step by step before you call a step right or wrong. If something isn't installed, say how to add it; never invent output.
-- run_sql / load_table: SQL on this lesson's lab database (SQLite with sample shop and product-analytics data); load_table adds one of their .csv or .tsv files. Run every query before you show it, show queries as \`\`\`sql blocks (the student can run and change them there), and draw a result with a \`\`\`chart block holding JSON: {"sql": "...", "type": "bar" | "line" | "scatter" (optional), "title": "..."}.
-- remember: save one lasting fact about the student (a goal, a deadline, how they like to learn) as a short third-person sentence.
-- make_flashcards: save cards for ideas worth keeping (in a lesson, prefer a <card> tag, which the learner adds with one click).
-- schedule_recall / recall_due: keep a missed idea as a question Tide brings back on a spaced schedule; see what is due on a topic.
-- search_courses / read_course: the open courses they imported (books, lecture notes, exercises), searched and read in full.
-- search_transcripts: the transcripts of videos they saved.
-- related_material: when you start teaching a new concept (unless a Tide note already gave you material on it), the sections of their OTHER courses and the video moments that teach it too, with how to name each and the tag that shows it. Bring in at most two or three that add understanding (the code, the why, the theory), each introduced in your own words with where it's from, and build on it; never a list of links. You may suggest one catalogue course they haven't imported with <suggest-course id="…">why</suggest-course>; never import anything yourself.
-- show_in_view: seek the video on their screen to a moment, or scroll the page they're reading to a section, when you point at it.
-When a message carries "What the student has on screen", that is what they are looking at in Tide right now (a course page and section, a video and the words around its current moment, an article, a passage they selected): answer about that, and point at moments as m:ss and at sections by their heading.
-- record_answer: only outside a lesson; in a lesson the <grade> tag records the mark in What you know.
-- set_exercise / banked_exercise: set a practice exercise, proven in Tide's sandbox before the learner sees it; reuse one you verified before.
-- place_explorable / set_challenge / check_graph / explorable_library (maths lessons): check an explorable's settings, prove a poke-holes challenge with SymPy, check a graph (each hands back the block to paste); reuse an explorable made on the fly before.
-- render_animation / animation_library (maths lessons): a short narrated Manim animation from a tested template or your own scene (it hands back the animation block to paste); reuse a scene of yours from before.`
+export function claudeSystemBase(shape: SessionShape, packs: ToolPack[] = toolPacks(shape)): string {
+  return claudeBase({ shape, packs, sims: SIM_GUIDE, visuals: VISUAL_GUIDE })
+}
 
 /** Added to Claude's prompt when it has its own web tools */
 export const CLAUDE_WEB_NOTE = `You also have WebSearch and WebFetch. Use them for anything that changes (versions, releases, prices, laws, news, recent research) and to read a page before you rely on it or quote it; cite the page as a Markdown link. Their notes come first, then the web.`
 
-const RULES = TUTOR_SYSTEM.slice(TUTOR_SYSTEM.indexOf('\nRules:'), TUTOR_SYSTEM.length - SIM_GUIDE.length - 1)
-  // find_image and the web tools are Gemma's; Claude draws mermaid instead, or uses its own web tools when it has them
-  .replace(/ When the thing exists physically[^.]*find_image\./, '')
-
-/** In a lesson Tide runs no checks for Claude: it runs them itself */
-const CLAUDE_LESSON_RULES = `\n- Every numbered practice problem (code, SQL, a calculation, or a conceptual problem to answer at length) goes through Tide: first banked_exercise for one you verified before, else set_exercise with its proof and a common mistake. When it's verified, end your reply with <exercise id="…"/> and Tide sets it, numbered, with its hidden solution and tests: don't write that problem, its <solution> or its <ask> yourself. If the check fails, fix what it says and call set_exercise once more with repair_of; if that fails too, take the bank's exercise it offers or set a different one. Never show an exercise that wasn't verified, and never write a \`\`\`tests block yourself. To have them try an exercise again after a miss, ask with a plain code <ask> naming the same function: Tide gives it the exercise's hidden tests again. Quick questions while you teach (predict, a short check, explain back) are ordinary <ask> tags. A note from Tide giving a mark ("(Tide: … marked this answer …") comes from a second, careful marker: write your <grade> with that verdict and score, in your own words.`
-
-// Custom visuals are Claude's alone: Gemma keeps to the fixed simulations and mermaid
-export const CLAUDE_TUTOR_SYSTEM = `${CLAUDE_TOOLS}${RULES}\n${SIM_GUIDE}\n${VISUAL_GUIDE}`
-// A Claude lesson has the whole simulation guide in its (cached) prompt, where Gemma's lessons get only
-// the kinds their topic can use, with the instructions (shared/workarounds lessonSimSubset)
-export const CLAUDE_LESSON_SYSTEM = `${CLAUDE_TOOLS}${RULES}${CLAUDE_LESSON_RULES}${uses('lessonSimSubset', 'claude') ? '' : `\n${SIM_GUIDE}`}\n${VISUAL_GUIDE}`
+// The prompts for a chat and an ordinary lesson (the default packs): prewarming and tests use them
+export const CLAUDE_TUTOR_SYSTEM = claudeSystemBase({ kind: 'chat' })
+// A Claude lesson gets the simulation kinds its topic can use with its instructions (shared/subjects lessonKit), as Gemma's do
+export const CLAUDE_LESSON_SYSTEM = claudeSystemBase({ kind: 'lesson' })

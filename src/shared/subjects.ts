@@ -270,19 +270,44 @@ export function preferredAreas(p: SubjectProfile): string[] {
  */
 export function lessonKit(topic: string, profile?: SubjectProfile, notebook?: string): LessonKit {
   const p = profile ?? profileSubject(topic, notebook)
-  if (isUnclear(p)) return { handsOn: true, sims: simLesson(topic), toolkit: '', humanities: humanitiesText(topic, p) }
+  // An unclear topic is taught hands-on, unless it is a text or a period of history (Augustine's Confessions has no code to run)
+  if (isUnclear(p)) {
+    const humanities = humanitiesText(topic, p)
+    return { handsOn: !humanities, sims: humanities ? '' : simLesson(topic), toolkit: '', humanities }
+  }
   const simsOk = p.kinds.some((k) => SIM_KINDS_OK.includes(k))
-  const kinds = simsOk ? [...new Set([...simKindsFor(topic), ...(p.kinds.includes('quant') || p.kinds.includes('build') ? (p.sims ?? []) : [])])] : []
+  // Maths mode (shared/mathsMode, with the lesson's first message) already says how to write explorables: the explore kind would say it twice
+  const maths = mathsMode(topic, notebook).on
+  const kinds = simsOk ? [...new Set([...simKindsFor(topic), ...(p.kinds.includes('quant') || p.kinds.includes('build') ? (p.sims ?? []) : [])])].filter((k) => !(maths && k === 'explore')) : []
   const sims = kinds.length ? `A live simulation fits this topic (${kinds.join(', ')}). Use one rather than a diagram where it shows the idea running, with a short tour pointing at what to look at, then ask them to change one thing and predict what happens.\n${simGuide(kinds)}` : ''
   // Finance lessons draw their data too: graphs as lesson blocks (a maths-mode lesson gets them with its own rules, main/maths)
   const graphs = kinds.some((k) => FINANCE_SIM_KINDS.includes(k)) && !mathsMode(topic, notebook).on ? `\n\n${GRAPH_BRIEF}` : ''
   const handsOn = !!p.hands
-  const parts = p.kinds.map((k) => TOOLKITS[k].rules)
+  const taught = p.kinds
+  const parts = taught.map((k) => TOOLKITS[k].rules)
   if (p.lab && !handsOn) parts.push(LAB_LINE)
   // Finance, payments and quant: the lab that fits (its simulation is in `sims`; this is the Python helper and the tables)
   const finance = financeLabNote(topic)
   if (finance) parts.push(finance)
-  return { handsOn, sims: sims + graphs, toolkit: parts.length ? `How to teach this subject (${p.kinds.map((k) => TOOLKITS[k].label).join('; ')}):\n${parts.join('\n')}` : '', humanities: humanitiesText(topic, p) }
+  return { handsOn, sims: sims + graphs, toolkit: parts.length ? `How to teach this subject (${taught.map((k) => TOOLKITS[k].label).join('; ')}):\n${parts.join('\n')}` : '', humanities: humanitiesText(topic, p) }
+}
+
+/**
+ * A maths-mode lesson's instructions as Claude gets them: maths mode (with the lesson's first
+ * message) already says how to teach and check calculation, so the quant toolkit's paragraph would
+ * say it a second time. Gemma keeps it: its maths rules are the short numbered ones.
+ */
+export function withoutQuantToolkit(instructions: string): string {
+  const rules = TOOLKITS.quant.rules
+  if (!instructions.includes(rules)) return instructions
+  const label = TOOLKITS.quant.label
+  return instructions
+    .replace(`${rules}\n`, '')
+    .replace(rules, '')
+    .replace(new RegExp(`^How to teach this subject \\(${label}\\):\\n(?=\\n|$)`, 'm'), '')
+    .replace(`(${label}; `, '(')
+    .replace(`; ${label})`, ')')
+    .replace(`; ${label};`, ';')
 }
 
 /**

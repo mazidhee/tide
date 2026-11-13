@@ -1,3 +1,4 @@
+import { CORE_PEDAGOGY } from '../src/shared/tutorGuide'
 import { describe, expect, it, vi } from 'vitest'
 import { mathsArea, mathsMode, mathsRules, exploreGuide, AREA_SCENES, SCENES, formulaLooksOk } from '../src/shared/mathsMode'
 import { driftCheck, driftNote, switchIn, DRIFT, type DriftInput } from '../src/shared/mathsDrift'
@@ -33,7 +34,8 @@ describe('maths mode: detection', () => {
   it('Claude and Gemma each get their own rules, with explorables and poke-holes', () => {
     const claude = mathsRules('claude', 'Derivatives from first principles')
     const gemma = mathsRules('gemma', 'Derivatives from first principles')
-    for (const r of [claude, gemma]) {
+    // Claude's lesson always has the core guide (shared/tutorGuide): predict then reveal, no "does that make sense?" and worked → faded → solo are said there once, and maths mode builds on them
+    for (const r of [`${CORE_PEDAGOGY}\n\n${claude}`, gemma]) {
       expect(r).toMatch(/MATHS MODE/)
       expect(r).toMatch(/Predict first|Predict, then reveal/)
       expect(r).toMatch(/does that make sense/)
@@ -44,7 +46,11 @@ describe('maths mode: detection', () => {
     }
     expect(claude).toMatch(/set_challenge/)
     expect(claude).toMatch(/place_explorable/)
-    expect(claude).toMatch(/Worked example → faded example → solo problem/)
+    expect(CORE_PEDAGOGY).toMatch(/Worked, then faded, then solo/)
+    expect(claude).toMatch(/worked → faded → solo for every new technique/)
+    // The scenes that don't fit the topic are named, not spelled out
+    expect(claude).toMatch(/Other scenes \(place_explorable fills in their settings\): .*gbm/)
+    expect(claude).not.toMatch(/- gbm:/)
     expect(gemma).not.toMatch(/set_challenge|place_explorable/)
     // Gemma reads the scenes that fit, numbered rules, and less
     expect(gemma).toMatch(/^MATHS MODE[^\n]*\n1\. /)
@@ -262,6 +268,11 @@ describe('maths mode: where ideas came from', () => {
       expect(r.indexOf(ORIGINS_RULES)).toBeLessThan(r.indexOf('Explorables:'))
     }
     expect(ORIGINS_RULES.split(/\s+/).length).toBeLessThan(130)
+    // The zero example is for number foundations; an eigenvectors lesson gets origin first and the arc without it
+    const eigen = mathsRules('claude', 'Eigenvalues and eigenvectors')
+    expect(eigen).toMatch(/problem that forced it/)
+    expect(eigen).toMatch(/Keep the arc visible/)
+    expect(eigen).not.toMatch(/Brahmagupta/)
   })
 })
 

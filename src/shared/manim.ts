@@ -348,6 +348,6 @@ export function animationGuide(engine: 'claude' | 'gemma', topic = ''): string {
 - Call render_animation with a template and settings filled in from THIS learner's example (their number, their matrix, their function), and optional narration (one line per beat, the template's count). It returns the \`\`\`animation block: paste it where it belongs and keep teaching; the lesson shows your text first and slots the video in when it is ready (a few seconds).
 - When no template fits the idea, call render_animation with your own scene (code and narration); look in animation_library first for one already made and proven. A scene that renders and is watched is kept there.
 - After it, ask them a question about what they saw, and offer the matching explorable.
-Templates${fitting.length ? ' (the ones that fit this topic first)' : ''}:
-${templateGuide([...fitting, ...TEMPLATES.filter((t) => !fitting.includes(t))])}`
+Templates${fitting.length ? ' that fit this topic' : ''}:
+${templateGuide(fitting.length ? fitting : TEMPLATES)}${fitting.length && fitting.length < TEMPLATES.length ? `\nOthers, by id (their settings have defaults): ${TEMPLATES.filter((t) => !fitting.includes(t)).map((t) => t.id).join(', ')}.` : ''}`
 }

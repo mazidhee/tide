@@ -142,11 +142,12 @@ const SCENE_GUIDE: Record<string, string> = {
 }
 
 /** What a maths lesson is told about explorables: the scenes that fit its area first */
-export function exploreGuide(area: MathsArea | null, onlyFitting = false): string {
+export function exploreGuide(area: MathsArea | null, onlyFitting = false, /** The scenes that don't fit by name only (Claude: place_explorable fills in their settings) */ restByName = false): string {
   const first = area ? AREA_SCENES[area] : []
   // A small model reads only the scenes that fit (all of them when the area is unknown)
-  const order = onlyFitting && first.length ? first : [...new Set([...first, ...Object.keys(SCENE_GUIDE)])]
-  return `Explorables: a fenced block whose language is sim, holding one JSON object of kind explore, e.g. {"kind":"explore","scene":"secant","f":"x^2","x0":1,"h":1,"question":"Drag h toward 0. What happens to the secant's slope?","predict":"What number will the slope settle at?"}. "question" sits above it; "predict" asks for a guess and hides the answer until they lock one in. f uses x only (+ - * / ^, sin cos tan exp ln sqrt abs, pi, e). Optional "title", and a "tour" like other simulations (parts: curve, secant, tangent, h, table, rectangles, sum, error, grid, basis, vector, image, eigen, density, mean, interval, histogram, theory, running-mean, truth, posterior, paths, envelope, median, line, residuals, yours, intervals, coverage; do: {"set":{"h":0.1}}, {"reveal":true}). The scenes${first.length ? ' (the ones that fit this topic first)' : ''}:\n${order.map((s) => `  - ${SCENE_GUIDE[s]}`).join('\n')}\nWhat they do in it comes back to you with their next message, as a note from Tide with the values they left it at; their "Tell the tutor" puts the same in their answer.`
+  const order = (onlyFitting || restByName) && first.length ? first : [...new Set([...first, ...Object.keys(SCENE_GUIDE)])]
+  const rest = restByName && first.length ? Object.keys(SCENE_GUIDE).filter((s) => !first.includes(s)) : []
+  return `Explorables: a fenced block whose language is sim, holding one JSON object of kind explore, e.g. {"kind":"explore","scene":"secant","f":"x^2","x0":1,"h":1,"question":"Drag h toward 0. What happens to the secant's slope?","predict":"What number will the slope settle at?"}. "question" sits above it; "predict" asks for a guess and hides the answer until they lock one in. f uses x only (+ - * / ^, sin cos tan exp ln sqrt abs, pi, e). Optional "title", and a "tour" like other simulations (parts: curve, secant, tangent, h, table, rectangles, sum, error, grid, basis, vector, image, eigen, density, mean, interval, histogram, theory, running-mean, truth, posterior, paths, envelope, median, line, residuals, yours, intervals, coverage; do: {"set":{"h":0.1}}, {"reveal":true}). The scenes${first.length ? ' (the ones that fit this topic first)' : ''}:\n${order.map((s) => `  - ${SCENE_GUIDE[s]}`).join('\n')}\nWhat they do in it comes back to you with their next message, as a note from Tide with the values they left it at; their "Tell the tutor" puts the same in their answer.${rest.length ? `\n  Other scenes (place_explorable fills in their settings): ${rest.join(', ')}.` : ''}`
 }
 
 // ---------- Poke holes ----------
@@ -168,16 +169,22 @@ export const ORIGINS_RULES = `Maths is the deepest subject here: teach each idea
 - Foundations especially: e.g. zero. Ask why people needed it; what counting without it looked like (tally marks, Babylonian place value with a gap, the Indian śūnya, Brahmagupta's rules, the route to Europe via al-Khwārizmī and Fibonacci); let them work out why place value needs a zero.
 - Keep the arc visible: say where each idea is used later (place value → binary → floating point → ML numerics; limits → derivatives → gradients → Greeks).`
 
-const CLAUDE_RULES = `MATHS MODE. This lesson is maths, statistics, probability or quant: teach it so they master it from the ground up, never by handing over formulas.
-- First principles, why before how. Derive each idea from things they already accept (the warm-up's concepts and their earlier lessons are in your context: build on those by name). Ask "why must this be true?" before you show that it is. A formula appears only after they have seen why it has to look that way.
-- Predict, then reveal. Before you show a result, a graph, a derivation's last line or an explorable's answer, ask for a prediction or a rough estimate (a predict ask, or the explorable's "predict"). Then reveal and have them compare: what did their guess get right, what did it miss.
-- Small steps, alternating thinking and doing. One idea per message. Never two explanations in a row without them doing something: a prediction, a calculation, a drag in an explorable, a "why".
-- Worked example → faded example → solo problem, for every new technique: you work one in full, saying why each step; then a near-identical one with the last step or two left for them; then one on their own (set_exercise, proven first).
-- Socratic questions that make them reason: "what would happen if…", "why can't h be 0 here?", "which assumption did we just use?", "what's the simplest case you could check?". Never "does that make sense?" or "any questions?".
-- Concrete → visual → symbolic. Start from numbers or a situation they can picture, then a picture (an explorable, a plot, a diagram), and only then the symbols. When it's natural, end on a real quant or finance hook (a price, a risk, a trading decision, an ML model) in one or two sentences, not a lecture.
-- Draw the maths: a graph (below) whenever a shape, a region, a tangent, a distribution or a transformation says it faster than words; static graphs for showing, explorables for moving.
-- Explorables are part of the teaching, not decoration: place one where moving something is how the idea is understood (secants closing in on a tangent, means piling into a bell curve), with a precise question and usually a "predict". Then ask about what they saw. Use place_explorable to check a block before you write it when you're unsure of the settings. When no built-in scene fits the idea exactly, make one on the fly for exactly this idea: a \`\`\`visual explorable built with TideMath (plane, draggable points, sliders, TideMath.predict, TideMath.goal, KaTeX, three.js), reporting what they do with visual.report so it comes back to you. For example: zero, a tally counter beside a place-value counter; Taylor series, adding terms one at a time; a Markov chain stepping between states; the loss surface of this very model. First look in explorable_library for one already made and proven; the ones that work are kept there.
-- Poke holes: at least once a lesson, give a poke-holes challenge (a claim to break with a counterexample, a derivation with one wrong step, or always/sometimes/never) and have them justify it. Prove it first with set_challenge, which checks your challenge with SymPy, and paste the \`\`\`challenge block it returns: always as that block (the app makes it clickable and checks their pick), never as plain text.
+/**
+ * The origins rules for a topic: the worked example of zero only where it is the kind of idea being
+ * taught (number and arithmetic foundations); elsewhere (eigenvectors, option pricing) it is a
+ * hundred words about something else.
+ */
+export function originsRules(topic: string, area?: MathsArea | null): string {
+  if (area === 'algebra' || /\b(zero|numbers?|number systems?|counting|place value|arithmetic|numerals?|foundations?)\b/i.test(topic)) return ORIGINS_RULES
+  return ORIGINS_RULES.split('\n').filter((l) => !l.startsWith('- Foundations especially')).join('\n')
+}
+
+const CLAUDE_RULES = `MATHS MODE. This lesson is maths, statistics, probability or quant: they master it from the ground up, never by being handed formulas. Your core rules (first principles, Socratic questions, predict then reveal, worked → faded → solo for every new technique, the last one through set_exercise) carry the most weight here. On top of them:
+- Why before how: build on the warm-up's concepts and their earlier lessons by name, and ask "why must this be true?" before you show that it is. A formula appears only after they have seen why it has to look that way.
+- Small steps, alternating thinking and doing: never two explanations in a row without them doing something (a prediction, a calculation, a drag in an explorable, a "why").
+- Concrete → visual → symbolic: numbers or a situation they can picture, then a picture, then the symbols. When it's natural, close on a real quant or finance hook (a price, a risk, a trading decision, an ML model) in a sentence or two.
+- Draw the maths: a graph (below) when a shape, region, tangent, distribution or transformation says it faster than words; explorables for what moves. An explorable is teaching, not decoration: place one where moving something is how the idea is understood, with a precise question and usually a "predict", then ask about what they saw. Look in explorable_library first; check one with place_explorable when unsure of its settings. When no scene fits exactly, make a \`\`\`visual explorable for exactly this idea with TideMath (plane, draggable points, sliders, TideMath.predict, TideMath.goal, KaTeX, three.js), reporting with visual.report (a Taylor series adding terms, a Markov chain stepping, this model's loss surface).
+- Poke holes at least once a lesson (a counterexample, a derivation with one wrong step, or always/sometimes/never): prove it with set_challenge and paste the \`\`\`challenge block it returns, never as plain text, then have them justify their pick.
 - Check every number and step with SymPy before you call it right or wrong; name the exact step that fails.
 - When Tide notes that their attention is drifting, switch format at once as it says: start your reply with "Let's try this a different way." and do that thing.`
 
@@ -197,7 +204,7 @@ export function mathsRules(engine: 'claude' | 'gemma', topic: string, notebook?:
   const mode = mathsMode(topic, notebook)
   if (!mode.on) return ''
   const area = mode.area ? ` It sits on the ${AREA_LABEL[mode.area]} rung of their maths ladder.` : ''
-  return `${engine === 'claude' ? CLAUDE_RULES : GEMMA_RULES}${area}\n\n${ORIGINS_RULES}\n\n${GRAPH_GUIDE}${engine === 'claude' ? ' Check one with check_graph when unsure.' : ''}\n\n${exploreGuide(mode.area, engine === 'gemma')}\n\n${[animationGuide(engine, topic), POKE_GUIDE].filter(Boolean).join('\n\n')}`
+  return `${engine === 'claude' ? CLAUDE_RULES : GEMMA_RULES}${area}\n\n${originsRules(topic, mode.area)}\n\n${GRAPH_GUIDE}${engine === 'claude' ? ' Check one with check_graph when unsure.' : ''}\n\n${exploreGuide(mode.area, engine === 'gemma', engine === 'claude')}\n\n${[animationGuide(engine, topic), POKE_GUIDE].filter(Boolean).join('\n\n')}`
 }
 
 export const AREA_LABEL: Record<MathsArea, string> = {
