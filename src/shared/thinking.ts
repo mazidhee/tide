@@ -84,6 +84,8 @@ const JOB_EFFORT: Record<JobName, Effort> = {
   weekPlan: 'medium',
   goalPlan: 'high',
   weekMix: 'medium',
+  phaseCheck: 'medium',
+  phaseCheckMark: 'medium',
   learnerProfile: 'low',
   profileUpdate: 'low',
   profileWeekly: 'medium',

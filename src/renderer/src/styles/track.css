@@ -1,0 +1,395 @@
+/*
+  A roadmap as a track (components/TrackView): the phase strip, the gate, the capstone, what's
+  next. Theme roles only, and one colour: the accent. Solid is the accent, shaky the accent
+  faded, new is the rule colour; a phase skipped ahead of its gate keeps an accent outline.
+*/
+
+.track {
+  --tk-gap: 12px;
+  --tk-solid: var(--accent);
+  --tk-shaky: color-mix(in srgb, var(--accent) 34%, transparent);
+  --tk-empty: color-mix(in srgb, var(--ink) 12%, transparent);
+  margin: 4px 0 28px;
+  display: grid;
+  gap: var(--tk-gap);
+  font-family: var(--font-ui);
+  color: var(--ink);
+}
+
+.track-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+.track-where {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.track-kicker,
+.track-label {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.track-phase {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.track-eta {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  flex: none;
+}
+.track-eta-date {
+  font-size: var(--text-md);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.track-eta-sub,
+.track-meta {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- The strip: one segment a phase, as wide as its topics ---- */
+.track-strip {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 4px;
+}
+.track-seg {
+  min-width: 14px;
+}
+.track-seg button {
+  all: unset;
+  display: block;
+  width: 100%;
+  padding: 6px 0;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.track-seg button:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+.track-bar {
+  position: relative;
+  display: block;
+  height: 8px;
+  border-radius: 3px;
+  background: var(--tk-empty);
+  overflow: hidden;
+  transition: height 160ms var(--ease);
+}
+.track-fill,
+.track-fill-shaky {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+}
+.track-fill {
+  background: var(--tk-solid);
+}
+.track-fill-shaky {
+  background: var(--tk-shaky);
+}
+.track-seg.is-held .track-bar {
+  opacity: 0.75;
+}
+.track-seg.is-optional .track-bar {
+  background: repeating-linear-gradient(90deg, var(--tk-empty) 0 4px, transparent 4px 7px);
+}
+.track-seg.is-skipped .track-bar {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+.track-seg.is-picked .track-bar,
+.track-seg button:hover .track-bar {
+  height: 12px;
+}
+.track-seg.is-current button {
+  position: relative;
+}
+.track-seg.is-current button::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.track-scale {
+  margin-top: -6px;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Cards ---- */
+.track-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--tk-gap);
+}
+@media (max-width: 760px) {
+  .track-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.track-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  padding: 14px 16px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-width: 0;
+}
+.track-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.track-step {
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+.track-step.is-passed {
+  color: var(--accent);
+  font-weight: 600;
+}
+.track-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.track-counts b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.track-counts .is-done {
+  color: var(--accent);
+}
+.track-gate-line {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 500;
+}
+.track-gate-line.is-muted,
+.track-note {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+.track-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.track-skip,
+.track-confirm {
+  margin-left: auto;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+.track .link-btn.track-skip,
+:root[data-design] .track .link-btn.track-skip {
+  color: var(--ink-muted);
+}
+.track .track-skip:hover {
+  color: var(--ink);
+}
+.track-confirm {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+}
+.track-shaky {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.track-shaky li {
+  font-size: var(--text-xs);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--ink-soft);
+}
+.track-shaky li.is-more {
+  background: none;
+  color: var(--ink-muted);
+}
+.track-courses {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.track-cap-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.track-cap-about {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+.track-cap-foot .track-meta {
+  white-space: nowrap;
+}
+.track-cap-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* ---- Next ---- */
+.track-next {
+  display: grid;
+  gap: 4px;
+}
+.track-next ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.track-next-row {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+.track-next-row:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.track-next-row:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+.track-next-row:disabled {
+  cursor: default;
+  color: var(--ink-muted);
+}
+.track-next-kind {
+  color: var(--ink-muted);
+}
+.track-next-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- The phase check ---- */
+.track-check {
+  display: grid;
+  gap: 12px;
+}
+.track-qs,
+.track-marks {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 14px;
+}
+.track-q {
+  margin: 0 0 6px;
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+.track-a {
+  margin: 0 0 6px;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+}
+.track-input {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: 8px 10px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--line);
+  background: var(--field);
+  color: var(--ink);
+}
+.track-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+.track-result {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.track-result.is-pass {
+  color: var(--accent);
+}
+.track-marks li {
+  display: grid;
+  gap: 2px;
+  font-size: var(--text-sm);
+}
+.track-marks li::marker {
+  color: var(--ink-muted);
+}
+.track-mark-topic {
+  font-weight: 500;
+}
+.track-marks li.is-correct .track-mark-topic::after {
+  content: ' · right';
+  color: var(--accent);
+  font-weight: 400;
+}
+.track-marks li.is-partial .track-mark-topic::after {
+  content: ' · partly';
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+.track-marks li.is-wrong .track-mark-topic::after {
+  content: ' · missed';
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+.track-mark-fb {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+.track-self {
+  margin-top: 6px;
+}

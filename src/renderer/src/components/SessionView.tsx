@@ -1030,7 +1030,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         const review = options?.review
         if (review?.items.length) {
           const k = gradeIndex.current++
-          if (review.items[k]) window.tide.knowledge.reviewAnswer(review.concept, review.items[k], b.verdict).catch(() => {})
+          if (review.items[k]) window.tide.knowledge.reviewAnswer(review.items[k].concept ?? review.concept, review.items[k], b.verdict).catch(() => {})
           return
         }
         // A retest: the k-th grade is the k-th mistake asked about

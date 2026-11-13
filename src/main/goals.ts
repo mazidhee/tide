@@ -7,6 +7,7 @@ import { balanceWeek, type BalanceNotebook } from '@shared/balance'
 import { MOCK_MODES } from '@shared/mocks'
 import { ROUNDS } from '@shared/workout'
 import { readingLabel } from '@shared/books'
+import { addMixedReview, gateFilter, gateItem, type GateInfo } from '@shared/track'
 import { joinRel, readText, writeText } from './vault'
 
 /**
@@ -383,6 +384,9 @@ async function roadmapCandidates(threads: Thread[], goals: PlanGoal[], coach: Co
   // A roadmap kept alive for its own sake can be all "elective" for your dated goals: its next
   // topics in roadmap order, then, rather than nothing
   for (const nb of notebooks) if (!byNotebook.get(nb.name)?.length) byNotebook.set(nb.name, nb.topics.filter((t) => !t.checked && !t.project).slice(0, 20).map((t) => ({ notebook: nb.name, topic: t.title, section: t.section, topicId: t.id, ...(t.source ? { source: t.source } : {}) })))
+  // A roadmap's next phase waits behind its gate (shared/track): its topics aren't planned yet
+  const held = await import('./track').then((m) => m.heldTopics()).catch(() => new Set<string>())
+  for (const [nb, list] of byNotebook) byNotebook.set(nb, gateFilter(list, held))
   for (const [nb, list] of byNotebook) {
     const want = wanted.get(nb)
     if (want) byNotebook.set(nb, [...list.filter((c) => want.has(c.section)), ...list.filter((c) => !want.has(c.section))])
@@ -400,8 +404,9 @@ export function studyDays(start: string, coach: CoachSettings, n = 7): { date: s
 }
 
 /** A thread's item: the next topic, the project's milestone, the mock, the book */
-function itemMaker(threads: Thread[], goals: PlanGoal[], inv: Inventory, queues: Map<string, TopicCandidate[]>, lastTopic: Map<string, string>) {
+function itemMaker(threads: Thread[], goals: PlanGoal[], inv: Inventory, queues: Map<string, TopicCandidate[]>, lastTopic: Map<string, string>, gates: Map<string, GateInfo> = new Map()) {
   const byId = new Map(threads.map((t) => [t.id, t]))
+  const checked = new Set<string>()
   const needOf = (id: string) => goals.flatMap((g) => g.needs).find((n) => needThread(n) === id && !n.dropped)
   return (threadIdOf: string, minutes: number, touch: boolean): AgendaItem[] => {
     const t = byId.get(threadIdOf)
@@ -415,6 +420,12 @@ function itemMaker(threads: Thread[], goals: PlanGoal[], inv: Inventory, queues:
       const lesson = (c: TopicCandidate, m: number): AgendaItem => {
         lastTopic.set(t.label, c.topic)
         return { kind: 'learn', title: c.topic, topic: c.topic, notebook: t.label, ...(c.topicId ? { topicId: c.topicId } : {}), ...(c.refresh ? { refresh: true } : {}), ...base, minutes: m, ...(c.why ? { why: c.why } : {}) }
+      }
+      // No new topics left in the phase: its gate's step (firm up, the check once, the capstone)
+      const gate = gates.get(t.label)
+      if (!q.length && gate && !(gate.step === 'check' && checked.has(t.label))) {
+        if (gate.step === 'check') checked.add(t.label)
+        return [{ ...gateItem(t.label, gate, minutes), thread: t.id, ...(touch ? { touch: true } : {}) }]
       }
       if (!q.length) return [{ kind: 'review', title: `Revisit ${t.label}`, notebook: t.label, ...base }]
       // A long session is two topics, one after the other
@@ -451,6 +462,9 @@ const reviewItem = (minutes: number, due: number, fading: number, yesterday?: st
  * first lesson, and Opus says why in a few sentences (the code's own note when it can't).
  */
 export async function planGoalsWeek(date = today(), background = false): Promise<WeekPlan> {
+  const track = await import('./track')
+  // A phase that has reached its end gets its capstone set up first, so the week can plan it
+  await track.autoCapstones().catch(() => 0)
   const s = await snapshot()
   const days = studyDays(date, s.coach)
   const due = await dueCards()
@@ -468,8 +482,13 @@ export async function planGoalsWeek(date = today(), background = false): Promise
   }
   const lastTopic = new Map<string, string>()
   for (const d of last?.days ?? []) for (const it of d.items) if (it.done && it.kind === 'learn' && it.topic && it.notebook) lastTopic.set(it.notebook, it.topic)
-  const make = itemMaker(s.threads, s.goals, s.inv, byNotebook, lastTopic)
-  const planDays = week.days.map((d) => {
+  const gates = new Map<string, GateInfo>()
+  for (const t of s.threads.filter((x) => x.kind === 'roadmap' && !x.paused)) {
+    const g = await track.gateStep(t.label).catch(() => null)
+    if (g) gates.set(t.label, g)
+  }
+  const make = itemMaker(s.threads, s.goals, s.inv, byNotebook, lastTopic, gates)
+  let planDays = week.days.map((d) => {
     const items: AgendaItem[] = []
     for (const sess of d.sessions)
       make(sess.thread, sess.minutes, !!sess.touch).forEach((it, k) => items.push({ ...it, why: sess.touch || !it.why ? sess.why : it.why, ...(sess.peak && k === 0 ? { peak: true } : {}) }))
@@ -482,6 +501,11 @@ export async function planGoalsWeek(date = today(), background = false): Promise
     const learned = planDays[i - 1].items.find((it) => it.kind === 'learn' && it.topic)
     const review = planDays[i].items.find((it) => it.kind === 'review' && !it.thread)
     if (learned && review) Object.assign(review, reviewItem(review.minutes, due, s.fading.total, learned.topic))
+  }
+  // Once a week: a mixed review across everything learned so far, every track (shared/track)
+  if ((await track.mixedPool().catch(() => 0)) >= 6) {
+    const tracks = new Set((await import('./knowledge').then((k) => k.allConcepts()).catch(() => [])).filter((c) => c.seen > 0 && !c.parent).map((c) => c.area)).size
+    planDays = addMixedReview(planDays, Object.fromEntries(days.map((d) => [d.date, d.minutes])), tracks)
   }
   // Checks: just before the first lesson from a section not yet checked
   for (const c of checks) {

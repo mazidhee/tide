@@ -15,6 +15,11 @@ import MACHINE_LEARNING from '../../../resources/roadmaps/RM_MACHINE_LEARNING.md
 import DATA_ENGINEERING from '../../../resources/roadmaps/RM_DATA_ENGINEERING.md?raw'
 import DATA_SCIENCE from '../../../resources/roadmaps/RM_DATA_SCIENCE.md?raw'
 import ECONOMICS from '../../../resources/roadmaps/RM_ECONOMICS.md?raw'
+import CPP from '../../../resources/roadmaps/RM_CPP.md?raw'
+import BACKEND from '../../../resources/roadmaps/RM_BACKEND.md?raw'
+import BIG_DATA from '../../../resources/roadmaps/RM_BIG_DATA.md?raw'
+import BLOCKCHAIN_ENGINEERING from '../../../resources/roadmaps/RM_BLOCKCHAIN_ENGINEERING.md?raw'
+import MLE from '../../../resources/roadmaps/RM_MLE.md?raw'
 
 export const ROADMAP_TEXT: Record<string, string> = {
   'RM_PAYMENTS.md': PAYMENTS,
@@ -28,7 +33,12 @@ export const ROADMAP_TEXT: Record<string, string> = {
   'RM_MACHINE_LEARNING.md': MACHINE_LEARNING,
   'RM_DATA_ENGINEERING.md': DATA_ENGINEERING,
   'RM_DATA_SCIENCE.md': DATA_SCIENCE,
-  'RM_ECONOMICS.md': ECONOMICS
+  'RM_ECONOMICS.md': ECONOMICS,
+  'RM_CPP.md': CPP,
+  'RM_BACKEND.md': BACKEND,
+  'RM_BIG_DATA.md': BIG_DATA,
+  'RM_BLOCKCHAIN_ENGINEERING.md': BLOCKCHAIN_ENGINEERING,
+  'RM_MLE.md': MLE
 }
 
 /** A ready roadmap's Markdown, by its id */

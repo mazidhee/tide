@@ -48,6 +48,9 @@ export const JOB_ROUTES = {
   // Goals and the week mixed across them (main/goals): Opus breaks a goal down and explains the mix; the numbers are code's
   goalPlan: { label: 'Breaking a goal down into what it needs', role: 'hard' },
   weekMix: { label: 'Explaining the week’s mix across your goals', role: 'hard' },
+  // Roadmap continuity (main/track): Opus writes and marks a phase check; without a model, plain questions you mark yourself
+  phaseCheck: { label: 'Writing a phase check', role: 'hard' },
+  phaseCheckMark: { label: 'Marking a phase check', role: 'mark' },
   learnerProfile: { label: 'Learner profile and direction', role: 'background' },
   // A tutor that remembers you (main/learnerProfile): small changes after each lesson, a tidy each week
   profileUpdate: { label: 'Updating your learner profile after a lesson', role: 'background' },

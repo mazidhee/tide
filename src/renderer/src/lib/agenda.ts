@@ -42,6 +42,30 @@ export function openAgendaItem(app: ReturnType<typeof useApp>, it: AgendaItem, a
     app.setView({ kind: 'session', mode: 'quiz', scope, topic: checkTopic(it.title), options: { placement: it.check, length: 6 }, nonce: Date.now() })
     return
   }
+  // Roadmap continuity (shared/track): the week's mixed review, a phase's firm-up, check or capstone
+  if (it.mixed) {
+    void window.tide.track.mixedReview().then((r) => {
+      if (r) app.setView({ kind: 'session', mode: 'quiz', scope: { kind: 'vault' }, topic: it.title, options: { length: r.review.items.length, review: r.review }, nonce: Date.now() })
+      else app.setView({ kind: 'study', scope: { kind: 'vault' } })
+    })
+    return
+  }
+  if (it.gate?.step === 'firm-up' && it.notebook) {
+    void window.tide.track.firmUp(it.notebook).then((r) => {
+      if (r) app.setView({ kind: 'session', mode: 'quiz', scope: { kind: 'folder', path: r.scope }, topic: it.title, options: { length: r.review.items.length, review: r.review }, nonce: Date.now() })
+      else app.setView({ kind: 'notebook', path: it.notebook!, tab: 'outline' })
+    })
+    return
+  }
+  if ((it.gate?.step === 'check' || (it.gate?.step === 'capstone' && !it.path)) && it.notebook) {
+    try {
+      if (it.gate.step === 'check') localStorage.setItem('tide.track.check', it.notebook)
+    } catch {
+      // Opens on the track without the check
+    }
+    app.setView({ kind: 'notebook', path: it.notebook, tab: 'outline' })
+    return
+  }
   if (it.kind === 'learn' && it.refresh) {
     app.setView({ kind: 'session', mode: 'teach', scope: lessonScope(app, it), topic, options: { refresh: true, why: whyByDefault(app.settings.whyMode, topic, it.topicId) }, nonce: Date.now() })
     return
