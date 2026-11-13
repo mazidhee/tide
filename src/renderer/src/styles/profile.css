@@ -1,0 +1,434 @@
+/*
+  You: the avatar everywhere it appears, and Settings › You (photo framing, the pixel self and
+  its editor). Neutral surfaces and the single accent; written in the classic token names, which
+  the new design points at its own roles, so it holds in both designs and every theme.
+*/
+
+/* ---------- The avatar ---------- */
+
+.avatar {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg-inset);
+  color: var(--ink-soft);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  user-select: none;
+}
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* A ring drawn over the photo, so a pale photo still has an edge */
+.avatar-photo::after,
+.avatar-pixel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--line);
+  pointer-events: none;
+}
+.avatar-pixel .pixel-self {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* A sprite without a backdrop stands a touch lower, so the head sits in the circle's middle */
+.avatar-pixel:not(.has-backdrop) .pixel-self {
+  transform: translateY(6%) scale(1.04);
+}
+
+/* ---------- Settings › You ---------- */
+
+.pf-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 26px;
+  padding: 2px 4px;
+}
+.pf-hero .avatar {
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    0 0 0 4px var(--bg),
+    0 0 0 5px var(--line);
+}
+.pf-hero-name {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.pf-hero-sub {
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.pf-choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.pf-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+}
+.pf-choice:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.pf-choice.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+  color: var(--ink);
+}
+.pf-choice:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+.pf-choice-empty {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px dashed var(--line-strong);
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  color: var(--ink-muted);
+  text-align: center;
+  line-height: 1.2;
+}
+.pf-choice-label {
+  font-weight: 500;
+}
+
+.pf-photo {
+  transition: background 120ms ease;
+}
+.pf-photo.over {
+  background: var(--accent-soft);
+}
+.pf-drop {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 0;
+}
+.pf-drop-circle {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px dashed var(--line-strong);
+  display: grid;
+  place-items: center;
+  color: var(--ink-muted);
+}
+.pf-drop-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13.5px;
+}
+.pf-drop-text strong {
+  font-weight: 550;
+  color: var(--ink);
+}
+.pf-drop-text span {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.pf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pf-actions .btn svg {
+  margin-right: 2px;
+}
+
+.pf-photo-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+}
+.pf-photo-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding-top: 6px;
+}
+.pf-photo-side .set-hint {
+  margin: 0;
+}
+.pf-remove {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  font-weight: 450;
+}
+.pf-remove:hover {
+  color: var(--ink);
+}
+
+.pf-crop {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.pf-stage {
+  position: relative;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg-inset);
+  box-shadow:
+    inset 0 0 0 1px var(--line),
+    0 0 0 6px var(--bg-inset);
+  touch-action: none;
+}
+.pf-stage img,
+.pf-stage video {
+  position: absolute;
+  max-width: none;
+  user-select: none;
+  pointer-events: none;
+}
+.pf-stage video {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+.pf-drag {
+  cursor: grab;
+}
+.pf-drag:active {
+  cursor: grabbing;
+}
+.pf-drag:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 8px;
+}
+.pf-zoom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pf-zoom .set-range {
+  width: 150px;
+}
+.pf-zoom-icon {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1.5px solid var(--ink-muted);
+}
+.pf-zoom-icon.small {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.pf-camera {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+.pf-error {
+  color: var(--danger, var(--ink-soft));
+  text-align: center;
+  max-width: 340px;
+}
+
+/* The pixel editor */
+.pf-pixel-empty {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-content: space-between;
+}
+.pf-pixel-empty .set-hint {
+  margin: 0;
+}
+.pf-editor {
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+  --pf-check-a: color-mix(in srgb, var(--ink) 7%, var(--bg));
+  --pf-check-b: color-mix(in srgb, var(--ink) 3%, var(--bg));
+  --pf-grid: color-mix(in srgb, var(--ink) 9%, transparent);
+}
+.pf-pixels {
+  flex: none;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px var(--line);
+  image-rendering: pixelated;
+  cursor: crosshair;
+  touch-action: none;
+}
+.pf-pixels.tool-eye {
+  cursor: pointer;
+}
+.pf-tools {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pf-tool-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.pf-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pf-swatch {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--sw);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 14%, transparent);
+  transition: transform 100ms ease;
+}
+.pf-swatch.on {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--ink) 14%, transparent),
+    0 0 0 2px var(--bg-raised),
+    0 0 0 4px var(--accent);
+}
+.pf-swatch.pf-add {
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  color: var(--ink-muted);
+  border: 1px dashed var(--line-strong);
+  box-shadow: none;
+  cursor: pointer;
+}
+.pf-swatch.pf-add input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.pf-toolrow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.pf-tool.on {
+  background: var(--bg-active);
+  color: var(--ink);
+}
+.pf-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--line);
+}
+.pf-tool-hint {
+  margin: 0;
+  min-height: 2.9em;
+}
+.pf-previews {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.pf-previews .pixel-self {
+  image-rendering: pixelated;
+}
+.pf-pixel-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ---------- Where you appear ---------- */
+
+/* The sidebar's foot: you, and Settings */
+.sidebar-you {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.sidebar-you .sidebar-you-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Your side of a chat or a lesson: the bubble, with you beside it */
+.you-row {
+  align-self: flex-end;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 85%;
+  min-width: 0;
+}
+.you-row > .s-you.s-you.s-you {
+  max-width: 100%;
+  min-width: 0;
+  align-self: auto;
+}
+.you-row > .avatar {
+  margin-bottom: 2px;
+}
+.msg.user .you-mark {
+  align-self: flex-end;
+  margin-left: 8px;
+  margin-bottom: 2px;
+}
+
+/* Home's greeting, above the date in the new design */
+.td-hello {
+  margin: 0 0 4px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+:root[data-design='tide'] .you-row {
+  max-width: 78%;
+}

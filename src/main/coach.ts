@@ -382,16 +382,18 @@ export async function directionLine(): Promise<string> {
 
 /**
  * The profile for the tutor's prompt, Claude's and Gemma's alike: where they're heading, and the
- * learner profile's digest (300 words at most, shared/learnerProfile digest). Nothing when neither
- * is there.
+ * learner profile's digest (300 words at most, shared/learnerProfile digest), and their first name
+ * when they've allowed it. Nothing when none is there.
  */
 export async function profilePrompt(): Promise<string> {
   const { profileDigest } = await import('./learnerProfile')
   const d = await profileDigest().catch(() => '')
   const aim = aimOf(await getCoach())
-  if (!d && !aim) return ''
+  // Their first name, only when they've set one and allowed it (Settings › You)
+  const name = await import('./profile').then((p) => p.profileNameLine()).catch(() => '')
+  if (!d && !aim) return name
   const adapt = d ? '\nAdapt to it: follow their stated preferences (when they have shown they can do something, move on rather than drilling it), check an open misconception with a question before relying on that idea, and explain differently from what didn’t land.' : ''
-  return `${aim ? `Where this learner is heading: ${aim}\n` : ''}${d}${adapt}`.trim()
+  return `${name ? `${name}\n` : ''}${aim ? `Where this learner is heading: ${aim}\n` : ''}${d}${adapt}`.trim()
 }
 
 const LINK_LABEL: Partial<Record<AgendaItem['kind'], string>> = { learn: 'Learn it in Tide', quiz: 'Quiz me in Tide', review: 'Review in Tide', test: 'Sit it in Tide', 'take-home': 'Open in Tide', practice: 'Open Practice in Tide' }

@@ -17,6 +17,8 @@ import { PromptBox } from '../PromptBox'
 import { Level } from './Level'
 import { AreaMark } from './AreaMark'
 import { ReadyCard } from '../ReadyCard'
+import { greetingLine, greetingName } from '@shared/profile'
+import { useProfile } from '../../lib/profile'
 
 const DAY = 86_400_000
 /** "1 h 20", "40 min": time as the page says it everywhere */
@@ -59,6 +61,7 @@ export interface HomeTideProps {
  */
 export function HomeTide(p: HomeTideProps) {
   const app = useApp()
+  const hello = greetingName(useProfile())
   const areaOf = useAreaClass()
   const ongoing = useOngoing()
   const known = useKnowledge()
@@ -148,6 +151,8 @@ export function HomeTide(p: HomeTideProps) {
     <div className="page td-home-page">
       <div className="td-home">
         <div className="td-home-main">
+          {/* Your name above the date, once you've given it (Settings › You); the page is otherwise as it was */}
+          {hello && <p className="td-hello">{greetingLine(hello)}</p>}
           <h1 className="page-title">{new Date(now).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</h1>
           <p className="td-lede">
             {lede}

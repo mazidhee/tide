@@ -601,6 +601,15 @@ export interface TideApi {
     get(): Promise<Settings>
     set(patch: Partial<Settings>): Promise<Settings>
   }
+  /** You: your name and picture, in Tide's app data (main/profile) */
+  profile: {
+    get(): Promise<import('./profile').Profile>
+    set(patch: Partial<import('./profile').Profile>): Promise<import('./profile').Profile>
+    /** The photo as you chose it, scaled down, for framing again */
+    source(): Promise<string | null>
+    setSource(dataUrl: string): Promise<void>
+    clearPhoto(alsoSprite?: boolean): Promise<import('./profile').Profile>
+  }
   vault: {
     choose(): Promise<string | null>
     tree(): Promise<FileNode | null>

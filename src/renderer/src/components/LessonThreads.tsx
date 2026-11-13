@@ -10,6 +10,7 @@ const PICTURE = /!\[[^\]]*\]\((\/[^)\s]+)\)/g
 const picturesIn = (s: string) => [...s.matchAll(PICTURE)].map((m) => decodeURIComponent(m[1].slice(1)))
 const withoutPictures = (s: string) => s.replace(PICTURE, '').trim()
 import { ProfessorStill } from './Professor'
+import { Avatar } from './Avatar'
 
 /**
  * Lesson threads (shared/lessonThreads): the pieces the lesson view puts around a tutor's output.
@@ -33,12 +34,9 @@ function ThreadGlyph({ size = 13 }: { size?: number }) {
   )
 }
 
-export function YouAvatar() {
-  return (
-    <span className="lt-av lt-me" aria-hidden="true">
-      Y
-    </span>
-  )
+/** You, in a thread: your picture, else your initials, in a neutral circle (components/Avatar) */
+export function YouAvatar({ size = 20 }: { size?: number }) {
+  return <Avatar size={size} className="lt-av lt-me" />
 }
 
 export function TutorAvatar() {
@@ -238,7 +236,7 @@ export function ThreadSlot(p: SlotProps) {
       <div className="lt-chip-row">
         <button type="button" className="lt-chip" onClick={p.onReopen} aria-label={`Reopen the thread: ${first}. ${n} question${n === 1 ? '' : 's'}${thread.understood ? ', understood' : ''}`}>
           <span className="lt-stack">
-            <YouAvatar />
+            <YouAvatar size={18} />
             <TutorAvatar />
           </span>
           <span className="lt-chip-q">{first}</span>

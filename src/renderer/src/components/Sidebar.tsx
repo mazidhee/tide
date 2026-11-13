@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'reac
 import type { FileNode } from '@shared/types'
 import { fileTitle, folderOf, useApp } from '../state'
 import { SECTIONS } from './SettingsView'
+import { Avatar } from './Avatar'
+import { useProfile } from '../lib/profile'
+import { hasProfile } from '@shared/profile'
 import { Icon, type IconName } from './Icon'
 import { ContextMenu, type MenuState } from './Menu'
 import { Professor } from './Professor'
@@ -234,6 +237,7 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
     localStorage.setItem('tide.nav.study', open ? 'open' : 'closed')
   }
   const ongoing = useOngoing()
+  const me = useProfile()
 
   // In Settings the sidebar becomes the list of settings, with a way back to where you were
   if (view.kind === 'settings') {
@@ -390,10 +394,23 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
       <div className="sidebar-bottom">
         {shown('focus') && <FocusTimer />}
         <div className="sidebar-bottom-row">
-          <button className="nav-item" onClick={() => app.setView({ kind: 'settings' })}>
-            <Icon name="settings" size={16} />
-            <span>Settings</span>
-          </button>
+          {hasProfile(me) ? (
+            <>
+              {/* You, once you've set yourself up: your picture and name open Settings › You */}
+              <button className="nav-item sidebar-you" title="You: your name and picture" onClick={() => app.setView({ kind: 'settings', section: 'you' })}>
+                <Avatar size={22} animate />
+                <span className="sidebar-you-name">{me.name || 'You'}</span>
+              </button>
+              <button className="icon-btn" title="Settings" aria-label="Settings" onClick={() => app.setView({ kind: 'settings' })}>
+                <Icon name="settings" size={15} />
+              </button>
+            </>
+          ) : (
+            <button className="nav-item" onClick={() => app.setView({ kind: 'settings' })}>
+              <Icon name="settings" size={16} />
+              <span>Settings</span>
+            </button>
+          )}
           {shown('help') && (
             <button className={`icon-btn${view.kind === 'help' ? ' on' : ''}`} title="Help" onClick={() => app.setView({ kind: 'help' })}>
               <Icon name="quiz" size={15} />

@@ -15,6 +15,7 @@ import { useApp } from '../state'
 import { DESIGNS, readingFace, resolveDesign, type DesignId } from '@shared/design'
 import { Icon, type IconName } from './Icon'
 import { SpeedView } from './SpeedView'
+import { ProfileSettings } from './ProfileSettings'
 import { UsageView } from './UsageView'
 import { ConnectionsView } from './ConnectionsView'
 import { LAB_PACK } from '@shared/labPack'
@@ -63,9 +64,10 @@ const ACCENTS = [
 
 const LOCAL_SEARCH = 'http://127.0.0.1:8888'
 
-export type Section = 'general' | 'appearance' | 'tutor' | 'study' | 'connections' | 'models' | 'tools' | 'usage' | 'speed'
+export type Section = 'you' | 'general' | 'appearance' | 'tutor' | 'study' | 'connections' | 'models' | 'tools' | 'usage' | 'speed'
 
 export const SECTIONS: { id: Section; label: string; icon: IconName; group: string; description: string }[] = [
+  { id: 'you', label: 'You', icon: 'person', group: 'App', description: 'Your name and picture. Kept on this Mac, never sent anywhere.' },
   { id: 'general', label: 'General', icon: 'settings', group: 'App', description: 'Where your notes live.' },
   { id: 'appearance', label: 'Appearance', icon: 'highlight', group: 'App', description: 'Theme, colour, reading and the sidebar.' },
   { id: 'tutor', label: 'Tutor and voice', icon: 'tutor', group: 'Learning', description: 'Who teaches you, and how they sound.' },
@@ -84,7 +86,7 @@ const errorText = (e: unknown) => (e as Error).message.replace(/^Error invoking 
 // ---------- Building blocks ----------
 
 /** A titled card of settings, like a group in System Settings */
-function Group({ title, note, children }: { title?: string; note?: ReactNode; children: ReactNode }) {
+export function Group({ title, note, children }: { title?: string; note?: ReactNode; children: ReactNode }) {
   return (
     <section className="set-group">
       {title && <h2 className="set-group-title">{title}</h2>}
@@ -95,7 +97,7 @@ function Group({ title, note, children }: { title?: string; note?: ReactNode; ch
 }
 
 /** One setting: what it is on the left, its control on the right */
-function Row({ label, hint, children, stack }: { label: ReactNode; hint?: ReactNode; children?: ReactNode; stack?: boolean }) {
+export function Row({ label, hint, children, stack }: { label: ReactNode; hint?: ReactNode; children?: ReactNode; stack?: boolean }) {
   return (
     <div className={`set-row${stack ? ' stack' : ''}`}>
       <div className="set-label">
@@ -107,7 +109,7 @@ function Row({ label, hint, children, stack }: { label: ReactNode; hint?: ReactN
   )
 }
 
-function Toggle({ on, onChange, label, disabled }: { on: boolean; onChange(on: boolean): void; label: string; disabled?: boolean }) {
+export function Toggle({ on, onChange, label, disabled }: { on: boolean; onChange(on: boolean): void; label: string; disabled?: boolean }) {
   return <button type="button" role="switch" aria-checked={on} aria-label={label} disabled={disabled} className={`switch${on ? ' on' : ''}`} onClick={() => onChange(!on)} />
 }
 
@@ -1427,6 +1429,7 @@ export function SettingsView({ section = 'general' }: { section?: Section | 'ai'
           <h1 className="settings-section-title">{meta.label}</h1>
           <p className="settings-section-desc">{meta.description}</p>
         </header>
+        {tab === 'you' && <ProfileSettings />}
         {tab === 'general' && <GeneralSection />}
         {tab === 'appearance' && <AppearanceSection />}
         {tab === 'tutor' && <TutorSection />}

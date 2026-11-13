@@ -115,7 +115,10 @@
       "icon": "build/icon.icns",
       "category": "public.app-category.education",
       "identity": null,
-      "darkModeSupport": true
+      "darkModeSupport": true,
+      "extendInfo": {
+        "NSCameraUsageDescription": "Tide uses the camera only when you take a profile photo in Settings. The photo stays on this Mac."
+      }
     },
     "asarUnpack": [
       "node_modules/node-pty/**",
