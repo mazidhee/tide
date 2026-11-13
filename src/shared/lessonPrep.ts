@@ -151,6 +151,8 @@ export interface PreparedLesson {
   exercises: PreparedExercise[]
   /** A custom visual in the opening, by its title */
   visual?: { title: string }
+  /** Maths animations rendered ahead of time (main/manim), by cache key */
+  animations?: string[]
   /** The lesson's first exchange, ready: the opening message and the tutor's first reply */
   opening?: { message: string; reply: string }
   /** Who prepared it: Claude, or code alone (no opening, plan or new exercises) */
@@ -162,7 +164,7 @@ export interface PreparedLesson {
 }
 
 /** What the Ready card lists, in order, each a few words */
-export function preparedParts(p: Pick<PreparedLesson, 'plan' | 'due' | 'warmup' | 'reading' | 'exercises' | 'visual' | 'opening'>): string[] {
+export function preparedParts(p: Pick<PreparedLesson, 'plan' | 'due' | 'warmup' | 'reading' | 'exercises' | 'visual' | 'opening'> & { animations?: string[] }): string[] {
   const parts: string[] = []
   if (p.plan?.steps.length) {
     const min = p.plan.steps.reduce((n, s) => n + (s.minutes ?? 0), 0)
@@ -173,6 +175,7 @@ export function preparedParts(p: Pick<PreparedLesson, 'plan' | 'due' | 'warmup' 
   if (p.due.recall || due) parts.push(p.due.recall ? `${p.due.recall} recall question${p.due.recall === 1 ? '' : 's'} due` : `${due} fading idea${due === 1 ? '' : 's'} to touch on`)
   if (p.exercises.length) parts.push(`${p.exercises.length} checked exercise${p.exercises.length === 1 ? '' : 's'}`)
   if (p.visual) parts.push('A custom visual')
+  if (p.animations?.length) parts.push(p.animations.length === 1 ? 'An animation, rendered' : `${p.animations.length} animations, rendered`)
   if (p.reading) parts.push(`Reading: ${p.reading.title}`)
   return parts
 }

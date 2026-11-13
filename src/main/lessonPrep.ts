@@ -316,6 +316,7 @@ export async function prepareLesson(t: PrepTarget, o: { claude: boolean; note?: 
   }
   if (!useClaude) {
     prep.exercises = await bankedFor(t.topic, 4)
+    await prerender(prep)
     await savePrep(prep)
     return prep
   }
@@ -361,7 +362,10 @@ export async function prepareLesson(t: PrepTarget, o: { claude: boolean; note?: 
   const pack = await packFor(t.topic).catch(() => null)
   const message = `${withSources(found ? withPassage(openingMessage(setup), found) : openingMessage(setup), pack)}\n\n${prepNote(prep)}`
   const { VISUAL_GUIDE, extractVisual, visualTitle } = await import('@shared/visuals')
-  const system = `You are Tide, a patient tutor who teaches one question at a time.\n\n${SESSION_FORMAT}\n\n${sessionInstructions(setup)}${plan.visual ? `\n\n${VISUAL_GUIDE}` : ''}${profile ? `\n\n${profile}` : ''}`
+  // A maths lesson may open on an animation (a template, written as its block: no tools here), rendered below
+  const { mathsMode } = await import('@shared/mathsMode')
+  const anim = mathsMode(t.topic, t.notebook).on ? (await import('@shared/manim')).animationGuide('gemma', t.topic) : ''
+  const system = `You are Tide, a patient tutor who teaches one question at a time.\n\n${SESSION_FORMAT}\n\n${sessionInstructions(setup)}${plan.visual ? `\n\n${VISUAL_GUIDE}` : ''}${anim ? `\n\n${anim}` : ''}${profile ? `\n\n${profile}` : ''}`
   const tag = planTag(prep.plan)
   const reply = await ask('prepExercises', `${message}\n\n---\n\n(Tide, to you: ${prepOpeningPrompt({ plan: tag, visual: plan.visual })})`, system)
   const { parseBlocks } = await import('@shared/session')
@@ -372,9 +376,21 @@ export async function prepareLesson(t: PrepTarget, o: { claude: boolean; note?: 
     if (code) prep.visual = { title: visualTitle(code) || 'A custom visual' }
   }
   prep.calls = counter.calls
+  await prerender(prep)
   await savePrep(prep)
   console.log(`[prep] ${t.topic}: ${prep.exercises.length} exercises, ${prep.opening ? 'opening' : 'no opening'}${prep.visual ? ', visual' : ''}, ${prep.calls} Claude calls`)
   return prep
+}
+
+/**
+ * A maths lesson's animations, rendered ahead (main/manim): the ones its opening uses and the
+ * templates that fit its topic. Only when Manim is installed; a failure leaves the lesson as it is.
+ */
+async function prerender(prep: PreparedLesson) {
+  const { mathsMode } = await import('@shared/mathsMode')
+  if (!mathsMode(prep.topic, prep.notebook).on) return
+  const keys = await (await import('./manim')).prerenderFor(prep.topic, prep.id, prep.opening?.reply ?? '').catch(() => [] as string[])
+  if (keys.length) prep.animations = keys
 }
 
 // ---------- The weekly review ----------

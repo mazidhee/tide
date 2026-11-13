@@ -244,6 +244,18 @@ const api: TideApi = {
     clips: invoke('videos:clips'),
     check: invoke('videos:check')
   },
+  manim: {
+    status: invoke('manim:status'),
+    install: invoke('manim:install'),
+    installTex: invoke('manim:installTex'),
+    settings: invoke('manim:settings'),
+    request: invoke('manim:request'),
+    get: invoke('manim:get'),
+    used: invoke('manim:used'),
+    onStatus: (cb: (s: import('@shared/manim').AnimStatus) => void) => subscribe<import('@shared/manim').AnimStatus>('manim:status', cb),
+    onInstallProgress: (cb: (step: string) => void) => subscribe<string>('manim:installProgress', cb),
+    onTexProgress: (cb: (step: string) => void) => subscribe<string>('manim:texProgress', cb)
+  },
   visuals: {
     policy: invoke('visuals:policy'),
     repair: invoke('visuals:repair'),

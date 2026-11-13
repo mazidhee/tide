@@ -345,7 +345,7 @@ export function takeVisualNotes(container: Element | null): string[] {
 export const ASK_VISUAL_EVENT = 'tide:ask-visual'
 
 /** Hands a question to whatever is listening (a lesson sends it); otherwise it fills the nearest "Ask…" box, or is copied */
-function ask(root: HTMLElement, question: string, flash: (t: string) => void) {
+export function ask(root: HTMLElement, question: string, flash: (t: string) => void) {
   const event = new CustomEvent(ASK_VISUAL_EVENT, { bubbles: true, cancelable: true, detail: { question } })
   root.dispatchEvent(event)
   if (event.defaultPrevented) return flash('Asked')

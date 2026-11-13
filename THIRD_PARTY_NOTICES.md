@@ -1530,3 +1530,31 @@ DEALINGS IN THE SOFTWARE.
 
 - EasyList (https://easylist.to/easylist/easylist.txt) and EasyPrivacy (https://easylist.to/easylist/easyprivacy.txt), by The EasyList authors (https://easylist.to/): dual licensed under the GNU General Public License version 3 (https://www.gnu.org/licenses/gpl-3.0.html) and the Creative Commons Attribution-ShareAlike 3.0 Unported licence (https://creativecommons.org/licenses/by-sa/3.0/); Tide uses them under CC BY-SA 3.0. Snapshot of 13 November 2026 (version 202611130319), unmodified
 - EasyList Cookie List (https://secure.fanboy.co.nz/fanboy-cookiemonster.txt) and Fanboy's Newsletter List (https://secure.fanboy.co.nz/fanboy-newsletter.txt), by The EasyList authors and Fanboy: Creative Commons Attribution 3.0 (https://creativecommons.org/licenses/by/3.0/). Snapshots of 12 November 2026, unmodified
+## Maths animations: Manim Community Edition 0.22.1 and what it is installed with (downloaded only when you press Install, into Tide's tools folder; not shipped with the app)
+
+- Manim Community Edition, MIT License. Copyright (c) 2018 3Blue1Brown LLC; Copyright (c) 2024, the Manim Community Developers. https://github.com/ManimCommunity/manim
+- pycairo 1.29.2, LGPL-2.1 or MPL-1.1, built on your Mac from its source, with cairo 1.18.4 (LGPL-2.1 or MPL-1.1), pixman 0.46.4 (MIT), libpng 1.6.59 (libpng license) and zlib 1.3.2 (zlib license), fetched through Meson's WrapDB.
+- ManimPango (MIT, bundles Pango, GLib and HarfBuzz under the LGPL), PyAV (BSD-3-Clause, bundles FFmpeg under the LGPL), NumPy and SciPy (BSD-3-Clause), Pillow (MIT-CMU), skia-pathops (BSD-3-Clause), moderngl (MIT) and Manim's other Python dependencies, each under its own permissive licence, installed by pip from PyPI.
+- TinyTeX (optional, for typeset equations): TinyTeX's installer and bundles are MIT (Copyright Yihui Xie); TeX Live's packages are free software under their own licences (LPPL, GPL and others), installed with tlmgr.
+
+The Manim MIT License:
+
+```
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

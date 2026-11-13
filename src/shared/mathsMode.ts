@@ -16,6 +16,7 @@
  */
 import { subjectMatches } from './subjects'
 import { GRAPH_GUIDE } from './graphSpec'
+import { animationGuide } from './manim'
 
 export type MathsArea = 'algebra' | 'functions' | 'calculus' | 'linear-algebra' | 'probability' | 'statistics' | 'stochastic' | 'pricing'
 
@@ -49,6 +50,9 @@ const MATHS_NOTEBOOK = /(^|[\s/_-])(rm[_ -]?math\w*|maths?|mathematics|statistic
 /** Words that mark a topic as something else even inside a maths notebook (a programming exercise) */
 const NOT_MATHS = /\b(python|javascript|typescript|rust|golang|java|c\+\+|sql|pandas|numpy|react|docker|git)\b/i
 
+/** The basics of number, from their origins */
+const FOUNDATIONS = /\b((invention|history|origins?|idea|concept|story) of (the )?(zero|numbers?|numerals|counting|place value)|zero as a (number|digit|placeholder)|place[- ]value|number systems?|numeral systems?|hindu[- ]arabic|roman numerals|babylonian (numbers|numerals|maths|mathematics)|positional (notation|numbers?|systems?)|tally marks?)\b/i
+
 /** Areas whose words are specific enough to decide on their own */
 const STRONG = new Set<MathsArea>(['calculus', 'linear-algebra', 'probability', 'statistics'])
 
@@ -72,6 +76,8 @@ export function mathsMode(topic: string, notebook?: string): MathsMode {
   // Quant finance words the subject map files under finance are maths here; so is a calculus,
   // probability or statistics topic nothing else claims ("The power rule")
   if (!code && (area === 'pricing' || area === 'stochastic' || (!top && area && STRONG.has(area)))) return { on: true, area, from: 'topic' }
+  // The foundations of number: where zero and place value came from is maths, taught from its origins
+  if (!code && FOUNDATIONS.test(t)) return { on: true, area: area ?? 'algebra', from: 'topic' }
   if (notebook && MATHS_NOTEBOOK.test(notebook) && !code && (!top || MATHS_SUBJECTS.has(top) || area)) return { on: true, area, from: 'notebook' }
   return OFF
 }
@@ -191,7 +197,7 @@ export function mathsRules(engine: 'claude' | 'gemma', topic: string, notebook?:
   const mode = mathsMode(topic, notebook)
   if (!mode.on) return ''
   const area = mode.area ? ` It sits on the ${AREA_LABEL[mode.area]} rung of their maths ladder.` : ''
-  return `${engine === 'claude' ? CLAUDE_RULES : GEMMA_RULES}${area}\n\n${ORIGINS_RULES}\n\n${GRAPH_GUIDE}${engine === 'claude' ? ' Check one with check_graph when unsure.' : ''}\n\n${exploreGuide(mode.area, engine === 'gemma')}\n\n${POKE_GUIDE}`
+  return `${engine === 'claude' ? CLAUDE_RULES : GEMMA_RULES}${area}\n\n${ORIGINS_RULES}\n\n${GRAPH_GUIDE}${engine === 'claude' ? ' Check one with check_graph when unsure.' : ''}\n\n${exploreGuide(mode.area, engine === 'gemma')}\n\n${[animationGuide(engine, topic), POKE_GUIDE].filter(Boolean).join('\n\n')}`
 }
 
 export const AREA_LABEL: Record<MathsArea, string> = {
