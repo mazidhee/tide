@@ -9,9 +9,11 @@
 import { BROWSER_UA, articleMarkdown } from './library'
 import { readArticle } from './extract'
 import { prefersWebView } from '@shared/links'
+import { cleanPage, type PageCleaning } from '@shared/pageClean'
+import { adblocker, blockedUrl } from './adblock'
 
 export type ReadPage =
-  | { kind: 'article'; url: string; title: string; site: string; byline?: string; image?: string; published?: string; markdown: string; words: number }
+  | { kind: 'article'; url: string; title: string; site: string; byline?: string; image?: string; published?: string; markdown: string; words: number; cleaning?: PageCleaning }
   /** Not an article: shown in the web view */
   | { kind: 'app'; url: string; title?: string; why: string }
   /** A PDF: shown in the reader's PDF pages */
@@ -75,7 +77,10 @@ async function read(url: string): Promise<ReadPage> {
   const docTitle = article?.title || article?.meta['og:title'] || article?.docTitle || ''
   if (!article || !article.content || !readable(article.text, at)) return { kind: 'app', url: at, title: docTitle || undefined, why: 'There is no article in it to read.' }
   // A link wrapped round a card (a picture, a name, a date) has blank lines in its text, which Markdown can't hold: they become spaces
-  const markdown = absoluteLinks(articleMarkdown(article), at).replace(/\[([^\]\n]*(?:\n[^\]\n]*){0,12})\]\(/g, (m, t: string) => (/\n\s*\n/.test(t) ? `[${t.replace(/\s*\n\s*/g, ' ').trim()}](` : m))
+  const read = absoluteLinks(articleMarkdown(article), at).replace(/\[([^\]\n]*(?:\n[^\]\n]*){0,12})\]\(/g, (m, t: string) => (/\n\s*\n/.test(t) ? `[${t.replace(/\s*\n\s*/g, ' ').trim()}](` : m))
+  // The article without what's around it: ads and trackers (by the same lists the web view blocks with), sign-up boxes, "Related posts"
+  await adblocker().catch(() => null)
+  const { markdown, cleaning } = cleanPage(read, { mode: 'article', blocked: (u, kind) => blockedUrl(u, at, kind) })
   return {
     kind: 'article',
     url: at,
@@ -85,7 +90,8 @@ async function read(url: string): Promise<ReadPage> {
     ...(article.image ? { image: article.image } : {}),
     ...(article.meta['article:published_time'] ? { published: article.meta['article:published_time'].slice(0, 10) } : {}),
     markdown,
-    words: article.text.split(/\s+/).filter(Boolean).length
+    words: article.text.split(/\s+/).filter(Boolean).length,
+    ...(cleaning ? { cleaning } : {})
   }
 }
 

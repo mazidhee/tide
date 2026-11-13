@@ -812,3 +812,41 @@
 .crs-outline-handle {
   -webkit-app-region: no-drag;
 }
+
+/* [clean] "Cleaned: 6 items hidden · Show original" (components/CleanedNote), over a lesson or an article */
+.page-cleaned {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+  margin: 10px 0 0;
+  color: var(--ink-muted);
+  font: 400 12.5px/18px var(--font-ui);
+}
+.page-cleaned .link-btn {
+  font-size: inherit;
+  line-height: inherit;
+}
+/* The original, a hidden part marked: set off by a rule and a label, read but not in the way */
+.page-noise {
+  position: relative;
+  margin: 14px 0;
+  padding: 22px 0 2px 14px;
+  border-left: 2px solid var(--line-strong);
+  opacity: 0.62;
+}
+.page-noise::before {
+  content: attr(data-noise-label);
+  position: absolute;
+  top: 2px;
+  left: 14px;
+  color: var(--ink-muted);
+  font: 500 11px/16px var(--font-ui);
+  letter-spacing: 0.02em;
+}
+.page-noise > :first-child {
+  margin-top: 0;
+}
+.page-noise > :last-child {
+  margin-bottom: 0;
+}

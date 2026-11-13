@@ -10,11 +10,15 @@
  *  - only http(s) pages: any other scheme is refused, at every navigation and redirect
  *  - downloads are cancelled, and every permission (camera, location, notifications…) is refused
  *  - a link that opens a new window opens in the same view instead
+ *  - ads and trackers are blocked, and cookie banners and sign-up pop-ups hidden (main/adblock):
+ *    this session only, never Tide's own window. The blocker's one preload script (Ghostery's
+ *    cosmetic filters) runs in the page's isolated world and gives the page nothing
  *
  * One at a time, and it is destroyed when the reader closes it, so it costs nothing once gone.
  */
 import { BrowserWindow, WebContentsView, session, type Session, type WebContents, type WebPreferences } from 'electron'
 import { webAllowed } from '@shared/links'
+import { blockAdsIn } from './adblock'
 
 /** The web view's session: not "persist:", so it lives in memory only */
 export const WEB_PARTITION = 'tide-web'
@@ -82,6 +86,8 @@ export function guardContents(wc: WebContents) {
 let view: WebContentsView | null = null
 let owner: BrowserWindow | null = null
 let lastBlocked: string | undefined
+/** Each open and close: an open that waited for the blocker gives up if the view was closed meanwhile */
+let generation = 0
 
 function stateOf(wc: WebContents): WebState {
   return {
@@ -114,12 +120,18 @@ export async function openWeb(sender: WebContents, url: string, bounds: Bounds):
   const win = BrowserWindow.fromWebContents(sender)
   if (!win) return null
   if (view && owner !== win) closeWeb()
+  const gen = ++generation
   if (!view) {
     lastBlocked = undefined
-    guardSession(session.fromPartition(WEB_PARTITION), (what) => {
+    const ses = session.fromPartition(WEB_PARTITION)
+    guardSession(ses, (what) => {
       lastBlocked = what
       report()
     })
+    // Before the first page loads, so its ads never do (the page still opens if the blocker can't start)
+    await blockAdsIn(ses).catch((e) => console.warn('[web] ad blocking unavailable', (e as Error).message))
+    if (gen !== generation || win.isDestroyed()) return null
+    if (view) return placeAndLoad(url, bounds)
     view = new WebContentsView({ webPreferences: webPreferences() })
     owner = win
     win.once('closed', () => {
@@ -133,9 +145,14 @@ export async function openWeb(sender: WebContents, url: string, bounds: Bounds):
     view.setBackgroundColor('#ffffff')
     win.contentView.addChildView(view)
   }
+  return placeAndLoad(url, bounds)
+}
+
+async function placeAndLoad(url: string, bounds: Bounds): Promise<WebState | null> {
+  if (!view) return null
   view.setBounds(clean(bounds))
   await view.webContents.loadURL(url).catch(() => {})
-  return stateOf(view.webContents)
+  return view.webContents.isDestroyed() ? null : stateOf(view.webContents)
 }
 
 export function placeWeb(bounds: Bounds, visible = true) {
@@ -155,6 +172,7 @@ export function webGo(action: 'back' | 'forward' | 'reload' | 'stop') {
 
 /** Removes the view and ends its page: nothing of it is left running */
 export function closeWeb() {
+  generation++
   const v = view
   const w = owner
   view = null

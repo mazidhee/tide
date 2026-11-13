@@ -39,6 +39,7 @@ import {
   type Section
 } from '@shared/courses'
 import { asciidocMarkdown, mystMarkdown, slugify, transcriptMarkdown } from '@shared/courseSource'
+import { cleanPage, type PageCleaning } from '@shared/pageClean'
 import type { Candidate } from '@shared/sourceLed'
 import type { LessonRecord } from '@shared/lessonLog'
 import { digestLesson } from '@shared/lessonMemory'
@@ -90,6 +91,8 @@ export interface LessonContent {
   sections: Section[]
   /** Code files beside it in its module */
   code: string[]
+  /** `markdown` is the lesson without its noise (shared/pageClean): what was hidden, and the original block by block */
+  cleaning?: PageCleaning
 }
 
 export type ImportPhase = { id: string; phase: 'fetching' | 'reading' | 'indexing' | 'done' | 'error'; detail?: string }
@@ -226,7 +229,7 @@ async function indexCourse(c: CatalogueCourse, files: RepoFile[], outline: Cours
   const lessonFiles = new Set(outline.modules.flatMap((m) => m.lessons.map((l) => l.path)))
   for (const f of files) {
     if (!f.text || !lessonFiles.has(f.path)) continue
-    const chunks = chunkMarkdown(indexPath(c.id, f.path), `${titleOf(f.text, f.path)} · ${c.title}`, f.text)
+    const chunks = chunkMarkdown(indexPath(c.id, f.path), `${titleOf(f.text, f.path)} · ${c.title}`, cleanPage(f.text, { repo: c.repo, rules: c.clean }).markdown)
     await ix.replace(indexPath(c.id, f.path), chunks)
   }
   await ix.commit()
@@ -549,7 +552,9 @@ export async function lessonContent(id: string, lessonId: string): Promise<Lesso
   if (lesson.range) md = md.slice(lesson.range[0], lesson.range[1]).replace(/\s+$/, '')
   if (fromRepo(c) && c.repo && c.branch) md = absolutise(md, c as CatalogueCourse & { repo: string; branch: string }, lesson.path)
   else md = await withTranscripts(md)
-  return { id: lesson.id, title: lesson.title, kind: lesson.kind, markdown: md, url: webUrlOf(c, lesson), sections: lessonSections(md, lesson.title, lesson.kind), code: mod.code }
+  // The lesson, not the badges, sign-up banners and sponsor sections around it: what you read, what the tutor teaches from
+  const { markdown, cleaning } = cleanPage(md, { repo: c.repo, rules: c.clean })
+  return { id: lesson.id, title: lesson.title, kind: lesson.kind, markdown, url: webUrlOf(c, lesson), sections: lessonSections(markdown, lesson.title, lesson.kind), code: mod.code, ...(cleaning ? { cleaning } : {}) }
 }
 
 /** A code file of a course, to read or run */
@@ -632,7 +637,15 @@ const previews = new Map<string, { at: number; markdown: string | null }>()
  * The course's README (or the file it is read from), fetched from GitHub to show what the course is
  * before you import it: read like a web page, kept in memory for an hour, never saved.
  */
-export async function coursePreview(id: string): Promise<{ markdown: string; url: string } | null> {
+export async function coursePreview(id: string): Promise<{ markdown: string; url: string; cleaning?: PageCleaning } | null> {
+  const p = await rawPreview(id)
+  if (!p) return null
+  const c = catalogueCourse(id)
+  const { markdown, cleaning } = cleanPage(p.markdown, { repo: c?.repo, rules: c?.clean })
+  return { ...p, markdown, ...(cleaning ? { cleaning } : {}) }
+}
+
+async function rawPreview(id: string): Promise<{ markdown: string; url: string } | null> {
   const c = catalogueCourse(id)
   if (!c) return null
   if (!fromRepo(c)) {

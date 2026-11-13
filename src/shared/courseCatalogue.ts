@@ -16,6 +16,7 @@
  */
 
 import { WEB_COURSES } from './courseCatalogueWeb'
+import type { CleanRules } from './pageClean'
 
 export type CourseArea = 'payments' | 'blockchain' | 'quant' | 'econ' | 'data' | 'mlops' | 'ml' | 'dl' | 'cs' | 'systems' | 'swe' | 'design' | 'algo' | 'maths' | 'physics'
 
@@ -122,9 +123,18 @@ export interface CatalogueCourse {
   moduleTitles?: Record<string, string>
   /** For a flat course whose file names don't give the order: the files, in order (others follow) */
   order?: string[]
+  /**
+   * Its own rules for what in its pages is noise, beside the ones every course gets (shared/pageClean):
+   * regular expressions (case-insensitive) matched against a section's heading or a block's text.
+   * `keep` is never hidden, `drop` always is.
+   */
+  clean?: CleanRules
 }
 
 const PERSONAL = 'No licence is stated: fetched to this Mac for your own study only, never redistributed'
+
+/** DataTalksClub's Zoomcamps: the README's cohort logistics (certificates, the quick-links table) aren't lessons */
+const ZOOMCAMP_CLEAN: CleanRules = { drop: ['^certificates?$', '^quick links$', '^certification$'] }
 
 const GITHUB_COURSES: CatalogueCourse[] = [
   // ---------- Data engineering ----------
@@ -143,7 +153,8 @@ const GITHUB_COURSES: CatalogueCourse[] = [
     level: 'intermediate',
     topics: ['data engineering', 'data pipeline', 'docker', 'terraform', 'workflow orchestration', 'kestra', 'data warehouse', 'bigquery', 'dbt', 'analytics engineering', 'spark', 'batch processing', 'kafka', 'stream processing', 'streaming'],
     modules: '^\\d\\d-',
-    homework: { dir: 'cohorts' }
+    homework: { dir: 'cohorts' },
+    clean: ZOOMCAMP_CLEAN
   },
   {
     id: 'de-handbook',
@@ -193,7 +204,8 @@ const GITHUB_COURSES: CatalogueCourse[] = [
     level: 'intermediate',
     topics: ['mlops', 'ml engineering', 'machine learning engineering', 'mlflow', 'experiment tracking', 'model registry', 'model deployment', 'model monitoring', 'evidently', 'ml pipelines'],
     modules: '^\\d\\d-',
-    homework: { dir: 'cohorts' }
+    homework: { dir: 'cohorts' },
+    clean: ZOOMCAMP_CLEAN
   },
   {
     id: 'made-with-ml',
@@ -272,7 +284,8 @@ const GITHUB_COURSES: CatalogueCourse[] = [
     level: 'intermediate',
     topics: ['rag', 'retrieval augmented generation', 'vector search', 'llm applications', 'llm evaluation', 'agents', 'embeddings'],
     modules: '^\\d\\d-',
-    homework: { dir: 'cohorts' }
+    homework: { dir: 'cohorts' },
+    clean: ZOOMCAMP_CLEAN
   },
 
   // ---------- Machine learning ----------
@@ -291,7 +304,8 @@ const GITHUB_COURSES: CatalogueCourse[] = [
     level: 'beginner',
     topics: ['machine learning', 'regression', 'linear regression', 'logistic regression', 'classification', 'model evaluation', 'decision trees', 'xgboost', 'kubernetes', 'serverless'],
     modules: '^\\d\\d-',
-    homework: { dir: 'cohorts' }
+    homework: { dir: 'cohorts' },
+    clean: ZOOMCAMP_CLEAN
   },
   {
     id: 'ml-for-beginners',

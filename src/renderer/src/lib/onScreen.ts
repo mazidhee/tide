@@ -79,3 +79,19 @@ export function trackSelection(root: HTMLElement): () => void {
     root.removeEventListener('mousedown', down)
   }
 }
+
+/**
+ * The section of `root` in view (its heading is the last one above `top`, in the viewport's
+ * coordinates) and its text, up to the next heading. What "Show original" brings back
+ * (`data-tide-noise`, components/CleanedNote) is passed over: the tutor reads the cleaned page.
+ */
+export function sectionIn(root: HTMLElement, top: number): { section: string; excerpt: string } | null {
+  const hs = [...root.querySelectorAll<HTMLElement>('h1,h2,h3')].filter((x) => !x.closest('[data-tide-noise]'))
+  let cur: HTMLElement | null = null
+  for (const h of hs) if (h.getBoundingClientRect().top <= top) cur = h
+  const h = cur ?? hs[0]
+  if (!h) return null
+  let text = ''
+  for (let n = h.nextElementSibling; n && !/^H[1-3]$/.test(n.tagName) && text.length < 2200; n = n.nextElementSibling) if (!n.hasAttribute('data-tide-noise')) text += `${(n as HTMLElement).innerText ?? n.textContent}\n`
+  return { section: (h.innerText ?? h.textContent ?? '').trim(), excerpt: text.trim() }
+}

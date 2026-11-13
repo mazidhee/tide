@@ -14,6 +14,7 @@ import { existsSync, promises as fs } from 'fs'
 import { join, relative, sep } from 'path'
 import { absolutise, catalogueCourse, notebookMarkdown } from '@shared/courses'
 import { fileKind, githubRawUrl, normalisePath, type FileKind } from '@shared/links'
+import { cleanPage, type CleanRules, type PageCleaning } from '@shared/pageClean'
 import { importedCourse, repoDir } from './courses'
 
 export interface RepoEntry {
@@ -38,6 +39,15 @@ export interface RepoFileView {
   size?: number
   /** Why it isn't shown (too big, not found, offline) */
   missing?: string
+  /** Markdown with its noise hidden (shared/pageClean): what was hidden, and the original block by block */
+  cleaning?: PageCleaning
+}
+
+/** A Markdown view (a file, a notebook, a folder's README) without its badges, sign-up banners and sponsor sections */
+function cleaned(v: RepoFileView, rules?: CleanRules): RepoFileView {
+  if (!v.text || !(v.kind === 'markdown' || v.kind === 'notebook' || v.kind === 'folder')) return v
+  const r = cleanPage(v.text, { repo: v.repo, rules })
+  return r.cleaning ? { ...v, text: r.markdown, cleaning: r.cleaning } : v
 }
 
 const MAX_TEXT = 3_000_000
@@ -205,8 +215,13 @@ function asView(base: Omit<RepoFileView, 'kind'>, kind: FileKind, bytes: Buffer 
   return { ...base, kind, size, text: raw }
 }
 
-/** A file or folder of an imported course */
+/** A file or folder of an imported course, its Markdown cleaned by the course's own rules too */
 export async function courseFileView(id: string, path: string): Promise<RepoFileView | null> {
+  const v = await courseFileRaw(id, path)
+  return v && cleaned(v, catalogueCourse(id)?.clean)
+}
+
+async function courseFileRaw(id: string, path: string): Promise<RepoFileView | null> {
   const c = catalogueCourse(id)
   const meta = await importedCourse(id)
   // A course from the web has no repository to browse: its links point at the web
@@ -231,6 +246,10 @@ export async function courseFileView(id: string, path: string): Promise<RepoFile
 
 /** A file or folder of any other GitHub repository */
 export async function githubFileView(repo: string, ref: string, path: string): Promise<RepoFileView> {
+  return cleaned(await githubFileRaw(repo, ref, path))
+}
+
+async function githubFileRaw(repo: string, ref: string, path: string): Promise<RepoFileView> {
   const clean = normalisePath(path)
   const branch = ref || 'HEAD'
   const r = { repo, branch }
