@@ -45,10 +45,16 @@ async function allTools(): Promise<McpTool[]> {
 
 /**
  * A pair-programming session in the IDE (key "ide:<session>") gets only the IDE's coding tools,
- * confined to its project (main/ide/pair); every other caller gets the tutor's tools and none of them.
+ * confined to its project (main/ide/pair); a coding lesson (key "code:<lab>") gets the tutor's
+ * tools and those code tools, confined to the lesson's folder (main/ide/lesson); every other
+ * caller gets the tutor's tools and none of them.
  */
-async function toolsFor(lesson: string): Promise<McpTool[]> {
+export async function toolsFor(lesson: string): Promise<McpTool[]> {
   if (lesson.startsWith('ide:')) return (await import('./ide/pair')).IDE_TOOLS
+  if (lesson.startsWith('code:')) {
+    const code = await import('./ide/lesson')
+    return [...(await allTools()), ...code.lessonTools(code.labOfKey(lesson))]
+  }
   return allTools()
 }
 

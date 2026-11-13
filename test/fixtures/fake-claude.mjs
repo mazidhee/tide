@@ -3,7 +3,7 @@
 // be tested without the real CLI. It says what it was given (its arguments, any API key it can
 // see, each message and model switch) in its replies. Words in a message change what it does:
 // "crash" exits, "limit" answers as a plan at its limit, "[hang]" never answers, "[thinks long]" thinks and writes late, "slow" writes slowly until interrupted,
-// "think" thinks before it writes, "window" reports the plan's windows. Pictures (image blocks) are counted in its reply; a marking call
+// "think" thinks before it writes, "window" reports the plan's windows, "[tail]" also says the end of the message, of its system prompt and its MCP config's path. Pictures (image blocks) are counted in its reply; a marking call
 // sent with pictures (one-shot, stream-json in) answers with a verdict that says how many it saw.
 import { createInterface } from 'readline'
 const out = (o) => process.stdout.write(JSON.stringify(o) + '\n')
@@ -83,7 +83,7 @@ if (flag('--output-format') === 'json' || !flag('--input-format')) {
       return
     }
     if (said.includes('think')) out({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'hmm' } } })
-    const reply = `pid ${process.pid} turn ${turn} model ${model} tools ${tools || 'none'} key ${process.env.ANTHROPIC_API_KEY ?? 'none'} heard: ${(pics.length ? words : said).slice(0, 60)}${pics.length ? ` [pictures ${pics.map((b) => b.source.media_type).join(',')}]` : ''}${said.includes('custom ```visual explainer') ? ' [offered a visual]' : ''}`
+    const reply = `pid ${process.pid} turn ${turn} model ${model} tools ${tools || 'none'} key ${process.env.ANTHROPIC_API_KEY ?? 'none'} heard: ${(pics.length ? words : said).slice(0, 60)}${pics.length ? ` [pictures ${pics.map((b) => b.source.media_type).join(',')}]` : ''}${said.includes('custom ```visual explainer') ? ' [offered a visual]' : ''}${said.includes('[tail]') ? ` [tail ${said.slice(-200)}] [system ${(flag('--system-prompt') ?? '').slice(-400)}] [config ${flag('--mcp-config')}]` : ''}`
     delta(reply.slice(0, 10))
     delta(reply.slice(10))
     out({ type: 'assistant', message: { content: [{ type: 'text', text: reply }] } })

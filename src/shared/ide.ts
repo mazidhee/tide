@@ -9,8 +9,8 @@ export interface Workspace {
   /** Absolute path of the folder */
   root: string
   name: string
-  /** The notes' Code folder, a folder you opened, or a copy made for a bug hunt */
-  kind: 'code' | 'folder' | 'bughunt'
+  /** The notes' Code folder, a folder you opened, a copy made for a bug hunt, or a coding lesson's own folder */
+  kind: 'code' | 'folder' | 'bughunt' | 'lesson'
 }
 
 export interface FileList {
@@ -236,6 +236,15 @@ export type PairEvent =
   | { session: string; type: 'comment'; comment: ReviewComment }
   | { session: string; type: 'opened'; root: string; path: string; line?: number }
 
+/** What a coding lesson's window hears from its tutor's code tools (main/ide/lesson) */
+export type LessonCodeEvent = { labId: string } & (
+  | { type: 'proposal'; proposal: Proposal }
+  | { type: 'applied'; root: string; path: string }
+  | { type: 'comment'; comment: ReviewComment }
+  /** `planted`: a find-the-bug exercise's file, written without a diff */
+  | { type: 'opened'; root: string; path: string; line?: number; planted?: boolean }
+)
+
 export interface BugHunt {
   id: string
   /** The project the copy was made from */
@@ -343,5 +352,13 @@ export interface IdeApi {
     bugHunt(root: string, hint?: string): Promise<BugHunt>
     reveal(id: string): Promise<BugHunt>
     hunts(): Promise<BugHunt[]>
+  }
+  /** Coding lessons' folders (main/ide/lesson) */
+  lesson: {
+    /** The lesson's folder (made if new), or the linked project's when `root` is one the IDE may open */
+    open(labId: string, topic: string, root?: string): Promise<Workspace>
+    /** Kept among the IDE's workspaces, to open it in the Code view */
+    openInIde(labId: string, topic: string, root?: string): Promise<Workspace>
+    onEvent(cb: (e: LessonCodeEvent) => void): () => void
   }
 }
