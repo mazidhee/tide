@@ -42,7 +42,7 @@ Last updated: 13 November 2026.
 
 ## Now
 
-- [ ] **Pop-out windows everywhere.** Open a lesson, project, course, note, the reader or a mock in its own window, from a clear button, ⌥⌘N or right-click. Being built (worktree `tide-popout`).
+- [x] **Pop-out windows everywhere.** Open a lesson, project, course, note, the reader or a mock in its own window, from a clear button, ⌥⌘N or right-click.
 - [ ] **The reading room.** Library › Reading: tonight's chapter in "Then today", an immersive reader (highlight, quote, margin notes, Challenge me, the core argument), a book page with a cover banner, an end-of-chapter seminar, and listening with a mini player. Being built (worktree `tide-reading`).
 - [ ] **Maths tutor.** First-principles, Socratic teaching for maths and statistics; drift detection that switches format; explorables you drag (derivatives, matrices, distributions, random walks); poke-holes challenges; a maths-to-quant ladder. Being built (worktree `tide-maths`).
 - [ ] **Notebook and quant lab.** A Jupyter-compatible notebook in Tide with the tutor in the margin (build on Jupyter's kernel or marimo); the lab pack (scipy, statsmodels, scikit-learn, polars, DuckDB, cvxpy, QuantLib, arch); market data from free sources; finance visuals (yield curve, option payoffs and Greeks, Monte Carlo, efficient frontier, order book). Check each licence first (OpenBB is AGPL).
