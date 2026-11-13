@@ -43,6 +43,8 @@ import { LessonNotes } from './LessonNotes'
 import { finishAgendaItem } from '../lib/agenda'
 import { useStudying } from '../lib/studying'
 import { lessonId } from '@shared/lessonLog'
+import { PopOutButton } from './PopOutButton'
+import { usePopOutSurface } from '../lib/popout'
 import { endOngoing, followInBackground, getOngoing, keepLesson, keepLive, saveOngoing, sessionKey, stopFollowing } from '../lib/sessions'
 import type { View } from '../state'
 import { Professor, type ProfessorPose } from './Professor'
@@ -117,7 +119,6 @@ const hostOf = (url: string) => {
     return url
   }
 }
-const inFocusWindow = /[#&]focus=/.test(window.location.hash)
 
 export function SessionView({ mode, scope, topic, options, initialTurns, view }: { mode: SessionMode; scope: ChatScope; topic: string; options?: SessionSetup['options']; initialTurns?: { role: 'user' | 'assistant'; content: string }[]; view?: View }) {
   const ongoingKey = view ? sessionKey(view as { kind: string; mode?: string; topic?: string; nonce?: number }) : null
@@ -823,10 +824,24 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     if (view) keepLesson(ongoingKey, view, keepRef.current.turns, true, keepRef.current.threads)
     endOngoing(ongoingKey)
   }, [finished, ongoingKey])
+  // Moved to a window of its own (or back): the other window keeps it from now on (lib/popout)
+  const handedOver = useRef(false)
+  usePopOutSurface({
+    name: topic.replace(/\s*\(https?:[^)]*\)\s*$/, ''),
+    busy,
+    view: () =>
+      view?.kind === 'session' && ongoingKey
+        ? { ...view, focus: undefined, lesson: view.lesson ?? lessonId(ongoingKey), turns: keepRef.current.turns.map((t) => ({ role: t.role, content: t.content })), threads: keepRef.current.threads }
+        : null,
+    handedOver: () => {
+      handedOver.current = true
+      if (ongoingKey) endOngoing(ongoingKey)
+    }
+  })
   useEffect(
     () => () => {
       const k = keepRef.current
-      if (!ongoingKey || !view || k.finished || k.turns.length < 2) return
+      if (handedOver.current || !ongoingKey || !view || k.finished || k.turns.length < 2) return
       saveOngoing({ key: ongoingKey, view, title: `${MODE_LABEL[mode] ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: activeId.current, threads: k.threads }, busy: k.busy })
       if (k.busy && activeId.current) followInBackground(ongoingKey, activeId.current)
     },
@@ -1595,20 +1610,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             <Icon name="globe" size={13} />
             <span>{web ? 'Web on' : 'Web off'}</span>
           </button>
-          {!inFocusWindow && (
-            <button
-              className="tool-btn"
-              disabled={busy}
-              onClick={() => {
-                window.tide.windows.openFocus({ kind: 'session', mode, scope, topic, options, turns: turns.map((t) => ({ role: t.role, content: t.content })), threads, nonce: Date.now() })
-                app.back()
-              }}
-              title="Carry on in a window of its own, with nothing else on screen"
-            >
-              <Icon name="width" />
-              <span>Own window</span>
-            </button>
-          )}
+          <PopOutButton className="tool-btn keep-label" disabled={busy} />
           <button
             className={`tool-btn keep-label${talk ? ' on' : ''}`}
             aria-pressed={talk}

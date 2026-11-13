@@ -4,6 +4,7 @@
  * code runnable here. "Learn" starts a lesson taught from the course's own text (the source-led
  * lessons: the tutor questions and marks, the course explains).
  */
+import { usePopOutSurface } from '../lib/popout'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CATALOGUE, SOURCES, areaLabel, fromRepo, homeUrl, mediaOf, moduleProgress, nextLesson, registerCourses, sourceOf, sourceSite, suggestCourses, type CatalogueCourse, type CourseArea, type CourseLesson, type CourseModule, type CourseProgress, type CourseRef } from '@shared/courses'
 import type { CourseCard, CourseDetail, ImportPhase, LessonContent } from '../../../main/courses'
@@ -652,6 +653,8 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
   const currentId = lessonId ?? next?.lesson.id ?? flat[0]?.l.id
   const at = flat.findIndex((x) => x.l.id === currentId)
   const here = at >= 0 ? flat[at] : null
+  // In a window of its own, at the same lesson, under the course's name (lib/popout)
+  usePopOutSurface({ name: d?.course.title, view: () => ({ kind: 'courses', id, ...(currentId ? { lesson: currentId } : {}) }) })
 
   // Links in this course open here: another lesson of it in the outline, anything else as a page over the lesson
   const flatRef = useRef(flat)
@@ -687,10 +690,13 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
     wasPage.current = !!page
   }, [page])
 
-  // The lesson's text, or the README before it is imported
+  // The lesson's text, or the README before it is imported. Keyed on whether it's imported, not on
+  // the course object: saving reading progress as you scroll replaces that object, and reloading the
+  // lesson then threw you back to the top of the page
+  const imported = d ? d.imported : undefined
   useEffect(() => {
-    if (!d) return
-    if (!d.imported) {
+    if (imported === undefined) return
+    if (!imported) {
       if (preview === undefined) window.tide.courses.preview(id).then(setPreview).catch(() => setPreview(null))
       return
     }
@@ -705,7 +711,7 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
     return () => {
       live = false
     }
-  }, [d, id, currentId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [imported, id, currentId]) // eslint-disable-line react-hooks/exhaustive-deps
   // The module you are in stays open
   useEffect(() => {
     if (here) setOpen((o) => (o.has(here.m.id) ? o : new Set(o).add(here.m.id)))

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { usePopOutSurface } from '../lib/popout'
+import { PopOutButton } from './PopOutButton'
 import type { EpubBook } from '@shared/epub'
 import { chapterLabel } from '@shared/epub'
 import { notesPageFor } from '@shared/bookNotes'
@@ -185,6 +187,8 @@ export function EpubView({ path, anchor }: { path: string; anchor?: string }) {
 
   const readTo: PassageLoc | undefined = current && current.n > 0 ? { kind: 'para', chapter: current.n, para: current.paragraphs.length } : undefined
   const title = book?.title || fileTitle(path).replace(/\.epub$/i, '')
+  // In a window of its own, at the same chapter, under the book's title (lib/popout)
+  usePopOutSurface({ name: title, view: () => ({ kind: 'file', path, ...(chapter != null ? { anchor: `loc=${chapter}.1` } : {}), nonce: Date.now() }) })
 
   return (
     <div className="doc-view epub-view">
@@ -219,6 +223,7 @@ export function EpubView({ path, anchor }: { path: string; anchor?: string }) {
             <Icon name="panel" />
             <span>Notes</span>
           </button>
+          <PopOutButton />
         </div>
       </header>
 

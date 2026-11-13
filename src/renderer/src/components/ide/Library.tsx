@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { LibraryItem, ProjectTemplate, Workspace } from '@shared/ide'
 import { TEMPLATES } from '@shared/ideTemplates'
 import { Icon } from '../Icon'
+import { ContextMenu, type MenuState } from '../Menu'
 import '../../styles/ideas.css'
 
 const clean = (e: unknown) => (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
@@ -20,7 +21,8 @@ export function LangMark({ language }: { language: string }) {
  * The Library: every project and snippet in one table (what, when made, its language, your tags),
  * filtered from the field along the bottom, with + for a new project.
  */
-export function Library({ onOpen, onNew, onIdea, current }: { onOpen(item: LibraryItem): void; onNew(): void; onIdea?(): void; current: string | null }) {
+export function Library({ onOpen, onNew, onIdea, current, onPopOut }: { onOpen(item: LibraryItem): void; onNew(): void; onIdea?(): void; current: string | null; onPopOut?(item: LibraryItem): void }) {
+  const [menu, setMenu] = useState<MenuState | null>(null)
   const [items, setItems] = useState<LibraryItem[] | null>(null)
   const [q, setQ] = useState('')
   const [sort, setSort] = useState<{ by: 'name' | 'created' | 'language'; desc: boolean }>({ by: 'created', desc: true })
@@ -74,7 +76,11 @@ export function Library({ onOpen, onNew, onIdea, current }: { onOpen(item: Libra
           </thead>
           <tbody>
             {shown.map((it) => (
-              <tr key={it.key} className={`${sel === it.key ? 'sel' : ''}${it.root === current && it.kind === 'project' ? ' current' : ''}`} onClick={() => setSel(it.key)} onDoubleClick={() => onOpen(it)} onKeyDown={(e) => e.key === 'Enter' && onOpen(it)} tabIndex={0}>
+              <tr key={it.key} className={`${sel === it.key ? 'sel' : ''}${it.root === current && it.kind === 'project' ? ' current' : ''}`} onClick={() => setSel(it.key)} onDoubleClick={() => onOpen(it)} onContextMenu={(e) => {
+                e.preventDefault()
+                setSel(it.key)
+                setMenu({ x: e.clientX, y: e.clientY, items: [{ label: 'Open', run: () => onOpen(it) }, ...(onPopOut ? [{ label: 'Open in new window', run: () => onPopOut(it) }] : [])] })
+              }} onKeyDown={(e) => e.key === 'Enter' && onOpen(it)} tabIndex={0}>
                 <td className="ix-col-mark">
                   <LangMark language={it.language} />
                 </td>
@@ -129,8 +135,9 @@ export function Library({ onOpen, onNew, onIdea, current }: { onOpen(item: Libra
             </button>
           )}
         </div>
-        <span className="ix-row-dir">Double-click to open</span>
+        <span className="ix-row-dir">{onPopOut ? 'Double-click to open, right-click for a new window' : 'Double-click to open'}</span>
       </div>
+      <ContextMenu menu={menu} onClose={() => setMenu(null)} />
     </div>
   )
 }

@@ -2,7 +2,10 @@ import type { SidebarItem } from '@shared/sidebar'
 import { FocusTimer } from './FocusTimer'
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react'
 import type { FileNode } from '@shared/types'
-import { fileTitle, folderOf, useApp } from '../state'
+import { fileTitle, folderOf, useApp, type View } from '../state'
+import { popOutItem } from './PopOutButton'
+import { useHeld } from '../lib/popout'
+import { canPopOut, popKeyOf, type PopView } from '@shared/popout'
 import { SECTIONS } from './SettingsView'
 import { Avatar } from './Avatar'
 import { useProfile } from '../lib/profile'
@@ -116,17 +119,20 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
     e.preventDefault()
     const isFolder = node.type === 'folder'
     const scope = isFolder ? ({ kind: 'folder', path: node.path } as const) : ({ kind: 'note', path: node.path } as const)
+    // A note, a book, or a top-level notebook (a project's home) can have a window of its own
+    const own: View | null = !isFolder ? (node.kind === 'image' ? null : { kind: 'file', path: node.path }) : !node.path.includes('/') ? { kind: 'notebook', path: node.path } : null
     setMenu({
       x: e.clientX,
       y: e.clientY,
       items: [
+        ...(own ? [popOutItem(app, own)] : []),
         ...(isFolder
           ? [
-              { label: 'New note', run: () => newNote(node.path) },
+              { label: 'New note', run: () => newNote(node.path), separatorBefore: !!own },
               { label: 'New folder', run: () => newFolder(node.path) }
             ]
           : []),
-        { label: isFolder ? 'Ask about this notebook' : 'Ask about this note', run: () => app.ask('', { scope }), separatorBefore: isFolder },
+        { label: isFolder ? 'Ask about this notebook' : 'Ask about this note', run: () => app.ask('', { scope }), separatorBefore: isFolder || !!own },
         { label: 'Quiz me', run: () => app.setView({ kind: 'quiz', scope }) },
         { label: 'Review flashcards', run: () => app.setView({ kind: 'study', scope }) },
         { label: 'Rename', run: () => setRenaming(node.path), separatorBefore: true },
@@ -210,8 +216,13 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
   const hidden = new Set(settings.sidebarHidden ?? [])
   const shown = (id: SidebarItem) => !hidden.has(id)
 
-  const navItem = (icon: IconName, label: string, active: boolean, onClick: () => void, badge?: number | string) => (
-    <button className={`nav-item${active ? ' active' : ''}`} onClick={onClick} aria-current={tide && active ? 'page' : undefined}>
+  const navItem = (icon: IconName, label: string, active: boolean, onClick: () => void, badge?: number | string, own?: View) => (
+    <button
+      className={`nav-item${active ? ' active' : ''}`}
+      onClick={onClick}
+      aria-current={tide && active ? 'page' : undefined}
+      onContextMenu={own ? (e) => (e.preventDefault(), setMenu({ x: e.clientX, y: e.clientY, items: [{ label: 'Open', run: onClick }, popOutItem(app, own)] })) : undefined}
+    >
       <Icon name={icon} size={16} />
       <span>{label}</span>
       {!!badge && <span className="badge">{badge}</span>}
@@ -237,6 +248,8 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
     localStorage.setItem('tide.nav.study', open ? 'open' : 'closed')
   }
   const ongoing = useOngoing()
+  // Lessons open in a window of their own are marked: a click brings that window forward
+  const held = useHeld()
   const me = useProfile()
 
   // In Settings the sidebar becomes the list of settings, with a way back to where you were
@@ -318,7 +331,7 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
 
       <nav className="sidebar-nav">
         {shown('home') && navItem('home', 'Home', view.kind === 'home', () => app.setView({ kind: 'home' }))}
-        {shown('chat') && navItem('chat', 'Chat', view.kind === 'chat', () => app.setView({ kind: 'chat' }))}
+        {shown('chat') && navItem('chat', 'Chat', view.kind === 'chat', () => app.setView({ kind: 'chat' }), undefined, { kind: 'chat' })}
         <div className={`nav-group${studyOpen ? ' open' : ''}`}>
           <button className={`nav-item nav-group-head${studyActive && !studyOpen ? ' active' : ''}`} onClick={() => setStudyOpen(!studyOpen)} aria-expanded={studyOpen}>
             <Icon name="book" size={16} />
@@ -329,7 +342,7 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
           {studyOpen && (
             <div className="nav-group-items">
               {shown('learn') && navItem('tutor', 'Learn', view.kind === 'learn' || view.kind === 'session' || view.kind === 'quiz' || view.kind === 'exam', () => app.setView({ kind: 'learn' }))}
-              {shown('courses') && navItem('course', 'Courses', view.kind === 'courses', () => app.setView({ kind: 'courses' }))}
+              {shown('courses') && navItem('course', 'Courses', view.kind === 'courses', () => app.setView({ kind: 'courses' }), undefined, { kind: 'courses' })}
               {shown('practice') && navItem('terminal', 'Practice', view.kind === 'practice' || view.kind === 'lab' || view.kind === 'code' || view.kind === 'drill' || view.kind === 'maths' || view.kind === 'design', () => app.setView({ kind: 'practice' }))}
               {shown('review') && navItem('cards', 'Review', view.kind === 'study', () => app.setView({ kind: 'study', scope: { kind: 'vault' } }), dueCount)}
               {navItem('list', 'Your week', view.kind === 'coach' || view.kind === 'wrapup' || view.kind === 'weekly', () => app.setView({ kind: 'coach' }))}
@@ -338,6 +351,8 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
           )}
         </div>
         {shown('library') && navItem('library', 'Library', view.kind === 'library', () => app.setView({ kind: 'library' }))}
+        {/* The reading room sits under the Library (components/reading) */}
+        {shown('library') && <div className="nav-group-items nav-sub-reading">{navItem('book', 'Reading', view.kind === 'reading' || view.kind === 'reader', () => app.setView({ kind: 'reading' }))}</div>}
         {shown('graph') && navItem('graph', tide ? 'What you know' : 'Brain', view.kind === 'graph', () => app.setView({ kind: 'graph' }), tide && fading ? `${fading} fading` : undefined)}
       </nav>
 
@@ -348,10 +363,31 @@ export function Sidebar({ dueCount }: { dueCount: number }) {
           </div>
           {ongoing.slice(0, 4).map((o) => (
             <div key={o.key} className={`ongoing-row${JSON.stringify(o.view) === JSON.stringify(view) ? ' active' : ''}`}>
-              <button className="ongoing-open" onClick={() => app.setView(o.view)} title={`Carry on: ${o.title}`}>
+              <button
+                className="ongoing-open"
+                onClick={() => app.setView(o.view)}
+                title={`Carry on: ${o.title}`}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  setMenu({
+                    x: e.clientX,
+                    y: e.clientY,
+                    items: [
+                      { label: 'Carry on', run: () => app.setView(o.view) },
+                      ...(canPopOut(o.view as PopView) ? [popOutItem(app, o.view)] : []),
+                      { label: 'Let it go', run: () => endOngoing(o.key), separatorBefore: true }
+                    ]
+                  })
+                }}
+              >
                 <Professor state={o.busy ? 'writing' : o.title.startsWith('Exam') ? 'stopwatch' : 'tea'} size={16} />
                 <span className="ongoing-title">{o.title}</span>
                 {o.busy && <span className="ongoing-dot" title="A reply is arriving" />}
+                {held.has(popKeyOf(o.view as PopView)) && (
+                  <span className="ongoing-out" title="Open in its own window">
+                    <Icon name="popout" size={12} />
+                  </span>
+                )}
               </button>
               <button className="icon-btn small ongoing-close" title="Let it go" onClick={() => endOngoing(o.key)}>
                 <Icon name="x" size={11} />

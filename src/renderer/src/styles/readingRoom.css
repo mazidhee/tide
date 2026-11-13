@@ -1,0 +1,1839 @@
+/*
+  The reading room (components/reading) and the cover banner any note can have (NoteCover).
+
+  The reader has its own paper, day or night, chosen by the reader and kept per window. Its
+  tokens are derived from the theme: each theme gives the two papers a base tone of its own
+  family (warm for sepia and ember, blue-black for midnight), and every highlight, rule and
+  control is made from the theme's single --accent, so a colour picked in Settings follows.
+  Surfaces stay neutral; the covers bring the colour.
+*/
+
+:root {
+  --read-face: 'Newsreader Variable', 'Source Serif 4 Variable', 'Iowan Old Style', Georgia, serif;
+  --rr-ui: var(--ui, var(--font-ui, -apple-system, BlinkMacSystemFont, sans-serif));
+  /* The two papers, per theme family */
+  --rp-day: #f5f2eb;
+  --rp-day-ink: #2b2823;
+  --rp-day-soft: #6c665b;
+  --rp-night: #17181b;
+  --rp-night-ink: #e3e0d9;
+  --rp-night-soft: #a29e95;
+}
+:root[data-theme='sepia'] {
+  --rp-day: #f3ecdf;
+  --rp-day-ink: #3a2f22;
+  --rp-day-soft: #7a6a56;
+  --rp-night: #1d1a16;
+  --rp-night-ink: #e6dccb;
+}
+:root[data-theme='graphite'] {
+  --rp-night: #19191a;
+}
+:root[data-theme='dark'] {
+  --rp-night: #1b1d20;
+}
+:root[data-theme='midnight'] {
+  --rp-night: #0f1218;
+  --rp-night-ink: #dfe3ea;
+  --rp-night-soft: #959cab;
+  --rp-day: #f2f1ee;
+}
+:root[data-theme='ember'] {
+  --rp-night: #1c1714;
+  --rp-night-ink: #e9dfd5;
+  --rp-night-soft: #a8998c;
+  --rp-day: #f6efe6;
+}
+
+/* ---------- The reader ---------- */
+
+.rr-reader {
+  --rp-paper: var(--rp-night);
+  --rp-ink: var(--rp-night-ink);
+  --rp-soft: var(--rp-night-soft);
+  --rp-line: color-mix(in srgb, var(--rp-ink) 11%, transparent);
+  --rp-hover: color-mix(in srgb, var(--rp-ink) 7%, transparent);
+  --rp-raised: color-mix(in oklab, var(--rp-paper) 90%, var(--rp-ink));
+  --rp-hl: color-mix(in srgb, var(--accent) 24%, transparent);
+  --rp-hl-quote: color-mix(in srgb, var(--accent) 34%, transparent);
+  --rp-mark: color-mix(in srgb, var(--accent) 70%, var(--rp-ink));
+  /* The line being read aloud: a neutral wash, so it never reads as one of your marks */
+  --rp-spoken: color-mix(in srgb, var(--rp-ink) 14%, transparent);
+  --rp-shadow: 0 14px 40px -8px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--rp-line);
+  --drawer-w: 372px;
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--rp-paper);
+  color: var(--rp-ink);
+  transition: background 0.4s, color 0.4s;
+  overflow: hidden;
+}
+.rr-reader[data-paper='day'] {
+  --rp-paper: var(--rp-day);
+  --rp-ink: var(--rp-day-ink);
+  --rp-soft: var(--rp-day-soft);
+  --rp-raised: #fffdf8;
+  --rp-hl: color-mix(in srgb, var(--accent) 17%, transparent);
+  --rp-hl-quote: color-mix(in srgb, var(--accent) 26%, transparent);
+  --rp-mark: color-mix(in srgb, var(--accent) 80%, var(--rp-ink));
+  --rp-spoken: color-mix(in srgb, var(--rp-ink) 10%, transparent);
+  --rp-shadow: 0 12px 34px -10px rgba(40, 30, 10, 0.28), 0 0 0 1px var(--rp-line);
+}
+
+.rr-bar {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 6;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px 0 84px;
+  font: 400 13px/1 var(--rr-ui);
+  color: var(--rp-soft);
+  background: linear-gradient(var(--rp-paper) 62%, transparent);
+  transition: opacity 0.5s ease;
+}
+.rr-reader.with-drawer .rr-bar {
+  padding-right: calc(var(--drawer-w) + 14px);
+}
+.rr-reader.quiet .rr-bar {
+  opacity: 0;
+}
+.rr-reader.quiet .rr-bar:hover,
+.rr-reader.quiet .rr-bar:focus-within {
+  opacity: 1;
+}
+.rr-bar-title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rr-bar-acts {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.rr-tool {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--rp-soft);
+}
+.rr-tool svg {
+  opacity: 0.8;
+}
+.rr-tool:hover,
+.rr-tool.on {
+  background: var(--rp-hover);
+  color: var(--rp-ink);
+}
+.rr-tool:focus-visible,
+.rr-pop button:focus-visible,
+.rr-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.rr-aa {
+  font: 500 14px/1 var(--read-face);
+}
+.rr-anchor {
+  position: relative;
+}
+.rr-size,
+.rr-voices {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 8;
+  width: 260px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--rp-raised);
+  box-shadow: var(--rp-shadow);
+  color: var(--rp-ink);
+}
+.rr-size-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.rr-size-row input {
+  flex: 1;
+  accent-color: var(--accent);
+}
+.rr-step {
+  all: unset;
+  cursor: pointer;
+  width: 26px;
+  text-align: center;
+  font-family: var(--read-face);
+  color: var(--rp-soft);
+}
+.rr-seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--rp-hover);
+}
+.rr-seg button {
+  all: unset;
+  cursor: pointer;
+  white-space: nowrap;
+  flex: 1;
+  text-align: center;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font: 500 12.5px/1.2 var(--rr-ui);
+  color: var(--rp-soft);
+}
+.rr-seg button.on {
+  background: var(--rp-paper);
+  color: var(--rp-ink);
+  box-shadow: 0 0 0 1px var(--rp-line);
+}
+
+.rr-scroll {
+  position: relative;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  container-type: inline-size;
+  transition: padding-right 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.rr-reader.with-drawer .rr-scroll {
+  padding-right: var(--drawer-w);
+}
+.rr-empty {
+  padding: 120px 40px;
+  text-align: center;
+  color: var(--rp-soft);
+  font-family: var(--rr-ui);
+}
+.rr-page {
+  position: relative;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+  max-width: var(--rd-measure, 640px);
+  margin: 0 auto;
+  padding: 96px 30px 120px;
+  font-family: var(--read-face);
+  font-size: var(--rd-size, 20px);
+  font-optical-sizing: auto;
+  line-height: 1.75;
+  color: var(--rp-ink);
+}
+.rr-kicker {
+  font: 500 12px/1.3 var(--rr-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--rp-soft);
+  margin-bottom: 10px;
+}
+.rr-title {
+  font: italic 400 1.7em/1.2 var(--read-face);
+  margin: 0 0 1.5em;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.rr-unit {
+  position: relative;
+  border-radius: 4px;
+  transition: background 0.8s;
+}
+.rr-unit.flash {
+  background: var(--rp-spoken);
+}
+.rr-text {
+  margin: 0 0 1.15em;
+  white-space: pre-line;
+  hanging-punctuation: first;
+  text-wrap: pretty;
+}
+.rr-text.verse {
+  padding-left: 1.2em;
+}
+.rr-text.drop::first-letter {
+  float: left;
+  font-size: 3.15em;
+  line-height: 0.88;
+  margin: 0.08em 0.1em 0 0;
+  font-weight: 400;
+  color: var(--rp-ink);
+}
+.rr-text ::selection,
+.rr-text::selection {
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+}
+::highlight(tide-spoken) {
+  background-color: var(--rp-spoken, rgba(128, 128, 128, 0.18));
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.32em;
+}
+
+/* Marks */
+.rr-m {
+  color: inherit;
+  background: none;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.rr-m.k-highlight,
+.rr-m.k-note {
+  background: var(--rp-hl);
+  box-shadow: 0 0 0 2px var(--rp-hl);
+}
+.rr-m.k-quote {
+  background: var(--rp-hl-quote);
+  box-shadow: 0 0 0 2px var(--rp-hl-quote);
+}
+.rr-m.k-question {
+  text-decoration: underline dotted var(--rp-mark);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.3em;
+}
+.rr-m.flash {
+  animation: rr-flash 1.8s ease;
+}
+@keyframes rr-flash {
+  0%,
+  40% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+}
+
+/* Margin notes, beside the words */
+.rr-margins {
+  position: absolute;
+  top: 0;
+  left: calc(100% - 4px);
+  width: 210px;
+}
+.rr-margin {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  padding: 2px 0 2px 11px;
+  border-left: 2px solid var(--rp-mark);
+  font: 400 12.5px/1.45 var(--rr-ui);
+  color: var(--rp-soft);
+  transition: top 0.25s;
+}
+.rr-margin b {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--rp-ink);
+}
+.rr-margin-text {
+  cursor: text;
+  white-space: pre-wrap;
+}
+.rr-margin textarea {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  resize: none;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--rp-ink);
+  caret-color: var(--accent);
+}
+.rr-margin.flash {
+  border-left-color: var(--accent);
+}
+/* Not enough room beside the text: the notes sit under it, in its column */
+@container (max-width: 1010px) {
+  .rr-margins {
+    position: static;
+    width: auto;
+  }
+  .rr-margin {
+    position: relative;
+    top: auto !important;
+    margin: 0 0 14px;
+  }
+}
+
+/* The menu on a selection */
+.rr-pop {
+  position: absolute;
+  z-index: 7;
+  transform: translate(-50%, calc(-100% - 10px));
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 4px;
+  border-radius: 11px;
+  background: var(--rp-raised);
+  box-shadow: var(--rp-shadow);
+  font: 400 13px/1 var(--rr-ui);
+  white-space: nowrap;
+  animation: rr-in 0.14s ease-out;
+}
+.rr-pop button {
+  all: unset;
+  cursor: pointer;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: var(--rp-soft);
+}
+.rr-pop button:hover {
+  background: var(--rp-hover);
+  color: var(--rp-ink);
+}
+.rr-pop button.danger:hover {
+  color: var(--danger, #d0503c);
+}
+.rr-pop .sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 3px;
+  background: var(--rp-line);
+}
+@keyframes rr-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% - 4px));
+  }
+}
+
+/* End of the chapter */
+.rr-endcard {
+  user-select: none;
+  cursor: default;
+  margin: 3em 0 0;
+  padding: 22px 0 0;
+  border-top: 1px solid var(--rp-line);
+  font-family: var(--rr-ui);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.rr-endcard h2 {
+  margin: 4px 0 4px;
+  font: 500 22px/1.3 var(--read-face);
+}
+.rr-endcard p {
+  margin: 0 0 14px;
+  color: var(--rp-soft);
+}
+.rr-end-kicker {
+  margin: 0 !important;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.rr-end-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.rr-end-done {
+  color: var(--rp-soft);
+  margin-right: 8px;
+}
+
+/* Buttons, in the reader's paper and in the app */
+.rr-btn {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 13px;
+  border-radius: 8px;
+  border: 1px solid var(--rp-line, var(--line-strong));
+  font: 500 13.5px/1 var(--rr-ui);
+  color: var(--rp-ink, var(--ink));
+  box-sizing: border-box;
+}
+.rr-btn:hover {
+  background: var(--rp-hover, var(--bg-hover));
+}
+.rr-btn.primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-ink);
+}
+.rr-btn.primary:hover {
+  background: color-mix(in srgb, var(--accent) 88%, var(--ink));
+}
+.rr-btn.ghost {
+  border-color: transparent;
+  color: var(--rp-soft, var(--ink-muted));
+}
+.rr-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Progress, at the foot */
+.rr-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--rp-line);
+  z-index: 3;
+}
+.rr-progress i {
+  display: block;
+  height: 100%;
+  background: color-mix(in srgb, var(--accent) 75%, var(--rp-paper));
+  transition: width 0.4s;
+}
+.rr-foot {
+  position: absolute;
+  left: 14px;
+  bottom: 8px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font: 400 12px/1 var(--rr-ui);
+  color: var(--rp-soft);
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.5s;
+}
+.rr-reader.quiet .rr-foot {
+  opacity: 0.55;
+}
+.rr-foot-btn {
+  all: unset;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+.rr-foot-btn:hover {
+  background: var(--rp-hover);
+}
+.rr-foot-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.rr-foot-btn.flip svg {
+  transform: scaleX(-1);
+}
+
+/* ---------- Reading aloud ---------- */
+
+.rr-player {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 6px;
+  border-radius: 999px;
+  background: var(--rp-raised);
+  box-shadow: var(--rp-shadow);
+  font: 400 13px/1 var(--rr-ui);
+  color: var(--rp-soft);
+  white-space: nowrap;
+}
+.rr-reader.with-drawer .rr-player {
+  left: calc((100% - var(--drawer-w)) / 2);
+}
+.rr-play {
+  all: unset;
+  flex: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.rr-play.small {
+  width: 28px;
+  height: 28px;
+}
+.rr-player-skip,
+.rr-player-x {
+  all: unset;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: var(--rp-soft, var(--ink-muted));
+}
+.rr-player-skip:hover,
+.rr-player-x:hover {
+  background: var(--rp-hover, var(--bg-hover));
+}
+.rr-voice {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--rp-line);
+  color: var(--rp-ink);
+}
+.rr-voice:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.rr-voices {
+  top: auto;
+  bottom: calc(100% + 10px);
+  right: auto;
+  left: -40px;
+  width: 300px;
+  white-space: normal;
+}
+.rr-voices-head {
+  font-size: 11.5px;
+  color: var(--rp-soft);
+  margin: 0 4px 8px;
+}
+.rr-voices-list {
+  max-height: 240px;
+  overflow-y: auto;
+  display: grid;
+  gap: 1px;
+}
+.rr-voices-list button {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+.rr-voices-list button span {
+  color: var(--rp-soft);
+  font-size: 12px;
+}
+.rr-voices-list button:hover,
+.rr-voices-list button.on {
+  background: var(--rp-hover);
+}
+.rr-voices-list button.on b {
+  color: var(--accent);
+}
+.rr-voices-check {
+  display: flex;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 10px 4px 2px;
+  border-top: 1px solid var(--rp-line);
+  font-size: 13px;
+  color: var(--rp-ink);
+  line-height: 1.35;
+}
+.rr-voices-check input {
+  accent-color: var(--accent);
+  margin-top: 2px;
+}
+.rr-voices-check small {
+  display: block;
+  color: var(--rp-soft);
+  font-size: 12px;
+  margin-top: 2px;
+}
+.rr-speed {
+  border: 1px solid var(--rp-line);
+  border-radius: 8px;
+  padding: 4px 6px;
+  background: transparent;
+  color: var(--rp-ink);
+  font: inherit;
+}
+.rr-player-left {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The mini player, anywhere else in Tide */
+.rr-mini {
+  position: fixed;
+  left: 50%;
+  bottom: 40px;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(560px, calc(100vw - 48px));
+  padding: 6px 6px 6px 6px;
+  border-radius: 999px;
+  background: var(--bg-raised);
+  color: var(--ink);
+  box-shadow: var(--shadow-pop, var(--shadow));
+  border: 1px solid var(--line);
+}
+.rr-mini-line {
+  all: unset;
+  cursor: pointer;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding-right: 4px;
+}
+.rr-mini-book {
+  font: 500 11.5px/1.2 var(--rr-ui);
+  color: var(--ink-muted);
+}
+.rr-mini-text {
+  font: italic 400 14px/1.3 var(--read-face);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Beside the page ---------- */
+
+/* The drawer takes the paper's palette, day or night, so the page and what's beside it are one surface */
+.rr-drawer {
+  --ink: var(--rp-ink);
+  --ink-soft: color-mix(in oklab, var(--rp-ink) 78%, var(--rp-paper));
+  --ink-muted: var(--rp-soft);
+  --line: var(--rp-line);
+  --line-strong: color-mix(in srgb, var(--rp-ink) 18%, transparent);
+  --bg: var(--rp-paper);
+  --bg-sidebar: color-mix(in oklab, var(--rp-paper) 96%, var(--rp-ink));
+  --bg-raised: var(--rp-raised);
+  --bg-hover: var(--rp-hover);
+  --rp-line: color-mix(in srgb, var(--rp-ink) 18%, transparent);
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  width: var(--drawer-w);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-sidebar, var(--bg));
+  color: var(--ink);
+  border-left: 1px solid var(--line);
+  font: 400 14px/1.58 var(--rr-ui);
+  animation: rr-drawer 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes rr-drawer {
+  from {
+    transform: translateX(100%);
+  }
+}
+.rr-drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 10px 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.rr-tabs {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+}
+.rr-tabs button {
+  all: unset;
+  cursor: pointer;
+  padding: 6px 11px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.rr-tabs button:hover {
+  color: var(--ink);
+}
+.rr-tabs button.on {
+  background: var(--bg-raised);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+.rr-x {
+  all: unset;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  color: var(--ink-muted);
+}
+.rr-x:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+.rr-drawer-body {
+  user-select: text;
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px 18px;
+}
+.rr-who {
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.rr-drawer-empty p {
+  margin: 0 0 8px;
+  color: var(--ink-soft);
+}
+.rr-drawer-empty ul {
+  margin: 0 0 16px;
+  padding-left: 18px;
+  color: var(--ink-soft);
+}
+.rr-drawer-empty li {
+  margin-bottom: 6px;
+}
+.rr-drawer-empty b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.rr-qt {
+  margin: 0 0 16px;
+  padding: 0 0 0 12px;
+  border-left: 2px solid var(--accent);
+  font: italic 400 15.5px/1.5 var(--read-face);
+  color: var(--ink-soft);
+}
+.rr-qt small {
+  display: block;
+  margin-top: 4px;
+  font: 400 11.5px/1.3 var(--rr-ui);
+  font-style: normal;
+  color: var(--ink-muted);
+}
+.rr-cl {
+  margin: 0 0 14px;
+}
+.rr-cl b {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  margin-bottom: 3px;
+}
+.rr-cl p {
+  margin: 0 0 8px;
+  white-space: pre-line;
+}
+.rr-cl.opening p {
+  color: var(--ink);
+}
+.rr-cl.opening b {
+  color: var(--accent);
+}
+.rr-cl-note {
+  color: var(--ink-soft);
+  margin: 10px 0 14px;
+}
+.rr-me {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  white-space: pre-wrap;
+}
+.rr-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.rr-chips button {
+  all: unset;
+  cursor: pointer;
+  padding: 4px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.rr-chips button:hover {
+  color: var(--ink);
+  background: var(--bg-hover);
+}
+.rr-chips button:disabled {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  cursor: default;
+}
+.rr-map h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.rr-map ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+  display: grid;
+  gap: 6px;
+}
+.rr-map li {
+  counter-increment: step;
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  line-height: 1.45;
+}
+.rr-map li::before {
+  content: counter(step);
+  color: var(--accent);
+  font-weight: 700;
+}
+.rr-map li.new {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--bg-raised));
+}
+.rr-ask {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 10px 12px 12px;
+  padding: 8px 8px 8px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--bg-raised);
+}
+.rr-ask:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line-strong));
+}
+.rr-ask textarea {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.45;
+}
+.rr-send {
+  all: unset;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.rr-send:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.rr-thinking {
+  display: flex;
+  gap: 4px;
+  padding: 8px 0 14px;
+}
+.rr-thinking i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-muted);
+  animation: rr-dot 1.2s infinite ease-in-out;
+}
+.rr-thinking i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.rr-thinking i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes rr-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+.rr-error {
+  color: var(--danger, #d0503c);
+  font-size: 13px;
+}
+.rr-muted {
+  color: var(--ink-muted);
+}
+.rr-small {
+  font-size: 12.5px;
+}
+.rr-done {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+/* The seminar */
+.rr-sem-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.rr-sem-head span {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.rr-stages {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+.rr-stages li {
+  padding-top: 6px;
+  border-top: 2px solid var(--line-strong);
+}
+.rr-stages li.past {
+  border-top-color: color-mix(in srgb, var(--accent) 45%, var(--line-strong));
+}
+.rr-stages li.on {
+  border-top-color: var(--accent);
+  color: var(--ink);
+  font-weight: 600;
+}
+.rr-sem-foot {
+  border-top: 1px solid var(--line);
+}
+.rr-sem-foot .rr-ask {
+  margin-bottom: 8px;
+}
+.rr-sem-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+.rr-sem-foot > .rr-sem-acts:first-child {
+  padding-top: 12px;
+}
+.rr-keep {
+  display: grid;
+  gap: 8px;
+}
+.rr-keep-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  cursor: pointer;
+  line-height: 1.45;
+}
+.rr-keep-item input {
+  accent-color: var(--accent);
+  margin-top: 4px;
+}
+.rr-keep-item small {
+  display: block;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  margin-bottom: 2px;
+}
+.rr-keep-item q {
+  font: italic 400 15px/1.45 var(--read-face);
+}
+.rr-keep-item em {
+  display: block;
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+/* Your notes, and the chapter */
+.rr-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+.rr-filter button {
+  all: unset;
+  cursor: pointer;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.rr-filter button.on {
+  border-color: var(--line-strong);
+  background: var(--bg-raised);
+  color: var(--ink);
+}
+.rr-notes-group h4 {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.rr-note {
+  all: unset;
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px 9px 12px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  border-left: 2px solid var(--line-strong);
+}
+.rr-note:hover {
+  background: var(--bg-hover);
+}
+.rr-note.k-quote,
+.rr-note.k-note {
+  border-left-color: var(--accent);
+}
+.rr-note.k-question {
+  border-left-style: dotted;
+  border-left-color: var(--accent);
+}
+.rr-note-text {
+  font: 400 14.5px/1.45 var(--read-face);
+  color: var(--ink);
+}
+.rr-note-mine {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.rr-note small {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+.rr-chapter-card {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+.rr-chapter-card small {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+.rr-chapter-card b {
+  font: 500 17px/1.3 var(--read-face);
+}
+.rr-chapter-card span {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  margin-bottom: 8px;
+}
+.rr-chapters {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rr-chapters button {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+.rr-chapters button small {
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.rr-chapters button:hover {
+  background: var(--bg-hover);
+}
+.rr-chapters button.on {
+  background: var(--bg-raised);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+/* ---------- The reading room ---------- */
+
+.rr-room {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 34px 40px 80px;
+}
+.rr-room-head h1 {
+  margin: 0 0 4px;
+  font: 500 34px/1.15 var(--read-face);
+  letter-spacing: -0.01em;
+}
+.rr-lead {
+  margin: 0 0 24px;
+  color: var(--ink-soft);
+}
+.rr-goal {
+  all: unset;
+  cursor: pointer;
+  border-bottom: 1px dotted var(--ink-muted);
+}
+.rr-goal:hover {
+  color: var(--ink);
+}
+.rr-goal-edit input {
+  width: 64px;
+  margin-right: 6px;
+  padding: 2px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--bg-raised);
+  color: var(--ink);
+  font: inherit;
+}
+.rr-tonight {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 28px;
+  align-items: center;
+  padding: 20px;
+  border-radius: 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-raised);
+}
+.rr-tonight-cover {
+  all: unset;
+  cursor: pointer;
+}
+.rr-kick {
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+.rr-tonight h2 {
+  margin: 2px 0 6px;
+  font: 500 25px/1.25 var(--read-face);
+}
+.rr-tonight p {
+  margin: 0 0 14px;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+.rr-meter {
+  width: min(300px, 100%);
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line-strong);
+  margin-bottom: 16px;
+}
+.rr-meter i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.rr-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.rr-private {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-left: 4px;
+}
+.rr-sec-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 32px 0 12px;
+}
+.rr-sec-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.rr-sec-head span {
+  font-size: 13px;
+}
+.rr-shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 132px));
+  gap: 22px;
+}
+.rr-shelf-item {
+  all: unset;
+  cursor: pointer;
+  display: block;
+}
+.rr-shelf-item small {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rr-shelf-item:hover .rr-bk {
+  transform: translateY(-2px);
+}
+.rr-shelf-item:focus-visible .rr-bk {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* A book's face */
+.rr-bk {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  border-radius: 3px 7px 7px 3px;
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+  box-shadow: inset 4px 0 0 rgba(0, 0, 0, 0.22), 0 10px 22px -6px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s ease;
+}
+.rr-bk:not(.own):not(.add)::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 58%;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.78));
+}
+.rr-bk span {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  z-index: 1;
+  font-family: var(--read-face);
+  color: #f4f1ea;
+  line-height: 1.2;
+}
+.rr-bk span b {
+  display: block;
+  font-weight: 500;
+  font-size: 15px;
+}
+.rr-bk span small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  opacity: 0.8;
+}
+.rr-bk.plain {
+  background: linear-gradient(160deg, color-mix(in oklab, var(--bg-raised) 70%, var(--ink) 12%), color-mix(in oklab, var(--bg) 80%, var(--ink) 6%));
+}
+.rr-bk.plain span {
+  color: var(--ink);
+}
+.rr-bk.plain::after {
+  display: none;
+}
+.rr-bk.add {
+  background: none;
+  box-shadow: none;
+  border: 1px dashed var(--line-strong);
+  display: grid;
+  place-items: center;
+  color: var(--ink-muted);
+}
+.rr-bk.add span {
+  color: var(--ink);
+}
+.rr-bk.add span small {
+  color: var(--ink-muted);
+  opacity: 1;
+}
+.rr-bk.add > svg {
+  margin-bottom: 40px;
+}
+.rr-bk-tonight {
+  width: 150px;
+}
+.rr-bk-tonight span b {
+  font-size: 17px;
+}
+
+/* Adding a book */
+.rr-add {
+  margin-top: 22px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-raised);
+}
+.rr-add .rr-seg {
+  --rp-hover: var(--bg-hover);
+  --rp-paper: var(--bg);
+  --rp-ink: var(--ink);
+  --rp-soft: var(--ink-muted);
+  --rp-line: var(--line);
+}
+.rr-add-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.rr-add-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.rr-add-row input {
+  flex: 1;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+.rr-add .rr-btn,
+.rr-room .rr-btn {
+  --rp-line: var(--line-strong);
+  --rp-ink: var(--ink);
+  --rp-hover: var(--bg-hover);
+}
+.rr-add-sub {
+  margin: 16px 0 6px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+.rr-found {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.rr-found li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 2px;
+  border-top: 1px solid var(--line);
+}
+.rr-found small {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.rr-empty-shelf {
+  margin-top: 16px;
+}
+
+/* ---------- A cover banner on any note ---------- */
+
+.note-cover-host {
+  position: relative;
+}
+/* The banner runs edge to edge, over the page's own padding (the classic design pads the page less) */
+:root:not([data-design='tide']) {
+  --cover-pad-top: 24px;
+  --cover-pad-x: 40px;
+}
+.doc-scroll > .note-cover-host.has-cover {
+  margin: calc(-1 * var(--cover-pad-top, 44px)) calc(-1 * var(--cover-pad-x, 48px)) 0;
+}
+.doc-scroll > .note-cover-host:not(.has-cover) {
+  margin-top: -34px;
+}
+.note-cover-title {
+  margin: 14px 0 4px;
+  font: 500 36px/1.15 var(--read-face);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.doc-view.css-tide-book .prose > h1:first-child,
+.doc-view.css-tide-book .doc-source {
+  display: none;
+}
+.doc-view.css-tide-book .prose p:has(> em:only-child) {
+  font: 400 13px/1.5 var(--rr-ui);
+  color: var(--ink-muted);
+  margin-top: 8px;
+}
+.doc-view.css-tide-book .prose p:has(> em:only-child) em {
+  font-style: normal;
+}
+.note-cover {
+  position: relative;
+  height: 210px;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+.note-cover.moving {
+  cursor: ns-resize;
+}
+.note-cover-acts {
+  position: absolute;
+  right: 18px;
+  bottom: 12px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.18s;
+}
+.note-cover:hover .note-cover-acts,
+.note-cover.moving .note-cover-acts,
+.note-cover-acts:focus-within {
+  opacity: 1;
+}
+.note-cover-acts button,
+.note-cover-hint {
+  all: unset;
+  cursor: pointer;
+  padding: 5px 10px;
+  border-radius: 7px;
+  font: 500 12.5px/1.2 var(--rr-ui);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.52);
+  backdrop-filter: blur(8px);
+}
+.note-cover-hint {
+  cursor: default;
+}
+.note-cover-acts button:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+.note-cover-add {
+  height: 34px;
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 18px 0;
+  opacity: 0;
+  transition: opacity 0.18s;
+}
+.note-cover-host:hover .note-cover-add,
+.note-cover-add:focus-within {
+  opacity: 1;
+}
+.note-cover-add button {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 7px;
+  font: 400 12.5px/1.2 var(--rr-ui);
+  color: var(--ink-muted);
+}
+.note-cover-add button:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+.note-cover-under {
+  position: relative;
+}
+.note-icon {
+  width: 72px;
+  height: 72px;
+  margin-top: -40px;
+  border-radius: 10px;
+  background-size: cover;
+  background-position: center;
+  border: 3px solid var(--bg);
+  box-shadow: 0 8px 22px -6px rgba(0, 0, 0, 0.4);
+}
+.note-icon.book {
+  width: 74px;
+  height: 110px;
+  margin-top: -58px;
+  border-radius: 3px 6px 6px 3px;
+}
+.note-cover-host:not(.has-cover) .note-icon {
+  margin-top: 8px;
+}
+.note-props {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+  margin: 4px 0 6px;
+  font: 400 13px/1.5 var(--rr-ui);
+  color: var(--ink-muted);
+}
+.note-props-open {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent);
+}
+.note-props-open:hover {
+  text-decoration: underline;
+}
+
+/* The cover picker */
+.cover-picker-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+.cover-picker {
+  width: min(760px, calc(100vw - 48px));
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--bg-raised);
+  color: var(--ink);
+  box-shadow: var(--shadow-pop, var(--shadow));
+  border: 1px solid var(--line);
+  font-family: var(--rr-ui);
+}
+.cover-picker-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.cover-picker-row {
+  display: flex;
+  gap: 8px;
+}
+.cover-picker-row input {
+  flex: 1;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+.cover-picker .rr-btn {
+  --rp-line: var(--line-strong);
+  --rp-ink: var(--ink);
+  --rp-hover: var(--bg-hover);
+}
+.cover-picker-note {
+  margin: 8px 0 12px;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+.cover-grid {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  min-height: 160px;
+}
+.cover-thumb {
+  all: unset;
+  cursor: pointer;
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-inset, var(--bg));
+}
+.cover-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.25s;
+}
+.cover-thumb:hover img {
+  transform: scale(1.03);
+}
+.cover-thumb span {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 18px 8px 6px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
+  color: #fff;
+  font-size: 11.5px;
+  line-height: 1.3;
+  opacity: 0;
+  transition: opacity 0.18s;
+}
+.cover-thumb:hover span,
+.cover-thumb:focus-visible span {
+  opacity: 1;
+}
+.cover-thumb span b,
+.cover-thumb span small {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cover-thumb:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.cover-thumb-wait {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, var(--bg-hover) 50%, transparent 70%) 0 0 / 200% 100%;
+  animation: rr-shimmer 1.4s linear infinite;
+}
+@keyframes rr-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+.cover-thumb.busy {
+  opacity: 0.5;
+}
+.cover-picker-foot {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* ---------- The book page (a note with cssclasses: tide-book) ---------- */
+
+.doc-view.css-tide-book .prose h1 {
+  font: 500 36px/1.15 var(--read-face);
+  letter-spacing: -0.01em;
+  margin-top: 14px;
+}
+.doc-view.css-tide-book .prose h2 {
+  font: 600 15px/1.4 var(--rr-ui);
+  margin: 30px 0 10px;
+  letter-spacing: 0;
+}
+.doc-view.css-tide-book .prose h2 + ol {
+  list-style: none;
+  counter-reset: step;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.doc-view.css-tide-book .prose h2 + ol > li {
+  counter-increment: step;
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  line-height: 1.5;
+}
+.doc-view.css-tide-book .prose h2 + ol > li::before {
+  content: counter(step);
+  color: var(--accent);
+  font-weight: 700;
+  font-family: var(--rr-ui);
+}
+.doc-view.css-tide-book .prose blockquote {
+  margin: 0 0 16px;
+  padding: 2px 0 2px 16px;
+  border-left: 2px solid var(--accent);
+  font: 400 18px/1.6 var(--read-face);
+  color: var(--ink);
+  background: none;
+}
+.doc-view.css-tide-book .prose blockquote p:last-child {
+  font: 400 12px/1.4 var(--rr-ui);
+  color: var(--ink-muted);
+}
+.doc-view.css-tide-book .prose blockquote p:only-child {
+  font: inherit;
+  color: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rr-reader *,
+  .rr-drawer,
+  .rr-pop {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+.doc-view.css-tide-book .prose li > em:last-child {
+  font: 400 12.5px/1.4 var(--rr-ui);
+  font-style: normal;
+  color: var(--ink-muted);
+}
+.rr-player-what {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The way in from the Library: tonight's reading, one line */
+.lib-reading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 20px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  color: var(--ink-soft);
+}
+.lib-reading > span {
+  flex: 1;
+  min-width: 0;
+}
+.lib-reading b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.lib-reading svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}

@@ -151,3 +151,12 @@ describe('graphs: what Claude is handed back', () => {
     expect(String(await checkGraphTool.run({ graph: '{"kind":"pie"}' }, {} as never))).toMatch(/^Not drawable/)
   })
 })
+
+describe('graphs: the short form for finance lessons', () => {
+  it('every example in it parses', async () => {
+    const { GRAPH_BRIEF } = await import('../src/shared/graphSpec')
+    const examples = GRAPH_BRIEF.match(/\{"[a-z]+":[^\n]*?\}(?=[,.\s])/g) ?? []
+    expect(examples.length).toBe(5)
+    for (const e of examples) expect(parseGraph(e).ok, e).toBe(true)
+  })
+})

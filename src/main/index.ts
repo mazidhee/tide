@@ -4,7 +4,8 @@ import { connectMetabase, disconnectMetabase, metabaseStatus } from './metabase'
 import { followVault } from './vaultHome'
 import { bankStatus, openingFor, prepare as prepareBank, previewFor, startBank, variantFor, warmups } from './bank'
 import { newStudyApiToken, setStudyApi, startStudyApi, stopStudyApi, studyApiStatus } from './studyApi'
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, protocol, session, shell, powerMonitor } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, net, protocol, screen, session, shell, powerMonitor } from 'electron'
+import { isPopout, popMenuItems, registerPopouts, setQuitting } from './popout'
 import { APP_CSP } from '@shared/appCsp'
 import { VISUAL_SCHEME_PRIVILEGES, blockVisualRequests, denyVisualPermissions, devFrameSrc, guardVisualFrames, handleVisualProtocol, killVisual, unwatchVisual, visualMetrics, watchVisual } from './visualFrames'
 import { lessonVisuals, rememberVisual, repairVisual, visualFallback, visualPolicy } from './visuals'
@@ -47,6 +48,8 @@ import {
 import { importFile, libraryThumb, saveUrl } from './library'
 import { getHighlights, saveHighlights } from './highlights'
 import { registerReading } from './reading'
+import { addToShelf, registerReadingRoom } from './readingRoom'
+import { registerTts } from './tts'
 import { labLoadTable, labQuery, labReset, labSchema } from './lab'
 import { isSql, languagesStatus } from './languages'
 import { registerLanguageServer, stopLanguageServer } from './pythonLanguageServer'
@@ -159,17 +162,12 @@ const send = (channel: string, payload: unknown) => {
   for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send(channel, payload)
 }
 
-/**
- * A lesson, exam or drill in its own window, with nothing else on screen. The view (and a lesson's
- * conversation so far) is handed over through main, so the new window carries on where it was.
- */
-const focusViews = new Map<string, unknown>()
-function openFocusWindow(view: unknown) {
-  const id = Math.random().toString(36).slice(2, 10)
-  focusViews.set(id, view)
+/** A pop-out window (main/popout): set up like the main one, at the place its kind was last left */
+function buildPopout(at: { x: number; y: number; width: number; height: number }, title: string) {
   const w = new BrowserWindow({
-    width: 1080,
-    height: 820,
+    ...at,
+    title,
+    // A test copy's windows stay parked off-screen and never take focus, like its main window
     ...(testCopy ? { x: -1250, y: 60, focusable: false } : {}),
     minWidth: 560,
     minHeight: 420,
@@ -185,8 +183,13 @@ function openFocusWindow(view: unknown) {
     if (/^https?:/.test(url)) shell.openExternal(url)
     return { action: 'deny' }
   })
-  if (process.env.ELECTRON_RENDERER_URL) w.loadURL(`${process.env.ELECTRON_RENDERER_URL}#focus=${id}`)
-  else w.loadFile(join(__dirname, '../renderer/index.html'), { hash: `focus=${id}` })
+  w.webContents.on('will-navigate', (e, url) => {
+    if (url !== w.webContents.getURL() && !url.startsWith('http://localhost')) {
+      e.preventDefault()
+      if (/^https?:/.test(url)) shell.openExternal(url)
+    }
+  })
+  return w
 }
 
 function startVault() {
@@ -486,13 +489,23 @@ function registerIpc() {
     const { claudeTeaches } = await import('./claudeEngine')
     return p.writeWeeklyReview(undefined, { claude: await claudeTeaches().catch(() => false) })
   })
-  handle('window:openFocus', (view: unknown) => openFocusWindow(view))
-  handle('window:focusView', (id: string) => {
-    const v = focusViews.get(id) ?? null
-    focusViews.delete(id)
-    return v
+  registerPopouts({
+    main: (create) => {
+      if ((!win || win.isDestroyed()) && create) createWindow()
+      return win && !win.isDestroyed() ? win : null
+    },
+    build: buildPopout,
+    load: (w, hash) => {
+      if (process.env.ELECTRON_RENDERER_URL) w.loadURL(`${process.env.ELECTRON_RENDERER_URL}#${hash}`)
+      else w.loadFile(join(__dirname, '../renderer/index.html'), { hash })
+    },
+    boundsFile: join(app.getPath('userData'), 'windows.json'),
+    screens: () => {
+      const primary = screen.getPrimaryDisplay()
+      return [primary, ...screen.getAllDisplays().filter((d) => d.id !== primary.id)].map((d) => d.workArea)
+    },
+    testCopy
   })
-  ipcMain.handle('window:close', (e) => BrowserWindow.fromWebContents(e.sender)?.close())
   ipcMain.handle('app:study', (e, status: StudyStatus | null) => {
     const id = e.sender.id
     reportStudy(id, status)
@@ -517,6 +530,14 @@ function registerIpc() {
   handle('mistakes:add', (items: NewMistake[]) => addMistakes(items))
   handle('mistakes:retest', (id: string, correct: boolean) => retestMistake(id, correct))
   handle('learn:checkResources', (md: string) => checkOutlineResources(md))
+  handle('finance:marketStatus', () => import('./finance/marketFetch').then((m) => m.marketDataStatus(absPath)))
+  handle('finance:fetchMarketData', async () => {
+    const m = await import('./finance/marketFetch')
+    const y = new Date().getFullYear()
+    await m.fetchMarketData({ fromYear: y - 1, toYear: y, write: (path, text) => writeText(path, text) })
+    return m.marketDataStatus(absPath)
+  })
+  handle('learn:readyRoadmap', (id: string) => import('./finance/roadmaps').then((m) => m.readyRoadmapText(String(id ?? ''))))
   handle('learn:planReadings', (topic: string, plan: StudyPlan, research: string) => planReadings(topic, plan, research ?? ''))
   handle('learn:planToThings', (path: string, name: string, notebook?: string) => planToThings(path, name, notebook))
   handle('learn:syncFromThings', (path: string) => syncFromThings(path))
@@ -680,6 +701,19 @@ function registerIpc() {
   handle('highlights:save', (p: string, list: PdfHighlight[]) => saveHighlights(p, list))
   // humanities: books, free books, Discuss this, reading together, the notes page (src/main/reading)
   registerReading(handle)
+  // The reading room (Library › Reading), covers for any note, and reading aloud (main/readingRoom, main/tts)
+  registerReadingRoom(handle, async (filters) => {
+    const res = await dialog.showOpenDialog(win!, { properties: ['openFile'], filters })
+    return res.canceled ? null : res.filePaths[0]
+  })
+  registerTts(handle)
+  handle('room:import', async () => {
+    const res = await dialog.showOpenDialog(win!, { title: 'Add a book to your shelf', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Books', extensions: ['epub', 'pdf'] }] })
+    if (res.canceled) return []
+    const added = []
+    for (const r of await importPaths(res.filePaths)) added.push(await addToShelf(r.path))
+    return added
+  })
 
   handle('study:cards', (scope: ChatScope) => getCards(scope))
   handle('study:review', (id: string, grade: ReviewGrade, path: string) => reviewCard(id, grade, path))
@@ -729,7 +763,17 @@ const flowKeys = (codes: string) => codes.split('+').map((c) => MAC_KEYS[c] ?? `
 const themeSource = (theme: Settings['theme']) =>
   theme === 'system' ? 'system' : theme === 'light' || theme === 'sepia' ? 'light' : 'dark'
 
+/** A menu command goes to the window in front (a pop-out's ⌘N is its own), or the main one */
+const toFront = (action: string) => {
+  const w = BrowserWindow.getFocusedWindow() ?? (win && !win.isDestroyed() ? win : null)
+  if (w && !w.webContents.isDestroyed()) w.webContents.send('menu', action)
+}
+
 function setMenu() {
+  // A pop-out offers the way back; the main window, the way out
+  const front = BrowserWindow.getFocusedWindow()
+  const inPopout = isPopout(front?.webContents)
+  const send = (_channel: 'menu', action: string) => toFront(action)
   const template: Electron.MenuItemConstructorOptions[] = [
     { role: 'appMenu' },
     {
@@ -753,6 +797,8 @@ function setMenu() {
         { label: 'Toggle AI Panel', accelerator: 'CmdOrCtrl+J', click: () => send('menu', 'toggle-chat') },
         { label: 'Search', accelerator: 'CmdOrCtrl+K', click: () => send('menu', 'search') },
         { label: 'Toggle Edit Mode', accelerator: 'CmdOrCtrl+E', click: () => send('menu', 'toggle-edit') },
+        { type: 'separator' },
+        ...popMenuItems(inPopout, (action) => send('menu', action)),
         { type: 'separator' },
         { role: 'zoomIn' },
         { role: 'zoomOut' },
@@ -798,8 +844,9 @@ if (!app.isPackaged && process.env.TIDE_REMOTE_DEBUGGING_PORT) {
 let pendingLink: string | null = null
 const openLink = (url: string) => {
   if (!url.startsWith('tide://')) return
-  if (win && !win.webContents.isDestroyed()) {
-    send('deeplink', url)
+  if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) {
+    // The main window opens links; a pop-out keeps to its one thing
+    win.webContents.send('deeplink', url)
     if (win.isMinimized()) win.restore()
     win.focus()
   } else pendingLink = url
@@ -881,6 +928,8 @@ app.whenReady().then(() => {
   // The study data API, when it's turned on in Settings › Tools
   startStudyApi().catch(() => {})
   setMenu()
+  // Its items follow the window in front (a pop-out has "Return to Main Window")
+  app.on('browser-window-focus', () => setMenu())
   createWindow()
   onBrainEvent((e) => BrowserWindow.getAllWindows().forEach((w) => !w.isDestroyed() && w.webContents.send('brain:event', e)))
   onModelBusy((busy) => BrowserWindow.getAllWindows().forEach((w) => !w.isDestroyed() && w.webContents.send('model:busy', busy)))
@@ -930,6 +979,7 @@ app.whenReady().then(() => {
 
 // No lab container outlives the app
 app.on('before-quit', () => {
+  setQuitting()
   void import('./claudeEngine').then((c) => c.stopClaude()).catch(() => {})
   void import('./tideMcp').then((m) => m.mcpHandle()?.close()).catch(() => {})
   stopStudyApi().catch(() => {})

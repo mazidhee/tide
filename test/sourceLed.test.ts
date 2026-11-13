@@ -63,7 +63,7 @@ describe('the trusted list', () => {
     expect(trustedCount()).toBeGreaterThan(80)
     // Grew from about 110 when the areas for any subject and for the humanities were added
     expect(trustedCount()).toBeLessThan(200)
-    expect(Object.keys(TRUSTED).length).toBe(23)
+    expect(Object.keys(TRUSTED).length).toBe(24)
     expect(trustedSite('https://docs.python.org/3/tutorial/classes.html')?.kind).toBe('official')
     expect(trustedSite('https://www.postgresql.org/docs/current/mvcc-intro.html')?.licence).toBe('PostgreSQL Licence')
     expect(trustedSite('https://en.cppreference.com/w/cpp/language/raii')?.by).toBe('cppreference')

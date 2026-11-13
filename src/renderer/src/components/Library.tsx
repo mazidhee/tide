@@ -1,4 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { ContextMenu, type MenuState } from './Menu'
+import { popOutItem } from './PopOutButton'
 import { createPortal } from 'react-dom'
 import type { NoteMeta } from '@shared/types'
 import { useApp } from '../state'
@@ -300,6 +302,32 @@ export function Library() {
 
   const pickerItem = picker ? items.find((i) => i.path === picker.path) : undefined
   const openPicker = (i: Item, at: { x: number; y: number }) => setPicker({ path: i.path, at })
+  // A book from the library goes on the reading room's shelf and opens in the reader
+  const readInRoom = (path: string) =>
+    window.tide.room
+      .add(path)
+      .then(() => app.setView({ kind: 'reader', path }))
+      .catch(() => app.toast('Couldn’t open that in the reading room'))
+  // What's on tonight in the reading room: the way in from here
+  const [tonight, setTonight] = useState<{ path: string; title: string; minutes: number; done: boolean } | null>(null)
+  useEffect(() => {
+    window.tide.room
+      .tonight()
+      .then((t) => setTonight(t))
+      .catch(() => setTonight(null))
+  }, [])
+  // Right-click: open it here or in a window of its own, or sort it under topics
+  const [rowMenu, setRowMenu] = useState<MenuState | null>(null)
+  const openRowMenu = (i: Item, at: { x: number; y: number }) =>
+    setRowMenu({
+      ...at,
+      items: [
+        { label: 'Open', run: () => app.openPath(i.path) },
+        ...(i.type === 'pdf' || i.type === 'epub' ? [{ label: 'Read in the reading room', run: () => readInRoom(i.path) }] : []),
+        popOutItem(app, { kind: 'file', path: i.path }),
+        { label: 'Topics…', run: () => openPicker(i, at), separatorBefore: true }
+      ]
+    })
 
   // The new design's shelves take the whole window: the page's own header folds into the top bar,
   // and the tutor panel steps aside until you leave the shelves
@@ -368,6 +396,10 @@ export function Library() {
             )}
           </div>
           <div className="row-gap">
+          <button className="btn primary" onClick={() => app.setView({ kind: 'reading' })} title="Your books, read slowly, with Claude beside the page">
+            <Icon name="book" size={15} />
+            Reading room
+          </button>
           {/* humanities: public-domain books from Project Gutenberg and Standard Ebooks */}
           <button className={`btn${freeBooks ? ' on' : ''}`} onClick={() => setFreeBooks((f) => !f)} title="Add a free public-domain book">
             <Icon name="library" size={15} />
@@ -392,6 +424,26 @@ export function Library() {
           </button>
           </div>
         </header>
+        <div className="lib-reading">
+          <Icon name="book" size={16} />
+          {tonight ? (
+            <span>
+              <b>Tonight in the reading room:</b> {tonight.title}, {tonight.done ? 'done for today' : `about ${tonight.minutes} min`}
+            </span>
+          ) : (
+            <span>
+              <b>Reading room:</b> put a book on your shelf and read it with Claude beside the page.
+            </span>
+          )}
+          {tonight && !tonight.done && (
+            <button className="btn primary" onClick={() => app.setView({ kind: 'reader', path: tonight.path })}>
+              Read
+            </button>
+          )}
+          <button className="btn" onClick={() => app.setView({ kind: 'reading' })}>
+            Open the reading room
+          </button>
+        </div>
         {finding && <ReadingFinder onClose={() => setFinding(false)} />}
         {freeBooks && <FreeBookFinder onClose={() => setFreeBooks(false)} />}
         <SaveLinkForm compact />
@@ -455,11 +507,11 @@ export function Library() {
         ) : layout === 'shelf' ? (
           <Bookcase items={shelfItems} subjects={subjects} setStatus={setStatus} tide={tide} />
         ) : layout === 'grid' ? (
-          visible.length ? <Masonry items={visible} onOpen={(i) => app.openPath(i.path)} onTopics={openPicker} /> : <p className="muted">Nothing matches that filter.</p>
+          visible.length ? <Masonry items={visible} onOpen={(i) => app.openPath(i.path)} onTopics={openRowMenu} /> : <p className="muted">Nothing matches that filter.</p>
         ) : (
           <ul className="library-list">
             {visible.map((i) => (
-              <li key={i.path} className="library-row" onContextMenu={(e) => (e.preventDefault(), openPicker(i, { x: e.clientX, y: e.clientY }))}>
+              <li key={i.path} className="library-row" onContextMenu={(e) => (e.preventDefault(), openRowMenu(i, { x: e.clientX, y: e.clientY }))}>
                 <button className="library-item" onClick={() => app.openPath(i.path)}>
                   <Icon name={sourceIcon({ path: i.path, sourceType: i.type as NoteMeta['sourceType'] })} size={18} />
                   <div className="library-text">
@@ -491,6 +543,7 @@ export function Library() {
           </ul>
         )}
       </div>
+      <ContextMenu menu={rowMenu} onClose={() => setRowMenu(null)} />
       {picker && pickerItem && <TopicPicker at={picker.at} selected={pickerItem.topics} subjects={subjects} onChange={(next) => setTopics(pickerItem.path, next)} onClose={() => setPicker(null)} />}
     </div>
   )

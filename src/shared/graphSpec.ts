@@ -440,3 +440,6 @@ export const GRAPH_GUIDE = `Graphs: draw maths natively, as often as a picture h
   - {"kind":"surface","z":"x^2 - y^2","x":[-2,2],"y":[-2,2]}: z = f(x, y) in 3D; the learner turns it with the mouse.
   - {"kind":"space","vectors":[{"to":[1,2,3],"label":"u"}],"planes":["x + y + z = 1"],"points":[[0,0,0]]}: 3D vectors, planes and points.
   Any kind takes "title". Use real data and computed values, never made-up numbers.`
+
+/** The short form, for a lesson that only needs data drawn (a finance lesson outside maths mode) */
+export const GRAPH_BRIEF = `Graphs: draw maths natively when data says it faster: a fenced block whose language is graph, holding JSON, e.g. {"kind":"line","series":[{"name":"Reserves","points":[[0,30],[1,22]]}]}, {"kind":"bar","labels":["A","B"],"values":[3,5]}, {"kind":"scatter","points":[[1,2],[2,3.9]]}, {"kind":"histogram","values":[1.2,0.8,1.9]} or {"fn":"100*exp(0.05x)","x":[0,10]}. Real computed numbers only.`

@@ -1,4 +1,6 @@
 import { Professor } from './Professor'
+import { PopOutButton } from './PopOutButton'
+import { inFocusWindow, popOut, usePopOutSurface } from '../lib/popout'
 import { learnIntent, projectIntent } from '@shared/learnIntent'
 import { climbLadder } from '../lib/mathsLadder'
 import { startProject } from '../lib/projects'
@@ -164,13 +166,16 @@ export function ChatPage({ id }: { id?: string }) {
   }, [visible])
 
   const current = chats.find((c) => c.id === convo.chatId)
+  // In a window of its own: this conversation, under its title (lib/popout)
+  usePopOutSurface({ name: current?.title, busy: convo.busy, view: () => ({ kind: 'chat', ...(convo.chatId ? { id: convo.chatId } : {}) }) })
 
   const chatMenu = (c: ChatSummary, x: number, y: number) =>
     setMenu({
       x,
       y,
       items: [
-        { label: 'Rename', run: () => setRenaming(c.id) },
+        ...(inFocusWindow ? [] : [{ label: 'Open in new window', run: () => void popOut(app, { kind: 'chat', id: c.id }, { here: c.id === convo.chatId }) }]),
+        { label: 'Rename', run: () => setRenaming(c.id), separatorBefore: !inFocusWindow },
         { label: c.pinned ? 'Unpin' : 'Pin to top', run: async () => (await window.tide.chats.pin(c.id, !c.pinned), refresh()) },
         {
           label: 'Delete conversation',
@@ -271,6 +276,7 @@ export function ChatPage({ id }: { id?: string }) {
                 <Icon name="panel" size={16} />
               </button>
             )}
+            <PopOutButton className="icon-btn" label={false} />
           </div>
         </header>
 

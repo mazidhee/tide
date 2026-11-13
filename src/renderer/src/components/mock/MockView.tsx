@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { PopOutButton } from '../PopOutButton'
 import { BANK_TAGS, type BankTag } from '@shared/mockBank'
 import { DESIGNS } from '@shared/mockQuestions'
 import { annotateCanvas, referenceCanvas, clockText, clockTone, modeInfo, openingMessage, remainingMs, rubricFor, type MockAnswer, type MockDebrief, type MockMode, type MockPhase, type MockRecord, type RubricItem } from '@shared/mocks'
@@ -262,6 +263,7 @@ export function MockView({ mode, review }: { mode: MockMode; review?: string }) 
             <Icon name="x" />
             <span>{leaving ? 'Leave without marking?' : phase === 'debrief' ? 'Close' : 'Leave'}</span>
           </button>
+          {(phase === 'brief' || !!review) && <PopOutButton />}
         </div>
       </header>
 

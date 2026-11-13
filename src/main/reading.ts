@@ -4,7 +4,8 @@ import { basename, extname } from 'path'
 import matter from 'gray-matter'
 import type { EpubBook } from '@shared/epub'
 import { chapterLabel } from '@shared/epub'
-import { managedBlock, mergeNotesPage, notesPageFor, type ReadingItem } from '@shared/bookNotes'
+import { managedBlock, mergeNotesPage, notesPageFor, START, type ReadingItem } from '@shared/bookNotes'
+import { isBookPage } from '@shared/bookPage'
 import { checkDiscussReply, discussFallback, discussFix, discussPrompt, DISCUSS_SYSTEM, makesClaim, openingQuestion, type Discussion, type DiscussTurn } from '@shared/closeReading'
 import { bookFromUrl, freeHostAllowed, parseGutenbergOpds, parseStandardEbooks, rankFree, searchUrl, SITE_LICENCE, SITE_NAME, type BookSource, type FreeBook } from '@shared/freeBooks'
 import { humanitiesArea } from '@shared/humanities'
@@ -242,7 +243,7 @@ async function saveDiscussion(d: Discussion) {
 }
 
 /** Spoilers are guarded for stories; the learner can turn it on or off for any work */
-const narrativeOf = (w: Work) => guessKind(w.title, w.subjects) === 'story' && (isEpub(w.path) || /fiction|novel|stories|drama|plays/i.test(w.subjects.join(' ')))
+export const narrativeOf = (w: Work) => guessKind(w.title, w.subjects) === 'story' && (isEpub(w.path) || /fiction|novel|stories|drama|plays/i.test(w.subjects.join(' ')))
 
 export interface DiscussRequest {
   path: string
@@ -340,6 +341,8 @@ export async function syncNotesPage(path: string): Promise<string> {
   const existing = existsSync(absPath(page)) ? await readText(page) : null
   const items = await readingItems(path)
   if (!existing && !items.length) return page
+  // A book page from the reading room (shared/bookPage) keeps its own sections: no block added to it
+  if (existing && isBookPage(existing) && !existing.includes(START)) return page
   await writeText(page, mergeNotesPage(existing, path, managedBlock(path, items)))
   return page
 }

@@ -1,4 +1,5 @@
 import { TimeThis } from './TimeThis'
+import { PopOutButton } from './PopOutButton'
 import { passageSaying } from '../lib/passage'
 import { readyForMargin } from '@shared/lessonNotes'
 import { savePastedImage } from '../lib/pastedImages'
@@ -28,6 +29,15 @@ import { addQuoteToNotes } from '../lib/companion'
 import { useTideDesign } from '../lib/design'
 import { noteTranscriptSection } from '@shared/video'
 import { noteOpenMode } from '@shared/noteMode'
+import { NoteCover } from './NoteCover'
+
+/** Obsidian's cssclasses from the frontmatter, as classes on the page (a book page is "tide-book") */
+const cssClasses = (props: Record<string, unknown>) => {
+  const v = props.cssclasses ?? props.cssclass
+  const list = Array.isArray(v) ? v.map(String) : typeof v === 'string' ? v.split(/[,\s]+/) : []
+  const ok = list.map((c) => c.trim().replace(/^["']|["']$/g, '')).filter((c) => /^[\w-]{1,40}$/.test(c))
+  return ok.length ? ` ${ok.map((c) => `css-${c}`).join(' ')}` : ''
+}
 
 const SAVE_DELAY = 600
 const MIN_READALONG_CHARS = 60
@@ -449,7 +459,7 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
   }
 
   return (
-    <div className={`doc-view${page.fullWidth ? ' full-width' : ''}`} style={style}>
+    <div className={`doc-view${page.fullWidth ? ' full-width' : ''}${cssClasses(props)}`} style={style}>
       <header className="doc-toolbar drag">
         <div className="crumbs no-drag">
           {crumbs.length > 0 && (
@@ -560,11 +570,14 @@ export function NoteView({ path, anchor, nonce }: { path: string; anchor?: strin
             </button>
             {menuOpen && <PageMenu settings={page} update={updatePage} onClose={() => setMenuOpen(false)} />}
           </div>
+          <PopOutButton />
         </div>
       </header>
 
       <div className="doc-scroll" ref={scrollRef} onMouseUp={editing ? undefined : onMouseUp}>
         {error && <div className="empty-state">Couldn't open this note: {error}</div>}
+        {/* A cover banner and icon, from the note's frontmatter (shared/noteCover): any note can have one */}
+        {raw !== null && <NoteCover path={path} props={props} title={editing ? undefined : /^\s*#\s+(.+)$/m.exec(body)?.[1]?.trim()} onChange={load} />}
         {raw !== null && !editing && (
           <>
             {(source || props.channel || props.author || props.site) && (

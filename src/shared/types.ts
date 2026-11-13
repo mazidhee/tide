@@ -710,6 +710,12 @@ export interface TideApi {
     /** Real books, courses and docs for each phase of a plan */
     /** Drops the books a drafted roadmap names that can't be found, and corrects their authors */
     checkResources(md: string): Promise<string>
+    /** A ready roadmap's Markdown (shared/finance/roadmaps), bundled with Tide */
+    readyRoadmap(id: string): Promise<string>
+    /** The finance lab's market data: what is bundled and when newer series were last fetched */
+    marketStatus(): Promise<{ ready: boolean; detail: string }>
+    /** Fetches this year's and last year's Treasury and ECB series into Market data/ in the notes folder */
+    fetchMarketData(): Promise<{ ready: boolean; detail: string }>
     planReadings(topic: string, plan: import('./plan').StudyPlan, research: string): Promise<{ phase: string; items: { title: string; by?: string; why?: string; url?: string; unverified?: boolean }[] }[]>
     /** Sends a dated roadmap to Things 4 as a project */
     planToThings(path: string, name: string, notebook?: string): Promise<{ project: string; todos: number }>
@@ -961,11 +967,31 @@ export interface TideApi {
   onTrayCommand(cb: (c: { type: 'view'; view: unknown } | { type: 'agenda'; date: string; index: number } | { type: 'focus'; minutes: number }) => void): () => void
   studying(status: { pose: import('./professorArt').ProfessorPose; label: string; since: number; until?: number } | null): Promise<void>
   windows: {
-    /** Opens the view in its own window, with nothing else on screen */
-    openFocus(view: unknown): Promise<void>
+    /**
+     * Opens the view in a window of its own, with nothing else on screen (shared/popout). If a
+     * window already holds it, that one comes forward instead.
+     */
+    openFocus(view: unknown, info?: Partial<import('./popout').PopInfo>): Promise<'opened' | 'focused' | 'refused'>
     /** The view handed to this focus window, once */
     focusView(id: string): Promise<unknown>
     close(): Promise<void>
+    /** Brings forward the window holding this key; false when none does */
+    focusKey(key: string): Promise<boolean>
+    /** What this pop-out now shows: its key and window title */
+    setInfo(info: Partial<import('./popout').PopInfo>): Promise<void>
+    /** Hands the view (with its state) back to the main window and closes this one */
+    returnToMain(view: unknown): Promise<void>
+    /** The keys other windows hold */
+    held(): Promise<string[]>
+    onHeld(cb: (keys: string[]) => void): () => void
+    /** The main window: a pop-out handed its view back */
+    onAdopt(cb: (view: unknown) => void): () => void
+    /** This pop-out is closing: save, then call closeNow */
+    onClosing(cb: () => void): () => void
+    closeNow(): Promise<void>
+    /** A small message to every other window */
+    relay(channel: string, payload: unknown): void
+    onRelay(cb: (m: { channel: string; payload: unknown }) => void): () => void
   }
   cloud: {
     /** Which providers have a saved key (the keys themselves never leave the main process) */
@@ -1201,6 +1227,26 @@ export interface TideApi {
   }
   /** humanities: reading books in any format (src/main/reading) */
   reading: ReadingApi
+  /** The reading room (Library › Reading, src/main/readingRoom) */
+  room: RoomApi
+  /** A cover banner for any note (shared/noteCover), from public-domain art or your own image */
+  covers: {
+    search(q: string): Promise<import('./noteCover').Artwork[]>
+    art(notePath: string, art: import('./noteCover').Artwork): Promise<import('./noteCover').NoteCover>
+    /** A picker thumbnail as a data URL (fetched in the main process) */
+    thumb(url: string): Promise<string | null>
+    own(notePath: string): Promise<import('./noteCover').NoteCover | null>
+    y(notePath: string, y: number): Promise<void>
+    remove(notePath: string): Promise<string>
+    icon(notePath: string, icon: string | null): Promise<void>
+  }
+  /** Reading aloud: pluggable speech engines and their audio cache (src/main/tts) */
+  tts: {
+    engines(): Promise<import('./speech').TtsEngineInfo[]>
+    synth(engine: string, text: string, voice: string, speed: number): Promise<Uint8Array>
+    prerender(job: { key: string; engine: string; voice: string; speed: number; pieces: { text: string; voice: string }[] }): Promise<{ queued: boolean; reason?: string }>
+    cachedCount(engine: string, speed: number, pieces: { text: string; voice: string }[]): Promise<number>
+  }
   study: {
     cards(scope: ChatScope): Promise<StudyCard[]>
     review(cardId: string, grade: ReviewGrade, path: string): Promise<CardSchedule>
@@ -1215,6 +1261,35 @@ export interface TideApi {
     /** Started from the source with a test profile, so check tooling can drive it */
     testCopy?: boolean
   }
+}
+
+// ---------- the reading room (src/main/readingRoom) ----------
+
+export interface RoomApi {
+  shelf(): Promise<{ room: import('./readingRoom').RoomState; week: number }>
+  tonight(): Promise<(import('./readingRoom').Tonight & { book: import('./readingRoom').ShelfBook; week: number; goal: number }) | null>
+  book(path: string): Promise<{ title: string; author?: string; kind: import('./readingRoom').BookKind; chapters: import('./readingRoom').ReaderChapter[]; subjects: string[]; narrative: boolean }>
+  add(path: string): Promise<import('./readingRoom').ShelfBook>
+  addFree(book: import('./freeBooks').FreeBook): Promise<import('./readingRoom').ShelfBook>
+  import(): Promise<import('./readingRoom').ShelfBook[]>
+  remove(path: string): Promise<import('./readingRoom').RoomState>
+  patch(path: string, p: { voice?: import('./readingRoom').BookVoice; finished?: string | null; current?: boolean }): Promise<import('./readingRoom').RoomState>
+  goal(weeklyMinutes: number): Promise<import('./readingRoom').RoomState>
+  progress(path: string, p: { loc: import('./passage').PassageLoc; progress: number; label?: string; where?: string; chapterLeft?: number }): Promise<void>
+  time(path: string, seconds: number, wordsRead?: number): Promise<void>
+  marks(path: string): Promise<import('./readingRoom').Mark[]>
+  saveMark(path: string, m: import('./readingRoom').Mark): Promise<import('./readingRoom').Mark[]>
+  removeMark(path: string, id: string): Promise<import('./readingRoom').Mark[]>
+  page(path: string): Promise<string>
+  pageInfo(pagePath: string): Promise<{ book: string; author?: string; chapter?: string; progress?: number; quotes: number; notes: number; started?: string } | null>
+  talks(path: string): Promise<import('./readingTalk').Talk[]>
+  who(path: string): Promise<'claude' | 'gemma'>
+  challenge(req: { path: string; passage: string; loc?: import('./passage').PassageLoc; chapter?: string; id?: string; said?: string }): Promise<import('./readingTalk').Talk>
+  argument(req: { path: string; passage?: string; loc?: import('./passage').PassageLoc; chapter?: string }): Promise<{ steps: string[]; added: number; note: string; talk: import('./readingTalk').Talk; who: 'claude' | 'gemma' }>
+  keepTalk(path: string, id: string): Promise<string>
+  seminarTurn(req: { path: string; chapter: number; stage: Exclude<import('./readingTalk').SeminarStage, 'keep'>; turns: import('./readingTalk').TalkTurn[]; said: string }): Promise<string>
+  seminarKeep(req: { path: string; chapter: number; turns: import('./readingTalk').TalkTurn[] }): Promise<import('./readingTalk').KeepItem[]>
+  seminarSave(req: { path: string; chapter: number; items: import('./readingTalk').KeepItem[]; turns: import('./readingTalk').TalkTurn[] }): Promise<{ quotes: number; ideas: number; recall: number }>
 }
 
 // ---------- humanities: reading (src/main/reading) ----------

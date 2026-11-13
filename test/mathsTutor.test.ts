@@ -264,3 +264,17 @@ describe('maths mode: where ideas came from', () => {
     expect(ORIGINS_RULES.split(/\s+/).length).toBeLessThan(130)
   })
 })
+
+describe('finance topics get the maths tools where they fit', () => {
+  it('a pricing lesson is in maths mode with explorables and graphs; a payments lesson gets graphs beside its own simulation', async () => {
+    const { simKindsFor } = await import('../src/shared/sims')
+    const { lessonKit } = await import('../src/shared/subjects')
+    expect(mathsMode('Black-Scholes option pricing').on).toBe(true)
+    expect(simKindsFor('Black-Scholes option pricing')).toEqual(expect.arrayContaining(['risk', 'explore']))
+    expect(mathsRules('claude', 'Value at risk with Monte Carlo')).toMatch(/Graphs: draw maths natively/)
+    const pay = lessonKit('Netting and RTGS settlement')
+    expect(pay.sims).toContain('- payments, money between banks')
+    expect(pay.sims).toContain('Graphs: draw maths natively')
+    expect(mathsMode('Netting and RTGS settlement').on).toBe(false)
+  })
+})

@@ -17,8 +17,11 @@
  *
  * Pure, so the lesson screen, main and the benchmark agree, and it can be tested.
  */
-import { simGuide, simKindsFor, simLesson, type SimKind } from './sims'
+import { FINANCE_SIM_KINDS, simGuide, simKindsFor, simLesson, type SimKind } from './sims'
+import { GRAPH_BRIEF } from './graphSpec'
+import { mathsMode } from './mathsMode'
 import { HUMANITIES_RULES, THEOLOGY_RULES, humanitiesArea } from './humanities'
+import { financeLabNote } from './finance/labs'
 import { SUBJECTS, SUBJECT_KINDS, type Need, type SubjectEntry, type SubjectKind } from './subjectMap'
 
 export type { SubjectKind } from './subjectMap'
@@ -271,10 +274,15 @@ export function lessonKit(topic: string, profile?: SubjectProfile, notebook?: st
   const simsOk = p.kinds.some((k) => SIM_KINDS_OK.includes(k))
   const kinds = simsOk ? [...new Set([...simKindsFor(topic), ...(p.kinds.includes('quant') || p.kinds.includes('build') ? (p.sims ?? []) : [])])] : []
   const sims = kinds.length ? `A live simulation fits this topic (${kinds.join(', ')}). Use one rather than a diagram where it shows the idea running, with a short tour pointing at what to look at, then ask them to change one thing and predict what happens.\n${simGuide(kinds)}` : ''
+  // Finance lessons draw their data too: graphs as lesson blocks (a maths-mode lesson gets them with its own rules, main/maths)
+  const graphs = kinds.some((k) => FINANCE_SIM_KINDS.includes(k)) && !mathsMode(topic, notebook).on ? `\n\n${GRAPH_BRIEF}` : ''
   const handsOn = !!p.hands
   const parts = p.kinds.map((k) => TOOLKITS[k].rules)
   if (p.lab && !handsOn) parts.push(LAB_LINE)
-  return { handsOn, sims, toolkit: parts.length ? `How to teach this subject (${p.kinds.map((k) => TOOLKITS[k].label).join('; ')}):\n${parts.join('\n')}` : '', humanities: humanitiesText(topic, p) }
+  // Finance, payments and quant: the lab that fits (its simulation is in `sims`; this is the Python helper and the tables)
+  const finance = financeLabNote(topic)
+  if (finance) parts.push(finance)
+  return { handsOn, sims: sims + graphs, toolkit: parts.length ? `How to teach this subject (${p.kinds.map((k) => TOOLKITS[k].label).join('; ')}):\n${parts.join('\n')}` : '', humanities: humanitiesText(topic, p) }
 }
 
 /**

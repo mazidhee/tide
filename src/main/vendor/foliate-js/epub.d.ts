@@ -23,4 +23,6 @@ export class EPUB {
   metadata: { title?: LangMap; language?: string[]; author?: Contributor[]; subject?: Contributor[] }
   resolveHref(href: string): { index: number; anchor: unknown } | null
   splitTOCHref(href: string): string[]
+  /** The cover image from the package, if it names one */
+  getCover(): Promise<Blob | null>
 }
