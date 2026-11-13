@@ -203,7 +203,16 @@ export function IdeView({ path: initialVaultPath, root: initialRoot, file: initi
   const activePath = activeTab && activeTab.kind !== 'proposal' ? activeTab.path : activeTab?.path ?? null
   const activeFile = activeTab?.kind === 'file' ? activeTab.path : null
 
+  const rootNow = useRef(root)
+  rootNow.current = root
+  const appNow = useRef(app)
+  appNow.current = app
   const openTab = useCallback((tab: Tab, opts: { group?: number; at?: { line: number; column: number; endLine?: number; endColumn?: number } } = {}) => {
+    // A Jupyter notebook opens in the notebook view, with its kernel, rather than as JSON
+    if (tab.kind === 'file' && /\.ipynb$/i.test(tab.path) && rootNow.current) {
+      appNow.current.setView({ kind: 'ipynb', abs: tab.path.startsWith('/') ? tab.path : `${rootNow.current}/${tab.path}` })
+      return
+    }
     setHome(false)
     const gi = Math.min(opts.group ?? focusRef.current, groupsRef.current.length - 1)
     setGroups((gs) => gs.map((g, i) => (i === gi ? { ...g, tabs: g.tabs.some((t) => t.key === tab.key) ? g.tabs : [...g.tabs, tab], active: tab.key } : g)))

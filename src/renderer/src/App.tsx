@@ -66,6 +66,7 @@ const WorkshopView = lazy(() => import('./components/WorkshopView').then((m) => 
 const CoursesView = lazy(() => import('./components/CoursesView').then((m) => ({ default: m.CoursesView })))
 const CodeView = lazy(() => import('./components/CodeView').then((m) => ({ default: m.CodeView })))
 const CanvasView = lazy(() => import('./components/CanvasView').then((m) => ({ default: m.CanvasView })))
+const JupyterView = lazy(() => import('./components/notebook/JupyterView').then((m) => ({ default: m.JupyterView })))
 const GraphView = lazy(() => import('./components/GraphView').then((m) => ({ default: m.GraphView })))
 const DrillView = lazy(() => import('./components/DrillView').then((m) => ({ default: m.DrillView })))
 const MockView = lazy(() => import('./components/mock/MockView').then((m) => ({ default: m.MockView })))
@@ -424,7 +425,7 @@ export default function App() {
 
   // Views with their own tutor beside them don't get the floating Ask button or the chat panel
   // A course being read has its tutor docked in its reading column (the right is the video's)
-  const ownTutor = ['chat', 'lab', 'code', 'design', 'drill', 'session', 'exam', 'mock', 'reader'].includes(view.kind) || (view.kind === 'file' && /\.canvas$/i.test(view.path)) || (view.kind === 'courses' && !!view.id)
+  const ownTutor = ['chat', 'lab', 'code', 'design', 'drill', 'session', 'exam', 'mock', 'reader', 'ipynb'].includes(view.kind) || (view.kind === 'file' && /\.(canvas|ipynb)$/i.test(view.path)) || (view.kind === 'courses' && !!view.id)
   // In the new design Home is the whole width of the window and has its own ask box: the tutor
   // panel stays beside what you read (a note, a PDF, the library), one click away from Home
   // …until you ask something from Home: then it opens there with your question, and stays until you close it
@@ -446,6 +447,7 @@ export default function App() {
     else if (/\.epub$/i.test(view.path)) main = <Reader key={view.path} path={view.path} anchor={view.anchor} />
     else if (/\.(png|jpe?g|gif|webp|svg|avif)$/i.test(view.path)) main = <ImageView path={view.path} />
     else if (/\.canvas$/i.test(view.path)) main = <CanvasView key={view.path} path={view.path} />
+    else if (/\.ipynb$/i.test(view.path)) main = <JupyterView key={view.path} refIn={{ vault: view.path }} />
     else main = <NoteView key={view.path} path={view.path} anchor={view.anchor} nonce={view.nonce} />
   } else if (view.kind === 'library') main = <Library />
   else if (view.kind === 'reading') main = <ReadingRoom />
@@ -476,6 +478,7 @@ export default function App() {
   else if (view.kind === 'drill') main = <DrillView key={`${view.drill}:${view.nonce ?? ''}`} kind={view.drill} />
   else if (view.kind === 'design') main = <CanvasView key={`${view.path}:${view.nonce ?? ''}`} path={view.path} start={view.start} topic={view.topic} company={view.company} timed={view.timed} reference={view.reference} />
   else if (view.kind === 'code') main = <CodeView key={`${view.root ?? view.path ?? 'code'}:${view.nonce ?? ''}`} path={view.path} root={view.root} file={view.file} home={view.home} />
+  else if (view.kind === 'ipynb') main = <JupyterView key={view.abs} refIn={{ abs: view.abs }} />
   else if (view.kind === 'help') main = <HelpView section={view.section} />
   else if (view.kind === 'mock') main = <MockView key={`${view.mode}:${view.review ?? ''}:${view.nonce ?? ''}`} mode={view.mode} review={view.review} />
   else if (view.kind === 'exam') main = <ExamView key={`${view.topic}:${view.nonce ?? ''}`} scope={view.scope} topic={view.topic} options={view.options} view={view} />

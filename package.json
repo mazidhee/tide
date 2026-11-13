@@ -34,6 +34,7 @@
     "turndown": "^7.2.0",
     "typescript": "^5.8.3",
     "typescript-language-server": "6.1.0",
+    "zeromq": "6.8.0",
     "zod": "4.6.7"
   },
   "devDependencies": {
@@ -77,6 +78,7 @@
     "mermaid": "^12.3.0",
     "monaco-editor": "^0.52.2",
     "planck": "1.5.1",
+    "plotly.js-dist-min": "4.3.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "regexp-tree": "0.1.27",
@@ -125,6 +127,7 @@
     },
     "asarUnpack": [
       "node_modules/node-pty/**",
+      "node_modules/zeromq/**",
       "node_modules/pdfjs-dist/**",
       "node_modules/basedpyright/**",
       "node_modules/@vscode/ripgrep*/**",

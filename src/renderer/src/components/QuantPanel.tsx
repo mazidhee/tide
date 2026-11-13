@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { DRILLS, type DrillKind, type DrillResult } from '@shared/drills'
 import type { InterviewRecord } from '@shared/interviews'
-import { useApp } from '../state'
+import type { NbTemplateInfo } from '@shared/notebook/api'
+import { fileTitle, useApp } from '../state'
 import { Icon } from './Icon'
 import { PillSegment, PillSelect, PromptBox } from './PromptBox'
 
@@ -14,6 +15,55 @@ const LEVELS: { id: 'gentle' | 'normal' | 'hard' | 'olympiad'; label: string }[]
   { id: 'hard', label: 'Hard' },
   { id: 'olympiad', label: 'Olympiad' }
 ]
+
+/** The folder in the vault the quant lab's notebooks go in */
+export const QUANT_LAB_FOLDER = 'Quant lab'
+
+/**
+ * The quant lab: guided Jupyter notebooks on the learner's focus areas (shared/notebook/templates),
+ * each copied into the vault and opened in the notebook view, with its exercises and the tutor.
+ */
+function QuantLab() {
+  const app = useApp()
+  const [templates, setTemplates] = useState<NbTemplateInfo[]>([])
+  useEffect(() => {
+    window.tide.notebook.templates().then(setTemplates).catch(() => {})
+  }, [])
+  const open = async (t: NbTemplateInfo) => {
+    // Opened before: carry on in that copy, with the work in it
+    const had = app.files.find((f) => f.kind === 'notebook' && f.path.startsWith(`${QUANT_LAB_FOLDER}/`) && fileTitle(f.name) === t.title)
+    if (had) return app.openPath(had.path)
+    try {
+      const path = await window.tide.notebook.create(QUANT_LAB_FOLDER, t.title, t.id)
+      await app.refreshTree()
+      app.openPath(path)
+    } catch (e) {
+      app.toast(`Couldn’t open it: ${(e as Error).message}`, { tone: 'error' })
+    }
+  }
+  if (!templates.length) return null
+  return (
+    <section className="pv-prompt">
+      <h2 className="pv-title">Quant lab notebooks</h2>
+      <p className="pv-sub">Guided Jupyter notebooks on real market data, with checked exercises and the tutor in the margin. Each one is saved to your notes in {QUANT_LAB_FOLDER}.</p>
+      <div className="qlab-grid">
+        {templates.map((t) => {
+          const started = app.files.some((f) => f.kind === 'notebook' && f.path.startsWith(`${QUANT_LAB_FOLDER}/`) && fileTitle(f.name) === t.title)
+          return (
+            <button key={t.id} className="qlab-card" onClick={() => void open(t)}>
+              <span className="qlab-title">
+                <Icon name="subNotebook" size={15} />
+                {t.title}
+              </span>
+              <span className="qlab-summary">{t.summary}</span>
+              <span className="qlab-meta">{started ? 'Continue' : 'Open'}{t.needs.length ? ` · uses ${t.needs.join(', ')}` : ''}</span>
+            </button>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
 
 /** Quant practice: mental maths speed drills, and timed interview drills like a trading firm's */
 export function QuantPanel() {
@@ -104,6 +154,8 @@ export function QuantPanel() {
           {last && <span className="muted small pv-meta-note">Last drill: {Math.round(last.score * 100)}%{last.verdict ? `, ${last.verdict}` : ''}</span>}
         </div>
       </section>
+
+      <QuantLab />
 
       <section className="pv-prompt">
         <h2 className="pv-title">Problem set</h2>

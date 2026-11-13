@@ -115,6 +115,8 @@ export interface Settings {
   /** Sidebar items the user chose to hide (ids from shared/sidebar.ts) */
   sidebarHidden?: string[]
   fontSize: number
+  /** Notebooks (main/notebook): `internet` lets a notebook's kernel reach the internet, for yfinance (off unless turned on) */
+  notebook?: { internet?: boolean }
   ai: AISettings
   /** How the tutor sounds: Tide's natural voice (Kokoro, set up in Settings) or the Mac's own */
   /** custom: a Kokoro voice that replaces the character's; dictation: who writes out what you say */
@@ -141,7 +143,7 @@ export interface Settings {
   prep?: Partial<import('./lessonPrep').PrepSettings>
 }
 
-export type FileKind = 'note' | 'pdf' | 'epub' | 'image' | 'doc' | 'canvas' | 'other'
+export type FileKind = 'note' | 'pdf' | 'epub' | 'image' | 'doc' | 'canvas' | 'notebook' | 'other'
 
 export interface FileNode {
   name: string
@@ -637,6 +639,8 @@ export interface TideApi {
   /** The Code view as an IDE (shared/ide) */
   ide: import('./ide').IdeApi
   ideas: import('./ideaProject').IdeasApi
+  /** Jupyter notebooks and the quant lab (shared/notebook) */
+  notebook: import('./notebook/api').NotebookApi
   lsp: {
     /** A JSON-RPC message for the server */
     send(msg: unknown): void

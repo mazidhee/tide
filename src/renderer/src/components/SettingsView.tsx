@@ -19,7 +19,8 @@ import { ProfileSettings } from './ProfileSettings'
 import { BackupsSettings } from './BackupsSettings'
 import { UsageView } from './UsageView'
 import { ConnectionsView } from './ConnectionsView'
-import { LAB_PACK } from '@shared/labPack'
+import { LAB_PACK, QUANT_PACK } from '@shared/labPack'
+import { usePackInstall } from './notebook/PackCard'
 import type { EditorChoice, InstalledEditor } from '@shared/editor'
 
 const THEMES: { id: ThemeId; name: string; bg: string; side: string; ink: string; accent: string }[] = [
@@ -179,6 +180,49 @@ function LabPackSetup() {
   const [step, setStep] = useState('')
   useEffect(() => window.tide.runner.onLabProgress(setStep), [])
   return <ToolSetup label="Lab pack" hint={LAB_PACK.contents} check={window.tide.runner.labStatus} setup={window.tide.runner.setupLab} busyText={step || 'Starting…'} actionText={`Install (${LAB_PACK.size})`} />
+}
+
+/**
+ * The quant pack: the Jupyter kernel for notebooks, and the statistics, data, optimisation and
+ * pricing libraries, installed in the background with uv when it's on this Mac; then the size it
+ * really took. Yahoo Finance prices are a separate, opt-in switch because of Yahoo's terms.
+ */
+function QuantPackSetup() {
+  const app = useApp()
+  const { status, step, busy, install, setStatus } = usePackInstall()
+  const internet = !!app.settings.notebook?.internet
+  const size = status?.sizeMb ? `${Math.round(status.sizeMb)} MB` : QUANT_PACK.size
+  return (
+    <>
+      <Row
+        label={
+          <span className="set-status-label">
+            <span className={`tool-dot${status?.ready ? ' ok' : status ? ' off' : ''}`} aria-hidden="true" />
+            Quant pack
+          </span>
+        }
+        hint={busy ? step || 'Starting…' : status ? `${status.detail}${!status.ready ? ` · installs with ${status.installer}` : ''}` : 'Checking…'}
+      >
+        {!status?.ready && (
+          <button className="btn small" onClick={() => void install()} disabled={busy || !status}>
+            {busy ? 'Installing…' : `Install (${size})`}
+          </button>
+        )}
+      </Row>
+      {status?.ready && (
+        <Row label="Yahoo Finance prices in notebooks" hint="Off by default. yfinance (Apache-2.0) downloads prices from Yahoo, whose terms allow personal use only and may block it; the bundled Treasury, ECB and sample data need no internet. Turning it on lets a notebook’s kernel reach the internet.">
+          <Toggle
+            label="Yahoo Finance prices in notebooks"
+            on={internet && status.yahoo}
+            onChange={async (on) => {
+              if (on && !status.yahoo) setStatus(await window.tide.notebook.installYahoo())
+              await app.updateSettings({ notebook: { ...app.settings.notebook, internet: on } })
+            }}
+          />
+        </Row>
+      )}
+    </>
+  )
 }
 
 /** Your Metabase, read-only, so the tutor can teach you your own dashboards and data */
@@ -1357,6 +1401,7 @@ function ToolsSection() {
         <ToolSetup label="Maths checker" hint="Python with SymPy" check={window.tide.runner.mathStatus} setup={window.tide.runner.setupMath} />
         <ToolSetup label="Data libraries" hint="NumPy, pandas, Matplotlib" check={window.tide.runner.librariesStatus} setup={window.tide.runner.setupLibraries} />
         <LabPackSetup />
+        <QuantPackSetup />
         <ToolSetup label="Market data" hint="US Treasury yields and ECB euro rates for the finance labs" check={window.tide.learn.marketStatus} setup={window.tide.learn.fetchMarketData} busyText="Fetching from the US Treasury and the ECB…" actionText="Fetch newer" />
         <ToolSetup label="Languages" hint="What code in lessons can be written in" check={window.tide.runner.languagesStatus} setup={window.tide.runner.languagesStatus} busyText="Checking…" actionText="Check again" />
         <ToolSetup label="Things 4" hint="Tasks and deadlines" check={window.tide.learn.thingsStatus} setup={window.tide.learn.thingsStatus} busyText="Checking…" actionText="Check again" />

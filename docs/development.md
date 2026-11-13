@@ -59,6 +59,10 @@ src/
     library.ts       saving articles, YouTube transcripts, PDFs and Word docs; cover images
     websearch.ts     private SearXNG search engine in Docker: status, setup, wake on launch
     outlineDraft.ts  new-topic outlines: research syllabi on the web, then stream a draft
+    notebook/        Jupyter notebooks: a direct ZeroMQ kernel client for ipykernel (kernel.ts, wire.ts),
+                     .ipynb files, the quant pack's installer (pack.ts), the kernel's helper (tide_nb.py),
+                     and the margin tutor's MCP tools (tutor.ts); shared/notebook has the format,
+                     stale-cell tracking (deps.ts) and the quant lab's templates
     runner.ts        sandboxed Python/JavaScript runner: snippets, whole project folders, Matplotlib
                      charts captured as images, Tide's own Python (SymPy, NumPy, pandas, Matplotlib)
     companyPrep.ts   company interview plans: research the loop on the web, then stream a plan

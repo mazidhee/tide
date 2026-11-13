@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { highlight, monaco, monacoLanguage, refreshTheme, tideTheme } from '../lib/monaco'
 import { watchPython } from '../lib/ruff/editor'
-import { enablePythonLanguageServer, isLibraryModel } from '../lib/lsp/python'
+import { enablePythonLanguageServer, isLibraryModel, quietModels } from '../lib/lsp/python'
 import type { ProblemReport, ReviewComment } from '@shared/ide'
 import '../styles/lessoncode.css'
 
@@ -32,6 +32,8 @@ interface Props {
   onProblems?(list: ProblemReport[]): void
   /** Scroll to and select this line (the tutor showed it); a new nonce shows it again */
   reveal?: { line: number; nonce: number } | null
+  /** false: no problems underlined (a notebook cell, whose names come from other cells) */
+  lint?: boolean
 }
 
 /** Where each file was scrolled to, by model URI */
@@ -73,7 +75,7 @@ function replaceText(model: monaco.editor.ITextModel, value: string) {
  * signatures, go to definition, type errors). Python also gets live Ruff diagnostics and Format
  * Document (Shift+Alt+F).
  */
-export function CodeEditor({ value, onChange, language = 'python', onSubmit, fill = false, minLines = 8, maxLines = 24, readOnly = false, editorRef, path, comments, onDismissComment, onProblems, reveal }: Props) {
+export function CodeEditor({ value, onChange, language = 'python', onSubmit, fill = false, minLines = 8, maxLines = 24, readOnly = false, editorRef, path, comments, onDismissComment, onProblems, reveal, lint = true }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const ed = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const onChangeRef = useRef(onChange)
@@ -143,7 +145,8 @@ export function CodeEditor({ value, onChange, language = 'python', onSubmit, fil
     sizeRef.current = size
     size()
     const sizeSub = editor.onDidChangeModelContent(size)
-    const stopRuff = watchPython(monaco, editor)
+    if (!lint) quietModels.add(model.uri.toString())
+    const stopRuff = lint ? watchPython(monaco, editor) : () => {}
     // Follow the app theme
     const mo = new MutationObserver(() => void refreshTheme())
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-design', 'style', 'class'] })
@@ -159,6 +162,7 @@ export function CodeEditor({ value, onChange, language = 'python', onSubmit, fil
       // The editor goes first, then its model: disposing the model under a live editor made Monaco
       // throw "Model is disposed!" from its own pending work (seen when a code answer was handed in)
       editor.dispose()
+      if (!lint) quietModels.delete(model.uri.toString())
       if (current && !current.isDisposed()) current.dispose()
       if (model !== current && !path && !model.isDisposed()) model.dispose()
     }

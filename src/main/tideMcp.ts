@@ -52,6 +52,13 @@ async function allTools(): Promise<McpTool[]> {
 export async function toolsFor(lesson: string): Promise<McpTool[]> {
   if (lesson.startsWith('ide:')) return (await import('./ide/pair')).IDE_TOOLS
   const base = [...(await allTools()), ...(await metabaseTools())]
+  // A notebook's margin tutor (main/notebook/tutor): the tutor's tools and the notebook's
+  if (lesson.startsWith('nb:')) {
+    // The notebook's own tools win a clash of names (a lesson's set_exercise puts nothing in a notebook)
+    const nb = (await import('./notebook/tutor')).NOTEBOOK_TOOLS
+    const lessonOnly = new Set(['set_exercise', 'banked_exercise', 'check_exercise'])
+    return [...nb, ...base.filter((t) => !nb.some((n) => n.name === t.name) && !lessonOnly.has(t.name))]
+  }
   if (lesson.startsWith('code:')) {
     const code = await import('./ide/lesson')
     return [...base, ...code.lessonTools(code.labOfKey(lesson))]
