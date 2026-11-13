@@ -589,7 +589,10 @@ const api: TideApi = {
   metabase: {
     status: invoke('metabase:status'),
     connect: invoke('metabase:connect'),
-    disconnect: invoke('metabase:disconnect')
+    disconnect: invoke('metabase:disconnect'),
+    map: invoke('metabase:map'),
+    mapInfo: invoke('metabase:mapInfo'),
+    screen: invoke('metabase:screen')
   },
   app: {
     openExternal: invoke('app:openExternal'),

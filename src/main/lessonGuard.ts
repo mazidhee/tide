@@ -58,6 +58,9 @@ export async function exactCheck(req: ChatRequest): Promise<Exact | null> {
   const prev = [...req.messages].reverse().find((m) => m.role === 'assistant')
   const said = [...req.messages].reverse().find((m) => m.role === 'user')
   const mine = ownWords(text(said))
+  // An answer on their own Metabase is run beside the reference there, read-only, and the results compared
+  const mb = await import('./metabaseLearn').then((m) => m.metabaseExact(req)).catch(() => null)
+  if (mb) return mb
   // A SQL answer is run beside the reference query on the lesson's lab, and the rows compared
   const sql = await import('./sqlCheck').then((m) => m.sqlExact(req)).catch(() => null)
   if (sql) return sql

@@ -122,7 +122,7 @@ export function claudeWhy(i: Pick<PrepInput, 'now' | 'claude' | 'usedTonight' | 
 
 export interface PreparedExercise {
   id: string
-  kind: 'code' | 'sql' | 'maths' | 'concept'
+  kind: 'code' | 'sql' | 'maths' | 'concept' | 'metabase'
   level: 1 | 2 | 3
   question: string
 }

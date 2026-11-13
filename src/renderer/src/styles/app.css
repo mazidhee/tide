@@ -18059,6 +18059,76 @@ button.tl-dot:focus-visible {
   margin: 10px 14px 0;
 }
 
+/* Your Metabase beside a lesson on it (components/MetabasePane): the side grows to fit its pages */
+.session-split:has(.mb-side) {
+  grid-template-columns: minmax(0, 1fr) minmax(440px, 50%);
+}
+
+.mb-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 10px 12px 8px;
+  gap: 8px;
+}
+
+.mb-pane-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 26px;
+}
+
+.mb-pane-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 12.5px var(--font-ui);
+  color: var(--ink);
+}
+
+.mb-pane-sees {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--ink-soft);
+  font: 12px var(--font-ui);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mb-pane-sees b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.mb-pane-gap {
+  flex: 1;
+}
+
+.mb-pane .lv-web {
+  flex: 1;
+  min-height: 0;
+}
+
+.mb-pane .lv-web-box {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}
+
+.mb-pane-foot {
+  margin: 0;
+  font: 11.5px var(--font-ui);
+  color: var(--ink-muted);
+}
+
 /* A walkthrough needs room to draw: the side grows */
 .session-split:has(.lesson-canvas) {
   grid-template-columns: minmax(0, 1fr) minmax(420px, 46%);

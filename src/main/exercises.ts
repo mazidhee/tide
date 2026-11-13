@@ -95,7 +95,9 @@ export async function ioFor(lab: string): Promise<ExerciseIO> {
     sql: (q) => labQuery(lab, q, 1000),
     schema: () => schemaText(labSchema(lab)),
     // A quick second look on the background model; nothing when Claude can't take it
-    ask: async (prompt, system) => (await import('./claudeEngine')).claudeOnce(prompt, system, 'background').then((r) => r.text)
+    ask: async (prompt, system) => (await import('./claudeEngine')).claudeOnce(prompt, system, 'background').then((r) => r.text),
+    // Their Metabase, read-only, for an exercise on their own data
+    metabase: await import('./metabaseLearn').then((m) => m.metabaseIO()).catch(() => undefined)
   }
 }
 
@@ -110,23 +112,25 @@ async function fromBank(topic: string, kind: ExerciseKind | undefined, level: Le
 
 const offer = (p: BankProblem, why: string) => `${why} A verified exercise from the bank (id ${p.id}, ${['easy', 'medium', 'hard'][p.level - 1]}):\n${p.text.slice(0, 600)}\nQuestion: ${p.ask}\n\nPut <exercise id="${p.id}"/> as the last thing in your reply to set it: Tide puts in the problem, its hidden solution and tests. Don't restate it.`
 
-const KIND_WORD: Record<ExerciseKind, string> = { code: 'a code', sql: 'a SQL', maths: 'a maths', concept: 'a' }
+const KIND_WORD: Record<ExerciseKind, string> = { code: 'a code', sql: 'a SQL', maths: 'a maths', concept: 'a', metabase: 'a Metabase' }
 
 export const setExerciseTool: McpTool = {
   name: 'set_exercise',
   description:
-    "Set a practice exercise in a lesson, proven first. Give the problem and its proof, and a common mistake; Tide runs the proof in its sandbox and answers verified (with an id) or what failed. Only a verified exercise reaches the learner: put <exercise id=\"…\"/> as the last thing in your reply and Tide puts the problem in. Proof by kind: code — hidden tests (Python: 3+ pytest test_ functions calling the function by name, no import; other languages: JSON cases [{\"name\",\"stdin\",\"expect\"}]), a reference solution that must pass them all, and a wrong solution (the mistake) they must catch. sql — the reference query (run on this lesson's lab: it must return real, non-NULL rows) and a wrong query that returns different rows. maths — the worked solution, the final answer as a SymPy expression, a SymPy check that works it out from scratch and prints it last, and a wrong final answer. concept — the model answer saying what full marks needs, and a weak answer. If it fails, fix it and call again with repair_of (once). The level follows Tide's difficulty policy; give one only for the first exercise.",
+    "Set a practice exercise in a lesson, proven first. Give the problem and its proof, and a common mistake; Tide runs the proof in its sandbox and answers verified (with an id) or what failed. Only a verified exercise reaches the learner: put <exercise id=\"…\"/> as the last thing in your reply and Tide puts the problem in. Proof by kind: code — hidden tests (Python: 3+ pytest test_ functions calling the function by name, no import; other languages: JSON cases [{\"name\",\"stdin\",\"expect\"}]), a reference solution that must pass them all, and a wrong solution (the mistake) they must catch. sql — the reference query (run on this lesson's lab: it must return real, non-NULL rows) and a wrong query that returns different rows. maths — the worked solution, the final answer as a SymPy expression, a SymPy check that works it out from scratch and prints it last, and a wrong final answer. concept — the model answer saying what full marks needs, and a weak answer. metabase (only while their Metabase is connected) — a query on their real data: give database, and for MongoDB the collection; the reference is db.<collection>.aggregate([...]) (SQL on a SQL database, or \"card <id>\" to use an existing question as the answer), and the mistake a plausible wrong one; Tide runs both read-only and the learner answers with a pipeline, SQL, or a link to a question they built in Metabase. If it fails, fix it and call again with repair_of (once). The level follows Tide's difficulty policy; give one only for the first exercise.",
   inputSchema: {
     type: 'object',
     properties: {
-      kind: { type: 'string', enum: ['code', 'sql', 'maths', 'concept'] },
+      kind: { type: 'string', enum: ['code', 'sql', 'maths', 'concept', 'metabase'] },
       topic: { type: 'string', description: 'Only outside a lesson: the topic, e.g. "Python dictionaries"' },
+      database: { type: 'number', description: 'metabase: the database id' },
+      collection: { type: 'string', description: 'metabase: the collection a pipeline runs on' },
       level: { type: 'string', enum: ['easy', 'medium', 'hard'] },
       problem: { type: 'string', description: 'The problem as the learner reads it, in Markdown: the task, examples, everything needed. Not the question itself.' },
       question: { type: 'string', description: 'The one question asked in the answer box, a sentence' },
       lang: { type: 'string', description: 'code: python, javascript, typescript, c, cpp, …' },
       tests: { type: 'string', description: 'code: the hidden tests' },
-      reference: { type: 'string', description: 'code: the reference solution; sql: the reference query' },
+      reference: { type: 'string', description: 'code: the reference solution; sql: the reference query; metabase: the reference pipeline, SQL, or "card <id>"' },
       solution: { type: 'string', description: 'maths: the worked solution; concept: the model answer and what full marks needs' },
       answer: { type: 'string', description: 'maths: the final answer, e.g. 3/4 or 2*sqrt(3)' },
       check: { type: 'string', description: 'maths: Python with SymPy that computes the answer from scratch and prints it as its last line' },
@@ -152,7 +156,7 @@ export const setExerciseTool: McpTool = {
     if (move && (move.kind === 'recap' || move.kind === 'prerequisite')) return `Tide's difficulty policy says to set no new exercise now: ${move.why}. Do that instead.`
     x.level = level
     const id = exerciseId(x.topic)
-    const step = ctx.step({ kind: x.kind === 'sql' ? 'run_sql' : 'run_code', label: `Checking ${KIND_WORD[x.kind]} exercise before you see it`, status: 'running', depth: 0 })
+    const step = ctx.step({ kind: x.kind === 'sql' ? 'run_sql' : x.kind === 'metabase' ? 'metabase' : 'run_code', label: `Checking ${KIND_WORD[x.kind]} exercise before you see it`, status: 'running', depth: 0 })
     const v = await verifyExercise(x, await ioFor(lesson), id)
     console.log(`[exercise] ${x.kind} ${v.ok ? 'verified' : 'failed'} in ${v.ms} ms${x.repairOf ? ' (repair)' : ''}${v.ok ? '' : `: ${v.why.split('\n')[0].slice(0, 160)}`}`)
     if (v.ok) {
@@ -184,13 +188,13 @@ export const setExerciseTool: McpTool = {
 export const bankedExerciseTool: McpTool = {
   name: 'banked_exercise',
   description: 'A verified exercise you set in an earlier lesson on this topic, from Tide’s problem bank, at the level Tide’s difficulty policy picks. It costs nothing to check again: look here before writing a new one with set_exercise. Answers with an id to place as <exercise id="…"/>, or that there is none.',
-  inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['code', 'sql', 'maths', 'concept'] }, topic: { type: 'string', description: 'Only outside a lesson' }, level: { type: 'string', enum: ['easy', 'medium', 'hard'] } }, required: [] },
+  inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['code', 'sql', 'maths', 'concept', 'metabase'] }, topic: { type: 'string', description: 'Only outside a lesson' }, level: { type: 'string', enum: ['easy', 'medium', 'hard'] } }, required: [] },
   async run(args, ctx: ToolContext) {
     const lesson = ctx.labId ?? 'claude'
     const info = lessons.get(lesson)
     const topic = info?.topic || String(args.topic ?? '').trim()
     if (!topic) return 'Give the topic.'
-    const kind = ['code', 'sql', 'maths', 'concept'].includes(String(args.kind)) ? (String(args.kind) as ExerciseKind) : undefined
+    const kind = ['code', 'sql', 'maths', 'concept', 'metabase'].includes(String(args.kind)) ? (String(args.kind) as ExerciseKind) : undefined
     const given = ({ easy: 1, medium: 2, hard: 3 } as Record<string, Level>)[String(args.level ?? '')]
     const { level, move } = await levelFor(info, topic, given, lesson)
     if (move && (move.kind === 'recap' || move.kind === 'prerequisite')) return `Tide's difficulty policy says to set no new exercise now: ${move.why}. Do that instead.`

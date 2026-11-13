@@ -52,6 +52,7 @@ export const CALL_DEPTH = {
 const JOB_EFFORT: Record<JobName, Effort> = {
   mathsReadBack: 'low',
   notebookTutor: 'medium',
+  dataMap: 'low',
   paperRead: 'medium',
   workingMark: 'high',
   flashcards: 'low',

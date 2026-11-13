@@ -1121,6 +1121,12 @@ export interface TideApi {
     /** Checks the address and key, then saves them (the key goes to the Keychain) */
     connect(url: string, key: string): Promise<{ ready: boolean; detail: string; url: string }>
     disconnect(): Promise<void>
+    /** Maps the connected Metabase now (read-only): writes the Your data note and, the first time, the roadmap */
+    map(): Promise<{ note: string; roadmap: string; collections: number; dashboards: number }>
+    /** The last map, in brief: when, what, and the dashboards people use (null before the first) */
+    mapInfo(): Promise<{ at: number; host: string; collections: { name: string; count?: number; kind: string }[]; dashboards: { id: number; name: string; cards: number; views?: number }[]; note: string; roadmap: string; notebook: string } | null>
+    /** What the tutor reads of the Metabase page open in the web view ('' when it isn't one) */
+    screen(): Promise<{ text: string; label: string; url: string } | null>
   }
   voice: {
     status(): Promise<{ ready: boolean; detail: string }>

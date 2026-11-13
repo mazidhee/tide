@@ -87,7 +87,10 @@ const LessonProposal = lazy(() => import('./LessonProposal'))
 import { exerciseFile, exerciseNumber, isCodingLesson } from '@shared/lessonCode'
 import { useLessonCode } from '../lib/lessonCode'
 const LessonCanvas = lazy(() => import('./LessonCanvas').then((m) => ({ default: m.LessonCanvas })))
+// Loaded only when opened: the web view's frame comes with the link viewer (and its PDF reader)
+const MetabasePane = lazy(() => import('./MetabasePane').then((m) => ({ default: m.MetabasePane })))
 import { parseVerdict, scorecardScore } from '@shared/interviews'
+import { dollarsAsCode, isMetabaseLesson, teardownOf } from '@shared/metabaseData'
 
 interface Turn {
   role: 'user' | 'assistant'
@@ -365,7 +368,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       // A coding lesson: what's in the editor is on disk before the tutor's tools read it
       const coding = codeRef.current
       if (coding) await coding.flush()
-      await window.tide.ai.chat({ id, messages, scope, instructions: sessionInstructions(setupRef.current), labId: labId.current, ...(coding ? { codeLesson: { file: coding.file ?? undefined, root: setupRef.current.options?.codeRoot } } : {}), canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, ...engineFields(engineRef.current), sourceLed: ledRef.current, ...(setupRef.current.options?.course ? { course: { id: setupRef.current.options.course.id, lesson: setupRef.current.options.course.lesson } } : {}) })
+      // [metabase] The Metabase page beside the lesson, as the tutor reads it
+      const mbScreen = mbShownRef.current ? await window.tide.metabase.screen().catch(() => null) : null
+      await window.tide.ai.chat({ id, messages, scope, ...(mbScreen?.text ? { onScreen: mbScreen.text } : {}), instructions: sessionInstructions(setupRef.current), labId: labId.current, ...(coding ? { codeLesson: { file: coding.file ?? undefined, root: setupRef.current.options?.codeRoot } } : {}), canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, ...engineFields(engineRef.current), sourceLed: ledRef.current, ...(setupRef.current.options?.course ? { course: { id: setupRef.current.options.course.id, lesson: setupRef.current.options.course.lesson } } : {}) })
     },
     [scope, setup, web, timed, clock, mode, difficulty.noteFor]
   )
@@ -694,6 +699,33 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   )
   const [notesOpen, setNotesOpen] = useState(() => localStorage.getItem('tide.lesson.notes') !== 'closed')
   const withNotes = mode === 'teach' && notesOpen
+  // [metabase] A lesson on their own Metabase: Metabase opens beside it, and the tutor sees the page
+  const mbLesson = mode === 'teach' && isMetabaseLesson(topic, 'path' in scope ? scope.path : undefined)
+  const [mbUrl, setMbUrl] = useState('')
+  useEffect(() => {
+    if (!mbLesson) return
+    let live = true
+    window.tide.metabase
+      .status()
+      .then((st) => live && st.ready && setMbUrl(st.url))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [mbLesson])
+  const [mbOpen, setMbOpen] = useState(() => localStorage.getItem('tide.lesson.metabase') === 'open')
+  const mbShown = mbLesson && !!mbUrl && mbOpen
+  const mbShownRef = useRef(false)
+  mbShownRef.current = mbShown
+  const toggleMetabase = () =>
+    setMbOpen((o) => {
+      localStorage.setItem('tide.lesson.metabase', o ? 'closed' : 'open')
+      return !o
+    })
+  const mbStart = useMemo(() => {
+    const tear = teardownOf(topic)
+    return mbUrl ? (tear ? `${mbUrl}/dashboard/${tear.id}` : mbUrl) : ''
+  }, [mbUrl, topic])
   // The new design: the plan and what the lesson is checked against sit in a rail on the right
   // (when your notes are not open there), and a question shows how well you hold what it asks about
   const tide = useTideDesign()
@@ -1669,6 +1701,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               <span>{voice.handsFree ? (voice.speaking ? 'Speaking… (Esc)' : voice.flow ? 'Flow: sends when done' : voice.hearing === 'speech' ? 'Hearing you…' : voice.hearing === 'writing' ? 'Writing it down…' : 'Listening') : 'Hands-free'}</span>
             </button>
           )}
+          {mbLesson && mbUrl && (
+            <button className={`tool-btn${mbShown ? ' on' : ''}`} aria-pressed={mbShown} onClick={toggleMetabase} title={mbShown ? 'Close Metabase' : 'Open your Metabase beside the lesson: the tutor sees the question or dashboard you have open'}>
+              <Icon name="subDatabase" />
+              <span>Metabase</span>
+            </button>
+          )}
           {mode === 'teach' && (
             <button
               className={`tool-btn${notesOpen ? ' on' : ''}`}
@@ -1765,7 +1803,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         </div>
       </header>
 
-      <div className={`${withNotes ? 'session-split' : 'session-solo'}${rail ? ' td-with-rail' : ''}`}>
+      <div className={`${withNotes || mbShown ? 'session-split' : 'session-solo'}${rail ? ' td-with-rail' : ''}`}>
       <div className="lm-col">
       {showMap && <LessonTrack map={map} tutor={tutorName} nextLesson={nextUp ? (nextUp.item.topic ?? nextUp.item.title) : null} />}
       <div className="doc-scroll session-scroll">
@@ -1873,7 +1911,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     <>
                       {(() => {
                         const working = parseWorkingMarks(t.content)
-                        return working ? <WorkingCard working={working} /> : <div className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(text, env) }} />
+                        return working ? <WorkingCard working={working} /> : <div className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(dollarsAsCode(text), env) }} />
                       })()}
                       {conf && <span className="s-conf-tag">{conf}</span>}
                       {(() => {
@@ -2367,7 +2405,13 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           )}
         </aside>
       )}
-      {withNotes && approach === 'walkthrough' && sideTab === 'canvas' ? (
+      {mbShown ? (
+        <div className="lesson-side mb-side">
+          <Suspense fallback={<div className="view-loading" aria-busy="true" />}>
+            <MetabasePane url={mbStart} onClose={toggleMetabase} />
+          </Suspense>
+        </div>
+      ) : withNotes && approach === 'walkthrough' && sideTab === 'canvas' ? (
         <div className="lesson-side">
           <SideTabs tab={sideTab} onTab={setSideTab} />
           <Suspense fallback={<div className="view-loading" aria-busy="true" />}>
