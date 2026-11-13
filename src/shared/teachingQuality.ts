@@ -42,7 +42,10 @@ export interface AnswerEvent {
   turn: number
   verdict: Verdict
   score: number
+  /** How sure they said they were (Guessing, Unsure, Sure) */
   confidence?: Confidence
+  /** With nothing said: how sure they seemed, from hedging words and how long the answer took. Kept apart from what they said */
+  inferred?: Confidence
   /** Hints asked for on this question before answering */
   hints: number
   dontKnow: boolean
@@ -105,10 +108,53 @@ export const misconceptionTag = (m: Misconception) => `<misconception name="${m.
 
 const answered = (said: string) => /^Answer:/i.test(said.trim()) && !said.startsWith(GO_ON) && !said.startsWith(ASKED) && !said.startsWith('[hint]') && !isMoveOn(said)
 
+/** The inferred confidence of an answer with none said: its words, and the time since the question came */
+const inferredOf = (answer: { content: string; at?: number }, question?: { at?: number }): { inferred?: Confidence } => {
+  const ms = answer.at !== undefined && question?.at !== undefined ? answer.at - question.at : undefined
+  const c = inferConfidence(ownWords(answer.content), ms)
+  return c ? { inferred: c } : {}
+}
+
 const confidenceOf = (said: string): Confidence | undefined => {
   const c = said.match(/\(Confidence: (guessing|unsure|sure)\)/i)?.[1]?.toLowerCase()
   return c === 'sure' ? 3 : c === 'unsure' ? 2 : c === 'guessing' ? 1 : undefined
 }
+
+/** Words that hedge an answer: "I think", "maybe", "not sure" */
+const HEDGE = /\b(i think|i guess|i believe|maybe|perhaps|probably|possibly|might be|could be|not (sure|certain)|unsure|kind of|sort of|i suppose|if i remember|roughly|something like|or (is it|maybe)|i'?m not|no idea|guess(ing)?|don'?t know|dunno|idk)\b|\?\s*$/i
+/** Words that say it's a guess outright */
+const GUESS = /\b(no idea|just a guess|wild guess|(i'?m )?guessing|random guess|no clue|don'?t know|dunno|idk)\b/i
+
+/** Past this, a plain answer counts as unsure: a long while to answer (reading the question included) */
+export const SLOW_ANSWER_MS = 3 * 60_000
+
+/**
+ * How sure an answer seemed, when they didn't say: an outright guess or "I don't know" is
+ * Guessing, hedging words Unsure, a plain answer Sure unless it took a long while. Rough, and
+ * always kept apart from what they said (shown as inferred). Undefined with nothing to go on.
+ */
+export function inferConfidence(said: string, ms?: number): Confidence | undefined {
+  const text = said.replace(/^Answer:\s*/i, '').replace(/\n\(Confidence: [^)]*\)/i, '').trim()
+  if (!text) return undefined
+  if (GUESS.test(text) || saysDontKnow(text)) return 1
+  if (HEDGE.test(text)) return 2
+  if (ms !== undefined && ms > SLOW_ANSWER_MS) return 2
+  return 3
+}
+
+/**
+ * A user turn with how sure they were added (the one-tap chips after an answer): in its own
+ * words, before any of Tide's notes, where the confidence picked before sending goes
+ */
+export function withConfidence(content: string, c: Confidence): string {
+  const tag = `(Confidence: ${CONFIDENCE_LABEL[c].toLowerCase()})`
+  const bare = content.replace(/\n\(Confidence: (guessing|unsure|sure)\)/i, '')
+  const at = bare.search(/\n*\(Tide: /)
+  return at < 0 ? `${bare.trimEnd()}\n${tag}` : `${bare.slice(0, at).trimEnd()}\n${tag}${bare.slice(at)}`
+}
+
+/** Whether a user turn already says how sure they were */
+export const hasConfidence = (content: string) => /\(Confidence: (guessing|unsure|sure)\)/i.test(content)
 
 /**
  * Every marked answer in a lesson, in order, with what went with it: the confidence they gave,
@@ -149,7 +195,7 @@ export function lessonAnswers(
         turn: i - 1,
         verdict: grade.verdict,
         score: grade.score,
-        ...(confidenceOf(prev.content) ? { confidence: confidenceOf(prev.content) } : {}),
+        ...(confidenceOf(prev.content) ? { confidence: confidenceOf(prev.content) } : inferredOf(prev, turns[i - 2])),
         hints,
         dontKnow: saysDontKnow(prev.content),
         ...(ask ? { askType: ask.type } : {}),
@@ -373,8 +419,12 @@ export const CALIBRATION_MIN = 6
 /** A bias this far from 0 is called over- or underconfident */
 export const BIAS_LINE = 0.1
 
-export function calibration(answers: AnswerEvent[]): Calibration {
-  const rated = answers.filter((a): a is AnswerEvent & { confidence: Confidence } => !!a.confidence)
+/** Calibration on what they said (stated), or on what was inferred where they said nothing: never the two mixed */
+export function calibration(answers: AnswerEvent[], which: 'stated' | 'inferred' = 'stated'): Calibration {
+  const rated = answers.flatMap((a) => {
+    const c = which === 'stated' ? a.confidence : a.confidence ? undefined : a.inferred
+    return c ? [{ ...a, confidence: c }] : []
+  })
   const outcome = (a: AnswerEvent) => VERDICT_SCORE[a.verdict]
   const levels = ([1, 2, 3] as Confidence[]).map((level) => {
     const at = rated.filter((a) => a.confidence === level)
@@ -643,7 +693,10 @@ export interface TeachingMeasures {
   misconceptions: MisconceptionRecord[]
   hints: HintDependence
   hintWeeks: WeekHints[]
+  /** From the confidence they gave */
   calibration: Calibration
+  /** From the confidence inferred on answers they didn't rate (hedging words, answer time) */
+  inferredCalibration: Calibration
   transfer: ReturnType<typeof transfer>
   mastery: Mastery[]
   retention: Retention
@@ -687,6 +740,7 @@ export function measureTeaching(records: (Pick<LessonRecord, 'id' | 'topic' | 't
     hints: hintDependence(answers),
     hintWeeks: hintsByWeek(answers),
     calibration: calibration(answers),
+    inferredCalibration: calibration(answers, 'inferred'),
     transfer: transfer(answers),
     mastery: timeToMastery(concepts),
     retention: retention(concepts),

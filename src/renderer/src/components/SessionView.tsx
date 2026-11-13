@@ -77,6 +77,7 @@ import type { AgendaItem } from '@shared/coach'
 import { loadDaily } from '../lib/daily'
 import { startAgendaLesson } from '../lib/agenda'
 import { AskPurpose, LessonEnd, LessonTrack, MoveOnChip, StepDivider } from './LessonTrack'
+import { hasConfidence, withConfidence } from '@shared/teachingQuality'
 
 // Loaded when a lesson needs them: the code editor (Monaco) and the walkthrough canvas
 const answered = (said: string) => !said.startsWith(GO_ON) && !said.startsWith(ASKED) && !isMoveOn(said)
@@ -735,6 +736,18 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   talkRef.current = talk
   const stopTalking = voice.stop
   const finished = !busy && turns.length > 1 && !currentAsk && !carryOn && lastBlocks.some((b) => b.kind === 'summary' || b.kind === 'scores')
+
+  // ---------- How sure were you? One tap after an answer sent without it (shared/teachingQuality) ----------
+  const [sureDismissed, setSureDismissed] = useState<number | null>(null)
+  const sureAt = useMemo(() => {
+    if ((mode !== 'teach' && mode !== 'quiz') || !answeredHere.current) return -1
+    for (let i = turns.length - 1; i >= 0; i--) {
+      const t = turns[i]
+      if (t.role !== 'user' || t.content.startsWith('[hint]')) continue
+      return /^Answer:/.test(t.content) && !hasConfidence(t.content) && !isMoveOn(t.content) && i !== sureDismissed ? i : -1
+    }
+    return -1
+  }, [turns, mode, sureDismissed])
 
   // ---------- The lesson map (shared/lessonMap): where the lesson is on its plan ----------
   const map = useMemo(() => lessonMap(turns, parsed, { finished, warmup: warmStage }), [turns, parsed, finished, warmStage])
@@ -1882,6 +1895,13 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                     </div>
                   </Fragment>
                 )
+              if (i === sureAt)
+                return (
+                  <Fragment key={i}>
+                    <YouBeside>{bubble}</YouBeside>
+                    <SureAfter onPick={(c) => setTurns((ts) => ts.map((x, k) => (k === i ? { ...x, content: withConfidence(x.content, c) } : x)))} onDismiss={() => setSureDismissed(i)} />
+                  </Fragment>
+                )
               return isHint ? bubble : <YouBeside key={i}>{bubble}</YouBeside>
             }
             const blocks = parsed[i] ?? []
@@ -2381,6 +2401,23 @@ function SideTabs({ tab, onTab }: { tab: 'canvas' | 'notes'; onTab(t: 'canvas' |
       </button>
       <button role="tab" aria-selected={tab === 'notes'} className={tab === 'notes' ? 'on' : ''} onClick={() => onTab('notes')}>
         Notes
+      </button>
+    </div>
+  )
+}
+
+/** "How sure were you?" after an answer sent without saying: one tap, or dismissed (it's then inferred, marked as such) */
+function SureAfter({ onPick, onDismiss }: { onPick(c: 1 | 2 | 3): void; onDismiss(): void }) {
+  return (
+    <div className="s-sure" role="group" aria-label="How sure were you?">
+      <span>How sure were you?</span>
+      {CONFIDENCE.map((c) => (
+        <button key={c.value} className="s-sure-chip" onClick={() => onPick(c.value)}>
+          {c.label}
+        </button>
+      ))}
+      <button className="icon-btn small s-sure-x" onClick={onDismiss} title="Not now: Tide infers it from how you answered, marked as inferred" aria-label="Dismiss">
+        <Icon name="x" size={12} />
       </button>
     </div>
   )

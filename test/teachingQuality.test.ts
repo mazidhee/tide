@@ -358,3 +358,62 @@ describe('the prompt', () => {
     ).not.toContain('How to teach')
   })
 })
+
+describe('one-tap confidence, and inferred when unanswered', () => {
+  it('a tap adds how sure they were to the answer, before any of Tide’s notes, and replaces an earlier one', async () => {
+    const { withConfidence, hasConfidence } = await import('../src/shared/teachingQuality')
+    expect(withConfidence('Answer: 42', 3)).toBe('Answer: 42\n(Confidence: sure)')
+    expect(withConfidence('Answer: 42\n\n(Tide: their notes)', 1)).toBe('Answer: 42\n(Confidence: guessing)\n\n(Tide: their notes)')
+    expect(withConfidence('Answer: 42\n(Confidence: sure)', 2)).toBe('Answer: 42\n(Confidence: unsure)')
+    expect(hasConfidence(withConfidence('Answer: x', 2))).toBe(true)
+    expect(hasConfidence('Answer: x')).toBe(false)
+  })
+
+  it('infers it from hedging words and answer time', async () => {
+    const { inferConfidence, SLOW_ANSWER_MS } = await import('../src/shared/teachingQuality')
+    expect(inferConfidence('Answer: no idea, just a guess: 12')).toBe(1)
+    expect(inferConfidence("Answer: I don't know")).toBe(1)
+    expect(inferConfidence('Answer: I think it is 0x2A')).toBe(2)
+    expect(inferConfidence('Answer: maybe the left one?')).toBe(2)
+    expect(inferConfidence('Answer: 0x2A', 20_000)).toBe(3)
+    expect(inferConfidence('Answer: 0x2A', SLOW_ANSWER_MS + 1)).toBe(2)
+    expect(inferConfidence('Answer: ')).toBeUndefined()
+  })
+
+  it('a lesson’s answers carry what they said, or else what was inferred, never both', async () => {
+    const { lessonAnswers } = await import('../src/shared/teachingQuality')
+    const g = (v: string) => `<grade verdict="${v}" score="${v === 'correct' ? 1 : 0}">ok</grade>`
+    const record = {
+      id: 'l1',
+      topic: 'Hex',
+      started: 0,
+      turns: [
+        { role: 'user' as const, content: 'Teach me hex', at: 0 },
+        { role: 'assistant' as const, content: '<ask type="short">0x10?</ask>', at: 1000 },
+        { role: 'user' as const, content: 'Answer: 16\n(Confidence: sure)', at: 9000 },
+        { role: 'assistant' as const, content: `${g('correct')}\n<ask type="short">0xFF?</ask>`, at: 10_000 },
+        { role: 'user' as const, content: 'Answer: maybe 255?', at: 30_000 },
+        { role: 'assistant' as const, content: `${g('correct')}\n<ask type="short">0x100?</ask>`, at: 31_000 },
+        { role: 'user' as const, content: 'Answer: 256', at: 40_000 },
+        { role: 'assistant' as const, content: g('wrong'), at: 41_000 }
+      ]
+    }
+    const a = lessonAnswers(record)
+    expect(a.map((x) => [x.confidence ?? null, x.inferred ?? null])).toEqual([
+      [3, null],
+      [null, 2],
+      [null, 3]
+    ])
+  })
+
+  it('calibration keeps the stated and the inferred apart', async () => {
+    const { calibration } = await import('../src/shared/teachingQuality')
+    const ev = (v: 'correct' | 'wrong', c?: 1 | 2 | 3, inferred?: 1 | 2 | 3) => ({ lesson: 'l', topic: 't', at: 0, turn: 0, verdict: v, score: v === 'correct' ? 1 : 0, hints: 0, dontKnow: false, ...(c ? { confidence: c } : {}), ...(inferred ? { inferred } : {}) })
+    const answers = [ev('correct', 3), ev('wrong', undefined, 3), ev('wrong', undefined, 3), ev('correct', undefined, 1)]
+    expect(calibration(answers).answers).toBe(1)
+    expect(calibration(answers).levels.find((l) => l.level === 3)?.accuracy).toBe(1)
+    const inferred = calibration(answers, 'inferred')
+    expect(inferred.answers).toBe(3)
+    expect(inferred.levels.find((l) => l.level === 3)?.accuracy).toBe(0)
+  })
+})
