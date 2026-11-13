@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PopOutButton } from '../PopOutButton'
+import { usePopOutSurface } from '../../lib/popout'
 import { BANK_TAGS, type BankTag } from '@shared/mockBank'
 import { DESIGNS } from '@shared/mockQuestions'
-import { annotateCanvas, referenceCanvas, clockText, clockTone, modeInfo, openingMessage, remainingMs, rubricFor, type MockAnswer, type MockDebrief, type MockMode, type MockPhase, type MockRecord, type RubricItem } from '@shared/mocks'
+import { annotateCanvas, referenceCanvas, clockText, clockTone, modeInfo, openingMessage, remainingMs, rubricFor, type MockAnswer, type MockDebrief, type MockLiveState, type MockMode, type MockPhase, type MockRecord, type RubricItem } from '@shared/mocks'
 import type { Canvas } from '@shared/canvas'
 import type { ExamMark } from '@shared/types'
 import type { MockFed, MockStarted, MockStatus, TestOutcome } from '../../../../main/mocks'
@@ -53,10 +54,11 @@ interface Result {
   code?: string
 }
 
-export function MockView({ mode, review }: { mode: MockMode; review?: string }) {
+export function MockView({ mode, review, live }: { mode: MockMode; review?: string; live?: string }) {
   const app = useApp()
   const info = modeInfo(mode)
-  const [phase, setPhase] = useState<MockPhase>(review ? 'marking' : 'brief')
+  // A running mock moved here from another window starts where it was (main keeps its work)
+  const [phase, setPhase] = useState<MockPhase>(review ? 'marking' : live ? 'preparing' : 'brief')
   const [status, setStatus] = useState<MockStatus | null>(null)
   const [minutes, setMinutes] = useState(info.minutesDefault)
   const [tags, setTags] = useState<BankTag[]>([])
@@ -91,6 +93,32 @@ export function MockView({ mode, review }: { mode: MockMode; review?: string }) 
     return () => setMockPhase(null)
   }, [phase, title])
   useStudying('view', phase === 'live' && started ? { pose: 'stopwatch', label: `Mock: ${title}`, until: started.startedAt + started.minutes * 60_000 } : phase === 'marking' ? { pose: 'reading', label: `Marking: ${title}` } : null)
+
+  // A running mock taken over from another window: what it started with and the work so far
+  useEffect(() => {
+    if (!live || review) return
+    window.tide.mocks
+      .resume(live)
+      .then((r) => {
+        if (!r) throw new Error('That mock has ended.')
+        const st = r.state
+        opened.current = true
+        setStarted(r.started)
+        setCode(st.code ?? r.started.problem?.starter ?? '')
+        if (st.canvas) setCanvas(st.canvas)
+        setNotes(st.notes ?? '')
+        setAnswers(st.answers ?? [])
+        setExamAnswers((st.examAnswers ?? {}) as ExamAnswers)
+        setLines((st.lines ?? []) as ChatLine[])
+        setHints(st.hints ?? 0)
+        setNow(Date.now())
+        setPhase('live')
+      })
+      .catch((e) => {
+        setError(clean(e))
+        setPhase('brief')
+      })
+  }, [live, review])
 
   useEffect(() => {
     if (review) {
@@ -237,6 +265,31 @@ export function MockView({ mode, review }: { mode: MockMode; review?: string }) 
 
   const rubric = useMemo(() => rubricFor(mode, started?.exam ?? null), [mode, started])
 
+  // ---------- Moving to a window of its own, mid-mock ----------
+  // The work is kept in main as it changes, so a pop-out (or the main window, on return) carries on from it
+  const liveState = useCallback((): MockLiveState => ({ code, canvas, notes, answers, examAnswers, lines, hints }), [code, canvas, notes, answers, examAnswers, lines, hints])
+  const keepNow = useCallback(() => {
+    if (phase === 'live' && started) void window.tide.mocks.keep(started.id, liveState()).catch(() => {})
+  }, [phase, started, liveState])
+  useEffect(() => {
+    if (phase !== 'live' || !started) return
+    const t = setTimeout(keepNow, 600)
+    return () => clearTimeout(t)
+  }, [phase, started, keepNow])
+  usePopOutSurface({
+    name: phase === 'live' ? title : undefined,
+    busy: busy || testing || phase === 'preparing' || phase === 'marking',
+    busyText: phase === 'marking' ? 'It can move once the debrief is ready.' : 'It can move once the interviewer has answered.',
+    view: () => {
+      if (phase === 'live' && started) {
+        // Kept now, before the other window asks for it
+        keepNow()
+        return { kind: 'mock', mode, live: started.id }
+      }
+      return { kind: 'mock', mode, ...(review ? { review } : {}) }
+    }
+  })
+
   return (
     <div className={`doc-view mock mk-${mode} mk-phase-${phase}`}>
       <header className="doc-toolbar drag">
@@ -263,7 +316,7 @@ export function MockView({ mode, review }: { mode: MockMode; review?: string }) 
             <Icon name="x" />
             <span>{leaving ? 'Leave without marking?' : phase === 'debrief' ? 'Close' : 'Leave'}</span>
           </button>
-          {(phase === 'brief' || !!review) && <PopOutButton />}
+          {(phase === 'brief' || phase === 'live' || !!review) && <PopOutButton />}
         </div>
       </header>
 

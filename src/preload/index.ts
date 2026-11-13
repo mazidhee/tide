@@ -183,6 +183,8 @@ const api: TideApi = {
     history: invoke('mocks:history'),
     record: invoke('mocks:record'),
     examTopics: invoke('mocks:examTopics'),
+    keep: invoke('mocks:keep'),
+    resume: invoke('mocks:resume'),
     onEvent: (cb) => subscribe<{ id: string; delta: string }>('mock:event', cb)
   },
   speed: {

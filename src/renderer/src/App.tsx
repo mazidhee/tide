@@ -477,7 +477,7 @@ export default function App() {
   else if (view.kind === 'design') main = <CanvasView key={`${view.path}:${view.nonce ?? ''}`} path={view.path} start={view.start} topic={view.topic} company={view.company} timed={view.timed} reference={view.reference} />
   else if (view.kind === 'code') main = <CodeView key={`${view.root ?? view.path ?? 'code'}:${view.nonce ?? ''}`} path={view.path} root={view.root} file={view.file} home={view.home} />
   else if (view.kind === 'help') main = <HelpView section={view.section} />
-  else if (view.kind === 'mock') main = <MockView key={`${view.mode}:${view.review ?? ''}:${view.nonce ?? ''}`} mode={view.mode} review={view.review} />
+  else if (view.kind === 'mock') main = <MockView key={`${view.mode}:${view.review ?? ''}:${view.nonce ?? ''}:${view.live ?? ''}`} mode={view.mode} review={view.review} live={view.live} />
   else if (view.kind === 'exam') main = <ExamView key={`${view.topic}:${view.nonce ?? ''}`} scope={view.scope} topic={view.topic} options={view.options} view={view} />
   else if (view.kind === 'settings') main = <SettingsView section={view.section} />
   else main = <Home dueCount={due.due} cardCount={due.total} />

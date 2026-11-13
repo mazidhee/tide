@@ -36,6 +36,7 @@ import {
   modeInfo,
   openingMessage,
   half,
+  keepableLive,
   overallOf,
   parseMockMarks,
   profileOps,
@@ -48,6 +49,7 @@ import {
   verdictFor,
   type MockAnswer,
   type MockDebrief,
+  type MockLiveState,
   type MockMode,
   type MockRecord,
   type MockTurn,
@@ -139,6 +141,9 @@ interface Live {
   lastTests: { passed: number; total: number; failed: string[] } | null
   told: number[]
   busy: AbortController | null
+  /** What startMock handed the window, and the window's work as it last kept it: a pop-out resumes from these */
+  started?: MockStarted
+  kept?: MockLiveState
 }
 
 const live = new Map<string, Live>()
@@ -258,7 +263,7 @@ export async function startMock(s: MockSetup): Promise<MockStarted> {
   }
   m.startedAt = Date.now()
   live.set(id, m)
-  return {
+  m.started = {
     id,
     mode: m.mode,
     title: m.title,
@@ -272,6 +277,23 @@ export async function startMock(s: MockSetup): Promise<MockStarted> {
     ...(m.behavioural ? { behavioural: m.behavioural.map((q) => ({ id: q.id, prompt: q.prompt, followUp: q.followUp })) } : {}),
     ...(m.exam ? { exam: m.exam } : {})
   }
+  return m.started
+}
+
+/** The window's work on a running mock, kept so it can move to another window */
+export function keepMock(id: string, state: unknown): boolean {
+  const m = live.get(id)
+  const kept = keepableLive(state)
+  if (!m || !kept) return false
+  m.kept = kept
+  return true
+}
+
+/** A running mock, for a window taking it over: what it started with and the work so far; null once it has ended */
+export function resumeMock(id: string): { started: MockStarted; state: MockLiveState } | null {
+  const m = live.get(id)
+  if (!m?.started) return null
+  return { started: m.started, state: m.kept ?? {} }
 }
 
 const need = (id: string): Live => {
@@ -605,6 +627,8 @@ export function registerMocks() {
   ipcMain.handle('mocks:history', () => mockHistory())
   ipcMain.handle('mocks:record', (_e, id: string) => mockRecord(String(id)))
   ipcMain.handle('mocks:examTopics', () => suggestExamTopics())
+  ipcMain.handle('mocks:keep', (_e, id: string, state: unknown) => keepMock(String(id), state))
+  ipcMain.handle('mocks:resume', (_e, id: string) => resumeMock(String(id)))
 }
 
 /** For the renderer's bank picker (titles and tags only) */

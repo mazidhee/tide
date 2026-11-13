@@ -791,6 +791,10 @@ export interface TideApi {
     history(): Promise<import('./mocks').MockRecord[]>
     record(id: string): Promise<unknown>
     examTopics(): Promise<string[]>
+    /** The window's work on a running mock, kept in main so it can move to another window */
+    keep(id: string, state: import('./mocks').MockLiveState): Promise<boolean>
+    /** A running mock taken over by this window (a pop-out, or back in the main one): null once it has ended */
+    resume(id: string): Promise<{ started: import('../main/mocks').MockStarted; state: import('./mocks').MockLiveState } | null>
     onEvent(cb: (e: { id: string; delta: string }) => void): () => void
   }
   /** The morning workout (shared/workout): ratings, titles and the log, kept in the vault under .tide/ */
