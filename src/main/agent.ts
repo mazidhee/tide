@@ -15,6 +15,7 @@ import { getCoach, getWeek, profilePrompt } from './coach'
 import { todayItems } from '@shared/coach'
 import { metabaseHost, metabaseReady, metabaseTool } from './metabase'
 import { loadImages, type NoteImage } from './noteImages'
+import { MAX_IMAGES } from './imagePrep'
 import { pagesToRead } from './books'
 import { ensureSearch, LOCAL_URL, nativeSearch } from './websearch'
 import { earlierLessons } from './lessons'
@@ -1768,6 +1769,9 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
       if (hit) addSource(ctx, { path: hit.path, title: hit.title, heading: hit.heading ? `${hit.heading} (linked note)` : 'linked note', text: hit.text.slice(0, 1200) })
     }
   }
+  // Pictures inside PDFs: the figures on the PDF pages these passages come from, rendered for
+  // Claude (main/pdfFigures), each page once a conversation, in the room the turn's own pictures leave
+  const figures = engine === 'claude' && !req.warmOnly ? await import('./pdfFigures').then((f) => f.figuresForTurn(req.chatId ?? req.labId ?? 'chat', ctx.sources, Math.min(f.MAX_PAGES, MAX_IMAGES - images.length))).catch(() => []) : []
   const screen = req.terminalId ? readTerminal(req.terminalId, 5000).split('\n').slice(-45).join('\n').trim() : ''
   const design = req.canvasPath ? describeCanvas(parseCanvas(await readText(req.canvasPath).catch(() => ''))) : ''
   // Asked to be set work: say so plainly, small models otherwise just answer the question
@@ -1816,7 +1820,8 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
     // Asked to load one of their files: which tool, and the path (in a lesson too)
     loadHint(question, /\.(csv|tsv)\b|\b(csv|tsv|my data|spreadsheet)\b/i.test(question) ? dataFiles() : []),
     own.length ? `Where this is covered in books the student owns (they open in Tide; point them to the pages when it helps, as a markdown link like [${readingLabel(own[0])}](/${own[0].path.split('/').map(encodeURIComponent).join('/')}#page=${own[0].from})): ${own.map(readingLabel).join('; ')}` : '',
-    images.length ? `You can see ${images.length === 1 ? 'the picture' : `these ${images.length} pictures`} from their notes, attached below in this order: ${images.map((im, i) => `${i + 1}) ${im.path}`).join(', ')}. Teach from what they show. To show one in your answer, put its line on its own exactly as written: ${images.map((im) => imageMarkdown(im.path)).join(' ')}` : ''
+    images.length ? `You can see ${images.length === 1 ? 'the picture' : `these ${images.length} pictures`} from their notes, attached below in this order: ${images.map((im, i) => `${i + 1}) ${im.path}`).join(', ')}. Teach from what they show. To show one in your answer, put its line on its own exactly as written: ${images.map((im) => imageMarkdown(im.path)).join(' ')}` : '',
+    figures.length ? `The PDF ${figures.length === 1 ? 'page' : 'pages'} these passages come from ${figures.length === 1 ? 'has' : 'have'} figures, so ${figures.length === 1 ? 'a picture of it is' : 'pictures of them are'} attached below${images.length ? ', after their own pictures' : ''}: ${figures.map((f) => `page ${f.page} of ${f.file.split('/').pop()}`).join(', ')}. Read the figures (diagrams, charts, tables drawn as pictures) as part of the source, and refer to them by page when you teach from them.` : ''
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -1840,7 +1845,8 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
     )
   ]
 
-  return { ctx, messages, images, job }
+  // The turn's pictures: theirs first, then the PDF pages' figures (each is sent as an image block)
+  return { ctx, messages, images: [...images, ...figures], job }
 }
 
 async function agentChatNow(req: TurnRequest, emit: (e: ChatEvent) => void, signal: AbortSignal) {
