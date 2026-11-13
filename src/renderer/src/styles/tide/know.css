@@ -1252,4 +1252,204 @@
     font-size: var(--t-base);
     color: var(--ink);
   }
+
+
+  /* Your model (components/know/KnowModel): depth against target, the evidence, a correction */
+  .km-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 0 20px;
+    padding: 0;
+    list-style: none;
+  }
+  .km-strip li {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--raised);
+    font-size: var(--t-meta);
+    color: var(--ink-2);
+  }
+  .km-strip li b {
+    font-size: var(--t-base);
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .km-strip li.none {
+    opacity: 0.55;
+  }
+  .km-card h3 {
+    margin: 14px 0 4px;
+  }
+  .km-list {
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .km-row + .km-row {
+    border-top: 1px solid var(--line);
+  }
+  .km-line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto 112px 44px;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 8px 6px;
+    border: 0;
+    border-radius: var(--r-ctl);
+    background: none;
+    font: inherit;
+    text-align: left;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .km-line:hover {
+    background: var(--hover);
+  }
+  .km-line:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
+  .km-name {
+    min-width: 0;
+    overflow: hidden;
+    font-size: var(--t-base);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .km-name small {
+    margin-left: 8px;
+    font-size: var(--t-meta);
+    color: var(--ink-3);
+  }
+  .km-meter {
+    display: inline-flex;
+    gap: 3px;
+  }
+  .km-meter i {
+    position: relative;
+    width: 14px;
+    height: 6px;
+    border-radius: 2px;
+    background: var(--line-2);
+  }
+  .km-meter i.on {
+    background: var(--ink-2);
+  }
+  .km-meter i.target::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    right: -2px;
+    width: 2px;
+    height: 14px;
+    border-radius: 1px;
+    background: var(--ink-2);
+  }
+  .km-depth {
+    font-size: var(--t-meta);
+    color: var(--ink-2);
+  }
+  .km-depth small {
+    color: var(--ink-3);
+  }
+  .km-ret {
+    font-size: var(--t-meta);
+    text-align: right;
+    color: var(--ink-3);
+  }
+  .km-detail {
+    margin: 2px 6px 14px;
+    padding: 12px 16px;
+    border-radius: var(--r-box);
+    background: var(--sunk);
+  }
+  .km-detail .tq-say {
+    margin-top: 0;
+  }
+  .km-measures {
+    color: var(--ink-3);
+  }
+  .km-levels,
+  .km-events {
+    margin: 0 0 10px;
+    padding: 0;
+    list-style: none;
+    font-size: var(--t-meta);
+    line-height: 20px;
+    color: var(--ink-2);
+  }
+  .km-levels li {
+    display: flex;
+    gap: 8px;
+  }
+  .km-levels li.on b {
+    color: var(--ink);
+  }
+  .km-levels small {
+    color: var(--ink-3);
+  }
+  .km-tick {
+    width: 12px;
+    color: var(--ink-3);
+  }
+  .km-levels li.on .km-tick {
+    color: var(--accent-text);
+  }
+  .km-events li {
+    padding-left: 12px;
+    text-indent: -12px;
+  }
+  .km-events li::before {
+    content: '– ';
+    color: var(--ink-3);
+  }
+  .km-links {
+    margin: 0 0 10px;
+  }
+  .km-more {
+    margin-top: 6px;
+    padding: 2px 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: var(--t-meta);
+    color: var(--accent-text);
+    cursor: pointer;
+  }
+  .km-fix {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .km-note {
+    width: min(420px, 100%);
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    background: var(--paper);
+    font: inherit;
+    font-size: var(--t-meta);
+    color: var(--ink);
+  }
+  .km-fix-actions {
+    display: flex;
+    gap: 8px;
+  }
+  @container (max-width: 640px) {
+    .km-line {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+    .km-depth,
+    .km-ret {
+      display: none;
+    }
+  }
 }

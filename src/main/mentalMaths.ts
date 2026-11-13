@@ -56,6 +56,7 @@ export async function logMathsSession(s: Pick<MathsSession, 'focus' | 'answers'>
   const record: MathsSession = { id: Math.random().toString(36).slice(2, 10), at, day: dayKey(at), focus: s.focus, answers: s.answers.slice(0, 60).map(clean) }
   await fs.mkdir(absPath(joinRel('.tide')), { recursive: true })
   await fs.appendFile(absPath(LOG), JSON.stringify(record) + '\n')
+  await Promise.all([import('@shared/learningEvents'), import('./learningLog')]).then(([{ drillEvent }, { learningEvent }]) => learningEvent(drillEvent(record, 'mentalmaths'))).catch(() => {})
   return record
 }
 

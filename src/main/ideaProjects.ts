@@ -461,6 +461,24 @@ export async function stepSession(notebook: string, id: string, step: SessionSte
   if (step === 'debrief' && outcome === 'done' && !m.debrief) throw new Error('Write the debrief first.')
   m.session = advanceSession(m.session ?? newSession(now), step, outcome, tests ? { ...tests, at: now } : undefined, m.gate)
   await writePlan(plan)
+  // A step of building a milestone, in the learning event log: tests run count as built, a skip as skipped
+  const project = plan.notebook ?? plan.slug
+  const concepts = m.lessons.map((l) => l.concept)
+  await Promise.all([import('@shared/learningEvents'), import('./learningLog')])
+    .then(([, { learningEvent }]) =>
+      learningEvent({
+        key: `project:${project}#${id}:${step}`,
+        at: now,
+        kind: outcome === 'skipped' ? 'skipped' : tests ? 'built' : 'studied',
+        source: 'project',
+        project,
+        ...(concepts[0] ? { topic: concepts[0] } : {}),
+        ...(tests ? { tests, outcome: tests.total && tests.passed >= tests.total ? 'correct' : tests.passed ? 'partial' : 'wrong' } : {}),
+        note: `${m.title}: ${step}`,
+        data: { milestone: id, step, concepts }
+      })
+    )
+    .catch(() => {})
   return plan
 }
 
@@ -520,6 +538,15 @@ export async function markReady(notebook: string, id: string, answers: Record<st
   }
   const tries = (mm.gate!.tries ?? 0) + 1
   mm.gate = gateOf(qs, clean, results, by === 'plan' && mm.gate!.by === 'claude' ? 'plan' : by, now, tries)
+  // The ready check, in the learning event log: explaining the design and the reading before building
+  {
+    const project = plan.notebook ?? plan.slug
+    const concepts = mm.lessons.map((l) => l.concept)
+    const ready = mm.gate.ready
+    await Promise.all([import('@shared/learningEvents'), import('./learningLog')])
+      .then(([, { learningEvent }]) => learningEvent({ key: `project:${project}#${id}:ready${tries}`, at: now, kind: 'explained', source: 'project', project, ...(concepts[0] ? { topic: concepts[0] } : {}), outcome: ready ? 'correct' : 'partial', quality: ready ? 0.8 : 0.5, note: `Ready check: ${mm.title}`, data: { milestone: id, concepts, tries } }))
+      .catch(() => {})
+  }
   let celebrate: Celebration | null = null
   if (mm.gate.ready) {
     await unlockTests(plan, mm)

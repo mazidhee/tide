@@ -393,6 +393,13 @@ function registerIpc() {
   ipcMain.handle('visuals:kill', (e, host: string, reason: string) => killVisual(e.sender, String(host), String(reason ?? 'it stopped answering').slice(0, 120)))
   ipcMain.handle('visuals:metrics', (e) => visualMetrics(e.sender))
   handle('knowledge:view', async () => (await import('./knowledge')).knowledgeView())
+  // The learner model (main/learnerModel): What you know › Your model, a correction, a target, an act from the window
+  const depthIn = (d: unknown) => Math.max(0, Math.min(6, Math.round(Number(d) || 0))) as import('@shared/learningEvents').Depth
+  handle('model:view', async (fresh?: boolean) => (await import('./learnerModel')).modelView(!!fresh))
+  handle('model:node', async (id: string) => (await import('./learnerModel')).nodeDetail(String(id ?? '')))
+  handle('model:correct', async (id: string, depth: number, note?: string) => (await import('./learnerModel')).correctJudgement(String(id ?? ''), depthIn(depth), typeof note === 'string' ? note.slice(0, 300) : undefined))
+  handle('model:setTarget', async (node: string, depth: number | null) => (await import('./learnerModel')).setTarget(String(node ?? ''), depth === null ? null : depthIn(depth), { by: 'you' }))
+  handle('model:event', async (e: import('@shared/learningEvents').EventIn) => (await import('./learnerModel')).eventFromWindow(e))
   handle('teaching:view', async () => (await import('./teaching')).teachingView())
   handle('teaching:setAdjustment', async (id: import('@shared/teachingAdjust').AdjustmentId, on: boolean) => (await import('./teaching')).setAdjustment(id, !!on))
   handle('teaching:review', async (lesson: string) => (await import('./teaching')).reviewLesson(String(lesson)))

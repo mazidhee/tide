@@ -67,6 +67,8 @@ export const JOB_ROUTES = {
   weeklyReview: { label: 'Your weekly review', role: 'hard' },
   // This week's progress in Your week (main/weekProgress): one line, Claude only; without it, fixed words
   weekProgress: { label: 'A line on this week’s progress', role: 'background' },
+  // The learner model (main/learnerModel): Haiku proposes "used in" links and skill tags; Claude only, the name heuristics stand in without it
+  modelLinks: { label: 'Linking what you know: uses and skills', role: 'background' },
   // Opus reviewing a finished lesson against the teaching rubric (main/teaching): Claude only, never Gemma
   lessonReview: { label: 'Reviewing a finished lesson', role: 'mark' },
   // Your Metabase mapped (main/metabaseMap): what each collection holds, from its fields and a tiny example

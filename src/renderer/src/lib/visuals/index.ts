@@ -18,7 +18,7 @@ import { MAX_MESSAGES_PER_SECOND, askAboutPart, frameUrl, isVisualSource, looksC
 import type { ChatScope } from '@shared/types'
 import { createKeeper, watchBlocks } from '../liveBlocks'
 import { button, h } from '../sims/dom'
-import { toAnswerBox } from '../sims/exploreBus'
+import { tellModel, toAnswerBox } from '../sims/exploreBus'
 import { typingIn } from '../typing'
 
 // ---------- Settings, for tests ----------
@@ -420,7 +420,9 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
   stepper.hidden = true
   // What they found, into their answer, to finish in their own words (like the explorables)
   const tell = button('Tell the tutor', () => {
-    const where = toAnswerBox(root, tellTutor(state))
+    const said = tellTutor(state)
+    const where = toAnswerBox(root, said)
+    tellModel(title, said)
     tell.textContent = where === 'answer' ? 'In your answer' : where === 'ask' ? 'Added to your question' : 'Copied'
     setTimeout(() => (tell.textContent = 'Tell the tutor'), 1600)
     widget.dirty = false

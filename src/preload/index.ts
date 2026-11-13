@@ -339,6 +339,13 @@ const api: TideApi = {
   difficulty: {
     known: invoke('difficulty:known')
   },
+  model: {
+    view: invoke('model:view'),
+    node: invoke('model:node'),
+    correct: invoke('model:correct'),
+    setTarget: invoke('model:setTarget'),
+    event: invoke('model:event')
+  },
   knowledge: {
     view: invoke('knowledge:view'),
     review: invoke('knowledge:review'),

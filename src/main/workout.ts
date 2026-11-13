@@ -117,6 +117,7 @@ export function logWorkoutRound(input: Pick<RoundRecord, 'morning' | 'round' | '
     const saved = state.rounds[state.rounds.length - 1]
     await fs.mkdir(absPath(joinRel('.tide')), { recursive: true })
     await fs.appendFile(absPath(LOG), JSON.stringify(saved) + '\n')
+    await Promise.all([import('@shared/learningEvents'), import('./learningLog')]).then(([{ workoutEvent }, { learningEvent }]) => learningEvent(workoutEvent(saved))).catch(() => {})
     await writePrefs(state.prefs)
     return { state, events }
   })
