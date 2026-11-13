@@ -13,6 +13,8 @@ import { NO_FILTER, SORTS, SOURCE_GROUPS, SUBJECTS, browse, counts, shelves, sub
 import { useApp } from '../state'
 import { Icon, type IconName } from './Icon'
 import { renderMarkdown, splitFrontmatter } from '../lib/markdown'
+import type { PageCleaning } from '@shared/pageClean'
+import { CleanedNote, originalHtml, useShowOriginal } from './CleanedNote'
 import { youtubeIdOf } from '@shared/video'
 import { VideoPlayer } from './VideoPlayer'
 import { ChatPanel } from './ChatPanel'
@@ -621,7 +623,7 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
   const app = useApp()
   const [d, setD] = useState<CourseDetail | null | undefined>(undefined)
   const [content, setContent] = useState<LessonContent | null | undefined>(undefined)
-  const [preview, setPreview] = useState<{ markdown: string; url: string } | null | undefined>(undefined)
+  const [preview, setPreview] = useState<{ markdown: string; url: string; cleaning?: PageCleaning } | null | undefined>(undefined)
   const [open, setOpen] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState<'import' | 'update' | 'save' | 'remove' | null>(null)
   const phases = useImports()
@@ -719,13 +721,17 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
 
   const env = useMemo(() => ({ notePath: '', filesByName: app.filesByName }), [app.filesByName])
   const body = content ? content.markdown : !d?.imported && preview ? preview.markdown : ''
+  // [clean] The lesson without its badges, sign-up banners and sponsor sections (main/courses, shared/pageClean); the original on request
+  const cleaning = content ? content.cleaning : !d?.imported && preview ? preview.cleaning : undefined
+  const [original, toggleOriginal] = useShowOriginal(content ?? preview)
   // The page has the lesson's title over it: the text's own first heading, when it says the same, isn't repeated
   const title = content?.title ?? (!d?.imported ? d?.course.title : '') ?? ''
   const html = useMemo(() => {
     if (!body) return ''
-    const text = splitFrontmatter(body).body.replace(/^\s*#\s+(.+)\n+/, (all, h: string) => (sameTitle(h, title) ? '' : all))
-    return renderMarkdown(text, env)
-  }, [body, env, title])
+    const prep = (md: string) => splitFrontmatter(md).body.replace(/^\s*#\s+(.+)\n+/, (all, h: string) => (sameTitle(h, title) ? '' : all))
+    if (original && cleaning) return originalHtml(cleaning, (md) => renderMarkdown(md, env), prep)
+    return renderMarkdown(prep(body), env)
+  }, [body, env, title, original, cleaning])
 
   // [videos] The YouTube videos the lesson links, played beside its text
   const videos = useMemo(() => (content ? videosIn(content.markdown) : []), [content])
@@ -895,6 +901,7 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
                     </span>
                     <Licence c={c} />
                   </p>
+                  <CleanedNote cleaning={cleaning} original={original} onToggle={toggleOriginal} />
                   <div className="crs-article-actions">
                     <button className="btn primary" onClick={() => void learnLesson(app, c, here.m, here.l)}>
                       <Icon name="tutor" size={14} /> {progress[here.l.id]?.record && !isDone ? 'Carry on with the tutor' : 'Learn this with the tutor'}
@@ -955,6 +962,7 @@ function CourseReader({ id, lessonId }: { id: string; lessonId?: string }) {
                     `Reading it from ${fromRepo(c) ? 'GitHub' : sourceSite(c)}…`
                   )}
                 </p>
+                <CleanedNote cleaning={cleaning} original={original} onToggle={toggleOriginal} />
               </header>
               {preview ? <article className="prose crs-prose" dangerouslySetInnerHTML={{ __html: html }} /> : preview === undefined && <div className="crs-skeleton" aria-busy="true"><span /><span /><span /></div>}
             </>

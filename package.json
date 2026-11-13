@@ -14,10 +14,13 @@
     "postinstall": "node -e \"const fs=require('fs'),p=require('path');const d='node_modules/node-pty/prebuilds';if(fs.existsSync(d))for(const a of fs.readdirSync(d)){const f=p.join(d,a,'spawn-helper');if(fs.existsSync(f))fs.chmodSync(f,0o755)}\"",
     "check": "node scripts/check/run.mjs",
     "native": "cd native/tide-core && cargo build --release && cp target/release/libtide_core.dylib tide-core.node",
-    "pdfium": "node scripts/fetch-pdfium.mjs"
+    "pdfium": "node scripts/fetch-pdfium.mjs",
+    "adblock-lists": "node scripts/fetch-adblock-lists.mjs"
   },
   "dependencies": {
     "@astral-sh/ruff-wasm-web": "0.17.3",
+    "@ghostery/adblocker-electron": "2.20.3",
+    "@ghostery/adblocker-electron-preload": "2.20.3",
     "@modelcontextprotocol/sdk": "1.32.2",
     "@mozilla/readability": "^0.6.0",
     "@vscode/ripgrep": "1.18.0",
@@ -175,6 +178,10 @@
       {
         "from": "THIRD_PARTY_NOTICES.md",
         "to": "THIRD_PARTY_NOTICES.md"
+      },
+      {
+        "from": "resources/adblock",
+        "to": "adblock"
       }
     ]
   },

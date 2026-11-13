@@ -31,6 +31,23 @@ function frontmatter(fields: Record<string, string | string[] | undefined>): str
 
 const turndown = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced', bulletListMarker: '-' })
 turndown.remove(['script', 'style', 'noscript', 'iframe'])
+// A heading's permalink (Sphinx and MkDocs put a ¶ after every heading): not part of what it says
+turndown.addRule('permalink', {
+  filter: (node) => node.nodeName === 'A' && /^#/.test(node.getAttribute('href') ?? '') && /^\s*[¶#§🔗]?\s*$/u.test(node.textContent ?? ''),
+  replacement: () => ''
+})
+// A code block whose <code> isn't the <pre>'s first child (MkDocs writes <pre><span></span><code>): still a code block, laid out as it was
+turndown.addRule('pre-code', {
+  filter: (node) => node.nodeName === 'PRE' && !!node.querySelector?.('code') && node.firstChild?.nodeName !== 'CODE',
+  replacement: (_c, node) => {
+    const el = node as HTMLElement
+    const code = el.querySelector('code')!
+    const lang = ((code.getAttribute('class') ?? '') + ' ' + (el.getAttribute('class') ?? '')).match(/(?:language|lang)-([\w+#-]+)/)?.[1] ?? ''
+    const text = (code.textContent ?? '').replace(/\n+$/, '')
+    const fence = '`'.repeat(Math.max(3, ...(text.match(/`{3,}/g) ?? []).map((t) => t.length + 1)))
+    return `\n\n${fence}${lang}\n${text}\n${fence}\n\n`
+  }
+})
 
 /**
  * Converts article HTML to Markdown, keeping MathML formulas (Wikipedia and most math sites)

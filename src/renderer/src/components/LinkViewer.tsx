@@ -22,9 +22,10 @@ import type { WebState } from '../../../main/webView'
 import { renderMarkdown } from '../lib/markdown'
 import { codeBlockClick } from '../lib/runBlocks'
 import { courseRepos, onGoto, openInBrowser, openTarget, scrollToHeading } from '../lib/linkNav'
-import { clearScreen, patchScreen, setScreen, trackSelection } from '../lib/onScreen'
+import { clearScreen, patchScreen, sectionIn, setScreen, trackSelection } from '../lib/onScreen'
 import { useApp } from '../state'
 import { Icon } from './Icon'
+import { CleanedNote, originalHtml, useShowOriginal } from './CleanedNote'
 import { VideoPlayer } from './VideoPlayer'
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
@@ -95,16 +96,8 @@ export function useSectionInView(root: React.RefObject<HTMLElement | null>, read
     let raf = 0
     const look = () => {
       raf = 0
-      const top = (sc?.getBoundingClientRect().top ?? 0) + 90
-      const hs = [...el.querySelectorAll<HTMLElement>('h1,h2,h3')]
-      let cur: HTMLElement | null = null
-      for (const h of hs) if (h.getBoundingClientRect().top <= top) cur = h
-      const h = cur ?? hs[0]
-      if (!h) return
-      // The section's own text, up to the next heading
-      let text = ''
-      for (let n = h.nextElementSibling; n && !/^H[1-3]$/.test(n.tagName) && text.length < 2200; n = n.nextElementSibling) text += `${(n as HTMLElement).innerText}\n`
-      patchScreen({ section: h.innerText.trim(), excerpt: text.trim() })
+      const seen = sectionIn(el, (sc?.getBoundingClientRect().top ?? 0) + 90)
+      if (seen) patchScreen(seen)
     }
     const on = () => (raf ||= requestAnimationFrame(look))
     look()
@@ -155,6 +148,7 @@ function RepoPage({ target }: { target: Extract<LinkTarget, { kind: 'course-file
     if (v && target.anchor && ref.current) requestAnimationFrame(() => ref.current && scrollToHeading(ref.current, target.anchor!))
   }, [v, target.anchor])
   useSectionInView(ref, !!v)
+  const [original, toggleOriginal] = useShowOriginal(v)
 
   const linkBase = target.kind === 'course-file' ? { 'data-link-course': target.course, 'data-link-path': v?.kind === 'folder' ? `${target.path}/README.md` : target.path } : { 'data-link-repo': target.repo, 'data-link-ref': target.ref, 'data-link-path': v?.kind === 'folder' ? `${target.path}/README.md` : target.path }
   const crumbs = target.path.split('/').filter(Boolean)
@@ -181,6 +175,7 @@ function RepoPage({ target }: { target: Extract<LinkTarget, { kind: 'course-file
           ))}
         </nav>
         {v && v.kind !== 'folder' && <h1 className="lv-title">{title}</h1>}
+        {v && <CleanedNote cleaning={v.cleaning} original={original} onToggle={toggleOriginal} />}
       </header>
       {v === undefined ? (
         <Skeleton />
@@ -189,7 +184,7 @@ function RepoPage({ target }: { target: Extract<LinkTarget, { kind: 'course-file
       ) : v.missing ? (
         <Missing why={v.missing} url={targetUrl(target, courseRepos())} />
       ) : (
-        <FileBody v={v} target={target} open={(p) => openTarget(to(p))} />
+        <FileBody v={v} target={target} original={original} open={(p) => openTarget(to(p))} />
       )}
     </div>
   )
@@ -218,16 +213,17 @@ function Missing({ why, url }: { why: string; url?: string | null }) {
   )
 }
 
-function FileBody({ v, target, open }: { v: RepoFileView; target: Extract<LinkTarget, { kind: 'course-file' | 'github-file' }>; open: (path: string) => void }) {
+function FileBody({ v, target, original, open }: { v: RepoFileView; target: Extract<LinkTarget, { kind: 'course-file' | 'github-file' }>; original: boolean; open: (path: string) => void }) {
   const html = useMemo(() => {
     if (!v.text) return ''
-    if (v.kind === 'markdown' || v.kind === 'notebook' || v.kind === 'folder') return renderMarkdown(v.text.replace(/^---\n[\s\S]*?\n---\n/, ''), env)
+    const prep = (md: string) => md.replace(/^---\n[\s\S]*?\n---\n/, '')
+    if (v.kind === 'markdown' || v.kind === 'notebook' || v.kind === 'folder') return original && v.cleaning ? originalHtml(v.cleaning, (md) => renderMarkdown(md, env), prep) : renderMarkdown(prep(v.text), env)
     if (v.kind === 'code' && v.text.length < 300_000) {
       const fence = '`'.repeat(Math.max(3, ...(v.text.match(/`{3,}/g) ?? []).map((t) => t.length + 1)))
       return renderMarkdown(`${fence}${codeLanguage(v.path)}\n${v.text.replace(/\n$/, '')}\n${fence}`, env)
     }
     return ''
-  }, [v])
+  }, [v, original])
   if (v.kind === 'folder') {
     return (
       <>
@@ -398,7 +394,9 @@ function WebPage({ url, onShow }: { url: string; onShow?: (t: LinkTarget) => voi
     setScreen(screen)
     return () => clearScreen(screen)
   }, [screen])
-  const html = useMemo(() => (page?.kind === 'article' ? renderMarkdown(page.markdown, env) : ''), [page])
+  // [clean] The article without its ads, trackers, sign-up boxes and "Related posts" (main/linkReader); the original on request
+  const [original, toggleOriginal] = useShowOriginal(page)
+  const html = useMemo(() => (page?.kind !== 'article' ? '' : original && page.cleaning ? originalHtml(page.cleaning, (md) => renderMarkdown(md, env)) : renderMarkdown(page.markdown, env)), [page, original])
   useSectionInView(ref, page?.kind === 'article' && !showWeb)
   useEffect(() => {
     if (page && page.kind === 'article' && ref.current && /#./.test(url)) requestAnimationFrame(() => ref.current && scrollToHeading(ref.current, decodeURIComponent(url.split('#').pop()!)))
@@ -429,7 +427,7 @@ function WebPage({ url, onShow }: { url: string; onShow?: (t: LinkTarget) => voi
             </button>
           )}
         </div>
-        <WebFrame url={page.url} />
+        <WebFrame url={page.url} excerpt={page.kind === 'article' ? page.markdown : undefined} />
       </div>
     )
   }
@@ -456,6 +454,7 @@ function WebPage({ url, onShow }: { url: string; onShow?: (t: LinkTarget) => voi
         </p>
         <h1 className="lv-title">{page.title}</h1>
         {page.byline && <p className="lv-byline">{page.byline}</p>}
+        <CleanedNote cleaning={page.cleaning} original={original} onToggle={toggleOriginal} />
         <div className="lv-actions">
           <button className="btn small" onClick={() => void save()} disabled={!!saved}>
             <Icon name={saved ? 'check' : 'library'} size={13} /> {saved ? 'Saved to library' : 'Save to library'}
@@ -475,7 +474,7 @@ function WebPage({ url, onShow }: { url: string; onShow?: (t: LinkTarget) => voi
  * follows the box as the layout moves, hides while something covers the window, and is destroyed
  * when this goes.
  */
-export function WebFrame({ url }: { url: string }) {
+export function WebFrame({ url, excerpt }: { url: string; /** The page's article as the reader cleaned it, when it has one: what the tutor reads of it */ excerpt?: string }) {
   const box = useRef<HTMLDivElement>(null)
   const [state, setState] = useState<WebState | null>(null)
   const place = useRef<() => void>(() => {})
@@ -520,10 +519,12 @@ export function WebFrame({ url }: { url: string }) {
   }, [url])
   useEffect(() => {
     if (!state) return
-    const s: OnScreen = { kind: 'web', title: state.title || host(state.url), url: state.url }
+    // [clean] The tutor reads the cleaned article, not the page's ads and banners (only while it is still that page)
+    const same = excerpt && state.url.split('#')[0] === url.split('#')[0]
+    const s: OnScreen = { kind: 'web', title: state.title || host(state.url), url: state.url, ...(same ? { excerpt: excerpt.slice(0, 2200) } : {}) }
     setScreen(s)
     return () => clearScreen(s)
-  }, [state?.url, state?.title]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state?.url, state?.title, excerpt]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="lv-web">
       <div className="lv-web-bar">
