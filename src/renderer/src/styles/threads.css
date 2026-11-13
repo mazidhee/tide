@@ -256,8 +256,6 @@
   overflow: hidden;
 }
 .lt-av.lt-me {
-  background: var(--accent-soft);
-  color: var(--accent);
   border-radius: 50%;
 }
 .lt-av.lt-prof {

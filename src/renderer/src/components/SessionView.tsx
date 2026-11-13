@@ -46,6 +46,7 @@ import { lessonId } from '@shared/lessonLog'
 import { endOngoing, followInBackground, getOngoing, keepLesson, keepLive, saveOngoing, sessionKey, stopFollowing } from '../lib/sessions'
 import type { View } from '../state'
 import { Professor, type ProfessorPose } from './Professor'
+import { YouBeside } from './Avatar'
 import { useTideDesign } from '../lib/design'
 import { characterById } from '@shared/characters'
 import { conceptFor, useKnowledge } from '../lib/knowledge'
@@ -1723,8 +1724,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               const own = ownWords(t.content)
               const text = own.replace(/^Answer: /, '').replace(/^My question: /, '').replace(/\n\(Confidence: \w+\)$/, '')
               const conf = own.match(/\(Confidence: (\w+)\)$/)?.[1]
-              return (
-                <div key={i} className={`s-you${isHint ? ' hint' : ''}`}>
+              const bubble = (
+                <div key={isHint ? i : undefined} className={`s-you${isHint ? ' hint' : ''}`}>
                   {isHint ? (
                     <span className="muted small">You asked for a {t.content.match(/\((.+) please\)/)?.[1] ?? 'hint'}</span>
                   ) : (
@@ -1739,6 +1740,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   )}
                 </div>
               )
+              return isHint ? bubble : <YouBeside key={i}>{bubble}</YouBeside>
             }
             const blocks = parsed[i] ?? []
             const live = busy && i === turns.length - 1

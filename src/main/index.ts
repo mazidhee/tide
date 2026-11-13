@@ -80,6 +80,8 @@ import { getBrain } from './brain'
 import { draftBrief, flowSteps, mapProject, privatePath, projectDocs, projectMap, setProject } from './projects'
 import { onBrainEvent, recentBrainEvents } from './brainEvents'
 import { getCoach, getWeek, planWeek, saveCoach, updateProfile, inferDirection, autoPlanWeek, weekToThings, setItemDone, catchUp, rollOver, dayStats, journal, writeJournal, weekReview, saveReview, savePlacement, addTopicAfter } from './coach'
+import { clearPhoto, getProfile, getSourcePhoto, setProfile, setSourcePhoto } from './profile'
+import type { Profile } from '@shared/profile'
 import { addMistakes, listMistakes, mistakesDue, retestMistake } from './mistakes'
 import { initTray, refreshTray, reportStudy, type StudyStatus } from './tray'
 import { localDate, todayItems } from '@shared/coach'
@@ -203,6 +205,12 @@ function registerIpc() {
   registerIde()
   registerMocks()
   handle('settings:get', () => getSettings())
+  // You (main/profile): your name and picture, kept in app data
+  handle('profile:get', () => getProfile())
+  handle('profile:set', (patch: Partial<Profile>) => setProfile(patch))
+  handle('profile:source', () => getSourcePhoto())
+  handle('profile:setSource', (dataUrl: string) => setSourcePhoto(dataUrl))
+  handle('profile:clearPhoto', (alsoSprite?: boolean) => clearPhoto(!!alsoSprite))
   handle('settings:set', (patch: Partial<Settings>) => {
     const prevVault = getSettings().vaultPath
     const next = updateSettings(patch)
