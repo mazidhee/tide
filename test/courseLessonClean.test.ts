@@ -22,7 +22,7 @@ const lessons = [
   { id: '01-intro/README.md', path: '01-intro/README.md', title: 'Introduction', kind: 'reading', words: 120 },
   { id: '01-intro/01-what-is-ml.md', path: '01-intro/01-what-is-ml.md', title: 'What machine learning is', kind: 'reading', words: 400 }
 ]
-writeFileSync(join(data.dir, 'courses', 'ml-zoomcamp', 'course.json'), JSON.stringify({ id: 'ml-zoomcamp', importedAt: 1, updatedAt: 1, method: 'git', outline: { modules: [{ id: '01-intro', title: 'Introduction', lessons, code: [] }], lessons: 2 } }))
+writeFileSync(join(data.dir, 'courses', 'ml-zoomcamp', 'course.json'), JSON.stringify({ id: 'ml-zoomcamp', importedAt: 1, updatedAt: 1, method: 'git', outlineVersion: 99, outline: { modules: [{ id: '01-intro', title: 'Introduction', lessons, code: [] }], lessons: 2 } }))
 
 import { courseLessonSource, lessonContent } from '../src/main/courses'
 

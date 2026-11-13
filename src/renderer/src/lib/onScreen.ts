@@ -42,6 +42,20 @@ export function setScreenVideo(get: () => ScreenVideo | null): () => void {
   }
 }
 
+/** More of the page, read when asked (the lesson's notes, its code cells): each part by name; the returned function lets it go */
+const parts = new Map<'notes' | 'cells', () => string>()
+export function setScreenPart(name: 'notes' | 'cells', get: () => string): () => void {
+  parts.set(name, get)
+  tell()
+  return () => {
+    if (parts.get(name) !== get) return
+    parts.delete(name)
+    tell()
+  }
+}
+/** A part's text changed: the chip beside the message box is redrawn */
+export const screenPartChanged = () => tell()
+
 export function setScreenSelection(text: string) {
   const t = text.trim().slice(0, 4000)
   if (t === selection) return
@@ -54,7 +68,12 @@ export function screenNow(): OnScreen | null {
   const v = video?.() ?? null
   if (!page && !v) return null
   const base: OnScreen = page ?? { kind: 'video', title: v?.title ?? 'Video' }
-  return { ...base, ...(v ? { video: v } : {}), ...(selection ? { selection } : {}) }
+  const extra: Partial<OnScreen> = {}
+  for (const [name, get] of parts) {
+    const t = page ? get().trim() : ''
+    if (t) extra[name] = t
+  }
+  return { ...base, ...(v ? { video: v } : {}), ...(selection ? { selection } : {}), ...extra }
 }
 
 export function onScreenChange(f: () => void): () => void {

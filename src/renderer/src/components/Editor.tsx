@@ -78,6 +78,9 @@ export interface EditorHandle {
   paragraph(): { text: string; line: number } | null
   /** Bold, a heading, a list…: applied to the selection, or toggled off */
   format(kind: FormatKind): void
+  /** Puts text in at the cursor (replacing the selection) and leaves the cursor after it */
+  insert(text: string): void
+  focus(): void
 }
 
 interface Props {
@@ -92,6 +95,10 @@ interface Props {
   onImage?(file: File): Promise<string | null>
   /** The note being edited (vault path): its links and pictures resolve from here */
   notePath?: string
+  /** A link clicked in the text: true when it was handled here (a video's moment on the page, say) */
+  onLink?(href: string): boolean
+  /** Not focused when it opens */
+  noFocus?: boolean
 }
 
 const IDLE_MS = 3500
@@ -119,13 +126,15 @@ function insertImages(view: EditorView, files: File[], at: number | null, save?:
 /** Live preview hides Markdown away from the cursor; source mode shows it all. The choice is remembered (settings.editorSource). */
 const previewMode = new Compartment()
 
-export function Editor({ value, onChange, onIdle, onProbe, handleRef, onImage, notePath }: Props) {
+export function Editor({ value, onChange, onIdle, onProbe, handleRef, onImage, notePath, onLink, noFocus }: Props) {
   const app = useApp()
   const source = app.settings.editorSource === true
   const appRef = useRef(app)
   appRef.current = app
   const notePathRef = useRef(notePath ?? '')
   notePathRef.current = notePath ?? ''
+  const onLinkRef = useRef(onLink)
+  onLinkRef.current = onLink
   const envRef = useRef<LivePreviewEnv | null>(null)
   const livePreview = useRef<ReturnType<typeof livePreviewPlugin> | null>(null)
   if (!envRef.current) {
@@ -134,7 +143,10 @@ export function Editor({ value, onChange, onIdle, onProbe, handleRef, onImage, n
       imageUrl: (target) => (/^(https?|data|vault):/i.test(target) ? target : vaultUrl(resolveRelative(target, renderEnv()))),
       renderMath,
       renderTable: (table) => renderMarkdown(table, renderEnv()),
-      openLink: (link) => void followLink(appRef.current, notePathRef.current, link)
+      openLink: (link) => {
+        if ('href' in link && onLinkRef.current?.(link.href)) return
+        void followLink(appRef.current, notePathRef.current, link)
+      }
     }
     livePreview.current = livePreviewPlugin(envRef.current)
   }
@@ -209,11 +221,17 @@ export function Editor({ value, onChange, onIdle, onProbe, handleRef, onImage, n
       })
     })
     viewRef.current = view
-    view.focus()
+    if (!noFocus) view.focus()
     if (handleRef) {
       handleRef.current = {
         paragraph: () => paragraphAt(view.state),
         format: (kind) => void applyFormat(view, kind),
+        insert: (text) => {
+          const r = view.state.selection.main
+          view.dispatch({ changes: { from: r.from, to: r.to, insert: text }, selection: { anchor: r.from + text.length }, scrollIntoView: true })
+          view.focus()
+        },
+        focus: () => view.focus(),
         lineTop: (line) => {
           if (line + 1 > view.state.doc.lines) return null
           const block = view.lineBlockAt(view.state.doc.line(line + 1).from)

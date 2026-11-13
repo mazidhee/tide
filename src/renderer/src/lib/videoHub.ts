@@ -15,6 +15,11 @@ export interface PlayerHandle {
   playAt(t: number): void
   /** The element, to bring into view */
   el(): HTMLElement | null
+  /** Where it is now, in seconds (0 before it opens) */
+  time?(): number
+  playing?(): boolean
+  /** Plays or pauses it, opening it first if it is a thumbnail */
+  toggle?(): void
 }
 
 const players = new Set<PlayerHandle>()

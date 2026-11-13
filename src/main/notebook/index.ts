@@ -78,6 +78,17 @@ async function create(folder: string, name: string, template?: string): Promise<
 
 // ---------- Kernels ----------
 
+/**
+ * Where a course's lesson cells run: a folder of the course's own in Tide's data, kept between
+ * lessons, so a file one lesson downloads or writes is there for the next. Never the vault.
+ */
+async function courseRunDir(course: string): Promise<string> {
+  const id = String(course).split('/')[0].replace(/[^\w.-]+/g, '-').replace(/^\.+/, '') || 'course'
+  const dir = join(nbDir(), 'courses', id)
+  await fs.mkdir(dir, { recursive: true })
+  return dir
+}
+
 interface Open {
   kernel: Kernel
   dir: string
@@ -136,8 +147,7 @@ async function start(ref: NbRef, theme: NbTheme): Promise<KernelStartResult> {
   const had = kernels.get(key)
   if (had && had.kernel.state !== 'dead') return had.starting ?? { ok: true }
   if (!(await hasKernelPackage())) return { ok: false, needsPack: true, detail: `The notebook runs on the Jupyter kernel, which is in the quant pack (${QUANT_PACK.size}).` }
-  const abs = await resolveRef(ref)
-  const folder = dirname(abs)
+  const folder = ref.course ? await courseRunDir(ref.course) : dirname(await resolveRef(ref))
   const kdir = join(nbDir(), 'kernels', createHash('sha1').update(key).digest('hex').slice(0, 12))
   // The sandbox matches real paths, not links: Tide's Python folder may be one
   await fs.mkdir(mplDir(), { recursive: true }).catch(() => {})
