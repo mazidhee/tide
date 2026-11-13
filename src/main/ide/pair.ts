@@ -37,6 +37,10 @@ interface Session {
   /** What happened since Claude's last turn (proposals kept or undone), told with the next message */
   notes: string[]
   model: string
+  /** A planned project where the learner writes the code: no write_file, and code only as a counted hint */
+  hintsOnly: boolean
+  /** One hint as code is allowed for this turn (asked for, or after repeated failed runs) */
+  hintOk: boolean
 }
 
 const sessions = new Map<string, Session>()
@@ -98,6 +102,17 @@ async function propose(s: Session, rel: string, next: string, explanation: strin
   const path = cleanRel(rel)
   if (!path) throw new Error('Give the file’s path in the project.')
   const cur = await currentText(s, path)
+  // The learner writes the code: a proposal is only ever a small, counted hint
+  let hint = false
+  if (s.hintsOnly && !huntFor(s.root)) {
+    const { HINT_MAX_LINES, changedLines } = await import('@shared/ideaProject')
+    if (!s.hintOk) return 'Not proposed: in this project the learner writes the code. Guide them with questions and hints in words; code is allowed only when they ask you to show them, or after repeated failed test runs.'
+    if (changedLines(cur.text, next) > HINT_MAX_LINES) return `Not proposed: a hint is a snippet of at most ${HINT_MAX_LINES} changed lines. Show the one idea they need, not the solution.`
+    hint = true
+    s.hintOk = false
+    const { recordHint } = await import('../ideaProjects')
+    await recordHint(s.root).catch(() => 0)
+  }
   const hunt = huntFor(s.root)
   if (hunt || autoEdit(s.root)) {
     const abs = insideReal(s.root, path)
@@ -116,7 +131,7 @@ async function propose(s: Session, rel: string, next: string, explanation: strin
     return `Written to ${path} (the learner lets you edit this project directly).`
   }
   const id = cur.pending?.id ?? randomUUID()
-  const p: Proposal = { id, root: s.root, path, original: cur.pending?.original ?? cur.text, proposed: next, explanation: [cur.pending?.explanation, explanation].filter(Boolean).join('\n\n').slice(0, 3000), created: Date.now(), ...(cur.exists ? {} : { isNew: true }) }
+  const p: Proposal = { id, root: s.root, path, original: cur.pending?.original ?? cur.text, proposed: next, explanation: [cur.pending?.explanation, hint ? `Hint: ${explanation}` : explanation].filter(Boolean).join('\n\n').slice(0, 3000), created: Date.now(), ...(cur.exists ? {} : { isNew: true }), ...(hint ? { hint: true } : {}) }
   proposals.set(id, p)
   emit(s, { type: 'proposal', proposal: p })
   return `Proposed a change to ${path}. The learner sees it as a diff and keeps or undoes each change; nothing is written until they do. Further edits to this file are added to the same proposal.`
@@ -216,6 +231,7 @@ export const IDE_TOOLS: McpTool[] = [
     inputSchema: obj({ path: { type: 'string' }, content: { type: 'string' }, explanation: { type: 'string' } }, ['path', 'content']),
     async run(args, ctx) {
       const s = sessionOf(ctx.labId?.replace(/^claude:/, '') ?? '')!
+      if (s.hintsOnly && !huntFor(s.root)) return 'write_file is off in this project: the learner writes the code. Ask, check and hint instead.'
       return propose(s, str(args.path), str(args.content), str(args.explanation))
     }
   },
@@ -268,6 +284,29 @@ export const IDE_TOOLS: McpTool[] = [
     }
   },
   {
+    name: 'project_memory',
+    description: "The project's plan and your memory note from earlier sessions: the current milestone and what says it's done, decisions made, open issues, what's next and past reviews. Read it at the start of a session.",
+    inputSchema: obj({}),
+    async run(_args, ctx) {
+      const s = sessionOf(ctx.labId?.replace(/^claude:/, '') ?? '')!
+      return projectBriefing(s.root, true)
+    }
+  },
+  {
+    name: 'update_project_memory',
+    description: "Keep the project's memory note up to date across sessions: add short lines to decisions (choices made and why), open_issues (bugs, risks, debts), next (what to do next) or reviews (a one-line summary of a review), and resolve lines that are no longer true (by their text). Keep each line short.",
+    inputSchema: obj({ decisions: { type: 'array', items: { type: 'string' } }, open_issues: { type: 'array', items: { type: 'string' } }, next: { type: 'array', items: { type: 'string' } }, reviews: { type: 'array', items: { type: 'string' } }, resolve: { type: 'array', items: { type: 'string' } } }),
+    async run(args, ctx) {
+      const s = sessionOf(ctx.labId?.replace(/^claude:/, '') ?? '')!
+      const { planForRoot, rememberThat } = await import('../ideaProjects')
+      const plan = await planForRoot(hunts().find((h) => h.root === s.root)?.source ?? s.root)
+      if (!plan?.notebook) return 'This project has no plan, so there is no memory note to keep.'
+      const list = (v: unknown) => (Array.isArray(v) ? v.map(str).filter(Boolean).slice(0, 8) : [])
+      await rememberThat(plan.notebook, { add: { Decisions: list(args.decisions), 'Open issues': list(args.open_issues), 'What’s next': list(args.next), Reviews: list(args.reviews) }, resolve: list(args.resolve) })
+      return 'The memory note is updated.'
+    }
+  },
+  {
     name: 'open_in_editor',
     description: 'Open a file in the learner’s editor at a line, to show them something.',
     inputSchema: obj({ path: { type: 'string' }, line: { type: 'number' } }, ['path']),
@@ -281,14 +320,42 @@ export const IDE_TOOLS: McpTool[] = [
   }
 ]
 
+/** What a pair session knows of a planned project: the plan's current milestone and (with memory) the mentor's note */
+export async function projectBriefing(root: string, withMemory: boolean): Promise<string> {
+  try {
+    const { planForRoot, readMemory } = await import('../ideaProjects')
+    const { currentMilestone, progressOf } = await import('@shared/ideaProject')
+    const plan = await planForRoot(hunts().find((h) => h.root === root)?.source ?? root)
+    if (!plan) return withMemory ? 'This project has no plan or memory note.' : ''
+    const cur = currentMilestone(plan)
+    const prog = progressOf(plan)
+    const parts = [
+      `The project is planned in Tide: ${plan.name}. ${plan.summary}`,
+      `Components: ${plan.components.map((c) => `${c.name} (${c.about})`).join('; ')}.`,
+      cur ? `Current milestone ${prog.index + 1} of ${prog.total}: ${cur.title}. ${cur.build}\nDone when:\n${cur.doneWhen.map((d) => `- ${d}`).join('\n')}${cur.lessons.length ? `\nConcepts it teaches: ${cur.lessons.map((l) => l.concept).join(', ')}.` : ''}` : 'Every milestone is done.',
+      `Milestones done: ${plan.milestones.filter((m) => m.status === 'done').map((m) => m.title).join('; ') || 'none yet'}.`
+    ]
+    if (withMemory && plan.notebook) {
+      const { text } = await readMemory(plan.notebook)
+      parts.push(`Your memory note from earlier sessions:\n${text.slice(0, 6000) || '(empty)'}`)
+    }
+    return parts.join('\n\n')
+  } catch {
+    return ''
+  }
+}
+
 const BASE = `You are pair-programming with a learner in Tide's IDE. You work on their project only through Tide's tools, which are confined to the project folder: list_files, read_file, search_code, get_diagnostics, git_diff, debug_state, run_command and run_tests (both in a sandbox on a throwaway copy, with no network), add_review_comment, open_in_editor, and propose_edit or write_file to change code.
 Your edits are proposals: the learner sees each as a diff in the editor and keeps or undoes each change. Say what you proposed and why in a sentence; don't paste the same code into your reply.
-Read before you change anything, and run the tests after a change when the project has them. Be direct and concrete, write plainly, no analogies or jokes. Use Markdown, short paragraphs, and code spans for names.`
+Read before you change anything, and run the tests after a change when the project has them. Be direct and concrete, write plainly, no analogies or jokes. Use Markdown, short paragraphs, and code spans for names.
+When the project is planned in Tide, project_memory gives its plan and your notes from earlier sessions, and update_project_memory keeps them: record decisions, open issues and what's next in short lines before you finish.`
 
 const MODES: Record<PairMode, string> = {
   ask: 'The learner asks about their project. Answer from the code itself (read it, search it, run it), and point at files and lines.',
   build: `Build a feature together. The learner should end up understanding and owning the code. First agree a small plan (3 to 6 steps). For each step, explain what's needed and let the learner write it when it's a good thing to learn; propose an edit yourself for boilerplate, or when they ask. After each step, run the tests or the program and say what passed.`,
   review: `Review the learner's uncommitted changes like a senior engineer reviewing a pull request. Read git_diff and the files around it, run the tests, then put each specific point on its line with add_review_comment (issue for bugs and risks, suggestion for improvements, question when intent is unclear, praise for something done well; at most about eight). Finish with a short summary: what's good, what must change before it's merged, and what's optional. Don't propose edits unless asked.`,
+  tutor: '',
+  mentor: `You are the learner's mentor on a project they are building themselves, across many sessions, like a senior engineer who reviews their work. Start by reading project_memory. When asked for a review (or at the end of a milestone), review the whole project, not only the diff: list the files, read the main ones, run the tests, then put specific points on their lines with add_review_comment, covering architecture (are the components separated as the plan intends), correctness and edge cases, the tests (do they test behaviour, what is missing), naming, and security (for anything handling money, keys or input: integer money, idempotency, validation, secrets in code, injection, overflow). Where a fix teaches little, or when asked, propose it with propose_edit: the learner approves it line by line. Finish with a short summary in four parts: what's good, what must change, what's optional, and what's next. Then record the review's outcome with update_project_memory: decisions, open issues, next steps and a one-line review. When the learner asks what to do next, answer from the plan and the memory.`,
   bughunt: `This is a bug hunt, in a copy of the learner's project made for it. First, quietly read the code and plant exactly one realistic bug of the kind real code has (an off-by-one, a wrong comparison or sign, a shared mutable default, a missed edge case, a swapped argument), with propose_edit; it is written to the copy directly. Make it findable with the tests, the debugger or careful reading. Never say where the bug is or what you changed. Then tell the learner the symptom to start from and how to see it (a test to run, an input to try), and coach them with questions as they hunt. When they say they've found it, check their explanation and fix against what you changed. If they give up, explain the bug and how one would have tracked it down.`
 }
 
@@ -303,19 +370,22 @@ async function ensureProcess(s: Session): Promise<import('../claudeEngine').Clau
   const file = join(dir, `mcp-ide-${s.id.slice(0, 12)}.json`)
   // This launch's token for Tide's own server only; readable by the user alone
   writeFileSync(file, mcpConfig(mcp.port, mcp.token, `ide:${s.id}`), { mode: 0o600 })
-  const system = `${BASE}\n\nThe project is "${basename(s.root)}".\n\n${MODES[s.mode]}`
+  const brief = await projectBriefing(s.root, false)
+  const { TUTOR_MODE } = await import('@shared/ideaProject')
+  const tutoring = s.hintsOnly && s.mode !== 'bughunt'
+  const system = `${BASE}\n\nThe project is "${basename(s.root)}".${brief ? `\n\n${brief}` : ''}\n\n${s.mode === 'tutor' ? 'Tutor the learner through the current milestone: they build it.' : MODES[s.mode]}${tutoring ? `\n\n${TUTOR_MODE}` : brief && s.mode === 'build' ? "\n\nWork on the current milestone. If its tests aren't written yet, start by proposing failing tests for its done-when lines (write_file), then help the learner make them pass." : ''}`
   s.proc = new ClaudeProcess(`ide:${s.id}`, s.model, system, file, [])
   return s.proc
 }
 
-const TOOL_LABELS: Record<string, string> = { list_files: 'Listing files', read_file: 'Reading', search_code: 'Searching', get_diagnostics: 'Reading the problems', git_diff: 'Reading your changes', propose_edit: 'Proposing an edit', write_file: 'Proposing a file', run_command: 'Running', run_tests: 'Running the tests', debug_state: 'Reading the debugger', add_review_comment: 'Commenting', open_in_editor: 'Opening' }
+const TOOL_LABELS: Record<string, string> = { list_files: 'Listing files', read_file: 'Reading', search_code: 'Searching', get_diagnostics: 'Reading the problems', git_diff: 'Reading your changes', propose_edit: 'Proposing an edit', write_file: 'Proposing a file', run_command: 'Running', run_tests: 'Running the tests', debug_state: 'Reading the debugger', add_review_comment: 'Commenting', open_in_editor: 'Opening', project_memory: 'Reading the project memory', update_project_memory: 'Updating the project memory' }
 
 /** The session for this conversation: a new one when the project or the mode changed */
 export function ensureSession(id: string, root: string, mode: PairMode, owner: WebContents, model: string): Session {
   let s = sessions.get(id)
   if (!s || s.root !== root || s.mode !== mode) {
     s?.proc?.stop()
-    s = { id, root, mode, owner, proc: null, busy: null, notes: [], model }
+    s = { id, root, mode, owner, proc: null, busy: null, notes: [], model, hintsOnly: false, hintOk: false }
     sessions.set(id, s)
   }
   s.owner = owner
@@ -328,7 +398,13 @@ export async function send(owner: WebContents, req: { session: string; root: str
   const ready = await claudeReady()
   const { claudeModel } = await import('@shared/claude')
   const { getSettings } = await import('../settings')
-  const sess = ensureSession(req.session, root, req.mode, owner, req.model ?? claudeModel('teach', getSettings().ai.claude))
+  const sess = ensureSession(req.session, root, req.mode, owner, req.model ?? claudeModel(req.mode === 'mentor' ? 'hard' : 'teach', getSettings().ai.claude))
+  // A private project never goes to Claude (nor does a bug hunt in its copy)
+  const { privateRoot } = await import('../ideaProjects')
+  if (await privateRoot(huntFor(root)?.source ?? root).catch(() => true)) {
+    emit(sess, { type: 'error', message: 'This project is private, so Claude isn’t used for it. The Tutor tab helps on this Mac, and the project home’s mentor review runs on Gemma.' })
+    return
+  }
   if (!ready.ready) {
     emit(sess, { type: 'error', message: `Claude isn’t available: ${ready.why ?? 'not ready'}. The IDE works without it; the Tutor tab can help on this Mac.` })
     return
@@ -337,7 +413,20 @@ export async function send(owner: WebContents, req: { session: string; root: str
     emit(sess, { type: 'error', message: 'Claude is still answering.' })
     return
   }
+  // A planned project: the learner writes, unless they let Claude write; a hint as code only when asked for or after failed runs
+  const { planForRoot, failedRuns } = await import('../ideaProjects')
+  const plan = await planForRoot(huntFor(root)?.source ?? root).catch(() => null)
+  const wasHintsOnly = sess.hintsOnly
+  sess.hintsOnly = !!plan && !plan.claudeWrites
+  if (sess.hintsOnly !== wasHintsOnly && sess.proc) {
+    sess.proc.stop()
+    sess.proc = null
+  }
+  const { hintAllowed } = await import('@shared/ideaProject')
+  const allowed2 = sess.hintsOnly ? hintAllowed({ text: req.text, failedRuns: failedRuns(root) }) : { ok: false, why: null }
+  sess.hintOk = allowed2.ok
   const context = [
+    allowed2.ok ? `(${allowed2.why === 'asked' ? 'The learner asked you to show them.' : `The learner's tests have failed ${failedRuns(root)} times running.`} You may give one hint as code: a snippet with propose_edit of at most a few lines, the one idea they need, labelled as a hint. Then hand back to them.)` : '',
     sess.notes.length ? `(Since your last message: ${sess.notes.join(' ')})` : '',
     req.activePath ? `(The learner has ${req.activePath} open.)` : '',
     req.selection ? `(They selected:\n\`\`\`\n${req.selection.slice(0, 4000)}\n\`\`\`)` : ''
@@ -404,6 +493,8 @@ export function resolve(id: string, text: string | null) {
 /** A copy of the project for a bug hunt, in Tide's own folder, opened as a workspace of its own */
 export async function startHunt(rootIn: string): Promise<BugHunt> {
   const source = allowed(rootIn)
+  const { privateRoot } = await import('../ideaProjects')
+  if (await privateRoot(source).catch(() => true)) throw new Error('This project is private: a bug hunt needs Claude, which isn’t used for it.')
   const id = randomUUID().slice(0, 8)
   const root = join(huntsDir(), `${basename(source)}-bug-hunt-${id}`)
   await fs.mkdir(root, { recursive: true })

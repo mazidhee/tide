@@ -24,6 +24,9 @@ import { Explorer } from './Explorer'
 import { PairPanel } from './PairPanel'
 import { QuickHelp } from './QuickHelp'
 import { Library, NewProjectSheet } from './Library'
+import { IdeaSheet } from '../ideas/IdeaSheet'
+import { ProjectHome } from '../ideas/ProjectHome'
+import type { ProjectPlan } from '@shared/ideaProject'
 import { Palette, type Command, type PaletteSymbol } from './Palette'
 import { ScmPane } from './ScmPane'
 import { SearchPane } from './SearchPane'
@@ -78,7 +81,7 @@ const STARTERS = [
  * Keys follow VS Code: ⌘P, ⇧⌘P, ⇧⌘O, ⌃G, ⌘T, ⌘B, ⌘J, ⇧⌘E/F/D, ⌃⇧G, ⌘S, ⌥⌘S, ⌘W, ⇧⌘T, ⌘\, ⌘1–3,
  * ⌃Tab, ⌃`, ⇧⌘M, F5, ⇧F5, F9, F10, F11, ⇧F11, and ⌘Enter runs the file in Tide's sandbox.
  */
-export function IdeView({ path: initialVaultPath }: { path?: string }) {
+export function IdeView({ path: initialVaultPath, root: initialRoot, home: initialHome }: { path?: string; root?: string; home?: boolean }) {
   const app = useApp()
   const toastRef = useRef(app.toast)
   toastRef.current = app.toast
@@ -94,6 +97,10 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
   const [switcher, setSwitcher] = useState(false)
   const [treeFilter, setTreeFilter] = useState('')
   const root = ws?.root ?? null
+  // A project planned from an idea (shared/ideaProject): its plan, and its home in place of the editors
+  const [ideaPlan, setIdeaPlan] = useState<ProjectPlan | null>(null)
+  const [home, setHome] = useState(false)
+  const [ideaSheet, setIdeaSheet] = useState(false)
 
   useEffect(() => {
     let live = true
@@ -104,7 +111,13 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
       const last = store.get<string | null>('tide.ide.root', null)
       const fromVault = initialVaultPath?.startsWith('Code/') || initialVaultPath === 'Code'
       const pick = fromVault ? w.code : [w.code, ...w.recent].find((x) => x?.root === last) ?? w.code ?? w.recent[0] ?? null
-      setWs(pick)
+      // Opened at a project (Learn's Continue, a new project from an idea)
+      if (initialRoot)
+        window.tide.ide
+          .open(initialRoot)
+          .then((x) => live && setWs(x))
+          .catch(() => live && setWs(pick))
+      else setWs(pick)
     })
     return () => {
       live = false
@@ -184,6 +197,7 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
   const activeFile = activeTab?.kind === 'file' ? activeTab.path : null
 
   const openTab = useCallback((tab: Tab, opts: { group?: number; at?: { line: number; column: number; endLine?: number; endColumn?: number } } = {}) => {
+    setHome(false)
     const gi = Math.min(opts.group ?? focusRef.current, groupsRef.current.length - 1)
     setGroups((gs) => gs.map((g, i) => (i === gi ? { ...g, tabs: g.tabs.some((t) => t.key === tab.key) ? g.tabs : [...g.tabs, tab], active: tab.key } : g)))
     setFocus(gi)
@@ -544,7 +558,8 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
   }, [side, discovery, discover])
   const runTests = useCallback(
     async (ids?: string[]) => {
-      if (!root || testing) return
+      if (!root || testing) return null
+      let ran: TestRun | null = null
       await saveAll()
       setTesting(ids ?? ['*'])
       setOutputKind('tests')
@@ -552,6 +567,7 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
       try {
         const r = await window.tide.ide.tests.run(root, ids)
         setTestRun(r)
+        ran = r
         const failed = r.outcomes.filter((o) => o.status === 'fail' || o.status === 'error').length
         const passed = r.outcomes.filter((o) => o.status === 'pass').length
         setOutcome(r.error && !r.outcomes.length ? { text: 'Tests didn’t run', tone: 'bad' } : failed ? { text: `${failed} fail, ${passed} pass`, tone: 'bad' } : { text: `${passed} pass`, tone: 'good' })
@@ -560,6 +576,7 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
       } finally {
         setTesting(null)
       }
+      return ran
     },
     [root, testing, saveAll, toast]
   )
@@ -584,6 +601,28 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
       live = false
     }
   }, [folder])
+
+  // ---------- A project planned from an idea ----------
+  const homeFor = useRef<string | null>(null)
+  useEffect(() => {
+    setIdeaPlan(null)
+    if (!root) return
+    let live = true
+    window.tide.ideas
+      .forRoot(root)
+      .then((p) => {
+        if (!live) return
+        setIdeaPlan(p)
+        // Its home first, the first time it's opened here (or when asked for)
+        if (p && homeFor.current !== root && (initialHome || !groupsRef.current.some((g) => g.tabs.length))) setHome(true)
+        homeFor.current = root
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [root])
 
   // ---------- Claude and the tutor ----------
   const [pair, setPair] = useState<PairStatus | null>(null)
@@ -710,6 +749,8 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
     library: () => setLibrary((l) => !l),
     collapseFolders: () => setExpanded(new Set()),
     newProject: () => setSheet(true),
+    ideaProject: () => setIdeaSheet(true),
+    projectHome: () => (setLibrary(false), setHome(true)),
     quickHelp: () => setRight('help')
   }
   const cycleTab = (d: number) => {
@@ -732,6 +773,8 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
       c('newFile', 'File: New File…'),
       c('openFolder', 'File: Open Folder…'),
       c('newProject', 'File: New Project…'),
+      c('ideaProject', 'File: New Project from an Idea…'),
+      ...(ideaPlan ? [c('projectHome', 'View: Project Home')] : []),
       c('library', 'View: Library', '⇧⌘L'),
       c('collapseFolders', 'Files: Collapse Folders'),
       c('quickHelp', 'View: Quick Help'),
@@ -1215,6 +1258,10 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
                   <Icon name="plus" size={13} />
                   <span>New project…</span>
                 </button>
+                <button role="menuitem" onClick={() => (setSwitcher(false), setIdeaSheet(true))}>
+                  <Icon name="compass" size={13} />
+                  <span>New project from an idea…</span>
+                </button>
                 <button role="menuitem" onClick={() => (setSwitcher(false), void openFolder())}>
                   <Icon name="folder" size={13} />
                   <span>Open folder…</span>
@@ -1247,6 +1294,12 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
             }} disabled={projectTesting} title="Run this stage's tests, and every earlier stage's">
               <Icon name="check" />
               <span>{projectTesting ? 'Testing…' : 'Stage tests'}</span>
+            </button>
+          )}
+          {ideaPlan && (
+            <button className={`tool-btn${home ? ' on' : ''}`} onClick={() => (setLibrary(false), setHome((h) => !h))} title="The project’s home: its milestones, session and mentor">
+              <Icon name="compass" />
+              <span>Project</span>
             </button>
           )}
           {activeFile && <TimeThis context={{ label: nameOf(activeFile), path: ws?.kind === 'code' ? `Code/${activeFile}` : activeFile, kind: 'session' }} />}
@@ -1314,7 +1367,33 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
         )}
         <main className="ix-main no-drag">
           {library ? (
-            <Library current={root} onNew={() => setSheet(true)} onOpen={(it) => void openLibraryItem(it)} />
+            <Library current={root} onNew={() => setSheet(true)} onIdea={() => setIdeaSheet(true)} onOpen={(it) => void openLibraryItem(it)} />
+          ) : home && ideaPlan ? (
+            <ProjectHome
+              plan={ideaPlan}
+              claude={!!pair?.ready && !ideaPlan.private}
+              onPlan={setIdeaPlan}
+              onPair={(mode, text) => {
+                setRight('claude')
+                setPairPending({ mode, text, nonce: Date.now() })
+                // Building happens in the editor; reviews put their comments there too
+                if (mode === 'build') {
+                  const first = files.files.find((f) => /(^|\/)(test_[^/]*\.py|[^/]*_test\.go|[^/]*\.test\.[jt]s)$|^tests\/[^/]*\.rs$/.test(f))
+                  if (first) openFile(first)
+                  else setHome(false)
+                }
+              }}
+              onHunt={() => {
+                if (!root) return
+                window.tide.ide.pair
+                  .bugHunt(root)
+                  .then((h) => openHunt(h))
+                  .catch((e) => toast(clean(e), true))
+              }}
+              onOpenFile={(p) => openFile(p)}
+              onRunTests={() => runTests()}
+              onEditor={() => setHome(false)}
+            />
           ) : (
             <div className="ix-groups">{groups.map(renderGroup)}</div>
           )}
@@ -1374,7 +1453,9 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
             {right === 'help' && <QuickHelp docs={docs} cursor={cursor && cursor.path === activeFile ? cursor : null} claudeReady={!!pair?.ready} onExplain={(word) => (setRight('claude'), setPairPending({ mode: 'ask', text: `Explain \`${word}\` as it's used in ${activeFile ?? 'this file'}${cursor ? ` (line ${cursor.line})` : ''}: what it is, where it comes from, and how it's used here.`, nonce: Date.now() }))} />}
             <div className="ix-right-claude" hidden={right !== 'claude'}>
               <PairPanel
-                status={pair}
+                planned={!!ideaPlan}
+                writes={!!ideaPlan?.claudeWrites}
+                status={ideaPlan?.private ? { ready: false, installed: !!pair?.installed, why: 'this project is private, so it stays on this Mac' } : pair}
                 root={root}
                 rootKind={ws?.kind ?? null}
                 activePath={activeFile}
@@ -1447,6 +1528,27 @@ export function IdeView({ path: initialVaultPath }: { path?: string }) {
             setKnown(await window.tide.ide.workspaces())
             setWs(w)
             setTimeout(() => openFile(open), 400)
+          }}
+        />
+      )}
+
+      {ideaSheet && (
+        <IdeaSheet
+          onClose={() => setIdeaSheet(false)}
+          onNotebook={(nb) => (setIdeaSheet(false), app.setView({ kind: 'notebook', path: nb }))}
+          onOpen={async (made) => {
+            setIdeaSheet(false)
+            setLibrary(false)
+            await saveAll()
+            try {
+              const w = await window.tide.ide.open(made.root)
+              setKnown(await window.tide.ide.workspaces())
+              homeFor.current = null
+              setWs(w)
+              setHome(true)
+            } catch (e) {
+              toast(clean(e), true)
+            }
           }}
         />
       )}

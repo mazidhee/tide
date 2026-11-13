@@ -347,7 +347,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const answeredHere = useRef(false)
   const startWarmup = (): Promise<string> =>
     new Promise<string>((resolve) => {
-      if (mode !== 'teach' || options?.placement || options?.review || options?.check || options?.retest?.length) return resolve('')
+      if (mode !== 'teach' || options?.placement || options?.review || options?.check || options?.retest?.length || options?.project?.warmedUp) return resolve('')
       let settled = false
       // Never hold a lesson up for long waiting for the cards
       const wait = setTimeout(() => ((settled = true), resolve('')), 3000)

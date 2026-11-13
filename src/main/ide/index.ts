@@ -58,7 +58,13 @@ export function registerIde(): void {
   handle('ide:git:init', (root: string) => git.init(root))
 
   handle('ide:tests:discover', (root: string) => discover(root))
-  handle('ide:tests:run', (root: string, ids?: string[]) => runTests(root, ids))
+  handle('ide:tests:run', async (root: string, ids?: string[]) => {
+    const r = await runTests(root, ids)
+    // A planned project counts failed runs: after a few, Claude may give a hint as code
+    const failed = r.outcomes.filter((o) => o.status === 'fail' || o.status === 'error').length
+    void import('../ideaProjects').then((m) => m.noteTestRun(root, { failed, total: r.outcomes.length })).catch(() => {})
+    return r
+  })
   handle('ide:tests:setup', () => setupPytest())
 
   registerLanguageServers()

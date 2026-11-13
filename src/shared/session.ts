@@ -276,7 +276,7 @@ export interface SessionSetup {
     /** How to teach it (a lesson): chosen by the router unless set */
     strategy?: Strategy
     /** Part of a project: taught in its terms, or as a mentor while you build it */
-    project?: { name: string; kind: ProjectKind; milestone?: string }
+    project?: { name: string; kind: ProjectKind; milestone?: string; warmedUp?: boolean }
     /** A walkthrough's steps, in order: the app draws each on the canvas as the lesson reaches it */
     flow?: FlowStep[]
     /** A Quick check (a quiz): a short fresh diagnostic of one topic, on the knowledge map's concept */

@@ -1,0 +1,1587 @@
+/*
+  Projects from an idea (components/ideas): the sheet that turns an idea into a plan, and a planned
+  project's home in the IDE. Quiet like the IDE: neutral surfaces, hairlines, and the theme's one
+  accent for what is known, current or done. Every colour is a theme token, so all seven themes work.
+*/
+
+.ip-gap {
+  flex: 1;
+}
+
+.ip-label {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.ip-hint {
+  font-size: 12px;
+  color: var(--ink-muted);
+  line-height: 1.45;
+}
+
+.ip-error {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
+/* ---------- The sheet ---------- */
+
+.ip-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 64px;
+  background: color-mix(in srgb, #000 24%, transparent);
+}
+
+.ip-sheet {
+  width: min(660px, calc(100vw - 40px));
+  max-height: calc(100vh - 96px);
+  padding: 16px 20px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-raised);
+  color: var(--ink);
+  box-shadow: var(--pop-shadow, var(--shadow));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-size: 13px;
+}
+
+.ip-sheet.wide {
+  width: min(960px, calc(100vw - 40px));
+  height: calc(100vh - 96px);
+}
+
+.ip-sheet :where(button) {
+  font: inherit;
+  color: inherit;
+}
+
+.ip-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ip-sheet-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ip-stages {
+  flex: 1;
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.ip-stages li + li::before {
+  content: '›';
+  margin-right: 4px;
+  color: var(--line-strong);
+}
+
+.ip-stages li.on {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.ip-stages li.done {
+  color: var(--ink-soft);
+}
+
+.ip-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ip-field > span {
+  font-weight: 550;
+}
+
+.ip-field textarea,
+.ip-option-own,
+.ip-summary,
+.ip-name {
+  font: inherit;
+  color: var(--ink);
+}
+
+.ip-field textarea {
+  resize: vertical;
+  min-height: 72px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+.ip-field textarea:focus,
+.ip-option-own:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.ip-starts {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.ip-start-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.ip-start {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  text-align: left;
+  min-width: 0;
+}
+
+.ip-start strong {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.ip-start span {
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+}
+
+.ip-start:hover {
+  border-color: var(--line-strong);
+}
+
+.ip-start.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.ip-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.ip-check input {
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.ip-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 2px;
+}
+
+.ip-route {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.ip-idea-quote {
+  margin: 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--line-strong);
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.ip-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ip-question {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ip-question > .ip-label {
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 550;
+}
+
+.ip-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ip-option {
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  font-size: 12.5px;
+}
+
+.ip-option:hover {
+  background: var(--bg-hover);
+}
+
+.ip-option.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.ip-option-own {
+  height: 28px;
+  min-width: 160px;
+  padding: 0 11px;
+  border-radius: 14px;
+  border: 1px dashed var(--line-strong);
+  background: transparent;
+  font-size: 12.5px;
+}
+
+.ip-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--bg-inset);
+  align-self: flex-start;
+}
+
+.ip-seg button {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.ip-seg button.on {
+  background: var(--bg-raised);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--line), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.ip-working {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 26px 6px 30px;
+}
+
+.ip-working .spinner {
+  margin-top: 4px;
+}
+
+.ip-working-title {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.ip-working .ip-hint {
+  margin: 0;
+  max-width: 52ch;
+}
+
+/* ---------- Reviewing the plan ---------- */
+
+.ip-review-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ip-name {
+  margin: 0 -6px;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.ip-meta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.ip-summary {
+  margin: 2px -6px 0;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  resize: none;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.ip-name:hover,
+.ip-summary:hover,
+.ip-inline:hover,
+.ip-inline-area:hover {
+  border-color: var(--line);
+}
+
+.ip-name:focus,
+.ip-summary:focus,
+.ip-inline:focus,
+.ip-inline-area:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+.ip-note {
+  margin: 4px 0 0;
+  padding: 7px 10px;
+  border-radius: 7px;
+  background: var(--bg-inset);
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.ip-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-bottom: 1px solid var(--line);
+  margin: 0 -20px;
+  padding: 0 20px;
+}
+
+.ip-tabs > button {
+  height: 30px;
+  padding: 0 10px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  font-size: 12.5px;
+  color: var(--ink-muted);
+}
+
+.ip-tabs > button.on {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+
+.ip-review-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: -14px -20px 0;
+  padding: 14px 20px 4px;
+}
+
+.ip-problems {
+  margin: 0;
+  padding: 7px 10px 7px 26px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+/* Prerequisites: known carries the accent, fading an outline of it, new nothing */
+.ip-legend {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.ip-prereqs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.ip-prereq {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 21px;
+  padding: 0 8px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: transparent;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.ip-prereq-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line-strong);
+  flex-shrink: 0;
+}
+
+.ip-prereq.known {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.ip-prereq.known .ip-prereq-dot {
+  background: var(--accent);
+}
+
+.ip-prereq.fading {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--ink);
+}
+
+.ip-prereq.fading .ip-prereq-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The project map */
+.ip-map {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--bg);
+  padding: 10px;
+  overflow: auto;
+}
+
+.ip-map .mermaid-diagram {
+  margin: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.ip-map .mermaid-diagram svg {
+  max-width: 100%;
+  max-height: 520px;
+  height: auto;
+}
+
+/* Edge labels on the map's own surface, not Mermaid's grey boxes */
+.ip-map .edgeLabel,
+.ip-map .labelBkg,
+.ip-map .edgeLabel p,
+.ip-map .edgeLabel span {
+  background: var(--bg) !important;
+  color: var(--ink-soft) !important;
+}
+
+.ip-map .edgeLabel rect {
+  fill: var(--bg) !important;
+}
+
+.ip-side-card .ip-map .edgeLabel,
+.ip-side-card .ip-map .labelBkg,
+.ip-side-card .ip-map .edgeLabel p {
+  background: var(--bg) !important;
+}
+
+/* Until Mermaid has drawn it, the source stays out of the way */
+.ip-map pre.code-block {
+  margin: 0;
+  max-height: 120px;
+  overflow: hidden;
+  opacity: 0.35;
+}
+
+.ip-map .copy-code,
+.ip-map .run-code {
+  display: none;
+}
+
+.ip-components {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.ip-components li {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 7px 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+.ip-comp-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ip-inline,
+.ip-inline-area {
+  width: 100%;
+  margin: 0 -5px;
+  padding: 2px 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  font: inherit;
+  color: var(--ink);
+  min-width: 0;
+}
+
+.ip-inline.strong {
+  font-weight: 600;
+}
+
+.ip-inline.muted {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.ip-inline-area {
+  resize: vertical;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.ip-milestones {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: none;
+}
+
+.ip-ms {
+  padding: 10px 0 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ip-ms-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ip-ms-head .ip-inline {
+  flex: 1;
+  font-size: 13.5px;
+}
+
+.ip-ms-n {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--bg-inset);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.ip-hours {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.ip-hours input {
+  width: 42px;
+  height: 22px;
+  padding: 0 4px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  text-align: right;
+}
+
+.ip-ms > .ip-inline-area,
+.ip-ms-comps {
+  margin-left: 21px;
+}
+
+.ip-ms-comps {
+  margin-top: 0;
+  margin-bottom: 0;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.ip-ms-grid {
+  margin-left: 26px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 14px;
+}
+
+.ip-ms-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ip-readings {
+  list-style: none;
+  margin: 0 0 0 26px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ip-readings li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  min-width: 0;
+}
+
+.ip-readings li > svg {
+  color: var(--ink-muted);
+  flex-shrink: 0;
+}
+
+.ip-readings .ip-hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.ip-reading-title {
+  white-space: nowrap;
+}
+
+.ip-files {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 14px;
+  min-height: 100%;
+}
+
+.ip-file-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ip-file-list button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 5px;
+  font-family: var(--font-code);
+  font-size: 11.5px;
+  text-align: left;
+  color: var(--ink-soft);
+}
+
+.ip-file-list button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ip-file-list button:hover {
+  background: var(--bg-hover);
+}
+
+.ip-file-list button.on {
+  background: var(--bg-active);
+  color: var(--ink);
+}
+
+.ip-file-list svg {
+  color: var(--ink-muted);
+  flex-shrink: 0;
+}
+
+.ip-file-view {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ip-file-view .ip-hint {
+  margin: 0;
+}
+
+.ip-code {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  font-family: var(--font-code);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink);
+  overflow: auto;
+  white-space: pre;
+  max-height: 440px;
+}
+
+.ip-made {
+  list-style: none;
+  margin: 2px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.ip-made li {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  line-height: 1.45;
+}
+
+.ip-made li > svg {
+  margin-top: 3px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.ip-made li.warn > svg {
+  color: var(--ink-muted);
+}
+
+.ip-made code {
+  font-family: var(--font-code);
+  font-size: 12px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--bg-inset);
+}
+
+/* ---------- The project's home in the IDE ---------- */
+
+.ip-home {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  container-type: inline-size;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.ip-home :where(button) {
+  font: inherit;
+  color: inherit;
+}
+
+.ip-home-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 22px 28px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.ip-home-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ip-home-head h1 {
+  margin: 0 0 2px;
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
+/* The milestones, as a line of stops */
+.ip-track {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ip-track li {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.ip-track li + li::before {
+  content: '';
+  position: absolute;
+  top: 11px;
+  left: calc(-50% + 14px);
+  right: calc(50% + 14px);
+  height: 1.5px;
+  background: var(--line-strong);
+}
+
+.ip-track li.done + li::before {
+  background: var(--accent);
+}
+
+.ip-track button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 4px;
+  border-radius: 8px;
+}
+
+.ip-track-dot {
+  display: inline-grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-strong);
+  background: var(--bg-raised);
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  position: relative;
+  z-index: 1;
+}
+
+.ip-track li.done .ip-track-dot {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.ip-track li.active .ip-track-dot {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.ip-track-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+.ip-track li.sel .ip-track-label {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.ip-track button:hover .ip-track-label {
+  color: var(--ink);
+}
+
+.ip-home-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 16px;
+  align-items: start;
+}
+
+.ip-home-main,
+.ip-home-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.ip-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  padding: 16px 18px;
+}
+
+.ip-card h2 {
+  margin: 2px 0 6px;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.ip-card h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ip-eyebrow {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+}
+
+.ip-build {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+.ip-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 14px;
+  align-items: start;
+}
+
+.ip-row > .ip-label {
+  padding-top: 2px;
+}
+
+.ip-lessons,
+.ip-done-when,
+.ip-readings.plain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ip-readings.plain {
+  margin-left: 0;
+}
+
+.ip-lessons li,
+.ip-readings.plain li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ip-lesson,
+.ip-reading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 6px;
+  margin-left: -6px;
+  border-radius: 5px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.ip-lesson svg,
+.ip-reading svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.ip-lesson:hover,
+.ip-reading:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.ip-reading:disabled svg {
+  color: var(--ink-muted);
+}
+
+.ip-done-when li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.ip-tick {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  border-radius: 4px;
+  border: 1.5px solid var(--line-strong);
+  flex-shrink: 0;
+}
+
+.ip-done-when li.pass {
+  color: var(--ink);
+}
+
+.ip-done-when li.pass .ip-tick {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.ip-session-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.ip-session > .ip-hint {
+  margin: 4px 0 0;
+}
+
+.ip-steps {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.ip-steps li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  color: var(--ink-muted);
+}
+
+.ip-steps li:first-child {
+  border-top: 0;
+}
+
+.ip-step-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  color: var(--ink-muted);
+}
+
+.ip-steps li.done {
+  color: var(--ink-soft);
+}
+
+.ip-steps li.done .ip-step-mark {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.ip-steps li.now {
+  color: var(--ink);
+}
+
+.ip-steps li.now .ip-step-mark {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ip-steps li.skipped .ip-step-label {
+  color: var(--ink-muted);
+}
+
+.ip-step-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ip-step-label {
+  font-weight: 550;
+}
+
+.ip-steps li.now .ip-step-label {
+  font-weight: 600;
+}
+
+.ip-step-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.link-btn.small {
+  font-size: 12px;
+}
+
+.ip-finish {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  font-size: 12.5px;
+}
+
+.ip-quiet {
+  color: var(--ink-soft);
+}
+
+.ip-review .prose {
+  margin-top: 6px;
+}
+
+.ip-side-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ip-side-card .ip-map {
+  padding: 6px;
+}
+
+.ip-memory {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ip-memory ul {
+  margin: 0;
+  padding: 0 0 0 14px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.ip-memory .ip-hint {
+  margin: 0;
+}
+
+.ip-files-note .ip-hint {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- On Learn ---------- */
+
+.ip-shelf {
+  margin-top: 28px;
+}
+
+.ip-shelf-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ip-shelf-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.ip-shelf-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 9px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ip-shelf-row:hover {
+  background: var(--bg-hover);
+}
+
+.ip-shelf-title {
+  font-weight: 500;
+}
+
+.ip-shelf-sub {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ip-shelf-bar {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.ip-shelf-bar span {
+  width: 14px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+
+.ip-shelf-bar span.done {
+  background: var(--accent);
+}
+
+.ip-shelf-bar span.active {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* ---------- The Library's "From an idea" ---------- */
+
+.ix-lib-idea {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.ix-lib-idea:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+/* The home sits between the IDE's sidebars: it follows its own width, not the window's */
+@container (max-width: 900px) {
+  .ip-home-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ip-home-inner {
+    padding: 18px 20px 40px;
+  }
+  .ip-home-side {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+}
+
+@container (max-width: 560px) {
+  .ip-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .ip-steps li {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+  .ip-step-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+  .ip-home-head {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 980px) {
+  .ip-start-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ip-components li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .ip-components .ip-prereqs {
+    grid-column: 1 / -1;
+  }
+  .ip-ms-grid,
+  .ip-files {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- Celebrations (the workout's party, over the page) ---------- */
+
+.ip-celebrate-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, #000 28%, transparent);
+}
+
+.ip-celebrate {
+  width: min(620px, calc(100vw - 40px));
+}
+
+.ip-celebrate-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: var(--ink-soft);
+}
+
+/* ---------- Points, tiers and the ready check ---------- */
+
+.ip-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.ip-score b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.ip-level-bar {
+  width: 60px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+  overflow: hidden;
+}
+
+.ip-level-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.ip-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.ip-chip.on {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.ip-ready {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.ip-ready-before {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-inset);
+}
+
+.ip-ready-q {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ip-ready-q > span {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  line-height: 1.45;
+}
+
+.ip-ready-kind {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--ink-muted);
+  min-width: 52px;
+}
+
+.ip-ready-q textarea {
+  font: inherit;
+  color: var(--ink);
+  padding: 7px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+  resize: vertical;
+  min-height: 52px;
+  line-height: 1.45;
+}
+
+.ip-ready-q textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.ip-ready-q.pass textarea {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.ip-ready-feedback {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.ip-ready-q.pass .ip-ready-feedback::before {
+  content: '✓ ';
+  color: var(--accent);
+}
+
+.ip-ready-q.miss .ip-ready-feedback::before {
+  content: '· ';
+  color: var(--ink-muted);
+}
+
+.ip-ready-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ip-debrief {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+
+/* ---------- The ladder in the sheet ---------- */
+
+.ip-suggest {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ip-suggest-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 7px;
+}
+
+.ip-tierline {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.ip-start .ip-tierline {
+  -webkit-line-clamp: unset;
+  display: inline-flex;
+}
+
+.ip-start.locked {
+  opacity: 0.55;
+}
+
+.ip-areas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.ip-areas button {
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.ip-areas button.on {
+  background: var(--bg-active);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.ip-tiers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.ip-tier-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.ip-tier-row > .ip-label {
+  padding-top: 8px;
+}
+
+.ip-tier-row .ip-start-list {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+}

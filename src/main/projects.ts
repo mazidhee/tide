@@ -36,6 +36,8 @@ export async function privatePath(path: string): Promise<boolean> {
   for (const nb of await getNotebooks()) {
     if (!nb.project?.private) continue
     if (path === nb.path || path.startsWith(`${nb.path}/`) || nb.project.docs.includes(path)) return true
+    // Its code folder, and anything in it
+    if (nb.project.code && (path === nb.project.code || path.startsWith(`${nb.project.code}/`))) return true
     if ((await filedUnder(nb.name).catch(() => [] as string[])).includes(path)) return true
   }
   return false
