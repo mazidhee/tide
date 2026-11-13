@@ -14386,8 +14386,8 @@ img.lightbox-item {
   }
 }
 
-/* Page changes: only the page cross-fades and settles; the sidebar and window stay still */
-.shell > .main {
+/* Page changes: only the page cross-fades and settles; the sidebar, the tabs and window stay still */
+.shell > .main > .tab-body {
   view-transition-name: page;
 }
 

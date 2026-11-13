@@ -56,6 +56,13 @@ import { chromeFor, infoFor, handoverView, inFocusWindow, popOut, returnToMain, 
 import { canPopOut, type PopView } from '@shared/popout'
 import { PopOutButton } from './components/PopOutButton'
 import { typingIn } from './lib/typing'
+import { TabStrip } from './components/TabStrip'
+import { tabKey } from './lib/tabKeys'
+import { listenForNewTabs, openInNewTab, opener } from './lib/tabIntent'
+import { restoreScroll } from './lib/tabScroll'
+import { tabRoot } from './state'
+import { ContextMenu, type MenuState } from './components/Menu'
+import { useOngoingLoaded } from './lib/sessions'
 // The heavy views (PDF reader, terminal, code editor, canvas, graph, drills) load when first opened,
 // not with the window: Tide opens faster and holds less in memory until you need them
 const PdfView = lazy(() => import('./components/PdfView').then((m) => ({ default: m.PdfView })))
@@ -206,6 +213,7 @@ export default function App() {
 
   const app = useApp()
   const { settings, view, dialog } = app
+  const ongoingLoaded = useOngoingLoaded()
   // Development only: the dev copy's checks drive views from DevTools
   if (import.meta.env.DEV) (window as unknown as { __tideApp?: typeof app }).__tideApp = app
   const [due, setDue] = useState({ due: 0, total: 0 })
@@ -305,12 +313,48 @@ export default function App() {
     const info = infoFor(handoverView(view), view)
     if (info) void window.tide.windows.setInfo(info)
   }, [focusId, focusReady, view, surfaceName])
-  // A pop-out handed its view back: it carries on here
+  // A pop-out handed its view back: it carries on here, as a tab
   useEffect(() => {
     if (focusId) return
-    return window.tide.windows.onAdopt((v) => app.setView(v as typeof view))
+    const offAdopt = window.tide.windows.onAdopt((v) => app.adoptView(v as typeof view))
+    // Another window asked for what a tab here holds (a lesson, a project's code): that tab comes forward
+    const offShow = window.tide.windows.onShowKey?.((key) => app.showPopKey(key))
+    return () => {
+      offAdopt()
+      offShow?.()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusId])
+
+  // ⌘-click and middle click open in a new tab (lib/tabIntent); a right-click on something that
+  // opens a page, with no menu of its own, offers it
+  const [tabMenu, setTabMenu] = useState<MenuState | null>(null)
+  useEffect(() => {
+    if (focusId) return
+    const off = listenForNewTabs()
+    const onMenu = (e: MouseEvent) => {
+      if (e.defaultPrevented) return
+      const t = opener(e.target)
+      if (!t) return
+      e.preventDefault()
+      setTabMenu({ x: e.clientX, y: e.clientY, items: [{ label: 'Open in new tab', run: () => openInNewTab(t, false) }] })
+    }
+    window.addEventListener('contextmenu', onMenu)
+    return () => {
+      off()
+      window.removeEventListener('contextmenu', onMenu)
+    }
+  }, [focusId])
+
+  // A tab coming forward goes back to where it was scrolled (lib/tabScroll)
+  const activeTab = app.activeTab
+  useEffect(() => {
+    const root = tabRoot.current
+    const spots = app.takeScroll(activeTab)
+    if (!root || !spots.length) return
+    return restoreScroll(root, spots, { win: window })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
 
   // Dev only: lets screenshot tooling drive navigation
   useEffect(() => {
@@ -352,6 +396,13 @@ export default function App() {
     () =>
       window.tideEvents.onMenu((action) => {
         if (action === 'pop-out' && !focusId) void popOut(app)
+        // Tabs (lib/tabs): a pop-out is one page, so ⌘W closes its window
+        if (action === 'new-tab' && !focusId) app.newTab()
+        if (action === 'close-tab') {
+          if (focusId) void window.tide.windows.close()
+          else app.closeTab()
+        }
+        if (action === 'reopen-tab' && !focusId) app.reopenClosedTab()
         if (action === 'return-to-main' && focusId) void returnToMain(app)
         // A pop-out has no sidebar or tutor panel to show
         if (focusId && (action === 'toggle-sidebar' || action === 'toggle-chat')) return
@@ -385,6 +436,15 @@ export default function App() {
       if (e.metaKey && e.key === '[' && app.canGoBack && !typingIn(e)) app.back()
       if (e.metaKey && e.key === ']' && app.canGoForward && !typingIn(e)) app.forward()
       if (e.key === 'Escape' && dialog) app.setDialog(null)
+      // ⌘1–9 and ⌃Tab between tabs, never while typing (lib/tabKeys)
+      if (!focusId && !e.defaultPrevented) {
+        const k = tabKey(e)
+        if (k) {
+          e.preventDefault()
+          if ('go' in k) app.tabNumber(k.go)
+          else app.cycleTabs(k.cycle)
+        }
+      }
     }
     // A mouse's own back and forward buttons, as in a browser
     const onMouse = (e: MouseEvent) => {
@@ -397,7 +457,7 @@ export default function App() {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('mouseup', onMouse)
     }
-  }, [app, dialog])
+  }, [app, dialog, focusId])
 
   const onDrop = async (e: React.DragEvent) => {
     e.preventDefault()
@@ -432,6 +492,10 @@ export default function App() {
   useEffect(() => {
     if (!settings.chatOpen) setHomeAsked(null)
   }, [settings.chatOpen])
+
+  // A lesson, quiz or exam kept open in a tab last time waits for the lessons left open to be read,
+  // so it carries on from them rather than starting again
+  const waitForOngoing = !ongoingLoaded && ['session', 'quiz', 'exam', 'mock'].includes(view.kind)
 
   if (!settings.vaultPath) return <Onboarding />
   if (focusId && !focusReady) return <div className="shell focus-window" />
@@ -500,7 +564,7 @@ export default function App() {
 
   return (
     <div
-      className={`shell${settings.sidebarCollapsed || focusId || immersive || mockFocus ? ' no-sidebar' : ''}${immersive ? ' immersive' : ''}${focusId ? ' focus-window' : ''}${settings.chatOpen && !noPanel && !focusId ? ' with-chat' : ''}`}
+      className={`shell${settings.sidebarCollapsed || focusId || immersive || mockFocus ? ' no-sidebar' : ''}${immersive ? ' immersive' : ''}${focusId ? ' focus-window' : ''}${settings.chatOpen && !noPanel && !focusId ? ' with-chat' : ''}${!focusId && app.tabs.length > 1 ? ' with-tabs' : ''}`}
       onDragOver={(e) => {
         if ([...e.dataTransfer.types].some((t) => t === 'Files' || t === 'text/uri-list')) {
           e.preventDefault()
@@ -513,13 +577,8 @@ export default function App() {
       {chrome.sidebar && <Sidebar dueCount={due.due} />}
       {chrome.peek && <SidebarPeek dueCount={due.due} keys={chrome.peekKeys} />}
       <main className="main">
-        {!['file', 'graph', 'help', 'lab', 'code', 'design', 'chat', 'session', 'quiz', 'exam', 'mock', 'reader'].includes(view.kind) && (tide ? <TopBar /> : <div className="titlebar-drag drag" />)}
-        {/* The classic design has no top bar: pages that can pop out (a project, a course, the workout) get the button on their own */}
-        {!tide && canPopOut(view as PopView) && ['notebook', 'courses', 'workout'].includes(view.kind) && (
-          <div className="pop-float no-drag">
-            <PopOutButton className="icon-btn" label={false} />
-          </div>
-        )}
+        {/* Tabs, when there is more than one (components/TabStrip): a pop-out is just its page */}
+        {!focusId && app.tabs.length > 1 && <TabStrip />}
         {chrome.floatingControls && (
           <div className="floating-controls no-drag">
             <button className="icon-btn" title="Show sidebar (⌘\)" onClick={() => app.updateSettings({ sidebarCollapsed: false })}>
@@ -536,9 +595,25 @@ export default function App() {
             </button>
           </div>
         )}
-        <ErrorBoundary resetKey={JSON.stringify(view)}>
-          <Suspense fallback={<div className="view-loading" aria-busy="true" />}>{main}</Suspense>
-        </ErrorBoundary>
+        <div
+          className="tab-body"
+          key={app.activeTab}
+          id={`tabpanel-${app.activeTab}`}
+          role={!focusId && app.tabs.length > 1 ? 'tabpanel' : undefined}
+          aria-labelledby={!focusId && app.tabs.length > 1 ? `tab-${app.activeTab}` : undefined}
+          ref={(el) => void (tabRoot.current = el)}
+        >
+          {!['file', 'graph', 'help', 'lab', 'code', 'design', 'chat', 'session', 'quiz', 'exam', 'mock', 'reader'].includes(view.kind) && (tide ? <TopBar /> : <div className="titlebar-drag drag" />)}
+          {/* The classic design has no top bar: pages that can pop out (a project, a course, the workout) get the button on their own */}
+          {!tide && canPopOut(view as PopView) && ['notebook', 'courses', 'workout'].includes(view.kind) && (
+            <div className="pop-float no-drag">
+              <PopOutButton className="icon-btn" label={false} />
+            </div>
+          )}
+          <ErrorBoundary resetKey={JSON.stringify(view)}>
+            <Suspense fallback={<div className="view-loading" aria-busy="true" />}>{waitForOngoing ? <div className="view-loading" aria-busy="true" /> : main}</Suspense>
+          </ErrorBoundary>
+        </div>
         {!focusId && <LinkSheet />}
         {/* A book being read aloud keeps going anywhere in Tide, its line shown here */}
         {!focusId && <MiniPlayer />}
@@ -555,6 +630,7 @@ export default function App() {
       {dialog === 'save-link' && <SaveLinkDialog onClose={() => app.setDialog(null)} />}
       {dialog === 'report-bug' && <BugReportSheet onClose={() => app.setDialog(null)} />}
       {dragging && <div className="drop-overlay">Drop to add to your library</div>}
+      <ContextMenu menu={tabMenu} onClose={() => setTabMenu(null)} />
 
       <BreakScreen settings={breaks} />
       <div className="toasts" aria-live="polite">

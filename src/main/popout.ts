@@ -40,6 +40,9 @@ interface Held extends PopInfo {
 
 const pending = new Map<string, unknown>()
 const held = new Map<number, Held>()
+/** What the main window's tabs hold (renderer lib/tabs heldKeys), and which window that is */
+let mainKeys: string[] = []
+let mainId: number | null = null
 /** Windows whose page has saved (or that are going anyway): their next close goes through */
 const mayClose = new Set<number>()
 let quitting = false
@@ -87,7 +90,26 @@ function tellHeld() {
 }
 
 export function heldFor(wcId: number): string[] {
-  return [...held.entries()].filter(([id, h]) => id !== wcId && live(h.win)).map(([, h]) => h.key)
+  const out = [...held.entries()].filter(([id, h]) => id !== wcId && live(h.win)).map(([, h]) => h.key)
+  if (mainId !== null && wcId !== mainId && live(deps?.main(false))) out.push(...mainKeys.filter((k) => !out.includes(k)))
+  return out
+}
+
+/** The main window says what its tabs hold */
+export function setMainHolds(wcId: number, keys: string[]) {
+  mainId = wcId
+  mainKeys = keys.filter((k) => typeof k === 'string')
+  tellHeld()
+}
+
+/** A tab in the main window holds it: that window comes forward, showing that tab */
+function focusMainTab(key: string, asking?: number): boolean {
+  if (mainId === null || asking === mainId || !mainKeys.includes(key)) return false
+  const main = deps?.main(false)
+  if (!live(main)) return false
+  focus(main)
+  main.webContents.send('windows:showKey', key)
+  return true
 }
 
 export const isPopout = (wc: WebContents | null | undefined) => !!wc && held.has(wc.id)
@@ -106,7 +128,7 @@ export function windowFor(key: string, except?: number): BrowserWindow | null {
 
 export function focusKey(key: string, except?: number): boolean {
   const w = windowFor(key, except)
-  if (!w) return false
+  if (!w) return focusMainTab(key, except)
   focus(w)
   return true
 }
@@ -115,13 +137,18 @@ export function focusKey(key: string, except?: number): boolean {
  * Opens a view in a window of its own; if a window already holds it, that window comes forward
  * instead. Says which happened.
  */
-export function openPopout(view: unknown, given?: Partial<PopInfo> | null): 'opened' | 'focused' | 'refused' {
+export function openPopout(view: unknown, given?: Partial<PopInfo> | null, from?: number): 'opened' | 'focused' | 'refused' {
   if (!deps || !view || typeof view !== 'object') return 'refused'
   const auto = popInfoOf(view as PopView)
   const kind = (given?.kind ?? auto?.kind) as PopKind | undefined
   if (!kind) return 'refused'
   const info: PopInfo = { key: given?.key || auto?.key || `${kind}:${Date.now()}`, kind, title: given?.title || auto?.title || windowTitle('') }
-  if (focusKey(info.key)) return 'focused'
+  const w0 = windowFor(info.key)
+  if (w0) return focus(w0), 'focused'
+  // The main window's tab moving out: it lets the key go now, so the new window isn't sent back to it
+  if (from !== undefined && from === mainId) {
+    mainKeys = mainKeys.filter((k) => k !== info.key)
+  } else if (focusMainTab(info.key, from)) return 'focused'
 
   const taken = [...held.values()].filter((h) => live(h.win)).map((h) => h.win.getBounds())
   const at = placeWindow(bounds[kind], kind, deps.screens(), taken)
@@ -220,7 +247,8 @@ export function claimBreakFor(now = Date.now()): boolean {
 export function registerPopouts(d: PopoutDeps) {
   deps = d
   loadBounds()
-  ipcMain.handle('window:openFocus', (_e, view: unknown, info?: Partial<PopInfo>) => openPopout(view, info))
+  ipcMain.handle('window:openFocus', (e, view: unknown, info?: Partial<PopInfo>) => openPopout(view, info, e.sender.id))
+  ipcMain.handle('window:mainHolds', (e, keys: unknown) => setMainHolds(e.sender.id, Array.isArray(keys) ? (keys as string[]) : []))
   ipcMain.handle('window:focusView', (_e, id: string) => takeView(String(id)))
   ipcMain.handle('window:focusKey', (e, key: string) => focusKey(String(key), e.sender.id))
   ipcMain.handle('window:setInfo', (e, info: Partial<PopInfo>) => setInfo(e.sender.id, info ?? {}))
@@ -249,6 +277,8 @@ export function setQuitting() {
 export function resetPopouts() {
   pending.clear()
   held.clear()
+  mainKeys = []
+  mainId = null
   mayClose.clear()
   quitting = false
   deps = null
