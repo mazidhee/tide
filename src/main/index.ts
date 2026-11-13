@@ -854,7 +854,12 @@ function setMenu() {
         { type: 'separator' },
         { label: 'Change Notes Folder…', click: () => send('menu', 'choose-vault') },
         { type: 'separator' },
-        { role: 'close' }
+        // Tabs (renderer lib/tabs). The page hears these first: the IDE keeps ⌘W and ⌘T for its own
+        // file tabs and symbols, and ⇧⌘T for reopening a file, by handling them before the menu does
+        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', enabled: !inPopout, click: () => send('menu', 'new-tab') },
+        { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: () => send('menu', 'close-tab') },
+        { label: 'Reopen Closed Tab', accelerator: 'CmdOrCtrl+Shift+T', enabled: !inPopout, click: () => send('menu', 'reopen-tab') },
+        { role: 'close', accelerator: 'CmdOrCtrl+Shift+W' }
       ]
     },
     { role: 'editMenu' },

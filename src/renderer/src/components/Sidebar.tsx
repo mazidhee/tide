@@ -5,6 +5,7 @@ import type { FileNode } from '@shared/types'
 import { fileTitle, folderOf, useApp, type View } from '../state'
 import { popOutItem } from './PopOutButton'
 import { useHeld } from '../lib/popout'
+import { openInNewTab } from '../lib/tabIntent'
 import { canPopOut, popKeyOf, type PopView } from '@shared/popout'
 import { SECTIONS } from './SettingsView'
 import { Avatar } from './Avatar'
@@ -135,10 +136,14 @@ export function Sidebar({ dueCount, peek = false }: { dueCount: number; peek?: b
     const scope = isFolder ? ({ kind: 'folder', path: node.path } as const) : ({ kind: 'note', path: node.path } as const)
     // A note, a book, or a top-level notebook (a project's home) can have a window of its own
     const own: View | null = !isFolder ? (node.kind === 'image' ? null : { kind: 'file', path: node.path }) : !node.path.includes('/') ? { kind: 'notebook', path: node.path } : null
+    const row = e.currentTarget as HTMLElement
+    // A file, or a notebook (a top-level folder), opens in a tab of its own
+    const tabbable = !isFolder || !node.path.includes('/')
     setMenu({
       x: e.clientX,
       y: e.clientY,
       items: [
+        ...(tabbable ? [{ label: 'Open in new tab', run: () => openInNewTab(row) }] : []),
         ...(own ? [popOutItem(app, own)] : []),
         ...(isFolder
           ? [
@@ -238,7 +243,11 @@ export function Sidebar({ dueCount, peek = false }: { dueCount: number; peek?: b
       className={`nav-item${active ? ' active' : ''}`}
       onClick={onClick}
       aria-current={tide && active ? 'page' : undefined}
-      onContextMenu={own ? (e) => (e.preventDefault(), setMenu({ x: e.clientX, y: e.clientY, items: [{ label: 'Open', run: onClick }, popOutItem(app, own)] })) : undefined}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        const row = e.currentTarget
+        setMenu({ x: e.clientX, y: e.clientY, items: [{ label: 'Open', run: onClick }, { label: 'Open in new tab', run: () => openInNewTab(row) }, ...(own ? [popOutItem(app, own)] : [])] })
+      }}
     >
       <Icon name={icon} size={16} />
       <span>{label}</span>
@@ -400,6 +409,7 @@ export function Sidebar({ dueCount, peek = false }: { dueCount: number; peek?: b
                     y: e.clientY,
                     items: [
                       { label: 'Carry on', run: () => app.setView(o.view) },
+                      { label: 'Open in new tab', run: () => app.openTab(o.view) },
                       ...(canPopOut(o.view as PopView) ? [popOutItem(app, o.view)] : []),
                       { label: 'Let it go', run: () => endOngoing(o.key), separatorBefore: true }
                     ]
