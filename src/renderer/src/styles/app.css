@@ -19401,7 +19401,7 @@ button.tl-dot:focus-visible {
 
 .wp-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.15fr) repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -19430,7 +19430,11 @@ button.wp-tile:hover {
 }
 
 .wp-time {
-  grid-row: span 2;
+  grid-row: span 3;
+}
+
+.wp-know {
+  grid-column: span 2;
 }
 
 .wp-label {
@@ -19498,7 +19502,7 @@ button.wp-tile:hover {
   display: block;
   width: 100%;
   max-width: 26px;
-  height: 92px;
+  height: 120px;
   border-radius: 4px;
   background: color-mix(in srgb, var(--ink) 5%, transparent);
 }
@@ -19519,7 +19523,7 @@ button.wp-tile:hover {
   color: var(--ink-muted);
 }
 
-.wp-day.today .wp-dow {
+.wp-day.is-today .wp-dow {
   color: var(--ink);
   font-weight: 600;
 }
@@ -19574,7 +19578,8 @@ button.wp-tile:hover {
   .wp-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .wp-time {
+  .wp-time,
+  .wp-know {
     grid-column: 1 / -1;
     grid-row: auto;
   }

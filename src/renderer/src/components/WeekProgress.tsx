@@ -63,11 +63,11 @@ export function WeekProgressSection() {
           <span className="wp-big">{studied ? minutesText(studied) : '0 min'}</span>
           <span className="wp-sub">
             {p.lessons.count ? `${p.lessons.count} lesson${p.lessons.count === 1 ? '' : 's'}${p.lessons.finished ? `, ${p.lessons.finished} finished` : ''}` : 'No lessons yet'}
-            {vsLast !== null && vsLast !== 0 ? ` · ${signed(vsLast)} min of lessons on last week` : ''}
+            {vsLast !== null && vsLast !== 0 ? ` · lessons ${signed(vsLast)} min on last week` : ''}
           </span>
           <div className="wp-chart" role="img" aria-label={`Minutes studied each day: ${p.dates.map((d, i) => `${longDay(d)} ${total[i]}`).join(', ')}`} onMouseLeave={() => setHover(null)}>
             {p.dates.map((d, i) => (
-              <div key={d} className={`wp-day${i === today ? ' today' : ''}${i > today && today >= 0 ? ' later' : ''}`} onMouseEnter={() => setHover(i)}>
+              <div key={d} className={`wp-day${i === today ? ' is-today' : ''}${i > today && today >= 0 ? ' later' : ''}`} onMouseEnter={() => setHover(i)}>
                 <span className="wp-bar">
                   {total[i] > 0 && <span style={{ height: `${Math.max(4, (total[i] / max) * 100)}%` }} />}
                 </span>
@@ -85,7 +85,7 @@ export function WeekProgressSection() {
           </div>
         </div>
 
-        <button className="wp-tile" onClick={() => app.setView({ kind: 'graph', tab: 'know' })} title="Open What you know">
+        <button className="wp-tile wp-know" onClick={() => app.setView({ kind: 'graph', tab: 'know' })} title="Open What you know">
           <span className="wp-label">What you know</span>
           <span className="wp-big">
             {p.knowledge.solid.length}
@@ -96,8 +96,8 @@ export function WeekProgressSection() {
           </span>
           {(p.knowledge.solid.length > 0 || p.knowledge.stronger.length > 0) && (
             <span className="wp-names">
-              {[...p.knowledge.solid, ...p.knowledge.stronger].slice(0, 4).join(' · ')}
-              {p.knowledge.solid.length + p.knowledge.stronger.length > 4 ? ' …' : ''}
+              {[...p.knowledge.solid, ...p.knowledge.stronger].slice(0, 6).join(' · ')}
+              {p.knowledge.solid.length + p.knowledge.stronger.length > 6 ? ' …' : ''}
             </span>
           )}
         </button>
