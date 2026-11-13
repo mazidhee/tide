@@ -1,4 +1,4 @@
-import type { AgendaItem } from '@shared/coach'
+import { KIND_LABEL, type AgendaItem } from '@shared/coach'
 import type { ChatScope } from '@shared/types'
 import { whyByDefault } from '@shared/session'
 import type { Mistake } from '@shared/mistakes'
@@ -54,6 +54,10 @@ export function openAgendaItem(app: ReturnType<typeof useApp>, it: AgendaItem, a
   } else if (it.kind === 'quiz') app.setView({ kind: 'session', mode: 'quiz', scope, topic, options: { length: 6 }, nonce: Date.now() })
   else if (it.kind === 'review') app.setView({ kind: 'study', scope })
   else if (it.kind === 'practice') app.setView({ kind: 'practice' })
+  else if (it.kind === 'project') it.path ? app.setView({ kind: 'notebook', path: it.path, tab: 'project' }) : app.setView({ kind: 'practice' })
+  else if (it.kind === 'mock') app.setView({ kind: 'mock', mode: it.mode ?? 'coding', nonce: Date.now() })
+  else if (it.kind === 'workout') app.setView({ kind: 'workout' })
+  else if (it.kind === 'read') it.path ? app.openPath(it.path) : app.setView({ kind: 'reading' })
   else
     app.setView({
       kind: 'exam',
@@ -64,7 +68,7 @@ export function openAgendaItem(app: ReturnType<typeof useApp>, it: AgendaItem, a
     })
 }
 
-export const AGENDA_LABEL: Record<AgendaItem['kind'], string> = { learn: 'Learn', practice: 'Practise', quiz: 'Quiz', review: 'Review', 'take-home': 'Take-home', test: 'Test', check: 'Check' }
+export const AGENDA_LABEL: Record<AgendaItem['kind'], string> = KIND_LABEL
 
 /** Ticks off the planned item this lesson, quiz or test was started from, if it was */
 export function finishAgendaItem(topic: string): void {

@@ -1,6 +1,7 @@
 import { parseLink, scopeFromLink } from '@shared/deeplink'
 import type { useApp } from '../state'
 import { openAgendaItem } from './agenda'
+import { MOCK_MODES, type MockMode } from '@shared/mocks'
 
 /** Opens a tide:// link (from a Things 4 task, a browser, the Home timeline) where it points */
 export function openTideLink(app: ReturnType<typeof useApp>, url: string) {
@@ -8,6 +9,9 @@ export function openTideLink(app: ReturnType<typeof useApp>, url: string) {
   if (!l) return app.toast('That Tide link isn’t one Tide understands.', { tone: 'error' })
   if (l.to === 'open') app.openPath(l.path)
   else if (l.to === 'notebook') app.setView({ kind: 'notebook', path: l.path })
+  // A planned mock or the morning workout (Your week, sent to Things) opens straight on it
+  else if (l.to === 'practice' && l.tab === 'workout') app.setView({ kind: 'workout' })
+  else if (l.to === 'practice' && l.tab?.startsWith('mock:') && MOCK_MODES.some((m) => m.id === l.tab!.slice(5))) app.setView({ kind: 'mock', mode: l.tab.slice(5) as MockMode, nonce: Date.now() })
   else if (l.to === 'practice') {
     if (l.tab) localStorage.setItem('tide.practice.tab', l.tab)
     app.setView({ kind: 'practice' })

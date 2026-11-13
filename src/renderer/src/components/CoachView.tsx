@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { aimOf, aimsOf, pickOf, DEFAULT_COACH, localDate, type Aim, type AimWeight, type CoachSettings, type WeekPlan } from '@shared/coach'
+import { aimsOf, pickOf, DEFAULT_COACH, localDate, type CoachSettings, type WeekPlan } from '@shared/coach'
 import { useApp } from '../state'
 import { AGENDA_LABEL, openAgendaItem } from '../lib/agenda'
 import { Icon } from './Icon'
 import { PixelScene } from './PixelScene'
 import { Professor } from './Professor'
+import { GoalsPanel, PlanNotices } from './GoalsPanel'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const today = () => localDate()
@@ -23,26 +24,33 @@ export function CoachView() {
   const [editing, setEditing] = useState(false)
   const [error, setError] = useState('')
   const [thingsReady, setThingsReady] = useState(false)
-  // Where you're heading is worked out, not asked: shown here, yours to correct
-  const [inferring, setInferring] = useState(false)
-    const infer = (force = false) => {
-    setInferring(true)
+  // Threads to mix the week across (your goals and what's in progress): the week is planned from them
+  const [threads, setThreads] = useState(0)
+  // Where you're heading is worked out, not asked: offered as a first goal when you have none
+  const infer = (force = false) =>
     window.tide.coach
       .infer(force)
       .then((s) => setSettings((cur) => ({ ...cur, direction: s.direction, directionAt: s.directionAt, focus: cur.focus.length ? cur.focus : s.focus })))
       .catch(() => {})
-      .finally(() => setInferring(false))
-  }
 
   useEffect(() => {
     window.tide.coach
       .get()
       .then((s) => {
         setSettings(s)
+        // Tide's guess at where you're heading, offered when you have no goals yet
         if (!aimsOf(s).length) infer()
       })
       .catch(() => {})
-    window.tide.coach.week().then(setWeek).catch(() => {})
+    window.tide.coach
+      .week()
+      .then((w) => {
+        setWeek(w)
+        // A new morning: the rest of the week is reshuffled first
+        if (w?.mix && w.replannedOn !== today()) window.tide.portfolio.replan().then((r) => r && setWeek(r)).catch(() => {})
+      })
+      .catch(() => {})
+    window.tide.portfolio.view().then((v) => setThreads(v.threads.filter((t) => !t.paused).length)).catch(() => {})
     window.tide.learn.notebooks().then((n) => setNotebooks(n.filter((x) => x.outline).map((x) => x.name))).catch(() => {})
     window.tide.learn.thingsStatus().then((s) => setThingsReady(s.ready)).catch(() => {})
   }, [])
@@ -113,8 +121,8 @@ export function CoachView() {
             <h1 className="page-title">Your week</h1>
             <p className="practice-summary">
               {week
-                ? `${dayLabel(week.days[0]?.date ?? week.weekStart)} to ${dayLabel(week.days[week.days.length - 1]?.date ?? week.weekStart)} · ${settings.hoursPerWeek} hours, ${week.priorities.map((p) => p.notebook).join(' and ') || 'no focus set'}`
-                : 'Tell Tide where you’re heading; it plans each week towards it.'}
+                ? `${dayLabel(week.days[0]?.date ?? week.weekStart)} to ${dayLabel(week.days[week.days.length - 1]?.date ?? week.weekStart)} · ${settings.hoursPerWeek} hours across ${week.mix ? `${week.mix.length} threads` : week.priorities.map((p) => p.notebook).join(' and ') || 'no focus set'}`
+                : 'Tell Tide what you’re working towards; it mixes each week across all of it.'}
             </p>
           </div>
           <div className="pv-tools">
@@ -133,33 +141,27 @@ export function CoachView() {
           </div>
         </header>
 
-        {week && !editing ? (
-          <button className="coach-settings-row" onClick={() => setEditing(true)} title="Change your goal, focus, hours or days">
-            <span className="coach-settings-goal">{aimOf(settings) || 'Working out where you’re heading'}</span>
-            <span className="muted">{pickOf(settings) === 'tide' ? 'Tide picks the roadmaps' : settings.focus.join(', ')}</span>
-            <span className="muted">{settings.hoursPerWeek} h a week</span>
+        {week && !editing && (
+          <button className="coach-settings-row" onClick={() => setEditing(true)} title="Change your hours or days">
+            <span className="coach-settings-goal">{settings.hoursPerWeek} hours a week</span>
             <span className="muted">{DAYS.filter((_, i) => settings.days.includes(i)).join(' ')}</span>
+            {settings.weekdayMinutes !== undefined && <span className="muted">{weekdayMins} min weekdays, {weekendMins} weekends</span>}
             <span className="coach-settings-edit">Edit</span>
           </button>
-        ) : (
+        )}
+
+        <GoalsPanel guess={settings.direction} onWeek={(w) => w && setWeek(w)} onThreads={setThreads} />
+
+        {week && !editing ? null : (
         <section className="pv-panel coach-setup">
           <div className="pv-main">
-            <div className="field">
-              <span>What you’re working towards</span>
-              <AimsEditor
-                aims={aimsOf(settings)}
-                guess={settings.direction}
-                inferring={inferring}
-                onRethink={() => infer(true)}
-                onChange={(aims) => save({ ...settings, aims, goal: '' })}
-              />
-            </div>
+            {!threads && (
             <div className="field">
               <span>Who picks each week’s roadmaps</span>
               <div className="segmented text" role="radiogroup" aria-label="Who picks each week’s roadmaps">
                 {(
                   [
-                    ['tide', 'Tide, from your aims'],
+                    ['tide', 'Tide, from your goals'],
                     ['me', 'I do']
                   ] as const
                 ).map(([v, label]) => (
@@ -170,7 +172,8 @@ export function CoachView() {
               </div>
               {pickOf(settings) === 'tide' && <SortStatus aims={aimsOf(settings).length} />}
             </div>
-            {pickOf(settings) === 'me' && (
+            )}
+            {!threads && pickOf(settings) === 'me' && (
             <div className="field">
               <span>Focus on, most important first</span>
               <div className="pv-chips">
@@ -205,7 +208,7 @@ export function CoachView() {
                   </button>
                 ))}
               </div>
-              <button className="btn primary pv-go" onClick={plan} disabled={!!busy || (pickOf(settings) === 'me' ? !settings.focus.length : !aimsOf(settings).length)}>
+              <button className="btn primary pv-go" onClick={plan} disabled={!!busy || (!threads && (pickOf(settings) === 'me' ? !settings.focus.length : !aimsOf(settings).length))}>
                 {busy === 'plan' ? (
                   <>
                     <span className="spinner" /> Planning…
@@ -222,20 +225,23 @@ export function CoachView() {
         </section>
         )}
 
-        {week && <WeekBoard week={week} onChange={setWeek} thingsReady={thingsReady} onThings={toThings} busy={busy === 'things'} />}
+        {week && <WeekBoard week={week} onChange={setWeek} thingsReady={thingsReady} onThings={toThings} busy={busy === 'things'} onPlan={plan} planning={busy === 'plan'} />}
       </div>
     </div>
   )
 }
 
-const KIND_DOT: Record<string, string> = { learn: 'var(--accent)', practice: 'var(--info)', 'take-home': 'var(--info)', quiz: 'var(--warn)', review: 'var(--warn)', test: 'var(--danger)', check: 'var(--info)' }
+/** One accent, lighter down the list, every share still visible however many threads there are */
+const tint = (i: number, n: number) => Math.round(90 - (i * 65) / Math.max(1, n - 1))
+
+const KIND_DOT: Record<string, string> = { learn: 'var(--accent)', practice: 'var(--info)', 'take-home': 'var(--info)', quiz: 'var(--warn)', review: 'var(--warn)', test: 'var(--danger)', check: 'var(--info)', project: 'var(--ink-muted)', mock: 'var(--ink-muted)', workout: 'var(--ink-muted)', read: 'var(--ink-muted)' }
 
 /**
  * The week at a glance: why it's shaped the way it is (in a sentence, with more on request), how
  * the time splits between subjects, then a strip of seven days to pick from, and the chosen day's
  * items as a checklist.
  */
-function WeekBoard({ week, onChange, thingsReady, onThings, busy }: { week: WeekPlan; onChange(w: WeekPlan): void; thingsReady: boolean; onThings(): void; busy: boolean }) {
+function WeekBoard({ week, onChange, thingsReady, onThings, busy, onPlan, planning }: { week: WeekPlan; onChange(w: WeekPlan): void; thingsReady: boolean; onThings(): void; busy: boolean; onPlan(): void; planning: boolean }) {
   const app = useApp()
   const dates = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(week.weekStart + 'T12:00:00Z')
@@ -254,7 +260,11 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy }: { week: Week
     if (!it) return
     it.done = !it.done
     onChange(next)
-    window.tide.coach.setDone(picked, index, !!it.done).catch(() => onChange(week))
+    window.tide.coach
+      .setDone(picked, index, !!it.done)
+      // A mixed week reshuffles what's left once something is finished or undone
+      .then(() => (week.mix ? window.tide.portfolio.replan().then((r) => r && onChange(r)) : undefined))
+      .catch(() => onChange(week))
   }
 
   return (
@@ -269,17 +279,18 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy }: { week: Week
           )}
         </p>
         {more && rest && <p className="wk-rest">{rest}</p>}
+        {week.bestHours && <p className="muted small wk-note">Hard work goes {week.days.some((d) => d.items[d.items.length - 1]?.peak && d.items.length > 1) ? 'last' : 'first'} in the day, in your best hours ({week.bestHours}).</p>}
         {week.priorities.length > 0 && (
           <div className="wk-split" aria-label="How the week's time is split">
             <div className="wk-split-bar">
               {week.priorities.map((p, i) => (
-                <span key={p.notebook} style={{ flexGrow: Math.max(1, p.share), background: `color-mix(in srgb, var(--accent) ${90 - i * 30}%, var(--bg-active))` }} title={p.reason} />
+                <span key={p.notebook} style={{ flexGrow: Math.max(1, p.share), background: `color-mix(in srgb, var(--accent) ${tint(i, week.priorities.length)}%, var(--bg-active))` }} title={p.reason} />
               ))}
             </div>
             <div className="wk-legend">
               {week.priorities.map((p, i) => (
                 <span key={p.notebook} title={p.reason}>
-                  <i style={{ background: `color-mix(in srgb, var(--accent) ${90 - i * 30}%, var(--bg-active))` }} />
+                  <i style={{ background: `color-mix(in srgb, var(--accent) ${tint(i, week.priorities.length)}%, var(--bg-active))` }} />
                   {p.notebook} <span className="muted">{p.share}%</span>
                   {p.reason && <span className="muted wk-reason">{p.reason}</span>}
                 </span>
@@ -292,6 +303,13 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy }: { week: Week
         )}
         {week.unsorted?.length ? <p className="muted small wk-note">{week.unsorted.join(' and ')} {week.unsorted.length === 1 ? 'is' : 'are'} in roadmap order this week: Tide hasn’t finished sorting {week.unsorted.length === 1 ? 'it' : 'them'} against your aims.</p> : null}
       </section>
+
+      {week.notices?.length ? (
+        <section className="wk-changes" aria-label="What changed">
+          <h2 className="wk-changes-head">What changed</h2>
+          <PlanNotices week={week} onWeek={(w) => w && onChange(w)} />
+        </section>
+      ) : null}
 
       <div className="wk-strip" role="tablist" aria-label="Days">
         {dates.map((d) => {
@@ -329,6 +347,9 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy }: { week: Week
                   <button className="today-main" onClick={() => openAgendaItem(app, it, { date: picked, index: i })}>
                     <span className={`today-kind k-${it.kind}`}>{AGENDA_LABEL[it.kind]}</span>
                     <span className="today-title">{it.topic && it.kind === 'learn' ? it.topic : it.title}</span>
+                    {it.peak && <span className="wk-tag" title="Hard work, in your best hours">Best hours</span>}
+                    {it.touch && <span className="wk-tag" title="A short session that keeps this going">Keep alive</span>}
+                    {it.movedFrom && <span className="wk-tag" title="Moved here by the replanner">From {new Date(it.movedFrom + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' })}</span>}
                     <span className="today-min">{it.minutes} min</span>
                   </button>
                   {(it.why || it.readings?.length) && (
@@ -359,6 +380,12 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy }: { week: Week
           <Icon name="note" />
           <span>Open as a note</span>
         </button>
+        {week.mix && (
+          <button className="tool-btn" onClick={onPlan} disabled={planning} title="Mix the next seven days again from your goals">
+            <Icon name="refresh" />
+            <span>{planning ? 'Planning…' : 'Plan again'}</span>
+          </button>
+        )}
         {thingsReady && !week.thingsProject && (
           <button className="tool-btn" onClick={onThings} disabled={busy}>
             <Icon name="check" />
@@ -367,77 +394,6 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy }: { week: Week
         )}
       </div>
     </>
-  )
-}
-
-const WEIGHTS: { value: AimWeight; label: string; hint: string }[] = [
-  { value: 'main', label: 'Main', hint: 'Most of your weekday time goes here' },
-  { value: 'side', label: 'Side', hint: 'Steady, smaller share' },
-  { value: 'curious', label: 'Curious', hint: 'Weekend reading and primers' }
-]
-
-/** Your aims: as many as you have, each main, side or just curious; reword or drop them any time */
-function AimsEditor({ aims, guess, inferring, onRethink, onChange }: { aims: Aim[]; guess?: string; inferring: boolean; onRethink(): void; onChange(aims: Aim[]): void }) {
-  const [draft, setDraft] = useState('')
-  const [texts, setTexts] = useState<Record<string, string>>({})
-  const add = (text: string) => {
-    const t = text.trim()
-    if (!t) return
-    onChange([...aims, { id: Math.random().toString(36).slice(2, 10), text: t, weight: aims.some((a) => a.weight === 'main') ? 'side' : 'main', since: Date.now() }])
-    setDraft('')
-  }
-  const update = (id: string, patch: Partial<Aim>) => onChange(aims.map((a) => (a.id === id ? { ...a, ...patch } : a)))
-  return (
-    <div className="aims">
-      {aims.map((a) => (
-        <div key={a.id} className="aim-row">
-          <input
-            className="aim-text"
-            value={texts[a.id] ?? a.text}
-            onChange={(e) => setTexts({ ...texts, [a.id]: e.target.value })}
-            onBlur={() => {
-              const t = (texts[a.id] ?? a.text).trim()
-              if (t && t !== a.text) update(a.id, { text: t })
-              setTexts(({ [a.id]: _, ...rest }) => rest)
-            }}
-            onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-            aria-label="Aim"
-          />
-          <div className="segmented text" role="radiogroup" aria-label={`How much ${a.text} matters`}>
-            {WEIGHTS.map((w) => (
-              <button key={w.value} role="radio" aria-checked={a.weight === w.value} className={a.weight === w.value ? 'on' : ''} title={w.hint} onClick={() => update(a.id, { weight: w.value })}>
-                {w.label}
-              </button>
-            ))}
-          </div>
-          <button className="icon-btn small" title="Remove" aria-label={`Remove ${a.text}`} onClick={() => onChange(aims.filter((x) => x.id !== a.id))}>
-            <Icon name="x" size={12} />
-          </button>
-        </div>
-      ))}
-      <input
-        className="aim-text aim-new"
-        value={draft}
-        placeholder={aims.length ? 'Add another, e.g. payments and fintech systems' : 'e.g. distributed systems and blockchain infrastructure'}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && add(draft)}
-        onBlur={() => add(draft)}
-        aria-label="Add an aim"
-      />
-      {!aims.length && (
-        <p className="muted small aim-guess">
-          {guess ? <>Tide’s guess from your notebooks: {guess} </> : inferring ? 'Working out a guess from your notebooks… ' : null}
-          {guess && (
-            <button className="link-btn" onClick={() => add(guess)}>
-              Use it
-            </button>
-          )}{' '}
-          <button className="link-btn" onClick={onRethink} disabled={inferring}>
-            {inferring ? 'Thinking…' : 'Guess again'}
-          </button>
-        </p>
-      )}
-    </div>
   )
 }
 

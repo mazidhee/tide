@@ -503,4 +503,26 @@
       border-top: 1px solid var(--line);
     }
   }
+
+  /* What the replanner moved or raised today, under Then today */
+  .td-replan {
+    list-style: none;
+    margin: 10px 0 0;
+    padding: 0;
+    display: grid;
+    gap: 4px;
+    font-size: var(--t-meta);
+    color: var(--ink-3);
+  }
+  .td-replan li {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    line-height: 20px;
+  }
+  .td-replan svg {
+    flex: none;
+    position: relative;
+    top: 2px;
+  }
 }

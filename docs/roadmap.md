@@ -44,6 +44,7 @@ Last updated: 13 November 2026.
 
 - [x] **Pop-out windows everywhere.** Open a lesson, project, course, note, the reader or a mock in its own window, from a clear button, ⌥⌘N or right-click.
 - [x] **The reading room.** Library › Reading: tonight's chapter in "Then today", an immersive reader (highlight, quote, margin notes, Challenge me, the core argument), a book page with a cover banner, an end-of-chapter seminar, and listening with a mini player.
+- [ ] **Goals and dynamic planning.** Goals with or without a date, broken down by Opus into what they need (roadmaps, projects, mocks, workout rounds, books, new topics) and yours to edit; every roadmap and project in progress kept alive as a standing goal; a portfolio scheduler in code (shared/portfolio) that mixes each week and day across all of it with a touch limit per thread, deadlines weighted as they near, interleaving, spaced review and hard work in your best hours; a plain note on the week's mix; the rest of the week reshuffled each morning and after a miss or a finish, saying what moved and why, raising neglect and drift; honest trade-offs with numbers and choices; Things kept in step. In Your week, no new sidebar item. Built: worktree `tide-goals`, waiting to merge.
 - [ ] **Maths tutor.** First-principles, Socratic teaching for maths and statistics; drift detection that switches format; explorables you drag (derivatives, matrices, distributions, random walks); poke-holes challenges; a maths-to-quant ladder. Being built (worktree `tide-maths`).
 - [ ] **Claude for everything.** Remove the privacy routing: private notebooks and Metabase go to Claude; Gemma only when Claude is unavailable.
 - [ ] **Backups of Tide's own data.** A nightly local backup of `.tide/` and app data (lessons, ratings, profile, usage, workout), kept for weeks, with restore in Settings.
@@ -103,6 +104,7 @@ Last updated: 13 November 2026.
 
 ## Later
 
+- [ ] **Calendar awareness and time blocks (later). Deferred: not being built now.** Read macOS Calendar through a small native helper (EventKit, with the user's permission), so the week and the day plan around meetings and free time instead of a fixed number of minutes a day. Then write approved study blocks to a separate Tide calendar (never your own calendars), only after you accept them, and keep them in step when the replanner moves things. Builds on Goals and dynamic planning.
 - [ ] **System-design canvas on xyflow.** Animated request flow along the arrows during a lesson. Built in part: worktree `tide-canvas`, 2 commits.
 - [ ] **Better web clipper and search.** Compare Defuddle with the current clipper, and try a reranker; adopt only if the numbers win.
 - [ ] **Live preview leftovers.** The properties block at the top of a note, embedded notes, and tables and maths inside lists.
