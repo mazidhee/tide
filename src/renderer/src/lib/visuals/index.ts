@@ -495,7 +495,10 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
     phase = 'waiting'
     void start()
   }
-  const bar = h('div', { class: 'sim-bar visual-bar' }, stepper, reset, h('span', { class: 'visual-gap' }), tell, happening)
+  const bar = h('div', { class: 'sim-bar visual-bar' }, stepper, reset, h('span', { class: 'visual-gap' }), tell)
+  // In the head, away from Play and Step, so a click meant for the controls never asks
+  happening.classList.add('visual-happening')
+  root.querySelector('figcaption.sim-head')?.insertBefore(happening, status)
   root.append(bar)
   bar.hidden = true
   root.append(keptBar)

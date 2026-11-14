@@ -1223,3 +1223,13 @@ figure.sim p {
     transition: none !important;
   }
 }
+
+/* "What's happening here?" in a visual's head, beside its label */
+.sim-head .visual-happening {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.sim-head .visual-happening + .visual-status {
+  margin-left: 0;
+}
