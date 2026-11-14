@@ -480,6 +480,18 @@ export function noteFromProject(ops: ProfileOp[], from: string, by: 'claude' | '
   return change(from, by, async (p, ownership) => applyOps(p, ops, { date: noteDate(), ownership, maxOps: 3, sections: ['missed', 'strengths', 'hints'] }))
 }
 
+/**
+ * The writing habits line under Misconceptions (main/writing, after a review): code's own line,
+ * rewritten each time from the habit tallies (shared/writing habitsLine); empty removes it. The
+ * learner's own lines in the section are left as they are.
+ */
+export function noteWritingHabits(line: string): Promise<Change[]> {
+  return change('writing review', 'code', async (p) => {
+    const r = setMeasured(p, 'misconceptions', line, 'Writing habits:')
+    return { profile: r.profile, changes: r.change ? [r.change] : [] }
+  })
+}
+
 /** Makes the note now if there isn't one (the profile view's first open), with what code knows */
 export async function ensureProfile(): Promise<void> {
   const md = await readText(LEARNER_NOTE).catch(() => '')

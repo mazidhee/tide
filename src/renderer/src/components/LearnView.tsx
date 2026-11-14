@@ -24,7 +24,7 @@ const MODES: { id: LearnMode; label: string; icon: IconName; description: string
   { id: 'quiz', label: 'Quiz', icon: 'quiz', description: 'Adaptive questions; misses become flashcards' },
   { id: 'mixed', label: 'Mixed', icon: 'refresh', description: 'Questions mixed across topics and notebooks, the strongest way to practise' },
   { id: 'interview', label: 'Interview', icon: 'terminal', description: 'Approach, code, follow-ups and a scorecard' },
-  { id: 'review', label: 'Review', icon: 'edit', description: 'Grades your note and challenges its claims' },
+  { id: 'review', label: 'Review', icon: 'edit', description: 'Comments beside your writing and challenges its thinking; never rewrites it' },
   { id: 'exam', label: 'Exam', icon: 'timer', description: 'A timed paper; type or photograph answers' }
 ]
 
@@ -123,6 +123,11 @@ export function LearnView() {
     }
     if (m === 'exam') {
       app.setView({ kind: 'exam', scope, topic: t.trim() || 'what I have been studying', options: { ...exam, difficulty }, nonce: Date.now() })
+      return
+    }
+    // Reviewing writing opens the piece in Writing: comments beside the text, the challenge conversation a click away
+    if (m === 'review' && scope.kind === 'note' && /\.md$/i.test(scope.path)) {
+      app.setView({ kind: 'writing', path: scope.path, review: true, nonce: Date.now() })
       return
     }
     if (m === 'interview') localStorage.setItem('tide.interview.lang', language)

@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react'
-import { Compartment, EditorState } from '@codemirror/state'
+import { Compartment, EditorState, type Extension } from '@codemirror/state'
 import { EditorView, keymap, drawSelection, highlightActiveLine } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
@@ -81,6 +81,8 @@ export interface EditorHandle {
   /** Puts text in at the cursor (replacing the selection) and leaves the cursor after it */
   insert(text: string): void
   focus(): void
+  /** The CodeMirror view itself, for a page that marks text (Writing's comments) */
+  view(): EditorView
 }
 
 interface Props {
@@ -99,6 +101,8 @@ interface Props {
   onLink?(href: string): boolean
   /** Not focused when it opens */
   noFocus?: boolean
+  /** More CodeMirror extensions, set once when it opens (Writing's comment marks) */
+  extensions?: Extension[]
 }
 
 const IDLE_MS = 3500
@@ -126,7 +130,7 @@ function insertImages(view: EditorView, files: File[], at: number | null, save?:
 /** Live preview hides Markdown away from the cursor; source mode shows it all. The choice is remembered (settings.editorSource). */
 const previewMode = new Compartment()
 
-export function Editor({ value, onChange, onIdle, onProbe, handleRef, onImage, notePath, onLink, noFocus }: Props) {
+export function Editor({ value, onChange, onIdle, onProbe, handleRef, onImage, notePath, onLink, noFocus, extensions }: Props) {
   const app = useApp()
   const source = app.settings.editorSource === true
   const appRef = useRef(app)
@@ -203,6 +207,7 @@ export function Editor({ value, onChange, onIdle, onProbe, handleRef, onImage, n
             indentWithTab
           ]),
           theme,
+          ...(extensions ?? []),
           // A screenshot pasted or dragged in is saved beside the note and shown where the cursor is
           EditorView.domEventHandlers({
             paste: (e, v) => insertImages(v, [...(e.clipboardData?.files ?? [])], null, onImageRef.current) && (e.preventDefault(), true),
@@ -232,6 +237,7 @@ export function Editor({ value, onChange, onIdle, onProbe, handleRef, onImage, n
           view.focus()
         },
         focus: () => view.focus(),
+        view: () => view,
         lineTop: (line) => {
           if (line + 1 > view.state.doc.lines) return null
           const block = view.lineBlockAt(view.state.doc.line(line + 1).from)

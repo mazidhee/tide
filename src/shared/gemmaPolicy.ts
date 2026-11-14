@@ -20,6 +20,11 @@ export const JOB_ROUTES = {
   labCards: { label: 'Flashcards from lab commands', role: 'background' },
   marginNote: { label: 'Margin tutor and writing coach', role: 'background' },
   marginQuestion: { label: 'Margin tutor “test me” question', role: 'teach' },
+  // Writing review (main/writing): Opus reviews and re-checks a fix; Sonnet talks it through. Claude only:
+  // without it the local checker's comments stand alone
+  writingReview: { label: 'Reviewing your writing', role: 'mark' },
+  writingRecheck: { label: 'Checking a fix in your writing', role: 'mark' },
+  writingTalk: { label: 'Challenging the thinking in your writing', role: 'teach' },
   dailyMark: { label: 'Daily practice marking', role: 'mark' },
   tieBreak: { label: 'Choosing how to teach a topic', role: 'background' },
   examPaper: { label: 'Writing a practice exam', role: 'teach' },

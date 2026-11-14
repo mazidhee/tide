@@ -61,7 +61,7 @@ export const ITEM_MAX = 180
 /** The measured line in a section starts with this; code rewrites it each time */
 export const MEASURED = 'Measured:'
 /** Lines code writes from Tide's own records (the plan, the measurements): rewritten each time, never the model's or the learner's */
-export const CODE_PREFIXES = [MEASURED, 'Heading towards:', 'Roadmap:']
+export const CODE_PREFIXES = [MEASURED, 'Heading towards:', 'Roadmap:', 'Writing habits:']
 export const isCodeLine = (text: string) => CODE_PREFIXES.some((p) => text.startsWith(p))
 
 export const emptyProfile = (): Profile => ({ head: PROFILE_HEAD, sections: Object.fromEntries(SECTION_IDS.map((id) => [id, []])) as unknown as Profile['sections'], notes: {}, tail: '' })

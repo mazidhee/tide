@@ -147,6 +147,8 @@ export interface Settings {
   prep?: Partial<import('./lessonPrep').PrepSettings>
   /** The maths answer box: read back what you said before it's marked (on by default), and the calculator's angle unit */
   maths?: { readBack?: boolean; angle?: 'rad' | 'deg' }
+  /** Writing (main/writing): folders outside the notes folder Tide reads for writing, and topics from a Things 4 project */
+  writing?: { folders?: string[]; things?: boolean; thingsProject?: string }
 }
 
 export type FileKind = 'note' | 'pdf' | 'epub' | 'image' | 'doc' | 'canvas' | 'notebook' | 'other'
@@ -1166,6 +1168,26 @@ export interface TideApi {
     confirmDepth(topic: string, depth: number): Promise<import('../main/northStar').NorthStarView | null>
     startCapstone(): Promise<{ notebook: string } | null>
     install(): Promise<string[]>
+  }
+  /** Writing review (main/writing): paths are absolute (a vault-relative one is read from the notes folder) */
+  writing: {
+    list(): Promise<import('./writing').PieceSummary[]>
+    roots(): Promise<{ root: string; label: string; vault: boolean }[]>
+    open(path: string): Promise<import('../main/writing').PieceOpen>
+    /** The editor's save: the file in place, and the comments' anchors */
+    save(path: string, text: string, comments?: import('./writing').WritingComment[]): Promise<void>
+    comments(path: string, comments: import('./writing').WritingComment[]): Promise<import('./writing').PieceRecord>
+    kind(path: string, kind: import('./writing').WritingKind | null): Promise<import('./writing').PieceRecord>
+    review(path: string, text: string, full?: boolean): Promise<import('../main/writing').ReviewResult>
+    recheck(path: string, text: string, id: string): Promise<{ record: import('./writing').PieceRecord; fixed: boolean; note: string }>
+    challenge(path: string, text: string, said: string): Promise<{ record: import('./writing').PieceRecord; reply: string | null }>
+    habits(): Promise<import('./writing').Habit[]>
+    topics(refresh?: boolean): Promise<import('../main/writing').TopicsView>
+    startDraft(topic: import('./writingPrompt').Topic, root: string): Promise<string>
+    published(path: string, on: boolean): Promise<{ record: import('./writing').PieceRecord; thingsId?: string }>
+    tickThings(path: string): Promise<void>
+    /** Opens a folder picker and adds the folder to Settings › writing folders */
+    addFolder(): Promise<string | null>
   }
   learner: {
     view(): Promise<import('./learnerProfile').LearnerView>

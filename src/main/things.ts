@@ -215,6 +215,11 @@ export async function dayTasks(): Promise<DayTask[] | null> {
   return [...finished.filter((t) => t.type === 'to-do').map((t) => dayTask(t, true)), ...open.filter((t) => t.type === 'to-do' && t.status === 'open').map((t) => dayTask(t, false))]
 }
 
+/** A project's (or area's, or tag's) to-dos, by its name: Writing's topics (main/writing) */
+export async function listNamed(name: string): Promise<ThingsItem[]> {
+  return call<ThingsItem[]>('GET', `/lists/${encodeURIComponent(name)}`)
+}
+
 /** Ticks a to-do off in Things 4, or back on */
 export async function setTaskDone(id: string, done: boolean): Promise<void> {
   await call('POST', `/tasks/${encodeURIComponent(id)}/${done ? 'complete' : 'reopen'}`)

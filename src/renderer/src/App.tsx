@@ -75,6 +75,8 @@ const LabView = lazy(() => import('./components/LabView').then((m) => ({ default
 const WorkshopView = lazy(() => import('./components/WorkshopView').then((m) => ({ default: m.WorkshopView })))
 const CoursesView = lazy(() => import('./components/CoursesView').then((m) => ({ default: m.CoursesView })))
 const ProjectsPage = lazy(() => import('./components/ProjectsPage').then((m) => ({ default: m.ProjectsPage })))
+const WritingView = lazy(() => import('./components/writing/WritingView').then((m) => ({ default: m.WritingView })))
+const WritingPiece = lazy(() => import('./components/writing/WritingPiece').then((m) => ({ default: m.WritingPiece })))
 const CodeView = lazy(() => import('./components/CodeView').then((m) => ({ default: m.CodeView })))
 const CanvasView = lazy(() => import('./components/CanvasView').then((m) => ({ default: m.CanvasView })))
 const JupyterView = lazy(() => import('./components/notebook/JupyterView').then((m) => ({ default: m.JupyterView })))
@@ -508,12 +510,12 @@ export default function App() {
 
   // Views with their own tutor beside them don't get the floating Ask button or the chat panel
   // A course being read has its tutor docked in its reading column (the right is the video's)
-  const ownTutor = ['chat', 'lab', 'code', 'design', 'drill', 'session', 'exam', 'mock', 'reader', 'ipynb'].includes(view.kind) || (view.kind === 'file' && /\.(canvas|ipynb)$/i.test(view.path)) || (view.kind === 'courses' && !!view.id)
+  const ownTutor = ['chat', 'lab', 'code', 'design', 'drill', 'session', 'exam', 'mock', 'reader', 'ipynb', 'writing'].includes(view.kind) || (view.kind === 'file' && /\.(canvas|ipynb)$/i.test(view.path)) || (view.kind === 'courses' && !!view.id)
   // In the new design Home is the whole width of the window and has its own ask box: the tutor
   // panel stays beside what you read (a note, a PDF, the library), one click away from Home
   // …until you ask something from Home: then it opens there with your question, and stays until you close it
   // The map of what you know and Settings are the same: the whole width, the panel on request
-  const wide = view.kind === 'home' || view.kind === 'settings' || view.kind === 'learner' || (view.kind === 'graph' && !view.focus && (view.tab ?? lastBrainTab()) === 'know')
+  const wide = view.kind === 'home' || view.kind === 'settings' || view.kind === 'learner' || view.kind === 'writing' || (view.kind === 'graph' && !view.focus && (view.tab ?? lastBrainTab()) === 'know')
   // A course being read is the whole window: Tide's sidebar steps back to the left edge, there on hover
   // A book being read is the same: the reader has the window (components/reading/Reader)
   // Pop-out windows (tide-popout): the reader is meant to be a pop-out kind ({ kind: 'reader', path }) once that lands
@@ -546,6 +548,7 @@ export default function App() {
   else if (view.kind === 'practice') main = <PracticeView />
   // Guided projects: a small hook (components/WorkshopView.tsx)
   else if (view.kind === 'projects') main = <ProjectsPage />
+  else if (view.kind === 'writing') main = view.path ? <WritingPiece key={`${view.path}:${view.nonce ?? ''}`} path={view.path} talk={!!view.talk} review={!!view.review} /> : <WritingView />
   else if (view.kind === 'courses') main = <CoursesView key={view.id ?? ''} id={view.id} lesson={view.lesson} area={view.area} />
   else if (view.kind === 'workshop') main = <WorkshopView key={`${view.id ?? ''}:${view.from?.topic ?? ''}:${view.nonce ?? ''}`} id={view.id} from={view.from} />
   else if (view.kind === 'new-topic') main = <NewTopicView key={view.nonce ?? 'new'} initial={view.topic} initialGoal={view.goal} auto={view.auto} />

@@ -338,6 +338,8 @@ export function tabTitle(v: TabView, own?: string): string {
       return v.id ? popNameOf(v as PopView) : 'Courses'
     case 'chat':
       return 'Chat'
+    case 'writing':
+      return v.path ? plain(base(String(v.path))) : 'Writing'
     case 'lab':
       return v.terminal === 'local' ? 'Terminal' : 'Linux lab'
     case 'session':
@@ -424,6 +426,8 @@ export function tabIcon(v: TabView): string {
       return 'settings'
     case 'learner':
       return 'person'
+    case 'writing':
+      return 'compose'
     default:
       return 'dot'
   }
