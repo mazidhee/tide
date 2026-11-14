@@ -204,7 +204,7 @@ export function ModulesView({ notebook, path, notes, mastery }: { notebook: stri
         <ModuleMap modules={data.modules} onPick={(id) => (pickMode('list'), setOpen(id), requestAnimationFrame(() => document.getElementById(`md-${id}`)?.scrollIntoView({ block: 'nearest' })))} />
       )}
 
-      {data.projects.length > 0 && <Projects projects={data.projects} titles={new Map(data.modules.map((m) => [m.id, m.title]))} onChange={load} />}
+      {data.projects.length > 0 && <Projects projects={data.projects} titles={new Map(data.modules.map((m) => [m.id, m.title]))} />}
 
       {/* The part being worked on now: its gate, the check, what's next */}
       <TrackView notebook={notebook} path={path} modular />
@@ -353,28 +353,15 @@ function ModuleMap({ modules, onPick }: { modules: ModuleRow[]; onPick: (id: str
   )
 }
 
-function Projects({ projects, titles, onChange }: { projects: TrackModulesView['projects']; titles: Map<string, string>; onChange: () => void }) {
+/** The track's projects; each row goes to the Projects page, where they're started, paused and opened */
+function Projects({ projects, titles }: { projects: TrackModulesView['projects']; titles: Map<string, string> }) {
   const app = useApp()
-  const [busy, setBusy] = useState('')
-  const start = async (id: string, notebook?: string) => {
-    if (notebook) return app.setView({ kind: 'notebook', path: notebook, tab: 'project' })
-    setBusy(id)
-    try {
-      const made = await window.tide.modules.startProject(id)
-      onChange()
-      app.setView({ kind: 'notebook', path: made.notebook, tab: 'project' })
-    } catch (e) {
-      app.toast(clean(e), { tone: 'error' })
-    } finally {
-      setBusy('')
-    }
-  }
   return (
     <section className="md-projects" aria-label="Projects">
       <h3 className="md-h">Projects</h3>
       <ul>
         {projects.map((p) => (
-          <li key={p.id} className="md-project">
+          <li key={p.id} className="md-project is-link" role="link" tabIndex={0} onClick={() => app.setView({ kind: 'projects' })} onKeyDown={(e) => e.key === 'Enter' && app.setView({ kind: 'projects' })}>
             <span className="md-project-name">{p.title}</span>
             <span className="md-steps" role="img" aria-label={`${p.done} of ${p.of} milestones built`}>
               {p.milestones.map((m) => (
@@ -391,11 +378,7 @@ function Projects({ projects, titles, onChange }: { projects: TrackModulesView['
                       return w.length ? `Opens when you start ${w.map((id) => titles.get(id) ?? id.replace(/-/g, ' ')).join(', ')}` : 'Waits on its modules'
                     })()}
             </span>
-            {(p.next || p.notebook) && (
-              <button className="btn md-project-go" onClick={() => start(p.id, p.notebook)} disabled={busy === p.id}>
-                {p.notebook ? 'Open' : busy === p.id ? 'Setting up…' : 'Set it up'}
-              </button>
-            )}
+            <Icon name="chevron" size={12} className="md-project-go" />
           </li>
         ))}
       </ul>

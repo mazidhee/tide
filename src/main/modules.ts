@@ -17,6 +17,7 @@ import { createRequire } from 'module'
 import { dirname } from 'path'
 import type { RoadmapTopic } from '@shared/curriculum'
 import { roadmapTopics } from '@shared/curriculum'
+import { AI_TRACK, applyQueue, arrange, checkProject, parseSuggestions, projectMarkdown, projectNeeds, projectPath, suggestPrompt, type ProjectsPageView, type QueueAction, type SuggestedProject } from '@shared/projectQueue'
 import type { ConceptState } from '@shared/knowledge'
 import {
   checkDag,
@@ -313,7 +314,9 @@ export async function projectsView(o: { track?: string } = {}): Promise<ProjectR
     // The Projects plan's milestones are the project's, in the same order
     const done = new Set(p.milestones.filter((m, i) => plan?.milestones[i]?.status === 'done' || plan?.milestones.find((x) => x.title === m.title)?.status === 'done').map((m) => m.id))
     const st = projectState(p, gates, done)
-    out.push({ id: p.id, title: p.title, tracks: p.tracks.map((t) => cat.tracks.find((x) => x.id === t)?.title ?? t), ...(plan ? { notebook: link!.notebook } : {}), milestones: st.milestones, ...(st.next ? { next: { id: st.next.id, title: st.next.title, hours: st.next.hours || 10 } } : {}), done: done.size, ...(p.level ? { level: p.level } : {}) })
+    // The AI track may have no Tracks file of its own: it is called AI
+    const trackIds = [...new Set(p.tracks)]
+    out.push({ id: p.id, title: p.title, tracks: trackIds.map((t) => cat.tracks.find((x) => x.id === t)?.title ?? (t === AI_TRACK ? 'AI' : t)), trackIds, ...(p.about ? { about: p.about } : {}), ...(plan ? { notebook: link!.notebook } : {}), milestones: st.milestones.map((m, i) => ({ ...m, needs: p.milestones[i]?.needs ?? [] })), ...(st.next ? { next: { id: st.next.id, title: st.next.title, hours: st.next.hours || 10 } } : {}), done: done.size, ...(p.level ? { level: p.level } : {}) })
   }
   return out
 }
@@ -345,24 +348,103 @@ export async function startProject(id: string): Promise<{ notebook: string }> {
 
 export const PROJECTS_GOAL = 'projects'
 /** An unset-up project's thread ref (once set up, its Projects notebook is) */
-export const projectRef = (id: string) => `vault-project:${id}`
+export { projectThreadRef as projectRef } from '@shared/projectQueue'
 
 /**
- * Projects from day one, as a goal for the scheduler: each project whose next milestone is open
- * (every module it needs started) is a need, built as project work. Null without projects.
+ * Projects from day one, as a goal for the scheduler: only the projects being built
+ * (shared/projectQueue) whose next milestone is open, as building work; with nothing being built
+ * yet, the top of Up next. Null without projects.
  */
 export async function projectsGoal(): Promise<(import('@shared/goals').PlanGoal & { maxGap: number; tracksOf: Record<string, string[]> }) | null> {
   const { getNotebooks } = await import('./learn')
   if (!(await getNotebooks().catch(() => [])).some((n) => n.track)) return null
-  const rows = (await projectsView().catch(() => [])).filter((p) => p.next)
-  if (!rows.length) return null
-  const tracksOf: Record<string, string[]> = {}
-  const needs = rows.map((p) => {
-    const ref = p.notebook ?? projectRef(p.id)
-    tracksOf[`project:${ref.toLowerCase()}`] = p.tracks
-    return { id: `pj:${p.id}`, kind: 'project' as const, ref, label: `${p.title}: ${p.next!.title}`, hours: p.next!.hours, why: `Building ${p.next!.title}: its modules are under way` }
-  })
+  const rows = await projectsView().catch(() => [])
+  const q = (await import('./track').then((t) => t.loadTracks()).catch(() => null))?.modules?.queue
+  const { needs, tracksOf } = projectNeeds(rows, q)
+  if (!needs.length) return null
   return { id: PROJECTS_GOAL, title: 'Projects', weight: 'main', needs, createdAt: Date.now(), by: 'tide', maxGap: 4, tracksOf }
+}
+
+// ---------- The Projects page: the queue ----------
+
+/** Every project in its section (building, up next, later, built), with the filter's tracks */
+export async function projectsPage(): Promise<ProjectsPageView> {
+  const cat = await loadCatalogue()
+  const rows = await projectsView()
+  const q = (await import('./track').then((t) => t.loadTracks()).catch(() => null))?.modules?.queue
+  const a = arrange(rows, q)
+  const used = new Set(rows.flatMap((r) => r.trackIds ?? []))
+  const tracks = (cat?.tracks ?? []).filter((t) => used.has(t.id) && t.id !== AI_TRACK).map((t) => ({ id: t.id, title: t.title }))
+  const byId = cat ? moduleById(cat) : new Map<string, ModuleDef>()
+  const modules: Record<string, string> = {}
+  for (const r of rows) for (const m of r.milestones) for (const n of m.needs ?? []) modules[n] = byId.get(n)?.title ?? n
+  return { cap: a.cap, building: a.building, upNext: a.upNext, later: a.later, built: a.built, paused: [...a.paused], tracks, ai: used.has(AI_TRACK), modules }
+}
+
+/** Start, pause, move up or change the cap; the page as it then stands */
+export async function queueAction(action: QueueAction): Promise<ProjectsPageView> {
+  const rows = await projectsView()
+  const t = await import('./track')
+  await t.updateModules((m) => ({ ...m, queue: applyQueue(rows, m.queue ?? {}, action) }))
+  return projectsPage()
+}
+
+const SUGGEST_SYSTEM = `You design long build projects for a self-taught engineer who learns by building real systems themselves, from a first small component up to core infrastructure. Each project is one repository grown milestone by milestone. Every milestone names the modules it needs, using only module ids from the catalogue given. Order milestones so the first needs only foundational modules. No company names or brands. Reply with JSON only.`
+
+export type Suggestion = SuggestedProject & { problems: string[]; titles: Record<string, string> }
+
+/**
+ * Three projects Claude proposes from the goal note, what they're into lately and the module
+ * catalogue, each checked as its file would be. Without Claude it says so (`available: false`):
+ * New project works without it.
+ */
+export async function suggestProjects(lately = ''): Promise<{ available: boolean; suggestions: Suggestion[]; error?: string }> {
+  const ip = await import('./ideaProjects')
+  const route = await ip.planRoute().catch(() => null)
+  if (route?.who !== 'claude') return { available: false, suggestions: [] }
+  const cat = await loadCatalogue(true)
+  if (!cat) return { available: true, suggestions: [], error: 'There are no modules in Roadmaps/Modules to build on.' }
+  const { GOAL_NOTE } = await import('./northStar')
+  const goal = await readText(GOAL_NOTE).catch(() => '')
+  const prompt = suggestPrompt({ goal, lately, modules: cat.modules.map((m) => ({ id: m.id, title: m.title, track: m.track, requires: m.requires })), tracks: cat.tracks.map((t) => ({ id: t.id, title: t.title })), projects: (cat.projects ?? []).map((p) => ({ id: p.id, title: p.title })) })
+  try {
+    const { extractJsonObject } = await import('./ai')
+    const r = await ip.askClaudeForProjects(prompt, SUGGEST_SYSTEM)
+    const list = parseSuggestions(extractJsonObject(r.text)).slice(0, 3)
+    if (!list.length) return { available: true, suggestions: [], error: 'Claude’s reply had no projects in it. Try again.' }
+    const byId = moduleById(cat)
+    return {
+      available: true,
+      suggestions: list.map((p) => {
+        const titles: Record<string, string> = {}
+        for (const m of p.milestones) for (const n of m.needs) titles[n] = byId.get(n)?.title ?? n
+        return { ...p, problems: checkProject(projectMarkdown(p), { modules: cat.modules, projects: cat.projects ?? [] }).problems, titles }
+      })
+    }
+  } catch (e) {
+    return { available: true, suggestions: [], error: `Claude didn’t answer: ${String((e as Error)?.message ?? e).slice(0, 160)}` }
+  }
+}
+
+/**
+ * Adds a suggested project to the vault as Roadmaps/Projects/<id>.md: a new file only, never over
+ * one already there, and only when the vault's parser reads it back with every need a real module
+ */
+export async function addProject(p: SuggestedProject): Promise<{ id: string; path: string }> {
+  const cat = await loadCatalogue(true)
+  if (!cat) throw new Error('There are no modules in Roadmaps/Modules to build on.')
+  const tidy = parseSuggestions({ projects: [p] })[0]
+  if (!tidy) throw new Error('That project has no title or milestones.')
+  const md = projectMarkdown(tidy)
+  const { def, problems } = checkProject(md, { modules: cat.modules, projects: cat.projects ?? [] })
+  if (!def || problems.length) throw new Error(problems.join(' ') || 'It doesn’t read as a project.')
+  const path = projectPath(def.id)
+  if (existsSync(absPath(path))) throw new Error(`${path} is already there; nothing was changed.`)
+  await fs.mkdir(dirname(absPath(path)), { recursive: true })
+  // 'wx': fails rather than overwrite, should a file appear meanwhile
+  await fs.writeFile(absPath(path), md, { encoding: 'utf8', flag: 'wx' })
+  resetModules()
+  return { id: def.id, path }
 }
 
 // ---------- The switch ----------
@@ -1159,7 +1241,7 @@ export function switchBack(): Promise<{ ok: boolean; restored: number; kept: num
 }
 
 /** For the Learn page and the switch flow: whether modules are there, whether Tide uses them */
-export async function modulesStatus(): Promise<{ available: boolean; modules: number; tracks: number; moves: boolean; switched: boolean; at?: number; backup?: string; issues: number }> {
+export async function modulesStatus(): Promise<{ available: boolean; modules: number; tracks: number; moves: boolean; switched: boolean; at?: number; backup?: string; replaced: string[]; issues: number }> {
   const cat = await loadCatalogue()
   const state = await readState()
   return {
@@ -1169,6 +1251,8 @@ export async function modulesStatus(): Promise<{ available: boolean; modules: nu
     moves: !!(await loadMoves()),
     switched: !!state.switched,
     ...(state.switched ? { at: state.switched.at, backup: state.switched.backup } : {}),
+    // The old roadmaps the modules replaced: kept on disk for Switch back, not offered in Learn
+    replaced: state.switched ? [...new Set(Object.values(state.switched.outlines))] : [],
     issues: cat ? checkDag(cat).length : 0
   }
 }

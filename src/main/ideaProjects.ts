@@ -151,6 +151,9 @@ let ask: Asker = realAsk
 /** For tests: the model's answers */
 export const setAsker = (fn: Asker | null) => (ask = fn ?? realAsk)
 
+/** Claude only (no Gemma fallback), through the same asker: the Projects page's suggestions (main/modules) */
+export const askClaudeForProjects = (prompt: string, system: string, timeoutMs = 180_000) => ask('projectIdeas', prompt, system, { noFallback: true, timeoutMs })
+
 /** Where the plan will be written, for the window to say */
 export async function planRoute(): Promise<{ who: 'claude' | 'gemma' | 'none'; label: string }> {
   const { jobRoute } = await import('./ai')

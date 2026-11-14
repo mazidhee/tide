@@ -1068,7 +1068,7 @@ export interface TideApi {
   }
   /** Roadmap continuity (main/track, shared/track): a roadmap's phases and gates */
   modules: {
-    status(): Promise<{ available: boolean; modules: number; tracks: number; moves: boolean; switched: boolean; at?: number; backup?: string; issues: number }>
+    status(): Promise<{ available: boolean; modules: number; tracks: number; moves: boolean; switched: boolean; at?: number; backup?: string; replaced: string[]; issues: number }>
     /** A track's modules: status, hours, gate, requires */
     track(notebook: string): Promise<import('./modules').TrackModulesView | null>
     /** "I'm there": the learner says a module's gate is met (or takes it back) */
@@ -1083,6 +1083,14 @@ export interface TideApi {
     projects(): Promise<import('./modules').ProjectRow[]>
     /** A vault project set up in Projects (levels, ready check, mentor) */
     startProject(id: string): Promise<{ notebook: string }>
+    /** The Projects page: building, up next, later and built (shared/projectQueue) */
+    page(): Promise<import('./projectQueue').ProjectsPageView>
+    /** Start, pause, move up or the cap: the page as it then stands */
+    queue(action: import('./projectQueue').QueueAction): Promise<import('./projectQueue').ProjectsPageView>
+    /** Three projects Claude suggests from the goal note and the modules; available: false without Claude */
+    suggest(lately?: string): Promise<{ available: boolean; suggestions: (import('./projectQueue').SuggestedProject & { problems: string[]; titles: Record<string, string> })[]; error?: string }>
+    /** A suggestion written to Roadmaps/Projects/<id>.md (new file only, checked first) */
+    addProject(p: import('./projectQueue').SuggestedProject): Promise<{ id: string; path: string }>
   }
   track: {
     view(notebook: string): Promise<import('./track').TrackView | null>

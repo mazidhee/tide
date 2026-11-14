@@ -273,10 +273,15 @@ export function projectRef(title: string): { project: string; milestone?: string
 export interface ProjectRow {
   id: string
   title: string
+  /** Its tracks' titles */
   tracks: string[]
+  /** Its tracks' ids */
+  trackIds?: string[]
+  /** The first paragraph of its file */
+  about?: string
   /** Set up in Projects (levels, ready check, mentor): its notebook */
   notebook?: string
-  milestones: { id: string; title: string; status: 'done' | 'open' | 'locked'; waiting: string[]; hours: number }[]
+  milestones: { id: string; title: string; status: 'done' | 'open' | 'locked'; waiting: string[]; hours: number; needs?: string[] }[]
   next?: { id: string; title: string; hours: number }
   done: number
   level?: number

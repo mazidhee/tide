@@ -129,6 +129,10 @@ export const PATHS = {
   archive: 'M3.5 5h17v4h-17zM5 9v9.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V9M10 12.5h4',
   // North Star: a four-pointed star, its long ray pointing down to where you are
   northstar: 'M12 2.5l1.6 7.9L21 12l-7.4 1.6L12 21.5l-1.6-7.9L3 12l7.4-1.6z',
+  // Projects: blocks being built, two set and one going on top
+  projects: 'M4 13.5h7v6.5H4zM13 13.5h7v6.5h-7zM8.5 4h7v7h-7z',
+  // A padlock: waiting on something
+  lock: 'M7 11h10a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 17 20H7a1.5 1.5 0 0 1-1.5-1.5v-6A1.5 1.5 0 0 1 7 11zM8.5 11V8a3.5 3.5 0 0 1 7 0v3',
   claude: 'M12 3.5v4M12 16.5v4M3.5 12h4M16.5 12h4M6 6l2.8 2.8M15.2 15.2L18 18M6 18l2.8-2.8M15.2 8.8L18 6',
 } as const
 

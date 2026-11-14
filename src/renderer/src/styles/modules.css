@@ -468,3 +468,13 @@
 .md-page > * {
   min-width: 0;
 }
+.md-project.is-link {
+  cursor: pointer;
+  border-radius: 6px;
+}
+.md-project.is-link:hover {
+  background: var(--bg-hover);
+}
+.md-project.is-link .md-project-go {
+  color: var(--ink-muted);
+}

@@ -314,7 +314,8 @@ const TITLES: Record<string, string> = {
   maths: 'Mental maths',
   help: 'Guide',
   settings: 'Settings',
-  workshop: 'Projects'
+  workshop: 'Projects',
+  projects: 'Projects'
 }
 
 const base = (p: string) => p.replace(/\/+$/, '').split('/').pop() ?? p
@@ -388,6 +389,8 @@ export function tabIcon(v: TabView): string {
       return 'tutor'
     case 'courses':
       return 'course'
+    case 'projects':
+      return 'projects'
     case 'chat':
       return 'chat'
     case 'lab':

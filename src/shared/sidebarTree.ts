@@ -11,11 +11,11 @@ export const TIDE_FOLDER = 'Tide'
 /** The top-level folder new roadmaps are written to (see NewTopicView) */
 const ROADMAP_FOLDER = /^roadmaps?$/i
 
-/** A roadmap: some notebook's outline, or a Markdown file directly in the Roadmaps folder */
+/** A roadmap: some notebook's outline, or any file in the Roadmaps folder (its modules, tracks and projects too) */
 export function isRoadmapFile(path: string, outlines: ReadonlySet<string>): boolean {
   if (outlines.has(path)) return true
   const parts = path.split('/')
-  return parts.length === 2 && ROADMAP_FOLDER.test(parts[0]) && /\.md$/i.test(parts[1])
+  return parts.length >= 2 && ROADMAP_FOLDER.test(parts[0])
 }
 
 const onlyImages = (n: FileNode): boolean => (n.type === 'file' ? n.kind === 'image' : (n.children ?? []).every(onlyImages))
