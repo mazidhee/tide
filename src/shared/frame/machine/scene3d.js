@@ -178,11 +178,21 @@
         any = true;
       });
       if (!any) return null;
-      var sphere = box.getBoundingSphere(new T.Sphere());
+      var center = box.getCenter(new T.Vector3());
       var dir = new T.Vector3().fromArray(from || [0.55, 0.85, 1]).normalize();
-      var vfov = camera.fov * Math.PI / 180, hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect);
-      var dist = sphere.radius / Math.sin(Math.min(vfov, hfov) / 2) * 0.95;
-      return { camera: sphere.center.clone().add(dir.multiplyScalar(Math.max(dist, 3))).toArray(), target: sphere.center.toArray() };
+      // Move the camera along its direction until the box's corners fill about 85% of the view
+      var cam = camera.clone(), corners = [], d = box.getSize(new T.Vector3()).length() || 4;
+      for (var c = 0; c < 8; c++) corners.push(new T.Vector3(c & 1 ? box.max.x : box.min.x, c & 2 ? box.max.y : box.min.y, c & 4 ? box.max.z : box.min.z));
+      for (var k = 0; k < 6; k++) {
+        cam.position.copy(center).addScaledVector(dir, d);
+        cam.lookAt(center);
+        cam.updateMatrixWorld();
+        var most = 0;
+        corners.forEach(function (q) { var v = q.clone().project(cam); most = Math.max(most, Math.abs(v.x), Math.abs(v.y)); });
+        if (!isFinite(most) || most <= 0) break;
+        d *= most / 0.85;
+      }
+      return { camera: center.clone().addScaledVector(dir, Math.max(d, 3)).toArray(), target: center.toArray() };
     };
     var auditing = function () { return !!(window.visual && window.visual.auditing); };
 
@@ -199,7 +209,7 @@
     };
 
     var makeLabel = function (p) {
-      var lab = labels[p.id] || M.h('div', { style: 'position:absolute;left:0;top:0;max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;line-height:1.3;padding:3px 7px;border-radius:6px;background:var(--bg);color:var(--ink);box-shadow:0 0 0 1px var(--line-strong);display:none' });
+      var lab = labels[p.id] || M.h('div', { style: 'position:absolute;left:0;top:0;width:max-content;max-width:260px;white-space:normal;font-size:12px;line-height:1.3;padding:3px 7px;border-radius:6px;background:var(--bg);color:var(--ink);box-shadow:0 0 0 1px var(--line-strong);display:none' });
       lab.textContent = p.label;
       if (p.note) lab.append(M.h('span', { style: 'color:var(--muted);margin-left:6px' }, p.note));
       if (!labels[p.id]) labelsLayer.append(lab);
@@ -288,8 +298,11 @@
       if (opts.chips !== false) {
         chipsBar = M.h('div', { style: 'display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0' });
         var seenLabel = {};
-        parts.forEach(function (p) {
-          if (!p.label || p.chip === false || seenLabel[p.label]) return;
+        // A button per part to pick it from the keyboard; past ten, only the ones marked chip: true
+        var chipped = parts.filter(function (p) { return p.label && p.chip !== false; });
+        if (chipped.length > 10) chipped = chipped.filter(function (p) { return p.chip === true; });
+        chipped.forEach(function (p) {
+          if (seenLabel[p.label]) return;
           seenLabel[p.label] = 1;
           var b = M.h('button', { type: 'button', 'aria-label': 'Select ' + p.label }, p.label);
           b.addEventListener('click', function () { pick(p); });
