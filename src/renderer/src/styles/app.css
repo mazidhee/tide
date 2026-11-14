@@ -10056,17 +10056,13 @@ code.cmd-chip:hover {
   padding: 8px 8px 8px 14px;
   border-radius: var(--radius-m);
   border: 1px solid var(--line);
-  border-left: 3px solid var(--accent);
   background: var(--bg-raised);
 }
 
 .rv-fading-k {
   flex: none;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--accent);
+  font-size: 13px;
+  color: var(--ink-muted);
 }
 
 .rv-fading-names {
