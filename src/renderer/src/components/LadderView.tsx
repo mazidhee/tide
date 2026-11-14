@@ -7,7 +7,7 @@ import { useApp } from '../state'
 import { Celebrate } from './ideas/Celebrate'
 
 /**
- * The maths ladder, its own page, opened from Learn (LadderShelf below): arithmetic first, pricing and risk last
+ * The maths ladder, its own page, opened from the Mathematics track and What you know (LadderLink below): arithmetic first, pricing and risk last
  * (shared/mathsLadder), in the same order as the strip above it. One thing to do next, large, at the top; a strip showing
  * the whole climb at a glance; then the rungs, with the one being worked on open to its next
  * topics. A rung moving up a level, or a new title, gets the workout's pixel party once.
@@ -227,13 +227,15 @@ export function LadderView({ go }: { go?: number }) {
 }
 
 /**
- * The ladder's door on the Learn page: where you are on it and the next topic, in one line, with
- * the whole page a click away. Shown once there is a maths roadmap or a maths lesson to place.
+ * The ladder's door, on the Mathematics track and What you know: where you are on it, in one
+ * line, the whole page a click away.
  */
-export function LadderShelf() {
+export function LadderLink({ className = '', known }: { className?: string; /** What you know, when the page has it already */ known?: KnowledgeView }) {
   const app = useApp()
-  const [data, setData] = useState<KnowledgeView | null>(null)
+  const [fetched, setData] = useState<KnowledgeView | null>(null)
+  const data = known ?? fetched
   useEffect(() => {
+    if (known) return
     let live = true
     window.tide.knowledge
       .view()
@@ -242,37 +244,22 @@ export function LadderShelf() {
     return () => {
       live = false
     }
-  }, [])
+  }, [known])
   const l = useMemo(() => (data ? ladder(data.concepts) : null), [data])
-  if (!l || l.rungs.every((r) => r.starters)) return null
-  const here = l.rungs[l.here]
-  const next = groundUpNext(l)
-  const area = next && data?.areas.find((a) => a.name === next.topic.area)
+  const begun = l && !l.rungs.every((r) => r.starters)
   return (
-    <section className="ld-shelf" aria-label="Maths ladder">
-      <button className="ld-shelf-main" onClick={() => app.setView({ kind: 'ladder' })}>
-        <span className="ld-shelf-kicker">Maths ladder{l.title ? ` · ${l.title}` : ''}</span>
-        <span className="ld-shelf-where">
-          Rung {l.here + 1} of {l.rungs.length}: <b>{here.rung.label}</b>
+    <button className={`ld-link ${className}`} onClick={() => app.setView({ kind: 'ladder' })} title="The maths ladder: arithmetic first, pricing and risk last">
+      <span className="ld-link-name">Maths ladder</span>
+      {begun && (
+        <span className="ld-link-where">
+          Rung {l.here + 1} of {l.rungs.length}: {l.rungs[l.here].rung.label}
         </span>
-        <span className="ld-shelf-strip" aria-hidden>
-          {l.rungs.map((r, i) => (
-            <i key={r.rung.id} className={i === l.here ? 'here' : r.level >= CLIMBED ? 'climbed' : r.begun ? 'begun' : ''} />
-          ))}
-        </span>
-      </button>
-      {next && (
-        <div className="ld-shelf-next">
-          <span className="ld-shelf-label">Next</span>
-          <span className="ld-shelf-topic">{next.topic.name}</span>
-          <button className="btn small primary" onClick={() => app.setView({ kind: 'session', mode: 'teach', scope: area ? { kind: 'folder', path: area.path } : { kind: 'vault' }, topic: next.topic.name, nonce: Date.now() })}>
-            Continue
-          </button>
-          <button className="btn small" onClick={() => app.setView({ kind: 'ladder' })}>
-            See the ladder
-          </button>
-        </div>
       )}
-    </section>
+      <span className="ld-link-strip" aria-hidden>
+        {(l?.rungs ?? []).map((r, i) => (
+          <i key={r.rung.id} className={begun && i === l!.here ? 'here' : r.level >= CLIMBED ? 'climbed' : r.begun ? 'begun' : ''} />
+        ))}
+      </span>
+    </button>
   )
 }

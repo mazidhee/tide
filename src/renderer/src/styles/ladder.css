@@ -410,102 +410,66 @@
   }
 }
 
-/* ---------- The door on the Learn page ---------- */
-
-.ld-shelf {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 24px 0 0;
-  padding: 14px 16px;
-  border-radius: var(--radius-m, 10px);
-  background: var(--bg-raised);
-  box-shadow: 0 0 0 1px var(--line);
-}
-
-.ld-shelf-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: 'kicker strip' 'where strip';
-  gap: 2px 16px;
+/* The ladder's door (LadderLink), on the Mathematics track and What you know */
+.ld-link {
+  display: inline-flex;
   align-items: center;
-  padding: 0;
+  gap: 10px;
   border: 0;
-  background: none;
+  background: color-mix(in srgb, var(--ink) 5%, var(--bg-raised));
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 7px 12px;
   font: inherit;
-  text-align: left;
-  color: var(--ink);
+  font-size: 13px;
   cursor: pointer;
+  max-width: 100%;
 }
 
-.ld-shelf-main:focus-visible {
-  outline: none;
-  border-radius: var(--radius-s, 6px);
-  box-shadow: var(--focus-ring);
+.ld-link:hover {
+  background: color-mix(in srgb, var(--ink) 9%, var(--bg-raised));
 }
 
-.ld-shelf-kicker {
-  grid-area: kicker;
-  font-size: var(--text-xs);
-  font-weight: 600;
-  color: var(--accent);
+.ld-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
-.ld-shelf-where {
-  grid-area: where;
-  font-size: var(--text-sm);
-  color: var(--ink-soft);
+.ld-link-name {
+  font-weight: 560;
+  white-space: nowrap;
 }
 
-.ld-shelf-where b {
-  color: var(--ink);
-  font-weight: 600;
+.ld-link-where {
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
-.ld-shelf-strip {
-  grid-area: strip;
+.ld-link-strip {
   display: inline-flex;
   align-items: flex-end;
-  gap: 3px;
+  gap: 2px;
+  flex: none;
 }
 
-.ld-shelf-strip i {
-  width: 8px;
-  height: 18px;
-  border-radius: 2px;
-  background: var(--line);
+.ld-link-strip i {
+  width: 5px;
+  height: 12px;
+  border-radius: 1.5px;
+  background: var(--line-strong);
 }
 
-.ld-shelf-strip i.begun {
+.ld-link-strip i.begun {
   background: color-mix(in srgb, var(--ink-soft) 45%, transparent);
 }
 
-.ld-shelf-strip i.climbed {
+.ld-link-strip i.climbed {
   background: var(--ink-soft);
 }
 
-.ld-shelf-strip i.here {
+.ld-link-strip i.here {
   background: var(--accent);
-}
-
-.ld-shelf-next {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-}
-
-.ld-shelf-label {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  color: var(--ink-muted);
-}
-
-.ld-shelf-topic {
-  flex: 1 1 200px;
-  min-width: 0;
-  font-size: var(--text-sm);
-  color: var(--ink);
 }

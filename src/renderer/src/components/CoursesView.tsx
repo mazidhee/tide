@@ -1378,45 +1378,6 @@ export function CourseSuggestions({ topic, title = 'Open courses that teach this
   )
 }
 
-/** Learn's way in: the courses you have imported, and the way to the catalogue */
-export function CourseShelf() {
-  const app = useApp()
-  const [cards, setCards] = useState<CourseCard[]>([])
-  useEffect(() => {
-    window.tide.courses
-      .list()
-      .then(setCards)
-      .catch(() => {})
-  }, [])
-  const mine = cards.filter((c) => c.imported).slice(0, 3)
-  return (
-    <section className="ws-shelf crs-shelf">
-      <div className="ws-shelf-head">
-        <h2 className="section-title">Take a course</h2>
-        <button className="tool-btn" onClick={() => app.setView({ kind: 'courses' })}>
-          {cards.length ? `All ${cards.length} courses` : 'Courses'}
-        </button>
-      </div>
-      {mine.length ? (
-        <ul className="ws-shelf-rows">
-          {mine.map((c) => (
-            <li key={c.id}>
-              <button className="ws-shelf-row" onClick={() => app.setView({ kind: 'courses', id: c.id })}>
-                <span className="ws-shelf-title">{c.title}</span>
-                <span className="muted small">
-                  {c.imported!.done} of {c.imported!.lessons} lessons
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="muted small">Data Engineering Zoomcamp, Neural Networks: Zero to Hero, the Rust book, the System Design Primer: open courses from GitHub, taught from their own text.</p>
-      )}
-    </section>
-  )
-}
-
 /** The YouTube videos a lesson's text links or embeds, in order, each once */
 export function videosIn(markdown: string): string[] {
   const out: string[] = []

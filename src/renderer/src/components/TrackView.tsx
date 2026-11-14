@@ -7,6 +7,8 @@ import { Icon } from './Icon'
 import { READY_ROADMAPS } from '@shared/finance/roadmaps'
 import { packForRoadmap, trackPack } from '@shared/trackPacks'
 import { PackOffer, useTrackPack } from './TrackPacks'
+import { LadderLink } from './LadderView'
+import { isMathsArea } from '@shared/mathsLadder'
 import '../styles/track.css'
 
 /**
@@ -112,6 +114,11 @@ export function TrackView({ notebook, path, modular }: { notebook: string; path:
       </header>
 
       <TrackPackNote notebook={notebook} />
+      {!modular && isMathsArea(notebook) && (
+        <div className="track-ladder">
+          <LadderLink />
+        </div>
+      )}
       {data.star && (
         <button className="track-star" onClick={() => app.setView({ kind: 'northstar' })} title="Open your North Star">
           <Icon name="northstar" size={13} />

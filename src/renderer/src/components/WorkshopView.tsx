@@ -198,7 +198,7 @@ export function WorkshopView({ id, from }: { id?: string; from?: { notebook?: st
 }
 
 /**
- * Learn's way in (a small hook in LearnView): the projects in hand, and the way to the rest.
+ * On the Projects page: the guided projects in hand, and the way to the rest.
  */
 export function WorkshopShelf() {
   const app = useApp()
@@ -213,7 +213,7 @@ export function WorkshopShelf() {
   return (
     <section className="ws-shelf">
       <div className="ws-shelf-head">
-        <h2 className="section-title">Build a project</h2>
+        <h2 className="section-title">Guided projects</h2>
         <button className="tool-btn" onClick={() => app.setView({ kind: 'workshop' })}>
           {cards.length ? `All ${cards.length} projects` : 'Projects'}
         </button>

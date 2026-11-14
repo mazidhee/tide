@@ -7,7 +7,7 @@ import { IdeaSheet } from './IdeaSheet'
 import '../../styles/ideas.css'
 
 /**
- * On Learn: the projects you're building from an idea, to carry on with, and a new one. Each opens
+ * On the Projects page: the projects you're building from an idea, to carry on with, and a new one. Each opens
  * at its home in the Code view (components/ideas/ProjectHome).
  */
 export function ProjectsShelf() {

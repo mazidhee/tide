@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { LadderLink } from './LadderView'
 import { readyAcross, revisitList, SOLID, shareRight, since, standing, STATUS_LABEL, tickedOnly, type ConceptState, type ConceptStatus, type KnowledgeView, type MissedQuestion, type WeekPoint } from '@shared/knowledge'
 import { Icon } from './Icon'
 import { KnowPage } from './know/KnowPage'
@@ -147,6 +148,7 @@ export function KnowledgeMap({ data, onLesson, onCheck, onReview, onMissed, onNe
     <div className="know" ref={rootRef}>
       <header className="know-head">
         <h1 className="page-title">What you know</h1>
+        <LadderLink known={data} className="know-ladder" />
         <p className="know-lede">
           {begun === 0 ? (
             <>
