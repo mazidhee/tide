@@ -177,7 +177,7 @@ export function ProjectsPage() {
                 </button>
               </div>
             )}
-            {!view.building.length && !offer && <div className="pq-note">{data.building.length ? 'None on this track.' : 'Nothing being built. Start one from Up next.'}</div>}
+            {!view.building.length && !offer && <div className="pq-note">{data.building.length ? 'None on this track.' : data.upNext.length ? 'Nothing being built. Start one from Up next.' : 'Nothing being built yet.'}</div>}
           </div>
         </section>
 
