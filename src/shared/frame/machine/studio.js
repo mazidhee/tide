@@ -151,7 +151,23 @@
     var box = target && target.isBox3 ? target.clone() : new T.Box3().setFromObject(target);
     var center = box.getCenter(new T.Vector3()), dir = new T.Vector3().fromArray(o.from || [0.55, 0.85, 1]).normalize();
     var cam = camera.clone(), d = box.getSize(new T.Vector3()).length() || 4, corners = [];
-    for (var c = 0; c < 8; c++) corners.push(new T.Vector3(c & 1 ? box.max.x : box.min.x, c & 2 ? box.max.y : box.min.y, c & 4 ? box.max.z : box.min.z));
+    // The subject's own vertices (a sample), so a flat board seen at an angle fills the view, not its box
+    if (target && !target.isBox3 && target.traverse) {
+      var total = 0;
+      target.updateMatrixWorld(true);
+      target.traverse(function (o) { if (o.isMesh && o.visible && o.geometry && o.geometry.attributes.position) total += o.geometry.attributes.position.count; });
+      var stride = Math.max(1, Math.floor(total / 3000));
+      target.traverse(function (o) {
+        if (!o.isMesh || !o.visible || !o.geometry || !o.geometry.attributes.position) return;
+        var pos = o.geometry.attributes.position;
+        for (var i = 0; i < pos.count; i += stride) corners.push(new T.Vector3().fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld));
+      });
+    }
+    if (!corners.length) for (var c = 0; c < 8; c++) corners.push(new T.Vector3(c & 1 ? box.max.x : box.min.x, c & 2 ? box.max.y : box.min.y, c & 4 ? box.max.z : box.min.z));
+    // Aim at the middle of what is seen, not of the box
+    var mid = new T.Vector3();
+    corners.forEach(function (q) { mid.add(q); });
+    if (corners.length > 8) { mid.multiplyScalar(1 / corners.length); center.lerp(mid, 0.5); }
     for (var k = 0; k < 6; k++) {
       cam.position.copy(center).addScaledVector(dir, d);
       cam.lookAt(center);
@@ -159,7 +175,7 @@
       var most = 0;
       corners.forEach(function (q) { var v = q.clone().project(cam); most = Math.max(most, Math.abs(v.x), Math.abs(v.y)); });
       if (!isFinite(most) || most <= 0) break;
-      d *= most / (o.fill || 0.85);
+      d *= Math.pow(most / (o.fill || 0.85), 0.9);
     }
     return { camera: center.clone().addScaledVector(dir, d).toArray(), target: center.toArray() };
   };
