@@ -583,7 +583,7 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
                 {checks.on && (
                   <div className="rr-size-checks">
                     <span className="rr-size-label" id="rr-checks-every">
-                      Check me
+                      When to ask what it said
                     </span>
                     <div className="rr-seg" role="radiogroup" aria-labelledby="rr-checks-every">
                       {(['chapter', 'section'] as const).map((e) => (
@@ -727,9 +727,12 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
                     <button className="rr-btn primary" onClick={() => (setAsk({ kind: 'seminar', chapter: chapterName(current), n: current.n, nonce: Date.now() }), setDrawer('claude'))}>
                       Start the seminar
                     </button>
-                    <button className="rr-btn" onClick={() => void testMe(sectionJustRead(current.units))} title="The last part of this chapter: read it again, put it away, and say what it says">
-                      Test my understanding
-                    </button>
+                    {/* With checks on, the card above already asks about the section just read */}
+                    {!(checks.on && checkAt.size) && (
+                      <button className="rr-btn" onClick={() => void testMe(sectionJustRead(current.units))} title="The last part of this chapter: read it again, put it away, and say what it says">
+                        Test my understanding
+                      </button>
+                    )}
                     {!last && (
                       <button className="rr-btn" onClick={() => go(chapter + 1)}>
                         Next: {chapterName(book!.chapters[chapter + 1])}

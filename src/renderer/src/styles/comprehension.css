@@ -666,6 +666,8 @@ button.cp-next:hover {
   font: 400 1em/1.65 var(--read-face);
   color: var(--rp-ink);
   white-space: pre-wrap;
+  field-sizing: content;
+  overflow: hidden;
   user-select: text;
   -webkit-user-select: text;
   cursor: text;

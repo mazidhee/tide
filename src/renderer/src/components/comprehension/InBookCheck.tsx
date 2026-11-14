@@ -191,12 +191,7 @@ export function InBookCheck(p: {
         rows={3}
         placeholder="Three to five sentences…"
         aria-label="What the section said, in your own words"
-        onChange={(e) => {
-          setText(e.target.value)
-          const t = e.target
-          t.style.height = 'auto'
-          t.style.height = `${t.scrollHeight}px`
-        }}
+        onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void check()
         }}
