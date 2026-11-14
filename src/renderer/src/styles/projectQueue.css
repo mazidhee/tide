@@ -235,10 +235,20 @@
   padding: 8px 8px 8px 14px;
   background: var(--accent-soft);
 }
-.pq-offer > span {
+/* The course that opens the most waiting projects: a note with its one action */
+.pq-unlock {
+  padding: 8px 8px 8px 14px;
+  margin: 0 0 26px;
+}
+.pq-offer > span,
+.pq-unlock > span {
   flex: 1;
   min-width: 0;
 }
+.pq-unlock .btn {
+  flex: none;
+}
+.pq-unlock b,
 .pq-offer b {
   color: var(--ink);
   font-weight: 600;

@@ -4,7 +4,7 @@
  * changes, and a suggested project written in the vault's format and checked by its parser.
  */
 import { describe, expect, it } from 'vitest'
-import { applyQueue, arrange, capOf, checkProject, parseSuggestions, projectMarkdown, projectNeeds, scheduledProjects, type SuggestedProject } from '../src/shared/projectQueue'
+import { applyQueue, arrange, capOf, checkProject, parseSuggestions, projectMarkdown, projectNeeds, pulledModules, scheduledProjects, unlockHint, type SuggestedProject } from '../src/shared/projectQueue'
 import { parseProject, type ProjectRow } from '../src/shared/modules'
 
 type S = 'done' | 'open' | 'locked'
@@ -123,5 +123,88 @@ describe('a suggested project', () => {
   it('a model’s reply is tidied: safe ids, needs as a list, nothing without milestones', () => {
     const got = parseSuggestions({ projects: [{ title: 'Order Book!', tracks: ['Quant Finance'], about: 'x', milestones: [{ title: 'Matching', needs: 'python-core, data-structures' }] }, { title: 'Empty', milestones: [] }, 'junk'] })
     expect(got).toEqual([{ id: 'order-book', title: 'Order Book!', tracks: ['quant-finance'], about: 'x', milestones: [{ id: 'matching', title: 'Matching', needs: ['python-core', 'data-structures'] }] }])
+  })
+})
+
+describe('a waiting project pulls its course forward', () => {
+  // python open; agents needs ml, ml needs python (a locked chain); sql open; os under way
+  const mods = [
+    { id: 'python', title: 'Python', requires: [] },
+    { id: 'ml', title: 'Machine Learning', requires: ['python'] },
+    { id: 'agents', title: 'Agentic Systems', requires: ['ml'] },
+    { id: 'sql', title: 'SQL', requires: [] },
+    { id: 'os', title: 'Operating Systems', requires: [] }
+  ]
+  const st: Record<string, 'locked' | 'open' | 'active' | 'passed'> = { python: 'open', ml: 'locked', agents: 'locked', sql: 'open', os: 'active' }
+  const status = (id: string) => st[id]
+  /** One milestone built, the next waiting on these */
+  const built = (id: string, waiting: string[]): ProjectRow => ({
+    id,
+    title: id.toUpperCase(),
+    tracks: ['Software Engineering'],
+    milestones: [
+      { id: 'm1', title: `${id} 1`, status: 'done', waiting: [], hours: 10, needs: [] },
+      { id: 'm2', title: `${id} 2`, status: waiting.length ? 'locked' : 'open', waiting, hours: 10, needs: waiting }
+    ],
+    done: 1
+  })
+
+  it('a project being built that waits on an open course pulls that course, saying why', () => {
+    expect(pulledModules([built('rt', ['sql'])], { building: ['rt'] }, mods, status)).toEqual([{ module: 'sql', need: 'sql', project: 'rt', why: 'For RT: SQL opens its next milestone' }])
+  })
+
+  it('a locked course gives way to the nearest open one on its requires chain', () => {
+    expect(pulledModules([built('rt', ['agents'])], { building: ['rt'] }, mods, status)).toEqual([{ module: 'python', need: 'agents', project: 'rt', why: 'For RT: Python leads to Agentic Systems, which its next milestone needs' }])
+  })
+
+  it('at most two, in queue order then milestone order', () => {
+    const rows = [built('a', ['sql', 'agents']), built('b', ['python'])]
+    expect(pulledModules(rows, { building: ['b', 'a'] }, mods, status).map((p) => [p.module, p.project])).toEqual([
+      ['python', 'b'],
+      ['sql', 'a']
+    ])
+    expect(pulledModules([built('a', ['sql', 'agents'])], { building: ['a'] }, mods, status).map((p) => p.module)).toEqual(['sql', 'python'])
+    expect(pulledModules(rows, { building: ['b', 'a'] }, mods, status, 1).map((p) => p.module)).toEqual(['python'])
+  })
+
+  it('with nothing being built, the top of Up next; never a project only waiting in Later', () => {
+    expect(pulledModules([built('x', ['sql']), built('y', ['python'])], { building: [], order: ['y', 'x'] }, mods, status).map((p) => p.module)).toEqual(['python'])
+    const later: ProjectRow = { ...built('l', []), milestones: [{ id: 'm1', title: 'l 1', status: 'locked', waiting: ['sql'], hours: 10 }], done: 0 }
+    expect(pulledModules([later], { building: [] }, mods, status)).toEqual([])
+  })
+
+  it('a project whose next milestone is open pulls nothing', () => {
+    expect(pulledModules([built('ok', [])], { building: ['ok'] }, mods, status)).toEqual([])
+  })
+})
+
+describe('the course that opens the most projects', () => {
+  const mods = [
+    { id: 'python', title: 'Python', requires: [] },
+    { id: 'ml', title: 'Machine Learning', requires: ['python'] },
+    { id: 'sql', title: 'SQL', requires: [] }
+  ]
+  const st: Record<string, 'locked' | 'open' | 'active' | 'passed'> = { python: 'open', ml: 'locked', sql: 'open' }
+  const status = (id: string) => st[id]
+  const later = (id: string, waiting: string[]): ProjectRow => ({ id, title: id, tracks: [], milestones: [{ id: 'm1', title: 'one', status: 'locked', waiting, hours: 10, needs: waiting }], done: 0 })
+
+  it('names the open course that alone opens the most first milestones; ties by queue order', () => {
+    const rows = [later('a', ['sql']), later('b', ['python']), later('c', ['python']), later('d', ['python', 'sql']), later('e', ['python'])]
+    // d needs both, so neither alone opens it
+    expect(unlockHint(rows, { building: [] }, mods, status)).toEqual({ module: 'python', count: 3, opens: true })
+    expect(unlockHint([...rows.slice(0, 3), later('f', ['sql'])], { building: [] }, mods, status)).toEqual({ module: 'sql', count: 2, opens: true })
+  })
+
+  it('when every waiting project needs a locked course, the open one that leads there', () => {
+    expect(unlockHint([later('a', ['ml']), later('b', ['ml', 'sql'])], { building: [] }, mods, status)).toEqual({ module: 'python', count: 2, opens: false, via: 'ml' })
+  })
+
+  it('hidden while Up next can fill Building, or when nothing can be started', () => {
+    const ready: ProjectRow = { id: 'r', title: 'r', tracks: [], milestones: [{ id: 'm1', title: 'one', status: 'open', waiting: [], hours: 10 }], next: { id: 'm1', title: 'one', hours: 10 }, done: 0 }
+    const rows = [ready, later('a', ['python'])]
+    expect(unlockHint(rows, { building: [], cap: 1 }, mods, status)).toBeNull()
+    // Two places and one ready: Building can't be filled from it
+    expect(unlockHint(rows, { building: [] }, mods, status)?.module).toBe('python')
+    expect(unlockHint([later('a', ['ml'])], { building: [] }, mods, (id) => (id === 'python' ? 'active' : st[id]))).toBeNull()
   })
 })
