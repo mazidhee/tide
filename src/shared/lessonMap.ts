@@ -115,12 +115,16 @@ export function lessonMap(turns: MapTurn[], blocks: (Block[] | null)[], opts: { 
   // The warm-up: as the window has it while it runs, else as the opening message says it went
   const warm = opts.warmup ?? (turns[0]?.role === 'user' ? warmupStageOf(turns[0].content) : null)
   if (warm) map.warmup = warm
-  // Reported if any reply moved a step itself
-  map.reported = blocks.some((bs) => bs?.some((b) => b.kind === 'progress' && (b.report.step || b.report.passed || b.report.skipped)))
+  // Reported if any reply moved a step itself; the replies before the first such report are walked
+  // (a lesson whose earlier reports weren't kept, e.g. tool calls from before they were folded in,
+  // still gets its step starts where they happened)
+  const moves = (bs: Block[] | null | undefined) => !!bs?.some((b) => b.kind === 'progress' && (b.report.step || b.report.passed || b.report.skipped))
+  const firstReport = blocks.findIndex(moves)
+  map.reported = firstReport >= 0
   let planned = ''
-  // Not reported: where each reply starts a step, by the walk main uses (one source for step labels)
+  // Not reported (yet): where each reply starts a step, by the walk main uses (one source for step labels)
   const walked = new Map<number, number>()
-  if (!map.reported) {
+  if (firstReport !== 0) {
     const at: number[] = []
     const replies: string[] = []
     const moved: boolean[] = []
@@ -238,7 +242,7 @@ export function lessonMap(turns: MapTurn[], blocks: (Block[] | null)[], opts: { 
     })
     // Not reported: the walk says this reply starts a later step. It starts after the reply's last
     // mark (at the top when they asked to move on)
-    const next = walked.get(i)
+    const next = firstReport < 0 || i < firstReport ? walked.get(i) : undefined
     if (next !== undefined && map.phase === 'steps' && next > map.current) {
       const lastMark = bs.map((b) => b.kind).lastIndexOf('grade')
       const block = pendingSkip !== null || lastMark < 0 ? 0 : lastMark + 1
