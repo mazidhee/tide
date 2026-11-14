@@ -660,6 +660,48 @@
 .wr-add {
   grid-row: 1;
   grid-column: 2;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.wr-new {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 10px 10px 10px 14px;
+  border-radius: var(--radius-m);
+  background: var(--bg-raised);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.wr-new input {
+  flex: 1;
+  min-width: 220px;
+  border: 0;
+  background: none;
+  outline: none;
+  font-family: 'Instrument Serif', var(--font-read-serif), serif;
+  font-size: 22px;
+  color: var(--ink);
+}
+.wr-new input::placeholder {
+  color: var(--ink-muted);
+}
+.wr-new-where {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+.wr-new-where span {
+  margin-right: 4px;
+}
+.wr-new-where .btn.on {
+  background: var(--bg-active);
+  color: var(--ink);
 }
 .wr-cols {
   display: grid;

@@ -59,6 +59,17 @@ export function WritingView() {
     }
   }
 
+  // A new piece from nothing: a title (or none) and which writing folder it goes in
+  const [composing, setComposing] = useState(false)
+  const [newTitle, setNewTitle] = useState('')
+  const [newRoot, setNewRoot] = useState('')
+  const createPiece = () => {
+    const root = newRoot || roots[0]?.root || ''
+    setComposing(false)
+    setNewTitle('')
+    void startDraft({ title: newTitle.trim() || 'Untitled', group: '', from: 'things' }, root)
+  }
+
   const drill = (h: Habit) => app.setView({ kind: 'session', mode: 'quiz', scope: { kind: 'none' }, topic: drillTopic(h), options: { length: 6, difficulty: 'normal' }, nonce: Date.now() })
 
   const external = roots.filter((r) => !r.vault)
@@ -71,10 +82,31 @@ export function WritingView() {
           <p className="wr-lede">
             Reviewed, never written for you. Reading from {roots.map((r) => r.label).join(' and ') || 'your notes'}.
           </p>
-          <button className="btn small ghost wr-add" onClick={() => void addFolder()} title="Another folder of writing Tide can read, such as an Obsidian vault of essays">
-            <Icon name="plus" size={13} />
-            Add a folder
-          </button>
+          <div className="wr-add">
+            <button className="btn small ghost" onClick={() => void addFolder()} title="Another folder of writing Tide can read, such as an Obsidian vault of essays">
+              Add a folder
+            </button>
+            <button className="btn small primary" onClick={() => (setComposing((c) => !c), setNewRoot((r) => r || roots[0]?.root || ''))} aria-expanded={composing}>
+              <Icon name="plus" size={13} />
+              New piece
+            </button>
+          </div>
+          {composing && (
+            <form className="wr-new" onSubmit={(e) => (e.preventDefault(), createPiece())}>
+              <input autoFocus value={newTitle} onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setComposing(false)} placeholder="Title, or leave it for later" aria-label="Title" />
+              {roots.length > 1 && (
+                <div className="wr-new-where" role="group" aria-label="Where">
+                  <span>In</span>
+                  {roots.map((r) => (
+                    <button type="button" key={r.root} className={`btn small ghost${(newRoot || roots[0]?.root) === r.root ? ' on' : ''}`} aria-pressed={(newRoot || roots[0]?.root) === r.root} onClick={() => setNewRoot(r.root)}>
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button type="submit" className="btn small primary">Start writing</button>
+            </form>
+          )}
         </header>
 
         <div className="wr-cols">
