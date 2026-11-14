@@ -151,6 +151,29 @@ export function setFrontTags(md: string, tags: string[]): string {
   return replaceHead(md, m, next.join(nl))
 }
 
+/**
+ * The note with its front matter `title` set, nothing else changed (Obsidian and Quartz read the
+ * same key). An `id` that was the old title follows it. A missing key is added first; a missing
+ * front matter is added at the top.
+ */
+export function setFrontTitle(md: string, title: string): string {
+  const t = title.replace(/\s+/g, ' ').trim()
+  if (!t) return md
+  const nl = md.includes('\r\n') ? '\r\n' : '\n'
+  const value = /^[\w ,.'’()?!&-]+$/.test(t) && !/^[\d-]/.test(t) && !/: /.test(t) ? t : JSON.stringify(t)
+  const m = md.match(/^---\r?\n([\s\S]*?)(\r?\n)---[ \t]*(?:\r?\n|$)/)
+  if (!m) return `---${nl}title: ${value}${nl}---${nl}${md}`
+  const lines = m[1].split(/\r?\n/)
+  const unq = (v: string) => v.trim().replace(/^["']|["']$/g, '')
+  const at = lines.findIndex((l) => /^title:/.test(l))
+  const old = at >= 0 ? unq(lines[at].slice(6)) : ''
+  if (at >= 0) lines[at] = `title: ${value}`
+  else lines.unshift(`title: ${value}`)
+  const id = lines.findIndex((l) => /^id:/.test(l))
+  if (id >= 0 && old && (unq(lines[id].slice(3)) === old || /^untitled$/i.test(unq(lines[id].slice(3))))) lines[id] = `id: ${value}`
+  return replaceHead(md, m, lines.join(nl))
+}
+
 function replaceHead(md: string, m: RegExpMatchArray, head: string): string {
   const start = md.indexOf(m[1])
   return md.slice(0, start) + head + md.slice(start + m[1].length)

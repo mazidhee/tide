@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { EditorView } from '@codemirror/view'
 import { CATEGORY_LABEL, KIND_FOCUS, WRITING_KINDS, findAnchor, frontMatter, makeAnchor, pieceTitle, stackMargin, wordCount, type Overall, type PieceRecord, type WritingComment, type WritingKind } from '@shared/writing'
-import { dateLabel, fullDate, pieceTags, readMinutes, setFrontTags } from '@shared/writingMeta'
+import { dateLabel, fullDate, pieceTags, readMinutes, setFrontTags, setFrontTitle } from '@shared/writingMeta'
 import { writingImageUrl } from '@shared/writingMedia'
 import { readImageFile } from '../../lib/pastedImages'
 import { checkMechanics } from '@shared/writingCheck'
@@ -238,6 +238,15 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
     setAllTags((old) => [...new Set([...old, ...tags])].sort((a, b) => a.localeCompare(b)))
   }
 
+  /** The title, edited in place: only the front matter's title (and an id that matched it), then saved */
+  const setTitle = (title: string) => {
+    if (!title.trim() || title.trim() === pieceTitle(textRef.current, piece?.path ?? '')) return
+    const next = setFrontTitle(textRef.current, title)
+    if (next === textRef.current) return
+    onChange(next)
+    void saveNow()
+  }
+
   // ---------- Reviewing ----------
 
   const review = useCallback(
@@ -441,7 +450,21 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
 
       <div className={`wr-body${narrow ? ' narrow' : ''}${talk ? ' talking' : ''}`} ref={wrap}>
         <article className="wr-col">
-          <h1 className="wr-title">{pieceTitle(text, piece.path)}</h1>
+          <h1 className="wr-title">
+            <input
+              key={pieceTitle(text, piece.path)}
+              className="wr-title-input"
+              defaultValue={pieceTitle(text, piece.path)}
+              aria-label="Title"
+              placeholder="Untitled"
+              spellCheck
+              onBlur={(e) => setTitle(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.preventDefault(), e.currentTarget.blur())
+                if (e.key === 'Escape') ((e.currentTarget.value = pieceTitle(textRef.current, piece.path)), e.currentTarget.blur())
+              }}
+            />
+          </h1>
           <p className="wr-meta">
             <span title={fullDate(piece.written)}>Written {dateLabel(piece.written, Date.now())}</span>
             <span title={fullDate(edited)}>Edited {dateLabel(edited, Date.now())}</span>
