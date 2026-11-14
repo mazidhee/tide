@@ -205,6 +205,14 @@ describe('a visual in its sandbox', () => {
     expect(r.examples[2].steps).toBeGreaterThan(0)
   })
 
+  it('labels over a 3D scene must be one short line inside their own box', () => {
+    const p: string[] = r.sceneLabels.problems
+    expect(p.find((x) => /^At step 1, the label "A very long label/.test(x))).toMatch(/is 52 characters/)
+    expect(p.find((x) => /^At step 2, /.test(x))).toMatch(/"L3 cache, shared by all" wraps onto two lines/)
+    expect(p.find((x) => /^At step 3, /.test(x))).toMatch(/spills out of its box/)
+    expect(p.some((x) => /^At step 4/.test(x))).toBe(false)
+  })
+
   it('drawing every step once finds a step that throws and labels that overlap, then goes back to the start', () => {
     expect(r.audit.problems).toEqual(['Drawing step 2 failed: no data for step 2', 'At step 3, the labels "sum of exp = 39.47" and "weights sum = 1.00" overlap.'])
     expect(r.auditSteps).toMatchObject({ i: 0, n: 3 })

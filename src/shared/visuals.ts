@@ -376,12 +376,45 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
       if (cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity === 0) continue;
       var r = el.getBoundingClientRect();
       if (r.width < 2 || r.height < 2) continue;
-      out.push({ t: t.slice(0, 40), r: r });
+      out.push({ t: t.slice(0, 40), r: r, el: el, n: t.length });
     }
     return out;
   };
+  // A label over a 3D canvas: positioned over it, and narrower than most of it (a panel isn't a label)
+  var overCanvas = function (el, r) {
+    var cs = document.querySelectorAll('canvas');
+    for (var q = el, k = 0; q && k < 4; q = q.parentElement, k++) {
+      if (getComputedStyle(q).position !== 'absolute' && getComputedStyle(q).position !== 'fixed') continue;
+      for (var c = 0; c < cs.length; c++) {
+        var cr = cs[c].getBoundingClientRect();
+        if (cr.width > 40 && r.left < cr.right && r.right > cr.left && r.top < cr.bottom && r.bottom > cr.top && r.width < cr.width * 0.6) return true;
+      }
+    }
+    return false;
+  };
+  // The nearest box the text sits in (a background or a border of its own), within a few levels
+  var boxOf = function (el) {
+    for (var q = el, k = 0; q && k < 4; q = q.parentElement, k++) {
+      var cs = getComputedStyle(q), bg = cs.backgroundColor;
+      if ((bg && !/rgba\(.*,\s*0\)$|transparent/.test(bg)) || parseFloat(cs.borderTopWidth) > 0 || cs.boxShadow !== 'none') return q;
+    }
+    return null;
+  };
   var layoutProblems = function (where) {
     var found = [], ls = labels(), W = document.documentElement.clientWidth;
+    // Scene labels: short, one line, inside their own box
+    for (var m = 0; m < ls.length && found.length < 3; m++) {
+      var L = ls[m];
+      if (L.el.tagName === 'text' || !overCanvas(L.el, L.r)) continue;
+      var lh = parseFloat(getComputedStyle(L.el).lineHeight) || parseFloat(getComputedStyle(L.el).fontSize) * 1.3;
+      var box = boxOf(L.el);
+      if (box && box !== L.el) {
+        var br = box.getBoundingClientRect();
+        if (L.r.right > br.right + 2 || L.r.bottom > br.bottom + 2 || L.r.left < br.left - 2 || L.r.top < br.top - 2) { found.push(where + 'the label "' + L.t + '" spills out of its box.'); continue; }
+      } else if (box && (L.el.scrollWidth > L.el.clientWidth + 2 || L.el.scrollHeight > L.el.clientHeight + 2)) { found.push(where + 'the label "' + L.t + '" spills out of its box.'); continue; }
+      if (L.n > 40) { found.push(where + 'the label "' + L.t + '…" is ' + L.n + ' characters: a label over the scene is a name and a short number (40 at most); put the rest in the caption.'); continue; }
+      if (L.r.height > lh * 1.6) found.push(where + 'the label "' + L.t + '" wraps onto two lines: keep labels to one short line.');
+    }
     for (var i = 0; i < ls.length && found.length < 3; i++) {
       var a = ls[i].r;
       if (a.right > W + 2 || a.left < -2) { found.push(where + 'the label "' + ls[i].t + '" runs off the edge of the frame.'); continue; }
