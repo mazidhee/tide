@@ -34,6 +34,7 @@ export type View =
   | { kind: 'workshop'; id?: string; from?: { notebook?: string; topic?: string }; nonce?: number }
   | { kind: 'new-topic'; topic?: string; goal?: string; auto?: boolean; nonce?: number }
   // Open courses from GitHub (components/CoursesView.tsx): the catalogue, a course, or one of its lessons
+  | { kind: 'projects' }
   | { kind: 'courses'; id?: string; lesson?: string; area?: import('@shared/courses').CourseArea }
   | { kind: 'chat'; id?: string }
   | { kind: 'lab'; terminal: 'lab' | 'local'; topic?: string; nonce?: number }
@@ -161,7 +162,7 @@ const HOME: View = { kind: 'home' }
 export const tabRoot: { current: HTMLElement | null } = { current: null }
 
 const TABS_KEY = 'tide.tabs'
-const VIEW_KINDS = new Set<string>(['home', 'file', 'library', 'reading', 'reader', 'notebook', 'graph', 'study', 'daily', 'quiz', 'session', 'lessons', 'ladder', 'learn', 'practice', 'mock', 'workshop', 'new-topic', 'courses', 'chat', 'lab', 'coach', 'learner', 'wrapup', 'weekly', 'northstar', 'drill', 'maths', 'workout', 'sharp', 'design', 'code', 'ipynb', 'help', 'exam', 'settings'])
+const VIEW_KINDS = new Set<string>(['home', 'file', 'library', 'reading', 'reader', 'notebook', 'graph', 'study', 'daily', 'quiz', 'session', 'lessons', 'ladder', 'learn', 'practice', 'mock', 'workshop', 'new-topic', 'courses', 'projects', 'chat', 'lab', 'coach', 'learner', 'wrapup', 'weekly', 'northstar', 'drill', 'maths', 'workout', 'sharp', 'design', 'code', 'ipynb', 'help', 'exam', 'settings'])
 
 /** The tabs kept last time (the main window only), or one on Home */
 function loadTabs(): T.Tabs<View> {

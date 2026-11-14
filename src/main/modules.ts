@@ -314,7 +314,9 @@ export async function projectsView(o: { track?: string } = {}): Promise<ProjectR
     // The Projects plan's milestones are the project's, in the same order
     const done = new Set(p.milestones.filter((m, i) => plan?.milestones[i]?.status === 'done' || plan?.milestones.find((x) => x.title === m.title)?.status === 'done').map((m) => m.id))
     const st = projectState(p, gates, done)
-    out.push({ id: p.id, title: p.title, tracks: p.tracks.map((t) => cat.tracks.find((x) => x.id === t)?.title ?? t), trackIds: p.tracks, ...(p.about ? { about: p.about } : {}), ...(plan ? { notebook: link!.notebook } : {}), milestones: st.milestones.map((m, i) => ({ ...m, needs: p.milestones[i]?.needs ?? [] })), ...(st.next ? { next: { id: st.next.id, title: st.next.title, hours: st.next.hours || 10 } } : {}), done: done.size, ...(p.level ? { level: p.level } : {}) })
+    // The AI track may have no Tracks file of its own: it is called AI
+    const trackIds = [...new Set(p.tracks)]
+    out.push({ id: p.id, title: p.title, tracks: trackIds.map((t) => cat.tracks.find((x) => x.id === t)?.title ?? (t === AI_TRACK ? 'AI' : t)), trackIds, ...(p.about ? { about: p.about } : {}), ...(plan ? { notebook: link!.notebook } : {}), milestones: st.milestones.map((m, i) => ({ ...m, needs: p.milestones[i]?.needs ?? [] })), ...(st.next ? { next: { id: st.next.id, title: st.next.title, hours: st.next.hours || 10 } } : {}), done: done.size, ...(p.level ? { level: p.level } : {}) })
   }
   return out
 }

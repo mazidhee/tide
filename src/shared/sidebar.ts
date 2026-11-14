@@ -3,6 +3,7 @@ export const SIDEBAR_ITEMS = [
   { id: 'home', label: 'Home' },
   { id: 'learn', label: 'Learn' },
   { id: 'courses', label: 'Courses' },
+  { id: 'projects', label: 'Projects' },
   { id: 'chat', label: 'Chat' },
   { id: 'practice', label: 'Practice' },
   { id: 'library', label: 'Library' },
