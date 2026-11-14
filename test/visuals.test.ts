@@ -152,7 +152,11 @@ describe("Claude's instructions", () => {
     for (const sys of [CLAUDE_TUTOR_SYSTEM, CLAUDE_LESSON_SYSTEM]) {
       expect(sys).toContain(VISUAL_GUIDE)
     }
-    expect(VISUAL_GUIDE.match(/```visual/g)).toHaveLength(2)
+    expect(VISUAL_GUIDE.match(/```visual/g)).toHaveLength(3)
+    expect(VISUAL_GUIDE.match(/```draw/g)).toHaveLength(2)
+    // Pictures lead, unasked, using the kits
+    expect(VISUAL_GUIDE).toMatch(/without being asked/)
+    expect(VISUAL_GUIDE).toMatch(/TideMachine\.python/)
     expect(VISUAL_GUIDE).toMatch(/visual\.steps/)
     expect(VISUAL_GUIDE).toMatch(/keyboard accessible/i)
   })

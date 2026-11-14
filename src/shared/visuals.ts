@@ -20,10 +20,28 @@
  *   parseFrameMessage before Tide acts on it.
  */
 
+import { KIT_VISUALS } from './kitVisuals'
+
 export const VISUAL_SCHEME = 'tide-visual'
+
+/** The ids of Tide's own kit visuals, for the tutor */
+const kitVisualIds = () => KIT_VISUALS.map((v) => v.id).join(', ')
 
 /** Whether a fenced block is a visual: labelled visual (or html-visual, which some write) */
 export const isVisualSource = (lang: string) => /^(visual|html-visual|tide-visual)$/i.test(lang.trim())
+
+/** Whether a fenced block asks for a visual of a concept (```draw): Tide's own, a kept one, or one written once by the visual model */
+export const isDrawSource = (lang: string) => /^draw$/i.test(lang.trim())
+
+/** What a ```draw block asks for: concept: …, show: … (or just the concept on its own) */
+export function parseDraw(text: string): { concept: string; show: string } | null {
+  const t = text.trim()
+  if (!t) return null
+  const field = (k: string) => new RegExp(`^\\s*${k}\\s*:\\s*(.+)$`, 'im').exec(t)?.[1].trim() ?? ''
+  const concept = (field('concept') || (/^\s*\w+\s*:/.test(t) ? '' : t.split('\n')[0])).slice(0, 120)
+  const show = field('show').slice(0, 400)
+  return concept ? { concept, show } : null
+}
 
 /**
  * A block looks complete: it ends at a closing tag and its <script> tags are balanced. The text
@@ -507,11 +525,15 @@ export function fromBase64Url(s: string): string {
   return new TextDecoder().decode(bytes)
 }
 
-/** Largest visual Tide will run, in characters */
+/** Largest visual a lesson keeps, in characters */
 export const MAX_VISUAL = 60_000
+/** Largest 3D scene (a module part's big picture, main/conceptVisuals) */
+export const MAX_SCENE = 140_000
+/** Largest document a frame is given: a scene, or a visual with its Python trace in front */
+export const MAX_FRAME = 240_000
 
 export function frameUrl(host: string, code: string, theme: VisualTheme | null): string {
-  return `${VISUAL_SCHEME}://${host}/?c=${toBase64Url(code.slice(0, MAX_VISUAL))}&t=${toBase64Url(JSON.stringify(theme ?? null))}`
+  return `${VISUAL_SCHEME}://${host}/?c=${toBase64Url(code.slice(0, MAX_FRAME))}&t=${toBase64Url(JSON.stringify(theme ?? null))}`
 }
 
 /** The frame's document for a request to tide-visual: (main's protocol handler), or null to refuse it */
@@ -525,7 +547,7 @@ export function frameResponse(url: string, method = 'GET'): { body: string; head
   }
   if (u.protocol !== `${VISUAL_SCHEME}:` || !isFrameHost(u.hostname) || (u.pathname !== '/' && u.pathname !== '')) return null
   const c = u.searchParams.get('c')
-  if (!c || c.length > MAX_VISUAL * 2) return null
+  if (!c || c.length > MAX_FRAME * 2) return null
   let code: string
   let theme: VisualTheme | null = null
   try {
@@ -716,52 +738,70 @@ visual.steps(plan.map(p => p.say), i => {
 })
 </script>`
 
-const EXAMPLE_SLIDER = `<title>A rise in income shifts demand</title>
-<label>Income shift <input id="s" type="range" min="0" max="40" value="0" aria-describedby="out"></label> <span id="out" class="mono"></span>
-<svg id="g" viewBox="0 0 420 260" width="420" role="img" aria-label="Supply and demand"></svg>
+
+const EXAMPLE_KIT = `<title>Signed bytes: the top bit weighs −128</title>
+<div id="reg"></div>
 <script>
-// Demand P = 100 - Q + s, supply P = 20 + Q: equilibrium Q* = (80 + s) / 2, P* = 20 + Q*
-const s = document.getElementById('s'), out = document.getElementById('out'), g = document.getElementById('g')
-const X = q => 40 + q * 3.4, Y = p => 230 - p * 1.8
-function draw() {
-  const k = +s.value, q = (80 + k) / 2, p = 20 + q
-  g.innerHTML = \`
-    <line x1="40" y1="230" x2="400" y2="230" stroke="var(--line-strong)"/><line x1="40" y1="20" x2="40" y2="230" stroke="var(--line-strong)"/>
-    <line x1="\${X(0)}" y1="\${Y(20)}" x2="\${X(100)}" y2="\${Y(120)}" stroke="var(--c1)" stroke-width="2"/>
-    <line x1="\${X(0)}" y1="\${Y(100)}" x2="\${X(100)}" y2="\${Y(0)}" stroke="var(--muted)" stroke-dasharray="4 4"/>
-    <line x1="\${X(0)}" y1="\${Y(100 + k)}" x2="\${X(100 + k)}" y2="\${Y(0)}" stroke="var(--c2)" stroke-width="2" style="transition: all .25s"/>
-    <circle cx="\${X(q)}" cy="\${Y(p)}" r="5" fill="var(--accent)"/>
-    <text x="\${X(q) + 8}" y="\${Y(p) - 8}">Q* \${q.toFixed(1)}, P* \${p.toFixed(1)}</text>
-    <text x="\${X(96)}" y="\${Y(118)}" fill="var(--c1)">supply</text><text x="\${X(70 + k)}" y="\${Y(36)}" fill="var(--c2)">demand</text>\`
-  out.textContent = \`shift +\${k}\`
-}
-s.addEventListener('input', draw)
-s.addEventListener('change', () => visual.report(\`moved demand up by \${s.value}: equilibrium is now Q* = \${((80 + +s.value) / 2).toFixed(1)}, P* = \${(20 + (80 + +s.value) / 2).toFixed(1)}\`, { shift: +s.value }))
-visual.onReset(() => { s.value = 0; draw() })
-draw()
+const reg = TideMachine.bits('#reg', { n: 8, signed: true, value: 5 })
+const values = [5, -5, 127, -128]
+visual.steps(values.map(v => \`\${v} is \${TideMachine.bin(v, 8)}: add the place values of the lit bulbs.\`), i => reg.set(values[i]))
 </script>`
+
+const EXAMPLE_TRACE = `<title>A list holds references</title>
+<script type="text/x-python">
+row = [0] * 3
+grid = [row] * 2
+grid[0][0] = 5
+print(grid)
+</script>
+<div id="py"></div>
+<script>
+const py = TideMachine.python('#py')
+visual.steps(py.captions, py.draw)
+</script>`
+
+/** The computing kit, as the tutor (and the visual model) is told it */
+export const KIT_GUIDE = `TideMachine, Tide's computing kit, is loaded in every frame too. Build with it rather than drawing hardware or memory by hand: it is checked, themed and accessible, and each part reports what the learner does.
+  - TideMachine.bits(el, {n, value, signed, label, onChange}): a register of switches and light bulbs with place values (−2^(n−1) for the top bit when signed), the sum, and hex under each nibble. .set(v) .get() .mark(indexes, note).
+  - TideMachine.circuit(el, spec): gates and wires that light as signals settle, one gate delay at a time. spec {inputs: ['A', 'B'], gates: [{id: 'g1', type: 'XOR', in: ['A', 'B']}], outputs: [{id: 'S', from: 'g1'}]}; types AND OR NOT NAND NOR XOR XNOR, blocks HA FA MUX (ports 'fa0.cout'); laid out by depth. Ready-made: TideMachine.circuits.halfAdder() fullAdder() mux2() rippleAdder(4). .set(inputs) .flip(inputs) .stepsFor(inputs, before) → {captions, draw}. TideMachine.truthTable(el, circuit).
+  - TideMachine.memory(el, {size, base, cols}): addressed bytes. .writeInt(addr, v, {size, endian: 'little' | 'big', label}) .writeString(addr, s) .write(addr, bytes) .mark(addr, len, {label}) .pointer(fromAddr, toAddr) .focus(addr, len) .clear().
+  - TideMachine.cpu(el, {asm, data}): a tiny 8-bit CPU (R0–R3, PC, IR, ALU, Z, 16 bytes of memory, buses) running LOADI LOAD STORE ADD SUB AND OR JMP JZ HALT, one step each for fetch, decode and execute: visual.steps(cpu.captions, cpu.draw).
+  - TideMachine.python(el, {digits}): Python's frames, names, objects (type, id, refs) and the arrows between them, from a real trace: put the code (under 20 lines) in a <script type="text/x-python"> in the visual and Tide runs it under a tracer before the frame starts. visual.steps(py.captions, py.draw).
+  - TideMachine.stackHeap(el, {steps: [{frames: [{name, vars: [{name, text} | {name, to: id}]}], objects: [{id, title, kind: 'atom' | 'seq' | 'map', value, cells: [{label, to | text}]}], say}]}): stack and heap for C, Rust or anything else, step by step.
+  - TideMachine.die(el, {cores}) and TideMachine.gpu(el, {sms}): 3D scenes of a CPU die (cores, L1, L2, L3, memory controller, DRAM, a cache miss) and a GPU (SMs, a warp of 32 lanes, divergence, L2, HBM), captioned in steps. TideMachine.scene(el, {parts: [{id, label, note, box: [w, h, d], at: [x, y, z], color: 'c1', info}], lines, steps: [{say, focus: [ids], labels: [ids], show, view: {camera, target}}]}) builds any other 3D scene of boxes with labels, orbit, focus and picking; .ready gives {THREE, scene, render} for custom geometry.
+  - Helpers: TideMachine.bin(v, n) hex(v, digits) signed(u, n) unsigned(v, n) bytesOf(v, size, endian) assemble(asm).`
 
 /**
  * What Claude is told about visuals (CLAUDE_TUTOR_SYSTEM and CLAUDE_LESSON_SYSTEM only: Gemma
  * keeps to the fixed simulations and mermaid).
  */
-export const VISUAL_GUIDE = `- A custom visual: when the idea has moving parts or a process that none of the fixed simulation kinds shows exactly (backprop through one weight, a B-tree split, attention weights for a real sentence, a supply and demand shift, TCP's handshake, a hash map resize), write a small interactive explainer in a fenced block whose language is visual. Tide runs it inside the lesson, in a sandboxed frame. One visual per answer, then one sentence on what to look at or try. Prefer a fixed simulation when one fits, and mermaid for a static structure.
-  Format: an HTML fragment (no <html> or <head> needed): an optional <title>, inline <style>, SVG or a <canvas>, and inline <script>. It must be self-contained: the frame has no network at all, so no CDN libraries, fetch, fonts, images or links (only data: URLs you make yourself), no localStorage, no alert, no iframes. Under about 150 lines.
+export const VISUAL_GUIDE = `- Pictures lead. When an idea has a physical, spatial, memory or process picture (how hardware works, numbers as bits, data structures, an algorithm running, Python's memory, ML mechanics, a maths object, money moving between accounts), open that step of the lesson with a visual, before or beside your words, without being asked: at least one in every such step. Keep plain text for ideas with no picture (a definition, a date, a judgement). One visual per message, then one sentence on what to look at or try.
+- For a standard idea, a \`\`\`draw block: \`concept: <the idea in a few words>\` and, on the next line, \`show: <what it must make visible, with the numbers you are using>\`. Tide shows its own checked visual for that concept when it has one, else one kept from an earlier lesson, else its visual model writes one once and keeps it. Tide's own: ${kitVisualIds()}.
+- For this exact example, its numbers or the learner's code, write a custom visual in a fenced block whose language is visual. Tide runs it inside the lesson, in a sandboxed frame. Prefer a fixed simulation when one fits, and mermaid for a static structure.
+  Format: an HTML fragment (no <html> or <head> needed): an optional <title>, inline <style>, SVG or a <canvas>, and inline <script>. It must be self-contained: the frame has no network at all, so no CDN libraries, fetch, fonts, images or links (only data: URLs you make yourself), no localStorage, no alert, no iframes. Under about 150 lines drawn by hand; built on the kits, up to about 300.
   Tide's host API, the global visual:
   - visual.steps(captions, draw, ms?): Tide shows Back, Play, Step and Reset with the caption for the step; draw(i) paints step i (from 0). Compute every state up front so any step can be drawn from i alone.
   - visual.report(text, data?): tell the tutor what the learner just did and what it shows now, with the numbers (on each change they make, not each frame).
   - visual.select(label, data?): the learner clicked or pressed Enter on a part; Tide offers "Ask about this" for it.
   - visual.onReset(fn), visual.reducedMotion, visual.theme.
   Maths helpers are already loaded in the frame as TideMath (served by Tide, no network): TideMath.parse(expr, ['x']) is Tide's safe expression reader (.f(x)); TideMath.plane(el, {x:[lo,hi], y:[lo,hi]}) is an SVG plane with axes and .fn(f or "x^2"), .point([x,y], {drag:true, onMove}), .segment, .line, .vector, .polygon, .text; TideMath.slider(label, {min,max,step,value,into}, onInput); TideMath.predict(question, onLocked) holds the answer back until they guess; TideMath.goal(text) returns met(true) to call when they reach it; TideMath.katex(el, tex) and TideMath.three() (three.js with THREE.OrbitControls) load on first use and return promises; TideMath.fmt(v, digits). No other libraries.
-  Colours only from Tide's CSS variables, so every theme works: --bg --surface --ink --ink-soft --muted --line --line-strong --accent --accent-soft --pos --neg --good --bad --warn and --c1 to --c6 for series; fonts --font and --mono. Body text and SVG text already follow the theme.
+  ${KIT_GUIDE}
+  Colours only from Tide's CSS variables, so every theme works: --bg --surface --ink --ink-soft --muted --line --line-strong --accent --accent-soft --pos --neg --good --bad --warn and --c1 to --c6 for series; fonts --font and --mono. Body text and SVG text already follow the theme. One accent for what matters now, neutrals for the rest.
   Make it legible and minimal: label parts directly, text at 12px or more, nothing decorative; leave room so no two labels overlap at any step (Tide draws every step before showing it and sends back overlaps). Animate only to show a change (a short transition, never a loop for its own sake). Keyboard accessible: real <button> and <input> elements with labels; a clickable SVG part gets tabindex="0", role="button", an aria-label and Enter. Give an SVG a viewBox and the same width (width="640" for viewBox="0 0 640 …"), so its text stays the size you wrote and it only shrinks on a narrow screen; at most about 420px tall. Every number is computed in the script, never typed in by hand.
   When Tide says what the learner did in a visual, answer about exactly that state, then often ask them to predict the next step as an <ask>; they check it by pressing Step.
-  Two short examples:
-\`\`\`visual
-${EXAMPLE_STEPS}
+  Examples:
+\`\`\`draw
+concept: two's complement
+show: -5 in 8 bits: invert 5 and add one
 \`\`\`
 \`\`\`visual
-${EXAMPLE_SLIDER}
+${EXAMPLE_KIT}
+\`\`\`
+\`\`\`visual
+${EXAMPLE_TRACE}
+\`\`\`
+\`\`\`visual
+${EXAMPLE_STEPS}
 \`\`\``
 
 /** Said with Show me or Draw it when Claude teaches: a custom visual is one of its choices */
@@ -769,9 +809,9 @@ export const SHOW_ME_VISUAL_NOTE = `(Tide: you can also answer this with a custo
 
 /** The repair call's instructions */
 export const VISUAL_REPAIR_SYSTEM = `You fix interactive visuals that a tutor wrote for Tide, a study app. A visual is an HTML fragment (SVG or canvas, inline style and script) that runs in a sandboxed frame with no network: no external scripts, fonts, images, fetch, storage, iframes or alert. Tide's host API is the global visual: visual.steps(captions, draw, ms?), visual.report(text, data?), visual.select(label, data?), visual.predict(question, value), visual.goal(text, met), visual.onReset(fn), visual.theme. Colours come from CSS variables (--bg --ink --muted --line --accent --accent-soft --pos --neg --good --bad --warn --c1 to --c6).
-Reply with the corrected visual only, as one fenced block whose language is visual. Keep what it teaches and how it looks; fix the errors reported and anything else that would break it. TideMath (Tide's maths helpers: parse, plane, slider, predict, goal, katex, three, fmt) is available in the frame; any other library is not: rewrite that part with TideMath or plain JavaScript and SVG.`
+Reply with the corrected visual only, as one fenced block whose language is visual. Keep what it teaches and how it looks; fix the errors reported and anything else that would break it. TideMath (Tide's maths helpers: parse, plane, slider, predict, goal, katex, three, fmt) and TideMachine (Tide's computing kit: bits, circuit, circuits, truthTable, memory, cpu, python, stackHeap, die, gpu, scene, three, bin, hex) are available in the frame; any other library is not: rewrite that part with them or plain JavaScript and SVG. A <script type="text/x-python"> is traced by Tide before the frame starts (TideMachine.python replays it): keep it.`
 
-export const repairPrompt = (code: string, errors: string[]) => `This visual failed when Tide ran it.\n\nErrors:\n${errors.map((e) => `- ${e}`).join('\n')}\n\nThe visual:\n\`\`\`visual\n${code.slice(0, MAX_VISUAL)}\n\`\`\``
+export const repairPrompt = (code: string, errors: string[]) => `This visual failed when Tide ran it.\n\nErrors:\n${errors.map((e) => `- ${e}`).join('\n')}\n\nThe visual:\n\`\`\`visual\n${code.slice(0, MAX_SCENE)}\n\`\`\``
 
 /** When the repair fails too: something Tide can always draw */
 export const VISUAL_FALLBACK_SYSTEM = `A custom interactive visual could not be shown in a lesson. Give the learner the same idea in a form Tide always draws: a mermaid diagram (flowchart, sequenceDiagram or stateDiagram-v2, under about 12 nodes, each node an id with its label in quotes) in a fenced block whose language is mermaid, or a Markdown table tracing the steps with the exact numbers. Reply with that block and one line saying what to look at, nothing else.`

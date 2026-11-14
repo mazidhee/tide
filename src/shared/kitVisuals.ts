@@ -167,20 +167,20 @@ visual.steps(gpu.captions, gpu.draw, 3500)
 </script>`
 
 export const KIT_VISUALS: KitVisual[] = [
-  { id: 'binary-place-value', title: 'Eight bits as switches and bulbs', shows: 'a byte as switches and bulbs, place values adding up to its value, and its hex', match: /\b(binary|base[- ]?2|bits?|bytes?|place values?|switch(es)?|light bulbs?)\b/i, code: BINARY },
-  { id: 'twos-complement', title: "Two's complement", shows: 'flip the bits and add one; the top bit weighs −128', match: /\b(two'?s[- ]complement|signed (integers?|numbers?)|negative (numbers?|binary)|overflow)\b/i, code: SIGNED },
+  { id: 'binary-place-value', title: 'Eight bits as switches and bulbs', shows: 'a byte as switches and bulbs, place values adding up to its value, and its hex', match: /\bbinary(?! (search|trees?|heaps?|classif\w*|options?|relations?|operations?))\b|\bbase[- ]?2\b|\bplace values?\b|\bbits and bytes\b/i, code: BINARY },
+  { id: 'twos-complement', title: "Two's complement", shows: 'flip the bits and add one; the top bit weighs −128', match: /\b(two'?s[- ]complement|signed (integers?|numbers?)|negative (numbers? in )?binary|integer overflow)\b/i, code: SIGNED },
   { id: 'hexadecimal', title: 'One hex digit is four bits', shows: 'a 16-bit register with each hex digit under its four bits', match: /\b(hex(adecimal)?|base[- ]?16|nibbles?)\b/i, code: HEX },
-  { id: 'half-adder', title: 'A half adder', shows: 'XOR and AND gates whose wires light as 1 + 1 settles, with the truth table', match: /\b(logic gates?|gates?|half[- ]adder|boolean (logic|algebra)|xor|and gate|or gate|truth tables?)\b/i, code: GATES },
-  { id: 'full-adder', title: 'A full adder', shows: 'two half adders and an OR adding three bits, settling gate by gate', match: /\bfull[- ]adder\b/i, code: FULL_ADDER },
-  { id: 'ripple-carry-adder', title: 'A 4-bit ripple-carry adder', shows: '7 + 1 with the carry rippling through four full adders', match: /\b(ripple[- ]carry|adders?|binary addition|circuits?|carry)\b/i, code: RIPPLE },
-  { id: 'multiplexer', title: 'A multiplexer', shows: 'a select line choosing between two inputs', match: /\b(multiplexers?|mux|selectors?)\b/i, code: MUX },
-  { id: 'fetch-decode-execute', title: 'Fetch, decode, execute', shows: 'a tiny CPU running 5 + 3: PC, IR, registers, ALU, buses and memory', match: /\b(cpu|processor|fetch|decode|execute|instruction cycle|registers?|alu|program counter|machine code|assembly|von neumann)\b/i, code: CPU },
-  { id: 'memory-bytes', title: 'An int in memory', shows: 'addressed bytes, a little- and a big-endian int, a pointer', match: /\b(memory|ram|address(es)?|endian(ness)?|pointers?|bytes in memory)\b/i, code: MEMORY },
-  { id: 'python-names-objects', title: 'Names point at objects', shows: 'a real trace of a = [1, 2]; b = a; b.append(3): one list, two names', match: /\b(python (names|variables|objects|memory|lists?)|names and objects|references?|aliasing|mutab(le|ility)|lists? as arrays|id\(\)|is vs ==)\b/i, code: PY_NAMES },
-  { id: 'python-call-frames', title: 'Call frames', shows: 'a real trace of recursive factorial(4): frames pushed and popped', match: /\b(call (stack|frames?)|stack frames?|recursion|recursive|function calls?|the stack)\b/i, code: PY_FRAMES },
-  { id: 'python-int-storage', title: 'How Python stores an int', shows: 'ints as objects: CPython base-2^30 digits, sizes, small-int cache', match: /\b(how (python|an int|ints?) (is )?stored|int objects?|bignums?|arbitrary precision|integers? in python)\b/i, code: PY_INT },
-  { id: 'cpu-die-caches', title: 'Inside a CPU', shows: '3D die: cores, L1, L2, L3, memory controller, DRAM, and a cache miss', match: /\b(caches?|cache (lines?|miss(es)?|hierarchy)|memory hierarchy|cores?|die|latency|l1|l2|l3|dram)\b/i, code: DIE },
-  { id: 'gpu-sms-warps', title: 'Inside a GPU', shows: '3D GPU: SMs, a warp of 32 lanes, divergence, L2 and HBM', match: /\b(gpus?|cuda|warps?|sms?|streaming multiprocessors?|simt|hbm|kernels? launch)\b/i, code: GPU }
+  { id: 'half-adder', title: 'A half adder', shows: 'XOR and AND gates whose wires light as 1 + 1 settles, with the truth table', match: /\b(logic gates?|half[- ]adders?|boolean (logic|algebra)|xor gates?|and gates?|or gates?|nand|truth tables?)\b/i, code: GATES },
+  { id: 'full-adder', title: 'A full adder', shows: 'two half adders and an OR adding three bits, settling gate by gate', match: /\bfull[- ]adders?\b/i, code: FULL_ADDER },
+  { id: 'ripple-carry-adder', title: 'A 4-bit ripple-carry adder', shows: '7 + 1 with the carry rippling through four full adders', match: /\b(ripple[- ]carry|adders?|binary addition|combinational circuits?)\b/i, code: RIPPLE },
+  { id: 'multiplexer', title: 'A multiplexer', shows: 'a select line choosing between two inputs', match: /\b(multiplexers?|mux)\b/i, code: MUX },
+  { id: 'fetch-decode-execute', title: 'Fetch, decode, execute', shows: 'a tiny CPU running 5 + 3: PC, IR, registers, ALU, buses and memory', match: /\b(cpus?|central processing unit|fetch[- ]decode[- ]execute|instruction cycle|alu|program counter|machine code|assembly language|von neumann|datapath)\b/i, code: CPU },
+  { id: 'memory-bytes', title: 'An int in memory', shows: 'addressed bytes, a little- and a big-endian int, a pointer', match: /\b(memory addresses?|addresses in memory|endian(ness)?|pointers?|bytes in memory|how memory works|main memory)\b/i, code: MEMORY },
+  { id: 'python-names-objects', title: 'Names point at objects', shows: 'a real trace of a = [1, 2]; b = a; b.append(3): one list, two names', match: /\b(python (names|variables|objects|memory|lists?)|names and objects|aliasing|mutab(le|ility)|lists? as arrays|id\(\)|is vs ==)\b/i, code: PY_NAMES },
+  { id: 'python-call-frames', title: 'Call frames', shows: 'a real trace of recursive factorial(4): frames pushed and popped', match: /\b(call (stack|frames?)|stack frames?|recursion|recursive)\b/i, code: PY_FRAMES },
+  { id: 'python-int-storage', title: 'How Python stores an int', shows: 'ints as objects: CPython base-2^30 digits, sizes, small-int cache', match: /\b(how (python|an int|ints?) (is |are )?stored|int objects?|bignums?|arbitrary precision|integers? in python)\b/i, code: PY_INT },
+  { id: 'cpu-die-caches', title: 'Inside a CPU', shows: '3D die: cores, L1, L2, L3, memory controller, DRAM, and a cache miss', match: /\b(cpu caches?|cache (lines?|misses|hierarchy)|memory hierarchy|l[123] caches?|dram|multi-?core|cache locality)\b/i, code: DIE },
+  { id: 'gpu-sms-warps', title: 'Inside a GPU', shows: '3D GPU: SMs, a warp of 32 lanes, divergence, L2 and HBM', match: /\b(gpus?|cuda|warps?|streaming multiprocessors?|simt|hbm)\b/i, code: GPU }
 ]
 
 export const kitVisual = (id: string) => KIT_VISUALS.find((v) => v.id === id) ?? null

@@ -117,8 +117,8 @@ describe('the prompt, in layers', () => {
 
   it('stays small: the stable part of a lesson’s prompt, before the learner, under budget', () => {
     const lesson = forClaude(stableSystem(claudeSystemBase({ kind: 'lesson', maths: true }), { today: new Date(2026, 10, 13), web: true, session: true }))
-    // Was some 26,000 characters with the whole simulation guide and every tool's line
-    expect(lesson.length).toBeLessThan(18_500)
+    // Was some 26,000 characters with the whole simulation guide and every tool's line; the computing kit's guide (TideMachine) added some 700
+    expect(lesson.length).toBeLessThan(19_800)
     const history = forClaude(stableSystem(claudeSystemBase({ kind: 'lesson', humanities: true }), { today: new Date(2026, 10, 13), web: true, session: true }))
     expect(history.length).toBeLessThan(10_500)
     // Each lesson rule said once: the exercise rule, the citation rule

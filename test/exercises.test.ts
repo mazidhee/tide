@@ -380,7 +380,7 @@ describe('what Claude is offered', () => {
     const { sessionInstructions } = await import('../src/shared/session')
     const s = forClaude(sessionInstructions({ mode: 'teach', topic: 'Python generators and yield' }))
     // find_image is Gemma's tool; the core guide says how to teach visually; Tide numbers a set exercise itself
-    expect(s).not.toMatch(/find_image|Teach visually as well|Problem 2 · harder/)
+    expect(s).not.toMatch(/find_image|Teach visually as well|Lead with the picture|Problem 2 · harder/)
     expect(s).toMatch(/one problem per message/)
   })
 })
