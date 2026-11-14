@@ -167,12 +167,17 @@
       controls.addEventListener('change', render);
       controls.update();
       parts.forEach(function (p) {
-        var g = new T.BoxGeometry(p.box[0], p.box[1], p.box[2]);
+        // box [w, h, d]; cylinder [radius, height]; sphere [radius]: p.box is the size either way
+        var g = p.shape === 'cylinder' ? new T.CylinderGeometry(p.box[0], p.box[0], p.box[1], 32) : p.shape === 'sphere' ? new T.SphereGeometry(p.box[0], 32, 16) : new T.BoxGeometry(p.box[0], p.box[1], p.box[2]);
+        if (p.shape === 'sphere') p.box = [p.box[0] * 2, p.box[0] * 2, p.box[0] * 2];
+        if (p.shape === 'cylinder') p.box = [p.box[0] * 2, p.box[1], p.box[0] * 2];
         var mesh = new T.Mesh(g, new T.MeshStandardMaterial({ color: css(p.color || 'surface'), roughness: 0.62, metalness: 0.08, transparent: true }));
         mesh.position.fromArray(p.at);
+        if (p.rot) mesh.rotation.set(p.rot[0] || 0, p.rot[1] || 0, p.rot[2] || 0);
         mesh.userData.part = p;
         var edges = new T.LineSegments(new T.EdgesGeometry(g), new T.LineBasicMaterial({ color: css('line-strong'), transparent: true }));
         edges.position.copy(mesh.position);
+        edges.rotation.copy(mesh.rotation);
         scene.add(mesh, edges);
         byId[p.id] = { mesh: mesh, edges: edges };
         if (p.label && p.labelled !== 'never') {

@@ -45,7 +45,8 @@ export const CALL_DEPTH = {
   plan: { label: 'Study plans and roadmaps', effort: 'high' },
   outline: { label: 'A roadmap’s outline', effort: 'medium' },
   planAudit: { label: 'Auditing a roadmap', effort: 'high' },
-  background: { label: 'Other background work: titles, summaries', effort: 'low' }
+  background: { label: 'Other background work: titles, summaries', effort: 'low' },
+  visual: { label: 'Visuals and 3D scenes, written once and kept', effort: 'medium' }
 } as const satisfies Record<string, { label: string; effort: Effort }>
 
 /** Each routed job's depth (the label is JOB_ROUTES') */

@@ -3,10 +3,11 @@ import type { ClaudeModel, ClaudeRole, ClaudeSettings } from './types'
 /**
  * Which Claude model does what. Ordinary lesson and chat turns on Sonnet; Opus where being right
  * matters most (marking, maths and proofs, lesson plans and roadmaps, explanations asked to go
- * deep); Haiku for background jobs. Fable is offered for the hardest material. Older Opus
+ * deep); Haiku for background jobs; Fable for visuals and 3D scenes, which are written once and
+ * kept (main/conceptVisuals). Fable is offered for the hardest material too. Older Opus
  * versions are not offered: they cost three to four times as much per call.
  */
-export const CLAUDE_DEFAULTS: Record<ClaudeRole, ClaudeModel> = { teach: 'sonnet', mark: 'opus', hard: 'opus', background: 'haiku' }
+export const CLAUDE_DEFAULTS: Record<ClaudeRole, ClaudeModel> = { teach: 'sonnet', mark: 'opus', hard: 'opus', background: 'haiku', visual: 'claude-fable-5-1' }
 
 export const CLAUDE_MODELS: { id: ClaudeModel; label: string; note: string }[] = [
   { id: 'sonnet', label: 'Sonnet', note: 'Fast, for most turns' },

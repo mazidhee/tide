@@ -3,7 +3,8 @@
  * repair by Claude when a visual fails its check, a mermaid or table fallback when the repair
  * fails too, and each lesson's kept visuals in its record, so reopening it needs no new call.
  */
-import { VISUAL_FALLBACK_SYSTEM, VISUAL_REPAIR_SYSTEM, cleanRecord, extractVisual, fallbackPrompt, looksComplete, repairPrompt, MAX_VISUAL, type VisualRecord } from '@shared/visuals'
+import { VISUAL_FALLBACK_SYSTEM, VISUAL_REPAIR_SYSTEM, cleanRecord, extractVisual, fallbackPrompt, looksComplete, repairPrompt, MAX_SCENE, MAX_VISUAL, type VisualRecord } from '@shared/visuals'
+import { SCENE_REPAIR_NOTE } from '@shared/sceneCache'
 
 export interface VisualPolicy {
   /** Visuals may run here */
@@ -26,15 +27,17 @@ const cleanErrors = (errors: unknown): string[] => (Array.isArray(errors) ? erro
  * One repair: the visual and what went wrong go back to Claude (the teaching model), and the
  * fixed visual comes back, or null when Claude can't or didn't give one.
  */
-export async function repairVisual(req: { code: string; errors: string[]; scope: unknown }, signal?: AbortSignal): Promise<{ code: string } | null> {
-  const code = typeof req.code === 'string' ? req.code.slice(0, MAX_VISUAL) : ''
+export async function repairVisual(req: { code: string; errors: string[]; scope: unknown; scene?: boolean }, signal?: AbortSignal): Promise<{ code: string } | null> {
+  const scene = req.scene === true
+  const code = typeof req.code === 'string' ? req.code.slice(0, scene ? MAX_SCENE : MAX_VISUAL) : ''
   if (!code.trim()) return null
   const policy = await visualPolicy()
   if (!policy.repair) return null
   const { claudeOnce } = await import('./claudeEngine')
   const errors = cleanErrors(req.errors)
   try {
-    const r = await claudeOnce(repairPrompt(code, errors.length ? errors : ['It did not finish loading.']), VISUAL_REPAIR_SYSTEM, 'teach', signal)
+    // A kept visual or a scene is repaired by the model that writes them; a lesson's own by the lesson's
+    const r = await claudeOnce(repairPrompt(code, errors.length ? errors : ['It did not finish loading.']), scene ? `${VISUAL_REPAIR_SYSTEM}\n${SCENE_REPAIR_NOTE}` : VISUAL_REPAIR_SYSTEM, scene ? 'visual' : 'teach', signal)
     const fixed = extractVisual(r.text)
     return fixed && looksComplete(fixed) ? { code: fixed } : null
   } catch {

@@ -1,4 +1,5 @@
 import { testNames } from '@shared/codeTests'
+import { LessonBigPicture } from './BigPicture'
 import { showMeOffered } from '@shared/showMe'
 import { ASK_VISUAL_EVENT, takeVisualNotes } from '../lib/visuals'
 import { TimeThis } from './TimeThis'
@@ -1817,6 +1818,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           // Claude's visuals (lib/visuals): where they may run, and the lesson that keeps them
           data-visual-scope={JSON.stringify(scope)}
           data-visual-lesson={recordId ?? ''}
+          data-visual-topic={topic}
           // [source-led] a reading's "Open in your library at page N"
           onClick={(e) => {
             const cite = (e.target as HTMLElement).closest?.<HTMLElement>('.s-cite')
@@ -1853,6 +1855,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               </p>
             </header>
           )}
+          {/* A lesson in a module part opens beside that part's big picture, a 3D scene (components/BigPicture) */}
+          {mode === 'teach' && <LessonBigPicture topic={topic} />}
           {options?.curiosity && <CameUpIn curiosity={options.curiosity} />}
           {!rail && (toRead.length > 0 || found.length > 0 || !!pack?.sources.length) && (
             <div className="s-read" aria-label="Read alongside">

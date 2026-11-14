@@ -94,6 +94,7 @@ export const USAGE_JOBS: Record<string, string> = {
   draft: 'Long draft',
   background: 'Background job',
   warmup: 'Warm-up rerank',
+  visual: 'A visual or 3D scene',
   ...Object.fromEntries(Object.entries(JOB_ROUTES).map(([k, v]) => [k, v.label])),
   other: 'Other'
 }
@@ -106,7 +107,8 @@ export const jobFromRole = (role: ClaudeRole): string =>
     teach: 'lesson',
     hard: 'plan',
     mark: 'marking',
-    background: 'background'
+    background: 'background',
+    visual: 'visual'
   })[role] ?? 'other'
 
 /** A call on Gemma or the cloud with no job named: its task says what it was */

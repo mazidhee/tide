@@ -12,6 +12,8 @@ import { isPopout, popMenuItems, registerPopouts, setQuitting } from './popout'
 import { APP_CSP } from '@shared/appCsp'
 import { VISUAL_SCHEME_PRIVILEGES, blockVisualRequests, denyVisualPermissions, devFrameSrc, guardVisualFrames, handleVisualProtocol, killVisual, unwatchVisual, visualMetrics, watchVisual } from './visualFrames'
 import { lessonVisuals, rememberVisual, repairVisual, visualFallback, visualPolicy } from './visuals'
+import { dropVisual, keepVisual, partOfTopic, partScene, partsOfModule, visualFeedback, visualForConcept } from './conceptVisuals'
+import { traceSnippet } from './pyTrace'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import type { CompanyPrepRequest, OutlineDraftRequest, ChatRequest, ChatScope, LearningStatus, ReviewGrade, Settings, PdfHighlight, TutorThread } from '@shared/types'
@@ -388,7 +390,16 @@ function registerIpc() {
   handle('explore:remove', async (id: string) => (await import('./explore')).removeExplore(id))
   // Claude's visuals: main/visuals (policy, repair, fallback, kept with the lesson), main/visualFrames (limits)
   handle('visuals:policy', () => visualPolicy())
-  handle('visuals:repair', (req: { code: string; errors: string[]; scope: unknown }) => repairVisual(req))
+  handle('visuals:repair', (req: { code: string; errors: string[]; scope: unknown; scene?: boolean }) => repairVisual(req))
+  // Python traced for a visual (main/pyTrace); visuals kept per concept and per module part (main/conceptVisuals)
+  handle('visuals:trace', (code: string) => traceSnippet(code))
+  handle('visuals:concept', (req: { concept: string; show?: string; topic?: string; redraw?: boolean }) => visualForConcept(req))
+  handle('visuals:part', (req: { module: string; part: number; redraw?: boolean }) => partScene(req))
+  handle('visuals:partOf', (topic: string) => partOfTopic(topic))
+  handle('visuals:parts', (module: string) => partsOfModule(module))
+  handle('visuals:keep', (kind: string, key: string, code: string, repaired?: boolean) => keepVisual(kind, key, code, repaired))
+  handle('visuals:drop', (kind: string, key: string) => dropVisual(kind, key))
+  handle('visuals:feedback', (kind: string, key: string, feedback: string) => visualFeedback(kind, key, feedback))
   handle('visuals:fallback', (req: { code: string; title: string; scope: unknown }) => visualFallback(req))
   handle('visuals:cached', (id: string) => lessonVisuals(id))
   handle('visuals:remember', (id: string, key: string, record: unknown, source?: unknown) => rememberVisual(id, key, record, source))

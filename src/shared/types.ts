@@ -6,7 +6,7 @@ export type ThemeId = 'system' | 'light' | 'dark' | 'graphite' | 'midnight' | 'e
 export type ClaudeModel = 'opus' | 'sonnet' | 'haiku' | 'claude-fable-5-1'
 
 /** What a Claude call is for: each has its own model (shared/claude.ts has the defaults) */
-export type ClaudeRole = 'teach' | 'mark' | 'hard' | 'background'
+export type ClaudeRole = 'teach' | 'mark' | 'hard' | 'background' | 'visual'
 
 export interface ClaudeSettings {
   /** Who teaches lessons and the tutor chat: Claude (the default once Claude Code is set up) or Gemma on this Mac */
@@ -364,6 +364,27 @@ export interface ExamMark {
   marks: number
   feedback: string
   missed: string
+}
+
+/** A kept or freshly written visual (main/conceptVisuals ResolvedVisual) */
+export interface VisualSource {
+  code?: string
+  source?: 'kept' | 'kit' | 'model'
+  model?: string
+  at?: string
+  key?: string
+  feedback?: 'up' | 'down'
+  unchecked?: boolean
+  title?: string
+  error?: string
+}
+
+/** A module part (main/conceptVisuals PartInfo) */
+export interface PartRef {
+  module: string
+  moduleTitle: string
+  part: number
+  title: string
 }
 
 export interface RunResult {
@@ -959,7 +980,8 @@ export interface TideApi {
   }
   visuals: {
     policy(scope: ChatScope): Promise<{ show: boolean; repair: boolean; why?: string }>
-    repair(req: { code: string; errors: string[]; scope: ChatScope }): Promise<{ code: string } | null>
+    /** scene: a kept visual or a part's 3D scene, repaired by the visual model */
+    repair(req: { code: string; errors: string[]; scope: ChatScope; scene?: boolean }): Promise<{ code: string } | null>
     fallback(req: { code: string; title: string; scope: ChatScope }): Promise<string | null>
     cached(lessonId: string): Promise<Record<string, import('./visuals').VisualRecord>>
     /** source: the visual as written, so a working explorable can join the library (main/explorables) */
@@ -970,6 +992,20 @@ export interface TideApi {
     /** Kill a frame's process (it stopped answering) */
     kill(host: string, reason: string): Promise<boolean>
     metrics(): Promise<{ host: string; pid: number; mb: number; cpu: number }[]>
+    /** A Python snippet traced for TideMachine.python (main/pyTrace) */
+    trace(code: string): Promise<{ trace?: import('./pyTrace').PyTrace; error?: string }>
+    /** A ```draw block's visual: kept, Tide's own, or written now by the visual model (main/conceptVisuals) */
+    concept(req: { concept: string; show?: string; topic?: string; redraw?: boolean }): Promise<VisualSource>
+    /** A module part's big picture, a 3D scene; fallback is Tide's own 2D visual for it */
+    part(req: { module: string; part: number; redraw?: boolean }): Promise<VisualSource & { info?: PartRef & { topics: string[] }; fallback?: string }>
+    /** The module part a lesson's topic is in */
+    partOf(topic: string): Promise<PartRef | null>
+    parts(module: string): Promise<{ part: number; title: string; kept: boolean }[]>
+    /** After the window's check: keep it as checked, or drop it */
+    keep(kind: 'concept' | 'part', key: string, code: string, repaired?: boolean): Promise<boolean>
+    drop(kind: 'concept' | 'part', key: string): Promise<boolean>
+    /** "Was this clear?" */
+    feedback(kind: 'concept' | 'part', key: string, feedback: 'up' | 'down'): Promise<boolean>
     onKilled(cb: (e: { host: string; reason: string }) => void): () => void
   }
   /** The knowledge map: every concept with how solid it is today, what is ready next, what is fading, and retention by week */
