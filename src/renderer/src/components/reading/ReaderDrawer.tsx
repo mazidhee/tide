@@ -467,7 +467,7 @@ function Seminar({ path, n, name, marks, tutor, onDone }: { path: string; n: num
 
 // ---------- Your notes ----------
 
-const KIND: Record<MarkKind, string> = { highlight: 'Highlights', quote: 'Quotes', note: 'Notes', question: 'Questions' }
+const KIND: Record<MarkKind, string> = { highlight: 'Highlights', quote: 'Quotes', note: 'Notes', question: 'Questions', hard: 'Hard words' }
 
 function NotesTab(p: Parameters<typeof ReaderDrawer>[0]) {
   const [only, setOnly] = useState<MarkKind | null>(null)
@@ -487,7 +487,7 @@ function NotesTab(p: Parameters<typeof ReaderDrawer>[0]) {
         <button className={!only ? 'on' : ''} onClick={() => setOnly(null)}>
           All {p.marks.length || ''}
         </button>
-        {(['quote', 'note', 'question', 'highlight'] as const).map((k) => {
+        {(['quote', 'note', 'question', 'highlight', 'hard'] as const).map((k) => {
           const n = p.marks.filter((m) => m.kind === k).length
           return n ? (
             <button key={k} className={only === k ? 'on' : ''} onClick={() => setOnly(only === k ? null : k)}>

@@ -484,7 +484,9 @@ const api: TideApi = {
     grade: invoke('comp:grade'),
     selfCheck: invoke('comp:selfCheck'),
     cards: invoke('comp:cards'),
-    lookup: invoke('comp:lookup')
+    lookup: invoke('comp:lookup'),
+    inBook: invoke('comp:inBook'),
+    bookChecks: invoke('comp:bookChecks')
   },
   writing: {
     list: invoke('writing:list'),

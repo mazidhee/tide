@@ -69,3 +69,32 @@ export function saveReaderPrefs(p: ReaderPrefs) {
 }
 
 export const MEASURE: Record<ReaderPrefs['width'], number> = { narrow: 540, normal: 640, wide: 760 }
+
+// ---------- Checks in the book (components/comprehension/InBookCheck) ----------
+
+/** Per book: whether the in-book checks are on (off by default), how often, and the sections skipped (by sectionKey) */
+export interface BookChecks {
+  on: boolean
+  every: 'chapter' | 'section'
+  skipped: string[]
+}
+
+const checksKey = (path: string) => `tide.reader.checks:${path}`
+
+export function bookChecksPrefs(path: string): BookChecks {
+  let saved: Partial<BookChecks> = {}
+  try {
+    saved = JSON.parse(localStorage.getItem(checksKey(path)) ?? '{}')
+  } catch {
+    // The defaults: off
+  }
+  return { on: saved.on === true, every: saved.every === 'section' ? 'section' : 'chapter', skipped: Array.isArray(saved.skipped) ? saved.skipped.filter((s) => typeof s === 'string').slice(-500) : [] }
+}
+
+export function saveBookChecksPrefs(path: string, c: BookChecks) {
+  try {
+    localStorage.setItem(checksKey(path), JSON.stringify(c))
+  } catch {
+    // Kept for this session only
+  }
+}

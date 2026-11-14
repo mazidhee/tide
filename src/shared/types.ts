@@ -1182,6 +1182,10 @@ export interface TideApi {
     cards(id: string, keep: import('./comprehension').HardMark[]): Promise<import('./comprehension').CompLesson>
     /** The word in the Mac's dictionary */
     lookup(word: string): Promise<void>
+    /** A check in the reader's flow: the section just read, the learner's answer and their reading time; ready to grade */
+    inBook(o: { path: string; locs: import('./passage').PassageLoc[]; text: string; readMs?: number; summary: string; marks?: import('./comprehension').HardMark[] }): Promise<import('./comprehension').CompLesson>
+    /** The in-book checks done on a book, newest first */
+    bookChecks(path: string): Promise<import('./comprehension').CompLesson[]>
   }
   /** Writing review (main/writing): paths are absolute (a vault-relative one is read from the notes folder) */
   writing: {
