@@ -4,6 +4,8 @@ import { mathsArea, mathsMode, mathsRules, exploreGuide, AREA_SCENES, SCENES, fo
 import { driftCheck, driftNote, switchIn, DRIFT, type DriftInput } from '../src/shared/mathsDrift'
 import { answerStart, checkCounterexample, challengeBlock, holdsProgram, parseChallenge, proveChallenge, relHolds, type Counterexample } from '../src/shared/pokeHoles'
 import { groundUpIntent, groundUpNext, ladder, levelsOf, levelUps, rungOf, RUNGS, LEVELS } from '../src/shared/mathsLadder'
+import { roadmapTopics } from '../src/shared/curriculum'
+import { roadmapTopics } from '../src/shared/curriculum'
 import { evaluateExpr } from '../src/renderer/src/lib/maths/challenge'
 import type { AnswerSignal } from '../src/shared/breakPlanner'
 import type { ConceptState } from '../src/shared/knowledge'
@@ -209,6 +211,27 @@ describe('the maths ladder', () => {
     expect(rungOf({ name: 'Raft leader election', area: 'Systems', section: 'Consensus' })).toBeNull()
     // A maths lesson outside a roadmap still counts
     expect(rungOf({ name: 'Confidence intervals', area: '', section: undefined })).toBe('statistics')
+  })
+
+  it('keeps finance topics in a "Quant and Finance" track off the ladder, and Tasks dates out of its names', () => {
+    const md = `## 1. The three statements — SUPPORTING\n\n### The Three Financial Statements\n\n- [ ] The Balance Sheet — assets, liabilities, equity, the accounting equation ✅ 2026-06-30\n- [ ] The Income Statement — revenue, COGS, gross profit, EBITDA, EBIT, net income\n\n### Derivatives\n\n- [ ] Forwards and futures\n- [ ] The Black-Scholes formula 📅 2026-12-01 ⏫\n- [ ] Itô’s lemma\n- [ ] Bond duration — _Hull_ ✅ 2026-07-01\n`
+    const topics = roadmapTopics('Quant and Finance', md)
+    expect(topics[0].title).toBe('The Balance Sheet — assets, liabilities, equity, the accounting equation')
+    expect(topics[3].title).toBe('The Black-Scholes formula')
+    expect(topics[5]).toMatchObject({ title: 'Bond duration', source: 'Hull' })
+    const cs = topics.map((t, i) => c(t.title, t.section, { area: 'Quant and Finance', id: t.id, order: i }))
+    expect(rungOf(cs[0])).toBeNull()
+    expect(rungOf(cs[1])).toBeNull()
+    // "Derivatives" in a finance track is not calculus
+    expect(rungOf(cs[2])).toBeNull()
+    expect(rungOf(cs[3])).toBe('pricing')
+    expect(rungOf(cs[4])).toBe('stochastic')
+    const l = ladder(cs)
+    const names = l.rungs.flatMap((r) => r.topics.map((t) => t.name))
+    expect(names.join('\n')).not.toMatch(/Balance Sheet|✅|📅/)
+    expect(groundUpNext(l)?.topic.name).not.toMatch(/Balance Sheet/)
+    // A maths notebook keeps its chapters
+    expect(rungOf({ name: 'Solving linear equations', area: 'Mathematics', section: 'Chapter 3: Algebra' })).toBe('algebra')
   })
 
   it('levels each rung from FSRS-solid topics, finds where you are, and what to learn next', () => {

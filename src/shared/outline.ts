@@ -91,8 +91,16 @@ export function splitSource(text: string): { main: string; source: string | null
 
 export const joinSource = (main: string, source: string | null) => (source ? `${main} — _${source}_` : main)
 
-/** A topic's title as the reader sees it: no link syntax, no source */
-export const topicTitle = (text: string) => itemLink(splitSource(text).main).label
+const TASK_DATE = /\s*(?:✅|❌|📅|📆|🗓|⏳|⌛|🛫|➕)️?\s*\d{4}-\d{2}-\d{2}/gu
+const TASK_REPEAT = /\s*🔁️?[^✅❌📅📆🗓⏳⌛🛫➕⏫🔼🔽🔺⏬🆔⛔🏁]*/gu
+const TASK_REF = /\s*(?:🆔|⛔|🏁)️?\s*[\w,-]+/gu
+const TASK_PRIORITY = /\s*(?:⏫|🔼|🔽|🔺|⏬)️?/gu
+
+/** An item's text without the Obsidian Tasks plugin's metadata (✅ 2026-06-30, 📅 dates, 🔁 every week, priorities) */
+export const stripTasks = (text: string) => text.replace(TASK_DATE, '').replace(TASK_REPEAT, '').replace(TASK_REF, '').replace(TASK_PRIORITY, '').trimEnd()
+
+/** A topic's title as the reader sees it: no link syntax, no source, no Tasks metadata */
+export const topicTitle = (text: string) => itemLink(splitSource(stripTasks(text)).main).label
 
 /** Rewrites a topic's text with a new title, keeping its link and source */
 export function retitleItem(text: string, title: string): string {
