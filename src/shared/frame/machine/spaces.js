@@ -246,7 +246,7 @@
         return out;
       };
       var grid = new T.Group(), R = 3;
-      var lineMat = new T.LineBasicMaterial({ color: M.tcolor('ink-soft'), transparent: true, opacity: 0.75 }), ghostMat = new T.LineBasicMaterial({ color: M.tcolor('muted'), transparent: true, opacity: 0.35 });
+      var lineMat = new T.LineBasicMaterial({ color: M.tcolor('ink-soft'), transparent: true, opacity: 0.75 }), ghostMat = new T.LineBasicMaterial({ color: M.tcolor('muted'), transparent: true, opacity: 0.16 });
       var gridLines = [], ghost = new T.Group();
       var seg = function (a, b) { return [a, b]; };
       var segs = [];
@@ -279,10 +279,11 @@
       var eigLines = new T.Group();
       eig.forEach(function (e) {
         var v = e.vector;
-        var g = new T.BufferGeometry().setFromPoints([w(v.map(function (x) { return -x * 4; })), w(v.map(function (x) { return x * 4; }))]);
-        eigLines.add(new T.Line(g, new T.LineBasicMaterial({ color: acc })));
+        // The eigenvector's line, as a solid rod: it stays put while everything else turns
+        var a0 = w(v.map(function (x) { return -x * 3; })), a1 = w(v.map(function (x) { return x * 3; }));
+        eigLines.add(new T.Mesh(new T.TubeGeometry(new T.LineCurve3(a0, a1), 2, 0.035, 8), new T.MeshStandardMaterial({ color: acc, emissive: acc, emissiveIntensity: 0.3 })));
         var tag = M.text3d(T, 'λ = ' + fmt(e.value), { size: 0.5, color: 'accent' });
-        tag.position.copy(w(v.map(function (x) { return x * 3.4; }))).add(new T.Vector3(0, 0.4, 0));
+        tag.position.copy(w(v.map(function (x) { return x * 2.3; }))).add(new T.Vector3(0, 0.45, 0));
         eigLines.add(tag);
       });
       grid.add(ghost, eigLines);
