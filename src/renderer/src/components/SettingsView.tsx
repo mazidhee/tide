@@ -584,7 +584,57 @@ function GeneralSection() {
           />
         </Row>
       </Group>
+      <WritingSettings />
     </>
+  )
+}
+
+/** Writing (main/writing): folders Tide reads for writing, and topics from a Things 4 project */
+function WritingSettings() {
+  const app = useApp()
+  const w = app.settings.writing ?? {}
+  const folders = w.folders ?? []
+  const [things, setThings] = useState<string | null>(null)
+  useEffect(() => {
+    if (w.things === false) return setThings(null)
+    window.tide.writing
+      .topics()
+      .then((t) => setThings(t.thingsNote ?? null))
+      .catch(() => setThings(null))
+  }, [w.things, w.thingsProject])
+  const save = (patch: Partial<NonNullable<typeof app.settings.writing>>) => app.updateSettings({ writing: { ...w, ...patch } })
+  return (
+    <Group title="Writing" note="Tide reads these folders to review your writing and only writes a file when you edit it in Tide. Reviews and comments are kept in Tide’s own data, never in the note.">
+      <Row label="Writing folders" hint="Your notes folder’s Writing folder always counts. Add a vault of essays, for example." stack>
+        <div className="set-inline wide">
+          {folders.map((f) => (
+            <span key={f} className="set-inline">
+              <code className="path set-code">{f}</code>
+              <button className="btn small ghost" onClick={() => save({ folders: folders.filter((x) => x !== f) })}>
+                Remove
+              </button>
+            </span>
+          ))}
+          <button
+            className="btn small"
+            onClick={async () => {
+              const f = await window.tide.writing.addFolder()
+              if (f) save({ folders: [...new Set([...folders, f])] })
+            }}
+          >
+            Add a folder…
+          </button>
+        </div>
+      </Row>
+      <Row label="Topics from Things 4" hint={w.things === false ? 'Off: topics come from Coach/Writing topics.md only.' : things ? `${things.replace(/\.$/, '')}. In Things 4: Settings › API.` : 'The open to-dos of a Things 4 project are your topics to write about. Tide changes Things only when you tick one off.'}>
+        <Toggle label="Topics from Things 4" on={w.things !== false} onChange={(on) => save({ things: on })} />
+      </Row>
+      {w.things !== false && (
+        <Row label="Things project">
+          <input className="set-input" defaultValue={w.thingsProject ?? 'Writing'} aria-label="Things project" onBlur={(e) => save({ thingsProject: e.target.value.trim() || 'Writing' })} />
+        </Row>
+      )}
+    </Group>
   )
 }
 
