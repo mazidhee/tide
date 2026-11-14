@@ -1,7 +1,7 @@
 import { addDays, bestHoursLabel, planPortfolio, replanWeek, thingsChanges, type PlanNotice, type PortfolioWeek, type Thread } from '@shared/portfolio'
 import type { Goal } from '@shared/types'
 import { asDeadline, aimsFromGoals, buildThreads, readGoalsFile, decomposePrompt, driftOf, guessNeeds, needThread, parseDecomposition, parseGoalDate, threadId, tradeOffs, withStanding, EMPTY_GOALS, type Decomposition, type GoalNeed, type GoalsStore, type GoalWeight, type InProgress, type Inventory, type PlanGoal, type ThreadLog, type TradeOption, type GoalRow, type GoalsView } from '@shared/goals'
-import { aimsKey, aimsOf, localDate, thingsTitle, type AgendaItem, type CoachSettings, type TopicCandidate, type WeekPlan } from '@shared/coach'
+import { aimsKey, aimsOf, localDate, nextTopicsOf, thingsTitle, type AgendaItem, type CoachSettings, type TopicCandidate, type WeekPlan } from '@shared/coach'
 import { roadmapTopics, isSorted, sectionsOf } from '@shared/curriculum'
 import { balanceWeek, type BalanceNotebook } from '@shared/balance'
 import { MOCK_MODES } from '@shared/mocks'
@@ -438,6 +438,17 @@ async function roadmapCandidates(threads: Thread[], goals: PlanGoal[], coach: Co
   for (const [nb, list] of byNotebook) {
     const want = wanted.get(nb)
     if (want) byNotebook.set(nb, [...list.filter((c) => want.has(c.section)), ...list.filter((c) => !want.has(c.section))])
+  }
+  // A course a project being built waits on goes to the front of its track, saying which project (main/modules projectPulls)
+  for (const p of [...(await mm.projectPulls().catch(() => []))].reverse()) {
+    const nb = all.find((n) => n.name === p.notebook)
+    if (!nb || !byNotebook.has(nb.name)) continue
+    const ids = new Set(p.topics)
+    const front = nextTopicsOf(nb.name, (await mm.openTopics(nb).catch(() => [])).filter((t) => ids.has(t.id)), 8).map((c) => ({ ...c, why: p.why }))
+    if (!front.length) continue
+    const got = new Set(front.map((c) => c.topicId))
+    for (const [k, list] of byNotebook) byNotebook.set(k, list.filter((c) => !c.topicId || !got.has(c.topicId)))
+    byNotebook.set(nb.name, [...front, ...byNotebook.get(nb.name)!])
   }
   return { byNotebook, checks: b.checks }
 }

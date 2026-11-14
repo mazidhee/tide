@@ -17,13 +17,14 @@ import { createRequire } from 'module'
 import { dirname } from 'path'
 import type { RoadmapTopic } from '@shared/curriculum'
 import { roadmapTopics } from '@shared/curriculum'
-import { AI_TRACK, applyQueue, arrange, checkProject, parseSuggestions, projectMarkdown, projectNeeds, projectPath, suggestPrompt, type ProjectsPageView, type QueueAction, type SuggestedProject } from '@shared/projectQueue'
+import { AI_TRACK, applyQueue, arrange, checkProject, parseSuggestions, projectMarkdown, projectNeeds, projectPath, pulledModules, suggestPrompt, unlockHint, type ProjectsPageView, type PulledModule, type QueueAction, type SuggestedProject } from '@shared/projectQueue'
 import type { ConceptState } from '@shared/knowledge'
 import {
   checkDag,
   dependents,
   moduleById,
   moduleGates,
+  moduleHoursLeft,
   moduleParts,
   moduleRecordKey,
   moduleRow,
@@ -76,6 +77,7 @@ let cache: { at: number; root: string; cat: Catalogue | null } | null = null
 export const resetModules = () => {
   cache = null
   stateCache = null
+  pullCache = null
 }
 
 async function mdFiles(dir: string): Promise<string[]> {
@@ -165,7 +167,10 @@ export async function notebookTopics(nb: NotebookLike): Promise<RoadmapTopic[]> 
   return roadmapTopics(nb.name, await readText(nb.outline).catch(() => ''))
 }
 
-/** A track's topics the scheduler may plan now: not in a locked module, not in a part still waiting for the one before */
+/**
+ * A track's topics the scheduler may plan now: not in a locked module, not in a part still waiting
+ * for the one before. A course a project being built waits on comes first (projectPulls).
+ */
 export async function openTopics(nb: NotebookLike): Promise<RoadmapTopic[]> {
   const all = await notebookTopics(nb)
   if (!nb.track) return all
@@ -173,7 +178,9 @@ export async function openTopics(nb: NotebookLike): Promise<RoadmapTopic[]> {
   if (!gates) return all
   const { moduleHeld } = await import('@shared/modules')
   const held = moduleHeld(gates)
-  return all.filter((t) => !held.has(t.id))
+  const open = all.filter((t) => !held.has(t.id))
+  const pulled = new Set((await projectPulls().catch(() => [])).filter((p) => p.notebook === nb.name).flatMap((p) => p.topics))
+  return pulled.size ? [...open.filter((t) => pulled.has(t.id)), ...open.filter((t) => !pulled.has(t.id))] : open
 }
 
 /** Whether a notebook's topics come from modules */
@@ -268,6 +275,7 @@ export async function setThere(id: string, on: boolean, note?: string): Promise<
     return { ...m, there }
   })
   stateCache = null
+  pullCache = null
 }
 
 /** A track's page: its modules with progress, gate and requires */
@@ -361,8 +369,62 @@ export async function projectsGoal(): Promise<(import('@shared/goals').PlanGoal 
   const rows = await projectsView().catch(() => [])
   const q = (await import('./track').then((t) => t.loadTracks()).catch(() => null))?.modules?.queue
   const { needs, tracksOf } = projectNeeds(rows, q)
-  if (!needs.length) return null
-  return { id: PROJECTS_GOAL, title: 'Projects', weight: 'main', needs, createdAt: Date.now(), by: 'tide', maxGap: 4, tracksOf }
+  const all: import('@shared/goals').GoalNeed[] = [...needs]
+  // A course a project being built waits on: its track gets time as a building project's tracks
+  // do (main/milestone shapeThreads keeps them alive, outside the stage too), its topics first
+  for (const p of await projectPulls().catch(() => [])) {
+    all.push({ id: `pull:${p.module}`, kind: 'roadmap', ref: p.notebook, label: p.notebook, hours: p.hours, why: p.why })
+    tracksOf[`roadmap:${p.notebook.toLowerCase()}`] = [p.notebook]
+  }
+  if (!all.length) return null
+  return { id: PROJECTS_GOAL, title: 'Projects', weight: 'main', needs: all, createdAt: Date.now(), by: 'tide', maxGap: 4, tracksOf }
+}
+
+export interface ProjectPull extends PulledModule {
+  /** The track notebook it is planned in (its home track's, when that is a notebook) */
+  notebook: string
+  title: string
+  hours: number
+  /** Its topic ids not yet done, in order */
+  topics: string[]
+}
+
+let pullCache: { at: number; pulls: ProjectPull[] } | null = null
+
+/**
+ * The courses projects being built wait on, pulled to the front of the plan (shared/projectQueue
+ * pulledModules), each with the track notebook it is planned in. Cached for half a minute.
+ */
+export async function projectPulls(): Promise<ProjectPull[]> {
+  if (pullCache && Date.now() - pullCache.at < 30_000) return pullCache.pulls
+  const cat = await loadCatalogue()
+  const gates = await moduleState()
+  if (!cat || !gates) return []
+  const rows = await projectsView().catch(() => [])
+  const q = (await import('./track').then((t) => t.loadTracks()).catch(() => null))?.modules?.queue
+  const { getNotebooks } = await import('./learn')
+  const tracks = (await getNotebooks().catch(() => [])).filter((n) => n.track)
+  const byId = moduleById(cat)
+  const pulls: ProjectPull[] = []
+  for (const p of pulledModules(rows, q ?? {}, cat.modules, (id) => gates.get(id)?.status)) {
+    const m = byId.get(p.module)
+    const nb = m && moduleNotebook(cat, m, tracks)
+    if (!m || !nb) continue
+    const topics = moduleTopics(m, nb.name).filter((t) => !t.checked && !t.project)
+    pulls.push({ ...p, notebook: nb.name, title: m.title, hours: Math.max(1, Math.round(moduleHoursLeft(gates.get(m.id)!) || m.hours || 10)), topics: topics.map((t) => t.id) })
+  }
+  pullCache = { at: Date.now(), pulls }
+  return pulls
+}
+
+/** The track notebook a module is studied in: its home track's, else the first track listing it */
+function moduleNotebook<N extends Pick<NotebookLike, 'track'>>(cat: Catalogue, m: ModuleDef, notebooks: N[]): N | undefined {
+  const ids = [m.track, ...tracksOfModule(cat, m.id).map((t) => t.id)]
+  for (const id of ids) {
+    const nb = notebooks.find((n) => n.track === id)
+    if (nb) return nb
+  }
+  return undefined
 }
 
 // ---------- The Projects page: the queue ----------
@@ -378,7 +440,22 @@ export async function projectsPage(): Promise<ProjectsPageView> {
   const byId = cat ? moduleById(cat) : new Map<string, ModuleDef>()
   const modules: Record<string, string> = {}
   for (const r of rows) for (const m of r.milestones) for (const n of m.needs ?? []) modules[n] = byId.get(n)?.title ?? n
-  return { cap: a.cap, building: a.building, upNext: a.upNext, later: a.later, built: a.built, paused: [...a.paused], tracks, ai: used.has(AI_TRACK), modules }
+  const unlock = cat ? await unlockOf(cat, rows, q ?? {}).catch(() => undefined) : undefined
+  return { cap: a.cap, building: a.building, upNext: a.upNext, later: a.later, built: a.built, paused: [...a.paused], tracks, ai: used.has(AI_TRACK), modules, ...(unlock ? { unlock } : {}) }
+}
+
+/** The course that opens the most waiting projects (shared/projectQueue unlockHint), with where its first lesson is */
+async function unlockOf(cat: Catalogue, rows: ProjectRow[], q: import('@shared/projectQueue').QueueState): Promise<ProjectsPageView['unlock']> {
+  const gates = await moduleState()
+  if (!gates) return undefined
+  const hint = unlockHint(rows, q, cat.modules, (id) => gates.get(id)?.status)
+  const byId = moduleById(cat)
+  const m = hint && byId.get(hint.module)
+  if (!hint || !m) return undefined
+  const { getNotebooks } = await import('./learn')
+  const nb = moduleNotebook(cat, m, (await getNotebooks().catch(() => [])).filter((n) => n.track))
+  const first = nb ? moduleTopics(m, nb.name).find((t) => !t.checked && !t.project) : undefined
+  return { ...hint, title: m.title, ...(hint.via ? { viaTitle: byId.get(hint.via)?.title ?? hint.via } : {}), ...(nb ? { notebook: nb.path } : {}), ...(first ? { topic: first.title } : {}) }
 }
 
 /** Start, pause, move up or change the cap; the page as it then stands */
@@ -386,6 +463,7 @@ export async function queueAction(action: QueueAction): Promise<ProjectsPageView
   const rows = await projectsView()
   const t = await import('./track')
   await t.updateModules((m) => ({ ...m, queue: applyQueue(rows, m.queue ?? {}, action) }))
+  pullCache = null
   return projectsPage()
 }
 

@@ -88,3 +88,46 @@ describe('the queue in the vault', () => {
     expect(r.suggestions[0].titles).toEqual({ 'python-core': 'Python Core' })
   })
 })
+
+describe('a project being built that waits on a course pulls it forward', () => {
+  const queue = (q: object) => write('.tide/tracks.json', JSON.stringify({ version: 1, tracks: {}, modules: { there: { 'python-core': { at: 1 } }, queue: q } }))
+  const nb = { name: 'Software Engineering', path: 'Software Engineering', track: 'software-engineering' }
+
+  it('its course becomes a need with its track kept alive, and its topics come first in the track', async () => {
+    queue({ building: ['kernel'] })
+    const m = await import('../src/main/modules')
+    m.resetModules()
+    const g = (await m.projectsGoal())!
+    // Kernel's first milestone waits on Operating Systems, so it gets no build time yet: the course does
+    expect(g.needs).toEqual([{ id: 'pull:operating-systems', kind: 'roadmap', ref: 'Software Engineering', label: 'Software Engineering', hours: 20, why: 'For KERNEL: Operating Systems opens its next milestone' }])
+    expect(g.tracksOf).toEqual({ 'roadmap:software engineering': ['Software Engineering'] })
+    expect((await m.openTopics(nb)).map((t) => t.title).slice(0, 3)).toEqual(['operating-systems one', 'operating-systems two', 'python-core one'])
+  })
+
+  it('a locked course gives way to the open one that leads to it', async () => {
+    write('Roadmaps/Modules/distributed-systems.md', mod('distributed-systems', ['operating-systems']).replace('title: Operating Systems', 'title: Distributed Systems'))
+    write('Roadmaps/Tracks/software-engineering.md', '---\ntrack: software-engineering\ntitle: Software Engineering\nmodules: [python-core, operating-systems, distributed-systems]\n---\n# Software Engineering\n')
+    write('Roadmaps/Projects/cluster.md', proj('cluster', [['distributed-systems']]))
+    queue({ building: ['cluster'] })
+    const m = await import('../src/main/modules')
+    m.resetModules()
+    expect((await m.projectPulls()).map((p) => [p.module, p.why])).toEqual([['operating-systems', 'For CLUSTER: Operating Systems leads to Distributed Systems, which its next milestone needs']])
+    // Building it while its milestone is open: the project's own build time, nothing pulled
+    queue({ building: ['shell'] })
+    m.resetModules()
+    expect((await m.projectsGoal())!.needs.map((n) => n.id)).toEqual(['pj:shell'])
+  })
+
+  it('the Projects page names the course that opens the most waiting projects, and its first lesson', async () => {
+    queue({ building: [], cap: 4 })
+    const m = await import('../src/main/modules')
+    m.resetModules()
+    const page = await m.projectsPage()
+    // Kernel waits on it alone (Cluster waits on Distributed Systems, still locked)
+    expect(page.unlock).toEqual({ module: 'operating-systems', count: 1, opens: true, title: 'Operating Systems', notebook: 'Software Engineering', topic: 'operating-systems one' })
+    // Up next can fill Building: no line
+    queue({ building: [], cap: 2 })
+    m.resetModules()
+    expect((await m.projectsPage()).unlock).toBeUndefined()
+  })
+})
