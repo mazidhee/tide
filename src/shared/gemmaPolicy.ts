@@ -25,6 +25,9 @@ export const JOB_ROUTES = {
   writingReview: { label: 'Reviewing your writing', role: 'mark' },
   writingRecheck: { label: 'Checking a fix in your writing', role: 'mark' },
   writingTalk: { label: 'Challenging the thinking in your writing', role: 'teach' },
+  // Comprehension lessons (main/comprehension): Opus grades a summary against the passage. Claude only: without it
+  // the learner checks their summary against the shown passage
+  comprehensionGrade: { label: 'Grading what you understood of a passage', role: 'mark' },
   dailyMark: { label: 'Daily practice marking', role: 'mark' },
   tieBreak: { label: 'Choosing how to teach a topic', role: 'background' },
   examPaper: { label: 'Writing a practice exam', role: 'teach' },

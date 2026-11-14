@@ -63,6 +63,7 @@ const JOB_EFFORT: Record<JobName, Effort> = {
   writingReview: 'high',
   writingRecheck: 'low',
   writingTalk: 'medium',
+  comprehensionGrade: 'high',
   dailyMark: 'low',
   tieBreak: 'low',
   examPaper: 'medium',

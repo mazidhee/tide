@@ -16,8 +16,9 @@ import { LadderShelf } from './LadderView'
 import { NorthStarGlance } from './NorthStarView'
 import { looseRoadmaps } from '@shared/sidebarTree'
 import { outlinesChanged, useOutlines } from '../lib/outlines'
+import '../styles/comprehension.css'
 
-type LearnMode = SessionMode | 'exam' | 'mixed'
+type LearnMode = SessionMode | 'exam' | 'mixed' | 'comprehension'
 
 const MODES: { id: LearnMode; label: string; icon: IconName; description: string }[] = [
   { id: 'teach', label: 'Teach', icon: 'tutor', description: 'Probes what you know, plans a path, teaches step by step' },
@@ -25,7 +26,8 @@ const MODES: { id: LearnMode; label: string; icon: IconName; description: string
   { id: 'mixed', label: 'Mixed', icon: 'refresh', description: 'Questions mixed across topics and notebooks, the strongest way to practise' },
   { id: 'interview', label: 'Interview', icon: 'terminal', description: 'Approach, code, follow-ups and a scorecard' },
   { id: 'review', label: 'Review', icon: 'edit', description: 'Comments beside your writing and challenges its thinking; never rewrites it' },
-  { id: 'exam', label: 'Exam', icon: 'timer', description: 'A timed paper; type or photograph answers' }
+  { id: 'exam', label: 'Exam', icon: 'timer', description: 'A timed paper; type or photograph answers' },
+  { id: 'comprehension', label: 'Comprehension', icon: 'book', description: 'Read a passage of your book once, put it away, and say what it says; checked against its exact words' }
 ]
 
 const LANGUAGES = ['python', 'javascript', 'typescript', 'java', 'c++', 'go', 'rust']
@@ -121,6 +123,10 @@ export function LearnView() {
       })
       return
     }
+    if (m === 'comprehension') {
+      app.setView({ kind: 'comprehension' })
+      return
+    }
     if (m === 'exam') {
       app.setView({ kind: 'exam', scope, topic: t.trim() || 'what I have been studying', options: { ...exam, difficulty }, nonce: Date.now() })
       return
@@ -142,7 +148,7 @@ export function LearnView() {
 
   // While you settle on a topic, the model reads that lesson's opening in the background, so it
   // starts writing the moment you press start instead of reading for ten seconds first
-  const warmKey = mode === 'exam' || mode === 'mixed' || (mode === 'review' && source.kind !== 'note') || (!topic.trim() && source.kind === 'none') ? '' : JSON.stringify([mode, source, topic.trim(), length, difficulty, language])
+  const warmKey = mode === 'exam' || mode === 'mixed' || mode === 'comprehension' || (mode === 'review' && source.kind !== 'note') || (!topic.trim() && source.kind === 'none') ? '' : JSON.stringify([mode, source, topic.trim(), length, difficulty, language])
   useEffect(() => {
     if (!warmKey) return
     const t = setTimeout(() => {
@@ -157,7 +163,7 @@ export function LearnView() {
   const needsNote = mode === 'review' && source.kind !== 'note'
 
   const selected = MODES.find((m) => m.id === mode)!
-  const canStart = mode === 'mixed' ? !!topic.trim() || mixTopics.length > 0 : !needsNote && (!!topic.trim() || source.kind !== 'none')
+  const canStart = mode === 'comprehension' ? true : mode === 'mixed' ? !!topic.trim() || mixTopics.length > 0 : !needsNote && (!!topic.trim() || source.kind !== 'none')
 
   return (
     <div className="page learn">
@@ -176,6 +182,14 @@ export function LearnView() {
           ))}
         </div>
 
+        {mode === 'comprehension' ? (
+          <div className="learn-topic lrn-comp">
+            <span className="lrn-comp-text">The next passage of the book you’re reading, or one you select in the reader</span>
+            <button className="btn small primary" onClick={() => start('comprehension')}>
+              Open
+            </button>
+          </div>
+        ) : (
         <div className="learn-topic">
           <PromptBox
             value={topic}
@@ -296,6 +310,7 @@ export function LearnView() {
             </div>
           )}
         </div>
+        )}
         <p className="lrn-desc">{selected.description}</p>
 
         {/* North Star: where you are on the one path (components/NorthStarView) */}

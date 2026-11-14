@@ -12,6 +12,7 @@ import { locAnchor } from '@shared/passage'
 import { PlayerBar } from './Player'
 import { IDLE_MS } from '@shared/activeTime'
 import { hasMarginNote, MarginNotes, noteDomId, revealNote } from './MarginNotes'
+import { passageFromSelection, sectionJustRead, type Section } from '@shared/comprehension'
 
 /**
  * The immersive reader. Opening a book gives it the window: Tide's sidebar steps away (the left
@@ -329,7 +330,18 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
     return { id: uid(), kind, loc: u.loc, start: pop.sel.start, end: pop.sel.end, text: pop.sel.text, chapter: chapterName(current), at: Date.now() }
   }
 
-  const act = async (what: MarkKind | 'challenge' | 'argument' | 'explore' | 'remove' | 'edit') => {
+  // "Test my understanding" (components/comprehension): a lesson on these words, or on the section just read
+  const testMe = async (section: Section | null) => {
+    if (!section) return
+    try {
+      const l = await window.tide.comprehension.start({ from: 'selection', path, locs: section.units.map((u) => u.loc), text: section.text })
+      app.setView({ kind: 'comprehension', lesson: l.id })
+    } catch (e) {
+      app.toast(String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), { tone: 'error' })
+    }
+  }
+
+  const act = async (what: MarkKind | 'challenge' | 'argument' | 'explore' | 'remove' | 'edit' | 'test') => {
     if (!pop) return
     window.getSelection()?.removeAllRanges()
     const p = pop
@@ -346,6 +358,11 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
       setAsk({ kind: what, passage: text, loc, chapter: current ? chapterName(current) : undefined, nonce: Date.now() })
       setDrawer('claude')
       return
+    }
+    if (what === 'test') {
+      if (!current) return
+      const unit = p.sel ? p.sel.unit : p.mark ? current.units.findIndex((u) => sameLoc(u.loc, p.mark!.loc)) : -1
+      return testMe(passageFromSelection(current.units, unit, text))
     }
     if (what === 'explore') {
       await window.tide.explore.add({ text, subject: book?.title, from: { topic: book?.title ?? 'Reading' } }).catch(() => {})
@@ -567,6 +584,9 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
                     <button className="rr-btn primary" onClick={() => (setAsk({ kind: 'seminar', chapter: chapterName(current), n: current.n, nonce: Date.now() }), setDrawer('claude'))}>
                       Start the seminar
                     </button>
+                    <button className="rr-btn" onClick={() => void testMe(sectionJustRead(current.units))} title="The last part of this chapter: read it again, put it away, and say what it says">
+                      Test my understanding
+                    </button>
                     {!last && (
                       <button className="rr-btn" onClick={() => go(chapter + 1)}>
                         Next: {chapterName(book!.chapters[chapter + 1])}
@@ -598,6 +618,7 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
                 <span className="sep" />
                 <button onClick={() => act('challenge')}>Challenge me</button>
                 <button onClick={() => act('argument')}>What’s the argument?</button>
+                <button onClick={() => act('test')}>Test my understanding</button>
                 <span className="sep" />
                 <button className="danger" onClick={() => act('remove')}>
                   Remove
@@ -612,6 +633,9 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
                 <span className="sep" />
                 <button onClick={() => act('challenge')}>Challenge me</button>
                 <button onClick={() => act('argument')}>What’s the argument?</button>
+                <button onClick={() => act('test')} title="Read it once more, put it away, and say what it says">
+                  Test my understanding
+                </button>
                 <button onClick={() => act('explore')} title="Keep it to explore in a short side lesson later">
                   Explore later
                 </button>

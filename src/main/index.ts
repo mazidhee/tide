@@ -573,6 +573,17 @@ function registerIpc() {
   handle('writing:startDraft', async (topic: import('@shared/writingPrompt').Topic, root: string) => (await import('./writing')).startDraft(topic, String(root ?? '')))
   handle('writing:published', async (p: string, on: boolean) => (await import('./writing')).setPublished(String(p ?? ''), !!on))
   handle('writing:tickThings', async (p: string) => (await import('./writing')).tickInThings(String(p ?? '')))
+  // Comprehension lessons (main/comprehension): the next passage, a lesson's steps, the grade and the cards
+  handle('comp:next', async () => (await import('./comprehension')).nextPassage())
+  handle('comp:list', async () => (await import('./comprehension')).listLessons())
+  handle('comp:get', async (id: string) => (await import('./comprehension')).getLesson(String(id ?? '')))
+  handle('comp:start', async (o: import('./comprehension').StartFrom) => (await import('./comprehension')).startLesson(o?.from === 'selection' ? o : { from: 'book' }))
+  handle('comp:update', async (id: string, patch: import('./comprehension').LessonPatch) => (await import('./comprehension')).updateLesson(String(id ?? ''), patch && typeof patch === 'object' ? patch : {}))
+  handle('comp:canGrade', async () => (await import('./comprehension')).canGrade())
+  handle('comp:grade', async (id: string) => (await import('./comprehension')).gradeSummary(String(id ?? '')))
+  handle('comp:selfCheck', async (id: string, ticks: Record<string, boolean>) => (await import('./comprehension')).selfCheck(String(id ?? ''), ticks && typeof ticks === 'object' ? ticks : {}))
+  handle('comp:cards', async (id: string, keep: import('@shared/comprehension').HardMark[]) => (await import('./comprehension')).makeCards(String(id ?? ''), Array.isArray(keep) ? keep : []))
+  handle('comp:lookup', (word: string) => shell.openExternal(`dict://${encodeURIComponent(String(word ?? '').slice(0, 80))}`))
   handle('writing:addFolder', async () => {
     const res = await dialog.showOpenDialog(win!, { title: 'Add a writing folder', buttonLabel: 'Add folder', properties: ['openDirectory'] })
     if (res.canceled || !res.filePaths[0]) return null
