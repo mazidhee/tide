@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PassageLoc } from '@shared/passage'
 import { chapterName, findUnit, minutesFor, parseReaderAnchor, progressAt, reanchor, sameLoc, segments, whereLine, words, wordsLeft, wpmOf, type Mark, type MarkKind, type ReaderChapter } from '@shared/readingRoom'
 import { useApp } from '../../state'
@@ -11,6 +11,7 @@ import { PopOutButton } from '../PopOutButton'
 import { locAnchor } from '@shared/passage'
 import { PlayerBar } from './Player'
 import { IDLE_MS } from '@shared/activeTime'
+import { hasMarginNote, MarginNotes, noteDomId, revealNote } from './MarginNotes'
 
 /**
  * The immersive reader. Opening a book gives it the window: Tide's sidebar steps away (the left
@@ -75,8 +76,6 @@ function rangeIn(el: HTMLElement, start: number, end: number): Range | null {
 /** Where the line being read aloud is lit (the CSS Custom Highlight API), when the window has it */
 const spokenRegistry = () => (typeof CSS === 'undefined' ? undefined : (CSS as unknown as { highlights?: Map<string, Highlight> }).highlights)
 
-const KIND_LABEL: Record<MarkKind, string> = { highlight: 'Highlight', quote: 'Quote kept', note: 'Margin note', question: 'Question' }
-
 export function Reader({ path, anchor }: { path: string; anchor?: string }) {
   const app = useApp()
   const shelf = useShelf()
@@ -94,7 +93,7 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
   const [quiet, setQuiet] = useState(false)
   const [atUnit, setAtUnit] = useState(0)
   const [flash, setFlash] = useState<string | null>(null)
-  const [tops, setTops] = useState<Record<string, number>>({})
+  const [linked, setLinked] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const pageRef = useRef<HTMLElement>(null)
   const player = usePlayer()
@@ -244,29 +243,20 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
     return () => clearTimeout(t)
   }, [book, chapter, shelfBook?.voice, mine?.playing, path])
 
-  // ---------- Margin notes beside their words ----------
+  // ---------- Margin notes beside their words (MarginNotes) ----------
 
-  useLayoutEffect(() => {
-    const page = pageRef.current
-    if (!page) return
-    const next: Record<string, number> = {}
-    let floor = -Infinity
-    const notes = marks.filter((m) => (m.kind === 'note' || m.kind === 'question' || m.kind === 'quote') && (m.note?.trim() || writing?.id === m.id))
-    const placed = notes
-      .map((m) => {
-        const el = page.querySelector<HTMLElement>(`[data-mark~="${m.id}"]`)
-        return el ? { m, top: el.getBoundingClientRect().top - page.getBoundingClientRect().top } : null
-      })
-      .filter((x): x is { m: Mark; top: number } => !!x)
-      .sort((a, b) => a.top - b.top)
-    for (const p of placed) {
-      const top = Math.max(p.top, floor)
-      next[p.m.id] = top
-      const el = page.querySelector<HTMLElement>(`[data-note="${p.m.id}"]`)
-      floor = top + (el?.offsetHeight ?? 64) + 14
-    }
-    if (JSON.stringify(next) !== JSON.stringify(tops)) setTops(next)
-  })
+  const noted = useMemo(() => {
+    if (!current) return []
+    return marks.filter((m) => hasMarginNote(m, writing?.id) && current.units.some((u) => sameLoc(u.loc, m.loc)))
+  }, [marks, current, writing?.id])
+  const notedIds = useMemo(() => new Set(noted.map((m) => m.id)), [noted])
+  const revealTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  /** A passage hovered or focused: its note lit, and brought into view if it sits below the window */
+  const linkPassage = (id: string | null, now = false) => {
+    setLinked(id)
+    clearTimeout(revealTimer.current)
+    if (id) revealTimer.current = setTimeout(() => revealNote(scrollRef.current, id), now ? 0 : 350)
+  }
 
   // ---------- The line being read aloud ----------
 
@@ -301,7 +291,7 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
   // ---------- Selecting ----------
 
   const onMouseUp = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.rr-pop, .rr-margin, .rr-endcard')) return
+    if ((e.target as HTMLElement).closest('.rr-pop, .rr-margin, .rr-marker, .rr-note-pop, .rr-endcard')) return
     const sel = window.getSelection()
     const text = sel?.toString() ?? ''
     if (!sel || !sel.rangeCount || !text.trim()) return
@@ -507,62 +497,65 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
               return (
                 <div key={i} className={`rr-unit${flash === `u${i}` ? ' flash' : ''}`} data-u={i}>
                   <p className={`rr-text${i === 0 && /^[\p{L}"“‘']/u.test(u.text) && !/^[IVXLC]+\.\s/.test(u.text) ? ' drop' : ''}${u.text.includes('\n') ? ' verse' : ''}`} data-text={i}>
-                    {segments(u.text, ms).map((s) =>
-                      s.marks.length ? (
+                    {segments(u.text, ms).map((s) => {
+                      if (!s.marks.length) return <span key={s.start}>{s.text}</span>
+                      const starts = s.marks.filter((m) => reanchor(u.text, m)?.start === s.start)
+                      // The note this piece of the passage belongs to; its first piece can be reached from the keyboard
+                      const note = [...s.marks].reverse().find((m) => notedIds.has(m.id))
+                      const leads = !!note && starts.some((m) => m.id === note.id)
+                      const openPop = (el: HTMLElement) => {
+                        const host = scrollRef.current!.getBoundingClientRect()
+                        const r = el.getBoundingClientRect()
+                        setPop({ x: r.left + r.width / 2 - host.left, y: r.top - host.top + scrollRef.current!.scrollTop, mark: s.marks[s.marks.length - 1] })
+                      }
+                      return (
                         <mark
                           key={s.start}
-                          className={`rr-m ${[...new Set(s.marks.map((m) => `k-${m.kind}`))].join(' ')}${s.marks.some((m) => m.id === flash) ? ' flash' : ''}`}
-                          data-mark={s.marks.filter((m) => reanchor(u.text, m)?.start === s.start).map((m) => m.id).join(' ') || undefined}
+                          className={`rr-m ${[...new Set(s.marks.map((m) => `k-${m.kind}`))].join(' ')}${s.marks.some((m) => m.id === flash) ? ' flash' : ''}${s.marks.some((m) => m.id === linked) ? ' linked' : ''}`}
+                          data-mark={starts.map((m) => m.id).join(' ') || undefined}
+                          tabIndex={leads ? 0 : undefined}
+                          aria-describedby={leads ? noteDomId(note!.id) : undefined}
+                          onMouseEnter={note ? () => linkPassage(note.id) : undefined}
+                          onMouseLeave={note ? () => linkPassage(null) : undefined}
+                          onFocus={leads ? () => linkPassage(note!.id, true) : undefined}
+                          onBlur={leads ? () => linkPassage(null) : undefined}
+                          onKeyDown={
+                            leads
+                              ? (e) => {
+                                  if (e.key !== 'Enter' && e.key !== ' ') return
+                                  e.preventDefault()
+                                  openPop(e.currentTarget)
+                                }
+                              : undefined
+                          }
                           onClick={(e) => {
                             if (window.getSelection()?.toString()) return
                             e.stopPropagation()
-                            const host = scrollRef.current!.getBoundingClientRect()
-                            const r = (e.target as HTMLElement).getBoundingClientRect()
-                            setPop({ x: r.left + r.width / 2 - host.left, y: r.top - host.top + scrollRef.current!.scrollTop, mark: s.marks[s.marks.length - 1] })
+                            openPop(e.target as HTMLElement)
                           }}
                         >
                           {s.text}
                         </mark>
-                      ) : (
-                        <span key={s.start}>{s.text}</span>
                       )
-                    )}
+                    })}
                   </p>
                 </div>
               )
             })}
 
             {/* Margin notes, beside the words they're about */}
-            <div className="rr-margins" aria-label="Margin notes">
-              {marks
-                .filter((m) => tops[m.id] !== undefined)
-                .map((m) => (
-                  <aside key={m.id} className={`rr-margin k-${m.kind}${flash === m.id ? ' flash' : ''}`} data-note={m.id} style={{ top: tops[m.id] }}>
-                    <b>{KIND_LABEL[m.kind]}</b>
-                    {writing?.id === m.id ? (
-                      <textarea
-                        autoFocus
-                        rows={3}
-                        value={writing.text}
-                        placeholder={m.kind === 'question' ? 'Your question, for later' : 'Write in the margin…'}
-                        onChange={(e) => setWriting({ id: m.id, text: e.target.value })}
-                        onBlur={saveWriting}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault()
-                            ;(e.target as HTMLTextAreaElement).blur()
-                          }
-                          if (e.key === 'Escape') (e.target as HTMLTextAreaElement).blur()
-                        }}
-                      />
-                    ) : (
-                      <span className="rr-margin-text" onClick={() => setWriting({ id: m.id, text: m.note ?? '' })}>
-                        {m.note}
-                      </span>
-                    )}
-                  </aside>
-                ))}
-            </div>
+            <MarginNotes
+              pageRef={pageRef}
+              scrollRef={scrollRef}
+              notes={noted}
+              pageKey={`${chapter}|${prefs.size}|${prefs.width}`}
+              writing={writing}
+              setWriting={setWriting}
+              saveWriting={saveWriting}
+              flash={flash}
+              linked={linked}
+              onLink={setLinked}
+            />
 
             <section className="rr-endcard" aria-label="End of the chapter">
               {!seminarDone && current.units.length > 3 ? (

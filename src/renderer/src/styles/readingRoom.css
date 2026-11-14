@@ -52,6 +52,8 @@
   --rp-ink: var(--rp-night-ink);
   --rp-soft: var(--rp-night-soft);
   --rp-line: color-mix(in srgb, var(--rp-ink) 11%, transparent);
+  /* The theme's --line-strong, made on the reader's own paper (day or night, whatever the app's theme) */
+  --rp-line-strong: color-mix(in srgb, var(--rp-ink) 24%, transparent);
   --rp-hover: color-mix(in srgb, var(--rp-ink) 7%, transparent);
   --rp-raised: color-mix(in oklab, var(--rp-paper) 90%, var(--rp-ink));
   --rp-hl: color-mix(in srgb, var(--accent) 24%, transparent);
@@ -316,22 +318,47 @@
   }
 }
 
-/* Margin notes, beside the words */
+/* A passage and its note, lit together (hovering or focusing either) */
+.rr-m {
+  transition: background 0.18s, box-shadow 0.18s;
+}
+.rr-m.linked {
+  background: var(--rp-hl-quote);
+  box-shadow: 0 0 0 2px var(--rp-hl-quote);
+}
+
+/*
+  Margin notes, beside the words (MarginNotes, shared/marginLayout). The layer covers the page;
+  each note sits just outside the text column, right or left, level with its passage or pushed
+  below the note above it, with a hairline back to its words when it is.
+*/
 .rr-margins {
   position: absolute;
-  top: 0;
-  left: calc(100% - 4px);
-  width: 210px;
+  inset: 0;
+  pointer-events: none;
+}
+.rr-margins > * {
+  pointer-events: auto;
 }
 .rr-margin {
   position: absolute;
-  left: 0;
-  width: 100%;
-  padding: 2px 0 2px 11px;
+  width: var(--rr-col, 210px);
+  padding: 3px 6px 3px 11px;
   border-left: 2px solid var(--rp-mark);
   font: 400 12.5px/1.45 var(--rr-ui);
   color: var(--rp-soft);
-  transition: top 0.25s;
+  outline: none;
+  cursor: default;
+  transition: top 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.18s, color 0.18s;
+}
+.rr-margin.side-right {
+  left: calc(100% - 4px);
+}
+.rr-margin.side-left {
+  right: calc(100% - 4px);
+  padding: 3px 11px 3px 6px;
+  border-left: 0;
+  border-right: 2px solid var(--rp-mark);
 }
 .rr-margin b {
   display: block;
@@ -343,32 +370,169 @@
 .rr-margin-text {
   cursor: text;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
-.rr-margin textarea {
+/* At rest a note shows six lines; it opens in full when asked, focused or being written in */
+.rr-margin .rr-margin-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
+  overflow: hidden;
+}
+.rr-margin.open .rr-margin-text,
+.rr-margin:focus-within .rr-margin-text {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: none;
+}
+.rr-margin-more {
+  all: unset;
+  display: block;
+  margin-top: 3px;
+  font: 500 12px/1.4 var(--rr-ui);
+  color: var(--rp-ink);
+  cursor: pointer;
+  opacity: 0.72;
+}
+.rr-margin-more:hover {
+  opacity: 1;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.rr-margin:focus-within .rr-margin-more:not([aria-expanded='true']) {
+  display: none;
+}
+.rr-margin textarea,
+.rr-note-pop textarea {
+  display: block;
   width: 100%;
   border: 0;
   outline: 0;
   resize: none;
+  overflow: hidden;
   padding: 0;
   background: transparent;
   font: inherit;
   color: var(--rp-ink);
   caret-color: var(--accent);
 }
+.rr-margin.linked,
+.rr-margin:focus-within,
 .rr-margin.flash {
-  border-left-color: var(--accent);
+  border-color: var(--accent);
+  color: var(--rp-ink);
 }
-/* Not enough room beside the text: the notes sit under it, in its column */
-@container (max-width: 1010px) {
-  .rr-margins {
-    position: static;
-    width: auto;
-  }
-  .rr-margin {
-    position: relative;
-    top: auto !important;
-    margin: 0 0 14px;
-  }
+/* Reached from the keyboard, a note has the app's focus ring (tide/base.css) around it */
+.rr-margin:focus-visible {
+  border-radius: 2px;
+}
+
+/* The hairline from a pushed-down note back to the first line of its words: out from the text,
+   down a lane in the gutter, and into the note's rule */
+.rr-tether {
+  /* --lane: how far from the note's rule its line runs down (lines side by side get their own) */
+  position: absolute;
+  width: calc(23px - var(--lane, 11px));
+  border-top: 1px solid var(--rp-line-strong);
+  pointer-events: none;
+  transition: top 0.25s cubic-bezier(0.16, 1, 0.3, 1), height 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.18s;
+}
+.rr-tether::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  width: var(--lane, 11px);
+  border-top: 1px solid;
+  border-top-color: inherit;
+}
+.rr-tether.right {
+  left: calc(100% - 27px);
+  border-right: 1px solid var(--rp-line-strong);
+}
+.rr-tether.right::after {
+  left: 100%;
+}
+.rr-tether.left {
+  left: calc(4px + var(--lane, 11px));
+  border-left: 1px solid var(--rp-line-strong);
+}
+.rr-tether.left::after {
+  right: 100%;
+}
+.rr-tether.linked {
+  z-index: 1;
+  border-color: var(--rp-soft);
+}
+
+/* A window too narrow for a margin: a small marker beside each passage (the note's rule, folded
+   up) opens its note */
+.rr-margins > .rr-mark-slot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  pointer-events: none;
+}
+.rr-mark-slot > * {
+  pointer-events: auto;
+}
+.rr-marker {
+  all: unset;
+  top: 0;
+  position: absolute;
+  left: calc(100% - 25px);
+  width: 20px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.rr-marker i {
+  width: 3px;
+  height: 15px;
+  border-radius: 2px;
+  background: var(--rp-mark);
+  transition: background 0.15s, height 0.15s;
+}
+.rr-marker:hover,
+.rr-marker.linked,
+.rr-marker.on {
+  background: var(--rp-hover);
+}
+.rr-marker:hover i,
+.rr-marker.linked i,
+.rr-marker.on i,
+.rr-marker.flash i {
+  background: var(--accent);
+}
+.rr-note-pop {
+  position: absolute;
+  z-index: 7;
+  top: 28px;
+  right: 6px;
+  width: min(340px, calc(100% - 48px));
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+  padding: 12px 14px 13px;
+  border-radius: 11px;
+  background: var(--rp-raised);
+  box-shadow: var(--rp-shadow);
+  font: 400 13px/1.5 var(--rr-ui);
+  color: var(--rp-ink);
+  cursor: default;
+  animation: rr-in 0.14s ease-out;
+}
+.rr-note-pop b {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.rr-note-pop .rr-margin-text {
+  display: block;
 }
 
 /* The menu on a selection */
