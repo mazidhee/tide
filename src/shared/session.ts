@@ -113,8 +113,20 @@ export function closeGrade(reply: string): string {
 /** A numbered question or problem ("**Question 3 of 8**", "**Problem 2 · harder**"): something set to be answered */
 const NUMBERED = /\*\*\s*(?:Problem|Question)\s+\d+/i
 
+/**
+ * A tag's quoted attribute values with their angle brackets made harmless, so a `>` written inside
+ * one (note="260 -> 4") never ends the tag early and leaks the rest as text. Arrows stay arrows.
+ */
+export function quoteSafe(text: string): string {
+  return text.replace(/<([a-z][\w-]*)((?:\s+[\w:-]+\s*=\s*(?:"[^"]*"|'[^']*'))+)\s*(\/?)>/gi, (_m, tag: string, attrs: string, slash: string) => {
+    const safe = attrs.replace(/"[^"]*"|'[^']*'/g, (v) => v.replace(/->/g, '→').replace(/<-/g, '←').replace(/>=/g, '≥').replace(/<=/g, '≤').replace(/>/g, '›').replace(/</g, '‹'))
+    return `<${tag}${safe}${slash ? '/' : ''}>`
+  })
+}
+
 /** Splits a (possibly still streaming) tutor message into blocks; unfinished tags stay hidden */
 export function parseBlocks(full: string): Block[] {
+  full = quoteSafe(full)
   // "Carry on" (<continue/>): no question this time; the app offers Go on instead
   const carryOn = /<continue\b[^>]*\/?>/i.test(full)
   // Hidden tests Tide made for the code question from its reference solution (main/codeTests.ts)

@@ -305,3 +305,21 @@ describe('a lesson map for every teaching style', () => {
     expect(map.steps.map((s) => s.title)).toEqual(['Why retries double-pay', 'Keys and where they live'])
   })
 })
+
+describe('a step report after unreported steps', () => {
+  it('keeps the walked step starts where they happened, and closes only the reported step at the end', () => {
+    const turns: MapTurn[] = [{ role: 'user', content: 'Teach me binary' }, { role: 'assistant', content: `Here's the path.\n\n${PLAN}\n\n${ask()}` }]
+    for (let k = 0; k < 14; k++) turns.push({ role: 'user', content: `Answer: ${k}` }, { role: 'assistant', content: `${grade('correct')}\n${ask()}` })
+    const plain = lessonMap(turns, blocksOf(turns))
+    const last = turns.length - 1
+    const reported = [...turns.slice(0, last), { role: 'assistant' as const, content: `${turns[last].content}\n<progress passed="3" note="all three"/>` }]
+    const m = lessonMap(reported, blocksOf(reported))
+    const earlier = (map: typeof m) => [...map.dividers].filter(([t]) => t < last)
+    // The walk had moved through the steps before the report; those dividers stay where they were
+    expect(earlier(plain).length).toBeGreaterThan(0)
+    expect(earlier(m)).toEqual(earlier(plain))
+    // The report at the end never back-fills starts of steps already behind
+    const atEnd = m.dividers.get(last) ?? []
+    expect(atEnd.filter((d) => d.start && d.start.index < (plain.current ?? 0)).length).toBe(0)
+  })
+})
