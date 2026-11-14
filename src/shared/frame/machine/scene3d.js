@@ -28,10 +28,13 @@
    * A 3D scene in its own box. opts: height (380), label, camera ([x, y, z]), target ([x, y, z]),
    * parts ([{ id, label, box: [w, h, d], at: [x, y, z], color: 'c1' | 'surface' | …, info: {…},
    * hidden, labelled: 'focus' | 'always' | 'never', opacity }]), lines ([{ id, points: [[x,y,z]…],
-   * color, hidden }]), steps ([{ say, focus: [ids], show: [ids], view: { camera, target } }]),
-   * chips (true: a button per labelled part, below, to pick it with the keyboard).
-   * Returns at once { el, captions, draw(i), ready (a promise of { THREE, scene, camera, part(id) }) }:
-   * use visual.steps(s.captions, s.draw) straight away; drawing waits for three.js.
+   * color, hidden }]), steps ([{ say, focus: [ids], labels: [ids], show: [ids], lit: [ids],
+   * fit: [ids] (the camera frames these parts), from: [x, y, z] (the direction it looks from),
+   * view: { camera, target } (or exactly this) }]), chips (true: a button per labelled part, below).
+   * Returns at once { el, captions, draw(i), set(id, {lit, color, label, note, hidden, at, box}),
+   * add(id, object3D, {label, note, info, group}), ready (a promise of { THREE, scene, camera,
+   * render, part(id) }) }: use visual.steps(s.captions, s.draw) straight away; drawing waits for
+   * three.js. A step is drawn at once (no glide) while Tide checks the visual (visual.auditing).
    */
   M.scene = function (into, opts) {
     opts = opts || {};
@@ -48,9 +51,12 @@
     var parts = opts.parts || [], lines = opts.lines || [];
     var want = 0, T = null, scene, camera, renderer, controls, byId = {}, labels = {}, focusSet = null, shown = {}, raf = 0, tween = null;
     var chipsBar = null;
-    var selected = null, curLabels = null;
+    var selected = null, curLabels = null, stepLit = null;
 
     var info = function (p) { return Object.assign({ part: p.label || p.id }, p.info || {}); };
+    /** Objects added with add(): faded with the rest, labelled and picked like parts */
+    var custom = [];
+    var pending = [];
     var pick = function (p) {
       if (!p) return;
       selected = p.id;
@@ -68,14 +74,15 @@
         o.mesh.visible = o.edges.visible = vis;
         var on = !focusSet || focusSet.indexOf(p.id) >= 0 || (p.group && focusSet.indexOf(p.group) >= 0);
         var base = css(p.color || 'surface');
-        o.mesh.material.color.set(p.lit && on ? acc : base);
+        var isLit = p.lit || (stepLit && stepLit.indexOf(p.id) >= 0);
+        o.mesh.material.color.set(isLit && on ? acc : base);
         o.mesh.material.opacity = on ? (p.opacity != null ? p.opacity : 1) : 0.16;
         o.mesh.material.transparent = o.mesh.material.opacity < 1;
         o.mesh.material.depthWrite = o.mesh.material.opacity >= 0.5;
         o.edges.material.color.set(selected === p.id || (on && focusSet) ? acc : css('line-strong'));
         o.edges.material.opacity = on ? 0.9 : 0.2;
         var lab = labels[p.id];
-        var named = curLabels ? curLabels.indexOf(p.id) >= 0 : p.labelled !== 'never' && on && focusSet && focusSet.indexOf(p.id) >= 0;
+        var named = curLabels ? curLabels.indexOf(p.id) >= 0 : p.labelled !== 'never' && on && !!focusSet;
         if (lab) lab.style.display = vis && (p.labelled === 'always' || named) ? 'block' : 'none';
       });
       lines.forEach(function (l) {
@@ -84,31 +91,56 @@
         o.visible = !l.hidden || !!shown[l.id];
         o.material.color.set(css(l.color || 'accent'));
       });
+      custom.forEach(function (c) {
+        var on = !focusSet || focusSet.indexOf(c.id) >= 0 || (c.group && focusSet.indexOf(c.group) >= 0);
+        c.obj.visible = !c.hidden || !!shown[c.id];
+        c.obj.traverse(function (o) {
+          if (!o.material) return;
+          (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) {
+            if (m.userData.base == null) m.userData.base = m.opacity;
+            m.transparent = true;
+            m.opacity = on ? m.userData.base : Math.min(m.userData.base, 0.16);
+            m.depthWrite = m.opacity >= 0.5;
+          });
+        });
+        var lab = labels[c.id];
+        var named = curLabels ? curLabels.indexOf(c.id) >= 0 : c.labelled !== 'never' && on && focusSet && focusSet.indexOf(c.id) >= 0;
+        if (lab) lab.style.display = c.obj.visible && (c.labelled === 'always' || named) ? 'block' : 'none';
+      });
       render();
     };
+    /** Where a part's or an object's label hangs: above its top centre */
+    var anchorOf = function (id) {
+      var p = parts.filter(function (q) { return q.id === id; })[0];
+      if (p) return new T.Vector3(p.at[0], p.at[1] + p.box[1] / 2 + (p.labelLift || 0.25), p.at[2]);
+      var c = custom.filter(function (q) { return q.id === id; })[0];
+      if (!c) return null;
+      var b = new T.Box3().setFromObject(c.obj), mid = b.getCenter(new T.Vector3());
+      return new T.Vector3(mid.x, b.max.y + 0.25, mid.z);
+    };
     var place = function () {
-      var r = wrap.getBoundingClientRect();
-      parts.forEach(function (p) {
-        var lab = labels[p.id], o = byId[p.id];
-        if (!lab || lab.style.display === 'none' || !o) return;
-        var v = new T.Vector3(p.at[0], p.at[1] + p.box[1] / 2 + (p.labelLift || 0.25), p.at[2]).project(camera);
-        var x = (v.x + 1) / 2 * r.width, y = (1 - v.y) / 2 * r.height;
-        lab.style.transform = 'translate(' + Math.round(x) + 'px,' + Math.round(y) + 'px) translate(-50%, -100%)';
-        lab.style.visibility = v.z > 1 || x < -20 || x > r.width + 20 ? 'hidden' : 'visible';
-      });
-      // Labels that would overlap: the later one moves up
-      var boxes = [];
-      parts.forEach(function (p) {
-        var lab = labels[p.id];
-        if (!lab || lab.style.display === 'none') return;
-        var b = lab.getBoundingClientRect(), dy = 0;
-        for (var tries = 0; tries < 6; tries++) {
-          var hit = boxes.some(function (o) { return b.left < o.right && b.right > o.left && b.top - dy < o.bottom && b.bottom - dy > o.top; });
+      var W = wrap.clientWidth, Hh = wrap.clientHeight, boxes = [];
+      Object.keys(labels).forEach(function (id) {
+        var lab = labels[id];
+        if (lab.style.display === 'none') return;
+        var a = anchorOf(id);
+        if (!a) return;
+        var v = a.project(camera);
+        var x = (v.x + 1) / 2 * W, y = (1 - v.y) / 2 * Hh;
+        // Behind the camera or off the canvas: not shown, rather than half shown
+        if (v.z > 1 || x < 0 || x > W || y < 8 || y > Hh) { lab.style.visibility = 'hidden'; return; }
+        lab.style.visibility = 'visible';
+        var w = lab.offsetWidth, h = lab.offsetHeight;
+        var left = Math.max(4, Math.min(W - w - 4, x - w / 2)), top = y - h - 4;
+        // Labels that would overlap: the later one moves up, or below its part when there's no room above
+        for (var tries = 0; tries < 8; tries++) {
+          var hit = boxes.some(function (o) { return left < o.right + 3 && left + w > o.left - 3 && top < o.bottom + 2 && top + h > o.top - 2; });
           if (!hit) break;
-          dy += b.height + 3;
+          top -= h + 4;
         }
-        if (dy) lab.style.transform += ' translateY(' + -dy + 'px)';
-        boxes.push({ left: b.left, right: b.right, top: b.top - dy, bottom: b.bottom - dy });
+        if (top < 4) { lab.style.visibility = 'hidden'; return; }
+        lab.style.transform = 'translate(' + Math.round(left) + 'px,' + Math.round(top) + 'px)';
+        boxes.push({ left: left, right: left + w, top: top, bottom: top + h });
       });
     };
     var render = function () { if (renderer) { renderer.render(scene, camera); place(); } };
@@ -131,16 +163,52 @@
       tween = requestAnimationFrame(tick);
     };
 
+    /** A view that frames these parts (or objects), looking from a direction */
+    var fitView = function (ids, from) {
+      var box = new T.Box3(), any = false;
+      // A group's name stands for its members
+      ids = [].concat.apply([], ids.map(function (id) {
+        var members = parts.concat(custom).filter(function (p) { return p.group === id; }).map(function (p) { return p.id; });
+        return members.length ? members : [id];
+      }));
+      ids.forEach(function (id) {
+        var o = byId[id] && byId[id].mesh || (custom.filter(function (c) { return c.id === id; })[0] || {}).obj;
+        if (!o) return;
+        box.expandByObject(o);
+        any = true;
+      });
+      if (!any) return null;
+      var sphere = box.getBoundingSphere(new T.Sphere());
+      var dir = new T.Vector3().fromArray(from || [0.55, 0.85, 1]).normalize();
+      var vfov = camera.fov * Math.PI / 180, hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect);
+      var dist = sphere.radius / Math.sin(Math.min(vfov, hfov) / 2) * 0.95;
+      return { camera: sphere.center.clone().add(dir.multiplyScalar(Math.max(dist, 3))).toArray(), target: sphere.center.toArray() };
+    };
+    var auditing = function () { return !!(window.visual && window.visual.auditing); };
+
     var apply = function (i, quiet) {
       var st = steps[i] || {};
       focusSet = st.focus || null;
       curLabels = st.labels || null;
       shown = {};
       (st.show || []).forEach(function (id) { shown[id] = 1; });
-      if (st.lit) parts.forEach(function (p) { p.lit = st.lit.indexOf(p.id) >= 0; });
-      else parts.forEach(function (p) { p.lit = false; });
+      stepLit = st.lit || null;
       paint();
-      if (st.view && !quiet) moveTo(st.view);
+      var view = st.fit ? fitView(st.fit, st.from) : st.view;
+      if (view && !quiet) moveTo(view, auditing());
+    };
+
+    var makeLabel = function (p) {
+      var lab = labels[p.id] || M.h('div', { style: 'position:absolute;left:0;top:0;max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;line-height:1.3;padding:3px 7px;border-radius:6px;background:var(--bg);color:var(--ink);box-shadow:0 0 0 1px var(--line-strong);display:none' });
+      lab.textContent = p.label;
+      if (p.note) lab.append(M.h('span', { style: 'color:var(--muted);margin-left:6px' }, p.note));
+      if (!labels[p.id]) labelsLayer.append(lab);
+      labels[p.id] = lab;
+    };
+    var addNow = function (c) {
+      c.obj.userData.part = c;
+      scene.add(c.obj);
+      if (c.label && c.labelled !== 'never') makeLabel(c);
     };
 
     var ready = three().then(function (THREE) {
@@ -180,13 +248,7 @@
         edges.rotation.copy(mesh.rotation);
         scene.add(mesh, edges);
         byId[p.id] = { mesh: mesh, edges: edges };
-        if (p.label && p.labelled !== 'never') {
-          var lab = M.h('div', { style: 'position:absolute;left:0;top:0;white-space:nowrap;font-size:12px;line-height:1.3;padding:3px 7px;border-radius:6px;background:var(--bg);color:var(--ink);box-shadow:0 0 0 1px var(--line-strong);display:none' });
-          lab.textContent = p.label;
-          if (p.note) { var n = M.h('span', { style: 'color:var(--muted);margin-left:6px' }, p.note); lab.append(n); }
-          labelsLayer.append(lab);
-          labels[p.id] = lab;
-        }
+        if (p.label && p.labelled !== 'never') makeLabel(p);
       });
       lines.forEach(function (l) {
         var pts = l.points.map(function (q) { return new T.Vector3().fromArray(q); });
@@ -197,15 +259,19 @@
         scene.add(line);
         byId[l.id] = line;
       });
-      // Picking a part
+      // Picking a part (or an added object)
       var ray = new T.Raycaster(), down = null;
       canvas.addEventListener('pointerdown', function (e) { down = [e.clientX, e.clientY]; });
       canvas.addEventListener('pointerup', function (e) {
         if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) return;
         var r = canvas.getBoundingClientRect();
         ray.setFromCamera(new T.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
-        var hits = ray.intersectObjects(parts.map(function (p) { return byId[p.id].mesh; }).filter(function (m) { return m.visible && m.material.opacity > 0.3; }));
-        if (hits.length) pick(hits[0].object.userData.part);
+        var hits = ray.intersectObjects(parts.map(function (p) { return byId[p.id].mesh; }).filter(function (m) { return m.visible && m.material.opacity > 0.3; }).concat(custom.filter(function (c) { return c.obj.visible; }).map(function (c) { return c.obj; })), true);
+        for (var h = 0; h < hits.length; h++) {
+          var o = hits[h].object;
+          while (o && !o.userData.part) o = o.parent;
+          if (o && o.userData.part) return pick(o.userData.part);
+        }
       });
       // Keys: turn, tilt and zoom about the target
       canvas.addEventListener('keydown', function (e) {
@@ -234,11 +300,15 @@
       new ResizeObserver(size).observe(wrap);
       size();
       apply(want, true);
+      custom.forEach(function (c) { addNow(c); });
+      pending.forEach(function (f) { f(); });
+      pending = [];
       var s = steps[want] || {};
-      if (!s.view) render();
-      else moveTo(s.view, true);
+      var first = s.fit ? fitView(s.fit, s.from) : s.view;
+      if (!first) render();
+      else moveTo(first, true);
       if (window.visual) window.visual.onTheme(function () { paint(); });
-      return { THREE: T, scene: scene, camera: camera, controls: controls, renderer: renderer, part: function (id) { return byId[id]; }, render: render };
+      return { THREE: T, scene: scene, camera: camera, controls: controls, renderer: renderer, part: function (id) { return byId[id] || (custom.filter(function (c) { return c.id === id; })[0] || {}).obj; }, render: render, fitView: fitView };
     });
     ready.catch(function (e) { wrap.append(M.h('p', { style: 'position:absolute;inset:auto 12px 12px;color:var(--bad)' }, String(e && e.message || e))); });
 
@@ -246,7 +316,28 @@
       el: wrap,
       captions: steps.map(function (s) { return s.say || ''; }),
       ready: ready,
-      draw: function (i) { want = Math.max(0, Math.min(steps.length - 1, i)); if (T) apply(want); return steps[want] && steps[want].say; }
+      draw: function (i) { want = Math.max(0, Math.min(steps.length - 1, i)); if (T) apply(want); return steps[want] && steps[want].say; },
+      /** Changes a part (lit, color, label, note, hidden, at, box) and redraws: what a control the learner moves calls */
+      set: function (id, props) {
+        var run = function () {
+          var p = parts.filter(function (q) { return q.id === id; })[0] || custom.filter(function (q) { return q.id === id; })[0];
+          if (!p) return;
+          Object.assign(p, props);
+          var o = byId[id];
+          if (o && props.at) { o.mesh.position.fromArray(p.at); o.edges.position.copy(o.mesh.position); }
+          if (o && props.box && !p.shape) { o.mesh.scale.set(p.box[0] / o.mesh.geometry.parameters.width, p.box[1] / o.mesh.geometry.parameters.height, p.box[2] / o.mesh.geometry.parameters.depth); o.edges.scale.copy(o.mesh.scale); }
+          if (props.label != null || props.note != null) makeLabel(p);
+          paint();
+        };
+        if (T) run(); else pending.push(run);
+      },
+      /** Adds a three.js object of your own (made with the THREE from ready): labelled, faded, framed and picked like a part */
+      add: function (id, obj, o) {
+        var c = Object.assign({ id: id, obj: obj }, o || {});
+        custom.push(c);
+        if (scene) { addNow(c); paint(); }
+        return obj;
+      }
     };
   };
 

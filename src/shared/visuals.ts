@@ -334,7 +334,7 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
   };
 
   // ---- The host API ----
-  var steps = null, at = 0, timer = 0, resetters = [], themers = [];
+  var steps = null, at = 0, timer = 0, resetters = [], themers = [], auditing = false;
   var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   var say = function () { return steps && steps.captions ? steps.captions[at] || '' : steps && steps.said ? steps.said : ''; };
   var tell = function () { if (steps) send({ t: 'steps', i: at, n: steps.n, say: cut(say(), 300), playing: !!timer }); };
@@ -421,6 +421,7 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
   var audit = function () {
     var problems = [], n = steps ? steps.n : 1;
     stop();
+    auditing = true;
     for (var i = 0; i < n && problems.length < 6; i++) {
       if (steps) {
         try { var r = steps.draw(i); if (typeof r === 'string') steps.said = r; } catch (e) { problems.push(cut('Drawing step ' + (i + 1) + ' failed: ' + (e && e.message || e), 300)); continue; }
@@ -428,6 +429,7 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
       problems = problems.concat(layoutProblems(steps ? 'At step ' + (i + 1) + ', ' : ''));
     }
     if (steps) { at = 0; draw(); }
+    auditing = false;
     // A 3D scene renders a moment after it is drawn: look at its canvas then
     setTimeout(function () {
       if (blankCanvases()) problems.push('A canvas stayed blank: nothing was rendered on it (render after the scene is built and on every change, and point the camera at it).');
@@ -478,6 +480,8 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
     theme: {},
     onTheme: function (fn) { if (typeof fn === 'function') themers.push(fn); },
     reducedMotion: reduced,
+    /** Tide is drawing every step to check it: draw at once, no glides */
+    get auditing() { return auditing; },
     color: function (name) { return getComputedStyle(document.documentElement).getPropertyValue('--' + name).trim(); }
   };
   var readTheme = function () {
@@ -794,7 +798,7 @@ export const KIT_GUIDE = `TideMachine, Tide's computing kit, is loaded in every 
   - TideMachine.cpu(el, {asm, data}): a tiny 8-bit CPU (R0–R3, PC, IR, ALU, Z, 16 bytes of memory, buses) running LOADI LOAD STORE ADD SUB AND OR JMP JZ HALT, one step each for fetch, decode and execute: visual.steps(cpu.captions, cpu.draw).
   - TideMachine.python(el, {digits}): Python's frames, names, objects (type, id, refs) and the arrows between them, from a real trace: put the code (under 20 lines) in a <script type="text/x-python"> in the visual and Tide runs it under a tracer before the frame starts. visual.steps(py.captions, py.draw).
   - TideMachine.stackHeap(el, {steps: [{frames: [{name, vars: [{name, text} | {name, to: id}]}], objects: [{id, title, kind: 'atom' | 'seq' | 'map', value, cells: [{label, to | text}]}], say}]}): stack and heap for C, Rust or anything else, step by step.
-  - TideMachine.die(el, {cores}) and TideMachine.gpu(el, {sms}): 3D scenes of a CPU die (cores, L1, L2, L3, memory controller, DRAM, a cache miss) and a GPU (SMs, a warp of 32 lanes, divergence, L2, HBM), captioned in steps. TideMachine.scene(el, {parts: [{id, label, note, box: [w, h, d], at: [x, y, z], color: 'c1', info}], lines, steps: [{say, focus: [ids], labels: [ids], show, view: {camera, target}}]}) builds any other 3D scene of boxes with labels, orbit, focus and picking; .ready gives {THREE, scene, render} for custom geometry.
+  - TideMachine.die(el, {cores}) and TideMachine.gpu(el, {sms}): 3D scenes of a CPU die (cores, L1, L2, L3, memory controller, DRAM, a cache miss) and a GPU (SMs, a warp of 32 lanes, divergence, L2, HBM), captioned in steps. TideMachine.scene(el, {parts: [{id, label, box: [w, h, d], at: [x, y, z], color: 'c1', group, info}], steps: [{say, fit: [ids], focus: [ids], lit: [ids]}]}) builds any other 3D scene with labels, orbit, framing, focus and picking; .set(id, {lit, label}) changes a part, .add(id, object3D) adds your own geometry.
   - Helpers: TideMachine.bin(v, n) hex(v, digits) signed(u, n) unsigned(v, n) bytesOf(v, size, endian) assemble(asm).`
 
 /**
