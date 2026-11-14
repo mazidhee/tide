@@ -327,7 +327,7 @@ function WeekBoard({ week, onChange, thingsReady, onThings, busy, onPlan, planni
     it.done = !it.done
     onChange(next)
     window.tide.coach
-      .setDone(picked, index, !!it.done)
+      .setDone(picked, index, !!it.done, it.title)
       // A mixed week reshuffles what's left once something is finished or undone
       .then(() => (week.mix ? window.tide.portfolio.replan().then((r) => r && onChange(r)) : undefined))
       .catch(() => onChange(week))

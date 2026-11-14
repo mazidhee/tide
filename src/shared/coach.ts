@@ -114,6 +114,8 @@ export interface AgendaItem {
   gate?: { phase: string; step: 'firm-up' | 'check' | 'capstone' }
   /** The week's mixed review across every track (shared/track mixedReview) */
   mixed?: boolean
+  /** The spaced-review warm-up's contents (shared/spacedReview): the due cards, then the fading concepts to recall */
+  recall?: import('./spacedReview').SpacedRecall
   /** A session of a course's lessons (shared/coursePlan): the course, and the lessons in it, in order */
   course?: { id: string; title: string; lessons: { id: string; title: string; n: string; minutes: number }[] }
   /** Sharpness practice (kind practice): the category */

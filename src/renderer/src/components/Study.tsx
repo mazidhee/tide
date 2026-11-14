@@ -8,6 +8,8 @@ import { Icon } from './Icon'
 import { PixelScene } from './PixelScene'
 import { PillToggle } from './PromptBox'
 import { pageKey, typingIn } from '../lib/typing'
+import { startRecall, startSpacedReview, tickRun } from '../lib/agenda'
+import type { FadingConcept, SpacedRun } from '@shared/spacedReview'
 
 const NEW_PER_SESSION = 20
 
@@ -89,9 +91,12 @@ function Decks({ onStudy }: { onStudy(scope: ChatScope): void }) {
   const app = useApp()
   const [stats, setStats] = useState<ReviewStats | null>(null)
   const [recall, setRecall] = useState<{ path: string; title: string; due: number; first: boolean }[]>([])
+  const [fading, setFading] = useState<FadingConcept[]>([])
+  const [recalling, setRecalling] = useState(false)
   useEffect(() => {
     window.tide.learn.stats().then(setStats)
     window.tide.recall.queue().then(setRecall)
+    window.tide.track.fading().then(setFading).catch(() => {})
   }, [])
   if (!stats) return <p className="muted">Loading decks…</p>
   const decks = Object.entries(stats.decks).sort((a, b) => b[1].due + b[1].new - (a[1].due + a[1].new))
@@ -114,6 +119,23 @@ function Decks({ onStudy }: { onStudy(scope: ChatScope): void }) {
           </button>
         )}
       </div>
+
+      {fading.length > 0 && (
+        <div className="rv-fading" title={fading.map((c) => `${c.name}${c.retention !== undefined ? `: ${Math.round(c.retention * 100)}% retention` : ''}`).join('\n')}>
+          <span className="rv-fading-k">Fading</span>
+          <span className="rv-fading-names">{fading.slice(0, 3).map((c) => c.name).join(', ')}{fading.length > 3 ? ` +${fading.length - 3}` : ''}</span>
+          <button
+            className="btn small primary"
+            disabled={recalling}
+            onClick={() => {
+              setRecalling(true)
+              void startSpacedReview(app, null).finally(() => setRecalling(false))
+            }}
+          >
+            {recalling ? 'Opening…' : 'Recall now'}
+          </button>
+        </div>
+      )}
 
       <div className="rv-stats">
         {stat(String(dueToday), 'due today', dueToday ? 'hot' : '')}
@@ -190,14 +212,14 @@ function Decks({ onStudy }: { onStudy(scope: ChatScope): void }) {
   )
 }
 
-export function StudyView({ scope: initialScope }: { scope: ChatScope }) {
+export function StudyView({ scope: initialScope, run }: { scope: ChatScope; run?: SpacedRun }) {
   const app = useApp()
   const [scope, setScope] = useState(initialScope)
-  const [started, setStarted] = useState(initialScope.kind !== 'vault')
+  const [started, setStarted] = useState(initialScope.kind !== 'vault' || !!run)
   useEffect(() => {
     setScope(initialScope)
-    setStarted(initialScope.kind !== 'vault')
-  }, [initialScope])
+    setStarted(initialScope.kind !== 'vault' || !!run)
+  }, [initialScope, run])
   const [queue, setQueue] = useState<StudyCard[] | null>(null)
   const [total, setTotal] = useState(0)
   const [flipped, setFlipped] = useState(false)
@@ -211,15 +233,30 @@ export function StudyView({ scope: initialScope }: { scope: ChatScope }) {
     setQueue(null)
     setDone(0)
     window.tide.study.cards(scope).then((cards) => {
+      // A warm-up takes only its cards that are due: no new ones (they come in through lessons and Review)
+      const ids = run && new Set(run.cards)
+      if (ids) cards = cards.filter((c) => ids.has(c.id))
       setTotal(cards.length)
       const due = cards.filter((c) => c.schedule && isDue(c)).sort((a, b) => a.schedule!.due - b.schedule!.due)
-      const fresh = cards.filter((c) => !c.schedule).slice(0, NEW_PER_SESSION)
+      const fresh = ids ? [] : cards.filter((c) => !c.schedule).slice(0, NEW_PER_SESSION)
       setQueue([...due, ...fresh])
       setSessionSize(due.length + fresh.length)
     })
-  }, [scope, started])
+  }, [scope, started, run])
 
   const card = queue?.[0]
+  // A warm-up's cards done: on to its recall, or (cards only) ticked, then back to Your week
+  const ended = !!run && !!queue && !card
+  const ticked = useRef(false)
+  useEffect(() => {
+    ticked.current = false
+  }, [run])
+  useEffect(() => {
+    if (!ended || !run || run.recall || !done || ticked.current) return
+    ticked.current = true
+    tickRun(run)
+  }, [ended, run, done])
+  const back = () => app.setView(run?.back === 'review' ? { kind: 'study', scope: { kind: 'vault' } } : { kind: 'coach' })
   const env = useMemo(() => ({ notePath: card?.path ?? '', filesByName: app.filesByName }), [card, app.filesByName])
 
   const grade = useCallback(
@@ -291,11 +328,11 @@ export function StudyView({ scope: initialScope }: { scope: ChatScope }) {
       <div className="page-inner narrow">
         <header className="rv-session-head">
           <div className="crumbs">
-            <button className="crumb-link" onClick={() => setStarted(false)}>
-              Review
+            <button className="crumb-link" onClick={() => (run ? back() : setStarted(false))}>
+              {run?.back === 'week' ? 'Your week' : 'Review'}
             </button>
             <Icon name="chevron" size={11} />
-            <span className="crumb current">{scopeName(scope)}</span>
+            <span className="crumb current">{run ? (run.recall ? `Due cards, then recall ${run.recall.names}` : 'Due cards') : scopeName(scope)}</span>
           </div>
           {card && (
             <div className="rv-session-tools">
@@ -320,7 +357,7 @@ export function StudyView({ scope: initialScope }: { scope: ChatScope }) {
           )}
         </header>
 
-        {total === 0 && (
+        {!run && total === 0 && (
           <div className="empty-block">
             <p>No flashcards here yet.</p>
             <p className="muted">
@@ -330,7 +367,26 @@ export function StudyView({ scope: initialScope }: { scope: ChatScope }) {
           </div>
         )}
 
-        {total > 0 && !card && (
+        {run && !card && (
+          <div className="empty-block rv-run-end">
+            <p>
+              <Icon name="check" size={14} /> {done ? `${done} card${done === 1 ? '' : 's'} reviewed` : 'No cards due now'}
+            </p>
+            <div className="row-gap">
+              {run.recall ? (
+                <button className="btn primary" autoFocus onClick={() => startRecall(app, run)}>
+                  Next: recall {run.recall.names}
+                </button>
+              ) : (
+                <button className="btn primary" autoFocus onClick={back}>
+                  Back to {run.back === 'week' ? 'Your week' : 'Review'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {!run && total > 0 && !card && (
           <div className="empty-block">
             <p>{done ? `Done. You reviewed ${done} card${done === 1 ? '' : 's'}.` : 'Nothing is due right now.'}</p>
             <div className="row-gap">

@@ -2324,8 +2324,14 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           )}
           {finished && (
             <div className={`row-gap s-finish${showMap && map.steps.length > 0 ? ' lm-after-end' : ''}`}>
+              {/* A spaced-review warm-up ends where it came from (shared/spacedReview) */}
+              {options?.back && (
+                <button className="btn primary" autoFocus onClick={() => app.setView(options.back === 'week' ? { kind: 'coach' } : { kind: 'study', scope: { kind: 'vault' } })}>
+                  Back to {options.back === 'week' ? 'Your week' : 'Review'}
+                </button>
+              )}
               {/* Under the lesson map's end card, which has the primary action, these are secondary */}
-              <button className={`btn${showMap && map.steps.length > 0 ? '' : ' primary'}`} onClick={() => send(openingRef.current, [])}>
+              <button className={`btn${(showMap && map.steps.length > 0) || options?.back ? '' : ' primary'}`} onClick={() => send(openingRef.current, [])}>
                 <Icon name="refresh" size={14} />
                 Go again
               </button>

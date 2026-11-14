@@ -3,16 +3,57 @@ import type { ChatScope } from '@shared/types'
 import { whyByDefault } from '@shared/session'
 import type { Mistake } from '@shared/mistakes'
 import type { useApp } from '../state'
+import { isSpacedReview, type SpacedRun } from '@shared/spacedReview'
 
 const ACTIVE = 'tide.agenda.active'
 
 /** Remembered, so finishing the lesson, quiz or test ticks it off */
 function remember(it: AgendaItem, at?: { date: string; index: number }) {
+  if (at) rememberAs(at, it.title, it.kind === 'check' ? checkTopic(it.title) : it.kind === 'test' || it.kind === 'take-home' ? it.title : (it.topic ?? it.title))
+}
+
+/** The item a session will tick when it finishes: by position, checked by its title (main/coach setItemDone) */
+function rememberAs(at: { date: string; index: number }, title: string, topic: string) {
   try {
-    if (at) localStorage.setItem(ACTIVE, JSON.stringify({ ...at, topic: it.kind === 'check' ? checkTopic(it.title) : it.kind === 'test' || it.kind === 'take-home' ? it.title : (it.topic ?? it.title), since: Date.now() }))
+    localStorage.setItem(ACTIVE, JSON.stringify({ ...at, title, topic, since: Date.now() }))
   } catch {
     // Storage unavailable: it just won't tick itself off
   }
+}
+
+const forget = () => {
+  try {
+    localStorage.removeItem(ACTIVE)
+  } catch {
+    // Nothing remembered
+  }
+}
+
+/**
+ * A spaced-review warm-up (shared/spacedReview), run as one flow: the cards due now in Review,
+ * then a short recall on its fading concepts, then back to Your week. Ticked once that is done,
+ * never on opening. From Review (no plan item): the recall only, and back to Review.
+ */
+export async function startSpacedReview(app: ReturnType<typeof useApp>, it: AgendaItem | null, at?: { date: string; index: number }) {
+  forget()
+  const setup = await window.tide.track.spacedReview(it?.recall ?? null, { cards: !!it }).catch(() => null)
+  if (!setup) return app.toast('Couldn’t open the review. Try again.', { tone: 'error' })
+  const run: SpacedRun = { cards: setup.cards, recall: setup.recall, back: it ? 'week' : 'review', ...(it && at ? { tick: { ...at, title: it.title } } : {}) }
+  if (run.cards.length) app.setView({ kind: 'study', scope: { kind: 'vault' }, run })
+  else if (run.recall) startRecall(app, run)
+  else app.toast('Nothing is due or fading right now.')
+}
+
+/** The recall part of a warm-up: Review now on its concepts; finishing it ticks the item */
+export function startRecall(app: ReturnType<typeof useApp>, run: SpacedRun) {
+  if (!run.recall) return
+  if (run.tick) rememberAs({ date: run.tick.date, index: run.tick.index }, run.tick.title, run.recall.topic)
+  app.setView({ kind: 'session', mode: 'quiz', scope: { kind: 'vault' }, topic: run.recall.topic, options: { length: run.recall.review.items.length, review: run.recall.review, back: run.back }, nonce: Date.now() })
+}
+
+/** A warm-up with only cards, finished: its item ticked */
+export function tickRun(run: SpacedRun) {
+  if (run.tick) window.tide.coach.setDone(run.tick.date, run.tick.index, true, run.tick.title).catch(() => {})
 }
 
 /** The topic's own note, if there is one */
@@ -103,6 +144,7 @@ export function openAgendaItem(app: ReturnType<typeof useApp>, it: AgendaItem, a
     if (note) app.openPath(note.path)
     else app.setView({ kind: 'session', mode: 'teach', scope, topic, options: { why: whyByDefault(app.settings.whyMode, topic, it.topicId) }, nonce: Date.now() })
   } else if (it.kind === 'quiz') app.setView({ kind: 'session', mode: 'quiz', scope, topic, options: { length: 6 }, nonce: Date.now() })
+  else if (it.kind === 'review' && isSpacedReview(it)) void startSpacedReview(app, it, at)
   else if (it.kind === 'review') app.setView({ kind: 'study', scope })
   else if (it.kind === 'practice') app.setView(it.sharp ? { kind: 'sharp', category: it.sharp, nonce: Date.now() } : { kind: 'practice' })
   else if (it.kind === 'project') it.path ? app.setView({ kind: 'notebook', path: it.path, tab: 'project' }) : app.setView({ kind: 'practice' })
@@ -124,10 +166,10 @@ export const AGENDA_LABEL: Record<AgendaItem['kind'], string> = KIND_LABEL
 /** Ticks off the planned item this lesson, quiz or test was started from, if it was */
 export function finishAgendaItem(topic: string): void {
   try {
-    const a = JSON.parse(localStorage.getItem(ACTIVE) ?? 'null') as { date: string; index: number; topic: string; since: number } | null
+    const a = JSON.parse(localStorage.getItem(ACTIVE) ?? 'null') as { date: string; index: number; topic: string; title?: string; since: number } | null
     if (!a || a.topic !== topic || Date.now() - a.since > 12 * 3_600_000) return
     localStorage.removeItem(ACTIVE)
-    window.tide.coach.setDone(a.date, a.index, true).catch(() => {})
+    window.tide.coach.setDone(a.date, a.index, true, a.title).catch(() => {})
   } catch {
     // Nothing remembered
   }

@@ -10047,6 +10047,48 @@ code.cmd-chip:hover {
   color: var(--ink-muted);
 }
 
+/* Fading concepts: one row, one action (shared/spacedReview) */
+.rv-fading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 8px 8px 8px 14px;
+  border-radius: var(--radius-m);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+
+.rv-fading-k {
+  flex: none;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.rv-fading-names {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rv-fading .btn {
+  flex: none;
+}
+
+.rv-run-end p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+
+.rv-run-end p svg {
+  color: var(--accent);
+}
+
 .rv-panel {
   padding: 16px 18px 14px;
   border-radius: var(--radius-m);

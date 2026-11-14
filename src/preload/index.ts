@@ -431,7 +431,9 @@ const api: TideApi = {
     submitCheck: invoke('track:submitCheck'),
     setupCapstone: invoke('track:setupCapstone'),
     firmUp: invoke('track:firmUp'),
-    mixedReview: invoke('track:mixedReview')
+    mixedReview: invoke('track:mixedReview'),
+    spacedReview: invoke('track:spacedReview'),
+    fading: invoke('track:fading')
   },
   modules: {
     status: invoke('modules:status'),

@@ -16,6 +16,7 @@ import { readingLabel } from '@shared/books'
 import { isSorted, roadmapTopics, sectionsOf, topicsLeft } from '@shared/curriculum'
 import { balanceWeek, type Balance, type BalanceNotebook } from '@shared/balance'
 import { gateFilter } from '@shared/track'
+import { isSpacedReview, itemToTick } from '@shared/spacedReview'
 import type { Known, PlacementSetup, PlacementStore } from '@shared/placement'
 import { curriculumStatus, getOverrides, loadSorted, sortRoadmaps, sortRunning } from './curriculum'
 import { readingsForWeek } from './readings'
@@ -436,7 +437,7 @@ export async function weekToThings(date = today()): Promise<{ project: string; t
           ? buildLink({ to: 'open', path: it.path })
           : it.kind === 'mock' || it.kind === 'workout'
           ? buildLink({ to: 'practice', tab: it.kind === 'mock' ? `mock:${it.mode ?? 'coding'}` : 'workout' })
-          : it.kind === 'check' || it.kind === 'course' || it.refresh
+          : it.kind === 'check' || it.kind === 'course' || it.refresh || isSpacedReview(it)
           ? buildLink({ to: 'agenda', date: d.date, index })
           : it.kind === 'learn' || it.kind === 'review'
           ? buildLink({ to: 'session', mode: 'teach', topic: it.topic ?? it.title, scope })
@@ -466,9 +467,11 @@ export async function weekToThings(date = today()): Promise<{ project: string; t
 // ---------- The day: ticking things off, wrapping up, the journal ----------
 
 /** Ticks an item off (or back on), and does the same to its to-do in Things 4 */
-export async function setItemDone(date: string, index: number, done: boolean): Promise<WeekPlan | null> {
+export async function setItemDone(date: string, index: number, done: boolean, title?: string): Promise<WeekPlan | null> {
   const plan = await getWeek(date)
-  const item = plan?.days.find((d) => d.date === date)?.items[index]
+  const items = plan?.days.find((d) => d.date === date)?.items ?? []
+  // By position, checked by title: a replan or a new plan can move the items under a tick
+  const item = items[itemToTick(items, index, title, done)]
   if (!plan || !item) return plan
   item.done = done
   await savePlan(plan)

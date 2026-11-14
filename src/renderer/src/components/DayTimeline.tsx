@@ -67,7 +67,7 @@ export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design 
     try {
       // A planned item ticks its Things to-do too; a week mixed across goals reshuffles what's left
       if (s.plan) {
-        await window.tide.coach.setDone(date, s.plan.index, done)
+        await window.tide.coach.setDone(date, s.plan.index, done, s.plan.item.title)
         if (week?.mix) window.tide.portfolio.replan().then((w) => w && setWeek(w)).catch(() => {})
       }
       else if (s.task) await window.tide.learn.thingsSetDone(s.task.id, done)
