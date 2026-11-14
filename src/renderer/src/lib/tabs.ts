@@ -340,6 +340,8 @@ export function tabTitle(v: TabView, own?: string): string {
       return 'Chat'
     case 'writing':
       return v.path ? plain(base(String(v.path))) : 'Writing'
+    case 'comprehension':
+      return 'Comprehension'
     case 'lab':
       return v.terminal === 'local' ? 'Terminal' : 'Linux lab'
     case 'session':
@@ -428,6 +430,8 @@ export function tabIcon(v: TabView): string {
       return 'person'
     case 'writing':
       return 'compose'
+    case 'comprehension':
+      return 'book'
     default:
       return 'dot'
   }

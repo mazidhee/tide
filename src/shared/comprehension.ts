@@ -423,3 +423,36 @@ export function resultLine(l: Pick<CompLesson, 'grade'>): string {
 }
 
 export const lessonId = (at: number) => `c${at.toString(36)}${Math.random().toString(36).slice(2, 6)}`
+
+// ---------- Drawing the passage ----------
+
+/**
+ * The passage cut into pieces for drawing: its paragraphs (by blank lines), each cut where a
+ * range (a hard mark, a graded point) starts or ends, each piece with the ids of the ranges over it.
+ * Offsets are the passage's own, so a selection maps straight back.
+ */
+export function passagePieces(text: string, ranges: { id: string; start: number; end: number }[]): { start: number; pieces: { start: number; end: number; text: string; ids: string[] }[] }[] {
+  const paras: { start: number; end: number }[] = []
+  const re = /\n{2,}/g
+  let at = 0
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    paras.push({ start: at, end: m.index })
+    at = m.index + m[0].length
+  }
+  paras.push({ start: at, end: text.length })
+  return paras
+    .filter((p) => p.end > p.start)
+    .map((p) => {
+      const cuts = new Set([p.start, p.end])
+      for (const r of ranges) {
+        if (r.start > p.start && r.start < p.end) cuts.add(r.start)
+        if (r.end > p.start && r.end < p.end) cuts.add(r.end)
+      }
+      const xs = [...cuts].sort((a, b) => a - b)
+      const pieces = xs.slice(0, -1).map((s, i) => {
+        const e = xs[i + 1]
+        return { start: s, end: e, text: text.slice(s, e), ids: ranges.filter((r) => r.start < e && s < r.end).map((r) => r.id) }
+      })
+      return { start: p.start, pieces }
+    })
+}

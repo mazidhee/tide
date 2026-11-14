@@ -18,7 +18,8 @@ import {
   toggleMark,
   wholeWords,
   withGlosses,
-  cardsNote
+  cardsNote,
+  passagePieces
 } from '../src/shared/comprehension'
 import type { ReaderChapter } from '../src/shared/readingRoom'
 import { locAnchor } from '../src/shared/passage'
@@ -161,5 +162,17 @@ describe('marks and cards', () => {
   it('steps in order and stays on the last', () => {
     expect(nextStep('read')).toBe('summary')
     expect(nextStep('done')).toBe('done')
+  })
+})
+
+describe('drawing the passage', () => {
+  it('cuts paragraphs where ranges start and end, keeping the passage’s own offsets', () => {
+    const text = 'One two three.\n\nFour five six.'
+    const paras = passagePieces(text, [{ id: 'a', start: 4, end: 7 }, { id: 'b', start: 16, end: 20 }])
+    expect(paras).toHaveLength(2)
+    expect(paras[0].pieces.map((p) => [p.text, p.ids])).toEqual([['One ', []], ['two', ['a']], [' three.', []]])
+    expect(paras[1].start).toBe(16)
+    expect(paras[1].pieces[0]).toEqual({ start: 16, end: 20, text: 'Four', ids: ['b'] })
+    for (const para of paras) for (const p of para.pieces) expect(text.slice(p.start, p.end)).toBe(p.text)
   })
 })
