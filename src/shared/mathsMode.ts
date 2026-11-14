@@ -82,6 +82,19 @@ export function mathsMode(topic: string, notebook?: string): MathsMode {
   return OFF
 }
 
+/** Number representation: arithmetic in other bases, which a computing lesson is full of */
+const NUMBER_REPRESENTATION = /\b(binary|hexadecimal|hex|octal|(number|numeric) (bases?|representations?)|bases? (2|8|16|conversion)|base[- ](2|8|10|16|n)|radix|two'?s[- ]complement|ones'?[- ]complement|signed (and unsigned )?(integers?|numbers?)|bit(wise)?[- ]?(shifts?|operations?|arithmetic|masks?)|bits? and bytes?|floating[- ]point|ieee ?754|integer overflow)\b/i
+
+/**
+ * A lesson that isn't taught in maths mode but is full of arithmetic: binary, hex, two's
+ * complement, bit masks. Its answer box opens with the maths keys (₂, ₁₆, superscripts, a
+ * calculator) the first time; the lesson is still taught as the computing topic it is, so maths
+ * mode's teaching (derivations, explorables, Manim) stays with maths.
+ */
+export function mathsAdjacent(topic: string, notebook?: string): boolean {
+  return NUMBER_REPRESENTATION.test(topic) && !mathsMode(topic, notebook).on
+}
+
 // ---------- Explorables, by area ----------
 
 /** Every explorable scene (renderer/lib/sims/explore draws them) */

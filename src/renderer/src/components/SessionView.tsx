@@ -63,9 +63,10 @@ import { warmupNote, type WarmupSet, type WarmupStage } from '@shared/warmup'
 import { prepNote } from '@shared/lessonPrep'
 import { breakSignals, lessonAnswers, lessonForBreaks } from '../lib/breaks'
 import { MATHS_ANSWER_EVENT, takeExploreNotes, type MathsAnswerDetail } from '../lib/sims/exploreBus'
-import { AREA_SCENES, mathsMode } from '@shared/mathsMode'
+import { AREA_SCENES, mathsAdjacent, mathsMode } from '@shared/mathsMode'
 import { parseWorkingMarks } from '@shared/mathsAnswer'
 import { MathsAnswerBox, type BoxStatus, type MathsBoxHandle } from './maths/MathsAnswerBox'
+import { MathsKeysButton, MathsKeysPanel, useMathsKeys } from './maths/MathsKeys'
 import { WorkingCard } from './maths/WorkingCard'
 import { driftCheck, driftNote, FORMAT_LABEL, switchIn } from '@shared/mathsDrift'
 import { saysDontKnow } from '@shared/lessonRepair'
@@ -291,6 +292,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   engineRef.current = engine
   // Maths mode (shared/mathsMode): told from the topic and the notebook it sits in
   const maths = useMemo(() => mathsMode(topic, 'path' in scope ? scope.path : undefined), [topic, scope])
+  // The maths keys under a plain answer box: open from the start for binary, hex and the like, until you shut them
+  const [answerKeys, toggleAnswerKeys] = useMathsKeys('lesson', mathsAdjacent(topic, 'path' in scope ? scope.path : undefined))
   // When the last reply finished, for the quiet spell since the tutor spoke
   const repliedAt = useRef(0)
   useEffect(() => {
@@ -2212,6 +2215,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   {...pictures.handlers}
                 />
               )}
+              {!mathsBox && currentAsk.type !== 'code' && answerKeys && <MathsKeysPanel field={answerRef} value={answer} onChange={(v) => (setAnswer(v), setHint(false))} />}
               {(!mathsBox || boxStatus.mode === 'words') && <AttachedStrip images={pictures} />}
               <div className="s-answer-bar">
                 <div className="segmented text" role="radiogroup" aria-label="How sure are you?">
@@ -2222,6 +2226,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   ))}
                 </div>
                 <div className="row-gap">
+                  {!mathsBox && currentAsk.type !== 'code' && <MathsKeysButton open={answerKeys} onToggle={toggleAnswerKeys} />}
                   {(!mathsBox || boxStatus.mode === 'words') && <AttachImageButton images={pictures} />}
                   {currentAsk.type !== 'code' && (!mathsBox || boxStatus.mode === 'words') && (
                     <DictateButton

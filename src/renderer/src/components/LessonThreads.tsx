@@ -3,6 +3,7 @@ import type { AgentStep } from '@shared/types'
 import { asked, questionsAsked, replyParts, type LessonThread } from '@shared/lessonThreads'
 import { Icon } from './Icon'
 import { AttachedStrip, AttachImageButton, useAttachedImages } from './AttachImages'
+import { MathsKeysButton, MathsKeysPanel, useMathsKeys } from './maths/MathsKeys'
 import { vaultUrl } from '../lib/markdown'
 
 /** Markdown images in a message (the pictures sent with it), shown as pictures, not as text */
@@ -292,6 +293,7 @@ function ThreadCard(p: SlotProps) {
     el.style.height = `${Math.min(el.scrollHeight, 140)}px`
   }
   const pictures = useAttachedImages()
+  const [keys, toggleKeys] = useMathsKeys('thread')
   const go = () => {
     const q = pictures.withPictures(text.trim())
     if (!q || streaming || pictures.adding) return
@@ -397,11 +399,22 @@ function ThreadCard(p: SlotProps) {
           }}
           {...pictures.handlers}
         />
+        <MathsKeysButton open={keys} onToggle={toggleKeys} />
         <AttachImageButton images={pictures} />
         <button type="button" className="lt-send" aria-label="Ask" disabled={(!text.trim() && !pictures.paths.length) || streaming || pictures.adding} onClick={go}>
           <Icon name="send" size={14} />
         </button>
       </div>
+      {keys && (
+        <MathsKeysPanel
+          field={box}
+          value={text}
+          onChange={(v) => {
+            setText(v)
+            requestAnimationFrame(fit)
+          }}
+        />
+      )}
       <div className="lt-foot">
         <button type="button" className="btn primary small lt-got" onClick={() => p.onFold(true)} disabled={!thread.messages.length}>
           <Icon name="check" size={13} />
