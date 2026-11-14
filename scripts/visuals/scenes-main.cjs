@@ -12,7 +12,7 @@ const { serve, shoot } = require('./frameShot.cjs')
 
 const args = JSON.parse(process.env.TIDE_SCENES || '{}')
 const H = require(args.bundle)
-protocol.registerSchemesAsPrivileged([{ scheme: H.VISUAL_SCHEME, privileges: { standard: true, secure: true } }])
+protocol.registerSchemesAsPrivileged([{ scheme: H.VISUAL_SCHEME, privileges: { standard: true, secure: true, corsEnabled: true } }])
 
 const model = args.model || H.CLAUDE_DEFAULTS.visual
 const cwd = mkdtempSync(join(os.tmpdir(), 'tide-scenes-claude-'))
@@ -67,7 +67,33 @@ app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, width: 740, height: 1400, webPreferences: { contextIsolation: true } })
   if (args.shots) mkdirSync(args.shots, { recursive: true })
   const summary = []
-  for (const id of args.modules) {
+  // Free briefs: one scene each, checked and photographed like a part's, kept beside the shots
+  for (const b of args.briefs || []) {
+    console.log(`→ ${b.name}: asking ${model}…`)
+    try {
+      const r = await ask(`Brief: ${b.brief}\n\nBuild this as one 3D scene. It must come out within ${Math.round(H.MAX_SCENE / 1000)}k characters.`, H.PART_SCENE_SYSTEM)
+      let code = H.extractVisual(r.text)
+      if (!code || !H.looksComplete(code)) throw new Error('no complete visual in the reply')
+      console.log(`  written in ${Math.round(r.ms / 1000)} s, ${code.length} characters${r.cost ? `, $${r.cost.toFixed(2)}` : ''}`)
+      let c = await check(win, code, `art-${b.name}`)
+      if (c.errors.length || c.problems.length) {
+        const found = [...c.errors, ...c.problems]
+        console.log(`  check failed: ${found.join(' | ')}\n  repairing…`)
+        const fix = await ask(H.repairPrompt(code, found), `${H.VISUAL_REPAIR_SYSTEM}\n${H.SCENE_REPAIR_NOTE}`)
+        const fixed = H.extractVisual(fix.text)
+        if (fixed && H.looksComplete(fixed)) { code = fixed; c = await check(win, code, `art-${b.name}`) }
+      }
+      if (args.shots) writeFileSync(join(args.shots, `art-${b.name}.html`), code)
+      const ok = !c.errors.length && !c.problems.length
+      console.log(`  ${ok ? '✓' : '✗'} ${H.visualTitle(code)} (${c.steps} steps)${ok ? '' : ': ' + [...c.errors, ...c.problems].join(' | ')}`)
+      for (const cap of c.captions || []) console.log(`    “${cap.slice(0, 200)}”`)
+      summary.push({ key: b.name, ok })
+    } catch (e) {
+      console.log(`  ✗ ${e.message}`)
+      summary.push({ key: b.name, ok: false })
+    }
+  }
+  for (const id of args.briefs && args.briefs.length ? [] : args.modules) {
     const path = join(args.vault, 'Roadmaps/Modules', `${id}.md`)
     if (!existsSync(path)) { console.log(`✗ ${id}: no module file`); continue }
     const m = H.parseModule(`Roadmaps/Modules/${id}.md`, readFileSync(path, 'utf8'))

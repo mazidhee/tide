@@ -17,7 +17,7 @@ let TM: any
 
 beforeAll(() => {
   const dir = resolve('src/shared/frame/machine')
-  const src = ['core', 'bits', 'circuit', 'memory', 'cpu', 'python', 'scene3d', 'end'].map((f) => readFileSync(join(dir, `${f}.js`), 'utf8')).join('\n')
+  const src = ['core', 'bits', 'circuit', 'memory', 'cpu', 'python', 'studio', 'scene3d', 'teardown', 'spaces', 'end'].map((f) => readFileSync(join(dir, `${f}.js`), 'utf8')).join('\n')
   ;(window as unknown as { matchMedia: unknown }).matchMedia ??= () => ({ matches: false })
   new Function(src)()
   TM = (window as unknown as { TideMachine: unknown }).TideMachine
@@ -167,3 +167,37 @@ describe('Python, from a real trace', () => {
     expect(py.captions.join('\n')).toMatch(/factorial returns int 24/)
   })
 })
+
+describe('spaces and teardowns', () => {
+  it('eigenvalues and eigenvectors, 2×2 and 3×3', () => {
+    const e2 = TM.eigen([[2, 1], [1, 2]])
+    expect(e2.map((e: { value: number }) => Math.round(e.value * 1e6) / 1e6)).toEqual([3, 1])
+    const v = e2[0].vector
+    expect(Math.abs(v[0] - v[1])).toBeLessThan(1e-9)
+    expect(TM.eigen([[0, -1], [1, 0]])).toEqual([])
+    const e3 = TM.eigen([[2, 1, 0], [1, 2, 0], [0, 0, 0.5]]).map((e: { value: number }) => Math.round(e.value * 1e6) / 1e6).sort((a: number, b: number) => a - b)
+    expect(e3).toEqual([0.5, 1, 3])
+    for (const e of TM.eigen([[2, 1, 0], [1, 2, 0], [0, 0, 0.5]])) {
+      const A = [[2, 1, 0], [1, 2, 0], [0, 0, 0.5]]
+      const Av = A.map((r) => r[0] * e.vector[0] + r[1] * e.vector[1] + r[2] * e.vector[2])
+      Av.forEach((x, i) => expect(x).toBeCloseTo(e.value * e.vector[i], 6))
+    }
+  })
+
+  it('a teardown tours whole, apart, each part, then whole again', () => {
+    const t = TM.teardown(document.body, { label: 'A board', parts: [
+      { id: 'board', label: 'Board', note: 'the base', box: [4, 0.2, 4], at: [0, 0, 0] },
+      { id: 'chip', label: 'Chip', box: [1, 0.2, 1], at: [0, 0.2, 0], parent: 'board', explode: [0, 2, 0] },
+      { id: 'die', label: 'Die', say: 'The die, on its own.', box: [0.5, 0.1, 0.5], at: [0, 0.3, 0], parent: 'chip', explode: [0, 1, 0] }
+    ] })
+    expect(t.captions).toEqual([
+      'A board, assembled. Drag to turn it; click any part to take it out.',
+      'Taken apart: each part moves out along the way it fits in.',
+      'Board: the base.',
+      'Chip.',
+      'The die, on its own.',
+      'Back together: every part you saw has its place in the whole.'
+    ])
+  })
+})
+

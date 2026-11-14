@@ -376,12 +376,45 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
       if (cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity === 0) continue;
       var r = el.getBoundingClientRect();
       if (r.width < 2 || r.height < 2) continue;
-      out.push({ t: t.slice(0, 40), r: r });
+      out.push({ t: t.slice(0, 40), r: r, el: el, n: t.length });
     }
     return out;
   };
+  // A label over a 3D canvas: positioned over it, and narrower than most of it (a panel isn't a label)
+  var overCanvas = function (el, r) {
+    var cs = document.querySelectorAll('canvas');
+    for (var q = el, k = 0; q && k < 4; q = q.parentElement, k++) {
+      if (getComputedStyle(q).position !== 'absolute' && getComputedStyle(q).position !== 'fixed') continue;
+      for (var c = 0; c < cs.length; c++) {
+        var cr = cs[c].getBoundingClientRect();
+        if (cr.width > 40 && r.left < cr.right && r.right > cr.left && r.top < cr.bottom && r.bottom > cr.top && r.width < cr.width * 0.6) return true;
+      }
+    }
+    return false;
+  };
+  // The nearest box the text sits in (a background or a border of its own), within a few levels
+  var boxOf = function (el) {
+    for (var q = el, k = 0; q && k < 4; q = q.parentElement, k++) {
+      var cs = getComputedStyle(q), bg = cs.backgroundColor;
+      if ((bg && !/rgba\(.*,\s*0\)$|transparent/.test(bg)) || parseFloat(cs.borderTopWidth) > 0 || cs.boxShadow !== 'none') return q;
+    }
+    return null;
+  };
   var layoutProblems = function (where) {
     var found = [], ls = labels(), W = document.documentElement.clientWidth;
+    // Scene labels: short, one line, inside their own box
+    for (var m = 0; m < ls.length && found.length < 3; m++) {
+      var L = ls[m];
+      if (L.el.tagName === 'text' || !overCanvas(L.el, L.r)) continue;
+      var lh = parseFloat(getComputedStyle(L.el).lineHeight) || parseFloat(getComputedStyle(L.el).fontSize) * 1.3;
+      var box = boxOf(L.el);
+      if (box && box !== L.el) {
+        var br = box.getBoundingClientRect();
+        if (L.r.right > br.right + 2 || L.r.bottom > br.bottom + 2 || L.r.left < br.left - 2 || L.r.top < br.top - 2) { found.push(where + 'the label "' + L.t + '" spills out of its box.'); continue; }
+      } else if (box && (L.el.scrollWidth > L.el.clientWidth + 2 || L.el.scrollHeight > L.el.clientHeight + 2)) { found.push(where + 'the label "' + L.t + '" spills out of its box.'); continue; }
+      if (L.n > 40) { found.push(where + 'the label "' + L.t + '…" is ' + L.n + ' characters: a label over the scene is a name and a short number (40 at most); put the rest in the caption.'); continue; }
+      if (L.r.height > lh * 1.6) found.push(where + 'the label "' + L.t + '" wraps onto two lines: keep labels to one short line.');
+    }
     for (var i = 0; i < ls.length && found.length < 3; i++) {
       var a = ls[i].r;
       if (a.right > W + 2 || a.left < -2) { found.push(where + 'the label "' + ls[i].t + '" runs off the edge of the frame.'); continue; }
@@ -410,9 +443,14 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
       try {
         var t = document.createElement('canvas'); t.width = 48; t.height = 48;
         var x = t.getContext('2d'); x.drawImage(c, 0, 0, 48, 48);
-        var d = x.getImageData(0, 0, 48, 48).data, on = 0;
-        for (var k = 3; k < d.length; k += 4) if (d[k] > 8) on++;
-        if (on < 24) n++;
+        var d = x.getImageData(0, 0, 48, 48).data, on = 0, seen = 0;
+        // Drawn: pixels that are not transparent and not all the one colour of an empty background
+        for (var k = 0; k < d.length; k += 4) {
+          if (d[k + 3] <= 8) continue;
+          seen++;
+          if (Math.abs(d[k] - d[0]) + Math.abs(d[k + 1] - d[1]) + Math.abs(d[k + 2] - d[2]) + Math.abs(d[k + 3] - d[3]) > 12) on++;
+        }
+        if (on < 12) n++;
       } catch (e) {}
     }
     return n;
@@ -431,10 +469,14 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
     if (steps) { at = 0; draw(); }
     auditing = false;
     // A 3D scene renders a moment after it is drawn: look at its canvas then
-    setTimeout(function () {
-      if (blankCanvases()) problems.push('A canvas stayed blank: nothing was rendered on it (render after the scene is built and on every change, and point the camera at it).');
+    // A scene still building gets a few moments more before its canvas counts as blank
+    var tries = 0;
+    var look = function () {
+      if (blankCanvases() && ++tries < 6) return setTimeout(look, 450);
+      if (tries >= 6) problems.push('A canvas stayed blank: nothing was rendered on it (render after the scene is built and on every change, and point the camera at it).');
       send({ t: 'audit', problems: problems.slice(0, 6) });
-    }, 450);
+    };
+    setTimeout(look, 450);
   };
   var clean2 = function (data) {
     if (!data || typeof data !== 'object') return undefined;
@@ -537,7 +579,7 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
 /** The whole document the frame is served: Tide's base look, the theme, the bootstrap, then the visual */
 export function frameDocument(code: string, theme: VisualTheme | null): string {
   // The visual's text goes in the body as written: it can't reach outside the frame whatever it holds
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${BASE_CSS}</style><style id="tide-theme">${themeCss(theme)}</style><script>${FRAME_BOOTSTRAP}</script><script src="/lib/tide-math.js"></script><script src="/lib/tide-machine.js"></script></head><body>\n${code}\n</body></html>`
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${BASE_CSS}</style><style id="tide-theme">${themeCss(theme)}</style><script>${FRAME_BOOTSTRAP}</script><script src="/lib/tide-math.js" crossorigin="anonymous"></script><script src="/lib/tide-machine.js" crossorigin="anonymous"></script></head><body>\n${code}\n</body></html>`
 }
 
 // base64url of UTF-8, both ways (the frame's code travels in its URL, so its document needs no state in main)
@@ -798,7 +840,7 @@ export const KIT_GUIDE = `TideMachine, Tide's computing kit, is loaded in every 
   - TideMachine.cpu(el, {asm, data}): a tiny 8-bit CPU (R0–R3, PC, IR, ALU, Z, 16 bytes of memory, buses) running LOADI LOAD STORE ADD SUB AND OR JMP JZ HALT, one step each for fetch, decode and execute: visual.steps(cpu.captions, cpu.draw).
   - TideMachine.python(el, {digits}): Python's frames, names, objects (type, id, refs) and the arrows between them, from a real trace: put the code (under 20 lines) in a <script type="text/x-python"> in the visual and Tide runs it under a tracer before the frame starts. visual.steps(py.captions, py.draw).
   - TideMachine.stackHeap(el, {steps: [{frames: [{name, vars: [{name, text} | {name, to: id}]}], objects: [{id, title, kind: 'atom' | 'seq' | 'map', value, cells: [{label, to | text}]}], say}]}): stack and heap for C, Rust or anything else, step by step.
-  - TideMachine.die(el, {cores}) and TideMachine.gpu(el, {sms}): 3D scenes of a CPU die (cores, L1, L2, L3, memory controller, DRAM, a cache miss) and a GPU (SMs, a warp of 32 lanes, divergence, L2, HBM), captioned in steps. TideMachine.scene(el, {parts: [{id, label, box: [w, h, d], at: [x, y, z], color: 'c1', group, info}], steps: [{say, fit: [ids], focus: [ids], lit: [ids]}]}) builds any other 3D scene with labels, orbit, framing, focus and picking; .set(id, {lit, label}) changes a part, .add(id, object3D) adds your own geometry.
+  - TideMachine.die(el, {cores}) and TideMachine.gpu(el, {sms}): 3D scenes of a CPU die (cores, L1, L2, L3, DRAM, a cache miss) and a GPU (SMs, a warp, divergence, HBM), in steps. TideMachine.teardown(el, {parts: [{id, label, box, at, explode: [dx, dy, dz], parent}]}) is an exploded view of any system; TideMachine.surface(el, {f: 'x^2 - y^2', descent}) a surface with tangent plane, gradient and an optimiser's path; TideMachine.space(el, {matrix}) a linear map deforming space, with eigenvectors; TideMachine.scene(el, {parts, steps}) any other 3D scene.
   - Helpers: TideMachine.bin(v, n) hex(v, digits) signed(u, n) unsigned(v, n) bytesOf(v, size, endian) assemble(asm).`
 
 /**

@@ -21,11 +21,13 @@ vi.mock('../src/main/vault', () => ({
 }))
 const calls: { prompt: string; system: string; role: string }[] = []
 let teaches = true
+let slow = 0
 let reply = ''
 vi.mock('../src/main/claudeEngine', () => ({
   claudeTeaches: async () => teaches,
   claudeOnce: async (prompt: string, system: string, role: string) => {
     calls.push({ prompt, system, role })
+    if (slow) await new Promise((r) => setTimeout(r, slow))
     return { text: reply, model: 'claude-fable-5-1', usage: {}, ms: 1 }
   }
 }))
@@ -61,6 +63,7 @@ beforeEach(() => {
   store.clear()
   calls.length = 0
   teaches = true
+  slow = 0
   reply = '```visual\n' + SCENE + '\n```'
 })
 
@@ -166,7 +169,13 @@ describe('kept visuals', () => {
     expect(await cv.partOfTopic('Binary, hexadecimal, number representations')).toMatchObject({ part: 1 })
     expect(await cv.partOfTopic('Registers and the stack')).toMatchObject({ part: 2 })
     expect(await cv.partOfTopic('Something else')).toBeNull()
-    const s = await cv.partScene({ module: 'computation-foundations', part: 1 })
+    // The model takes minutes: at once, Tide's own 2D visual stands in; waited for, the scene
+    slow = 700
+    const first = await cv.partScene({ module: 'computation-foundations', part: 1 })
+    expect(first).toMatchObject({ pending: true, key: 'computation-foundations#1' })
+    expect(first.code).toBeUndefined()
+    expect(first.fallback).toMatch(/TideMachine\.bits/)
+    const s = await cv.partScene({ module: 'computation-foundations', part: 1, wait: true })
     expect(s).toMatchObject({ source: 'model', unchecked: true, key: 'computation-foundations#1' })
     expect(s.fallback).toMatch(/TideMachine\.bits/)
     expect(calls[0].system).toMatch(/big picture/)

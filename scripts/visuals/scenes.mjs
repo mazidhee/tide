@@ -11,6 +11,7 @@
  *   ... --force          write them again        ... --model claude-opus-4-8   another model
  *   ... --shots <dir>    save screenshots (viz-part-<module>-<part>-s<step>-<theme>.png)
  *   ... --dry            say what it would do
+ *   ... --brief "<what to show>" --name <name>   one scene from a free brief instead (kept beside the shots, not in the vault)
  *
  * It writes only inside <vault>/.tide/visuals/parts. Nothing else in the vault or app is touched.
  */
@@ -25,7 +26,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const argv = process.argv.slice(2)
 const opt = (k) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : null }
 const vault = opt('--vault')
-if (!vault || !existsSync(join(vault, 'Roadmaps/Modules'))) {
+const briefs = argv.filter((a, i) => argv[i - 1] === '--brief').map((brief, k) => ({ brief, name: argv.filter((x, i) => argv[i - 1] === '--name')[k] || `brief-${k + 1}` }))
+if (!briefs.length && (!vault || !existsSync(join(vault, 'Roadmaps/Modules')))) {
   console.error('Give --vault: a vault with Roadmaps/Modules.')
   process.exit(2)
 }
@@ -47,7 +49,8 @@ const r = spawnSync(join(root, 'node_modules/.bin/electron'), [join(root, 'scrip
     ...process.env,
     TIDE_SCENES: JSON.stringify({
       bundle: join(work, 'harness.cjs'),
-      vault: resolve(vault),
+      vault: vault ? resolve(vault) : null,
+      briefs,
       modules: (opt('--modules') || STAGE.join(',')).split(',').map((s) => s.trim()).filter(Boolean),
       parts: opt('--parts') ? opt('--parts').split(',').map(Number) : null,
       force: argv.includes('--force'),

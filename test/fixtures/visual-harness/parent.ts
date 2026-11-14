@@ -293,6 +293,27 @@ async function main() {
     r.frame.remove()
   }
 
+  // Labels over a 3D scene: one short line, inside their own box
+  {
+    const r = start(`<div style="position:relative;width:600px;height:300px"><canvas id="c" width="600" height="300" style="width:600px;height:300px"></canvas>
+      <div id="l" style="position:absolute;left:40px;top:40px;font-size:13px;line-height:18px;padding:3px 7px;background:#fff;border-radius:6px"></div></div><script>
+      const x = document.getElementById('c').getContext('2d'); x.fillStyle = '#356'; x.fillRect(100, 100, 300, 120)
+      const l = document.getElementById('l')
+      const looks = [
+        () => { l.style.cssText += ';width:auto;white-space:nowrap;height:auto'; l.textContent = 'A very long label that explains far too much at once' },
+        () => { l.style.cssText += ';width:120px;white-space:normal;height:auto'; l.textContent = 'L3 cache, shared by all' },
+        () => { l.style.cssText += ';width:60px;white-space:nowrap;height:18px'; l.innerHTML = 'DRAM <span>80 ns away</span>' },
+        () => { l.style.cssText += ';width:auto;white-space:nowrap;height:auto'; l.textContent = 'Core 0' }
+      ]
+      visual.steps(['long', 'wraps', 'spills', 'fine'], (i) => looks[i]())
+    </script>`)
+    await wait(700)
+    r.frame.contentWindow?.postMessage({ tv: 1, t: 'control', action: 'audit' }, '*')
+    await wait(900)
+    results.sceneLabels = r.messages.find((m) => m.t === 'audit') ?? null
+    r.frame.remove()
+  }
+
   // Errors are caught and reported
   results.broken = await attack(`<p>x</p><script>visual.report('before'); undefinedThing.call()</script><script>let = ;</script>`, 900)
   results.blank = await attack(`<script>/* draws nothing */</script>`, 900)

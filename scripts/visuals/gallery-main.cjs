@@ -10,7 +10,7 @@ const { serve, shoot } = require('./frameShot.cjs')
 const args = JSON.parse(process.env.TIDE_GALLERY || '{}')
 const H = require(args.bundle)
 
-protocol.registerSchemesAsPrivileged([{ scheme: H.VISUAL_SCHEME, privileges: { standard: true, secure: true } }])
+protocol.registerSchemesAsPrivileged([{ scheme: H.VISUAL_SCHEME, privileges: { standard: true, secure: true, corsEnabled: true } }])
 
 app.whenReady().then(async () => {
   serve(H)

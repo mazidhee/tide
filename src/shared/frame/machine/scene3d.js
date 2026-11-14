@@ -16,6 +16,7 @@
     if (window.TideMath) return window.TideMath.three();
     return new Promise(function (resolve, reject) {
       var s = document.createElement('script');
+      s.crossOrigin = 'anonymous';
       s.src = '/lib/three.js';
       s.onload = function () { resolve(window.THREE); };
       s.onerror = function () { reject(new Error('Tide could not load three.js')); };
@@ -38,7 +39,7 @@
    */
   M.scene = function (into, opts) {
     opts = opts || {};
-    var H = opts.height || 380;
+    var H = opts.height || 440;
     var wrap = M.h('div', { style: 'position:relative;width:100%;height:' + H + 'px;border-radius:10px;overflow:hidden;background:var(--bg);box-shadow:inset 0 0 0 1px var(--line)' });
     wrap.setAttribute('role', 'img');
     wrap.setAttribute('aria-label', (opts.label || 'A 3D scene') + '. Drag to turn it, scroll to zoom; with the keyboard, Q and E turn it, W and S tilt it, + and − zoom.');
@@ -51,7 +52,7 @@
     var parts = opts.parts || [], lines = opts.lines || [];
     var want = 0, T = null, scene, camera, renderer, controls, byId = {}, labels = {}, focusSet = null, shown = {}, raf = 0, tween = null;
     var chipsBar = null;
-    var selected = null, curLabels = null, stepLit = null;
+    var selected = null, curLabels = null, stepLit = null, moving = 0, onlySet = null, look = null;
 
     var info = function (p) { return Object.assign({ part: p.label || p.id }, p.info || {}); };
     /** Objects added with add(): faded with the rest, labelled and picked like parts */
@@ -62,25 +63,33 @@
       selected = p.id;
       if (window.visual) window.visual.select(p.label || p.id, p.info || {});
       paint();
+      if (opts.onPick) opts.onPick(p);
     };
 
+    var inOnly = function (p) { return !onlySet || onlySet.indexOf(p.id) >= 0 || (p.group && onlySet.indexOf(p.group) >= 0); };
     var paint = function () {
       if (!T) return;
       var acc = css('accent');
       parts.forEach(function (p) {
         var o = byId[p.id];
         if (!o) return;
-        var vis = !p.hidden || shown[p.id];
+        var vis = (!p.hidden || shown[p.id]) && inOnly(p);
         o.mesh.visible = o.edges.visible = vis;
+        if (o.halo) o.halo.visible = vis;
         var on = !focusSet || focusSet.indexOf(p.id) >= 0 || (p.group && focusSet.indexOf(p.group) >= 0);
-        var base = css(p.color || 'surface');
+        var base = p.material ? null : css(p.color || 'surface');
         var isLit = p.lit || (stepLit && stepLit.indexOf(p.id) >= 0);
-        o.mesh.material.color.set(isLit && on ? acc : base);
-        o.mesh.material.opacity = on ? (p.opacity != null ? p.opacity : 1) : 0.16;
+        if (base || isLit) o.mesh.material.color.set(isLit && on ? acc : base || o.baseColor);
+        else o.mesh.material.color.copy(o.baseColor);
+        if (o.halo) o.halo.material.opacity = isLit && on ? 0.85 : 0;
+        // A lit part glows a little in its own colour: on, not just recoloured
+        o.mesh.material.emissive.set(isLit && on ? acc : '#000000');
+        o.mesh.material.emissiveIntensity = isLit && on ? 0.35 : 0;
+        o.mesh.material.opacity = on ? (p.opacity != null ? p.opacity : 1) : (opts.ghost != null ? opts.ghost : 0.16);
         o.mesh.material.transparent = o.mesh.material.opacity < 1;
         o.mesh.material.depthWrite = o.mesh.material.opacity >= 0.5;
         o.edges.material.color.set(selected === p.id || (on && focusSet) ? acc : css('line-strong'));
-        o.edges.material.opacity = on ? 0.9 : 0.2;
+        o.edges.material.opacity = on ? (p.material ? 0.35 : 0.9) : 0.2;
         var lab = labels[p.id];
         var named = curLabels ? curLabels.indexOf(p.id) >= 0 : p.labelled !== 'never' && on && !!focusSet;
         if (lab) lab.style.display = vis && (p.labelled === 'always' || named) ? 'block' : 'none';
@@ -93,7 +102,7 @@
       });
       custom.forEach(function (c) {
         var on = !focusSet || focusSet.indexOf(c.id) >= 0 || (c.group && focusSet.indexOf(c.group) >= 0);
-        c.obj.visible = !c.hidden || !!shown[c.id];
+        c.obj.visible = (!c.hidden || !!shown[c.id]) && inOnly(c);
         c.obj.traverse(function (o) {
           if (!o.material) return;
           (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) {
@@ -172,7 +181,15 @@
         return members.length ? members : [id];
       }));
       ids.forEach(function (id) {
-        var o = byId[id] && byId[id].mesh || (custom.filter(function (c) { return c.id === id; })[0] || {}).obj;
+        var part = parts.filter(function (q) { return q.id === id; })[0];
+        if (part && byId[id]) {
+          var half = new T.Vector3(part.box[0] / 2, part.box[1] / 2, part.box[2] / 2);
+          box.expandByPoint(new T.Vector3().fromArray(part.at).sub(half));
+          box.expandByPoint(new T.Vector3().fromArray(part.at).add(half));
+          any = true;
+          return;
+        }
+        var o = (custom.filter(function (c) { return c.id === id; })[0] || {}).obj;
         if (!o) return;
         box.expandByObject(o);
         any = true;
@@ -180,7 +197,7 @@
       if (!any) return null;
       // Never closer than about a third of the whole scene: a small subject keeps its surroundings
       var all = new T.Box3();
-      parts.forEach(function (p) { if (byId[p.id] && byId[p.id].mesh.visible) all.expandByObject(byId[p.id].mesh); });
+      parts.forEach(function (p) { if (byId[p.id] && (!p.hidden || shown[p.id])) { all.expandByPoint(new T.Vector3(p.at[0] - p.box[0] / 2, p.at[1] - p.box[1] / 2, p.at[2] - p.box[2] / 2)); all.expandByPoint(new T.Vector3(p.at[0] + p.box[0] / 2, p.at[1] + p.box[1] / 2, p.at[2] + p.box[2] / 2)); } });
       custom.forEach(function (c) { if (c.obj.visible) all.expandByObject(c.obj); });
       if (!all.isEmpty()) {
         var least = all.getSize(new T.Vector3()).length() * 0.32, size = box.getSize(new T.Vector3()).length();
@@ -198,21 +215,29 @@
         var most = 0;
         corners.forEach(function (q) { var v = q.clone().project(cam); most = Math.max(most, Math.abs(v.x), Math.abs(v.y)); });
         if (!isFinite(most) || most <= 0) break;
-        d *= most / 0.85;
+        d *= most / (opts.fill || 0.9);
       }
       return { camera: center.clone().addScaledVector(dir, Math.max(d, 3)).toArray(), target: center.toArray() };
     };
     var auditing = function () { return !!(window.visual && window.visual.auditing); };
+    var aimShadows = function (view) {
+      if (!look) return;
+      if (!view) return look.frame(new T.Vector3(), 14);
+      var c = new T.Vector3().fromArray(view.target), d = new T.Vector3().fromArray(view.camera).distanceTo(c);
+      look.frame(c, d * 0.55);
+    };
 
     var apply = function (i, quiet) {
       var st = steps[i] || {};
       focusSet = st.focus || null;
+      onlySet = st.only || null;
       curLabels = st.labels || null;
       shown = {};
       (st.show || []).forEach(function (id) { shown[id] = 1; });
       stepLit = st.lit || null;
       paint();
       var view = st.fit ? fitView(st.fit, st.from) : st.view;
+      aimShadows(view);
       if (view && !quiet) moveTo(view, auditing());
     };
 
@@ -241,10 +266,7 @@
       canvas.tabIndex = 0;
       wrap.insertBefore(canvas, labelsLayer);
       var size = function () { var w = wrap.clientWidth || 640; renderer.setSize(w, H, false); camera.aspect = w / H; camera.updateProjectionMatrix(); render(); };
-      scene.add(new T.HemisphereLight(0xffffff, 0x8a8a8a, 1.6));
-      var sun = new T.DirectionalLight(0xffffff, 1.5);
-      sun.position.set(-8, 18, 10);
-      scene.add(sun);
+      look = M.studio(T, scene, renderer, { ground: opts.ground !== false, groundY: opts.groundY != null ? opts.groundY : parts.reduce(function (lo, p) { return Math.min(lo, p.at[1] - (p.shape === 'sphere' ? p.box[0] : p.box[1] / 2)); }, 0) - 0.02, onTheme: function () { parts.forEach(function (p) { if (!p.material && byId[p.id]) byId[p.id].baseColor = new T.Color(css(p.color || 'surface')); }); paint(); } });
       controls = new T.OrbitControls(camera, canvas);
       controls.target.fromArray(opts.target || [0, 0, 0]);
       controls.maxPolarAngle = Math.PI * 0.47;
@@ -257,15 +279,28 @@
         var g = p.shape === 'cylinder' ? new T.CylinderGeometry(p.box[0], p.box[0], p.box[1], 32) : p.shape === 'sphere' ? new T.SphereGeometry(p.box[0], 32, 16) : new T.BoxGeometry(p.box[0], p.box[1], p.box[2]);
         if (p.shape === 'sphere') p.box = [p.box[0] * 2, p.box[0] * 2, p.box[0] * 2];
         if (p.shape === 'cylinder') p.box = [p.box[0] * 2, p.box[1], p.box[0] * 2];
-        var mesh = new T.Mesh(g, new T.MeshStandardMaterial({ color: css(p.color || 'surface'), roughness: 0.62, metalness: 0.08, transparent: true }));
+        // material: 'metal' | 'darkMetal' | 'silicon' | 'pcb' | 'glass' | 'wire' (believable surfaces), else plastic in its colour
+        var lib = M.materials(T);
+        var made = p.material && lib[p.material] && typeof lib[p.material] !== 'function' ? lib[p.material].clone() : new T.MeshStandardMaterial({ color: css(p.color || 'surface'), roughness: 0.55, metalness: 0.12 });
+        made.transparent = true;
+        var mesh = new T.Mesh(g, made);
         mesh.position.fromArray(p.at);
         if (p.rot) mesh.rotation.set(p.rot[0] || 0, p.rot[1] || 0, p.rot[2] || 0);
         mesh.userData.part = p;
         var edges = new T.LineSegments(new T.EdgesGeometry(g), new T.LineBasicMaterial({ color: css('line-strong'), transparent: true }));
         edges.position.copy(mesh.position);
         edges.rotation.copy(mesh.rotation);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
         scene.add(mesh, edges);
-        byId[p.id] = { mesh: mesh, edges: edges };
+        byId[p.id] = { mesh: mesh, edges: edges, baseColor: made.color.clone() };
+        if (p.glow) {
+          var h = M.halo(T, 'accent', Math.max(p.box[0], p.box[1], p.box[2]) * 3);
+          h.position.fromArray(p.at);
+          h.material.opacity = 0;
+          scene.add(h);
+          byId[p.id].halo = h;
+        }
         if (p.label && p.labelled !== 'never') makeLabel(p);
       });
       lines.forEach(function (l) {
@@ -326,10 +361,10 @@
       pending = [];
       var s = steps[want] || {};
       var first = s.fit ? fitView(s.fit, s.from) : s.view;
+      aimShadows(first);
       if (!first) render();
       else moveTo(first, true);
-      if (window.visual) window.visual.onTheme(function () { paint(); });
-      return { THREE: T, scene: scene, camera: camera, controls: controls, renderer: renderer, part: function (id) { return byId[id] || (custom.filter(function (c) { return c.id === id; })[0] || {}).obj; }, render: render, fitView: fitView };
+      return { THREE: T, scene: scene, camera: camera, controls: controls, renderer: renderer, part: function (id) { return byId[id] || (custom.filter(function (c) { return c.id === id; })[0] || {}).obj; }, render: render, fitView: fitView, studio: look };
     });
     ready.catch(function (e) { wrap.append(M.h('p', { style: 'position:absolute;inset:auto 12px 12px;color:var(--bad)' }, String(e && e.message || e))); });
 
@@ -338,6 +373,48 @@
       captions: steps.map(function (s) { return s.say || ''; }),
       ready: ready,
       draw: function (i) { want = Math.max(0, Math.min(steps.length - 1, i)); if (T) apply(want); return steps[want] && steps[want].say; },
+      /** Looks at something outside the steps (a part the learner picked): { focus, fit, labels, only, from } */
+      look: function (v) {
+        var run = function () {
+          focusSet = v.focus || null;
+          curLabels = v.labels || null;
+          onlySet = v.only || null;
+          paint();
+          var view = v.fit ? fitView(v.fit, v.from) : v.view;
+          aimShadows(view);
+          if (view) moveTo(view, auditing());
+        };
+        if (T) run(); else pending.push(run);
+      },
+      /** Moves parts to new places together ({id: [x, y, z]}), gliding unless motion is reduced or Tide is checking */
+      move: function (targets, ms) {
+        var run = function () {
+          var from = {}, ids = Object.keys(targets).filter(function (id) { return byId[id]; });
+          ids.forEach(function (id) {
+            from[id] = byId[id].mesh.position.clone();
+            parts.filter(function (q) { return q.id === id; })[0].at = targets[id].slice();
+          });
+          cancelAnimationFrame(moving);
+          var put = function (k) {
+            ids.forEach(function (id) {
+              var o = byId[id], to = new T.Vector3().fromArray(targets[id]);
+              o.mesh.position.lerpVectors(from[id], to, k);
+              o.edges.position.copy(o.mesh.position);
+            });
+            render();
+          };
+          if (M.reduced() || auditing() || !ms) return put(1);
+          var t0 = performance.now();
+          var tick = function (now) {
+            var k = Math.min(1, (now - t0) / ms), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+            put(e);
+            if (k < 1) moving = requestAnimationFrame(tick);
+          };
+          moving = requestAnimationFrame(tick);
+        };
+        if (T) run(); else pending.push(run);
+      },
+      parts: parts,
       /** Changes a part (lit, color, label, note, hidden, at, box) and redraws: what a control the learner moves calls */
       set: function (id, props) {
         var run = function () {

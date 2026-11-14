@@ -28,12 +28,25 @@ function loadTideMath(): { tm: TM; sent: unknown[] } {
 describe('the maths library in the visual frame', () => {
   it('is loaded by every frame, from Tide, and the frame may run it but nothing from the network', () => {
     const r = frameResponse(frameUrl('vabcdefgh', '<p>hi</p>', null))!
-    expect(r.body).toContain('<script src="/lib/tide-math.js"></script>')
+    expect(r.body).toContain('<script src="/lib/tide-math.js" crossorigin="anonymous"></script>')
     // The bootstrap runs first
     expect(r.body.indexOf(FRAME_BOOTSTRAP.slice(0, 40))).toBeLessThan(r.body.indexOf('/lib/tide-math.js'))
     expect(VISUAL_CSP).toMatch(/script-src 'unsafe-inline' tide-visual:/)
     expect(VISUAL_CSP).toMatch(/connect-src 'none'/)
     expect(VISUAL_CSP).not.toMatch(/https?:/)
+  })
+
+  it('libraries load with CORS, so an error thrown inside three.js or the kit reaches the check with its message, not "Script error."', async () => {
+    const r = frameResponse(frameUrl('vabcdefgh', '<p>hi</p>', null))!
+    expect(r.body).toMatch(/<script src="\/lib\/tide-machine.js" crossorigin="anonymous"><\/script>/)
+    const { libraryResponse } = await import('../src/main/visualLibs')
+    expect(libraryResponse('/lib/three.js')!.headers['access-control-allow-origin']).toBe('*')
+    const { VISUAL_SCHEME_PRIVILEGES } = await import('../src/main/visualFrames')
+    expect(VISUAL_SCHEME_PRIVILEGES.privileges).toMatchObject({ standard: true, secure: true, corsEnabled: true })
+    expect(VISUAL_SCHEME_PRIVILEGES.privileges).not.toHaveProperty('bypassCSP')
+    // three.js is loaded on demand the same way
+    expect(readFileSync(resolve('src/shared/frame/machine/scene3d.js'), 'utf8')).toMatch(/s\.crossOrigin = 'anonymous';\s+s\.src = '\/lib\/three\.js'/)
+    expect(readFileSync(resolve('src/shared/frame/tideMath.js'), 'utf8')).toMatch(/s\.crossOrigin = 'anonymous';\s+s\.src = src/)
   })
 
   it('is served at /lib/ to frame hosts only: Tide’s helpers, KaTeX with its fonts inside, three.js with OrbitControls', async () => {
