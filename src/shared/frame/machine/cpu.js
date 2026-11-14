@@ -155,7 +155,7 @@
       // Control unit
       var cu = box(24, 114, 354, 48, isHot('cu'), 'Control unit');
       cu.append(el('text', { x: 34, y: 152, 'font-size': 13, 'font-family': 'var(--mono)', 'font-weight': 600, fill: st.decoded ? 'var(--ink)' : 'var(--muted)' }, st.decoded ? st.decoded.text : st.halted ? 'halted' : '—'));
-      if (st.decoded && st.decoded.op) cu.append(el('text', { x: 368, y: 152, 'text-anchor': 'end', 'font-size': 12, fill: 'var(--muted)' }, st.decoded.op.does.replace(/Ra/g, 'R' + st.decoded.ra).replace(/Rb/g, 'R' + st.decoded.rb)));
+      if (st.decoded && st.decoded.op) cu.append(el('text', { x: 368, y: 152, 'text-anchor': 'end', 'font-size': 12, fill: 'var(--muted)' }, st.decoded.op.does.replace(/Ra/g, 'R' + st.decoded.ra).replace(/Rb/g, 'R' + st.decoded.rb).replace('number', String(st.decoded.operand)).replace('addr', '0x' + M.hex(st.decoded.operand, 2))));
       svg.append(cu);
       // Registers
       svg.append(el('text', { x: 24, y: 190, 'font-size': 11, 'font-weight': 600, fill: 'var(--muted)' }, 'Registers'));

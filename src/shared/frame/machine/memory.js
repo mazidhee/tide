@@ -54,7 +54,8 @@
         var start = cell(m.addr), endA = cell(m.addr + m.len - 1);
         var y = Math.max(noteY, start.y + ch / 2 + 4);
         var lx = gridW + 14;
-        svg.append(el('path', { d: 'M' + (endA.x + cw) + ' ' + (endA.y + ch / 2) + ' H' + (gridW + 4) + ' L' + (lx - 2) + ' ' + (y - 4), fill: 'none', stroke: color(m.color), 'stroke-width': 1, opacity: 0.7 }));
+        // Under the cells: it runs behind any it passes, out to its note
+        svg.insertBefore(el('path', { d: 'M' + (endA.x + cw) + ' ' + (endA.y + ch / 2) + ' H' + (gridW + 4) + ' L' + (lx - 2) + ' ' + (y - 4), fill: 'none', stroke: color(m.color), 'stroke-width': 1, opacity: 0.7 }), svg.firstChild);
         var t = el('text', { x: lx, y: y, 'font-size': 12, fill: 'var(--ink)' });
         var lines = String(m.label).split('\n');
         lines.forEach(function (line, k) { t.append(el('tspan', { x: lx, dy: k ? 15 : 0, fill: k ? 'var(--muted)' : color(m.color), 'font-weight': k ? 400 : 600 }, line)); });
@@ -64,11 +65,20 @@
       pointers.forEach(function (p) {
         if (!inRange(p.from) || !inRange(p.to)) return;
         var a = cell(p.from), b = cell(p.to);
-        var x1 = a.x + cw / 2, y1 = a.y + 4, x2 = b.x + cw / 2, y2 = b.y + 4;
-        var lift = 18 + Math.abs(x2 - x1) * 0.12 + (a.y === b.y ? 6 : 0);
-        var d = 'M' + x1 + ' ' + y1 + ' C' + x1 + ' ' + (Math.min(y1, y2) - lift) + ' ' + x2 + ' ' + (Math.min(y1, y2) - lift) + ' ' + x2 + ' ' + (y2 - 1);
+        var x1 = a.x + cw / 2, x2 = b.x + cw / 2, d;
+        if (a.y === b.y) {
+          // Along the row: an arc over it
+          var lift = 18 + Math.abs(x2 - x1) * 0.12;
+          d = 'M' + x1 + ' ' + (a.y + 4) + ' C' + x1 + ' ' + (a.y - lift) + ' ' + x2 + ' ' + (b.y - lift) + ' ' + x2 + ' ' + (b.y + 3);
+        } else if (b.y < a.y) {
+          // Up: from the top of the pointer's cell to the bottom of the target's
+          d = 'M' + x1 + ' ' + (a.y + 3) + ' C' + x1 + ' ' + (a.y - ch) + ' ' + x2 + ' ' + (b.y + ch * 2) + ' ' + x2 + ' ' + (b.y + ch - 3);
+        } else {
+          d = 'M' + x1 + ' ' + (a.y + ch - 3) + ' C' + x1 + ' ' + (a.y + ch * 2) + ' ' + x2 + ' ' + (b.y - ch) + ' ' + x2 + ' ' + (b.y + 3);
+        }
+        var y1 = a.y, y2 = b.y, lift2 = 18;
         M.arrow(svg, svg, 0, 0, 0, 0, { d: d, color: 'var(--accent)', width: 1.8 });
-        if (p.label) svg.append(el('text', { x: (x1 + x2) / 2, y: Math.min(y1, y2) - lift * 0.75 - 4, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--accent)' }, p.label));
+        if (p.label) svg.append(el('text', { x: (x1 + x2) / 2, y: Math.min(y1, y2) - lift2 * 0.5, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--accent)' }, p.label));
       });
       var need = Math.max(gy + rows * ch + 34, noteY + 8);
       if (need !== H) { H = need; M.resize(svg, W, H); }

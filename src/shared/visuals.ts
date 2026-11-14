@@ -395,6 +395,28 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
     }
     return found;
   };
+  // A 3D (WebGL) canvas keeps what it drew, so the check can see whether anything was
+  var getCtx = HTMLCanvasElement.prototype.getContext;
+  Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', { configurable: false, writable: false, value: function (type, attrs) {
+    if (/webgl/i.test(String(type))) attrs = Object.assign({}, attrs || {}, { preserveDrawingBuffer: true });
+    return getCtx.call(this, type, attrs);
+  } });
+  // Canvases of a fair size with nothing drawn on them (every pixel transparent)
+  var blankCanvases = function () {
+    var n = 0, cs = document.querySelectorAll('canvas');
+    for (var i = 0; i < cs.length; i++) {
+      var c = cs[i];
+      if (c.width < 40 || c.height < 40) continue;
+      try {
+        var t = document.createElement('canvas'); t.width = 48; t.height = 48;
+        var x = t.getContext('2d'); x.drawImage(c, 0, 0, 48, 48);
+        var d = x.getImageData(0, 0, 48, 48).data, on = 0;
+        for (var k = 3; k < d.length; k += 4) if (d[k] > 8) on++;
+        if (on < 24) n++;
+      } catch (e) {}
+    }
+    return n;
+  };
   // Every step drawn once, before the visual is shown: errors and unreadable layouts in any of them
   var audit = function () {
     var problems = [], n = steps ? steps.n : 1;
@@ -406,7 +428,11 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
       problems = problems.concat(layoutProblems(steps ? 'At step ' + (i + 1) + ', ' : ''));
     }
     if (steps) { at = 0; draw(); }
-    send({ t: 'audit', problems: problems.slice(0, 6) });
+    // A 3D scene renders a moment after it is drawn: look at its canvas then
+    setTimeout(function () {
+      if (blankCanvases()) problems.push('A canvas stayed blank: nothing was rendered on it (render after the scene is built and on every change, and point the camera at it).');
+      send({ t: 'audit', problems: problems.slice(0, 6) });
+    }, 450);
   };
   var clean2 = function (data) {
     if (!data || typeof data !== 'object') return undefined;
