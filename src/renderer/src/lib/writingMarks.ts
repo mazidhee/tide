@@ -71,35 +71,23 @@ export function markRanges(state: EditorState): Map<string, { from: number; to: 
   return out
 }
 
-/** The front matter as one quiet line: what it says, not how YAML spells it */
+/**
+ * The front matter, folded away: the line under the title says what it holds (dates, draft, tags),
+ * and tags are edited there. The YAML stays in the file for Obsidian.
+ */
 class PropsWidget extends WidgetType {
-  constructor(readonly text: string) {
-    super()
-  }
-  eq(o: PropsWidget) {
-    return o.text === this.text
+  eq() {
+    return true
   }
   toDOM() {
     const el = document.createElement('div')
     el.className = 'wr-props'
-    el.textContent = this.text
-    el.title = 'Front matter: edit it in Obsidian'
+    el.setAttribute('aria-hidden', 'true')
     return el
   }
   ignoreEvent() {
     return false
   }
-}
-
-function propsLine(md: string): string {
-  const fm = frontMatter(md)
-  const d = fm.data
-  const bits: string[] = []
-  if (d.draft === true) bits.push('Draft')
-  if (typeof d.date === 'string' && d.date) bits.push(d.date)
-  const tags = Array.isArray(d.tags) ? d.tags : []
-  if (tags.length) bits.push(tags.map((t) => `#${t}`).join(' '))
-  return bits.join('  ·  ') || 'Properties'
 }
 
 const foldFront = StateField.define<DecorationSet>({
@@ -114,7 +102,7 @@ function frontDeco(s: EditorState): DecorationSet {
   if (!fm.end) return Decoration.none
   // The block ends at the closing "---" line's end (the newline after it stays)
   const end = md.slice(0, fm.end).replace(/\r?\n$/, '').length
-  return Decoration.set([Decoration.replace({ widget: new PropsWidget(propsLine(md)), block: true }).range(0, end)])
+  return Decoration.set([Decoration.replace({ widget: new PropsWidget(), block: true }).range(0, end)])
 }
 
 /** Keeps the caret out of the folded front matter */

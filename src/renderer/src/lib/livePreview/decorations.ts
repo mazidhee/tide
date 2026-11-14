@@ -3,6 +3,7 @@ import type { EditorState, Range } from '@codemirror/state'
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import type { SyntaxNode } from '@lezer/common'
 import { BulletWidget, CheckboxWidget, ImageWidget, LabelWidget, MathWidget, TableWidget, type LivePreviewEnv } from './widgets'
+import { IMAGE_FILE, embedWidth } from '@shared/writingMedia'
 
 /*
  * Live preview: Markdown that reads like the note it will be. The syntax of each line is hidden and
@@ -223,6 +224,13 @@ export function buildDecorations(state: EditorState, ranges: readonly { from: nu
             const marks = children(node, 'LinkMark')
             if (!url) return false
             const alt = marks.length >= 2 ? doc.sliceString(marks[0].to, marks[1].from) : ''
+            if (env.quietEmbeds) {
+              // Writing: the Markdown stays, quiet, with the picture under it
+              const src = doc.sliceString(url.from, url.to)
+              out.push(Decoration.mark({ class: 'cm-lp-embed-src' }).range(from, to))
+              out.push(Decoration.widget({ widget: new ImageWidget(env.imageUrl(src), alt, null, true, src.split('/').pop() ?? src), side: 1 }).range(to))
+              return false
+            }
             const widget = new ImageWidget(env.imageUrl(doc.sliceString(url.from, url.to)), alt, null, revealed(from, to))
             if (widget.preview) out.push(Decoration.widget({ widget, side: 1 }).range(to))
             else {
@@ -235,14 +243,21 @@ export function buildDecorations(state: EditorState, ranges: readonly { from: nu
 
           case 'Wikilink':
           case 'WikiEmbed': {
-            if (revealed(from, to)) return false
             const targetNode = node.getChild('WikilinkTarget')
             const aliasNode = node.getChild('WikilinkAlias')
             const target = targetNode ? doc.sliceString(targetNode.from, targetNode.to).trim() : ''
             const alias = aliasNode ? doc.sliceString(aliasNode.from, aliasNode.to).trim() : ''
+            if (name === 'WikiEmbed' && target && env.quietEmbeds && IMAGE_FILE.test(target)) {
+              // Writing: the embed stays, quiet, with the picture under it (at its |width)
+              const width = embedWidth(alias)
+              out.push(Decoration.mark({ class: 'cm-lp-embed-src' }).range(from, to))
+              out.push(Decoration.widget({ widget: new ImageWidget(env.imageUrl(target), width ? '' : alias, width, true, target), side: 1 }).range(to))
+              return false
+            }
+            if (revealed(from, to)) return false
             if (!target) return false
             if (name === 'WikiEmbed' && IMAGE_EXT.test(target)) {
-              const width = /^\d+$/.test(alias) ? Number(alias) : null
+              const width = embedWidth(alias)
               replace(from, to, Decoration.replace({ widget: new ImageWidget(env.imageUrl(target), width ? '' : alias, width) }))
               const line = doc.lineAt(from)
               if (line.from === from && line.to === to) addLine(from, 'cm-lp-block-line')
@@ -262,7 +277,7 @@ export function buildDecorations(state: EditorState, ranges: readonly { from: nu
               labelTo = at < 0 ? targetNode!.to : labelFrom + label.length
             }
             hide(from, labelFrom)
-            out.push(Decoration.mark({ class: 'cm-lp-wikilink', attributes: { 'data-lp-wikilink': target, title: target } }).range(labelFrom, labelTo))
+            out.push(Decoration.mark({ class: name === 'WikiEmbed' ? 'cm-lp-wikilink cm-lp-embed-link' : 'cm-lp-wikilink', attributes: { 'data-lp-wikilink': target, title: target } }).range(labelFrom, labelTo))
             hide(labelTo, to)
             return false
           }

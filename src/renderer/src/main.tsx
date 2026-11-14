@@ -7,6 +7,8 @@ import '@fontsource-variable/jetbrains-mono'
 // The reading room's serif (SIL Open Font License 1.1; see THIRD_PARTY_NOTICES.md)
 import '@fontsource-variable/newsreader/opsz.css'
 import '@fontsource-variable/newsreader/opsz-italic.css'
+// Writing's titles and headings (SIL Open Font License 1.1; see THIRD_PARTY_NOTICES.md)
+import '@fontsource/instrument-serif/400.css'
 import 'katex/dist/katex.min.css'
 import './styles/theme.css'
 import './styles/app.css'

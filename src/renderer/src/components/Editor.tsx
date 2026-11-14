@@ -103,6 +103,10 @@ interface Props {
   noFocus?: boolean
   /** More CodeMirror extensions, set once when it opens (Writing's comment marks) */
   extensions?: Extension[]
+  /** Where a picture written in the text loads from, instead of the notes folder (Writing's folders) */
+  imageUrl?(target: string): string
+  /** Picture embeds keep their text, quiet, with the picture under it (Writing) */
+  quietEmbeds?: boolean
 }
 
 const IDLE_MS = 3500
@@ -130,7 +134,7 @@ function insertImages(view: EditorView, files: File[], at: number | null, save?:
 /** Live preview hides Markdown away from the cursor; source mode shows it all. The choice is remembered (settings.editorSource). */
 const previewMode = new Compartment()
 
-export function Editor({ value, onChange, onIdle, onProbe, handleRef, onImage, notePath, onLink, noFocus, extensions }: Props) {
+export function Editor({ value, onChange, onIdle, onProbe, handleRef, onImage, notePath, onLink, noFocus, extensions, imageUrl, quietEmbeds }: Props) {
   const app = useApp()
   const source = app.settings.editorSource === true
   const appRef = useRef(app)
@@ -139,12 +143,15 @@ export function Editor({ value, onChange, onIdle, onProbe, handleRef, onImage, n
   notePathRef.current = notePath ?? ''
   const onLinkRef = useRef(onLink)
   onLinkRef.current = onLink
+  const imageUrlRef = useRef(imageUrl)
+  imageUrlRef.current = imageUrl
   const envRef = useRef<LivePreviewEnv | null>(null)
   const livePreview = useRef<ReturnType<typeof livePreviewPlugin> | null>(null)
   if (!envRef.current) {
     const renderEnv = () => ({ notePath: notePathRef.current, filesByName: appRef.current.filesByName })
     envRef.current = {
-      imageUrl: (target) => (/^(https?|data|vault):/i.test(target) ? target : vaultUrl(resolveRelative(target, renderEnv()))),
+      imageUrl: (target) => (/^(https?|data|vault):/i.test(target) ? target : imageUrlRef.current ? imageUrlRef.current(target) : vaultUrl(resolveRelative(target, renderEnv()))),
+      quietEmbeds,
       renderMath,
       renderTable: (table) => renderMarkdown(table, renderEnv()),
       openLink: (link) => {

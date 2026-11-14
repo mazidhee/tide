@@ -40,6 +40,8 @@ import {
   type WritingKind
 } from '@shared/writing'
 import { checkMechanics, recheckLocal } from '@shared/writingCheck'
+import { HEIC_FILE, IMAGE_FILE, attachmentDir, attachmentName, attachmentSetting, resolveEmbed } from '@shared/writingMedia'
+import { DEFAULT_FIELDS, UNSORTED, pieceDates, pieceField, pieceTags, setFrontTags, type MySections } from '@shared/writingMeta'
 import {
   REVIEW_SYSTEM,
   RECHECK_SYSTEM,
@@ -147,7 +149,13 @@ async function summary(abs: string, root: WritingRoot, rec?: PieceRecord): Promi
   try {
     const [md, st] = await Promise.all([fs.readFile(abs, 'utf8'), fs.stat(abs)])
     const kind = rec?.kind ?? detectKind(md, abs).kind
+    const tags = pieceTags(md)
+    const fm = frontMatter(md)
     return {
+      ...pieceDates(fm.data, { birthtime: st.birthtimeMs, mtime: st.mtimeMs }),
+      tags,
+      field: pieceField(md, tags),
+      ...(typeof fm.data.field === 'string' && fm.data.field.trim() ? { fieldSet: true } : {}),
       path: abs,
       title: pieceTitle(md, abs),
       kind,
@@ -185,6 +193,10 @@ export async function listPieces(): Promise<PieceSummary[]> {
     const s = await summary(f, root, byPath.get(f))
     if (s) out.push(s)
   }
+  // A tag that names a field some piece declares counts as that field too
+  const declared = [...new Set(out.filter((p) => p.fieldSet).map((p) => p.field))]
+  if (declared.length)
+    for (const p of out) if (p.field === UNSORTED) p.field = pieceField('', p.tags, [...DEFAULT_FIELDS, ...declared])
   return out.sort((a, b) => Number(b.draft) - Number(a.draft) || b.mtime - a.mtime)
 }
 
@@ -196,6 +208,8 @@ export interface PieceOpen {
   kindWhy: string
   folder: string
   record: PieceRecord
+  written: number
+  edited: number
 }
 
 /** A piece and its record, the comments moved to where their words are now (the file may have been edited in Obsidian) */
@@ -205,7 +219,17 @@ export async function openPiece(path: string): Promise<PieceOpen> {
   const rec = await readRecord(abs)
   const { comments } = reanchor(text, rec.comments)
   const detected = detectKind(text, abs)
-  return { path: abs, text, title: pieceTitle(text, abs), kind: rec.kind ?? detected.kind, kindWhy: rec.kind ? 'You chose it' : detected.why, folder: root.label, record: { ...rec, comments } }
+  const st = await fs.stat(abs)
+  return {
+    path: abs,
+    text,
+    title: pieceTitle(text, abs),
+    kind: rec.kind ?? detected.kind,
+    kindWhy: rec.kind ? 'You chose it' : detected.why,
+    folder: root.label,
+    record: { ...rec, comments },
+    ...pieceDates(frontMatter(text).data, { birthtime: st.birthtimeMs, mtime: st.mtimeMs })
+  }
 }
 
 /** The editor's save: the file in place, and the comments' anchors as the editor last placed them */
@@ -479,3 +503,109 @@ export async function tickInThings(path: string): Promise<void> {
 
 /** The writing roots, for the window: where a draft can go */
 export const rootList = () => roots().map((r) => ({ root: r.root, label: r.label, vault: r.vault }))
+
+// ---------- Pictures, tags and the learner's sections ----------
+
+const filesCache = new Map<string, { at: number; files: string[] }>()
+
+/** Every file under a writing root (relative paths), hidden folders left out; kept a few seconds */
+async function rootFiles(root: string): Promise<string[]> {
+  const hit = filesCache.get(root)
+  if (hit && Date.now() - hit.at < 10_000) return hit.files
+  const out: string[] = []
+  const go = async (dir: string, depth: number) => {
+    if (depth > 8 || out.length > 20_000) return
+    for (const e of await fs.readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      if (e.name.startsWith('.') || e.name === 'node_modules') continue
+      const p = join(dir, e.name)
+      if (e.isDirectory()) await go(p, depth + 1)
+      else out.push(relative(root, p).split(sep).join('/'))
+    }
+  }
+  await go(root, 0)
+  filesCache.set(root, { at: Date.now(), files: out })
+  return out
+}
+
+/** Where new pictures for a piece go (relative to its root): Obsidian's setting, else Tide's "attachments" beside the note */
+async function attachFolder(root: WritingRoot, noteRel: string): Promise<string> {
+  const setting = attachmentSetting(await fs.readFile(join(root.root, '.obsidian', 'app.json'), 'utf8').catch(() => null))
+  return attachmentDir(setting, noteRel, root.vault ? 'attachments' : 'root')
+}
+
+/**
+ * The file a piece's embed shows (vault://writing/image?piece=…&t=…): only a picture inside that
+ * piece's writing folder. A HEIC is turned into a JPEG once, kept in .tide/cache/heic of the
+ * notes folder (never beside the photo). Null when there's no such picture.
+ */
+export async function writingImage(piece: string, target: string): Promise<string | null> {
+  let found: { abs: string; root: WritingRoot }
+  try {
+    found = resolvePiece(piece)
+  } catch {
+    return null
+  }
+  const { abs, root } = found
+  const noteRel = relative(root.root, abs).split(sep).join('/')
+  const files = (await rootFiles(root.root)).filter((f) => IMAGE_FILE.test(f))
+  const rel = resolveEmbed(target, noteRel, await attachFolder(root, noteRel), files)
+  if (!rel) return null
+  const file = resolve(root.root, rel)
+  if (!inside(root.root, file) || !IMAGE_FILE.test(file) || !existsSync(file)) return null
+  if (!HEIC_FILE.test(file)) return file
+  const st = await fs.stat(file)
+  const out = absPath(`.tide/cache/heic/${createHash('sha1').update(`${file}:${st.mtimeMs}:${st.size}`).digest('hex').slice(0, 20)}.jpg`)
+  if (existsSync(out)) return out
+  await fs.mkdir(dirname(out), { recursive: true })
+  const { execFile } = await import('child_process')
+  await new Promise<void>((res, rej) => execFile('/usr/bin/sips', ['-s', 'format', 'jpeg', '-Z', '2400', file, '--out', out], { timeout: 30_000 }, (e) => (e ? rej(e) : res())))
+  return existsSync(out) ? out : null
+}
+
+/**
+ * A picture pasted or dropped into a piece, saved in its folder's attachment folder under an
+ * Obsidian-style name (never over a file). Returns the embed to put in and where it went.
+ */
+export async function attachImage(piece: string, original: string, dataUrl: string): Promise<{ embed: string; folder: string }> {
+  const { abs, root } = resolvePiece(piece)
+  const m = /^data:image\/(png|jpeg|webp|gif);base64,(.+)$/.exec(dataUrl)
+  if (!m) throw new Error('That isn’t a picture Tide can save.')
+  const noteRel = relative(root.root, abs).split(sep).join('/')
+  const folderRel = await attachFolder(root, noteRel)
+  const dir = resolve(root.root, folderRel)
+  if (!inside(root.root, dir)) throw new Error('The attachment folder is outside this writing folder.')
+  await fs.mkdir(dir, { recursive: true })
+  const ext = m[1] === 'jpeg' ? 'jpg' : m[1]
+  const name = attachmentName(original, ext, new Date(), (n) => existsSync(join(dir, n)))
+  await fs.writeFile(join(dir, name), Buffer.from(m[2], 'base64'), { flag: 'wx' })
+  filesCache.delete(root.root)
+  return { embed: `![[${name}]]`, folder: folderRel ? `${folderRel}/` : 'the top of the folder' }
+}
+
+/** Sets a piece's tags: only the front matter's tags entry changes. Returns the new text */
+export async function setTags(path: string, tags: string[]): Promise<string> {
+  const { abs } = resolvePiece(path)
+  const text = await fs.readFile(abs, 'utf8')
+  const next = setFrontTags(text, tags.map(String))
+  if (next !== text) await savePiece(abs, next)
+  return next
+}
+
+const SECTIONS = `${DIR}/sections.json`
+
+/** The learner's own sections for the Writing list (Tide's records, never the notes) */
+export async function getSections(): Promise<MySections> {
+  try {
+    const s = JSON.parse(await readText(SECTIONS)) as MySections
+    return { names: Array.isArray(s.names) ? s.names.map(String) : [], assign: s.assign && typeof s.assign === 'object' ? s.assign : {} }
+  } catch {
+    return { names: [], assign: {} }
+  }
+}
+
+export async function saveSections(s: MySections): Promise<MySections> {
+  const clean: MySections = { names: [...new Set((s.names ?? []).map((n) => String(n).trim()).filter(Boolean))].slice(0, 50), assign: {} }
+  for (const [k, v] of Object.entries(s.assign ?? {})) if (clean.names.includes(String(v))) clean.assign[k] = String(v)
+  await writeText(SECTIONS, JSON.stringify(clean))
+  return clean
+}

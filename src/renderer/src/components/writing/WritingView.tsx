@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { drillTopic, kindLabel, type Habit, type PieceSummary } from '@shared/writing'
+import { UNSORTED, dateLabel, fullDate, groupPieces, withTags, type GroupMode, type MySections } from '@shared/writingMeta'
 import type { Topic } from '@shared/writingPrompt'
 import { ago } from '@shared/workshop'
 import { useApp } from '../../state'
@@ -60,8 +61,6 @@ export function WritingView() {
 
   const drill = (h: Habit) => app.setView({ kind: 'session', mode: 'quiz', scope: { kind: 'none' }, topic: drillTopic(h), options: { length: 6, difficulty: 'normal' }, nonce: Date.now() })
 
-  const drafts = (pieces ?? []).filter((p) => p.draft)
-  const rest = (pieces ?? []).filter((p) => !p.draft)
   const external = roots.filter((r) => !r.vault)
 
   return (
@@ -85,8 +84,7 @@ export function WritingView() {
                 No pieces yet. Start a draft from a topic, put essays in the Writing folder of your notes, or add a folder{external.length ? '' : ' such as your Obsidian vault'}.
               </p>
             )}
-            {drafts.length > 0 && <PieceList title="Drafts" pieces={drafts} />}
-            {rest.length > 0 && <PieceList title={drafts.length ? 'Everything else' : 'Pieces'} pieces={rest} />}
+            {pieces && pieces.length > 0 && <Pieces pieces={pieces} onChanged={load} />}
           </div>
 
           <div className="wr-side">
@@ -122,22 +120,190 @@ export function WritingView() {
   )
 }
 
-function PieceList({ title, pieces }: { title: string; pieces: PieceSummary[] }) {
+type GroupBy = GroupMode
+
+const GROUPS: { id: GroupBy; label: string }[] = [
+  { id: 'none', label: 'None' },
+  { id: 'field', label: 'By field' },
+  { id: 'tag', label: 'By tag' },
+  { id: 'sections', label: 'My sections' }
+]
+
+const remembered = <T,>(key: string, fallback: T): T => {
+  try {
+    const v = localStorage.getItem(key)
+    return v ? (JSON.parse(v) as T) : fallback
+  } catch {
+    return fallback
+  }
+}
+const remember = (key: string, v: unknown) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(v))
+  } catch {
+    // Private window: not remembered
+  }
+}
+
+/** The pieces: a plain list by default (drafts, then newest), or grouped as the learner chooses, filtered by tags */
+function Pieces({ pieces, onChanged }: { pieces: PieceSummary[]; onChanged(): void }) {
+  const app = useApp()
+  const [mode, setMode] = useState<GroupBy>(() => remembered('tide.writing.group', 'none'))
+  const [chosen, setChosen] = useState<string[]>(() => remembered('tide.writing.tags', []))
+  const [mine, setMine] = useState<MySections>({ names: [], assign: {} })
+  const [naming, setNaming] = useState<string | null>(null)
+  useEffect(() => {
+    window.tide.writing.sections().then(setMine).catch(() => {})
+  }, [])
+
+  const allTags = useMemo(() => {
+    const n = new Map<string, { tag: string; count: number }>()
+    for (const p of pieces) for (const t of p.tags) n.set(t.toLowerCase(), { tag: n.get(t.toLowerCase())?.tag ?? t, count: (n.get(t.toLowerCase())?.count ?? 0) + 1 })
+    return [...n.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
+  }, [pieces])
+  const live = chosen.filter((c) => allTags.some((t) => t.tag.toLowerCase() === c.toLowerCase()))
+  const groups = groupPieces(withTags(pieces, live), mode, mine)
+
+  const pick = (m: GroupBy) => (setMode(m), remember('tide.writing.group', m))
+  const toggleTag = (t: string) => {
+    const next = live.some((c) => c.toLowerCase() === t.toLowerCase()) ? live.filter((c) => c.toLowerCase() !== t.toLowerCase()) : [...live, t]
+    setChosen(next)
+    remember('tide.writing.tags', next)
+  }
+  const saveMine = async (next: MySections) => {
+    setMine(next)
+    setMine(await window.tide.writing.saveSections(next).catch(() => next))
+  }
+  const addSection = (name: string, piece?: string) => {
+    const n = name.trim()
+    if (!n) return
+    void saveMine({ names: mine.names.includes(n) ? mine.names : [...mine.names, n], assign: piece ? { ...mine.assign, [piece]: n } : mine.assign })
+  }
+  const moveTo = (piece: string, section: string | null) => {
+    const assign = { ...mine.assign }
+    if (section) assign[piece] = section
+    else delete assign[piece]
+    void saveMine({ ...mine, assign })
+  }
+  const addTag = async (p: PieceSummary, tag: string) => {
+    try {
+      await window.tide.writing.tags(p.path, [...p.tags, tag])
+      onChanged()
+    } catch (e) {
+      app.toast(clean(e), { tone: 'error' })
+    }
+  }
+
+  return (
+    <>
+      <div className="wr-tools">
+        <div className="wr-seg" role="group" aria-label="Group">
+          <span className="wr-seg-label">Group</span>
+          {GROUPS.map((g) => (
+            <button key={g.id} aria-pressed={mode === g.id} onClick={() => pick(g.id)}>
+              {g.label}
+            </button>
+          ))}
+        </div>
+        {mode === 'sections' && (
+          <button className="wr-tool-link" onClick={() => setNaming('')}>
+            New section
+          </button>
+        )}
+      </div>
+      {allTags.length > 0 && (
+        <div className="wr-chips" role="group" aria-label="Tags">
+          {allTags.slice(0, 16).map((t) => (
+            <button key={t.tag} aria-pressed={live.some((c) => c.toLowerCase() === t.tag.toLowerCase())} onClick={() => toggleTag(t.tag)}>
+              #{t.tag}
+              <span>{t.count}</span>
+            </button>
+          ))}
+          {live.length > 0 && (
+            <button className="wr-chips-clear" onClick={() => (setChosen([]), remember('tide.writing.tags', []))}>
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+      {naming !== null && (
+        <form
+          className="wr-name-section"
+          onSubmit={(e) => {
+            e.preventDefault()
+            addSection(naming)
+            setNaming(null)
+          }}
+        >
+          <input autoFocus value={naming} onChange={(e) => setNaming(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setNaming(null)} placeholder="Name the section" aria-label="Section name" />
+          <button className="btn small" type="submit" disabled={!naming.trim()}>
+            Add
+          </button>
+        </form>
+      )}
+      {mode === 'sections' && !mine.names.length && <p className="wr-sec-note">Name a section, then move pieces into it from each row’s menu.</p>}
+      {live.length > 0 && !groups.some((g) => g.pieces.length) && <p className="wr-sec-note">No piece has all of those tags.</p>}
+      {groups.map((g) => (
+        <PieceList
+          key={g.title}
+          title={g.title}
+          count={mode === 'none' ? undefined : g.pieces.length}
+          pieces={g.pieces}
+          untagged={mode !== 'none' && mode !== 'sections' && g.title === UNSORTED}
+          tags={allTags.map((t) => t.tag)}
+          sections={mine}
+          onMove={moveTo}
+          onNewSection={(piece, name) => addSection(name, piece)}
+          onAddTag={(p, t) => void addTag(p, t)}
+        />
+      ))}
+    </>
+  )
+}
+
+function PieceList(props: {
+  title: string
+  count?: number
+  pieces: PieceSummary[]
+  untagged: boolean
+  tags: string[]
+  sections: MySections
+  onMove(piece: string, section: string | null): void
+  onNewSection(piece: string, name: string): void
+  onAddTag(p: PieceSummary, tag: string): void
+}) {
+  const { title, count, pieces } = props
   const app = useApp()
   const now = Date.now()
+  const [menu, setMenu] = useState<string | null>(null)
+  const [tagging, setTagging] = useState<string | null>(null)
+  const [tag, setTag] = useState('')
+  const listId = useId()
+  useEffect(() => {
+    if (!menu) return
+    const close = () => setMenu(null)
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [menu])
   return (
     <section className="wr-sec" aria-label={title}>
-      <h2 className="wr-sec-title">{title}</h2>
+      <h2 className="wr-sec-title">
+        {title}
+        {count !== undefined && <span className="wr-sec-count">{count}</span>}
+      </h2>
       <ul className="wr-pieces">
         {pieces.map((p) => (
-          <li key={p.path}>
+          <li key={p.path} className="wr-piece-item">
             <button className="wr-piece-row" onClick={() => app.setView({ kind: 'writing', path: p.path })}>
               <span className="wr-piece-title">{p.title}</span>
               <span className="wr-piece-meta">
-                <span>{kindLabel(p.kind)}</span>
+                <span title={fullDate(p.written)}>Written {dateLabel(p.written, now)}</span>
+                <span title={fullDate(p.edited)}>Edited {dateLabel(p.edited, now)}</span>
                 <span>{p.words.toLocaleString('en-GB')} words</span>
-                <span>{p.lastReviewed ? `reviewed ${ago(p.lastReviewed, now)}` : 'not reviewed'}</span>
+                <span>{kindLabel(p.kind)}</span>
+                {p.lastReviewed && <span>reviewed {ago(p.lastReviewed, now)}</span>}
                 {p.folder !== 'Tide' && <span>{p.folder}</span>}
+                {p.tags.length > 0 && <span className="wr-piece-tags">{p.tags.map((t) => `#${t}`).join(' ')}</span>}
               </span>
               {p.open > 0 && (
                 <span className="wr-piece-open" title={`${p.open} open comment${p.open === 1 ? '' : 's'}`}>
@@ -145,6 +311,67 @@ function PieceList({ title, pieces }: { title: string; pieces: PieceSummary[] })
                 </span>
               )}
             </button>
+            <span className="wr-piece-acts">
+              {props.untagged && !p.tags.length && tagging !== p.path && (
+                <button className="wr-tool-link" onClick={() => (setTagging(p.path), setTag(''))}>
+                  Add a tag
+                </button>
+              )}
+              {tagging === p.path && (
+                <form
+                  className="wr-tag-form"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    if (tag.trim()) props.onAddTag(p, tag.trim())
+                    setTagging(null)
+                  }}
+                >
+                  <input autoFocus list={listId} value={tag} onChange={(e) => setTag(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setTagging(null)} onBlur={() => setTagging(null)} placeholder="tag" aria-label="Tag" />
+                  <datalist id={listId}>
+                    {props.tags.map((t) => (
+                      <option key={t} value={t} />
+                    ))}
+                  </datalist>
+                </form>
+              )}
+              <button
+                className="icon-btn small wr-piece-menu"
+                aria-label="More"
+                aria-expanded={menu === p.path}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setMenu(menu === p.path ? null : p.path)
+                }}
+              >
+                <Icon name="more" size={14} />
+              </button>
+              {menu === p.path && (
+                <div className="wr-menu" role="menu" onClick={(e) => e.stopPropagation()}>
+                  <span className="wr-menu-label">Move to section</span>
+                  {props.sections.names.map((n) => (
+                    <button key={n} role="menuitemradio" aria-checked={props.sections.assign[p.path] === n} onClick={() => (props.onMove(p.path, n), setMenu(null))}>
+                      {n}
+                    </button>
+                  ))}
+                  <form
+                    className="wr-menu-new"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      const n = String(new FormData(e.currentTarget).get('name') ?? '').trim()
+                      if (n) props.onNewSection(p.path, n)
+                      setMenu(null)
+                    }}
+                  >
+                    <input name="name" placeholder="New section" aria-label="New section" />
+                  </form>
+                  {props.sections.assign[p.path] && (
+                    <button role="menuitem" onClick={() => (props.onMove(p.path, null), setMenu(null))}>
+                      Take out of {props.sections.assign[p.path]}
+                    </button>
+                  )}
+                </div>
+              )}
+            </span>
           </li>
         ))}
       </ul>
