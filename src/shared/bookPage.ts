@@ -2,17 +2,20 @@
  * A book's page: one note in the vault per book, made for reading, like a Notion page. A cover
  * banner and the book as its icon (frontmatter, shared/noteCover), a properties line, then three
  * sections: The core argument (numbered steps, mapped with Claude and corrected by you), Quotes
- * (each linked back to its exact place in the book) and My thinking (margin notes, open
- * questions, exchanges kept from Claude).
+ * (kept quotes and highlights, each linked back to its exact place in the book) and My thinking
+ * (margin notes and open questions, each under the words it is about, and exchanges kept from
+ * Claude).
  *
- * It's a normal note and yours: write anywhere in it. Tide only ever adds to it, at the end of
- * the section a thing belongs in, and remembers what it already added (ShelfBook.written), so
- * whatever you change or delete stays the way you left it. Pure; main/readingRoom writes it.
+ * It's a normal note and yours: write anywhere in it. Tide adds to it, at the end of the section
+ * a thing belongs in, and remembers what it already added (ShelfBook.written). A mark you change
+ * in the reader is rewritten on the page only while its block is still as Tide wrote it, so
+ * whatever you change or delete on the page stays the way you left it. Pure; main/readingRoom
+ * writes it.
  */
 
 import { notesPageFor } from './bookNotes'
 import { locAnchor, type PassageLoc } from './passage'
-import { citeLabel, markAnchor, type Mark, type ShelfBook } from './readingRoom'
+import { citeLabel, markAnchor, parseReaderAnchor, type Mark, type ShelfBook } from './readingRoom'
 
 export const ARGUMENT = 'The core argument'
 export const QUOTES = 'Quotes'
@@ -210,21 +213,180 @@ const link = (bookPath: string, m: Pick<Mark, 'loc' | 'id' | 'chapter'>) => {
 
 export const placeLink = (bookPath: string, loc: PassageLoc, chapter?: string) => `[[${bookPath.split('/').pop()!}#${locAnchor(loc)}|${citeLabel(chapter, loc)}]]`
 
-/** A kept quote: the words, then where it is (a link that opens the book there) and when */
-export function quoteBlock(bookPath: string, m: Mark): string {
-  const words = m.text
+/** The words of a passage as a blockquote, every line of it */
+const quoted = (text: string) =>
+  text
     .trim()
     .split('\n')
-    .map((l) => `> ${l}`)
+    .map((l) => `> ${l}`.trimEnd())
     .join('\n')
-  return `${words}\n>\n> ${link(bookPath, m)} · kept ${short(m.at)}${m.note?.trim() ? `\n\n${m.note.trim()}` : ''}`
+
+/** Where a passage is, under its words: "— Meditations, Book I ¶3", the place a link back to it */
+const citeLine = (bookPath: string, m: Mark, title?: string) => `> — ${title?.trim() ? `${title.trim()}, ` : ''}${link(bookPath, m)}`
+
+/**
+ * A mark as it goes on the page: the exact words quoted, where they are (a link that opens the
+ * book at the mark; the link carries the mark's id, which is how Tide finds the block again),
+ * then your note under it, as you wrote it.
+ *
+ *   > From my mother, piety and beneficence…
+ *   >
+ *   > — Meditations, [[Meditations.epub#loc=1.3&a=ok7vfrfi|Book I ¶3]]
+ *
+ *   The thought precedes the deed…
+ */
+export function passageBlock(bookPath: string, m: Mark, title?: string): string {
+  const kept = m.kind === 'quote' ? ` · kept ${short(m.at)}` : ''
+  const note = m.note?.trim()
+  const body = m.kind === 'question' ? `Open question: ${note || 'what is meant here?'}` : note
+  return `${quoted(m.text)}\n>\n${citeLine(bookPath, m, title)}${kept}${body ? `\n\n${body}` : ''}`
 }
 
-/** A margin note or a question, as a line of your thinking */
+/** A kept quote: the words, then where it is (a link that opens the book there) and when */
+export const quoteBlock = (bookPath: string, m: Mark, title?: string) => passageBlock(bookPath, { ...m, kind: 'quote' }, title)
+
+/** A margin note or a question as an earlier Tide wrote it, one line of your thinking. Still read (readPageMarks), no longer written. */
 export function thoughtLine(bookPath: string, m: Mark): string {
   const what = m.kind === 'question' ? 'open question' : 'margin'
-  const said = oneLine(m.note?.trim() || (m.kind === 'question' ? `What is meant by “${oneLine(m.text).slice(0, 120)}”?` : oneLine(m.text)))
-  return `- ${said} · _${what}, ${link(bookPath, m)}_`
+  return `- ${oldSaid(m)} · _${what}, ${link(bookPath, m)}_`
+}
+
+const oldSaid = (m: Mark) => oneLine(m.note?.trim() || (m.kind === 'question' ? `What is meant by “${oneLine(m.text).slice(0, 120)}”?` : oneLine(m.text)))
+
+/**
+ * Where a mark goes on the page, and what is written: kept quotes and plain highlights under
+ * Quotes; margin notes and settled questions under My thinking, the passage quoted above the
+ * note. Null while there is nothing to write yet (a note not written, a question not settled).
+ */
+export function blockFor(bookPath: string, m: Mark, title?: string): { section: string; block: string } | null {
+  if (m.kind === 'quote' || m.kind === 'highlight') return { section: QUOTES, block: passageBlock(bookPath, m, title) }
+  // A question goes in once it's settled: its words written, or left as it was (note '')
+  if ((m.kind === 'question' && m.note !== undefined) || (m.kind === 'note' && m.note?.trim())) return { section: THINKING, block: passageBlock(bookPath, m, title) }
+  return null
+}
+
+// ---------- Reading the page back ----------
+
+/** A mark as the page has it, in the format Tide writes now or the one it wrote before */
+export interface PageMark {
+  id: string
+  loc: PassageLoc
+  kind: Mark['kind']
+  /** The passage's words (an older one-line note has none) */
+  text: string
+  note?: string
+  /** "Book I", from the link's label */
+  chapter?: string
+  /** The heading of the section it is under */
+  section?: string
+  /** Where its block is in the page, end exclusive */
+  from: number
+  to: number
+}
+
+/** "> — Title, [[book#loc=1.3&a=id|Book I ¶3]]", or an older quote's "> [[book#…|…]] · kept 12 Nov" */
+const CITE = /^>\s*(?:—[^\n[]*)?\[\[[^\]|#\n]+#([^\]|\n]+)\|([^\]\n]+)\]\]/
+/** An older one-line note: "- note · _margin, [[book#loc=1.3&a=id|Book I ¶3]]_" */
+const OLD_LINE = /^-\s+(.*?)\s+·\s+_(margin|open question),\s+\[\[[^\]|#\n]+#([^\]|\n]+)\|([^\]\n]+)\]\]_\s*$/
+/** A line that starts something else: another passage, a heading, a line of thinking, a kept exchange, a step */
+const NEXT_THING = /^(?:>|#{1,6}\s|-\s|\*\*|\d+[.)]\s)/
+
+const chapterOf = (label: string) => {
+  const c = label.replace(/\s*¶\d+$/, '').trim()
+  return c && c !== label.trim() ? c : undefined
+}
+
+/**
+ * Every mark on a book page, read back: passage blocks (the quoted words, "> — Title, [[book#loc&a=id|place]]",
+ * then the note) and the one-line notes an earlier Tide wrote ("- note · _margin, [[book#loc&a=id|place]]_").
+ * Nothing needs migrating: pages written either way read the same.
+ */
+export function readPageMarks(md: string): PageMark[] {
+  const out: PageMark[] = []
+  const lines = md.split('\n')
+  const offsets: number[] = []
+  let o = 0
+  for (const l of lines) {
+    offsets.push(o)
+    o += l.length + 1
+  }
+  const at = (i: number) => Math.min(i < lines.length ? offsets[i] : md.length, md.length)
+  let section: string | undefined
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const head = /^##\s+(.+?)\s*$/.exec(line)
+    if (head) section = head[1]
+    const old = OLD_LINE.exec(line)
+    if (old) {
+      const target = parseReaderAnchor(old[3])
+      if (target?.mark) out.push({ id: target.mark, loc: target.loc, kind: old[2] === 'open question' ? 'question' : 'note', text: '', note: old[1].trim(), chapter: chapterOf(old[4]), section, from: at(i), to: at(i + 1) })
+      continue
+    }
+    const cite = CITE.exec(line)
+    const target = cite ? parseReaderAnchor(cite[1]) : null
+    if (!cite || !target?.mark) continue
+    // The words: the quote lines above it, back to where the blockquote starts
+    let first = i
+    while (first > 0 && /^>/.test(lines[first - 1])) first--
+    const text = lines
+      .slice(first, i)
+      .map((l) => l.replace(/^>\s?/, ''))
+      .join('\n')
+      .trim()
+    // The note: what follows, up to the next thing
+    let last = i
+    for (let j = i + 1; j < lines.length && !NEXT_THING.test(lines[j]); j++) if (lines[j].trim()) last = j
+    const body = lines
+      .slice(i + 1, last + 1)
+      .join('\n')
+      .trim()
+    const asked = /^Open question:\s*/.exec(body)
+    const note = asked ? body.slice(asked[0].length).trim() : body
+    const kept = /·\s*kept\b/.test(line.slice(cite[0].length))
+    const kind: Mark['kind'] = asked ? 'question' : section === THINKING ? 'note' : kept || note ? 'quote' : 'highlight'
+    out.push({ id: target.mark, loc: target.loc, kind, text, ...(note ? { note } : {}), chapter: chapterOf(cite[2]), section, from: at(first), to: at(last + 1) })
+    i = last
+  }
+  return out
+}
+
+/** Marks read back from a book page, for when Tide's own record of them is gone (each finds its words again by text) */
+export function marksFromPage(md: string, at = 0): Mark[] {
+  return readPageMarks(md).map((p) => ({ id: p.id, kind: p.kind, loc: p.loc, start: -1, end: -1, text: p.text, ...(p.note ? { note: p.note } : {}), ...(p.chapter ? { chapter: p.chapter } : {}), at }))
+}
+
+const flat = (t: string | undefined) => (t ?? '').replace(/\s+/g, ' ').trim()
+
+/** Whether the page's block is still what Tide wrote for this mark (or an earlier, shorter save of it): if you changed it, Tide leaves it */
+function untouched(p: PageMark, m: Mark): boolean {
+  if (p.text && flat(p.text) !== flat(m.text)) return false
+  const had = p.text ? flat(m.kind === 'question' && !m.note?.trim() ? 'what is meant here?' : m.note) : flat(oldSaid(m))
+  const shown = flat(p.note)
+  return shown === had || (!!shown && had.startsWith(shown))
+}
+
+/** The page with a block taken out (or another put in its place), the blank lines around it closed up */
+function splice(md: string, from: number, to: number, put = ''): string {
+  const before = md.slice(0, from).replace(/\n+$/, '\n')
+  const after = md.slice(to).replace(/^\n+/, '')
+  const mid = put ? `\n${put.trim()}\n` : ''
+  return `${before}${mid}${after ? `\n${after}` : ''}`
+}
+
+/**
+ * A mark changed (or, with next null, removed) after it went on the page: its block is rewritten
+ * where it is (or moved to the section it now belongs in), but only while it is still the way
+ * Tide wrote it; anything you edited on the page stays as you left it. Null when nothing changes.
+ * An older one-line note becomes a passage block the first time it is edited.
+ */
+export function updateMarkBlock(md: string, bookPath: string, prev: Mark, next: Mark | null, title?: string): string | null {
+  const found = readPageMarks(md).find((p) => p.id === prev.id)
+  if (!found || !untouched(found, prev)) return null
+  if (!next) return splice(md, found.from, found.to)
+  const want = blockFor(bookPath, next, title)
+  if (!want || md.slice(found.from, found.to).trim() === want.block.trim()) return null
+  if (want.section === found.section) return splice(md, found.from, found.to, want.block)
+  return applyAdditions(splice(md, found.from, found.to), [want])
 }
 
 export interface KeptExchange {
@@ -249,14 +411,12 @@ export function exchangeBlock(bookPath: string, x: KeptExchange, tutor = 'Claude
 }
 
 /** Everything new for the page, in the order it goes in, skipping what was already written */
-export function pageAdditions(bookPath: string, marks: Mark[], written: string[]): { section: string; block: string; id: string }[] {
+export function pageAdditions(bookPath: string, marks: Mark[], written: string[], title?: string): { section: string; block: string; id: string }[] {
   const done = new Set(written)
   const out: { section: string; block: string; id: string }[] = []
   for (const m of marks) {
-    if (done.has(m.id)) continue
-    if (m.kind === 'quote') out.push({ section: QUOTES, block: quoteBlock(bookPath, m), id: m.id })
-    // A question goes in once it's settled: its words written, or left as it was (note '')
-    else if ((m.kind === 'question' && m.note !== undefined) || (m.kind === 'note' && m.note?.trim())) out.push({ section: THINKING, block: thoughtLine(bookPath, m), id: m.id })
+    const b = done.has(m.id) ? null : blockFor(bookPath, m, title)
+    if (b) out.push({ ...b, id: m.id })
   }
   return out
 }

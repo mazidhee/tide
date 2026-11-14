@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { addArgumentSteps, applyAdditions, argumentSteps, bookPagePath, isBookPage, newBookPage, pageAdditions, readFront, setFront, HINTS, QUOTES, THINKING } from '../src/shared/bookPage'
+import { addArgumentSteps, applyAdditions, argumentSteps, bookPagePath, isBookPage, marksFromPage, newBookPage, pageAdditions, readFront, readPageMarks, setFront, updateMarkBlock, HINTS, QUOTES, THINKING } from '../src/shared/bookPage'
 import { artHostAllowed, coverOf, coverSrc, creditFor, mixArt, parseAic, parseMetObject, parseMetSearch, withCover, withCoverY } from '../src/shared/noteCover'
 import { daysLeftInWeek, findUnit, logMinutes, markAnchor, minutesThisWeek, parseReaderAnchor, planReading, progressAt, reanchor, segments, tonight, weekStartOf, wpmOf, type Mark, type RoomState, type ShelfBook } from '../src/shared/readingRoom'
 import { keepFallback, nextStage, parseArgument, parseKeep, recallPrompt, stageOpening, STAGES } from '../src/shared/readingTalk'
@@ -111,11 +111,72 @@ describe('marks at exact places', () => {
     expect(md).toContain('> All these things happen to them by reason of their ignorance of what is good and evil.')
     // The link opens the book at the exact mark
     expect(md).toContain('[[Meditations - Marcus Aurelius.epub#loc=2.1&a=q1|The Second Book ¶1]]')
-    expect(md).toContain('- So harm is only what I let in. · _margin, [[Meditations - Marcus Aurelius.epub#loc=2.2&a=n1|The Second Book ¶2]]_')
-    // A highlight stays in the reader, not on the page
-    expect(md).not.toContain(P3.slice(0, 10))
+    // A margin note: the exact words quoted, where they are, then the note
+    expect(md).toContain(`> ${P2.slice(0, 20).trim()}\n>\n> — Meditations, [[Meditations - Marcus Aurelius.epub#loc=2.2&a=n1|The Second Book ¶2]]\n\nSo harm is only what I let in.`)
+    // A highlight: just the words and where they are, under Quotes
+    expect(md).toContain(`> ${P3.slice(0, 10)}\n>\n> — Meditations, [[Meditations - Marcus Aurelius.epub#loc=2.3&a=h1|The Second Book ¶3]]\n`)
+    expect(md.indexOf(P3.slice(0, 10))).toBeLessThan(md.indexOf('## My thinking'))
+  })
+
+  it('follows a note you go on writing, and lets go of a block you changed on the page', async () => {
+    const room = await rr()
+    const n = mark({ id: 'n9', kind: 'note', loc: { kind: 'para', chapter: 2, para: 3 }, start: 0, end: P3.length, text: P3, note: 'The thoughts precede' })
+    await room.saveMark(BOOK, n)
+    await room.saveMark(BOOK, { ...n, note: 'The thoughts precede the deed, so a mere thought has moral weight.' })
+    expect(page()).toContain('\n\nThe thoughts precede the deed, so a mere thought has moral weight.')
+    expect(page()).not.toMatch(/The thoughts precede\n/)
+    // You rewrite it on the page: an edit in the reader no longer touches it
+    writeFileSync(join(vault, bookPagePath(BOOK)), page().replace('so a mere thought has moral weight.', 'my words now.'))
+    await room.saveMark(BOOK, { ...n, note: 'Something else.' })
+    expect(page()).toContain('The thoughts precede the deed, my words now.')
+    expect(page()).not.toContain('Something else.')
+    // A highlight removed in the reader leaves the page with it
+    await room.removeMark(BOOK, 'h1')
+    expect(page()).not.toContain(`a=h1|`)
+  })
+
+  it('brings marks back from the book page when Tide’s own record of them is gone, old notes included', async () => {
+    const other = 'Library/Books/Lost.epub'
+    writeFileSync(join(vault, other), 'x')
+    writeFileSync(join(vault, bookPagePath(other)), OLD_PAGE.replace(/Meditations - Marcus Aurelius\.epub/g, 'Lost.epub'))
+    const room = await rr()
+    const ms = await room.marks(other)
+    expect(ms.map((m) => [m.id, m.kind]).sort()).toEqual([
+      ['ok7vfrfi', 'note'],
+      ['q0ld', 'quote'],
+      ['qs', 'question']
+    ])
+    expect(ms.find((m) => m.id === 'ok7vfrfi')).toMatchObject({ loc: { kind: 'para', chapter: 1, para: 3 }, note: 'The thoughts preceeds the deed', chapter: 'Book I' })
+    expect(ms.find((m) => m.id === 'q0ld')).toMatchObject({ text: 'Hast thou reason? I have.', start: -1 })
   })
 })
+
+/** A book page as Tide wrote it before passage blocks: one-line notes, and the older quote line */
+const OLD_PAGE = `---
+tide_book: "[[Meditations - Marcus Aurelius.epub]]"
+cssclasses:
+  - "tide-book"
+---
+
+# Meditations
+
+## The core argument
+
+1. A person's good character is largely learned.
+
+_Mapped with Claude, 14 Nov. It’s your page: correct any step._
+
+## Quotes
+
+> Hast thou reason? I have.
+>
+> [[Meditations - Marcus Aurelius.epub#loc=1.1&a=q0ld|The First Book ¶1]] · kept 12 Nov
+
+## My thinking
+
+- The thoughts preceeds the deed · _margin, [[Meditations - Marcus Aurelius.epub#loc=1.3&a=ok7vfrfi|Book I ¶3]]_
+- Where does injustice go? · _open question, [[Meditations - Marcus Aurelius.epub#loc=2.2&a=qs|The Second Book ¶2]]_
+`
 
 // ---------- The book page ----------
 
@@ -153,21 +214,73 @@ describe('the book page', () => {
     expect(deleted).not.toContain('Do the things external')
   })
 
-  it('keeps thinking lines as one list, and brings back a section you deleted at the end', () => {
+  it('puts each note under the words it is about, and brings back a section you deleted at the end', () => {
     const base = newBookPage({ title: 'M', path: BOOK }).replace(/## My thinking[\s\S]*$/, '')
-    const n1 = mark({ id: 'n1', kind: 'note', note: 'First thought' })
+    const n1 = mark({ id: 'n1', kind: 'note', note: 'First thought\n\nAnd a second paragraph.' })
     const n2 = mark({ id: 'n2', kind: 'question', note: 'Where does injustice go?' })
-    const md = applyAdditions(base, pageAdditions(BOOK, [n1, n2], []))
-    expect(md).toMatch(/## My thinking\n\n- First thought · _margin, .*\n- Where does injustice go\? · _open question, /)
+    const md = applyAdditions(base, pageAdditions(BOOK, [n1, n2], [], 'Meditations'))
+    const cite = (id: string) => `> — Meditations, [[Meditations - Marcus Aurelius.epub#loc=2.1&a=${id}|The Second Book ¶1]]`
+    expect(md).toContain(`## My thinking\n\n> All these things happen to them by reason of their ignorance of what is good and evil.\n>\n${cite('n1')}\n\nFirst thought\n\nAnd a second paragraph.\n\n> All these`)
+    expect(md).toContain(`${cite('n2')}\n\nOpen question: Where does injustice go?`)
   })
 
   it('waits for a question to be settled, and keeps an exchange’s turns apart from later thoughts', () => {
     const q = mark({ id: 'q', kind: 'question', note: undefined })
     expect(pageAdditions(BOOK, [q], [])).toEqual([])
-    expect(pageAdditions(BOOK, [{ ...q, note: '' }], [])[0].block).toMatch(/^- What is meant by “All these things/)
+    expect(pageAdditions(BOOK, [{ ...q, note: '' }], [])[0].block).toMatch(/^> All these things[\s\S]*\n\nOpen question: what is meant here\?$/)
     const base = applyAdditions(newBookPage({ title: 'M', path: BOOK }), [{ section: THINKING, block: '**Challenged** · 13 Nov\n\n- **Claude:** A.\n- **Me:** B.' }])
     const md = applyAdditions(base, pageAdditions(BOOK, [mark({ id: 'n', kind: 'note', note: 'Later thought' })], []))
-    expect(md).toContain('- **Me:** B.\n\n- Later thought')
+    expect(md).toContain('- **Me:** B.\n\n> All these things')
+    expect(md).toMatch(/a=n\|The Second Book ¶1\]\]\n\nLater thought\n$/)
+  })
+
+  it('reads a page back, in the format written now and the one written before, without migrating it', () => {
+    const now = applyAdditions(newBookPage({ title: 'Meditations', path: BOOK }), pageAdditions(BOOK, [mark({ id: 'q1', note: 'Mine.' }), mark({ id: 'h1', kind: 'highlight' }), mark({ id: 'n1', kind: 'note', note: 'Line one\nline two' }), mark({ id: 'k1', kind: 'question', note: 'Why?' })], [], 'Meditations'))
+    const read = Object.fromEntries(readPageMarks(now).map((p) => [p.id, p]))
+    const words = P1.slice(P1.indexOf('All these'))
+    expect(read.q1).toMatchObject({ kind: 'quote', text: words, note: 'Mine.', section: QUOTES, chapter: 'The Second Book', loc: { kind: 'para', chapter: 2, para: 1 } })
+    expect(read.h1).toMatchObject({ kind: 'highlight', text: words, section: QUOTES })
+    expect(read.h1.note).toBeUndefined()
+    expect(read.n1).toMatchObject({ kind: 'note', text: words, note: 'Line one\nline two', section: THINKING })
+    expect(read.k1).toMatchObject({ kind: 'question', note: 'Why?' })
+    // Each block's place in the page is exact
+    expect(now.slice(read.n1.from, read.n1.to)).toBe(`> ${words}\n>\n> — Meditations, [[Meditations - Marcus Aurelius.epub#loc=2.1&a=n1|The Second Book ¶1]]\n\nLine one\nline two\n`)
+    // The older format, as the vault has it
+    const old = Object.fromEntries(readPageMarks(OLD_PAGE).map((p) => [p.id, p]))
+    expect(old.ok7vfrfi).toMatchObject({ kind: 'note', text: '', note: 'The thoughts preceeds the deed', section: THINKING, chapter: 'Book I', loc: { kind: 'para', chapter: 1, para: 3 } })
+    expect(old.qs).toMatchObject({ kind: 'question', note: 'Where does injustice go?' })
+    expect(old.q0ld).toMatchObject({ kind: 'quote', text: 'Hast thou reason? I have.', section: QUOTES })
+    expect(old.q0ld.note).toBeUndefined()
+    expect(marksFromPage(OLD_PAGE)).toHaveLength(3)
+    // A kept exchange's passage and the argument's steps are not marks
+    expect(readPageMarks('## My thinking\n\n**Challenged, [[B.epub#loc=2.1|ch. 2 ¶1]]** · 13 Nov\n\n> A passage\n\n- **Claude:** A.\n')).toEqual([])
+  })
+
+  it('rewrites a block only while it is still as Tide wrote it', () => {
+    const n = mark({ id: 'n1', kind: 'note', note: 'Short' })
+    const md = applyAdditions(newBookPage({ title: 'M', path: BOOK }), pageAdditions(BOOK, [n], [], 'M'))
+    const longer = updateMarkBlock(md, BOOK, n, { ...n, note: 'Short, and then much longer.' }, 'M')!
+    expect(longer).toContain('\n\nShort, and then much longer.\n')
+    expect(longer.match(/a=n1\|/g)).toHaveLength(1)
+    // The same note again: nothing to do
+    expect(updateMarkBlock(longer, BOOK, { ...n, note: 'Short, and then much longer.' }, { ...n, note: 'Short, and then much longer.' }, 'M')).toBeNull()
+    // Edited on the page: left alone
+    const yours = longer.replace('much longer', 'much longer, as I put it here')
+    expect(updateMarkBlock(yours, BOOK, { ...n, note: 'Short, and then much longer.' }, { ...n, note: 'Other' }, 'M')).toBeNull()
+    // A highlight becoming a note moves from Quotes to My thinking
+    const h = mark({ id: 'h1', kind: 'highlight' })
+    const withH = applyAdditions(newBookPage({ title: 'M', path: BOOK }), pageAdditions(BOOK, [h], [], 'M'))
+    const moved = updateMarkBlock(withH, BOOK, h, { ...h, kind: 'note', note: 'Now a thought' }, 'M')!
+    expect(moved.indexOf('a=h1|')).toBeGreaterThan(moved.indexOf('## My thinking'))
+    expect(moved.match(/a=h1\|/g)).toHaveLength(1)
+    // An older one-line note, written when the note was shorter, becomes a passage block when edited
+    const oldNote = mark({ id: 'ok7vfrfi', kind: 'note', loc: { kind: 'para', chapter: 1, para: 3 }, text: 'From my mother, piety.', chapter: 'Book I', note: 'The thoughts preceeds the deed, so a mere thought…' })
+    const up = updateMarkBlock(OLD_PAGE, BOOK, oldNote, { ...oldNote, note: 'The thoughts precede the deed.' }, 'Meditations')!
+    expect(up).toContain('## My thinking\n\n> From my mother, piety.\n>\n> — Meditations, [[Meditations - Marcus Aurelius.epub#loc=1.3&a=ok7vfrfi|Book I ¶3]]\n\nThe thoughts precede the deed.\n\n- Where does injustice go? · _open question,')
+    // Removed in the reader: the block goes, the rest stays
+    const gone = updateMarkBlock(OLD_PAGE, BOOK, mark({ id: 'q0ld', loc: { kind: 'para', chapter: 1, para: 1 }, text: 'Hast thou reason? I have.' }), null)!
+    expect(gone).toContain('## Quotes\n\n## My thinking')
+    expect(gone).not.toContain('Hast thou')
   })
 
   it('numbers new argument steps on from yours, keeping your corrections', () => {

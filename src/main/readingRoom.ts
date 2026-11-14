@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { existsSync, promises as fs } from 'fs'
 import { extname } from 'path'
-import { addArgumentSteps, applyAdditions, argumentSteps, bookPagePath, exchangeBlock, isBookPage, newBookPage, pageAdditions, readFront, setFront, THINKING, type KeptExchange } from '@shared/bookPage'
+import { addArgumentSteps, applyAdditions, argumentSteps, bookPagePath, exchangeBlock, isBookPage, marksFromPage, newBookPage, pageAdditions, readFront, setFront, THINKING, updateMarkBlock, type KeptExchange } from '@shared/bookPage'
 import { artHostAllowed, aicSearchUrl, coverQuery, creditFor, metObjectUrl, metSearchUrl, mixArt, noteCoverOf, parseAic, parseMetObject, parseMetSearch, withCover, withCoverY, withIcon, type Artwork, type NoteCover } from '@shared/noteCover'
 import { locLabel, locOrder, type PassageLoc } from '@shared/passage'
 import { contextText } from '@shared/readTogether'
@@ -223,9 +223,31 @@ export async function marks(path: string): Promise<Mark[]> {
   if (hit) return hit
   let list: Mark[]
   if (existsSync(absPath(marksFile(path)))) list = await readText(marksFile(path)).then((t) => JSON.parse(t) as Mark[]).catch(() => [])
-  else list = await legacy(path)
+  else {
+    list = await legacy(path)
+    if (!list.length) list = await fromPage(path)
+  }
   markCache.set(path, list)
   return list
+}
+
+/** Tide's record of the marks gone (a vault copied without .tide): they come back from the book page, in either format */
+async function fromPage(path: string): Promise<Mark[]> {
+  const page = bookPagePath(path)
+  if (!existsSync(absPath(page))) return []
+  return readText(page)
+    .then((md) => marksFromPage(md).filter((m) => m.text.trim() || m.note?.trim()))
+    .catch(() => [])
+}
+
+/** A mark already on the book page, changed or removed in the reader: its block follows, while it's still as Tide wrote it */
+async function followOnPage(path: string, prev: Mark, next: Mark | null): Promise<void> {
+  const book = await bookOf(path)
+  if (!book?.written?.includes(prev.id)) return
+  const page = bookPagePath(path)
+  if (!existsSync(absPath(page))) return
+  const changed = updateMarkBlock(await readText(page), path, prev, next, book.title)
+  if (changed !== null) await writeText(page, changed)
 }
 
 /** Highlights made in the earlier EPUB reader come along, once (the old store is left as it was) */
@@ -246,16 +268,21 @@ async function saveMarks(path: string, list: Mark[]) {
 export async function saveMark(path: string, mark: Mark): Promise<Mark[]> {
   const list = [...(await marks(path))]
   const i = list.findIndex((m) => m.id === mark.id)
+  const prev = i >= 0 ? list[i] : null
   if (i >= 0) list[i] = mark
   else list.push(mark)
   await saveMarks(path, list)
+  if (prev) await followOnPage(path, prev, mark).catch(() => {})
   if (await bookOf(path)) await syncPage(path).catch(() => {})
   return list
 }
 
 export async function removeMark(path: string, id: string): Promise<Mark[]> {
-  const list = (await marks(path)).filter((m) => m.id !== id)
+  const all = await marks(path)
+  const gone = all.find((m) => m.id === id)
+  const list = all.filter((m) => m.id !== id)
   await saveMarks(path, list)
+  if (gone) await followOnPage(path, gone, null).catch(() => {})
   return list
 }
 
@@ -285,7 +312,7 @@ export async function syncPage(path: string): Promise<string> {
   const page = await ensurePage(path)
   const book = await bookOf(path)
   if (!book) return page
-  const adds = pageAdditions(path, byPlace(await marks(path)), book.written ?? [])
+  const adds = pageAdditions(path, byPlace(await marks(path)), book.written ?? [], book.title)
   if (!adds.length) return page
   await writeText(page, applyAdditions(await readText(page), adds))
   await updateBook(path, (b) => ({ ...b, written: [...(b.written ?? []), ...adds.map((a) => a.id)] }))
