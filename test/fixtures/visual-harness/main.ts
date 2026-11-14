@@ -46,7 +46,7 @@ app.whenReady().then(async () => {
   const libs: Record<string, string> = { '/lib/tide-math.js': tideMath, '/lib/tide-machine.js': tideMachine }
   serveVisualLibraries((url, method) => {
     const body = method === 'GET' ? libs[new URL(url).pathname] : undefined
-    return body === undefined ? null : { body, headers: { 'content-type': 'text/javascript; charset=utf-8', 'cross-origin-resource-policy': 'cross-origin' } }
+    return body === undefined ? null : { body, headers: { 'content-type': 'text/javascript; charset=utf-8', 'cross-origin-resource-policy': 'cross-origin', 'access-control-allow-origin': '*' } }
   })
   denyVisualPermissions(session.defaultSession)
   if (!process.env.HARNESS_NO_BLOCK) blockVisualRequests(session.defaultSession)

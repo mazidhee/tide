@@ -9,8 +9,13 @@
 import { app, protocol, type Session, type WebContents, type WebFrameMain } from 'electron'
 import { VISUAL_SCHEME, frameResponse, isFrameHost } from '@shared/visuals'
 
-/** For protocol.registerSchemesAsPrivileged, before the app is ready: standard (so hosts work) and secure; no fetch, CORS or CSP bypass */
-export const VISUAL_SCHEME_PRIVILEGES = { scheme: VISUAL_SCHEME, privileges: { standard: true, secure: true } }
+/**
+ * For protocol.registerSchemesAsPrivileged, before the app is ready: standard (so hosts work) and
+ * secure; no fetch or CSP bypass. CORS is on only so the frame can load Tide's libraries with
+ * crossorigin, which lets an error inside them reach the check with its message instead of
+ * "Script error." (the frame's own CSP still allows no connection of any kind).
+ */
+export const VISUAL_SCHEME_PRIVILEGES = { scheme: VISUAL_SCHEME, privileges: { standard: true, secure: true, corsEnabled: true } }
 
 /** Tide's own libraries for frames (main/visualLibs), when the app serves them: kept out of this module so it stays plain to bundle */
 type Libraries = (url: string, method: string) => { body: string; headers: Record<string, string> } | null

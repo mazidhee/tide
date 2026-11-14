@@ -301,6 +301,7 @@
   var load = function (src, ready) {
     if (!loading[src]) loading[src] = new Promise(function (resolve, reject) {
       var s = document.createElement('script');
+      s.crossOrigin = 'anonymous';
       s.src = src;
       s.onload = function () { resolve(ready()); };
       s.onerror = function () { reject(new Error('Tide could not load ' + src)); };

@@ -12,7 +12,7 @@ const { serve, shoot } = require('./frameShot.cjs')
 
 const args = JSON.parse(process.env.TIDE_SCENES || '{}')
 const H = require(args.bundle)
-protocol.registerSchemesAsPrivileged([{ scheme: H.VISUAL_SCHEME, privileges: { standard: true, secure: true } }])
+protocol.registerSchemesAsPrivileged([{ scheme: H.VISUAL_SCHEME, privileges: { standard: true, secure: true, corsEnabled: true } }])
 
 const model = args.model || H.CLAUDE_DEFAULTS.visual
 const cwd = mkdtempSync(join(os.tmpdir(), 'tide-scenes-claude-'))

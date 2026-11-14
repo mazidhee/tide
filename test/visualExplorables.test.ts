@@ -28,7 +28,7 @@ function loadTideMath(): { tm: TM; sent: unknown[] } {
 describe('the maths library in the visual frame', () => {
   it('is loaded by every frame, from Tide, and the frame may run it but nothing from the network', () => {
     const r = frameResponse(frameUrl('vabcdefgh', '<p>hi</p>', null))!
-    expect(r.body).toContain('<script src="/lib/tide-math.js"></script>')
+    expect(r.body).toContain('<script src="/lib/tide-math.js" crossorigin="anonymous"></script>')
     // The bootstrap runs first
     expect(r.body.indexOf(FRAME_BOOTSTRAP.slice(0, 40))).toBeLessThan(r.body.indexOf('/lib/tide-math.js'))
     expect(VISUAL_CSP).toMatch(/script-src 'unsafe-inline' tide-visual:/)

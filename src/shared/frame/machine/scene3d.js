@@ -16,6 +16,7 @@
     if (window.TideMath) return window.TideMath.three();
     return new Promise(function (resolve, reject) {
       var s = document.createElement('script');
+      s.crossOrigin = 'anonymous';
       s.src = '/lib/three.js';
       s.onload = function () { resolve(window.THREE); };
       s.onerror = function () { reject(new Error('Tide could not load three.js')); };

@@ -142,26 +142,37 @@
   };
 
   /**
-   * Where the camera should be to frame an object (or a THREE.Box3) from a direction, so all of
-   * it is in view with a margin: M.fitView(THREE, camera, target, { from: [x, y, z], fill: 0.85 })
-   * → { camera: [x, y, z], target: [x, y, z] }, for a glide or a jump.
+   * Frames an object, a list of objects or a THREE.Box3 from a direction, so all of it is in view
+   * with a margin: M.fitView(THREE, camera, target, { from: [x, y, z], fill: 0.85, controls,
+   * move }) puts the camera there (and the controls' target, when given; move: false leaves them)
+   * and returns { camera: [x, y, z], target: [x, y, z] }, for a glide or a jump.
    */
   M.fitView = function (T, camera, target, o) {
     o = o || {};
-    var box = target && target.isBox3 ? target.clone() : new T.Box3().setFromObject(target);
-    var center = box.getCenter(new T.Vector3()), dir = new T.Vector3().fromArray(o.from || [0.55, 0.85, 1]).normalize();
+    if (Array.isArray(target)) { var grp = target; target = { isList: true, list: grp }; }
+    var box = new T.Box3();
+    if (target && target.isBox3) box.copy(target);
+    else if (target && target.isList) target.list.forEach(function (x) { if (x && x.isBox3) box.union(x); else if (x) box.expandByObject(x); });
+    else box.setFromObject(target);
+    var seen = function (obj) { for (var q = obj; q; q = q.parent) if (q.visible === false) return false; return true; };
+    var objects = target && target.isList ? target.list.filter(function (x) { return x && !x.isBox3; }) : target && target.traverse ? [target] : [];
+    var center = box.getCenter(new T.Vector3()), dir = new T.Vector3().fromArray(o.from || [0.2, 0.6, 1]).normalize();
     var cam = camera.clone(), d = box.getSize(new T.Vector3()).length() || 4, corners = [];
     // The subject's own vertices (a sample), so a flat board seen at an angle fills the view, not its box
-    if (target && !target.isBox3 && target.traverse) {
-      var total = 0;
-      target.updateMatrixWorld(true);
-      target.traverse(function (o) { if (o.isMesh && o.visible && o.geometry && o.geometry.attributes.position) total += o.geometry.attributes.position.count; });
+    var meshes = [];
+    objects.forEach(function (obj) {
+      obj.updateMatrixWorld(true);
+      obj.traverse(function (m) { if (m.isMesh && m.geometry && m.geometry.attributes.position && seen(m)) meshes.push(m); });
+    });
+    if (meshes.length) {
+      var total = meshes.reduce(function (n, m) { return n + m.geometry.attributes.position.count; }, 0);
       var stride = Math.max(1, Math.floor(total / 3000));
-      target.traverse(function (o) {
-        if (!o.isMesh || !o.visible || !o.geometry || !o.geometry.attributes.position) return;
-        var pos = o.geometry.attributes.position;
-        for (var i = 0; i < pos.count; i += stride) corners.push(new T.Vector3().fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld));
+      meshes.forEach(function (m) {
+        var pos = m.geometry.attributes.position;
+        for (var i = 0; i < pos.count; i += stride) corners.push(new T.Vector3().fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld));
       });
+      box = new T.Box3().setFromPoints(corners);
+      center = box.getCenter(new T.Vector3());
     }
     if (!corners.length) for (var c = 0; c < 8; c++) corners.push(new T.Vector3(c & 1 ? box.max.x : box.min.x, c & 2 ? box.max.y : box.min.y, c & 4 ? box.max.z : box.min.z));
     // Aim at the middle of what is seen, not of the box
@@ -177,7 +188,13 @@
       if (!isFinite(most) || most <= 0) break;
       d *= Math.pow(most / (o.fill || 0.85), 0.9);
     }
-    return { camera: center.clone().addScaledVector(dir, d).toArray(), target: center.toArray() };
+    var at = center.clone().addScaledVector(dir, d);
+    if (o.move !== false) {
+      camera.position.copy(at);
+      camera.lookAt(center);
+      if (o.controls) { o.controls.target.copy(center); o.controls.update(); }
+    }
+    return { camera: at.toArray(), target: center.toArray() };
   };
 
   /** A solid arrow (shaft and head) in a colour name: .set(from, to) as THREE.Vector3s */

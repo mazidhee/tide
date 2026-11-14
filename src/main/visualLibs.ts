@@ -106,6 +106,8 @@ export function libraryResponse(pathname: string): { body: string; headers: Reco
       'x-content-type-options': 'nosniff',
       // The frame's origin is opaque: a same-origin policy would refuse its own scripts
       'cross-origin-resource-policy': 'cross-origin',
+      // Loaded with crossorigin: errors inside the library keep their message in the frame
+      'access-control-allow-origin': '*',
       'cache-control': 'max-age=3600'
     }
   }
