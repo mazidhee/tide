@@ -138,3 +138,69 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* A kept visual (lib/visuals VisualExtra): who drew it, "Was this clear?", Redraw */
+.visual-kept {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 16px 10px;
+  font-size: var(--text-xs);
+}
+
+.visual-kept[hidden] {
+  display: none;
+}
+
+.visual-kept .muted {
+  color: var(--ink-muted);
+}
+
+.visual-kept button[aria-pressed='true'] {
+  color: var(--accent-text, var(--accent));
+  box-shadow: inset 0 0 0 1px var(--accent-line, var(--accent));
+}
+
+/* A module part's big picture: at the head of a lesson in that part, and under a module on its track */
+.big-picture {
+  margin: 0 0 var(--s-5, 24px);
+}
+
+.big-picture-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 8px;
+}
+
+.big-picture-head h2 {
+  margin: 0;
+  font-size: var(--t-meta, 12.5px);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.big-picture-head .big-picture-part {
+  color: var(--ink);
+  font-size: var(--t-base, 13.5px);
+}
+
+.big-picture-head .link-btn {
+  margin-left: auto;
+}
+
+.big-picture-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 8px;
+}
+
+.big-picture-parts button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-line, var(--accent));
+  color: var(--ink);
+}

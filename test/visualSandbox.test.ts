@@ -28,7 +28,7 @@ const shared = {
 let bare: any
 
 function runHarness(out: string, page: string) {
-  const run = spawnSync(electron, [out], { encoding: 'utf8', timeout: 110_000, env: { ...process.env, HARNESS_PAGE: page, TIDE_MATH_JS: resolve('src/shared/frame/tideMath.js') } })
+  const run = spawnSync(electron, [out], { encoding: 'utf8', timeout: 110_000, env: { ...process.env, HARNESS_PAGE: page, TIDE_MATH_JS: resolve('src/shared/frame/tideMath.js'), TIDE_MACHINE_DIR: resolve('src/shared/frame/machine') } })
   const line = (run.stdout ?? '').split('\n').find((l) => l.startsWith('RESULT '))
   if (!line) throw new Error(`the harness gave no result:\n${run.stdout}\n${run.stderr}`)
   return JSON.parse(line.slice(7))
@@ -192,15 +192,17 @@ describe('a visual in its sandbox', () => {
   })
 
   it("the examples in Claude's instructions run cleanly", () => {
-    expect(r.examples).toHaveLength(2)
+    expect(r.examples).toHaveLength(3)
     for (const e of r.examples) {
       expect(e.errors).toEqual([])
       expect(e.ready).toMatchObject({ drawn: true })
       expect(e.invalid).toBe(0)
     }
-    // Seven inserts and two resizes (4 → 8 → 16)
-    expect(r.examples[0].ready.steps).toBe(9)
-    expect(r.examples[0].steps).toBeGreaterThan(0)
+    // The kit's signed byte: four values
+    expect(r.examples[0].ready.steps).toBe(4)
+    // The hash map: seven inserts and two resizes (4 → 8 → 16)
+    expect(r.examples[2].ready.steps).toBe(9)
+    expect(r.examples[2].steps).toBeGreaterThan(0)
   })
 
   it('drawing every step once finds a step that throws and labels that overlap, then goes back to the start', () => {

@@ -14,8 +14,9 @@
  * The outcome is kept in the lesson's record (main/lessons), so a reopened lesson shows its
  * visuals at once without checking or asking Claude again.
  */
-import { MAX_MESSAGES_PER_SECOND, askAboutPart, frameUrl, isVisualSource, looksComplete, parseFrameMessage, themeCss, visualKey, tellTutor, visualNote, visualTitle, whatsHappening, type FrameMessage, type VisualRecord, type VisualState, type VisualTheme } from '@shared/visuals'
-import type { ChatScope } from '@shared/types'
+import { MAX_MESSAGES_PER_SECOND, askAboutPart, frameUrl, isDrawSource, isVisualSource, looksComplete, parseDraw, parseFrameMessage, themeCss, visualKey, tellTutor, visualNote, visualTitle, whatsHappening, type FrameMessage, type VisualRecord, type VisualState, type VisualTheme } from '@shared/visuals'
+import { traceSourceOf, withTrace } from '@shared/pyTrace'
+import type { ChatScope, VisualSource } from '@shared/types'
 import { createKeeper, watchBlocks } from '../liveBlocks'
 import { button, h } from '../sims/dom'
 import { tellModel, toAnswerBox } from '../sims/exploreBus'
@@ -363,15 +364,31 @@ export function ask(root: HTMLElement, question: string, flash: (t: string) => v
   void navigator.clipboard?.writeText(question.split('\n\n(Tide:')[0]).then(() => flash('Copied as a question')).catch(() => undefined)
 }
 
-export function mountVisual(source: string, at: Element, place: (root: HTMLElement) => void): Widget {
-  const original = source.trim()
+/** A visual kept outside the lesson (main/conceptVisuals): a concept's, or a part's 3D scene */
+export interface VisualExtra {
+  kept?: { kind: 'concept' | 'part'; key: string; unchecked?: boolean; model?: string; at?: string; feedback?: 'up' | 'down'; source?: VisualSource['source'] }
+  /** A 3D scene: repaired by the visual model, and given room */
+  scene?: boolean
+  /** What the head says it is ("Big picture") */
+  kindLabel?: string
+  /** Ask for a new one (Redraw): the new visual, or null */
+  redraw?: () => Promise<VisualSource | null>
+  /** Shown instead when it can't be (Tide's own 2D visual for a part) */
+  fallbackCode?: string
+}
+
+const modelName = (m?: string) => (!m ? '' : /fable/i.test(m) ? 'Fable' : /opus/i.test(m) ? 'Opus' : /sonnet/i.test(m) ? 'Sonnet' : /haiku/i.test(m) ? 'Haiku' : m === 'tide' ? 'Tide' : m)
+
+export function mountVisual(source: string, at: Element, place: (root: HTMLElement) => void, extra: VisualExtra = {}): Widget {
+  let original = source.trim()
   const key = visualKey(original)
   const title = visualTitle(original) || 'Visual'
   const scope = scopeOf(at)
   const lesson = lessonOf(at)
 
-  const root = h('figure', { class: 'sim visual', tabindex: 0, role: 'group', 'aria-label': `Interactive visual: ${title}`, 'data-state': 'waiting' })
-  const status = h('span', { class: 'sim-kind visual-status', 'aria-live': 'polite' }, 'Interactive visual')
+  const root = h('figure', { class: `sim visual${extra.scene ? ' visual-scene' : ''}`, tabindex: 0, role: 'group', 'aria-label': `Interactive visual: ${title}`, 'data-state': 'waiting' })
+  const liveLabel = extra.kindLabel ?? 'Interactive visual'
+  const status = h('span', { class: 'sim-kind visual-status', 'aria-live': 'polite' }, liveLabel)
   root.append(h('figcaption', { class: 'sim-head' }, h('span', { class: 'sim-title' }, title), status))
   const caption = h('p', { class: 'sim-tour-say visual-say', 'aria-live': 'polite' })
   const count = h('span', { class: 'sim-tour-count' })
@@ -427,14 +444,69 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
     setTimeout(() => (tell.textContent = 'Tell the tutor'), 1600)
     widget.dirty = false
   }, 'quiet')
+  // A kept visual: who drew it, "Was this clear?", and Redraw
+  const keptBar = h('div', { class: 'visual-kept', hidden: !extra.kept })
+  const drawnBy = h('span', { class: 'visual-by muted' })
+  const clearUp = button('Clear', () => void rate('up'), 'quiet')
+  const clearDown = button('Not clear', () => void rate('down'), 'quiet')
+  const redrawBtn = button('Redraw', () => void redraw(), 'quiet')
+  redrawBtn.hidden = !extra.redraw
+  keptBar.append(drawnBy, h('span', { class: 'visual-gap' }), h('span', { class: 'muted visual-ask-clear' }, 'Was this clear?'), clearUp, clearDown, redrawBtn)
+  const showKept = () => {
+    const k = extra.kept
+    keptBar.hidden = !k
+    if (!k) return
+    drawnBy.textContent = k.source === 'kit' ? 'Tide’s own visual' : `Drawn by ${modelName(k.model) || 'Claude'}${k.at ? `, ${k.at}` : ''}${k.source === 'kept' ? ', kept' : ''}`
+    clearUp.setAttribute('aria-pressed', k.feedback === 'up' ? 'true' : 'false')
+    clearDown.setAttribute('aria-pressed', k.feedback === 'down' ? 'true' : 'false')
+  }
+  async function rate(f: 'up' | 'down') {
+    const k = extra.kept
+    if (!k) return
+    k.feedback = f
+    showKept()
+    const ok = await d().api.feedback(k.kind, k.key, f).catch(() => false)
+    if (f === 'down') note(ok ? 'Noted: Tide will draw this another way next time. Redraw does it now.' : 'Noted.', extra.redraw ? { label: 'Redraw now', run: () => void redraw() } : undefined)
+  }
+  async function redraw() {
+    if (!extra.redraw) return
+    redrawBtn.disabled = true
+    frame?.stop()
+    frame = null
+    bar.hidden = true
+    setPhase('fixing', 'Drawing it again…')
+    stage.classList.add('pending')
+    stage.style.height = `${height}px`
+    const next = await extra.redraw().catch(() => null)
+    redrawBtn.disabled = false
+    if (dead) return
+    if (!next?.code) {
+      stage.classList.remove('pending')
+      note(next?.error ?? 'It could not be drawn again just now.')
+      return showLive()
+    }
+    original = next.code.trim()
+    code = original
+    traced = null
+    verified = false
+    repaired = false
+    if (next.key && extra.kept) extra.kept = { ...extra.kept, key: next.key, unchecked: next.unchecked, model: next.model, at: next.at, feedback: next.feedback, source: next.source }
+    showKept()
+    phase = 'waiting'
+    void start()
+  }
   const bar = h('div', { class: 'sim-bar visual-bar' }, stepper, reset, h('span', { class: 'visual-gap' }), tell, happening)
   root.append(bar)
   bar.hidden = true
+  root.append(keptBar)
+  showKept()
 
   const state: VisualState = { title }
   let playing = false
   let steps: { i: number; n: number } | null = null
   let code = original
+  /** The code as the frame gets it: with its Python trace in front, when it asks for one */
+  let traced: { for: string; code: string } | null = null
   let frame: FrameRun | null = null
   let height = 240
   let dead = false
@@ -481,7 +553,7 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
     switch (m.t) {
       case 'size':
       case 'ready':
-        height = Math.max(60, Math.min(640, m.h || height))
+        height = Math.max(60, Math.min(960, m.h || height))
         if (frame && phase === 'live') frame.iframe.style.height = `${height}px`
         if (m.t === 'ready' && phase === 'live' && restoreStep > 0) {
           control('goto', restoreStep)
@@ -562,9 +634,9 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
     if (checked) {
       frame = checked
       checked.reveal({ onMessage, onDead })
-    } else frame = startFrame(stage, code, true, { onMessage, onDead })
+    } else frame = startFrame(stage, frameCode(), true, { onMessage, onDead })
     frame.iframe.style.height = `${height}px`
-    setPhase('live', 'Interactive visual')
+    setPhase('live', liveLabel)
     bar.hidden = false
     // Anything it does wrong from here on is reported in place, not repaired
     void frame.outcome.then((r) => {
@@ -572,11 +644,24 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
     })
   }
 
+  /** The code with its trace in front (traced once per version of the code) */
+  async function withItsTrace(src: string): Promise<string> {
+    const py = traceSourceOf(src)
+    if (!py) return src
+    if (traced?.for === src) return traced.code
+    const r = await d()
+      .api.trace(py)
+      .catch((e: Error) => ({ error: e.message }))
+    traced = { for: src, code: withTrace(src, r) }
+    return traced.code
+  }
+  const frameCode = () => (traced?.for === code ? traced.code : code)
+
   /** Runs it hidden; a frame that passes is kept, to be shown as it is */
   async function check(source: string): Promise<{ ok: boolean; errors: string[]; run?: FrameRun }> {
     return oneAtATime(async () => {
       if (dead) return { ok: false, errors: [] }
-      const run = startFrame(stage, source, false, { onMessage: () => undefined, onDead: () => undefined })
+      const run = startFrame(stage, await withItsTrace(source), false, { onMessage: () => undefined, onDead: () => undefined })
       const r = await run.outcome
       if (r.ok && !dead && near) return { ...r, run }
       run.stop()
@@ -592,7 +677,9 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
       note(policy.why ?? 'Visuals are not shown here.')
       return
     }
-    const kept = lesson ? (await cachedFor(lesson))[key] : undefined
+    const kept = lesson && !extra.kept ? (await cachedFor(lesson))[key] : undefined
+    // Kept visuals that already passed the check run at once
+    if (extra.kept && !extra.kept.unchecked && extra.kept.source !== 'model') verified = true
     if (dead) return
     if (kept?.status === 'ok') {
       code = kept.code ?? original
@@ -605,7 +692,11 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
 
   async function start() {
     if (dead || phase !== 'waiting') return
-    if (verified) return showLive()
+    if (verified) {
+      await withItsTrace(code)
+      if (dead) return
+      return showLive()
+    }
     setPhase('checking', 'Checking the visual…')
     stage.style.height = `${height}px`
     stage.classList.add('pending')
@@ -615,7 +706,7 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
     if (!r.ok && policy.repair) {
       setPhase('fixing', 'Fixing the visual…')
       const fixed = await d()
-        .api.repair({ code: original, errors: r.errors, scope })
+        .api.repair({ code: original, errors: r.errors, scope, ...(extra.scene || extra.kept ? { scene: true } : {}) })
         .catch(() => null)
       if (dead) return
       if (fixed?.code) {
@@ -630,12 +721,29 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
     stage.style.height = ''
     if (r.ok) {
       verified = true
-      void remember(lesson, key, { status: 'ok', ...(repaired ? { code } : {}), at: Date.now() }, code)
+      if (extra.kept?.unchecked) {
+        void d().api.keep(extra.kept.kind, extra.kept.key, code, repaired).catch(() => false)
+        extra.kept.unchecked = false
+      }
+      if (!extra.kept) void remember(lesson, key, { status: 'ok', ...(repaired ? { code } : {}), at: Date.now() }, code)
       if (r.run && near && !dead) return showLive(r.run)
       r.run?.stop()
-      return near ? showLive() : setPhase('waiting', 'Interactive visual')
+      return near ? showLive() : setPhase('waiting', liveLabel)
     }
-    if (policy.repair) {
+    if (extra.kept?.unchecked) {
+      void d().api.drop(extra.kept.kind, extra.kept.key).catch(() => false)
+      extra.kept.unchecked = false
+    }
+    // A scene that can't be shown gives way to Tide's own visual for the part
+    if (extra.fallbackCode && extra.fallbackCode.trim() !== original) {
+      original = extra.fallbackCode.trim()
+      code = original
+      extra.kept = extra.kept ? { ...extra.kept, source: 'kit', unchecked: false } : undefined
+      showKept()
+      setPhase('waiting', liveLabel)
+      return start()
+    }
+    if (policy.repair && !extra.kept) {
       setPhase('fixing', 'Drawing it another way…')
       const md = await d()
         .api.fallback({ code: original, title, scope })
@@ -678,7 +786,7 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
     frame = null
     stage.style.height = `${height}px`
     stage.classList.add('parked')
-    setPhase('parked', 'Interactive visual')
+    setPhase('parked', liveLabel)
   }
 
   // Near the screen: start, or come back; away for a moment: torn down
@@ -765,8 +873,107 @@ export function scanVisuals(): void {
   }
 }
 
+// ---------- ```draw: a concept's visual, kept or Tide's own ----------
+
+const isDrawBlock = (pre: HTMLElement) => isDrawSource(pre.dataset.lang ?? '')
+const drawKeeper = createKeeper({ widget: 'div.visual-draw', isSource: isDrawBlock, sourceOf })
+
+/** A ```draw block: a placeholder while the concept's visual is found (or written), then the visual */
+export function mountDraw(text: string, pre: HTMLElement): { root: HTMLElement; destroy(): void } {
+  const ask = parseDraw(text)
+  const box = h('div', { class: 'visual-draw' })
+  let widget: Widget | null = null
+  let dead = false
+  const wait = h('figure', { class: 'sim visual', 'data-state': 'checking' }, h('figcaption', { class: 'sim-head' }, h('span', { class: 'sim-title' }, ask?.concept ?? 'A visual'), h('span', { class: 'sim-kind visual-status', 'aria-live': 'polite' }, 'Finding its visual…')), h('div', { class: 'sim-body' }, h('div', { class: 'visual-stage pending', style: 'height:180px' })))
+  box.append(wait)
+  pre.replaceWith(box)
+  const topic = box.closest<HTMLElement>('[data-visual-topic]')?.dataset.visualTopic ?? ''
+  const fetchIt = (redraw: boolean) => d().api.concept({ concept: ask?.concept ?? '', show: ask?.show, topic, redraw })
+  void (async () => {
+    if (!ask) return void wait.replaceWith(h('p', { class: 'visual-note' }, 'A draw block needs "concept: …".'))
+    const got = await fetchIt(false).catch((e: Error) => ({ error: e.message }) as VisualSource)
+    if (dead) return
+    if (!got.code) return void wait.replaceWith(h('p', { class: 'visual-note' }, got.error ?? `No visual for ${ask.concept} yet.`))
+    widget = mountVisual(got.code, wait, (root) => wait.replaceWith(root), {
+      kept: got.key ? { kind: 'concept', key: got.key, unchecked: got.unchecked, model: got.model, at: got.at, feedback: got.feedback, source: got.source } : undefined,
+      redraw: () => fetchIt(true)
+    })
+  })()
+  return {
+    root: box,
+    destroy() {
+      dead = true
+      widget?.destroy()
+    }
+  }
+}
+
+const drawSeen = new WeakMap<HTMLElement, { text: string; at: number }>()
+let drawRescan: ReturnType<typeof setTimeout> | undefined
+
+/** Each ```draw block once its text has stopped changing (the reply may still be streaming) */
+export function scanDraws(): void {
+  drawKeeper.reclaim()
+  const now = Date.now()
+  let waiting = false
+  document.querySelectorAll<HTMLElement>('pre.code-block').forEach((pre) => {
+    if (!isDrawBlock(pre)) return
+    const text = sourceOf(pre)
+    if (!parseDraw(text) || pre.dataset.visualTried === text) return
+    const seen = drawSeen.get(pre)
+    if (!seen || seen.text !== text || now - seen.at < timing.settleMs) {
+      if (!seen || seen.text !== text) drawSeen.set(pre, { text, at: now })
+      waiting = true
+      return
+    }
+    pre.dataset.visualTried = text
+    const slot = drawKeeper.slot(pre)
+    const w = mountDraw(text, pre)
+    drawKeeper.keep(slot, w.root, w.destroy)
+  })
+  if (waiting) {
+    clearTimeout(drawRescan)
+    drawRescan = setTimeout(scanDraws, timing.settleMs + 50)
+  }
+}
+
+// ---------- A module part's big picture ----------
+
+/** Mounts a part's 3D scene in `host` (found, or written once by the visual model); its 2D kit visual if the scene can't be shown */
+export function mountPartScene(host: HTMLElement, req: { module: string; part: number }, onState?: (s: { title?: string; error?: string }) => void): { destroy(): void } {
+  let widget: Widget | null = null
+  let dead = false
+  const wait = h('figure', { class: 'sim visual visual-scene', 'data-state': 'checking' }, h('figcaption', { class: 'sim-head' }, h('span', { class: 'sim-title' }, 'The big picture'), h('span', { class: 'sim-kind visual-status', 'aria-live': 'polite' }, 'Drawing this part’s big picture… the first time takes a minute or two')), h('div', { class: 'sim-body' }, h('div', { class: 'visual-stage pending', style: 'height:420px' })))
+  host.replaceChildren(wait)
+  const fetchIt = (redraw: boolean) => d().api.part({ ...req, redraw })
+  void (async () => {
+    const got = await fetchIt(false).catch((e: Error) => ({ error: e.message }) as Awaited<ReturnType<typeof fetchIt>>)
+    if (dead) return
+    const code = got.code ?? got.fallback
+    if (!code) {
+      onState?.({ error: got.error })
+      return void wait.replaceWith(h('p', { class: 'visual-note' }, got.error ?? 'No big picture for this part yet.'))
+    }
+    onState?.({ title: got.title })
+    widget = mountVisual(code, wait, (root) => wait.replaceWith(root), {
+      scene: true,
+      kindLabel: 'Big picture',
+      kept: got.key ? { kind: 'part', key: got.key, unchecked: got.unchecked, model: got.model, at: got.at, feedback: got.feedback, source: got.code ? got.source : 'kit' } : undefined,
+      redraw: () => fetchIt(true),
+      fallbackCode: got.fallback
+    })
+  })()
+  return {
+    destroy() {
+      dead = true
+      widget?.destroy()
+    }
+  }
+}
+
 /** Watches the whole document; call once at startup */
 export function startVisuals(): void {
+  watchBlocks(drawKeeper, scanDraws)
   watchBlocks(keeper, scanVisuals)
   // Main stopped a frame (memory, a busy core): the widget showing it says so
   d().api?.onKilled?.((e) => running.get(e.host)?.(e.reason))

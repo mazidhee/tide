@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ModuleBigPictures } from './BigPicture'
 import type { ModuleRow, TrackModulesView } from '@shared/modules'
 import type { Mastery, NoteMeta } from '@shared/types'
 import { useApp } from '../state'
@@ -287,6 +288,7 @@ function ModuleDetail({ m, busy, onOutline, onThere, onJump }: { m: ModuleRow; b
         )}
       </div>
       {gate && m.gate && <p className="md-gate">{m.gate}</p>}
+      <ModuleBigPictures module={m.id} />
     </div>
   )
 }

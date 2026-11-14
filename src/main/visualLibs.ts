@@ -5,9 +5,19 @@
  *   /lib/tide-math.js  Tide's maths helpers and safe expression reader (shared/frame/tideMath.js)
  *   /lib/katex.js      KaTeX, with its stylesheet and fonts (as data: URLs) put in by the script
  *   /lib/three.js      three.js and OrbitControls, as window.THREE
+ *   /lib/tide-machine.js  Tide's computing kit (shared/frame/machine): bits, circuits, memory, a CPU,
+ *                      Python's names and objects, 3D dies and GPUs
  */
 import { VISUAL_SCHEME, isFrameHost } from '@shared/visuals'
 import tideMath from '../shared/frame/tideMath.js?raw'
+import machineCore from '../shared/frame/machine/core.js?raw'
+import machineBits from '../shared/frame/machine/bits.js?raw'
+import machineCircuit from '../shared/frame/machine/circuit.js?raw'
+import machineMemory from '../shared/frame/machine/memory.js?raw'
+import machineCpu from '../shared/frame/machine/cpu.js?raw'
+import machinePython from '../shared/frame/machine/python.js?raw'
+import machineScene from '../shared/frame/machine/scene3d.js?raw'
+import machineEnd from '../shared/frame/machine/end.js?raw'
 import katexJs from '../../node_modules/katex/dist/katex.min.js?raw'
 import katexCss from '../../node_modules/katex/dist/katex.min.css?raw'
 import threeCore from '../../node_modules/three/build/three.core.js?raw'
@@ -64,6 +74,7 @@ let built: Map<string, string> | null = null
 export function visualLibraries(): Map<string, string> {
   built ??= new Map([
     ['/lib/tide-math.js', tideMath],
+    ['/lib/tide-machine.js', [machineCore, machineBits, machineCircuit, machineMemory, machineCpu, machinePython, machineScene, machineEnd].join('\n')],
     ['/lib/katex.js', katexBundle()],
     ['/lib/three.js', [moduleToClassic(threeCore), moduleToClassic(threeModule), moduleToClassic(orbit)].join('\n')]
   ])

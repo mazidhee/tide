@@ -40,7 +40,14 @@ app.whenReady().then(async () => {
   handleVisualProtocol()
   // The frame's maths library, as the app serves it (main/visualLibs), read from the source here
   const tideMath = readFileSync(process.env.TIDE_MATH_JS ?? '', 'utf8')
-  serveVisualLibraries((url, method) => (method === 'GET' && new URL(url).pathname === '/lib/tide-math.js' ? { body: tideMath, headers: { 'content-type': 'text/javascript; charset=utf-8', 'cross-origin-resource-policy': 'cross-origin' } } : null))
+  // And the computing kit, its modules in the order main/visualLibs joins them
+  const machineDir = process.env.TIDE_MACHINE_DIR ?? ''
+  const tideMachine = ['core', 'bits', 'circuit', 'memory', 'cpu', 'python', 'scene3d', 'end'].map((f) => readFileSync(`${machineDir}/${f}.js`, 'utf8')).join('\n')
+  const libs: Record<string, string> = { '/lib/tide-math.js': tideMath, '/lib/tide-machine.js': tideMachine }
+  serveVisualLibraries((url, method) => {
+    const body = method === 'GET' ? libs[new URL(url).pathname] : undefined
+    return body === undefined ? null : { body, headers: { 'content-type': 'text/javascript; charset=utf-8', 'cross-origin-resource-policy': 'cross-origin' } }
+  })
   denyVisualPermissions(session.defaultSession)
   if (!process.env.HARNESS_NO_BLOCK) blockVisualRequests(session.defaultSession)
   LIMITS.memoryMb = Number(process.env.HARNESS_MEMORY_MB ?? 250)

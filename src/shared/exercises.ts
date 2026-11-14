@@ -411,7 +411,7 @@ export function forClaude(instructions: string): string {
     // Tide numbers a set exercise itself (<exercise id>)
     .replace(/ Start each with its place, like "\*\*Problem 2 · harder\*\*"\./, '')
     // The core guide says how to teach visually once (shared/tutorGuide); find_image is Gemma's tool
-    .replace(/^[ \t]*Teach visually as well:[^\n]*\n?/m, '')
+    .replace(/^[ \t]*(Teach visually as well|Lead with the picture):[^\n]*\n?/m, '')
     .replace(/ or a real figure from find_image/g, '')
     .replace(/ Show places with a real map from find_image\./g, '')
     // Said once in the core guide

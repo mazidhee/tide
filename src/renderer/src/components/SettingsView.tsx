@@ -1068,7 +1068,8 @@ const ROLE_TEXT: Record<ClaudeRole, { label: string; hint: string }> = {
   teach: { label: 'Lessons and chat', hint: 'Ordinary turns' },
   mark: { label: 'Marking', hint: 'Your answers, marked by a separate short call' },
   hard: { label: 'Hard turns', hint: 'Lesson plans, maths and proofs, and when you ask it to go deep' },
-  background: { label: 'Background work', hint: 'Roadmap outlines, chat titles and summaries' }
+  background: { label: 'Background work', hint: 'Roadmap outlines, chat titles and summaries' },
+  visual: { label: 'Visuals and 3D scenes', hint: 'A lesson’s visuals and each part’s 3D scene, written once and kept' }
 }
 
 /**

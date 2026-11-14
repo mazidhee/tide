@@ -34,7 +34,7 @@ describe('who teaches', () => {
 
 describe('which Claude model', () => {
   it('teaches on Sonnet, marks and plans on Opus, background on Haiku', () => {
-    expect(CLAUDE_DEFAULTS).toEqual({ teach: 'sonnet', mark: 'opus', hard: 'opus', background: 'haiku' })
+    expect(CLAUDE_DEFAULTS).toEqual({ teach: 'sonnet', mark: 'opus', hard: 'opus', background: 'haiku', visual: 'claude-fable-5-1' })
     expect(claudeModel('teach', { models: { teach: 'opus' } })).toBe('opus')
     expect(claudeModel('teach', { models: { teach: 'opus' } }, 'claude-fable-5-1')).toBe('claude-fable-5-1')
     expect(claudeModel('mark', undefined, 'haiku')).toBe('opus')

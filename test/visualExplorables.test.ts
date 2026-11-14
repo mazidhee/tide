@@ -129,7 +129,7 @@ describe('the bridge: predict first, a goal, and "Tell the tutor"', () => {
   it('Claude is told the library is there, and a repair may keep using it', () => {
     expect(VISUAL_GUIDE).toMatch(/TideMath\.plane/)
     expect(VISUAL_GUIDE).toMatch(/TideMath\.predict/)
-    expect(VISUAL_REPAIR_SYSTEM).toMatch(/TideMath .* is available/)
+    expect(VISUAL_REPAIR_SYSTEM).toMatch(/TideMath .* are available/)
   })
 })
 

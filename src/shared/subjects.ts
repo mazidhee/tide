@@ -17,6 +17,7 @@
  *
  * Pure, so the lesson screen, main and the benchmark agree, and it can be tested.
  */
+import { kitVisualFor } from './kitVisuals'
 import { FINANCE_SIM_KINDS, simGuide, simKindsFor, simLesson, type SimKind } from './sims'
 import { GRAPH_BRIEF } from './graphSpec'
 import { mathsMode } from './mathsMode'
@@ -273,7 +274,7 @@ export function lessonKit(topic: string, profile?: SubjectProfile, notebook?: st
   // An unclear topic is taught hands-on, unless it is a text or a period of history (Augustine's Confessions has no code to run)
   if (isUnclear(p)) {
     const humanities = humanitiesText(topic, p)
-    return { handsOn: !humanities, sims: humanities ? '' : simLesson(topic), toolkit: '', humanities }
+    return { handsOn: !humanities, sims: humanities ? '' : withKitVisual(simLesson(topic), topic), toolkit: '', humanities }
   }
   const simsOk = p.kinds.some((k) => SIM_KINDS_OK.includes(k))
   // Maths mode (shared/mathsMode, with the lesson's first message) already says how to write explorables: the explore kind would say it twice
@@ -289,7 +290,19 @@ export function lessonKit(topic: string, profile?: SubjectProfile, notebook?: st
   // Finance, payments and quant: the lab that fits (its simulation is in `sims`; this is the Python helper and the tables)
   const finance = financeLabNote(topic)
   if (finance) parts.push(finance)
-  return { handsOn, sims: sims + graphs, toolkit: parts.length ? `How to teach this subject (${taught.map((k) => TOOLKITS[k].label).join('; ')}):\n${parts.join('\n')}` : '', humanities: humanitiesText(topic, p) }
+  return { handsOn, sims: withKitVisual(sims + graphs, topic), toolkit: parts.length ? `How to teach this subject (${taught.map((k) => TOOLKITS[k].label).join('; ')}):\n${parts.join('\n')}` : '', humanities: humanitiesText(topic, p) }
+}
+
+/**
+ * A lesson on a topic Tide has its own visual for (shared/kitVisuals: binary, gates, adders, the
+ * CPU's cycle, memory, Python's names and frames, caches, GPUs) is told to open with it: a
+ * \`\`\`draw block naming it, which Tide draws itself, so the picture is there whoever teaches.
+ */
+export function withKitVisual(sims: string, topic: string): string {
+  const v = kitVisualFor(topic)
+  if (!v) return sims
+  const line = `Tide has its own checked visual for this topic (${v.shows}). Open the step that teaches it with a \`\`\`draw block holding the line "concept: ${v.id}"; Tide draws it, and the learner can step through it and change it. Then point at what to look at in one sentence.`
+  return sims ? `${sims}\n\n${line}` : line
 }
 
 /**
