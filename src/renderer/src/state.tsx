@@ -19,7 +19,8 @@ export type View =
   | { kind: 'reader'; path: string; anchor?: string; nonce?: number }
   | { kind: 'notebook'; path: string; /** The tab it opens on (a pop-out carries it over) */ tab?: 'project' | 'outline' | 'notes' | 'reading' }
   | { kind: 'graph'; focus?: string; /** Which side of Brain: what you know, or the graph (the one last used when not said) */ tab?: 'know' | 'graph' }
-  | { kind: 'study'; scope: ChatScope }
+  /** Review: the decks, or cards to study; `run` is a spaced-review warm-up's due cards (shared/spacedReview) */
+  | { kind: 'study'; scope: ChatScope; run?: import('@shared/spacedReview').SpacedRun }
   | { kind: 'daily'; nonce?: number }
   | { kind: 'quiz'; scope: ChatScope }
   | { kind: 'session'; mode: SessionMode; scope: ChatScope; topic: string; options?: SessionSetup['options']; nonce?: number; turns?: { role: 'user' | 'assistant'; content: string }[]; /** Carrying on a past lesson: kept under the same record */ lesson?: string; /** ...with its side threads */ threads?: import('@shared/lessonThreads').LessonThread[]; /** A message to bring into view and flash once it opens (Explore later's "Open where it came up") */ focus?: { turn: number; thread?: string; reply?: number } }

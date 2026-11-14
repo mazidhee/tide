@@ -486,7 +486,7 @@ function registerIpc() {
   handle('coach:profile', () => updateProfile())
   handle('coach:infer', (force?: boolean) => inferDirection(!!force))
   handle('coach:toThings', () => weekToThings())
-  handle('coach:setDone', (date: string, index: number, done: boolean) => setItemDone(date, index, done))
+  handle('coach:setDone', (date: string, index: number, done: boolean, title?: string) => setItemDone(date, index, done, typeof title === 'string' ? title : undefined))
   // Home asks for today's plan: ticks from Things come in, and past days' leftovers move to today
   handle('coach:syncDone', () => catchUp())
   handle('coach:rollOver', (date?: string) => rollOver(date))
@@ -515,6 +515,8 @@ function registerIpc() {
   handle('track:setupCapstone', async (notebook: string, phase?: string) => (await import('./track')).setupCapstone(String(notebook), phase ? String(phase) : undefined))
   handle('track:firmUp', async (notebook: string) => (await import('./track')).firmUp(String(notebook)))
   handle('track:mixedReview', async () => (await import('./track')).mixedReviewSetup())
+  handle('track:spacedReview', async (recall: import('@shared/spacedReview').SpacedRecall | null, o?: { cards?: boolean }) => (await import('./track')).spacedReviewSetup(recall && typeof recall === 'object' && Array.isArray(recall.concepts) ? recall : null, { cards: o?.cards !== false }))
+  handle('track:fading', async () => (await import('./track')).fadingNow())
   // Modules and tracks (main/modules): a track's page, "I'm there", and the switch to modules and back
   handle('modules:status', async () => (await import('./modules')).modulesStatus())
   handle('modules:track', async (notebook: string) => (await import('./modules')).trackView(String(notebook ?? '')))

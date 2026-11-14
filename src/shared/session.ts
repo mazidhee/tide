@@ -285,6 +285,8 @@ export interface SessionSetup {
     check?: QuickCheck
     /** Review now (a quiz): the topic's kept questions that are due, asked again and each scheduled by how it went */
     review?: ReviewSetup
+    /** Where its end leads: back to Your week (a warm-up from the plan) or to Review */
+    back?: 'week' | 'review'
     /** A placement check on a section (a quiz): which topics are known, shaky or new */
     placement?: PlacementSetup
     /** A refresher (a lesson): learned before, rusty; practice first, explain only what's missed */

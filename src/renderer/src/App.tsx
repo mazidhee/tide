@@ -538,7 +538,7 @@ export default function App() {
   else if (view.kind === 'notebook') main = <NotebookView key={view.path} path={view.path} tab={view.tab} />
   // Brain: what you know, or the graph. Asked for around a note, it is always the graph
   else if (view.kind === 'graph') main = !view.focus && (view.tab ?? lastBrainTab()) === 'know' ? <KnowledgeView /> : <GraphView key={view.focus ?? 'all'} focus={view.focus} />
-  else if (view.kind === 'study') main = <StudyView scope={view.scope} />
+  else if (view.kind === 'study') main = <StudyView scope={view.scope} run={view.run} />
   else if (view.kind === 'daily') main = <DailyView key={view.nonce ?? 'daily'} />
   else if (view.kind === 'quiz') main = <SessionView key={JSON.stringify(view.scope)} mode="quiz" scope={view.scope} topic={scopeTopic(view.scope)} />
   else if (view.kind === 'session') main = <SessionView key={`${view.mode}:${view.topic}:${view.nonce ?? ''}`} mode={view.mode} scope={view.scope} topic={view.topic} options={view.options} initialTurns={view.turns} view={view} />

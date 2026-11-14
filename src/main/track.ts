@@ -11,6 +11,7 @@ import { threadId } from '@shared/goals'
 import { tierLabel, type ProjectRecord } from '@shared/ideaLadder'
 import { progressOf } from '@shared/ideaProject'
 import type { ReviewItem, ReviewSetup } from '@shared/review'
+import { conceptsToRecall, recallNames, RECALL_MAX, type FadingConcept, type SpacedRecall } from '@shared/spacedReview'
 import {
   CHECK_SYSTEM,
   MARK_SYSTEM,
@@ -548,6 +549,35 @@ export async function firmUp(notebook: string): Promise<{ topic: string; scope: 
   if (!shaky.length) return null
   const items = await itemsFor(shaky)
   return { topic: `Firm up: ${gate.phase.title}`, scope: g.path, review: { concept: shaky[0].id, items } }
+}
+
+/** The concepts fading now, lowest retention first (the knowledge map's estimate) */
+export async function fadingNow(): Promise<FadingConcept[]> {
+  const concepts = await import('./knowledge').then((k) => k.allConcepts()).catch(() => [] as ConceptState[])
+  return concepts
+    .filter((c) => c.status === 'fading')
+    .map((c) => ({ id: c.id, name: c.name.replace(/\*\*/g, ''), retention: Math.round(c.estimate * 100) / 100 }))
+    .sort((a, b) => (a.retention ?? 1) - (b.retention ?? 1))
+}
+
+/**
+ * What a spaced-review warm-up runs when opened (shared/spacedReview): the flashcards due now, and
+ * a short recall on the concepts it names (the firm-up's Review now: each concept's kept question,
+ * else one from memory), each scheduled by how it went. Nothing named: what is fading now.
+ */
+export async function spacedReviewSetup(recall: SpacedRecall | null, o: { cards?: boolean } = {}): Promise<{ cards: string[]; recall: { topic: string; review: ReviewSetup; names: string } | null }> {
+  const now = Date.now()
+  const cards = o.cards === false ? [] : await import('./study').then((s) => s.getCards({ kind: 'vault' })).then((cs) => cs.filter((c) => c.schedule && c.schedule.due <= now).sort((a, b) => a.schedule!.due - b.schedule!.due).map((c) => c.id)).catch(() => [] as string[])
+  const all = await import('./knowledge').then((k) => k.allConcepts()).catch(() => [] as ConceptState[])
+  const concepts = conceptsToRecall(recall?.concepts ?? [], all, await fadingNow())
+  // Yesterday's topic: its concept when the map has one, else a question from memory on it
+  const byName = new Map(all.map((c) => [c.name.replace(/\*\*/g, '').toLowerCase(), c]))
+  const topics = (recall?.topics ?? []).map((t) => byName.get(t.toLowerCase()) ?? { id: t, name: t }).filter((t) => !concepts.some((c) => c.id === t.id))
+  const picked = [...concepts, ...topics.map((t) => ({ id: t.id, name: t.name }))].slice(0, RECALL_MAX + 1)
+  if (!picked.length) return { cards, recall: null }
+  const items = await itemsFor(picked)
+  const names = recallNames({ concepts: picked })
+  return { cards, recall: { topic: `Recall: ${names}`, review: { concept: picked[0].id, items }, names } }
 }
 
 /** This week's mixed review across every track: the same set all week (seeded by the week) */

@@ -1039,7 +1039,8 @@ export interface TideApi {
     /** Works out where you're heading (at most every few days unless forced); returns the settings */
     infer(force?: boolean): Promise<import('./coach').CoachSettings>
     toThings(): Promise<{ project: string; todos: number }>
-    setDone(date: string, index: number, done: boolean): Promise<import('./coach').WeekPlan | null>
+    /** By position; `title` makes sure it is still the same item (the list can change under a tick) */
+    setDone(date: string, index: number, done: boolean, title?: string): Promise<import('./coach').WeekPlan | null>
     syncDone(): Promise<import('./coach').WeekPlan | null>
     rollOver(date?: string): Promise<{ moved: number; to: string }>
     dayStats(date?: string): Promise<import('./coach').DayStats>
@@ -1106,6 +1107,10 @@ export interface TideApi {
     firmUp(notebook: string): Promise<{ topic: string; scope: string; review: import('./review').ReviewSetup } | null>
     /** This week's mixed review across every track */
     mixedReview(): Promise<{ topic: string; review: import('./review').ReviewSetup; tracks: number } | null>
+    /** A spaced-review warm-up, opened: the cards due now, then a short recall on its fading concepts (shared/spacedReview) */
+    spacedReview(recall: import('./spacedReview').SpacedRecall | null, o?: { cards?: boolean }): Promise<{ cards: string[]; recall: { topic: string; review: import('./review').ReviewSetup; names: string } | null }>
+    /** The concepts fading now, lowest retention first */
+    fading(): Promise<import('./spacedReview').FadingConcept[]>
   }
   /** A tutor that remembers you (main/learnerProfile): the profile note, as the profile view shows it */
   northStar: {

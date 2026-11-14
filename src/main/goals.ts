@@ -12,6 +12,7 @@ import { joinRel, readText, writeText } from './vault'
 import { courseItem } from '@shared/coursePlan'
 import { NORTH_STAR_GOAL } from '@shared/northStar'
 import { plannedDay } from '@shared/milestone'
+import { spacedReviewItem, type FadingConcept } from '@shared/spacedReview'
 import type { CoursePlanResult } from './coursePlan'
 
 /**
@@ -190,21 +191,22 @@ async function threadLog(goals: PlanGoal[]): Promise<ThreadLog[]> {
 }
 
 /** Fading concepts by thread: each concept's area is its roadmap's notebook */
-async function fadingByThread(): Promise<{ by: Record<string, number>; total: number }> {
+async function fadingByThread(): Promise<{ by: Record<string, number>; total: number; list: FadingConcept[] }> {
   const concepts = await import('./knowledge').then((k) => k.allConcepts()).catch(() => [])
   const by: Record<string, number> = {}
-  let total = 0
+  const list: FadingConcept[] = []
   for (const c of concepts) {
     if (c.status !== 'fading') continue
-    total++
+    list.push({ id: c.id, name: c.name, retention: Math.round(c.estimate * 100) / 100 })
     if (c.area) by[threadId('roadmap', c.area)] = (by[threadId('roadmap', c.area)] ?? 0) + 1
   }
-  return { by, total }
+  return { by, total: list.length, list: list.sort((a, b) => (a.retention ?? 1) - (b.retention ?? 1)) }
 }
 
-async function dueCards(): Promise<number> {
+/** The flashcards due now (only ones already scheduled: new cards come in through lessons and Review) */
+async function dueCards(): Promise<string[]> {
   const cards = await import('./study').then((s) => s.getCards({ kind: 'vault' })).catch(() => [])
-  return cards.filter((c) => c.schedule && c.schedule.due <= Date.now()).length
+  return cards.filter((c) => c.schedule && c.schedule.due <= Date.now()).map((c) => c.id)
 }
 
 async function bestHours(): Promise<number[]> {
@@ -545,12 +547,6 @@ function itemMaker(threads: Thread[], goals: PlanGoal[], inv: Inventory, queues:
   }
 }
 
-const reviewItem = (minutes: number, due: number, fading: number, yesterday?: string): AgendaItem => ({
-  kind: 'review',
-  title: [due ? `${due} card${due === 1 ? '' : 's'} due` : '', fading ? `${fading} fading concept${fading === 1 ? '' : 's'}` : '', yesterday ? `yesterday’s ${yesterday}` : ''].filter(Boolean).join(', ').replace(/^\w/, (c) => c.toUpperCase()) || 'Spaced review',
-  minutes,
-  why: 'Spaced review, as a warm-up: recall before it fades'
-})
 
 /**
  * The week mixed across your goals: the scheduler decides minutes and days, then each session
@@ -568,7 +564,7 @@ export async function planGoalsWeek(date = today(), background = false): Promise
   const days = studyDays(date, s.coach).map((d) => ({ ...d, minutes: s.milestone ? plannedDay(d.minutes, s.milestone.milestone.hours).plan : d.minutes }))
   const due = await dueCards()
   const hours = await bestHours()
-  const week = planPortfolio({ today: date, days, threads: s.threads, dueCards: due, fading: s.fading.total, bestHours: hours, groupFloors: s.groupFloors })
+  const week = planPortfolio({ today: date, days, threads: s.threads, dueCards: due.length, fading: s.fading.total, bestHours: hours, groupFloors: s.groupFloors })
   if (!week.days.length) throw new Error('No study days are set this week. Pick your days in Your week.')
   const { byNotebook, checks } = await roadmapCandidates(s.threads, s.goals, s.coach)
   // What last week left undone goes first in its roadmap's queue
@@ -598,14 +594,15 @@ export async function planGoalsWeek(date = today(), background = false): Promise
     for (const sess of d.sessions)
       make(sess.thread, sess.minutes, !!sess.touch).forEach((it, k) => items.push({ ...it, why: sess.touch || !it.why ? sess.why : it.why, ...(sess.peak && k === 0 ? { peak: true } : {}) }))
     // Spaced review folded in: due cards and fading concepts, as a warm-up
-    if (d.review) items.unshift(reviewItem(d.review, due, s.fading.total))
+    const review = d.review ? spacedReviewItem(d.review, due, s.fading.list) : null
+    if (review) items.unshift(review)
     return { date: d.date, items }
   })
   // Yesterday's first new topic joins the next day's review (recall a day later, as it starts to fade)
   for (let i = 1; i < planDays.length; i++) {
     const learned = planDays[i - 1].items.find((it) => it.kind === 'learn' && it.topic)
     const review = planDays[i].items.find((it) => it.kind === 'review' && !it.thread)
-    if (learned && review) Object.assign(review, reviewItem(review.minutes, due, s.fading.total, learned.topic))
+    if (learned && review) Object.assign(review, spacedReviewItem(review.minutes, due, s.fading.list, learned.topic))
   }
   // Once a week: a mixed review across everything learned so far, every track (shared/track)
   if ((await track.mixedPool().catch(() => 0)) >= 6) {
