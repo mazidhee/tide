@@ -16,7 +16,10 @@ import machineCircuit from '../shared/frame/machine/circuit.js?raw'
 import machineMemory from '../shared/frame/machine/memory.js?raw'
 import machineCpu from '../shared/frame/machine/cpu.js?raw'
 import machinePython from '../shared/frame/machine/python.js?raw'
+import machineStudio from '../shared/frame/machine/studio.js?raw'
 import machineScene from '../shared/frame/machine/scene3d.js?raw'
+import machineTeardown from '../shared/frame/machine/teardown.js?raw'
+import machineSpaces from '../shared/frame/machine/spaces.js?raw'
 import machineEnd from '../shared/frame/machine/end.js?raw'
 import katexJs from '../../node_modules/katex/dist/katex.min.js?raw'
 import katexCss from '../../node_modules/katex/dist/katex.min.css?raw'
@@ -74,7 +77,7 @@ let built: Map<string, string> | null = null
 export function visualLibraries(): Map<string, string> {
   built ??= new Map([
     ['/lib/tide-math.js', tideMath],
-    ['/lib/tide-machine.js', [machineCore, machineBits, machineCircuit, machineMemory, machineCpu, machinePython, machineScene, machineEnd].join('\n')],
+    ['/lib/tide-machine.js', [machineCore, machineBits, machineCircuit, machineMemory, machineCpu, machinePython, machineStudio, machineScene, machineTeardown, machineSpaces, machineEnd].join('\n')],
     ['/lib/katex.js', katexBundle()],
     ['/lib/three.js', [moduleToClassic(threeCore), moduleToClassic(threeModule), moduleToClassic(orbit)].join('\n')]
   ])

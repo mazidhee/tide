@@ -38,6 +38,9 @@ async function readFile(kind: VisualKind, key: string): Promise<KeptVisual | nul
 
 const today = () => new Date().toISOString().slice(0, 10)
 
+/** How long a part's scene may take before the window is told to show Tide's own visual meanwhile */
+export const PENDING_AFTER_MS = 400
+
 /** One call at a time per file: a second ask waits for the first */
 const writing = new Map<string, Promise<ResolvedVisual>>()
 
@@ -143,7 +146,12 @@ export const partFallback = (info: Pick<PartInfo, 'title' | 'topics'>): KitVisua
   return null
 }
 
-export async function partScene(req: { module?: unknown; part?: unknown; redraw?: unknown }): Promise<ResolvedVisual & { info?: PartInfo; fallback?: string }> {
+/**
+ * A part's big picture. A kept one comes at once. Otherwise the visual model starts on it, which
+ * takes minutes: without wait the answer comes at once as { pending, fallback } (the window shows
+ * Tide's own 2D visual meanwhile and asks again with wait), with wait it comes when written.
+ */
+export async function partScene(req: { module?: unknown; part?: unknown; redraw?: unknown; wait?: unknown }): Promise<ResolvedVisual & { info?: PartInfo; fallback?: string; pending?: boolean }> {
   const info = await partInfo(String(req.module ?? ''), Number(req.part) || 1)
   if (!info) return { error: 'No such part.' }
   const key = partKey(info.module, info.part)
@@ -161,6 +169,11 @@ export async function partScene(req: { module?: unknown; part?: unknown; redraw?
       return { code: r.code, source: 'model' as const, model: r.model, at: today(), key, unchecked: true, title: visualTitle(r.code) || info.title }
     })().finally(() => writing.delete(id))
     writing.set(id, p)
+  }
+  // Not written within a moment (the model takes minutes): Tide's own visual stands in meanwhile
+  if (req.wait !== true && kit) {
+    const soon = await Promise.race([p, new Promise<null>((r) => setTimeout(() => r(null), PENDING_AFTER_MS))])
+    if (!soon) return { pending: true, info, fallback, key }
   }
   return { ...(await p), info, fallback }
 }

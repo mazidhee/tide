@@ -394,7 +394,7 @@ function registerIpc() {
   // Python traced for a visual (main/pyTrace); visuals kept per concept and per module part (main/conceptVisuals)
   handle('visuals:trace', (code: string) => traceSnippet(code))
   handle('visuals:concept', (req: { concept: string; show?: string; topic?: string; redraw?: boolean }) => visualForConcept(req))
-  handle('visuals:part', (req: { module: string; part: number; redraw?: boolean }) => partScene(req))
+  handle('visuals:part', (req: { module: string; part: number; redraw?: boolean; wait?: boolean }) => partScene(req))
   handle('visuals:partOf', (topic: string) => partOfTopic(topic))
   handle('visuals:parts', (module: string) => partsOfModule(module))
   handle('visuals:keep', (kind: string, key: string, code: string, repaired?: boolean) => keepVisual(kind, key, code, repaired))

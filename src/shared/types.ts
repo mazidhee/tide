@@ -997,7 +997,7 @@ export interface TideApi {
     /** A ```draw block's visual: kept, Tide's own, or written now by the visual model (main/conceptVisuals) */
     concept(req: { concept: string; show?: string; topic?: string; redraw?: boolean }): Promise<VisualSource>
     /** A module part's big picture, a 3D scene; fallback is Tide's own 2D visual for it */
-    part(req: { module: string; part: number; redraw?: boolean }): Promise<VisualSource & { info?: PartRef & { topics: string[] }; fallback?: string }>
+    part(req: { module: string; part: number; redraw?: boolean; wait?: boolean }): Promise<VisualSource & { info?: PartRef & { topics: string[] }; fallback?: string; pending?: boolean }>
     /** The module part a lesson's topic is in */
     partOf(topic: string): Promise<PartRef | null>
     parts(module: string): Promise<{ part: number; title: string; kept: boolean }[]>

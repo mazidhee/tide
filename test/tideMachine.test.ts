@@ -17,7 +17,7 @@ let TM: any
 
 beforeAll(() => {
   const dir = resolve('src/shared/frame/machine')
-  const src = ['core', 'bits', 'circuit', 'memory', 'cpu', 'python', 'scene3d', 'end'].map((f) => readFileSync(join(dir, `${f}.js`), 'utf8')).join('\n')
+  const src = ['core', 'bits', 'circuit', 'memory', 'cpu', 'python', 'studio', 'scene3d', 'teardown', 'spaces', 'end'].map((f) => readFileSync(join(dir, `${f}.js`), 'utf8')).join('\n')
   ;(window as unknown as { matchMedia: unknown }).matchMedia ??= () => ({ matches: false })
   new Function(src)()
   TM = (window as unknown as { TideMachine: unknown }).TideMachine

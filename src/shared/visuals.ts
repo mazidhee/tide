@@ -410,8 +410,13 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
       try {
         var t = document.createElement('canvas'); t.width = 48; t.height = 48;
         var x = t.getContext('2d'); x.drawImage(c, 0, 0, 48, 48);
-        var d = x.getImageData(0, 0, 48, 48).data, on = 0;
-        for (var k = 3; k < d.length; k += 4) if (d[k] > 8) on++;
+        var d = x.getImageData(0, 0, 48, 48).data, on = 0, seen = 0;
+        // Drawn: pixels that are not transparent and not all the one colour of an empty background
+        for (var k = 0; k < d.length; k += 4) {
+          if (d[k + 3] <= 8) continue;
+          seen++;
+          if (Math.abs(d[k] - d[0]) + Math.abs(d[k + 1] - d[1]) + Math.abs(d[k + 2] - d[2]) + Math.abs(d[k + 3] - d[3]) > 24) on++;
+        }
         if (on < 24) n++;
       } catch (e) {}
     }
@@ -798,7 +803,7 @@ export const KIT_GUIDE = `TideMachine, Tide's computing kit, is loaded in every 
   - TideMachine.cpu(el, {asm, data}): a tiny 8-bit CPU (R0–R3, PC, IR, ALU, Z, 16 bytes of memory, buses) running LOADI LOAD STORE ADD SUB AND OR JMP JZ HALT, one step each for fetch, decode and execute: visual.steps(cpu.captions, cpu.draw).
   - TideMachine.python(el, {digits}): Python's frames, names, objects (type, id, refs) and the arrows between them, from a real trace: put the code (under 20 lines) in a <script type="text/x-python"> in the visual and Tide runs it under a tracer before the frame starts. visual.steps(py.captions, py.draw).
   - TideMachine.stackHeap(el, {steps: [{frames: [{name, vars: [{name, text} | {name, to: id}]}], objects: [{id, title, kind: 'atom' | 'seq' | 'map', value, cells: [{label, to | text}]}], say}]}): stack and heap for C, Rust or anything else, step by step.
-  - TideMachine.die(el, {cores}) and TideMachine.gpu(el, {sms}): 3D scenes of a CPU die (cores, L1, L2, L3, memory controller, DRAM, a cache miss) and a GPU (SMs, a warp of 32 lanes, divergence, L2, HBM), captioned in steps. TideMachine.scene(el, {parts: [{id, label, box: [w, h, d], at: [x, y, z], color: 'c1', group, info}], steps: [{say, fit: [ids], focus: [ids], lit: [ids]}]}) builds any other 3D scene with labels, orbit, framing, focus and picking; .set(id, {lit, label}) changes a part, .add(id, object3D) adds your own geometry.
+  - TideMachine.die(el, {cores}) and TideMachine.gpu(el, {sms}): 3D scenes of a CPU die (cores, L1, L2, L3, DRAM, a cache miss) and a GPU (SMs, a warp, divergence, HBM), in steps. TideMachine.teardown(el, {parts: [{id, label, box, at, explode: [dx, dy, dz], parent}]}) is an exploded view of any system; TideMachine.surface(el, {f: 'x^2 - y^2', descent}) a surface with tangent plane, gradient and an optimiser's path; TideMachine.space(el, {matrix}) a linear map deforming space, with eigenvectors; TideMachine.scene(el, {parts, steps}) any other 3D scene.
   - Helpers: TideMachine.bin(v, n) hex(v, digits) signed(u, n) unsigned(v, n) bytesOf(v, size, endian) assemble(asm).`
 
 /**

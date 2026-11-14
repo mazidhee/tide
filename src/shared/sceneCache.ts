@@ -83,48 +83,34 @@ export const conceptVisualPrompt = (o: { concept: string; show?: string; topic?:
 
 // ---------- A module part's big picture ----------
 
-const SCENE_EXAMPLE = `<title>Bits become a sum</title>
-<div id="s"></div>
-<div class="row"><label>A <input id="a" type="range" min="0" max="15" value="5"></label> <output id="out" class="mono"></output></div>
-<style>.row { display: flex; gap: 12px; align-items: center; margin-top: 8px }</style>
-<script>
-const parts = []
-for (let i = 0; i < 4; i++) parts.push({ id: 'a' + i, label: 'A' + (3 - i), box: [0.8, 0.5, 0.8], at: [i * 1.2 - 1.8, 0.25, 0], color: 'line-strong', group: 'bits', labelled: i === 0 ? 'focus' : 'never' })
-parts.push({ id: 'board', box: [6, 0.2, 3], at: [0, -0.1, 0], color: 'surface', labelled: 'never', chip: false })
-const s = TideMachine.scene('#s', { label: 'Four bits', parts, steps: [
-  { say: 'Four switches hold a number.', fit: ['board'] },
-  { say: 'The lit ones are 1s.', focus: ['bits'], fit: ['a0', 'a3'], from: [0, 1, 0.6] }
-] })
-visual.steps(s.captions, s.draw)
-const a = document.getElementById('a'), out = document.getElementById('out')
-const show = () => {
-  for (let i = 0; i < 4; i++) s.set('a' + i, { lit: (+a.value >> (3 - i)) & 1 })
-  out.textContent = TideMachine.bin(+a.value, 4) + ' = ' + a.value
-}
-a.addEventListener('input', show)
-a.addEventListener('change', () => visual.report('set A to ' + a.value, { A: +a.value }))
-show()
-</script>`
+/** How a 3D scene is built and how it must look: the scene prompt's craft, shared with any other 3D brief */
+export const SCENE_CRAFT = `How it runs: an HTML fragment in a sandboxed frame with no network (inline <style> and <script> only; no external scripts, fonts, images, fetch, storage or iframes). three.js comes from Tide: \`const THREE = await TideMachine.three()\` (with THREE.OrbitControls). Write the scene freehand on three.js: you have full freedom of geometry, composition and camera. Tide's helpers are there to save work, never to limit it:
+  - TideMachine.studio(THREE, scene, renderer, { ground }) gives the house look in one call: filmic tone mapping, a soft key light with shadows plus fill and sky light, a ground that only shows shadows over the page colour, fog into the page, all in the theme and switched with it; .frame(center, radius) aims the shadows at what the camera looks at.
+  - TideMachine.materials(THREE): .metal .darkMetal .silicon (a die's floorplan texture) .pcb (green-black board with copper traces) .glass (a bulb: raise emissiveIntensity to light it) .wire .plastic(colourName) .matte(colourName). TideMachine.halo(THREE, colourName, size) is a glow sprite for what is on. TideMachine.text3d(THREE, text, { size, color }) is crisp text in the scene. TideMachine.arrow3d(THREE, colourName, radius).set(from, to).
+  - Patterns: TideMachine.teardown(el, { parts: [{ id, label, note, box, at, explode: [dx, dy, dz], parent, material, say }], order }) is an exploded view (assembled, taken apart, each part isolated with the rest ghosted, click to isolate). TideMachine.surface(el, { f, x, y, descent: { start, rate, steps } }) is a surface with a probe point, its tangent plane and gradient, and an optimiser's path. TideMachine.space(el, { matrix }) is a linear map deforming a grid, with basis vectors, eigenvectors and the determinant. TideMachine.scene(el, { parts, steps: [{ say, fit, focus, only }] }) is a general scene of labelled parts. Use one as it is, or build your own the same way.
+The contract with Tide (keep all of it):
+  - Call visual.steps(captions, draw, ms) at once, before any await; draw(i) shows step i from i alone, in any order. Captions are one or two plain sentences with the exact numbers on screen.
+  - While Tide checks the scene (visual.auditing is true) and when visual.reducedMotion is true, steps jump: no glides.
+  - Clicking or pressing Enter on a part calls visual.select(name, { facts }); a control the learner moves calls visual.report(what changed, { numbers }).
+  - Colours come from the theme: visual.color('bg' | 'surface' | 'ink' | 'ink-soft' | 'muted' | 'line-strong' | 'accent' | 'c1'…'c6'), read again in visual.onTheme (TideMachine.studio and TideMachine.materials follow the theme for you). Believable materials (metal, silicon, a PCB, glass) may keep their own colours; everything that carries meaning uses the accent and series colours.
+  - Render on demand: on a controls change, during a glide, during a short pulse that stops. Never a loop that runs for ever (Tide stops a frame that keeps a core busy).
+  - Labels: HTML elements over the canvas, positioned each render from their 3D anchor, 13px or larger, hidden when their anchor leaves the canvas, never overlapping one another (Tide checks every step); or text3d sprites sized to read at least as large. At most 5 at a time.
+  - No network, no storage. Under about 700 lines.
+How it must look (the bar is a calm, beautiful scale model, stylised and precise, never a toy or a chart):
+  - Each step's subject fills most of the frame. Only that step's station is visible (hide the others, or place stations far apart so fog swallows them): nothing from another step bleeds in at the edges, and nothing is cut off by the frame.
+  - Soft key light with shadows, a cool fill, filmic tone mapping; materials that read as the real thing; what is on glows (emissive plus a halo); generous spacing so no two objects crowd or overlap (at least an object's own width between neighbours).
+  - Confident camera moves between steps (0.7 to 1.2 s, eased), each ending on a composed view; the learner may orbit and zoom at any time.
+  - Every element the brief names is in the scene; every number and fact is right.
+  - Controls, when there are any, are one row of real labelled HTML controls under the canvas, with one short readout.`
 
-export const PART_SCENE_SYSTEM = `You build the big picture for one part of a course in Tide, a study app: a single immersive, interactive 3D scene that shows the grand idea of the whole part, opened at the start of every lesson in it beside the tutor's first words on why the topic matters. The learner builds from first principles towards deep infrastructure work (systems, machine learning, quantitative finance, blockchains). This scene is the showpiece of the part: it must be genuinely beautiful, precise and correct, never a toy.
-What it is: an HTML fragment run in a sandboxed frame with no network. Inline <style> and <script> only; no external scripts, fonts, images, fetch, storage, iframes or alert.
-Build it on TideMachine.scene: it gives orbit, HTML labels that follow their parts and never overlap or leave the canvas, focus that fades the rest, a camera that glides between views (and jumps while Tide checks the scene), framing, picking (visual.select) and keyboard controls.
-  const s = TideMachine.scene(el, { label, height: 420, parts: [{ id, label, note, box: [w, h, d], at: [x, y, z], shape: 'box' | 'cylinder' (box [radius, height]) | 'sphere' (box [radius]), rot: [x, y, z], color: 'c1' | 'surface' | 'line-strong' | …, group, info: {…}, hidden, labelled: 'focus' | 'always' | 'never', chip: false }], lines: [{ id, points: [[x, y, z], …], color, radius, hidden }], steps: [{ say, fit: [ids or groups' members], from: [x, y, z], focus: [ids or groups], labels: [ids], show: [ids], lit: [ids] }] })
-  visual.steps(s.captions, s.draw) at once. s.set(id, { lit, color, label, note, hidden, at, box }) changes a part (what your controls call). s.ready.then(({ THREE, render }) => s.add(id, object3D, { label, info, group })) adds geometry of your own (tubes for wires and data paths, planes, instanced grids), labelled, faded, framed and picked like a part. fit makes the camera frame those parts from the direction from: use it for every step, so each step's subject fills the view.
-${KIT_GUIDE}
-Tide's host API, the global visual: visual.steps(captions, draw, ms?); visual.select(label, data) when the learner picks a part (Tide then offers "Ask about this"); visual.report(text, data) when they change something; visual.reducedMotion; visual.onTheme(fn); visual.color(name).
-The scene:
-- One coherent space that makes the part's grand idea visible: its structure and how things flow through it, built from the real thing's parts (a walk from switches to gates to an adder to a CPU's datapath; memory as frames, names and objects with arrows; a matrix bending a grid of space; activations and gradients flowing through a network; SMs, warps and memory; nodes exchanging messages; money moving between ledgers). Real proportions and real numbers where they exist, said as typical values.
-- Composition: 3 to 6 large, clearly separated stations on low plates of 'surface', laid out so the whole picture fills a wide frame (about 16:10): two rows, or a gentle arc, never one long thin line; the path between them drawn as tubes. Each station recognisable from the whole view; nothing thinner than a tenth of its station. The whole view frames everything; each later step fits its own station.
-- 5 to 8 steps whose captions (one or two plain sentences, the exact numbers on screen) walk the part's own topics in order; the first is the whole picture, the last ties it together.
-- Labels: at most 4 on screen in a step, each under 28 characters (a name and at most a short number). Longer working (sums, binary strings, formulas) goes in the caption or in the HTML readout under the canvas, never in a label.
-- Interactive: one row of real labelled HTML controls under the scene (a slider and a toggle, or a few buttons; no more) that changes the scene through s.set, with one short readout line, reported with visual.report. Clicking a part selects it; mark the 4 to 8 main parts chip: true so they can be picked from the keyboard too.
-- Look: Tide's theme only, through the colour names: one accent ('accent', and lit parts) for what matters now; neutrals ('surface', 'line-strong', 'muted', 'ink-soft') for structure; the series colours 'c2' to 'c6' only to tell kinds of things apart, at most three of them. Nothing decorative: no particles, glow or spinning for its own sake.
-- Care: render on demand only (TideMachine.scene does); never an animation loop; respect visual.reducedMotion; under 20k triangles; every number computed in the script, every fact right; under about 450 lines.
-A short example of the pattern (yours is far richer):
-\`\`\`visual
-${SCENE_EXAMPLE}
-\`\`\`
+export const PART_SCENE_SYSTEM = `You build the big picture for one part of a course in Tide, a study app: a single immersive, interactive 3D scene of the part's grand idea, opened at the start of every lesson in it beside the tutor's first words on why the topic matters. The learner builds from first principles towards deep infrastructure work (systems, machine learning, quantitative finance, blockchains). This scene is the showpiece of the part: beautiful, precise and correct.
+Choose the form that fits the part:
+  - A system (hardware, a machine, an architecture, a protocol stack, a model): an exploded view. Show the whole assembled and rendered in full, then take it apart into its pieces one by one, each isolated with the rest ghosted and captioned, and let the learner click any piece to isolate it. For example a motherboard → the CPU package → the die → a core → its ALU, registers and caches; a GPU → its SMs → warps → tensor cores; a transformer block → embeddings, attention heads, the MLP, the residual stream.
+  - A flow (a payment rail, a network request, a pipeline, a ledger): the stations as one 3D system whose pieces separate along the path, with the messages or money moving between them as glowing pulses, step by step (card → terminal → acquirer → network → issuer → settlement).
+  - Maths or ML mechanics: a manipulable 3D space. A surface with its tangent plane and gradient; a linear map deforming space, with its eigenvectors; a distribution as a density surface; a loss landscape with an optimiser's path; a network whose activations and gradients flow.
+  - A journey of levels (switch → gate → adder → CPU; source → bytecode → frames → objects): a walk through stations, one per step, each a small world of its own.
+The steps (5 to 9) walk the part's own topics in the order it teaches them; the first shows the whole, the last ties it together.
+${SCENE_CRAFT}
 Reply with the scene only, as one fenced block whose language is visual, starting with a <title> naming the part's grand idea.`
 
 /** A wiki link's text, and no trailing source note: how a topic reads in a prompt or a match */

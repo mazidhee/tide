@@ -939,29 +939,52 @@ export function scanDraws(): void {
 
 // ---------- A module part's big picture ----------
 
-/** Mounts a part's 3D scene in `host` (found, or written once by the visual model); its 2D kit visual if the scene can't be shown */
+/**
+ * Mounts a part's 3D scene in `host`: a kept one at once; while the visual model draws a new one
+ * (minutes, the first time), Tide's own 2D visual for the part stands in, and the scene replaces it
+ * when it is ready. If the scene can't be shown, the 2D visual stays.
+ */
 export function mountPartScene(host: HTMLElement, req: { module: string; part: number }, onState?: (s: { title?: string; error?: string }) => void): { destroy(): void } {
   let widget: Widget | null = null
   let dead = false
-  const wait = h('figure', { class: 'sim visual visual-scene', 'data-state': 'checking' }, h('figcaption', { class: 'sim-head' }, h('span', { class: 'sim-title' }, 'The big picture'), h('span', { class: 'sim-kind visual-status', 'aria-live': 'polite' }, 'Drawing this part’s big picture… the first time takes a minute or two')), h('div', { class: 'sim-body' }, h('div', { class: 'visual-stage pending', style: 'height:420px' })))
+  const wait = h('figure', { class: 'sim visual visual-scene', 'data-state': 'checking' }, h('figcaption', { class: 'sim-head' }, h('span', { class: 'sim-title' }, 'The big picture'), h('span', { class: 'sim-kind visual-status', 'aria-live': 'polite' }, 'Finding this part’s big picture…')), h('div', { class: 'sim-body' }, h('div', { class: 'visual-stage pending', style: 'height:440px' })))
   host.replaceChildren(wait)
-  const fetchIt = (redraw: boolean) => d().api.part({ ...req, redraw })
-  void (async () => {
-    const got = await fetchIt(false).catch((e: Error) => ({ error: e.message }) as Awaited<ReturnType<typeof fetchIt>>)
-    if (dead) return
+  const fetchIt = (redraw: boolean, waitForIt = true) => d().api.part({ ...req, redraw, wait: waitForIt })
+  type Got = Awaited<ReturnType<typeof fetchIt>>
+  const show = (got: Got, at: HTMLElement) => {
     const code = got.code ?? got.fallback
     if (!code) {
       onState?.({ error: got.error })
-      return void wait.replaceWith(h('p', { class: 'visual-note' }, got.error ?? 'No big picture for this part yet.'))
+      return void at.replaceWith(h('p', { class: 'visual-note' }, got.error ?? 'No big picture for this part yet.'))
     }
     onState?.({ title: got.title })
-    widget = mountVisual(code, wait, (root) => wait.replaceWith(root), {
+    widget?.destroy()
+    widget = mountVisual(code, at, (root) => at.replaceWith(root), {
       scene: true,
       kindLabel: 'Big picture',
       kept: got.key ? { kind: 'part', key: got.key, unchecked: got.unchecked, model: got.model, at: got.at, feedback: got.feedback, source: got.code ? got.source : 'kit' } : undefined,
       redraw: () => fetchIt(true),
       fallbackCode: got.fallback
     })
+  }
+  void (async () => {
+    const first = await fetchIt(false, false).catch((e: Error) => ({ error: e.message }) as Got)
+    if (dead) return
+    if (!first.pending) return show(first, wait)
+    // The 3D scene is being drawn: Tide's own visual meanwhile, then the scene in its place
+    show({ ...first, code: undefined, key: undefined }, wait)
+    const note = h('p', { class: 'visual-note' }, 'Drawing this part’s 3D big picture: it will take this one’s place when it is ready (the first time takes a few minutes).')
+    host.append(note)
+    const done = await fetchIt(false, true).catch(() => null)
+    note.remove()
+    // (set inside show: TypeScript can't see it from here)
+    const standIn = widget as Widget | null
+    if (dead || !done?.code || !standIn) return
+    const slot = h('div')
+    standIn.root.replaceWith(slot)
+    standIn.destroy()
+    widget = null
+    show(done, slot)
   })()
   return {
     destroy() {

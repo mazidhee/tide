@@ -42,7 +42,7 @@ app.whenReady().then(async () => {
   const tideMath = readFileSync(process.env.TIDE_MATH_JS ?? '', 'utf8')
   // And the computing kit, its modules in the order main/visualLibs joins them
   const machineDir = process.env.TIDE_MACHINE_DIR ?? ''
-  const tideMachine = ['core', 'bits', 'circuit', 'memory', 'cpu', 'python', 'scene3d', 'end'].map((f) => readFileSync(`${machineDir}/${f}.js`, 'utf8')).join('\n')
+  const tideMachine = ['core', 'bits', 'circuit', 'memory', 'cpu', 'python', 'studio', 'scene3d', 'teardown', 'spaces', 'end'].map((f) => readFileSync(`${machineDir}/${f}.js`, 'utf8')).join('\n')
   const libs: Record<string, string> = { '/lib/tide-math.js': tideMath, '/lib/tide-machine.js': tideMachine }
   serveVisualLibraries((url, method) => {
     const body = method === 'GET' ? libs[new URL(url).pathname] : undefined
