@@ -237,6 +237,12 @@
   cursor: text;
 }
 
+.cm-live-preview .cm-lp-image-missing {
+  display: inline-block;
+  font-size: 0.8em;
+  color: var(--ink-muted);
+}
+
 /* Tables: drawn with the reading view's table styles (the widget is a .prose) */
 .cm-live-preview .cm-lp-table {
   display: block;

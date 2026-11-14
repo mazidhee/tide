@@ -501,6 +501,10 @@ const api: TideApi = {
     startDraft: invoke('writing:startDraft'),
     published: invoke('writing:published'),
     tickThings: invoke('writing:tickThings'),
+    attach: invoke('writing:attach'),
+    tags: invoke('writing:tags'),
+    sections: invoke('writing:sections'),
+    saveSections: invoke('writing:saveSections'),
     addFolder: invoke('writing:addFolder')
   },
   learner: {

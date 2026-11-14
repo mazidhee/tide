@@ -1200,6 +1200,12 @@ export interface TideApi {
     startDraft(topic: import('./writingPrompt').Topic, root: string): Promise<string>
     published(path: string, on: boolean): Promise<{ record: import('./writing').PieceRecord; thingsId?: string }>
     tickThings(path: string): Promise<void>
+    /** Saves a pasted or dropped picture in the piece's attachment folder; the embed to insert and where it went */
+    attach(path: string, name: string, dataUrl: string): Promise<{ embed: string; folder: string }>
+    /** Sets the piece's front matter tags (nothing else changes); the new text */
+    tags(path: string, tags: string[]): Promise<string>
+    sections(): Promise<import('./writingMeta').MySections>
+    saveSections(s: import('./writingMeta').MySections): Promise<import('./writingMeta').MySections>
     /** Opens a folder picker and adds the folder to Settings › writing folders */
     addFolder(): Promise<string | null>
   }

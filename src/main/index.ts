@@ -572,6 +572,10 @@ function registerIpc() {
   handle('writing:topics', async (refresh?: boolean) => (await import('./writing')).topics({ refresh: !!refresh }))
   handle('writing:startDraft', async (topic: import('@shared/writingPrompt').Topic, root: string) => (await import('./writing')).startDraft(topic, String(root ?? '')))
   handle('writing:published', async (p: string, on: boolean) => (await import('./writing')).setPublished(String(p ?? ''), !!on))
+  handle('writing:attach', async (p: string, name: string, dataUrl: string) => (await import('./writing')).attachImage(String(p ?? ''), String(name ?? ''), String(dataUrl ?? '')))
+  handle('writing:tags', async (p: string, tags: string[]) => (await import('./writing')).setTags(String(p ?? ''), Array.isArray(tags) ? tags : []))
+  handle('writing:sections', async () => (await import('./writing')).getSections())
+  handle('writing:saveSections', async (s: import('@shared/writingMeta').MySections) => (await import('./writing')).saveSections(s && typeof s === 'object' ? s : { names: [], assign: {} }))
   handle('writing:tickThings', async (p: string) => (await import('./writing')).tickInThings(String(p ?? '')))
   // Comprehension lessons (main/comprehension): the next passage, a lesson's steps, the grade and the cards
   handle('comp:next', async () => (await import('./comprehension')).nextPassage())
@@ -1084,8 +1088,13 @@ app.whenReady().then(() => {
   if (process.env.ELECTRON_RENDERER_URL) devFrameSrc(session.defaultSession, process.env.ELECTRON_RENDERER_URL, APP_CSP)
 
   // Serves vault files (images, PDFs) to the renderer: vault://file/<relative path>
-  protocol.handle('vault', (req) => {
+  protocol.handle('vault', async (req) => {
     const url = new URL(req.url)
+    // A writing piece's picture: found the way Obsidian finds it, only inside that piece's writing folder (main/writing)
+    if (url.host === 'writing') {
+      const file = await (await import('./writing')).writingImage(url.searchParams.get('piece') ?? '', url.searchParams.get('t') ?? '').catch(() => null)
+      return file ? net.fetch(pathToFileURL(file).toString()) : new Response('Not found', { status: 404 })
+    }
     const rel = decodeURIComponent(url.pathname.replace(/^\//, ''))
     try {
       return net.fetch(pathToFileURL(absPath(rel)).toString(), { headers: req.headers })

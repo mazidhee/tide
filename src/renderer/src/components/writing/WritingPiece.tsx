@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { EditorView } from '@codemirror/view'
-import { CATEGORY_LABEL, KIND_FOCUS, WRITING_KINDS, findAnchor, kindLabel, makeAnchor, pieceTitle, stackMargin, wordCount, type Overall, type PieceRecord, type WritingComment, type WritingKind } from '@shared/writing'
+import { CATEGORY_LABEL, KIND_FOCUS, WRITING_KINDS, findAnchor, frontMatter, makeAnchor, pieceTitle, stackMargin, wordCount, type Overall, type PieceRecord, type WritingComment, type WritingKind } from '@shared/writing'
+import { dateLabel, fullDate, pieceTags, readMinutes, setFrontTags } from '@shared/writingMeta'
+import { writingImageUrl } from '@shared/writingMedia'
+import { readImageFile } from '../../lib/pastedImages'
 import { checkMechanics } from '@shared/writingCheck'
 import { ago } from '@shared/workshop'
 import { useApp } from '../../state'
@@ -44,6 +47,9 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
   const [filter, setFilter] = useState<'all' | WritingComment['category']>('all')
   const [showNote, setShowNote] = useState(true)
   const [checking, setChecking] = useState<string | null>(null)
+  const [edited, setEdited] = useState(0)
+  const [allTags, setAllTags] = useState<string[]>([])
+  const [hint, setHint] = useState('')
 
   const editor = useRef<EditorHandle | null>(null)
   const wrap = useRef<HTMLDivElement>(null)
@@ -81,8 +87,14 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
         textRef.current = p.text
         setRecord(p.record)
         setKind(p.kind)
+        setEdited(p.edited)
       })
       .catch((e) => setError(clean(e)))
+    // Tags already in use anywhere, for suggestions
+    window.tide.writing
+      .list()
+      .then((ps) => !off && setAllTags([...new Set(ps.flatMap((x) => x.tags))].sort((a, b) => a.localeCompare(b))))
+      .catch(() => {})
     return () => {
       off = true
     }
@@ -153,6 +165,7 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
     try {
       await window.tide.writing.save(piece.path, textRef.current, placedComments())
       setSave('saved')
+      setEdited(Date.now())
     } catch (e) {
       setSave('unsaved')
       app.toast(clean(e), { tone: 'error' })
@@ -186,6 +199,44 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
     },
     []
   )
+
+  // ---------- Pictures and tags ----------
+
+  /** A pasted or dropped picture: saved in the folder's attachment folder, the embed put in where it went */
+  const attach = useCallback(
+    async (file: File): Promise<string | null> => {
+      if (!piece) return null
+      try {
+        const r = await window.tide.writing.attach(piece.path, file.name, await readImageFile(file))
+        const key = `tide.writing.attached:${piece.folder}`
+        let told = false
+        try {
+          told = localStorage.getItem(key) === '1'
+          localStorage.setItem(key, '1')
+        } catch {
+          // Not remembered: said again next time
+        }
+        if (!told) {
+          setHint(`Saved to ${r.folder}`)
+          setTimeout(() => setHint(''), 4000)
+        }
+        return r.embed
+      } catch (e) {
+        app.toast(clean(e), { tone: 'error' })
+        return null
+      }
+    },
+    [piece, app]
+  )
+
+  /** Tags changed under the title: only the front matter's tags entry, then saved */
+  const setTags = (tags: string[]) => {
+    const next = setFrontTags(textRef.current, tags)
+    if (next === textRef.current) return
+    onChange(next)
+    void saveNow()
+    setAllTags((old) => [...new Set([...old, ...tags])].sort((a, b) => a.localeCompare(b)))
+  }
 
   // ---------- Reviewing ----------
 
@@ -364,11 +415,10 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
             </select>
             <Icon name="chevron" size={10} />
           </label>
-          <span>{words.toLocaleString('en-GB')} words</span>
           <span className={`wr-save ${save}`}>{save === 'saved' ? 'Saved' : save === 'saving' ? 'Saving…' : 'Edited'}</span>
         </span>
         <span className="wr-bar-actions">
-          {status && <span className="wr-status">{status}</span>}
+          {(hint || status) && <span className="wr-status">{hint || status}</span>}
           <button className="btn small ghost" onClick={() => void publish()} aria-pressed={!!record.published} title={record.published ? 'Published: mark it a draft again' : 'Mark this piece published'}>
             {record.published ? (
               <>
@@ -392,13 +442,18 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
       <div className={`wr-body${narrow ? ' narrow' : ''}${talk ? ' talking' : ''}`} ref={wrap}>
         <article className="wr-col">
           <h1 className="wr-title">{pieceTitle(text, piece.path)}</h1>
-          <p className="wr-sub">
-            {piece.folder} · {kindLabel(kind)}
-            {lastRun ? ` · reviewed ${ago(lastRun.at, Date.now())}` : ''}
+          <p className="wr-meta">
+            <span title={fullDate(piece.written)}>Written {dateLabel(piece.written, Date.now())}</span>
+            <span title={fullDate(edited)}>Edited {dateLabel(edited, Date.now())}</span>
+            <span>{words.toLocaleString('en-GB')} words</span>
+            <span>{readMinutes(words)} min read</span>
+            <span>{record.published ? 'Published' : 'Draft'}</span>
+            {lastRun && <span title={fullDate(lastRun.at)}>Reviewed {ago(lastRun.at, Date.now())}</span>}
           </p>
+          <TagLine text={text} all={allTags} onSet={setTags} />
           {record.overall && lastRun && <OverallNote o={record.overall} open={showNote} onToggle={() => setShowNote(!showNote)} />}
           <div className="wr-editor" onMouseOver={onTextOver} onMouseLeave={() => setHover(null)} onClick={onTextClick}>
-            <Editor value={text} onChange={onChange} handleRef={editor} noFocus extensions={extensions} />
+            <Editor value={text} onChange={onChange} handleRef={editor} noFocus extensions={extensions} quietEmbeds imageUrl={(t) => writingImageUrl(piece.path, t)} onImage={attach} />
           </div>
         </article>
 
@@ -639,5 +694,69 @@ function TalkPanel({ path, text, record, onRecord, relVault, title }: { path: st
         </form>
       )}
     </aside>
+  )
+}
+
+/** The piece's tags under its title: front matter tags can be taken off and added (with suggestions); #tags in the text are shown as they are */
+function TagLine({ text, all, onSet }: { text: string; all: string[]; onSet(tags: string[]): void }) {
+  const [adding, setAdding] = useState(false)
+  const [q, setQ] = useState('')
+  const listId = useId()
+  const raw = frontMatter(text).data.tags
+  const front = (Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(/[,\s]+/) : []).map((t) => t.replace(/^#+/, '').trim()).filter(Boolean)
+  const inline = pieceTags(text).filter((t) => !front.some((f) => f.toLowerCase() === t.toLowerCase()))
+  const add = () => {
+    const t = q.trim().replace(/^#+/, '')
+    if (t && !front.some((f) => f.toLowerCase() === t.toLowerCase())) onSet([...front, t])
+    setQ('')
+    setAdding(false)
+  }
+  return (
+    <div className="wr-tags" aria-label="Tags">
+      {front.map((t) => (
+        <span key={t} className="wr-tag">
+          #{t}
+          <button onClick={() => onSet(front.filter((x) => x !== t))} aria-label={`Remove the tag ${t}`} title="Remove">
+            <Icon name="x" size={10} />
+          </button>
+        </span>
+      ))}
+      {inline.map((t) => (
+        <span key={t} className="wr-tag inline" title="Written in the text">
+          #{t}
+        </span>
+      ))}
+      {adding ? (
+        <>
+          <input
+            autoFocus
+            list={listId}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                add()
+              }
+              if (e.key === 'Escape') (setQ(''), setAdding(false))
+            }}
+            onBlur={add}
+            placeholder="tag"
+            aria-label="Add a tag"
+          />
+          <datalist id={listId}>
+            {all
+              .filter((t) => !front.some((f) => f.toLowerCase() === t.toLowerCase()))
+              .map((t) => (
+                <option key={t} value={t} />
+              ))}
+          </datalist>
+        </>
+      ) : (
+        <button className="wr-tag-add" onClick={() => setAdding(true)}>
+          {front.length + inline.length ? '+ tag' : 'Add a tag'}
+        </button>
+      )}
+    </div>
   )
 }

@@ -131,6 +131,15 @@ export interface PieceSummary {
   lastReviewed?: number
   open: number
   published?: number
+  /** Front matter date/created, else the file's birth time (shared/writingMeta pieceDates) */
+  written: number
+  /** The later of the file's mtime and front matter modified */
+  edited: number
+  tags: string[]
+  /** Front matter field, else the first tag that names a field, else Unsorted */
+  field: string
+  /** The field came from front matter */
+  fieldSet?: boolean
 }
 
 export const habitKey = (c: Pick<WritingComment, 'category' | 'rule'>) => (c.rule && (c.category === 'mechanics' || c.rule === 'long-paragraph') ? `mechanics:${c.rule}` : c.category)

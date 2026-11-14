@@ -10,6 +10,8 @@ export interface LivePreviewEnv {
   renderTable(source: string): string
   /** Opens a [[wiki link]] or a Markdown link's href, by Tide's usual rules */
   openLink(link: { wikilink: string } | { href: string }): void
+  /** Writing: picture embeds keep their text (quiet) with the picture drawn under it */
+  quietEmbeds?: boolean
 }
 
 /** Where a widget's source starts now (edits above it move it); null once it has left the document */
@@ -55,7 +57,9 @@ export class ImageWidget extends WidgetType {
     readonly src: string,
     readonly alt: string,
     readonly width: number | null,
-    readonly preview = false
+    readonly preview = false,
+    /** The name written in the note, for "Missing image: name" when there's no such file */
+    readonly name = ''
   ) {
     super()
   }
@@ -70,7 +74,16 @@ export class ImageWidget extends WidgetType {
     img.alt = this.alt
     img.loading = 'lazy'
     img.decoding = 'async'
-    if (this.width) img.width = this.width
+    if (this.width) {
+      img.width = this.width
+      img.style.maxWidth = `min(100%, ${this.width}px)`
+    }
+    img.addEventListener('error', () => {
+      const missing = document.createElement('span')
+      missing.className = 'cm-lp-image-missing'
+      missing.textContent = `Missing image: ${this.name || this.alt || decodeURIComponent(this.src.split(/[/=]/).pop() ?? '')}`
+      img.replaceWith(missing)
+    })
     wrap.appendChild(img)
     return wrap
   }
