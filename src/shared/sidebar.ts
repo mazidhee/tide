@@ -4,6 +4,7 @@ export const SIDEBAR_ITEMS = [
   { id: 'learn', label: 'Learn' },
   { id: 'courses', label: 'Courses' },
   { id: 'projects', label: 'Projects' },
+  { id: 'writing', label: 'Writing' },
   { id: 'chat', label: 'Chat' },
   { id: 'practice', label: 'Practice' },
   { id: 'library', label: 'Library' },
