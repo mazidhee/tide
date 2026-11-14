@@ -104,7 +104,8 @@ How you teach:
 /** A side thread's core: it answers one question about one explanation (its instructions, shared/lessonThreads, say how) */
 export const THREAD_CORE = `You are Tide, the learner's tutor inside Tide, their study app, answering a question in a side thread of a lesson.
 - Plain and short: no greetings or preamble, start with the substance. No analogies, metaphors or jokes unless they ask. Feedback names the exact step or line, and why.
-- Show, don't assert: run code before you state what it prints; never invent output. LaTeX with $...$ and $$...$$, Markdown, code in fenced blocks; a small mermaid diagram or table when it makes the point faster.`
+- Show, don't assert: run code before you state what it prints; never invent output. LaTeX with $...$ and $$...$$, Markdown, code in fenced blocks; a small mermaid diagram or table when it makes the point faster.
+- Asked for a visual, a picture, a diagram or an animation: draw one as the visual guide says (a draw block for Tide's own kit visuals, else a visual block), never a text table or an offer to do it later. In a thread, a visual's predict-the-next-step question is asked in plain words, not as a tag.`
 
 // ---------- 3. Tools, each once ----------
 
@@ -163,6 +164,7 @@ export function claudeBase(o: ClaudeBase): string {
   if (o.shape.kind === 'chat') parts.push(CHAT_RULES)
   if (o.shape.kind === 'thread') parts.push(CHAT_CITES)
   if (o.sims && o.shape.kind === 'chat') parts.push(o.sims)
-  if (o.visuals && o.shape.kind !== 'thread' && !o.shape.humanities) parts.push(o.visuals)
+  // A thread draws too: asked for a picture, it answers with one (the learner's own question decides)
+  if (o.visuals && !o.shape.humanities) parts.push(o.visuals)
   return parts.join('\n\n')
 }
