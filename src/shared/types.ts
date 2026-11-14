@@ -1169,6 +1169,20 @@ export interface TideApi {
     startCapstone(): Promise<{ notebook: string } | null>
     install(): Promise<string[]>
   }
+  /** Comprehension lessons (main/comprehension): read a passage, say what it says, look again, keep the hard words */
+  comprehension: {
+    next(): Promise<{ passage: import('../main/comprehension').PassagePreview | null; why?: string }>
+    list(): Promise<import('./comprehension').CompLesson[]>
+    get(id: string): Promise<import('./comprehension').CompLesson>
+    start(from: import('../main/comprehension').StartFrom): Promise<import('./comprehension').CompLesson>
+    update(id: string, patch: import('../main/comprehension').LessonPatch): Promise<import('./comprehension').CompLesson>
+    canGrade(): Promise<boolean>
+    grade(id: string): Promise<{ lesson: import('./comprehension').CompLesson; by: 'claude' | 'none' }>
+    selfCheck(id: string, ticks: Record<string, boolean>): Promise<import('./comprehension').CompLesson>
+    cards(id: string, keep: import('./comprehension').HardMark[]): Promise<import('./comprehension').CompLesson>
+    /** The word in the Mac's dictionary */
+    lookup(word: string): Promise<void>
+  }
   /** Writing review (main/writing): paths are absolute (a vault-relative one is read from the notes folder) */
   writing: {
     list(): Promise<import('./writing').PieceSummary[]>

@@ -474,6 +474,18 @@ const api: TideApi = {
     startCapstone: invoke('northStar:startCapstone'),
     install: invoke('northStar:install')
   },
+  comprehension: {
+    next: invoke('comp:next'),
+    list: invoke('comp:list'),
+    get: invoke('comp:get'),
+    start: invoke('comp:start'),
+    update: invoke('comp:update'),
+    canGrade: invoke('comp:canGrade'),
+    grade: invoke('comp:grade'),
+    selfCheck: invoke('comp:selfCheck'),
+    cards: invoke('comp:cards'),
+    lookup: invoke('comp:lookup')
+  },
   writing: {
     list: invoke('writing:list'),
     roots: invoke('writing:roots'),
