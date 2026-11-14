@@ -408,7 +408,7 @@ describe('the daily look', () => {
     expect(st.runs.at(-1)).toMatchObject({ kind: 'daily', by: 'claude', usd: 0.0612, tokens: 22600, tools: ['learner_model:standing'], interventions: 2 })
     expect(st.interventions.map((h) => h.kind)).toEqual(['firm-up', 'post-mortem'])
     expect(log).not.toContain('Added a deeper lesson')
-    const v = await C.coachView()
+    const v = await C.coachView(TODAY)
     expect(v.today?.lines[0]).toBe('Matrices then the Monte Carlo build, as planned.')
     expect(v.scheduled).toHaveLength(2)
   })

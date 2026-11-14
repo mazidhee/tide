@@ -631,9 +631,8 @@ export function startCoach(): void {
 // ---------- For the app ----------
 
 
-export async function coachView(): Promise<CoachView> {
+export async function coachView(date = localDate()): Promise<CoachView> {
   const md = await readText(LOG_NOTE).catch(() => '')
-  const date = localDate()
   const plan = await import('./coach').then((m) => m.getWeek(date)).catch(() => null)
   const scheduled = (plan?.days.find((d) => d.date === date)?.items ?? []).filter((it) => it.coach).map((it) => ({ kind: it.coach!.kind, title: it.title, reason: it.coach!.reason, minutes: it.minutes, done: !!it.done }))
   const st = await loadState()
