@@ -11,7 +11,7 @@ import { layoutMargins, sameLayout, type MarginItem, type MarginPlace, type Marg
  * narrow for a margin shows a small marker beside each passage instead; it opens the note.
  */
 
-export const KIND_LABEL: Record<MarkKind, string> = { highlight: 'Highlight', quote: 'Quote kept', note: 'Margin note', question: 'Question' }
+export const KIND_LABEL: Record<MarkKind, string> = { highlight: 'Highlight', quote: 'Quote kept', note: 'Margin note', question: 'Question', hard: 'Hard word' }
 
 /** A mark that has a note in the margin (or is having one written) */
 export const hasMarginNote = (m: Mark, writingId?: string | null) => (m.kind === 'note' || m.kind === 'question' || m.kind === 'quote') && (!!m.note?.trim() || writingId === m.id)

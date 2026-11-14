@@ -101,4 +101,28 @@ describe('comprehension lessons in main', () => {
     expect(all[0].at).toBeGreaterThanOrEqual(all[1].at)
     expect(existsSync(join(vault, 'Library'))).toBe(false)
   })
+
+  it('keeps a check in the book: the section checked against the book, the answer and the reading time, graded on its words', async () => {
+    const { sectionText, unitToPassage } = await import('../src/shared/comprehension')
+    const sec = units.slice(1, 4)
+    const text = sectionText(units, { from: 1, to: 3 })
+    const k = sec[1].text.indexOf('kinsman')
+    const hard = unitToPassage(sec, 1, k, k + 7)!
+    const l = await C.startInBook({ path: 'Library/Books/Meditations.epub', locs: sec.map((u) => u.loc), text, readMs: 45_000, summary: 'Expect bad people; they are ignorant; we are made to work together.', marks: [{ id: 'h1', ...hard, text: '' }] })
+    expect(l.source.kind).toBe('book-check')
+    expect(l.step).toBe('summary')
+    expect(l.passage).toBe(text)
+    expect(l.read!.wpm).toBe(Math.round(l.words / 0.75))
+    expect(l.marks[0].text).toBe('kinsman')
+    C.setAsker(async () => JSON.stringify({ points: [{ verdict: 'caught', point: 'We are made to work together', quote: 'For we are made for co-operation' }], overall: 'Good.' }))
+    const g = await C.gradeSummary(l.id)
+    expect(g.lesson.grade!.points[0].quote).toBe('For we are made for co-operation')
+    expect((await C.bookChecks('Library/Books/Meditations.epub')).map((x) => x.id)).toEqual([l.id])
+    expect(await C.bookChecks('Library/Books/Other.epub')).toEqual([])
+  })
+
+  it('refuses a check whose section isn’t the book’s, or with nothing written', async () => {
+    await expect(C.startInBook({ path: 'Library/Books/Meditations.epub', locs: [units[3].loc], text: 'Made-up words.', summary: 'x' })).rejects.toThrow(/match/)
+    await expect(C.startInBook({ path: 'Library/Books/Meditations.epub', locs: [units[3].loc], text: units[3].text, summary: '  ' })).rejects.toThrow(/Write/)
+  })
 })

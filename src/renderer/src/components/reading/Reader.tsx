@@ -3,7 +3,7 @@ import type { PassageLoc } from '@shared/passage'
 import { chapterName, findUnit, minutesFor, parseReaderAnchor, progressAt, reanchor, sameLoc, segments, whereLine, words, wordsLeft, wpmOf, type Mark, type MarkKind, type ReaderChapter } from '@shared/readingRoom'
 import { useApp } from '../../state'
 import { Icon } from '../Icon'
-import { MEASURE, readerPrefs, refreshShelf, saveReaderPrefs, useShelf, type ReaderPrefs } from '../../lib/readingRoom'
+import { bookChecksPrefs, MEASURE, readerPrefs, refreshShelf, saveBookChecksPrefs, saveReaderPrefs, useShelf, type BookChecks, type ReaderPrefs } from '../../lib/readingRoom'
 import { DEFAULT_BOOK_VOICE, nowPiece, playerState, prerenderChapter, seek, startReading, toggle as togglePlay, usePlayer } from '../../lib/readAloud'
 import { ReaderDrawer, type DrawerAsk, type DrawerTab } from './ReaderDrawer'
 import { inFocusWindow, usePopOutSurface } from '../../lib/popout'
@@ -12,7 +12,8 @@ import { locAnchor } from '@shared/passage'
 import { PlayerBar } from './Player'
 import { IDLE_MS } from '@shared/activeTime'
 import { hasMarginNote, MarginNotes, noteDomId, revealNote } from './MarginNotes'
-import { passageFromSelection, sectionJustRead, type Section } from '@shared/comprehension'
+import { checkpoints, passageFromSelection, passageSpans, sectionJustRead, sectionKey, sectionText, unitToPassage, type CompLesson, type HardMark, type ReaderSection, type Section } from '@shared/comprehension'
+import { InBookCheck, type Lit } from '../comprehension/InBookCheck'
 
 /**
  * The immersive reader. Opening a book gives it the window: Tide's sidebar steps away (the left
@@ -104,6 +105,25 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
     setPrefsState(p)
     saveReaderPrefs(p)
   }
+
+  // Checks in the book (components/comprehension/InBookCheck): off unless turned on for this book
+  const [checks, setChecksState] = useState<BookChecks>(() => bookChecksPrefs(path))
+  const [checked, setChecked] = useState<Map<string, CompLesson>>(new Map())
+  const setChecks = (c: BookChecks) => {
+    setChecksState(c)
+    saveBookChecksPrefs(path, c)
+  }
+  useEffect(() => {
+    setChecksState(bookChecksPrefs(path))
+    let live = true
+    window.tide.comprehension
+      .bookChecks(path)
+      .then((ls) => live && setChecked(new Map([...ls].reverse().map((l) => [sectionKey(l.source.locs), l]))))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [path])
 
   // ---------- Opening ----------
 
@@ -244,6 +264,86 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
     return () => clearTimeout(t)
   }, [book, chapter, shelfBook?.voice, mine?.playing, path])
 
+  // ---------- Checks in the book ----------
+
+  /** Where the cards go in this chapter: none while checks are off for the book */
+  const checkAt = useMemo(() => {
+    const m = new Map<number, ReaderSection>()
+    if (!current) return m
+    for (const s of checkpoints(current.units, checks.on ? checks.every : 'off')) m.set(s.to, s)
+    return m
+  }, [current, checks.on, checks.every])
+  const keyOf = (s: ReaderSection) => (current ? sectionKey(current.units.slice(s.from, s.to + 1).map((u) => u.loc)) : '')
+
+  // Time spent reading each section: a second at a time, with the window in view and you at it
+  const sectionMs = useRef(new Map<string, number>())
+  const atUnitRef = useRef(0)
+  atUnitRef.current = atUnit
+  useEffect(() => {
+    if (!checkAt.size || !current) return
+    const all = [...checkAt.values()]
+    const t = setInterval(() => {
+      if (document.hidden || !document.hasFocus() || Date.now() - lastActive.current > IDLE_MS) return
+      const s = all.find((x) => atUnitRef.current >= x.from && atUnitRef.current <= x.to)
+      if (!s) return
+      const k = keyOf(s)
+      sectionMs.current.set(k, (sectionMs.current.get(k) ?? 0) + 1000)
+    }, 1000)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkAt, current])
+
+  /** Words marked hard in a section, as the passage's offsets */
+  const hardIn = (s: ReaderSection): HardMark[] => {
+    if (!current) return []
+    const units = current.units.slice(s.from, s.to + 1)
+    return marks
+      .filter((m) => m.kind === 'hard')
+      .flatMap((m) => {
+        const i = units.findIndex((u) => sameLoc(u.loc, m.loc))
+        const r = i >= 0 ? reanchor(units[i].text, m) : null
+        const at = r ? unitToPassage(units, i, r.start, r.end) : null
+        return at ? [{ id: m.id.slice(0, 20), start: at.start, end: at.end, text: m.text }] : []
+      })
+  }
+
+  // The graded words lit in the book a while (the CSS Custom Highlight API: the page's own marks are left alone)
+  const litTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const LIT = ['caught', 'missed', 'wrong', 'all'] as const
+  const clearLit = () => LIT.forEach((v) => spokenRegistry()?.delete(`tide-comp-${v}`))
+  const light = (s: ReaderSection, spans: Lit[] | null) => {
+    const reg = spokenRegistry()
+    clearTimeout(litTimer.current)
+    clearLit()
+    if (!reg || !spans || !current || !scrollRef.current) return
+    const units = current.units.slice(s.from, s.to + 1)
+    const ranges: Record<string, Range[]> = {}
+    let first: Range | null = null
+    for (const x of spans)
+      for (const sp of passageSpans(units, x.start, x.end)) {
+        const el = scrollRef.current.querySelector<HTMLElement>(`[data-text="${s.from + sp.unit}"]`)
+        const r = el ? rangeIn(el, sp.start, sp.end) : null
+        if (!r) continue
+        ;(ranges[x.verdict] ??= []).push(r)
+        if (!first || r.compareBoundaryPoints(Range.START_TO_START, first) < 0) first = r
+      }
+    for (const [v, rs] of Object.entries(ranges)) reg.set(`tide-comp-${v}`, new Highlight(...rs))
+    if (first) {
+      const box = first.getBoundingClientRect()
+      const sc = scrollRef.current.getBoundingClientRect()
+      scrollRef.current.scrollBy({ top: box.top - sc.top - sc.height * 0.3, behavior: 'smooth' })
+    }
+    litTimer.current = setTimeout(clearLit, 30_000)
+  }
+  useEffect(
+    () => () => {
+      clearTimeout(litTimer.current)
+      clearLit()
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chapter]
+  )
+
   // ---------- Margin notes beside their words (MarginNotes) ----------
 
   const noted = useMemo(() => {
@@ -292,7 +392,7 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
   // ---------- Selecting ----------
 
   const onMouseUp = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.rr-pop, .rr-margin, .rr-marker, .rr-note-pop, .rr-endcard')) return
+    if ((e.target as HTMLElement).closest('.rr-pop, .rr-margin, .rr-marker, .rr-note-pop, .rr-endcard, .ib-card')) return
     const sel = window.getSelection()
     const text = sel?.toString() ?? ''
     if (!sel || !sel.rangeCount || !text.trim()) return
@@ -480,9 +580,33 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
                     </button>
                   ))}
                 </div>
+                {checks.on && (
+                  <div className="rr-size-checks">
+                    <span className="rr-size-label" id="rr-checks-every">
+                      Check me
+                    </span>
+                    <div className="rr-seg" role="radiogroup" aria-labelledby="rr-checks-every">
+                      {(['chapter', 'section'] as const).map((e) => (
+                        <button key={e} role="radio" aria-checked={checks.every === e} className={checks.every === e ? 'on' : ''} onClick={() => setChecks({ ...checks, every: e })}>
+                          {e === 'chapter' ? 'End of each chapter' : 'Every section'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
+          <button
+            className={`rr-tool${checks.on ? ' on' : ''}`}
+            role="switch"
+            aria-checked={checks.on}
+            onClick={() => setChecks({ ...checks, on: !checks.on })}
+            title={checks.on ? 'Checks are on for this book: a short “say what that said” at each break. Click to turn off' : 'Ask me to say what I just read, at the end of each chapter or section'}
+          >
+            <Icon name="quiz" size={15} />
+            <span>Check me</span>
+          </button>
           <button className={`rr-tool${mine ? ' on' : ''}`} onClick={listen} title="Read it aloud from here">
             <Icon name="headphones" size={15} />
             <span>Listen</span>
@@ -511,7 +635,25 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
             <h1 className="rr-title">{chapterName(current)}</h1>
             {current.units.map((u, i) => {
               const ms = markByUnit.get(i) ?? []
-              return (
+              const cp = checkAt.get(i)
+              const cpKey = cp ? keyOf(cp) : ''
+              const card = cp && !checks.skipped.includes(cpKey) && (
+                <InBookCheck
+                  key={`cp-${cpKey}`}
+                  path={path}
+                  chapter={chapterName(current)}
+                  units={current.units.slice(cp.from, cp.to + 1)}
+                  toEnd={cp.to === current.units.length - 1}
+                  text={sectionText(current.units, cp)}
+                  done={checked.get(cpKey)}
+                  readMs={() => sectionMs.current.get(cpKey) ?? 0}
+                  hard={() => hardIn(cp)}
+                  onLesson={(l) => setChecked((m) => new Map(m).set(cpKey, l))}
+                  onSkip={() => setChecks({ ...checks, skipped: [...checks.skipped, cpKey] })}
+                  onLight={(spans) => light(cp, spans)}
+                />
+              )
+              return [
                 <div key={i} className={`rr-unit${flash === `u${i}` ? ' flash' : ''}`} data-u={i}>
                   <p className={`rr-text${i === 0 && /^[\p{L}"“‘']/u.test(u.text) && !/^[IVXLC]+\.\s/.test(u.text) ? ' drop' : ''}${u.text.includes('\n') ? ' verse' : ''}`} data-text={i}>
                     {segments(u.text, ms).map((s) => {
@@ -556,8 +698,9 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
                       )
                     })}
                   </p>
-                </div>
-              )
+                </div>,
+                card || null
+              ]
             })}
 
             {/* Margin notes, beside the words they're about */}
@@ -630,6 +773,11 @@ export function Reader({ path, anchor }: { path: string; anchor?: string }) {
                 <button onClick={() => act('quote')}>Keep as quote</button>
                 <button onClick={() => act('note')}>Margin note</button>
                 <button onClick={() => act('question')}>Question</button>
+                {checks.on && (
+                  <button onClick={() => act('hard')} title="A card for it after the next check">
+                    Hard word
+                  </button>
+                )}
                 <span className="sep" />
                 <button onClick={() => act('challenge')}>Challenge me</button>
                 <button onClick={() => act('argument')}>What’s the argument?</button>

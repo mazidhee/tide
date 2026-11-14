@@ -136,6 +136,24 @@ export async function startLesson(o: StartFrom): Promise<CompLesson> {
   return saveLesson({ id: lessonId(at), at, source: p.source, passage: p.text, words: p.words, step: 'read', marks: [] })
 }
 
+/**
+ * A check in the reader's flow (increment 2): the section just read, checked against the book;
+ * the learner's answer and the time they spent reading it come with it, so the lesson starts at
+ * the summary, ready to grade. Words they marked hard in the section come as marks.
+ */
+export async function startInBook(o: { path: string; locs: PassageLoc[]; text: string; readMs?: number; summary: string; marks?: HardMark[] }): Promise<CompLesson> {
+  if (!String(o?.summary ?? '').trim()) throw new Error('Write what it said first.')
+  const p = await checkedSelection(String(o.path ?? ''), Array.isArray(o.locs) ? o.locs : [], String(o.text ?? ''))
+  const at = Date.now()
+  const l = await saveLesson({ id: lessonId(at), at, source: { ...p.source, kind: 'book-check' }, passage: p.text, words: p.words, step: 'summary', marks: [] })
+  return updateLesson(l.id, { ...(typeof o.readMs === 'number' ? { readMs: o.readMs } : {}), summary: String(o.summary), marks: Array.isArray(o.marks) ? o.marks : [] })
+}
+
+/** The in-book checks done on a book, newest first */
+export async function bookChecks(path: string): Promise<CompLesson[]> {
+  return (await listLessons()).filter((l) => l.source.kind === 'book-check' && l.source.path === path)
+}
+
 // ---------- The learner's work ----------
 
 export interface LessonPatch {

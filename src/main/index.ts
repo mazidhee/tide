@@ -583,7 +583,9 @@ function registerIpc() {
   handle('comp:grade', async (id: string) => (await import('./comprehension')).gradeSummary(String(id ?? '')))
   handle('comp:selfCheck', async (id: string, ticks: Record<string, boolean>) => (await import('./comprehension')).selfCheck(String(id ?? ''), ticks && typeof ticks === 'object' ? ticks : {}))
   handle('comp:cards', async (id: string, keep: import('@shared/comprehension').HardMark[]) => (await import('./comprehension')).makeCards(String(id ?? ''), Array.isArray(keep) ? keep : []))
-  handle('comp:lookup', (word: string) => shell.openExternal(`dict://${encodeURIComponent(String(word ?? '').slice(0, 80))}`))
+  handle('comp:inBook', async (o: Parameters<typeof import('./comprehension').startInBook>[0]) => (await import('./comprehension')).startInBook(o && typeof o === 'object' ? o : ({} as never)))
+  handle('comp:bookChecks', async (path: string) => (await import('./comprehension')).bookChecks(String(path ?? '')))
+  handle('comp:lookup',(word: string) => shell.openExternal(`dict://${encodeURIComponent(String(word ?? '').slice(0, 80))}`))
   handle('writing:addFolder', async () => {
     const res = await dialog.showOpenDialog(win!, { title: 'Add a writing folder', buttonLabel: 'Add folder', properties: ['openDirectory'] })
     if (res.canceled || !res.filePaths[0]) return null

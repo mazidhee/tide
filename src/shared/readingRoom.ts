@@ -11,7 +11,8 @@
 import type { AgendaItem } from './coach'
 import { locAnchor, locLabel, locOrder, parseAnchor, type PassageLoc } from './passage'
 
-export type MarkKind = 'highlight' | 'quote' | 'note' | 'question'
+/** 'hard': words the learner found hard, for the in-book check's cards (never written to the book page) */
+export type MarkKind = 'highlight' | 'quote' | 'note' | 'question' | 'hard'
 
 export interface Mark {
   id: string

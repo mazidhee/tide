@@ -19,7 +19,14 @@ import {
   wholeWords,
   withGlosses,
   cardsNote,
-  passagePieces
+  passagePieces,
+  readerSections,
+  checkpoints,
+  sectionText,
+  passageSpans,
+  unitToPassage,
+  sectionCue,
+  sectionKey
 } from '../src/shared/comprehension'
 import type { ReaderChapter } from '../src/shared/readingRoom'
 import { locAnchor } from '../src/shared/passage'
@@ -174,5 +181,59 @@ describe('drawing the passage', () => {
     expect(paras[1].start).toBe(16)
     expect(paras[1].pieces[0]).toEqual({ start: 16, end: 20, text: 'Four', ids: ['b'] })
     for (const para of paras) for (const p of para.pieces) expect(text.slice(p.start, p.end)).toBe(p.text)
+  })
+})
+
+describe('checks in the book', () => {
+  const ws = (n: number) => ({ text: Array.from({ length: n }, (_, i) => `w${i}`).join(' ') })
+  it('cuts a chapter into sections of about 400 to 900 words at paragraph ends', () => {
+    const units = [ws(5), ws(200), ws(250), ws(300), ws(200), ws(350), ws(100)]
+    const s = readerSections(units)
+    expect(s.map((x) => [x.from, x.to])).toEqual([
+      [0, 3],
+      [4, 6]
+    ])
+    expect(s[0].words).toBe(755)
+    for (const x of s) expect(x.words).toBeLessThanOrEqual(900)
+    // Every unit in exactly one section, in order
+    expect(s.flatMap((x) => Array.from({ length: x.to - x.from + 1 }, (_, i) => x.from + i))).toEqual(units.map((_, i) => i))
+  })
+  it('joins a short tail to the section before it, and lets a long paragraph stand alone', () => {
+    expect(readerSections([ws(500), ws(150), ws(80)]).map((x) => [x.from, x.to])).toEqual([[0, 2]])
+    expect(readerSections([ws(300), ws(1200), ws(450)]).map((x) => [x.from, x.to])).toEqual([
+      [0, 0],
+      [1, 1],
+      [2, 2]
+    ])
+    expect(readerSections([])).toEqual([])
+  })
+  it('puts no cards anywhere when checks are off, one at a chapter’s end, or one per section', () => {
+    const units = [ws(300), ws(350), ws(400), ws(300)]
+    expect(checkpoints(units, 'off')).toEqual([])
+    expect(checkpoints(units, 'chapter').map((x) => x.to)).toEqual([3])
+    expect(checkpoints(units, 'section').map((x) => x.to)).toEqual([1, 3])
+    // A chapter too short to say anything about has no card
+    expect(checkpoints([ws(60)], 'chapter')).toEqual([])
+  })
+  it('maps the passage’s offsets back to the book’s paragraphs and back', () => {
+    const units = [{ text: '  One two three.' }, { text: 'Four five six.  ' }]
+    const text = sectionText(units, { from: 0, to: 1 })
+    expect(text).toBe('One two three.\n\nFour five six.')
+    const at = text.indexOf('three.\n\nFour')
+    const spans = passageSpans(units, at, at + 'three.\n\nFour'.length)
+    expect(spans).toEqual([
+      { unit: 0, start: 10, end: 16 },
+      { unit: 1, start: 0, end: 4 }
+    ])
+    const five = unitToPassage(units, 1, 5, 9)!
+    expect(text.slice(five.start, five.end)).toBe('five')
+    expect(unitToPassage(units, 5, 0, 1)).toBeNull()
+  })
+  it('names a section by where it starts, not by showing it again', () => {
+    expect(sectionCue('I. Of my grandfather Verus I learned good morals', 'Book I', true)).toBe('From “Of my grandfather Verus I…” to the end of Book I')
+    expect(sectionCue('Short one.', 'Book I', false)).toBe('From “Short one”')
+    const a = { kind: 'para' as const, chapter: 1, para: 2 }
+    const b = { kind: 'para' as const, chapter: 1, para: 5 }
+    expect(sectionKey([a, b])).toBe(`${locAnchor(a)}..${locAnchor(b)}`)
   })
 })

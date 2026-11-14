@@ -36,8 +36,8 @@ export interface HardMark {
 }
 
 export interface PassageSource {
-  /** The next unread section of the book being read, or words chosen in the reader */
-  kind: 'book' | 'selection'
+  /** The next unread section of the book being read, words chosen in the reader, or a check in the reader's flow (increment 2) */
+  kind: 'book' | 'selection' | 'book-check'
   /** The book's vault path */
   path: string
   work: string
@@ -455,4 +455,109 @@ export function passagePieces(text: string, ranges: { id: string; start: number;
       })
       return { start: p.start, pieces }
     })
+}
+
+// ---------- Checks in the book ----------
+
+/**
+ * In the reader (docs/plans/comprehension.md, increment 2): when the learner turns checks on for
+ * a book (off by default), a quiet card sits in the reading flow at the end of each chapter, or
+ * at every natural break, and asks them to say what they just read, without showing it again.
+ */
+export type CheckEvery = 'chapter' | 'section'
+
+/** A run of a chapter's units, first to last (inclusive) */
+export interface ReaderSection {
+  from: number
+  to: number
+  words: number
+}
+
+export const SECTION_MIN = 400
+export const SECTION_TARGET = 600
+export const SECTION_MAX = 900
+/** A section shorter than this has nothing to check */
+export const CHECK_MIN_WORDS = 150
+
+/**
+ * A chapter cut into sections at paragraph ends: a section closes once it has about `target`
+ * words, or at `min` when the next paragraph would take it past `max`; a paragraph longer than
+ * `max` stands alone. A short tail is joined to the section before it.
+ */
+export function readerSections(units: { text: string }[], o: { min?: number; target?: number; max?: number } = {}): ReaderSection[] {
+  const min = o.min ?? SECTION_MIN
+  const target = o.target ?? SECTION_TARGET
+  const max = o.max ?? SECTION_MAX
+  const out: ReaderSection[] = []
+  let from = 0
+  let words = 0
+  units.forEach((u, i) => {
+    words += countWords(u.text)
+    if (i + 1 >= units.length) return
+    const next = countWords(units[i + 1].text)
+    if (words >= target || (words >= min && words + next > max) || (next > max && words >= min / 2)) {
+      out.push({ from, to: i, words })
+      from = i + 1
+      words = 0
+    }
+  })
+  if (from < units.length) {
+    const prev = out[out.length - 1]
+    if (prev && words < min / 2) out[out.length - 1] = { from: prev.from, to: units.length - 1, words: prev.words + words }
+    else out.push({ from, to: units.length - 1, words })
+  }
+  return out
+}
+
+/** Where the cards go in a chapter: none when checks are off, the last section at a chapter's end, or every section */
+export function checkpoints(units: { text: string }[], every: CheckEvery | 'off'): ReaderSection[] {
+  if (every === 'off' || !units.length) return []
+  const all = readerSections(units).filter((s) => s.words >= CHECK_MIN_WORDS)
+  return every === 'chapter' ? all.slice(-1) : all
+}
+
+/** A section's text, as its lesson's passage: its units trimmed and joined by blank lines */
+export const sectionText = (units: { text: string }[], s: Pick<ReaderSection, 'from' | 'to'>) => joinUnits(units.slice(s.from, s.to + 1))
+
+/** Where each unit of a section starts in its passage, and how much space trimming took off its front */
+function unitOffsets(units: { text: string }[]) {
+  let at = 0
+  return units.map((u) => {
+    const o = { base: at, lead: u.text.length - u.text.trimStart().length, len: u.text.trim().length }
+    at += o.len + 2
+    return o
+  })
+}
+
+/**
+ * Characters of a section's passage back on the book: [{unit (index within the section), start,
+ * end}] in each unit's own text, for lighting the graded words in place.
+ */
+export function passageSpans(units: { text: string }[], start: number, end: number): { unit: number; start: number; end: number }[] {
+  const out: { unit: number; start: number; end: number }[] = []
+  unitOffsets(units).forEach((o, i) => {
+    const s = Math.max(start, o.base)
+    const e = Math.min(end, o.base + o.len)
+    if (e > s) out.push({ unit: i, start: s - o.base + o.lead, end: e - o.base + o.lead })
+  })
+  return out
+}
+
+/** Words marked in a unit of a section (the unit's own offsets), as offsets in the section's passage; null when outside it */
+export function unitToPassage(units: { text: string }[], unit: number, start: number, end: number): { start: number; end: number } | null {
+  const o = unitOffsets(units)[unit]
+  if (!o) return null
+  const s = Math.max(0, start - o.lead)
+  const e = Math.min(o.len, end - o.lead)
+  return e > s ? { start: o.base + s, end: o.base + e } : null
+}
+
+/** A section's key, for skips and checks done: its first and last units' anchors */
+export const sectionKey = (locs: PassageLoc[]) => (locs.length ? `${locAnchor(locs[0])}..${locAnchor(locs[locs.length - 1])}` : '')
+
+/** "From “Of my grandfather Verus…” to the end of Book I": where the section began, not the section again */
+export function sectionCue(firstText: string, chapter: string | undefined, toEnd: boolean): string {
+  const all = firstText.trim().replace(/^[IVXLC\d]+\.\s+/, '').split(/\s+/)
+  const head = all.slice(0, 5).join(' ').replace(/[,;:.!?]+$/, '')
+  return `From “${head}${all.length > 5 ? '…' : ''}”${toEnd && chapter ? ` to the end of ${chapter}` : ''}`
 }
