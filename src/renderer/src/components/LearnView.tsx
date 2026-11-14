@@ -343,7 +343,15 @@ export function LearnView() {
 function RoadmapShelf() {
   const app = useApp()
   const outlines = useOutlines(app.tree)
-  const loose = useMemo(() => looseRoadmaps(app.tree, outlines), [app.tree, outlines])
+  // After the switch to modules the old roadmaps stay on disk for Switch back; they aren't offered here
+  const [replaced, setReplaced] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    window.tide.modules
+      .status()
+      .then((s) => setReplaced(new Set(s.replaced)))
+      .catch(() => {})
+  }, [app.tree])
+  const loose = useMemo(() => looseRoadmaps(app.tree, outlines).filter((f) => !replaced.has(f.path)), [app.tree, outlines, replaced])
   const [counts, setCounts] = useState<Record<string, { done: number; total: number }>>({})
   useEffect(() => {
     let live = true

@@ -1068,7 +1068,7 @@ export interface TideApi {
   }
   /** Roadmap continuity (main/track, shared/track): a roadmap's phases and gates */
   modules: {
-    status(): Promise<{ available: boolean; modules: number; tracks: number; moves: boolean; switched: boolean; at?: number; backup?: string; issues: number }>
+    status(): Promise<{ available: boolean; modules: number; tracks: number; moves: boolean; switched: boolean; at?: number; backup?: string; replaced: string[]; issues: number }>
     /** A track's modules: status, hours, gate, requires */
     track(notebook: string): Promise<import('./modules').TrackModulesView | null>
     /** "I'm there": the learner says a module's gate is met (or takes it back) */

@@ -7,7 +7,7 @@ const folder = (path: string, children: FileNode[]): FileNode => ({ name: path.s
 
 const vault = folder('', [
   folder('Mathematics', [file('Mathematics/Limits.md')]),
-  folder('Roadmaps', [file('Roadmaps/RM_MATH.md'), file('Roadmaps/RM_SWE.md'), file('Roadmaps/Linear algebra.md')]),
+  folder('Roadmaps', [file('Roadmaps/RM_MATH.md'), file('Roadmaps/RM_SWE.md'), file('Roadmaps/Linear algebra.md'), file('Roadmaps/_moves.json'), folder('Roadmaps/Modules', [file('Roadmaps/Modules/dsa.md')])]),
   folder('Tide', [file('Tide/Tide bugs.md'), file('Tide/Tide roadmap.md'), folder('Tide/Bug shots', [file('Tide/Bug shots/a.png', 'image')])]),
   folder('Software Engineering', [file('Software Engineering/Outline.md'), file('Software Engineering/Git.md')]),
   folder('New topic', [])
@@ -30,7 +30,8 @@ describe('sidebar tree', () => {
 
   it('knows a roadmap by being an outline or sitting in Roadmaps', () => {
     expect(isRoadmapFile('Roadmaps/Linear algebra.md', new Set())).toBe(true)
-    expect(isRoadmapFile('Roadmaps/sub/x.md', new Set())).toBe(false)
+    expect(isRoadmapFile('Roadmaps/Modules/dsa.md', new Set())).toBe(true)
+    expect(isRoadmapFile('Roadmaps/_moves.json', new Set())).toBe(true)
     expect(isRoadmapFile('Tide/Tide roadmap.md', outlines)).toBe(false)
   })
 

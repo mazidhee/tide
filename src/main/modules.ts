@@ -1159,7 +1159,7 @@ export function switchBack(): Promise<{ ok: boolean; restored: number; kept: num
 }
 
 /** For the Learn page and the switch flow: whether modules are there, whether Tide uses them */
-export async function modulesStatus(): Promise<{ available: boolean; modules: number; tracks: number; moves: boolean; switched: boolean; at?: number; backup?: string; issues: number }> {
+export async function modulesStatus(): Promise<{ available: boolean; modules: number; tracks: number; moves: boolean; switched: boolean; at?: number; backup?: string; replaced: string[]; issues: number }> {
   const cat = await loadCatalogue()
   const state = await readState()
   return {
@@ -1169,6 +1169,8 @@ export async function modulesStatus(): Promise<{ available: boolean; modules: nu
     moves: !!(await loadMoves()),
     switched: !!state.switched,
     ...(state.switched ? { at: state.switched.at, backup: state.switched.backup } : {}),
+    // The old roadmaps the modules replaced: kept on disk for Switch back, not offered in Learn
+    replaced: state.switched ? [...new Set(Object.values(state.switched.outlines))] : [],
     issues: cat ? checkDag(cat).length : 0
   }
 }
