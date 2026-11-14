@@ -90,19 +90,23 @@ function Label({ k: key }: { k: Key }) {
   return <span className="kp-tex" dangerouslySetInnerHTML={{ __html: html }} />
 }
 
-export function Keypad({ onKey, page: initial }: { onKey(key: Key): void; page?: string }) {
+/**
+ * `pages` swaps the keys for another set, the plain-text ones (shared/plainKeys) in a thread or the
+ * chat; `store` is where the page last used is remembered, one per set.
+ */
+export function Keypad({ onKey, page: initial, pages = KEYPAGES, store = 'tide.keypad.page' }: { onKey(key: Key): void; page?: string; pages?: { id: string; label: string; title: string; keys: Key[] }[]; store?: string }) {
   const [page, setPage] = useState(() => {
     try {
-      return initial ?? localStorage.getItem('tide.keypad.page') ?? 'basic'
+      return initial ?? localStorage.getItem(store) ?? pages[0].id
     } catch {
-      return 'basic'
+      return pages[0].id
     }
   })
-  const current = KEYPAGES.find((p) => p.id === page) ?? KEYPAGES[0]
+  const current = pages.find((p) => p.id === page) ?? pages[0]
   const pick = (id: string) => {
     setPage(id)
     try {
-      localStorage.setItem('tide.keypad.page', id)
+      localStorage.setItem(store, id)
     } catch {
       // only a convenience
     }
@@ -112,7 +116,7 @@ export function Keypad({ onKey, page: initial }: { onKey(key: Key): void; page?:
   return (
     <div className="kp" role="group" aria-label="Maths keypad">
       <div className="kp-pages" role="tablist" aria-label="Keypad pages">
-        {KEYPAGES.map((p) => (
+        {pages.map((p) => (
           <button key={p.id} role="tab" aria-selected={p.id === current.id} className={p.id === current.id ? 'on' : ''} title={p.title} onMouseDown={keep} onClick={() => pick(p.id)}>
             {p.label}
           </button>

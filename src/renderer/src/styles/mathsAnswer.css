@@ -1017,3 +1017,38 @@
   --ma-bad-soft: color-mix(in srgb, var(--danger) 9%, transparent);
   --ma-bad-line: color-mix(in srgb, var(--danger) 55%, transparent);
 }
+
+/* ---------- Maths keys for a plain field (components/maths/MathsKeys) ---------- */
+
+.mk-panel {
+  container-type: inline-size;
+  margin-top: 8px;
+}
+.mk-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+@container (min-width: 560px) {
+  .mk-grid {
+    grid-template-columns: minmax(200px, 0.62fr) minmax(0, 1fr);
+    align-items: stretch;
+  }
+}
+.mk-panel .calc-tape {
+  max-height: 96px;
+}
+.mk-panel .kp-key {
+  min-height: 30px;
+}
+.mk-panel .kp-text {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.mk-panel .kp-key.fn .kp-text,
+.mk-panel .kp-key.op .kp-text {
+  font-size: 13.5px;
+}
+.mk-toggle.on {
+  color: var(--accent);
+}
