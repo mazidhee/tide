@@ -1411,6 +1411,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // tutor as your question, saying which part and what it showed
   const askAboutRef = useRef<(label: string) => void>(() => {})
   askAboutRef.current = (label) => submit(`${ASKED}In the simulation, explain ${label}: what it is doing here, and why it has that value.`)
+  // Asks from a visual inside a side thread go to that thread (askInThread is defined above)
+  const askThreadRef = useRef<(tid: string, q: string) => void>(() => {})
+  askThreadRef.current = (tid, q) => askInThread(tid, q)
   const askVisualRef = useRef<(question: string) => void>(() => {})
   askVisualRef.current = (question) => submit(`${ASKED}${question}`)
   useEffect(() => {
@@ -1419,6 +1422,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       if (!label) return
       e.preventDefault()
       e.stopImmediatePropagation()
+      const tid = (e.target as Element).closest?.<HTMLElement>('[data-thread-id]')?.dataset.threadId
+      if (tid) return askThreadRef.current(tid, `What is “${label}” here?`)
       askAboutRef.current(label)
     }
     // Claude's visuals: "What's happening here?" and "Ask about this" go straight to the tutor, with what the visual shows
@@ -1427,6 +1432,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       if (!question || !columnRef.current?.contains(e.target as Node)) return
       e.preventDefault()
       e.stopImmediatePropagation()
+      // A visual inside a side thread asks in that thread, never the lesson
+      const tid = (e.target as Element).closest?.<HTMLElement>('[data-thread-id]')?.dataset.threadId
+      if (tid) return askThreadRef.current(tid, question)
       askVisualRef.current(question)
     }
     // An explorable's "Tell the tutor" or a challenge's "Use as my answer": into the answer box, to finish in their own words
