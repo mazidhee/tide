@@ -100,17 +100,19 @@ describe('the prompt, in layers', () => {
     }
   })
 
-  it('a lesson has the format rules and the custom visuals, not the whole simulation guide; a chat has the simulations; a thread neither', () => {
+  it('a lesson has the format rules and the custom visuals, not the whole simulation guide; a chat has the simulations; a thread draws visuals but has no simulations', () => {
     const lesson = stableSystem(CLAUDE_LESSON_SYSTEM, { today: new Date(2026, 10, 13), web: true, session: true })
     expect(lesson).toContain(SESSION_FORMAT.slice(0, 80))
     expect(lesson).toContain(VISUAL_GUIDE)
     expect(lesson).not.toContain(SIM_GUIDE.slice(0, 120))
     expect(CLAUDE_TUTOR_SYSTEM).toContain(SIM_GUIDE)
     const thread = claudeSystemBase({ kind: 'thread' })
-    expect(thread).not.toContain(VISUAL_GUIDE.slice(0, 80))
+    expect(thread).toContain(VISUAL_GUIDE.slice(0, 80))
+    expect(thread).toMatch(/Asked for a visual/)
     expect(thread).not.toContain(SIM_GUIDE.slice(0, 80))
-    expect(thread).not.toMatch(/<ask|<grade/)
-    expect(words(thread)).toBeLessThan(260)
+    // The visual guide mentions <ask>; a thread's own rules (THREAD_RULES) forbid lesson tags
+    expect(thread.replace(VISUAL_GUIDE, '')).not.toMatch(/<ask|<grade/)
+    expect(words(thread.replace(VISUAL_GUIDE, ''))).toBeLessThan(300)
     // Taught as the humanities: no custom visuals
     expect(claudeSystemBase({ kind: 'lesson', humanities: true })).not.toContain(VISUAL_GUIDE.slice(0, 80))
   })
