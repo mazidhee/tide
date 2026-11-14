@@ -14,7 +14,7 @@
  * - Then learning fills each day in 45-minute blocks, from the notebook furthest below its share,
  *   at most two subjects a day, each roadmap strictly in order, carried-over topics first.
  */
-import type { AgendaItem, TopicCandidate, WeekPlan } from './coach'
+import { nextLine, type AgendaItem, type TopicCandidate, type WeekPlan } from './coach'
 import type { PlacementSetup } from './placement'
 
 export interface ScheduleInput {
@@ -96,7 +96,7 @@ export function scheduleWeek(input: ScheduleInput): WeekPlan {
   const n = input.days.length
 
   // Queues: carried-over topics first, then each roadmap in order, never a topic twice
-  const queue = new Map<string, { topic: string; notebook: string; section?: string; topicId?: string; why?: string; refresh?: boolean; carried?: boolean }[]>()
+  const queue = new Map<string, { topic: string; notebook: string; section?: string; module?: string; topicId?: string; why?: string; refresh?: boolean; carried?: boolean }[]>()
   const seen = new Set<string>()
   for (const u of input.undone) {
     const nb = u.notebook && input.focus.includes(u.notebook) ? u.notebook : undefined
@@ -107,7 +107,7 @@ export function scheduleWeek(input: ScheduleInput): WeekPlan {
   for (const c of input.candidates) {
     if (!input.focus.includes(c.notebook) || seen.has(c.topic)) continue
     seen.add(c.topic)
-    queue.set(c.notebook, [...(queue.get(c.notebook) ?? []), { topic: c.topic, notebook: c.notebook, section: c.section, ...(c.topicId ? { topicId: c.topicId } : {}), ...(c.why ? { why: c.why } : {}), ...(c.refresh ? { refresh: true } : {}) }])
+    queue.set(c.notebook, [...(queue.get(c.notebook) ?? []), { topic: c.topic, notebook: c.notebook, section: c.section, ...(c.module ? { module: c.module } : {}), ...(c.topicId ? { topicId: c.topicId } : {}), ...(c.why ? { why: c.why } : {}), ...(c.refresh ? { refresh: true } : {}) }])
   }
 
   // Repair first: weak spots, due cards and mistakes, early in the week and again mid-week
@@ -164,7 +164,7 @@ export function scheduleWeek(input: ScheduleInput): WeekPlan {
         ...(next.refresh ? { refresh: true } : {}),
         notebook: nb,
         minutes,
-        why: next.carried ? 'Carried over from last time' : goal && (shares.find((s) => s.notebook === nb)?.reason ?? '').includes('left') ? `Next in ${nb}, to keep "${goal.name}" on time` : (next.why ?? `Next in your ${nb} roadmap${next.section ? ` (${next.section})` : ''}`),
+        why: next.carried ? 'Carried over from last time' : goal && (shares.find((s) => s.notebook === nb)?.reason ?? '').includes('left') ? `Next in ${nb}, to keep "${goal.name}" on time` : (next.why ?? nextLine(nb, next)),
         ...(next.carried ? { carried: true } : {})
       })
       got.set(nb, (got.get(nb) ?? 0) + minutes)

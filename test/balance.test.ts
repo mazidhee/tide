@@ -275,3 +275,20 @@ describe('placement in the week', () => {
     expect(item?.minutes).toBeLessThanOrEqual(25)
   })
 })
+
+describe('why a topic is next', () => {
+  it("names a module's topic by its module, not the old roadmap and section", () => {
+    const nb = notebook('Software Engineering', SWE)
+    nb.topics = nb.topics.map((t) => ({ ...t, module: 'foundations-of-computation', path: ['Foundations of Computation', ...t.path], section: 'How Computers Work' }))
+    const b = balanceWeek(base({ notebooks: [nb], aims: [] }))
+    const first = b.candidates.find((c) => c.notebook === 'Software Engineering')!
+    expect(first.why).toBe('Next · Foundations of Computation')
+    const item = week(b).days.flatMap((d) => d.items).find((i) => i.kind === 'learn' && i.notebook === 'Software Engineering')!
+    expect(item.why).toBe('Next · Foundations of Computation')
+  })
+
+  it('names a plain roadmap topic by its notebook and section, without "roadmap"', () => {
+    const b = balanceWeek(base({ notebooks: [notebook('Software Engineering', SWE)], aims: [] }))
+    expect(b.candidates[0].why).toBe('Next · Software Engineering, 1. Foundations')
+  })
+})

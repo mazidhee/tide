@@ -11,7 +11,7 @@
  * - A roadmap Tide hasn't sorted yet is planned in roadmap order, and the week says so.
  */
 import { AIM_WEIGHT, classOf, sectionValue, type Overrides, type RoadmapTopic, type SortedRoadmap } from './curriculum'
-import type { Aim, TopicCandidate } from './coach'
+import { moduleTitleOf, nextLine, type Aim, type TopicCandidate } from './coach'
 import { weekShares, type Shares } from './schedule'
 import { PLACEMENT_TOPICS, type PlacementSetup, type PlacementStore } from './placement'
 
@@ -166,9 +166,10 @@ export function balanceWeek(input: BalanceInput): Balance {
         topicId: t.id,
         ...(refresh ? { refresh } : {}),
         ...(t.source ? { source: t.source } : {}),
+        ...(moduleTitleOf(t) ? { module: moduleTitleOf(t) } : {}),
         why: refresh
           ? 'A refresher: you knew this, and it was rusty'
-          : serves >= 0.6 ? `${t.section ? `${t.section}, ` : ''}${serves >= 1 ? 'for' : 'needed for'} ${short(aim!.text).replace(/^\w/, (c) => c.toLowerCase())}` : `Next in your ${name} roadmap${t.section ? ` (${t.section})` : ''}`
+          : serves >= 0.6 ? `${t.section ? `${t.section}, ` : ''}${serves >= 1 ? 'for' : 'needed for'} ${short(aim!.text).replace(/^\w/, (c) => c.toLowerCase())}` : nextLine(name, { module: moduleTitleOf(t), section: t.section })
       })
     }
   }
