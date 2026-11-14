@@ -547,6 +547,28 @@ function registerIpc() {
   handle('northStar:startCapstone', async () => (await import('./northStar')).startCapstone())
   handle('northStar:install', async () => (await import('./northStar')).installCurrent())
   handle('portfolio:bringForward', async (date: string, index: number) => (await import('./goals')).bringForward(date, index))
+  // Writing review (main/writing): pieces, reviews, re-checks, the conversation, habits and topics
+  handle('writing:list', async () => (await import('./writing')).listPieces())
+  handle('writing:roots', async () => (await import('./writing')).rootList())
+  handle('writing:open', async (p: string) => (await import('./writing')).openPiece(String(p ?? '')))
+  handle('writing:save', async (p: string, text: string, comments?: import('@shared/writing').WritingComment[]) => (await import('./writing')).savePiece(String(p ?? ''), String(text ?? ''), Array.isArray(comments) ? comments : undefined))
+  handle('writing:comments', async (p: string, comments: import('@shared/writing').WritingComment[]) => (await import('./writing')).saveComments(String(p ?? ''), Array.isArray(comments) ? comments : []))
+  handle('writing:kind', async (p: string, kind: string | null) => (await import('./writing')).setKind(String(p ?? ''), kind as import('@shared/writing').WritingKind | null))
+  handle('writing:review', async (p: string, text: string, full?: boolean) => (await import('./writing')).reviewPiece(String(p ?? ''), String(text ?? ''), { full: !!full }))
+  handle('writing:recheck', async (p: string, text: string, id: string) => (await import('./writing')).recheck(String(p ?? ''), String(text ?? ''), String(id ?? '')))
+  handle('writing:challenge', async (p: string, text: string, said: string) => (await import('./writing')).challenge(String(p ?? ''), String(text ?? ''), String(said ?? '')))
+  handle('writing:habits', async () => (await import('./writing')).habitsNow())
+  handle('writing:topics', async (refresh?: boolean) => (await import('./writing')).topics({ refresh: !!refresh }))
+  handle('writing:startDraft', async (topic: import('@shared/writingPrompt').Topic, root: string) => (await import('./writing')).startDraft(topic, String(root ?? '')))
+  handle('writing:published', async (p: string, on: boolean) => (await import('./writing')).setPublished(String(p ?? ''), !!on))
+  handle('writing:tickThings', async (p: string) => (await import('./writing')).tickInThings(String(p ?? '')))
+  handle('writing:addFolder', async () => {
+    const res = await dialog.showOpenDialog(win!, { title: 'Add a writing folder', buttonLabel: 'Add folder', properties: ['openDirectory'] })
+    if (res.canceled || !res.filePaths[0]) return null
+    const w = getSettings().writing ?? {}
+    updateSettings({ writing: { ...w, folders: [...new Set([...(w.folders ?? []), res.filePaths[0]])] } })
+    return res.filePaths[0]
+  })
   // A tutor that remembers you (main/learnerProfile) and lesson prep while you're away (main/lessonPrep)
   handle('learner:view', async () => (await import('./learnerProfile')).learnerView())
   handle('learner:refresh', async () => {

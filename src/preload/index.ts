@@ -466,6 +466,23 @@ const api: TideApi = {
     startCapstone: invoke('northStar:startCapstone'),
     install: invoke('northStar:install')
   },
+  writing: {
+    list: invoke('writing:list'),
+    roots: invoke('writing:roots'),
+    open: invoke('writing:open'),
+    save: invoke('writing:save'),
+    comments: invoke('writing:comments'),
+    kind: invoke('writing:kind'),
+    review: invoke('writing:review'),
+    recheck: invoke('writing:recheck'),
+    challenge: invoke('writing:challenge'),
+    habits: invoke('writing:habits'),
+    topics: invoke('writing:topics'),
+    startDraft: invoke('writing:startDraft'),
+    published: invoke('writing:published'),
+    tickThings: invoke('writing:tickThings'),
+    addFolder: invoke('writing:addFolder')
+  },
   learner: {
     view: invoke('learner:view'),
     refresh: invoke('learner:refresh'),
