@@ -113,6 +113,8 @@ export function ProjectsPage() {
           </div>
         )}
 
+        {data.unlock && <Unlock u={data.unlock} />}
+
         <section className="pq-sec" aria-label="Building">
           <div className="pq-sec-head">
             <h3>Building</h3>
@@ -283,6 +285,26 @@ export function ProjectsPage() {
             setIdea(true)
           }}
         />
+      )}
+    </div>
+  )
+}
+
+/** One line when Up next can't fill Building: the course that opens the most waiting projects, and a lesson to start it */
+function Unlock({ u }: { u: NonNullable<ProjectsPageView['unlock']> }) {
+  const app = useApp()
+  const n = `${u.count} project${u.count === 1 ? '' : 's'}`
+  return (
+    <div className="pq-note pq-unlock">
+      <Icon name="lock" size={14} />
+      <span>
+        Start <b>{u.title}</b>
+        {u.opens ? ` to open ${n}` : u.viaTitle ? `: it leads to ${u.viaTitle}, which ${n} wait on` : `: ${n} wait on it`}
+      </span>
+      {u.notebook && u.topic && (
+        <button className="btn small" onClick={() => app.setView({ kind: 'session', mode: 'teach', scope: { kind: 'folder', path: u.notebook! }, topic: u.topic!, nonce: Date.now() })}>
+          Start it
+        </button>
       )}
     </div>
   )
