@@ -136,6 +136,26 @@
 .wr-col {
   min-width: 0;
 }
+.wr-title-input {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: none;
+  outline: none;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  border-radius: 4px;
+}
+.wr-title-input:hover {
+  box-shadow: 0 2px 0 var(--line);
+}
+.wr-title-input:focus {
+  box-shadow: 0 2px 0 var(--accent);
+}
+.wr-title-input::placeholder {
+  color: var(--ink-muted);
+}
 .wr-title {
   font-family: var(--wr-display);
   font-size: 52px;
