@@ -15,7 +15,7 @@
  * Also here: a suggested project written in the vault's project format, and checked with the same
  * parser that reads Roadmaps/Projects (shared/modules).
  */
-import { parseProject, PROJECTS_DIR, type ProjectDef, type ProjectRow } from './modules'
+import { parseProject, PROJECTS_DIR, type ModuleDef, type ModuleStatus, type ProjectDef, type ProjectRow } from './modules'
 
 export const DEFAULT_CAP = 2
 export const MAX_CAP = 4
@@ -95,6 +95,115 @@ export function projectNeeds(rows: ProjectRow[], q: QueueState = {}): { needs: {
   return { needs, tracksOf }
 }
 
+// ---------- Courses a waiting project pulls forward ----------
+
+type ModuleLite = Pick<ModuleDef, 'id' | 'title' | 'requires'>
+type StatusOf = (id: string) => ModuleStatus | undefined
+
+/** A project's next milestone (the first not built), when it waits on modules not started */
+const waitingNext = (p: Pick<ProjectRow, 'milestones'>) => {
+  const m = p.milestones.find((x) => x.status !== 'done')
+  return m?.status === 'locked' && m.waiting.length ? m : undefined
+}
+
+/**
+ * The modules nearest a module on its requires chain that can be worked on now (open, or already
+ * under way): the module itself when it isn't locked; for a locked one, walking back through what
+ * it requires, past what has passed, to the first that isn't locked. In requires order.
+ */
+export function nearestOpen(id: string, mods: Map<string, Pick<ModuleDef, 'requires'>>, status: StatusOf, seen = new Set<string>()): string[] {
+  if (seen.has(id)) return []
+  seen.add(id)
+  const st = status(id)
+  if (st === 'open' || st === 'active') return [id]
+  if (st !== 'locked') return []
+  return [...new Set((mods.get(id)?.requires ?? []).flatMap((r) => nearestOpen(r, mods, status, seen)))]
+}
+
+export interface PulledModule {
+  module: string
+  /** The not-started module the project's next milestone needs (the same module when it is open itself) */
+  need: string
+  project: string
+  /** "For Agent Runtime: Agentic Systems opens its next milestone" */
+  why: string
+}
+
+/** At most this many modules pulled forward at a time, so the plan is never flooded */
+export const PULL_CAP = 2
+
+/**
+ * When a project being built waits on a course, that course moves to the front of the plan. For
+ * each project being built (with none, the top of Up next), its next milestone's modules not yet
+ * started; a locked one gives way to the nearest open modules on its requires chain. In queue
+ * order, then milestone order, at most `cap`.
+ */
+export function pulledModules(rows: ProjectRow[], q: QueueState, modules: ModuleLite[], status: StatusOf, cap = PULL_CAP): PulledModule[] {
+  const a = arrange(rows, q)
+  const projects = a.building.length ? a.building : a.upNext.filter((p) => !a.paused.has(p.id)).slice(0, 1)
+  const byId = new Map(modules.map((m) => [m.id, m]))
+  const title = (id: string) => byId.get(id)?.title ?? id
+  const out: PulledModule[] = []
+  for (const p of projects)
+    for (const need of waitingNext(p)?.waiting ?? [])
+      for (const id of nearestOpen(need, byId, status)) {
+        if (out.some((x) => x.module === id)) continue
+        if (out.length >= cap) return out
+        out.push({ module: id, need, project: p.id, why: id === need ? `For ${p.title}: ${title(id)} opens its next milestone` : `For ${p.title}: ${title(id)} leads to ${title(need)}, which its next milestone needs` })
+      }
+  return out
+}
+
+/** The one course to start that opens the most waiting projects (the Projects page's line) */
+export interface UnlockHint {
+  module: string
+  /** Projects it opens (or, when `opens` is false, leads towards) */
+  count: number
+  /** Starting it alone opens their next milestones */
+  opens: boolean
+  /** The locked module it leads to, when that is what they wait on */
+  via?: string
+}
+
+/**
+ * Shown when Up next is empty or can't fill Building: the open module, not yet started, that would
+ * open the most projects' next milestones (ties by queue order). When none opens one on its own,
+ * the open module that leads most of them there: one they need, or the nearest open one on a locked
+ * module's requires chain. Null when it doesn't apply.
+ */
+export function unlockHint(rows: ProjectRow[], q: QueueState, modules: ModuleLite[], status: StatusOf): UnlockHint | null {
+  const a = arrange(rows, q)
+  const ready = a.upNext.filter((p) => !a.paused.has(p.id)).length
+  if (ready > 0 && a.cap - a.building.length <= ready) return null
+  const byId = new Map(modules.map((m) => [m.id, m]))
+  const waiting = [...a.building, ...a.upNext, ...a.later].map(waitingNext).filter((m) => !!m)
+  // Map order is first-seen order, which is queue order: a tie goes to the earlier
+  const best = (m: Map<string, number>) => [...m].reduce<[string, number] | null>((b, x) => (!b || x[1] > b[1] ? x : b), null)
+  const opens = new Map<string, number>()
+  for (const m of waiting) if (m.waiting.length === 1 && status(m.waiting[0]) === 'open') opens.set(m.waiting[0], (opens.get(m.waiting[0]) ?? 0) + 1)
+  const direct = best(opens)
+  if (direct) return { module: direct[0], count: direct[1], opens: true }
+  const leads = new Map<string, number>()
+  const vias = new Map<string, Map<string, number>>()
+  for (const m of waiting) {
+    const counted = new Set<string>()
+    for (const need of m.waiting)
+      for (const id of nearestOpen(need, byId, status)) {
+        if (status(id) !== 'open') continue
+        if (!counted.has(id)) leads.set(id, (leads.get(id) ?? 0) + 1)
+        counted.add(id)
+        if (id !== need) {
+          const v = vias.get(id) ?? new Map<string, number>()
+          vias.set(id, v.set(need, (v.get(need) ?? 0) + 1))
+        }
+      }
+  }
+  const lead = best(leads)
+  if (!lead) return null
+  const via = vias.get(lead[0]) ? best(vias.get(lead[0])!)?.[0] : undefined
+  return { module: lead[0], count: lead[1], opens: false, ...(via ? { via } : {}) }
+}
+
 /** The projects as they stand with the queue's changes applied, as a state to save */
 const snapshotOf = (rows: Row[], q: QueueState): Required<Pick<QueueState, 'building' | 'order' | 'paused'>> & { cap?: number } => {
   const a = arrange(rows, q)
@@ -114,6 +223,8 @@ export interface ProjectsPageView {
   ai: boolean
   /** Titles of the modules projects need */
   modules: Record<string, string>
+  /** The course to start that opens the most waiting projects, with its first lesson (unlockHint) */
+  unlock?: UnlockHint & { title: string; viaTitle?: string; notebook?: string; topic?: string }
 }
 
 export type QueueAction = { kind: 'start'; id: string } | { kind: 'pause'; id: string } | { kind: 'up'; id: string } | { kind: 'cap'; cap: number }
