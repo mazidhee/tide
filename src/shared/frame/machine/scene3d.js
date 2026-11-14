@@ -178,6 +178,14 @@
         any = true;
       });
       if (!any) return null;
+      // Never closer than about a third of the whole scene: a small subject keeps its surroundings
+      var all = new T.Box3();
+      parts.forEach(function (p) { if (byId[p.id] && byId[p.id].mesh.visible) all.expandByObject(byId[p.id].mesh); });
+      custom.forEach(function (c) { if (c.obj.visible) all.expandByObject(c.obj); });
+      if (!all.isEmpty()) {
+        var least = all.getSize(new T.Vector3()).length() * 0.32, size = box.getSize(new T.Vector3()).length();
+        if (size < least) box.expandByScalar((least - size) / 3.4);
+      }
       var center = box.getCenter(new T.Vector3());
       var dir = new T.Vector3().fromArray(from || [0.55, 0.85, 1]).normalize();
       // Move the camera along its direction until the box's corners fill about 85% of the view
