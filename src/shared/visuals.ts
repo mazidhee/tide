@@ -489,7 +489,7 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
 /** The whole document the frame is served: Tide's base look, the theme, the bootstrap, then the visual */
 export function frameDocument(code: string, theme: VisualTheme | null): string {
   // The visual's text goes in the body as written: it can't reach outside the frame whatever it holds
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${BASE_CSS}</style><style id="tide-theme">${themeCss(theme)}</style><script>${FRAME_BOOTSTRAP}</script><script src="/lib/tide-math.js"></script></head><body>\n${code}\n</body></html>`
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${BASE_CSS}</style><style id="tide-theme">${themeCss(theme)}</style><script>${FRAME_BOOTSTRAP}</script><script src="/lib/tide-math.js"></script><script src="/lib/tide-machine.js"></script></head><body>\n${code}\n</body></html>`
 }
 
 // base64url of UTF-8, both ways (the frame's code travels in its URL, so its document needs no state in main)
