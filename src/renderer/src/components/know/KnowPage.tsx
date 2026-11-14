@@ -4,6 +4,7 @@ import { KnowSubjects, type Actions } from './KnowSubjects'
 import { KnowTimeline } from './KnowTimeline'
 import { KnowTeaching } from './KnowTeaching'
 import { KnowModel } from './KnowModel'
+import { LadderLink } from '../LadderView'
 
 /**
  * What you know, in the new design: one sentence carrying the numbers, then either view, by
@@ -62,6 +63,7 @@ export function KnowPage({ data, areaClass, actions }: { data: KnowledgeView; ar
               </button>
             ))}
           </div>
+          <LadderLink known={data} className="kp-ladder" />
         </div>
         {mode !== 'teaching' && mode !== 'model' && (
           <div className="td-glance kp-glance" aria-label="Your topics">

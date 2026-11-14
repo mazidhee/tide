@@ -1,44 +1,75 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { ChatScope, ExamOptions, Mastery, NoteMeta, SessionMode } from '@shared/types'
 import type { SessionSetup } from '@shared/session'
+import type { ProfessorPose } from '@shared/professorArt'
 import { fileTitle, useApp } from '../state'
-import { Icon, type IconName } from './Icon'
-import { PillSegment, PromptBox } from './PromptBox'
+import { Icon } from './Icon'
 import { openingRequest } from '../lib/openingRequest'
-import { PixelScene } from './PixelScene'
-import { WorkshopShelf } from './WorkshopView'
-import { ProjectsShelf } from './ideas/ProjectsShelf'
-import { CourseShelf } from './CoursesView'
-import { ToExplore } from './ExploreLater'
-import { ReadyCard } from './ReadyCard'
+import { readyCounts } from './ReadyCard'
 import { startPrepared, useReadyLesson } from '../lib/prep'
-import { LadderShelf } from './LadderView'
-import { NorthStarGlance } from './NorthStarView'
-import { looseRoadmaps } from '@shared/sidebarTree'
-import { outlinesChanged, useOutlines } from '../lib/outlines'
+import { PixelProf } from './learn/PixelProf'
+import { WAY_ART, type WayId } from './learn/WayArt'
+import { LearnShelf, LEVEL_LABEL } from './learn/LearnShelf'
 import '../styles/comprehension.css'
+import '../styles/learn.css'
+
+export { LEVEL_LABEL }
 
 type LearnMode = SessionMode | 'exam' | 'mixed' | 'comprehension'
 
-const MODES: { id: LearnMode; label: string; icon: IconName; description: string }[] = [
-  { id: 'teach', label: 'Teach', icon: 'tutor', description: 'Probes what you know, plans a path, teaches step by step' },
-  { id: 'quiz', label: 'Quiz', icon: 'quiz', description: 'Adaptive questions; misses become flashcards' },
-  { id: 'mixed', label: 'Mixed', icon: 'refresh', description: 'Questions mixed across topics and notebooks, the strongest way to practise' },
-  { id: 'interview', label: 'Interview', icon: 'terminal', description: 'Approach, code, follow-ups and a scorecard' },
-  { id: 'review', label: 'Review', icon: 'edit', description: 'Comments beside your writing and challenges its thinking; never rewrites it' },
-  { id: 'exam', label: 'Exam', icon: 'timer', description: 'A timed paper; type or photograph answers' },
-  { id: 'comprehension', label: 'Comprehension', icon: 'book', description: 'Read a passage of your book once, put it away, and say what it says; checked against its exact words' }
+/** The seven ways in, each with what the tutor is doing in it and what he says */
+const WAYS: { id: WayId & LearnMode; name: string; start: string; pose: ProfessorPose; say: string; desc: string }[] = [
+  { id: 'teach', name: 'Teach me', start: 'Start the lesson', pose: 'board', say: 'What does a switch do?', desc: 'Asks what you already know, then teaches step by step, with visuals.' },
+  { id: 'quiz', name: 'Quiz', start: 'Start the quiz', pose: 'cards', say: 'Pick a card. Any card.', desc: 'Questions on one topic. Anything you miss becomes a flashcard.' },
+  { id: 'mixed', name: 'Mixed', start: 'Start mixed practice', pose: 'chess', say: 'Binary, then gates, then back again.', desc: 'Questions that switch topic every time. Harder, and the strongest way to practise.' },
+  { id: 'exam', name: 'Exam', start: 'Start the exam', pose: 'stopwatch', say: '45 minutes. Begin.', desc: 'A timed paper, marked at the end. Type your answers or photograph your working.' },
+  { id: 'comprehension', name: 'Comprehension', start: 'Start reading', pose: 'book', say: 'Read it once, then tell me.', desc: 'Read a passage, put it away, then say what it says. Checked against its exact words.' },
+  { id: 'review', name: 'Review my writing', start: 'Start the review', pose: 'writing', say: 'Nice line. One comma, though.', desc: 'Comments on something you wrote, pinned to your words. It never rewrites it.' },
+  { id: 'interview', name: 'Interview', start: 'Start the interview', pose: 'laptop', say: 'Walk me through your approach.', desc: 'A coding problem, your code run against tests, follow-up questions and a scorecard.' }
 ]
 
 const LANGUAGES = ['python', 'javascript', 'typescript', 'java', 'c++', 'go', 'rust']
+const DIFFICULTY = [
+  { value: 'gentle', label: 'Gentle' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'hard', label: 'Hard' }
+] as const
 
-export const LEVEL_LABEL: Record<Mastery['level'], string> = {
-  new: 'Not tested',
-  weak: 'Weak',
-  shaky: 'Shaky',
-  solid: 'Solid',
-  mastered: 'Mastered'
+/** A small segmented control: a few options side by side, one chosen */
+function Seg<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: readonly { value: T; label: string }[]; onChange(v: T): void }) {
+  return (
+    <div className="lrn-seg" role="radiogroup" aria-label={label}>
+      {options.map((o) => (
+        <button key={String(o.value)} type="button" role="radio" aria-checked={o.value === value} onClick={() => onChange(o.value)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
 }
+
+/** A select for when the options are many */
+function Choose<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: readonly { value: T; label: string }[]; onChange(v: T): void }) {
+  return (
+    <label className="lrn-select">
+      <select value={String(value)} aria-label={label} onChange={(e) => onChange((typeof value === 'number' ? Number(e.target.value) : e.target.value) as T)}>
+        {options.map((o) => (
+          <option key={String(o.value)} value={String(o.value)}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <Icon name="chevron" size={11} className="lrn-select-caret" />
+    </label>
+  )
+}
+
+const Row = ({ label, children }: { label: string; children: ReactNode }) => (
+  <div className="lrn-row">
+    <span className="lrn-row-label">{label}</span>
+    <div className="lrn-row-control">{children}</div>
+  </div>
+)
 
 export function LearnView() {
   const app = useApp()
@@ -51,9 +82,13 @@ export function LearnView() {
   const [length, setLength] = useState(8)
   const [difficulty, setDifficulty] = useState<'gentle' | 'normal' | 'hard'>('normal')
   const [language, setLanguage] = useState(() => localStorage.getItem('tide.interview.lang') ?? 'python')
+  // Mixed practice: your recent and weak topics, unless you type a list
+  const [mixList, setMixList] = useState<string | null>(null)
   const [notes, setNotes] = useState<NoteMeta[]>([])
   const [mastery, setMastery] = useState<Record<string, Mastery>>({})
   const [focused, setFocused] = useState(false)
+  // The card the pointer or keyboard is on: only its tutor moves
+  const [live, setLive] = useState<string | null>(null)
 
   useEffect(() => {
     window.tide.vault.notes().then(setNotes)
@@ -74,13 +109,13 @@ export function LearnView() {
   const suggestions = useMemo(() => {
     const q = topic.trim().toLowerCase()
     if (!q || !focused) return []
-    const nb = notebooks.filter((n) => n.name.toLowerCase().includes(q)).map((n) => ({ scope: { kind: 'folder', path: n.path } as ChatScope, label: n.name, kind: 'Notebook' }))
+    const nb = mode === 'review' ? [] : notebooks.filter((n) => n.name.toLowerCase().includes(q)).map((n) => ({ scope: { kind: 'folder', path: n.path } as ChatScope, label: n.name, kind: 'Notebook' }))
     const ns = notes
       .filter((n) => n.title.toLowerCase().includes(q))
       .slice(0, 6)
       .map((n) => ({ scope: { kind: 'note', path: n.path } as ChatScope, label: n.title, kind: n.path.endsWith('.pdf') ? 'PDF' : 'Note' }))
     return [...nb, ...ns].slice(0, 7)
-  }, [topic, focused, notes, notebooks])
+  }, [topic, focused, notes, notebooks, mode])
 
   const weak = useMemo(
     () =>
@@ -109,10 +144,11 @@ export function LearnView() {
     return picked
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weak, app.recent, notes])
+  const typedMix = (mixList ?? '').split(/[,;]/).map((x) => x.trim()).filter(Boolean)
 
   const start = (m: LearnMode = mode, scope: ChatScope = source, t: string = topic) => {
     if (m === 'mixed') {
-      const topics = t.trim() ? t.split(/[,;]/).map((x) => x.trim()).filter(Boolean) : mixTopics
+      const topics = typedMix.length ? typedMix : mixTopics
       app.setView({
         kind: 'session',
         mode: 'quiz',
@@ -161,276 +197,210 @@ export function LearnView() {
   }, [warmKey])
 
   const needsNote = mode === 'review' && source.kind !== 'note'
+  const way = WAYS.find((w) => w.id === mode)!
+  const canStart = mode === 'comprehension' ? true : mode === 'mixed' ? typedMix.length > 0 || mixTopics.length > 0 : !needsNote && (!!topic.trim() || source.kind !== 'none')
 
-  const selected = MODES.find((m) => m.id === mode)!
-  const canStart = mode === 'comprehension' ? true : mode === 'mixed' ? !!topic.trim() || mixTopics.length > 0 : !needsNote && (!!topic.trim() || source.kind !== 'none')
+  const counts = ready ? readyCounts(ready) : []
+  const countLine = counts.map((c) => (c.n !== undefined ? `${c.n} ${c.label}` : `a ${c.label.toLowerCase()}`)).join(' · ')
+
+  const topicField = (
+    <div className="lrn-topic">
+      <label className="lrn-field">
+        <Icon name="search" size={15} />
+        <input
+          value={topic}
+          onChange={(e) => {
+            setTopic(e.target.value)
+            setSource({ kind: 'none' })
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing && canStart) start()
+          }}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setTimeout(() => setFocused(false), 150)}
+          placeholder={mode === 'interview' ? 'A topic, or a LeetCode problem' : mode === 'review' ? 'Choose a note or essay' : 'A topic, note, notebook or PDF'}
+          aria-label={mode === 'review' ? 'Piece' : 'Topic'}
+        />
+        {source.kind !== 'none' && (
+          <span className="lrn-source">
+            <Icon name={source.kind === 'folder' ? 'folder' : source.kind === 'note' && /\.pdf$/i.test(source.path) ? 'pdf' : 'note'} size={12} />
+            {source.kind === 'folder' ? 'Notebook' : source.kind === 'note' && /\.pdf$/i.test(source.path) ? 'PDF' : 'Note'}
+          </span>
+        )}
+      </label>
+      {suggestions.length > 0 && (
+        <div className="popover learn-suggest">
+          {suggestions.map((s) => (
+            <button
+              key={s.label + s.kind}
+              className="highlight-item"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setSource(s.scope)
+                setTopic(s.label)
+                setFocused(false)
+              }}
+            >
+              <Icon name={s.kind === 'Notebook' ? 'folder' : s.kind === 'PDF' ? 'pdf' : 'note'} size={14} />
+              <span className="highlight-text">{s.label}</span>
+              <span className="muted small">{s.kind}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  const difficultyRow = (
+    <Row label="Difficulty">
+      <Seg<typeof difficulty> label="Difficulty" value={difficulty} options={DIFFICULTY} onChange={setDifficulty} />
+    </Row>
+  )
+  const questionsRow = (
+    <Row label="Questions">
+      <Seg<number> label="Questions" value={length} options={[5, 8, 12, 20].map((n) => ({ value: n, label: String(n) }))} onChange={setLength} />
+    </Row>
+  )
 
   return (
-    <div className="page learn">
-      <PixelScene place="classroom" rows={40} scale={3} className="page-scene" />
-      <div className="page-inner narrow">
-        <h1 className="page-title">Learn</h1>
+    <div className="page learn lrn">
+      <div className="page-inner lrn-inner">
+        <h1 className="lrn-title">Learn</h1>
+        <p className="lrn-sub">Start where the plan says, or choose a way.</p>
 
-        {ready && <ReadyCard prep={ready} variant="learn" onStart={() => startPrepared(app, ready)} />}
+        {ready && (
+          <section className="lrn-banner" aria-label="Up next">
+            <PixelProf pose="eureka" scale={2} className="lrn-banner-prof" />
+            <div className="lrn-banner-text">
+              <span className="lrn-label">{ready.notebook ? `Up next · ${ready.notebook}` : 'Up next'}</span>
+              <b title={ready.why}>{ready.topic}</b>
+              {countLine && <span className="lrn-label">{countLine}</span>}
+            </div>
+            <button className="lrn-btn primary large" onClick={() => startPrepared(app, ready)}>
+              Start
+            </button>
+          </section>
+        )}
 
-        <div className="lrn-modes" role="radiogroup" aria-label="How">
-          {MODES.map((m) => (
-            <button key={m.id} role="radio" aria-checked={mode === m.id} className={`lrn-mode${mode === m.id ? ' on' : ''}`} onClick={() => setMode(m.id)} title={m.description}>
-              <Icon name={m.icon} size={17} />
-              <span>{m.label}</span>
+        <div className="lrn-ways" role="radiogroup" aria-label="Ways to learn">
+          {WAYS.map((w) => (
+            <button
+              key={w.id}
+              role="radio"
+              aria-checked={mode === w.id}
+              className={`lrn-card${w.id === 'teach' ? ' wide' : ''}`}
+              onClick={() => setMode(w.id)}
+              onMouseEnter={() => setLive(w.id)}
+              onMouseLeave={() => setLive((l) => (l === w.id ? null : l))}
+              onFocus={(e) => e.currentTarget.matches(':focus-visible') && setLive(w.id)}
+              onBlur={() => setLive((l) => (l === w.id ? null : l))}
+            >
+              <span className={`lrn-stage${live === w.id ? ' live' : ''}`} aria-hidden="true">
+                <span className="lrn-art">{WAY_ART[w.id]}</span>
+                <span className="lrn-prof">
+                  {live === w.id && <PixelProf pose={w.pose} scale={4} playing />}
+                  <span className="lrn-say">{w.say}</span>
+                </span>
+              </span>
+              <span className="lrn-card-text">
+                <b>{w.name}</b>
+                <span>{w.desc}</span>
+              </span>
             </button>
           ))}
         </div>
 
-        {mode === 'comprehension' ? (
-          <div className="learn-topic lrn-comp">
-            <span className="lrn-comp-text">The next passage of the book you’re reading, or one you select in the reader</span>
-            <button className="btn small primary" onClick={() => start('comprehension')}>
-              Open
+        <section className="lrn-sheet" aria-label={`${way.name}: settings`}>
+          {mode === 'comprehension' ? (
+            <Row label="From">
+              <span className="lrn-plain">The next passage of the book you’re reading, or one you select in the reader</span>
+            </Row>
+          ) : mode === 'mixed' ? (
+            <Row label="Topics">
+              {mixList === null ? (
+                <span className="lrn-plain">
+                  {mixTopics.length ? mixTopics.slice(0, 4).join(', ') + (mixTopics.length > 4 ? '…' : '') : 'Your recent and weak topics'}
+                  <button className="lrn-btn small ghost" onClick={() => setMixList('')}>
+                    Change
+                  </button>
+                </span>
+              ) : (
+                <label className="lrn-field">
+                  <input
+                    autoFocus
+                    value={mixList}
+                    onChange={(e) => setMixList(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.nativeEvent.isComposing && canStart) start()
+                      if (e.key === 'Escape') setMixList(null)
+                    }}
+                    placeholder="Topics to mix, separated by commas"
+                    aria-label="Topics to mix"
+                  />
+                  <button className="lrn-btn small ghost" onClick={() => setMixList(null)}>
+                    Use my recent topics
+                  </button>
+                </label>
+              )}
+            </Row>
+          ) : (
+            <Row label={mode === 'review' ? 'Piece' : 'Topic'}>{topicField}</Row>
+          )}
+
+          {mode === 'quiz' && (
+            <>
+              {questionsRow}
+              {difficultyRow}
+            </>
+          )}
+          {mode === 'mixed' && (
+            <>
+              {questionsRow}
+              {difficultyRow}
+            </>
+          )}
+          {mode === 'exam' && (
+            <>
+              <Row label="Questions">
+                <Seg label="Questions" value={exam.questions} options={[2, 3, 4, 6, 8].map((n) => ({ value: n, label: String(n) }))} onChange={(v) => setExam({ ...exam, questions: v })} />
+              </Row>
+              <Row label="Time">
+                <Choose<number> label="Time" value={exam.minutes} options={[{ value: 0, label: 'No limit' }, ...[20, 30, 45, 60, 90, 120, 180].map((n) => ({ value: n, label: `${n} minutes` }))]} onChange={(v) => setExam({ ...exam, minutes: v })} />
+              </Row>
+              <Row label="Style">
+                <Seg
+                  label="Style"
+                  value={exam.style}
+                  options={[
+                    { value: 'university', label: 'University paper' },
+                    { value: 'problems', label: 'Problem sheet' },
+                    { value: 'short', label: 'Short answers' }
+                  ]}
+                  onChange={(v) => setExam({ ...exam, style: v as ExamOptions['style'] })}
+                />
+              </Row>
+              {difficultyRow}
+            </>
+          )}
+          {mode === 'interview' && (
+            <>
+              <Row label="Language">
+                <Choose<string> label="Language" value={language} options={LANGUAGES.map((l) => ({ value: l, label: l }))} onChange={setLanguage} />
+              </Row>
+              {difficultyRow}
+            </>
+          )}
+
+          <div className="lrn-go">
+            {needsNote && <span className="lrn-label">Choose a note to review</span>}
+            <button className="lrn-btn primary" disabled={!canStart} onClick={() => start()}>
+              {way.start}
             </button>
           </div>
-        ) : (
-        <div className="learn-topic">
-          <PromptBox
-            value={topic}
-            onChange={(v: string) => {
-              setTopic(v)
-              setSource({ kind: 'none' })
-            }}
-            onSubmit={() => start()}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setTimeout(() => setFocused(false), 150)}
-            ready={canStart}
-            label="Topic"
-            placeholder={mode === 'mixed'
-                ? mixTopics.length
-                  ? mixTopics.slice(0, 3).join(', ') + (mixTopics.length > 3 ? '…' : '')
-                  : 'Topics to mix, separated by commas'
-                : mode === 'interview'
-                  ? 'A topic, or a LeetCode problem'
-                  : mode === 'review'
-                    ? 'Pick a note to review'
-                    : 'What do you want to learn?'}
-            tools={
-              <>
-                {source.kind !== 'none' && (
-                  <span className="learn-source">
-                    <Icon name={source.kind === 'folder' ? 'folder' : source.kind === 'note' && /\.pdf$/i.test(source.path) ? 'pdf' : 'note'} size={13} />
-                    {source.kind === 'folder' ? 'Notebook' : 'Note'}
-                  </span>
-                )}
-                {(mode === 'quiz' || mode === 'mixed') && (
-                  <label className="pill select">
-                    <select value={length} onChange={(e) => setLength(Number(e.target.value))} aria-label="Questions">
-                      {[5, 8, 12, 20].map((n) => (
-                        <option key={n} value={n}>
-                          {n} questions
-                        </option>
-                      ))}
-                    </select>
-                    <Icon name="chevron" size={11} className="pill-caret" />
-                  </label>
-                )}
-                {mode === 'interview' && (
-                  <label className="pill select">
-                    <select value={language} onChange={(e) => setLanguage(e.target.value)} aria-label="Language">
-                      {LANGUAGES.map((l) => (
-                        <option key={l}>{l}</option>
-                      ))}
-                    </select>
-                    <Icon name="chevron" size={11} className="pill-caret" />
-                  </label>
-                )}
-                {mode === 'exam' && (
-                  <>
-                    <label className="pill select">
-                      <select value={exam.questions} onChange={(e) => setExam({ ...exam, questions: Number(e.target.value) })} aria-label="Questions">
-                        {[2, 3, 4, 6, 8].map((n) => (
-                          <option key={n} value={n}>
-                            {n} questions
-                          </option>
-                        ))}
-                      </select>
-                      <Icon name="chevron" size={11} className="pill-caret" />
-                    </label>
-                    <label className="pill select">
-                      <select value={exam.minutes} onChange={(e) => setExam({ ...exam, minutes: Number(e.target.value) })} aria-label="Time">
-                        <option value={0}>No limit</option>
-                        {[20, 30, 45, 60, 90, 120, 180].map((n) => (
-                          <option key={n} value={n}>
-                            {n} min
-                          </option>
-                        ))}
-                      </select>
-                      <Icon name="chevron" size={11} className="pill-caret" />
-                    </label>
-                    <label className="pill select">
-                      <select value={exam.style} onChange={(e) => setExam({ ...exam, style: e.target.value as ExamOptions['style'] })} aria-label="Style">
-                        <option value="university">University paper</option>
-                        <option value="problems">Problem sheet</option>
-                        <option value="short">Short answers</option>
-                      </select>
-                      <Icon name="chevron" size={11} className="pill-caret" />
-                    </label>
-                  </>
-                )}
-                {(mode === 'quiz' || mode === 'mixed' || mode === 'interview' || mode === 'exam') && (
-                  <PillSegment
-                    label="Difficulty"
-                    value={difficulty}
-                    onChange={(v) => setDifficulty(v as typeof difficulty)}
-                    options={[
-                      { value: 'gentle', label: 'Gentle' },
-                      { value: 'normal', label: 'Normal' },
-                      { value: 'hard', label: 'Hard' }
-                    ]}
-                  />
-                )}
-              </>
-            }
-          />
-          {suggestions.length > 0 && (
-            <div className="popover learn-suggest">
-              {suggestions.map((s) => (
-                <button
-                  key={s.label + s.kind}
-                  className="highlight-item"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    setSource(s.scope)
-                    setTopic(s.label)
-                    setFocused(false)
-                  }}
-                >
-                  <Icon name={s.kind === 'Notebook' ? 'folder' : s.kind === 'PDF' ? 'pdf' : 'note'} size={14} />
-                  <span className="highlight-text">{s.label}</span>
-                  <span className="muted small">{s.kind}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        )}
-        <p className="lrn-desc">{selected.description}</p>
+        </section>
 
-        {/* North Star: where you are on the one path (components/NorthStarView) */}
-        <NorthStarGlance />
-        {/* The maths-to-quant ladder (components/LadderView): where you are and what's next */}
-        <LadderShelf />
-        {/* Projects from an idea (components/ideas): continue one, or start one */}
-        <ProjectsShelf />
-        {/* Hook: guided projects (components/WorkshopView.tsx) */}
-        <WorkshopShelf />
-        {/* Roadmaps no notebook uses yet: drawn here, since the sidebar leaves roadmap files out */}
-        <RoadmapShelf />
-        {/* Hook: open courses from GitHub (components/CoursesView.tsx) */}
-        <CourseShelf />
-        {/* Things kept from lessons to explore later (components/ExploreLater.tsx) */}
-        <ToExplore />
-
-        {weak.length > 0 && (
-          <section className="lrn-weak">
-            <h2 className="section-title">Worth revisiting</h2>
-            <div className="lrn-weak-grid">
-              {weak.map((m) => (
-                <div key={m.path} className="lrn-weak-card">
-                  <button className="lrn-weak-title" onClick={() => app.openPath(m.path)} title={titleOf(m.path)}>
-                    {titleOf(m.path)}
-                  </button>
-                  <div className="lrn-weak-foot">
-                    <span className={`level-pill level-${m.level}`}>{LEVEL_LABEL[m.level]}</span>
-                    {m.misconceptions > 0 && <span className="muted small">{m.misconceptions} confident miss{m.misconceptions === 1 ? '' : 'es'}</span>}
-                    <span className="lrn-weak-actions">
-                      <button className="icon-btn small" title="Quiz me" onClick={() => start('quiz', { kind: 'note', path: m.path }, titleOf(m.path))}>
-                        <Icon name="quiz" size={14} />
-                      </button>
-                      <button className="icon-btn small" title="Teach me" onClick={() => start('teach', { kind: 'note', path: m.path }, titleOf(m.path))}>
-                        <Icon name="tutor" size={14} />
-                      </button>
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        <LearnShelf weak={weak} titleOf={titleOf} onStart={(m, path) => start(m, { kind: 'note', path }, titleOf(path))} />
       </div>
     </div>
-  )
-}
-
-/** Roadmaps in the Roadmaps folder that no notebook has as its outline, with their progress */
-function RoadmapShelf() {
-  const app = useApp()
-  const outlines = useOutlines(app.tree)
-  // After the switch to modules the old roadmaps stay on disk for Switch back; they aren't offered here
-  const [replaced, setReplaced] = useState<Set<string>>(new Set())
-  useEffect(() => {
-    window.tide.modules
-      .status()
-      .then((s) => setReplaced(new Set(s.replaced)))
-      .catch(() => {})
-  }, [app.tree])
-  const loose = useMemo(() => looseRoadmaps(app.tree, outlines).filter((f) => !replaced.has(f.path)), [app.tree, outlines, replaced])
-  const [counts, setCounts] = useState<Record<string, { done: number; total: number }>>({})
-  useEffect(() => {
-    let live = true
-    for (const f of loose)
-      window.tide.vault
-        .read(f.path)
-        .then((md: string) => {
-          const done = (md.match(/^\s*[-*] \[[xX]\]/gm) ?? []).length
-          const total = done + (md.match(/^\s*[-*] \[ \]/gm) ?? []).length
-          if (live) setCounts((c) => ({ ...c, [f.path]: { done, total } }))
-        })
-        .catch(() => {})
-    return () => {
-      live = false
-    }
-  }, [loose])
-  if (!loose.length) return null
-  // A roadmap becomes a notebook's outline: the notebook draws it with its progress and topics
-  const adopt = async (path: string) => {
-    try {
-      const folder = await window.tide.vault.createFolder('', fileTitle(path.split('/').pop()!))
-      await window.tide.learn.updateNotebook(folder, { outline: path })
-      await app.refreshTree()
-      outlinesChanged()
-      app.setView({ kind: 'notebook', path: folder, tab: 'outline' })
-    } catch (e) {
-      app.toast((e as Error).message, { tone: 'error' })
-    }
-  }
-  return (
-    <section className="ws-shelf rm-shelf">
-      <div className="ws-shelf-head">
-        <h2 className="section-title">Roadmaps</h2>
-      </div>
-      <ul className="ws-shelf-rows">
-        {loose.map((f) => {
-          const c = counts[f.path]
-          return (
-            <li key={f.path} className="rm-shelf-row">
-              <button className="ws-shelf-row" onClick={() => app.openPath(f.path)}>
-                <span className="ws-shelf-title">{fileTitle(f.name)}</span>
-                {c && c.total > 0 && (
-                  <span className="rm-shelf-progress">
-                    <span className="gl-meter-bar">
-                      <i style={{ width: `${Math.round((c.done / c.total) * 100)}%` }} />
-                    </span>
-                    <span className="muted small">
-                      {c.done} of {c.total} topics
-                    </span>
-                  </span>
-                )}
-              </button>
-              <button className="tool-btn" onClick={() => adopt(f.path)} title="Give this roadmap a notebook of its own, where Tide draws it">
-                Make it a notebook
-              </button>
-            </li>
-          )
-        })}
-      </ul>
-    </section>
   )
 }

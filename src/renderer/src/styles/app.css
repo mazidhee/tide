@@ -9865,141 +9865,6 @@ code.cmd-chip:hover {
   margin-top: 8px;
 }
 
-/* ---------- Learn ---------- */
-
-.lrn-modes {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
-  margin: 4px 0 14px;
-}
-
-.lrn-mode {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 12px 4px 10px;
-  border-radius: var(--radius-m);
-  border: 1px solid var(--line);
-  font-size: 13px;
-  color: var(--ink-muted);
-}
-
-.lrn-mode:hover {
-  color: var(--ink);
-  background: var(--bg-hover);
-}
-
-.lrn-mode.on {
-  color: var(--ink);
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-}
-
-.lrn-mode.on svg {
-  color: var(--accent);
-}
-
-.lrn-bar {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 8px 8px 18px;
-  border-radius: 18px;
-  border: 1px solid var(--line-strong);
-  background: var(--bg-raised);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 24px -12px rgba(0, 0, 0, 0.25);
-}
-
-.lrn-bar input,
-.lrn-bar input:focus {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  padding: 8px 0;
-  background: transparent;
-  box-shadow: none;
-  font-size: 17px;
-}
-
-.lrn-go {
-  width: 36px;
-  height: 36px;
-}
-
-.lrn-options {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  min-height: 30px;
-  margin: 12px 4px 0;
-}
-
-.lrn-desc {
-  margin-right: auto;
-  font-size: 13px;
-  color: var(--ink-muted);
-}
-
-.lrn-difficulty {
-  font-size: 12.5px;
-}
-
-.lrn-weak {
-  margin-top: 40px;
-}
-
-.lrn-weak-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 10px;
-}
-
-.lrn-weak-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 12px 10px 14px;
-  border-radius: var(--radius-m);
-  border: 1px solid var(--line);
-  background: var(--bg-raised);
-  min-width: 0;
-}
-
-.lrn-weak-title {
-  text-align: left;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--ink);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.lrn-weak-title:hover {
-  color: var(--accent);
-}
-
-.lrn-weak-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.lrn-weak-actions {
-  display: flex;
-  margin-left: auto;
-}
-
-@container (max-width: 720px) {
-  .lrn-modes {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
 /* ---------- Review ---------- */
 
 .rv-head {
@@ -14680,6 +14545,10 @@ img.lightbox-item {
 
 .set-input.tiny {
   width: 72px;
+}
+
+.set-input.set-time {
+  width: 124px;
 }
 
 .set-select {

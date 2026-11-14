@@ -6,6 +6,8 @@ import { useApp } from '../state'
 import { Icon } from './Icon'
 import { OutlineView } from './OutlineView'
 import { TrackView } from './TrackView'
+import { LadderLink } from './LadderView'
+import { isMathsArea } from '@shared/mathsLadder'
 import '../styles/modules.css'
 
 /**
@@ -158,6 +160,13 @@ export function ModulesView({ notebook, path, notes, mastery }: { notebook: stri
           </button>
         </div>
       </header>
+
+      {/* The maths ladder, from the Mathematics track (components/LadderView) */}
+      {(isMathsArea(notebook) || isMathsArea(data.track.title) || isMathsArea(data.track.id)) && (
+        <div className="md-ladder">
+          <LadderLink />
+        </div>
+      )}
 
       {data.issues.length > 0 && (
         <p className="md-issue" title={data.issues.map((i) => (i.kind === 'missing' ? `${i.module} ${i.via} ${i.ref}, which no file has` : i.kind === 'cycle' ? `A loop: ${i.modules.join(' → ')}` : i.kind === 'duplicate-topic' ? `“${i.topic}” is in ${i.modules.join(' and ')}` : `${i.module} twice`)).join('\n')}>

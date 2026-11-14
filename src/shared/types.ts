@@ -93,6 +93,16 @@ export interface Settings {
   /** Folder inside the vault where saved links, PDFs, videos and docs go */
   libraryFolder: string
   theme: ThemeId
+  /** With theme 'system' (shared/themeSchedule): the day theme (Sepia unless chosen) */
+  themeDay?: ThemeId
+  /** With theme 'system': the night theme (Midnight unless chosen) */
+  themeNight?: ThemeId
+  /** With theme 'system': switch at set times (the default) or with macOS's appearance */
+  themeSwitch?: 'time' | 'macos'
+  /** "HH:MM" day begins, 07:00 unless set */
+  themeDayAt?: string
+  /** "HH:MM" night begins, 19:00 unless set */
+  themeNightAt?: string
   /** Which of Tide's two designs to draw (shared/design.ts): 'tide', the default, or the earlier 'classic' */
   design?: import('./design').DesignId
   /** Overrides the theme's accent colour, e.g. '#4f7cff'; null keeps the theme's own */

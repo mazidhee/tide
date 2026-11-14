@@ -1,4 +1,5 @@
 import { SIDEBAR_ITEMS } from '@shared/sidebar'
+import { DAY_AT, DAY_THEME, NIGHT_AT, NIGHT_THEME } from '@shared/themeSchedule'
 import { breakSettings, type BreakSettings, type Strictness } from '@shared/breaks'
 import { rhythmLine } from '@shared/breakPlanner'
 import { prepSettings, type PrepSettings, type PrepStatus } from '@shared/lessonPrep'
@@ -29,7 +30,7 @@ import { teardownTopic } from '@shared/metabaseData'
 import type { EditorChoice, InstalledEditor } from '@shared/editor'
 
 const THEMES: { id: ThemeId; name: string; bg: string; side: string; ink: string; accent: string }[] = [
-  { id: 'system', name: 'Match system', bg: 'linear-gradient(90deg, #f7f7f5 50%, #1b1b1b 50%)', side: 'rgba(0, 0, 0, 0.06)', ink: '#8a8d93', accent: '#2f9a88' },
+  { id: 'system', name: 'Day and night', bg: 'linear-gradient(90deg, #f3ecdf 50%, #000000 50%)', side: 'rgba(0, 0, 0, 0.06)', ink: '#8a8d93', accent: '#a99bff' },
   { id: 'light', name: 'Light', bg: '#f7f7f5', side: '#efefec', ink: '#1d1f23', accent: '#0e7c6b' },
   { id: 'sepia', name: 'Sepia', bg: '#f3ecdf', side: '#ebe2d2', ink: '#3a2f22', accent: '#8a5a1f' },
   { id: 'graphite', name: 'Graphite', bg: '#1b1b1b', side: '#171717', ink: '#e3e3e3', accent: '#4fb8a6' },
@@ -40,7 +41,7 @@ const THEMES: { id: ThemeId; name: string; bg: string; side: string; ink: string
 
 /** The same themes as the new design draws them (styles/tide/tokens.css) */
 const TIDE_THEMES: typeof THEMES = [
-  { id: 'system', name: 'Match system', bg: 'linear-gradient(90deg, #ffffff 50%, #1a1b1e 50%)', side: 'rgba(120, 130, 150, 0.16)', ink: '#8d919a', accent: '#4a86d6' },
+  { id: 'system', name: 'Day and night', bg: 'linear-gradient(90deg, #f6efe2 50%, #000000 50%)', side: 'rgba(120, 130, 150, 0.16)', ink: '#8d919a', accent: '#8cbcf7' },
   { id: 'light', name: 'Light', bg: '#ffffff', side: '#eff3f8', ink: '#121a26', accent: '#1257b8' },
   { id: 'sepia', name: 'Sepia', bg: '#f6efe2', side: '#ede4d3', ink: '#33291d', accent: '#1d4f9c' },
   { id: 'dark', name: 'Dark', bg: '#141a23', side: '#0f141c', ink: '#e7eaf0', accent: '#7db5f5' },
@@ -638,6 +639,45 @@ function WritingSettings() {
   )
 }
 
+/** Theme "Day and night" (shared/themeSchedule): which theme by day, which at night, and when it switches */
+function DayNight({ themes }: { themes: { id: ThemeId; name: string }[] }) {
+  const app = useApp()
+  const s = app.settings
+  const how = s.themeSwitch ?? 'time'
+  const options = themes.map((t) => ({ value: t.id, label: t.name }))
+  const time = (v: string) => /^\d{1,2}:\d{2}$/.test(v)
+  return (
+    <>
+      <Row label="By day">
+        <Select label="By day" value={s.themeDay && s.themeDay !== 'system' ? s.themeDay : DAY_THEME} onChange={(v) => app.updateSettings({ themeDay: v })} options={options} />
+      </Row>
+      <Row label="At night">
+        <Select label="At night" value={s.themeNight && s.themeNight !== 'system' ? s.themeNight : NIGHT_THEME} onChange={(v) => app.updateSettings({ themeNight: v })} options={options} />
+      </Row>
+      <Row label="Switch" hint={how === 'macos' ? 'With macOS’s light and dark appearance' : undefined}>
+        <PillSegment
+          label="Switch"
+          value={how}
+          onChange={(v) => app.updateSettings({ themeSwitch: v as 'time' | 'macos' })}
+          options={[
+            { value: 'time', label: 'By time' },
+            { value: 'macos', label: 'Follow macOS' }
+          ]}
+        />
+      </Row>
+      {how === 'time' && (
+        <Row label="Day from">
+          <span className="set-inline">
+            <input className="set-input set-time" type="time" aria-label="Day begins" value={s.themeDayAt ?? DAY_AT} onChange={(e) => time(e.target.value) && app.updateSettings({ themeDayAt: e.target.value })} />
+            <span className="muted">night from</span>
+            <input className="set-input set-time" type="time" aria-label="Night begins" value={s.themeNightAt ?? NIGHT_AT} onChange={(e) => time(e.target.value) && app.updateSettings({ themeNightAt: e.target.value })} />
+          </span>
+        </Row>
+      )}
+    </>
+  )
+}
+
 function AppearanceSection() {
   const app = useApp()
   const { settings } = app
@@ -669,6 +709,7 @@ function AppearanceSection() {
             ))}
           </div>
         </div>
+        {settings.theme === 'system' && <DayNight themes={(tide ? TIDE_THEMES : THEMES).filter((t) => t.id !== 'system')} />}
         <Row label="Accent colour" hint={settings.accent ? ACCENTS.find((a) => a.hex === settings.accent)?.name ?? 'Custom' : "The theme's own"}>
           <div className="accent-row" role="radiogroup" aria-label="Accent colour">
             <button role="radio" aria-checked={!settings.accent} className={`accent-swatch theme-default${!settings.accent ? ' on' : ''}`} onClick={() => app.updateSettings({ accent: null })} title="The theme's own">

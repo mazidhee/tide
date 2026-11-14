@@ -6,7 +6,7 @@ import { Professor } from './Professor'
 type Count = { key: string; n?: number; label: string; title?: string }
 
 /** What was got ready, as counts: "3 warm-up · 15 recall · 4 exercises · Reading"; names go in the tooltip */
-function readyCounts(prep: PreparedLesson): Count[] {
+export function readyCounts(prep: PreparedLesson): Count[] {
   const out: Count[] = []
   if (prep.warmup?.cards.length) out.push({ key: 'warm', n: prep.warmup.cards.length, label: 'warm-up' })
   const fading = prep.due.onTopic.length + prep.due.fading.length

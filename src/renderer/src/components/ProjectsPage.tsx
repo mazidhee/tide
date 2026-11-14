@@ -4,6 +4,8 @@ import { AI_TRACK, MAX_CAP, type ProjectsPageView, type QueueAction, type Sugges
 import { useApp } from '../state'
 import { Icon } from './Icon'
 import { IdeaSheet } from './ideas/IdeaSheet'
+import { ProjectsShelf } from './ideas/ProjectsShelf'
+import { WorkshopShelf } from './WorkshopView'
 import '../styles/projectQueue.css'
 
 /**
@@ -74,7 +76,7 @@ export function ProjectsPage() {
   const view = useMemo(() => data && { building: data.building.filter(match), upNext: data.upNext.filter(match), later: data.later.filter(match), built: data.built.filter(match) }, [data, match])
 
   if (data === undefined) return <div className="page" />
-  if (!data || !view) return <div className="page"><div className="page-inner"><h1 className="page-title">Projects</h1><p className="muted">Couldn’t read Roadmaps/Projects.</p></div></div>
+  if (!data || !view) return <div className="page"><div className="page-inner"><h1 className="page-title">Projects</h1><p className="muted">Couldn’t read Roadmaps/Projects.</p><ProjectsShelf /><WorkshopShelf /></div></div>
 
   const full = data.building.length >= data.cap
   const paused = new Set(data.paused)
@@ -266,6 +268,13 @@ export function ProjectsPage() {
             Built: {view.built.map((p) => p.title).join(', ')}
           </p>
         )}
+
+        {/* Projects from an idea, and the next tier to plan (components/ideas); moved here from Learn */}
+        <div className="pq-shelves">
+          <ProjectsShelf />
+          {/* Guided projects built in stages against tests (components/WorkshopView) */}
+          <WorkshopShelf />
+        </div>
       </div>
 
       {look && <Look p={look} titles={titles} onClose={() => setLook(null)} />}

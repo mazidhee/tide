@@ -412,3 +412,7 @@
   box-shadow: var(--focus-ring);
   border-radius: 3px;
 }
+
+.track-ladder {
+  margin: 0 0 12px;
+}

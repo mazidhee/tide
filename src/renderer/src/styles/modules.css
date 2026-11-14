@@ -478,3 +478,7 @@
 .md-project.is-link .md-project-go {
   color: var(--ink-muted);
 }
+
+.md-ladder {
+  margin: 4px 0 14px;
+}
