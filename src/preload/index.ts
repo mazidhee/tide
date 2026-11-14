@@ -442,7 +442,11 @@ const api: TideApi = {
     removeFolders: invoke('modules:removeFolders'),
     switchBack: invoke('modules:switchBack'),
     projects: invoke('modules:projects'),
-    startProject: invoke('modules:startProject')
+    startProject: invoke('modules:startProject'),
+    page: invoke('modules:page'),
+    queue: invoke('modules:queue'),
+    suggest: invoke('modules:suggest'),
+    addProject: invoke('modules:addProject')
   },
   northStar: {
     view: invoke('northStar:view'),

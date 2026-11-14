@@ -213,7 +213,7 @@ export interface TracksStore {
   /** Mixed reviews taken, by week (yyyy-mm-dd of the Monday) */
   mixed?: Record<string, number>
   /** Modules (shared/modules): the learner's "I'm there" on a module's gate. Part gates are kept in `tracks` as module:<id> */
-  modules?: { there: Record<string, { at: number; note?: string }>; /** Vault projects (Roadmaps/Projects) set up in Projects: their notebooks */ projects?: Record<string, { notebook: string; at: number }> }
+  modules?: { there: Record<string, { at: number; note?: string }>; /** Vault projects (Roadmaps/Projects) set up in Projects: their notebooks */ projects?: Record<string, { notebook: string; at: number }>; /** The project queue (shared/projectQueue): what's being built, up next, paused, and the cap */ queue?: import('./projectQueue').QueueState }
 }
 
 export const EMPTY_TRACKS: TracksStore = { version: 1, tracks: {} }
