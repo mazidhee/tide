@@ -3,7 +3,7 @@
  * learner's own tag on those headings (CORE, LATER, OPTIONAL…), and whether it is a project
  * (a capstone) rather than something to be taught.
  */
-import { parseOutline, splitSource, topicTitle } from './outline'
+import { parseOutline, splitSource, stripTasks, topicTitle } from './outline'
 
 export type SectionClass = 'core' | 'supporting' | 'elective' | 'enrichment' | 'skip'
 
@@ -103,7 +103,7 @@ export function roadmapTopics(notebook: string, md: string): RoadmapTopic[] {
     const base = `${sectionId}::${norm(title.replace(/\*\*/g, ''))}`
     const n = seen.get(base) ?? 0
     seen.set(base, n + 1)
-    const source = splitSource(l.text).source
+    const source = splitSource(stripTasks(l.text)).source
     out.push({
       id: n ? `${base}#${n + 1}` : base,
       notebook,

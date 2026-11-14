@@ -63,6 +63,13 @@ const STATS_WORDS = /\b(statistic\w*|estimat\w*|regression|least squares|confide
 export function rungOf(c: Pick<ConceptState, 'name' | 'area' | 'section'>): MathsArea | null {
   for (const [re, area] of OWN) if (re.test(c.name)) return area
   const section = c.section ?? ''
+  // A quant or finance notebook is mostly finance: its chapters ("Derivatives", "The Three Financial
+  // Statements") aren't maths chapters, and its name doesn't make "the accounting equation" algebra.
+  // Its topics are on the ladder only when their own words are maths
+  if (FINANCE_AREA.test(c.area) && !/math/i.test(c.area)) {
+    const own = mathsMode(c.name)
+    return own.on ? (own.area ?? mathsArea(c.name)) : null
+  }
   if (section && isMathsArea(c.area)) {
     for (const [re, to] of CHAPTERS) {
       if (!re.test(section)) continue
@@ -74,6 +81,9 @@ export function rungOf(c: Pick<ConceptState, 'name' | 'area' | 'section'>): Math
   const mode = mathsMode(c.name, c.area || undefined)
   return mode.on ? (mode.area ?? mathsArea(c.name)) : null
 }
+
+/** A notebook about finance, quant or money, though its name may say "quant" ("Quant and Finance") */
+const FINANCE_AREA = /financ\w*|quant\w*|trading|banking|payments|accounting|econom\w*/i
 
 /** A notebook that holds a maths roadmap */
 export const isMathsArea = (area: string) => /(^|[\s/_-])(rm[_ -]?math\w*|maths?|mathematics|statistics|probability|quant\w*)($|[\s/_.-])/i.test(area)

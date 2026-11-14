@@ -262,7 +262,16 @@ export interface TopicCandidate {
   why?: string
   /** Learned before and rusty (a placement check said so): a short refresher, not a lesson */
   refresh?: boolean
+  /** The module it belongs to, by title, when the notebook is a track of modules (shared/modules) */
+  module?: string
 }
+
+/** Where a next topic comes from, said the way the course reads now: its module, else its notebook and section */
+export const nextLine = (notebook: string, t: { module?: string; section?: string }): string =>
+  `Next · ${t.module || (t.section && t.section !== notebook ? `${notebook}, ${t.section}` : notebook)}`
+
+/** A roadmap topic's module title, when it is a module's (shared/modules puts the title first in its path) */
+export const moduleTitleOf = (t: Pick<RoadmapTopic, 'module' | 'path'>): string | undefined => (t.module ? t.path[0] : undefined)
 
 /** The next unfinished topics in a roadmap, in order, with the section each sits in (projects are practised, not taught) */
 export function nextTopics(notebook: string, outlineMd: string, n = 12): TopicCandidate[] {
@@ -274,7 +283,7 @@ export function nextTopicsOf(notebook: string, topics: RoadmapTopic[], n = 12): 
   return topics
     .filter((t) => !t.checked && !t.project && !/^(Exam|Project|Practice):/i.test(t.title))
     .slice(0, n)
-    .map((t) => ({ notebook, topic: t.title, section: t.section, topicId: t.id, ...(t.source ? { source: t.source } : {}) }))
+    .map((t) => ({ notebook, topic: t.title, section: t.section, topicId: t.id, ...(t.source ? { source: t.source } : {}), ...(moduleTitleOf(t) ? { module: moduleTitleOf(t) } : {}) }))
 }
 
 /** Monday of the week containing the date (yyyy-mm-dd) */
