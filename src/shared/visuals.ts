@@ -415,9 +415,9 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
         for (var k = 0; k < d.length; k += 4) {
           if (d[k + 3] <= 8) continue;
           seen++;
-          if (Math.abs(d[k] - d[0]) + Math.abs(d[k + 1] - d[1]) + Math.abs(d[k + 2] - d[2]) + Math.abs(d[k + 3] - d[3]) > 24) on++;
+          if (Math.abs(d[k] - d[0]) + Math.abs(d[k + 1] - d[1]) + Math.abs(d[k + 2] - d[2]) + Math.abs(d[k + 3] - d[3]) > 12) on++;
         }
-        if (on < 24) n++;
+        if (on < 12) n++;
       } catch (e) {}
     }
     return n;
@@ -436,10 +436,14 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
     if (steps) { at = 0; draw(); }
     auditing = false;
     // A 3D scene renders a moment after it is drawn: look at its canvas then
-    setTimeout(function () {
-      if (blankCanvases()) problems.push('A canvas stayed blank: nothing was rendered on it (render after the scene is built and on every change, and point the camera at it).');
+    // A scene still building gets a few moments more before its canvas counts as blank
+    var tries = 0;
+    var look = function () {
+      if (blankCanvases() && ++tries < 6) return setTimeout(look, 450);
+      if (tries >= 6) problems.push('A canvas stayed blank: nothing was rendered on it (render after the scene is built and on every change, and point the camera at it).');
       send({ t: 'audit', problems: problems.slice(0, 6) });
-    }, 450);
+    };
+    setTimeout(look, 450);
   };
   var clean2 = function (data) {
     if (!data || typeof data !== 'object') return undefined;

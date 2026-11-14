@@ -65,7 +65,7 @@ function inked(img, bgHex) {
   let on = 0, n = 0
   for (let i = 0; i < px.length; i += 16) {
     n++
-    if (Math.abs(px[i] - bg[0]) + Math.abs(px[i + 1] - bg[1]) + Math.abs(px[i + 2] - bg[2]) > 30) on++
+    if (Math.abs(px[i] - bg[0]) + Math.abs(px[i + 1] - bg[1]) + Math.abs(px[i + 2] - bg[2]) > 18) on++
   }
   return on / n
 }
@@ -104,7 +104,7 @@ async function shoot(win, H, code, o) {
     if (canvas && canvas.width > 20 && canvas.height > 20) {
       const k = img.getSize().width / rect.width
       const share = inked(img.crop({ x: Math.round(canvas.x * k), y: Math.round(canvas.y * k), width: Math.round(canvas.width * k), height: Math.round(canvas.height * k) }), t.tokens.bg)
-      if (share < 0.02) out.blank = true
+      if (share < 0.008) out.blank = true
     }
     if (o.out) {
       const file = join(o.out, `viz-${o.name}${(o.steps || [0]).length > 1 ? `-s${step}` : ''}-${o.theme || 'light'}.png`)

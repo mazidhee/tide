@@ -32,7 +32,7 @@ export const timing = {
   /** After ready, errors still count for this long */
   watchMs: 700,
   /** Drawing every step once, hidden, may take this long */
-  auditMs: 3000,
+  auditMs: 5000,
   /** No heartbeat for this long: the frame's main thread is stuck */
   hangMs: 3000,
   /** Out of sight this long: the frame is torn down */

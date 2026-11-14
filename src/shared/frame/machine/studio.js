@@ -141,6 +141,29 @@
     return cache.mats;
   };
 
+  /**
+   * Where the camera should be to frame an object (or a THREE.Box3) from a direction, so all of
+   * it is in view with a margin: M.fitView(THREE, camera, target, { from: [x, y, z], fill: 0.85 })
+   * → { camera: [x, y, z], target: [x, y, z] }, for a glide or a jump.
+   */
+  M.fitView = function (T, camera, target, o) {
+    o = o || {};
+    var box = target && target.isBox3 ? target.clone() : new T.Box3().setFromObject(target);
+    var center = box.getCenter(new T.Vector3()), dir = new T.Vector3().fromArray(o.from || [0.55, 0.85, 1]).normalize();
+    var cam = camera.clone(), d = box.getSize(new T.Vector3()).length() || 4, corners = [];
+    for (var c = 0; c < 8; c++) corners.push(new T.Vector3(c & 1 ? box.max.x : box.min.x, c & 2 ? box.max.y : box.min.y, c & 4 ? box.max.z : box.min.z));
+    for (var k = 0; k < 6; k++) {
+      cam.position.copy(center).addScaledVector(dir, d);
+      cam.lookAt(center);
+      cam.updateMatrixWorld();
+      var most = 0;
+      corners.forEach(function (q) { var v = q.clone().project(cam); most = Math.max(most, Math.abs(v.x), Math.abs(v.y)); });
+      if (!isFinite(most) || most <= 0) break;
+      d *= most / (o.fill || 0.85);
+    }
+    return { camera: center.clone().addScaledVector(dir, d).toArray(), target: center.toArray() };
+  };
+
   /** A solid arrow (shaft and head) in a colour name: .set(from, to) as THREE.Vector3s */
   M.arrow3d = function (T, color, radius) {
     radius = radius || 0.05;
