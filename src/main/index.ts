@@ -18,6 +18,7 @@ import { join } from 'path'
 import { pathToFileURL } from 'url'
 import type { CompanyPrepRequest, OutlineDraftRequest, ChatRequest, ChatScope, LearningStatus, ReviewGrade, Settings, PdfHighlight, TutorThread } from '@shared/types'
 import { getSettings, updateSettings } from './settings'
+import { resolveTheme } from '@shared/themeSchedule'
 import { noteRender, recentSpeed } from './speed'
 import {
   absPath,
@@ -137,7 +138,7 @@ function createWindow() {
     show: false,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 16 },
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#161616' : '#fbfaf8',
+    backgroundColor: windowBackground(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -184,7 +185,7 @@ function buildPopout(at: { x: number; y: number; width: number; height: number }
     show: false,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 16 },
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#161616' : '#fbfaf8',
+    backgroundColor: windowBackground(),
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false, contextIsolation: true, nodeIntegration: false, backgroundThrottling: !testCopy }
   })
   w.once('ready-to-show', () => (testCopy ? w.showInactive() : w.show()))
@@ -936,6 +937,12 @@ function registerIpc() {
 /** Flow keeps shortcuts as macOS key codes ("59+63"): as you'd read them */
 const MAC_KEYS: Record<string, string> = { '63': 'Fn', '58': 'Left ⌥', '61': 'Right ⌥', '59': 'Left ⌃', '62': 'Right ⌃', '55': 'Left ⌘', '54': 'Right ⌘', '56': 'Left ⇧', '60': 'Right ⇧', '49': 'Space', '53': 'Esc', '57': 'Caps Lock' }
 const flowKeys = (codes: string) => codes.split('+').map((c) => MAC_KEYS[c] ?? `key ${c}`).join(' + ')
+
+/** The window's colour before the page draws, from the theme it will draw (shared/themeSchedule) */
+function windowBackground(): string {
+  const t = resolveTheme(getSettings(), new Date(), nativeTheme.shouldUseDarkColors)
+  return t === 'light' ? '#fbfaf8' : t === 'sepia' ? '#f3ecdf' : t === 'midnight' ? '#000000' : '#161616'
+}
 
 const themeSource = (theme: Settings['theme']) =>
   theme === 'system' ? 'system' : theme === 'light' || theme === 'sepia' ? 'light' : 'dark'

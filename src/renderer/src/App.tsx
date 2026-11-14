@@ -11,8 +11,9 @@ import { todayItems } from '@shared/coach'
 import { WeeklyView } from './components/WeeklyView'
 import { NorthStarView } from './components/NorthStarView'
 import { openTideLink } from './lib/links'
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ThemeId } from '@shared/types'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { resolveTheme } from '@shared/themeSchedule'
+import type { Settings } from '@shared/types'
 import { readingFace, resolveDesign, type DesignId } from '@shared/design'
 import { folderOf, scopeTopic, useApp } from './state'
 import { Sidebar } from './components/Sidebar'
@@ -129,17 +130,39 @@ function useAccent(accent: string | null | undefined) {
   }, [accent])
 }
 
-function useTheme(theme: ThemeId) {
-  useEffect(() => {
+/**
+ * The theme on <html>. "System" is a day theme and a night theme (shared/themeSchedule), switched
+ * at set times or with macOS: looked at again each minute, when the window comes back (after
+ * sleep, say) and when macOS changes. Set before paint, so launching draws no other theme first.
+ */
+function useTheme(s: Pick<Settings, 'theme' | 'themeDay' | 'themeNight' | 'themeSwitch' | 'themeDayAt' | 'themeNightAt'>) {
+  const { theme, themeDay, themeNight, themeSwitch, themeDayAt, themeNightAt } = s
+  useLayoutEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
     const apply = () => {
-      document.documentElement.dataset.theme = theme === 'system' ? (media.matches ? 'graphite' : 'light') : theme
+      const next = resolveTheme({ theme, themeDay, themeNight, themeSwitch, themeDayAt, themeNightAt }, new Date(), media.matches)
+      if (document.documentElement.dataset.theme !== next) document.documentElement.dataset.theme = next
     }
     apply()
     if (theme !== 'system') return
     media.addEventListener('change', apply)
-    return () => media.removeEventListener('change', apply)
-  }, [theme])
+    const onShow = () => document.visibilityState === 'visible' && apply()
+    document.addEventListener('visibilitychange', onShow)
+    window.addEventListener('focus', apply)
+    // On the minute, so 19:00 turns at 19:00
+    let timer: ReturnType<typeof setTimeout>
+    const tick = () => {
+      apply()
+      timer = setTimeout(tick, 60_000 - (Date.now() % 60_000) + 50)
+    }
+    timer = setTimeout(tick, 60_000 - (Date.now() % 60_000) + 50)
+    return () => {
+      media.removeEventListener('change', apply)
+      document.removeEventListener('visibilitychange', onShow)
+      window.removeEventListener('focus', apply)
+      clearTimeout(timer)
+    }
+  }, [theme, themeDay, themeNight, themeSwitch, themeDayAt, themeNightAt])
 }
 
 /** Which of the two designs is drawn: data-design on the root, beside data-theme */
@@ -226,7 +249,7 @@ export default function App() {
   const [due, setDue] = useState({ due: 0, total: 0 })
   const [dragging, setDragging] = useState(false)
 
-  useTheme(settings.theme)
+  useTheme(settings)
   const tide = resolveDesign(settings.design) === 'tide'
   useDesign(resolveDesign(settings.design))
   useAccent(settings.accent)
