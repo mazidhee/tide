@@ -6,7 +6,7 @@
  * the weekly check: a proposal approved changes the note and is recorded, a rejected one isn't
  * proposed again; and the learner's edits to the note are what the scheduler uses.
  */
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join, relative } from 'path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -243,4 +243,24 @@ describe('Build my North Star', () => {
     expect(readFileSync(join(vault(), 'Tide/North Star 2.md'), 'utf8')).toMatch(/Moved on to stage 2 before stage 1’s gate passed/)
     expect((await NS.trackScope('Risk'))!.scope).toEqual(['Measuring market risk'])
   })
+  it('a replan moves the plan in use to hidden backups: the new one is the only North Star', async () => {
+    await NS.synthesise({ goal: '' })
+    const first = await NS.build()
+    const oldNote = readFileSync(join(vault(), first.notePath), 'utf8')
+    const oldStore = readFileSync(join(vault(), '.tide/northstar.json'), 'utf8')
+    await NS.synthesise({ goal: 'ML is the spine' })
+    const second = await NS.build()
+    // The old note is gone from view; the new plan sits at a single North Star note
+    expect(existsSync(join(vault(), first.notePath))).toBe(first.notePath === second.notePath)
+    expect(existsSync(join(vault(), second.notePath))).toBe(true)
+    expect(JSON.parse(readFileSync(join(vault(), '.tide/northstar.json'), 'utf8')).notePath).toBe(second.notePath)
+    // Both are in the backups, byte for byte
+    // The latest backup is the plan that was in use, byte for byte (an earlier one is the plan before it)
+    const backups = readdirSync(join(vault(), '.tide/backups')).filter((f) => f.startsWith('northstar-')).sort()
+    expect(backups.length).toBeGreaterThan(0)
+    const dir = join(vault(), '.tide/backups', backups[backups.length - 1])
+    expect(readFileSync(join(dir, first.notePath.split('/').pop()!), 'utf8')).toBe(oldNote)
+    expect(readFileSync(join(dir, 'northstar.json'), 'utf8')).toBe(oldStore)
+  })
+
 })
