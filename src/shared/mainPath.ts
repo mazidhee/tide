@@ -221,13 +221,15 @@ export function checkMainPath(ns: Pick<NorthStar, 'stages'>, path: MainPath, cat
   }
   // 4. The applied thread: one side track a stage, a little in stage 1, 15–25% from stage 2, never leading
   if (path.applied.length) {
+    // Once the thread is whole (its last stage passed), later stages are the spine's alone
+    const lastSide = stages.reduce((k, s, i) => (s.tracks.some((t) => path.applied.includes(t.track)) ? i : k), -1)
     stages.forEach((s, i) => {
       const side = s.tracks.filter((t) => path.applied.includes(t.track))
       const sum = sideShare(s, path)
       const n = `Stage ${i + 1} (${s.title})`
       if (side.length > 1) v.push(`${n} has ${side.length} side tracks (${side.map((t) => t.track).join(', ')}); the applied thread takes one at a time.`)
       if (i === 0 && sum > APPLIED_FIRST) v.push(`${n} gives the side tracks ${sum}%; stage 1 has at most ${APPLIED_FIRST}%.`)
-      if (i > 0 && (sum < APPLIED_MIN || sum > APPLIED_MAX)) v.push(`${n} gives the side tracks ${sum}%; from stage 2 the applied thread is ${APPLIED_MIN}–${APPLIED_MAX}% of every stage.`)
+      if (i > 0 && i <= lastSide && (sum < APPLIED_MIN || sum > APPLIED_MAX)) v.push(`${n} gives the side tracks ${sum}%; from stage 2 the applied thread is ${APPLIED_MIN}–${APPLIED_MAX}% of every stage.`)
       if ((dl < 0 || i < dl) && side.length && path.applied.includes(lead(s).track)) v.push(`${n} is led by ${lead(s).track}, a side track, before deep learning.`)
     })
     // …and it goes through each side track's whole outline, not a sample
@@ -423,9 +425,20 @@ export function repairMainPath(ns: NorthStar, path: MainPath, cat: CatalogueTrac
         t.scope = t.scope.filter((x) => !mine.includes(x))
       }
     }
-    if (moved.length && s.tracks.length < MAX_TRACKS) {
-      s.tracks.push({ track: spineTrack, weight: 0, scope: moved })
-      s.tracks = setShare(s.tracks, s.tracks.length - 1, 30)
+    // None there: the spine track's first module whose prerequisites come by then, brought forward from later
+    if (!moved.length) {
+      const by = new Set(stages.slice(0, i + 1).flatMap((x) => scopeIds(x, cat)))
+      const m = cat.find((t) => t.name === spineTrack)?.modules?.find((x) => !x.passed && !by.has(x.id) && x.requires.every((r) => by.has(r) || byId.get(r)?.passed || !byId.has(r)))
+      if (m) {
+        moved.push(m.title)
+        for (const later of stages.slice(i + 1)) for (const t of later.tracks) t.scope = t.scope.filter((x) => bare(x) !== bare(m.title))
+        stages = stages.map((x) => ({ ...x, tracks: x.tracks.filter((t) => t.scope.length) })).filter((x) => x.tracks.length)
+      }
+    }
+    const here = stages[i]
+    if (moved.length && here.tracks.length < MAX_TRACKS) {
+      here.tracks.push({ track: spineTrack, weight: 0, scope: moved })
+      here.tracks = setShare(here.tracks, here.tracks.length - 1, 30)
       fixes.push(`started ${spineTrack} in ${words(i)} (${moved.join('; ')})`)
     }
   }
