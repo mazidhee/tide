@@ -535,7 +535,7 @@ const realAsk: Asker = async (job, prompt, system) => {
   const { completeFor, jobRoute } = await import('./ai')
   const route = await jobRoute(job).catch(() => ({ who: 'gemma' as const }))
   // Opus thinking hard over every roadmap can take several minutes
-  const text = await completeFor(job, prompt, system, { priority: 'interactive', timeoutMs: job === 'northStar' ? 15 * 60_000 : 6 * 60_000 })
+  const text = await completeFor(job, prompt, system, { priority: 'interactive', timeoutMs: job === 'northStar' ? 40 * 60_000 : 6 * 60_000 })
   return { text, by: route.who === 'claude' ? 'claude' : 'gemma' }
 }
 let ask: Asker = realAsk
