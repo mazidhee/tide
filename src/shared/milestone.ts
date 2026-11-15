@@ -652,7 +652,9 @@ export function parkThreads<T extends Thread>(threads: T[], o: { milestone: Mile
     const inStage = o.stageTracks.some((s) => s.toLowerCase() === t.label.toLowerCase())
     const out: T = isMaths(t.label) ? { ...t, group: 'maths' } : t
     if (active.has(t.label.toLowerCase()) && !inStage && t.kind === 'roadmap') return { ...out, group: out.group ?? 'love' }
-    if (before && t.kind === 'roadmap' && !inStage && PARKED.test(t.label)) return { ...out, parked: true, paused: false, session: 15, touch: 15, maxGap: PARK_INTERVAL, hard: false }
+    // Nothing learned there yet: nothing to keep alive, so no review either (it waits, untouched)
+    const learned = !!t.lastTouched || (t.fading ?? 0) > 0
+    if (before && t.kind === 'roadmap' && !inStage && PARKED.test(t.label)) return { ...out, parked: true, paused: !learned, session: 15, touch: 15, maxGap: PARK_INTERVAL, hard: false }
     return out
   })
 }

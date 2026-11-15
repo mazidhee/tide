@@ -522,7 +522,8 @@ function itemMaker(threads: Thread[], goals: PlanGoal[], inv: Inventory, queues:
         if (gate.step === 'check') checked.add(t.label)
         return [{ ...gateItem(t.label, gate, minutes), thread: t.id, ...(touch ? { touch: true } : {}) }]
       }
-      if (!q.length) return [{ kind: 'review', title: `Revisit ${t.label}`, notebook: t.label, ...base }]
+      // Nothing queued: revisit what was learned there; a track never started has nothing to revisit
+      if (!q.length) return t.lastTouched || t.fading ? [{ kind: 'review', title: `Revisit ${t.label}`, notebook: t.label, ...base }] : []
       // A long session is two topics, one after the other
       if (minutes >= 75 && q.length >= 2) return [lesson(q.shift()!, Math.round(minutes / 2 / 5) * 5), lesson(q.shift()!, minutes - Math.round(minutes / 2 / 5) * 5)]
       return [lesson(q.shift()!, minutes)]
@@ -728,7 +729,7 @@ async function replanInner(date: string): Promise<WeekPlan | null> {
   for (const [nb, q] of queues) queues.set(nb, q.filter((c: TopicCandidate) => !planned.has(c.topic)))
   const make = itemMaker(s.threads, s.goals, inv, queues, new Map(), new Map(), null, servesOf(s))
   const dayFloor = s.milestone ? s.milestone.hours.full : undefined
-  const r = replanWeek({ plan, today: date, budgets, spent, ranLong, threads: s.threads, ...(dayFloor ? { dayFloor } : {}), touchItem: (t, m) => make(t.id, m, true)[0] ?? { kind: 'learn', title: t.label } })
+  const r = replanWeek({ plan, today: date, budgets, spent, ranLong, threads: s.threads, ...(dayFloor ? { dayFloor } : {}), touchItem: (t, m) => make(t.id, m, true)[0] ?? null })
   // Drift: once a day, the worst behind of each dated goal
   const drift = (plan.replannedOn === date ? [] : driftOf(s.goals, s.log, date)).map((d): PlanNotice => ({ kind: 'drift', on: date, thread: d.thread, text: d.text }))
   const keep = (plan.notices ?? []).filter((n) => n.on >= addDays(date, -1))
