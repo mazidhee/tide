@@ -78,6 +78,8 @@ export const JOB_ROUTES = {
   weeklyReview: { label: 'Your weekly review', role: 'hard' },
   // This week's progress in Your week (main/weekProgress): one line, Claude only; without it, fixed words
   weekProgress: { label: 'A line on this week’s progress', role: 'background' },
+  // "Save to notes" on a side thread's reply (main/threadPoint): its key point. Claude only; without it, code takes the reply's first sentences
+  threadPoint: { label: 'A saved point from a side thread', role: 'background' },
   // The proactive coach (main/proactiveCoach): Opus reads the learner model through Tide's tools and acts on it; near the
   // plan's limits Haiku or Sonnet; without Claude the daily look is Tide's own rules and the reviews are written from the numbers
   coachDaily: { label: 'The coach’s morning look at today', role: 'hard' },

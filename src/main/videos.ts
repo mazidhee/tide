@@ -26,6 +26,7 @@ import {
   youtubeIdOf,
   type Clip,
   type ClipCandidate,
+  coversTopic,
   type ClipCheck,
   type Transcript
 } from '@shared/video'
@@ -234,6 +235,8 @@ export async function clipsFor(topic: string, { limit = 2, recap = false }: { li
     if (!t) continue
     const s = bestSection(t.lines, topic, recap ? RECAP : SECTION)
     if (!s || s.score < 0.45) continue
+    // A strong match only: a clip that shares a word or two with the topic is offered for nothing
+    if (!coversTopic(topic, { title: t.title, text: s.text })) continue
     out.push({ video: id, start: s.start, end: s.end, title: t.title, ...(t.channel ? { channel: t.channel } : {}), text: s.text, score: s.score, ...(t.path ? { path: t.path } : {}), ...(t.course ? { course: t.course } : {}) })
   }
   return out.sort((a, b) => b.score - a.score).slice(0, limit)

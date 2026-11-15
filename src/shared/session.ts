@@ -763,6 +763,17 @@ export const GO_ON = 'Go on.'
  */
 export const END_NOW = "Let's stop here for today.\n\n(Tide: the student is ending the session now. Teach nothing new and ask nothing. Write your closing <summary> now, as your instructions describe it, from how they answered in this session only.)"
 
+/**
+ * A lesson that has closed once: some reply of the tutor's ended it with its <summary> (or a
+ * scorecard). It stays closed: anything after it (a recap quiz chosen at the end) is kept with it
+ * in Past lessons, never put back in Carry on.
+ */
+export function closedOnce(turns: readonly { role: string; content: string }[]): boolean {
+  return turns.some((t, i) => i > 0 && t.role === 'assistant' && /<summary\b|<scorecard\b|<rubric\b/i.test(t.content) && ended(parseBlocks(t.content)))
+}
+/** A reply that closes: a summary or scorecard, and no question or Go on after it */
+const ended = (blocks: Block[]) => blocks.some((b) => b.kind === 'summary' || b.kind === 'scores') && !blocks.some((b) => b.kind === 'ask' || b.kind === 'continue')
+
 /** Whether End should ask for the closing summary first: something was answered and it isn't closed yet */
 export const shouldSumUp = (turns: { role: string; content: string }[], finished: boolean) => !finished && turns.filter((t) => t.role === 'user' && /^Answer: /.test(t.content)).length > 0
 export const ASKED = 'My question: '

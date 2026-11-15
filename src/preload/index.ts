@@ -96,6 +96,7 @@ const api: TideApi = {
     test: invoke('ai:test'),
     generateFlashcards: invoke('ai:flashcards'),
     tieBreak: invoke('ai:tieBreak'),
+    threadPoint: invoke('ai:threadPoint'),
     readAlong: invoke('ai:readAlong')
   },
   learn: {
@@ -677,7 +678,9 @@ const api: TideApi = {
   study: {
     cards: invoke('study:cards'),
     review: invoke('study:review'),
-    saveCards: invoke('study:saveCards')
+    saveCards: invoke('study:saveCards'),
+    removeCards: invoke('study:removeCards'),
+    cardsSaved: invoke('study:cardsSaved')
   },
   projects: {
     set: invoke('projects:set'),

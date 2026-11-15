@@ -165,7 +165,9 @@ describe('the thread tutor writes to your notes', () => {
     await click(save)
     await settle()
     expect([...container.querySelectorAll('.lt-act')].some((b) => b.textContent === 'Saved to notes')).toBe(true)
-    expect(notesWritten()).toContain('> **Why ten?**\n>\n> Ten fingers made ten the habit.')
+    // Its key point, never the question asked
+    expect(notesWritten()).toContain('Ten fingers made ten the habit.')
+    expect(notesWritten()).not.toContain('Why ten?')
   })
 })
 

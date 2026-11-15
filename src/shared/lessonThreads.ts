@@ -36,6 +36,8 @@ export interface LessonThread {
   noted?: boolean
   /** Replies you saved to the lesson's notes with "Save to notes", by their index in messages */
   saved?: number[]
+  /** The key point each saved reply went into the notes as, distilled by the notes model, by its index */
+  points?: Record<number, string>
   started: number
   updated: number
 }
@@ -203,11 +205,83 @@ export function threadNotes(t: LessonThread, writing = false): string[] {
     if (m.role !== 'assistant' || (writing && i === t.messages.length - 1)) return
     out.push(...replyParts(m.content).notes)
     if (t.saved?.includes(i)) {
-      const r = replyTakeaway(t, i)
+      const r = replyPoint(t, i)
       if (r) out.push(r)
     }
   })
   return out
+}
+
+// ---------- "Save to notes" on a thread reply: its key point, never the exchange ----------
+
+/** Openers that carry nothing: "Good question.", "Exactly!", "Sure," */
+const FILLER = /^((good|great|nice|fair|excellent) (question|point|catch)|exactly|right|yes|yep|sure|of course|absolutely|correct|not quite|close|ok|okay|so)\b[.!,:]?\s*$/i
+
+/**
+ * The key point of an explanation, without a model: a bolded concept (the phrase the thread is
+ * about, else the first phrase the tutor bolded) and the first one or two sentences that state
+ * something. Questions back to the learner and filler are left out; the learner's own words never
+ * come into it.
+ */
+export function keyPoint(reply: string, quote?: string): string {
+  const prose = reply
+    .replace(/```[\s\S]*?```/g, ' ')
+    .split('\n')
+    .map((l) => l.replace(/^\s*(#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|>\s*)/, '').trim())
+    .filter(Boolean)
+    .join(' ')
+  const q = quote ? oneLine(quote).replace(/^[“"']|[”"']$/g, '') : ''
+  const bold = /\*\*([^*\n]{2,50})\*\*/.exec(reply)?.[1]?.trim()
+  const concept = q && q.length <= 60 && q.split(' ').length <= 6 ? q : bold
+  const name = concept?.replace(/\*\*/g, '').replace(/[.:]+$/, '') ?? ''
+  // A short sentence that only names the concept ("**X** is the slip here.") is what the label says already
+  const onlyNames = (s: string) => !!name && s.split(/\s+/).length < 9 && s.replace(/\*\*/g, '').toLowerCase().includes(name.toLowerCase()) && /\b(the|your) (slip|catch|trick|point|key|issue|problem|confusion|mix-?up|thing)\b|\bhere[.!]*$/i.test(s)
+  const sentences = (prose.match(/(?:[^.!?]|[.!?](?!\s|$))+(?:[.!?]+|$)/g) ?? []).map((s) => s.trim()).filter((s) => s && !s.endsWith('?') && !FILLER.test(s.replace(/\*\*/g, '')) && !onlyNames(s))
+  const picked: string[] = []
+  for (const s of sentences) {
+    if (picked.length === 2 || (picked.length && picked.join(' ').length + s.length > 320)) break
+    picked.push(s)
+  }
+  let body = clip(picked.join(' '), 360)
+  if (!body) return ''
+  if (!name) return body
+  body = body.replace(/\*\*([^*]+)\*\*/g, '$1')
+  return `**${name.charAt(0).toUpperCase()}${name.slice(1)}:** ${body}`
+}
+
+/** The model that distils a saved reply (main/threadPoint, Haiku): what to write */
+export const POINT_SYSTEM = `You turn a tutor's explanation into one key point for a learner's lesson notes, the way the notes' "From the lesson" points read.
+Write exactly one point: the concept's own name in bold with a colon, then one or two plain sentences stating the idea, then a small concrete example in a few words ("For example, ..."). Like this: **Place value:** in base $b$, a digit in position $i$ is worth $b^i$. For example, $101_2 = 4 + 0 + 1 = 5$.
+- No preamble, no heading, no list, no question, no quote marks around it. Under 70 words.
+- Use $...$ for maths. Say what is true; don't say "the tutor said" or "you asked".
+Write only the point.`
+
+/** What the notes model is given: the explanation (and the phrase it hangs off), never the learner's question */
+export function pointPrompt(reply: string, opts: { quote?: string; topic?: string } = {}): string {
+  return [
+    ...(opts.topic ? [`Lesson: ${oneLine(opts.topic)}`] : []),
+    ...(opts.quote ? [`About: "${oneLine(opts.quote)}"`] : []),
+    `The explanation:\n---\n${clip(reply.trim(), 4000)}\n---`
+  ].join('\n\n')
+}
+
+/** The model's point, tidied, or null when it isn't one (empty, a tag, far too long) */
+export function cleanPoint(out: string): string | null {
+  const t = out
+    .trim()
+    .replace(/^```\w*\s*|\s*```$/g, '')
+    .replace(/^(key point|point|note)\s*:\s*/i, '')
+    .replace(/^[-*]\s+(?=\*\*)/, '')
+    .trim()
+  if (!t || t.length > 900 || /<\/?[a-z]+[^>]*>/i.test(t)) return null
+  return t
+}
+
+/** What a saved reply puts in the notes: its distilled point, else the key point taken from it */
+export function replyPoint(t: Pick<LessonThread, 'messages' | 'quote' | 'points'>, at: number): string {
+  const reply = t.messages[at]
+  if (reply?.role !== 'assistant') return ''
+  return t.points?.[at]?.trim() || keyPoint(replyParts(reply.content).text, t.quote)
 }
 
 /** One reply saved as it is: the question it answered in bold, then the answer, as a quote */

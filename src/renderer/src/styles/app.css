@@ -4186,6 +4186,16 @@ button.menu-row:hover {
   border: 1px dashed var(--line-strong);
 }
 
+.s-card-added {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
 .s-card-text {
   display: flex;
   flex-direction: column;

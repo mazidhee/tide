@@ -111,7 +111,7 @@ import { PATTERNS, addChallenge, addProblem, addStarterSet, listProblems, record
 import { getGoals, getRecallQueue, listDrills, listInterviews, logDrill, logInterview, reviewRecall, saveGoals } from './learn'
 import type { DrillResult } from '@shared/drills'
 import type { InterviewRecord } from '@shared/interviews'
-import { getCards, reviewCard, saveCards } from './study'
+import { cardsSaved, getCards, removeCards, reviewCard, saveCards } from './study'
 import { registerEditorIpc, runNow } from './workshopWatch'
 
 protocol.registerSchemesAsPrivileged([
@@ -747,6 +747,7 @@ function registerIpc() {
 
   handle('learn:graph', () => getGraph())
   handle('learn:brain', () => getBrain())
+  handle('ai:threadPoint', (reply: string, opts?: { quote?: string; topic?: string }) => import('./threadPoint').then((m) => m.threadPoint(String(reply ?? ''), { ...(opts?.quote ? { quote: String(opts.quote) } : {}), ...(opts?.topic ? { topic: String(opts.topic) } : {}) })))
   handle('ai:tieBreak', (topic: string, options: Parameters<typeof tieBreak>[1], context?: string) => tieBreak(topic, options, context))
   handle('projects:set', (notebook: string, info: Parameters<typeof setProject>[1]) => setProject(notebook, info))
   handle('projects:docs', (notebook: string) => projectDocs(notebook))
@@ -900,6 +901,12 @@ function registerIpc() {
     await reindexPath(path)
     return path
   })
+  handle('study:removeCards', async (p: string, md: string) => {
+    const path = await removeCards(String(p), String(md ?? ''))
+    if (path) await reindexPath(path)
+    return path
+  })
+  handle('study:cardsSaved', (p: string, cards: string[]) => cardsSaved(String(p), (cards ?? []).map(String)))
 
   handle('app:openExternal', (url: string) => shell.openExternal(url))
   // Dictation goes through Handy, which types into the focused field; we only read its shortcut
