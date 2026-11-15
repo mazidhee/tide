@@ -4,6 +4,7 @@ import { basename, dirname, extname } from 'path'
 import type { CardSchedule, ChatScope, Flashcard, ReviewGrade, StudyCard } from '@shared/types'
 import { appendRevlog, elapsedDays, RATING as REVLOG_RATING } from './revlog'
 import { absPath, allNotes, joinRel, readText, uniquePath, writeText } from './vault'
+import { hasCards, withCards, withoutCards } from '@shared/cards'
 import { createEmptyCard, fsrs, Rating, State, type Card as FsrsCard } from 'ts-fsrs'
 
 const SRS_FILE = joinRel('.tide', 'srs.json')
@@ -204,18 +205,42 @@ export async function reviewCard(id: string, grade: ReviewGrade, path: string): 
   return schedule
 }
 
-/** Saves AI generated cards next to the source note as "<Note> (Flashcards).md". */
-export async function saveCards(sourcePath: string, cardsMarkdown: string): Promise<string> {
+/** The flashcards note cards for a source note go in: "<Note> (Flashcards).md" beside it */
+function cardsNoteFor(sourcePath: string): { target: string; name: string } {
   const name = basename(sourcePath, extname(sourcePath))
   const dir = dirname(sourcePath) === '.' ? '' : dirname(sourcePath)
-  const target = joinRel(dir, `${name} (Flashcards).md`)
+  return { target: joinRel(dir, `${name} (Flashcards).md`), name }
+}
+
+/** Saves AI generated cards next to the source note as "<Note> (Flashcards).md". Cards already in it aren't added again */
+export async function saveCards(sourcePath: string, cardsMarkdown: string): Promise<string> {
+  const { target, name } = cardsNoteFor(sourcePath)
   const header = `#${FLASHCARD_TAG}\n\nCards for [[${name}]]\n\n`
   if (existsSync(absPath(target))) {
     const existing = await readText(target)
-    await writeText(target, existing.trimEnd() + '\n\n' + cardsMarkdown.trim() + '\n')
+    const next = withCards(existing, cardsMarkdown)
+    if (next !== existing) await writeText(target, next)
     return target
   }
   const path = uniquePath(target)
   await writeText(path, header + cardsMarkdown.trim() + '\n')
   return path
+}
+
+/** Takes cards saved with saveCards out again; the note's path, or null when they weren't there */
+export async function removeCards(sourcePath: string, cardsMarkdown: string): Promise<string | null> {
+  const { target } = cardsNoteFor(sourcePath)
+  if (!existsSync(absPath(target))) return null
+  const existing = await readText(target)
+  const next = withoutCards(existing, cardsMarkdown)
+  if (next === existing) return null
+  await writeText(target, next)
+  return target
+}
+
+/** Which of these cards are in the flashcards note for a source note already */
+export async function cardsSaved(sourcePath: string, cards: string[]): Promise<boolean[]> {
+  const { target } = cardsNoteFor(sourcePath)
+  const existing = existsSync(absPath(target)) ? await readText(target).catch(() => '') : ''
+  return cards.map((c) => hasCards(existing, c))
 }

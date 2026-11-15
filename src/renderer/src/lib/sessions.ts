@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { View } from '../state'
 import { lessonId } from '@shared/lessonLog'
 import type { LessonThread } from '@shared/lessonThreads'
+import { closedOnce } from '@shared/session'
 
 /**
  * Lessons, quizzes, interviews and exams you've left mid-way, so going elsewhere doesn't lose them.
@@ -25,6 +26,12 @@ export interface Ongoing {
   at: number
 }
 
+/** A lesson that finished once (its closing summary is in it): it's in Past lessons, never in Carry on */
+export function isClosedLesson(o: Pick<Ongoing, 'view' | 'state'>): boolean {
+  const turns = (o.state as { turns?: unknown } | null)?.turns
+  return o.view?.kind === 'session' && Array.isArray(turns) && closedOnce(turns as { role: string; content: string }[])
+}
+
 const store = new Map<string, Ongoing>()
 /** The one on screen, saved as it goes but not listed until you leave it (or Tide closes) */
 const live = new Map<string, Ongoing>()
@@ -39,7 +46,7 @@ let loaded = false
 /** What goes in the file: the lessons left, and the ones on screen in any window */
 export function ongoingSnapshot(): Ongoing[] {
   const all = new Map<string, Ongoing>()
-  for (const o of [...store.values(), ...live.values()]) if (!all.has(o.key) || all.get(o.key)!.at < o.at) all.set(o.key, o)
+  for (const o of [...store.values(), ...live.values()]) if (!isClosedLesson(o) && (!all.has(o.key) || all.get(o.key)!.at < o.at)) all.set(o.key, o)
   return [...all.values()].sort((a, b) => b.at - a.at).slice(0, 6)
 }
 
@@ -128,9 +135,9 @@ export function keepLesson(key: string, view: View, turns: unknown, finished = f
 export async function loadOngoing() {
   try {
     const saved = JSON.parse(await window.tide.vault.read(FILE)) as Ongoing[]
-    for (const o of saved) if (o?.key && o.view && !store.has(o.key)) store.set(o.key, { ...o, busy: false, ...(o.busy ? { interrupted: true } : {}) })
+    for (const o of saved) if (o?.key && o.view && !store.has(o.key) && !isClosedLesson(o)) store.set(o.key, { ...o, busy: false, ...(o.busy ? { interrupted: true } : {}) })
     // Lessons from before Past lessons existed (or saved while it wasn't running) are kept there too
-    for (const o of saved) if (o?.view?.kind === 'session') keepLesson(o.key, o.view, (o.state as { turns?: unknown })?.turns, false, (o.state as { threads?: unknown })?.threads)
+    for (const o of saved) if (o?.view?.kind === 'session') keepLesson(o.key, o.view, (o.state as { turns?: unknown })?.turns, isClosedLesson(o), (o.state as { threads?: unknown })?.threads)
     emit()
   } catch {
     // nothing saved yet, or unreadable
@@ -164,7 +171,9 @@ try {
 export const sessionKey = (v: { kind: string; mode?: string; topic?: string; nonce?: number }) => `${v.kind}:${v.mode ?? ''}:${v.topic ?? ''}:${v.nonce ?? ''}`
 
 export function saveOngoing(o: Omit<Ongoing, 'at'>) {
-  keepLesson(o.key, o.view, (o.state as { turns?: unknown })?.turns, false, (o.state as { threads?: unknown })?.threads)
+  const closed = isClosedLesson(o)
+  keepLesson(o.key, o.view, (o.state as { turns?: unknown })?.turns, closed, (o.state as { threads?: unknown })?.threads)
+  if (closed) return endOngoing(o.key)
   live.delete(o.key)
   // The same lesson opened again (from Past lessons, or where something came up) is one entry, not two
   const record = (x: Ongoing) => (x.view.kind === 'session' ? (x.view.lesson ?? lessonId(x.key)) : null)
@@ -182,7 +191,9 @@ export function saveOngoing(o: Omit<Ongoing, 'at'>) {
 
 /** The one on screen, as it goes: kept on disk, listed only if Tide closes before you leave it */
 export function keepLive(o: Omit<Ongoing, 'at'>) {
-  keepLesson(o.key, o.view, (o.state as { turns?: unknown })?.turns, false, (o.state as { threads?: unknown })?.threads)
+  const closed = isClosedLesson(o)
+  keepLesson(o.key, o.view, (o.state as { turns?: unknown })?.turns, closed, (o.state as { threads?: unknown })?.threads)
+  if (closed) return endOngoing(o.key)
   const kept = { ...o, at: Date.now() }
   live.set(o.key, kept)
   persist()
@@ -233,9 +244,9 @@ export function followInBackground(key: string, id: string): () => void {
 }
 
 export function useOngoing(): Ongoing[] {
-  const [list, setList] = useState(() => [...store.values()])
+  const [list, setList] = useState(() => [...store.values()].filter((o) => !isClosedLesson(o)))
   useEffect(() => {
-    const l = () => setList([...store.values()].sort((a, b) => b.at - a.at))
+    const l = () => setList([...store.values()].filter((o) => !isClosedLesson(o)).sort((a, b) => b.at - a.at))
     listeners.add(l)
     l()
     return () => {

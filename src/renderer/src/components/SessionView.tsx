@@ -19,7 +19,7 @@ import { useDifficulty } from '../lib/difficulty'
 import { nothingToMark, unmarked } from '@shared/lessonRepair'
 import { citeSources, withSources, type SourcePack } from '@shared/sources'
 import { ledPrefKey, withoutEcho } from '@shared/sourceLed'
-import { formatRange, offeredClip, recapMessage, watchFirstNote, type ClipCandidate } from '@shared/video'
+import { coversTopic, formatRange, offeredClip, recapMessage, watchFirstNote, type ClipCandidate } from '@shared/video'
 import { ClipCard } from './ClipCard'
 import { relatedForPrompt } from '@shared/related'
 import { openReading } from '../lib/reading'
@@ -28,7 +28,7 @@ import { parsePlacement, placementNote } from '@shared/placement'
 import { correctionText } from '@shared/lessonCheck'
 import type { Reading } from '@shared/readings'
 import { whyByDefault } from '../lib/agenda'
-import { ASKED, END_NOW, GO_ON, SHOW_ME, askIdentity, askStarter, shouldSumUp, modeLabel, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
+import { ASKED, END_NOW, GO_ON, SHOW_ME, askIdentity, closedOnce, askStarter, shouldSumUp, modeLabel, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
 import { cardsToMarkdown } from '@shared/cards'
 import { fileTitle, useApp, pagesLabel } from '../state'
@@ -849,28 +849,71 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     (map.dividers.get(i) ?? [])
       .filter((d: Divider) => (after ? d.block >= (parsed[i]?.length ?? 0) : d.block === j))
       .map((d, k) => <StepDivider key={`d${i}-${j}-${k}`} d={d} total={map.steps.length} fresh={i === turns.length - 1} />)
-  // [videos] At the end of a lesson: a short clip on its topic to rewatch, with questions from it, once
+  // [videos] At the end of a lesson: a short clip on its topic to rewatch, once, and only one that
+  // really is about the topic (shared/video coversTopic). Watching it is apart from the lesson;
+  // questions on it come only if you ask for them
   const [recapClip, setRecapClip] = useState<ClipCandidate | null>(null)
+  const [watchingRecap, setWatchingRecap] = useState(false)
   const recapped = turns.some((t) => t.role === 'user' && t.content.startsWith('Recap from the video'))
   useEffect(() => {
     if (!finished || recapped || mode !== 'teach') return setRecapClip(null)
     let live = true
     window.tide.videos
       .clips(topic, { limit: 1, recap: true })
-      .then((c) => live && setRecapClip(c[0] ?? null))
+      .then((c) => live && setRecapClip(c.find((x) => coversTopic(topic, x)) ?? null))
       .catch(() => {})
     return () => {
       live = false
     }
   }, [finished, recapped, mode, topic])
+  // Flashcards from misses go into the deck as they appear (Settings: autoCards, on unless turned
+  // off), once: a card already in the deck shows Added, after a reload too, and one you undid stays out
+  const cardsTarget = sourcePath ?? `Flashcards/${topic.replace(/[\\/:*?"<>|]/g, ' ').slice(0, 60)}.md`
+  const undoneCards = useRef(new Set<string>())
+  const saveCardRef = useRef<(front: string, back: string) => Promise<void>>(async () => {})
+  const missCards = (i: number) => {
+    const blocks = parsed[i]
+    if (!blocks || turns[i]?.role !== 'assistant' || blocks.some((x) => x.kind === 'grade' && x.verdict === 'correct')) return []
+    return blocks.filter((b): b is Extract<Block, { kind: 'card' }> => b.kind === 'card')
+  }
+  const wasBusy = useRef(false)
+  useEffect(() => {
+    const replied = wasBusy.current && !busy
+    wasBusy.current = busy
+    if (!replied || app.settings.autoCards === false) return
+    for (const c of missCards(turns.length - 1)) if (!savedCards.has(c.front) && !undoneCards.current.has(c.front)) void saveCardRef.current(c.front, c.back)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy])
+  const cardsKey = busy ? '' : parsed.flatMap((b) => (b ?? []).filter((x) => x.kind === 'card').map((x) => (x as Extract<Block, { kind: 'card' }>).front)).join('\n')
+  useEffect(() => {
+    if (!cardsKey) return
+    const cards = parsed.flatMap((b) => (b ?? []).filter((x): x is Extract<Block, { kind: 'card' }> => x.kind === 'card'))
+    let live = true
+    window.tide.study
+      .cardsSaved(cardsTarget, cards.map((c) => cardsToMarkdown([c])))
+      .then((has) => live && setSavedCards((s) => {
+        const n = new Set(s)
+        cards.forEach((c, k) => has[k] && n.add(c.front))
+        return n
+      }))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardsKey, cardsTarget])
+  // A lesson that has closed once stays closed: never back in Carry on (shared/session closedOnce)
+  const closed = useMemo(() => closedOnce(turns), [turns])
   // Leaving mid-way keeps the session for later; finishing it lets it go
-  const keepRef = useRef({ turns, busy, finished, threads })
-  keepRef.current = { turns, busy, finished, threads }
+  const keepRef = useRef({ turns, busy, finished, threads, closed })
+  keepRef.current = { turns, busy, finished, threads, closed }
   // Saved to disk as it goes (when you answer, and when each reply is done), so quitting Tide or
   // the Mac shutting down mid-lesson doesn't lose it
   useEffect(() => {
     const k = keepRef.current
     if (!ongoingKey || !view || k.finished || k.turns.length < 2) return
+    // Questions after the close (a recap quiz) are kept with the finished lesson in Past lessons
+    if (k.closed) return keepLesson(ongoingKey, view, k.turns, true, k.threads)
     keepLive({ key: ongoingKey, view, title: `${modeLabel(mode, options) ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: null, threads: k.threads }, busy: k.busy })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [turns.length, busy, finished, ongoingKey, edited, threadsRev])
@@ -904,6 +947,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     () => () => {
       const k = keepRef.current
       if (handedOver.current || !ongoingKey || !view || k.finished || k.turns.length < 2) return
+      if (k.closed) return keepLesson(ongoingKey, view, k.turns, true, k.threads)
       saveOngoing({ key: ongoingKey, view, title: `${modeLabel(mode, options) ?? 'Session'}: ${topic}`, state: { turns: k.turns, activeId: activeId.current, threads: k.threads }, busy: k.busy })
       if (k.busy && activeId.current) followInBackground(ongoingKey, activeId.current)
     },
@@ -1377,11 +1421,24 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   }
 
   /** "Save to notes" on one thread reply */
+  // The key point goes in at once (taken from the reply by code), and the notes model's distilled
+  // point replaces it when it comes (shared/lessonThreads replyPoint). Never the question asked
   const saveReply = (tid: string, at: number) => {
+    const th = threadsRef.current.find((x) => x.id === tid)
+    if (!th || th.saved?.includes(at)) return
     setThreads((list) => list.map((x) => (x.id === tid && !x.saved?.includes(at) ? { ...x, saved: [...(x.saved ?? []), at] } : x)))
     setThreadsRev((r) => r + 1)
     threadSaved()
     app.toast('Added to your notes for this lesson')
+    const reply = replyParts(th.messages[at]?.content ?? '').text
+    window.tide.ai
+      .threadPoint(reply, { ...(th.quote ? { quote: th.quote } : {}), topic })
+      .then((point) => {
+        if (!point) return
+        setThreads((list) => list.map((x) => (x.id === tid && x.saved?.includes(at) ? { ...x, points: { ...x.points, [at]: point } } : x)))
+        setThreadsRev((r) => r + 1)
+      })
+      .catch(() => {})
   }
 
 
@@ -1480,11 +1537,23 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   }
 
   const saveCard = async (front: string, back: string) => {
-    const target = sourcePath ?? `Flashcards/${topic.replace(/[\\/:*?"<>|]/g, ' ').slice(0, 60)}.md`
-    await window.tide.study.saveCards(target, cardsToMarkdown([{ front, back }]))
+    undoneCards.current.delete(front)
     setSavedCards((s) => new Set(s).add(front))
+    await window.tide.study.saveCards(cardsTarget, cardsToMarkdown([{ front, back }]))
     await app.refreshTree()
   }
+  /** Undo on a card that was added: out of the deck again, and not added again by itself */
+  const unsaveCard = async (front: string, back: string) => {
+    undoneCards.current.add(front)
+    setSavedCards((s) => {
+      const n = new Set(s)
+      n.delete(front)
+      return n
+    })
+    await window.tide.study.removeCards(cardsTarget, cardsToMarkdown([{ front, back }]))
+    await app.refreshTree()
+  }
+  saveCardRef.current = saveCard
 
   // [S2] in what the tutor wrote: the source's name, a button that opens it (shared/sources)
   const cited = (md: string) => citeSources(md, pack?.sources ?? [])
@@ -1537,15 +1606,19 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               <span className="muted small">{fromMiss ? 'Flashcard from this miss' : 'Flashcard'}</span>
               <div className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(`**${b.front}**\n\n${b.back}`, env) }} />
             </div>
-            <button className="btn small" disabled={savedCards.has(b.front)} onClick={() => saveCard(b.front, b.back)}>
-              {savedCards.has(b.front) ? (
-                <>
-                  <Icon name="check" size={13} /> Saved
-                </>
-              ) : (
-                'Add to flashcards'
-              )}
-            </button>
+            {savedCards.has(b.front) ? (
+              <span className="s-card-added">
+                <Icon name="check" size={13} /> Added
+                <span aria-hidden>·</span>
+                <button className="link-btn small" onClick={() => void unsaveCard(b.front, b.back)} title="Take this card out of your flashcards">
+                  Undo
+                </button>
+              </span>
+            ) : (
+              <button className="btn small" onClick={() => void saveCard(b.front, b.back)}>
+                Add to flashcards
+              </button>
+            )}
           </div>
         )
       case 'plan':
@@ -2318,14 +2391,24 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           )}
 
           {finished && recapClip && (
-            <div className="vclip-offer">
-              <p>
-                <b>Recap from the video.</b> Rewatch {formatRange(recapClip.start, recapClip.end)} of “{recapClip.title}” and answer {mode === 'teach' ? '2 or 3' : 'a few'} questions on it. They count towards What you know.
-              </p>
-              <button className="btn" onClick={() => send(recapMessage(recapClip), turns)}>
-                <Icon name="video" size={14} /> Watch the recap
-              </button>
-            </div>
+            <>
+              <div className="vclip-offer">
+                <p>
+                  <b>Recap from the video.</b> Rewatch {formatRange(recapClip.start, recapClip.end)} of “{recapClip.title}”, if you like. The lesson is done either way.
+                </p>
+                <div className="vclip-offer-acts">
+                  {!watchingRecap && (
+                    <button className="btn" onClick={() => setWatchingRecap(true)}>
+                      <Icon name="video" size={14} /> Watch the recap
+                    </button>
+                  )}
+                  <button className="btn ghost" onClick={() => send(recapMessage(recapClip), turns)} title="2 or 3 questions on what’s said in the clip. They count towards What you know.">
+                    Quiz me on it
+                  </button>
+                </div>
+              </div>
+              {watchingRecap && <ClipCard clip={recapClip} kicker="Recap" />}
+            </>
           )}
           {finished && showMap && map.steps.length > 0 && (
             <LessonEnd

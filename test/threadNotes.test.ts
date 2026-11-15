@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { THREAD_NOTE_TOOL, THREAD_RULES, cleanNoteText, newThread, replyParts, replyTakeaway, saveFallback, threadNotes, wantsSave, withNote, type LessonThread } from '../src/shared/lessonThreads'
+import { POINT_SYSTEM, THREAD_NOTE_TOOL, THREAD_RULES, cleanNoteText, cleanPoint, keyPoint, newThread, pointPrompt, replyPoint, replyParts, replyTakeaway, saveFallback, threadNotes, wantsSave, withNote, type LessonThread } from '../src/shared/lessonThreads'
 import { EXTRA_TOOLS } from '../src/main/tideMcpTools'
 import type { AgentStep } from '../src/shared/types'
 
@@ -34,7 +34,10 @@ describe('the thread tutor saves to your notes', () => {
       ],
       [3]
     )
-    expect(threadNotes(t)).toEqual(['Base ten comes from counting on fingers.', '> **And base 60?**\n>\n> The Babylonians used it: 60 has many divisors.'])
+    // The saved reply goes in as its key point, never with the question asked
+    expect(threadNotes(t)).toEqual(['Base ten comes from counting on fingers.', '**Because of fingers:** The Babylonians used it: 60 has many divisors.'])
+    // The notes model's distilled point, when it came, is what goes in
+    expect(threadNotes({ ...t, points: { 3: '**Base 60:** divides evenly by 2, 3, 4, 5 and 6. For example, an hour splits into 4 × 15 min.' } })[1]).toMatch(/^\*\*Base 60:\*\*/)
   })
 
   it('adds nothing from a reply still being written', () => {
@@ -88,5 +91,45 @@ describe('the thread tutor saves to your notes', () => {
     expect(steps).toEqual([expect.objectContaining({ kind: 'save_note', label: 'Added to your notes', detail: 'Base 60 divides evenly by 2, 3, 4, 5 and 6.' })])
     expect(await tool.run({ text: ' ' }, ctx as never)).toMatch(/Nothing to save/)
     expect(steps).toHaveLength(1)
+  })
+
+  it('saves a reply as its key point without a model: a bolded concept and its first sentences', () => {
+    const reply =
+      'Good question! **Two’s complement** stores a negative number as the bits that add to it to make $2^n$. So in 8 bits, $-1$ is 11111111, because 11111111 + 1 wraps to 0. It also means one adder does both sums. Does that make sense?'
+    const point = keyPoint(reply)
+    expect(point).toBe('**Two’s complement:** Two’s complement stores a negative number as the bits that add to it to make $2^n$. So in 8 bits, $-1$ is 11111111, because 11111111 + 1 wraps to 0.')
+    // The phrase the thread is about names the concept when there is one
+    expect(keyPoint('A hex digit is four bits. So 0xFF is one byte.', 'hex digit')).toBe('**Hex digit:** A hex digit is four bits. So 0xFF is one byte.')
+    // Numbers with points in them stay whole; a reply that only asks back saves nothing
+    expect(keyPoint('Pi is about 3.14 to two places.')).toBe('Pi is about 3.14 to two places.')
+    expect(keyPoint('What do you think?')).toBe('')
+    // A sentence that only names the concept is left to the label
+    expect(keyPoint('Good question! **Count versus largest** is the slip here. With $n$ hex digits there are $16^n$ values, from 0 up to $16^n - 1$. For example, one hex digit goes from 0 to F, which is 15. Does that make sense now?')).toBe(
+      '**Count versus largest:** With $n$ hex digits there are $16^n$ values, from 0 up to $16^n - 1$. For example, one hex digit goes from 0 to F, which is 15.'
+    )
+  })
+
+  it('never puts the question you asked into the saved point', () => {
+    const question = 'why is the largest 8 digit hex number FFFFFFFF and not 100000000 i dont get it'
+    const t = thread([
+      { role: 'user', content: question },
+      { role: 'assistant', content: 'Counting starts at 0, so $n$ hex digits reach $16^n - 1$, not $16^n$. For example, one hex digit goes up to F, which is 15.' }
+    ], [1])
+    const saved = threadNotes(t)
+    expect(saved).toHaveLength(1)
+    expect(saved[0]).not.toContain(question)
+    expect(saved[0]).not.toMatch(/dont get it|largest 8 digit/)
+    expect(saved[0]).toBe('**Because of fingers:** Counting starts at 0, so $n$ hex digits reach $16^n - 1$, not $16^n$. For example, one hex digit goes up to F, which is 15.')
+    expect(replyPoint(t, 0)).toBe('')
+    // Nor does the notes model ever see it
+    expect(pointPrompt(t.messages[1].content, { quote: t.quote, topic: 'Binary and hex' })).not.toContain(question)
+    expect(POINT_SYSTEM).toMatch(/concept's own name in bold/)
+  })
+
+  it('takes the notes model’s point only when it is one', () => {
+    expect(cleanPoint('Key point: **Count versus largest:** $n$ digits give $16^n$ values, up to $16^n - 1$. For example, FF is 255.')).toBe('**Count versus largest:** $n$ digits give $16^n$ values, up to $16^n - 1$. For example, FF is 255.')
+    expect(cleanPoint('')).toBeNull()
+    expect(cleanPoint('<note>x</note>')).toBeNull()
+    expect(cleanPoint('x'.repeat(1000))).toBeNull()
   })
 })

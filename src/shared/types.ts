@@ -124,6 +124,8 @@ export interface Settings {
   editorSource?: boolean
   /** Study timers: the sidebar's Focus timer and the timer buttons on notes, books and practice */
   studyTimers?: boolean
+  /** A lesson's "Flashcard from this miss" goes into your flashcards as it appears (Undo takes it out). On unless turned off */
+  autoCards?: boolean
   /** Sidebar items the user chose to hide (ids from shared/sidebar.ts) */
   sidebarHidden?: string[]
   fontSize: number
@@ -751,6 +753,8 @@ export interface TideApi {
     test(): Promise<{ ok: boolean; message: string }>
     /** The model picks between close teaching strategies (a one-letter answer, a few seconds at most) */
     tieBreak(topic: string, options: import('./strategy').Strategy[], context?: string): Promise<import('./strategy').Strategy>
+    /** "Save to notes" on a thread reply: its key point from the notes model, or null without Claude (shared/lessonThreads keyPoint then) */
+    threadPoint(reply: string, opts?: { quote?: string; topic?: string }): Promise<string | null>
     generateFlashcards(path: string, count: number, focusText?: string, pages?: { from: number; to: number }): Promise<{ front: string; back: string }[]>
     readAlong(path: string, passage: string, mode: string, force?: boolean, style?: 'coach'): Promise<ReadAlongNote | null>
   }
@@ -1563,6 +1567,10 @@ export interface TideApi {
     cards(scope: ChatScope): Promise<StudyCard[]>
     review(cardId: string, grade: ReviewGrade, path: string): Promise<CardSchedule>
     saveCards(path: string, markdown: string): Promise<string>
+    /** Takes cards saved with saveCards out of the same note again (Undo); the note, or null */
+    removeCards(path: string, markdown: string): Promise<string | null>
+    /** Which of these cards (as cardsToMarkdown writes them) are in the flashcards note for `path` */
+    cardsSaved(path: string, cards: string[]): Promise<boolean[]>
   }
   app: {
     openExternal(url: string): Promise<void>

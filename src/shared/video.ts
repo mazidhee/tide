@@ -334,7 +334,38 @@ export function bestSection(lines: Line[], topic: string, { min, max } = SECTION
   return best
 }
 
-export type ClipCheck = { ok: true; clip: Clip; text: string; adjusted: boolean } | { ok: false; why: string }
+/**
+ * Words too common across subjects to tie a clip to a topic on their own: "number" and
+ * "representation" are said in a neural-network lecture as often as in one on binary
+ */
+const GENERIC = new Set(
+  'number representation system method model theory problem value type form process data example case way thing result part level term rule simple general common key main fundamental principle application practice'.split(' ')
+)
+
+/** A topic word among a clip's words (as bestSection matches them, and "hex" for "hexadecimal") */
+const meets = (want: string, have: Set<string>) => have.has(want) || [...have].some((x) => want.length > 4 && ((x.length > 4 && x.startsWith(want)) || (x.length >= 3 && want.startsWith(x))))
+
+/**
+ * Whether a clip genuinely covers a lesson's topic, not just shares a word or two with it: the
+ * topic's key words (its general ones set aside) are named in the clip's title and said in it, or
+ * nearly all of them are said in it. "Binary, hexadecimal, number representations" never matches a
+ * neural-network lecture that says "binary classification" and "representations".
+ */
+export function coversTopic(topic: string, clip: { title: string; text: string }): boolean {
+  const all = terms(topic)
+  if (!all.length) return false
+  const keys = all.filter((w) => !GENERIC.has(w))
+  const want = keys.length ? keys : all
+  const title = new Set(terms(clip.title))
+  const said = new Set(terms(clip.text))
+  const inTitle = want.filter((w) => meets(w, title)).length
+  const inClip = want.filter((w) => meets(w, said)).length
+  if (inTitle >= Math.ceil(want.length / 2) && inClip > 0) return true
+  // All of up to three key words said in it, three in four of more
+  return inClip >= (want.length <= 3 ? want.length : Math.ceil(want.length * 0.75))
+}
+
+export type ClipCheck ={ ok: true; clip: Clip; text: string; adjusted: boolean } | { ok: false; why: string }
 
 /**
  * A clip's times checked against the real transcript: the video's transcript must be known, the

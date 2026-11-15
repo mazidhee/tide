@@ -778,6 +778,9 @@ function StudySection() {
         <Row label="Timers" hint="The Focus timer and the timer buttons on notes and practice.">
           <Toggle label="Timers" on={settings.studyTimers !== false} onChange={(on) => app.updateSettings({ studyTimers: on })} />
         </Row>
+        <Row label="Add flashcards from mistakes automatically" hint="A card the tutor makes from a question you missed goes into your flashcards as it appears. Undo on the card takes it out.">
+          <Toggle label="Add flashcards from mistakes automatically" on={settings.autoCards !== false} onChange={(on) => app.updateSettings({ autoCards: on })} />
+        </Row>
       </Group>
       <BreaksGroup />
       <PrepGroup />

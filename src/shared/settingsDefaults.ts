@@ -12,6 +12,7 @@ export const DEFAULT_SETTINGS: Settings = {
   readingWidth: 'normal',
   readingFont: 'sans',
   studyTimers: true,
+  autoCards: true,
   fontSize: 17,
   ai: {
     baseUrl: 'http://localhost:8080/v1',

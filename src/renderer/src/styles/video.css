@@ -574,6 +574,11 @@
 .vclip-offer b {
   color: var(--ink);
 }
+.vclip-offer-acts {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
 
 /* Notes while watching */
 .vt-notes {
