@@ -79,7 +79,7 @@ export function Home(_: { dueCount: number; cardCount: number }) {
   const [mastery, setMastery] = useState<Record<string, Mastery>>({})
   const daily = useDailyCount()
   // A lesson prepared while you were away comes first (main/lessonPrep)
-  const { prep: ready } = useReadyLesson()
+  const { prep: ready, preparing } = useReadyLesson()
 
   useEffect(() => {
     window.tide.vault.notes().then(setNotes)
@@ -228,6 +228,7 @@ export function Home(_: { dueCount: number; cardCount: number }) {
       <HomeTide
         upNext={upNext}
         ready={ready ? { prep: ready, start: () => startPrepared(app, ready) } : null}
+        preparing={preparing && !hasDaily && planned?.item.kind === 'learn'}
         why={!hasDaily && planned ? planned.item.why : undefined}
         plans={plans}
         forecasts={forecasts}

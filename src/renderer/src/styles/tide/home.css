@@ -188,6 +188,10 @@
     margin-left: 6px;
     color: var(--ink-2);
   }
+  /* The next lesson has no prep yet: said quietly beside its plain Start */
+  .td-now-prep {
+    margin-right: 10px;
+  }
   .td-now-side {
     display: flex;
     flex-direction: column;

@@ -11,6 +11,7 @@ import type { PlanStep } from './lessonPlan'
 import type { ChatScope } from './types'
 import type { WarmupSet } from './warmup'
 import type { SessionSetup } from './session'
+import { nextLine } from './coach'
 
 export interface PrepSettings {
   on: boolean
@@ -161,6 +162,57 @@ export interface PreparedLesson {
   calls: number
   /** Why Claude didn't take part, when it didn't */
   note?: string
+}
+
+// ---------- Is it still the next lesson? ----------
+
+/** A prepared lesson is offered as the next one for this long at most; after that it's dropped */
+export const PREP_FRESH_MS = 2 * 86_400_000
+
+/** "Teach me: Binary,  hex" and "binary, hex" are one topic */
+export const sameTopic = (t: string) => t.toLowerCase().replace(/^(teach me|quiz me|review|mixed):\s*/, '').replace(/\s+/g, ' ').trim()
+
+/** What the plan puts next now: today's first unfinished lesson or Check (as Home shows it), else the roadmap's next topic */
+export interface PlanNext {
+  topic: string
+  topicId?: string
+  kind: 'learn' | 'check'
+  notebook?: string
+  /** The plan item's reason, as the plan says it now */
+  why?: string
+  section?: string
+  module?: string
+}
+
+export type PrepFit = { show: true } | { show: false; why: 'used' | 'expired' | 'nothing planned' | 'check first' | 'plan moved on' }
+
+/**
+ * Whether a prepared lesson is still the next lesson, so Home and Learn may offer it. It must be
+ * the very thing the plan puts next now: after a replan, a different first lesson, or a Check
+ * before it, it is set aside (never shown beside a different "next"). Past PREP_FRESH_MS it's stale anyway.
+ */
+export function prepFits(p: Pick<PreparedLesson, 'status' | 'at' | 'topic' | 'topicId'>, next: PlanNext | null, now: number): PrepFit {
+  if (p.status !== 'ready') return { show: false, why: 'used' }
+  if (now - p.at > PREP_FRESH_MS) return { show: false, why: 'expired' }
+  if (!next) return { show: false, why: 'nothing planned' }
+  const same = (!!p.topicId && p.topicId === next.topicId) || sameTopic(p.topic) === sameTopic(next.topic)
+  if (next.kind === 'check') return { show: false, why: same ? 'check first' : 'plan moved on' }
+  return same ? { show: true } : { show: false, why: 'plan moved on' }
+}
+
+/** The pre-modules reason line ("Next in your Software Engineering roadmap (How Computers Work)", "Next on your …") */
+const LEGACY_WHY = /^Next (in|on) your\b/
+
+/**
+ * The reason line a prepared lesson shows, from what is true now: Claude's own line for that
+ * lesson when it wrote one, else the plan's current reason, else where it sits in the course said
+ * the module way ("Next · Python and Engineering Practice"). Never the old stored roadmap wording.
+ */
+export function prepReason(p: Pick<PreparedLesson, 'why' | 'by' | 'plan' | 'notebook'>, next: Pick<PlanNext, 'why' | 'notebook' | 'section' | 'module'> | null): string {
+  if (p.by === 'claude' && p.plan?.steps.length && p.why && !LEGACY_WHY.test(p.why)) return p.why
+  if (next?.why && !LEGACY_WHY.test(next.why)) return next.why
+  const nb = next?.notebook ?? p.notebook
+  return nb ? nextLine(nb, { module: next?.module, section: next?.section }) : ''
 }
 
 /** What the Ready card lists, in order, each a few words */
@@ -411,4 +463,6 @@ export interface PrepStatus {
   last?: { at: number; decision: PrepDecision }
   lastWeekly?: number
   preparing: boolean
+  /** No prepared lesson fits the plan's next lesson yet; prep makes one at the next quiet time */
+  queued?: boolean
 }

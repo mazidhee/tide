@@ -79,6 +79,8 @@ export interface HomeTideProps {
   makeFit(plan: GoalPlan, f: Forecast): void
   /** A lesson prepared while you were away (main/lessonPrep): it takes the next-thing block */
   ready?: { prep: import('@shared/lessonPrep').PreparedLesson; start(): void } | null
+  /** The next lesson shown has no prep yet: a quiet "Preparing…" beside its plain Start */
+  preparing?: boolean
 }
 
 /**
@@ -227,6 +229,11 @@ export function HomeTide(p: HomeTideProps) {
                   Choose something else
                 </button>
                 <span className="td-meta td-now-key" title="Press Return to start">
+                  {!open && p.preparing && (
+                    <span className="td-now-prep" title="Tide gets this lesson ready while you’re away; Start works now too">
+                      Preparing…
+                    </span>
+                  )}
                   <kbd>↵</kbd>
                 </span>
               </div>
