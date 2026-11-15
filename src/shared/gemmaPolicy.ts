@@ -25,6 +25,8 @@ export const JOB_ROUTES = {
   writingReview: { label: 'Reviewing your writing', role: 'mark' },
   writingRecheck: { label: 'Checking a fix in your writing', role: 'mark' },
   writingTalk: { label: 'Challenging the thinking in your writing', role: 'teach' },
+  // Draft check while writing: Sonnet looks at a paragraph or two for flow and clarity
+  writingDraft: { label: 'Checking a paragraph as you write', role: 'teach' },
   // Comprehension lessons (main/comprehension): Opus grades a summary against the passage. Claude only: without it
   // the learner checks their summary against the shown passage
   comprehensionGrade: { label: 'Grading what you understood of a passage', role: 'mark' },

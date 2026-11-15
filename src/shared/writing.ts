@@ -65,6 +65,13 @@ export interface WritingComment {
   ask: string
   /** An illustration on a different sentence, never a rewrite of theirs */
   example?: string
+  /**
+   * "Show me": the technique on a made-up sentence about something else (never the learner's
+   * words): the sentence with the same problem, the same sentence improved, and the principle
+   */
+  show?: { before: string; after: string; why: string }
+  /** From a draft check of a paragraph or two, not a full review */
+  draft?: boolean
   by: 'tide' | 'claude'
   status: 'open' | 'resolved' | 'dismissed'
   at: number
@@ -115,6 +122,8 @@ export interface PieceRecord {
   talk?: { role: 'tutor' | 'learner'; text: string }[]
   /** When the learner marked it published (Tide's state; the file is left alone) */
   published?: number
+  /** Short keys of the paragraphs as they were at the last check or review, for "what changed since" */
+  checked?: string[]
 }
 
 export interface PieceSummary {

@@ -496,6 +496,7 @@ const api: TideApi = {
     comments: invoke('writing:comments'),
     kind: invoke('writing:kind'),
     review: invoke('writing:review'),
+    draftCheck: invoke('writing:draftCheck'),
     recheck: invoke('writing:recheck'),
     challenge: invoke('writing:challenge'),
     habits: invoke('writing:habits'),

@@ -43,11 +43,17 @@ import { checkMechanics, recheckLocal } from '@shared/writingCheck'
 import { HEIC_FILE, IMAGE_FILE, attachmentDir, attachmentName, attachmentSetting, resolveEmbed } from '@shared/writingMedia'
 import { DEFAULT_FIELDS, UNSORTED, pieceDates, pieceField, pieceTags, setFrontTags, type MySections } from '@shared/writingMeta'
 import {
+  DRAFT_SYSTEM,
   REVIEW_SYSTEM,
   RECHECK_SYSTEM,
   challengePrompt,
   challengeSystem,
+  changedParagraphs,
+  combineDraftCheck,
   combineReview,
+  draftPrompt,
+  paragraphsAt,
+  parseDraftCheck,
   mergeTopics,
   parseRecheck,
   parseReview,
@@ -278,7 +284,7 @@ export async function setPublished(path: string, published: boolean): Promise<{ 
 // ---------- Reviews ----------
 
 /** Asks Claude (only Claude: no Gemma for a review) for a job's answer; null when Claude can't */
-type Ask = (job: 'writingReview' | 'writingRecheck' | 'writingTalk', prompt: string, system: string) => Promise<string | null>
+type Ask = (job: 'writingReview' | 'writingRecheck' | 'writingTalk' | 'writingDraft', prompt: string, system: string) => Promise<string | null>
 const realAsk: Ask = async (job, prompt, system) => {
   const { jobRoute, completeFor } = await import('./ai')
   if ((await jobRoute(job)).who !== 'claude') return null
@@ -318,6 +324,38 @@ export async function reviewPiece(path: string, text: string, o: { full?: boolea
   await writeRecord(next)
   void updateHabits().catch(() => {})
   return { record: next, by: claude ? 'claude' : 'tide' }
+}
+
+export interface DraftCheckResult {
+  record: PieceRecord
+  by: 'claude' | 'tide'
+  /** How many paragraphs were looked at (0: nothing new since the last check) */
+  paragraphs: number
+  /** Claude's one line on how it reads so far */
+  note: string
+}
+
+/**
+ * A draft check while writing: only the paragraph(s) at `range` (the cursor or a selection), or
+ * else the ones written or changed since the last check, at most three. The checker's marks and
+ * Claude's (Sonnet, flow and clarity, never a verdict on the piece) replace the open comments in
+ * just those paragraphs; the last full review stays as it was.
+ */
+export async function draftCheck(path: string, text: string, range?: { from: number; to: number }): Promise<DraftCheckResult> {
+  const { abs } = resolvePiece(path)
+  const stored = await readRecord(abs)
+  // The comments where their words are now, so the ones in the checked paragraphs are found
+  const rec = { ...stored, comments: reanchor(text, stored.comments).comments }
+  const kind = rec.kind ?? detectKind(text, abs).kind
+  const parts = (range ? paragraphsAt(text, range.from, range.to) : changedParagraphs(text, rec.checked)).slice(-3)
+  if (!parts.length) return { record: rec, by: 'tide', paragraphs: 0, note: '' }
+  const at = Date.now()
+  const local = checkMechanics(text, { light: true, at })
+  const reply = await ask('writingDraft', draftPrompt({ text, parts, kind }), DRAFT_SYSTEM)
+  const claude = reply ? parseDraftCheck(reply, text, parts, at) : null
+  const next = combineDraftCheck(rec, { text, parts, local, claude: claude?.comments ?? [] })
+  await writeRecord(next)
+  return { record: next, by: claude ? 'claude' : 'tide', paragraphs: parts.length, note: claude?.note ?? '' }
 }
 
 /**
