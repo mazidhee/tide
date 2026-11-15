@@ -28,8 +28,19 @@ export function NorthStarView() {
     void load()
   }, [load, app.files])
 
+  // Replan: the whole map thought through again from the goal note; the current one stays until the new one is built
+  const [replanning, setReplanning] = useState(false)
   if (data === undefined) return <div className="page ns-page" />
-  return <div className="page ns-page">{data ? <MapView data={data} onChange={setData} reload={load} /> : <Build onBuilt={load} />}</div>
+  if (data && replanning)
+    return (
+      <div className="page ns-page">
+        <button className="link-btn ns-back" onClick={() => setReplanning(false)}>
+          ← Back to my current plan
+        </button>
+        <Build onBuilt={() => (setReplanning(false), void load())} />
+      </div>
+    )
+  return <div className="page ns-page">{data ? <MapView data={data} onChange={setData} reload={load} onReplan={() => setReplanning(true)} /> : <Build onBuilt={load} />}</div>
 }
 
 // ---------- Small marks: a ring, a depth bar ----------
@@ -641,7 +652,7 @@ function useNextItem(): { item: AgendaItem; date: string; index: number } | null
   return next
 }
 
-function MapView({ data, onChange, reload }: { data: ViewData; onChange: (d: ViewData | null) => void; reload: () => void }) {
+function MapView({ data, onChange, reload, onReplan }: { data: ViewData; onChange: (d: ViewData | null) => void; reload: () => void; onReplan: () => void }) {
   const app = useApp()
   const { ns } = data
   const [busy, setBusy] = useState('')
@@ -697,6 +708,10 @@ function MapView({ data, onChange, reload }: { data: ViewData; onChange: (d: Vie
             {busy === 'review' ? <span className="spinner" /> : <Icon name="refresh" />}
             <span>Check now</span>
           </button>
+          <button className="tool-btn" onClick={onReplan} disabled={!!busy} title="Think the whole map through again from your goal note. Your current plan stays until you build the new one">
+            <Icon name="northstar" />
+            <span>Replan</span>
+          </button>
         </div>
       </header>
 
@@ -705,7 +720,7 @@ function MapView({ data, onChange, reload }: { data: ViewData; onChange: (d: Vie
       {(data.goalEdited || (data.edited && !data.error)) && (
         <div className="ns-banner">
           <span>{data.goalEdited ? 'Your goal note changed since this map was planned.' : 'You edited the note; Tide is using your version.'}</span>
-          <button className="link-btn" onClick={review} disabled={!!busy}>
+          <button className="link-btn" onClick={onReplan} disabled={!!busy}>
             Replan
           </button>
         </div>
