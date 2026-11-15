@@ -118,6 +118,9 @@ describe('preparing a lesson', () => {
   })
 
   it('gets everything ready with Claude: due, reading, a plan, checked exercises, a visual and the opening', async () => {
+    // The morning it's for: the plan's next lesson then is Two's complement
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 10, 13, 9))
     const asked: string[] = []
     const ask: import('../src/main/lessonPrep').PrepAsk = async (job, prompt) => {
       asked.push(job)
@@ -156,6 +159,26 @@ describe('preparing a lesson', () => {
     expect(blocks.some((b) => b.kind === 'ask')).toBe(true)
     // Used: it no longer shows as ready
     expect(await M.readyPrep()).toBeNull()
+  })
+
+  it('sets a prep aside once the plan moves on, and says a fitting one’s reason from the plan as it is now', async () => {
+    const day = PLAN.days[0]
+    const items = day.items
+    const p = await M.prepareLesson({ topic: 'Two’s complement', notebook: 'Software engineering', forDate: '2026-11-13', why: 'Next in your Software engineering roadmap (Binary)' }, { claude: false })
+    // Still the next lesson: shown, its old stored wording replaced
+    const shown = await M.readyPrep()
+    expect(shown?.id).toBe(p.id)
+    expect(shown?.why).toBe('It builds on binary, which you have now.')
+    // Replanned: a different first lesson today. The prep is not offered; a fresh one is queued
+    day.items = [{ ...items[0], title: 'Running Python', topic: 'Running Python', why: 'Python from the ground up, needed for your aim' }]
+    expect(await M.readyPrep()).toBeNull()
+    expect(await M.prepStatus()).toMatchObject({ ready: null, queued: true })
+    // Two days on it is dropped whatever the plan says
+    day.items = items
+    vi.setSystemTime(new Date(2026, 10, 15, 9, 1))
+    expect(await M.readyPrep()).toBeNull()
+    expect(await M.getPrep(p.id)).toBeNull()
+    vi.useRealTimers()
   })
 
   it('uses Claude for a work project’s topic like any other, and without Claude prepares what needs no model', async () => {

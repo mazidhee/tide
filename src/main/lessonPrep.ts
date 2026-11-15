@@ -14,7 +14,7 @@
  * model. Also, once a week, the weekly review note and the profile's tidy.
  */
 import { promises as fs } from 'fs'
-import { claudeWhy, factsText, inWindow, fallbackFocus, nightOf, parsePrepPlan, parseReviewProse, planTag, planText, prepExercisesPrompt, prepNote, prepOpeningPrompt, prepPlanPrompt, prepSettings, PREP_EXERCISES_SYSTEM, PREP_PLAN_SYSTEM, shouldPrep, weeklyReviewMarkdown, weeklyReviewPrompt, WEEKLY_CALLS, WEEKLY_REVIEW_SYSTEM, type PrepDecision, type PreparedExercise, type PreparedLesson, type PrepSettings, type PrepStatus, type ReviewProse, type WeekFacts } from '@shared/lessonPrep'
+import { claudeWhy, factsText, inWindow, fallbackFocus, nightOf, parsePrepPlan, parseReviewProse, planTag, planText, prepExercisesPrompt, prepNote, prepOpeningPrompt, prepPlanPrompt, prepSettings, PREP_EXERCISES_SYSTEM, PREP_PLAN_SYSTEM, prepFits, prepReason, PREP_FRESH_MS, sameTopic, shouldPrep, weeklyReviewMarkdown, weeklyReviewPrompt, WEEKLY_CALLS, WEEKLY_REVIEW_SYSTEM, type PlanNext, type PrepDecision, type PreparedExercise, type PreparedLesson, type PrepSettings, type PrepStatus, type ReviewProse, type WeekFacts } from '@shared/lessonPrep'
 import type { JobName } from '@shared/gemmaPolicy'
 import type { ChatScope } from '@shared/types'
 import type { SessionSetup } from '@shared/session'
@@ -25,8 +25,8 @@ const DIR = '.tide/prep'
 const USAGE = `${DIR}/usage.json`
 const fileFor = (id: string) => `${DIR}/${id.replace(/[^a-z0-9-]/gi, '')}.json`
 const DAY = 86_400_000
-/** A prepared lesson nobody started is dropped after this */
-const KEEP_MS = 10 * DAY
+/** A prepared lesson nobody started is dropped after this: by then the plan has moved on */
+const KEEP_MS = PREP_FRESH_MS
 
 const localDate = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
@@ -91,14 +91,54 @@ export async function openTopics(now = Date.now()): Promise<string[]> {
   const lessons = await listLessons().catch(() => [])
   return lessons.filter((l) => !l.finished && now - l.updated < 3 * DAY && l.topic).map((l) => sameTopic(l.topic))
 }
-export const sameTopic = (t: string) => t.toLowerCase().replace(/^(teach me|quiz me|review|mixed):\s*/, '').replace(/\s+/g, ' ').trim()
+export { sameTopic }
 
-/** What Home and Learn show as "Ready for you" */
-export async function readyPrep(): Promise<PreparedLesson | null> {
+/**
+ * What the plan puts next now, the way Home reads it: today's first unfinished lesson or Check,
+ * else the next lesson prep would make (the next study day's, else the focus roadmap's)
+ */
+export async function planNext(): Promise<PlanNext | null> {
+  const { getWeek } = await import('./coach')
+  const { todayItems } = await import('@shared/coach')
+  const today = localDate()
+  const plan = await getWeek(today).catch(() => null)
+  const it = todayItems(plan, today).find((x) => (x.kind === 'learn' || x.kind === 'check') && !x.done)
+  if (it) return { topic: it.kind === 'check' ? it.title : (it.topic ?? it.title), kind: it.kind as 'learn' | 'check', ...(it.topicId ? { topicId: it.topicId } : {}), ...(it.notebook ? { notebook: it.notebook } : {}), ...(it.why ? { why: it.why } : {}) }
+  const t = await nextTarget(await openTopics().catch(() => []))
+  return t ? { topic: t.topic, kind: 'learn', ...(t.topicId ? { topicId: t.topicId } : {}), ...(t.notebook ? { notebook: t.notebook } : {}), ...(t.why ? { why: t.why } : {}), ...(t.section ? { section: t.section } : {}) } : null
+}
+
+/** Where a topic sits in its course now (its module, else its section), for the reason line */
+async function whereNow(notebook: string, topic: string, topicId?: string): Promise<{ section?: string; module?: string }> {
+  try {
+    const { getNotebooks } = await import('./learn')
+    const nb = (await getNotebooks()).find((n) => n.name === notebook || n.path === notebook)
+    if (!nb) return {}
+    const { moduleTitleOf } = await import('@shared/coach')
+    const t = (await (await import('./modules')).openTopics(nb)).find((x) => (topicId && x.id === topicId) || sameTopic(x.title) === sameTopic(topic))
+    return t ? { section: t.section, ...(moduleTitleOf(t) ? { module: moduleTitleOf(t) } : {}) } : {}
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * What Home and Learn show as "Ready for you": the prepared lesson only while it is still the
+ * plan's next lesson (shared/lessonPrep prepFits), its reason line said from today's plan and
+ * course. One that no longer fits is set aside, not shown, and dropped once stale.
+ */
+export async function readyPrep(next?: PlanNext | null): Promise<PreparedLesson | null> {
+  const now = Date.now()
+  const want = next !== undefined ? next : await planNext().catch(() => null)
   const open = await openTopics().catch(() => [] as string[])
-  const all = (await waitingPreps()).filter((p) => !open.includes(sameTopic(p.topic)))
-  // The one for the soonest day, then the newest
-  return all.sort((a, b) => a.forDate.localeCompare(b.forDate) || b.at - a.at)[0] ?? null
+  const all = (await waitingPreps(now)).filter((p) => !open.includes(sameTopic(p.topic)) && prepFits(p, want, now).show)
+  const p = all.sort((a, b) => b.at - a.at)[0]
+  if (!p) return null
+  const why = prepReason(p, want)
+  // Said from where it sits in the course: look up its module now
+  const nb = want?.notebook ?? p.notebook
+  if (!why.startsWith('Next · ') || !nb) return { ...p, why }
+  return { ...p, why: prepReason(p, { ...want, notebook: nb, ...(await whereNow(nb, p.topic, p.topicId)) }) }
 }
 
 /**
@@ -305,7 +345,8 @@ export async function prepareLesson(t: PrepTarget, o: { claude: boolean; note?: 
     forDate: t.forDate,
     scope,
     options,
-    why: t.why ?? `Next on your ${t.notebook ?? 'roadmap'}${t.section ? `, in ${t.section}` : ''}.`,
+    // Kept for the tutor's note; the card says its reason from the plan as it is then (readyPrep)
+    why: t.why ?? prepReason({ why: '', by: 'local', notebook: t.notebook }, { notebook: t.notebook, section: t.section }),
     ...due,
     ...(reading ? { reading } : {}),
     exercises: [],
@@ -534,9 +575,11 @@ export async function tick(o: { force?: boolean } = {}): Promise<PrepDecision> {
     const settings = getPrepSettings()
     const u = await usage()
     const { busy, claude } = await claudeFacts()
-    const ready = await readyPrep()
-    const target = ready ? null : await nextTarget(await openTopics().catch(() => []))
-    const input = { now: Date.now(), settings, idleSeconds: o.force ? 1e9 : await idleSeconds(), busy: o.force ? false : busy, claude, usedTonight: u.calls, ready: !!ready, target: !!target, lastTry: o.force ? undefined : u.lastTry }
+    // Ready means a prep that fits the next lesson to make; one set aside by a replan doesn't count
+    const target = await nextTarget(await openTopics().catch(() => []))
+    const now = Date.now()
+    const ready = !!target && (await waitingPreps(now)).some((p) => prepFits(p, { topic: target.topic, topicId: target.topicId, kind: 'learn' }, now).show)
+    const input = { now, settings, idleSeconds: o.force ? 1e9 : await idleSeconds(), busy: o.force ? false : busy, claude, usedTonight: u.calls, ready, target: !!target, lastTry: o.force ? undefined : u.lastTry }
     const decision = shouldPrep(input)
     await setUsage({ last: { at: Date.now(), decision } })
     if (decision.run && target) {
@@ -565,7 +608,12 @@ export async function tick(o: { force?: boolean } = {}): Promise<PrepDecision> {
 export async function prepStatus(): Promise<PrepStatus> {
   const u = await usage()
   const waiting = await waitingPreps()
-  return { settings: getPrepSettings(), ready: await readyPrep(), waiting: waiting.length, usedTonight: u.calls, ...(u.last ? { last: u.last } : {}), ...(u.lastWeekly ? { lastWeekly: u.lastWeekly } : {}), preparing: running }
+  const settings = getPrepSettings()
+  const next = await planNext().catch(() => null)
+  const ready = await readyPrep(next)
+  // The plan's next lesson has no prep yet: Home says "Preparing…" beside its plain Start
+  const queued = settings.on && !ready && next?.kind === 'learn'
+  return { settings, ready, waiting: waiting.length, usedTonight: u.calls, ...(u.last ? { last: u.last } : {}), ...(u.lastWeekly ? { lastWeekly: u.lastWeekly } : {}), preparing: running, ...(queued ? { queued } : {}) }
 }
 
 let timer: ReturnType<typeof setInterval> | null = null
