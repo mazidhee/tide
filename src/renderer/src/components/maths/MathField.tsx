@@ -12,6 +12,8 @@ let loading: Promise<typeof import('mathlive')> | null = null
 /** MathLive, loaded the first time a maths field is shown, so other screens never pay for it */
 export function loadMathLive() {
   loading ??= import('mathlive').then((m) => {
+    // Outside a real browser (the jsdom tests) MathLive has no element to set up
+    if (!m.MathfieldElement) return m
     m.MathfieldElement.fontsDirectory = null
     m.MathfieldElement.soundsDirectory = null
     m.MathfieldElement.keypressSound = null
@@ -83,7 +85,7 @@ export function MathField({
   useEffect(() => {
     let gone = false
     void loadMathLive().then(({ MathfieldElement }) => {
-      if (gone || !host.current) return
+      if (gone || !host.current || !MathfieldElement) return
       const el = new MathfieldElement()
       el.mathVirtualKeyboardPolicy = 'manual'
       el.smartFence = true
