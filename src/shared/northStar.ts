@@ -420,10 +420,18 @@ export interface SynthInput {
   goalNote?: string
   /** Dated milestones parsed from the note (shared/milestone milestoneText), already as lines */
   milestones?: string
+  /** The goal note's main path as hard rules (shared/mainPath mainPathPrompt), and its tracks in order: spine, serving, applied */
+  mainPath?: { text: string; order: string[] }
 }
 
 export function synthesisPrompt(i: SynthInput): string {
-  const tracks = i.catalogue
+  // The main path's tracks first (spine, serving, applied), so the catalogue reads in the order they matter
+  const rank = (t: CatalogueTrack) => {
+    const k = i.mainPath?.order.indexOf(t.name) ?? -1
+    return k < 0 ? 99 : k
+  }
+  const tracks = [...i.catalogue]
+    .sort((a, b) => rank(a) - rank(b))
     .map((t) => {
       const head = `### ${t.name} (${t.source === 'own' ? 'their own roadmap' : 'ready roadmap'}, ${t.left} of ${t.topics} topics left)${t.about ? `: ${t.about}` : ''}`
       const phases = t.phases.map((p) => {
@@ -444,7 +452,9 @@ ${i.goal && !i.goalNote.includes(i.goal.slice(0, 80)) ? `
 ${i.goal}
 ` : ''}` : `## Their goal, in their words
 ${i.goal}
-`}
+`}${i.mainPath ? `
+${i.mainPath.text}
+` : ''}
 ## Their time
 About ${i.hoursPerWeek} hours a week${i.measuredHours !== undefined ? ` planned; they actually studied about ${i.measuredHours} hours a week lately` : ''}.
 
@@ -473,19 +483,19 @@ ${i.milestones ? `
 ${i.milestones}
 
 Keep the foundation-first outline: foundations still come first and go deep. Within it, order the year so the foundations the milestone's interviews test come first and are learned deeply:
-- Data structures and algorithms, C++ from zero (memory, ownership, the standard library), operating systems and concurrency, and networking come early, in the first stages.
+- Data structures and algorithms, C++ from zero (memory, ownership, the standard library), operating systems and concurrency, and networking come early, in the first stages${i.mainPath ? ', beside the spine, never instead of it' : ''}.
 - Probability and brainteasers stay warm throughout for quant rounds; SQL early enough for data roles; system design basics before the date.
 - Languages are topics like any other: no fixed order between them. Place each where what depends on it and the milestone's bar put it, with prerequisites from the roadmaps.
-- Tracks the milestone doesn't test (for example payments, blockchain, economics) get no new material before the milestone's date: put their stages after it. Their learned flashcards keep their reviews.
+${i.mainPath ? "- The applied thread (the side tracks) runs as the main path says, the milestone doesn't change it." : "- Tracks the milestone doesn't test (for example payments, blockchain, economics) get no new material before the milestone's date: put their stages after it. Their learned flashcards keep their reviews."}
 - Give each stage that carries milestone scope "serves": ["the milestone's title"].
 ` : ''}
 ## What to build
 1. One integrated goal statement in their terms (2–4 sentences): where all of this is heading.
-2. A master map: a DAG of stages. Shared foundations first and reused everywhere: maths (linear algebra, calculus, optimisation), probability and statistics, programming and software engineering, computer systems. Then branches that converge, for example: risk ↔ data science ↔ ML; backend and infrastructure ↔ ML engineering; quant ↔ ML ↔ computational economics; payments and blockchain ↔ backend and distributed systems. The final stage is research: reading papers, reproducing results, writing a paper.
+2. ${i.mainPath ? 'A master map: a DAG of stages that follows the main path above (its rules override anything below): the spine from the first stages to the last, serving tracks beside it when it needs them, the side tracks as one applied thread beside it. The final stage is the spine’s frontier: research, reading papers, reproducing results, writing a paper.' : `A master map: a DAG of stages. Shared foundations first and reused everywhere: maths (linear algebra, calculus, optimisation), probability and statistics, programming and software engineering, computer systems. Then branches that converge, for example: risk ↔ data science ↔ ML; backend and infrastructure ↔ ML engineering; quant ↔ ML ↔ computational economics; payments and blockchain ↔ backend and distributed systems. The final stage is research: reading papers, reproducing results, writing a paper.`}
 3. Each stage interleaves 2–3 tracks (at most 4) that reinforce each other, with a weight each (percent, at least 15). Its scope names the exact phase or section headings of each track it covers, copied from the list above (just-in-time: only what this stage needs; leave what isn't needed for later or out).
 4. Stages are mastery-gated, NOT calendar-boxed: a stage ends when its depth goals are met, not after a fixed number of months. Give each stage a target depth, and its key topics ("deep") a depth each, on this scale: 1 recall, 2 explain, 3 apply, 4 transfer to unseen problems, 5 build from scratch or teach, 6 research. Foundations this goal rests on (probability and statistics, linear algebra, optimisation, systems, distributed systems) must target the deep levels (4–5). Not every stage is the same size: some need very deep learning and take as long as they take.
 5. Synergies, explicit and concrete, for every stage ("this stage's probability feeds both VaR in Risk and logistic regression in ML").
-6. A concrete capstone for every stage that joins its tracks (for example: a fraud-detection model served behind a payments API).
+6. A concrete capstone for every stage that joins its tracks (for example: an RL market-making agent on their own matching engine, or a stablecoin depeg early-warning system; never the common fraud-model-behind-an-API).
 7. A gate line per stage: what passing it means.
 8. An honest timeline: how long this really takes at their hours, explained, in months or years, never padded and never rushed. Say how it was compressed: doing things once and reusing them across tracks, skipping what they know, learning just in time. Say plainly what "a cracked ML engineer with deep infrastructure knowledge" realistically requires.
 9. "What Claude assumed" (the assumptions you made about them, for them to correct) and "this month" (3–5 concrete things they will do in the first month).
@@ -658,7 +668,7 @@ const TEMPLATES: Template[] = [
     ],
     deep: [{ topic: 'Optimisation and gradient descent', depth: 4 }],
     synergy: 'Regression in data science is the same least squares ML starts from; SQL feeds both.',
-    capstone: { title: 'A fraud classifier on a real dataset', brief: 'From SQL extraction to a calibrated model with honest time-based validation.' }
+    capstone: { title: 'Intraday cash-position forecasting for a payment network', brief: 'From SQL extraction of settlement flows to a calibrated forecast with honest time-based validation.' }
   },
   {
     title: 'Backend and systems',
@@ -694,7 +704,7 @@ const TEMPLATES: Template[] = [
     ],
     deep: [{ topic: 'Model serving and monitoring', depth: 5 }],
     synergy: 'Serving a model is backend engineering; its features come from the pipelines you build here.',
-    capstone: { title: 'A fraud model served behind a payments API', brief: 'Features from a stream, a served model with monitoring and a rollback plan.' }
+    capstone: { title: 'A stablecoin depeg early-warning system', brief: 'An on-chain data pipeline feeding a served sequence model, backtested on USDC in the SVB weekend and on Terra, with monitoring and a rollback plan.' }
   },
   {
     title: 'Payments and blockchain',

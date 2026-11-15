@@ -187,6 +187,32 @@ describe('replanning', () => {
     expect(r.notices.find((n) => n.kind === 'neglect')!.text).toMatch(/^Blockchain untouched for 9 days, so a 20-minute session is in (today|tomorrow)\.$/)
   })
 
+  it('keeps nothing alive that was never started: no keep-alive for a parked track with nothing learned, no "Revisit" for a track not started', () => {
+    const r = replanWeek({
+      plan: plan(),
+      today: '2026-11-18',
+      budgets,
+      spent: {},
+      threads: [
+        ...threads,
+        // Parked until the milestone, never studied
+        thread('Payments and Banking', { parked: true, maxGap: 14, touch: 15 }),
+        // Never started, nothing queued: the item maker has nothing to give
+        thread('Data Engineering', { maxGap: 7 }),
+        // Never started, a first lesson queued
+        thread('Writing', { maxGap: 7 })
+      ],
+      touchItem: (t) => (t.label === 'Writing' ? { kind: 'learn', title: 'Grammar and punctuation', topic: 'Grammar and punctuation' } : t.label === 'Data Engineering' ? null : { kind: 'review', title: `Review ${t.label}` })
+    })
+    expect(r.added.some((a) => a.item.thread === 'Payments and Banking')).toBe(false)
+    expect(r.added.some((a) => a.item.thread === 'Data Engineering')).toBe(false)
+    expect(r.added.some((a) => /^Revisit/.test(a.item.title))).toBe(false)
+    // A first session is a first session, not a keep-alive
+    const first = r.added.find((a) => a.item.thread === 'Writing')!.item
+    expect(first).toMatchObject({ title: 'Grammar and punctuation', why: 'Not started yet: a short first session' })
+    expect(first.touch).toBeUndefined()
+  })
+
   it('carries to next week what has no room, and tells Things where everything went', () => {
     const tight = { '2026-11-18': 60, '2026-11-19': 45 }
     const r = replanWeek({ plan: plan(), today: '2026-11-18', budgets: tight, spent: {}, threads })

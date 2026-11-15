@@ -535,7 +535,7 @@ const realAsk: Asker = async (job, prompt, system) => {
   const { completeFor, jobRoute } = await import('./ai')
   const route = await jobRoute(job).catch(() => ({ who: 'gemma' as const }))
   // Opus thinking hard over every roadmap can take several minutes
-  const text = await completeFor(job, prompt, system, { priority: 'interactive', timeoutMs: job === 'northStar' ? 15 * 60_000 : 6 * 60_000 })
+  const text = await completeFor(job, prompt, system, { priority: 'interactive', timeoutMs: job === 'northStar' ? 40 * 60_000 : 6 * 60_000 })
   return { text, by: route.who === 'claude' ? 'claude' : 'gemma' }
 }
 let ask: Asker = realAsk
@@ -596,20 +596,33 @@ export async function synthesise(input: { goal: string; hoursPerWeek?: number })
     const pace = paceOf(hoursPerWeek, await minutesByWeek())
     const { parseMilestones, milestoneText } = await import('@shared/milestone')
     const milestones = parseMilestones(note).filter((m) => m.date >= today())
-    const prompt = synthesisPrompt({ ...(milestones.length ? { milestones: milestones.map((m) => milestoneText(m, today())).join('\n') } : {}), goal, ...(note ? { goalNote: note } : {}), today: today(), hoursPerWeek, ...(pace.measured ? { measuredHours: pace.hours } : {}), catalogue: cat, known: knownText(all), profile, shared: groups.slice(0, 40).map((g) => ({ topic: g.title, tracks: [...new Set(g.members.map((m) => m.track))] })) })
+    // The note's main path: hard rules in the prompt, checked on the reply (shared/mainPath)
+    const mp = await import('@shared/mainPath')
+    const path = note ? mp.parseMainPath(note, cat) : null
+    const prompt = synthesisPrompt({ ...(milestones.length ? { milestones: milestones.map((m) => milestoneText(m, today())).join('\n') } : {}), goal, ...(note ? { goalNote: note } : {}), today: today(), hoursPerWeek, ...(pace.measured ? { measuredHours: pace.hours } : {}), catalogue: cat, known: knownText(all), profile, shared: groups.slice(0, 40).map((g) => ({ topic: g.title, tracks: [...new Set(g.members.map((m) => m.track))] })), ...(path ? { mainPath: { text: mp.mainPathPrompt(path, hoursPerWeek, cat), order: [...path.spine, ...path.serving, ...path.applied] } } : {}) })
     let ns: NorthStar | null = null
     const { withRequires } = await import('@shared/northStar')
-    try {
-      const out = await ask('northStar', prompt, SYNTH_SYSTEM)
+    const plan = async (p: string) => {
+      const out = await ask('northStar', p, SYNTH_SYSTEM)
       const { extractJsonObject } = await import('./ai')
-      ns = parseSynthesis(extractJsonObject(out.text), cat, { today: today(), hoursPerWeek, goal: goal || firstPara(note), by: out.by })
+      const got = parseSynthesis(extractJsonObject(out.text), cat, { today: today(), hoursPerWeek, goal: goal || firstPara(note), by: out.by })
       // Over modules: every module a stage takes comes with what it requires
-      if (ns) ns = withRequires(ns, cat)
+      return got ? withRequires(got, cat) : null
+    }
+    try {
+      ns = await plan(prompt)
+      // A reply that breaks the main path is sent back once, with what it broke
+      const broke = ns && path ? mp.checkMainPath(ns, path, cat, hoursPerWeek).violations : []
+      if (broke.length) {
+        console.warn(`[northstar] the plan broke the main path (${broke.length}); asking again`)
+        ns = (await plan(prompt + mp.retryText(broke)).catch((e) => (console.warn(`[northstar] re-ask: ${(e as Error).message}`), null))) ?? ns
+      }
     } catch (e) {
       console.warn(`[northstar] synthesis: ${(e as Error).message}`)
     }
     // Mastery first: the fallback orders modules by long-term value, not by the interview date
     ns ??= heuristicNorthStar(cat, { goal: goal || firstPara(note), today: today(), hoursPerWeek })
+    if (path) ns = followMainPath(ns, path, cat, hoursPerWeek, mp)
     draft = await preview(ns)
     return draft
   } catch (e) {
@@ -618,6 +631,18 @@ export async function synthesise(input: { goal: string; hoursPerWeek?: number })
   } finally {
     if (status.running) status = { running: false }
   }
+}
+
+/**
+ * Still off the main path after the model's second try (or Tide's own map): repaired by code, and
+ * the proposal says what changed and anything still off. Each stage says how long its applied thread takes.
+ */
+function followMainPath(ns: NorthStar, path: import('@shared/mainPath').MainPath, cat: CatalogueTrack[], hoursPerWeek: number, mp: typeof import('@shared/mainPath')): NorthStar {
+  if (!mp.checkMainPath(ns, path, cat, hoursPerWeek).violations.length) return mp.withThreadLines(ns, path, cat)
+  const r = mp.repairMainPath(ns, path, cat, hoursPerWeek)
+  const still = mp.checkMainPath(r.ns, path, cat, hoursPerWeek).violations
+  const said = [`Tide changed this plan to follow your main path: ${r.fixes.join('; ') || 'no change it could make'}.`, ...(still.length ? [`Still off your main path: ${still.slice(0, 3).join(' ')}`] : [])]
+  return { ...r.ns, assumptions: [...said, ...r.ns.assumptions] }
 }
 
 /** The goal note's goal: the paragraph under "The goal", else its first paragraph */

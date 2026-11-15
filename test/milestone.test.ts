@@ -237,6 +237,16 @@ describe('mastery first: the date only adds practice', () => {
     expect(t[1].parked).toBeFalsy()
     expect(t[1].group).toBe('love')
   })
+
+  it('a parked track with nothing learned gets no reviews at all; one studied before keeps them', () => {
+    const [never, studied, fading] = parkThreads([th('Payments and Banking'), th('Blockchain', { lastTouched: '2026-10-01' }), th('Economics', { fading: 3 })], { milestone: ms(), today: TODAY, stageTracks: [] })
+    expect(never).toMatchObject({ parked: true, paused: true })
+    expect(studied).toMatchObject({ parked: true, paused: false })
+    expect(fading).toMatchObject({ parked: true, paused: false })
+    // Paused: the week gives it nothing, so no "Review Payments and Banking" keep-alive
+    const w = planPortfolio({ today: TODAY, days: [0, 1, 2, 3, 4].map((i) => ({ date: addDays(TODAY, i), minutes: 240 })), threads: [th('Machine Learning'), never, studied], dueCards: 0, fading: 0 })
+    expect(w.days.flatMap((d) => d.sessions).some((s) => s.thread === never.id)).toBe(false)
+  })
 })
 
 describe('urgency', () => {

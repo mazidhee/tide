@@ -497,7 +497,8 @@ export interface ReplanInput {
    */
   dayFloor?: number
   /** The item for a short keep-alive session on a thread (main fills in the next topic, the project's milestone…) */
-  touchItem?: (t: Thread, minutes: number) => AgendaItem
+  /** The item a short session on a thread is; null when there is nothing to do there (a track never started, nothing queued) */
+  touchItem?: (t: Thread, minutes: number) => AgendaItem | null
 }
 
 export interface ReplanResult {
@@ -609,10 +610,16 @@ export function replanWeek(input: ReplanInput): ReplanResult {
     const inTime = ahead.filter((d) => d <= (by < today ? today : by))
     const day = [...inTime].sort((a, b) => roomOn(b) - roomOn(a) || a.localeCompare(b))[0] ?? ahead[0]
     if (!day) continue
+    // A parked track keeps only what was learned alive: never started, it gets nothing
+    if (t.parked && !t.lastTouched) continue
     const gap = gapOf(t, day)
     const minutes = Math.max(t.touch, 15)
-    const why = gap < 99 ? `Untouched for ${gap} days: a short session keeps it alive` : 'Not started yet: a short first session'
-    const item: AgendaItem = { ...(input.touchItem?.(t, minutes) ?? { kind: 'learn', title: t.label }), thread: t.id, minutes, why, touch: true }
+    const made = input.touchItem ? input.touchItem(t, minutes) : { kind: 'learn' as const, title: t.label }
+    if (!made) continue
+    // Never started: a first session, not a keep-alive
+    const started = gap < 99
+    const why = started ? `Untouched for ${gap} days: a short session keeps it alive` : 'Not started yet: a short first session'
+    const item: AgendaItem = { ...made, thread: t.id, minutes, why, ...(started ? { touch: true } : {}) }
     // Make room by shortening the day's longest unfinished item
     if (roomOn(day) < minutes) {
       const longest = dayOf(day).items.filter((it) => !it.done && it.minutes - (minutes - roomOn(day)) >= 25).sort((a, b) => b.minutes - a.minutes)[0]
