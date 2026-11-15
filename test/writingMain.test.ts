@@ -127,6 +127,45 @@ describe('a review', () => {
     await W.savePiece(piece, essay + '\nA new line.\n')
     expect(readFileSync(piece, 'utf8')).toContain('A new line.')
   })
+  it('a draft check looks only at the new paragraph, keeps the full review’s comments, and never touches the file', async () => {
+    const before = readFileSync(piece, 'utf8')
+    const draft = before + '\nThe week was long. It was tiring. I slept.\n'
+    let asked = ''
+    W.setAsker(async (job, prompt) => {
+      asked = job
+      expect(prompt).toContain('The week was long.')
+      expect(prompt).not.toContain('<<<\nRest is not')
+      return JSON.stringify({
+        note: 'Short sentences in a row read as a list.',
+        comments: [
+          { quote: 'The week was long. It was tiring.', category: 'clarity', severity: 'major', what: 'Three short sentences in a row.', principle: 'Vary the rhythm.', ask: 'Which two belong together?', show: { before: 'The bus was late. It was cold. We waited.', after: 'The bus was late, and in the cold we waited.', why: 'Join short sentences that share a thought.' } },
+          { quote: 'part of the work', category: 'argument', what: 'Outside the paragraph.', principle: 'p', ask: 'a' }
+        ]
+      })
+    })
+    const r = await W.draftCheck(piece, draft)
+    expect(asked).toBe('writingDraft')
+    // The line saved above and the new paragraph: both written since the last review
+    expect(r).toMatchObject({ by: 'claude', paragraphs: 2, note: 'Short sentences in a row read as a list.' })
+    const fresh = r.record.comments.filter((c) => c.draft && c.status === 'open')
+    expect(fresh).toHaveLength(1)
+    expect(fresh[0]).toMatchObject({ severity: 'moderate', show: { why: 'Join short sentences that share a thought.' } })
+    // The full review's argument comment is still there
+    expect(r.record.comments.some((c) => c.category === 'argument' && c.status === 'open' && !c.draft)).toBe(true)
+    expect(readFileSync(piece, 'utf8')).toBe(before)
+    // Nothing changed since: nothing to check
+    W.setAsker(async () => {
+      throw new Error('should not ask')
+    })
+    expect((await W.draftCheck(piece, draft)).paragraphs).toBe(0)
+    // The cursor in a paragraph checks that one again
+    W.setAsker(async () => null)
+    const at = draft.indexOf('Rest is not')
+    const again = await W.draftCheck(piece, draft, { from: at, to: at })
+    expect(again).toMatchObject({ by: 'tide', paragraphs: 1 })
+    // The other paragraph's comment from the last check stays
+    expect(again.record.comments.some((c) => c.status === 'open' && c.draft && c.by === 'claude' && c.anchor.quote.startsWith('The week'))).toBe(true)
+  })
 })
 
 describe('topics', () => {

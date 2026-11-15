@@ -14,17 +14,41 @@ import '../../styles/writing.css'
 
 /**
  * One piece of writing with its review beside it (shared/writing, main/writing). The essay is the
- * hero: Tide's own editor in a reading measure, the learner's words marked quietly where a comment
- * points, the comments in the margin level with their words (stacked so none overlap; hover one
- * and its words light up, hover the words and the comment does). A short overall note sits above
- * the text. "I've fixed it" checks just that comment again; "Review again" reviews the revision
- * and says what improved. The conversation that challenges the thinking opens in place of the
- * margin. Only the learner's typing changes the file: reviews never do.
+ * hero and the default view: a piece opens with the review hidden, and "Show review" / "Hide
+ * review" (remembered per piece) brings it in or takes it all away in one click. Shown, the
+ * learner's words are marked quietly where a comment points, the comments sit in the margin level
+ * with their words (stacked so none overlap; short until opened), and a compact summary (the one
+ * question, the top three, the scores) sits above the text and folds to one line.
+ *
+ * Two kinds of check: "Check this paragraph" looks at the paragraph at the cursor (or what changed
+ * since the last check) for flow and clarity while drafting, never judging the piece as finished;
+ * "Full review" reads the whole piece. A comment's "Show me" teaches its technique on a made-up
+ * sentence about something else. "I've fixed it" checks just that comment again. The conversation
+ * that challenges the thinking opens in place of the margin. Only the learner's typing changes the
+ * file: reviews never do.
  */
 
 const clean = (e: unknown) => String((e as Error)?.message ?? e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
 const NARROW = 940
 const SAVE_MS = 1200
+
+/** Per-piece view choices, kept in this browser only: whether the review shows, whether its summary is open */
+const viewKey = (what: 'review' | 'summary', path: string) => `tide.writing.${what}:${path}`
+const readFlag = (key: string, fallback: boolean): boolean => {
+  try {
+    const v = localStorage.getItem(key)
+    return v === null ? fallback : v === '1'
+  } catch {
+    return fallback
+  }
+}
+const writeFlag = (key: string, on: boolean) => {
+  try {
+    localStorage.setItem(key, on ? '1' : '0')
+  } catch {
+    // Not remembered: the default next time
+  }
+}
 
 type Piece = Awaited<ReturnType<typeof window.tide.writing.open>>
 
@@ -35,7 +59,7 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
   const [text, setText] = useState('')
   const [record, setRecord] = useState<PieceRecord | null>(null)
   const [kind, setKind] = useState<WritingKind>('essay')
-  const [busy, setBusy] = useState<'' | 'review' | 'recheck'>('')
+  const [busy, setBusy] = useState<'' | 'review' | 'draft'>('')
   const [status, setStatus] = useState('')
   const [save, setSave] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const [active, setActiveId] = useState<string | null>(null)
@@ -45,7 +69,23 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
   const [talk, setTalk] = useState(!!talkFirst)
   const [narrow, setNarrow] = useState(false)
   const [filter, setFilter] = useState<'all' | WritingComment['category']>('all')
-  const [showNote, setShowNote] = useState(true)
+  const [showNote, setShowNoteState] = useState(() => readFlag(viewKey('summary', path), true))
+  // The essay is the default view: the review shows only when asked for (remembered per piece)
+  const [reviewOn, setReviewOnState] = useState(() => readFlag(viewKey('review', path), false))
+  const setReviewOn = useCallback(
+    (on: boolean) => {
+      setReviewOnState(on)
+      writeFlag(viewKey('review', path), on)
+      if (!on) setActiveId(null)
+    },
+    [path]
+  )
+  const setShowNote = (on: boolean) => {
+    setShowNoteState(on)
+    writeFlag(viewKey('summary', path), on)
+  }
+  // Where the learner last put the cursor (null until they do): "Check this paragraph" checks there
+  const [caret, setCaret] = useState<{ from: number; to: number } | null>(null)
   const [checking, setChecking] = useState<string | null>(null)
   const [edited, setEdited] = useState(0)
   const [allTags, setAllTags] = useState<string[]>([])
@@ -67,6 +107,10 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
     () => [
       writingMarks(),
       EditorView.updateListener.of((u) => {
+        if (u.selectionSet && u.transactions.some((t) => t.isUserEvent('select') || t.isUserEvent('input') || t.isUserEvent('delete'))) {
+          const m = u.state.selection.main
+          setCaret({ from: m.from, to: m.to })
+        } else if (u.docChanged) setCaret((c) => (c ? { from: u.changes.mapPos(c.from), to: u.changes.mapPos(c.to) } : c))
         if (u.docChanged || u.geometryChanged || u.viewportChanged || u.heightChanged) {
           cancelAnimationFrame(layoutTimer.current)
           layoutTimer.current = requestAnimationFrame(() => setLayoutTick((t) => t + 1))
@@ -75,6 +119,12 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
     ],
     []
   )
+
+  useEffect(() => {
+    setReviewOnState(readFlag(viewKey('review', path), false))
+    setShowNoteState(readFlag(viewKey('summary', path), true))
+    setCaret(null)
+  }, [path])
 
   useEffect(() => {
     let off = false
@@ -254,6 +304,7 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
       if (!piece || busy) return
       await saveNow()
       setBusy('review')
+      setReviewOn(true)
       setStatus('Opus is reading it. The checker’s marks are in.')
       // The checker's comments straight away, while Claude reads
       const local = checkMechanics(textRef.current, { light: kind === 'journal' && !full })
@@ -263,6 +314,7 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
         setRecord(r.record)
         setStatus(r.by === 'claude' ? '' : 'Claude couldn’t review it just now: these are the checker’s marks.')
         setShowNote(true)
+        setReviewOn(true)
       } catch (e) {
         setStatus('')
         app.toast(clean(e), { tone: 'error' })
@@ -270,8 +322,31 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
         setBusy('')
       }
     },
-    [piece, busy, kind, saveNow, app]
+    [piece, busy, kind, saveNow, app, setReviewOn]
   )
+
+  /** Check as I write: the paragraph at the cursor (or what changed since the last check), for flow and clarity only */
+  const draftCheck = async () => {
+    if (!piece || busy) return
+    await saveNow()
+    setBusy('draft')
+    setReviewOn(true)
+    setStatus(caret ? 'Reading this paragraph…' : 'Reading what’s new…')
+    try {
+      const r = await window.tide.writing.draftCheck(piece.path, textRef.current, caret)
+      setRecord(r.record)
+      if (!r.paragraphs) setStatus('Nothing new since the last check. Put the cursor in a paragraph to check it again.')
+      else {
+        const n = r.record.comments.filter((c) => c.status === 'open' && c.draft && c.at > Date.now() - 10 * 60_000).length
+        setStatus(r.by === 'claude' ? r.note || (n ? '' : 'Reads cleanly so far.') : 'Claude couldn’t look just now: these are the checker’s marks.')
+      }
+    } catch (e) {
+      setStatus('')
+      app.toast(clean(e), { tone: 'error' })
+    } finally {
+      setBusy('')
+    }
+  }
 
   // From Learn's "Review my writing": a piece never reviewed is reviewed on arrival
   const started = useRef(false)
@@ -341,7 +416,19 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
       setLayoutTick((t) => t + 1)
     })
     ro.observe(el)
-    return () => ro.disconnect()
+    // The editor's positions can be a frame behind a scroll (opening a comment scrolls to its
+    // words): the margin is placed again once a scroll settles, so cards stay level with their words
+    let t = 0
+    const onScroll = () => {
+      clearTimeout(t)
+      t = window.setTimeout(() => setLayoutTick((n) => n + 1), 80)
+    }
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      ro.disconnect()
+      clearTimeout(t)
+      window.removeEventListener('scroll', onScroll, true)
+    }
   }, [piece])
 
   /** Each comment's wanted top: level with its words, in the page's coordinates */
@@ -370,14 +457,16 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
     }
     const next = stackMargin(items, 10, narrow ? undefined : (active ?? undefined))
     setTops((old) => (JSON.stringify(old) === JSON.stringify(next) ? old : next))
-  }, [shown, layoutTick, active, narrow, lost, talk, showNote])
+  }, [shown, layoutTick, active, narrow, lost, talk, showNote, reviewOn])
 
   // Hovering marked words lights up their comment; clicking opens it
   const onTextOver = (e: React.MouseEvent) => {
+    if (!reviewOn) return
     const id = (e.target as HTMLElement).closest('[data-wid]')?.getAttribute('data-wid') ?? null
     if (id !== hover) setHover(id)
   }
   const onTextClick = (e: React.MouseEvent) => {
+    if (!reviewOn) return
     const id = (e.target as HTMLElement).closest('[data-wid]')?.getAttribute('data-wid')
     if (id) setActiveId(id)
   }
@@ -404,6 +493,7 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
   const words = wordCount(text)
   const lastRun = record.runs[record.runs.length - 1]
   const counts = (['mechanics', 'clarity', 'structure', 'argument', 'accuracy'] as const).map((c) => [c, open.filter((x) => x.category === c).length] as const).filter(([, n]) => n > 0)
+  const hasReview = !!lastRun || open.length > 0
   const relVault = app.settings.vaultPath && piece.path.startsWith(app.settings.vaultPath + '/') ? piece.path.slice(app.settings.vaultPath.length + 1) : null
 
   return (
@@ -425,9 +515,13 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
             <Icon name="chevron" size={10} />
           </label>
           <span className={`wr-save ${save}`}>{save === 'saved' ? 'Saved' : save === 'saving' ? 'Saving…' : 'Edited'}</span>
+          {(hint || status) && (
+            <span className="wr-status" title={hint || status}>
+              {hint || status}
+            </span>
+          )}
         </span>
         <span className="wr-bar-actions">
-          {(hint || status) && <span className="wr-status">{hint || status}</span>}
           <button className="btn small ghost" onClick={() => void publish()} aria-pressed={!!record.published} title={record.published ? 'Published: mark it a draft again' : 'Mark this piece published'}>
             {record.published ? (
               <>
@@ -442,13 +536,23 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
             <Icon name="chat" size={13} />
             Talk it through
           </button>
-          <button className="btn small primary" disabled={!!busy} onClick={() => void review()}>
-            {busy === 'review' ? 'Reviewing…' : lastRun ? 'Review again' : 'Review'}
-          </button>
+          {hasReview && (
+            <button className="btn small ghost" onClick={() => setReviewOn(!reviewOn)} aria-pressed={reviewOn} title={reviewOn ? 'Hide the review: just the essay' : 'Show the review beside the essay'}>
+              {reviewOn ? 'Hide review' : `Show review${open.length ? ` · ${open.length}` : ''}`}
+            </button>
+          )}
+          <span className="wr-checks" role="group" aria-label="Check your writing">
+            <button className="btn small" disabled={!!busy} onClick={() => void draftCheck()} title={caret ? 'Flow and clarity of the paragraph at your cursor, as a draft' : 'Flow and clarity of what you wrote since the last check, as a draft'}>
+              {busy === 'draft' ? 'Checking…' : caret ? 'Check this paragraph' : 'Check new writing'}
+            </button>
+            <button className="btn small primary" disabled={!!busy} onClick={() => void review()} title="Read the whole piece as finished: the argument, the structure and every line">
+              {busy === 'review' ? 'Reviewing…' : lastRun ? 'Full review again' : 'Full review'}
+            </button>
+          </span>
         </span>
       </header>
 
-      <div className={`wr-body${narrow ? ' narrow' : ''}${talk ? ' talking' : ''}`} ref={wrap}>
+      <div className={`wr-body${narrow ? ' narrow' : ''}${talk ? ' talking' : ''}${reviewOn ? '' : ' quiet'}`} ref={wrap}>
         <article className="wr-col">
           <h1 className="wr-title">
             <input
@@ -474,13 +578,13 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
             {lastRun && <span title={fullDate(lastRun.at)}>Reviewed {ago(lastRun.at, Date.now())}</span>}
           </p>
           <TagLine text={text} all={allTags} onSet={setTags} />
-          {record.overall && lastRun && <OverallNote o={record.overall} open={showNote} onToggle={() => setShowNote(!showNote)} />}
+          {reviewOn && record.overall && lastRun && <OverallNote o={record.overall} open={showNote} count={open.length} onToggle={() => setShowNote(!showNote)} />}
           <div className="wr-editor" onMouseOver={onTextOver} onMouseLeave={() => setHover(null)} onClick={onTextClick}>
             <Editor value={text} onChange={onChange} handleRef={editor} noFocus extensions={extensions} quietEmbeds imageUrl={(t) => writingImageUrl(piece.path, t)} onImage={attach} />
           </div>
         </article>
 
-        {!talk && (
+        {!talk && reviewOn && (
           <aside className={`wr-margin${narrow ? ' pop' : ''}`} aria-label="Comments" ref={marginEl}>
             {!narrow && counts.length > 1 && (
               <div className="wr-filter" role="group" aria-label="Show">
@@ -516,7 +620,7 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
                 />
               )
             })}
-            {!open.length && lastRun && !busy && <p className="wr-clear">No open comments. Revise, then review again.</p>}
+            {!open.length && hasReview && !busy && <p className="wr-clear">No open comments.</p>}
           </aside>
         )}
 
@@ -526,52 +630,56 @@ export function WritingPiece({ path, talk: talkFirst, review: reviewFirst }: { p
   )
 }
 
-/** The note above the text: what works, the three that matter most, one question */
-function OverallNote({ o, open, onToggle }: { o: Overall; open: boolean; onToggle(): void }) {
+/**
+ * The summary above the text: one line when folded; open, the one question, the three things that
+ * matter most, the scores in a quiet row and what's working (folded)
+ */
+function OverallNote({ o, open, count, onToggle }: { o: Overall; open: boolean; count: number; onToggle(): void }) {
+  const [works, setWorks] = useState(false)
+  const kept = [...o.works, ...o.voice]
+  const line = [o.top.length ? `${o.top.length} thing${o.top.length === 1 ? '' : 's'} to work on` : '', count ? `${count} comment${count === 1 ? '' : 's'} in the margin` : ''].filter(Boolean).join(' · ')
   return (
-    <section className={`wr-note${open ? '' : ' closed'}`} aria-label="The review">
+    <section className={`wr-note${open ? '' : ' closed'}`} aria-label="Review summary">
       <button className="wr-note-head" onClick={onToggle} aria-expanded={open}>
-        <span>The review</span>
+        <span className="wr-note-title">Review</span>
+        {line && <span className="wr-note-line">{line}</span>}
         <Icon name="chevron" size={11} className={open ? 'up' : ''} />
       </button>
       {open && (
         <div className="wr-note-body">
           {o.question && <p className="wr-question">{o.question}</p>}
-          <div className="wr-note-cols">
-            {o.top.length > 0 && (
-              <div className="wr-note-part">
-                <h3>What matters most</h3>
-                <ol>
-                  {o.top.map((x) => (
-                    <li key={x}>{x}</li>
-                  ))}
-                </ol>
-              </div>
-            )}
-            {(o.works.length > 0 || o.voice.length > 0) && (
-              <div className="wr-note-part">
-                <h3>What works</h3>
-                <ul>
-                  {[...o.works, ...o.voice].map((x) => (
-                    <li key={x}>{x}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-          {o.improved.length > 0 && (
-            <p className="wr-improved">
-              <b>Better since last time:</b> {o.improved.join('; ')}
-            </p>
-          )}
-          {o.rubric.length > 0 && (
-            <p className="wr-rubric">
-              {o.rubric.map((r) => (
-                <span key={r.name} title={r.note}>
-                  {r.name} <b>{r.score}</b>/{r.of}
-                </span>
+          {o.top.length > 0 && (
+            <ol className="wr-top">
+              {o.top.map((x) => (
+                <li key={x}>{x}</li>
               ))}
-            </p>
+            </ol>
+          )}
+          {o.improved.length > 0 && <p className="wr-improved">Better since last time: {o.improved.join('; ')}</p>}
+          {(kept.length > 0 || o.rubric.length > 0) && (
+            <div className="wr-note-foot">
+              {o.rubric.length > 0 && (
+                <p className="wr-rubric">
+                  {o.rubric.map((r) => (
+                    <span key={r.name} title={r.note}>
+                      {r.name} <b>{r.score}</b>/{r.of}
+                    </span>
+                  ))}
+                </p>
+              )}
+              {kept.length > 0 && (
+                <button className="wr-works-toggle" onClick={() => setWorks(!works)} aria-expanded={works}>
+                  {works ? 'Hide what’s working' : `What’s working (${kept.length})`}
+                </button>
+              )}
+            </div>
+          )}
+          {works && (
+            <ul className="wr-works">
+              {kept.map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
           )}
         </div>
       )}
@@ -595,7 +703,12 @@ function Card(p: {
   onDismiss(): void
 }) {
   const { c } = p
+  const [showing, setShowing] = useState(false)
+  useEffect(() => {
+    if (!p.on) setShowing(false)
+  }, [p.on])
   const label = c.ruleName ?? CATEGORY_LABEL[c.category]
+  const canShow = !!(c.show || c.example)
   return (
     <div
       ref={p.cardRef}
@@ -612,20 +725,36 @@ function Card(p: {
       <div className="wr-card-head">
         <span className="wr-card-label">{label}</span>
         {c.category !== 'mechanics' && c.ruleName && <span className="wr-card-cat">{CATEGORY_LABEL[c.category]}</span>}
+        {c.draft && <span className="wr-card-cat">Draft check</span>}
         {c.severity === 'major' && <span className="wr-card-sev">Matters most</span>}
       </div>
       <p className="wr-card-what">{c.what}</p>
       {p.lost && <p className="wr-card-lost">The words it pointed at have changed.</p>}
       {p.on && (
         <div className="wr-card-more">
-          {c.principle && <p className="wr-card-why">{c.principle}</p>}
-          {c.example && (
-            <p className="wr-card-eg">
-              <span>In a different sentence</span>
-              {c.example}
-            </p>
-          )}
           <p className="wr-card-ask">{c.ask}</p>
+          {!canShow && c.principle && <p className="wr-card-why">{c.principle}</p>}
+          {canShow && (
+            <button className="wr-show-btn" aria-expanded={showing} onClick={(e) => (e.stopPropagation(), setShowing(!showing))}>
+              {showing ? 'Hide the example' : 'Show me'}
+              <Icon name="chevron" size={10} className={showing ? 'up' : ''} />
+            </button>
+          )}
+          {showing && c.show && (
+            <div className="wr-show">
+              <span className="wr-show-label">On a made-up sentence</span>
+              <p className="wr-show-before">{c.show.before}</p>
+              <p className="wr-show-after">{c.show.after}</p>
+              <p className="wr-show-why">{c.show.why}</p>
+            </div>
+          )}
+          {showing && !c.show && c.example && (
+            <div className="wr-show">
+              <span className="wr-show-label">On a made-up sentence</span>
+              <p className="wr-show-after">{c.example}</p>
+              {c.principle && <p className="wr-show-why">{c.principle}</p>}
+            </div>
+          )}
           {c.reply && <p className="wr-card-reply">{c.reply}</p>}
           <div className="wr-card-actions">
             <button className="btn small" disabled={p.checking} onClick={(e) => (e.stopPropagation(), p.onFixed())}>

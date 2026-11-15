@@ -20,7 +20,24 @@ import {
   type WritingComment
 } from '../src/shared/writing'
 import { checkMechanics, countHits, maskProse, proseBlocks, recheckLocal } from '../src/shared/writingCheck'
-import { combineReview, mergeTopics, overlap, parseRecheck, parseReview, reviewPrompt, topicsFromThings } from '../src/shared/writingPrompt'
+import {
+  DRAFT_SYSTEM,
+  changedParagraphs,
+  combineDraftCheck,
+  combineReview,
+  draftPrompt,
+  mergeTopics,
+  overlap,
+  paraKey,
+  paragraphs,
+  paragraphsAt,
+  parseDraftCheck,
+  parseRecheck,
+  parseReview,
+  reusesTheirWords,
+  reviewPrompt,
+  topicsFromThings
+} from '../src/shared/writingPrompt'
 
 // A draft shaped like the learner's: Quartz front matter, a highlighted opening, comma splices,
 // lowercase "i", a space before a comma, a question left without its mark, a long paragraph.
@@ -295,6 +312,63 @@ describe('Claude’s review', () => {
   it('reads a re-check', () => {
     expect(parseRecheck('{"fixed": false, "note": "Still two clauses."}')).toEqual({ fixed: false, note: 'Still two clauses.' })
     expect(parseRecheck('no')).toBeNull()
+  })
+  it('keeps a "Show me" on a made-up sentence and drops one that reuses the learner’s words', () => {
+    const t = 'I think that maybe the market is efficient most of the time. Prices move fast.'
+    const mk = (before: string, after: string) =>
+      JSON.stringify({ comments: [{ quote: 'I think that maybe the market', category: 'clarity', what: 'Two hedges.', principle: 'Cut hedges.', ask: 'Which hedge can go?', show: { before, after, why: 'Say it once, plainly.' } }] })
+    const kept = parseReview(mk('I suppose perhaps the soup is a little salty.', 'The soup is salty.'), t, 1)!.comments[0]
+    expect(kept.show).toEqual({ before: 'I suppose perhaps the soup is a little salty.', after: 'The soup is salty.', why: 'Say it once, plainly.' })
+    // A rewrite of their sentence, and one that borrows a run of their words, both go
+    expect(parseReview(mk('I think maybe the market is efficient.', 'The market is efficient most of the time.'), t, 1)!.comments[0].show).toBeUndefined()
+    expect(parseReview(mk('Our team says prices move fast in spring.', 'Prices move fast in spring.'), t, 1)!.comments[0].show).toBeUndefined()
+    expect(reusesTheirWords(t, t, 'Wealth markets: efficient prices, fast moves.')).toBe(true)
+    expect(reusesTheirWords(t, t, 'The kettle boils, and then we pour.')).toBe(false)
+    // Mechanics get no "Show me"
+    const mech = JSON.stringify({ comments: [{ quote: 'Prices move fast', category: 'mechanics', rule: 'x', what: 'w', principle: 'p', ask: 'a', show: { before: 'Dogs bark loud.', after: 'Dogs bark loudly.', why: 'y' } }] })
+    expect(parseReview(mech, t, 1)!.comments[0].show).toBeUndefined()
+  })
+  it('asks for "Show me" illustrations with the hard rule against their words', () => {
+    const p = reviewPrompt({ text, kind: 'essay', title: 't', found: [] })
+    expect(p).toMatch(/"show"/)
+    expect(p).toMatch(/HARD RULE/)
+  })
+})
+
+describe('the draft check', () => {
+  const t = '---\ntitle: x\n---\nFirst paragraph here.\n\n## A heading\n\nSecond one, a bit longer.\n\n![[pic.png]]\n\nThird.'
+  it('splits the prose into paragraphs, leaving headings and embeds out', () => {
+    expect(paragraphs(t).map((p) => p.text)).toEqual(['First paragraph here.', 'Second one, a bit longer.', 'Third.'])
+    for (const p of paragraphs(t)) expect(t.slice(p.start, p.end)).toBe(p.text)
+  })
+  it('finds what changed since the last check, and the paragraph at the cursor', () => {
+    const checked = paragraphs(t).map((p) => paraKey(p.text))
+    expect(changedParagraphs(t, checked)).toEqual([])
+    const edited = t.replace('Third.', 'Third, now edited.')
+    expect(changedParagraphs(edited, checked).map((p) => p.text)).toEqual(['Third, now edited.'])
+    expect(paragraphsAt(t, t.indexOf('bit')).map((p) => p.text)).toEqual(['Second one, a bit longer.'])
+    expect(paragraphsAt(t, t.indexOf('First'), t.indexOf('longer')).map((p) => p.text)).toHaveLength(2)
+  })
+  it('never judges the piece as finished', () => {
+    expect(DRAFT_SYSTEM).toMatch(/UNFINISHED/)
+    expect(draftPrompt({ text: t, parts: [{ text: 'Third.' }], kind: 'essay' })).toMatch(/HARD RULE/)
+  })
+  it('keeps only comments inside the checked paragraphs, never argument verdicts', () => {
+    const parts = paragraphsAt(t, t.indexOf('bit'))
+    const reply = JSON.stringify({
+      note: 'Reads well.',
+      comments: [
+        { quote: 'First paragraph here', category: 'clarity', what: 'x', principle: 'p', ask: 'a' },
+        { quote: 'a bit longer', category: 'argument', what: 'State your claim.', principle: 'p', ask: 'a' },
+        { quote: 'Second one', category: 'clarity', severity: 'major', what: 'Vague.', principle: 'p', ask: 'Which one?' }
+      ]
+    })
+    const r = parseDraftCheck(reply, t, parts, 3)!
+    expect(r.note).toBe('Reads well.')
+    expect(r.comments).toHaveLength(1)
+    expect(r.comments[0]).toMatchObject({ what: 'Vague.', severity: 'moderate', draft: true })
+    const rec = combineDraftCheck({ path: 'p', comments: [], runs: [] }, { text: t, parts, local: [], claude: r.comments })
+    expect(rec.checked).toEqual([paraKey('Second one, a bit longer.')])
   })
 })
 

@@ -1207,6 +1207,8 @@ export interface TideApi {
     comments(path: string, comments: import('./writing').WritingComment[]): Promise<import('./writing').PieceRecord>
     kind(path: string, kind: import('./writing').WritingKind | null): Promise<import('./writing').PieceRecord>
     review(path: string, text: string, full?: boolean): Promise<import('../main/writing').ReviewResult>
+    /** A draft check: the paragraph(s) at `range`, or else those changed since the last check */
+    draftCheck(path: string, text: string, range?: { from: number; to: number } | null): Promise<import('../main/writing').DraftCheckResult>
     recheck(path: string, text: string, id: string): Promise<{ record: import('./writing').PieceRecord; fixed: boolean; note: string }>
     challenge(path: string, text: string, said: string): Promise<{ record: import('./writing').PieceRecord; reply: string | null }>
     habits(): Promise<import('./writing').Habit[]>

@@ -567,6 +567,7 @@ function registerIpc() {
   handle('writing:comments', async (p: string, comments: import('@shared/writing').WritingComment[]) => (await import('./writing')).saveComments(String(p ?? ''), Array.isArray(comments) ? comments : []))
   handle('writing:kind', async (p: string, kind: string | null) => (await import('./writing')).setKind(String(p ?? ''), kind as import('@shared/writing').WritingKind | null))
   handle('writing:review', async (p: string, text: string, full?: boolean) => (await import('./writing')).reviewPiece(String(p ?? ''), String(text ?? ''), { full: !!full }))
+  handle('writing:draftCheck', async (p: string, text: string, range?: { from: number; to: number } | null) => (await import('./writing')).draftCheck(String(p ?? ''), String(text ?? ''), range && typeof range.from === 'number' && typeof range.to === 'number' ? { from: range.from, to: range.to } : undefined))
   handle('writing:recheck', async (p: string, text: string, id: string) => (await import('./writing')).recheck(String(p ?? ''), String(text ?? ''), String(id ?? '')))
   handle('writing:challenge', async (p: string, text: string, said: string) => (await import('./writing')).challenge(String(p ?? ''), String(text ?? ''), String(said ?? '')))
   handle('writing:habits', async () => (await import('./writing')).habitsNow())
