@@ -688,17 +688,32 @@ export async function build(): Promise<{ notePath: string; wrote: string[]; trac
   if (!draft) throw new Error('Nothing to build: think it through first.')
   const d = draft
   const wrote: string[] = []
-  if (!(await writeNew(d.notePath, d.note))) throw new Error(`${d.notePath} appeared meanwhile; nothing was written. Try again.`)
-  wrote.push(d.notePath)
+  // A replan: the plan in use (its note and record) moves to Tide's hidden backups, so the new one
+  // is the only North Star. A note Tide never built from (no record) is the learner's and stays.
+  const prior = await readText(STORE).catch(() => null)
+  const priorStore = prior ? (JSON.parse(prior) as NorthStarStore) : null
+  // Where the new plan goes, decided and checked before anything moves: on a replan, the single North
+  // Star note (freed by the move below, or free already); otherwise the draft's own new name
+  const notePath = priorStore?.notePath && (priorStore.notePath === NOTE_PATH || !(await exists(NOTE_PATH))) ? NOTE_PATH : d.notePath
+  if (notePath !== priorStore?.notePath && (await exists(notePath))) throw new Error(`${notePath} appeared meanwhile; nothing was written. Try again.`)
+  if (priorStore?.notePath) {
+    const dir = `.tide/backups/northstar-${new Date().toISOString().replace(/[:.]/g, '-')}`
+    const oldNote = await readText(priorStore.notePath).catch(() => null)
+    if (!(await writeNew(`${dir}/northstar.json`, prior!))) throw new Error('Couldn’t back up the current plan; nothing was changed.')
+    if (oldNote !== null) {
+      if (!(await writeNew(`${dir}/${priorStore.notePath.split('/').pop()}`, oldNote))) throw new Error('Couldn’t back up the current plan; nothing was changed.')
+      await fs.rm(absPath(priorStore.notePath))
+    }
+  }
+  if (!(await writeNew(notePath, d.note))) throw new Error(`${notePath} appeared meanwhile; nothing was written. Try again.`)
+  wrote.push(notePath)
   const { parseMilestones } = await import('@shared/milestone')
   const prevReadings = (await loadStore())?.readings
-  const store: NorthStarStore = { ...EMPTY, notePath: d.notePath, written: d.note, createdAt: Date.now(), stageSince: Date.now(), goalHash: hash(await goalNote()), lastReview: Date.now(), milestones: parseMilestones(await goalNote()), ...(prevReadings?.length ? { readings: prevReadings } : {}) }
+  const store: NorthStarStore = { ...EMPTY, notePath, written: d.note, createdAt: Date.now(), stageSince: Date.now(), goalHash: hash(await goalNote()), lastReview: Date.now(), milestones: parseMilestones(await goalNote()), ...(prevReadings?.length ? { readings: prevReadings } : {}) }
   // An earlier record is kept beside it, never overwritten
-  if (!(await writeNew(STORE, JSON.stringify(store, null, 1)))) {
-    const prev = await readText(STORE).catch(() => '')
-    await writeNew(`.tide/northstar.before-${Date.now()}.json`, prev)
-    await writeText(STORE, JSON.stringify(store, null, 1))
-  } else wrote.push(STORE)
+  // The record before it is in the backups already (above), when there was one
+  if (!(await writeNew(STORE, JSON.stringify(store, null, 1)))) await writeText(STORE, JSON.stringify(store, null, 1))
+  else wrote.push(STORE)
   activeCache = null
   wrote.push(...(await installFor(d.ns, d.ns.current)))
   draft = null
@@ -710,7 +725,7 @@ export async function build(): Promise<{ notePath: string; wrote: string[]; trac
     .then((c) => c.planWeek())
     .then(() => true)
     .catch((e) => (console.warn(`[northstar] first week: ${(e as Error).message}`), false))
-  return { notePath: d.notePath, wrote, tracks, week }
+  return { notePath, wrote, tracks, week }
 }
 
 // ---------- Changing it ----------
