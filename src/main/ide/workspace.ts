@@ -21,6 +21,8 @@ const recentFile = () => join(ideDir(), 'workspaces.json')
 export const huntsDir = () => join(ideDir(), 'bughunts')
 /** Coding lessons' own folders (main/lessonCode), one per lesson */
 export const lessonsDir = () => join(ideDir(), 'lessons')
+/** The scratchpad's folder (renderer components/WorkspaceWindow): kept, never cleared */
+export const scratchDir = () => join(ideDir(), 'scratch')
 
 /** The notes' Code folder, made if it isn't there yet */
 export function codeRoot(): string | null {
@@ -72,6 +74,7 @@ export function allowed(root: string): string {
   if (code && (r === code || r.startsWith(code + '/'))) return r
   // A coding lesson's own folder, which Tide made
   if (dirname(r) === resolve(lessonsDir())) return r
+  if (r === resolve(scratchDir())) return r
   if (readRecent().some((w) => w.root === r)) return r
   throw new Error('Open the folder from the IDE first.')
 }

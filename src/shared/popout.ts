@@ -10,7 +10,7 @@
 import { lessonId } from './lessonLog'
 import { modeInfo, type MockMode } from './mocks'
 
-export type PopKind = 'lesson' | 'code' | 'project' | 'course' | 'note' | 'reading' | 'workout' | 'mock' | 'chat' | 'exam' | 'drill' | 'design'
+export type PopKind = 'lesson' | 'code' | 'project' | 'course' | 'note' | 'reading' | 'workout' | 'mock' | 'chat' | 'exam' | 'drill' | 'design' | 'workspace'
 
 export interface PopView {
   kind: string
@@ -68,6 +68,9 @@ export function popKindOf(v: PopView | null | undefined): PopKind | null {
       return 'drill'
     case 'design':
       return 'design'
+    // A lesson's Workspace or the scratchpad (shared/workspace): its own small window
+    case 'workspace':
+      return 'workspace'
     default:
       return null
   }
@@ -111,6 +114,8 @@ export function popKeyOf(v: PopView): string {
       return `drill:${str(v.drill)}`
     case 'design':
       return `design:${str(v.path)}`
+    case 'workspace':
+      return `workspace:${str(v.root)}`
     default:
       return `${v.kind}:${JSON.stringify(v)}`
   }
@@ -153,6 +158,8 @@ export function popNameOf(v: PopView): string {
       return str(v.drill) === 'zetamac' ? 'Arithmetic drill' : str(v.drill) === 'eighty' ? 'Eighty in eight' : 'Drill'
     case 'design':
       return noExt(base(str(v.path))) || 'System design'
+    case 'workspace':
+      return str(v.title) || 'Scratchpad'
     default:
       return 'Tide'
   }
@@ -189,7 +196,9 @@ export const DEFAULT_SIZE: Record<PopKind, { width: number; height: number }> = 
   chat: { width: 860, height: 800 },
   exam: { width: 1000, height: 820 },
   drill: { width: 820, height: 700 },
-  design: { width: 1280, height: 840 }
+  design: { width: 1280, height: 840 },
+  // Small, like a notepad
+  workspace: { width: 760, height: 620 }
 }
 
 export const MIN_SIZE = { width: 560, height: 420 }

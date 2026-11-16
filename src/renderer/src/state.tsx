@@ -52,6 +52,8 @@ export type View =
   /** North Star: one woven path towards your goal (components/NorthStarView) */
   | { kind: 'northstar' }
   | { kind: 'drill'; drill: import('@shared/drills').DrillKind; nonce?: number }
+  /** The Workspace in a small window of its own (components/WorkspaceWindow): a lesson's (its folder and shell) or the scratchpad */
+  | { kind: 'workspace'; root?: string; files?: string[]; open?: string; terminalId?: string | null; title?: string; lesson?: boolean }
   // Daily mental maths (components/MentalMaths.tsx): today's session, or one on a level you choose
   | { kind: 'maths'; level?: string; nonce?: number }
   // The morning workout (components/workout): its page, or a morning under way

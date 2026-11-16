@@ -721,6 +721,14 @@ export interface TideApi {
     close(id: string): Promise<void>
     /** Flashcards from the commands run in a lab, added to the lab's flashcard note */
     flashcards(id: string, topic?: string): Promise<{ added: number; path: string; commands: number }>
+    /** Run in a lesson's Workspace: types the command into the shell as if typed (shared/workspace runCommand) */
+    run(id: string, command: string): Promise<void>
+    /** What the shell has shown so far, raw, for a second view of it (a popped-out workspace) */
+    history(id: string): Promise<string>
+    /** The scratchpad's shell and file while its window is open, for Chat's tutor; null when it closes */
+    scratchpad(s: { terminalId: string; root: string; file: string } | null): Promise<void>
+    /** A command finished in a shell (quiet for a moment after Enter), with what it printed */
+    onFinished(cb: (e: { id: string } & import('./workspace').Finished) => void): () => void
     onData(cb: (e: { id: string; data: string }) => void): () => void
     onExit(cb: (e: { id: string; code: number }) => void): () => void
   }
@@ -1263,6 +1271,10 @@ export interface TideApi {
     /** The view handed to this focus window, once */
     focusView(id: string): Promise<unknown>
     close(): Promise<void>
+    /** Keeps this window above the others, or not */
+    setOnTop(on: boolean): Promise<void>
+    /** Asks the window holding this key to close; false when none does */
+    closeKey(key: string): Promise<boolean>
     /** Brings forward the window holding this key; false when none does */
     focusKey(key: string): Promise<boolean>
     /** What this pop-out now shows: its key and window title */

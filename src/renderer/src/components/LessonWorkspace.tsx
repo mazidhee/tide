@@ -1,11 +1,12 @@
 /**
- * The lesson's Workspace (shared/workspace): the lesson's file in the code editor on top and a
- * real terminal below, your own shell in the lesson's folder. Run types the file's command into
- * that shell, so you see what runs it; each command that finishes there (Run's or one you typed)
- * is reported with what it printed, for the lesson to send to the tutor.
+ * The Workspace (shared/workspace): a file in the code editor on top and a real terminal below,
+ * your own shell in the workspace's folder. Beside a lesson, in its own small window
+ * (components/WorkspaceWindow), or as the scratchpad. Run types the file's command into that
+ * shell, so you see what runs it; main follows the shell and says when a command has finished
+ * (terminal.onFinished), whichever window it was typed in, so the lesson's tutor hears it.
  */
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { commandOutput, langOfFile, plainText, QUIET_MS, runCommand, type Finished } from '@shared/workspace'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { langOfFile, runCommand } from '@shared/workspace'
 import { TerminalView } from './TerminalView'
 import { Icon } from './Icon'
 
@@ -16,105 +17,45 @@ const MONACO: Record<string, string> = { python: 'python', c: 'c', cpp: 'cpp', r
 
 const WRITE_MS = 300
 
-/**
- * Follows the shell: what you type builds the command line, Enter starts a command, and output
- * going quiet for QUIET_MS after it means it has finished.
- */
-function useCommandWatch(id: string | null, onFinished: (f: Finished) => void) {
-  const raw = useRef('')
-  const line = useRef({ text: '', exact: true })
-  const open = useRef<{ command: string; start: number; prompt: string; how: 'run' | 'typed' } | null>(null)
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const finishedRef = useRef(onFinished)
-  finishedRef.current = onFinished
-
-  const settle = useCallback(() => {
-    clearTimeout(timer.current)
-    timer.current = setTimeout(() => {
-      const c = open.current
-      if (!c) return
-      const since = plainText(raw.current.slice(c.start))
-      // Still nothing back but the echo: a slow start (a compile, an import); keep waiting
-      if (!since.includes('\n')) return settle()
-      open.current = null
-      finishedRef.current({ command: c.command, output: commandOutput(since, c.command), prompt: c.prompt, at: Date.now(), how: c.how })
-    }, QUIET_MS)
-  }, [])
-
-  useEffect(() => {
-    if (!id) return
-    raw.current = ''
-    return window.tide.terminal.onData((e) => {
-      if (e.id !== id) return
-      // Kept short: only what follows the last command matters
-      raw.current = (raw.current + e.data).slice(-200_000)
-      if (open.current) settle()
-    })
-  }, [id, settle])
-
-  useEffect(() => () => clearTimeout(timer.current), [])
-
-  const lastLine = () => plainText(raw.current.slice(-4000)).split('\n').pop() ?? ''
-
-  const begin = useCallback(
-    (command: string, how: 'run' | 'typed') => {
-      open.current = { command, start: raw.current.length, prompt: lastLine(), how }
-      settle()
-    },
-    [settle]
-  )
-
-  /** Keys typed into the terminal: the line is followed so the command is known exactly when it can be */
-  const input = useCallback(
-    (data: string) => {
-      for (let i = 0; i < data.length; i++) {
-        const ch = data[i]
-        if (ch === '\r') {
-          // History, completion or editing keys: the line on screen says what was typed
-          const shown = lastLine()
-          const command = line.current.exact ? line.current.text : shown.replace(/^.*?(?:[$%#❯➜»]|>>>|\.\.\.)\s+/, '')
-          line.current = { text: '', exact: true }
-          begin(command, 'typed')
-        } else if (ch === '\x7f' || ch === '\b') line.current.text = line.current.text.slice(0, -1)
-        else if (ch === '\x03' || ch === '\x15') line.current = { text: '', exact: true }
-        else if (ch === '\x1b' || ch === '\t' || ch < ' ') {
-          line.current.exact = false
-          // An escape sequence (an arrow key) is skipped whole
-          if (ch === '\x1b') i += data.slice(i + 1).match(/^\[[0-9;]*[A-Za-z~]|^O[A-Za-z]/)?.[0].length ?? 0
-        } else line.current.text += ch
-      }
-    },
-    [begin]
-  )
-  return { begin, input }
-}
-
 export interface WorkspaceProps {
   root: string
   files: string[]
   open: string
   onOpen(file: string): void
+  /** A shell already running for this workspace (kept by the lesson): shown, not started again */
+  terminalId?: string | null
   /** The terminal's id once it starts (the tutor's terminal_read reads it) */
   onTerminal(id: string | null): void
-  onFinished(f: Finished): void
-  full: boolean
-  onFull(): void
+  /** The shell outlives this view (the lesson keeps it), or closes with it */
+  keepShell?: boolean
   /** Commands the tutor has been sent */
-  seen: number
+  seen?: number
   /** Put the keyboard in the editor (a task just started) */
-  focusNonce: number
+  focusNonce?: number
+  /** Bumped when a file was written from outside (a code block opened here): read it again */
+  rev?: number
+  /** The buttons beside Run: full screen, pop out, keep on top */
+  tools?: ReactNode
+  /** What the editor says with no file open */
+  empty?: string
 }
 
-export function LessonWorkspace({ root, files, open, onOpen, onTerminal, onFinished, full, onFull, seen, focusNonce }: WorkspaceProps) {
+export function LessonWorkspace({ root, files, open, onOpen, terminalId, onTerminal, keepShell = true, seen = 0, focusNonce = 0, rev = 0, tools, empty }: WorkspaceProps) {
   const [text, setText] = useState<Record<string, string>>({})
-  const [termId, setTermId] = useState<string | null>(null)
+  const [termId, setTermId] = useState<string | null>(terminalId ?? null)
   const editorRef = useRef<import('monaco-editor').editor.IStandaloneCodeEditor | null>(null)
-  const watch = useCommandWatch(termId, onFinished)
   const pending = useRef<{ file: string; text: string } | null>(null)
   const loaded = useRef(new Set<string>())
+  // Which shell to show, fixed at mount: a running one is attached to, else one is started
+  const [attach] = useState(terminalId ?? undefined)
 
-  // Each file is read from the lesson's folder when first shown: what you wrote is kept on disk
+  // Each file is read from the folder when first shown (and again when written from outside)
+  const seenRev = useRef(rev)
   useEffect(() => {
+    if (seenRev.current !== rev) {
+      seenRev.current = rev
+      loaded.current.clear()
+    }
     if (!open || loaded.current.has(open)) return
     let live = true
     window.tide.ide
@@ -125,13 +66,14 @@ export function LessonWorkspace({ root, files, open, onOpen, onTerminal, onFinis
         setText((t) => ({ ...t, [open]: r.binary ? '' : r.text }))
       })
       .catch(() => {
+        if (!live) return
         loaded.current.add(open)
         setText((t) => ({ ...t, [open]: '' }))
       })
     return () => {
       live = false
     }
-  }, [root, open])
+  }, [root, open, rev])
 
   const flush = useCallback(async () => {
     const p = pending.current
@@ -154,21 +96,13 @@ export function LessonWorkspace({ root, files, open, onOpen, onTerminal, onFinis
   const run = useCallback(async () => {
     if (!termId || !open) return
     await flush()
-    const command = runCommand(open)
-    // Ctrl-U first: a half-typed line in the shell would otherwise run with it
-    window.tide.terminal.write(termId, `\x15${command}\r`)
-    watch.begin(command, 'run')
-  }, [termId, open, flush, watch])
-
-  // The shell closes with the workspace: the tutor is no longer pointed at it
-  const onTerminalRef = useRef(onTerminal)
-  onTerminalRef.current = onTerminal
-  useEffect(() => () => onTerminalRef.current(null), [])
+    await window.tide.terminal.run(termId, runCommand(open)).catch(() => {})
+  }, [termId, open, flush])
 
   const value = text[open]
   return (
     <div className="lw">
-      <div className="lw-files" role="toolbar" aria-label="The lesson's files">
+      <div className="lw-files" role="toolbar" aria-label="Files">
         {files.map((f) => (
           <button key={f} className={`lw-file${f === open ? ' on' : ''}`} onClick={() => onOpen(f)} title={`${root}/${f}`}>
             {f}
@@ -180,9 +114,7 @@ export function LessonWorkspace({ root, files, open, onOpen, onTerminal, onFinis
             Tutor sees your runs
           </span>
         )}
-        <button className="icon-btn small" onClick={onFull} title={full ? 'Back to the lesson (Esc)' : 'Full screen: the workspace in front, the lesson beside it (⌘⇧F)'} aria-label={full ? 'Leave full screen' : 'Full screen'}>
-          <Icon name={full ? 'collapse' : 'width'} size={14} />
-        </button>
+        {tools}
         {open && (
           <button className="lw-run" onClick={() => void run()} disabled={!termId} title={`Runs ${runCommand(open)} in the terminal below`}>
             <Icon name="play" size={12} />
@@ -196,6 +128,7 @@ export function LessonWorkspace({ root, files, open, onOpen, onTerminal, onFinis
           {open && value !== undefined ? (
             <Suspense fallback={<div className="view-loading" aria-busy="true" />}>
               <CodeEditor
+                key={`${open}:${rev}`}
                 value={value}
                 onChange={(v) => {
                   pending.current = { file: open, text: v }
@@ -209,7 +142,7 @@ export function LessonWorkspace({ root, files, open, onOpen, onTerminal, onFinis
               />
             </Suspense>
           ) : (
-            <p className="lw-empty muted">{open ? 'Opening…' : 'A terminal in this lesson’s folder. Start a task to get its file here.'}</p>
+            <p className="lw-empty muted">{open ? 'Opening…' : (empty ?? 'A terminal in this folder.')}</p>
           )}
         </div>
         <div className="lw-term">
@@ -217,7 +150,8 @@ export function LessonWorkspace({ root, files, open, onOpen, onTerminal, onFinis
             kind="local"
             cwd={root}
             focus={false}
-            onInput={watch.input}
+            keep={keepShell}
+            attach={attach}
             onReady={(id) => {
               setTermId(id)
               onTerminal(id)
@@ -226,7 +160,6 @@ export function LessonWorkspace({ root, files, open, onOpen, onTerminal, onFinis
               setTermId(null)
               onTerminal(null)
             }}
-            // Leaving the lesson closes the shell; coming back starts a new one in the same folder
           />
         </div>
       </div>

@@ -20,7 +20,7 @@ function themeFromCss() {
  * A real terminal (xterm.js) connected to a shell in the main process. It creates the shell when
  * it mounts (or attaches to an existing one) and closes it when it unmounts, unless `keep` is set.
  */
-export function TerminalView({ kind, onReady, onExit, onInput, keep = false, cwd, focus = true }: { kind: 'lab' | 'local'; onReady?(id: string): void; onExit?(code: number): void; /** What you type, as it's sent to the shell (the lesson's Workspace follows commands with it) */ onInput?(data: string): void; keep?: boolean; /** Where a local shell starts */ cwd?: string; /** Take the keyboard once it starts */ focus?: boolean }) {
+export function TerminalView({ kind, onReady, onExit, onInput, keep = false, cwd, focus = true, attach }: { kind: 'lab' | 'local'; /** A shell already running (a workspace moved to its own window): shown from its history, never closed here */ attach?: string; onReady?(id: string): void; onExit?(code: number): void; /** What you type, as it's sent to the shell (the lesson's Workspace follows commands with it) */ onInput?(data: string): void; keep?: boolean; /** Where a local shell starts */ cwd?: string; /** Take the keyboard once it starts */ focus?: boolean }) {
   const host = useRef<HTMLDivElement>(null)
   const [error, setError] = useState('')
   const onReadyRef = useRef(onReady)
@@ -63,12 +63,17 @@ export function TerminalView({ kind, onReady, onExit, onInput, keep = false, cwd
     const ro = new ResizeObserver(() => requestAnimationFrame(doFit))
     ro.observe(el)
 
-    if (kind === 'lab') term.writeln('\x1b[2mStarting a Linux lab (Ubuntu in Docker). The first time downloads the image, about 30 MB.\x1b[0m')
-    window.tide.terminal
-      .create(kind, term.cols || 80, term.rows || 24, cwd)
+    if (kind === 'lab' && !attach) term.writeln('\x1b[2mStarting a Linux lab (Ubuntu in Docker). The first time downloads the image, about 30 MB.\x1b[0m')
+    const started = attach
+      ? window.tide.terminal.history(attach).then((past) => {
+          term.write(past)
+          return { id: attach }
+        })
+      : window.tide.terminal.create(kind, term.cols || 80, term.rows || 24, cwd)
+    started
       .then((res) => {
         if (disposed) {
-          window.tide.terminal.close(res.id)
+          if (!attach) window.tide.terminal.close(res.id)
           return
         }
         id = res.id
@@ -102,10 +107,10 @@ export function TerminalView({ kind, onReady, onExit, onInput, keep = false, cwd
       ro.disconnect()
       mo.disconnect()
       offs.forEach((f) => f())
-      if (id && !keep) window.tide.terminal.close(id)
+      if (id && !keep && !attach) window.tide.terminal.close(id)
       term.dispose()
     }
-  }, [kind, keep])
+  }, [kind, keep, attach])
 
   return (
     <div className="terminal-wrap">

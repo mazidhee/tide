@@ -372,3 +372,156 @@
   border-radius: 6px;
   padding: 3px 6px;
 }
+
+/* "Open in workspace" on a tutor's code block, beside Run and Copy: quiet until the block is hovered */
+.prose pre.code-block .open-ws {
+  position: absolute;
+  bottom: 5px;
+  right: 6px;
+  font-family: var(--font-ui, var(--ui));
+  font-size: 11.5px;
+  padding: 2px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--ink-3, var(--ink-muted));
+  cursor: pointer;
+}
+.prose pre.code-block:hover .open-ws {
+  color: var(--accent);
+}
+.prose pre.code-block .open-ws:hover {
+  background: var(--hover);
+}
+/* A question still waiting on its code: nothing that would run it */
+.run-held .open-ws {
+  display: none;
+}
+
+/* The panel while the workspace is in its own window */
+.lw-away {
+  margin: auto;
+  max-width: 300px;
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-3, var(--ink-soft));
+}
+.lw-away > div {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+}
+.lw-host:not([hidden]):has(.lw-away) {
+  justify-content: center;
+}
+
+/* ---------- The Workspace's own window: small and calm, like a notepad ---------- */
+.lw-window {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper, var(--bg));
+}
+.lw-window-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 10px 0 84px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.lw-window-title {
+  font: 600 13px var(--ui, inherit);
+  color: var(--ink-2, var(--ink));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lw-chip {
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: none;
+  font: 12px var(--ui, inherit);
+  color: var(--ink-3, var(--ink-soft));
+  cursor: pointer;
+}
+.lw-chip:hover {
+  color: var(--ink);
+}
+.lw-chip.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.lw-window-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+}
+.lw-window-body > .lw {
+  border-left: 1px solid var(--line);
+}
+.lw-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 6px;
+  overflow: auto;
+  background: var(--rail, var(--bg));
+}
+.lw-list-item,
+.lw-list-new {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  text-align: left;
+  font: 12.5px var(--font-code, monospace);
+  color: var(--ink-2, var(--ink));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.lw-list-item:hover,
+.lw-list-new:hover {
+  background: var(--hover);
+}
+.lw-list-item.on {
+  background: var(--active);
+  color: var(--ink);
+}
+.lw-list-new {
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 6px;
+  padding: 4px 6px;
+  cursor: default;
+  white-space: normal;
+  color: var(--ink-3, var(--ink-soft));
+}
+.lw-list-new:hover {
+  background: none;
+}
+.lw-list-new button {
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  font: 12px var(--font-code, monospace);
+  color: var(--ink-3, var(--ink-soft));
+  cursor: pointer;
+}
+.lw-list-new button:hover {
+  background: var(--hover);
+  color: var(--accent);
+}

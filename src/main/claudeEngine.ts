@@ -895,7 +895,7 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   if (exactSaid && !markNote) markNote = exactSaid
 
   // The lesson's Workspace terminal, for terminal_read (read only: main/terminal refuses to type into their own shell)
-  const toolCtx: ToolContext = { signal, sources: ctx.sources, emitSources: ctx.emitSources, step: ctx.step, updateStep: ctx.updateStep, web: false, chatId: req.chatId, labId: req.labId ?? req.chatId, terminalId: req.terminalId }
+  const toolCtx: ToolContext = { signal, sources: ctx.sources, emitSources: ctx.emitSources, step: ctx.step, updateStep: ctx.updateStep, web: false, chatId: req.chatId, labId: req.labId ?? req.chatId, terminalId: ctx.terminalId }
   bindLesson(proc.binding, toolCtx)
   // What set_exercise needs of this turn: the topic, the lesson so far and the mark, for the level (main/exercises)
   const { setLessonInfo } = await import('./exercises')

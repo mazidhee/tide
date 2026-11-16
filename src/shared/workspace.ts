@@ -6,6 +6,7 @@
  * tests agree.
  */
 import type { LessonMap } from './lessonMap'
+import { profileSubject } from './subjects'
 
 /** A hands-on task from the tutor: the file it names and the code it starts from */
 export interface WorkspaceTask {
@@ -210,7 +211,7 @@ export function clip(output: string, max = 3000): string {
 export function sawMessage(command: string, output: string, how: 'run' | 'typed' = 'typed'): string {
   const said = `${SAW}${sawSummary(command, output)}`
   const body = output.trim() ? `\`\`\`\n${clip(output)}\n\`\`\`` : '(it printed nothing)'
-  return `${said}\n\n(Tide: they ${how === 'run' ? 'pressed Run in' : 'typed this in'} the lesson's Workspace terminal, unprompted:\n$ ${command.trim()}\n${body}\nThis is not an answer to your question: no grade tag. Reply to what it shows in a few sentences: say how it bears on the task, explain the line that matters, and give the next step or one question. Don't paste the output back. They can keep running things; you'll hear each one.)`
+  return `${said}\n\n(Tide: they ${how === 'run' ? 'pressed Run in' : 'typed this in'} the lesson's Workspace terminal, unprompted:\n$ ${command.trim()}\n${body}\nThis is not an answer to your question: no grade tag. Reply to what it shows in a few sentences: say how it bears on the task, explain the line that matters, and give the next step or one question. Don't paste the output back. A long command can show split over two lines in the terminal: that's the display wrapping, not something they typed. They can keep running things; you'll hear each one.)`
 }
 
 /** The "Saw:" line of a message a finished command sent, or null for anything else */
@@ -218,6 +219,42 @@ export function sawLine(content: string): string | null {
   if (!content.startsWith(SAW)) return null
   return content.slice(SAW.length).split('\n')[0].trim()
 }
+
+// ---------- Following the shell (main/terminal) ----------
+
+/** The command line being typed, as far as the keys say; not exact once history or completion keys were used */
+export interface LineState {
+  text: string
+  exact: boolean
+}
+
+export const NEW_LINE: LineState = { text: '', exact: true }
+
+/**
+ * Keys typed into a shell, followed: the line so far, and each command Enter sent. A command is
+ * null when editing keys (arrows, tab completion, history) mean the screen has to say what it was.
+ */
+export function followKeys(line: LineState, data: string): { line: LineState; entered: (string | null)[] } {
+  let cur = { ...line }
+  const entered: (string | null)[] = []
+  for (let i = 0; i < data.length; i++) {
+    const ch = data[i]
+    if (ch === '\r') {
+      entered.push(cur.exact ? cur.text : null)
+      cur = { ...NEW_LINE }
+    } else if (ch === '\x7f' || ch === '\b') cur.text = cur.text.slice(0, -1)
+    else if (ch === '\x03' || ch === '\x15') cur = { ...NEW_LINE }
+    else if (ch === '\x1b' || ch === '\t' || ch < ' ') {
+      cur.exact = false
+      // An escape sequence (an arrow key) is skipped whole
+      if (ch === '\x1b') i += data.slice(i + 1).match(/^\[[0-9;]*[A-Za-z~]|^O[A-Za-z]/)?.[0].length ?? 0
+    } else cur.text += ch
+  }
+  return { line: cur, entered }
+}
+
+/** The command on a line of the screen: what follows the prompt ("… % ", "$ ", ">>> ") */
+export const commandOnScreen = (shown: string) => shown.replace(/^.*?(?:[$%#❯➜»]|>>>|\.\.\.)\s+/, '').trim()
 
 // ---------- When to reply on its own ----------
 
@@ -256,3 +293,75 @@ export function stepText(map: Pick<LessonMap, 'steps' | 'current' | 'phase'>): s
   const at = Math.min(map.current, n - 1)
   return `Step ${at + 1} of ${n} · ${map.steps[at].title}`
 }
+
+// ---------- A Workspace in every hands-on lesson ----------
+
+/** Topics and courses learnt at a keyboard: languages, the shell, databases, systems */
+const TECH = /\b(python|py|c\+\+|cpp|c|rust|go(lang)?|java(script)?|typescript|ts|node|sql|sqlite|postgres(ql)?|mysql|bash|shell|zsh|linux|unix|terminal|command line|git|docker|kubernetes|programming|coding|code|algorithms?|data structures?|software|swe|compilers?|operating systems?|os|pointers?|memory|malloc|syscalls?|processes|threads?|regex|scripting|leetcode|numpy|pandas)\b/i
+
+interface LessonLike {
+  mode: string
+  topic: string
+  options?: { language?: string; codeRoot?: string; strategy?: string; course?: { id?: string; lesson?: string }; subject?: { hands?: boolean; kinds?: string[] } } | null
+}
+
+/**
+ * A lesson the Workspace is always offered in: a teach lesson on something learnt at a keyboard
+ * (a language, the shell, SQL, systems), by the lesson's language, folder or way of teaching, its
+ * course, or its topic. Other lessons get it only when the tutor hands over a task.
+ */
+export function workspaceLesson(l: LessonLike): boolean {
+  if (l.mode !== 'teach') return false
+  const o = l.options ?? {}
+  if (o.language || o.codeRoot || o.strategy === 'code' || o.strategy === 'lab') return true
+  if (o.course?.id && TECH.test(o.course.id.replace(/[-_]+/g, ' '))) return true
+  if (TECH.test(l.topic)) return true
+  const p = o.subject ?? profileSubject(l.topic)
+  return !!p.hands && !!p.kinds?.includes('build')
+}
+
+/** The language a lesson's scratch file is in: the lesson's own, else what its topic names, else Python */
+export function lessonLanguage(l: Pick<LessonLike, 'topic' | 'options'>): string {
+  const own = l.options?.language?.trim().toLowerCase()
+  if (own) return LANG_EXT[own] ? langOfFile(`x.${LANG_EXT[own]}`) : own
+  const t = `${l.topic} ${l.options?.course?.id ?? ''}`.toLowerCase().replace(/[-_]+/g, ' ')
+  if (/\bc\+\+|\bcpp\b/.test(t)) return 'cpp'
+  if (/\brust\b/.test(t)) return 'rust'
+  if (/\b(sql|sqlite|postgres|mysql|database)/.test(t)) return 'sql'
+  if (/\b(bash|shell|zsh|linux|unix|terminal|command line)\b/.test(t)) return 'shell'
+  if (/\bc\b|\bpointers?\b|\bmalloc\b/.test(t)) return 'c'
+  if (/\b(javascript|node)\b/.test(t)) return 'javascript'
+  return 'python'
+}
+
+/** The file extension a language's files take */
+export const extOf = (lang: string) => LANG_EXT[lang.trim().toLowerCase()] ?? 'txt'
+
+/** scratch.py, then scratch-2.py, … : the first name not taken */
+export function scratchName(lang: string, taken: string[]): string {
+  const ext = extOf(lang)
+  for (let n = 1; ; n++) {
+    const name = n === 1 ? `scratch.${ext}` : `scratch-${n}.${ext}`
+    if (!taken.includes(name)) return name
+  }
+}
+
+/**
+ * What "Open in workspace" does with a code block of the tutor's: code goes into a file; shell
+ * commands are pasted at the prompt without Enter (you read them and press it yourself). Null for
+ * anything else (output, JSON, a diagram).
+ */
+export function blockTarget(lang: string): { kind: 'file'; lang: string } | { kind: 'paste' } | null {
+  const l = lang.trim().toLowerCase()
+  if (['bash', 'sh', 'shell', 'zsh', 'console', 'terminal'].includes(l)) return { kind: 'paste' }
+  const file: Record<string, string> = { python: 'python', py: 'python', python3: 'python', c: 'c', cpp: 'cpp', 'c++': 'cpp', cc: 'cpp', rust: 'rust', rs: 'rust', sql: 'sql', sqlite: 'sql', javascript: 'javascript', js: 'javascript', typescript: 'typescript', ts: 'typescript', go: 'go' }
+  return file[l] ? { kind: 'file', lang: file[l] } : null
+}
+
+/** Shell commands to paste: one line each, the "$ " prompts some blocks show taken off, never a trailing Enter */
+export const pasteText = (code: string) =>
+  code
+    .split('\n')
+    .map((l) => l.replace(/^\s*\$\s+/, ''))
+    .join('\n')
+    .replace(/\s+$/, '')

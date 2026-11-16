@@ -133,3 +133,56 @@ describe('a run is not an answer', () => {
     expect(nothingToMark(sawMessage('python3 r.py', 'ZeroDivisionError: division by zero'))).toBe(true)
   })
 })
+
+describe('the Workspace in every hands-on lesson', () => {
+  it('is offered in lessons learnt at a keyboard', async () => {
+    const { workspaceLesson } = await import('../src/shared/workspace')
+    expect(workspaceLesson({ mode: 'teach', topic: 'Running Python' })).toBe(true)
+    expect(workspaceLesson({ mode: 'teach', topic: 'Pointers and arrays in C' })).toBe(true)
+    expect(workspaceLesson({ mode: 'teach', topic: 'SQL joins' })).toBe(true)
+    expect(workspaceLesson({ mode: 'teach', topic: 'Anything', options: { strategy: 'lab' } })).toBe(true)
+    expect(workspaceLesson({ mode: 'teach', topic: 'Week 3', options: { course: { id: 'cs50-python' } } })).toBe(true)
+    expect(workspaceLesson({ mode: 'teach', topic: 'The causes of the French Revolution' })).toBe(false)
+    expect(workspaceLesson({ mode: 'quiz', topic: 'Running Python' })).toBe(false)
+  })
+
+  it('makes its scratch file in the lesson’s language', async () => {
+    const { lessonLanguage, scratchName } = await import('../src/shared/workspace')
+    expect(lessonLanguage({ topic: 'Running Python' })).toBe('python')
+    expect(lessonLanguage({ topic: 'Pointers in C' })).toBe('c')
+    expect(lessonLanguage({ topic: 'C++ templates' })).toBe('cpp')
+    expect(lessonLanguage({ topic: 'Ownership in Rust' })).toBe('rust')
+    expect(lessonLanguage({ topic: 'Linux permissions' })).toBe('shell')
+    expect(lessonLanguage({ topic: 'x', options: { language: 'cpp' } })).toBe('cpp')
+    expect(scratchName('python', [])).toBe('scratch.py')
+    expect(scratchName('python', ['scratch.py', 'scratch-2.py'])).toBe('scratch-3.py')
+    expect(scratchName('c', ['scratch.py'])).toBe('scratch.c')
+  })
+
+  it('opens code blocks as files and pastes shell commands without Enter', async () => {
+    const { blockTarget, pasteText } = await import('../src/shared/workspace')
+    expect(blockTarget('python')).toEqual({ kind: 'file', lang: 'python' })
+    expect(blockTarget('c++')).toEqual({ kind: 'file', lang: 'cpp' })
+    expect(blockTarget('bash')).toEqual({ kind: 'paste' })
+    expect(blockTarget('output')).toBeNull()
+    expect(pasteText('$ ls -la\n$ cd ..\n')).toBe('ls -la\ncd ..')
+  })
+})
+
+describe('following the shell in main', () => {
+  it('knows the command typed, and when to read it off the screen', async () => {
+    const { followKeys, commandOnScreen, NEW_LINE } = await import('../src/shared/workspace')
+    let r = followKeys(NEW_LINE, 'pythn')
+    r = followKeys(r.line, '\x7f\x7fhon3 r.py\r')
+    expect(r.entered).toEqual(['python3 r.py'])
+    expect(followKeys(NEW_LINE, '\x1b[A\r').entered).toEqual([null])
+    expect(commandOnScreen('me@mac lesson % python3 -m py_compile r.py')).toBe('python3 -m py_compile r.py')
+    expect(commandOnScreen('>>> 1/0')).toBe('1/0')
+  })
+
+  it('a workspace pops out into a window of its own kind, one per folder', async () => {
+    const { popInfoOf } = await import('../src/shared/popout')
+    expect(popInfoOf({ kind: 'workspace', root: '/x/lesson', title: 'Running Python: workspace' })).toEqual({ key: 'workspace:/x/lesson', kind: 'workspace', title: 'Running Python: workspace — Tide' })
+    expect(popInfoOf({ kind: 'workspace', title: 'Scratchpad' })?.key).toBe('workspace:')
+  })
+})
