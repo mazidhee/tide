@@ -314,6 +314,11 @@ export function registerPractice(): void {
   ipcMain.handle('practice:stop', () => stopPractice())
   ipcMain.handle('practice:reset', () => resetPractice())
   ipcMain.handle('practice:open', () => shell.openExternal(PRACTICE_URL))
+  // Local only, and yours: the practice admin Tide made, for signing in to it yourself
+  ipcMain.handle('practice:login', () => {
+    const password = getKey(KEY_PASSWORD)
+    return readState().metabase && password ? { email: EMAIL, password } : null
+  })
 }
 
 // ---------- The tutor's tool ----------

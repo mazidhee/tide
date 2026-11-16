@@ -76,6 +76,7 @@ export function PracticeSettings() {
             </button>
           </span>
         </Row>
+        {s?.setUp && <LoginRow />}
         {s?.error && <Row label={<span className="set-error">Last attempt failed</span>} hint={s.error} />}
         <Row
           label="Your spec"
@@ -115,5 +116,30 @@ export function PracticeSettings() {
         {asking && <div className="set-pad pr-confirm">Reset makes the data again from your spec and replaces every practice collection. Questions you saved in the practice Metabase are kept.</div>}
       </Group>
     </>
+  )
+}
+
+/** The practice Metabase's sign-in, for looking around yourself: the password is copied, never shown in full */
+function LoginRow() {
+  const [login, setLogin] = useState<{ email: string; password: string } | null>(null)
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    void window.tide.practiceData.login().then(setLogin).catch(() => {})
+  }, [])
+  if (!login) return null
+  return (
+    <Row label="Sign in to it yourself" hint={<span>Email <code>{login.email}</code>, and the password Tide made for it</span>}>
+      <button
+        className="btn small"
+        onClick={() => {
+          void navigator.clipboard.writeText(login.password).then(() => {
+            setCopied(true)
+            setTimeout(() => setCopied(false), 2000)
+          })
+        }}
+      >
+        {copied ? 'Copied' : 'Copy password'}
+      </button>
+    </Row>
   )
 }
