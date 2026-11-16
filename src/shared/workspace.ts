@@ -418,7 +418,9 @@ export function shortPromptRc(home: string): Record<string, string> {
     '.zshenv': `${yours('.zshenv')}\n`,
     '.zprofile': `${yours('.zprofile')}\n`,
     // After yours: the short prompt; then zsh is pointed back at your folder, so your .zlogin runs as usual
-    '.zshrc': `${yours('.zshrc')}\nPROMPT='%14<…<%1~%<< %# '\nRPROMPT=''\nexport ZDOTDIR="${home}"\n`
+    // History stays in your own file: macOS's /etc/zshrc would otherwise keep it in this shared folder,
+    // where one Tide's commands (a test run's) came back on the up arrow in another's
+    '.zshrc': `${yours('.zshrc')}\nPROMPT='%14<…<%1~%<< %# '\nRPROMPT=''\n[ "$HISTFILE" = "$ZDOTDIR/.zsh_history" ] && HISTFILE="${home}/.zsh_history"\nexport ZDOTDIR="${home}"\n`
   }
 }
 
