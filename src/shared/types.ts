@@ -715,7 +715,7 @@ export interface TideApi {
   }
   terminal: {
     /** Starts a Linux lab container or a shell on this Mac */
-    create(kind: 'lab' | 'local', cols: number, rows: number, cwd?: string): Promise<{ id: string }>
+    create(kind: 'lab' | 'local', cols: number, rows: number, cwd?: string, /** The Workspace's shell: a short prompt */ short?: boolean): Promise<{ id: string }>
     write(id: string, data: string): Promise<void>
     resize(id: string, cols: number, rows: number): Promise<void>
     close(id: string): Promise<void>
@@ -729,6 +729,8 @@ export interface TideApi {
     scratchpad(s: { terminalId: string; root: string; file: string } | null): Promise<void>
     /** A command finished in a shell (quiet for a moment after Enter), with what it printed */
     onFinished(cb: (e: { id: string } & import('./workspace').Finished) => void): () => void
+    /** The tutor made a file in a lesson's Workspace (workspace_file): the lesson opens it */
+    onWorkspaceFile(cb: (e: { labId: string; root: string; file: string }) => void): () => void
     onData(cb: (e: { id: string; data: string }) => void): () => void
     onExit(cb: (e: { id: string; code: number }) => void): () => void
   }

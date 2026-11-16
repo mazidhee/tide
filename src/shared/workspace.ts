@@ -148,7 +148,8 @@ const REPL = /^(>>>|\.\.\.|sqlite>|irb\(|>\s)/
  * REPL only a line that raised an error (or the tutor would answer every line typed at >>>).
  */
 export function worthAReply(command: string, output: string, typedOn = ''): boolean {
-  const c = command.trim()
+  // Enter on an empty line, or a line that was only the prompt: nothing was run
+  const c = cleanCommand(command)
   if (!c) return false
   if (REPL.test(typedOn.trim())) return /Error|Exception|Traceback/.test(output)
   // Opening a REPL or a shell: it's waiting for them, not finished
@@ -254,7 +255,18 @@ export function followKeys(line: LineState, data: string): { line: LineState; en
 }
 
 /** The command on a line of the screen: what follows the prompt ("… % ", "$ ", ">>> ") */
-export const commandOnScreen = (shown: string) => shown.replace(/^.*?(?:[$%#❯➜»]|>>>|\.\.\.)\s+/, '').trim()
+export const commandOnScreen = (shown: string) => shown.replace(/^.*?(?:[$%#❯➜»]|>>>|\.\.\.)(?=\s|$)\s*/, '').trim()
+
+/** A zsh or bash prompt at the start of a line: "me@mac dir % ", "dir % " (the Workspace's own short one) */
+const PROMPT_AT_START = /^(?:\S+@\S+(?:\s+[^\s%$#]+)*\s*[%$#❯]|[^\s%$#]+\s[%$#])(?=\s|$)\s*/
+
+/**
+ * The command as reported to the tutor: any prompt read along with it taken off, so a line that
+ * was only the prompt (Enter on an empty line) is no command at all.
+ */
+export function cleanCommand(command: string): string {
+  return command.replace(PROMPT_AT_START, '').trim()
+}
 
 // ---------- When to reply on its own ----------
 
@@ -365,3 +377,53 @@ export const pasteText = (code: string) =>
     .map((l) => l.replace(/^\s*\$\s+/, ''))
     .join('\n')
     .replace(/\s+$/, '')
+
+// ---------- What to do now, above the editor ----------
+
+/** The task as one quiet line: the latest question, without its code, links or marks, cut at a word */
+export function taskLine(prompt: string, max = 110): string {
+  const flat = prompt
+    .replace(/```[\s\S]*?(```|$)/g, ' ')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[*_#>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return flat.length > max ? `${flat.slice(0, max - 1).replace(/\s+\S*$/, '')}…` : flat
+}
+
+// ---------- The file a code block belongs in ----------
+
+/**
+ * The file the tutor's message names for a code block ("Make a file r.py with…"): the last name
+ * with the block's language's ending before the block, else after it; null when none is named.
+ */
+export function fileForBlock(before: string, after: string, lang: string): string | null {
+  const ext = extOf(lang)
+  const names = (text: string) => [...text.matchAll(new RegExp(`(?<![\\w./-])([\\w-]+\\.${ext.replace(/[+]/g, '\\+')})(?![\\w])`, 'g'))].map((m) => m[1])
+  const name = names(before).pop() ?? names(after)[0]
+  return name ? safeFileName(name) : null
+}
+
+// ---------- A short prompt in the Workspace's shell ----------
+
+/**
+ * The zsh start-up files for the Workspace's shell (main/terminal, by ZDOTDIR): each runs yours
+ * first, so your PATH, aliases and tools are all there, then the prompt is made short ("r % "), so
+ * long lines don't wrap and the tutor reads commands cleanly. Your own files are never changed.
+ */
+export function shortPromptRc(home: string): Record<string, string> {
+  const yours = (name: string) => `[ -f "${home}/${name}" ] && source "${home}/${name}"`
+  return {
+    '.zshenv': `${yours('.zshenv')}\n`,
+    '.zprofile': `${yours('.zprofile')}\n`,
+    // After yours: the short prompt; then zsh is pointed back at your folder, so your .zlogin runs as usual
+    '.zshrc': `${yours('.zshrc')}\nPROMPT='%14<…<%1~%<< %# '\nRPROMPT=''\nexport ZDOTDIR="${home}"\n`
+  }
+}
+
+/** An unlabelled code block that is a command to type ("python3 prices.py"): pasted like a shell block */
+export const looksLikeCommand = (code: string) => {
+  const lines = code.trim().split('\n')
+  return lines.length <= 3 && lines.every((l) => /^\s*\$?\s*(python3?|pip3?|gcc|clang\+?\+?|cc|g\+\+|rustc|cargo|go|node|sqlite3|ls|cd|cat|mkdir|rm|mv|cp|echo|chmod|bash|sh|zsh|which|man|git|\.\/)(\s|$|\w)/.test(l))
+}

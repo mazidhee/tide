@@ -96,7 +96,7 @@ import { parseVerdict, scorecardScore } from '@shared/interviews'
 import { dollarsAsCode, isMetabaseLesson, teardownOf } from '@shared/metabaseData'
 import { pageKey } from '../lib/typing'
 import { LessonWorkspace } from './LessonWorkspace'
-import { autoReply, blockTarget, extOf, LANG_LABEL, lessonLanguage, pasteText, sawLine, sawMessage, scratchName, stepText, taskOf, workspaceLesson, type Finished, type WorkspaceTask } from '@shared/workspace'
+import { autoReply, blockTarget, extOf, fileForBlock, looksLikeCommand, taskLine, LANG_LABEL, lessonLanguage, pasteText, sawLine, sawMessage, scratchName, stepText, taskOf, workspaceLesson, type Finished, type WorkspaceTask } from '@shared/workspace'
 import { useHeld } from '../lib/popout'
 
 /** The lesson's Workspace as it was left: its files, the one open and the tasks started (kept per lesson) */
@@ -745,9 +745,10 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const [workRoot, setWorkRoot] = useState<string | null>(null)
   const openRoot = useCallback(async () => (await window.tide.ide.lesson.open(labId.current, topic, options?.codeRoot)).root, [topic, options?.codeRoot])
   useEffect(() => {
-    if (!workOn || workRoot) return
+    // A lesson that offers the Workspace has its folder from the start, so the tutor's workspace_file can write there
+    if (!(workOn || workOffered) || workRoot) return
     openRoot().then(setWorkRoot).catch(() => {})
-  }, [workOn, workRoot, openRoot])
+  }, [workOn, workOffered, workRoot, openRoot])
   const [workFull, setWorkFull] = useState(false)
   const [workFocus, setWorkFocus] = useState(0)
   // Commands sent to the tutor, and one held while a reply is being written
@@ -896,7 +897,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // "Open in workspace" on a code block of the tutor's: code into a file (the scratch file while
   // it's empty, else the next scratch-N), shell commands pasted at the prompt without Enter
   const pendingPaste = useRef<string | null>(null)
-  const openBlock = async (code: string, lang: string) => {
+  const openBlock = async (code: string, lang: string, named: string | null = null) => {
     const target = blockTarget(lang)
     if (!target) return
     const root = await openWorkspace()
@@ -906,10 +907,22 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       if (termIdRef.current) pasteNow()
       return
     }
-    const first = `scratch.${extOf(target.lang)}`
-    const blank = await window.tide.ide.read(root, first).then((r) => !r.text.trim()).catch(() => true)
-    const file = blank ? first : scratchName(target.lang, [...work.files, first])
-    await window.tide.ide.write(root, file, code.replace(/\s+$/, '') + '\n')
+    const body = code.replace(/\s+$/, '') + '\n'
+    let file: string
+    if (named) {
+      // The file the message names: what's there already is kept unless you say to replace it
+      const had = await window.tide.ide.read(root, named).then((r) => r.text).catch(() => '')
+      if (had.trim() && had !== body && !window.confirm(`${named} already has code in it. Replace it with this block?`)) {
+        setWork((w) => ({ ...w, files: w.files.includes(named) ? w.files : [...w.files, named], open: named, tab: 'work' }))
+        return
+      }
+      file = named
+    } else {
+      const first = `scratch.${extOf(target.lang)}`
+      const blank = await window.tide.ide.read(root, first).then((r) => !r.text.trim()).catch(() => true)
+      file = blank ? first : scratchName(target.lang, [...work.files, first])
+    }
+    await window.tide.ide.write(root, file, body)
     setWork((w) => ({ ...w, files: w.files.includes(file) ? w.files : [...w.files, file], open: file, tab: 'work' }))
     setWorkRev((n) => n + 1)
     // The workspace in its own window hears it too
@@ -958,7 +971,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     if (mode !== 'teach' || !(workOffered || workOn)) return
     columnRef.current?.querySelectorAll<HTMLElement>('.s-tutor pre.code-block').forEach((pre) => {
       if (pre.querySelector('.open-ws')) return
-      const t = blockTarget(pre.dataset.lang ?? '')
+      // An unlabelled one-liner like "python3 prices.py" is a command to paste
+      const t = blockTarget(pre.dataset.lang || (looksLikeCommand(pre.querySelector('code')?.textContent ?? '') ? 'sh' : ''))
       if (!t) return
       const b = document.createElement('button')
       b.type = 'button'
@@ -968,6 +982,38 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       pre.insertBefore(b, pre.querySelector('code'))
     })
   })
+  // The tutor made a file there (workspace_file, main/ide/lesson): it opens in the Workspace
+  useEffect(
+    () =>
+      window.tide.terminal.onWorkspaceFile((e) => {
+        if (e.labId !== labId.current) return
+        setWork((w) => ({ ...w, files: w.files.includes(e.file) ? w.files : [...w.files, e.file], open: e.file, tab: 'work', started: w.started.includes('open') ? w.started : [...w.started, 'open'] }))
+        setNotesOpen(true)
+        setWorkRev((n) => n + 1)
+        window.tide.windows.relay('workspace:file', { root: e.root, file: e.file })
+      }),
+    []
+  )
+  // A file renamed in the workspace's own window: the lesson's list follows
+  useEffect(
+    () =>
+      window.tide.windows.onRelay(({ channel, payload }) => {
+        const p = payload as { root?: string; from?: string; to?: string }
+        if (channel !== 'workspace:renamed' || !p.from || !p.to || p.root !== workRootRef.current) return
+        setWork((w) => ({ ...w, files: w.files.map((f) => (f === p.from ? p.to! : f)), open: w.open === p.from ? p.to! : w.open }))
+      }),
+    []
+  )
+  const workRootRef = useRef(workRoot)
+  workRootRef.current = workRoot
+  // Files gone from the folder (deleted in the terminal) leave the tabs
+  useEffect(() => {
+    if (!workRoot) return
+    window.tide.ide
+      .files(workRoot)
+      .then((l) => setWork((w) => (w.files.every((f) => l.files.includes(f)) ? w : { ...w, files: w.files.filter((f) => l.files.includes(f)), open: l.files.includes(w.open) ? w.open : (w.files.find((f) => l.files.includes(f)) ?? '') })))
+      .catch(() => {})
+  }, [workRoot])
   const onRanRef = useRef<(f: Finished) => void>(() => {})
   useEffect(() => window.tide.terminal.onFinished((e) => e.id === termIdRef.current && onRanRef.current(e)), [])
   const sendRan = (f: Finished) => {
@@ -991,6 +1037,14 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busy])
+  // What to do now, one line above the Workspace's editor: the latest question asked
+  const taskNow = useMemo(() => {
+    for (let i = parsed.length - 1; i >= 0; i--) {
+      const ask = (parsed[i] ?? []).filter((b): b is Extract<Block, { kind: 'ask' }> => b.kind === 'ask' && !!b.prompt).pop()
+      if (ask) return taskLine(taskOf(ask)?.prompt ?? ask.prompt)
+    }
+    return undefined
+  }, [parsed])
   // The task on screen, pinned above the lesson in full screen
   const lastTask = useMemo(() => {
     for (let i = parsed.length - 1; i >= 0; i--)
@@ -2217,7 +2271,15 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             const toWork = (e.target as HTMLElement).closest?.<HTMLElement>('.open-ws')
             if (toWork) {
               const pre = toWork.closest<HTMLElement>('pre.code-block')
-              if (pre) void openBlock(pre.querySelector('code')?.textContent ?? '', pre.dataset.lang ?? '')
+              if (pre) {
+                // The file its message names ("Make a file r.py with…"), from the words before the block, else after
+                const turn = pre.closest<HTMLElement>('.s-tutor')
+                const all = turn?.innerText ?? ''
+                const code = pre.querySelector('code')?.textContent ?? ''
+                const at = all.indexOf(code.trim().split('\n')[0])
+                const named = fileForBlock(at >= 0 ? all.slice(0, at) : all, at >= 0 ? all.slice(at + code.length) : '', blockTarget(pre.dataset.lang ?? '')?.kind === 'file' ? (blockTarget(pre.dataset.lang ?? '') as { lang: string }).lang : 'python')
+                void openBlock(code, pre.dataset.lang || (looksLikeCommand(code) ? 'sh' : ''), named)
+              }
               return
             }
             const open = openReading(e.target)
@@ -2883,6 +2945,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   seen={workSeen}
                   focusNonce={workFocus}
                   rev={workRev}
+                  task={taskNow}
+                  onRenamed={(from, to) => setWork((w) => ({ ...w, files: w.files.map((f) => (f === from ? to : f)), open: w.open === from ? to : w.open }))}
+                  onCreated={(name) => setWork((w) => ({ ...w, files: [...w.files, name], open: name }))}
                   tools={
                     <>
                       <button className="icon-btn small" onClick={() => setWorkFull((v) => !v)} title={workFull ? 'Back to the lesson (Esc)' : 'Full screen: the workspace in front, the lesson beside it (⌘⇧F)'} aria-label={workFull ? 'Leave full screen' : 'Full screen'}>

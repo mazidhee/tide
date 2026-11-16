@@ -213,6 +213,13 @@ const METABASE = tool(
   ['action']
 )
 const TERMINAL_READ = tool('terminal_read', "Read what the student's terminal shows now: recent commands and output.", { lines: { type: 'number', description: 'How many recent lines, default 60' } }, [])
+// A lesson's Workspace (shared/workspace): the tutor sets up a file there (it never types in their shell)
+const WORKSPACE_FILE = tool(
+  'workspace_file',
+  "Create or replace a file in the lesson's Workspace (the editor and terminal beside the lesson) and open it there for them. Set up any file the exercise needs this way, then say which file you made and the exact command to run it.",
+  { name: { type: 'string', description: 'A plain file name in the lesson folder, e.g. r.py' }, contents: { type: 'string' } },
+  ['name', 'contents']
+)
 const TERMINAL_RUN = tool(
   'terminal_run',
   "Type a command into the student's Linux lab terminal (a disposable Ubuntu container) and return its output. Use it to set up exercises or demonstrate; let the student type the commands they're learning.",
@@ -1244,6 +1251,19 @@ async function runToolNow(call: ToolCall, ctx: LoopContext, depth: number): Prom
     return text.trim() ? `Terminal (most recent at the bottom):\n${text}` : 'The terminal is empty so far.'
   }
 
+  if (call.name === 'workspace_file') {
+    const name = String(args.name ?? '')
+    const id = ctx.step({ kind: 'terminal', label: `Making ${name} in your workspace`, status: 'running', depth })
+    try {
+      const made = await (await import('./ide/lesson')).writeWorkspaceFile(ctx.labId ?? '', name, String(args.contents ?? ''))
+      ctx.updateStep(id, { status: 'done' })
+      return `Made ${made} in the lesson's Workspace and opened it in their editor. Tell them its name and the command to run it (e.g. python3 ${made}).`
+    } catch (e) {
+      ctx.updateStep(id, { status: 'error', detail: (e as Error).message })
+      return `Could not make the file: ${(e as Error).message}`
+    }
+  }
+
   if (call.name === 'terminal_run') {
     if (!ctx.terminalId) return 'No terminal is open.'
     const command = String(args.command ?? '')
@@ -1349,7 +1369,7 @@ export function toolSet(o: { top: boolean; web: boolean; focused: boolean; thing
  *  more or fewer and nothing after them is found in the server's cache. */
 async function turnTools(ctx: LoopContext, depth: number): Promise<unknown[]> {
   const term = ctx.terminalId ? terminalInfo(ctx.terminalId) : null
-  const terminalTools = term && !term.exited ? (term.kind === 'lab' ? [TERMINAL_READ, TERMINAL_RUN] : [TERMINAL_READ]) : []
+  const terminalTools = [...(term && !term.exited ? (term.kind === 'lab' ? [TERMINAL_READ, TERMINAL_RUN] : [TERMINAL_READ]) : []), ...(ctx.labId && (await import('./ide/lesson')).lessonOf(ctx.labId) ? [WORKSPACE_FILE] : [])]
   const canvasTools = ctx.canvasPath ? [CANVAS_READ, CANVAS_EDIT] : []
   const top = depth === 0 && !ctx.focused
   // Checking maths or finding a mistake in the cloud needs only the code tool (SymPy), which keeps the request small
@@ -1906,7 +1926,7 @@ function taskLink(open: Record<string, unknown> | null, kind: string, title: str
 
 /** The tutor's tools Tide serves to Claude over MCP: the same definitions and handlers Gemma uses */
 // terminal_read reads the lesson's Workspace terminal (the turn's terminalId); it never types into it
-export const MCP_TUTOR_TOOLS = [...NOTE_TOOLS, CODE_TOOL, SQL_TOOL, LOAD_TABLE_TOOL, STUDY_PLAN, MEMORY_TOOLS[0], TERMINAL_READ] as { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }[]
+export const MCP_TUTOR_TOOLS = [...NOTE_TOOLS, CODE_TOOL, SQL_TOOL, LOAD_TABLE_TOOL, STUDY_PLAN, MEMORY_TOOLS[0], TERMINAL_READ, WORKSPACE_FILE] as { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }[]
 
 /** The Metabase tool, served to Claude over MCP while a Metabase is connected (Settings › Connections) */
 export const MCP_METABASE_TOOL = METABASE as { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }
