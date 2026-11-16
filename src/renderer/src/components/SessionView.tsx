@@ -95,6 +95,26 @@ const MetabasePane = lazy(() => import('./MetabasePane').then((m) => ({ default:
 import { parseVerdict, scorecardScore } from '@shared/interviews'
 import { dollarsAsCode, isMetabaseLesson, teardownOf } from '@shared/metabaseData'
 import { pageKey } from '../lib/typing'
+import { LessonWorkspace } from './LessonWorkspace'
+import { autoReply, LANG_LABEL, sawLine, sawMessage, stepText, taskOf, type Finished, type WorkspaceTask } from '@shared/workspace'
+
+/** The lesson's Workspace as it was left: its files, the one open and the tasks started (kept per lesson) */
+interface WorkspaceState {
+  files: string[]
+  open: string
+  tab: 'notes' | 'work'
+  started: string[]
+}
+const NO_WORKSPACE: WorkspaceState = { files: [], open: '', tab: 'notes', started: [] }
+const wsStore = (lab: string) => `tide.ws.${lab}`
+function loadWorkspace(lab: string): WorkspaceState {
+  try {
+    const v = JSON.parse(localStorage.getItem(wsStore(lab)) ?? 'null') as WorkspaceState | null
+    return v && Array.isArray(v.files) && Array.isArray(v.started) ? { ...NO_WORKSPACE, ...v } : NO_WORKSPACE
+  } catch {
+    return NO_WORKSPACE
+  }
+}
 
 interface Turn {
   role: 'user' | 'assistant'
@@ -139,6 +159,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const recordId = view?.kind === 'session' && ongoingKey && (mode === 'teach' || mode === 'quiz') ? (view.lesson ?? lessonId(ongoingKey)) : undefined
   // The lesson's data lab: the tutor's run_sql and the queries you run in the lesson share it
   const labId = useRef(`lesson:${ongoingKey ?? uid()}`)
+  // The Workspace's terminal, while it's open: the tutor reads it (terminal_read and each message)
+  const termIdRef = useRef<string | null>(null)
   const app = useApp()
   const [turns, setTurns] = useState<Turn[]>([])
   // Side threads under the tutor's outputs (shared/lessonThreads): kept apart from the turns
@@ -376,7 +398,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       if (coding) await coding.flush()
       // [metabase] The Metabase page beside the lesson, as the tutor reads it
       const mbScreen = mbShownRef.current ? await window.tide.metabase.screen().catch(() => null) : null
-      await window.tide.ai.chat({ id, messages, scope, ...(mbScreen?.text ? { onScreen: mbScreen.text } : {}), instructions: sessionInstructions(setupRef.current), labId: labId.current, ...(coding ? { codeLesson: { file: coding.file ?? undefined, root: setupRef.current.options?.codeRoot } } : {}), canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, ...engineFields(engineRef.current), sourceLed: ledRef.current, ...(setupRef.current.options?.course ? { course: { id: setupRef.current.options.course.id, lesson: setupRef.current.options.course.lesson } } : {}) })
+      await window.tide.ai.chat({ id, messages, scope, ...(mbScreen?.text ? { onScreen: mbScreen.text } : {}), instructions: sessionInstructions(setupRef.current), labId: labId.current, ...(termIdRef.current ? { terminalId: termIdRef.current } : {}), ...(coding ? { codeLesson: { file: coding.file ?? undefined, root: setupRef.current.options?.codeRoot } } : {}), canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, ...engineFields(engineRef.current), sourceLed: ledRef.current, ...(setupRef.current.options?.course ? { course: { id: setupRef.current.options.course.id, lesson: setupRef.current.options.course.lesson } } : {}) })
     },
     [scope, setup, web, timed, clock, mode, difficulty.noteFor]
   )
@@ -707,6 +729,29 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     [parsed, busy, pinned, turns, threads, threadBusy]
   )
   const [notesOpen, setNotesOpen] = useState(() => localStorage.getItem('tide.lesson.notes') !== 'closed')
+  // The Workspace beside the lesson (shared/workspace): the task's file and a terminal in the lesson's folder
+  const [work, setWork] = useState<WorkspaceState>(() => loadWorkspace(labId.current))
+  const workOn = mode === 'teach' && work.started.length > 0
+  useEffect(() => {
+    try {
+      if (work.started.length) localStorage.setItem(wsStore(labId.current), JSON.stringify(work))
+    } catch {
+      // kept for this visit only
+    }
+  }, [work])
+  const [workRoot, setWorkRoot] = useState<string | null>(null)
+  const openRoot = useCallback(async () => (await window.tide.ide.lesson.open(labId.current, topic, options?.codeRoot)).root, [topic, options?.codeRoot])
+  useEffect(() => {
+    if (!workOn || workRoot) return
+    openRoot().then(setWorkRoot).catch(() => {})
+  }, [workOn, workRoot, openRoot])
+  const [workFull, setWorkFull] = useState(false)
+  const [workFocus, setWorkFocus] = useState(0)
+  // Commands sent to the tutor, and one held while a reply is being written
+  const [workSeen, setWorkSeen] = useState(0)
+  const sentAt = useRef(0)
+  const heldRun = useRef<Finished | null>(null)
+  const showWork = workOn && (work.tab === 'work' || workFull)
   const withNotes = mode === 'teach' && notesOpen
   // [metabase] A lesson on their own Metabase: Metabase opens beside it, and the tutor sees the page
   const mbLesson = mode === 'teach' && isMetabaseLesson(topic, 'path' in scope ? scope.path : undefined)
@@ -777,6 +822,80 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   talkRef.current = talk
   const stopTalking = voice.stop
   const finished = !busy && turns.length > 1 && !currentAsk && !carryOn && lastBlocks.some((b) => b.kind === 'summary' || b.kind === 'scores')
+
+  // ---------- The Workspace ----------
+  // Start on a task: its file is made in the lesson's folder with the tutor's starting code (never
+  // over what you already wrote in it), and the Workspace opens on it
+  const startTask = async (task: WorkspaceTask, key: string) => {
+    try {
+      const root = workRoot ?? (await openRoot())
+      setWorkRoot(root)
+      if (task.file) {
+        const had = await window.tide.ide.read(root, task.file).then((r) => !!r.text.trim()).catch(() => false)
+        if (!had) await window.tide.ide.write(root, task.file, task.starter)
+      }
+      setWork((w) => ({
+        files: task.file && !w.files.includes(task.file) ? [...w.files, task.file] : w.files,
+        open: task.file ?? w.open,
+        tab: 'work',
+        started: w.started.includes(key) ? w.started : [...w.started, key]
+      }))
+      setNotesOpen(true)
+      setWorkFocus((n) => n + 1)
+    } catch (e) {
+      app.toast((e as Error).message, { tone: 'error' })
+    }
+  }
+  const busyRef = useRef(busy)
+  busyRef.current = busy
+  const finishedRef = useRef(finished)
+  finishedRef.current = finished
+  const sendRan = (f: Finished) => {
+    sentAt.current = f.at
+    heldRun.current = null
+    setWorkSeen((n) => n + 1)
+    sendRef.current(sawMessage(f.command, f.output, f.how), turnsRef.current)
+  }
+  // A command finished in the Workspace: the tutor hears it and replies on its own, once per
+  // command, and never over a reply still being written (the last one waits for it)
+  const onRan = (f: Finished) => {
+    const d = autoReply(f, { busy: busyRef.current, sentAt: sentAt.current, enabled: mode === 'teach' && !finishedRef.current })
+    if (d === 'send') sendRan(f)
+    else if (d === 'hold') heldRun.current = f
+  }
+  useEffect(() => {
+    if (busy || !heldRun.current) return
+    const f = heldRun.current
+    const t = setTimeout(() => !busyRef.current && heldRun.current === f && sendRan(f), 400)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy])
+  // The task on screen, pinned above the lesson in full screen
+  const lastTask = useMemo(() => {
+    for (let i = parsed.length - 1; i >= 0; i--)
+      for (const b of [...(parsed[i] ?? [])].reverse()) {
+        const task = b.kind === 'ask' ? taskOf(b) : null
+        if (task) return task
+      }
+    return null
+  }, [parsed])
+  // ⌘⇧F: full screen and back; Esc returns (not from the terminal, where Esc is the shell's)
+  useEffect(() => {
+    if (!workOn) return
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        setWorkFull((v) => !v)
+        setWork((w) => ({ ...w, tab: 'work' }))
+      } else if (e.key === 'Escape' && workFull && !e.defaultPrevented) {
+        const t = e.target as HTMLElement | null
+        if (t?.closest?.('.xterm') || document.querySelector('.lw .suggest-widget.visible')) return
+        setWorkFull(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [workOn, workFull])
 
   // ---------- How sure were you? One tap after an answer sent without it (shared/teachingQuality) ----------
   const [sureDismissed, setSureDismissed] = useState<number | null>(null)
@@ -1574,6 +1693,42 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         const skip = mode === 'teach' && !timed && !live && !busy && at === turns.length - 1 && !!currentAsk && map.phase !== 'recap' && map.phase !== 'finished' ? <MoveOnChip onMove={moveOn} /> : null
         // A question you missed before says so (a retest); nothing on every other question, where
         // "Holding: last right today" was only noise
+        // A hands-on task: Start makes its file and opens the Workspace beside the lesson
+        const task = mode === 'teach' ? taskOf(b) : null
+        if (task) {
+          const id = `${at}:${task.file ?? 'terminal'}`
+          const started = work.started.includes(id)
+          return (
+            <div key={key} className={`s-ask lw-task${head ? ' lm-has-purpose' : ''}`}>
+              {head}
+              <div className="lw-task-top">
+                <p className="lw-task-lab">Try it · {LANG_LABEL[task.lang] ?? task.lang}</p>
+                <div className="prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(cited(task.prompt), env) }} />
+              </div>
+              <div className="lw-task-act">
+                {started ? (
+                  <>
+                    <span className="lw-task-status">{workSeen > 0 ? <><b aria-hidden="true">●</b> The tutor has seen {workSeen === 1 ? '1 run' : `${workSeen} runs`}</> : task.file ? `Ready: ${task.file} is in your workspace` : 'Ready: the terminal is open'}</span>
+                    {!showWork && (
+                      <button className="link-btn small" onClick={() => setWork((w) => ({ ...w, tab: 'work', open: task.file ?? w.open }))}>
+                        Open the workspace
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <button className="btn primary small" disabled={live} onClick={() => void startTask(task, id)}>
+                      Start
+                    </button>
+                    <small>{task.file ? `Makes ${task.file} and opens it beside the lesson, with a terminal` : 'Opens a terminal beside the lesson'}</small>
+                  </>
+                )}
+                <span className="lw-sp" />
+                {skip}
+              </div>
+            </div>
+          )
+        }
         if (tide && concept && concept.seen > 0 && options?.retest?.length)
           return (
             <div key={key} className="s-ask td-recall">
@@ -1731,31 +1886,41 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const checks = Object.values(challenged)
   const hasSources = toRead.length > 0 || found.length > 0 || !!pack?.sources.length || checks.length > 0
   // (the plan itself is on the lesson map's track; the rail keeps the level and the sources)
-  const rail = tide && !withNotes && railOpen && (!!difficultyLine || hasSources)
+  const rail = tide && !withNotes && !showWork && railOpen && (!!difficultyLine || hasSources)
   const moreFound = found.filter((r) => !pack?.sources.some((x) => x.url === r.url)).slice(0, 4)
 
   return (
     <div className="doc-view session">
-      <header className="doc-toolbar drag session-toolbar">
-        <div className="crumbs no-drag">
+      <header className="doc-toolbar drag session-toolbar lw-head">
+        <div className="crumbs no-drag lw-head-title">
           <span className="session-prof" title={busy ? 'Teaching' : currentAsk ? 'Your turn' : ''}>
             <Professor state={pose} size={20} />
           </span>
-          <span className="crumb">{modeLabel(mode, options)}</span>
-          <Icon name="chevron" size={11} />
-          <span className="crumb current">{topic}</span>
-          {options?.curiosity ? (
-            <span className="muted page-count">came up in {options.curiosity.from.topic}</span>
-          ) : scopeLabel && scopeLabel !== topic && (
-            <span className="muted page-count">
-              {tide && 'path' in scope && <AreaMark area={scope.path} size={14} />}
-              from {scopeLabel}
-            </span>
-          )}
+          <div className="lw-head-text">
+            <div className="lw-head-name">
+              <span className="crumb current" title={`${modeLabel(mode, options)}: ${topic}`}>{topic}</span>
+              {options?.curiosity ? (
+                <span className="muted page-count">came up in {options.curiosity.from.topic}</span>
+              ) : scopeLabel && scopeLabel !== topic && (
+                <span className="muted page-count">
+                  {tide && 'path' in scope && <AreaMark area={scope.path} size={14} />}
+                  from {scopeLabel}
+                </span>
+              )}
+            </div>
+            {showMap && stepText(map) && (
+              <div className="lw-steps" aria-label={stepText(map)}>
+                {map.steps.slice(0, 12).map((st, k) => (
+                  <span key={k} className={st.state === 'done' || st.state === 'skipped' ? 'done' : st.state === 'now' ? 'now' : ''} />
+                ))}
+                <em>{stepText(map)}</em>
+              </div>
+            )}
+          </div>
         </div>
         <div className="toolbar-actions no-drag">
           {timed && <InterviewClock remaining={clock.remaining} total={timed} />}
-          <EnginePill value={engine} onChange={setEngine} />
+          {mode === 'teach' && !!map.minutes && map.minutes >= 1 && <span className="lw-clock">Studied {Math.round(map.minutes)} min</span>}
           <TimeThis
             context={
               options?.problemId
@@ -1765,30 +1930,6 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   : { label: topic, path: `session:${topic.toLowerCase()}`, kind: 'session' }
             }
           />
-          <button
-            className={`chip-toggle${web ? ' on' : ''}`}
-            aria-pressed={web}
-            onClick={() =>
-              setWeb((v) => {
-                localStorage.setItem('tide.chat.web', v ? 'off' : 'on')
-                return !v
-              })
-            }
-            title={web ? 'The tutor may look things up online. Click to turn off.' : 'The tutor only uses your notes. Click to let it look things up online.'}
-          >
-            <Icon name="globe" size={13} />
-            <span>{web ? 'Web on' : 'Web off'}</span>
-          </button>
-          <PopOutButton className="tool-btn keep-label" disabled={busy} />
-          <button
-            className={`tool-btn keep-label${talk ? ' on' : ''}`}
-            aria-pressed={talk}
-            onClick={voice.toggle}
-            title={talk ? 'Talking: the tutor speaks and you answer by voice. Click to stop.' : 'Talk it through: the tutor speaks its replies and you answer by speaking'}
-          >
-            <Icon name="speaker" />
-            <span>Talk</span>
-          </button>
           {talk && (
             <button className={`tool-btn keep-label hands-free is-${voice.hearing}${voice.handsFree ? ' on' : ''}`} aria-pressed={voice.handsFree} onClick={voice.toggleHandsFree} title={voice.flow ? 'Hands-free with Wispr Flow: speak with Flow; what it types is sent when it finishes. Space or Esc interrupts the tutor.' : 'Hands-free: just talk; Tide hears when you stop. Space or Esc interrupts the tutor.'}>
               <span className="hear-dot" aria-hidden="true" />
@@ -1801,88 +1942,115 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               <span>Metabase</span>
             </button>
           )}
-          {mode === 'teach' && (
+          {/* The controls a lesson needs now and then, in one menu (nothing taken away, only moved) */}
+          <LessonMenu>
+            {mode === 'teach' && approach && (
+              <label className="lw-menu-row">
+                <span>How it’s taught</span>
+                <select value={approach} onChange={(e) => changeApproach(e.target.value as Strategy)} disabled={busy} aria-label="How to teach this">
+                  {STRATEGIES.map((st) => (
+                    <option key={st} value={st}>
+                      {STRATEGY_LABEL[st]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <div className="lw-menu-row">
+              <span>Tutor</span>
+              <EnginePill value={engine} onChange={setEngine} />
+            </div>
             <button
-              className={`tool-btn${notesOpen ? ' on' : ''}`}
+              className="lw-menu-row"
+              role="menuitemcheckbox"
+              aria-checked={web}
               onClick={() =>
-                setNotesOpen((o) => {
-                  localStorage.setItem('tide.lesson.notes', o ? 'closed' : 'open')
-                  return !o
+                setWeb((v) => {
+                  localStorage.setItem('tide.chat.web', v ? 'off' : 'on')
+                  return !v
                 })
               }
-              title="Your notes for this lesson"
+              title={web ? 'The tutor may look things up online. Click to turn off.' : 'The tutor only uses your notes. Click to let it look things up online.'}
             >
-              <Icon name="note" />
-              <span>Notes</span>
+              <span>Look things up on the web</span>
+              <span className="lw-menu-val">{web ? 'On' : 'Off'}</span>
             </button>
-          )}
-          {/* [source-led] */}
-          {mode === 'teach' && (
-            <button
-              className={`tool-btn led-toggle${led ? ' on' : ''}`}
-              aria-pressed={led}
-              onClick={() =>
-                setLed((on) => {
-                  localStorage.setItem(ledPrefKey(scope), on ? 'off' : 'on')
-                  return !on
-                })
-              }
-              title={led ? 'Teaching from sources: each step opens with a reading from your books, official documentation or a free text, when a good one is found. Click to let the tutor explain instead.' : 'The tutor is explaining from its own knowledge. Click to teach from sources.'}
-            >
-              <Icon name="book" />
-              <span>{led ? 'Teach from sources' : 'Let the tutor explain'}</span>
+            {mode === 'teach' && (
+              <button
+                className="lw-menu-row"
+                role="menuitemcheckbox"
+                aria-checked={led}
+                onClick={() =>
+                  setLed((on) => {
+                    localStorage.setItem(ledPrefKey(scope), on ? 'off' : 'on')
+                    return !on
+                  })
+                }
+                title={led ? 'Teaching from sources: each step opens with a reading from your books, official documentation or a free text, when a good one is found.' : 'The tutor is explaining from its own knowledge.'}
+              >
+                <span>Teach from sources</span>
+                <span className="lw-menu-val">{led ? 'On' : 'Off'}</span>
+              </button>
+            )}
+            {mode === 'teach' && (
+              <button className="lw-menu-row" role="menuitemcheckbox" aria-checked={why} onClick={toggleWhy} title="Why mode: have the tutor lead you to why each idea is so, from first principles">
+                <span>Why mode</span>
+                <span className="lw-menu-val">{why ? 'On' : 'Off'}</span>
+              </button>
+            )}
+            {tide && (
+              <button className="lw-menu-row" onClick={() => app.updateSettings({ tideReadingFont: app.settings.tideReadingFont === 'sans' ? 'serif' : 'sans' })}>
+                <span>Reading face</span>
+                <span className="lw-menu-val">{app.settings.tideReadingFont === 'sans' ? 'Sans' : 'Serif'}</span>
+              </button>
+            )}
+            <hr />
+            <button className={`lw-menu-row${talk ? ' on' : ''}`} role="menuitemcheckbox" aria-checked={talk} onClick={voice.toggle} title="Talk it through: the tutor speaks its replies and you answer by speaking">
+              <span>Talk</span>
+              <span className="lw-menu-val">{talk ? 'On' : ''}</span>
             </button>
-          )}
-          {coding && (
-            <button className="tool-btn" onClick={() => void openInIde()} title="Open this lesson’s files in the Code view, with Claude beside them">
-              <Icon name="files" />
-              <span>Open in the IDE</span>
+            {mode === 'teach' && (
+              <button
+                className="lw-menu-row"
+                role="menuitemcheckbox"
+                aria-checked={notesOpen}
+                onClick={() =>
+                  setNotesOpen((o) => {
+                    localStorage.setItem('tide.lesson.notes', o ? 'closed' : 'open')
+                    return !o
+                  })
+                }
+              >
+                <span>Notes beside the lesson</span>
+                <span className="lw-menu-val">{notesOpen ? 'Shown' : 'Hidden'}</span>
+              </button>
+            )}
+            {tide && !withNotes && !showWork && (
+              <button
+                className="lw-menu-row"
+                role="menuitemcheckbox"
+                aria-checked={railOpen}
+                onClick={() =>
+                  setRailOpen((o) => {
+                    localStorage.setItem('tide.lesson.rail', o ? 'closed' : 'open')
+                    return !o
+                  })
+                }
+              >
+                <span>Readings and level{toRead.length + found.length + (pack?.sources.length ?? 0) > 0 ? ` (${toRead.length + moreFound.length + (pack?.sources.length ?? 0)})` : ''}</span>
+                <span className="lw-menu-val">{railOpen ? 'Shown' : 'Hidden'}</span>
+              </button>
+            )}
+            <button className="lw-menu-row" onClick={() => document.querySelector('.session .big-picture')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} hidden={mode !== 'teach'}>
+              <span>The big picture</span>
             </button>
-          )}
-          {mode === 'teach' && (
-            <button className={`tool-btn${why ? ' on' : ''}`} aria-pressed={why} onClick={toggleWhy} title={why ? 'Why mode: teaching the reasons behind each idea, Socratically. Click for plain explanations.' : 'Why mode: have the tutor lead you to why each idea is so, from first principles'}>
-              <Icon name="sparkle" />
-              <span>Why</span>
-            </button>
-          )}
-          {mode === 'teach' && approach && (
-            <label className="tool-btn approach-pick" title="How the tutor is teaching this; change it any time">
-              <select value={approach} onChange={(e) => changeApproach(e.target.value as Strategy)} disabled={busy} aria-label="How to teach this">
-                {STRATEGIES.map((s) => (
-                  <option key={s} value={s}>
-                    {STRATEGY_LABEL[s]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          {tide && (
-            <button
-              className="icon-btn td-aa"
-              aria-pressed={app.settings.tideReadingFont === 'sans'}
-              onClick={() => app.updateSettings({ tideReadingFont: app.settings.tideReadingFont === 'sans' ? 'serif' : 'sans' })}
-              title={app.settings.tideReadingFont === 'sans' ? 'Reading in the sans. Click for the serif.' : 'Reading in the serif. Click for the sans.'}
-              aria-label="Switch the reading face"
-            >
-              Aa
-            </button>
-          )}
-          {tide && !withNotes && (
-            <button
-              className="icon-btn"
-              aria-pressed={railOpen}
-              onClick={() =>
-                setRailOpen((o) => {
-                  localStorage.setItem('tide.lesson.rail', o ? 'closed' : 'open')
-                  return !o
-                })
-              }
-              title={railOpen ? 'Hide the level and sources' : 'Show the level and what this is checked against'}
-              aria-label="The level and sources"
-            >
-              <Icon name="panel" />
-            </button>
-          )}
+            {coding && (
+              <button className="lw-menu-row" onClick={() => void openInIde()} title="Open this lesson’s files in the Code view, with Claude beside them">
+                <span>Open in the IDE</span>
+              </button>
+            )}
+            <PopOutButton className="lw-menu-row" disabled={busy} />
+          </LessonMenu>
           <button
             className="tool-btn keep-label"
             disabled={busy && shouldSumUp(turns, finished)}
@@ -1891,14 +2059,19 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             onClick={() => (!busy && shouldSumUp(turns, finished) ? send(END_NOW, turns) : app.back())}
             title={shouldSumUp(turns, finished) ? 'End: the tutor sums up what you learned and what to review. To pause instead, just go elsewhere: it waits under Carry on.' : 'Leave this session'}
           >
-            <Icon name="x" />
             <span>End</span>
           </button>
         </div>
       </header>
 
-      <div className={`${withNotes || mbShown ? 'session-split' : 'session-solo'}${rail ? ' td-with-rail' : ''}`}>
+      <div className={`${withNotes || mbShown || showWork ? 'session-split' : 'session-solo'}${rail ? ' td-with-rail' : ''}${showWork && !mbShown ? ' lw-on' : ''}${workFull && workOn && !mbShown ? ' lw-full' : ''}`}>
       <div className="lm-col">
+      {workFull && workOn && lastTask && (
+        <div className="lw-pinned">
+          <small>Your task</small>
+          <div className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(lastTask.prompt.split(/\n\s*\n/)[0], env) }} />
+        </div>
+      )}
       {showMap && <LessonTrack map={map} tutor={tutorName} nextLesson={nextUp ? (nextUp.item.topic ?? nextUp.item.title) : null} />}
       <div className="doc-scroll session-scroll">
         <div
@@ -1991,6 +2164,14 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               return first ? <ClipCard key={i} clip={first} kicker="Watch first" /> : null
             }
             if (t.role === 'user') {
+              // Something you ran in the Workspace: the tutor's reply below says what it saw
+              const saw = sawLine(t.content)
+              if (saw)
+                return (
+                  <p key={i} className="lw-saw">
+                    Saw: <code>{saw}</code>
+                  </p>
+                )
               if (isMoveOn(t.content))
                 return (
                   <div key={i} className="s-you hint">
@@ -2528,24 +2709,43 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             <MetabasePane url={mbStart} onClose={toggleMetabase} />
           </Suspense>
         </div>
-      ) : withNotes && approach === 'walkthrough' && sideTab === 'canvas' ? (
+      ) : (withNotes || showWork) && (
         <div className="lesson-side">
-          <SideTabs tab={sideTab} onTab={setSideTab} />
-          <Suspense fallback={<div className="view-loading" aria-busy="true" />}>
-            <LessonCanvas path={canvasPath} lessonId="session:" revision={canvasRev} />
-          </Suspense>
-        </div>
-      ) : withNotes && (
-        <div className="lesson-side">
-        {approach === 'walkthrough' && <SideTabs tab={sideTab} onTab={setSideTab} />}
-        <LessonNotes
-          topic={topic}
-          scope={scope}
-          takeaways={takeaways}
-          busy={busy}
-          mineRef={notesMine}
-          onCheck={(mine) => send(notesReviewRequest(mine), turns)}
-        />
+          <SideTabs
+            tabs={[...(approach === 'walkthrough' ? [{ id: 'canvas', label: 'Canvas' }] : []), { id: 'notes', label: 'Notes' }, ...(workOn ? [{ id: 'work', label: work.open ? `${work.open} + Terminal` : 'Terminal' }] : [])]}
+            tab={showWork ? 'work' : approach === 'walkthrough' && sideTab === 'canvas' ? 'canvas' : 'notes'}
+            onTab={(t) => {
+              if (t === 'work') return setWork((w) => ({ ...w, tab: 'work' }))
+              setWorkFull(false)
+              setWork((w) => ({ ...w, tab: 'notes' }))
+              setSideTab(t === 'canvas' ? 'canvas' : 'notes')
+              setNotesOpen(true)
+            }}
+          />
+          {!showWork && approach === 'walkthrough' && sideTab === 'canvas' ? (
+            <Suspense fallback={<div className="view-loading" aria-busy="true" />}>
+              <LessonCanvas path={canvasPath} lessonId="session:" revision={canvasRev} />
+            </Suspense>
+          ) : !showWork ? (
+            <LessonNotes topic={topic} scope={scope} takeaways={takeaways} busy={busy} mineRef={notesMine} onCheck={(mine) => send(notesReviewRequest(mine), turns)} />
+          ) : null}
+          {/* Kept running while the notes are shown, so the shell and what's in it stay */}
+          {workOn && workRoot && (
+            <div className="lw-host" hidden={!showWork}>
+              <LessonWorkspace
+                root={workRoot}
+                files={work.files}
+                open={work.open}
+                onOpen={(f) => setWork((w) => ({ ...w, open: f }))}
+                onTerminal={(id) => (termIdRef.current = id)}
+                onFinished={onRan}
+                full={workFull}
+                onFull={() => setWorkFull((v) => !v)}
+                seen={workSeen}
+                focusNonce={workFocus}
+              />
+            </div>
+          )}
         </div>
       )}
       </div>
@@ -2553,16 +2753,47 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   )
 }
 
-/** Beside a walkthrough: the canvas the tutor draws on, or your notes */
-function SideTabs({ tab, onTab }: { tab: 'canvas' | 'notes'; onTab(t: 'canvas' | 'notes'): void }) {
+/** "Lesson ▾": the lesson's less used controls, in a popover that closes on a click outside or Esc */
+function LessonMenu({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: Event) => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    window.addEventListener('mousedown', close)
+    window.addEventListener('keydown', close)
+    return () => {
+      window.removeEventListener('mousedown', close)
+      window.removeEventListener('keydown', close)
+    }
+  }, [open])
   return (
-    <div className="segmented text lesson-side-tabs" role="tablist">
-      <button role="tab" aria-selected={tab === 'canvas'} className={tab === 'canvas' ? 'on' : ''} onClick={() => onTab('canvas')}>
-        Canvas
+    <div className={`lw-menu${open ? ' open' : ''}`} ref={ref}>
+      <button className="tool-btn keep-label" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <span>Lesson</span>
+        <Icon name="chevron" size={11} />
       </button>
-      <button role="tab" aria-selected={tab === 'notes'} className={tab === 'notes' ? 'on' : ''} onClick={() => onTab('notes')}>
-        Notes
-      </button>
+      {open && (
+        <div className="lw-menu-pop" role="menu">
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The lesson's side: the canvas a walkthrough draws on, your notes, and the Workspace */
+function SideTabs({ tabs, tab, onTab }: { tabs: { id: string; label: string }[]; tab: string; onTab(t: string): void }) {
+  if (tabs.length < 2) return null
+  return (
+    <div className="lw-tabs" role="tablist">
+      {tabs.map((t) => (
+        <button key={t.id} role="tab" aria-selected={tab === t.id} className={`lw-tab${tab === t.id ? ' on' : ''}`} onClick={() => onTab(t.id)}>
+          {t.label}
+        </button>
+      ))}
     </div>
   )
 }

@@ -1,0 +1,374 @@
+/* ---------- A lesson's Workspace (components/LessonWorkspace): the file and a terminal beside the lesson ---------- */
+
+/* The side grows for code: about half the lesson's width */
+.session-split.lw-on {
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 42%, 600px);
+}
+
+/* Full screen: the workspace in front, the lesson a narrow column on the left */
+.session-split.lw-full {
+  grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+}
+.session-split.lw-full .doc-scroll.session-scroll {
+  padding: 18px 18px 20px;
+}
+.session-split.lw-full .session-column {
+  font-size: 15px;
+}
+.session-split.lw-full .td-lesson-head,
+.session-split.lw-full .big-picture {
+  display: none;
+}
+
+.lw-pinned {
+  margin: 14px 18px 4px;
+  padding: 10px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.lw-pinned small {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.lw-pinned .prose {
+  max-height: 9.5em;
+  overflow: auto;
+  font: 14px/1.5 var(--ui, inherit);
+}
+.lw-pinned .prose p {
+  margin: 0;
+}
+
+/* The side's tabs: Canvas, Notes, the file + Terminal */
+.lw-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 10px 0;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.lw-tab {
+  padding: 8px 12px;
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink-3, var(--ink-soft));
+  cursor: pointer;
+}
+.lw-tab:hover {
+  color: var(--ink);
+}
+.lw-tab.on {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+.lw-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lw-host[hidden] {
+  display: none;
+}
+
+.lw {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lw-files {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px 6px 10px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.lw-file {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: 12.5px var(--font-code, monospace);
+  color: var(--ink-3, var(--ink-soft));
+  cursor: pointer;
+}
+.lw-file.on {
+  background: var(--raised, var(--bg-raised));
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--line-2, var(--line));
+}
+.lw-sp {
+  flex: 1;
+}
+.lw-seen {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--ink-3, var(--ink-soft));
+}
+.lw-seen::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.lw-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--accent-ink, #fff);
+  font: 600 12.5px var(--ui, inherit);
+  cursor: pointer;
+}
+.lw-run:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.lw-run kbd {
+  font: 11px var(--ui, inherit);
+  padding: 0 4px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  opacity: 0.85;
+}
+
+/* Editor on top, terminal below */
+.lw-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(120px, 1fr) minmax(140px, 1fr);
+}
+.lw-editor {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--code-bg);
+}
+.lw-editor > * {
+  flex: 1;
+  min-height: 0;
+}
+.lw-empty {
+  margin: 18px;
+  font-size: 13px;
+}
+.lw-term {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+}
+.lw-term .terminal-wrap {
+  flex: 1;
+}
+
+/* The task card: the hand-off from reading to doing */
+:root .session .s-ask.lw-task {
+  padding: 0;
+  border: 1px solid var(--line-2, var(--line));
+  border-radius: 12px;
+  background: var(--raised, var(--bg-raised));
+  overflow: hidden;
+}
+.lw-task > .lm-purpose {
+  margin: 14px 16px 0;
+}
+.lw-task .lm-skip {
+  margin: 0;
+}
+.lw-task-top {
+  padding: 14px 16px 10px;
+}
+.lw-task-lab {
+  margin: 0 0 6px;
+  font: 600 12px var(--ui, inherit);
+  color: var(--accent);
+}
+.lw-task-act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 9px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--sunk, var(--bg));
+  font-family: var(--ui, inherit);
+}
+.lw-task-act small,
+.lw-task-status {
+  font-size: 12.5px;
+  color: var(--ink-3, var(--ink-soft));
+}
+.lw-task-status b {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* What the tutor saw you run, above its reply */
+.lw-saw {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 8px 0 -4px;
+  font: 12.5px var(--ui, inherit);
+  color: var(--ink-3, var(--ink-soft));
+}
+.lw-saw::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.lw-saw code {
+  font-size: 12px;
+  background: none;
+  padding: 0;
+  color: var(--ink-2, var(--ink));
+}
+
+/* ---------- The slim lesson header ---------- */
+.lw-head .lw-head-title {
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+}
+.lw-head-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lw-head-name {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.lw-head-name .crumb.current {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lw-steps {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.lw-steps span {
+  flex: none;
+  width: 26px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line-2, var(--line));
+}
+.lw-steps span.done {
+  background: var(--ink-3, var(--ink-soft));
+}
+.lw-steps span.now {
+  background: var(--accent);
+}
+.lw-steps em {
+  margin-left: 6px;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--ink-3, var(--ink-soft));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lw-clock {
+  font-size: 12.5px;
+  color: var(--ink-3, var(--ink-soft));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lw-menu {
+  position: relative;
+}
+.lw-menu > .tool-btn svg {
+  transform: rotate(90deg);
+}
+.lw-menu-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  width: 290px;
+  padding: 6px;
+  border: 1px solid var(--line-2, var(--line));
+  border-radius: 10px;
+  background: var(--raised, var(--bg-raised));
+  box-shadow: var(--shadow-pop, 0 18px 44px -12px rgba(0, 0, 0, 0.35));
+}
+.lw-menu-pop hr {
+  margin: 5px 4px;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.lw-menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--ink-2, var(--ink));
+  cursor: pointer;
+}
+.lw-menu-row[hidden] {
+  display: none;
+}
+.lw-menu-row:hover {
+  background: var(--hover);
+}
+.lw-menu-row:disabled {
+  opacity: 0.5;
+}
+.lw-menu-row svg {
+  display: none;
+}
+.lw-menu-val {
+  color: var(--ink-3, var(--ink-soft));
+}
+.lw-menu-row select {
+  max-width: 150px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+  background: var(--sunk, var(--bg));
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 6px;
+}

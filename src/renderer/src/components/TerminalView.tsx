@@ -20,13 +20,15 @@ function themeFromCss() {
  * A real terminal (xterm.js) connected to a shell in the main process. It creates the shell when
  * it mounts (or attaches to an existing one) and closes it when it unmounts, unless `keep` is set.
  */
-export function TerminalView({ kind, onReady, onExit, keep = false, cwd, focus = true }: { kind: 'lab' | 'local'; onReady?(id: string): void; onExit?(code: number): void; keep?: boolean; /** Where a local shell starts */ cwd?: string; /** Take the keyboard once it starts */ focus?: boolean }) {
+export function TerminalView({ kind, onReady, onExit, onInput, keep = false, cwd, focus = true }: { kind: 'lab' | 'local'; onReady?(id: string): void; onExit?(code: number): void; /** What you type, as it's sent to the shell (the lesson's Workspace follows commands with it) */ onInput?(data: string): void; keep?: boolean; /** Where a local shell starts */ cwd?: string; /** Take the keyboard once it starts */ focus?: boolean }) {
   const host = useRef<HTMLDivElement>(null)
   const [error, setError] = useState('')
   const onReadyRef = useRef(onReady)
   onReadyRef.current = onReady
   const onExitRef = useRef(onExit)
   onExitRef.current = onExit
+  const onInputRef = useRef(onInput)
+  onInputRef.current = onInput
   const focusRef = useRef(focus)
   focusRef.current = focus
 
@@ -79,7 +81,11 @@ export function TerminalView({ kind, onReady, onExit, keep = false, cwd, focus =
             onExitRef.current?.(e.code)
           })
         )
-        const input = term.onData((data) => id && window.tide.terminal.write(id, data))
+        const input = term.onData((data) => {
+          if (!id) return
+          window.tide.terminal.write(id, data)
+          onInputRef.current?.(data)
+        })
         offs.push(() => input.dispose())
         doFit()
         if (focusRef.current) term.focus()

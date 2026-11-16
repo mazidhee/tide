@@ -2,6 +2,7 @@ import { existsSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 import type { IPty } from 'node-pty'
+import { backspaced, plainText } from '@shared/workspace'
 
 /**
  * Terminals for the Lab and the Code playground.
@@ -39,17 +40,8 @@ export function setTerminalListeners(onData: typeof emitData, onExit: typeof emi
   emitExit = onExit
 }
 
-/** Escape sequences, carriage-return redraws and bells removed, for a model to read */
-export function plainText(raw: string): string {
-  return raw
-    .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '')
-    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
-    .replace(/\x1b[()][A-Z0-9]/g, '')
-    .replace(/\x1b[=>]/g, '')
-    .replace(/[\x07\x00]/g, '')
-    .replace(/[^\n]*\r(?!\n)/g, '')
-    .replace(/\r\n/g, '\n')
-}
+/** Escape sequences removed, for a model to read (shared, so the lesson's Workspace reads it the same way) */
+export { plainText }
 
 const DOCKER_PATHS = ['/usr/local/bin/docker', '/opt/homebrew/bin/docker', join(homedir(), '.docker/bin/docker'), '/Applications/Docker.app/Contents/Resources/bin/docker']
 const dockerBin = () => DOCKER_PATHS.find((p) => existsSync(p)) ?? null
@@ -90,9 +82,9 @@ export async function createTerminal(kind: TerminalKind, cols: number, rows: num
   sessions.set(id, session)
   pty.onData((data) => {
     session.lastOutput = Date.now()
-    const text = plainText(data)
-    session.transcript = (session.transcript + text).slice(-MAX_TRANSCRIPT)
-    session.pending += text
+    const text = plainText(data, true)
+    session.transcript = backspaced(session.transcript + text).slice(-MAX_TRANSCRIPT)
+    session.pending = backspaced(session.pending + text)
     emitData(id, data)
   })
   pty.onExit(({ exitCode }) => {

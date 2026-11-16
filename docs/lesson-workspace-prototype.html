@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson Workspace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#000;--rail:#050608;--sunk:#0a0b0e;--raised:#111318;--line:#1d2027;--line-2:#31353e;
+  --ink:#ededf0;--ink-2:#bcbfc7;--ink-3:#8a8e98;--accent:#8cbcf7;--accent-ink:#06101c;
+  --good:#66d695;--warn:#ecb654;--bad:#f59186;--hover:rgba(200,220,255,.08);--active:rgba(200,220,255,.14);
+  --serif:'Source Serif 4',Georgia,serif;--sans:Inter,system-ui,sans-serif;--mono:'JetBrains Mono',ui-monospace,monospace;
+}
+:root[data-theme="light"]{
+  --paper:#f6f1e7;--rail:#efe8db;--sunk:#ebe3d4;--raised:#fbf8f2;--line:#ddd3c1;--line-2:#c9bda7;
+  --ink:#2a2620;--ink-2:#544d42;--ink-3:#857b6c;--accent:#2f62b8;--accent-ink:#fff;
+  --good:#2f8a55;--warn:#a86d00;--bad:#b9473c;--hover:rgba(60,40,10,.06);--active:rgba(60,40,10,.1);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+code,.mono{font-family:var(--mono);font-size:12.5px}
+
+/* prototype switcher: not part of the design */
+.switch{display:flex;gap:4px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--rail);flex-wrap:wrap}
+.switch b{font-weight:600;margin-right:10px;color:var(--ink-2)}
+.switch button{padding:6px 11px;border-radius:7px;color:var(--ink-2)}
+.switch button.on{background:var(--active);color:var(--ink)}
+.switch .sp{flex:1}
+.switch .hint{color:var(--ink-3);font-size:12.5px;margin-right:8px}
+
+.app{display:flex;height:calc(100vh - 45px)}
+.side{width:210px;flex:none;background:var(--rail);border-right:1px solid var(--line);padding:14px 10px;color:var(--ink-2);font-size:13px}
+.side .it{padding:6px 9px;border-radius:7px}
+.side .it.on{background:var(--active);color:var(--ink)}
+.side h6{margin:16px 9px 6px;font-size:12px;font-weight:500;color:var(--ink-3)}
+.side .one{display:flex;gap:8px;align-items:center;padding:6px 9px;border-radius:7px;background:var(--hover);color:var(--ink)}
+.side .one i{width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+
+/* Slim header */
+.hd{display:flex;align-items:center;gap:14px;height:52px;padding:0 16px 0 20px;border-bottom:1px solid var(--line);flex:none}
+.hd .t{min-width:0;flex:1}
+.hd .t div:first-child{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.steps{display:flex;gap:4px;align-items:center;margin-top:5px}
+.steps span{height:3px;width:34px;border-radius:2px;background:var(--line-2)}
+.steps span.done{background:var(--ink-3)}
+.steps span.now{background:var(--accent)}
+.steps em{font-style:normal;color:var(--ink-3);font-size:12px;margin-left:8px}
+.hd .clock{color:var(--ink-3);font-size:12.5px;font-variant-numeric:tabular-nums}
+.hd .btn{padding:6px 10px;border-radius:7px;color:var(--ink-2)}
+.hd .btn:hover{background:var(--hover)}
+.menu{position:relative}
+.menu .pop{display:none;position:absolute;right:0;top:38px;width:250px;background:var(--raised);border:1px solid var(--line-2);border-radius:10px;padding:6px;z-index:20;box-shadow:0 20px 40px -12px rgba(0,0,0,.6)}
+.menu.open .pop{display:block}
+.pop .row{display:flex;justify-content:space-between;padding:8px 10px;border-radius:7px;color:var(--ink-2)}
+.pop .row:hover{background:var(--hover)}
+.pop .row span:last-child{color:var(--ink-3)}
+.pop hr{border:0;border-top:1px solid var(--line);margin:5px 4px}
+
+/* Lesson column */
+.body{flex:1;min-height:0;display:flex}
+.lesson{flex:1;min-width:0;display:flex;flex-direction:column}
+.scroll{flex:1;overflow:auto;padding:28px 0 20px}
+.col{max-width:680px;margin:0 auto;padding:0 28px}
+.msg{font-family:var(--serif);font-size:17px;line-height:1.62;color:var(--ink)}
+.msg p{margin:0 0 14px}
+.msg code{background:var(--sunk);border:1px solid var(--line);padding:1px 5px;border-radius:5px;font-size:13px}
+.who{display:flex;gap:9px;align-items:center;font-family:var(--sans);font-weight:600;font-size:13.5px;margin:22px 0 10px}
+.who .av{width:22px;height:22px;border-radius:6px;background:var(--raised);border:1px solid var(--line-2);display:grid;place-items:center;font-size:12px}
+.you{margin:20px 0;padding:12px 14px;border-left:2px solid var(--line-2);color:var(--ink-2);font-family:var(--sans);font-size:14.5px}
+.you small{display:block;color:var(--ink-3);font-size:12px;margin-bottom:3px}
+.verdict{display:inline-block;font-family:var(--sans);font-size:12.5px;font-weight:600;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good);margin-bottom:8px}
+.verdict.part{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}
+.saw{font-family:var(--sans);font-size:12.5px;color:var(--ink-3);display:flex;gap:7px;align-items:center;margin:0 0 10px}
+.saw::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.thinking{font-family:var(--sans);font-size:13px;color:var(--ink-3);display:flex;gap:8px;align-items:center;margin:14px 0}
+.dot{width:12px;height:12px;border:2px solid var(--line-2);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* "Try it" task card: the hand-off from reading to doing */
+.task{margin:16px 0 6px;border:1px solid var(--line-2);border-radius:12px;background:var(--raised);overflow:hidden;font-family:var(--sans)}
+.task .top{padding:14px 16px 12px}
+.task .lab{font-size:12px;color:var(--accent);font-weight:600;margin-bottom:6px}
+.task .q{font-size:15px;line-height:1.5;font-weight:500}
+.task ol{margin:10px 0 0;padding-left:20px;color:var(--ink-2);font-size:13.5px;line-height:1.7}
+.task .act{display:flex;gap:8px;align-items:center;padding:10px 16px;border-top:1px solid var(--line);background:var(--sunk)}
+.primary{background:var(--accent);color:var(--accent-ink);padding:7px 13px;border-radius:8px;font-weight:600;font-size:13px}
+.ghost{padding:7px 11px;border-radius:8px;color:var(--ink-2);font-size:13px}
+.ghost:hover{background:var(--hover)}
+.task .act .sp{flex:1}
+.task .act small{color:var(--ink-3);font-size:12px}
+.task .status{font-size:12.5px;color:var(--ink-3)}
+.task .status b{color:var(--good);font-weight:600}
+
+/* Answer box */
+.ans{flex:none;border-top:1px solid var(--line);padding:12px 0 16px}
+.box{border:1px solid var(--line-2);border-radius:12px;background:var(--sunk)}
+.box textarea{width:100%;border:0;background:none;color:var(--ink);font:15px/1.5 var(--sans);padding:12px 14px 4px;resize:none;outline:none;height:58px}
+.box .bar{display:flex;gap:6px;align-items:center;padding:6px 8px 8px 10px}
+.box .bar .sp{flex:1}
+.chip{font-size:12.5px;color:var(--ink-3);padding:4px 8px;border-radius:6px}
+.chip.on{background:var(--active);color:var(--ink)}
+.kbd{font-size:11px;color:var(--ink-3);border:1px solid var(--line-2);border-radius:4px;padding:0 4px;margin-left:6px}
+
+/* Workspace pieces */
+.editor{display:flex;flex-direction:column;min-height:0;background:var(--sunk)}
+.ftabs{display:flex;align-items:center;gap:2px;padding:6px 8px;border-bottom:1px solid var(--line);flex:none}
+.ftab{padding:5px 10px;border-radius:6px;font-size:12.5px;color:var(--ink-3);display:flex;gap:6px;align-items:center}
+.ftab.on{background:var(--raised);color:var(--ink);box-shadow:0 0 0 1px var(--line-2)}
+.ftabs .sp{flex:1}
+.run{display:flex;gap:6px;align-items:center;padding:5px 11px;border-radius:7px;background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:12.5px}
+.code{flex:1;min-height:0;display:flex;font-family:var(--mono);font-size:13px;line-height:1.65;overflow:auto}
+.gut{padding:10px 8px 10px 12px;color:var(--ink-3);text-align:right;user-select:none;border-right:1px solid var(--line)}
+.code textarea{flex:1;border:0;outline:none;background:none;color:var(--ink);font:inherit;padding:10px 12px;resize:none;white-space:pre;min-height:120px}
+.term{display:flex;flex-direction:column;min-height:0;background:#050505;color:#d6d8de}
+:root[data-theme="light"] .term{background:#1d1b18;color:#ece6da}
+.term .out{flex:1;overflow:auto;padding:10px 14px;font-family:var(--mono);font-size:12.5px;line-height:1.6;white-space:pre-wrap}
+.term .out .p{color:#8cbcf7}
+.term .out .err{color:#f59186}
+.term .out .note{color:#8a8e98}
+.term .in{display:flex;gap:8px;align-items:center;padding:8px 14px 10px;border-top:1px solid #1d2027;font-family:var(--mono);font-size:12.5px}
+.term .in span{color:#66d695}
+.term .in input{flex:1;background:none;border:0;outline:none;color:inherit;font:inherit}
+.seen{font-family:var(--sans);font-size:11.5px;color:var(--ink-3);display:flex;gap:6px;align-items:center}
+.seen::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--good)}
+.notes{padding:18px 20px;overflow:auto;font-size:13.5px;line-height:1.6;color:var(--ink-2)}
+.notes h4{margin:0 0 10px;color:var(--ink);font-size:14px}
+.notes li{margin-bottom:8px}
+
+/* A: dock */
+.dock{width:46%;max-width:620px;min-width:380px;border-left:1px solid var(--line);display:flex;flex-direction:column;background:var(--rail)}
+.dtabs{display:flex;gap:2px;padding:8px 10px 0;border-bottom:1px solid var(--line);flex:none}
+.dtab{padding:8px 12px;font-size:13px;color:var(--ink-3);border-bottom:2px solid transparent;margin-bottom:-1px;display:flex;gap:7px;align-items:center}
+.dtab.on{color:var(--ink);border-color:var(--accent)}
+.dtab .new{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.dpane{flex:1;min-height:0;display:flex;flex-direction:column}
+.split{flex:1;min-height:0;display:grid;grid-template-rows:1fr 1fr}
+.split>*{min-height:0}
+.split .term{border-top:1px solid var(--line)}
+
+/* B: inline cells */
+.cell{margin:14px 0;border:1px solid var(--line-2);border-radius:10px;overflow:hidden;font-family:var(--sans)}
+.cell .ch{display:flex;align-items:center;gap:8px;padding:6px 8px 6px 12px;background:var(--raised);border-bottom:1px solid var(--line);font-size:12px;color:var(--ink-3)}
+.cell .ch .sp{flex:1}
+.cell .code{max-height:180px;background:var(--sunk)}
+.cell .term{max-height:240px}
+.cell .term .out{min-height:60px}
+
+/* C: drawer */
+.drawer{flex:none;border-top:1px solid var(--line-2);display:flex;flex-direction:column;background:var(--rail);transition:height .28s cubic-bezier(.2,.8,.2,1);height:38px;overflow:hidden}
+.drawer.open{height:44vh}
+.drawer .dh{height:38px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;font-size:12.5px;color:var(--ink-2);cursor:pointer}
+.drawer .dh .sp{flex:1}
+.drawer .db{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line)}
+.drawer .db>*{min-height:0}
+.drawer .db .term{border-left:1px solid var(--line)}
+
+/* D: hands-on mode */
+.hands{flex:1;min-height:0;display:grid;grid-template-columns:340px 1fr}
+.hands .rail{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;background:var(--rail)}
+.hands .rail .scroll{padding:18px 0}
+.hands .rail .col{padding:0 18px}
+.hands .rail .msg{font-size:15px}
+.hands .ws{display:grid;grid-template-rows:auto 1fr 1fr;min-height:0}
+.hands .ws .term{border-top:1px solid var(--line)}
+.pinned{margin:0 18px 14px;padding:12px 14px;border:1px solid var(--accent);border-radius:10px;font-size:13.5px;line-height:1.5;background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.pinned small{display:block;font-size:11.5px;color:var(--accent);font-weight:600;margin-bottom:4px}
+.wsbar{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--ink-3)}
+.wsbar .sp{flex:1}
+
+.why{position:fixed;right:16px;bottom:16px;max-width:330px;background:var(--raised);border:1px solid var(--line-2);border-radius:12px;padding:14px 16px;font-size:12.5px;line-height:1.55;color:var(--ink-2);box-shadow:0 20px 40px -12px rgba(0,0,0,.6);z-index:30}
+.why>b{color:var(--ink);display:block;margin-bottom:6px;font-size:13px}
+.why li b{color:var(--ink);font-weight:600}
+.why ul{margin:0;padding-left:16px}
+.why button{position:absolute;top:8px;right:10px;color:var(--ink-3)}
+@media (max-width:900px){.side{display:none}.dock{min-width:0;width:50%}.hands{grid-template-columns:1fr}.hands .rail{display:none}}
+</style>
+</head>
+<body>
+<div class="switch">
+  <b>Lesson workspace</b>
+  <button data-d="A" class="on">A · Side workspace</button>
+  <button data-d="B">B · Live cells in the lesson</button>
+  <button data-d="C">C · Drawer underneath</button>
+  <button data-d="D">D · Hands-on mode</button>
+  <span class="sp"></span>
+  <span class="hint">Try it: press <b>Start</b> on the task, run the file, then run it in the terminal</span>
+  <button id="theme">Sepia / Midnight</button>
+  <button id="reset">Reset</button>
+</div>
+<div class="app">
+  <nav class="side">
+    <div class="it">Home</div><div class="it">Chat</div><div class="it on">Learn</div><div class="it">Courses</div><div class="it">Practice</div><div class="it">Review</div><div class="it">Your week</div>
+    <h6>Carry on</h6>
+    <div class="one"><i></i>Running Python</div>
+  </nav>
+  <section class="main" id="main"></section>
+</div>
+<div class="why" id="why"></div>
+
+<script>
+const FILE0 = 'print("a")\nprint(1 / 0)\nprint("b")\n'
+let S
+const reset = () => (S = { started: false, file: FILE0, files: ['r.py'], term: [], ran: [], replied: 0, dockTab: 'notes', drawer: false, hands: false, compiled: false, lastRun: null, pending: false, answered: false })
+reset()
+let D = 'A'
+
+const WHY = {
+  A: ['Side workspace', ['The notes panel becomes tabs: <b>Notes · r.py · Terminal</b>.', '<b>Start</b> on a task opens the right tab with the file already made.', 'Run, or type in the terminal: the tutor sees it (green dot) and replies on its own.', 'Best when you read and do side by side, which is most lessons.']],
+  B: ['Live cells in the lesson', ['The tutor\'s code and commands are editable and runnable where they appear, like a notebook.', 'No second panel, nothing to find: the exercise is in the message.', 'Notes stay on the right as now.', 'Best for short snippets; long files or many commands get cramped.']],
+  C: ['Drawer underneath', ['Editor and terminal live in a drawer under the lesson, like an IDE\'s panel.', '<b>Start</b> slides it up; it folds to one line when you\'re reading.', 'The lesson keeps its full width for reading.', 'Familiar from VS Code and PyCharm, which you use.']],
+  D: ['Hands-on mode', ['When a task starts, the workspace takes the screen and the lesson becomes a narrow column on the left, the task pinned at its top.', '<b>Back to reading</b> returns the normal lesson.', 'Most room for code; strongest for C/C++ and longer projects.', 'Switching modes is a bigger change of scene.']]
+}
+
+// ---------- the fake Python and shell ----------
+function runPy(src) {
+  const lines = src.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i].trim()
+    if (/print\(\s*1\s*\/\s*\)/.test(l) || (/\($/.test(l)) || (l.startsWith('print(') && (l.match(/\(/g) || []).length > (l.match(/\)/g) || []).length))
+      return { syntax: true, out: [`  File "r.py", line ${i + 1}`, `    ${l}`, `    ${' '.repeat(Math.max(0, l.indexOf(')')))}^`, 'SyntaxError: invalid syntax'], code: 1 }
+  }
+  const out = []
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i].trim()
+    let m
+    if (!l) continue
+    if ((m = l.match(/^print\("(.*)"\)$/))) out.push({ t: m[1] })
+    else if ((m = l.match(/^print\((.+)\)$/))) {
+      const e = m[1]
+      if (/\/\s*0(\D|$)/.test(e)) { out.push({ e: 'Traceback (most recent call last):' }, { e: `  File "r.py", line ${i + 1}, in <module>` }, { e: `    ${l}` }, { e: 'ZeroDivisionError: division by zero' }); return { syntax: false, out, code: 1 } }
+      try { out.push({ t: String(Function('return (' + e + ')')()) }) } catch { out.push({ t: e }) }
+    }
+  }
+  return { syntax: false, out, code: 0 }
+}
+function shell(cmd) {
+  const c = cmd.trim()
+  if (!c) return []
+  if (c === 'ls') return S.files.map((f) => ({ t: f })).concat(S.compiled ? [{ t: '__pycache__' }] : [])
+  if (c === 'cat r.py') return S.file.trimEnd().split('\n').map((t) => ({ t }))
+  if (c === 'clear') { S.term = []; return null }
+  if (/^python3? -m py_compile r\.py$/.test(c)) {
+    const r = runPy(S.file)
+    if (r.syntax) return r.out.map((e) => ({ e }))
+    S.compiled = true
+    return []
+  }
+  if (/^python3? r\.py$/.test(c)) {
+    const r = runPy(S.file)
+    return r.syntax ? r.out.map((e) => ({ e })) : r.out
+  }
+  if (c === 'ls __pycache__' && S.compiled) return [{ t: 'r.cpython-312.pyc' }]
+  return [{ e: `zsh: command not found: ${c.split(' ')[0]}` }]
+}
+
+// ---------- the tutor reacting to what it saw ----------
+function tutorSees(kind, cmd, result) {
+  S.ran.push({ kind, cmd, result })
+  S.pending = true
+  render()
+  setTimeout(() => {
+    S.pending = false
+    S.replied++
+    render()
+  }, 1100)
+}
+function replyFor(r) {
+  const err = r.result.some((x) => x.e && /SyntaxError/.test(x.e))
+  const zero = r.result.some((x) => x.e && /ZeroDivision/.test(x.e))
+  if (r.kind === 'compile' && !err) return { v: 'Good', saw: `Saw: <code>${r.cmd}</code> printed nothing`, p: ['Nothing printed is the answer: <code>py_compile</code> only runs the compile phase. Your file is valid syntax, so it compiled and wrote <code>__pycache__/r.cpython-312.pyc</code>, the bytecode. Not one <code>print</code> ran. Try <code>ls __pycache__</code> to see it.', 'Now change line 2 to <code>print(1 /)</code> and compile again.'] }
+  if (r.kind === 'compile' && err) return { v: 'Good', saw: `Saw: <code>${r.cmd}</code> raised SyntaxError`, p: ['Same command, and now it fails, without running anything. That\'s the compile phase catching it. <code>1 /</code> can\'t be parsed into an expression, so no bytecode is made.', 'In your own words: which phase caught each error, <code>1 / 0</code> and <code>1 /</code>?'] }
+  if (err) return { v: 'Good', saw: 'Saw: you ran r.py and got SyntaxError', p: ['Notice <code>a</code> didn\'t print this time, even though line 1 is fine. The whole file failed to compile, so nothing ran.'] }
+  if (zero) return { v: 'Good', saw: 'Saw: you ran r.py: <code>a</code>, then ZeroDivisionError', p: ['<code>a</code> printed, then line 2 failed while running. Compiling passed (<code>1 / 0</code> is valid syntax); the error only exists once the division happens. Now try <code>python3 -m py_compile r.py</code> in the terminal and see what it prints.'] }
+  return { v: 'Good', saw: 'Saw your run', p: ['It ran to the end. Put the <code>1 / 0</code> back if you want to see the runtime error again.'] }
+}
+
+// ---------- pieces ----------
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+function header() {
+  const done = S.replied >= 3
+  return `<header class="hd">
+    <div class="t"><div>Running Python: the interpreter, the REPL, a script</div>
+      <div class="steps"><span class="done"></span><span class="${done ? 'done' : 'now'}"></span><span class="${done ? 'now' : ''}"></span><span></span><span></span><em>Step 2 of 5 · Compile, then run</em></div></div>
+    <span class="clock">Studied 24 min</span>
+    <div class="menu" id="menu"><button class="btn" id="menuBtn">Lesson ▾</button>
+      <div class="pop">
+        <div class="row"><span>How it's taught</span><span>Problem sets</span></div>
+        <div class="row"><span>Tutor</span><span>Auto (Sonnet)</span></div>
+        <div class="row"><span>Look things up on the web</span><span>On</span></div>
+        <hr><div class="row"><span>Talk</span><span></span></div><div class="row"><span>Open in a new window</span><span></span></div><div class="row"><span>The big picture</span><span></span></div><div class="row"><span>Readings (3)</span><span></span></div>
+      </div></div>
+    <button class="btn">End</button>
+  </header>`
+}
+function story(compact) {
+  let h = `<div class="who"><span class="av">🎓</span>The Professor</div>
+  <div class="msg"><span class="verdict part">Partly right</span>
+  <p>Your result is right: <code>a</code> appears, then the error, and <code>b</code> never prints. What you left out is which phase does what. The file compiled fine, because <code>1 / 0</code> is valid syntax. <code>a</code> printed in the run phase, and the error was raised in the run phase when line 2 executed.</p>
+  <p>Now see the two phases apart for yourself.</p></div>`
+  h += taskCard()
+  if (D === 'B' && S.started) h += cells()
+  S.ran.slice(0, S.replied).forEach((r) => {
+    const rep = replyFor(r)
+    h += `<div class="who"><span class="av">🎓</span>The Professor</div><div class="msg"><div class="saw">${rep.saw}</div>${rep.p.map((p) => `<p>${p}</p>`).join('')}</div>`
+  })
+  if (S.pending) h += `<div class="thinking"><span class="dot"></span>Reading what you ran…</div>`
+  if (S.answered) h += `<div class="you"><small>You</small>${esc(S.answered)}</div><div class="thinking"><span class="dot"></span>Opus is marking your answer</div>`
+  return h
+}
+function taskCard() {
+  const where = { A: 'Opens r.py and a terminal beside the lesson', B: 'The file and a terminal appear right here', C: 'Opens the editor and terminal below', D: 'Switches to hands-on: workspace in front' }[D]
+  return `<div class="task"><div class="top"><div class="lab">Try it · Python</div>
+    <div class="q">Run the file, then compile it without running it. What's different?</div>
+    <ol><li>Run <code class="mono">r.py</code> as it is.</li><li>In the terminal: <code class="mono">python3 -m py_compile r.py</code></li><li>Change line 2 to <code class="mono">print(1 /)</code> and compile again.</li></ol></div>
+    <div class="act">${S.started ? `<span class="status">${S.ran.length ? `<b>●</b> The tutor has seen ${S.ran.length} run${S.ran.length > 1 ? 's' : ''}` : 'Ready: r.py is made for you'}</span><span class="sp"></span>${D === 'D' && !S.hands ? '<button class="ghost" data-act="hands">Back to the workspace</button>' : ''}` : `<button class="primary" data-act="start">Start</button><small>${where}</small><span class="sp"></span><button class="ghost">I've got this, move on</button>`}</div></div>`
+}
+function editor(withTabs = true) {
+  const n = S.file.split('\n').length
+  return `<div class="editor">${withTabs ? `<div class="ftabs"><span class="ftab on">r.py</span><span class="sp"></span>${S.ran.length ? '<span class="seen">Tutor sees your runs</span>' : ''}<button class="run" data-act="run">▶ Run <span class="kbd" style="border-color:rgba(0,0,0,.25);color:inherit">⌘↵</span></button></div>` : ''}
+    <div class="code"><div class="gut">${Array.from({ length: n }, (_, i) => i + 1).join('<br>')}</div><textarea id="src" spellcheck="false">${esc(S.file)}</textarea></div></div>`
+}
+function terminal() {
+  const out = S.term.map((l) => (l.p ? `<div><span class="p">~/lesson $</span> ${esc(l.p)}</div>` : l.e ? `<div class="err">${esc(l.e)}</div>` : l.n ? `<div class="note">${esc(l.n)}</div>` : `<div>${esc(l.t)}</div>`)).join('')
+  return `<div class="term"><div class="out" id="out">${out || '<div class="note">A terminal for this lesson, on your Mac. The tutor reads what happens here.</div>'}</div>
+    <div class="in"><span>~/lesson $</span><input id="cmd" placeholder="type a command" autocomplete="off" spellcheck="false"></div></div>`
+}
+function notes() {
+  return `<div class="notes"><h4>From the lesson</h4><ul><li>A script doesn't echo bare expressions; the REPL does.</li><li>In the REPL, an assignment shows nothing; a bare expression shows its repr.</li><li>Python compiles the whole file to bytecode before any line runs. A syntax error stops everything.</li>${S.compiled ? '<li><b>New:</b> <code>py_compile</code> runs only the compile phase and writes the bytecode to <code>__pycache__</code>.</li>' : ''}</ul></div>`
+}
+function cells() {
+  const n = S.file.split('\n').length
+  return `<div class="cell"><div class="ch"><span class="mono">r.py</span><span class="sp"></span>${S.ran.length ? '<span class="seen">Tutor sees your runs</span>' : ''}<button class="run" data-act="run">▶ Run</button></div>
+    <div class="code"><div class="gut">${Array.from({ length: n }, (_, i) => i + 1).join('<br>')}</div><textarea id="src" spellcheck="false">${esc(S.file)}</textarea></div></div>
+    <div class="cell"><div class="ch"><span>Terminal</span><span class="sp"></span><span>~/lesson</span></div>${terminal()}</div>`
+}
+function answerBox(compact) {
+  return `<div class="ans"><div class="col"><div class="box"><textarea id="answer" placeholder="${S.started ? 'Answer in your own words, or just run things: the tutor follows along' : 'Your answer'}"></textarea>
+    <div class="bar"><span class="chip">Guessing</span><span class="chip">Unsure</span><span class="chip">Sure</span><span class="sp"></span><span class="chip">I don't know</span><button class="primary" data-act="send">Submit<span class="kbd" style="border-color:rgba(0,0,0,.25);color:inherit">⌘↵</span></button></div></div></div></div>`
+}
+
+// ---------- layouts ----------
+function layout() {
+  const lesson = `<div class="lesson"><div class="scroll" id="scroll"><div class="col">${story()}</div></div>${answerBox()}</div>`
+  if (D === 'A') {
+    const tab = S.dockTab
+    const tabs = `<div class="dtabs"><button class="dtab ${tab === 'notes' ? 'on' : ''}" data-tab="notes">Notes</button>${S.started ? `<button class="dtab ${tab === 'work' ? 'on' : ''}" data-tab="work">r.py + Terminal${tab !== 'work' && S.ran.length === 0 ? '<span class="new"></span>' : ''}</button>` : ''}</div>`
+    const pane = tab === 'work' ? `<div class="split">${editor()}${terminal()}</div>` : notes()
+    return `${header()}<div class="body">${lesson}<aside class="dock">${tabs}<div class="dpane">${pane}</div></aside></div>`
+  }
+  if (D === 'B') return `${header()}<div class="body">${lesson}<aside class="dock" style="max-width:360px;min-width:300px;width:30%"><div class="dtabs"><button class="dtab on">Notes</button></div>${notes()}</aside></div>`
+  if (D === 'C') {
+    return `${header()}<div class="body" style="flex-direction:column"><div class="body">${lesson}</div>
+      <div class="drawer ${S.drawer ? 'open' : ''}"><div class="dh" data-act="drawer"><span>${S.drawer ? '▾' : '▸'} Workspace</span><span class="mono" style="color:var(--ink-3)">r.py · terminal</span><span class="sp"></span>${S.ran.length ? '<span class="seen">Tutor sees your runs</span>' : ''}<span style="color:var(--ink-3)">⌘J</span></div>
+      <div class="db">${editor()}${terminal()}</div></div></div>`
+  }
+  if (S.hands) {
+    return `${header()}<div class="hands"><div class="rail"><div class="pinned"><small>Your task</small>Run the file, then compile it without running it. What's different?</div><div class="scroll" id="scroll"><div class="col">${story(true)}</div></div>
+      <div style="padding:10px 14px;border-top:1px solid var(--line)"><div class="box"><textarea id="answer" style="height:44px;font-size:14px" placeholder="Answer, or ask"></textarea></div></div></div>
+      <div class="ws"><div class="wsbar"><span>Hands-on · Python 3.12 · ~/lesson</span><span class="sp"></span><button class="ghost" data-act="read">Back to reading</button></div>${editor()}${terminal()}</div></div>`
+  }
+  return `${header()}<div class="body">${lesson}<aside class="dock" style="max-width:360px;min-width:300px;width:30%"><div class="dtabs"><button class="dtab on">Notes</button></div>${notes()}</aside></div>`
+}
+
+function render() {
+  const focusCmd = document.activeElement?.id === 'cmd'
+  const sc = document.getElementById('scroll')
+  const atEnd = sc ? sc.scrollHeight - sc.scrollTop - sc.clientHeight < 60 : true
+  document.getElementById('main').innerHTML = layout()
+  const out = document.getElementById('out')
+  if (out) out.scrollTop = out.scrollHeight
+  const sc2 = document.getElementById('scroll')
+  if (sc2 && atEnd) sc2.scrollTop = sc2.scrollHeight
+  if (focusCmd) document.getElementById('cmd')?.focus()
+  const src = document.getElementById('src')
+  if (src) src.addEventListener('input', () => (S.file = src.value))
+  const [title, pts] = WHY[D]
+  document.getElementById('why').innerHTML = `<button onclick="this.parentNode.style.display='none'">✕</button><b>${title}</b><ul>${pts.map((p) => `<li>${p}</li>`).join('')}</ul>`
+}
+
+function runFile() {
+  const r = runPy(S.file)
+  S.term.push({ p: 'python3 r.py' }, ...(r.syntax ? r.out.map((e) => ({ e })) : r.out))
+  tutorSees('run', 'python3 r.py', r.syntax ? r.out.map((e) => ({ e })) : r.out)
+}
+
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-act],[data-tab],[data-d],#menuBtn,#reset,#theme')
+  if (!t) { document.getElementById('menu')?.classList.remove('open'); return }
+  if (t.dataset.d) {
+    D = t.dataset.d
+    document.querySelectorAll('.switch [data-d]').forEach((b) => b.classList.toggle('on', b === t))
+    document.getElementById('why').style.display = ''
+    if (D === 'A' && S.started) S.dockTab = 'work'
+    if (D === 'C' && S.started) S.drawer = true
+    if (D === 'D' && S.started) S.hands = true
+    return render()
+  }
+  if (t.id === 'menuBtn') return document.getElementById('menu').classList.toggle('open')
+  if (t.id === 'reset') { reset(); return render() }
+  if (t.id === 'theme') { const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'light' ? '' : 'light'; return }
+  if (t.dataset.tab) { S.dockTab = t.dataset.tab; return render() }
+  const a = t.dataset.act
+  if (a === 'start') { S.started = true; S.dockTab = 'work'; S.drawer = true; S.hands = true; S.term.push({ n: 'Made r.py for this task.' }); render(); document.getElementById('cmd')?.focus(); return }
+  if (a === 'run') return runFile()
+  if (a === 'drawer') { S.drawer = !S.drawer; return render() }
+  if (a === 'read') { S.hands = false; return render() }
+  if (a === 'hands') { S.hands = true; return render() }
+  if (a === 'send') { const v = document.getElementById('answer')?.value.trim(); if (v) { S.answered = v; render() } }
+})
+document.addEventListener('keydown', (e) => {
+  if (e.target.id === 'cmd' && e.key === 'Enter') {
+    const cmd = e.target.value
+    S.term.push({ p: cmd })
+    const res = shell(cmd)
+    if (res === null) return render()
+    S.term.push(...res)
+    if (/py_compile/.test(cmd)) tutorSees('compile', cmd, res)
+    else if (/python3? r\.py/.test(cmd)) tutorSees('run', cmd, res)
+    else render()
+  }
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && e.target.id === 'src') { e.preventDefault(); runFile() }
+  if ((e.metaKey || e.ctrlKey) && e.key === 'j' && D === 'C') { e.preventDefault(); S.drawer = !S.drawer; render() }
+})
+render()
+</script>
+</body>
+</html>

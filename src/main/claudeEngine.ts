@@ -522,7 +522,8 @@ export function isAnswer(req: TurnRequest, said: string): boolean {
   // Not an attempt (Go on, a hint, "I don't know" however it's typed, even after "Answer:", "teach
   // me again", "can we move on"): nothing to mark, the tutor teaches or moves on (shared/lessonRepair)
   if (notAnAttempt(said)) return false
-  return !/^\s*(\[hint\]|my question:|(i (don'?t|do not) know|i dunno|idk|no idea|not sure|no clue|i have no (idea|clue)|i'?m not sure|go on|continue|skip)\b)/i.test(said.replace(/[\u2018\u2019\u02bc]/g, "'"))
+  // Something run in the lesson's Workspace (shared/workspace) is no answer either
+  return !/^\s*(\[hint\]|\[ran\] |my question:|(i (don'?t|do not) know|i dunno|idk|no idea|not sure|no clue|i have no (idea|clue)|i'?m not sure|go on|continue|skip)\b)/i.test(said.replace(/[\u2018\u2019\u02bc]/g, "'"))
 }
 
 const MARK_SYSTEM = `You mark one answer a student gave in a lesson, for their tutor. Grade against the tutor's own solution when there is one (it is inside <solution>; the student never saw it). "correct" means the result is right and complete, not just heading the right way. A right final result is "correct" even when the working the question asked for isn't shown: say in "why" that the working wasn't shown, and never mark it down for that alone. "partial" is for a result that is incomplete or only partly right, or reasoning they wrote that is wrong. A message that only asks for something (to be taught again, to move on) is not an answer and is never marked. An equivalent method or ordering is not a mistake. Quote the words of their answer that earned the verdict. A code answer may come with what Tide's sandbox found when it ran their code against the question's hidden tests (the tests are in the \`\`\`tests block of the question; the results read "N of M tests passed" with each FAILED test and why): it can't be "correct" unless every test passed, and for each failed test say what that test tried and the exact line or idea in their code that makes it fail. A note from Tide on an exact check of their final answer or query is a fact: follow it. Reply with JSON only: {"verdict": "correct" | "partial" | "wrong", "score": 0.0 to 1.0, "why": "one or two sentences: what was right and why, or the exact step that's wrong and why", "misconception": optional, only when a partial or wrong answer comes from a specific wrong belief rather than a slip or a gap: {"name": "a short name, under 8 words", "description": "one sentence: what they believe and why it's wrong"}}. When it is one of the learner's known misconceptions listed with the answer, use that exact name.`
@@ -893,7 +894,8 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   // No separate marker (the tutor is already the strongest model): the exact check goes to the tutor itself
   if (exactSaid && !markNote) markNote = exactSaid
 
-  const toolCtx: ToolContext = { signal, sources: ctx.sources, emitSources: ctx.emitSources, step: ctx.step, updateStep: ctx.updateStep, web: false, chatId: req.chatId, labId: req.labId ?? req.chatId }
+  // The lesson's Workspace terminal, for terminal_read (read only: main/terminal refuses to type into their own shell)
+  const toolCtx: ToolContext = { signal, sources: ctx.sources, emitSources: ctx.emitSources, step: ctx.step, updateStep: ctx.updateStep, web: false, chatId: req.chatId, labId: req.labId ?? req.chatId, terminalId: req.terminalId }
   bindLesson(proc.binding, toolCtx)
   // What set_exercise needs of this turn: the topic, the lesson so far and the mark, for the level (main/exercises)
   const { setLessonInfo } = await import('./exercises')
