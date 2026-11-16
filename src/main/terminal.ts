@@ -1,8 +1,8 @@
-import { existsSync } from 'fs'
-import { homedir } from 'os'
+import { existsSync, mkdirSync, writeFileSync } from 'fs'
+import { homedir, tmpdir } from 'os'
 import { join } from 'path'
 import type { IPty } from 'node-pty'
-import { backspaced, commandOnScreen, commandOutput, followKeys, NEW_LINE, plainText, QUIET_MS, type Finished, type LineState } from '@shared/workspace'
+import { backspaced, cleanCommand, commandOnScreen, shortPromptRc, commandOutput, followKeys, NEW_LINE, plainText, QUIET_MS, type Finished, type LineState } from '@shared/workspace'
 
 /**
  * Terminals for the Lab and the Code playground.
@@ -58,7 +58,22 @@ const dockerBin = () => DOCKER_PATHS.find((p) => existsSync(p)) ?? null
 const PATH = `${process.env.PATH ?? ''}:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/Applications/Docker.app/Contents/Resources/bin`
 
 /** `cwd`: where a local shell starts (the IDE's project folder); a folder that isn't there is ignored */
-export async function createTerminal(kind: TerminalKind, cols: number, rows: number, cwdIn?: string): Promise<{ id: string }> {
+/** Where the Workspace shell's start-up files are written */
+const rcDir = join(tmpdir(), 'tide-zsh')
+
+/** The start-up files for a short prompt (shared/workspace shortPromptRc), written once per launch */
+function shortPromptDir(): string | null {
+  try {
+    mkdirSync(rcDir, { recursive: true })
+    for (const [name, text] of Object.entries(shortPromptRc(homedir()))) writeFileSync(join(rcDir, name), text)
+    return rcDir
+  } catch {
+    return null
+  }
+}
+
+/** `short`: the Workspace's shell, zsh with a short prompt so lines don't wrap (your own ~/.zshrc still runs) */
+export async function createTerminal(kind: TerminalKind, cols: number, rows: number, cwdIn?: string, short = false): Promise<{ id: string }> {
   const { spawn } = await import('node-pty')
   const id = `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
   let file: string
@@ -82,6 +97,10 @@ export async function createTerminal(kind: TerminalKind, cols: number, rows: num
   } else {
     file = process.env.SHELL && existsSync(process.env.SHELL) ? process.env.SHELL : '/bin/zsh'
     args = ['-l']
+    if (short && /\/zsh$/.test(file)) {
+      const dir = shortPromptDir()
+      if (dir) env.ZDOTDIR = dir
+    }
     const code = join(homedir(), 'Documents')
     if (cwdIn && typeof cwdIn === 'string' && cwdIn.startsWith('/') && existsSync(cwdIn)) cwd = cwdIn
     else if (existsSync(code)) cwd = code
@@ -123,7 +142,7 @@ const lastLine = (s: Session) => s.transcript.split('\n').pop() ?? ''
 
 /** Enter pressed (or Run): output quiet for QUIET_MS after it means the command has finished */
 function begin(s: Session, command: string, how: 'run' | 'typed') {
-  s.running = { command, since: '', prompt: lastLine(s), how }
+  s.running = { command: cleanCommand(command), since: '', prompt: lastLine(s), how }
   settle(s)
 }
 

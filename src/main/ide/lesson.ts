@@ -15,6 +15,7 @@ import { existsSync, mkdirSync, promises as fs } from 'fs'
 import { basename, dirname, join, resolve } from 'path'
 import type { LessonCodeEvent, Workspace } from '@shared/ide'
 import { codeTurnNote, IDE_LESSON_NOTE } from '@shared/lessonCode'
+import { safeFileName } from '@shared/workspace'
 import type { McpTool } from '../tideMcp'
 import { cleanRel, insideReal } from './paths'
 import { IDE_TOOLS, resolvedListeners, setLessonNote, setLessonTargets } from './pair'
@@ -71,6 +72,20 @@ export function lessonWorkspace(labId: string, topic = '', linkedRoot?: string):
 }
 
 export const lessonOf = (labId: string): LessonCode | null => lessons.get(labId) ?? null
+
+/**
+ * The tutor's workspace_file (main/agent): a file made or replaced in the lesson's own folder (a
+ * plain name, nothing outside it), and the lesson told to open it in the Workspace. Says the name used.
+ */
+export async function writeWorkspaceFile(labId: string, name: string, contents: string): Promise<string> {
+  const l = lessons.get(labId)
+  if (!l) throw new Error('This lesson has no Workspace open yet: give the code in a fenced block instead.')
+  const file = safeFileName(name)
+  if (!file) throw new Error(`"${name}" isn't a plain file name (letters, digits, - _ . and an ending, no folders).`)
+  await fs.writeFile(join(l.root, file), contents.endsWith('\n') ? contents : `${contents}\n`, 'utf8')
+  for (const w of BrowserWindow.getAllWindows()) if (!w.webContents.isDestroyed()) w.webContents.send('workspace:wrote', { labId, root: l.root, file })
+  return file
+}
 
 /** The lab id in a coding lesson's MCP key ("code:<lab>", with ":web" when Claude's web tools are on) */
 export const labOfKey = (key: string) => key.replace(/^code:/, '').replace(/:web$/, '')

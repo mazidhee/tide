@@ -306,7 +306,7 @@ function registerIpc() {
     // A command finished in a shell: the lesson that owns it tells its tutor (shared/workspace), whichever window it was typed in
     (id, f) => send('terminal:finished', { id, ...f })
   )
-  handle('terminal:create', (kind: TerminalKind, cols: number, rows: number, cwd?: string) => createTerminal(kind === 'lab' ? 'lab' : 'local', cols, rows, cwd))
+  handle('terminal:create', (kind: TerminalKind, cols: number, rows: number, cwd?: string, short?: boolean) => createTerminal(kind === 'lab' ? 'lab' : 'local', cols, rows, cwd, short === true))
   handle('terminal:write', (id: string, data: string) => writeTerminal(id, String(data)))
   handle('terminal:resize', (id: string, cols: number, rows: number) => resizeTerminal(id, cols, rows))
   handle('terminal:close', (id: string) => closeTerminal(id))

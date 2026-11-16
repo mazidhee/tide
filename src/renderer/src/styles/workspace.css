@@ -92,11 +92,13 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
   padding: 6px 8px 6px 10px;
   border-bottom: 1px solid var(--line);
   flex: none;
 }
 .lw-file {
+  flex: none;
   padding: 4px 10px;
   border: 0;
   border-radius: 6px;
@@ -114,6 +116,8 @@
   flex: 1;
 }
 .lw-seen {
+  flex: none;
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -128,6 +132,7 @@
   background: var(--accent);
 }
 .lw-run {
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -501,27 +506,81 @@
   color: var(--ink);
 }
 .lw-list-new {
-  flex-wrap: wrap;
-  gap: 2px;
   margin-top: 6px;
-  padding: 4px 6px;
-  cursor: default;
-  white-space: normal;
+  font-family: var(--ui, inherit);
   color: var(--ink-3, var(--ink-soft));
 }
-.lw-list-new:hover {
-  background: none;
+
+/* A file's name typed in place (rename, new file) */
+.lw-name {
+  position: relative;
+  display: inline-flex;
 }
-.lw-list-new button {
-  padding: 2px 5px;
-  border: 0;
-  border-radius: 5px;
-  background: none;
-  font: 12px var(--font-code, monospace);
+.lw-name input {
+  width: 140px;
+  padding: 4px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--paper, var(--bg));
+  font: 12.5px var(--font-code, monospace);
+  color: var(--ink);
+  outline: none;
+}
+.lw-list .lw-name input {
+  width: 100%;
+}
+.lw-name-why {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 5;
+  width: max-content;
+  max-width: 220px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--raised, var(--bg-raised));
+  box-shadow: var(--shadow-pop, 0 6px 18px rgba(0, 0, 0, 0.3));
+  font: 11.5px var(--ui, inherit);
+  color: var(--bad, var(--danger));
+}
+
+/* What to do now: one quiet line above the editor */
+.lw-task {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  border-left: 2px solid var(--accent);
+  font: 12.5px/1.45 var(--ui, inherit);
+  color: var(--ink-2, var(--ink));
+  flex: none;
+}
+.lw-task span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lw-task em {
+  flex: none;
+  font-style: normal;
+  font-size: 11.5px;
   color: var(--ink-3, var(--ink-soft));
-  cursor: pointer;
 }
-.lw-list-new button:hover {
-  background: var(--hover);
-  color: var(--accent);
+
+/* The file tabs scroll on their own, so Run and the buttons beside it always show */
+.lw-filetabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.lw-filetabs::-webkit-scrollbar {
+  display: none;
 }

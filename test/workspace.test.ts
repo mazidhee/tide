@@ -186,3 +186,56 @@ describe('following the shell in main', () => {
     expect(popInfoOf({ kind: 'workspace', title: 'Scratchpad' })?.key).toBe('workspace:')
   })
 })
+
+describe('the fixes from a real lesson', () => {
+  it('Enter on an empty line, or a line that is only the prompt, is no command', async () => {
+    const { autoReply, cleanCommand, commandOnScreen, worthAReply } = await import('../src/shared/workspace')
+    const prompt = 'divineuzoukwu@Divines-MacBook-Pro running-python-the-interpreter-the-repl--n61kl1 %'
+    expect(commandOnScreen(prompt)).toBe('')
+    expect(commandOnScreen(`${prompt} `)).toBe('')
+    expect(cleanCommand(prompt)).toBe('')
+    expect(cleanCommand(`${prompt} python3 r.py`)).toBe('python3 r.py')
+    expect(cleanCommand('r % python3 r.py')).toBe('python3 r.py')
+    expect(cleanCommand('…ng-cdede92ff4 % python3 r.py')).toBe('python3 r.py')
+    expect(cleanCommand('python3 r.py')).toBe('python3 r.py')
+    expect(cleanCommand('echo $HOME')).toBe('echo $HOME')
+    expect(worthAReply(prompt, '')).toBe(false)
+    expect(worthAReply('   ', '')).toBe(false)
+    expect(autoReply({ command: prompt, output: '', prompt, at: 5 }, { busy: false, sentAt: 0, enabled: true })).toBe('drop')
+  })
+
+  it('the task, as one line above the editor', async () => {
+    const { taskLine } = await import('../src/shared/workspace')
+    expect(taskLine('Run `r.py`, then **compile** it:\n```sh\npython3 -m py_compile r.py\n```\nWhat changed?')).toBe('Run r.py, then compile it: What changed?')
+    expect(taskLine('word '.repeat(60)).length).toBeLessThanOrEqual(110)
+  })
+
+  it('a code block goes in the file its message names', async () => {
+    const { fileForBlock } = await import('../src/shared/workspace')
+    expect(fileForBlock('Make a file r.py with the three lines above:', '', 'python')).toBe('r.py')
+    expect(fileForBlock('Save this as total.py, then run python3 total.py.', '', 'python')).toBe('total.py')
+    expect(fileForBlock('First r.py, now a second file b.py:', '', 'python')).toBe('b.py')
+    expect(fileForBlock('Put this in a file:', 'Then run python3 sum.py', 'python')).toBe('sum.py')
+    expect(fileForBlock('Compile hello.c', '', 'python')).toBeNull()
+    expect(fileForBlock('Put it in hello.c', '', 'c')).toBe('hello.c')
+    expect(fileForBlock('No name here.', '', 'python')).toBeNull()
+  })
+
+  it('the Workspace shell gets a short prompt after your own zsh files, which are never changed', async () => {
+    const { shortPromptRc } = await import('../src/shared/workspace')
+    const rc = shortPromptRc('/Users/me')
+    expect(rc['.zshrc']).toContain('source "/Users/me/.zshrc"')
+    expect(rc['.zshrc'].indexOf("PROMPT='%14<…<%1~%<< %# '")).toBeGreaterThan(rc['.zshrc'].indexOf('source'))
+    expect(rc['.zprofile']).toContain('/Users/me/.zprofile')
+  })
+})
+
+describe('an unlabelled command block', () => {
+  it('is pasted like a shell block', async () => {
+    const { looksLikeCommand } = await import('../src/shared/workspace')
+    expect(looksLikeCommand('python3 prices.py\n')).toBe(true)
+    expect(looksLikeCommand('$ ls -la')).toBe(true)
+    expect(looksLikeCommand('[10, 30, 50]')).toBe(false)
+    expect(looksLikeCommand('x = 1\nprint(x)')).toBe(false)
+  })
+})

@@ -6,7 +6,7 @@
  * (terminal.onFinished), whichever window it was typed in, so the lesson's tutor hears it.
  */
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { langOfFile, runCommand } from '@shared/workspace'
+import { langOfFile, runCommand, safeFileName, scratchName } from '@shared/workspace'
 import { TerminalView } from './TerminalView'
 import { Icon } from './Icon'
 
@@ -38,9 +38,56 @@ export interface WorkspaceProps {
   tools?: ReactNode
   /** What the editor says with no file open */
   empty?: string
+  /** What to do now: the lesson's latest question, as one line above the editor */
+  task?: string
+  /** A file renamed (double-click its tab) or made (+): the parent keeps its list */
+  onRenamed?(from: string, to: string): void
+  onCreated?(name: string): void
 }
 
-export function LessonWorkspace({ root, files, open, onOpen, terminalId, onTerminal, keepShell = true, seen = 0, focusNonce = 0, rev = 0, tools, empty }: WorkspaceProps) {
+/**
+ * A file's name, typed in place: safe names only (no folders), Enter keeps it, Esc leaves it.
+ * Says why when a name won't do.
+ */
+export function NameField({ initial, onDone, onCancel }: { initial: string; onDone(name: string): Promise<string | null>; onCancel(): void }) {
+  const [value, setValue] = useState(initial)
+  const [why, setWhy] = useState('')
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.focus()
+    // The name selected without its ending, as Finder does
+    el.setSelectionRange(0, Math.max(0, initial.lastIndexOf('.')) || initial.length)
+  }, [initial])
+  const done = async () => {
+    const name = safeFileName(value)
+    if (!name) return setWhy('Letters, digits, - _ and . only, with no folders')
+    if (name === initial) return onCancel()
+    const err = await onDone(name)
+    if (err) setWhy(err)
+  }
+  return (
+    <span className="lw-name">
+      <input
+        ref={ref}
+        value={value}
+        spellCheck={false}
+        aria-label="File name"
+        onChange={(e) => (setValue(e.target.value), setWhy(''))}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') void done()
+          if (e.key === 'Escape') onCancel()
+          e.stopPropagation()
+        }}
+        onBlur={onCancel}
+      />
+      {why && <span className="lw-name-why">{why}</span>}
+    </span>
+  )
+}
+
+export function LessonWorkspace({ root, files, open, onOpen, terminalId, onTerminal, keepShell = true, seen = 0, focusNonce = 0, rev = 0, tools, empty, task, onRenamed, onCreated }: WorkspaceProps) {
   const [text, setText] = useState<Record<string, string>>({})
   const [termId, setTermId] = useState<string | null>(terminalId ?? null)
   const editorRef = useRef<import('monaco-editor').editor.IStandaloneCodeEditor | null>(null)
@@ -99,16 +146,54 @@ export function LessonWorkspace({ root, files, open, onOpen, terminalId, onTermi
     await window.tide.terminal.run(termId, runCommand(open)).catch(() => {})
   }, [termId, open, flush])
 
+  // A tab being renamed, or a new file being named
+  const [naming, setNaming] = useState<string | null>(null)
+  const NEW = '\u0000new'
+  const rename = async (from: string, to: string): Promise<string | null> => {
+    try {
+      await flush()
+      await window.tide.ide.rename(root, from, to)
+      setText(({ [from]: was, ...rest }) => (was === undefined ? rest : { ...rest, [to]: was }))
+      loaded.current.delete(from)
+      setNaming(null)
+      onRenamed?.(from, to)
+      return null
+    } catch (e) {
+      return (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+    }
+  }
+  const create = async (name: string): Promise<string | null> => {
+    const there = await window.tide.ide.read(root, name).then(() => true).catch(() => false)
+    if (there) return `${name} already exists`
+    await window.tide.ide.write(root, name, '').catch(() => {})
+    setNaming(null)
+    onCreated?.(name)
+    return null
+  }
+
   const value = text[open]
   return (
     <div className="lw">
       <div className="lw-files" role="toolbar" aria-label="Files">
-        {files.map((f) => (
-          <button key={f} className={`lw-file${f === open ? ' on' : ''}`} onClick={() => onOpen(f)} title={`${root}/${f}`}>
-            {f}
-          </button>
-        ))}
-        <span className="lw-sp" />
+        <div className="lw-filetabs">
+        {files.map((f) =>
+          naming === f ? (
+            <NameField key={f} initial={f} onDone={(to) => rename(f, to)} onCancel={() => setNaming(null)} />
+          ) : (
+            <button key={f} className={`lw-file${f === open ? ' on' : ''}`} onClick={() => onOpen(f)} onDoubleClick={() => onRenamed && setNaming(f)} title={onRenamed ? `${f}: double-click to rename` : `${root}/${f}`}>
+              {f}
+            </button>
+          )
+        )}
+        </div>
+        {onCreated &&
+          (naming === NEW ? (
+            <NameField initial={scratchName(open ? langOfFile(open) : 'python', files)} onDone={create} onCancel={() => setNaming(null)} />
+          ) : (
+            <button className="icon-btn small" onClick={() => setNaming(NEW)} title="A new file" aria-label="New file">
+              <Icon name="plus" size={13} />
+            </button>
+          ))}
         {seen > 0 && (
           <span className="lw-seen" title="Each command you finish here is sent to the tutor, which replies on its own">
             Tutor sees your runs
@@ -123,6 +208,12 @@ export function LessonWorkspace({ root, files, open, onOpen, terminalId, onTermi
           </button>
         )}
       </div>
+      {task && (
+        <p className="lw-task" title={task}>
+          <span>{task}</span>
+          <em>Run with ⌘↵ or type in the terminal below</em>
+        </p>
+      )}
       <div className="lw-split">
         <div className="lw-editor">
           {open && value !== undefined ? (
@@ -149,6 +240,7 @@ export function LessonWorkspace({ root, files, open, onOpen, terminalId, onTermi
           <TerminalView
             kind="local"
             cwd={root}
+            shortPrompt
             focus={false}
             keep={keepShell}
             attach={attach}

@@ -72,6 +72,7 @@ const api: TideApi = {
     history: invoke('terminal:history'),
     scratchpad: invoke('terminal:scratchpad'),
     onFinished: (cb) => subscribe('terminal:finished', cb),
+    onWorkspaceFile: (cb) => subscribe('workspace:wrote', cb),
     onData: (cb) => subscribe<{ id: string; data: string }>('terminal:data', cb),
     onExit: (cb) => subscribe<{ id: string; code: number }>('terminal:exit', cb)
   },

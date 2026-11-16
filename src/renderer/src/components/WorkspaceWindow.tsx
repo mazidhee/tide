@@ -6,15 +6,13 @@
  * and which Chat's tutor can read while it's open (never type in).
  */
 import { useCallback, useEffect, useState } from 'react'
-import { scratchName } from '@shared/workspace'
-import { LessonWorkspace } from './LessonWorkspace'
+import { langOfFile, scratchName } from '@shared/workspace'
+import { LessonWorkspace, NameField } from './LessonWorkspace'
 import { Icon } from './Icon'
 
 type WorkspaceView = { kind: 'workspace'; root?: string; files?: string[]; open?: string; terminalId?: string | null; title?: string; lesson?: boolean }
 
 const ON_TOP = 'tide.workspace.onTop'
-/** The kinds of file "+" makes, each run by Run with its language's command (shared/workspace runCommand) */
-const NEW_KINDS: [string, string][] = [['python', 'py'], ['c', 'c'], ['cpp', 'cpp'], ['rust', 'rs'], ['sql', 'sql'], ['shell', 'sh']]
 const LAST = 'tide.scratchpad.open'
 
 export function WorkspaceWindow({ view }: { view: WorkspaceView }) {
@@ -96,12 +94,31 @@ export function WorkspaceWindow({ view }: { view: WorkspaceView }) {
     return () => window.removeEventListener('tide:scratchpad', again)
   }, [])
 
-  const newFile = async (lang: string) => {
-    if (!root) return
-    const name = scratchName(lang, files)
+  // A file being named: a new one, or one renamed (double-click it in the list)
+  const [naming, setNaming] = useState<string | null>(null)
+  const NEW = '\u0000new'
+  const create = async (name: string): Promise<string | null> => {
+    const there = await window.tide.ide.read(root, name).then(() => true).catch(() => false)
+    if (there) return `${name} already exists`
     await window.tide.ide.write(root, name, '').catch(() => {})
+    setNaming(null)
     setFiles((fs) => [...fs, name])
     setOpen(name)
+    return null
+  }
+  const rename = async (from: string, to: string): Promise<string | null> => {
+    try {
+      await window.tide.ide.rename(root, from, to)
+      setNaming(null)
+      setFiles((fs) => fs.map((f) => (f === from ? to : f)))
+      setOpen((o) => (o === from ? to : o))
+      setRev((n) => n + 1)
+      // The lesson's own list follows
+      window.tide.windows.relay('workspace:renamed', { root, from, to })
+      return null
+    } catch (e) {
+      return (e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+    }
   }
 
   return (
@@ -120,19 +137,23 @@ export function WorkspaceWindow({ view }: { view: WorkspaceView }) {
       </header>
       <div className="lw-window-body">
         <nav className="lw-list" aria-label="Files">
-          {files.map((f) => (
-            <button key={f} className={`lw-list-item${f === open ? ' on' : ''}`} onClick={() => setOpen(f)} title={`${root}/${f}`}>
-              {f}
-            </button>
-          ))}
-          <div className="lw-list-new" role="group" aria-label="A new file">
-            <Icon name="plus" size={12} />
-            {NEW_KINDS.map(([lang, ext]) => (
-              <button key={lang} onClick={() => void newFile(lang)} title={`A new file: ${scratchName(lang, files)}`}>
-                .{ext}
+          {files.map((f) =>
+            naming === f ? (
+              <NameField key={f} initial={f} onDone={(to) => rename(f, to)} onCancel={() => setNaming(null)} />
+            ) : (
+              <button key={f} className={`lw-list-item${f === open ? ' on' : ''}`} onClick={() => setOpen(f)} onDoubleClick={() => setNaming(f)} title={`${f}: double-click to rename`}>
+                {f}
               </button>
-            ))}
-          </div>
+            )
+          )}
+          {naming === NEW ? (
+            <NameField initial={scratchName(open ? langOfFile(open) : 'python', files)} onDone={create} onCancel={() => setNaming(null)} />
+          ) : (
+            <button className="lw-list-new" onClick={() => setNaming(NEW)} title="A new file: give it any name and ending (.py, .c, .cpp, .rs, .sql, .sh)">
+              <Icon name="plus" size={12} />
+              New file
+            </button>
+          )}
         </nav>
         {root && (
           <LessonWorkspace
