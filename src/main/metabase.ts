@@ -4,6 +4,7 @@ import { resultTable, type ResultSet } from '@shared/resultCompare'
 import { getKey, setKey } from './cloud'
 import { getSettings, updateSettings } from './settings'
 import { noteUse } from './connectionUse'
+import { connectorsFrom } from '@shared/metabaseConnector'
 
 /**
  * Your Metabase, read-only, for learning it: the tutor can search it, read dashboards, questions
@@ -132,12 +133,53 @@ export async function queryRows(q: MbQuery, maxRows = 200): Promise<ResultSet & 
   return { columns: (r.data?.cols ?? []).map((c) => c.name || c.display_name || ''), rows: rows.slice(0, max), truncated: rows.length > max, ms: Date.now() - t0 }
 }
 
-export async function metabaseStatus(): Promise<{ ready: boolean; detail: string; url: string }> {
+// ---------- Through the user's Claude connector, when there is no key ----------
+
+type ConnectorState = ReturnType<typeof connectorsFrom>['state']
+let connector: { state: ConnectorState; others: string[]; at: number } | null = null
+let checking: Promise<ConnectorState> | null = null
+/** How long a connector check is trusted */
+const CONNECTOR_TTL = 10 * 60_000
+
+/** Whether their Claude Code has claude.ai's Metabase connector, connected: asks `claude mcp list` (no model call, nothing paid) */
+export async function connectorState(fresh = false): Promise<ConnectorState> {
+  if (!fresh && connector && Date.now() - connector.at < CONNECTOR_TTL) return connector.state
+  checking ??= (async () => {
+    const { findClaude, childEnv } = await import('./claudeCli')
+    const cmd = findClaude(getSettings().ai.claude?.path)
+    if (!cmd || process.env.VITEST) return { state: 'missing' as const, others: [] }
+    const { execFile } = await import('child_process')
+    const { homedir } = await import('os')
+    const out = await new Promise<string>((resolve) => execFile(cmd, ['mcp', 'list'], { env: childEnv(), timeout: 45_000, cwd: homedir() }, (_e, so, se) => resolve(`${so}\n${se}`)))
+    return connectorsFrom(out)
+  })()
+    .then((r) => ((connector = { ...r, at: Date.now() }), r.state))
+    .finally(() => (checking = null))
+  return checking
+}
+
+/** The user's other claude.ai connectors, as last listed */
+export const otherConnectors = () => connector?.others ?? []
+
+/** No key, and the connector answers: Metabase lessons on Claude read through it */
+export async function connectorUsable(): Promise<boolean> {
+  if (metabaseReady()) return false
+  return (await connectorState().catch(() => 'missing' as const)) === 'connected'
+}
+
+/** How Metabase is reached now, without waiting: the key, the connector as last checked, or not at all */
+export const metabaseVia = (): 'key' | 'connector' | null => (metabaseReady() ? 'key' : connector?.state === 'connected' ? 'connector' : null)
+
+export async function metabaseStatus(): Promise<{ ready: boolean; detail: string; url: string; via?: 'key' | 'connector' }> {
   const url = metabaseUrl()
-  if (!metabaseReady()) return { ready: false, detail: 'Not connected', url }
+  if (!metabaseReady()) {
+    const state = await connectorState(true).catch(() => 'missing' as const)
+    if (state === 'connected') return { ready: true, detail: 'Using your Claude connector (read-only)', url, via: 'connector' }
+    return { ready: false, detail: state === 'needs-auth' ? 'Not connected: your Claude connector for Metabase needs you to sign in again (claude.ai › Settings › Connectors)' : 'Not connected', url }
+  }
   try {
     const dbs = await call<{ data: unknown[] }>('GET', '/api/database')
-    return { ready: true, detail: `Connected, read-only: ${dbs.data.length} database${dbs.data.length === 1 ? '' : 's'}`, url }
+    return { ready: true, detail: `Connected, read-only: ${dbs.data.length} database${dbs.data.length === 1 ? '' : 's'}`, url, via: 'key' }
   } catch (e) {
     return { ready: false, detail: (e as Error).message, url }
   }

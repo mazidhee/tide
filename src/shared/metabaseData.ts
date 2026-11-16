@@ -737,6 +737,16 @@ export function metabaseRoadmap(map: DataMap): string {
 export const METABASE_NOTEBOOK = 'Metabase on Your Data'
 export const METABASE_ROADMAP_FILE = 'RM_METABASE_YOUR_DATA.md'
 export const YOUR_DATA_NOTE = `${METABASE_NOTEBOOK}/Your data.md`
+/** What they (and their other Claude sessions) already know about this data: tables, KPI rules, gotchas. Written by them, read at a Metabase lesson's start */
+export const KNOWN_DATA_NOTE = `${METABASE_NOTEBOOK}/What we already know.md`
+
+/** The known-data note as the tutor reads it: its front matter dropped, cut to fit */
+export function knownDataForTutor(raw: string, maxChars = 6000): string {
+  const body = raw.replace(/^---\n[\s\S]*?\n---\n?/, '').trim()
+  if (!body) return ''
+  const cut = body.length > maxChars ? `${body.slice(0, maxChars)}\n…(the rest is in the note "${KNOWN_DATA_NOTE}")` : body
+  return `What we already know about this data (their own note, ${KNOWN_DATA_NOTE}; trust it over guesses, and check numbers against it):\n${cut}`
+}
 
 /** A lesson on the student's own Metabase: in its notebook, a teardown, or a topic naming Metabase */
 export function isMetabaseLesson(topic: string | undefined, scopePath: string | undefined): boolean {

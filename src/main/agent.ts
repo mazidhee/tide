@@ -1821,8 +1821,11 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
   // Maths mode (shared/mathsMode): first principles, predict then reveal, explorables and poke-holes, in this engine's own words
   const maths = req.session && req.instructions && userTurns <= 1 && req.topic ? await (await import('./maths')).mathsContext({ topic: req.topic, scope: req.scope, instructions: req.instructions }, engine).catch(() => '') : ''
   // A lesson on their own Metabase: the rules, the map of their data, a dashboard's cards (main/metabaseLearn)
-  const mbLesson = !!req.session && metabaseReady() && (await import('@shared/metabaseData')).isMetabaseLesson(req.topic, 'path' in req.scope ? req.scope.path : undefined)
-  const metabaseNote = mbLesson && req.instructions && userTurns <= 1 ? await import('./metabaseLearn').then((m) => m.metabaseContext(req)).catch(() => '') : ''
+  // Without a key, a lesson Claude teaches reads it through their Claude connector (shared/metabaseConnector); Gemma has no way in
+  const onMetabase = !!req.session && (await import('@shared/metabaseData')).isMetabaseLesson(req.topic, 'path' in req.scope ? req.scope.path : undefined)
+  const mbVia = !onMetabase ? null : metabaseReady() ? 'key' : engine === 'claude' && (await (await import('./metabase')).connectorUsable()) ? 'connector' : null
+  const mbLesson = !!mbVia
+  const metabaseNote = mbVia && req.instructions && userTurns <= 1 ? await import('./metabaseLearn').then((m) => m.metabaseContext(req, mbVia)).catch(() => '') : ''
   const assigning = thingsOn && wanted === 'assign'
   // A SQL lesson knows the lab's tables before it writes its first query
   // A finance lesson's lab holds the market data and the core bank's tables, and is told so

@@ -185,7 +185,9 @@ export class ClaudeProcess {
     private readonly system: string,
     private readonly configFile: string,
     private readonly builtIn: string[] = [],
-    effort?: Effort
+    effort?: Effort,
+    /** The guard hook's command, for a Metabase lesson through the Claude connector */
+    private readonly connector?: { guard: string; others: string[] }
   ) {
     this.model = model
     this.binding = key
@@ -201,7 +203,7 @@ export class ClaudeProcess {
     if (!cmd) throw new ClaudeUnavailable('Claude Code isn’t installed')
     const cwd = join(app.getPath('userData'), 'claude')
     mkdirSync(cwd, { recursive: true })
-    const child = spawn(cmd, claudeArgs({ model: this.model, system: this.system, mcpConfig: this.configFile, builtIn: this.builtIn, effort: this.effort }), { cwd, env: childEnv(), stdio: ['pipe', 'pipe', 'pipe'] })
+    const child = spawn(cmd, claudeArgs({ model: this.model, system: this.system, mcpConfig: this.configFile, builtIn: this.builtIn, effort: this.effort, connector: this.connector?.guard, otherConnectors: this.connector?.others }), { cwd, env: this.connector ? { ...childEnv(), MCP_CONNECTION_NONBLOCKING: 'false' } : childEnv(), stdio: ['pipe', 'pipe', 'pipe'] })
     this.child = child
     this.stderr = ''
     child.stderr.on('data', (d) => (this.stderr = (this.stderr + String(d)).slice(-2000)))
@@ -328,7 +330,7 @@ export function stopClaude(key?: string) {
 /** Live processes, for the usage view and tests */
 export const liveClaude = () => [...live.values()].filter((p) => p.alive).map((p) => ({ key: p.key, model: p.model, turns: p.turns, lastUsed: p.lastUsed }))
 
-function processFor(key: string, model: string, system: string, config: string, builtIn: string[], effort?: Effort): ClaudeProcess {
+function processFor(key: string, model: string, system: string, config: string, builtIn: string[], effort?: Effort, connector?: { guard: string; others: string[] }): ClaudeProcess {
   let p = live.get(key)
   if (!p) {
     // Room for one more: the one used longest ago goes
@@ -338,7 +340,7 @@ function processFor(key: string, model: string, system: string, config: string, 
       oldest.stop()
       live.delete(oldest.key)
     }
-    p = new ClaudeProcess(key, model, system, config, builtIn, effort)
+    p = new ClaudeProcess(key, model, system, config, builtIn, effort, connector)
     live.set(key, p)
   }
   return p
@@ -373,6 +375,8 @@ export async function prewarmClaude(req: Omit<TurnRequest, 'id'>): Promise<void>
   const web = req.web !== false
   const { forClaude } = await import('@shared/exercises')
   const shape = await sessionShape(req, await (await import('./maths')).isMathsLesson(req).catch(() => false))
+  // A lesson through the Metabase connector starts its own process, with the connector's flags
+  if (shape.kind === 'lesson' && shape.metabaseVia === 'connector') return
   const { toolPacks, packsHeader } = await import('@shared/tutorGuide')
   const packs = toolPacks(shape)
   const system = forClaude(await stablePrompt(claudeSystemBase(shape, packs), { ...req, id: 'prewarm' }, web, !!req.session)) + (web ? `\n\n${CLAUDE_WEB_NOTE}` : '')
@@ -397,7 +401,7 @@ export async function prewarmClaude(req: Omit<TurnRequest, 'id'>): Promise<void>
 export async function sessionShape(req: Pick<TurnRequest, 'thread' | 'session' | 'topic' | 'instructions' | 'scope' | 'codeLesson'>, maths: boolean): Promise<import('@shared/tutorGuide').SessionShape> {
   const topic = req.topic ?? ''
   const { aboutSql } = await import('./lab')
-  const { metabaseReady } = await import('./metabase')
+  const { metabaseReady, connectorUsable } = await import('./metabase')
   const { isMetabaseLesson } = await import('@shared/metabaseData')
   const { teachesAsHumanities } = await import('@shared/subjects')
   const path = 'path' in req.scope ? req.scope.path : undefined
@@ -409,7 +413,10 @@ export async function sessionShape(req: Pick<TurnRequest, 'thread' | 'session' |
   if (!req.session) return { kind: 'chat', metabase: mb }
   // A placement check asks only about its own topics: no recall, past mistakes or lesson tools
   if ((await import('@shared/placement')).isPlacementSession(req)) return { kind: 'lesson', placement: true, data }
-  return { kind: 'lesson', maths, data, humanities, graphs: /language is graph/.test(said), metabase: mb && isMetabaseLesson(req.topic, path) }
+  const onMetabase = isMetabaseLesson(req.topic, path)
+  // No key: the lesson reads their Metabase through their Claude connector when it answers
+  const via = onMetabase ? (mb ? 'key' : (await connectorUsable()) ? 'connector' : undefined) : undefined
+  return { kind: 'lesson', maths, data, humanities, graphs: /language is graph/.test(said), metabase: via === 'key', ...(via === 'connector' ? { metabase: false, metabaseVia: 'connector' as const, data: true } : {}) }
 }
 
 // ---------- A turn ----------
@@ -828,7 +835,10 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   const system = forClaude(String(messages[0].content)) + (web ? `\n\n${CLAUDE_WEB_NOTE}` : '') + (coding ? `\n\n${(await import('@shared/lessonCode')).CLAUDE_CODE_LESSON_NOTE}` : '')
   const history = messages.slice(1)
   const mcp = await startMcp()
-  const proc = (live.get(key)?.alive || coding ? null : adopt(system, web, key, packsHeader(packs))) ?? processFor(key, model, system, configFor(key, mcp.port, mcp.token, packsHeader(packs)), web ? CLAUDE_WEB_TOOLS : [], effort)
+  // A Metabase lesson without a key reads their Metabase through their Claude connector, read-only (shared/metabaseConnector)
+  // The connector loads before the first message (claude.ai connectors otherwise connect in the background and miss it)
+  const connector = shape.kind === 'lesson' && shape.metabaseVia === 'connector' ? { guard: (await import('@shared/metabaseConnector')).guardCommand(mcp.port, mcp.token), others: (await import('./metabase')).otherConnectors() } : undefined
+  const proc = (live.get(key)?.alive || coding || connector ? null : adopt(system, web, key, packsHeader(packs))) ?? processFor(key, model, system, configFor(key, mcp.port, mcp.token, packsHeader(packs)), web ? CLAUDE_WEB_TOOLS : [], effort, connector)
   // Known by the student's own first message, as the window sends it (the context Tide adds to it can change)
   const firstSaid = fp(text(req.messages.find((m) => m.role === 'user')?.content))
   // The learner's messages in the whole lesson (the history may be cut to fit the context)

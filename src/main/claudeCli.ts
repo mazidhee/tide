@@ -11,6 +11,7 @@ import { join } from 'path'
 import type { ClaudeModel } from '@shared/types'
 import type { Effort } from '@shared/thinking'
 import { windowsFromEvent, type WindowReading } from '@shared/usage'
+import { withConnector } from '@shared/metabaseConnector'
 
 /** Variables that would make the CLI bill an API key or another provider instead of the user's plan */
 export const STRIPPED_ENV = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_OAUTH_TOKEN', 'ANTHROPIC_MODEL']
@@ -44,6 +45,10 @@ export interface ClaudeArgs {
   builtIn?: string[]
   /** How hard it thinks to begin with (shared/thinking); a running process is changed with effortLine */
   effort?: Effort
+  /** A Metabase lesson without a Metabase key: the guard hook's command, and the connector's read tools are given (shared/metabaseConnector) */
+  connector?: string
+  /** The user's other claude.ai connectors, refused whole in that lesson */
+  otherConnectors?: string[]
 }
 
 /**
@@ -53,7 +58,7 @@ export interface ClaudeArgs {
  */
 export function claudeArgs(o: ClaudeArgs): string[] {
   const builtIn = o.builtIn ?? []
-  return [
+  const args = [
     '-p',
     '--model', o.model,
     '--input-format', 'stream-json',
@@ -70,6 +75,7 @@ export function claudeArgs(o: ClaudeArgs): string[] {
     ...(o.effort ? ['--effort', o.effort] : []),
     '--system-prompt', o.system
   ]
+  return o.connector ? withConnector(args, o.connector, o.otherConnectors) : args
 }
 
 /**

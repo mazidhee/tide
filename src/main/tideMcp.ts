@@ -125,6 +125,24 @@ export async function startMcp(port = 0, token = randomBytes(24).toString('base6
       res.writeHead(401).end()
       return
     }
+    // The connector's guard (shared/metabaseConnector): a Metabase lesson's hook asks here before each Metabase call
+    if (req.url === '/guard/metabase' && req.method === 'POST') {
+      const { connectorCallProblem, hookAnswer } = await import('@shared/metabaseConnector')
+      let body = ''
+      for await (const chunk of req) {
+        body += String(chunk)
+        if (body.length > 200_000) break
+      }
+      let problem: string | null
+      try {
+        const j = JSON.parse(body) as { tool_name?: string; tool_input?: unknown }
+        problem = connectorCallProblem(String(j.tool_name ?? ''), j.tool_input)
+      } catch {
+        problem = 'Tide couldn’t read this call, so it was stopped.'
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify(hookAnswer(problem)))
+      return
+    }
     if (!req.url?.startsWith('/mcp')) {
       res.writeHead(404).end()
       return
