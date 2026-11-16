@@ -1234,8 +1234,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   useEffect(() => {
     const replied = wasBusy.current && !busy
     wasBusy.current = busy
-    // A placement check's miss is "not learned yet": no flashcard from it
-    if (!replied || app.settings.autoCards === false || isPlacementSession({ topic, options })) return
+    // A placement check's miss is "not learned yet": no flashcard from it; nor is a miss in a lesson's
+    // opening questions, before anything has been taught
+    if (!replied || app.settings.autoCards === false || isPlacementSession({ topic, options }) || mapRef.current?.phase === 'probe') return
     for (const c of missCards(turns.length - 1)) if (!savedCards.has(c.front) && !undoneCards.current.has(c.front)) void saveCardRef.current(c.front, c.back)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busy])

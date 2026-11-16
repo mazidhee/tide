@@ -256,6 +256,24 @@ export interface LessonKit {
   humanities: string
 }
 
+/**
+ * A programming language is learnt to the metal, not bootcamp-style: how each feature works, what
+ * it costs and the rules the official docs give, shown running. The learner asked for this depth
+ * in Python first, then C and C++, for quant and payments work
+ */
+export const LANGUAGE_DEPTH = `Depth: this is a programming language, learnt properly, never surface-level. For each feature teach how it works, not just how to write it:
+- In memory: what the objects, references and layout are, drawn, and shown live (id, sys.getsizeof, dis, ast; in C and C++ addresses, sizeof and the compiler's output).
+- Its cost: the time and space of each operation and why (list append amortised O(1), x in list O(n) against a set's O(1) on average, slicing copies), measured with timeit when it matters.
+- The exact rules: what the language reference, data model and library docs say, named by section, and the edge cases those rules imply.
+- One level below the surface by default; the interpreter's or compiler's internals when they explain the behaviour.
+Order each step: explain the mechanism with a picture, show it running in the workspace, then ask them to predict and check.`
+
+const LANGUAGES = /\b(python|cpython|cpp|rust|golang|java|javascript|typescript|swift|haskell|ocaml|zig)\b|\bc\+\+|\b(in|with|using|learn|learning) C\b(?![+#])|^C\b(?![+#])\s*[:,-]|\bC (language|programming|pointers|strings|arrays|structs|memory)\b/i
+/** A lesson on a programming language itself (Python, C, C++, Rust…), from its topic or notebook */
+export function isLanguageTopic(topic: string, notebook?: string): boolean {
+  return LANGUAGES.test(topic) || (!!notebook && /\b(python|cpp|rust)\b|\bc\+\+/i.test(notebook))
+}
+
 /** The SQL lab, briefly, for a subject that works with data but isn't taught hands-on */
 const LAB_LINE = 'Real data suits this: query the lab with run_sql (the shop and product-analytics tables, or their own .csv after load_table), show each query as a ```sql block, and draw results with a ```chart block of JSON {"sql": "...", "type": "line"}.'
 
@@ -286,6 +304,7 @@ export function lessonKit(topic: string, profile?: SubjectProfile, notebook?: st
   const handsOn = !!p.hands
   const taught = p.kinds
   const parts = taught.map((k) => TOOLKITS[k].rules)
+  if (handsOn && isLanguageTopic(topic, notebook)) parts.push(LANGUAGE_DEPTH)
   if (p.lab && !handsOn) parts.push(LAB_LINE)
   // Finance, payments and quant: the lab that fits (its simulation is in `sims`; this is the Python helper and the tables)
   const finance = financeLabNote(topic)
