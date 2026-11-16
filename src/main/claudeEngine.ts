@@ -20,6 +20,7 @@ import { createHash } from 'crypto'
 import type { AgentStep, ChatEvent, ChatMessage, ClaudeModel, ClaudeRole } from '@shared/types'
 import { claudeModel, claudeLabel, asksForDepth, rank } from '@shared/claude'
 import { notAnAttempt } from '@shared/lessonRepair'
+import { asksToThink } from '@shared/session'
 import { FIRST_WORDS_MS } from '@shared/workarounds'
 import { checkClaude, childEnv, claudeArgs, effortLine, findClaude, mcpConfig, onceArgs, parseLine, unavailableReason, unavailableText, userContent, userLine, type ClaudeEvent, type ClaudeStatus, type ClaudeUsage, type ImageInput } from './claudeCli'
 import { getSettings } from './settings'
@@ -528,6 +529,8 @@ export function isAnswer(req: TurnRequest, said: string): boolean {
   if (!req.session) return false
   const prev = [...req.messages].reverse().find((m) => m.role === 'assistant')
   if (!prev || !/<ask\b/i.test(text(prev.content))) return false
+  // A think question (a tutorial's "what would happen if…") is discussed, never marked (shared/session)
+  if (asksToThink(text(prev.content))) return false
   // Not an attempt (Go on, a hint, "I don't know" however it's typed, even after "Answer:", "teach
   // me again", "can we move on"): nothing to mark, the tutor teaches or moves on (shared/lessonRepair)
   if (notAnAttempt(said)) return false

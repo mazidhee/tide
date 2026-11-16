@@ -1,5 +1,5 @@
 import { SAW } from './workspace'
-import { ASKED, GO_ON, closeGrade, ownWords, parseBlocks } from './session'
+import { ASKED, GO_ON, asksToThink, closeGrade, ownWords, parseBlocks } from './session'
 import { isMoveOn } from './lessonPlan'
 
 /**
@@ -51,6 +51,28 @@ const ownText = (said: string) =>
     .trim()
     .replace(/[\u2018\u2019\u02bc]/g, "'")
 
+/**
+ * Lost or confused, or asking what the tutor meant: a signal, not an answer. Seen live in a Python
+ * lesson, each marked "Partly right" with a flashcard: "what do you mean what instruction after
+ * multiply", "i am lost does print(1 / ) cause a runtime error or syntax error", "i so lost",
+ * "i really dont know". The tutor explains again differently instead (shared/pace confusedNote).
+ */
+const LOST = /\b(i(?:'?m|\s+am)?\s+(?:(?:so|really|very|completely|totally|quite|still|kinda|kind of|a bit|a little|getting|feeling|feel)\s+)*(?:lost|confused)|(?:this|that|it)(?:'s|\s+is)\s+(?:so\s+|really\s+|very\s+)?confusing|confused|what\s+do\s+you\s+mean|what\s+does\s+(?:that|this|it)\s+mean|i\s+(?:(?:really|just|still|honestly|genuinely)\s+)?(?:don'?t|do\s+not|can'?t|cannot)\s+(?:understand|follow|get\s+(?:it|this|that|what))|i\s+(?:really|just|still|honestly|genuinely|truly)\s+(?:don'?t|do\s+not)\s+know|makes?\s+no\s+sense|doesn'?t\s+make\s+(?:any\s+)?sense|you\s+lost\s+me)\b/i
+/** A request to be shown again, the whole message: "explain", "explain please", "can you explain that?" */
+const EXPLAIN_ONLY = /^(?:(?:can|could)\s+you\s+)?(?:please\s+)?(?:explain|elaborate|clarify)(?:\s+(?:it|this|that|more|again|please|further|differently))*\s*(?:please)?\s*[?.!]*$/i
+/** Reasoning written out at length, with a claim of its own: an answer that mentions being confused, not a cry for help */
+const REASONED = /\b(i think|so the answer|because|therefore|which means)\b/i
+
+export function saysLost(said: string): boolean {
+  const all = ownText(said)
+  const mine = all.replace(/^(answer:\s*)+/i, '').trim()
+  // An answer sent with nothing written, or only a question mark
+  if (/^answer:/i.test(all) && /^[?.\s]*$/.test(mine)) return true
+  if (/^\?+$/.test(mine)) return true
+  if (EXPLAIN_ONLY.test(mine)) return true
+  return LOST.test(mine) && (mine.length < 120 || !REASONED.test(mine))
+}
+
 export function saysDontKnow(said: string): boolean {
   const mine = ownText(said)
   if (IDK.test(mine)) return true
@@ -72,7 +94,7 @@ export const asksToMoveOn = (said: string) => MOVE_ON.test(ownText(said))
  * answer beside it. Requests and questions get a teaching reply, never a mark (and so never a
  * miss on the record or a flashcard from one).
  */
-export const notAnAttempt = (said: string) => saysDontKnow(said) || (asksToMoveOn(said) && !ATTEMPT.test(ownText(said).replace(/^answer:\s*/i, '')))
+export const notAnAttempt = (said: string) => saysDontKnow(said) || saysLost(said) || (asksToMoveOn(said) && !ATTEMPT.test(ownText(said).replace(/^answer:\s*/i, '')))
 
 /** Whether what the learner sent is an answer to mark: not a question of theirs, Go on, a hint request, "I don't know" or a request */
 export function isAnswer(said: string): boolean {
@@ -80,26 +102,33 @@ export function isAnswer(said: string): boolean {
   return /^Answer:/i.test(mine) && !IDK.test(mine) && !notAnAttempt(mine)
 }
 
-/** Whether a mark on the reply to this message has nothing to mark */
-export const nothingToMark = (said: string) => {
+/**
+ * Whether a mark on the reply to this message has nothing to mark. With the tutor's message it
+ * answered (`asked`), an answer to a think question is never marked either.
+ */
+export const nothingToMark = (said: string, asked?: string) => {
+  if (asked && asksToThink(asked)) return true
   const mine = ownWords(said).trim()
   // "I've got this, move on" (shared/lessonPlan) is a request too, and something run in the Workspace is no answer (shared/workspace)
   return mine.startsWith(SAW) || mine.startsWith(ASKED) || mine === GO_ON || /^\[hint\]$/i.test(mine) || isMoveOn(mine) || notAnAttempt(mine)
 }
+
+/** A miss's flashcard; a key idea's (<card idea>) is no mark and stays */
+const MISS_CARD = /\s*<card\b(?![^>]*\bidea\b)[^>]*>[\s\S]*?<\/card>/gi
 
 /** Grades turned back into what they say: the feedback stays, as a paragraph, and no mark is recorded (nor a flashcard from the "miss") */
 export const unmarked = (reply: string) =>
   /<grade\b/i.test(reply)
     ? closeGrade(reply)
         .replace(/<grade\b[^>]*>([\s\S]*?)<\/grade>/gi, (_, body: string) => body.trim())
-        .replace(/\s*<card>[\s\S]*?<\/card>/gi, '')
-    : reply
+        .replace(MISS_CARD, '')
+    : reply.replace(MISS_CARD, '')
 
-export function repairReply(reply: string, said: string): { text: string; repaired: string[] } {
+export function repairReply(reply: string, said: string, asked?: string): { text: string; repaired: string[] } {
   const repaired: string[] = []
   let text = closeGrade(reply)
   if (text !== reply) repaired.push('close')
-  if (nothingToMark(said) && /<grade\b/i.test(text)) {
+  if (nothingToMark(said, asked) && /<grade\b|<card\b(?![^>]*\bidea\b)/i.test(text)) {
     text = unmarked(text)
     repaired.push('grade')
   }
