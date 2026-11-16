@@ -552,6 +552,8 @@ export const FRAME_BOOTSTRAP = String.raw`(function () {
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
     var tag = e.target && e.target.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    // F: Tide puts the visual full screen (or back)
+    if (e.key === 'f' || e.key === 'F') { send({ t: 'key', key: 'f' }); e.preventDefault(); return; }
     if (!steps) return;
     if (e.key === 'ArrowRight') { control('next'); e.preventDefault(); }
     else if (e.key === 'ArrowLeft') { control('back'); e.preventDefault(); }
@@ -638,6 +640,24 @@ export function frameResponse(url: string, method = 'GET'): { body: string; head
   return { body: frameDocument(code, theme), headers: { ...VISUAL_HEADERS } }
 }
 
+// ---------- Full screen ----------
+
+/**
+ * How a visual fills a full screen (renderer lib/visuals): the frame's size in its own CSS pixels
+ * and the CSS zoom that makes it fill `room`. Zoom, not a transform, so Chromium lays the frame out
+ * at a higher device pixel ratio and redraws text, SVG and three.js canvases (shared/frame/
+ * threeSharp.js) sharp. Its height is the content's own (`natural.h`, which scenes fix); its width
+ * takes the room's shape (the zoom is never more than the card's width, `natural.w`, allows), so a
+ * fluid scene gets wider rather than letterboxed. Never shrunk, and never more than `maxZoom`.
+ */
+export function fitVisual(room: { w: number; h: number }, natural: { w: number; h: number }, maxZoom = 3): { w: number; h: number; zoom: number } {
+  const nw = Math.max(1, natural.w)
+  const nh = Math.max(1, natural.h)
+  // Rounded down, so the zoomed frame never overflows the room by a fraction of a pixel (a scrollbar would shrink the room, and so on)
+  const zoom = Math.floor(Math.max(1, Math.min(maxZoom, room.h / nh, room.w / nw)) * 1000) / 1000
+  return { w: Math.max(1, Math.floor(room.w / zoom)), h: nh, zoom }
+}
+
 // ---------- Messages ----------
 
 export type FrameMessage =
@@ -655,6 +675,8 @@ export type FrameMessage =
   | { t: 'predict'; question: string; value: string }
   /** A small target, and whether it is met */
   | { t: 'goal'; text: string; met: boolean }
+  /** A key meant for Tide pressed inside the frame (F: full screen) */
+  | { t: 'key'; key: 'f' }
 
 const str = (v: unknown, max: number): string | null => (typeof v === 'string' ? (v.length > max ? v.slice(0, max) : v) : null)
 const int = (v: unknown, lo: number, hi: number): number | null => (typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : null)
@@ -690,6 +712,8 @@ export function parseFrameMessage(m: unknown): FrameMessage | null {
     }
     case 'beat':
       return { t: 'beat' }
+    case 'key':
+      return o.key === 'f' ? { t: 'key', key: 'f' } : null
     case 'error':
     case 'warn': {
       const msg = str(o.msg, 400)

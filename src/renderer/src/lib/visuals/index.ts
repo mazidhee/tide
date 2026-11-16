@@ -14,7 +14,7 @@
  * The outcome is kept in the lesson's record (main/lessons), so a reopened lesson shows its
  * visuals at once without checking or asking Claude again.
  */
-import { MAX_MESSAGES_PER_SECOND, askAboutPart, frameUrl, isDrawSource, isVisualSource, looksComplete, parseDraw, parseFrameMessage, themeCss, visualKey, tellTutor, visualNote, visualTitle, whatsHappening, type FrameMessage, type VisualRecord, type VisualState, type VisualTheme } from '@shared/visuals'
+import { MAX_MESSAGES_PER_SECOND, askAboutPart, fitVisual, frameUrl, isDrawSource, isVisualSource, looksComplete, parseDraw, parseFrameMessage, themeCss, visualKey, tellTutor, visualNote, visualTitle, whatsHappening, type FrameMessage, type VisualRecord, type VisualState, type VisualTheme } from '@shared/visuals'
 import { traceSourceOf, withTrace } from '@shared/pyTrace'
 import type { ChatScope, VisualSource } from '@shared/types'
 import { createKeeper, watchBlocks } from '../liveBlocks'
@@ -377,6 +377,18 @@ export interface VisualExtra {
   fallbackCode?: string
 }
 
+/** Four corners pointing out (or in, to leave full screen) */
+function fullIcon(leave: boolean): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', '0 0 16 16')
+  svg.setAttribute('aria-hidden', 'true')
+  svg.setAttribute('class', 'visual-full-icon')
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  path.setAttribute('d', leave ? 'M6 2v4H2M10 2v4h4M6 14v-4H2M10 14v-4h4' : 'M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4')
+  svg.append(path)
+  return svg
+}
+
 const modelName = (m?: string) => (!m ? '' : /fable/i.test(m) ? 'Fable' : /opus/i.test(m) ? 'Opus' : /sonnet/i.test(m) ? 'Sonnet' : /haiku/i.test(m) ? 'Haiku' : m === 'tide' ? 'Tide' : m)
 
 export function mountVisual(source: string, at: Element, place: (root: HTMLElement) => void, extra: VisualExtra = {}): Widget {
@@ -499,6 +511,12 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
   // In the head, away from Play and Step, so a click meant for the controls never asks
   happening.classList.add('visual-happening')
   root.querySelector('figcaption.sim-head')?.insertBefore(happening, status)
+  // Full screen: the whole visual (stage and its controls), the scene enlarged to fill it
+  const full = button('Full screen', () => void toggleFull(), 'quiet visual-full')
+  full.title = 'Full screen (F)'
+  full.prepend(fullIcon(false))
+  full.hidden = true
+  root.querySelector('figcaption.sim-head')?.insertBefore(full, status)
   root.append(bar)
   bar.hidden = true
   root.append(keptBar)
@@ -526,7 +544,63 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
     phase = p
     root.dataset.state = p
     status.textContent = text
+    full.hidden = p !== 'live' && !isFull()
   }
+
+  // ---------- Full screen ----------
+  /** Where the page was when it went full screen, to put it back exactly */
+  let before: { width: number; scroll: [Element, number][] } | null = null
+  const isFull = () => document.fullscreenElement === root
+  /** The frame sized and zoomed to fill the stage (zoom re-renders it at the higher density: shared/visuals fitVisual) */
+  const fit = () => {
+    const f = frame?.iframe
+    if (!f || !isFull() || !before) return
+    const fitted = fitVisual({ w: stage.clientWidth - 2, h: stage.clientHeight - 2 }, { w: before.width, h: height })
+    // Small changes are left alone: a frame whose height follows its width could otherwise rock between two fits
+    const now = { w: parseFloat(f.style.width) || 0, h: parseFloat(f.style.height) || 0, zoom: parseFloat(f.style.zoom) || 1 }
+    if (Math.abs(now.zoom - fitted.zoom) < 0.02 && Math.abs(now.w - fitted.w) <= 4 && Math.abs(now.h - fitted.h) <= 4) return
+    f.style.width = `${fitted.w}px`
+    f.style.height = `${fitted.h}px`
+    f.style.zoom = String(fitted.zoom)
+  }
+  const unfit = (f: HTMLIFrameElement | undefined) => {
+    if (!f) return
+    f.style.width = ''
+    f.style.zoom = ''
+    f.style.height = `${height}px`
+  }
+  const fullWatch = new ResizeObserver(() => fit())
+  async function toggleFull() {
+    if (isFull()) return void (await document.exitFullscreen().catch(() => undefined))
+    if (!frame || phase !== 'live' || !root.requestFullscreen) return
+    const scroll: [Element, number][] = []
+    for (let el = root.parentElement; el; el = el.parentElement) if (el.scrollTop) scroll.push([el, el.scrollTop])
+    if (document.scrollingElement?.scrollTop) scroll.push([document.scrollingElement, document.scrollingElement.scrollTop])
+    before = { width: frame.iframe.clientWidth || stage.clientWidth, scroll }
+    await root.requestFullscreen({ navigationUI: 'hide' }).catch(() => (before = null))
+  }
+  const onFullChange = () => {
+    const on = isFull()
+    root.classList.toggle('visual-is-full', on)
+    full.replaceChildren(fullIcon(on), on ? 'Exit full screen' : 'Full screen')
+    full.title = on ? 'Exit full screen (F or Esc)' : 'Full screen (F)'
+    if (on) {
+      fullWatch.observe(stage)
+      fit()
+      return
+    }
+    if (!before) return
+    fullWatch.disconnect()
+    unfit(frame?.iframe)
+    const was = before
+    before = null
+    full.hidden = phase !== 'live'
+    // The page as it was: the browser may have scrolled while the visual filled the screen
+    requestAnimationFrame(() => {
+      for (const [el, top] of was.scroll) el.scrollTop = top
+    })
+  }
+  document.addEventListener('fullscreenchange', onFullChange)
 
   const widget: Widget = {
     root,
@@ -557,7 +631,10 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
       case 'size':
       case 'ready':
         height = Math.max(60, Math.min(960, m.h || height))
-        if (frame && phase === 'live') frame.iframe.style.height = `${height}px`
+        if (frame && phase === 'live') {
+          if (isFull()) fit()
+          else frame.iframe.style.height = `${height}px`
+        }
         if (m.t === 'ready' && phase === 'live' && restoreStep > 0) {
           control('goto', restoreStep)
           restoreStep = 0
@@ -606,6 +683,9 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
       case 'error':
         if (phase === 'live') note(`The visual reported a problem: ${m.msg}`)
         break
+      case 'key':
+        if (m.key === 'f' && !full.hidden) void toggleFull()
+        break
     }
   }
 
@@ -640,6 +720,7 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
     } else frame = startFrame(stage, frameCode(), true, { onMessage, onDead })
     frame.iframe.style.height = `${height}px`
     setPhase('live', liveLabel)
+    fit()
     bar.hidden = false
     // Anything it does wrong from here on is reported in place, not repaired
     void frame.outcome.then((r) => {
@@ -811,8 +892,13 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
   themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'style', 'class', 'data-design'] })
 
   root.addEventListener('keydown', (e) => {
-    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || !steps) return
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
     if (typingIn(e)) return
+    if ((e.key === 'f' || e.key === 'F') && !full.hidden) {
+      e.preventDefault()
+      return void toggleFull()
+    }
+    if (!steps) return
     if (e.key === 'ArrowRight') control('next')
     else if (e.key === 'ArrowLeft') control('back')
     else if (e.key === ' ' && !(e.target as HTMLElement).closest('button')) control(playing ? 'pause' : 'play')
@@ -828,6 +914,9 @@ export function mountVisual(source: string, at: Element, place: (root: HTMLEleme
     clearTimeout(flashTimer)
     seen.disconnect()
     themeWatch.disconnect()
+    fullWatch.disconnect()
+    document.removeEventListener('fullscreenchange', onFullChange)
+    if (isFull()) void document.exitFullscreen().catch(() => undefined)
     frame?.stop()
     frame = null
     widgets.delete(widget)
