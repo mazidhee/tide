@@ -4,6 +4,7 @@ import { currentSurface, focusIfHeld, handoverView, heldView, inFocusWindow, pop
 import { canBack, navBack, navForward, navLeave, samePage, type Nav } from './lib/history'
 import * as T from './lib/tabs'
 import { takeIntent } from './lib/tabIntent'
+import { ongoingSnapshot, sessionKey } from './lib/sessions'
 import { captureScroll, type ScrollSpot } from './lib/tabScroll'
 import { canPopOut, type PopView } from '@shared/popout'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -203,6 +204,22 @@ function pageUp(kind: string): Promise<void> {
   })
 }
 
+/**
+ * Starting a lesson that's already in Carry on (from the week, Home's plan, a course) carries that
+ * one on rather than opening a second copy from the start. Only a fresh lesson asked for by topic;
+ * one opened with its own turns or record (Carry on, Past lessons) is left as it is
+ */
+function carryOnInstead(v: View): View {
+  if (v.kind !== 'session' || v.mode !== 'teach' || v.turns || v.lesson) return v
+  const open = ongoingSnapshot()
+  // It is itself one of them (Carry on's own button)
+  if (open.some((o) => o.key === sessionKey(v))) return v
+  const same = open
+    .filter((o) => o.view.kind === 'session' && o.view.mode === v.mode && o.view.topic === v.topic)
+    .sort((a, b) => b.at - a.at)[0]
+  return same ? same.view : v
+}
+
 export function AppProvider({ initial, children }: { initial: Settings; children: ReactNode }) {
   const [settings, setSettings] = useState(initial)
   const [tree, setTree] = useState<FileNode | null>(null)
@@ -310,7 +327,8 @@ export function AppProvider({ initial, children }: { initial: Settings; children
   )
 
   const setView = useCallback(
-    (v: View) => {
+    (asked: View) => {
+      const v = carryOnInstead(asked)
       // Already open in a window of its own: that window comes forward (lib/popout)
       if (focusIfHeld(v)) return
       // A ⌘-click, a middle click or "Open in new tab" (lib/tabIntent)
@@ -333,7 +351,8 @@ export function AppProvider({ initial, children }: { initial: Settings; children
 
   const forward = useCallback(() => onActive((n) => navForward(n, heldView)), [onActive])
 
-  const openTab = useCallback((v: View, opts: { background?: boolean } = {}) => {
+  const openTab = useCallback((asked: View, opts: { background?: boolean } = {}) => {
+    const v = carryOnInstead(asked)
     if (inFocusWindow) return setView(v)
     if (focusIfHeld(v)) return
     switchTo((t) => T.goToNewTab(t, v, opts))
