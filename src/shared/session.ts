@@ -38,8 +38,12 @@ export function lastAskType(reply: string): string | undefined {
   return /\btype\s*=\s*["']?(\w+)/i.exec(asks[asks.length - 1][1])?.[1]?.toLowerCase() ?? 'short'
 }
 
+/** Asks that are never marked (predict stays marked: a sure, wrong guess shows a misconception, which the tutor benchmark checks) */
+export const UNGRADED_ASKS: readonly string[] = [THINK_ASK]
+export const ungradedAsk = (type?: string) => !!type && UNGRADED_ASKS.includes(type)
+
 /** Whether a tutor reply's question was a think question: whatever answers it is not marked */
-export const asksToThink = (reply: string) => lastAskType(reply) === THINK_ASK
+export const asksToThink = (reply: string) => ungradedAsk(lastAskType(reply))
 
 /** A question answered with one tap on an option: a choice, or a think question given options (still never marked) */
 export const picksOne = (ask: { type: string; options: string[] }) => (ask.type === 'choice' || ask.type === THINK_ASK) && ask.options.length > 0
@@ -276,7 +280,7 @@ export const SESSION_FORMAT = `Format rules (the app turns these tags into inter
   a) ONE question for the student inside an ask tag: <ask type="short">question</ask>
      The student can only answer inside an ask tag, so never ask a question in plain text, not even the first one.
   b) <continue/> when your next message carries on explaining, or Tide's note says to explain. Then ask nothing.
-  Types: think (to reason aloud: "what if…", a prediction, or one tap with options="a|b"; discussed, never marked), predict (they guess before you explain), short (a sentence or two), explain (explain it back in their own words), choice (multiple choice, put options in the tag: <ask type="choice" options="first|second|third|fourth">question</ask>), error (show a flawed statement or code and ask them to find the mistake), problem (a worked problem or calculation), code (they write code in an editor that runs it: <ask type="code" lang="python">task</ask>; lang is the language being taught: python, javascript, c or cpp run here).
+  Types: think (to reason aloud: "what if…", or one tap with options="a|b"; discussed, never marked), predict (they guess before you explain), short (a sentence or two), explain (explain it back in their own words), choice (multiple choice, put options in the tag: <ask type="choice" options="first|second|third|fourth">question</ask>), error (show a flawed statement or code and ask them to find the mistake), problem (a worked problem or calculation), code (they write code in an editor that runs it: <ask type="code" lang="python">task</ask>; lang is the language being taught: python, javascript, c or cpp run here).
 - Hands-on work is in the Workspace beside the lesson (an editor, their shell), never another app. A task names its file, code last: <ask type="problem" lang="python" file="r.py">steps\n\`\`\`python\ncode\n\`\`\`</ask>; commands alone: terminal, not file. Make every file you name (and examples over 3 lines) with workspace_file first; never printf/echo/cat. Name the file and command to run. You get each command they run, with output: reply.
 - Transfer: once an idea is taught and answered right, test it in a new setting. Mark such a question transfer="near" (the same idea in a new context or form) or transfer="far" (a different kind of problem or field that needs it): <ask type="problem" transfer="near">…</ask>.
 - Use choice when picking is the real test and typing would only slow them down. Correct option first; each wrong one from one specific misconception, the same length and shape, giving nothing away. Mark any reasoning they add to their pick.

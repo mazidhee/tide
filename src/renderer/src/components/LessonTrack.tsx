@@ -224,12 +224,13 @@ export function StepDivider({ d, total, fresh }: { d: Divider; total: number; fr
 
 /** The line on a question card: what it checks, and what getting it right does */
 export function AskPurpose({ p, title }: { p: Purpose; title?: string }) {
-  const what = p.checking ? `Checking: ${p.checking}` : title && p.step >= 0 ? `Step ${p.step + 1}: ${lower(title)}` : null
+  // A think question is discussed, never marked: it checks nothing
+  const what = p.think ? 'Thinking it through · not marked' : p.checking ? `Checking: ${p.checking}` : title && p.step >= 0 ? `Step ${p.step + 1}: ${lower(title)}` : null
   if (!what && !p.next) return null
   return (
     <div className="lm-purpose">
       {what && <b>{what}</b>}
-      {p.next && <span>{p.next}</span>}
+      {p.next && !p.think && <span>{p.next}</span>}
     </div>
   )
 }

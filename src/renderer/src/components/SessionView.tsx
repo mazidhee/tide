@@ -28,7 +28,7 @@ import { isPlacementSession, parsePlacement, placementNote } from '@shared/place
 import { correctionText } from '@shared/lessonCheck'
 import type { Reading } from '@shared/readings'
 import { whyByDefault } from '../lib/agenda'
-import { runHeldTurns, asksToThink, picksOne, ASKED, END_NOW, GO_ON, SHOW_ME, askIdentity, closedOnce, askStarter, shouldSumUp, modeLabel, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
+import { runHeldTurns, asksToThink, picksOne, ungradedAsk, ASKED, END_NOW, GO_ON, SHOW_ME, askIdentity, closedOnce, askStarter, shouldSumUp, modeLabel, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
 import { cardsToMarkdown } from '@shared/cards'
 import { fileTitle, useApp, pagesLabel } from '../state'
@@ -1426,7 +1426,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         if (!answered(turns[i - 1]?.content ?? '')) return
         const prevAsk = (parsed[i - 2] ?? []).filter((x) => x.kind === 'ask').pop() as Extract<Block, { kind: 'ask' }> | undefined
         // A think question is discussed, never graded: no attempt on the record, no mistake journal entry
-        if (prevAsk?.type === 'think') return
+        if (ungradedAsk(prevAsk?.type)) return
         const conf = turns[i - 1]?.content.match(/\(Confidence: (guessing|unsure|sure)\)/i)?.[1]?.toLowerCase()
         window.tide.learn.recordAttempt({
           path: sourcePath,

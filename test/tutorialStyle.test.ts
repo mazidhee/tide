@@ -25,6 +25,8 @@ describe('think asks', () => {
     expect(lastAskType(THINK)).toBe('think')
     expect(asksToThink(THINK)).toBe(true)
     expect(asksToThink(CHECK)).toBe(false)
+    // A predict ask stays graded: a sure, wrong guess is a misconception to catch
+    expect(asksToThink('<ask type="predict">What will the stack hold?</ask>')).toBe(false)
     // The last question decides: a think question earlier in a reply that ends on a checkpoint is a checkpoint
     expect(asksToThink(`${THINK}\n${CHECK}`)).toBe(false)
   })
@@ -72,7 +74,7 @@ describe('think asks', () => {
     expect(map.steps[0].checks).toBe(1)
     expect(map.steps[0].state).toBe('done')
     expect(map.current).toBe(1)
-    expect(map.purposes.get(1)?.next).toMatch(/not marked/)
+    expect(map.purposes.get(1)?.think).toBe(true)
   })
 })
 

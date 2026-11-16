@@ -12,7 +12,7 @@
  * and how the finished steps compared with the tutor's guesses), and from the plan's guesses
  * before that.
  */
-import { ASKED, GO_ON, type Block } from './session'
+import { ASKED, GO_ON, ungradedAsk, type Block } from './session'
 import { isMoveOn, type PlanStep } from './lessonPlan'
 import { asksToMoveOn } from './lessonRepair'
 import { ledWalk } from './sourceLed'
@@ -258,7 +258,7 @@ export function lessonMap(turns: MapTurn[], blocks: (Block[] | null)[], opts: { 
       const p = map.purposes.get(i) ?? { step: map.phase === 'probe' ? -1 : map.current }
       p.step = map.phase === 'probe' ? -1 : map.current
       const ask = bs.filter((b) => b.kind === 'ask').pop()
-      if (ask?.kind === 'ask' && ask.type === 'think') p.think = true
+      if (ask?.kind === 'ask' && ungradedAsk(ask.type)) p.think = true
       map.purposes.set(i, p)
     }
   })
@@ -292,7 +292,7 @@ export function lessonMap(turns: MapTurn[], blocks: (Block[] | null)[], opts: { 
       continue
     }
     if (p.think) {
-      p.next = 'To think through with your tutor: not marked'
+      p.next = undefined
       continue
     }
     // Only the latest question gets a count: earlier ones show what they checked
