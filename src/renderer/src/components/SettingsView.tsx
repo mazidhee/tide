@@ -26,7 +26,7 @@ import { LAB_PACK, QUANT_PACK } from '@shared/labPack'
 import { usePackInstall } from './notebook/PackCard'
 import { trackPack, TRACK_PACKS, type TrackPackId } from '@shared/trackPacks'
 import { installLabel, PackProgress, useTrackPack } from './TrackPacks'
-import { teardownTopic } from '@shared/metabaseData'
+import { KNOWN_DATA_NOTE, METABASE_NOTEBOOK, teardownTopic } from '@shared/metabaseData'
 import type { EditorChoice, InstalledEditor } from '@shared/editor'
 
 const THEMES: { id: ThemeId; name: string; bg: string; side: string; ink: string; accent: string }[] = [
@@ -321,7 +321,8 @@ function AnimationsSetup() {
 
 /** Your Metabase, read-only, so the tutor can teach you your own dashboards and data */
 function MetabaseGroup() {
-  const [state, setState] = useState<{ ready: boolean; detail: string; url: string } | null>(null)
+  const app = useApp()
+  const [state, setState] = useState<{ ready: boolean; detail: string; url: string; via?: 'key' | 'connector' } | null>(null)
   const [url, setUrl] = useState('')
   const [key, setKey] = useState('')
   const [busy, setBusy] = useState(false)
@@ -351,9 +352,27 @@ function MetabaseGroup() {
     await window.tide.metabase.disconnect()
     setState({ ready: false, detail: 'Not connected', url: '' })
   }
-  const connected = !!state?.url && state.detail !== 'Not connected'
+  const connected = !!state?.url && state.detail !== 'Not connected' && state.via !== 'connector'
+  const viaConnector = state?.via === 'connector'
   return (
     <Group title="Metabase" note="Read-only: Tide reads your Metabase and runs pipelines and SELECT queries with small row limits and a time limit. It never creates or changes a question, dashboard or anything else.">
+      {viaConnector && (
+        <>
+          <Row
+            label={
+              <span className="set-status-label">
+                <span className="tool-dot ok" aria-hidden="true" />
+                Claude connector
+              </span>
+            }
+            hint={`${state.detail}. Lessons Claude teaches read it live with search, table reads and SELECT queries only. Mapping your data, Run and the exact answer check need an API key; Tide also reads your note “${KNOWN_DATA_NOTE}” at each lesson’s start.`}
+          >
+            <button className="btn small primary" onClick={() => app.setView({ kind: 'session', mode: 'teach', scope: { kind: 'folder', path: METABASE_NOTEBOOK }, topic: 'Metabase: your data', nonce: Date.now() })}>
+              Start a lesson
+            </button>
+          </Row>
+        </>
+      )}
       {connected ? (
         <Row
           label={

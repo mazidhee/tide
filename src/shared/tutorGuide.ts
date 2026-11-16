@@ -45,6 +45,8 @@ export interface SessionShape {
   graphs?: boolean
   /** Their Metabase is connected, and this is a chat or a lesson on it */
   metabase?: boolean
+  /** A Metabase lesson read through the user's Claude connector (no key): Tide's metabase tool is left out, the connector's read tools are given instead */
+  metabaseVia?: 'key' | 'connector'
   /** Taught as the humanities: no custom visuals or code guide */
   humanities?: boolean
   /** A placement check ("What I already know: …"): it asks only about its own topics, so no recall, mistakes or learner history */

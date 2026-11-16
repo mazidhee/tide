@@ -8,7 +8,8 @@
  * - Run in the answer box: a pipeline or SQL run on their Metabase, a few rows back;
  * - what the tutor sees of a Metabase page open beside the lesson.
  */
-import { isMetabaseLesson, mapForTutor, metabasePage, METABASE_LESSON_RULES, pageLabel, teardownBrief, teardownOf, TEARDOWN_RULES, type TeardownCard } from '@shared/metabaseData'
+import { CONNECTOR_LESSON_NOTE } from '@shared/metabaseConnector'
+import { isMetabaseLesson, KNOWN_DATA_NOTE, knownDataForTutor, mapForTutor, metabasePage, METABASE_LESSON_RULES, pageLabel, teardownBrief, teardownOf, TEARDOWN_RULES, type TeardownCard } from '@shared/metabaseData'
 import { answerRef, asksOrder, solutionRef, type MbRef, type MetabaseIO } from '@shared/metabaseExercise'
 import { compareResultSets, resultTable, type ResultSet } from '@shared/resultCompare'
 import { solutionOf } from '@shared/lessonCheck'
@@ -131,11 +132,17 @@ export async function teardownContext(id: number): Promise<string> {
 }
 
 /** A lesson's Metabase context, at its start: the rules, the map, and a dashboard's brief when it takes one apart */
-export async function metabaseContext(req: Pick<ChatRequest, 'topic' | 'scope'>): Promise<string> {
+export async function metabaseContext(req: Pick<ChatRequest, 'topic' | 'scope'>, via: 'key' | 'connector' = 'key'): Promise<string> {
   const path = 'path' in req.scope ? req.scope.path : undefined
-  if (!isMetabaseLesson(req.topic, path) || !metabaseReady()) return ''
+  if (!isMetabaseLesson(req.topic, path)) return ''
+  const known = await knownData()
+  if (via === 'connector') {
+    // No key: no map, no dashboard teardown, no exact check from Tide; the tutor reads it all live through the connector
+    return [METABASE_LESSON_RULES.replace(/ \(mapped below\)/, ''), CONNECTOR_LESSON_NOTE, known || 'Their data has not been mapped (that needs a Metabase key): look with read_resource and search before you teach on a table.'].join('\n\n')
+  }
+  if (!metabaseReady()) return ''
   const map = await readMap()
-  const parts = [METABASE_LESSON_RULES, map ? mapForTutor(map) : 'Their data has not been mapped yet: use the metabase tool (databases, table) to look first.']
+  const parts = [METABASE_LESSON_RULES, ...(known ? [known] : []), map ? mapForTutor(map) : 'Their data has not been mapped yet: use the metabase tool (databases, table) to look first.']
   const tear = req.topic ? teardownOf(req.topic) : null
   if (tear) {
     parts.push(TEARDOWN_RULES)
@@ -144,13 +151,23 @@ export async function metabaseContext(req: Pick<ChatRequest, 'topic' | 'scope'>)
   return parts.join('\n\n')
 }
 
+/** Their own note on what is already known about the data (shared/metabaseData KNOWN_DATA_NOTE), when it's in the vault */
+async function knownData(): Promise<string> {
+  try {
+    const { readText } = await import('./vault')
+    return knownDataForTutor(await readText(KNOWN_DATA_NOTE))
+  } catch {
+    return ''
+  }
+}
+
 // ---------- Run, in the answer box ----------
 
 /** A pipeline, SQL or question run on their Metabase, as Run shows it */
 export async function runAnswer(lang: string, code: string): Promise<RunResult> {
   const t0 = Date.now()
   const fail = (msg: string): RunResult => ({ stdout: '', stderr: msg, exitCode: 1, timedOut: false, durationMs: Date.now() - t0 })
-  if (!metabaseReady()) return fail('Metabase isn’t connected. Add it in Settings › Connections.')
+  if (!metabaseReady()) return fail((await import('./metabase')).metabaseVia() === 'connector' ? 'Run needs a Metabase key: through your Claude connector, ask the tutor to run it for you.' : 'Metabase isn’t connected. Add it in Settings › Connections.')
   const sql = lang === 'metabase-sql'
   const pre = answerRef(code, { collection: undefined })
   if ('error' in pre) return fail(pre.error)
