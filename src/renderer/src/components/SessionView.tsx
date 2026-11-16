@@ -96,7 +96,7 @@ import { parseVerdict, scorecardScore } from '@shared/interviews'
 import { dollarsAsCode, isMetabaseLesson, teardownOf } from '@shared/metabaseData'
 import { pageKey } from '../lib/typing'
 import { LessonWorkspace } from './LessonWorkspace'
-import { autoReply, blockTarget, extOf, fileForBlock, looksLikeCommand, taskLine, LANG_LABEL, lessonLanguage, pasteText, sawLine, sawMessage, scratchName, stepText, taskOf, workspaceLesson, type Finished, type WorkspaceTask } from '@shared/workspace'
+import { autoReply, blockTarget, extOf, fileForBlock, filesToWorkOn, looksLikeCommand, missingFiles, nextCommand, taskLine, LANG_LABEL, lessonLanguage, pasteText, sawLine, sawMessage, scratchName, stepText, taskOf, workspaceLesson, type Finished, type WorkspaceTask } from '@shared/workspace'
 import { useHeld } from '../lib/popout'
 
 /** The lesson's Workspace as it was left: its files, the one open and the tasks started (kept per lesson) */
@@ -105,6 +105,8 @@ interface WorkspaceState {
   open: string
   tab: 'notes' | 'work'
   started: string[]
+  /** Files Tide made from the lesson's code (the tutor named them but hadn't made them) */
+  made?: string[]
 }
 const NO_WORKSPACE: WorkspaceState = { files: [], open: '', tab: 'notes', started: [] }
 const wsStore = (lab: string) => `tide.ws.${lab}`
@@ -928,6 +930,60 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     // The workspace in its own window hears it too
     window.tide.windows.relay('workspace:file', { root, file })
   }
+  // ---------- After each reply: its files in the editor, its next command at the prompt ----------
+  // Files it names that aren't in the folder, with no code in the lesson to make them from
+  const [missing, setMissing] = useState<string[]>([])
+  // The command waiting at the prompt, unrun
+  const [staged, setStaged] = useState<string | null>(null)
+  const pendingStage = useRef<string | null>(null)
+  const stageNow = async () => {
+    const cmd = pendingStage.current
+    if (!cmd || !termIdRef.current) return
+    pendingStage.current = null
+    const ok = await window.tide.terminal.stage(termIdRef.current, cmd).catch(() => false)
+    setStaged(ok ? cmd : null)
+  }
+  const netDone = useRef(-1)
+  useEffect(() => {
+    if (busy) {
+      setStaged(null)
+      return
+    }
+    if (mode !== 'teach' || !(workOffered || workOnRef.current)) return
+    const at = turns.length - 1
+    const last = turns[at]
+    if (!last || last.role !== 'assistant' || !last.content.trim() || netDone.current === at) return
+    netDone.current = at
+    void (async () => {
+      const root = workRootRef.current ?? (await openRoot().catch(() => null))
+      if (!root) return
+      const taskFiles = (parsed[at] ?? []).flatMap((b) => (b.kind === 'ask' && b.file ? [b.file] : []))
+      const named = filesToWorkOn(last.content, taskFiles)
+      if (named.length) {
+        const existing = (await window.tide.ide.files(root).catch(() => null))?.files ?? []
+        const lesson = turnsRef.current.filter((t) => t.role === 'assistant').map((t) => t.content)
+        const { make, ask } = missingFiles(named, existing, lesson)
+        // Made from the lesson's own code; a file already there is never written over
+        for (const m of make) await window.tide.ide.write(root, m.file, m.code).catch(() => {})
+        if (make.length) {
+          const names = make.map((m) => m.file)
+          setWork((w) => ({ ...w, files: [...w.files, ...names.filter((f) => !w.files.includes(f))], open: names[0], tab: 'work', started: w.started.includes('open') ? w.started : [...w.started, 'open'], made: [...(w.made ?? []), ...names] }))
+          setNotesOpen(true)
+          setWorkRev((n) => n + 1)
+          for (const f of names) window.tide.windows.relay('workspace:file', { root, file: f })
+        }
+        setMissing(ask)
+      } else setMissing([])
+      // The one command it gives, waiting at an empty prompt for Return
+      pendingStage.current = nextCommand(last.content)
+      if (termIdRef.current) await stageNow()
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, turns.length])
+  const askForFile = (file: string) => {
+    setMissing((m) => m.filter((f) => f !== file))
+    sendRef.current(`${ASKED}Please make ${file} in my workspace (with workspace_file) so I can open and run it.`, turnsRef.current)
+  }
   const pasteNow = () => {
     const text = pendingPaste.current
     if (!text || !termIdRef.current) return
@@ -937,6 +993,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   }
   useEffect(() => {
     if (termId) pasteNow()
+    if (termId && pendingStage.current) void stageNow()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [termId])
   // Out to a window of its own, and back (closing that window puts it back here)
@@ -1025,6 +1082,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // A command finished in the Workspace: the tutor hears it and replies on its own, once per
   // command, and never over a reply still being written (the last one waits for it)
   const onRan = (f: Finished) => {
+    setStaged(null)
     const d = autoReply(f, { busy: busyRef.current, sentAt: sentAt.current, enabled: mode === 'teach' && !finishedRef.current })
     if (d === 'send') sendRan(f)
     else if (d === 'hold') heldRun.current = f
@@ -2946,6 +3004,20 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   focusNonce={workFocus}
                   rev={workRev}
                   task={taskNow}
+                  staged={staged}
+                  made={work.made}
+                  notice={
+                    missing.length > 0 ? (
+                      <>
+                        <span>{missing.join(', ')} {missing.length === 1 ? 'isn’t' : 'aren’t'} in your workspace yet</span>
+                        {missing.map((f) => (
+                          <button key={f} className="link-btn small" onClick={() => askForFile(f)} disabled={busy}>
+                            Make {missing.length > 1 ? f : 'it'}
+                          </button>
+                        ))}
+                      </>
+                    ) : undefined
+                  }
                   onRenamed={(from, to) => setWork((w) => ({ ...w, files: w.files.map((f) => (f === from ? to : f)), open: w.open === from ? to : w.open }))}
                   onCreated={(name) => setWork((w) => ({ ...w, files: [...w.files, name], open: name }))}
                   tools={
