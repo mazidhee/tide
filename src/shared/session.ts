@@ -23,7 +23,7 @@ export type AskType = 'predict' | 'short' | 'choice' | 'explain' | 'error' | 'pr
 
 export type Block =
   | { kind: 'text'; text: string }
-  | { kind: 'ask'; type: AskType; prompt: string; options: string[]; lang?: string; tests?: string; /** In a quiz on several topics: the one this question is on */ topic?: string; /** The tutor's tag: the idea taught, asked in a new setting (shared/teachingQuality) */ transfer?: 'near' | 'far' }
+  | { kind: 'ask'; type: AskType; prompt: string; options: string[]; lang?: string; tests?: string; /** In a quiz on several topics: the one this question is on */ topic?: string; /** The tutor's tag: the idea taught, asked in a new setting (shared/teachingQuality) */ transfer?: 'near' | 'far'; /** Hands-on in the lesson's Workspace (shared/workspace): the file it is done in */ file?: string; /** ...or the Workspace's terminal alone */ terminal?: boolean }
   | { kind: 'grade'; verdict: Verdict; score: number; text: string }
   /** steps: the titles; detail: each with what it covers, when it's done and rough minutes (shared/lessonPlan) */
   | { kind: 'plan'; steps: string[]; detail: PlanStep[]; goal?: string; ends?: string }
@@ -177,7 +177,12 @@ export function parseBlocks(full: string): Block[] {
       const tests = hidden.tests ?? (type === 'code' ? madeTests : undefined)
       const on = attr(attrs, 'topic')?.trim()
       const far = attr(attrs, 'transfer')?.trim().toLowerCase()
-      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt, options, lang: attr(attrs, 'lang'), ...(tests ? { tests } : {}), ...(on ? { topic: on } : {}), ...(far === 'near' || far === 'far' ? { transfer: far } : {}) })
+      // A Workspace task (shared/workspace): done in the file or terminal beside the lesson, and
+      // answered in words, so a code task is not also given the answer box's editor
+      const file = attr(attrs, 'file')?.trim()
+      const terminal = !file && /(^|\s)terminal(\s|=|$)/i.test(attrs)
+      const kind = (file || terminal) && type === 'code' ? 'problem' : type
+      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(kind) ? kind : 'short', prompt, options, lang: attr(attrs, 'lang'), ...(tests ? { tests } : {}), ...(on ? { topic: on } : {}), ...(far === 'near' || far === 'far' ? { transfer: far } : {}), ...(file ? { file } : {}), ...(terminal ? { terminal } : {}) })
     } else if (name === 'grade') {
       const verdict = (attr(attrs, 'verdict')?.toLowerCase() ?? 'partial') as Verdict
       const score = Number(attr(attrs, 'score') ?? (verdict === 'correct' ? 1 : verdict === 'wrong' ? 0 : 0.5))
@@ -249,6 +254,7 @@ export const SESSION_FORMAT = `Format rules (the app turns these tags into inter
      The student can only answer inside an ask tag, so never ask a question in plain text, not even the first one.
   b) <continue/> when your next message should carry on explaining: an idea that needs more than one message, or when Tide's note says to explain. Then ask nothing. After two explaining messages in a row, check their understanding with a question.
   Types: predict (they guess before you explain), short (a sentence or two), explain (explain it back in their own words), choice (multiple choice, put options in the tag: <ask type="choice" options="first|second|third|fourth">question</ask>), error (show a flawed statement or code and ask them to find the mistake), problem (a worked problem or calculation), code (they write code in an editor that runs it: <ask type="code" lang="python">task</ask>; lang is the language being taught: python, javascript, c or cpp run here).
+- Hands-on work happens in the lesson's Workspace (an editor and their own shell, in the lesson's folder, beside the lesson), never another app. Name the file and put its starting code last: <ask type="problem" lang="python" file="r.py">steps, commands in backticks\n\`\`\`python\ncode\n\`\`\`</ask>; for commands alone, terminal instead of file. You're sent each command they run and its output: reply to it.
 - Transfer: once an idea is taught and answered right, test it in a new setting. Mark such a question transfer="near" (the same idea in a new context or form) or transfer="far" (a different kind of problem or field that needs it): <ask type="problem" transfer="near">…</ask>.
 - Use choice when picking is the real test (spotting the right idea, the next step, or a misconception) and typing would only slow them down. Write the correct option first, then make each wrong option from one specific misconception, the same length and shape, with nothing that gives the answer away. They may add their reasoning to their pick: mark the reasoning too.
 - When they answer, judge it first: <grade verdict="correct|partial|wrong" score="0.0-1.0">one or two sentences: what was right and why, or the exact step that's wrong and why; no empty praise</grade>

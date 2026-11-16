@@ -1900,13 +1900,14 @@ function taskLink(open: Record<string, unknown> | null, kind: string, title: str
 // ---------- Tide's tools for Claude (main/tideMcp) ----------
 
 /** The tutor's tools Tide serves to Claude over MCP: the same definitions and handlers Gemma uses */
-export const MCP_TUTOR_TOOLS = [...NOTE_TOOLS, CODE_TOOL, SQL_TOOL, LOAD_TABLE_TOOL, STUDY_PLAN, MEMORY_TOOLS[0]] as { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }[]
+// terminal_read reads the lesson's Workspace terminal (the turn's terminalId); it never types into it
+export const MCP_TUTOR_TOOLS = [...NOTE_TOOLS, CODE_TOOL, SQL_TOOL, LOAD_TABLE_TOOL, STUDY_PLAN, MEMORY_TOOLS[0], TERMINAL_READ] as { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }[]
 
 /** The Metabase tool, served to Claude over MCP while a Metabase is connected (Settings › Connections) */
 export const MCP_METABASE_TOOL = METABASE as { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }
 
 /** What a tool call from outside the loop needs: where its steps and sources go */
-export type ToolContext = Pick<LoopContext, 'signal' | 'sources' | 'emitSources' | 'step' | 'updateStep' | 'web' | 'chatId' | 'labId'>
+export type ToolContext = Pick<LoopContext, 'signal' | 'sources' | 'emitSources' | 'step' | 'updateStep' | 'web' | 'chatId' | 'labId'> & Partial<Pick<LoopContext, 'terminalId'>>
 
 /** Runs one of Tide's tools by name, as the tutor's loop would, and returns what the model reads */
 export function runTideTool(name: string, args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
