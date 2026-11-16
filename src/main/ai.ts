@@ -791,7 +791,9 @@ async function answerTurn(req: TurnRequest, send: (e: ChatEvent) => void) {
         const { repairReply } = await import('@shared/lessonRepair')
         const said = [...req.messages].reverse().find((m) => m.role === 'user')
         // What the window is showing (it follows a retry's reset, which the tally in `reply` does not)
-        const fixed = repairReply(shown, typeof said?.content === 'string' ? said.content : '')
+        // ...and the question it answered: an answer to a think question is never marked
+        const asked = [...req.messages].reverse().find((m) => m.role === 'assistant')
+        const fixed = repairReply(shown, typeof said?.content === 'string' ? said.content : '', typeof asked?.content === 'string' ? asked.content : '')
         if (fixed.repaired.length && fixed.text !== shown) {
           emit({ id: req.id, type: 'reset' })
           emit({ id: req.id, type: 'delta', text: fixed.text })

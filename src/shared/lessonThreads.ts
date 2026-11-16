@@ -374,9 +374,10 @@ const TENTATIVE = /^(is it|isn'?t it|would it be|could it be|so it'?s|it'?s|it i
 export function readsAsQuestion(typed: string): boolean {
   const s = typed.trim()
   if (!s || s.length > 400 || /```/.test(s)) return false
-  if (!isAnswer(`Answer: ${s}`) || saysDontKnow(s)) return false
-  if (TENTATIVE.test(s)) return false
+  if (saysDontKnow(s) || TENTATIVE.test(s)) return false
+  // "What do you mean…", "I'm lost": a question about the explanation (sent as an answer instead, it's never marked: lessonRepair saysLost)
   if (ASKING.test(s)) return true
+  if (!isAnswer(`Answer: ${s}`)) return false
   // "101?" or "x = 4?": a short answer with a question mark is a guess
   return /\?\s*$/.test(s) && s.split(/\s+/).length > 3
 }

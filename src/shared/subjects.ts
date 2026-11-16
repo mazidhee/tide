@@ -266,7 +266,8 @@ export const LANGUAGE_DEPTH = `Depth: this is a programming language, learnt pro
 - Its cost: the time and space of each operation and why (list append amortised O(1), x in list O(n) against a set's O(1) on average, slicing copies), measured with timeit when it matters.
 - The exact rules: what the language reference, data model and library docs say, named by section, and the edge cases those rules imply.
 - One level below the surface by default; the interpreter's or compiler's internals when they explain the behaviour.
-Order each step: explain the mechanism with a picture, show it running in the workspace, then ask them to predict and check.`
+Systems depth is the default, not the exception: objects and references, the stack machine, memory layout, costs, and how CPython or the compiler actually does it.
+Order each step: the big picture, the mechanism drawn, shown running in the workspace, one level deeper, then think questions and a checkpoint.`
 
 const LANGUAGES = /\b(python|cpython|cpp|rust|golang|java|javascript|typescript|swift|haskell|ocaml|zig)\b|\bc\+\+|\b(in|with|using|learn|learning) C\b(?![+#])|^C\b(?![+#])\s*[:,-]|\bC (language|programming|pointers|strings|arrays|structs|memory)\b/i
 /** A lesson on a programming language itself (Python, C, C++, Rust…), from its topic or notebook */

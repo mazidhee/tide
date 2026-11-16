@@ -18,7 +18,7 @@
  *
  * The pure parts are here; main/exercises.ts holds the tool, the bank and the lesson's stream.
  */
-import { MAP_RULES, MAP_RULES_CLAUDE } from './lessonPlan'
+import { MAP_RULES, MAP_RULES_CLAUDE, TUTORIAL, TUTORIAL_CLAUDE } from './lessonPlan'
 import { slugOf, BANK_VERSION, type BankProblem, type Level } from './bank'
 import { comparePython, finalAnswer, toSympy } from './answerCheck'
 import { pythonFunctions, readsStdin, splitTestFunctions } from './codeTests'
@@ -408,6 +408,8 @@ export function forClaude(instructions: string): string {
     .replace(/^- A code ask can carry hidden tests[^\n]*\n?/m, '')
     // The lesson map: Claude reports a step starting, passing or added with Tide's lesson_progress tool
     .replace(MAP_RULES, MAP_RULES_CLAUDE)
+    // A tutorial lesson: the full form of how each step is taught (the local model gets the short one)
+    .replace(TUTORIAL, TUTORIAL_CLAUDE)
     // Tide numbers a set exercise itself (<exercise id>)
     .replace(/ Start each with its place, like "\*\*Problem 2 · harder\*\*"\./, '')
     // The core guide says how to teach visually once (shared/tutorGuide); find_image is Gemma's tool
@@ -415,7 +417,7 @@ export function forClaude(instructions: string): string {
     .replace(/ or a real figure from find_image/g, '')
     .replace(/ Show places with a real map from find_image\./g, '')
     // Said once in the core guide
-    .replace(/^- Never answer your own question\. Ask one thing at a time\. Keep your turns short\. No greetings, no introductions, no preamble: start with the substance\.$/m, '- Never answer your own question. Ask one thing at a time.')
+    .replace(/^- Never answer your own question\. Ask one thing at a time\. Keep questions short\. No greetings, no introductions, no preamble: start with the substance\.$/m, '- Never answer your own question. Ask one thing at a time.')
     .replace(/^- Math in LaTeX \(\$\.\.\.\$, \$\$\.\.\.\$\$\)\. Code in fenced blocks\.\n?/m, '')
 }
 

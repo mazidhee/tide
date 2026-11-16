@@ -12,7 +12,7 @@
  * and how the finished steps compared with the tutor's guesses), and from the plan's guesses
  * before that.
  */
-import { ASKED, GO_ON, type Block } from './session'
+import { ASKED, GO_ON, ungradedAsk, type Block } from './session'
 import { isMoveOn, type PlanStep } from './lessonPlan'
 import { asksToMoveOn } from './lessonRepair'
 import { ledWalk } from './sourceLed'
@@ -51,6 +51,8 @@ export interface Purpose {
   checking?: string
   /** "Get this right and step 3 is done" or "2 of about 3 checks" */
   next?: string
+  /** A think question: discussed, never marked, so it counts toward no check */
+  think?: boolean
 }
 
 export interface LessonMap {
@@ -255,6 +257,8 @@ export function lessonMap(turns: MapTurn[], blocks: (Block[] | null)[], opts: { 
     if (bs.some((b) => b.kind === 'ask')) {
       const p = map.purposes.get(i) ?? { step: map.phase === 'probe' ? -1 : map.current }
       p.step = map.phase === 'probe' ? -1 : map.current
+      const ask = bs.filter((b) => b.kind === 'ask').pop()
+      if (ask?.kind === 'ask' && ungradedAsk(ask.type)) p.think = true
       map.purposes.set(i, p)
     }
   })
@@ -285,6 +289,10 @@ export function lessonMap(turns: MapTurn[], blocks: (Block[] | null)[], opts: { 
     }
     if (p.step >= map.steps.length) {
       p.next = 'A final mixed problem, then the recap'
+      continue
+    }
+    if (p.think) {
+      p.next = undefined
       continue
     }
     // Only the latest question gets a count: earlier ones show what they checked

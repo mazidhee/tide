@@ -84,8 +84,8 @@ describe('paceNote', () => {
     expect(paceNote([tutor('Q?'), you("Answer: I don't know")], "I don't know.")).toMatch(/worked example/)
   })
 
-  it('asks for a check after two explaining messages', () => {
-    const history = [tutor('Part one.\n<continue/>'), you('Go on.'), tutor('Part two.\n<continue/>')]
+  it('asks for a check after three explaining messages', () => {
+    const history = [tutor('Part one.\n<continue/>'), you('Go on.'), tutor('Part two.\n<continue/>'), you('Go on.'), tutor('Part three.\n<continue/>')]
     expect(paceNote(history, 'Go on.')).toMatch(/Check their understanding/)
     expect(paceNote(history.slice(0, 1), 'Go on.')).toBeNull()
   })

@@ -28,7 +28,7 @@ import { isPlacementSession, parsePlacement, placementNote } from '@shared/place
 import { correctionText } from '@shared/lessonCheck'
 import type { Reading } from '@shared/readings'
 import { whyByDefault } from '../lib/agenda'
-import { runHeldTurns, ASKED, END_NOW, GO_ON, SHOW_ME, askIdentity, closedOnce, askStarter, shouldSumUp, modeLabel, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
+import { runHeldTurns, asksToThink, picksOne, ungradedAsk, ASKED, END_NOW, GO_ON, SHOW_ME, askIdentity, closedOnce, askStarter, shouldSumUp, modeLabel, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
 import { cardsToMarkdown } from '@shared/cards'
 import { fileTitle, useApp, pagesLabel } from '../state'
@@ -364,7 +364,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         paceNote(history, content) ? null : difficulty.noteFor(history, content),
         // humanities: an answer to a question of interpretation is appraised, not marked (when the subject's profile says it is taught as the humanities)
         mode === 'teach' || (mode === 'quiz' && !setupRef.current.options?.placement)
-          ? markingNote(markNote(content), [...history].reverse().find((t) => t.role === 'assistant')?.content ?? '', setupRef.current.topic, teachesAsHumanities(setupRef.current.topic, setupRef.current.options?.subject))
+          ? markingNote(markNote(content, [...history].reverse().find((t) => t.role === 'assistant')?.content ?? ''), [...history].reverse().find((t) => t.role === 'assistant')?.content ?? '', setupRef.current.topic, teachesAsHumanities(setupRef.current.topic, setupRef.current.options?.subject))
           : null,
         whyNoteRef.current,
         // What the learner did in Claude's visuals since the tutor last heard
@@ -593,7 +593,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         // [source-led] the tutor's own copy of a reading Tide already shows is left out (shared/sourceLed)
         // (with the map's reports from Claude that aren't in the reply yet)
         const content = withoutEcho(progressOf(t).length ? `${t.content}\n${progressOf(t).join('\n')}` : t.content)
-        const blocks = parseBlocks(i > 1 && nothingToMark(turns[i - 1]?.content ?? '') ? unmarked(content) : content)
+        // An answer to a think question is never marked either: its reply is a conversation (shared/session)
+        const blocks = parseBlocks(i > 1 && nothingToMark(turns[i - 1]?.content ?? '', turns[i - 2]?.role === 'assistant' ? turns[i - 2].content : undefined) ? unmarked(content) : content)
         return i <= 1 ? blocks.filter((b) => b.kind !== 'grade' && b.kind !== 'card') : blocks
       }),
     [turns]
@@ -612,7 +613,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     : undefined
   askTypeRef.current = currentAsk?.type
   // A maths lesson answers in the maths answer box: words read back, maths with a calculator, or paper
-  const mathsBox = maths.on && !!currentAsk && !asking && currentAsk.type !== 'code' && !(currentAsk.type === 'choice' && currentAsk.options.length > 0)
+  const mathsBox = maths.on && !!currentAsk && !asking && currentAsk.type !== 'code' && !(picksOne(currentAsk))
   const currentAskRef = useRef(currentAsk)
   currentAskRef.current = currentAsk
   // For the break planner: a question is on screen, waiting; how long the answer takes counts from here
@@ -1229,8 +1230,13 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const saveCardRef = useRef<(front: string, back: string) => Promise<void>>(async () => {})
   const missCards = (i: number) => {
     const blocks = parsed[i]
-    if (!blocks || turns[i]?.role !== 'assistant' || blocks.some((x) => x.kind === 'grade' && x.verdict === 'correct')) return []
-    return blocks.filter((b): b is Extract<Block, { kind: 'card' }> => b.kind === 'card')
+    if (!blocks || turns[i]?.role !== 'assistant') return []
+    const cards = blocks.filter((b): b is Extract<Block, { kind: 'card' }> => b.kind === 'card')
+    // A key idea's card (<card idea>) is kept whenever it comes; a miss's card never after a right
+    // answer, nor from a think answer, which is discussed and never marked (shared/session)
+    const thought = i > 1 && turns[i - 2]?.role === 'assistant' && asksToThink(turns[i - 2].content)
+    if (thought || blocks.some((x) => x.kind === 'grade' && x.verdict === 'correct')) return cards.filter((c) => c.idea)
+    return cards
   }
   const wasBusy = useRef(false)
   useEffect(() => {
@@ -1419,6 +1425,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
         // A mark after "Go on" or a question of yours isn't an answer to record
         if (!answered(turns[i - 1]?.content ?? '')) return
         const prevAsk = (parsed[i - 2] ?? []).filter((x) => x.kind === 'ask').pop() as Extract<Block, { kind: 'ask' }> | undefined
+        // A think question is discussed, never graded: no attempt on the record, no mistake journal entry
+        if (ungradedAsk(prevAsk?.type)) return
         const conf = turns[i - 1]?.content.match(/\(Confidence: (guessing|unsure|sure)\)/i)?.[1]?.toLowerCase()
         window.tide.learn.recordAttempt({
           path: sourcePath,
@@ -1495,7 +1503,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     }
     const out = asking ? null : (ranNow ?? runOut)
     const ran = out ? `\n\nWhen I ran it:\n\`\`\`\n${(out.stdout + out.stderr).slice(0, 1500) || '(no output)'}\n\`\`\`` : ''
-    const choice = currentAsk?.type === 'choice' && currentAsk.options.length > 0
+    const choice = !!currentAsk && picksOne(currentAsk)
     const pick = choice && picked !== null && currentAsk.options[picked] ? currentAsk.options[picked] : ''
     const typed =
       text ??
@@ -1546,7 +1554,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       if (carryOn && !asking && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         send(GO_ON, turns)
-      } else if (!typing && currentAsk?.type === 'choice' && /^[1-9]$/.test(e.key) && Number(e.key) <= currentAsk.options.length) {
+      } else if (!typing && !!currentAsk && picksOne(currentAsk) && /^[1-9]$/.test(e.key) && Number(e.key) <= currentAsk.options.length) {
         setPicked(Number(e.key) - 1)
       }
     }
@@ -2613,7 +2621,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                 }}
                 onAnswer={() => submit(undefined, undefined, true)}
               />
-              {currentAsk.type === 'choice' && currentAsk.options.length > 0 ? (
+              {picksOne(currentAsk) ? (
                 <>
                   <div className="s-options" role="radiogroup" aria-label="Options">
                     {currentAsk.options.map((o, k) => (
@@ -2713,7 +2721,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                 <textarea
                   ref={answerRef}
                   className="s-input"
-                  rows={currentAsk.type === 'explain' || currentAsk.type === 'problem' ? 5 : 3}
+                  rows={currentAsk.type === 'explain' || currentAsk.type === 'problem' || currentAsk.type === 'think' ? 5 : 3}
                   autoFocus
                   value={answer}
                   onChange={(e) => (setAnswer(e.target.value), setHint(false))}
@@ -2723,6 +2731,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   placeholder={
                     asking
                       ? 'What would you like to ask? Your answer can wait.'
+                      : currentAsk.type === 'think'
+                      ? 'Think it through out loud. Not marked: half-formed is fine'
                       : currentAsk.type === 'predict'
                       ? 'Make your best guess before the explanation'
                       : currentAsk.type === 'explain'
@@ -2777,7 +2787,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                       {boxStatus.label} <kbd>⌘↵</kbd>
                     </button>
                   ) : (
-                  <button className="btn primary" onClick={() => submit()} disabled={pictures.adding || (asking ? !answer.trim() && !pictures.paths.length : currentAsk.type === 'code' ? !code.trim() : currentAsk.type === 'choice' && currentAsk.options.length > 0 ? picked === null && !answer.trim() && !pictures.paths.length : !answer.trim() && !pictures.paths.length)}>
+                  <button className="btn primary" onClick={() => submit()} disabled={pictures.adding || (asking ? !answer.trim() && !pictures.paths.length : currentAsk.type === 'code' ? !code.trim() : picksOne(currentAsk) ? picked === null && !answer.trim() && !pictures.paths.length : !answer.trim() && !pictures.paths.length)}>
                     {asking ? 'Ask' : 'Submit'} <kbd>⌘↵</kbd>
                   </button>
                   )}

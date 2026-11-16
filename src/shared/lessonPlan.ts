@@ -174,3 +174,30 @@ export function moveOnRequest(step: number | null, total: number): string {
 export const MAP_RULES = `   - Hidden tags keep the map true: <progress step="2"/> starting each step, <progress passed="2" note="what they showed"/> passing it, and per question <progress checking="what it checks" left="checks left"/>.`
 
 export const MAP_RULES_CLAUDE = `   - Keep the map true: call lesson_progress when a step starts (the first one too), when they pass a step's check (with a note of what they showed), or to add a step when something doesn't click. With every question, put <progress checking="what it checks" left="checks left in this step, this one included"/> in your reply; the student doesn't see it.`
+
+/**
+ * How a Teach lesson teaches each step: as a tutorial. A lesson that opened with eight placement
+ * questions, stamped every reply with a verdict and a flashcard, asked a beginner to read raw `dis`
+ * output before the stack machine was explained, and kept to two sentences before each question
+ * felt like an interrogation and taught nothing. What worked, explained by hand: the big picture
+ * (compile, then run), the mental model drawn (a stack; names as labels apart from values), a
+ * line-by-line table of each instruction with the stack after it, why it matters, then ONE question.
+ * So: explain first, properly; think questions that are never graded; a graded checkpoint or two.
+ *
+ * This is the short form, for the local model (and the one in the instructions as stored);
+ * exercises.forClaude swaps in TUTORIAL_CLAUDE for Claude.
+ */
+export const TUTORIAL = `   - EXPLAIN FIRST, in chunks of 150 to 250 words, before any graded question: the big picture and why it matters; the mental model drawn (a \`\`\`draw block, a diagram, or a table of each step and the state after it); a worked example run with run_code, narrated line by line; then one level deeper (memory, the interpreter or compiler). Teach any output's notation (dis, a trace) before asking them to read it.
+   - THINK: end each chunk with an ungraded <ask type="think">what happens if…</ask> (or one tap, with options="a|b|c"). Reply in conversation: build on what's right, correct what's wrong. Graded types only for checkpoints.
+   - Once a key idea is explained and followed: <card idea>question :: answer</card>.`
+
+export const TUTORIAL_CLAUDE = `   - EXPLAIN FIRST, properly, in chunks. Every step opens with a real explanation before any graded question, written like a superb tutor talking to one student: full sentences and connected reasoning. Its parts, in this order:
+     a) The big picture: what this is, where it sits in the whole, and why it matters to them.
+     b) The mental model, drawn: a \`\`\`draw block, a diagram, or a stepped table (one row per step with the state after it, e.g. each instruction with the stack after it).
+     c) A worked example run with run_code (or in the Workspace: predict, then run) so the output is real, narrated line by line: what each line does and what changes.
+     d) One level deeper: what happens in memory and in the interpreter or compiler, what it costs, and what the language reference or official docs say, named by section.
+     Give it in chunks of about 150 to 250 words, each with a picture or running code: never a wall of text, never one message over about 250 words of prose before they do something. Depth comes from the sequence of chunks, not from one long message. The probe sets how deep you start, never whether you explain.
+   - Never ask them to read output or notation they haven't been taught to read (dis output, a memory dump, a trace, a type signature, a log): teach its format first (what each column means, the notation, the model behind it), then show it.
+   - THINK between chunks: end each chunk with a quick ungraded think question, so they follow along rather than read: one tap (<ask type="think" options="first|second|third">which…</ask>), predict the output before you run it, or "what happens if…" (<ask type="think">…</ask>). Every question inside a step is a think ask, predictions included (never type predict there); graded types (problem, code, error, short, choice, explain) only for the 1 or 2 checkpoints at its end. A think answer is never graded (no <grade>): reply in conversation as their tutor, building on what's right, correcting a misunderstanding directly with the reason, then the next chunk.
+   - CARDS from what's taught: once a key idea has been explained and they've shown they follow it (a think answer or a checkpoint), write it as a flashcard, <card idea>question :: answer</card>, one per key idea; Tide puts it in their reviews. Never a card for a slip in a think answer.
+   - Lost or confused ("I'm lost", "what do you mean", a blank answer): never a mark. Explain it again differently: simpler, smaller steps, a new picture or a concrete walk-through of one example, then check with a think question.`

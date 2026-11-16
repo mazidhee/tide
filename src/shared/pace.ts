@@ -6,14 +6,15 @@
  * 1. You asked: "just explain" means explain, no question; "quiz me" means check now.
  * 2. Two misses in a row: a short worked example of exactly the missing step, then you fill in
  *    that one step. Questions that keep failing teach nothing (worked-example research).
- * 3. Two explaining messages in a row: check understanding now, so explanation doesn't run on
+ * 3. Three explaining messages in a row: check understanding now, so explanation doesn't run on
  *    unchecked.
  *
  * The note rides at the end of your message, hidden, and is kept with it so later requests send
  * the same text (the model server's prefix cache). The problem bank stands aside on a turn with one.
  */
 
-import { asksToBeTaughtAgain, asksToMoveOn, isAnswer as marksAnswer } from './lessonRepair'
+import { asksToBeTaughtAgain, asksToMoveOn, isAnswer as marksAnswer, saysLost } from './lessonRepair'
+import { asksToThink } from './session'
 
 export const PACE_MARK = '(Tide: This turn:'
 
@@ -28,7 +29,13 @@ export const PACE_MARK = '(Tide: This turn:'
 export const MARK_NOTE = '(Tide: mark this first. A right result is correct, by any method and even without the working asked for. If partial or wrong, add <card>question :: answer</card> for the idea missed.)'
 
 /** The marking note for what you're sending, when it is an answer to mark */
-export const markNote = (said: string): string | null => (marksAnswer(said) ? MARK_NOTE : null)
+export const markNote = (said: string, asked = ''): string | null => (marksAnswer(said) && !asksToThink(asked) ? MARK_NOTE : null)
+
+/** Lost or confused (lessonRepair saysLost): explained again another way, never marked */
+export const LOST_NOTE = `${PACE_MARK} they're lost or confused: a signal, not an answer. Don't mark it: no <grade>, no <card>. Answer any question they asked in it directly, then explain the point again differently, not in the same words: simpler and in smaller steps, with a new picture or a concrete walk-through of one example. Then check their understanding with a think question.)`
+
+/** An answer to a think question: discussed, never marked */
+export const THINK_NOTE = `${PACE_MARK} this answers a think question, which is never graded: write no <grade> and no card for a slip in it. Reply as their tutor in conversation: build on what's right, correct any misunderstanding directly with the reason, then the next chunk (150 to 250 words) or a checkpoint. If they've shown they follow a key idea, add its <card idea>question :: answer</card>.)`
 
 const EXPLAIN = /\b(just|please|can you|could you)\s+(explain|teach|walk me through|show me)\b|\b(keep|carry on|continue)\s+(explaining|going)\b|\bstop (asking|quizzing)\b|\bno (more )?questions\b/i
 const CHECK = /\b(quiz|test|check) me\b|\bask me (a|some|more)\b|\bharder (one|question|problem)s?\b|\bgive me (a|another) (problem|question)\b/i
@@ -48,8 +55,13 @@ export function paceNote(history: PaceTurn[], said: string): string | null {
   const words = said.replace(/^Answer:\s*/i, '').replace(/\n\(Confidence: [^)]*\)\s*$/, '')
   // Asked to move on: never kept on the point, and never marked for asking (an answer sent with it is marked)
   if (asksToMoveOn(said)) return `${PACE_MARK} they asked to move on. Don't mark the request or ask about this point again${marksAnswer(said) ? '; mark the answer they sent with it' : ''}. Go on to the next step now. Tide brings this point back later as a recall question.)`
+  // Lost or confused, or "what do you mean": explained again another way, not marked
+  if (saysLost(said)) return LOST_NOTE
   // Forgotten, or "teach me again": taught again from the start, not marked
   if (asksToBeTaughtAgain(said)) return `${PACE_MARK} they've forgotten this or asked to be taught it again. Don't mark it. Teach it again from the start, simply, with one small worked example, then ask one easy question on it.)`
+  // An answer to a think question: a conversation, not a mark
+  const asked = [...history].reverse().find((t) => t.role === 'assistant')?.content ?? ''
+  if (asksToThink(asked) && /^Answer:/i.test(said)) return THINK_NOTE
   if (CHECK.test(words)) return `${PACE_MARK} they asked to be tested. Check their understanding now with one question.)`
   if (EXPLAIN.test(words)) return `${PACE_MARK} they asked you to explain. Explain the next part clearly, ask nothing, and end with <continue/>.)`
 
@@ -65,7 +77,8 @@ export function paceNote(history: PaceTurn[], said: string): string | null {
   if (lastTwoWrong) return `${PACE_MARK} their last two answers were wrong. Mark this one; if it's wrong again, stop setting full questions: show a short worked example of exactly the step they're missing, then ask them to fill in just that one step.)`
 
   // Explaining for two messages already: time to check
-  const run = replies.slice(-2)
-  if (run.length === 2 && run.every(goesOn) && /^Go on\.?$/i.test(said.trim())) return `${PACE_MARK} you've explained for two messages. Check their understanding now with one question (a choice question works well here).)`
+  // (three: a tutorial step's explanation runs to 300 to 700 words, over more than one message)
+  const run = replies.slice(-3)
+  if (run.length === 3 && run.every(goesOn) && /^Go on\.?$/i.test(said.trim())) return `${PACE_MARK} you've explained for three messages. Check their understanding now with one question (a think question, or a choice question).)`
   return null
 }

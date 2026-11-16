@@ -13,14 +13,40 @@ import { parseAppraise, type AppraiseRow } from './humanities'
 import { lessonKit, type SubjectProfile } from './subjects'
 import { courseRules, type CourseRef } from './courses'
 import { clipsIn } from './video'
-import { MAP_RULES, parsePlanBody, parseProgress, type PlanStep, type ProgressReport } from './lessonPlan'
+import { MAP_RULES, TUTORIAL, parsePlanBody, parseProgress, type PlanStep, type ProgressReport } from './lessonPlan'
 
 /**
  * Learning sessions are a conversation where the tutor writes Markdown plus a few tags the UI
  * turns into interactive pieces. Tags are simple and forgiving so small local models get them right.
  */
 
-export type AskType = 'predict' | 'short' | 'choice' | 'explain' | 'error' | 'problem' | 'code'
+export type AskType = 'predict' | 'short' | 'choice' | 'explain' | 'error' | 'problem' | 'code' | 'think'
+
+const ASK_TYPES: readonly string[] = ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code', 'think']
+
+/**
+ * A think question (a tutorial lesson's "what would happen if…"): asked for the learner to reason
+ * aloud, never graded. Its answer gets a conversational reply: no mark, no flashcard, no mistake
+ * journal entry and no separate marking call.
+ */
+export const THINK_ASK = 'think'
+
+/** The type of the last question a tutor reply asked, or undefined (read off the tag, so a reply still streaming works too) */
+export function lastAskType(reply: string): string | undefined {
+  const asks = [...reply.matchAll(/<ask\b([^>]*)>/gi)]
+  if (!asks.length) return undefined
+  return /\btype\s*=\s*["']?(\w+)/i.exec(asks[asks.length - 1][1])?.[1]?.toLowerCase() ?? 'short'
+}
+
+/** Asks that are never marked (predict stays marked: a sure, wrong guess shows a misconception, which the tutor benchmark checks) */
+export const UNGRADED_ASKS: readonly string[] = [THINK_ASK]
+export const ungradedAsk = (type?: string) => !!type && UNGRADED_ASKS.includes(type)
+
+/** Whether a tutor reply's question was a think question: whatever answers it is not marked */
+export const asksToThink = (reply: string) => ungradedAsk(lastAskType(reply))
+
+/** A question answered with one tap on an option: a choice, or a think question given options (still never marked) */
+export const picksOne = (ask: { type: string; options: string[] }) => (ask.type === 'choice' || ask.type === THINK_ASK) && ask.options.length > 0
 
 export type Block =
   | { kind: 'text'; text: string }
@@ -30,7 +56,7 @@ export type Block =
   | { kind: 'plan'; steps: string[]; detail: PlanStep[]; goal?: string; ends?: string }
   /** Where the lesson is on its plan, for the lesson map (shared/lessonMap): never shown as text */
   | { kind: 'progress'; report: ProgressReport }
-  | { kind: 'card'; front: string; back: string }
+  | { kind: 'card'; front: string; back: string; /** A key idea's card (<card idea>), written once it's taught and checked: kept whatever the mark */ idea?: boolean }
   | { kind: 'scores'; title: 'scorecard' | 'rubric'; rows: { label: string; score: number; max: number; note: string }[] }
   | { kind: 'challenge'; quote: string; text: string }
   | { kind: 'summary'; text: string }
@@ -150,7 +176,7 @@ export function parseBlocks(full: string): Block[] {
     const open = t.match(/<ask\b([^>]*)>([\s\S]*)$/i)
     if (open && open[2].trim()) {
       const type = (attr(open[1], 'type')?.toLowerCase() ?? 'short') as AskType
-      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(type) ? type : 'short', prompt: splitTests(open[2].replace(/<\/?a?s?k?$/i, '').trim()).prompt, options: [], lang: attr(open[1], 'lang') })
+      blocks.push({ kind: 'ask', type: ASK_TYPES.includes(type) ? type : 'short', prompt: splitTests(open[2].replace(/<\/?a?s?k?$/i, '').trim()).prompt, options: [], lang: attr(open[1], 'lang') })
     }
   }
   for (const m of message.matchAll(TAG)) {
@@ -183,7 +209,7 @@ export function parseBlocks(full: string): Block[] {
       const file = attr(attrs, 'file')?.trim()
       const terminal = !file && /(^|\s)terminal(\s|=|$)/i.test(attrs)
       const kind = (file || terminal) && type === 'code' ? 'problem' : type
-      blocks.push({ kind: 'ask', type: ['predict', 'short', 'choice', 'explain', 'error', 'problem', 'code'].includes(kind) ? kind : 'short', prompt, options, lang: attr(attrs, 'lang'), ...(tests ? { tests } : {}), ...(on ? { topic: on } : {}), ...(far === 'near' || far === 'far' ? { transfer: far } : {}), ...(file ? { file } : {}), ...(terminal ? { terminal } : {}) })
+      blocks.push({ kind: 'ask', type: ASK_TYPES.includes(kind) ? kind : 'short', prompt, options, lang: attr(attrs, 'lang'), ...(tests ? { tests } : {}), ...(on ? { topic: on } : {}), ...(far === 'near' || far === 'far' ? { transfer: far } : {}), ...(file ? { file } : {}), ...(terminal ? { terminal } : {}) })
     } else if (name === 'grade') {
       const verdict = (attr(attrs, 'verdict')?.toLowerCase() ?? 'partial') as Verdict
       const score = Number(attr(attrs, 'score') ?? (verdict === 'correct' ? 1 : verdict === 'wrong' ? 0 : 0.5))
@@ -198,7 +224,7 @@ export function parseBlocks(full: string): Block[] {
       const front = attr(attrs, 'front')
       const back = attr(attrs, 'back')
       const [f, b] = front && back ? [front, back] : body.split(/\s*::\s*/)
-      if (f && b) blocks.push({ kind: 'card', front: f.trim(), back: b.trim() })
+      if (f && b) blocks.push({ kind: 'card', front: f.trim(), back: b.trim(), ...(/(^|\s)idea(\s|=|$)/i.test(attrs) ? { idea: true } : {}) })
     } else if (name === 'scorecard' || name === 'rubric') {
       const rows = parseScores(body)
       if (rows.length) blocks.push({ kind: 'scores', title: name, rows })
@@ -253,23 +279,24 @@ export const SESSION_FORMAT = `Format rules (the app turns these tags into inter
 - End each message in one of two ways, unless the session is finished:
   a) ONE question for the student inside an ask tag: <ask type="short">question</ask>
      The student can only answer inside an ask tag, so never ask a question in plain text, not even the first one.
-  b) <continue/> when your next message should carry on explaining: an idea that needs more than one message, or when Tide's note says to explain. Then ask nothing. After two explaining messages in a row, check their understanding with a question.
-  Types: predict (they guess before you explain), short (a sentence or two), explain (explain it back in their own words), choice (multiple choice, put options in the tag: <ask type="choice" options="first|second|third|fourth">question</ask>), error (show a flawed statement or code and ask them to find the mistake), problem (a worked problem or calculation), code (they write code in an editor that runs it: <ask type="code" lang="python">task</ask>; lang is the language being taught: python, javascript, c or cpp run here).
+  b) <continue/> when your next message carries on explaining, or Tide's note says to explain. Then ask nothing.
+  Types: think (to reason aloud: "what if…", or one tap with options="a|b"; discussed, never marked), predict (they guess before you explain), short (a sentence or two), explain (explain it back in their own words), choice (multiple choice, put options in the tag: <ask type="choice" options="first|second|third|fourth">question</ask>), error (show a flawed statement or code and ask them to find the mistake), problem (a worked problem or calculation), code (they write code in an editor that runs it: <ask type="code" lang="python">task</ask>; lang is the language being taught: python, javascript, c or cpp run here).
 - Hands-on work is in the Workspace beside the lesson (an editor, their shell), never another app. A task names its file, code last: <ask type="problem" lang="python" file="r.py">steps\n\`\`\`python\ncode\n\`\`\`</ask>; commands alone: terminal, not file. Make every file you name (and examples over 3 lines) with workspace_file first; never printf/echo/cat. Name the file and command to run. You get each command they run, with output: reply.
 - Transfer: once an idea is taught and answered right, test it in a new setting. Mark such a question transfer="near" (the same idea in a new context or form) or transfer="far" (a different kind of problem or field that needs it): <ask type="problem" transfer="near">…</ask>.
-- Use choice when picking is the real test (spotting the right idea, the next step, or a misconception) and typing would only slow them down. Write the correct option first, then make each wrong option from one specific misconception, the same length and shape, with nothing that gives the answer away. They may add their reasoning to their pick: mark the reasoning too.
-- When they answer, judge it first: <grade verdict="correct|partial|wrong" score="0.0-1.0">one or two sentences: what was right and why, or the exact step that's wrong and why; no empty praise</grade>
+- Use choice when picking is the real test and typing would only slow them down. Correct option first; each wrong one from one specific misconception, the same length and shape, giving nothing away. Mark any reasoning they add to their pick.
+- When they answer (but a think one: no grade, no card for a slip), judge it first: <grade verdict="correct|partial|wrong" score="0.0-1.0">one or two sentences: what was right and why, or the exact step that's wrong and why; no empty praise</grade>
 - When a partial or wrong answer comes from a specific wrong belief (not a slip), name it on the grade: <grade verdict="wrong" score="0.2" misconception="short name: what they believe">. Reuse the same short name when the same belief comes back.
 - Grade against your own solution, and quote the words of their answer that earned the verdict. "correct" means the result is right and complete, not just heading the right way. A right final result without the working you asked for is still "correct": say in a few words that the working wasn't shown, or ask for the one check in your next question. "partial" is for a result that is incomplete, or reasoning they wrote that is wrong.
 - Before you set a problem, solve it yourself, and put your answer and the key steps after it in <solution>...</solution>. The student never sees it (so this isn't answering your own question); you grade their answer against it. When the answer is a number or an expression, also add <check lang="python">Python that works the answer out from scratch and asserts it equals yours (SymPy is available)</check>; for a code problem, a check that runs your reference solution on test cases with asserts. Tide runs every check before the student sees the problem: if it fails, the problem or your answer is wrong. A problem must be well posed: every quantity it asks about is defined and it has one clear answer.
-- If they got something wrong, or partly wrong with a real gap (not a detail unsaid), capture the missed idea as a flashcard: <card>question :: answer</card>. Never after a "correct" mark.
-- The student may send [hint]. Give the smallest hint that unblocks their thinking, and give more each time they ask again: a nudge, then a hint, then one worked step, then the answer.
-- The student may say they don't know, have forgotten, or ask you to teach it again. That is not an answer: never grade it. Teach the idea again, simply, then ask an easier question.
-- The student may ask to move on or skip. Respect it: never grade the request or argue for more practice. Mark an answer they sent with it, then go straight to the next step; Tide brings the skipped point back later as a recall question.
-- Their answers note how sure they were. Sure and wrong is a misconception: name it plainly, and test it again later in a new form. Unsure and right: give one more like it.
+- A key idea taught and shown understood: <card idea>question :: answer</card>.
+- If they got something wrong on a graded question, or partly wrong with a real gap (not a detail unsaid), capture the missed idea as a flashcard: <card>question :: answer</card>. Never after a "correct" mark.
+- [hint]: the smallest hint that unblocks them, more each time they ask: a nudge, a hint, one worked step, then the answer.
+- The student may say they don't know, have forgotten, are lost, ask what you mean, or ask you to teach it again. That is not an answer: never grade it. Explain it again differently (simpler, smaller steps, a new picture), then ask a think question.
+- Asked to move on or skip: never grade the request or argue. Mark an answer sent with it, then go to the next step; Tide brings the point back later as a recall question.
+- Answers note how sure they were: sure and wrong is a misconception (name it, retest it later in a new form); unsure and right, give one more like it.
 - Never repeat a question in the same words. Before the summary, retest anything they missed in a new form.
 - Tide may add a note at the end of their message, starting "(Tide:". Follow it; they don't see it.
-- Never answer your own question. Ask one thing at a time. Keep your turns short. No greetings, no introductions, no preamble: start with the substance.
+- Never answer your own question. Ask one thing at a time. Keep questions short. No greetings, no introductions, no preamble: start with the substance.
 - Write questions in plain words about the thing itself ("Convert 150 to binary"): no invented people, stories or labels.
 - Cite the lesson's sources as [S1], [S2] and nothing else. For one of their notes you read with a tool, link it by its title, [[Note title]], never by a result number like [2].
 - Never write a source's words out in a tag of your own: Tide shows readings.
@@ -442,7 +469,7 @@ function baseInstructions({ mode, topic, options }: SessionSetup): string {
     const first: Partial<Record<Strategy, string>> = {
       walkthrough: 'Your first teaching message: call canvas_read, then canvas_edit to draw the first step (connect the first two parts involved and label the connection with what passes between them), then a predict ask for the next step. Every later step: one canvas_edit adding the next connection, then one ask.',
       dialogue: 'Your first teaching message: pose the real design question in one or two sentences and ask what they would do (an explain ask).',
-      code: 'Your first teaching message: a two-line explanation and the smallest task that exercises it (a code ask).',
+      code: 'Your first teaching message: explain the idea properly (as below), then the smallest task that exercises it (a code ask).',
       lab: 'Your first teaching message: the first command or task to try in the lab (a short ask), saying what to look for.',
       maths: 'Your first teaching message: the key definition or result in a line, then the first problem (a problem ask).',
       reading: 'Your first teaching message: where to read (section and pages if known) and one question to read for (a short ask).'
@@ -456,30 +483,25 @@ function baseInstructions({ mode, topic, options }: SessionSetup): string {
 2. ${lightPlan(flow ? 'one step per stage of the flow, grouping small stages so there are 3 to 5' : options.strategy === 'dialogue' ? 'one step per part of the question you will think through together' : '3 to 5 steps')}
 3. Then teach it this way: ${flow ? 'trace it step by step like following one real record through the system.' : STRATEGY_RULES[options.strategy]}
    ${flow || (first[options.strategy] ?? '')}
-${MAP_RULES}
-4. Grade every answer. Move on when they have it; when they don't, point at exactly what's missing and try again a smaller step.
+${MAP_RULES}${options.strategy === 'code' || options.strategy === 'lab' ? `\n${TUTORIAL}` : ''}
+4. Grade every answer but a think one (never graded: reply in conversation). Move on when they have it; when they don't, point at exactly what's missing and try again a smaller step.
 When you explain an idea, also write it for their notes: <note>the key idea in 1 to 5 lines of Markdown (up to 12 for notation, a formula or a worked example), worth rereading later</note>.${options?.project ? projectRules(options.project) : ''}
 When it's done, write <summary>what they learned, what is still shaky, what to look at next</summary>.`
   }
   if (mode === 'teach') {
     const extra = options?.project ? projectRules(options.project) : ''
     const start = difficulty === 'hard' ? 'at a hard level' : difficulty === 'gentle' ? 'gently' : 'one notch below where the probe placed them'
-    return `You are running a TEACH session on: ${topic}. They learn by doing: you explain briefly, they solve.
+    return `You are running a TEACH session on: ${topic}. Teach it as a tutorial, like a superb tutor with one student: explain each idea properly first, then they think it through and practise.
 1. PROBE: place them with 2 or 3 short questions (never more), one at a time. Start near the hardest thing this topic needs; after a confident right answer, step up; after a miss, step down. Stop once you know where they're solid and where they break. Don't teach yet.
 2. PLAN: from what you learned, write a short path (3 to 6 steps) to the goal, skipping what they've shown they know; it's their map:
 <plan>
 Goal: By the end you can …
 1. Title | what it covers | Done when … | 6 min
 </plan>
-3. TEACH each step in order:
+3. TEACH each step in this order: big picture, mechanism, practice, check.
 ${MAP_RULES}
-   - Explain the idea in under 150 words with one worked example, tied to where they're heading when it fits. If the probe showed they already have the background, skip the example and go straight to a problem.
-   - Then a problem set, one problem per message (problem, code, error or explain asks), starting ${start}. Start each with its place, like "**Problem 2 · harder**". Never repeat a problem: change the details.
-   - Right first time with no hint: the next one is harder. Right but with hints, or unsure: same level, new problem. Wrong: an easier one, or re-teach only the missing piece.
-   - Move to the next step after two right in a row without hints (at most 5 problems a step). From the second step on, mix in one problem from an earlier step without saying which.
-   - When they're wrong, point at the exact step that fails before anything else; give the worked solution only after the hint ladder, then a near-identical problem for them.
-   - Now and then ask why a step holds or what would break if something changed. Never ask "does that make sense?".
-   Lead with the picture: every step whose idea has a physical, memory or process picture opens with a visual, before or beside the words, without being asked (a simulation or a \`\`\`draw block when the instructions name one; else a small mermaid diagram, under about 12 nodes, for structure or a process; a real figure with find_image for something physical). Plain text only for ideas with no picture.
+${TUTORIAL}
+   - CHECK: 1 or 2 graded checkpoints end each step (problem, code, error, short, choice or explain asks), one problem per message, starting ${start}. Start each with its place, like "**Problem 2 · harder**". Right first time: harder next. Wrong: point at the exact step that fails, re-teach that piece, then a near-identical one. Pass the step on a checkpoint right without hints (at most 4). Never ask "does that make sense?".
    When you explain an idea, also write it for their notes: <note>the key idea, definition, formula or a short worked example, in 1 to 5 lines of Markdown (up to 12 when it spells out notation or works an example), worded to be worth rereading later</note>. Do the same after grading whenever your feedback states a rule, a reason or corrects something they got wrong: one <note> with that point in a line or two (never one that repeats an earlier note). Notes are only for the ideas this lesson is about, ${topic}: never a side fact (a date, a definition of an everyday word, how centuries are counted). A note never stands in for a miss’s flashcard: write the <card> too.
 4. FINISH with 2 or 3 mixed problems across all the steps, one at a time.${extra}
 When every step is done, write <summary>what they learned, what is still shaky, what to review next</summary>.`
