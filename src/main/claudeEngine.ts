@@ -407,6 +407,8 @@ export async function sessionShape(req: Pick<TurnRequest, 'thread' | 'session' |
   if (req.thread) return { kind: 'thread', data, humanities }
   const mb = metabaseReady()
   if (!req.session) return { kind: 'chat', metabase: mb }
+  // A placement check asks only about its own topics: no recall, past mistakes or lesson tools
+  if ((await import('@shared/placement')).isPlacementSession(req)) return { kind: 'lesson', placement: true, data }
   return { kind: 'lesson', maths, data, humanities, graphs: /language is graph/.test(said), metabase: mb && isMetabaseLesson(req.topic, path) }
 }
 

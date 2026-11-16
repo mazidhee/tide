@@ -8,7 +8,7 @@ import { gradeOf, reviewItems, type ReviewItem, type ReviewSetup } from '@shared
 import type { Verdict } from '@shared/types'
 import { cardsOnMany, conceptById, conceptOfTopic, noteReviewAnswer } from './knowledge'
 import { listMistakes, retestMistake } from './mistakes'
-import { recallItems, reviewRecall } from './recall'
+import { reviewableRecall, reviewRecall } from './recall'
 
 /** A yyyy-mm-dd day as the moment it begins, local time */
 const dayStart = (ymd: string) => {
@@ -30,7 +30,7 @@ export async function keptOnMany(concepts: string[]): Promise<Map<string, Review
     return named.get(topic)!
   }
   const add = async (topic: string, item: ReviewItem) => out.get((await on(topic)) ?? '')?.push(item)
-  for (const i of recallItems()) await add(i.topic, { kind: 'recall', id: i.id, topic: i.topic, question: i.prompt, due: i.due })
+  for (const i of await reviewableRecall()) await add(i.topic, { kind: 'recall', id: i.id, topic: i.topic, question: i.prompt, due: i.due })
   for (const m of await listMistakes()) if (m.status === 'open') await add(m.topic, { kind: 'mistake', id: m.id, topic: m.topic, question: m.question, answer: m.fix, ...(m.path ? { path: m.path } : {}), due: dayStart(m.due) })
   for (const [concept, cards] of await cardsOnMany(concepts)) for (const c of cards) out.get(concept)!.push({ kind: 'card', id: c.id, topic: '', question: c.front, answer: c.back, path: c.path, due: c.due })
   return out

@@ -15,7 +15,7 @@ vi.mock('../src/main/coach', () => ({
   weekReview: async () => ({ minutes: 225, days: Array.from({ length: 7 }, (_, i) => ({ date: `2026-11-${String(6 + i).padStart(2, '0')}`, minutes: [30, 0, 45, 60, 0, 50, 40][i] })) })
 }))
 vi.mock('../src/main/lessons', () => ({ earlierLessons: async () => 'Earlier: Binary numbers, 5 of 7 right.' }))
-vi.mock('../src/main/recall', () => ({ recallItems: () => [{ id: 'r1', prompt: 'What does the top bit mean in two’s complement?', topic: 'Two’s complement', due: 0 }] }))
+vi.mock('../src/main/recall', () => ({ reviewableRecall: async () => [{ id: 'r1', prompt: 'What does the top bit mean in two’s complement?', topic: 'Two’s complement', due: 0 }] }))
 vi.mock('../src/main/warmup', () => ({ warmupFor: async () => ({ topic: 'Two’s complement', cards: [{ concept: 'c1', conceptName: 'Binary numbers', from: 'From Binary numbers', question: 'What is 1011 in decimal?', item: null, estimate: 0.55 }], concepts: [{ name: 'Binary numbers', estimate: 0.55, status: 'fading' }] }) }))
 vi.mock('../src/main/books', () => ({ pagesToRead: async () => [] }))
 vi.mock('../src/main/sources', () => ({ packFor: async () => ({ topic: 'Two’s complement', at: Date.now(), sources: [{ n: 1, title: 'Two’s complement (Cornell CS 3410 notes)', url: 'https://example.edu/twos', text: 'Negate by inverting and adding one.' }] }), buildPack: async () => null }))

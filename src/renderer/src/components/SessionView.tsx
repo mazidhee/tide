@@ -24,7 +24,7 @@ import { ClipCard } from './ClipCard'
 import { relatedForPrompt } from '@shared/related'
 import { openReading } from '../lib/reading'
 import { codeBlockClick } from '../lib/runBlocks'
-import { parsePlacement, placementNote } from '@shared/placement'
+import { isPlacementSession, parsePlacement, placementNote } from '@shared/placement'
 import { correctionText } from '@shared/lessonCheck'
 import type { Reading } from '@shared/readings'
 import { whyByDefault } from '../lib/agenda'
@@ -1089,8 +1089,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           if (retest[k]) window.tide.mistakes.retest(retest[k].id, b.verdict === 'correct').catch(() => {})
           return
         }
-        // Anything not right goes in the mistake journal, to come back until it is
-        if (b.verdict !== 'correct' && prevAsk?.prompt && (mode === 'teach' || mode === 'quiz')) {
+        // Anything not right goes in the mistake journal, to come back until it is. Not in a
+        // placement check: a miss there is "not learned yet", kept in placement.json as new
+        if (b.verdict !== 'correct' && prevAsk?.prompt && (mode === 'teach' || mode === 'quiz') && !isPlacementSession({ topic, options })) {
           const said = ownWords(turns[i - 1]?.content ?? '').replace(/^Answer:\s*/, '').replace(/\n\(Confidence: [^)]*\)\s*$/, '').trim()
           window.tide.mistakes
             .add([{ topic, path: sourcePath ?? (scope.kind === 'folder' ? scope.path : undefined), source: mode === 'teach' ? 'lesson' : 'quiz', question: prevAsk.prompt, answer: said, fix: b.text }])

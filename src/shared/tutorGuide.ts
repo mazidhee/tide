@@ -47,12 +47,16 @@ export interface SessionShape {
   metabase?: boolean
   /** Taught as the humanities: no custom visuals or code guide */
   humanities?: boolean
+  /** A placement check ("What I already know: …"): it asks only about its own topics, so no recall, mistakes or learner history */
+  placement?: boolean
 }
 
 /** The packs a session is given */
 export function toolPacks(s: SessionShape): ToolPack[] {
   if (s.kind === 'thread') return ['notes', 'run', ...(s.data ? (['data'] as const) : []), 'thread']
   if (s.kind === 'coach' || s.kind === 'plan') return ['notes', 'learner', 'courses', 'model']
+  // A placement check reads the section and may run code: nothing due for recall or from other topics
+  if (s.placement) return ['notes', 'run', ...(s.data ? (['data'] as const) : [])]
   const packs: ToolPack[] = ['notes', 'learner', 'run', 'courses']
   if (s.kind === 'chat') packs.push('data', 'chat')
   else {

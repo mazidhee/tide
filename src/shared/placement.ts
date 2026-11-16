@@ -77,3 +77,53 @@ export const REFRESH_RULES = `This is a REFRESHER: the student learned this befo
 export function placementNote(answersSoFar: number): string | null {
   return answersSoFar + 1 >= PLACEMENT_QUESTIONS ? '(Tide: that was the last question of the check. Mark this answer in one line, then write the <placement> result for every topic and the <summary>, and ask nothing more.)' : null
 }
+
+// ---------- A miss in a check is "not learned yet", not a mistake ----------
+
+/** The topic a check's session runs under (renderer/lib/agenda checkTopic): "What I already know: <section>" */
+export const PLACEMENT_PREFIX = 'What I already know: '
+
+/** A topic (a lesson's, a mistake's, a recall question's) that came from a placement check */
+export const isPlacementTopic = (topic: string | undefined | null): boolean => /^\s*what i already know:/i.test(topic ?? '')
+
+/**
+ * A session that is a placement check: by its topic, or by its instructions (the window sends the
+ * check's rules as them). It only asks about its own topics: nothing due for recall, no past
+ * mistakes, and what it misses is recorded in placement.json as new, never as a mistake or a card.
+ */
+export const isPlacementSession = (s: { topic?: string | null; instructions?: string | null; options?: { placement?: unknown } | null }): boolean =>
+  !!s.options?.placement || isPlacementTopic(s.topic) || /\bPLACEMENT CHECK\b/.test(s.instructions ?? '')
+
+// Words that say nothing about which idea a question is on
+const STOP = new Set(
+  'about above after again against algebra their there these those which while where what when with without would could should every other under between into from that this they them then than have does done each more most some such only very being been your yours using used uses work works working basic basics introduction intro number numbers representation representations system systems ground first how why the and for are'.split(' ')
+)
+const words = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9+#]+/g, ' ')
+    .split(' ')
+    .filter((w) => (w.length >= 4 || /^(cpu|alu|ram|sql|api|bit|tcp|udp|gpu|dns|os)$/.test(w)) && !STOP.has(w))
+
+/**
+ * Whether a question kept from a placement check is on something taught since: a concept with
+ * evidence of being studied (`seen` > 0; a check that found a topic new leaves none) whose name
+ * shares a telling word with the question. A check's miss on the CPU stays out until the CPU is taught.
+ */
+export function taughtSince(question: string, taught: { name: string }[]): boolean {
+  const q = new Set(words(question))
+  if (!q.size) return false
+  return taught.some((c) => words(c.name).some((w) => q.has(w) || (w.length > 4 && [...q].some((x) => x.length > 4 && (x.startsWith(w) || w.startsWith(x))))))
+}
+
+/**
+ * Leaves out of a review (Daily practice, retests, recall) every item kept from a placement check,
+ * unless what it asks about has been taught since. Pure; the learner's files are left as they are.
+ * `taught` is the concepts with evidence of being studied (main/knowledge).
+ */
+export function withoutPlacementMisses<T>(items: T[], of: (item: T) => { topic: string; question: string }, taught: { name: string }[]): T[] {
+  return items.filter((it) => {
+    const { topic, question } = of(it)
+    return !isPlacementTopic(topic) || taughtSince(question, taught)
+  })
+}
