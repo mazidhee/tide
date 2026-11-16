@@ -13,7 +13,8 @@ export const practiceApi: PracticeApi = {
   start: invoke('practice:start'),
   stop: invoke('practice:stop'),
   reset: invoke('practice:reset'),
-  open: invoke('practice:open')
+  open: invoke('practice:open'),
+  login: invoke('practice:login')
 }
 
 /** Guided work projects (main/workProjects) */

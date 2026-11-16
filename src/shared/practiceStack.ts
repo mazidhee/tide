@@ -82,6 +82,8 @@ export interface PracticeApi {
   stop(): Promise<PracticeStatus>
   reset(): Promise<PracticeStatus>
   open(): Promise<void>
+  /** The practice Metabase's own login (local only), to sign in and look around yourself */
+  login(): Promise<{ email: string; password: string } | null>
 }
 
 /** One plain sentence for the state, for Settings */
