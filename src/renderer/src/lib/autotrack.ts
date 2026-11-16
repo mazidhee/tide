@@ -63,9 +63,16 @@ export function useAutoTrack(context: StudyContext | null) {
     })
     const state = (now: number) => ({ now, lastInput, lastTutor, focused: document.hasFocus(), visible: !document.hidden, onStudy: !!ctx.current && !manualFocusRunning() })
 
+    // Stretches are logged in whole minutes; what's left over (a 40-second stretch between switching
+    // apps, the half minute past the last whole one) is kept and added to the next, never dropped.
+    // It goes on the front of that stretch, into the gap the short ones came from, so nothing overlaps
+    let leftover = 0
     const flush = (end: number) => {
       if (!seg) return
-      if (end - seg.start >= 60_000) window.tide.learn.logFocus(seg.start, end, { label: seg.ctx.label, path: seg.ctx.path, kind: seg.ctx.kind }).catch(() => {})
+      const total = Math.max(0, end - seg.start) + leftover
+      const whole = Math.floor(total / 60_000) * 60_000
+      leftover = total - whole
+      if (whole) window.tide.learn.logFocus(end - whole, end, { label: seg.ctx.label, path: seg.ctx.path, kind: seg.ctx.kind }).catch(() => {})
       seg = null
     }
     // The stretch ends at the last sign of you, not when the idle limit noticed

@@ -45,5 +45,11 @@ describe('switchFrom', () => {
     expect(switchFrom('draw it out for me', 'dialogue')).toBe('walkthrough')
     expect(switchFrom('give me some problems', 'walkthrough')).toBe('problems')
     expect(switchFrom('the answer is 42', 'problems')).toBeNull()
+    expect(switchFrom("let's do it in the terminal", 'problems')).toBe('lab')
+    expect(switchFrom('use the lab', 'problems')).toBe('lab')
+  })
+  it('does not take an answer about a terminal as a request to switch', () => {
+    expect(switchFrom('a appears in the terminal since there is a runtime error at line two, line three wont run', 'problems')).toBeNull()
+    expect(switchFrom('nothing shows in the terminal', 'problems')).toBeNull()
   })
 })
