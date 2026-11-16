@@ -20,6 +20,11 @@ export interface StudyStatus {
   since: number
   /** A deadline (an exam's end): shown as a countdown instead */
   until?: number
+  /** Time that really counted (window in front, you at it), as of activeAt; the minutes shown */
+  activeMs?: number
+  /** Whether it was still counting at activeAt */
+  counting?: boolean
+  activeAt?: number
 }
 
 let tray: Tray | null = null
@@ -50,7 +55,7 @@ const latest = () => [...reports.values()].sort((a, b) => b.at - a.at)[0] ?? nul
 /** What's being studied right now, for the study data API */
 export const currentStudy = () => {
   const s = latest()
-  return s ? { label: s.label, since: s.since } : null
+  return s ? { label: s.label, since: s.since, minutes: studiedMinutes(s) } : null
 }
 
 function frame(p: ProfessorPose) {
@@ -59,7 +64,12 @@ function frame(p: ProfessorPose) {
   return nativeImage.createFromBitmap(Buffer.from(data), { width, height, scaleFactor: 2 })
 }
 
-const minutes = (since: number) => Math.max(0, Math.floor((Date.now() - since) / 60_000))
+/** Minutes that counted: they stop while you're in another app, away, or the lesson sits in the background */
+const studiedMinutes = (s: StudyStatus) => {
+  if (s.activeMs === undefined) return 0
+  const live = s.counting && s.activeAt ? Math.min(Date.now() - s.activeAt, 30_000) : 0
+  return Math.max(0, Math.floor((s.activeMs + live) / 60_000))
+}
 const countdown = (until: number) => {
   const s = Math.max(0, Math.round((until - Date.now()) / 1000))
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
@@ -69,7 +79,7 @@ function render() {
   if (!tray) return
   const s = latest()
   tray.setImage(frame(pose ?? idlePose()))
-  const title = s ? (s.until ? ` ${countdown(s.until)}` : minutes(s.since) ? ` ${minutes(s.since)}m` : '') : ''
+  const title = s ? (s.until ? ` ${countdown(s.until)}` : studiedMinutes(s) ? ` ${studiedMinutes(s)}m` : '') : ''
   tray.setTitle(title, { fontType: 'monospacedDigit' })
 }
 
@@ -80,7 +90,7 @@ async function buildMenu(): Promise<Menu> {
   const items: MenuItemConstructorOptions[] = []
   if (s) {
     items.push({ label: s.label, enabled: false })
-    items.push({ label: s.until ? `${countdown(s.until)} left` : `${minutes(s.since)} minutes so far`, enabled: false })
+    items.push({ label: s.until ? `${countdown(s.until)} left` : `${studiedMinutes(s)} minutes so far${s.counting ? '' : ', paused while you’re away'}`, enabled: false })
     items.push({ type: 'separator' })
   }
   const today = await agenda().catch(() => [] as AgendaItem[])

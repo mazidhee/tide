@@ -142,7 +142,7 @@ export interface StudySummary {
   answers: { total: number; right: number; partly: number; wrong: number; averageScore?: number }
 }
 
-export function summarize(input: { sessions: StudySession[]; reviews: ReviewRow[]; answers: AnswerRow[]; now: number; days: number; current?: { label: string; since: number } | null }): StudySummary {
+export function summarize(input: { sessions: StudySession[]; reviews: ReviewRow[]; answers: AnswerRow[]; now: number; days: number; current?: { label: string; since: number; minutes?: number } | null }): StudySummary {
   const { sessions, reviews, answers, now } = input
   const days = Math.max(1, Math.min(366, Math.round(input.days)))
   const today = startOfDay(now)
@@ -214,7 +214,7 @@ export function summarize(input: { sessions: StudySession[]; reviews: ReviewRow[
   return {
     generatedAt: new Date(now).toISOString(),
     range: { from: dayKey(from), to: dayKey(today), days },
-    ...(input.current ? { now: { label: input.current.label, since: new Date(input.current.since).toISOString(), minutes: Math.max(0, Math.floor((now - input.current.since) / 60_000)) } } : {}),
+    ...(input.current ? { now: { label: input.current.label, since: new Date(input.current.since).toISOString(), minutes: input.current.minutes ?? Math.max(0, Math.floor((now - input.current.since) / 60_000)) } } : {}),
     totals: {
       today: since(today),
       thisWeek: since(startOfWeek(now)),

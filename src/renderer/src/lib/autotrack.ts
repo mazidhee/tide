@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { activeEnd, studyingNow } from '@shared/activeTime'
+import { noteActive } from './studying'
 
 /**
  * Study time, tracked without a timer: while you're on something to study and actually at it, the
@@ -36,6 +37,15 @@ export function useAutoTrack(context: StudyContext | null) {
     let lastInput = Date.now()
     let lastTutor = 0
     let seg: { start: number; ctx: StudyContext } | null = null
+    // Active time on the page on screen, for the menu bar's minutes (lib/studying)
+    let active = { label: null as string | null, ms: 0, from: 0 }
+    const markActive = (counting: boolean, now: number) => {
+      const label = ctx.current?.label ?? null
+      if (label !== active.label) active = { label, ms: 0, from: 0 }
+      if (active.from) active.ms += Math.min(now - active.from, 2 * TICK_MS)
+      active.from = counting ? now : 0
+      noteActive(active.ms, counting)
+    }
     const bump = () => (lastInput = Date.now())
     let moveAt = 0
     const onMove = () => {
@@ -59,12 +69,16 @@ export function useAutoTrack(context: StudyContext | null) {
       seg = null
     }
     // The stretch ends at the last sign of you, not when the idle limit noticed
-    const stop = () => seg && flush(Math.max(seg.start, activeEnd({ now: Date.now(), lastInput, lastTutor })))
+    const stop = () => {
+      markActive(false, Math.max(active.from, activeEnd({ now: Date.now(), lastInput, lastTutor })))
+      if (seg) flush(Math.max(seg.start, activeEnd({ now: Date.now(), lastInput, lastTutor })))
+    }
 
     const tick = () => {
       const now = Date.now()
       const c = ctx.current
       if (c && studyingNow(state(now))) {
+        markActive(true, now)
         if (!seg) seg = { start: now, ctx: c }
         else if (seg.ctx.label !== c.label) {
           flush(now)
