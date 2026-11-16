@@ -129,8 +129,10 @@ export async function projectTurnNote(labId: string, said: string): Promise<stri
   const l = lessons.get(labId)
   if (!l?.linked) return ''
   const { planForRoot, failedRuns } = await import('../ideaProjects')
-  const plan = await planForRoot(l.root).catch(() => null)
-  l.rules.hintsOnly = !!plan && !plan.claudeWrites
+  // A guided work project's folder (main/workProjects): the learner writes every query, always
+  const work = /\/Code\/Work\/[^/]+\/?$/.test(l.root)
+  const plan = work ? null : await planForRoot(l.root).catch(() => null)
+  l.rules.hintsOnly = work || (!!plan && !plan.claudeWrites)
   if (!l.rules.hintsOnly) {
     l.rules.hintOk = false
     return ''

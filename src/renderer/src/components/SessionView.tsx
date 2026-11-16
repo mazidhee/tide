@@ -96,6 +96,8 @@ import { parseVerdict, scorecardScore } from '@shared/interviews'
 import { dollarsAsCode, isMetabaseLesson, teardownOf } from '@shared/metabaseData'
 import { pageKey } from '../lib/typing'
 import { LessonWorkspace } from './LessonWorkspace'
+import { PlaceTag } from './PracticeSettings'
+import '../styles/workProjects.css'
 import { autoReply, blockTarget, extOf, fileForBlock, filesToWorkOn, looksLikeCommand, missingFiles, nextCommand, taskLine, LANG_LABEL, lessonLanguage, pasteText, sawLine, sawMessage, scratchName, stepText, taskOf, workspaceLesson, type Finished, type WorkspaceTask } from '@shared/workspace'
 import { useHeld } from '../lib/popout'
 
@@ -401,7 +403,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       if (coding) await coding.flush()
       // [metabase] The Metabase page beside the lesson, as the tutor reads it
       const mbScreen = mbShownRef.current ? await window.tide.metabase.screen().catch(() => null) : null
-      await window.tide.ai.chat({ id, messages, scope, ...(mbScreen?.text ? { onScreen: mbScreen.text } : {}), instructions: sessionInstructions(setupRef.current), labId: labId.current, ...(termIdRef.current ? { terminalId: termIdRef.current } : {}), ...(coding ? { codeLesson: { file: coding.file ?? undefined, root: setupRef.current.options?.codeRoot } } : {}), canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, ...engineFields(engineRef.current), sourceLed: ledRef.current, ...(setupRef.current.options?.course ? { course: { id: setupRef.current.options.course.id, lesson: setupRef.current.options.course.lesson } } : {}) })
+      await window.tide.ai.chat({ id, messages, scope, ...(mbScreen?.text ? { onScreen: mbScreen.text } : {}), instructions: sessionInstructions(setupRef.current), labId: labId.current, ...(termIdRef.current ? { terminalId: termIdRef.current } : {}), ...(coding ? { codeLesson: { file: coding.file ?? undefined, root: setupRef.current.options?.codeRoot } } : {}), canvasPath: approachRef.current === 'walkthrough' ? canvasPath : undefined, session: true, topic: setupRef.current.topic, web, voice: talkRef.current ? (app.settings.character ?? 'professor') : undefined, askType: askTypeRef.current, ...engineFields(engineRef.current), sourceLed: ledRef.current, ...(setupRef.current.options?.course ? { course: { id: setupRef.current.options.course.id, lesson: setupRef.current.options.course.lesson } } : {}), ...(setupRef.current.options?.workProject ? { workProject: setupRef.current.options.workProject.slug } : {}) })
     },
     [scope, setup, web, timed, clock, mode, difficulty.noteFor]
   )
@@ -2353,6 +2355,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               <h1>{topic}</h1>
               <p>
                 <span>{modeLabel(mode, options)}</span>
+                {options?.workProject && <PlaceTag place="practice" />}
                 {scopeLabel && scopeLabel !== topic && (
                   <span className="td-area">
                     {'path' in scope && <AreaMark area={scope.path} size={14} />}

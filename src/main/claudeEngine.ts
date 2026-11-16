@@ -413,6 +413,8 @@ export async function sessionShape(req: Pick<TurnRequest, 'thread' | 'session' |
   if (!req.session) return { kind: 'chat', metabase: mb }
   // A placement check asks only about its own topics: no recall, past mistakes or lesson tools
   if ((await import('@shared/placement')).isPlacementSession(req)) return { kind: 'lesson', placement: true, data }
+  // A guided work project runs on the practice data only: the company Metabase is never one of its tools
+  if (said.includes((await import('@shared/workProject')).WORK_MARK)) return { kind: 'lesson', maths, data: true, humanities: false, workProject: true }
   const onMetabase = isMetabaseLesson(req.topic, path)
   // No key: the lesson reads their Metabase through their Claude connector when it answers
   const via = onMetabase ? (mb ? 'key' : (await connectorUsable()) ? 'connector' : undefined) : undefined
@@ -820,6 +822,12 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   const settings = getSettings().ai.claude
   const said = ownWords(text([...req.messages].reverse().find((m) => m.role === 'user')?.content))
   const escalation = escalationFor(said, req.askType) ?? null
+  // A guided work project: which project the lesson is on, and the learner's words (their answer to an open decision)
+  if (shape.kind === 'lesson' && shape.workProject && req.workProject && req.labId) {
+    const work = await import('./workProjects')
+    work.bindWorkLesson(req.labId, req.workProject)
+    if (!req.thread && said.trim()) await work.noteLearnerTurn(req.workProject, said).catch(() => null)
+  }
   const role = turnRole(req, said, escalation, maths)
   const effort = effortFor(turnDepth(req, said, escalation, maths), settings?.thinking)
   const teachModel = claudeModel('teach', settings, req.claudeModel)

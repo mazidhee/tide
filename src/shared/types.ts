@@ -273,6 +273,8 @@ export interface ChatRequest {
   thread?: string
   /** A coding lesson (shared/lessonCode): on Claude, the tutor gets the IDE's code tools on its folder. `file`: the lesson file the editor shows; `root`: a linked project's folder */
   codeLesson?: { file?: string; root?: string }
+  /** A guided work project (shared/workProject): its slug, so its tools know which project the lesson is on */
+  workProject?: string
 }
 
 export interface StoredMessage {
@@ -695,6 +697,8 @@ export interface TideApi {
   /** The Code view as an IDE (shared/ide) */
   ide: import('./ide').IdeApi
   ideas: import('./ideaProject').IdeasApi
+  practiceData: import('./practiceStack').PracticeApi
+  work: import('./workProject').WorkApi
   packs: import('./trackPacks').PacksApi
   /** Jupyter notebooks and the quant lab (shared/notebook) */
   notebook: import('./notebook/api').NotebookApi

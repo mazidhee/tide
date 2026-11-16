@@ -78,9 +78,56 @@ const mb = () => defaultClient ?? metabaseClient()
 /** The client readers use (the test's, when one is set) */
 export const readClient = () => mb()
 
-async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown, auth?: MbAuth): Promise<T> {
+async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown, auth?: MbAuth, client?: MbClient): Promise<T> {
+  if (client) return method === 'GET' ? client.get<T>(path) : client.post<T>(path, body)
   if (auth) return method === 'GET' ? metabaseClient(auth).get<T>(path) : metabaseClient(auth).post<T>(path, body)
   return method === 'GET' ? mb().get<T>(path) : mb().post<T>(path, body)
+}
+
+// ---------- The practice Metabase (main/practiceStack): local, yours to break ----------
+
+/**
+ * The practice instance Tide runs in Docker on this Mac. Writes are allowed here (questions,
+ * dashboards, collections), and only here: this client refuses any address but the loopback one
+ * it was given, and the production client above is untouched by it (its ALLOWED list stays read-only).
+ */
+export const PRACTICE_ALLOWED: [string, RegExp][] = [
+  ['GET', /^\/api\/[\w/?=&%.,-]*$/],
+  ['POST', /^\/api\/(card|dashboard|collection|dataset)(\/|\?|$)/],
+  ['POST', /^\/api\/database\/\d+\/(sync_schema|rescan_values)$/],
+  ['PUT', /^\/api\/(card|dashboard|collection)\/\d+$/],
+  ['DELETE', /^\/api\/(card|dashboard)\/\d+$/]
+]
+
+export const practiceAllowed = (method: string, path: string) => PRACTICE_ALLOWED.some(([m, re]) => m === method && re.test(path)) && !/\.\./.test(path)
+
+/** Only a Metabase on this Mac can be the practice one */
+export const isLoopback = (url: string) => {
+  try {
+    const u = new URL(url)
+    return u.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(u.hostname)
+  } catch {
+    return false
+  }
+}
+
+export interface PracticeClient extends MbClient {
+  put<T>(path: string, body: unknown): Promise<T>
+  del<T>(path: string): Promise<T>
+}
+
+export function practiceClient(auth: MbAuth, timeoutMs = QUERY_MS): PracticeClient {
+  const go = async <T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> => {
+    if (!isLoopback(auth.url)) throw new Error('The practice Metabase runs on this Mac only.')
+    if (!practiceAllowed(method, path)) throw new Error(`The practice Metabase doesn’t take ${method} ${path.split('?')[0]} from Tide.`)
+    const res = await fetch(`${auth.url}${path}`, { method, headers: { 'x-api-key': auth.key, ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}), redirect: 'error', signal: AbortSignal.timeout(timeoutMs) }).catch((e: Error) => {
+      throw new Error(e.name === 'TimeoutError' ? `The practice Metabase took longer than ${Math.round(timeoutMs / 1000)} s.` : `Couldn’t reach the practice Metabase: ${e.message}`)
+    })
+    if (!res.ok && res.status !== 202) throw new Error(`Practice Metabase: ${(await res.text().catch(() => '')).slice(0, 200) || res.statusText}`)
+    const text = await res.text()
+    return (text ? JSON.parse(text) : null) as T
+  }
+  return { get: (p) => go('GET', p), post: (p, b) => go('POST', p, b), put: (p, b) => go('PUT', p, b), del: (p) => go('DELETE', p) }
 }
 
 // ---------- Queries, read-only, few rows ----------
@@ -103,7 +150,7 @@ export const MAX_ROWS = 500
 type Dataset = { data?: { rows: unknown[][]; cols: MbColumn[] }; row_count?: number; status?: string; error?: string | { message?: string } }
 
 /** Runs a query read-only and gives at most `maxRows` rows (it asks Metabase for one more, to know if there were more) */
-export async function queryRows(q: MbQuery, maxRows = 200): Promise<ResultSet & { ms: number }> {
+export async function queryRows(q: MbQuery, maxRows = 200, client?: MbClient): Promise<ResultSet & { ms: number }> {
   const max = Math.max(1, Math.min(MAX_ROWS, maxRows))
   const t0 = Date.now()
   const constraints = { 'max-results': max + 1, 'max-results-bare-rows': max + 1 }
@@ -111,18 +158,18 @@ export async function queryRows(q: MbQuery, maxRows = 200): Promise<ResultSet & 
   try {
     if (q.card !== undefined) {
       if (!Number.isInteger(q.card) || q.card < 0) throw new Error('A question id is a whole number.')
-      r = await call<Dataset>('POST', `/api/card/${q.card}/query`, {})
+      r = await call<Dataset>('POST', `/api/card/${q.card}/query`, {}, undefined, client)
     } else if (q.pipeline) {
       const problem = pipelineProblem(q.pipeline)
       if (problem) return { columns: [], rows: [], error: problem, ms: 0 }
       if (!/^[\w.$-]+$/.test(q.pipeline.collection)) return { columns: [], rows: [], error: 'That isn’t a collection name.', ms: 0 }
-      r = await call<Dataset>('POST', '/api/dataset', { database: q.database, type: 'native', native: { collection: q.pipeline.collection, query: JSON.stringify(limited(q.pipeline.stages, max + 1)) }, constraints })
+      r = await call<Dataset>('POST', '/api/dataset', { database: q.database, type: 'native', native: { collection: q.pipeline.collection, query: JSON.stringify(limited(q.pipeline.stages, max + 1)) }, constraints }, undefined, client)
     } else if (q.sql !== undefined) {
       const problem = sqlProblem(q.sql)
       if (problem) return { columns: [], rows: [], error: problem, ms: 0 }
-      r = await call<Dataset>('POST', '/api/dataset', { database: q.database, type: 'native', native: { query: q.sql }, constraints })
+      r = await call<Dataset>('POST', '/api/dataset', { database: q.database, type: 'native', native: { query: q.sql }, constraints }, undefined, client)
     } else if (q.mbql) {
-      r = await call<Dataset>('POST', '/api/dataset', { database: q.database, type: 'query', query: q.mbql, constraints })
+      r = await call<Dataset>('POST', '/api/dataset', { database: q.database, type: 'query', query: q.mbql, constraints }, undefined, client)
     } else return { columns: [], rows: [], error: 'Nothing to run.', ms: 0 }
   } catch (e) {
     return { columns: [], rows: [], error: (e as Error).message, ms: Date.now() - t0 }
@@ -179,7 +226,7 @@ export async function metabaseStatus(): Promise<{ ready: boolean; detail: string
   }
   try {
     const dbs = await call<{ data: unknown[] }>('GET', '/api/database')
-    return { ready: true, detail: `Connected, read-only: ${dbs.data.length} database${dbs.data.length === 1 ? '' : 's'}`, url, via: 'key' }
+    return { ready: true, detail: `Your company’s data (read-only): ${dbs.data.length} database${dbs.data.length === 1 ? '' : 's'}`, url, via: 'key' }
   } catch (e) {
     return { ready: false, detail: (e as Error).message, url }
   }

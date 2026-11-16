@@ -37,6 +37,8 @@ export type View =
   | { kind: 'new-topic'; topic?: string; goal?: string; auto?: boolean; nonce?: number }
   // Open courses from GitHub (components/CoursesView.tsx): the catalogue, a course, or one of its lessons
   | { kind: 'projects' }
+  /** A guided work project (shared/workProject) */
+  | { kind: 'work'; slug: string }
   /** Writing (components/writing): the list of pieces, or one piece with its review beside it (`path` absolute, or vault-relative); `talk` opens the conversation */
   | { kind: 'writing'; path?: string; talk?: boolean; review?: boolean; nonce?: number }
   /** Comprehension (components/comprehension): the next passage and past lessons, or one lesson */
