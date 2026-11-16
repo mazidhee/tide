@@ -429,3 +429,98 @@ export const looksLikeCommand = (code: string) => {
   const lines = code.trim().split('\n')
   return lines.length <= 3 && lines.every((l) => /^\s*\$?\s*(python3?|pip3?|gcc|clang\+?\+?|cc|g\+\+|rustc|cargo|go|node|sqlite3|ls|cd|cat|mkdir|rm|mv|cp|echo|chmod|bash|sh|zsh|which|man|git|\.\/)(\s|$|\w)/.test(l))
 }
+
+// ---------- The tutor's files are in the editor, its next command at the prompt ----------
+
+const CODE_EXT = 'py|c|cpp|cc|h|hpp|rs|sql|sh|js|ts|go|rb|java|swift'
+
+/**
+ * The files a reply tells the learner to edit or run: a task's file="…", and names after "in",
+ * "run", "open", "edit", "fix", "save as" or a command that runs them ("python3 t.py", "gcc t.c").
+ * A name only mentioned in passing ("like main.py in big projects") isn't one.
+ */
+export function filesToWorkOn(reply: string, taskFiles: string[] = []): string[] {
+  const out: string[] = taskFiles.map((f) => safeFileName(f)).filter((f): f is string => !!f)
+  const verbs = /(?:\b(?:in|into|run|open|edit|fix|change|save(?:\s+(?:it|this))?\s+as|make|create|called|named|python3?|gcc|clang\+*|cc|g\+\+|rustc|bash|sh|node|go\s+run|sqlite3\s+\S+\s*<)\s+[`"']?)([\w-]+\.(?:CODE_EXT))(?![\w.])/gi
+  const re = new RegExp(verbs.source.replace('CODE_EXT', CODE_EXT), 'gi')
+  for (const m of reply.matchAll(re)) {
+    const f = safeFileName(m[1])
+    if (f && !out.includes(f)) out.push(f)
+  }
+  return out
+}
+
+/** The fenced code blocks of a message, with the text before and after each (for fileForBlock) */
+function blocksOf(text: string): { lang: string; code: string; before: string; after: string }[] {
+  const out: { lang: string; code: string; before: string; after: string }[] = []
+  for (const m of text.matchAll(/```([^\n`]*)\n([\s\S]*?)\n?[ \t]*```/g)) {
+    out.push({ lang: m[1].trim().toLowerCase(), code: m[2], before: text.slice(0, m.index), after: text.slice(m.index! + m[0].length) })
+  }
+  return out
+}
+
+/**
+ * The code a message gives for a file: a block whose message names that file just before it (or
+ * just after), or whose first line is a comment naming it ("# t.py"). Searched in the newest
+ * message first, then back through the lesson. Null when no message has it.
+ */
+export function codeForFile(file: string, messages: string[]): string | null {
+  const lang = langOfFile(file)
+  for (let i = messages.length - 1; i >= 0; i--) {
+    // Blocks in the file's language (an unlabelled block counts unless it's a command)
+    const blocks = blocksOf(messages[i]).filter((b) => {
+      const t = blockTarget(b.lang)
+      return b.lang ? t?.kind === 'file' && t.lang === lang : !looksLikeCommand(b.code)
+    })
+    for (let k = blocks.length - 1; k >= 0; k--) {
+      const b = blocks[k]
+      const first = b.code.split('\n')[0]
+      if (new RegExp(`^\\s*(#|//|--)\\s*${file.replace(/[.+]/g, '\\$&')}\\b`).test(first)) return b.code.replace(/\s+$/, '') + '\n'
+      // Only the words close to the block: its own sentence, not the whole message
+      if (fileForBlock(b.before.slice(-240), b.after.slice(0, 160), lang) === file) return b.code.replace(/\s+$/, '') + '\n'
+    }
+  }
+  return null
+}
+
+/**
+ * After a reply: of the files it tells them to work on, which to make from the lesson's code and
+ * which to ask the tutor for. Files already in the folder are never touched.
+ */
+export function missingFiles(named: string[], existing: string[], messages: string[]): { make: { file: string; code: string }[]; ask: string[] } {
+  const make: { file: string; code: string }[] = []
+  const ask: string[] = []
+  for (const f of named) {
+    if (existing.includes(f)) continue
+    const code = codeForFile(f, messages)
+    if (code) make.push({ file: f, code })
+    else ask.push(f)
+  }
+  return { make, ask }
+}
+
+/**
+ * The one command a reply gives them to run next, to wait at the prompt: from a shell block, a
+ * one-line command block, or `python3 t.py` in backticks. Null when it gives none, or several
+ * (then which comes first is theirs to choose).
+ */
+export function nextCommand(reply: string): string | null {
+  const found = new Set<string>()
+  for (const b of blocksOf(reply)) {
+    const lines = b.code.split('\n').map((l) => l.replace(/^\s*\$\s+/, '').trim()).filter(Boolean)
+    if ((blockTarget(b.lang)?.kind === 'paste' || (!b.lang && looksLikeCommand(b.code))) && lines.length === 1) found.add(lines[0])
+    else if (blockTarget(b.lang)?.kind === 'paste' && lines.length > 1) return null
+  }
+  const text = reply.replace(/```[\s\S]*?```/g, ' ')
+  for (const m of text.matchAll(/`([^`\n]+)`/g)) if (looksLikeCommand(m[1]) && /\s/.test(m[1].trim()) && !/^(cd|ls|cat|echo|which|man)\b/.test(m[1].trim())) found.add(m[1].trim().replace(/^\$\s+/, ''))
+  return found.size === 1 ? [...found][0] : null
+}
+
+/**
+ * Whether a command may be put at the prompt now: only on an empty prompt line (the screen's last
+ * line ends at the prompt), with nothing typed and nothing running. Never added to text already there.
+ */
+export function canStage(lastLine: string, typed: string, running: boolean): boolean {
+  if (running || typed.length > 0) return false
+  return /(?:^|\s)[%$#❯]\s?$/.test(lastLine.replace(/\s+$/, ' ').replace(/ $/, ' ')) && commandOnScreen(lastLine) === ''
+}

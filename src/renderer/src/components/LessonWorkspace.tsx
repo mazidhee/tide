@@ -43,6 +43,12 @@ export interface WorkspaceProps {
   /** A file renamed (double-click its tab) or made (+): the parent keeps its list */
   onRenamed?(from: string, to: string): void
   onCreated?(name: string): void
+  /** The tutor's next command, waiting at the prompt for Return */
+  staged?: string | null
+  /** Files Tide made from the lesson's code: their tabs say so */
+  made?: string[]
+  /** A file the tutor named that isn't here, and the button that asks for it */
+  notice?: ReactNode
 }
 
 /**
@@ -87,7 +93,7 @@ export function NameField({ initial, onDone, onCancel }: { initial: string; onDo
   )
 }
 
-export function LessonWorkspace({ root, files, open, onOpen, terminalId, onTerminal, keepShell = true, seen = 0, focusNonce = 0, rev = 0, tools, empty, task, onRenamed, onCreated }: WorkspaceProps) {
+export function LessonWorkspace({ root, files, open, onOpen, terminalId, onTerminal, keepShell = true, seen = 0, focusNonce = 0, rev = 0, tools, empty, task, onRenamed, onCreated, staged, made, notice }: WorkspaceProps) {
   const [text, setText] = useState<Record<string, string>>({})
   const [termId, setTermId] = useState<string | null>(terminalId ?? null)
   const editorRef = useRef<import('monaco-editor').editor.IStandaloneCodeEditor | null>(null)
@@ -180,8 +186,9 @@ export function LessonWorkspace({ root, files, open, onOpen, terminalId, onTermi
           naming === f ? (
             <NameField key={f} initial={f} onDone={(to) => rename(f, to)} onCancel={() => setNaming(null)} />
           ) : (
-            <button key={f} className={`lw-file${f === open ? ' on' : ''}`} onClick={() => onOpen(f)} onDoubleClick={() => onRenamed && setNaming(f)} title={onRenamed ? `${f}: double-click to rename` : `${root}/${f}`}>
+            <button key={f} className={`lw-file${f === open ? ' on' : ''}`} onClick={() => onOpen(f)} onDoubleClick={() => onRenamed && setNaming(f)} title={`${made?.includes(f) ? 'Made from the lesson’s code. ' : ''}${onRenamed ? `${f}: double-click to rename` : `${root}/${f}`}`}>
               {f}
+              {made?.includes(f) && <em className="lw-made">from the lesson</em>}
             </button>
           )
         )}
@@ -208,12 +215,19 @@ export function LessonWorkspace({ root, files, open, onOpen, terminalId, onTermi
           </button>
         )}
       </div>
-      {task && (
-        <p className="lw-task" title={task}>
+      {(task || staged) && (
+        <p className="lw-taskline" title={task}>
           <span>{task}</span>
-          <em>Run with ⌘↵ or type in the terminal below</em>
+          {staged ? (
+            <em className="lw-staged">
+              Ready at the prompt: <code>{staged}</code>, press Return
+            </em>
+          ) : (
+            <em>Run with ⌘↵ or type in the terminal below</em>
+          )}
         </p>
       )}
+      {notice && <p className="lw-notice">{notice}</p>}
       <div className="lw-split">
         <div className="lw-editor">
           {open && value !== undefined ? (

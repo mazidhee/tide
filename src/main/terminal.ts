@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { homedir, tmpdir } from 'os'
 import { join } from 'path'
 import type { IPty } from 'node-pty'
-import { backspaced, cleanCommand, commandOnScreen, shortPromptRc, commandOutput, followKeys, NEW_LINE, plainText, QUIET_MS, type Finished, type LineState } from '@shared/workspace'
+import { backspaced, canStage, cleanCommand, commandOnScreen, shortPromptRc, commandOutput, followKeys, NEW_LINE, plainText, QUIET_MS, type Finished, type LineState } from '@shared/workspace'
 
 /**
  * Terminals for the Lab and the Code playground.
@@ -170,6 +170,24 @@ export function runInShell(id: string, command: string) {
   s.pty.write(`\x15${command.replace(/[\r\n]+/g, ' ')}\r`)
   begin(s, command, 'run')
 }
+
+/**
+ * The tutor's next command, put at the prompt for the learner to read and press Return on (never
+ * run): only when the prompt line is empty, nothing is typed and nothing is running, so it never
+ * joins text already there. Says whether it was put there.
+ */
+export function stageCommand(id: string, command: string): boolean {
+  const s = sessions.get(id)
+  const cmd = command.replace(/[\r\n]+/g, ' ').trim()
+  if (!s || s.exited || !cmd || !canStage(lastLine(s), s.line.text, !!s.running)) return false
+  // Bracketed paste: the shell takes it as typed text and waits for Return
+  s.pty.write(`\x1b[200~${cmd}\x1b[201~`)
+  s.line = { text: cmd, exact: true }
+  return true
+}
+
+/** Text at the prompt that hasn't been run (typed, or a command put there for them), for the tutor to read as such */
+export const typedNotRun = (id: string) => sessions.get(id)?.line.text ?? ''
 
 /** What the shell has shown so far, raw, for a second view of it to start from */
 export function terminalHistory(id: string): string {

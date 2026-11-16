@@ -103,7 +103,7 @@ import type { NewMistake } from '@shared/mistakes'
 import type { CoachSettings } from '@shared/coach'
 import { deleteChat, getChat, listChats, pinChat, renameChat } from './chats'
 import { addMemory, listMemories, removeMemory, updateMemory } from './memory'
-import { closeAllTerminals, closeTerminal, createTerminal, resizeTerminal, runInShell, setScratchpad, setTerminalListeners, terminalHistory, writeTerminal, type TerminalKind } from './terminal'
+import { closeAllTerminals, closeTerminal, createTerminal, resizeTerminal, runInShell, setScratchpad, stageCommand, setTerminalListeners, terminalHistory, writeTerminal, type TerminalKind } from './terminal'
 import { bookChapters } from './book'
 import { getBrief, suggestReading } from './brief'
 import { generateExam, markPart } from './exam'
@@ -312,6 +312,7 @@ function registerIpc() {
   handle('terminal:close', (id: string) => closeTerminal(id))
   handle('terminal:run', (id: string, command: string) => runInShell(String(id), String(command)))
   handle('terminal:history', (id: string) => terminalHistory(String(id)))
+  handle('terminal:stage', (id: string, command: string) => stageCommand(String(id), String(command)))
   handle('terminal:scratchpad', (s: { terminalId: string; root: string; file: string } | null) => void setScratchpad(s && typeof s === 'object' ? { terminalId: String(s.terminalId), root: String(s.root), file: String(s.file ?? '') } : null))
   handle('terminal:flashcards', (id: string, topic?: string) => labFlashcards(id, topic))
   handle('code:list', () => listCode())

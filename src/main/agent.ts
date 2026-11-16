@@ -7,7 +7,7 @@ import { isMlxVlm } from './modelServer'
 import { thingsIntent } from '@shared/learnIntent'
 import { CLAUDE_HISTORY_TOKENS, CLAUDE_PASSAGES, uses, type Engine } from '@shared/workarounds'
 import { graphCached, relatedNotes } from './learn'
-import { readTerminal, runInTerminal, scratchpad, terminalInfo } from './terminal'
+import { readTerminal, runInTerminal, scratchpad, terminalInfo, typedNotRun } from './terminal'
 import { claudeState, ensureGemmaServer, inUse, markGemmaUsed, noteGemmaDemand } from './modelIdle'
 import { afterBackground, asInteractive, inBackground } from './modelQueue'
 import { memoize } from './memo'
@@ -216,7 +216,7 @@ const TERMINAL_READ = tool('terminal_read', "Read what the student's terminal sh
 // A lesson's Workspace (shared/workspace): the tutor sets up a file there (it never types in their shell)
 const WORKSPACE_FILE = tool(
   'workspace_file',
-  "Create or replace a file in the lesson's Workspace (the editor and terminal beside the lesson) and open it there for them. Set up any file the exercise needs this way, then say which file you made and the exact command to run it.",
+  "Create or replace a file in the lesson's Workspace (the editor and terminal beside the lesson) and open it there for them. Make every file you mention this way BEFORE you tell them to edit or run it (a file only in your own sandbox isn't theirs), and put any runnable example of more than about 3 lines in a file too. Then say which file you made and the exact command to run it.",
   { name: { type: 'string', description: 'A plain file name in the lesson folder, e.g. r.py' }, contents: { type: 'string' } },
   ['name', 'contents']
 )
@@ -1841,7 +1841,7 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
       ? 'The student is asking you to set them work in Things 4. Call things_assign now with a full brief (## Goal, ## What to do, ## Deliverable, ## How it will be checked, ## Read), steps and the due date they gave. Do NOT solve or hint at the answer to work you assign; afterwards just confirm in one or two lines what you set and when it is due.'
       : '',
     design ? `The student's system design canvas right now:\n${design}` : '',
-    screen ? `The student's terminal right now (most recent at the bottom):\n\`\`\`\n${screen}\n\`\`\`` : '',
+    screen ? `The student's terminal right now (most recent at the bottom):\n\`\`\`\n${screen}\n\`\`\`${typedNotRun(terminalId!) ? `\n("${typedNotRun(terminalId!)}" at the prompt is waiting for Return: not run yet, nothing is running.)` : ''}` : '',
     scratch?.file ? `Their scratchpad (a small editor and their own shell, open beside you; you can read it, never type in it) has ${scratch.file} open:\n\`\`\`\n${scratchFile.slice(0, 6000)}\n\`\`\`` : '',
     // Setting or marking work from a general chat: notes picked by keyword are only noise there
     // A lesson or quiz reads its notes once, at the start: fresh passages every answer would make

@@ -239,3 +239,43 @@ describe('an unlabelled command block', () => {
     expect(looksLikeCommand('x = 1\nprint(x)')).toBe(false)
   })
 })
+
+describe('the tutor’s files are in the editor, its next command at the prompt', () => {
+  it('finds the files a reply means them to work on, not ones mentioned in passing', async () => {
+    const { filesToWorkOn } = await import('../src/shared/workspace')
+    expect(filesToWorkOn('Fix line 4 in t.py by adding the closing bracket, then run `python3 t.py`.')).toEqual(['t.py'])
+    expect(filesToWorkOn('Save it as total.py and compile hello.c with gcc hello.c', [])).toEqual(['total.py', 'hello.c'])
+    expect(filesToWorkOn('Big projects start from main.py, but not yet.')).toEqual([])
+    expect(filesToWorkOn('Try it.', ['r.py'])).toEqual(['r.py'])
+  })
+
+  it('makes a missing file from the lesson’s code, never touches one that exists, and asks when there is no code', async () => {
+    const { missingFiles } = await import('../src/shared/workspace')
+    const earlier = 'Here is t.py:\n```python\nx = [1, 2\nprint(x)\n```'
+    const reply = 'Fix line 1 in t.py, then run `python3 t.py`. Then write u.py yourself.'
+    expect(missingFiles(['t.py', 'u.py'], [], [earlier, reply])).toEqual({ make: [{ file: 't.py', code: 'x = [1, 2\nprint(x)\n' }], ask: ['u.py'] })
+    expect(missingFiles(['t.py'], ['t.py'], [earlier, reply])).toEqual({ make: [], ask: [] })
+    expect(missingFiles(['a.py'], [], ['```python\n# a.py\nprint(1)\n```'])).toEqual({ make: [{ file: 'a.py', code: '# a.py\nprint(1)\n' }], ask: [] })
+  })
+
+  it('stages one command, never several', async () => {
+    const { nextCommand } = await import('../src/shared/workspace')
+    expect(nextCommand('Now run it:\n```sh\npython3 t.py\n```')).toBe('python3 t.py')
+    expect(nextCommand('Then run `python3 t.py` and look at line 4.')).toBe('python3 t.py')
+    expect(nextCommand('Run `python3 a.py`, then `python3 b.py`.')).toBeNull()
+    expect(nextCommand('```python\nprint(1)\n```')).toBeNull()
+    expect(nextCommand('```sh\ncd x\nmake\n```')).toBeNull()
+  })
+
+  it('puts a command at the prompt only when the prompt line is empty', async () => {
+    const { canStage } = await import('../src/shared/workspace')
+    expect(canStage('…ng-cdede92ff4 % ', '', false)).toBe(true)
+    expect(canStage('lesson %', '', false)).toBe(true)
+    expect(canStage('me@mac lesson % ', '', false)).toBe(true)
+    expect(canStage('lesson % python3 prices.py', '', false)).toBe(false)
+    expect(canStage('lesson % ', 'pyth', false)).toBe(false)
+    expect(canStage('lesson % ', '', true)).toBe(false)
+    expect(canStage('>>> ', '', false)).toBe(false)
+    expect(canStage('Traceback (most recent call last):', '', false)).toBe(false)
+  })
+})

@@ -70,6 +70,7 @@ const api: TideApi = {
     flashcards: invoke('terminal:flashcards'),
     run: invoke('terminal:run'),
     history: invoke('terminal:history'),
+    stage: invoke('terminal:stage'),
     scratchpad: invoke('terminal:scratchpad'),
     onFinished: (cb) => subscribe('terminal:finished', cb),
     onWorkspaceFile: (cb) => subscribe('workspace:wrote', cb),

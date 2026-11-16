@@ -725,6 +725,8 @@ export interface TideApi {
     run(id: string, command: string): Promise<void>
     /** What the shell has shown so far, raw, for a second view of it (a popped-out workspace) */
     history(id: string): Promise<string>
+    /** Puts a command at an empty prompt, unrun (shared/workspace canStage); false when the prompt isn't empty */
+    stage(id: string, command: string): Promise<boolean>
     /** The scratchpad's shell and file while its window is open, for Chat's tutor; null when it closes */
     scratchpad(s: { terminalId: string; root: string; file: string } | null): Promise<void>
     /** A command finished in a shell (quiet for a moment after Enter), with what it printed */
