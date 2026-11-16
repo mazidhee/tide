@@ -2069,7 +2069,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       {workFull && workOn && lastTask && (
         <div className="lw-pinned">
           <small>Your task</small>
-          <div className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(lastTask.prompt.split(/\n\s*\n/)[0], env) }} />
+          <div className="prose compact" dangerouslySetInnerHTML={{ __html: renderMarkdown(lastTask.prompt.split(/\n\s*\n/)[0].replace(/\s*`{2,}\s*$/, ''), env) }} />
         </div>
       )}
       {showMap && <LessonTrack map={map} tutor={tutorName} nextLesson={nextUp ? (nextUp.item.topic ?? nextUp.item.title) : null} />}
