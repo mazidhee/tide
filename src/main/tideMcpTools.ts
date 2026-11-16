@@ -180,9 +180,9 @@ export const EXTRA_TOOLS: McpTool[] = [
     async run(args, ctx) {
       const topic = String(args.topic ?? '').trim().toLowerCase()
       const id = ctx.step({ kind: 'read_note', label: topic ? `Looking at what’s due on ${topic}` : 'Looking at what’s due for recall', status: 'running', depth: 0 })
-      const { recallItems } = await import('./recall')
+      const { reviewableRecall } = await import('./recall')
       const now = Date.now()
-      const items = recallItems()
+      const items = (await reviewableRecall())
         .filter((i) => !topic || i.topic.toLowerCase().includes(topic) || topic.includes(i.topic.toLowerCase()))
         .sort((a, b) => a.due - b.due)
         .slice(0, 8)

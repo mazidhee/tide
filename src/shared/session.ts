@@ -779,6 +779,25 @@ export const shouldSumUp = (turns: { role: string; content: string }[], finished
 export const ASKED = 'My question: '
 
 /**
+ * The tutor's replies whose code has no Run button yet: ones with a question still waiting about
+ * it ("What does this print?"), where running the code would give the answer away. Once the
+ * question is answered (or given up on) Run comes back, so they can check themselves. A code
+ * question keeps Run: there they are meant to run what they write. Go on, a question of theirs and
+ * a hint don't answer it.
+ */
+export function runHeldTurns(turns: readonly { role: string; content: string }[], parsed: readonly (Block[] | null | undefined)[]): Set<number> {
+  const held = new Set<number>()
+  turns.forEach((t, i) => {
+    if (t.role !== 'assistant') return
+    const asks = (parsed[i] ?? []).filter((b): b is Extract<Block, { kind: 'ask' }> => b.kind === 'ask')
+    if (!asks.length || asks.some((a) => a.type === 'code')) return
+    const answered = turns.slice(i + 1).some((u) => u.role === 'user' && !u.content.startsWith(GO_ON) && !u.content.startsWith(ASKED) && !u.content.startsWith('[hint]'))
+    if (!answered) held.add(i)
+  })
+  return held
+}
+
+/**
  * Show me: you ask to see the explanation you were just given. The tutor picks the one kind of
  * picture that fits what it taught, and anything with numbers in it is computed, not drawn by eye.
  *

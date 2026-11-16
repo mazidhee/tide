@@ -38,7 +38,7 @@ import type { PlacementStore } from '@shared/placement'
 import type { Attempt, ChatScope, ReviewGrade } from '@shared/types'
 import { getGoals, getNotebooks, readJsonl } from './learn'
 import { tideCore } from './native'
-import { recallItems } from './recall'
+import { reviewableRecall } from './recall'
 import { REVLOG_FILE } from './revlog'
 import { absPath, getNoteMeta, readText, vaultRoot } from './vault'
 
@@ -548,7 +548,7 @@ export async function knowledgeView(): Promise<KnowledgeView> {
   const missed: Record<string, MissedQuestion[]> = {}
   const recall: { concept: string; due: number }[] = []
   const named = new Map<string, string | null>()
-  for (const item of recallItems()) {
+  for (const item of await reviewableRecall()) {
     if (!named.has(item.topic)) named.set(item.topic, k.resolve(conceptName(item.topic), null))
     const id = named.get(item.topic)
     if (!id) continue
@@ -611,6 +611,15 @@ export async function allConcepts(): Promise<ConceptState[]> {
   if (!k) return []
   await syncRoadmaps(k).catch(() => {})
   return k.all(Date.now(), true)
+}
+
+/**
+ * The concepts with evidence of being studied, being taught included (a placement check that found
+ * one new leaves none): what a question kept from a check needs before it comes back for review
+ * (shared/placement withoutPlacementMisses)
+ */
+export async function studiedConcepts(): Promise<{ name: string }[]> {
+  return (await allConcepts()).filter((c) => c.seen > 0).map((c) => ({ name: c.name }))
 }
 
 /** The notebook a path is in (its subject on the map) */

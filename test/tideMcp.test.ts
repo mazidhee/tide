@@ -30,7 +30,7 @@ vi.mock('../src/main/claudeEngine', () => ({ stopClaude: () => {} }))
 const kept: unknown[] = []
 vi.mock('../src/main/recall', () => ({
   keepForRecall: async (items: unknown[]) => void kept.push(...items),
-  recallItems: () => [{ id: '1', prompt: 'What does activate change?', topic: 'Python venv', due: 0 }, { id: '2', prompt: 'Later one', topic: 'Rust', due: Date.now() + 86_400_000 }]
+  reviewableRecall: async () => [{ id: '1', prompt: 'What does activate change?', topic: 'Python venv', due: 0 }, { id: '2', prompt: 'Later one', topic: 'Rust', due: Date.now() + 86_400_000 }]
 }))
 vi.mock('../src/main/courses', () => ({
   searchCourses: async () => [{ course: 'pyds', path: 'notebooks/01.md', title: 'Intro', heading: 'Lists', text: 'list comprehension', score: 1 }],

@@ -24,11 +24,11 @@ import { ClipCard } from './ClipCard'
 import { relatedForPrompt } from '@shared/related'
 import { openReading } from '../lib/reading'
 import { codeBlockClick } from '../lib/runBlocks'
-import { parsePlacement, placementNote } from '@shared/placement'
+import { isPlacementSession, parsePlacement, placementNote } from '@shared/placement'
 import { correctionText } from '@shared/lessonCheck'
 import type { Reading } from '@shared/readings'
 import { whyByDefault } from '../lib/agenda'
-import { ASKED, END_NOW, GO_ON, SHOW_ME, askIdentity, closedOnce, askStarter, shouldSumUp, modeLabel, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
+import { runHeldTurns, ASKED, END_NOW, GO_ON, SHOW_ME, askIdentity, closedOnce, askStarter, shouldSumUp, modeLabel, notesNudge, whyNote, ownWords, openingMessage, withPassage, parseBlocks, sessionInstructions, strategyChoice, lessonCanvasPath, type Block, type SessionSetup } from '@shared/session'
 import { STRATEGIES, STRATEGY_LABEL, STRATEGY_RULES, switchFrom, type Strategy } from '@shared/strategy'
 import { cardsToMarkdown } from '@shared/cards'
 import { fileTitle, useApp, pagesLabel } from '../state'
@@ -577,6 +577,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // The tutor is carrying on explaining: Go on, or ask something (the box opens for a question)
   const carryOn = !busy && lastIsTutor && lastBlocks.some((b) => b.kind === 'continue')
   carryOnRef.current = carryOn
+  // Replies with a question still waiting on their code: no Run there until it's answered
+  const runHeld = useMemo(() => runHeldTurns(turns, parsed), [turns, parsed])
   const currentAsk = !busy
     ? ((lastBlocks.filter((b) => b.kind === 'ask').pop() as Extract<Block, { kind: 'ask' }> | undefined) ??
       (lastIsTutor && lastBlocks.length && !carryOn && !lastBlocks.some((b) => b.kind === 'summary' || b.kind === 'scores') ? { kind: 'ask' as const, type: 'short' as const, prompt: '', options: [] } : undefined))
@@ -880,7 +882,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   useEffect(() => {
     const replied = wasBusy.current && !busy
     wasBusy.current = busy
-    if (!replied || app.settings.autoCards === false) return
+    // A placement check's miss is "not learned yet": no flashcard from it
+    if (!replied || app.settings.autoCards === false || isPlacementSession({ topic, options })) return
     for (const c of missCards(turns.length - 1)) if (!savedCards.has(c.front) && !undoneCards.current.has(c.front)) void saveCardRef.current(c.front, c.back)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busy])
@@ -1089,8 +1092,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           if (retest[k]) window.tide.mistakes.retest(retest[k].id, b.verdict === 'correct').catch(() => {})
           return
         }
-        // Anything not right goes in the mistake journal, to come back until it is
-        if (b.verdict !== 'correct' && prevAsk?.prompt && (mode === 'teach' || mode === 'quiz')) {
+        // Anything not right goes in the mistake journal, to come back until it is. Not in a
+        // placement check: a miss there is "not learned yet", kept in placement.json as new
+        if (b.verdict !== 'correct' && prevAsk?.prompt && (mode === 'teach' || mode === 'quiz') && !isPlacementSession({ topic, options })) {
           const said = ownWords(turns[i - 1]?.content ?? '').replace(/^Answer:\s*/, '').replace(/\n\(Confidence: [^)]*\)\s*$/, '').trim()
           window.tide.mistakes
             .add([{ topic, path: sourcePath ?? (scope.kind === 'folder' ? scope.path : undefined), source: mode === 'teach' ? 'lesson' : 'quiz', question: prevAsk.prompt, answer: said, fix: b.text }])
@@ -1600,6 +1604,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           </div>
         )
       case 'card':
+        // A placement check makes no flashcards: what it finds new is taught first
+        if (isPlacementSession({ topic, options })) return null
         return (
           <div key={key} className="s-card">
             <div className="s-card-text">
@@ -1915,8 +1921,9 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             }
             const open = openReading(e.target)
             if (open) (e.preventDefault(), app.openPath(open.path, open.anchor))
-            // Run and Copy on the code in a reading or a reply (lib/runBlocks)
-            else void codeBlockClick(e.target)
+            // Run and Copy on the code in a reading or a reply (lib/runBlocks); no Run on code a
+            // question is still waiting on ("What does this print?"): it would give the answer away
+            else if (!(e.target instanceof Element && e.target.closest('.run-held .run-code'))) void codeBlockClick(e.target)
           }}
         >
           {tide && (
@@ -2042,7 +2049,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             return (
               <Fragment key={i}>
               {showMap && dividersAt(i, 0)}
-              <div className="s-tutor" data-turn={i}>
+              <div className={`s-tutor${runHeld.has(i) ? ' run-held' : ''}`} data-turn={i}>
                 {tide && (
                   <div className="td-who">
                     <Professor state={live ? 'writing' : 'idle'} size={24} />

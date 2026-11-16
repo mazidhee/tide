@@ -293,6 +293,15 @@
   right: 112px;
 }
 
+/* A question is still waiting on this code ("What does this print?"): no Run until it's answered */
+.run-held .run-code {
+  display: none;
+}
+
+.run-held .prose pre[data-lang]:has(.run-code)::before {
+  right: 58px;
+}
+
 .run-output {
   position: relative;
   margin: -0.6em 0 1.05em;

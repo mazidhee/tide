@@ -291,10 +291,10 @@ const extractJson = (text: string): unknown => {
 
 /** What's due around the topic: recall questions on it, fading ideas it builds on, and the warm-up */
 async function dueFor(t: PrepTarget, scope: ChatScope): Promise<Pick<PreparedLesson, 'due' | 'warmup'>> {
-  const { recallItems } = await import('./recall')
+  const { reviewableRecall } = await import('./recall')
   const { similarity } = await import('@shared/learnerProfile')
   const now = Date.now()
-  const all = recallItems()
+  const all = await reviewableRecall()
   const onTopic = all.filter((r) => r.due <= now + DAY && (similarity(r.topic, t.topic) >= 0.5 || r.topic.toLowerCase() === t.topic.toLowerCase())).map((r) => r.prompt.slice(0, 160))
   const recall = all.filter((r) => r.due <= now).length
   const [{ warmupFor }, { RERANK_PREP_MS }] = await Promise.all([import('./warmup'), import('@shared/warmup')])

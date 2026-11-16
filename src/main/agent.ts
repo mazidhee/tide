@@ -19,6 +19,7 @@ import { MAX_IMAGES } from './imagePrep'
 import { pagesToRead } from './books'
 import { ensureSearch, LOCAL_URL, nativeSearch } from './websearch'
 import { earlierLessons } from './lessons'
+import { isPlacementSession } from '@shared/placement'
 import { requestSent, timeTurn, toolRan } from './speed'
 import { readingLabel } from '@shared/books'
 import { imageMarkdown } from '@shared/noteImages'
@@ -1788,8 +1789,9 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
   const marking = thingsOn && wanted === 'mark'
   // A lesson opens knowing where its topic is in the books they own, so it can send them to the pages
   const own = req.session && req.instructions && userTurns <= 1 && req.scope.kind !== 'pages' ? await pagesToRead(question, 2, `${req.topic ?? ''} ${'path' in req.scope ? req.scope.path : ''}`).catch(() => []) : []
-  // And what earlier lessons on this topic (or close to it) show, so it builds on them
-  const before = req.session && req.instructions && userTurns <= 1 && req.topic ? await earlierLessons(req.topic).catch(() => '') : ''
+  // And what earlier lessons on this topic (or close to it) show, so it builds on them. Not for a
+  // placement check: it asks only about its own topics, nothing due for recall from elsewhere
+  const before = req.session && req.instructions && userTurns <= 1 && req.topic && !isPlacementSession(req) ? await earlierLessons(req.topic).catch(() => '') : ''
   // Subject hook (any-subject, src/main/subjects.ts): a toolkit the topic's words couldn't decide, and what Tide can't do for this subject
   const subject = req.session && req.instructions && userTurns <= 1 && req.topic ? await subjectContext({ topic: req.topic, scope: req.scope, instructions: req.instructions, web: !!ctx.web }).catch(() => '') : ''
   // Maths mode (shared/mathsMode): first principles, predict then reveal, explorables and poke-holes, in this engine's own words

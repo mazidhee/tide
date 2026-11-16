@@ -8,7 +8,8 @@ import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import type { LessonRecord } from '@shared/lessonLog'
 import { digestLesson, recallDueNote, type LessonDigest } from '@shared/lessonMemory'
-import { noteRecallReview } from './knowledge'
+import { isPlacementSession, isPlacementTopic, withoutPlacementMisses } from '@shared/placement'
+import { noteRecallReview, studiedConcepts } from './knowledge'
 import { tideCore } from './native'
 import { appendRevlog, elapsedDays, type RevlogEntry } from './revlog'
 import { vaultRoot } from './vault'
@@ -85,6 +86,8 @@ async function keep(r: Engine, items: { prompt: string; topic: string; lesson: s
 
 /** A lesson was saved: keep what was missed in it, and settle the recall question it opened with */
 export async function noteLesson(record: LessonRecord): Promise<void> {
+  // A placement check's misses are "not learned yet" (placement.json has them as new): nothing kept to recall
+  if (isPlacementSession(record)) return
   const r = recall()
   const d = digestLesson(record)
   if (!r || !d) return
@@ -121,8 +124,10 @@ export async function keepFromReading(items: { prompt: string; topic: string }[]
 
 /** For a lesson that is opening: what is due on its topic, as a note for the tutor (empty when nothing is) */
 export function recallNote(topic: string): string {
+  // A placement check asks only about its own topics; and a check's misses aren't taught yet
+  if (isPlacementTopic(topic)) return ''
   const out = retired()
-  const due = (recall()?.due(topic, Date.now(), 6, null) ?? []).filter((i) => !out.has(same(i.prompt))).slice(0, 2)
+  const due = (recall()?.due(topic, Date.now(), 6, null) ?? []).filter((i) => !out.has(same(i.prompt)) && !isPlacementTopic(i.topic)).slice(0, 2)
   if (!due.length) return ''
   opened.set(key(topic), { id: due[0].id, at: Date.now() })
   return recallDueNote(due)
@@ -175,11 +180,23 @@ export async function reviewRecall(id: string, grade: 'again' | 'hard' | 'good' 
 export const recallStats = () => recall()?.stats(Date.now()) ?? { total: 0, due: 0, settled: 0 }
 export const recallItems = (): RecallItem[] => recall()?.all() ?? []
 
+/**
+ * The kept questions as they are reviewed: one kept from a placement check (an older Tide kept a
+ * check's misses) is left out until what it asks about has been taught. recall.json is left as it is.
+ */
+export async function reviewableRecall(): Promise<RecallItem[]> {
+  const all = recallItems()
+  if (!all.some((i) => isPlacementTopic(i.topic))) return all
+  const taught = await studiedConcepts().catch(() => [])
+  return withoutPlacementMisses(all, (i) => ({ topic: i.topic, question: i.prompt }), taught)
+}
+
 // ---------- Hook for guided projects (main/workshop.ts) ----------
 
 /** Questions to bring back in a later lesson on their topic, from outside a lesson */
 export async function keepForRecall(items: { prompt: string; topic: string; lesson: string }[], path?: string): Promise<void> {
   const r = recall()
+  items = items.filter((i) => !isPlacementTopic(i.topic))
   if (!r || !items.length) return
   await keep(r, items)
 }

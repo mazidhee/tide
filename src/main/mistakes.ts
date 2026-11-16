@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto'
 import { localDate } from '@shared/coach'
 import { dueMistakes, mistakesMarkdown, recordMistake, retested, type Mistake, type NewMistake } from '@shared/mistakes'
+import { isPlacementTopic, withoutPlacementMisses } from '@shared/placement'
 import { joinRel, readText, writeText } from './vault'
 
 /**
@@ -12,7 +13,8 @@ const STORE = joinRel('.tide', 'mistakes.json')
 export const MISTAKES_NOTE = 'Coach/Mistakes.md'
 const today = () => localDate()
 
-export async function listMistakes(): Promise<Mistake[]> {
+/** The journal as kept, every entry: what writes go through */
+async function readMistakes(): Promise<Mistake[]> {
   try {
     const list = JSON.parse(await readText(STORE))
     return Array.isArray(list) ? list : []
@@ -21,10 +23,22 @@ export async function listMistakes(): Promise<Mistake[]> {
   }
 }
 
+/**
+ * The journal as it is reviewed: a miss in a placement check ("What I already know: …") is
+ * something not learned yet, not a mistake, so it is left out until it has been taught (an older
+ * Tide kept them; the file is left as it is).
+ */
+export async function listMistakes(): Promise<Mistake[]> {
+  const all = await readMistakes()
+  if (!all.some((m) => isPlacementTopic(m.topic))) return all
+  const taught = await import('./knowledge').then((k) => k.studiedConcepts()).catch(() => [])
+  return withoutPlacementMisses(all, (m) => m, taught)
+}
+
 let queue: Promise<unknown> = Promise.resolve()
 function update(fn: (list: Mistake[]) => Mistake[]): Promise<Mistake[]> {
   const run = queue.then(async () => {
-    const before = await listMistakes()
+    const before = await readMistakes()
     const after = fn(before)
     if (after === before) return before
     await writeText(STORE, JSON.stringify(after, null, 1))
@@ -36,6 +50,9 @@ function update(fn: (list: Mistake[]) => Mistake[]): Promise<Mistake[]> {
 }
 
 export async function addMistakes(items: NewMistake[]): Promise<number> {
+  // A placement check's miss is "not learned yet": placement.json has it as new, it's no mistake
+  items = items.filter((m) => !isPlacementTopic(m.topic))
+  if (!items.length) return 0
   let added = 0
   let fresh: Mistake[] = []
   await update((list) => {
