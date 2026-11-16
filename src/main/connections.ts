@@ -194,7 +194,7 @@ async function build(): Promise<Connection[]> {
           return as(st.ready ? 'connected' : 'not-set-up', st.detail)
         }
         case 'metabase':
-          return metabaseReady() ? as('connected', 'Connected, read-only') : as('not-set-up', 'Not connected', false)
+          return metabaseReady() ? as('connected', 'Your company’s data (read-only)') : as('not-set-up', 'Not connected', false)
         case 'study-api': {
           const st = studyApiStatus()
           return st.running ? as('connected', `Serving at ${st.url}`) : as('off', 'Off', false)

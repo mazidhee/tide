@@ -14,8 +14,10 @@
  * learner's message. Gemma keeps its own compact prompt (shared/tutorPrompt TUTOR_SYSTEM).
  */
 
+import { WORK_TOOL_LINE } from './workProject'
+
 /** Groups of Tide's tools: a session is given the packs that fit it */
-export type ToolPack = 'notes' | 'learner' | 'run' | 'data' | 'courses' | 'lesson' | 'chat' | 'maths' | 'graph' | 'metabase' | 'thread' | 'model'
+export type ToolPack = 'notes' | 'learner' | 'run' | 'data' | 'courses' | 'lesson' | 'chat' | 'maths' | 'graph' | 'metabase' | 'thread' | 'model' | 'work'
 
 export const PACK_TOOLS: Record<ToolPack, string[]> = {
   notes: ['search_notes', 'read_note', 'related_notes'],
@@ -30,7 +32,9 @@ export const PACK_TOOLS: Record<ToolPack, string[]> = {
   metabase: ['metabase'],
   thread: ['save_to_notes'],
   // The learner model in full (main/learnerModel): for the coach and planning sessions, not lessons (they get learner_standing)
-  model: ['learner_model']
+  model: ['learner_model'],
+  // A guided work project (shared/workProject): its rules and the practice Metabase, only in those sessions
+  work: ['work_project', 'practice_metabase']
 }
 
 /** What a session is, for its packs and its prompt */
@@ -51,6 +55,8 @@ export interface SessionShape {
   humanities?: boolean
   /** A placement check ("What I already know: …"): it asks only about its own topics, so no recall, mistakes or learner history */
   placement?: boolean
+  /** A guided work project on practice data (shared/workProject): its tools, and never the company Metabase */
+  workProject?: boolean
 }
 
 /** The packs a session is given */
@@ -68,6 +74,7 @@ export function toolPacks(s: SessionShape): ToolPack[] {
     else if (s.graphs) packs.push('graph')
   }
   if (s.metabase) packs.push('metabase')
+  if (s.workProject && s.kind === 'lesson') packs.push('work')
   return packs
 }
 
@@ -137,6 +144,7 @@ const TOOL_LINES: { tools: string[]; line: string }[] = [
   { tools: ['place_explorable', 'set_challenge', 'check_graph', 'explorable_library'], line: 'place_explorable / set_challenge / check_graph: check an explorable, prove a poke-holes challenge, check a graph; each hands back the block to paste. explorable_library: explorables already made and proven.' },
   { tools: ['render_animation', 'animation_library'], line: 'render_animation / animation_library: a short narrated Manim animation from a tested template or your own scene (it hands back the block to paste); scenes of yours already proven.' },
   { tools: ['metabase'], line: 'metabase: their company Metabase, read-only. Start with action map; run saved questions, pipelines or SELECTs to show real numbers. If they ask you to create or change something there, show them how to do it themselves.' },
+  { tools: ['work_project', 'practice_metabase'], line: WORK_TOOL_LINE },
   { tools: ['save_to_notes'], line: 'save_to_notes: save a point to their notes for this lesson.' }
 ]
 

@@ -1,3 +1,4 @@
+import { workRules } from './workProject'
 import { splitSay } from './characters'
 import { curiosityOpening, curiosityRules, type CuriositySetup } from './explore'
 import { retestInstructions } from './mistakes'
@@ -315,6 +316,8 @@ export interface SessionSetup {
     subject?: SubjectProfile
     /** A lesson of an open course imported from GitHub (shared/courses): taught from its own text, in its sections' order */
     course?: CourseRef
+    /** A guided work project on practice data (shared/workProject): its rules ride with these instructions */
+    workProject?: { slug: string; title: string }
     /** A short side lesson, for curiosity, on something kept to explore later (shared/explore) */
     curiosity?: CuriositySetup
     /** Prepared ahead (shared/lessonPrep): it opens on the prepared exchange, with the prepared warm-up */
@@ -425,7 +428,8 @@ export function sessionInstructions(setup: SessionSetup): string {
   // The humanities' marking (<appraise>) and theology's rules come through it too, for a subject that is mainly texts and arguments or history
   const kit = lessonKit(setup.topic, setup.options?.subject)
   const course = setup.options?.course
-  const extra = [!setup.options?.refresh && !setup.options?.project && !course && !setup.options?.curiosity ? BIG_PICTURE : '', course ? courseRules(course).trim() : '', GROUNDED, kit.handsOn ? HANDS_ON : '', kit.sims, kit.toolkit, kit.humanities, setup.options?.why ? WHY_RULES : ''].filter(Boolean)
+  const work = setup.options?.workProject
+  const extra = [work ? workRules(work.title) : '', !setup.options?.refresh && !setup.options?.project && !course && !setup.options?.curiosity && !work ? BIG_PICTURE : '', course ? courseRules(course).trim() : '', GROUNDED, kit.handsOn ? HANDS_ON : '', kit.sims, kit.toolkit, kit.humanities, setup.options?.why ? WHY_RULES : ''].filter(Boolean)
   return extra.length ? `${base.trimEnd()}\n\n${extra.join('\n\n')}\n` : base
 }
 
