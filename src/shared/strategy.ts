@@ -149,7 +149,8 @@ const SWITCH: [RegExp, Strategy][] = [
   [/\b(draw|diagram|map) (it|this) out\b|\bon the canvas\b|\bshow me the flow\b|\bwalk me through\b/i, 'walkthrough'],
   [/\b(give me|more) (some )?(problems|practice|exercises|questions)\b|\bquiz me\b|\btest me\b/i, 'problems'],
   [/\blet me (code|write|implement) it\b|\bi want to (code|write|implement)\b/i, 'code'],
-  [/\b(in|use) the (lab|terminal)\b|\blet me (run|try) (it|the commands?)\b/i, 'lab']
+  // Only a request to work there: an answer that says what "appears in the terminal" is not one
+  [/\b(let'?s|let me|can (we|i)|i want to|i'?d like to) (do|try|run|practi[cs]e) (it|this|them|that|the commands?)( myself)? in the (lab|terminal)\b|\b(use|open) the lab\b|\blet me (run|try) (it|the commands?)( myself)?$/i, 'lab']
 ]
 
 export function switchFrom(text: string, current: Strategy): Strategy | null {
@@ -166,7 +167,8 @@ export const STRATEGY_RULES: Record<Strategy, string> = {
     "Teach this as a walkthrough: trace it step by step like following one real request or record through the system. One step per turn: what happens, which part does it, what it reads or writes, what can fail there. Before each step, ask them to predict it (a predict ask). Draw it on the canvas as you go with canvas_edit: add each component when it first appears and connect them in the order things flow, labelling each connection with what passes along it. Read the canvas first with canvas_read. End with them explaining the whole flow back.",
   code:
     "Teach this by having them write and run code: small, growing tasks (code asks) that each exercise one idea; run their code with run_code on real cases including edge cases before judging it; point at the exact line that fails. Explain only what they need for the next task.",
-  lab: 'Teach this hands-on in the Linux lab terminal: give them a command or a small task to do there, read what happened with terminal_read, and explain from the result. Let them type the commands they are learning; only set things up yourself.',
+  // A lesson has no terminal beside it: the learner works in their own Mac's Terminal and pastes back
+  lab: "Teach this hands-on at the command line: give them a command or a small task to run in their Mac's Terminal app (there is no terminal inside the lesson, so never call it a Linux lab terminal), and ask them to paste what it printed. Explain from what they paste. Let them type the commands they are learning; if terminal_read says no terminal is open, don't try it again.",
   maths:
     'Teach this by deriving and solving: short explanations, then problems where they show working. Check every algebra or calculus step with run_code (SymPy) before calling it right or wrong, and name the exact step that fails.',
   reading:
