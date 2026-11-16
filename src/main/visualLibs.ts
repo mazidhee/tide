@@ -4,7 +4,7 @@
  * (the frame is sandboxed with an opaque origin, which module scripts can't load from):
  *   /lib/tide-math.js  Tide's maths helpers and safe expression reader (shared/frame/tideMath.js)
  *   /lib/katex.js      KaTeX, with its stylesheet and fonts (as data: URLs) put in by the script
- *   /lib/three.js      three.js and OrbitControls, as window.THREE
+ *   /lib/three.js      three.js and OrbitControls, as window.THREE (kept sharp when enlarged: shared/frame/threeSharp.js)
  *   /lib/tide-machine.js  Tide's computing kit (shared/frame/machine): bits, circuits, memory, a CPU,
  *                      Python's names and objects, 3D dies and GPUs
  */
@@ -21,6 +21,7 @@ import machineScene from '../shared/frame/machine/scene3d.js?raw'
 import machineTeardown from '../shared/frame/machine/teardown.js?raw'
 import machineSpaces from '../shared/frame/machine/spaces.js?raw'
 import machineEnd from '../shared/frame/machine/end.js?raw'
+import threeSharp from '../shared/frame/threeSharp.js?raw'
 import katexJs from '../../node_modules/katex/dist/katex.min.js?raw'
 import katexCss from '../../node_modules/katex/dist/katex.min.css?raw'
 import threeCore from '../../node_modules/three/build/three.core.js?raw'
@@ -79,7 +80,7 @@ export function visualLibraries(): Map<string, string> {
     ['/lib/tide-math.js', tideMath],
     ['/lib/tide-machine.js', [machineCore, machineBits, machineCircuit, machineMemory, machineCpu, machinePython, machineStudio, machineScene, machineTeardown, machineSpaces, machineEnd].join('\n')],
     ['/lib/katex.js', katexBundle()],
-    ['/lib/three.js', [moduleToClassic(threeCore), moduleToClassic(threeModule), moduleToClassic(orbit)].join('\n')]
+    ['/lib/three.js', [moduleToClassic(threeCore), moduleToClassic(threeModule), moduleToClassic(orbit), threeSharp].join('\n')]
   ])
   return built
 }
