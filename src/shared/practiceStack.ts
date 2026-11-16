@@ -76,6 +76,8 @@ export interface PracticeStatus {
   setUp: boolean
   seeded: { at: number; collections: { name: string; count: number }[]; spec: string } | null
   spec: { path: string | null; problems: string[]; name?: string; collections: number; documents: number }
+  /** The learner's Metabase layout (Practice/layout.json), when there is one, and the last rebuild */
+  layout?: { path: string | null; problems: string[]; questions: number; dashboards: number; built: { at: number; questions: number; dashboards: number; made: number; missing: string[] } | null }
   url: string
   ports: typeof PRACTICE_PORTS
   /** What's happening now (starting, loading data…) */
@@ -88,6 +90,8 @@ export interface PracticeApi {
   start(): Promise<PracticeStatus>
   stop(): Promise<PracticeStatus>
   reset(): Promise<PracticeStatus>
+  /** Recreates the layout in the practice Metabase, updating in place */
+  layout(): Promise<PracticeStatus>
   open(): Promise<void>
   /** The practice Metabase's own login (local only), to sign in and look around yourself */
   login(): Promise<{ email: string; password: string } | null>

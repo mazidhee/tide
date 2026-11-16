@@ -91,7 +91,7 @@ export type FieldSpec = Base &
     | { gen: 'expr'; op: 'sum' | 'diff' | 'max' | 'min'; fields: string[] }
   )
 
-export const LIMITS = { collections: 60, docs: 400_000, perCollection: 200_000, fields: 120 } as const
+export const LIMITS = { collections: 400, docs: 400_000, perCollection: 200_000, fields: 200 } as const
 
 const GENS = new Set(['objectId', 'time', 'const', 'copy', 'enum', 'bool', 'int', 'number', 'date', 'ref', 'lookup', 'pattern', 'pick', 'switch', 'object', 'array', 'expr'])
 

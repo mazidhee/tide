@@ -96,6 +96,8 @@ export const PRACTICE_ALLOWED: [string, RegExp][] = [
   ['POST', /^\/api\/(card|dashboard|collection|dataset)(\/|\?|$)/],
   ['POST', /^\/api\/database\/\d+\/(sync_schema|rescan_values)$/],
   ['PUT', /^\/api\/(card|dashboard|collection)\/\d+$/],
+  // Renaming the practice database only (main/practiceStack sends its name, nothing else)
+  ['PUT', /^\/api\/database\/\d+$/],
   ['DELETE', /^\/api\/(card|dashboard)\/\d+$/]
 ]
 

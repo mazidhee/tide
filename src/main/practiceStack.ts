@@ -21,6 +21,7 @@ import { homedir } from 'os'
 import { dirname, join } from 'path'
 import { composeFile, PRACTICE_DB, PRACTICE_PORTS, PRACTICE_PROJECT, PRACTICE_URL, SPEC_PATHS, type DockerState, type PracticeStatus } from '@shared/practiceStack'
 import { generate, specProblems, toExtendedJson, type PracticeSpec } from '@shared/practiceData'
+import { applyLayout, indexMeta, LAYOUT_PATHS, layoutNeeds, layoutProblems, type DbMeta, type PracticeLayout } from '@shared/practiceLayout'
 import { getKey, setKey } from './cloud'
 import { practiceClient, queryRows, type PracticeClient } from './metabase'
 import type { McpTool } from './tideMcp'
@@ -36,6 +37,7 @@ const statePath = () => join(dir(), 'state.json')
 
 interface StackState {
   seeded?: { at: number; collections: { name: string; count: number }[]; spec: string }
+  layout?: { at: number; questions: number; dashboards: number; made: number; missing: string[] }
   metabase?: { databaseId: number; email: string }
 }
 
@@ -102,6 +104,27 @@ async function readSpec(): Promise<{ path: string | null; spec: PracticeSpec | n
   return { path: null, spec: null, text: '', problems: [`No spec yet. Put one at ${SPEC_PATHS[0]} in your notes.`] }
 }
 
+/** The learner's Metabase layout (collections, questions, dashboards), when there is one */
+async function readLayout(): Promise<{ path: string | null; layout: PracticeLayout | null; problems: string[] }> {
+  const { absPath } = await import('./vault')
+  for (const rel of LAYOUT_PATHS) {
+    let text: string
+    try {
+      text = await fs.readFile(absPath(rel), 'utf8')
+    } catch {
+      continue
+    }
+    try {
+      const raw = JSON.parse(text)
+      const problems = layoutProblems(raw)
+      return { path: rel, layout: problems.length ? null : (raw as PracticeLayout), problems }
+    } catch (e) {
+      return { path: rel, layout: null, problems: [`${rel} can’t be read: ${(e as Error).message}`] }
+    }
+  }
+  return { path: null, layout: null, problems: [] }
+}
+
 // ---------- Status ----------
 
 let busy = ''
@@ -116,8 +139,10 @@ export async function practiceStatus(): Promise<PracticeStatus> {
   const docker = await dockerState()
   const st = readState()
   const spec = await readSpec().catch(() => ({ path: null, spec: null, text: '', problems: ['The notes folder isn’t open.'] }))
+  const lay = await readLayout().catch(() => ({ path: null, layout: null, problems: [] as string[] }))
+  const layout = { path: lay.path, problems: lay.problems, questions: lay.layout?.questions.length ?? 0, dashboards: lay.layout?.dashboards.length ?? 0, built: st.layout ?? null }
   const specInfo = { path: spec.path, problems: spec.problems, name: spec.spec?.name, collections: spec.spec?.collections.length ?? 0, documents: spec.spec?.collections.reduce((s, c) => s + c.count, 0) ?? 0 }
-  const base = { docker, running: false, mongo: 'down' as const, metabase: 'down' as const, setUp: !!st.metabase && !!getKey(KEY_API), seeded: st.seeded ?? null, spec: specInfo, url: PRACTICE_URL, ports: PRACTICE_PORTS, ...(busy ? { busy } : {}), ...(lastError ? { error: lastError } : {}) }
+  const base = { docker, running: false, mongo: 'down' as const, metabase: 'down' as const, setUp: !!st.metabase && !!getKey(KEY_API), seeded: st.seeded ?? null, spec: specInfo, layout, url: PRACTICE_URL, ports: PRACTICE_PORTS, ...(busy ? { busy } : {}), ...(lastError ? { error: lastError } : {}) }
   if (docker !== 'ok') return base
   const up = await running()
   const mbReady = up.metabase && (await metabaseUp())
@@ -156,6 +181,9 @@ async function seed(): Promise<void> {
     const r = await compose(['exec', '-T', 'mongo', 'mongoimport', '--quiet', '--db', PRACTICE_DB, '--collection', name, '--drop', '--jsonArray', '--file', `/tmp/seed/${name}.json`], 300_000)
     if (r.code !== 0 || /Failed|error/i.test(r.err)) throw new Error(`Loading ${name} failed: ${(r.err || r.out).slice(0, 300)}`)
   }
+  // A collection with no documents still exists (Metabase lists it), as in the database it copies
+  const empty = [...data].filter(([, docs]) => !docs.length).map(([name]) => name)
+  if (empty.length) await mongosh(`${JSON.stringify(empty)}.forEach((n) => { if (!db.getCollectionNames().includes(n)) db.createCollection(n) })`)
   await compose(['exec', '-T', 'mongo', 'rm', '-rf', '/tmp/seed'])
   const st = readState()
   writeState({ ...st, seeded: { at: Date.now(), collections: [...data].map(([name, docs]) => ({ name, count: docs.length })), spec: createHash('sha1').update(spec.text).digest('hex').slice(0, 12) } })
@@ -227,6 +255,47 @@ async function sync() {
   if (a) await practiceClient(a).post(`/api/database/${a.databaseId}/sync_schema`, {}).catch(() => null)
 }
 
+// ---------- The layout ----------
+
+/**
+ * Recreates the learner's layout in the practice Metabase: waits until the database has synced every
+ * table and field the layout names (a fresh load takes a while), then makes or updates in place.
+ */
+async function buildLayout(): Promise<void> {
+  const lay = await readLayout()
+  if (!lay.path) return
+  if (!lay.layout) throw new Error(lay.problems.slice(0, 3).join(' '))
+  const a = practiceAuth()
+  if (!a) throw new Error('The practice Metabase isn’t set up yet: press Start first.')
+  const c = practiceClient(a)
+  busy = 'Waiting for Metabase to read the practice data…'
+  const need = layoutNeeds(lay.layout)
+  let meta: DbMeta = { tables: [] }
+  const end = Date.now() + 300_000
+  for (;;) {
+    meta = await c.get<DbMeta>(`/api/database/${a.databaseId}/metadata`)
+    const ix = indexMeta(meta)
+    const left = [...need].filter((n) => (n.startsWith('table ') ? ix.table(n.slice(6)) === undefined : !(() => { const [t, ...p] = n.slice(6).split('.'); return ix.field(t, p.join('.')) !== undefined })()))
+    if (!left.length || Date.now() > end) break
+    await new Promise((r) => setTimeout(r, 5000))
+  }
+  busy = 'Building your Metabase layout…'
+  const r = await applyLayout(c, lay.layout, a.databaseId, meta)
+  writeState({ ...readState(), layout: { at: Date.now(), questions: Object.keys(r.questionIds).length, dashboards: Object.keys(r.dashboardIds).length, made: r.created.collections + r.created.questions + r.created.dashboards, missing: r.missing } })
+}
+
+export const rebuildLayout = () =>
+  one(async () => {
+    lastError = ''
+    try {
+      await buildLayout()
+    } catch (e) {
+      lastError = `Layout: ${(e as Error).message}`
+    }
+    busy = ''
+    return practiceStatus()
+  })
+
 // ---------- Start, stop, reset ----------
 
 async function prepare() {
@@ -267,6 +336,9 @@ export const startPractice = () =>
       await waitFor(metabaseUp, 360_000, 'Metabase')
       await setUpMetabase()
       await sync()
+      await buildLayout().catch((e: Error) => {
+        lastError = `Layout: ${e.message}`
+      })
     } catch (e) {
       lastError = (e as Error).message
     }
@@ -313,6 +385,7 @@ export function registerPractice(): void {
   ipcMain.handle('practice:start', () => startPractice())
   ipcMain.handle('practice:stop', () => stopPractice())
   ipcMain.handle('practice:reset', () => resetPractice())
+  ipcMain.handle('practice:layout', () => rebuildLayout())
   ipcMain.handle('practice:open', () => shell.openExternal(PRACTICE_URL))
   // Local only, and yours: the practice admin Tide made, for signing in to it yourself
   ipcMain.handle('practice:login', () => {
