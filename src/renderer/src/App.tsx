@@ -84,6 +84,7 @@ const CanvasView = lazy(() => import('./components/CanvasView').then((m) => ({ d
 const JupyterView = lazy(() => import('./components/notebook/JupyterView').then((m) => ({ default: m.JupyterView })))
 const GraphView = lazy(() => import('./components/GraphView').then((m) => ({ default: m.GraphView })))
 const DrillView = lazy(() => import('./components/DrillView').then((m) => ({ default: m.DrillView })))
+const WorkspaceWindow = lazy(() => import('./components/WorkspaceWindow').then((m) => ({ default: m.WorkspaceWindow })))
 const MockView = lazy(() => import('./components/mock/MockView').then((m) => ({ default: m.MockView })))
 const SharpView = lazy(() => import('./components/sharp/SharpView').then((m) => ({ default: m.SharpView })))
 
@@ -436,6 +437,12 @@ export default function App() {
         }
         if (action === 'reopen-tab' && !focusId) app.reopenClosedTab()
         if (action === 'return-to-main' && focusId) void returnToMain(app)
+        // Study ▸ Scratchpad (⌘⇧E): a lesson's workspace takes it (in or out of its window); else the scratchpad
+        if (action === 'scratchpad') {
+          const asked = new Event('tide:scratchpad', { cancelable: true })
+          window.dispatchEvent(asked)
+          if (!asked.defaultPrevented) void window.tide.windows.openFocus({ kind: 'workspace', title: 'Scratchpad' })
+        }
         // A pop-out has no sidebar or tutor panel to show
         if (focusId && (action === 'toggle-sidebar' || action === 'toggle-chat')) return
         if (action === 'toggle-sidebar') app.updateSettings({ sidebarCollapsed: !settings.sidebarCollapsed })
@@ -589,6 +596,7 @@ export default function App() {
   else if (view.kind === 'maths') main = <MathsView key={`${view.level ?? ''}:${view.nonce ?? ''}`} level={view.level} />
   else if (view.kind === 'workout') main = <WorkoutView key={`${view.start ? 'run' : 'hub'}:${view.nonce ?? ''}`} start={view.start} championship={view.championship} />
   else if (view.kind === 'drill') main = <DrillView key={`${view.drill}:${view.nonce ?? ''}`} kind={view.drill} />
+  else if (view.kind === 'workspace') main = <WorkspaceWindow view={view} />
   else if (view.kind === 'design') main = <CanvasView key={`${view.path}:${view.nonce ?? ''}`} path={view.path} start={view.start} topic={view.topic} company={view.company} timed={view.timed} reference={view.reference} />
   else if (view.kind === 'code') main = <CodeView key={`${view.root ?? view.path ?? 'code'}:${view.nonce ?? ''}`} path={view.path} root={view.root} file={view.file} home={view.home} />
   else if (view.kind === 'ipynb') main = <JupyterView key={view.abs} refIn={{ abs: view.abs }} />
@@ -640,7 +648,7 @@ export default function App() {
           aria-labelledby={!focusId && app.tabs.length > 1 ? `tab-${app.activeTab}` : undefined}
           ref={(el) => void (tabRoot.current = el)}
         >
-          {!['file', 'graph', 'help', 'lab', 'code', 'design', 'chat', 'session', 'quiz', 'exam', 'mock', 'reader'].includes(view.kind) && (tide ? <TopBar /> : <div className="titlebar-drag drag" />)}
+          {!['file', 'graph', 'help', 'lab', 'code', 'design', 'chat', 'session', 'quiz', 'exam', 'mock', 'reader', 'workspace'].includes(view.kind) && (tide ? <TopBar /> : <div className="titlebar-drag drag" />)}
           {/* The classic design has no top bar: pages that can pop out (a project, a course, the workout) get the button on their own */}
           {!tide && canPopOut(view as PopView) && ['notebook', 'courses', 'workout'].includes(view.kind) && (
             <div className="pop-float no-drag">

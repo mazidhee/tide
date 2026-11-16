@@ -103,7 +103,7 @@ import type { NewMistake } from '@shared/mistakes'
 import type { CoachSettings } from '@shared/coach'
 import { deleteChat, getChat, listChats, pinChat, renameChat } from './chats'
 import { addMemory, listMemories, removeMemory, updateMemory } from './memory'
-import { closeAllTerminals, closeTerminal, createTerminal, resizeTerminal, setTerminalListeners, writeTerminal, type TerminalKind } from './terminal'
+import { closeAllTerminals, closeTerminal, createTerminal, resizeTerminal, runInShell, setScratchpad, setTerminalListeners, terminalHistory, writeTerminal, type TerminalKind } from './terminal'
 import { bookChapters } from './book'
 import { getBrief, suggestReading } from './brief'
 import { generateExam, markPart } from './exam'
@@ -302,12 +302,17 @@ function registerIpc() {
   setChatsChangedListener((id) => send('chats:changed', id))
   setTerminalListeners(
     (id, data) => send('terminal:data', { id, data }),
-    (id, code) => send('terminal:exit', { id, code })
+    (id, code) => send('terminal:exit', { id, code }),
+    // A command finished in a shell: the lesson that owns it tells its tutor (shared/workspace), whichever window it was typed in
+    (id, f) => send('terminal:finished', { id, ...f })
   )
   handle('terminal:create', (kind: TerminalKind, cols: number, rows: number, cwd?: string) => createTerminal(kind === 'lab' ? 'lab' : 'local', cols, rows, cwd))
   handle('terminal:write', (id: string, data: string) => writeTerminal(id, String(data)))
   handle('terminal:resize', (id: string, cols: number, rows: number) => resizeTerminal(id, cols, rows))
   handle('terminal:close', (id: string) => closeTerminal(id))
+  handle('terminal:run', (id: string, command: string) => runInShell(String(id), String(command)))
+  handle('terminal:history', (id: string) => terminalHistory(String(id)))
+  handle('terminal:scratchpad', (s: { terminalId: string; root: string; file: string } | null) => void setScratchpad(s && typeof s === 'object' ? { terminalId: String(s.terminalId), root: String(s.root), file: String(s.file ?? '') } : null))
   handle('terminal:flashcards', (id: string, topic?: string) => labFlashcards(id, topic))
   handle('code:list', () => listCode())
   handle('code:create', (name: string, content?: string) => createCodeFile(name, content ?? ''))
@@ -1010,7 +1015,10 @@ function setMenu() {
       label: 'Study',
       submenu: [
         { label: 'Review Flashcards', accelerator: 'CmdOrCtrl+Shift+R', click: () => send('menu', 'review') },
-        { label: 'Quiz Me on This', accelerator: 'CmdOrCtrl+Shift+Q', click: () => send('menu', 'quiz') }
+        { label: 'Quiz Me on This', accelerator: 'CmdOrCtrl+Shift+Q', click: () => send('menu', 'quiz') },
+        { type: 'separator' },
+        // A small editor and a shell (renderer components/WorkspaceWindow): a lesson's own, or a scratchpad of your own
+        { label: 'Scratchpad', accelerator: 'CmdOrCtrl+Shift+E', click: () => send('menu', 'scratchpad') }
       ]
     },
     { role: 'windowMenu' },

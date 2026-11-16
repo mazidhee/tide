@@ -2,7 +2,7 @@ import { existsSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 import type { IPty } from 'node-pty'
-import { backspaced, plainText } from '@shared/workspace'
+import { backspaced, commandOnScreen, commandOutput, followKeys, NEW_LINE, plainText, QUIET_MS, type Finished, type LineState } from '@shared/workspace'
 
 /**
  * Terminals for the Lab and the Code playground.
@@ -26,18 +26,27 @@ interface Session {
   pending: string
   lastOutput: number
   exited: boolean
+  /** Raw output kept for a second view of the same shell (a workspace popped out to a window) */
+  raw: string
+  /** The command line being typed, and the command running since Enter, for the lesson's tutor */
+  line: LineState
+  running: { command: string; since: string; prompt: string; how: 'run' | 'typed' } | null
+  quiet?: ReturnType<typeof setTimeout>
 }
 
 const MAX_TRANSCRIPT = 60_000
+const MAX_RAW = 150_000
 export const LAB_IMAGE = 'ubuntu:24.04'
 
 const sessions = new Map<string, Session>()
 let emitData: (id: string, data: string) => void = () => {}
 let emitExit: (id: string, code: number) => void = () => {}
+let emitFinished: (id: string, f: Finished) => void = () => {}
 
-export function setTerminalListeners(onData: typeof emitData, onExit: typeof emitExit) {
+export function setTerminalListeners(onData: typeof emitData, onExit: typeof emitExit, onFinished?: typeof emitFinished) {
   emitData = onData
   emitExit = onExit
+  if (onFinished) emitFinished = onFinished
 }
 
 /** Escape sequences removed, for a model to read (shared, so the lesson's Workspace reads it the same way) */
@@ -78,13 +87,18 @@ export async function createTerminal(kind: TerminalKind, cols: number, rows: num
     else if (existsSync(code)) cwd = code
   }
   const pty = spawn(file, args, { name: 'xterm-256color', cols: Math.max(20, cols), rows: Math.max(5, rows), cwd, env })
-  const session: Session = { id, kind, pty, transcript: '', pending: '', lastOutput: Date.now(), exited: false }
+  const session: Session = { id, kind, pty, transcript: '', pending: '', lastOutput: Date.now(), exited: false, raw: '', line: { ...NEW_LINE }, running: null }
   sessions.set(id, session)
   pty.onData((data) => {
     session.lastOutput = Date.now()
     const text = plainText(data, true)
     session.transcript = backspaced(session.transcript + text).slice(-MAX_TRANSCRIPT)
     session.pending = backspaced(session.pending + text)
+    session.raw = (session.raw + data).slice(-MAX_RAW)
+    if (session.running) {
+      session.running.since += text
+      settle(session)
+    }
     emitData(id, data)
   })
   pty.onExit(({ exitCode }) => {
@@ -97,7 +111,60 @@ export async function createTerminal(kind: TerminalKind, cols: number, rows: num
 
 export function writeTerminal(id: string, data: string) {
   const s = sessions.get(id)
-  if (s && !s.exited) s.pty.write(data)
+  if (!s || s.exited) return
+  s.pty.write(data)
+  // What's typed is followed, so a finished command can be told to the lesson's tutor (shared/workspace)
+  const f = followKeys(s.line, data)
+  s.line = f.line
+  for (const c of f.entered) begin(s, c ?? commandOnScreen(lastLine(s)), 'typed')
+}
+
+const lastLine = (s: Session) => s.transcript.split('\n').pop() ?? ''
+
+/** Enter pressed (or Run): output quiet for QUIET_MS after it means the command has finished */
+function begin(s: Session, command: string, how: 'run' | 'typed') {
+  s.running = { command, since: '', prompt: lastLine(s), how }
+  settle(s)
+}
+
+function settle(s: Session) {
+  clearTimeout(s.quiet)
+  s.quiet = setTimeout(() => {
+    const r = s.running
+    if (!r || s.exited) return
+    const since = backspaced(r.since)
+    // Nothing back but the echo yet: a slow start (a compile, an import); keep waiting
+    if (!since.includes('\n')) return settle(s)
+    s.running = null
+    emitFinished(s.id, { command: r.command, output: commandOutput(since, r.command), prompt: r.prompt, at: Date.now(), how: r.how })
+  }, QUIET_MS)
+}
+
+/**
+ * Run in a lesson's Workspace: types the file's command into the shell as if typed (it is the
+ * learner's own button, never the tutor's), clearing a half-typed line first.
+ */
+export function runInShell(id: string, command: string) {
+  const s = sessions.get(id)
+  if (!s || s.exited) throw new Error('That terminal is closed.')
+  s.line = { ...NEW_LINE }
+  s.pty.write(`\x15${command.replace(/[\r\n]+/g, ' ')}\r`)
+  begin(s, command, 'run')
+}
+
+/** What the shell has shown so far, raw, for a second view of it to start from */
+export function terminalHistory(id: string): string {
+  return sessions.get(id)?.raw ?? ''
+}
+
+// ---------- The scratchpad, for Chat's tutor ----------
+
+/** The standalone scratchpad's shell and file while its window is open (Chat's tutor reads them) */
+let scratch: { terminalId: string; root: string; file: string } | null = null
+export const setScratchpad = (s: typeof scratch) => (scratch = s && s.terminalId ? s : null)
+export function scratchpad(): typeof scratch {
+  if (scratch && !sessions.get(scratch.terminalId)) scratch = null
+  return scratch
 }
 
 export function resizeTerminal(id: string, cols: number, rows: number) {
@@ -109,6 +176,7 @@ export function closeTerminal(id: string) {
   const s = sessions.get(id)
   if (!s) return
   if (!s.exited) s.pty.kill()
+  clearTimeout(s.quiet)
   sessions.delete(id)
 }
 

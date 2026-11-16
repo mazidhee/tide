@@ -18,7 +18,7 @@ import { codeTurnNote, IDE_LESSON_NOTE } from '@shared/lessonCode'
 import type { McpTool } from '../tideMcp'
 import { cleanRel, insideReal } from './paths'
 import { IDE_TOOLS, resolvedListeners, setLessonNote, setLessonTargets } from './pair'
-import { allowed, lessonsDir, remember } from './workspace'
+import { allowed, lessonsDir, remember, scratchDir } from './workspace'
 
 interface LessonCode {
   labId: string
@@ -214,6 +214,11 @@ export function registerLessonCode(): void {
   ipcMain.handle('ide:lesson:open', (_e, labId: string, topic: string, root?: string): Workspace => {
     const l = open(labId, topic, root)
     return { root: l.root, name: l.linked ? basename(l.root) : l.topic || 'Lesson', kind: l.linked ? 'folder' : 'lesson' }
+  })
+  ipcMain.handle('ide:scratch:open', (): Workspace => {
+    const root = scratchDir()
+    mkdirSync(root, { recursive: true })
+    return { root, name: 'Scratchpad', kind: 'folder' }
   })
   ipcMain.handle('ide:lesson:openInIde', (_e, labId: string, topic: string, root?: string): Workspace => {
     const l = open(labId, topic, root)

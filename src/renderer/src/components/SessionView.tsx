@@ -96,7 +96,8 @@ import { parseVerdict, scorecardScore } from '@shared/interviews'
 import { dollarsAsCode, isMetabaseLesson, teardownOf } from '@shared/metabaseData'
 import { pageKey } from '../lib/typing'
 import { LessonWorkspace } from './LessonWorkspace'
-import { autoReply, LANG_LABEL, sawLine, sawMessage, stepText, taskOf, type Finished, type WorkspaceTask } from '@shared/workspace'
+import { autoReply, blockTarget, extOf, LANG_LABEL, lessonLanguage, pasteText, sawLine, sawMessage, scratchName, stepText, taskOf, workspaceLesson, type Finished, type WorkspaceTask } from '@shared/workspace'
+import { useHeld } from '../lib/popout'
 
 /** The lesson's Workspace as it was left: its files, the one open and the tasks started (kept per lesson) */
 interface WorkspaceState {
@@ -731,10 +732,12 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const [notesOpen, setNotesOpen] = useState(() => localStorage.getItem('tide.lesson.notes') !== 'closed')
   // The Workspace beside the lesson (shared/workspace): the task's file and a terminal in the lesson's folder
   const [work, setWork] = useState<WorkspaceState>(() => loadWorkspace(labId.current))
-  const workOn = mode === 'teach' && work.started.length > 0
+  // Offered in every lesson learnt at a keyboard, and in any other once the tutor hands over a task
+  const workOffered = useMemo(() => workspaceLesson({ mode, topic, options }), [])
+  const workOn = mode === 'teach' && (work.started.length > 0 || work.files.length > 0)
   useEffect(() => {
     try {
-      if (work.started.length) localStorage.setItem(wsStore(labId.current), JSON.stringify(work))
+      if (work.started.length || work.files.length) localStorage.setItem(wsStore(labId.current), JSON.stringify(work))
     } catch {
       // kept for this visit only
     }
@@ -752,6 +755,26 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const sentAt = useRef(0)
   const heldRun = useRef<Finished | null>(null)
   const showWork = workOn && (work.tab === 'work' || workFull)
+  // The lesson's shell: kept here (a pop-out window shows the same one), closed when the lesson goes
+  const [termId, setTermId] = useState<string | null>(null)
+  const setTerm = (id: string | null) => {
+    termIdRef.current = id
+    setTermId(id)
+  }
+  // Moved to a window of its own (components/WorkspaceWindow): that window holds its key
+  const workKey = workRoot ? `workspace:${workRoot}` : ''
+  const heldKeys = useHeld()
+  const poppedOut = !!workKey && heldKeys.has(workKey)
+  const poppedRef = useRef(poppedOut)
+  poppedRef.current = poppedOut
+  useEffect(
+    () => () => {
+      if (termIdRef.current && !poppedRef.current) void window.tide.terminal.close(termIdRef.current)
+    },
+    []
+  )
+  // Bumped when a file is written from outside the editor (a code block opened in the workspace)
+  const [workRev, setWorkRev] = useState(0)
   const withNotes = mode === 'teach' && notesOpen
   // [metabase] A lesson on their own Metabase: Metabase opens beside it, and the tutor sees the page
   const mbLesson = mode === 'teach' && isMetabaseLesson(topic, 'path' in scope ? scope.path : undefined)
@@ -850,6 +873,103 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   busyRef.current = busy
   const finishedRef = useRef(finished)
   finishedRef.current = finished
+  // Opened by hand (no task yet): an empty scratch file in the lesson's language
+  const openWorkspace = async (): Promise<string | null> => {
+    try {
+      const root = workRoot ?? (await openRoot())
+      setWorkRoot(root)
+      let file = work.open
+      if (!file) {
+        file = `scratch.${extOf(lessonLanguage({ topic, options }))}`
+        const had = await window.tide.ide.read(root, file).then(() => true).catch(() => false)
+        if (!had) await window.tide.ide.write(root, file, '')
+      }
+      setWork((w) => ({ ...w, files: w.files.includes(file) ? w.files : [...w.files, file], open: file, tab: 'work', started: w.started.includes('open') ? w.started : [...w.started, 'open'] }))
+      setNotesOpen(true)
+      setWorkFocus((n) => n + 1)
+      return root
+    } catch (e) {
+      app.toast((e as Error).message, { tone: 'error' })
+      return null
+    }
+  }
+  // "Open in workspace" on a code block of the tutor's: code into a file (the scratch file while
+  // it's empty, else the next scratch-N), shell commands pasted at the prompt without Enter
+  const pendingPaste = useRef<string | null>(null)
+  const openBlock = async (code: string, lang: string) => {
+    const target = blockTarget(lang)
+    if (!target) return
+    const root = await openWorkspace()
+    if (!root) return
+    if (target.kind === 'paste') {
+      pendingPaste.current = pasteText(code)
+      if (termIdRef.current) pasteNow()
+      return
+    }
+    const first = `scratch.${extOf(target.lang)}`
+    const blank = await window.tide.ide.read(root, first).then((r) => !r.text.trim()).catch(() => true)
+    const file = blank ? first : scratchName(target.lang, [...work.files, first])
+    await window.tide.ide.write(root, file, code.replace(/\s+$/, '') + '\n')
+    setWork((w) => ({ ...w, files: w.files.includes(file) ? w.files : [...w.files, file], open: file, tab: 'work' }))
+    setWorkRev((n) => n + 1)
+    // The workspace in its own window hears it too
+    window.tide.windows.relay('workspace:file', { root, file })
+  }
+  const pasteNow = () => {
+    const text = pendingPaste.current
+    if (!text || !termIdRef.current) return
+    pendingPaste.current = null
+    // Bracketed paste: the shell takes it as typed text and waits for your Enter
+    void window.tide.terminal.write(termIdRef.current, `\x1b[200~${text}\x1b[201~`)
+  }
+  useEffect(() => {
+    if (termId) pasteNow()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [termId])
+  // Out to a window of its own, and back (closing that window puts it back here)
+  const popWorkspace = async () => {
+    if (!workRoot) return
+    if (poppedOut) return void window.tide.windows.closeKey(workKey)
+    // The window shows the lesson's own shell: wait for it to start if the panel only just opened
+    for (let i = 0; i < 30 && !termIdRef.current; i++) await new Promise((r) => setTimeout(r, 100))
+    await window.tide.windows.openFocus({ kind: 'workspace', root: workRoot, files: work.files, open: work.open, terminalId: termIdRef.current, title: `${topic}: workspace`, lesson: true })
+  }
+  const popRef = useRef(popWorkspace)
+  popRef.current = popWorkspace
+  const openRef = useRef(openWorkspace)
+  openRef.current = openWorkspace
+  // Study ▸ Scratchpad (⌘⇧E) in a lesson with a workspace: this lesson's, in and out of its window
+  useEffect(() => {
+    const onKey = (e: Event) => {
+      if (mode !== 'teach' || !(workOffered || workOnRef.current)) return
+      e.preventDefault()
+      if (!workOnRef.current) void openRef.current().then(() => setTimeout(() => void popRef.current(), 600))
+      else void popRef.current()
+    }
+    window.addEventListener('tide:scratchpad', onKey)
+    return () => window.removeEventListener('tide:scratchpad', onKey)
+  }, [])
+  const workOnRef = useRef(workOn)
+  workOnRef.current = workOn
+  // A command finished in the lesson's shell, in this window or the workspace's own
+  // Each code block of the tutor's gets "Open in workspace" (or "Paste into terminal" for shell commands),
+  // added to the rendered Markdown after each render (lib/markdown makes the blocks, with Run and Copy)
+  useEffect(() => {
+    if (mode !== 'teach' || !(workOffered || workOn)) return
+    columnRef.current?.querySelectorAll<HTMLElement>('.s-tutor pre.code-block').forEach((pre) => {
+      if (pre.querySelector('.open-ws')) return
+      const t = blockTarget(pre.dataset.lang ?? '')
+      if (!t) return
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'open-ws'
+      b.textContent = t.kind === 'paste' ? 'Paste into terminal' : 'Open in workspace'
+      b.title = t.kind === 'paste' ? 'Puts the command at the prompt in the workspace’s terminal; press Return yourself' : 'Puts this code in a file in the workspace beside the lesson'
+      pre.insertBefore(b, pre.querySelector('code'))
+    })
+  })
+  const onRanRef = useRef<(f: Finished) => void>(() => {})
+  useEffect(() => window.tide.terminal.onFinished((e) => e.id === termIdRef.current && onRanRef.current(e)), [])
   const sendRan = (f: Finished) => {
     sentAt.current = f.at
     heldRun.current = null
@@ -863,6 +983,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
     if (d === 'send') sendRan(f)
     else if (d === 'hold') heldRun.current = f
   }
+  onRanRef.current = onRan
   useEffect(() => {
     if (busy || !heldRun.current) return
     const f = heldRun.current
@@ -2092,6 +2213,13 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               else if (src.url) void window.tide.app.openExternal(src.url)
               return
             }
+            // "Open in workspace" on a code block (added above, in the workspace's lessons)
+            const toWork = (e.target as HTMLElement).closest?.<HTMLElement>('.open-ws')
+            if (toWork) {
+              const pre = toWork.closest<HTMLElement>('pre.code-block')
+              if (pre) void openBlock(pre.querySelector('code')?.textContent ?? '', pre.dataset.lang ?? '')
+              return
+            }
             const open = openReading(e.target)
             if (open) (e.preventDefault(), app.openPath(open.path, open.anchor))
             // Run and Copy on the code in a reading or a reply (lib/runBlocks); no Run on code a
@@ -2712,10 +2840,10 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       ) : (withNotes || showWork) && (
         <div className="lesson-side">
           <SideTabs
-            tabs={[...(approach === 'walkthrough' ? [{ id: 'canvas', label: 'Canvas' }] : []), { id: 'notes', label: 'Notes' }, ...(workOn ? [{ id: 'work', label: work.open ? `${work.open} + Terminal` : 'Terminal' }] : [])]}
+            tabs={[...(approach === 'walkthrough' ? [{ id: 'canvas', label: 'Canvas' }] : []), { id: 'notes', label: 'Notes' }, ...(workOn || workOffered ? [{ id: 'work', label: work.open ? `${work.open} + Terminal` : 'Workspace' }] : [])]}
             tab={showWork ? 'work' : approach === 'walkthrough' && sideTab === 'canvas' ? 'canvas' : 'notes'}
             onTab={(t) => {
-              if (t === 'work') return setWork((w) => ({ ...w, tab: 'work' }))
+              if (t === 'work') return workOn ? setWork((w) => ({ ...w, tab: 'work' })) : void openWorkspace()
               setWorkFull(false)
               setWork((w) => ({ ...w, tab: 'notes' }))
               setSideTab(t === 'canvas' ? 'canvas' : 'notes')
@@ -2732,18 +2860,41 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
           {/* Kept running while the notes are shown, so the shell and what's in it stay */}
           {workOn && workRoot && (
             <div className="lw-host" hidden={!showWork}>
-              <LessonWorkspace
-                root={workRoot}
-                files={work.files}
-                open={work.open}
-                onOpen={(f) => setWork((w) => ({ ...w, open: f }))}
-                onTerminal={(id) => (termIdRef.current = id)}
-                onFinished={onRan}
-                full={workFull}
-                onFull={() => setWorkFull((v) => !v)}
-                seen={workSeen}
-                focusNonce={workFocus}
-              />
+              {poppedOut ? (
+                <div className="lw-away">
+                  <p>The workspace is in its own window. The tutor still sees what you run there.</p>
+                  <div>
+                    <button className="btn small" onClick={() => void window.tide.windows.focusKey(workKey)}>
+                      Show the window
+                    </button>
+                    <button className="btn small" onClick={() => void window.tide.windows.closeKey(workKey)}>
+                      Bring it back here
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <LessonWorkspace
+                  root={workRoot}
+                  files={work.files}
+                  open={work.open}
+                  onOpen={(f) => setWork((w) => ({ ...w, open: f }))}
+                  terminalId={termId}
+                  onTerminal={setTerm}
+                  seen={workSeen}
+                  focusNonce={workFocus}
+                  rev={workRev}
+                  tools={
+                    <>
+                      <button className="icon-btn small" onClick={() => setWorkFull((v) => !v)} title={workFull ? 'Back to the lesson (Esc)' : 'Full screen: the workspace in front, the lesson beside it (⌘⇧F)'} aria-label={workFull ? 'Leave full screen' : 'Full screen'}>
+                        <Icon name={workFull ? 'collapse' : 'width'} size={14} />
+                      </button>
+                      <button className="icon-btn small" onClick={() => void popWorkspace()} title="Its own small window, the same file and shell; the tutor still sees your runs (⌘⇧E)" aria-label="Pop out">
+                        <Icon name="popout" size={14} />
+                      </button>
+                    </>
+                  }
+                />
+              )}
             </div>
           )}
         </div>

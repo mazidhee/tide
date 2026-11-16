@@ -87,6 +87,7 @@ export const ideApi: IdeApi = {
   },
   lesson: {
     open: invoke('ide:lesson:open'),
+    scratch: invoke('ide:scratch:open'),
     openInIde: invoke('ide:lesson:openInIde'),
     onEvent: (cb) => subscribe('ide:lesson:event', cb)
   }

@@ -364,6 +364,8 @@ export interface IdeApi {
   lesson: {
     /** The lesson's folder (made if new), or the linked project's when `root` is one the IDE may open */
     open(labId: string, topic: string, root?: string): Promise<Workspace>
+    /** The scratchpad's own folder (made if new): files kept, so old experiments can be found */
+    scratch(): Promise<Workspace>
     /** Kept among the IDE's workspaces, to open it in the Code view */
     openInIde(labId: string, topic: string, root?: string): Promise<Workspace>
     onEvent(cb: (e: LessonCodeEvent) => void): () => void

@@ -256,6 +256,14 @@ export function registerPopouts(d: PopoutDeps) {
   ipcMain.handle('window:held', (e) => heldFor(e.sender.id))
   ipcMain.handle('window:closeNow', (e) => closeNow(e.sender.id))
   ipcMain.handle('window:close', (e) => BrowserWindow.fromWebContents(e.sender)?.close())
+  // A small window kept above the others (the workspace beside a lesson in another app)
+  ipcMain.handle('window:setOnTop', (e, on: boolean) => BrowserWindow.fromWebContents(e.sender)?.setAlwaysOnTop(!!on, 'floating'))
+  // The window holding a key is asked to close (its page saves first), from another window
+  ipcMain.handle('window:closeKey', (e, key: string) => {
+    const w = windowFor(String(key), e.sender.id)
+    if (w) w.close()
+    return !!w
+  })
   ipcMain.on('windows:relay', (e, channel: string, payload: unknown) => relay(e.sender.id, String(channel), payload))
   ipcMain.handle('windows:claimBreak', () => claimBreakFor())
 }

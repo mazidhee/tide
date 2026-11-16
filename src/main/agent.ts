@@ -7,7 +7,7 @@ import { isMlxVlm } from './modelServer'
 import { thingsIntent } from '@shared/learnIntent'
 import { CLAUDE_HISTORY_TOKENS, CLAUDE_PASSAGES, uses, type Engine } from '@shared/workarounds'
 import { graphCached, relatedNotes } from './learn'
-import { readTerminal, runInTerminal, terminalInfo } from './terminal'
+import { readTerminal, runInTerminal, scratchpad, terminalInfo } from './terminal'
 import { claudeState, ensureGemmaServer, inUse, markGemmaUsed, noteGemmaDemand } from './modelIdle'
 import { afterBackground, asInteractive, inBackground } from './modelQueue'
 import { memoize } from './memo'
@@ -1727,13 +1727,16 @@ export function agentChat(req: TurnRequest, emit: (e: ChatEvent) => void, signal
  */
 export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, signal: AbortSignal, base: string = SYSTEM, engine: Engine = 'gemma') {
   const sources: ContextSource[] = []
+  // A chat (not a lesson) while the scratchpad window is open: its tutor reads that shell and file too
+  const scratch = !req.session && !req.instructions && !req.terminalId ? scratchpad() : null
+  const terminalId = req.terminalId ?? scratch?.terminalId
   const ctx: LoopContext = {
     signal,
     sources,
     web: req.web !== false,
     chatId: req.chatId,
     labId: req.labId ?? req.chatId,
-    terminalId: req.terminalId,
+    terminalId,
     canvasPath: req.canvasPath,
     focused: !!req.instructions,
     emitSources: () => emit({ id: req.id, type: 'sources', sources: [...sources] }),
@@ -1779,7 +1782,8 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
   // Pictures inside PDFs: the figures on the PDF pages these passages come from, rendered for
   // Claude (main/pdfFigures), each page once a conversation, in the room the turn's own pictures leave
   const figures = engine === 'claude' && !req.warmOnly ? await import('./pdfFigures').then((f) => f.figuresForTurn(req.chatId ?? req.labId ?? 'chat', ctx.sources, Math.min(f.MAX_PAGES, MAX_IMAGES - images.length))).catch(() => []) : []
-  const screen = req.terminalId ? readTerminal(req.terminalId, 5000).split('\n').slice(-45).join('\n').trim() : ''
+  const screen = terminalId ? readTerminal(terminalId, 5000).split('\n').slice(-45).join('\n').trim() : ''
+  const scratchFile = scratch?.file ? await import('fs').then((f) => f.promises.readFile(join(scratch.root, scratch.file), 'utf8')).catch(() => '') : ''
   const design = req.canvasPath ? describeCanvas(parseCanvas(await readText(req.canvasPath).catch(() => ''))) : ''
   // Asked to be set work: say so plainly, small models otherwise just answer the question
   const userTurns = req.messages.filter((m) => m.role === 'user').length
@@ -1818,6 +1822,7 @@ export async function buildTurn(req: TurnRequest, emit: (e: ChatEvent) => void, 
       : '',
     design ? `The student's system design canvas right now:\n${design}` : '',
     screen ? `The student's terminal right now (most recent at the bottom):\n\`\`\`\n${screen}\n\`\`\`` : '',
+    scratch?.file ? `Their scratchpad (a small editor and their own shell, open beside you; you can read it, never type in it) has ${scratch.file} open:\n\`\`\`\n${scratchFile.slice(0, 6000)}\n\`\`\`` : '',
     // Setting or marking work from a general chat: notes picked by keyword are only noise there
     // A lesson or quiz reads its notes once, at the start: fresh passages every answer would make
     // each turn longer and slower, and the tutor can still search when it needs more
