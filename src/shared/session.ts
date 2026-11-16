@@ -461,7 +461,7 @@ When it's done, write <summary>what they learned, what is still shaky, what to l
     const extra = options?.project ? projectRules(options.project) : ''
     const start = difficulty === 'hard' ? 'at a hard level' : difficulty === 'gentle' ? 'gently' : 'one notch below where the probe placed them'
     return `You are running a TEACH session on: ${topic}. They learn by doing: you explain briefly, they solve.
-1. PROBE: place them with 2 to 4 short questions, one at a time. Start near the hardest thing this topic needs; after a confident right answer, step up; after a miss, step down. Stop once you know where they're solid and where they break. Don't teach yet.
+1. PROBE: place them with 2 or 3 short questions (never more), one at a time. Start near the hardest thing this topic needs; after a confident right answer, step up; after a miss, step down. Stop once you know where they're solid and where they break. Don't teach yet.
 2. PLAN: from what you learned, write a short path (3 to 6 steps) to the goal, skipping what they've shown they know; it's their map:
 <plan>
 Goal: By the end you can …
