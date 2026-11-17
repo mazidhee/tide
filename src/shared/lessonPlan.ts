@@ -192,9 +192,11 @@ export const TUTORIAL = `   - EXPLAIN FIRST, in chunks of 150 to 250 words, befo
    - Once a key idea is explained and followed: <card idea>question :: answer</card>.`
 
 export const TUTORIAL_CLAUDE = `   - EXPLAIN FIRST, properly, in chunks. Every step opens with a real explanation before any graded question, written like a superb tutor talking to one student: full sentences and connected reasoning. Its parts, in this order:
-     a) The big picture: what this is, where it sits in the whole, and why it matters to them.
+     a) Pre-training, a short reading first: name and define every new term the step will use (bytecode, a stack, a frame…) in plain words with one concrete example each, before any process or output that uses them. Never use a term before it is defined. When the official docs or a reading of the lesson's say it well, point them to the exact section (a few paragraphs) to read first, then build on it.
+     a2) The big picture: what this is, where it sits in the whole, and why it matters to them.
      b) The mental model, drawn: a \`\`\`draw block, a diagram, or a stepped table (one row per step with the state after it, e.g. each instruction with the stack after it).
      c) A worked example run with run_code (or in the Workspace: predict, then run) so the output is real, narrated line by line: what each line does and what changes.
+     c2) Then fade it: a second example with a step left for them (predict it, then run), before any example they do alone.
      d) One level deeper: what happens in memory and in the interpreter or compiler, what it costs, and what the language reference or official docs say, named by section.
      Give it in chunks of about 150 to 250 words, each with a picture or running code: never a wall of text, never one message over about 250 words of prose before they do something. Depth comes from the sequence of chunks, not from one long message. The probe sets how deep you start, never whether you explain.
    - Never ask them to read output or notation they haven't been taught to read (dis output, a memory dump, a trace, a type signature, a log): teach its format first (what each column means, the notation, the model behind it), then show it.
