@@ -467,10 +467,13 @@ export function filesToWorkOn(reply: string, taskFiles: string[] = []): string[]
   const re = new RegExp(verbs.source.replace('CODE_EXT', CODE_EXT), 'gi')
   for (const m of reply.matchAll(re)) {
     const f = safeFileName(m[1])
-    if (f && !out.includes(f)) out.push(f)
+    if (f && !out.includes(f) && !PLACEHOLDER.test(f)) out.push(f)
   }
   return out
 }
+
+/** A stand-in name in a sentence ("python3 file.py runs it"), never a file to make */
+const PLACEHOLDER = /^(file|filename|script|your[-_]?(file|script)|my[-_]?(file|script)|example|name|program|something|x)\.\w+$/i
 
 /** The fenced code blocks of a message, with the text before and after each (for fileForBlock) */
 function blocksOf(text: string): { lang: string; code: string; before: string; after: string }[] {
@@ -501,6 +504,9 @@ export function codeForFile(file: string, messages: string[]): string | null {
       // Only the words close to the block: its own sentence, not the whole message
       if (fileForBlock(b.before.slice(-240), b.after.slice(0, 160), lang) === file) return b.code.replace(/\s+$/, '') + '\n'
     }
+    // The newest message names the file (its question: "Run with python3 job.py…") and gives one
+    // script in that language: that script is the file
+    if (i === messages.length - 1 && blocks.length === 1 && new RegExp(`\\b${file.replace(/[.+]/g, '\\$&')}\\b`).test(messages[i])) return blocks[0].code.replace(/\s+$/, '') + '\n'
   }
   return null
 }
