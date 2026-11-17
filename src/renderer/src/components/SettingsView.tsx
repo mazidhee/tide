@@ -921,6 +921,8 @@ function TutorSection() {
   const [ready, setReady] = useState(false)
   const [preview, setPreview] = useState<Speaker | null>(null)
   useEffect(() => window.tide.voice.onProgress(setStep), [])
+  const [lectureDetail, setLectureDetail] = useState('')
+  useEffect(() => void window.tide.lecture.status().then((r) => setLectureDetail(r.ready ? '' : `${r.detail}.`)).catch(() => {}), [])
   const save = (patch: Partial<typeof prefs>) => app.updateSettings({ voice: { ...prefs, ...patch } })
   const hear = (name: string) => {
     preview?.stop()
@@ -999,6 +1001,14 @@ function TutorSection() {
         <Row label="Use the Mac’s own voice" hint="More robotic, nothing to set up.">
           <Toggle label="Use the Mac’s own voice" on={prefs.engine === 'system'} onChange={(on) => save({ engine: on ? 'system' : 'natural' })} />
         </Row>
+        <Row label="Tutor’s voice in Talk" hint={prefs.lecture === 'kokoro' ? 'Kokoro speaks each reply as it’s written, straight away.' : `A real lecturer’s voice, with pauses and breaths. Each reply is made while you read it (under a minute for a short one, a few minutes for a long one) and plays as it’s ready. ${lectureDetail}`}>
+          <Select label="Tutor’s voice in Talk" value={prefs.lecture ?? 'fish'} onChange={(v) => save({ lecture: v as 'fish' | 'kokoro' })} options={[{ value: 'fish', label: 'Lecture voice (Fish S2 Pro, the professor)' }, { value: 'kokoro', label: 'Kokoro (instant)' }]} />
+        </Row>
+        {(prefs.lecture ?? 'fish') === 'fish' && (
+          <Row label="Pace" hint="How unhurried the lecture voice is. Slightly slow suits explanations.">
+            <Select label="Pace" value={prefs.pace ?? 0.92} onChange={(v) => save({ pace: v })} options={[0.85, 0.92, 1, 1.08].map((v) => ({ value: v, label: v === 0.92 ? 'Slightly slow' : v === 0.85 ? 'Slow' : v === 1 ? 'Natural' : 'Brisk' }))} />
+          </Row>
+        )}
         <VoicePicker prefs={prefs} own={characterById(app.settings.character).voice} ready={ready && prefs.engine !== 'system'} save={save} hear={hear} />
         <Row label="Dictation" hint={DICTATION_HINT[prefs.dictation ?? 'tide']}>
           <Select label="Dictation" value={prefs.dictation ?? 'tide'} onChange={(v) => save({ dictation: v as 'tide' | 'handy' | 'deepgram' | 'flow' })} options={[{ value: 'flow', label: 'Wispr Flow' }, { value: 'tide', label: 'Tide (Parakeet)' }, { value: 'deepgram', label: 'Deepgram (Nova-3)' }, { value: 'handy', label: 'Handy' }]} />

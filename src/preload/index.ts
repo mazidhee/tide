@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { ChatEvent, TideApi } from '@shared/types'
+import type { ChatEvent, LectureState, TideApi } from '@shared/types'
 import { ideApi } from './ide'
 import { ideasApi } from './ideas'
 import { notebookApi } from './notebook'
@@ -566,6 +566,13 @@ const api: TideApi = {
     test: invoke('cloud:test'),
     models: invoke('cloud:models'),
     usage: invoke('cloud:usage')
+  },
+  lecture: {
+    prepare: invoke('lecture:prepare'),
+    piece: invoke('lecture:piece'),
+    status: invoke('lecture:status'),
+    warm: invoke('lecture:warm'),
+    onProgress: (cb: (st: LectureState) => void) => subscribe<LectureState>('lecture:progress', cb)
   },
   voice: {
     status: invoke('voice:status'),
