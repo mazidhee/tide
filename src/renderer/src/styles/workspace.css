@@ -131,6 +131,23 @@
   border-radius: 50%;
   background: var(--accent);
 }
+button.lw-follow {
+  border: 0;
+  background: none;
+  padding: 3px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+}
+button.lw-follow:hover {
+  background: var(--hover, color-mix(in srgb, var(--ink) 6%, transparent));
+  color: var(--ink);
+}
+button.lw-follow:not(.on)::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--ink-3, var(--ink-soft));
+}
 .lw-run {
   flex: none;
   display: inline-flex;

@@ -287,10 +287,32 @@ export interface Finished {
  * Whether a finished command is sent to the tutor now, held until the reply being written is done,
  * or dropped. One reply per command: the same finish is never sent twice.
  */
-export function autoReply(f: Finished, o: { busy: boolean; sentAt: number; enabled: boolean }): 'send' | 'hold' | 'drop' {
+export function autoReply(
+  f: Finished,
+  o: { busy: boolean; sentAt: number; enabled: boolean; follow?: boolean; waiting?: boolean; files?: string[]; staged?: string | null }
+): 'send' | 'hold' | 'drop' {
   if (!o.enabled || f.at <= o.sentAt) return 'drop'
+  // "Tutor follows along" off: run anything, the tutor stays quiet (it can still read the terminal when asked)
+  if (o.follow === false) return 'drop'
+  // Experimenting: only a run that answers the question waiting replies on its own
+  if (o.waiting === false) return 'drop'
+  if (o.files && !runIsRelated(f.command, o.files, o.staged ?? null)) return 'drop'
   if (!worthAReply(f.command, f.output, f.prompt)) return 'drop'
   return o.busy ? 'hold' : 'send'
+}
+
+/**
+ * Whether a run belongs to the task at hand: the command the tutor put at the prompt, or one
+ * that names the task's file or a file the tutor named. Anything else is the learner trying things.
+ */
+export function runIsRelated(command: string, files: string[], staged: string | null): boolean {
+  const c = cleanCommand(command).trim()
+  if (!c) return false
+  if (staged && cleanCommand(staged).trim() === c) return true
+  return files.some((f) => {
+    const base = f.split('/').pop()!
+    return new RegExp(`(^|[\\s/'"=<>(])${base.replace(/[.+*?^$()[\]{}|\\]/g, '\\$&')}($|[\\s'")<>;:,])`).test(c)
+  })
 }
 
 // ---------- The header's step ----------
