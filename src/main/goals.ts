@@ -572,7 +572,14 @@ export async function planGoalsWeek(date = today(), background = false): Promise
   const { getWeek } = await import('./coach')
   const last = await getWeek(addDays(date, -1)).catch(() => null)
   const undone = [...(last?.carry ?? []), ...(last?.days ?? []).filter((d) => d.date < date).flatMap((d) => d.items.filter((it) => !it.done))].filter((it) => it.kind === 'learn' && it.topic && it.notebook)
+  // A lesson finished since (from Carry on or the course, not the plan's own item) isn't carried over
+  const finished = new Set(
+    (await import('./knowledge').then((k) => k.lessonRecords()).catch(() => []))
+      .filter((r) => r.mode === 'teach' && r.finished)
+      .map((r) => r.topic.trim().toLowerCase())
+  )
   for (const u of undone.reverse()) {
+    if (finished.has(u.topic!.trim().toLowerCase())) continue
     const q = byNotebook.get(u.notebook!) ?? []
     if (!q.some((c) => c.topic === u.topic)) byNotebook.set(u.notebook!, [{ notebook: u.notebook!, topic: u.topic!, section: '', ...(u.topicId ? { topicId: u.topicId } : {}), why: 'Carried over from last time' }, ...q])
   }
