@@ -279,3 +279,16 @@ describe('the tutor’s files are in the editor, its next command at the prompt'
     expect(canStage('Traceback (most recent call last):', '', false)).toBe(false)
   })
 })
+
+describe('the script a question names', () => {
+  const reply = 'Here is a three-line script:\n\n```python\nprint("loading")\ntotal = 100 +\nprint("done")\n```\n\n<ask type="short">Run with `python3 job.py`: what appears in the terminal? The difference between `python3 file.py` and the output…</ask>'
+  it('makes job.py from the one script in the message, and never a stand-in like file.py', async () => {
+    const { filesToWorkOn, missingFiles } = await import('../src/shared/workspace')
+    const named = filesToWorkOn(reply)
+    expect(named).toContain('job.py')
+    expect(named).not.toContain('file.py')
+    const { make, ask } = missingFiles(named, [], [reply])
+    expect(make).toEqual([{ file: 'job.py', code: 'print("loading")\ntotal = 100 +\nprint("done")\n' }])
+    expect(ask).toEqual([])
+  })
+})
