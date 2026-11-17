@@ -16,6 +16,8 @@ import { existsSync, promises as fs } from 'fs'
 import { join } from 'path'
 import { askDecision, cardOf, commitDecision, newState, noteLearner, parseWorkProject, progressText, publicView, revealDecision, rubricFor, setStep, summaryMarkdown, workSlug, type WorkCard, type WorkProject, type WorkState, type WorkView } from '@shared/workProject'
 import type { McpTool } from './tideMcp'
+import { cardIndex, coverFor, lockDefence, noteBuilder, noteCheck, noteRun, setFinding, stepCards, tickCover, type FlightState } from '@shared/flightPlan'
+import type { FlightApi, WorkRun } from '@shared/workProject'
 
 export const WORK_DIR = 'Projects/Work'
 const STATE_DIR = '.tide/work-projects'
@@ -98,10 +100,12 @@ const obj = (properties: Record<string, unknown>, required: string[] = []) => ({
 export const WORK_TOOL: McpTool = {
   name: 'work_project',
   description:
-    'The guided work project this lesson is on. Actions: progress (brief, steps, decision points and where they are), ask_decision (id: before putting a decision question to them; then stop and wait), commit_decision (id: after they answer; records their own last message), reveal_decision (id: what was actually decided, why, and common wrong choices; only after commit), step_done (step: when a step is finished), rubric (what a good answer contains; only once every decision is answered, never pasted to them), write_summary (text: a short summary in their words at the end, saved in their notes).',
+    'The guided work project this lesson is on. Actions: progress (brief, steps, decision points and where they are), ask_decision (id: before putting a decision question to them; then stop and wait), commit_decision (id: after they answer; records their own last message), reveal_decision (id: what was actually decided, why, and common wrong choices; only after commit), step_done (step: when a step is finished), rubric (what a good answer contains; only once every decision is answered, never pasted to them), builder (step: how their step’s pipeline maps onto Metabase’s query builder, what is native only and why, and the question they built there: its definition and how its result compared with their pipeline’s), check_card (step, card, file: their result against the finished dashboard’s real card, both run on the practice data: the same rows or which differ; the reference pipeline is never shown), write_summary (text: a short summary in their words at the end, saved in their notes).',
   inputSchema: obj(
     {
-      action: { type: 'string', enum: ['progress', 'ask_decision', 'commit_decision', 'reveal_decision', 'step_done', 'rubric', 'write_summary'] },
+      action: { type: 'string', enum: ['progress', 'ask_decision', 'commit_decision', 'reveal_decision', 'step_done', 'rubric', 'builder', 'check_card', 'write_summary'] },
+      card: { type: 'number', description: 'check_card: the card number in the project’s card reference' },
+      file: { type: 'string', description: 'check_card: their file, e.g. step2.js' },
       id: { type: 'string', description: 'A decision id, e.g. D1' },
       step: { type: 'number' },
       text: { type: 'string' }
@@ -150,6 +154,14 @@ export const WORK_TOOL: McpTool = {
       case 'rubric': {
         const r = rubricFor(p, s)
         return r.error ?? r.text!
+      }
+      case 'builder':
+        return builderReport(p.slug, Number(args.step) || s.step)
+      case 'check_card': {
+        const r = await checkReference(p.slug, Number(args.step) || s.step, Number(args.card), args.file ? String(args.file) : undefined).catch((e: Error) => ({ error: e.message }))
+        if ('error' in r) return r.error
+        say(`Checked against the real card ${Number(args.card)}`)
+        return `Their result against the real card ${Number(args.card)} (“${r.name}”), both run on the practice data: ${r.comparison.match ? 'the same rows.' : `differs. ${r.comparison.why}`}${r.comparison.hints.length ? `\n${r.comparison.hints.join('\n')}` : ''}\nNever show them the reference pipeline; ask about the difference.`
       }
       case 'write_summary': {
         const text = String(args.text ?? '').trim()
@@ -204,7 +216,234 @@ export async function answerOnPage(slug: string, id: string, answer: string): Pr
   return viewOf(slug)
 }
 
+// ---------- The flight plan (components/FlightPlan) ----------
+
+const stepFileName = (n: number) => `step${Math.max(1, Math.round(n) || 1)}.js`
+
+/** The step's file in their workspace: made with a two-line header if new (never a solution) */
+async function stepFile(slug: string, n: number): Promise<{ root: string; file: string; abs: string }> {
+  const p = await workProject(slug)
+  if (!p) throw new Error('That project isn’t in Projects/Work any more.')
+  const root = await workspaceFor(p.slug)
+  const file = stepFileName(n)
+  const abs = join(root, file)
+  if (!existsSync(abs)) {
+    const st = p.steps.find((x) => x.n === n)
+    await fs.writeFile(abs, `// Step ${n}${st ? `: ${st.title}` : ''}\n// Your pipeline: db.<collection>.aggregate([ ... ])\n\n`)
+  }
+  return { root, file, abs }
+}
+
+async function practice() {
+  const { practiceAuth } = await import('./practiceStack')
+  const a = practiceAuth()
+  if (!a) throw new Error('The practice data isn’t running. Start it in Settings › Practice data.')
+  const { practiceClient } = await import('./metabase')
+  return { a, c: practiceClient(a) }
+}
+
+/** One of their files in the workspace (a plain name ending .js), or the step's own */
+async function pickFile(slug: string, n: number, name?: string): Promise<{ abs: string; file: string }> {
+  const own = await stepFile(slug, n)
+  if (!name || name === own.file) return own
+  if (!/^[\w.-]+\.js$/.test(name)) throw new Error('Run a .js file from this project’s folder.')
+  return { abs: join(own.root, name), file: name }
+}
+
+/** Runs the pipeline in the step's file (or another of theirs) on the practice data */
+async function runStep(slug: string, n: number, name?: string): Promise<WorkRun> {
+  const { abs, file } = await pickFile(slug, n, name)
+  const text = await fs.readFile(abs, 'utf8')
+  const { parsePipeline } = await import('@shared/mongoPipeline')
+  const parsed = parsePipeline(text.replace(/^\s*\/\/.*$/gm, ''))
+  if ('error' in parsed) return { columns: [], rows: [], error: parsed.error, ms: 0, file }
+  if (!parsed.collection) return { columns: [], rows: [], error: 'Name the collection: db.<collection>.aggregate([...])', ms: 0, file }
+  const { a, c } = await practice()
+  const { queryRows } = await import('./metabase')
+  const r = await queryRows({ database: a.databaseId, pipeline: { collection: parsed.collection, stages: parsed.stages } }, 200, c)
+  return { ...r, file, collection: parsed.collection }
+}
+
+async function stepStages(slug: string, n: number, name?: string): Promise<{ stages: Record<string, unknown>[] } | { error: string }> {
+  const { abs } = await pickFile(slug, n, name)
+  const { parsePipeline } = await import('@shared/mongoPipeline')
+  const parsed = parsePipeline((await fs.readFile(abs, 'utf8')).replace(/^\s*\/\/.*$/gm, ''))
+  return 'error' in parsed ? { error: parsed.error } : { stages: parsed.stages }
+}
+
+async function cardOfPractice(id: number) {
+  const { a, c } = await practice()
+  const q = await c.get<{ id: number; name: string; database_id?: number; dataset_query?: unknown }>(`/api/card/${Math.round(id)}`)
+  if (q.database_id !== undefined && q.database_id !== a.databaseId) throw new Error('That question isn’t on the practice data.')
+  return q
+}
+
+/** For the tutor: the builder mapping of their step, and the question they built and how it compared */
+async function builderReport(slug: string, n: number): Promise<string> {
+  const { builderGuide, guideText, producesMetric } = await import('@shared/builderMap')
+  const { mbqlText } = await import('@shared/flightPlan')
+  const st = await stepStages(slug, n).catch((e: Error) => ({ error: e.message }))
+  if ('error' in st) return `Their step ${n} file isn’t a pipeline yet: ${st.error}`
+  const lines = [`Step ${n}: their pipeline in Metabase's query builder${producesMetric(st.stages) ? '' : ' (this step returns documents, not a metric)'}:`, guideText(builderGuide(st.stages))]
+  const b = ((await readWorkState(slug)) as FlightState).builder?.[String(n)]
+  if (b?.native) lines.push(`They marked the builder part native only: ${b.native}`)
+  if (b?.card) {
+    lines.push(`Their builder question: “${b.name}” (${b.match ? 'its result matches their pipeline' : `differs: ${b.why ?? ''}`}).`)
+    const q = await cardOfPractice(b.card).catch(() => null)
+    if (q) lines.push(`Its definition (MBQL):\n${mbqlText(q.dataset_query)}`)
+    lines.push('Review it with them: explain the differences (the report time zone against $dateTrunc’s timezone, empty values kept as their own group, filters on relative dates) and ask why each one happens.')
+  }
+  return lines.join('\n\n')
+}
+
+// ---------- The real piece of work, as the reference ----------
+
+type RefCard = { id: number; name: string; collection: string; stages: Record<string, unknown>[] }
+const refCache = async (slug: string) => (await vault()).absPath(`.tide/work-references/${workSlug(slug)}.json`)
+
+/**
+ * The reference cards: the finished dashboard's native MongoDB questions (front matter `reference:`,
+ * a dashboard id or address in your company Metabase, read once through its read-only client and
+ * kept beside the project's state). Only names ever reach the window; the pipelines are run on the
+ * practice data and compared, never shown.
+ */
+async function references(p: WorkProject): Promise<{ cards: RefCard[]; source: string } | null> {
+  const file = await refCache(p.slug)
+  const cached = await fs.readFile(file, 'utf8').then((t) => JSON.parse(t) as { cards: RefCard[]; source: string }).catch(() => null)
+  if (cached?.cards?.length) return cached
+  const id = /(?:dashboard\/)?(\d+)\s*$/.exec(p.reference ?? '')?.[1]
+  if (!id) return null
+  const { metabaseReady, readClient } = await import('./metabase')
+  if (!metabaseReady()) return null
+  const d = await readClient().get<{ name: string; dashcards?: { card?: { id: number; name: string; dataset_query?: unknown } }[] }>(`/api/dashboard/${id}`)
+  const { nativeOf } = await import('@shared/flightPlan')
+  const cards: RefCard[] = []
+  for (const dc of d.dashcards ?? []) {
+    const n = dc.card ? nativeOf(dc.card.dataset_query) : null
+    if (!dc.card || !n?.collection || !n.query) continue
+    try {
+      cards.push({ id: dc.card.id, name: dc.card.name, collection: n.collection, stages: JSON.parse(n.query) as Record<string, unknown>[] })
+    } catch {
+      // a query Tide can't read as a pipeline: left out
+    }
+  }
+  const out = { cards, source: `dashboard ${id}` }
+  await fs.mkdir(join(file, '..'), { recursive: true })
+  await fs.writeFile(file, JSON.stringify(out, null, 2))
+  return out
+}
+
+/** Their result against the real card's pipeline, both run on the practice data */
+async function checkReference(slug: string, n: number, num: number, file?: string) {
+  const p = await workProject(slug)
+  if (!p) throw new Error('That project isn’t in Projects/Work any more.')
+  const name = cardIndex(p.rubric)[num]
+  if (!name) throw new Error(`There’s no card ${num} in this project’s reference.`)
+  const r = await references(p)
+  const { matchCard, compareBuilder } = await import('@shared/flightPlan')
+  const card = r ? matchCard(name, r.cards, Object.values(cardIndex(p.rubric))) : null
+  if (!card) throw new Error(p.reference ? 'The real card couldn’t be read: connect your company Metabase in Settings › Connections once, and Tide keeps a copy.' : 'This project names no finished dashboard to check against (reference: in its front matter).')
+  const { a, c } = await practice()
+  const { queryRows } = await import('./metabase')
+  const [mine, real] = await Promise.all([runStep(slug, n, file), queryRows({ database: a.databaseId, pipeline: { collection: card.collection, stages: card.stages } }, 200, c)])
+  const comparison = compareBuilder(real, mine)
+  await saveState(noteCheck((await readWorkState(slug)) as FlightState, num, n, { match: comparison.match, why: comparison.why }, Date.now()))
+  return { comparison, name }
+}
+
+const flight: { [K in keyof FlightApi]: (...args: Parameters<FlightApi[K]>) => ReturnType<FlightApi[K]> } = {
+  async finding(slug, n, text) {
+    await saveState(setFinding((await readWorkState(slug)) as FlightState, n, String(text ?? ''), Date.now()))
+    return viewOf(slug)
+  },
+  async stepDone(slug, n) {
+    const p = await workProject(slug)
+    if (!p) throw new Error('That project isn’t in Projects/Work any more.')
+    const s = await readWorkState(slug)
+    if (n >= s.step) await saveState(setStep(p, s, n + 1, Date.now()))
+    return viewOf(slug)
+  },
+  async run(slug, n, file) {
+    const run = await runStep(slug, n, file)
+    await saveState(noteRun((await readWorkState(slug)) as FlightState, n, { rows: run.rows.length, ok: !run.error, file: run.file }, Date.now()))
+    return { run, view: await viewOf(slug) }
+  },
+  async stepFile(slug, n) {
+    const { root, file } = await stepFile(slug, n)
+    return { root, file }
+  },
+  async guide(slug, n, file) {
+    const { builderGuide, producesMetric } = await import('@shared/builderMap')
+    const st = await stepStages(slug, n, file)
+    if ('error' in st) return { guide: null, metric: false, error: st.error }
+    return { guide: builderGuide(st.stages), metric: producesMetric(st.stages) }
+  },
+  async questions() {
+    const { a, c } = await practice()
+    const { nativeOf } = await import('@shared/flightPlan')
+    const all = await c.get<{ id: number; name: string; database_id?: number; updated_at?: string; dataset_query?: unknown }[]>('/api/card?f=all')
+    return all
+      .filter((q) => q.database_id === a.databaseId)
+      .sort((x, y) => String(y.updated_at ?? '').localeCompare(String(x.updated_at ?? '')))
+      .slice(0, 8)
+      .map((q) => ({ id: q.id, name: q.name, updated: String(q.updated_at ?? ''), builder: !nativeOf(q.dataset_query) }))
+  },
+  async compare(slug, n, card, file) {
+    const { a, c } = await practice()
+    const { queryRows } = await import('./metabase')
+    const { compareBuilder, mbqlText } = await import('@shared/flightPlan')
+    const q = await cardOfPractice(card)
+    const [pipeline, mine] = await Promise.all([runStep(slug, n, file), queryRows({ database: a.databaseId, card: q.id }, 200, c)])
+    const comparison = compareBuilder(pipeline, mine, { theirs: 'the builder’s', reference: 'your pipeline' })
+    const builder = !(await import('@shared/flightPlan')).nativeOf(q.dataset_query)
+    await saveState(noteBuilder((await readWorkState(slug)) as FlightState, n, { card: q.id, name: q.name, match: comparison.match, why: comparison.why }, Date.now()))
+    return { comparison, mbql: mbqlText(q.dataset_query), builder, name: q.name, pipeline, question: { ...mine, file: `question ${q.id}` }, view: await viewOf(slug) }
+  },
+  async native(slug, n, why) {
+    await saveState(noteBuilder((await readWorkState(slug)) as FlightState, n, { native: String(why ?? '').slice(0, 600) || 'The builder can’t express this step.' }, Date.now()))
+    return viewOf(slug)
+  },
+  async defend(slug, k, answer) {
+    const r = lockDefence((await readWorkState(slug)) as FlightState, k, String(answer ?? ''), Date.now())
+    if (r.error) throw new Error(r.error)
+    await saveState(r.state)
+    return viewOf(slug)
+  },
+  async cover(slug, k) {
+    const p = await workProject(slug)
+    if (!p) throw new Error('That project isn’t in Projects/Work any more.')
+    return coverFor(p, (await readWorkState(slug)) as FlightState, k)
+  },
+  async tick(slug, k, ticked) {
+    await saveState(tickCover((await readWorkState(slug)) as FlightState, k, Array.isArray(ticked) ? ticked.map(Number).filter(Number.isInteger) : [], Date.now()))
+    return viewOf(slug)
+  },
+  async refs(slug, n) {
+    const p = await workProject(slug)
+    if (!p) throw new Error('That project isn’t in Projects/Work any more.')
+    const r = await references(p).catch(() => null)
+    const st = p.steps.find((x) => x.n === n)
+    const idx = cardIndex(p.rubric)
+    const s = (await readWorkState(slug)) as FlightState
+    const { matchCard } = await import('@shared/flightPlan')
+    const names = Object.values(idx)
+    const list = (st ? stepCards(st.task) : []).filter((num) => idx[num]).map((num) => ({ num, name: idx[num], available: !!(r && matchCard(idx[num], r.cards, names)), ...(s.checks?.[String(num)] ? { check: s.checks[String(num)] } : {}) }))
+    return { cards: list, source: r ? r.source : p.reference ? 'unreachable' : 'none' }
+  },
+  async checkRef(slug, n, num, file) {
+    const r = await checkReference(slug, n, num, file)
+    return { comparison: r.comparison, name: r.name, view: await viewOf(slug) }
+  },
+  async openMetabase(path) {
+    const { PRACTICE_URL } = await import('@shared/practiceStack')
+    const clean = /^\/[\w/#?=&.-]*$/.test(String(path ?? '')) ? String(path) : '/'
+    const { shell } = await import('electron')
+    await shell.openExternal(`${PRACTICE_URL}${clean}`)
+  }
+}
+
 export function registerWork(): void {
+  for (const [name, fn] of Object.entries(flight)) ipcMain.handle(`work:${name}`, (_e, ...args: unknown[]) => (fn as (...a: unknown[]) => unknown)(...args))
   ipcMain.handle('work:list', () => listWork())
   ipcMain.handle('work:view', (_e, slug: string) => viewOf(String(slug ?? '')))
   ipcMain.handle('work:answer', (_e, slug: string, id: string, answer: string) => answerOnPage(String(slug ?? ''), String(id ?? ''), String(answer ?? '')))

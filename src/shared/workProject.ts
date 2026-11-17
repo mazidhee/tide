@@ -49,6 +49,8 @@ export interface WorkProject {
   steps: WorkStep[]
   decisions: WorkDecision[]
   defend: string[]
+  /** The finished piece of work this project redoes (front matter `reference:`), e.g. a dashboard's id or address in the company Metabase: its cards are the reference answers, run on the practice data. Never sent to the window */
+  reference?: string
 }
 
 /** What the window and the tutor may see before anything is answered: no rubric, no decided choices */
@@ -188,7 +190,7 @@ export function parseWorkProject(md: string, fileSlug = ''): { project: WorkProj
   if (problems.length && !brief && !steps.length) return { project: null, problems }
   const skills = Array.isArray(meta.skills) ? meta.skills : meta.skills ? String(meta.skills).split(',').map((x) => x.trim()) : []
   return {
-    project: { slug, title, order: Number(meta.order) || 99, difficulty: Number(meta.difficulty) || undefined, skills, stakeholder: meta.stakeholder ? String(meta.stakeholder) : undefined, brief, rubric, steps, decisions, defend },
+    project: { slug, title, order: Number(meta.order) || 99, difficulty: Number(meta.difficulty) || undefined, skills, stakeholder: meta.stakeholder ? String(meta.stakeholder) : undefined, brief, rubric, steps, decisions, defend, ...(meta.reference ? { reference: String(meta.reference) } : {}) },
     problems
   }
 }
@@ -292,9 +294,17 @@ export function progressText(p: WorkProject, s: WorkState): string {
     `Steps:\n${p.steps.map((x) => `${x.n === s.step ? '→' : x.n < s.step ? '✓' : ' '} ${x.n}. ${x.title}: ${x.task.replace(/\n+/g, ' ')}${x.data ? ` [data: ${x.data}]` : ''}${x.skill ? ` [skill: ${x.skill}]` : ''}`).join('\n')}`,
     step ? `Now on step ${step.n}: ${step.title}.` : 'Every step is done: the defend-it round is next.',
     p.decisions.length ? `Decision points (ask before revealing):\n${p.decisions.map((d) => `- ${d.id} (step ${d.step}): ${d.ask} — ${s.committed[d.id] ? (s.revealed.includes(d.id) ? 'answered and revealed' : 'answered, not yet revealed') : s.asked[d.id] !== undefined ? 'asked, waiting for their answer' : 'not asked yet'}`).join('\n')}` : '',
-    p.defend.length ? `Defend-it round (at the end, one at a time):\n${p.defend.map((q) => `- ${q}`).join('\n')}` : ''
+    p.defend.length ? `Defend-it round (at the end, one at a time):\n${p.defend.map((q) => `- ${q}`).join('\n')}` : '',
+    findingsText(s)
   ]
   return lines.filter(Boolean).join('\n\n')
+}
+
+/** Their one-line findings, written on the flight plan (shared/flightPlan) */
+function findingsText(s: WorkState): string {
+  const f = (s as WorkState & { findings?: Record<string, string> }).findings ?? {}
+  const lines = Object.entries(f).map(([n, t]) => `- step ${n}: ${t}`)
+  return lines.length ? `What they found, in their words:\n${lines.join('\n')}` : ''
 }
 
 export function cardOf(p: WorkProject, s: WorkState | null): WorkCard {
@@ -335,16 +345,50 @@ export const WORK_TOOL_LINE = 'work_project: the guided project (brief, steps, d
 
 export interface WorkView {
   project: WorkProjectPublic
-  state: WorkState
+  state: WorkState & import('./flightPlan').FlightExtras
   /** What was decided, for the decisions they've answered */
   revealed: Record<string, { decided: string; why: string; wrong: string[] }>
   path: string
   problems: string[]
 }
 
-export interface WorkApi {
+export interface WorkApi extends FlightApi {
   list(): Promise<WorkCard[]>
   view(slug: string): Promise<WorkView>
   answer(slug: string, id: string, answer: string): Promise<WorkView>
   prepare(slug: string): Promise<{ root: string; title: string; slug: string }>
+}
+
+/** A run of their step's pipeline on the practice data */
+export type WorkRun = import('./resultCompare').ResultSet & { ms: number; file: string; collection?: string }
+
+/** The flight plan's calls (components/FlightPlan, main/workProjects) */
+export interface FlightApi {
+  /** Their one-line finding for a step */
+  finding(slug: string, step: number, text: string): Promise<WorkView>
+  /** The step is finished: the plan moves on */
+  stepDone(slug: string, step: number): Promise<WorkView>
+  /** Runs the step's file (step<n>.js in their workspace) on the practice data; made empty if new */
+  run(slug: string, step: number, file?: string): Promise<{ run: WorkRun; view: WorkView }>
+  /** The step's file name, made with a two-line header if it isn't there yet */
+  stepFile(slug: string, step: number): Promise<{ root: string; file: string }>
+  /** How the step's pipeline maps onto Metabase's query builder */
+  guide(slug: string, step: number, file?: string): Promise<{ guide: import('./builderMap').BuilderGuide | null; metric: boolean; error?: string }>
+  /** Their most recently saved questions in the practice Metabase */
+  questions(): Promise<{ id: number; name: string; updated: string; builder: boolean }[]>
+  /** Runs their saved question and their pipeline, and compares the two */
+  compare(slug: string, step: number, card: number, file?: string): Promise<{ comparison: import('./flightPlan').BuilderComparison; mbql: string; builder: boolean; name: string; pipeline: WorkRun; question: WorkRun; view: WorkView }>
+  /** The builder can't do this step: native only, with the reason */
+  native(slug: string, step: number, why: string): Promise<WorkView>
+  /** A defend-it answer, locked */
+  defend(slug: string, k: number, answer: string): Promise<WorkView>
+  /** What a strong answer covers, once locked and the rubric is open */
+  cover(slug: string, k: number): Promise<{ cover?: string[]; error?: string }>
+  tick(slug: string, k: number, ticked: number[]): Promise<WorkView>
+  /** The real cards this step builds (from the finished dashboard), by number and name, and the last check of each */
+  refs(slug: string, step: number): Promise<{ cards: { num: number; name: string; available: boolean; check?: { match: boolean; why: string; at: number } }[]; source: string }>
+  /** Their result against a real card, both run on the practice data */
+  checkRef(slug: string, step: number, num: number, file?: string): Promise<{ comparison: import('./flightPlan').BuilderComparison; name: string; view: WorkView }>
+  /** Opens the practice Metabase in the browser at a path (a new question: /question/notebook) */
+  openMetabase(path: string): Promise<void>
 }

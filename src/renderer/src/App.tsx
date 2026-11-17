@@ -75,7 +75,7 @@ const ReadingRoom = lazy(() => import('./components/reading/ReadingRoom').then((
 const LabView = lazy(() => import('./components/LabView').then((m) => ({ default: m.LabView })))
 const WorkshopView = lazy(() => import('./components/WorkshopView').then((m) => ({ default: m.WorkshopView })))
 const CoursesView = lazy(() => import('./components/CoursesView').then((m) => ({ default: m.CoursesView })))
-const WorkProjectPage = lazy(() => import('./components/WorkProjects').then((m) => ({ default: m.WorkProjectPage })))
+const FlightPlan = lazy(() => import('./components/FlightPlan').then((m) => ({ default: m.FlightPlan })))
 const ProjectsPage = lazy(() => import('./components/ProjectsPage').then((m) => ({ default: m.ProjectsPage })))
 const WritingView = lazy(() => import('./components/writing/WritingView').then((m) => ({ default: m.WritingView })))
 const ComprehensionView = lazy(() => import('./components/comprehension/ComprehensionView').then((m) => ({ default: m.ComprehensionView })))
@@ -580,7 +580,7 @@ export default function App() {
   else if (view.kind === 'practice') main = <PracticeView />
   // Guided projects: a small hook (components/WorkshopView.tsx)
   else if (view.kind === 'projects') main = <ProjectsPage />
-  else if (view.kind === 'work') main = <WorkProjectPage key={view.slug} slug={view.slug} />
+  else if (view.kind === 'work') main = <FlightPlan key={view.slug} slug={view.slug} />
   else if (view.kind === 'writing') main = view.path ? <WritingPiece key={`${view.path}:${view.nonce ?? ''}`} path={view.path} talk={!!view.talk} review={!!view.review} /> : <WritingView />
   else if (view.kind === 'comprehension') main = <ComprehensionView key={view.lesson ?? 'home'} lesson={view.lesson} />
   else if (view.kind === 'courses') main = <CoursesView key={view.id ?? ''} id={view.id} lesson={view.lesson} area={view.area} />
