@@ -2186,6 +2186,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               <span>Metabase</span>
             </button>
           )}
+          {/* Always in sight, not only in the menu: this lesson in a window of its own (⌥⌘N) */}
+          <PopOutButton className="tool-btn lw-pop" label={false} disabled={busy} />
           {/* The controls a lesson needs now and then, in one menu (nothing taken away, only moved) */}
           <LessonMenu>
             {mode === 'teach' && approach && (
