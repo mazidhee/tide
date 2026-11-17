@@ -1001,7 +1001,7 @@ function TutorSection() {
         <Row label="Use the Mac’s own voice" hint="More robotic, nothing to set up.">
           <Toggle label="Use the Mac’s own voice" on={prefs.engine === 'system'} onChange={(on) => save({ engine: on ? 'system' : 'natural' })} />
         </Row>
-        <Row label="Tutor’s voice in Talk" hint={prefs.lecture === 'kokoro' ? 'Kokoro speaks each reply as it’s written, straight away.' : `A real lecturer’s voice, with pauses and breaths. Each reply is made while you read it (about a minute for a long one), then plays. ${lectureDetail}`}>
+        <Row label="Tutor’s voice in Talk" hint={prefs.lecture === 'kokoro' ? 'Kokoro speaks each reply as it’s written, straight away.' : `A real lecturer’s voice, with pauses and breaths. Each reply is made while you read it (under a minute for a short one, a few minutes for a long one) and plays as it’s ready. ${lectureDetail}`}>
           <Select label="Tutor’s voice in Talk" value={prefs.lecture ?? 'fish'} onChange={(v) => save({ lecture: v as 'fish' | 'kokoro' })} options={[{ value: 'fish', label: 'Lecture voice (Fish S2 Pro, the professor)' }, { value: 'kokoro', label: 'Kokoro (instant)' }]} />
         </Row>
         {(prefs.lecture ?? 'fish') === 'fish' && (
