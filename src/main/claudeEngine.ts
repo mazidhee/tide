@@ -538,6 +538,18 @@ export function isAnswer(req: TurnRequest, said: string): boolean {
   return !/^\s*(\[hint\]|\[ran\] |my question:|(i (don'?t|do not) know|i dunno|idk|no idea|not sure|no clue|i have no (idea|clue)|i'?m not sure|go on|continue|skip)\b)/i.test(said.replace(/[\u2018\u2019\u02bc]/g, "'"))
 }
 
+/**
+ * Whether an answer gets the separate marking call (Opus, when it outranks the tutor). A code
+ * answer to a question with hidden tests is marked by the tests (run in Tide's sandbox) and the
+ * teaching model: the tests settle right or wrong, so a second, costlier model adds nothing.
+ * Maths, explanations and open-ended answers keep the marker.
+ */
+export function wantsMarker(question: string, said: string, markRank: number, teachRank: number): boolean {
+  if (markRank <= teachRank) return false
+  const hiddenTests = /```tests\b/i.test(question) || /\b\d+ of \d+ (hidden )?tests passed\b/i.test(said)
+  return !hiddenTests
+}
+
 const MARK_SYSTEM = `You mark one answer a student gave in a lesson, for their tutor. Grade against the tutor's own solution when there is one (it is inside <solution>; the student never saw it). "correct" means the result is right and complete, not just heading the right way. A right final result is "correct" even when the working the question asked for isn't shown: say in "why" that the working wasn't shown, and never mark it down for that alone. "partial" is for a result that is incomplete or only partly right, or reasoning they wrote that is wrong. A part of the question their answer settles by plain implication counts as answered (naming a syntax error names the compile phase; "only the error appears" means nothing else printed): never mark it down for not restating it, though "why" may add it in a few words. A message that only asks for something (to be taught again, to move on) is not an answer and is never marked. An equivalent method or ordering is not a mistake. Quote the words of their answer that earned the verdict. A code answer may come with what Tide's sandbox found when it ran their code against the question's hidden tests (the tests are in the \`\`\`tests block of the question; the results read "N of M tests passed" with each FAILED test and why): it can't be "correct" unless every test passed, and for each failed test say what that test tried and the exact line or idea in their code that makes it fail. A note from Tide on an exact check of their final answer or query is a fact: follow it. Reply with JSON only: {"verdict": "correct" | "partial" | "wrong", "score": 0.0 to 1.0, "why": "one or two sentences: what was right and why, or the exact step that's wrong and why", "misconception": optional, only when a partial or wrong answer comes from a specific wrong belief rather than a slip or a gap: {"name": "a short name, under 8 words", "description": "one sentence: what they believe and why it's wrong"}}. When it is one of the learner's known misconceptions listed with the answer, use that exact name.`
 
 /**
@@ -896,8 +908,9 @@ export async function claudeTurn(req: TurnRequest, emit: (e: ChatEvent) => void,
   if (exact) emit({ id: req.id, type: 'step', step: { id: nextStepId(), kind: 'helper', label: exact.kind === 'sql' || exact.kind === 'metabase' ? (exact.result === 'match' ? 'Ran your query beside the reference: the same rows' : 'Ran your query beside the reference: the rows differ') : exact.result === 'match' ? 'Checked your final answer: it’s right' : 'Checked your final answer: it isn’t right yet', status: 'done', depth: 0 } })
   // An answer is marked first by the marking model, when it's stronger than the one teaching
   const markModel = claudeModel('mark', settings)
-  if (answering && rank(markModel) > rank(model)) {
-    const prev = text([...req.messages].reverse().find((m) => m.role === 'assistant')?.content)
+  const question = answering ? text([...req.messages].reverse().find((m) => m.role === 'assistant')?.content) : ''
+  if (answering && wantsMarker(question, said, rank(markModel), rank(model))) {
+    const prev = question
     const id = nextStepId()
     emit({ id: req.id, type: 'step', step: { id, kind: 'helper', label: `${claudeLabel(markModel)} is marking your answer`, status: 'running', depth: 0 } })
     // Bounded like the turn itself: a marker that never answers leaves the mark to the tutor
