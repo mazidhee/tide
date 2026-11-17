@@ -49,6 +49,9 @@ export interface WorkspaceProps {
   made?: string[]
   /** A file the tutor named that isn't here, and the button that asks for it */
   notice?: ReactNode
+  /** "Tutor follows along": the tutor replies on its own to runs that answer its task (kept per lesson) */
+  follow?: boolean
+  onFollow?(on: boolean): void
 }
 
 /**
@@ -93,7 +96,7 @@ export function NameField({ initial, onDone, onCancel }: { initial: string; onDo
   )
 }
 
-export function LessonWorkspace({ root, files, open, onOpen, terminalId, onTerminal, keepShell = true, seen = 0, focusNonce = 0, rev = 0, tools, empty, task, onRenamed, onCreated, staged, made, notice }: WorkspaceProps) {
+export function LessonWorkspace({ root, files, open, onOpen, terminalId, onTerminal, keepShell = true, seen = 0, focusNonce = 0, rev = 0, tools, empty, task, onRenamed, onCreated, staged, made, notice, follow, onFollow }: WorkspaceProps) {
   const [text, setText] = useState<Record<string, string>>({})
   const [termId, setTermId] = useState<string | null>(terminalId ?? null)
   const editorRef = useRef<import('monaco-editor').editor.IStandaloneCodeEditor | null>(null)
@@ -201,10 +204,22 @@ export function LessonWorkspace({ root, files, open, onOpen, terminalId, onTermi
               <Icon name="plus" size={13} />
             </button>
           ))}
-        {seen > 0 && (
-          <span className="lw-seen" title="Each command you finish here is sent to the tutor, which replies on its own">
-            Tutor sees your runs
-          </span>
+        {onFollow ? (
+          <button
+            className={`lw-seen lw-follow${follow ? ' on' : ''}`}
+            role="switch"
+            aria-checked={!!follow}
+            onClick={() => onFollow(!follow)}
+            title={follow ? 'On: when a question is waiting, a run of its file or the command the tutor gave gets a reply. Anything else you run stays yours. Click to turn off.' : 'Off: run anything, the tutor stays quiet. Ask it to look at the terminal any time. Click to turn on.'}
+          >
+            Tutor follows along: {follow ? 'on' : 'off'}
+          </button>
+        ) : (
+          seen > 0 && (
+            <span className="lw-seen" title="Each command you finish here is sent to the tutor, which replies on its own">
+              Tutor sees your runs
+            </span>
+          )
         )}
         {tools}
         {open && (

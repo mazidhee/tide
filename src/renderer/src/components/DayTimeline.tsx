@@ -12,24 +12,52 @@ import { Icon } from './Icon'
  * day and the evening. It reads Things 4's Today (whatever you or the tutor put there) and the
  * coach's plan, and keeps up as they change: tick things off here or in Things.
  */
+/**
+ * The day as last seen, kept for the window's life: Home shows it at once when it comes back and
+ * refreshes it behind (Things and the week's sync can take seconds)
+ */
+const lastDay: { date?: string; tasks?: DayTask[] | null; week?: WeekPlan | null; due?: Mistake[]; reading?: Awaited<ReturnType<typeof window.tide.room.tonight>> } = {}
+
 export function DayTimeline({ now, tide }: { now: ReactNode; /** The new design draws the day as ruled rows, without the 'now' card (Home shows that above) */ tide?: boolean }) {
   const app = useApp()
   const date = localDate()
-  const [tasks, setTasks] = useState<DayTask[] | null>(null)
-  const [week, setWeek] = useState<WeekPlan | null>(null)
-  const [due, setDue] = useState<Mistake[]>([])
-  const [loaded, setLoaded] = useState(false)
+  const cached = lastDay.date === date ? lastDay : {}
+  const [tasks, setTasks] = useState<DayTask[] | null>(cached.tasks ?? null)
+  const [week, setWeek] = useState<WeekPlan | null>(cached.week ?? null)
+  const [due, setDue] = useState<Mistake[]>(cached.due ?? [])
+  const [loaded, setLoaded] = useState('week' in cached)
   // Tonight's reading (the reading room): one more item in the day, sized in minutes
-  const [reading, setReading] = useState<Awaited<ReturnType<typeof window.tide.room.tonight>>>(null)
+  const [reading, setReading] = useState<Awaited<ReturnType<typeof window.tide.room.tonight>>>(cached.reading ?? null)
   // Slots that arrive after the first load slide in, so a task the tutor just set is easy to spot
   const seen = useRef<Set<string> | null>(null)
 
+  // Each part shows as soon as it comes: the saved week plan at once, then what Things says
   const load = async () => {
-    const [t, w, m, r] = await Promise.all([window.tide.learn.thingsToday().catch(() => null), window.tide.coach.syncDone().catch(() => null), window.tide.mistakes.due(6).catch(() => [] as Mistake[]), window.tide.room.tonight().catch(() => null)])
-    setReading(r)
-    setTasks(t)
-    setWeek(w)
-    setDue(m)
+    if (lastDay.date !== date) Object.assign(lastDay, { date, tasks: undefined, week: undefined, due: undefined, reading: undefined })
+    const keep = <K extends 'tasks' | 'week' | 'due' | 'reading'>(k: K, v: (typeof lastDay)[K]) => (lastDay[k] = v)
+    let synced = false
+    const quick = window.tide.coach
+      .week()
+      .then((w) => {
+        if (synced) return
+        keep('week', w)
+        setWeek(w)
+        setLoaded(true)
+      })
+      .catch(() => {})
+    await Promise.all([
+      quick,
+      window.tide.learn.thingsToday().catch(() => null).then((t) => (keep('tasks', t), setTasks(t))),
+      window.tide.mistakes.due(6).catch(() => [] as Mistake[]).then((m) => (keep('due', m), setDue(m))),
+      window.tide.room.tonight().catch(() => null).then((r) => (keep('reading', r), setReading(r))),
+      window.tide.coach
+        .syncDone()
+        .catch(() => null)
+        .then((w) => {
+          synced = true
+          if (w) (keep('week', w), setWeek(w))
+        })
+    ])
     setLoaded(true)
   }
 

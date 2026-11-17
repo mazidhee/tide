@@ -129,6 +129,21 @@ let win: BrowserWindow | null = null
 /** Development only: a test copy runs in a window parked off-screen so it never covers the real one */
 const testCopy = !app.isPackaged && !!process.env.TIDE_USER_DATA
 
+/**
+ * macOS full screen: the menu bar and the title bar slide down over the top of the page when the
+ * pointer nears it, covering the page's header (the lesson's "Lesson ▾" and New window). The page
+ * is told, so its header moves below them (html.mac-fullscreen in app.css).
+ */
+function markFullScreen(w: BrowserWindow) {
+  const tell = () => {
+    if (w.isDestroyed() || w.webContents.isDestroyed()) return
+    void w.webContents.executeJavaScript(`document.documentElement.classList.toggle('mac-fullscreen', ${w.isFullScreen()})`).catch(() => {})
+  }
+  w.on('enter-full-screen', tell)
+  w.on('leave-full-screen', tell)
+  w.webContents.on('did-finish-load', tell)
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: testCopy ? 1300 : 1400,
@@ -151,6 +166,7 @@ function createWindow() {
   })
 
   win.once('ready-to-show', () => (testCopy ? win?.showInactive() : win?.show()))
+  markFullScreen(win)
   guardVisualFrames(win.webContents)
 
   // Links in notes open in the user's real browser, never inside the app
@@ -191,6 +207,7 @@ function buildPopout(at: { x: number; y: number; width: number; height: number }
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false, contextIsolation: true, nodeIntegration: false, backgroundThrottling: !testCopy }
   })
   w.once('ready-to-show', () => (testCopy ? w.showInactive() : w.show()))
+  markFullScreen(w)
   guardVisualFrames(w.webContents)
   w.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) shell.openExternal(url)

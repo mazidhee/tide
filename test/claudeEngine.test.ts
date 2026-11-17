@@ -266,6 +266,16 @@ describe('what a turn sends', () => {
     expect(live.content.endsWith('c')).toBe(true)
   })
 
+  it('marks code with hidden tests by the tests and the tutor, not a separate Opus call', () => {
+    const codeQ = 'Write `total(xs)`.\n<ask type="code">\n```python\ndef total(xs):\n```\n```tests\nassert total([1,2]) == 3\n```\n</ask>'
+    expect(engine.wantsMarker(codeQ, 'def total(xs): return sum(xs)', 3, 2)).toBe(false)
+    expect(engine.wantsMarker('Q <ask type="code">?</ask>', 'my code\n\n2 of 3 hidden tests passed', 3, 2)).toBe(false)
+    // Maths, explanations and open answers keep the marker, when it outranks the tutor
+    expect(engine.wantsMarker('Why does a syntax error stop line 1? <ask type="short">?</ask>', 'it compiles first', 3, 2)).toBe(true)
+    expect(engine.wantsMarker('Solve $x^2=4$ <ask type="short">?</ask>', 'x = ±2', 3, 2)).toBe(true)
+    expect(engine.wantsMarker('Why? <ask type="short">?</ask>', 'because', 2, 2)).toBe(false)
+  })
+
   it('knows an answer from a hint', () => {
     const req = (said: string) => ({ id: 'x', scope: { kind: 'none' as const }, session: true, messages: [{ role: 'assistant' as const, content: 'Q <ask type="short">?</ask>' }, { role: 'user' as const, content: said }] })
     expect(engine.isAnswer(req('x = 3'), 'x = 3')).toBe(true)

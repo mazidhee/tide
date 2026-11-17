@@ -85,3 +85,91 @@ export const wantsNotesReview = (text: string) => /\b(review|check|mark|look (at
 /** The request that sends what they wrote to the tutor, for feedback that helps them fix it */
 export const notesReviewRequest = (mine: string) =>
   `Here is what I've written in my notes for this lesson:\n\n${mine}\n\nReview it against what we covered. First say what's right and why it works. Then at most three things that are wrong, unclear or missing, most important first: quote the exact line, say why it matters and what to change. Then ask one question or problem that tests the weakest point.`
+
+// ---------- One writer for a lesson's note, so what the learner wrote is never lost ----------
+
+/** The items under "From the lesson": each bullet with its continuation lines, or a paragraph */
+export function lessonItems(note: string): string[] {
+  const lines = note.split('\n')
+  const at = lines.findIndex((l) => l.trim() === LESSON_HEADING)
+  if (at < 0) return []
+  const items: string[] = []
+  let cur: string[] = []
+  const push = () => {
+    const t = cur.join('\n').trim()
+    if (t) items.push(t)
+    cur = []
+  }
+  for (let i = at + 1; i < lines.length; i++) {
+    const l = lines[i]
+    if (/^#{1,2}\s/.test(l)) break
+    if (/^[-*+]\s/.test(l) || (!l.trim() && cur.length && !/^[-*+]\s/.test(cur[0]))) push()
+    if (l.trim() || cur.length) cur.push(l)
+  }
+  push()
+  return items
+}
+
+/** Where the learner's own section ends: the caret goes here to carry on writing */
+export function ownWordsEnd(note: string): number {
+  const at = note.search(/^## In my words[ \t]*$/m)
+  if (at < 0) return note.replace(/\s+$/, '').length
+  const headEnd = note.indexOf('\n', at)
+  if (headEnd < 0) return note.length
+  const rest = note.slice(headEnd + 1)
+  const next = rest.search(/^#{1,2}\s/m)
+  const section = next < 0 ? rest : rest.slice(0, next)
+  const body = section.replace(/\s+$/, '')
+  return body ? headEnd + 1 + body.length : Math.min(note.length, headEnd + 1)
+}
+
+/**
+ * Merges what is on disk into the note about to be written. `dirty` says the learner typed here
+ * since the last sync: then this copy holds the newest words and disk only adds takeaways.
+ * Otherwise disk is newer (another window or a reload wrote it) and this copy only adds its
+ * takeaways to it. Either way no learner text that was newest is dropped.
+ */
+export function mergeLessonNote(mine: string, disk: string | null, base: string | null, dirty: boolean): string {
+  if (disk === null || disk === base || disk === mine) return mine
+  return dirty ? addTakeaways(mine, lessonItems(disk)) : addTakeaways(disk, lessonItems(mine))
+}
+
+export interface NoteIo {
+  read(path: string): Promise<string>
+  write(path: string, text: string): Promise<unknown>
+}
+
+/**
+ * The single writer for lesson notes in a window: writes for a path run one at a time, each reads
+ * the file first and merges (mergeLessonNote), and a read waits for writes still in flight. The
+ * last text per path is kept, so a Notes panel mounted again shows it before the disk answers.
+ */
+export function createNoteSync(io: NoteIo) {
+  const chains = new Map<string, Promise<unknown>>()
+  const bases = new Map<string, string | null>()
+  const run = <T>(path: string, job: () => Promise<T>): Promise<T> => {
+    const p = (chains.get(path) ?? Promise.resolve()).catch(() => {}).then(job)
+    chains.set(path, p)
+    return p
+  }
+  return {
+    /** The note as it is now, after any write still in flight */
+    read: (path: string) =>
+      run(path, async () => {
+        const t = await io.read(path)
+        bases.set(path, t)
+        return t
+      }),
+    /** Writes `mine` merged with the file; resolves with what was written */
+    write: (path: string, mine: string, dirty: boolean) =>
+      run(path, async () => {
+        const disk = await io.read(path).catch(() => null)
+        const out = mergeLessonNote(mine, disk, bases.has(path) ? bases.get(path)! : null, dirty)
+        if (out !== disk) await io.write(path, out)
+        bases.set(path, out)
+        return out
+      }),
+    /** Waits for every write in flight for this path */
+    idle: (path: string) => (chains.get(path) ?? Promise.resolve()).catch(() => {})
+  }
+}

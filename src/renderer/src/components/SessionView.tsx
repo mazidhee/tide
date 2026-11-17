@@ -109,6 +109,8 @@ interface WorkspaceState {
   started: string[]
   /** Files Tide made from the lesson's code (the tutor named them but hadn't made them) */
   made?: string[]
+  /** "Tutor follows along" (on unless turned off): replies on its own to runs that answer its task */
+  follow?: boolean
 }
 const NO_WORKSPACE: WorkspaceState = { files: [], open: '', tab: 'notes', started: [] }
 const wsStore = (lab: string) => `tide.ws.${lab}`
@@ -938,6 +940,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   const [missing, setMissing] = useState<string[]>([])
   // The command waiting at the prompt, unrun
   const [staged, setStaged] = useState<string | null>(null)
+  const stagedRef = useRef(staged)
+  stagedRef.current = staged
   const pendingStage = useRef<string | null>(null)
   const stageNow = async () => {
     const cmd = pendingStage.current
@@ -1041,7 +1045,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       b.title = t.kind === 'paste' ? 'Puts the command at the prompt in the workspace’s terminal; press Return yourself' : 'Puts this code in a file in the workspace beside the lesson'
       pre.insertBefore(b, pre.querySelector('code'))
     })
-  })
+    // Only when the replies change, not on each key typed in the answer box
+  }, [turns, busy, workOn, workOffered, mode, openThread])
   // The tutor made a file there (workspace_file, main/ide/lesson): it opens in the Workspace
   useEffect(
     () =>
@@ -1085,12 +1090,18 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
   // A command finished in the Workspace: the tutor hears it and replies on its own, once per
   // command, and never over a reply still being written (the last one waits for it)
   const onRan = (f: Finished) => {
+    const was = stagedRef.current
     setStaged(null)
-    const d = autoReply(f, { busy: busyRef.current, sentAt: sentAt.current, enabled: mode === 'teach' && !finishedRef.current })
+    const r = runContext.current
+    const d = autoReply(f, { busy: busyRef.current, sentAt: sentAt.current, enabled: mode === 'teach' && !finishedRef.current, follow: workRef.current.follow !== false, waiting: r.waiting, files: r.files, staged: was })
     if (d === 'send') sendRan(f)
     else if (d === 'hold') heldRun.current = f
   }
   onRanRef.current = onRan
+  const workRef = useRef(work)
+  workRef.current = work
+  // What a run must touch to get a reply on its own: a question waiting, and its file, the files the tutor named
+  const runContext = useRef<{ waiting: boolean; files: string[] }>({ waiting: false, files: [] })
   useEffect(() => {
     if (busy || !heldRun.current) return
     const f = heldRun.current
@@ -1115,6 +1126,10 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
       }
     return null
   }, [parsed])
+  {
+    const lastTutor = [...turns].reverse().find((t) => t.role === 'assistant')?.content ?? ''
+    runContext.current = { waiting: !!currentAsk && !busy, files: filesToWorkOn(lastTutor, lastTask?.file ? [lastTask.file] : []) }
+  }
   // ⌘⇧F: full screen and back; Esc returns (not from the terminal, where Esc is the shell's)
   useEffect(() => {
     if (!workOn) return
@@ -2186,6 +2201,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
               <span>Metabase</span>
             </button>
           )}
+          {/* Always in sight, not only in the menu: this lesson in a window of its own (⌥⌘N) */}
+          <PopOutButton className="tool-btn lw-pop" label={false} disabled={busy} />
           {/* The controls a lesson needs now and then, in one menu (nothing taken away, only moved) */}
           <LessonMenu>
             {mode === 'teach' && approach && (
@@ -2490,7 +2507,7 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
             return (
               <Fragment key={i}>
               {showMap && dividersAt(i, 0)}
-              <div className={`s-tutor${runHeld.has(i) ? ' run-held' : ''}`} data-turn={i}>
+              <div className={`s-tutor${runHeld.has(i) ? ' run-held' : ''}${i < turns.length - 4 ? ' s-old' : ''}`} data-turn={i}>
                 {tide && (
                   <div className="td-who">
                     <Professor state={live ? 'writing' : 'idle'} size={24} />
@@ -3020,6 +3037,8 @@ export function SessionView({ mode, scope, topic, options, initialTurns, view }:
                   task={taskNow}
                   staged={staged}
                   made={work.made}
+                  follow={work.follow !== false}
+                  onFollow={(on) => setWork((w) => ({ ...w, follow: on }))}
                   notice={
                     missing.length > 0 ? (
                       <>

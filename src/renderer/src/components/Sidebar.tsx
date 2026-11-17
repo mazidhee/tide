@@ -14,7 +14,7 @@ import { hasProfile } from '@shared/profile'
 import { Icon, type IconName } from './Icon'
 import { ContextMenu, type MenuState } from './Menu'
 import { Professor } from './Professor'
-import { endOngoing, useOngoing } from '../lib/sessions'
+import { endOngoing, sessionKey, useOngoing } from '../lib/sessions'
 import { CHAT_IMAGES } from '../lib/pastedImages'
 import { useTideDesign } from '../lib/design'
 import { useKnowledge } from '../lib/knowledge'
@@ -274,6 +274,15 @@ export function Sidebar({ dueCount, peek = false }: { dueCount: number; peek?: b
     localStorage.setItem('tide.nav.study', open ? 'open' : 'closed')
   }
   const ongoing = useOngoing()
+  /** Let it go: gone from Carry on, and from any tab holding it, so a restored tab can't bring it back */
+  const letItGo = (o: { key: string; view: View }) => {
+    endOngoing(o.key, true)
+    const holding = app.tabs.filter((t) => t.nav.current.kind === 'session' && sessionKey(t.nav.current as Parameters<typeof sessionKey>[0]) === o.key)
+    for (const t of holding) {
+      if (app.tabs.length - holding.indexOf(t) > 1) app.closeTab(t.id)
+      else app.setView({ kind: 'home' })
+    }
+  }
   // Lessons open in a window of their own are marked: a click brings that window forward
   const held = useHeld()
   const me = useProfile()
@@ -413,7 +422,7 @@ export function Sidebar({ dueCount, peek = false }: { dueCount: number; peek?: b
                       { label: 'Carry on', run: () => app.setView(o.view) },
                       { label: 'Open in new tab', run: () => app.openTab(o.view) },
                       ...(canPopOut(o.view as PopView) ? [popOutItem(app, o.view)] : []),
-                      { label: 'Let it go', run: () => endOngoing(o.key), separatorBefore: true }
+                      { label: 'Let it go', run: () => letItGo(o), separatorBefore: true }
                     ]
                   })
                 }}
@@ -427,7 +436,7 @@ export function Sidebar({ dueCount, peek = false }: { dueCount: number; peek?: b
                   </span>
                 )}
               </button>
-              <button className="icon-btn small ongoing-close" title="Let it go" onClick={() => endOngoing(o.key)}>
+              <button className="icon-btn small ongoing-close" title="Let it go" onClick={() => letItGo(o)}>
                 <Icon name="x" size={11} />
               </button>
             </div>
