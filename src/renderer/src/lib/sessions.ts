@@ -32,6 +32,43 @@ export function isClosedLesson(o: Pick<Ongoing, 'view' | 'state'>): boolean {
   return o.view?.kind === 'session' && Array.isArray(turns) && closedOnce(turns as { role: string; content: string }[])
 }
 
+/** The same teach topic: two entries for it are one lesson (the one with the most turns) */
+const teachTopic = (o: Pick<Ongoing, 'view'>) => (o.view?.kind === 'session' && o.view.mode === 'teach' && o.view.topic ? `teach:${o.view.topic}` : null)
+const turnsOf = (o: Pick<Ongoing, 'state'>): { role: string }[] => {
+  const t = (o.state as { turns?: unknown } | null)?.turns
+  return Array.isArray(t) ? (t as { role: string }[]) : []
+}
+/** The learner answered something in it: more than the opening request */
+const answered = (o: Pick<Ongoing, 'state'>) => turnsOf(o).filter((t) => t.role === 'user').length > 1
+
+/**
+ * One entry per teach topic: where two exist, the one with fewer turns goes. On load (a one-time
+ * clean-up of old duplicates) only one the learner never answered in is dropped; when saving, the
+ * shorter one is merged into the longer.
+ */
+export function dedupeOngoing(list: Ongoing[], onlyUnanswered = false): Ongoing[] {
+  const best = new Map<string, Ongoing>()
+  for (const o of list) {
+    const t = teachTopic(o)
+    if (!t) continue
+    const b = best.get(t)
+    if (!b || turnsOf(o).length > turnsOf(b).length) best.set(t, o)
+  }
+  return list.filter((o) => {
+    const t = teachTopic(o)
+    const b = t ? best.get(t) : undefined
+    if (!b || b === o) return true
+    return onlyUnanswered ? answered(o) : false
+  })
+}
+
+/**
+ * Let go of (Carry on's ×): not brought back by the page still on screen saving itself, nor by
+ * another window. Only carrying on in it (a new turn past the count when it was let go) lists it again.
+ */
+const letGo = new Map<string, number>()
+const stillLetGo = (o: Pick<Ongoing, 'key' | 'state'>) => letGo.has(o.key) && turnsOf(o).length <= letGo.get(o.key)!
+
 const store = new Map<string, Ongoing>()
 /** The one on screen, saved as it goes but not listed until you leave it (or Tide closes) */
 const live = new Map<string, Ongoing>()
@@ -47,7 +84,7 @@ let loaded = false
 export function ongoingSnapshot(): Ongoing[] {
   const all = new Map<string, Ongoing>()
   for (const o of [...store.values(), ...live.values()]) if (!isClosedLesson(o) && (!all.has(o.key) || all.get(o.key)!.at < o.at)) all.set(o.key, o)
-  return [...all.values()].sort((a, b) => b.at - a.at).slice(0, 6)
+  return dedupeOngoing([...all.values()]).sort((a, b) => b.at - a.at).slice(0, 6)
 }
 
 const writeNow = () => window.tide.vault.write(FILE, JSON.stringify(ongoingSnapshot())).catch(() => {})
@@ -66,7 +103,7 @@ function persist() {
 // to the other windows as it happens (main/popout relay), so whichever window writes the file next
 // writes everything, and none drops what another holds.
 
-type Op = { op: 'set'; o: Ongoing } | { op: 'live'; o: Ongoing } | { op: 'end'; key: string }
+type Op = { op: 'set'; o: Ongoing } | { op: 'live'; o: Ongoing } | { op: 'end'; key: string; letGo?: boolean }
 const share = (op: Op) => {
   try {
     window.tide?.windows?.relay?.('ongoing', op)
@@ -77,6 +114,7 @@ const share = (op: Op) => {
 
 /** A change made in another window */
 export function applyOngoingOp(op: Op, opts: { follow?: boolean } = {}) {
+  if (op.op !== 'end' && stillLetGo(op.o)) return
   if (op.op === 'set') {
     live.delete(op.o.key)
     store.set(op.o.key, op.o)
@@ -85,6 +123,8 @@ export function applyOngoingOp(op: Op, opts: { follow?: boolean } = {}) {
     if (opts.follow && op.o.busy && activeId) followInBackground(op.o.key, activeId)
   } else if (op.op === 'live') live.set(op.o.key, op.o)
   else {
+    const gone = store.get(op.key) ?? live.get(op.key)
+    if (op.letGo && gone) letGo.set(op.key, turnsOf(gone).length)
     live.delete(op.key)
     store.delete(op.key)
   }
@@ -134,7 +174,10 @@ export function keepLesson(key: string, view: View, turns: unknown, finished = f
 /** What was in progress when Tide last closed, the lesson on screen included: back under "In progress" */
 export async function loadOngoing() {
   try {
-    const saved = JSON.parse(await window.tide.vault.read(FILE)) as Ongoing[]
+    const read = JSON.parse(await window.tide.vault.read(FILE)) as Ongoing[]
+    // Old duplicates of one teach topic (a short copy never answered in) are dropped, once
+    const saved = Array.isArray(read) ? dedupeOngoing(read.filter((o) => o?.key && o.view), true) : []
+    if (saved.length !== (Array.isArray(read) ? read.length : 0)) persist()
     for (const o of saved) if (o?.key && o.view && !store.has(o.key) && !isClosedLesson(o)) store.set(o.key, { ...o, busy: false, ...(o.busy ? { interrupted: true } : {}) })
     // Lessons from before Past lessons existed (or saved while it wasn't running) are kept there too
     for (const o of saved) if (o?.view?.kind === 'session') keepLesson(o.key, o.view, (o.state as { turns?: unknown })?.turns, isClosedLesson(o), (o.state as { threads?: unknown })?.threads)
@@ -174,6 +217,11 @@ export function saveOngoing(o: Omit<Ongoing, 'at'>) {
   const closed = isClosedLesson(o)
   keepLesson(o.key, o.view, (o.state as { turns?: unknown })?.turns, closed, (o.state as { threads?: unknown })?.threads)
   if (closed) return endOngoing(o.key)
+  if (stillLetGo(o)) {
+    live.delete(o.key)
+    return
+  }
+  letGo.delete(o.key)
   live.delete(o.key)
   // The same lesson opened again (from Past lessons, or where something came up) is one entry, not two
   const record = (x: Ongoing) => (x.view.kind === 'session' ? (x.view.lesson ?? lessonId(x.key)) : null)
@@ -181,6 +229,9 @@ export function saveOngoing(o: Omit<Ongoing, 'at'>) {
   if (mine) for (const x of [...store.values()]) if (x.key !== o.key && record(x) === mine) store.delete(x.key)
   const kept = { ...o, at: Date.now() }
   store.set(o.key, kept)
+  // Two entries for one teach topic are one: the one with the most turns stays
+  const merged = new Set(dedupeOngoing([...store.values()]).map((x) => x.key))
+  for (const k of [...store.keys()]) if (!merged.has(k)) store.delete(k)
   // Keep a handful: the oldest go first
   const all = [...store.values()].sort((a, b) => b.at - a.at)
   for (const old of all.slice(6)) store.delete(old.key)
@@ -194,6 +245,8 @@ export function keepLive(o: Omit<Ongoing, 'at'>) {
   const closed = isClosedLesson(o)
   keepLesson(o.key, o.view, (o.state as { turns?: unknown })?.turns, closed, (o.state as { threads?: unknown })?.threads)
   if (closed) return endOngoing(o.key)
+  if (stillLetGo(o)) return
+  letGo.delete(o.key)
   const kept = { ...o, at: Date.now() }
   live.set(o.key, kept)
   persist()
@@ -202,11 +255,14 @@ export function keepLive(o: Omit<Ongoing, 'at'>) {
 
 export const getOngoing = (key: string) => store.get(key)
 
-export function endOngoing(key: string) {
+/** `letGoOf`: the learner let it go (Carry on's ×), so the page on screen saving itself doesn't bring it back */
+export function endOngoing(key: string, letGoOf = false) {
+  const gone = store.get(key) ?? live.get(key)
+  if (letGoOf) letGo.set(key, gone ? turnsOf(gone).length : 0)
   live.delete(key)
   if (store.delete(key)) emit()
   persist()
-  share({ op: 'end', key })
+  share({ op: 'end', key, ...(letGoOf ? { letGo: true } : {}) })
 }
 
 const followers = new Map<string, () => void>()

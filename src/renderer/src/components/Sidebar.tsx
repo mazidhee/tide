@@ -413,7 +413,7 @@ export function Sidebar({ dueCount, peek = false }: { dueCount: number; peek?: b
                       { label: 'Carry on', run: () => app.setView(o.view) },
                       { label: 'Open in new tab', run: () => app.openTab(o.view) },
                       ...(canPopOut(o.view as PopView) ? [popOutItem(app, o.view)] : []),
-                      { label: 'Let it go', run: () => endOngoing(o.key), separatorBefore: true }
+                      { label: 'Let it go', run: () => endOngoing(o.key, true), separatorBefore: true }
                     ]
                   })
                 }}
@@ -427,7 +427,7 @@ export function Sidebar({ dueCount, peek = false }: { dueCount: number; peek?: b
                   </span>
                 )}
               </button>
-              <button className="icon-btn small ongoing-close" title="Let it go" onClick={() => endOngoing(o.key)}>
+              <button className="icon-btn small ongoing-close" title="Let it go" onClick={() => endOngoing(o.key, true)}>
                 <Icon name="x" size={11} />
               </button>
             </div>
