@@ -66,7 +66,24 @@ export function dedupeOngoing(list: Ongoing[], onlyUnanswered = false): Ongoing[
  * Let go of (Carry on's ×): not brought back by the page still on screen saving itself, nor by
  * another window. Only carrying on in it (a new turn past the count when it was let go) lists it again.
  */
-const letGo = new Map<string, number>()
+const LET_GO = 'tide.ongoing.letGo'
+const letGo = new Map<string, number>(
+  (() => {
+    try {
+      return Object.entries(JSON.parse(localStorage.getItem(LET_GO) ?? '{}') as Record<string, number>)
+    } catch {
+      return []
+    }
+  })()
+)
+/** Kept across restarts: a tab restored with the lesson in it doesn't bring it back either */
+const keepLetGo = () => {
+  try {
+    localStorage.setItem(LET_GO, JSON.stringify(Object.fromEntries([...letGo].slice(-50))))
+  } catch {
+    // no storage (tests)
+  }
+}
 const stillLetGo = (o: Pick<Ongoing, 'key' | 'state'>) => letGo.has(o.key) && turnsOf(o).length <= letGo.get(o.key)!
 
 const store = new Map<string, Ongoing>()
@@ -124,7 +141,7 @@ export function applyOngoingOp(op: Op, opts: { follow?: boolean } = {}) {
   } else if (op.op === 'live') live.set(op.o.key, op.o)
   else {
     const gone = store.get(op.key) ?? live.get(op.key)
-    if (op.letGo && gone) letGo.set(op.key, turnsOf(gone).length)
+    if (op.letGo && gone) (letGo.set(op.key, turnsOf(gone).length), keepLetGo())
     live.delete(op.key)
     store.delete(op.key)
   }
@@ -178,7 +195,7 @@ export async function loadOngoing() {
     // Old duplicates of one teach topic (a short copy never answered in) are dropped, once
     const saved = Array.isArray(read) ? dedupeOngoing(read.filter((o) => o?.key && o.view), true) : []
     if (saved.length !== (Array.isArray(read) ? read.length : 0)) persist()
-    for (const o of saved) if (o?.key && o.view && !store.has(o.key) && !isClosedLesson(o)) store.set(o.key, { ...o, busy: false, ...(o.busy ? { interrupted: true } : {}) })
+    for (const o of saved) if (o?.key && o.view && !store.has(o.key) && !isClosedLesson(o) && !stillLetGo(o)) store.set(o.key, { ...o, busy: false, ...(o.busy ? { interrupted: true } : {}) })
     // Lessons from before Past lessons existed (or saved while it wasn't running) are kept there too
     for (const o of saved) if (o?.view?.kind === 'session') keepLesson(o.key, o.view, (o.state as { turns?: unknown })?.turns, isClosedLesson(o), (o.state as { threads?: unknown })?.threads)
     emit()
@@ -221,7 +238,7 @@ export function saveOngoing(o: Omit<Ongoing, 'at'>) {
     live.delete(o.key)
     return
   }
-  letGo.delete(o.key)
+  if (letGo.delete(o.key)) keepLetGo()
   live.delete(o.key)
   // The same lesson opened again (from Past lessons, or where something came up) is one entry, not two
   const record = (x: Ongoing) => (x.view.kind === 'session' ? (x.view.lesson ?? lessonId(x.key)) : null)
@@ -246,7 +263,7 @@ export function keepLive(o: Omit<Ongoing, 'at'>) {
   keepLesson(o.key, o.view, (o.state as { turns?: unknown })?.turns, closed, (o.state as { threads?: unknown })?.threads)
   if (closed) return endOngoing(o.key)
   if (stillLetGo(o)) return
-  letGo.delete(o.key)
+  if (letGo.delete(o.key)) keepLetGo()
   const kept = { ...o, at: Date.now() }
   live.set(o.key, kept)
   persist()
@@ -258,7 +275,7 @@ export const getOngoing = (key: string) => store.get(key)
 /** `letGoOf`: the learner let it go (Carry on's ×), so the page on screen saving itself doesn't bring it back */
 export function endOngoing(key: string, letGoOf = false) {
   const gone = store.get(key) ?? live.get(key)
-  if (letGoOf) letGo.set(key, gone ? turnsOf(gone).length : 0)
+  if (letGoOf) (letGo.set(key, gone ? turnsOf(gone).length : 0), keepLetGo())
   live.delete(key)
   if (store.delete(key)) emit()
   persist()

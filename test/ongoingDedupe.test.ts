@@ -14,6 +14,8 @@ const entry = (nonce: number, turns: number, lesson: string) => ({
 })
 const saved = [entry(1794819976011, 34, 'n61kl1'), entry(1794818676610, 2, '72ijmk')]
 const written: string[] = []
+const ls = new Map<string, string>()
+;(globalThis as unknown as { localStorage: unknown }).localStorage = { getItem: (k: string) => ls.get(k) ?? null, setItem: (k: string, v: string) => void ls.set(k, v), removeItem: (k: string) => void ls.delete(k) }
 ;(globalThis as unknown as { window: unknown }).window = {
   location: { hash: '' },
   tide: {
@@ -52,6 +54,20 @@ describe('Carry on', () => {
     // Carrying on in it (a new turn) lists it again
     s.saveOngoing({ key: o.key, view: o.view as never, title: o.title, state: { ...o.state, turns: t(36) }, busy: false })
     expect(s.getOngoing(o.key)).toBeTruthy()
+  })
+
+  it('after a restart, a restored tab holding a let-go lesson does not bring it back', async () => {
+    const o = entry(1794819976011, 34, 'n61kl1')
+    s.endOngoing(o.key, true)
+    vi.resetModules()
+    const again = await import('../src/renderer/src/lib/sessions')
+    await new Promise((r) => setTimeout(r, 5))
+    // Not loaded from the file, and the restored page saving itself is ignored
+    expect(again.getOngoing(o.key)).toBeUndefined()
+    again.keepLive({ key: o.key, view: o.view as never, title: o.title, state: o.state, busy: false })
+    again.saveOngoing({ key: o.key, view: o.view as never, title: o.title, state: o.state, busy: false })
+    expect(again.getOngoing(o.key)).toBeUndefined()
+    expect(again.ongoingSnapshot().some((x) => x.key === o.key)).toBe(false)
   })
 
   it('a lesson ended by finishing or popping out is not blocked', () => {
