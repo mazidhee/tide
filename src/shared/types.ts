@@ -136,7 +136,17 @@ export interface Settings {
   animations?: { narration?: boolean; quality?: 'low' | 'medium'; prompted?: boolean }
   /** How the tutor sounds: Tide's natural voice (Kokoro, set up in Settings) or the Mac's own */
   /** custom: a Kokoro voice that replaces the character's; dictation: who writes out what you say */
-  voice?: { engine: 'natural' | 'system'; name: string; speed: number; custom?: string; dictation?: 'tide' | 'handy' | 'deepgram' | 'flow' }
+  voice?: {
+    engine: 'natural' | 'system'
+    name: string
+    speed: number
+    custom?: string
+    dictation?: 'tide' | 'handy' | 'deepgram' | 'flow'
+    /** How Talk speaks tutor replies: the lecture voice (Fish S2 Pro, the professor), or Kokoro at once */
+    lecture?: 'fish' | 'kokoro'
+    /** The lecture voice's pace (playback rate, pitch kept); a little slow by default */
+    pace?: number
+  }
   /** Who the tutor is: the character's face, voice and way of talking */
   character?: import('./characters').CharacterId
   /** Why mode in lessons: Socratic, from first principles. Foundations (the default) turns it on for early, basic topics */
@@ -1366,6 +1376,13 @@ export interface TideApi {
     /** What the tutor reads of the Metabase page open in the web view ('' when it isn't one) */
     screen(): Promise<{ text: string; label: string; url: string } | null>
   }
+  lecture: {
+    prepare(req: { reply: string; mode?: import('./lectureScript').LectureMode; kokoroVoice?: string }): Promise<LectureState>
+    piece(id: string, i: number): Promise<Uint8Array | null>
+    status(): Promise<{ ready: boolean; detail: string }>
+    warm(): Promise<void>
+    onProgress(cb: (st: LectureState) => void): () => void
+  }
   voice: {
     status(): Promise<{ ready: boolean; detail: string }>
     setup(): Promise<{ ready: boolean; detail: string }>
@@ -1650,4 +1667,19 @@ export interface ReadingApi {
   togetherOrient(path: string, chapter: number): Promise<string>
   togetherDiscuss(t: { path: string; chapter: number; turns: { role: 'tutor' | 'learner'; text: string }[]; said?: string }): Promise<{ reply: string; record: import('./readTogether').ReadingRecord; refused: string[] }>
   togetherFinish(path: string, chapter: number, note?: string): Promise<import('./readTogether').ReadingRecord>
+}
+
+/** A tutor reply in the lecture voice (main/lectureVoice): its spoken script and the pieces made so far */
+export interface LectureState {
+  id: string
+  phase: 'script' | 'audio' | 'done'
+  script?: string
+  scriptBy?: 'claude' | 'rules'
+  scriptMs?: number
+  pieces: { text: string; engine: 'fish' | 'kokoro'; ready: boolean; failed?: boolean; ms?: number; secs?: number }[]
+  startedAt: number
+  firstAudioMs?: number
+  totalMs?: number
+  /** Said quietly when Kokoro stood in */
+  note?: string
 }

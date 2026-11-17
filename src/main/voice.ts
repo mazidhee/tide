@@ -147,6 +147,32 @@ export async function speak(text: string, voice = 'bm_george', speed = 1): Promi
   return new Uint8Array(await (await call('/speak', { text, voice, speed })).arrayBuffer())
 }
 
+/**
+ * The lecture voice: Fish S2 Pro (8-bit) cloning a reference clip (refs/professor.wav, a
+ * public-domain LibriVox narrator). About 0.2 to 0.4 times real time on an M4 Pro, so replies are
+ * made ahead, sentence by sentence (main/lectureVoice). The model stays loaded while it's used and
+ * is let go after ten idle minutes.
+ */
+export async function speakFish(text: string, ref = 'professor', timeoutMs = 180_000): Promise<Uint8Array> {
+  noteUse('voice')
+  return new Uint8Array(await (await call('/speak', { text, engine: 'fish', ref }, timeoutMs)).arrayBuffer())
+}
+
+const FISH_MODEL_DIR = () => join(app.getPath('home'), '.cache', 'huggingface', 'hub', 'models--mlx-community--fish-audio-s2-pro-8bit')
+
+/** Whether the lecture voice can speak: the natural voice set up, the model downloaded, the clip in place */
+export async function lectureStatus(): Promise<{ ready: boolean; detail: string }> {
+  if (!existsSync(python())) return { ready: false, detail: 'Set up the natural voice first' }
+  if (!existsSync(join(dir(), 'refs', 'professor.wav'))) return { ready: false, detail: 'The professor’s voice clip is missing' }
+  if (!existsSync(FISH_MODEL_DIR())) return { ready: false, detail: 'Fish S2 Pro isn’t downloaded (mlx-community/fish-audio-s2-pro-8bit)' }
+  return { ready: true, detail: 'Lecture voice ready' }
+}
+
+/** Loads the lecture voice ahead (a lesson opened with it on), so the first reply only waits for its own audio */
+export async function warmFish(): Promise<void> {
+  await call('/warm', { tts: false, fish: true }, 5 * 60_000).catch(() => {})
+}
+
 /** Where you were speaking: the topic helps Deepgram spell its jargon */
 export type Heard = { path?: string; topic?: string }
 

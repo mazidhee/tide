@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { characterById } from '@shared/characters'
 import { useApp } from '../state'
 import { DEFAULT_VOICE, listen, LiveSpeaker, record, Speaker } from '../lib/voice'
+import * as lecture from '../lib/lecture'
+import type { LectureMode } from '@shared/lectureScript'
 import { Icon } from './Icon'
 import { pageKey } from '../lib/typing'
 
@@ -197,6 +199,15 @@ export function useTalk(latest: { content: string; streaming: boolean; key: stri
   const [speaking, setSpeaking] = useState(false)
   const [hearing, setHearing] = useState<'off' | 'listening' | 'speech' | 'writing'>('off')
   const live = useRef<{ key: string; speaker: Speaker; live: LiveSpeaker } | null>(null)
+  // The lecture voice (Fish, the professor): replies are made whole, ahead, then played
+  const lectureOn = prefs.engine === 'natural' && (prefs.lecture ?? 'fish') === 'fish'
+  const lessonKey = `tide.lecture.mode:${where?.path ?? where?.topic ?? ''}`
+  const [mode, setModeState] = useState<LectureMode>(() => (localStorage.getItem(lessonKey) === 'gist' ? 'gist' : 'all'))
+  const setMode = (m: LectureMode) => (localStorage.setItem(lessonKey, m), setModeState(m))
+  const lect = lecture.useLecture()
+  const lectureKey = useRef<{ key: string; streamed: boolean; prepared: boolean } | null>(null)
+  const autoplay = useRef<string | null>(null)
+  useEffect(() => lecture.setPace(prefs.pace ?? 0.92), [prefs.pace])
   const onTextRef = useRef(onText)
   onTextRef.current = onText
   const whereRef = useRef(where)
@@ -204,16 +215,44 @@ export function useTalk(latest: { content: string; streaming: boolean; key: stri
   const stop = () => {
     live.current?.speaker.stop()
     live.current = null
+    autoplay.current = null
+    lecture.stop()
     setSpeaking(false)
   }
   useEffect(() => {
-    if (talk) window.tide.voice.warm(true).catch(() => {})
-    else stop()
-  }, [talk])
+    if (talk) {
+      window.tide.voice.warm(true).catch(() => {})
+      if (lectureOn) window.tide.lecture.warm().catch(() => {})
+    } else stop()
+  }, [talk, lectureOn])
+
+  // Lecture voice: a reply written now is made in the background as soon as it's finished, and
+  // plays on its own a moment later (by then, while you read its opening, the first piece is ready)
+  useEffect(() => {
+    if (!talk || !lectureOn || !latest?.content) return
+    if (lectureKey.current?.key !== latest.key) {
+      if (!latest.streaming) return
+      lecture.stop()
+      lectureKey.current = { key: latest.key, streamed: true, prepared: false }
+    }
+    if (latest.streaming || lectureKey.current.prepared) return
+    lectureKey.current.prepared = true
+    const doneAt = Date.now()
+    void lecture.prepare(latest.content, mode, prefs.name).then((st) => {
+      autoplay.current = st.id
+      // A moment to start reading first; then as soon as it can play through without a gap
+      setTimeout(() => {
+        if (autoplay.current !== st.id) return
+        void lecture.autoplay(st.id, doneAt).finally(() => autoplay.current === st.id && (autoplay.current = null))
+      }, Math.max(0, 1200 - (Date.now() - doneAt)))
+    })
+  }, [talk, lectureOn, latest?.key, latest?.content, latest?.streaming, mode, prefs.name])
+  const lecturePlaying = !!lect.playing && !lect.playing.paused
+  useEffect(() => setSpeaking(lecturePlaying), [lecturePlaying])
   useEffect(() => () => stop(), [])
 
   useEffect(() => {
-    if (!talk || !latest || !latest.content) return
+    if (!talk || lectureOn || !latest || !latest.content) return
     // Only replies written now: opening an old conversation shouldn't read it out
     if (live.current?.key !== latest.key && !latest.streaming) return
     if (live.current?.key !== latest.key) {
@@ -224,12 +263,19 @@ export function useTalk(latest: { content: string; streaming: boolean; key: stri
     }
     live.current.live.update(latest.content, !latest.streaming)
     if (live.current.speaker.speaking) setSpeaking(true)
-  }, [talk, latest?.key, latest?.content, latest?.streaming, prefs])
+  }, [talk, lectureOn, latest?.key, latest?.content, latest?.streaming, prefs])
 
   // Interrupt: Space (outside a text field) or Esc stops the voice
   useEffect(() => {
     if (!talk) return
     const onKey = (e: KeyboardEvent) => {
+      // The lecture voice stops at any key, as when you start to speak over someone
+      if (lecture.isPlaying() || autoplay.current) {
+        if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(e.key)) return
+        if (e.key === 'Escape' || (e.key === ' ' && pageKey(e))) e.preventDefault()
+        stop()
+        return
+      }
       if (e.key === 'Escape' || (e.key === ' ' && pageKey(e))) {
         if (live.current?.speaker.speaking) {
           e.preventDefault()
@@ -301,7 +347,69 @@ export function useTalk(latest: { content: string; streaming: boolean; key: stri
       localStorage.setItem('tide.talk.handsfree', v ? 'off' : 'on')
       return !v
     })
-  return { talk, toggle, stop, handsFree, toggleHandsFree, speaking, flow, hearing: busy || speaking ? ('off' as const) : hearing }
+  const lastState = latest ? Object.values(lect.states).sort((a, b) => b.startedAt - a.startedAt)[0] : undefined
+  return { talk, toggle, stop, handsFree, toggleHandsFree, speaking, flow, hearing: busy || speaking ? ('off' as const) : hearing, lectureOn, mode, setMode, lastState }
+}
+
+/** Read it all or just the gist (this lesson), the speed, and how the newest reply is coming along */
+export function LectureControls({ voice }: { voice: ReturnType<typeof useTalk> }) {
+  const lect = lecture.useLecture()
+  if (!voice.talk || !voice.lectureOn) return null
+  const st = voice.lastState
+  const label = lecture.lectureLabel(st)
+  const made = st ? st.pieces.filter((p) => p.ready).length / Math.max(1, st.pieces.length) : 0
+  return (
+    <span className="lecture-controls">
+      {label && (
+        <span className="lecture-prep" title={st?.note ?? 'Made in the professor’s voice while you read'}>
+          <span className="lecture-meter" style={{ ['--made' as string]: made.toFixed(2) }} />
+          {label}
+        </span>
+      )}
+      {!label && st?.note && <span className="lecture-note muted small">{st.note}</span>}
+      <span className="lecture-seg" role="radiogroup" aria-label="How much is said">
+        <button role="radio" aria-checked={voice.mode === 'all'} className={voice.mode === 'all' ? 'on' : ''} onClick={() => voice.setMode('all')} title="Read it all: a spoken version of the whole reply">
+          Read it all
+        </button>
+        <button role="radio" aria-checked={voice.mode === 'gist'} className={voice.mode === 'gist' ? 'on' : ''} onClick={() => voice.setMode('gist')} title="Just the gist: the main idea and the question">
+          Just the gist
+        </button>
+      </span>
+      <select className="lecture-speed" aria-label="Speed" value={lect.speed} onChange={(e) => lecture.setSpeed(Number(e.target.value))}>
+        {[0.85, 1, 1.15, 1.3, 1.5].map((v) => (
+          <option key={v} value={v}>
+            {v === 1 ? '1×' : `${v}×`}
+          </option>
+        ))}
+      </select>
+    </span>
+  )
+}
+
+/**
+ * A reply's own play button. With the lecture voice: play or pause it in the professor's voice
+ * (made once and kept, so a replay is instant), with "Preparing the voice…" while it's made.
+ * Otherwise the plain read-aloud button.
+ */
+export function ReplyVoiceButton({ reply, text, mode = 'all' }: { reply: string; text: string; mode?: LectureMode }) {
+  const prefs = useVoicePrefs()
+  const lect = lecture.useLecture()
+  const id = lecture.idFor(reply, mode)
+  const lectureOn = prefs.engine === 'natural' && (prefs.lecture ?? 'fish') === 'fish'
+  if (!lectureOn) return <SpeakButton text={text} />
+  const mine = !!id && lect.playing?.id === id
+  const st = id ? lect.states[id] : undefined
+  const label = mine ? lecture.lectureLabel(st) : ''
+  const click = async () => {
+    if (mine && lect.playing) return lect.playing.paused ? lecture.resume() : lecture.pause()
+    const s = await lecture.prepare(reply, mode, prefs.name)
+    void lecture.play(s.id)
+  }
+  return (
+    <button className={`icon-btn small speak${mine ? ' on' : ''}${label ? ' preparing' : ''}`} title={mine ? (lect.playing?.paused ? 'Play' : label || 'Pause') : 'Play in the professor’s voice'} onClick={() => void click()}>
+      {label ? <span className="spinner" /> : <Icon name={mine && !lect.playing?.paused ? 'pause' : 'play'} size={13} />}
+    </button>
+  )
 }
 
 /** The Talk switch and, when talking, the mic (or hands-free listening) */

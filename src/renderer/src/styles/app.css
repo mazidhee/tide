@@ -12238,6 +12238,87 @@ code.cmd-chip:hover {
   background: var(--warn);
 }
 
+/* The lecture voice: how much is said, its speed, and "Preparing the voice…" while it's made */
+.lecture-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.lecture-prep {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.lecture-meter {
+  position: relative;
+  width: 36px;
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  overflow: hidden;
+}
+
+.lecture-meter::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  transform: scaleX(max(0.06, var(--made, 0)));
+  background: var(--accent);
+  transition: transform 300ms ease;
+}
+
+.lecture-note {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lecture-seg {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+
+.lecture-seg button {
+  border: 0;
+  background: none;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font: inherit;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.lecture-seg button.on {
+  background: var(--bg-raised);
+  color: var(--ink);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+.lecture-speed {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  border: 0;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  border-radius: 6px;
+  padding: 3px 4px;
+  color: var(--ink-soft);
+}
+
+.icon-btn.speak.preparing .spinner {
+  width: 11px;
+  height: 11px;
+}
+
 @keyframes hear-breathe {
   50% {
     opacity: 0.45;
