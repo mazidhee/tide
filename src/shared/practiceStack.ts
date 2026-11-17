@@ -4,8 +4,15 @@
  * name, so Start, Stop and Reset always find the same containers. Pure: the compose file and labels.
  */
 
-export const PRACTICE_PROJECT = 'tide-practice'
-export const PRACTICE_PORTS = { mongo: 27047, metabase: 3047 } as const
+/**
+ * A throwaway copy of Tide (a dev build started with TIDE_USER_DATA, for checks and walks) can run a
+ * stack of its own beside yours: TIDE_PRACTICE_PROJECT names it and moves it 100 ports up, so it
+ * never starts, resets or writes to your tide-practice volumes. Ignored anywhere else.
+ */
+const env: Record<string, string | undefined> = (typeof process !== 'undefined' && process.env) || {}
+const testStack = !!env.TIDE_USER_DATA && /^tide-practice-[a-z0-9-]+$/.test(env.TIDE_PRACTICE_PROJECT ?? '')
+export const PRACTICE_PROJECT: string = testStack ? env.TIDE_PRACTICE_PROJECT! : 'tide-practice'
+export const PRACTICE_PORTS: { mongo: number; metabase: number } = testStack ? { mongo: 27147, metabase: 3147 } : { mongo: 27047, metabase: 3047 }
 export const PRACTICE_IMAGES = { mongo: 'mongo:8.0', metabase: 'metabase/metabase:v0.64.3.3' } as const
 export const PRACTICE_DB = 'practice'
 export const PRACTICE_URL = `http://127.0.0.1:${PRACTICE_PORTS.metabase}`

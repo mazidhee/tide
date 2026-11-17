@@ -49,6 +49,11 @@ export interface WorkspaceProps {
   made?: string[]
   /** A file the tutor named that isn't here, and the button that asks for it */
   notice?: ReactNode
+  /** Run does this (after saving the file) instead of typing the file's command into the shell: a work project runs its pipeline on the practice data */
+  onRun?(): void | Promise<void>
+  /** Run's label and title, with onRun */
+  runLabel?: string
+  runTitle?: string
 }
 
 /**
@@ -93,7 +98,7 @@ export function NameField({ initial, onDone, onCancel }: { initial: string; onDo
   )
 }
 
-export function LessonWorkspace({ root, files, open, onOpen, terminalId, onTerminal, keepShell = true, seen = 0, focusNonce = 0, rev = 0, tools, empty, task, onRenamed, onCreated, staged, made, notice }: WorkspaceProps) {
+export function LessonWorkspace({ root, files, open, onOpen, terminalId, onTerminal, keepShell = true, seen = 0, focusNonce = 0, rev = 0, tools, empty, task, onRenamed, onCreated, staged, made, notice, onRun, runLabel, runTitle }: WorkspaceProps) {
   const [text, setText] = useState<Record<string, string>>({})
   const [termId, setTermId] = useState<string | null>(terminalId ?? null)
   const editorRef = useRef<import('monaco-editor').editor.IStandaloneCodeEditor | null>(null)
@@ -147,10 +152,14 @@ export function LessonWorkspace({ root, files, open, onOpen, terminalId, onTermi
   }, [focusNonce, open])
 
   const run = useCallback(async () => {
+    if (onRun) {
+      await flush()
+      return void (await onRun())
+    }
     if (!termId || !open) return
     await flush()
     await window.tide.terminal.run(termId, runCommand(open)).catch(() => {})
-  }, [termId, open, flush])
+  }, [termId, open, flush, onRun])
 
   // A tab being renamed, or a new file being named
   const [naming, setNaming] = useState<string | null>(null)
@@ -208,9 +217,9 @@ export function LessonWorkspace({ root, files, open, onOpen, terminalId, onTermi
         )}
         {tools}
         {open && (
-          <button className="lw-run" onClick={() => void run()} disabled={!termId} title={`Runs ${runCommand(open)} in the terminal below`}>
+          <button className="lw-run" onClick={() => void run()} disabled={!onRun && !termId} title={onRun ? (runTitle ?? 'Run') : `Runs ${runCommand(open)} in the terminal below`}>
             <Icon name="play" size={12} />
-            Run
+            {onRun ? (runLabel ?? 'Run') : 'Run'}
             <kbd>⌘↵</kbd>
           </button>
         )}

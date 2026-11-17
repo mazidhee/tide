@@ -22,5 +22,19 @@ export const workApi: WorkApi = {
   list: invoke('work:list'),
   view: invoke('work:view'),
   answer: invoke('work:answer'),
-  prepare: invoke('work:prepare')
+  prepare: invoke('work:prepare'),
+  finding: invoke('work:finding'),
+  stepDone: invoke('work:stepDone'),
+  run: invoke('work:run'),
+  stepFile: invoke('work:stepFile'),
+  guide: invoke('work:guide'),
+  questions: invoke('work:questions'),
+  compare: invoke('work:compare'),
+  native: invoke('work:native'),
+  defend: invoke('work:defend'),
+  cover: invoke('work:cover'),
+  tick: invoke('work:tick'),
+  refs: invoke('work:refs'),
+  checkRef: invoke('work:checkRef'),
+  openMetabase: invoke('work:openMetabase')
 }

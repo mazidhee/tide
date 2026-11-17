@@ -69,7 +69,8 @@ const near = (a: number, b: number, tol: Tolerance) => Math.abs(a - b) <= Math.m
 
 function same(a: Cell, b: Cell, tol: Tolerance): boolean {
   if (a === null || b === null) return a === b
-  if ('n' in a && 'n' in b) return near(a.n, b.n, tol)
+  // Instants (and whole numbers as large) compare exactly: a relative tolerance on milliseconds would call dates two days apart the same
+  if ('n' in a && 'n' in b) return Number.isInteger(a.n) && Number.isInteger(b.n) && Math.max(Math.abs(a.n), Math.abs(b.n)) > 6e11 ? a.n === b.n : near(a.n, b.n, tol)
   if ('t' in a && 't' in b) return a.t === b.t
   return false
 }
